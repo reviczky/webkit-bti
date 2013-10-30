@@ -1,0 +1,26 @@
+From a72541c85628749ef5628620cf9eb2f60dac39eb Mon Sep 17 00:00:00 2001
+From: Emilio Pozuelo Monfort <pochu27@gmail.com>
+Date: Wed, 30 Oct 2013 18:36:23 +0100
+Subject: [PATCH] Fix build on !linux
+
+---
+ Source/WebKit2/UIProcess/Launcher/gtk/ProcessLauncherGtk.cpp | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/Source/WebKit2/UIProcess/Launcher/gtk/ProcessLauncherGtk.cpp b/Source/WebKit2/UIProcess/Launcher/gtk/ProcessLauncherGtk.cpp
+index 685a1f6..3169180 100644
+--- a/Source/WebKit2/UIProcess/Launcher/gtk/ProcessLauncherGtk.cpp
++++ b/Source/WebKit2/UIProcess/Launcher/gtk/ProcessLauncherGtk.cpp
+@@ -42,8 +42,7 @@
+ #include <wtf/gobject/GOwnPtr.h>
+ #include <wtf/gobject/GlibUtilities.h>
+ 
+-#if OS(LINUX)
+-#include <sys/prctl.h>
++#if OS(UNIX)
+ #include <sys/socket.h>
+ #endif
+ 
+-- 
+1.8.4.rc3
+
