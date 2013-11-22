@@ -2,26 +2,19 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKitIconDatabase</title>
+<title>WebKitGTK+ Reference Manual: WebKitIconDatabase</title>
 <meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="WebKitGTK+ Reference Manual">
 <link rel="up" href="ch02.html" title="Class Overview">
 <link rel="prev" href="WebKitWebWindowFeatures.html" title="WebKitWebWindowFeatures">
 <link rel="next" href="WebKitSpellChecker.html" title="WebKitSpellChecker">
-<meta name="generator" content="GTK-Doc V1.18.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.19.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
-<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="2">
-<tr valign="middle">
-<td><a accesskey="p" href="WebKitWebWindowFeatures.html"><img src="left.png" width="24" height="24" border="0" alt="Prev"></a></td>
-<td><a accesskey="u" href="ch02.html"><img src="up.png" width="24" height="24" border="0" alt="Up"></a></td>
-<td><a accesskey="h" href="index.html"><img src="home.png" width="24" height="24" border="0" alt="Home"></a></td>
-<th width="100%" align="center">WebKitGTK+ Reference Manual</th>
-<td><a accesskey="n" href="WebKitSpellChecker.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
-</tr>
-<tr><td colspan="5" class="shortcuts">
-<a href="#WebKitIconDatabase.synopsis" class="shortcut">Top</a>
+<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="10"><tr valign="middle">
+<td width="100%" align="left">
+<a href="#" class="shortcut">Top</a>
                    | 
                   <a href="#WebKitIconDatabase.description" class="shortcut">Description</a>
                    | 
@@ -30,8 +23,12 @@
                   <a href="#WebKitIconDatabase.properties" class="shortcut">Properties</a>
                    | 
                   <a href="#WebKitIconDatabase.signals" class="shortcut">Signals</a>
-</td></tr>
-</table>
+</td>
+<td><a accesskey="h" href="index.html"><img src="home.png" width="16" height="16" border="0" alt="Home"></a></td>
+<td><a accesskey="u" href="ch02.html"><img src="up.png" width="16" height="16" border="0" alt="Up"></a></td>
+<td><a accesskey="p" href="WebKitWebWindowFeatures.html"><img src="left.png" width="16" height="16" border="0" alt="Prev"></a></td>
+<td><a accesskey="n" href="WebKitSpellChecker.html"><img src="right.png" width="16" height="16" border="0" alt="Next"></a></td>
+</tr></table>
 <div class="refentry">
 <a name="WebKitIconDatabase"></a><div class="titlepage"></div>
 <div class="refnamediv"><table width="100%"><tr>
@@ -115,7 +112,7 @@ be deleted from it.
 <div class="refsect2">
 <a name="webkit-icon-database-clear"></a><h3>webkit_icon_database_clear ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>                webkit_icon_database_clear          (<em class="parameter"><code><a class="link" href="WebKitIconDatabase.html" title="WebKitIconDatabase"><span class="type">WebKitIconDatabase</span></a> *database</code></em>);</pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">webkit_icon_database_clear</code> has been deprecated since version 1.8 and should not be used in newly-written code. Use <a class="link" href="WebKitFaviconDatabase.html#webkit-favicon-database-clear" title="webkit_favicon_database_clear ()"><code class="function">webkit_favicon_database_clear()</code></a> instead.</p>
 </div>
@@ -141,7 +138,7 @@ Clears all icons from the database.
 <pre class="programlisting"><a href="../gdk-pixbuf/gdk-pixbuf-The-GdkPixbuf-Structure.html#GdkPixbuf"><span class="returnvalue">GdkPixbuf</span></a> *         webkit_icon_database_get_icon_pixbuf
                                                         (<em class="parameter"><code><a class="link" href="WebKitIconDatabase.html" title="WebKitIconDatabase"><span class="type">WebKitIconDatabase</span></a> *database</code></em>,
                                                          <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *page_uri</code></em>);</pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">webkit_icon_database_get_icon_pixbuf</code> has been deprecated since version 1.8 and should not be used in newly-written code. Use <a class="link" href="WebKitFaviconDatabase.html#webkit-favicon-database-try-get-favicon-pixbuf" title="webkit_favicon_database_try_get_favicon_pixbuf ()"><code class="function">webkit_favicon_database_try_get_favicon_pixbuf()</code></a> instead.</p>
 </div>
@@ -186,7 +183,7 @@ See also <a class="link" href="webkitgtk-webkitwebview.html#webkit-web-view-get-
 <a name="webkit-icon-database-get-icon-uri"></a><h3>webkit_icon_database_get_icon_uri ()</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *             webkit_icon_database_get_icon_uri   (<em class="parameter"><code><a class="link" href="WebKitIconDatabase.html" title="WebKitIconDatabase"><span class="type">WebKitIconDatabase</span></a> *database</code></em>,
                                                          <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *page_uri</code></em>);</pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">webkit_icon_database_get_icon_uri</code> has been deprecated since version 1.8 and should not be used in newly-written code. Use <a class="link" href="WebKitFaviconDatabase.html#webkit-favicon-database-get-favicon-uri" title="webkit_favicon_database_get_favicon_uri ()"><code class="function">webkit_favicon_database_get_favicon_uri()</code></a> instead.</p>
 </div>
@@ -222,7 +219,7 @@ See also <a class="link" href="webkitgtk-webkitwebview.html#webkit-web-view-get-
 <div class="refsect2">
 <a name="webkit-icon-database-get-path"></a><h3>webkit_icon_database_get_path ()</h3>
 <pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *       webkit_icon_database_get_path       (<em class="parameter"><code><a class="link" href="WebKitIconDatabase.html" title="WebKitIconDatabase"><span class="type">WebKitIconDatabase</span></a> *database</code></em>);</pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">webkit_icon_database_get_path</code> has been deprecated since version 1.8 and should not be used in newly-written code. Use <a class="link" href="WebKitFaviconDatabase.html#webkit-favicon-database-get-path" title="webkit_favicon_database_get_path ()"><code class="function">webkit_favicon_database_get_path()</code></a> instead.</p>
 </div>
@@ -261,7 +258,7 @@ Determines the absolute path to the database folder on disk.
 <a name="webkit-icon-database-set-path"></a><h3>webkit_icon_database_set_path ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>                webkit_icon_database_set_path       (<em class="parameter"><code><a class="link" href="WebKitIconDatabase.html" title="WebKitIconDatabase"><span class="type">WebKitIconDatabase</span></a> *database</code></em>,
                                                          <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *path</code></em>);</pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">webkit_icon_database_set_path</code> has been deprecated since version 1.8 and should not be used in newly-written code. Use <a class="link" href="WebKitFaviconDatabase.html#webkit-favicon-database-set-path" title="webkit_favicon_database_set_path ()"><code class="function">webkit_favicon_database_set_path()</code></a> instead.</p>
 </div>
@@ -296,7 +293,7 @@ Passing <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="liter
 <div class="refsect2">
 <a name="WebKitIconDatabase--path"></a><h3>The <code class="literal">"path"</code> property</h3>
 <pre class="programlisting">  "path"                     <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a>*                : Read / Write</pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">WebKitIconDatabase:path</code> has been deprecated since version 1.8 and should not be used in newly-written code. Use WebKitFaviconDatabase::path instead.</p>
 </div>
@@ -315,7 +312,7 @@ The absolute path of the icon database folder.
                                                         <a class="link" href="WebKitWebFrame.html" title="WebKitWebFrame"><span class="type">WebKitWebFrame</span></a>     *frame,
                                                         <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a>              *frame_uri,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>            user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS"><code class="literal">Run Last</code></a></pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">WebKitIconDatabase::icon-loaded</code> has been deprecated since version 1.8 and should not be used in newly-written code. Use WebKitFaviconDatabase::icon-loaded instead.</p>
 </div>
@@ -355,6 +352,6 @@ the main frame of a particular <a class="link" href="webkitgtk-webkitwebview.htm
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.18.1</div>
+          Generated by GTK-Doc V1.19.1</div>
 </body>
 </html>

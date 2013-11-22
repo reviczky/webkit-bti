@@ -2,30 +2,27 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>Global functions</title>
+<title>WebKitGTK+ Reference Manual: Global functions</title>
 <meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="WebKitGTK+ Reference Manual">
 <link rel="up" href="ch01.html" title="Global functions">
 <link rel="prev" href="ch01.html" title="Global functions">
 <link rel="next" href="ch02.html" title="Class Overview">
-<meta name="generator" content="GTK-Doc V1.18.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.19.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
-<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="2">
-<tr valign="middle">
-<td><a accesskey="p" href="ch01.html"><img src="left.png" width="24" height="24" border="0" alt="Prev"></a></td>
-<td><a accesskey="u" href="ch01.html"><img src="up.png" width="24" height="24" border="0" alt="Up"></a></td>
-<td><a accesskey="h" href="index.html"><img src="home.png" width="24" height="24" border="0" alt="Home"></a></td>
-<th width="100%" align="center">WebKitGTK+ Reference Manual</th>
-<td><a accesskey="n" href="ch02.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
-</tr>
-<tr><td colspan="5" class="shortcuts">
-<a href="#webkitgtk-Global-functions.synopsis" class="shortcut">Top</a>
+<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="10"><tr valign="middle">
+<td width="100%" align="left">
+<a href="#" class="shortcut">Top</a>
                    | 
                   <a href="#webkitgtk-Global-functions.description" class="shortcut">Description</a>
-</td></tr>
-</table>
+</td>
+<td><a accesskey="h" href="index.html"><img src="home.png" width="16" height="16" border="0" alt="Home"></a></td>
+<td><a accesskey="u" href="ch01.html"><img src="up.png" width="16" height="16" border="0" alt="Up"></a></td>
+<td><a accesskey="p" href="ch01.html"><img src="left.png" width="16" height="16" border="0" alt="Prev"></a></td>
+<td><a accesskey="n" href="ch02.html"><img src="right.png" width="16" height="16" border="0" alt="Next"></a></td>
+</tr></table>
 <div class="refentry">
 <a name="webkitgtk-Global-functions"></a><div class="titlepage"></div>
 <div class="refnamediv"><table width="100%"><tr>
@@ -249,7 +246,7 @@ icons.
 <div class="refsect2">
 <a name="webkit-get-icon-database"></a><h3>webkit_get_icon_database ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitIconDatabase.html" title="WebKitIconDatabase"><span class="returnvalue">WebKitIconDatabase</span></a> * webkit_get_icon_database           (<em class="parameter"><code><span class="type">void</span></code></em>);</pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">webkit_get_icon_database</code> has been deprecated since version 1.8 and should not be used in newly-written code. Use <a class="link" href="webkitgtk-Global-functions.html#webkit-get-favicon-database" title="webkit_get_favicon_database ()"><code class="function">webkit_get_favicon_database()</code></a> instead</p>
 </div>
@@ -752,7 +749,7 @@ In order to inspect the default context menu, you should connect to
 <p>
 </p>
 <div class="example">
-<a name="idp45685728"></a><p class="title"><b>Example 1. Inspecting the default context menu</b></p>
+<a name="id-1.2.2.5.20.5.1"></a><p class="title"><b>Example 1. Inspecting the default context menu</b></p>
 <div class="example-contents">
   <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
     <tbody>
@@ -806,62 +803,8 @@ In order to inspect the default context menu, you should connect to
 47
 48
 49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59
-60
-61
-62
-63
-64
-65
-66
-67
-68
-69
-70
-71
-72
-73
-74
-75
-76
-77</pre></td>
-        <td class="listing_code"><pre class="programlisting"><?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<meta name="syntax" content="cpp" />
-<meta name="settings" content="use_xhtml,use_css,pre_wrap,no_foldcolumn,prevent_copy=" />
-<meta name="colorscheme" content="none" />
-<style type="text/css">
-
-pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
-body { font-family: monospace; color: #000000; background-color: #ffffff; }
-* { font-size: 1em; }
-.Comment { color: #c00000; font-weight: bold; }
-.Constant { color: #0000c0; text-decoration: underline; }
-.Statement { color: #008080; font-weight: bold; }
-.Type { color: #008000; text-decoration: underline; }
-
-</style>
-
-<script type='text/javascript'>
-//<![CDATA[
-
-//]]>
-</script>
-</head>
-<body>
-<pre id='vimCodeElement'>
-<span class="type">static</span> gboolean context_menu_cb (WebKitWebView       *webView,
+50</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="type">static</span> gboolean context_menu_cb (WebKitWebView       *webView,
                                  GtkWidget           *default_menu,
                                  WebKitHitTestResult *hit_test_result,
                                  gboolean             triggered_with_keyboard,
@@ -1063,6 +1006,6 @@ Get the security policy for the given URI scheme.
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.18.1</div>
+          Generated by GTK-Doc V1.19.1</div>
 </body>
 </html>

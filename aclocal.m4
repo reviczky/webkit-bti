@@ -1571,7 +1571,12 @@ AC_DEFUN([GTK_DOC_CHECK],
   AC_BEFORE([AM_PROG_LIBTOOL],[$0])dnl setup libtool first
 
   dnl check for tools we added during development
-  AC_PATH_PROG([GTKDOC_CHECK],[gtkdoc-check])
+  dnl Use AC_CHECK_PROG to avoid the check target using an absolute path that
+  dnl may not be writable by the user. Currently, automake requires that the
+  dnl test name must end in '.test'.
+  dnl https://bugzilla.gnome.org/show_bug.cgi?id=701638
+  AC_CHECK_PROG([GTKDOC_CHECK],[gtkdoc-check],[gtkdoc-check.test])
+  AC_PATH_PROG([GTKDOC_CHECK_PATH],[gtkdoc-check])
   AC_PATH_PROGS([GTKDOC_REBASE],[gtkdoc-rebase],[true])
   AC_PATH_PROG([GTKDOC_MKPDF],[gtkdoc-mkpdf])
 
@@ -1597,7 +1602,7 @@ AC_DEFUN([GTK_DOC_CHECK],
     dnl don't check for glib if we build glib
     if test "x$PACKAGE_NAME" != "xglib"; then
       dnl don't fail if someone does not have glib
-      PKG_CHECK_MODULES(GTKDOC_DEPS, glib-2.0 >= 2.10.0 gobject-2.0  >= 2.10.0,,)
+      PKG_CHECK_MODULES(GTKDOC_DEPS, glib-2.0 >= 2.10.0 gobject-2.0  >= 2.10.0,,[:])
     fi
   fi
 

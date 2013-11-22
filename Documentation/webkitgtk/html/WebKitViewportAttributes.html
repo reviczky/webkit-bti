@@ -2,34 +2,31 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKitViewportAttributes</title>
+<title>WebKitGTK+ Reference Manual: WebKitViewportAttributes</title>
 <meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="WebKitGTK+ Reference Manual">
 <link rel="up" href="ch02.html" title="Class Overview">
 <link rel="prev" href="webkitgtk-webkitdownload.html" title="WebKitDownload">
 <link rel="next" href="WebKitHitTestResult.html" title="WebKitHitTestResult">
-<meta name="generator" content="GTK-Doc V1.18.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.19.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
-<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="2">
-<tr valign="middle">
-<td><a accesskey="p" href="webkitgtk-webkitdownload.html"><img src="left.png" width="24" height="24" border="0" alt="Prev"></a></td>
-<td><a accesskey="u" href="ch02.html"><img src="up.png" width="24" height="24" border="0" alt="Up"></a></td>
-<td><a accesskey="h" href="index.html"><img src="home.png" width="24" height="24" border="0" alt="Home"></a></td>
-<th width="100%" align="center">WebKitGTK+ Reference Manual</th>
-<td><a accesskey="n" href="WebKitHitTestResult.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
-</tr>
-<tr><td colspan="5" class="shortcuts">
-<a href="#WebKitViewportAttributes.synopsis" class="shortcut">Top</a>
+<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="10"><tr valign="middle">
+<td width="100%" align="left">
+<a href="#" class="shortcut">Top</a>
                    | 
                   <a href="#WebKitViewportAttributes.description" class="shortcut">Description</a>
                    | 
                   <a href="#WebKitViewportAttributes.object-hierarchy" class="shortcut">Object Hierarchy</a>
                    | 
                   <a href="#WebKitViewportAttributes.properties" class="shortcut">Properties</a>
-</td></tr>
-</table>
+</td>
+<td><a accesskey="h" href="index.html"><img src="home.png" width="16" height="16" border="0" alt="Home"></a></td>
+<td><a accesskey="u" href="ch02.html"><img src="up.png" width="16" height="16" border="0" alt="Up"></a></td>
+<td><a accesskey="p" href="webkitgtk-webkitdownload.html"><img src="left.png" width="16" height="16" border="0" alt="Prev"></a></td>
+<td><a accesskey="n" href="WebKitHitTestResult.html"><img src="right.png" width="16" height="16" border="0" alt="Next"></a></td>
+</tr></table>
 <div class="refentry">
 <a name="WebKitViewportAttributes"></a><div class="titlepage"></div>
 <div class="refnamediv"><table width="100%"><tr>
@@ -132,62 +129,8 @@ http://developer.apple.com/safari/library/documentation/appleapplications/refere
 29
 30
 31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59</pre></td>
-        <td class="listing_code"><pre class="programlisting"><?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<meta name="syntax" content="cpp" />
-<meta name="settings" content="use_xhtml,use_css,pre_wrap,no_foldcolumn,prevent_copy=" />
-<meta name="colorscheme" content="none" />
-<style type="text/css">
-
-pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
-body { font-family: monospace; color: #000000; background-color: #ffffff; }
-* { font-size: 1em; }
-.Comment { color: #c00000; font-weight: bold; }
-.Constant { color: #0000c0; text-decoration: underline; }
-.Statement { color: #008080; font-weight: bold; }
-.Type { color: #008000; text-decoration: underline; }
-
-</style>
-
-<script type='text/javascript'>
-//<![CDATA[
-
-//]]>
-</script>
-</head>
-<body>
-<pre id='vimCodeElement'>
-<span class="comment">/*</span><span class="comment"> Connect to the viewport-attributes-changes signal </span><span class="comment">*/</span>
+32</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="comment">/*</span><span class="comment"> Connect to the viewport-attributes-changes signal </span><span class="comment">*/</span>
 WebKitViewportAttributes* attributes = webkit_web_view_get_viewport_attributes (web_view);
 g_signal_connect (web_view, <span class="number">&quot;viewport-attributes-recompute-requested&quot;</span>, G_CALLBACK (viewport_recompute_cb), window);
 g_signal_connect (web_view, <span class="number">&quot;viewport-attributes-changed&quot;</span>, G_CALLBACK (viewport_changed_cb), window);
@@ -378,6 +321,6 @@ the device size, available size, desktop width, or device DPI.
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.18.1</div>
+          Generated by GTK-Doc V1.19.1</div>
 </body>
 </html>
