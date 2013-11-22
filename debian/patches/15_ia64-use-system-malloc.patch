@@ -2,9 +2,9 @@ Description: Fix wide pointer issues on ia64 (closes: #642750).
 Author: Stephan Schreiber <info@fs-driver.org>
 Index: webkitgtk/Source/WTF/wtf/Platform.h
 ===================================================================
---- webkitgtk.orig/Source/WTF/wtf/Platform.h	2013-09-16 15:23:20.094986421 -0300
-+++ webkitgtk/Source/WTF/wtf/Platform.h	2013-09-16 15:23:33.000000000 -0300
-@@ -704,6 +704,13 @@
+--- webkitgtk.orig/Source/WTF/wtf/Platform.h
++++ webkitgtk/Source/WTF/wtf/Platform.h
+@@ -705,6 +705,13 @@
  #define ENABLE_JIT 1
  #endif
  

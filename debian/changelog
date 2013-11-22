@@ -1,6 +1,12 @@
 webkitgtk (2.2.2-1) UNRELEASED; urgency=low
 
   * New upstream stable release.
+  * debian/patches/15_ia64-use-system-malloc.patch:
+  * debian/patches/40_hppa_platform_h.patch:
+    + Refreshed.
+  * debian/patches/41_hppa_build_fix.patch:
+  * debian/patches/50_bsd-hurd-build-fix.patch:
+    + Remove patches already included in this release.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 22 Nov 2013 17:46:12 +0200
 

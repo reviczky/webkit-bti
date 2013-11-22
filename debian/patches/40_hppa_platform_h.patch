@@ -1,9 +1,9 @@
 Index: webkitgtk/Source/WTF/wtf/Platform.h
 ===================================================================
---- webkitgtk.orig/Source/WTF/wtf/Platform.h	2013-09-16 15:23:20.798989912 -0300
-+++ webkitgtk/Source/WTF/wtf/Platform.h	2013-09-16 15:23:20.794989892 -0300
-@@ -71,6 +71,15 @@
- #define WTF_CPU_HPPA 1
+--- webkitgtk.orig/Source/WTF/wtf/Platform.h
++++ webkitgtk/Source/WTF/wtf/Platform.h
+@@ -72,6 +72,15 @@
+ #define WTF_CPU_BIG_ENDIAN 1
  #endif
  
 +/* CPU(HPPA) - HP PARISC */

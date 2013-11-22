@@ -2,5 +2,3 @@
 02_notebook_scroll.patch
 15_ia64-use-system-malloc.patch
 40_hppa_platform_h.patch
-41_hppa_build_fix.patch
-50_bsd-hurd-build-fix.patch
