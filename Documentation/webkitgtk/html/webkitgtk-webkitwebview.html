@@ -2,26 +2,19 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKitWebView</title>
+<title>WebKitGTK+ Reference Manual: WebKitWebView</title>
 <meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="WebKitGTK+ Reference Manual">
 <link rel="up" href="ch02.html" title="Class Overview">
 <link rel="prev" href="ch02.html" title="Class Overview">
 <link rel="next" href="WebKitWebFrame.html" title="WebKitWebFrame">
-<meta name="generator" content="GTK-Doc V1.18.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.19.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
-<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="2">
-<tr valign="middle">
-<td><a accesskey="p" href="ch02.html"><img src="left.png" width="24" height="24" border="0" alt="Prev"></a></td>
-<td><a accesskey="u" href="ch02.html"><img src="up.png" width="24" height="24" border="0" alt="Up"></a></td>
-<td><a accesskey="h" href="index.html"><img src="home.png" width="24" height="24" border="0" alt="Home"></a></td>
-<th width="100%" align="center">WebKitGTK+ Reference Manual</th>
-<td><a accesskey="n" href="WebKitWebFrame.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
-</tr>
-<tr><td colspan="5" class="shortcuts">
-<a href="#webkitgtk-webkitwebview.synopsis" class="shortcut">Top</a>
+<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="10"><tr valign="middle">
+<td width="100%" align="left">
+<a href="#" class="shortcut">Top</a>
                    | 
                   <a href="#webkitgtk-webkitwebview.description" class="shortcut">Description</a>
                    | 
@@ -32,8 +25,12 @@
                   <a href="#webkitgtk-webkitwebview.properties" class="shortcut">Properties</a>
                    | 
                   <a href="#webkitgtk-webkitwebview.signals" class="shortcut">Signals</a>
-</td></tr>
-</table>
+</td>
+<td><a accesskey="h" href="index.html"><img src="home.png" width="16" height="16" border="0" alt="Home"></a></td>
+<td><a accesskey="u" href="ch02.html"><img src="up.png" width="16" height="16" border="0" alt="Up"></a></td>
+<td><a accesskey="p" href="ch02.html"><img src="left.png" width="16" height="16" border="0" alt="Prev"></a></td>
+<td><a accesskey="n" href="WebKitWebFrame.html"><img src="right.png" width="16" height="16" border="0" alt="Next"></a></td>
+</tr></table>
 <div class="refentry">
 <a name="webkitgtk-webkitwebview"></a><div class="titlepage"></div>
 <div class="refnamediv"><table width="100%"><tr>
@@ -1034,7 +1031,7 @@ specified position. <span class="annotation">[<acronym title="Free data after th
 <div class="refsect2">
 <a name="webkit-web-view-get-icon-pixbuf"></a><h3>webkit_web_view_get_icon_pixbuf ()</h3>
 <pre class="programlisting"><a href="../gdk-pixbuf/gdk-pixbuf-The-GdkPixbuf-Structure.html#GdkPixbuf"><span class="returnvalue">GdkPixbuf</span></a> *         webkit_web_view_get_icon_pixbuf     (<em class="parameter"><code><a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">webkit_web_view_get_icon_pixbuf</code> has been deprecated since version 1.8 and should not be used in newly-written code. Use <a class="link" href="webkitgtk-webkitwebview.html#webkit-web-view-try-get-favicon-pixbuf" title="webkit_web_view_try_get_favicon_pixbuf ()"><code class="function">webkit_web_view_try_get_favicon_pixbuf()</code></a> instead.</p>
 </div>
@@ -1598,7 +1595,7 @@ Determines whether text was selected.
 <pre class="programlisting"><span class="returnvalue">void</span>                webkit_web_view_load_html_string    (<em class="parameter"><code><a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>,
                                                          <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *content</code></em>,
                                                          <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *base_uri</code></em>);</pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">webkit_web_view_load_html_string</code> has been deprecated since version 1.1.1 and should not be used in newly-written code. Use <a class="link" href="webkitgtk-webkitwebview.html#webkit-web-view-load-string" title="webkit_web_view_load_string ()"><code class="function">webkit_web_view_load_string()</code></a> instead.</p>
 </div>
@@ -1822,7 +1819,7 @@ Move the cursor in <em class="parameter"><code>view</code></em> as described by 
 <a name="webkit-web-view-open"></a><h3>webkit_web_view_open ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>                webkit_web_view_open                (<em class="parameter"><code><a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>,
                                                          <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *uri</code></em>);</pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">webkit_web_view_open</code> has been deprecated since version 1.1.1 and should not be used in newly-written code. Use <a class="link" href="webkitgtk-webkitwebview.html#webkit-web-view-load-uri" title="webkit_web_view_load_uri ()"><code class="function">webkit_web_view_load_uri()</code></a> instead.</p>
 </div>
@@ -3431,7 +3428,7 @@ entering-fullscreen stage for instance.
 <pre class="programlisting"><span class="returnvalue">void</span>                user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>  *web_view,
                                                         <a class="link" href="WebKitWebFrame.html" title="WebKitWebFrame"><span class="type">WebKitWebFrame</span></a> *frame,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>        user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS"><code class="literal">Run Last</code></a></pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">WebKitWebView::load-committed</code> is deprecated and should not be used in newly-written code. Use the "load-status" property instead.</p>
 </div>
@@ -3515,7 +3512,7 @@ event. <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="liter
 <pre class="programlisting"><span class="returnvalue">void</span>                user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>  *web_view,
                                                         <a class="link" href="WebKitWebFrame.html" title="WebKitWebFrame"><span class="type">WebKitWebFrame</span></a> *frame,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>        user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS"><code class="literal">Run Last</code></a></pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">WebKitWebView::load-finished</code> is deprecated and should not be used in newly-written code. Use the "load-status" property instead.</p>
 </div>
@@ -3548,7 +3545,7 @@ event. <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="liter
 <pre class="programlisting"><span class="returnvalue">void</span>                user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view,
                                                         <a href="../glib/glib-Basic-Types.html#gint"><span class="type">gint</span></a>           progress,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>       user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS"><code class="literal">Run Last</code></a></pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">WebKitWebView::load-progress-changed</code> is deprecated and should not be used in newly-written code. Use the "progress" property instead.</p>
 </div>
@@ -3580,7 +3577,7 @@ event. <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="liter
 <pre class="programlisting"><span class="returnvalue">void</span>                user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>  *web_view,
                                                         <a class="link" href="WebKitWebFrame.html" title="WebKitWebFrame"><span class="type">WebKitWebFrame</span></a> *frame,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>        user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS"><code class="literal">Run Last</code></a></pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">WebKitWebView::load-started</code> is deprecated and should not be used in newly-written code. Use the "load-status" property instead.</p>
 </div>
@@ -3793,7 +3790,7 @@ default behavior apply</td>
                                                         <a class="link" href="WebKitWebFrame.html" title="WebKitWebFrame"><span class="type">WebKitWebFrame</span></a>       *frame,
                                                         <a class="link" href="WebKitNetworkRequest.html" title="WebKitNetworkRequest"><span class="type">WebKitNetworkRequest</span></a> *request,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>              user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS"><code class="literal">Run Last</code></a></pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">WebKitWebView::navigation-requested</code> is deprecated and should not be used in newly-written code. Use WebKitWebView::navigation-policy-decision-requested
 instead</p>
@@ -3971,7 +3968,7 @@ The default bindings for this signal are Ctrl-v and Shift-Insert.
 <pre class="programlisting"><span class="returnvalue">void</span>                user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view,
                                                         <a href="../gtk2/GtkMenu.html"><span class="type">GtkMenu</span></a>       *menu,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>       user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS"><code class="literal">Run Last</code></a></pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">WebKitWebView::populate-popup</code> has been deprecated since version 1.10 and should not be used in newly-written code. Use <a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView-context-menu" title='The "context-menu" signal'><span class="type">"context-menu"</span></a> signal instead.</p>
 </div>
@@ -4851,7 +4848,7 @@ The default bindings for this signal is Ctrl-a.
                                                         <a class="link" href="WebKitWebFrame.html" title="WebKitWebFrame"><span class="type">WebKitWebFrame</span></a> *frame,
                                                         <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a>          *title,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>        user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS"><code class="literal">Run Last</code></a></pre>
-<div class="warning" style="margin-left: 0.5in; margin-right: 0.5in;">
+<div class="warning">
 <h3 class="title">Warning</h3>
 <p><code class="literal">WebKitWebView::title-changed</code> has been deprecated since version 1.1.4 and should not be used in newly-written code. Use "notify::title" instead.</p>
 </div>
@@ -5080,6 +5077,6 @@ window object</td>
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.18.1</div>
+          Generated by GTK-Doc V1.19.1</div>
 </body>
 </html>

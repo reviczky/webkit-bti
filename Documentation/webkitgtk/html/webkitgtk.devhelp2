@@ -612,7 +612,7 @@
     <keyword type="property" name="The &quot;mime-types&quot; property" link="WebKitFileChooserRequest.html#WebKitFileChooserRequest--mime-types"/>
     <keyword type="property" name="The &quot;select-multiple&quot; property" link="WebKitFileChooserRequest.html#WebKitFileChooserRequest--select-multiple"/>
     <keyword type="property" name="The &quot;selected-files&quot; property" link="WebKitFileChooserRequest.html#WebKitFileChooserRequest--selected-files"/>
-    <keyword type="" name="Logging" link="webkit-environment.html#idp41241072"/>
+    <keyword type="" name="Logging" link="webkit-environment.html#id-1.4.2.3"/>
     <keyword type="constant" name="WEBKIT_CACHE_MODEL_DEFAULT" link="webkitgtk-Global-functions.html#WEBKIT-CACHE-MODEL-DEFAULT:CAPS"/>
     <keyword type="constant" name="WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER" link="webkitgtk-Global-functions.html#WEBKIT-CACHE-MODEL-DOCUMENT-VIEWER:CAPS"/>
     <keyword type="constant" name="WEBKIT_CACHE_MODEL_WEB_BROWSER" link="webkitgtk-Global-functions.html#WEBKIT-CACHE-MODEL-WEB-BROWSER:CAPS"/>
