@@ -3,7 +3,7 @@ Priority: optional
 Section: web
 Maintainer: Debian WebKit Maintainers <pkg-webkit-maintainers@lists.alioth.debian.org>
 Uploaders: Mike Hommey <glandium@debian.org>, Gustavo Noronha Silva <kov@debian.org>,
-           Emilio Pozuelo Monfort <pochu@debian.org>
+           Emilio Pozuelo Monfort <pochu@debian.org>, Alberto Garcia <berto@igalia.com>
 Build-Depends: gawk,
                chrpath,
                flex (>= 2.5.33),
