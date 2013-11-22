@@ -1,4 +1,4 @@
-webkitgtk (2.2.2-1) UNRELEASED; urgency=low
+webkitgtk (2.2.2-1) unstable; urgency=low
 
   * New upstream stable release.
   * debian/control:
@@ -10,7 +10,7 @@ webkitgtk (2.2.2-1) UNRELEASED; urgency=low
   * debian/patches/50_bsd-hurd-build-fix.patch:
     + Remove patches already included in this release.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 22 Nov 2013 17:46:12 +0200
+ -- Alberto Garcia <berto@igalia.com>  Fri, 22 Nov 2013 17:57:18 +0200
 
 webkitgtk (2.2.1-2) unstable; urgency=low
 
