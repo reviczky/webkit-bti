@@ -55,6 +55,8 @@ Vcs-Git: git://git.debian.org/git/pkg-webkit/webkit.git
 Package: libjavascriptcoregtk-1.0-0
 Section: libs
 Architecture: any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends},
          ${misc:Depends}
 Description: Javascript engine library for GTK+
@@ -80,6 +82,7 @@ Package: libjavascriptcoregtk-1.0-0-dbg
 Section: debug
 Priority: extra
 Architecture: any
+Multi-Arch: same
 Depends: libjavascriptcoregtk-1.0-0 (= ${binary:Version}),
          ${misc:Depends}
 Description: Javascript engine library for GTK+
@@ -106,6 +109,8 @@ Description: GObject introspection data for the GTK+-based JavaScriptCore librar
 Package: libwebkitgtk-1.0-0
 Section: libs
 Architecture: any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
 Depends: libjavascriptcoregtk-1.0-0 (= ${binary:Version}),
          ${shlibs:Depends},
          libwebkitgtk-1.0-common (>= ${source:Upstream-Version}),
@@ -160,6 +165,7 @@ Section: libs
 Priority: optional
 Depends: ${misc:Depends}
 Architecture: all
+Multi-Arch: foreign
 Description: Web content engine library for GTK+ - data files
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
@@ -174,6 +180,7 @@ Package: libwebkitgtk-1.0-0-dbg
 Section: debug
 Priority: extra
 Architecture: any
+Multi-Arch: same
 Depends: libwebkitgtk-1.0-0 (= ${binary:Version}),
          libjavascriptcoregtk-1.0-0-dbg (= ${binary:Version}),
          ${misc:Depends}
@@ -204,6 +211,8 @@ Description: GObject introspection data for the WebKit library
 Package: libjavascriptcoregtk-3.0-0
 Section: libs
 Architecture: any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends},
          ${misc:Depends}
 Description: Javascript engine library for GTK+
@@ -229,6 +238,7 @@ Package: libjavascriptcoregtk-3.0-0-dbg
 Section: debug
 Priority: extra
 Architecture: any
+Multi-Arch: same
 Depends: libjavascriptcoregtk-3.0-0 (= ${binary:Version}),
          ${misc:Depends}
 Description: Javascript engine library for GTK+
@@ -255,6 +265,8 @@ Description: GObject introspection data for the GTK+-based JavaScriptCore librar
 Package: libwebkitgtk-3.0-0
 Section: libs
 Architecture: any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
 Depends: libjavascriptcoregtk-3.0-0 (= ${binary:Version}),
          ${shlibs:Depends},
          libwebkitgtk-3.0-common (>= ${source:Upstream-Version}),
@@ -298,6 +310,7 @@ Package: libwebkitgtk-3.0-common
 Section: libs
 Priority: optional
 Architecture: all
+Multi-Arch: foreign
 Depends: ${misc:Depends}
 Description: Web content engine library for GTK+ - data files
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
@@ -313,6 +326,7 @@ Package: libwebkitgtk-3.0-0-dbg
 Section: debug
 Priority: extra
 Architecture: any
+Multi-Arch: same
 Depends: libwebkitgtk-3.0-0 (= ${binary:Version}),
          libjavascriptcoregtk-3.0-0-dbg (= ${binary:Version}),
          ${misc:Depends}
@@ -343,6 +357,8 @@ Description: GObject introspection data for the WebKit library
 Package: libwebkit2gtk-3.0-25
 Section: libs
 Architecture: any
+Multi-Arch: same
+Pre-Depends: ${misc:Pre-Depends}
 Depends: libjavascriptcoregtk-3.0-0 (= ${binary:Version}),
          ${shlibs:Depends},
          libwebkitgtk-3.0-common (>= ${source:Upstream-Version}),
@@ -388,6 +404,7 @@ Package: libwebkit2gtk-3.0-25-dbg
 Section: debug
 Priority: extra
 Architecture: any
+Multi-Arch: same
 Depends: libwebkit2gtk-3.0-25 (= ${binary:Version}),
          libjavascriptcoregtk-3.0-0-dbg (= ${binary:Version}),
          ${misc:Depends}

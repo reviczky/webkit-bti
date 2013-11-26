@@ -7,6 +7,7 @@ DEB_HOST_GNU_TYPE   ?= $(shell dpkg-architecture -qDEB_HOST_GNU_TYPE)
 DEB_BUILD_GNU_TYPE  ?= $(shell dpkg-architecture -qDEB_BUILD_GNU_TYPE)
 DEB_BUILD_ARCH      ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
 DEB_HOST_ARCH_BITS  ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_BITS)
+DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 
 GTK_VERSIONS = 2.0 3.0
 ENABLE_WEBKIT2 ?= yes
@@ -17,6 +18,7 @@ LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS)
 CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS)
 
 COMMON_CONFIGURE_ARGUMENTS = \
+	--libdir=\$${prefix}/lib/$(DEB_HOST_MULTIARCH) \
 	--disable-silent-rules \
 	--host=$(DEB_HOST_GNU_TYPE) \
 	--build=$(DEB_BUILD_GNU_TYPE) \
@@ -29,7 +31,7 @@ EXTRA_CONFIGURE_ARGUMENTS =
 EXTRA_DH_ARGUMENTS =
 
 ifeq ($(ENABLE_WEBKIT2),yes)
-	EXTRA_CONFIGURE_ARGUMENTS = --enable-webkit2 --libexecdir=/usr/lib/webkit2gtk-3.0/libexec
+	EXTRA_CONFIGURE_ARGUMENTS = --enable-webkit2 --libexecdir=\$${libdir}/webkit2gtk-3.0/libexec
 else
 	EXTRA_CONFIGURE_ARGUMENTS = --disable-webkit2
 	EXTRA_DH_ARGUMENTS = -Nlibwebkit2gtk-3.0-25 -Nlibwebkit2gtk-3.0-dev -Nlibwebkit2gtk-3.0-25-dbg -Ngir1.2-webkit2-3.0
@@ -127,8 +129,8 @@ ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
 	$(MAKE) $(MAKEARGUMENTS) -C build-2.0
 
 	$(MAKE) -C build-2.0 install DESTDIR="$(CURDIR)"/debian/tmp-2.0
-	[ ! -d debian/tmp-2.0/usr/lib/webkitgtk-1.0-0/libexec ] && install -d -m 755 debian/tmp-2.0/usr/lib/webkitgtk-1.0-0/libexec || true
-
+	[ ! -d debian/tmp-2.0/usr/lib/$(DEB_HOST_MULTIARCH)/webkitgtk-1.0-0/libexec ] && \
+		install -d -m 755 debian/tmp-2.0/usr/lib/$(DEB_HOST_MULTIARCH)/webkitgtk-1.0-0/libexec || true
 	install -d -m 755 debian/tmp-2.0/usr/share/doc/libwebkitgtk-dev/html/
 	install -m 644 Documentation/webkitgtk/html/* \
 		debian/tmp-2.0/usr/share/doc/libwebkitgtk-dev/html/
@@ -154,15 +156,15 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	$(MAKE) $(MAKEARGUMENTS) -C build-3.0
 
 	$(MAKE) -C build-3.0 install DESTDIR="$(CURDIR)"/debian/tmp-3.0
-	[ ! -d debian/tmp-3.0/usr/lib/webkitgtk-3.0-0/libexec ] && install -d -m 755 debian/tmp-3.0/usr/lib/webkitgtk-3.0-0/libexec || true
-
+	[ ! -d debian/tmp-3.0/usr/lib/$(DEB_HOST_MULTIARCH)/webkitgtk-3.0-0/libexec ] && \
+		install -d -m 755 debian/tmp-3.0/usr/lib/$(DEB_HOST_MULTIARCH)/webkitgtk-3.0-0/libexec || true
 	install -d -m 755 debian/tmp-3.0/usr/share/doc/libwebkitgtk-3.0-dev/html
 	install -m 644 Documentation/webkitgtk/html/* \
 		debian/tmp-3.0/usr/share/doc/libwebkitgtk-3.0-dev/html/
 
 ifeq ($(ENABLE_WEBKIT2),yes)
-	[ ! -d debian/tmp-3.0/usr/lib/webkit2gtk-3.0/libexec ] && install -d -m 755 debian/tmp-3.0/usr/lib/webkit2gtk-3.0/libexec || true
-
+	[ ! -d debian/tmp-3.0/usr/lib/$(DEB_HOST_MULTIARCH)/webkit2gtk-3.0/libexec ] && \
+		install -d -m 755 debian/tmp-3.0/usr/lib/$(DEB_HOST_MULTIARCH)/webkit2gtk-3.0/libexec || true
 	install -d -m 755 debian/tmp-3.0/usr/share/doc/libwebkit2gtk-3.0-dev/html
 	install -m 644 Documentation/webkit2gtk/html/* \
 		debian/tmp-3.0/usr/share/doc/libwebkit2gtk-3.0-dev/html/

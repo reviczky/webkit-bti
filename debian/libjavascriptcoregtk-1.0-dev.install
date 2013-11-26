@@ -1,4 +1,4 @@
-usr/lib/libjavascriptcoregtk-1.0.so
+usr/lib/*/libjavascriptcoregtk-1.0.so
 usr/include/webkitgtk-1.0/JavaScriptCore/
-usr/lib/pkgconfig/javascriptcoregtk-1.0.pc
+usr/lib/*/pkgconfig/javascriptcoregtk-1.0.pc
 usr/share/gir-1.0/JavaScriptCore-1.0.gir
