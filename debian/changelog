@@ -6,7 +6,7 @@ webkitgtk (2.2.2-2) UNRELEASED; urgency=low
     + debian/*.install: replace usr/lib/ with usr/lib/*/, but keep
       GObject Introspection .typelib files in /usr/lib
     + debian/rules: adapt libdir and libexecdir to multi-arch.
-  * debian/control: support noopt and debug in DEB_BUILD_OPTIONS.
+  * debian/rules: support noopt and debug in DEB_BUILD_OPTIONS.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 26 Nov 2013 16:55:59 +0200
 
