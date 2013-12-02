@@ -71,6 +71,14 @@ ifneq (,$(filter $(DEB_BUILD_ARCH),armel armhf))
        COMMON_CONFIGURE_ARGUMENTS += --enable-glx=no
 endif
 
+ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
+	COMMON_CONFIGURE_ARGUMENTS += --disable-fast-malloc --disable-optimizations
+endif
+
+ifneq (,$(filter debug,$(DEB_BUILD_OPTIONS)))
+	COMMON_CONFIGURE_ARGUMENTS += --enable-debug
+endif
+
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 	NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 	MAKEARGUMENTS += -j$(NUMJOBS)
