@@ -7,6 +7,8 @@ webkitgtk (2.2.3-1) UNRELEASED; urgency=low
       GObject Introspection .typelib files in /usr/lib
     + debian/rules: adapt libdir and libexecdir to multi-arch.
   * debian/rules: support noopt and debug in DEB_BUILD_OPTIONS.
+  * debian/patches/02_notebook_scroll.patch:
+    + Refreshed.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 04 Dec 2013 13:06:12 +0100
 
