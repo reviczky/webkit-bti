@@ -23,7 +23,7 @@ import sys
 import optparse
 import re
 from signal import alarm, signal, SIGALRM, SIGKILL
-#from gi.repository import Gio, GLib
+from gi.repository import Gio, GLib
 
 top_level_directory = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.append(os.path.join(top_level_directory, "Tools", "jhbuild"))
