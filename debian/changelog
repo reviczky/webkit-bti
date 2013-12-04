@@ -1,4 +1,4 @@
-webkitgtk (2.2.2-2) UNRELEASED; urgency=low
+webkitgtk (2.2.3-1) UNRELEASED; urgency=low
 
   * Multi-arch support:
     + debian/control: Add Multi-Arch and Pre-Depends fields to all
@@ -8,7 +8,7 @@ webkitgtk (2.2.2-2) UNRELEASED; urgency=low
     + debian/rules: adapt libdir and libexecdir to multi-arch.
   * debian/rules: support noopt and debug in DEB_BUILD_OPTIONS.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 26 Nov 2013 16:55:59 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 04 Dec 2013 13:06:12 +0100
 
 webkitgtk (2.2.2-1) unstable; urgency=low
 
