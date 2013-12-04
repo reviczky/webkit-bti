@@ -1,3 +1,123 @@
+2013-11-14  Aloisio Almeida Jr  <aloisio.almeida@openbossa.org>
+
+        [Cairo] Avoid extra copy when drawing images
+        https://bugs.webkit.org/show_bug.cgi?id=124209
+
+        Reviewed by Martin Robinson.
+
+        To solve the bug #58309 a cairo subsurface is being used to limit the
+        source image boundaries.
+        In many cases, when a cairo subsurface is used for drawing an image,
+        it occurs an image copy, causing performance penalty. In the case of
+        the function PlatformContextCairo::drawSurfaceToContext, the image
+        copy always happens.
+        So, we should use the subsurface only when it's really necessary.
+        In cases where we're drawing the whole image, the subsurface is
+        unnecessary.
+
+        The proposed patch avoid the use of subsurfaces when sampling the whole
+        image.
+
+        No new tests. It's an enhancement. Already covered by existing tests.
+
+        * platform/graphics/cairo/PlatformContextCairo.cpp:
+        (WebCore::PlatformContextCairo::drawSurfaceToContext):
+
+2013-08-29  Arnaud Renevier  <a.renevier@samsung.com>
+
+        [cairo] canvas drawing on itself doesn't work with accelerated canvas
+        https://bugs.webkit.org/show_bug.cgi?id=118808
+
+        Reviewed by Martin Robinson.
+
+        When copying an accelerated image, we try to get its dimensions with
+        cairo_image_surface_get_width/cairo_image_surface_get_height. As
+        surface is not an image, this returns width and height of 0.
+
+        Many other places use cairo_image_surface_get although the surface may
+        be a gl surface. 
+        
+        This patch fixes those issues by implementing a cairoSurfaceSize
+        helper that returns the surface size whatever type it is.
+
+        It use cairo_surface_create_similar instead of
+        cairo_image_surface_create in copyCairoImageSurface. It also calls
+        cairo_paint in encodeImage when a drawing over a black background is
+        needed.
+
+        It copies the surface to an image surface if needed in extractImage.
+
+        No new tests. Covered by existing tests.
+
+        * platform/graphics/cairo/BitmapImageCairo.cpp:
+        (WebCore::BitmapImage::BitmapImage):
+        (WebCore::BitmapImage::draw):
+        (WebCore::BitmapImage::checkForSolidColor):
+        * platform/graphics/cairo/CairoUtilities.cpp:
+        (WebCore::copyCairoImageSurface):
+        (WebCore::cairoSurfaceSize):
+        * platform/graphics/cairo/CairoUtilities.h:
+        * platform/graphics/cairo/GraphicsContext3DCairo.cpp:
+        (WebCore::GraphicsContext3D::ImageExtractor::extractImage):
+        * platform/graphics/gtk/GdkCairoUtilities.cpp:
+        (cairoSurfaceToGdkPixbuf):
+        * platform/graphics/gtk/GdkCairoUtilities.h:
+        * platform/graphics/gtk/ImageBufferGtk.cpp:
+        (WebCore::encodeImage):
+        * platform/graphics/gtk/ImageGtk.cpp:
+        (WebCore::BitmapImage::getGdkPixbuf):
+        * platform/gtk/DragIcon.cpp:
+        (WebCore::DragIcon::setImage):
+
+2013-12-02  Andres Gomez  <agomez@igalia.com>
+
+        [GTK] Fails to build with freetype 2.5.1
+        https://bugs.webkit.org/show_bug.cgi?id=125074
+
+        Reviewed by Carlos Garcia Campos.
+
+        FreeType specifies a canonical way of including their own
+        headers. Now, we are following this recommendation so the
+        compilation won't be broken again due to an upgrade in FeeType's
+        including paths.
+
+        * platform/graphics/freetype/FontPlatformDataFreeType.cpp:
+        * platform/graphics/freetype/SimpleFontDataFreeType.cpp:
+        * platform/graphics/harfbuzz/HarfBuzzFaceCairo.cpp:
+
+2013-11-21  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] Cannot scroll in option menu when it larger than the screen
+        https://bugs.webkit.org/show_bug.cgi?id=124671
+
+        Reviewed by Martin Robinson.
+
+        The problem is that the popup menu is not resized to fit in the
+        screen, so it doesn't scroll and some of the items are offscreen
+        so they can't be selected either. GTK+ automatically resizes the
+        popup menus to fit in the work area, but only when the menu is
+        already positioned.
+
+        * platform/gtk/GtkPopupMenu.cpp:
+        (WebCore::GtkPopupMenu::popUp): Schedule a resize of the popup
+        menu right after showing it once it has a position.
+
+2013-11-20  Víctor Manuel Jáquez Leal  <vjaquez@igalia.com>
+
+        [GTK] Remove Chromium as user agent and claim to be Safari in OS X
+        https://bugs.webkit.org/show_bug.cgi?id=124229
+
+        Reviewed by Martin Robinson.
+
+        http://www.duolingo.com/ doesn't get render correctly because it uses
+        Chrome/Chromium specific variables, added after it was forked. Because
+        of this, it is necessary to remove the Chrome/Chromium identification
+        in the user agent. Also, from now on, by default, The GTK+ port will
+        claim to be Safari in OS X to avoid loading wrong resources.
+
+        * platform/gtk/UserAgentGtk.cpp:
+        (WebCore::standardUserAgent):
+
 2013-09-24  Lorenzo Tilve  <ltilve@igalia.com>
 
         [GTK] Fix compilation problems when setting ENABLE_DRAG_SUPPORT = FALSE

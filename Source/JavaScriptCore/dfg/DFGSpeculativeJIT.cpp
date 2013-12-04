@@ -2097,17 +2097,9 @@ void SpeculativeJIT::compileGetByValOnString(Node* node)
     // 8 bit string values don't need the isASCII check.
     cont8Bit.link(&m_jit);
 
-#if CPU(X86)
-    // Don't have enough register, construct our own indexed address and load.
-    m_jit.lshift32(MacroAssembler::TrustedImm32(2), scratchReg);
+    m_jit.lshift32(MacroAssembler::TrustedImm32(sizeof(void*) == 4 ? 2 : 3), scratchReg);
     m_jit.addPtr(MacroAssembler::TrustedImmPtr(m_jit.vm()->smallStrings.singleCharacterStrings()), scratchReg);
     m_jit.loadPtr(scratchReg, scratchReg);
-#else
-    GPRTemporary smallStrings(this);
-    GPRReg smallStringsReg = smallStrings.gpr();
-    m_jit.move(MacroAssembler::TrustedImmPtr(m_jit.vm()->smallStrings.singleCharacterStrings()), smallStringsReg);
-    m_jit.loadPtr(MacroAssembler::BaseIndex(smallStringsReg, scratchReg, MacroAssembler::ScalePtr, 0), scratchReg);
-#endif
 
     addSlowPathGenerator(
         slowPathCall(
@@ -4612,6 +4604,23 @@ void SpeculativeJIT::speculateObject(Edge edge)
             MacroAssembler::TrustedImmPtr(m_jit.vm()->stringStructure.get())));
 }
 
+void SpeculativeJIT::speculateFinalObject(Edge edge)
+{
+    if (!needsTypeCheck(edge, SpecFinalObject))
+        return;
+    
+    SpeculateCellOperand operand(this, edge);
+    GPRTemporary structure(this);
+    GPRReg gpr = operand.gpr();
+    GPRReg structureGPR = structure.gpr();
+    m_jit.loadPtr(MacroAssembler::Address(gpr, JSCell::structureOffset()), structureGPR);
+    DFG_TYPE_CHECK(
+        JSValueSource::unboxedCell(gpr), edge, SpecFinalObject, m_jit.branch8(
+            MacroAssembler::NotEqual,
+            MacroAssembler::Address(structureGPR, Structure::typeInfoTypeOffset()),
+            TrustedImm32(FinalObjectType)));
+}
+
 void SpeculativeJIT::speculateObjectOrOther(Edge edge)
 {
     if (!needsTypeCheck(edge, SpecObject | SpecOther))
@@ -4847,6 +4856,9 @@ void SpeculativeJIT::speculate(Node*, Edge edge)
         break;
     case ObjectUse:
         speculateObject(edge);
+        break;
+    case FinalObjectUse:
+        speculateFinalObject(edge);
         break;
     case ObjectOrOtherUse:
         speculateObjectOrOther(edge);
