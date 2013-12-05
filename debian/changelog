@@ -1,4 +1,4 @@
-webkitgtk (2.2.3-1) UNRELEASED; urgency=low
+webkitgtk (2.2.3-1) unstable; urgency=low
 
   * New upstream stable release (Closes: #731396).
   * Multi-arch support:
@@ -11,7 +11,7 @@ webkitgtk (2.2.3-1) UNRELEASED; urgency=low
   * debian/patches/02_notebook_scroll.patch:
     + Refreshed.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 04 Dec 2013 13:06:12 +0100
+ -- Alberto Garcia <berto@igalia.com>  Thu, 05 Dec 2013 10:43:28 +0100
 
 webkitgtk (2.2.2-1) unstable; urgency=low
 
