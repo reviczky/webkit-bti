@@ -1,5 +1,6 @@
 webkitgtk (2.2.3-1) UNRELEASED; urgency=low
 
+  * New upstream stable release (Closes: #731396).
   * Multi-arch support:
     + debian/control: Add Multi-Arch and Pre-Depends fields to all
       packages with shared libraries.
