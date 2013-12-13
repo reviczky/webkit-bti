@@ -4,6 +4,9 @@ webkitgtk (2.2.3-2) UNRELEASED; urgency=low
   * debian/rules: disable debug symbols, JIT and MacroAssembler on
     powerpcspe (Closes: #731676).
 
+  [ Alberto Garcia ]
+  * debian/control: update package descriptions (Closes: #648639).
+
  -- Alberto Garcia <berto@igalia.com>  Mon, 09 Dec 2013 15:15:10 +0100
 
 webkitgtk (2.2.3-1) unstable; urgency=low

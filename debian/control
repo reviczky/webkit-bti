@@ -59,8 +59,8 @@ Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends},
          ${misc:Depends}
-Description: Javascript engine library for GTK+
- Javascript Core is the javascript engine used in many ports of
+Description: JavaScript engine library for GTK+
+ JavaScriptCore is the JavaScript engine used in many ports of
  WebKit. This build comes from WebKitGTK+.
 
 Package: libjavascriptcoregtk-1.0-dev
@@ -72,11 +72,11 @@ Replaces: libwebkitgtk-dev (<< 1.5.0), libwebkit-dev (<< 1.5.0)
 Depends: libjavascriptcoregtk-1.0-0 (= ${binary:Version}),
          gir1.2-javascriptcoregtk-1.0 (= ${binary:Version}),
          ${misc:Depends}
-Description: Javascript engine library for GTK+
- Javascript Core is the javascript engine used in many ports of
+Description: JavaScript engine library for GTK+ - Development files
+ JavaScriptCore is the JavaScript engine used in many ports of
  WebKit. This build comes from WebKitGTK+.
  .
- Development files.
+ This package contains the development files.
 
 Package: libjavascriptcoregtk-1.0-0-dbg
 Section: debug
@@ -85,11 +85,11 @@ Architecture: any
 Multi-Arch: same
 Depends: libjavascriptcoregtk-1.0-0 (= ${binary:Version}),
          ${misc:Depends}
-Description: Javascript engine library for GTK+
- Javascript Core is the javascript engine used in many ports of
+Description: JavaScript engine library for GTK+ - Debugging symbols
+ JavaScriptCore is the JavaScript engine used in many ports of
  WebKit. This build comes from WebKitGTK+.
  .
- This package provides the debugging symbols for the Javascriptcore
+ This package provides the debugging symbols for the JavaScriptCore
  library for GTK+.
 
 Package: gir1.2-javascriptcoregtk-1.0
@@ -125,7 +125,7 @@ Description: Web content engine library for GTK+
  other applications, such as mail readers, or web browsers.
  .
  It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, Javascript/ECMAscript and more.
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  This is the library for embedding in GTK+ applications.
 
@@ -155,7 +155,7 @@ Description: Web content engine library for GTK+ - Development files
  other applications, such as mail readers, or web browsers.
  .
  It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, Javascript/ECMAscript and more.
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  This package provides development files required to create GTK+ applications
  embedding WebKit.
@@ -172,7 +172,7 @@ Description: Web content engine library for GTK+ - data files
  other applications, such as mail readers, or web browsers.
  .
  It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, Javascript/ECMAscript and more.
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  This package provides the data files needed by the library.
 
@@ -190,7 +190,7 @@ Description: Web content engine library for GTK+ - Debugging symbols
  other applications, such as mail readers, or web browsers.
  .
  It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, Javascript/ECMAscript and more.
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  This package provides the debugging symbols for the Webkit library for GTK+.
 
@@ -215,8 +215,8 @@ Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends},
          ${misc:Depends}
-Description: Javascript engine library for GTK+
- Javascript Core is the javascript engine used in many ports of
+Description: JavaScript engine library for GTK+
+ JavaScriptCore is the JavaScript engine used in many ports of
  WebKit. This build comes from WebKitGTK+.
 
 Package: libjavascriptcoregtk-3.0-dev
@@ -228,11 +228,11 @@ Replaces: libwebkitgtk-3.0-dev (<< 1.5.0)
 Depends: libjavascriptcoregtk-3.0-0 (= ${binary:Version}),
          gir1.2-javascriptcoregtk-3.0 (= ${binary:Version}),
          ${misc:Depends}
-Description: Javascript engine library for GTK+
- Javascript Core is the javascript engine used in many ports of
+Description: JavaScript engine library for GTK+ - Development files
+ JavaScriptCore is the JavaScript engine used in many ports of
  WebKit. This build comes from WebKitGTK+.
  .
- Development files.
+ This package contains the development files.
 
 Package: libjavascriptcoregtk-3.0-0-dbg
 Section: debug
@@ -241,11 +241,11 @@ Architecture: any
 Multi-Arch: same
 Depends: libjavascriptcoregtk-3.0-0 (= ${binary:Version}),
          ${misc:Depends}
-Description: Javascript engine library for GTK+
- Javascript Core is the javascript engine used in many ports of
+Description: JavaScript engine library for GTK+ - Debugging symbols
+ JavaScriptCore is the JavaScript engine used in many ports of
  WebKit. This build comes from WebKitGTK+.
  .
- This package provides the debugging symbols for the Javascriptcore
+ This package provides the debugging symbols for the JavaScriptCore
  library for GTK+.
 
 Package: gir1.2-javascriptcoregtk-3.0
@@ -280,7 +280,7 @@ Description: Web content engine library for GTK+
  other applications, such as mail readers, or web browsers.
  .
  It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, Javascript/ECMAscript and more.
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  This is the library for embedding in GTK+ applications.
 
@@ -301,7 +301,7 @@ Description: Web content engine library for GTK+ - Development files
  other applications, such as mail readers, or web browsers.
  .
  It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, Javascript/ECMAscript and more.
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  This package provides development files required to create GTK+ applications
  embedding WebKit.
@@ -318,7 +318,7 @@ Description: Web content engine library for GTK+ - data files
  other applications, such as mail readers, or web browsers.
  .
  It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, Javascript/ECMAscript and more.
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  This package provides the data files needed by the library.
 
@@ -336,7 +336,7 @@ Description: Web content engine library for GTK+ - Debugging symbols
  other applications, such as mail readers, or web browsers.
  .
  It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, Javascript/ECMAscript and more.
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  This package provides the debugging symbols for the Webkit library for GTK+.
 
@@ -374,7 +374,7 @@ Description: Web content engine library for GTK+
  other applications, such as mail readers, or web browsers.
  .
  It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, Javascript/ECMAscript and more.
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  This is the library for embedding in GTK+ applications.
 
@@ -395,7 +395,7 @@ Description: Web content engine library for GTK+ - Development files
  other applications, such as mail readers, or web browsers.
  .
  It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, Javascript/ECMAscript and more.
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  This package provides development files required to create GTK+ applications
  embedding WebKit.
@@ -416,7 +416,7 @@ Description: Web content engine library for GTK+ - Debugging symbols
  other applications, such as mail readers, or web browsers.
  .
  It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, Javascript/ECMAscript and more.
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  This package provides the debugging symbols for the Webkit library for GTK+.
 
@@ -447,7 +447,7 @@ Description: Web content engine library for GTK+ - common development files
  other applications, such as mail readers, or web browsers.
  .
  It is able to display content such as HTML, SVG, XML, and others. It also
- supports DOM, XMLHttpRequest, XSLT, CSS, Javascript/ECMAscript and more.
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
  .
  This package provides development files that are common to WebKitGTK+
  and WebKit2GTK+.
