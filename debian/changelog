@@ -1,10 +1,9 @@
 webkitgtk (2.2.3-2) UNRELEASED; urgency=low
 
-  [ Roland Stigge ]
-  * debian/rules: disable debug symbols, JIT and MacroAssembler on
-    powerpcspe (Closes: #731676).
-
-  [ Alberto Garcia ]
+  * debian/rules:
+    + Disable debug symbols, JIT and MacroAssembler on powerpcspe and
+      mips64el (thanks Roland Stigge and YunQiang Su)
+      (Closes: #731676, #729572).
   * debian/control:
     + Update package descriptions (Closes: #648639).
     + Build depend on libpng-dev, not libpng12-dev (Closes: #662547).

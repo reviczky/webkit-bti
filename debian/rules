@@ -62,7 +62,7 @@ ifneq (,$(filter $(DEB_BUILD_ARCH),armel mips mipsel))
 endif
 
 # See https://bugs.webkit.org/show_bug.cgi?id=113638
-ifneq (,$(filter $(DEB_BUILD_ARCH),alpha hppa ia64 powerpc powerpcspe ppc64 sparc sparc64 s390 s390x))
+ifneq (,$(filter $(DEB_BUILD_ARCH),alpha hppa ia64 powerpc powerpcspe ppc64 sparc sparc64 s390 s390x mips64el))
 	CPPFLAGS += -DENABLE_JIT=0 -DENABLE_YARR_JIT=0 -DENABLE_ASSEMBLER=0
 endif
 
