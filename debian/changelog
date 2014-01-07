@@ -4,6 +4,7 @@ webkitgtk (2.2.3-2) UNRELEASED; urgency=low
     + Disable debug symbols, JIT and MacroAssembler on powerpcspe and
       mips64el (thanks Roland Stigge and YunQiang Su)
       (Closes: #731676, #729572).
+    + Don't create the libexec dirs manually, this is no longer needed.
   * debian/control:
     + Update package descriptions (Closes: #648639).
     + Build depend on libpng-dev, not libpng12-dev (Closes: #662547).
