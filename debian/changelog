@@ -8,6 +8,7 @@ webkitgtk (2.2.3-2) UNRELEASED; urgency=low
   * debian/control:
     + Update package descriptions (Closes: #648639).
     + Build depend on libpng-dev, not libpng12-dev (Closes: #662547).
+    + Use canonical versions of VCS URLs.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 09 Dec 2013 15:15:10 +0100
 

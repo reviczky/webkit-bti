@@ -49,8 +49,8 @@ Build-Depends: gawk,
 Build-Conflicts: gir-repository-dev
 Standards-Version: 3.9.4
 Homepage: http://webkitgtk.org/
-Vcs-Browser: http://git.debian.org/?p=pkg-webkit/webkit.git
-Vcs-Git: git://git.debian.org/git/pkg-webkit/webkit.git
+Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-webkit/webkit.git
+Vcs-Git: git://anonscm.debian.org/pkg-webkit/webkit.git
 
 Package: libjavascriptcoregtk-1.0-0
 Section: libs
