@@ -121,11 +121,13 @@ location and length of the first misspelling in
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>misspelling_location</code></em> :</span></p></td>
-<td>(out) (allow-none) a pointer to an integer to store the location of the first misspelling</td>
+<td>a pointer to an integer to store the location of the first misspelling. <span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="NULL is ok, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span>
+</td>
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>misspelling_length</code></em> :</span></p></td>
-<td>(out) (allow-none) a pointer to an integer to store the length of the first misspelling</td>
+<td>a pointer to an integer to store the length of the first misspelling. <span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="NULL is ok, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span>
+</td>
 </tr>
 </tbody>
 </table></div>
@@ -159,7 +161,8 @@ misspelled word <em class="parameter"><code>word</code></em>.
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>context</code></em> :</span></p></td>
-<td>(allow-none) the surrounding context of the misspelled word</td>
+<td>the surrounding context of the misspelled word. <span class="annotation">[<acronym title="NULL is ok, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span>
+</td>
 </tr>
 <tr>
 <td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
@@ -196,7 +199,7 @@ of the form 'en_US', ie, language_VARIANT.
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>languages</code></em> :</span></p></td>
-<td>(allow-none) a string of languages to use for <em class="parameter"><code>checker</code></em>
+<td>a string of languages to use for <em class="parameter"><code>checker</code></em>. <span class="annotation">[<acronym title="NULL is ok, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span>
 </td>
 </tr>
 </tbody>
@@ -229,8 +232,8 @@ Returns a suggestion for a word to use in an "autocorrect" feature.
 </tr>
 <tr>
 <td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>(transfer full) the suggestion for the autocorrection of
-<em class="parameter"><code>word</code></em>
+<td>the suggestion for the autocorrection of
+<em class="parameter"><code>word</code></em>. <span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span>
 </td>
 </tr>
 </tbody>

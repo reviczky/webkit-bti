@@ -68,7 +68,7 @@ enum                <a class="link" href="webkitgtk-webkitwebview.html#WebKitWeb
 <a href="../gtk2/gtk2-Selections.html#GtkTargetList"><span class="returnvalue">GtkTargetList</span></a> *     <a class="link" href="webkitgtk-webkitwebview.html#webkit-web-view-get-copy-target-list" title="webkit_web_view_get_copy_target_list ()">webkit_web_view_get_copy_target_list</a>
                                                         (<em class="parameter"><code><a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);
 const <span class="returnvalue">char</span> *        <a class="link" href="webkitgtk-webkitwebview.html#webkit-web-view-get-custom-encoding" title="webkit_web_view_get_custom_encoding ()">webkit_web_view_get_custom_encoding</a> (<em class="parameter"><code><a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);
-<span class="returnvalue">WebKitDOMDocument</span> * <a class="link" href="webkitgtk-webkitwebview.html#webkit-web-view-get-dom-document" title="webkit_web_view_get_dom_document ()">webkit_web_view_get_dom_document</a>    (<em class="parameter"><code><a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);
+<a href="../webkitdomgtk/WebKitDOMDocument.html"><span class="returnvalue">WebKitDOMDocument</span></a> * <a class="link" href="webkitgtk-webkitwebview.html#webkit-web-view-get-dom-document" title="webkit_web_view_get_dom_document ()">webkit_web_view_get_dom_document</a>    (<em class="parameter"><code><a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);
 <a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            <a class="link" href="webkitgtk-webkitwebview.html#webkit-web-view-get-editable" title="webkit_web_view_get_editable ()">webkit_web_view_get_editable</a>        (<em class="parameter"><code><a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);
 const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *       <a class="link" href="webkitgtk-webkitwebview.html#webkit-web-view-get-encoding" title="webkit_web_view_get_encoding ()">webkit_web_view_get_encoding</a>        (<em class="parameter"><code><a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);
 <a class="link" href="WebKitWebFrame.html" title="WebKitWebFrame"><span class="returnvalue">WebKitWebFrame</span></a> *    <a class="link" href="webkitgtk-webkitwebview.html#webkit-web-view-get-focused-frame" title="webkit_web_view_get_focused_frame ()">webkit_web_view_get_focused_frame</a>   (<em class="parameter"><code><a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);
@@ -861,7 +861,7 @@ of WebKitWebSettings.
 <hr>
 <div class="refsect2">
 <a name="webkit-web-view-get-dom-document"></a><h3>webkit_web_view_get_dom_document ()</h3>
-<pre class="programlisting"><span class="returnvalue">WebKitDOMDocument</span> * webkit_web_view_get_dom_document    (<em class="parameter"><code><a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+<pre class="programlisting"><a href="../webkitdomgtk/WebKitDOMDocument.html"><span class="returnvalue">WebKitDOMDocument</span></a> * webkit_web_view_get_dom_document    (<em class="parameter"><code><a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
 <col align="left" valign="top">
@@ -875,7 +875,7 @@ of WebKitWebSettings.
 </tr>
 <tr>
 <td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
-<td>the <span class="type">WebKitDOMDocument</span> currently loaded in
+<td>the <a href="../webkitdomgtk/WebKitDOMDocument.html"><span class="type">WebKitDOMDocument</span></a> currently loaded in
 the main frame of the <em class="parameter"><code>web_view</code></em> or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if no document is loaded. <span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span>
 </td>
 </tr>
@@ -3167,7 +3167,7 @@ cancel it</td>
 <div class="refsect2">
 <a name="WebKitWebView-entering-fullscreen"></a><h3>The <code class="literal">"entering-fullscreen"</code> signal</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>        *web_view,
-                                                        <span class="type">WebKitDOMHTMLElement</span> *element,
+                                                        <a href="../webkitdomgtk/WebKitDOMHTMLElement.html"><span class="type">WebKitDOMHTMLElement</span></a> *element,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>              user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS"><code class="literal">Run Last</code></a></pre>
 <p>
 Emitted when JavaScript code calls
@@ -3191,7 +3191,7 @@ full screen window).
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>element</code></em> :</span></p></td>
-<td>the <span class="type">WebKitDOMHTMLElement</span> which has requested full screen display.</td>
+<td>the <a href="../webkitdomgtk/WebKitDOMHTMLElement.html"><span class="type">WebKitDOMHTMLElement</span></a> which has requested full screen display.</td>
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>user_data</code></em> :</span></p></td>
@@ -3386,7 +3386,7 @@ icons for child frames.
 <div class="refsect2">
 <a name="WebKitWebView-leaving-fullscreen"></a><h3>The <code class="literal">"leaving-fullscreen"</code> signal</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>        *web_view,
-                                                        <span class="type">WebKitDOMHTMLElement</span> *element,
+                                                        <a href="../webkitdomgtk/WebKitDOMHTMLElement.html"><span class="type">WebKitDOMHTMLElement</span></a> *element,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>              user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS"><code class="literal">Run Last</code></a></pre>
 <p>
 Emitted when the WebView is about to restore its top level
@@ -3406,7 +3406,7 @@ entering-fullscreen stage for instance.
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>element</code></em> :</span></p></td>
-<td>the <span class="type">WebKitDOMHTMLElement</span> which is currently displayed full screen.</td>
+<td>the <a href="../webkitdomgtk/WebKitDOMHTMLElement.html"><span class="type">WebKitDOMHTMLElement</span></a> which is currently displayed full screen.</td>
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>user_data</code></em> :</span></p></td>
@@ -4550,8 +4550,8 @@ The default bindings for this signal is Ctrl-a.
 <div class="refsect2">
 <a name="WebKitWebView-should-apply-style"></a><h3>The <code class="literal">"should-apply-style"</code> signal</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>                *web_view,
-                                                        <span class="type">WebKitDOMCSSStyleDeclaration</span> *set,
-                                                        <span class="type">WebKitDOMRange</span>               *range,
+                                                        <a href="../webkitdomgtk/WebKitDOMCSSStyleDeclaration.html"><span class="type">WebKitDOMCSSStyleDeclaration</span></a> *set,
+                                                        <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>               *range,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                      user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-ACTION:CAPS"><code class="literal">Action</code></a></pre>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
@@ -4565,12 +4565,12 @@ The default bindings for this signal is Ctrl-a.
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>set</code></em> :</span></p></td>
-<td>a <span class="type">WebKitDOMCSSStyleDeclaration</span>
+<td>a <a href="../webkitdomgtk/WebKitDOMCSSStyleDeclaration.html"><span class="type">WebKitDOMCSSStyleDeclaration</span></a>
 </td>
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>range</code></em> :</span></p></td>
-<td>a <span class="type">WebKitDOMRange</span>
+<td>a <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>
 </td>
 </tr>
 <tr>
@@ -4584,7 +4584,7 @@ The default bindings for this signal is Ctrl-a.
 <div class="refsect2">
 <a name="WebKitWebView-should-begin-editing"></a><h3>The <code class="literal">"should-begin-editing"</code> signal</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>  *web_view,
-                                                        <span class="type">WebKitDOMRange</span> *range,
+                                                        <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a> *range,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>        user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-ACTION:CAPS"><code class="literal">Action</code></a></pre>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
@@ -4598,7 +4598,7 @@ The default bindings for this signal is Ctrl-a.
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>range</code></em> :</span></p></td>
-<td>a <span class="type">WebKitDOMRange</span>
+<td>a <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>
 </td>
 </tr>
 <tr>
@@ -4612,8 +4612,8 @@ The default bindings for this signal is Ctrl-a.
 <div class="refsect2">
 <a name="WebKitWebView-should-change-selected-range"></a><h3>The <code class="literal">"should-change-selected-range"</code> signal</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>          *web_view,
-                                                        <span class="type">WebKitDOMRange</span>         *fromRange,
-                                                        <span class="type">WebKitDOMRange</span>         *toRange,
+                                                        <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>         *fromRange,
+                                                        <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>         *toRange,
                                                         <span class="type">WebKitSelectionAffinity</span> affinity,
                                                         <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a>                stillSelecting,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                user_data)           : <a href="../gobject/gobject-Signals.html#G-SIGNAL-ACTION:CAPS"><code class="literal">Action</code></a></pre>
@@ -4629,12 +4629,12 @@ The default bindings for this signal is Ctrl-a.
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>fromRange</code></em> :</span></p></td>
-<td>a <span class="type">WebKitDOMRange</span>
+<td>a <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>
 </td>
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>toRange</code></em> :</span></p></td>
-<td>a <span class="type">WebKitDOMRange</span>
+<td>a <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>
 </td>
 </tr>
 <tr>
@@ -4657,7 +4657,7 @@ The default bindings for this signal is Ctrl-a.
 <div class="refsect2">
 <a name="WebKitWebView-should-delete-range"></a><h3>The <code class="literal">"should-delete-range"</code> signal</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>  *web_view,
-                                                        <span class="type">WebKitDOMRange</span> *range,
+                                                        <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a> *range,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>        user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-ACTION:CAPS"><code class="literal">Action</code></a></pre>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
@@ -4671,7 +4671,7 @@ The default bindings for this signal is Ctrl-a.
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>range</code></em> :</span></p></td>
-<td>a <span class="type">WebKitDOMRange</span>
+<td>a <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>
 </td>
 </tr>
 <tr>
@@ -4685,7 +4685,7 @@ The default bindings for this signal is Ctrl-a.
 <div class="refsect2">
 <a name="WebKitWebView-should-end-editing"></a><h3>The <code class="literal">"should-end-editing"</code> signal</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>  *web_view,
-                                                        <span class="type">WebKitDOMRange</span> *range,
+                                                        <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a> *range,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>        user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-ACTION:CAPS"><code class="literal">Action</code></a></pre>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
@@ -4699,7 +4699,7 @@ The default bindings for this signal is Ctrl-a.
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>range</code></em> :</span></p></td>
-<td>a <span class="type">WebKitDOMRange</span>
+<td>a <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>
 </td>
 </tr>
 <tr>
@@ -4713,8 +4713,8 @@ The default bindings for this signal is Ctrl-a.
 <div class="refsect2">
 <a name="WebKitWebView-should-insert-node"></a><h3>The <code class="literal">"should-insert-node"</code> signal</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>     *web_view,
-                                                        <span class="type">WebKitDOMNode</span>     *node,
-                                                        <span class="type">WebKitDOMRange</span>    *range,
+                                                        <a href="../webkitdomgtk/WebKitDOMNode.html"><span class="type">WebKitDOMNode</span></a>     *node,
+                                                        <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>    *range,
                                                         <span class="type">WebKitInsertAction</span> action,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>           user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-ACTION:CAPS"><code class="literal">Action</code></a></pre>
 <div class="variablelist"><table border="0" class="variablelist">
@@ -4729,12 +4729,12 @@ The default bindings for this signal is Ctrl-a.
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>node</code></em> :</span></p></td>
-<td>a <span class="type">WebKitDOMNode</span>
+<td>a <a href="../webkitdomgtk/WebKitDOMNode.html"><span class="type">WebKitDOMNode</span></a>
 </td>
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>range</code></em> :</span></p></td>
-<td>a <span class="type">WebKitDOMRange</span>
+<td>a <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>
 </td>
 </tr>
 <tr>
@@ -4754,7 +4754,7 @@ The default bindings for this signal is Ctrl-a.
 <a name="WebKitWebView-should-insert-text"></a><h3>The <code class="literal">"should-insert-text"</code> signal</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>     *web_view,
                                                         <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a>             *string,
-                                                        <span class="type">WebKitDOMRange</span>    *range,
+                                                        <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>    *range,
                                                         <span class="type">WebKitInsertAction</span> action,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>           user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-ACTION:CAPS"><code class="literal">Action</code></a></pre>
 <div class="variablelist"><table border="0" class="variablelist">
@@ -4773,7 +4773,7 @@ The default bindings for this signal is Ctrl-a.
 </tr>
 <tr>
 <td><p><span class="term"><em class="parameter"><code>range</code></em> :</span></p></td>
-<td>a <span class="type">WebKitDOMRange</span>
+<td>a <a href="../webkitdomgtk/WebKitDOMRange.html"><span class="type">WebKitDOMRange</span></a>
 </td>
 </tr>
 <tr>
@@ -4792,7 +4792,7 @@ The default bindings for this signal is Ctrl-a.
 <div class="refsect2">
 <a name="WebKitWebView-should-show-delete-interface-for-element"></a><h3>The <code class="literal">"should-show-delete-interface-for-element"</code> signal</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>            user_function                      (<a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>        *web_view,
-                                                        <span class="type">WebKitDOMHTMLElement</span> *element,
+                                                        <a href="../webkitdomgtk/WebKitDOMHTMLElement.html"><span class="type">WebKitDOMHTMLElement</span></a> *element,
                                                         <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>              user_data)      : <a href="../gobject/gobject-Signals.html#G-SIGNAL-ACTION:CAPS"><code class="literal">Action</code></a></pre>
 <div class="variablelist"><table border="0" class="variablelist">
 <colgroup>
