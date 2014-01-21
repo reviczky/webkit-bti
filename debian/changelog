@@ -12,6 +12,7 @@ webkitgtk (2.2.4-1) UNRELEASED; urgency=low
     + Update package descriptions (Closes: #648639).
     + Build depend on libpng-dev, not libpng12-dev (Closes: #662547).
     + Use canonical versions of VCS URLs.
+    + Bump Standards-Version to 3.9.5; no changes needed.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 21 Jan 2014 16:14:39 +0200
 
