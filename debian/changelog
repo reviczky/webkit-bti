@@ -1,5 +1,6 @@
-webkitgtk (2.2.3-2) UNRELEASED; urgency=low
+webkitgtk (2.2.4-1) UNRELEASED; urgency=low
 
+  * New upstream release.
   * debian/rules:
     + Disable debug symbols, JIT and MacroAssembler on powerpcspe and
       mips64el (thanks Roland Stigge and YunQiang Su)
@@ -10,7 +11,7 @@ webkitgtk (2.2.3-2) UNRELEASED; urgency=low
     + Build depend on libpng-dev, not libpng12-dev (Closes: #662547).
     + Use canonical versions of VCS URLs.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 09 Dec 2013 15:15:10 +0100
+ -- Alberto Garcia <berto@igalia.com>  Tue, 21 Jan 2014 16:14:39 +0200
 
 webkitgtk (2.2.3-1) unstable; urgency=low
 
