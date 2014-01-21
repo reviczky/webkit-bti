@@ -8,9 +8,11 @@ Subject: [PATCH] Avoid exporting a bunch of C++ symbols by not building
  Source/WebKit/gtk/GNUmakefile.am |  2 +-
  2 files changed, 8 insertions(+), 8 deletions(-)
 
---- a/GNUmakefile.am
-+++ b/GNUmakefile.am
-@@ -174,7 +174,7 @@
+Index: webkitgtk/GNUmakefile.am
+===================================================================
+--- webkitgtk.orig/GNUmakefile.am
++++ webkitgtk/GNUmakefile.am
+@@ -173,7 +173,7 @@ version_script = -export-symbols-regex "
  endif
  
  if OS_GNU
@@ -19,7 +21,7 @@ Subject: [PATCH] Avoid exporting a bunch of C++ symbols by not building
  endif
  
  if ENABLE_COVERAGE
-@@ -201,16 +201,16 @@
+@@ -200,15 +200,15 @@ include Source/WebCore/bindings/gobject/
  include Source/WebCore/platform/gtk/po/GNUmakefile.am
  include Source/WebInspectorUI/GNUmakefile.am
  include Source/WebKit/gtk/GNUmakefile.am
@@ -27,10 +29,8 @@ Subject: [PATCH] Avoid exporting a bunch of C++ symbols by not building
 +# include Tools/GNUmakefile.am
  
  include Source/WebKit2/GNUmakefile.am
--include Source/WebKit2/UIProcess/API/gtk/tests/GNUmakefile.am
 -include Tools/MiniBrowser/gtk/GNUmakefile.am
 -include Tools/WebKitTestRunner/GNUmakefile.am
-+# include Source/WebKit2/UIProcess/API/gtk/tests/GNUmakefile.am
 +# include Tools/MiniBrowser/gtk/GNUmakefile.am
 +# include Tools/WebKitTestRunner/GNUmakefile.am
  include Source/ThirdParty/ANGLE/GNUmakefile.am
@@ -42,14 +42,25 @@ Subject: [PATCH] Avoid exporting a bunch of C++ symbols by not building
  # [GTK] Refactor the translations now that we have webkit2
  # https://bugs.webkit.org/show_bug.cgi?id=55153
  
---- a/Source/WebKit/gtk/GNUmakefile.am
-+++ b/Source/WebKit/gtk/GNUmakefile.am
-@@ -446,7 +446,7 @@
- 	-no-fast-install
+Index: webkitgtk/Tools/TestWebKitAPI/GNUmakefile.am
+===================================================================
+--- webkitgtk.orig/Tools/TestWebKitAPI/GNUmakefile.am
++++ webkitgtk/Tools/TestWebKitAPI/GNUmakefile.am
+@@ -118,7 +118,7 @@ noinst_PROGRAMS += \
+ 	Programs/TestWebKitAPI/WebCoreGtk/TestWebCoreGtk
  
  if ENABLE_WEBKIT1
 -noinst_PROGRAMS += \
-+DEBIAN_DISABLED = \
- 	Programs/unittests/testapplicationcache \
- 	Programs/unittests/testcontextmenu \
- 	Programs/unittests/testdomdocument \
++DEBIAN_DISABLED += \
+ 	Programs/TestWebKitAPI/WebKitGtk/testapplicationcache \
+ 	Programs/TestWebKitAPI/WebKitGtk/testcontextmenu \
+ 	Programs/TestWebKitAPI/WebKitGtk/testdomdocument \
+@@ -150,7 +150,7 @@ noinst_PROGRAMS += \
+ endif
+ 
+ if ENABLE_WEBKIT2
+-noinst_PROGRAMS += \
++DEBIAN_DISABLED += \
+ 	Programs/TestWebKitAPI/WebKit2/TestWebKit2 \
+ 	Programs/TestWebKitAPI/WebKit2Gtk/InspectorTestServer \
+ 	Programs/TestWebKitAPI/WebKit2Gtk/TestAuthentication \

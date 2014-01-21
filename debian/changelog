@@ -1,6 +1,8 @@
 webkitgtk (2.2.4-1) UNRELEASED; urgency=low
 
   * New upstream release.
+  * debian/patches/01_do-not-build-testing-tools.patch:
+    + Update against the current release.
   * debian/rules:
     + Disable debug symbols, JIT and MacroAssembler on powerpcspe and
       mips64el (thanks Roland Stigge and YunQiang Su)
