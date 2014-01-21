@@ -1,3 +1,177 @@
+2014-01-08  Alberto Garcia  <berto@igalia.com>
+
+        Fix some compilation warnings
+        https://bugs.webkit.org/show_bug.cgi?id=126635
+
+        Reviewed by Csaba Osztrogonác.
+
+        Remove code that is no longer being used.
+
+        * platform/graphics/cairo/GraphicsContextCairo.cpp:
+        * platform/graphics/texmap/GraphicsLayerTextureMapper.h:
+        * platform/gtk/PopupMenuGtk.cpp:
+        * platform/gtk/RedirectedXCompositeWindow.h:
+
+2013-12-30  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [SOUP] willSendRequest doesn't work after a redirect
+        https://bugs.webkit.org/show_bug.cgi?id=126290
+
+        Reviewed by Martin Robinson.
+
+        The problem is that we are creating the new soup request for the
+        redirect before calling ResourceHandleClient::willSendRequest() so
+        that any change made to the request by the client is ignored.
+
+        * platform/network/soup/ResourceHandleSoup.cpp:
+        (WebCore::doRedirect): Create the new soup request and soup
+        message for the redirect after calling willSendRequest() on the
+        client.
+
+2013-12-06  Lukasz Gajowy  <l.gajowy@samsung.com>
+
+        [ATK] Missing aria roles mappings
+        https://bugs.webkit.org/show_bug.cgi?id=117729
+
+        Reviewed by Mario Sanchez Prada.
+
+        Added a few mappings from ARIA roles to ATK roles.
+
+        Test: accessibility/aria-mappings.html
+
+        * accessibility/atk/WebKitAccessibleWrapperAtk.cpp:
+        (atkRole):
+
+2013-12-23  Zan Dobersek  <zdobersek@igalia.com>
+
+        webkit gtk 2.2.3 stable tarball compilation error
+        https://bugs.webkit.org/show_bug.cgi?id=125987
+
+        Reviewed by Gustavo Noronha Silva.
+
+        Only try including <gdk/gdkwayland.h> and using GDK_IS_WAYLAND_DISPLAY if the Wayland support has been
+        enabled and when not compiling with GTK+ 2 (which occurs when building for libPlatformGtk2).
+
+        * platform/graphics/GLContext.cpp:
+        (WebCore::GLContext::createContextForWindow):
+
+2013-09-10  Mario Sanchez Prada  <mario.prada@samsung.com>
+
+        [GTK] Test /webkit/atk/getTextInParagraphAndBodyModerate fails
+        https://bugs.webkit.org/show_bug.cgi?id=105538
+
+        Reviewed by Chris Fleizach.
+
+        Expose '\n' for linebreaks when they were explicitly set by the
+        author of the web content with a <br> tag.
+
+        Tests: accessibility/paragraph-with-linebreaks.html
+
+        * accessibility/AccessibilityNodeObject.cpp:
+        (WebCore::shouldAddSpaceBeforeAppendingNextElement): Helper
+        function to decide when to append spaces when building the text
+        under an element, considering line breaks.
+        (WebCore::AccessibilityNodeObject::textUnderElement): Use the
+        shouldAddSpaceBeforeAppendingNextElement() function here.
+        * accessibility/AccessibilityRenderObject.cpp:
+        (WebCore::AccessibilityRenderObject::textUnderElement): Return the
+        renderer's text for accessibility objects exposing <br> elements.
+        * html/parser/HTMLParserIdioms.h:
+        (WebCore::isHTMLSpaceButNotLineBreak): New helper function, useful
+        to be passed to other functions like simplifyWhiteSpace().
+
+2013-12-06  Roger Fong  <roger_fong@apple.com>
+
+        Hook into some shader symbol logic following the ANGLE update in r159533.
+        https://bugs.webkit.org/show_bug.cgi?id=125332.
+
+        Reviewed by Brent Fulgham.
+
+        No new functionality added.
+
+        * html/canvas/WebGLRenderingContext.cpp: Add some error checking for errors related to 
+            shader symbols that exist across both vertex and fragment shaders.
+        (WebCore::WebGLRenderingContext::linkProgram):
+        * platform/graphics/ANGLEWebKitBridge.cpp: Add logic for handling varyings 
+            and add new fields to the ANGLEShaderSymbol struct.
+        (WebCore::getSymbolInfo):
+        * platform/graphics/ANGLEWebKitBridge.h:
+        * platform/graphics/GraphicsContext3D.h: Add those same fields to the SymbolInfo struct 
+            as well so that we can access them from our shader source map.
+            Also add a map of varyings along side the uniforms and attributes.
+        (WebCore::GraphicsContext3D::SymbolInfo::SymbolInfo):
+        (WebCore::GraphicsContext3D::ShaderSourceEntry::symbolMap):
+        * platform/graphics/opengl/Extensions3DOpenGLCommon.cpp:
+        (WebCore::Extensions3DOpenGLCommon::getTranslatedShaderSourceANGLE):
+        * platform/graphics/opengl/GraphicsContext3DOpenGLCommon.cpp:
+        (WebCore::GraphicsContext3D::areProgramSymbolsValid): Will be filled in later, this method 
+            will use the shader source map to check for issues with unused varyings and precisions 
+            mismatches of shader symbols that exist across both the vertex and fragment shaders.
+
+2013-10-04  Dean Jackson  <dino@apple.com>
+
+        [WebGL] program should not be able to link if a bad shader is attached
+        https://bugs.webkit.org/show_bug.cgi?id=94036
+
+        Reviewed by Darin Adler.
+
+        If you attempt to link a program when bad shaders are attached, the
+        link should fail. WebGL also requires that the previously linked
+        program should remain intact. We were doing the former, but not
+        the latter.
+
+        Fix this by not calling glLinkProgram if we know we have bad
+        shaders, and synthesize a bad link status instead.
+
+        Test: WebGL conformance test conformance/programs/program-test.html
+        (found in LayoutTests/webgl)
+
+        * html/canvas/WebGLRenderingContext.cpp:
+        (WebCore::WebGLRenderingContext::compileShader): Mark a shader as valid
+        if it compiled ok.
+        (WebCore::WebGLRenderingContext::linkProgram): Don't call into GraphicsContext3D::linkProgram
+        if we know that we don't have valid shaders.
+        * html/canvas/WebGLShader.cpp:
+        (WebCore::WebGLShader::WebGLShader): Initialize m_isValid.
+        * html/canvas/WebGLShader.h:
+        (WebCore::WebGLShader::isValid): New member variable getter and setter.
+        (WebCore::WebGLShader::setValid):
+
+2013-11-19  Roger Fong  <roger_fong@apple.com>
+
+        Update ANGLE sources.
+        https://bugs.webkit.org/show_bug.cgi?id=124615.
+
+        Reviewed by Dean Jackson.
+
+        Tests covered by Khronos WebGL conformance tests.
+
+        * platform/graphics/ANGLEWebKitBridge.cpp: Resolve a build error that resulted from updating ANGLE.
+        (WebCore::getSymbolInfo):
+        (WebCore::ANGLEWebKitBridge::compileShaderSource):
+
+2013-12-07  Gustavo Noronha Silva  <gns@gnome.org>
+
+        ubuntu software center hits _XReadEvents() error
+        https://bugs.webkit.org/show_bug.cgi?id=123480
+
+        Reviewed by Martin Robinson.
+
+        * platform/gtk/WidgetBackingStoreGtkX11.cpp:
+        (WebCore::WidgetBackingStoreGtkX11::~WidgetBackingStoreGtkX11): clear the surface
+        before freeing the associated pixmap.
+
+2013-12-10  Gustavo Noronha Silva  <gns@gnome.org>
+
+        [GTK] REGRESSION: www.yahoo.com redirects to the mobile version after UA change
+        https://bugs.webkit.org/show_bug.cgi?id=125444
+
+        Reviewed by Martin Robinson.
+
+        * platform/gtk/UserAgentGtk.cpp:
+        (WebCore::platformVersionForUAString): more correctly pretend we're Mac OS X.
+        (WebCore::standardUserAgent): ditto.
+
 2013-11-14  Aloisio Almeida Jr  <aloisio.almeida@openbossa.org>
 
         [Cairo] Avoid extra copy when drawing images
