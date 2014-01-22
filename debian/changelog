@@ -1,4 +1,4 @@
-webkitgtk (2.2.4-1) UNRELEASED; urgency=low
+webkitgtk (2.2.4-1) unstable; urgency=low
 
   * New upstream release.
   * Build a libjavascriptcoregtk-3.0-bin package with the jsc interpreter
@@ -22,7 +22,7 @@ webkitgtk (2.2.4-1) UNRELEASED; urgency=low
     + Use canonical versions of VCS URLs.
     + Bump Standards-Version to 3.9.5; no changes needed.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 21 Jan 2014 16:14:39 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 22 Jan 2014 08:36:05 +0200
 
 webkitgtk (2.2.3-1) unstable; urgency=low
 
