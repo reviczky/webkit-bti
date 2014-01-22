@@ -1,6 +1,14 @@
 webkitgtk (2.2.4-1) UNRELEASED; urgency=low
 
   * New upstream release.
+  * Build a libjavascriptcoregtk-3.0-bin package with the jsc interpreter
+    (Closes: #733338):
+    + debian/control: add the new entry.
+    + debian/rules: rename the binary from jsc-3 to jsc and add the
+      suitable debhelper rules.
+    + debian/libjavascriptcoregtk-3.0-bin.install: list package contents.
+    + debian/libjavascriptcoregtk-3.0-bin.manpages,
+      debian/jsc.1: add manual page.
   * debian/patches/01_do-not-build-testing-tools.patch:
     + Update against the current release.
   * debian/rules:

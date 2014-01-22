@@ -162,6 +162,7 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	$(MAKE) $(MAKEARGUMENTS) -C build-3.0
 
 	$(MAKE) -C build-3.0 install DESTDIR="$(CURDIR)"/debian/tmp-3.0
+	mv debian/tmp-3.0/usr/bin/jsc-3 debian/tmp-3.0/usr/bin/jsc
 	install -d -m 755 debian/tmp-3.0/usr/share/doc/libwebkitgtk-3.0-dev/html
 	install -m 644 Documentation/webkitgtk/html/* \
 		debian/tmp-3.0/usr/share/doc/libwebkitgtk-3.0-dev/html/
@@ -188,6 +189,7 @@ ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
 endif
 ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_install -plibwebkitgtk-3.0-common --sourcedir=debian/tmp-3.0
+	dh_installman -plibjavascriptcoregtk-3.0-bin
 endif
 	dh_link -i $(EXTRA_DH_ARGUMENTS)
 	dh_compress -i $(EXTRA_DH_ARGUMENTS)
@@ -217,6 +219,7 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_install -plibjavascriptcoregtk-3.0-0 --sourcedir=debian/tmp-3.0
 	dh_install -plibjavascriptcoregtk-3.0-dev --sourcedir=debian/tmp-3.0
 	dh_install -plibjavascriptcoregtk-3.0-0-dbg --sourcedir=debian/tmp-3.0
+	dh_install -plibjavascriptcoregtk-3.0-bin --sourcedir=debian/tmp-3.0
 	dh_install -pgir1.2-javascriptcoregtk-3.0 --sourcedir=debian/tmp-3.0
 	dh_install -plibwebkitgtk-3.0-0 --sourcedir=debian/tmp-3.0
 	dh_install -plibwebkitgtk-3.0-dev --sourcedir=debian/tmp-3.0
@@ -237,6 +240,7 @@ ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
 endif
 ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_strip -plibjavascriptcoregtk-3.0-0 --dbg-package=libjavascriptcoregtk-3.0-0-dbg
+	dh_strip -plibjavascriptcoregtk-3.0-bin
 	dh_strip -plibwebkitgtk-3.0-0 --dbg-package=libwebkitgtk-3.0-0-dbg
 ifeq ($(ENABLE_WEBKIT2),yes)
 	dh_strip -plibwebkit2gtk-3.0-25 --dbg-package=libwebkit2gtk-3.0-25-dbg
