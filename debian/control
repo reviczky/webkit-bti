@@ -6,7 +6,6 @@ Uploaders: Mike Hommey <glandium@debian.org>, Gustavo Noronha Silva <kov@debian.
            Emilio Pozuelo Monfort <pochu@debian.org>, Alberto Garcia <berto@igalia.com>
 Build-Depends: gawk,
                chrpath,
-               flex (>= 2.5.33),
                gcc-4.7,
                g++-4.7,
                debhelper (>= 9),
