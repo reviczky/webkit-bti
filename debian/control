@@ -182,7 +182,6 @@ Description: Web content engine library for GTK+ - development files
 
 Package: libwebkitgtk-1.0-common
 Section: libs
-Priority: optional
 Depends: ${misc:Depends}
 Architecture: all
 Multi-Arch: foreign
@@ -374,7 +373,6 @@ Description: Web content engine library for GTK+ - development files
 
 Package: libwebkitgtk-3.0-common
 Section: libs
-Priority: optional
 Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}
