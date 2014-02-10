@@ -3,6 +3,8 @@ webkitgtk (2.2.4-2) UNRELEASED; urgency=low
   * debian/rules:
     + Move dh_installman to the binary-arch target to make sure that the
       jsc manual page is installed in all architectures.
+  * debian/control:
+    + Update package descriptions (Closes: #738144).
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 07 Feb 2014 10:20:23 +0000
 
