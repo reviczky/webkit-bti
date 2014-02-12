@@ -7,6 +7,10 @@ webkitgtk (2.2.4-2) UNRELEASED; urgency=low
     + Update package descriptions (Closes: #738144).
     + Remove redundant Priority fields from libwebkitgtk-{1,3}.0-common.
     + Remove duplicate build dependency on flex.
+  * Ship the MiniBrowser binary, which is useful for testing purposes.
+    + debian/patches/01_do-not-build-testing-tools.patch: don't disable
+      its build anymore.
+    + debian/patches/03_install-minibrowser.patch: install it.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 07 Feb 2014 10:20:23 +0000
 

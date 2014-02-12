@@ -1,4 +1,5 @@
 01_do-not-build-testing-tools.patch
 02_notebook_scroll.patch
+03_install-minibrowser.patch
 15_ia64-use-system-malloc.patch
 40_hppa_platform_h.patch
