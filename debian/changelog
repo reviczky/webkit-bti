@@ -4,6 +4,7 @@ webkitgtk (2.2.5-1) UNRELEASED; urgency=low
   * debian/rules:
     + Move dh_installman to the binary-arch target to make sure that the
       jsc manual page is installed in all architectures.
+    + Switch to gcc 4.8.
   * debian/control:
     + Update package descriptions (Closes: #738144).
     + Remove redundant Priority fields from libwebkitgtk-{1,3}.0-common.
