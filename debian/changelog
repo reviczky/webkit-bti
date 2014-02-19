@@ -1,4 +1,4 @@
-webkitgtk (2.2.5-1) UNRELEASED; urgency=low
+webkitgtk (2.2.5-1) unstable; urgency=low
 
   * New upstream release (Closes: #696295, #728789).
   * debian/rules:
@@ -14,7 +14,7 @@ webkitgtk (2.2.5-1) UNRELEASED; urgency=low
       its build anymore.
     + debian/patches/03_install-minibrowser.patch: install it.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 07 Feb 2014 10:20:23 +0000
+ -- Alberto Garcia <berto@igalia.com>  Wed, 19 Feb 2014 10:31:35 +0000
 
 webkitgtk (2.2.4-1) unstable; urgency=low
 
