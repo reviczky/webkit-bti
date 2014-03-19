@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <wtf/Assertions.h>
 #include <wtf/Functional.h>
 #include <wtf/OwnArrayPtr.h>
@@ -391,6 +392,8 @@ void Connection::readyReadHandler()
                 return;
 
             // FIXME: Handle other errors here?
+            WTFLogAlways("Error receiving IPC message on socket %d in process %d: %s", m_socketDescriptor, getpid(), strerror(errno));
+            connectionDidClose();
             return;
         }
 
@@ -554,8 +557,20 @@ bool Connection::sendOutgoingMessage(PassOwnPtr<MessageEncoder> encoder)
 
     int bytesSent = 0;
     while ((bytesSent = sendmsg(m_socketDescriptor, &message, 0)) == -1) {
-        if (errno != EINTR)
-            return false;
+        if (errno == EINTR)
+            continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            struct pollfd pollfd;
+
+            pollfd.fd = m_socketDescriptor;
+            pollfd.events = POLLOUT;
+            pollfd.revents = 0;
+            poll(&pollfd, 1, -1);
+            continue;
+        }
+
+        WTFLogAlways("Error sending IPC message: %s", strerror(errno));
+        return false;
     }
     return true;
 }
