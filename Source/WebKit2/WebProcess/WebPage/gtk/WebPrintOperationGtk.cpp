@@ -29,6 +29,7 @@
 #include "WebCoreArgumentCoders.h"
 #include "WebPage.h"
 #include "WebPageProxyMessages.h"
+#include "WebProcess.h"
 #include <WebCore/ErrorsGtk.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/NotImplemented.h>
@@ -144,10 +145,14 @@ public:
     static void printJobFinished(WebPrintOperationGtkUnix* printOperation)
     {
         printOperation->deref();
+        WebProcess::shared().enableTermination();
     }
 
     void endPrint()
     {
+        // Disable web process termination until the print job finishes.
+        WebProcess::shared().disableTermination();
+
         cairo_surface_finish(gtk_print_job_get_surface(m_printJob.get(), 0));
         // Make sure the operation is alive until the job is sent.
         ref();
@@ -410,6 +415,11 @@ WebPrintOperationGtk::~WebPrintOperationGtk()
 {
     if (m_printPagesIdleId)
         g_source_remove(m_printPagesIdleId);
+}
+
+void WebPrintOperationGtk::disconnectFromPage()
+{
+    m_webPage = nullptr;
 }
 
 int WebPrintOperationGtk::pageCount() const
@@ -682,8 +692,9 @@ void WebPrintOperationGtk::printDone(const WebCore::ResourceError& error)
         g_source_remove(m_printPagesIdleId);
     m_printPagesIdleId = 0;
 
-    // Print finished or failed, notify the UI process that we are done.
-    m_webPage->send(Messages::WebPageProxy::PrintFinishedCallback(error, m_callbackID));
+    // Print finished or failed, notify the UI process that we are done if the page hasn't been closed.
+    if (m_webPage)
+        m_webPage->didFinishPrintOperation(error, m_callbackID);
 }
 
 void WebPrintOperationGtk::print(cairo_surface_t* surface, double xDPI, double yDPI)
