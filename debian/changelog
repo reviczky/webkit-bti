@@ -1,3 +1,9 @@
+webkitgtk (2.2.6-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 19 Mar 2014 14:29:10 +0200
+
 webkitgtk (2.2.5-1) unstable; urgency=low
 
   * New upstream release (Closes: #696295, #728789).
