@@ -1,0 +1,140 @@
+From: Alberto Garcia <berto@igalia.com>
+Subject: Revert commit r159826 to fix crash in JSC
+Forwarded: no
+Index: webkitgtk/Source/JavaScriptCore/dfg/DFGJITCompiler.h
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/dfg/DFGJITCompiler.h
++++ webkitgtk/Source/JavaScriptCore/dfg/DFGJITCompiler.h
+@@ -270,8 +270,6 @@ public:
+                 entry->m_expectedValues.local(local).makeHeapTop();
+             else {
+                 VariableAccessData* variable = node->variableAccessData();
+-                entry->m_machineStackUsed.set(variable->machineLocal().toLocal());
+-                
+                 switch (variable->flushFormat()) {
+                 case FlushedDouble:
+                     entry->m_localsForcedDouble.set(local);
+Index: webkitgtk/Source/JavaScriptCore/dfg/DFGOSREntry.cpp
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/dfg/DFGOSREntry.cpp
++++ webkitgtk/Source/JavaScriptCore/dfg/DFGOSREntry.cpp
+@@ -52,9 +52,6 @@ void* prepareOSREntry(ExecState* exec, C
+     }
+     
+     VM* vm = &exec->vm();
+-    
+-    vm->interpreter->stack().sanitizeStack();
+-    
+     if (codeBlock->jitType() != JITCode::DFGJIT) {
+         RELEASE_ASSERT(codeBlock->jitType() == JITCode::FTLJIT);
+         
+@@ -184,8 +181,7 @@ void* prepareOSREntry(ExecState* exec, C
+     //    it seems silly: you'd be diverting the program to error handling when it
+     //    would have otherwise just kept running albeit less quickly.
+     
+-    unsigned frameSize = jitCode->common.requiredRegisterCountForExecutionAndExit();
+-    if (!vm->interpreter->stack().grow(&exec->registers()[virtualRegisterForLocal(frameSize).offset()])) {
++    if (!vm->interpreter->stack().grow(&exec->registers()[virtualRegisterForLocal(jitCode->common.requiredRegisterCountForExecutionAndExit()).offset()])) {
+         if (Options::verboseOSR())
+             dataLogF("    OSR failed because stack growth failed.\n");
+         return 0;
+@@ -211,20 +207,11 @@ void* prepareOSREntry(ExecState* exec, C
+     for (unsigned i = entry->m_reshufflings.size(); i--;)
+         registers[entry->m_reshufflings[i].toOffset] = temporaryLocals[i];
+     
+-    // 5) Clear those parts of the call frame that the DFG ain't using. This helps GC on some
+-    //    programs by eliminating some stale pointer pathologies.
+-    
+-    for (unsigned i = frameSize; i--;) {
+-        if (entry->m_machineStackUsed.get(i))
+-            continue;
+-        registers[virtualRegisterForLocal(i).offset()] = JSValue::encode(JSValue());
+-    }
+-    
+-    // 6) Fix the call frame.
++    // 5) Fix the call frame.
+     
+     exec->setCodeBlock(codeBlock);
+     
+-    // 7) Find and return the destination machine code address.
++    // 6) Find and return the destination machine code address.
+     
+     void* result = codeBlock->jitCode()->executableAddressAtOffset(entry->m_machineCodeOffset);
+     
+Index: webkitgtk/Source/JavaScriptCore/dfg/DFGOSREntry.h
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/dfg/DFGOSREntry.h
++++ webkitgtk/Source/JavaScriptCore/dfg/DFGOSREntry.h
+@@ -59,7 +59,6 @@ struct OSREntryData {
+     BitVector m_localsForcedDouble;
+     BitVector m_localsForcedMachineInt;
+     Vector<OSREntryReshuffling> m_reshufflings;
+-    BitVector m_machineStackUsed;
+ };
+ 
+ inline unsigned getOSREntryDataBytecodeIndex(OSREntryData* osrEntryData)
+Index: webkitgtk/Source/JavaScriptCore/heap/Heap.cpp
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/heap/Heap.cpp
++++ webkitgtk/Source/JavaScriptCore/heap/Heap.cpp
+@@ -467,7 +467,6 @@ void Heap::markRoots()
+     {
+         GCPHASE(GatherStackRoots);
+         stack().gatherConservativeRoots(stackRoots, m_jitStubRoutines, m_codeBlocks);
+-        stack().sanitizeStack();
+     }
+ 
+ #if ENABLE(DFG_JIT)
+Index: webkitgtk/Source/JavaScriptCore/interpreter/JSStack.cpp
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/interpreter/JSStack.cpp
++++ webkitgtk/Source/JavaScriptCore/interpreter/JSStack.cpp
+@@ -52,8 +52,6 @@ JSStack::JSStack(VM& vm, size_t capacity
+     m_reservation = PageReservation::reserve(roundUpAllocationSize(capacity * sizeof(Register), commitSize), OSAllocator::JSVMStackPages);
+     updateStackLimit(highAddress());
+     m_commitEnd = highAddress();
+-    
+-    m_lastStackTop = getBaseOfStack();
+ 
+     disableErrorStackReserve();
+ 
+@@ -103,19 +101,6 @@ void JSStack::gatherConservativeRoots(Co
+     conservativeRoots.add(getBaseOfStack(), getTopOfStack(), jitStubRoutines, codeBlocks);
+ }
+ 
+-void JSStack::sanitizeStack()
+-{
+-    ASSERT(getTopOfStack() <= getBaseOfStack());
+-    
+-    if (m_lastStackTop < getTopOfStack()) {
+-        char* begin = reinterpret_cast<char*>(m_lastStackTop);
+-        char* end = reinterpret_cast<char*>(getTopOfStack());
+-        memset(begin, 0, end - begin);
+-    }
+-    
+-    m_lastStackTop = getTopOfStack();
+-}
+-
+ void JSStack::releaseExcessCapacity()
+ {
+     ptrdiff_t delta = reinterpret_cast<uintptr_t>(highAddress()) - reinterpret_cast<uintptr_t>(m_commitEnd);
+Index: webkitgtk/Source/JavaScriptCore/interpreter/JSStack.h
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/interpreter/JSStack.h
++++ webkitgtk/Source/JavaScriptCore/interpreter/JSStack.h
+@@ -82,7 +82,6 @@ namespace JSC {
+         
+         void gatherConservativeRoots(ConservativeRoots&);
+         void gatherConservativeRoots(ConservativeRoots&, JITStubRoutineSet&, CodeBlockSet&);
+-        void sanitizeStack();
+ 
+         Register* getBaseOfStack() const
+         {
+@@ -157,7 +156,6 @@ namespace JSC {
+         Register* m_useableEnd;
+         PageReservation m_reservation;
+         CallFrame*& m_topCallFrame;
+-        Register* m_lastStackTop;
+ 
+         friend class LLIntOffsetsExtractor;
+     };
