@@ -6,6 +6,8 @@ webkitgtk (2.4.2-1) UNRELEASED; urgency=medium
   * debian/control:
     + Require make 4.0, which is the version that can make parallel builds
       of webkitgtk.
+  * debian/patches/fix-jsc-crash.patch:
+    + Removed, this is already included in this release.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 04 May 2014 23:36:39 +0300
 
