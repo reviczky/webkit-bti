@@ -1,4 +1,4 @@
-webkitgtk (2.4.2-1) UNRELEASED; urgency=medium
+webkitgtk (2.4.2-1) unstable; urgency=medium
 
   * New upstream release (Closes: #732095).
   * debian/rules:
@@ -9,7 +9,7 @@ webkitgtk (2.4.2-1) UNRELEASED; urgency=medium
   * debian/patches/fix-jsc-crash.patch:
     + Removed, this is already included in this release.
 
- -- Alberto Garcia <berto@igalia.com>  Sun, 04 May 2014 23:36:39 +0300
+ -- Alberto Garcia <berto@igalia.com>  Mon, 12 May 2014 12:07:00 +0300
 
 webkitgtk (2.4.1-2) unstable; urgency=medium
 
