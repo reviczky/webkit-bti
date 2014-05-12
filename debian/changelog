@@ -1,5 +1,6 @@
-webkitgtk (2.4.1-3) UNRELEASED; urgency=medium
+webkitgtk (2.4.2-1) UNRELEASED; urgency=medium
 
+  * New upstream release (Closes: #732095).
   * debian/rules:
     + Enable parallel builds again (Closes: #746959).
   * debian/control:
