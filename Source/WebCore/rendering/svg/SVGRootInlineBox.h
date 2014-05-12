@@ -35,24 +35,21 @@ class SVGInlineTextBox;
 
 class SVGRootInlineBox final : public RootInlineBox {
 public:
-    SVGRootInlineBox(RenderSVGText&);
+    explicit SVGRootInlineBox(RenderSVGText&);
 
     RenderSVGText& renderSVGText();
 
-    virtual float virtualLogicalHeight() const { return m_logicalHeight; }
+    virtual float virtualLogicalHeight() const override final { return m_logicalHeight; }
     void setLogicalHeight(float height) { m_logicalHeight = height; }
 
-    virtual void paint(PaintInfo&, const LayoutPoint&, LayoutUnit lineTop, LayoutUnit lineBottom);
+    virtual void paint(PaintInfo&, const LayoutPoint&, LayoutUnit lineTop, LayoutUnit lineBottom) override final;
 
     void computePerCharacterLayoutInformation();
-
-    virtual FloatRect objectBoundingBox() const { return FloatRect(); }
-    virtual FloatRect repaintRectInLocalCoordinates() const { return FloatRect(); }
 
     InlineBox* closestLeafChildForPosition(const LayoutPoint&);
 
 private:
-    virtual bool isSVGRootInlineBox() const override { return true; }
+    virtual bool isSVGRootInlineBox() const override final { return true; }
     void reorderValueLists(Vector<SVGTextLayoutAttributes*>&);
     void layoutCharactersInTextBoxes(InlineFlowBox*, SVGTextLayoutEngine&);
     void layoutChildBoxes(InlineFlowBox*, FloatRect* = 0);

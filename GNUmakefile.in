@@ -7871,6 +7871,7 @@ am__libWebCoreSVG_la_SOURCES_DIST =  \
 	Source/WebCore/svg/properties/SVGAnimatedTransformListPropertyTearOff.h \
 	Source/WebCore/svg/properties/SVGListProperty.h \
 	Source/WebCore/svg/properties/SVGListPropertyTearOff.h \
+	Source/WebCore/svg/properties/SVGMatrixTearOff.h \
 	Source/WebCore/svg/properties/SVGPathSegListPropertyTearOff.cpp \
 	Source/WebCore/svg/properties/SVGPathSegListPropertyTearOff.h \
 	Source/WebCore/svg/properties/SVGProperty.h \
@@ -7880,7 +7881,6 @@ am__libWebCoreSVG_la_SOURCES_DIST =  \
 	Source/WebCore/svg/properties/SVGPropertyTraits.h \
 	Source/WebCore/svg/properties/SVGStaticListPropertyTearOff.h \
 	Source/WebCore/svg/properties/SVGStaticPropertyTearOff.h \
-	Source/WebCore/svg/properties/SVGStaticPropertyWithParentTearOff.h \
 	Source/WebCore/svg/properties/SVGTransformListPropertyTearOff.h \
 	Source/WebCore/svg/RadialGradientAttributes.h \
 	Source/WebCore/svg/SVGAElement.cpp \
@@ -16859,6 +16859,7 @@ webcore_svg_sources :=  \
 	Source/WebCore/svg/properties/SVGAnimatedTransformListPropertyTearOff.h \
 	Source/WebCore/svg/properties/SVGListProperty.h \
 	Source/WebCore/svg/properties/SVGListPropertyTearOff.h \
+	Source/WebCore/svg/properties/SVGMatrixTearOff.h \
 	Source/WebCore/svg/properties/SVGPathSegListPropertyTearOff.cpp \
 	Source/WebCore/svg/properties/SVGPathSegListPropertyTearOff.h \
 	Source/WebCore/svg/properties/SVGProperty.h \
@@ -16868,7 +16869,6 @@ webcore_svg_sources :=  \
 	Source/WebCore/svg/properties/SVGPropertyTraits.h \
 	Source/WebCore/svg/properties/SVGStaticListPropertyTearOff.h \
 	Source/WebCore/svg/properties/SVGStaticPropertyTearOff.h \
-	Source/WebCore/svg/properties/SVGStaticPropertyWithParentTearOff.h \
 	Source/WebCore/svg/properties/SVGTransformListPropertyTearOff.h \
 	Source/WebCore/svg/RadialGradientAttributes.h \
 	Source/WebCore/svg/SVGAElement.cpp \
