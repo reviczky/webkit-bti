@@ -40,7 +40,7 @@ Build-Depends: gawk,
                libgstreamer-plugins-base1.0-dev (>= 1.0.3),
                libenchant-dev (>= 0.22),
                gtk-doc-tools,
-               libgeoclue-dev,
+               geoclue-2.0,
                libsecret-1-dev,
                gobject-introspection (>= 1.32.0),
                libgirepository1.0-dev (>= 0.9.12-4),
@@ -133,6 +133,7 @@ Depends: libjavascriptcoregtk-1.0-0 (= ${binary:Version}),
          ${misc:Depends}
 Recommends: gstreamer1.0-plugins-base (>= 1.0.3),
             gstreamer1.0-plugins-good,
+            geoclue-2.0,
             ${gst:Recommends}
 Breaks: midori (<< 0.4.1-2), claws-mail-fancy-plugin (<< 3.7.10-3)
 Description: Web content engine library for GTK+
@@ -334,6 +335,7 @@ Depends: libjavascriptcoregtk-3.0-0 (= ${binary:Version}),
          ${misc:Depends}
 Recommends: gstreamer1.0-plugins-base,
             gstreamer1.0-plugins-good,
+            geoclue-2.0,
             ${gst:Recommends}
 Description: Web content engine library for GTK+
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
@@ -438,6 +440,7 @@ Depends: libjavascriptcoregtk-3.0-0 (= ${binary:Version}),
          ${misc:Depends}
 Recommends: gstreamer1.0-plugins-base,
             gstreamer1.0-plugins-good,
+            geoclue-2.0,
             ${gst:Recommends}
 Breaks: libwebkit2gtk-3.0-0
 Replaces: libwebkit2gtk-3.0-0
