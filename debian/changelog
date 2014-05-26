@@ -2,7 +2,9 @@ webkitgtk (2.4.3-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * debian/control:
-    - Switch to geoclue 2 (Closes: #743606).
+    + Switch to geoclue 2 (Closes: #743606).
+  * debian/patches/fix-gtkdoc-error.patch:
+    + Refresh.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 13 May 2014 15:53:36 +0300
 
