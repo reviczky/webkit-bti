@@ -206,7 +206,7 @@
     <keyword type="function" name="webkit_dom_css_style_declaration_set_css_text ()" link="WebKitDOMCSSStyleDeclaration.html#webkit-dom-css-style-declaration-set-css-text"/>
     <keyword type="function" name="webkit_dom_css_style_declaration_get_length ()" link="WebKitDOMCSSStyleDeclaration.html#webkit-dom-css-style-declaration-get-length"/>
     <keyword type="function" name="webkit_dom_css_style_declaration_get_parent_rule ()" link="WebKitDOMCSSStyleDeclaration.html#webkit-dom-css-style-declaration-get-parent-rule"/>
-    <keyword type="function" name="webkit_dom_css_style_declaration_get_property_css_value ()" link="WebKitDOMCSSStyleDeclaration.html#webkit-dom-css-style-declaration-get-property-css-value" deprecated="2.2"/>
+    <keyword type="function" name="webkit_dom_css_style_declaration_get_property_css_value ()" link="WebKitDOMCSSStyleDeclaration.html#webkit-dom-css-style-declaration-get-property-css-value" deprecated=""/>
     <keyword type="struct" name="WebKitDOMCSSStyleDeclaration" link="WebKitDOMCSSStyleDeclaration.html#WebKitDOMCSSStyleDeclaration-struct"/>
     <keyword type="property" name="The “css-text” property" link="WebKitDOMCSSStyleDeclaration.html#WebKitDOMCSSStyleDeclaration--css-text"/>
     <keyword type="property" name="The “length” property" link="WebKitDOMCSSStyleDeclaration.html#WebKitDOMCSSStyleDeclaration--length"/>
@@ -410,8 +410,8 @@
     <keyword type="function" name="webkit_dom_document_get_hidden ()" link="WebKitDOMDocument.html#webkit-dom-document-get-hidden"/>
     <keyword type="function" name="webkit_dom_document_get_security_policy ()" link="WebKitDOMDocument.html#webkit-dom-document-get-security-policy"/>
     <keyword type="function" name="webkit_dom_document_get_current_script ()" link="WebKitDOMDocument.html#webkit-dom-document-get-current-script"/>
-    <keyword type="function" name="webkit_dom_document_get_webkit_hidden ()" link="WebKitDOMDocument.html#webkit-dom-document-get-webkit-hidden" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_document_get_webkit_visibility_state ()" link="WebKitDOMDocument.html#webkit-dom-document-get-webkit-visibility-state" deprecated="2.2"/>
+    <keyword type="function" name="webkit_dom_document_get_webkit_hidden ()" link="WebKitDOMDocument.html#webkit-dom-document-get-webkit-hidden" deprecated=""/>
+    <keyword type="function" name="webkit_dom_document_get_webkit_visibility_state ()" link="WebKitDOMDocument.html#webkit-dom-document-get-webkit-visibility-state" deprecated=""/>
     <keyword type="struct" name="WebKitDOMDocument" link="WebKitDOMDocument.html#WebKitDOMDocument-struct"/>
     <keyword type="property" name="The “anchors” property" link="WebKitDOMDocument.html#WebKitDOMDocument--anchors"/>
     <keyword type="property" name="The “applets” property" link="WebKitDOMDocument.html#WebKitDOMDocument--applets"/>
@@ -579,7 +579,7 @@
     <keyword type="function" name="webkit_dom_element_get_next_element_sibling ()" link="WebKitDOMElement.html#webkit-dom-element-get-next-element-sibling"/>
     <keyword type="function" name="webkit_dom_element_get_child_element_count ()" link="WebKitDOMElement.html#webkit-dom-element-get-child-element-count"/>
     <keyword type="function" name="webkit_dom_element_get_webkit_region_overset ()" link="WebKitDOMElement.html#webkit-dom-element-get-webkit-region-overset"/>
-    <keyword type="function" name="webkit_dom_element_get_webkit_region_overflow ()" link="WebKitDOMElement.html#webkit-dom-element-get-webkit-region-overflow" deprecated="1.10: Use webkit_dom_element_get_webkit_region_overset() instead."/>
+    <keyword type="function" name="webkit_dom_element_get_webkit_region_overflow ()" link="WebKitDOMElement.html#webkit-dom-element-get-webkit-region-overflow" deprecated=""/>
     <keyword type="struct" name="WebKitDOMElement" link="WebKitDOMElement.html#WebKitDOMElement-struct"/>
     <keyword type="property" name="The “attributes” property" link="WebKitDOMElement.html#WebKitDOMElement--attributes"/>
     <keyword type="property" name="The “child-element-count” property" link="WebKitDOMElement.html#WebKitDOMElement--child-element-count"/>
@@ -736,8 +736,8 @@
     <keyword type="function" name="webkit_dom_node_get_text_content ()" link="WebKitDOMNode.html#webkit-dom-node-get-text-content"/>
     <keyword type="function" name="webkit_dom_node_set_text_content ()" link="WebKitDOMNode.html#webkit-dom-node-set-text-content"/>
     <keyword type="function" name="webkit_dom_node_get_parent_element ()" link="WebKitDOMNode.html#webkit-dom-node-get-parent-element"/>
-    <keyword type="function" name="webkit_dom_node_get_attributes ()" link="WebKitDOMNode.html#webkit-dom-node-get-attributes" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_node_has_attributes ()" link="WebKitDOMNode.html#webkit-dom-node-has-attributes" deprecated="2.2"/>
+    <keyword type="function" name="webkit_dom_node_get_attributes ()" link="WebKitDOMNode.html#webkit-dom-node-get-attributes" deprecated=""/>
+    <keyword type="function" name="webkit_dom_node_has_attributes ()" link="WebKitDOMNode.html#webkit-dom-node-has-attributes" deprecated=""/>
     <keyword type="struct" name="WebKitDOMNode" link="WebKitDOMNode.html#WebKitDOMNode-struct"/>
     <keyword type="property" name="The “base-uri” property" link="WebKitDOMNode.html#WebKitDOMNode--base-uri"/>
     <keyword type="property" name="The “child-nodes” property" link="WebKitDOMNode.html#WebKitDOMNode--child-nodes"/>
@@ -779,8 +779,8 @@
     <keyword type="property" name="The “length” property" link="WebKitDOMNodeList.html#WebKitDOMNodeList--length"/>
     <keyword type="function" name="webkit_dom_processing_instruction_get_target ()" link="WebKitDOMProcessingInstruction.html#webkit-dom-processing-instruction-get-target"/>
     <keyword type="function" name="webkit_dom_processing_instruction_get_sheet ()" link="WebKitDOMProcessingInstruction.html#webkit-dom-processing-instruction-get-sheet"/>
-    <keyword type="function" name="webkit_dom_processing_instruction_get_data ()" link="WebKitDOMProcessingInstruction.html#webkit-dom-processing-instruction-get-data" deprecated="2.4"/>
-    <keyword type="function" name="webkit_dom_processing_instruction_set_data ()" link="WebKitDOMProcessingInstruction.html#webkit-dom-processing-instruction-set-data" deprecated="2.4"/>
+    <keyword type="function" name="webkit_dom_processing_instruction_get_data ()" link="WebKitDOMProcessingInstruction.html#webkit-dom-processing-instruction-get-data" deprecated=""/>
+    <keyword type="function" name="webkit_dom_processing_instruction_set_data ()" link="WebKitDOMProcessingInstruction.html#webkit-dom-processing-instruction-set-data" deprecated=""/>
     <keyword type="struct" name="WebKitDOMProcessingInstruction" link="WebKitDOMProcessingInstruction.html#WebKitDOMProcessingInstruction-struct"/>
     <keyword type="property" name="The “sheet” property" link="WebKitDOMProcessingInstruction.html#WebKitDOMProcessingInstruction--sheet"/>
     <keyword type="property" name="The “target” property" link="WebKitDOMProcessingInstruction.html#WebKitDOMProcessingInstruction--target"/>
@@ -894,7 +894,7 @@
     <keyword type="property" name="The “which” property" link="WebKitDOMUIEvent.html#WebKitDOMUIEvent--which"/>
     <keyword type="function" name="webkit_dom_blob_slice ()" link="WebKitDOMBlob.html#webkit-dom-blob-slice"/>
     <keyword type="function" name="webkit_dom_blob_get_size ()" link="WebKitDOMBlob.html#webkit-dom-blob-get-size"/>
-    <keyword type="function" name="webkit_dom_blob_webkit_slice ()" link="WebKitDOMBlob.html#webkit-dom-blob-webkit-slice" deprecated="1.10: Use webkit_dom_blob_slice() instead."/>
+    <keyword type="function" name="webkit_dom_blob_webkit_slice ()" link="WebKitDOMBlob.html#webkit-dom-blob-webkit-slice" deprecated=""/>
     <keyword type="struct" name="WebKitDOMBlob" link="WebKitDOMBlob.html#WebKitDOMBlob-struct"/>
     <keyword type="property" name="The “size” property" link="WebKitDOMBlob.html#WebKitDOMBlob--size"/>
     <keyword type="property" name="The “type” property" link="WebKitDOMBlob.html#WebKitDOMBlob--type"/>
@@ -1181,7 +1181,7 @@
     <keyword type="function" name="webkit_dom_html_document_set_link_color ()" link="WebKitDOMHTMLDocument.html#webkit-dom-html-document-set-link-color"/>
     <keyword type="function" name="webkit_dom_html_document_get_vlink_color ()" link="WebKitDOMHTMLDocument.html#webkit-dom-html-document-get-vlink-color"/>
     <keyword type="function" name="webkit_dom_html_document_set_vlink_color ()" link="WebKitDOMHTMLDocument.html#webkit-dom-html-document-set-vlink-color"/>
-    <keyword type="function" name="webkit_dom_html_document_open ()" link="WebKitDOMHTMLDocument.html#webkit-dom-html-document-open" deprecated="2.2"/>
+    <keyword type="function" name="webkit_dom_html_document_open ()" link="WebKitDOMHTMLDocument.html#webkit-dom-html-document-open" deprecated=""/>
     <keyword type="struct" name="WebKitDOMHTMLDocument" link="WebKitDOMHTMLDocument.html#WebKitDOMHTMLDocument-struct"/>
     <keyword type="property" name="The “active-element” property" link="WebKitDOMHTMLDocument.html#WebKitDOMHTMLDocument--active-element"/>
     <keyword type="property" name="The “alink-color” property" link="WebKitDOMHTMLDocument.html#WebKitDOMHTMLDocument--alink-color"/>
@@ -1237,18 +1237,18 @@
     <keyword type="function" name="webkit_dom_html_element_get_is_content_editable ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-is-content-editable"/>
     <keyword type="function" name="webkit_dom_html_element_get_spellcheck ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-spellcheck"/>
     <keyword type="function" name="webkit_dom_html_element_set_spellcheck ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-set-spellcheck"/>
-    <keyword type="function" name="webkit_dom_html_element_get_id ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-id" deprecated="2.2: Use webkit_dom_element_get_id() instead."/>
-    <keyword type="function" name="webkit_dom_html_element_set_id ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-set-id" deprecated="2.2: Use webkit_dom_element_set_id() instead."/>
-    <keyword type="function" name="webkit_dom_html_element_get_class_name ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-class-name" deprecated="1.10: Use webkit_dom_element_get_class_name() instead."/>
-    <keyword type="function" name="webkit_dom_html_element_set_class_name ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-set-class-name" deprecated="1.10: Use webkit_dom_element_set_class_name() instead."/>
-    <keyword type="function" name="webkit_dom_html_element_get_class_list ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-class-list" deprecated="1.10: Use webkit_dom_element_get_class_list() instead."/>
-    <keyword type="function" name="webkit_dom_html_element_set_item_id ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-set-item-id" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_html_element_get_item_id ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-item-id" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_html_element_get_item_ref ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-item-ref" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_html_element_get_item_prop ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-item-prop" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_html_element_set_item_scope ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-set-item-scope" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_html_element_get_item_scope ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-item-scope" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_html_element_get_item_type ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-item-type" deprecated="2.2"/>
+    <keyword type="function" name="webkit_dom_html_element_get_id ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-id" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_element_set_id ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-set-id" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_element_get_class_name ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-class-name" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_element_set_class_name ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-set-class-name" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_element_get_class_list ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-class-list" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_element_set_item_id ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-set-item-id" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_element_get_item_id ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-item-id" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_element_get_item_ref ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-item-ref" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_element_get_item_prop ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-item-prop" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_element_set_item_scope ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-set-item-scope" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_element_get_item_scope ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-item-scope" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_element_get_item_type ()" link="WebKitDOMHTMLElement.html#webkit-dom-html-element-get-item-type" deprecated=""/>
     <keyword type="struct" name="WebKitDOMHTMLElement" link="WebKitDOMHTMLElement.html#WebKitDOMHTMLElement-struct"/>
     <keyword type="property" name="The “access-key” property" link="WebKitDOMHTMLElement.html#WebKitDOMHTMLElement--access-key"/>
     <keyword type="property" name="The “children” property" link="WebKitDOMHTMLElement.html#WebKitDOMHTMLElement--children"/>
@@ -1341,8 +1341,8 @@
     <keyword type="function" name="webkit_dom_html_form_element_set_autocorrect ()" link="WebKitDOMHTMLFormElement.html#webkit-dom-html-form-element-set-autocorrect"/>
     <keyword type="function" name="webkit_dom_html_form_element_get_autocapitalize ()" link="WebKitDOMHTMLFormElement.html#webkit-dom-html-form-element-get-autocapitalize"/>
     <keyword type="function" name="webkit_dom_html_form_element_set_autocapitalize ()" link="WebKitDOMHTMLFormElement.html#webkit-dom-html-form-element-set-autocapitalize"/>
-    <keyword type="function" name="webkit_dom_html_form_element_dispatch_form_change ()" link="WebKitDOMHTMLFormElement.html#webkit-dom-html-form-element-dispatch-form-change" deprecated="1.6"/>
-    <keyword type="function" name="webkit_dom_html_form_element_dispatch_form_input ()" link="WebKitDOMHTMLFormElement.html#webkit-dom-html-form-element-dispatch-form-input" deprecated="1.6"/>
+    <keyword type="function" name="webkit_dom_html_form_element_dispatch_form_change ()" link="WebKitDOMHTMLFormElement.html#webkit-dom-html-form-element-dispatch-form-change" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_form_element_dispatch_form_input ()" link="WebKitDOMHTMLFormElement.html#webkit-dom-html-form-element-dispatch-form-input" deprecated=""/>
     <keyword type="struct" name="WebKitDOMHTMLFormElement" link="WebKitDOMHTMLFormElement.html#WebKitDOMHTMLFormElement-struct"/>
     <keyword type="property" name="The “accept-charset” property" link="WebKitDOMHTMLFormElement.html#WebKitDOMHTMLFormElement--accept-charset"/>
     <keyword type="property" name="The “action” property" link="WebKitDOMHTMLFormElement.html#WebKitDOMHTMLFormElement--action"/>
@@ -1836,8 +1836,8 @@
     <keyword type="function" name="webkit_dom_html_media_element_set_media_group ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-set-media-group"/>
     <keyword type="function" name="webkit_dom_html_media_element_get_controller ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-controller"/>
     <keyword type="function" name="webkit_dom_html_media_element_get_webkit_current_playback_target_is_wireless ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-webkit-current-playback-target-is-wireless"/>
-    <keyword type="function" name="webkit_dom_html_media_element_get_start_time ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-start-time" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_html_media_element_get_initial_time ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-initial-time" deprecated="2.2"/>
+    <keyword type="function" name="webkit_dom_html_media_element_get_start_time ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-start-time" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_media_element_get_initial_time ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-initial-time" deprecated=""/>
     <keyword type="struct" name="WebKitDOMHTMLMediaElement" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement-struct"/>
     <keyword type="property" name="The “autoplay” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--autoplay"/>
     <keyword type="property" name="The “buffered” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--buffered"/>
@@ -2108,8 +2108,8 @@
     <keyword type="function" name="webkit_dom_html_style_element_get_media ()" link="WebKitDOMHTMLStyleElement.html#webkit-dom-html-style-element-get-media"/>
     <keyword type="function" name="webkit_dom_html_style_element_set_media ()" link="WebKitDOMHTMLStyleElement.html#webkit-dom-html-style-element-set-media"/>
     <keyword type="function" name="webkit_dom_html_style_element_get_sheet ()" link="WebKitDOMHTMLStyleElement.html#webkit-dom-html-style-element-get-sheet"/>
-    <keyword type="function" name="webkit_dom_html_style_element_set_scoped ()" link="WebKitDOMHTMLStyleElement.html#webkit-dom-html-style-element-set-scoped" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_html_style_element_get_scoped ()" link="WebKitDOMHTMLStyleElement.html#webkit-dom-html-style-element-get-scoped" deprecated="2.2"/>
+    <keyword type="function" name="webkit_dom_html_style_element_set_scoped ()" link="WebKitDOMHTMLStyleElement.html#webkit-dom-html-style-element-set-scoped" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_style_element_get_scoped ()" link="WebKitDOMHTMLStyleElement.html#webkit-dom-html-style-element-get-scoped" deprecated=""/>
     <keyword type="struct" name="WebKitDOMHTMLStyleElement" link="WebKitDOMHTMLStyleElement.html#WebKitDOMHTMLStyleElement-struct"/>
     <keyword type="property" name="The “disabled” property" link="WebKitDOMHTMLStyleElement.html#WebKitDOMHTMLStyleElement--disabled"/>
     <keyword type="property" name="The “media” property" link="WebKitDOMHTMLStyleElement.html#WebKitDOMHTMLStyleElement--media"/>
@@ -2397,7 +2397,7 @@
     <keyword type="property" name="The “visible” property" link="WebKitDOMBarProp.html#WebKitDOMBarProp--visible"/>
     <keyword type="function" name="webkit_dom_console_time ()" link="WebKitDOMConsole.html#webkit-dom-console-time"/>
     <keyword type="function" name="webkit_dom_console_group_end ()" link="WebKitDOMConsole.html#webkit-dom-console-group-end"/>
-    <keyword type="function" name="webkit_dom_console_get_memory ()" link="WebKitDOMConsole.html#webkit-dom-console-get-memory" deprecated="2.2"/>
+    <keyword type="function" name="webkit_dom_console_get_memory ()" link="WebKitDOMConsole.html#webkit-dom-console-get-memory" deprecated=""/>
     <keyword type="struct" name="WebKitDOMConsole" link="WebKitDOMConsole.html#WebKitDOMConsole-struct"/>
     <keyword type="function" name="webkit_dom_html_text_area_element_is_edited ()" link="webkitdomgtk-WebKitDOMCustom.html#webkit-dom-html-text-area-element-is-edited"/>
     <keyword type="function" name="webkit_dom_html_input_element_is_edited ()" link="webkitdomgtk-WebKitDOMCustom.html#webkit-dom-html-input-element-is-edited"/>
@@ -2692,9 +2692,9 @@
     <keyword type="function" name="webkit_dom_webkit_named_flow_get_name ()" link="WebKitDOMWebKitNamedFlow.html#webkit-dom-webkit-named-flow-get-name" deprecated=""/>
     <keyword type="function" name="webkit_dom_webkit_named_flow_get_overset ()" link="WebKitDOMWebKitNamedFlow.html#webkit-dom-webkit-named-flow-get-overset"/>
     <keyword type="function" name="webkit_dom_webkit_named_flow_get_first_empty_region_index ()" link="WebKitDOMWebKitNamedFlow.html#webkit-dom-webkit-named-flow-get-first-empty-region-index"/>
-    <keyword type="function" name="webkit_dom_webkit_named_flow_get_overflow ()" link="WebKitDOMWebKitNamedFlow.html#webkit-dom-webkit-named-flow-get-overflow" deprecated="1.10: Use webkit_dom_webkit_named_flow_get_overset() instead."/>
-    <keyword type="function" name="webkit_dom_webkit_named_flow_get_content_nodes ()" link="WebKitDOMWebKitNamedFlow.html#webkit-dom-webkit-named-flow-get-content-nodes" deprecated="1.10: Use webkit_dom_webkit_named_flow_get_content() instead."/>
-    <keyword type="function" name="webkit_dom_webkit_named_flow_get_regions_by_content_node ()" link="WebKitDOMWebKitNamedFlow.html#webkit-dom-webkit-named-flow-get-regions-by-content-node" deprecated="1.10: Use webkit_dom_webkit_named_flow_get_regions_by_content() instead."/>
+    <keyword type="function" name="webkit_dom_webkit_named_flow_get_overflow ()" link="WebKitDOMWebKitNamedFlow.html#webkit-dom-webkit-named-flow-get-overflow" deprecated=""/>
+    <keyword type="function" name="webkit_dom_webkit_named_flow_get_content_nodes ()" link="WebKitDOMWebKitNamedFlow.html#webkit-dom-webkit-named-flow-get-content-nodes" deprecated=""/>
+    <keyword type="function" name="webkit_dom_webkit_named_flow_get_regions_by_content_node ()" link="WebKitDOMWebKitNamedFlow.html#webkit-dom-webkit-named-flow-get-regions-by-content-node" deprecated=""/>
     <keyword type="struct" name="WebKitDOMWebKitNamedFlow" link="WebKitDOMWebKitNamedFlow.html#WebKitDOMWebKitNamedFlow-struct"/>
     <keyword type="property" name="The “first-empty-region-index” property" link="WebKitDOMWebKitNamedFlow.html#WebKitDOMWebKitNamedFlow--first-empty-region-index"/>
     <keyword type="property" name="The “name” property" link="WebKitDOMWebKitNamedFlow.html#WebKitDOMWebKitNamedFlow--name"/>
@@ -2766,7 +2766,7 @@
     <keyword type="function" name="webkit_dom_performance_now ()" link="WebKitDOMPerformance.html#webkit-dom-performance-now"/>
     <keyword type="function" name="webkit_dom_performance_get_navigation ()" link="WebKitDOMPerformance.html#webkit-dom-performance-get-navigation"/>
     <keyword type="function" name="webkit_dom_performance_get_timing ()" link="WebKitDOMPerformance.html#webkit-dom-performance-get-timing"/>
-    <keyword type="function" name="webkit_dom_performance_get_memory ()" link="WebKitDOMPerformance.html#webkit-dom-performance-get-memory" deprecated="2.2"/>
+    <keyword type="function" name="webkit_dom_performance_get_memory ()" link="WebKitDOMPerformance.html#webkit-dom-performance-get-memory" deprecated=""/>
     <keyword type="struct" name="WebKitDOMPerformance" link="WebKitDOMPerformance.html#WebKitDOMPerformance-struct"/>
     <keyword type="property" name="The “navigation” property" link="WebKitDOMPerformance.html#WebKitDOMPerformance--navigation"/>
     <keyword type="property" name="The “timing” property" link="WebKitDOMPerformance.html#WebKitDOMPerformance--timing"/>
@@ -2994,15 +2994,15 @@
     <keyword type="function" name="webkit_dom_video_track_list_get_length ()" link="WebKitDOMVideoTrackList.html#webkit-dom-video-track-list-get-length" deprecated=""/>
     <keyword type="struct" name="WebKitDOMVideoTrackList" link="WebKitDOMVideoTrackList.html#WebKitDOMVideoTrackList-struct"/>
     <keyword type="property" name="The “length” property" link="WebKitDOMVideoTrackList.html#WebKitDOMVideoTrackList--length"/>
-    <keyword type="function" name="webkit_dom_bar_info_get_visible ()" link="webkitdomgtk-WebKitDOMBarInfo.html#webkit-dom-bar-info-get-visible" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_html_properties_collection_item ()" link="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkit-dom-html-properties-collection-item" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_html_properties_collection_named_item ()" link="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkit-dom-html-properties-collection-named-item" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_html_properties_collection_get_length ()" link="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkit-dom-html-properties-collection-get-length" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_html_properties_collection_get_names ()" link="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkit-dom-html-properties-collection-get-names" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_memory_info_get_total_js_heap_size ()" link="webkitdomgtk-WebKitDOMMemoryInfo.html#webkit-dom-memory-info-get-total-js-heap-size" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_memory_info_get_used_js_heap_size ()" link="webkitdomgtk-WebKitDOMMemoryInfo.html#webkit-dom-memory-info-get-used-js-heap-size" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_memory_info_get_js_heap_size_limit ()" link="webkitdomgtk-WebKitDOMMemoryInfo.html#webkit-dom-memory-info-get-js-heap-size-limit" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_property_node_list_item ()" link="webkitdomgtk-WebKitDOMPropertyNodeList.html#webkit-dom-property-node-list-item" deprecated="2.2"/>
-    <keyword type="function" name="webkit_dom_property_node_list_get_length ()" link="webkitdomgtk-WebKitDOMPropertyNodeList.html#webkit-dom-property-node-list-get-length" deprecated="2.2"/>
+    <keyword type="function" name="webkit_dom_bar_info_get_visible ()" link="webkitdomgtk-WebKitDOMBarInfo.html#webkit-dom-bar-info-get-visible" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_properties_collection_item ()" link="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkit-dom-html-properties-collection-item" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_properties_collection_named_item ()" link="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkit-dom-html-properties-collection-named-item" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_properties_collection_get_length ()" link="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkit-dom-html-properties-collection-get-length" deprecated=""/>
+    <keyword type="function" name="webkit_dom_html_properties_collection_get_names ()" link="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkit-dom-html-properties-collection-get-names" deprecated=""/>
+    <keyword type="function" name="webkit_dom_memory_info_get_total_js_heap_size ()" link="webkitdomgtk-WebKitDOMMemoryInfo.html#webkit-dom-memory-info-get-total-js-heap-size" deprecated=""/>
+    <keyword type="function" name="webkit_dom_memory_info_get_used_js_heap_size ()" link="webkitdomgtk-WebKitDOMMemoryInfo.html#webkit-dom-memory-info-get-used-js-heap-size" deprecated=""/>
+    <keyword type="function" name="webkit_dom_memory_info_get_js_heap_size_limit ()" link="webkitdomgtk-WebKitDOMMemoryInfo.html#webkit-dom-memory-info-get-js-heap-size-limit" deprecated=""/>
+    <keyword type="function" name="webkit_dom_property_node_list_item ()" link="webkitdomgtk-WebKitDOMPropertyNodeList.html#webkit-dom-property-node-list-item" deprecated=""/>
+    <keyword type="function" name="webkit_dom_property_node_list_get_length ()" link="webkitdomgtk-WebKitDOMPropertyNodeList.html#webkit-dom-property-node-list-get-length" deprecated=""/>
   </functions>
 </book>

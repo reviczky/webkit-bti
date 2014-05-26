@@ -12,12 +12,12 @@
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
-<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="10"><tr valign="middle">
+<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="5"><tr valign="middle">
 <td width="100%" align="left" class="shortcuts">
-<a href="#" class="shortcut">Top</a><span id="nav_description"> <span class="dim">|</span> 
-                  <a href="#WebKitDownload.description" class="shortcut">Description</a></span><span id="nav_hierarchy"> <span class="dim">|</span> 
-                  <a href="#WebKitDownload.object-hierarchy" class="shortcut">Object Hierarchy</a></span><span id="nav_properties"> <span class="dim">|</span> 
-                  <a href="#WebKitDownload.properties" class="shortcut">Properties</a></span><span id="nav_signals"> <span class="dim">|</span> 
+<a href="#" class="shortcut">Top</a><span id="nav_description">  <span class="dim">|</span> 
+                  <a href="#WebKitDownload.description" class="shortcut">Description</a></span><span id="nav_hierarchy">  <span class="dim">|</span> 
+                  <a href="#WebKitDownload.object-hierarchy" class="shortcut">Object Hierarchy</a></span><span id="nav_properties">  <span class="dim">|</span> 
+                  <a href="#WebKitDownload.properties" class="shortcut">Properties</a></span><span id="nav_signals">  <span class="dim">|</span> 
                   <a href="#WebKitDownload.signals" class="shortcut">Signals</a></span>
 </td>
 <td><a accesskey="h" href="index.html"><img src="home.png" width="16" height="16" border="0" alt="Home"></a></td>
@@ -157,27 +157,27 @@
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitDownload.html#WebKitDownload-created-destination" title="The “created-destination” signal">created-destination</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a></td>
 <td class="signal_name"><a class="link" href="WebKitDownload.html#WebKitDownload-decide-destination" title="The “decide-destination” signal">decide-destination</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitDownload.html#WebKitDownload-failed" title="The “failed” signal">failed</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitDownload.html#WebKitDownload-finished" title="The “finished” signal">finished</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitDownload.html#WebKitDownload-received-data" title="The “received-data” signal">received-data</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 </tbody>
 </table></div>
@@ -286,7 +286,7 @@ filename you can connect to notify::response signal and call
 If <a class="link" href="WebKitDownload.html#WebKitDownload-decide-destination" title="The “decide-destination” signal"><span class="type">“decide-destination”</span></a> signal is not handled
 and destination URI is not set when the download tranfer starts,
 the file will be saved with the filename suggested by the server in
-<a href="../glib/glib-Miscellaneous-Utility-Functions.html#G-USER-DIRECTORY-DOWNLOAD:CAPS"><code class="literal">G_USER_DIRECTORY_DOWNLOAD</code></a> directory.</p>
+<code class="literal">G_USER_DIRECTORY_DOWNLOAD</code> directory.</p>
 <div class="refsect3">
 <a name="id-1.2.11.9.4.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
@@ -567,7 +567,7 @@ created successfully at <em class="parameter"><code>destination</code></em>
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -578,7 +578,7 @@ user_function (<a class="link" href="WebKitDownload.html" title="WebKitDownload"
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>        user_data)</pre>
 <p>This signal is emitted after response is received to
 decide a destination URI for the download. If this signal is not
-handled the file will be downloaded to <a href="../glib/glib-Miscellaneous-Utility-Functions.html#G-USER-DIRECTORY-DOWNLOAD:CAPS"><code class="literal">G_USER_DIRECTORY_DOWNLOAD</code></a>
+handled the file will be downloaded to <code class="literal">G_USER_DIRECTORY_DOWNLOAD</code>
 directory using <em class="parameter"><code>suggested_filename</code></em>
 .</p>
 <div class="refsect3">
@@ -614,7 +614,7 @@ directory using <em class="parameter"><code>suggested_filename</code></em>
 <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> to propagate the event further.</p>
 <p></p>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -657,7 +657,7 @@ after an error and <a class="link" href="WebKitDownload.html#WebKitDownload-fini
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -689,7 +689,7 @@ In case of errors <a class="link" href="WebKitDownload.html#WebKitDownload-faile
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -728,7 +728,7 @@ useful to know the progress of the download operation.</p>
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 </div>
 </div>

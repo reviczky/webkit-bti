@@ -12,12 +12,12 @@
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
-<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="10"><tr valign="middle">
+<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="5"><tr valign="middle">
 <td width="100%" align="left" class="shortcuts">
-<a href="#" class="shortcut">Top</a><span id="nav_description"> <span class="dim">|</span> 
-                  <a href="#WebKitWebInspector.description" class="shortcut">Description</a></span><span id="nav_hierarchy"> <span class="dim">|</span> 
-                  <a href="#WebKitWebInspector.object-hierarchy" class="shortcut">Object Hierarchy</a></span><span id="nav_properties"> <span class="dim">|</span> 
-                  <a href="#WebKitWebInspector.properties" class="shortcut">Properties</a></span><span id="nav_signals"> <span class="dim">|</span> 
+<a href="#" class="shortcut">Top</a><span id="nav_description">  <span class="dim">|</span> 
+                  <a href="#WebKitWebInspector.description" class="shortcut">Description</a></span><span id="nav_hierarchy">  <span class="dim">|</span> 
+                  <a href="#WebKitWebInspector.object-hierarchy" class="shortcut">Object Hierarchy</a></span><span id="nav_properties">  <span class="dim">|</span> 
+                  <a href="#WebKitWebInspector.properties" class="shortcut">Properties</a></span><span id="nav_signals">  <span class="dim">|</span> 
                   <a href="#WebKitWebInspector.signals" class="shortcut">Signals</a></span>
 </td>
 <td><a accesskey="h" href="index.html"><img src="home.png" width="16" height="16" border="0" alt="Home"></a></td>
@@ -143,27 +143,27 @@
 <tr>
 <td class="signal_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a></td>
 <td class="signal_name"><a class="link" href="WebKitWebInspector.html#WebKitWebInspector-attach" title="The “attach” signal">attach</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a></td>
 <td class="signal_name"><a class="link" href="WebKitWebInspector.html#WebKitWebInspector-bring-to-front" title="The “bring-to-front” signal">bring-to-front</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitWebInspector.html#WebKitWebInspector-closed" title="The “closed” signal">closed</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a></td>
 <td class="signal_name"><a class="link" href="WebKitWebInspector.html#WebKitWebInspector-detach" title="The “detach” signal">detach</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 <tr>
 <td class="signal_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a></td>
 <td class="signal_name"><a class="link" href="WebKitWebInspector.html#WebKitWebInspector-open-window" title="The “open-window” signal">open-window</a></td>
-<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+<td class="signal_flags">Run Last</td>
 </tr>
 </tbody>
 </table></div>
@@ -191,7 +191,7 @@
 <a name="WebKitWebInspector.description"></a><h2>Description</h2>
 <p>The WebKit Inspector is a graphical tool to inspect and change the
 content of a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a>. It also includes an interactive
-JavaScript debugger. Using this class one can get a <a href="../gtk2/GtkWidget.html"><span class="type">GtkWidget</span></a>
+JavaScript debugger. Using this class one can get a <a href="../gtk3/GtkWidget.html"><span class="type">GtkWidget</span></a>
 which can be embedded into an application to show the inspector.</p>
 <p>The inspector is available when the <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> of the
 <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> has set the <a class="link" href="WebKitSettings.html#WebKitSettings--enable-developer-extras" title="The “enable-developer-extras” property"><span class="type">“enable-developer-extras”</span></a>
@@ -512,7 +512,7 @@ signal and simply return <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><
 <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> to propagate the event further.</p>
 <p></p>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -528,7 +528,7 @@ For example, if the inspector view is attached using a tab in a browser
 window, the browser window should be raised and the tab containing the
 inspector view should be the active one.
 In both cases, if this signal is not handled, the default implementation
-calls <a href="../gtk2/GtkWindow.html#gtk-window-present"><code class="function">gtk_window_present()</code></a> on the current toplevel <a href="../gtk2/GtkWindow.html"><span class="type">GtkWindow</span></a> of the
+calls <a href="../gtk3/GtkWindow.html#gtk-window-present"><code class="function">gtk_window_present()</code></a> on the current toplevel <a href="../gtk3/GtkWindow.html"><span class="type">GtkWindow</span></a> of the
 inspector view.</p>
 <div class="refsect3">
 <a name="id-1.2.26.12.3.6"></a><h4>Parameters</h4>
@@ -558,7 +558,7 @@ inspector view.</p>
 <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> to propagate the event further.</p>
 <p></p>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -591,7 +591,7 @@ window.</p>
 </tbody>
 </table></div>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -635,7 +635,7 @@ signal and simply return <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><
 <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> to propagate the event further.</p>
 <p></p>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -644,7 +644,7 @@ signal and simply return <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><
 user_function (<a class="link" href="WebKitWebInspector.html" title="WebKitWebInspector"><span class="type">WebKitWebInspector</span></a> *inspector,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>            user_data)</pre>
 <p>Emitted when the inspector is requested to open in a separate window.
-If this signal is not handled, a <a href="../gtk2/GtkWindow.html"><span class="type">GtkWindow</span></a> with the inspector will be
+If this signal is not handled, a <a href="../gtk3/GtkWindow.html"><span class="type">GtkWindow</span></a> with the inspector will be
 created and shown, so you only need to handle this signal if you want
 to use your own window.
 This signal is emitted after <a class="link" href="WebKitWebInspector.html#WebKitWebInspector-detach" title="The “detach” signal"><span class="type">“detach”</span></a> to show
@@ -679,7 +679,7 @@ signal and simply return <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><
 <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> to propagate the event further.</p>
 <p></p>
 </div>
-<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p>Flags: Run Last</p>
 </div>
 </div>
 </div>

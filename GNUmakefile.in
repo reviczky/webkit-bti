@@ -242,9 +242,12 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/graphics/win/GraphicsContextCairoWin.cpp \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/graphics/win/GraphicsContextWin.cpp \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/graphics/win/LocalWindowsContext.h \
+@TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/graphics/win/SharedGDIObject.h \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/graphics/win/TransformationMatrixWin.cpp \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/win/BitmapInfo.cpp \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/win/BitmapInfo.h \
+@TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/win/GDIObjectCounter.cpp \
+@TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/win/GDIObjectCounter.h \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/win/SystemInfo.cpp \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/win/SystemInfo.h \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/win/WebCoreInstanceHandle.cpp \
@@ -398,12 +401,14 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @ENABLE_WEBKIT1_TRUE@am__append_31 = \
 @ENABLE_WEBKIT1_TRUE@	libwebkitgtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
 @ENABLE_WEBKIT1_TRUE@	Source/WebKit/gtk/docs/webkitgtk-docs.sgml \
-@ENABLE_WEBKIT1_TRUE@	Source/WebKit/gtk/docs/webkitgtk-sections.txt
+@ENABLE_WEBKIT1_TRUE@	Source/WebKit/gtk/docs/webkitgtk-sections.txt \
+@ENABLE_WEBKIT1_TRUE@	gtkdoc-webkitgtk.cfg
 
 @ENABLE_WEBKIT2_TRUE@am__append_32 = \
 @ENABLE_WEBKIT2_TRUE@	libwebkit2gtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
 @ENABLE_WEBKIT2_TRUE@	Source/WebKit2/UIProcess/API/gtk/docs/webkit2gtk-docs.sgml \
-@ENABLE_WEBKIT2_TRUE@	Source/WebKit2/UIProcess/API/gtk/docs/webkit2gtk-sections.txt
+@ENABLE_WEBKIT2_TRUE@	Source/WebKit2/UIProcess/API/gtk/docs/webkit2gtk-sections.txt \
+@ENABLE_WEBKIT2_TRUE@	gtkdoc-webkit2gtk.cfg
 
 @ENABLE_GTK_DOC_TRUE@am__append_33 = docs-build.stamp
 @ENABLE_WEBKIT1_TRUE@am__append_34 = \
@@ -429,32 +434,33 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_41 = WebKit-@WEBKITGTK_API_VERSION@.gir
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_42 = WebKit-@WEBKITGTK_API_VERSION@.typelib
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_43 = WebKit-@WEBKITGTK_API_VERSION@.gir WebKit-@WEBKITGTK_API_VERSION@.typelib
-@ENABLE_WEBKIT1_TRUE@am__append_44 = \
+@ENABLE_WEBKIT1_TRUE@am__append_44 = gtkdoc-webkitgtk.cfg
+@ENABLE_WEBKIT1_TRUE@am__append_45 = \
 @ENABLE_WEBKIT1_TRUE@	Programs/GtkLauncher
 
-@TARGET_X11_TRUE@am__append_45 = \
+@TARGET_X11_TRUE@am__append_46 = \
 @TARGET_X11_TRUE@	Source/WebKit2/Shared/Plugins/Netscape/x11/NetscapePluginModuleX11.cpp \
 @TARGET_X11_TRUE@	Source/WebKit2/WebProcess/Plugins/Netscape/x11/NetscapePluginX11.cpp
 
-@TARGET_X11_FALSE@am__append_46 = \
+@TARGET_X11_FALSE@am__append_47 = \
 @TARGET_X11_FALSE@	Source/WebKit2/Shared/Plugins/Netscape/NetscapePluginModuleNone.cpp \
 @TARGET_X11_FALSE@	Source/WebKit2/WebProcess/Plugins/Netscape/NetscapePluginNone.cpp
 
-@USE_TEXTURE_MAPPER_GL_TRUE@am__append_47 = \
+@USE_TEXTURE_MAPPER_GL_TRUE@am__append_48 = \
 @USE_TEXTURE_MAPPER_GL_TRUE@   Source/WebKit2/WebProcess/WebPage/gtk/LayerTreeHostGtk.cpp \
 @USE_TEXTURE_MAPPER_GL_TRUE@   Source/WebKit2/WebProcess/WebPage/gtk/LayerTreeHostGtk.h
 
-@TARGET_X11_TRUE@am__append_48 = \
+@TARGET_X11_TRUE@am__append_49 = \
 @TARGET_X11_TRUE@	Source/WebKit2/Shared/Plugins/Netscape/x11/NetscapePluginModuleX11.cpp \
 @TARGET_X11_TRUE@	Source/WebKit2/WebProcess/Plugins/Netscape/x11/NetscapePluginX11.cpp
 
-@TARGET_X11_FALSE@am__append_49 = \
+@TARGET_X11_FALSE@am__append_50 = \
 @TARGET_X11_FALSE@	Source/WebKit2/Shared/Plugins/Netscape/NetscapePluginModuleNone.cpp \
 @TARGET_X11_FALSE@	Source/WebKit2/WebProcess/Plugins/Netscape/NetscapePluginNone.cpp
 
 
 # Shared libraries
-@ENABLE_WEBKIT2_TRUE@am__append_50 = \
+@ENABLE_WEBKIT2_TRUE@am__append_51 = \
 @ENABLE_WEBKIT2_TRUE@	libwebkit2gtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la
 
 
@@ -462,69 +468,70 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 
 # We need to make sure plugin process is always built with gtk2, because plugins like flash
 # still use gtk2. Since webcore was built with gtk3, we need to build webcoregtk sources again with gtk2
-@ENABLE_WEBKIT2_TRUE@am__append_51 = libWebKit2Platform.la \
+@ENABLE_WEBKIT2_TRUE@am__append_52 = libWebKit2Platform.la \
 @ENABLE_WEBKIT2_TRUE@	libPlatformGtk2.la libWebCoreGtk2.la
-@ENABLE_WEBKIT2_TRUE@am__append_52 = Programs/WebKitPluginProcess \
+@ENABLE_WEBKIT2_TRUE@am__append_53 = Programs/WebKitPluginProcess \
 @ENABLE_WEBKIT2_TRUE@	Programs/WebKitNetworkProcess \
 @ENABLE_WEBKIT2_TRUE@	Programs/WebKitWebProcess
-@ENABLE_DEVELOPER_MODE_FALSE@am__append_53 = \
+@ENABLE_DEVELOPER_MODE_FALSE@am__append_54 = \
 @ENABLE_DEVELOPER_MODE_FALSE@	$(version_script)
 
-@ENABLE_INDEXED_DATABASE_TRUE@am__append_54 = \
+@ENABLE_INDEXED_DATABASE_TRUE@am__append_55 = \
 @ENABLE_INDEXED_DATABASE_TRUE@	libLevelDB.la
 
-@USE_OPENGL_TRUE@am__append_55 = \
+@USE_OPENGL_TRUE@am__append_56 = \
 @USE_OPENGL_TRUE@	libANGLE.la
 
-@ENABLE_SVG_TRUE@am__append_56 = \
+@ENABLE_SVG_TRUE@am__append_57 = \
 @ENABLE_SVG_TRUE@	libWebCoreSVG.la
 
-@ENABLE_WEBKIT2_TRUE@am__append_57 = \
+@ENABLE_WEBKIT2_TRUE@am__append_58 = \
 @ENABLE_WEBKIT2_TRUE@	Source/WebKit2/webkit2gtk-@WEBKITGTK_API_VERSION@.pc \
 @ENABLE_WEBKIT2_TRUE@	Source/WebKit2/webkit2gtk-web-extension-@WEBKITGTK_API_VERSION@.pc
 
-@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_58 = WebKit2-@WEBKITGTK_API_VERSION@.gir \
+@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_59 = WebKit2-@WEBKITGTK_API_VERSION@.gir \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@	WebKit2WebExtension-@WEBKITGTK_API_VERSION@.gir
-@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_59 = WebKit2-@WEBKITGTK_API_VERSION@.typelib \
+@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_60 = WebKit2-@WEBKITGTK_API_VERSION@.typelib \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@	WebKit2WebExtension-@WEBKITGTK_API_VERSION@.typelib
-@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_60 = WebKit2-@WEBKITGTK_API_VERSION@.gir \
+@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_61 = WebKit2-@WEBKITGTK_API_VERSION@.gir \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@	WebKit2-@WEBKITGTK_API_VERSION@.typelib \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@	WebKit2WebExtension-@WEBKITGTK_API_VERSION@.gir \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@	WebKit2WebExtension-@WEBKITGTK_API_VERSION@.typelib
-@ENABLE_WEBKIT1_TRUE@am__append_61 = \
+@ENABLE_WEBKIT1_TRUE@am__append_62 = \
 @ENABLE_WEBKIT1_TRUE@	libwebkitgtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la
 
-@ENABLE_SVG_TRUE@am__append_62 = \
+@ENABLE_SVG_TRUE@am__append_63 = \
 @ENABLE_SVG_TRUE@	libWebCoreSVG.la
 
-@ENABLE_INDEXED_DATABASE_TRUE@am__append_63 = \
+@ENABLE_INDEXED_DATABASE_TRUE@am__append_64 = \
 @ENABLE_INDEXED_DATABASE_TRUE@	libLevelDB.la
 
-@USE_OPENGL_TRUE@am__append_64 = \
+@USE_OPENGL_TRUE@am__append_65 = \
 @USE_OPENGL_TRUE@	libANGLE.la
 
-@ENABLE_WEBKIT2_TRUE@am__append_65 = \
+@ENABLE_WEBKIT2_TRUE@am__append_66 = gtkdoc-webkit2gtk.cfg
+@ENABLE_WEBKIT2_TRUE@am__append_67 = \
 @ENABLE_WEBKIT2_TRUE@	Programs/MiniBrowser
 
-@USE_OPENGL_TRUE@am__append_66 = \
+@USE_OPENGL_TRUE@am__append_68 = \
 @USE_OPENGL_TRUE@	libANGLE.la
 
-@ENABLE_INDEXED_DATABASE_TRUE@am__append_67 = \
+@ENABLE_INDEXED_DATABASE_TRUE@am__append_69 = \
 @ENABLE_INDEXED_DATABASE_TRUE@	libLevelDB.la
 
-@OS_WIN32_TRUE@am__append_68 = \
+@OS_WIN32_TRUE@am__append_70 = \
 @OS_WIN32_TRUE@	-DOS_WIN
 
-@OS_WIN32_FALSE@am__append_69 = \
+@OS_WIN32_FALSE@am__append_71 = \
 @OS_WIN32_FALSE@	-pthread
 
-@OS_LINUX_TRUE@am__append_70 = \
+@OS_LINUX_TRUE@am__append_72 = \
 @OS_LINUX_TRUE@	-DOS_LINUX
 
-@OS_FREEBSD_TRUE@am__append_71 = \
+@OS_FREEBSD_TRUE@am__append_73 = \
 @OS_FREEBSD_TRUE@	-DOS_FREEBSD
 
-@OS_DARWIN_TRUE@am__append_72 = \
+@OS_DARWIN_TRUE@am__append_74 = \
 @OS_DARWIN_TRUE@	-DOS_MACOSX
 
 
@@ -532,12 +539,12 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 # We must split off the window.internals implementation into a separate
 # convenience library because it requires a different include path order
 # to prefer the WebCore config.h over the DumpRenderTree config.h
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_73 = Libraries/libgtest.la \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_75 = Libraries/libgtest.la \
 @ENABLE_DEVELOPER_MODE_TRUE@	libWebCoreInternals.la
 
 # gtest source files that we don't compile directly.  They are
 # #included by gtest-all.cc.
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_74 = Source/ThirdParty/gtest/src/gtest.cc \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_76 = Source/ThirdParty/gtest/src/gtest.cc \
 @ENABLE_DEVELOPER_MODE_TRUE@	Source/ThirdParty/gtest/src/gtest-death-test.cc \
 @ENABLE_DEVELOPER_MODE_TRUE@	Source/ThirdParty/gtest/src/gtest-filepath.cc \
 @ENABLE_DEVELOPER_MODE_TRUE@	Source/ThirdParty/gtest/src/gtest-internal-inl.h \
@@ -581,13 +588,13 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(srcdir)/Source/WebCore/bindings/scripts/generate-bindings.pl \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(shell ls \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(srcdir)/Tools/WebKitTestRunner/InjectedBundle/Bindings/*.idl)
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_75 = \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_77 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/ImageDiff
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_76 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_78 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@	Programs/DumpRenderTree
 
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_77 = \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_79 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/InternalSettingsGenerated.cpp \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/InternalSettingsGenerated.h   \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/JSMallocStatistics.cpp \
@@ -603,15 +610,15 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/JSTypeConversions.cpp \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/JSTypeConversions.h
 
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_78 = $(libwebcoreinternals_built_sources) \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_80 = $(libwebcoreinternals_built_sources) \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(top_builddir)/stamp-testwebkitapi-webcore-forwarding-headers
-@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_OR_WAYLAND_TRUE@am__append_79 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_OR_WAYLAND_TRUE@am__append_81 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_OR_WAYLAND_TRUE@	-DTEST_PLUGIN_DIR=\"${shell pwd}/${top_builddir}/TestNetscapePlugin/.libs\" \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_OR_WAYLAND_TRUE@	-DFONTS_CONF_DIR=\"${shell pwd}/${srcdir}/Tools/DumpRenderTree/gtk/fonts\"
 
 
 # clean target
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_80 = \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_82 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/DumpRenderTree \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/GtkLauncher \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/ImageDiff
@@ -619,30 +626,30 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 
 # Build TestNetscapePlugin only for X11
 # since we don't support plugins for non-X11 builds at the moment.
-@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@am__append_81 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@am__append_83 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	TestNetscapePlugin/libTestNetscapePlugin.la
 
 
 # For the Gtk port we want to use XP_UNIX both on X11 and Mac
-@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_WIN32_FALSE@@TARGET_X11_TRUE@am__append_82 = -DXP_UNIX
-@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@am__append_83 = TestNetscapePlugin/libTestNetscapePlugin.la
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_84 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_WIN32_FALSE@@TARGET_X11_TRUE@am__append_84 = -DXP_UNIX
+@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@am__append_85 = TestNetscapePlugin/libTestNetscapePlugin.la
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_86 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Libraries/libTestWebKitAPIMain.la
 
 
 # The InjectedBundle library allows the render process to load harness code.
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_85 = Libraries/libTestWebKit2GtkAPI.la \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_87 = Libraries/libTestWebKit2GtkAPI.la \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Libraries/libTestWebKitAPIInjectedBundle.la \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Libraries/WebExtensions/libWebExtensionTest.la \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Libraries/WebExtensions/libWebProcessTest.la \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Libraries/libTestRunnerInjectedBundle.la
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_86 = \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_88 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/TestWebKitAPI/WTF/TestWTF \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/TestWebKitAPI/JavaScriptCore/TestJavaScriptCore \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/TestWebKitAPI/WebCore/TestWebCore \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/TestWebKitAPI/WebCoreGtk/TestWebCoreGtk
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_87 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_89 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@	Programs/TestWebKitAPI/WebKitGtk/testapplicationcache \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@	Programs/TestWebKitAPI/WebKitGtk/testcontextmenu \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@	Programs/TestWebKitAPI/WebKitGtk/testdomdocument \
@@ -672,7 +679,7 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@	Programs/TestWebKitAPI/WebKitGtk/testkeyevents \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@	Programs/TestWebKitAPI/WebKitGtk/testcopyandpaste
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_88 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_90 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Programs/TestWebKitAPI/WebKit2/TestWebKit2 \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/InspectorTestServer \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/TestAuthentication \
@@ -701,32 +708,32 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/TestWebKitWebViewGroup \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/TestWebViewEditor
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@@HAVE_ATSPI2_TRUE@am__append_89 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@@HAVE_ATSPI2_TRUE@am__append_91 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@@HAVE_ATSPI2_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/AccessibilityTestServer \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@@HAVE_ATSPI2_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/TestWebKitAccessibility
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_SVG_TRUE@am__append_90 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_SVG_TRUE@am__append_92 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_SVG_TRUE@	libWebCoreSVG.la
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_INDEXED_DATABASE_TRUE@am__append_91 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_INDEXED_DATABASE_TRUE@am__append_93 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_INDEXED_DATABASE_TRUE@	libLevelDB.la
 
-@ENABLE_DEVELOPER_MODE_TRUE@@USE_OPENGL_TRUE@am__append_92 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@USE_OPENGL_TRUE@am__append_94 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@USE_OPENGL_TRUE@	libANGLE.la
 
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_93 =  \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_95 =  \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(top_builddir)/libWebCoreLayer.a \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/resources/webkit2gtk-tests-resources.gresource
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_94 = \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_96 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/resources/webkit2gtk-tests-resources.gresource
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_95 = $(top_builddir)/stamp-testwebkitapi-webkit2-forwarding-headers
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_96 = $(top_builddir)/stamp-webkittestrunner-forwarding-headers \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_97 = $(top_builddir)/stamp-testwebkitapi-webkit2-forwarding-headers
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_98 = $(top_builddir)/stamp-webkittestrunner-forwarding-headers \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(webkittestrunner_built_sources)
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_97 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_99 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Programs/WebKitTestRunner
 
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_98 = \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_100 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/InjectedBundle/JSAccessibilityController.cpp \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/InjectedBundle/JSAccessibilityTextMarker.cpp \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/InjectedBundle/JSAccessibilityTextMarkerRange.cpp \
@@ -5156,9 +5163,12 @@ am__libWebCore_la_SOURCES_DIST =  \
 	Source/WebCore/platform/graphics/win/GraphicsContextCairoWin.cpp \
 	Source/WebCore/platform/graphics/win/GraphicsContextWin.cpp \
 	Source/WebCore/platform/graphics/win/LocalWindowsContext.h \
+	Source/WebCore/platform/graphics/win/SharedGDIObject.h \
 	Source/WebCore/platform/graphics/win/TransformationMatrixWin.cpp \
 	Source/WebCore/platform/win/BitmapInfo.cpp \
 	Source/WebCore/platform/win/BitmapInfo.h \
+	Source/WebCore/platform/win/GDIObjectCounter.cpp \
+	Source/WebCore/platform/win/GDIObjectCounter.h \
 	Source/WebCore/platform/win/SystemInfo.cpp \
 	Source/WebCore/platform/win/SystemInfo.h \
 	Source/WebCore/platform/win/WebCoreInstanceHandle.cpp \
@@ -5210,6 +5220,7 @@ am__libWebCore_la_SOURCES_DIST =  \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/graphics/win/libWebCore_la-GraphicsContextWin.lo \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/graphics/win/libWebCore_la-TransformationMatrixWin.lo \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/win/libWebCore_la-BitmapInfo.lo \
+@TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/win/libWebCore_la-GDIObjectCounter.lo \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/win/libWebCore_la-SystemInfo.lo \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/platform/win/libWebCore_la-WebCoreInstanceHandle.lo \
 @TARGET_WIN32_TRUE@@TARGET_X11_OR_WAYLAND_FALSE@	Source/WebCore/plugins/win/libWebCore_la-PluginDatabaseWin.lo \
@@ -9112,7 +9123,7 @@ libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@
 	$(LDFLAGS) -o $@
 libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_DEPENDENCIES =  \
 	libWebCore.la libWebCorePlatform.la libWebCoreModules.la \
-	$(am__append_54) $(am__append_55) $(am__append_56) \
+	$(am__append_55) $(am__append_56) $(am__append_57) \
 	libjavascriptcoregtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
 	libPlatform.la libPlatformGtk.la libGObjectDOMBindings.la \
 	libWebCoreGtk.la libWebKit2Platform.la $(am__DEPENDENCIES_1) \
@@ -13000,8 +13011,7 @@ INSPECTOR_SCRIPTS_DIR := $(JavaScriptCore)/inspector/scripts
 
 # Libraries and support components
 bin_PROGRAMS := Programs/jsc-@WEBKITGTK_API_MAJOR_VERSION@$(EXEEXT)
-noinst_DATA := DerivedSources/webkitdom/webkitdom.symbols \
-	$(am__append_33) $(am__append_94)
+noinst_DATA := $(am__append_33) $(am__append_96)
 noinst_HEADERS := 
 
 # We have a different library with only the files that require GTK+. It allows us
@@ -13012,11 +13022,11 @@ noinst_HEADERS :=
 noinst_LTLIBRARIES := libWTF.la libPlatform.la libPlatformGtk.la \
 	libWebCorePlatform.la libWebCoreModules.la libWebCore.la \
 	$(am__append_28) libWebCoreGtk.la libGObjectDOMBindings.la \
-	$(am__append_51) $(am__append_66) $(am__append_67) \
-	$(am__append_73) $(am__append_81) $(am__append_84) \
-	$(am__append_85)
+	$(am__append_52) $(am__append_68) $(am__append_69) \
+	$(am__append_75) $(am__append_83) $(am__append_86) \
+	$(am__append_87)
 lib_LTLIBRARIES := libjavascriptcoregtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
-	$(am__append_34) $(am__append_50)
+	$(am__append_34) $(am__append_51)
 IDL_BINDINGS := 
 POFILES := $(shell ls $(srcdir)/Source/WebCore/platform/gtk/po/*.po)
 PO_LINGUAS := $(patsubst \
@@ -13748,7 +13758,8 @@ wtf_sources := Source/WTF/config.h Source/WTF/wtf/Platform.h \
 	Source/WTF/wtf/unicode/Unicode.h \
 	Source/WTF/wtf/unicode/UnicodeMacrosFromICU.h \
 	Source/WTF/wtf/unicode/icu/CollatorICU.cpp \
-	Source/WTF/wtf/unicode/icu/UnicodeIcu.h
+	Source/WTF/wtf/unicode/icu/UnicodeIcu.h \
+	Source/WTF/wtf/win/GDIObject.h
 javascriptcore_h_api := Source/JavaScriptCore/API/JSBase.h \
 	Source/JavaScriptCore/API/JSContextRef.h \
 	Source/JavaScriptCore/API/JSObjectRef.h \
@@ -22483,8 +22494,8 @@ webkit2_sources := Source/WebKit2/config.h \
 	Source/WebKit2/WebProcess/WebConnectionToUIProcess.h \
 	Source/WebKit2/WebProcess/WebProcessSupplement.h \
 	Source/WebKit2/WebProcess/WebProcess.cpp \
-	Source/WebKit2/WebProcess/WebProcess.h $(am__append_45) \
-	$(am__append_46) $(am__append_47)
+	Source/WebKit2/WebProcess/WebProcess.h $(am__append_46) \
+	$(am__append_47) $(am__append_48)
 webkit2_built_sources := DerivedSources/WebKit2/AuthenticationManagerMessageReceiver.cpp \
 	DerivedSources/WebKit2/AuthenticationManagerMessages.h \
 	DerivedSources/WebKit2/CustomProtocolManagerProxyMessageReceiver.cpp \
@@ -22758,8 +22769,8 @@ webkit2_plugin_process_sources :=  \
 	Source/WebKit2/WebProcess/Plugins/Netscape/NetscapePlugin.h \
 	Source/WebKit2/WebProcess/Plugins/Netscape/NetscapePluginStream.cpp \
 	Source/WebKit2/WebProcess/Plugins/Netscape/NetscapePluginStream.h \
-	Source/WebKit2/unix/PluginMainUnix.cpp $(am__append_48) \
-	$(am__append_49)
+	Source/WebKit2/unix/PluginMainUnix.cpp $(am__append_49) \
+	$(am__append_50)
 webkit2_plugin_process_built_sources := DerivedSources/WebKit2/NPObjectMessageReceiverMessageReceiver.cpp \
 	DerivedSources/WebKit2/NPObjectMessageReceiverMessages.h \
 	DerivedSources/WebKit2/PluginControllerProxyMessageReceiver.cpp \
@@ -22768,8 +22779,8 @@ webkit2_plugin_process_built_sources := DerivedSources/WebKit2/NPObjectMessageRe
 	DerivedSources/WebKit2/PluginProcessMessages.h \
 	DerivedSources/WebKit2/WebProcessConnectionMessageReceiver.cpp \
 	DerivedSources/WebKit2/WebProcessConnectionMessages.h
-webkittestrunner_built_sources := $(am__append_98)
-libwebcoreinternals_built_sources := $(am__append_77)
+webkittestrunner_built_sources := $(am__append_100)
+libwebcoreinternals_built_sources := $(am__append_79)
 minibrowser_built_sources := DerivedSources/WebKit2/BrowserMarshal.h \
 	DerivedSources/WebKit2/BrowserMarshal.c
 global_cppflags := -Wall -W -Wcast-align -Wchar-subscripts \
@@ -22851,7 +22862,6 @@ EXTRA_DIST := $(srcdir)/Source/autotools/symbols.filter \
 	Source/WebCore/bindings/scripts/StaticString.pm \
 	Source/WebCore/bindings/scripts/generate-bindings.pl \
 	Source/WebCore/bindings/scripts/gobject-generate-headers.pl \
-	Source/WebCore/bindings/scripts/gobject-run-api-break-test \
 	Source/WebCore/bindings/scripts/preprocessor.pm \
 	Source/WebCore/bindings/scripts/preprocess-idls.pl \
 	Source/WebCore/ChangeLog Source/WebCore/css/CSSGrammar.y.in \
@@ -22917,12 +22927,12 @@ EXTRA_DIST := $(srcdir)/Source/autotools/symbols.filter \
 	$(WebInspectorUI)/UserInterface/Images/*.png) $(shell ls \
 	$(WebInspectorUI)/UserInterface/Images/*.svg) $(shell ls \
 	$(WebInspectorUI)/UserInterface/External/CodeMirror/*) \
-	Tools/gtk/common.py Tools/gtk/generate-feature-defines-files \
+	Tools/gtk/check-for-webkitdom-api-breaks Tools/gtk/common.py \
+	Tools/gtk/generate-feature-defines-files \
 	Tools/gtk/generate-gtkdoc \
 	Tools/gtk/generate-inspector-gresource-manifest.py \
-	Tools/gtk/generate-webkitdom-doc-files Tools/gtk/gtkdoc.py \
-	$(WebKit)/ChangeLog $(WebKit)/NEWS \
-	$(WebKit)/docs/webkitgtk-docs.sgml \
+	Tools/gtk/gtkdoc.py Tools/gtk/webkitdom.py $(WebKit)/ChangeLog \
+	$(WebKit)/NEWS $(WebKit)/docs/webkitgtk-docs.sgml \
 	$(WebKit)/docs/webkitgtk-sections.txt \
 	$(WebKit)/docs/webkitgtk.types \
 	$(WebKit)/docs/webkitenvironment.xml \
@@ -22978,7 +22988,7 @@ EXTRA_DIST := $(srcdir)/Source/autotools/symbols.filter \
 	$(WebKit2)/WebProcess/WebPage/*.in) $(shell ls \
 	$(WebKit2)/WebProcess/soup/*.in) \
 	$(srcdir)/Tools/MiniBrowser/gtk/browser-marshal.list \
-	$(am__append_74)
+	$(am__append_76)
 
 # Include module makefiles
 
@@ -22987,16 +22997,15 @@ EXTRA_DIST := $(srcdir)/Source/autotools/symbols.filter \
 
 # Autogenerated sources
 BUILT_SOURCES := $(webkitgtk_gdom_built_h_api) \
-	$(webkitgtk_gdom_built_sources) \
+	$(webkitgtk_gdom_built_sources) gtkdoc-webkitdom.cfg \
 	DerivedSources/WebInspectorUI/GResourceBundle.xml \
-	$(top_builddir)/DerivedSources/webkitdom/docs/webkitdomgtk-docs.sgml \
-	$(top_builddir)/DerivedSources/webkitdom/docs/webkitdomgtk-sections.txt \
-	$(webkitgtk_built_sources) \
+	$(webkitgtk_built_sources) $(am__append_44) \
 	$(top_builddir)/stamp-webkit2-forwarding-headers \
 	$(GENSOURCES_WEBKIT2)/webkit2extension/include/webkit2 \
 	$(GENSOURCES_WEBKIT2)/webkit2gtk/include/webkit2 \
-	$(minibrowser_built_sources) $(am__append_78) $(am__append_95) \
-	$(am__append_96) $(javascriptcore_built_sources) \
+	$(am__append_66) $(minibrowser_built_sources) $(am__append_80) \
+	$(am__append_97) $(am__append_98) \
+	$(javascriptcore_built_sources) \
 	$(javascriptcore_built_nosources) $(platform_built_sources) \
 	$(webcore_built_sources) $(webcore_built_nosources) \
 	$(webcore_svg_built_sources) $(webkitgtk_built_sources) \
@@ -23016,7 +23025,7 @@ CLEANFILES := $(javascriptcore_built_nosources) Programs/jsc \
 	$(top_builddir)/stamp-webkitmarshal.h \
 	$(top_builddir)/stamp-webkitenumtypes.cpp \
 	$(top_builddir)/stamp-webkitenumtypes.h \
-	$(top_builddir)/Programs/GtkLauncher $(am__append_60) \
+	$(top_builddir)/Programs/GtkLauncher $(am__append_61) \
 	$(BUILT_SOURCES) $(top_builddir)/stamp-webkit2enumtypes \
 	$(top_builddir)/stamp-webkit2marshal.cpp \
 	$(top_builddir)/stamp-webkit2marshal.h \
@@ -23025,8 +23034,8 @@ CLEANFILES := $(javascriptcore_built_nosources) Programs/jsc \
 	$(top_builddir)/Programs/MiniBrowser \
 	$(minibrowser_built_sources) \
 	$(top_builddir)/stamp-mini-browser-marshal.h \
-	$(top_builddir)/stamp-mini-browser-marshal.c $(am__append_80) \
-	$(am__append_83)
+	$(top_builddir)/stamp-mini-browser-marshal.c $(am__append_82) \
+	$(am__append_85)
 DOMAIN := $(GETTEXT_PACKAGE)
 DISTCLEANFILES := $(top_builddir)/Source/JavaScriptCore/javascriptcoregtk-@WEBKITGTK_API_VERSION@.pc \
 	$(ALL_MOFILES) \
@@ -23036,7 +23045,7 @@ DISTCLEANFILES := $(top_builddir)/Source/JavaScriptCore/javascriptcoregtk-@WEBKI
 	$(top_builddir)/Source/WebKit/gtk/org.webkitgtk-@WEBKITGTK_API_VERSION@.gschema.xml \
 	$(top_builddir)/Source/WebKit/gtk/webkit/webkitversion.h \
 	$(top_builddir)/WebKit2/webkit2gtk-@WEBKITGTK_API_VERSION@.pc \
-	$(top_builddir)/libWebCoreLayerGtk2.a $(am__append_93) \
+	$(top_builddir)/libWebCoreLayerGtk2.a $(am__append_95) \
 	$(CLEANFILES) $(builddir)/doltcompile $(builddir)/doltlibtool \
 	$(builddir)/WebKitFeatures.h $(builddir)/WebKitFeatures.txt
 MAINTAINERCLEANFILES := $(ALL_MOFILES) \
@@ -23050,16 +23059,20 @@ MAINTAINERCLEANFILES := $(ALL_MOFILES) \
 	$(srcdir)/GNUmakefile.in $(srcdir)/INSTALL $(srcdir)/README \
 	$(top_builddir)/config.*
 pkgconfig_DATA := Source/JavaScriptCore/javascriptcoregtk-@WEBKITGTK_API_VERSION@.pc \
-	$(am__append_40) $(am__append_57)
+	$(am__append_40) $(am__append_58)
 gdom_symbol_files := $(patsubst %.h,%.symbols, $(filter \
 	DerivedSources/webkitdom/WebKitDOM%.h, \
 	$(webkitgtk_gdom_built_h_api)))
 @ENABLE_INTROSPECTION_TRUE@gir_DATA := JavaScriptCore-@WEBKITGTK_API_VERSION@.gir \
-@ENABLE_INTROSPECTION_TRUE@	$(am__append_41) $(am__append_58)
+@ENABLE_INTROSPECTION_TRUE@	$(am__append_41) $(am__append_59)
 @ENABLE_INTROSPECTION_TRUE@typelibs_DATA := JavaScriptCore-@WEBKITGTK_API_VERSION@.typelib \
-@ENABLE_INTROSPECTION_TRUE@	$(am__append_42) $(am__append_59)
+@ENABLE_INTROSPECTION_TRUE@	$(am__append_42) $(am__append_60)
 @ENABLE_INTROSPECTION_TRUE@girdir := $(datadir)/gir-1.0
 @ENABLE_INTROSPECTION_TRUE@typelibsdir := $(libdir)/girepository-1.0
+webkit1_pkg_config_file = Source/WebKit/gtk/webkitgtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.pc
+webkit2_pkg_config_file = Source/WebKit2/webkit2gtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.pc
+@ENABLE_WEBKIT2_FALSE@webkitdom_pkgconfig_file = $(webkit1_pkg_config_file)
+@ENABLE_WEBKIT2_TRUE@webkitdom_pkgconfig_file = $(webkit2_pkg_config_file)
 
 # Read the feature defines file, that's created by generate-feature-defines-files
 # during configuration (SetupWebKitFeatures.m4).
@@ -23605,12 +23618,15 @@ libGObjectDOMBindings_la_CFLAGS = \
 	-fvisibility=hidden \
 	$(global_cflags)
 
+webkitgtk_gdom_include_dirs = \
+	-I$(WebCore)/bindings \
+	-I$(WebCore)/bindings/gobject \
+	-I$(GENSOURCES_WEBKITDOM)
+
 libGObjectDOMBindings_la_CPPFLAGS = \
 	-DBUILDING_WebCore \
 	-DBUILDING_WEBKIT \
-	-I$(WebCore)/bindings \
-	-I$(WebCore)/bindings/gobject \
-	-I$(GENSOURCES_WEBKITDOM) \
+	$(webkitgtk_gdom_include_dirs) \
 	$(global_cppflags) \
 	$(platform_cppflags) \
 	$(platformgtk_cppflags) \
@@ -23626,10 +23642,9 @@ MSGFMT := $(shell which msgfmt)
 XGETTEXT := $(shell which xgettext)
 MSGMERGE := $(shell which msgmerge)
 MSGMERGE_UPDATE := $(MSGMERGE) --update
-docs_build_stamp_list = Source/WebKit/gtk/docs/webkitenvironment.xml \
-	$(am__append_31) $(am__append_32) libGObjectDOMBindings.la \
-	$(top_builddir)/DerivedSources/webkitdom/docs/webkitdomgtk-docs.sgml \
-	$(top_builddir)/DerivedSources/webkitdom/docs/webkitdomgtk-sections.txt
+docs_build_dependencies =  \
+	Source/WebKit/gtk/docs/webkitenvironment.xml $(am__append_31) \
+	$(am__append_32) libGObjectDOMBindings.la gtkdoc-webkitdom.cfg
 nodist_libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_SOURCES = \
 	$(webkitgtk_built_sources)
 
@@ -23942,11 +23957,11 @@ libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_ladir 
 
 libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_LDFLAGS :=  \
 	-version-info @LIBWEBKIT2GTK_VERSION@ $(no_undefined) \
-	$(am__append_53)
+	$(am__append_54)
 libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_LIBADD :=  \
 	-lpthread libWebCore.la libWebCorePlatform.la \
-	libWebCoreModules.la $(am__append_54) $(am__append_55) \
-	$(am__append_56) \
+	libWebCoreModules.la $(am__append_55) $(am__append_56) \
+	$(am__append_57) \
 	libjavascriptcoregtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
 	libPlatform.la libPlatformGtk.la libGObjectDOMBindings.la \
 	libWebCoreGtk.la libWebKit2Platform.la $(CAIRO_LIBS) \
@@ -24120,11 +24135,11 @@ libwebkit2gtkinjectedbundle_la_CPPFLAGS = \
 # Serialize linking of the plugin process with both webkit libraries.
 plugin_process_for_dep = Programs/WebKitPluginProcess
 plugin_process_for_dep_list = libwebkit2gtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
-	$(am__append_61)
+	$(am__append_62)
 webcore_layer_gtk2_deps = libPlatform.la libPlatformGtk2.la \
 	libWebCorePlatform.la libWebCoreGtk2.la libWebCore.la \
-	libWebCoreModules.la $(am__append_62) $(am__append_63) \
-	$(am__append_64)
+	libWebCoreModules.la $(am__append_63) $(am__append_64) \
+	$(am__append_65)
 webcore_layer_gtk2_archives = $(foreach lib, $(webcore_layer_gtk2_deps), $(shell echo $(lib) | sed "s/\(.*\)\.la/.libs\/\1.a/"))
 Programs_WebKitPluginProcess_CPPFLAGS = \
 	-include $(srcdir)/Source/WebKit2/WebKit2Prefix.h \
@@ -24421,8 +24436,8 @@ libLevelDB_la_CFLAGS = $(global_cflags)
 libLevelDB_la_CPPFLAGS = $(global_cppflags) -fno-builtin-memcmp \
 	-I$(srcdir)/Source/ThirdParty/leveldb \
 	-I$(srcdir)/Source/ThirdParty/leveldb/include \
-	-DLEVELDB_PLATFORM_POSIX $(am__append_68) $(am__append_69) \
-	$(am__append_70) $(am__append_71) $(am__append_72)
+	-DLEVELDB_PLATFORM_POSIX $(am__append_70) $(am__append_71) \
+	$(am__append_72) $(am__append_73) $(am__append_74)
 libLevelDB_la_SOURCES = \
 	Source/ThirdParty/leveldb/db/builder.cc\
 	Source/ThirdParty/leveldb/db/builder.h \
@@ -24610,7 +24625,7 @@ libLevelDB_la_SOURCES = \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(platform_cppflags) \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(platformgtk_cppflags) \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(webcore_cppflags) \
-@ENABLE_DEVELOPER_MODE_TRUE@	$(am__append_79)
+@ENABLE_DEVELOPER_MODE_TRUE@	$(am__append_81)
 @ENABLE_DEVELOPER_MODE_TRUE@Programs_DumpRenderTree_SOURCES = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Source/WebCore/platform/gtk/GtkVersioning.c \
 @ENABLE_DEVELOPER_MODE_TRUE@	Tools/DumpRenderTree/DumpRenderTree.h \
@@ -24723,7 +24738,7 @@ libLevelDB_la_SOURCES = \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	$(global_cppflags) \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	$(javascriptcore_cppflags) \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	-Wno-missing-format-attribute \
-@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	$(am__append_82) \
+@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	$(am__append_84) \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	-DMOZ_X11
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@TestNetscapePlugin_libTestNetscapePlugin_la_SOURCES = \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	Tools/DumpRenderTree/TestNetscapePlugIn/Tests/DocumentOpenInDestroyStream.cpp \
@@ -24936,8 +24951,8 @@ libLevelDB_la_SOURCES = \
 @ENABLE_DEVELOPER_MODE_TRUE@	libWebCorePlatform.la \
 @ENABLE_DEVELOPER_MODE_TRUE@	libWebCoreGtk.la libWebCore.la \
 @ENABLE_DEVELOPER_MODE_TRUE@	libWebCoreModules.la \
-@ENABLE_DEVELOPER_MODE_TRUE@	$(am__append_90) $(am__append_91) \
-@ENABLE_DEVELOPER_MODE_TRUE@	$(am__append_92)
+@ENABLE_DEVELOPER_MODE_TRUE@	$(am__append_92) $(am__append_93) \
+@ENABLE_DEVELOPER_MODE_TRUE@	$(am__append_94)
 @ENABLE_DEVELOPER_MODE_TRUE@webcore_layer_archives = $(foreach lib, $(webcore_layer_deps), $(shell echo $(lib) | sed "s/\(.*\)\.la/.libs\/\1.a/"))
 @ENABLE_DEVELOPER_MODE_TRUE@Programs_TestWebKitAPI_WebCore_TestWebCore_CPPFLAGS = \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(Libraries_libTestWebKitAPIMain_la_CPPFLAGS) \
@@ -32487,6 +32502,9 @@ Source/WebCore/platform/win/$(DEPDIR)/$(am__dirstamp):
 	@$(MKDIR_P) Source/WebCore/platform/win/$(DEPDIR)
 	@: > Source/WebCore/platform/win/$(DEPDIR)/$(am__dirstamp)
 Source/WebCore/platform/win/libWebCore_la-BitmapInfo.lo:  \
+	Source/WebCore/platform/win/$(am__dirstamp) \
+	Source/WebCore/platform/win/$(DEPDIR)/$(am__dirstamp)
+Source/WebCore/platform/win/libWebCore_la-GDIObjectCounter.lo:  \
 	Source/WebCore/platform/win/$(am__dirstamp) \
 	Source/WebCore/platform/win/$(DEPDIR)/$(am__dirstamp)
 Source/WebCore/platform/win/libWebCore_la-SystemInfo.lo:  \
@@ -45345,6 +45363,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@Source/WebCore/platform/text/icu/$(DEPDIR)/libPlatform_la-UTextProviderLatin1.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Source/WebCore/platform/text/icu/$(DEPDIR)/libPlatform_la-UTextProviderUTF16.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Source/WebCore/platform/win/$(DEPDIR)/libWebCore_la-BitmapInfo.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@Source/WebCore/platform/win/$(DEPDIR)/libWebCore_la-GDIObjectCounter.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Source/WebCore/platform/win/$(DEPDIR)/libWebCore_la-SystemInfo.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Source/WebCore/platform/win/$(DEPDIR)/libWebCore_la-WebCoreInstanceHandle.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Source/WebCore/plugins/$(DEPDIR)/libWebCore_la-DOMMimeType.Plo@am__quote@
@@ -61247,6 +61266,13 @@ Source/WebCore/platform/win/libWebCore_la-BitmapInfo.lo: Source/WebCore/platform
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Source/WebCore/platform/win/BitmapInfo.cpp' object='Source/WebCore/platform/win/libWebCore_la-BitmapInfo.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libWebCore_la_CPPFLAGS) $(CPPFLAGS) $(libWebCore_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/WebCore/platform/win/libWebCore_la-BitmapInfo.lo `test -f 'Source/WebCore/platform/win/BitmapInfo.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/win/BitmapInfo.cpp
+
+Source/WebCore/platform/win/libWebCore_la-GDIObjectCounter.lo: Source/WebCore/platform/win/GDIObjectCounter.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libWebCore_la_CPPFLAGS) $(CPPFLAGS) $(libWebCore_la_CXXFLAGS) $(CXXFLAGS) -MT Source/WebCore/platform/win/libWebCore_la-GDIObjectCounter.lo -MD -MP -MF Source/WebCore/platform/win/$(DEPDIR)/libWebCore_la-GDIObjectCounter.Tpo -c -o Source/WebCore/platform/win/libWebCore_la-GDIObjectCounter.lo `test -f 'Source/WebCore/platform/win/GDIObjectCounter.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/win/GDIObjectCounter.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Source/WebCore/platform/win/$(DEPDIR)/libWebCore_la-GDIObjectCounter.Tpo Source/WebCore/platform/win/$(DEPDIR)/libWebCore_la-GDIObjectCounter.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Source/WebCore/platform/win/GDIObjectCounter.cpp' object='Source/WebCore/platform/win/libWebCore_la-GDIObjectCounter.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libWebCore_la_CPPFLAGS) $(CPPFLAGS) $(libWebCore_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/WebCore/platform/win/libWebCore_la-GDIObjectCounter.lo `test -f 'Source/WebCore/platform/win/GDIObjectCounter.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/win/GDIObjectCounter.cpp
 
 Source/WebCore/platform/win/libWebCore_la-SystemInfo.lo: Source/WebCore/platform/win/SystemInfo.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libWebCore_la_CPPFLAGS) $(CPPFLAGS) $(libWebCore_la_CXXFLAGS) $(CXXFLAGS) -MT Source/WebCore/platform/win/libWebCore_la-SystemInfo.lo -MD -MP -MF Source/WebCore/platform/win/$(DEPDIR)/libWebCore_la-SystemInfo.Tpo -c -o Source/WebCore/platform/win/libWebCore_la-SystemInfo.lo `test -f 'Source/WebCore/platform/win/SystemInfo.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/win/SystemInfo.cpp
@@ -82102,11 +82128,6 @@ $(top_builddir)/DerivedSources/webkitdom/WebKitDOMDeprecated.symbols: $(WebCore)
 DerivedSources/webkitdom/WebKitDOM%.symbols: DerivedSources/webkitdom/WebKitDOM%.h
 	@true
 
-DerivedSources/webkitdom/webkitdom.symbols: $(gdom_symbol_files) $(WebCore)/bindings/gobject/webkitdom.symbols $(WebCore)/bindings/scripts/gobject-run-api-break-test
-	$(AM_V_GEN)cat $(gdom_symbol_files) > gdom-gen-symbols \
-	&& $(PYTHON) $(WebCore)/bindings/scripts/gobject-run-api-break-test $(WebCore)/bindings/gobject/webkitdom.symbols gdom-gen-symbols \
-	&& mv gdom-gen-symbols $@
-
 # Because WebCore/bindings/gobject/WebKitDOMObject.h is static source but is also a distributed header
 # required by other distributed headers (both static and auto-generated), need to move this to the
 # DerivedSources/webkitdom directory.  The reason is that we want all header files distributed in the
@@ -82128,6 +82149,15 @@ $(top_builddir)/DerivedSources/webkitdom/WebKitDOMDeprecated.h: $(WebCore)/bindi
 	$(AM_V_GEN)cp -f $< $@
 DerivedSources/webkitdom/WebKitDOM%.cpp DerivedSources/webkitdom/WebKitDOM%.h DerivedSources/webkitdom/WebKitDOM%Private.h: %.idl $(SCRIPTS_FOR_GENERATE_BINDINGS) $(WebCore)/bindings/scripts/CodeGeneratorGObject.pm $(WebCore)/bindings/gobject/GNUmakefile.am $(supplemental_dependency_file)
 	$(AM_V_GEN)$(PERL) -I$(WebCore)/bindings/scripts $(WebCore)/bindings/scripts/generate-bindings.pl --include $(WebCore)/Modules --include $(WebCore)/dom --include $(WebCore)/html --include $(WebCore)/css --include $(WebCore)/page --include $(WebCore)/fileapi --include $(WebCore)/xml --include $(WebCore)/svg --outputDir "$(GENSOURCES_WEBKITDOM)" --defines "LANGUAGE_GOBJECT=1 $(gdom_feature_defines)" --generator GObject --supplementalDependencyFile $(supplemental_dependency_file) $<
+
+gtkdoc-webkitdom.cfg: $(WebCore)/bindings/gobject/GNUmakefile.am $(srcdir)/Tools/gtk/GNUmakefile.am
+	$(AM_V_GEN)echo "[webkitdomgtk]" > $@ && \
+	echo "pkgconfig_file=$(webkitdom_pkgconfig_file)" >> $@ && \
+	echo "namespace=webkit_dom" >> $@ && \
+	echo "doc_dir=DerivedSources/webkitdom/docs" >> $@ && \
+	echo -e "cflags=-I$(srcdir)/Source $(webkitgtk_gdom_include_dirs)" >> $@ && \
+	echo "source_dirs=$(top_builddir)/DerivedSources/webkitdom $(srcdir)/Source/WebCore/bindings/gobject" >> $@ && \
+	echo "headers=$(webkitgtk_gdom_built_h_api) DerivedSources/webkitdom/WebKitDOMDeprecated.h" >> $@
 
 .po.mo:
 	test -d Source/WebCore/platform/gtk/po/ || mkdir -p Source/WebCore/platform/gtk/po/
@@ -82337,15 +82367,7 @@ ${GENSOURCES_WEBINSPECTOR_UI}/GResourceBundle.c: DerivedSources/WebInspectorUI/G
 docs: docs-build.stamp
 .PHONY : docs
 
-$(top_builddir)/DerivedSources/webkitdom/docs/webkitdomgtk-docs.sgml: $(gdom_symbol_files) $(srcdir)/Tools/gtk/generate-webkitdom-doc-files
-	$(AM_V_GEN)mkdir -p $(top_builddir)/DerivedSources/webkitdom/docs \
-	&& echo $(gdom_symbol_files) | $(PYTHON) $(srcdir)/Tools/gtk/generate-webkitdom-doc-files docs > $@
-
-$(top_builddir)/DerivedSources/webkitdom/docs/webkitdomgtk-sections.txt: $(gdom_symbol_files) $(srcdir)/Tools/gtk/generate-webkitdom-doc-files
-	$(AM_V_GEN)mkdir -p $(top_builddir)/DerivedSources/webkitdom/docs \
-	&& echo $(gdom_symbol_files) | $(PYTHON) $(srcdir)/Tools/gtk/generate-webkitdom-doc-files sections > $@
-
-docs-build.stamp: $(docs_build_stamp_list)
+docs-build.stamp: $(docs_build_dependencies)
 	CC=$(CC) $(srcdir)/Tools/gtk/generate-gtkdoc
 	@touch docs-build.stamp
 
@@ -82523,6 +82545,16 @@ $(GENSOURCES_WEBKIT)/webkitenumtypes.cpp: $(webkitgtk_h_api) $(WebKit)/GNUmakefi
 		> xgen-gtc \
 	&& cp xgen-gtc $@ \
 	&& rm -f xgen-gtc
+
+@ENABLE_WEBKIT1_TRUE@gtkdoc-webkitgtk.cfg: $(WebKit)/GNUmakefile.am $(srcdir)/Tools/gtk/GNUmakefile.am
+@ENABLE_WEBKIT1_TRUE@	$(AM_V_GEN)echo "[webkitgtk]" > $@ && \
+@ENABLE_WEBKIT1_TRUE@	echo "pkgconfig_file=$(webkit1_pkg_config_file)" >> $@ && \
+@ENABLE_WEBKIT1_TRUE@	echo "namespace=webkit" >> $@ && \
+@ENABLE_WEBKIT1_TRUE@	echo -e "cflags=$(libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_CPPFLAGS)" >> $@ && \
+@ENABLE_WEBKIT1_TRUE@	echo "doc_dir=$(srcdir)/Source/WebKit/gtk/docs" >> $@ && \
+@ENABLE_WEBKIT1_TRUE@	echo -e "source_dirs=$(srcdir)/Source/WebKit/gtk/webkit\n \
+@ENABLE_WEBKIT1_TRUE@           Source/WebKit/gtk/webkit" >> $@ && \
+@ENABLE_WEBKIT1_TRUE@	echo -e "headers=$(webkitgtk_static_h_api) Source/WebKit/gtk/webkit/webkitversion.h" >> $@
 
 ${GENSOURCES_WEBINSPECTOR_UI}/WebKit2GResourceBundle.c: \
 		$(WebKit2)/UIProcess/InspectorServer/front-end/inspectorPageIndex.html \
@@ -82723,6 +82755,24 @@ libWebCoreLayerGtk2.a: $(webcore_layer_gtk2_deps)
 	$(AM_V_at)$(foreach archive, $(webcore_layer_gtk2_archives), $(shell $(AR) t $(archive) | xargs -n1 basename | xargs -I obj_file grep -F obj_file objects_list | xargs -n50 $(AR) $(AR_FLAGS) $@))
 	$(AM_V_at)$(shell rm -f objects_list)
 
+# It would be nice to use the CPPFLAGS from the WebKit2 library here, but the prefix
+# header doesn't seem to play nicely with the gtkdoc tools.
+@ENABLE_WEBKIT2_TRUE@gtkdoc-webkit2gtk.cfg: $(WebKit2)/GNUmakefile.am $(WebKit2)/GNUmakefile.list.am
+@ENABLE_WEBKIT2_TRUE@	$(AM_V_GEN)echo "[webkit2gtk]" > $@ && \
+@ENABLE_WEBKIT2_TRUE@	echo "pkgconfig_file=$(webkit2_pkg_config_file)" >> $@ && \
+@ENABLE_WEBKIT2_TRUE@	echo "namespace=webkit" >> $@ && \
+@ENABLE_WEBKIT2_TRUE@	echo -e "cflags=-I$(srcdir)/Source\n \
+@ENABLE_WEBKIT2_TRUE@       -I$(WebKit2)/UIProcess/API/gtk\n \
+@ENABLE_WEBKIT2_TRUE@       -IDerivedSources/webkit2gtk/include\n \
+@ENABLE_WEBKIT2_TRUE@       -IDerivedSources/WebKit2/webkit2gtk\n" >> $@ && \
+@ENABLE_WEBKIT2_TRUE@	echo "doc_dir=$(WebKit2)/UIProcess/API/gtk/docs" >> $@ && \
+@ENABLE_WEBKIT2_TRUE@	echo -e "source_dirs=$(WebKit2)/UIProcess/API/gtk\n \
+@ENABLE_WEBKIT2_TRUE@           $(WebKit2)/WebProcess/InjectedBundle/API/gtk\n \
+@ENABLE_WEBKIT2_TRUE@           DerivedSources/WebKit2/webkit2gtk/webkit2\n" >> $@ && \
+@ENABLE_WEBKIT2_TRUE@	echo -e "headers=$(webkit2gtk_ui_h_api)\n \
+@ENABLE_WEBKIT2_TRUE@         $(webkit2gtk_web_extension_h_api)\n \
+@ENABLE_WEBKIT2_TRUE@         DerivedSources/WebKit2/webkit2gtk/webkit2/WebKitVersion.h" >> $@
+
 $(GENSOURCES_WEBKIT2)/BrowserMarshal.h: stamp-mini-browser-marshal.h
 	@true
 $(GENSOURCES_WEBKIT2)/BrowserMarshal.c: stamp-mini-browser-marshal.c
@@ -82739,6 +82789,7 @@ stamp-mini-browser-marshal.h: $(minibrowser_marshal_list)
 
 @ENABLE_DEVELOPER_MODE_TRUE@check-local:
 @ENABLE_DEVELOPER_MODE_TRUE@	$(top_srcdir)/Tools/Scripts/run-gtk-tests --timeout=-1
+@ENABLE_DEVELOPER_MODE_TRUE@	$(top_srcdir)/Tools/gtk/check-for-webkitdom-api-breaks
 
 @ENABLE_DEVELOPER_MODE_TRUE@libWebCoreLayer.a: $(webcore_layer_deps)
 @ENABLE_DEVELOPER_MODE_TRUE@	$(AM_V_GEN)

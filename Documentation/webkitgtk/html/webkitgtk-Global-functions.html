@@ -12,11 +12,10 @@
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
-<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="10"><tr valign="middle">
+<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="5"><tr valign="middle">
 <td width="100%" align="left" class="shortcuts">
-<a href="#" class="shortcut">Top</a><span id="nav_description"> <span class="dim">|</span> 
-                  <a href="#webkitgtk-Global-functions.description" class="shortcut">Description</a></span><span id="nav_hierarchy"> <span class="dim">|</span> 
-                  <a href="#webkitgtk-Global-functions.object-hierarchy" class="shortcut">Object Hierarchy</a></span>
+<a href="#" class="shortcut">Top</a><span id="nav_description">  <span class="dim">|</span> 
+                  <a href="#webkitgtk-Global-functions.description" class="shortcut">Description</a></span>
 </td>
 <td><a accesskey="h" href="index.html"><img src="home.png" width="16" height="16" border="0" alt="Home"></a></td>
 <td><a accesskey="u" href="ch01.html"><img src="up.png" width="16" height="16" border="0" alt="Up"></a></td>
@@ -216,11 +215,6 @@
 </table></div>
 </div>
 <div class="refsect1">
-<a name="webkitgtk-Global-functions.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">
-</pre>
-</div>
-<div class="refsect1">
 <a name="webkitgtk-Global-functions.description"></a><h2>Description</h2>
 <p>WebKit manages many resources which are not related to specific
 views. These functions relate to cross-view limits, such as cache
@@ -237,7 +231,7 @@ Note that the session features are added by WebKit on demand,
 so if you insert your own <a href="../libsoup-2.4/SoupCookieJar.html"><span class="type">SoupCookieJar</span></a> before any network
 traffic occurs, WebKit will use it instead of the default.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.2.5"></a><h4>Returns</h4>
+<a name="id-1.2.2.6.2.5"></a><h4>Returns</h4>
 <p> the default <a href="../libsoup-2.4/SoupSession.html"><span class="type">SoupSession</span></a>. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
@@ -251,7 +245,7 @@ webkit_get_default_web_database_quota (<em class="parameter"><code><span class="
 <p>Returns the default quota for Web Database databases. By default
 this value is 5MB.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.3.5"></a><h4>Returns</h4>
+<a name="id-1.2.2.6.3.5"></a><h4>Returns</h4>
 <p> the current default database quota in bytes</p>
 <p></p>
 </div>
@@ -267,7 +261,7 @@ webkit_get_web_database_directory_path
 Database and Indexed Database databases. By default this path will
 be in the user data directory.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.4.5"></a><h4>Returns</h4>
+<a name="id-1.2.2.6.4.5"></a><h4>Returns</h4>
 <p> the current database directory path in the filesystem encoding</p>
 <p></p>
 </div>
@@ -281,7 +275,7 @@ webkit_get_web_plugin_database (<em class="parameter"><code><span class="type">v
 <p>Returns the current <a class="link" href="WebKitWebPluginDatabase.html" title="WebKitWebPluginDatabase"><span class="type">WebKitWebPluginDatabase</span></a> with information about
 all the plugins WebKit knows about in this instance.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.5.5"></a><h4>Returns</h4>
+<a name="id-1.2.2.6.5.5"></a><h4>Returns</h4>
 <p> the current <a class="link" href="WebKitWebPluginDatabase.html" title="WebKitWebPluginDatabase"><span class="type">WebKitWebPluginDatabase</span></a>. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
@@ -302,7 +296,7 @@ webkit_remove_all_web_databases (<em class="parameter"><code><span class="type">
 webkit_set_default_web_database_quota (<em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint64"><span class="type">guint64</span></a> defaultQuota</code></em>);</pre>
 <p>Sets the default quota for Web Database databases.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.7.5"></a><h4>Parameters</h4>
+<a name="id-1.2.2.6.7.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -327,7 +321,7 @@ webkit_set_web_database_directory_path
 <p>Sets the current path to the directory WebKit will write Web
 Database and Indexed Database databases.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.8.5"></a><h4>Parameters</h4>
+<a name="id-1.2.2.6.8.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -351,7 +345,7 @@ webkit_get_favicon_database (<em class="parameter"><code><span class="type">void
 <p>Returns the <a class="link" href="WebKitFaviconDatabase.html" title="WebKitFaviconDatabase"><span class="type">WebKitFaviconDatabase</span></a> providing access to website
 icons.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.9.5"></a><h4>Returns</h4>
+<a name="id-1.2.2.6.9.5"></a><h4>Returns</h4>
 <p> the current <a class="link" href="WebKitFaviconDatabase.html" title="WebKitFaviconDatabase"><span class="type">WebKitFaviconDatabase</span></a>. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
@@ -368,7 +362,7 @@ webkit_get_icon_database (<em class="parameter"><code><span class="type">void</s
 </div>
 <p>Returns the <a class="link" href="WebKitIconDatabase.html" title="WebKitIconDatabase"><span class="type">WebKitIconDatabase</span></a> providing access to website icons.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.10.7"></a><h4>Returns</h4>
+<a name="id-1.2.2.6.10.7"></a><h4>Returns</h4>
 <p> the current <a class="link" href="WebKitIconDatabase.html" title="WebKitIconDatabase"><span class="type">WebKitIconDatabase</span></a>. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
@@ -380,7 +374,7 @@ webkit_get_icon_database (<em class="parameter"><code><span class="type">void</s
 <pre class="programlisting"><a href="../gobject/gobject-The-Base-Object-Type.html#GObject"><span class="returnvalue">GObject</span></a> *
 webkit_get_text_checker (<em class="parameter"><code><span class="type">void</span></code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.2.7.11.4"></a><h4>Returns</h4>
+<a name="id-1.2.2.6.11.4"></a><h4>Returns</h4>
 <p> the <a class="link" href="WebKitSpellChecker.html" title="WebKitSpellChecker"><span class="type">WebKitSpellChecker</span></a> used by WebKit, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if spell
 checking is not enabled. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
@@ -398,7 +392,7 @@ accepts GObject since in the future we might accept objects
 implementing multiple interfaces (for example, spell checking and
 grammar checking).</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.12.5"></a><h4>Parameters</h4>
+<a name="id-1.2.2.6.12.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -424,7 +418,7 @@ webkit_application_cache_get_database_directory_path
 cache databases to. By default this path is set to
 $XDG_CACHE_HOME/webkitgtk/applications and cannot be modified.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.13.5"></a><h4>Returns</h4>
+<a name="id-1.2.2.6.13.5"></a><h4>Returns</h4>
 <p> the application cache database directory path</p>
 <p></p>
 </div>
@@ -439,7 +433,7 @@ webkit_application_cache_get_maximum_size
 <p>Returns the maximum size of the cache storage.
 By default it is set to UINT_MAX i.e. no quota.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.14.5"></a><h4>Returns</h4>
+<a name="id-1.2.2.6.14.5"></a><h4>Returns</h4>
 <p> the current application cache maximum storage size</p>
 <p></p>
 </div>
@@ -455,7 +449,7 @@ webkit_application_cache_set_maximum_size
 Changing the application cache storage size will clear the cache
 and rebuild cache storage.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.15.5"></a><h4>Parameters</h4>
+<a name="id-1.2.2.6.15.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -480,7 +474,7 @@ webkit_get_cache_model (<em class="parameter"><code><span class="type">void</spa
 value check the documentation of the function
 <a class="link" href="webkitgtk-Global-functions.html#webkit-set-cache-model" title="webkit_set_cache_model ()"><code class="function">webkit_set_cache_model()</code></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.16.5"></a><h4>Returns</h4>
+<a name="id-1.2.2.6.16.5"></a><h4>Returns</h4>
 <p> the current <a class="link" href="webkitgtk-Global-functions.html#WebKitCacheModel" title="enum WebKitCacheModel"><span class="type">WebKitCacheModel</span></a></p>
 <p></p>
 </div>
@@ -508,7 +502,7 @@ browsing interface can reduce memory usage substantially by
 specifying WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER. Default value is
 WEBKIT_CACHE_MODEL_WEB_BROWSER.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.17.7"></a><h4>Parameters</h4>
+<a name="id-1.2.2.6.17.7"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -528,14 +522,14 @@ WEBKIT_CACHE_MODEL_WEB_BROWSER.</p>
 <div class="refsect2">
 <a name="webkit-context-menu-item-get-action"></a><h3>webkit_context_menu_item_get_action ()</h3>
 <pre class="programlisting"><a class="link" href="webkitgtk-Global-functions.html#WebKitContextMenuAction" title="enum WebKitContextMenuAction"><span class="returnvalue">WebKitContextMenuAction</span></a>
-webkit_context_menu_item_get_action (<em class="parameter"><code><a href="../gtk2/GtkMenuItem.html"><span class="type">GtkMenuItem</span></a> *item</code></em>);</pre>
+webkit_context_menu_item_get_action (<em class="parameter"><code><a href="../gtk3/GtkMenuItem.html"><span class="type">GtkMenuItem</span></a> *item</code></em>);</pre>
 <p>Returns the <a class="link" href="webkitgtk-Global-functions.html#WebKitContextMenuAction" title="enum WebKitContextMenuAction"><span class="type">WebKitContextMenuAction</span></a> of the given <em class="parameter"><code>item</code></em>
 . This function
 can be used to determine the items present in the default context menu.
 In order to inspect the default context menu, you should connect to
 <a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView-context-menu" title="The “context-menu” signal"><span class="type">“context-menu”</span></a> signal.</p>
 <div class="example">
-<a name="id-1.2.2.7.18.5"></a><p class="title"><b>Example 1. Inspecting the default context menu</b></p>
+<a name="id-1.2.2.6.18.5"></a><p class="title"><b>Example 1. Inspecting the default context menu</b></p>
 <div class="example-contents">
   <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
     <tbody>
@@ -646,10 +640,10 @@ In order to inspect the default context menu, you should connect to
 </div>
 
 </div>
-<br class="example-break"><p>Note that you can get the <a href="../gtk2/GtkAction.html"><span class="type">GtkAction</span></a> of any item in the default context menu with
-<a href="../gtk2/GtkActivatable.html#gtk-activatable-get-related-action"><code class="function">gtk_activatable_get_related_action()</code></a>.</p>
+<br class="example-break"><p>Note that you can get the <a href="../gtk3/GtkAction.html"><span class="type">GtkAction</span></a> of any item in the default context menu with
+<a href="../gtk3/GtkActivatable.html#gtk-activatable-get-related-action"><code class="function">gtk_activatable_get_related_action()</code></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.18.7"></a><h4>Parameters</h4>
+<a name="id-1.2.2.6.18.7"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -658,13 +652,13 @@ In order to inspect the default context menu, you should connect to
 </colgroup>
 <tbody><tr>
 <td class="parameter_name"><p>item</p></td>
-<td class="parameter_description"><p>a <a href="../gtk2/GtkMenuItem.html"><span class="type">GtkMenuItem</span></a> of the default context menu</p></td>
+<td class="parameter_description"><p>a <a href="../gtk3/GtkMenuItem.html"><span class="type">GtkMenuItem</span></a> of the default context menu</p></td>
 <td class="parameter_annotations"> </td>
 </tr></tbody>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.2.7.18.8"></a><h4>Returns</h4>
+<a name="id-1.2.2.6.18.8"></a><h4>Returns</h4>
 <p> the <a class="link" href="webkitgtk-Global-functions.html#WebKitContextMenuAction" title="enum WebKitContextMenuAction"><span class="type">WebKitContextMenuAction</span></a> of the given <em class="parameter"><code>item</code></em>
 </p>
 <p></p>
@@ -680,7 +674,7 @@ webkit_set_security_policy_for_uri_scheme
                                 <em class="parameter"><code><a class="link" href="webkitgtk-Global-functions.html#WebKitSecurityPolicy" title="enum WebKitSecurityPolicy"><span class="type">WebKitSecurityPolicy</span></a> policy</code></em>);</pre>
 <p>Set the security policy for the given URI scheme.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.19.5"></a><h4>Parameters</h4>
+<a name="id-1.2.2.6.19.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -711,7 +705,7 @@ webkit_get_security_policy_for_uri_scheme
                                (<em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *scheme</code></em>);</pre>
 <p>Get the security policy for the given URI scheme.</p>
 <div class="refsect3">
-<a name="id-1.2.2.7.20.5"></a><h4>Parameters</h4>
+<a name="id-1.2.2.6.20.5"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -726,7 +720,7 @@ webkit_get_security_policy_for_uri_scheme
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.2.7.20.6"></a><h4>Returns</h4>
+<a name="id-1.2.2.6.20.6"></a><h4>Returns</h4>
 <p> a <a class="link" href="webkitgtk-Global-functions.html#WebKitSecurityPolicy" title="enum WebKitSecurityPolicy"><span class="type">WebKitSecurityPolicy</span></a></p>
 <p></p>
 </div>
@@ -739,7 +733,7 @@ webkit_get_security_policy_for_uri_scheme
 <a name="WebKitCacheModel"></a><h3>enum WebKitCacheModel</h3>
 <p>Enum values used for determining the webview cache model.</p>
 <div class="refsect3">
-<a name="id-1.2.2.8.2.4"></a><h4>Members</h4>
+<a name="id-1.2.2.7.2.4"></a><h4>Members</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="300px" class="enum_members_name">
@@ -791,7 +785,7 @@ webkit_get_security_policy_for_uri_scheme
 <a name="WebKitContextMenuAction"></a><h3>enum WebKitContextMenuAction</h3>
 <p>Enum values used to denote actions of items in the default context menu.</p>
 <div class="refsect3">
-<a name="id-1.2.2.8.3.4"></a><h4>Members</h4>
+<a name="id-1.2.2.7.3.4"></a><h4>Members</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="300px" class="enum_members_name">
@@ -1082,7 +1076,7 @@ webkit_get_security_policy_for_uri_scheme
 <a name="WebKitSecurityPolicy"></a><h3>enum WebKitSecurityPolicy</h3>
 <p>Flags used to represent the security policy of a URI scheme.</p>
 <div class="refsect3">
-<a name="id-1.2.2.8.4.4"></a><h4>Members</h4>
+<a name="id-1.2.2.7.4.4"></a><h4>Members</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="300px" class="enum_members_name">

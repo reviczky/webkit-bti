@@ -635,7 +635,6 @@
 <ANCHOR id="webkit2gtk-WebKitError" href="webkit2gtk/webkit2gtk-WebKitError.html">
 <ANCHOR id="webkit2gtk-WebKitError.functions" href="webkit2gtk/webkit2gtk-WebKitError.html#webkit2gtk-WebKitError.functions">
 <ANCHOR id="webkit2gtk-WebKitError.other" href="webkit2gtk/webkit2gtk-WebKitError.html#webkit2gtk-WebKitError.other">
-<ANCHOR id="webkit2gtk-WebKitError.object-hierarchy" href="webkit2gtk/webkit2gtk-WebKitError.html#webkit2gtk-WebKitError.object-hierarchy">
 <ANCHOR id="webkit2gtk-WebKitError.description" href="webkit2gtk/webkit2gtk-WebKitError.html#webkit2gtk-WebKitError.description">
 <ANCHOR id="webkit2gtk-WebKitError.functions_details" href="webkit2gtk/webkit2gtk-WebKitError.html#webkit2gtk-WebKitError.functions_details">
 <ANCHOR id="webkit-network-error-quark" href="webkit2gtk/webkit2gtk-WebKitError.html#webkit-network-error-quark">
@@ -810,7 +809,6 @@
 <ANCHOR id="WebKitURISchemeRequest-struct" href="webkit2gtk/WebKitURISchemeRequest.html#WebKitURISchemeRequest-struct">
 <ANCHOR id="webkit2gtk-WebKitVersion" href="webkit2gtk/webkit2gtk-WebKitVersion.html">
 <ANCHOR id="webkit2gtk-WebKitVersion.functions" href="webkit2gtk/webkit2gtk-WebKitVersion.html#webkit2gtk-WebKitVersion.functions">
-<ANCHOR id="webkit2gtk-WebKitVersion.object-hierarchy" href="webkit2gtk/webkit2gtk-WebKitVersion.html#webkit2gtk-WebKitVersion.object-hierarchy">
 <ANCHOR id="webkit2gtk-WebKitVersion.description" href="webkit2gtk/webkit2gtk-WebKitVersion.html#webkit2gtk-WebKitVersion.description">
 <ANCHOR id="webkit2gtk-WebKitVersion.functions_details" href="webkit2gtk/webkit2gtk-WebKitVersion.html#webkit2gtk-WebKitVersion.functions_details">
 <ANCHOR id="webkit-get-major-version" href="webkit2gtk/webkit2gtk-WebKitVersion.html#webkit-get-major-version">

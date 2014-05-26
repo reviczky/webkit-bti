@@ -3321,7 +3321,6 @@
 <ANCHOR id="WebKitDOMConsole-struct" href="webkitdomgtk/WebKitDOMConsole.html#WebKitDOMConsole-struct">
 <ANCHOR id="webkitdomgtk-WebKitDOMCustom" href="webkitdomgtk/webkitdomgtk-WebKitDOMCustom.html">
 <ANCHOR id="webkitdomgtk-WebKitDOMCustom.functions" href="webkitdomgtk/webkitdomgtk-WebKitDOMCustom.html#webkitdomgtk-WebKitDOMCustom.functions">
-<ANCHOR id="webkitdomgtk-WebKitDOMCustom.object-hierarchy" href="webkitdomgtk/webkitdomgtk-WebKitDOMCustom.html#webkitdomgtk-WebKitDOMCustom.object-hierarchy">
 <ANCHOR id="webkitdomgtk-WebKitDOMCustom.description" href="webkitdomgtk/webkitdomgtk-WebKitDOMCustom.html#webkitdomgtk-WebKitDOMCustom.description">
 <ANCHOR id="webkitdomgtk-WebKitDOMCustom.functions_details" href="webkitdomgtk/webkitdomgtk-WebKitDOMCustom.html#webkitdomgtk-WebKitDOMCustom.functions_details">
 <ANCHOR id="webkit-dom-html-text-area-element-is-edited" href="webkitdomgtk/webkitdomgtk-WebKitDOMCustom.html#webkit-dom-html-text-area-element-is-edited">
@@ -4283,14 +4282,12 @@
 <ANCHOR id="WebKitDOMVideoTrackList--length" href="webkitdomgtk/WebKitDOMVideoTrackList.html#WebKitDOMVideoTrackList--length">
 <ANCHOR id="webkitdomgtk-WebKitDOMBarInfo" href="webkitdomgtk/webkitdomgtk-WebKitDOMBarInfo.html">
 <ANCHOR id="webkitdomgtk-WebKitDOMBarInfo.functions" href="webkitdomgtk/webkitdomgtk-WebKitDOMBarInfo.html#webkitdomgtk-WebKitDOMBarInfo.functions">
-<ANCHOR id="webkitdomgtk-WebKitDOMBarInfo.object-hierarchy" href="webkitdomgtk/webkitdomgtk-WebKitDOMBarInfo.html#webkitdomgtk-WebKitDOMBarInfo.object-hierarchy">
 <ANCHOR id="webkitdomgtk-WebKitDOMBarInfo.description" href="webkitdomgtk/webkitdomgtk-WebKitDOMBarInfo.html#webkitdomgtk-WebKitDOMBarInfo.description">
 <ANCHOR id="webkitdomgtk-WebKitDOMBarInfo.functions_details" href="webkitdomgtk/webkitdomgtk-WebKitDOMBarInfo.html#webkitdomgtk-WebKitDOMBarInfo.functions_details">
 <ANCHOR id="webkit-dom-bar-info-get-visible" href="webkitdomgtk/webkitdomgtk-WebKitDOMBarInfo.html#webkit-dom-bar-info-get-visible">
 <ANCHOR id="webkitdomgtk-WebKitDOMBarInfo.other_details" href="webkitdomgtk/webkitdomgtk-WebKitDOMBarInfo.html#webkitdomgtk-WebKitDOMBarInfo.other_details">
 <ANCHOR id="webkitdomgtk-WebKitDOMHTMLPropertiesCollection" href="webkitdomgtk/webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html">
 <ANCHOR id="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.functions" href="webkitdomgtk/webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkitdomgtk-WebKitDOMHTMLPropertiesCollection.functions">
-<ANCHOR id="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.object-hierarchy" href="webkitdomgtk/webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkitdomgtk-WebKitDOMHTMLPropertiesCollection.object-hierarchy">
 <ANCHOR id="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.description" href="webkitdomgtk/webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkitdomgtk-WebKitDOMHTMLPropertiesCollection.description">
 <ANCHOR id="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.functions_details" href="webkitdomgtk/webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkitdomgtk-WebKitDOMHTMLPropertiesCollection.functions_details">
 <ANCHOR id="webkit-dom-html-properties-collection-item" href="webkitdomgtk/webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkit-dom-html-properties-collection-item">
@@ -4300,7 +4297,6 @@
 <ANCHOR id="webkitdomgtk-WebKitDOMHTMLPropertiesCollection.other_details" href="webkitdomgtk/webkitdomgtk-WebKitDOMHTMLPropertiesCollection.html#webkitdomgtk-WebKitDOMHTMLPropertiesCollection.other_details">
 <ANCHOR id="webkitdomgtk-WebKitDOMMemoryInfo" href="webkitdomgtk/webkitdomgtk-WebKitDOMMemoryInfo.html">
 <ANCHOR id="webkitdomgtk-WebKitDOMMemoryInfo.functions" href="webkitdomgtk/webkitdomgtk-WebKitDOMMemoryInfo.html#webkitdomgtk-WebKitDOMMemoryInfo.functions">
-<ANCHOR id="webkitdomgtk-WebKitDOMMemoryInfo.object-hierarchy" href="webkitdomgtk/webkitdomgtk-WebKitDOMMemoryInfo.html#webkitdomgtk-WebKitDOMMemoryInfo.object-hierarchy">
 <ANCHOR id="webkitdomgtk-WebKitDOMMemoryInfo.description" href="webkitdomgtk/webkitdomgtk-WebKitDOMMemoryInfo.html#webkitdomgtk-WebKitDOMMemoryInfo.description">
 <ANCHOR id="webkitdomgtk-WebKitDOMMemoryInfo.functions_details" href="webkitdomgtk/webkitdomgtk-WebKitDOMMemoryInfo.html#webkitdomgtk-WebKitDOMMemoryInfo.functions_details">
 <ANCHOR id="webkit-dom-memory-info-get-total-js-heap-size" href="webkitdomgtk/webkitdomgtk-WebKitDOMMemoryInfo.html#webkit-dom-memory-info-get-total-js-heap-size">
@@ -4308,19 +4304,15 @@
 <ANCHOR id="webkit-dom-memory-info-get-js-heap-size-limit" href="webkitdomgtk/webkitdomgtk-WebKitDOMMemoryInfo.html#webkit-dom-memory-info-get-js-heap-size-limit">
 <ANCHOR id="webkitdomgtk-WebKitDOMMemoryInfo.other_details" href="webkitdomgtk/webkitdomgtk-WebKitDOMMemoryInfo.html#webkitdomgtk-WebKitDOMMemoryInfo.other_details">
 <ANCHOR id="webkitdomgtk-WebKitDOMMicroDataItemValue" href="webkitdomgtk/webkitdomgtk-WebKitDOMMicroDataItemValue.html">
-<ANCHOR id="webkitdomgtk-WebKitDOMMicroDataItemValue.object-hierarchy" href="webkitdomgtk/webkitdomgtk-WebKitDOMMicroDataItemValue.html#webkitdomgtk-WebKitDOMMicroDataItemValue.object-hierarchy">
 <ANCHOR id="webkitdomgtk-WebKitDOMMicroDataItemValue.description" href="webkitdomgtk/webkitdomgtk-WebKitDOMMicroDataItemValue.html#webkitdomgtk-WebKitDOMMicroDataItemValue.description">
 <ANCHOR id="webkitdomgtk-WebKitDOMMicroDataItemValue.functions_details" href="webkitdomgtk/webkitdomgtk-WebKitDOMMicroDataItemValue.html#webkitdomgtk-WebKitDOMMicroDataItemValue.functions_details">
 <ANCHOR id="webkitdomgtk-WebKitDOMMicroDataItemValue.other_details" href="webkitdomgtk/webkitdomgtk-WebKitDOMMicroDataItemValue.html#webkitdomgtk-WebKitDOMMicroDataItemValue.other_details">
 <ANCHOR id="webkitdomgtk-WebKitDOMPropertyNodeList" href="webkitdomgtk/webkitdomgtk-WebKitDOMPropertyNodeList.html">
 <ANCHOR id="webkitdomgtk-WebKitDOMPropertyNodeList.functions" href="webkitdomgtk/webkitdomgtk-WebKitDOMPropertyNodeList.html#webkitdomgtk-WebKitDOMPropertyNodeList.functions">
-<ANCHOR id="webkitdomgtk-WebKitDOMPropertyNodeList.object-hierarchy" href="webkitdomgtk/webkitdomgtk-WebKitDOMPropertyNodeList.html#webkitdomgtk-WebKitDOMPropertyNodeList.object-hierarchy">
 <ANCHOR id="webkitdomgtk-WebKitDOMPropertyNodeList.description" href="webkitdomgtk/webkitdomgtk-WebKitDOMPropertyNodeList.html#webkitdomgtk-WebKitDOMPropertyNodeList.description">
 <ANCHOR id="webkitdomgtk-WebKitDOMPropertyNodeList.functions_details" href="webkitdomgtk/webkitdomgtk-WebKitDOMPropertyNodeList.html#webkitdomgtk-WebKitDOMPropertyNodeList.functions_details">
 <ANCHOR id="webkit-dom-property-node-list-item" href="webkitdomgtk/webkitdomgtk-WebKitDOMPropertyNodeList.html#webkit-dom-property-node-list-item">
 <ANCHOR id="webkit-dom-property-node-list-get-length" href="webkitdomgtk/webkitdomgtk-WebKitDOMPropertyNodeList.html#webkit-dom-property-node-list-get-length">
 <ANCHOR id="webkitdomgtk-WebKitDOMPropertyNodeList.other_details" href="webkitdomgtk/webkitdomgtk-WebKitDOMPropertyNodeList.html#webkitdomgtk-WebKitDOMPropertyNodeList.other_details">
 <ANCHOR id="annotation-glossterm-allow-none" href="webkitdomgtk/annotation-glossary.html#annotation-glossterm-allow-none">
-<ANCHOR id="annotation-glossterm-scope async" href="webkitdomgtk/annotation-glossary.html#annotation-glossterm-scope async">
-<ANCHOR id="annotation-glossterm-scope call" href="webkitdomgtk/annotation-glossary.html#annotation-glossterm-scope call">
 <ANCHOR id="annotation-glossterm-transfer none" href="webkitdomgtk/annotation-glossary.html#annotation-glossterm-transfer none">
