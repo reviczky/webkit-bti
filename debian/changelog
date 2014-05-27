@@ -1,4 +1,4 @@
-webkitgtk (2.4.3-1) UNRELEASED; urgency=medium
+webkitgtk (2.4.3-1) unstable; urgency=medium
 
   * New upstream release.
   * debian/control:
@@ -8,7 +8,7 @@ webkitgtk (2.4.3-1) UNRELEASED; urgency=medium
   * debian/patches/fix-webprocess-leak.patch:
     + Cherry picked r169374 and r169375 to properly fix a leak.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 13 May 2014 15:53:36 +0300
+ -- Alberto Garcia <berto@igalia.com>  Tue, 27 May 2014 12:16:19 +0200
 
 webkitgtk (2.4.2-1) unstable; urgency=medium
 
