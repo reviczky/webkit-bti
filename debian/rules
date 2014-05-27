@@ -12,9 +12,8 @@ DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 GTK_VERSIONS = 2.0 3.0
 ENABLE_WEBKIT2 ?= yes
 
-CFLAGS = $(shell dpkg-buildflags --get CFLAGS)
-CFLAGS += -Wall -Wl,--as-needed
-LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS)
+CFLAGS = $(shell dpkg-buildflags --get CFLAGS) -Wall
+LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS) -Wl,--as-needed
 CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS)
 
 COMMON_CONFIGURE_ARGUMENTS = \
