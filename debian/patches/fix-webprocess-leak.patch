@@ -1,0 +1,144 @@
+From: Carlos Garcia Campos <carlosgc@webkit.org>
+Subject: WebProcess leaked when closing pages with network process enabled
+Bug: https://bugs.webkit.org/show_bug.cgi?id=129684
+Index: webkitgtk/Source/WebKit2/Platform/IPC/Connection.h
+===================================================================
+--- webkitgtk.orig/Source/WebKit2/Platform/IPC/Connection.h
++++ webkitgtk/Source/WebKit2/Platform/IPC/Connection.h
+@@ -122,7 +122,12 @@ public:
+         int server;
+     };
+ 
+-    static Connection::SocketPair createPlatformConnection();
++    enum ConnectionOptions {
++        SetCloexecOnClient = 1 << 0,
++        SetCloexecOnServer = 1 << 1,
++    };
++
++    static Connection::SocketPair createPlatformConnection(unsigned options = SetCloexecOnClient | SetCloexecOnServer);
+ #endif
+ 
+     static PassRefPtr<Connection> createServerConnection(Identifier, Client*, WTF::RunLoop* clientRunLoop);
+Index: webkitgtk/Source/WebKit2/Platform/IPC/unix/ConnectionUnix.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit2/Platform/IPC/unix/ConnectionUnix.cpp
++++ webkitgtk/Source/WebKit2/Platform/IPC/unix/ConnectionUnix.cpp
+@@ -541,18 +541,22 @@ bool Connection::sendOutgoingMessage(std
+     return true;
+ }
+ 
+-Connection::SocketPair Connection::createPlatformConnection()
++Connection::SocketPair Connection::createPlatformConnection(unsigned options)
+ {
+     int sockets[2];
+     RELEASE_ASSERT(socketpair(AF_UNIX, SOCKET_TYPE, 0, sockets) != -1);
+ 
+-    // Don't expose the child socket to the parent process.
+-    while (fcntl(sockets[1], F_SETFD, FD_CLOEXEC)  == -1)
+-        RELEASE_ASSERT(errno != EINTR);
++    if (options & SetCloexecOnServer) {
++        // Don't expose the child socket to the parent process.
++        while (fcntl(sockets[1], F_SETFD, FD_CLOEXEC)  == -1)
++            RELEASE_ASSERT(errno != EINTR);
++    }
+ 
+-    // Don't expose the parent socket to potential future children.
+-    while (fcntl(sockets[0], F_SETFD, FD_CLOEXEC) == -1)
+-        RELEASE_ASSERT(errno != EINTR);
++    if (options & SetCloexecOnClient) {
++        // Don't expose the parent socket to potential future children.
++        while (fcntl(sockets[0], F_SETFD, FD_CLOEXEC) == -1)
++            RELEASE_ASSERT(errno != EINTR);
++    }
+ 
+     SocketPair socketPair = { sockets[0], sockets[1] };
+     return socketPair;
+Index: webkitgtk/Source/WebKit2/UIProcess/Launcher/gtk/ProcessLauncherGtk.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit2/UIProcess/Launcher/gtk/ProcessLauncherGtk.cpp
++++ webkitgtk/Source/WebKit2/UIProcess/Launcher/gtk/ProcessLauncherGtk.cpp
+@@ -34,6 +34,7 @@
+ #include <WebCore/NetworkingContext.h>
+ #include <WebCore/ResourceHandle.h>
+ #include <errno.h>
++#include <fcntl.h>
+ #include <glib.h>
+ #include <locale.h>
+ #include <wtf/RunLoop.h>
+@@ -42,16 +43,6 @@
+ #include <wtf/gobject/GUniquePtr.h>
+ #include <wtf/gobject/GlibUtilities.h>
+ 
+-#if OS(UNIX)
+-#include <sys/socket.h>
+-#endif
+-
+-#ifdef SOCK_SEQPACKET
+-#define SOCKET_TYPE SOCK_SEQPACKET
+-#else
+-#define SOCKET_TYPE SOCK_STREAM
+-#endif
+-
+ using namespace WebCore;
+ 
+ namespace WebKit {
+@@ -66,12 +57,7 @@ void ProcessLauncher::launchProcess()
+ {
+     GPid pid = 0;
+ 
+-    int sockets[2];
+-    if (socketpair(AF_UNIX, SOCKET_TYPE, 0, sockets) < 0) {
+-        g_printerr("Creation of socket failed: %s.\n", g_strerror(errno));
+-        ASSERT_NOT_REACHED();
+-        return;
+-    }
++    IPC::Connection::SocketPair socketPair = IPC::Connection::createPlatformConnection(IPC::Connection::ConnectionOptions::SetCloexecOnServer);
+ 
+     String executablePath, pluginPath;
+     CString realExecutablePath, realPluginPath;
+@@ -95,7 +81,7 @@ void ProcessLauncher::launchProcess()
+     }
+ 
+     realExecutablePath = fileSystemRepresentation(executablePath);
+-    GUniquePtr<gchar> socket(g_strdup_printf("%d", sockets[0]));
++    GUniquePtr<gchar> socket(g_strdup_printf("%d", socketPair.client));
+ 
+     unsigned nargs = 4; // size of the argv array for g_spawn_async()
+ 
+@@ -123,16 +109,20 @@ void ProcessLauncher::launchProcess()
+     argv[i++] = 0;
+ 
+     GUniqueOutPtr<GError> error;
+-    if (!g_spawn_async(0, argv, 0, G_SPAWN_LEAVE_DESCRIPTORS_OPEN, childSetupFunction, GINT_TO_POINTER(sockets[1]), &pid, &error.outPtr())) {
++    if (!g_spawn_async(0, argv, 0, G_SPAWN_LEAVE_DESCRIPTORS_OPEN, childSetupFunction, GINT_TO_POINTER(socketPair.server), &pid, &error.outPtr())) {
+         g_printerr("Unable to fork a new WebProcess: %s.\n", error->message);
+         ASSERT_NOT_REACHED();
+     }
+ 
+-    close(sockets[0]);
++    // Don't expose the parent socket to potential future children.
++    while (fcntl(socketPair.client, F_SETFD, FD_CLOEXEC) == -1)
++        RELEASE_ASSERT(errno != EINTR);
++
++    close(socketPair.client);
+     m_processIdentifier = pid;
+ 
+     // We've finished launching the process, message back to the main run loop.
+-    RunLoop::main()->dispatch(bind(&ProcessLauncher::didFinishLaunchingProcess, this, m_processIdentifier, sockets[1]));
++    RunLoop::main()->dispatch(bind(&ProcessLauncher::didFinishLaunchingProcess, this, m_processIdentifier, socketPair.server));
+ }
+ 
+ void ProcessLauncher::terminateProcess()
+Index: webkitgtk/Source/WebKit2/WebProcess/WebProcess.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebKit2/WebProcess/WebProcess.cpp
++++ webkitgtk/Source/WebKit2/WebProcess/WebProcess.cpp
+@@ -590,7 +590,7 @@ bool WebProcess::shouldTerminate()
+ 
+     // FIXME: the ShouldTerminate message should also send termination parameters, such as any session cookies that need to be preserved.
+     bool shouldTerminate = false;
+-    if (parentProcessConnection()->sendSync(Messages::WebProcessProxy::ShouldTerminate(), Messages::WebProcessProxy::ShouldTerminate::Reply(shouldTerminate), 0, std::chrono::seconds(1))
++    if (parentProcessConnection()->sendSync(Messages::WebProcessProxy::ShouldTerminate(), Messages::WebProcessProxy::ShouldTerminate::Reply(shouldTerminate), 0)
+         && !shouldTerminate)
+         return false;
+ 

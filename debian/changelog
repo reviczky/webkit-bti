@@ -5,6 +5,8 @@ webkitgtk (2.4.3-1) UNRELEASED; urgency=medium
     + Switch to geoclue 2 (Closes: #743606).
   * debian/patches/fix-gtkdoc-error.patch:
     + Refresh.
+  * debian/patches/fix-webprocess-leak.patch:
+    + Cherry picked r169374 and r169375 to properly fix a leak.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 13 May 2014 15:53:36 +0300
 
