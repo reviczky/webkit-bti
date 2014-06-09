@@ -1,0 +1,28 @@
+From: Victor Jaquez <vjaquez@igalia.com>
+Subject: Remove -Wcast-align during gtk-doc generation
+Bug: https://bugs.webkit.org/show_bug.cgi?id=133640
+Bug-Debian: http://bugs.debian.org/750839
+diff --git a/Tools/gtk/generate-gtkdoc b/Tools/gtk/generate-gtkdoc
+index c55998b..f9ab96b 100755
+--- a/Tools/gtk/generate-gtkdoc
++++ b/Tools/gtk/generate-gtkdoc
+@@ -110,6 +110,7 @@ def get_generator_for_config(config_file, virtual_root):
+     if not os.path.isfile(pkgconfig_file):
+         return None
+ 
++    cflags = [x for x in config.get(module_name, 'cflags').split() if x != '-Wcast-align']
+     source_dirs = config.get(module_name, 'source_dirs').replace(';', ' ').split()
+     headers = [os.path.abspath(f) for f in config.get(module_name, 'headers').replace(';', ' ').split()]
+     return gtkdoc.PkgConfigGTKDoc(pkgconfig_file, {
+@@ -123,7 +124,7 @@ def get_generator_for_config(config_file, virtual_root):
+         'output_dir': common.build_path('Documentation', module_name),
+         'source_dirs': source_dirs,
+         'headers': headers,
+-        'cflags': " ".join(config.get(module_name, 'cflags').split()),
++        'cflags': " ".join(cflags),
+         'cross_reference_deps': get_gtkdoc_module_paths(gtk_version),
+         'ignored_files': files_to_ignore(source_dirs, headers),
+     })
+-- 
+2.0.0.rc2
+
