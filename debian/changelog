@@ -1,4 +1,4 @@
-webkitgtk (2.4.3-2) UNRELEASED; urgency=medium
+webkitgtk (2.4.3-2) unstable; urgency=medium
 
   * debian/rules:
     + Move -Wl,--as-needed from CFLAGS to LDFLAGS.
@@ -9,7 +9,7 @@ webkitgtk (2.4.3-2) UNRELEASED; urgency=medium
     + Remove -Wcast-align during gtk-doc generation. Fixes FTBFS on hppa
       and others (Closes: #750839).
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 27 May 2014 16:33:49 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 09 Jun 2014 15:35:44 +0300
 
 webkitgtk (2.4.3-1) unstable; urgency=medium
 
