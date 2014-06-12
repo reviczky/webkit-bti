@@ -5,8 +5,6 @@ Maintainer: Debian WebKit Maintainers <pkg-webkit-maintainers@lists.alioth.debia
 Uploaders: Mike Hommey <glandium@debian.org>, Gustavo Noronha Silva <kov@debian.org>,
            Emilio Pozuelo Monfort <pochu@debian.org>, Alberto Garcia <berto@igalia.com>
 Build-Depends: gawk,
-               gcc-4.8,
-               g++-4.8,
                make (>= 4.0),
                debhelper (>= 9),
                dh-autoreconf,

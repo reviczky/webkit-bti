@@ -1,3 +1,11 @@
+webkitgtk (2.4.3-3) UNRELEASED; urgency=medium
+
+  * Build using the default gcc version available (Closes: #751329):
+    + debian/control: remove build dependency on gcc-4.8 and g++-4.8.
+    + debian/rules: don't set the CC and CXX variables.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 12 Jun 2014 11:39:45 +0300
+
 webkitgtk (2.4.3-2) unstable; urgency=medium
 
   * debian/rules:

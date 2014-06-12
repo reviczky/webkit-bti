@@ -127,8 +127,6 @@ ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
 	CXXFLAGS="$(CFLAGS)" \
 	CPPFLAGS="$(CPPFLAGS)" \
 	LDFLAGS="$(LDFLAGS)" \
-	CC="gcc-4.8" \
-	CXX="g++-4.8" \
 	../configure --prefix=/usr \
 		--with-gtk=2.0 \
 		$(COMMON_CONFIGURE_ARGUMENTS) \
@@ -152,8 +150,6 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	CXXFLAGS="$(CFLAGS)" \
 	CPPFLAGS="$(CPPFLAGS)" \
 	LDFLAGS="$(LDFLAGS)" \
-	CC="gcc-4.8" \
-	CXX="g++-4.8" \
 	../configure --prefix=/usr \
 		--with-gtk=3.0 \
 		$(COMMON_CONFIGURE_ARGUMENTS) \
