@@ -1,8 +1,14 @@
 webkitgtk (2.4.3-3) UNRELEASED; urgency=medium
 
+  [ Alberto Garcia ]
   * Build using the default gcc version available (Closes: #751329):
     + debian/control: remove build dependency on gcc-4.8 and g++-4.8.
     + debian/rules: don't set the CC and CXX variables.
+
+  [ Emilio Pozuelo Monfort ]
+  * Drop gir1.2-javascriptcore-1.0 and gir1.2-webkit-1.0. WebKit1 is
+    deprecated and those packages have no reverse dependencies, so we
+    can remove them already.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 12 Jun 2014 11:39:45 +0300
 

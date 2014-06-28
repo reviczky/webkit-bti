@@ -204,11 +204,9 @@ ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
 	dh_install -plibjavascriptcoregtk-1.0-0 --sourcedir=debian/tmp-2.0
 	dh_install -plibjavascriptcoregtk-1.0-dev --sourcedir=debian/tmp-2.0
 	dh_install -plibjavascriptcoregtk-1.0-0-dbg --sourcedir=debian/tmp-2.0
-	dh_install -pgir1.2-javascriptcoregtk-1.0 --sourcedir=debian/tmp-2.0
 	dh_install -plibwebkitgtk-1.0-0 --sourcedir=debian/tmp-2.0
 	dh_install -plibwebkitgtk-dev --sourcedir=debian/tmp-2.0
 	dh_install -plibwebkitgtk-1.0-0-dbg --sourcedir=debian/tmp-2.0
-	dh_install -pgir1.2-webkit-1.0 --sourcedir=debian/tmp-2.0
 endif
 ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_install -plibjavascriptcoregtk-3.0-0 --sourcedir=debian/tmp-3.0
@@ -247,8 +245,6 @@ endif
 ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
 	dh_makeshlibs -plibjavascriptcoregtk-1.0-0 -V 'libjavascriptcoregtk-1.0-0 (>= 1.5.1)' -- -c4
 	dh_makeshlibs -plibwebkitgtk-1.0-0 -V 'libwebkitgtk-1.0-0 (>= 1.3.9)' -- -c4
-	dh_girepository --package=gir1.2-javascriptcoregtk-1.0
-	dh_girepository --package=gir1.2-webkit-1.0
 endif
 ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_makeshlibs -plibjavascriptcoregtk-3.0-0 -V 'libjavascriptcoregtk-3.0-0 (>= 1.5.1)' -- -c4
