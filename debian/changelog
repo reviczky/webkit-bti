@@ -1,4 +1,4 @@
-webkitgtk (2.4.4-1) UNRELEASED; urgency=medium
+webkitgtk (2.4.4-1) unstable; urgency=medium
 
   [ Alberto Garcia ]
   * New upstream release (Closes: #751259).
@@ -18,7 +18,7 @@ webkitgtk (2.4.4-1) UNRELEASED; urgency=medium
     deprecated and those packages have no reverse dependencies, so we
     can remove them already.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 12 Jun 2014 11:39:45 +0300
+ -- Alberto Garcia <berto@igalia.com>  Tue, 08 Jul 2014 17:25:22 +0300
 
 webkitgtk (2.4.3-2) unstable; urgency=medium
 
