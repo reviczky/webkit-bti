@@ -9,5 +9,3 @@ fix-textrel-x86.patch
 ftbfs-armhf.patch
 local-label-string-hurd.patch
 x32_support.patch
-fix-webprocess-leak.patch
-gtkdoc-remove-Wcast-align.patch
