@@ -8,6 +8,10 @@ webkitgtk (2.4.4-1) UNRELEASED; urgency=medium
   * debian/patches/fix-webprocess-leak.patch,
     debian/patches/gtkdoc-remove-Wcast-align.patch
     + Remove, this has been merged upstream.
+  * debian/patches/fix-arm64-build.patch:
+    + Add support for ARM64 (Closes: #752735).
+  * debian/rules:
+    + Disable JIT, YARR and assembler in arm64.
 
   [ Emilio Pozuelo Monfort ]
   * Drop gir1.2-javascriptcore-1.0 and gir1.2-webkit-1.0. WebKit1 is
