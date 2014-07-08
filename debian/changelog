@@ -1,6 +1,7 @@
-webkitgtk (2.4.3-3) UNRELEASED; urgency=medium
+webkitgtk (2.4.4-1) UNRELEASED; urgency=medium
 
   [ Alberto Garcia ]
+  * New upstream release (Closes: #751259).
   * Build using the default gcc version available (Closes: #751329):
     + debian/control: remove build dependency on gcc-4.8 and g++-4.8.
     + debian/rules: don't set the CC and CXX variables.
