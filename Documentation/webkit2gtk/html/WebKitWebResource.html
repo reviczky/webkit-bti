@@ -323,7 +323,7 @@ webkit_web_resource_get_data_finish (<em class="parameter"><code><a class="link"
 <tr>
 <td class="parameter_name"><p>length</p></td>
 <td class="parameter_description"><p> return location for the length of the resource data. </p></td>
-<td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>]</span></td>
+<td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>][<acronym title="NULL is ok, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>error</p></td>
@@ -335,11 +335,11 @@ webkit_web_resource_get_data_finish (<em class="parameter"><code><a class="link"
 </div>
 <div class="refsect3">
 <a name="id-1.2.19.9.5.6"></a><h4>Returns</h4>
-<p> a string with the data of <em class="parameter"><code>resource</code></em>
-, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> in case
-of error. if <em class="parameter"><code>length</code></em>
+<p> a
+string with the data of <em class="parameter"><code>resource</code></em>
+, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> in case of error. if <em class="parameter"><code>length</code></em>
 is not <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>, the size of the data will be assigned to it. </p>
-<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>][<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> length=length][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> guint8]</span></p>
 </div>
 </div>
 </div>

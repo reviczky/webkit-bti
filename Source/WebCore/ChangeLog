@@ -1,3 +1,152 @@
+2014-07-04  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK][Stable] Google Maps doesn't work with Version/X in the user agent
+        https://bugs.webkit.org/show_bug.cgi?id=134631
+
+        Reviewed by Sergio Villar Senin.
+
+        Because of the JSC version used in stable branch, when the
+        Version/X string is present in the user agent, google maps uses
+        JavaScript API that we don't support. Move the google domain quirks
+        from WebKit1 to WebCore and add a quirk for google maps.
+
+        * platform/gtk/UserAgentGtk.cpp:
+        (WebCore::googleDomains):
+        (WebCore::otherGoogleDomains):
+        (WebCore::isGoogleDomain): Returns whether the given host is a
+        known google domain
+        (WebCore::buildUserAgentString): Do not include the Version/X
+        string in the user agent if the ShouldNotIncludeSafariVersion
+        quirk is present.
+        (WebCore::standardUserAgentForURL): Add RequiresStandardUserAgent
+        quirk for any google doamin and ShouldNotIncludeSafariVersion for
+        Google Maps.
+
+2014-06-27  Philippe Normand  <pnormand@igalia.com>
+
+        [GTK] 8tracks.com triggers annoying pop-up window/installation of "About protocol source plugin" (GStreamer?)
+        https://bugs.webkit.org/show_bug.cgi?id=133605
+
+        Reviewed by Carlos Garcia Campos.
+
+        Don't attempt to load blank URLs with the GStreamer media
+        player. Those URLs trigger the codec installer which is useless in
+        this scenario. This patch also renames some of the variables of
+        the ::load method, as suggested by Carlos.
+
+        * platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp:
+        (WebCore::MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer):
+        Check video-sink validity before disconnecting its signal handlers.
+        (WebCore::MediaPlayerPrivateGStreamer::load): Don't load blank
+        URLs (about:blank).
+        * platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp:
+        (WebCore::MediaPlayerPrivateGStreamerBase::~MediaPlayerPrivateGStreamerBase):
+        Disconnect repaint handler only if it's valid.
+
+2014-06-12  Alberto Garcia  <berto@igalia.com>
+
+        [GTK] fails to build with --disable-webgl --disable-accelerated-compositing
+        https://bugs.webkit.org/show_bug.cgi?id=131267
+
+        Reviewed by Philippe Normand.
+
+        Add missing headers needed for Float32Array::create().
+
+        * Modules/webaudio/AudioBuffer.cpp:
+
+2014-06-13  Alberto Garcia  <berto@igalia.com>
+
+        [GTK] GLContextEGL.cpp: conflicting declaration 'typedef ptrdiff_t GLintptr'
+        https://bugs.webkit.org/show_bug.cgi?id=133550
+
+        Reviewed by Gustavo Noronha Silva.
+
+        Cairo includes some definitions from GLX that conflict with the
+        ones provided by our GLES2 headers (GLintptr, GLsizeiptr).
+
+        Since GLContextEGL doesn't use any GLX functions we can safely
+        disable the inclusion of those functions in that source file.
+
+        * platform/graphics/egl/GLContextEGL.cpp:
+
+2014-06-24  Jarek Czekalski  <jarekczek@poczta.onet.pl>
+
+        [ATK] Don't ignore links rendered as blocks.
+        https://bugs.webkit.org/show_bug.cgi?id=130941
+
+        Reviewed by Mario Sanchez Prada.
+
+        * /m/usr/src/webkit-trunk/Source/WebCore/accessibility/atk/WebKitAccessibleWrapperAtk.cpp:
+        (WebCore::AccessibilityObject::objectFocusedAndCaretOffsetUnignored): Don't ignore links
+        when they are renderered with display:block.
+
+2014-06-13  Jarek Czekalski  <jarekczek@poczta.onet.pl>
+
+        [ATK] Fix text inside "span" block in "a" block was not accessible.
+        https://bugs.webkit.org/show_bug.cgi?id=132349
+
+        Reviewed by Mario Sanchez Prada.
+
+        * accessibility/atk/WebKitAccessibleWrapperAtk.cpp: Add link role
+          to the list of roles whose objects always expose atk_text interface.
+
+2014-06-11  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] Use a different user agent string depending on the site
+        https://bugs.webkit.org/show_bug.cgi?id=132681
+
+        Reviewed by Anders Carlsson.
+
+        We have changed the user agent string several times to try to fix
+        broken websites that require specific things in the UA string to
+        properly work. But everytime we change the UA string to fix a
+        website we break others. We could use different UA string
+        depending on the website. UserAgentGtk code has also been cleaned
+        up, using NeverDestroyed instead of DEPRECATED_DEFINE_STATIC_LOCAL
+        and avoiding unneeded conversions to UTF-8.
+
+        * platform/gtk/UserAgentGtk.cpp:
+        (WebCore::UserAgentQuirks::UserAgentQuirks): New helper private
+        class to handle user agent quirks.
+        (WebCore::UserAgentQuirks::add):
+        (WebCore::UserAgentQuirks::contains):
+        (WebCore::UserAgentQuirks::isEmpty):
+        (WebCore::platformForUAString): Bring back this method that was
+        removed to always pretend to be Macintosh.
+        (WebCore::platformVersionForUAString): Return a different platform
+        version depending on the actual platform.
+        (WebCore::versionForUAString): Return the WebKit version.
+        (WebCore::buildUserAgentString): Helper function to build the user
+        agent taking into account the UserAgentQuirks received.
+        (WebCore::standardUserAgentStatic): Standard user agent string
+        when no quirks are present.
+        (WebCore::standardUserAgent):
+        (WebCore::standardUserAgentForURL): New method that returns the
+        user agent string for the given URL.
+        * platform/gtk/UserAgentGtk.h:
+
+2014-06-13  Sergio Villar Senin  <svillar@igalia.com>
+
+        [Gtk] [Stable] Fix the "Safari" part of the UA
+        https://bugs.webkit.org/show_bug.cgi?id=133855
+
+        Reviewed by Martin Robinson.
+
+        We claim to be Safari (among others) to ensure maximum
+        compatibility with existing web sites. Since Safari 3.0 valid
+        Safari UA strings look like this "Version/X Safari/Y" while in our
+        UA it's "Safari/Y Version/6.0".
+
+        This is wrong and is causing "unsupported browser" issues in
+        many important sites as live.com our icloud.com.
+
+        Apart from that I'm bumping the Safari Version in the UA to 8.0 as
+        we're already claiming to be "Safari/538.15" which should be
+        pretty equivalent to Safari 8 in terms of features.
+
+        * platform/gtk/UserAgentGtk.cpp:
+        (WebCore::standardUserAgent):
+
 2014-05-25  Milan Crha  <mcrha@redhat.com>
 
         [Stable] [GTK] GdiObject.h missing in WebKitGTK 2.4.1 tarball

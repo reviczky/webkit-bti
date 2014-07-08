@@ -1096,7 +1096,8 @@ static GType GetAtkInterfaceTypeFromWAIType(WAIType type)
 
 static bool roleIsTextType(AccessibilityRole role)
 {
-    return role == ParagraphRole || role == HeadingRole || role == DivRole || role == CellRole || role == ListItemRole;
+    return role == ParagraphRole || role == HeadingRole || role == DivRole || role == CellRole
+        || role == LinkRole || role == WebCoreLinkRole || role == ListItemRole;
 }
 
 static guint16 getInterfaceMaskFromObject(AccessibilityObject* coreObject)
@@ -1298,8 +1299,10 @@ AccessibilityObject* objectFocusedAndCaretOffsetUnignored(AccessibilityObject* r
     if (!firstUnignoredParent)
         return 0;
 
-    // Don't ignore links if the offset is being requested for a link.
-    if (!referenceObject->isLink() && firstUnignoredParent->isLink())
+    // Don't ignore links if the offset is being requested for a link
+    // or if the link is a block.
+    if (!referenceObject->isLink() && firstUnignoredParent->isLink()
+        && !(firstUnignoredParent->renderer() && !firstUnignoredParent->renderer()->isInline()))
         firstUnignoredParent = firstUnignoredParent->parentObjectUnignored();
     if (!firstUnignoredParent)
         return 0;
