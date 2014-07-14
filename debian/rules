@@ -47,12 +47,12 @@ ifeq ($(DEB_BUILD_ARCH),alpha)
 endif
 
 # Disable debugging symbols on these arches.
-ifneq (,$(filter $(DEB_BUILD_ARCH),hurd-i386 ia64 mips mipsel powerpcspe s390 s390x sparc))
+ifneq (,$(filter $(DEB_BUILD_ARCH),hurd-i386 ia64 kfreebsd-i386 mips mipsel powerpcspe s390 s390x sparc))
 	CFLAGS := $(CFLAGS:-g=)
 endif
 
 # Let's try to keep debugging symbols on these arches.
-ifneq (,$(filter $(DEB_BUILD_ARCH),armel armhf kfreebsd-amd64 kfreebsd-i386 powerpc))
+ifneq (,$(filter $(DEB_BUILD_ARCH),armel armhf kfreebsd-amd64 powerpc))
 	CFLAGS += -gstabs
 endif
 
