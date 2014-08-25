@@ -2,8 +2,9 @@ Source: webkitgtk
 Priority: optional
 Section: web
 Maintainer: Debian WebKit Maintainers <pkg-webkit-maintainers@lists.alioth.debian.org>
-Uploaders: Mike Hommey <glandium@debian.org>, Gustavo Noronha Silva <kov@debian.org>,
-           Emilio Pozuelo Monfort <pochu@debian.org>, Alberto Garcia <berto@igalia.com>
+Uploaders: Gustavo Noronha Silva <kov@debian.org>,
+           Emilio Pozuelo Monfort <pochu@debian.org>,
+           Alberto Garcia <berto@igalia.com>
 Build-Depends: gawk,
                make (>= 4.0),
                debhelper (>= 9),
