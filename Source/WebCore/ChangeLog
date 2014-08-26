@@ -1,3 +1,80 @@
+2014-08-07  Simon Fraser  <simon.fraser@apple.com>
+
+        HTML <sub> and <sup> elements do not work in some 64-bit builds
+        https://bugs.webkit.org/show_bug.cgi?id=135736
+
+        Reviewed by Tim Horton.
+        
+        RootInlineBox::verticalPositionForBox() had some implicit conversions between
+        LayoutUnit and int that caused overflow, and resulted in different comparison
+        behavior with an int constant in different architectures, since overflow behavior
+        is undefined.
+        
+        Specifically, VerticalPositionCache was written in terms of ints with a special
+        0x80000000 "not found" value. However, 0x80000000 was being assigned to
+        a LayoutUnit, which multiplies by 64 causing overflow. The result was then
+        compared again with 0x80000000 which could pass or fail depending on overflow
+        behavior.
+        
+        Fix by converting VerticalPositionCache to use LayoutUnits, and to have a bool
+        return value with a result out param, instead of a special return value.
+
+        Not easily testable, since the difference does not show in DRT output,
+        and a ref test would be flakey.
+
+        * rendering/RootInlineBox.cpp:
+        (WebCore::RootInlineBox::ascentAndDescentForBox):
+        * rendering/VerticalPositionCache.h:
+        (WebCore::VerticalPositionCache::get):
+        (WebCore::VerticalPositionCache::set):
+
+2014-08-12  Fabien Vallée  <fvallee@connected-labs.com>
+
+        [GStreamer] playback rate is rounded to integer
+        https://bugs.webkit.org/show_bug.cgi?id=135802
+
+        Reviewed by Philippe Normand.
+
+        Test: media/video-ended-event-slow-motion-playback.html
+
+        * platform/graphics/gstreamer/MediaPlayerPrivateGStreamer.cpp:
+        (WebCore::MediaPlayerPrivateGStreamer::setRate):
+
+2014-08-24  Michael Catanzaro  <mcatanzaro@igalia.com>
+
+        [GTK] Toggle buttons visually broken with GTK+ 3.13.7
+        https://bugs.webkit.org/show_bug.cgi?id=136130
+
+        Reviewed by Martin Robinson.
+
+        No new tests. Hopefully covered by existing tests, and our tests only
+        run with GTK+ 3.6 anyway.
+
+        * platform/gtk/RenderThemeGtk3.cpp:
+        (WebCore::paintToggle): use GTK_STATE_FLAG_CHECKED when compiling for
+        GTK+ 3.13.7 and above to ensure toggle buttons display as toggled.
+
+2014-08-21  Víctor Manuel Jáquez Leal  <vjaquez@igalia.com>
+
+        [GTK] WebkitWebProcess crashing navigating away from ogg video element
+        https://bugs.webkit.org/show_bug.cgi?id=135348
+
+        Reviewed by Philippe Normand.
+
+        Let GraphicsLayerTextureMapper know it needs to detach the platform
+        layer when a MediaPlayerPrivateGStreamerBase is destroyed.
+
+        No new test since media/restore-from-page-cache.html covers it.
+
+        * platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp:
+        (WebCore::MediaPlayerPrivateGStreamerBase::~MediaPlayerPrivateGStreamerBase):
+
+2014-07-08  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Fix make distcheck.
+
+        * GNUmakefile.am:
+
 2014-07-04  Carlos Garcia Campos  <cgarcia@igalia.com>
 
         [GTK][Stable] Google Maps doesn't work with Version/X in the user agent
