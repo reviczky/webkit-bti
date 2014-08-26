@@ -1,5 +1,6 @@
-webkitgtk (2.4.4-3) UNRELEASED; urgency=medium
+webkitgtk (2.4.5-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * debian/control:
     + Remove Mike Hommey from the Uploaders field.
   * debian/rules:
