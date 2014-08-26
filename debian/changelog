@@ -2,6 +2,9 @@ webkitgtk (2.4.4-3) UNRELEASED; urgency=medium
 
   * debian/control:
     + Remove Mike Hommey from the Uploaders field.
+  * debian/rules:
+    + Disable JIT and MacroAssembler in all architectures unless we know
+      it works (Closes: #759313).
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 25 Aug 2014 15:55:58 +0300
 
