@@ -1,4 +1,4 @@
-webkitgtk (2.4.5-1) UNRELEASED; urgency=medium
+webkitgtk (2.4.5-1) unstable; urgency=medium
 
   * New upstream release.
   * debian/patches/dfg-jit.patch,
@@ -16,7 +16,7 @@ webkitgtk (2.4.5-1) UNRELEASED; urgency=medium
   * debian/watch:
     + Track releases from the 2.4 series only.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 25 Aug 2014 15:55:58 +0300
+ -- Alberto Garcia <berto@igalia.com>  Tue, 26 Aug 2014 08:19:01 +0000
 
 webkitgtk (2.4.4-2) unstable; urgency=medium
 
