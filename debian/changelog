@@ -5,6 +5,8 @@ webkitgtk (2.4.4-3) UNRELEASED; urgency=medium
   * debian/rules:
     + Disable JIT and MacroAssembler in all architectures unless we know
       it works (Closes: #759313).
+  * debian/watch:
+    + Track releases from the 2.4 series only.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 25 Aug 2014 15:55:58 +0300
 
