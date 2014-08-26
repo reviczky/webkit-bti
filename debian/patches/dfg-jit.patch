@@ -5,7 +5,7 @@ Index: webkitgtk/Source/WTF/wtf/Platform.h
 ===================================================================
 --- webkitgtk.orig/Source/WTF/wtf/Platform.h
 +++ webkitgtk/Source/WTF/wtf/Platform.h
-@@ -716,7 +716,7 @@
+@@ -731,7 +731,7 @@
  
  #if !defined(ENABLE_DFG_JIT) && ENABLE(JIT) && !COMPILER(MSVC)
  /* Enable the DFG JIT on X86 and X86_64.  Only tested on Mac, GNU/Linux and FreeBSD. */

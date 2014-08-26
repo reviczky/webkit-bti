@@ -1,6 +1,13 @@
 webkitgtk (2.4.5-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/patches/dfg-jit.patch,
+    debian/patches/enable_llint.patch,
+    debian/patches/fix-arm64-build.patch,
+    debian/patches/fix-mips64-build.patch,
+    debian/patches/restore_sparc_code.patch,
+    debian/patches/x32_support.patch:
+    + Refresh.
   * debian/control:
     + Remove Mike Hommey from the Uploaders field.
   * debian/rules:

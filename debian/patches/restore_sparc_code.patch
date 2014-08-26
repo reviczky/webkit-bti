@@ -1,11 +1,11 @@
 From: Alberto Garcia <berto@igalia.com>
 Subject: Restore removed SPARC code
 Bug: https://bugs.webkit.org/show_bug.cgi?id=124941
-Index: webkit/Source/WTF/wtf/Platform.h
+Index: webkitgtk/Source/WTF/wtf/Platform.h
 ===================================================================
---- webkit.orig/Source/WTF/wtf/Platform.h
-+++ webkit/Source/WTF/wtf/Platform.h
-@@ -124,6 +124,23 @@
+--- webkitgtk.orig/Source/WTF/wtf/Platform.h
++++ webkitgtk/Source/WTF/wtf/Platform.h
+@@ -138,6 +138,23 @@
  #define WTF_CPU_SH4 1
  #endif
  
@@ -29,7 +29,7 @@ Index: webkit/Source/WTF/wtf/Platform.h
  /* CPU(S390X) - S390 64-bit */
  #if defined(__s390x__)
  #define WTF_CPU_S390X 1
-@@ -313,7 +330,7 @@
+@@ -327,7 +344,7 @@
  
  #endif /* ARM */
  
@@ -38,24 +38,24 @@ Index: webkit/Source/WTF/wtf/Platform.h
  #define WTF_CPU_NEEDS_ALIGNED_ACCESS 1
  #endif
  
-@@ -640,6 +657,7 @@
+@@ -654,6 +671,7 @@
      || (CPU(IA64) && !CPU(IA64_32)) \
      || CPU(ALPHA) \
      || CPU(ARM64) \
 +    || CPU(SPARC64) \
      || CPU(S390X) \
-     || CPU(PPC64)
- #define WTF_USE_JSVALUE64 1
-Index: webkit/Source/WTF/wtf/dtoa/utils.h
+     || CPU(PPC64) \
+     || CPU(PPC64LE)
+Index: webkitgtk/Source/WTF/wtf/dtoa/utils.h
 ===================================================================
---- webkit.orig/Source/WTF/wtf/dtoa/utils.h
-+++ webkit/Source/WTF/wtf/dtoa/utils.h
+--- webkitgtk.orig/Source/WTF/wtf/dtoa/utils.h
++++ webkitgtk/Source/WTF/wtf/dtoa/utils.h
 @@ -49,7 +49,7 @@
  defined(__ARMEL__) || \
  defined(_MIPS_ARCH_MIPS32R2)
  #define DOUBLE_CONVERSION_CORRECT_DOUBLE_OPERATIONS 1
--#elif CPU(MIPS) || CPU(PPC) || CPU(PPC64) || OS(WINCE) || CPU(SH4) || CPU(S390) || CPU(S390X) || CPU(IA64) || CPU(ALPHA) || CPU(ARM64) || CPU(HPPA)
-+#elif CPU(MIPS) || CPU(PPC) || CPU(PPC64) || OS(WINCE) || CPU(SH4) || CPU(S390) || CPU(S390X) || CPU(IA64) || CPU(SPARC) || CPU(ALPHA) || CPU(ARM64) || CPU(HPPA)
+-#elif CPU(MIPS) || CPU(PPC) || CPU(PPC64) || CPU(PPC64LE) || OS(WINCE) || CPU(SH4) || CPU(S390) || CPU(S390X) || CPU(IA64) || CPU(ALPHA) || CPU(ARM64) || CPU(HPPA)
++#elif CPU(MIPS) || CPU(PPC) || CPU(PPC64) || CPU(PPC64LE) || OS(WINCE) || CPU(SH4) || CPU(S390) || CPU(S390X) || CPU(IA64) || CPU(SPARC) || CPU(ALPHA) || CPU(ARM64) || CPU(HPPA)
  #define DOUBLE_CONVERSION_CORRECT_DOUBLE_OPERATIONS 1
  #elif defined(_M_IX86) || defined(__i386__)
  #if defined(_WIN32)
