@@ -1,3 +1,11 @@
+webkitgtk (2.4.5-3) UNRELEASED; urgency=medium
+
+  * debian/rules:
+    + Make the GTK+3 build first. Since it's the one that needs more disk
+      space, it's better to do it before the GTK+2 version is built.
+
+ -- Alberto Garcia <berto@igalia.com>  Sat, 06 Sep 2014 21:09:39 +0300
+
 webkitgtk (2.4.5-2) unstable; urgency=medium
 
   * debian/control:

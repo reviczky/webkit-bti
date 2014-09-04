@@ -119,29 +119,6 @@ reconf-stamp:
 build-stamp: reconf-stamp
 	dh_testdir
 
-ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
-	test -d build-2.0 || mkdir build-2.0
-	cd build-2.0; \
-	env -u AR_FLAGS \
-	CFLAGS="$(CFLAGS)" \
-	CXXFLAGS="$(CFLAGS)" \
-	CPPFLAGS="$(CPPFLAGS)" \
-	LDFLAGS="$(LDFLAGS)" \
-	../configure --prefix=/usr \
-		--with-gtk=2.0 \
-		$(COMMON_CONFIGURE_ARGUMENTS) \
-		--disable-webkit2
-
-	$(MAKE) $(MAKEARGUMENTS) -C build-2.0
-
-	$(MAKE) -C build-2.0 install DESTDIR="$(CURDIR)"/debian/tmp-2.0
-	install -d -m 755 debian/tmp-2.0/usr/share/doc/libwebkitgtk-dev/html/
-	install -m 644 Documentation/webkitgtk/html/* \
-		debian/tmp-2.0/usr/share/doc/libwebkitgtk-dev/html/
-
-	rm -rf build-2.0
-endif
-
 ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	test -d build-3.0 || mkdir build-3.0
 	cd build-3.0; \
@@ -170,6 +147,29 @@ ifeq ($(ENABLE_WEBKIT2),yes)
 endif
 
 	rm -rf build-3.0
+endif
+
+ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
+	test -d build-2.0 || mkdir build-2.0
+	cd build-2.0; \
+	env -u AR_FLAGS \
+	CFLAGS="$(CFLAGS)" \
+	CXXFLAGS="$(CFLAGS)" \
+	CPPFLAGS="$(CPPFLAGS)" \
+	LDFLAGS="$(LDFLAGS)" \
+	../configure --prefix=/usr \
+		--with-gtk=2.0 \
+		$(COMMON_CONFIGURE_ARGUMENTS) \
+		--disable-webkit2
+
+	$(MAKE) $(MAKEARGUMENTS) -C build-2.0
+
+	$(MAKE) -C build-2.0 install DESTDIR="$(CURDIR)"/debian/tmp-2.0
+	install -d -m 755 debian/tmp-2.0/usr/share/doc/libwebkitgtk-dev/html/
+	install -m 644 Documentation/webkitgtk/html/* \
+		debian/tmp-2.0/usr/share/doc/libwebkitgtk-dev/html/
+
+	rm -rf build-2.0
 endif
 
 	touch $@
