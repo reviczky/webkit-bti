@@ -4,6 +4,10 @@ webkitgtk (2.4.6-1) UNRELEASED; urgency=medium
   * debian/rules:
     + Make the GTK+3 build first. Since it's the one that needs more disk
       space, it's better to do it before the GTK+2 version is built.
+  * debian/libwebkit2gtk-3.0-25.symbols,
+    debian/libwebkitgtk-1.0-0.symbols,
+    debian/libwebkitgtk-3.0-0.symbols:
+    + Add new symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 06 Sep 2014 21:09:39 +0300
 

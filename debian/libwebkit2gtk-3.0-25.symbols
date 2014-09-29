@@ -1113,8 +1113,10 @@ libwebkit2gtk-3.0.so.25 libwebkit2gtk-3.0-25 #MINVER#
  webkit_dom_html_marquee_element_set_width@Base 2.0.2
  webkit_dom_html_marquee_element_start@Base 2.0.2
  webkit_dom_html_marquee_element_stop@Base 2.0.2
+ webkit_dom_html_media_element_add_text_track@Base 2.4.6
  webkit_dom_html_media_element_can_play_type@Base 2.0.2
  webkit_dom_html_media_element_fast_seek@Base 2.3.2
+ webkit_dom_html_media_element_get_audio_tracks@Base 2.4.6
  webkit_dom_html_media_element_get_autoplay@Base 2.0.2
  webkit_dom_html_media_element_get_buffered@Base 2.0.2
  webkit_dom_html_media_element_get_controller@Base 2.3.3
@@ -1140,7 +1142,9 @@ libwebkit2gtk-3.0.so.25 libwebkit2gtk-3.0-25 #MINVER#
  webkit_dom_html_media_element_get_seeking@Base 2.0.2
  webkit_dom_html_media_element_get_src@Base 2.0.2
  webkit_dom_html_media_element_get_start_time@Base 2.0.2
+ webkit_dom_html_media_element_get_text_tracks@Base 2.4.6
  webkit_dom_html_media_element_get_type@Base 2.0.2
+ webkit_dom_html_media_element_get_video_tracks@Base 2.4.6
  webkit_dom_html_media_element_get_volume@Base 2.0.2
  webkit_dom_html_media_element_get_webkit_audio_decoded_byte_count@Base 2.0.2
  webkit_dom_html_media_element_get_webkit_closed_captions_visible@Base 2.0.2
