@@ -286,6 +286,7 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/GRefPtrGStreamer.h \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/GStreamerUtilities.cpp \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/GStreamerUtilities.h \
+@USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/InbandMetadataTextTrackPrivateGStreamer.h \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/InbandTextTrackPrivateGStreamer.cpp \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/InbandTextTrackPrivateGStreamer.h \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/TextCombinerGStreamer.cpp \
@@ -2009,6 +2010,7 @@ am__libPlatform_la_SOURCES_DIST =  \
 	Source/WebCore/platform/graphics/gstreamer/GRefPtrGStreamer.h \
 	Source/WebCore/platform/graphics/gstreamer/GStreamerUtilities.cpp \
 	Source/WebCore/platform/graphics/gstreamer/GStreamerUtilities.h \
+	Source/WebCore/platform/graphics/gstreamer/InbandMetadataTextTrackPrivateGStreamer.h \
 	Source/WebCore/platform/graphics/gstreamer/InbandTextTrackPrivateGStreamer.cpp \
 	Source/WebCore/platform/graphics/gstreamer/InbandTextTrackPrivateGStreamer.h \
 	Source/WebCore/platform/graphics/gstreamer/TextCombinerGStreamer.cpp \
@@ -22903,9 +22905,11 @@ EXTRA_DIST := $(srcdir)/Source/autotools/symbols.filter \
 	$(shell ls $(WebInspectorUI)/UserInterface/*.html) $(shell ls \
 	$(WebInspectorUI)/UserInterface/*.js) $(shell ls \
 	$(WebInspectorUI)/UserInterface/*.css) $(shell ls \
-	$(WebInspectorUI)/UserInterface/Images/*.png) $(shell ls \
-	$(WebInspectorUI)/UserInterface/Images/*.svg) $(shell ls \
-	$(WebInspectorUI)/UserInterface/External/CodeMirror/*) \
+	$(WebInspectorUI)/UserInterface/Images/gtk/*.png) $(shell ls \
+	$(WebInspectorUI)/UserInterface/Images/gtk/*.svg) $(shell ls \
+	$(WebInspectorUI)/UserInterface/External/CodeMirror/*.js) \
+	$(shell ls \
+	$(WebInspectorUI)/UserInterface/External/CodeMirror/*.css) \
 	Tools/gtk/check-for-webkitdom-api-breaks Tools/gtk/common.py \
 	Tools/gtk/generate-feature-defines-files \
 	Tools/gtk/generate-gtkdoc \
@@ -23042,6 +23046,16 @@ pkgconfig_DATA := Source/JavaScriptCore/javascriptcoregtk-@WEBKITGTK_API_VERSION
 gdom_symbol_files := $(patsubst %.h,%.symbols, $(filter \
 	DerivedSources/webkitdom/WebKitDOM%.h, \
 	$(webkitgtk_gdom_built_h_api)))
+inspector_files :=  \
+	$(WebInspectorUI)/Localizations/en.lproj/localizedStrings.js \
+	$(shell ls $(WebInspectorUI)/UserInterface/*.html) $(shell ls \
+	$(WebInspectorUI)/UserInterface/*.js) $(shell ls \
+	$(WebInspectorUI)/UserInterface/*.css) $(shell ls \
+	$(WebInspectorUI)/UserInterface/Images/gtk/*.png) $(shell ls \
+	$(WebInspectorUI)/UserInterface/Images/gtk/*.svg) $(shell ls \
+	$(WebInspectorUI)/UserInterface/External/CodeMirror/*.js) \
+	$(shell ls \
+	$(WebInspectorUI)/UserInterface/External/CodeMirror/*.css)
 @ENABLE_INTROSPECTION_TRUE@gir_DATA := JavaScriptCore-@WEBKITGTK_API_VERSION@.gir \
 @ENABLE_INTROSPECTION_TRUE@	$(am__append_41) $(am__append_59)
 @ENABLE_INTROSPECTION_TRUE@typelibs_DATA := JavaScriptCore-@WEBKITGTK_API_VERSION@.typelib \
@@ -82288,18 +82302,13 @@ po-uninstall-local:
 install-data-local: po-install-data-local
 installdirs-data-local: po-installdirs-data-local
 uninstall-local: po-uninstall-local
+
 ${GENSOURCES_WEBINSPECTOR_UI}/GResourceBundle.xml: GNUmakefile \
-	$(WebInspectorUI)/UserInterface/*.html \
-	$(WebInspectorUI)/UserInterface/*.js \
-	$(WebInspectorUI)/UserInterface/*.css \
-	$(WebInspectorUI)/UserInterface/Images/*.png \
-	$(WebInspectorUI)/UserInterface/Images/*.svg \
-	$(WebInspectorUI)/UserInterface/External/CodeMirror/* \
-	$(WebInspectorUI)/Localizations/en.lproj/localizedStrings.js \
+	$(inspector_files) \
 	$(srcdir)/Tools/gtk/generate-inspector-gresource-manifest.py
 	$(AM_V_GEN)
 	$(AM_V_at)mkdir -p ${GENSOURCES_WEBINSPECTOR_UI}
-	$(AM_V_at)$(srcdir)/Tools/gtk/generate-inspector-gresource-manifest.py $@
+	$(AM_V_at)$(srcdir)/Tools/gtk/generate-inspector-gresource-manifest.py --output $@ $(inspector_files)
 
 ${GENSOURCES_WEBINSPECTOR_UI}/GResourceBundle.c: DerivedSources/WebInspectorUI/GResourceBundle.xml
 	$(AM_V_GEN)

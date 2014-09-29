@@ -2418,6 +2418,7 @@
 <ANCHOR id="webkit-dom-html-media-element-play" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-play">
 <ANCHOR id="webkit-dom-html-media-element-pause" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-pause">
 <ANCHOR id="webkit-dom-html-media-element-fast-seek" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-fast-seek">
+<ANCHOR id="webkit-dom-html-media-element-add-text-track" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-add-text-track">
 <ANCHOR id="webkit-dom-html-media-element-webkit-show-playback-target-picker" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-webkit-show-playback-target-picker">
 <ANCHOR id="webkit-dom-html-media-element-get-error" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-error">
 <ANCHOR id="webkit-dom-html-media-element-get-src" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-src">
@@ -2458,6 +2459,9 @@
 <ANCHOR id="webkit-dom-html-media-element-set-webkit-closed-captions-visible" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-set-webkit-closed-captions-visible">
 <ANCHOR id="webkit-dom-html-media-element-get-webkit-audio-decoded-byte-count" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-webkit-audio-decoded-byte-count">
 <ANCHOR id="webkit-dom-html-media-element-get-webkit-video-decoded-byte-count" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-webkit-video-decoded-byte-count">
+<ANCHOR id="webkit-dom-html-media-element-get-audio-tracks" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-audio-tracks">
+<ANCHOR id="webkit-dom-html-media-element-get-text-tracks" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-text-tracks">
+<ANCHOR id="webkit-dom-html-media-element-get-video-tracks" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-video-tracks">
 <ANCHOR id="webkit-dom-html-media-element-get-media-group" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-media-group">
 <ANCHOR id="webkit-dom-html-media-element-set-media-group" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-set-media-group">
 <ANCHOR id="webkit-dom-html-media-element-get-controller" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-controller">
@@ -2467,6 +2471,7 @@
 <ANCHOR id="WebKitDOMHTMLMediaElement.other_details" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement.other_details">
 <ANCHOR id="WebKitDOMHTMLMediaElement-struct" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement-struct">
 <ANCHOR id="WebKitDOMHTMLMediaElement.property-details" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement.property-details">
+<ANCHOR id="WebKitDOMHTMLMediaElement--audio-tracks" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--audio-tracks">
 <ANCHOR id="WebKitDOMHTMLMediaElement--autoplay" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--autoplay">
 <ANCHOR id="WebKitDOMHTMLMediaElement--buffered" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--buffered">
 <ANCHOR id="WebKitDOMHTMLMediaElement--controller" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--controller">
@@ -2490,6 +2495,8 @@
 <ANCHOR id="WebKitDOMHTMLMediaElement--seekable" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--seekable">
 <ANCHOR id="WebKitDOMHTMLMediaElement--seeking" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--seeking">
 <ANCHOR id="WebKitDOMHTMLMediaElement--src" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--src">
+<ANCHOR id="WebKitDOMHTMLMediaElement--text-tracks" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--text-tracks">
+<ANCHOR id="WebKitDOMHTMLMediaElement--video-tracks" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--video-tracks">
 <ANCHOR id="WebKitDOMHTMLMediaElement--volume" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--volume">
 <ANCHOR id="WebKitDOMHTMLMediaElement--webkit-audio-decoded-byte-count" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--webkit-audio-decoded-byte-count">
 <ANCHOR id="WebKitDOMHTMLMediaElement--webkit-closed-captions-visible" href="webkitdomgtk/WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--webkit-closed-captions-visible">

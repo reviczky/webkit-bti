@@ -9,12 +9,10 @@ WebKitDOMHTMLMediaElement
 
 </para>
 
-
 <!-- ##### SECTION See_Also ##### -->
 <para>
 
 </para>
-
 
 <!-- ##### SECTION Stability_Level ##### -->
 
@@ -27,6 +25,11 @@ WebKitDOMHTMLMediaElement
 
 </para>
 
+
+<!-- ##### ARG WebKitDOMHTMLMediaElement:audio-tracks ##### -->
+<para>
+
+</para>
 
 <!-- ##### ARG WebKitDOMHTMLMediaElement:autoplay ##### -->
 <para>
@@ -143,6 +146,16 @@ WebKitDOMHTMLMediaElement
 
 </para>
 
+<!-- ##### ARG WebKitDOMHTMLMediaElement:text-tracks ##### -->
+<para>
+
+</para>
+
+<!-- ##### ARG WebKitDOMHTMLMediaElement:video-tracks ##### -->
+<para>
+
+</para>
+
 <!-- ##### ARG WebKitDOMHTMLMediaElement:volume ##### -->
 <para>
 
@@ -219,6 +232,19 @@ WebKitDOMHTMLMediaElement
 
 @self: 
 @time: 
+
+
+<!-- ##### FUNCTION webkit_dom_html_media_element_add_text_track ##### -->
+<para>
+
+</para>
+
+@self: 
+@kind: 
+@label: 
+@language: 
+@error: 
+@Returns: 
 
 
 <!-- ##### FUNCTION webkit_dom_html_media_element_webkit_show_playback_target_picker ##### -->
@@ -573,6 +599,33 @@ WebKitDOMHTMLMediaElement
 
 
 <!-- ##### FUNCTION webkit_dom_html_media_element_get_webkit_video_decoded_byte_count ##### -->
+<para>
+
+</para>
+
+@self: 
+@Returns: 
+
+
+<!-- ##### FUNCTION webkit_dom_html_media_element_get_audio_tracks ##### -->
+<para>
+
+</para>
+
+@self: 
+@Returns: 
+
+
+<!-- ##### FUNCTION webkit_dom_html_media_element_get_text_tracks ##### -->
+<para>
+
+</para>
+
+@self: 
+@Returns: 
+
+
+<!-- ##### FUNCTION webkit_dom_html_media_element_get_video_tracks ##### -->
 <para>
 
 </para>

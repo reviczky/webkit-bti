@@ -1792,6 +1792,7 @@
     <keyword type="function" name="webkit_dom_html_media_element_play ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-play"/>
     <keyword type="function" name="webkit_dom_html_media_element_pause ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-pause"/>
     <keyword type="function" name="webkit_dom_html_media_element_fast_seek ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-fast-seek"/>
+    <keyword type="function" name="webkit_dom_html_media_element_add_text_track ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-add-text-track"/>
     <keyword type="function" name="webkit_dom_html_media_element_webkit_show_playback_target_picker ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-webkit-show-playback-target-picker"/>
     <keyword type="function" name="webkit_dom_html_media_element_get_error ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-error"/>
     <keyword type="function" name="webkit_dom_html_media_element_get_src ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-src"/>
@@ -1832,6 +1833,9 @@
     <keyword type="function" name="webkit_dom_html_media_element_set_webkit_closed_captions_visible ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-set-webkit-closed-captions-visible"/>
     <keyword type="function" name="webkit_dom_html_media_element_get_webkit_audio_decoded_byte_count ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-webkit-audio-decoded-byte-count"/>
     <keyword type="function" name="webkit_dom_html_media_element_get_webkit_video_decoded_byte_count ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-webkit-video-decoded-byte-count"/>
+    <keyword type="function" name="webkit_dom_html_media_element_get_audio_tracks ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-audio-tracks"/>
+    <keyword type="function" name="webkit_dom_html_media_element_get_text_tracks ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-text-tracks"/>
+    <keyword type="function" name="webkit_dom_html_media_element_get_video_tracks ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-video-tracks"/>
     <keyword type="function" name="webkit_dom_html_media_element_get_media_group ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-media-group"/>
     <keyword type="function" name="webkit_dom_html_media_element_set_media_group ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-set-media-group"/>
     <keyword type="function" name="webkit_dom_html_media_element_get_controller ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-controller"/>
@@ -1839,6 +1843,7 @@
     <keyword type="function" name="webkit_dom_html_media_element_get_start_time ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-start-time" deprecated=""/>
     <keyword type="function" name="webkit_dom_html_media_element_get_initial_time ()" link="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-initial-time" deprecated=""/>
     <keyword type="struct" name="WebKitDOMHTMLMediaElement" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement-struct"/>
+    <keyword type="property" name="The “audio-tracks” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--audio-tracks"/>
     <keyword type="property" name="The “autoplay” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--autoplay"/>
     <keyword type="property" name="The “buffered” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--buffered"/>
     <keyword type="property" name="The “controller” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--controller"/>
@@ -1862,6 +1867,8 @@
     <keyword type="property" name="The “seekable” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--seekable"/>
     <keyword type="property" name="The “seeking” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--seeking"/>
     <keyword type="property" name="The “src” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--src"/>
+    <keyword type="property" name="The “text-tracks” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--text-tracks"/>
+    <keyword type="property" name="The “video-tracks” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--video-tracks"/>
     <keyword type="property" name="The “volume” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--volume"/>
     <keyword type="property" name="The “webkit-audio-decoded-byte-count” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--webkit-audio-decoded-byte-count"/>
     <keyword type="property" name="The “webkit-closed-captions-visible” property" link="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--webkit-closed-captions-visible"/>
