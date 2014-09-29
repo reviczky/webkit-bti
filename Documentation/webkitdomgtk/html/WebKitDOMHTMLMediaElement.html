@@ -8,7 +8,7 @@
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitDOMHTMLMarqueeElement.html" title="WebKitDOMHTMLMarqueeElement">
 <link rel="next" href="WebKitDOMHTMLMenuElement.html" title="WebKitDOMHTMLMenuElement">
-<meta name="generator" content="GTK-Doc V1.20.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -80,6 +80,14 @@
 </td>
 <td class="function_name">
 <a class="link" href="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-fast-seek" title="webkit_dom_html_media_element_fast_seek ()">webkit_dom_html_media_element_fast_seek</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a class="link" href="WebKitDOMTextTrack.html" title="WebKitDOMTextTrack"><span class="returnvalue">WebKitDOMTextTrack</span></a> *
+</td>
+<td class="function_name">
+<a class="link" href="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-add-text-track" title="webkit_dom_html_media_element_add_text_track ()">webkit_dom_html_media_element_add_text_track</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
 <tr>
@@ -404,6 +412,30 @@
 </tr>
 <tr>
 <td class="function_type">
+<a class="link" href="WebKitDOMAudioTrackList.html" title="WebKitDOMAudioTrackList"><span class="returnvalue">WebKitDOMAudioTrackList</span></a> *
+</td>
+<td class="function_name">
+<a class="link" href="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-audio-tracks" title="webkit_dom_html_media_element_get_audio_tracks ()">webkit_dom_html_media_element_get_audio_tracks</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a class="link" href="WebKitDOMTextTrackList.html" title="WebKitDOMTextTrackList"><span class="returnvalue">WebKitDOMTextTrackList</span></a> *
+</td>
+<td class="function_name">
+<a class="link" href="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-text-tracks" title="webkit_dom_html_media_element_get_text_tracks ()">webkit_dom_html_media_element_get_text_tracks</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a class="link" href="WebKitDOMVideoTrackList.html" title="WebKitDOMVideoTrackList"><span class="returnvalue">WebKitDOMVideoTrackList</span></a> *
+</td>
+<td class="function_name">
+<a class="link" href="WebKitDOMHTMLMediaElement.html#webkit-dom-html-media-element-get-video-tracks" title="webkit_dom_html_media_element_get_video_tracks ()">webkit_dom_html_media_element_get_video_tracks</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
 <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
 </td>
 <td class="function_name">
@@ -462,6 +494,12 @@
 <col width="200px" class="properties_flags">
 </colgroup>
 <tbody>
+<tr>
+<td class="property_type">
+<a class="link" href="WebKitDOMAudioTrackList.html" title="WebKitDOMAudioTrackList"><span class="type">WebKitDOMAudioTrackList</span></a> *</td>
+<td class="property_name"><a class="link" href="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--audio-tracks" title="The “audio-tracks” property">audio-tracks</a></td>
+<td class="property_flags">Read</td>
+</tr>
 <tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--autoplay" title="The “autoplay” property">autoplay</a></td>
@@ -585,6 +623,18 @@
 <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--src" title="The “src” property">src</a></td>
 <td class="property_flags">Read / Write</td>
+</tr>
+<tr>
+<td class="property_type">
+<a class="link" href="WebKitDOMTextTrackList.html" title="WebKitDOMTextTrackList"><span class="type">WebKitDOMTextTrackList</span></a> *</td>
+<td class="property_name"><a class="link" href="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--text-tracks" title="The “text-tracks” property">text-tracks</a></td>
+<td class="property_flags">Read</td>
+</tr>
+<tr>
+<td class="property_type">
+<a class="link" href="WebKitDOMVideoTrackList.html" title="WebKitDOMVideoTrackList"><span class="type">WebKitDOMVideoTrackList</span></a> *</td>
+<td class="property_name"><a class="link" href="WebKitDOMHTMLMediaElement.html#WebKitDOMHTMLMediaElement--video-tracks" title="The “video-tracks” property">video-tracks</a></td>
+<td class="property_flags">Read</td>
 </tr>
 <tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></td>
@@ -791,12 +841,65 @@ webkit_dom_html_media_element_fast_seek
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-dom-html-media-element-add-text-track"></a><h3>webkit_dom_html_media_element_add_text_track ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitDOMTextTrack.html" title="WebKitDOMTextTrack"><span class="returnvalue">WebKitDOMTextTrack</span></a> *
+webkit_dom_html_media_element_add_text_track
+                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *kind</code></em>,
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *label</code></em>,
+                                <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *language</code></em>,
+                                <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
+<div class="refsect3">
+<a name="id-1.2.87.9.7.4"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>kind</p></td>
+<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>label</p></td>
+<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>language</p></td>
+<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>error</p></td>
+<td class="parameter_description"><p><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="id-1.2.87.9.7.5"></a><h4>Returns</h4>
+<p> A <a class="link" href="WebKitDOMTextTrack.html" title="WebKitDOMTextTrack"><span class="type">WebKitDOMTextTrack</span></a>. </p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+</div>
+</div>
+<hr>
+<div class="refsect2">
 <a name="webkit-dom-html-media-element-webkit-show-playback-target-picker"></a><h3>webkit_dom_html_media_element_webkit_show_playback_target_picker ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_dom_html_media_element_webkit_show_playback_target_picker
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.7.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.8.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -818,32 +921,6 @@ webkit_dom_html_media_element_webkit_show_playback_target_picker
 webkit_dom_html_media_element_get_error
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.8.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
-<colgroup>
-<col width="150px" class="parameters_name">
-<col class="parameters_description">
-<col width="200px" class="parameters_annotations">
-</colgroup>
-<tbody><tr>
-<td class="parameter_name"><p>self</p></td>
-<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
-<td class="parameter_annotations"> </td>
-</tr></tbody>
-</table></div>
-</div>
-<div class="refsect3">
-<a name="id-1.2.87.9.8.5"></a><h4>Returns</h4>
-<p> A <a class="link" href="WebKitDOMMediaError.html" title="WebKitDOMMediaError"><span class="type">WebKitDOMMediaError</span></a>. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
-</div>
-</div>
-<hr>
-<div class="refsect2">
-<a name="webkit-dom-html-media-element-get-src"></a><h3>webkit_dom_html_media_element_get_src ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
-webkit_dom_html_media_element_get_src (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
-<div class="refsect3">
 <a name="id-1.2.87.9.9.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
@@ -860,6 +937,32 @@ webkit_dom_html_media_element_get_src (<em class="parameter"><code><a class="lin
 </div>
 <div class="refsect3">
 <a name="id-1.2.87.9.9.5"></a><h4>Returns</h4>
+<p> A <a class="link" href="WebKitDOMMediaError.html" title="WebKitDOMMediaError"><span class="type">WebKitDOMMediaError</span></a>. </p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+</div>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-dom-html-media-element-get-src"></a><h3>webkit_dom_html_media_element_get_src ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
+webkit_dom_html_media_element_get_src (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
+<div class="refsect3">
+<a name="id-1.2.87.9.10.4"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="id-1.2.87.9.10.5"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p>
 <p></p>
 </div>
@@ -871,7 +974,7 @@ webkit_dom_html_media_element_get_src (<em class="parameter"><code><a class="lin
 webkit_dom_html_media_element_set_src (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
                                        <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.10.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.11.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -900,33 +1003,6 @@ webkit_dom_html_media_element_set_src (<em class="parameter"><code><a class="lin
 webkit_dom_html_media_element_get_current_src
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.11.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
-<colgroup>
-<col width="150px" class="parameters_name">
-<col class="parameters_description">
-<col width="200px" class="parameters_annotations">
-</colgroup>
-<tbody><tr>
-<td class="parameter_name"><p>self</p></td>
-<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
-<td class="parameter_annotations"> </td>
-</tr></tbody>
-</table></div>
-</div>
-<div class="refsect3">
-<a name="id-1.2.87.9.11.5"></a><h4>Returns</h4>
-<p> A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p>
-<p></p>
-</div>
-</div>
-<hr>
-<div class="refsect2">
-<a name="webkit-dom-html-media-element-get-network-state"></a><h3>webkit_dom_html_media_element_get_network_state ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gushort"><span class="returnvalue">gushort</span></a>
-webkit_dom_html_media_element_get_network_state
-                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
-<div class="refsect3">
 <a name="id-1.2.87.9.12.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
@@ -943,15 +1019,15 @@ webkit_dom_html_media_element_get_network_state
 </div>
 <div class="refsect3">
 <a name="id-1.2.87.9.12.5"></a><h4>Returns</h4>
-<p> A <a href="../glib/glib-Basic-Types.html#gushort"><span class="type">gushort</span></a></p>
+<p> A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p>
 <p></p>
 </div>
 </div>
 <hr>
 <div class="refsect2">
-<a name="webkit-dom-html-media-element-get-preload"></a><h3>webkit_dom_html_media_element_get_preload ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
-webkit_dom_html_media_element_get_preload
+<a name="webkit-dom-html-media-element-get-network-state"></a><h3>webkit_dom_html_media_element_get_network_state ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gushort"><span class="returnvalue">gushort</span></a>
+webkit_dom_html_media_element_get_network_state
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
 <a name="id-1.2.87.9.13.4"></a><h4>Parameters</h4>
@@ -970,6 +1046,33 @@ webkit_dom_html_media_element_get_preload
 </div>
 <div class="refsect3">
 <a name="id-1.2.87.9.13.5"></a><h4>Returns</h4>
+<p> A <a href="../glib/glib-Basic-Types.html#gushort"><span class="type">gushort</span></a></p>
+<p></p>
+</div>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-dom-html-media-element-get-preload"></a><h3>webkit_dom_html_media_element_get_preload ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
+webkit_dom_html_media_element_get_preload
+                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
+<div class="refsect3">
+<a name="id-1.2.87.9.14.4"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="id-1.2.87.9.14.5"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p>
 <p></p>
 </div>
@@ -982,7 +1085,7 @@ webkit_dom_html_media_element_set_preload
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
                                 <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.14.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.15.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1011,33 +1114,6 @@ webkit_dom_html_media_element_set_preload
 webkit_dom_html_media_element_get_buffered
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.15.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
-<colgroup>
-<col width="150px" class="parameters_name">
-<col class="parameters_description">
-<col width="200px" class="parameters_annotations">
-</colgroup>
-<tbody><tr>
-<td class="parameter_name"><p>self</p></td>
-<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
-<td class="parameter_annotations"> </td>
-</tr></tbody>
-</table></div>
-</div>
-<div class="refsect3">
-<a name="id-1.2.87.9.15.5"></a><h4>Returns</h4>
-<p> A <a class="link" href="WebKitDOMTimeRanges.html" title="WebKitDOMTimeRanges"><span class="type">WebKitDOMTimeRanges</span></a>. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
-</div>
-</div>
-<hr>
-<div class="refsect2">
-<a name="webkit-dom-html-media-element-get-ready-state"></a><h3>webkit_dom_html_media_element_get_ready_state ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gushort"><span class="returnvalue">gushort</span></a>
-webkit_dom_html_media_element_get_ready_state
-                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
-<div class="refsect3">
 <a name="id-1.2.87.9.16.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
@@ -1054,15 +1130,15 @@ webkit_dom_html_media_element_get_ready_state
 </div>
 <div class="refsect3">
 <a name="id-1.2.87.9.16.5"></a><h4>Returns</h4>
-<p> A <a href="../glib/glib-Basic-Types.html#gushort"><span class="type">gushort</span></a></p>
-<p></p>
+<p> A <a class="link" href="WebKitDOMTimeRanges.html" title="WebKitDOMTimeRanges"><span class="type">WebKitDOMTimeRanges</span></a>. </p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
 <div class="refsect2">
-<a name="webkit-dom-html-media-element-get-seeking"></a><h3>webkit_dom_html_media_element_get_seeking ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
-webkit_dom_html_media_element_get_seeking
+<a name="webkit-dom-html-media-element-get-ready-state"></a><h3>webkit_dom_html_media_element_get_ready_state ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gushort"><span class="returnvalue">gushort</span></a>
+webkit_dom_html_media_element_get_ready_state
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
 <a name="id-1.2.87.9.17.4"></a><h4>Parameters</h4>
@@ -1081,15 +1157,15 @@ webkit_dom_html_media_element_get_seeking
 </div>
 <div class="refsect3">
 <a name="id-1.2.87.9.17.5"></a><h4>Returns</h4>
-<p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
+<p> A <a href="../glib/glib-Basic-Types.html#gushort"><span class="type">gushort</span></a></p>
 <p></p>
 </div>
 </div>
 <hr>
 <div class="refsect2">
-<a name="webkit-dom-html-media-element-get-current-time"></a><h3>webkit_dom_html_media_element_get_current_time ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gdouble"><span class="returnvalue">gdouble</span></a>
-webkit_dom_html_media_element_get_current_time
+<a name="webkit-dom-html-media-element-get-seeking"></a><h3>webkit_dom_html_media_element_get_seeking ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_dom_html_media_element_get_seeking
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
 <a name="id-1.2.87.9.18.4"></a><h4>Parameters</h4>
@@ -1108,15 +1184,15 @@ webkit_dom_html_media_element_get_current_time
 </div>
 <div class="refsect3">
 <a name="id-1.2.87.9.18.5"></a><h4>Returns</h4>
-<p> A <a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></p>
+<p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
 <p></p>
 </div>
 </div>
 <hr>
 <div class="refsect2">
-<a name="webkit-dom-html-media-element-get-duration"></a><h3>webkit_dom_html_media_element_get_duration ()</h3>
+<a name="webkit-dom-html-media-element-get-current-time"></a><h3>webkit_dom_html_media_element_get_current_time ()</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gdouble"><span class="returnvalue">gdouble</span></a>
-webkit_dom_html_media_element_get_duration
+webkit_dom_html_media_element_get_current_time
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
 <a name="id-1.2.87.9.19.4"></a><h4>Parameters</h4>
@@ -1141,9 +1217,9 @@ webkit_dom_html_media_element_get_duration
 </div>
 <hr>
 <div class="refsect2">
-<a name="webkit-dom-html-media-element-get-paused"></a><h3>webkit_dom_html_media_element_get_paused ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
-webkit_dom_html_media_element_get_paused
+<a name="webkit-dom-html-media-element-get-duration"></a><h3>webkit_dom_html_media_element_get_duration ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gdouble"><span class="returnvalue">gdouble</span></a>
+webkit_dom_html_media_element_get_duration
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
 <a name="id-1.2.87.9.20.4"></a><h4>Parameters</h4>
@@ -1162,15 +1238,15 @@ webkit_dom_html_media_element_get_paused
 </div>
 <div class="refsect3">
 <a name="id-1.2.87.9.20.5"></a><h4>Returns</h4>
-<p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
+<p> A <a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></p>
 <p></p>
 </div>
 </div>
 <hr>
 <div class="refsect2">
-<a name="webkit-dom-html-media-element-get-default-playback-rate"></a><h3>webkit_dom_html_media_element_get_default_playback_rate ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gdouble"><span class="returnvalue">gdouble</span></a>
-webkit_dom_html_media_element_get_default_playback_rate
+<a name="webkit-dom-html-media-element-get-paused"></a><h3>webkit_dom_html_media_element_get_paused ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_dom_html_media_element_get_paused
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
 <a name="id-1.2.87.9.21.4"></a><h4>Parameters</h4>
@@ -1189,6 +1265,33 @@ webkit_dom_html_media_element_get_default_playback_rate
 </div>
 <div class="refsect3">
 <a name="id-1.2.87.9.21.5"></a><h4>Returns</h4>
+<p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
+<p></p>
+</div>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-dom-html-media-element-get-default-playback-rate"></a><h3>webkit_dom_html_media_element_get_default_playback_rate ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gdouble"><span class="returnvalue">gdouble</span></a>
+webkit_dom_html_media_element_get_default_playback_rate
+                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
+<div class="refsect3">
+<a name="id-1.2.87.9.22.4"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="id-1.2.87.9.22.5"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></p>
 <p></p>
 </div>
@@ -1201,7 +1304,7 @@ webkit_dom_html_media_element_set_default_playback_rate
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a> value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.22.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.23.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1230,7 +1333,7 @@ webkit_dom_html_media_element_set_default_playback_rate
 webkit_dom_html_media_element_get_playback_rate
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.23.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.24.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1245,7 +1348,7 @@ webkit_dom_html_media_element_get_playback_rate
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.87.9.23.5"></a><h4>Returns</h4>
+<a name="id-1.2.87.9.24.5"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></p>
 <p></p>
 </div>
@@ -1258,7 +1361,7 @@ webkit_dom_html_media_element_set_playback_rate
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a> value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.24.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.25.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1287,33 +1390,6 @@ webkit_dom_html_media_element_set_playback_rate
 webkit_dom_html_media_element_get_played
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.25.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
-<colgroup>
-<col width="150px" class="parameters_name">
-<col class="parameters_description">
-<col width="200px" class="parameters_annotations">
-</colgroup>
-<tbody><tr>
-<td class="parameter_name"><p>self</p></td>
-<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
-<td class="parameter_annotations"> </td>
-</tr></tbody>
-</table></div>
-</div>
-<div class="refsect3">
-<a name="id-1.2.87.9.25.5"></a><h4>Returns</h4>
-<p> A <a class="link" href="WebKitDOMTimeRanges.html" title="WebKitDOMTimeRanges"><span class="type">WebKitDOMTimeRanges</span></a>. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
-</div>
-</div>
-<hr>
-<div class="refsect2">
-<a name="webkit-dom-html-media-element-get-seekable"></a><h3>webkit_dom_html_media_element_get_seekable ()</h3>
-<pre class="programlisting"><a class="link" href="WebKitDOMTimeRanges.html" title="WebKitDOMTimeRanges"><span class="returnvalue">WebKitDOMTimeRanges</span></a> *
-webkit_dom_html_media_element_get_seekable
-                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
-<div class="refsect3">
 <a name="id-1.2.87.9.26.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
@@ -1336,9 +1412,9 @@ webkit_dom_html_media_element_get_seekable
 </div>
 <hr>
 <div class="refsect2">
-<a name="webkit-dom-html-media-element-get-ended"></a><h3>webkit_dom_html_media_element_get_ended ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
-webkit_dom_html_media_element_get_ended
+<a name="webkit-dom-html-media-element-get-seekable"></a><h3>webkit_dom_html_media_element_get_seekable ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitDOMTimeRanges.html" title="WebKitDOMTimeRanges"><span class="returnvalue">WebKitDOMTimeRanges</span></a> *
+webkit_dom_html_media_element_get_seekable
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
 <a name="id-1.2.87.9.27.4"></a><h4>Parameters</h4>
@@ -1357,15 +1433,15 @@ webkit_dom_html_media_element_get_ended
 </div>
 <div class="refsect3">
 <a name="id-1.2.87.9.27.5"></a><h4>Returns</h4>
-<p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
-<p></p>
+<p> A <a class="link" href="WebKitDOMTimeRanges.html" title="WebKitDOMTimeRanges"><span class="type">WebKitDOMTimeRanges</span></a>. </p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
 <hr>
 <div class="refsect2">
-<a name="webkit-dom-html-media-element-get-autoplay"></a><h3>webkit_dom_html_media_element_get_autoplay ()</h3>
+<a name="webkit-dom-html-media-element-get-ended"></a><h3>webkit_dom_html_media_element_get_ended ()</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
-webkit_dom_html_media_element_get_autoplay
+webkit_dom_html_media_element_get_ended
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
 <a name="id-1.2.87.9.28.4"></a><h4>Parameters</h4>
@@ -1390,13 +1466,40 @@ webkit_dom_html_media_element_get_autoplay
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-dom-html-media-element-get-autoplay"></a><h3>webkit_dom_html_media_element_get_autoplay ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_dom_html_media_element_get_autoplay
+                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
+<div class="refsect3">
+<a name="id-1.2.87.9.29.4"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="id-1.2.87.9.29.5"></a><h4>Returns</h4>
+<p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
+<p></p>
+</div>
+</div>
+<hr>
+<div class="refsect2">
 <a name="webkit-dom-html-media-element-set-autoplay"></a><h3>webkit_dom_html_media_element_set_autoplay ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_dom_html_media_element_set_autoplay
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.29.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.30.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1425,7 +1528,7 @@ webkit_dom_html_media_element_set_autoplay
 webkit_dom_html_media_element_get_loop
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.30.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.31.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1440,7 +1543,7 @@ webkit_dom_html_media_element_get_loop
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.87.9.30.5"></a><h4>Returns</h4>
+<a name="id-1.2.87.9.31.5"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
 <p></p>
 </div>
@@ -1453,7 +1556,7 @@ webkit_dom_html_media_element_set_loop
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.31.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.32.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1482,7 +1585,7 @@ webkit_dom_html_media_element_set_loop
 webkit_dom_html_media_element_get_controls
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.32.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.33.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1497,7 +1600,7 @@ webkit_dom_html_media_element_get_controls
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.87.9.32.5"></a><h4>Returns</h4>
+<a name="id-1.2.87.9.33.5"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
 <p></p>
 </div>
@@ -1510,7 +1613,7 @@ webkit_dom_html_media_element_set_controls
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.33.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.34.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1539,7 +1642,7 @@ webkit_dom_html_media_element_set_controls
 webkit_dom_html_media_element_get_volume
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.34.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.35.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1554,7 +1657,7 @@ webkit_dom_html_media_element_get_volume
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.87.9.34.5"></a><h4>Returns</h4>
+<a name="id-1.2.87.9.35.5"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></p>
 <p></p>
 </div>
@@ -1568,7 +1671,7 @@ webkit_dom_html_media_element_set_volume
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a> value</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.35.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.36.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1602,7 +1705,7 @@ webkit_dom_html_media_element_set_volume
 webkit_dom_html_media_element_get_muted
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.36.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.37.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1617,7 +1720,7 @@ webkit_dom_html_media_element_get_muted
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.87.9.36.5"></a><h4>Returns</h4>
+<a name="id-1.2.87.9.37.5"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
 <p></p>
 </div>
@@ -1630,7 +1733,7 @@ webkit_dom_html_media_element_set_muted
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.37.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.38.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1659,7 +1762,7 @@ webkit_dom_html_media_element_set_muted
 webkit_dom_html_media_element_get_default_muted
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.38.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.39.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1674,7 +1777,7 @@ webkit_dom_html_media_element_get_default_muted
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.87.9.38.5"></a><h4>Returns</h4>
+<a name="id-1.2.87.9.39.5"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
 <p></p>
 </div>
@@ -1687,7 +1790,7 @@ webkit_dom_html_media_element_set_default_muted
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.39.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.40.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1716,7 +1819,7 @@ webkit_dom_html_media_element_set_default_muted
 webkit_dom_html_media_element_get_webkit_preserves_pitch
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.40.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.41.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1731,7 +1834,7 @@ webkit_dom_html_media_element_get_webkit_preserves_pitch
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.87.9.40.5"></a><h4>Returns</h4>
+<a name="id-1.2.87.9.41.5"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
 <p></p>
 </div>
@@ -1744,7 +1847,7 @@ webkit_dom_html_media_element_set_webkit_preserves_pitch
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.41.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.42.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1773,33 +1876,6 @@ webkit_dom_html_media_element_set_webkit_preserves_pitch
 webkit_dom_html_media_element_get_webkit_has_closed_captions
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.42.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
-<colgroup>
-<col width="150px" class="parameters_name">
-<col class="parameters_description">
-<col width="200px" class="parameters_annotations">
-</colgroup>
-<tbody><tr>
-<td class="parameter_name"><p>self</p></td>
-<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
-<td class="parameter_annotations"> </td>
-</tr></tbody>
-</table></div>
-</div>
-<div class="refsect3">
-<a name="id-1.2.87.9.42.5"></a><h4>Returns</h4>
-<p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
-<p></p>
-</div>
-</div>
-<hr>
-<div class="refsect2">
-<a name="webkit-dom-html-media-element-get-webkit-closed-captions-visible"></a><h3>webkit_dom_html_media_element_get_webkit_closed_captions_visible ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
-webkit_dom_html_media_element_get_webkit_closed_captions_visible
-                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
-<div class="refsect3">
 <a name="id-1.2.87.9.43.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
@@ -1822,13 +1898,40 @@ webkit_dom_html_media_element_get_webkit_closed_captions_visible
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-dom-html-media-element-get-webkit-closed-captions-visible"></a><h3>webkit_dom_html_media_element_get_webkit_closed_captions_visible ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_dom_html_media_element_get_webkit_closed_captions_visible
+                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
+<div class="refsect3">
+<a name="id-1.2.87.9.44.4"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="id-1.2.87.9.44.5"></a><h4>Returns</h4>
+<p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
+<p></p>
+</div>
+</div>
+<hr>
+<div class="refsect2">
 <a name="webkit-dom-html-media-element-set-webkit-closed-captions-visible"></a><h3>webkit_dom_html_media_element_set_webkit_closed_captions_visible ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_dom_html_media_element_set_webkit_closed_captions_visible
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.44.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.45.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1857,33 +1960,6 @@ webkit_dom_html_media_element_set_webkit_closed_captions_visible
 webkit_dom_html_media_element_get_webkit_audio_decoded_byte_count
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.45.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
-<colgroup>
-<col width="150px" class="parameters_name">
-<col class="parameters_description">
-<col width="200px" class="parameters_annotations">
-</colgroup>
-<tbody><tr>
-<td class="parameter_name"><p>self</p></td>
-<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
-<td class="parameter_annotations"> </td>
-</tr></tbody>
-</table></div>
-</div>
-<div class="refsect3">
-<a name="id-1.2.87.9.45.5"></a><h4>Returns</h4>
-<p> A <a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a></p>
-<p></p>
-</div>
-</div>
-<hr>
-<div class="refsect2">
-<a name="webkit-dom-html-media-element-get-webkit-video-decoded-byte-count"></a><h3>webkit_dom_html_media_element_get_webkit_video_decoded_byte_count ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gulong"><span class="returnvalue">gulong</span></a>
-webkit_dom_html_media_element_get_webkit_video_decoded_byte_count
-                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
-<div class="refsect3">
 <a name="id-1.2.87.9.46.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
@@ -1906,9 +1982,9 @@ webkit_dom_html_media_element_get_webkit_video_decoded_byte_count
 </div>
 <hr>
 <div class="refsect2">
-<a name="webkit-dom-html-media-element-get-media-group"></a><h3>webkit_dom_html_media_element_get_media_group ()</h3>
-<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
-webkit_dom_html_media_element_get_media_group
+<a name="webkit-dom-html-media-element-get-webkit-video-decoded-byte-count"></a><h3>webkit_dom_html_media_element_get_webkit_video_decoded_byte_count ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gulong"><span class="returnvalue">gulong</span></a>
+webkit_dom_html_media_element_get_webkit_video_decoded_byte_count
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
 <a name="id-1.2.87.9.47.4"></a><h4>Parameters</h4>
@@ -1927,6 +2003,114 @@ webkit_dom_html_media_element_get_media_group
 </div>
 <div class="refsect3">
 <a name="id-1.2.87.9.47.5"></a><h4>Returns</h4>
+<p> A <a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a></p>
+<p></p>
+</div>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-dom-html-media-element-get-audio-tracks"></a><h3>webkit_dom_html_media_element_get_audio_tracks ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitDOMAudioTrackList.html" title="WebKitDOMAudioTrackList"><span class="returnvalue">WebKitDOMAudioTrackList</span></a> *
+webkit_dom_html_media_element_get_audio_tracks
+                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
+<div class="refsect3">
+<a name="id-1.2.87.9.48.4"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="id-1.2.87.9.48.5"></a><h4>Returns</h4>
+<p> A <a class="link" href="WebKitDOMAudioTrackList.html" title="WebKitDOMAudioTrackList"><span class="type">WebKitDOMAudioTrackList</span></a>. </p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+</div>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-dom-html-media-element-get-text-tracks"></a><h3>webkit_dom_html_media_element_get_text_tracks ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitDOMTextTrackList.html" title="WebKitDOMTextTrackList"><span class="returnvalue">WebKitDOMTextTrackList</span></a> *
+webkit_dom_html_media_element_get_text_tracks
+                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
+<div class="refsect3">
+<a name="id-1.2.87.9.49.4"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="id-1.2.87.9.49.5"></a><h4>Returns</h4>
+<p> A <a class="link" href="WebKitDOMTextTrackList.html" title="WebKitDOMTextTrackList"><span class="type">WebKitDOMTextTrackList</span></a>. </p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+</div>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-dom-html-media-element-get-video-tracks"></a><h3>webkit_dom_html_media_element_get_video_tracks ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitDOMVideoTrackList.html" title="WebKitDOMVideoTrackList"><span class="returnvalue">WebKitDOMVideoTrackList</span></a> *
+webkit_dom_html_media_element_get_video_tracks
+                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
+<div class="refsect3">
+<a name="id-1.2.87.9.50.4"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="id-1.2.87.9.50.5"></a><h4>Returns</h4>
+<p> A <a class="link" href="WebKitDOMVideoTrackList.html" title="WebKitDOMVideoTrackList"><span class="type">WebKitDOMVideoTrackList</span></a>. </p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+</div>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-dom-html-media-element-get-media-group"></a><h3>webkit_dom_html_media_element_get_media_group ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
+webkit_dom_html_media_element_get_media_group
+                               (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
+<div class="refsect3">
+<a name="id-1.2.87.9.51.4"></a><h4>Parameters</h4>
+<div class="informaltable"><table width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="id-1.2.87.9.51.5"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p>
 <p></p>
 </div>
@@ -1939,7 +2123,7 @@ webkit_dom_html_media_element_set_media_group
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>,
                                 <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.48.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.52.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1968,7 +2152,7 @@ webkit_dom_html_media_element_set_media_group
 webkit_dom_html_media_element_get_controller
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.49.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.53.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -1983,7 +2167,7 @@ webkit_dom_html_media_element_get_controller
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.87.9.49.5"></a><h4>Returns</h4>
+<a name="id-1.2.87.9.53.5"></a><h4>Returns</h4>
 <p> A <a class="link" href="WebKitDOMMediaController.html" title="WebKitDOMMediaController"><span class="type">WebKitDOMMediaController</span></a>. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
@@ -1995,7 +2179,7 @@ webkit_dom_html_media_element_get_controller
 webkit_dom_html_media_element_get_webkit_current_playback_target_is_wireless
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLMediaElement.html" title="WebKitDOMHTMLMediaElement"><span class="type">WebKitDOMHTMLMediaElement</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.87.9.50.4"></a><h4>Parameters</h4>
+<a name="id-1.2.87.9.54.4"></a><h4>Parameters</h4>
 <div class="informaltable"><table width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -2010,7 +2194,7 @@ webkit_dom_html_media_element_get_webkit_current_playback_target_is_wireless
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.87.9.50.5"></a><h4>Returns</h4>
+<a name="id-1.2.87.9.54.5"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
 <p></p>
 </div>
@@ -2025,7 +2209,7 @@ webkit_dom_html_media_element_get_start_time
 <p>
 </p>
 <div class="refsect3">
-<a name="id-1.2.87.9.51.6"></a><h4>Returns</h4>
+<a name="id-1.2.87.9.55.6"></a><h4>Returns</h4>
 <p></p>
 </div>
 </div>
@@ -2039,7 +2223,7 @@ webkit_dom_html_media_element_get_initial_time
 <p>
 </p>
 <div class="refsect3">
-<a name="id-1.2.87.9.52.6"></a><h4>Returns</h4>
+<a name="id-1.2.87.9.56.6"></a><h4>Returns</h4>
 <p></p>
 </div>
 </div>
@@ -2055,6 +2239,13 @@ webkit_dom_html_media_element_get_initial_time
 </div>
 <div class="refsect1">
 <a name="WebKitDOMHTMLMediaElement.property-details"></a><h2>Property Details</h2>
+<div class="refsect2">
+<a name="WebKitDOMHTMLMediaElement--audio-tracks"></a><h3>The <code class="literal">“audio-tracks”</code> property</h3>
+<pre class="programlisting">  “audio-tracks”             <a class="link" href="WebKitDOMAudioTrackList.html" title="WebKitDOMAudioTrackList"><span class="type">WebKitDOMAudioTrackList</span></a> *</pre>
+<p>read-only WebKitDOMAudioTrackList* HTMLMediaElement:audio-tracks.</p>
+<p>Flags: Read</p>
+</div>
+<hr>
 <div class="refsect2">
 <a name="WebKitDOMHTMLMediaElement--autoplay"></a><h3>The <code class="literal">“autoplay”</code> property</h3>
 <pre class="programlisting">  “autoplay”                 <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
@@ -2235,6 +2426,20 @@ webkit_dom_html_media_element_get_initial_time
 </div>
 <hr>
 <div class="refsect2">
+<a name="WebKitDOMHTMLMediaElement--text-tracks"></a><h3>The <code class="literal">“text-tracks”</code> property</h3>
+<pre class="programlisting">  “text-tracks”              <a class="link" href="WebKitDOMTextTrackList.html" title="WebKitDOMTextTrackList"><span class="type">WebKitDOMTextTrackList</span></a> *</pre>
+<p>read-only WebKitDOMTextTrackList* HTMLMediaElement:text-tracks.</p>
+<p>Flags: Read</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitDOMHTMLMediaElement--video-tracks"></a><h3>The <code class="literal">“video-tracks”</code> property</h3>
+<pre class="programlisting">  “video-tracks”             <a class="link" href="WebKitDOMVideoTrackList.html" title="WebKitDOMVideoTrackList"><span class="type">WebKitDOMVideoTrackList</span></a> *</pre>
+<p>read-only WebKitDOMVideoTrackList* HTMLMediaElement:video-tracks.</p>
+<p>Flags: Read</p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="WebKitDOMHTMLMediaElement--volume"></a><h3>The <code class="literal">“volume”</code> property</h3>
 <pre class="programlisting">  “volume”                   <a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></pre>
 <p>read-write gdouble HTMLMediaElement:volume.</p>
@@ -2291,6 +2496,6 @@ webkit_dom_html_media_element_get_initial_time
 </div>
 <div class="footer">
 <hr>
-          Generated by GTK-Doc V1.20.1</div>
+          Generated by GTK-Doc V1.21.1</div>
 </body>
 </html>
