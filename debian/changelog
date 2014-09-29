@@ -1,6 +1,8 @@
-webkitgtk (2.4.6-1) UNRELEASED; urgency=medium
+webkitgtk (2.4.6-1) UNRELEASED; urgency=high
 
   * New upstream release.
+  * Urgency high because this release comes with a new set of icons that
+    fix copyright issues.
   * debian/rules:
     + Make the GTK+3 build first. Since it's the one that needs more disk
       space, it's better to do it before the GTK+2 version is built.
