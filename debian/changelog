@@ -1,4 +1,4 @@
-webkitgtk (2.4.6-1) UNRELEASED; urgency=high
+webkitgtk (2.4.6-1) unstable; urgency=high
 
   * New upstream release.
   * Urgency high because this release comes with a new set of icons that
@@ -11,7 +11,7 @@ webkitgtk (2.4.6-1) UNRELEASED; urgency=high
     debian/libwebkitgtk-3.0-0.symbols:
     + Add new symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Sat, 06 Sep 2014 21:09:39 +0300
+ -- Alberto Garcia <berto@igalia.com>  Mon, 29 Sep 2014 12:24:08 +0000
 
 webkitgtk (2.4.5-2) unstable; urgency=medium
 
