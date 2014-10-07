@@ -1,3 +1,10 @@
+webkitgtk (2.4.6-2) UNRELEASED; urgency=medium
+
+  * debian/rules:
+    + Enable JIT in armhf (Closes: #764341).
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 07 Oct 2014 23:11:30 +0300
+
 webkitgtk (2.4.6-1) unstable; urgency=high
 
   * New upstream release.

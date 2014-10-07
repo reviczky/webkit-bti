@@ -62,7 +62,7 @@ ifneq (,$(filter $(DEB_BUILD_ARCH),armel mips mipsel))
 endif
 
 # See https://bugs.webkit.org/show_bug.cgi?id=113638
-ifeq (,$(filter $(DEB_BUILD_ARCH),i386 amd64 hurd-i386 kfreebsd-i386 kfreebsd-amd64 armel mips mipsel))
+ifeq (,$(filter $(DEB_BUILD_ARCH),i386 amd64 hurd-i386 kfreebsd-i386 kfreebsd-amd64 armel armhf mips mipsel))
 	CPPFLAGS += -DENABLE_JIT=0 -DENABLE_YARR_JIT=0 -DENABLE_ASSEMBLER=0
 endif
 
