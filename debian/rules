@@ -49,6 +49,7 @@ endif
 # Disable debugging symbols on these arches.
 ifneq (,$(filter $(DEB_BUILD_ARCH),hurd-i386 ia64 kfreebsd-i386 mips mipsel powerpcspe s390 s390x sparc))
 	CFLAGS := $(CFLAGS:-g=)
+	EXTRA_DH_ARGUMENTS += -Nlibjavascriptcoregtk-1.0-0-dbg -Nlibwebkitgtk-1.0-0-dbg -Nlibjavascriptcoregtk-3.0-0-dbg -Nlibwebkitgtk-3.0-0-dbg -Nlibwebkit2gtk-3.0-25-dbg
 endif
 
 # Let's try to keep debugging symbols on these arches.
