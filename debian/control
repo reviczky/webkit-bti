@@ -73,6 +73,7 @@ Package: libjavascriptcoregtk-1.0-dev
 Section: libdevel
 Priority: extra
 Architecture: any
+Multi-Arch: same
 Conflicts: libwebkitgtk-dev (<< 1.5.0), libwebkit-dev (<< 1.5.0)
 Replaces: libwebkitgtk-dev (<< 1.5.0), libwebkit-dev (<< 1.5.0)
 Depends: libjavascriptcoregtk-1.0-0 (= ${binary:Version}),
@@ -133,8 +134,8 @@ Description: Web content engine library for GTK+
 Package: libwebkit-dev
 Section: oldlibs
 Priority: extra
-Architecture: any
-Depends: libwebkitgtk-dev (= ${binary:Version}), ${misc:Depends}
+Architecture: all
+Depends: libwebkitgtk-dev, ${misc:Depends}
 Description: Transitional package for the development files of WebKitGTK+
  This is a dummy package and can be safely removed after all
  packages start depending on the new one.
@@ -143,6 +144,7 @@ Package: libwebkitgtk-dev
 Section: libdevel
 Priority: extra
 Architecture: any
+Multi-Arch: same
 Depends: libwebkitgtk-1.0-0 (= ${binary:Version}),
          libgtk2.0-dev (>= 2.24.10),
          libsoup2.4-dev (>= 2.42),
@@ -219,6 +221,7 @@ Package: libjavascriptcoregtk-3.0-dev
 Section: libdevel
 Priority: extra
 Architecture: any
+Multi-Arch: same
 Conflicts: libwebkitgtk-3.0-dev (<< 1.5.0)
 Replaces: libwebkitgtk-3.0-dev (<< 1.5.0)
 Depends: libjavascriptcoregtk-3.0-0 (= ${binary:Version}),
@@ -270,6 +273,7 @@ Description: JavaScript engine library from WebKitGTK+ - command-line interprete
 Package: gir1.2-javascriptcoregtk-3.0
 Section: introspection
 Architecture: any
+Multi-Arch: same
 Depends: ${gir:Depends},
          ${misc:Depends}
 Conflicts: gobject-introspection-repository, gir1.0-webkit-3.0, gir1.2-webkit-3.0 (<< 1.5.0)
@@ -314,9 +318,10 @@ Package: libwebkitgtk-3.0-dev
 Section: libdevel
 Priority: extra
 Architecture: any
+Multi-Arch: same
 Depends: libwebkitgtk-3.0-0 (= ${binary:Version}),
          gir1.2-webkit-3.0 (= ${binary:Version}),
-         libwebkitgtk-common-dev (= ${binary:Version}),
+         libwebkitgtk-common-dev (= ${source:Version}),
          libgtk-3-dev,
          libsoup2.4-dev (>= 2.40),
          libjavascriptcoregtk-3.0-dev (= ${binary:Version}),
@@ -373,6 +378,7 @@ Description: Web content engine library for GTK+ - debugging symbols
 Package: gir1.2-webkit-3.0
 Section: introspection
 Architecture: any
+Multi-Arch: same
 Depends: gir1.2-javascriptcoregtk-3.0 (= ${binary:Version}),
          ${gir:Depends},
          ${misc:Depends}
@@ -425,9 +431,10 @@ Package: libwebkit2gtk-3.0-dev
 Section: libdevel
 Priority: extra
 Architecture: any
+Multi-Arch: same
 Depends: libwebkit2gtk-3.0-25 (= ${binary:Version}),
          gir1.2-webkit2-3.0 (= ${binary:Version}),
-         libwebkitgtk-common-dev (= ${binary:Version}),
+         libwebkitgtk-common-dev (= ${source:Version}),
          libgtk-3-dev,
          libsoup2.4-dev (>= 2.40),
          libjavascriptcoregtk-3.0-dev (= ${binary:Version}),
@@ -477,6 +484,7 @@ Description: WebKit2 API layer for WebKitGTK+ - debugging symbols
 Package: gir1.2-webkit2-3.0
 Section: introspection
 Architecture: any
+Multi-Arch: same
 Depends: gir1.2-javascriptcoregtk-3.0 (= ${binary:Version}),
          ${gir:Depends},
          ${misc:Depends}
@@ -501,7 +509,8 @@ Description: WebKit2 API layer for WebKitGTK+ - GObject introspection data
 Package: libwebkitgtk-common-dev
 Section: libdevel
 Priority: extra
-Architecture: any
+Architecture: all
+Multi-Arch: foreign
 Depends: ${misc:Depends}
 Breaks: libwebkitgtk-3.0-dev (<< 2.1.4-3)
 Replaces: libwebkitgtk-3.0-dev (<< 2.1.4-3)
