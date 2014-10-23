@@ -1,3 +1,73 @@
+2014-10-07  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [SOUP] TLS errors should take precedence over HTTP authentication
+        https://bugs.webkit.org/show_bug.cgi?id=137300
+
+        Reviewed by Sergio Villar Senin.
+
+        Handle TLS errors in got-headers callback to make sure it happens
+        before starting the authentication process.
+
+        * platform/network/soup/ResourceHandleSoup.cpp:
+        (WebCore::handleUnignoredTLSErrors): Refactored to receive the
+        soup message.
+        (WebCore::gotHeadersCallback): Return early and cancel the request in case of TLS errors.
+        (WebCore::sendRequestCallback): Do not handle TLS errors here, the request should have already been
+        cancelled at this point in case of TLS errors.
+
+2014-10-05  Lorenzo Tilve  <ltilve@igalia.com>
+
+        [GTK] Fix build when DRAG_SUPPORT is disabled
+        https://bugs.webkit.org/show_bug.cgi?id=137361
+
+        Reviewed by Carlos Garcia Campos.
+
+        Flag out unbuildable code without DRAG_SUPPORT.
+
+        * platform/gtk/GtkDragAndDropHelper.cpp:
+        * platform/gtk/GtkDragAndDropHelper.h:
+
+2014-10-21  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] Several labels are white instead of black
+        https://bugs.webkit.org/show_bug.cgi?id=137803
+
+        Reviewed by Martin Robinson.
+
+        Recent GTK+ versions require to explicitly set the state before
+        getting a color.
+
+        * rendering/RenderThemeGtk.cpp:
+        (WebCore::styleColor): Helper function to get a color from a
+        GtkStylecontext that explicitly sets the state before getting the color.
+        (WebCore::RenderThemeGtk::platformActiveSelectionBackgroundColor): Use styleColor().
+        (WebCore::RenderThemeGtk::platformInactiveSelectionBackgroundColor): Ditto.
+        (WebCore::RenderThemeGtk::platformActiveSelectionForegroundColor): Ditto.
+        (WebCore::RenderThemeGtk::platformInactiveSelectionForegroundColor): Ditto.
+        (WebCore::RenderThemeGtk::platformActiveListBoxSelectionBackgroundColor): Ditto.
+        (WebCore::RenderThemeGtk::platformInactiveListBoxSelectionBackgroundColor): Ditto.
+        (WebCore::RenderThemeGtk::platformActiveListBoxSelectionForegroundColor): Ditto.
+        (WebCore::RenderThemeGtk::platformInactiveListBoxSelectionForegroundColor): Ditto.
+        (WebCore::RenderThemeGtk::systemColor): Ditto.
+
+2014-10-09  Philip Chimento  <philip.chimento@gmail.com>
+
+        [GTK] Netscape plugin API symbol used outside feature guards
+        https://bugs.webkit.org/show_bug.cgi?id=137385
+
+        Reviewed by Philippe Normand.
+
+        * plugins/PluginPackage.cpp:
+        (WebCore::PluginPackage::unload): Add guards for Netscape Plugin
+        API around symbol, so that it compiles OK when the API is not
+        available.
+
+2014-09-26  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Fix make distcheck.
+
+        * GNUmakefile.list.am: Add missing header file.
+
 2014-08-25  Brendan Long  <b.long@cablelabs.com>
 
         [GStreamer] ASSERT failure in WebKitWebSource in StreamingClient
