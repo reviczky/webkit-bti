@@ -1,3 +1,9 @@
+webkitgtk (2.4.7-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 23 Oct 2014 12:08:40 +0300
+
 webkitgtk (2.4.6-2) unstable; urgency=medium
 
   * debian/rules:
