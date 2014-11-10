@@ -12,3 +12,4 @@ x32_support.patch
 fix-arm64-build.patch
 fix-mips64-build.patch
 touch-event.patch
+flash-crash.patch

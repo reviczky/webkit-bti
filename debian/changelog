@@ -2,6 +2,8 @@ webkitgtk (2.4.7-2) UNRELEASED; urgency=medium
 
   * debian/patches/touch-event.patch:
     + Fix crash in EventPath::updateTouchLists() (Closes: #761492).
+  * debian/patches/flash-crash.patch:
+    + Fix crash in the Flash player (Closes: #768929).
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 30 Oct 2014 12:31:26 +0200
 
