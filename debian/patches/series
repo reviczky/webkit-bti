@@ -16,3 +16,7 @@ flash-crash.patch
 ppc64-align.patch
 no-ssl-record-version.patch
 protect-document.patch
+render-text-control.patch
+nullptr-frameprogresstracker.patch
+nullptr-applystylecommand.patch
+nullptr-accessibilitymenulistoption.patch

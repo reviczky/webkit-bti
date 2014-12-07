@@ -1,0 +1,21 @@
+From: Joanmarie Diggs <jdiggs@igalia.com>
+Subject: Check for NULL pointers in AccessibilityMenuListOption
+Origin: http://trac.webkit.org/changeset/176389
+Index: webkitgtk/Source/WebCore/accessibility/AccessibilityMenuListOption.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/accessibility/AccessibilityMenuListOption.cpp
++++ webkitgtk/Source/WebCore/accessibility/AccessibilityMenuListOption.cpp
+@@ -104,9 +104,13 @@ bool AccessibilityMenuListOption::comput
+ LayoutRect AccessibilityMenuListOption::elementRect() const
+ {
+     AccessibilityObject* parent = parentObject();
++    if (!parent)
++        return boundingBoxRect();
+     ASSERT(parent->isMenuListPopup());
+ 
+     AccessibilityObject* grandparent = parent->parentObject();
++    if (!grandparent)
++        return boundingBoxRect();
+     ASSERT(grandparent->isMenuList());
+ 
+     return grandparent->elementRect();

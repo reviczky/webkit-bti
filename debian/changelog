@@ -7,6 +7,14 @@ webkitgtk (2.4.7-3) UNRELEASED; urgency=medium
   * debian/patches/protect-document.patch:
     + Protect Document in ProcessingInstruction::setXSLStyleSheet(). This
       is a security fix, see https://codereview.chromium.org/579133004.
+  * debian/patches/nullptr-accessibilitymenulistoption.patch:
+    + Check for NULL pointers in AccessibilityMenuListOption.
+  * debian/patches/nullptr-applystylecommand.patch:
+    + Check for NULL pointer in ApplyStyleCommand.
+  * debian/patches/nullptr-frameprogresstracker.patch:
+    + Check for NULL pointer in FrameProgressTracker.
+  * debian/patches/render-text-control.patch:
+    + Check for NULL pointer in SearchInputType.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 08 Dec 2014 12:50:52 +0100
 

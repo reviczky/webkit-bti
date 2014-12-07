@@ -1,0 +1,17 @@
+From: Jeffrey Pfau <jpfau@apple.com>
+Subject: Check for NULL pointer in FrameProgressTracker
+Origin: http://trac.webkit.org/changeset/175919
+Index: webkitgtk/Source/WebCore/loader/FrameLoader.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/loader/FrameLoader.cpp
++++ webkitgtk/Source/WebCore/loader/FrameLoader.cpp
+@@ -195,8 +195,7 @@ public:
+ 
+     ~FrameProgressTracker()
+     {
+-        ASSERT(!m_inProgress || m_frame.page());
+-        if (m_inProgress)
++        if (m_inProgress && m_frame.page())
+             m_frame.page()->progress().progressCompleted(m_frame);
+     }
+ 
