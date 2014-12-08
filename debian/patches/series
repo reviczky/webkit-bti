@@ -20,3 +20,4 @@ render-text-control.patch
 nullptr-frameprogresstracker.patch
 nullptr-applystylecommand.patch
 nullptr-accessibilitymenulistoption.patch
+ax-focus-events.patch
