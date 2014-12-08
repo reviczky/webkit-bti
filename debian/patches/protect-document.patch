@@ -1,0 +1,15 @@
+From: David Kilzer <ddkilzer@apple.com>
+Subject: Protect Document in ProcessingInstruction::setXSLStyleSheet()
+Origin: http://trac.webkit.org/changeset/176014
+Index: webkitgtk/Source/WebCore/dom/ProcessingInstruction.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/dom/ProcessingInstruction.cpp
++++ webkitgtk/Source/WebCore/dom/ProcessingInstruction.cpp
+@@ -215,6 +215,7 @@ void ProcessingInstruction::setXSLStyleS
+ {
+     ASSERT(m_isXSL);
+     m_sheet = XSLStyleSheet::create(this, href, baseURL);
++    Ref<Document> protect(document());
+     parseStyleSheet(sheet);
+ }
+ #endif

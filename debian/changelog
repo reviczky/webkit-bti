@@ -4,6 +4,9 @@ webkitgtk (2.4.7-3) UNRELEASED; urgency=medium
     + Fix crash in ppc64el (Closes: #762670).
   * debian/patches/no-ssl-record-version.patch:
     + Don't use a SSL3.0 record version in client hello.
+  * debian/patches/protect-document.patch:
+    + Protect Document in ProcessingInstruction::setXSLStyleSheet(). This
+      is a security fix, see https://codereview.chromium.org/579133004.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 08 Dec 2014 12:50:52 +0100
 
