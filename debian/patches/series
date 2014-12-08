@@ -14,3 +14,4 @@ fix-mips64-build.patch
 touch-event.patch
 flash-crash.patch
 ppc64-align.patch
+no-ssl-record-version.patch

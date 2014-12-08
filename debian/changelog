@@ -2,6 +2,8 @@ webkitgtk (2.4.7-3) UNRELEASED; urgency=medium
 
   * debian/patches/ppc64-align.patch:
     + Fix crash in ppc64el (Closes: #762670).
+  * debian/patches/no-ssl-record-version.patch:
+    + Don't use a SSL3.0 record version in client hello.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 08 Dec 2014 12:50:52 +0100
 
