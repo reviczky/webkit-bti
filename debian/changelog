@@ -1,4 +1,4 @@
-webkitgtk (2.4.7-3) UNRELEASED; urgency=medium
+webkitgtk (2.4.7-3) unstable; urgency=medium
 
   * debian/patches/ppc64-align.patch:
     + Fix crash in ppc64el (Closes: #762670).
@@ -18,7 +18,7 @@ webkitgtk (2.4.7-3) UNRELEASED; urgency=medium
   * debian/patches/ax-focus-events.patch:
     + Fix accessible focus events in non-focused combo boxes.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 08 Dec 2014 12:50:52 +0100
+ -- Alberto Garcia <berto@igalia.com>  Mon, 08 Dec 2014 13:26:23 +0100
 
 webkitgtk (2.4.7-2) unstable; urgency=medium
 
