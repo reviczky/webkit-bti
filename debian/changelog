@@ -1,6 +1,9 @@
 webkitgtk (2.4.8-1) UNRELEASED; urgency=medium
 
-  * New upstream release.
+  * New upstream release, which includes some of the patches already
+    available in Debian plus security fixes for CVE-2014-1344,
+    CVE-2014-1384, CVE-2014-1385, CVE-2014-1386, CVE-2014-1387,
+    CVE-2014-1388, CVE-2014-1389 and CVE-2014-1390.
   * debian/patches/dfg-jit.patch,
     debian/patches/enable_llint.patch,
     debian/patches/flash-crash.patch,
