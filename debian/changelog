@@ -1,6 +1,15 @@
 webkitgtk (2.4.8-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/patches/dfg-jit.patch,
+    debian/patches/enable_llint.patch,
+    debian/patches/flash-crash.patch,
+    debian/patches/local-label-string-hurd.patch,
+    debian/patches/no-ssl-record-version.patch,
+    debian/patches/nullptr-applystylecommand.patch,
+    debian/patches/protect-document.patch,
+    debian/patches/touch-event.patch:
+     + Remove.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 16 Jan 2015 13:55:07 +0200
 
