@@ -274,6 +274,8 @@ void FrameLoader::init()
     setPolicyDocumentLoader(m_client.createDocumentLoader(ResourceRequest(URL(ParsedURLString, emptyString())), SubstituteData()).get());
     setProvisionalDocumentLoader(m_policyDocumentLoader.get());
     m_provisionalDocumentLoader->startLoadingMainResource();
+
+    Ref<Frame> protect(m_frame);
     m_frame.document()->cancelParsing();
     m_stateMachine.advanceTo(FrameLoaderStateMachine::DisplayingInitialEmptyDocument);
 
@@ -1253,6 +1255,8 @@ void FrameLoader::loadURL(const URL& newURL, const String& referrer, const Strin
 {
     if (m_inStopAllLoaders)
         return;
+
+    Ref<Frame> protect(m_frame);
 
     RefPtr<FormState> formState = prpFormState;
     bool isFormSubmission = formState;

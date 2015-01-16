@@ -1,3 +1,198 @@
+2014-11-10  Csaba Osztrogonác  <ossy@webkit.org>
+
+        Crash in WebCore::Node::getFlag
+        https://bugs.webkit.org/show_bug.cgi?id=137961
+
+        Reviewed by Antti Koivisto.
+
+        * editing/ApplyStyleCommand.cpp:
+        (WebCore::ApplyStyleCommand::applyBlockStyle): Null pointer check added.
+
+2014-11-11  David Kilzer  <ddkilzer@apple.com>
+
+        Protect Document in ProcessingInstruction::setXSLStyleSheet()
+        <http://webkit.org/b/138621>
+
+        Reviewed by Andreas Kling.
+
+        The patch is inspired by the following Blink revision by
+        <tasak@google.com>:
+        <https://src.chromium.org/viewvc/blink?view=rev&revision=182309>
+
+        * dom/ProcessingInstruction.cpp:
+        (WebCore::ProcessingInstruction::setXSLStyleSheet):
+
+2014-12-08  Doron Wloschowsky  <doron_wloschowsky@scee.net>
+
+        Webkit using Harfbuzz does not display Arabic script correctly
+        https://bugs.webkit.org/show_bug.cgi?id=136337
+
+        Reviewed by Carlos Garcia Campos.
+
+        Using reinterpret_cast to convert hb_codepoint_t* into UChar*
+        doesn't work on big endian systems.
+
+        * platform/graphics/harfbuzz/HarfBuzzFaceCairo.cpp:
+        (WebCore::harfBuzzGetGlyph):
+
+2014-04-25  Miyoung Shin  <myid.shin@samsung.com>
+
+        Web process is crashed during dispatching touchEvent created by JS.
+        https://bugs.webkit.org/show_bug.cgi?id=113225
+
+        Reviewed by Benjamin Poulain.
+
+        TouchEvent created by JS should have the necessary attributes
+        of touches, targetTouches and changedTouches.
+        It should be verified weather there are touchLists before dispatching touch event.
+
+        Test: fast/events/touch/create-touch-event-without-touchList.html
+
+        * dom/EventDispatcher.cpp:
+        (WebCore::EventDispatcher::dispatchEvent):
+        (WebCore::EventPath::updateTouchLists):
+        (WebCore::addRelatedNodeResolversForTouchList): Deleted.
+
+2014-07-08  Jeffrey Pfau  <jpfau@apple.com>
+
+        Fix flaky loading tests
+        https://bugs.webkit.org/show_bug.cgi?id=133696
+
+        Reviewed by Ryosuke Niwa.
+
+        In some cases, the Frame may be destroyed while the loader is
+        initializing. Make sure we don't delete it too early.
+
+        * loader/FrameLoader.cpp:
+        (WebCore::FrameLoader::init):
+
+2014-06-11  Jeffrey Pfau  <jpfau@apple.com>
+
+        Fix flaky beforeload tests
+        https://bugs.webkit.org/show_bug.cgi?id=133685
+
+        Reviewed by David Kilzer.
+
+        * loader/FrameLoader.cpp:
+        (WebCore::FrameLoader::loadURL):
+
+2014-06-16  Chris Fleizach  <cfleizach@apple.com>
+
+        AX: Safari crashed once in WebCore::AccessibilityObject::ariaIsHidden
+        https://bugs.webkit.org/show_bug.cgi?id=133825
+
+        Reviewed by Enrica Casucci.
+
+        Sometimes asking accessibilityIsIgnored() will cause a newObject to be detached immediately after its created. 
+        The creation function holds a reference with RefPtr as long as it lives, but when that method returns, the object goes away.
+
+        With that out of the way, I saw the same backtrace lead to updateLayoutIgnorePendingStylesheets being called while still inLayout.
+
+        I tried my best but could not create a reproducible layout test.
+
+        * accessibility/AXObjectCache.cpp:
+        (WebCore::AXObjectCache::getOrCreate):
+        * accessibility/AccessibilityObject.cpp:
+        (WebCore::AccessibilityObject::updateBackingStore):
+
+2014-06-16  Chris Fleizach  <cfleizach@apple.com>
+
+        AX: Crash at WebCore::AXObjectCache::textChanged
+        https://bugs.webkit.org/show_bug.cgi?id=133873
+
+        Reviewed by Enrica Casucci.
+
+        This looks like a very similar problem to 
+        https://bugs.webkit.org/show_bug.cgi?id=133825
+
+        The object is being created and deallocated almost right away because calling accessibilityIsIgnored triggers
+        a deferred layout that invalidates the associated render element.
+
+        Despite my best efforts, I could not come up with a way to reproduce this in a layout test.
+
+        * accessibility/AXObjectCache.cpp:
+        (WebCore::AXObjectCache::getOrCreate):
+
+2014-06-09  Alexey Proskuryakov  <ap@apple.com>
+
+        Properly reset UStringSearch object in SearchBuffer constructor.
+        https://bugs.webkit.org/show_bug.cgi?id=133662
+        <rdar://problem/17240136>
+
+        Reviewed by Tim Horton.
+
+        * editing/TextIterator.cpp: (WebCore::SearchBuffer::~SearchBuffer):
+
+2014-05-28  Jon Honeycutt  <jhoneycutt@apple.com>
+
+        Roll r168668 back in.
+
+        <https://bugs.webkit.org/show_bug.cgi?id=132621>
+
+        Reviewed by Brent Fulgham.
+
+        Tests: fast/events/beforeload-assertion.html
+               fast/events/beforeload-iframe-crash.html
+               fast/events/beforeload-input-time-crash.html
+
+        * WebCore.exp.in:
+        * dom/Document.cpp:
+        (WebCore::Document::updateLayoutIgnorePendingStylesheets):
+        * dom/Document.h:
+        * html/HTMLAppletElement.cpp:
+        (WebCore::HTMLAppletElement::renderWidgetForJSBindings):
+        * html/HTMLEmbedElement.cpp:
+        (WebCore::HTMLEmbedElement::renderWidgetForJSBindings):
+        * html/HTMLObjectElement.cpp:
+        (WebCore::HTMLObjectElement::renderWidgetForJSBindings):
+        * page/FrameView.cpp:
+        (WebCore::FrameView::FrameView):
+        (WebCore::FrameView::reset):
+        (WebCore::FrameView::updateEmbeddedObjectsTimerFired):
+        (WebCore::FrameView::flushAnyPendingPostLayoutTasks):
+        (WebCore::FrameView::performPostLayoutTasks):
+        * page/FrameView.h:
+        * testing/Internals.cpp:
+        (WebCore::Internals::updateLayoutIgnorePendingStylesheetsAndRunPostLayoutTasks):
+        * testing/Internals.h:
+        * testing/Internals.idl:
+
+2014-10-06  Philip Chimento  <philip.chimento@gmail.com>
+
+        webkit-gtk 2.3.3 fails on darwin/quartz due to duplicate symbols in WebCore
+        https://bugs.webkit.org/show_bug.cgi?id=126821
+
+        Reviewed by Carlos Garcia Campos.
+
+        * plugins/PluginPackageNone.cpp: Remove PluginPackage::determineQuirks()
+        from PluginPackageNone.cpp as it also shows up as a duplicate symbol.
+
+2014-10-06  Philip Chimento  <philip.chimento@gmail.com>
+
+        webkit-gtk 2.3.3 fails on darwin/quartz due to duplicate symbols in WebCore
+        https://bugs.webkit.org/show_bug.cgi?id=126821
+
+        Reviewed by Carlos Garcia Campos.
+
+        * GNUmakefile.list.am: Add WidgetBackingStoreCairo to platformgtk_sources
+        for the Quartz build target, otherwise WebKitGTK aborts with an undefined
+        symbol at runtime.
+
+2015-01-05  Zan Dobersek  <zdobersek@igalia.com>
+
+        webkit-gtk 2.3.3 fails on darwin/quartz due to duplicate symbols in WebCore
+        https://bugs.webkit.org/show_bug.cgi?id=126821
+
+        Reviewed by Carlos Garcia Campos.
+
+        * GNUmakefile.list.am: Simplify the logic for determining build
+        targets that are specific to windowing targets. Avoid nested target
+        checks and list all the additional build targets for each windowing
+        target - X11, Wayland, X11 and Wayland (i.e. the build targets that
+        are shared between the two configurations), Win32 and Quartz. This
+        avoids the current problems of building duplicate build targets on
+        Quartz, and also cleans up the list.
+
 2014-10-07  Carlos Garcia Campos  <cgarcia@igalia.com>
 
         [SOUP] TLS errors should take precedence over HTTP authentication
