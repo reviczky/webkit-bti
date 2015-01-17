@@ -1,4 +1,4 @@
-webkitgtk (2.4.8-1) UNRELEASED; urgency=medium
+webkitgtk (2.4.8-1) unstable; urgency=medium
 
   * New upstream release, which includes some of the patches already
     available in Debian plus security fixes for CVE-2014-1344,
@@ -16,7 +16,7 @@ webkitgtk (2.4.8-1) UNRELEASED; urgency=medium
   * debian/patches/fix-ftbfs-pluginpackage.patch:
     + Fix FTBFS.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 16 Jan 2015 13:55:07 +0200
+ -- Alberto Garcia <berto@igalia.com>  Sat, 17 Jan 2015 14:19:43 +0200
 
 webkitgtk (2.4.7-3) unstable; urgency=medium
 
