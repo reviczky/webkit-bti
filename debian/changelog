@@ -13,6 +13,8 @@ webkitgtk (2.4.8-1) UNRELEASED; urgency=medium
     debian/patches/protect-document.patch,
     debian/patches/touch-event.patch:
      + Remove.
+  * debian/patches/fix-ftbfs-pluginpackage.patch:
+    + Fix FTBFS.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 16 Jan 2015 13:55:07 +0200
 
