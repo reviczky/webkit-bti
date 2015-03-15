@@ -1,0 +1,28 @@
+From: Milan Crha <mcrha@redhat.com>
+Subject: Fix use-after-free warning when loading page into WebView
+Bug: https://bugs.webkit.org/show_bug.cgi?id=127474
+Bug-Debian: http://bugs.debian.org/780444
+Origin: http://trac.webkit.org/changeset/180141
+Index: webkitgtk/Source/WebCore/bindings/gobject/GObjectEventListener.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/bindings/gobject/GObjectEventListener.cpp
++++ webkitgtk/Source/WebCore/bindings/gobject/GObjectEventListener.cpp
+@@ -52,12 +52,13 @@ void GObjectEventListener::gobjectDestro
+ {
+     ASSERT(m_coreTarget);
+ 
+-    // We must set m_coreTarget to null, because removeEventListener
+-    // may call the destructor as a side effect and we must be in the
+-    // proper state to prevent g_object_weak_unref.
+-    EventTarget* target = m_coreTarget;
++    // Protect 'this' class in case the 'm_coreTarget' holds the last reference,
++    // which may cause, inside removeEventListener(), free of this object
++    // and later use-after-free with the m_handler = 0; assignment.
++    RefPtr<GObjectEventListener> protect(this);
++
++    m_coreTarget->removeEventListener(m_domEventName.data(), this, m_capture);
+     m_coreTarget = 0;
+-    target->removeEventListener(m_domEventName.data(), this, m_capture);
+     m_handler = 0;
+ }
+ 

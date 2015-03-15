@@ -14,3 +14,4 @@ nullptr-frameprogresstracker.patch
 nullptr-accessibilitymenulistoption.patch
 ax-focus-events.patch
 fix-ftbfs-pluginpackage.patch
+g-closure-unref.diff
