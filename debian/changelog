@@ -3,6 +3,8 @@ webkitgtk (2.4.8-2) UNRELEASED; urgency=medium
   * debian/patches/g-closure-unref.diff:
     + Fix use-after-free warning when loading page into WebView
      (Closes: #780444).
+  * debian/patches/fix-cloop.patch:
+    + Fix crash on powerpc (Closes: #771841).
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 15 Mar 2015 20:21:16 +0200
 
