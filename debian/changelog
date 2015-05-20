@@ -10,12 +10,12 @@ webkitgtk (2.4.9-1) UNRELEASED; urgency=medium
     debian/patches/nullptr-accessibilitymenulistoption.patch,
     debian/patches/nullptr-frameprogresstracker.patch,
     debian/patches/render-text-control.patch:
-     + Remove.
+    + Remove.
   * debian/patches/02_notebook_scroll.patch,
     debian/patches/fix-arm64-build.patch,
     debian/patches/restore_sparc_code.patch,
     debian/patches/x32_support.patch:
-     + Refresh.
+    + Refresh.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 20 May 2015 14:30:46 +0300
 
