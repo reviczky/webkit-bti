@@ -1,3 +1,77 @@
+2015-05-20  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Update NEWS and Versions.m4 for 2.4.9 release.
+
+        * Source/autotools/Versions.m4: Bump version numbers.
+
+2015-04-17  Milan Crha  <mcrha@redhat.com>
+
+        [GTK] Expand wildcards inside generate-inspector-gresource-manifest.py
+        https://bugs.webkit.org/show_bug.cgi?id=138134
+
+        Reviewed by Carlos Garcia Campos.
+
+        * GNUmakefile.am: Command line with expanded resources exceeds 32KB, which
+        is a limit on Windows. It's better to expand wildcards inside the
+        python script.
+
+2015-04-15  Руслан Ижбулатов  <lrn1986@gmail.com>
+
+        [W32] Wrong configure tests for OpenGL on Windows, wrong ifdefs
+        https://bugs.webkit.org/show_bug.cgi?id=143763
+
+        Reviewed by Carlos Garcia Campos.
+
+        Change OpenGL checks to work on W32, add libopengl32
+
+        AGain, use OS(WINDOWS) for things that are W32 but not necessarily MSVC.
+        Don't try to check for dlopen() on W32 (it might be available, but
+        native code is already here, so use it).
+
+        Correctly cast the result of GetProcAddress(), because C++.
+
+        Link W32 version to -lOpenGL32 instead of -lGL, otherwise libtool complains:
+        *** Warning: linker path does not have real file for library -lGL.
+
+        * Source/autotools/FindDependencies.m4:
+
+2015-04-15  Руслан Ижбулатов  <lrn1986@gmail.com>
+
+        [W32] Configure may misdetect ICU libraries
+        https://bugs.webkit.org/show_bug.cgi?id=143767
+
+        Reviewed by Carlos Garcia Campos.
+
+        Try to use pkg-config to detect ICU libraries.
+
+        MinGW packages tend to have .pc files these days. Use them.
+
+        ICU naming and structure is complex enough to warrant this, and
+        asking pkg-config might result in things like
+        UNICODE_LIBS="-licui18n54 -licuuc54 -licudata54"
+        instead of the default
+        UNICODE_LIBS="-licui18n -licuuc"
+        and pkg-config usually knows best.
+
+        * Source/autotools/FindDependencies.m4:
+
+2015-04-07  Philip Chimento  <philip.chimento@gmail.com>
+
+        configure check for clang version is incorrect
+        https://bugs.webkit.org/show_bug.cgi?id=126324
+
+        Reviewed by Carlos Garcia Campos.
+
+        * Source/autotools/CheckSystemAndBasicDependencies.m4:
+        Change compiler version checks of Clang and GCC so that they
+        handle major/minor versions correctly.
+
+2015-01-07  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Update NEWS and Versions.m4 for 2.4.8 release.
+
+        * Source/autotools/Versions.m4: Bump version numbers.
+
 2014-10-22  Carlos Garcia Campos  <cgarcia@igalia.com>
 
         Unreviewed. Update NEWS and Versions.m4 for 2.4.7 release.

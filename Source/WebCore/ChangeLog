@@ -1,3 +1,898 @@
+2015-04-15  Руслан Ижбулатов  <lrn1986@gmail.com>
+
+        WebCore uses M_PI_2 instead of piOverTwoDouble
+        https://bugs.webkit.org/show_bug.cgi?id=143758
+
+        Reviewed by Darin Adler.
+
+        Because M_PI_2 is not defined everywhere.
+        Fixes errors like:
+          CXX Source/WebCore/platform/graphics/freetype/libPlatformGtk_la-FontPlatformDataFreeType.lo
+        ../webkitgtk-2.4.8/Source/WebCore/platform/graphics/freetype/FontPlatformDataFreeType.cpp: In function 'void WebCore::rotateCairoMatrixForVerticalOrientation(cairo_matrix_t*)':
+        ../webkitgtk-2.4.8/Source/WebCore/platform/graphics/freetype/FontPlatformDataFreeType.cpp:123:34: error: 'M_PI_2' was not declared in this scope
+             cairo_matrix_rotate(matrix, -M_PI_2);
+                                          ^
+        GNUmakefile:51663: recipe for target 'Source/WebCore/platform/graphics/freetype/libPlatformGtk_la-FontPlatformDataFreeType.lo' failed
+
+        * platform/graphics/freetype/FontPlatformDataFreeType.cpp:
+        (WebCore::rotateCairoMatrixForVerticalOrientation):
+2015-04-15  Руслан Ижбулатов  <lrn1986@gmail.com>
+
+        [GTK][W32] FileSystemGtk calls GetModuleHandleExA(), but does not include appropriate header
+        https://bugs.webkit.org/show_bug.cgi?id=143759
+
+        Reviewed by Darin Adler.
+
+        Add missing includes to FileSystemGtk
+
+        Needed for GetModuleHandleExA() & Co.
+
+        * platform/gtk/FileSystemGtk.cpp:
+
+2015-04-15  Руслан Ижбулатов  <lrn1986@gmail.com>
+
+        [W32] Compile-time assertion failure: RenderBlock_should_stay_small
+        https://bugs.webkit.org/show_bug.cgi?id=143760
+
+        Reviewed by Carlos Garcia Campos.
+
+        Move enum LineLayoutPath in RenderBlock
+
+        This removes the bitfield interruption, allowing more efficient
+        packing.
+        Otherwise compile-time assertion fails:
+        In file included from ../webkitgtk-2.4.8/Source/WTF/wtf/PossiblyNull.h:29:0,
+                         from ../webkitgtk-2.4.8/Source/WTF/wtf/FastMalloc.h:27,
+                         from ../webkitgtk-2.4.8/Source/WebCore/config.h:74,
+                         from ../webkitgtk-2.4.8/Source/WebCore/rendering/RenderBlock.cpp:24:
+        ../webkitgtk-2.4.8/Source/WTF/wtf/Assertions.h:326:35: error: static assertion failed: RenderBlock_should_stay_small
+        #define COMPILE_ASSERT(exp, name) static_assert((exp), #name)
+                                          ^
+        ../webkitgtk-2.4.8/Source/WebCore/rendering/RenderBlock.cpp:88:1: note: in expansion of macro 'COMPILE_ASSERT'
+        COMPILE_ASSERT(sizeof(RenderBlock) == sizeof(SameSizeAsRenderBlock), RenderBlock_should_stay_small);
+        ^
+
+2015-04-15  Руслан Ижбулатов  <lrn1986@gmail.com>
+
+        [W32] GraphicsContextCairoWin.cpp fails to compile: unallowed function template partial specialization
+        https://bugs.webkit.org/show_bug.cgi?id=143761
+
+        Reviewed by Darin Adler.
+
+        Fix deleteObject prototypte, fix header case
+
+        Apparently, <T> is unneeded here:
+
+        In file included from ../webkitgtk-2.4.8/Source/WebCore/platform/graphics/win/GraphicsContextCairoWin.cpp:35:0:
+        ../webkitgtk-2.4.8/Source/WTF/wtf/win/GdiObject.h:114:58: error: function template partial specialization 'deleteObject<T>' is not allowed
+        template<typename T> inline void deleteObject<T>(T object)
+                                                                 ^
+        As a bonus, change GdiObject.h -> GDIObject.h (this matters when
+        cross-compiling or when using case-sensitive filesystems on W32).
+
+2015-04-15  Руслан Ижбулатов  <lrn1986@gmail.com>
+
+        [W32][GTK] Conflict between NO_ERROR from W32API and GraphicsContext3D
+        https://bugs.webkit.org/show_bug.cgi?id=143768
+
+        Reviewed by Carlos Garcia Campos.
+
+        Work around name conflicts (NO_ERROR)
+
+        In file included from /mingw/include/_mingw.h:12:0,
+                         from ../webkitgtk-2.4.8/Source/WTF/wtf/Compiler.h:93,
+                         from ../webkitgtk-2.4.8/Source/WTF/wtf/Platform.h:32,
+                         from ../webkitgtk-2.4.8/Source/JavaScriptCore/config.h:30,
+                         from ../webkitgtk-2.4.8/Source/WebCore/platform/graphics/opengl/Extensions3DOpenGLCommon.cpp:27:
+        ../webkitgtk-2.4.8/Source/WebCore/platform/graphics/opengl/Extensions3DOpenGLCommon.cpp: In member function 'virtual int WebCore::Extensions3DOpenGLCommon::getGraphicsResetStatusARB()':
+        ../webkitgtk-2.4.8/Source/WebCore/platform/graphics/opengl/Extensions3DOpenGLCommon.cpp:144:31: error: expected unqualified-id before numeric constant
+             return GraphicsContext3D::NO_ERROR;
+
+        because NO_ERROR is also a macro defined in Windows headers. Ouch.
+        Also expand this to the (PLATFORM(GTK) && OS(WINDOWS)) combination,
+        in addition to the workaround for VERSION already present there.
+
+2015-04-15  Руслан Ижбулатов  <lrn1986@gmail.com>
+
+        [W32] Fails to build - missing references to OpenGL context functions
+        https://bugs.webkit.org/show_bug.cgi?id=143769
+
+        Reviewed by Carlos Garcia Campos.
+
+        Also use GL-related files when compiling with MinGW
+        CXXLD    libwebkitgtk-3.0.la
+        ./.libs/../source/webcore/platform/graphics/.libs/libplatform_la-graphicscontext3dprivate.o: In function `GraphicsContext3DPrivate':
+        /src/mingw/webkitgtk-2.4.8-1\bld/../webkitgtk-2.4.8/Source/WebCore/platform/graphics/GraphicsContext3DPrivate.cpp:59: undefined reference to `__ZN7WebCore9GLContext14sharingContextEv'
+        /src/mingw/webkitgtk-2.4.8-1\bld/../webkitgtk-2.4.8/Source/WebCore/platform/graphics/GraphicsContext3DPrivate.cpp:59: undefined reference to `__ZN7WebCore9GLContext22createOffscreenContextEPS0_'
+        ./.libs/../source/webcore/platform/graphics/.libs/libplatform_la-graphicscontext3dprivate.o: In function `platformContext':
+        /src/mingw/webkitgtk-2.4.8-1\bld/../webkitgtk-2.4.8/Source/WebCore/platform/graphics/GraphicsContext3DPrivate.cpp:84: undefined reference to `__ZN7WebCore9GLContext10getCurrentEv'
+
+        Becuase GLContext.cpp is not used, which happens because it's
+        under TARGET_X11_OR_WAYLAND condition in the GNUmakefile.list.am.
+        Move TARGET_X11_OR_WAYLAND up a bit to free up GLContext.cpp (now
+        only protected by USE_OPENGL).
+
+        * GNUmakefile.list.am:
+
+2015-04-15  Руслан Ижбулатов  <lrn1986@gmail.com>
+
+        [W32] Wrong configure tests for OpenGL on Windows, wrong ifdefs
+        https://bugs.webkit.org/show_bug.cgi?id=143763
+
+        Reviewed by Carlos Garcia Campos.
+
+        Change OpenGL checks to work on W32, add libopengl32
+
+        AGain, use OS(WINDOWS) for things that are W32 but not necessarily MSVC.
+        Don't try to check for dlopen() on W32 (it might be available, but
+        native code is already here, so use it).
+
+        Correctly cast the result of GetProcAddress(), because C++.
+
+        Link W32 version to -lOpenGL32 instead of -lGL, otherwise libtool complains:
+        *** Warning: linker path does not have real file for library -lGL.
+
+        * platform/graphics/OpenGLShims.cpp:
+        (WebCore::getProcAddress):
+
+2015-04-15  Руслан Ижбулатов  <lrn1986@gmail.com>
+
+        [W32] windowsVersion() and osVersionForUAString() are outdated
+        https://bugs.webkit.org/show_bug.cgi?id=143771
+
+        Reviewed by Darin Adler
+
+        Update windowsVersion() and osVersionForUAString()
+
+        Add support for newer Windows versions to windowsVersion(), handle
+        all defined cases in osVersionForUAString(), avoiding warnings like
+        ../webkitgtk-2.4.8/Source/WebCore/platform/win/SystemInfo.cpp: In function 'WTF::String WebCore::osVersionForUAString()':
+        ../webkitgtk-2.4.8/Source/WebCore/platform/win/SystemInfo.cpp:94:12: warning: enumeration value 'WindowsCE5' not handled in switch [-Wswitch]
+        repeated for each unhandled value
+
+        * platform/win/SystemInfo.cpp:
+        (WebCore::windowsVersion):
+        (WebCore::osVersionForUAString):
+        * platform/win/SystemInfo.h:
+
+2015-04-17  Milan Crha  <mcrha@redhat.com>
+
+        [GTK] Replace M_SQRT2 with sqrtOfTwoDouble
+        https://bugs.webkit.org/show_bug.cgi?id=143906
+
+        Reviewed by Carlos Garcia Campos.
+
+        * rendering/mathml/RenderMathMLMenclose.cpp:
+        (WebCore::RenderMathMLMenclose::computePreferredLogicalWidths):
+        (WebCore::RenderMathMLMenclose::updateLogicalHeight):
+
+2015-04-17  Milan Crha  <mcrha@redhat.com>
+
+        [GTK] Make preprocessor.pm / make_names.pl work under msys/mingw
+        https://bugs.webkit.org/show_bug.cgi?id=143908
+
+        Reviewed by Carlos Garcia Campos.
+
+        * bindings/scripts/preprocessor.pm:
+        (applyPreprocessor):
+        * dom/make_names.pl:
+
+2014-05-29  Owen Taylor  <otaylor@redhat.com>
+
+        [GTK] Add HighDPI support for non-accelerated compositing contents
+        https://bugs.webkit.org/show_bug.cgi?id=131562
+
+        Reviewed by Anders Carlsson.
+
+        No new tests. This will be tested once we have the proper dependencies in the WebKit testing
+        JHBuild.
+
+        Adapted by Michael Kuhn for 2.4 branch.
+
+        * platform/cairo/WidgetBackingStore.h:
+        (WebCore::WidgetBackingStore::WidgetBackingStore): Accept a device scale argument.
+        * platform/cairo/WidgetBackingStoreCairo.cpp: Use the device scale argument to make the surface the proper size and set the surface device scale.
+        * platform/cairo/WidgetBackingStoreCairo.h: Accept a device scale argument.
+        * platform/graphics/cairo/CairoUtilities.cpp: Add a new helper to set the device scale if Cairo built against is new enough.
+        * platform/graphics/cairo/CairoUtilities.h:
+        * platform/gtk/GtkVersioning.h: Add the HAVE_GTK_SCALE_FACTOR macro.
+        * platform/gtk/WidgetBackingStoreGtkX11.cpp: Use the device scale argument to make the surface the proper size and set the surface device scale.
+        * platform/gtk/WidgetBackingStoreGtkX11.h: Accept a device scale argument.
+
+2015-05-03  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] API tests crashing on debug builds due to extra unref
+        https://bugs.webkit.org/show_bug.cgi?id=144508
+
+        Reviewed by Mario Sanchez Prada.
+
+        The problem is that we were assuming that when a new DOMWindow is
+        created, the DOM object cache was notified about the previous
+        DOMWindow being destroyed before objects for the new DOMWindow are
+        added to the cache. However, that's not always the case and we
+        only create a DOMWindowObserver for the first DOMWindow. We need
+        to keep a pointer to the DOMWindow being observed to clear() the
+        cache and create a new DOMWindowObserver when it changes in the
+        Frame.
+
+        Fixes crashes in several unit tests in debug builds.
+
+        * bindings/gobject/DOMObjectCache.cpp:
+
+2015-03-20  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] Crash due to empty drag image during drag-and-drop
+        https://bugs.webkit.org/show_bug.cgi?id=142671
+
+        Reviewed by Philippe Normand.
+
+        Return early from ImageBuffer constructor if an empty size is
+        given. This is a speculative fix for a crash while starting a drag
+        and drop operation, that I haven't been able to reproduce.
+
+        * platform/graphics/cairo/ImageBufferCairo.cpp:
+        (WebCore::ImageBuffer::ImageBuffer):
+
+2015-03-05  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [SOUP] Check TLS errors as soon as they are set in the SoupMessage
+        https://bugs.webkit.org/show_bug.cgi?id=142244
+
+        Reviewed by Sergio Villar Senin.
+
+        Connect to the notify::tls-errors signal of SoupMessage to cancel
+        the load earlier in case of TLS failure, preventing any private
+        data from being sent to the server before the TLS errors are checked.
+
+        * platform/network/soup/ResourceHandleSoup.cpp:
+        (WebCore::tlsErrorsChangedCallback):
+        (WebCore::gotHeadersCallback):
+        (WebCore::createSoupMessageForHandleAndRequest):
+
+2015-03-03  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [SOUP] Synchronous XMLHttpRequests can time out when we reach the max connections limit
+        https://bugs.webkit.org/show_bug.cgi?id=141508
+
+        Reviewed by Sergio Villar Senin.
+
+        Use SOUP_MESSAGE_IGNORE_CONNECTION_LIMITS flag when loading a
+        synchronous message instead of increasing the maximum number of
+        connections allowed if the soup version is recent enough.
+        The current solution of increasing/decreasing the limits doesn't
+        always work, because connections are not marked as IDLE in libsoup
+        until the message is unqueued, but we don't wait for the message
+        to be unqueued to finish our loads in WebKit, we finish them as
+        soon as we have finished reading the stream. This causes that
+        synchronous loads keep blocked in the nested main loop until the
+        timeout of 10 seconds is fired and the load fails.
+        Also marked WebCoreSynchronousLoader class as final, the virtual
+        methods as override and removed the unsused method isSynchronousClient.
+
+        * platform/network/soup/ResourceHandleSoup.cpp:
+        (WebCore::createSoupMessageForHandleAndRequest):
+        (WebCore::WebCoreSynchronousLoader::WebCoreSynchronousLoader):
+        (WebCore::WebCoreSynchronousLoader::isSynchronousClient): Deleted.
+        (WebCore::WebCoreSynchronousLoader::didReceiveResponse):
+        (WebCore::WebCoreSynchronousLoader::didReceiveData):
+        (WebCore::WebCoreSynchronousLoader::didReceiveBuffer):
+        (WebCore::WebCoreSynchronousLoader::didFinishLoading):
+        (WebCore::WebCoreSynchronousLoader::didFail):
+        (WebCore::WebCoreSynchronousLoader::didReceiveAuthenticationChallenge):
+        (WebCore::WebCoreSynchronousLoader::shouldUseCredentialStorage):
+
+2015-03-19  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] Scrollbars look bad with GTK+ 3.16
+        https://bugs.webkit.org/show_bug.cgi?id=140800
+
+        Reviewed by Sergio Villar Senin.
+
+        Take margin into account when rendering scrollbars. This fixes the
+        huge scrollbars rendered with GTK+ 3.16. We don't need to check
+        the GTK+ version because in previous versions the marging were 0,
+        so the same code just works.
+
+        * platform/gtk/ScrollbarThemeGtk.cpp:
+        (WebCore::adjustRectAccordingToMargin):
+        (WebCore::ScrollbarThemeGtk::paintTrackBackground):
+        (WebCore::ScrollbarThemeGtk::paintThumb):
+
+2014-12-07  Youenn Fablet  <youenn.fablet@crf.canon.fr>
+
+        [Soup][Curl] HTTP header values should be treated as latin1, not UTF-8
+        https://bugs.webkit.org/show_bug.cgi?id=128739
+
+        Reviewed by Martin Robinson.
+
+        Removed UTF-8 conversion of HTTP header values (SOUP and CURL).
+        Removed unnecessary UTF-8 conversion of HTTP header names (SOUP).
+        Changed conversion of HTTP method from UTF-8 to ASCII (SOUP and CURL).
+        Added explicit UTF-8 conversion of Content-Disposition header to compute download suggested filename. 
+
+        Test: http/tests/xmlhttprequest/response-special-characters.html
+
+        * platform/network/curl/CurlDownload.cpp:
+        (WebCore::CurlDownload::headerCallback): Removed header conversion.
+        * platform/network/curl/ResourceHandleManager.cpp:
+        (WebCore::headerCallback): Ditto.
+        (WebCore::ResourceHandleManager::initializeHandle): Changed HTTP method conversion to ASCI.
+        * platform/network/soup/ResourceRequestSoup.cpp:
+        (WebCore::ResourceRequest::updateFromSoupMessageHeaders): Removed header conversion.
+        (WebCore::ResourceRequest::updateSoupMessage): Changed HTTP method conversion to ASCII.
+        (WebCore::ResourceRequest::toSoupMessage): Ditto.
+        (WebCore::ResourceRequest::updateFromSoupMessage):
+        * platform/network/soup/ResourceResponseSoup.cpp:
+        (WebCore::ResourceResponse::updateFromSoupMessageHeaders): Rmoved header conversion.
+        (WebCore::ResourceResponse::platformSuggestedFilename): Added explicit conversion of contentDisposition to UTF-8.
+
+2014-12-04  Oliver Hunt  <oliver@apple.com>
+
+        Serialization of MapData object provides unsafe access to internal types
+        https://bugs.webkit.org/show_bug.cgi?id=138653
+
+        Reviewed by Geoffrey Garen.
+
+        We now keep the value portion of the key/value pair in MapData as a
+        separate stack. This allows us to maintain the spec semantic of
+        "atomic" serialisation of the key/value pair without retaining the
+        use of a potentially invalid iterator.
+
+        * bindings/js/SerializedScriptValue.cpp:
+        (WebCore::CloneSerializer::serialize):
+
+2014-10-29  Said Abou-Hallawa  <sabouhallawa@apple.com>
+
+        ASSERTION NOT REACHED because RenderStyle::setWordSpacing() does not handle a Length value of type 'Calculated'.
+        https://bugs.webkit.org/show_bug.cgi?id=138054.
+
+        Reviewed by Zalan Bujtas.
+
+        A Length of type 'Calculated' can be generated from blending two lengths of
+        different types. Setting the wordSpacing of the render style should be handled
+        correctly when the type of the new value is 'Calculated'.
+
+        Tests: css3/calculated-word-spacing.html.
+
+        Add a case for setting the render style wordSpacing to a <length> of type 'Calculated'.
+        * rendering/style/RenderStyle.cpp:
+        (WebCore::RenderStyle::setWordSpacing):
+
+2014-10-24  Said Abou-Hallawa  <sabouhallawa@apple.com>
+
+        Clamp wordSpacing percentage value.
+        https://bugs.webkit.org/show_bug.cgi?id=129350.
+
+        Reviewed by Zalan Bujtas.
+
+        When the CSS wordSpacing property is percentage, its value has to be within the
+        pre-defined min/max values for the CSS length type. This is done the same way
+        the wordSpacing of type <length> is handled.
+
+        Tests: css3/infinite-word-spacing.html.
+
+        Move the definitions of minValueForCssLength and maxValueForCssLength from the
+        .cpp file to the .h file.
+        * css/CSSPrimitiveValue.cpp:
+        * css/CSSPrimitiveValue.h:
+
+        Clamp the wordSpacing value to minValueForCssLength and maxValueForCssLength when
+        its type is percentage.
+        * css/DeprecatedStyleBuilder.cpp:
+        (WebCore::ApplyPropertyWordSpacing::applyValue):
+
+2014-10-24  Zalan Bujtas  <zalan@apple.com>
+
+        Replace INT_MIN/MAX / kFixedPointDenominator with intMin/MaxForLayoutUnit.
+        https://bugs.webkit.org/show_bug.cgi?id=138047
+
+        Reviewed by Andreas Kling.
+
+        No change in functionality.
+
+        * css/CSSPrimitiveValue.cpp:
+
+2014-10-29  Zalan Bujtas  <zalan@apple.com>
+
+        Remove invalid float from RootInlineBox.
+        https://bugs.webkit.org/show_bug.cgi?id=137707
+
+        Reviewed by Antti Koivisto.
+
+        In certain cases, floating boxes get attached to the last (root) inline box.
+        When this particular floating box gets destroyed, it also needs to be detached
+        from the last inline box.
+        1. Introduce RootInlineBox::removeFloat() (vs. RootInlineBox::appendFloat())
+        2. Ensure that it is called when the floating box is being destroyed.
+
+        Test: fast/inline/crash-when-inline-box-has-invalid-float.html
+
+        * rendering/RenderBlockFlow.cpp:
+        (WebCore::RenderBlockFlow::removeFloatingObject):
+        (WebCore::RenderBlockFlow::markAllDescendantsWithFloatsForLayout): During style recalc, while
+        tearing down the render tree, we can get to a state where a block element has both inline and block children.
+        It happens when the style change on an element makes sibling anonymous block wrappers detached.
+        In that case the markAllDescendantsWithFloatsForLayout() call does not get propagated down on the
+        block child elements as we return early at the childrenInline() check.
+        * rendering/RootInlineBox.h:
+        (WebCore::RootInlineBox::removeFloat):
+
+2014-10-22  Said Abou-Hallawa  <sabouhallawa@apple.com>
+
+        SVG loaded through html <img> can't request to load any external resources.
+        https://bugs.webkit.org/show_bug.cgi?id=137762.
+
+        Reviewed by Daniel Bates.
+
+        SVG images have unique security rules that prevent them from loading any external
+        resources. This patch enforces these rules in CachedResourceLoader::canRequest for
+        all non-data-uri resources.
+
+        The fix and the tests are ported but modified a little from the chromium fix:
+        http://src.chromium.org/viewvc/blink?view=rev&rev=176084
+
+        Test: http/tests/security/svg-image-with-cached-remote-image.html
+              http/tests/security/svg-image-with-css-cross-domain.html
+
+        For the SVG image, prevent loading any external sub-resource except for data urls.
+        * loader/cache/CachedResourceLoader.cpp:
+        (WebCore::CachedResourceLoader::canRequest):
+
+2015-04-08  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] Crash in DOMObjectCache when a wrapped object owned by the cache is unreffed by the user
+        https://bugs.webkit.org/show_bug.cgi?id=143521
+
+        Reviewed by Martin Robinson.
+
+        This is a case we claim to support, but it only works if the
+        object has only one reference. In that case, when the user unrefs
+        it, the weak ref notify callback removes the object from the
+        cache. However, if the object has more than one ref, the cache
+        doesn't know the user unreffed it, and when clearing the cache we
+        try to remove more references than what the object actually has,
+        causing a crash in g_object_unref.
+
+        * bindings/gobject/DOMObjectCache.cpp:
+        (WebKit::DOMObjectCacheData::clearObject):
+
+2015-02-17  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Use HashMap::add instead of get/contains + set in DOMObjectCache
+        https://bugs.webkit.org/show_bug.cgi?id=141558
+
+        Rubber-stamped by Žan Doberšek.
+
+        * bindings/gobject/DOMObjectCache.cpp:
+        (WebKit::getOrCreateDOMObjectCacheFrameObserver):
+        (WebKit::DOMObjectCache::put):
+
+2014-10-22  Milan Crha  <mcrha@redhat.com>
+
+        Do not include GraphicsContext3D.h when 3D_GRAPHICS is not used.
+        <https://webkit.org/b/137969>.
+
+        Reviewed by Carlos Garcia Campos.
+
+        * platform/graphics/cairo/GraphicsContext3DCairo.cpp:
+
+2014-10-22  Milan Crha  <mcrha@redhat.com>
+
+        Do not build WidgetBackingStoreGtkX11 when not used.
+        <https://webkit.org/b/137972>.
+
+        Reviewed by Carlos Garcia Campos.
+
+        * platform/gtk/WidgetBackingStoreGtkX11.cpp:
+        * platform/gtk/WidgetBackingStoreGtkX11.h:
+
+2014-10-17  Jeffrey Pfau  <jpfau@apple.com>
+
+        Ensure attached frame count doesn't exceed the maximum allowed frames
+        https://bugs.webkit.org/show_bug.cgi?id=136457
+
+        Reviewed by Alexey Proskuryakov.
+
+        Test: fast/frames/exponential-frames.html
+
+        * html/HTMLFrameElementBase.cpp:
+        (WebCore::HTMLFrameElementBase::isURLAllowed):
+
+2014-10-16  Alexey Proskuryakov  <ap@apple.com>
+
+        REGRESSION (r169024): Undetermined text is not displayed in the search field of Adobe Help Website
+        https://bugs.webkit.org/show_bug.cgi?id=137679
+        rdar://problem/18450335
+
+        Reviewed by Enrica Casucci.
+
+        Test: platform/mac/editing/input/selected-composed-text-painting.html
+
+        * rendering/InlineTextBox.cpp: (WebCore::InlineTextBox::paint): We do not paint
+        selection beckground for unconfirmed text with underlines, so we should use a regular
+        style for text painting, as well.
+
+2014-10-14  Jer Noble  <jer.noble@apple.com>
+
+        REGRESSION (r159208): Crash when clicking scrubber after navigating away/back to video
+        https://bugs.webkit.org/show_bug.cgi?id=137715
+
+        Reviewed by Darin Adler.
+
+        Simple null-check of m_player in refreshCachedTime.
+
+        * html/HTMLMediaElement.cpp:
+        (WebCore::HTMLMediaElement::refreshCachedTime):
+
+2014-10-14  Dan Bernstein  <mitz@apple.com>
+
+        URLs that start with http:/// and https:/// lose two slashes when parsed, causing assertion failure and inconsistent behavior
+        https://bugs.webkit.org/show_bug.cgi?id=137718
+
+        Reviewed by Alexey Proskuryakov.
+
+        Added cases to fast/loader/url-parse-1.html.
+
+        * platform/URL.cpp:
+        (WebCore::URL::parse): In hierarchical schemes other than file:, ignore any additional
+        slashes after the ://, as prescribed by the authority-ignore-slashes state in the current
+        URL spec.
+
+2014-10-14  Youenn Fablet  <youennf@gmail.com>
+
+        [XHR] Abort method execution when m_loader->cancel() in internalAbort() caused reentry
+        https://bugs.webkit.org/show_bug.cgi?id=126975
+
+        Reviewed by Alexey Proskuryakov.
+
+        Merging https://chromium.googlesource.com/chromium/blink/+/0d75daf2053631518606ae15daaece701a25b2c4
+        Ensuring new test from https://codereview.chromium.org/76133002/ is passing.
+
+        Test: http/tests/xmlhttprequest/reentrant-cancel-abort.html
+
+        * xml/XMLHttpRequest.cpp:
+        (WebCore::XMLHttpRequest::open): exit early if internalAbort asks so
+        (WebCore::XMLHttpRequest::abort): exit early if internalAbort asks so
+        (WebCore::XMLHttpRequest::internalAbort): ask calling function to exit early if a new loader is created during the cancellation of the loader (potential reentrant case through window.onload callback)   
+        (WebCore::XMLHttpRequest::didTimeout): exit early if internalAbort asks so
+        * xml/XMLHttpRequest.h:
+
+2014-09-30  Said Abou-Hallawa  <sabouhallawa@apple.com>
+
+        Stack overflow with enormous SVG filter
+        https://bugs.webkit.org/show_bug.cgi?id=63290
+
+        Prevent building an SVG filter if it has more than 200 FilterEffect nodes in its map 
+        regardless whether they will be connected to its lastEffect or not. Also discard any
+        filter which has more 100 contributing FilterEffect nodes in its tree.
+
+        Reviewed by Dean Jackson.
+
+        Tests: svg/filters/svg-deeply-nested-crash.html
+
+        * platform/graphics/filters/FilterEffect.cpp:
+        (WebCore::collectEffects):
+        (WebCore::FilterEffect::totalNumberOfEffectInputs):
+        * platform/graphics/filters/FilterEffect.h:
+        -- Add a method to return the total number of input FilterEffect's contributing to a FilterEffect.
+        * rendering/svg/RenderSVGResourceFilter.cpp:
+        (WebCore::RenderSVGResourceFilter::buildPrimitives):
+        -- Do not build a filter if it has more than 200 FilterEffects in its map.
+        (WebCore::RenderSVGResourceFilter::applyResource):
+        -- Discard a filter after it was built if it has more than 100 FilterEffects in its tree.
+
+2014-09-22  Alexey Proskuryakov  <ap@apple.com>
+
+        WebSocket crash when a connection is closed from server side
+        https://bugs.webkit.org/show_bug.cgi?id=137009
+        rdar://problem/18333977
+        rdar://problem/12708225
+
+        Reviewed by Brady Eidson.
+
+        I don't think that this can be tested with our test server.
+
+        * Modules/websockets/WebSocketChannel.cpp:
+        (WebCore::WebSocketChannel::WebSocketChannel): Added logging.
+        (WebCore::WebSocketChannel::~WebSocketChannel): Ditto.
+        (WebCore::WebSocketChannel::close): Protect self, because startClosingHandshake
+        can release the last reference.
+        (WebCore::WebSocketChannel::fail): Added an assertion that the channel is always
+        closed after this function.
+        (WebCore::WebSocketChannel::startClosingHandshake): Protect self, and don't change
+        the stack from closed back to closing if after failing to send closing handshake.
+        (WebCore::WebSocketChannel::processOutgoingFrameQueue): Protect self.
+
+2015-03-17  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] Wrong transfer annotations used in GObject DOM bindings
+        https://bugs.webkit.org/show_bug.cgi?id=142780
+
+        Reviewed by Gustavo Noronha Silva.
+
+        We are using transfer none for all methods returning a GObject DOM
+        Object. That's not true. Only objects derived from Node are
+        automatically released by the DOM object cache and can be transfer
+        none. All other objects are added to the cache only to avoid
+        creating the same wrapper twice for the same core object, but
+        caller should release the returned reference.
+
+        * bindings/gobject/WebKitDOMCustomUnstable.h:
+        * bindings/scripts/CodeGeneratorGObject.pm:
+        (GetTransferTypeForReturnType):
+        (GenerateFunction):
+
+2015-03-17  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] WebKitDOM objects leaking
+        https://bugs.webkit.org/show_bug.cgi?id=118788
+
+        Reviewed by Darin Adler and Sergio Villar Senin.
+
+        Use a DOMwindowObserver class, derived from DOMWindowProperty to
+        be notified when the window object is detached from the frame to
+        clear the DOM objects associated to that frame in that case too.
+
+        * bindings/gobject/DOMObjectCache.cpp:
+
+2015-02-17  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] GObject DOM bindings object are cached forever
+        https://bugs.webkit.org/show_bug.cgi?id=141558
+
+        Reviewed by Sergio Villar Senin.
+
+        Rework the DOMObjectCache to avoid having to manually clear the
+        objects when the frame is destroyed, using a FrameDestructionObserver
+        instead. When a new object associated to a Frame is added to the
+        cache, a FrameDestructionObserver is created for the frame if
+        needed, and the DOM object is tracked by the observer too. When
+        the frame is detached from the page all its objects are cleared,
+        and if the aren't additional references, the object is finalized
+        and removed from the cache normally.
+        This patch also simplifies and modernizes the code to make it
+        easier to read an maintain.
+
+        * bindings/gobject/DOMObjectCache.cpp:
+        (WebKit::DOMObjectCacheData::DOMObjectCacheData): Add constructor
+        to initialize its members and simplify the callers.
+        (WebKit::DOMObjectCacheData::clearObject): Remove the references
+        added by the cache, ensuring the GObject is not finalized until
+        the method returns.
+        (WebKit::DOMObjectCacheData::refObject): Adds a reference owned by
+        the cache.
+        (WebKit::domObjectCacheFrameObservers): Map a frame to a FrameDestructionObserver.
+        (WebKit::getOrCreateDOMObjectCacheFrameObserver): Create a new
+        FrameDestructionObserver for the given Frame or return the
+        existing one.
+        (WebKit::domObjects): Map wrapped object to wrapper object.
+        (WebKit::DOMObjectCache::forget): Remove the wrapped object from
+        the cache.
+        (WebKit::DOMObjectCache::get): Return the wrapped object if it is
+        in the cache, increasing the cache references.
+        (WebKit::DOMObjectCache::put): Add the wrapper object to the cache
+        for the given wrapped object. If it's a Node and has a frame add
+        the node to the FrameDestructionObserver corresponding to the frame.
+        (WebKit::getFrameFromHandle): Deleted.
+        (WebKit::weakRefNotify): Deleted.
+        (WebKit::DOMObjectCache::clearByFrame): Deleted.
+        (WebKit::DOMObjectCache::~DOMObjectCache): Deleted.
+        * bindings/gobject/DOMObjectCache.h:
+
+2015-04-07  Milan Crha  <mcrha@redhat.com>
+
+        [GTK] [WebKit1] Crash under WebCore::ScrollView::contentsToWindow()
+        https://bugs.webkit.org/show_bug.cgi?id=142343
+
+        Reviewed by Carlos Garcia Campos.
+
+        Return early from frameRectsChanged() if the plugin widget doesn't
+        have a parent.
+
+        * platform/gtk/GtkPluginWidget.cpp:
+        (WebCore::GtkPluginWidget::frameRectsChanged):
+
+2015-02-16  Milan Crha  <mcrha@redhat.com>
+
+        [GTK] Loading page into WebView shows g_closure_unref warning
+        https://bugs.webkit.org/show_bug.cgi?id=127474
+
+        Reviewed by Carlos Garcia Campos.
+
+        * bindings/gobject/GObjectEventListener.cpp:
+        (WebCore::GObjectEventListener::gobjectDestroyed):
+
+2015-01-09  Zalan Bujtas  <zalan@apple.com>
+
+        Calling clearSelection on a detached RenderObject leads to segfault.
+        https://bugs.webkit.org/show_bug.cgi?id=140275
+
+        Reviewed by Simon Fraser.
+
+        We collect selection rects and compute selection gaps in order to
+        paint/clear selection. With certain content, we need to be able
+        to walk the tree up to a particular container to compute the selection rect.
+        However this container might not be available when the selection is part of a detached tree.
+        This is a null-check fix to ensure we don't crash in such cases, but in the long run
+        selection gaps and rect should be cached between two layouts so that we don't need to
+        keep collecting/recomputing them. Tracked here: webkit.org/b/140321
+
+        Test: editing/selection/clearselection-on-detached-subtree-crash.html
+
+        * rendering/RenderBox.cpp:
+        (WebCore::RenderBox::containingBlockLogicalWidthForContent):
+        (WebCore::RenderBox::containingBlockLogicalHeightForContent):
+        * rendering/RenderView.cpp:
+        (WebCore::RenderView::clearSelection):
+
+2014-11-18  Joanmarie Diggs  <jdiggs@igalia.com>
+
+        AX: [ATK] Crash getting the orientation of a MenuListOption after the MenuList was removed from the document
+        https://bugs.webkit.org/show_bug.cgi?id=138727
+
+        Reviewed by Chris Fleizach.
+
+        AccessibilityMenuListOption::elementRect() returns the value of the
+        grandparent MenuList, asserting that the grandparent exists with that
+        role. But it is possible to have an existing MenuListOption and remove
+        the element which had been backing that MenuList from the document.
+        Adding null checks prior to the assertions prevents our crashing if the
+        parent or grandparent was removed.
+
+        Test: platform/gtk/accessibility/combobox-descendants-orientation-crash.html
+
+        * accessibility/AccessibilityMenuListOption.cpp:
+        (WebCore::AccessibilityMenuListOption::elementRect):
+
+2014-11-13  Joanmarie Diggs  <jdiggs@igalia.com>
+
+        AX: [ATK] Do not return ATK_ROLE_UNKNOWN for null or otherwise invalid accessible objects
+        https://bugs.webkit.org/show_bug.cgi?id=137867
+
+        Reviewed by Chris Fleizach.
+
+        Return ATK_ROLE_INVALID for null or otherwise invalid accessible objects.
+
+        Test: platform/gtk/accessibility/detached-object-role.html
+
+        * accessibility/atk/WebKitAccessibleWrapperAtk.cpp:
+        (webkitAccessibleGetRole):
+
+2014-11-13  Joanmarie Diggs  <jdiggs@igalia.com>
+
+        AX: [ATK] Accessible focus events are emitted when the selection is changed in non-focused combo boxes
+        https://bugs.webkit.org/show_bug.cgi?id=137866
+
+        Reviewed by Mario Sanchez Prada.
+
+        Check that the AccessibilityMenuList is really focused before notifying
+        the platform that it is focused. Likewise, only notify the platform of
+        an AccessibilityMenuListOption focus gain if the AccessibilityMenuList
+        containing that option is expanded.
+
+        Test: platform/gtk/accessibility/menu-list-unfocused-notifications.html
+
+        * accessibility/atk/AXObjectCacheAtk.cpp:
+        (WebCore::notifyChildrenSelectionChange):
+        (WebCore::AXObjectCache::postPlatformNotification):
+
+2014-10-29  Alexey Proskuryakov  <ap@apple.com>
+
+        Notify Settings object when its Page object goes away.
+        https://bugs.webkit.org/show_bug.cgi?id=138183
+        rdar://problem/18786900
+
+        Reviewed by Andreas Kling.
+
+        I could not make a test for this issue.
+
+        * page/Page.cpp:
+        (WebCore::Page::~Page):
+        * page/Settings.cpp:
+        (WebCore::setImageLoadingSettings):
+        (WebCore::Settings::Settings):
+        (WebCore::Settings::setTextAutosizingEnabled):
+        (WebCore::Settings::setTextAutosizingWindowSizeOverride):
+        (WebCore::Settings::setTextAutosizingFontScaleFactor):
+        (WebCore::Settings::setMediaTypeOverride):
+        (WebCore::Settings::setScriptEnabled):
+        (WebCore::Settings::setUserStyleSheetLocation):
+        (WebCore::Settings::setMinDOMTimerInterval):
+        (WebCore::Settings::minDOMTimerInterval):
+        (WebCore::Settings::domTimerAlignmentInterval):
+        (WebCore::Settings::setUsesPageCache):
+        (WebCore::Settings::setScreenFontSubstitutionEnabled):
+        (WebCore::Settings::setFontRenderingMode):
+        (WebCore::Settings::setDNSPrefetchingEnabled):
+        (WebCore::Settings::setStorageBlockingPolicy):
+        (WebCore::Settings::setBackgroundShouldExtendBeyondPage):
+        (WebCore::Settings::setScrollingPerformanceLoggingEnabled):
+        (WebCore::Settings::setHiddenPageDOMTimerThrottlingEnabled):
+        (WebCore::Settings::setHiddenPageCSSAnimationSuspensionEnabled):
+        (WebCore::Settings::setFontFallbackPrefersPictographs):
+        * page/Settings.h:
+        (WebCore::Settings::pageDestroyed):
+
+2014-10-24  Jeffrey Pfau  <jpfau@apple.com>
+
+        FrameProgressTracker expects Page to not have detached
+        https://bugs.webkit.org/show_bug.cgi?id=138061
+
+        Reviewed by Alexey Proskuryakov.
+
+        In some cases, a Page may be detached from a Frame before its
+        FrameLoader is torn down, causing FrameProgressTracker's destructor
+        to hit a null pointer.
+
+        No new tests; it is impossible to reliably simulate the null pointer
+        case without intrusive code changes.
+
+        * loader/FrameLoader.cpp:
+        (WebCore::FrameLoader::FrameProgressTracker::~FrameProgressTracker):
+
+2014-10-23  Zalan Bujtas  <zalan@apple.com>
+
+        WebContent crash at WebCore::RenderTextControl::textFormControlElement const.
+        https://bugs.webkit.org/show_bug.cgi?id=138035
+
+        Reviewed by Antti Koivisto.
+
+        NULL-check element().renderer() before using it.
+
+        * html/SearchInputType.cpp:
+        (WebCore::SearchInputType::didSetValueByUserEdit):
+
+2015-04-07  Tomas Popela  <tpopela@redhat.com>
+
+        REGRESSION(r177885): [GTK][WK1] Cannot compile 2.4.8 when WK2 is disabled
+        https://bugs.webkit.org/show_bug.cgi?id=140241
+
+        Reviewed by Carlos Garcia Campos.
+
+        We have to compile the PluginPackageNone.cpp and PluginViewNone.cpp
+        just when WebKit2 is enabled and we are not building for X11.
+
+        * GNUmakefile.list.am:
+
+2015-04-07  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Fix the build with newer GLib.
+
+        Use WTF::GMutexLocker.
+
+        * platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.cpp:
+        (WebCore::MediaPlayerPrivateGStreamerBase::updateTexture):
+        (WebCore::MediaPlayerPrivateGStreamerBase::triggerRepaint):
+        (WebCore::MediaPlayerPrivateGStreamerBase::paint):
+        * platform/graphics/gstreamer/VideoSinkGStreamer.cpp:
+        (webkitVideoSinkTimeoutCallback):
+        (webkitVideoSinkRender):
+        (unlockBufferMutex):
+        (webkitVideoSinkUnlockStop):
+        (webkitVideoSinkStart):
+        * platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp:
+        (webKitWebSrcSetProperty):
+        (webKitWebSrcGetProperty):
+        (webKitWebSrcStop):
+        (webKitWebSrcStart):
+        (webKitWebSrcChangeState):
+        (webKitWebSrcQueryWithParent):
+        (webKitWebSrcGetUri):
+        (webKitWebSrcSetUri):
+        (webKitWebSrcNeedDataMainCb):
+        (webKitWebSrcNeedDataCb):
+        (webKitWebSrcEnoughDataMainCb):
+        (webKitWebSrcEnoughDataCb):
+        (webKitWebSrcSeekMainCb):
+        (webKitWebSrcSeekDataCb):
+        (webKitWebSrcSetMediaPlayer):
+        (StreamingClient::createReadBuffer):
+        (StreamingClient::handleResponseReceived):
+        (StreamingClient::handleDataReceived):
+        (StreamingClient::handleNotifyFinished):
+        (ResourceHandleStreamingClient::wasBlocked):
+        (ResourceHandleStreamingClient::cannotShowURL):
+
 2014-11-10  Csaba Osztrogonác  <ossy@webkit.org>
 
         Crash in WebCore::Node::getFlag

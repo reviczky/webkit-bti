@@ -21,6 +21,7 @@
 
 #include "WidgetBackingStore.h"
 
+#if PLATFORM(GTK) && PLATFORM(X11) && defined(GDK_WINDOWING_X11)
 #include <X11/Xlib.h>
 
 namespace WebCore {
@@ -28,8 +29,8 @@ namespace WebCore {
 class WidgetBackingStoreGtkX11 : public WidgetBackingStore {
 
 public:
-    static PassOwnPtr<WidgetBackingStore> create(GtkWidget*, const IntSize&);
-    WidgetBackingStoreGtkX11(GtkWidget*, const IntSize&);
+    static PassOwnPtr<WidgetBackingStore> create(GtkWidget*, const IntSize&, float deviceScaleFactor);
+    WidgetBackingStoreGtkX11(GtkWidget*, const IntSize&, float deviceScaleFactor);
     ~WidgetBackingStoreGtkX11();
     cairo_surface_t* cairoSurface();
     void scroll(const IntRect& scrollRect, const IntSize& scrollOffset);
@@ -42,5 +43,7 @@ private:
 };
 
 } // namespace WebCore
+
+#endif // PLATFORM(GTK) && PLATFORM(X11) && defined(GDK_WINDOWING_X11)
 
 #endif // GtkWidgetBackingStoreX11_h

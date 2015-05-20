@@ -215,29 +215,31 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @TARGET_X11_TRUE@	Source/WebCore/platform/gtk/WidgetBackingStoreGtkX11.h \
 @TARGET_X11_TRUE@	Source/WebCore/platform/gtk/WidgetBackingStoreGtkX11.cpp
 
-@TARGET_X11_TRUE@@USE_GLX_TRUE@am__append_10 = \
+@TARGET_X11_TRUE@@USE_OPENGL_TRUE@am__append_10 = \
+@TARGET_X11_TRUE@@USE_OPENGL_TRUE@	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp \
+@TARGET_X11_TRUE@@USE_OPENGL_TRUE@	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.h
+
+@TARGET_X11_TRUE@@USE_GLX_TRUE@am__append_11 = \
 @TARGET_X11_TRUE@@USE_GLX_TRUE@	Source/WebCore/platform/graphics/glx/GLContextGLX.cpp \
 @TARGET_X11_TRUE@@USE_GLX_TRUE@	Source/WebCore/platform/graphics/glx/GLContextGLX.h
 
-@TARGET_WAYLAND_TRUE@am__append_11 = \
-@TARGET_WAYLAND_TRUE@	Source/WebCore/plugins/PluginPackageNone.cpp \
-@TARGET_WAYLAND_TRUE@	Source/WebCore/plugins/PluginViewNone.cpp
+@ENABLE_WEBKIT2_TRUE@@TARGET_WAYLAND_TRUE@@TARGET_X11_FALSE@am__append_12 = \
+@ENABLE_WEBKIT2_TRUE@@TARGET_WAYLAND_TRUE@@TARGET_X11_FALSE@	Source/WebCore/plugins/PluginPackageNone.cpp \
+@ENABLE_WEBKIT2_TRUE@@TARGET_WAYLAND_TRUE@@TARGET_X11_FALSE@	Source/WebCore/plugins/PluginViewNone.cpp
 
-@TARGET_X11_OR_WAYLAND_TRUE@am__append_12 = \
+@TARGET_X11_OR_WAYLAND_TRUE@am__append_13 = \
 @TARGET_X11_OR_WAYLAND_TRUE@	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.h \
 @TARGET_X11_OR_WAYLAND_TRUE@	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp
 
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_OPENGL_TRUE@am__append_13 = \
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_OPENGL_TRUE@	Source/WebCore/platform/graphics/GLContext.cpp \
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_OPENGL_TRUE@	Source/WebCore/platform/graphics/GLContext.h \
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_OPENGL_TRUE@	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp \
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_OPENGL_TRUE@	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.h
+@USE_OPENGL_TRUE@am__append_14 = \
+@USE_OPENGL_TRUE@	Source/WebCore/platform/graphics/GLContext.cpp \
+@USE_OPENGL_TRUE@	Source/WebCore/platform/graphics/GLContext.h
 
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_EGL_TRUE@am__append_14 = \
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_EGL_TRUE@	Source/WebCore/platform/graphics/egl/GLContextEGL.cpp \
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_EGL_TRUE@	Source/WebCore/platform/graphics/egl/GLContextEGL.h
+@USE_EGL_TRUE@am__append_15 = \
+@USE_EGL_TRUE@	Source/WebCore/platform/graphics/egl/GLContextEGL.cpp \
+@USE_EGL_TRUE@	Source/WebCore/platform/graphics/egl/GLContextEGL.h
 
-@TARGET_WIN32_TRUE@am__append_15 = \
+@TARGET_WIN32_TRUE@am__append_16 = \
 @TARGET_WIN32_TRUE@	Source/WebCore/platform/graphics/win/DIBPixelData.cpp \
 @TARGET_WIN32_TRUE@	Source/WebCore/platform/graphics/win/DIBPixelData.h \
 @TARGET_WIN32_TRUE@	Source/WebCore/platform/graphics/win/GraphicsContextCairoWin.cpp \
@@ -258,33 +260,33 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @TARGET_WIN32_TRUE@	Source/WebCore/plugins/win/PluginMessageThrottlerWin.h \
 @TARGET_WIN32_TRUE@	Source/WebCore/plugins/win/PluginPackageWin.cpp
 
-@TARGET_WIN32_TRUE@am__append_16 = \
+@TARGET_WIN32_TRUE@am__append_17 = \
 @TARGET_WIN32_TRUE@	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp \
 @TARGET_WIN32_TRUE@	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.h \
 @TARGET_WIN32_TRUE@	Source/WebCore/plugins/win/PluginViewWin.cpp
 
-@TARGET_QUARTZ_TRUE@am__append_17 = \
-@TARGET_QUARTZ_TRUE@	Source/WebCore/plugins/PluginPackageNone.cpp \
-@TARGET_QUARTZ_TRUE@	Source/WebCore/plugins/PluginViewNone.cpp
+@ENABLE_WEBKIT2_TRUE@@TARGET_QUARTZ_TRUE@@TARGET_X11_FALSE@am__append_18 = \
+@ENABLE_WEBKIT2_TRUE@@TARGET_QUARTZ_TRUE@@TARGET_X11_FALSE@	Source/WebCore/plugins/PluginPackageNone.cpp \
+@ENABLE_WEBKIT2_TRUE@@TARGET_QUARTZ_TRUE@@TARGET_X11_FALSE@	Source/WebCore/plugins/PluginViewNone.cpp
 
-@TARGET_QUARTZ_TRUE@am__append_18 = \
+@TARGET_QUARTZ_TRUE@am__append_19 = \
 @TARGET_QUARTZ_TRUE@	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.h \
 @TARGET_QUARTZ_TRUE@	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp
 
-@USE_GLES2_TRUE@am__append_19 = \
+@USE_GLES2_TRUE@am__append_20 = \
 @USE_GLES2_TRUE@	Source/WebCore/platform/graphics/opengl/Extensions3DOpenGLES.cpp \
 @USE_GLES2_TRUE@	Source/WebCore/platform/graphics/opengl/Extensions3DOpenGLES.h \
 @USE_GLES2_TRUE@	Source/WebCore/platform/graphics/opengl/GraphicsContext3DOpenGLES.cpp \
 @USE_GLES2_TRUE@	Source/WebCore/platform/graphics/OpenGLESShims.h
 
-@USE_GLES2_FALSE@am__append_20 = \
+@USE_GLES2_FALSE@am__append_21 = \
 @USE_GLES2_FALSE@	Source/WebCore/platform/graphics/opengl/Extensions3DOpenGL.cpp \
 @USE_GLES2_FALSE@	Source/WebCore/platform/graphics/opengl/Extensions3DOpenGL.h \
 @USE_GLES2_FALSE@	Source/WebCore/platform/graphics/opengl/GraphicsContext3DOpenGL.cpp \
 @USE_GLES2_FALSE@	Source/WebCore/platform/graphics/OpenGLShims.cpp \
 @USE_GLES2_FALSE@	Source/WebCore/platform/graphics/OpenGLShims.h
 
-@USE_GSTREAMER_TRUE@am__append_21 = \
+@USE_GSTREAMER_TRUE@am__append_22 = \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/AudioTrackPrivateGStreamer.cpp \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/AudioTrackPrivateGStreamer.h \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/GRefPtrGStreamer.cpp \
@@ -303,7 +305,7 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/VideoTrackPrivateGStreamer.cpp \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/VideoTrackPrivateGStreamer.h
 
-@USE_GSTREAMER_TRUE@am__append_22 = \
+@USE_GSTREAMER_TRUE@am__append_23 = \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/SourceBufferPrivateGStreamer.cpp \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/SourceBufferPrivateGStreamer.h \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/MediaSourceGStreamer.cpp \
@@ -315,7 +317,7 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 # ---
 # Accelerated compositing support
 # ---
-@USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@am__append_23 = \
+@USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@am__append_24 = \
 @USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@	Source/WebCore/platform/graphics/texmap/TextureMapperGL.cpp \
 @USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@	Source/WebCore/platform/graphics/texmap/TextureMapperGL.h \
 @USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@	Source/WebCore/platform/graphics/texmap/TextureMapperShaderProgram.cpp \
@@ -348,28 +350,28 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 # ---
 # Windows plugin support
 # ---
-@TARGET_WIN32_TRUE@am__append_24 = \
+@TARGET_WIN32_TRUE@am__append_25 = \
 @TARGET_WIN32_TRUE@	-I$(srcdir)/Source/WebCore/platform/graphics/win
 
-@ENABLE_SVG_TRUE@am__append_25 = $(WebCore)/css/SVGCSSPropertyNames.in
-@ENABLE_SVG_TRUE@am__append_26 = $(WebCore)/css/SVGCSSValueKeywords.in
-@USE_TEXTURE_MAPPER_GL_TRUE@am__append_27 = \
+@ENABLE_SVG_TRUE@am__append_26 = $(WebCore)/css/SVGCSSPropertyNames.in
+@ENABLE_SVG_TRUE@am__append_27 = $(WebCore)/css/SVGCSSValueKeywords.in
+@USE_TEXTURE_MAPPER_GL_TRUE@am__append_28 = \
 @USE_TEXTURE_MAPPER_GL_TRUE@	-I$(srcdir)/Source/WebCore/platform/graphics/texmap
-
-@ENABLE_INDEXED_DATABASE_TRUE@am__append_28 = \
-@ENABLE_INDEXED_DATABASE_TRUE@	-DWTF_USE_LEVELDB=1 \
-@ENABLE_INDEXED_DATABASE_TRUE@	-I$(srcdir)/Source/ThirdParty/leveldb \
-@ENABLE_INDEXED_DATABASE_TRUE@	-I$(srcdir)/Source/ThirdParty/leveldb/include
 
 @ENABLE_INDEXED_DATABASE_TRUE@am__append_29 = \
 @ENABLE_INDEXED_DATABASE_TRUE@	-DWTF_USE_LEVELDB=1 \
 @ENABLE_INDEXED_DATABASE_TRUE@	-I$(srcdir)/Source/ThirdParty/leveldb \
 @ENABLE_INDEXED_DATABASE_TRUE@	-I$(srcdir)/Source/ThirdParty/leveldb/include
 
-@ENABLE_SVG_TRUE@am__append_30 = \
+@ENABLE_INDEXED_DATABASE_TRUE@am__append_30 = \
+@ENABLE_INDEXED_DATABASE_TRUE@	-DWTF_USE_LEVELDB=1 \
+@ENABLE_INDEXED_DATABASE_TRUE@	-I$(srcdir)/Source/ThirdParty/leveldb \
+@ENABLE_INDEXED_DATABASE_TRUE@	-I$(srcdir)/Source/ThirdParty/leveldb/include
+
+@ENABLE_SVG_TRUE@am__append_31 = \
 @ENABLE_SVG_TRUE@	libWebCoreSVG.la
 
-@ENABLE_VIDEO_TRUE@am__append_31 = \
+@ENABLE_VIDEO_TRUE@am__append_32 = \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/WebKitDOMAudioTrack.h \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/WebKitDOMAudioTrackList.h \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/WebKitDOMHTMLAudioElement.h \
@@ -383,7 +385,7 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/WebKitDOMVideoTrack.h \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/WebKitDOMVideoTrackList.h
 
-@ENABLE_VIDEO_TRUE@am__append_32 = \
+@ENABLE_VIDEO_TRUE@am__append_33 = \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/WebKitDOMHTMLAudioElement.cpp \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/WebKitDOMHTMLAudioElementPrivate.h \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/WebKitDOMHTMLVideoElement.cpp \
@@ -404,69 +406,69 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/WebKitDOMTrackEvent.cpp \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/WebKitDOMTrackEventPrivate.h
 
-@ENABLE_WEBKIT1_TRUE@am__append_33 = \
+@ENABLE_WEBKIT1_TRUE@am__append_34 = \
 @ENABLE_WEBKIT1_TRUE@	libwebkitgtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
 @ENABLE_WEBKIT1_TRUE@	Source/WebKit/gtk/docs/webkitgtk-docs.sgml \
 @ENABLE_WEBKIT1_TRUE@	Source/WebKit/gtk/docs/webkitgtk-sections.txt \
 @ENABLE_WEBKIT1_TRUE@	gtkdoc-webkitgtk.cfg
 
-@ENABLE_WEBKIT2_TRUE@am__append_34 = \
+@ENABLE_WEBKIT2_TRUE@am__append_35 = \
 @ENABLE_WEBKIT2_TRUE@	libwebkit2gtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
 @ENABLE_WEBKIT2_TRUE@	Source/WebKit2/UIProcess/API/gtk/docs/webkit2gtk-docs.sgml \
 @ENABLE_WEBKIT2_TRUE@	Source/WebKit2/UIProcess/API/gtk/docs/webkit2gtk-sections.txt \
 @ENABLE_WEBKIT2_TRUE@	gtkdoc-webkit2gtk.cfg
 
-@ENABLE_GTK_DOC_TRUE@am__append_35 = docs-build.stamp
-@ENABLE_WEBKIT1_TRUE@am__append_36 = \
+@ENABLE_GTK_DOC_TRUE@am__append_36 = docs-build.stamp
+@ENABLE_WEBKIT1_TRUE@am__append_37 = \
 @ENABLE_WEBKIT1_TRUE@	libwebkitgtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la
 
-@ENABLE_SPELLCHECK_TRUE@am__append_37 = \
+@ENABLE_SPELLCHECK_TRUE@am__append_38 = \
 @ENABLE_SPELLCHECK_TRUE@	Source/WebKit/gtk/WebCoreSupport/TextCheckerClientGtk.cpp \
 @ENABLE_SPELLCHECK_TRUE@	Source/WebKit/gtk/WebCoreSupport/TextCheckerClientGtk.h
 
-@ENABLE_DEVELOPER_MODE_FALSE@am__append_38 = \
+@ENABLE_DEVELOPER_MODE_FALSE@am__append_39 = \
 @ENABLE_DEVELOPER_MODE_FALSE@	$(version_script)
 
-@ENABLE_INDEXED_DATABASE_TRUE@am__append_39 = \
+@ENABLE_INDEXED_DATABASE_TRUE@am__append_40 = \
 @ENABLE_INDEXED_DATABASE_TRUE@	libLevelDB.la
 
-@USE_OPENGL_TRUE@am__append_40 = \
+@USE_OPENGL_TRUE@am__append_41 = \
 @USE_OPENGL_TRUE@	libANGLE.la
 
-@ENABLE_SVG_TRUE@am__append_41 = \
+@ENABLE_SVG_TRUE@am__append_42 = \
 @ENABLE_SVG_TRUE@	libWebCoreSVG.la
 
-@ENABLE_WEBKIT1_TRUE@am__append_42 = Source/WebKit/gtk/@WEBKITGTK_PC_NAME@-@WEBKITGTK_API_VERSION@.pc
-@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_43 = WebKit-@WEBKITGTK_API_VERSION@.gir
-@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_44 = WebKit-@WEBKITGTK_API_VERSION@.typelib
-@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_45 = WebKit-@WEBKITGTK_API_VERSION@.gir WebKit-@WEBKITGTK_API_VERSION@.typelib
-@ENABLE_WEBKIT1_TRUE@am__append_46 = gtkdoc-webkitgtk.cfg
-@ENABLE_WEBKIT1_TRUE@am__append_47 = \
+@ENABLE_WEBKIT1_TRUE@am__append_43 = Source/WebKit/gtk/@WEBKITGTK_PC_NAME@-@WEBKITGTK_API_VERSION@.pc
+@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_44 = WebKit-@WEBKITGTK_API_VERSION@.gir
+@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_45 = WebKit-@WEBKITGTK_API_VERSION@.typelib
+@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_46 = WebKit-@WEBKITGTK_API_VERSION@.gir WebKit-@WEBKITGTK_API_VERSION@.typelib
+@ENABLE_WEBKIT1_TRUE@am__append_47 = gtkdoc-webkitgtk.cfg
+@ENABLE_WEBKIT1_TRUE@am__append_48 = \
 @ENABLE_WEBKIT1_TRUE@	Programs/GtkLauncher
 
-@TARGET_X11_TRUE@am__append_48 = \
+@TARGET_X11_TRUE@am__append_49 = \
 @TARGET_X11_TRUE@	Source/WebKit2/Shared/Plugins/Netscape/x11/NetscapePluginModuleX11.cpp \
 @TARGET_X11_TRUE@	Source/WebKit2/WebProcess/Plugins/Netscape/x11/NetscapePluginX11.cpp
 
-@TARGET_X11_FALSE@am__append_49 = \
+@TARGET_X11_FALSE@am__append_50 = \
 @TARGET_X11_FALSE@	Source/WebKit2/Shared/Plugins/Netscape/NetscapePluginModuleNone.cpp \
 @TARGET_X11_FALSE@	Source/WebKit2/WebProcess/Plugins/Netscape/NetscapePluginNone.cpp
 
-@USE_TEXTURE_MAPPER_GL_TRUE@am__append_50 = \
+@USE_TEXTURE_MAPPER_GL_TRUE@am__append_51 = \
 @USE_TEXTURE_MAPPER_GL_TRUE@   Source/WebKit2/WebProcess/WebPage/gtk/LayerTreeHostGtk.cpp \
 @USE_TEXTURE_MAPPER_GL_TRUE@   Source/WebKit2/WebProcess/WebPage/gtk/LayerTreeHostGtk.h
 
-@TARGET_X11_TRUE@am__append_51 = \
+@TARGET_X11_TRUE@am__append_52 = \
 @TARGET_X11_TRUE@	Source/WebKit2/Shared/Plugins/Netscape/x11/NetscapePluginModuleX11.cpp \
 @TARGET_X11_TRUE@	Source/WebKit2/WebProcess/Plugins/Netscape/x11/NetscapePluginX11.cpp
 
-@TARGET_X11_FALSE@am__append_52 = \
+@TARGET_X11_FALSE@am__append_53 = \
 @TARGET_X11_FALSE@	Source/WebKit2/Shared/Plugins/Netscape/NetscapePluginModuleNone.cpp \
 @TARGET_X11_FALSE@	Source/WebKit2/WebProcess/Plugins/Netscape/NetscapePluginNone.cpp
 
 
 # Shared libraries
-@ENABLE_WEBKIT2_TRUE@am__append_53 = \
+@ENABLE_WEBKIT2_TRUE@am__append_54 = \
 @ENABLE_WEBKIT2_TRUE@	libwebkit2gtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la
 
 
@@ -474,70 +476,72 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 
 # We need to make sure plugin process is always built with gtk2, because plugins like flash
 # still use gtk2. Since webcore was built with gtk3, we need to build webcoregtk sources again with gtk2
-@ENABLE_WEBKIT2_TRUE@am__append_54 = libWebKit2Platform.la \
+@ENABLE_WEBKIT2_TRUE@am__append_55 = libWebKit2Platform.la \
 @ENABLE_WEBKIT2_TRUE@	libPlatformGtk2.la libWebCoreGtk2.la
-@ENABLE_WEBKIT2_TRUE@am__append_55 = Programs/WebKitPluginProcess \
+@ENABLE_WEBKIT2_TRUE@am__append_56 = Programs/WebKitPluginProcess \
 @ENABLE_WEBKIT2_TRUE@	Programs/WebKitNetworkProcess \
 @ENABLE_WEBKIT2_TRUE@	Programs/WebKitWebProcess
-@ENABLE_DEVELOPER_MODE_FALSE@am__append_56 = \
+@ENABLE_DEVELOPER_MODE_FALSE@am__append_57 = \
 @ENABLE_DEVELOPER_MODE_FALSE@	$(version_script)
 
-@ENABLE_INDEXED_DATABASE_TRUE@am__append_57 = \
+@ENABLE_INDEXED_DATABASE_TRUE@am__append_58 = \
 @ENABLE_INDEXED_DATABASE_TRUE@	libLevelDB.la
 
-@USE_OPENGL_TRUE@am__append_58 = \
+@USE_OPENGL_TRUE@am__append_59 = \
 @USE_OPENGL_TRUE@	libANGLE.la
 
-@ENABLE_SVG_TRUE@am__append_59 = \
+@ENABLE_SVG_TRUE@am__append_60 = \
 @ENABLE_SVG_TRUE@	libWebCoreSVG.la
 
-@ENABLE_WEBKIT2_TRUE@am__append_60 = \
+@ENABLE_WEBKIT2_TRUE@am__append_61 = \
 @ENABLE_WEBKIT2_TRUE@	Source/WebKit2/webkit2gtk-@WEBKITGTK_API_VERSION@.pc \
 @ENABLE_WEBKIT2_TRUE@	Source/WebKit2/webkit2gtk-web-extension-@WEBKITGTK_API_VERSION@.pc
 
-@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_61 = WebKit2-@WEBKITGTK_API_VERSION@.gir \
+@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_62 = WebKit2-@WEBKITGTK_API_VERSION@.gir \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@	WebKit2WebExtension-@WEBKITGTK_API_VERSION@.gir
-@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_62 = WebKit2-@WEBKITGTK_API_VERSION@.typelib \
+@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_63 = WebKit2-@WEBKITGTK_API_VERSION@.typelib \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@	WebKit2WebExtension-@WEBKITGTK_API_VERSION@.typelib
-@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_63 = WebKit2-@WEBKITGTK_API_VERSION@.gir \
+@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_64 = WebKit2-@WEBKITGTK_API_VERSION@.gir \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@	WebKit2-@WEBKITGTK_API_VERSION@.typelib \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@	WebKit2WebExtension-@WEBKITGTK_API_VERSION@.gir \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT2_TRUE@	WebKit2WebExtension-@WEBKITGTK_API_VERSION@.typelib
-@ENABLE_WEBKIT1_TRUE@am__append_64 = \
+@ENABLE_WEBKIT1_TRUE@am__append_65 = \
 @ENABLE_WEBKIT1_TRUE@	libwebkitgtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la
 
-@ENABLE_SVG_TRUE@am__append_65 = \
+@ENABLE_SVG_TRUE@am__append_66 = \
 @ENABLE_SVG_TRUE@	libWebCoreSVG.la
 
-@ENABLE_INDEXED_DATABASE_TRUE@am__append_66 = \
+@ENABLE_INDEXED_DATABASE_TRUE@am__append_67 = \
 @ENABLE_INDEXED_DATABASE_TRUE@	libLevelDB.la
 
-@USE_OPENGL_TRUE@am__append_67 = \
+@USE_OPENGL_TRUE@am__append_68 = \
 @USE_OPENGL_TRUE@	libANGLE.la
 
-@ENABLE_WEBKIT2_TRUE@am__append_68 = gtkdoc-webkit2gtk.cfg
-@ENABLE_WEBKIT2_TRUE@am__append_69 = \
+@ENABLE_WEBKIT2_TRUE@am__append_69 = gtkdoc-webkit2gtk.cfg
+@ENABLE_WEBKIT2_TRUE@am__append_70 = \
 @ENABLE_WEBKIT2_TRUE@	Programs/MiniBrowser
 
-@USE_OPENGL_TRUE@am__append_70 = \
+@USE_OPENGL_TRUE@am__append_71 = \
 @USE_OPENGL_TRUE@	libANGLE.la
 
-@ENABLE_INDEXED_DATABASE_TRUE@am__append_71 = \
+@TARGET_WIN32_TRUE@am__append_72 = Source/ThirdParty/ANGLE/src/compiler/ossource_win.cpp
+@TARGET_WIN32_FALSE@am__append_73 = Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp
+@ENABLE_INDEXED_DATABASE_TRUE@am__append_74 = \
 @ENABLE_INDEXED_DATABASE_TRUE@	libLevelDB.la
 
-@OS_WIN32_TRUE@am__append_72 = \
+@OS_WIN32_TRUE@am__append_75 = \
 @OS_WIN32_TRUE@	-DOS_WIN
 
-@OS_WIN32_FALSE@am__append_73 = \
+@OS_WIN32_FALSE@am__append_76 = \
 @OS_WIN32_FALSE@	-pthread
 
-@OS_LINUX_TRUE@am__append_74 = \
+@OS_LINUX_TRUE@am__append_77 = \
 @OS_LINUX_TRUE@	-DOS_LINUX
 
-@OS_FREEBSD_TRUE@am__append_75 = \
+@OS_FREEBSD_TRUE@am__append_78 = \
 @OS_FREEBSD_TRUE@	-DOS_FREEBSD
 
-@OS_DARWIN_TRUE@am__append_76 = \
+@OS_DARWIN_TRUE@am__append_79 = \
 @OS_DARWIN_TRUE@	-DOS_MACOSX
 
 
@@ -545,12 +549,12 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 # We must split off the window.internals implementation into a separate
 # convenience library because it requires a different include path order
 # to prefer the WebCore config.h over the DumpRenderTree config.h
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_77 = Libraries/libgtest.la \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_80 = Libraries/libgtest.la \
 @ENABLE_DEVELOPER_MODE_TRUE@	libWebCoreInternals.la
 
 # gtest source files that we don't compile directly.  They are
 # #included by gtest-all.cc.
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_78 = Source/ThirdParty/gtest/src/gtest.cc \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_81 = Source/ThirdParty/gtest/src/gtest.cc \
 @ENABLE_DEVELOPER_MODE_TRUE@	Source/ThirdParty/gtest/src/gtest-death-test.cc \
 @ENABLE_DEVELOPER_MODE_TRUE@	Source/ThirdParty/gtest/src/gtest-filepath.cc \
 @ENABLE_DEVELOPER_MODE_TRUE@	Source/ThirdParty/gtest/src/gtest-internal-inl.h \
@@ -594,13 +598,13 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(srcdir)/Source/WebCore/bindings/scripts/generate-bindings.pl \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(shell ls \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(srcdir)/Tools/WebKitTestRunner/InjectedBundle/Bindings/*.idl)
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_79 = \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_82 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/ImageDiff
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_80 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_83 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@	Programs/DumpRenderTree
 
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_81 = \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_84 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/InternalSettingsGenerated.cpp \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/InternalSettingsGenerated.h   \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/JSMallocStatistics.cpp \
@@ -616,15 +620,15 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/JSTypeConversions.cpp \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/JSTypeConversions.h
 
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_82 = $(libwebcoreinternals_built_sources) \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_85 = $(libwebcoreinternals_built_sources) \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(top_builddir)/stamp-testwebkitapi-webcore-forwarding-headers
-@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_OR_WAYLAND_TRUE@am__append_83 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_OR_WAYLAND_TRUE@am__append_86 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_OR_WAYLAND_TRUE@	-DTEST_PLUGIN_DIR=\"${shell pwd}/${top_builddir}/TestNetscapePlugin/.libs\" \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_OR_WAYLAND_TRUE@	-DFONTS_CONF_DIR=\"${shell pwd}/${srcdir}/Tools/DumpRenderTree/gtk/fonts\"
 
 
 # clean target
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_84 = \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_87 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/DumpRenderTree \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/GtkLauncher \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/ImageDiff
@@ -632,29 +636,29 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 
 # Build TestNetscapePlugin only for X11
 # since we don't support plugins for non-X11 builds at the moment.
-@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@am__append_85 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@am__append_88 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	TestNetscapePlugin/libTestNetscapePlugin.la
 
 
 # For the Gtk port we want to use XP_UNIX both on X11 and Mac
-@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_WIN32_FALSE@@TARGET_X11_TRUE@am__append_86 = -DXP_UNIX
-@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@am__append_87 = TestNetscapePlugin/libTestNetscapePlugin.la
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_88 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_WIN32_FALSE@@TARGET_X11_TRUE@am__append_89 = -DXP_UNIX
+@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@am__append_90 = TestNetscapePlugin/libTestNetscapePlugin.la
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_91 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Libraries/libTestWebKitAPIMain.la
 
 
 # The InjectedBundle library allows the render process to load harness code.
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_89 = Libraries/libTestWebKit2GtkAPI.la \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_92 = Libraries/libTestWebKit2GtkAPI.la \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Libraries/libTestWebKitAPIInjectedBundle.la \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Libraries/WebExtensions/libWebExtensionTest.la \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Libraries/WebExtensions/libWebProcessTest.la \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Libraries/libTestRunnerInjectedBundle.la
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_90 = \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_93 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/TestWebKitAPI/WTF/TestWTF \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/TestWebKitAPI/JavaScriptCore/TestJavaScriptCore \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/TestWebKitAPI/WebCore/TestWebCore
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_91 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@am__append_94 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@	Programs/TestWebKitAPI/WebKitGtk/testapplicationcache \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@	Programs/TestWebKitAPI/WebKitGtk/testcontextmenu \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@	Programs/TestWebKitAPI/WebKitGtk/testdomdocument \
@@ -684,7 +688,7 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@	Programs/TestWebKitAPI/WebKitGtk/testkeyevents \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT1_TRUE@	Programs/TestWebKitAPI/WebKitGtk/testcopyandpaste
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_92 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_95 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Programs/TestWebKitAPI/WebKit2/TestWebKit2 \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/InspectorTestServer \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/TestAuthentication \
@@ -713,32 +717,32 @@ DIST_COMMON = $(srcdir)/Source/WTF/GNUmakefile.am \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/TestWebKitWebViewGroup \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/TestWebViewEditor
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@@HAVE_ATSPI2_TRUE@am__append_93 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@@HAVE_ATSPI2_TRUE@am__append_96 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@@HAVE_ATSPI2_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/AccessibilityTestServer \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@@HAVE_ATSPI2_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/TestWebKitAccessibility
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_SVG_TRUE@am__append_94 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_SVG_TRUE@am__append_97 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_SVG_TRUE@	libWebCoreSVG.la
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_INDEXED_DATABASE_TRUE@am__append_95 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_INDEXED_DATABASE_TRUE@am__append_98 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_INDEXED_DATABASE_TRUE@	libLevelDB.la
 
-@ENABLE_DEVELOPER_MODE_TRUE@@USE_OPENGL_TRUE@am__append_96 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@USE_OPENGL_TRUE@am__append_99 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@USE_OPENGL_TRUE@	libANGLE.la
 
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_97 =  \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_100 =  \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(top_builddir)/libWebCoreLayer.a \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/resources/webkit2gtk-tests-resources.gresource
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_98 = \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_101 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Programs/TestWebKitAPI/WebKit2Gtk/resources/webkit2gtk-tests-resources.gresource
 
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_99 = $(top_builddir)/stamp-testwebkitapi-webkit2-forwarding-headers
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_100 = $(top_builddir)/stamp-webkittestrunner-forwarding-headers \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_102 = $(top_builddir)/stamp-testwebkitapi-webkit2-forwarding-headers
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_103 = $(top_builddir)/stamp-webkittestrunner-forwarding-headers \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(webkittestrunner_built_sources)
-@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_101 = \
+@ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@am__append_104 = \
 @ENABLE_DEVELOPER_MODE_TRUE@@ENABLE_WEBKIT2_TRUE@	Programs/WebKitTestRunner
 
-@ENABLE_DEVELOPER_MODE_TRUE@am__append_102 = \
+@ENABLE_DEVELOPER_MODE_TRUE@am__append_105 = \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/InjectedBundle/JSAccessibilityController.cpp \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/InjectedBundle/JSAccessibilityTextMarker.cpp \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/InjectedBundle/JSAccessibilityTextMarkerRange.cpp \
@@ -948,8 +952,6 @@ am__Libraries_libTestWebKit2GtkAPI_la_SOURCES_DIST =  \
 	Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebKitTestBus.h \
 	Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebKitTestServer.cpp \
 	Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebKitTestServer.h \
-	Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebProcessTestRunner.cpp \
-	Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebProcessTestRunner.h \
 	Tools/TestWebKitAPI/gtk/WebKit2Gtk/TestMain.cpp \
 	Tools/TestWebKitAPI/gtk/WebKit2Gtk/TestMain.h \
 	Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebViewTest.cpp \
@@ -957,7 +959,6 @@ am__Libraries_libTestWebKit2GtkAPI_la_SOURCES_DIST =  \
 @ENABLE_DEVELOPER_MODE_TRUE@am_Libraries_libTestWebKit2GtkAPI_la_OBJECTS = Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-LoadTrackingTest.lo \
 @ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebKitTestBus.lo \
 @ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebKitTestServer.lo \
-@ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebProcessTestRunner.lo \
 @ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-TestMain.lo \
 @ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebViewTest.lo
 Libraries_libTestWebKit2GtkAPI_la_OBJECTS =  \
@@ -1136,6 +1137,150 @@ TestNetscapePlugin_libTestNetscapePlugin_la_LINK = $(LIBTOOL) \
 	$(LDFLAGS) -o $@
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@am_TestNetscapePlugin_libTestNetscapePlugin_la_rpath =
 libANGLE_la_LIBADD =
+am__libANGLE_la_SOURCES_DIST =  \
+	Source/ThirdParty/ANGLE/include/EGL/egl.h \
+	Source/ThirdParty/ANGLE/include/EGL/eglext.h \
+	Source/ThirdParty/ANGLE/include/EGL/eglplatform.h \
+	Source/ThirdParty/ANGLE/include/GLES2/gl2.h \
+	Source/ThirdParty/ANGLE/include/GLES2/gl2ext.h \
+	Source/ThirdParty/ANGLE/include/GLES2/gl2platform.h \
+	Source/ThirdParty/ANGLE/include/GLSLANG/ShaderLang.h \
+	Source/ThirdParty/ANGLE/include/KHR/khrplatform.h \
+	Source/ThirdParty/ANGLE/src/common/angleutils.h \
+	Source/ThirdParty/ANGLE/src/compiler/BaseTypes.h \
+	Source/ThirdParty/ANGLE/src/compiler/BuiltInFunctionEmulator.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/BuiltInFunctionEmulator.h \
+	Source/ThirdParty/ANGLE/src/compiler/CodeGen.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/Common.h \
+	Source/ThirdParty/ANGLE/src/compiler/Compiler.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/ConstantUnion.h \
+	Source/ThirdParty/ANGLE/src/compiler/debug.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/debug.h \
+	Source/ThirdParty/ANGLE/src/compiler/depgraph/DependencyGraphBuilder.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/depgraph/DependencyGraphBuilder.h \
+	Source/ThirdParty/ANGLE/src/compiler/depgraph/DependencyGraph.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/depgraph/DependencyGraph.h \
+	Source/ThirdParty/ANGLE/src/compiler/depgraph/DependencyGraphOutput.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/depgraph/DependencyGraphOutput.h \
+	Source/ThirdParty/ANGLE/src/compiler/depgraph/DependencyGraphTraverse.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/DetectCallDepth.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/DetectCallDepth.h \
+	Source/ThirdParty/ANGLE/src/compiler/Diagnostics.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/Diagnostics.h \
+	Source/ThirdParty/ANGLE/src/compiler/DirectiveHandler.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/DirectiveHandler.h \
+	Source/ThirdParty/ANGLE/src/compiler/DetectDiscontinuity.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/DetectDiscontinuity.h \
+	Source/ThirdParty/ANGLE/src/compiler/ExtensionBehavior.h \
+	Source/ThirdParty/ANGLE/src/compiler/ForLoopUnroll.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/ForLoopUnroll.h \
+	Source/ThirdParty/ANGLE/src/compiler/glslang.h \
+	Source/ThirdParty/ANGLE/src/compiler/HashNames.h \
+	Source/ThirdParty/ANGLE/src/compiler/InfoSink.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/InfoSink.h \
+	Source/ThirdParty/ANGLE/src/compiler/Initialize.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/InitializeDll.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/InitializeDll.h \
+	Source/ThirdParty/ANGLE/src/compiler/InitializeGlobals.h \
+	Source/ThirdParty/ANGLE/src/compiler/InitializeGLPosition.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/InitializeGLPosition.h \
+	Source/ThirdParty/ANGLE/src/compiler/Initialize.h \
+	Source/ThirdParty/ANGLE/src/compiler/InitializeParseContext.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/InitializeParseContext.h \
+	Source/ThirdParty/ANGLE/src/compiler/Intermediate.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/intermediate.h \
+	Source/ThirdParty/ANGLE/src/compiler/intermOut.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/IntermTraverse.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/localintermediate.h \
+	Source/ThirdParty/ANGLE/src/compiler/MapLongVariableNames.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/MapLongVariableNames.h \
+	Source/ThirdParty/ANGLE/src/compiler/MMap.h \
+	Source/ThirdParty/ANGLE/src/compiler/NodeSearch.h \
+	Source/ThirdParty/ANGLE/src/compiler/osinclude.h \
+	Source/ThirdParty/ANGLE/src/compiler/OutputESSL.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/OutputESSL.h \
+	Source/ThirdParty/ANGLE/src/compiler/OutputGLSLBase.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/OutputGLSLBase.h \
+	Source/ThirdParty/ANGLE/src/compiler/OutputGLSL.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/OutputGLSL.h \
+	Source/ThirdParty/ANGLE/src/compiler/OutputHLSL.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/OutputHLSL.h \
+	Source/ThirdParty/ANGLE/src/compiler/parseConst.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/ParseContext.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/ParseContext.h \
+	Source/ThirdParty/ANGLE/src/compiler/PoolAlloc.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/PoolAlloc.h \
+	Source/ThirdParty/ANGLE/src/compiler/Pragma.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/DiagnosticsBase.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/DiagnosticsBase.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/DirectiveHandlerBase.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/DirectiveHandlerBase.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/DirectiveParser.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/DirectiveParser.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/ExpressionParser.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/ExpressionParser.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/Input.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/Input.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/length_limits.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/Lexer.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/Lexer.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/Macro.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/MacroExpander.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/MacroExpander.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/Macro.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/numeric_lex.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/pp_utils.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/Preprocessor.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/Preprocessor.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/SourceLocation.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/Token.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/Token.h \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/Tokenizer.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/preprocessor/Tokenizer.h \
+	Source/ThirdParty/ANGLE/src/compiler/QualifierAlive.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/QualifierAlive.h \
+	Source/ThirdParty/ANGLE/src/compiler/RemoveTree.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/RemoveTree.h \
+	Source/ThirdParty/ANGLE/src/compiler/RenameFunction.h \
+	Source/ThirdParty/ANGLE/src/compiler/SearchSymbol.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/SearchSymbol.h \
+	Source/ThirdParty/ANGLE/src/compiler/ShaderLang.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/ShHandle.h \
+	Source/ThirdParty/ANGLE/src/compiler/SymbolTable.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/SymbolTable.h \
+	Source/ThirdParty/ANGLE/src/compiler/timing/RestrictFragmentShaderTiming.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/timing/RestrictFragmentShaderTiming.h \
+	Source/ThirdParty/ANGLE/src/compiler/timing/RestrictVertexShaderTiming.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/timing/RestrictVertexShaderTiming.h \
+	Source/ThirdParty/ANGLE/src/compiler/TranslatorESSL.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/TranslatorESSL.h \
+	Source/ThirdParty/ANGLE/src/compiler/TranslatorGLSL.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/TranslatorGLSL.h \
+	Source/ThirdParty/ANGLE/src/compiler/TranslatorHLSL.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/TranslatorHLSL.h \
+	Source/ThirdParty/ANGLE/src/compiler/Types.h \
+	Source/ThirdParty/ANGLE/src/compiler/UnfoldShortCircuitAST.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/UnfoldShortCircuitAST.h \
+	Source/ThirdParty/ANGLE/src/compiler/UnfoldShortCircuit.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/UnfoldShortCircuit.h \
+	Source/ThirdParty/ANGLE/src/compiler/Uniform.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/Uniform.h \
+	Source/ThirdParty/ANGLE/src/compiler/util.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/util.h \
+	Source/ThirdParty/ANGLE/src/compiler/ValidateLimitations.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/ValidateLimitations.h \
+	Source/ThirdParty/ANGLE/src/compiler/VariableInfo.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/VariableInfo.h \
+	Source/ThirdParty/ANGLE/src/compiler/VariablePacker.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/VariablePacker.h \
+	Source/ThirdParty/ANGLE/src/compiler/VersionGLSL.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/VersionGLSL.h \
+	Source/ThirdParty/ANGLE/src/third_party/compiler/ArrayBoundsClamper.cpp \
+	Source/ThirdParty/ANGLE/src/third_party/compiler/ArrayBoundsClamper.h \
+	Source/ThirdParty/ANGLE/src/compiler/ossource_win.cpp \
+	Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp
+@TARGET_WIN32_TRUE@am__objects_3 = Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_win.lo
+@TARGET_WIN32_FALSE@am__objects_4 = Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo
 am_libANGLE_la_OBJECTS = Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-BuiltInFunctionEmulator.lo \
 	Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-CodeGen.lo \
 	Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-Compiler.lo \
@@ -1158,7 +1303,6 @@ am_libANGLE_la_OBJECTS = Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-BuiltI
 	Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-intermOut.lo \
 	Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-IntermTraverse.lo \
 	Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-MapLongVariableNames.lo \
-	Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo \
 	Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-OutputESSL.lo \
 	Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-OutputGLSLBase.lo \
 	Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-OutputGLSL.lo \
@@ -1195,7 +1339,8 @@ am_libANGLE_la_OBJECTS = Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-BuiltI
 	Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-VariableInfo.lo \
 	Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-VariablePacker.lo \
 	Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-VersionGLSL.lo \
-	Source/ThirdParty/ANGLE/src/third_party/compiler/libANGLE_la-ArrayBoundsClamper.lo
+	Source/ThirdParty/ANGLE/src/third_party/compiler/libANGLE_la-ArrayBoundsClamper.lo \
+	$(am__objects_3) $(am__objects_4)
 nodist_libANGLE_la_OBJECTS =  \
 	DerivedSources/ANGLE/libANGLE_la-glslang.lo \
 	DerivedSources/ANGLE/libANGLE_la-glslang_tab.lo
@@ -1215,7 +1360,7 @@ am_libGObjectDOMBindings_la_OBJECTS = Source/WebCore/bindings/gobject/libGObject
 	Source/WebCore/bindings/gobject/libGObjectDOMBindings_la-WebKitDOMHTMLPrivate.lo \
 	Source/WebCore/bindings/gobject/libGObjectDOMBindings_la-WebKitDOMObject.lo \
 	Source/WebCore/bindings/gobject/libGObjectDOMBindings_la-WebKitDOMPrivate.lo
-@ENABLE_VIDEO_TRUE@am__objects_3 = DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMHTMLAudioElement.lo \
+@ENABLE_VIDEO_TRUE@am__objects_5 = DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMHTMLAudioElement.lo \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMHTMLVideoElement.lo \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMAudioTrack.lo \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMAudioTrackList.lo \
@@ -1227,7 +1372,7 @@ am_libGObjectDOMBindings_la_OBJECTS = Source/WebCore/bindings/gobject/libGObject
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMVideoTrack.lo \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMVideoTrackList.lo \
 @ENABLE_VIDEO_TRUE@	DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMTrackEvent.lo
-am__objects_4 = DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMAttr.lo \
+am__objects_6 = DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMAttr.lo \
 	DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMBarProp.lo \
 	DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMBatteryManager.lo \
 	DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMBlob.lo \
@@ -1370,8 +1515,8 @@ am__objects_4 = DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMAttr.
 	DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMXPathExpression.lo \
 	DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMXPathNSResolver.lo \
 	DerivedSources/webkitdom/libGObjectDOMBindings_la-WebKitDOMXPathResult.lo \
-	$(am__objects_3)
-nodist_libGObjectDOMBindings_la_OBJECTS = $(am__objects_4)
+	$(am__objects_5)
+nodist_libGObjectDOMBindings_la_OBJECTS = $(am__objects_6)
 libGObjectDOMBindings_la_OBJECTS =  \
 	$(am_libGObjectDOMBindings_la_OBJECTS) \
 	$(nodist_libGObjectDOMBindings_la_OBJECTS)
@@ -2026,7 +2171,7 @@ am__libPlatform_la_SOURCES_DIST =  \
 	Source/WebCore/platform/graphics/gstreamer/TrackPrivateBaseGStreamer.h \
 	Source/WebCore/platform/graphics/gstreamer/VideoTrackPrivateGStreamer.cpp \
 	Source/WebCore/platform/graphics/gstreamer/VideoTrackPrivateGStreamer.h
-@USE_GSTREAMER_TRUE@am__objects_5 = Source/WebCore/platform/graphics/gstreamer/libPlatform_la-AudioTrackPrivateGStreamer.lo \
+@USE_GSTREAMER_TRUE@am__objects_7 = Source/WebCore/platform/graphics/gstreamer/libPlatform_la-AudioTrackPrivateGStreamer.lo \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/libPlatform_la-GRefPtrGStreamer.lo \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/libPlatform_la-GStreamerUtilities.lo \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/libPlatform_la-InbandTextTrackPrivateGStreamer.lo \
@@ -2034,7 +2179,7 @@ am__libPlatform_la_SOURCES_DIST =  \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/libPlatform_la-TextSinkGStreamer.lo \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/libPlatform_la-TrackPrivateBaseGStreamer.lo \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/libPlatform_la-VideoTrackPrivateGStreamer.lo
-am__objects_6 = Source/WebCore/platform/audio/gstreamer/libPlatform_la-AudioDestinationGStreamer.lo \
+am__objects_8 = Source/WebCore/platform/audio/gstreamer/libPlatform_la-AudioDestinationGStreamer.lo \
 	Source/WebCore/platform/audio/gstreamer/libPlatform_la-AudioFileReaderGStreamer.lo \
 	Source/WebCore/platform/audio/gstreamer/libPlatform_la-FFTFrameGStreamer.lo \
 	Source/WebCore/platform/audio/gstreamer/libPlatform_la-WebKitWebAudioSourceGStreamer.lo \
@@ -2266,13 +2411,13 @@ am__objects_6 = Source/WebCore/platform/audio/gstreamer/libPlatform_la-AudioDest
 	Source/WebCore/platform/libPlatform_la-Timer.lo \
 	Source/WebCore/platform/libPlatform_la-UUID.lo \
 	Source/WebCore/platform/libPlatform_la-Widget.lo \
-	$(am__objects_5)
-am_libPlatform_la_OBJECTS = $(am__objects_6)
-@USE_GEOCLUE2_TRUE@am__objects_7 = DerivedSources/Platform/libPlatform_la-Geoclue2Interface.lo
-am__objects_8 = DerivedSources/Platform/libPlatform_la-ColorData.lo \
-	DerivedSources/Platform/libPlatform_la-WebKitFontFamilyNames.lo \
 	$(am__objects_7)
-nodist_libPlatform_la_OBJECTS = $(am__objects_8)
+am_libPlatform_la_OBJECTS = $(am__objects_8)
+@USE_GEOCLUE2_TRUE@am__objects_9 = DerivedSources/Platform/libPlatform_la-Geoclue2Interface.lo
+am__objects_10 = DerivedSources/Platform/libPlatform_la-ColorData.lo \
+	DerivedSources/Platform/libPlatform_la-WebKitFontFamilyNames.lo \
+	$(am__objects_9)
+nodist_libPlatform_la_OBJECTS = $(am__objects_10)
 libPlatform_la_OBJECTS = $(am_libPlatform_la_OBJECTS) \
 	$(nodist_libPlatform_la_OBJECTS)
 libPlatform_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
@@ -2351,18 +2496,18 @@ am__libPlatformGtk_la_SOURCES_DIST =  \
 	Source/WebCore/platform/text/gtk/TextBreakIteratorInternalICUGtk.cpp \
 	Source/WebCore/platform/gtk/WidgetBackingStoreGtkX11.h \
 	Source/WebCore/platform/gtk/WidgetBackingStoreGtkX11.cpp \
+	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp \
+	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.h \
 	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.h \
 	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp \
 	Source/WebCore/platform/graphics/GLContext.cpp \
-	Source/WebCore/platform/graphics/GLContext.h \
-	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp \
-	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.h
-@TARGET_X11_TRUE@am__objects_9 = Source/WebCore/platform/gtk/libPlatformGtk_la-WidgetBackingStoreGtkX11.lo
-@TARGET_X11_OR_WAYLAND_TRUE@am__objects_10 = Source/WebCore/platform/cairo/libPlatformGtk_la-WidgetBackingStoreCairo.lo
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_OPENGL_TRUE@am__objects_11 = Source/WebCore/platform/graphics/libPlatformGtk_la-GLContext.lo \
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_OPENGL_TRUE@	Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo
-@TARGET_QUARTZ_TRUE@am__objects_12 = Source/WebCore/platform/cairo/libPlatformGtk_la-WidgetBackingStoreCairo.lo
-am__objects_13 = Source/WebCore/platform/audio/gtk/libPlatformGtk_la-AudioBusGtk.lo \
+	Source/WebCore/platform/graphics/GLContext.h
+@TARGET_X11_TRUE@am__objects_11 = Source/WebCore/platform/gtk/libPlatformGtk_la-WidgetBackingStoreGtkX11.lo
+@TARGET_X11_TRUE@@USE_OPENGL_TRUE@am__objects_12 = Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo
+@TARGET_X11_OR_WAYLAND_TRUE@am__objects_13 = Source/WebCore/platform/cairo/libPlatformGtk_la-WidgetBackingStoreCairo.lo
+@USE_OPENGL_TRUE@am__objects_14 = Source/WebCore/platform/graphics/libPlatformGtk_la-GLContext.lo
+@TARGET_QUARTZ_TRUE@am__objects_15 = Source/WebCore/platform/cairo/libPlatformGtk_la-WidgetBackingStoreCairo.lo
+am__objects_16 = Source/WebCore/platform/audio/gtk/libPlatformGtk_la-AudioBusGtk.lo \
 	Source/WebCore/platform/graphics/cairo/libPlatformGtk_la-GraphicsContextCairo.lo \
 	Source/WebCore/platform/graphics/freetype/libPlatformGtk_la-FontPlatformDataFreeType.lo \
 	Source/WebCore/platform/graphics/gstreamer/libPlatformGtk_la-ImageGStreamerCairo.lo \
@@ -2406,9 +2551,9 @@ am__objects_13 = Source/WebCore/platform/audio/gtk/libPlatformGtk_la-AudioBusGtk
 	Source/WebCore/platform/gtk/libPlatformGtk_la-WidgetGtk.lo \
 	Source/WebCore/platform/network/gtk/libPlatformGtk_la-CredentialBackingStore.lo \
 	Source/WebCore/platform/text/gtk/libPlatformGtk_la-TextBreakIteratorInternalICUGtk.lo \
-	$(am__objects_9) $(am__objects_10) $(am__objects_11) \
-	$(am__objects_12)
-am_libPlatformGtk_la_OBJECTS = $(am__objects_13)
+	$(am__objects_11) $(am__objects_12) $(am__objects_13) \
+	$(am__objects_14) $(am__objects_15)
+am_libPlatformGtk_la_OBJECTS = $(am__objects_16)
 libPlatformGtk_la_OBJECTS = $(am_libPlatformGtk_la_OBJECTS)
 libPlatformGtk_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
@@ -2486,18 +2631,18 @@ am__libPlatformGtk2_la_SOURCES_DIST =  \
 	Source/WebCore/platform/text/gtk/TextBreakIteratorInternalICUGtk.cpp \
 	Source/WebCore/platform/gtk/WidgetBackingStoreGtkX11.h \
 	Source/WebCore/platform/gtk/WidgetBackingStoreGtkX11.cpp \
+	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp \
+	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.h \
 	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.h \
 	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp \
 	Source/WebCore/platform/graphics/GLContext.cpp \
-	Source/WebCore/platform/graphics/GLContext.h \
-	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp \
-	Source/WebCore/platform/gtk/RedirectedXCompositeWindow.h
-@TARGET_X11_TRUE@am__objects_14 = Source/WebCore/platform/gtk/libPlatformGtk2_la-WidgetBackingStoreGtkX11.lo
-@TARGET_X11_OR_WAYLAND_TRUE@am__objects_15 = Source/WebCore/platform/cairo/libPlatformGtk2_la-WidgetBackingStoreCairo.lo
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_OPENGL_TRUE@am__objects_16 = Source/WebCore/platform/graphics/libPlatformGtk2_la-GLContext.lo \
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_OPENGL_TRUE@	Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo
-@TARGET_QUARTZ_TRUE@am__objects_17 = Source/WebCore/platform/cairo/libPlatformGtk2_la-WidgetBackingStoreCairo.lo
-am__objects_18 = Source/WebCore/platform/audio/gtk/libPlatformGtk2_la-AudioBusGtk.lo \
+	Source/WebCore/platform/graphics/GLContext.h
+@TARGET_X11_TRUE@am__objects_17 = Source/WebCore/platform/gtk/libPlatformGtk2_la-WidgetBackingStoreGtkX11.lo
+@TARGET_X11_TRUE@@USE_OPENGL_TRUE@am__objects_18 = Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo
+@TARGET_X11_OR_WAYLAND_TRUE@am__objects_19 = Source/WebCore/platform/cairo/libPlatformGtk2_la-WidgetBackingStoreCairo.lo
+@USE_OPENGL_TRUE@am__objects_20 = Source/WebCore/platform/graphics/libPlatformGtk2_la-GLContext.lo
+@TARGET_QUARTZ_TRUE@am__objects_21 = Source/WebCore/platform/cairo/libPlatformGtk2_la-WidgetBackingStoreCairo.lo
+am__objects_22 = Source/WebCore/platform/audio/gtk/libPlatformGtk2_la-AudioBusGtk.lo \
 	Source/WebCore/platform/graphics/cairo/libPlatformGtk2_la-GraphicsContextCairo.lo \
 	Source/WebCore/platform/graphics/freetype/libPlatformGtk2_la-FontPlatformDataFreeType.lo \
 	Source/WebCore/platform/graphics/gstreamer/libPlatformGtk2_la-ImageGStreamerCairo.lo \
@@ -2541,9 +2686,9 @@ am__objects_18 = Source/WebCore/platform/audio/gtk/libPlatformGtk2_la-AudioBusGt
 	Source/WebCore/platform/gtk/libPlatformGtk2_la-WidgetGtk.lo \
 	Source/WebCore/platform/network/gtk/libPlatformGtk2_la-CredentialBackingStore.lo \
 	Source/WebCore/platform/text/gtk/libPlatformGtk2_la-TextBreakIteratorInternalICUGtk.lo \
-	$(am__objects_14) $(am__objects_15) $(am__objects_16) \
-	$(am__objects_17)
-am_libPlatformGtk2_la_OBJECTS = $(am__objects_18)
+	$(am__objects_17) $(am__objects_18) $(am__objects_19) \
+	$(am__objects_20) $(am__objects_21)
+am_libPlatformGtk2_la_OBJECTS = $(am__objects_22)
 libPlatformGtk2_la_OBJECTS = $(am_libPlatformGtk2_la_OBJECTS)
 libPlatformGtk2_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
@@ -2553,7 +2698,7 @@ libPlatformGtk2_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 am__DEPENDENCIES_1 =
 libWTF_la_DEPENDENCIES = $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
-am__objects_19 = Source/WTF/wtf/libWTF_la-Assertions.lo \
+am__objects_23 = Source/WTF/wtf/libWTF_la-Assertions.lo \
 	Source/WTF/wtf/libWTF_la-Atomics.lo \
 	Source/WTF/wtf/libWTF_la-BitVector.lo \
 	Source/WTF/wtf/libWTF_la-CompilationThread.lo \
@@ -2622,7 +2767,7 @@ am__objects_19 = Source/WTF/wtf/libWTF_la-Assertions.lo \
 	Source/WTF/wtf/unicode/libWTF_la-CollatorDefault.lo \
 	Source/WTF/wtf/unicode/libWTF_la-UTF8.lo \
 	Source/WTF/wtf/unicode/icu/libWTF_la-CollatorICU.lo
-am_libWTF_la_OBJECTS = $(am__objects_19)
+am_libWTF_la_OBJECTS = $(am__objects_23)
 libWTF_la_OBJECTS = $(am_libWTF_la_OBJECTS)
 libWTF_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(libWTF_la_CXXFLAGS) \
@@ -5223,9 +5368,9 @@ am__libWebCore_la_SOURCES_DIST =  \
 	Source/WebCore/platform/graphics/texmap/TextureMapperTile.h \
 	Source/WebCore/platform/graphics/texmap/TextureMapperTiledBackingStore.cpp \
 	Source/WebCore/platform/graphics/texmap/TextureMapperTiledBackingStore.h
-@TARGET_WAYLAND_TRUE@am__objects_20 = Source/WebCore/plugins/libWebCore_la-PluginPackageNone.lo \
-@TARGET_WAYLAND_TRUE@	Source/WebCore/plugins/libWebCore_la-PluginViewNone.lo
-@TARGET_WIN32_TRUE@am__objects_21 = Source/WebCore/platform/graphics/win/libWebCore_la-DIBPixelData.lo \
+@ENABLE_WEBKIT2_TRUE@@TARGET_WAYLAND_TRUE@@TARGET_X11_FALSE@am__objects_24 = Source/WebCore/plugins/libWebCore_la-PluginPackageNone.lo \
+@ENABLE_WEBKIT2_TRUE@@TARGET_WAYLAND_TRUE@@TARGET_X11_FALSE@	Source/WebCore/plugins/libWebCore_la-PluginViewNone.lo
+@TARGET_WIN32_TRUE@am__objects_25 = Source/WebCore/platform/graphics/win/libWebCore_la-DIBPixelData.lo \
 @TARGET_WIN32_TRUE@	Source/WebCore/platform/graphics/win/libWebCore_la-GraphicsContextCairoWin.lo \
 @TARGET_WIN32_TRUE@	Source/WebCore/platform/graphics/win/libWebCore_la-GraphicsContextWin.lo \
 @TARGET_WIN32_TRUE@	Source/WebCore/platform/graphics/win/libWebCore_la-TransformationMatrixWin.lo \
@@ -5236,14 +5381,14 @@ am__libWebCore_la_SOURCES_DIST =  \
 @TARGET_WIN32_TRUE@	Source/WebCore/plugins/win/libWebCore_la-PluginDatabaseWin.lo \
 @TARGET_WIN32_TRUE@	Source/WebCore/plugins/win/libWebCore_la-PluginMessageThrottlerWin.lo \
 @TARGET_WIN32_TRUE@	Source/WebCore/plugins/win/libWebCore_la-PluginPackageWin.lo
-@TARGET_QUARTZ_TRUE@am__objects_22 = Source/WebCore/plugins/libWebCore_la-PluginPackageNone.lo \
-@TARGET_QUARTZ_TRUE@	Source/WebCore/plugins/libWebCore_la-PluginViewNone.lo
-@USE_GLES2_TRUE@am__objects_23 = Source/WebCore/platform/graphics/opengl/libWebCore_la-Extensions3DOpenGLES.lo \
+@ENABLE_WEBKIT2_TRUE@@TARGET_QUARTZ_TRUE@@TARGET_X11_FALSE@am__objects_26 = Source/WebCore/plugins/libWebCore_la-PluginPackageNone.lo \
+@ENABLE_WEBKIT2_TRUE@@TARGET_QUARTZ_TRUE@@TARGET_X11_FALSE@	Source/WebCore/plugins/libWebCore_la-PluginViewNone.lo
+@USE_GLES2_TRUE@am__objects_27 = Source/WebCore/platform/graphics/opengl/libWebCore_la-Extensions3DOpenGLES.lo \
 @USE_GLES2_TRUE@	Source/WebCore/platform/graphics/opengl/libWebCore_la-GraphicsContext3DOpenGLES.lo
-@USE_GLES2_FALSE@am__objects_24 = Source/WebCore/platform/graphics/opengl/libWebCore_la-Extensions3DOpenGL.lo \
+@USE_GLES2_FALSE@am__objects_28 = Source/WebCore/platform/graphics/opengl/libWebCore_la-Extensions3DOpenGL.lo \
 @USE_GLES2_FALSE@	Source/WebCore/platform/graphics/opengl/libWebCore_la-GraphicsContext3DOpenGL.lo \
 @USE_GLES2_FALSE@	Source/WebCore/platform/graphics/libWebCore_la-OpenGLShims.lo
-@USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@am__objects_25 = Source/WebCore/platform/graphics/texmap/libWebCore_la-TextureMapperGL.lo \
+@USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@am__objects_29 = Source/WebCore/platform/graphics/texmap/libWebCore_la-TextureMapperGL.lo \
 @USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@	Source/WebCore/platform/graphics/texmap/libWebCore_la-TextureMapperShaderProgram.lo \
 @USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@	Source/WebCore/platform/graphics/texmap/libWebCore_la-GraphicsLayerTextureMapper.lo \
 @USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@	Source/WebCore/platform/graphics/libWebCore_la-GraphicsLayerTransform.lo \
@@ -5256,7 +5401,7 @@ am__libWebCore_la_SOURCES_DIST =  \
 @USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@	Source/WebCore/platform/graphics/texmap/libWebCore_la-TextureMapperSurfaceBackingStore.lo \
 @USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@	Source/WebCore/platform/graphics/texmap/libWebCore_la-TextureMapperTile.lo \
 @USE_ACCELERATED_COMPOSITING_TRUE@@USE_TEXTURE_MAPPER_GL_TRUE@	Source/WebCore/platform/graphics/texmap/libWebCore_la-TextureMapperTiledBackingStore.lo
-am__objects_26 = Source/WebCore/accessibility/libWebCore_la-AccessibilityARIAGridCell.lo \
+am__objects_30 = Source/WebCore/accessibility/libWebCore_la-AccessibilityARIAGridCell.lo \
 	Source/WebCore/accessibility/libWebCore_la-AccessibilityARIAGrid.lo \
 	Source/WebCore/accessibility/libWebCore_la-AccessibilityARIAGridRow.lo \
 	Source/WebCore/accessibility/libWebCore_la-AccessibilityImageMapLink.lo \
@@ -6457,10 +6602,10 @@ am__objects_26 = Source/WebCore/accessibility/libWebCore_la-AccessibilityARIAGri
 	Source/WebCore/xml/libWebCore_la-XSLTProcessor.lo \
 	Source/WebCore/xml/libWebCore_la-XSLTProcessorLibxslt.lo \
 	Source/WebCore/xml/libWebCore_la-XSLTUnicodeSort.lo \
-	$(am__objects_20) $(am__objects_21) $(am__objects_22) \
-	$(am__objects_23) $(am__objects_24) $(am__objects_25)
-am_libWebCore_la_OBJECTS = $(am__objects_26)
-am__objects_27 = DerivedSources/WebCore/libWebCore_la-CSSGrammar.lo \
+	$(am__objects_24) $(am__objects_25) $(am__objects_26) \
+	$(am__objects_27) $(am__objects_28) $(am__objects_29)
+am_libWebCore_la_OBJECTS = $(am__objects_30)
+am__objects_31 = DerivedSources/WebCore/libWebCore_la-CSSGrammar.lo \
 	DerivedSources/WebCore/libWebCore_la-CSSPropertyNames.lo \
 	DerivedSources/WebCore/libWebCore_la-CSSValueKeywords.lo \
 	DerivedSources/WebCore/libWebCore_la-EventFactory.lo \
@@ -6892,7 +7037,7 @@ am__objects_27 = DerivedSources/WebCore/libWebCore_la-CSSGrammar.lo \
 	DerivedSources/WebCore/libWebCore_la-SVGNames.lo \
 	DerivedSources/WebCore/libWebCore_la-SVGElementFactory.lo \
 	DerivedSources/WebInspectorUI/libWebCore_la-GResourceBundle.lo
-nodist_libWebCore_la_OBJECTS = $(am__objects_27)
+nodist_libWebCore_la_OBJECTS = $(am__objects_31)
 libWebCore_la_OBJECTS = $(am_libWebCore_la_OBJECTS) \
 	$(nodist_libWebCore_la_OBJECTS)
 libWebCore_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
@@ -6979,14 +7124,14 @@ am__libWebCoreGtk_la_SOURCES_DIST =  \
 	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp \
 	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.h \
 	Source/WebCore/plugins/win/PluginViewWin.cpp
-@TARGET_X11_TRUE@am__objects_28 = Source/WebCore/plugins/gtk/libWebCoreGtk_la-gtk2xtbin.lo \
+@TARGET_X11_TRUE@am__objects_32 = Source/WebCore/plugins/gtk/libWebCoreGtk_la-gtk2xtbin.lo \
 @TARGET_X11_TRUE@	Source/WebCore/plugins/gtk/libWebCoreGtk_la-PluginPackageGtk.lo \
 @TARGET_X11_TRUE@	Source/WebCore/plugins/gtk/libWebCoreGtk_la-PluginViewGtk.lo
-@TARGET_X11_TRUE@@USE_GLX_TRUE@am__objects_29 = Source/WebCore/platform/graphics/glx/libWebCoreGtk_la-GLContextGLX.lo
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_EGL_TRUE@am__objects_30 = Source/WebCore/platform/graphics/egl/libWebCoreGtk_la-GLContextEGL.lo
-@TARGET_WIN32_TRUE@am__objects_31 = Source/WebCore/platform/cairo/libWebCoreGtk_la-WidgetBackingStoreCairo.lo \
+@TARGET_X11_TRUE@@USE_GLX_TRUE@am__objects_33 = Source/WebCore/platform/graphics/glx/libWebCoreGtk_la-GLContextGLX.lo
+@USE_EGL_TRUE@am__objects_34 = Source/WebCore/platform/graphics/egl/libWebCoreGtk_la-GLContextEGL.lo
+@TARGET_WIN32_TRUE@am__objects_35 = Source/WebCore/platform/cairo/libWebCoreGtk_la-WidgetBackingStoreCairo.lo \
 @TARGET_WIN32_TRUE@	Source/WebCore/plugins/win/libWebCoreGtk_la-PluginViewWin.lo
-am__objects_32 = Source/WebCore/accessibility/atk/libWebCoreGtk_la-AccessibilityObjectAtk.lo \
+am__objects_36 = Source/WebCore/accessibility/atk/libWebCoreGtk_la-AccessibilityObjectAtk.lo \
 	Source/WebCore/accessibility/atk/libWebCoreGtk_la-AXObjectCacheAtk.lo \
 	Source/WebCore/accessibility/atk/libWebCoreGtk_la-WebKitAccessibleHyperlink.lo \
 	Source/WebCore/accessibility/atk/libWebCoreGtk_la-WebKitAccessibleInterfaceAction.lo \
@@ -7026,9 +7171,9 @@ am__objects_32 = Source/WebCore/accessibility/atk/libWebCoreGtk_la-Accessibility
 	Source/WebCore/platform/gtk/libWebCoreGtk_la-ScrollbarThemeGtk2.lo \
 	Source/WebCore/platform/gtk/libWebCoreGtk_la-ScrollbarThemeGtk3.lo \
 	Source/WebCore/platform/gtk/libWebCoreGtk_la-WidgetRenderingContext.lo \
-	$(am__objects_28) $(am__objects_29) $(am__objects_30) \
-	$(am__objects_31)
-am_libWebCoreGtk_la_OBJECTS = $(am__objects_32)
+	$(am__objects_32) $(am__objects_33) $(am__objects_34) \
+	$(am__objects_35)
+am_libWebCoreGtk_la_OBJECTS = $(am__objects_36)
 libWebCoreGtk_la_OBJECTS = $(am_libWebCoreGtk_la_OBJECTS)
 libWebCoreGtk_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
@@ -7114,14 +7259,14 @@ am__libWebCoreGtk2_la_SOURCES_DIST =  \
 	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp \
 	Source/WebCore/platform/cairo/WidgetBackingStoreCairo.h \
 	Source/WebCore/plugins/win/PluginViewWin.cpp
-@TARGET_X11_TRUE@am__objects_33 = Source/WebCore/plugins/gtk/libWebCoreGtk2_la-gtk2xtbin.lo \
+@TARGET_X11_TRUE@am__objects_37 = Source/WebCore/plugins/gtk/libWebCoreGtk2_la-gtk2xtbin.lo \
 @TARGET_X11_TRUE@	Source/WebCore/plugins/gtk/libWebCoreGtk2_la-PluginPackageGtk.lo \
 @TARGET_X11_TRUE@	Source/WebCore/plugins/gtk/libWebCoreGtk2_la-PluginViewGtk.lo
-@TARGET_X11_TRUE@@USE_GLX_TRUE@am__objects_34 = Source/WebCore/platform/graphics/glx/libWebCoreGtk2_la-GLContextGLX.lo
-@TARGET_X11_OR_WAYLAND_TRUE@@USE_EGL_TRUE@am__objects_35 = Source/WebCore/platform/graphics/egl/libWebCoreGtk2_la-GLContextEGL.lo
-@TARGET_WIN32_TRUE@am__objects_36 = Source/WebCore/platform/cairo/libWebCoreGtk2_la-WidgetBackingStoreCairo.lo \
+@TARGET_X11_TRUE@@USE_GLX_TRUE@am__objects_38 = Source/WebCore/platform/graphics/glx/libWebCoreGtk2_la-GLContextGLX.lo
+@USE_EGL_TRUE@am__objects_39 = Source/WebCore/platform/graphics/egl/libWebCoreGtk2_la-GLContextEGL.lo
+@TARGET_WIN32_TRUE@am__objects_40 = Source/WebCore/platform/cairo/libWebCoreGtk2_la-WidgetBackingStoreCairo.lo \
 @TARGET_WIN32_TRUE@	Source/WebCore/plugins/win/libWebCoreGtk2_la-PluginViewWin.lo
-am__objects_37 = Source/WebCore/accessibility/atk/libWebCoreGtk2_la-AccessibilityObjectAtk.lo \
+am__objects_41 = Source/WebCore/accessibility/atk/libWebCoreGtk2_la-AccessibilityObjectAtk.lo \
 	Source/WebCore/accessibility/atk/libWebCoreGtk2_la-AXObjectCacheAtk.lo \
 	Source/WebCore/accessibility/atk/libWebCoreGtk2_la-WebKitAccessibleHyperlink.lo \
 	Source/WebCore/accessibility/atk/libWebCoreGtk2_la-WebKitAccessibleInterfaceAction.lo \
@@ -7161,9 +7306,9 @@ am__objects_37 = Source/WebCore/accessibility/atk/libWebCoreGtk2_la-Accessibilit
 	Source/WebCore/platform/gtk/libWebCoreGtk2_la-ScrollbarThemeGtk2.lo \
 	Source/WebCore/platform/gtk/libWebCoreGtk2_la-ScrollbarThemeGtk3.lo \
 	Source/WebCore/platform/gtk/libWebCoreGtk2_la-WidgetRenderingContext.lo \
-	$(am__objects_33) $(am__objects_34) $(am__objects_35) \
-	$(am__objects_36)
-am_libWebCoreGtk2_la_OBJECTS = $(am__objects_37)
+	$(am__objects_37) $(am__objects_38) $(am__objects_39) \
+	$(am__objects_40)
+am_libWebCoreGtk2_la_OBJECTS = $(am__objects_41)
 libWebCoreGtk2_la_OBJECTS = $(am_libWebCoreGtk2_la_OBJECTS)
 libWebCoreGtk2_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
@@ -7187,16 +7332,16 @@ am__libWebCoreInternals_la_SOURCES_DIST =  \
 @ENABLE_DEVELOPER_MODE_TRUE@	Source/WebCore/testing/libWebCoreInternals_la-Internals.lo \
 @ENABLE_DEVELOPER_MODE_TRUE@	Source/WebCore/testing/libWebCoreInternals_la-InternalSettings.lo \
 @ENABLE_DEVELOPER_MODE_TRUE@	Source/WebCore/testing/js/libWebCoreInternals_la-WebCoreTestSupport.lo
-@ENABLE_DEVELOPER_MODE_TRUE@am__objects_38 = DerivedSources/WebCore/libWebCoreInternals_la-InternalSettingsGenerated.lo \
+@ENABLE_DEVELOPER_MODE_TRUE@am__objects_42 = DerivedSources/WebCore/libWebCoreInternals_la-InternalSettingsGenerated.lo \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/libWebCoreInternals_la-JSMallocStatistics.lo \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/libWebCoreInternals_la-JSMemoryInfo.lo \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/libWebCoreInternals_la-JSInternals.lo \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/libWebCoreInternals_la-JSInternalSettings.lo \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/libWebCoreInternals_la-JSInternalSettingsGenerated.lo \
 @ENABLE_DEVELOPER_MODE_TRUE@	DerivedSources/WebCore/libWebCoreInternals_la-JSTypeConversions.lo
-am__objects_39 = $(am__objects_38)
+am__objects_43 = $(am__objects_42)
 @ENABLE_DEVELOPER_MODE_TRUE@nodist_libWebCoreInternals_la_OBJECTS =  \
-@ENABLE_DEVELOPER_MODE_TRUE@	$(am__objects_39)
+@ENABLE_DEVELOPER_MODE_TRUE@	$(am__objects_43)
 libWebCoreInternals_la_OBJECTS = $(am_libWebCoreInternals_la_OBJECTS) \
 	$(nodist_libWebCoreInternals_la_OBJECTS)
 libWebCoreInternals_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
@@ -7205,7 +7350,7 @@ libWebCoreInternals_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(LDFLAGS) -o $@
 @ENABLE_DEVELOPER_MODE_TRUE@am_libWebCoreInternals_la_rpath =
 libWebCoreModules_la_LIBADD =
-am__objects_40 = Source/WebCore/Modules/battery/libWebCoreModules_la-BatteryController.lo \
+am__objects_44 = Source/WebCore/Modules/battery/libWebCoreModules_la-BatteryController.lo \
 	Source/WebCore/Modules/battery/libWebCoreModules_la-BatteryManager.lo \
 	Source/WebCore/Modules/battery/libWebCoreModules_la-BatteryStatus.lo \
 	Source/WebCore/Modules/battery/libWebCoreModules_la-NavigatorBattery.lo \
@@ -7396,7 +7541,7 @@ am__objects_40 = Source/WebCore/Modules/battery/libWebCoreModules_la-BatteryCont
 	Source/WebCore/Modules/websockets/libWebCoreModules_la-WebSocketFrame.lo \
 	Source/WebCore/Modules/websockets/libWebCoreModules_la-WebSocketHandshake.lo \
 	Source/WebCore/Modules/websockets/libWebCoreModules_la-WorkerThreadableWebSocketChannel.lo
-am_libWebCoreModules_la_OBJECTS = $(am__objects_40)
+am_libWebCoreModules_la_OBJECTS = $(am__objects_44)
 libWebCoreModules_la_OBJECTS = $(am_libWebCoreModules_la_OBJECTS)
 libWebCoreModules_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
@@ -7622,10 +7767,10 @@ am__libWebCorePlatform_la_SOURCES_DIST =  \
 	Source/WebCore/platform/graphics/gstreamer/MediaSourceGStreamer.h \
 	Source/WebCore/platform/graphics/gstreamer/WebKitMediaSourceGStreamer.cpp \
 	Source/WebCore/platform/graphics/gstreamer/WebKitMediaSourceGStreamer.h
-@USE_GSTREAMER_TRUE@am__objects_41 = Source/WebCore/platform/graphics/gstreamer/libWebCorePlatform_la-SourceBufferPrivateGStreamer.lo \
+@USE_GSTREAMER_TRUE@am__objects_45 = Source/WebCore/platform/graphics/gstreamer/libWebCorePlatform_la-SourceBufferPrivateGStreamer.lo \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/libWebCorePlatform_la-MediaSourceGStreamer.lo \
 @USE_GSTREAMER_TRUE@	Source/WebCore/platform/graphics/gstreamer/libWebCorePlatform_la-WebKitMediaSourceGStreamer.lo
-am__objects_42 = Source/WebCore/platform/animation/libWebCorePlatform_la-Animation.lo \
+am__objects_46 = Source/WebCore/platform/animation/libWebCorePlatform_la-Animation.lo \
 	Source/WebCore/platform/animation/libWebCorePlatform_la-AnimationList.lo \
 	Source/WebCore/platform/audio/libWebCorePlatform_la-HRTFDatabase.lo \
 	Source/WebCore/platform/audio/libWebCorePlatform_la-HRTFDatabaseLoader.lo \
@@ -7722,8 +7867,8 @@ am__objects_42 = Source/WebCore/platform/animation/libWebCorePlatform_la-Animati
 	Source/WebCore/platform/libWebCorePlatform_la-ScrollAnimatorNone.lo \
 	Source/WebCore/platform/libWebCorePlatform_la-ThreadGlobalData.lo \
 	Source/WebCore/platform/libWebCorePlatform_la-UserActivity.lo \
-	$(am__objects_41)
-am_libWebCorePlatform_la_OBJECTS = $(am__objects_42)
+	$(am__objects_45)
+am_libWebCorePlatform_la_OBJECTS = $(am__objects_46)
 libWebCorePlatform_la_OBJECTS = $(am_libWebCorePlatform_la_OBJECTS)
 libWebCorePlatform_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
@@ -8244,7 +8389,7 @@ am__libWebCoreSVG_la_SOURCES_DIST =  \
 	Source/WebCore/svg/SVGZoomAndPan.h \
 	Source/WebCore/svg/SVGZoomEvent.cpp \
 	Source/WebCore/svg/SVGZoomEvent.h
-am__objects_43 = Source/WebCore/bindings/js/libWebCoreSVG_la-JSSVGElementInstanceCustom.lo \
+am__objects_47 = Source/WebCore/bindings/js/libWebCoreSVG_la-JSSVGElementInstanceCustom.lo \
 	Source/WebCore/bindings/js/libWebCoreSVG_la-JSSVGLengthCustom.lo \
 	Source/WebCore/bindings/js/libWebCoreSVG_la-JSSVGPathSegCustom.lo \
 	Source/WebCore/css/libWebCoreSVG_la-SVGCSSComputedStyleDeclaration.lo \
@@ -8472,8 +8617,8 @@ am__objects_43 = Source/WebCore/bindings/js/libWebCoreSVG_la-JSSVGElementInstanc
 	Source/WebCore/svg/libWebCoreSVG_la-SVGVKernElement.lo \
 	Source/WebCore/svg/libWebCoreSVG_la-SVGZoomAndPan.lo \
 	Source/WebCore/svg/libWebCoreSVG_la-SVGZoomEvent.lo
-@ENABLE_SVG_TRUE@am_libWebCoreSVG_la_OBJECTS = $(am__objects_43)
-am__objects_44 =  \
+@ENABLE_SVG_TRUE@am_libWebCoreSVG_la_OBJECTS = $(am__objects_47)
+am__objects_48 =  \
 	DerivedSources/WebCore/libWebCoreSVG_la-JSSVGAElement.lo \
 	DerivedSources/WebCore/libWebCoreSVG_la-JSSVGAltGlyphDefElement.lo \
 	DerivedSources/WebCore/libWebCoreSVG_la-JSSVGAltGlyphElement.lo \
@@ -8618,7 +8763,7 @@ am__objects_44 =  \
 	DerivedSources/WebCore/libWebCoreSVG_la-JSSVGVKernElement.lo \
 	DerivedSources/WebCore/libWebCoreSVG_la-JSSVGZoomAndPan.lo \
 	DerivedSources/WebCore/libWebCoreSVG_la-JSSVGZoomEvent.lo
-@ENABLE_SVG_TRUE@nodist_libWebCoreSVG_la_OBJECTS = $(am__objects_44)
+@ENABLE_SVG_TRUE@nodist_libWebCoreSVG_la_OBJECTS = $(am__objects_48)
 libWebCoreSVG_la_OBJECTS = $(am_libWebCoreSVG_la_OBJECTS) \
 	$(nodist_libWebCoreSVG_la_OBJECTS)
 libWebCoreSVG_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
@@ -8627,7 +8772,7 @@ libWebCoreSVG_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(LDFLAGS) -o $@
 @ENABLE_SVG_TRUE@am_libWebCoreSVG_la_rpath =
 libWebKit2Platform_la_LIBADD =
-am__objects_45 = Source/WebKit2/Platform/IPC/libWebKit2Platform_la-ArgumentCoders.lo \
+am__objects_49 = Source/WebKit2/Platform/IPC/libWebKit2Platform_la-ArgumentCoders.lo \
 	Source/WebKit2/Platform/IPC/libWebKit2Platform_la-ArgumentDecoder.lo \
 	Source/WebKit2/Platform/IPC/libWebKit2Platform_la-ArgumentEncoder.lo \
 	Source/WebKit2/Platform/IPC/libWebKit2Platform_la-Attachment.lo \
@@ -8647,7 +8792,7 @@ am__objects_45 = Source/WebKit2/Platform/IPC/libWebKit2Platform_la-ArgumentCoder
 	Source/WebKit2/Platform/libWebKit2Platform_la-Module.lo \
 	Source/WebKit2/Platform/unix/libWebKit2Platform_la-SharedMemoryUnix.lo \
 	Source/WebKit2/Platform/libWebKit2Platform_la-WorkQueue.lo
-am_libWebKit2Platform_la_OBJECTS = $(am__objects_45)
+am_libWebKit2Platform_la_OBJECTS = $(am__objects_49)
 libWebKit2Platform_la_OBJECTS = $(am_libWebKit2Platform_la_OBJECTS)
 libWebKit2Platform_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
@@ -8657,7 +8802,7 @@ libWebKit2Platform_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_DEPENDENCIES =  \
 	libWTF.la $(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
-am__objects_46 = Source/JavaScriptCore/API/libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-JSBase.lo \
+am__objects_50 = Source/JavaScriptCore/API/libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-JSBase.lo \
 	Source/JavaScriptCore/API/libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-JSCTestRunnerUtils.lo \
 	Source/JavaScriptCore/API/libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-JSCallbackConstructor.lo \
 	Source/JavaScriptCore/API/libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-JSCallbackFunction.lo \
@@ -9118,10 +9263,10 @@ am__objects_46 = Source/JavaScriptCore/API/libjavascriptcoregtk_@WEBKITGTK_API_M
 	DerivedSources/JavaScriptCore/libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-InspectorJSFrontendDispatchers.lo \
 	DerivedSources/JavaScriptCore/libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-InspectorJSTypeBuilders.lo
 am_libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS =  \
-	$(am__objects_46)
-am__objects_47 =
+	$(am__objects_50)
+am__objects_51 =
 nodist_libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS =  \
-	$(am__objects_47)
+	$(am__objects_51)
 libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS = $(am_libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS) \
 	$(nodist_libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS)
 libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_LINK =  \
@@ -9133,7 +9278,7 @@ libjavascriptcoregtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@
 	$(LDFLAGS) -o $@
 libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_DEPENDENCIES =  \
 	libWebCore.la libWebCorePlatform.la libWebCoreModules.la \
-	$(am__append_57) $(am__append_58) $(am__append_59) \
+	$(am__append_58) $(am__append_59) $(am__append_60) \
 	libjavascriptcoregtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
 	libPlatform.la libPlatformGtk.la libGObjectDOMBindings.la \
 	libWebCoreGtk.la libWebKit2Platform.la $(am__DEPENDENCIES_1) \
@@ -10226,12 +10371,12 @@ am__libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la
 	Source/WebKit2/WebProcess/Plugins/Netscape/NetscapePluginNone.cpp \
 	Source/WebKit2/WebProcess/WebPage/gtk/LayerTreeHostGtk.cpp \
 	Source/WebKit2/WebProcess/WebPage/gtk/LayerTreeHostGtk.h
-@TARGET_X11_TRUE@am__objects_48 = Source/WebKit2/Shared/Plugins/Netscape/x11/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-NetscapePluginModuleX11.lo \
+@TARGET_X11_TRUE@am__objects_52 = Source/WebKit2/Shared/Plugins/Netscape/x11/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-NetscapePluginModuleX11.lo \
 @TARGET_X11_TRUE@	Source/WebKit2/WebProcess/Plugins/Netscape/x11/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-NetscapePluginX11.lo
-@TARGET_X11_FALSE@am__objects_49 = Source/WebKit2/Shared/Plugins/Netscape/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-NetscapePluginModuleNone.lo \
+@TARGET_X11_FALSE@am__objects_53 = Source/WebKit2/Shared/Plugins/Netscape/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-NetscapePluginModuleNone.lo \
 @TARGET_X11_FALSE@	Source/WebKit2/WebProcess/Plugins/Netscape/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-NetscapePluginNone.lo
-@USE_TEXTURE_MAPPER_GL_TRUE@am__objects_50 = Source/WebKit2/WebProcess/WebPage/gtk/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-LayerTreeHostGtk.lo
-am__objects_51 = Source/WebKit2/NetworkProcess/FileAPI/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-NetworkBlobRegistry.lo \
+@USE_TEXTURE_MAPPER_GL_TRUE@am__objects_54 = Source/WebKit2/WebProcess/WebPage/gtk/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-LayerTreeHostGtk.lo
+am__objects_55 = Source/WebKit2/NetworkProcess/FileAPI/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-NetworkBlobRegistry.lo \
 	Source/WebKit2/NetworkProcess/soup/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-NetworkProcessSoup.lo \
 	Source/WebKit2/NetworkProcess/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-AsynchronousNetworkLoaderClient.lo \
 	Source/WebKit2/NetworkProcess/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-HostRecord.lo \
@@ -10709,10 +10854,10 @@ am__objects_51 = Source/WebKit2/NetworkProcess/FileAPI/libwebkit2gtk_@WEBKITGTK_
 	Source/WebKit2/WebProcess/WebPage/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-WebUndoStep.lo \
 	Source/WebKit2/WebProcess/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-WebConnectionToUIProcess.lo \
 	Source/WebKit2/WebProcess/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-WebProcess.lo \
-	$(am__objects_48) $(am__objects_49) $(am__objects_50)
+	$(am__objects_52) $(am__objects_53) $(am__objects_54)
 am_libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS =  \
-	$(am__objects_51)
-am__objects_52 = DerivedSources/WebKit2/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-AuthenticationManagerMessageReceiver.lo \
+	$(am__objects_55)
+am__objects_56 = DerivedSources/WebKit2/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-AuthenticationManagerMessageReceiver.lo \
 	DerivedSources/WebKit2/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-CustomProtocolManagerProxyMessageReceiver.lo \
 	DerivedSources/WebKit2/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-CustomProtocolManagerMessageReceiver.lo \
 	DerivedSources/WebKit2/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-DownloadProxyMessageReceiver.lo \
@@ -10768,11 +10913,11 @@ am__objects_52 = DerivedSources/WebKit2/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSI
 	DerivedSources/WebKit2/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-WebResourceCacheManagerProxyMessageReceiver.lo \
 	DerivedSources/WebKit2/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-WebResourceLoaderMessageReceiver.lo \
 	DerivedSources/WebKit2/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-WebVibrationProxyMessageReceiver.lo
-am__objects_53 = DerivedSources/WebKit2/webkit2gtk/webkit2/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-WebKitEnumTypes.lo \
+am__objects_57 = DerivedSources/WebKit2/webkit2gtk/webkit2/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-WebKitEnumTypes.lo \
 	DerivedSources/WebKit2/webkit2gtk/webkit2/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-WebKitMarshal.lo \
 	DerivedSources/WebInspectorUI/libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-WebKit2GResourceBundle.lo
 nodist_libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS =  \
-	$(am__objects_52) $(am__objects_53)
+	$(am__objects_56) $(am__objects_57)
 libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS = $(am_libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS) \
 	$(nodist_libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS)
 libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_LINK =  \
@@ -10797,8 +10942,8 @@ libwebkit2gtkinjectedbundle_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_DEPENDENCIES =  \
 	libPlatform.la libPlatformGtk.la libWebCore.la \
 	libWebCorePlatform.la libWebCoreModules.la \
-	libGObjectDOMBindings.la libWebCoreGtk.la $(am__append_39) \
-	$(am__append_40) $(am__append_41) \
+	libGObjectDOMBindings.la libWebCoreGtk.la $(am__append_40) \
+	$(am__append_41) $(am__append_42) \
 	libjavascriptcoregtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
@@ -10919,8 +11064,8 @@ am__libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_
 	Source/WebKit/gtk/webkit/webkitwebviewprivate.h \
 	Source/WebKit/gtk/webkit/webkitwebwindowfeatures.cpp \
 	Source/WebKit/gtk/webkit/webkitwebwindowfeaturesprivate.h
-@ENABLE_SPELLCHECK_TRUE@am__objects_54 = Source/WebKit/gtk/WebCoreSupport/libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-TextCheckerClientGtk.lo
-am__objects_55 = $(am__objects_54) \
+@ENABLE_SPELLCHECK_TRUE@am__objects_58 = Source/WebKit/gtk/WebCoreSupport/libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-TextCheckerClientGtk.lo
+am__objects_59 = $(am__objects_58) \
 	Source/WebKit/gtk/WebCoreSupport/libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-AcceleratedCompositingContextGL.lo \
 	Source/WebKit/gtk/WebCoreSupport/libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-AssertMatchingEnums.lo \
 	Source/WebKit/gtk/WebCoreSupport/libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-BatteryClientGtk.lo \
@@ -10975,12 +11120,12 @@ am__objects_55 = $(am__objects_54) \
 	Source/WebKit/gtk/webkit/libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-webkitwebview.lo \
 	Source/WebKit/gtk/webkit/libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-webkitwebwindowfeatures.lo
 am_libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS =  \
-	$(am__objects_55)
-am__objects_56 = DerivedSources/webkit/libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-webkitenumtypes.lo \
+	$(am__objects_59)
+am__objects_60 = DerivedSources/webkit/libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-webkitenumtypes.lo \
 	DerivedSources/webkit/libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la-webkitmarshal.lo \
-	$(am__objects_47)
+	$(am__objects_51)
 nodist_libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS =  \
-	$(am__objects_56)
+	$(am__objects_60)
 libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS = $(am_libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS) \
 	$(nodist_libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_OBJECTS)
 libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_LINK =  \
@@ -11193,8 +11338,8 @@ am_Programs_MiniBrowser_OBJECTS = Tools/MiniBrowser/gtk/Programs_MiniBrowser-Bro
 	Tools/MiniBrowser/gtk/Programs_MiniBrowser-BrowserSettingsDialog.$(OBJEXT) \
 	Tools/MiniBrowser/gtk/Programs_MiniBrowser-BrowserWindow.$(OBJEXT) \
 	Tools/MiniBrowser/gtk/Programs_MiniBrowser-main.$(OBJEXT)
-am__objects_57 = DerivedSources/WebKit2/Programs_MiniBrowser-BrowserMarshal.$(OBJEXT)
-nodist_Programs_MiniBrowser_OBJECTS = $(am__objects_57)
+am__objects_61 = DerivedSources/WebKit2/Programs_MiniBrowser-BrowserMarshal.$(OBJEXT)
+nodist_Programs_MiniBrowser_OBJECTS = $(am__objects_61)
 Programs_MiniBrowser_OBJECTS = $(am_Programs_MiniBrowser_OBJECTS) \
 	$(nodist_Programs_MiniBrowser_OBJECTS)
 Programs_MiniBrowser_DEPENDENCIES = libwebkit2gtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
@@ -12264,11 +12409,11 @@ am__Programs_WebKitPluginProcess_SOURCES_DIST =  \
 	Source/WebKit2/WebProcess/Plugins/Netscape/x11/NetscapePluginX11.cpp \
 	Source/WebKit2/Shared/Plugins/Netscape/NetscapePluginModuleNone.cpp \
 	Source/WebKit2/WebProcess/Plugins/Netscape/NetscapePluginNone.cpp
-@TARGET_X11_TRUE@am__objects_58 = Source/WebKit2/Shared/Plugins/Netscape/x11/Programs_WebKitPluginProcess-NetscapePluginModuleX11.$(OBJEXT) \
+@TARGET_X11_TRUE@am__objects_62 = Source/WebKit2/Shared/Plugins/Netscape/x11/Programs_WebKitPluginProcess-NetscapePluginModuleX11.$(OBJEXT) \
 @TARGET_X11_TRUE@	Source/WebKit2/WebProcess/Plugins/Netscape/x11/Programs_WebKitPluginProcess-NetscapePluginX11.$(OBJEXT)
-@TARGET_X11_FALSE@am__objects_59 = Source/WebKit2/Shared/Plugins/Netscape/Programs_WebKitPluginProcess-NetscapePluginModuleNone.$(OBJEXT) \
+@TARGET_X11_FALSE@am__objects_63 = Source/WebKit2/Shared/Plugins/Netscape/Programs_WebKitPluginProcess-NetscapePluginModuleNone.$(OBJEXT) \
 @TARGET_X11_FALSE@	Source/WebKit2/WebProcess/Plugins/Netscape/Programs_WebKitPluginProcess-NetscapePluginNone.$(OBJEXT)
-am__objects_60 = Source/WebKit2/PluginProcess/Programs_WebKitPluginProcess-PluginControllerProxy.$(OBJEXT) \
+am__objects_64 = Source/WebKit2/PluginProcess/Programs_WebKitPluginProcess-PluginControllerProxy.$(OBJEXT) \
 	Source/WebKit2/PluginProcess/Programs_WebKitPluginProcess-PluginCreationParameters.$(OBJEXT) \
 	Source/WebKit2/PluginProcess/Programs_WebKitPluginProcess-PluginProcess.$(OBJEXT) \
 	Source/WebKit2/PluginProcess/Programs_WebKitPluginProcess-WebProcessConnection.$(OBJEXT) \
@@ -12306,13 +12451,13 @@ am__objects_60 = Source/WebKit2/PluginProcess/Programs_WebKitPluginProcess-Plugi
 	Source/WebKit2/WebProcess/Plugins/Netscape/Programs_WebKitPluginProcess-NetscapePlugin.$(OBJEXT) \
 	Source/WebKit2/WebProcess/Plugins/Netscape/Programs_WebKitPluginProcess-NetscapePluginStream.$(OBJEXT) \
 	Source/WebKit2/unix/Programs_WebKitPluginProcess-PluginMainUnix.$(OBJEXT) \
-	$(am__objects_58) $(am__objects_59)
-am_Programs_WebKitPluginProcess_OBJECTS = $(am__objects_60)
-am__objects_61 = DerivedSources/WebKit2/Programs_WebKitPluginProcess-NPObjectMessageReceiverMessageReceiver.$(OBJEXT) \
+	$(am__objects_62) $(am__objects_63)
+am_Programs_WebKitPluginProcess_OBJECTS = $(am__objects_64)
+am__objects_65 = DerivedSources/WebKit2/Programs_WebKitPluginProcess-NPObjectMessageReceiverMessageReceiver.$(OBJEXT) \
 	DerivedSources/WebKit2/Programs_WebKitPluginProcess-PluginControllerProxyMessageReceiver.$(OBJEXT) \
 	DerivedSources/WebKit2/Programs_WebKitPluginProcess-PluginProcessMessageReceiver.$(OBJEXT) \
 	DerivedSources/WebKit2/Programs_WebKitPluginProcess-WebProcessConnectionMessageReceiver.$(OBJEXT)
-nodist_Programs_WebKitPluginProcess_OBJECTS = $(am__objects_61)
+nodist_Programs_WebKitPluginProcess_OBJECTS = $(am__objects_65)
 Programs_WebKitPluginProcess_OBJECTS =  \
 	$(am_Programs_WebKitPluginProcess_OBJECTS) \
 	$(nodist_Programs_WebKitPluginProcess_OBJECTS)
@@ -12579,8 +12724,9 @@ DIST_SOURCES = $(am__Libraries_WebExtensions_libWebExtensionTest_la_SOURCES_DIST
 	$(am__Libraries_libTestWebKitAPIMain_la_SOURCES_DIST) \
 	$(am__Libraries_libgtest_la_SOURCES_DIST) \
 	$(am__TestNetscapePlugin_libTestNetscapePlugin_la_SOURCES_DIST) \
-	$(libANGLE_la_SOURCES) $(libGObjectDOMBindings_la_SOURCES) \
-	$(libLevelDB_la_SOURCES) $(am__libPlatform_la_SOURCES_DIST) \
+	$(am__libANGLE_la_SOURCES_DIST) \
+	$(libGObjectDOMBindings_la_SOURCES) $(libLevelDB_la_SOURCES) \
+	$(am__libPlatform_la_SOURCES_DIST) \
 	$(am__libPlatformGtk_la_SOURCES_DIST) \
 	$(am__libPlatformGtk2_la_SOURCES_DIST) $(libWTF_la_SOURCES) \
 	$(am__libWebCore_la_SOURCES_DIST) \
@@ -12817,6 +12963,8 @@ G_IR_SCANNER = @G_IR_SCANNER@
 HARFBUZZ_ICU_CFLAGS = @HARFBUZZ_ICU_CFLAGS@
 HARFBUZZ_ICU_LIBS = @HARFBUZZ_ICU_LIBS@
 HTML_DIR = @HTML_DIR@
+ICU_CFLAGS = @ICU_CFLAGS@
+ICU_LIBS = @ICU_LIBS@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -13001,7 +13149,7 @@ INSPECTOR_SCRIPTS_DIR := $(JavaScriptCore)/inspector/scripts
 
 # Libraries and support components
 bin_PROGRAMS := Programs/jsc-@WEBKITGTK_API_MAJOR_VERSION@$(EXEEXT)
-noinst_DATA := $(am__append_35) $(am__append_98)
+noinst_DATA := $(am__append_36) $(am__append_101)
 noinst_HEADERS := 
 
 # We have a different library with only the files that require GTK+. It allows us
@@ -13011,12 +13159,12 @@ noinst_HEADERS :=
 # the common libWebCore and two libWebCoreGtk, one using gtk3 and the other one using gtk2.
 noinst_LTLIBRARIES := libWTF.la libPlatform.la libPlatformGtk.la \
 	libWebCorePlatform.la libWebCoreModules.la libWebCore.la \
-	$(am__append_30) libWebCoreGtk.la libGObjectDOMBindings.la \
-	$(am__append_54) $(am__append_70) $(am__append_71) \
-	$(am__append_77) $(am__append_85) $(am__append_88) \
-	$(am__append_89)
+	$(am__append_31) libWebCoreGtk.la libGObjectDOMBindings.la \
+	$(am__append_55) $(am__append_71) $(am__append_74) \
+	$(am__append_80) $(am__append_88) $(am__append_91) \
+	$(am__append_92)
 lib_LTLIBRARIES := libjavascriptcoregtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
-	$(am__append_36) $(am__append_53)
+	$(am__append_37) $(am__append_54)
 IDL_BINDINGS := 
 POFILES := $(shell ls $(srcdir)/Source/WebCore/platform/gtk/po/*.po)
 PO_LINGUAS := $(patsubst \
@@ -15088,7 +15236,7 @@ platform_cppflags := -I$(srcdir)/Source/ThirdParty/ANGLE/src \
 	-I$(srcdir)/Source/ThirdParty/ANGLE/include \
 	-I$(srcdir)/Source/ThirdParty/ANGLE/include/GLSLANG \
 	-I$(srcdir)/Source/ThirdParty/ANGLE/include/KHR \
-	-I$(top_builddir)/DerivedSources/Platform $(am__append_29)
+	-I$(top_builddir)/DerivedSources/Platform $(am__append_30)
 platform_built_sources := DerivedSources/Platform/ColorData.cpp \
 	DerivedSources/Platform/WebKitFontFamilyNames.cpp \
 	DerivedSources/Platform/WebKitFontFamilyNames.h \
@@ -15675,7 +15823,7 @@ platform_sources :=  \
 	Source/WebCore/platform/Widget.cpp \
 	Source/WebCore/platform/Widget.h \
 	Source/WebCore/platform/WindowsKeyboardCodes.h \
-	$(am__append_21)
+	$(am__append_22)
 platformgtk_cppflags :=  \
 	-DWEBKITGTK_API_VERSION_STRING=\"@WEBKITGTK_API_VERSION@\" \
 	-DDATA_DIR=\"${datadir}\"
@@ -15748,8 +15896,8 @@ platformgtk_sources :=  \
 	Source/WebCore/platform/network/gtk/CredentialBackingStore.cpp \
 	Source/WebCore/platform/network/gtk/CredentialBackingStore.h \
 	Source/WebCore/platform/text/gtk/TextBreakIteratorInternalICUGtk.cpp \
-	$(am__append_9) $(am__append_12) $(am__append_13) \
-	$(am__append_18)
+	$(am__append_9) $(am__append_10) $(am__append_13) \
+	$(am__append_14) $(am__append_19)
 webcore_platform_sources :=  \
 	Source/WebCore/platform/animation/Animation.cpp \
 	Source/WebCore/platform/animation/Animation.h \
@@ -15962,7 +16110,7 @@ webcore_platform_sources :=  \
 	Source/WebCore/platform/ThreadGlobalData.cpp \
 	Source/WebCore/platform/ThreadGlobalData.h \
 	Source/WebCore/platform/UserActivity.cpp \
-	Source/WebCore/platform/UserActivity.h $(am__append_22)
+	Source/WebCore/platform/UserActivity.h $(am__append_23)
 webcore_modules_sources :=  \
 	Source/WebCore/Modules/battery/BatteryClient.h \
 	Source/WebCore/Modules/battery/BatteryController.cpp \
@@ -17326,7 +17474,7 @@ webcore_cppflags := -I$(srcdir)/Source/ThirdParty/ANGLE/src \
 	-I$(top_builddir)/DerivedSources/WebCore \
 	-I$(top_builddir)/DerivedSources \
 	-I$(top_builddir)/DerivedSources/JavaScriptCore \
-	$(am__append_27) $(am__append_28)
+	$(am__append_28) $(am__append_29)
 webcore_sources :=  \
 	Source/WebCore/accessibility/AccessibilityARIAGridCell.cpp \
 	Source/WebCore/accessibility/AccessibilityARIAGridCell.h \
@@ -19867,9 +20015,9 @@ webcore_sources :=  \
 	Source/WebCore/xml/XSLTProcessor.h \
 	Source/WebCore/xml/XSLTProcessorLibxslt.cpp \
 	Source/WebCore/xml/XSLTUnicodeSort.cpp \
-	Source/WebCore/xml/XSLTUnicodeSort.h $(am__append_11) \
-	$(am__append_15) $(am__append_17) $(am__append_19) \
-	$(am__append_20) $(am__append_23)
+	Source/WebCore/xml/XSLTUnicodeSort.h $(am__append_12) \
+	$(am__append_16) $(am__append_18) $(am__append_20) \
+	$(am__append_21) $(am__append_24)
 webcore_libadd := 
 
 # These files need to be part of WebCore otherwise they cause undefined
@@ -20813,8 +20961,8 @@ webcoregtk_sources :=  \
 	Source/WebCore/platform/gtk/ScrollbarThemeGtk3.cpp \
 	Source/WebCore/platform/gtk/WidgetRenderingContext.cpp \
 	Source/WebCore/platform/gtk/WidgetRenderingContext.h \
-	$(am__append_8) $(am__append_10) $(am__append_14) \
-	$(am__append_16)
+	$(am__append_8) $(am__append_11) $(am__append_15) \
+	$(am__append_17)
 webcoregtk_cppflags :=  \
 	-DWEBKITGTK_API_VERSION_STRING=\"@WEBKITGTK_API_VERSION@\" \
 	-I$(srcdir)/Source/WebCore/accessibility/atk \
@@ -20834,7 +20982,7 @@ webcoregtk_cppflags :=  \
 	-I$(srcdir)/Source/WebCore/platform/mediastream/gstreamer \
 	-I$(srcdir)/Source/WebCore/platform/network/soup \
 	-I$(srcdir)/Source/WebCore/platform/text/enchant \
-	$(am__append_24)
+	$(am__append_25)
 webkitgtk_built_h_api := Source/WebKit/gtk/webkit/webkitversion.h
 webkitgtk_static_h_api := $(srcdir)/Source/WebKit/gtk/webkit/webkit.h \
 	$(srcdir)/Source/WebKit/gtk/webkit/webkitapplicationcache.h \
@@ -20869,7 +21017,7 @@ webkitgtk_static_h_api := $(srcdir)/Source/WebKit/gtk/webkit/webkit.h \
 	$(srcdir)/Source/WebKit/gtk/webkit/webkitwebwindowfeatures.h \
 	$(srcdir)/Source/WebKit/gtk/webkit/webkitwebview.h
 webkitgtk_h_api := $(webkitgtk_built_h_api) $(webkitgtk_static_h_api)
-webkitgtk_sources := $(am__append_37) \
+webkitgtk_sources := $(am__append_38) \
 	Source/WebKit/gtk/WebCoreSupport/AcceleratedCompositingContext.h \
 	Source/WebKit/gtk/WebCoreSupport/AcceleratedCompositingContextGL.cpp \
 	Source/WebKit/gtk/WebCoreSupport/AssertMatchingEnums.cpp \
@@ -21121,7 +21269,7 @@ webkitgtk_gdom_built_h_api :=  \
 	DerivedSources/webkitdom/WebKitDOMPerformanceTiming.h \
 	DerivedSources/webkitdom/WebKitDOMWheelEvent.h \
 	DerivedSources/webkitdom/webkitdom.h \
-	DerivedSources/webkitdom/webkitdomdefines.h $(am__append_31)
+	DerivedSources/webkitdom/webkitdomdefines.h $(am__append_32)
 webkitgtk_gdom_built_sources :=  \
 	DerivedSources/webkitdom/WebKitDOMAttr.cpp \
 	DerivedSources/webkitdom/WebKitDOMAttrPrivate.h \
@@ -21407,7 +21555,7 @@ webkitgtk_gdom_built_sources :=  \
 	DerivedSources/webkitdom/WebKitDOMXPathNSResolverPrivate.h \
 	DerivedSources/webkitdom/WebKitDOMXPathResult.cpp \
 	DerivedSources/webkitdom/WebKitDOMXPathResultPrivate.h \
-	$(am__append_32)
+	$(am__append_33)
 
 # webkitenumtypes.{h,cpp} cannot be in webkitgtk_built_h_api, because
 # the rule that builds it depends on webkitgtk_built_h_api (circular dependency).
@@ -22485,8 +22633,8 @@ webkit2_sources := Source/WebKit2/config.h \
 	Source/WebKit2/WebProcess/WebConnectionToUIProcess.h \
 	Source/WebKit2/WebProcess/WebProcessSupplement.h \
 	Source/WebKit2/WebProcess/WebProcess.cpp \
-	Source/WebKit2/WebProcess/WebProcess.h $(am__append_48) \
-	$(am__append_49) $(am__append_50)
+	Source/WebKit2/WebProcess/WebProcess.h $(am__append_49) \
+	$(am__append_50) $(am__append_51)
 webkit2_built_sources := DerivedSources/WebKit2/AuthenticationManagerMessageReceiver.cpp \
 	DerivedSources/WebKit2/AuthenticationManagerMessages.h \
 	DerivedSources/WebKit2/CustomProtocolManagerProxyMessageReceiver.cpp \
@@ -22760,8 +22908,8 @@ webkit2_plugin_process_sources :=  \
 	Source/WebKit2/WebProcess/Plugins/Netscape/NetscapePlugin.h \
 	Source/WebKit2/WebProcess/Plugins/Netscape/NetscapePluginStream.cpp \
 	Source/WebKit2/WebProcess/Plugins/Netscape/NetscapePluginStream.h \
-	Source/WebKit2/unix/PluginMainUnix.cpp $(am__append_51) \
-	$(am__append_52)
+	Source/WebKit2/unix/PluginMainUnix.cpp $(am__append_52) \
+	$(am__append_53)
 webkit2_plugin_process_built_sources := DerivedSources/WebKit2/NPObjectMessageReceiverMessageReceiver.cpp \
 	DerivedSources/WebKit2/NPObjectMessageReceiverMessages.h \
 	DerivedSources/WebKit2/PluginControllerProxyMessageReceiver.cpp \
@@ -22770,8 +22918,8 @@ webkit2_plugin_process_built_sources := DerivedSources/WebKit2/NPObjectMessageRe
 	DerivedSources/WebKit2/PluginProcessMessages.h \
 	DerivedSources/WebKit2/WebProcessConnectionMessageReceiver.cpp \
 	DerivedSources/WebKit2/WebProcessConnectionMessages.h
-webkittestrunner_built_sources := $(am__append_102)
-libwebcoreinternals_built_sources := $(am__append_81)
+webkittestrunner_built_sources := $(am__append_105)
+libwebcoreinternals_built_sources := $(am__append_84)
 minibrowser_built_sources := DerivedSources/WebKit2/BrowserMarshal.h \
 	DerivedSources/WebKit2/BrowserMarshal.c
 global_cppflags := -Wall -W -Wcast-align -Wchar-subscripts \
@@ -22981,7 +23129,7 @@ EXTRA_DIST := $(srcdir)/Source/autotools/symbols.filter \
 	$(WebKit2)/WebProcess/WebPage/*.in) $(shell ls \
 	$(WebKit2)/WebProcess/soup/*.in) \
 	$(srcdir)/Tools/MiniBrowser/gtk/browser-marshal.list \
-	$(am__append_78)
+	$(am__append_81)
 
 # Include module makefiles
 
@@ -22992,12 +23140,12 @@ EXTRA_DIST := $(srcdir)/Source/autotools/symbols.filter \
 BUILT_SOURCES := $(webkitgtk_gdom_built_h_api) \
 	$(webkitgtk_gdom_built_sources) gtkdoc-webkitdom.cfg \
 	DerivedSources/WebInspectorUI/GResourceBundle.xml \
-	$(webkitgtk_built_sources) $(am__append_46) \
+	$(webkitgtk_built_sources) $(am__append_47) \
 	$(top_builddir)/stamp-webkit2-forwarding-headers \
 	$(GENSOURCES_WEBKIT2)/webkit2extension/include/webkit2 \
 	$(GENSOURCES_WEBKIT2)/webkit2gtk/include/webkit2 \
-	$(am__append_68) $(minibrowser_built_sources) $(am__append_82) \
-	$(am__append_99) $(am__append_100) \
+	$(am__append_69) $(minibrowser_built_sources) $(am__append_85) \
+	$(am__append_102) $(am__append_103) \
 	$(javascriptcore_built_sources) \
 	$(javascriptcore_built_nosources) $(platform_built_sources) \
 	$(webcore_built_sources) $(webcore_built_nosources) \
@@ -23013,12 +23161,12 @@ BUILT_SOURCES := $(webkitgtk_gdom_built_h_api) \
 CLEANFILES := $(javascriptcore_built_nosources) Programs/jsc \
 	Programs/jsc-@WEBKITGTK_API_MAJOR_VERSION@ \
 	Programs/LLIntOffsetsExtractor Programs/minidom \
-	$(am__append_6) $(top_builddir)/stamp-po $(am__append_45) \
+	$(am__append_6) $(top_builddir)/stamp-po $(am__append_46) \
 	$(BUILT_SOURCES) $(top_builddir)/stamp-webkitmarshal.cpp \
 	$(top_builddir)/stamp-webkitmarshal.h \
 	$(top_builddir)/stamp-webkitenumtypes.cpp \
 	$(top_builddir)/stamp-webkitenumtypes.h \
-	$(top_builddir)/Programs/GtkLauncher $(am__append_63) \
+	$(top_builddir)/Programs/GtkLauncher $(am__append_64) \
 	$(BUILT_SOURCES) $(top_builddir)/stamp-webkit2enumtypes \
 	$(top_builddir)/stamp-webkit2marshal.cpp \
 	$(top_builddir)/stamp-webkit2marshal.h \
@@ -23027,8 +23175,8 @@ CLEANFILES := $(javascriptcore_built_nosources) Programs/jsc \
 	$(top_builddir)/Programs/MiniBrowser \
 	$(minibrowser_built_sources) \
 	$(top_builddir)/stamp-mini-browser-marshal.h \
-	$(top_builddir)/stamp-mini-browser-marshal.c $(am__append_84) \
-	$(am__append_87)
+	$(top_builddir)/stamp-mini-browser-marshal.c $(am__append_87) \
+	$(am__append_90)
 DOMAIN := $(GETTEXT_PACKAGE)
 DISTCLEANFILES := $(top_builddir)/Source/JavaScriptCore/javascriptcoregtk-@WEBKITGTK_API_VERSION@.pc \
 	$(ALL_MOFILES) \
@@ -23038,7 +23186,7 @@ DISTCLEANFILES := $(top_builddir)/Source/JavaScriptCore/javascriptcoregtk-@WEBKI
 	$(top_builddir)/Source/WebKit/gtk/org.webkitgtk-@WEBKITGTK_API_VERSION@.gschema.xml \
 	$(top_builddir)/Source/WebKit/gtk/webkit/webkitversion.h \
 	$(top_builddir)/WebKit2/webkit2gtk-@WEBKITGTK_API_VERSION@.pc \
-	$(top_builddir)/libWebCoreLayerGtk2.a $(am__append_97) \
+	$(top_builddir)/libWebCoreLayerGtk2.a $(am__append_100) \
 	$(CLEANFILES) $(builddir)/doltcompile $(builddir)/doltlibtool \
 	$(builddir)/WebKitFeatures.h $(builddir)/WebKitFeatures.txt
 MAINTAINERCLEANFILES := $(ALL_MOFILES) \
@@ -23052,24 +23200,14 @@ MAINTAINERCLEANFILES := $(ALL_MOFILES) \
 	$(srcdir)/GNUmakefile.in $(srcdir)/INSTALL $(srcdir)/README \
 	$(top_builddir)/config.*
 pkgconfig_DATA := Source/JavaScriptCore/javascriptcoregtk-@WEBKITGTK_API_VERSION@.pc \
-	$(am__append_42) $(am__append_60)
+	$(am__append_43) $(am__append_61)
 gdom_symbol_files := $(patsubst %.h,%.symbols, $(filter \
 	DerivedSources/webkitdom/WebKitDOM%.h, \
 	$(webkitgtk_gdom_built_h_api)))
-inspector_files :=  \
-	$(WebInspectorUI)/Localizations/en.lproj/localizedStrings.js \
-	$(shell ls $(WebInspectorUI)/UserInterface/*.html) $(shell ls \
-	$(WebInspectorUI)/UserInterface/*.js) $(shell ls \
-	$(WebInspectorUI)/UserInterface/*.css) $(shell ls \
-	$(WebInspectorUI)/UserInterface/Images/gtk/*.png) $(shell ls \
-	$(WebInspectorUI)/UserInterface/Images/gtk/*.svg) $(shell ls \
-	$(WebInspectorUI)/UserInterface/External/CodeMirror/*.js) \
-	$(shell ls \
-	$(WebInspectorUI)/UserInterface/External/CodeMirror/*.css)
 @ENABLE_INTROSPECTION_TRUE@gir_DATA := JavaScriptCore-@WEBKITGTK_API_VERSION@.gir \
-@ENABLE_INTROSPECTION_TRUE@	$(am__append_43) $(am__append_61)
-@ENABLE_INTROSPECTION_TRUE@typelibs_DATA := JavaScriptCore-@WEBKITGTK_API_VERSION@.typelib \
 @ENABLE_INTROSPECTION_TRUE@	$(am__append_44) $(am__append_62)
+@ENABLE_INTROSPECTION_TRUE@typelibs_DATA := JavaScriptCore-@WEBKITGTK_API_VERSION@.typelib \
+@ENABLE_INTROSPECTION_TRUE@	$(am__append_45) $(am__append_63)
 @ENABLE_INTROSPECTION_TRUE@girdir := $(datadir)/gir-1.0
 @ENABLE_INTROSPECTION_TRUE@typelibsdir := $(libdir)/girepository-1.0
 webkit1_pkg_config_file = Source/WebKit/gtk/webkitgtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.pc
@@ -23294,9 +23432,9 @@ libPlatformGtk_la_CPPFLAGS = \
 	$(LIBSOUP_CFLAGS)
 
 WEBCORE_CSS_PROPERTY_NAMES := $(WebCore)/css/CSSPropertyNames.in \
-	$(am__append_25)
-WEBCORE_CSS_VALUE_KEYWORDS := $(WebCore)/css/CSSValueKeywords.in \
 	$(am__append_26)
+WEBCORE_CSS_VALUE_KEYWORDS := $(WebCore)/css/CSSValueKeywords.in \
+	$(am__append_27)
 
 # ----
 # SVG Support
@@ -23642,9 +23780,29 @@ MSGFMT := $(shell which msgfmt)
 XGETTEXT := $(shell which xgettext)
 MSGMERGE := $(shell which msgmerge)
 MSGMERGE_UPDATE := $(MSGMERGE) --update
+inspector_files = \
+	"$(WebInspectorUI)/Localizations/en.lproj/localizedStrings.js" \
+	"$(WebInspectorUI)/UserInterface/*.html" \
+	"$(WebInspectorUI)/UserInterface/*.js" \
+	"$(WebInspectorUI)/UserInterface/*.css" \
+	"$(WebInspectorUI)/UserInterface/Images/gtk/*.png" \
+	"$(WebInspectorUI)/UserInterface/Images/gtk/*.svg" \
+	"$(WebInspectorUI)/UserInterface/External/CodeMirror/*.js" \
+	"$(WebInspectorUI)/UserInterface/External/CodeMirror/*.css"
+
+inspector_files_dependencies = \
+	$(WebInspectorUI)/Localizations/en.lproj/localizedStrings.js \
+	$(shell ls $(WebInspectorUI)/UserInterface/*.html) \
+	$(shell ls $(WebInspectorUI)/UserInterface/*.js) \
+	$(shell ls $(WebInspectorUI)/UserInterface/*.css) \
+	$(shell ls $(WebInspectorUI)/UserInterface/Images/gtk/*.png) \
+	$(shell ls $(WebInspectorUI)/UserInterface/Images/gtk/*.svg) \
+	$(shell ls $(WebInspectorUI)/UserInterface/External/CodeMirror/*.js) \
+	$(shell ls $(WebInspectorUI)/UserInterface/External/CodeMirror/*.css)
+
 docs_build_dependencies =  \
-	Source/WebKit/gtk/docs/webkitenvironment.xml $(am__append_33) \
-	$(am__append_34) libGObjectDOMBindings.la gtkdoc-webkitdom.cfg
+	Source/WebKit/gtk/docs/webkitenvironment.xml $(am__append_34) \
+	$(am__append_35) libGObjectDOMBindings.la gtkdoc-webkitdom.cfg
 nodist_libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_SOURCES = \
 	$(webkitgtk_built_sources)
 
@@ -23710,12 +23868,12 @@ libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_CPPF
 
 libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_LDFLAGS :=  \
 	-version-info @LIBWEBKITGTK_VERSION@ $(no_undefined) \
-	$(am__append_38)
+	$(am__append_39)
 libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_LIBADD :=  \
 	-lpthread libPlatform.la libPlatformGtk.la libWebCore.la \
 	libWebCorePlatform.la libWebCoreModules.la \
-	libGObjectDOMBindings.la libWebCoreGtk.la $(am__append_39) \
-	$(am__append_40) $(am__append_41) \
+	libGObjectDOMBindings.la libWebCoreGtk.la $(am__append_40) \
+	$(am__append_41) $(am__append_42) \
 	libjavascriptcoregtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
 	$(CAIRO_LIBS) $(COVERAGE_LDFLAGS) $(ENCHANT_LIBS) \
 	$(FREETYPE_LIBS) $(GAMEPAD_LIBS) $(GEOCLUE_LIBS) $(GLIB_LIBS) \
@@ -23957,11 +24115,11 @@ libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_ladir 
 
 libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_LDFLAGS :=  \
 	-version-info @LIBWEBKIT2GTK_VERSION@ $(no_undefined) \
-	$(am__append_56)
+	$(am__append_57)
 libwebkit2gtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_LIBADD :=  \
 	-lpthread libWebCore.la libWebCorePlatform.la \
-	libWebCoreModules.la $(am__append_57) $(am__append_58) \
-	$(am__append_59) \
+	libWebCoreModules.la $(am__append_58) $(am__append_59) \
+	$(am__append_60) \
 	libjavascriptcoregtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
 	libPlatform.la libPlatformGtk.la libGObjectDOMBindings.la \
 	libWebCoreGtk.la libWebKit2Platform.la $(CAIRO_LIBS) \
@@ -24135,11 +24293,11 @@ libwebkit2gtkinjectedbundle_la_CPPFLAGS = \
 # Serialize linking of the plugin process with both webkit libraries.
 plugin_process_for_dep = Programs/WebKitPluginProcess
 plugin_process_for_dep_list = libwebkit2gtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
-	$(am__append_64)
+	$(am__append_65)
 webcore_layer_gtk2_deps = libPlatform.la libPlatformGtk2.la \
 	libWebCorePlatform.la libWebCoreGtk2.la libWebCore.la \
-	libWebCoreModules.la $(am__append_65) $(am__append_66) \
-	$(am__append_67)
+	libWebCoreModules.la $(am__append_66) $(am__append_67) \
+	$(am__append_68)
 webcore_layer_gtk2_archives = $(foreach lib, $(webcore_layer_gtk2_deps), $(shell echo $(lib) | sed "s/\(.*\)\.la/.libs\/\1.a/"))
 Programs_WebKitPluginProcess_CPPFLAGS = \
 	-include $(srcdir)/Source/WebKit2/WebKit2Prefix.h \
@@ -24289,8 +24447,7 @@ nodist_libANGLE_la_SOURCES = \
 	DerivedSources/ANGLE/glslang_tab.cpp \
 	DerivedSources/ANGLE/glslang_tab.h
 
-libANGLE_la_SOURCES = \
-	Source/ThirdParty/ANGLE/include/EGL/egl.h \
+libANGLE_la_SOURCES = Source/ThirdParty/ANGLE/include/EGL/egl.h \
 	Source/ThirdParty/ANGLE/include/EGL/eglext.h \
 	Source/ThirdParty/ANGLE/include/EGL/eglplatform.h \
 	Source/ThirdParty/ANGLE/include/GLES2/gl2.h \
@@ -24349,7 +24506,6 @@ libANGLE_la_SOURCES = \
 	Source/ThirdParty/ANGLE/src/compiler/MMap.h \
 	Source/ThirdParty/ANGLE/src/compiler/NodeSearch.h \
 	Source/ThirdParty/ANGLE/src/compiler/osinclude.h \
-	Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp \
 	Source/ThirdParty/ANGLE/src/compiler/OutputESSL.cpp \
 	Source/ThirdParty/ANGLE/src/compiler/OutputESSL.h \
 	Source/ThirdParty/ANGLE/src/compiler/OutputGLSLBase.cpp \
@@ -24429,15 +24585,15 @@ libANGLE_la_SOURCES = \
 	Source/ThirdParty/ANGLE/src/compiler/VersionGLSL.cpp \
 	Source/ThirdParty/ANGLE/src/compiler/VersionGLSL.h \
 	Source/ThirdParty/ANGLE/src/third_party/compiler/ArrayBoundsClamper.cpp \
-	Source/ThirdParty/ANGLE/src/third_party/compiler/ArrayBoundsClamper.h
-
+	Source/ThirdParty/ANGLE/src/third_party/compiler/ArrayBoundsClamper.h \
+	$(am__append_72) $(am__append_73)
 libLevelDB_la_CXXFLAGS = $(global_cxxflags)
 libLevelDB_la_CFLAGS = $(global_cflags)
 libLevelDB_la_CPPFLAGS = $(global_cppflags) -fno-builtin-memcmp \
 	-I$(srcdir)/Source/ThirdParty/leveldb \
 	-I$(srcdir)/Source/ThirdParty/leveldb/include \
-	-DLEVELDB_PLATFORM_POSIX $(am__append_72) $(am__append_73) \
-	$(am__append_74) $(am__append_75) $(am__append_76)
+	-DLEVELDB_PLATFORM_POSIX $(am__append_75) $(am__append_76) \
+	$(am__append_77) $(am__append_78) $(am__append_79)
 libLevelDB_la_SOURCES = \
 	Source/ThirdParty/leveldb/db/builder.cc\
 	Source/ThirdParty/leveldb/db/builder.h \
@@ -24625,7 +24781,7 @@ libLevelDB_la_SOURCES = \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(platform_cppflags) \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(platformgtk_cppflags) \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(webcore_cppflags) \
-@ENABLE_DEVELOPER_MODE_TRUE@	$(am__append_83)
+@ENABLE_DEVELOPER_MODE_TRUE@	$(am__append_86)
 @ENABLE_DEVELOPER_MODE_TRUE@Programs_DumpRenderTree_SOURCES = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Source/WebCore/platform/gtk/GtkVersioning.c \
 @ENABLE_DEVELOPER_MODE_TRUE@	Tools/DumpRenderTree/DumpRenderTree.h \
@@ -24738,7 +24894,7 @@ libLevelDB_la_SOURCES = \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	$(global_cppflags) \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	$(javascriptcore_cppflags) \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	-Wno-missing-format-attribute \
-@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	$(am__append_86) \
+@ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	$(am__append_89) \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	-DMOZ_X11
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@TestNetscapePlugin_libTestNetscapePlugin_la_SOURCES = \
 @ENABLE_DEVELOPER_MODE_TRUE@@TARGET_X11_TRUE@	Tools/DumpRenderTree/TestNetscapePlugIn/Tests/DocumentOpenInDestroyStream.cpp \
@@ -24871,8 +25027,6 @@ libLevelDB_la_SOURCES = \
 @ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebKitTestBus.h \
 @ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebKitTestServer.cpp \
 @ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebKitTestServer.h \
-@ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebProcessTestRunner.cpp \
-@ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebProcessTestRunner.h \
 @ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/TestMain.cpp \
 @ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/TestMain.h \
 @ENABLE_DEVELOPER_MODE_TRUE@	Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebViewTest.cpp \
@@ -24951,8 +25105,8 @@ libLevelDB_la_SOURCES = \
 @ENABLE_DEVELOPER_MODE_TRUE@	libWebCorePlatform.la \
 @ENABLE_DEVELOPER_MODE_TRUE@	libWebCoreGtk.la libWebCore.la \
 @ENABLE_DEVELOPER_MODE_TRUE@	libWebCoreModules.la \
-@ENABLE_DEVELOPER_MODE_TRUE@	$(am__append_94) $(am__append_95) \
-@ENABLE_DEVELOPER_MODE_TRUE@	$(am__append_96)
+@ENABLE_DEVELOPER_MODE_TRUE@	$(am__append_97) $(am__append_98) \
+@ENABLE_DEVELOPER_MODE_TRUE@	$(am__append_99)
 @ENABLE_DEVELOPER_MODE_TRUE@webcore_layer_archives = $(foreach lib, $(webcore_layer_deps), $(shell echo $(lib) | sed "s/\(.*\)\.la/.libs\/\1.a/"))
 @ENABLE_DEVELOPER_MODE_TRUE@Programs_TestWebKitAPI_WebCore_TestWebCore_CPPFLAGS = \
 @ENABLE_DEVELOPER_MODE_TRUE@	$(Libraries_libTestWebKitAPIMain_la_CPPFLAGS) \
@@ -25977,9 +26131,6 @@ Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebKitTestB
 Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebKitTestServer.lo:  \
 	Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(am__dirstamp) \
 	Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/$(am__dirstamp)
-Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebProcessTestRunner.lo:  \
-	Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(am__dirstamp) \
-	Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/$(am__dirstamp)
 Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-TestMain.lo:  \
 	Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(am__dirstamp) \
 	Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/$(am__dirstamp)
@@ -26285,9 +26436,6 @@ Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-IntermTraverse.lo:  \
 Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-MapLongVariableNames.lo:  \
 	Source/ThirdParty/ANGLE/src/compiler/$(am__dirstamp) \
 	Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/$(am__dirstamp)
-Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo:  \
-	Source/ThirdParty/ANGLE/src/compiler/$(am__dirstamp) \
-	Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/$(am__dirstamp)
 Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-OutputESSL.lo:  \
 	Source/ThirdParty/ANGLE/src/compiler/$(am__dirstamp) \
 	Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/$(am__dirstamp)
@@ -26405,6 +26553,12 @@ Source/ThirdParty/ANGLE/src/third_party/compiler/$(DEPDIR)/$(am__dirstamp):
 	@: > Source/ThirdParty/ANGLE/src/third_party/compiler/$(DEPDIR)/$(am__dirstamp)
 Source/ThirdParty/ANGLE/src/third_party/compiler/libANGLE_la-ArrayBoundsClamper.lo: Source/ThirdParty/ANGLE/src/third_party/compiler/$(am__dirstamp) \
 	Source/ThirdParty/ANGLE/src/third_party/compiler/$(DEPDIR)/$(am__dirstamp)
+Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_win.lo:  \
+	Source/ThirdParty/ANGLE/src/compiler/$(am__dirstamp) \
+	Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/$(am__dirstamp)
+Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo:  \
+	Source/ThirdParty/ANGLE/src/compiler/$(am__dirstamp) \
+	Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/$(am__dirstamp)
 DerivedSources/ANGLE/$(am__dirstamp):
 	@$(MKDIR_P) DerivedSources/ANGLE
 	@: > DerivedSources/ANGLE/$(am__dirstamp)
@@ -28165,6 +28319,9 @@ Source/WebCore/platform/text/gtk/libPlatformGtk_la-TextBreakIteratorInternalICUG
 Source/WebCore/platform/gtk/libPlatformGtk_la-WidgetBackingStoreGtkX11.lo:  \
 	Source/WebCore/platform/gtk/$(am__dirstamp) \
 	Source/WebCore/platform/gtk/$(DEPDIR)/$(am__dirstamp)
+Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo:  \
+	Source/WebCore/platform/gtk/$(am__dirstamp) \
+	Source/WebCore/platform/gtk/$(DEPDIR)/$(am__dirstamp)
 Source/WebCore/platform/cairo/$(am__dirstamp):
 	@$(MKDIR_P) Source/WebCore/platform/cairo
 	@: > Source/WebCore/platform/cairo/$(am__dirstamp)
@@ -28177,9 +28334,6 @@ Source/WebCore/platform/cairo/libPlatformGtk_la-WidgetBackingStoreCairo.lo:  \
 Source/WebCore/platform/graphics/libPlatformGtk_la-GLContext.lo:  \
 	Source/WebCore/platform/graphics/$(am__dirstamp) \
 	Source/WebCore/platform/graphics/$(DEPDIR)/$(am__dirstamp)
-Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo:  \
-	Source/WebCore/platform/gtk/$(am__dirstamp) \
-	Source/WebCore/platform/gtk/$(DEPDIR)/$(am__dirstamp)
 
 libPlatformGtk.la: $(libPlatformGtk_la_OBJECTS) $(libPlatformGtk_la_DEPENDENCIES) $(EXTRA_libPlatformGtk_la_DEPENDENCIES) 
 	$(AM_V_CXXLD)$(libPlatformGtk_la_LINK)  $(libPlatformGtk_la_OBJECTS) $(libPlatformGtk_la_LIBADD) $(LIBS)
@@ -28318,15 +28472,15 @@ Source/WebCore/platform/text/gtk/libPlatformGtk2_la-TextBreakIteratorInternalICU
 Source/WebCore/platform/gtk/libPlatformGtk2_la-WidgetBackingStoreGtkX11.lo:  \
 	Source/WebCore/platform/gtk/$(am__dirstamp) \
 	Source/WebCore/platform/gtk/$(DEPDIR)/$(am__dirstamp)
+Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo:  \
+	Source/WebCore/platform/gtk/$(am__dirstamp) \
+	Source/WebCore/platform/gtk/$(DEPDIR)/$(am__dirstamp)
 Source/WebCore/platform/cairo/libPlatformGtk2_la-WidgetBackingStoreCairo.lo:  \
 	Source/WebCore/platform/cairo/$(am__dirstamp) \
 	Source/WebCore/platform/cairo/$(DEPDIR)/$(am__dirstamp)
 Source/WebCore/platform/graphics/libPlatformGtk2_la-GLContext.lo:  \
 	Source/WebCore/platform/graphics/$(am__dirstamp) \
 	Source/WebCore/platform/graphics/$(DEPDIR)/$(am__dirstamp)
-Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo:  \
-	Source/WebCore/platform/gtk/$(am__dirstamp) \
-	Source/WebCore/platform/gtk/$(DEPDIR)/$(am__dirstamp)
 
 libPlatformGtk2.la: $(libPlatformGtk2_la_OBJECTS) $(libPlatformGtk2_la_DEPENDENCIES) $(EXTRA_libPlatformGtk2_la_DEPENDENCIES) 
 	$(AM_V_CXXLD)$(libPlatformGtk2_la_LINK) $(am_libPlatformGtk2_la_rpath) $(libPlatformGtk2_la_OBJECTS) $(libPlatformGtk2_la_LIBADD) $(LIBS)
@@ -43482,6 +43636,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-debug.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-intermOut.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-ossource_posix.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-ossource_win.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-parseConst.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-util.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Source/ThirdParty/ANGLE/src/compiler/depgraph/$(DEPDIR)/libANGLE_la-DependencyGraph.Plo@am__quote@
@@ -46655,7 +46810,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/Libraries_libTestWebKit2GtkAPI_la-TestMain.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/Libraries_libTestWebKit2GtkAPI_la-WebKitTestBus.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/Libraries_libTestWebKit2GtkAPI_la-WebKitTestServer.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/Libraries_libTestWebKit2GtkAPI_la-WebProcessTestRunner.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/Libraries_libTestWebKit2GtkAPI_la-WebViewTest.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Tools/WebKitTestRunner/$(DEPDIR)/Programs_WebKitTestRunner-CyclicRedundancyCheck.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@Tools/WebKitTestRunner/$(DEPDIR)/Programs_WebKitTestRunner-GeolocationProviderMock.Po@am__quote@
@@ -47697,13 +47851,6 @@ Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebKitTestS
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(Libraries_libTestWebKit2GtkAPI_la_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebKitTestServer.lo `test -f 'Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebKitTestServer.cpp' || echo '$(srcdir)/'`Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebKitTestServer.cpp
 
-Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebProcessTestRunner.lo: Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebProcessTestRunner.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(Libraries_libTestWebKit2GtkAPI_la_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebProcessTestRunner.lo -MD -MP -MF Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/Libraries_libTestWebKit2GtkAPI_la-WebProcessTestRunner.Tpo -c -o Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebProcessTestRunner.lo `test -f 'Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebProcessTestRunner.cpp' || echo '$(srcdir)/'`Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebProcessTestRunner.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/Libraries_libTestWebKit2GtkAPI_la-WebProcessTestRunner.Tpo Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/Libraries_libTestWebKit2GtkAPI_la-WebProcessTestRunner.Plo
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebProcessTestRunner.cpp' object='Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebProcessTestRunner.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(Libraries_libTestWebKit2GtkAPI_la_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-WebProcessTestRunner.lo `test -f 'Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebProcessTestRunner.cpp' || echo '$(srcdir)/'`Tools/TestWebKitAPI/gtk/WebKit2Gtk/WebProcessTestRunner.cpp
-
 Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-TestMain.lo: Tools/TestWebKitAPI/gtk/WebKit2Gtk/TestMain.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(Libraries_libTestWebKit2GtkAPI_la_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-TestMain.lo -MD -MP -MF Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/Libraries_libTestWebKit2GtkAPI_la-TestMain.Tpo -c -o Tools/TestWebKitAPI/gtk/WebKit2Gtk/Libraries_libTestWebKit2GtkAPI_la-TestMain.lo `test -f 'Tools/TestWebKitAPI/gtk/WebKit2Gtk/TestMain.cpp' || echo '$(srcdir)/'`Tools/TestWebKitAPI/gtk/WebKit2Gtk/TestMain.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/Libraries_libTestWebKit2GtkAPI_la-TestMain.Tpo Tools/TestWebKitAPI/gtk/WebKit2Gtk/$(DEPDIR)/Libraries_libTestWebKit2GtkAPI_la-TestMain.Plo
@@ -48250,13 +48397,6 @@ Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-MapLongVariableNames.lo: Source
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libANGLE_la_CPPFLAGS) $(CPPFLAGS) $(libANGLE_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-MapLongVariableNames.lo `test -f 'Source/ThirdParty/ANGLE/src/compiler/MapLongVariableNames.cpp' || echo '$(srcdir)/'`Source/ThirdParty/ANGLE/src/compiler/MapLongVariableNames.cpp
 
-Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo: Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libANGLE_la_CPPFLAGS) $(CPPFLAGS) $(libANGLE_la_CXXFLAGS) $(CXXFLAGS) -MT Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo -MD -MP -MF Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-ossource_posix.Tpo -c -o Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo `test -f 'Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp' || echo '$(srcdir)/'`Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-ossource_posix.Tpo Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-ossource_posix.Plo
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp' object='Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libANGLE_la_CPPFLAGS) $(CPPFLAGS) $(libANGLE_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo `test -f 'Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp' || echo '$(srcdir)/'`Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp
-
 Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-OutputESSL.lo: Source/ThirdParty/ANGLE/src/compiler/OutputESSL.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libANGLE_la_CPPFLAGS) $(CPPFLAGS) $(libANGLE_la_CXXFLAGS) $(CXXFLAGS) -MT Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-OutputESSL.lo -MD -MP -MF Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-OutputESSL.Tpo -c -o Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-OutputESSL.lo `test -f 'Source/ThirdParty/ANGLE/src/compiler/OutputESSL.cpp' || echo '$(srcdir)/'`Source/ThirdParty/ANGLE/src/compiler/OutputESSL.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-OutputESSL.Tpo Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-OutputESSL.Plo
@@ -48515,6 +48655,20 @@ Source/ThirdParty/ANGLE/src/third_party/compiler/libANGLE_la-ArrayBoundsClamper.
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Source/ThirdParty/ANGLE/src/third_party/compiler/ArrayBoundsClamper.cpp' object='Source/ThirdParty/ANGLE/src/third_party/compiler/libANGLE_la-ArrayBoundsClamper.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libANGLE_la_CPPFLAGS) $(CPPFLAGS) $(libANGLE_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/ThirdParty/ANGLE/src/third_party/compiler/libANGLE_la-ArrayBoundsClamper.lo `test -f 'Source/ThirdParty/ANGLE/src/third_party/compiler/ArrayBoundsClamper.cpp' || echo '$(srcdir)/'`Source/ThirdParty/ANGLE/src/third_party/compiler/ArrayBoundsClamper.cpp
+
+Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_win.lo: Source/ThirdParty/ANGLE/src/compiler/ossource_win.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libANGLE_la_CPPFLAGS) $(CPPFLAGS) $(libANGLE_la_CXXFLAGS) $(CXXFLAGS) -MT Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_win.lo -MD -MP -MF Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-ossource_win.Tpo -c -o Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_win.lo `test -f 'Source/ThirdParty/ANGLE/src/compiler/ossource_win.cpp' || echo '$(srcdir)/'`Source/ThirdParty/ANGLE/src/compiler/ossource_win.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-ossource_win.Tpo Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-ossource_win.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Source/ThirdParty/ANGLE/src/compiler/ossource_win.cpp' object='Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_win.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libANGLE_la_CPPFLAGS) $(CPPFLAGS) $(libANGLE_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_win.lo `test -f 'Source/ThirdParty/ANGLE/src/compiler/ossource_win.cpp' || echo '$(srcdir)/'`Source/ThirdParty/ANGLE/src/compiler/ossource_win.cpp
+
+Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo: Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libANGLE_la_CPPFLAGS) $(CPPFLAGS) $(libANGLE_la_CXXFLAGS) $(CXXFLAGS) -MT Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo -MD -MP -MF Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-ossource_posix.Tpo -c -o Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo `test -f 'Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp' || echo '$(srcdir)/'`Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-ossource_posix.Tpo Source/ThirdParty/ANGLE/src/compiler/$(DEPDIR)/libANGLE_la-ossource_posix.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp' object='Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libANGLE_la_CPPFLAGS) $(CPPFLAGS) $(libANGLE_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/ThirdParty/ANGLE/src/compiler/libANGLE_la-ossource_posix.lo `test -f 'Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp' || echo '$(srcdir)/'`Source/ThirdParty/ANGLE/src/compiler/ossource_posix.cpp
 
 DerivedSources/ANGLE/libANGLE_la-glslang.lo: DerivedSources/ANGLE/glslang.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libANGLE_la_CPPFLAGS) $(CPPFLAGS) $(libANGLE_la_CXXFLAGS) $(CXXFLAGS) -MT DerivedSources/ANGLE/libANGLE_la-glslang.lo -MD -MP -MF DerivedSources/ANGLE/$(DEPDIR)/libANGLE_la-glslang.Tpo -c -o DerivedSources/ANGLE/libANGLE_la-glslang.lo `test -f 'DerivedSources/ANGLE/glslang.cpp' || echo '$(srcdir)/'`DerivedSources/ANGLE/glslang.cpp
@@ -51953,6 +52107,13 @@ Source/WebCore/platform/gtk/libPlatformGtk_la-WidgetBackingStoreGtkX11.lo: Sourc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/WebCore/platform/gtk/libPlatformGtk_la-WidgetBackingStoreGtkX11.lo `test -f 'Source/WebCore/platform/gtk/WidgetBackingStoreGtkX11.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/gtk/WidgetBackingStoreGtkX11.cpp
 
+Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo: Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk_la_CXXFLAGS) $(CXXFLAGS) -MT Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo -MD -MP -MF Source/WebCore/platform/gtk/$(DEPDIR)/libPlatformGtk_la-RedirectedXCompositeWindow.Tpo -c -o Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo `test -f 'Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Source/WebCore/platform/gtk/$(DEPDIR)/libPlatformGtk_la-RedirectedXCompositeWindow.Tpo Source/WebCore/platform/gtk/$(DEPDIR)/libPlatformGtk_la-RedirectedXCompositeWindow.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp' object='Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo `test -f 'Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp
+
 Source/WebCore/platform/cairo/libPlatformGtk_la-WidgetBackingStoreCairo.lo: Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk_la_CXXFLAGS) $(CXXFLAGS) -MT Source/WebCore/platform/cairo/libPlatformGtk_la-WidgetBackingStoreCairo.lo -MD -MP -MF Source/WebCore/platform/cairo/$(DEPDIR)/libPlatformGtk_la-WidgetBackingStoreCairo.Tpo -c -o Source/WebCore/platform/cairo/libPlatformGtk_la-WidgetBackingStoreCairo.lo `test -f 'Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Source/WebCore/platform/cairo/$(DEPDIR)/libPlatformGtk_la-WidgetBackingStoreCairo.Tpo Source/WebCore/platform/cairo/$(DEPDIR)/libPlatformGtk_la-WidgetBackingStoreCairo.Plo
@@ -51966,13 +52127,6 @@ Source/WebCore/platform/graphics/libPlatformGtk_la-GLContext.lo: Source/WebCore/
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Source/WebCore/platform/graphics/GLContext.cpp' object='Source/WebCore/platform/graphics/libPlatformGtk_la-GLContext.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/WebCore/platform/graphics/libPlatformGtk_la-GLContext.lo `test -f 'Source/WebCore/platform/graphics/GLContext.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/graphics/GLContext.cpp
-
-Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo: Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk_la_CXXFLAGS) $(CXXFLAGS) -MT Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo -MD -MP -MF Source/WebCore/platform/gtk/$(DEPDIR)/libPlatformGtk_la-RedirectedXCompositeWindow.Tpo -c -o Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo `test -f 'Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Source/WebCore/platform/gtk/$(DEPDIR)/libPlatformGtk_la-RedirectedXCompositeWindow.Tpo Source/WebCore/platform/gtk/$(DEPDIR)/libPlatformGtk_la-RedirectedXCompositeWindow.Plo
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp' object='Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/WebCore/platform/gtk/libPlatformGtk_la-RedirectedXCompositeWindow.lo `test -f 'Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp
 
 Source/WebCore/platform/audio/gtk/libPlatformGtk2_la-AudioBusGtk.lo: Source/WebCore/platform/audio/gtk/AudioBusGtk.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk2_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk2_la_CXXFLAGS) $(CXXFLAGS) -MT Source/WebCore/platform/audio/gtk/libPlatformGtk2_la-AudioBusGtk.lo -MD -MP -MF Source/WebCore/platform/audio/gtk/$(DEPDIR)/libPlatformGtk2_la-AudioBusGtk.Tpo -c -o Source/WebCore/platform/audio/gtk/libPlatformGtk2_la-AudioBusGtk.lo `test -f 'Source/WebCore/platform/audio/gtk/AudioBusGtk.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/audio/gtk/AudioBusGtk.cpp
@@ -52282,6 +52436,13 @@ Source/WebCore/platform/gtk/libPlatformGtk2_la-WidgetBackingStoreGtkX11.lo: Sour
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk2_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk2_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/WebCore/platform/gtk/libPlatformGtk2_la-WidgetBackingStoreGtkX11.lo `test -f 'Source/WebCore/platform/gtk/WidgetBackingStoreGtkX11.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/gtk/WidgetBackingStoreGtkX11.cpp
 
+Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo: Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk2_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk2_la_CXXFLAGS) $(CXXFLAGS) -MT Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo -MD -MP -MF Source/WebCore/platform/gtk/$(DEPDIR)/libPlatformGtk2_la-RedirectedXCompositeWindow.Tpo -c -o Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo `test -f 'Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Source/WebCore/platform/gtk/$(DEPDIR)/libPlatformGtk2_la-RedirectedXCompositeWindow.Tpo Source/WebCore/platform/gtk/$(DEPDIR)/libPlatformGtk2_la-RedirectedXCompositeWindow.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp' object='Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk2_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk2_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo `test -f 'Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp
+
 Source/WebCore/platform/cairo/libPlatformGtk2_la-WidgetBackingStoreCairo.lo: Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk2_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk2_la_CXXFLAGS) $(CXXFLAGS) -MT Source/WebCore/platform/cairo/libPlatformGtk2_la-WidgetBackingStoreCairo.lo -MD -MP -MF Source/WebCore/platform/cairo/$(DEPDIR)/libPlatformGtk2_la-WidgetBackingStoreCairo.Tpo -c -o Source/WebCore/platform/cairo/libPlatformGtk2_la-WidgetBackingStoreCairo.lo `test -f 'Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/cairo/WidgetBackingStoreCairo.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Source/WebCore/platform/cairo/$(DEPDIR)/libPlatformGtk2_la-WidgetBackingStoreCairo.Tpo Source/WebCore/platform/cairo/$(DEPDIR)/libPlatformGtk2_la-WidgetBackingStoreCairo.Plo
@@ -52295,13 +52456,6 @@ Source/WebCore/platform/graphics/libPlatformGtk2_la-GLContext.lo: Source/WebCore
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Source/WebCore/platform/graphics/GLContext.cpp' object='Source/WebCore/platform/graphics/libPlatformGtk2_la-GLContext.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk2_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk2_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/WebCore/platform/graphics/libPlatformGtk2_la-GLContext.lo `test -f 'Source/WebCore/platform/graphics/GLContext.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/graphics/GLContext.cpp
-
-Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo: Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk2_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk2_la_CXXFLAGS) $(CXXFLAGS) -MT Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo -MD -MP -MF Source/WebCore/platform/gtk/$(DEPDIR)/libPlatformGtk2_la-RedirectedXCompositeWindow.Tpo -c -o Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo `test -f 'Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) Source/WebCore/platform/gtk/$(DEPDIR)/libPlatformGtk2_la-RedirectedXCompositeWindow.Tpo Source/WebCore/platform/gtk/$(DEPDIR)/libPlatformGtk2_la-RedirectedXCompositeWindow.Plo
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp' object='Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libPlatformGtk2_la_CPPFLAGS) $(CPPFLAGS) $(libPlatformGtk2_la_CXXFLAGS) $(CXXFLAGS) -c -o Source/WebCore/platform/gtk/libPlatformGtk2_la-RedirectedXCompositeWindow.lo `test -f 'Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp' || echo '$(srcdir)/'`Source/WebCore/platform/gtk/RedirectedXCompositeWindow.cpp
 
 Source/WTF/wtf/libWTF_la-Assertions.lo: Source/WTF/wtf/Assertions.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libWTF_la_CPPFLAGS) $(CPPFLAGS) $(libWTF_la_CXXFLAGS) $(CXXFLAGS) -MT Source/WTF/wtf/libWTF_la-Assertions.lo -MD -MP -MF Source/WTF/wtf/$(DEPDIR)/libWTF_la-Assertions.Tpo -c -o Source/WTF/wtf/libWTF_la-Assertions.lo `test -f 'Source/WTF/wtf/Assertions.cpp' || echo '$(srcdir)/'`Source/WTF/wtf/Assertions.cpp
@@ -82312,11 +82466,11 @@ installdirs-data-local: po-installdirs-data-local
 uninstall-local: po-uninstall-local
 
 ${GENSOURCES_WEBINSPECTOR_UI}/GResourceBundle.xml: GNUmakefile \
-	$(inspector_files) \
+	$(inspector_files_dependencies) \
 	$(srcdir)/Tools/gtk/generate-inspector-gresource-manifest.py
 	$(AM_V_GEN)
 	$(AM_V_at)mkdir -p ${GENSOURCES_WEBINSPECTOR_UI}
-	$(AM_V_at)$(srcdir)/Tools/gtk/generate-inspector-gresource-manifest.py --output $@ $(inspector_files)
+	$(AM_V_at)$(PYTHON) $(srcdir)/Tools/gtk/generate-inspector-gresource-manifest.py --output $@ $(inspector_files)
 
 ${GENSOURCES_WEBINSPECTOR_UI}/GResourceBundle.c: DerivedSources/WebInspectorUI/GResourceBundle.xml
 	$(AM_V_GEN)
@@ -82327,7 +82481,7 @@ docs: docs-build.stamp
 .PHONY : docs
 
 docs-build.stamp: $(docs_build_dependencies)
-	CC=$(CC) $(srcdir)/Tools/gtk/generate-gtkdoc
+	CC=$(CC) $(PYTHON) $(srcdir)/Tools/gtk/generate-gtkdoc
 	@touch docs-build.stamp
 
 clean-local: doc-clean-local
@@ -82445,8 +82599,8 @@ uninstall-local:
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@	     --include=Gtk-@GTK_API_VERSION@ \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@	     --include=JavaScriptCore-@WEBKITGTK_API_VERSION@ \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@	     --include=Soup-2.4 \
-@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@	     --library=webkitgtk-@WEBKITGTK_API_VERSION@ \
-@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@	     --library=javascriptcoregtk-@WEBKITGTK_API_VERSION@ \
+@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@	     --library=libwebkitgtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
+@ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@	     --library=libjavascriptcoregtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@	     --libtool="$(LIBTOOL)" \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@	     --pkg=gobject-2.0 \
 @ENABLE_INTROSPECTION_TRUE@@ENABLE_WEBKIT1_TRUE@	     --pkg=gtk+-@GTK_API_VERSION@ \
