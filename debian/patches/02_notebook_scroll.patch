@@ -1,8 +1,8 @@
-Index: webkit/Source/WebKit/gtk/webkit/webkitwebview.cpp
+Index: webkitgtk/Source/WebKit/gtk/webkit/webkitwebview.cpp
 ===================================================================
---- webkit.orig/Source/WebKit/gtk/webkit/webkitwebview.cpp
-+++ webkit/Source/WebKit/gtk/webkit/webkitwebview.cpp
-@@ -808,6 +808,12 @@ static gboolean webkit_web_view_scroll_e
+--- webkitgtk.orig/Source/WebKit/gtk/webkit/webkitwebview.cpp
++++ webkitgtk/Source/WebKit/gtk/webkit/webkitwebview.cpp
+@@ -813,6 +813,12 @@ static gboolean webkit_web_view_scroll_e
      if (!frame.view())
          return FALSE;
  

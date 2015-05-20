@@ -3,16 +3,8 @@ install-minibrowser.patch
 atomic_build_fix.patch
 restore_sparc_code.patch
 02_notebook_scroll.patch
-fix-textrel-x86.patch
 ftbfs-armhf.patch
 x32_support.patch
 fix-arm64-build.patch
-fix-mips64-build.patch
 ppc64-align.patch
-render-text-control.patch
-nullptr-frameprogresstracker.patch
-nullptr-accessibilitymenulistoption.patch
-ax-focus-events.patch
-fix-ftbfs-pluginpackage.patch
-g-closure-unref.diff
 fix-cloop.patch

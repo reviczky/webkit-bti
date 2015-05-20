@@ -1,6 +1,20 @@
 webkitgtk (2.4.9-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/patches/ax-focus-events.patch,
+    debian/patches/fix-ftbfs-pluginpackage.patch,
+    debian/patches/fix-mips64-build.patch,
+    debian/patches/fix-textrel-x86.patch,
+    debian/patches/g-closure-unref.diff,
+    debian/patches/nullptr-accessibilitymenulistoption.patch,
+    debian/patches/nullptr-frameprogresstracker.patch,
+    debian/patches/render-text-control.patch:
+     + Remove.
+  * debian/patches/02_notebook_scroll.patch,
+    debian/patches/fix-arm64-build.patch,
+    debian/patches/restore_sparc_code.patch,
+    debian/patches/x32_support.patch:
+     + Refresh.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 20 May 2015 14:30:46 +0300
 
