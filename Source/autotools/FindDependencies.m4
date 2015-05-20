@@ -109,8 +109,14 @@ case "$host" in
         UNICODE_LIBS="-licucore"
         ;;
     *-*-mingw*)
-        UNICODE_CFLAGS=""
-        UNICODE_LIBS="-licui18n -licuuc"
+	PKG_CHECK_MODULES(ICU, icu-i18n, ,)
+	if test "x$ICU_LIBS" = "x" ; then
+           UNICODE_CFLAGS=""
+           UNICODE_LIBS="-licui18n -licuuc"
+	else
+           UNICODE_CFLAGS="$ICU_CFLAGS"
+           UNICODE_LIBS="$ICU_LIBS"
+	fi
         AC_CHECK_HEADERS([unicode/uchar.h], [], [AC_MSG_ERROR([Could not find ICU headers.])])
         ;;
     *)
@@ -453,6 +459,9 @@ if test "$found_opengl" = "yes"; then
     if test "$enable_gles2" = "yes"; then
         acceleration_description="$acceleration_description (gles2"
         OPENGL_LIBS="-lGLESv2"
+    elif test "$os_win32" = "yes"; then
+        acceleration_description="$acceleration_description (gl"
+        OPENGL_LIBS="-lopengl32"
     else
         acceleration_description="$acceleration_description (gl"
         OPENGL_LIBS="-lGL"
@@ -467,7 +476,9 @@ if test "$found_opengl" = "yes"; then
 
     # Check whether dlopen() is in the core libc like on FreeBSD, or in a separate
     # libdl like on GNU/Linux (in which case we want to link to libdl).
-    AC_CHECK_FUNC([dlopen], [], [AC_CHECK_LIB([dl], [dlopen], [OPENGL_LIBS="$OPENGL_LIBS -ldl"])])
+    if test "$os_win32" = "no"; then
+        AC_CHECK_FUNC([dlopen], [], [AC_CHECK_LIB([dl], [dlopen], [OPENGL_LIBS="$OPENGL_LIBS -ldl"])])
+    fi
 
     acceleration_description="$acceleration_description)"
 fi

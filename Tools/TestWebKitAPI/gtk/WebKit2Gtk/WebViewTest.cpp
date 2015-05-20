@@ -187,10 +187,12 @@ void WebViewTest::showInWindow(GtkWindowType windowType)
     gtk_widget_show(m_parentWindow);
 }
 
-void WebViewTest::showInWindowAndWaitUntilMapped(GtkWindowType windowType)
+void WebViewTest::showInWindowAndWaitUntilMapped(GtkWindowType windowType, int width, int height)
 {
     g_assert(!m_parentWindow);
     m_parentWindow = gtk_window_new(windowType);
+    if (width && height)
+        gtk_window_resize(GTK_WINDOW(m_parentWindow), width, height);
     gtk_container_add(GTK_CONTAINER(m_parentWindow), GTK_WIDGET(m_webView));
     gtk_widget_show(GTK_WIDGET(m_webView));
 
@@ -441,4 +443,13 @@ cairo_surface_t* WebViewTest::getSnapshotAndWaitUntilReady(WebKitSnapshotRegion 
     webkit_web_view_get_snapshot(m_webView, region, options, 0, reinterpret_cast<GAsyncReadyCallback>(onSnapshotReady), this);
     g_main_loop_run(m_mainLoop);
     return m_surface;
+}
+
+bool WebViewTest::runWebProcessTest(const char* suiteName, const char* testName)
+{
+    GUniquePtr<char> script(g_strdup_printf("WebProcessTestRunner.runTest('%s/%s');", suiteName, testName));
+    GUniqueOutPtr<GError> error;
+    WebKitJavascriptResult* javascriptResult = runJavaScriptAndWaitUntilFinished(script.get(), &error.outPtr());
+    g_assert(!error);
+    return javascriptResultToBoolean(javascriptResult);
 }

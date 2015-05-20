@@ -72,7 +72,7 @@ extern "C" void _ReadWriteBarrier(void);
 
 namespace WTF {
 
-#if OS(WINDOWS)
+#if OS(WINDOWS) && !COMPILER(GCC)
 inline bool weakCompareAndSwap(volatile unsigned* location, unsigned expected, unsigned newValue)
 {
 #if OS(WINCE)
@@ -86,7 +86,7 @@ inline bool weakCompareAndSwap(void*volatile* location, void* expected, void* ne
 {
     return InterlockedCompareExchangePointer(location, newValue, expected) == expected;
 }
-#else // OS(WINDOWS) --> not windows
+#else // OS(WINDOWS) && !COMPILER(GCC) --> not windows, but maybe mingw
 inline bool weakCompareAndSwap(volatile unsigned* location, unsigned expected, unsigned newValue) 
 {
 #if ENABLE(COMPARE_AND_SWAP)
@@ -178,7 +178,7 @@ inline bool weakCompareAndSwap(void*volatile* location, void* expected, void* ne
     return 0;
 #endif // ENABLE(COMPARE_AND_SWAP)
 }
-#endif // OS(WINDOWS) (end of the not-windows case)
+#endif // OS(WINDOWS) && !COMPILER(GCC) (end of the not-windows (but maybe mingw) case)
 
 inline bool weakCompareAndSwapUIntPtr(volatile uintptr_t* location, uintptr_t expected, uintptr_t newValue)
 {
@@ -228,7 +228,7 @@ inline void memoryBarrierBeforeUnlock() { armV7_dmb(); }
 
 inline void x86_mfence()
 {
-#if OS(WINDOWS)
+#if OS(WINDOWS) && !COMPILER(GCC)
     // I think that this does the equivalent of a dummy interlocked instruction,
     // instead of using the 'mfence' instruction, at least according to MSDN. I
     // know that it is equivalent for our purposes, but it would be good to
@@ -260,7 +260,8 @@ inline void memoryBarrierBeforeUnlock() { compilerFence(); }
 inline bool weakCompareAndSwap(uint8_t* location, uint8_t expected, uint8_t newValue)
 {
 #if ENABLE(COMPARE_AND_SWAP)
-#if !OS(WINDOWS) && (CPU(X86) || CPU(X86_64))
+#if !COMPILER(MSVC) && (CPU(X86) || CPU(X86_64))
+    // !COMPILER(MSVC) here means "ASM_SYNTAX(AT_AND_T)"
     unsigned char result;
     asm volatile(
         "lock; cmpxchgb %3, %2\n\t"
@@ -270,7 +271,8 @@ inline bool weakCompareAndSwap(uint8_t* location, uint8_t expected, uint8_t newV
         : "memory"
         );
     return result;
-#elif OS(WINDOWS) && CPU(X86)
+#elif COMPILER(MSVC) && CPU(X86)
+    // COMPILER(MSVC) here means "ASM_SYNTAX(INTEL)"
     // FIXME: We need a 64-bit ASM implementation, but this cannot be inline due to
     // Microsoft's decision to exclude it from the compiler.
     bool result = false;
@@ -292,16 +294,24 @@ inline bool weakCompareAndSwap(uint8_t* location, uint8_t expected, uint8_t newV
     unsigned* alignedLocation = bitwise_cast<unsigned*>(alignedLocationValue);
     // Make sure that this load is always issued and never optimized away.
     unsigned oldAlignedValue = *const_cast<volatile unsigned*>(alignedLocation);
-    union {
-        uint8_t bytes[sizeof(unsigned)];
-        unsigned word;
-    } u;
-    u.word = oldAlignedValue;
-    if (u.bytes[locationOffset] != expected)
-        return false;
-    u.bytes[locationOffset] = newValue;
-    unsigned newAlignedValue = u.word;
-    return weakCompareAndSwap(alignedLocation, oldAlignedValue, newAlignedValue);
+
+    struct Splicer {
+        static unsigned splice(unsigned value, uint8_t byte, uintptr_t byteIndex)
+        {
+            union {
+                unsigned word;
+                uint8_t bytes[sizeof(unsigned)];
+            } u;
+            u.word = value;
+            u.bytes[byteIndex] = byte;
+            return u.word;
+        }
+    };
+    
+    unsigned expectedAlignedValue = Splicer::splice(oldAlignedValue, expected, locationOffset);
+    unsigned newAlignedValue = Splicer::splice(oldAlignedValue, newValue, locationOffset);
+
+    return weakCompareAndSwap(alignedLocation, expectedAlignedValue, newAlignedValue);
 #endif
 #else
     UNUSED_PARAM(location);
