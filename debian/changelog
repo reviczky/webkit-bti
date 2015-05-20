@@ -1,6 +1,7 @@
 webkitgtk (2.4.9-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+    + This fixes CVE-2015-2330.
   * debian/patches/ax-focus-events.patch,
     debian/patches/fix-ftbfs-pluginpackage.patch,
     debian/patches/fix-mips64-build.patch,
