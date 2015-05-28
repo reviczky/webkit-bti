@@ -10,7 +10,8 @@ DEB_HOST_ARCH_BITS  ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_BITS)
 DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 
 GTK_VERSIONS = 2.0 3.0
-ENABLE_WEBKIT2 ?= yes
+# Set to yes to enable old webkit2 (for the new one look at src:webkit2gtk)
+ENABLE_WEBKIT2 ?= no
 
 CFLAGS = $(shell dpkg-buildflags --get CFLAGS) -Wall
 LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS) -Wl,--as-needed
