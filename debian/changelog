@@ -1,9 +1,14 @@
 webkitgtk (2.4.9-2) UNRELEASED; urgency=medium
 
+  [ Emilio Pozuelo Monfort ]
   * Disable libwebkit2gtk-3.0 packages. They have no rdeps anymore
     and are superseded by src:webkit2gtk.
 
- -- Emilio Pozuelo Monfort <pochu@debian.org>  Thu, 28 May 2015 17:35:07 +0200
+  [ Alberto Garcia ]
+  * debian/patches/use-abi64-for-mips64el.patch:
+    + Use ABI64 instead of _MIPS_SIM_ABI64 for mips64el (Closes: #789261).
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 24 Jun 2015 17:12:27 +0300
 
 webkitgtk (2.4.9-1) unstable; urgency=high
 

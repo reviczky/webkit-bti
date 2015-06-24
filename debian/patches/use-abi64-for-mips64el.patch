@@ -1,0 +1,18 @@
+From: YunQiang Su <​wzssyqa@gmail.com>
+Subject: Use _ABI64 instead of _MIPS_SIM_ABI64 for mips64el
+Bug: https://bugs.webkit.org/show_bug.cgi?id=145113
+Bug-Debian: https://bugs.debian.org/789261
+Origin: https://trac.webkit.org/changeset/185863
+Index: webkitgtk/Source/WTF/wtf/Platform.h
+===================================================================
+--- webkitgtk.orig/Source/WTF/wtf/Platform.h
++++ webkitgtk/Source/WTF/wtf/Platform.h
+@@ -82,7 +82,7 @@
+ 
+ /* CPU(MIPS) - MIPS 32-bit and 64-bit */
+ #if (defined(mips) || defined(__mips__) || defined(MIPS) || defined(_MIPS_) || defined(__mips64))
+-#if defined(_MIPS_SIM_ABI64) && (_MIPS_SIM == _MIPS_SIM_ABI64)
++#if defined(_ABI64) && (_MIPS_SIM == _ABI64)
+ #define WTF_CPU_MIPS64 1
+ #define WTF_MIPS_ARCH __mips64
+ #else
