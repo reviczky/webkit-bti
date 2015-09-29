@@ -1,4 +1,4 @@
-webkitgtk (2.4.9-1) unstable; urgency=high
+webkitgtk (2.4.9-1~deb8u1) stable; urgency=high
 
   * New upstream release.
     + This fixes CVE-2015-2330.
@@ -16,8 +16,11 @@ webkitgtk (2.4.9-1) unstable; urgency=high
     debian/patches/restore_sparc_code.patch,
     debian/patches/x32_support.patch:
     + Refresh.
+  * debian/source/lintian-overrides:
+    + lintian gives false positives with many of the javascript files in
+      the source tarball, thinking that they are minified (see #798900).
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 20 May 2015 19:23:49 +0300
+ -- Alberto Garcia <berto@igalia.com>  Tue, 29 Sep 2015 14:31:34 +0300
 
 webkitgtk (2.4.8-2) unstable; urgency=medium
 

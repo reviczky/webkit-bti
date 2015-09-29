@@ -2,3 +2,19 @@
 # implementation's license but doesn't have this non-free license,
 # see https://bugs.webkit.org/show_bug.cgi?id=123665
 webkitgtk source: license-problem-json-evil
+# lintian thinks all these are minified, but they're not (see #798900).
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/ActivateButtonNavigationItem.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/ConsoleMessageImpl.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/ContentBrowser.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/DebuggerSidebarPanel.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/InspectorJSBackendCommands.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/InspectorWebBackendCommands.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/JavaScriptLogViewController.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/LogContentView.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/ProfileView.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/RuntimeManager.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/TimelineSidebarPanel.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/External/CodeMirror/clojure.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/External/CodeMirror/less.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/External/CodeMirror/livescript.js
+webkitgtk source: source-is-missing Source/WebInspectorUI/UserInterface/External/CodeMirror/sql.js
