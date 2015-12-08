@@ -1,3 +1,10 @@
+webkitgtk (2.4.9-3) UNRELEASED; urgency=medium
+
+  * debian/patches/disable-jit-nonsse2.patch:
+    + Disable JIT on x86 CPUs without SSE2 (Closes: #783293).
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 09 Dec 2015 13:10:32 +0100
+
 webkitgtk (2.4.9-2) unstable; urgency=medium
 
   [ Emilio Pozuelo Monfort ]
