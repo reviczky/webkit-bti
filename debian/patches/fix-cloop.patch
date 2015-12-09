@@ -6,83 +6,6 @@ Index: webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter32_64.asm
 ===================================================================
 --- webkitgtk.orig/Source/JavaScriptCore/llint/LowLevelInterpreter32_64.asm
 +++ webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter32_64.asm
-@@ -2002,7 +2002,7 @@ _llint_op_next_pname:
-     loadi 20[PC], t2
-     loadi PayloadOffset[cfr, t2, 8], t2
-     loadp JSPropertyNameIterator::m_jsStrings[t2], t3
--    loadi [t3, t0, 8], t3
-+    loadi PayloadOffset[t3, t0, 8], t3
-     addi 1, t0
-     storei t0, PayloadOffset[cfr, t1, 8]
-     loadi 4[PC], t1
-Index: webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter.asm
-===================================================================
---- webkitgtk.orig/Source/JavaScriptCore/llint/LowLevelInterpreter.asm
-+++ webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter.asm
-@@ -299,13 +299,13 @@ macro assertNotConstant(index)
- end
- 
- macro functionForCallCodeBlockGetter(targetRegister)
--    loadp Callee[cfr], targetRegister
-+    loadp Callee + PayloadOffset[cfr], targetRegister
-     loadp JSFunction::m_executable[targetRegister], targetRegister
-     loadp FunctionExecutable::m_codeBlockForCall[targetRegister], targetRegister
- end
- 
- macro functionForConstructCodeBlockGetter(targetRegister)
--    loadp Callee[cfr], targetRegister
-+    loadp Callee + PayloadOffset[cfr], targetRegister
-     loadp JSFunction::m_executable[targetRegister], targetRegister
-     loadp FunctionExecutable::m_codeBlockForConstruct[targetRegister], targetRegister
- end
-Index: webkitgtk/Source/JavaScriptCore/interpreter/ProtoCallFrame.h
-===================================================================
---- webkitgtk.orig/Source/JavaScriptCore/interpreter/ProtoCallFrame.h
-+++ webkitgtk/Source/JavaScriptCore/interpreter/ProtoCallFrame.h
-@@ -36,7 +36,7 @@ struct ProtoCallFrame {
-     Register calleeValue;
-     Register argCountAndCodeOriginValue;
-     Register thisArg;
--    size_t paddedArgCount;
-+    uint32_t paddedArgCount;
-     JSValue *args;
- 
-     void init(CodeBlock*, JSScope*, JSObject*, JSValue, int, JSValue* otherArgs = 0);
-@@ -53,7 +53,7 @@ struct ProtoCallFrame {
-     int argumentCountIncludingThis() const { return argCountAndCodeOriginValue.payload(); }
-     int argumentCount() const { return argumentCountIncludingThis() - 1; }
-     void setArgumentCountIncludingThis(int count) { argCountAndCodeOriginValue.payload() = count; }
--    void setPaddedArgsCount(size_t argCount) { paddedArgCount = argCount; }
-+    void setPaddedArgsCount(uint32_t argCount) { paddedArgCount = argCount; }
- 
-     void clearCurrentVPC() { argCountAndCodeOriginValue.tag() = 0; }
-     
-Index: webkitgtk/Source/JavaScriptCore/llint/LLIntSlowPaths.cpp
-===================================================================
---- webkitgtk.orig/Source/JavaScriptCore/llint/LLIntSlowPaths.cpp
-+++ webkitgtk/Source/JavaScriptCore/llint/LLIntSlowPaths.cpp
-@@ -1354,7 +1354,7 @@ LLINT_SLOW_PATH_DECL(slow_path_get_from_
-             CodeBlock* codeBlock = exec->codeBlock();
-             ConcurrentJITLocker locker(codeBlock->m_lock);
-             pc[5].u.structure.set(exec->vm(), codeBlock->ownerExecutable(), scope->structure());
--            pc[6].u.operand = slot.cachedOffset();
-+            pc[6].u.pointer = reinterpret_cast<void*>(slot.cachedOffset());
-         }
-     }
- 
-@@ -1381,7 +1381,7 @@ LLINT_SLOW_PATH_DECL(slow_path_put_to_sc
-         if (slot.isCacheable() && slot.base() == scope && scope->structure()->propertyAccessesAreCacheable()) {
-             ConcurrentJITLocker locker(codeBlock->m_lock);
-             pc[5].u.structure.set(exec->vm(), codeBlock->ownerExecutable(), scope->structure());
--            pc[6].u.operand = slot.cachedOffset();
-+            pc[6].u.pointer = reinterpret_cast<void*>(slot.cachedOffset());
-         }
-     }
- 
-Index: webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter32_64.asm
-===================================================================
---- webkitgtk.orig/Source/JavaScriptCore/llint/LowLevelInterpreter32_64.asm
-+++ webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter32_64.asm
 @@ -282,7 +282,7 @@ macro doCallToJavaScript(makeCall, doRet
      storep temp3, CodeBlock+4[cfr, temp1, 8]
      btinz temp1, .copyHeaderLoop
@@ -110,6 +33,15 @@ Index: webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter32_64.asm
      andp MarkedBlockMask, t3
      loadp MarkedBlock::m_weakSet + WeakSet::m_vm[t3], t3
      bieq VM::m_exception + TagOffset[t3], EmptyValueTag, .noException
+@@ -2002,7 +2002,7 @@ _llint_op_next_pname:
+     loadi 20[PC], t2
+     loadi PayloadOffset[cfr, t2, 8], t2
+     loadp JSPropertyNameIterator::m_jsStrings[t2], t3
+-    loadi [t3, t0, 8], t3
++    loadi PayloadOffset[t3, t0, 8], t3
+     addi 1, t0
+     storei t0, PayloadOffset[cfr, t1, 8]
+     loadi 4[PC], t1
 @@ -2039,7 +2039,7 @@ _llint_op_catch:
      # the interpreter's throw trampoline (see _llint_throw_trampoline).
      # The throwing code must have known that we were throwing to the interpreter,
@@ -189,6 +121,70 @@ Index: webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter32_64.asm
      storei t2, TagOffset[t0, t1, 8]
      storei t3, PayloadOffset[t0, t1, 8]
  end
+Index: webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter.asm
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/llint/LowLevelInterpreter.asm
++++ webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter.asm
+@@ -299,13 +299,13 @@ macro assertNotConstant(index)
+ end
+ 
+ macro functionForCallCodeBlockGetter(targetRegister)
+-    loadp Callee[cfr], targetRegister
++    loadp Callee + PayloadOffset[cfr], targetRegister
+     loadp JSFunction::m_executable[targetRegister], targetRegister
+     loadp FunctionExecutable::m_codeBlockForCall[targetRegister], targetRegister
+ end
+ 
+ macro functionForConstructCodeBlockGetter(targetRegister)
+-    loadp Callee[cfr], targetRegister
++    loadp Callee + PayloadOffset[cfr], targetRegister
+     loadp JSFunction::m_executable[targetRegister], targetRegister
+     loadp FunctionExecutable::m_codeBlockForConstruct[targetRegister], targetRegister
+ end
+Index: webkitgtk/Source/JavaScriptCore/interpreter/ProtoCallFrame.h
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/interpreter/ProtoCallFrame.h
++++ webkitgtk/Source/JavaScriptCore/interpreter/ProtoCallFrame.h
+@@ -36,7 +36,7 @@ struct ProtoCallFrame {
+     Register calleeValue;
+     Register argCountAndCodeOriginValue;
+     Register thisArg;
+-    size_t paddedArgCount;
++    uint32_t paddedArgCount;
+     JSValue *args;
+ 
+     void init(CodeBlock*, JSScope*, JSObject*, JSValue, int, JSValue* otherArgs = 0);
+@@ -53,7 +53,7 @@ struct ProtoCallFrame {
+     int argumentCountIncludingThis() const { return argCountAndCodeOriginValue.payload(); }
+     int argumentCount() const { return argumentCountIncludingThis() - 1; }
+     void setArgumentCountIncludingThis(int count) { argCountAndCodeOriginValue.payload() = count; }
+-    void setPaddedArgsCount(size_t argCount) { paddedArgCount = argCount; }
++    void setPaddedArgsCount(uint32_t argCount) { paddedArgCount = argCount; }
+ 
+     void clearCurrentVPC() { argCountAndCodeOriginValue.tag() = 0; }
+     
+Index: webkitgtk/Source/JavaScriptCore/llint/LLIntSlowPaths.cpp
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/llint/LLIntSlowPaths.cpp
++++ webkitgtk/Source/JavaScriptCore/llint/LLIntSlowPaths.cpp
+@@ -1354,7 +1354,7 @@ LLINT_SLOW_PATH_DECL(slow_path_get_from_
+             CodeBlock* codeBlock = exec->codeBlock();
+             ConcurrentJITLocker locker(codeBlock->m_lock);
+             pc[5].u.structure.set(exec->vm(), codeBlock->ownerExecutable(), scope->structure());
+-            pc[6].u.operand = slot.cachedOffset();
++            pc[6].u.pointer = reinterpret_cast<void*>(slot.cachedOffset());
+         }
+     }
+ 
+@@ -1381,7 +1381,7 @@ LLINT_SLOW_PATH_DECL(slow_path_put_to_sc
+         if (slot.isCacheable() && slot.base() == scope && scope->structure()->propertyAccessesAreCacheable()) {
+             ConcurrentJITLocker locker(codeBlock->m_lock);
+             pc[5].u.structure.set(exec->vm(), codeBlock->ownerExecutable(), scope->structure());
+-            pc[6].u.operand = slot.cachedOffset();
++            pc[6].u.pointer = reinterpret_cast<void*>(slot.cachedOffset());
+         }
+     }
+ 
 Index: webkitgtk/Source/JavaScriptCore/llint/LowLevelInterpreter64.asm
 ===================================================================
 --- webkitgtk.orig/Source/JavaScriptCore/llint/LowLevelInterpreter64.asm
