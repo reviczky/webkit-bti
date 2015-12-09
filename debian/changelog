@@ -4,6 +4,9 @@ webkitgtk (2.4.9-3) UNRELEASED; urgency=medium
     + Disable JIT on x86 CPUs without SSE2 (Closes: #783293).
   * debian/patches/fix-cloop.patch:
     + Refresh.
+  * debian/source/lintian-overrides:
+    + lintian gives false positives with many of the javascript files in
+      the source tarball, thinking that they are minified (see #798900).
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 09 Dec 2015 13:10:32 +0100
 
