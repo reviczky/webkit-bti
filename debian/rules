@@ -10,8 +10,6 @@ DEB_HOST_ARCH_BITS  ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_BITS)
 DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 
 GTK_VERSIONS = 2.0 3.0
-# Set to yes to enable old webkit2 (for the new one look at src:webkit2gtk)
-ENABLE_WEBKIT2 ?= no
 
 CFLAGS = $(shell dpkg-buildflags --get CFLAGS) -Wall
 LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS) -Wl,--as-needed
@@ -26,16 +24,7 @@ COMMON_CONFIGURE_ARGUMENTS = \
 	--enable-introspection \
 	--enable-geolocation
 
-# This is used by the GTK+ 3.0 library only.
-EXTRA_CONFIGURE_ARGUMENTS =
 EXTRA_DH_ARGUMENTS =
-
-ifeq ($(ENABLE_WEBKIT2),yes)
-	EXTRA_CONFIGURE_ARGUMENTS += --enable-webkit2 --libexecdir=\$${libdir}/webkit2gtk-3.0/libexec
-else
-	EXTRA_CONFIGURE_ARGUMENTS += --disable-webkit2
-	EXTRA_DH_ARGUMENTS += -Nlibwebkit2gtk-3.0-25 -Nlibwebkit2gtk-3.0-dev -Nlibwebkit2gtk-3.0-25-dbg -Ngir1.2-webkit2-3.0
-endif
 
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
@@ -50,7 +39,7 @@ endif
 # Disable debugging symbols on these arches.
 ifneq (,$(filter $(DEB_BUILD_ARCH),hurd-i386 ia64 kfreebsd-i386 mips mipsel powerpcspe s390 s390x sparc))
 	CFLAGS := $(CFLAGS:-g=)
-	EXTRA_DH_ARGUMENTS += -Nlibjavascriptcoregtk-1.0-0-dbg -Nlibwebkitgtk-1.0-0-dbg -Nlibjavascriptcoregtk-3.0-0-dbg -Nlibwebkitgtk-3.0-0-dbg -Nlibwebkit2gtk-3.0-25-dbg
+	EXTRA_DH_ARGUMENTS += -Nlibjavascriptcoregtk-1.0-0-dbg -Nlibwebkitgtk-1.0-0-dbg -Nlibjavascriptcoregtk-3.0-0-dbg -Nlibwebkitgtk-3.0-0-dbg
 endif
 
 # Let's try to keep debugging symbols on these arches.
@@ -132,7 +121,7 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	../configure --prefix=/usr \
 		--with-gtk=3.0 \
 		$(COMMON_CONFIGURE_ARGUMENTS) \
-		$(EXTRA_CONFIGURE_ARGUMENTS)
+		--disable-webkit2
 
 	$(MAKE) $(MAKEARGUMENTS) -C build-3.0
 
@@ -143,12 +132,6 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	install -d -m 755 debian/tmp-3.0/usr/share/doc/libwebkitgtk-3.0-dev/html
 	install -m 644 Documentation/webkitgtk/html/* \
 		debian/tmp-3.0/usr/share/doc/libwebkitgtk-3.0-dev/html/
-
-ifeq ($(ENABLE_WEBKIT2),yes)
-	install -d -m 755 debian/tmp-3.0/usr/share/doc/libwebkit2gtk-3.0-dev/html
-	install -m 644 Documentation/webkit2gtk/html/* \
-		debian/tmp-3.0/usr/share/doc/libwebkit2gtk-3.0-dev/html/
-endif
 
 	rm -rf build-3.0
 endif
@@ -224,12 +207,6 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_install -plibwebkitgtk-3.0-0-dbg --sourcedir=debian/tmp-3.0
 	dh_install -pgir1.2-webkit-3.0 --sourcedir=debian/tmp-3.0
 	dh_installman -plibjavascriptcoregtk-3.0-bin
-ifeq ($(ENABLE_WEBKIT2),yes)
-	dh_install -plibwebkit2gtk-3.0-25 --sourcedir=debian/tmp-3.0
-	dh_install -plibwebkit2gtk-3.0-dev --sourcedir=debian/tmp-3.0
-	dh_install -plibwebkit2gtk-3.0-25-dbg --sourcedir=debian/tmp-3.0
-	dh_install -pgir1.2-webkit2-3.0 --sourcedir=debian/tmp-3.0
-endif
 endif
 	dh_link -a $(EXTRA_DH_ARGUMENTS)
 ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
@@ -240,9 +217,6 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_strip -plibjavascriptcoregtk-3.0-0 --dbg-package=libjavascriptcoregtk-3.0-0-dbg
 	dh_strip -plibjavascriptcoregtk-3.0-bin
 	dh_strip -plibwebkitgtk-3.0-0 --dbg-package=libwebkitgtk-3.0-0-dbg
-ifeq ($(ENABLE_WEBKIT2),yes)
-	dh_strip -plibwebkit2gtk-3.0-25 --dbg-package=libwebkit2gtk-3.0-25-dbg
-endif
 endif
 	dh_compress -a $(EXTRA_DH_ARGUMENTS)
 	dh_fixperms -a $(EXTRA_DH_ARGUMENTS)
@@ -255,10 +229,6 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_makeshlibs -plibwebkitgtk-3.0-0 -V 'libwebkitgtk-3.0-0 (>= 1.3.9)' -- -c4
 	dh_girepository --package=gir1.2-javascriptcoregtk-3.0
 	dh_girepository --package=gir1.2-webkit-3.0
-ifeq ($(ENABLE_WEBKIT2),yes)
-	dh_makeshlibs -plibwebkit2gtk-3.0-25 -Xinjected-bundle -V 'libwebkit2gtk-3.0-25 (>= 1.11.90)' -- -c4
-	dh_girepository --package=gir1.2-webkit2-3.0
-endif
 endif
 	dh_installdeb -a $(EXTRA_DH_ARGUMENTS)
 	dh_shlibdeps -a $(EXTRA_DH_ARGUMENTS)

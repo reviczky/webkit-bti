@@ -7,6 +7,16 @@ webkitgtk (2.4.9-3) UNRELEASED; urgency=medium
   * debian/source/lintian-overrides:
     + lintian gives false positives with many of the javascript files in
       the source tarball, thinking that they are minified (see #798900).
+  * Remove the webkit2 packages completely:
+    + debian/control:
+      - Remove entries for gir1.2-webkit2-3.0 and libwebkit2gtk-*
+    + debian/rules:
+      - Remove the ENABLE_WEBKIT2 variable and all references to the
+        webkit2 packages.
+    + debian/gir1.2-webkit2-3.0.install,
+      debian/libwebkit2gtk-3.0-25.{install,symbols},
+      debian/libwebkit2gtk-3.0-dev.{install,links}:
+      - Remove these files.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 09 Dec 2015 13:10:32 +0100
 
