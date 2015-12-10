@@ -17,6 +17,8 @@ webkitgtk (2.4.9-3) UNRELEASED; urgency=medium
       debian/libwebkit2gtk-3.0-25.{install,symbols},
       debian/libwebkit2gtk-3.0-dev.{install,links}:
       - Remove these files.
+  * debian/copyright:
+    + Update copyright years.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 09 Dec 2015 13:10:32 +0100
 
