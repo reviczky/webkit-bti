@@ -1,4 +1,4 @@
-webkitgtk (2.4.9-3) UNRELEASED; urgency=medium
+webkitgtk (2.4.9-3) unstable; urgency=medium
 
   * debian/patches/disable-jit-nonsse2.patch:
     + Disable JIT on x86 CPUs without SSE2 (Closes: #783293).
@@ -30,7 +30,7 @@ webkitgtk (2.4.9-3) UNRELEASED; urgency=medium
     + Do not run dh_builddeb in parallel, it is very I/O intensive for
       some buildds.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 09 Dec 2015 13:10:32 +0100
+ -- Alberto Garcia <berto@igalia.com>  Thu, 10 Dec 2015 15:52:24 +0100
 
 webkitgtk (2.4.9-2) unstable; urgency=medium
 
