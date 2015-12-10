@@ -21,6 +21,12 @@ webkitgtk (2.4.9-3) UNRELEASED; urgency=medium
     + Update copyright years.
   * debian/rules:
     + Build with -DNDEBUG and -DG_DISABLE_CAST_CHECKS.
+    + The size of the webkitgtk -dbg packages is huge and has been a
+      source of headaches in many architectures that cannot build them or
+      deal with them easily. Our current approach has been to disable them
+      completely for those architectures. For this release we'll build
+      them again but using -g1 instead, which produces _way_ smaller files
+      that are still useful for backtraces.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 09 Dec 2015 13:10:32 +0100
 

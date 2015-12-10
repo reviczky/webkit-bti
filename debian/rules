@@ -36,15 +36,10 @@ ifeq ($(DEB_BUILD_ARCH),alpha)
         LDFLAGS += -Wl,--no-relax
 endif
 
-# Disable debugging symbols on these arches.
-ifneq (,$(filter $(DEB_BUILD_ARCH),hurd-i386 ia64 kfreebsd-i386 mips mipsel powerpcspe s390 s390x sparc))
-	CFLAGS := $(CFLAGS:-g=)
-	EXTRA_DH_ARGUMENTS += -Nlibjavascriptcoregtk-1.0-0-dbg -Nlibwebkitgtk-1.0-0-dbg -Nlibjavascriptcoregtk-3.0-0-dbg -Nlibwebkitgtk-3.0-0-dbg
-endif
-
-# Let's try to keep debugging symbols on these arches.
-ifneq (,$(filter $(DEB_BUILD_ARCH),armel armhf kfreebsd-amd64 powerpc))
-	CFLAGS += -gstabs
+# The size of the debugging symbols is causing problems
+# in all these arches, so use -g1
+ifneq (,$(filter $(DEB_BUILD_ARCH),i386 hurd-i386 ia64 kfreebsd-i386 kfreebsd-amd64 mips mipsel mips64el powerpc powerpcspe s390 s390x sparc armel armhf hppa arm64))
+	CFLAGS := $(CFLAGS:-g=-g1)
 endif
 
 # disable jit on some architectures (bug #651636)
