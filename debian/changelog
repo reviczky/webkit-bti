@@ -27,6 +27,8 @@ webkitgtk (2.4.9-3) UNRELEASED; urgency=medium
       completely for those architectures. For this release we'll build
       them again but using -g1 instead, which produces _way_ smaller files
       that are still useful for backtraces.
+    + Do not run dh_builddeb in parallel, it is very I/O intensive for
+      some buildds.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 09 Dec 2015 13:10:32 +0100
 

@@ -231,7 +231,8 @@ endif
 	dh_shlibdeps -a $(EXTRA_DH_ARGUMENTS)
 	dh_gencontrol -a $(EXTRA_DH_ARGUMENTS)
 	dh_md5sums -a $(EXTRA_DH_ARGUMENTS)
-	dh_builddeb -a $(EXTRA_DH_ARGUMENTS) -- -Zxz
+	DEB_BUILD_OPTIONS="$(filter-out parallel=%,$(DEB_BUILD_OPTIONS))" \
+		dh_builddeb -a $(EXTRA_DH_ARGUMENTS) -- -Zxz
 
 binary: binary-indep binary-arch
 
