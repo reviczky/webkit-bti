@@ -68,6 +68,8 @@ endif
 
 ifneq (,$(filter debug,$(DEB_BUILD_OPTIONS)))
 	COMMON_CONFIGURE_ARGUMENTS += --enable-debug
+else
+	CPPFLAGS += -DNDEBUG -DG_DISABLE_CAST_CHECKS
 endif
 
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))

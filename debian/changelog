@@ -19,6 +19,8 @@ webkitgtk (2.4.9-3) UNRELEASED; urgency=medium
       - Remove these files.
   * debian/copyright:
     + Update copyright years.
+  * debian/rules:
+    + Build with -DNDEBUG and -DG_DISABLE_CAST_CHECKS.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 09 Dec 2015 13:10:32 +0100
 
