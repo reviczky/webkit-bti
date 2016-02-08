@@ -10,3 +10,4 @@ ppc64-align.patch
 fix-cloop.patch
 use-abi64-for-mips64el.patch
 disable-jit-nonsse2.patch
+fix-ftbfs-m68k.patch

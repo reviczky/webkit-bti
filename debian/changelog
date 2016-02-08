@@ -1,3 +1,10 @@
+webkitgtk (2.4.9-4) UNRELEASED; urgency=medium
+
+  * debian/patches/fix-ftbfs-m68k.patch:
+    + Fix FTBFS in m68k (Closes: #696236).
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 08 Feb 2016 19:19:54 +0200
+
 webkitgtk (2.4.9-3) unstable; urgency=medium
 
   * debian/patches/disable-jit-nonsse2.patch:
