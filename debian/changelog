@@ -1,4 +1,4 @@
-webkitgtk (2.4.10-1) UNRELEASED; urgency=medium
+webkitgtk (2.4.10-1) unstable; urgency=high
 
   * New upstream release.
     + This contains the following security fixes: CVE-2015-1120,
@@ -57,7 +57,7 @@ webkitgtk (2.4.10-1) UNRELEASED; urgency=medium
       - Replace --dbg-package with --ddeb-migration in dh_strip, but don't
         make it fail if debhelper < 9.20151219.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 08 Feb 2016 19:19:54 +0200
+ -- Alberto Garcia <berto@igalia.com>  Thu, 17 Mar 2016 10:15:29 +0200
 
 webkitgtk (2.4.9-3) unstable; urgency=medium
 
