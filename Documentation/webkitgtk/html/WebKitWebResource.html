@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKitGTK+ Reference Manual: WebKitWebResource</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitWebResource: WebKitGTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKitGTK+ Reference Manual">
 <link rel="up" href="ch02.html" title="Class Overview">
 <link rel="prev" href="WebKitWebDataSource.html" title="WebKitWebDataSource">
 <link rel="next" href="webkitgtk-webkitdownload.html" title="WebKitDownload">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -36,7 +36,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitWebResource.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -91,7 +91,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebResource.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -127,7 +127,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebResource.signals"></a><h2>Signals</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="signals_return">
 <col width="300px" class="signals_name">
@@ -159,7 +159,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebResource.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -172,7 +172,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebResource.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitWebResource
 </pre>
 </div>
@@ -190,8 +190,8 @@ webkit_web_resource_get_data (<em class="parameter"><code><a class="link" href="
 <p>Returns the data of the <em class="parameter"><code>webResource</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.3.15.9.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-resource-get-data.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -205,14 +205,14 @@ webkit_web_resource_get_data (<em class="parameter"><code><a class="link" href="
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.15.9.2.6"></a><h4>Returns</h4>
+<a name="webkit-web-resource-get-data.returns"></a><h4>Returns</h4>
 <p> a <a href="../glib/glib-Strings.html#GString"><span class="type">GString</span></a> containing the character
 data of the <em class="parameter"><code>webResource</code></em>
 .  The string is owned by WebKit and should
 not be freed or destroyed. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -220,8 +220,8 @@ not be freed or destroyed. </p>
 <pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
 webkit_web_resource_get_encoding (<em class="parameter"><code><a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *web_resource</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.3.15.9.3.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-resource-get-encoding.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -235,11 +235,10 @@ webkit_web_resource_get_encoding (<em class="parameter"><code><a class="link" hr
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.15.9.3.5"></a><h4>Returns</h4>
+<a name="webkit-web-resource-get-encoding.returns"></a><h4>Returns</h4>
 <p> the encoding name of the resource</p>
-<p></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -247,8 +246,8 @@ webkit_web_resource_get_encoding (<em class="parameter"><code><a class="link" hr
 <pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
 webkit_web_resource_get_frame_name (<em class="parameter"><code><a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *web_resource</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.3.15.9.4.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-resource-get-frame-name.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -262,11 +261,10 @@ webkit_web_resource_get_frame_name (<em class="parameter"><code><a class="link" 
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.15.9.4.5"></a><h4>Returns</h4>
+<a name="webkit-web-resource-get-frame-name.returns"></a><h4>Returns</h4>
 <p> the frame name of the resource.</p>
-<p></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -274,8 +272,8 @@ webkit_web_resource_get_frame_name (<em class="parameter"><code><a class="link" 
 <pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
 webkit_web_resource_get_mime_type (<em class="parameter"><code><a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *web_resource</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.3.15.9.5.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-resource-get-mime-type.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -289,11 +287,10 @@ webkit_web_resource_get_mime_type (<em class="parameter"><code><a class="link" h
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.15.9.5.5"></a><h4>Returns</h4>
+<a name="webkit-web-resource-get-mime-type.returns"></a><h4>Returns</h4>
 <p> the MIME type of the resource</p>
-<p></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -301,8 +298,8 @@ webkit_web_resource_get_mime_type (<em class="parameter"><code><a class="link" h
 <pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
 webkit_web_resource_get_uri (<em class="parameter"><code><a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *web_resource</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.3.15.9.6.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-resource-get-uri.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -316,11 +313,10 @@ webkit_web_resource_get_uri (<em class="parameter"><code><a class="link" href="W
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.15.9.6.5"></a><h4>Returns</h4>
+<a name="webkit-web-resource-get-uri.returns"></a><h4>Returns</h4>
 <p> the URI of the resource</p>
-<p></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -338,8 +334,8 @@ webkit_web_resource_new (<em class="parameter"><code>const <a href="../glib/glib
  argument can be used if the resource represents contents of an
 entire HTML frame, otherwise pass <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>.</p>
 <div class="refsect3">
-<a name="id-1.3.15.9.7.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-resource-new.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -381,11 +377,10 @@ entire HTML frame, otherwise pass <a href="../glib/glib-Standard-Macros.html#NUL
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.15.9.7.6"></a><h4>Returns</h4>
+<a name="webkit-web-resource-new.returns"></a><h4>Returns</h4>
 <p> a new <a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a></p>
-<p></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 </div>
 <div class="refsect1">
@@ -405,7 +400,7 @@ entire HTML frame, otherwise pass <a href="../glib/glib-Standard-Macros.html#NUL
 <p>The encoding name to which the web resource was encoded in.</p>
 <p>Flags: Read</p>
 <p>Default value: NULL</p>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -414,7 +409,7 @@ entire HTML frame, otherwise pass <a href="../glib/glib-Standard-Macros.html#NUL
 <p>The frame name for the web resource.</p>
 <p>Flags: Read</p>
 <p>Default value: NULL</p>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -423,7 +418,7 @@ entire HTML frame, otherwise pass <a href="../glib/glib-Standard-Macros.html#NUL
 <p>The MIME type of the web resource.</p>
 <p>Flags: Read</p>
 <p>Default value: NULL</p>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -432,7 +427,7 @@ entire HTML frame, otherwise pass <a href="../glib/glib-Standard-Macros.html#NUL
 <p>The URI of the web resource</p>
 <p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 </div>
 <div class="refsect1">
@@ -449,8 +444,8 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
 since the last time this signal was emitted. This is useful to
 provide progress information about the resource load operation.</p>
 <div class="refsect3">
-<a name="id-1.3.15.12.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitWebResource-content-length-received.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -476,7 +471,7 @@ provide progress information about the resource load operation.</p>
 </table></div>
 </div>
 <p>Flags: Run Last</p>
-<p class="since">Since 1.7.5</p>
+<p class="since">Since: 1.7.5</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -488,8 +483,8 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
 <p>Invoked when the <em class="parameter"><code>web_resource</code></em>
  failed to load</p>
 <div class="refsect3">
-<a name="id-1.3.15.12.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitWebResource-load-failed.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -515,7 +510,7 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
 </table></div>
 </div>
 <p>Flags: Run Last</p>
-<p class="since">Since 1.7.5</p>
+<p class="since">Since: 1.7.5</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -525,8 +520,8 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>           user_data)</pre>
 <p>Emitted when all the data for the resource was loaded</p>
 <div class="refsect3">
-<a name="id-1.3.15.12.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitWebResource-load-finished.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -547,7 +542,7 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
 </table></div>
 </div>
 <p>Flags: Run Last</p>
-<p class="since">Since 1.7.5</p>
+<p class="since">Since: 1.7.5</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -558,8 +553,8 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>               user_data)</pre>
 <p>Emitted when the response is received from the server.</p>
 <div class="refsect3">
-<a name="id-1.3.15.12.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitWebResource-response-received.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -585,7 +580,7 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
 </table></div>
 </div>
 <p>Flags: Run Last</p>
-<p class="since">Since 1.7.5</p>
+<p class="since">Since: 1.7.5</p>
 </div>
 </div>
 <div class="refsect1">
@@ -594,7 +589,6 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>

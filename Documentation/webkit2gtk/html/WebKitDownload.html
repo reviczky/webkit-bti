@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKit2GTK+ Reference Manual: WebKitDownload</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitDownload: WebKit2GTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKit2GTK+ Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitWindowProperties.html" title="WebKitWindowProperties">
 <link rel="next" href="WebKitPermissionRequest.html" title="WebKitPermissionRequest">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -36,7 +36,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitDownload.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -118,7 +118,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitDownload.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -147,7 +147,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitDownload.signals"></a><h2>Signals</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="signals_return">
 <col width="300px" class="signals_name">
@@ -184,7 +184,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitDownload.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -197,7 +197,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitDownload.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitDownload
 </pre>
 </div>
@@ -218,8 +218,8 @@ webkit_download_get_request (<em class="parameter"><code><a class="link" href="W
 <p>Retrieves the <a class="link" href="WebKitURIRequest.html" title="WebKitURIRequest"><span class="type">WebKitURIRequest</span></a> object that backs the download
 process.</p>
 <div class="refsect3">
-<a name="id-1.2.11.9.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-download-get-request.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -233,7 +233,7 @@ process.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.11.9.2.6"></a><h4>Returns</h4>
+<a name="webkit-download-get-request.returns"></a><h4>Returns</h4>
 <p> the <a class="link" href="WebKitURIRequest.html" title="WebKitURIRequest"><span class="type">WebKitURIRequest</span></a> of <em class="parameter"><code>download</code></em>
 . </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
@@ -248,8 +248,8 @@ webkit_download_get_destination (<em class="parameter"><code><a class="link" hre
 can connect to <a class="link" href="WebKitDownload.html#WebKitDownload-created-destination" title="The “created-destination” signal"><span class="type">“created-destination”</span></a> to make
 sure this method returns a valid destination.</p>
 <div class="refsect3">
-<a name="id-1.2.11.9.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-download-get-destination.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -263,9 +263,8 @@ sure this method returns a valid destination.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.11.9.3.6"></a><h4>Returns</h4>
+<a name="webkit-download-get-destination.returns"></a><h4>Returns</h4>
 <p> the destination URI or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a></p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -288,8 +287,8 @@ and destination URI is not set when the download tranfer starts,
 the file will be saved with the filename suggested by the server in
 <code class="literal">G_USER_DIRECTORY_DOWNLOAD</code> directory.</p>
 <div class="refsect3">
-<a name="id-1.2.11.9.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-download-set-destination.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -320,8 +319,8 @@ process. This method returns <a href="../glib/glib-Standard-Macros.html#NULL:CAP
 is received from the server. You can connect to notify::response
 signal to be notified when the response is received.</p>
 <div class="refsect3">
-<a name="id-1.2.11.9.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-download-get-response.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -335,7 +334,7 @@ signal to be notified when the response is received.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.11.9.5.6"></a><h4>Returns</h4>
+<a name="webkit-download-get-response.returns"></a><h4>Returns</h4>
 <p> the <a class="link" href="WebKitURIResponse.html" title="WebKitURIResponse"><span class="type">WebKitURIResponse</span></a>, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if
 the response hasn't been received yet. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
@@ -351,8 +350,8 @@ operation is effectively cancelled the signal
 <a class="link" href="WebKitDownload.html#WebKitDownload-failed" title="The “failed” signal"><span class="type">“failed”</span></a> is emitted with
 <a class="link" href="webkit2gtk-WebKitError.html#WEBKIT-DOWNLOAD-ERROR-CANCELLED-BY-USER:CAPS"><code class="literal">WEBKIT_DOWNLOAD_ERROR_CANCELLED_BY_USER</code></a> error.</p>
 <div class="refsect3">
-<a name="id-1.2.11.9.6.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-download-cancel.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -377,8 +376,8 @@ You can monitor the estimated progress of the download operation by
 connecting to the notify::estimated-progress signal of <em class="parameter"><code>download</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.2.11.9.7.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-download-get-estimated-progress.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -392,10 +391,9 @@ connecting to the notify::estimated-progress signal of <em class="parameter"><co
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.11.9.7.6"></a><h4>Returns</h4>
+<a name="webkit-download-get-estimated-progress.returns"></a><h4>Returns</h4>
 <p> an estimate of the of the percent complete for a download
 as a range from 0.0 to 1.0.</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -407,8 +405,8 @@ webkit_download_get_elapsed_time (<em class="parameter"><code><a class="link" hr
 If the download finished, had an error or was cancelled this is
 the time between its start and the event.</p>
 <div class="refsect3">
-<a name="id-1.2.11.9.8.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-download-get-elapsed-time.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -422,9 +420,8 @@ the time between its start and the event.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.11.9.8.6"></a><h4>Returns</h4>
+<a name="webkit-download-get-elapsed-time.returns"></a><h4>Returns</h4>
 <p> seconds since the download was started</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -437,8 +434,8 @@ webkit_download_get_received_data_length
 
 in bytes.</p>
 <div class="refsect3">
-<a name="id-1.2.11.9.9.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-download-get-received-data-length.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -452,9 +449,8 @@ in bytes.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.11.9.9.6"></a><h4>Returns</h4>
+<a name="webkit-download-get-received-data-length.returns"></a><h4>Returns</h4>
 <p> the amount of bytes already downloaded.</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -464,8 +460,8 @@ in bytes.</p>
 webkit_download_get_web_view (<em class="parameter"><code><a class="link" href="WebKitDownload.html" title="WebKitDownload"><span class="type">WebKitDownload</span></a> *download</code></em>);</pre>
 <p>Get the <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> that initiated the download.</p>
 <div class="refsect3">
-<a name="id-1.2.11.9.10.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-download-get-web-view.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -479,7 +475,7 @@ webkit_download_get_web_view (<em class="parameter"><code><a class="link" href="
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.11.9.10.6"></a><h4>Returns</h4>
+<a name="webkit-download-get-web-view.returns"></a><h4>Returns</h4>
 <p> the <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> that initiated <em class="parameter"><code>download</code></em>
 ,
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if <em class="parameter"><code>download</code></em>
@@ -541,8 +537,8 @@ user_function (<a class="link" href="WebKitDownload.html" title="WebKitDownload"
 created successfully at <em class="parameter"><code>destination</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.2.11.12.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitDownload-created-destination.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -582,8 +578,8 @@ handled the file will be downloaded to <code class="literal">G_USER_DIRECTORY_DO
 directory using <em class="parameter"><code>suggested_filename</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.2.11.12.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitDownload-decide-destination.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -609,10 +605,9 @@ directory using <em class="parameter"><code>suggested_filename</code></em>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.11.12.3.6"></a><h4>Returns</h4>
+<a name="WebKitDownload-decide-destination.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> to stop other handlers from being invoked for the event.
 <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> to propagate the event further.</p>
-<p></p>
 </div>
 <p>Flags: Run Last</p>
 </div>
@@ -631,8 +626,8 @@ with <a class="link" href="WebKitDownload.html#webkit-download-cancel" title="we
 <a class="link" href="webkit2gtk-WebKitError.html#WEBKIT-DOWNLOAD-ERROR-CANCELLED-BY-USER:CAPS"><code class="literal">WEBKIT_DOWNLOAD_ERROR_CANCELLED_BY_USER</code></a>. The download operation finishes
 after an error and <a class="link" href="WebKitDownload.html#WebKitDownload-finished" title="The “finished” signal"><span class="type">“finished”</span></a> signal is emitted after this one.</p>
 <div class="refsect3">
-<a name="id-1.2.11.12.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitDownload-failed.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -668,8 +663,8 @@ user_function (<a class="link" href="WebKitDownload.html" title="WebKitDownload"
 <p>This signal is emitted when download finishes successfully or due to an error.
 In case of errors <a class="link" href="WebKitDownload.html#WebKitDownload-failed" title="The “failed” signal"><span class="type">“failed”</span></a> signal is emitted before this one.</p>
 <div class="refsect3">
-<a name="id-1.2.11.12.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitDownload-finished.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -702,8 +697,8 @@ user_function (<a class="link" href="WebKitDownload.html" title="WebKitDownload"
 every time new data has been written to the destination. It's
 useful to know the progress of the download operation.</p>
 <div class="refsect3">
-<a name="id-1.2.11.12.6.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitDownload-received-data.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -733,7 +728,6 @@ useful to know the progress of the download operation.</p>
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>

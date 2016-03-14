@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKitDOMGTK+ Reference Manual: WebKitDOMEvent</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitDOMEvent: WebKitDOMGTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKitDOMGTK+ Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitDOMEntityReference.html" title="WebKitDOMEntityReference">
 <link rel="next" href="WebKitDOMKeyboardEvent.html" title="WebKitDOMKeyboardEvent">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -35,7 +35,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitDOMEvent.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -174,7 +174,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitDOMEvent.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -245,7 +245,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitDOMEvent.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -258,7 +258,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitDOMEvent.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> <a class="link" href="WebKitDOMObject.html" title="WebKitDOMObject">WebKitDOMObject</a>
         <span class="lineart">╰──</span> WebKitDOMEvent
             <span class="lineart">├──</span> <a class="link" href="WebKitDOMUIEvent.html" title="WebKitDOMUIEvent">WebKitDOMUIEvent</a>
@@ -277,8 +277,8 @@
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_dom_event_stop_propagation (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.2.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-stop-propagation.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -298,8 +298,8 @@ webkit_dom_event_stop_propagation (<em class="parameter"><code><a class="link" h
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_dom_event_prevent_default (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.3.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-prevent-default.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -322,8 +322,8 @@ webkit_dom_event_init_event (<em class="parameter"><code><a class="link" href="W
                              <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> canBubbleArg</code></em>,
                              <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> cancelableArg</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.4.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-init-event.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -361,8 +361,8 @@ webkit_dom_event_init_event (<em class="parameter"><code><a class="link" href="W
 webkit_dom_event_stop_immediate_propagation
                                (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.5.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-stop-immediate-propagation.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -382,8 +382,8 @@ webkit_dom_event_stop_immediate_propagation
 <pre class="programlisting"><a class="link" href="WebKitDOMEventTarget.html" title="WebKitDOMEventTarget"><span class="returnvalue">WebKitDOMEventTarget</span></a> *
 webkit_dom_event_get_target (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.6.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-get-target.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -397,7 +397,7 @@ webkit_dom_event_get_target (<em class="parameter"><code><a class="link" href="W
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.30.8.6.5"></a><h4>Returns</h4>
+<a name="webkit-dom-event-get-target.returns"></a><h4>Returns</h4>
 <p> A <a class="link" href="WebKitDOMEventTarget.html" title="WebKitDOMEventTarget"><span class="type">WebKitDOMEventTarget</span></a>. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
@@ -408,8 +408,8 @@ webkit_dom_event_get_target (<em class="parameter"><code><a class="link" href="W
 <pre class="programlisting"><a class="link" href="WebKitDOMEventTarget.html" title="WebKitDOMEventTarget"><span class="returnvalue">WebKitDOMEventTarget</span></a> *
 webkit_dom_event_get_current_target (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.7.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-get-current-target.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -423,7 +423,7 @@ webkit_dom_event_get_current_target (<em class="parameter"><code><a class="link"
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.30.8.7.5"></a><h4>Returns</h4>
+<a name="webkit-dom-event-get-current-target.returns"></a><h4>Returns</h4>
 <p> A <a class="link" href="WebKitDOMEventTarget.html" title="WebKitDOMEventTarget"><span class="type">WebKitDOMEventTarget</span></a>. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
@@ -434,8 +434,8 @@ webkit_dom_event_get_current_target (<em class="parameter"><code><a class="link"
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gushort"><span class="returnvalue">gushort</span></a>
 webkit_dom_event_get_event_phase (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.8.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-get-event-phase.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -449,9 +449,8 @@ webkit_dom_event_get_event_phase (<em class="parameter"><code><a class="link" hr
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.30.8.8.5"></a><h4>Returns</h4>
+<a name="webkit-dom-event-get-event-phase.returns"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gushort"><span class="type">gushort</span></a></p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -460,8 +459,8 @@ webkit_dom_event_get_event_phase (<em class="parameter"><code><a class="link" hr
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_dom_event_get_bubbles (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.9.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-get-bubbles.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -475,9 +474,8 @@ webkit_dom_event_get_bubbles (<em class="parameter"><code><a class="link" href="
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.30.8.9.5"></a><h4>Returns</h4>
+<a name="webkit-dom-event-get-bubbles.returns"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -486,8 +484,8 @@ webkit_dom_event_get_bubbles (<em class="parameter"><code><a class="link" href="
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_dom_event_get_cancelable (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.10.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-get-cancelable.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -501,9 +499,8 @@ webkit_dom_event_get_cancelable (<em class="parameter"><code><a class="link" hre
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.30.8.10.5"></a><h4>Returns</h4>
+<a name="webkit-dom-event-get-cancelable.returns"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -512,8 +509,8 @@ webkit_dom_event_get_cancelable (<em class="parameter"><code><a class="link" hre
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#guint32"><span class="returnvalue">guint32</span></a>
 webkit_dom_event_get_time_stamp (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.11.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-get-time-stamp.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -527,9 +524,8 @@ webkit_dom_event_get_time_stamp (<em class="parameter"><code><a class="link" hre
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.30.8.11.5"></a><h4>Returns</h4>
+<a name="webkit-dom-event-get-time-stamp.returns"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#guint32"><span class="type">guint32</span></a></p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -539,8 +535,8 @@ webkit_dom_event_get_time_stamp (<em class="parameter"><code><a class="link" hre
 webkit_dom_event_get_default_prevented
                                (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.12.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-get-default-prevented.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -554,9 +550,8 @@ webkit_dom_event_get_default_prevented
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.30.8.12.5"></a><h4>Returns</h4>
+<a name="webkit-dom-event-get-default-prevented.returns"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -565,8 +560,8 @@ webkit_dom_event_get_default_prevented
 <pre class="programlisting"><a class="link" href="WebKitDOMEventTarget.html" title="WebKitDOMEventTarget"><span class="returnvalue">WebKitDOMEventTarget</span></a> *
 webkit_dom_event_get_src_element (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.13.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-get-src-element.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -580,7 +575,7 @@ webkit_dom_event_get_src_element (<em class="parameter"><code><a class="link" hr
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.30.8.13.5"></a><h4>Returns</h4>
+<a name="webkit-dom-event-get-src-element.returns"></a><h4>Returns</h4>
 <p> A <a class="link" href="WebKitDOMEventTarget.html" title="WebKitDOMEventTarget"><span class="type">WebKitDOMEventTarget</span></a>. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
@@ -591,8 +586,8 @@ webkit_dom_event_get_src_element (<em class="parameter"><code><a class="link" hr
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_dom_event_get_return_value (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.14.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-get-return-value.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -606,9 +601,8 @@ webkit_dom_event_get_return_value (<em class="parameter"><code><a class="link" h
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.30.8.14.5"></a><h4>Returns</h4>
+<a name="webkit-dom-event-get-return-value.returns"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -618,8 +612,8 @@ webkit_dom_event_get_return_value (<em class="parameter"><code><a class="link" h
 webkit_dom_event_set_return_value (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>,
                                    <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.15.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-set-return-value.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -646,8 +640,8 @@ webkit_dom_event_set_return_value (<em class="parameter"><code><a class="link" h
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_dom_event_get_cancel_bubble (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.16.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-get-cancel-bubble.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -661,9 +655,8 @@ webkit_dom_event_get_cancel_bubble (<em class="parameter"><code><a class="link" 
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.30.8.16.5"></a><h4>Returns</h4>
+<a name="webkit-dom-event-get-cancel-bubble.returns"></a><h4>Returns</h4>
 <p> A <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -673,8 +666,8 @@ webkit_dom_event_get_cancel_bubble (<em class="parameter"><code><a class="link" 
 webkit_dom_event_set_cancel_bubble (<em class="parameter"><code><a class="link" href="WebKitDOMEvent.html" title="WebKitDOMEvent"><span class="type">WebKitDOMEvent</span></a> *self</code></em>,
                                     <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> value</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.30.8.17.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-dom-event-set-cancel-bubble.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -794,7 +787,6 @@ webkit_dom_event_set_cancel_bubble (<em class="parameter"><code><a class="link" 
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>

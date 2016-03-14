@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKit2GTK+ Reference Manual: WebKitHitTestResult</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitHitTestResult: WebKit2GTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKit2GTK+ Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitResponsePolicyDecision.html" title="WebKitResponsePolicyDecision">
 <link rel="next" href="WebKitPrintOperation.html" title="WebKitPrintOperation">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -35,7 +35,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitHitTestResult.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -129,7 +129,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitHitTestResult.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -176,7 +176,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitHitTestResult.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -195,7 +195,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitHitTestResult.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitHitTestResult
 </pre>
 </div>
@@ -226,8 +226,8 @@ signal is emitted with a <a class="link" href="WebKitHitTestResult.html" title="
 webkit_hit_test_result_get_context (<em class="parameter"><code><a class="link" href="WebKitHitTestResult.html" title="WebKitHitTestResult"><span class="type">WebKitHitTestResult</span></a> *hit_test_result</code></em>);</pre>
 <p>Gets the value of the <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResult--context" title="The “context” property"><span class="type">“context”</span></a> property.</p>
 <div class="refsect3">
-<a name="id-1.2.17.8.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-hit-test-result-get-context.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -241,9 +241,8 @@ webkit_hit_test_result_get_context (<em class="parameter"><code><a class="link" 
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.17.8.2.6"></a><h4>Returns</h4>
+<a name="webkit-hit-test-result-get-context.returns"></a><h4>Returns</h4>
 <p> a bitmask of <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResultContext" title="enum WebKitHitTestResultContext"><span class="type">WebKitHitTestResultContext</span></a> flags</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -255,8 +254,8 @@ webkit_hit_test_result_context_is_link
 <p>Gets whether <a class="link" href="WebKitHitTestResult.html#WEBKIT-HIT-TEST-RESULT-CONTEXT-LINK:CAPS"><code class="literal">WEBKIT_HIT_TEST_RESULT_CONTEXT_LINK</code></a> flag is present in
 <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResult--context" title="The “context” property"><span class="type">“context”</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.17.8.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-hit-test-result-context-is-link.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -270,10 +269,9 @@ webkit_hit_test_result_context_is_link
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.17.8.3.6"></a><h4>Returns</h4>
+<a name="webkit-hit-test-result-context-is-link.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if there's a link element in the coordinates of the Hit Test,
 or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -285,8 +283,8 @@ webkit_hit_test_result_context_is_image
 <p>Gets whether <a class="link" href="WebKitHitTestResult.html#WEBKIT-HIT-TEST-RESULT-CONTEXT-IMAGE:CAPS"><code class="literal">WEBKIT_HIT_TEST_RESULT_CONTEXT_IMAGE</code></a> flag is present in
 <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResult--context" title="The “context” property"><span class="type">“context”</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.17.8.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-hit-test-result-context-is-image.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -300,10 +298,9 @@ webkit_hit_test_result_context_is_image
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.17.8.4.6"></a><h4>Returns</h4>
+<a name="webkit-hit-test-result-context-is-image.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if there's an image element in the coordinates of the Hit Test,
 or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -315,8 +312,8 @@ webkit_hit_test_result_context_is_media
 <p>Gets whether <a class="link" href="WebKitHitTestResult.html#WEBKIT-HIT-TEST-RESULT-CONTEXT-MEDIA:CAPS"><code class="literal">WEBKIT_HIT_TEST_RESULT_CONTEXT_MEDIA</code></a> flag is present in
 <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResult--context" title="The “context” property"><span class="type">“context”</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.17.8.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-hit-test-result-context-is-media.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -330,10 +327,9 @@ webkit_hit_test_result_context_is_media
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.17.8.5.6"></a><h4>Returns</h4>
+<a name="webkit-hit-test-result-context-is-media.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if there's a media element in the coordinates of the Hit Test,
 or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -345,8 +341,8 @@ webkit_hit_test_result_context_is_editable
 <p>Gets whether <a class="link" href="WebKitHitTestResult.html#WEBKIT-HIT-TEST-RESULT-CONTEXT-EDITABLE:CAPS"><code class="literal">WEBKIT_HIT_TEST_RESULT_CONTEXT_EDITABLE</code></a> flag is present in
 <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResult--context" title="The “context” property"><span class="type">“context”</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.17.8.6.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-hit-test-result-context-is-editable.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -360,11 +356,10 @@ webkit_hit_test_result_context_is_editable
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.17.8.6.6"></a><h4>Returns</h4>
+<a name="webkit-hit-test-result-context-is-editable.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if there's an editable element at the coordinates of the <em class="parameter"><code>hit_test_result</code></em>
 ,
 or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -374,8 +369,8 @@ or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">
 webkit_hit_test_result_get_link_uri (<em class="parameter"><code><a class="link" href="WebKitHitTestResult.html" title="WebKitHitTestResult"><span class="type">WebKitHitTestResult</span></a> *hit_test_result</code></em>);</pre>
 <p>Gets the value of the <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResult--link-uri" title="The “link-uri” property"><span class="type">“link-uri”</span></a> property.</p>
 <div class="refsect3">
-<a name="id-1.2.17.8.7.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-hit-test-result-get-link-uri.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -389,11 +384,10 @@ webkit_hit_test_result_get_link_uri (<em class="parameter"><code><a class="link"
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.17.8.7.6"></a><h4>Returns</h4>
+<a name="webkit-hit-test-result-get-link-uri.returns"></a><h4>Returns</h4>
 <p> the URI of the link element in the coordinates of the Hit Test,
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if there ins't a link element in <em class="parameter"><code>hit_test_result</code></em>
 context</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -403,8 +397,8 @@ context</p>
 webkit_hit_test_result_get_link_title (<em class="parameter"><code><a class="link" href="WebKitHitTestResult.html" title="WebKitHitTestResult"><span class="type">WebKitHitTestResult</span></a> *hit_test_result</code></em>);</pre>
 <p>Gets the value of the <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResult--link-title" title="The “link-title” property"><span class="type">“link-title”</span></a> property.</p>
 <div class="refsect3">
-<a name="id-1.2.17.8.8.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-hit-test-result-get-link-title.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -418,12 +412,11 @@ webkit_hit_test_result_get_link_title (<em class="parameter"><code><a class="lin
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.17.8.8.6"></a><h4>Returns</h4>
+<a name="webkit-hit-test-result-get-link-title.returns"></a><h4>Returns</h4>
 <p> the title of the link element in the coordinates of the Hit Test,
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if there ins't a link element in <em class="parameter"><code>hit_test_result</code></em>
 context or the
 link element doesn't have a title</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -433,8 +426,8 @@ link element doesn't have a title</p>
 webkit_hit_test_result_get_link_label (<em class="parameter"><code><a class="link" href="WebKitHitTestResult.html" title="WebKitHitTestResult"><span class="type">WebKitHitTestResult</span></a> *hit_test_result</code></em>);</pre>
 <p>Gets the value of the <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResult--link-label" title="The “link-label” property"><span class="type">“link-label”</span></a> property.</p>
 <div class="refsect3">
-<a name="id-1.2.17.8.9.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-hit-test-result-get-link-label.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -448,12 +441,11 @@ webkit_hit_test_result_get_link_label (<em class="parameter"><code><a class="lin
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.17.8.9.6"></a><h4>Returns</h4>
+<a name="webkit-hit-test-result-get-link-label.returns"></a><h4>Returns</h4>
 <p> the label of the link element in the coordinates of the Hit Test,
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if there ins't a link element in <em class="parameter"><code>hit_test_result</code></em>
 context or the
 link element doesn't have a label</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -463,8 +455,8 @@ link element doesn't have a label</p>
 webkit_hit_test_result_get_image_uri (<em class="parameter"><code><a class="link" href="WebKitHitTestResult.html" title="WebKitHitTestResult"><span class="type">WebKitHitTestResult</span></a> *hit_test_result</code></em>);</pre>
 <p>Gets the value of the <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResult--image-uri" title="The “image-uri” property"><span class="type">“image-uri”</span></a> property.</p>
 <div class="refsect3">
-<a name="id-1.2.17.8.10.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-hit-test-result-get-image-uri.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -478,11 +470,10 @@ webkit_hit_test_result_get_image_uri (<em class="parameter"><code><a class="link
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.17.8.10.6"></a><h4>Returns</h4>
+<a name="webkit-hit-test-result-get-image-uri.returns"></a><h4>Returns</h4>
 <p> the URI of the image element in the coordinates of the Hit Test,
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if there ins't an image element in <em class="parameter"><code>hit_test_result</code></em>
 context</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -492,8 +483,8 @@ context</p>
 webkit_hit_test_result_get_media_uri (<em class="parameter"><code><a class="link" href="WebKitHitTestResult.html" title="WebKitHitTestResult"><span class="type">WebKitHitTestResult</span></a> *hit_test_result</code></em>);</pre>
 <p>Gets the value of the <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResult--media-uri" title="The “media-uri” property"><span class="type">“media-uri”</span></a> property.</p>
 <div class="refsect3">
-<a name="id-1.2.17.8.11.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-hit-test-result-get-media-uri.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -507,11 +498,10 @@ webkit_hit_test_result_get_media_uri (<em class="parameter"><code><a class="link
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.17.8.11.6"></a><h4>Returns</h4>
+<a name="webkit-hit-test-result-get-media-uri.returns"></a><h4>Returns</h4>
 <p> the URI of the media element in the coordinates of the Hit Test,
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if there ins't a media element in <em class="parameter"><code>hit_test_result</code></em>
 context</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -523,8 +513,8 @@ webkit_hit_test_result_context_is_scrollbar
 <p>Gets whether <a class="link" href="WebKitHitTestResult.html#WEBKIT-HIT-TEST-RESULT-CONTEXT-SCROLLBAR:CAPS"><code class="literal">WEBKIT_HIT_TEST_RESULT_CONTEXT_SCROLLBAR</code></a> flag is present in
 <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResult--context" title="The “context” property"><span class="type">“context”</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.17.8.12.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-hit-test-result-context-is-scrollbar.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -538,11 +528,10 @@ webkit_hit_test_result_context_is_scrollbar
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.17.8.12.6"></a><h4>Returns</h4>
+<a name="webkit-hit-test-result-context-is-scrollbar.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if there's a scrollbar element at the coordinates of the <em class="parameter"><code>hit_test_result</code></em>
 ,
 or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</p>
-<p></p>
 </div>
 </div>
 </div>
@@ -559,8 +548,8 @@ or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">
 <a name="WebKitHitTestResultContext"></a><h3>enum WebKitHitTestResultContext</h3>
 <p>Enum values with flags representing the context of a <a class="link" href="WebKitHitTestResult.html" title="WebKitHitTestResult"><span class="type">WebKitHitTestResult</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.17.9.3.4"></a><h4>Members</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitHitTestResultContext.members"></a><h4>Members</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="300px" class="enum_members_name">
 <col class="enum_members_description">
@@ -676,7 +665,6 @@ is present in <a class="link" href="WebKitHitTestResult.html#WebKitHitTestResult
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>

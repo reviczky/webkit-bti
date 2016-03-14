@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKitGTK+ Reference Manual: WebKitSpellChecker</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitSpellChecker: WebKitGTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKitGTK+ Reference Manual">
 <link rel="up" href="ch02.html" title="Class Overview">
 <link rel="prev" href="WebKitIconDatabase.html" title="WebKitIconDatabase">
 <link rel="next" href="WebKitFaviconDatabase.html" title="WebKitFaviconDatabase">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -35,7 +35,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitSpellChecker.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -94,7 +94,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitSpellChecker.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -115,7 +115,7 @@
 <a name="WebKitSpellChecker.prerequisites"></a><h2>Prerequisites</h2>
 <p>
 WebKitSpellChecker requires
- <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>.</p>
+ <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitSpellChecker.description"></a><h2>Description</h2>
@@ -143,8 +143,8 @@ location and length of the first misspelling in
  and <em class="parameter"><code>misspelling_length</code></em>
  respectively.</p>
 <div class="refsect3">
-<a name="id-1.3.25.8.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-spell-checker-check-spelling-of-string.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -174,7 +174,7 @@ location and length of the first misspelling in
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 1.5.1</p>
+<p class="since">Since: 1.5.1</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -188,8 +188,8 @@ webkit_spell_checker_get_guesses_for_word
 misspelled word <em class="parameter"><code>word</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.3.25.8.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-spell-checker-get-guesses-for-word.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -215,14 +215,14 @@ misspelled word <em class="parameter"><code>word</code></em>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.25.8.3.6"></a><h4>Returns</h4>
+<a name="webkit-spell-checker-get-guesses-for-word.returns"></a><h4>Returns</h4>
 <p> a newly allocated <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>-terminated array
 of suggested corrections for a misspelled word <em class="parameter"><code>word</code></em>
 . Free it with
 <a href="../glib/glib-String-Utility-Functions.html#g-strfreev"><code class="literal">g_strfreev</code></a> when done with it. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
-<p class="since">Since 1.5.1</p>
+<p class="since">Since: 1.5.1</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -237,8 +237,8 @@ webkit_spell_checker_update_spell_checking_languages
 accepted format is a list of comma (',') separated language codes
 of the form 'en_US', ie, language_VARIANT.</p>
 <div class="refsect3">
-<a name="id-1.3.25.8.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-spell-checker-update-spell-checking-languages.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -259,7 +259,7 @@ of the form 'en_US', ie, language_VARIANT.</p>
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 1.5.1</p>
+<p class="since">Since: 1.5.1</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -270,8 +270,8 @@ webkit_spell_checker_get_autocorrect_suggestions_for_misspelled_word
                                 <em class="parameter"><code>const <span class="type">char</span> *word</code></em>);</pre>
 <p>Returns a suggestion for a word to use in an "autocorrect" feature.</p>
 <div class="refsect3">
-<a name="id-1.3.25.8.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-spell-checker-get-autocorrect-suggestions-for-misspelled-word.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -292,13 +292,13 @@ webkit_spell_checker_get_autocorrect_suggestions_for_misspelled_word
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.25.8.5.6"></a><h4>Returns</h4>
+<a name="webkit-spell-checker-get-autocorrect-suggestions-for-misspelled-word.returns"></a><h4>Returns</h4>
 <p> the suggestion for the autocorrection of
 <em class="parameter"><code>word</code></em>
 . </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
-<p class="since">Since 1.5.1</p>
+<p class="since">Since: 1.5.1</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -312,8 +312,8 @@ webkit_spell_checker_learn_word (<em class="parameter"><code><a class="link" hre
 spelled word. The word will be learned permanently in the user's
 personal dictionary.</p>
 <div class="refsect3">
-<a name="id-1.3.25.8.6.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-spell-checker-learn-word.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -333,7 +333,7 @@ personal dictionary.</p>
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 1.5.1</p>
+<p class="since">Since: 1.5.1</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -346,8 +346,8 @@ webkit_spell_checker_ignore_word (<em class="parameter"><code><a class="link" hr
  as a misspelling for this
 session.</p>
 <div class="refsect3">
-<a name="id-1.3.25.8.7.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-spell-checker-ignore-word.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -367,7 +367,7 @@ session.</p>
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 1.5.1</p>
+<p class="since">Since: 1.5.1</p>
 </div>
 </div>
 <div class="refsect1">
@@ -381,7 +381,6 @@ session.</p>
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>

@@ -1,3 +1,954 @@
+2014-06-06  Brady Eidson  <beidson@apple.com>
+
+        Initialize a char* that needs to be initialized.
+        <rdar://problem/15840022> and https://bugs.webkit.org/show_bug.cgi?id=133585
+
+        Reviewed by Mark Rowe.
+
+        r152134 (erroneously) removed this initialization.
+
+        * platform/sql/SQLiteStatement.cpp:
+        (WebCore::SQLiteStatement::prepare): tail should start out initialized to 0.
+
+2016-03-02  Milan Crha  <mcrha@redhat.com>
+
+        Fix the build with VIDEO disabled.
+
+        Reviewed by Carlos Garcia Campos.
+
+        * platform/gtk/RenderThemeGtk2.cpp:
+        * platform/gtk/RenderThemeGtk3.cpp:
+
+2016-02-29  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Fix the build with GTK+ < 3.19.
+
+        * platform/gtk/ScrollbarThemeGtk3.cpp:
+        (WebCore::ScrollbarThemeGtk::paintScrollbarBackground):
+        (WebCore::ScrollbarThemeGtk::paintThumb):
+        (WebCore::ScrollbarThemeGtk::paintButton):
+
+2015-02-06  Zalan Bujtas  <zalan@apple.com>
+
+        ASSERT repaintContainer->hasLayer() in WebCore::RenderObject::repaintUsingContainer
+        https://bugs.webkit.org/show_bug.cgi?id=140750
+
+        Reviewed by Simon Fraser.
+
+        There's a short period of time when RenderObject::layer() still returns a valid pointer
+        even though we already cleared the hasLayer() flag.
+        Do not use the layer as repaint container in such cases.
+
+        Test: compositing/repaint-container-assertion-when-toggling-compositing.html
+
+        * rendering/RenderObject.cpp:
+        (WebCore::RenderObject::enclosingLayer):
+
+2015-01-13  Andreas Kling  <akling@apple.com>
+
+        Element::normalizeAttributes() needs to handle arbitrary JS executing between loop iterations.
+        <https://webkit.org/b/140379>
+        <rdar://problem/19446901>
+
+        Reviewed by Benjamin Poulain.
+
+        Since DOM mutation events may arise below the call to Node::normalize(),
+        have the loop in Element::normalizeAttributes() make a copy of the Attr nodes
+        beforehand, to guard against mutations.
+
+        Based on a patch by Chris "Chris Dumez" Dumez.
+
+        Test: fast/dom/Element/normalize-crash2.html
+
+        * dom/Element.cpp:
+        (WebCore::Element::normalizeAttributes):
+
+2015-02-06  Maciej Stachowiak  <mjs@apple.com>
+
+        REGRESSION(r179706): Caused memory corruption on some tests (Requested by _ap_ on #webkit).
+        https://bugs.webkit.org/show_bug.cgi?id=141324
+
+        Reviewed by Alexey Proskuryakov.
+
+        No new tests. This is caught by existing tests under ASAN, and I don't know how to reproduce
+        it without ASAN.
+
+        * rendering/RenderLineBoxList.cpp:
+        (WebCore::RenderLineBoxList::dirtyLinesFromChangedChild): Give up
+        and just always invalidate the next line. It's too hard to come up
+        with the condition that catches all needed cases, doesn't itself
+        cause a crash, and isn't overzealous. And we do this for the
+        previous line anyway.  Also clean up the code a bit since it
+        confusingly reuses a variable, and declares it uninitialized, for
+        no good reason.
+
+2015-02-05  Maciej Stachowiak  <mjs@apple.com>
+
+        Crash due to failing to dirty a removed text node's line box
+        https://bugs.webkit.org/show_bug.cgi?id=136544
+
+        Reviewed by David Hyatt.
+        
+        Test: fast/text/remove-text-node-linebox-not-dirty-crash.html
+
+        * rendering/RenderLineBoxList.cpp:
+        (WebCore::RenderLineBoxList::dirtyLinesFromChangedChild): Make the check for dirtying the next
+        line box a bit more inclusive to avoid a case of a line box for a destroyed render object not
+        being dirtied. In particular, when the text node's parent has no line boxes but contains BRs.
+
+2015-02-15  Said Abou-Hallawa  <sabouhallawa@apple.com>
+
+        Crash when accessing an item in SVGLengthList and then replacing it with a previous item in the list.
+        https://bugs.webkit.org/show_bug.cgi?id=141552.
+
+        Reviewed by Darin Adler.
+
+        Tests: LayoutTests/svg/dom/SVGLengthList-basics.xhtml: This test is modified to
+        include a new test case.
+
+        * svg/properties/SVGListPropertyTearOff.h: Commit the removal of the replacing item
+        before trying to detach the wrapper of the item which going to be replaced.
+
+2015-04-02  Alexey Proskuryakov  <ap@apple.com>
+
+        Clean up access checks in JSHistoryCustom.cpp
+        https://bugs.webkit.org/show_bug.cgi?id=143227
+
+        Reviewed by Sam Weinig.
+
+        * bindings/js/JSHistoryCustom.cpp:
+        (WebCore::JSHistory::putDelegate):
+        (WebCore::JSHistory::deleteProperty):
+        (WebCore::JSHistory::deletePropertyByIndex):
+        (WebCore::JSHistory::getOwnPropertyNames):
+        (WebCore::JSHistory::pushState):
+        (WebCore::JSHistory::replaceState):
+
+2014-08-27  Daniel Bates  <dabates@apple.com>
+
+        Scrollbar corner can be drawn outside containing frame
+        https://bugs.webkit.org/show_bug.cgi?id=133131
+        <rdar://problem/16382769>
+
+        Reviewed by Simon Fraser.
+
+        Merged from Blink (patch by Levi Weintraub):
+        <https://src.chromium.org/viewvc/blink?revision=170625&view=revision>
+
+        Fixes an issue where the scroll corner may be painted outside the rectangle of
+        its associated frame by setting a clip rectangle before painting the scroll bar(s)
+        and scroll corner.
+
+        Test: scrollbars/custom-scrollbars-paint-outside-iframe.html
+
+        * platform/ScrollView.cpp:
+        (WebCore::ScrollView::paint):
+
+2015-07-09  Daniel Bates  <dabates@apple.com>
+
+        Fetching Content Security Policy report URL should respect same origin policy
+        https://bugs.webkit.org/show_bug.cgi?id=146754
+        <rdar://problem/18860259>
+
+        Reviewed by Brady Eidson.
+
+        Inspired by Blink r149791 (by Mike West <mkwst@chromium.org>):
+        <https://src.chromium.org/viewvc/blink?revision=149791&view=revision>
+
+        As per <http://www.w3.org/TR/2015/CR-CSP2-20150219/#send-violation-reports>, fetching the
+        Content Security Policy report URL should include cookies if and only if the origin of
+        the protected resource is equal to the origin of the report URL.
+
+        Tests: http/tests/security/contentSecurityPolicy/report-cross-origin-no-cookies-when-private-browsing-enabled.html
+               http/tests/security/contentSecurityPolicy/report-cross-origin-no-cookies-when-private-browsing-toggled.html
+               http/tests/security/contentSecurityPolicy/report-cross-origin-no-cookies.html
+               http/tests/security/contentSecurityPolicy/report-same-origin-no-cookies-when-private-browsing-toggled.html
+               http/tests/security/contentSecurityPolicy/report-same-origin-with-cookies-when-private-browsing-enabled.html
+               http/tests/security/contentSecurityPolicy/report-same-origin-with-cookies.html
+
+        * loader/PingLoader.cpp:
+        (WebCore::PingLoader::sendViolationReport):
+
+2015-07-09  Zalan Bujtas  <zalan@apple.com>
+
+        Plugin create can end up destroying its renderer.
+        https://bugs.webkit.org/show_bug.cgi?id=146824
+        rdar://problem/18921429
+
+        Reviewed by Andreas Kling.
+
+        Plugins can run arbitrary code during initialization. If the plugin
+        happens to destroy the associated node, its renderer becomes invalid.
+        This patch checks whether the renderer survived the createPlugin() call.
+        (This WeakPtr pattern is also used in RenderWidget to avoid dangling pointers.)
+
+        Speculative fix. Not reproducible.
+
+        * loader/SubframeLoader.cpp:
+        (WebCore::SubframeLoader::loadPlugin):
+
+2015-08-05  Chris Dumez  <cdumez@apple.com>
+
+        Crash when removing children of a MathMLSelectElement
+        https://bugs.webkit.org/show_bug.cgi?id=147704
+        <rdar://problem/21940321>
+
+        Reviewed by Ryosuke Niwa.
+
+        When MathMLSelectElement::childrenChanged() is called after its
+        children have been removed, MathMLSelectElement calls
+        updateSelectedChild() which accesses m_selectedChild. However,
+        in this case, m_selectedChild is the previously selected child
+        and it may be destroyed as this point if it was removed. To avoid
+        this problem, MathMLSelectElement now keep a strong ref to the
+        currently selected element.
+
+        Test: mathml/maction-removeChild.html
+
+        * mathml/MathMLSelectElement.h:
+
+2015-05-28  Myles C. Maxfield  <mmaxfield@apple.com>
+
+        Crash under ICU with ASAN during editing/selection/move-by-word-visually-crash-test-5.html
+        https://bugs.webkit.org/show_bug.cgi?id=145429
+        <rdar://problem/20992218>
+
+        Reviewed by Alexey Proskuryakov.
+
+        WebKit uses some strings which contain the lower 8-bits of UTF-16 (thereby saving space). However,
+        ICU doesn't understand this encoding. When we want to use ICU functions with strings in this encoding,
+        we create a UTextProvider which converts our encoded strings to UTF-16 for ICU, one chunk at a time.
+        This object contains a vtable which we populate to perform the conversion.
+
+        The WebKit function which actually returns the UTF-16 chunks has two relevant arguments: an index into
+        the encoded string which ICU is requesting, and a direction from that index which ICU is interested
+        in. This function populates a "chunk" which is characterized by a pointer to a buffer, the length of
+        the populated data in the buffer, and an offset into the chunk which represents the index that the
+        requested character was put into.
+
+        When ICU requests data going backward, we fill in the chunk accordingly, with the requested character
+        all the way at the end. We then set the offset equal to the length of the buffer. However, this length
+        value is stale from the previous time the function ran. Therefore, ICU was reading the wrong index in
+        the chunk when expecting the requested character.
+
+        Covered by editing/selection/move-by-word-visually-crash-test-5.html.
+
+        * platform/text/icu/UTextProviderLatin1.cpp:
+        (WebCore::uTextLatin1Access):
+
+2015-05-29  Brady Eidson  <beidson@apple.com>
+
+        Review feedback followup for r185003.
+        https://bugs.webkit.org/show_bug.cgi?id=145463
+
+        Reviewed by Darin Adler.
+
+        * platform/sql/SQLiteDatabase.cpp:
+        (WebCore::SQLiteDatabase::overrideUnauthorizedFunctions): `static const` one thing, c++-style cast another.
+
+2015-05-29  Brady Eidson  <beidson@apple.com>
+
+        WebSQL default functions can bypass authorizer.
+        <rdar://problem/21048994> and https://bugs.webkit.org/show_bug.cgi?id=145463
+
+        Reviewed by Sam Weinig and Alexey Proskuryakov.
+
+        No new tests yet.
+
+        * platform/sql/SQLiteDatabase.cpp:
+        (WebCore::unauthorizedSQLFunction): Function to install into SQLite to override some built-in functions.
+        (WebCore::SQLiteDatabase::open):
+        (WebCore::SQLiteDatabase::overrideUnauthorizedFunctions): Install function overrides for functions that
+           take arbitrary input that are also meant to be disabled by virtue of them not being whitelisted.
+        * platform/sql/SQLiteDatabase.h:
+
+2015-06-09  Said Abou-Hallawa  <sabouhallawa@apple.com>
+
+        feComposite filter does not clip the paint rect to its effect rect when the operator is 'in' or 'atop'
+        https://bugs.webkit.org/show_bug.cgi?id=137856
+
+        Reviewed by Darin Adler.
+
+        There was bug in calculating the absolutePaintRect of the feComposite filter
+        when the operator is equal to 'in' or 'atop'. The absolutePaintRect was set
+        to the absolutePaintRect of the background FilterEffect which is correct.
+        What was missing is clipping this rectangle to the maxEffectRect of the
+        filter which we do for other operators.
+
+        Tests: svg/filters/feComposite-background-rect-control-operators.svg
+
+        * platform/graphics/IntRect.h:
+        (WebCore::operator-=):
+        (WebCore::operator-): Add new operators to IntRect.
+
+        * platform/graphics/filters/FEComposite.cpp:
+        (WebCore::FEComposite::determineAbsolutePaintRect): Make sure the filter
+        absolutePaintRect is clipped to maxEffectRect for all operators.
+        
+        (WebCore::FEComposite::platformApplySoftware): Code clean-up.
+        
+        * platform/graphics/filters/FilterEffect.cpp:
+        (WebCore::FilterEffect::determineAbsolutePaintRect): Move the clipping
+        part to a separate function.
+        
+        (WebCore::FilterEffect::clipAbsolutePaintRect): Clip the absolutePaintRect
+        to the maxEffectRect of the filter.
+        
+        * platform/graphics/filters/FilterEffect.h:
+
+2015-06-15  Zalan Bujtas  <zalan@apple.com>
+
+        RootInlineBox::m_lineBreakObj becomes invalid when a child renderer is removed and the line does not get marked dirty.
+        https://bugs.webkit.org/show_bug.cgi?id=145988
+        rdar://problem/20959137
+
+        Reviewed by David Hyatt.
+
+        This patch ensures that we find the right first inline box so that we can dirty the
+        the appropriate line boxes.
+        With marking the right line boxes dirty, now we can update RootInlineBox::m_lineBreakObj at the next layout.
+
+        Test: fast/inline/crash-when-child-renderer-is-removed-and-line-stays-clean.html
+
+        * rendering/RenderInline.cpp:
+        (WebCore::RenderInline::culledInlineFirstLineBox):
+        (WebCore::RenderInline::culledInlineLastLineBox):
+        * rendering/RootInlineBox.cpp:
+        (WebCore::RootInlineBox::setLineBreakInfo): Deleted. Remove misleading assert and comment.
+
+2015-06-19  Andy Estes  <aestes@apple.com>
+
+        Various assertion failures occur when executing script in the midst of DOM insertion
+        https://bugs.webkit.org/show_bug.cgi?id=132482
+
+        Reviewed by Darin Adler.
+
+        Prior to this change, when an element containing a <script> child was inserted into a document, the script was
+        executed in ScriptElement::insertedInto(). That script can access nodes that follow it in the newly-inserted
+        hierarchy but are not yet fully inserted, leading to at least the following problems:
+
+            - The script could remove a node that is not yet marked as in the document.
+            - The script could remove a named <map> that has yet to be added to TreeScope::m_imageMapsByName.
+            - The script could remove a form control that has yet to be added to FormController::m_formElementsWithState.
+
+        These scenarios all result in assertion failures. This change ensures that each node in the newly-inserted
+        hierarchy is fully inserted before executing any scripts.
+
+        Tests: fast/dom/element-removed-while-inserting-parent-crash.html
+               fast/dom/named-map-removed-while-inserting-parent-crash.html
+               fast/forms/form-control-removed-while-inserting-parent-crash.html
+               svg/dom/element-removed-while-inserting-parent-crash.html
+
+        * dom/ScriptElement.cpp:
+        (WebCore::ScriptElement::shouldNotifySubtreeInsertions): Renamed from insertedInto().
+        Returned true in the case where insertedInto() would've called prepareScript().
+        (WebCore::ScriptElement::didNotifySubtreeInsertions): Called prepareScript().
+        (WebCore::ScriptElement::insertedInto): Renamed to shouldNotifySubtreeInsertions().
+        * dom/ScriptElement.h:
+        * html/HTMLScriptElement.cpp:
+        (WebCore::HTMLScriptElement::insertedInto): If shouldNotifySubtreeInsertions() is true, returned InsertionShouldCallDidNotifySubtreeInsertions.
+        Otherwise, returned InsertionDone.
+        (WebCore::HTMLScriptElement::didNotifySubtreeInsertions): Called ScriptElement::didNotifySubtreeInsertions().
+        * html/HTMLScriptElement.h:
+        * svg/SVGScriptElement.cpp:
+        (WebCore::SVGScriptElement::insertedInto): Did the same as HTMLScriptElement::insertedInto().
+        (WebCore::SVGScriptElement::didNotifySubtreeInsertions): Called ScriptElement::didNotifySubtreeInsertions().
+        * svg/SVGScriptElement.h:
+
+2015-04-16  Brady Eidson  <beidson@apple.com>
+
+        Media element can manipulate DOM during Document destruction.
+        rdar://problem/20553898 and https://bugs.webkit.org/show_bug.cgi?id=143780
+
+        Reviewed by Jer Noble.
+
+        * html/HTMLMediaElement.cpp:
+        (WebCore::HTMLMediaElement::configureMediaControls): Bail if the element has no active document.
+
+2015-05-01  Martin Robinson  <mrobinson@igalia.com>
+
+        [GTK] New CORS tests from r183280 fail on WebKitGTK+
+        https://bugs.webkit.org/show_bug.cgi?id=144469
+
+        Reviewed by Sergio Villar Senin.
+
+        No new tests. This causes failing tests to pass.
+
+        * platform/network/soup/ResourceHandleSoup.cpp:
+        (WebCore::doRedirect): Clear the origin header on cross-origin redirects.
+
+2015-04-24  Brady Eidson  <beidson@apple.com>
+
+        Origin header is preserved on cross-origin redirects.
+        https://bugs.webkit.org/show_bug.cgi?id=144157.
+
+        Reviewed by Sam Weinig.
+
+        Tests: http/tests/security/cors-post-redirect-301.html
+               http/tests/security/cors-post-redirect-302.html
+               http/tests/security/cors-post-redirect-307.html
+               http/tests/security/cors-post-redirect-308.html
+
+        * platform/network/cf/ResourceHandleCFNet.cpp:
+        (WebCore::ResourceHandle::willSendRequest): Always clear any origin header for cross-origin redirects.
+        * platform/network/mac/ResourceHandleMac.mm:
+        (WebCore::ResourceHandle::willSendRequest): Ditto.
+
+2015-04-27  Daniel Bates  <dabates@apple.com>
+
+        Form control may be associated with the wrong HTML Form element after form id change
+        https://bugs.webkit.org/show_bug.cgi?id=133456
+        <rdar://problem/17095055>
+
+        Reviewed by Andy Estes.
+
+        Fixes an issue where a form control may be associated with the wrong HTML Form element
+        after the id of the HTML Form element associated with the form control is changed when
+        there is more than one HTML Form element with the same id in the document. Specifically,
+        a form control that has an HTML form attribute value X will always be associated with
+        some HTML Form element f where f.id = X regardless of whether f.id is subsequently
+        changed.
+
+        Tests: fast/forms/change-form-id-to-be-unique-then-submit-form.html
+               fast/forms/change-form-id-to-be-unique.html
+
+        * dom/Element.cpp:
+        (WebCore::Element::attributeChanged): Notify observers when the id of an element changed.
+        (WebCore::Element::updateId): Added parameter NotifyObservers (defaults to NotifyObservers::Yes),
+        as to whether we should notify observers of the id change.
+        (WebCore::Element::updateIdForTreeScope): Ditto.
+        (WebCore::Element::willModifyAttribute): Do not notify observers of the id change immediately. As
+        indicated by the name of this method, we plan to modify the DOM attribute id of the element, but
+        we have not actually modified it when this method is called. Instead we will notify observers
+        in Element::attributeChanged(), which is called after the DOM attribute id is modified.
+        (WebCore::Element::cloneAttributesFromElement): Ditto.
+        * dom/Element.h: Defined enum class NotifyObservers.
+        * dom/TreeScope.cpp:
+        (WebCore::TreeScope::addElementById): Added boolean parameter notifyObservers (defaults to true)
+        as to whether we should dispatch a notification to all observers.
+        (WebCore::TreeScope::removeElementById): Ditto.
+        * dom/TreeScope.h:
+
+2014-02-27  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Element::attributeChanged shouldn't do any work when attribute value didn't change
+        https://bugs.webkit.org/show_bug.cgi?id=129467
+
+        Reviewed by Geoffrey Garen.
+
+        Exit early in childrenChanged when the attribute value didn't change.
+
+        * dom/Attr.cpp:
+        (WebCore::Attr::setValue):
+        (WebCore::Attr::childrenChanged):
+        * dom/Element.cpp:
+        (WebCore::Element::setAttributeInternal):
+        (WebCore::Element::attributeChanged):
+        (WebCore::Element::parserSetAttributes):
+        (WebCore::Element::removeAttributeInternal):
+        (WebCore::Element::didAddAttribute):
+        (WebCore::Element::didModifyAttribute):
+        (WebCore::Element::didRemoveAttribute):
+        (WebCore::Element::cloneAttributesFromElement):
+        * dom/Element.h:
+        * dom/StyledElement.cpp:
+        (WebCore::StyledElement::attributeChanged):
+        * dom/StyledElement.h:
+        * html/HTMLInputElement.cpp:
+        (WebCore::HTMLInputElement::updateType):
+        * mathml/MathMLElement.cpp:
+        (WebCore::MathMLElement::attributeChanged):
+        * mathml/MathMLElement.h:
+        * mathml/MathMLSelectElement.cpp:
+        (WebCore::MathMLSelectElement::attributeChanged):
+        * mathml/MathMLSelectElement.h:
+        * svg/SVGElement.cpp:
+        (WebCore::SVGElement::attributeChanged):
+        * svg/SVGElement.h:
+
+2015-04-30  Brady Eidson  <beidson@apple.com>
+
+        Build fix after r183646 for less enlightened platforms.
+
+        Unreviewed.
+
+        * Modules/webdatabase/DatabaseBackendBase.cpp:
+        (WebCore::fullyQualifiedInfoTableName): Windows doesn’t have stpcpy :(
+
+2015-04-30  Brady Eidson  <beidson@apple.com>
+
+        Javascript using WebSQL can create their own WebKit info table.
+        <rdar://problem/20688792> and https://bugs.webkit.org/show_bug.cgi?id=144466
+
+        Reviewed by Alex Christensen.
+
+        Test: storage/websql/alter-to-info-table.html
+
+        * Modules/webdatabase/DatabaseBackendBase.cpp:
+        (WebCore::DatabaseBackendBase::databaseInfoTableName): Return the info table name.
+        (WebCore::fullyQualifiedInfoTableName): Append "main." to the info table name.
+        (WebCore::DatabaseBackendBase::DatabaseBackendBase): Use the fully qualified name.
+        (WebCore::DatabaseBackendBase::performOpenAndVerify): Ditto.
+        (WebCore::DatabaseBackendBase::getVersionFromDatabase): Ditto.
+        (WebCore::DatabaseBackendBase::setVersionInDatabase): Ditto.
+
+2015-03-27  Said Abou-Hallawa  <sabouhallawa@apple.com>
+
+        FEMorphology::platformApplyGeneric() should bail out if the radius is less than or equal to zero.
+        https://bugs.webkit.org/show_bug.cgi?id=142885.
+
+        Reviewed by Dean Jackson.
+
+        FEMorphology class implementation code clean up.
+        
+        Tests: svg/filters/feMorphology-radius-cases.svg
+
+        * platform/graphics/filters/FEMorphology.cpp:
+        (WebCore::shouldSupersedeExtremum): Reuse code instead of repeating it and
+        use < and > instead of =< and >=.
+        
+        (WebCore::pixelArrayIndex): Returns the array index of a pixel in an image
+        buffer, given: position(x, y), image width and the color channel.
+        
+        (WebCore::columnExtremum): Returns the extremum of a column of pixels.
+        
+        (WebCore::kernelExtremum): Returns the extremum of a filter kernel.
+        
+        (WebCore::FEMorphology::platformApplyGeneric): Apply some code clean-up.
+        The kernel size should be equal to radius of the filter. The extra pixel
+        was causing the resulted image to be asymmetric in some cases.
+        
+        (WebCore::FEMorphology::platformApplyDegenerate):
+        (WebCore::FEMorphology::platformApplySoftware): After applying scaling, we
+        still need to check the resulted radius is negative (overflow case) or less
+        than one (zero radius case) and treat these cases differently.
+        
+        (WebCore::FEMorphology::morphologyOperator): Deleted.
+        (WebCore::FEMorphology::radiusX): Deleted.
+        (WebCore::FEMorphology::radiusY): Deleted.
+        * platform/graphics/filters/FEMorphology.h:
+        (WebCore::FEMorphology::morphologyOperator):
+        (WebCore::FEMorphology::radiusX):
+        (WebCore::FEMorphology::radiusY):
+        Move a single line functions from the source file to the header file.
+
+2015-04-13  Said Abou-Hallawa  <sabouhallawa@apple.com>
+
+        Canvas drawImage() has a security hole when the image isn't yet fully loaded.
+        https://bugs.webkit.org/show_bug.cgi?id=58681.
+
+        Reviewed by Darin Adler.
+
+        There is a race condition which may happen if an image from a different
+        origin is drawn on a canvas before it finishes loading. The check to taint
+        the canvas comes before drawing it. This check returns false if the image
+        is not completely loaded because we check the URL of the resource response.
+        If after this check and before the drawing, the image finishes loading, the
+        canvas will not be tainted but the image will be drawn.
+        
+        The fix is to move the check to taint the canvas after drawing the image.
+        The only problem with this solution is basically the opposite of this bug:
+        we will become stricter than before with images which are from a different
+        origin and before they finish loading. The image has not finished loading,
+        so we do not draw it. Before we check for tainting, the image finishes
+        loading. So we decide to taint the canvas even the image is not drawn.
+        
+        But this should not be a security issue anymore. I personally do not know
+        if it is even a correctness issue or not.
+
+        Test: http/tests/canvas/canvas-tainted-after-draw-image.html
+
+        * html/canvas/CanvasRenderingContext2D.cpp:
+        (WebCore::CanvasRenderingContext2D::drawImage):
+
+2015-04-27  Darin Adler  <darin@apple.com>
+
+        Crashes under IDBDatabase::closeConnection
+        https://bugs.webkit.org/show_bug.cgi?id=141745
+
+        Reviewed by Alexey Proskuryakov.
+
+        * Modules/indexeddb/IDBDatabase.cpp:
+        (WebCore::IDBDatabase::~IDBDatabase): Do the work of close/closeConnection without
+        actually calling those functions.
+        (WebCore::IDBDatabase::closeConnection): Protect the database so it's not destroyed
+        in the middle of this function's execution.
+
+2015-02-23  Brent Fulgham  <bfulgham@apple.com>
+
+        EventHandler references deleted Scrollbar
+        https://bugs.webkit.org/show_bug.cgi?id=141931
+        <rdar://problem/19915210>
+
+        Reviewed by Tim Horton.
+
+        Tested by scrollbars/overflow-custom-scrollbar-crash.html
+
+        Update the EventHandler class to use a WeakPtr to reference the
+        last used Scrollbar, rather than retaining the Scrollbar and
+        artificially extending its life. This keeps the EventHandler
+        state in proper sync with the state of the render tree, and
+        avoids cases where we have destroyed a ScrollableArea (and
+        Scrollbar) but are still sending messages to a fake zombie
+        version of the element.
+
+        * page/EventHandler.cpp:
+        (WebCore::EventHandler::clear):
+        (WebCore::EventHandler::handleMousePressEvent):
+        (WebCore::EventHandler::updateMouseEventTargetNode):
+        (WebCore::EventHandler::updateLastScrollbarUnderMouse):
+        * page/EventHandler.h:
+        * platform/Scrollbar.cpp:
+        (WebCore::Scrollbar::Scrollbar): Initialize WeakPtrFactory.
+        * platform/Scrollbar.h:
+        (WebCore::Scrollbar::createWeakPtr): Added,
+
+2015-03-16  Brady Eidson  <beidson@apple.com>
+
+        URLs visited during private browsing show up in WebpageIcons.db
+        rdar://problem/11254910 and https://bugs.webkit.org/show_bug.cgi?id=142733
+
+        Patch by Sam Weinig. Reviewed by Brady Eidson.
+
+        * loader/icon/IconController.cpp:
+        (WebCore::IconController::startLoader): Bail early here if the page is using an ephemeral session.
+        (WebCore::IconController::continueLoadWithDecision): Instead of here.
+
+2015-03-26  Zalan Bujtas  <zalan@apple.com>
+
+        Inline continuation code should not take anonymous containing wrapper granted.
+        https://bugs.webkit.org/show_bug.cgi?id=133312
+
+        Reviewed by Dave Hyatt.
+
+        It's wrong to assume that when RenderInline is part of an inline continuation, its containing block
+        is an anonymous wrapper and its sibling might be a block level renderer.
+        When the inline continuation is no longer needed, for example when the block level renderer that initiated the continuation
+        is detached from the render tree, the inline renderes still continue to form continuation.(however they no longer require
+        anonymous wrappers)
+
+        Test: fast/inline/crash-when-position-property-is-changed-and-no-longer-in-continuation.html
+
+        * rendering/RenderInline.cpp:
+        (WebCore::updateStyleOfAnonymousBlockContinuations):
+        (WebCore::RenderInline::styleDidChange):
+
+2014-12-10  Dean Jackson  <dino@apple.com>
+
+        InstancedArray crashes attempting to draw out of bounds
+        https://bugs.webkit.org/show_bug.cgi?id=139521
+
+        Reviewed by Simon Fraser.
+
+        We were not doing index validation correctly for instancing.
+
+        Test: fast/canvas/webgl/angle-instanced-arrays-out-of-bounds.html
+
+        * html/canvas/WebGLRenderingContext.cpp:
+        (WebCore::WebGLRenderingContext::validateVertexAttributes): We need to check
+        the number of instances drawn against the amount of instance data that has
+        been provided, taking into account the number of repeats (the divisor).
+        (WebCore::WebGLRenderingContext::drawArrays): Added some whitespace to make it more clear.
+        (WebCore::WebGLRenderingContext::validateDrawElements): This needs to take a primcount
+        parameter so that it can correctly validate the call (when used from drawElementsInstanced).
+        (WebCore::WebGLRenderingContext::drawElements): New signature to validate.
+        (WebCore::WebGLRenderingContext::drawArraysInstanced): Rearrange this a bit. The
+        primcount validation is already being done by the validateDrawArrays call. Also, there
+        was a bogus UNUSED_PARAM hanging around.
+        (WebCore::WebGLRenderingContext::drawElementsInstanced): Similar rearrangement. Use
+        the primcount parameter.
+        * html/canvas/WebGLRenderingContext.h:
+
+2016-02-09  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] Toggle buttons are blurry with GTK+ 3.19
+        https://bugs.webkit.org/show_bug.cgi?id=154007
+
+        Reviewed by Michael Catanzaro.
+
+        Use min-width/min-height style properties when GTK+ >= 3.19.7 to
+        get the size of toggle buttons.
+
+        * rendering/RenderThemeGtk.cpp:
+        (WebCore::setToggleSize):
+        (WebCore::paintToggle):
+
+2016-01-11  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] Cleanup RenderThemeGtk
+        https://bugs.webkit.org/show_bug.cgi?id=152888
+
+        Reviewed by Michael Catanzaro.
+
+        Use a common path for GTK+ 3.19 and previous versions, simplifying
+        the code and removing a lot of ifdefs.
+
+         - createStyleContext() now receives a theme part enum value, and
+           an optional parent GtkStyleContext. It encapsulates all the
+           differences between GTK+ 3.19 and previous version leaving the
+           rendering code common and free of ifdefs.
+         - Stock icons support have been removed, simplifying the code
+           that now always renders symbolic icons, updating the colors
+           depending on the current state.
+         - Media button and colors have been removed, because they are
+           unused now that we render the media controls with CSS.
+         - ComboBox separators support has also been removed. In GTK+ 3.19
+           combo boxes no longer have separators and most of the GTK+
+           themes don't use the either, so it's better to simple not render
+           them anymore in WebKit either.
+         - Code to paint caps lock indicator has been removed too, since
+           caps lock indicator is now shadow dom and automatically
+           rendered by WebCore.
+
+        * rendering/RenderThemeGtk.cpp:
+        (WebCore::createStyleContext):
+        (WebCore::loadThemedIcon):
+        (WebCore::gtkIconStateFlags):
+        (WebCore::RenderThemeGtk::adjustRepaintRect):
+        (WebCore::setToggleSize):
+        (WebCore::paintToggle):
+        (WebCore::RenderThemeGtk::setCheckboxSize):
+        (WebCore::RenderThemeGtk::paintCheckbox):
+        (WebCore::RenderThemeGtk::setRadioSize):
+        (WebCore::RenderThemeGtk::paintRadio):
+        (WebCore::RenderThemeGtk::paintButton):
+        (WebCore::getComboBoxMetrics):
+        (WebCore::RenderThemeGtk::popupInternalPaddingLeft):
+        (WebCore::RenderThemeGtk::popupInternalPaddingRight):
+        (WebCore::RenderThemeGtk::popupInternalPaddingTop):
+        (WebCore::RenderThemeGtk::popupInternalPaddingBottom):
+        (WebCore::RenderThemeGtk::paintMenuList):
+        (WebCore::RenderThemeGtk::paintTextField):
+        (WebCore::adjustSearchFieldIconStyle):
+        (WebCore::RenderThemeGtk::adjustSearchFieldResultsDecorationPartStyle):
+        (WebCore::paintIcon):
+        (WebCore::paintEntryIcon):
+        (WebCore::RenderThemeGtk::paintSearchFieldResultsDecorationPart):
+        (WebCore::RenderThemeGtk::adjustSearchFieldCancelButtonStyle):
+        (WebCore::RenderThemeGtk::paintSearchFieldCancelButton):
+        (WebCore::RenderThemeGtk::shouldHaveCapsLockIndicator):
+        (WebCore::RenderThemeGtk::paintSliderTrack):
+        (WebCore::RenderThemeGtk::paintSliderThumb):
+        (WebCore::RenderThemeGtk::adjustSliderThumbSize):
+        (WebCore::RenderThemeGtk::paintProgressBar):
+        (WebCore::RenderThemeGtk::adjustInnerSpinButtonStyle):
+        (WebCore::paintSpinArrowButton):
+        (WebCore::RenderThemeGtk::paintInnerSpinButton):
+        (WebCore::styleColor):
+        (WebCore::RenderThemeGtk::platformActiveSelectionBackgroundColor):
+        (WebCore::RenderThemeGtk::platformInactiveSelectionBackgroundColor):
+        (WebCore::RenderThemeGtk::platformActiveSelectionForegroundColor):
+        (WebCore::RenderThemeGtk::platformInactiveSelectionForegroundColor):
+        (WebCore::RenderThemeGtk::platformActiveListBoxSelectionBackgroundColor):
+        (WebCore::RenderThemeGtk::platformInactiveListBoxSelectionBackgroundColor):
+        (WebCore::RenderThemeGtk::platformActiveListBoxSelectionForegroundColor):
+        (WebCore::RenderThemeGtk::platformInactiveListBoxSelectionForegroundColor):
+        (WebCore::RenderThemeGtk::systemColor):
+        (WebCore::RenderThemeGtk::paintMediaButton):
+        (WebCore::RenderThemeGtk::paintMediaFullscreenButton):
+        (WebCore::RenderThemeGtk::paintMediaMuteButton):
+        (WebCore::RenderThemeGtk::paintMediaPlayButton):
+        (WebCore::RenderThemeGtk::paintMediaSeekBackButton):
+        (WebCore::RenderThemeGtk::paintMediaSeekForwardButton):
+        (WebCore::RenderThemeGtk::paintMediaToggleClosedCaptionsButton):
+        * rendering/RenderThemeGtk.h:
+
+2015-12-22  Michael Catanzaro  <mcatanzaro@igalia.com>
+
+        [GTK] Everything broken in GTK+ 3.19
+        https://bugs.webkit.org/show_bug.cgi?id=150550
+
+        Reviewed by Carlos Garcia Campos.
+
+        Port RenderThemeGtk and ScrollbarThemeGtk to use CSS nodes. This makes it possible to render
+        stuff with modern GTK+.
+
+        No new tests. We already have tons of tests for this functionality, but we're running them
+        with GTK+ 3.16, so they cannot have detected this breakage. These fixes require unreleased
+        GTK+, and GTK+ rendering is currently in a state of flux; once things settle down, we can
+        consider upgrading the GTK+ used for our layout tests.
+
+        * platform/gtk/GRefPtrGtk.cpp:
+        (WTF::refGPtr):
+        (WTF::derefGPtr):
+        * platform/gtk/GRefPtrGtk.h:
+        * platform/gtk/ScrollbarThemeGtk.cpp:
+        (WebCore::ScrollbarThemeGtk::themeChanged):
+        (WebCore::ScrollbarThemeGtk::updateThemeProperties):
+        (WebCore::orientationStyleClass):
+        (WebCore::applyScrollbarStyleContextClasses):
+        (WebCore::ScrollbarThemeGtk::paintTrackBackground):
+        (WebCore::ScrollbarThemeGtk::paintScrollbarBackground):
+        (WebCore::ScrollbarThemeGtk::paintThumb):
+        (WebCore::ScrollbarThemeGtk::paintButton):
+        * rendering/RenderThemeGtk.cpp:
+        (WebCore::createStyleContext):
+        (WebCore::setToggleSize):
+        (WebCore::paintToggle):
+        (WebCore::RenderThemeGtk::paintButton):
+        (WebCore::getComboBoxMetrics):
+        (WebCore::RenderThemeGtk::paintMenuList):
+        (WebCore::RenderThemeGtk::paintTextField):
+        (WebCore::applySliderStyleContextClasses):
+        (WebCore::RenderThemeGtk::paintSliderTrack):
+        (WebCore::RenderThemeGtk::paintSliderThumb):
+        (WebCore::RenderThemeGtk::paintProgressBar):
+        (WebCore::paintSpinArrowButton):
+        (WebCore::styleColor):
+
+2015-12-10  Michael Catanzaro  <mcatanzaro@igalia.com>
+
+        [GTK] RenderThemeGtk::platformActiveSelectionBackgroundColor, et. al. should not clobber state of cached GtkStyleContexts
+        https://bugs.webkit.org/show_bug.cgi?id=151533
+
+        Reviewed by Carlos Garcia Campos.
+
+        Remove the style context cache to simplify the code, drastically reduce the number of
+        expensive save/restore operations performed on style contexts, and avoid unwanted
+        side-effects in RenderThemeGtk::styleColor. This is also a speculative fix for improper
+        button rendering with certain custom themes, and a simplification that will make it easier
+        to fix bug #150550.
+
+        This change does have performance implications, which I intend to check on the perf bot
+        after landing to ensure that removing the cache does not have a significant negative impact
+        on performance; I have no clue whether this will be a net performance win or loss. However,
+        this is a bit tricky, because the bot is running GTK+ 3.16, whereas I expect save/restore
+        might be much more expensive in GTK+ 3.20, and I do not want to make performance decisions
+        except based on the latest GTK+ due to large changes in the implementation of
+        GtkStyleContext.
+
+        * rendering/RenderThemeGtk.cpp:
+        (WebCore::createStyleContext):
+        (WebCore::getStockIconForWidgetType):
+        (WebCore::getStockSymbolicIconForWidgetType):
+        (WebCore::RenderThemeGtk::initMediaColors):
+        (WebCore::RenderThemeGtk::adjustRepaintRect):
+        (WebCore::setToggleSize):
+        (WebCore::paintToggle):
+        (WebCore::RenderThemeGtk::setCheckboxSize):
+        (WebCore::RenderThemeGtk::setRadioSize):
+        (WebCore::RenderThemeGtk::paintButton):
+        (WebCore::getComboBoxMetrics):
+        (WebCore::RenderThemeGtk::paintMenuList):
+        (WebCore::RenderThemeGtk::paintTextField):
+        (WebCore::RenderThemeGtk::paintSliderTrack):
+        (WebCore::RenderThemeGtk::paintSliderThumb):
+        (WebCore::RenderThemeGtk::adjustSliderThumbSize):
+        (WebCore::RenderThemeGtk::paintProgressBar):
+        (WebCore::RenderThemeGtk::adjustInnerSpinButtonStyle):
+        (WebCore::RenderThemeGtk::paintInnerSpinButton):
+        (WebCore::styleColor):
+        (WebCore::gtkStyleChangedCallback): Deleted.
+        (WebCore::styleContextMap): Deleted.
+        (WebCore::getStyleContext): Deleted.
+
+2014-08-29  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        [GTK] ScrollbarThemeGtk should not depend on RenderThemeGtk
+        https://bugs.webkit.org/show_bug.cgi?id=136338
+
+        Reviewed by Philippe Normand.
+
+        Remove the dependency by creating the GtkStyleContext for the
+        scrollbars in ScrollbarThemeGtk.
+
+        * platform/gtk/RenderThemeGtk.cpp:
+        (WebCore::gtkStyleChangedCallback): Call ScrollbarThemeGtk::themeChanged().
+        (WebCore::getStyleContext): Remove the scrollbar style context support.
+        * platform/gtk/RenderThemeGtk.h: Remove gtkScrollbarStyle().
+        * platform/gtk/ScrollbarThemeGtk.cpp:
+        (WebCore::ScrollbarStyleContext::ScrollbarStyleContext): Helper
+        class to create the global GtkStyleContext for scrollbars.
+        (WebCore::ScrollbarStyleContext::~ScrollbarStyleContext):
+        (WebCore::ScrollbarStyleContext::context):
+        (WebCore::gtkScrollbarStyleContext):
+        (WebCore::ScrollbarThemeGtk::ScrollbarThemeGtk): Remove m_context initialization.
+        (WebCore::ScrollbarThemeGtk::themeChanged): Invalidate the
+        GtkStylecontext and call updateThemeProperties().
+        (WebCore::ScrollbarThemeGtk::updateThemeProperties): Use the
+        global style context.
+        (WebCore::ScrollbarThemeGtk::paintTrackBackground): Ditto.
+        (WebCore::ScrollbarThemeGtk::paintScrollbarBackground): Ditto.
+        (WebCore::ScrollbarThemeGtk::paintThumb): Ditto.
+        (WebCore::ScrollbarThemeGtk::paintButton): Ditto.
+        * platform/gtk/ScrollbarThemeGtk.h:
+
+2015-11-21  Michael Catanzaro  <mcatanzaro@igalia.com>
+
+        [GTK] Off-by-one error in getStyleContext()
+        https://bugs.webkit.org/show_bug.cgi?id=151524
+
+        Reviewed by Carlos Garcia Campos.
+
+        GtkWidgetPath* path = gtk_widget_path_new();
+        gtk_widget_path_append_type(path, widgetType);
+        // ...
+        gtk_widget_path_iter_add_class(path, 0, GTK_STYLE_CLASS_BUTTON);
+        gtk_widget_path_iter_add_class(path, 1, "text-button");
+
+        Only one widget type was appended to the widget path, so the maximum valid index is 0. This
+        code means to add both style classes to the first widget type in the widget path, so the
+        second call should use index 0 rather than index 1.
+
+        This caused no bug in practice, because when the index is invalid,
+        gtk_widget_path_iter_add_class() automatically changes the index to the last valid position
+        in the widget path -- in this case, 0. This is routinely done with -1 as a convention for
+        specifying the last position in the widget path.
+
+        * rendering/RenderThemeGtk.cpp:
+        (WebCore::getStyleContext):
+
+2015-11-21  Michael Catanzaro  <mcatanzaro@igalia.com>
+
+        [GTK] Warning spam from GtkStyleContext
+        https://bugs.webkit.org/show_bug.cgi?id=151520
+
+        Reviewed by Carlos Garcia Campos.
+
+        Audit every use of gtk_style_context_get_* to fix compatibility with GTK+ 3.19. Some of
+        these were already fine and are only changed for clarity.
+
+        Company:  gtk_style_context_get() (and _get_padding/border/color()) should only ever be
+                  called with the same state as gtk_style_context_get_state()
+        Company:  usually that's a simple replacing of the old state (like in the trace you posted)
+        Company:  sometimes it requires calling gtk_style_context_set_sate() with the right state
+                  first
+        Company:  and in very rare cases it needs a gtk_style_context_save() before the set_state(),
+                  too
+
+        * platform/gtk/ScrollbarThemeGtk.cpp:
+        (WebCore::adjustRectAccordingToMargin):
+        * rendering/RenderThemeGtk.cpp:
+        (gtk_css_section_print):
+        (WebCore::getStyleContext):
+        (WebCore::RenderThemeGtk::initMediaColors):
+        (WebCore::renderButton):
+        (WebCore::getComboBoxMetrics):
+        (WebCore::RenderThemeGtk::paintMenuList):
+        (WebCore::RenderThemeGtk::paintTextField):
+        (WebCore::RenderThemeGtk::paintProgressBar):
+        (WebCore::spinButtonArrowSize):
+        (WebCore::RenderThemeGtk::adjustInnerSpinButtonStyle):
+        (WebCore::styleColor):
+
+2015-10-07  ChangSeok Oh  <changseok.oh@collabora.com>
+
+        [GTK] Progress bar is broken on recent GTK+
+        https://bugs.webkit.org/show_bug.cgi?id=149831
+
+        Reviewed by Carlos Garcia Campos.
+
+        The gtk progress bar has been broken after bumping up to Gtk+-3.16. This is because
+        the way of rendering progress bar changed after gtk+-3.13.7. See more
+        https://mail.gnome.org/archives/commits-list/2014-August/msg03865.html
+        gtk_render_activity is no longer valid to paint a progress bar on a newer gtk+.
+        It should be done with gtk_render_background and gtk_render_frame.
+
+        Test: fast/dom/HTMLProgressElement/native-progress-bar.html
+
+        * rendering/RenderThemeGtk.cpp:
+        (WebCore::RenderThemeGtk::paintProgressBar):
+
 2015-04-15  Руслан Ижбулатов  <lrn1986@gmail.com>
 
         WebCore uses M_PI_2 instead of piOverTwoDouble

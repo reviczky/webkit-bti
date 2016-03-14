@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKitGTK+ Reference Manual: WebKitWebDataSource</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitWebDataSource: WebKitGTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKitGTK+ Reference Manual">
 <link rel="up" href="ch02.html" title="Class Overview">
 <link rel="prev" href="WebKitWebDatabase.html" title="WebKitWebDatabase">
 <link rel="next" href="WebKitWebResource.html" title="WebKitWebResource">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -34,7 +34,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitWebDataSource.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -123,7 +123,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebDataSource.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -136,7 +136,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebDataSource.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitWebDataSource
 </pre>
 </div>
@@ -167,8 +167,8 @@ be incomplete until the data has finished loading. Returns <a href="../glib/glib
 frame hasn't loaded any data. Use webkit_web_data_source_is_loading to test
 if data source is in the process of loading.</p>
 <div class="refsect3">
-<a name="id-1.3.14.7.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-data-source-get-data.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -182,14 +182,14 @@ if data source is in the process of loading.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.14.7.2.6"></a><h4>Returns</h4>
+<a name="webkit-web-data-source-get-data.returns"></a><h4>Returns</h4>
 <p> a <a href="../glib/glib-Strings.html#GString"><span class="type">GString</span></a> which contains the raw
 data that represents the <em class="parameter"><code>data_source</code></em>
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if the <em class="parameter"><code>data_source</code></em>
 hasn't loaded any data. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -199,8 +199,8 @@ webkit_web_data_source_get_encoding (<em class="parameter"><code><a class="link"
 <p>Returns the text encoding name as set in the <a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a>, or if not, the
 text encoding of the response.</p>
 <div class="refsect3">
-<a name="id-1.3.14.7.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-data-source-get-encoding.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -214,11 +214,10 @@ text encoding of the response.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.14.7.3.6"></a><h4>Returns</h4>
+<a name="webkit-web-data-source-get-encoding.returns"></a><h4>Returns</h4>
 <p> the encoding name of the <a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> or of the response.</p>
-<p></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -231,8 +230,8 @@ content. The <a class="link" href="WebKitNetworkRequest.html" title="WebKitNetwo
 prior to the "committed" load state. See webkit_web_data_source_get_request
 for getting the "committed" request.</p>
 <div class="refsect3">
-<a name="id-1.3.14.7.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-data-source-get-initial-request.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -246,11 +245,11 @@ for getting the "committed" request.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.14.7.4.6"></a><h4>Returns</h4>
+<a name="webkit-web-data-source-get-initial-request.returns"></a><h4>Returns</h4>
 <p> the original <a class="link" href="WebKitNetworkRequest.html" title="WebKitNetworkRequest"><span class="type">WebKitNetworkRequest</span></a>. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -261,8 +260,8 @@ webkit_web_data_source_get_main_resource
 <p>Returns the main resource of the <em class="parameter"><code>data_source</code></em>
 </p>
 <div class="refsect3">
-<a name="id-1.3.14.7.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-data-source-get-main-resource.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -276,13 +275,13 @@ webkit_web_data_source_get_main_resource
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.14.7.5.6"></a><h4>Returns</h4>
+<a name="webkit-web-data-source-get-main-resource.returns"></a><h4>Returns</h4>
 <p> a new <a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a>
 representing the main resource of the <em class="parameter"><code>data_source</code></em>
 . </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -294,8 +293,8 @@ webkit_web_data_source_get_request (<em class="parameter"><code><a class="link" 
 the request that was "committed", and hence, different from the request you
 get from the webkit_web_data_source_get_initial_request method.</p>
 <div class="refsect3">
-<a name="id-1.3.14.7.6.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-data-source-get-request.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -309,7 +308,7 @@ get from the webkit_web_data_source_get_initial_request method.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.14.7.6.6"></a><h4>Returns</h4>
+<a name="webkit-web-data-source-get-request.returns"></a><h4>Returns</h4>
 <p> the <a class="link" href="WebKitNetworkRequest.html" title="WebKitNetworkRequest"><span class="type">WebKitNetworkRequest</span></a> that
 created the <em class="parameter"><code>data_source</code></em>
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if the <em class="parameter"><code>data_source</code></em>
@@ -317,7 +316,7 @@ is not
 attached to the frame or the frame hasn't been loaded. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -328,8 +327,8 @@ webkit_web_data_source_get_subresources
 <p>Gives you a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of <a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> objects that compose the
 <a class="link" href="webkitgtk-webkitwebview.html#WebKitWebView"><span class="type">WebKitWebView</span></a> to which this <a class="link" href="WebKitWebDataSource.html" title="WebKitWebDataSource"><span class="type">WebKitWebDataSource</span></a> is attached.</p>
 <div class="refsect3">
-<a name="id-1.3.14.7.7.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-data-source-get-subresources.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -343,12 +342,12 @@ webkit_web_data_source_get_subresources
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.14.7.7.6"></a><h4>Returns</h4>
+<a name="webkit-web-data-source-get-subresources.returns"></a><h4>Returns</h4>
 <p>a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of <a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> objects; the objects are owned by
 WebKit, but the GList must be freed. </p>
 <p><span class="annotation">[<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> WebKitWebResource][<acronym title="Free data container after the code is done."><span class="acronym">transfer container</span></acronym>]</span></p>
 </div>
-<p class="since">Since 1.1.15</p>
+<p class="since">Since: 1.1.15</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -362,8 +361,8 @@ webkit_web_data_source_get_unreachable_uri
 unreachable URL if it was created using <a class="link" href="WebKitWebFrame.html" title="WebKitWebFrame"><span class="type">WebKitWebFrame</span></a>'s
 webkit_web_frame_load_alternate_html_string method.</p>
 <div class="refsect3">
-<a name="id-1.3.14.7.8.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-data-source-get-unreachable-uri.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -377,12 +376,11 @@ webkit_web_frame_load_alternate_html_string method.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.14.7.8.6"></a><h4>Returns</h4>
+<a name="webkit-web-data-source-get-unreachable-uri.returns"></a><h4>Returns</h4>
 <p> the unreachable URL of <em class="parameter"><code>data_source</code></em>
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if there is no unreachable URL.</p>
-<p></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -391,8 +389,8 @@ or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">N
 webkit_web_data_source_get_web_frame (<em class="parameter"><code><a class="link" href="WebKitWebDataSource.html" title="WebKitWebDataSource"><span class="type">WebKitWebDataSource</span></a> *data_source</code></em>);</pre>
 <p>Returns the <a class="link" href="WebKitWebFrame.html" title="WebKitWebFrame"><span class="type">WebKitWebFrame</span></a> that represents this data source</p>
 <div class="refsect3">
-<a name="id-1.3.14.7.9.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-data-source-get-web-frame.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -406,7 +404,7 @@ webkit_web_data_source_get_web_frame (<em class="parameter"><code><a class="link
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.14.7.9.6"></a><h4>Returns</h4>
+<a name="webkit-web-data-source-get-web-frame.returns"></a><h4>Returns</h4>
 <p> the <a class="link" href="WebKitWebFrame.html" title="WebKitWebFrame"><span class="type">WebKitWebFrame</span></a> that represents
 the <em class="parameter"><code>data_source</code></em>
 . The <a class="link" href="WebKitWebFrame.html" title="WebKitWebFrame"><span class="type">WebKitWebFrame</span></a> is owned by WebKit and should
@@ -415,7 +413,7 @@ not be freed or destroyed.  This will return <a href="../glib/glib-Standard-Macr
 is not attached to a frame. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -424,8 +422,8 @@ is not attached to a frame. </p>
 webkit_web_data_source_is_loading (<em class="parameter"><code><a class="link" href="WebKitWebDataSource.html" title="WebKitWebDataSource"><span class="type">WebKitWebDataSource</span></a> *data_source</code></em>);</pre>
 <p>Determines whether the data source is in the process of loading its content.</p>
 <div class="refsect3">
-<a name="id-1.3.14.7.10.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-data-source-is-loading.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -439,12 +437,11 @@ webkit_web_data_source_is_loading (<em class="parameter"><code><a class="link" h
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.14.7.10.6"></a><h4>Returns</h4>
+<a name="webkit-web-data-source-is-loading.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the <em class="parameter"><code>data_source</code></em>
 is still loading, <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</p>
-<p></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -454,11 +451,10 @@ webkit_web_data_source_new (<em class="parameter"><code><span class="type">void<
 <p>Creates a new <a class="link" href="WebKitWebDataSource.html" title="WebKitWebDataSource"><span class="type">WebKitWebDataSource</span></a> instance. The URL of the
 <a class="link" href="WebKitWebDataSource.html" title="WebKitWebDataSource"><span class="type">WebKitWebDataSource</span></a> will be set to "about:blank".</p>
 <div class="refsect3">
-<a name="id-1.3.14.7.11.5"></a><h4>Returns</h4>
+<a name="webkit-web-data-source-new.returns"></a><h4>Returns</h4>
 <p> a new <a class="link" href="WebKitWebDataSource.html" title="WebKitWebDataSource"><span class="type">WebKitWebDataSource</span></a>.</p>
-<p></p>
 </div>
-<p class="since">Since 1.1.14</p>
+<p class="since">Since: 1.1.14</p>
 </div>
 </div>
 <div class="refsect1">
@@ -476,7 +472,6 @@ webkit_web_data_source_new (<em class="parameter"><code><span class="type">void<
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>

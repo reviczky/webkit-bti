@@ -28,54 +28,111 @@
 
 #ifndef GTK_API_VERSION_2
 
+#include "GRefPtrGtk.h"
 #include "PlatformContextCairo.h"
 #include "PlatformMouseEvent.h"
-#include "RenderThemeGtk.h"
 #include "ScrollView.h"
 #include "Scrollbar.h"
 #include <gtk/gtk.h>
+#include <wtf/gobject/GRefPtr.h>
 
 namespace WebCore {
 
-static void gtkStyleChangedCallback(GtkWidget*, ScrollbarThemeGtk* scrollbarTheme)
+#if !GTK_CHECK_VERSION(3, 19, 2)
+// Currently we use a static GtkStyleContext for GTK+ < 3.19, and a bunch of unique
+// GtkStyleContexts for GTK+ >= 3.19. This is crazy and definitely should not be necessary, but I
+// couldn't find any other way to not break one version or the other. Ideally one of the two
+// people on the planet who really understand GTK+ styles would fix this.
+class ScrollbarStyleContext {
+    WTF_MAKE_NONCOPYABLE(ScrollbarStyleContext); WTF_MAKE_FAST_ALLOCATED;
+public:
+    ScrollbarStyleContext()
+        : m_context(adoptGRef(gtk_style_context_new()))
+    {
+        GtkWidgetPath* path = gtk_widget_path_new();
+        gtk_widget_path_append_type(path, GTK_TYPE_SCROLLBAR);
+        gtk_widget_path_iter_add_class(path, 0, GTK_STYLE_CLASS_SCROLLBAR);
+        gtk_style_context_set_path(m_context.get(), path);
+        gtk_widget_path_free(path);
+    }
+
+    ~ScrollbarStyleContext()
+    {
+    }
+
+    GtkStyleContext* context() const { return m_context.get(); }
+
+private:
+    GRefPtr<GtkStyleContext> m_context;
+};
+
+static GtkStyleContext* gtkScrollbarStyleContext()
 {
-    scrollbarTheme->updateThemeProperties();
+    DEFINE_STATIC_LOCAL(ScrollbarStyleContext, styleContext, ());
+    return styleContext.context();
+}
+#endif
+
+void ScrollbarThemeGtk::themeChanged()
+{
+#if !GTK_CHECK_VERSION(3, 19, 2)
+    gtk_style_context_invalidate(gtkScrollbarStyleContext());
+#endif
+    updateThemeProperties();
 }
 
 ScrollbarThemeGtk::ScrollbarThemeGtk()
-    : m_context(static_cast<RenderThemeGtk*>(RenderTheme::defaultTheme().get())->gtkScrollbarStyle())
 {
     updateThemeProperties();
-    g_signal_connect(m_context, "changed", G_CALLBACK(gtkStyleChangedCallback), this);
 }
 
 void ScrollbarThemeGtk::updateThemeProperties()
 {
-    gtk_style_context_get_style(m_context,
-                                "min-slider-length", &m_minThumbLength,
-                                "slider-width", &m_thumbFatness,
-                                "trough-border", &m_troughBorderWidth,
-                                "stepper-size", &m_stepperSize,
-                                "stepper-spacing", &m_stepperSpacing,
-                                "trough-under-steppers", &m_troughUnderSteppers,
-                                "has-backward-stepper", &m_hasBackButtonStartPart,
-                                "has-forward-stepper", &m_hasForwardButtonEndPart,
-                                "has-secondary-backward-stepper", &m_hasBackButtonEndPart,
-                                "has-secondary-forward-stepper", &m_hasForwardButtonStartPart,
-                                NULL);
+#if GTK_CHECK_VERSION(3, 19, 2)
+    GRefPtr<GtkStyleContext> styleContext = adoptGRef(gtk_style_context_new());
+    GRefPtr<GtkWidgetPath> path = adoptGRef(gtk_widget_path_new());
+
+    gtk_widget_path_append_type(path.get(), GTK_TYPE_SCROLLBAR);
+    gtk_widget_path_iter_set_object_name(path.get(), 0, "scrollbar");
+
+    gtk_style_context_set_path(styleContext.get(), path.get());
+#else
+    GRefPtr<GtkStyleContext> styleContext = gtkScrollbarStyleContext();
+#endif
+    gtk_style_context_get_style(
+        styleContext.get(),
+        "min-slider-length", &m_minThumbLength,
+        "slider-width", &m_thumbFatness,
+        "trough-border", &m_troughBorderWidth,
+        "stepper-size", &m_stepperSize,
+        "stepper-spacing", &m_stepperSpacing,
+        "trough-under-steppers", &m_troughUnderSteppers,
+        "has-backward-stepper", &m_hasBackButtonStartPart,
+        "has-forward-stepper", &m_hasForwardButtonEndPart,
+        "has-secondary-backward-stepper", &m_hasBackButtonEndPart,
+        "has-secondary-forward-stepper", &m_hasForwardButtonStartPart,
+        nullptr);
     updateScrollbarsFrameThickness();
 }
 
+#if GTK_CHECK_VERSION(3, 19, 2)
+static const char* orientationStyleClass(ScrollbarOrientation orientation)
+{
+    return orientation == VerticalScrollbar ? "vertical" : "horizontal";
+}
+#else
 static void applyScrollbarStyleContextClasses(GtkStyleContext* context, ScrollbarOrientation orientation)
 {
     gtk_style_context_add_class(context, GTK_STYLE_CLASS_SCROLLBAR);
     gtk_style_context_add_class(context, orientation == VerticalScrollbar ?  GTK_STYLE_CLASS_VERTICAL : GTK_STYLE_CLASS_HORIZONTAL);
 }
+#endif
 
 static void adjustRectAccordingToMargin(GtkStyleContext* context, GtkStateFlags state, IntRect& rect)
 {
     GtkBorder margin;
-    gtk_style_context_get_margin(context, state, &margin);
+    gtk_style_context_set_state(context, state);
+    gtk_style_context_get_margin(context, gtk_style_context_get_state(context), &margin);
     rect.move(margin.left, margin.right);
     rect.contract(margin.left + margin.right, margin.top + margin.bottom);
 }
@@ -89,60 +146,129 @@ void ScrollbarThemeGtk::paintTrackBackground(GraphicsContext* context, Scrollbar
     if (m_troughUnderSteppers)
         fullScrollbarRect = IntRect(scrollbar->x(), scrollbar->y(), scrollbar->width(), scrollbar->height());
 
-    gtk_style_context_save(m_context);
+#if GTK_CHECK_VERSION(3, 19, 2)
+    GRefPtr<GtkStyleContext> styleContext = adoptGRef(gtk_style_context_new());
+    GRefPtr<GtkWidgetPath> path = adoptGRef(gtk_widget_path_new());
 
-    applyScrollbarStyleContextClasses(m_context, scrollbar->orientation());
-    gtk_style_context_add_class(m_context, GTK_STYLE_CLASS_TROUGH);
+    gtk_widget_path_append_type(path.get(), GTK_TYPE_SCROLLBAR);
+    gtk_widget_path_iter_set_object_name(path.get(), 0, "scrollbar");
+    gtk_widget_path_iter_add_class(path.get(), 0, orientationStyleClass(scrollbar->orientation()));
 
-    adjustRectAccordingToMargin(m_context, static_cast<GtkStateFlags>(0), fullScrollbarRect);
-    gtk_render_background(m_context, context->platformContext()->cr(),
-                          fullScrollbarRect.x(), fullScrollbarRect.y(), fullScrollbarRect.width(), fullScrollbarRect.height());
-    gtk_render_frame(m_context, context->platformContext()->cr(),
-                     fullScrollbarRect.x(), fullScrollbarRect.y(), fullScrollbarRect.width(), fullScrollbarRect.height());
+    gtk_widget_path_append_type(path.get(), GTK_TYPE_SCROLLBAR);
+    gtk_widget_path_iter_set_object_name(path.get(), 1, "trough");
 
-    gtk_style_context_restore(m_context);
+    gtk_style_context_set_path(styleContext.get(), path.get());
+#else
+    GRefPtr<GtkStyleContext> styleContext = gtkScrollbarStyleContext();
+    gtk_style_context_save(styleContext.get());
+
+    applyScrollbarStyleContextClasses(styleContext.get(), scrollbar->orientation());
+    gtk_style_context_add_class(styleContext.get(), GTK_STYLE_CLASS_TROUGH);
+#endif
+
+    adjustRectAccordingToMargin(styleContext.get(), static_cast<GtkStateFlags>(0), fullScrollbarRect);
+    gtk_render_background(styleContext.get(), context->platformContext()->cr(), fullScrollbarRect.x(), fullScrollbarRect.y(), fullScrollbarRect.width(), fullScrollbarRect.height());
+    gtk_render_frame(styleContext.get(), context->platformContext()->cr(), fullScrollbarRect.x(), fullScrollbarRect.y(), fullScrollbarRect.width(), fullScrollbarRect.height());
+
+#if !GTK_CHECK_VERSION(3, 19, 2)
+    gtk_style_context_restore(styleContext.get());
+#endif
 }
 
 void ScrollbarThemeGtk::paintScrollbarBackground(GraphicsContext* context, ScrollbarThemeClient* scrollbar)
 {
-    gtk_style_context_save(m_context);
+#if GTK_CHECK_VERSION(3, 19, 2)
+    GRefPtr<GtkStyleContext> styleContext = adoptGRef(gtk_style_context_new());
+    GRefPtr<GtkWidgetPath> path = adoptGRef(gtk_widget_path_new());
 
-    applyScrollbarStyleContextClasses(m_context, scrollbar->orientation());
-    gtk_style_context_add_class(m_context, "scrolled-window");
-    gtk_render_frame(m_context, context->platformContext()->cr(), scrollbar->x(), scrollbar->y(), scrollbar->width(), scrollbar->height());
+    gtk_widget_path_append_type(path.get(), GTK_TYPE_SCROLLBAR);
+    gtk_widget_path_iter_set_object_name(path.get(), 0, "scrollbar");
+    gtk_widget_path_iter_add_class(path.get(), 0, orientationStyleClass(scrollbar->orientation()));
 
-    gtk_style_context_restore(m_context);
+    gtk_style_context_set_path(styleContext.get(), path.get());
+#else
+    GRefPtr<GtkStyleContext> styleContext = gtkScrollbarStyleContext();
+    gtk_style_context_save(styleContext.get());
+
+    applyScrollbarStyleContextClasses(styleContext.get(), scrollbar->orientation());
+    gtk_style_context_add_class(styleContext.get(), "scrolled-window");
+#endif
+
+    gtk_render_frame(styleContext.get(), context->platformContext()->cr(), scrollbar->x(), scrollbar->y(), scrollbar->width(), scrollbar->height());
+
+#if !GTK_CHECK_VERSION(3, 19, 2)
+    gtk_style_context_restore(styleContext.get());
+#endif
 }
 
 void ScrollbarThemeGtk::paintThumb(GraphicsContext* context, ScrollbarThemeClient* scrollbar, const IntRect& rect)
 {
-    gtk_style_context_save(m_context);
+#if GTK_CHECK_VERSION(3, 19, 2)
+    GRefPtr<GtkStyleContext> styleContext = adoptGRef(gtk_style_context_new());
+    GRefPtr<GtkWidgetPath> path = adoptGRef(gtk_widget_path_new());
+
+    gtk_widget_path_append_type(path.get(), GTK_TYPE_SCROLLBAR);
+    gtk_widget_path_iter_set_object_name(path.get(), 0, "scrollbar");
+    gtk_widget_path_iter_add_class(path.get(), 0, orientationStyleClass(scrollbar->orientation()));
+
+    gtk_widget_path_append_type(path.get(), GTK_TYPE_SCROLLBAR);
+    gtk_widget_path_iter_set_object_name(path.get(), 1, "trough");
+
+    gtk_widget_path_append_type(path.get(), GTK_TYPE_SCROLLBAR);
+    gtk_widget_path_iter_set_object_name(path.get(), 2, "slider");
+
+    gtk_style_context_set_path(styleContext.get(), path.get());
+#else
+    GRefPtr<GtkStyleContext> styleContext = gtkScrollbarStyleContext();
+    gtk_style_context_save(styleContext.get());
+#endif
 
     ScrollbarOrientation orientation = scrollbar->orientation();
-    applyScrollbarStyleContextClasses(m_context, orientation);
-    gtk_style_context_add_class(m_context, GTK_STYLE_CLASS_SLIDER);
+#if !GTK_CHECK_VERSION(3, 19, 2)
+    applyScrollbarStyleContextClasses(styleContext.get(), orientation);
+    gtk_style_context_add_class(styleContext.get(), GTK_STYLE_CLASS_SLIDER);
+#endif
 
     guint flags = 0;
     if (scrollbar->pressedPart() == ThumbPart)
         flags |= GTK_STATE_FLAG_ACTIVE;
     if (scrollbar->hoveredPart() == ThumbPart)
         flags |= GTK_STATE_FLAG_PRELIGHT;
-    gtk_style_context_set_state(m_context, static_cast<GtkStateFlags>(flags));
+    gtk_style_context_set_state(styleContext.get(), static_cast<GtkStateFlags>(flags));
 
     IntRect thumbRect(rect);
-    adjustRectAccordingToMargin(m_context, static_cast<GtkStateFlags>(flags), thumbRect);
-    gtk_render_slider(m_context, context->platformContext()->cr(), thumbRect.x(), thumbRect.y(), thumbRect.width(), thumbRect.height(),
+    adjustRectAccordingToMargin(styleContext.get(), static_cast<GtkStateFlags>(flags), thumbRect);
+    gtk_render_slider(styleContext.get(), context->platformContext()->cr(), thumbRect.x(), thumbRect.y(), thumbRect.width(), thumbRect.height(),
         orientation == VerticalScrollbar ? GTK_ORIENTATION_VERTICAL : GTK_ORIENTATION_HORIZONTAL);
 
-    gtk_style_context_restore(m_context);
+#if !GTK_CHECK_VERSION(3, 19, 2)
+    gtk_style_context_restore(styleContext.get());
+#endif
 }
 
 void ScrollbarThemeGtk::paintButton(GraphicsContext* context, ScrollbarThemeClient* scrollbar, const IntRect& rect, ScrollbarPart part)
 {
-    gtk_style_context_save(m_context);
+#if GTK_CHECK_VERSION(3, 19, 2)
+    GRefPtr<GtkStyleContext> styleContext = adoptGRef(gtk_style_context_new());
+    GRefPtr<GtkWidgetPath> path = adoptGRef(gtk_widget_path_new());
+
+    gtk_widget_path_append_type(path.get(), GTK_TYPE_SCROLLBAR);
+    gtk_widget_path_iter_set_object_name(path.get(), 0, "scrollbar");
+    gtk_widget_path_iter_add_class(path.get(), 0, orientationStyleClass(scrollbar->orientation()));
+
+    gtk_widget_path_append_type(path.get(), GTK_TYPE_SCROLLBAR);
+    gtk_widget_path_iter_set_object_name(path.get(), 1, "button");
+
+    gtk_style_context_set_path(styleContext.get(), path.get());
+#else
+    GRefPtr<GtkStyleContext> styleContext = gtkScrollbarStyleContext();
+    gtk_style_context_save(styleContext.get());
+#endif
 
     ScrollbarOrientation orientation = scrollbar->orientation();
-    applyScrollbarStyleContextClasses(m_context, orientation);
+#if !GTK_CHECK_VERSION(3, 19, 2)
+    applyScrollbarStyleContextClasses(styleContext.get(), orientation);
+#endif
 
     guint flags = 0;
     if ((BackButtonStartPart == part && scrollbar->currentPos())
@@ -155,14 +281,16 @@ void ScrollbarThemeGtk::paintButton(GraphicsContext* context, ScrollbarThemeClie
             flags |= GTK_STATE_FLAG_PRELIGHT;
     } else
         flags |= GTK_STATE_FLAG_INSENSITIVE;
-    gtk_style_context_set_state(m_context, static_cast<GtkStateFlags>(flags));
+    gtk_style_context_set_state(styleContext.get(), static_cast<GtkStateFlags>(flags));
 
-    gtk_style_context_add_class(m_context, GTK_STYLE_CLASS_BUTTON);
-    gtk_render_background(m_context, context->platformContext()->cr(), rect.x(), rect.y(), rect.width(), rect.height());
-    gtk_render_frame(m_context, context->platformContext()->cr(), rect.x(), rect.y(), rect.width(), rect.height());
+#if !GTK_CHECK_VERSION(3, 19, 2)
+    gtk_style_context_add_class(styleContext.get(), GTK_STYLE_CLASS_BUTTON);
+#endif
+    gtk_render_background(styleContext.get(), context->platformContext()->cr(), rect.x(), rect.y(), rect.width(), rect.height());
+    gtk_render_frame(styleContext.get(), context->platformContext()->cr(), rect.x(), rect.y(), rect.width(), rect.height());
 
     gfloat arrowScaling;
-    gtk_style_context_get_style(m_context, "arrow-scaling", &arrowScaling, NULL);
+    gtk_style_context_get_style(styleContext.get(), "arrow-scaling", &arrowScaling, nullptr);
 
     double arrowSize = std::min(rect.width(), rect.height()) * arrowScaling;
     FloatPoint arrowPoint(rect.x() + (rect.width() - arrowSize) / 2,
@@ -170,10 +298,7 @@ void ScrollbarThemeGtk::paintButton(GraphicsContext* context, ScrollbarThemeClie
 
     if (flags & GTK_STATE_FLAG_ACTIVE) {
         gint arrowDisplacementX, arrowDisplacementY;
-        gtk_style_context_get_style(m_context,
-                                    "arrow-displacement-x", &arrowDisplacementX,
-                                    "arrow-displacement-y", &arrowDisplacementY,
-                                    NULL);
+        gtk_style_context_get_style(styleContext.get(), "arrow-displacement-x", &arrowDisplacementX, "arrow-displacement-y", &arrowDisplacementY, nullptr);
         arrowPoint.move(arrowDisplacementX, arrowDisplacementY);
     }
 
@@ -184,9 +309,11 @@ void ScrollbarThemeGtk::paintButton(GraphicsContext* context, ScrollbarThemeClie
         angle = (part == ForwardButtonEndPart || part == ForwardButtonStartPart) ? G_PI / 2 : 3 * (G_PI / 2);
     }
 
-    gtk_render_arrow(m_context, context->platformContext()->cr(), angle, arrowPoint.x(), arrowPoint.y(), arrowSize);
+    gtk_render_arrow(styleContext.get(), context->platformContext()->cr(), angle, arrowPoint.x(), arrowPoint.y(), arrowSize);
 
-    gtk_style_context_restore(m_context);
+#if !GTK_CHECK_VERSION(3, 19, 2)
+    gtk_style_context_restore(styleContext.get());
+#endif
 }
 
 } // namespace WebCore

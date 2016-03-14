@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
-<!DOCTYPE book PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "">
 <book xmlns="http://www.devhelp.net/book" title="WebKit2GTK+ Reference Manual" link="index.html" author="" name="webkit2gtk" version="2" language="c">
   <chapters>
     <sub name="Class Overview" link="ch01.html">
@@ -525,12 +524,12 @@
     <keyword type="enum" name="enum WebKitPrintError" link="webkit2gtk-WebKitError.html#WebKitPrintError"/>
     <keyword type="enum" name="enum WebKitJavascriptError" link="webkit2gtk-WebKitError.html#WebKitJavascriptError"/>
     <keyword type="enum" name="enum WebKitSnapshotError" link="webkit2gtk-WebKitError.html#WebKitSnapshotError"/>
-    <keyword type="macro" name="WEBKIT_FAVICON_DATABASE_ERROR" link="WebKitFaviconDatabase.html#WEBKIT-FAVICON-DATABASE-ERROR:CAPS"/>
     <keyword type="function" name="webkit_favicon_database_get_favicon ()" link="WebKitFaviconDatabase.html#webkit-favicon-database-get-favicon"/>
     <keyword type="function" name="webkit_favicon_database_get_favicon_finish ()" link="WebKitFaviconDatabase.html#webkit-favicon-database-get-favicon-finish"/>
     <keyword type="function" name="webkit_favicon_database_get_favicon_uri ()" link="WebKitFaviconDatabase.html#webkit-favicon-database-get-favicon-uri"/>
     <keyword type="function" name="webkit_favicon_database_clear ()" link="WebKitFaviconDatabase.html#webkit-favicon-database-clear"/>
     <keyword type="struct" name="struct WebKitFaviconDatabase" link="WebKitFaviconDatabase.html#WebKitFaviconDatabase-struct"/>
+    <keyword type="macro" name="WEBKIT_FAVICON_DATABASE_ERROR" link="WebKitFaviconDatabase.html#WEBKIT-FAVICON-DATABASE-ERROR:CAPS"/>
     <keyword type="enum" name="enum WebKitFaviconDatabaseError" link="WebKitFaviconDatabase.html#WebKitFaviconDatabaseError"/>
     <keyword type="signal" name="The “favicon-changed” signal" link="WebKitFaviconDatabase.html#WebKitFaviconDatabase-favicon-changed"/>
     <keyword type="function" name="webkit_file_chooser_request_get_mime_types ()" link="WebKitFileChooserRequest.html#webkit-file-chooser-request-get-mime-types"/>
@@ -611,10 +610,10 @@
     <keyword type="function" name="webkit_get_major_version ()" link="webkit2gtk-WebKitVersion.html#webkit-get-major-version"/>
     <keyword type="function" name="webkit_get_minor_version ()" link="webkit2gtk-WebKitVersion.html#webkit-get-minor-version"/>
     <keyword type="function" name="webkit_get_micro_version ()" link="webkit2gtk-WebKitVersion.html#webkit-get-micro-version"/>
+    <keyword type="macro" name="WEBKIT_CHECK_VERSION()" link="webkit2gtk-WebKitVersion.html#WEBKIT-CHECK-VERSION:CAPS"/>
     <keyword type="macro" name="WEBKIT_MAJOR_VERSION" link="webkit2gtk-WebKitVersion.html#WEBKIT-MAJOR-VERSION:CAPS"/>
     <keyword type="macro" name="WEBKIT_MINOR_VERSION" link="webkit2gtk-WebKitVersion.html#WEBKIT-MINOR-VERSION:CAPS"/>
     <keyword type="macro" name="WEBKIT_MICRO_VERSION" link="webkit2gtk-WebKitVersion.html#WEBKIT-MICRO-VERSION:CAPS"/>
-    <keyword type="macro" name="WEBKIT_CHECK_VERSION()" link="webkit2gtk-WebKitVersion.html#WEBKIT-CHECK-VERSION:CAPS"/>
     <keyword type="function" name="webkit_context_menu_new ()" link="WebKitContextMenu.html#webkit-context-menu-new"/>
     <keyword type="function" name="webkit_context_menu_new_with_items ()" link="WebKitContextMenu.html#webkit-context-menu-new-with-items"/>
     <keyword type="function" name="webkit_context_menu_prepend ()" link="WebKitContextMenu.html#webkit-context-menu-prepend"/>
@@ -693,5 +692,142 @@
     <keyword type="function" name="webkit_script_world_new ()" link="WebKitScriptWorld.html#webkit-script-world-new" since="2.2"/>
     <keyword type="struct" name="struct WebKitScriptWorld" link="WebKitScriptWorld.html#WebKitScriptWorld-struct"/>
     <keyword type="signal" name="The “window-object-cleared” signal" link="WebKitScriptWorld.html#WebKitScriptWorld-window-object-cleared"/>
+    <keyword type="constant" name="WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER" link="WebKitWebContext.html#WEBKIT-CACHE-MODEL-DOCUMENT-VIEWER:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CACHE_MODEL_WEB_BROWSER" link="WebKitWebContext.html#WEBKIT-CACHE-MODEL-WEB-BROWSER:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CACHE_MODEL_DOCUMENT_BROWSER" link="WebKitWebContext.html#WEBKIT-CACHE-MODEL-DOCUMENT-BROWSER:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PROCESS_MODEL_SHARED_SECONDARY_PROCESS" link="WebKitWebContext.html#WEBKIT-PROCESS-MODEL-SHARED-SECONDARY-PROCESS:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES" link="WebKitWebContext.html#WEBKIT-PROCESS-MODEL-MULTIPLE-SECONDARY-PROCESSES:CAPS"/>
+    <keyword type="constant" name="WEBKIT_TLS_ERRORS_POLICY_IGNORE" link="WebKitWebContext.html#WEBKIT-TLS-ERRORS-POLICY-IGNORE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_TLS_ERRORS_POLICY_FAIL" link="WebKitWebContext.html#WEBKIT-TLS-ERRORS-POLICY-FAIL:CAPS"/>
+    <keyword type="constant" name="WEBKIT_LOAD_STARTED" link="WebKitWebView.html#WEBKIT-LOAD-STARTED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_LOAD_REDIRECTED" link="WebKitWebView.html#WEBKIT-LOAD-REDIRECTED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_LOAD_COMMITTED" link="WebKitWebView.html#WEBKIT-LOAD-COMMITTED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_LOAD_FINISHED" link="WebKitWebView.html#WEBKIT-LOAD-FINISHED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION" link="WebKitWebView.html#WEBKIT-POLICY-DECISION-TYPE-NAVIGATION-ACTION:CAPS"/>
+    <keyword type="constant" name="WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION" link="WebKitWebView.html#WEBKIT-POLICY-DECISION-TYPE-NEW-WINDOW-ACTION:CAPS"/>
+    <keyword type="constant" name="WEBKIT_POLICY_DECISION_TYPE_RESPONSE" link="WebKitWebView.html#WEBKIT-POLICY-DECISION-TYPE-RESPONSE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_SAVE_MODE_MHTML" link="WebKitWebView.html#WEBKIT-SAVE-MODE-MHTML:CAPS"/>
+    <keyword type="constant" name="WEBKIT_VIEW_MODE_WEB" link="WebKitWebView.html#WEBKIT-VIEW-MODE-WEB:CAPS"/>
+    <keyword type="constant" name="WEBKIT_VIEW_MODE_SOURCE" link="WebKitWebView.html#WEBKIT-VIEW-MODE-SOURCE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INSECURE_CONTENT_RUN" link="WebKitWebView.html#WEBKIT-INSECURE-CONTENT-RUN:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INSECURE_CONTENT_DISPLAYED" link="WebKitWebView.html#WEBKIT-INSECURE-CONTENT-DISPLAYED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_SNAPSHOT_OPTIONS_NONE" link="WebKitWebView.html#WEBKIT-SNAPSHOT-OPTIONS-NONE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_SNAPSHOT_OPTIONS_INCLUDE_SELECTION_HIGHLIGHTING" link="WebKitWebView.html#WEBKIT-SNAPSHOT-OPTIONS-INCLUDE-SELECTION-HIGHLIGHTING:CAPS"/>
+    <keyword type="constant" name="WEBKIT_SNAPSHOT_REGION_VISIBLE" link="WebKitWebView.html#WEBKIT-SNAPSHOT-REGION-VISIBLE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_SNAPSHOT_REGION_FULL_DOCUMENT" link="WebKitWebView.html#WEBKIT-SNAPSHOT-REGION-FULL-DOCUMENT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_SCRIPT_DIALOG_ALERT" link="WebKitWebView.html#WEBKIT-SCRIPT-DIALOG-ALERT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_SCRIPT_DIALOG_CONFIRM" link="WebKitWebView.html#WEBKIT-SCRIPT-DIALOG-CONFIRM:CAPS"/>
+    <keyword type="constant" name="WEBKIT_SCRIPT_DIALOG_PROMPT" link="WebKitWebView.html#WEBKIT-SCRIPT-DIALOG-PROMPT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_DEFAULT" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-DEFAULT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_HTTP_BASIC" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-HTTP-BASIC:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_HTTP_DIGEST" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-HTTP-DIGEST:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_HTML_FORM" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-HTML-FORM:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_NTLM" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-NTLM:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_NEGOTIATE" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-NEGOTIATE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_CLIENT_CERTIFICATE_REQUESTED" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-CLIENT-CERTIFICATE-REQUESTED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_SERVER_TRUST_EVALUATION_REQUESTED" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-SERVER-TRUST-EVALUATION-REQUESTED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_AUTHENTICATION_SCHEME_UNKNOWN" link="WebKitAuthenticationRequest.html#WEBKIT-AUTHENTICATION-SCHEME-UNKNOWN:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CREDENTIAL_PERSISTENCE_NONE" link="WebKitAuthenticationRequest.html#WEBKIT-CREDENTIAL-PERSISTENCE-NONE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CREDENTIAL_PERSISTENCE_FOR_SESSION" link="WebKitAuthenticationRequest.html#WEBKIT-CREDENTIAL-PERSISTENCE-FOR-SESSION:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CREDENTIAL_PERSISTENCE_PERMANENT" link="WebKitAuthenticationRequest.html#WEBKIT-CREDENTIAL-PERSISTENCE-PERMANENT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NAVIGATION_TYPE_LINK_CLICKED" link="WebKitNavigationPolicyDecision.html#WEBKIT-NAVIGATION-TYPE-LINK-CLICKED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NAVIGATION_TYPE_FORM_SUBMITTED" link="WebKitNavigationPolicyDecision.html#WEBKIT-NAVIGATION-TYPE-FORM-SUBMITTED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NAVIGATION_TYPE_BACK_FORWARD" link="WebKitNavigationPolicyDecision.html#WEBKIT-NAVIGATION-TYPE-BACK-FORWARD:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NAVIGATION_TYPE_RELOAD" link="WebKitNavigationPolicyDecision.html#WEBKIT-NAVIGATION-TYPE-RELOAD:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NAVIGATION_TYPE_FORM_RESUBMITTED" link="WebKitNavigationPolicyDecision.html#WEBKIT-NAVIGATION-TYPE-FORM-RESUBMITTED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NAVIGATION_TYPE_OTHER" link="WebKitNavigationPolicyDecision.html#WEBKIT-NAVIGATION-TYPE-OTHER:CAPS"/>
+    <keyword type="constant" name="WEBKIT_HIT_TEST_RESULT_CONTEXT_DOCUMENT" link="WebKitHitTestResult.html#WEBKIT-HIT-TEST-RESULT-CONTEXT-DOCUMENT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_HIT_TEST_RESULT_CONTEXT_LINK" link="WebKitHitTestResult.html#WEBKIT-HIT-TEST-RESULT-CONTEXT-LINK:CAPS"/>
+    <keyword type="constant" name="WEBKIT_HIT_TEST_RESULT_CONTEXT_IMAGE" link="WebKitHitTestResult.html#WEBKIT-HIT-TEST-RESULT-CONTEXT-IMAGE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_HIT_TEST_RESULT_CONTEXT_MEDIA" link="WebKitHitTestResult.html#WEBKIT-HIT-TEST-RESULT-CONTEXT-MEDIA:CAPS"/>
+    <keyword type="constant" name="WEBKIT_HIT_TEST_RESULT_CONTEXT_EDITABLE" link="WebKitHitTestResult.html#WEBKIT-HIT-TEST-RESULT-CONTEXT-EDITABLE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_HIT_TEST_RESULT_CONTEXT_SCROLLBAR" link="WebKitHitTestResult.html#WEBKIT-HIT-TEST-RESULT-CONTEXT-SCROLLBAR:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PRINT_OPERATION_RESPONSE_PRINT" link="WebKitPrintOperation.html#WEBKIT-PRINT-OPERATION-RESPONSE-PRINT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PRINT_OPERATION_RESPONSE_CANCEL" link="WebKitPrintOperation.html#WEBKIT-PRINT-OPERATION-RESPONSE-CANCEL:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NETWORK_ERROR_FAILED" link="webkit2gtk-WebKitError.html#WEBKIT-NETWORK-ERROR-FAILED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NETWORK_ERROR_TRANSPORT" link="webkit2gtk-WebKitError.html#WEBKIT-NETWORK-ERROR-TRANSPORT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NETWORK_ERROR_UNKNOWN_PROTOCOL" link="webkit2gtk-WebKitError.html#WEBKIT-NETWORK-ERROR-UNKNOWN-PROTOCOL:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NETWORK_ERROR_CANCELLED" link="webkit2gtk-WebKitError.html#WEBKIT-NETWORK-ERROR-CANCELLED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_NETWORK_ERROR_FILE_DOES_NOT_EXIST" link="webkit2gtk-WebKitError.html#WEBKIT-NETWORK-ERROR-FILE-DOES-NOT-EXIST:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PLUGIN_ERROR_FAILED" link="webkit2gtk-WebKitError.html#WEBKIT-PLUGIN-ERROR-FAILED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PLUGIN_ERROR_CANNOT_FIND_PLUGIN" link="webkit2gtk-WebKitError.html#WEBKIT-PLUGIN-ERROR-CANNOT-FIND-PLUGIN:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PLUGIN_ERROR_CANNOT_LOAD_PLUGIN" link="webkit2gtk-WebKitError.html#WEBKIT-PLUGIN-ERROR-CANNOT-LOAD-PLUGIN:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PLUGIN_ERROR_JAVA_UNAVAILABLE" link="webkit2gtk-WebKitError.html#WEBKIT-PLUGIN-ERROR-JAVA-UNAVAILABLE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PLUGIN_ERROR_CONNECTION_CANCELLED" link="webkit2gtk-WebKitError.html#WEBKIT-PLUGIN-ERROR-CONNECTION-CANCELLED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PLUGIN_ERROR_WILL_HANDLE_LOAD" link="webkit2gtk-WebKitError.html#WEBKIT-PLUGIN-ERROR-WILL-HANDLE-LOAD:CAPS"/>
+    <keyword type="constant" name="WEBKIT_POLICY_ERROR_FAILED" link="webkit2gtk-WebKitError.html#WEBKIT-POLICY-ERROR-FAILED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_POLICY_ERROR_CANNOT_SHOW_MIME_TYPE" link="webkit2gtk-WebKitError.html#WEBKIT-POLICY-ERROR-CANNOT-SHOW-MIME-TYPE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_POLICY_ERROR_CANNOT_SHOW_URI" link="webkit2gtk-WebKitError.html#WEBKIT-POLICY-ERROR-CANNOT-SHOW-URI:CAPS"/>
+    <keyword type="constant" name="WEBKIT_POLICY_ERROR_FRAME_LOAD_INTERRUPTED_BY_POLICY_CHANGE" link="webkit2gtk-WebKitError.html#WEBKIT-POLICY-ERROR-FRAME-LOAD-INTERRUPTED-BY-POLICY-CHANGE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_POLICY_ERROR_CANNOT_USE_RESTRICTED_PORT" link="webkit2gtk-WebKitError.html#WEBKIT-POLICY-ERROR-CANNOT-USE-RESTRICTED-PORT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_DOWNLOAD_ERROR_NETWORK" link="webkit2gtk-WebKitError.html#WEBKIT-DOWNLOAD-ERROR-NETWORK:CAPS"/>
+    <keyword type="constant" name="WEBKIT_DOWNLOAD_ERROR_CANCELLED_BY_USER" link="webkit2gtk-WebKitError.html#WEBKIT-DOWNLOAD-ERROR-CANCELLED-BY-USER:CAPS"/>
+    <keyword type="constant" name="WEBKIT_DOWNLOAD_ERROR_DESTINATION" link="webkit2gtk-WebKitError.html#WEBKIT-DOWNLOAD-ERROR-DESTINATION:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PRINT_ERROR_GENERAL" link="webkit2gtk-WebKitError.html#WEBKIT-PRINT-ERROR-GENERAL:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PRINT_ERROR_PRINTER_NOT_FOUND" link="webkit2gtk-WebKitError.html#WEBKIT-PRINT-ERROR-PRINTER-NOT-FOUND:CAPS"/>
+    <keyword type="constant" name="WEBKIT_PRINT_ERROR_INVALID_PAGE_RANGE" link="webkit2gtk-WebKitError.html#WEBKIT-PRINT-ERROR-INVALID-PAGE-RANGE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_JAVASCRIPT_ERROR_SCRIPT_FAILED" link="webkit2gtk-WebKitError.html#WEBKIT-JAVASCRIPT-ERROR-SCRIPT-FAILED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_SNAPSHOT_ERROR_FAILED_TO_CREATE" link="webkit2gtk-WebKitError.html#WEBKIT-SNAPSHOT-ERROR-FAILED-TO-CREATE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_FAVICON_DATABASE_ERROR_NOT_INITIALIZED" link="WebKitFaviconDatabase.html#WEBKIT-FAVICON-DATABASE-ERROR-NOT-INITIALIZED:CAPS"/>
+    <keyword type="constant" name="WEBKIT_FAVICON_DATABASE_ERROR_FAVICON_NOT_FOUND" link="WebKitFaviconDatabase.html#WEBKIT-FAVICON-DATABASE-ERROR-FAVICON-NOT-FOUND:CAPS"/>
+    <keyword type="constant" name="WEBKIT_FAVICON_DATABASE_ERROR_FAVICON_UNKNOWN" link="WebKitFaviconDatabase.html#WEBKIT-FAVICON-DATABASE-ERROR-FAVICON-UNKNOWN:CAPS"/>
+    <keyword type="constant" name="WEBKIT_FIND_OPTIONS_NONE" link="WebKitFindController.html#WEBKIT-FIND-OPTIONS-NONE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_FIND_OPTIONS_CASE_INSENSITIVE" link="WebKitFindController.html#WEBKIT-FIND-OPTIONS-CASE-INSENSITIVE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_FIND_OPTIONS_AT_WORD_STARTS" link="WebKitFindController.html#WEBKIT-FIND-OPTIONS-AT-WORD-STARTS:CAPS"/>
+    <keyword type="constant" name="WEBKIT_FIND_OPTIONS_TREAT_MEDIAL_CAPITAL_AS_WORD_START" link="WebKitFindController.html#WEBKIT-FIND-OPTIONS-TREAT-MEDIAL-CAPITAL-AS-WORD-START:CAPS"/>
+    <keyword type="constant" name="WEBKIT_FIND_OPTIONS_BACKWARDS" link="WebKitFindController.html#WEBKIT-FIND-OPTIONS-BACKWARDS:CAPS"/>
+    <keyword type="constant" name="WEBKIT_FIND_OPTIONS_WRAP_AROUND" link="WebKitFindController.html#WEBKIT-FIND-OPTIONS-WRAP-AROUND:CAPS"/>
+    <keyword type="constant" name="WEBKIT_COOKIE_PERSISTENT_STORAGE_TEXT" link="WebKitCookieManager.html#WEBKIT-COOKIE-PERSISTENT-STORAGE-TEXT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE" link="WebKitCookieManager.html#WEBKIT-COOKIE-PERSISTENT-STORAGE-SQLITE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_COOKIE_POLICY_ACCEPT_ALWAYS" link="WebKitCookieManager.html#WEBKIT-COOKIE-POLICY-ACCEPT-ALWAYS:CAPS"/>
+    <keyword type="constant" name="WEBKIT_COOKIE_POLICY_ACCEPT_NEVER" link="WebKitCookieManager.html#WEBKIT-COOKIE-POLICY-ACCEPT-NEVER:CAPS"/>
+    <keyword type="constant" name="WEBKIT_COOKIE_POLICY_ACCEPT_NO_THIRD_PARTY" link="WebKitCookieManager.html#WEBKIT-COOKIE-POLICY-ACCEPT-NO-THIRD-PARTY:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_NO_ACTION" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-NO-ACTION:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_OPEN_LINK" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-OPEN-LINK:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_OPEN_LINK_IN_NEW_WINDOW" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-OPEN-LINK-IN-NEW-WINDOW:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_LINK_TO_DISK" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-DOWNLOAD-LINK-TO-DISK:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_COPY_LINK_TO_CLIPBOARD" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-COPY-LINK-TO-CLIPBOARD:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_OPEN_IMAGE_IN_NEW_WINDOW" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-OPEN-IMAGE-IN-NEW-WINDOW:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_IMAGE_TO_DISK" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-DOWNLOAD-IMAGE-TO-DISK:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_COPY_IMAGE_TO_CLIPBOARD" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-COPY-IMAGE-TO-CLIPBOARD:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_COPY_IMAGE_URL_TO_CLIPBOARD" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-COPY-IMAGE-URL-TO-CLIPBOARD:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_OPEN_FRAME_IN_NEW_WINDOW" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-OPEN-FRAME-IN-NEW-WINDOW:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_GO_BACK" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-GO-BACK:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_GO_FORWARD" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-GO-FORWARD:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_STOP" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-STOP:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_RELOAD" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-RELOAD:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_COPY" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-COPY:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_CUT" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-CUT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_PASTE" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-PASTE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_DELETE" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-DELETE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_SELECT_ALL" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-SELECT-ALL:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_INPUT_METHODS" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-INPUT-METHODS:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_UNICODE" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-UNICODE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_SPELLING_GUESS" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-SPELLING-GUESS:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_NO_GUESSES_FOUND" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-NO-GUESSES-FOUND:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_IGNORE_SPELLING" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-IGNORE-SPELLING:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_LEARN_SPELLING" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-LEARN-SPELLING:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_IGNORE_GRAMMAR" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-IGNORE-GRAMMAR:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_FONT_MENU" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-FONT-MENU:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_BOLD" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-BOLD:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_ITALIC" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-ITALIC:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_UNDERLINE" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-UNDERLINE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_OUTLINE" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-OUTLINE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_INSPECT_ELEMENT" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-INSPECT-ELEMENT:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_OPEN_VIDEO_IN_NEW_WINDOW" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-OPEN-VIDEO-IN-NEW-WINDOW:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_OPEN_AUDIO_IN_NEW_WINDOW" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-OPEN-AUDIO-IN-NEW-WINDOW:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_COPY_VIDEO_LINK_TO_CLIPBOARD" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-COPY-VIDEO-LINK-TO-CLIPBOARD:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_COPY_AUDIO_LINK_TO_CLIPBOARD" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-COPY-AUDIO-LINK-TO-CLIPBOARD:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_TOGGLE_MEDIA_CONTROLS" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-TOGGLE-MEDIA-CONTROLS:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_TOGGLE_MEDIA_LOOP" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-TOGGLE-MEDIA-LOOP:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_ENTER_VIDEO_FULLSCREEN" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-ENTER-VIDEO-FULLSCREEN:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_MEDIA_PLAY" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-MEDIA-PLAY:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_MEDIA_PAUSE" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-MEDIA-PAUSE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_MEDIA_MUTE" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-MEDIA-MUTE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_VIDEO_TO_DISK" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-DOWNLOAD-VIDEO-TO-DISK:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_DOWNLOAD_AUDIO_TO_DISK" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-DOWNLOAD-AUDIO-TO-DISK:CAPS"/>
+    <keyword type="constant" name="WEBKIT_CONTEXT_MENU_ACTION_CUSTOM" link="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-CUSTOM:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INJECTED_CONTENT_FRAMES_ALL" link="WebKitWebViewGroup.html#WEBKIT-INJECTED-CONTENT-FRAMES-ALL:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INJECTED_CONTENT_FRAMES_TOP_ONLY" link="WebKitWebViewGroup.html#WEBKIT-INJECTED-CONTENT-FRAMES-TOP-ONLY:CAPS"/>
   </functions>
 </book>

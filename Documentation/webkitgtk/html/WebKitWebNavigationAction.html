@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKitGTK+ Reference Manual: WebKitWebNavigationAction</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitWebNavigationAction: WebKitGTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKitGTK+ Reference Manual">
 <link rel="up" href="ch02.html" title="Class Overview">
 <link rel="prev" href="WebKitWebHistoryItem.html" title="WebKitWebHistoryItem">
 <link rel="next" href="WebKitWebPolicyDecision.html" title="WebKitWebPolicyDecision">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -35,7 +35,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitWebNavigationAction.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -100,7 +100,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebNavigationAction.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -139,7 +139,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebNavigationAction.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -158,7 +158,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebNavigationAction.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitWebNavigationAction
 </pre>
 </div>
@@ -179,8 +179,8 @@ webkit_web_navigation_action_get_button
 are 1, 2 and 3 for left, middle and right buttons, so they are DOM button values +1. If the action was not
 initiated by a mouse click the value will be -1.</p>
 <div class="refsect3">
-<a name="id-1.3.7.8.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-navigation-action-get-button.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -194,11 +194,10 @@ initiated by a mouse click the value will be -1.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.7.8.2.6"></a><h4>Returns</h4>
+<a name="webkit-web-navigation-action-get-button.returns"></a><h4>Returns</h4>
 <p> the mouse button used to click</p>
-<p></p>
 </div>
-<p class="since">Since 1.0.3</p>
+<p class="since">Since: 1.0.3</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -208,8 +207,8 @@ webkit_web_navigation_action_get_modifier_state
                                (<em class="parameter"><code><a class="link" href="WebKitWebNavigationAction.html" title="WebKitWebNavigationAction"><span class="type">WebKitWebNavigationAction</span></a> *navigationAction</code></em>);</pre>
 <p>Returns a bitmask with the the state of the modifier keys.</p>
 <div class="refsect3">
-<a name="id-1.3.7.8.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-navigation-action-get-modifier-state.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -223,11 +222,10 @@ webkit_web_navigation_action_get_modifier_state
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.7.8.3.6"></a><h4>Returns</h4>
+<a name="webkit-web-navigation-action-get-modifier-state.returns"></a><h4>Returns</h4>
 <p> a bitmask with the state of the modifier keys</p>
-<p></p>
 </div>
-<p class="since">Since 1.0.3</p>
+<p class="since">Since: 1.0.3</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -238,8 +236,8 @@ webkit_web_navigation_action_get_original_uri
 <p>Returns the URI that was originally requested. This may differ from the
 navigation target, for instance because of a redirect.</p>
 <div class="refsect3">
-<a name="id-1.3.7.8.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-navigation-action-get-original-uri.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -253,11 +251,10 @@ navigation target, for instance because of a redirect.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.7.8.4.6"></a><h4>Returns</h4>
+<a name="webkit-web-navigation-action-get-original-uri.returns"></a><h4>Returns</h4>
 <p> the originally requested URI</p>
-<p></p>
 </div>
-<p class="since">Since 1.0.3</p>
+<p class="since">Since: 1.0.3</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -267,8 +264,8 @@ webkit_web_navigation_action_get_reason
                                (<em class="parameter"><code><a class="link" href="WebKitWebNavigationAction.html" title="WebKitWebNavigationAction"><span class="type">WebKitWebNavigationAction</span></a> *navigationAction</code></em>);</pre>
 <p>Returns the reason why WebKit is requesting a navigation.</p>
 <div class="refsect3">
-<a name="id-1.3.7.8.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-navigation-action-get-reason.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -282,11 +279,10 @@ webkit_web_navigation_action_get_reason
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.7.8.5.6"></a><h4>Returns</h4>
+<a name="webkit-web-navigation-action-get-reason.returns"></a><h4>Returns</h4>
 <p> a <a class="link" href="WebKitWebNavigationAction.html#WebKitWebNavigationReason" title="enum WebKitWebNavigationReason"><span class="type">WebKitWebNavigationReason</span></a></p>
-<p></p>
 </div>
-<p class="since">Since 1.0.3</p>
+<p class="since">Since: 1.0.3</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -296,8 +292,8 @@ webkit_web_navigation_action_get_target_frame
                                (<em class="parameter"><code><a class="link" href="WebKitWebNavigationAction.html" title="WebKitWebNavigationAction"><span class="type">WebKitWebNavigationAction</span></a> *navigationAction</code></em>);</pre>
 <p>Returns the target frame of the action.</p>
 <div class="refsect3">
-<a name="id-1.3.7.8.6.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-navigation-action-get-target-frame.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -311,12 +307,11 @@ webkit_web_navigation_action_get_target_frame
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.7.8.6.6"></a><h4>Returns</h4>
+<a name="webkit-web-navigation-action-get-target-frame.returns"></a><h4>Returns</h4>
 <p> the target frame of the action or NULL
 if there is no target.</p>
-<p></p>
 </div>
-<p class="since">Since 1.1.13</p>
+<p class="since">Since: 1.1.13</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -328,8 +323,8 @@ webkit_web_navigation_action_set_original_uri
 <p>Sets the URI that was originally requested. This may differ from the
 navigation target, for instance because of a redirect.</p>
 <div class="refsect3">
-<a name="id-1.3.7.8.7.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-navigation-action-set-original-uri.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -349,7 +344,7 @@ navigation target, for instance because of a redirect.</p>
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 1.0.3</p>
+<p class="since">Since: 1.0.3</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -360,8 +355,8 @@ webkit_web_navigation_action_set_reason
                                 <em class="parameter"><code><a class="link" href="WebKitWebNavigationAction.html#WebKitWebNavigationReason" title="enum WebKitWebNavigationReason"><span class="type">WebKitWebNavigationReason</span></a> reason</code></em>);</pre>
 <p>Sets the reason why WebKit is requesting a navigation.</p>
 <div class="refsect3">
-<a name="id-1.3.7.8.8.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-navigation-action-set-reason.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -381,7 +376,7 @@ webkit_web_navigation_action_set_reason
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 1.0.3</p>
+<p class="since">Since: 1.0.3</p>
 </div>
 </div>
 <div class="refsect1">
@@ -397,8 +392,8 @@ webkit_web_navigation_action_set_reason
 <a name="WebKitWebNavigationReason"></a><h3>enum WebKitWebNavigationReason</h3>
 <p>Enum values used to denote the various navigation reasons.</p>
 <div class="refsect3">
-<a name="id-1.3.7.9.3.4"></a><h4>Members</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitWebNavigationReason.members"></a><h4>Members</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="300px" class="enum_members_name">
 <col class="enum_members_description">
@@ -463,7 +458,7 @@ initiated by a mouse click the value will be -1.</p>
 <p>Flags: Read / Write / Construct Only</p>
 <p>Allowed values: &gt;= -1</p>
 <p>Default value: -1</p>
-<p class="since">Since 1.0.3</p>
+<p class="since">Since: 1.0.3</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -473,7 +468,7 @@ initiated by a mouse click the value will be -1.</p>
 <p>Flags: Read / Write / Construct Only</p>
 <p>Allowed values: &gt;= 0</p>
 <p>Default value: 0</p>
-<p class="since">Since 1.0.3</p>
+<p class="since">Since: 1.0.3</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -482,7 +477,7 @@ initiated by a mouse click the value will be -1.</p>
 <p>The URI that was requested as the target for the navigation.</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: ""</p>
-<p class="since">Since 1.0.3</p>
+<p class="since">Since: 1.0.3</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -491,7 +486,7 @@ initiated by a mouse click the value will be -1.</p>
 <p>The reason why this navigation is occuring.</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: WEBKIT_WEB_NAVIGATION_REASON_OTHER</p>
-<p class="since">Since 1.0.3</p>
+<p class="since">Since: 1.0.3</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -500,12 +495,11 @@ initiated by a mouse click the value will be -1.</p>
 <p>The target frame for the navigation.</p>
 <p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
-<p class="since">Since 1.1.13</p>
+<p class="since">Since: 1.1.13</p>
 </div>
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>

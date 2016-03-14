@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKit2GTK+ Reference Manual: WebKitBackForwardList</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitBackForwardList: WebKit2GTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKit2GTK+ Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest">
 <link rel="next" href="WebKitBackForwardListItem.html" title="WebKitBackForwardListItem">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -35,7 +35,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitBackForwardList.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -118,7 +118,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitBackForwardList.signals"></a><h2>Signals</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="signals_return">
 <col width="300px" class="signals_name">
@@ -133,7 +133,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitBackForwardList.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -146,7 +146,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitBackForwardList.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitBackForwardList
 </pre>
 </div>
@@ -172,8 +172,8 @@ item or items.</p>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#guint"><span class="returnvalue">guint</span></a>
 webkit_back_forward_list_get_length (<em class="parameter"><code><a class="link" href="WebKitBackForwardList.html" title="WebKitBackForwardList"><span class="type">WebKitBackForwardList</span></a> *back_forward_list</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.5.8.2.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-back-forward-list-get-length.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -187,10 +187,9 @@ webkit_back_forward_list_get_length (<em class="parameter"><code><a class="link"
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.5.8.2.5"></a><h4>Returns</h4>
+<a name="webkit-back-forward-list-get-length.returns"></a><h4>Returns</h4>
 <p> the length of <em class="parameter"><code>back_forward_list</code></em>
 .</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -202,8 +201,8 @@ webkit_back_forward_list_get_current_item
 <p>Returns the current item in <em class="parameter"><code>back_forward_list</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.2.5.8.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-back-forward-list-get-current-item.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -217,7 +216,7 @@ webkit_back_forward_list_get_current_item
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.5.8.3.6"></a><h4>Returns</h4>
+<a name="webkit-back-forward-list-get-current-item.returns"></a><h4>Returns</h4>
 <p> a <a class="link" href="WebKitBackForwardListItem.html" title="WebKitBackForwardListItem"><span class="type">WebKitBackForwardListItem</span></a>
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if <em class="parameter"><code>back_forward_list</code></em>
 is empty. </p>
@@ -232,8 +231,8 @@ webkit_back_forward_list_get_back_item
                                (<em class="parameter"><code><a class="link" href="WebKitBackForwardList.html" title="WebKitBackForwardList"><span class="type">WebKitBackForwardList</span></a> *back_forward_list</code></em>);</pre>
 <p>Returns the item that precedes the current item.</p>
 <div class="refsect3">
-<a name="id-1.2.5.8.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-back-forward-list-get-back-item.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -247,7 +246,7 @@ webkit_back_forward_list_get_back_item
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.5.8.4.6"></a><h4>Returns</h4>
+<a name="webkit-back-forward-list-get-back-item.returns"></a><h4>Returns</h4>
 <p> the <a class="link" href="WebKitBackForwardListItem.html" title="WebKitBackForwardListItem"><span class="type">WebKitBackForwardListItem</span></a>
 preceding the current item or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
@@ -261,8 +260,8 @@ webkit_back_forward_list_get_forward_item
                                (<em class="parameter"><code><a class="link" href="WebKitBackForwardList.html" title="WebKitBackForwardList"><span class="type">WebKitBackForwardList</span></a> *back_forward_list</code></em>);</pre>
 <p>Returns the item that follows the current item.</p>
 <div class="refsect3">
-<a name="id-1.2.5.8.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-back-forward-list-get-forward-item.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -276,7 +275,7 @@ webkit_back_forward_list_get_forward_item
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.5.8.5.6"></a><h4>Returns</h4>
+<a name="webkit-back-forward-list-get-forward-item.returns"></a><h4>Returns</h4>
 <p> the <a class="link" href="WebKitBackForwardListItem.html" title="WebKitBackForwardListItem"><span class="type">WebKitBackForwardListItem</span></a>
 following the current item or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
@@ -290,8 +289,8 @@ webkit_back_forward_list_get_nth_item (<em class="parameter"><code><a class="lin
                                        <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gint"><span class="type">gint</span></a> index</code></em>);</pre>
 <p>Returns the item at a given index relative to the current item.</p>
 <div class="refsect3">
-<a name="id-1.2.5.8.6.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-back-forward-list-get-nth-item.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -312,7 +311,7 @@ webkit_back_forward_list_get_nth_item (<em class="parameter"><code><a class="lin
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.5.8.6.6"></a><h4>Returns</h4>
+<a name="webkit-back-forward-list-get-nth-item.returns"></a><h4>Returns</h4>
 <p> the <a class="link" href="WebKitBackForwardListItem.html" title="WebKitBackForwardListItem"><span class="type">WebKitBackForwardListItem</span></a>
 located at the specified index relative to the current item. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
@@ -325,8 +324,8 @@ located at the specified index relative to the current item. </p>
 webkit_back_forward_list_get_back_list
                                (<em class="parameter"><code><a class="link" href="WebKitBackForwardList.html" title="WebKitBackForwardList"><span class="type">WebKitBackForwardList</span></a> *back_forward_list</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.5.8.7.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-back-forward-list-get-back-list.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -340,7 +339,7 @@ webkit_back_forward_list_get_back_list
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.5.8.7.5"></a><h4>Returns</h4>
+<a name="webkit-back-forward-list-get-back-list.returns"></a><h4>Returns</h4>
 <p> a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of
 items preceding the current item. </p>
 <p><span class="annotation">[<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> WebKit2.BackForwardListItem][<acronym title="Free data container after the code is done."><span class="acronym">transfer container</span></acronym>]</span></p>
@@ -354,8 +353,8 @@ webkit_back_forward_list_get_back_list_with_limit
                                (<em class="parameter"><code><a class="link" href="WebKitBackForwardList.html" title="WebKitBackForwardList"><span class="type">WebKitBackForwardList</span></a> *back_forward_list</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> limit</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.5.8.8.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-back-forward-list-get-back-list-with-limit.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -376,7 +375,7 @@ webkit_back_forward_list_get_back_list_with_limit
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.5.8.8.5"></a><h4>Returns</h4>
+<a name="webkit-back-forward-list-get-back-list-with-limit.returns"></a><h4>Returns</h4>
 <p> a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of
 items preceding the current item limited by <em class="parameter"><code>limit</code></em>
 . </p>
@@ -390,8 +389,8 @@ items preceding the current item limited by <em class="parameter"><code>limit</c
 webkit_back_forward_list_get_forward_list
                                (<em class="parameter"><code><a class="link" href="WebKitBackForwardList.html" title="WebKitBackForwardList"><span class="type">WebKitBackForwardList</span></a> *back_forward_list</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.5.8.9.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-back-forward-list-get-forward-list.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -405,7 +404,7 @@ webkit_back_forward_list_get_forward_list
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.5.8.9.5"></a><h4>Returns</h4>
+<a name="webkit-back-forward-list-get-forward-list.returns"></a><h4>Returns</h4>
 <p> a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of
 items following the current item. </p>
 <p><span class="annotation">[<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> WebKit2.BackForwardListItem][<acronym title="Free data container after the code is done."><span class="acronym">transfer container</span></acronym>]</span></p>
@@ -419,8 +418,8 @@ webkit_back_forward_list_get_forward_list_with_limit
                                (<em class="parameter"><code><a class="link" href="WebKitBackForwardList.html" title="WebKitBackForwardList"><span class="type">WebKitBackForwardList</span></a> *back_forward_list</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> limit</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.2.5.8.10.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-back-forward-list-get-forward-list-with-limit.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -441,7 +440,7 @@ webkit_back_forward_list_get_forward_list_with_limit
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.5.8.10.5"></a><h4>Returns</h4>
+<a name="webkit-back-forward-list-get-forward-list-with-limit.returns"></a><h4>Returns</h4>
 <p> a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of
 items following the current item limited by <em class="parameter"><code>limit</code></em>
 . </p>
@@ -476,8 +475,8 @@ items are removed. Note that both <em class="parameter"><code>item_added</code><
 <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> when only the current item is updated. Items are only removed
 when the list is cleared or the maximum items limit is reached.</p>
 <div class="refsect3">
-<a name="id-1.2.5.10.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitBackForwardList-changed.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -516,7 +515,6 @@ when the list is cleared or the maximum items limit is reached.</p>
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>

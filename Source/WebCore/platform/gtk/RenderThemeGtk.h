@@ -108,8 +108,6 @@ public:
     GtkWidget* gtkVScrollbar() const;
     GtkWidget* gtkHScrollbar() const;
     static void getIndicatorMetrics(ControlPart, int& indicatorSize, int& indicatorSpacing);
-#else
-    GtkStyleContext* gtkScrollbarStyle();
 #endif
 
 protected:
@@ -160,8 +158,6 @@ protected:
     virtual void adjustSliderThumbSize(RenderStyle*, Element*) const;
 
 #if ENABLE(VIDEO)
-    void initMediaColors();
-    void initMediaButtons();
     virtual bool hasOwnDisabledStateHandlingFor(ControlPart) const;
     virtual bool paintMediaFullscreenButton(RenderObject*, const PaintInfo&, const IntRect&);
     virtual bool paintMediaPlayButton(RenderObject*, const PaintInfo&, const IntRect&);
@@ -170,7 +166,6 @@ protected:
     virtual bool paintMediaSeekForwardButton(RenderObject*, const PaintInfo&, const IntRect&);
     virtual bool paintMediaSliderTrack(RenderObject*, const PaintInfo&, const IntRect&);
     virtual bool paintMediaSliderThumb(RenderObject*, const PaintInfo&, const IntRect&);
-    virtual bool paintMediaVolumeSliderContainer(RenderObject*, const PaintInfo&, const IntRect&);
     virtual bool paintMediaVolumeSliderTrack(RenderObject*, const PaintInfo&, const IntRect&);
     virtual bool paintMediaVolumeSliderThumb(RenderObject*, const PaintInfo&, const IntRect&);
     virtual bool paintMediaCurrentTime(RenderObject*, const PaintInfo&, const IntRect&);
@@ -202,12 +197,6 @@ private:
 #if ENABLE(PROGRESS_ELEMENT)
     static IntRect calculateProgressRect(RenderObject*, const IntRect&);
 #endif
-
-    mutable Color m_panelColor;
-    mutable Color m_sliderColor;
-    mutable Color m_sliderThumbColor;
-    const int m_mediaIconSize;
-    const int m_mediaSliderHeight;
 
 #ifdef GTK_API_VERSION_2
     void setupWidgetAndAddToContainer(GtkWidget*, GtkWidget*) const;

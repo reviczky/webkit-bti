@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKitGTK+ Reference Manual: WebKitWebHistoryItem</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitWebHistoryItem: WebKitGTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKitGTK+ Reference Manual">
 <link rel="up" href="ch02.html" title="Class Overview">
 <link rel="prev" href="WebKitWebBackForwardList.html" title="WebKitWebBackForwardList">
 <link rel="next" href="WebKitWebNavigationAction.html" title="WebKitWebNavigationAction">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -35,7 +35,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitWebHistoryItem.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -114,7 +114,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebHistoryItem.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -155,7 +155,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebHistoryItem.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -168,7 +168,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebHistoryItem.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitWebHistoryItem
 </pre>
 </div>
@@ -203,8 +203,8 @@ webkit_web_history_item_new_with_data(<span class="number">&quot;<a href="http:/
 webkit_web_history_item_copy (<em class="parameter"><code><a class="link" href="WebKitWebHistoryItem.html" title="WebKitWebHistoryItem"><span class="type">WebKitWebHistoryItem</span></a> *web_history_item</code></em>);</pre>
 <p>Makes a copy of the item for use with other WebView objects.</p>
 <div class="refsect3">
-<a name="id-1.3.6.8.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-history-item-copy.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -218,11 +218,11 @@ webkit_web_history_item_copy (<em class="parameter"><code><a class="link" href="
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.6.8.2.6"></a><h4>Returns</h4>
+<a name="webkit-web-history-item-copy.returns"></a><h4>Returns</h4>
 <p> the new <a class="link" href="WebKitWebHistoryItem.html" title="WebKitWebHistoryItem"><span class="type">WebKitWebHistoryItem</span></a>. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
-<p class="since">Since 1.1.18</p>
+<p class="since">Since: 1.1.18</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -233,8 +233,8 @@ webkit_web_history_item_get_alternate_title
 <p>Returns the alternate title of <em class="parameter"><code>web_history_item</code></em>
 </p>
 <div class="refsect3">
-<a name="id-1.3.6.8.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-history-item-get-alternate-title.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -248,10 +248,9 @@ webkit_web_history_item_get_alternate_title
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.6.8.3.6"></a><h4>Returns</h4>
+<a name="webkit-web-history-item-get-alternate-title.returns"></a><h4>Returns</h4>
 <p> the alternate title of <em class="parameter"><code>web_history_item</code></em>
 </p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -262,10 +261,6 @@ webkit_web_history_item_get_last_visited_time
                                (<em class="parameter"><code><a class="link" href="WebKitWebHistoryItem.html" title="WebKitWebHistoryItem"><span class="type">WebKitWebHistoryItem</span></a> *web_history_item</code></em>);</pre>
 <p>
 </p>
-<div class="refsect3">
-<a name="id-1.3.6.8.4.5"></a><h4>Returns</h4>
-<p></p>
-</div>
 </div>
 <hr>
 <div class="refsect2">
@@ -276,8 +271,8 @@ webkit_web_history_item_get_original_uri
 <p>Returns the original URI of <em class="parameter"><code>web_history_item</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.3.6.8.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-history-item-get-original-uri.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -291,10 +286,9 @@ webkit_web_history_item_get_original_uri
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.6.8.5.6"></a><h4>Returns</h4>
+<a name="webkit-web-history-item-get-original-uri.returns"></a><h4>Returns</h4>
 <p> the original URI of <em class="parameter"><code>web_history_item</code></em>
 </p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -303,8 +297,8 @@ webkit_web_history_item_get_original_uri
 <pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
 webkit_web_history_item_get_title (<em class="parameter"><code><a class="link" href="WebKitWebHistoryItem.html" title="WebKitWebHistoryItem"><span class="type">WebKitWebHistoryItem</span></a> *web_history_item</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.3.6.8.6.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-history-item-get-title.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -318,10 +312,9 @@ webkit_web_history_item_get_title (<em class="parameter"><code><a class="link" h
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.6.8.6.5"></a><h4>Returns</h4>
+<a name="webkit-web-history-item-get-title.returns"></a><h4>Returns</h4>
 <p> the page title of <em class="parameter"><code>web_history_item</code></em>
 </p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -332,8 +325,8 @@ webkit_web_history_item_get_uri (<em class="parameter"><code><a class="link" hre
 <p>Returns the URI of <em class="parameter"><code>this</code></em>
 </p>
 <div class="refsect3">
-<a name="id-1.3.6.8.7.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-history-item-get-uri.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -347,10 +340,9 @@ webkit_web_history_item_get_uri (<em class="parameter"><code><a class="link" hre
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.6.8.7.6"></a><h4>Returns</h4>
+<a name="webkit-web-history-item-get-uri.returns"></a><h4>Returns</h4>
 <p> the URI of <em class="parameter"><code>web_history_item</code></em>
 </p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -360,9 +352,8 @@ webkit_web_history_item_get_uri (<em class="parameter"><code><a class="link" hre
 webkit_web_history_item_new (<em class="parameter"><code><span class="type">void</span></code></em>);</pre>
 <p>Creates a new <a class="link" href="WebKitWebHistoryItem.html" title="WebKitWebHistoryItem"><span class="type">WebKitWebHistoryItem</span></a> instance</p>
 <div class="refsect3">
-<a name="id-1.3.6.8.8.5"></a><h4>Returns</h4>
+<a name="webkit-web-history-item-new.returns"></a><h4>Returns</h4>
 <p> the new <a class="link" href="WebKitWebHistoryItem.html" title="WebKitWebHistoryItem"><span class="type">WebKitWebHistoryItem</span></a></p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -373,8 +364,8 @@ webkit_web_history_item_new_with_data (<em class="parameter"><code>const <a href
                                        <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *title</code></em>);</pre>
 <p>Creates a new <a class="link" href="WebKitWebHistoryItem.html" title="WebKitWebHistoryItem"><span class="type">WebKitWebHistoryItem</span></a> with the given URI and title</p>
 <div class="refsect3">
-<a name="id-1.3.6.8.9.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-history-item-new-with-data.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -395,9 +386,8 @@ webkit_web_history_item_new_with_data (<em class="parameter"><code>const <a href
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.6.8.9.6"></a><h4>Returns</h4>
+<a name="webkit-web-history-item-new-with-data.returns"></a><h4>Returns</h4>
 <p> the new <a class="link" href="WebKitWebHistoryItem.html" title="WebKitWebHistoryItem"><span class="type">WebKitWebHistoryItem</span></a></p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -410,8 +400,8 @@ webkit_web_history_item_set_alternate_title
 <p>Sets an alternate title for <em class="parameter"><code>web_history_item</code></em>
 </p>
 <div class="refsect3">
-<a name="id-1.3.6.8.10.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-history-item-set-alternate-title.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -451,7 +441,7 @@ history item</p></td>
 <p>The alternate title of the history item.</p>
 <p>Flags: Read / Write</p>
 <p>Default value: NULL</p>
-<p class="since">Since 1.0.2</p>
+<p class="since">Since: 1.0.2</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -461,7 +451,7 @@ history item</p></td>
 <p>Flags: Read</p>
 <p>Allowed values: &gt;= 0</p>
 <p>Default value: 0</p>
-<p class="since">Since 1.0.2</p>
+<p class="since">Since: 1.0.2</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -470,7 +460,7 @@ history item</p></td>
 <p>The original URI of the history item.</p>
 <p>Flags: Read</p>
 <p>Default value: NULL</p>
-<p class="since">Since 1.0.2</p>
+<p class="since">Since: 1.0.2</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -479,7 +469,7 @@ history item</p></td>
 <p>The title of the history item.</p>
 <p>Flags: Read</p>
 <p>Default value: NULL</p>
-<p class="since">Since 1.0.2</p>
+<p class="since">Since: 1.0.2</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -488,7 +478,7 @@ history item</p></td>
 <p>The URI of the history item.</p>
 <p>Flags: Read</p>
 <p>Default value: NULL</p>
-<p class="since">Since 1.0.2</p>
+<p class="since">Since: 1.0.2</p>
 </div>
 </div>
 <div class="refsect1">
@@ -497,7 +487,6 @@ history item</p></td>
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>
