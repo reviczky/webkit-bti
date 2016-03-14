@@ -1,4 +1,3 @@
-fix-gtkdoc-error.patch
 install-minibrowser.patch
 atomic_build_fix.patch
 restore_sparc_code.patch
@@ -6,8 +5,5 @@ restore_sparc_code.patch
 ftbfs-armhf.patch
 x32_support.patch
 fix-arm64-build.patch
-ppc64-align.patch
-fix-cloop.patch
-use-abi64-for-mips64el.patch
 disable-jit-nonsse2.patch
 fix-ftbfs-m68k.patch

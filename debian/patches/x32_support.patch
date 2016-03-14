@@ -17,4 +17,4 @@ Index: webkitgtk/Source/WTF/wtf/Platform.h
 +#endif
  
  /* CPU(ARM64) - Apple */
- #if defined(__arm64__) && defined(__APPLE__)
+ #if (defined(__arm64__) && defined(__APPLE__)) || defined(__aarch64__)

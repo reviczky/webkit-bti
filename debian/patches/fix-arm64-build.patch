@@ -9,22 +9,7 @@ Index: webkitgtk/Source/WTF/wtf/Platform.h
 ===================================================================
 --- webkitgtk.orig/Source/WTF/wtf/Platform.h
 +++ webkitgtk/Source/WTF/wtf/Platform.h
-@@ -194,6 +194,14 @@
- #define WTF_CPU_ARM64 1
- #endif
- 
-+/* CPU(ARM64) - AArch64 */
-+#if defined(__aarch64__)
-+#define WTF_CPU_ARM64 1
-+#if defined(__AARCH64BE__)
-+#define WTF_CPU_BIG_ENDIAN 1
-+#endif
-+#endif
-+
- /* CPU(ARM) - ARM, any version*/
- #define WTF_ARM_ARCH_AT_LEAST(N) (CPU(ARM) && WTF_ARM_ARCH_VERSION >= N)
- 
-@@ -978,7 +986,7 @@
+@@ -978,7 +978,7 @@
  #define WTF_USE_IMLANG_FONT_LINK2 1
  #endif
  

@@ -9,6 +9,14 @@ webkitgtk (2.4.10-1) UNRELEASED; urgency=medium
       CVE-2015-3658, CVE-2015-3741, CVE-2015-3727, CVE-2015-5801,
       CVE-2015-5788, CVE-2015-3747, CVE-2015-5794, CVE-2015-1127,
       CVE-2015-1153, CVE-2015-1083.
+  * debian/patches/fix-cloop.patch,
+    debian/patches/fix-gtkdoc-error.patch,
+    debian/patches/ppc64-align.patch,
+    debian/patches/use-abi64-for-mips64el.patch:
+    + Delete these patches, they are no longer needed.
+  * debian/patches/atomic_build_fix.patch,
+    debian/patches/x32_support.patch:
+    + Refresh.
   * debian/patches/fix-ftbfs-m68k.patch:
     + Fix FTBFS in m68k (Closes: #696236).
 

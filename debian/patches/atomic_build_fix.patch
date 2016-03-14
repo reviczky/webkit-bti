@@ -1,12 +1,12 @@
 From: Alberto Garcia <berto@igalia.com>
 Subject: Some architectures need to add -latomic explicitly
-Index: webkit/Source/autotools/SetupCompilerFlags.m4
+Index: webkitgtk/Source/autotools/SetupCompilerFlags.m4
 ===================================================================
---- webkit.orig/Source/autotools/SetupCompilerFlags.m4
-+++ webkit/Source/autotools/SetupCompilerFlags.m4
-@@ -57,3 +57,18 @@ else
-     CXXFLAGS="$CXXFLAGS -O0"
-     CFLAGS="$CFLAGS -O0"
+--- webkitgtk.orig/Source/autotools/SetupCompilerFlags.m4
++++ webkitgtk/Source/autotools/SetupCompilerFlags.m4
+@@ -72,3 +72,18 @@ AC_LANG_POP([C++])
+ if test "$has_atomic" = "no"; then
+    LIBS="$LIBS -latomic"
  fi
 +
 +# Some architectures need to add libatomic explicitly
