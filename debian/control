@@ -47,7 +47,7 @@ Build-Depends: gawk,
                libegl1-mesa-dev [armel armhf],
                libgles2-mesa-dev [armel armhf]
 Build-Conflicts: gir-repository-dev
-Standards-Version: 3.9.6
+Standards-Version: 3.9.7
 Homepage: http://webkitgtk.org/
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=pkg-webkit/webkit.git
 Vcs-Git: git://anonscm.debian.org/pkg-webkit/webkit.git
