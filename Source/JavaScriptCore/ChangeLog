@@ -1,3 +1,107 @@
+2016-03-12  Tomas Popela  <tpopela@redhat.com>
+
+        [CLoop] - Fix CLoop on the 32-bit Big-Endians
+        https://bugs.webkit.org/show_bug.cgi?id=137020
+
+        Reviewed by Mark Lam.
+
+        * llint/LowLevelInterpreter.asm:
+        * llint/LowLevelInterpreter32_64.asm:
+
+2016-03-12  Tomas Popela  <tpopela@redhat.com>
+
+        LLINT op_put_to_scope and op_get_from_scope should use loadpFromInstruction to get operand from instruction
+        https://bugs.webkit.org/show_bug.cgi?id=132333
+
+        Unreviewed.
+
+        When loading operand variable from instruction in
+        _llint_op_get_from_scope and _llint_op_put_to_scope use
+        loadpFromInstruction instead of loadisFromInstruction. Also when
+        saving the operand in LLIntSlowPaths.cpp use the same way as in
+        CodeBlock.cpp.
+
+        * llint/LLIntSlowPaths.cpp:
+        * llint/LowLevelInterpreter32_64.asm:
+        * llint/LowLevelInterpreter64.asm:
+
+2016-03-10  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Fix the build in Windows.
+
+        Reviewed by Alberto Garcia.
+
+        * interpreter/JSStack.cpp:
+        (JSC::commitSize):
+
+2015-12-07  Alberto Garcia  <berto@igalia.com>
+
+        Crashes on PPC64 due to mprotect() on address not aligned to the page size
+        https://bugs.webkit.org/show_bug.cgi?id=130237
+
+        Reviewed by Mark Lam.
+
+        Make sure that commitSize is at least as big as the page size.
+
+        * interpreter/JSStack.cpp:
+        (JSC::commitSize):
+        (JSC::JSStack::JSStack):
+        (JSC::JSStack::growSlowCase):
+        * interpreter/JSStack.h:
+
+2014-04-09  Mark Lam  <mark.lam@apple.com>
+
+        Ensure that LLINT accessing of the ProtoCallFrame is big endian friendly.
+        <https://webkit.org/b/131449>
+
+        Reviewed by Mark Hahnenberg.
+
+        Change ProtoCallFrame::paddedArgCount to be of type uint32_t.  The argCount
+        that it pads is of type int anyway.  It doesn't need to be 64 bit.  This
+        also makes it work with the LLINT which is loading it with a loadi
+        instruction.
+
+        We should add the PayLoadOffset to ProtoCallFrame::argCountAndCodeOriginValue
+        when loading the argCount.
+
+        * interpreter/ProtoCallFrame.h:
+        (JSC::ProtoCallFrame::setPaddedArgCount):
+        * llint/LowLevelInterpreter32_64.asm:
+        * llint/LowLevelInterpreter64.asm:
+
+2015-01-12  Geoffrey Garen  <ggaren@apple.com>
+
+        Out of bounds read in IdentifierArena::makeIdentifier
+        https://bugs.webkit.org/show_bug.cgi?id=140376
+
+        Patch by Alexey Proskuryakov.
+
+        Reviewed and ChangeLogged by Geoffrey Garen.
+
+        No test, since this is a small past-the-end read, which is very
+        difficult to turn into a reproducible failing test -- and existing tests
+        crash reliably using ASan.
+
+        * parser/ParserArena.h:
+        (JSC::IdentifierArena::makeIdentifier):
+        (JSC::IdentifierArena::makeIdentifierLCharFromUChar): Check for a
+        zero-length string input, like we do in the literal parser, since it is
+        not valid to dereference characters in a zero-length string.
+
+        A zero-length string is allowed in JavaScript -- for example, "".
+
+2015-04-24  Matthew Mirman  <mmirman@apple.com>
+
+        Made Object.prototype.__proto__ native getter and setter check that this object not null or undefined
+        https://bugs.webkit.org/show_bug.cgi?id=141865
+        rdar://problem/19927273
+
+        Reviewed by Filip Pizlo.
+
+        * runtime/JSGlobalObjectFunctions.cpp:
+        (JSC::globalFuncProtoGetter):
+        (JSC::globalFuncProtoSetter):
+
 2015-04-17  Milan Crha  <mcrha@redhat.com>
 
         [GTK][Stable] Missing implementation of callToJavaScript/callToNativeFunction with msys/mingw32

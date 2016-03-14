@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKit2GTK+ Reference Manual: WebKitResponsePolicyDecision</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitResponsePolicyDecision: WebKit2GTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKit2GTK+ Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitNavigationPolicyDecision.html" title="WebKitNavigationPolicyDecision">
 <link rel="next" href="WebKitHitTestResult.html" title="WebKitHitTestResult">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -35,7 +35,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitResponsePolicyDecision.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -70,7 +70,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitResponsePolicyDecision.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -94,7 +94,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitResponsePolicyDecision.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -107,7 +107,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitResponsePolicyDecision.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> <a class="link" href="WebKitPolicyDecision.html" title="WebKitPolicyDecision">WebKitPolicyDecision</a>
         <span class="lineart">╰──</span> WebKitResponsePolicyDecision
 </pre>
@@ -129,8 +129,8 @@ webkit_response_policy_decision_get_request
                                (<em class="parameter"><code><a class="link" href="WebKitResponsePolicyDecision.html" title="WebKitResponsePolicyDecision"><span class="type">WebKitResponsePolicyDecision</span></a> *decision</code></em>);</pre>
 <p>Gets the value of the <a class="link" href="WebKitResponsePolicyDecision.html#WebKitResponsePolicyDecision--request" title="The “request” property"><span class="type">“request”</span></a> property.</p>
 <div class="refsect3">
-<a name="id-1.2.16.8.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-response-policy-decision-get-request.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -144,7 +144,7 @@ webkit_response_policy_decision_get_request
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.16.8.2.6"></a><h4>Returns</h4>
+<a name="webkit-response-policy-decision-get-request.returns"></a><h4>Returns</h4>
 <p> The URI request that is associated with this policy decision. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
@@ -157,8 +157,8 @@ webkit_response_policy_decision_get_response
                                (<em class="parameter"><code><a class="link" href="WebKitResponsePolicyDecision.html" title="WebKitResponsePolicyDecision"><span class="type">WebKitResponsePolicyDecision</span></a> *decision</code></em>);</pre>
 <p>Gets the value of the <a class="link" href="WebKitResponsePolicyDecision.html#WebKitResponsePolicyDecision--response" title="The “response” property"><span class="type">“response”</span></a> property.</p>
 <div class="refsect3">
-<a name="id-1.2.16.8.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-response-policy-decision-get-response.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -172,7 +172,7 @@ webkit_response_policy_decision_get_response
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.16.8.3.6"></a><h4>Returns</h4>
+<a name="webkit-response-policy-decision-get-response.returns"></a><h4>Returns</h4>
 <p> The URI response that is associated with this policy decision. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
@@ -186,8 +186,8 @@ webkit_response_policy_decision_is_mime_type_supported
 <p>Gets whether the MIME type of the response can be displayed in the <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a>
 that triggered this policy decision request. See also <a class="link" href="WebKitWebView.html#webkit-web-view-can-show-mime-type" title="webkit_web_view_can_show_mime_type ()"><code class="function">webkit_web_view_can_show_mime_type()</code></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.16.8.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-response-policy-decision-is-mime-type-supported.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -201,11 +201,10 @@ that triggered this policy decision request. See also <a class="link" href="WebK
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.16.8.4.6"></a><h4>Returns</h4>
+<a name="webkit-response-policy-decision-is-mime-type-supported.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the MIME type of the response is supported or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</p>
-<p></p>
 </div>
-<p class="since">Since 2.4</p>
+<p class="since">Since: <a class="link" href="api-index-2-4.html#api-index-2.4">2.4</a></p>
 </div>
 </div>
 <div class="refsect1">
@@ -241,7 +240,6 @@ policy decision.</p>
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>

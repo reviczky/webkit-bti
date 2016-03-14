@@ -31,6 +31,7 @@
 
 #include "ConservativeRoots.h"
 #include "Interpreter.h"
+#include <wtf/PageBlock.h>
 
 namespace JSC {
 
@@ -42,6 +43,14 @@ static Mutex& stackStatisticsMutex()
     return staticMutex;
 }    
 
+static size_t commitSize()
+{
+    static size_t size = 0;
+    if (!size)
+        size = std::max(16 * 1024, static_cast<int>(WTF::pageSize()));
+    return size;
+}
+
 JSStack::JSStack(VM& vm, size_t capacity)
     : m_vm(vm)
     , m_end(0)
@@ -49,7 +58,7 @@ JSStack::JSStack(VM& vm, size_t capacity)
 {
     ASSERT(capacity && isPageAligned(capacity));
 
-    m_reservation = PageReservation::reserve(roundUpAllocationSize(capacity * sizeof(Register), commitSize), OSAllocator::JSVMStackPages);
+    m_reservation = PageReservation::reserve(roundUpAllocationSize(capacity * sizeof(Register), commitSize()), OSAllocator::JSVMStackPages);
     updateStackLimit(highAddress());
     m_commitEnd = highAddress();
 
@@ -78,7 +87,7 @@ bool JSStack::growSlowCase(Register* newEnd)
     // Compute the chunk size of additional memory to commit, and see if we
     // have it is still within our budget. If not, we'll fail to grow and
     // return false.
-    long delta = roundUpAllocationSize(reinterpret_cast<char*>(m_commitEnd) - reinterpret_cast<char*>(newEnd), commitSize);
+    long delta = roundUpAllocationSize(reinterpret_cast<char*>(m_commitEnd) - reinterpret_cast<char*>(newEnd), commitSize());
     if (reinterpret_cast<char*>(m_commitEnd) - delta <= reinterpret_cast<char*>(m_useableEnd))
         return false;
 
@@ -134,7 +143,7 @@ void JSStack::enableErrorStackReserve()
 
 void JSStack::disableErrorStackReserve()
 {
-    char* useableEnd = reinterpret_cast<char*>(reservationEnd()) + commitSize;
+    char* useableEnd = reinterpret_cast<char*>(reservationEnd()) + commitSize();
     m_useableEnd = reinterpret_cast_ptr<Register*>(useableEnd);
 
     // By the time we get here, we are guaranteed to be destructing the last

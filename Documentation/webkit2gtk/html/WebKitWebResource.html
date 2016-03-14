@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKit2GTK+ Reference Manual: WebKitWebResource</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitWebResource: WebKit2GTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKit2GTK+ Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitPrintOperation.html" title="WebKitPrintOperation">
 <link rel="next" href="webkit2gtk-WebKitError.html" title="WebKitError">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -36,7 +36,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitWebResource.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -78,7 +78,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebResource.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -102,7 +102,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebResource.signals"></a><h2>Signals</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="signals_return">
 <col width="300px" class="signals_name">
@@ -134,7 +134,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebResource.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -147,7 +147,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebResource.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitWebResource
 </pre>
 </div>
@@ -194,8 +194,8 @@ a load operation:</p>
 signal of <em class="parameter"><code>resource</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.2.19.9.2.7"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-resource-get-uri.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -209,10 +209,9 @@ signal of <em class="parameter"><code>resource</code></em>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.19.9.2.8"></a><h4>Returns</h4>
+<a name="webkit-web-resource-get-uri.returns"></a><h4>Returns</h4>
 <p> the current active URI of <em class="parameter"><code>resource</code></em>
 </p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -225,8 +224,8 @@ This method returns <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code 
 is received from the server. You can connect to notify::response
 signal to be notified when the response is received.</p>
 <div class="refsect3">
-<a name="id-1.2.19.9.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-resource-get-response.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -240,7 +239,7 @@ signal to be notified when the response is received.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.19.9.3.6"></a><h4>Returns</h4>
+<a name="webkit-web-resource-get-response.returns"></a><h4>Returns</h4>
 <p> the <a class="link" href="WebKitURIResponse.html" title="WebKitURIResponse"><span class="type">WebKitURIResponse</span></a>, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if
 the response hasn't been received yet. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
@@ -251,7 +250,7 @@ the response hasn't been received yet. </p>
 <a name="webkit-web-resource-get-data"></a><h3>webkit_web_resource_get_data ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_web_resource_get_data (<em class="parameter"><code><a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *resource</code></em>,
-                              <em class="parameter"><code><a href="../gio/GCancellable.html"><span class="type">GCancellable</span></a> *cancellable</code></em>,
+                              <em class="parameter"><code><a href="../gio/GCancellable.html#GCancellable-struct"><span class="type">GCancellable</span></a> *cancellable</code></em>,
                               <em class="parameter"><code><a href="../gio/GAsyncResult.html#GAsyncReadyCallback"><span class="type">GAsyncReadyCallback</span></a> callback</code></em>,
                               <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> user_data</code></em>);</pre>
 <p>Asynchronously get the raw data for <em class="parameter"><code>resource</code></em>
@@ -260,8 +259,8 @@ webkit_web_resource_get_data (<em class="parameter"><code><a class="link" href="
  will be called. You can then call
 <a class="link" href="WebKitWebResource.html#webkit-web-resource-get-data-finish" title="webkit_web_resource_get_data_finish ()"><code class="function">webkit_web_resource_get_data_finish()</code></a> to get the result of the operation.</p>
 <div class="refsect3">
-<a name="id-1.2.19.9.4.6"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-resource-get-data.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -275,7 +274,7 @@ webkit_web_resource_get_data (<em class="parameter"><code><a class="link" href="
 </tr>
 <tr>
 <td class="parameter_name"><p>cancellable</p></td>
-<td class="parameter_description"><p> a <a href="../gio/GCancellable.html"><span class="type">GCancellable</span></a> or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to ignore. </p></td>
+<td class="parameter_description"><p> a <a href="../gio/GCancellable.html#GCancellable-struct"><span class="type">GCancellable</span></a> or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to ignore. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
@@ -297,13 +296,13 @@ webkit_web_resource_get_data (<em class="parameter"><code><a class="link" href="
 <a name="webkit-web-resource-get-data-finish"></a><h3>webkit_web_resource_get_data_finish ()</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#guchar"><span class="returnvalue">guchar</span></a> *
 webkit_web_resource_get_data_finish (<em class="parameter"><code><a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> *resource</code></em>,
-                                     <em class="parameter"><code><a href="../gio/GAsyncResult.html"><span class="type">GAsyncResult</span></a> *result</code></em>,
+                                     <em class="parameter"><code><a href="../gio/GAsyncResult.html#GAsyncResult-struct"><span class="type">GAsyncResult</span></a> *result</code></em>,
                                      <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gsize"><span class="type">gsize</span></a> *length</code></em>,
                                      <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
 <p>Finish an asynchronous operation started with <a class="link" href="WebKitWebResource.html#webkit-web-resource-get-data" title="webkit_web_resource_get_data ()"><code class="function">webkit_web_resource_get_data()</code></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.19.9.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-resource-get-data-finish.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -317,7 +316,7 @@ webkit_web_resource_get_data_finish (<em class="parameter"><code><a class="link"
 </tr>
 <tr>
 <td class="parameter_name"><p>result</p></td>
-<td class="parameter_description"><p>a <a href="../gio/GAsyncResult.html"><span class="type">GAsyncResult</span></a></p></td>
+<td class="parameter_description"><p>a <a href="../gio/GAsyncResult.html#GAsyncResult-struct"><span class="type">GAsyncResult</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -334,7 +333,7 @@ webkit_web_resource_get_data_finish (<em class="parameter"><code><a class="link"
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.19.9.5.6"></a><h4>Returns</h4>
+<a name="webkit-web-resource-get-data-finish.returns"></a><h4>Returns</h4>
 <p> a
 string with the data of <em class="parameter"><code>resource</code></em>
 , or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> in case of error. if <em class="parameter"><code>length</code></em>
@@ -381,8 +380,8 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
 <p>This signal is emitted when an error occurs during the resource
 load operation.</p>
 <div class="refsect3">
-<a name="id-1.2.19.12.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitWebResource-failed.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -419,8 +418,8 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
 or due to an error. In case of errors <a class="link" href="WebKitWebResource.html#WebKitWebResource-failed" title="The “failed” signal"><span class="type">“failed”</span></a> signal
 is emitted before this one.</p>
 <div class="refsect3">
-<a name="id-1.2.19.12.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitWebResource-finished.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -453,8 +452,8 @@ user_function (<a class="link" href="WebKitWebResource.html" title="WebKitWebRes
 every time new data has been received. It's
 useful to know the progress of the resource load operation.</p>
 <div class="refsect3">
-<a name="id-1.2.19.12.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitWebResource-received-data.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -499,8 +498,8 @@ request sent to the server due to the redirection and the
  parameter containing the response
 received by the server for the initial request.</p>
 <div class="refsect3">
-<a name="id-1.2.19.12.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitWebResource-sent-request.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -535,7 +534,6 @@ received by the server for the initial request.</p>
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>

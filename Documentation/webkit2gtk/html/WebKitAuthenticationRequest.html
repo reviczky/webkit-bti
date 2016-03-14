@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKit2GTK+ Reference Manual: WebKitAuthenticationRequest</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitAuthenticationRequest: WebKit2GTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKit2GTK+ Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitWebView.html" title="WebKitWebView">
 <link rel="next" href="WebKitBackForwardList.html" title="WebKitBackForwardList">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -35,7 +35,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitAuthenticationRequest.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -178,7 +178,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitAuthenticationRequest.signals"></a><h2>Signals</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="signals_return">
 <col width="300px" class="signals_name">
@@ -193,7 +193,7 @@
 </div>
 <a name="WebKitCredential"></a><div class="refsect1">
 <a name="WebKitAuthenticationRequest.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -222,7 +222,7 @@
 <a name="WebKitAuthenticationRequest.object-hierarchy"></a><h2>Object Hierarchy</h2>
 <pre class="screen">    <a href="/home/cgarcia/gnome/share/gtk-doc/html/gobject/gobject-Boxed-Types.html">GBoxed</a>
     <span class="lineart">╰──</span> WebKitCredential
-    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitAuthenticationRequest
 </pre>
 </div>
@@ -252,8 +252,8 @@ webkit_authentication_request_authenticate
 supplied. To continue without credentials, pass <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> as <em class="parameter"><code>credential</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-authentication-request-authenticate.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -273,7 +273,7 @@ supplied. To continue without credentials, pass <a href="../glib/glib-Standard-M
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -283,8 +283,8 @@ webkit_authentication_request_cancel (<em class="parameter"><code><a class="link
 <p>Cancel the authentication challenge. This will also cancel the page loading and result in a
 <a class="link" href="WebKitWebView.html#WebKitWebView-load-failed" title="The “load-failed” signal"><span class="type">“load-failed”</span></a> signal with a <a class="link" href="webkit2gtk-WebKitError.html#WebKitNetworkError" title="enum WebKitNetworkError"><span class="type">WebKitNetworkError</span></a> of type <a class="link" href="webkit2gtk-WebKitError.html#WEBKIT-NETWORK-ERROR-CANCELLED:CAPS"><code class="literal">WEBKIT_NETWORK_ERROR_CANCELLED</code></a> being emitted.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-authentication-request-cancel.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -297,7 +297,7 @@ webkit_authentication_request_cancel (<em class="parameter"><code><a class="link
 </tr></tbody>
 </table></div>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -310,8 +310,8 @@ webkit_authentication_request_can_save_credentials
 This will return <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> if webkit doesn't support credential storing
 or if private browsing is enabled.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-authentication-request-can-save-credentials.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -325,11 +325,10 @@ or if private browsing is enabled.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.4.6"></a><h4>Returns</h4>
+<a name="webkit-authentication-request-can-save-credentials.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if webkit can store credentials or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
-<p></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -339,8 +338,8 @@ webkit_authentication_request_get_host
                                (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> *request</code></em>);</pre>
 <p>Get the host that this authentication challenge is applicable to.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-authentication-request-get-host.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -354,12 +353,11 @@ webkit_authentication_request_get_host
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.5.6"></a><h4>Returns</h4>
+<a name="webkit-authentication-request-get-host.returns"></a><h4>Returns</h4>
 <p> The host of <em class="parameter"><code>request</code></em>
 .</p>
-<p></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -369,8 +367,8 @@ webkit_authentication_request_get_port
                                (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> *request</code></em>);</pre>
 <p>Get the port that this authentication challenge is applicable to.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.6.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-authentication-request-get-port.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -384,12 +382,11 @@ webkit_authentication_request_get_port
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.6.6"></a><h4>Returns</h4>
+<a name="webkit-authentication-request-get-port.returns"></a><h4>Returns</h4>
 <p> The port of <em class="parameter"><code>request</code></em>
 .</p>
-<p></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -399,8 +396,8 @@ webkit_authentication_request_is_retry
                                (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> *request</code></em>);</pre>
 <p>Determine whether this this is a first attempt or a retry for this authentication challenge.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.7.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-authentication-request-is-retry.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -414,11 +411,10 @@ webkit_authentication_request_is_retry
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.7.6"></a><h4>Returns</h4>
+<a name="webkit-authentication-request-is-retry.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if authentication attempt is a retry or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
-<p></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -430,8 +426,8 @@ webkit_authentication_request_get_proposed_credential
 stored from a previous session. The client can use this directly for
 authentication or construct their own <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.8.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-authentication-request-get-proposed-credential.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -445,12 +441,12 @@ authentication or construct their own <a class="link" href="WebKitAuthentication
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.8.6"></a><h4>Returns</h4>
+<a name="webkit-authentication-request-get-proposed-credential.returns"></a><h4>Returns</h4>
 <p> A <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a> encapsulating credential details
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if there is no stored credential. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -460,8 +456,8 @@ webkit_authentication_request_get_realm
                                (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> *request</code></em>);</pre>
 <p>Get the realm that this authentication challenge is applicable to.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.9.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-authentication-request-get-realm.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -475,12 +471,11 @@ webkit_authentication_request_get_realm
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.9.6"></a><h4>Returns</h4>
+<a name="webkit-authentication-request-get-realm.returns"></a><h4>Returns</h4>
 <p> The realm of <em class="parameter"><code>request</code></em>
 .</p>
-<p></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -490,8 +485,8 @@ webkit_authentication_request_get_scheme
                                (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> *request</code></em>);</pre>
 <p>Get the authentication scheme of the authentication challenge.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.10.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-authentication-request-get-scheme.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -505,12 +500,11 @@ webkit_authentication_request_get_scheme
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.10.6"></a><h4>Returns</h4>
+<a name="webkit-authentication-request-get-scheme.returns"></a><h4>Returns</h4>
 <p> The <a class="link" href="WebKitAuthenticationRequest.html#WebKitAuthenticationScheme" title="enum WebKitAuthenticationScheme"><span class="type">WebKitAuthenticationScheme</span></a> of <em class="parameter"><code>request</code></em>
 .</p>
-<p></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -520,8 +514,8 @@ webkit_authentication_request_is_for_proxy
                                (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest"><span class="type">WebKitAuthenticationRequest</span></a> *request</code></em>);</pre>
 <p>Determine whether the authentication challenge is associated with a proxy server rather than an "origin" server.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.11.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-authentication-request-is-for-proxy.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -535,11 +529,10 @@ webkit_authentication_request_is_for_proxy
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.11.6"></a><h4>Returns</h4>
+<a name="webkit-authentication-request-is-for-proxy.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if authentication is for a proxy or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
-<p></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -550,8 +543,8 @@ webkit_credential_new (<em class="parameter"><code>const <a href="../glib/glib-B
                        <em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html#WebKitCredentialPersistence" title="enum WebKitCredentialPersistence"><span class="type">WebKitCredentialPersistence</span></a> persistence</code></em>);</pre>
 <p>Create a new credential from the provided username, password and persistence mode.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.12.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-credential-new.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -577,11 +570,11 @@ webkit_credential_new (<em class="parameter"><code>const <a href="../glib/glib-B
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.12.6"></a><h4>Returns</h4>
+<a name="webkit-credential-new.returns"></a><h4>Returns</h4>
 <p> A <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -590,8 +583,8 @@ webkit_credential_new (<em class="parameter"><code>const <a href="../glib/glib-B
 webkit_credential_copy (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a> *credential</code></em>);</pre>
 <p>Make a copy of the <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.13.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-credential-copy.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -605,11 +598,11 @@ webkit_credential_copy (<em class="parameter"><code><a class="link" href="WebKit
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.13.6"></a><h4>Returns</h4>
+<a name="webkit-credential-copy.returns"></a><h4>Returns</h4>
 <p> A copy of passed in <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -618,8 +611,8 @@ webkit_credential_copy (<em class="parameter"><code><a class="link" href="WebKit
 webkit_credential_free (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a> *credential</code></em>);</pre>
 <p>Free the <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.14.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-credential-free.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -632,7 +625,7 @@ webkit_credential_free (<em class="parameter"><code><a class="link" href="WebKit
 </tr></tbody>
 </table></div>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -641,8 +634,8 @@ webkit_credential_free (<em class="parameter"><code><a class="link" href="WebKit
 webkit_credential_get_password (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a> *credential</code></em>);</pre>
 <p>Get the password currently held by this <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.15.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-credential-get-password.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -656,11 +649,10 @@ webkit_credential_get_password (<em class="parameter"><code><a class="link" href
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.15.6"></a><h4>Returns</h4>
+<a name="webkit-credential-get-password.returns"></a><h4>Returns</h4>
 <p> The password stored in the <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>.</p>
-<p></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -669,8 +661,8 @@ webkit_credential_get_password (<em class="parameter"><code><a class="link" href
 webkit_credential_get_persistence (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a> *credential</code></em>);</pre>
 <p>Get the persistence mode currently held by this <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.16.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-credential-get-persistence.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -684,11 +676,10 @@ webkit_credential_get_persistence (<em class="parameter"><code><a class="link" h
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.16.6"></a><h4>Returns</h4>
+<a name="webkit-credential-get-persistence.returns"></a><h4>Returns</h4>
 <p> The <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredentialPersistence" title="enum WebKitCredentialPersistence"><span class="type">WebKitCredentialPersistence</span></a> stored in the <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>.</p>
-<p></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -697,8 +688,8 @@ webkit_credential_get_persistence (<em class="parameter"><code><a class="link" h
 webkit_credential_get_username (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a> *credential</code></em>);</pre>
 <p>Get the username currently held by this <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.17.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-credential-get-username.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -712,11 +703,10 @@ webkit_credential_get_username (<em class="parameter"><code><a class="link" href
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.17.6"></a><h4>Returns</h4>
+<a name="webkit-credential-get-username.returns"></a><h4>Returns</h4>
 <p> The username stored in the <a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a>.</p>
-<p></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -725,8 +715,8 @@ webkit_credential_get_username (<em class="parameter"><code><a class="link" href
 webkit_credential_has_password (<em class="parameter"><code><a class="link" href="WebKitAuthenticationRequest.html#WebKitCredential"><span class="type">WebKitCredential</span></a> *credential</code></em>);</pre>
 <p>Determine whether this credential has a password stored.</p>
 <div class="refsect3">
-<a name="id-1.2.4.9.18.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-credential-has-password.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -740,11 +730,10 @@ webkit_credential_has_password (<em class="parameter"><code><a class="link" href
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.4.9.18.6"></a><h4>Returns</h4>
+<a name="webkit-credential-has-password.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the credential has a password or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
-<p></p>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 </div>
 <div class="refsect1">
@@ -760,8 +749,8 @@ webkit_credential_has_password (<em class="parameter"><code><a class="link" href
 <a name="WebKitAuthenticationScheme"></a><h3>enum WebKitAuthenticationScheme</h3>
 <p>Enum values representing the authentication scheme.</p>
 <div class="refsect3">
-<a name="id-1.2.4.10.3.4"></a><h4>Members</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitAuthenticationScheme.members"></a><h4>Members</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="300px" class="enum_members_name">
 <col class="enum_members_description">
@@ -834,7 +823,7 @@ webkit_credential_has_password (<em class="parameter"><code><a class="link" href
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -848,8 +837,8 @@ webkit_credential_has_password (<em class="parameter"><code><a class="link" href
 <a name="WebKitCredentialPersistence"></a><h3>enum WebKitCredentialPersistence</h3>
 <p>Enum values representing the duration for which a credential persists.</p>
 <div class="refsect3">
-<a name="id-1.2.4.10.5.4"></a><h4>Members</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitCredentialPersistence.members"></a><h4>Members</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="300px" class="enum_members_name">
 <col class="enum_members_description">
@@ -880,7 +869,7 @@ webkit_credential_has_password (<em class="parameter"><code><a class="link" href
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 </div>
 <div class="refsect1">
@@ -894,8 +883,8 @@ user_function (<a class="link" href="WebKitAuthenticationRequest.html" title="We
 cancelled. It allows the application to dismiss its authentication
 dialog in case of page load failure for example.</p>
 <div class="refsect3">
-<a name="id-1.2.4.11.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitAuthenticationRequest-cancelled.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -916,7 +905,7 @@ dialog in case of page load failure for example.</p>
 </table></div>
 </div>
 <p>Flags: Run Last</p>
-<p class="since">Since 2.2</p>
+<p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
 </div>
 </div>
 <div class="refsect1">
@@ -925,7 +914,6 @@ dialog in case of page load failure for example.</p>
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>

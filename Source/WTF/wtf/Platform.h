@@ -82,7 +82,7 @@
 
 /* CPU(MIPS) - MIPS 32-bit and 64-bit */
 #if (defined(mips) || defined(__mips__) || defined(MIPS) || defined(_MIPS_) || defined(__mips64))
-#if defined(_MIPS_SIM_ABI64) && (_MIPS_SIM == _MIPS_SIM_ABI64)
+#if defined(_ABI64) && (_MIPS_SIM == _ABI64)
 #define WTF_CPU_MIPS64 1
 #define WTF_MIPS_ARCH __mips64
 #else
@@ -169,7 +169,7 @@
 #endif
 
 /* CPU(ARM64) - Apple */
-#if defined(__arm64__) && defined(__APPLE__)
+#if (defined(__arm64__) && defined(__APPLE__)) || defined(__aarch64__)
 #define WTF_CPU_ARM64 1
 #endif
 

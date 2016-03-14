@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKitGTK+ Reference Manual: WebKitWebPlugin</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitWebPlugin: WebKitGTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKitGTK+ Reference Manual">
 <link rel="up" href="ch02.html" title="Class Overview">
 <link rel="prev" href="WebKitHitTestResult.html" title="WebKitHitTestResult">
 <link rel="next" href="WebKitWebPluginDatabase.html" title="WebKitWebPluginDatabase">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -35,7 +35,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitWebPlugin.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -91,7 +91,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebPlugin.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -106,7 +106,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebPlugin.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -125,7 +125,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebPlugin.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitWebPlugin
 </pre>
 </div>
@@ -144,8 +144,8 @@ plugins can be obtained from the <a class="link" href="WebKitWebPluginDatabase.h
 <pre class="programlisting">const <span class="returnvalue">char</span> *
 webkit_web_plugin_get_description (<em class="parameter"><code><a class="link" href="WebKitWebPlugin.html" title="WebKitWebPlugin"><span class="type">WebKitWebPlugin</span></a> *plugin</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.3.19.8.2.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-plugin-get-description.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -159,12 +159,11 @@ webkit_web_plugin_get_description (<em class="parameter"><code><a class="link" h
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.19.8.2.5"></a><h4>Returns</h4>
+<a name="webkit-web-plugin-get-description.returns"></a><h4>Returns</h4>
 <p> the description string for <em class="parameter"><code>plugin</code></em>
 .</p>
-<p></p>
 </div>
-<p class="since">Since 1.3.8</p>
+<p class="since">Since: 1.3.8</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -172,8 +171,8 @@ webkit_web_plugin_get_description (<em class="parameter"><code><a class="link" h
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_web_plugin_get_enabled (<em class="parameter"><code><a class="link" href="WebKitWebPlugin.html" title="WebKitWebPlugin"><span class="type">WebKitWebPlugin</span></a> *plugin</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.3.19.8.3.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-plugin-get-enabled.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -187,11 +186,10 @@ webkit_web_plugin_get_enabled (<em class="parameter"><code><a class="link" href=
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.19.8.3.5"></a><h4>Returns</h4>
+<a name="webkit-web-plugin-get-enabled.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the plugin is enabled, <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise</p>
-<p></p>
 </div>
-<p class="since">Since 1.3.8</p>
+<p class="since">Since: 1.3.8</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -201,9 +199,10 @@ webkit_web_plugin_get_mimetypes (<em class="parameter"><code><a class="link" hre
 <p>Returns all the <a class="link" href="WebKitWebPlugin.html#WebKitWebPluginMIMEType" title="WebKitWebPluginMIMEType"><span class="type">WebKitWebPluginMIMEType</span></a> that <em class="parameter"><code>plugin</code></em>
  is handling
 at the moment.</p>
+<p><span class="annotation">[<acronym title="Exposed in C code, not necessarily available in other languages."><span class="acronym">skip</span></acronym>]</span></p>
 <div class="refsect3">
-<a name="id-1.3.19.8.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-plugin-get-mimetypes.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -217,11 +216,10 @@ at the moment.</p>
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.19.8.4.6"></a><h4>Returns</h4>
+<a name="webkit-web-plugin-get-mimetypes.returns"></a><h4>Returns</h4>
 <p>  a <a href="../glib/glib-Singly-Linked-Lists.html#GSList"><span class="type">GSList</span></a> of <a class="link" href="WebKitWebPlugin.html#WebKitWebPluginMIMEType" title="WebKitWebPluginMIMEType"><span class="type">WebKitWebPluginMIMEType</span></a></p>
-<p></p>
 </div>
-<p class="since">Since 1.3.8</p>
+<p class="since">Since: 1.3.8</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -229,8 +227,8 @@ at the moment.</p>
 <pre class="programlisting">const <span class="returnvalue">char</span> *
 webkit_web_plugin_get_name (<em class="parameter"><code><a class="link" href="WebKitWebPlugin.html" title="WebKitWebPlugin"><span class="type">WebKitWebPlugin</span></a> *plugin</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.3.19.8.5.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-plugin-get-name.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -244,12 +242,11 @@ webkit_web_plugin_get_name (<em class="parameter"><code><a class="link" href="We
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.19.8.5.5"></a><h4>Returns</h4>
+<a name="webkit-web-plugin-get-name.returns"></a><h4>Returns</h4>
 <p> the name string for <em class="parameter"><code>plugin</code></em>
 .</p>
-<p></p>
 </div>
-<p class="since">Since 1.3.8</p>
+<p class="since">Since: 1.3.8</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -260,8 +257,8 @@ webkit_web_plugin_set_enabled (<em class="parameter"><code><a class="link" href=
 <p>Sets the enabled status of the <em class="parameter"><code>plugin</code></em>
 .</p>
 <div class="refsect3">
-<a name="id-1.3.19.8.6.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-plugin-set-enabled.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -281,7 +278,7 @@ webkit_web_plugin_set_enabled (<em class="parameter"><code><a class="link" href=
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 1.3.8</p>
+<p class="since">Since: 1.3.8</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -289,8 +286,8 @@ webkit_web_plugin_set_enabled (<em class="parameter"><code><a class="link" href=
 <pre class="programlisting">const <span class="returnvalue">char</span> *
 webkit_web_plugin_get_path (<em class="parameter"><code><a class="link" href="WebKitWebPlugin.html" title="WebKitWebPlugin"><span class="type">WebKitWebPlugin</span></a> *plugin</code></em>);</pre>
 <div class="refsect3">
-<a name="id-1.3.19.8.7.4"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-web-plugin-get-path.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -304,13 +301,12 @@ webkit_web_plugin_get_path (<em class="parameter"><code><a class="link" href="We
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.3.19.8.7.5"></a><h4>Returns</h4>
+<a name="webkit-web-plugin-get-path.returns"></a><h4>Returns</h4>
 <p> the absolute path to <em class="parameter"><code>plugin</code></em>
 in system filename encoding
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> on failure to convert the filename from UTF-8.</p>
-<p></p>
 </div>
-<p class="since">Since 1.4.0</p>
+<p class="since">Since: 1.4.0</p>
 </div>
 </div>
 <div class="refsect1">
@@ -335,8 +331,8 @@ plugin. A <a href="../glib/glib-Singly-Linked-Lists.html#GSList"><span class="ty
 <a class="link" href="WebKitWebPlugin.html#webkit-web-plugin-get-mimetypes" title="webkit_web_plugin_get_mimetypes ()"><span class="type">webkit_web_plugin_get_mimetypes</span></a>, use
 <span class="type">webkit_web_plugin_mime_type_list_free</span> to free it.</p>
 <div class="refsect3">
-<a name="id-1.3.19.9.3.5"></a><h4>Members</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="WebKitWebPluginMIMEType.members"></a><h4>Members</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="300px" class="struct_members_name">
 <col class="struct_members_description">
@@ -362,7 +358,7 @@ associated with this MIME type.</p></td>
 </tbody>
 </table></div>
 </div>
-<p class="since">Since 1.3.8</p>
+<p class="since">Since: 1.3.8</p>
 </div>
 </div>
 <div class="refsect1">
@@ -381,7 +377,6 @@ associated with this MIME type.</p></td>
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>

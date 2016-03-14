@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKit2GTK+ Reference Manual: WebKitWindowProperties</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<title>WebKitWindowProperties: WebKit2GTK+ Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKit2GTK+ Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitURIResponse.html" title="WebKitURIResponse">
 <link rel="next" href="WebKitDownload.html" title="WebKitDownload">
-<meta name="generator" content="GTK-Doc V1.21.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.24.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -35,7 +35,7 @@
 </tr></table></div>
 <div class="refsect1">
 <a name="WebKitWindowProperties.functions"></a><h2>Functions</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="functions_return">
 <col class="functions_name">
@@ -110,7 +110,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWindowProperties.properties"></a><h2>Properties</h2>
-<div class="informaltable"><table border="0">
+<div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
 <col width="150px" class="properties_type">
 <col width="300px" class="properties_name">
@@ -124,7 +124,7 @@
 </tr>
 <tr>
 <td class="property_type">
-<a href="../gdk3/gdk3-Points-Rectangles-and-Regions.html#GdkRectangle"><span class="type">GdkRectangle</span></a> *</td>
+<a href="../gdk2/gdk2-Points-Rectangles-and-Regions.html#GdkRectangle"><span class="type">GdkRectangle</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitWindowProperties.html#WebKitWindowProperties--geometry" title="The “geometry” property">geometry</a></td>
 <td class="property_flags">Read / Write / Construct Only</td>
 </tr>
@@ -163,7 +163,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWindowProperties.other"></a><h2>Types and Values</h2>
-<div class="informaltable"><table width="100%" border="0">
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="name">
 <col class="description">
@@ -176,7 +176,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWindowProperties.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject">GObject</a>
+<pre class="screen">    <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitWindowProperties
 </pre>
 </div>
@@ -290,11 +290,11 @@ to apply the initial window properties. Then you can monitor the
 <a name="webkit-window-properties-get-geometry"></a><h3>webkit_window_properties_get_geometry ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_window_properties_get_geometry (<em class="parameter"><code><a class="link" href="WebKitWindowProperties.html" title="WebKitWindowProperties"><span class="type">WebKitWindowProperties</span></a> *window_properties</code></em>,
-                                       <em class="parameter"><code><a href="../gdk3/gdk3-Points-Rectangles-and-Regions.html#GdkRectangle"><span class="type">GdkRectangle</span></a> *geometry</code></em>);</pre>
+                                       <em class="parameter"><code><a href="../gdk2/gdk2-Points-Rectangles-and-Regions.html#GdkRectangle"><span class="type">GdkRectangle</span></a> *geometry</code></em>);</pre>
 <p>Get the geometry the window should have on the screen when shown.</p>
 <div class="refsect3">
-<a name="id-1.2.10.8.2.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-window-properties-get-geometry.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -323,8 +323,8 @@ webkit_window_properties_get_toolbar_visible
                                (<em class="parameter"><code><a class="link" href="WebKitWindowProperties.html" title="WebKitWindowProperties"><span class="type">WebKitWindowProperties</span></a> *window_properties</code></em>);</pre>
 <p>Get whether the window should have the toolbar visible or not.</p>
 <div class="refsect3">
-<a name="id-1.2.10.8.3.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-window-properties-get-toolbar-visible.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -338,9 +338,8 @@ webkit_window_properties_get_toolbar_visible
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.10.8.3.6"></a><h4>Returns</h4>
+<a name="webkit-window-properties-get-toolbar-visible.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if toolbar should be visible or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -351,8 +350,8 @@ webkit_window_properties_get_statusbar_visible
                                (<em class="parameter"><code><a class="link" href="WebKitWindowProperties.html" title="WebKitWindowProperties"><span class="type">WebKitWindowProperties</span></a> *window_properties</code></em>);</pre>
 <p>Get whether the window should have the statusbar visible or not.</p>
 <div class="refsect3">
-<a name="id-1.2.10.8.4.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-window-properties-get-statusbar-visible.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -366,9 +365,8 @@ webkit_window_properties_get_statusbar_visible
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.10.8.4.6"></a><h4>Returns</h4>
+<a name="webkit-window-properties-get-statusbar-visible.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if statusbar should be visible or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -379,8 +377,8 @@ webkit_window_properties_get_scrollbars_visible
                                (<em class="parameter"><code><a class="link" href="WebKitWindowProperties.html" title="WebKitWindowProperties"><span class="type">WebKitWindowProperties</span></a> *window_properties</code></em>);</pre>
 <p>Get whether the window should have the scrollbars visible or not.</p>
 <div class="refsect3">
-<a name="id-1.2.10.8.5.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-window-properties-get-scrollbars-visible.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -394,9 +392,8 @@ webkit_window_properties_get_scrollbars_visible
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.10.8.5.6"></a><h4>Returns</h4>
+<a name="webkit-window-properties-get-scrollbars-visible.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if scrollbars should be visible or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -407,8 +404,8 @@ webkit_window_properties_get_menubar_visible
                                (<em class="parameter"><code><a class="link" href="WebKitWindowProperties.html" title="WebKitWindowProperties"><span class="type">WebKitWindowProperties</span></a> *window_properties</code></em>);</pre>
 <p>Get whether the window should have the menubar visible or not.</p>
 <div class="refsect3">
-<a name="id-1.2.10.8.6.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-window-properties-get-menubar-visible.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -422,9 +419,8 @@ webkit_window_properties_get_menubar_visible
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.10.8.6.6"></a><h4>Returns</h4>
+<a name="webkit-window-properties-get-menubar-visible.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if menubar should be visible or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -435,8 +431,8 @@ webkit_window_properties_get_locationbar_visible
                                (<em class="parameter"><code><a class="link" href="WebKitWindowProperties.html" title="WebKitWindowProperties"><span class="type">WebKitWindowProperties</span></a> *window_properties</code></em>);</pre>
 <p>Get whether the window should have the locationbar visible or not.</p>
 <div class="refsect3">
-<a name="id-1.2.10.8.7.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-window-properties-get-locationbar-visible.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -450,9 +446,8 @@ webkit_window_properties_get_locationbar_visible
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.10.8.7.6"></a><h4>Returns</h4>
+<a name="webkit-window-properties-get-locationbar-visible.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if locationbar should be visible or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -463,8 +458,8 @@ webkit_window_properties_get_resizable
                                (<em class="parameter"><code><a class="link" href="WebKitWindowProperties.html" title="WebKitWindowProperties"><span class="type">WebKitWindowProperties</span></a> *window_properties</code></em>);</pre>
 <p>Get whether the window should be resizable by the user or not.</p>
 <div class="refsect3">
-<a name="id-1.2.10.8.8.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-window-properties-get-resizable.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -478,9 +473,8 @@ webkit_window_properties_get_resizable
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.10.8.8.6"></a><h4>Returns</h4>
+<a name="webkit-window-properties-get-resizable.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the window should be resizable or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
-<p></p>
 </div>
 </div>
 <hr>
@@ -491,8 +485,8 @@ webkit_window_properties_get_fullscreen
                                (<em class="parameter"><code><a class="link" href="WebKitWindowProperties.html" title="WebKitWindowProperties"><span class="type">WebKitWindowProperties</span></a> *window_properties</code></em>);</pre>
 <p>Get whether the window should be shown in fullscreen state or not.</p>
 <div class="refsect3">
-<a name="id-1.2.10.8.9.5"></a><h4>Parameters</h4>
-<div class="informaltable"><table width="100%" border="0">
+<a name="webkit-window-properties-get-fullscreen.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
 <col class="parameters_description">
@@ -506,9 +500,8 @@ webkit_window_properties_get_fullscreen
 </table></div>
 </div>
 <div class="refsect3">
-<a name="id-1.2.10.8.9.6"></a><h4>Returns</h4>
+<a name="webkit-window-properties-get-fullscreen.returns"></a><h4>Returns</h4>
 <p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if the window should be fullscreen or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
-<p></p>
 </div>
 </div>
 </div>
@@ -533,7 +526,7 @@ webkit_window_properties_get_fullscreen
 <hr>
 <div class="refsect2">
 <a name="WebKitWindowProperties--geometry"></a><h3>The <code class="literal">“geometry”</code> property</h3>
-<pre class="programlisting">  “geometry”                 <a href="../gdk3/gdk3-Points-Rectangles-and-Regions.html#GdkRectangle"><span class="type">GdkRectangle</span></a> *</pre>
+<pre class="programlisting">  “geometry”                 <a href="../gdk2/gdk2-Points-Rectangles-and-Regions.html#GdkRectangle"><span class="type">GdkRectangle</span></a> *</pre>
 <p>The size and position of the window on the screen.</p>
 <p>Flags: Read / Write / Construct Only</p>
 </div>
@@ -592,7 +585,6 @@ webkit_window_properties_get_fullscreen
 </div>
 </div>
 <div class="footer">
-<hr>
-          Generated by GTK-Doc V1.21.1</div>
+<hr>Generated by GTK-Doc V1.24.1</div>
 </body>
 </html>
