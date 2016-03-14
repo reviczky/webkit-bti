@@ -26,6 +26,9 @@ webkitgtk (2.4.10-1) UNRELEASED; urgency=medium
     + Enable all hardening flags.
   * debian/copyright:
     + Update copyright years.
+  * debian/source/lintian-overrides:
+    + Update overrides so the latest lintian doesn't give more
+      source-is-missing false positives.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 08 Feb 2016 19:19:54 +0200
 
