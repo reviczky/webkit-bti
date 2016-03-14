@@ -166,9 +166,6 @@ binary-indep: build
 	dh_testroot
 	dh_installdocs -i $(EXTRA_DH_ARGUMENTS)
 	dh_installchangelogs -i $(EXTRA_DH_ARGUMENTS)
-ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
-	dh_install -plibwebkitgtk-common-dev --sourcedir=debian/tmp-3.0
-endif
 	dh_link -i $(EXTRA_DH_ARGUMENTS)
 	dh_compress -i $(EXTRA_DH_ARGUMENTS)
 	dh_fixperms -i $(EXTRA_DH_ARGUMENTS)

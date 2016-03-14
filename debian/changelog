@@ -29,12 +29,13 @@ webkitgtk (2.4.10-1) UNRELEASED; urgency=medium
   * debian/source/lintian-overrides:
     + Update overrides so the latest lintian doesn't give more
       source-is-missing false positives.
-  * Remove the libwebkitgtk-{1,3}.0-common packages:
+  * Remove the libwebkitgtk-*common* packages:
     + debian/control:
       - Remove package entries and add Breaks and Replaces fields to
-        libwebkitgtk-{1,3}.0-0.
-    + debian/libwebkitgtk-{1,3}.0-common.install:
-      - Remove and move all files to libwebkitgtk-{1,3}.0-0.install.
+        libwebkitgtk-{1,3}.0-0 and libwebkitgtk-3.0-dev.
+    + debian/libwebkitgtk-*common*.install:
+      - Remove and move all files to libwebkitgtk-{1,3}.0-0.install and
+        libwebkitgtk-3.0-dev.install.
     + debian/rules:
       - Remove dh_install rules from binary-indep.
 
