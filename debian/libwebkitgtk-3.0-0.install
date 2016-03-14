@@ -1,1 +1,3 @@
 usr/lib/*/libwebkitgtk-3.0.so.*
+usr/share/webkitgtk-3.0/*
+usr/share/locale/*
