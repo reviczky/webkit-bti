@@ -24,6 +24,7 @@ webkitgtk (2.4.10-1) UNRELEASED; urgency=medium
     + Use secure URIs for the Vcs-* fields.
   * debian/rules:
     + Enable all hardening flags.
+    + Remove EXTRA_DH_ARGUMENTS, this is no longer being used.
   * debian/copyright:
     + Update copyright years.
   * debian/source/lintian-overrides:

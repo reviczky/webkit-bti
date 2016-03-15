@@ -26,8 +26,6 @@ COMMON_CONFIGURE_ARGUMENTS = \
 	--enable-introspection \
 	--enable-geolocation
 
-EXTRA_DH_ARGUMENTS =
-
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
 ifeq ($(DEB_HOST_ARCH_BITS),32)
@@ -164,22 +162,22 @@ endif
 binary-indep: build
 	dh_testdir
 	dh_testroot
-	dh_installdocs -i $(EXTRA_DH_ARGUMENTS)
-	dh_installchangelogs -i $(EXTRA_DH_ARGUMENTS)
-	dh_link -i $(EXTRA_DH_ARGUMENTS)
-	dh_compress -i $(EXTRA_DH_ARGUMENTS)
-	dh_fixperms -i $(EXTRA_DH_ARGUMENTS)
-	dh_installdeb -i $(EXTRA_DH_ARGUMENTS)
-	dh_gencontrol -i $(EXTRA_DH_ARGUMENTS)
-	dh_md5sums -i $(EXTRA_DH_ARGUMENTS)
-	dh_builddeb -i $(EXTRA_DH_ARGUMENTS) -- -Zxz
+	dh_installdocs -i
+	dh_installchangelogs -i
+	dh_link -i
+	dh_compress -i
+	dh_fixperms -i
+	dh_installdeb -i
+	dh_gencontrol -i
+	dh_md5sums -i
+	dh_builddeb -i -- -Zxz
 
 # Build architecture-dependent files here.
 binary-arch: build install
 	dh_testdir
 	dh_testroot
-	dh_installdocs -a $(EXTRA_DH_ARGUMENTS)
-	dh_installchangelogs -a $(EXTRA_DH_ARGUMENTS)
+	dh_installdocs -a
+	dh_installchangelogs -a
 ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
 	dh_install -plibjavascriptcoregtk-1.0-0 --sourcedir=debian/tmp-2.0
 	dh_install -plibjavascriptcoregtk-1.0-dev --sourcedir=debian/tmp-2.0
@@ -200,7 +198,7 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_install -pgir1.2-webkit-3.0 --sourcedir=debian/tmp-3.0
 	dh_installman -plibjavascriptcoregtk-3.0-bin
 endif
-	dh_link -a $(EXTRA_DH_ARGUMENTS)
+	dh_link -a
 ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
 	dh_strip -plibjavascriptcoregtk-1.0-0 --dbg-package=libjavascriptcoregtk-1.0-0-dbg
 	dh_strip -plibwebkitgtk-1.0-0 --dbg-package=libwebkitgtk-1.0-0-dbg
@@ -210,8 +208,8 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_strip -plibjavascriptcoregtk-3.0-bin
 	dh_strip -plibwebkitgtk-3.0-0 --dbg-package=libwebkitgtk-3.0-0-dbg
 endif
-	dh_compress -a $(EXTRA_DH_ARGUMENTS)
-	dh_fixperms -a $(EXTRA_DH_ARGUMENTS)
+	dh_compress -a
+	dh_fixperms -a
 ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
 	dh_makeshlibs -plibjavascriptcoregtk-1.0-0 -V 'libjavascriptcoregtk-1.0-0 (>= 1.5.1)' -- -c4
 	dh_makeshlibs -plibwebkitgtk-1.0-0 -V 'libwebkitgtk-1.0-0 (>= 1.3.9)' -- -c4
@@ -222,12 +220,12 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_girepository --package=gir1.2-javascriptcoregtk-3.0
 	dh_girepository --package=gir1.2-webkit-3.0
 endif
-	dh_installdeb -a $(EXTRA_DH_ARGUMENTS)
-	dh_shlibdeps -a $(EXTRA_DH_ARGUMENTS)
-	dh_gencontrol -a $(EXTRA_DH_ARGUMENTS)
-	dh_md5sums -a $(EXTRA_DH_ARGUMENTS)
+	dh_installdeb -a
+	dh_shlibdeps -a
+	dh_gencontrol -a
+	dh_md5sums -a
 	DEB_BUILD_OPTIONS="$(filter-out parallel=%,$(DEB_BUILD_OPTIONS))" \
-		dh_builddeb -a $(EXTRA_DH_ARGUMENTS) -- -Zxz
+		dh_builddeb -a -- -Zxz
 
 binary: binary-indep binary-arch
 
