@@ -315,6 +315,24 @@ Description: Web content engine library for GTK+ - development files
  .
  This package contains the development files.
 
+Package: libwebkitgtk-doc
+Section: doc
+Priority: extra
+Architecture: all
+Depends: ${misc:Depends}
+Suggests: devhelp
+Breaks: libwebkitgtk-dev (<< 2.4.10), libwebkitgtk-3.0-dev (<< 2.4.10)
+Replaces: libwebkitgtk-dev (<< 2.4.10), libwebkitgtk-3.0-dev (<< 2.4.10)
+Description: Web content engine library for GTK+ - documentation
+ WebKit is a web content engine, derived from KHTML and KJS from KDE, and
+ used primarily in Apple's Safari browser.  It is made to be embedded in
+ other applications, such as mail readers, or web browsers.
+ .
+ It is able to display content such as HTML, SVG, XML, and others. It also
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
+ .
+ This package contains the documentation.
+
 Package: libwebkitgtk-3.0-0-dbg
 Section: debug
 Priority: extra

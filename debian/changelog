@@ -39,6 +39,17 @@ webkitgtk (2.4.10-1) UNRELEASED; urgency=medium
         libwebkitgtk-3.0-dev.install.
     + debian/rules:
       - Remove dh_install rules from binary-indep.
+  * Move documentation to a separate libwebkitgtk-doc package:
+    + debian/libwebkitgtk-3.0-dev.{install,links},
+      debian/libwebkitgtk-dev.{install,links},
+      debian/libwebkitgtk-doc.{install,links}:
+      debian/rules:
+      - Don't install the documentation in the -dev packages and do it in
+        libwebkitgtk-doc instead.
+    + debian/libwebkitgtk-doc.doc-base:
+      - Add doc-base control file.
+    + debian/control:
+      - Add package entry.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 08 Feb 2016 19:19:54 +0200
 

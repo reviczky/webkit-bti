@@ -126,9 +126,6 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	ln -s JavaScriptCore-3.0.typelib \
 		debian/tmp-3.0/usr/lib/$(DEB_HOST_MULTIARCH)/girepository-1.0/JSCore-3.0.typelib
 	mv debian/tmp-3.0/usr/bin/jsc-3 debian/tmp-3.0/usr/bin/jsc
-	install -d -m 755 debian/tmp-3.0/usr/share/doc/libwebkitgtk-3.0-dev/html
-	install -m 644 Documentation/webkitgtk/html/* \
-		debian/tmp-3.0/usr/share/doc/libwebkitgtk-3.0-dev/html/
 
 	rm -rf build-3.0
 endif
@@ -149,9 +146,6 @@ ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
 	$(MAKE) $(MAKEARGUMENTS) -C build-2.0
 
 	$(MAKE) -C build-2.0 install DESTDIR="$(CURDIR)"/debian/tmp-2.0
-	install -d -m 755 debian/tmp-2.0/usr/share/doc/libwebkitgtk-dev/html/
-	install -m 644 Documentation/webkitgtk/html/* \
-		debian/tmp-2.0/usr/share/doc/libwebkitgtk-dev/html/
 
 	rm -rf build-2.0
 endif
@@ -164,6 +158,7 @@ binary-indep: build
 	dh_testroot
 	dh_installdocs -i
 	dh_installchangelogs -i
+	dh_install -plibwebkitgtk-doc
 	dh_link -i
 	dh_compress -i
 	dh_fixperms -i
