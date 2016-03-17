@@ -12,6 +12,8 @@ DEB_BUILD_ARCH      ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
 DEB_HOST_ARCH_BITS  ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_BITS)
 DEB_HOST_MULTIARCH  ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
 
+DEBHELPER_VERSION = $(shell dpkg-query -W -f='$${source:Version}' debhelper)
+
 GTK_VERSIONS = 2.0 3.0
 
 CFLAGS += -Wall
@@ -195,14 +197,18 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 endif
 	dh_link -a
 ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
-	dh_strip -plibjavascriptcoregtk-1.0-0 --dbg-package=libjavascriptcoregtk-1.0-0-dbg
-	dh_strip -plibwebkitgtk-1.0-0 --dbg-package=libwebkitgtk-1.0-0-dbg
+	if dpkg --compare-versions $(DEBHELPER_VERSION) ge 9.20151219; then \
+		dh_strip -plibjavascriptcoregtk-1.0-0 --ddeb-migration='libjavascriptcoregtk-1.0-0-dbg (<< 2.4.10)' ; \
+		dh_strip -plibwebkitgtk-1.0-0 --ddeb-migration='libwebkitgtk-1.0-0-dbg (<< 2.4.10)' ; \
+	fi
 endif
 ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
-	dh_strip -plibjavascriptcoregtk-3.0-0 --dbg-package=libjavascriptcoregtk-3.0-0-dbg
-	dh_strip -plibjavascriptcoregtk-3.0-bin
-	dh_strip -plibwebkitgtk-3.0-0 --dbg-package=libwebkitgtk-3.0-0-dbg
+	if dpkg --compare-versions $(DEBHELPER_VERSION) ge 9.20151219; then \
+		dh_strip -plibjavascriptcoregtk-3.0-0 --ddeb-migration='libjavascriptcoregtk-3.0-0-dbg (<< 2.4.10)'; \
+		dh_strip -plibwebkitgtk-3.0-0 --ddeb-migration='libwebkitgtk-3.0-0-dbg (<< 2.4.10)' ; \
+	fi
 endif
+	dh_strip -a
 	dh_compress -a
 	dh_fixperms -a
 ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
