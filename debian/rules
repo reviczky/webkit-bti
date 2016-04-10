@@ -55,7 +55,7 @@ ifeq (,$(filter $(DEB_BUILD_ARCH),i386 amd64 hurd-i386 kfreebsd-i386 kfreebsd-am
 endif
 
 # Disabling GLX on ARM will make it use EGL, which works better.
-ifneq (,$(filter $(DEB_BUILD_ARCH),armel armhf))
+ifneq (,$(filter $(DEB_BUILD_ARCH),armel armhf arm64))
        COMMON_CONFIGURE_ARGUMENTS += --enable-glx=no
 endif
 
