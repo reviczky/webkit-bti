@@ -1,4 +1,4 @@
-webkitgtk (2.4.11-1) UNRELEASED; urgency=medium
+webkitgtk (2.4.11-1) unstable; urgency=medium
 
   * New upstream release.
   * debian/patches/fix-arm64-build.patch:
