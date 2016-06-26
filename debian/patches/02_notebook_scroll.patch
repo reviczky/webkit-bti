@@ -1,3 +1,6 @@
+From: Josselin Mouette <joss@debian.org>
+Subject: Add support for switching tabs with alt+scroll
+Bug-Debian: https://bugs.debian.org/640980
 Index: webkitgtk/Source/WebKit/gtk/webkit/webkitwebview.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebKit/gtk/webkit/webkitwebview.cpp
