@@ -4,6 +4,8 @@ webkitgtk (2.4.11-2) UNRELEASED; urgency=medium
     + Fix FTBFS with GCC 6 (Closes: #828198).
   * debian/patches/02_notebook_scroll.patch:
     + Add missing tags to this patch.
+  * debian/control:
+    + Bump Standards-Version to 3.9.8; no changes needed.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 26 Jun 2016 19:25:23 +0300
 
