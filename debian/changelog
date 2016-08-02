@@ -1,3 +1,11 @@
+webkitgtk (2.4.11-3) UNRELEASED; urgency=medium
+
+  * debian/control:
+    - Bump breaks/replaces for libwebkitgtk-doc split since Ubuntu
+      packaged 2.4.11 before taking the split (Closes: #833308)
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Tue, 02 Aug 2016 14:39:17 -0400
+
 webkitgtk (2.4.11-2) unstable; urgency=medium
 
   * debian/patches/fix-ftbfs-gcc6.patch:

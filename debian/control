@@ -100,8 +100,8 @@ Recommends: gstreamer1.0-plugins-base (>= 1.0.3),
             gstreamer1.0-plugins-good,
             geoclue-2.0,
             ${gst:Recommends}
-Breaks: midori (<< 0.4.1-2), claws-mail-fancy-plugin (<< 3.7.10-3), libwebkitgtk-1.0-common (<< 2.4.10)
-Replaces: libwebkitgtk-1.0-common (<< 2.4.10)
+Breaks: midori (<< 0.4.1-2), claws-mail-fancy-plugin (<< 3.7.10-3), libwebkitgtk-1.0-common (<< 2.4.11-2~)
+Replaces: libwebkitgtk-1.0-common (<< 2.4.11-2~)
 Description: Web content engine library for GTK+
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
@@ -124,8 +124,8 @@ Depends: libwebkitgtk-1.0-0 (= ${binary:Version}),
          libsoup2.4-dev (>= 2.42),
          libjavascriptcoregtk-1.0-dev (= ${binary:Version}),
          ${misc:Depends}
-Breaks: libwebkit-dev (<< 2.4.10)
-Replaces: libwebkit-dev (<< 2.4.10)
+Breaks: libwebkit-dev (<< 2.4.11-2~)
+Replaces: libwebkit-dev (<< 2.4.11-2~)
 Description: Web content engine library for GTK+ - development files
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
@@ -222,8 +222,8 @@ Recommends: gstreamer1.0-plugins-base,
             gstreamer1.0-plugins-good,
             geoclue-2.0,
             ${gst:Recommends}
-Breaks: libwebkitgtk-3.0-common (<< 2.4.10)
-Replaces: libwebkitgtk-3.0-common (<< 2.4.10)
+Breaks: libwebkitgtk-3.0-common (<< 2.4.11-2~)
+Replaces: libwebkitgtk-3.0-common (<< 2.4.11-2~)
 Description: Web content engine library for GTK+
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
@@ -247,8 +247,8 @@ Depends: libwebkitgtk-3.0-0 (= ${binary:Version}),
          libsoup2.4-dev (>= 2.40),
          libjavascriptcoregtk-3.0-dev (= ${binary:Version}),
          ${misc:Depends}
-Breaks: libwebkitgtk-common-dev (<< 2.4.10)
-Replaces: libwebkitgtk-common-dev (<< 2.4.10)
+Breaks: libwebkitgtk-common-dev (<< 2.4.11-2~)
+Replaces: libwebkitgtk-common-dev (<< 2.4.11-2~)
 Description: Web content engine library for GTK+ - development files
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
@@ -267,8 +267,8 @@ Priority: extra
 Architecture: all
 Depends: ${misc:Depends}
 Suggests: devhelp
-Breaks: libwebkitgtk-dev (<< 2.4.10), libwebkitgtk-3.0-dev (<< 2.4.10)
-Replaces: libwebkitgtk-dev (<< 2.4.10), libwebkitgtk-3.0-dev (<< 2.4.10)
+Breaks: libwebkitgtk-dev (<< 2.4.11-2~), libwebkitgtk-3.0-dev (<< 2.4.11-2~)
+Replaces: libwebkitgtk-dev (<< 2.4.11-2~), libwebkitgtk-3.0-dev (<< 2.4.11-2~)
 Description: Web content engine library for GTK+ - documentation
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
