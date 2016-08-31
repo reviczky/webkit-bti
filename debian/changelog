@@ -1,3 +1,9 @@
+webkit2gtk (2.12.4-2~bpo8+1) jessie-backports; urgency=medium
+
+  * Rebuild for jessie-backports.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 31 Aug 2016 10:02:21 +0300
+
 webkit2gtk (2.12.4-2) unstable; urgency=high
 
   * debian/rules:
