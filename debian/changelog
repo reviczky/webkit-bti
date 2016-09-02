@@ -1,10 +1,17 @@
 webkitgtk (2.4.11-3) UNRELEASED; urgency=medium
 
+  [ Jeremy Bicha ]
   * debian/control:
     - Bump breaks/replaces for libwebkitgtk-doc split since Ubuntu
       packaged 2.4.11 before taking the split (Closes: #833308)
 
- -- Jeremy Bicha <jbicha@ubuntu.com>  Tue, 02 Aug 2016 14:39:17 -0400
+  [ Alberto Garcia ]
+  * debian/rules:
+    - Build with -fno-delete-null-pointer-checks. This prevents crashes
+      with GCC 6.1.
+      See https://bugzilla.redhat.com/show_bug.cgi?id=1320240.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 02 Sep 2016 11:18:33 +0300
 
 webkitgtk (2.4.11-2) unstable; urgency=medium
 
