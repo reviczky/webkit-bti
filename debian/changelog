@@ -1,4 +1,4 @@
-webkitgtk (2.4.11-3) UNRELEASED; urgency=medium
+webkitgtk (2.4.11-3) unstable; urgency=medium
 
   [ Jeremy Bicha ]
   * debian/control:
