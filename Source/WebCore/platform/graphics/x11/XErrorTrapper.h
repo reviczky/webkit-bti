@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Google Inc. All rights reserved.
+ * Copyright (C) 2016 Igalia S.L
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,49 +23,32 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef TemporaryChange_h
-#define TemporaryChange_h
+#pragma once
 
-#include <wtf/Noncopyable.h>
+#if PLATFORM(X11)
+#include <X11/Xlib.h>
+#include <wtf/Vector.h>
 
-namespace WTF {
+namespace WebCore {
 
-// TemporaryChange<> is useful for setting a variable to a new value only within a
-// particular scope. An TemporaryChange<> object changes a variable to its original
-// value upon destruction, making it an alternative to writing "var = false;"
-// or "var = oldVal;" at all of a block's exit points.
-//
-// This should be obvious, but note that an TemporaryChange<> instance should have a
-// shorter lifetime than its scopedVariable, to prevent invalid memory writes
-// when the TemporaryChange<> object is destroyed.
-
-template<typename T>
-class TemporaryChange {
-    WTF_MAKE_NONCOPYABLE(TemporaryChange);
+class XErrorTrapper {
 public:
-    TemporaryChange(T& scopedVariable)
-        : m_scopedVariable(scopedVariable)
-        , m_originalValue(scopedVariable)
-    {
-    }
-    TemporaryChange(T& scopedVariable, T newValue)
-        : TemporaryChange(scopedVariable)
-    {
-        m_scopedVariable = newValue;
-    }
+    enum class Policy { Ignore, Warn, Crash };
+    XErrorTrapper(Display*, Policy = Policy::Ignore, Vector<unsigned char>&& expectedErrors = { });
+    ~XErrorTrapper();
 
-    ~TemporaryChange()
-    {
-        m_scopedVariable = m_originalValue;
-    }
+    unsigned char errorCode() const;
 
 private:
-    T& m_scopedVariable;
-    T m_originalValue;
+    void errorEvent(XErrorEvent*);
+
+    Display* m_display { nullptr };
+    Policy m_policy { Policy::Ignore };
+    Vector<unsigned char> m_expectedErrors;
+    XErrorHandler m_previousErrorHandler { nullptr };
+    unsigned char m_errorCode { 0 };
 };
 
-}
+} // namespace WebCore
 
-using WTF::TemporaryChange;
-
-#endif
+#endif // PLATFORM(X11)
