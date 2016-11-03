@@ -1,5 +1,6 @@
-webkit2gtk (2.14.1-2) UNRELEASED; urgency=medium
+webkit2gtk (2.14.2-1) UNRELEASED; urgency=medium
 
+  * New upstream release (Closes: #839379, #839397).
   * debian/patches/fix-ftbfs-armel.patch:
     + The previous update broke this patch, fix it now.
   * debian/rules:
