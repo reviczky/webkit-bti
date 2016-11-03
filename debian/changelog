@@ -9,6 +9,8 @@ webkit2gtk (2.14.2-1) UNRELEASED; urgency=medium
       once we have libxslt >= 1.1.29.
     + Enable gold again in mips and mipsel now that #834147 is fixed and
       we have binutils 2.27-9.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 13 Oct 2016 11:12:18 +0300
 

@@ -854,6 +854,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (optional)webkit_dom_html_form_element_check_validity@Base 2.5.3
  webkit_dom_html_form_element_get_accept_charset@Base 2.5.3
  webkit_dom_html_form_element_get_action@Base 2.5.3
+ (optional)webkit_dom_html_input_element_get_auto_filled@Base 2.14.2
  (optional)webkit_dom_html_form_element_get_autocapitalize@Base 2.5.3
  (optional)webkit_dom_html_form_element_get_autocomplete@Base 2.5.3
  (optional)webkit_dom_html_form_element_get_autocorrect@Base 2.5.3
@@ -870,6 +871,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_dom_html_form_element_reset@Base 2.5.3
  webkit_dom_html_form_element_set_accept_charset@Base 2.5.3
  webkit_dom_html_form_element_set_action@Base 2.5.3
+ (optional)webkit_dom_html_input_element_set_auto_filled@Base 2.14.2
  (optional)webkit_dom_html_form_element_set_autocapitalize@Base 2.5.3
  (optional)webkit_dom_html_form_element_set_autocomplete@Base 2.5.3
  (optional)webkit_dom_html_form_element_set_autocorrect@Base 2.5.3
@@ -1056,6 +1058,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_dom_html_input_element_set_default_value@Base 2.5.3
  (optional)webkit_dom_html_input_element_set_dir_name@Base 2.5.3
  webkit_dom_html_input_element_set_disabled@Base 2.5.3
+ (optional)webkit_dom_html_input_element_set_editing_value@Base 2.14.2
  webkit_dom_html_input_element_set_files@Base 2.5.3
  (optional)webkit_dom_html_input_element_set_form_action@Base 2.5.3
  (optional)webkit_dom_html_input_element_set_form_enctype@Base 2.5.3
