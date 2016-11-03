@@ -26,7 +26,7 @@
 #include "config.h"
 #include "WaylandCompositor.h"
 
-#if PLATFORM(WAYLAND)
+#if PLATFORM(WAYLAND) && USE(EGL)
 
 #include "WebKit2WaylandServerProtocol.h"
 #include <EGL/egl.h>
@@ -218,14 +218,14 @@ bool WaylandCompositor::Surface::prepareTextureForPainting(unsigned& texture, In
     return true;
 }
 
-bool WaylandCompositor::Surface::commit()
+void WaylandCompositor::Surface::commit()
 {
     EGLDisplay eglDisplay = PlatformDisplay::sharedDisplay().eglDisplay();
     if (m_image != EGL_NO_IMAGE_KHR)
         eglDestroyImage(eglDisplay, m_image);
     m_image = m_pendingBuffer->createImage();
     if (m_image == EGL_NO_IMAGE_KHR)
-        return false;
+        return;
 
     makePendingBufferCurrent();
     if (m_webPage)
@@ -240,8 +240,6 @@ bool WaylandCompositor::Surface::commit()
         wl_callback_send_done(resource, 0);
         wl_resource_destroy(resource);
     }
-
-    return true;
 }
 
 static const struct wl_surface_interface surfaceInterface = {
@@ -288,9 +286,7 @@ static const struct wl_surface_interface surfaceInterface = {
         auto* surface = static_cast<WaylandCompositor::Surface*>(wl_resource_get_user_data(resource));
         if (!surface)
             return;
-
-        if (surface->commit())
-            wl_display_flush_clients(wl_client_get_display(client));
+        surface->commit();
     },
     // setBufferTransformCallback
     [](struct wl_client*, struct wl_resource*, int32_t) { },
@@ -339,7 +335,7 @@ bool WaylandCompositor::initializeEGL()
         eglDestroyImage = reinterpret_cast<PFNEGLDESTROYIMAGEKHRPROC>(eglGetProcAddress("eglDestroyImage"));
     } else {
         const char* extensions = eglQueryString(PlatformDisplay::sharedDisplay().eglDisplay(), EGL_EXTENSIONS);
-        if (strstr(extensions, "EGL_KHR_image_base")) {
+        if (GLContext::isExtensionSupported(extensions, "EGL_KHR_image_base")) {
             eglCreateImage = reinterpret_cast<PFNEGLCREATEIMAGEKHRPROC>(eglGetProcAddress("eglCreateImageKHR"));
             eglDestroyImage = reinterpret_cast<PFNEGLDESTROYIMAGEKHRPROC>(eglGetProcAddress("eglDestroyImageKHR"));
         }
@@ -520,4 +516,4 @@ void WaylandCompositor::unregisterWebPage(WebPageProxy& webPage)
 
 } // namespace WebKit
 
-#endif // PLATFORM(WAYLAND)
+#endif // PLATFORM(WAYLAND) && USE(EGL)

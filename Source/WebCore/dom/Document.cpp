@@ -485,9 +485,6 @@ Document::Document(Frame* frame, const URL& url, unsigned documentClasses, unsig
     , m_xmlStandalone(StandaloneUnspecified)
     , m_hasXMLDeclaration(false)
     , m_designMode(inherit)
-#if !ASSERT_DISABLED
-    , m_inInvalidateNodeListAndCollectionCaches(false)
-#endif
 #if ENABLE(DASHBOARD_SUPPORT)
     , m_hasAnnotatedRegions(false)
     , m_annotatedRegionsDirty(false)
@@ -1924,6 +1921,8 @@ void Document::recalcStyle(Style::Change change)
         Style::TreeResolver resolver(*this);
         auto styleUpdate = resolver.resolve(change);
 
+        m_lastStyleUpdateSizeForTesting = styleUpdate ? styleUpdate->size() : 0;
+
         clearNeedsStyleRecalc();
         clearChildNeedsStyleRecalc();
         unscheduleStyleRecalc();
@@ -2428,6 +2427,11 @@ void Document::removeAllEventListeners()
 #endif
     for (Node* node = firstChild(); node; node = NodeTraversal::next(*node))
         node->removeAllEventListeners();
+
+#if ENABLE(TOUCH_EVENTS)
+    m_touchEventTargets = nullptr;
+#endif
+    m_wheelEventTargets = nullptr;
 }
 
 void Document::suspendDeviceMotionAndOrientationUpdates()
@@ -4008,9 +4012,7 @@ void Document::unregisterNodeListForInvalidation(LiveNodeList& list)
         return;
 
     list.setRegisteredForInvalidationAtDocument(false);
-    ASSERT(m_inInvalidateNodeListAndCollectionCaches
-        ? m_listsInvalidatedAtDocument.isEmpty()
-        : m_listsInvalidatedAtDocument.contains(&list));
+    ASSERT(m_listsInvalidatedAtDocument.contains(&list));
     m_listsInvalidatedAtDocument.remove(&list);
 }
 
