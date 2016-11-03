@@ -1,4 +1,4 @@
-webkit2gtk (2.14.2-1) UNRELEASED; urgency=medium
+webkit2gtk (2.14.2-1) unstable; urgency=medium
 
   * New upstream release (Closes: #839379, #839397).
   * debian/patches/fix-ftbfs-armel.patch:
@@ -12,7 +12,7 @@ webkit2gtk (2.14.2-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 13 Oct 2016 11:12:18 +0300
+ -- Alberto Garcia <berto@igalia.com>  Thu, 03 Nov 2016 11:29:40 +0200
 
 webkit2gtk (2.14.1-1) unstable; urgency=medium
 
