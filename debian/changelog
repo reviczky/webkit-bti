@@ -1,3 +1,21 @@
+webkit2gtk (2.14.2-1~bpo8+1) jessie-backports; urgency=medium
+
+  * Rebuild for jessie-backports.
+  * Security advisory announcement (WSA-2016-0006, 04 November 2016):
+    - WebKitGTK+ 2.12.0 contains fixes for CVE-2016-4611,
+      CVE-2016-4729, CVE-2016-4730 and CVE-2016-4731.
+    - WebKitGTK+ 2.12.1 contains fixes for CVE-2016-4758.
+    - WebKitGTK+ 2.12.4 contains fixes for CVE-2016-4766.
+    - WebKitGTK+ 2.14.0 contains fixes for CVE-2016-4613,
+      CVE-2016-4657, CVE-2016-4666, CVE-2016-4707, CVE-2016-4728,
+      CVE-2016-4733, CVE-2016-4734, CVE-2016-4735, CVE-2016-4759,
+      CVE-2016-4760, CVE-2016-4761, CVE-2016-4762, CVE-2016-4764,
+      CVE-2016-4765, CVE-2016-4767, CVE-2016-4768, CVE-2016-4769 and
+      CVE-2016-7578.
+    - See https://webkitgtk.org/security/WSA-2016-0006.html for details.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 10 Nov 2016 10:37:53 +0200
+
 webkit2gtk (2.14.2-1) unstable; urgency=medium
 
   * New upstream release (Closes: #839379, #839397).
