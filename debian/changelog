@@ -1,3 +1,13 @@
+webkit2gtk (2.14.2-2) UNRELEASED; urgency=medium
+
+  * Verify GPG signature of the upstream tarball:
+    + debian/upstream/signing-key.asc:
+      - Add key file.
+    + debian/watch:
+      - Add pgpsigurlmangle option.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 17 Jan 2017 22:29:06 +0200
+
 webkit2gtk (2.14.2-1) unstable; urgency=medium
 
   * New upstream release (Closes: #839379, #839397).
