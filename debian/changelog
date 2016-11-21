@@ -5,6 +5,8 @@ webkit2gtk (2.14.2-2) UNRELEASED; urgency=medium
       - Add key file.
     + debian/watch:
       - Add pgpsigurlmangle option.
+  * debian/rules:
+    + Use the NEWS file as the upstream changelog.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 17 Jan 2017 22:29:06 +0200
 
