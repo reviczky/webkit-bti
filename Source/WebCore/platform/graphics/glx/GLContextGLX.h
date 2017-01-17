@@ -40,8 +40,6 @@ public:
 
     virtual ~GLContextGLX();
 
-    void clear();
-
 private:
     bool makeContextCurrent() override;
     void swapBuffers() override;
