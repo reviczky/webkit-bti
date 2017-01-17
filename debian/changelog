@@ -1,5 +1,17 @@
-webkit2gtk (2.14.2-2) UNRELEASED; urgency=medium
+webkit2gtk (2.14.3-1) UNRELEASED; urgency=high
 
+  * New upstream release.
+    + The WebKitGTK+ security advisory WSA-2017-0001 published along with
+      this release lists the following security fixes in the latest
+      versions of WebKitGTK+:
+      - CVE-2016-4743, CVE-2016-7587, CVE-2016-7598 (fixed in 2.14.0).
+      - CVE-2016-4692, CVE-2016-7610 (fixed in 2.14.1).
+      - CVE-2016-7611, CVE-2016-7640, CVE-2016-7642, CVE-2016-7646,
+        CVE-2016-7648, CVE-2016-7649 (fixed in 2.14.2)
+      - CVE-2016-7586, CVE-2016-7589, CVE-2016-7592, CVE-2016-7599,
+        CVE-2016-7623, CVE-2016-7632, CVE-2016-7635, CVE-2016-7639,
+        CVE-2016-7645, CVE-2016-7641, CVE-2016-7652, CVE-2016-7654,
+        CVE-2016-7656 (fixed in 2.14.3)
   * Verify GPG signature of the upstream tarball:
     + debian/upstream/signing-key.asc:
       - Add key file.
