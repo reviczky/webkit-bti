@@ -1646,13 +1646,14 @@ void Document::setTitle(const String& title)
     } else if (!isHTMLDocument() && !isXHTMLDocument() && !isSVGDocument())
         m_titleElement = nullptr;
 
-    // The DOM API has no method of specifying direction, so assume LTR.
-    updateTitle(StringWithDirection(title, LTR));
-
     if (is<HTMLTitleElement>(m_titleElement.get()))
         downcast<HTMLTitleElement>(*m_titleElement).setTextContent(title, ASSERT_NO_EXCEPTION);
     else if (is<SVGTitleElement>(m_titleElement.get()))
         downcast<SVGTitleElement>(*m_titleElement).setTextContent(title, ASSERT_NO_EXCEPTION);
+    else {
+        // The DOM API has no method of specifying direction, so assume LTR.
+        updateTitle(StringWithDirection(title, LTR));
+    }
 }
 
 void Document::updateTitleElement(Element* newTitleElement)
@@ -1820,6 +1821,8 @@ void Document::scheduleForcedStyleRecalc()
 
 void Document::scheduleStyleRecalc()
 {
+    ASSERT(!m_renderView || !m_renderView->inHitTesting());
+
     if (m_styleRecalcTimer.isActive() || inPageCache())
         return;
 
