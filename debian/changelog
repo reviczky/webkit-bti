@@ -1,4 +1,4 @@
-webkit2gtk (2.14.3-1) UNRELEASED; urgency=high
+webkit2gtk (2.14.3-1) unstable; urgency=high
 
   * New upstream release.
     + The WebKitGTK+ security advisory WSA-2017-0001 published along with
@@ -20,7 +20,7 @@ webkit2gtk (2.14.3-1) UNRELEASED; urgency=high
   * debian/rules:
     + Use the NEWS file as the upstream changelog.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 17 Jan 2017 22:29:06 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 18 Jan 2017 11:28:41 +0200
 
 webkit2gtk (2.14.2-1) unstable; urgency=medium
 
