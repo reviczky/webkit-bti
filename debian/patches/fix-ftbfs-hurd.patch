@@ -1,0 +1,18 @@
+From: Alberto Garcia <berto@igalia.com>
+Subject: Define PATH_MAX if it's not already defined
+Forwarded: no
+Index: webkitgtk/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
++++ webkitgtk/Source/WebCore/platform/text/hyphen/HyphenationLibHyphen.cpp
+@@ -45,6 +45,10 @@
+ #include <wtf/glib/GUniquePtr.h>
+ #endif
+ 
++#if !defined(PATH_MAX)
++#define PATH_MAX 4096
++#endif
++
+ namespace WebCore {
+ 
+ static const char* const gDictionaryDirectories[] = {

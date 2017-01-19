@@ -1,3 +1,10 @@
+webkit2gtk (2.14.3-2) UNRELEASED; urgency=medium
+
+  * debian/patches/fix-ftbfs-hurd.patch:
+    + Fix FTBFS in Hurd.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 19 Jan 2017 12:54:54 +0200
+
 webkit2gtk (2.14.3-1) unstable; urgency=high
 
   * New upstream release.
