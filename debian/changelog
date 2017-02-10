@@ -1,4 +1,4 @@
-webkit2gtk (2.14.4-1) UNRELEASED; urgency=medium
+webkit2gtk (2.14.4-1) unstable; urgency=high
 
   * New upstream release.
     + This fixes CVE-2017-2365, CVE-2017-2366, CVE-2017-2373,
@@ -8,7 +8,7 @@ webkit2gtk (2.14.4-1) UNRELEASED; urgency=medium
   * debian/patches/fix-ftbfs-hurd.patch:
     + Fix FTBFS in Hurd.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 19 Jan 2017 12:54:54 +0200
+ -- Alberto Garcia <berto@igalia.com>  Fri, 10 Feb 2017 14:17:37 +0200
 
 webkit2gtk (2.14.3-1) unstable; urgency=high
 
