@@ -2,6 +2,9 @@ webkit2gtk (2.14.5-2) UNRELEASED; urgency=medium
 
   * debian/patches/fix-ftbfs-x32.patch:
     + Fix FTBFS in x32 (Closes: #856498).
+  * debian/libwebkit2gtk-4.0-doc.links:
+    + Remove webkit2gtk-4.0.devhelp2.gz -> webkit2gtk.devhelp2.gz symlink
+      as it is now obsolete (see upstream bug #139369) (Closes: #857412)
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 03 Mar 2017 12:00:10 +0200
 
