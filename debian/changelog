@@ -1,3 +1,11 @@
+webkit2gtk (2.14.5-3) UNRELEASED; urgency=medium
+
+  * debian/control:
+    + Downgrade libwebkit2gtk-4.0-37-gtk2 from Recommends to Suggests,
+      since most apps that depend on webkit2gtk don't need this.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 04 Apr 2017 14:51:07 +0300
+
 webkit2gtk (2.14.5-2) unstable; urgency=medium
 
   * debian/patches/fix-ftbfs-x32.patch:
