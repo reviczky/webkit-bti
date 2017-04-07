@@ -1,5 +1,12 @@
-webkit2gtk (2.14.5-3) UNRELEASED; urgency=medium
+webkit2gtk (2.14.6-1) UNRELEASED; urgency=high
 
+  * New upstream release.
+    + This fixes CVE-2016-9643, CVE-2017-2364, CVE-2017-2367,
+      CVE-2017-2377, CVE-2017-2392, CVE-2017-2394, CVE-2017-2415,
+      CVE-2017-2419, CVE-2017-2442, CVE-2017-2446, CVE-2017-2454,
+      CVE-2017-2459, CVE-2017-2460, CVE-2017-2465, CVE-2017-2466,
+      CVE-2017-2468, CVE-2017-2470, CVE-2017-2471, CVE-2017-2475,
+      CVE-2017-2476, CVE-2017-2481.
   * debian/control:
     + Downgrade libwebkit2gtk-4.0-37-gtk2 from Recommends to Suggests,
       since most apps that depend on webkit2gtk don't need this.
