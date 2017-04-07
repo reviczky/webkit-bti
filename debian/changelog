@@ -1,4 +1,4 @@
-webkit2gtk (2.14.6-1) UNRELEASED; urgency=high
+webkit2gtk (2.14.6-1) unstable; urgency=high
 
   * New upstream release.
     + This fixes CVE-2016-9643, CVE-2017-2364, CVE-2017-2367,
@@ -11,7 +11,7 @@ webkit2gtk (2.14.6-1) UNRELEASED; urgency=high
     + Downgrade libwebkit2gtk-4.0-37-gtk2 from Recommends to Suggests,
       since most apps that depend on webkit2gtk don't need this.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 04 Apr 2017 14:51:07 +0300
+ -- Alberto Garcia <berto@igalia.com>  Fri, 07 Apr 2017 13:56:45 +0300
 
 webkit2gtk (2.14.5-2) unstable; urgency=medium
 
