@@ -1067,6 +1067,8 @@ RefPtr<Node> Document::adoptNode(Node& source, ExceptionCode& ec)
             if (ec)
                 return nullptr;
         }
+        ASSERT_WITH_SECURITY_IMPLICATION(!source.inDocument());
+        ASSERT_WITH_SECURITY_IMPLICATION(!source.parentNode());
     }
 
     adoptIfNeeded(&source);
@@ -4268,7 +4270,7 @@ EventListener* Document::getWindowAttributeEventListener(const AtomicString& eve
 
 void Document::dispatchWindowEvent(Event& event, EventTarget* target)
 {
-    ASSERT_WITH_SECURITY_IMPLICATION(!NoEventDispatchAssertion::isEventDispatchForbidden());
+    ASSERT_WITH_SECURITY_IMPLICATION(NoEventDispatchAssertion::isEventAllowedInMainThread());
     if (!m_domWindow)
         return;
     m_domWindow->dispatchEvent(event, target);
@@ -4276,7 +4278,7 @@ void Document::dispatchWindowEvent(Event& event, EventTarget* target)
 
 void Document::dispatchWindowLoadEvent()
 {
-    ASSERT_WITH_SECURITY_IMPLICATION(!NoEventDispatchAssertion::isEventDispatchForbidden());
+    ASSERT_WITH_SECURITY_IMPLICATION(NoEventDispatchAssertion::isEventAllowedInMainThread());
     if (!m_domWindow)
         return;
     m_domWindow->dispatchLoadEvent();
@@ -5416,19 +5418,19 @@ void Document::initSecurityContext()
 
 void Document::initContentSecurityPolicy()
 {
-    if (!m_frame->tree().parent())
+    Frame* parentFrame = m_frame->tree().parent();
+    if (parentFrame)
+        contentSecurityPolicy()->copyUpgradeInsecureRequestStateFrom(*parentFrame->document()->contentSecurityPolicy());
+
+    if (!shouldInheritSecurityOriginFromOwner(m_url) && !isPluginDocument())
         return;
 
-    if (!shouldInheritSecurityOriginFromOwner(m_url) && !isPluginDocument()) {
-        // Per <http://www.w3.org/TR/upgrade-insecure-requests/>, we need to retain an ongoing set of upgraded
-        // requests in new navigation contexts. Although this information is present when we construct the
-        // Document object, it is discard in the subsequent 'clear' statements below. So, we must capture it
-        ASSERT(m_frame->tree().parent()->document());
-        contentSecurityPolicy()->copyUpgradeInsecureRequestStateFrom(*m_frame->tree().parent()->document()->contentSecurityPolicy());
+    Frame* ownerFrame = parentFrame;
+    if (!ownerFrame)
+        ownerFrame = m_frame->loader().opener();
+    if (!ownerFrame)
         return;
-    }
-    
-    contentSecurityPolicy()->copyStateFrom(m_frame->tree().parent()->document()->contentSecurityPolicy());
+    contentSecurityPolicy()->copyStateFrom(ownerFrame->document()->contentSecurityPolicy()); // Does not copy Upgrade Insecure Requests state.
 }
 
 bool Document::isContextThread() const

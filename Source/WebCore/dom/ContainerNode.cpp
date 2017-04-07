@@ -71,6 +71,7 @@ ChildNodesLazySnapshot* ChildNodesLazySnapshot::latestSnapshot;
 
 #ifndef NDEBUG
 unsigned NoEventDispatchAssertion::s_count = 0;
+NoEventDispatchAssertion::EventAllowedScope* NoEventDispatchAssertion::EventAllowedScope::s_currentScope = nullptr;
 #endif
 
 static void collectChildrenAndRemoveFromOldParent(Node& node, NodeVector& nodes, ExceptionCode& ec)
@@ -127,21 +128,27 @@ void ContainerNode::takeAllChildrenFrom(ContainerNode* oldParent)
             mutation.willRemoveChild(child);
     }
 
-    // FIXME: We need to do notifyMutationObserversNodeWillDetach() for each child,
-    // probably inside removeDetachedChildrenInContainer.
+    disconnectSubframesIfNeeded(*oldParent, DescendantsOnly);
+    {
+        NoEventDispatchAssertion assertNoEventDispatch;
 
-    oldParent->removeDetachedChildren();
+        oldParent->document().nodeChildrenWillBeRemoved(*oldParent);
 
+        WidgetHierarchyUpdatesSuspensionScope suspendWidgetHierarchyUpdates;
+        while (RefPtr<Node> child = oldParent->m_firstChild) {
+            oldParent->removeBetween(nullptr, child->nextSibling(), *child);
+            notifyChildNodeRemoved(*oldParent, *child);
+        }
+        ChildChange change = { AllChildrenRemoved, nullptr, nullptr, ChildChangeSourceParser };
+        childrenChanged(change);
+    }
+
+    // FIXME: assert that we don't dispatch events here since this container node is still disconnected.
     for (auto& child : children) {
-        destroyRenderTreeIfNeeded(child);
-
-        // FIXME: We need a no mutation event version of adoptNode.
-        RefPtr<Node> adoptedChild = document().adoptNode(child, ASSERT_NO_EXCEPTION);
-        parserAppendChild(*adoptedChild);
-        // FIXME: Together with adoptNode above, the tree scope might get updated recursively twice
-        // (if the document changed or oldParent was in a shadow tree, AND *this is in a shadow tree).
-        // Can we do better?
-        treeScope().adoptIfNeeded(adoptedChild.get());
+        RELEASE_ASSERT(!child->parentNode() && &child->treeScope() == &treeScope());
+        ASSERT(!ensurePreInsertionValidity(child, nullptr).hasException());
+        treeScope().adoptIfNeeded(child.ptr());
+        parserAppendChild(child);
     }
 }
 
@@ -282,9 +289,12 @@ bool ContainerNode::insertBefore(Node& newChild, Node* refChild, ExceptionCode& 
         if (child->parentNode())
             break;
 
-        treeScope().adoptIfNeeded(child.ptr());
+        {
+            NoEventDispatchAssertion assertNoEventDispatch;
 
-        insertBeforeCommon(next, child);
+            treeScope().adoptIfNeeded(child.ptr());
+            insertBeforeCommon(next, child);
+        }
 
         updateTreeAfterInsertion(child);
     }
@@ -320,6 +330,8 @@ void ContainerNode::insertBeforeCommon(Node& nextChild, Node& newChild)
 
 void ContainerNode::appendChildCommon(Node& child)
 {
+    NoEventDispatchAssertion assertNoEventDispatch;
+
     child.setParentNode(this);
 
     if (m_lastChild) {
@@ -339,7 +351,7 @@ void ContainerNode::notifyChildInserted(Node& child, ChildChangeSource source)
     notifyChildNodeInserted(*this, child, postInsertionNotificationTargets);
 
     ChildChange change;
-    change.type = child.isElementNode() ? ElementInserted : child.isTextNode() ? TextInserted : NonContentsChildChanged;
+    change.type = child.isElementNode() ? ElementInserted : child.isTextNode() ? TextInserted : NonContentsChildInserted;
     change.previousSiblingElement = ElementTraversal::previousSibling(child);
     change.nextSiblingElement = ElementTraversal::nextSibling(child);
     change.source = source;
@@ -352,10 +364,11 @@ void ContainerNode::notifyChildInserted(Node& child, ChildChangeSource source)
 
 void ContainerNode::notifyChildRemoved(Node& child, Node* previousSibling, Node* nextSibling, ChildChangeSource source)
 {
+    NoEventDispatchAssertion assertNoEventDispatch;
     notifyChildNodeRemoved(*this, child);
 
     ChildChange change;
-    change.type = is<Element>(child) ? ElementRemoved : is<Text>(child) ? TextRemoved : NonContentsChildChanged;
+    change.type = is<Element>(child) ? ElementRemoved : is<Text>(child) ? TextRemoved : NonContentsChildRemoved;
     change.previousSiblingElement = (!previousSibling || is<Element>(*previousSibling)) ? downcast<Element>(previousSibling) : ElementTraversal::previousSibling(*previousSibling);
     change.nextSiblingElement = (!nextSibling || is<Element>(*nextSibling)) ? downcast<Element>(nextSibling) : ElementTraversal::nextSibling(*nextSibling);
     change.source = source;
@@ -447,10 +460,9 @@ bool ContainerNode::replaceChild(Node& newChild, Node& oldChild, ExceptionCode& 
         if (child->parentNode())
             break;
 
-        treeScope().adoptIfNeeded(child.ptr());
-
         {
             NoEventDispatchAssertion assertNoEventDispatch;
+            treeScope().adoptIfNeeded(child.ptr());
             if (refChild)
                 insertBeforeCommon(*refChild, child.get());
             else
@@ -477,11 +489,6 @@ static void willRemoveChild(ContainerNode& container, Node& child)
 
     if (is<ContainerNode>(child))
         disconnectSubframesIfNeeded(downcast<ContainerNode>(child), RootAndDescendants);
-
-    if (child.parentNode() != &container)
-        return;
-
-    child.document().nodeWillBeRemoved(child); // e.g. mutation event listener can create a new range.
 }
 
 static void willRemoveChildren(ContainerNode& container)
@@ -499,9 +506,6 @@ static void willRemoveChildren(ContainerNode& container)
     }
 
     disconnectSubframesIfNeeded(container, DescendantsOnly);
-
-    container.document().nodeChildrenWillBeRemoved(container);
-
 }
 
 void ContainerNode::disconnectDescendantFrames()
@@ -529,7 +533,7 @@ bool ContainerNode::removeChild(Node& oldChild, ExceptionCode& ec)
 
     willRemoveChild(*this, child);
 
-    // Mutation events might have moved this child into a different parent.
+    // Mutation events in willRemoveChild might have moved this child into a different parent.
     if (child->parentNode() != this) {
         ec = NOT_FOUND_ERR;
         return false;
@@ -537,6 +541,9 @@ bool ContainerNode::removeChild(Node& oldChild, ExceptionCode& ec)
 
     {
         WidgetHierarchyUpdatesSuspensionScope suspendWidgetHierarchyUpdates;
+        NoEventDispatchAssertion assertNoEventDispatch;
+
+        document().nodeWillBeRemoved(child);
 
         Node* prev = child->previousSibling();
         Node* next = child->nextSibling();
@@ -585,20 +592,28 @@ void ContainerNode::removeBetween(Node* previousChild, Node* nextChild, Node& ol
 
 void ContainerNode::parserRemoveChild(Node& oldChild)
 {
-    ASSERT(oldChild.parentNode() == this);
-    ASSERT(!oldChild.isDocumentFragment());
+    disconnectSubframesIfNeeded(*this, DescendantsOnly);
+    if (oldChild.parentNode() != this)
+        return;
 
-    Node* prev = oldChild.previousSibling();
-    Node* next = oldChild.nextSibling();
+    {
+        NoEventDispatchAssertion assertNoEventDispatch;
 
-    oldChild.updateAncestorConnectedSubframeCountForRemoval();
+        document().nodeChildrenWillBeRemoved(*this);
 
-    ChildListMutationScope(*this).willRemoveChild(oldChild);
-    oldChild.notifyMutationObserversNodeWillDetach();
+        ASSERT(oldChild.parentNode() == this);
+        ASSERT(!oldChild.isDocumentFragment());
 
-    removeBetween(prev, next, oldChild);
+        Node* prev = oldChild.previousSibling();
+        Node* next = oldChild.nextSibling();
 
-    notifyChildRemoved(oldChild, prev, next, ChildChangeSourceParser);
+        ChildListMutationScope(*this).willRemoveChild(oldChild);
+        oldChild.notifyMutationObserversNodeWillDetach();
+
+        removeBetween(prev, next, oldChild);
+
+        notifyChildRemoved(oldChild, prev, next, ChildChangeSourceParser);
+    }
 }
 
 // this differs from other remove functions because it forcibly removes all the children,
@@ -617,12 +632,13 @@ void ContainerNode::removeChildren()
 
     {
         WidgetHierarchyUpdatesSuspensionScope suspendWidgetHierarchyUpdates;
-        {
-            NoEventDispatchAssertion assertNoEventDispatch;
-            while (RefPtr<Node> child = m_firstChild) {
-                removeBetween(0, child->nextSibling(), *child);
-                notifyChildNodeRemoved(*this, *child);
-            }
+        NoEventDispatchAssertion assertNoEventDispatch;
+
+        document().nodeChildrenWillBeRemoved(*this);
+
+        while (RefPtr<Node> child = m_firstChild) {
+            removeBetween(0, child->nextSibling(), *child);
+            notifyChildNodeRemoved(*this, *child);
         }
 
         ChildChange change = { AllChildrenRemoved, nullptr, nullptr, ChildChangeSourceAPI };
@@ -680,11 +696,10 @@ bool ContainerNode::appendChildWithoutPreInsertionValidityCheck(Node& newChild, 
         if (child->parentNode())
             break;
 
-        treeScope().adoptIfNeeded(child.ptr());
-
         // Append child to the end of the list
         {
             NoEventDispatchAssertion assertNoEventDispatch;
+            treeScope().adoptIfNeeded(child.ptr());
             appendChildCommon(child);
         }
 
@@ -701,12 +716,13 @@ void ContainerNode::parserAppendChild(Node& newChild)
     ASSERT(!newChild.isDocumentFragment());
     ASSERT(!hasTagName(HTMLNames::templateTag));
 
-    if (&document() != &newChild.document())
-        document().adoptNode(newChild, ASSERT_NO_EXCEPTION);
-
     {
         NoEventDispatchAssertion assertNoEventDispatch;
         // FIXME: This method should take a PassRefPtr.
+
+        if (&document() != &newChild.document())
+            document().adoptNode(newChild, ASSERT_NO_EXCEPTION);
+
         appendChildCommon(newChild);
         treeScope().adoptIfNeeded(&newChild);
     }
@@ -758,7 +774,7 @@ static void dispatchChildInsertionEvents(Node& child)
     if (child.isInShadowTree())
         return;
 
-    ASSERT_WITH_SECURITY_IMPLICATION(!NoEventDispatchAssertion::isEventDispatchForbidden());
+    ASSERT_WITH_SECURITY_IMPLICATION(NoEventDispatchAssertion::isEventDispatchAllowedInSubtree(child));
 
     RefPtr<Node> c = &child;
     Ref<Document> document(child.document());
@@ -780,7 +796,7 @@ static void dispatchChildRemovalEvents(Node& child)
         return;
     }
 
-    ASSERT_WITH_SECURITY_IMPLICATION(!NoEventDispatchAssertion::isEventDispatchForbidden());
+    ASSERT_WITH_SECURITY_IMPLICATION(NoEventDispatchAssertion::isEventDispatchAllowedInSubtree(child));
 
     willCreatePossiblyOrphanedTreeByRemoval(&child);
     InspectorInstrumentation::willRemoveDOMNode(child.document(), child);
