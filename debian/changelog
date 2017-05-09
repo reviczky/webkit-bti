@@ -5,6 +5,8 @@ webkit2gtk (2.16.2-1) UNRELEASED; urgency=medium
     + Refresh.
   * debian/patches/fix-ftbfs-x32.patch:
     + Remove, this one is now upstream.
+  * debian/copyright:
+    + Update copyright years and remove nonexistent files.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 09 May 2017 12:21:07 +0300
 
