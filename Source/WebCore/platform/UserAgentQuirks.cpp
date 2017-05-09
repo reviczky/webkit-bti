@@ -41,8 +41,9 @@ static bool isGoogle(const URL& url)
     // Our Google UA is *very* complicated to get right. Read
     // https://webkit.org/b/142074 carefully before changing. Test that Earth
     // view is available in Google Maps. Test Google Calendar. Test downloading
-    // the Hangouts browser plugin. Change platformVersionForUAString() to
-    // return "FreeBSD amd64" and test Maps and Calendar again.
+    // the Hangouts browser plugin. Test logging out and logging in to a Google
+    // account. Change platformVersionForUAString() to return "FreeBSD amd64"
+    // and test everything again.
     if (baseDomain.startsWith("google."))
         return true;
     if (baseDomain == "gstatic.com")
@@ -66,10 +67,6 @@ static bool urlRequiresChromeBrowser(const URL& url)
     if (baseDomain == "typekit.net" || baseDomain == "typekit.com")
         return true;
 
-    // Needed for YouTube 360 with WebKitGTK+ and WPE (requires ENABLE_MEDIA_SOURCE).
-    if (baseDomain == "youtube.com")
-        return true;
-
     // Slack completely blocks users with WebKitGTK+'s standard user agent.
     if (baseDomain == "slack.com")
         return true;
@@ -79,7 +76,7 @@ static bool urlRequiresChromeBrowser(const URL& url)
 
 static bool urlRequiresFirefoxBrowser(const URL& url)
 {
-    return isGoogle(url);
+    return isGoogle(url) && url.host() != "accounts.google.com";
 }
 
 static bool urlRequiresMacintoshPlatform(const URL& url)
