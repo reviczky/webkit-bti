@@ -757,9 +757,9 @@ public:
     void setContextDocument(Document& document) { m_contextDocument = document.createWeakPtr(); }
 
     // Helper functions for forwarding DOMWindow event related tasks to the DOMWindow if it exists.
-    void setWindowAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& value);
-    void setWindowAttributeEventListener(const AtomicString& eventType, RefPtr<EventListener>&&);
-    EventListener* getWindowAttributeEventListener(const AtomicString& eventType);
+    void setWindowAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& value, DOMWrapperWorld&);
+    void setWindowAttributeEventListener(const AtomicString& eventType, RefPtr<EventListener>&&, DOMWrapperWorld&);
+    EventListener* getWindowAttributeEventListener(const AtomicString& eventType, DOMWrapperWorld&);
     WEBCORE_EXPORT void dispatchWindowEvent(Event&, EventTarget* = nullptr);
     void dispatchWindowLoadEvent();
 
@@ -1154,6 +1154,9 @@ public:
     bool hasTouchEventHandlers() const { return false; }
 #endif
 
+    void setUserDidInteractWithPage(bool userDidInteractWithPage) { ASSERT(&topDocument() == this); m_userDidInteractWithPage = userDidInteractWithPage; }
+    bool userDidInteractWithPage() const { ASSERT(&topDocument() == this); return m_userDidInteractWithPage; }
+
     // Used for testing. Count handlers in the main document, and one per frame which contains handlers.
     WEBCORE_EXPORT unsigned wheelEventHandlerCount() const;
     WEBCORE_EXPORT unsigned touchEventHandlerCount() const;
@@ -1272,7 +1275,7 @@ public:
 #endif
 
     using ContainerNode::setAttributeEventListener;
-    void setAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& value);
+    void setAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& value, DOMWrapperWorld& isolatedWorld);
 
     DOMSelection* getSelection();
 
@@ -1735,6 +1738,7 @@ private:
     RefPtr<MediaSession> m_defaultMediaSession;
 #endif
     bool m_areDeviceMotionAndOrientationUpdatesSuspended { false };
+    bool m_userDidInteractWithPage { false };
 
 #if ENABLE(MEDIA_STREAM)
     bool m_hasHadActiveMediaStreamTrack { false };

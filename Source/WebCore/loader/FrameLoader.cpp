@@ -775,6 +775,13 @@ void FrameLoader::checkCompleted()
     if (m_isComplete)
         return;
 
+    // FIXME: It would be better if resource loads were kicked off after render tree update (or didn't complete synchronously).
+    //        https://bugs.webkit.org/show_bug.cgi?id=171729
+    if (m_frame.document()->inRenderTreeUpdate()) {
+        scheduleCheckCompleted();
+        return;
+    }
+
     // Are we still parsing?
     if (m_frame.document()->parsing())
         return;
@@ -1916,20 +1923,20 @@ void FrameLoader::transitionToCommitted(CachedPage* cachedPage)
     if (pdl != m_provisionalDocumentLoader)
         return;
 
-    // Nothing else can interupt this commit - set the Provisional->Committed transition in stone
     if (m_documentLoader)
         m_documentLoader->stopLoadingSubresources();
     if (m_documentLoader)
         m_documentLoader->stopLoadingPlugIns();
 
+    // Setting our document loader invokes the unload event handler of our child frames.
+    // Script can do anything. If the script initiates a new load, we need to abandon the
+    // current load or the two will stomp each other.
     setDocumentLoader(m_provisionalDocumentLoader.get());
+    if (pdl != m_provisionalDocumentLoader)
+        return;
     setProvisionalDocumentLoader(nullptr);
 
-    if (pdl != m_documentLoader) {
-        ASSERT(m_state == FrameStateComplete);
-        return;
-    }
-
+    // Nothing else can interupt this commit - set the Provisional->Committed transition in stone
     setState(FrameStateCommittedPage);
 
     // Handle adding the URL to the back/forward list.
@@ -2988,7 +2995,7 @@ void FrameLoader::dispatchUnloadEvents(UnloadEventPolicy unloadEventPolicy)
 
 static bool shouldAskForNavigationConfirmation(Document& document, const BeforeUnloadEvent& event)
 {
-    bool userDidInteractWithPage = document.topDocument().lastHandledUserGestureTimestamp() > 0;
+    bool userDidInteractWithPage = document.topDocument().userDidInteractWithPage();
     // Web pages can request we ask for confirmation before navigating by:
     // - Cancelling the BeforeUnloadEvent (modern way)
     // - Setting the returnValue attribute on the BeforeUnloadEvent to a non-empty string.

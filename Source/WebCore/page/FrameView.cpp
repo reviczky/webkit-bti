@@ -1284,6 +1284,8 @@ inline void FrameView::forceLayoutParentViewIfNeeded()
 
 void FrameView::layout(bool allowSubtree)
 {
+    ASSERT_WITH_SECURITY_IMPLICATION(!frame().document()->inRenderTreeUpdate());
+
     LOG(Layout, "FrameView %p (%dx%d) layout, main frameview %d, allowSubtree=%d", this, size().width(), size().height(), frame().isMainFrame(), allowSubtree);
     if (isInRenderTreeLayout()) {
         LOG(Layout, "  in layout, bailing");
@@ -3713,6 +3715,9 @@ void FrameView::autoSizeIfEnabled()
         setScrollbarModes(horizonalScrollbarMode, verticalScrollbarMode, true, true);
     }
 
+    // All the resizing above may have invalidated style (for example if viewport units are being used).
+    document->updateStyleIfNeeded();
+
     m_autoSizeContentSize = contentsSize();
 
     if (m_autoSizeFixedMinimumHeight) {
@@ -4402,7 +4407,7 @@ void FrameView::didPaintContents(GraphicsContext& context, const IntRect& dirtyR
     }
 }
 
-void FrameView::paintContents(GraphicsContext& context, const IntRect& dirtyRect)
+void FrameView::paintContents(GraphicsContext& context, const IntRect& dirtyRect, SecurityOriginPaintPolicy securityOriginPaintPolicy)
 {
 #ifndef NDEBUG
     bool fillWithRed;
@@ -4456,7 +4461,7 @@ void FrameView::paintContents(GraphicsContext& context, const IntRect& dirtyRect
     while (is<RenderInline>(renderer) && !downcast<RenderInline>(*renderer).firstLineBox())
         renderer = renderer->parent();
 
-    rootLayer->paint(context, dirtyRect, LayoutSize(), m_paintBehavior, renderer);
+    rootLayer->paint(context, dirtyRect, LayoutSize(), m_paintBehavior, renderer, 0, securityOriginPaintPolicy == SecurityOriginPaintPolicy::AnyOrigin ? RenderLayer::SecurityOriginPaintPolicy::AnyOrigin : RenderLayer::SecurityOriginPaintPolicy::AccessibleOriginOnly);
     if (rootLayer->containsDirtyOverlayScrollbars())
         rootLayer->paintOverlayScrollbars(context, dirtyRect, m_paintBehavior, renderer);
 
