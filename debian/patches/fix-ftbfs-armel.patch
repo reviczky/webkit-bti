@@ -13,7 +13,7 @@ Index: webkitgtk/Source/WTF/wtf/CMakeLists.txt
      AutomaticThread.cpp
      BitVector.cpp
      ClockType.cpp
-@@ -301,6 +300,16 @@ if (NOT USE_SYSTEM_MALLOC)
+@@ -304,6 +303,16 @@ if (NOT USE_SYSTEM_MALLOC)
      list(APPEND WTF_LIBRARIES bmalloc)
  endif ()
  

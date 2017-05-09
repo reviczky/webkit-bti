@@ -1,6 +1,10 @@
 webkit2gtk (2.16.2-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/patches/fix-ftbfs-armel.patch:
+    + Refresh.
+  * debian/patches/fix-ftbfs-x32.patch:
+    + Remove, this one is now upstream.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 09 May 2017 12:21:07 +0300
 
