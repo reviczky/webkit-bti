@@ -212,10 +212,6 @@ static bool urlRequiresChromeBrowser(const URL& url)
     if (baseDomain == "typekit.net" || baseDomain == "typekit.com")
         return true;
 
-    // Needed for YouTube 360 (requires ENABLE_MEDIA_SOURCE).
-    if (baseDomain == "youtube.com")
-        return true;
-
     // Slack completely blocks users with our standard user agent.
     if (baseDomain == "slack.com")
         return true;
@@ -225,7 +221,7 @@ static bool urlRequiresChromeBrowser(const URL& url)
 
 static bool urlRequiresFirefoxBrowser(const URL& url)
 {
-    return isGoogle(url);
+    return isGoogle(url) && url.host() != "accounts.google.com";
 }
 
 static bool urlRequiresMacintoshPlatform(const URL& url)
