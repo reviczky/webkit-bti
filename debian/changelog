@@ -1,3 +1,9 @@
+webkit2gtk (2.14.7-1~bpo8+1) jessie-backports; urgency=medium
+
+  * Rebuild for jessie-backports.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 24 May 2017 15:58:21 +0200
+
 webkit2gtk (2.14.7-1) unstable; urgency=medium
 
   * New upstream release.
