@@ -1,4 +1,4 @@
-webkit2gtk (2.16.3-1) UNRELEASED; urgency=medium
+webkit2gtk (2.16.3-1) experimental; urgency=medium
 
   * New upstream release
     + This fixes CVE-2017-2496, CVE-2017-2539 and CVE-2017-2510.
