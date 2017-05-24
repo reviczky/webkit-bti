@@ -238,6 +238,11 @@ static AvoidanceReasonFlags canUseForStyle(const RenderStyle& style, IncludeReas
     if (style.trailingWord() != TrailingWord::Auto)
         SET_REASON_AND_RETURN_IF_NEEDED(FlowHasNonAutoTrailingWord, reasons, includeReasons);
 #endif
+    if (style.hyphens() == HyphensAuto) {
+        auto textReasons = canUseForText(style.hyphenString(), style.fontCascade(), std::nullopt, false, includeReasons);
+        if (textReasons != NoReason)
+            SET_REASON_AND_RETURN_IF_NEEDED(textReasons, reasons, includeReasons);
+    }
     return reasons;
 }
 
@@ -619,7 +624,7 @@ static std::optional<unsigned> hyphenPositionForFragment(unsigned splitPosition,
     // It does not work properly with non-collapsed leading tabs when font is enlarged.
     auto adjustedAvailableWidth = availableWidth - style.hyphenStringWidth;
     if (!lineIsEmpty)
-        adjustedAvailableWidth += style.spaceWidth;
+        adjustedAvailableWidth += style.font.spaceWidth();
     if (!enoughWidthForHyphenation(adjustedAvailableWidth, style.font.pixelSize()))
         return std::nullopt;
 
@@ -724,7 +729,7 @@ static void forceFragmentToLine(LineState& line, TextFragmentIterator& textFragm
 static bool createLineRuns(LineState& line, const LineState& previousLine, Layout::RunVector& runs, TextFragmentIterator& textFragmentIterator)
 {
     const auto& style = textFragmentIterator.style();
-    line.setCollapedWhitespaceWidth(style.spaceWidth + style.wordSpacing);
+    line.setCollapedWhitespaceWidth(style.font.spaceWidth() + style.wordSpacing);
     bool lineCanBeWrapped = style.wrapLines || style.breakFirstWordOnOverflow || style.breakAnyWordOnOverflow;
     auto fragment = firstFragment(textFragmentIterator, line, previousLine, runs);
     while (fragment.type() != TextFragmentIterator::TextFragment::ContentEnd) {
