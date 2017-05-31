@@ -326,18 +326,6 @@
 <td class="property_flags">Read</td>
 </tr>
 <tr>
-<td class="property_type">
-<a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
-<td class="property_name"><a class="link" href="WebKitDOMHTMLImageElement.html#WebKitDOMHTMLImageElement--cross-origin" title="The “cross-origin” property">cross-origin</a></td>
-<td class="property_flags">Read / Write</td>
-</tr>
-<tr>
-<td class="property_type">
-<a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
-<td class="property_name"><a class="link" href="WebKitDOMHTMLImageElement.html#WebKitDOMHTMLImageElement--current-src" title="The “current-src” property">current-src</a></td>
-<td class="property_flags">Read</td>
-</tr>
-<tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#glong"><span class="type">glong</span></a></td>
 <td class="property_name"><a class="link" href="WebKitDOMHTMLImageElement.html#WebKitDOMHTMLImageElement--height" title="The “height” property">height</a></td>
 <td class="property_flags">Read / Write</td>
@@ -383,19 +371,7 @@
 <tr>
 <td class="property_type">
 <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
-<td class="property_name"><a class="link" href="WebKitDOMHTMLImageElement.html#WebKitDOMHTMLImageElement--sizes" title="The “sizes” property">sizes</a></td>
-<td class="property_flags">Read / Write</td>
-</tr>
-<tr>
-<td class="property_type">
-<a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitDOMHTMLImageElement.html#WebKitDOMHTMLImageElement--src" title="The “src” property">src</a></td>
-<td class="property_flags">Read / Write</td>
-</tr>
-<tr>
-<td class="property_type">
-<a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
-<td class="property_name"><a class="link" href="WebKitDOMHTMLImageElement.html#WebKitDOMHTMLImageElement--srcset" title="The “srcset” property">srcset</a></td>
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
@@ -435,8 +411,8 @@
 <col class="description">
 </colgroup>
 <tbody><tr>
-<td class="datatype_keyword"> </td>
-<td class="function_name"><a class="link" href="WebKitDOMHTMLImageElement.html#WebKitDOMHTMLImageElement-struct" title="WebKitDOMHTMLImageElement">WebKitDOMHTMLImageElement</a></td>
+<td class="datatype_keyword">struct</td>
+<td class="function_name"><a class="link" href="WebKitDOMHTMLImageElement.html#WebKitDOMHTMLImageElement-struct" title="struct WebKitDOMHTMLImageElement">WebKitDOMHTMLImageElement</a></td>
 </tr></tbody>
 </table></div>
 </div>
@@ -454,7 +430,7 @@
 <a name="WebKitDOMHTMLImageElement.implemented-interfaces"></a><h2>Implemented Interfaces</h2>
 <p>
 WebKitDOMHTMLImageElement implements
- <a class="link" href="WebKitDOMEventTarget.html" title="WebKitDOMEventTarget">WebKitDOMEventTarget</a>.</p>
+ WebKitDOMEventTarget.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitDOMHTMLImageElement.description"></a><h2>Description</h2>
@@ -1316,8 +1292,8 @@ webkit_dom_html_image_element_get_y (<em class="parameter"><code><a class="link"
 <div class="refsect1">
 <a name="WebKitDOMHTMLImageElement.other_details"></a><h2>Types and Values</h2>
 <div class="refsect2">
-<a name="WebKitDOMHTMLImageElement-struct"></a><h3>WebKitDOMHTMLImageElement</h3>
-<pre class="programlisting">typedef struct _WebKitDOMHTMLImageElement WebKitDOMHTMLImageElement;</pre>
+<a name="WebKitDOMHTMLImageElement-struct"></a><h3>struct WebKitDOMHTMLImageElement</h3>
+<pre class="programlisting">struct WebKitDOMHTMLImageElement;</pre>
 </div>
 </div>
 <div class="refsect1">
@@ -1352,22 +1328,6 @@ webkit_dom_html_image_element_get_y (<em class="parameter"><code><a class="link"
 <p>read-only gboolean HTMLImageElement:complete.</p>
 <p>Flags: Read</p>
 <p>Default value: FALSE</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMHTMLImageElement--cross-origin"></a><h3>The <code class="literal">“cross-origin”</code> property</h3>
-<pre class="programlisting">  “cross-origin”             <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
-<p>read-write gchar* HTMLImageElement:cross-origin.</p>
-<p>Flags: Read / Write</p>
-<p>Default value: ""</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMHTMLImageElement--current-src"></a><h3>The <code class="literal">“current-src”</code> property</h3>
-<pre class="programlisting">  “current-src”              <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
-<p>read-only gchar* HTMLImageElement:current-src.</p>
-<p>Flags: Read</p>
-<p>Default value: ""</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -1435,25 +1395,9 @@ webkit_dom_html_image_element_get_y (<em class="parameter"><code><a class="link"
 </div>
 <hr>
 <div class="refsect2">
-<a name="WebKitDOMHTMLImageElement--sizes"></a><h3>The <code class="literal">“sizes”</code> property</h3>
-<pre class="programlisting">  “sizes”                    <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
-<p>read-write gchar* HTMLImageElement:sizes.</p>
-<p>Flags: Read / Write</p>
-<p>Default value: ""</p>
-</div>
-<hr>
-<div class="refsect2">
 <a name="WebKitDOMHTMLImageElement--src"></a><h3>The <code class="literal">“src”</code> property</h3>
 <pre class="programlisting">  “src”                      <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>read-write gchar* HTMLImageElement:src.</p>
-<p>Flags: Read / Write</p>
-<p>Default value: ""</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMHTMLImageElement--srcset"></a><h3>The <code class="literal">“srcset”</code> property</h3>
-<pre class="programlisting">  “srcset”                   <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
-<p>read-write gchar* HTMLImageElement:srcset.</p>
 <p>Flags: Read / Write</p>
 <p>Default value: ""</p>
 </div>

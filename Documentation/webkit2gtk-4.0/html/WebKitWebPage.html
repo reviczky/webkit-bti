@@ -125,6 +125,11 @@
 <td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
 </tr>
 <tr>
+<td class="signal_type"><span class="returnvalue">void</span></td>
+<td class="signal_name"><a class="link" href="WebKitWebPage.html#WebKitWebPage-form-controls-associated" title="The “form-controls-associated” signal">form-controls-associated</a></td>
+<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+</tr>
+<tr>
 <td class="signal_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a></td>
 <td class="signal_name"><a class="link" href="WebKitWebPage.html#WebKitWebPage-send-request" title="The “send-request” signal">send-request</a></td>
 <td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
@@ -451,6 +456,53 @@ loaded.</p>
 </table></div>
 </div>
 <p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitWebPage-form-controls-associated"></a><h3>The <code class="literal">“form-controls-associated”</code> signal</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+user_function (<a class="link" href="WebKitWebPage.html" title="WebKitWebPage"><span class="type">WebKitWebPage</span></a> *web_page,
+               <a href="../glib/glib-Pointer-Arrays.html#GPtrArray"><span class="type">GPtrArray</span></a>     *elements,
+               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>       user_data)</pre>
+<p>Emitted after form elements (or form associated elements) are associated to a particular web
+page. This is useful to implement form autofilling for web pages where form fields are added
+dynamically. This signal might be emitted multiple times for the same web page.</p>
+<p>Note that this signal could be also emitted when form controls are moved between forms. In
+that case, the <em class="parameter"><code>elements</code></em>
+ array carries the list of those elements which have moved.</p>
+<p>Clients should take a reference to the members of the <em class="parameter"><code>elements</code></em>
+ array if it is desired to
+keep them alive after the signal handler returns.</p>
+<div class="refsect3">
+<a name="WebKitWebPage-form-controls-associated.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>web_page</p></td>
+<td class="parameter_description"><p>the <a class="link" href="WebKitWebPage.html" title="WebKitWebPage"><span class="type">WebKitWebPage</span></a> on which the signal is emitted</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>elements</p></td>
+<td class="parameter_description"><p> a <a href="../glib/glib-Pointer-Arrays.html#GPtrArray"><span class="type">GPtrArray</span></a> of
+<a href="../html/WebKitDOMElement.html#WebKitDOMElement-struct"><span class="type">WebKitDOMElement</span></a> with the list of forms in the page. </p></td>
+<td class="parameter_annotations"><span class="annotation">[<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> WebKitDOMElement][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></td>
+</tr>
+<tr>
+<td class="parameter_name"><p>user_data</p></td>
+<td class="parameter_description"><p>user data set when the signal handler was connected.</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
 </div>
 <hr>
 <div class="refsect2">

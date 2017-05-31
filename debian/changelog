@@ -1,93 +1,124 @@
-webkit2gtk (2.14.7-1) unstable; urgency=medium
+webkit2gtk (2.16.3-1) experimental; urgency=medium
+
+  * New upstream release
+    + This fixes CVE-2017-2496, CVE-2017-2539 and CVE-2017-2510.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 24 May 2017 15:17:20 +0200
+
+webkit2gtk (2.16.2-1) experimental; urgency=medium
 
   * New upstream release.
+  * debian/patches/fix-ftbfs-armel.patch:
+    + Refresh.
+  * debian/patches/fix-ftbfs-x32.patch:
+    + Remove, this one is now upstream.
   * debian/copyright:
     + Update copyright years and remove nonexistent files.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 09 May 2017 16:48:39 +0300
+ -- Alberto Garcia <berto@igalia.com>  Tue, 09 May 2017 12:21:07 +0300
 
-webkit2gtk (2.14.6-1) unstable; urgency=high
+webkit2gtk (2.16.1-1) experimental; urgency=medium
 
-  * New upstream release.
-    + This fixes CVE-2016-9643, CVE-2017-2364, CVE-2017-2367,
-      CVE-2017-2377, CVE-2017-2392, CVE-2017-2394, CVE-2017-2415,
-      CVE-2017-2419, CVE-2017-2442, CVE-2017-2446, CVE-2017-2454,
-      CVE-2017-2459, CVE-2017-2460, CVE-2017-2465, CVE-2017-2466,
-      CVE-2017-2468, CVE-2017-2470, CVE-2017-2471, CVE-2017-2475,
-      CVE-2017-2476, CVE-2017-2481.
+  * New upstream release (Closes: #853705).
   * debian/control:
     + Downgrade libwebkit2gtk-4.0-37-gtk2 from Recommends to Suggests,
       since most apps that depend on webkit2gtk don't need this.
+      (Closes: #858839)
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 07 Apr 2017 13:56:45 +0300
+ -- Alberto Garcia <berto@igalia.com>  Tue, 04 Apr 2017 15:48:44 +0300
 
-webkit2gtk (2.14.5-2) unstable; urgency=medium
+webkit2gtk (2.16.0-1) experimental; urgency=medium
 
+  * New upstream release.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 22 Mar 2017 12:15:14 +0200
+
+webkit2gtk (2.15.92-1) experimental; urgency=medium
+
+  * New upstream release.
   * debian/patches/fix-ftbfs-x32.patch:
-    + Fix FTBFS in x32 (Closes: #856498).
+    + Fix FTBFS in x32.
   * debian/libwebkit2gtk-4.0-doc.links:
     + Remove webkit2gtk-4.0.devhelp2.gz -> webkit2gtk.devhelp2.gz symlink
-      as it is now obsolete (see upstream bug #139369) (Closes: #857412)
+      as it is now obsolete (see upstream bug #139369).
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 13 Mar 2017 12:48:26 +0200
+ -- Alberto Garcia <berto@igalia.com>  Tue, 14 Mar 2017 11:31:31 +0200
 
-webkit2gtk (2.14.5-1) unstable; urgency=high
-
-  * New upstream release (Closes: #855103).
-
- -- Alberto Garcia <berto@igalia.com>  Wed, 15 Feb 2017 10:42:51 +0200
-
-webkit2gtk (2.14.4-1) unstable; urgency=high
+webkit2gtk (2.15.91-1) experimental; urgency=medium
 
   * New upstream release.
-    + This fixes CVE-2017-2365, CVE-2017-2366, CVE-2017-2373,
-      CVE-2017-2363, CVE-2017-2362, CVE-2017-2350, CVE-2017-2350,
-      CVE-2017-2354, CVE-2017-2355, CVE-2017-2356, CVE-2017-2371,
-      CVE-2017-2364 and CVE-2017-2369.
+  * Refresh all patches.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 01 Mar 2017 12:17:05 +0200
+
+webkit2gtk (2.15.90-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Refresh all patches.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 21 Feb 2017 10:44:50 +0200
+
+webkit2gtk (2.15.4-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Refresh all patches.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 31 Jan 2017 14:02:33 +0200
+
+webkit2gtk (2.15.3-1) experimental; urgency=medium
+
+  * New upstream release.
+  * Refresh all patches.
   * debian/patches/fix-ftbfs-hurd.patch:
     + Fix FTBFS in Hurd.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
+  * debian/libwebkit2gtk-4.0-37.lintian-overrides:
+    + Remove unused overrides file.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 10 Feb 2017 14:17:37 +0200
+ -- Alberto Garcia <berto@igalia.com>  Fri, 20 Jan 2017 11:04:52 +0200
 
-webkit2gtk (2.14.3-1) unstable; urgency=high
+webkit2gtk (2.15.2-1) experimental; urgency=medium
 
-  * New upstream release.
-    + The WebKitGTK+ security advisory WSA-2017-0001 published along with
-      this release lists the following security fixes in the latest
-      versions of WebKitGTK+:
-      - CVE-2016-4743, CVE-2016-7587, CVE-2016-7598 (fixed in 2.14.0).
-      - CVE-2016-4692, CVE-2016-7610 (fixed in 2.14.1).
-      - CVE-2016-7611, CVE-2016-7640, CVE-2016-7642, CVE-2016-7646,
-        CVE-2016-7648, CVE-2016-7649 (fixed in 2.14.2)
-      - CVE-2016-7586, CVE-2016-7589, CVE-2016-7592, CVE-2016-7599,
-        CVE-2016-7623, CVE-2016-7632, CVE-2016-7635, CVE-2016-7639,
-        CVE-2016-7645, CVE-2016-7641, CVE-2016-7652, CVE-2016-7654,
-        CVE-2016-7656 (fixed in 2.14.3)
+  * New upstream development release.
   * Verify GPG signature of the upstream tarball:
     + debian/upstream/signing-key.asc:
       - Add key file.
     + debian/watch:
       - Add pgpsigurlmangle option.
+  * Refresh all patches.
+  * debian/control:
+    + Add build dependencies on libgeoclue-2-dev and libgcrypt20-dev, and
+      remove libgnutls28-dev.
   * debian/rules:
     + Use the NEWS file as the upstream changelog.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 18 Jan 2017 11:28:41 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 21 Nov 2016 20:34:28 +0200
 
-webkit2gtk (2.14.2-1) unstable; urgency=medium
+webkit2gtk (2.15.1-1) experimental; urgency=medium
 
-  * New upstream release (Closes: #839379, #839397).
+  * New upstream development release.
   * debian/patches/fix-ftbfs-armel.patch:
     + The previous update broke this patch, fix it now.
+  * Refresh all other patches.
   * debian/rules:
     + Don't use the gold linker in kFreeBSD, its version of libxslt is
       still affected by #801989. We should be able to revert this change
       once we have libxslt >= 1.1.29.
     + Enable gold again in mips and mipsel now that #834147 is fixed and
       we have binutils 2.27-9.
+  * debian/watch, debian/gbp.conf:
+    + Update for 2.15.x packages in experimental.
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 03 Nov 2016 11:29:40 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 26 Oct 2016 17:43:28 +0300
 
 webkit2gtk (2.14.1-1) unstable; urgency=medium
 

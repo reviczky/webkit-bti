@@ -129,18 +129,6 @@
 <td class="property_name"><a class="link" href="WebKitDOMCharacterData.html#WebKitDOMCharacterData--length" title="The “length” property">length</a></td>
 <td class="property_flags">Read</td>
 </tr>
-<tr>
-<td class="property_type">
-<a class="link" href="WebKitDOMElement.html" title="WebKitDOMElement"><span class="type">WebKitDOMElement</span></a> *</td>
-<td class="property_name"><a class="link" href="WebKitDOMCharacterData.html#WebKitDOMCharacterData--next-element-sibling" title="The “next-element-sibling” property">next-element-sibling</a></td>
-<td class="property_flags">Read</td>
-</tr>
-<tr>
-<td class="property_type">
-<a class="link" href="WebKitDOMElement.html" title="WebKitDOMElement"><span class="type">WebKitDOMElement</span></a> *</td>
-<td class="property_name"><a class="link" href="WebKitDOMCharacterData.html#WebKitDOMCharacterData--previous-element-sibling" title="The “previous-element-sibling” property">previous-element-sibling</a></td>
-<td class="property_flags">Read</td>
-</tr>
 </tbody>
 </table></div>
 </div>
@@ -152,8 +140,8 @@
 <col class="description">
 </colgroup>
 <tbody><tr>
-<td class="datatype_keyword"> </td>
-<td class="function_name"><a class="link" href="WebKitDOMCharacterData.html#WebKitDOMCharacterData-struct" title="WebKitDOMCharacterData">WebKitDOMCharacterData</a></td>
+<td class="datatype_keyword">struct</td>
+<td class="function_name"><a class="link" href="WebKitDOMCharacterData.html#WebKitDOMCharacterData-struct" title="struct WebKitDOMCharacterData">WebKitDOMCharacterData</a></td>
 </tr></tbody>
 </table></div>
 </div>
@@ -172,7 +160,7 @@
 <a name="WebKitDOMCharacterData.implemented-interfaces"></a><h2>Implemented Interfaces</h2>
 <p>
 WebKitDOMCharacterData implements
- <a class="link" href="WebKitDOMEventTarget.html" title="WebKitDOMEventTarget">WebKitDOMEventTarget</a>.</p>
+ WebKitDOMEventTarget.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitDOMCharacterData.description"></a><h2>Description</h2>
@@ -478,8 +466,8 @@ webkit_dom_character_data_get_length (<em class="parameter"><code><a class="link
 <div class="refsect1">
 <a name="WebKitDOMCharacterData.other_details"></a><h2>Types and Values</h2>
 <div class="refsect2">
-<a name="WebKitDOMCharacterData-struct"></a><h3>WebKitDOMCharacterData</h3>
-<pre class="programlisting">typedef struct _WebKitDOMCharacterData WebKitDOMCharacterData;</pre>
+<a name="WebKitDOMCharacterData-struct"></a><h3>struct WebKitDOMCharacterData</h3>
+<pre class="programlisting">struct WebKitDOMCharacterData;</pre>
 </div>
 </div>
 <div class="refsect1">
@@ -496,20 +484,6 @@ webkit_dom_character_data_get_length (<em class="parameter"><code><a class="link
 <a name="WebKitDOMCharacterData--length"></a><h3>The <code class="literal">“length”</code> property</h3>
 <pre class="programlisting">  “length”                   <a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a></pre>
 <p>read-only gulong CharacterData:length.</p>
-<p>Flags: Read</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMCharacterData--next-element-sibling"></a><h3>The <code class="literal">“next-element-sibling”</code> property</h3>
-<pre class="programlisting">  “next-element-sibling”     <a class="link" href="WebKitDOMElement.html" title="WebKitDOMElement"><span class="type">WebKitDOMElement</span></a> *</pre>
-<p>read-only WebKitDOMElement* CharacterData:next-element-sibling.</p>
-<p>Flags: Read</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMCharacterData--previous-element-sibling"></a><h3>The <code class="literal">“previous-element-sibling”</code> property</h3>
-<pre class="programlisting">  “previous-element-sibling” <a class="link" href="WebKitDOMElement.html" title="WebKitDOMElement"><span class="type">WebKitDOMElement</span></a> *</pre>
-<p>read-only WebKitDOMElement* CharacterData:previous-element-sibling.</p>
 <p>Flags: Read</p>
 </div>
 </div>

@@ -85,6 +85,14 @@
 </tr>
 <tr>
 <td class="function_type">
+<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-is-ephemeral" title="webkit_web_view_is_ephemeral ()">webkit_web_view_is_ephemeral</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
 <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="returnvalue">WebKitWebContext</span></a> *
 </td>
 <td class="function_name">
@@ -97,6 +105,14 @@
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebView.html#webkit-web-view-get-user-content-manager" title="webkit_web_view_get_user_content_manager ()">webkit_web_view_get_user_content_manager</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="returnvalue">WebKitWebsiteDataManager</span></a> *
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-get-website-data-manager" title="webkit_web_view_get_website_data_manager ()">webkit_web_view_get_website_data_manager</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
 <tr>
@@ -691,6 +707,11 @@
 </tr>
 <tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
+<td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--is-ephemeral" title="The “is-ephemeral” property">is-ephemeral</a></td>
+<td class="property_flags">Read / Write / Construct Only</td>
+</tr>
+<tr>
+<td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--is-loading" title="The “is-loading” property">is-loading</a></td>
 <td class="property_flags">Read</td>
 </tr>
@@ -1137,6 +1158,39 @@ in the view by the user content manager.</p>
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-web-view-is-ephemeral"></a><h3>webkit_web_view_is_ephemeral ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_web_view_is_ephemeral (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+<p>Get whether a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> is ephemeral. To create an ephemeral <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> you need to
+use <a href="../gobject/gobject-The-Base-Object-Type.html#g-object-new"><code class="function">g_object_new()</code></a> and pass is-ephemeral propery with <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> value. See
+<a class="link" href="WebKitWebView.html#WebKitWebView--is-ephemeral" title="The “is-ephemeral” property"><span class="type">“is-ephemeral”</span></a> for more details.
+If <em class="parameter"><code>web_view</code></em>
+ was created with a ephemeral <a class="link" href="WebKitWebView.html#WebKitWebView--related-view" title="The “related-view” property"><span class="type">“related-view”</span></a> or an
+ephemeral <a class="link" href="WebKitWebView.html#WebKitWebView--web-context" title="The “web-context” property"><span class="type">“web-context”</span></a> it will also be ephemeral.</p>
+<div class="refsect3">
+<a name="webkit-web-view-is-ephemeral.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-web-view-is-ephemeral.returns"></a><h4>Returns</h4>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if <em class="parameter"><code>web_view</code></em>
+is ephemeral or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="webkit-web-view-get-context"></a><h3>webkit_web_view_get_context ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="returnvalue">WebKitWebContext</span></a> *
 webkit_web_view_get_context (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
@@ -1193,6 +1247,40 @@ view does not have an user content manager.</p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-6.html#api-index-2.6">2.6</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-get-website-data-manager"></a><h3>webkit_web_view_get_website_data_manager ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="returnvalue">WebKitWebsiteDataManager</span></a> *
+webkit_web_view_get_website_data_manager
+                               (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+<p>Get the <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a> associated to <em class="parameter"><code>web_view</code></em>
+. If <em class="parameter"><code>web_view</code></em>
+ is not ephemeral,
+the returned <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a> will be the same as the <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a>
+of <em class="parameter"><code>web_view</code></em>
+'s <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>.</p>
+<div class="refsect3">
+<a name="webkit-web-view-get-website-data-manager.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-web-view-get-website-data-manager.returns"></a><h4>Returns</h4>
+<p> a <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a>. </p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -2239,7 +2327,7 @@ webkit_web_view_can_execute_editing_command
                                 <em class="parameter"><code><a href="../gio/GCancellable.html#GCancellable-struct"><span class="type">GCancellable</span></a> *cancellable</code></em>,
                                 <em class="parameter"><code><a href="../gio/GAsyncResult.html#GAsyncReadyCallback"><span class="type">GAsyncReadyCallback</span></a> callback</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a> user_data</code></em>);</pre>
-<p>Asynchronously execute the given editing command.</p>
+<p>Asynchronously check if it is possible to execute the given editing command.</p>
 <p>When the operation is finished, <em class="parameter"><code>callback</code></em>
  will be called. You can then call
 <a class="link" href="WebKitWebView.html#webkit-web-view-can-execute-editing-command-finish" title="webkit_web_view_can_execute_editing_command_finish ()"><code class="function">webkit_web_view_can_execute_editing_command_finish()</code></a> to get the result of the operation.</p>
@@ -2501,7 +2589,7 @@ webkit_web_view_run_javascript (<em class="parameter"><code><a class="link" href
 <p>Asynchronously run <em class="parameter"><code>script</code></em>
  in the context of the current page in <em class="parameter"><code>web_view</code></em>
 . If
-WebKitWebSettings:enable-javascript is FALSE, this method will do nothing.</p>
+WebKitSettings:enable-javascript is FALSE, this method will do nothing.</p>
 <p>When the operation is finished, <em class="parameter"><code>callback</code></em>
  will be called. You can then call
 <a class="link" href="WebKitWebView.html#webkit-web-view-run-javascript-finish" title="webkit_web_view_run_javascript_finish ()"><code class="function">webkit_web_view_run_javascript_finish()</code></a> to get the result of the operation.</p>
@@ -4222,7 +4310,7 @@ that is used as the image source. This command should be executed with
 <a name="WEBKIT-EDITING-COMMAND-CREATE-LINK:CAPS"></a><h3>WEBKIT_EDITING_COMMAND_CREATE_LINK</h3>
 <pre class="programlisting">#define WEBKIT_EDITING_COMMAND_CREATE_LINK "CreateLink"
 </pre>
-<p>The create link command. Creates a link elment thst is inserted at
+<p>The create link command. Creates a link element that is inserted at
 the current cursor position. If there's a selection, the selected text
 will be used as the link text, otherwise the URL itself will be used.
 It receives the link URL as argument. This command should be executed
@@ -4327,6 +4415,21 @@ and child documents.</p>
 <p>The favicon currently associated to the <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a>.
 See <a class="link" href="WebKitWebView.html#webkit-web-view-get-favicon" title="webkit_web_view_get_favicon ()"><code class="function">webkit_web_view_get_favicon()</code></a> for more details.</p>
 <p>Flags: Read</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitWebView--is-ephemeral"></a><h3>The <code class="literal">“is-ephemeral”</code> property</h3>
+<pre class="programlisting">  “is-ephemeral”             <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
+<p>Whether the <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> is ephemeral. An ephemeral web view never writes
+website data to the client storage, no matter what <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a>
+its context is using. This is normally used to implement private browsing mode.
+This is a <a href="../gobject/gobject-GParamSpec.html#G-PARAM-CONSTRUCT-ONLY:CAPS"><code class="literal">G_PARAM_CONSTRUCT_ONLY</code></a> property, so you have to create a ephemeral
+<a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> and it can't be changed. Note that all <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a>s
+created with an ephemeral <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> will be ephemeral automatically.
+See also <a class="link" href="WebKitWebContext.html#webkit-web-context-new-ephemeral" title="webkit_web_context_new_ephemeral ()"><code class="function">webkit_web_context_new_ephemeral()</code></a>.</p>
+<p>Flags: Read / Write / Construct Only</p>
+<p>Default value: FALSE</p>
+<p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -4515,8 +4618,8 @@ user_function (<a class="link" href="WebKitWebView.html" title="WebKitWebView"><
                <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a>            *event,
                <a class="link" href="WebKitHitTestResult.html" title="WebKitHitTestResult"><span class="type">WebKitHitTestResult</span></a> *hit_test_result,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>             user_data)</pre>
-<p>Emmited when a context menu is about to be displayed to give the application
-a chance to customize the proposed menu, prevent the menu from being displayed
+<p>Emitted when a context menu is about to be displayed to give the application
+a chance to customize the proposed menu, prevent the menu from being displayed,
 or build its own context menu.</p>
 <div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
 <li class="listitem"><p>
@@ -4540,6 +4643,22 @@ or build its own context menu.</p>
 <li class="listitem"><p>
  If you just want the default menu to be shown always, simply don't connect to this
  signal because showing the proposed context menu is the default behaviour.
+</p></li>
+</ul></div>
+<p>The <em class="parameter"><code>event</code></em>
+ is expected to be one of the following types:</p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem"><p>
+a <a href="../gdk3/gdk3-Event-Structures.html#GdkEventButton"><span class="type">GdkEventButton</span></a> of type <a href="../gdk3/gdk3-Events.html#GDK-BUTTON-PRESS:CAPS"><code class="literal">GDK_BUTTON_PRESS</code></a> when the context menu
+was triggered with mouse.
+</p></li>
+<li class="listitem"><p>
+a <a href="../gdk3/gdk3-Event-Structures.html#GdkEventKey"><span class="type">GdkEventKey</span></a> of type <a href="../gdk3/gdk3-Events.html#GDK-KEY-PRESS:CAPS"><code class="literal">GDK_KEY_PRESS</code></a> if the keyboard was used to show
+the menu.
+</p></li>
+<li class="listitem"><p>
+a generic <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a> of type <a href="../gdk3/gdk3-Events.html#GDK-NOTHING:CAPS"><code class="literal">GDK_NOTHING</code></a> when the <span class="type">“popup-menu”</span>
+signal was used to show the context menu.
 </p></li>
 </ul></div>
 <p>If the signal handler returns <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> the context menu represented by <em class="parameter"><code>context_menu</code></em>

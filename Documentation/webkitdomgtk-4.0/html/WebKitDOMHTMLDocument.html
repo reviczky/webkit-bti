@@ -303,8 +303,8 @@
 <col class="description">
 </colgroup>
 <tbody><tr>
-<td class="datatype_keyword"> </td>
-<td class="function_name"><a class="link" href="WebKitDOMHTMLDocument.html#WebKitDOMHTMLDocument-struct" title="WebKitDOMHTMLDocument">WebKitDOMHTMLDocument</a></td>
+<td class="datatype_keyword">struct</td>
+<td class="function_name"><a class="link" href="WebKitDOMHTMLDocument.html#WebKitDOMHTMLDocument-struct" title="struct WebKitDOMHTMLDocument">WebKitDOMHTMLDocument</a></td>
 </tr></tbody>
 </table></div>
 </div>
@@ -321,7 +321,7 @@
 <a name="WebKitDOMHTMLDocument.implemented-interfaces"></a><h2>Implemented Interfaces</h2>
 <p>
 WebKitDOMHTMLDocument implements
- <a class="link" href="WebKitDOMEventTarget.html" title="WebKitDOMEventTarget">WebKitDOMEventTarget</a>.</p>
+ WebKitDOMEventTarget.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitDOMHTMLDocument.description"></a><h2>Description</h2>
@@ -800,7 +800,32 @@ webkit_dom_html_document_set_vlink_color
 webkit_dom_html_document_set_design_mode
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a> *self</code></em>,
                                 <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *value</code></em>);</pre>
-<div class="warning"><p><code class="literal">webkit_dom_html_document_set_design_mode</code> is deprecated and should not be used in newly-written code.</p></div>
+<div class="warning">
+<p><code class="literal">webkit_dom_html_document_set_design_mode</code> has been deprecated since version 2.14 and should not be used in newly-written code.</p>
+<p>Use <a class="link" href="WebKitDOMDocument.html#webkit-dom-document-set-design-mode" title="webkit_dom_document_set_design_mode ()"><code class="function">webkit_dom_document_set_design_mode()</code></a> instead.</p>
+</div>
+<div class="refsect3">
+<a name="webkit-dom-html-document-set-design-mode.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>value</p></td>
+<td class="parameter_description"><p>A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
 </div>
 <hr>
 <div class="refsect2">
@@ -808,7 +833,29 @@ webkit_dom_html_document_set_design_mode
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
 webkit_dom_html_document_get_design_mode
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a> *self</code></em>);</pre>
-<div class="warning"><p><code class="literal">webkit_dom_html_document_get_design_mode</code> is deprecated and should not be used in newly-written code.</p></div>
+<div class="warning">
+<p><code class="literal">webkit_dom_html_document_get_design_mode</code> has been deprecated since version 2.14 and should not be used in newly-written code.</p>
+<p>Use <a class="link" href="WebKitDOMDocument.html#webkit-dom-document-get-design-mode" title="webkit_dom_document_get_design_mode ()"><code class="function">webkit_dom_document_get_design_mode()</code></a> instead.</p>
+</div>
+<div class="refsect3">
+<a name="webkit-dom-html-document-get-design-mode.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-dom-html-document-get-design-mode.returns"></a><h4>Returns</h4>
+<p> A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p>
+</div>
 </div>
 <hr>
 <div class="refsect2">
@@ -816,35 +863,126 @@ webkit_dom_html_document_get_design_mode
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
 webkit_dom_html_document_get_compat_mode
                                (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a> *self</code></em>);</pre>
-<div class="warning"><p><code class="literal">webkit_dom_html_document_get_compat_mode</code> is deprecated and should not be used in newly-written code.</p></div>
+<div class="warning">
+<p><code class="literal">webkit_dom_html_document_get_compat_mode</code> has been deprecated since version 2.14 and should not be used in newly-written code.</p>
+<p>Use <a class="link" href="WebKitDOMDocument.html#webkit-dom-document-get-compat-mode" title="webkit_dom_document_get_compat_mode ()"><code class="function">webkit_dom_document_get_compat_mode()</code></a> instead.</p>
+</div>
+<div class="refsect3">
+<a name="webkit-dom-html-document-get-compat-mode.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-dom-html-document-get-compat-mode.returns"></a><h4>Returns</h4>
+<p> A <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a></p>
+</div>
 </div>
 <hr>
 <div class="refsect2">
 <a name="webkit-dom-html-document-get-scripts"></a><h3>webkit_dom_html_document_get_scripts ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitDOMHTMLCollection.html" title="WebKitDOMHTMLCollection"><span class="returnvalue">WebKitDOMHTMLCollection</span></a> *
 webkit_dom_html_document_get_scripts (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a> *self</code></em>);</pre>
-<div class="warning"><p><code class="literal">webkit_dom_html_document_get_scripts</code> is deprecated and should not be used in newly-written code.</p></div>
+<div class="warning">
+<p><code class="literal">webkit_dom_html_document_get_scripts</code> has been deprecated since version 2.14 and should not be used in newly-written code.</p>
+<p>Use <a class="link" href="WebKitDOMDocument.html#webkit-dom-document-get-scripts" title="webkit_dom_document_get_scripts ()"><code class="function">webkit_dom_document_get_scripts()</code></a> instead.</p>
+</div>
+<div class="refsect3">
+<a name="webkit-dom-html-document-get-scripts.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-dom-html-document-get-scripts.returns"></a><h4>Returns</h4>
+<p> A <a class="link" href="WebKitDOMHTMLCollection.html" title="WebKitDOMHTMLCollection"><span class="type">WebKitDOMHTMLCollection</span></a>. </p>
+<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+</div>
 </div>
 <hr>
 <div class="refsect2">
 <a name="webkit-dom-html-document-get-embeds"></a><h3>webkit_dom_html_document_get_embeds ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitDOMHTMLCollection.html" title="WebKitDOMHTMLCollection"><span class="returnvalue">WebKitDOMHTMLCollection</span></a> *
 webkit_dom_html_document_get_embeds (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a> *self</code></em>);</pre>
-<div class="warning"><p><code class="literal">webkit_dom_html_document_get_embeds</code> is deprecated and should not be used in newly-written code.</p></div>
+<div class="warning">
+<p><code class="literal">webkit_dom_html_document_get_embeds</code> has been deprecated since version 2.14 and should not be used in newly-written code.</p>
+<p>Use <a class="link" href="WebKitDOMDocument.html#webkit-dom-document-get-embeds" title="webkit_dom_document_get_embeds ()"><code class="function">webkit_dom_document_get_embeds()</code></a> instead.</p>
+</div>
+<div class="refsect3">
+<a name="webkit-dom-html-document-get-embeds.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-dom-html-document-get-embeds.returns"></a><h4>Returns</h4>
+<p> A <a class="link" href="WebKitDOMHTMLCollection.html" title="WebKitDOMHTMLCollection"><span class="type">WebKitDOMHTMLCollection</span></a>. </p>
+<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+</div>
 </div>
 <hr>
 <div class="refsect2">
 <a name="webkit-dom-html-document-get-plugins"></a><h3>webkit_dom_html_document_get_plugins ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitDOMHTMLCollection.html" title="WebKitDOMHTMLCollection"><span class="returnvalue">WebKitDOMHTMLCollection</span></a> *
 webkit_dom_html_document_get_plugins (<em class="parameter"><code><a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a> *self</code></em>);</pre>
-<div class="warning"><p><code class="literal">webkit_dom_html_document_get_plugins</code> is deprecated and should not be used in newly-written code.</p></div>
+<div class="warning">
+<p><code class="literal">webkit_dom_html_document_get_plugins</code> has been deprecated since version 2.14 and should not be used in newly-written code.</p>
+<p>Use <a class="link" href="WebKitDOMDocument.html#webkit-dom-document-get-plugins" title="webkit_dom_document_get_plugins ()"><code class="function">webkit_dom_document_get_plugins()</code></a> instead.</p>
+</div>
+<div class="refsect3">
+<a name="webkit-dom-html-document-get-plugins.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>self</p></td>
+<td class="parameter_description"><p>A <a class="link" href="WebKitDOMHTMLDocument.html" title="WebKitDOMHTMLDocument"><span class="type">WebKitDOMHTMLDocument</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-dom-html-document-get-plugins.returns"></a><h4>Returns</h4>
+<p> A <a class="link" href="WebKitDOMHTMLCollection.html" title="WebKitDOMHTMLCollection"><span class="type">WebKitDOMHTMLCollection</span></a>. </p>
+<p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+</div>
 </div>
 </div>
 <div class="refsect1">
 <a name="WebKitDOMHTMLDocument.other_details"></a><h2>Types and Values</h2>
 <div class="refsect2">
-<a name="WebKitDOMHTMLDocument-struct"></a><h3>WebKitDOMHTMLDocument</h3>
-<pre class="programlisting">typedef struct _WebKitDOMHTMLDocument WebKitDOMHTMLDocument;</pre>
+<a name="WebKitDOMHTMLDocument-struct"></a><h3>struct WebKitDOMHTMLDocument</h3>
+<pre class="programlisting">struct WebKitDOMHTMLDocument;</pre>
 </div>
 </div>
 <div class="refsect1">

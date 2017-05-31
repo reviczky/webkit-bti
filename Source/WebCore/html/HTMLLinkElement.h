@@ -53,7 +53,7 @@ public:
 
     const AtomicString& type() const;
 
-    Optional<LinkIconType> iconType() const;
+    std::optional<LinkIconType> iconType() const;
 
     CSSStyleSheet* sheet() const { return m_sheet.get(); }
 
@@ -80,7 +80,10 @@ private:
     void clearSheet();
 
     InsertionNotificationRequest insertedInto(ContainerNode&) final;
+    void finishedInsertingSubtree() final;
     void removedFrom(ContainerNode&) final;
+
+    void initializeStyleSheet(Ref<StyleSheetContents>&&, const CachedCSSStyleSheet&);
 
     // from CachedResourceClient
     void setCSSStyleSheet(const String& href, const URL& baseURL, const String& charset, const CachedCSSStyleSheet*) final;
@@ -109,14 +112,10 @@ private:
     enum PendingSheetType { Unknown, ActiveSheet, InactiveSheet };
     void addPendingSheet(PendingSheetType);
 
-    enum RemovePendingSheetNotificationType {
-        RemovePendingSheetNotifyImmediately,
-        RemovePendingSheetNotifyLater
-    };
-
-    void removePendingSheet(RemovePendingSheetNotificationType = RemovePendingSheetNotifyImmediately);
+    void removePendingSheet();
 
     LinkLoader m_linkLoader;
+    Style::Scope* m_styleScope { nullptr };
     CachedResourceHandle<CachedCSSStyleSheet> m_cachedSheet;
     RefPtr<CSSStyleSheet> m_sheet;
     enum DisabledState {
@@ -132,9 +131,8 @@ private:
     LinkRelAttribute m_relAttribute;
     bool m_loading;
     bool m_createdByParser;
-    bool m_isInShadowTree;
     bool m_firedLoad;
-    bool m_loadedSheet;
+    bool m_loadedResource;
 
     PendingSheetType m_pendingSheetType;
 

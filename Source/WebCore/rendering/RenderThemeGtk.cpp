@@ -26,7 +26,6 @@
 #include "RenderThemeGtk.h"
 
 #include "CSSValueKeywords.h"
-#include "ExceptionCodePlaceholder.h"
 #include "FileList.h"
 #include "FileSystem.h"
 #include "FontDescription.h"
@@ -67,10 +66,10 @@ Ref<RenderTheme> RenderThemeGtk::create()
     return adoptRef(*new RenderThemeGtk());
 }
 
-PassRefPtr<RenderTheme> RenderTheme::themeForPage(Page*)
+Ref<RenderTheme> RenderTheme::themeForPage(Page*)
 {
     static RenderTheme& rt = RenderThemeGtk::create().leakRef();
-    return &rt;
+    return rt;
 }
 
 static double getScreenDPI()
@@ -2015,10 +2014,10 @@ bool RenderThemeGtk::paintMediaToggleClosedCaptionsButton(const RenderObject& re
 static FloatRoundedRect::Radii borderRadiiFromStyle(const RenderStyle& style)
 {
     return FloatRoundedRect::Radii(
-        IntSize(style.borderTopLeftRadius().width().intValue(), style.borderTopLeftRadius().height().intValue()),
-        IntSize(style.borderTopRightRadius().width().intValue(), style.borderTopRightRadius().height().intValue()),
-        IntSize(style.borderBottomLeftRadius().width().intValue(), style.borderBottomLeftRadius().height().intValue()),
-        IntSize(style.borderBottomRightRadius().width().intValue(), style.borderBottomRightRadius().height().intValue()));
+        IntSize(style.borderTopLeftRadius().width.intValue(), style.borderTopLeftRadius().height.intValue()),
+        IntSize(style.borderTopRightRadius().width.intValue(), style.borderTopRightRadius().height.intValue()),
+        IntSize(style.borderBottomLeftRadius().width.intValue(), style.borderBottomLeftRadius().height.intValue()),
+        IntSize(style.borderBottomRightRadius().width.intValue(), style.borderBottomRightRadius().height.intValue()));
 }
 
 bool RenderThemeGtk::paintMediaSliderTrack(const RenderObject& o, const PaintInfo& paintInfo, const IntRect& r)
@@ -2036,8 +2035,8 @@ bool RenderThemeGtk::paintMediaSliderTrack(const RenderObject& o, const PaintInf
     auto& style = o.style();
     RefPtr<TimeRanges> timeRanges = mediaElement->buffered();
     for (unsigned index = 0; index < timeRanges->length(); ++index) {
-        float start = timeRanges->start(index, IGNORE_EXCEPTION);
-        float end = timeRanges->end(index, IGNORE_EXCEPTION);
+        float start = timeRanges->start(index).releaseReturnValue();
+        float end = timeRanges->end(index).releaseReturnValue();
         float startRatio = start / mediaDuration;
         float lengthRatio = (end - start) / mediaDuration;
         if (!lengthRatio)

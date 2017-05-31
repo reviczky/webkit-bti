@@ -18,7 +18,7 @@ Index: webkitgtk/Source/WTF/wtf/Platform.h
  /* CPU(X86) - i386 / x86 32-bit */
  #if   defined(__i386__) \
      || defined(i386)     \
-@@ -342,7 +348,7 @@
+@@ -348,7 +354,7 @@
  
  #endif /* ARM */
  
@@ -27,7 +27,7 @@ Index: webkitgtk/Source/WTF/wtf/Platform.h
  #define WTF_CPU_NEEDS_ALIGNED_ACCESS 1
  #endif
  
-@@ -695,6 +701,7 @@
+@@ -678,6 +684,7 @@
      || CPU(ALPHA) \
      || CPU(ARM64) \
      || CPU(S390X) \
@@ -39,7 +39,7 @@ Index: webkitgtk/CMakeLists.txt
 ===================================================================
 --- webkitgtk.orig/CMakeLists.txt
 +++ webkitgtk/CMakeLists.txt
-@@ -72,6 +72,8 @@ elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR
+@@ -83,6 +83,8 @@ elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR
      set(WTF_CPU_S390 1)
  elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "s390x")
      set(WTF_CPU_S390X 1)
@@ -52,7 +52,7 @@ Index: webkitgtk/Source/JavaScriptCore/CMakeLists.txt
 ===================================================================
 --- webkitgtk.orig/Source/JavaScriptCore/CMakeLists.txt
 +++ webkitgtk/Source/JavaScriptCore/CMakeLists.txt
-@@ -1343,6 +1343,7 @@ elseif (WTF_CPU_S390)
+@@ -1483,6 +1483,7 @@ elseif (WTF_CPU_S390)
  elseif (WTF_CPU_S390X)
  elseif (WTF_CPU_MIPS)
  elseif (WTF_CPU_SH4)

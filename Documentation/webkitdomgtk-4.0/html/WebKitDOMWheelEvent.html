@@ -86,31 +86,6 @@
 </colgroup>
 <tbody>
 <tr>
-<td class="property_type"><a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a></td>
-<td class="property_name"><a class="link" href="WebKitDOMWheelEvent.html#WebKitDOMWheelEvent--delta-mode" title="The “delta-mode” property">delta-mode</a></td>
-<td class="property_flags">Read</td>
-</tr>
-<tr>
-<td class="property_type"><a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></td>
-<td class="property_name"><a class="link" href="WebKitDOMWheelEvent.html#WebKitDOMWheelEvent--delta-x" title="The “delta-x” property">delta-x</a></td>
-<td class="property_flags">Read</td>
-</tr>
-<tr>
-<td class="property_type"><a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></td>
-<td class="property_name"><a class="link" href="WebKitDOMWheelEvent.html#WebKitDOMWheelEvent--delta-y" title="The “delta-y” property">delta-y</a></td>
-<td class="property_flags">Read</td>
-</tr>
-<tr>
-<td class="property_type"><a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></td>
-<td class="property_name"><a class="link" href="WebKitDOMWheelEvent.html#WebKitDOMWheelEvent--delta-z" title="The “delta-z” property">delta-z</a></td>
-<td class="property_flags">Read</td>
-</tr>
-<tr>
-<td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
-<td class="property_name"><a class="link" href="WebKitDOMWheelEvent.html#WebKitDOMWheelEvent--webkit-direction-inverted-from-device" title="The “webkit-direction-inverted-from-device” property">webkit-direction-inverted-from-device</a></td>
-<td class="property_flags">Read</td>
-</tr>
-<tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#glong"><span class="type">glong</span></a></td>
 <td class="property_name"><a class="link" href="WebKitDOMWheelEvent.html#WebKitDOMWheelEvent--wheel-delta" title="The “wheel-delta” property">wheel-delta</a></td>
 <td class="property_flags">Read</td>
@@ -136,8 +111,8 @@
 <col class="description">
 </colgroup>
 <tbody><tr>
-<td class="datatype_keyword"> </td>
-<td class="function_name"><a class="link" href="WebKitDOMWheelEvent.html#WebKitDOMWheelEvent-struct" title="WebKitDOMWheelEvent">WebKitDOMWheelEvent</a></td>
+<td class="datatype_keyword">struct</td>
+<td class="function_name"><a class="link" href="WebKitDOMWheelEvent.html#WebKitDOMWheelEvent-struct" title="struct WebKitDOMWheelEvent">WebKitDOMWheelEvent</a></td>
 </tr></tbody>
 </table></div>
 </div>
@@ -327,51 +302,12 @@ webkit_dom_wheel_event_get_wheel_delta
 <div class="refsect1">
 <a name="WebKitDOMWheelEvent.other_details"></a><h2>Types and Values</h2>
 <div class="refsect2">
-<a name="WebKitDOMWheelEvent-struct"></a><h3>WebKitDOMWheelEvent</h3>
-<pre class="programlisting">typedef struct _WebKitDOMWheelEvent WebKitDOMWheelEvent;</pre>
+<a name="WebKitDOMWheelEvent-struct"></a><h3>struct WebKitDOMWheelEvent</h3>
+<pre class="programlisting">struct WebKitDOMWheelEvent;</pre>
 </div>
 </div>
 <div class="refsect1">
 <a name="WebKitDOMWheelEvent.property-details"></a><h2>Property Details</h2>
-<div class="refsect2">
-<a name="WebKitDOMWheelEvent--delta-mode"></a><h3>The <code class="literal">“delta-mode”</code> property</h3>
-<pre class="programlisting">  “delta-mode”               <a href="../glib/glib-Basic-Types.html#gulong"><span class="type">gulong</span></a></pre>
-<p>read-only gulong WheelEvent:delta-mode.</p>
-<p>Flags: Read</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMWheelEvent--delta-x"></a><h3>The <code class="literal">“delta-x”</code> property</h3>
-<pre class="programlisting">  “delta-x”                  <a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></pre>
-<p>read-only gdouble WheelEvent:delta-x.</p>
-<p>Flags: Read</p>
-<p>Default value: 0</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMWheelEvent--delta-y"></a><h3>The <code class="literal">“delta-y”</code> property</h3>
-<pre class="programlisting">  “delta-y”                  <a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></pre>
-<p>read-only gdouble WheelEvent:delta-y.</p>
-<p>Flags: Read</p>
-<p>Default value: 0</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMWheelEvent--delta-z"></a><h3>The <code class="literal">“delta-z”</code> property</h3>
-<pre class="programlisting">  “delta-z”                  <a href="../glib/glib-Basic-Types.html#gdouble"><span class="type">gdouble</span></a></pre>
-<p>read-only gdouble WheelEvent:delta-z.</p>
-<p>Flags: Read</p>
-<p>Default value: 0</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMWheelEvent--webkit-direction-inverted-from-device"></a><h3>The <code class="literal">“webkit-direction-inverted-from-device”</code> property</h3>
-<pre class="programlisting">  “webkit-direction-inverted-from-device” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
-<p>read-only gboolean WheelEvent:webkit-direction-inverted-from-device.</p>
-<p>Flags: Read</p>
-<p>Default value: FALSE</p>
-</div>
-<hr>
 <div class="refsect2">
 <a name="WebKitDOMWheelEvent--wheel-delta"></a><h3>The <code class="literal">“wheel-delta”</code> property</h3>
 <pre class="programlisting">  “wheel-delta”              <a href="../glib/glib-Basic-Types.html#glong"><span class="type">glong</span></a></pre>

@@ -212,23 +212,6 @@
 </tr>
 <tr>
 <td class="property_type">
-<a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
-<td class="property_name"><a class="link" href="WebKitDOMHTMLFormElement.html#WebKitDOMHTMLFormElement--autocapitalize" title="The “autocapitalize” property">autocapitalize</a></td>
-<td class="property_flags">Read / Write</td>
-</tr>
-<tr>
-<td class="property_type">
-<a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
-<td class="property_name"><a class="link" href="WebKitDOMHTMLFormElement.html#WebKitDOMHTMLFormElement--autocomplete" title="The “autocomplete” property">autocomplete</a></td>
-<td class="property_flags">Read / Write</td>
-</tr>
-<tr>
-<td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
-<td class="property_name"><a class="link" href="WebKitDOMHTMLFormElement.html#WebKitDOMHTMLFormElement--autocorrect" title="The “autocorrect” property">autocorrect</a></td>
-<td class="property_flags">Read / Write</td>
-</tr>
-<tr>
-<td class="property_type">
 <a class="link" href="WebKitDOMHTMLCollection.html" title="WebKitDOMHTMLCollection"><span class="type">WebKitDOMHTMLCollection</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitDOMHTMLFormElement.html#WebKitDOMHTMLFormElement--elements" title="The “elements” property">elements</a></td>
 <td class="property_flags">Read</td>
@@ -263,11 +246,6 @@
 <td class="property_flags">Read / Write</td>
 </tr>
 <tr>
-<td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
-<td class="property_name"><a class="link" href="WebKitDOMHTMLFormElement.html#WebKitDOMHTMLFormElement--no-validate" title="The “no-validate” property">no-validate</a></td>
-<td class="property_flags">Read / Write</td>
-</tr>
-<tr>
 <td class="property_type">
 <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitDOMHTMLFormElement.html#WebKitDOMHTMLFormElement--target" title="The “target” property">target</a></td>
@@ -284,8 +262,8 @@
 <col class="description">
 </colgroup>
 <tbody><tr>
-<td class="datatype_keyword"> </td>
-<td class="function_name"><a class="link" href="WebKitDOMHTMLFormElement.html#WebKitDOMHTMLFormElement-struct" title="WebKitDOMHTMLFormElement">WebKitDOMHTMLFormElement</a></td>
+<td class="datatype_keyword">struct</td>
+<td class="function_name"><a class="link" href="WebKitDOMHTMLFormElement.html#WebKitDOMHTMLFormElement-struct" title="struct WebKitDOMHTMLFormElement">WebKitDOMHTMLFormElement</a></td>
 </tr></tbody>
 </table></div>
 </div>
@@ -303,7 +281,7 @@
 <a name="WebKitDOMHTMLFormElement.implemented-interfaces"></a><h2>Implemented Interfaces</h2>
 <p>
 WebKitDOMHTMLFormElement implements
- <a class="link" href="WebKitDOMEventTarget.html" title="WebKitDOMEventTarget">WebKitDOMEventTarget</a>.</p>
+ WebKitDOMEventTarget.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitDOMHTMLFormElement.description"></a><h2>Description</h2>
@@ -798,8 +776,8 @@ webkit_dom_html_form_element_get_length
 <div class="refsect1">
 <a name="WebKitDOMHTMLFormElement.other_details"></a><h2>Types and Values</h2>
 <div class="refsect2">
-<a name="WebKitDOMHTMLFormElement-struct"></a><h3>WebKitDOMHTMLFormElement</h3>
-<pre class="programlisting">typedef struct _WebKitDOMHTMLFormElement WebKitDOMHTMLFormElement;</pre>
+<a name="WebKitDOMHTMLFormElement-struct"></a><h3>struct WebKitDOMHTMLFormElement</h3>
+<pre class="programlisting">struct WebKitDOMHTMLFormElement;</pre>
 </div>
 </div>
 <div class="refsect1">
@@ -818,30 +796,6 @@ webkit_dom_html_form_element_get_length
 <p>read-write gchar* HTMLFormElement:action.</p>
 <p>Flags: Read / Write</p>
 <p>Default value: ""</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMHTMLFormElement--autocapitalize"></a><h3>The <code class="literal">“autocapitalize”</code> property</h3>
-<pre class="programlisting">  “autocapitalize”           <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
-<p>read-write gchar* HTMLFormElement:autocapitalize.</p>
-<p>Flags: Read / Write</p>
-<p>Default value: ""</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMHTMLFormElement--autocomplete"></a><h3>The <code class="literal">“autocomplete”</code> property</h3>
-<pre class="programlisting">  “autocomplete”             <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
-<p>read-write gchar* HTMLFormElement:autocomplete.</p>
-<p>Flags: Read / Write</p>
-<p>Default value: ""</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMHTMLFormElement--autocorrect"></a><h3>The <code class="literal">“autocorrect”</code> property</h3>
-<pre class="programlisting">  “autocorrect”              <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
-<p>read-write gboolean HTMLFormElement:autocorrect.</p>
-<p>Flags: Read / Write</p>
-<p>Default value: FALSE</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -889,14 +843,6 @@ webkit_dom_html_form_element_get_length
 <p>read-write gchar* HTMLFormElement:name.</p>
 <p>Flags: Read / Write</p>
 <p>Default value: ""</p>
-</div>
-<hr>
-<div class="refsect2">
-<a name="WebKitDOMHTMLFormElement--no-validate"></a><h3>The <code class="literal">“no-validate”</code> property</h3>
-<pre class="programlisting">  “no-validate”              <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
-<p>read-write gboolean HTMLFormElement:no-validate.</p>
-<p>Flags: Read / Write</p>
-<p>Default value: FALSE</p>
 </div>
 <hr>
 <div class="refsect2">
