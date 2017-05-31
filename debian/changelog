@@ -4,6 +4,15 @@ webkit2gtk (2.16.3-2) UNRELEASED; urgency=medium
     + Stop scanning the 2.15 branch.
   * debian/gbp.conf:
     + Update upstream branch name.
+  * The WebKitGTK+ security advisory WSA-2017-0004 lists the following
+    security fixes in the latest versions of WebKitGTK+:
+    + CVE-2017-2505, CVE-2017-2508, CVE-2017-2514, CVE-2017-2521
+      (fixed in 2.16.0).
+    + CVE-2017-2504, CVE-2017-2506, CVE-2017-2515, CVE-2017-2525,
+      CVE-2017-2526, CVE-2017-2528, CVE-2017-2530, CVE-2017-2531,
+      CVE-2017-2536, CVE-2017-2544, CVE-2017-2547, CVE-2017-2549,
+      CVE-2017-6980, CVE-2017-6984 (fixed in 2.16.1).
+    + CVE-2017-2496, CVE-2017-2510, CVE-2017-2539 (fixed in 2.16.3).
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 01 Jun 2017 00:29:57 +0300
 
