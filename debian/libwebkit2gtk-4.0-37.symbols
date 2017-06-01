@@ -18,6 +18,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_authentication_request_is_for_proxy@Base 2.5.3
  webkit_authentication_request_is_retry@Base 2.5.3
  webkit_authentication_scheme_get_type@Base 2.5.3
+ webkit_automation_session_get_id@Base 2.17.3
+ webkit_automation_session_get_type@Base 2.17.3
  webkit_back_forward_list_get_back_item@Base 2.5.3
  webkit_back_forward_list_get_back_list@Base 2.5.3
  webkit_back_forward_list_get_back_list_with_limit@Base 2.5.3
@@ -57,11 +59,13 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_context_menu_get_user_data@Base 2.8.1
  webkit_context_menu_insert@Base 2.5.3
  webkit_context_menu_item_get_action@Base 2.5.3
+ webkit_context_menu_item_get_gaction@Base 2.17.3
  webkit_context_menu_item_get_stock_action@Base 2.5.3
  webkit_context_menu_item_get_submenu@Base 2.5.3
  webkit_context_menu_item_get_type@Base 2.5.3
  webkit_context_menu_item_is_separator@Base 2.5.3
  webkit_context_menu_item_new@Base 2.5.3
+ webkit_context_menu_item_new_from_gaction@Base 2.17.3
  webkit_context_menu_item_new_from_stock_action@Base 2.5.3
  webkit_context_menu_item_new_from_stock_action_with_label@Base 2.5.3
  webkit_context_menu_item_new_separator@Base 2.5.3
@@ -116,6 +120,16 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_dom_character_data_replace_data@Base 2.5.3
  webkit_dom_character_data_set_data@Base 2.5.3
  webkit_dom_character_data_substring_data@Base 2.5.3
+ webkit_dom_client_rect_get_bottom@Base 2.17.3
+ webkit_dom_client_rect_get_height@Base 2.17.3
+ webkit_dom_client_rect_get_left@Base 2.17.3
+ webkit_dom_client_rect_get_right@Base 2.17.3
+ webkit_dom_client_rect_get_top@Base 2.17.3
+ webkit_dom_client_rect_get_type@Base 2.17.3
+ webkit_dom_client_rect_get_width@Base 2.17.3
+ webkit_dom_client_rect_list_get_length@Base 2.17.3
+ webkit_dom_client_rect_list_get_type@Base 2.17.3
+ webkit_dom_client_rect_list_item@Base 2.17.3
  webkit_dom_comment_get_type@Base 2.5.3
  webkit_dom_css_rule_get_css_text@Base 2.5.3
  webkit_dom_css_rule_get_parent_rule@Base 2.5.3
@@ -373,12 +387,14 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_dom_element_get_attribute_node_ns@Base 2.5.3
  webkit_dom_element_get_attribute_ns@Base 2.5.3
  webkit_dom_element_get_attributes@Base 2.5.3
+ webkit_dom_element_get_bounding_client_rect@Base 2.17.3
  webkit_dom_element_get_child_element_count@Base 2.5.3
  webkit_dom_element_get_children@Base 2.10.0
  (optional)webkit_dom_element_get_class_list@Base 2.5.3
  webkit_dom_element_get_class_name@Base 2.5.3
  webkit_dom_element_get_client_height@Base 2.5.3
  webkit_dom_element_get_client_left@Base 2.5.3
+ webkit_dom_element_get_client_rects@Base 2.17.3
  webkit_dom_element_get_client_top@Base 2.5.3
  webkit_dom_element_get_client_width@Base 2.5.3
  webkit_dom_element_get_elements_by_class_name@Base 2.5.3
@@ -1460,6 +1476,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_hit_test_result_get_media_uri@Base 2.5.3
  webkit_hit_test_result_get_type@Base 2.5.3
  webkit_insecure_content_event_get_type@Base 2.5.3
+ webkit_inspector_window_get_type@Base 2.17.3
  webkit_install_missing_media_plugins_permission_request_get_description@Base 2.10.0
  webkit_install_missing_media_plugins_permission_request_get_type@Base 2.10.0
  webkit_javascript_error_get_type@Base 2.5.3
@@ -1768,6 +1785,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_get_web_process_count_limit@Base 2.10.0
  webkit_web_context_get_website_data_manager@Base 2.10.0
  webkit_web_context_initialize_notification_permissions@Base 2.15.3
+ webkit_web_context_is_automation_allowed@Base 2.17.3
  webkit_web_context_is_ephemeral@Base 2.15.4
  webkit_web_context_new@Base 2.8.1
  webkit_web_context_new_ephemeral@Base 2.15.4
@@ -1775,6 +1793,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_prefetch_dns@Base 2.5.3
  webkit_web_context_register_uri_scheme@Base 2.5.3
  webkit_web_context_set_additional_plugins_directory@Base 2.5.3
+ webkit_web_context_set_automation_allowed@Base 2.17.3
  webkit_web_context_set_cache_model@Base 2.5.3
  webkit_web_context_set_disk_cache_directory@Base 2.5.3
  webkit_web_context_set_favicon_database_directory@Base 2.5.3
@@ -1852,6 +1871,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_go_back@Base 2.5.3
  webkit_web_view_go_forward@Base 2.5.3
  webkit_web_view_go_to_back_forward_list_item@Base 2.5.3
+ webkit_web_view_is_controlled_by_automation@Base 2.17.3
  webkit_web_view_is_editable@Base 2.8.1
  webkit_web_view_is_ephemeral@Base 2.15.4
  webkit_web_view_is_loading@Base 2.5.3
