@@ -140,10 +140,9 @@ void RemoteInspector::updateClientCapabilities()
     }
 }
 
-void RemoteInspector::setRemoteInspectorClient(RemoteInspector::Client* client)
+void RemoteInspector::setClient(RemoteInspector::Client* client)
 {
-    ASSERT_ARG(client, client);
-    ASSERT(!m_client);
+    ASSERT((m_client && !client) || (!m_client && client));
 
     {
         std::lock_guard<Lock> lock(m_mutex);
@@ -205,6 +204,26 @@ TargetListing RemoteInspector::listingForTarget(const RemoteControllableTarget& 
 
     ASSERT_NOT_REACHED();
     return nullptr;
+}
+
+void RemoteInspector::updateTargetListing(unsigned targetIdentifier)
+{
+    auto target = m_targetMap.get(targetIdentifier);
+    if (!target)
+        return;
+
+    updateTargetListing(*target);
+}
+
+void RemoteInspector::updateTargetListing(const RemoteControllableTarget& target)
+{
+    auto targetListing = listingForTarget(target);
+    if (!targetListing)
+        return;
+
+    m_targetListingMap.set(target.targetIdentifier(), targetListing);
+
+    pushListingsSoon();
 }
 
 void RemoteInspector::updateHasActiveDebugSession()

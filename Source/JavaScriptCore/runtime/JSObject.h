@@ -36,6 +36,7 @@
 #include "Heap.h"
 #include "IndexingHeaderInlines.h"
 #include "JSCell.h"
+#include "ObjectInitializationScope.h"
 #include "PropertySlot.h"
 #include "PropertyStorage.h"
 #include "PutDirectIndexMode.h"
@@ -195,6 +196,7 @@ public:
     // putByIndex assumes that the receiver is this JSCell object.
     JS_EXPORT_PRIVATE static bool putByIndex(JSCell*, ExecState*, unsigned propertyName, JSValue, bool shouldThrow);
         
+    // This performs the ECMAScript Set() operation.
     ALWAYS_INLINE bool putByIndexInline(ExecState* exec, unsigned propertyName, JSValue value, bool shouldThrow)
     {
         if (canSetIndexQuickly(propertyName)) {
@@ -208,21 +210,44 @@ public:
     //  - the prototype chain is not consulted
     //  - accessors are not called.
     //  - it will ignore extensibility and read-only properties if PutDirectIndexLikePutDirect is passed as the mode (the default).
-    // This method creates a property with attributes writable, enumerable and configurable all set to true.
+    // This method creates a property with attributes writable, enumerable and configurable all set to true if attributes is zero,
+    // otherwise, it creates a property with the provided attributes. Semantically, this is performing defineOwnProperty.
     bool putDirectIndex(ExecState* exec, unsigned propertyName, JSValue value, unsigned attributes, PutDirectIndexMode mode)
     {
-        if (!attributes && canSetIndexQuicklyForPutDirect(propertyName)) {
+        auto canSetIndexQuicklyForPutDirect = [&] () -> bool {
+            switch (indexingType()) {
+            case ALL_BLANK_INDEXING_TYPES:
+            case ALL_UNDECIDED_INDEXING_TYPES:
+                return false;
+            case ALL_INT32_INDEXING_TYPES:
+            case ALL_DOUBLE_INDEXING_TYPES:
+            case ALL_CONTIGUOUS_INDEXING_TYPES:
+            case ALL_ARRAY_STORAGE_INDEXING_TYPES:
+                return propertyName < m_butterfly.get()->vectorLength();
+            default:
+                RELEASE_ASSERT_NOT_REACHED();
+                return false;
+            }
+        };
+        
+        if (!attributes && canSetIndexQuicklyForPutDirect()) {
             setIndexQuickly(exec->vm(), propertyName, value);
             return true;
         }
-        return putDirectIndexBeyondVectorLength(exec, propertyName, value, attributes, mode);
+        return putDirectIndexSlowOrBeyondVectorLength(exec, propertyName, value, attributes, mode);
     }
+    // This is semantically equivalent to performing defineOwnProperty(propertyName, {configurable:true, writable:true, enumerable:true, value:value}).
     bool putDirectIndex(ExecState* exec, unsigned propertyName, JSValue value)
     {
         return putDirectIndex(exec, propertyName, value, 0, PutDirectIndexLikePutDirect);
     }
 
-    // A non-throwing version of putDirect and putDirectIndex.
+    // A generally non-throwing version of putDirect and putDirectIndex.
+    // However, it's only guaranteed to not throw based on what the receiver is.
+    // For example, if the receiver is a ProxyObject, this is not guaranteed, since
+    // it may call into arbitrary JS code. It's the responsibility of the user of
+    // this API to ensure that the receiver object is a well known type if they
+    // want to ensure that this won't throw an exception.
     JS_EXPORT_PRIVATE bool putDirectMayBeIndex(ExecState*, PropertyName, JSValue);
         
     bool hasIndexingHeader() const
@@ -351,23 +376,6 @@ public:
         }
     }
         
-    bool canSetIndexQuicklyForPutDirect(unsigned i)
-    {
-        switch (indexingType()) {
-        case ALL_BLANK_INDEXING_TYPES:
-        case ALL_UNDECIDED_INDEXING_TYPES:
-            return false;
-        case ALL_INT32_INDEXING_TYPES:
-        case ALL_DOUBLE_INDEXING_TYPES:
-        case ALL_CONTIGUOUS_INDEXING_TYPES:
-        case ALL_ARRAY_STORAGE_INDEXING_TYPES:
-            return i < m_butterfly.get()->vectorLength();
-        default:
-            RELEASE_ASSERT_NOT_REACHED();
-            return false;
-        }
-    }
-        
     void setIndexQuickly(VM& vm, unsigned i, JSValue v)
     {
         Butterfly* butterfly = m_butterfly.get();
@@ -420,15 +428,16 @@ public:
         }
     }
 
-    void initializeIndex(VM& vm, unsigned i, JSValue v)
+    void initializeIndex(ObjectInitializationScope& scope, unsigned i, JSValue v)
     {
-        initializeIndex(vm, i, v, indexingType());
+        initializeIndex(scope, i, v, indexingType());
     }
 
     // NOTE: Clients of this method may call it more than once for any index, and this is supposed
     // to work.
-    ALWAYS_INLINE void initializeIndex(VM& vm, unsigned i, JSValue v, IndexingType indexingType)
+    ALWAYS_INLINE void initializeIndex(ObjectInitializationScope& scope, unsigned i, JSValue v, IndexingType indexingType)
     {
+        VM& vm = scope.vm();
         Butterfly* butterfly = m_butterfly.get();
         switch (indexingType) {
         case ALL_UNDECIDED_INDEXING_TYPES: {
@@ -477,14 +486,14 @@ public:
         }
     }
         
-    void initializeIndexWithoutBarrier(unsigned i, JSValue v)
+    void initializeIndexWithoutBarrier(ObjectInitializationScope& scope, unsigned i, JSValue v)
     {
-        initializeIndexWithoutBarrier(i, v, indexingType());
+        initializeIndexWithoutBarrier(scope, i, v, indexingType());
     }
 
     // This version of initializeIndex is for cases where you know that you will not need any
     // barriers. This implies not having any data format conversions.
-    ALWAYS_INLINE void initializeIndexWithoutBarrier(unsigned i, JSValue v, IndexingType indexingType)
+    ALWAYS_INLINE void initializeIndexWithoutBarrier(ObjectInitializationScope&, unsigned i, JSValue v, IndexingType indexingType)
     {
         Butterfly* butterfly = m_butterfly.get();
         switch (indexingType) {
@@ -664,7 +673,7 @@ public:
         
     const Butterfly* butterfly() const { return m_butterfly.get(); }
     Butterfly* butterfly() { return m_butterfly.get(); }
-        
+    
     ConstPropertyStorage outOfLineStorage() const { return m_butterfly.get()->propertyStorage(); }
     PropertyStorage outOfLineStorage() { return m_butterfly.get()->propertyStorage(); }
 
@@ -705,9 +714,10 @@ public:
     JS_EXPORT_PRIVATE bool putDirectNativeIntrinsicGetter(VM&, JSGlobalObject*, Identifier, NativeFunction, Intrinsic, unsigned attributes);
     JS_EXPORT_PRIVATE bool putDirectNativeFunction(VM&, JSGlobalObject*, const PropertyName&, unsigned functionLength, NativeFunction, Intrinsic, unsigned attributes);
     JS_EXPORT_PRIVATE bool putDirectNativeFunction(VM&, JSGlobalObject*, const PropertyName&, unsigned functionLength, NativeFunction, Intrinsic, const DOMJIT::Signature*, unsigned attributes);
+    JS_EXPORT_PRIVATE void putDirectNativeFunctionWithoutTransition(VM&, JSGlobalObject*, const PropertyName&, unsigned functionLength, NativeFunction, Intrinsic, unsigned attributes);
+
     JS_EXPORT_PRIVATE JSFunction* putDirectBuiltinFunction(VM&, JSGlobalObject*, const PropertyName&, FunctionExecutable*, unsigned attributes);
     JSFunction* putDirectBuiltinFunctionWithoutTransition(VM&, JSGlobalObject*, const PropertyName&, FunctionExecutable*, unsigned attributes);
-    JS_EXPORT_PRIVATE void putDirectNativeFunctionWithoutTransition(VM&, JSGlobalObject*, const PropertyName&, unsigned functionLength, NativeFunction, Intrinsic, unsigned attributes);
 
     JS_EXPORT_PRIVATE static bool defineOwnProperty(JSObject*, ExecState*, PropertyName, const PropertyDescriptor&, bool shouldThrow);
 
@@ -1013,7 +1023,7 @@ private:
         
     bool putByIndexBeyondVectorLength(ExecState*, unsigned propertyName, JSValue, bool shouldThrow);
     bool putDirectIndexBeyondVectorLengthWithArrayStorage(ExecState*, unsigned propertyName, JSValue, unsigned attributes, PutDirectIndexMode, ArrayStorage*);
-    JS_EXPORT_PRIVATE bool putDirectIndexBeyondVectorLength(ExecState*, unsigned propertyName, JSValue, unsigned attributes, PutDirectIndexMode);
+    JS_EXPORT_PRIVATE bool putDirectIndexSlowOrBeyondVectorLength(ExecState*, unsigned propertyName, JSValue, unsigned attributes, PutDirectIndexMode);
         
     unsigned getNewVectorLength(unsigned indexBias, unsigned currentVectorLength, unsigned currentLength, unsigned desiredLength);
     unsigned getNewVectorLength(unsigned desiredLength);
@@ -1080,9 +1090,9 @@ public:
     typedef JSObject Base;
     static const unsigned StructureFlags = Base::StructureFlags;
 
-    static size_t allocationSize(size_t inlineCapacity)
+    static size_t allocationSize(Checked<size_t> inlineCapacity)
     {
-        return sizeof(JSObject) + inlineCapacity * sizeof(WriteBarrierBase<Unknown>);
+        return (sizeof(JSObject) + inlineCapacity * sizeof(WriteBarrierBase<Unknown>)).unsafeGet();
     }
 
     static inline const TypeInfo typeInfo() { return TypeInfo(FinalObjectType, StructureFlags); }
@@ -1580,6 +1590,5 @@ JS_EXPORT_PRIVATE NEVER_INLINE bool ordinarySetSlow(ExecState*, JSObject*, Prope
 
 #define JSC_NATIVE_GETTER(jsName, cppName, attributes) \
     JSC_NATIVE_INTRINSIC_GETTER((jsName), (cppName), (attributes), NoIntrinsic)
-
 
 } // namespace JSC

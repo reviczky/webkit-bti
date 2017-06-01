@@ -301,6 +301,7 @@ public:
     static void clearMediaCacheForOrigins(const String& path, const HashSet<RefPtr<SecurityOrigin>>&);
     static bool supportsKeySystem(const String& keySystem, const String& mimeType);
 
+    bool supportsPictureInPicture() const;
     bool supportsFullscreen() const;
     bool supportsScanning() const;
     bool canSaveMediaData() const;
@@ -338,7 +339,7 @@ public:
     bool load(const URL&, const ContentType&, MediaSourcePrivateClient*);
 #endif
 #if ENABLE(MEDIA_STREAM)
-    bool load(MediaStreamPrivate*);
+    bool load(MediaStreamPrivate&);
 #endif
     void cancelLoad();
 
@@ -397,9 +398,6 @@ public:
 
     bool hasClosedCaptions() const;
     void setClosedCaptionsVisible(bool closedCaptionsVisible);
-
-    bool autoplay() const;
-    void setAutoplay(bool);
 
     void paint(GraphicsContext&, const FloatRect&);
     void paintCurrentFrameInContext(GraphicsContext&, const FloatRect&);
@@ -531,7 +529,7 @@ public:
     long platformErrorCode() const;
 
     CachedResourceLoader* cachedResourceLoader();
-    PassRefPtr<PlatformMediaResourceLoader> createResourceLoader();
+    RefPtr<PlatformMediaResourceLoader> createResourceLoader();
 
 #if ENABLE(VIDEO_TRACK)
     void addAudioTrack(AudioTrackPrivate&);
@@ -585,14 +583,16 @@ public:
     void setShouldDisableSleep(bool);
     bool shouldDisableSleep() const;
 
+    const String& contentMIMEType() const { return m_contentMIMEType; }
+    const String& contentTypeCodecs() const { return m_contentTypeCodecs; }
+    bool contentMIMETypeWasInferredFromExtension() const { return m_contentMIMETypeWasInferredFromExtension; }
+
 private:
     MediaPlayer(MediaPlayerClient&);
 
     const MediaPlayerFactory* nextBestMediaEngine(const MediaPlayerFactory*) const;
     void loadWithNextMediaEngine(const MediaPlayerFactory*);
     void reloadTimerFired();
-
-    static void initializeMediaEngines();
 
     MediaPlayerClient* m_client;
     Timer m_reloadTimer;

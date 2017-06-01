@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -63,6 +63,23 @@
 #include <wtf/StdLibExtras.h>
 
 namespace JSC { namespace DFG {
+
+namespace {
+
+NO_RETURN_DUE_TO_CRASH NEVER_INLINE void crash()
+{
+    CRASH();
+}
+
+#undef RELEASE_ASSERT
+#define RELEASE_ASSERT(assertion) do { \
+    if (UNLIKELY(!(assertion))) { \
+        WTFReportAssertionFailure(__FILE__, __LINE__, WTF_PRETTY_FUNCTION, #assertion); \
+        crash(); \
+    } \
+} while (0)
+
+} // anonymous namespace
 
 static const bool verbose = false;
 
@@ -184,7 +201,7 @@ private:
     // Helper for min and max.
     template<typename ChecksFunctor>
     bool handleMinMax(int resultOperand, NodeType op, int registerOffset, int argumentCountIncludingThis, const ChecksFunctor& insertChecks);
-
+    
     void refineStatically(CallLinkStatus&, Node* callTarget);
     // Handle calls. This resolves issues surrounding inlining and intrinsics.
     enum Terminality { Terminal, NonTerminal };
@@ -625,7 +642,7 @@ private:
         if (!inlineStackEntry->m_inlineCallFrame && m_graph.needsFlushedThis())
             flushDirect(virtualRegisterForArgument(0));
         if (m_graph.needsScopeRegister())
-            flush(m_codeBlock->scopeRegister());
+            flushDirect(m_codeBlock->scopeRegister());
     }
 
     void flushForTerminal()
@@ -1189,6 +1206,7 @@ private:
             , m_operand(operand)
             , m_value(value)
         {
+            RELEASE_ASSERT(operand.isValid());
         }
         
         Node* execute(ByteCodeParser* parser, SetMode setMode = NormalSet)
@@ -1370,7 +1388,7 @@ void ByteCodeParser::emitFunctionChecks(CallVariant callee, Node* callTarget, Vi
     if (thisArgumentReg.isValid())
         thisArgument = get(thisArgumentReg);
     else
-        thisArgument = 0;
+        thisArgument = nullptr;
 
     JSCell* calleeCell;
     Node* callTargetForCheck;
@@ -1383,7 +1401,9 @@ void ByteCodeParser::emitFunctionChecks(CallVariant callee, Node* callTarget, Vi
     }
     
     ASSERT(calleeCell);
-    addToGraph(CheckCell, OpInfo(m_graph.freeze(calleeCell)), callTargetForCheck, thisArgument);
+    addToGraph(CheckCell, OpInfo(m_graph.freeze(calleeCell)), callTargetForCheck);
+    if (thisArgument)
+        addToGraph(Phantom, thisArgument);
 }
 
 Node* ByteCodeParser::getArgumentCount()
@@ -2144,6 +2164,18 @@ bool ByteCodeParser::handleMinMax(int resultOperand, NodeType op, int registerOf
 template<typename ChecksFunctor>
 bool ByteCodeParser::handleIntrinsicCall(Node* callee, int resultOperand, Intrinsic intrinsic, int registerOffset, int argumentCountIncludingThis, SpeculatedType prediction, const ChecksFunctor& insertChecks)
 {
+    if (Options::verboseDFGByteCodeParsing())
+        dataLog("       The intrinsic is ", intrinsic, "\n");
+    
+    // It so happens that the code below doesn't handle the invalid result case. We could fix that, but
+    // it would only benefit intrinsics called as setters, like if you do:
+    //
+    //     o.__defineSetter__("foo", Math.pow)
+    //
+    // Which is extremely amusing, but probably not worth optimizing.
+    if (!VirtualRegister(resultOperand).isValid())
+        return false;
+    
     switch (intrinsic) {
 
     // Intrinsic Functions:
@@ -2172,12 +2204,34 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, int resultOperand, Intrin
     case MaxIntrinsic:
         return handleMinMax(resultOperand, ArithMax, registerOffset, argumentCountIncludingThis, insertChecks);
 
-    case CosIntrinsic:
+#define DFG_ARITH_UNARY(capitalizedName, lowerName) \
+    case capitalizedName##Intrinsic:
+    FOR_EACH_DFG_ARITH_UNARY_OP(DFG_ARITH_UNARY)
+#undef DFG_ARITH_UNARY
+    {
+        if (argumentCountIncludingThis == 1) {
+            insertChecks();
+            set(VirtualRegister(resultOperand), addToGraph(JSConstant, OpInfo(m_constantNaN)));
+            return true;
+        }
+        Arith::UnaryType type = Arith::UnaryType::Sin;
+        switch (intrinsic) {
+#define DFG_ARITH_UNARY(capitalizedName, lowerName) \
+        case capitalizedName##Intrinsic: \
+            type = Arith::UnaryType::capitalizedName; \
+            break;
+    FOR_EACH_DFG_ARITH_UNARY_OP(DFG_ARITH_UNARY)
+#undef DFG_ARITH_UNARY
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+        }
+        insertChecks();
+        set(VirtualRegister(resultOperand), addToGraph(ArithUnary, OpInfo(static_cast<std::underlying_type<Arith::UnaryType>::type>(type)), get(virtualRegisterForArgument(1, registerOffset))));
+        return true;
+    }
+
     case FRoundIntrinsic:
-    case LogIntrinsic:
-    case SinIntrinsic:
-    case SqrtIntrinsic:
-    case TanIntrinsic: {
+    case SqrtIntrinsic: {
         if (argumentCountIncludingThis == 1) {
             insertChecks();
             set(VirtualRegister(resultOperand), addToGraph(JSConstant, OpInfo(m_constantNaN)));
@@ -2186,23 +2240,11 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, int resultOperand, Intrin
 
         NodeType nodeType = Unreachable;
         switch (intrinsic) {
-        case CosIntrinsic:
-            nodeType = ArithCos;
-            break;
         case FRoundIntrinsic:
             nodeType = ArithFRound;
             break;
-        case LogIntrinsic:
-            nodeType = ArithLog;
-            break;
-        case SinIntrinsic:
-            nodeType = ArithSin;
-            break;
         case SqrtIntrinsic:
             nodeType = ArithSqrt;
-            break;
-        case TanIntrinsic:
-            nodeType = ArithTan;
             break;
         default:
             RELEASE_ASSERT_NOT_REACHED();
@@ -2252,7 +2294,7 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, int resultOperand, Intrin
 
     case ArraySliceIntrinsic: {
 #if USE(JSVALUE32_64)
-        if (isX86()) {
+        if (isX86() || isMIPS()) {
             // There aren't enough registers for this to be done easily.
             return false;
         }
@@ -2359,6 +2401,94 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, int resultOperand, Intrin
         default:
             return false;
         }
+    }
+        
+    case AtomicsAddIntrinsic:
+    case AtomicsAndIntrinsic:
+    case AtomicsCompareExchangeIntrinsic:
+    case AtomicsExchangeIntrinsic:
+    case AtomicsIsLockFreeIntrinsic:
+    case AtomicsLoadIntrinsic:
+    case AtomicsOrIntrinsic:
+    case AtomicsStoreIntrinsic:
+    case AtomicsSubIntrinsic:
+    case AtomicsXorIntrinsic: {
+        if (!is64Bit())
+            return false;
+        
+        NodeType op = LastNodeType;
+        unsigned numArgs = 0; // Number of actual args; we add one for the backing store pointer.
+        switch (intrinsic) {
+        case AtomicsAddIntrinsic:
+            op = AtomicsAdd;
+            numArgs = 3;
+            break;
+        case AtomicsAndIntrinsic:
+            op = AtomicsAnd;
+            numArgs = 3;
+            break;
+        case AtomicsCompareExchangeIntrinsic:
+            op = AtomicsCompareExchange;
+            numArgs = 4;
+            break;
+        case AtomicsExchangeIntrinsic:
+            op = AtomicsExchange;
+            numArgs = 3;
+            break;
+        case AtomicsIsLockFreeIntrinsic:
+            // This gets no backing store, but we need no special logic for this since this also does
+            // not need varargs.
+            op = AtomicsIsLockFree;
+            numArgs = 1;
+            break;
+        case AtomicsLoadIntrinsic:
+            op = AtomicsLoad;
+            numArgs = 2;
+            break;
+        case AtomicsOrIntrinsic:
+            op = AtomicsOr;
+            numArgs = 3;
+            break;
+        case AtomicsStoreIntrinsic:
+            op = AtomicsStore;
+            numArgs = 3;
+            break;
+        case AtomicsSubIntrinsic:
+            op = AtomicsSub;
+            numArgs = 3;
+            break;
+        case AtomicsXorIntrinsic:
+            op = AtomicsXor;
+            numArgs = 3;
+            break;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+            break;
+        }
+        
+        if (static_cast<unsigned>(argumentCountIncludingThis) < 1 + numArgs)
+            return false;
+        
+        insertChecks();
+        
+        Vector<Node*, 3> args;
+        for (unsigned i = 0; i < numArgs; ++i)
+            args.append(get(virtualRegisterForArgument(1 + i, registerOffset)));
+        
+        Node* result;
+        if (numArgs + 1 <= 3) {
+            while (args.size() < 3)
+                args.append(nullptr);
+            result = addToGraph(op, OpInfo(ArrayMode(Array::SelectUsingPredictions).asWord()), OpInfo(prediction), args[0], args[1], args[2]);
+        } else {
+            for (Node* node : args)
+                addVarArgChild(node);
+            addVarArgChild(nullptr);
+            result = addToGraph(Node::VarArg, op, OpInfo(ArrayMode(Array::SelectUsingPredictions).asWord()), OpInfo(prediction));
+        }
+        
+        set(VirtualRegister(resultOperand), result);
+        return true;
     }
 
     case ParseIntIntrinsic: {
@@ -2863,10 +2993,8 @@ bool ByteCodeParser::handleDOMJITGetter(int resultOperand, const GetByIdVariant&
         return false;
     addToGraph(CheckStructure, OpInfo(m_graph.addStructureSet(variant.structureSet())), thisNode);
 
-    Ref<DOMJIT::Patchpoint> checkDOMPatchpoint = domJIT->checkDOM();
-    m_graph.m_domJITPatchpoints.append(checkDOMPatchpoint.ptr());
     // We do not need to emit CheckCell thingy here. When the custom accessor is replaced to different one, Structure transition occurs.
-    addToGraph(CheckDOM, OpInfo(checkDOMPatchpoint.ptr()), OpInfo(domJIT->thisClassInfo()), thisNode);
+    addToGraph(CheckSubClass, OpInfo(domJIT->thisClassInfo()), thisNode);
 
     CallDOMGetterData* callDOMGetterData = m_graph.m_callDOMGetterData.add();
     Ref<DOMJIT::CallDOMGetterPatchpoint> callDOMGetterPatchpoint = domJIT->callDOMGetter();
@@ -2978,8 +3106,13 @@ bool ByteCodeParser::handleConstantInternalFunction(
     Node* callTargetNode, int resultOperand, InternalFunction* function, int registerOffset,
     int argumentCountIncludingThis, CodeSpecializationKind kind, SpeculatedType prediction, const ChecksFunctor& insertChecks)
 {
-    if (verbose)
+    if (Options::verboseDFGByteCodeParsing())
         dataLog("    Handling constant internal function ", JSValue(function), "\n");
+    
+    // It so happens that the code below assumes that the result operand is valid. It's extremely
+    // unlikely that the result operand would be invalid - you'd have to call this via a setter call.
+    if (!VirtualRegister(resultOperand).isValid())
+        return false;
 
     if (kind == CodeForConstruct) {
         Node* newTargetNode = get(virtualRegisterForArgument(0, registerOffset));
@@ -3612,9 +3745,9 @@ void ByteCodeParser::handleGetById(
 
     if (handleIntrinsicGetter(destinationOperand, variant, base,
             [&] () {
-                addToGraph(CheckCell, OpInfo(m_graph.freeze(variant.intrinsicFunction())), getter, base);
+                addToGraph(CheckCell, OpInfo(m_graph.freeze(variant.intrinsicFunction())), getter);
             })) {
-        addToGraph(Phantom, getter);
+        addToGraph(Phantom, base);
         return;
     }
 
@@ -4937,8 +5070,8 @@ bool ByteCodeParser::parseBlock(unsigned limit)
             LAST_OPCODE(op_throw);
             
         case op_throw_static_error:
-            addToGraph(Phantom, get(VirtualRegister(currentInstruction[1].u.operand))); // Keep argument live.
             addToGraph(ThrowStaticError);
+            addToGraph(Phantom, get(VirtualRegister(currentInstruction[1].u.operand))); // Keep argument live.
             flushForTerminal();
             addToGraph(Unreachable);
             LAST_OPCODE(op_throw_static_error);
@@ -5115,6 +5248,15 @@ bool ByteCodeParser::parseBlock(unsigned limit)
                 break;
             }
             NEXT_OPCODE(op_resolve_scope);
+        }
+        case op_resolve_scope_for_hoisting_func_decl_in_eval: {
+            int dst = currentInstruction[1].u.operand;
+            int scope = currentInstruction[2].u.operand;
+            unsigned identifierNumber = m_inlineStackTop->m_identifierRemap[currentInstruction[3].u.operand];
+
+            set(VirtualRegister(dst), addToGraph(ResolveScopeForHoistingFuncDeclInEval, OpInfo(identifierNumber), get(VirtualRegister(scope))));
+
+            NEXT_OPCODE(op_resolve_scope_for_hoisting_func_decl_in_eval);
         }
 
         case op_get_from_scope: {
@@ -5404,9 +5546,9 @@ bool ByteCodeParser::parseBlock(unsigned limit)
             NEXT_OPCODE(op_loop_hint);
         }
         
-        case op_watchdog: {
-            addToGraph(CheckWatchdogTimer);
-            NEXT_OPCODE(op_watchdog); 
+        case op_check_traps: {
+            addToGraph(CheckTraps);
+            NEXT_OPCODE(op_check_traps);
         }
             
         case op_create_lexical_environment: {

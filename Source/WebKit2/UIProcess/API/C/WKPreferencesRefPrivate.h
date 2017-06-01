@@ -63,6 +63,10 @@ WK_EXPORT void WKPreferencesEnableAllExperimentalFeatures(WKPreferencesRef);
 WK_EXPORT void WKPreferencesSetFontSmoothingLevel(WKPreferencesRef, WKFontSmoothingLevel);
 WK_EXPORT WKFontSmoothingLevel WKPreferencesGetFontSmoothingLevel(WKPreferencesRef);
 
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetSubpixelAntialiasedLayerTextEnabled(WKPreferencesRef, bool);
+WK_EXPORT bool WKPreferencesGetSubpixelAntialiasedLayerTextEnabled(WKPreferencesRef);
+
 // Defaults to EditableLinkNeverLive.
 WK_EXPORT void WKPreferencesSetEditableLinkBehavior(WKPreferencesRef preferencesRef, WKEditableLinkBehavior);
 WK_EXPORT WKEditableLinkBehavior WKPreferencesGetEditableLinkBehavior(WKPreferencesRef preferencesRef);   
@@ -394,10 +398,6 @@ WK_EXPORT void WKPreferencesSetMinimumZoomFontSize(WKPreferencesRef preferencesR
 WK_EXPORT double WKPreferencesGetMinimumZoomFontSize(WKPreferencesRef preferencesRef);
 
 // Not implemented, should be deleted once Safari no longer uses this function.
-WK_EXPORT void WKPreferencesSetScreenFontSubstitutionEnabled(WKPreferencesRef preferences, bool enabled);
-WK_EXPORT bool WKPreferencesGetScreenFontSubstitutionEnabled(WKPreferencesRef preferences);
-
-// Not implemented, should be deleted once Safari no longer uses this function.
 WK_EXPORT void WKPreferencesSetAntialiasedFontDilationEnabled(WKPreferencesRef preferences, bool enabled);
 WK_EXPORT bool WKPreferencesGetAntialiasedFontDilationEnabled(WKPreferencesRef preferences);
 
@@ -422,9 +422,21 @@ WK_EXPORT void WKPreferencesSetMockCaptureDevicesEnabled(WKPreferencesRef, bool)
 WK_EXPORT bool WKPreferencesGetMockCaptureDevicesEnabled(WKPreferencesRef);
 
 // Defaults to true.
+WK_EXPORT void WKPreferencesSetICECandidateFilteringEnabled(WKPreferencesRef, bool);
+WK_EXPORT bool WKPreferencesGetICECandidateFilteringEnabled(WKPreferencesRef);
+
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetEnumeratingAllNetworkInterfacesEnabled(WKPreferencesRef, bool);
+WK_EXPORT bool WKPreferencesGetEnumeratingAllNetworkInterfacesEnabled(WKPreferencesRef);
+
+// Defaults to true.
 WK_EXPORT void WKPreferencesSetMediaCaptureRequiresSecureConnection(WKPreferencesRef, bool);
 WK_EXPORT bool WKPreferencesGetMediaCaptureRequiresSecureConnection(WKPreferencesRef);
 
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetUseAVFoundationAudioCapture(WKPreferencesRef, bool);
+WK_EXPORT bool WKPreferencesGetUseAVFoundationAudioCapture(WKPreferencesRef);
+    
 // Defaults to false
 WK_EXPORT void WKPreferencesSetFetchAPIEnabled(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetFetchAPIEnabled(WKPreferencesRef);
@@ -457,6 +469,14 @@ WK_EXPORT bool WKPreferencesGetResourceTimingEnabled(WKPreferencesRef);
 WK_EXPORT void WKPreferencesSetSubtleCryptoEnabled(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetSubtleCryptoEnabled(WKPreferencesRef);
 
+// Defaults to true.
+WK_EXPORT void WKPreferencesSetLargeImageAsyncDecodingEnabled(WKPreferencesRef preferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetLargeImageAsyncDecodingEnabled(WKPreferencesRef preferencesRef);
+
+// Defaults to true.
+WK_EXPORT void WKPreferencesSetAnimatedImageAsyncDecodingEnabled(WKPreferencesRef preferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetAnimatedImageAsyncDecodingEnabled(WKPreferencesRef preferencesRef);
+
 // Defaults to false
 WK_EXPORT void WKPreferencesSetShouldSuppressKeyboardInputDuringProvisionalNavigation(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetShouldSuppressKeyboardInputDuringProvisionalNavigation(WKPreferencesRef);
@@ -464,6 +484,18 @@ WK_EXPORT bool WKPreferencesGetShouldSuppressKeyboardInputDuringProvisionalNavig
 // Defaults to false.
 WK_EXPORT void WKPreferencesSetLinkPreloadEnabled(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetLinkPreloadEnabled(WKPreferencesRef);
+
+// Defaults to false
+WK_EXPORT void WKPreferencesSetCredentialManagementEnabled(WKPreferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetCredentialManagementEnabled(WKPreferencesRef);
+
+// Defaults to true.
+WK_EXPORT void WKPreferencesSetInvisibleMediaAutoplayPermitted(WKPreferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetInvisibleMediaAutoplayPermitted(WKPreferencesRef);
+
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetMediaUserGestureInheritsFromDocument(WKPreferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetMediaUserGestureInheritsFromDocument(WKPreferencesRef);
 
 #ifdef __cplusplus
 }

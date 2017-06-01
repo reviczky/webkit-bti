@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,11 +26,17 @@
 #pragma once
 
 #include "ArgumentCoders.h"
+#include <WebCore/AutoplayEvent.h>
+#include <WebCore/CaptureDevice.h>
 #include <WebCore/ColorSpace.h>
 #include <WebCore/DiagnosticLoggingClient.h>
 #include <WebCore/FrameLoaderTypes.h>
 #include <WebCore/IndexedDB.h>
+#include <WebCore/MediaSelectionOption.h>
+#include <WebCore/NetworkLoadMetrics.h>
+#include <WebCore/NotificationDirection.h>
 #include <WebCore/PaymentHeaders.h>
+#include <WebCore/RealtimeMediaSource.h>
 #include <WebCore/ScrollSnapOffsetsInfo.h>
 
 namespace WTF {
@@ -82,7 +88,6 @@ class UserStyleSheet;
 class UserScript;
 class URL;
 struct CompositionUnderline;
-struct Cookie;
 struct DictationAlternative;
 struct DictionaryPopupInfo;
 struct EventTrackingRegions;
@@ -92,6 +97,7 @@ struct Length;
 struct GrammarDetail;
 struct MimeClassInfo;
 struct PasteboardImage;
+struct PasteboardURL;
 struct PasteboardWebContent;
 struct PluginInfo;
 struct RecentSearch;
@@ -101,6 +107,9 @@ struct TextCheckingResult;
 struct TextIndicatorData;
 struct ViewportAttributes;
 struct WindowFeatures;
+    
+template <typename> class BoxExtent;
+using FloatBoxExtent = BoxExtent<float>;
 }
 
 #if PLATFORM(COCOA)
@@ -127,6 +136,12 @@ struct SoupNetworkProxySettings;
 }
 #endif
 
+#if PLATFORM(WPE)
+namespace WebCore {
+struct PasteboardWebContents;
+}
+#endif
+
 #if ENABLE(CONTENT_FILTERING)
 namespace WebCore {
 class ContentFilterUnblockHandler;
@@ -148,7 +163,7 @@ class MediaSessionMetadata;
 #if ENABLE(MEDIA_STREAM)
 namespace WebCore {
 class CaptureDevice;
-struct MediaConstraintsData;
+struct MediaConstraints;
 }
 #endif
 
@@ -223,6 +238,11 @@ template<> struct ArgumentCoder<WebCore::FloatPoint3D> {
 template<> struct ArgumentCoder<WebCore::FloatRect> {
     static void encode(Encoder&, const WebCore::FloatRect&);
     static bool decode(Decoder&, WebCore::FloatRect&);
+};
+    
+template<> struct ArgumentCoder<WebCore::FloatBoxExtent> {
+    static void encode(Encoder&, const WebCore::FloatBoxExtent&);
+    static bool decode(Decoder&, WebCore::FloatBoxExtent&);
 };
 
 template<> struct ArgumentCoder<WebCore::FloatSize> {
@@ -386,6 +406,11 @@ template<> struct ArgumentCoder<WebCore::PasteboardWebContent> {
     static bool decode(Decoder&, WebCore::PasteboardWebContent&);
 };
 
+template<> struct ArgumentCoder<WebCore::PasteboardURL> {
+    static void encode(Encoder&, const WebCore::PasteboardURL&);
+    static bool decode(Decoder&, WebCore::PasteboardURL&);
+};
+
 template<> struct ArgumentCoder<WebCore::PasteboardImage> {
     static void encode(Encoder&, const WebCore::PasteboardImage&);
     static bool decode(Decoder&, WebCore::PasteboardImage&);
@@ -399,14 +424,16 @@ template<> struct ArgumentCoder<WebCore::SoupNetworkProxySettings> {
 };
 #endif
 
+#if PLATFORM(WPE)
+template<> struct ArgumentCoder<WebCore::PasteboardWebContent> {
+    static void encode(Encoder&, const WebCore::PasteboardWebContent&);
+    static bool decode(Decoder&, WebCore::PasteboardWebContent&);
+};
+#endif
+
 template<> struct ArgumentCoder<WebCore::CompositionUnderline> {
     static void encode(Encoder&, const WebCore::CompositionUnderline&);
     static bool decode(Decoder&, WebCore::CompositionUnderline&);
-};
-
-template<> struct ArgumentCoder<WebCore::Cookie> {
-    static void encode(Encoder&, const WebCore::Cookie&);
-    static bool decode(Decoder&, WebCore::Cookie&);
 };
 
 template<> struct ArgumentCoder<WebCore::DatabaseDetails> {
@@ -481,11 +508,6 @@ template<> struct ArgumentCoder<WebCore::FilterOperation> {
 bool decodeFilterOperation(Decoder&, RefPtr<WebCore::FilterOperation>&);
 #endif
 
-template<> struct ArgumentCoder<WebCore::SessionID> {
-    static void encode(Encoder&, const WebCore::SessionID&);
-    static bool decode(Decoder&, WebCore::SessionID&);
-};
-
 template<> struct ArgumentCoder<WebCore::BlobPart> {
     static void encode(Encoder&, const WebCore::BlobPart&);
     static bool decode(Decoder&, WebCore::BlobPart&);
@@ -546,9 +568,19 @@ template<> struct ArgumentCoder<WebCore::Payment> {
     static bool decode(Decoder&, WebCore::Payment&);
 };
 
+template<> struct ArgumentCoder<WebCore::PaymentAuthorizationResult> {
+    static void encode(Encoder&, const WebCore::PaymentAuthorizationResult&);
+    static bool decode(Decoder&, WebCore::PaymentAuthorizationResult&);
+};
+
 template<> struct ArgumentCoder<WebCore::PaymentContact> {
     static void encode(Encoder&, const WebCore::PaymentContact&);
     static bool decode(Decoder&, WebCore::PaymentContact&);
+};
+
+template<> struct ArgumentCoder<WebCore::PaymentError> {
+    static void encode(Encoder&, const WebCore::PaymentError&);
+    static bool decode(Decoder&, WebCore::PaymentError&);
 };
 
 template<> struct ArgumentCoder<WebCore::PaymentMerchantSession> {
@@ -559,6 +591,11 @@ template<> struct ArgumentCoder<WebCore::PaymentMerchantSession> {
 template<> struct ArgumentCoder<WebCore::PaymentMethod> {
     static void encode(Encoder&, const WebCore::PaymentMethod&);
     static bool decode(Decoder&, WebCore::PaymentMethod&);
+};
+
+template<> struct ArgumentCoder<WebCore::PaymentMethodUpdate> {
+    static void encode(Encoder&, const WebCore::PaymentMethodUpdate&);
+    static bool decode(Decoder&, WebCore::PaymentMethodUpdate&);
 };
 
 template<> struct ArgumentCoder<WebCore::PaymentRequest> {
@@ -591,12 +628,22 @@ template<> struct ArgumentCoder<WebCore::PaymentRequest::TotalAndLineItems> {
     static bool decode(Decoder&, WebCore::PaymentRequest::TotalAndLineItems&);
 };
 
+template<> struct ArgumentCoder<WebCore::ShippingContactUpdate> {
+    static void encode(Encoder&, const WebCore::ShippingContactUpdate&);
+    static bool decode(Decoder&, WebCore::ShippingContactUpdate&);
+};
+
+template<> struct ArgumentCoder<WebCore::ShippingMethodUpdate> {
+    static void encode(Encoder&, const WebCore::ShippingMethodUpdate&);
+    static bool decode(Decoder&, WebCore::ShippingMethodUpdate&);
+};
+
 #endif
 
 #if ENABLE(MEDIA_STREAM)
-template<> struct ArgumentCoder<WebCore::MediaConstraintsData> {
-    static void encode(Encoder&, const WebCore::MediaConstraintsData&);
-    static bool decode(Decoder&, WebCore::MediaConstraintsData&);
+template<> struct ArgumentCoder<WebCore::MediaConstraints> {
+    static void encode(Encoder&, const WebCore::MediaConstraints&);
+    static bool decode(Decoder&, WebCore::MediaConstraints&);
 };
 
 template<> struct ArgumentCoder<WebCore::CaptureDevice> {
@@ -623,6 +670,11 @@ template<> struct ArgumentCoder<WebCore::ScrollOffsetRange<float>> {
 
 #endif
 
+template<> struct ArgumentCoder<WebCore::MediaSelectionOption> {
+    static void encode(Encoder&, const WebCore::MediaSelectionOption&);
+    static bool decode(Decoder&, WebCore::MediaSelectionOption&);
+};
+
 } // namespace IPC
 
 namespace WTF {
@@ -645,11 +697,40 @@ template<> struct EnumTraits<WebCore::HasInsecureContent> {
     >;
 };
 
+template<> struct EnumTraits<WebCore::AutoplayEvent> {
+    using values = EnumValues<
+        WebCore::AutoplayEvent,
+        WebCore::AutoplayEvent::DidPreventMediaFromPlaying,
+        WebCore::AutoplayEvent::DidPlayMediaPreventedFromPlaying,
+        WebCore::AutoplayEvent::DidEndMediaPlaybackWithoutUserInterference,
+        WebCore::AutoplayEvent::UserDidInterfereWithPlayback,
+        WebCore::AutoplayEvent::UserNeverPlayedMediaPreventedFromPlaying
+    >;
+};
+
 template<> struct EnumTraits<WebCore::ShouldSample> {
     using values = EnumValues<
         WebCore::ShouldSample,
         WebCore::ShouldSample::No,
         WebCore::ShouldSample::Yes
+    >;
+};
+
+template<> struct EnumTraits<WebCore::NetworkLoadPriority> {
+    using values = EnumValues<
+        WebCore::NetworkLoadPriority,
+        WebCore::NetworkLoadPriority::Low,
+        WebCore::NetworkLoadPriority::Medium,
+        WebCore::NetworkLoadPriority::High
+    >;
+};
+
+template<> struct EnumTraits<WebCore::NotificationDirection> {
+    using values = EnumValues<
+        WebCore::NotificationDirection,
+        WebCore::NotificationDirection::Auto,
+        WebCore::NotificationDirection::Ltr,
+        WebCore::NotificationDirection::Rtl
     >;
 };
 
@@ -662,5 +743,33 @@ template<> struct EnumTraits<WebCore::IndexedDB::GetAllType> {
     >;
 };
 #endif
+
+#if ENABLE(MEDIA_STREAM)
+template<> struct EnumTraits<WebCore::CaptureDevice::DeviceType> {
+    using values = EnumValues<
+        WebCore::CaptureDevice::DeviceType,
+        WebCore::CaptureDevice::DeviceType::Unknown,
+        WebCore::CaptureDevice::DeviceType::Audio,
+        WebCore::CaptureDevice::DeviceType::Video
+    >;
+};
+template<> struct EnumTraits<WebCore::RealtimeMediaSource::Type> {
+    using values = EnumValues<
+    WebCore::RealtimeMediaSource::Type,
+    WebCore::RealtimeMediaSource::Type::None,
+    WebCore::RealtimeMediaSource::Type::Audio,
+    WebCore::RealtimeMediaSource::Type::Video
+    >;
+};
+#endif
+
+template<> struct EnumTraits<WebCore::MediaSelectionOption::Type> {
+    using values = EnumValues<
+        WebCore::MediaSelectionOption::Type,
+        WebCore::MediaSelectionOption::Type::Regular,
+        WebCore::MediaSelectionOption::Type::LegibleOff,
+        WebCore::MediaSelectionOption::Type::LegibleAuto
+    >;
+};
 
 } // namespace WTF

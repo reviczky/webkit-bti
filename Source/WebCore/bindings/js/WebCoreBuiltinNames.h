@@ -33,9 +33,13 @@ namespace WebCore {
 #define WEBCORE_COMMON_PRIVATE_IDENTIFIERS_EACH_PROPERTY_NAME(macro)\
     macro(addTrack) \
     macro(appendFromJS) \
+    macro(associatedReadableByteStreamController) \
     macro(autoAllocateChunkSize) \
+    macro(backingMap) \
     macro(body) \
+    macro(byobRequest) \
     macro(cancel) \
+    macro(cloneArrayBuffer) \
     macro(cloneForJS) \
     macro(closeRequested) \
     macro(closedPromiseCapability) \
@@ -76,6 +80,7 @@ namespace WebCore {
     macro(reader) \
     macro(readIntoRequests) \
     macro(readRequests) \
+    macro(readableByteStreamAPIEnabled) \
     macro(readableStreamController) \
     macro(readyPromiseCapability) \
     macro(removeTrack) \
@@ -103,12 +108,16 @@ namespace WebCore {
     macro(underlyingByteSource) \
     macro(underlyingSink) \
     macro(underlyingSource) \
+    macro(view) \
+    macro(webRTCLegacyAPIEnabled) \
     macro(writing) \
     macro(Headers) \
     macro(MediaStream) \
     macro(MediaStreamTrack) \
     macro(ReadableByteStreamController) \
     macro(ReadableStream) \
+    macro(ReadableStreamBYOBReader) \
+    macro(ReadableStreamBYOBRequest) \
     macro(ReadableStreamDefaultController) \
     macro(ReadableStreamDefaultReader) \
     macro(Request) \

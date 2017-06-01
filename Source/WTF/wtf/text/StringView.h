@@ -94,6 +94,7 @@ public:
     String toString() const;
     String toStringWithoutCopying() const;
     AtomicString toAtomicString() const;
+    RefPtr<AtomicStringImpl> toExistingAtomicString() const;
 
 #if USE(CF)
     // This function converts null strings to empty strings.
@@ -490,6 +491,13 @@ inline AtomicString StringView::toAtomicString() const
     return AtomicString(characters16(), m_length);
 }
 
+inline RefPtr<AtomicStringImpl> StringView::toExistingAtomicString() const
+{
+    if (is8Bit())
+        return AtomicStringImpl::lookUp(characters8(), m_length);
+    return AtomicStringImpl::lookUp(characters16(), m_length);
+}
+
 inline float StringView::toFloat(bool& isValid) const
 {
     if (is8Bit())
@@ -689,7 +697,7 @@ private:
 
 class StringView::GraphemeClusters::Iterator {
 public:
-    WTF_EXPORT_PRIVATE Iterator() = delete;
+    Iterator() = delete;
     WTF_EXPORT_PRIVATE Iterator(const StringView&, unsigned index);
     WTF_EXPORT_PRIVATE ~Iterator();
 

@@ -62,13 +62,14 @@ enum ShouldSerializeSelectedTextForDataTransfer { DefaultSelectedTextType, Inclu
 // For writing to the pasteboard. Generally sorted with the richest formats on top.
 
 struct PasteboardWebContent {
-#if !(PLATFORM(GTK) || PLATFORM(WIN))
+#if !(PLATFORM(GTK) || PLATFORM(WIN) || PLATFORM(WPE))
     WEBCORE_EXPORT PasteboardWebContent();
     WEBCORE_EXPORT ~PasteboardWebContent();
     bool canSmartCopyOrDelete;
     RefPtr<SharedBuffer> dataInWebArchiveFormat;
     RefPtr<SharedBuffer> dataInRTFDFormat;
     RefPtr<SharedBuffer> dataInRTFFormat;
+    RefPtr<SharedBuffer> dataInAttributedStringFormat;
     String dataInHTMLFormat;
     String dataInStringFormat;
     Vector<String> clientTypes;
@@ -76,6 +77,10 @@ struct PasteboardWebContent {
 #endif
 #if PLATFORM(GTK)
     bool canSmartCopyOrDelete;
+    String text;
+    String markup;
+#endif
+#if PLATFORM(WPE)
     String text;
     String markup;
 #endif
@@ -196,6 +201,8 @@ public:
 #endif
 
 #if PLATFORM(IOS)
+    explicit Pasteboard(long changeCount);
+
     static NSArray* supportedPasteboardTypes();
     static String resourceMIMEType(const NSString *mimeType);
 #endif
@@ -216,6 +223,11 @@ public:
 #endif
 
 private:
+#if PLATFORM(IOS)
+    bool respectsUTIFidelities() const;
+    void readRespectingUTIFidelities(PasteboardWebContentReader&);
+#endif
+
 #if PLATFORM(WIN)
     void finishCreatingPasteboard();
     void writeRangeToDataObject(Range&, Frame&); // FIXME: Layering violation.

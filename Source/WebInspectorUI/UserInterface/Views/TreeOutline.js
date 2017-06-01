@@ -397,6 +397,20 @@ WebInspector.TreeOutline = class TreeOutline extends WebInspector.Object
         return null;
     }
 
+    selfOrDescendant(predicate)
+    {
+        let treeElements = [this];
+        while (treeElements.length) {
+            let treeElement = treeElements.shift();
+            if (predicate(treeElement))
+                return treeElement;
+
+            treeElements = treeElements.concat(treeElement.children);
+        }
+
+        return false;
+    }
+
     findTreeElement(representedObject, isAncestor, getParent)
     {
         if (!representedObject)
@@ -482,6 +496,8 @@ WebInspector.TreeOutline = class TreeOutline extends WebInspector.Object
         if (!this.selectedTreeElement || event.shiftKey || event.metaKey || event.ctrlKey)
             return;
 
+        let isRTL = WebInspector.resolvedLayoutDirection() === WebInspector.LayoutDirection.RTL;
+
         var handled = false;
         var nextSelectedElement;
         if (event.keyIdentifier === "Up" && !event.altKey) {
@@ -494,7 +510,7 @@ WebInspector.TreeOutline = class TreeOutline extends WebInspector.Object
             while (nextSelectedElement && !nextSelectedElement.selectable)
                 nextSelectedElement = nextSelectedElement.traverseNextTreeElement(true);
             handled = nextSelectedElement ? true : false;
-        } else if (event.keyIdentifier === "Left") {
+        } else if ((!isRTL && event.keyIdentifier === "Left") || (isRTL && event.keyIdentifier === "Right")) {
             if (this.selectedTreeElement.expanded) {
                 if (event.altKey)
                     this.selectedTreeElement.collapseRecursively();
@@ -511,7 +527,7 @@ WebInspector.TreeOutline = class TreeOutline extends WebInspector.Object
                 } else if (this.selectedTreeElement.parent)
                     this.selectedTreeElement.parent.collapse();
             }
-        } else if (event.keyIdentifier === "Right") {
+        } else if ((!isRTL && event.keyIdentifier === "Right") || (isRTL && event.keyIdentifier === "Left")) {
             if (!this.selectedTreeElement.revealed()) {
                 this.selectedTreeElement.reveal();
                 handled = true;
@@ -651,7 +667,13 @@ WebInspector.TreeOutline = class TreeOutline extends WebInspector.Object
             // Keep all the elements at the same depth once the maximum is reached.
             childrenSubstring += i === maximumTreeDepth ? " .children" : " > .children";
             styleText += `.${WebInspector.TreeOutline.ElementStyleClassName}:not(.${WebInspector.TreeOutline.CustomIndentStyleClassName})${childrenSubstring} > .item { `;
-            styleText += "padding-left: " + (baseLeftPadding + (depthPadding * i)) + "px; }\n";
+
+            if (WebInspector.resolvedLayoutDirection() === WebInspector.LayoutDirection.RTL)
+                styleText += "padding-right: ";
+            else
+                styleText += "padding-left: ";
+
+            styleText += (baseLeftPadding + (depthPadding * i)) + "px; }\n";
         }
 
         WebInspector.TreeOutline._styleElement.textContent = styleText;

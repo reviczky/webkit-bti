@@ -30,6 +30,7 @@
 #include "CacheValidation.h"
 #include "HTTPHeaderNames.h"
 #include "HTTPParsers.h"
+#include "MIMETypeRegistry.h"
 #include "ParsedContentRange.h"
 #include "ResourceResponse.h"
 #include <wtf/CurrentTime.h>
@@ -38,6 +39,16 @@
 #include <wtf/text/StringView.h>
 
 namespace WebCore {
+
+#if ENABLE(NOSNIFF)
+bool isScriptAllowedByNosniff(const ResourceResponse& response)
+{
+    if (parseContentTypeOptionsHeader(response.httpHeaderField(HTTPHeaderName::XContentTypeOptions)) != ContentTypeOptionsNosniff)
+        return true;
+    String mimeType = extractMIMETypeFromMediaType(response.httpHeaderField(HTTPHeaderName::ContentType));
+    return MIMETypeRegistry::isSupportedJavaScriptMIMEType(mimeType);
+}
+#endif
 
 ResourceResponseBase::ResourceResponseBase()
     : m_isNull(true)
@@ -71,7 +82,7 @@ ResourceResponseBase::CrossThreadData ResourceResponseBase::crossThreadData() co
     data.httpVersion = httpVersion().isolatedCopy();
 
     data.httpHeaderFields = httpHeaderFields().isolatedCopy();
-    data.networkLoadTiming = m_networkLoadTiming.isolatedCopy();
+    data.networkLoadMetrics = m_networkLoadMetrics.isolatedCopy();
     data.type = m_type;
     data.isRedirected = m_isRedirected;
 
@@ -92,7 +103,7 @@ ResourceResponse ResourceResponseBase::fromCrossThreadData(CrossThreadData&& dat
     response.setHTTPVersion(data.httpVersion);
 
     response.m_httpHeaderFields = WTFMove(data.httpHeaderFields);
-    response.m_networkLoadTiming = data.networkLoadTiming;
+    response.m_networkLoadMetrics = data.networkLoadMetrics;
     response.m_type = data.type;
     response.m_isRedirected = data.isRedirected;
 
@@ -222,6 +233,19 @@ void ResourceResponseBase::includeCertificateInfo() const
 String ResourceResponseBase::suggestedFilename() const
 {
     return static_cast<const ResourceResponse*>(this)->platformSuggestedFilename();
+}
+
+String ResourceResponseBase::sanitizeSuggestedFilename(const String& suggestedFilename)
+{
+    if (suggestedFilename.isEmpty())
+        return suggestedFilename;
+
+    ResourceResponse response(URL(ParsedURLString, "http://example.com/"), String(), -1, String());
+    response.setHTTPStatusCode(200);
+    String escapedSuggestedFilename = String(suggestedFilename).replace('\\', "\\\\").replace('"', "\\\"");
+    String value = makeString("attachment; filename=\"", escapedSuggestedFilename, '"');
+    response.setHTTPHeaderField(HTTPHeaderName::ContentDisposition, value);
+    return response.suggestedFilename();
 }
 
 bool ResourceResponseBase::isSuccessful() const
@@ -567,11 +591,6 @@ ResourceResponseBase::Source ResourceResponseBase::source() const
     return m_source;
 }
 
-void ResourceResponseBase::setSource(Source source)
-{
-    m_source = source;
-}
-
 void ResourceResponseBase::lazyInit(InitLevel initLevel) const
 {
     const_cast<ResourceResponse*>(static_cast<const ResourceResponse*>(this))->platformLazyInit(initLevel);
@@ -597,7 +616,7 @@ bool ResourceResponseBase::compare(const ResourceResponse& a, const ResourceResp
         return false;
     if (a.httpHeaderFields() != b.httpHeaderFields())
         return false;
-    if (a.networkLoadTiming() != b.networkLoadTiming())
+    if (a.deprecatedNetworkLoadMetrics() != b.deprecatedNetworkLoadMetrics())
         return false;
     return ResourceResponse::platformCompare(a, b);
 }

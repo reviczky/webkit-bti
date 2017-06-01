@@ -74,7 +74,7 @@ public:
         XHRResource,
         FetchResource,
         WebSocketResource,
-        OtherResource
+        OtherResource,
     };
 
     static bool cachedResourceContent(CachedResource*, String* result, bool* base64Encoded);
@@ -118,7 +118,7 @@ public:
     void loaderDetachedFromFrame(DocumentLoader&);
     void frameStartedLoading(Frame&);
     void frameStoppedLoading(Frame&);
-    void frameScheduledNavigation(Frame&, double delay);
+    void frameScheduledNavigation(Frame&, Seconds delay);
     void frameClearedScheduledNavigation(Frame&);
     void applyEmulatedMedia(String&);
     void didPaint(RenderObject&, const LayoutRect&);

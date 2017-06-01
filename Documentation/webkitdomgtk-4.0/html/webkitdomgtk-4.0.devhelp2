@@ -484,6 +484,8 @@
     <keyword type="function" name="webkit_dom_element_set_scroll_top ()" link="WebKitDOMElement.html#webkit-dom-element-set-scroll-top"/>
     <keyword type="function" name="webkit_dom_element_get_scroll_width ()" link="WebKitDOMElement.html#webkit-dom-element-get-scroll-width"/>
     <keyword type="function" name="webkit_dom_element_get_scroll_height ()" link="WebKitDOMElement.html#webkit-dom-element-get-scroll-height"/>
+    <keyword type="function" name="webkit_dom_element_get_bounding_client_rect ()" link="WebKitDOMElement.html#webkit-dom-element-get-bounding-client-rect" since="2.18"/>
+    <keyword type="function" name="webkit_dom_element_get_client_rects ()" link="WebKitDOMElement.html#webkit-dom-element-get-client-rects" since="2.18"/>
     <keyword type="function" name="webkit_dom_element_get_offset_parent ()" link="WebKitDOMElement.html#webkit-dom-element-get-offset-parent"/>
     <keyword type="function" name="webkit_dom_element_get_inner_html ()" link="WebKitDOMElement.html#webkit-dom-element-get-inner-html" since="2.8"/>
     <keyword type="function" name="webkit_dom_element_set_inner_html ()" link="WebKitDOMElement.html#webkit-dom-element-set-inner-html" since="2.8"/>

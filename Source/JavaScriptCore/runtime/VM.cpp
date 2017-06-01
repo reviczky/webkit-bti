@@ -38,7 +38,6 @@
 #include "CommonIdentifiers.h"
 #include "CommonSlowPaths.h"
 #include "CustomGetterSetter.h"
-#include "DFGLongLivedState.h"
 #include "DFGWorklist.h"
 #include "Disassembler.h"
 #include "ErrorInstance.h"
@@ -85,6 +84,7 @@
 #include "Parser.h"
 #include "ProfilerDatabase.h"
 #include "ProgramCodeBlock.h"
+#include "PromiseDeferredTimer.h"
 #include "PropertyMapHashTable.h"
 #include "RegExpCache.h"
 #include "RegExpObject.h"
@@ -103,6 +103,7 @@
 #include "UnlinkedCodeBlock.h"
 #include "VMEntryScope.h"
 #include "VMInspector.h"
+#include "WasmWorklist.h"
 #include "Watchdog.h"
 #include "WeakGCMapInlines.h"
 #include "WeakMapData.h"
@@ -163,9 +164,6 @@ static bool enableAssembler(ExecutableAllocator& executableAllocator)
 
 VM::VM(VMType vmType, HeapType heapType)
     : m_apiLock(adoptRef(new JSLock(this)))
-#if ENABLE(ASSEMBLER)
-    , executableAllocator(*this)
-#endif
     , heap(this, heapType)
     , auxiliarySpace("Auxiliary", heap, AllocatorAttributes(DoesNotNeedDestruction, HeapCell::Auxiliary))
     , cellSpace("JSCell", heap, AllocatorAttributes(DoesNotNeedDestruction, HeapCell::JSCell))
@@ -173,11 +171,14 @@ VM::VM(VMType vmType, HeapType heapType)
     , stringSpace("JSString", heap)
     , destructibleObjectSpace("JSDestructibleObject", heap)
     , segmentedVariableObjectSpace("JSSegmentedVariableObjectSpace", heap)
+#if ENABLE(WEBASSEMBLY)
+    , webAssemblyCodeBlockSpace("JSWebAssemblyCodeBlockSpace", heap)
+#endif
     , vmType(vmType)
     , clientData(0)
     , topVMEntryFrame(nullptr)
     , topCallFrame(CallFrame::noCaller())
-    , topJSWebAssemblyInstance(nullptr)
+    , promiseDeferredTimer(std::make_unique<PromiseDeferredTimer>(*this))
     , m_atomicStringTable(vmType == Default ? wtfThreadData().atomicStringTable() : new AtomicStringTable)
     , propertyNames(nullptr)
     , emptyList(new ArgList)
@@ -196,7 +197,7 @@ VM::VM(VMType vmType, HeapType heapType)
     , m_rtTraceList(new RTTraceList())
 #endif
 #if ENABLE(ASSEMBLER)
-    , m_canUseAssembler(enableAssembler(executableAllocator))
+    , m_canUseAssembler(enableAssembler(ExecutableAllocator::singleton()))
 #endif
 #if ENABLE(JIT)
     , m_canUseJIT(m_canUseAssembler && Options::useJIT())
@@ -238,9 +239,7 @@ VM::VM(VMType vmType, HeapType heapType)
     programExecutableStructure.set(*this, ProgramExecutable::createStructure(*this, 0, jsNull()));
     functionExecutableStructure.set(*this, FunctionExecutable::createStructure(*this, 0, jsNull()));
 #if ENABLE(WEBASSEMBLY)
-    webAssemblyCalleeStructure.set(*this, JSWebAssemblyCallee::createStructure(*this, 0, jsNull()));
-    webAssemblyToJSCalleeStructure.set(*this, WebAssemblyToJSCallee::createStructure(*this, 0, jsNull()));
-    webAssemblyToJSCallee.set(*this, WebAssemblyToJSCallee::create(*this, webAssemblyToJSCalleeStructure.get()));
+    webAssemblyCodeBlockStructure.set(*this, JSWebAssemblyCodeBlock::createStructure(*this, 0, jsNull()));
 #endif
     moduleProgramExecutableStructure.set(*this, ModuleProgramExecutable::createStructure(*this, 0, jsNull()));
     regExpStructure.set(*this, RegExp::createStructure(*this, 0, jsNull()));
@@ -273,8 +272,6 @@ VM::VM(VMType vmType, HeapType heapType)
     functionCodeBlockStructure.set(*this, FunctionCodeBlock::createStructure(*this, 0, jsNull()));
     hashMapBucketSetStructure.set(*this, HashMapBucket<HashMapBucketDataKey>::createStructure(*this, 0, jsNull()));
     hashMapBucketMapStructure.set(*this, HashMapBucket<HashMapBucketDataKeyValue>::createStructure(*this, 0, jsNull()));
-    hashMapImplSetStructure.set(*this, HashMapImpl<HashMapBucket<HashMapBucketDataKey>>::createStructure(*this, 0, jsNull()));
-    hashMapImplMapStructure.set(*this, HashMapImpl<HashMapBucket<HashMapBucketDataKeyValue>>::createStructure(*this, 0, jsNull()));
 
     iterationTerminator.set(*this, JSFinalObject::create(*this, JSFinalObject::createStructure(*this, 0, jsNull(), 1)));
     nativeStdFunctionCellStructure.set(*this, NativeStdFunctionCell::createStructure(*this, 0, jsNull()));
@@ -284,7 +281,6 @@ VM::VM(VMType vmType, HeapType heapType)
 
 #if ENABLE(JIT)
     jitStubs = std::make_unique<JITThunks>();
-    allCalleeSaveRegisterOffsets = std::make_unique<RegisterAtOffsetList>(RegisterSet::vmCalleeSaveRegisters(), RegisterAtOffsetList::ZeroBased);
 #endif
     arityCheckData = std::make_unique<CommonSlowPaths::ArityCheckData>();
 
@@ -315,11 +311,6 @@ VM::VM(VMType vmType, HeapType heapType)
 
     callFrameForCatch = nullptr;
 
-#if ENABLE(DFG_JIT)
-    if (canUseJIT())
-        dfgState = std::make_unique<DFG::LongLivedState>();
-#endif
-    
     // Initialize this last, as a free way of asserting that VM initialization itself
     // won't use this.
     m_typedArrayController = adoptRef(new SimpleTypedArrayController());
@@ -356,6 +347,14 @@ VM::VM(VMType vmType, HeapType heapType)
 
 VM::~VM()
 {
+    promiseDeferredTimer->stopRunningTasks();
+#if ENABLE(WEBASSEMBLY)
+    if (Wasm::existingWorklistOrNull())
+        Wasm::ensureWorklist().stopAllPlansForVM(*this);
+#endif
+    if (UNLIKELY(m_watchdog))
+        m_watchdog->willDestroyVM(this);
+    m_traps.willDestroyVM();
     VMInspector::instance().remove(this);
 
     // Never GC, ever again.
@@ -389,7 +388,7 @@ VM::~VM()
     // Clear this first to ensure that nobody tries to remove themselves from it.
     m_perBytecodeProfiler = nullptr;
 
-    ASSERT(m_apiLock->currentThreadIsHoldingLock());
+    ASSERT(currentThreadIsHoldingAPILock());
     m_apiLock->willDestroyVM(this);
     heap.lastChanceToFinalize();
 
@@ -458,19 +457,8 @@ VM*& VM::sharedInstanceInternal()
 
 Watchdog& VM::ensureWatchdog()
 {
-    if (!m_watchdog) {
-        m_watchdog = adoptRef(new Watchdog());
-        
-        // The LLINT peeks into the Watchdog object directly. In order to do that,
-        // the LLINT assumes that the internal shape of a std::unique_ptr is the
-        // same as a plain C++ pointer, and loads the address of Watchdog from it.
-        RELEASE_ASSERT(*reinterpret_cast<Watchdog**>(&m_watchdog) == m_watchdog.get());
-
-        // And if we've previously compiled any functions, we need to revert
-        // them because they don't have the needed polling checks for the watchdog
-        // yet.
-        deleteAllCode(PreventCollectionAndDeleteAllCode);
-    }
+    if (!m_watchdog)
+        m_watchdog = adoptRef(new Watchdog(this));
     return *m_watchdog;
 }
 
@@ -611,24 +599,25 @@ void VM::throwException(ExecState* exec, Exception* exception)
 {
     if (Options::breakOnThrow()) {
         CodeBlock* codeBlock = exec->codeBlock();
-        dataLog("Throwing exception in call frame ", RawPointer(exec), " for code block ");
-        if (codeBlock)
-            dataLog(*codeBlock, "\n");
-        else
-            dataLog("<nullptr>\n");
+        dataLog("Throwing exception in call frame ", RawPointer(exec), " for code block ", codeBlock, "\n");
         CRASH();
     }
 
     ASSERT(exec == topCallFrame || exec == exec->lexicalGlobalObject()->globalExec() || exec == exec->vmEntryGlobalObject()->globalExec());
 
-    interpreter->notifyDebuggerOfExceptionToBeThrown(exec, exception);
+    interpreter->notifyDebuggerOfExceptionToBeThrown(*this, exec, exception);
 
     setException(exception);
+
+#if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
+    m_nativeStackTraceOfLastThrow = std::unique_ptr<StackTrace>(StackTrace::captureStackTrace(Options::unexpectedExceptionStackTraceLimit()));
+    m_throwingThread = currentThread();
+#endif
 }
 
 JSValue VM::throwException(ExecState* exec, JSValue thrownValue)
 {
-    VM& vm = exec->vm();
+    VM& vm = *this;
     Exception* exception = jsDynamicCast<Exception*>(vm, thrownValue);
     if (!exception)
         exception = Exception::create(*this, thrownValue);
@@ -661,7 +650,7 @@ size_t VM::updateSoftReservedZoneSize(size_t softReservedZoneSize)
     return oldSoftReservedZoneSize;
 }
 
-#if PLATFORM(WIN)
+#if OS(WINDOWS)
 // On Windows the reserved stack space consists of committed memory, a guard page, and uncommitted memory,
 // where the guard page is a barrier between committed and uncommitted memory.
 // When data from the guard page is read or written, the guard page is moved, and memory is committed.
@@ -688,7 +677,7 @@ static void preCommitStackMemory(void* stackLimit)
 
 inline void VM::updateStackLimits()
 {
-#if PLATFORM(WIN)
+#if OS(WINDOWS)
     void* lastSoftStackLimit = m_softStackLimit;
 #endif
 
@@ -703,7 +692,7 @@ inline void VM::updateStackLimits()
         m_stackLimit = wtfThreadData().stack().recursionLimit(reservedZoneSize);
     }
 
-#if PLATFORM(WIN)
+#if OS(WINDOWS)
     // We only need to precommit stack memory dictated by the VM::m_softStackLimit limit.
     // This is because VM::m_softStackLimit applies to stack usage by LLINT asm or JIT
     // generated code which can allocate stack space that the C++ compiler does not know
@@ -868,9 +857,9 @@ void VM::dumpTypeProfilerData()
     typeProfiler()->dumpTypeProfilerData(*this);
 }
 
-void VM::queueMicrotask(JSGlobalObject* globalObject, Ref<Microtask>&& task)
+void VM::queueMicrotask(JSGlobalObject& globalObject, Ref<Microtask>&& task)
 {
-    m_microtaskQueue.append(std::make_unique<QueuedTask>(*this, globalObject, WTFMove(task)));
+    m_microtaskQueue.append(std::make_unique<QueuedTask>(*this, &globalObject, WTFMove(task)));
 }
 
 void VM::drainMicrotasks()
@@ -942,5 +931,19 @@ void VM::verifyExceptionCheckNeedIsSatisfied(unsigned recursionDepth, ExceptionE
     }
 }
 #endif
+
+#if ENABLE(JIT)
+RegisterAtOffsetList* VM::getAllCalleeSaveRegisterOffsets()
+{
+    static RegisterAtOffsetList* result;
+
+    static std::once_flag calleeSavesFlag;
+    std::call_once(calleeSavesFlag, [] () {
+        result = new RegisterAtOffsetList(RegisterSet::vmCalleeSaveRegisters(), RegisterAtOffsetList::ZeroBased);
+    });
+
+    return result;
+}
+#endif // ENABLE(JIT)
 
 } // namespace JSC

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2013, 2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2009-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,8 +32,10 @@
 #include "CryptoKeyAES.h"
 #include "CryptoKeyDataOctetSequence.h"
 #include "CryptoKeyDataRSAComponents.h"
+#include "CryptoKeyEC.h"
 #include "CryptoKeyHMAC.h"
 #include "CryptoKeyRSA.h"
+#include "CryptoKeyRaw.h"
 #include "File.h"
 #include "FileList.h"
 #include "IDBValue.h"
@@ -75,6 +77,7 @@
 #include <runtime/RegExpObject.h>
 #include <runtime/TypedArrayInlines.h>
 #include <runtime/TypedArrays.h>
+#include <wasm/js/JSWebAssemblyModule.h>
 #include <wtf/HashTraits.h>
 #include <wtf/MainThread.h>
 #include <wtf/RunLoop.h>
@@ -145,6 +148,9 @@ enum SerializationTag {
     CryptoKeyTag = 33,
 #endif
     SharedArrayBufferTag = 34,
+#if ENABLE(WEBASSEMBLY)
+    WasmModuleTag = 35,
+#endif
     ErrorTag = 255
 };
 
@@ -191,9 +197,11 @@ const uint32_t currentKeyFormatVersion = 1;
 enum class CryptoKeyClassSubtag {
     HMAC = 0,
     AES = 1,
-    RSA = 2
+    RSA = 2,
+    EC = 3,
+    Raw = 4,
 };
-const uint8_t cryptoKeyClassSubtagMaximumValue = 2;
+const uint8_t cryptoKeyClassSubtagMaximumValue = 4;
 
 enum class CryptoKeyAsymmetricTypeSubtag {
     Public = 0,
@@ -234,7 +242,7 @@ enum class CryptoAlgorithmIdentifierTag {
     SHA_384 = 17,
     SHA_512 = 18,
     CONCAT = 19,
-    HKDF_CTR = 20,
+    HKDF = 20,
     PBKDF2 = 21,
 };
 const uint8_t cryptoAlgorithmIdentifierTagMaximumValue = 21;
@@ -383,6 +391,12 @@ static const unsigned StringDataIs8BitFlag = 0x80000000;
  *
  * PrimeInfo :-
  *    <factorSize:uint32_t> <factor:byte{factorSize}> <crtExponentSize:uint32_t> <crtExponent:byte{crtExponentSize}> <crtCoefficientSize:uint32_t> <crtCoefficient:byte{crtCoefficientSize}>
+ *
+ * CryptoKeyEC :-
+ *    CryptoAlgorithmIdentifierTag <namedCurve:StringData> CryptoKeyAsymmetricTypeSubtag <keySize:uint32_t> <keyData:byte{keySize}>
+ *
+ * CryptoKeyRaw :-
+ *    CryptoAlgorithmIdentifierTag <keySize:uint32_t> <keyData:byte{keySize}>
  */
 
 using DeserializationResult = std::pair<JSC::JSValue, SerializationReturnCode>;
@@ -477,9 +491,17 @@ template <> bool writeLittleEndian<uint8_t>(Vector<uint8_t>& buffer, const uint8
 
 class CloneSerializer : CloneBase {
 public:
-    static SerializationReturnCode serialize(ExecState* exec, JSValue value, Vector<RefPtr<MessagePort>>& messagePorts, Vector<RefPtr<JSC::ArrayBuffer>>& arrayBuffers, Vector<String>& blobURLs, Vector<uint8_t>& out, SerializationContext context, ArrayBufferContentsArray& sharedBuffers)
+    static SerializationReturnCode serialize(ExecState* exec, JSValue value, Vector<RefPtr<MessagePort>>& messagePorts, Vector<RefPtr<JSC::ArrayBuffer>>& arrayBuffers,
+#if ENABLE(WEBASSEMBLY)
+            WasmModuleArray& wasmModules,
+#endif
+            Vector<String>& blobURLs, Vector<uint8_t>& out, SerializationContext context, ArrayBufferContentsArray& sharedBuffers)
     {
-        CloneSerializer serializer(exec, messagePorts, arrayBuffers, blobURLs, out, context, sharedBuffers);
+        CloneSerializer serializer(exec, messagePorts, arrayBuffers,
+#if ENABLE(WEBASSEMBLY)
+            wasmModules,
+#endif
+            blobURLs, out, context, sharedBuffers);
         return serializer.serialize(value);
     }
 
@@ -526,13 +548,20 @@ public:
 private:
     typedef HashMap<JSObject*, uint32_t> ObjectPool;
 
-    CloneSerializer(ExecState* exec, Vector<RefPtr<MessagePort>>& messagePorts, Vector<RefPtr<JSC::ArrayBuffer>>& arrayBuffers, Vector<String>& blobURLs, Vector<uint8_t>& out, SerializationContext context, ArrayBufferContentsArray& sharedBuffers)
+    CloneSerializer(ExecState* exec, Vector<RefPtr<MessagePort>>& messagePorts, Vector<RefPtr<JSC::ArrayBuffer>>& arrayBuffers,
+#if ENABLE(WEBASSEMBLY)
+            WasmModuleArray& wasmModules,
+#endif
+            Vector<String>& blobURLs, Vector<uint8_t>& out, SerializationContext context, ArrayBufferContentsArray& sharedBuffers)
         : CloneBase(exec)
         , m_buffer(out)
         , m_blobURLs(blobURLs)
         , m_emptyIdentifier(Identifier::fromString(exec, emptyString()))
         , m_context(context)
         , m_sharedBuffers(sharedBuffers)
+#if ENABLE(WEBASSEMBLY)
+        , m_wasmModules(wasmModules)
+#endif
     {
         write(CurrentVersion);
         fillTransferMap(messagePorts, m_transferredMessagePorts);
@@ -896,13 +925,33 @@ private:
                 Vector<String> dummyBlobURLs;
                 Vector<RefPtr<MessagePort>> dummyMessagePorts;
                 Vector<RefPtr<JSC::ArrayBuffer>> dummyArrayBuffers;
+#if ENABLE(WEBASSEMBLY)
+                WasmModuleArray dummyModules;
+#endif
                 ArrayBufferContentsArray dummySharedBuffers;
-                CloneSerializer rawKeySerializer(m_exec, dummyMessagePorts, dummyArrayBuffers, dummyBlobURLs, serializedKey, SerializationContext::Default, dummySharedBuffers);
+                CloneSerializer rawKeySerializer(m_exec, dummyMessagePorts, dummyArrayBuffers,
+#if ENABLE(WEBASSEMBLY)
+                    dummyModules,
+#endif
+                    dummyBlobURLs, serializedKey, SerializationContext::Default, dummySharedBuffers);
                 rawKeySerializer.write(key);
                 Vector<uint8_t> wrappedKey;
                 if (!wrapCryptoKey(m_exec, serializedKey, wrappedKey))
                     return false;
                 write(wrappedKey);
+                return true;
+            }
+#endif
+
+#if ENABLE(WEBASSEMBLY)
+            if (JSWebAssemblyModule* module = jsDynamicDowncast<JSWebAssemblyModule*>(vm, obj)) {
+                if (m_context != SerializationContext::WorkerPostMessage)
+                    return false;
+
+                uint32_t index = m_wasmModules.size(); 
+                m_wasmModules.append(makeRef(module->module()));
+                write(WasmModuleTag);
+                write(index);
                 return true;
             }
 #endif
@@ -1124,8 +1173,8 @@ private:
         case CryptoAlgorithmIdentifier::CONCAT:
             write(CryptoAlgorithmIdentifierTag::CONCAT);
             break;
-        case CryptoAlgorithmIdentifier::HKDF_CTR:
-            write(CryptoAlgorithmIdentifierTag::HKDF_CTR);
+        case CryptoAlgorithmIdentifier::HKDF:
+            write(CryptoAlgorithmIdentifierTag::HKDF);
             break;
         case CryptoAlgorithmIdentifier::PBKDF2:
             write(CryptoAlgorithmIdentifierTag::PBKDF2);
@@ -1208,6 +1257,35 @@ private:
             write(key->algorithmIdentifier());
             write(downcast<CryptoKeyAES>(*key).key());
             break;
+        case CryptoKeyClass::EC:
+            write(CryptoKeyClassSubtag::EC);
+            write(key->algorithmIdentifier());
+            write(downcast<CryptoKeyEC>(*key).namedCurveString());
+            switch (key->type()) {
+            case CryptoKey::Type::Public: {
+                write(CryptoKeyAsymmetricTypeSubtag::Public);
+                auto result = downcast<CryptoKeyEC>(*key).exportRaw();
+                ASSERT(!result.hasException());
+                write(result.releaseReturnValue());
+                break;
+            }
+            case CryptoKey::Type::Private: {
+                write(CryptoKeyAsymmetricTypeSubtag::Private);
+                // Use the standard complied method is not very efficient, but simple/reliable.
+                auto result = downcast<CryptoKeyEC>(*key).exportPkcs8();
+                ASSERT(!result.hasException());
+                write(result.releaseReturnValue());
+                break;
+            }
+            default:
+                ASSERT_NOT_REACHED();
+            }
+            break;
+        case CryptoKeyClass::Raw:
+            write(CryptoKeyClassSubtag::Raw);
+            write(key->algorithmIdentifier());
+            write(downcast<CryptoKeyRaw>(*key).key());
+            break;
         case CryptoKeyClass::RSA:
             write(CryptoKeyClassSubtag::RSA);
             write(key->algorithmIdentifier());
@@ -1237,6 +1315,9 @@ private:
     Identifier m_emptyIdentifier;
     SerializationContext m_context;
     ArrayBufferContentsArray& m_sharedBuffers;
+#if ENABLE(WEBASSEMBLY)
+    WasmModuleArray& m_wasmModules;
+#endif
 };
 
 SerializationReturnCode CloneSerializer::serialize(JSValue in)
@@ -1508,11 +1589,19 @@ public:
         return str;
     }
 
-    static DeserializationResult deserialize(ExecState* exec, JSGlobalObject* globalObject, Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContentsArray, const Vector<uint8_t>& buffer, const Vector<String>& blobURLs, const Vector<String> blobFilePaths, ArrayBufferContentsArray* sharedBuffers)
+    static DeserializationResult deserialize(ExecState* exec, JSGlobalObject* globalObject, Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContentsArray, const Vector<uint8_t>& buffer, const Vector<String>& blobURLs, const Vector<String> blobFilePaths, ArrayBufferContentsArray* sharedBuffers
+#if ENABLE(WEBASSEMBLY)
+        , WasmModuleArray* wasmModules
+#endif
+        )
     {
         if (!buffer.size())
             return std::make_pair(jsNull(), SerializationReturnCode::UnspecifiedError);
-        CloneDeserializer deserializer(exec, globalObject, messagePorts, arrayBufferContentsArray, buffer, blobURLs, blobFilePaths, sharedBuffers);
+        CloneDeserializer deserializer(exec, globalObject, messagePorts, arrayBufferContentsArray, buffer, blobURLs, blobFilePaths, sharedBuffers
+#if ENABLE(WEBASSEMBLY)
+            , wasmModules
+#endif
+            );
         if (!deserializer.isValid())
             return std::make_pair(JSValue(), SerializationReturnCode::ValidationError);
         return deserializer.deserialize();
@@ -1557,7 +1646,11 @@ private:
         size_t m_index;
     };
 
-    CloneDeserializer(ExecState* exec, JSGlobalObject* globalObject, Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents, const Vector<uint8_t>& buffer)
+    CloneDeserializer(ExecState* exec, JSGlobalObject* globalObject, Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents,
+#if ENABLE(WEBASSEMBLY)
+        WasmModuleArray* wasmModules,
+#endif
+        const Vector<uint8_t>& buffer)
         : CloneBase(exec)
         , m_globalObject(globalObject)
         , m_isDOMGlobalObject(globalObject->inherits(globalObject->vm(), JSDOMGlobalObject::info()))
@@ -1567,12 +1660,19 @@ private:
         , m_messagePorts(messagePorts)
         , m_arrayBufferContents(arrayBufferContents)
         , m_arrayBuffers(arrayBufferContents ? arrayBufferContents->size() : 0)
+#if ENABLE(WEBASSEMBLY)
+        , m_wasmModules(wasmModules)
+#endif
     {
         if (!read(m_version))
             m_version = 0xFFFFFFFF;
     }
 
-    CloneDeserializer(ExecState* exec, JSGlobalObject* globalObject, Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents, const Vector<uint8_t>& buffer, const Vector<String>& blobURLs, const Vector<String> blobFilePaths, ArrayBufferContentsArray* sharedBuffers)
+    CloneDeserializer(ExecState* exec, JSGlobalObject* globalObject, Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents, const Vector<uint8_t>& buffer, const Vector<String>& blobURLs, const Vector<String> blobFilePaths, ArrayBufferContentsArray* sharedBuffers
+#if ENABLE(WEBASSEMBLY)
+        , WasmModuleArray* wasmModules
+#endif
+        )
         : CloneBase(exec)
         , m_globalObject(globalObject)
         , m_isDOMGlobalObject(globalObject->inherits(globalObject->vm(), JSDOMGlobalObject::info()))
@@ -1585,6 +1685,9 @@ private:
         , m_blobURLs(blobURLs)
         , m_blobFilePaths(blobFilePaths)
         , m_sharedBuffers(sharedBuffers)
+#if ENABLE(WEBASSEMBLY)
+        , m_wasmModules(wasmModules)
+#endif
     {
         if (!read(m_version))
             m_version = 0xFFFFFFFF;
@@ -1972,8 +2075,8 @@ private:
         case CryptoAlgorithmIdentifierTag::CONCAT:
             result = CryptoAlgorithmIdentifier::CONCAT;
             break;
-        case CryptoAlgorithmIdentifierTag::HKDF_CTR:
-            result = CryptoAlgorithmIdentifier::HKDF_CTR;
+        case CryptoAlgorithmIdentifierTag::HKDF:
+            result = CryptoAlgorithmIdentifier::HKDF;
             break;
         case CryptoAlgorithmIdentifierTag::PBKDF2:
             result = CryptoAlgorithmIdentifier::PBKDF2;
@@ -2023,7 +2126,7 @@ private:
         CryptoAlgorithmIdentifier hash;
         if (!read(hash))
             return false;
-        result = CryptoKeyHMAC::create(keyData, hash, extractable, usages);
+        result = CryptoKeyHMAC::importRaw(0, hash, WTFMove(keyData), extractable, usages);
         return true;
     }
 
@@ -2037,7 +2140,7 @@ private:
         Vector<uint8_t> keyData;
         if (!read(keyData))
             return false;
-        result = CryptoKeyAES::create(algorithm, keyData, extractable, usages);
+        result = CryptoKeyAES::importRaw(algorithm, WTFMove(keyData), extractable, usages);
         return true;
     }
 
@@ -2119,6 +2222,47 @@ private:
         return true;
     }
 
+    bool readECKey(bool extractable, CryptoKeyUsageBitmap usages, RefPtr<CryptoKey>& result)
+    {
+        CryptoAlgorithmIdentifier algorithm;
+        if (!read(algorithm))
+            return false;
+        if (!CryptoKeyEC::isValidECAlgorithm(algorithm))
+            return false;
+        CachedStringRef curve;
+        if (!readStringData(curve))
+            return false;
+        CryptoKeyAsymmetricTypeSubtag type;
+        if (!read(type))
+            return false;
+        Vector<uint8_t> keyData;
+        if (!read(keyData))
+            return false;
+
+        switch (type) {
+        case CryptoKeyAsymmetricTypeSubtag::Public:
+            result = CryptoKeyEC::importRaw(algorithm, curve->string(), WTFMove(keyData), extractable, usages);
+            break;
+        case CryptoKeyAsymmetricTypeSubtag::Private:
+            result = CryptoKeyEC::importPkcs8(algorithm, curve->string(), WTFMove(keyData), extractable, usages);
+            break;
+        }
+
+        return true;
+    }
+
+    bool readRawKey(CryptoKeyUsageBitmap usages, RefPtr<CryptoKey>& result)
+    {
+        CryptoAlgorithmIdentifier algorithm;
+        if (!read(algorithm))
+            return false;
+        Vector<uint8_t> keyData;
+        if (!read(keyData))
+            return false;
+        result = CryptoKeyRaw::create(algorithm, WTFMove(keyData), usages);
+        return true;
+    }
+
     bool readCryptoKey(JSValue& cryptoKey)
     {
         uint32_t keyFormatVersion;
@@ -2181,6 +2325,14 @@ private:
             break;
         case CryptoKeyClassSubtag::RSA:
             if (!readRSAKey(extractable, usages, result))
+                return false;
+            break;
+        case CryptoKeyClassSubtag::EC:
+            if (!readECKey(extractable, usages, result))
+                return false;
+            break;
+        case CryptoKeyClassSubtag::Raw:
+            if (!readRawKey(usages, result))
                 return false;
             break;
         }
@@ -2377,6 +2529,24 @@ private:
             }
             return getJSValue(m_messagePorts[index].get());
         }
+#if ENABLE(WEBASSEMBLY)
+        case WasmModuleTag: {
+            uint32_t index;
+            bool indexSuccessfullyRead = read(index);
+            if (!indexSuccessfullyRead || !m_wasmModules || index >= m_wasmModules->size()) {
+                fail();
+                return JSValue();
+            }
+            auto scope = DECLARE_THROW_SCOPE(m_exec->vm());
+            JSValue result = JSC::JSWebAssemblyModule::createStub(m_exec->vm(), m_exec, m_globalObject->WebAssemblyModuleStructure(), m_wasmModules->at(index));
+            // Since we are cloning a JSWebAssemblyModule, it's impossible for that
+            // module to not have been a valid module. Therefore, createStub should
+            // not trow.
+            scope.releaseAssertNoException();
+            m_gcBuffer.append(result);
+            return result;
+        }
+#endif
         case ArrayBufferTag: {
             RefPtr<ArrayBuffer> arrayBuffer;
             if (!readArrayBuffer(arrayBuffer)) {
@@ -2444,7 +2614,11 @@ private:
             }
             JSValue cryptoKey;
             Vector<RefPtr<MessagePort>> dummyMessagePorts;
-            CloneDeserializer rawKeyDeserializer(m_exec, m_globalObject, dummyMessagePorts, nullptr, serializedKey);
+            CloneDeserializer rawKeyDeserializer(m_exec, m_globalObject, dummyMessagePorts, nullptr,
+#if ENABLE(WEBASSEMBLY)
+                nullptr,
+#endif
+                serializedKey);
             if (!rawKeyDeserializer.readCryptoKey(cryptoKey)) {
                 fail();
                 return JSValue();
@@ -2480,6 +2654,9 @@ private:
     Vector<String> m_blobURLs;
     Vector<String> m_blobFilePaths;
     ArrayBufferContentsArray* m_sharedBuffers;
+#if ENABLE(WEBASSEMBLY)
+    WasmModuleArray* m_wasmModules;
+#endif
 
     String blobFilePathForBlobURL(const String& blobURL)
     {
@@ -2689,10 +2866,17 @@ SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer)
 {
 }
 
-SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer, const Vector<String>& blobURLs, std::unique_ptr<ArrayBufferContentsArray> arrayBufferContentsArray, std::unique_ptr<ArrayBufferContentsArray> sharedBufferContentsArray)
+SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer, const Vector<String>& blobURLs, std::unique_ptr<ArrayBufferContentsArray> arrayBufferContentsArray, std::unique_ptr<ArrayBufferContentsArray> sharedBufferContentsArray
+#if ENABLE(WEBASSEMBLY)
+        , std::unique_ptr<WasmModuleArray> wasmModulesArray
+#endif
+        )
     : m_data(WTFMove(buffer))
     , m_arrayBufferContentsArray(WTFMove(arrayBufferContentsArray))
     , m_sharedBufferContentsArray(WTFMove(sharedBufferContentsArray))
+#if ENABLE(WEBASSEMBLY)
+    , m_wasmModulesArray(WTFMove(wasmModulesArray))
+#endif
 {
     // Since this SerializedScriptValue is meant to be passed between threads, its String data members
     // need to be isolatedCopies so we don't run into thread safety issues for the StringImpls.
@@ -2777,8 +2961,19 @@ RefPtr<SerializedScriptValue> SerializedScriptValue::create(ExecState& exec, JSV
     Vector<String> blobURLs;
     Vector<RefPtr<MessagePort>> dummyMessagePorts;
     Vector<RefPtr<JSC::ArrayBuffer>> dummyArrayBuffers;
+#if ENABLE(WEBASSEMBLY)
+    WasmModuleArray dummyModules;
+#endif
     ArrayBufferContentsArray dummySharedBuffers;
-    auto code = CloneSerializer::serialize(&exec, value, dummyMessagePorts, dummyArrayBuffers, blobURLs, buffer, SerializationContext::Default, dummySharedBuffers);
+    auto code = CloneSerializer::serialize(&exec, value, dummyMessagePorts, dummyArrayBuffers,
+#if ENABLE(WEBASSEMBLY)
+        dummyModules,
+#endif
+        blobURLs, buffer, SerializationContext::Default, dummySharedBuffers);
+
+#if ENABLE(WEBASSEMBLY)
+    ASSERT_WITH_MESSAGE(dummyModules.isEmpty(), "Wasm::Module serialization is only allowed in the postMessage context");
+#endif
 
     if (throwExceptions == SerializationErrorMode::Throwing)
         maybeThrowExceptionIfSerializationFailed(exec, code);
@@ -2786,7 +2981,11 @@ RefPtr<SerializedScriptValue> SerializedScriptValue::create(ExecState& exec, JSV
     if (code != SerializationReturnCode::SuccessfullyCompleted)
         return nullptr;
 
-    return adoptRef(*new SerializedScriptValue(WTFMove(buffer), blobURLs, nullptr, nullptr));
+    return adoptRef(*new SerializedScriptValue(WTFMove(buffer), blobURLs, nullptr, nullptr
+#if ENABLE(WEBASSEMBLY)
+        , nullptr
+#endif
+            ));
 }
 
 ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(ExecState& state, JSValue value, Vector<JSC::Strong<JSC::JSObject>>&& transferList, Vector<RefPtr<MessagePort>>& messagePorts, SerializationContext context)
@@ -2797,8 +2996,11 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(ExecState&
         if (auto arrayBuffer = toPossiblySharedArrayBuffer(vm, transferable.get())) {
             if (arrayBuffer->isNeutered())
                 return Exception { DATA_CLONE_ERR };
-            if (arrayBuffer->isShared())
-                return Exception { TypeError };
+            if (arrayBuffer->isLocked()) {
+                auto scope = DECLARE_THROW_SCOPE(vm);
+                throwVMTypeError(&state, scope, errorMesasgeForTransfer(arrayBuffer));
+                return Exception { ExistingExceptionError };
+            }
             arrayBuffers.append(WTFMove(arrayBuffer));
             continue;
         }
@@ -2813,8 +3015,15 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(ExecState&
 
     Vector<uint8_t> buffer;
     Vector<String> blobURLs;
+#if ENABLE(WEBASSEMBLY)
+    WasmModuleArray wasmModules;
+#endif
     std::unique_ptr<ArrayBufferContentsArray> sharedBuffers = std::make_unique<ArrayBufferContentsArray>();
-    auto code = CloneSerializer::serialize(&state, value, messagePorts, arrayBuffers, blobURLs, buffer, context, *sharedBuffers);
+    auto code = CloneSerializer::serialize(&state, value, messagePorts, arrayBuffers, 
+#if ENABLE(WEBASSEMBLY)
+        wasmModules, 
+#endif
+        blobURLs, buffer, context, *sharedBuffers);
 
     if (code != SerializationReturnCode::SuccessfullyCompleted)
         return exceptionForSerializationFailure(code);
@@ -2823,7 +3032,11 @@ ExceptionOr<Ref<SerializedScriptValue>> SerializedScriptValue::create(ExecState&
     if (arrayBufferContentsArray.hasException())
         return arrayBufferContentsArray.releaseException();
 
-    return adoptRef(*new SerializedScriptValue(WTFMove(buffer), blobURLs, arrayBufferContentsArray.releaseReturnValue(), context == SerializationContext::WorkerPostMessage ? WTFMove(sharedBuffers) : nullptr));
+    return adoptRef(*new SerializedScriptValue(WTFMove(buffer), blobURLs, arrayBufferContentsArray.releaseReturnValue(), context == SerializationContext::WorkerPostMessage ? WTFMove(sharedBuffers) : nullptr
+#if ENABLE(WEBASSEMBLY)
+                , std::make_unique<WasmModuleArray>(wasmModules)
+#endif
+                ));
 }
 
 RefPtr<SerializedScriptValue> SerializedScriptValue::create(StringView string)
@@ -2873,7 +3086,11 @@ JSValue SerializedScriptValue::deserialize(ExecState& exec, JSGlobalObject* glob
 
 JSValue SerializedScriptValue::deserialize(ExecState& exec, JSGlobalObject* globalObject, Vector<RefPtr<MessagePort>>& messagePorts, const Vector<String>& blobURLs, const Vector<String>& blobFilePaths, SerializationErrorMode throwExceptions)
 {
-    DeserializationResult result = CloneDeserializer::deserialize(&exec, globalObject, messagePorts, m_arrayBufferContentsArray.get(), m_data, blobURLs, blobFilePaths, m_sharedBufferContentsArray.get());
+    DeserializationResult result = CloneDeserializer::deserialize(&exec, globalObject, messagePorts, m_arrayBufferContentsArray.get(), m_data, blobURLs, blobFilePaths, m_sharedBufferContentsArray.get()
+#if ENABLE(WEBASSEMBLY)
+        , m_wasmModulesArray.get()
+#endif
+        );
     if (throwExceptions == SerializationErrorMode::Throwing)
         maybeThrowExceptionIfSerializationFailed(exec, result.second);
     return result.first ? result.first : jsNull();

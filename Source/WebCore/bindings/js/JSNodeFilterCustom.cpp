@@ -38,7 +38,7 @@ using namespace JSC;
 // FIXME: The bindings generator is currently not able to generate
 // callback function calls if they return something other than a
 // boolean.
-uint16_t JSNodeFilter::acceptNode(Node* node)
+unsigned short JSNodeFilter::acceptNode(Node& node)
 {
     Ref<JSNodeFilter> protectedThis(*this);
 
@@ -61,7 +61,7 @@ uint16_t JSNodeFilter::acceptNode(Node* node)
         return NodeFilter::FILTER_REJECT;
     }
 
-    auto result = convert<IDLUnsignedShort>(*state, value, IntegerConversionConfiguration::Normal);
+    auto result = convert<IDLUnsignedShort>(*state, value);
     RETURN_IF_EXCEPTION(scope, NodeFilter::FILTER_REJECT);
 
     return result;

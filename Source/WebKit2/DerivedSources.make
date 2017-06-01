@@ -1,4 +1,4 @@
-# Copyright (C) 2010, 2011, 2012, 2013 Apple Inc. All rights reserved.
+# Copyright (C) 2010-2017 Apple Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -45,6 +45,7 @@ VPATH = \
     $(WebKit2)/WebProcess/Geolocation \
     $(WebKit2)/WebProcess/IconDatabase \
     $(WebKit2)/WebProcess/MediaCache \
+    $(WebKit2)/WebProcess/MediaStream \
     $(WebKit2)/WebProcess/Network \
     $(WebKit2)/WebProcess/Network/webrtc \
     $(WebKit2)/WebProcess/Notifications \
@@ -65,6 +66,7 @@ VPATH = \
     $(WebKit2)/UIProcess/Cocoa \
     $(WebKit2)/UIProcess/Databases \
     $(WebKit2)/UIProcess/Downloads \
+    $(WebKit2)/UIProcess/MediaStream \
     $(WebKit2)/UIProcess/Network \
     $(WebKit2)/UIProcess/Network/CustomProtocols \
     $(WebKit2)/UIProcess/Notifications \
@@ -88,8 +90,6 @@ endif
 MESSAGE_RECEIVERS = \
     AuthenticationManager \
     ChildProcess \
-    CustomProtocolManager \
-    CustomProtocolManagerProxy \
     DatabaseProcess \
     DatabaseProcessProxy \
     DatabaseToWebProcessConnection \
@@ -97,6 +97,8 @@ MESSAGE_RECEIVERS = \
     DrawingArea \
     DrawingAreaProxy \
     EventDispatcher \
+    LegacyCustomProtocolManager \
+    LegacyCustomProtocolManagerProxy \
     NPObjectMessageReceiver \
     NetworkConnectionToWebProcess \
     NetworkProcess \
@@ -106,6 +108,7 @@ MESSAGE_RECEIVERS = \
     NetworkRTCProvider \
     NetworkRTCSocket \
     NetworkResourceLoader \
+    NetworkSocketStream \
     PluginControllerProxy \
     PluginProcess \
     PluginProcessConnection \
@@ -121,6 +124,8 @@ MESSAGE_RECEIVERS = \
     SmartMagnificationController \
     StorageAreaMap \
     StorageManager \
+    UserMediaCaptureManager \
+    UserMediaCaptureManagerProxy \
     ViewGestureController \
     ViewGestureGeometryCollector \
     ViewUpdateDispatcher \
@@ -140,6 +145,7 @@ MESSAGE_RECEIVERS = \
     WebIconDatabase \
     WebIconDatabaseProxy \
     WebInspector \
+    WebInspectorInterruptDispatcher \
     WebInspectorProxy \
     WebInspectorUI \
     WebNotificationManager \
@@ -159,6 +165,7 @@ MESSAGE_RECEIVERS = \
     WebRTCSocket \
     WebResourceLoader \
     WebResourceLoadStatisticsStore \
+    WebSocketStream \
     WebUserContentController \
     WebUserContentControllerProxy \
     WebVideoFullscreenManager \
@@ -243,7 +250,7 @@ AUTOMATION_PROTOCOL_OUTPUT_FILES = \
 #
 
 ifeq ($(OS),MACOS)
-ifeq ($(shell $(CC) -std=gnu++11 -x c++ -E -P -dM $(SDK_FLAGS) $(FRAMEWORK_FLAGS) $(HEADER_FLAGS) -include "wtf/Platform.h" /dev/null | grep ' WTF_PLATFORM_IOS ' | cut -d' ' -f3), 1)
+ifeq ($(shell $(CC) -std=gnu++14 -x c++ -E -P -dM $(SDK_FLAGS) $(FRAMEWORK_FLAGS) $(HEADER_FLAGS) -include "wtf/Platform.h" /dev/null | grep ' WTF_PLATFORM_IOS ' | cut -d' ' -f3), 1)
 	AUTOMATION_BACKEND_PLATFORM_ARGUMENTS = --platform iOS
 else
 	AUTOMATION_BACKEND_PLATFORM_ARGUMENTS = --platform macOS

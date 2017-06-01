@@ -29,6 +29,7 @@
 #include "AuthenticationManager.h"
 #include "DataReference.h"
 #include "DrawingArea.h"
+#include "FindController.h"
 #include "InjectedBundle.h"
 #include "InjectedBundleBackForwardListItem.h"
 #include "InjectedBundleDOMWindowExtension.h"
@@ -689,20 +690,18 @@ void WebFrameLoaderClient::dispatchDecidePolicyForResponse(const ResourceRespons
     bool canShowMIMEType = webPage->canShowMIMEType(response.mimeType());
 
     uint64_t listenerID = m_frame->setUpPolicyListener(WTFMove(function));
-    bool receivedPolicyAction;
     uint64_t policyAction;
     DownloadID downloadID;
 
     Ref<WebFrame> protect(*m_frame);
     WebCore::Frame* coreFrame = m_frame->coreFrame();
-    if (!webPage->sendSync(Messages::WebPageProxy::DecidePolicyForResponseSync(m_frame->frameID(), SecurityOriginData::fromFrame(coreFrame), response, request, canShowMIMEType, listenerID, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())), Messages::WebPageProxy::DecidePolicyForResponseSync::Reply(receivedPolicyAction, policyAction, downloadID), Seconds::infinity(), IPC::SendSyncOption::InformPlatformProcessWillSuspend)) {
+    if (!webPage->sendSync(Messages::WebPageProxy::DecidePolicyForResponseSync(m_frame->frameID(), SecurityOriginData::fromFrame(coreFrame), response, request, canShowMIMEType, listenerID, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())), Messages::WebPageProxy::DecidePolicyForResponseSync::Reply(policyAction, downloadID), Seconds::infinity(), IPC::SendSyncOption::InformPlatformProcessWillSuspend)) {
         m_frame->didReceivePolicyDecision(listenerID, PolicyIgnore, 0, { });
         return;
     }
 
     // We call this synchronously because CFNetwork can only convert a loading connection to a download from its didReceiveResponse callback.
-    if (receivedPolicyAction)
-        m_frame->didReceivePolicyDecision(listenerID, static_cast<PolicyAction>(policyAction), 0, downloadID);
+    m_frame->didReceivePolicyDecision(listenerID, static_cast<PolicyAction>(policyAction), 0, downloadID);
 }
 
 void WebFrameLoaderClient::dispatchDecidePolicyForNewWindowAction(const NavigationAction& navigationAction, const ResourceRequest& request, FormState* formState, const String& frameName, FramePolicyFunction function)
@@ -767,7 +766,6 @@ void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const Navigat
     }
     
     uint64_t listenerID = m_frame->setUpPolicyListener(WTFMove(function));
-    bool receivedPolicyAction;
     uint64_t newNavigationID;
     uint64_t policyAction;
     DownloadID downloadID;
@@ -812,7 +810,7 @@ void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const Navigat
     Ref<WebFrame> protect(*m_frame);
     WebCore::Frame* originatingCoreFrame = originatingFrame ? originatingFrame->coreFrame() : nullptr;
     WebsitePolicies websitePolicies;
-    if (!webPage->sendSync(Messages::WebPageProxy::DecidePolicyForNavigationAction(m_frame->frameID(), SecurityOriginData::fromFrame(coreFrame), documentLoader->navigationID(), navigationActionData, originatingFrame ? originatingFrame->frameID() : 0, SecurityOriginData::fromFrame(originatingCoreFrame), navigationAction.resourceRequest(), request, listenerID, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())), Messages::WebPageProxy::DecidePolicyForNavigationAction::Reply(receivedPolicyAction, newNavigationID, policyAction, downloadID, websitePolicies))) {
+    if (!webPage->sendSync(Messages::WebPageProxy::DecidePolicyForNavigationAction(m_frame->frameID(), SecurityOriginData::fromFrame(coreFrame), documentLoader->navigationID(), navigationActionData, originatingFrame ? originatingFrame->frameID() : 0, SecurityOriginData::fromFrame(originatingCoreFrame), navigationAction.resourceRequest(), request, listenerID, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())), Messages::WebPageProxy::DecidePolicyForNavigationAction::Reply(newNavigationID, policyAction, downloadID, websitePolicies))) {
         m_frame->didReceivePolicyDecision(listenerID, PolicyIgnore, 0, { });
         return;
     }
@@ -820,6 +818,8 @@ void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const Navigat
     // Only setUserContentExtensionsEnabled if it hasn't already been disabled by reloading without content blockers.
     if (documentLoader->userContentExtensionsEnabled())
         documentLoader->setUserContentExtensionsEnabled(websitePolicies.contentBlockersEnabled);
+
+    documentLoader->setAllowsAutoplayQuirks(websitePolicies.allowsAutoplayQuirks);
 
     switch (websitePolicies.autoplayPolicy) {
     case WebsiteAutoplayPolicy::Default:
@@ -837,8 +837,7 @@ void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const Navigat
     }
 
     // We call this synchronously because WebCore cannot gracefully handle a frame load without a synchronous navigation policy reply.
-    if (receivedPolicyAction)
-        m_frame->didReceivePolicyDecision(listenerID, static_cast<PolicyAction>(policyAction), newNavigationID, downloadID);
+    m_frame->didReceivePolicyDecision(listenerID, static_cast<PolicyAction>(policyAction), newNavigationID, downloadID);
 }
 
 void WebFrameLoaderClient::cancelPolicyCheck()

@@ -52,6 +52,22 @@
 
 namespace WebCore {
 
+#if !LOG_DISABLED
+static const char* toString(MediaSource::ReadyState readyState)
+{
+    switch (readyState) {
+    case MediaSource::ReadyState::Closed:
+        return "closed";
+    case MediaSource::ReadyState::Ended:
+        return "ended";
+    case MediaSource::ReadyState::Open:
+        return "open";
+    default:
+        return "(unknown)";
+    }
+}
+#endif
+
 URLRegistry* MediaSource::s_registry;
 
 void MediaSource::setRegistry(URLRegistry* registry)
@@ -71,7 +87,6 @@ MediaSource::MediaSource(ScriptExecutionContext& context)
     : ActiveDOMObject(&context)
     , m_duration(MediaTime::invalidTime())
     , m_pendingSeekTime(MediaTime::invalidTime())
-    , m_readyState(closedKeyword())
     , m_asyncEventQueue(*this)
 {
     LOG(MediaSource, "MediaSource::MediaSource %p", this);
@@ -83,24 +98,6 @@ MediaSource::~MediaSource()
 {
     LOG(MediaSource, "MediaSource::~MediaSource %p", this);
     ASSERT(isClosed());
-}
-
-const AtomicString& MediaSource::openKeyword()
-{
-    static NeverDestroyed<const AtomicString> open("open", AtomicString::ConstructFromLiteral);
-    return open;
-}
-
-const AtomicString& MediaSource::closedKeyword()
-{
-    static NeverDestroyed<const AtomicString> closed("closed", AtomicString::ConstructFromLiteral);
-    return closed;
-}
-
-const AtomicString& MediaSource::endedKeyword()
-{
-    static NeverDestroyed<const AtomicString> ended("ended", AtomicString::ConstructFromLiteral);
-    return ended;
 }
 
 void MediaSource::setPrivateAndOpen(Ref<MediaSourcePrivate>&& mediaSourcePrivate)
@@ -126,7 +123,7 @@ void MediaSource::setPrivateAndOpen(Ref<MediaSourcePrivate>&& mediaSourcePrivate
 
     // 2. Set the readyState attribute to "open".
     // 3. Queue a task to fire a simple event named sourceopen at the MediaSource.
-    setReadyState(openKeyword());
+    setReadyState(ReadyState::Open);
 
     // 4. Continue the resource fetch algorithm by running the remaining "Otherwise (mode is local)" steps,
     // with these clarifications:
@@ -192,7 +189,7 @@ std::unique_ptr<PlatformTimeRanges> MediaSource::buffered() const
     m_buffered->add(MediaTime::zeroTime(), highestEndTime);
 
     // 5. For each SourceBuffer object in activeSourceBuffers run the following steps:
-    bool ended = readyState() == endedKeyword();
+    bool ended = readyState() == ReadyState::Ended;
     for (auto& sourceRanges : activeRanges) {
         // 5.1 Let source ranges equal the ranges returned by the buffered attribute on the current SourceBuffer.
         // 5.2 If readyState is "ended", then set the end time on the last range in source ranges to highest end time.
@@ -236,6 +233,7 @@ void MediaSource::seekToTime(const MediaTime& time)
     // ↳ Otherwise
     // Continue
 
+    m_private->waitForSeekCompleted();
     completeSeek();
 }
 
@@ -466,18 +464,18 @@ void MediaSource::monitorSourceBuffers()
 ExceptionOr<void> MediaSource::setDuration(double duration)
 {
     // 2.1 Attributes - Duration
-    // https://dvcs.w3.org/hg/html-media/raw-file/tip/media-source/media-source.html#attributes
+    // https://www.w3.org/TR/2016/REC-media-source-20161117/#attributes
 
     // On setting, run the following steps:
-    // 1. If the value being set is negative or NaN then throw an INVALID_ACCESS_ERR exception and abort these steps.
+    // 1. If the value being set is negative or NaN then throw a TypeError exception and abort these steps.
     if (duration < 0.0 || std::isnan(duration))
-        return Exception { INVALID_ACCESS_ERR };
+        return Exception { TypeError };
 
-    // 2. If the readyState attribute is not "open" then throw an INVALID_STATE_ERR exception and abort these steps.
+    // 2. If the readyState attribute is not "open" then throw an InvalidStateError exception and abort these steps.
     if (!isOpen())
         return Exception { INVALID_STATE_ERR };
 
-    // 3. If the updating attribute equals true on any SourceBuffer in sourceBuffers, then throw an INVALID_STATE_ERR
+    // 3. If the updating attribute equals true on any SourceBuffer in sourceBuffers, then throw an InvalidStateError
     // exception and abort these steps.
     for (auto& sourceBuffer : *m_sourceBuffers) {
         if (sourceBuffer->updating())
@@ -491,7 +489,7 @@ ExceptionOr<void> MediaSource::setDuration(double duration)
 ExceptionOr<void> MediaSource::setDurationInternal(const MediaTime& duration)
 {
     // 2.4.6 Duration Change
-    // https://rawgit.com/w3c/media-source/45627646344eea0170dd1cbc5a3d508ca751abb8/media-source-respec.html#duration-change-algorithm
+    // https://www.w3.org/TR/2016/REC-media-source-20161117/#duration-change-algorithm
 
     MediaTime newDuration = duration;
 
@@ -528,12 +526,10 @@ ExceptionOr<void> MediaSource::setDurationInternal(const MediaTime& duration)
     return { };
 }
 
-void MediaSource::setReadyState(const AtomicString& state)
+void MediaSource::setReadyState(ReadyState state)
 {
-    ASSERT(state == openKeyword() || state == closedKeyword() || state == endedKeyword());
-
-    AtomicString oldState = readyState();
-    LOG(MediaSource, "MediaSource::setReadyState(%p) : %s -> %s", this, oldState.string().ascii().data(), state.string().ascii().data());
+    auto oldState = readyState();
+    LOG(MediaSource, "MediaSource::setReadyState(%p) : %s -> %s", this, toString(oldState), toString(state));
 
     if (oldState == state)
         return;
@@ -572,7 +568,7 @@ void MediaSource::streamEndedWithError(std::optional<EndOfStreamError> error)
 
     // 1. Change the readyState attribute value to "ended".
     // 2. Queue a task to fire a simple event named sourceended at the MediaSource.
-    setReadyState(endedKeyword());
+    setReadyState(ReadyState::Ended);
 
     // 3.
     if (!error) {
@@ -861,17 +857,17 @@ bool MediaSource::isTypeSupported(const String& type)
 
 bool MediaSource::isOpen() const
 {
-    return readyState() == openKeyword();
+    return readyState() == ReadyState::Open;
 }
 
 bool MediaSource::isClosed() const
 {
-    return readyState() == closedKeyword();
+    return readyState() == ReadyState::Closed;
 }
 
 bool MediaSource::isEnded() const
 {
-    return readyState() == endedKeyword();
+    return readyState() == ReadyState::Ended;
 }
 
 void MediaSource::detachFromElement(HTMLMediaElement& element)
@@ -883,7 +879,7 @@ void MediaSource::detachFromElement(HTMLMediaElement& element)
 
     // 1. Set the readyState attribute to "closed".
     // 7. Queue a task to fire a simple event named sourceclose at the MediaSource.
-    setReadyState(closedKeyword());
+    setReadyState(ReadyState::Closed);
 
     // 2. Update duration to NaN.
     m_duration = MediaTime::invalidTime();
@@ -920,10 +916,10 @@ bool MediaSource::attachToElement(HTMLMediaElement& element)
 
 void MediaSource::openIfInEndedState()
 {
-    if (m_readyState != endedKeyword())
+    if (m_readyState != ReadyState::Ended)
         return;
 
-    setReadyState(openKeyword());
+    setReadyState(ReadyState::Open);
     m_private->unmarkEndOfStream();
 }
 
@@ -938,7 +934,7 @@ void MediaSource::stop()
     m_asyncEventQueue.close();
     if (m_mediaElement)
         m_mediaElement->detachMediaSource();
-    m_readyState = closedKeyword();
+    m_readyState = ReadyState::Closed;
     m_private = nullptr;
 }
 
@@ -952,7 +948,7 @@ const char* MediaSource::activeDOMObjectName() const
     return "MediaSource";
 }
 
-void MediaSource::onReadyStateChange(const AtomicString& oldState, const AtomicString& newState)
+void MediaSource::onReadyStateChange(ReadyState oldState, ReadyState newState)
 {
     for (auto& buffer : *m_sourceBuffers)
         buffer->readyStateChanged();
@@ -962,7 +958,7 @@ void MediaSource::onReadyStateChange(const AtomicString& oldState, const AtomicS
         return;
     }
 
-    if (oldState == openKeyword() && newState == endedKeyword()) {
+    if (oldState == ReadyState::Open && newState == ReadyState::Ended) {
         scheduleEvent(eventNames().sourceendedEvent);
         return;
     }

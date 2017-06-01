@@ -55,7 +55,7 @@ static EncodedJSValue JSC_HOST_CALL regExpProtoGetterUnicode(ExecState*);
 static EncodedJSValue JSC_HOST_CALL regExpProtoGetterSource(ExecState*);
 static EncodedJSValue JSC_HOST_CALL regExpProtoGetterFlags(ExecState*);
 
-const ClassInfo RegExpPrototype::s_info = { "Object", &Base::s_info, 0, CREATE_METHOD_TABLE(RegExpPrototype) };
+const ClassInfo RegExpPrototype::s_info = { "Object", &Base::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(RegExpPrototype) };
 
 RegExpPrototype::RegExpPrototype(VM& vm, Structure* structure)
     : JSNonFinalObject(vm, structure)
@@ -76,10 +76,16 @@ void RegExpPrototype::finishCreation(VM& vm, JSGlobalObject* globalObject)
     JSC_NATIVE_GETTER(vm.propertyNames->unicode, regExpProtoGetterUnicode, DontEnum | Accessor);
     JSC_NATIVE_GETTER(vm.propertyNames->source, regExpProtoGetterSource, DontEnum | Accessor);
     JSC_NATIVE_GETTER(vm.propertyNames->flags, regExpProtoGetterFlags, DontEnum | Accessor);
-    JSC_BUILTIN_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->matchSymbol, regExpPrototypeMatchCodeGenerator, DontEnum);
-    JSC_BUILTIN_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->replaceSymbol, regExpPrototypeReplaceCodeGenerator, DontEnum);
-    JSC_BUILTIN_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->searchSymbol, regExpPrototypeSearchCodeGenerator, DontEnum);
-    JSC_BUILTIN_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->splitSymbol, regExpPrototypeSplitCodeGenerator, DontEnum);
+
+    JSFunction* matchFunction = JSFunction::createBuiltinFunction(vm, regExpPrototypeMatchCodeGenerator(vm), globalObject, ASCIILiteral("[Symbol.match]"));
+    putDirectWithoutTransition(vm, vm.propertyNames->matchSymbol, matchFunction, DontEnum);
+    JSFunction* replaceFunction = JSFunction::createBuiltinFunction(vm, regExpPrototypeReplaceCodeGenerator(vm), globalObject, ASCIILiteral("[Symbol.replace]"));
+    putDirectWithoutTransition(vm, vm.propertyNames->replaceSymbol, replaceFunction, DontEnum);
+    JSFunction* searchFunction = JSFunction::createBuiltinFunction(vm, regExpPrototypeSearchCodeGenerator(vm), globalObject, ASCIILiteral("[Symbol.search]"));
+    putDirectWithoutTransition(vm, vm.propertyNames->searchSymbol, searchFunction, DontEnum);
+    JSFunction* splitFunction = JSFunction::createBuiltinFunction(vm, regExpPrototypeSplitCodeGenerator(vm), globalObject, ASCIILiteral("[Symbol.split]"));
+    putDirectWithoutTransition(vm, vm.propertyNames->splitSymbol, splitFunction, DontEnum);
+
     JSC_BUILTIN_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->test, regExpPrototypeTestCodeGenerator, DontEnum);
 
     m_emptyRegExp.set(vm, this, RegExp::create(vm, "", NoFlags));

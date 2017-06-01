@@ -149,7 +149,7 @@ private:
     void didSendData(unsigned long long bytesSent, unsigned long long totalBytesToBeSent) override;
     void didReceiveResponse(unsigned long identifier, const ResourceResponse&) override;
     void didReceiveData(const char* data, int dataLength) override;
-    void didFinishLoading(unsigned long identifier, double finishTime) override;
+    void didFinishLoading(unsigned long identifier) override;
     void didFail(const ResourceError&) override;
 
     bool responseIsXML() const;
@@ -229,6 +229,7 @@ private:
 
     ResponseType m_responseType { ResponseType::EmptyString };
     bool m_responseCacheIsValid { false };
+    mutable String m_allResponseHeaders;
 
     Timer m_resumeTimer;
     bool m_dispatchErrorOnResuming { false };
@@ -237,7 +238,7 @@ private:
     void networkErrorTimerFired();
 
     unsigned m_timeoutMilliseconds { 0 };
-    std::chrono::steady_clock::time_point m_sendingTime;
+    MonotonicTime m_sendingTime;
     Timer m_timeoutTimer;
 };
 

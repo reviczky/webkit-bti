@@ -25,10 +25,12 @@
 #include "FrameLoaderTypes.h"
 #include "LayoutMilestones.h"
 #include "LayoutRect.h"
+#include "LengthBox.h"
 #include "MediaProducer.h"
 #include "PageVisibilityState.h"
 #include "Pagination.h"
 #include "PlatformScreen.h"
+#include "RTCController.h"
 #include "Region.h"
 #include "ScrollTypes.h"
 #include "SessionID.h"
@@ -79,10 +81,10 @@ class BackForwardController;
 class BackForwardClient;
 class Chrome;
 class ChromeClient;
-class ClientRectList;
 class Color;
 class ContextMenuClient;
 class ContextMenuController;
+class DOMRect;
 class DatabaseProvider;
 class DiagnosticLoggingClient;
 class DragCaretController;
@@ -98,6 +100,7 @@ class UserInputBridge;
 class InspectorClient;
 class InspectorController;
 class LibWebRTCProvider;
+class LowPowerModeNotifier;
 class MainFrame;
 class MediaCanStartListener;
 class MediaPlaybackTarget;
@@ -125,6 +128,7 @@ class Settings;
 class SocketProvider;
 class StorageNamespace;
 class StorageNamespaceProvider;
+class URL;
 class UserContentProvider;
 class ValidationMessageClient;
 class ActivityStateChangeObserver;
@@ -143,6 +147,9 @@ enum class EventThrottlingBehavior {
     Unresponsive
 };
 
+enum class CanWrap : bool;
+enum class DidWrap : bool;
+
 class Page : public Supplementable<Page> {
     WTF_MAKE_NONCOPYABLE(Page);
     WTF_MAKE_FAST_ALLOCATED;
@@ -158,8 +165,6 @@ public:
     WEBCORE_EXPORT uint64_t renderTreeSize() const;
 
     void setNeedsRecalcStyleInAllFrames();
-
-    RenderTheme& theme() const { return *m_theme; }
 
     WEBCORE_EXPORT ViewportArguments viewportArguments() const;
 
@@ -223,6 +228,8 @@ public:
     PointerLockController& pointerLockController() const { return *m_pointerLockController; }
 #endif
     LibWebRTCProvider& libWebRTCProvider() { return m_libWebRTCProvider.get(); }
+    RTCController& rtcController() { return m_rtcController; }
+    PerformanceMonitor* performanceMonitor() { return m_performanceMonitor.get(); }
 
     ValidationMessageClient* validationMessageClient() const { return m_validationMessageClient.get(); }
     void updateValidationBubbleStateIfNeeded();
@@ -231,13 +238,16 @@ public:
 
     WEBCORE_EXPORT String scrollingStateTreeAsText();
     WEBCORE_EXPORT String synchronousScrollingReasonsAsText();
-    WEBCORE_EXPORT Ref<ClientRectList> nonFastScrollableRects();
+    WEBCORE_EXPORT Vector<Ref<DOMRect>> nonFastScrollableRects();
+
+    WEBCORE_EXPORT Vector<Ref<DOMRect>> touchEventRectsForEvent(const String& eventName);
+    WEBCORE_EXPORT Vector<Ref<DOMRect>> passiveTouchEventListenerRects();
 
     Settings& settings() const { return *m_settings; }
     ProgressTracker& progress() const { return *m_progress; }
     BackForwardController& backForward() const { return *m_backForwardController; }
 
-    std::chrono::milliseconds domTimerAlignmentInterval() const { return m_timerAlignmentInterval; }
+    Seconds domTimerAlignmentInterval() const { return m_domTimerAlignmentInterval; }
 
 #if ENABLE(VIEW_MODE_CSS_MEDIA)
     enum ViewMode {
@@ -257,7 +267,7 @@ public:
     void setTabKeyCyclesThroughElements(bool b) { m_tabKeyCyclesThroughElements = b; }
     bool tabKeyCyclesThroughElements() const { return m_tabKeyCyclesThroughElements; }
 
-    WEBCORE_EXPORT bool findString(const String&, FindOptions);
+    WEBCORE_EXPORT bool findString(const String&, FindOptions, DidWrap* = nullptr);
 
     WEBCORE_EXPORT RefPtr<Range> rangeOfString(const String&, Range*, FindOptions);
 
@@ -318,10 +328,13 @@ public:
     float topContentInset() const { return m_topContentInset; }
     WEBCORE_EXPORT void setTopContentInset(float);
 
+    const FloatBoxExtent& obscuredInsets() const { return m_obscuredInsets; }
+    void setObscuredInsets(const FloatBoxExtent& obscuredInsets) { m_obscuredInsets = obscuredInsets; }
+
+    const FloatBoxExtent& unobscuredSafeAreaInsets() const { return m_unobscuredSafeAreaInsets; }
+    WEBCORE_EXPORT void setUnobscuredSafeAreaInsets(const FloatBoxExtent&);
+
 #if PLATFORM(IOS)
-    FloatSize obscuredInset() const { return m_obscuredInset; }
-    void setObscuredInset(FloatSize inset) { m_obscuredInset = inset; }
-    
     bool enclosedInScrollableAncestorView() const { return m_enclosedInScrollableAncestorView; }
     void setEnclosedInScrollableAncestorView(bool f) { m_enclosedInScrollableAncestorView = f; }
 #endif
@@ -484,6 +497,8 @@ public:
     void allowPrompts();
     bool arePromptsAllowed();
 
+    void mainFrameLoadStarted(const URL&, FrameLoadType);
+
     void setLastSpatialNavigationCandidateCount(unsigned count) { m_lastSpatialNavigationCandidatesCount = count; }
     unsigned lastSpatialNavigationCandidateCount() const { return m_lastSpatialNavigationCandidatesCount; }
 
@@ -513,6 +528,7 @@ public:
     bool isAudioMuted() const { return m_mutedState & MediaProducer::AudioIsMuted; }
     bool isMediaCaptureMuted() const { return m_mutedState & MediaProducer::CaptureDevicesAreMuted; };
     WEBCORE_EXPORT void setMuted(MediaProducer::MutedStateFlags);
+    WEBCORE_EXPORT void stopMediaCapture();
 
 #if ENABLE(MEDIA_SESSION)
     WEBCORE_EXPORT void handleMediaEvent(MediaEventType);
@@ -552,7 +568,7 @@ public:
     void setShowAllPlugins(bool showAll) { m_showAllPlugins = showAll; }
     bool showAllPlugins() const;
 
-    WEBCORE_EXPORT void setTimerAlignmentIntervalIncreaseLimit(std::chrono::milliseconds);
+    WEBCORE_EXPORT void setDOMTimerAlignmentIntervalIncreaseLimit(Seconds);
 
     bool isControlledByAutomation() const { return m_controlledByAutomation; }
     void setControlledByAutomation(bool controlled) { m_controlledByAutomation = controlled; }
@@ -562,8 +578,11 @@ public:
     String captionUserPreferencesStyleSheet();
     void setCaptionUserPreferencesStyleSheet(const String&);
 
-    bool isResourceCachingDisabled() const { return m_resourceCachingDisabled; }
+    bool isResourceCachingDisabled() const { return m_resourceCachingDisabled || m_resourceCachingDisabledOverride; }
     void setResourceCachingDisabled(bool disabled) { m_resourceCachingDisabled = disabled; }
+
+    // Web Inspector can override whatever value is set via WebKit SPI, but only while it is open.
+    void setResourceCachingDisabledOverride(bool disabled) { m_resourceCachingDisabledOverride = disabled; }
 
     std::optional<EventThrottlingBehavior> eventThrottlingBehaviorOverride() const { return m_eventThrottlingBehaviorOverride; }
     void setEventThrottlingBehaviorOverride(std::optional<EventThrottlingBehavior> throttling) { m_eventThrottlingBehaviorOverride = throttling; }
@@ -574,10 +593,19 @@ public:
     bool isUtilityPage() const { return m_isUtilityPage; }
 
 #if ENABLE(DATA_INTERACTION)
-    WEBCORE_EXPORT bool hasDataInteractionAtPosition(const FloatPoint&) const;
+    WEBCORE_EXPORT bool hasSelectionAtPosition(const FloatPoint&) const;
 #endif
 
+    bool isLowPowerModeEnabled() const;
+    WEBCORE_EXPORT void setLowPowerModeEnabledOverrideForTesting(std::optional<bool>);
+
 private:
+    struct Navigation {
+        String domain;
+        FrameLoadType type;
+    };
+    void logNavigation(const Navigation&);
+
     WEBCORE_EXPORT void initGroup();
 
     void setIsInWindowInternal(bool);
@@ -599,12 +627,14 @@ private:
 
     Vector<Ref<PluginViewBase>> pluginViews();
 
+    void handleLowModePowerChange(bool);
+
     enum class TimerThrottlingState { Disabled, Enabled, EnabledIncreasing };
     void hiddenPageDOMTimerThrottlingStateChanged();
     void setTimerThrottlingState(TimerThrottlingState);
     void updateTimerThrottlingState();
     void updateDOMTimerAlignmentInterval();
-    void timerAlignmentIntervalIncreaseTimerFired();
+    void domTimerAlignmentIntervalIncreaseTimerFired();
 
     const std::unique_ptr<Chrome> m_chrome;
     const std::unique_ptr<DragCaretController> m_dragCaretController;
@@ -634,8 +664,6 @@ private:
 
     RefPtr<PluginData> m_pluginData;
 
-    RefPtr<RenderTheme> m_theme;
-
     UniqueRef<EditorClient> m_editorClient;
     PlugInClient* m_plugInClient;
     std::unique_ptr<ValidationMessageClient> m_validationMessageClient;
@@ -643,6 +671,7 @@ private:
     std::unique_ptr<WebGLStateTracker> m_webGLStateTracker;
 
     UniqueRef<LibWebRTCProvider> m_libWebRTCProvider;
+    RTCController m_rtcController;
 
     int m_nestedRunLoopCount { 0 };
     std::function<void()> m_unnestCallback;
@@ -666,10 +695,10 @@ private:
     float m_viewScaleFactor { 1 };
 
     float m_topContentInset;
+    FloatBoxExtent m_obscuredInsets;
+    FloatBoxExtent m_unobscuredSafeAreaInsets;
 
 #if PLATFORM(IOS)
-    // This is only used for history scroll position restoration.
-    FloatSize m_obscuredInset;
     bool m_enclosedInScrollableAncestorView { false };
 #endif
 
@@ -707,10 +736,10 @@ private:
 #endif // ENABLE(VIEW_MODE_CSS_MEDIA)
 
     TimerThrottlingState m_timerThrottlingState { TimerThrottlingState::Disabled };
-    std::chrono::steady_clock::time_point m_timerThrottlingStateLastChangedTime { std::chrono::steady_clock::duration::zero() };
-    std::chrono::milliseconds m_timerAlignmentInterval;
-    Timer m_timerAlignmentIntervalIncreaseTimer;
-    std::chrono::milliseconds m_timerAlignmentIntervalIncreaseLimit { 0 };
+    MonotonicTime m_timerThrottlingStateLastChangedTime;
+    Seconds m_domTimerAlignmentInterval;
+    Timer m_domTimerAlignmentIntervalIncreaseTimer;
+    Seconds m_domTimerAlignmentIntervalIncreaseLimit;
 
     bool m_isEditable;
     bool m_isPrerender;
@@ -774,6 +803,7 @@ private:
     bool m_showAllPlugins { false };
     bool m_controlledByAutomation { false };
     bool m_resourceCachingDisabled { false };
+    bool m_resourceCachingDisabledOverride { false };
     bool m_isUtilityPage;
     UserInterfaceLayoutDirection m_userInterfaceLayoutDirection { UserInterfaceLayoutDirection::LTR };
     
@@ -781,6 +811,10 @@ private:
     std::optional<EventThrottlingBehavior> m_eventThrottlingBehaviorOverride;
 
     std::unique_ptr<PerformanceMonitor> m_performanceMonitor;
+    std::unique_ptr<LowPowerModeNotifier> m_lowPowerModeNotifier;
+    std::optional<bool> m_lowPowerModeEnabledOverrideForTesting;
+
+    std::optional<Navigation> m_navigationToLogWhenVisible;
 
     bool m_isRunningUserScripts { false };
 };

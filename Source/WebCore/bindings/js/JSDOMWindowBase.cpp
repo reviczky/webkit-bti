@@ -1,7 +1,7 @@
 /*
  *  Copyright (C) 2000 Harri Porten (porten@kde.org)
  *  Copyright (C) 2006 Jon Shier (jshier@iastate.edu)
- *  Copyright (C) 2003-2009, 2014, 2016 Apple Inc. All rights reseved.
+ *  Copyright (C) 2003-2017 Apple Inc. All rights reseved.
  *  Copyright (C) 2006 Alexey Proskuryakov (ap@webkit.org)
  *  Copyright (c) 2015 Canon Inc. All rights reserved.
  *
@@ -38,6 +38,7 @@
 #include "Language.h"
 #include "Logging.h"
 #include "Page.h"
+#include "RejectedPromiseTracker.h"
 #include "RuntimeApplicationChecks.h"
 #include "ScriptController.h"
 #include "ScriptModuleLoader.h"
@@ -46,6 +47,7 @@
 #include "WebCoreJSClientData.h"
 #include <bytecode/CodeBlock.h>
 #include <heap/StrongInlines.h>
+#include <runtime/JSInternalPromise.h>
 #include <runtime/JSInternalPromiseDeferred.h>
 #include <runtime/Microtask.h>
 #include <wtf/MainThread.h>
@@ -58,7 +60,7 @@ using namespace JSC;
 
 namespace WebCore {
 
-const ClassInfo JSDOMWindowBase::s_info = { "Window", &JSDOMGlobalObject::s_info, 0, CREATE_METHOD_TABLE(JSDOMWindowBase) };
+const ClassInfo JSDOMWindowBase::s_info = { "Window", &JSDOMGlobalObject::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(JSDOMWindowBase) };
 
 const GlobalObjectMethodTable JSDOMWindowBase::s_globalObjectMethodTable = {
     &supportsRichSourceInfo,
@@ -69,8 +71,9 @@ const GlobalObjectMethodTable JSDOMWindowBase::s_globalObjectMethodTable = {
     &moduleLoaderImportModule,
     &moduleLoaderResolve,
     &moduleLoaderFetch,
-    nullptr,
+    nullptr, // moduleLoaderInstantiate
     &moduleLoaderEvaluate,
+    &promiseRejectionTracker,
     &defaultLanguage
 };
 
@@ -197,7 +200,7 @@ RuntimeFlags JSDOMWindowBase::javaScriptRuntimeFlags(const JSGlobalObject* objec
 
 class JSDOMWindowMicrotaskCallback : public RefCounted<JSDOMWindowMicrotaskCallback> {
 public:
-    static Ref<JSDOMWindowMicrotaskCallback> create(JSDOMWindowBase* globalObject, Ref<JSC::Microtask>&& task)
+    static Ref<JSDOMWindowMicrotaskCallback> create(JSDOMWindowBase& globalObject, Ref<JSC::Microtask>&& task)
     {
         return adoptRef(*new JSDOMWindowMicrotaskCallback(globalObject, WTFMove(task)));
     }
@@ -213,13 +216,13 @@ public:
 
         JSMainThreadExecState::runTask(exec, m_task);
 
-        ASSERT_UNUSED(scope, !scope.exception());
+        scope.assertNoException();
     }
 
 private:
-    JSDOMWindowMicrotaskCallback(JSDOMWindowBase* globalObject, Ref<JSC::Microtask>&& task)
-        : m_globalObject(globalObject->vm(), globalObject)
-        , m_task(WTFMove(task))
+    JSDOMWindowMicrotaskCallback(JSDOMWindowBase& globalObject, Ref<JSC::Microtask>&& task)
+        : m_globalObject { globalObject.vm(), &globalObject }
+        , m_task { WTFMove(task) }
     {
     }
 
@@ -227,12 +230,12 @@ private:
     Ref<JSC::Microtask> m_task;
 };
 
-void JSDOMWindowBase::queueTaskToEventLoop(const JSGlobalObject* object, Ref<JSC::Microtask>&& task)
+void JSDOMWindowBase::queueTaskToEventLoop(JSGlobalObject& object, Ref<JSC::Microtask>&& task)
 {
-    const JSDOMWindowBase* thisObject = static_cast<const JSDOMWindowBase*>(object);
+    JSDOMWindowBase& thisObject = static_cast<JSDOMWindowBase&>(object);
 
-    RefPtr<JSDOMWindowMicrotaskCallback> callback = JSDOMWindowMicrotaskCallback::create((JSDOMWindowBase*)thisObject, WTFMove(task));
-    auto microtask = std::make_unique<ActiveDOMCallbackMicrotask>(MicrotaskQueue::mainThreadQueue(), *thisObject->scriptExecutionContext(), [callback]() mutable {
+    RefPtr<JSDOMWindowMicrotaskCallback> callback = JSDOMWindowMicrotaskCallback::create(thisObject, WTFMove(task));
+    auto microtask = std::make_unique<ActiveDOMCallbackMicrotask>(MicrotaskQueue::mainThreadQueue(), *thisObject.scriptExecutionContext(), [callback]() mutable {
         callback->call();
     });
 
@@ -288,7 +291,7 @@ JSDOMWindow* toJSDOMWindow(JSC::VM& vm, JSValue value)
     return 0;
 }
 
-DOMWindow& callerDOMWindow(ExecState* exec)
+DOMWindow& incumbentDOMWindow(ExecState* exec)
 {
     class GetCallerGlobalObjectFunctor {
     public:
@@ -304,12 +307,12 @@ DOMWindow& callerDOMWindow(ExecState* exec)
             if (auto* codeBlock = visitor->codeBlock())
                 m_globalObject = codeBlock->globalObject();
             else {
-                ASSERT(visitor->callee());
+                ASSERT(visitor->callee().rawPtr());
                 // FIXME: Callee is not an object if the caller is Web Assembly.
                 // Figure out what to do here. We can probably get the global object
                 // from the top-most Wasm Instance. https://bugs.webkit.org/show_bug.cgi?id=165721
-                if (visitor->callee()->isObject())
-                    m_globalObject = jsCast<JSObject*>(visitor->callee())->globalObject();
+                if (visitor->callee().isCell() && visitor->callee().asCell()->isObject())
+                    m_globalObject = jsCast<JSObject*>(visitor->callee().asCell())->globalObject();
             }
             return StackVisitor::Done;
         }
@@ -355,7 +358,6 @@ void JSDOMWindowBase::fireFrameClearedWatchpointsForWindow(DOMWindow* window)
     }
 }
 
-
 JSC::JSInternalPromise* JSDOMWindowBase::moduleLoaderResolve(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSModuleLoader* moduleLoader, JSC::JSValue moduleName, JSC::JSValue importerModuleKey, JSC::JSValue scriptFetcher)
 {
     JSDOMWindowBase* thisObject = JSC::jsCast<JSDOMWindowBase*>(globalObject);
@@ -389,6 +391,33 @@ JSC::JSInternalPromise* JSDOMWindowBase::moduleLoaderImportModule(JSC::JSGlobalO
         return document->moduleLoader()->importModule(globalObject, exec, moduleLoader, moduleName, sourceOrigin);
     JSC::JSInternalPromiseDeferred* deferred = JSC::JSInternalPromiseDeferred::create(exec, globalObject);
     return deferred->reject(exec, jsUndefined());
+}
+
+void JSDOMWindowBase::promiseRejectionTracker(JSGlobalObject* jsGlobalObject, ExecState* exec, JSPromise* promise, JSPromiseRejectionOperation operation)
+{
+    // https://html.spec.whatwg.org/multipage/webappapis.html#the-hostpromiserejectiontracker-implementation
+
+    VM& vm = exec->vm();
+    auto& globalObject = *JSC::jsCast<JSDOMWindowBase*>(jsGlobalObject);
+    auto* context = globalObject.scriptExecutionContext();
+    if (!context)
+        return;
+
+    // InternalPromises should not be exposed to user scripts.
+    if (JSC::jsDynamicCast<JSC::JSInternalPromise*>(vm, promise))
+        return;
+
+    // FIXME: If script has muted errors (cross origin), terminate these steps.
+    // <https://webkit.org/b/171415> Implement the `muted-errors` property of Scripts to avoid onerror/onunhandledrejection for cross-origin scripts
+
+    switch (operation) {
+    case JSPromiseRejectionOperation::Reject:
+        context->ensureRejectedPromiseTracker().promiseRejected(*exec, globalObject, *promise);
+        break;
+    case JSPromiseRejectionOperation::Handle:
+        context->ensureRejectedPromiseTracker().promiseHandled(*exec, globalObject, *promise);
+        break;
+    }
 }
 
 } // namespace WebCore

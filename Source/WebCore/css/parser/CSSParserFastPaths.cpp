@@ -168,6 +168,7 @@ static inline bool isColorPropertyID(CSSPropertyID propertyId)
     case CSSPropertyOutlineColor:
     case CSSPropertyStopColor:
     case CSSPropertyStroke:
+    case CSSPropertyStrokeColor:
     case CSSPropertyWebkitBorderAfterColor:
     case CSSPropertyWebkitBorderBeforeColor:
     case CSSPropertyWebkitBorderEndColor:
@@ -559,10 +560,6 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
         return valueID == CSSValueShow || valueID == CSSValueHide;
     case CSSPropertyFloat: // left | right | none
         return valueID == CSSValueLeft || valueID == CSSValueRight || valueID == CSSValueNone;
-    case CSSPropertyFontStyle: // normal | italic | oblique
-        return valueID == CSSValueNormal || valueID == CSSValueItalic || valueID == CSSValueOblique;
-    case CSSPropertyFontStretch: // normal | ultra-condensed | extra-condensed | condensed | semi-condensed | semi-expanded | expanded | extra-expanded | ultra-expanded
-        return valueID == CSSValueNormal || (valueID >= CSSValueUltraCondensed && valueID <= CSSValueUltraExpanded);
     case CSSPropertyImageRendering: // auto | optimizeContrast | pixelated | optimizeSpeed | crispEdges | optimizeQuality | webkit-crispEdges
         return valueID == CSSValueAuto || valueID == CSSValueOptimizeSpeed || valueID == CSSValueOptimizeQuality || valueID == CSSValueWebkitCrispEdges || valueID == CSSValueWebkitOptimizeContrast || valueID == CSSValueCrispEdges || valueID == CSSValuePixelated;
 #if ENABLE(CSS_COMPOSITING)
@@ -656,8 +653,10 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
         return (valueID >= CSSValueCapitalize && valueID <= CSSValueLowercase) || valueID == CSSValueNone;
     case CSSPropertyUnicodeBidi:
         return valueID == CSSValueNormal || valueID == CSSValueEmbed
-            || valueID == CSSValueBidiOverride || valueID == CSSValueWebkitIsolate
-            || valueID == CSSValueWebkitIsolateOverride || valueID == CSSValueWebkitPlaintext;
+            || valueID == CSSValueBidiOverride
+            || valueID == CSSValueIsolate || valueID == CSSValueWebkitIsolate
+            || valueID == CSSValueIsolateOverride || valueID == CSSValueWebkitIsolateOverride
+            || valueID == CSSValuePlaintext || valueID == CSSValueWebkitPlaintext;
     case CSSPropertyVectorEffect:
         return valueID == CSSValueNone || valueID == CSSValueNonScalingStroke;
     case CSSPropertyVisibility: // visible | hidden | collapse
@@ -721,7 +720,7 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
         return valueID == CSSValueAuto || valueID == CSSValueNone || valueID == CSSValueAntialiased || valueID == CSSValueSubpixelAntialiased;
     case CSSPropertyWebkitLineAlign:
         return valueID == CSSValueNone || valueID == CSSValueEdges;
-    case CSSPropertyWebkitLineBreak: // auto | loose | normal | strict | after-white-space
+    case CSSPropertyLineBreak: // auto | loose | normal | strict | after-white-space
         return valueID == CSSValueAuto || valueID == CSSValueLoose || valueID == CSSValueNormal || valueID == CSSValueStrict || valueID == CSSValueAfterWhiteSpace;
     case CSSPropertyWebkitLineSnap:
         return valueID == CSSValueNone || valueID == CSSValueBaseline || valueID == CSSValueContain;
@@ -804,6 +803,10 @@ bool CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyID propertyId
     case CSSPropertyWebkitOverflowScrolling:
         return valueID == CSSValueAuto || valueID == CSSValueTouch;
 #endif
+#if ENABLE(VARIATION_FONTS)
+    case CSSPropertyFontOpticalSizing:
+        return valueID == CSSValueAuto || valueID == CSSValueNone;
+#endif
     default:
         ASSERT_NOT_REACHED();
         return false;
@@ -833,8 +836,6 @@ bool CSSParserFastPaths::isKeywordPropertyID(CSSPropertyID propertyId)
     case CSSPropertyFlexDirection:
     case CSSPropertyFlexWrap:
     case CSSPropertyFloat:
-    case CSSPropertyFontStretch:
-    case CSSPropertyFontStyle:
     case CSSPropertyFontVariantAlternates:
     case CSSPropertyFontVariantCaps:
     case CSSPropertyFontVariantPosition:
@@ -852,15 +853,9 @@ bool CSSParserFastPaths::isKeywordPropertyID(CSSPropertyID propertyId)
     case CSSPropertySpeak:
     case CSSPropertyTableLayout:
     case CSSPropertyTextAlign:
-    case CSSPropertyTextLineThroughMode:
-    case CSSPropertyTextLineThroughStyle:
     case CSSPropertyTextOverflow:
-    case CSSPropertyTextOverlineMode:
-    case CSSPropertyTextOverlineStyle:
     case CSSPropertyTextRendering:
     case CSSPropertyTextTransform:
-    case CSSPropertyTextUnderlineMode:
-    case CSSPropertyTextUnderlineStyle:
     case CSSPropertyTransformStyle:
     case CSSPropertyUnicodeBidi:
     case CSSPropertyVisibility:
@@ -881,7 +876,7 @@ bool CSSParserFastPaths::isKeywordPropertyID(CSSPropertyID propertyId)
     case CSSPropertyWebkitFontSmoothing:
     case CSSPropertyWebkitHyphens:
     case CSSPropertyWebkitLineAlign:
-    case CSSPropertyWebkitLineBreak:
+    case CSSPropertyLineBreak:
     case CSSPropertyWebkitLineSnap:
     case CSSPropertyWebkitMarginAfterCollapse:
     case CSSPropertyWebkitMarginBeforeCollapse:
@@ -973,6 +968,9 @@ bool CSSParserFastPaths::isKeywordPropertyID(CSSPropertyID propertyId)
 #if ENABLE(APPLE_PAY)
     case CSSPropertyApplePayButtonStyle:
     case CSSPropertyApplePayButtonType:
+#endif
+#if ENABLE(VARIATION_FONTS)
+    case CSSPropertyFontOpticalSizing:
 #endif
         return true;
     case CSSPropertyJustifyContent:

@@ -76,6 +76,7 @@ public:
     virtual void pause() = 0;    
     virtual void setShouldBufferData(bool) { }
 
+    virtual bool supportsPictureInPicture() const { return false; }
     virtual bool supportsFullscreen() const { return false; }
     virtual bool supportsScanning() const { return false; }
     virtual bool requiresImmediateCompositing() const { return false; }
@@ -119,7 +120,7 @@ public:
 
     virtual void setVolume(float) { }
     virtual void setVolumeDouble(double volume) { return setVolume(volume); }
-#if PLATFORM(IOS)
+#if PLATFORM(IOS) || USE(GSTREAMER)
     virtual float volume() const { return 1; }
 #endif
 

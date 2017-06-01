@@ -79,8 +79,7 @@
 #include <WebCore/UserScript.h>
 #include <WebCore/UserStyleSheet.h>
 
-
-#if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
+#if ENABLE(NOTIFICATIONS)
 #include "WebNotificationManager.h"
 #endif
 
@@ -89,7 +88,7 @@ using namespace JSC;
 
 namespace WebKit {
 
-PassRefPtr<InjectedBundle> InjectedBundle::create(const WebProcessCreationParameters& parameters, API::Object* initializationUserData)
+RefPtr<InjectedBundle> InjectedBundle::create(const WebProcessCreationParameters& parameters, API::Object* initializationUserData)
 {
     auto bundle = adoptRef(*new InjectedBundle(parameters));
 
@@ -184,24 +183,15 @@ void InjectedBundle::overrideBoolPreferenceForTestRunner(WebPageGroupProxy* page
         RuntimeEnabledFeatures::sharedFeatures().setWebAnimationsEnabled(enabled);
 #endif
 
-#if ENABLE(FETCH_API)
-    if (preference == "WebKitFetchAPIEnabled")
-        RuntimeEnabledFeatures::sharedFeatures().setFetchAPIEnabled(enabled);
+#if ENABLE(STREAMS_API)
+    if (preference == "WebKitReadableByteStreamAPIEnabled")
+        RuntimeEnabledFeatures::sharedFeatures().setReadableByteStreamAPIEnabled(enabled);
+    if (preference == "WebKitWritableStreamAPIEnabled")
+        RuntimeEnabledFeatures::sharedFeatures().setWritableStreamAPIEnabled(enabled);
 #endif
-
-#if ENABLE(DOWNLOAD_ATTRIBUTE)
-    if (preference == "WebKitDownloadAttributeEnabled")
-        RuntimeEnabledFeatures::sharedFeatures().setDownloadAttributeEnabled(enabled);
-#endif
-
-    if (preference == "WebKitShadowDOMEnabled")
-        RuntimeEnabledFeatures::sharedFeatures().setShadowDOMEnabled(enabled);
 
     if (preference == "WebKitCSSGridLayoutEnabled")
         RuntimeEnabledFeatures::sharedFeatures().setCSSGridLayoutEnabled(enabled);
-
-    if (preference == "WebKitCustomElementsEnabled")
-        RuntimeEnabledFeatures::sharedFeatures().setCustomElementsEnabled(enabled);
 
     if (preference == "WebKitInteractiveFormValidationEnabled")
         RuntimeEnabledFeatures::sharedFeatures().setInteractiveFormValidationEnabled(enabled);
@@ -209,6 +199,11 @@ void InjectedBundle::overrideBoolPreferenceForTestRunner(WebPageGroupProxy* page
 #if ENABLE(WEBGL2)
     if (preference == "WebKitWebGL2Enabled")
         RuntimeEnabledFeatures::sharedFeatures().setWebGL2Enabled(enabled);
+#endif
+
+#if ENABLE(WEBGPU)
+    if (preference == "WebKitWebGPUEnabled")
+        RuntimeEnabledFeatures::sharedFeatures().setWebGPUEnabled(enabled);
 #endif
 
     if (preference == "WebKitModernMediaControlsEnabled")
@@ -225,13 +220,13 @@ void InjectedBundle::overrideBoolPreferenceForTestRunner(WebPageGroupProxy* page
 #endif
 
 #if ENABLE(MEDIA_STREAM)
-    if (preference == "WebKitMediaStreamEnabled")
-        RuntimeEnabledFeatures::sharedFeatures().setMediaStreamEnabled(enabled);
+    if (preference == "WebKitMediaDevicesEnabled")
+        RuntimeEnabledFeatures::sharedFeatures().setMediaDevicesEnabled(enabled);
 #endif
 
 #if ENABLE(WEB_RTC)
-    if (preference == "WebKitPeerConnectionEnabled")
-        RuntimeEnabledFeatures::sharedFeatures().setPeerConnectionEnabled(enabled);
+    if (preference == "WebKitWebRTCLegacyAPIEnabled")
+        RuntimeEnabledFeatures::sharedFeatures().setWebRTCLegacyAPIEnabled(enabled);
 #endif
 
     // Map the names used in LayoutTests with the names used in WebCore::Settings and WebPreferencesStore.
@@ -544,7 +539,7 @@ void InjectedBundle::setUserStyleSheetLocation(WebPageGroupProxy* pageGroup, con
 
 void InjectedBundle::setWebNotificationPermission(WebPage* page, const String& originString, bool allowed)
 {
-#if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
+#if ENABLE(NOTIFICATIONS)
     page->notificationPermissionRequestManager()->setPermissionLevelForTesting(originString, allowed);
 #else
     UNUSED_PARAM(page);
@@ -555,7 +550,7 @@ void InjectedBundle::setWebNotificationPermission(WebPage* page, const String& o
 
 void InjectedBundle::removeAllWebNotificationPermissions(WebPage* page)
 {
-#if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
+#if ENABLE(NOTIFICATIONS)
     page->notificationPermissionRequestManager()->removeAllPermissionsForTesting();
 #else
     UNUSED_PARAM(page);
@@ -564,7 +559,7 @@ void InjectedBundle::removeAllWebNotificationPermissions(WebPage* page)
 
 uint64_t InjectedBundle::webNotificationID(JSContextRef jsContext, JSValueRef jsNotification)
 {
-#if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
+#if ENABLE(NOTIFICATIONS)
     WebCore::Notification* notification = JSNotification::toWrapped(toJS(jsContext)->vm(), toJS(toJS(jsContext), jsNotification));
     if (!notification)
         return 0;
@@ -577,7 +572,7 @@ uint64_t InjectedBundle::webNotificationID(JSContextRef jsContext, JSValueRef js
 }
 
 // FIXME Get rid of this function and move it into WKBundle.cpp.
-PassRefPtr<API::Data> InjectedBundle::createWebDataFromUint8Array(JSContextRef context, JSValueRef data)
+Ref<API::Data> InjectedBundle::createWebDataFromUint8Array(JSContextRef context, JSValueRef data)
 {
     JSC::ExecState* execState = toJS(context);
     RefPtr<Uint8Array> arrayData = WebCore::toUnsharedUint8Array(execState->vm(), toJS(execState, data));

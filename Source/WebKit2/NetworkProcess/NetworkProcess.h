@@ -30,11 +30,11 @@
 #include "DownloadManager.h"
 #include "MessageReceiverMap.h"
 #include <WebCore/DiagnosticLoggingClient.h>
-#include <WebCore/MemoryPressureHandler.h>
 #include <WebCore/SessionID.h>
 #include <memory>
 #include <wtf/Forward.h>
 #include <wtf/Function.h>
+#include <wtf/MemoryPressureHandler.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RetainPtr.h>
 
@@ -61,6 +61,7 @@ class NetworkResourceLoader;
 enum class WebsiteDataFetchOption;
 enum class WebsiteDataType;
 struct NetworkProcessCreationParameters;
+struct WebsiteDataStoreParameters;
 
 class NetworkProcess : public ChildProcess, private DownloadManager::Client {
     WTF_MAKE_NONCOPYABLE(NetworkProcess);
@@ -112,11 +113,15 @@ public:
 
     void prefetchDNS(const String&);
 
-    void ensurePrivateBrowsingSession(WebCore::SessionID);
+    void ensurePrivateBrowsingSession(WebsiteDataStoreParameters&&);
 
     void grantSandboxExtensionsToDatabaseProcessForBlobs(const Vector<String>& filenames, Function<void ()>&& completionHandler);
 
-    std::chrono::milliseconds loadThrottleLatency() const { return m_loadThrottleLatency; }
+#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+    void shouldPartitionCookiesForTopPrivatelyOwnedDomains(const Vector<String>& domainsToRemove, const Vector<String>& domainsToAdd, bool clearFirst);
+#endif
+
+    Seconds loadThrottleLatency() const { return m_loadThrottleLatency; }
 
 private:
     NetworkProcess();
@@ -127,7 +132,7 @@ private:
     void terminate() override;
     void platformTerminate();
 
-    void lowMemoryHandler(WebCore::Critical);
+    void lowMemoryHandler(Critical);
 
     // ChildProcess
     void initializeProcess(const ChildProcessInitializationParameters&) override;
@@ -155,7 +160,8 @@ private:
     void didReceiveSyncNetworkProcessMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
     void initializeNetworkProcess(NetworkProcessCreationParameters&&);
     void createNetworkConnectionToWebProcess();
-    void destroyPrivateBrowsingSession(WebCore::SessionID);
+    void addWebsiteDataStore(WebsiteDataStoreParameters&&);
+    void destroySession(WebCore::SessionID);
 
     void fetchWebsiteData(WebCore::SessionID, OptionSet<WebsiteDataType>, OptionSet<WebsiteDataFetchOption>, uint64_t callbackID);
     void deleteWebsiteData(WebCore::SessionID, OptionSet<WebsiteDataType>, std::chrono::system_clock::time_point modifiedSince, uint64_t callbackID);
@@ -185,6 +191,8 @@ private:
     void setCanHandleHTTPSServerTrustEvaluation(bool);
     void getNetworkProcessStatistics(uint64_t callbackID);
     void clearCacheForAllOrigins(uint32_t cachesToClear);
+    void setAllowsAnySSLCertificateForWebSocket(bool);
+    void syncAllCookies();
 
     void didGrantSandboxExtensionsToDatabaseProcessForBlobs(uint64_t requestID);
 
@@ -207,17 +215,13 @@ private:
     bool m_suppressMemoryPressureHandler { false };
     bool m_diskCacheIsDisabledForTesting;
     bool m_canHandleHTTPSServerTrustEvaluation;
-    std::chrono::milliseconds m_loadThrottleLatency;
+    Seconds m_loadThrottleLatency;
 
     typedef HashMap<const char*, std::unique_ptr<NetworkProcessSupplement>, PtrHash<const char*>> NetworkProcessSupplementMap;
     NetworkProcessSupplementMap m_supplements;
 
     HashMap<uint64_t, Function<void ()>> m_sandboxExtensionForBlobsCompletionHandlers;
     HashMap<uint64_t, Ref<NetworkResourceLoader>> m_waitingNetworkResourceLoaders;
-
-#if ENABLE(WEB_RTC)
-    bool m_webRTCEnabled { false };
-#endif
 
 #if PLATFORM(COCOA)
     void platformInitializeNetworkProcessCocoa(const NetworkProcessCreationParameters&);

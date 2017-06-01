@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2015 Ericsson AB. All rights reserved.
+ * Copyright (C) 2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,8 +33,9 @@
 
 #if ENABLE(WEB_RTC)
 
-#include "JSDOMPromise.h"
-#include "PeerConnectionStates.h"
+#include "JSDOMPromiseDeferred.h"
+#include "RTCRtpParameters.h"
+#include "RTCSignalingState.h"
 
 namespace WebCore {
 
@@ -54,13 +56,12 @@ struct RTCDataChannelInit;
 struct RTCOfferOptions;
 
 namespace PeerConnection {
-using SessionDescriptionPromise = DOMPromise<IDLInterface<RTCSessionDescription>>;
-using StatsPromise = DOMPromise<IDLInterface<RTCStatsReport>>;
+using SessionDescriptionPromise = DOMPromiseDeferred<IDLInterface<RTCSessionDescription>>;
+using StatsPromise = DOMPromiseDeferred<IDLInterface<RTCStatsReport>>;
 }
 
 using CreatePeerConnectionBackend = std::unique_ptr<PeerConnectionBackend> (*)(RTCPeerConnection&);
 
-// FIXME: What is the value of this abstract class? There is only one concrete class derived from it.
 class PeerConnectionBackend {
 public:
     WEBCORE_EXPORT static CreatePeerConnectionBackend create;
@@ -70,9 +71,9 @@ public:
 
     void createOffer(RTCOfferOptions&&, PeerConnection::SessionDescriptionPromise&&);
     void createAnswer(RTCAnswerOptions&&, PeerConnection::SessionDescriptionPromise&&);
-    void setLocalDescription(RTCSessionDescription&, DOMPromise<void>&&);
-    void setRemoteDescription(RTCSessionDescription&, DOMPromise<void>&&);
-    void addIceCandidate(RTCIceCandidate&, DOMPromise<void>&&);
+    void setLocalDescription(RTCSessionDescription&, DOMPromiseDeferred<void>&&);
+    void setRemoteDescription(RTCSessionDescription&, DOMPromiseDeferred<void>&&);
+    void addIceCandidate(RTCIceCandidate*, DOMPromiseDeferred<void>&&);
 
     virtual std::unique_ptr<RTCDataChannelHandler> createDataChannelHandler(const String&, const RTCDataChannelInit&) = 0;
 
@@ -93,7 +94,11 @@ public:
     virtual Vector<RefPtr<MediaStream>> getRemoteStreams() const = 0;
 
     virtual Ref<RTCRtpReceiver> createReceiver(const String& transceiverMid, const String& trackKind, const String& trackId) = 0;
-    virtual void replaceTrack(RTCRtpSender&, RefPtr<MediaStreamTrack>&&, DOMPromise<void>&&) = 0;
+    virtual void replaceTrack(RTCRtpSender&, Ref<MediaStreamTrack>&&, DOMPromiseDeferred<void>&&) = 0;
+    virtual void notifyAddedTrack(RTCRtpSender&) { }
+    virtual void notifyRemovedTrack(RTCRtpSender&) { }
+
+    virtual RTCRtpParameters getParameters(RTCRtpSender&) const { return { }; }
 
     void markAsNeedingNegotiation();
     bool isNegotiationNeeded() const { return m_negotiationNeeded; };
@@ -101,11 +106,15 @@ public:
 
     virtual void emulatePlatformEvent(const String& action) = 0;
 
+    void newICECandidate(String&& sdp, String&& mid);
+    void disableICECandidateFiltering();
+    void enableICECandidateFiltering();
+
 protected:
     void fireICECandidateEvent(RefPtr<RTCIceCandidate>&&);
     void doneGatheringCandidates();
 
-    void updateSignalingState(PeerConnectionStates::SignalingState);
+    void updateSignalingState(RTCSignalingState);
 
     void createOfferSucceeded(String&&);
     void createOfferFailed(Exception&&);
@@ -128,6 +137,7 @@ private:
     virtual void doSetLocalDescription(RTCSessionDescription&) = 0;
     virtual void doSetRemoteDescription(RTCSessionDescription&) = 0;
     virtual void doAddIceCandidate(RTCIceCandidate&) = 0;
+    virtual void endOfIceCandidates(DOMPromiseDeferred<void>&& promise) { promise.resolve(); }
     virtual void doStop() = 0;
 
 protected:
@@ -135,9 +145,17 @@ protected:
 
 private:
     std::optional<PeerConnection::SessionDescriptionPromise> m_offerAnswerPromise;
-    std::optional<DOMPromise<void>> m_setDescriptionPromise;
-    std::optional<DOMPromise<void>> m_addIceCandidatePromise;
-    
+    std::optional<DOMPromiseDeferred<void>> m_setDescriptionPromise;
+    std::optional<DOMPromiseDeferred<void>> m_addIceCandidatePromise;
+
+    bool m_shouldFilterICECandidates { true };
+    struct PendingICECandidate {
+        // Fields described in https://www.w3.org/TR/webrtc/#idl-def-rtcicecandidateinit.
+        String sdp;
+        String mid;
+    };
+    Vector<PendingICECandidate> m_pendingICECandidates;
+
     bool m_negotiationNeeded { false };
 };
 

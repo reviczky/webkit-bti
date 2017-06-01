@@ -74,7 +74,7 @@ inline SVGSVGElement::SVGSVGElement(const QualifiedName& tagName, Document& docu
     , m_y(LengthModeHeight)
     , m_width(LengthModeWidth, ASCIILiteral("100%"))
     , m_height(LengthModeHeight, ASCIILiteral("100%"))
-    , m_timeContainer(SMILTimeContainer::create(this))
+    , m_timeContainer(SMILTimeContainer::create(*this))
 {
     ASSERT(hasTagName(SVGNames::svgTag));
     registerAnimatedPropertiesForSVGSVGElement();
@@ -470,6 +470,8 @@ Node::InsertionNotificationRequest SVGSVGElement::insertedInto(ContainerNode& ro
 {
     if (rootParent.isConnected()) {
         document().accessSVGExtensions().addTimeContainer(this);
+        if (!document().accessSVGExtensions().areAnimationsPaused())
+            unpauseAnimations();
 
         // Animations are started at the end of document parsing and after firing the load event,
         // but if we miss that train (deferred programmatic element insertion for example) we need
@@ -482,8 +484,10 @@ Node::InsertionNotificationRequest SVGSVGElement::insertedInto(ContainerNode& ro
 
 void SVGSVGElement::removedFrom(ContainerNode& rootParent)
 {
-    if (rootParent.isConnected())
+    if (rootParent.isConnected()) {
         document().accessSVGExtensions().removeTimeContainer(this);
+        pauseAnimations();
+    }
     SVGGraphicsElement::removedFrom(rootParent);
 }
 
@@ -502,6 +506,11 @@ void SVGSVGElement::unpauseAnimations()
 bool SVGSVGElement::animationsPaused() const
 {
     return m_timeContainer->isPaused();
+}
+
+bool SVGSVGElement::hasActiveAnimation() const
+{
+    return m_timeContainer->isActive();
 }
 
 float SVGSVGElement::getCurrentTime() const

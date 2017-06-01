@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2009, 2012-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -83,6 +83,7 @@ JIT::JIT(VM* vm, CodeBlock* codeBlock, unsigned loopOSREntryBytecodeOffset)
     , m_labels(codeBlock ? codeBlock->numberOfInstructions() : 0)
     , m_bytecodeOffset(std::numeric_limits<unsigned>::max())
     , m_getByIdIndex(UINT_MAX)
+    , m_getByIdWithThisIndex(UINT_MAX)
     , m_putByIdIndex(UINT_MAX)
     , m_byValInstructionIndex(UINT_MAX)
     , m_callLinkInfoIndex(UINT_MAX)
@@ -109,7 +110,7 @@ void JIT::emitEnterOptimizationCheck()
     skipOptimize.append(branchAdd32(Signed, TrustedImm32(Options::executionCounterIncrementForEntry()), AbsoluteAddress(m_codeBlock->addressOfJITExecuteCounter())));
     ASSERT(!m_bytecodeOffset);
 
-    copyCalleeSavesFromFrameOrRegisterToVMEntryFrameCalleeSavesBuffer();
+    copyCalleeSavesFromFrameOrRegisterToVMEntryFrameCalleeSavesBuffer(*vm());
 
     callOperation(operationOptimize, m_bytecodeOffset);
     skipOptimize.append(branchTestPtr(Zero, returnValueGPR));
@@ -328,7 +329,7 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_jngreatereq)
         DEFINE_OP(op_jtrue)
         DEFINE_OP(op_loop_hint)
-        DEFINE_OP(op_watchdog)
+        DEFINE_OP(op_check_traps)
         DEFINE_OP(op_lshift)
         DEFINE_OP(op_mod)
         DEFINE_OP(op_mov)
@@ -391,6 +392,7 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_to_primitive)
 
         DEFINE_OP(op_resolve_scope)
+        DEFINE_OP(op_resolve_scope_for_hoisting_func_decl_in_eval)
         DEFINE_OP(op_get_from_scope)
         DEFINE_OP(op_put_to_scope)
         DEFINE_OP(op_get_from_arguments)
@@ -437,6 +439,7 @@ void JIT::privateCompileSlowCases()
     Instruction* instructionsBegin = m_codeBlock->instructions().begin();
 
     m_getByIdIndex = 0;
+    m_getByIdWithThisIndex = 0;
     m_putByIdIndex = 0;
     m_byValInstructionIndex = 0;
     m_callLinkInfoIndex = 0;
@@ -492,6 +495,7 @@ void JIT::privateCompileSlowCases()
         case op_get_by_id_proto_load:
         case op_get_by_id_unset:
         DEFINE_SLOWCASE_OP(op_get_by_id)
+        DEFINE_SLOWCASE_OP(op_get_by_id_with_this)
         DEFINE_SLOWCASE_OP(op_get_by_val)
         DEFINE_SLOWCASE_OP(op_instanceof)
         DEFINE_SLOWCASE_OP(op_instanceof_custom)
@@ -504,7 +508,7 @@ void JIT::privateCompileSlowCases()
         DEFINE_SLOWCASE_OP(op_jngreater)
         DEFINE_SLOWCASE_OP(op_jngreatereq)
         DEFINE_SLOWCASE_OP(op_loop_hint)
-        DEFINE_SLOWCASE_OP(op_watchdog)
+        DEFINE_SLOWCASE_OP(op_check_traps)
         DEFINE_SLOWCASE_OP(op_lshift)
         DEFINE_SLOWCASE_OP(op_mod)
         DEFINE_SLOWCASE_OP(op_mul)
@@ -551,6 +555,7 @@ void JIT::privateCompileSlowCases()
     }
 
     RELEASE_ASSERT(m_getByIdIndex == m_getByIds.size());
+    RELEASE_ASSERT(m_getByIdWithThisIndex == m_getByIdsWithThis.size());
     RELEASE_ASSERT(m_putByIdIndex == m_putByIds.size());
     RELEASE_ASSERT(m_callLinkInfoIndex == m_callCompilationInfo.size());
     RELEASE_ASSERT(numberOfValueProfiles == m_codeBlock->numberOfValueProfiles());
@@ -712,7 +717,7 @@ void JIT::compileWithoutLinking(JITCompilationEffort effort)
         m_disassembler->setEndOfCode(label());
     m_pcToCodeOriginMapBuilder.appendItem(label(), PCToCodeOriginMapBuilder::defaultCodeOrigin());
 
-    m_linkBuffer = std::unique_ptr<LinkBuffer>(new LinkBuffer(*m_vm, *this, m_codeBlock, effort));
+    m_linkBuffer = std::unique_ptr<LinkBuffer>(new LinkBuffer(*this, m_codeBlock, effort));
 
     double after = 0;
     if (UNLIKELY(computeCompileTimes())) {
@@ -773,6 +778,8 @@ CompilationResult JIT::link()
 
     for (unsigned i = m_getByIds.size(); i--;)
         m_getByIds[i].finalize(patchBuffer);
+    for (unsigned i = m_getByIdsWithThis.size(); i--;)
+        m_getByIdsWithThis[i].finalize(patchBuffer);
     for (unsigned i = m_putByIds.size(); i--;)
         m_putByIds[i].finalize(patchBuffer);
 
@@ -866,7 +873,7 @@ void JIT::privateCompileExceptionHandlers()
     if (!m_exceptionChecksWithCallFrameRollback.empty()) {
         m_exceptionChecksWithCallFrameRollback.link(this);
 
-        copyCalleeSavesToVMEntryFrameCalleeSavesBuffer();
+        copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(*vm());
 
         // lookupExceptionHandlerFromCallerFrame is passed two arguments, the VM and the exec (the CallFrame*).
 
@@ -879,14 +886,14 @@ void JIT::privateCompileExceptionHandlers()
         poke(GPRInfo::argumentGPR1, 1);
 #endif
         m_calls.append(CallRecord(call(), std::numeric_limits<unsigned>::max(), FunctionPtr(lookupExceptionHandlerFromCallerFrame).value()));
-        jumpToExceptionHandler();
+        jumpToExceptionHandler(*vm());
     }
 
     if (!m_exceptionChecks.empty() || m_byValCompilationInfo.size()) {
         m_exceptionHandler = label();
         m_exceptionChecks.link(this);
 
-        copyCalleeSavesToVMEntryFrameCalleeSavesBuffer();
+        copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(*vm());
 
         // lookupExceptionHandler is passed two arguments, the VM and the exec (the CallFrame*).
         move(TrustedImmPtr(vm()), GPRInfo::argumentGPR0);
@@ -898,7 +905,7 @@ void JIT::privateCompileExceptionHandlers()
         poke(GPRInfo::argumentGPR1, 1);
 #endif
         m_calls.append(CallRecord(call(), std::numeric_limits<unsigned>::max(), FunctionPtr(lookupExceptionHandler).value()));
-        jumpToExceptionHandler();
+        jumpToExceptionHandler(*vm());
     }
 }
 

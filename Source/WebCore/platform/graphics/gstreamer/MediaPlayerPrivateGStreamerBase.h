@@ -69,13 +69,13 @@ public:
     FloatSize naturalSize() const override;
 
     void setVolume(float) override;
-    virtual float volume() const;
+    float volume() const override;
 
 #if USE(GSTREAMER_GL)
     bool ensureGstGLContext();
     static GstContext* requestGLContext(const gchar* contextType, MediaPlayerPrivateGStreamerBase*);
 #endif
-
+    static bool initializeGStreamerAndRegisterWebKitElements();
     bool supportsMuting() const override { return true; }
     void setMuted(bool) override;
     bool muted() const;

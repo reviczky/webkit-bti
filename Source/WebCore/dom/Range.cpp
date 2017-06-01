@@ -25,10 +25,10 @@
 #include "config.h"
 #include "Range.h"
 
-#include "ClientRect.h"
-#include "ClientRectList.h"
 #include "Comment.h"
+#include "DOMRect.h"
 #include "DocumentFragment.h"
+#include "Editing.h"
 #include "Event.h"
 #include "ExceptionCode.h"
 #include "Frame.h"
@@ -47,7 +47,6 @@
 #include "TextIterator.h"
 #include "VisiblePosition.h"
 #include "VisibleUnits.h"
-#include "htmlediting.h"
 #include "markup.h"
 #include <stdio.h>
 #include <wtf/RefCountedLeakCounter.h>
@@ -537,6 +536,7 @@ static inline unsigned lengthOfContentsInNode(Node& node)
     // This switch statement must be consistent with that of Range::processContentsBetweenOffsets.
     switch (node.nodeType()) {
     case Node::DOCUMENT_TYPE_NODE:
+    case Node::ATTRIBUTE_NODE:
         return 0;
     case Node::TEXT_NODE:
     case Node::CDATA_SECTION_NODE:
@@ -544,7 +544,6 @@ static inline unsigned lengthOfContentsInNode(Node& node)
     case Node::PROCESSING_INSTRUCTION_NODE:
         return downcast<CharacterData>(node).length();
     case Node::ELEMENT_NODE:
-    case Node::ATTRIBUTE_NODE:
     case Node::DOCUMENT_NODE:
     case Node::DOCUMENT_FRAGMENT_NODE:
         return downcast<ContainerNode>(node).countChildNodes();
@@ -1266,7 +1265,7 @@ static SelectionRect coalesceSelectionRects(const SelectionRect& original, const
 
 // This function is similar in spirit to addLineBoxRects, but annotates the returned rectangles
 // with additional state which helps iOS draw selections in its unique way.
-int Range::collectSelectionRectsWithoutUnionInteriorLines(Vector<SelectionRect>& rects)
+int Range::collectSelectionRectsWithoutUnionInteriorLines(Vector<SelectionRect>& rects) const
 {
     auto& startContainer = this->startContainer();
     auto& endContainer = this->endContainer();
@@ -1426,7 +1425,7 @@ int Range::collectSelectionRectsWithoutUnionInteriorLines(Vector<SelectionRect>&
     return maxLineNumber;
 }
 
-void Range::collectSelectionRects(Vector<SelectionRect>& rects)
+void Range::collectSelectionRects(Vector<SelectionRect>& rects) const
 {
     int maxLineNumber = collectSelectionRectsWithoutUnionInteriorLines(rects);
     const size_t numberOfRects = rects.size();
@@ -1763,14 +1762,14 @@ ExceptionOr<void> Range::expand(const String& unit)
     return setEnd(*endContainer, end.deepEquivalent().computeOffsetInContainerNode());
 }
 
-Ref<ClientRectList> Range::getClientRects() const
+Vector<Ref<DOMRect>> Range::getClientRects() const
 {
-    return ClientRectList::create(borderAndTextQuads(CoordinateSpace::Client));
+    return createDOMRectVector(borderAndTextQuads(CoordinateSpace::Client));
 }
 
-Ref<ClientRect> Range::getBoundingClientRect() const
+Ref<DOMRect> Range::getBoundingClientRect() const
 {
-    return ClientRect::create(boundingRect(CoordinateSpace::Client));
+    return DOMRect::create(boundingRect(CoordinateSpace::Client));
 }
 
 Vector<FloatQuad> Range::borderAndTextQuads(CoordinateSpace space) const
@@ -1798,7 +1797,7 @@ Vector<FloatQuad> Range::borderAndTextQuads(CoordinateSpace space) const
                 Vector<FloatQuad> elementQuads;
                 renderer->absoluteQuads(elementQuads);
                 if (space == CoordinateSpace::Client)
-                    node->document().adjustFloatQuadsForScrollAndAbsoluteZoomAndFrameScale(elementQuads, renderer->style());
+                    node->document().convertAbsoluteToClientQuads(elementQuads, renderer->style());
                 quads.appendVector(elementQuads);
             }
         } else if (is<Text>(*node)) {
@@ -1807,7 +1806,7 @@ Vector<FloatQuad> Range::borderAndTextQuads(CoordinateSpace space) const
                 unsigned endOffset = node == &endContainer() ? m_end.offset() : std::numeric_limits<unsigned>::max();
                 auto textQuads = renderer->absoluteQuadsForRange(startOffset, endOffset);
                 if (space == CoordinateSpace::Client)
-                    node->document().adjustFloatQuadsForScrollAndAbsoluteZoomAndFrameScale(textQuads, renderer->style());
+                    node->document().convertAbsoluteToClientQuads(textQuads, renderer->style());
                 quads.appendVector(textQuads);
             }
         }

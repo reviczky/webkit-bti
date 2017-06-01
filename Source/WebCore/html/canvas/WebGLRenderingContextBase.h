@@ -27,9 +27,8 @@
 
 #if ENABLE(WEBGL)
 
-#include "ActiveDOMObject.h"
 #include "ActivityStateChangeObserver.h"
-#include "CanvasRenderingContext.h"
+#include "GPUBasedCanvasRenderingContext.h"
 #include "GraphicsContext3D.h"
 #include "ImageBuffer.h"
 #include "Timer.h"
@@ -110,17 +109,10 @@ inline bool clip2D(GC3Dint x, GC3Dint y, GC3Dsizei width, GC3Dsizei height,
     return (*clippedX != x || *clippedY != y || *clippedWidth != width || *clippedHeight != height);
 }
 
-class WebGLRenderingContextBase : public CanvasRenderingContext, private ActivityStateChangeObserver, public ActiveDOMObject {
+class WebGLRenderingContextBase : public GPUBasedCanvasRenderingContext, private ActivityStateChangeObserver {
 public:
     static std::unique_ptr<WebGLRenderingContextBase> create(HTMLCanvasElement&, WebGLContextAttributes&, const String&);
     virtual ~WebGLRenderingContextBase();
-
-#if PLATFORM(WIN)
-    // FIXME: Implement accelerated 3d canvas on Windows.
-    bool isAccelerated() const override { return false; }
-#else
-    bool isAccelerated() const override { return true; }
-#endif
 
     int drawingBufferWidth() const;
     int drawingBufferHeight() const;
@@ -214,6 +206,9 @@ public:
     RefPtr<WebGLUniformLocation> getUniformLocation(WebGLProgram*, const String&);
     WebGLAny getVertexAttrib(GC3Duint index, GC3Denum pname);
     long long getVertexAttribOffset(GC3Duint index, GC3Denum pname);
+
+    bool isPreservingDrawingBuffer() const { return m_attributes.preserveDrawingBuffer; }
+    void setPreserveDrawingBuffer(bool value) { m_attributes.preserveDrawingBuffer = value; }
 
     virtual void hint(GC3Denum target, GC3Denum mode) = 0;
     GC3Dboolean isBuffer(WebGLBuffer*);
@@ -340,14 +335,16 @@ public:
     void recycleContext();
     void forceRestoreContext();
     void loseContextImpl(LostContextMode);
+    void dispatchContextChangedEvent();
+    WEBCORE_EXPORT void simulateContextChanged();
 
     GraphicsContext3D* graphicsContext3D() const { return m_context.get(); }
     WebGLContextGroup* contextGroup() const { return m_contextGroup.get(); }
     PlatformLayer* platformLayer() const override;
 
-    void reshape(int width, int height);
+    void reshape(int width, int height) override;
 
-    void markLayerComposited();
+    void markLayerComposited() final;
     void paintRenderingResultsToCanvas() override;
     RefPtr<ImageData> paintRenderingResultsToImageData();
 
@@ -394,6 +391,7 @@ protected:
 
     void destroyGraphicsContext3D();
     void markContextChanged();
+    void markContextChangedAndNotifyCanvasObserver();
 
     void addActivityStateChangeObserverIfNecessary();
     void removeActivityStateChangeObserver();
@@ -843,6 +841,6 @@ private:
 
 } // namespace WebCore
 
-SPECIALIZE_TYPE_TRAITS_CANVASRENDERINGCONTEXT(WebCore::WebGLRenderingContextBase, is3d())
+SPECIALIZE_TYPE_TRAITS_CANVASRENDERINGCONTEXT(WebCore::WebGLRenderingContextBase, isWebGL())
 
 #endif

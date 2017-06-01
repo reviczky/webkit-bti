@@ -49,7 +49,7 @@
 
 namespace JSC {
 
-const ClassInfo UnlinkedCodeBlock::s_info = { "UnlinkedCodeBlock", 0, 0, CREATE_METHOD_TABLE(UnlinkedCodeBlock) };
+const ClassInfo UnlinkedCodeBlock::s_info = { "UnlinkedCodeBlock", nullptr, nullptr, nullptr, CREATE_METHOD_TABLE(UnlinkedCodeBlock) };
 
 UnlinkedCodeBlock::UnlinkedCodeBlock(VM* vm, Structure* structure, CodeType codeType, const ExecutableInfo& info, DebuggerMode debuggerMode)
     : Base(*vm, structure)
@@ -410,7 +410,12 @@ void UnlinkedCodeBlock::shrinkToFit()
         m_rareData->m_switchJumpTables.shrinkToFit();
         m_rareData->m_stringSwitchJumpTables.shrinkToFit();
         m_rareData->m_expressionInfoFatPositions.shrinkToFit();
+        m_rareData->m_opProfileControlFlowBytecodeOffsets.shrinkToFit();
     }
+}
+
+void UnlinkedCodeBlock::dump(PrintStream&) const
+{
 }
 
 } // namespace JSC

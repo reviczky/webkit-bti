@@ -352,7 +352,7 @@ void CanvasRenderingContext2D::realizeSaves()
         realizeSavesLoop();
 
     if (m_unrealizedSaveCount) {
-        static NeverDestroyed<String> consoleMessage(ASCIILiteral("CanvasRenderingContext2D.save() has been called without a matching restore() too many times. Ignoring save()."));
+        static NeverDestroyed<String> consoleMessage(MAKE_STATIC_STRING_IMPL("CanvasRenderingContext2D.save() has been called without a matching restore() too many times. Ignoring save()."));
         canvas().document().addConsoleMessage(MessageSource::Rendering, MessageLevel::Error, consoleMessage);
     }
 }
@@ -839,7 +839,7 @@ void CanvasRenderingContext2D::setStrokeColor(const String& color, std::optional
         return;
 
     realizeSaves();
-    setStrokeStyle(CanvasStyle::createFromString(color, &canvas().document()));
+    setStrokeStyle(CanvasStyle::createFromString(color));
     modifiableState().unparsedStrokeColor = color;
 }
 
@@ -875,7 +875,7 @@ void CanvasRenderingContext2D::setFillColor(const String& color, std::optional<f
         return;
 
     realizeSaves();
-    setFillStyle(CanvasStyle::createFromString(color, &canvas().document()));
+    setFillStyle(CanvasStyle::createFromString(color));
     modifiableState().unparsedFillColor = color;
 }
 
@@ -1431,6 +1431,9 @@ ExceptionOr<void> CanvasRenderingContext2D::drawImage(HTMLImageElement& imageEle
         image->setContainerSize(imageRect.size());
     }
 
+    if (image->isBitmapImage())
+        downcast<BitmapImage>(*image).updateFromSettings(imageElement.document().settings());
+
     if (rectContainsCanvas(normalizedDstRect)) {
         c->drawImage(*image, normalizedDstRect, normalizedSrcRect, ImagePaintingOptions(op, blendMode));
         didDrawEntireCanvas();
@@ -1978,7 +1981,7 @@ ExceptionOr<RefPtr<ImageData>> CanvasRenderingContext2D::webkitGetImageDataHD(fl
 ExceptionOr<RefPtr<ImageData>> CanvasRenderingContext2D::getImageData(ImageBuffer::CoordinateSystem coordinateSystem, float sx, float sy, float sw, float sh) const
 {
     if (!canvas().originClean()) {
-        static NeverDestroyed<String> consoleMessage(ASCIILiteral("Unable to get image data from canvas because the canvas has been tainted by cross-origin data."));
+        static NeverDestroyed<String> consoleMessage(MAKE_STATIC_STRING_IMPL("Unable to get image data from canvas because the canvas has been tainted by cross-origin data."));
         canvas().document().addConsoleMessage(MessageSource::Security, MessageLevel::Error, consoleMessage);
         return Exception { SECURITY_ERR };
     }
@@ -2008,7 +2011,7 @@ ExceptionOr<RefPtr<ImageData>> CanvasRenderingContext2D::getImageData(ImageBuffe
     if (!buffer)
         return createEmptyImageData(imageDataRect.size());
 
-    auto byteArray = buffer->getUnmultipliedImageData(imageDataRect, coordinateSystem);
+    auto byteArray = buffer->getUnmultipliedImageData(imageDataRect, nullptr, coordinateSystem);
     if (!byteArray) {
         StringBuilder consoleMessage;
         consoleMessage.appendLiteral("Unable to get image data from canvas. Requested size was ");

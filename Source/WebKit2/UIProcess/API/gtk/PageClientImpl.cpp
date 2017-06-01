@@ -75,6 +75,11 @@ void PageClientImpl::requestScroll(const WebCore::FloatPoint&, const WebCore::In
     notImplemented();
 }
 
+WebCore::FloatPoint PageClientImpl::viewScrollPosition()
+{
+    return { };
+}
+
 WebCore::IntSize PageClientImpl::viewSize()
 {
     auto* drawingArea = static_cast<DrawingAreaProxyImpl*>(webkitWebViewBaseGetPage(WEBKIT_WEB_VIEW_BASE(m_viewWidget))->drawingArea());
@@ -142,9 +147,9 @@ void PageClientImpl::didChangeViewportProperties(const WebCore::ViewportAttribut
     notImplemented();
 }
 
-void PageClientImpl::registerEditCommand(PassRefPtr<WebEditCommandProxy> command, WebPageProxy::UndoOrRedo undoOrRedo)
+void PageClientImpl::registerEditCommand(Ref<WebEditCommandProxy>&& command, WebPageProxy::UndoOrRedo undoOrRedo)
 {
-    m_undoController.registerEditCommand(command, undoOrRedo);
+    m_undoController.registerEditCommand(WTFMove(command), undoOrRedo);
 }
 
 void PageClientImpl::clearAllEditCommands()

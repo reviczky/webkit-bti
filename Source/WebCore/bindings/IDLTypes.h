@@ -48,12 +48,14 @@ namespace WebCore {
 class IDBKey;
 class IDBKeyData;
 class IDBValue;
-template<typename> class DOMPromise;
+class DOMPromise;
 
 template<typename T>
 struct IDLType {
     using ImplementationType = T;
+
     using ParameterType = T;
+    using NullableParameterType = std::optional<ImplementationType>;
 
     using NullableType = std::optional<ImplementationType>;
     static NullableType nullValue() { return std::nullopt; }
@@ -69,6 +71,7 @@ struct IDLNull : IDLType<std::nullptr_t> { };
 
 struct IDLAny : IDLType<JSC::Strong<JSC::Unknown>> {
     using ParameterType = JSC::JSValue;
+    using NullableParameterType = JSC::JSValue;
 
     using NullableType = JSC::Strong<JSC::Unknown>;
     static inline std::nullptr_t nullValue() { return nullptr; }
@@ -90,23 +93,44 @@ struct IDLUnsignedLong : IDLInteger<uint32_t> { };
 struct IDLLongLong : IDLInteger<int64_t> { };
 struct IDLUnsignedLongLong : IDLInteger<uint64_t> { };
 
+template<typename T> struct IDLClampAdaptor : IDLInteger<typename T::ImplementationType> {
+    using InnerType = T;
+};
+
+template<typename T> struct IDLEnforceRangeAdaptor : IDLInteger<typename T::ImplementationType> {
+    using InnerType = T;
+};
+
 template<typename FloatingPointType> struct IDLFloatingPoint : IDLNumber<FloatingPointType> { };
 struct IDLFloat : IDLFloatingPoint<float> { };
 struct IDLUnrestrictedFloat : IDLFloatingPoint<float> { };
 struct IDLDouble : IDLFloatingPoint<double> { };
 struct IDLUnrestrictedDouble : IDLFloatingPoint<double> { };
 
-struct IDLString : IDLType<String> {
-    using ParameterType = const String&;
+template<typename StringType> struct IDLString : IDLType<StringType> {
+    using ParameterType = const StringType&;
+    using NullableParameterType = const StringType&;
 
-    using NullableType = String;
-    static String nullValue() { return String(); }
-    static bool isNullValue(const String& value) { return value.isNull(); }
+    using NullableType = StringType;
+    static StringType nullValue() { return StringType(); }
+    static bool isNullValue(const StringType& value) { return value.isNull(); }
     template <typename U> static U&& extractValueFromNullable(U&& value) { return std::forward<U>(value); }
 };
-struct IDLDOMString : IDLString { };
-struct IDLByteString : IDLString { };
-struct IDLUSVString : IDLString { };
+struct IDLDOMString : IDLString<String> { };
+struct IDLByteString : IDLString<String> { };
+struct IDLUSVString : IDLString<String> { };
+
+template<typename T> struct IDLTreatNullAsEmptyAdaptor : IDLString<String> {
+    using InnerType = T;
+};
+
+template<typename T> struct IDLAtomicStringAdaptor : IDLString<AtomicString> {
+    using InnerType = T;
+};
+
+template<typename T> struct IDLRequiresExistingAtomicStringAdaptor : IDLString<AtomicString> {
+    using InnerType = T;
+};
 
 struct IDLObject : IDLType<JSC::Strong<JSC::JSObject>> {
     using NullableType = JSC::Strong<JSC::JSObject>;
@@ -120,6 +144,7 @@ template<typename T> struct IDLWrapper : IDLType<RefPtr<T>> {
     using RawType = T;
 
     using ParameterType = T&;
+    using NullableParameterType = T*;
 
     using NullableType = RefPtr<T>;
     static inline std::nullptr_t nullValue() { return nullptr; }
@@ -133,12 +158,16 @@ template<typename T> struct IDLCallbackFunction : IDLWrapper<T> { };
 
 template<typename T> struct IDLDictionary : IDLType<T> {
     using ParameterType = const T&;
+    using NullableParameterType = const T&;
 };
 
 template<typename T> struct IDLEnumeration : IDLType<T> { };
 
 template<typename T> struct IDLNullable : IDLType<typename T::NullableType> {
     using InnerType = T;
+
+    using ParameterType = typename T::NullableParameterType;
+    using NullableParameterType = typename T::NullableParameterType;
 
     using NullableType = typename T::NullableType;
     static inline auto nullValue() -> decltype(T::nullValue()) { return T::nullValue(); }
@@ -150,12 +179,14 @@ template<typename T> struct IDLSequence : IDLType<Vector<typename T::Implementat
     using InnerType = T;
 
     using ParameterType = const Vector<typename T::ImplementationType>&;
+    using NullableParameterType = const std::optional<Vector<typename T::ImplementationType>>&;
 };
 
 template<typename T> struct IDLFrozenArray : IDLType<Vector<typename T::ImplementationType>> {
     using InnerType = T;
 
     using ParameterType = const Vector<typename T::ImplementationType>&;
+    using NullableParameterType = const std::optional<Vector<typename T::ImplementationType>>&;
 };
 
 template<typename K, typename V> struct IDLRecord : IDLType<Vector<WTF::KeyValuePair<typename K::ImplementationType, typename V::ImplementationType>>> {
@@ -163,9 +194,10 @@ template<typename K, typename V> struct IDLRecord : IDLType<Vector<WTF::KeyValue
     using ValueType = V;
 
     using ParameterType = const Vector<WTF::KeyValuePair<typename K::ImplementationType, typename V::ImplementationType>>&;
+    using NullableParameterType = const std::optional<Vector<WTF::KeyValuePair<typename K::ImplementationType, typename V::ImplementationType>>>&;
 };
 
-template<typename T> struct IDLPromise : IDLType<DOMPromise<T>> {
+template<typename T> struct IDLPromise : IDLType<DOMPromise> {
     using InnerType = T;
 };
 
@@ -177,6 +209,7 @@ struct IDLUnion : IDLType<Variant<typename Ts::ImplementationType...>> {
     using TypeList = brigand::list<Ts...>;
 
     using ParameterType = const Variant<typename Ts::ImplementationType...>&;
+    using NullableParameterType = const std::optional<Variant<typename Ts::ImplementationType...>>&;
 };
 
 // Non-WebIDL extensions
@@ -190,6 +223,7 @@ struct IDLDate : IDLType<double> {
 
 struct IDLJSON : IDLType<String> { 
     using ParameterType = const String&;
+    using NullableParameterType = const String&;
 
     using NullableType = String;
     static String nullValue() { return String(); }
@@ -233,6 +267,12 @@ struct IsIDLFrozenArray : public std::integral_constant<bool, WTF::IsTemplate<T,
 
 template<typename T>
 struct IsIDLRecord : public std::integral_constant<bool, WTF::IsTemplate<T, IDLRecord>::value> { };
+
+template<typename T>
+struct IsIDLString : public std::integral_constant<bool, WTF::IsBaseOfTemplate<IDLString, T>::value> { };
+
+template<typename T>
+struct IsIDLStringOrEnumeration : public std::integral_constant<bool, WTF::IsBaseOfTemplate<IDLString, T>::value || WTF::IsTemplate<T, IDLEnumeration>::value> { };
 
 template<typename T>
 struct IsIDLNumber : public std::integral_constant<bool, WTF::IsBaseOfTemplate<IDLNumber, T>::value> { };

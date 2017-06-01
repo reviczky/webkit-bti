@@ -350,7 +350,7 @@ static void webkit_website_data_manager_class_init(WebKitWebsiteDataManagerClass
 WebKitWebsiteDataManager* webkitWebsiteDataManagerCreate(WebsiteDataStore::Configuration&& configuration)
 {
     WebKitWebsiteDataManager* manager = WEBKIT_WEBSITE_DATA_MANAGER(g_object_new(WEBKIT_TYPE_WEBSITE_DATA_MANAGER, nullptr));
-    manager->priv->websiteDataStore = API::WebsiteDataStore::create(WTFMove(configuration));
+    manager->priv->websiteDataStore = API::WebsiteDataStore::createLegacy(WTFMove(configuration));
 
     return manager;
 }
@@ -369,7 +369,7 @@ API::WebsiteDataStore& webkitWebsiteDataManagerGetDataStore(WebKitWebsiteDataMan
         configuration.webSQLDatabaseDirectory = !priv->webSQLDirectory ?
             API::WebsiteDataStore::defaultWebSQLDatabaseDirectory() : WebCore::stringFromFileSystemRepresentation(priv->webSQLDirectory.get());
         configuration.mediaKeysStorageDirectory = API::WebsiteDataStore::defaultMediaKeysStorageDirectory();
-        priv->websiteDataStore = API::WebsiteDataStore::create(WTFMove(configuration));
+        priv->websiteDataStore = API::WebsiteDataStore::createLegacy(WTFMove(configuration));
     }
 
     return *priv->websiteDataStore;
@@ -753,7 +753,7 @@ void webkit_website_data_manager_remove(WebKitWebsiteDataManager* manager, WebKi
  *
  * Finish an asynchronous operation started with webkit_website_data_manager_remove().
  *
- * Returns: %TRUE if website data resources were succesfully removed, or %FALSE otherwise.
+ * Returns: %TRUE if website data resources were successfully removed, or %FALSE otherwise.
  *
  * Since: 2.16
  */
@@ -805,7 +805,7 @@ void webkit_website_data_manager_clear(WebKitWebsiteDataManager* manager, WebKit
  *
  * Finish an asynchronous operation started with webkit_website_data_manager_clear()
  *
- * Returns: %TRUE if website data was succesfully cleared, or %FALSE otherwise.
+ * Returns: %TRUE if website data was successfully cleared, or %FALSE otherwise.
  *
  * Since: 2.16
  */

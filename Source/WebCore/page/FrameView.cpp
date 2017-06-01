@@ -63,7 +63,6 @@
 #include "Logging.h"
 #include "MainFrame.h"
 #include "MemoryCache.h"
-#include "MemoryPressureHandler.h"
 #include "OverflowEvent.h"
 #include "Page.h"
 #include "PageCache.h"
@@ -98,6 +97,7 @@
 #include "WheelEventTestTrigger.h"
 
 #include <wtf/CurrentTime.h>
+#include <wtf/MemoryPressureHandler.h>
 #include <wtf/Ref.h>
 #include <wtf/SetForScope.h>
 #include <wtf/SystemTracing.h>
@@ -296,7 +296,8 @@ FrameView::FrameView(Frame& frame)
 Ref<FrameView> FrameView::create(Frame& frame)
 {
     Ref<FrameView> view = adoptRef(*new FrameView(frame));
-    view->show();
+    if (frame.page() && frame.page()->isVisible())
+        view->show();
     return view;
 }
 
@@ -304,7 +305,8 @@ Ref<FrameView> FrameView::create(Frame& frame, const IntSize& initialSize)
 {
     Ref<FrameView> view = adoptRef(*new FrameView(frame));
     view->Widget::setFrameRect(IntRect(view->location(), initialSize));
-    view->show();
+    if (frame.page() && frame.page()->isVisible())
+        view->show();
     return view;
 }
 
@@ -1229,7 +1231,9 @@ bool FrameView::isEnclosedInCompositingLayer() const
 
 bool FrameView::flushCompositingStateIncludingSubframes()
 {
+#if PLATFORM(COCOA)
     InspectorInstrumentation::willComposite(frame());
+#endif
 
     bool allFramesFlushed = flushCompositingStateForThisFrame(frame());
 
@@ -1363,8 +1367,9 @@ void FrameView::layout(bool allowSubtree)
             document.styleScope().didChangeStyleSheetEnvironment();
             // FIXME: This instrumentation event is not strictly accurate since cached media query results do not persist across StyleResolver rebuilds.
             InspectorInstrumentation::mediaQueryResultChanged(document);
-        } else
-            document.evaluateMediaQueryList();
+        }
+        
+        document.evaluateMediaQueryList();
 
         // If there is any pagination to apply, it will affect the RenderView's style, so we should
         // take care of that now.
@@ -1545,7 +1550,7 @@ void FrameView::layout(bool allowSubtree)
 #endif
 
 #if ENABLE(IOS_TOUCH_EVENTS)
-    document.dirtyTouchEventRects();
+    document.setTouchEventRegionsNeedUpdate();
 #endif
 
     updateCanBlitOnScrollRecursively();
@@ -1574,7 +1579,7 @@ void FrameView::layout(bool allowSubtree)
             // defer widget updates and event dispatch until after we return. postLayoutTasks()
             // can make us need to update again, and we can get stuck in a nasty cycle unless
             // we call it through the timer here.
-            m_postLayoutTasksTimer.startOneShot(0);
+            m_postLayoutTasksTimer.startOneShot(0_s);
             if (needsLayout())
                 layout();
         }
@@ -1805,6 +1810,28 @@ void FrameView::removeViewportConstrainedObject(RenderElement* object)
         // why isn't the same check being made here?
         updateCanBlitOnScrollRecursively();
     }
+}
+
+LayoutRect FrameView::computeUpdatedLayoutViewportRect(const LayoutRect& layoutViewport, const LayoutRect& documentRect, const LayoutSize& unobscuredContentSize, const LayoutRect& unobscuredContentRect, const LayoutSize& baseLayoutViewportSize, const LayoutPoint& stableLayoutViewportOriginMin, const LayoutPoint& stableLayoutViewportOriginMax, LayoutViewportConstraint constraint)
+{
+    LayoutRect layoutViewportRect = layoutViewport;
+    
+    // The layout viewport is never smaller than baseLayoutViewportSize, and never be smaller than the unobscuredContentRect.
+    LayoutSize constrainedSize = baseLayoutViewportSize;
+    layoutViewportRect.setSize(constrainedSize.expandedTo(unobscuredContentSize));
+        
+    LayoutPoint layoutViewportOrigin = computeLayoutViewportOrigin(unobscuredContentRect, stableLayoutViewportOriginMin, stableLayoutViewportOriginMax, layoutViewportRect, StickToViewportBounds);
+        
+    if (constraint == LayoutViewportConstraint::ConstrainedToDocumentRect) {
+        // The max stable layout viewport origin really depends on the size of the layout viewport itself, so we need to adjust the location of the layout viewport one final time to make sure it does not end up out of bounds of the document.
+        // Without this adjustment (and with using the non-constrained unobscuredContentRect's size as the size of the layout viewport) the layout viewport can be pushed past the bounds of the document during rubber-banding, and cannot be pushed
+        // back in until the user scrolls back in the other direction.
+        layoutViewportOrigin.setX(clampTo<float>(layoutViewportOrigin.x(), 0, documentRect.width() - layoutViewportRect.width()));
+        layoutViewportOrigin.setY(clampTo<float>(layoutViewportOrigin.y(), 0, documentRect.height() - layoutViewportRect.height()));
+    }
+    layoutViewportRect.setLocation(layoutViewportOrigin);
+    
+    return layoutViewportRect;
 }
 
 // visualViewport and layoutViewport are both in content coordinates (unzoomed).
@@ -2515,7 +2542,7 @@ void FrameView::scrollPositionChanged(const ScrollPosition& oldPosition, const S
         m_delayedScrollEventTimer.stop();
         sendScrollEvent();
     } else if (!m_delayedScrollEventTimer.isActive())
-        m_delayedScrollEventTimer.startOneShot(throttlingDelay.value());
+        m_delayedScrollEventTimer.startOneShot(throttlingDelay);
 
     if (Document* document = frame().document())
         document->sendWillRevealEdgeEventsIfNeeded(oldPosition, newPosition, visibleContentRect(), contentsSize());
@@ -2565,8 +2592,12 @@ void FrameView::updateScriptedAnimationsAndTimersThrottlingState(const IntRect& 
     // We don't throttle zero-size or display:none frames because those are usually utility frames.
     bool shouldThrottle = visibleRect.isEmpty() && !m_size.isEmpty() && frame().ownerRenderer();
 
-    if (auto* scriptedAnimationController = document->scriptedAnimationController())
-        scriptedAnimationController->setThrottled(shouldThrottle);
+    if (auto* scriptedAnimationController = document->scriptedAnimationController()) {
+        if (shouldThrottle)
+            scriptedAnimationController->addThrottlingReason(ScriptedAnimationController::ThrottlingReason::OutsideViewport);
+        else
+            scriptedAnimationController->removeThrottlingReason(ScriptedAnimationController::ThrottlingReason::OutsideViewport);
+    }
 
     document->setTimerThrottlingEnabled(shouldThrottle);
 }
@@ -2607,9 +2638,6 @@ bool FrameView::shouldUpdateCompositingLayersAfterScrolling() const
 
     ScrollingCoordinator* scrollingCoordinator = page->scrollingCoordinator();
     if (!scrollingCoordinator)
-        return true;
-
-    if (!scrollingCoordinator->supportsFixedPositionLayers())
         return true;
 
     if (scrollingCoordinator->shouldUpdateScrollLayerPositionSynchronously(*this))
@@ -2927,10 +2955,16 @@ void FrameView::enableSpeculativeTilingIfNeeded()
     }
     if (!shouldEnableSpeculativeTilingDuringLoading(*this))
         return;
+
+    if (m_speculativeTilingDelayDisabledForTesting) {
+        speculativeTilingEnableTimerFired();
+        return;
+    }
+
     if (m_speculativeTilingEnableTimer.isActive())
         return;
     // Delay enabling a bit as load completion may trigger further loading from scripts.
-    static const double speculativeTilingEnableDelay = 0.5;
+    static const Seconds speculativeTilingEnableDelay { 500_ms };
     m_speculativeTilingEnableTimer.startOneShot(speculativeTilingEnableDelay);
 }
 
@@ -2954,6 +2988,13 @@ void FrameView::show()
         adjustTiledBackingCoverage();
     }
 }
+
+void FrameView::hide()
+{
+    ScrollView::hide();
+    adjustTiledBackingCoverage();
+}
+
 void FrameView::convertSubtreeLayoutToFullLayout()
 {
     ASSERT(m_layoutRoot);
@@ -3221,9 +3262,6 @@ void FrameView::updateBackgroundRecursively(const Color& backgroundColor, bool t
 
 bool FrameView::hasExtendedBackgroundRectForPainting() const
 {
-    if (!frame().settings().backgroundShouldExtendBeyondPage())
-        return false;
-
     TiledBacking* tiledBacking = this->tiledBacking();
     if (!tiledBacking)
         return false;
@@ -3242,18 +3280,18 @@ void FrameView::updateExtendBackgroundIfNecessary()
 
 FrameView::ExtendedBackgroundMode FrameView::calculateExtendedBackgroundMode() const
 {
-    // Just because Settings::backgroundShouldExtendBeyondPage() is true does not necessarily mean
-    // that the background rect needs to be extended for painting. Simple backgrounds can be extended
-    // just with RenderLayerCompositor::setRootExtendedBackgroundColor(). More complicated backgrounds,
-    // such as images, require extending the background rect to continue painting into the extended
-    // region. This function finds out if it is necessary to extend the background rect for painting.
-
 #if PLATFORM(IOS)
     // <rdar://problem/16201373>
     return ExtendedBackgroundModeNone;
 #else
     if (!frame().settings().backgroundShouldExtendBeyondPage())
         return ExtendedBackgroundModeNone;
+
+    // Just because Settings::backgroundShouldExtendBeyondPage() is true does not necessarily mean
+    // that the background rect needs to be extended for painting. Simple backgrounds can be extended
+    // just with RenderLayerCompositor::setRootExtendedBackgroundColor(). More complicated backgrounds,
+    // such as images, require extending the background rect to continue painting into the extended
+    // region. This function finds out if it is necessary to extend the background rect for painting.
 
     if (!frame().isMainFrame())
         return ExtendedBackgroundModeNone;
@@ -3284,9 +3322,6 @@ FrameView::ExtendedBackgroundMode FrameView::calculateExtendedBackgroundMode() c
 
 void FrameView::updateTilesForExtendedBackgroundMode(ExtendedBackgroundMode mode)
 {
-    if (!frame().settings().backgroundShouldExtendBeyondPage())
-        return;
-
     RenderView* renderView = this->renderView();
     if (!renderView)
         return;
@@ -3476,9 +3511,8 @@ void FrameView::flushPostLayoutTasksQueue()
 
 void FrameView::performPostLayoutTasks()
 {
-    LOG(Layout, "FrameView %p performPostLayoutTasks", this);
-
     // FIXME: We should not run any JavaScript code in this function.
+    LOG(Layout, "FrameView %p performPostLayoutTasks", this);
 
     m_postLayoutTasksTimer.stop();
 
@@ -3513,12 +3547,7 @@ void FrameView::performPostLayoutTasks()
 #if ENABLE(CSS_SCROLL_SNAP)
     updateSnapOffsets();
 #endif
-
-    // layout() protects FrameView, but it still can get destroyed when updateEmbeddedObjects()
-    // is called through the post layout timer.
-    Ref<FrameView> protectedThis(*this);
-
-    m_updateEmbeddedObjectsTimer.startOneShot(0);
+    m_updateEmbeddedObjectsTimer.startOneShot(0_s);
 
     if (auto* page = frame().page()) {
         if (auto* scrollingCoordinator = page->scrollingCoordinator())
@@ -3540,7 +3569,7 @@ void FrameView::performPostLayoutTasks()
     updateScrollSnapState();
 
     if (AXObjectCache* cache = frame().document()->existingAXObjectCache())
-        cache->performDeferredIsIgnoredChange();
+        cache->performDeferredCacheUpdate();
 }
 
 IntSize FrameView::sizeForResizeEvent() const
@@ -3590,6 +3619,8 @@ void FrameView::sendResizeEventIfNeeded()
 
     bool isMainFrame = frame().isMainFrame();
     bool canSendResizeEventSynchronously = isMainFrame && !m_shouldAutoSize;
+
+    LOG(Events, "FrameView %p sendResizeEventIfNeeded sending resize event, size %dx%d (canSendResizeEventSynchronously %d)", this, currentSize.width(), currentSize.height(), canSendResizeEventSynchronously);
 
     Ref<Event> resizeEvent = Event::create(eventNames().resizeEvent, false, false);
     if (canSendResizeEventSynchronously)
@@ -4431,8 +4462,6 @@ void FrameView::paintContents(GraphicsContext& context, const IntRect& dirtyRect
     if (m_layoutPhase == InViewSizeAdjust)
         return;
 
-    TraceScope tracingScope(PaintViewStart, PaintViewEnd);
-
     ASSERT(m_layoutPhase == InPostLayerPositionsUpdatedAfterLayout || m_layoutPhase == OutsideLayout);
     
     RenderView* renderView = this->renderView();
@@ -4588,6 +4617,10 @@ bool FrameView::qualifiesAsVisuallyNonEmpty() const
     // Ensure that we always get marked visually non-empty eventually.
     if (!frame().document()->parsing() && frame().loader().stateMachine().committedFirstRealDocumentLoad())
         return true;
+
+    // FIXME: We should also ignore renderers with non-final style.
+    if (frame().document()->styleScope().hasPendingSheetsBeforeBody())
+        return false;
 
     // Require the document to grow a bit.
     // Using a value of 48 allows the header on Google's search page to render immediately before search results populate later.
@@ -4868,6 +4901,42 @@ IntPoint FrameView::convertFromContainingView(const IntPoint& parentPoint) const
     return parentPoint;
 }
 
+float FrameView::absoluteToDocumentScaleFactor(std::optional<float> effectiveZoom) const
+{
+    // If effectiveZoom is passed, it already factors in pageZoomFactor(). 
+    float cssZoom = effectiveZoom.value_or(frame().pageZoomFactor()); 
+    return 1 / (cssZoom * frame().frameScaleFactor());
+}
+
+FloatRect FrameView::absoluteToDocumentRect(FloatRect rect, std::optional<float> effectiveZoom) const
+{
+    rect.scale(absoluteToDocumentScaleFactor(effectiveZoom));
+    return rect;
+}
+
+FloatPoint FrameView::absoluteToDocumentPoint(FloatPoint p, std::optional<float> effectiveZoom) const
+{
+    p.scale(absoluteToDocumentScaleFactor(effectiveZoom));
+    return p;
+}
+
+FloatSize FrameView::documentToClientOffset() const
+{
+    return frame().settings().visualViewportEnabled() ? -toFloatSize(layoutViewportRect().location()) : -toFloatSize(visibleContentRect().location());
+}
+
+FloatRect FrameView::documentToClientRect(FloatRect rect) const
+{
+    rect.move(documentToClientOffset());
+    return rect;
+}
+
+FloatPoint FrameView::documentToClientPoint(FloatPoint p) const
+{
+    p.move(documentToClientOffset());
+    return p;
+}
+
 void FrameView::setTracksRepaints(bool trackRepaints)
 {
     if (trackRepaints == m_isTrackingRepaints)
@@ -5131,7 +5200,7 @@ void FrameView::fireLayoutRelatedMilestonesIfNeeded()
     updateIsVisuallyNonEmpty();
 
     // If the layout was done with pending sheets, we are not in fact visually non-empty yet.
-    if (m_isVisuallyNonEmpty && !frame().document()->didLayoutWithPendingStylesheets() && m_firstVisuallyNonEmptyLayoutCallbackPending) {
+    if (m_isVisuallyNonEmpty &&m_firstVisuallyNonEmptyLayoutCallbackPending) {
         m_firstVisuallyNonEmptyLayoutCallbackPending = false;
         if (requestedMilestones & DidFirstVisuallyNonEmptyLayout)
             milestonesAchieved |= DidFirstVisuallyNonEmptyLayout;

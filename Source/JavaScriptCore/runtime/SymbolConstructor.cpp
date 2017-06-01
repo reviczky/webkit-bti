@@ -47,7 +47,7 @@ namespace JSC {
 
 STATIC_ASSERT_IS_TRIVIALLY_DESTRUCTIBLE(SymbolConstructor);
 
-const ClassInfo SymbolConstructor::s_info = { "Function", &Base::s_info, &symbolConstructorTable, CREATE_METHOD_TABLE(SymbolConstructor) };
+const ClassInfo SymbolConstructor::s_info = { "Function", &Base::s_info, &symbolConstructorTable, nullptr, CREATE_METHOD_TABLE(SymbolConstructor) };
 
 /* Source for SymbolConstructor.lut.h
 @begin symbolConstructorTable
@@ -68,7 +68,7 @@ void SymbolConstructor::finishCreation(VM& vm, SymbolPrototype* prototype)
 {
     Base::finishCreation(vm, prototype->classInfo(vm)->className);
     putDirectWithoutTransition(vm, vm.propertyNames->prototype, prototype, DontEnum | DontDelete | ReadOnly);
-    putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(0), DontDelete | ReadOnly | DontEnum);
+    putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(0), ReadOnly | DontEnum);
 
     JSC_COMMON_PRIVATE_IDENTIFIERS_EACH_WELL_KNOWN_SYMBOL(INITIALIZE_WELL_KNOWN_SYMBOLS)
 }

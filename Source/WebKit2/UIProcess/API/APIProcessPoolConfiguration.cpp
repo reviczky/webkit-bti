@@ -52,6 +52,7 @@ Ref<ProcessPoolConfiguration> ProcessPoolConfiguration::createWithLegacyOptions(
     configuration->m_localStorageDirectory = WebKit::WebProcessPool::legacyPlatformDefaultLocalStorageDirectory();
     configuration->m_mediaKeysStorageDirectory = WebKit::WebProcessPool::legacyPlatformDefaultMediaKeysStorageDirectory();
     configuration->m_webSQLDatabaseDirectory = WebKit::WebProcessPool::legacyPlatformDefaultWebSQLDatabaseDirectory();
+    configuration->m_javaScriptConfigurationDirectory = WebKit::WebProcessPool::legacyPlatformDefaultJavaScriptConfigurationDirectory();
 
     return configuration;
 }
@@ -81,6 +82,7 @@ ProcessPoolConfiguration::ProcessPoolConfiguration()
     , m_localStorageDirectory(WebsiteDataStore::defaultLocalStorageDirectory())
     , m_webSQLDatabaseDirectory(WebsiteDataStore::defaultWebSQLDatabaseDirectory())
     , m_mediaKeysStorageDirectory(WebsiteDataStore::defaultMediaKeysStorageDirectory())
+    , m_javaScriptConfigurationDirectory(WebsiteDataStore::defaultJavaScriptConfigurationDirectory())
 {
 }
 
@@ -96,7 +98,6 @@ Ref<ProcessPoolConfiguration> ProcessPoolConfiguration::copy()
     copy->m_maximumProcessCount = this->m_maximumProcessCount;
     copy->m_cacheModel = this->m_cacheModel;
     copy->m_diskCacheSpeculativeValidationEnabled = this->m_diskCacheSpeculativeValidationEnabled;
-    copy->m_unresponsiveBackgroundProcessesTerminationEnabled = this->m_unresponsiveBackgroundProcessesTerminationEnabled;
     copy->m_diskCacheSizeOverride = this->m_diskCacheSizeOverride;
     copy->m_applicationCacheDirectory = this->m_applicationCacheDirectory;
     copy->m_applicationCacheFlatFileSubdirectoryName = this->m_applicationCacheFlatFileSubdirectoryName;
@@ -106,15 +107,19 @@ Ref<ProcessPoolConfiguration> ProcessPoolConfiguration::copy()
     copy->m_injectedBundlePath = this->m_injectedBundlePath;
     copy->m_localStorageDirectory = this->m_localStorageDirectory;
     copy->m_mediaKeysStorageDirectory = this->m_mediaKeysStorageDirectory;
+    copy->m_javaScriptConfigurationDirectory = this->m_javaScriptConfigurationDirectory;
     copy->m_webSQLDatabaseDirectory = this->m_webSQLDatabaseDirectory;
     copy->m_cachePartitionedURLSchemes = this->m_cachePartitionedURLSchemes;
     copy->m_alwaysRevalidatedURLSchemes = this->m_alwaysRevalidatedURLSchemes;
+    copy->m_additionalReadAccessAllowedPaths = this->m_additionalReadAccessAllowedPaths;
     copy->m_fullySynchronousModeIsAllowedForTesting = this->m_fullySynchronousModeIsAllowedForTesting;
     copy->m_ignoreSynchronousMessagingTimeoutsForTesting = this->m_ignoreSynchronousMessagingTimeoutsForTesting;
     copy->m_overrideLanguages = this->m_overrideLanguages;
     copy->m_sourceApplicationBundleIdentifier = this->m_sourceApplicationBundleIdentifier;
     copy->m_sourceApplicationSecondaryIdentifier = this->m_sourceApplicationSecondaryIdentifier;
     copy->m_alwaysRunsAtBackgroundPriority = this->m_alwaysRunsAtBackgroundPriority;
+    copy->m_shouldTakeUIBackgroundAssertion = this->m_shouldTakeUIBackgroundAssertion;
+    copy->m_shouldCaptureAudioInUIProcess = this->m_shouldCaptureAudioInUIProcess;
 #if PLATFORM(IOS)
     copy->m_ctDataConnectionServiceType = this->m_ctDataConnectionServiceType;
 #endif

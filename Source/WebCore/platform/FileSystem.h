@@ -146,7 +146,7 @@ WEBCORE_EXPORT String directoryName(const String&);
 WEBCORE_EXPORT bool getVolumeFreeSpace(const String&, uint64_t&);
 WEBCORE_EXPORT std::optional<int32_t> getFileDeviceId(const CString&);
 
-WEBCORE_EXPORT void setMetadataURL(String& URLString, const String& referrer, const String& path);
+WEBCORE_EXPORT void setMetadataURL(const String& path, const String& urlString);
 
 bool canExcludeFromBackup(); // Returns true if any file can ever be excluded from backup.
 bool excludeFromBackup(const String&); // Returns true if successful.
@@ -190,7 +190,7 @@ bool unloadModule(PlatformModule);
 
 // Encode a string for use within a file name.
 WEBCORE_EXPORT String encodeForFileName(const String&);
-String decodeFromFilename(const String&);
+WEBCORE_EXPORT String decodeFromFilename(const String&);
 
 WEBCORE_EXPORT bool filesHaveSameVolume(const String&, const String&);
 
@@ -198,7 +198,7 @@ WEBCORE_EXPORT bool filesHaveSameVolume(const String&, const String&);
 RetainPtr<CFURLRef> pathAsURL(const String&);
 #endif
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WPE)
 String filenameForDisplay(const String&);
 CString applicationDirectoryPath();
 CString sharedResourcesPath();

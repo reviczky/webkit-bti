@@ -32,7 +32,6 @@
 #include "StringFunctions.h"
 #include "TestInvocation.h"
 #include "WebCoreTestSupport.h"
-#include <WebCore/UUID.h>
 #include <WebKit/WKArray.h>
 #include <WebKit/WKAuthenticationChallenge.h>
 #include <WebKit/WKAuthenticationDecisionListener.h>
@@ -74,6 +73,7 @@
 #include <wtf/RefCounted.h>
 #include <wtf/RunLoop.h>
 #include <wtf/SetForScope.h>
+#include <wtf/UUID.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/WTFString.h>
 
@@ -152,7 +152,19 @@ static bool runBeforeUnloadConfirmPanel(WKPageRef page, WKStringRef message, WKF
 static void runOpenPanel(WKPageRef page, WKFrameRef frame, WKOpenPanelParametersRef parameters, WKOpenPanelResultListenerRef resultListenerRef, const void*)
 {
     printf("OPEN FILE PANEL\n");
-    WKOpenPanelResultListenerCancel(resultListenerRef);
+    WKArrayRef fileURLs = TestController::singleton().openPanelFileURLs();
+    if (!fileURLs || !WKArrayGetSize(fileURLs)) {
+        WKOpenPanelResultListenerCancel(resultListenerRef);
+        return;
+    }
+
+    if (WKOpenPanelParametersGetAllowsMultipleFiles(parameters)) {
+        WKOpenPanelResultListenerChooseFiles(resultListenerRef, fileURLs);
+        return;
+    }
+
+    WKTypeRef firstItem = WKArrayGetItemAtIndex(fileURLs, 0);
+    WKOpenPanelResultListenerChooseFiles(resultListenerRef, adoptWK(WKArrayCreate(&firstItem, 1)).get());
 }
 
 void TestController::runModal(WKPageRef page, const void* clientInfo)
@@ -641,9 +653,11 @@ void TestController::resetPreferencesToConsistentValues(const TestOptions& optio
     WKPreferencesSetPageVisibilityBasedProcessSuppressionEnabled(preferences, false);
     WKPreferencesSetOfflineWebApplicationCacheEnabled(preferences, true);
     WKPreferencesSetFontSmoothingLevel(preferences, kWKFontSmoothingLevelNoSubpixelAntiAliasing);
+    WKPreferencesSetSubpixelAntialiasedLayerTextEnabled(preferences, false);
     WKPreferencesSetXSSAuditorEnabled(preferences, false);
     WKPreferencesSetWebAudioEnabled(preferences, true);
-    WKPreferencesSetMediaStreamEnabled(preferences, true);
+    WKPreferencesSetMediaDevicesEnabled(preferences, true);
+    WKPreferencesSetWebRTCLegacyAPIEnabled(preferences, true);
     WKPreferencesSetDeveloperExtrasEnabled(preferences, true);
     WKPreferencesSetJavaScriptRuntimeFlags(preferences, kWKJavaScriptRuntimeFlagsAllEnabled);
     WKPreferencesSetJavaScriptCanOpenWindowsAutomatically(preferences, true);
@@ -665,6 +679,7 @@ void TestController::resetPreferencesToConsistentValues(const TestOptions& optio
     WKPreferencesSetNeedsSiteSpecificQuirks(preferences, options.needsSiteSpecificQuirks);
     WKPreferencesSetIntersectionObserverEnabled(preferences, options.enableIntersectionObserver);
     WKPreferencesSetModernMediaControlsEnabled(preferences, options.enableModernMediaControls);
+    WKPreferencesSetCredentialManagementEnabled(preferences, options.enableCredentialManagement);
 
     static WKStringRef defaultTextEncoding = WKStringCreateWithUTF8CString("ISO-8859-1");
     WKPreferencesSetDefaultTextEncodingName(preferences, defaultTextEncoding);
@@ -705,6 +720,8 @@ void TestController::resetPreferencesToConsistentValues(const TestOptions& optio
     WKCookieManagerDeleteAllCookies(WKContextGetCookieManager(m_context.get()));
 
     WKPreferencesSetMockCaptureDevicesEnabled(preferences, true);
+    
+    WKPreferencesSetLargeImageAsyncDecodingEnabled(preferences, false);
 
     platformResetPreferencesToConsistentValues();
 }
@@ -751,7 +768,7 @@ bool TestController::resetStateToConsistentValues(const TestOptions& options)
     // some other code doing this, it should probably be responsible for cleanup too.
     resetPreferencesToConsistentValues(options);
 
-#if !PLATFORM(COCOA)
+#if !PLATFORM(COCOA) && !PLATFORM(WPE)
     WKTextCheckerContinuousSpellCheckingEnabledStateChanged(true);
 #endif
 
@@ -766,13 +783,6 @@ bool TestController::resetStateToConsistentValues(const TestOptions& options)
     WKPageSetCustomBackingScaleFactor(m_mainWebView->page(), 0);
 
     WKPageClearWheelEventTestTrigger(m_mainWebView->page());
-
-#if PLATFORM(EFL)
-    // EFL uses a real window while other ports such as Qt don't.
-    // In EFL, we need to resize the window to the original size after calls to window.resizeTo.
-    WKRect rect = m_mainWebView->windowFrame();
-    m_mainWebView->setWindowFrame(WKRectMake(rect.origin.x, rect.origin.y, TestController::viewWidth, TestController::viewHeight));
-#endif
 
     WKPageSetMuted(m_mainWebView->page(), true);
 
@@ -822,6 +832,8 @@ bool TestController::resetStateToConsistentValues(const TestOptions& options)
     
     setIgnoresViewportScaleLimits(options.ignoresViewportScaleLimits);
 
+    m_openPanelFileURLs = nullptr;
+
     WKPageLoadURL(m_mainWebView->page(), blankURL());
     runUntil(m_doneResetting, m_currentInvocation->shortTimeout());
     return m_doneResetting;
@@ -868,6 +880,11 @@ const char* TestController::databaseProcessName()
 #else
     return "DatabaseProcess";
 #endif
+}
+
+void TestController::setAllowsAnySSLCertificate(bool allows)
+{
+    WKContextSetAllowsAnySSLCertificateForWebSocketTesting(platformContext(), allows);
 }
 
 static std::string testPath(WKURLRef url)
@@ -988,6 +1005,8 @@ static void updateTestOptionsFromTestHeader(TestOptions& testOptions, const std:
             testOptions.enableModernMediaControls = parseBooleanTestHeaderValue(value);
         if (key == "enablePointerLock")
             testOptions.enablePointerLock = parseBooleanTestHeaderValue(value);
+        if (key == "enableCredentialManagement")
+            testOptions.enableCredentialManagement = parseBooleanTestHeaderValue(value);
         pairStart = pairEnd + 1;
     }
 }
@@ -1286,23 +1305,6 @@ void TestController::didReceiveMessageFromInjectedBundle(WKStringRef messageName
             
             // Forward to WebProcess
             m_eventSenderProxy->mouseScrollByWithWheelAndMomentumPhases(x, y, phase, momentum);
-
-            return;
-        }
-
-        if (WKStringIsEqualToUTF8CString(subMessageName, "SwipeGestureWithWheelAndMomentumPhases")) {
-            WKRetainPtr<WKStringRef> xKey = adoptWK(WKStringCreateWithUTF8CString("X"));
-            double x = WKDoubleGetValue(static_cast<WKDoubleRef>(WKDictionaryGetItemForKey(messageBodyDictionary, xKey.get())));
-
-            WKRetainPtr<WKStringRef> yKey = adoptWK(WKStringCreateWithUTF8CString("Y"));
-            double y = WKDoubleGetValue(static_cast<WKDoubleRef>(WKDictionaryGetItemForKey(messageBodyDictionary, yKey.get())));
-
-            WKRetainPtr<WKStringRef> phaseKey = adoptWK(WKStringCreateWithUTF8CString("Phase"));
-            int phase = static_cast<int>(WKUInt64GetValue(static_cast<WKUInt64Ref>(WKDictionaryGetItemForKey(messageBodyDictionary, phaseKey.get()))));
-            WKRetainPtr<WKStringRef> momentumKey = adoptWK(WKStringCreateWithUTF8CString("Momentum"));
-            int momentum = static_cast<int>(WKUInt64GetValue(static_cast<WKUInt64Ref>(WKDictionaryGetItemForKey(messageBodyDictionary, momentumKey.get()))));
-
-            m_eventSenderProxy->swipeGestureWithWheelAndMomentumPhases(x, y, phase, momentum);
 
             return;
         }
@@ -1876,28 +1878,6 @@ void TestController::setUserMediaPermission(bool enabled)
     decidePolicyForUserMediaPermissionRequestIfPossible();
 }
 
-static String createCanonicalUUIDString()
-{
-    unsigned randomData[4];
-    cryptographicallyRandomValues(reinterpret_cast<unsigned char*>(randomData), sizeof(randomData));
-
-    // Format as Version 4 UUID.
-    StringBuilder builder;
-    builder.reserveCapacity(36);
-    appendUnsignedAsHexFixedSize(randomData[0], builder, 8, Lowercase);
-    builder.append('-');
-    appendUnsignedAsHexFixedSize(randomData[1] >> 16, builder, 4, Lowercase);
-    builder.appendLiteral("-4");
-    appendUnsignedAsHexFixedSize(randomData[1] & 0x00000fff, builder, 3, Lowercase);
-    builder.append('-');
-    appendUnsignedAsHexFixedSize((randomData[2] >> 30) | 0x8, builder, 1, Lowercase);
-    appendUnsignedAsHexFixedSize((randomData[2] >> 16) & 0x00000fff, builder, 3, Lowercase);
-    builder.append('-');
-    appendUnsignedAsHexFixedSize(randomData[2] & 0x0000ffff, builder, 4, Lowercase);
-    appendUnsignedAsHexFixedSize(randomData[3], builder, 8, Lowercase);
-    return builder.toString();
-}
-
 class OriginSettings : public RefCounted<OriginSettings> {
 public:
     explicit OriginSettings()
@@ -2228,9 +2208,39 @@ bool TestController::isStatisticsHasHadUserInteraction(WKStringRef hostName)
     return WKResourceLoadStatisticsManagerIsHasHadUserInteraction(hostName);
 }
 
+void TestController::setStatisticsGrandfathered(WKStringRef hostName, bool value)
+{
+    WKResourceLoadStatisticsManagerSetGrandfathered(hostName, value);
+}
+
+bool TestController::isStatisticsGrandfathered(WKStringRef hostName)
+{
+    return WKResourceLoadStatisticsManagerIsGrandfathered(hostName);
+}
+
+void TestController::setStatisticsSubframeUnderTopFrameOrigin(WKStringRef hostName, WKStringRef topFrameHostName)
+{
+    WKResourceLoadStatisticsManagerSetSubframeUnderTopFrameOrigin(hostName, topFrameHostName);
+}
+
+void TestController::setStatisticsSubresourceUnderTopFrameOrigin(WKStringRef hostName, WKStringRef topFrameHostName)
+{
+    WKResourceLoadStatisticsManagerSetSubresourceUnderTopFrameOrigin(hostName, topFrameHostName);
+}
+    
+void TestController::setStatisticsSubresourceUniqueRedirectTo(WKStringRef hostName, WKStringRef hostNameRedirectedTo)
+{
+    WKResourceLoadStatisticsManagerSetSubresourceUniqueRedirectTo(hostName, hostNameRedirectedTo);
+}
+
 void TestController::setStatisticsTimeToLiveUserInteraction(double seconds)
 {
     WKResourceLoadStatisticsManagerSetTimeToLiveUserInteraction(seconds);
+}
+
+void TestController::setStatisticsTimeToLiveCookiePartitionFree(double seconds)
+{
+    WKResourceLoadStatisticsManagerSetTimeToLiveCookiePartitionFree(seconds);
 }
 
 void TestController::statisticsFireDataModificationHandler()
@@ -2238,6 +2248,16 @@ void TestController::statisticsFireDataModificationHandler()
     WKResourceLoadStatisticsManagerFireDataModificationHandler();
 }
     
+void TestController::statisticsFireShouldPartitionCookiesHandler()
+{
+    WKResourceLoadStatisticsManagerFireShouldPartitionCookiesHandler();
+}
+
+void TestController::statisticsFireShouldPartitionCookiesHandlerForOneDomain(WKStringRef hostName, bool value)
+{
+    WKResourceLoadStatisticsManagerFireShouldPartitionCookiesHandlerForOneDomain(hostName, value);
+}
+
 void TestController::setStatisticsNotifyPagesWhenDataRecordsWereScanned(bool value)
 {
     WKResourceLoadStatisticsManagerSetNotifyPagesWhenDataRecordsWereScanned(value);
@@ -2252,11 +2272,32 @@ void TestController::setStatisticsMinimumTimeBetweeenDataRecordsRemoval(double s
 {
     WKResourceLoadStatisticsManagerSetMinimumTimeBetweeenDataRecordsRemoval(seconds);
 }
+
+void TestController::setStatisticsGrandfatheringTime(double seconds)
+{
+    WKResourceLoadStatisticsManagerSetGrandfatheringTime(seconds);
+}
+
+void TestController::statisticsClearInMemoryAndPersistentStore()
+{
+    WKResourceLoadStatisticsManagerClearInMemoryAndPersistentStore();
+}
+
+void TestController::statisticsClearInMemoryAndPersistentStoreModifiedSinceHours(unsigned hours)
+{
+    WKResourceLoadStatisticsManagerClearInMemoryAndPersistentStoreModifiedSinceHours(hours);
+}
+    
 void TestController::statisticsResetToConsistentState()
 {
     WKResourceLoadStatisticsManagerResetToConsistentState();
 }
-    
+
+void TestController::terminateNetworkProcess()
+{
+    WKContextTerminateNetworkProcess(platformContext());
+}
+
 #if !PLATFORM(COCOA)
 void TestController::platformWillRunTest(const TestInvocation&)
 {

@@ -68,6 +68,7 @@ WebInspector.loaded = function()
     this.probeManager = new WebInspector.ProbeManager;
     this.workerManager = new WebInspector.WorkerManager;
     this.replayManager = new WebInspector.ReplayManager;
+    this.domDebuggerManager = new WebInspector.DOMDebuggerManager;
 
     document.addEventListener("DOMContentLoaded", this.contentLoaded);
 
@@ -101,6 +102,7 @@ WebInspector.assumingMainTarget = () => WebInspector.mainTarget;
 
 WebInspector.isDebugUIEnabled = () => false;
 
+WebInspector.unlocalizedString = (string) => string;
 WebInspector.UIString = (string) => string;
 
 WebInspector.indentString = () => "    ";

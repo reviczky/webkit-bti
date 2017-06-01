@@ -31,6 +31,7 @@
 #include "APIWebsiteDataStore.h"
 #include "DownloadProxyMap.h"
 #include "GenericCallback.h"
+#include "HiddenPageThrottlingAutoIncreasesCounter.h"
 #include "MessageReceiver.h"
 #include "MessageReceiverMap.h"
 #include "NetworkProcessProxy.h"
@@ -48,7 +49,6 @@
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
-#include <wtf/PassRefPtr.h>
 #include <wtf/RefCounter.h>
 #include <wtf/RefPtr.h>
 #include <wtf/text/StringHash.h>
@@ -76,6 +76,7 @@ namespace API {
 class AutomationClient;
 class CustomProtocolManagerClient;
 class DownloadClient;
+class HTTPCookieStore;
 class LegacyContextHistoryClient;
 class PageConfiguration;
 }
@@ -112,6 +113,8 @@ public:
     explicit WebProcessPool(API::ProcessPoolConfiguration&);        
     virtual ~WebProcessPool();
 
+    void notifyThisWebProcessPoolWasCreated();
+
     API::ProcessPoolConfiguration& configuration() { return m_configuration.get(); }
 
     static const Vector<WebProcessPool*>& allProcessPools();
@@ -142,7 +145,7 @@ public:
     void setHistoryClient(std::unique_ptr<API::LegacyContextHistoryClient>);
     void setDownloadClient(std::unique_ptr<API::DownloadClient>);
     void setAutomationClient(std::unique_ptr<API::AutomationClient>);
-    void setCustomProtocolManagerClient(std::unique_ptr<API::CustomProtocolManagerClient>&&);
+    void setLegacyCustomProtocolManagerClient(std::unique_ptr<API::CustomProtocolManagerClient>&&);
 
     void setMaximumNumberOfProcesses(unsigned); // Can only be called when there are no processes running.
     unsigned maximumNumberOfProcesses() const { return !m_configuration->maximumProcessCount() ? UINT_MAX : m_configuration->maximumProcessCount(); }
@@ -158,6 +161,7 @@ public:
 
     // Sends the message to WebProcess or NetworkProcess as approporiate for current process model.
     template<typename T> void sendToNetworkingProcess(T&& message);
+    template<typename T, typename U> void sendSyncToNetworkingProcess(T&& message, U&& reply);
     template<typename T> void sendToNetworkingProcessRelaunchingIfNecessary(T&& message);
 
     // Sends the message to WebProcess or DatabaseProcess as approporiate for current process model.
@@ -168,16 +172,19 @@ public:
     // Disconnect the process from the context.
     void disconnectProcess(WebProcessProxy*);
 
-    API::WebsiteDataStore* websiteDataStore() const { return m_websiteDataStore.get(); }
+    API::WebsiteDataStore& websiteDataStore() const { return m_websiteDataStore.get(); }
 
     Ref<WebPageProxy> createWebPage(PageClient&, Ref<API::PageConfiguration>&&);
+
+    void pageAddedToProcess(WebPageProxy&);
+    void pageRemovedFromProcess(WebPageProxy&);
 
     const String& injectedBundlePath() const { return m_configuration->injectedBundlePath(); }
 
     DownloadProxy* download(WebPageProxy* initiatingPage, const WebCore::ResourceRequest&, const String& suggestedFilename = { });
     DownloadProxy* resumeDownload(const API::Data* resumeData, const String& path);
 
-    void setInjectedBundleInitializationUserData(PassRefPtr<API::Object> userData) { m_injectedBundleInitializationUserData = userData; }
+    void setInjectedBundleInitializationUserData(RefPtr<API::Object>&& userData) { m_injectedBundleInitializationUserData = WTFMove(userData); }
 
     void postMessageToInjectedBundle(const String&, API::Object*);
 
@@ -251,14 +258,19 @@ public:
     void useTestingNetworkSession();
     bool isUsingTestingNetworkSession() const { return m_shouldUseTestingNetworkSession; }
 
+    void setAllowsAnySSLCertificateForWebSocket(bool);
+
     void clearCachedCredentials();
     void terminateDatabaseProcess();
+    void terminateNetworkProcess();
 
-    void reportWebContentCPUTime(int64_t cpuTime, uint64_t activityState);
+    void syncNetworkProcessCookies();
+
+    void reportWebContentCPUTime(Seconds cpuTime, uint64_t activityState);
 
     void allowSpecificHTTPSCertificateForHost(const WebCertificateInfo*, const String& host);
 
-    WebProcessProxy& createNewWebProcessRespectingProcessCountLimit(); // Will return an existing one if limit is met.
+    WebProcessProxy& createNewWebProcessRespectingProcessCountLimit(WebsiteDataStore&); // Will return an existing one if limit is met.
     void warmInitialProcess();
 
     bool shouldTerminate(WebProcessProxy*);
@@ -274,8 +286,14 @@ public:
     void setHTTPPipeliningEnabled(bool);
     bool httpPipeliningEnabled() const;
 
-    void getStatistics(uint32_t statisticsMask, std::function<void (API::Dictionary*, CallbackBase::Error)>);
+    void getStatistics(uint32_t statisticsMask, Function<void (API::Dictionary*, CallbackBase::Error)>&&);
     
+    bool javaScriptConfigurationFileEnabled() { return m_javaScriptConfigurationFileEnabled; }
+    void setJavaScriptConfigurationFileEnabled(bool flag);
+#if PLATFORM(IOS)
+    void setJavaScriptConfigurationFileEnabledFromDefaults();
+#endif
+
     void garbageCollectJavaScriptObjects();
     void setJavaScriptGarbageCollectorTimerEnabled(bool flag);
 
@@ -287,7 +305,7 @@ public:
 
     void textCheckerStateChanged();
 
-    PassRefPtr<API::Dictionary> plugInAutoStartOriginHashes() const;
+    Ref<API::Dictionary> plugInAutoStartOriginHashes() const;
     void setPlugInAutoStartOriginHashes(API::Dictionary&);
     void setPlugInAutoStartOrigins(API::Array&);
     void setPlugInAutoStartOriginsFilteringOutEntriesAddedAfterTime(API::Dictionary&, double time);
@@ -300,7 +318,7 @@ public:
     void getNetworkProcessConnection(Ref<Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply>&&);
 
 #if ENABLE(DATABASE_PROCESS)
-    void ensureDatabaseProcess();
+    void ensureDatabaseProcessAndWebsiteDataStore(WebsiteDataStore* relevantDataStore);
     DatabaseProcessProxy* databaseProcess() { return m_databaseProcess.get(); }
     void getDatabaseProcessConnection(Ref<Messages::WebProcessProxy::GetDatabaseProcessConnection::DelayedReply>&&);
     void databaseProcessCrashed(DatabaseProcessProxy*);
@@ -372,12 +390,14 @@ public:
     static String legacyPlatformDefaultMediaCacheDirectory();
     static String legacyPlatformDefaultApplicationCacheDirectory();
     static String legacyPlatformDefaultNetworkCacheDirectory();
+    static String legacyPlatformDefaultJavaScriptConfigurationDirectory();
     static bool isNetworkCacheEnabled();
 
     bool resourceLoadStatisticsEnabled() { return m_resourceLoadStatisticsEnabled; }
     void setResourceLoadStatisticsEnabled(bool enabled) { m_resourceLoadStatisticsEnabled = enabled; }
 
-    bool alwaysRunsAtBackgroundPriority() { return m_alwaysRunsAtBackgroundPriority; }
+    bool alwaysRunsAtBackgroundPriority() const { return m_alwaysRunsAtBackgroundPriority; }
+    bool shouldTakeUIBackgroundAssertion() const { return m_shouldTakeUIBackgroundAssertion; }
 
 #if ENABLE(GAMEPAD)
     void gamepadConnected(const UIGamepad&);
@@ -391,13 +411,16 @@ public:
     void setCookieStoragePartitioningEnabled(bool);
 #endif
 
+    static uint64_t registerProcessPoolCreationListener(Function<void(WebProcessPool&)>&&);
+    static void unregisterProcessPoolCreationListener(uint64_t identifier);
+
 private:
     void platformInitialize();
 
     void platformInitializeWebProcess(WebProcessCreationParameters&);
     void platformInvalidateContext();
 
-    WebProcessProxy& createNewWebProcess();
+    WebProcessProxy& createNewWebProcess(WebsiteDataStore&);
 
     void requestWebContentStatistics(StatisticsRequest*);
     void requestNetworkingStatistics(StatisticsRequest*);
@@ -506,7 +529,7 @@ private:
 
     RefPtr<WebIconDatabase> m_iconDatabase;
 
-    const RefPtr<API::WebsiteDataStore> m_websiteDataStore;
+    const Ref<API::WebsiteDataStore> m_websiteDataStore;
 
     typedef HashMap<const char*, RefPtr<WebContextSupplement>, PtrHash<const char*>> WebContextSupplementMap;
     WebContextSupplementMap m_supplements;
@@ -552,8 +575,9 @@ private:
 
     bool m_memoryCacheDisabled;
     bool m_resourceLoadStatisticsEnabled { false };
-
+    bool m_javaScriptConfigurationFileEnabled { false };
     bool m_alwaysRunsAtBackgroundPriority;
+    bool m_shouldTakeUIBackgroundAssertion;
 
     UserObservablePageCounter m_userObservablePageCounter;
     ProcessSuppressionDisabledCounter m_processSuppressionDisabledForPageCounter;
@@ -588,14 +612,19 @@ private:
         String mediaCacheDirectory;
         String mediaKeyStorageDirectory;
         String uiProcessBundleResourcePath;
+        String indexedDatabaseDirectory;
 
 #if PLATFORM(IOS)
         String cookieStorageDirectory;
         String containerCachesDirectory;
         String containerTemporaryDirectory;
 #endif
+
+        Vector<String> additionalWebProcessSandboxExtensionPaths;
     };
     Paths m_resolvedPaths;
+
+    HashMap<WebCore::SessionID, HashSet<WebPageProxy*>> m_sessionToPagesMap;
 };
 
 template<typename T>
@@ -616,7 +645,7 @@ template<typename T>
 void WebProcessPool::sendToDatabaseProcessRelaunchingIfNecessary(T&& message)
 {
 #if ENABLE(DATABASE_PROCESS)
-    ensureDatabaseProcess();
+    ensureDatabaseProcessAndWebsiteDataStore(nullptr);
     m_databaseProcess->send(std::forward<T>(message), 0);
 #else
     sendToAllProcessesRelaunchingThemIfNecessary(std::forward<T>(message));

@@ -28,13 +28,13 @@
 
 #include "Logging.h"
 #include "SandboxInitializationParameters.h"
+#include <WebCore/SessionID.h>
 #include <unistd.h>
 
 namespace WebKit {
 
 ChildProcess::ChildProcess()
-    : m_terminationTimeout(0)
-    , m_terminationCounter(0)
+    : m_terminationCounter(0)
     , m_terminationTimer(RunLoop::main(), this, &ChildProcess::terminationTimerFired)
     , m_processSuppressionDisabled("Process Suppression Disabled by UIProcess")
 {
@@ -48,7 +48,7 @@ static void didCloseOnConnectionWorkQueue(IPC::Connection*)
 {
     // If the connection has been closed and we haven't responded in the main thread for 10 seconds
     // the process will exit forcibly.
-    auto watchdogDelay = std::chrono::seconds(10);
+    auto watchdogDelay = 10_s;
 
     WorkQueue::create("com.apple.WebKit.ChildProcess.WatchDogQueue")->dispatchAfter(watchdogDelay, [] {
         // We use _exit here since the watchdog callback is called from another thread and we don't want
@@ -72,7 +72,10 @@ void ChildProcess::initialize(const ChildProcessInitializationParameters& parame
 
     SandboxInitializationParameters sandboxParameters;
     initializeSandbox(parameters, sandboxParameters);
-    
+
+    // In WebKit2, only the UI process should ever be generating non-default SessionIDs.
+    WebCore::SessionID::enableGenerationProtection();
+
     m_connection = IPC::Connection::createClientConnection(parameters.connectionIdentifier, *this);
     m_connection->setDidCloseOnConnectionWorkQueueCallback(didCloseOnConnectionWorkQueue);
     initializeConnection(m_connection.get());

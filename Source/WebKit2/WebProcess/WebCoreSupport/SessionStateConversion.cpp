@@ -85,6 +85,7 @@ static FrameState toFrameState(const HistoryItem& historyItem)
     frameState.itemSequenceNumber = historyItem.itemSequenceNumber();
 
     frameState.scrollPosition = historyItem.scrollPosition();
+    frameState.shouldRestoreScrollPosition = historyItem.shouldRestoreScrollPosition();
     frameState.pageScaleFactor = historyItem.pageScaleFactor();
 
     if (FormData* formData = const_cast<HistoryItem&>(historyItem).formData()) {
@@ -121,7 +122,7 @@ PageState toPageState(const WebCore::HistoryItem& historyItem)
     return pageState;
 }
 
-static PassRefPtr<FormData> toFormData(const HTTPBody& httpBody)
+static Ref<FormData> toFormData(const HTTPBody& httpBody)
 {
     auto formData = FormData::create();
 
@@ -141,7 +142,7 @@ static PassRefPtr<FormData> toFormData(const HTTPBody& httpBody)
         }
     }
 
-    return WTFMove(formData);
+    return formData;
 }
 
 static void applyFrameState(HistoryItem& historyItem, const FrameState& frameState)
@@ -161,6 +162,7 @@ static void applyFrameState(HistoryItem& historyItem, const FrameState& frameSta
     historyItem.setItemSequenceNumber(frameState.itemSequenceNumber);
 
     historyItem.setScrollPosition(frameState.scrollPosition);
+    historyItem.setShouldRestoreScrollPosition(frameState.shouldRestoreScrollPosition);
     historyItem.setPageScaleFactor(frameState.pageScaleFactor);
 
     if (frameState.httpBody) {

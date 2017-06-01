@@ -24,6 +24,10 @@
  */
 
 #include "Heap.h"
+
+#if BPLATFORM(IOS)
+#include "AvailableMemory.h"
+#endif
 #include "BumpAllocator.h"
 #include "Chunk.h"
 #include "DebugHeap.h"
@@ -32,12 +36,24 @@
 #include "SmallPage.h"
 #include <thread>
 
+#if BOS(DARWIN)
+#include "bmalloc.h"
+#if BPLATFORM(IOS)
+#import <mach/host_info.h>
+#import <mach/mach.h>
+#import <mach/mach_error.h>
+#endif
+#endif
+
 namespace bmalloc {
 
 Heap::Heap(std::lock_guard<StaticMutex>&)
     : m_vmPageSizePhysical(vmPageSizePhysical())
     , m_scavenger(*this, &Heap::concurrentScavenge)
     , m_debugHeap(nullptr)
+#if BPLATFORM(IOS)
+    , m_maxAvailableMemory(availableMemory())
+#endif
 {
     RELEASE_BASSERT(vmPageSizePhysical() >= smallPageSize);
     RELEASE_BASSERT(vmPageSize() >= vmPageSizePhysical());
@@ -47,6 +63,16 @@ Heap::Heap(std::lock_guard<StaticMutex>&)
     
     if (m_environment.isDebugHeapEnabled())
         m_debugHeap = PerProcess<DebugHeap>::get();
+
+#if BOS(DARWIN)
+    auto queue = dispatch_queue_create("WebKit Malloc Memory Pressure Handler", DISPATCH_QUEUE_SERIAL);
+    m_pressureHandlerDispatchSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_MEMORYPRESSURE, 0, DISPATCH_MEMORYPRESSURE_CRITICAL, queue);
+    dispatch_source_set_event_handler(m_pressureHandlerDispatchSource, ^{
+        api::scavenge();
+    });
+    dispatch_resume(m_pressureHandlerDispatchSource);
+    dispatch_release(queue);
+#endif
 }
 
 void Heap::initializeLineMetadata()
@@ -105,6 +131,28 @@ void Heap::initializePageMetadata()
         m_pageClasses[i] = (computePageSize(i) - 1) / smallPageSize;
 }
 
+#if BPLATFORM(IOS)
+void Heap::updateMemoryInUseParameters()
+{
+    task_vm_info_data_t vmInfo;
+    mach_msg_type_number_t vmSize = TASK_VM_INFO_COUNT;
+    
+    if (KERN_SUCCESS != task_info(mach_task_self(), TASK_VM_INFO, (task_info_t)(&vmInfo), &vmSize))
+        m_memoryFootprint = 0;
+    else
+        m_memoryFootprint = static_cast<size_t>(vmInfo.phys_footprint);
+
+    double percentInUse = static_cast<double>(m_memoryFootprint) / static_cast<double>(m_maxAvailableMemory);
+    m_percentAvailableMemoryInUse = std::min(percentInUse, 1.0);
+
+    double percentFree = 1.0 - m_percentAvailableMemoryInUse;
+    double sleepInMS = 1200.0 * percentFree * percentFree - 100.0 * percentFree + 2.0;
+    sleepInMS = std::max(std::min(sleepInMS, static_cast<double>(maxScavengeSleepDuration.count())), 2.0);
+
+    m_scavengeSleepDuration = std::chrono::milliseconds(static_cast<long long>(sleepInMS));
+}
+#endif
+
 void Heap::concurrentScavenge()
 {
 #if BOS(DARWIN)
@@ -114,6 +162,10 @@ void Heap::concurrentScavenge()
     std::unique_lock<StaticMutex> lock(PerProcess<Heap>::mutex());
 
     scavenge(lock, Async);
+
+#if BPLATFORM(IOS)
+    updateMemoryInUseParameters();
+#endif
 }
 
 void Heap::scavenge(std::unique_lock<StaticMutex>& lock, ScavengeMode scavengeMode)
@@ -122,7 +174,7 @@ void Heap::scavenge(std::unique_lock<StaticMutex>& lock, ScavengeMode scavengeMo
     m_isAllocatingLargePages = false;
 
     if (scavengeMode == Async)
-        sleep(lock, scavengeSleepDuration);
+        sleep(lock, m_scavengeSleepDuration);
 
     scavengeSmallPages(lock, scavengeMode);
     scavengeLargeObjects(lock, scavengeMode);

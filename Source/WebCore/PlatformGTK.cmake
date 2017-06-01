@@ -81,6 +81,7 @@ list(APPEND WebCore_SOURCES
     platform/glib/KeyedDecoderGlib.cpp
     platform/glib/KeyedEncoderGlib.cpp
     platform/glib/MainThreadSharedTimerGLib.cpp
+    platform/glib/SSLKeyGeneratorGLib.cpp
     platform/glib/SharedBufferGlib.cpp
 
     platform/graphics/GLContext.cpp
@@ -138,12 +139,10 @@ list(APPEND WebCore_SOURCES
     platform/graphics/x11/XUniqueResource.cpp
 
     platform/gtk/DragDataGtk.cpp
-    platform/gtk/ErrorsGtk.cpp
-    platform/gtk/MIMETypeRegistryGtk.cpp
+    platform/gtk/LocalizedStringsGtk.cpp
     platform/gtk/PasteboardGtk.cpp
     platform/gtk/ScrollAnimatorGtk.cpp
     platform/gtk/SelectionData.cpp
-    platform/gtk/TemporaryLinkStubs.cpp
     platform/gtk/UserAgentGtk.cpp
 
     platform/image-decoders/cairo/ImageBackingStoreCairo.cpp
@@ -178,6 +177,8 @@ list(APPEND WebCore_SOURCES
     platform/text/hyphen/HyphenationLibHyphen.cpp
 
     platform/unix/LoggingUnix.cpp
+
+    platform/xdg/MIMETypeRegistryXdg.cpp
 )
 
 list(APPEND WebCorePlatformGTK_SOURCES
@@ -199,7 +200,6 @@ list(APPEND WebCorePlatformGTK_SOURCES
     platform/gtk/GRefPtrGtk.cpp
     platform/gtk/GtkUtilities.cpp
     platform/gtk/GtkVersioning.c
-    platform/gtk/LocalizedStringsGtk.cpp
     platform/gtk/PasteboardHelper.cpp
     platform/gtk/PlatformKeyboardEventGtk.cpp
     platform/gtk/PlatformMouseEventGtk.cpp
@@ -382,8 +382,15 @@ if (ENABLE_SUBTLE_CRYPTO)
         crypto/WebKitSubtleCrypto.cpp
 
         crypto/algorithms/CryptoAlgorithmAES_CBC.cpp
+        crypto/algorithms/CryptoAlgorithmAES_CFB.cpp
+        crypto/algorithms/CryptoAlgorithmAES_CTR.cpp
+        crypto/algorithms/CryptoAlgorithmAES_GCM.cpp
         crypto/algorithms/CryptoAlgorithmAES_KW.cpp
+        crypto/algorithms/CryptoAlgorithmECDH.cpp
+        crypto/algorithms/CryptoAlgorithmECDSA.cpp
+        crypto/algorithms/CryptoAlgorithmHKDF.cpp
         crypto/algorithms/CryptoAlgorithmHMAC.cpp
+        crypto/algorithms/CryptoAlgorithmPBKDF2.cpp
         crypto/algorithms/CryptoAlgorithmRSAES_PKCS1_v1_5.cpp
         crypto/algorithms/CryptoAlgorithmRSASSA_PKCS1_v1_5.cpp
         crypto/algorithms/CryptoAlgorithmRSA_OAEP.cpp
@@ -393,22 +400,31 @@ if (ENABLE_SUBTLE_CRYPTO)
         crypto/algorithms/CryptoAlgorithmSHA384.cpp
         crypto/algorithms/CryptoAlgorithmSHA512.cpp
 
+        crypto/gcrypt/CryptoAlgorithmAES_CBCGCrypt.cpp
+        crypto/gcrypt/CryptoAlgorithmAES_CFBGCrypt.cpp
+        crypto/gcrypt/CryptoAlgorithmAES_CTRGCrypt.cpp
+        crypto/gcrypt/CryptoAlgorithmAES_GCMGCrypt.cpp
+        crypto/gcrypt/CryptoAlgorithmAES_KWGCrypt.cpp
+        crypto/gcrypt/CryptoAlgorithmECDHGCrypt.cpp
+        crypto/gcrypt/CryptoAlgorithmECDSAGCrypt.cpp
+        crypto/gcrypt/CryptoAlgorithmHKDFGCrypt.cpp
         crypto/gcrypt/CryptoAlgorithmHMACGCrypt.cpp
-
-        crypto/gnutls/CryptoAlgorithmAES_CBCGnuTLS.cpp
-        crypto/gnutls/CryptoAlgorithmAES_KWGnuTLS.cpp
-        crypto/gnutls/CryptoAlgorithmRSAES_PKCS1_v1_5GnuTLS.cpp
-        crypto/gnutls/CryptoAlgorithmRSASSA_PKCS1_v1_5GnuTLS.cpp
-        crypto/gnutls/CryptoAlgorithmRSA_OAEPGnuTLS.cpp
-        crypto/gnutls/CryptoAlgorithmRegistryGnuTLS.cpp
-        crypto/gnutls/CryptoKeyRSAGnuTLS.cpp
-        crypto/gnutls/SerializedCryptoKeyWrapGnuTLS.cpp
+        crypto/gcrypt/CryptoAlgorithmPBKDF2GCrypt.cpp
+        crypto/gcrypt/CryptoAlgorithmRSAES_PKCS1_v1_5GCrypt.cpp
+        crypto/gcrypt/CryptoAlgorithmRSASSA_PKCS1_v1_5GCrypt.cpp
+        crypto/gcrypt/CryptoAlgorithmRSA_OAEPGCrypt.cpp
+        crypto/gcrypt/CryptoAlgorithmRegistryGCrypt.cpp
+        crypto/gcrypt/CryptoKeyECGCrypt.cpp
+        crypto/gcrypt/CryptoKeyRSAGCrypt.cpp
+        crypto/gcrypt/SerializedCryptoKeyWrapGCrypt.cpp
 
         crypto/keys/CryptoKeyAES.cpp
         crypto/keys/CryptoKeyDataOctetSequence.cpp
         crypto/keys/CryptoKeyDataRSAComponents.cpp
+        crypto/keys/CryptoKeyEC.cpp
         crypto/keys/CryptoKeyHMAC.cpp
         crypto/keys/CryptoKeyRSA.cpp
+        crypto/keys/CryptoKeyRaw.cpp
         crypto/keys/CryptoKeySerializationRaw.cpp
     )
 endif ()

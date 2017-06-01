@@ -23,7 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-WebInspector.BreakpointTreeElement = class BreakpointTreeElement extends WebInspector.DebuggerTreeElement
+WebInspector.BreakpointTreeElement = class BreakpointTreeElement extends WebInspector.GeneralTreeElement
 {
     constructor(breakpoint, className, title)
     {
@@ -114,6 +114,8 @@ WebInspector.BreakpointTreeElement = class BreakpointTreeElement extends WebInsp
 
     ondetach()
     {
+        super.ondetach();
+
         this._listenerSet.uninstall();
 
         if (this._probeSet)

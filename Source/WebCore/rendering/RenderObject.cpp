@@ -29,6 +29,7 @@
 
 #include "AXObjectCache.h"
 #include "CSSAnimationController.h"
+#include "Editing.h"
 #include "FloatQuad.h"
 #include "FlowThreadController.h"
 #include "FrameSelection.h"
@@ -69,7 +70,6 @@
 #include "SVGRenderSupport.h"
 #include "StyleResolver.h"
 #include "TransformState.h"
-#include "htmlediting.h"
 #include <algorithm>
 #include <stdio.h>
 #include <wtf/RefCountedLeakCounter.h>
@@ -141,7 +141,7 @@ RenderObject::~RenderObject()
 
 RenderTheme& RenderObject::theme() const
 {
-    return page().theme();
+    return RenderTheme::singleton();
 }
 
 bool RenderObject::isDescendantOf(const RenderObject* ancestor) const
@@ -156,6 +156,12 @@ bool RenderObject::isDescendantOf(const RenderObject* ancestor) const
 bool RenderObject::isLegend() const
 {
     return node() && node()->hasTagName(legendTag);
+}
+
+    
+bool RenderObject::isFieldset() const
+{
+    return node() && node()->hasTagName(fieldsetTag);
 }
 
 bool RenderObject::isHTMLMarquee() const
@@ -1977,18 +1983,6 @@ void RenderObject::setHasOutlineAutoAncestor(bool hasOutlineAutoAncestor)
 {
     if (hasOutlineAutoAncestor || hasRareData())
         ensureRareData().setHasOutlineAutoAncestor(hasOutlineAutoAncestor);
-}
-
-void RenderObject::setIsRegisteredForVisibleInViewportCallback(bool registered)
-{
-    if (registered || hasRareData())
-        ensureRareData().setIsRegisteredForVisibleInViewportCallback(registered);
-}
-
-void RenderObject::setVisibleInViewportState(VisibleInViewportState visible)
-{
-    if (visible != VisibilityUnknown || hasRareData())
-        ensureRareData().setVisibleInViewportState(visible);
 }
 
 RenderObject::RareDataMap& RenderObject::rareDataMap()

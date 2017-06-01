@@ -155,7 +155,7 @@ void AutomaticThread::start(const AbstractLocker&)
     
     m_hasUnderlyingThread = true;
     
-    ThreadIdentifier thread = createThread(
+    RefPtr<Thread> thread = Thread::create(
         "WTF::AutomaticThread",
         [=] () {
             if (verbose)
@@ -194,10 +194,11 @@ void AutomaticThread::start(const AbstractLocker&)
                         if (result == PollResult::Stop)
                             return stopPermanently(locker);
                         RELEASE_ASSERT(result == PollResult::Wait);
-                        // Shut the thread down after one second.
+
+                        // Shut the thread down after a timeout.
                         m_isWaiting = true;
                         bool awokenByNotify =
-                            m_waitCondition.waitFor(*m_lock, 1_s);
+                            m_waitCondition.waitFor(*m_lock, 10_s);
                         if (verbose && !awokenByNotify && !m_isWaiting)
                             dataLog(RawPointer(this), ": waitFor timed out, but notified via m_isWaiting flag!\n");
                         if (m_isWaiting) {
@@ -220,7 +221,7 @@ void AutomaticThread::start(const AbstractLocker&)
                 RELEASE_ASSERT(result == WorkResult::Continue);
             }
         });
-    detachThread(thread);
+    thread->detach();
 }
 
 void AutomaticThread::threadDidStart()

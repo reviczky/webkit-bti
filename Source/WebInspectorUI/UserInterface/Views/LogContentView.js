@@ -84,7 +84,7 @@ WebInspector.LogContentView = class LogContentView extends WebInspector.ContentV
         this._clearLogNavigationItem = new WebInspector.ButtonNavigationItem("clear-log", WebInspector.UIString("Clear log (%s or %s)").format(WebInspector.clearKeyboardShortcut.displayName, this._logViewController.messagesAlternateClearKeyboardShortcut.displayName), "Images/NavigationItemClear.svg", clearImageDimensions, clearImageDimensions);
         this._clearLogNavigationItem.addEventListener(WebInspector.ButtonNavigationItem.Event.Clicked, this._clearLog, this);
 
-        this._showConsoleTabNavigationItem = new WebInspector.ButtonNavigationItem("show-tab", WebInspector.UIString("Show console tab"), "Images/SplitToggleUp.svg", 16, 16);
+        this._showConsoleTabNavigationItem = new WebInspector.ButtonNavigationItem("show-tab", WebInspector.UIString("Show Console tab"), "Images/SplitToggleUp.svg", 16, 16);
         this._showConsoleTabNavigationItem.addEventListener(WebInspector.ButtonNavigationItem.Event.Clicked, this._showConsoleTab, this);
 
         this.messagesElement.addEventListener("contextmenu", this._handleContextMenuEvent.bind(this), false);
@@ -229,6 +229,11 @@ WebInspector.LogContentView = class LogContentView extends WebInspector.ContentV
 
     findBannerRevealPreviousResult()
     {
+        this.highlightPreviousSearchMatch();
+    }
+
+    highlightPreviousSearchMatch()
+    {
         if (!this.hasPerformedSearch || isEmptyObject(this._searchMatches))
             return;
 
@@ -237,6 +242,11 @@ WebInspector.LogContentView = class LogContentView extends WebInspector.ContentV
     }
 
     findBannerRevealNextResult()
+    {
+        this.highlightNextSearchMatch();
+    }
+
+    highlightNextSearchMatch()
     {
         if (!this.hasPerformedSearch || isEmptyObject(this._searchMatches))
             return;
@@ -379,6 +389,15 @@ WebInspector.LogContentView = class LogContentView extends WebInspector.ContentV
             contextMenu.appendItem(WebInspector.UIString("Copy Selected"), () => {
                 InspectorFrontendHost.copyText(this._formatMessagesAsData(true));
             });
+
+            contextMenu.appendItem(WebInspector.UIString("Save Selected"), () => {
+                const forceSaveAs = true;
+                WebInspector.saveDataToFile({
+                    url: "web-inspector:///Console.txt",
+                    content: this._formatMessagesAsData(true),
+                }, forceSaveAs);
+            });
+
             contextMenu.appendSeparator();
         }
 
@@ -728,6 +747,8 @@ WebInspector.LogContentView = class LogContentView extends WebInspector.ContentV
 
     _keyDown(event)
     {
+        let isRTL = WebInspector.resolvedLayoutDirection() === WebInspector.LayoutDirection.RTL;
+
         if (this._keyboardShortcutCommandA.matchesEvent(event))
             this._commandAWasPressed(event);
         else if (this._keyboardShortcutEsc.matchesEvent(event))
@@ -736,9 +757,9 @@ WebInspector.LogContentView = class LogContentView extends WebInspector.ContentV
             this._upArrowWasPressed(event);
         else if (event.keyIdentifier === "Down")
             this._downArrowWasPressed(event);
-        else if (event.keyIdentifier === "Left")
+        else if ((!isRTL && event.keyIdentifier === "Left") || (isRTL && event.keyIdentifier === "Right"))
             this._leftArrowWasPressed(event);
-        else if (event.keyIdentifier === "Right")
+        else if ((!isRTL && event.keyIdentifier === "Right") || (isRTL && event.keyIdentifier === "Left"))
             this._rightArrowWasPressed(event);
         else if (event.keyIdentifier === "Enter" && event.metaKey)
             this._commandEnterWasPressed(event);
@@ -910,6 +931,7 @@ WebInspector.LogContentView = class LogContentView extends WebInspector.ContentV
         this._searchMatches = [];
         this._selectedSearchMatchIsValid = false;
         this._selectedSearchMatch = null;
+        let numberOfResults = 0;
 
         if (this._currentSearchQuery === "") {
             this.element.classList.remove(WebInspector.LogContentView.SearchInProgressStyleClassName);
@@ -925,6 +947,7 @@ WebInspector.LogContentView = class LogContentView extends WebInspector.ContentV
             let text = message.textContent;
             let match = searchRegex.exec(text);
             while (match) {
+                numberOfResults++;
                 matchRanges.push({offset: match.index, length: match[0].length});
                 match = searchRegex.exec(text);
             }
@@ -940,6 +963,8 @@ WebInspector.LogContentView = class LogContentView extends WebInspector.ContentV
         }, this);
 
         this.dispatchEventToListeners(WebInspector.ContentView.Event.NumberOfSearchResultsDidChange);
+
+        this._findBanner.numberOfResults = numberOfResults;
 
         if (!this._selectedSearchMatchIsValid && this._selectedSearchMatch) {
             this._selectedSearchMatch.highlight.classList.remove(WebInspector.LogContentView.SelectedStyleClassName);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -546,6 +546,13 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         }
         break;
     }
+        
+    case AtomicsIsLockFree: {
+        if (node->child1().useKind() != Int32Use)
+            clobberWorld(node->origin.semantic, clobberLimit);
+        forNode(node).setType(SpecBoolInt32);
+        break;
+    }
 
     case ArithClz32: {
         JSValue operand = forNode(node->child1()).value();
@@ -559,6 +566,45 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     }
 
     case MakeRope: {
+        unsigned numberOfChildren = 0;
+        unsigned numberOfRemovedChildren = 0;
+        std::optional<unsigned> nonEmptyIndex;
+        for (unsigned i = 0; i < AdjacencyList::Size; ++i) {
+            Edge& edge = node->children.child(i);
+            if (!edge)
+                break;
+            ++numberOfChildren;
+
+            JSValue childConstant = m_state.forNode(edge).value();
+            if (!childConstant) {
+                nonEmptyIndex = i;
+                continue;
+            }
+            if (!childConstant.isString()) {
+                nonEmptyIndex = i;
+                continue;
+            }
+            if (asString(childConstant)->length()) {
+                nonEmptyIndex = i;
+                continue;
+            }
+
+            ++numberOfRemovedChildren;
+        }
+
+        if (numberOfRemovedChildren) {
+            m_state.setFoundConstants(true);
+            if (numberOfRemovedChildren == numberOfChildren) {
+                // Propagate the last child. This is the way taken in the constant folding phase.
+                forNode(node) = forNode(node->children.child(numberOfChildren - 1));
+                break;
+            }
+            if ((numberOfRemovedChildren + 1) == numberOfChildren) {
+                ASSERT(nonEmptyIndex);
+                forNode(node) = forNode(node->children.child(nonEmptyIndex.value()));
+                break;
+            }
+        }
         forNode(node).set(m_graph, m_vm.stringStructure.get());
         break;
     }
@@ -962,20 +1008,8 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         executeDoubleUnaryOpEffects(node, [](double value) -> double { return static_cast<float>(value); });
         break;
         
-    case ArithSin:
-        executeDoubleUnaryOpEffects(node, sin);
-        break;
-    
-    case ArithCos:
-        executeDoubleUnaryOpEffects(node, cos);
-        break;
-
-    case ArithTan:
-        executeDoubleUnaryOpEffects(node, tan);
-        break;
-
-    case ArithLog:
-        executeDoubleUnaryOpEffects(node, log);
+    case ArithUnary:
+        executeDoubleUnaryOpEffects(node, arithUnaryFunction(node->arithUnaryType()));
         break;
             
     case LogicalNot: {
@@ -1506,7 +1540,18 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         forNode(node).set(m_graph, m_vm.stringStructure.get());
         break;
             
-    case GetByVal: {
+    case GetByVal:
+    case AtomicsAdd:
+    case AtomicsAnd:
+    case AtomicsCompareExchange:
+    case AtomicsExchange:
+    case AtomicsLoad:
+    case AtomicsOr:
+    case AtomicsStore:
+    case AtomicsSub:
+    case AtomicsXor: {
+        if (node->op() != GetByVal)
+            clobberWorld(node->origin.semantic, clobberLimit);
         switch (node->arrayMode().type()) {
         case Array::SelectUsingPredictions:
         case Array::Unprofiled:
@@ -2234,6 +2279,11 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         break;
     }
 
+    case GetVectorLength: {
+        forNode(node).setType(SpecInt32Only);
+        break;
+    }
+
     case DeleteById:
     case DeleteByVal: {
         // FIXME: This could decide if the delete will be successful based on the set of structures that
@@ -2336,7 +2386,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         // nobody would currently benefit from having that information. But it's a bug nonetheless.
         forNode(node).clear(); // The result is not a JS value.
         break;
-    case CheckDOM: {
+    case CheckSubClass: {
         JSValue constant = forNode(node->child1()).value();
         if (constant) {
             if (constant.isCell() && constant.asCell()->inherits(m_vm, node->classInfo())) {
@@ -2855,11 +2905,16 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         clobberWorld(node->origin.semantic, clobberLimit);
         forNode(node).setType(m_graph, SpecObject);
         break;
-        
+
+    case ResolveScopeForHoistingFuncDeclInEval:
+        clobberWorld(node->origin.semantic, clobberLimit);
+        forNode(node).makeBytecodeTop();
+        break;
+
     case PutGlobalVariable:
     case NotifyWrite:
         break;
-            
+
     case OverridesHasInstance:
         forNode(node).setType(SpecBoolean);
         break;
@@ -2923,7 +2978,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         m_state.setStructureClobberState(StructuresAreWatched);
         break;
 
-    case CheckWatchdogTimer:
+    case CheckTraps:
     case LogShadowChickenPrologue:
     case LogShadowChickenTail:
         break;

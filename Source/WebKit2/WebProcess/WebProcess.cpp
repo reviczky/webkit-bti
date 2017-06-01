@@ -34,6 +34,7 @@
 #include "DrawingArea.h"
 #include "EventDispatcher.h"
 #include "InjectedBundle.h"
+#include "LibWebRTCNetwork.h"
 #include "Logging.h"
 #include "NetworkConnectionToWebProcessMessages.h"
 #include "NetworkProcessConnection.h"
@@ -63,13 +64,16 @@
 #include "WebProcessPoolMessages.h"
 #include "WebProcessProxyMessages.h"
 #include "WebResourceLoadStatisticsStoreMessages.h"
+#include "WebSocketStream.h"
 #include "WebsiteData.h"
 #include "WebsiteDataType.h"
 #include <JavaScriptCore/JSLock.h>
 #include <JavaScriptCore/MemoryStatistics.h>
+#include <JavaScriptCore/WasmFaultSignalHandler.h>
 #include <WebCore/AXObjectCache.h>
 #include <WebCore/ApplicationCacheStorage.h>
 #include <WebCore/AuthenticationChallenge.h>
+#include <WebCore/CPUMonitor.h>
 #include <WebCore/CommonVM.h>
 #include <WebCore/CrossOriginPreflightResultCache.h>
 #include <WebCore/DNS.h>
@@ -112,11 +116,9 @@
 #include <wtf/text/StringHash.h>
 
 #if PLATFORM(COCOA)
-#include "ObjCObjectGraph.h"
-#endif
-
-#if PLATFORM(COCOA)
 #include "CookieStorageShim.h"
+#include "ObjCObjectGraph.h"
+#include "UserMediaCaptureManager.h"
 #endif
 
 #if ENABLE(SEC_ITEM_SHIM)
@@ -127,7 +129,7 @@
 #include "WebToDatabaseProcessConnection.h"
 #endif
 
-#if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
+#if ENABLE(NOTIFICATIONS)
 #include "WebNotificationManager.h"
 #endif
 
@@ -142,7 +144,7 @@ using namespace WebCore;
 static const double plugInAutoStartExpirationTimeUpdateThreshold = 29 * 24 * 60 * 60;
 
 // This should be greater than tileRevalidationTimeout in TileController.
-static const double nonVisibleProcessCleanupDelay = 10;
+static const Seconds nonVisibleProcessCleanupDelay { 10_s };
 
 namespace WebKit {
 
@@ -157,6 +159,7 @@ WebProcess::WebProcess()
 #if PLATFORM(IOS)
     , m_viewUpdateDispatcher(ViewUpdateDispatcher::create())
 #endif
+    , m_webInspectorInterruptDispatcher(WebInspectorInterruptDispatcher::create())
     , m_iconDatabaseProxy(*new WebIconDatabaseProxy(*this))
     , m_webLoaderStrategy(*new WebLoaderStrategy)
     , m_dnsPrefetchHystereris([this](HysteresisState state) { if (state == HysteresisState::Stopped) m_dnsPrefetchedHosts.clear(); })
@@ -180,12 +183,16 @@ WebProcess::WebProcess()
     addSupplement<WebCookieManager>();
     addSupplement<AuthenticationManager>();
 
-#if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
+#if ENABLE(NOTIFICATIONS)
     addSupplement<WebNotificationManager>();
 #endif
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     addSupplement<WebMediaKeyStorageManager>();
+#endif
+
+#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
+    addSupplement<UserMediaCaptureManager>();
 #endif
 
     m_plugInAutoStartOriginHashes.add(SessionID::defaultSessionID(), HashMap<unsigned, double>());
@@ -194,7 +201,7 @@ WebProcess::WebProcess()
     m_resourceLoadStatisticsStore->setNotificationCallback([this] {
         if (m_statisticsChangedTimer.isActive())
             return;
-        m_statisticsChangedTimer.startOneShot(std::chrono::seconds(5));
+        m_statisticsChangedTimer.startOneShot(5_s);
     });
 }
 
@@ -221,6 +228,7 @@ void WebProcess::initializeConnection(IPC::Connection* connection)
 #if PLATFORM(IOS)
     m_viewUpdateDispatcher->initializeConnection(connection);
 #endif // PLATFORM(IOS)
+    m_webInspectorInterruptDispatcher->initializeConnection(connection);
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
     m_pluginProcessConnectionManager->initializeConnection(connection);
@@ -242,6 +250,8 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
 {    
     ASSERT(m_pageMap.isEmpty());
 
+    WebCore::setPresentingApplicationPID(parameters.presentingApplicationPID);
+
 #if OS(LINUX)
     if (parameters.memoryPressureMonitorHandle.fileDescriptor() != -1)
         MemoryPressureHandler::singleton().setMemoryPressureMonitorHandle(parameters.memoryPressureMonitorHandle.releaseFileDescriptor());
@@ -251,7 +261,7 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
     platformInitializeWebProcess(WTFMove(parameters));
 
     // Match the QoS of the UIProcess and the scrolling thread but use a slightly lower priority.
-    WTF::setCurrentThreadIsUserInteractive(-1);
+    WTF::Thread::setCurrentThreadIsUserInteractive(-1);
 
     m_suppressMemoryPressureHandler = parameters.shouldSuppressMemoryPressureHandler;
     if (!m_suppressMemoryPressureHandler) {
@@ -261,18 +271,29 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
         });
 #if PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 101200
         memoryPressureHandler.setShouldUsePeriodicMemoryMonitor(true);
-        memoryPressureHandler.setMemoryKillCallback([] () {
-            WebCore::didExceedMemoryLimitAndFailedToRecover();
+        memoryPressureHandler.setMemoryKillCallback([this] () {
+            WebCore::logMemoryStatisticsAtTimeOfDeath();
+            if (MemoryPressureHandler::singleton().processState() == WebsamProcessState::Active)
+                parentProcessConnection()->send(Messages::WebProcessProxy::DidExceedActiveMemoryLimit(), 0);
+            else
+                parentProcessConnection()->send(Messages::WebProcessProxy::DidExceedInactiveMemoryLimit(), 0);
         });
-        memoryPressureHandler.setProcessIsEligibleForMemoryKillCallback([] () {
-            return WebCore::processIsEligibleForMemoryKill();
+        memoryPressureHandler.setDidExceedInactiveLimitWhileActiveCallback([this] () {
+            parentProcessConnection()->send(Messages::WebProcessProxy::DidExceedInactiveMemoryLimitWhileActive(), 0);
         });
 #endif
+        memoryPressureHandler.setMemoryPressureStatusChangedCallback([this](bool isUnderMemoryPressure) {
+            if (parentProcessConnection())
+                parentProcessConnection()->send(Messages::WebProcessProxy::MemoryPressureStatusChanged(isUnderMemoryPressure), 0);
+        });
         memoryPressureHandler.install();
     }
 
     if (!parameters.injectedBundlePath.isEmpty())
         m_injectedBundle = InjectedBundle::create(parameters, transformHandlesToObjects(parameters.initializationUserData.object()).get());
+
+    for (size_t i = 0, size = parameters.additionalSandboxExtensionHandles.size(); i < size; ++i)
+        SandboxExtension::consumePermanently(parameters.additionalSandboxExtensionHandles[i]);
 
     for (auto& supplement : m_supplements.values())
         supplement->initialize(parameters);
@@ -372,7 +393,7 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
     audit_token_t auditToken;
     if (parentProcessConnection()->getAuditToken(auditToken)) {
         RetainPtr<CFDataRef> auditData = adoptCF(CFDataCreate(nullptr, (const UInt8*)&auditToken, sizeof(auditToken)));
-        Inspector::RemoteInspector::singleton().setParentProcessInformation(presenterApplicationPid(), auditData);
+        Inspector::RemoteInspector::singleton().setParentProcessInformation(WebCore::presentingApplicationPID(), auditData);
     }
 #endif
 
@@ -387,6 +408,10 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
 
 #if ENABLE(GAMEPAD)
     GamepadProvider::singleton().setSharedProvider(WebGamepadProvider::singleton());
+#endif
+
+#if ENABLE(WEBASSEMBLY)
+    JSC::Wasm::enableFastMemory();
 #endif
 }
 
@@ -494,7 +519,12 @@ void WebProcess::ensurePrivateBrowsingSession(SessionID sessionID)
     WebFrameNetworkingContext::ensurePrivateBrowsingSession(sessionID);
 }
 
-void WebProcess::destroyPrivateBrowsingSession(SessionID sessionID)
+void WebProcess::addWebsiteDataStore(WebsiteDataStoreParameters&& parameters)
+{
+    WebFrameNetworkingContext::ensureWebsiteDataStoreSession(WTFMove(parameters));
+}
+
+void WebProcess::destroySession(SessionID sessionID)
 {
     SessionTracker::destroySession(sessionID);
 }
@@ -524,7 +554,7 @@ void WebProcess::setCacheModel(uint32_t cm)
     unsigned cacheTotalCapacity = 0;
     unsigned cacheMinDeadCapacity = 0;
     unsigned cacheMaxDeadCapacity = 0;
-    auto deadDecodedDataDeletionInterval = std::chrono::seconds { 0 };
+    Seconds deadDecodedDataDeletionInterval;
     unsigned pageCacheSize = 0;
     calculateMemoryCacheSizes(cacheModel, cacheTotalCapacity, cacheMinDeadCapacity, cacheMaxDeadCapacity, deadDecodedDataDeletionInterval, pageCacheSize);
 
@@ -569,6 +599,7 @@ void WebProcess::createWebPage(uint64_t pageID, WebPageCreationParameters&& para
 
         // Balanced by an enableTermination in removeWebPage.
         disableTermination();
+        updateCPULimit();
     } else
         result.iterator->value->reinitializeWebPage(WTFMove(parameters));
 
@@ -583,6 +614,7 @@ void WebProcess::removeWebPage(uint64_t pageID)
     m_pageMap.remove(pageID);
 
     enableTermination();
+    updateCPULimit();
 }
 
 bool WebProcess::shouldTerminate()
@@ -1009,6 +1041,11 @@ void WebProcess::mainThreadPing()
     parentProcessConnection()->send(Messages::WebProcessProxy::DidReceiveMainThreadPing(), 0);
 }
 
+void WebProcess::backgroundResponsivenessPing()
+{
+    parentProcessConnection()->send(Messages::WebProcessProxy::DidReceiveBackgroundResponsivenessPing(), 0);
+}
+
 #if ENABLE(GAMEPAD)
 
 void WebProcess::setInitialGamepads(const Vector<WebKit::GamepadData>& gamepadDatas)
@@ -1103,6 +1140,7 @@ void WebProcess::networkProcessConnectionClosed(NetworkProcessConnection* connec
     logDiagnosticMessageForNetworkProcessCrash();
 
     m_webLoaderStrategy.networkProcessCrashed();
+    WebSocketStream::networkProcessCrashed();
 }
 
 WebLoaderStrategy& WebProcess::webLoaderStrategy()
@@ -1229,10 +1267,10 @@ void WebProcess::deleteWebsiteDataForOrigins(WebCore::SessionID sessionID, Optio
     }
 }
 
-void WebProcess::setHiddenPageTimerThrottlingIncreaseLimit(int milliseconds)
+void WebProcess::setHiddenPageDOMTimerThrottlingIncreaseLimit(int milliseconds)
 {
     for (auto& page : m_pageMap.values())
-        page->setHiddenPageTimerThrottlingIncreaseLimit(std::chrono::milliseconds(milliseconds));
+        page->setHiddenPageDOMTimerThrottlingIncreaseLimit(Seconds::fromMilliseconds(milliseconds));
 }
 
 #if !PLATFORM(COCOA)
@@ -1252,7 +1290,21 @@ void WebProcess::updateActivePages()
 {
 }
 
+void WebProcess::updateCPULimit()
+{
+}
+
+void WebProcess::updateCPUMonitorState(CPUMonitorUpdateReason)
+{
+}
+
 #endif
+
+void WebProcess::pageActivityStateDidChange(uint64_t, WebCore::ActivityState::Flags changed)
+{
+    if (changed & WebCore::ActivityState::IsVisible)
+        updateCPUMonitorState(CPUMonitorUpdateReason::VisibilityHasChanged);
+}
 
 #if PLATFORM(IOS)
 void WebProcess::resetAllGeolocationPermissions()
@@ -1543,6 +1595,15 @@ void WebProcess::prefetchDNS(const String& hostname)
     // in a very short period of time, producing a lot of IPC traffic. So we clear this cache after
     // some time of no DNS requests.
     m_dnsPrefetchHystereris.impulse();
+}
+
+bool WebProcess::hasVisibleWebPage() const
+{
+    for (auto& page : m_pageMap.values()) {
+        if (page->isVisible())
+            return true;
+    }
+    return false;
 }
 
 #if USE(LIBWEBRTC)

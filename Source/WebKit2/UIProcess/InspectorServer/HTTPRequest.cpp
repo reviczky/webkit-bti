@@ -26,6 +26,8 @@
 #include "config.h"
 #include "HTTPRequest.h"
 
+#if ENABLE(INSPECTOR_SERVER)
+
 #include <wtf/text/CString.h>
 #include <wtf/text/StringView.h>
 
@@ -33,15 +35,15 @@ using namespace WebCore;
 
 namespace WebKit {
 
-PassRefPtr<HTTPRequest> HTTPRequest::parseHTTPRequestFromBuffer(const char* data, size_t length, String& failureReason)
+RefPtr<HTTPRequest> HTTPRequest::parseHTTPRequestFromBuffer(const char* data, size_t length, String& failureReason)
 {
     if (!length) {
         failureReason = "No data to parse.";
-        return 0;
+        return nullptr;
     }
 
     // Request we will be building.
-    RefPtr<HTTPRequest> request = HTTPRequest::create();
+    auto request = HTTPRequest::create();
 
     // Advance a pointer through the data as needed.
     const char* pos = data;
@@ -50,14 +52,14 @@ PassRefPtr<HTTPRequest> HTTPRequest::parseHTTPRequestFromBuffer(const char* data
     // 1. Parse Method + URL.
     size_t requestLineLength = request->parseRequestLine(pos, remainingLength, failureReason);
     if (!requestLineLength)
-        return 0;
+        return nullptr;
     pos += requestLineLength;
     remainingLength -= requestLineLength;
 
     // 2. Parse HTTP Headers.
     size_t headersLength = request->parseHeaders(pos, remainingLength, failureReason);
     if (!headersLength)
-        return 0;
+        return nullptr;
     pos += headersLength;
     remainingLength -= headersLength;
 
@@ -68,7 +70,7 @@ PassRefPtr<HTTPRequest> HTTPRequest::parseHTTPRequestFromBuffer(const char* data
 
     // We should have processed the entire input.
     ASSERT(!remainingLength);
-    return request.release();
+    return WTFMove(request);
 }
 
 size_t HTTPRequest::parseRequestLine(const char* data, size_t length, String& failureReason)
@@ -126,3 +128,5 @@ HTTPRequest::~HTTPRequest()
 }
 
 } // namespace WebCore
+
+#endif // ENABLE(INSPECTOR_SERVER)

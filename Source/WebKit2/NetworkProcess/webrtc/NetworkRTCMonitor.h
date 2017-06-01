@@ -44,9 +44,11 @@ class NetworkRTCProvider;
 class NetworkRTCMonitor final : public sigslot::has_slots<> {
 public:
     explicit NetworkRTCMonitor(NetworkRTCProvider& rtcProvider) : m_rtcProvider(rtcProvider) { }
+    ~NetworkRTCMonitor();
 
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&);
     void stopUpdating();
+    bool isStarted() const { return m_isStarted; }
 
 private:
     void startUpdating();

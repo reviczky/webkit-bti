@@ -107,4 +107,53 @@ void WebsiteDataRecord::addPluginDataHostName(const String& hostName)
 }
 #endif
 
+static inline bool hostIsInDomain(StringView host, StringView domain)
+{
+    if (!host.endsWithIgnoringASCIICase(domain))
+        return false;
+    
+    ASSERT(host.length() >= domain.length());
+    unsigned suffixOffset = host.length() - domain.length();
+    return !suffixOffset || host[suffixOffset - 1] == '.';
+}
+
+bool WebsiteDataRecord::matchesTopPrivatelyControlledDomain(const String& topPrivatelyControlledDomain) const
+{
+    if (topPrivatelyControlledDomain.isEmpty())
+        return false;
+
+    if (types.contains(WebsiteDataType::Cookies)) {
+        for (const auto& hostName : cookieHostNames) {
+            if (hostIsInDomain(hostName, topPrivatelyControlledDomain))
+                return true;
+        }
+    }
+
+    for (const auto& dataRecordOriginData : origins) {
+        if (hostIsInDomain(dataRecordOriginData.securityOrigin().get().host(), topPrivatelyControlledDomain))
+            return true;
+    }
+
+    return false;
+}
+
+String WebsiteDataRecord::topPrivatelyControlledDomain()
+{
+#if ENABLE(PUBLIC_SUFFIX_LIST)
+    if (!cookieHostNames.isEmpty())
+        return WebCore::topPrivatelyControlledDomain(cookieHostNames.takeAny());
+    
+    if (!origins.isEmpty())
+        return WebCore::topPrivatelyControlledDomain(origins.takeAny().securityOrigin().get().host());
+    
+#if ENABLE(NETSCAPE_PLUGIN_API)
+    if (!pluginDataHostNames.isEmpty())
+        return WebCore::topPrivatelyControlledDomain(pluginDataHostNames.takeAny());
+#endif
+    
+#endif // ENABLE(PUBLIC_SUFFIX_LIST)
+    
+    return emptyString();
+}
+    
 }

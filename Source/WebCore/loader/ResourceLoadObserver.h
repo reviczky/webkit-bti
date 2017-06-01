@@ -57,20 +57,34 @@ public:
     WEBCORE_EXPORT void setPrevalentResource(const URL&);
     WEBCORE_EXPORT bool isPrevalentResource(const URL&);
     WEBCORE_EXPORT void clearPrevalentResource(const URL&);
+    WEBCORE_EXPORT void setGrandfathered(const URL&, bool value);
+    WEBCORE_EXPORT bool isGrandfathered(const URL&);
+    
+    WEBCORE_EXPORT void setSubframeUnderTopFrameOrigin(const URL& subframe, const URL& topFrame);
+    WEBCORE_EXPORT void setSubresourceUnderTopFrameOrigin(const URL& subresource, const URL& topFrame);
+    WEBCORE_EXPORT void setSubresourceUniqueRedirectTo(const URL& subresource, const URL& hostNameRedirectedTo);
 
     WEBCORE_EXPORT void setTimeToLiveUserInteraction(double seconds);
+    WEBCORE_EXPORT void setTimeToLiveCookiePartitionFree(double seconds);
+    WEBCORE_EXPORT void setMinimumTimeBetweeenDataRecordsRemoval(double seconds);
     WEBCORE_EXPORT void setReducedTimestampResolution(double seconds);
-
+    WEBCORE_EXPORT void setGrandfatheringTime(double seconds);
+    
     WEBCORE_EXPORT void fireDataModificationHandler();
+    WEBCORE_EXPORT void fireShouldPartitionCookiesHandler();
+    WEBCORE_EXPORT void fireShouldPartitionCookiesHandler(const Vector<String>& domainsToRemove, const Vector<String>& domainsToAdd, bool clearFirst);
 
-    WEBCORE_EXPORT RefPtr<ResourceLoadStatisticsStore> statisticsStore();
     WEBCORE_EXPORT void setStatisticsStore(Ref<ResourceLoadStatisticsStore>&&);
+    WEBCORE_EXPORT void clearInMemoryStore();
+    WEBCORE_EXPORT void clearInMemoryAndPersistentStore();
+    WEBCORE_EXPORT void clearInMemoryAndPersistentStore(std::chrono::system_clock::time_point modifiedSince);
 
     WEBCORE_EXPORT String statisticsForOrigin(const String&);
 
 private:
     bool shouldLog(Page*);
     static String primaryDomain(const URL&);
+    static String primaryDomain(const String& host);
 
     RefPtr<ResourceLoadStatisticsStore> m_store;
     HashMap<String, size_t> m_originsVisitedMap;

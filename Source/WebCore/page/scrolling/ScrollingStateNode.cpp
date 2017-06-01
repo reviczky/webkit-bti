@@ -112,30 +112,48 @@ void ScrollingStateNode::setLayer(const LayerRepresentation& layerRepresentation
     setPropertyChanged(ScrollLayer);
 }
 
-void ScrollingStateNode::dump(TextStream& ts, int indent, ScrollingStateTreeAsTextBehavior behavior) const
+void ScrollingStateNode::dumpProperties(TextStream& ts, ScrollingStateTreeAsTextBehavior behavior) const
 {
-    writeIndent(ts, indent);
-    dumpProperties(ts, indent, behavior);
-
-    if (m_children) {
-        writeIndent(ts, indent + 1);
-        ts << "(children " << children()->size() << "\n";
-        
-        for (auto& child : *m_children)
-            child->dump(ts, indent + 2, behavior);
-        writeIndent(ts, indent + 1);
-        ts << ")\n";
-    }
-
-    writeIndent(ts, indent);
-    ts << ")\n";
+    if (behavior & ScrollingStateTreeAsTextBehaviorIncludeNodeIDs)
+        ts.dumpProperty("nodeID", scrollingNodeID());
+    
+    if (behavior & ScrollingStateTreeAsTextBehaviorIncludeLayerIDs)
+        ts.dumpProperty("layerID", layer().layerID());
 }
 
-String ScrollingStateNode::scrollingStateTreeAsText() const
+void ScrollingStateNode::dump(TextStream& ts, ScrollingStateTreeAsTextBehavior behavior) const
+{
+    ts << "\n";
+    ts.writeIndent();
+    ts << "(";
+    ts.increaseIndent();
+    dumpProperties(ts, behavior);
+
+    if (m_children) {
+        ts << "\n";
+        ts.writeIndent();
+        ts << "(";
+        ts.increaseIndent();
+        ts << "children " << children()->size();
+        for (auto& child : *m_children)
+            child->dump(ts, behavior);
+        ts << "\n";
+        ts.decreaseIndent();
+        ts.writeIndent();
+        ts << ")";
+    }
+    ts << "\n";
+    ts.decreaseIndent();
+    ts.writeIndent();
+    ts << ")";
+}
+
+String ScrollingStateNode::scrollingStateTreeAsText(ScrollingStateTreeAsTextBehavior behavior) const
 {
     TextStream ts(TextStream::LineMode::MultipleLine, TextStream::Formatting::SVGStyleRect);
 
-    dump(ts, 0, ScrollingStateTreeAsTextBehaviorNormal);
+    dump(ts, behavior);
+    ts << "\n";
     return ts.release();
 }
 

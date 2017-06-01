@@ -34,7 +34,7 @@
 #include "FetchBodyConsumer.h"
 #include "FetchLoader.h"
 #include "FormData.h"
-#include "JSDOMPromise.h"
+#include "JSDOMPromiseDeferred.h"
 #include "URLSearchParams.h"
 #include <wtf/Optional.h>
 #include <wtf/Variant.h>
@@ -58,7 +58,7 @@ public:
     void text(FetchBodyOwner&, Ref<DeferredPromise>&&);
     void formData(FetchBodyOwner&, Ref<DeferredPromise>&& promise) { promise.get().reject(0); }
 
-#if ENABLE(READABLE_STREAM_API)
+#if ENABLE(STREAMS_API)
     void consumeAsStream(FetchBodyOwner&, FetchResponseSource&);
 #endif
 
@@ -80,7 +80,7 @@ public:
 
     FetchBodyConsumer& consumer() { return m_consumer; }
 
-    void consumeOnceLoadingFinished(FetchBodyConsumer::Type, Ref<DeferredPromise>&&);
+    void consumeOnceLoadingFinished(FetchBodyConsumer::Type, Ref<DeferredPromise>&&, const String&);
     void cleanConsumePromise() { m_consumePromise = nullptr; }
 
     FetchBody clone() const;

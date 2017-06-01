@@ -166,6 +166,7 @@ NetscapePluginX11::NetscapePluginX11(NetscapePlugin& plugin, Display* display)
     Visual* visual = visualInfo.get()[0].visual;
     ASSERT(visual);
 
+    m_setWindowCallbackStruct.type = NP_SETWINDOW;
     m_setWindowCallbackStruct.visual = visual;
     m_setWindowCallbackStruct.colormap = XCreateColormap(hostDisplay, rootWindowID(), visual, AllocNone);
 }
@@ -174,7 +175,6 @@ NetscapePluginX11::NetscapePluginX11(NetscapePlugin& plugin, Display* display)
 NetscapePluginX11::NetscapePluginX11(NetscapePlugin& plugin, Display* display, uint64_t windowID)
     : m_plugin(plugin)
     , m_pluginDisplay(display)
-    , m_windowID(windowID)
 {
     // It seems flash needs the socket to be in the same process,
     // I guess it uses gdk_window_lookup(), so we create a new socket here
@@ -195,6 +195,7 @@ NetscapePluginX11::NetscapePluginX11(NetscapePlugin& plugin, Display* display, u
     Display* hostDisplay = x11HostDisplay();
     m_npWindowID = gtk_socket_get_id(GTK_SOCKET(socket));
     GdkWindow* window = gtk_widget_get_window(socket);
+    m_setWindowCallbackStruct.type = NP_SETWINDOW;
     m_setWindowCallbackStruct.display = GDK_WINDOW_XDISPLAY(window);
     m_setWindowCallbackStruct.visual = GDK_VISUAL_XVISUAL(gdk_window_get_visual(window));
     m_setWindowCallbackStruct.depth = gdk_visual_get_depth(gdk_window_get_visual(window));

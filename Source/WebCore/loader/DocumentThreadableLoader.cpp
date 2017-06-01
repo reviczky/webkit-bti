@@ -52,6 +52,7 @@
 #include "RuntimeEnabledFeatures.h"
 #include "SchemeRegistry.h"
 #include "SecurityOrigin.h"
+#include "SubresourceIntegrity.h"
 #include "SubresourceLoader.h"
 #include "ThreadableLoaderClient.h"
 #include <wtf/Assertions.h>
@@ -95,6 +96,7 @@ DocumentThreadableLoader::DocumentThreadableLoader(Document& document, Threadabl
     , m_sameOriginRequest(securityOrigin().canRequest(request.url()))
     , m_simpleRequest(true)
     , m_async(blockingBehavior == LoadAsynchronously)
+    , m_delayCallbacksForIntegrityCheck(!m_options.integrity.isEmpty())
     , m_contentSecurityPolicy(WTFMove(contentSecurityPolicy))
     , m_shouldLogError(shouldLogError)
 {
@@ -296,6 +298,9 @@ void DocumentThreadableLoader::didReceiveResponse(unsigned long identifier, cons
 
     InspectorInstrumentation::didReceiveThreadableLoaderResponse(*this, identifier);
 
+    if (m_delayCallbacksForIntegrityCheck)
+        return;
+
     if (options().filteringPolicy == ResponseFilteringPolicy::Disable) {
         m_client->didReceiveResponse(identifier, response);
         return;
@@ -306,7 +311,7 @@ void DocumentThreadableLoader::didReceiveResponse(unsigned long identifier, cons
         if (tainting == ResourceResponse::Tainting::Opaque) {
             clearResource();
             if (m_client)
-                m_client->didFinishLoading(identifier, 0.0);
+                m_client->didFinishLoading(identifier);
         }
     } else {
         ASSERT(response.type() == ResourceResponse::Type::Opaqueredirect);
@@ -323,6 +328,9 @@ void DocumentThreadableLoader::dataReceived(CachedResource& resource, const char
 void DocumentThreadableLoader::didReceiveData(unsigned long, const char* data, int dataLength)
 {
     ASSERT(m_client);
+
+    if (m_delayCallbacksForIntegrityCheck)
+        return;
 
     m_client->didReceiveData(data, dataLength);
 }
@@ -355,13 +363,34 @@ void DocumentThreadableLoader::notifyFinished(CachedResource& resource)
     if (m_resource->errorOccurred())
         didFail(m_resource->identifier(), m_resource->resourceError());
     else
-        didFinishLoading(m_resource->identifier(), m_resource->loadFinishTime());
+        didFinishLoading(m_resource->identifier());
 }
 
-void DocumentThreadableLoader::didFinishLoading(unsigned long identifier, double finishTime)
+void DocumentThreadableLoader::didFinishLoading(unsigned long identifier)
 {
     ASSERT(m_client);
-    m_client->didFinishLoading(identifier, finishTime);
+
+    if (m_delayCallbacksForIntegrityCheck) {
+        if (!matchIntegrityMetadata(*m_resource, m_options.integrity)) {
+            reportIntegrityMetadataError(m_resource->url());
+            return;
+        }
+
+        auto response = m_resource->response();
+
+        if (options().filteringPolicy == ResponseFilteringPolicy::Disable) {
+            m_client->didReceiveResponse(identifier, response);
+            m_client->didReceiveData(m_resource->resourceBuffer()->data(), m_resource->resourceBuffer()->size());
+        } else {
+            ASSERT(response.type() == ResourceResponse::Type::Default);
+            
+            auto tainting = m_resource->responseTainting();
+            m_client->didReceiveResponse(identifier, ResourceResponse::filterResponse(response, tainting));
+            m_client->didReceiveData(m_resource->resourceBuffer()->data(), m_resource->resourceBuffer()->size());
+        }
+    }
+
+    m_client->didFinishLoading(identifier);
 }
 
 void DocumentThreadableLoader::didFail(unsigned long, const ResourceError& error)
@@ -407,6 +436,10 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
         ResourceLoaderOptions options = m_options;
         options.clientCredentialPolicy = m_sameOriginRequest ? ClientCredentialPolicy::MayAskClientForCredentials : ClientCredentialPolicy::CannotAskClientForCredentials;
         options.contentSecurityPolicyImposition = ContentSecurityPolicyImposition::SkipPolicyCheck;
+        
+        // If there is integrity metadata to validate, we must buffer.
+        if (!m_options.integrity.isEmpty())
+            options.dataBufferingPolicy = BufferData;
 
         request.setAllowCookies(m_options.allowCredentials == AllowStoredCredentials);
         CachedResourceRequest newRequest(WTFMove(request), options);
@@ -461,7 +494,7 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
             // We don't want XMLHttpRequest to raise an exception for file:// resources, see <rdar://problem/4962298>.
             // FIXME: XMLHttpRequest quirks should be in XMLHttpRequest code, not in DocumentThreadableLoader.cpp.
             didReceiveResponse(identifier, response, ResourceResponse::Tainting::Basic);
-            didFinishLoading(identifier, 0.0);
+            didFinishLoading(identifier);
             return;
         }
         logErrorAndFail(error);
@@ -504,7 +537,7 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
 
 #if ENABLE(WEB_TIMING)
     if (RuntimeEnabledFeatures::sharedFeatures().resourceTimingEnabled()) {
-        ResourceTiming resourceTiming = ResourceTiming::fromSynchronousLoad(requestURL, m_options.initiator, loadTiming, response.networkLoadTiming(), response, securityOrigin());
+        auto resourceTiming = ResourceTiming::fromSynchronousLoad(requestURL, m_options.initiator, loadTiming, response.deprecatedNetworkLoadMetrics(), response, securityOrigin());
         if (options().initiatorContext == InitiatorContext::Worker)
             finishedTimingForWorkerLoad(resourceTiming);
         else {
@@ -514,7 +547,7 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
     }
 #endif
 
-    didFinishLoading(identifier, 0.0);
+    didFinishLoading(identifier);
 }
 
 bool DocumentThreadableLoader::isAllowedByContentSecurityPolicy(const URL& url, ContentSecurityPolicy::RedirectResponseReceived redirectResponseReceived)
@@ -572,6 +605,11 @@ void DocumentThreadableLoader::reportContentSecurityPolicyError(const URL& url)
 void DocumentThreadableLoader::reportCrossOriginResourceSharingError(const URL& url)
 {
     logErrorAndFail(ResourceError(errorDomainWebKitInternal, 0, url, "Cross-origin redirection denied by Cross-Origin Resource Sharing policy.", ResourceError::Type::AccessControl));
+}
+
+void DocumentThreadableLoader::reportIntegrityMetadataError(const URL& url)
+{
+    logErrorAndFail(ResourceError(errorDomainWebKitInternal, 0, url, "Failed integrity metadata check.", ResourceError::Type::General));
 }
 
 void DocumentThreadableLoader::logErrorAndFail(const ResourceError& error)

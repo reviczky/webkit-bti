@@ -48,8 +48,8 @@
 
 namespace WebCore {
 
-// One day in seconds.
-static auto timestampResolution = 86400;
+// One hour in seconds.
+static auto timestampResolution = 3600;
 
 ResourceLoadObserver& ResourceLoadObserver::sharedObserver()
 {
@@ -57,15 +57,28 @@ ResourceLoadObserver& ResourceLoadObserver::sharedObserver()
     return resourceLoadObserver;
 }
 
-RefPtr<ResourceLoadStatisticsStore> ResourceLoadObserver::statisticsStore()
-{
-    ASSERT(m_store);
-    return m_store;
-}
-
 void ResourceLoadObserver::setStatisticsStore(Ref<ResourceLoadStatisticsStore>&& store)
 {
     m_store = WTFMove(store);
+}
+
+void ResourceLoadObserver::clearInMemoryStore()
+{
+    if (m_store)
+        m_store->clearInMemory();
+}
+    
+void ResourceLoadObserver::clearInMemoryAndPersistentStore()
+{
+    if (m_store)
+        m_store->clearInMemoryAndPersistent();
+}
+
+void ResourceLoadObserver::clearInMemoryAndPersistentStore(std::chrono::system_clock::time_point modifiedSince)
+{
+    // For now, be conservative and clear everything regardless of modifiedSince
+    UNUSED_PARAM(modifiedSince);
+    clearInMemoryAndPersistentStore();
 }
 
 static inline bool is3xxRedirect(const ResourceResponse& response)
@@ -288,7 +301,7 @@ void ResourceLoadObserver::logWebSocketLoading(const Frame* frame, const URL& ta
         m_store->fireDataModificationHandler();
 }
 
-static double reduceTimeResolutionToOneDay(double seconds)
+static double reduceTimeResolution(double seconds)
 {
     return std::floor(seconds / timestampResolution) * timestampResolution;
 }
@@ -304,13 +317,16 @@ void ResourceLoadObserver::logUserInteractionWithReducedTimeResolution(const Doc
     if (url.isBlankURL() || url.isEmpty())
         return;
 
-    auto& statistics = m_store->ensureResourceStatisticsForPrimaryDomain(primaryDomain(url));
-    double newTimestamp = reduceTimeResolutionToOneDay(WTF::currentTime());
+    auto primaryDomainStr = primaryDomain(url);
+
+    auto& statistics = m_store->ensureResourceStatisticsForPrimaryDomain(primaryDomainStr);
+    double newTimestamp = reduceTimeResolution(WTF::currentTime());
     if (newTimestamp == statistics.mostRecentUserInteraction)
         return;
 
     statistics.hadUserInteraction = true;
     statistics.mostRecentUserInteraction = newTimestamp;
+
     m_store->fireDataModificationHandler();
 }
 
@@ -319,9 +335,13 @@ void ResourceLoadObserver::logUserInteraction(const URL& url)
     if (url.isBlankURL() || url.isEmpty())
         return;
 
-    auto& statistics = m_store->ensureResourceStatisticsForPrimaryDomain(primaryDomain(url));
+    auto primaryDomainStr = primaryDomain(url);
+
+    auto& statistics = m_store->ensureResourceStatisticsForPrimaryDomain(primaryDomainStr);
     statistics.hadUserInteraction = true;
     statistics.mostRecentUserInteraction = WTF::currentTime();
+
+    m_store->fireShouldPartitionCookiesHandler({primaryDomainStr}, { }, false);
 }
 
 void ResourceLoadObserver::clearUserInteraction(const URL& url)
@@ -374,21 +394,103 @@ void ResourceLoadObserver::clearPrevalentResource(const URL& url)
     
     statistics.isPrevalentResource = false;
 }
+    
+void ResourceLoadObserver::setGrandfathered(const URL& url, bool value)
+{
+    if (url.isBlankURL() || url.isEmpty())
+        return;
+    
+    auto& statistics = m_store->ensureResourceStatisticsForPrimaryDomain(primaryDomain(url));
+    
+    statistics.grandfathered = value;
+}
+    
+bool ResourceLoadObserver::isGrandfathered(const URL& url)
+{
+    if (url.isBlankURL() || url.isEmpty())
+        return false;
+    
+    auto& statistics = m_store->ensureResourceStatisticsForPrimaryDomain(primaryDomain(url));
+    
+    return statistics.grandfathered;
+}
+
+void ResourceLoadObserver::setSubframeUnderTopFrameOrigin(const URL& subframe, const URL& topFrame)
+{
+    if (subframe.isBlankURL() || subframe.isEmpty() || topFrame.isBlankURL() || topFrame.isEmpty())
+        return;
+    
+    auto& statistics = m_store->ensureResourceStatisticsForPrimaryDomain(primaryDomain(subframe));
+    statistics.subframeUnderTopFrameOrigins.add(primaryDomain(topFrame));
+}
+
+void ResourceLoadObserver::setSubresourceUnderTopFrameOrigin(const URL& subresource, const URL& topFrame)
+{
+    if (subresource.isBlankURL() || subresource.isEmpty() || topFrame.isBlankURL() || topFrame.isEmpty())
+        return;
+    
+    auto& statistics = m_store->ensureResourceStatisticsForPrimaryDomain(primaryDomain(subresource));
+    statistics.subresourceUnderTopFrameOrigins.add(primaryDomain(topFrame));
+}
+
+void ResourceLoadObserver::setSubresourceUniqueRedirectTo(const URL& subresource, const URL& hostNameRedirectedTo)
+{
+    if (subresource.isBlankURL() || subresource.isEmpty() || hostNameRedirectedTo.isBlankURL() || hostNameRedirectedTo.isEmpty())
+        return;
+    
+    auto& statistics = m_store->ensureResourceStatisticsForPrimaryDomain(primaryDomain(subresource));
+    statistics.subresourceUniqueRedirectsTo.add(primaryDomain(hostNameRedirectedTo));
+}
 
 void ResourceLoadObserver::setTimeToLiveUserInteraction(double seconds)
 {
     m_store->setTimeToLiveUserInteraction(seconds);
 }
 
+void ResourceLoadObserver::setTimeToLiveCookiePartitionFree(double seconds)
+{
+    m_store->setTimeToLiveCookiePartitionFree(seconds);
+}
+
+void ResourceLoadObserver::setMinimumTimeBetweeenDataRecordsRemoval(double seconds)
+{
+    m_store->setMinimumTimeBetweeenDataRecordsRemoval(seconds);
+}
+    
+void ResourceLoadObserver::setReducedTimestampResolution(double seconds)
+{
+    if (seconds > 0)
+        timestampResolution = seconds;
+}
+
+void ResourceLoadObserver::setGrandfatheringTime(double seconds)
+{
+    m_store->setMinimumTimeBetweeenDataRecordsRemoval(seconds);
+}
+    
 void ResourceLoadObserver::fireDataModificationHandler()
 {
     m_store->fireDataModificationHandler();
 }
 
+void ResourceLoadObserver::fireShouldPartitionCookiesHandler()
+{
+    m_store->fireShouldPartitionCookiesHandler();
+}
+
+void ResourceLoadObserver::fireShouldPartitionCookiesHandler(const Vector<String>& domainsToRemove, const Vector<String>& domainsToAdd, bool clearFirst)
+{
+    m_store->fireShouldPartitionCookiesHandler(domainsToRemove, domainsToAdd, clearFirst);
+}
+
 String ResourceLoadObserver::primaryDomain(const URL& url)
 {
+    return primaryDomain(url.host());
+}
+
+String ResourceLoadObserver::primaryDomain(const String& host)
+{
     String primaryDomain;
-    String host = url.host();
     if (host.isNull() || host.isEmpty())
         primaryDomain = "nullOrigin";
 #if ENABLE(PUBLIC_SUFFIX_LIST)

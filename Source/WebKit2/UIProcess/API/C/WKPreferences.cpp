@@ -42,19 +42,19 @@ WKTypeID WKPreferencesGetTypeID()
 WKPreferencesRef WKPreferencesCreate()
 {
     auto preferences = WebPreferences::createWithLegacyDefaults(String(), "WebKit2.", "WebKit2.");
-    return toAPI(preferences.leakRef());
+    return toAPI(&preferences.leakRef());
 }
 
 WKPreferencesRef WKPreferencesCreateWithIdentifier(WKStringRef identifierRef)
 {
     auto preferences = WebPreferences::createWithLegacyDefaults(toWTFString(identifierRef), "WebKit2.", "WebKit2.");
-    return toAPI(preferences.leakRef());
+    return toAPI(&preferences.leakRef());
 }
 
 WKPreferencesRef WKPreferencesCreateCopy(WKPreferencesRef preferencesRef)
 {
     auto preferences = toImpl(preferencesRef)->copy();
-    return toAPI(preferences.leakRef());
+    return toAPI(&preferences.leakRef());
 }
 
 void WKPreferencesEnableAllExperimentalFeatures(WKPreferencesRef preferencesRef)
@@ -381,6 +381,16 @@ void WKPreferencesSetFontSmoothingLevel(WKPreferencesRef preferencesRef, WKFontS
 WKFontSmoothingLevel WKPreferencesGetFontSmoothingLevel(WKPreferencesRef preferencesRef)
 {
     return toAPI(static_cast<FontSmoothingLevel>(toImpl(preferencesRef)->fontSmoothingLevel()));
+}
+
+void WKPreferencesSetSubpixelAntialiasedLayerTextEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setSubpixelAntialiasedLayerTextEnabled(flag);
+}
+
+bool WKPreferencesGetSubpixelAntialiasedLayerTextEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->subpixelAntialiasedLayerTextEnabled();
 }
 
 void WKPreferencesSetAcceleratedDrawingEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -830,6 +840,26 @@ void WKPreferencesSetModernMediaControlsEnabled(WKPreferencesRef preferencesRef,
 bool WKPreferencesGetModernMediaControlsEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->modernMediaControlsEnabled();
+}
+
+void WKPreferencesSetCredentialManagementEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setCredentialManagementEnabled(flag);
+}
+
+bool WKPreferencesGetCredentialManagementEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->credentialManagementEnabled();
+}
+
+void WKPreferencesSetInvisibleMediaAutoplayPermitted(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setInvisibleAutoplayNotPermitted(!flag);
+}
+
+bool WKPreferencesGetInvisibleMediaAutoplayPermitted(WKPreferencesRef preferencesRef)
+{
+    return !toImpl(preferencesRef)->invisibleAutoplayNotPermitted();
 }
 
 void WKPreferencesSetShowsToolTipOverTruncatedText(WKPreferencesRef preferencesRef, bool flag)
@@ -1311,6 +1341,16 @@ bool WKPreferencesGetUseGiantTiles(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->useGiantTiles();
 }
 
+void WKPreferencesSetMediaDevicesEnabled(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setMediaDevicesEnabled(enabled);
+}
+
+bool WKPreferencesGetMediaDevicesEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->mediaDevicesEnabled();
+}
+
 void WKPreferencesSetMediaStreamEnabled(WKPreferencesRef preferencesRef, bool enabled)
 {
     toImpl(preferencesRef)->setMediaStreamEnabled(enabled);
@@ -1329,6 +1369,16 @@ void WKPreferencesSetPeerConnectionEnabled(WKPreferencesRef preferencesRef, bool
 bool WKPreferencesGetPeerConnectionEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->peerConnectionEnabled();
+}
+
+void WKPreferencesSetWebRTCLegacyAPIEnabled(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setWebRTCLegacyAPIEnabled(enabled);
+}
+
+bool WKPreferencesGetWebRTCLegacyAPIEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->webRTCLegacyAPIEnabled();
 }
 
 void WKPreferencesSetSpatialNavigationEnabled(WKPreferencesRef preferencesRef, bool enabled)
@@ -1531,6 +1581,26 @@ bool WKPreferencesGetMockCaptureDevicesEnabled(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->mockCaptureDevicesEnabled();
 }
 
+void WKPreferencesSetICECandidateFilteringEnabled(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setICECandidateFilteringEnabled(enabled);
+}
+
+bool WKPreferencesGetICECandidateFilteringEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->iceCandidateFilteringEnabled();
+}
+
+void WKPreferencesSetEnumeratingAllNetworkInterfacesEnabled(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setEnumeratingAllNetworkInterfacesEnabled(enabled);
+}
+
+bool WKPreferencesGetEnumeratingAllNetworkInterfacesEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->enumeratingAllNetworkInterfacesEnabled();
+}
+
 void WKPreferencesSetMediaCaptureRequiresSecureConnection(WKPreferencesRef preferencesRef, bool enabled)
 {
     toImpl(preferencesRef)->setMediaCaptureRequiresSecureConnection(enabled);
@@ -1539,6 +1609,16 @@ void WKPreferencesSetMediaCaptureRequiresSecureConnection(WKPreferencesRef prefe
 bool WKPreferencesGetMediaCaptureRequiresSecureConnection(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->mediaCaptureRequiresSecureConnection();
+}
+
+void WKPreferencesSetUseAVFoundationAudioCapture(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setUseAVFoundationAudioCapture(enabled);
+}
+
+bool WKPreferencesGetUseAVFoundationAudioCapture(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->useAVFoundationAudioCapture();
 }
 
 void WKPreferencesSetFetchAPIEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -1651,6 +1731,26 @@ bool WKPreferencesGetLinkPreloadEnabled(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->linkPreloadEnabled();
 }
 
+void WKPreferencesSetLargeImageAsyncDecodingEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setLargeImageAsyncDecodingEnabled(flag);
+}
+
+bool WKPreferencesGetLargeImageAsyncDecodingEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->largeImageAsyncDecodingEnabled();
+}
+
+void WKPreferencesSetAnimatedImageAsyncDecodingEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setAnimatedImageAsyncDecodingEnabled(flag);
+}
+
+bool WKPreferencesGetAnimatedImageAsyncDecodingEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->animatedImageAsyncDecodingEnabled();
+}
+
 void WKPreferencesSetShouldSuppressKeyboardInputDuringProvisionalNavigation(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setShouldSuppressKeyboardInputDuringProvisionalNavigation(flag);
@@ -1659,4 +1759,14 @@ void WKPreferencesSetShouldSuppressKeyboardInputDuringProvisionalNavigation(WKPr
 bool WKPreferencesGetShouldSuppressKeyboardInputDuringProvisionalNavigation(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->shouldSuppressKeyboardInputDuringProvisionalNavigation();
+}
+
+void WKPreferencesSetMediaUserGestureInheritsFromDocument(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setMediaUserGestureInheritsFromDocument(flag);
+}
+
+bool WKPreferencesGetMediaUserGestureInheritsFromDocument(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->mediaUserGestureInheritsFromDocument();
 }

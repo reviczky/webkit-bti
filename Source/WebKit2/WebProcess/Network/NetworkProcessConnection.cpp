@@ -27,6 +27,7 @@
 #include "NetworkProcessConnection.h"
 
 #include "DataReference.h"
+#include "LibWebRTCNetwork.h"
 #include "NetworkConnectionToWebProcessMessages.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebLoaderStrategy.h"
@@ -36,6 +37,8 @@
 #include "WebRTCResolverMessages.h"
 #include "WebRTCSocketMessages.h"
 #include "WebResourceLoaderMessages.h"
+#include "WebSocketStream.h"
+#include "WebSocketStreamMessages.h"
 #include <WebCore/CachedResource.h>
 #include <WebCore/MemoryCache.h>
 #include <WebCore/SessionID.h>
@@ -60,6 +63,11 @@ void NetworkProcessConnection::didReceiveMessage(IPC::Connection& connection, IP
     if (decoder.messageReceiverName() == Messages::WebResourceLoader::messageReceiverName()) {
         if (auto* webResourceLoader = WebProcess::singleton().webLoaderStrategy().webResourceLoaderForIdentifier(decoder.destinationID()))
             webResourceLoader->didReceiveWebResourceLoaderMessage(connection, decoder);
+        return;
+    }
+    if (decoder.messageReceiverName() == Messages::WebSocketStream::messageReceiverName()) {
+        if (auto* stream = WebSocketStream::streamWithIdentifier(decoder.destinationID()))
+            stream->didReceiveMessage(connection, decoder);
         return;
     }
 

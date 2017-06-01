@@ -127,6 +127,8 @@ typedef uint32_t WKMediaMutedState;
 WK_EXPORT void WKPageSetMuted(WKPageRef page, WKMediaMutedState muted);
 
 WK_EXPORT void WKPageClearUserMediaState(WKPageRef page);
+WK_EXPORT void WKPageSetMediaCaptureEnabled(WKPageRef page, bool enabled);
+WK_EXPORT bool WKPageGetMediaCaptureEnabled(WKPageRef page);
 
 WK_EXPORT void WKPageDidAllowPointerLock(WKPageRef page);
 WK_EXPORT void WKPageDidDenyPointerLock(WKPageRef page);
@@ -137,6 +139,8 @@ enum {
     kWKMediaIsPlayingVideo = 1 << 1,
     kWKMediaHasActiveAudioCaptureDevice = 1 << 2,
     kWKMediaHasActiveVideoCaptureDevice = 1 << 3,
+    kWKMediaHasMutedAudioCaptureDevice = 1 << 4,
+    kWKMediaHasMutedVideoCaptureDevice = 1 << 5,
 };
 typedef uint32_t WKMediaState;
 

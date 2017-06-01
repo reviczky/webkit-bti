@@ -50,6 +50,14 @@
 #define COMPILER_HAS_CLANG_FEATURE(x) 0
 #endif
 
+/* COMPILER_HAS_CLANG_DECLSPEC() - whether the compiler supports a Microsoft style __declspec attribute. */
+/* https://clang.llvm.org/docs/LanguageExtensions.html#has-declspec-attribute */
+#ifdef __has_declspec_attribute
+#define COMPILER_HAS_CLANG_DECLSPEC(x) __has_declspec_attribute(x)
+#else
+#define COMPILER_HAS_CLANG_DECLSPEC(x) 0
+#endif
+
 /* ==== COMPILER() - primary detection of the compiler being used to build the project, in alphabetical order ==== */
 
 /* COMPILER(CLANG) - Clang  */
@@ -59,7 +67,6 @@
 #define WTF_COMPILER_SUPPORTS_BLOCKS COMPILER_HAS_CLANG_FEATURE(blocks)
 #define WTF_COMPILER_SUPPORTS_C_STATIC_ASSERT COMPILER_HAS_CLANG_FEATURE(c_static_assert)
 #define WTF_COMPILER_SUPPORTS_CXX_REFERENCE_QUALIFIED_FUNCTIONS COMPILER_HAS_CLANG_FEATURE(cxx_reference_qualified_functions)
-#define WTF_COMPILER_SUPPORTS_CXX_USER_LITERALS COMPILER_HAS_CLANG_FEATURE(cxx_user_literals)
 #define WTF_COMPILER_SUPPORTS_FALLTHROUGH_WARNINGS COMPILER_HAS_CLANG_FEATURE(cxx_attributes) && __has_warning("-Wimplicit-fallthrough")
 #define WTF_COMPILER_SUPPORTS_CXX_EXCEPTIONS COMPILER_HAS_CLANG_FEATURE(cxx_exceptions)
 #define WTF_COMPILER_SUPPORTS_BUILTIN_IS_TRIVIALLY_COPYABLE COMPILER_HAS_CLANG_FEATURE(is_trivially_copyable)
@@ -83,7 +90,6 @@
 /* Note: This section must come after the Clang section since we check !COMPILER(CLANG) here. */
 #if COMPILER(GCC_OR_CLANG) && !COMPILER(CLANG)
 #define WTF_COMPILER_GCC 1
-#define WTF_COMPILER_SUPPORTS_CXX_USER_LITERALS 1
 #define WTF_COMPILER_SUPPORTS_CXX_REFERENCE_QUALIFIED_FUNCTIONS 1
 
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
@@ -280,6 +286,16 @@
 
 #if !defined(PURE_FUNCTION)
 #define PURE_FUNCTION
+#endif
+
+/* UNUSED_FUNCTION */
+
+#if !defined(UNUSED_FUNCTION) && COMPILER(GCC_OR_CLANG)
+#define UNUSED_FUNCTION __attribute__((unused))
+#endif
+
+#if !defined(UNUSED_FUNCTION)
+#define UNUSED_FUNCTION
 #endif
 
 /* REFERENCED_FROM_ASM */

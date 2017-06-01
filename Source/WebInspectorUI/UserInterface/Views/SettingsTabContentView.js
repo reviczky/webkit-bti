@@ -35,9 +35,8 @@ WebInspector.SettingsTabContentView = class SettingsTabContentView extends WebIn
         // Ensures that the Settings tab is displayable from a pinned tab bar item.
         tabBarItem.representedObject = this;
 
-        let boundNeedsLayout = this.needsLayout.bind(this, WebInspector.View.LayoutReason.Dirty);
-        WebInspector.notifications.addEventListener(WebInspector.Notification.DebugUIEnabledDidChange, boundNeedsLayout);
-        WebInspector.settings.zoomFactor.addEventListener(WebInspector.Setting.Event.Changed, boundNeedsLayout);
+        this._selectedSettingsView = null;
+        this._settingsViews = [];
     }
 
     static tabInfo()
@@ -60,161 +59,143 @@ WebInspector.SettingsTabContentView = class SettingsTabContentView extends WebIn
 
     // Public
 
-    get type()
+    get type() { return WebInspector.SettingsTabContentView.Type; }
+
+    get selectedSettingsView()
     {
-        return WebInspector.SettingsTabContentView.Type;
+        return this._selectedSettingsView;
     }
 
-    layout()
+    set selectedSettingsView(settingsView)
     {
-        this.element.removeChildren();
+        if (this._selectedSettingsView === settingsView)
+            return;
 
-        let header = this.element.createChild("div", "header");
-        header.textContent = WebInspector.UIString("Settings");
+        if (this._selectedSettingsView)
+            this.replaceSubview(this._selectedSettingsView, settingsView);
+        else
+            this.addSubview(settingsView);
 
-        let createContainer = (title, createValueController) => {
-            let container = this.element.createChild("div", "setting-container");
+        this._selectedSettingsView = settingsView;
+        this._selectedSettingsView.updateLayout();
 
-            let titleContainer = container.createChild("div", "setting-name");
-            titleContainer.textContent = title;
+        let navigationItem = this._navigationBar.findNavigationItem(settingsView.identifier);
+        console.assert(navigationItem, "Missing navigation item for settings view.", settingsView)
+        if (!navigationItem)
+            return;
 
-            let valueControllerContainer = container.createChild("div", "setting-value-controller");
-            let labelElement = valueControllerContainer.createChild("label");
-            if (typeof createValueController === "function")
-                createValueController(labelElement);
-        };
+        this._navigationBar.selectedNavigationItem = navigationItem;
+    }
 
-        let createCheckbox = (setting) => {
-            let checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.checked = setting.value;
-            checkbox.addEventListener("change", (event) => {
-                setting.value = checkbox.checked;
-            });
-            return checkbox;
-        };
-
-        createContainer(WebInspector.UIString("Prefer indent using:"), (valueControllerContainer) => {
-            let select = valueControllerContainer.createChild("select");
-            select.addEventListener("change", (event) => {
-                WebInspector.settings.indentWithTabs.value = select.value === "tabs";
-            });
-
-            let tabsOption = select.createChild("option");
-            tabsOption.value = "tabs";
-            tabsOption.textContent = WebInspector.UIString("Tabs");
-            tabsOption.selected = WebInspector.settings.indentWithTabs.value;
-
-            let spacesOption = select.createChild("option");
-            spacesOption.value = "spaces";
-            spacesOption.textContent = WebInspector.UIString("Spaces");
-            spacesOption.selected = !WebInspector.settings.indentWithTabs.value;
-        });
-
-        createContainer(WebInspector.UIString("Tab width:"), (valueControllerContainer) => {
-            let input = valueControllerContainer.createChild("input");
-            input.type = "number";
-            input.min = 1;
-            input.value = WebInspector.settings.tabSize.value;
-            input.addEventListener("change", (event) => {
-                WebInspector.settings.tabSize.value = parseInt(input.value) || 4;
-            });
-
-            valueControllerContainer.append(WebInspector.UIString("spaces"));
-        });
-
-        createContainer(WebInspector.UIString("Indent width:"), (valueControllerContainer) => {
-            let input = valueControllerContainer.createChild("input");
-            input.type = "number";
-            input.min = 1;
-            input.value = WebInspector.settings.indentUnit.value;
-            input.addEventListener("change", (event) => {
-                WebInspector.settings.indentUnit.value = parseInt(input.value) || 4;
-            });
-
-            valueControllerContainer.append(WebInspector.UIString("spaces"));
-        });
-
-        createContainer(WebInspector.UIString("Line wrapping:"), (valueControllerContainer) => {
-            let checkbox = createCheckbox(WebInspector.settings.enableLineWrapping);
-            valueControllerContainer.appendChild(checkbox);
-
-            valueControllerContainer.append(WebInspector.UIString("Wrap lines to editor width"));
-        });
-
-        createContainer(WebInspector.UIString("Whitespace Characters:"), (valueControllerContainer) => {
-            let checkbox = createCheckbox(WebInspector.settings.showWhitespaceCharacters);
-            valueControllerContainer.appendChild(checkbox);
-
-            valueControllerContainer.append(WebInspector.UIString("Visible"));
-        });
-
-        createContainer(WebInspector.UIString("Invalid Characters:"), (valueControllerContainer) => {
-            let checkbox = createCheckbox(WebInspector.settings.showInvalidCharacters);
-            valueControllerContainer.appendChild(checkbox);
-
-            valueControllerContainer.append(WebInspector.UIString("Visible"));
-        });
-
-        this.element.appendChild(document.createElement("br"));
-
-        createContainer(WebInspector.UIString("Network:"), (valueControllerContainer) => {
-            let checkbox = createCheckbox(WebInspector.settings.clearNetworkOnNavigate);
-            valueControllerContainer.appendChild(checkbox);
-
-            valueControllerContainer.append(WebInspector.UIString("Clear when page navigates"));
-        });
-
-        this.element.appendChild(document.createElement("br"));
-
-        createContainer(WebInspector.UIString("Console:"), (valueControllerContainer) => {
-            let checkbox = createCheckbox(WebInspector.settings.clearLogOnNavigate);
-            valueControllerContainer.appendChild(checkbox);
-
-            valueControllerContainer.append(WebInspector.UIString("Clear when page navigates"));
-        });
-
-        this.element.appendChild(document.createElement("br"));
-
-        createContainer(WebInspector.UIString("Zoom:"), (valueControllerContainer) => {
-            let select = valueControllerContainer.createChild("select");
-            select.addEventListener("change", (event) => {
-                WebInspector.setZoomFactor(select.value);
-            });
-
-            let currentZoom = WebInspector.getZoomFactor().maxDecimals(1);
-            [0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4].forEach((level) => {
-                let option = select.createChild("option");
-                option.value = level;
-                option.textContent = Number.percentageString(level, 0);
-                option.selected = currentZoom === level;
-            });
-        });
-
-        if (WebInspector.isDebugUIEnabled()) {
-            this.element.appendChild(document.createElement("br"));
-
-            createContainer(WebInspector.unlocalizedString("Layout Direction:"), (valueControllerContainer) => {
-                let selectElement = valueControllerContainer.appendChild(document.createElement("select"));
-                selectElement.addEventListener("change", (event) => {
-                    WebInspector.setLayoutDirection(selectElement.value);
-                });
-
-                let currentLayoutDirection = WebInspector.settings.layoutDirection.value;
-                let options = new Map([
-                    [WebInspector.LayoutDirection.System, WebInspector.unlocalizedString("System Default")],
-                    [WebInspector.LayoutDirection.LTR, WebInspector.unlocalizedString("Left to Right (LTR)")],
-                    [WebInspector.LayoutDirection.RTL, WebInspector.unlocalizedString("Right to Left (RTL)")],
-                ]);
-
-                for (let [key, value] of options) {
-                    let optionElement = selectElement.appendChild(document.createElement("option"));
-                    optionElement.value = key;
-                    optionElement.textContent = value;
-                    optionElement.selected = currentLayoutDirection === key;
-                }
-            });
+    addSettingsView(settingsView)
+    {
+        if (this._settingsViews.includes(settingsView)) {
+            console.assert(false, "SettingsView already exists.", settingsView);
+            return;
         }
+
+        this._settingsViews.push(settingsView);
+        this._navigationBar.addNavigationItem(new WebInspector.RadioButtonNavigationItem(settingsView.identifier, settingsView.displayName));
+
+        this._updateNavigationBarVisibility();
+    }
+
+    setSettingsViewVisible(settingsView, visible)
+    {
+        let navigationItem = this._navigationBar.findNavigationItem(settingsView.identifier);
+        console.assert(navigationItem, "Missing NavigationItem for identifier: " + settingsView.identifier);
+        if (!navigationItem)
+            return;
+
+        if (navigationItem.hidden === !visible)
+            return;
+
+        navigationItem.hidden = !visible;
+        settingsView.element.classList.toggle("hidden", !visible);
+
+        this._updateNavigationBarVisibility();
+
+        if (!this.selectedSettingsView) {
+            if (visible)
+                this.selectedSettingsView = settingsView;
+            return;
+        }
+
+        if (this.selectedSettingsView !== settingsView)
+            return;
+
+        let index = this._settingsViews.indexOf(settingsView);
+        console.assert(index !== -1, "SettingsView not found.", settingsView)
+        if (index === -1)
+            return;
+
+        let previousIndex = index;
+        while (--previousIndex >= 0) {
+            let previousNavigationItem = this._navigationBar.navigationItems[previousIndex];
+            console.assert(previousNavigationItem);
+            if (!previousNavigationItem || previousNavigationItem.hidden)
+                continue;
+
+            this.selectedSettingsView = this._settingsViews[previousIndex];
+            return;
+        }
+
+        let nextIndex = index;
+        while (++nextIndex < this._settingsViews.length) {
+            let nextNavigationItem = this._navigationBar.navigationItems[nextIndex];
+            console.assert(nextNavigationItem);
+            if (!nextNavigationItem || nextNavigationItem.hidden)
+                continue;
+
+            this.selectedSettingsView = this._settingsViews[nextIndex];
+            return;
+        }
+    }
+
+    // Protected
+
+    initialLayout()
+    {
+        this._navigationBar = new WebInspector.NavigationBar;
+        this._navigationBar.addEventListener(WebInspector.NavigationBar.Event.NavigationItemSelected, this._navigationItemSelected, this);
+
+        this.addSubview(this._navigationBar);
+
+        let generalSettingsView = new WebInspector.GeneralSettingsView;
+        this.addSettingsView(generalSettingsView);
+
+        this.selectedSettingsView = generalSettingsView;
+
+        WebInspector.notifications.addEventListener(WebInspector.Notification.DebugUIEnabledDidChange, this.needsLayout.bind(this, WebInspector.View.LayoutReason.Dirty));
+    }
+
+    // Private
+
+    _updateNavigationBarVisibility()
+    {
+        let visibleItems = 0;
+        for (let item of this._navigationBar.navigationItems) {
+            if (!item.hidden && ++visibleItems > 1) {
+                this._navigationBar.element.classList.remove("invisible");
+                return;
+            }
+        }
+
+        this._navigationBar.element.classList.add("invisible");
+    }
+
+    _navigationItemSelected(event)
+    {
+        let navigationItem = event.target.selectedNavigationItem;
+        if (!navigationItem)
+            return;
+
+        let settingsView = this._settingsViews.find((view) => view.identifier === navigationItem.identifier);
+        console.assert(settingsView, "Missing SettingsView for identifier " + navigationItem.identifier);
+        if (!settingsView)
+            return;
+
+        this.selectedSettingsView = settingsView;
     }
 };
 

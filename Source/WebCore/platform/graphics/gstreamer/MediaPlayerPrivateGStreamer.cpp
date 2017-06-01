@@ -110,25 +110,9 @@ void MediaPlayerPrivateGStreamer::registerMediaEngine(MediaEngineRegistrar regis
             getSupportedTypes, supportsType, nullptr, nullptr, nullptr, supportsKeySystem);
 }
 
-bool initializeGStreamerAndRegisterWebKitElements()
-{
-    if (!initializeGStreamer())
-        return false;
-
-    registerWebKitGStreamerElements();
-
-    GRefPtr<GstElementFactory> srcFactory = adoptGRef(gst_element_factory_find("webkitwebsrc"));
-    if (!srcFactory) {
-        GST_DEBUG_CATEGORY_INIT(webkit_media_player_debug, "webkitmediaplayer", 0, "WebKit media player");
-        gst_element_register(nullptr, "webkitwebsrc", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_WEB_SRC);
-    }
-
-    return true;
-}
-
 bool MediaPlayerPrivateGStreamer::isAvailable()
 {
-    if (!initializeGStreamerAndRegisterWebKitElements())
+    if (!MediaPlayerPrivateGStreamerBase::initializeGStreamerAndRegisterWebKitElements())
         return false;
 
     GRefPtr<GstElementFactory> factory = adoptGRef(gst_element_factory_find("playbin"));
@@ -227,7 +211,7 @@ MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
 
 void MediaPlayerPrivateGStreamer::load(const String& urlString)
 {
-    if (!initializeGStreamerAndRegisterWebKitElements())
+    if (!MediaPlayerPrivateGStreamerBase::initializeGStreamerAndRegisterWebKitElements())
         return;
 
     URL url(URL(), urlString);
@@ -370,7 +354,7 @@ bool MediaPlayerPrivateGStreamer::changePipelineState(GstState newState)
     if (newState == GST_STATE_READY && !m_readyTimerHandler.isActive()) {
         // Max interval in seconds to stay in the READY state on manual
         // state change requests.
-        static const double readyStateTimerDelay = 60;
+        static const Seconds readyStateTimerDelay { 1_min };
         m_readyTimerHandler.startOneShot(readyStateTimerDelay);
     } else if (newState != GST_STATE_READY)
         m_readyTimerHandler.stop();
@@ -1177,7 +1161,7 @@ void MediaPlayerPrivateGStreamer::processTableOfContentsEntry(GstTocEntry* entry
 {
     ASSERT(entry);
 
-    RefPtr<GenericCueData> cue = GenericCueData::create();
+    auto cue = GenericCueData::create();
 
     gint64 start = -1, stop = -1;
     gst_toc_entry_get_start_stop_times(entry, &start, &stop);
@@ -1196,7 +1180,7 @@ void MediaPlayerPrivateGStreamer::processTableOfContentsEntry(GstTocEntry* entry
         }
     }
 
-    m_chaptersTrack->addGenericCue(cue.release());
+    m_chaptersTrack->addGenericCue(cue);
 
     for (GList* i = gst_toc_entry_get_sub_entries(entry); i; i = i->next)
         processTableOfContentsEntry(static_cast<GstTocEntry*>(i->data));
@@ -1776,7 +1760,7 @@ static HashSet<String, ASCIICaseInsensitiveHash>& mimeTypeSet()
 {
     static NeverDestroyed<HashSet<String, ASCIICaseInsensitiveHash>> mimeTypes = []()
     {
-        initializeGStreamerAndRegisterWebKitElements();
+        MediaPlayerPrivateGStreamerBase::initializeGStreamerAndRegisterWebKitElements();
         HashSet<String, ASCIICaseInsensitiveHash> set;
 
         GList* audioDecoderFactories = gst_element_factory_list_get_elements(GST_ELEMENT_FACTORY_TYPE_DECODER | GST_ELEMENT_FACTORY_TYPE_MEDIA_AUDIO, GST_RANK_MARGINAL);
@@ -1946,7 +1930,7 @@ void MediaPlayerPrivateGStreamer::setDownloadBuffering()
     if (shouldDownload) {
         GST_DEBUG("Enabling on-disk buffering");
         g_object_set(m_pipeline.get(), "flags", flags | flagDownload, nullptr);
-        m_fillTimer.startRepeating(0.2);
+        m_fillTimer.startRepeating(200_ms);
     } else {
         GST_DEBUG("Disabling on-disk buffering");
         g_object_set(m_pipeline.get(), "flags", flags & ~flagDownload, nullptr);

@@ -49,7 +49,7 @@
 namespace JSC { namespace DFG {
 
 JITCompiler::JITCompiler(Graph& dfg)
-    : CCallHelpers(&dfg.m_vm, dfg.m_codeBlock)
+    : CCallHelpers(dfg.m_codeBlock)
     , m_graph(dfg)
     , m_jitCode(adoptRef(new JITCode()))
     , m_blockHeads(dfg.numBlocks())
@@ -139,7 +139,7 @@ void JITCompiler::compileExceptionHandlers()
     if (!m_exceptionChecksWithCallFrameRollback.empty()) {
         m_exceptionChecksWithCallFrameRollback.link(this);
 
-        copyCalleeSavesToVMEntryFrameCalleeSavesBuffer();
+        copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(*vm());
 
         // lookupExceptionHandlerFromCallerFrame is passed two arguments, the VM and the exec (the CallFrame*).
         move(TrustedImmPtr(vm()), GPRInfo::argumentGPR0);
@@ -153,13 +153,13 @@ void JITCompiler::compileExceptionHandlers()
 #endif
         m_calls.append(CallLinkRecord(call(), lookupExceptionHandlerFromCallerFrame));
 
-        jumpToExceptionHandler();
+        jumpToExceptionHandler(*vm());
     }
 
     if (!m_exceptionChecks.empty()) {
         m_exceptionChecks.link(this);
 
-        copyCalleeSavesToVMEntryFrameCalleeSavesBuffer();
+        copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(*vm());
 
         // lookupExceptionHandler is passed two arguments, the VM and the exec (the CallFrame*).
         move(TrustedImmPtr(vm()), GPRInfo::argumentGPR0);
@@ -172,7 +172,7 @@ void JITCompiler::compileExceptionHandlers()
 #endif
         m_calls.append(CallLinkRecord(call(), lookupExceptionHandler));
 
-        jumpToExceptionHandler();
+        jumpToExceptionHandler(*vm());
     }
 }
 
@@ -253,6 +253,8 @@ void JITCompiler::link(LinkBuffer& linkBuffer)
 
     for (unsigned i = m_getByIds.size(); i--;)
         m_getByIds[i].finalize(linkBuffer);
+    for (unsigned i = m_getByIdsWithThis.size(); i--;)
+        m_getByIdsWithThis[i].finalize(linkBuffer);
     for (unsigned i = m_putByIds.size(); i--;)
         m_putByIds[i].finalize(linkBuffer);
 
@@ -276,7 +278,7 @@ void JITCompiler::link(LinkBuffer& linkBuffer)
     
     for (auto& record : m_jsCalls) {
         CallLinkInfo& info = *record.info;
-        linkBuffer.link(record.slowCall, FunctionPtr(m_vm->getCTIStub(linkCallThunkGenerator).code().executableAddress()));
+        linkBuffer.link(record.slowCall, FunctionPtr(vm()->getCTIStub(linkCallThunkGenerator).code().executableAddress()));
         info.setCallLocations(
             CodeLocationLabel(linkBuffer.locationOfNearCall(record.slowCall)),
             CodeLocationLabel(linkBuffer.locationOf(record.targetToCheck)),
@@ -359,7 +361,7 @@ void JITCompiler::compile()
 
     // Plant a check that sufficient space is available in the JSStack.
     addPtr(TrustedImm32(virtualRegisterForLocal(m_graph.requiredRegisterCountForExecutionAndExit() - 1).offset() * sizeof(Register)), GPRInfo::callFrameRegister, GPRInfo::regT1);
-    Jump stackOverflow = branchPtr(Above, AbsoluteAddress(m_vm->addressOfSoftStackLimit()), GPRInfo::regT1);
+    Jump stackOverflow = branchPtr(Above, AbsoluteAddress(vm()->addressOfSoftStackLimit()), GPRInfo::regT1);
 
     addPtr(TrustedImm32(m_graph.stackPointerOffset() * sizeof(Register)), GPRInfo::callFrameRegister, stackPointerRegister);
     checkStackPointerAlignment();
@@ -392,7 +394,7 @@ void JITCompiler::compile()
     m_speculative->createOSREntries();
     setEndOfCode();
 
-    auto linkBuffer = std::make_unique<LinkBuffer>(*m_vm, *this, m_codeBlock, JITCompilationCanFail);
+    auto linkBuffer = std::make_unique<LinkBuffer>(*this, m_codeBlock, JITCompilationCanFail);
     if (linkBuffer->didFailToAllocate()) {
         m_graph.m_plan.finalizer = std::make_unique<FailedFinalizer>(m_graph.m_plan);
         return;
@@ -422,7 +424,7 @@ void JITCompiler::compileFunction()
     Label fromArityCheck(this);
     // Plant a check that sufficient space is available in the JSStack.
     addPtr(TrustedImm32(virtualRegisterForLocal(m_graph.requiredRegisterCountForExecutionAndExit() - 1).offset() * sizeof(Register)), GPRInfo::callFrameRegister, GPRInfo::regT1);
-    Jump stackOverflow = branchPtr(Above, AbsoluteAddress(m_vm->addressOfSoftStackLimit()), GPRInfo::regT1);
+    Jump stackOverflow = branchPtr(Above, AbsoluteAddress(vm()->addressOfSoftStackLimit()), GPRInfo::regT1);
 
     // Move the stack pointer down to accommodate locals
     addPtr(TrustedImm32(m_graph.stackPointerOffset() * sizeof(Register)), GPRInfo::callFrameRegister, stackPointerRegister);
@@ -486,7 +488,7 @@ void JITCompiler::compileFunction()
     setEndOfCode();
 
     // === Link ===
-    auto linkBuffer = std::make_unique<LinkBuffer>(*m_vm, *this, m_codeBlock, JITCompilationCanFail);
+    auto linkBuffer = std::make_unique<LinkBuffer>(*this, m_codeBlock, JITCompilationCanFail);
     if (linkBuffer->didFailToAllocate()) {
         m_graph.m_plan.finalizer = std::make_unique<FailedFinalizer>(m_graph.m_plan);
         return;
@@ -497,7 +499,7 @@ void JITCompiler::compileFunction()
     m_jitCode->shrinkToFit();
     codeBlock()->shrinkToFit(CodeBlock::LateShrink);
     
-    linkBuffer->link(m_callArityFixup, FunctionPtr((m_vm->getCTIStub(arityFixupGenerator)).code().executableAddress()));
+    linkBuffer->link(m_callArityFixup, FunctionPtr((vm()->getCTIStub(arityFixupGenerator)).code().executableAddress()));
     
     disassemble(*linkBuffer);
 
@@ -622,11 +624,11 @@ void JITCompiler::exceptionCheck()
     bool willCatchException = m_graph.willCatchExceptionInMachineFrame(m_speculative->m_currentNode->origin.forExit, opCatchOrigin, exceptionHandler); 
     if (willCatchException) {
         unsigned streamIndex = m_speculative->m_outOfLineStreamIndex ? *m_speculative->m_outOfLineStreamIndex : m_speculative->m_stream->size();
-        MacroAssembler::Jump hadException = emitNonPatchableExceptionCheck();
+        MacroAssembler::Jump hadException = emitNonPatchableExceptionCheck(*vm());
         // We assume here that this is called after callOpeartion()/appendCall() is called.
         appendExceptionHandlingOSRExit(ExceptionCheck, streamIndex, opCatchOrigin, exceptionHandler, m_jitCode->common.lastCallSite(), hadException);
     } else
-        m_exceptionChecks.append(emitExceptionCheck());
+        m_exceptionChecks.append(emitExceptionCheck(*vm()));
 }
 
 CallSiteIndex JITCompiler::recordCallSiteAndGenerateExceptionHandlingOSRExitIfNeeded(const CodeOrigin& callSiteCodeOrigin, unsigned eventStreamIndex)

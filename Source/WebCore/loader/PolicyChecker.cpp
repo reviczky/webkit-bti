@@ -125,7 +125,7 @@ void PolicyChecker::checkNavigationPolicy(const ResourceRequest& request, bool d
 
 #if USE(QUICK_LOOK)
     // Always allow QuickLook-generated URLs based on the protocol scheme.
-    if (!request.isNull() && request.url().protocolIs(QLPreviewProtocol())) {
+    if (!request.isNull() && isQuickLookPreviewURL(request.url())) {
         continueAfterNavigationPolicy(PolicyUse);
         return;
     }
@@ -145,7 +145,7 @@ void PolicyChecker::checkNavigationPolicy(const ResourceRequest& request, bool d
 #endif
 
     m_delegateIsDecidingNavigationPolicy = true;
-    m_suggestedFilename = action.downloadAttribute();
+    m_suggestedFilename = action.downloadAttribute().isEmpty() ? nullAtom : action.downloadAttribute();
     m_frame.loader().client().dispatchDecidePolicyForNavigationAction(action, request, formState, [this](PolicyAction action) {
         continueAfterNavigationPolicy(action);
     });
@@ -177,14 +177,13 @@ void PolicyChecker::checkContentPolicy(const ResourceResponse& response, Content
 void PolicyChecker::cancelCheck()
 {
     m_frame.loader().client().cancelPolicyCheck();
-    m_callback.clear();
+    m_callback = { };
 }
 
 void PolicyChecker::stopCheck()
 {
     m_frame.loader().client().cancelPolicyCheck();
-    PolicyCallback callback = m_callback;
-    m_callback.clear();
+    PolicyCallback callback = WTFMove(m_callback);
     callback.cancel();
 }
 
@@ -202,8 +201,7 @@ void PolicyChecker::continueLoadAfterWillSubmitForm(PolicyAction)
 
 void PolicyChecker::continueAfterNavigationPolicy(PolicyAction policy)
 {
-    PolicyCallback callback = m_callback;
-    m_callback.clear();
+    PolicyCallback callback = WTFMove(m_callback);
 
     bool shouldContinue = policy == PolicyUse;
 
@@ -235,8 +233,7 @@ void PolicyChecker::continueAfterNavigationPolicy(PolicyAction policy)
 
 void PolicyChecker::continueAfterNewWindowPolicy(PolicyAction policy)
 {
-    PolicyCallback callback = m_callback;
-    m_callback.clear();
+    PolicyCallback callback = WTFMove(m_callback);
 
     switch (policy) {
         case PolicyIgnore:
@@ -255,8 +252,7 @@ void PolicyChecker::continueAfterNewWindowPolicy(PolicyAction policy)
 
 void PolicyChecker::continueAfterContentPolicy(PolicyAction policy)
 {
-    PolicyCallback callback = m_callback;
-    m_callback.clear();
+    PolicyCallback callback = WTFMove(m_callback);
     callback.call(policy);
 }
 

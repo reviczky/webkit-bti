@@ -338,7 +338,7 @@ public:
     {
         return computeEditability(treatment, ShouldUpdateStyle::DoNotUpdate) != Editability::ReadOnly;
     }
-    // FIXME: Replace every use of this function by helpers in htmlediting.h
+    // FIXME: Replace every use of this function by helpers in Editing.h
     bool hasRichlyEditableStyle() const
     {
         return computeEditability(UserSelectAllIsAlwaysNonEditable, ShouldUpdateStyle::DoNotUpdate) == Editability::CanEditRichly;
@@ -474,7 +474,8 @@ public:
     void showTreeForThisAcrossFrame() const;
 #endif // ENABLE(TREE_DEBUGGING)
 
-    void invalidateNodeListAndCollectionCachesInAncestors(const QualifiedName* attrName = nullptr, Element* attributeOwnerElement = nullptr);
+    void invalidateNodeListAndCollectionCachesInAncestors();
+    void invalidateNodeListAndCollectionCachesInAncestorsForAttribute(const QualifiedName& attrName);
     NodeListsNodeData* nodeLists();
     void clearNodeLists();
 

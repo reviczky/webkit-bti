@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,6 +36,7 @@
 #include "DOMJITGetterSetter.h"
 #include "DirectArguments.h"
 #include "FTLThunks.h"
+#include "FullCodeOrigin.h"
 #include "FunctionCodeBlock.h"
 #include "GCAwareJITStubRoutine.h"
 #include "GetterSetter.h"
@@ -90,7 +91,7 @@ void ftlThunkAwareRepatchCall(CodeBlock* codeBlock, CodeLocationCall call, Funct
                 MacroAssembler::readCallTarget(call).executableAddress()));
         key = key.withCallTarget(newCalleeFunction.executableAddress());
         newCalleeFunction = FunctionPtr(
-            thunks.getSlowPathCallThunk(vm, key).code().executableAddress());
+            thunks.getSlowPathCallThunk(key).code().executableAddress());
     }
 #else // ENABLE(FTL_JIT)
     UNUSED_PARAM(codeBlock);
@@ -138,17 +139,21 @@ static bool forceICFailure(ExecState*)
 #endif
 }
 
-inline J_JITOperation_ESsiJI appropriateOptimizingGetByIdFunction(GetByIDKind kind)
+inline FunctionPtr appropriateOptimizingGetByIdFunction(GetByIDKind kind)
 {
     if (kind == GetByIDKind::Normal)
         return operationGetByIdOptimize;
+    else if (kind == GetByIDKind::WithThis)
+        return operationGetByIdWithThisOptimize;
     return operationTryGetByIdOptimize;
 }
 
-inline J_JITOperation_ESsiJI appropriateGenericGetByIdFunction(GetByIDKind kind)
+inline FunctionPtr appropriateGenericGetByIdFunction(GetByIDKind kind)
 {
     if (kind == GetByIDKind::Normal)
         return operationGetById;
+    else if (kind == GetByIDKind::WithThis)
+        return operationGetByIdWithThisGeneric;
     return operationTryGetById;
 }
 
@@ -172,7 +177,7 @@ static InlineCacheAction tryCacheGetByID(ExecState* exec, JSValue baseValue, con
                 && slot.slotBase() == baseValue
                 && InlineAccess::isCacheableArrayLength(stubInfo, jsCast<JSArray*>(baseValue))) {
 
-                bool generatedCodeInline = InlineAccess::generateArrayLength(*codeBlock->vm(), stubInfo, jsCast<JSArray*>(baseValue));
+                bool generatedCodeInline = InlineAccess::generateArrayLength(stubInfo, jsCast<JSArray*>(baseValue));
                 if (generatedCodeInline) {
                     ftlThunkAwareRepatchCall(codeBlock, stubInfo.slowPathCallLocation(), appropriateOptimizingGetByIdFunction(kind));
                     stubInfo.initArrayLength();
@@ -228,7 +233,7 @@ static InlineCacheAction tryCacheGetByID(ExecState* exec, JSValue baseValue, con
             && !structure->needImpurePropertyWatchpoint()
             && !loadTargetFromProxy) {
 
-            bool generatedCodeInline = InlineAccess::generateSelfPropertyAccess(*codeBlock->vm(), stubInfo, structure, slot.cachedOffset());
+            bool generatedCodeInline = InlineAccess::generateSelfPropertyAccess(stubInfo, structure, slot.cachedOffset());
             if (generatedCodeInline) {
                 LOG_IC((ICEvent::GetByIdSelfPatch, structure->classInfo(), propertyName));
                 structure->startWatchingPropertyForReplacements(vm, slot.cachedOffset());
@@ -303,6 +308,10 @@ static InlineCacheAction tryCacheGetByID(ExecState* exec, JSValue baseValue, con
                 else
                     type = AccessCase::CustomValueGetter;
 
+                // we don't emit IC for DOMJIT when op is get_by_id_with_this
+                if (Options::useDOMJIT() && kind == GetByIDKind::WithThis && type == AccessCase::CustomAccessorGetter && domJIT)
+                    return GiveUpOnCache;
+
                 newCase = GetterSetterAccessCase::create(
                     vm, codeBlock, type, offset, structure, conditionSet, loadTargetFromProxy,
                     slot.watchpointSet(), slot.isCacheableCustom() ? slot.customGetter() : nullptr,
@@ -320,7 +329,7 @@ static InlineCacheAction tryCacheGetByID(ExecState* exec, JSValue baseValue, con
         LOG_IC((ICEvent::GetByIdReplaceWithJump, baseValue.classInfoOrNull(vm), propertyName));
         
         RELEASE_ASSERT(result.code());
-        InlineAccess::rewireStubAsJump(exec->vm(), stubInfo, CodeLocationLabel(result.code()));
+        InlineAccess::rewireStubAsJump(stubInfo, CodeLocationLabel(result.code()));
     }
     
     return result.shouldGiveUpNow() ? GiveUpOnCache : RetryCacheLater;
@@ -387,7 +396,7 @@ static InlineCacheAction tryCachePutByID(ExecState* exec, JSValue baseValue, Str
                 && !structure->needImpurePropertyWatchpoint()
                 && !structure->inferredTypeFor(ident.impl())) {
                 
-                bool generatedCodeInline = InlineAccess::generateSelfPropertyReplace(vm, stubInfo, structure, slot.cachedOffset());
+                bool generatedCodeInline = InlineAccess::generateSelfPropertyReplace(stubInfo, structure, slot.cachedOffset());
                 if (generatedCodeInline) {
                     LOG_IC((ICEvent::PutByIdSelfPatch, structure->classInfo(), ident));
                     ftlThunkAwareRepatchCall(codeBlock, stubInfo.slowPathCallLocation(), appropriateOptimizingPutByIdFunction(slot, putKind));
@@ -474,7 +483,7 @@ static InlineCacheAction tryCachePutByID(ExecState* exec, JSValue baseValue, Str
         
         RELEASE_ASSERT(result.code());
 
-        InlineAccess::rewireStubAsJump(vm, stubInfo, CodeLocationLabel(result.code()));
+        InlineAccess::rewireStubAsJump(stubInfo, CodeLocationLabel(result.code()));
     }
     
     return result.shouldGiveUpNow() ? GiveUpOnCache : RetryCacheLater;
@@ -567,25 +576,13 @@ static void linkSlowFor(VM* vm, CallLinkInfo& callLinkInfo)
     callLinkInfo.setSlowStub(createJITStubRoutine(virtualThunk, *vm, nullptr, true));
 }
 
-static bool isWebAssemblyToJSCallee(VM& vm, JSCell* callee)
-{
-#if ENABLE(WEBASSEMBLY)
-    // The WebAssembly -> JS stub sets it caller frame's callee to a singleton which lives on the VM.
-    return callee == vm.webAssemblyToJSCallee.get();
-#else
-    UNUSED_PARAM(vm);
-    UNUSED_PARAM(callee);
-    return false;
-#endif // ENABLE(WEBASSEMBLY)
-}
-
-static JSCell* webAssemblyOwner(VM& vm)
+static JSCell* webAssemblyOwner(JSCell* callee)
 {
 #if ENABLE(WEBASSEMBLY)
     // Each WebAssembly.Instance shares the stubs from their WebAssembly.Module, which are therefore the appropriate owner.
-    return vm.topJSWebAssemblyInstance->module();
+    return jsCast<WebAssemblyToJSCallee*>(callee)->module();
 #else
-    UNUSED_PARAM(vm);
+    UNUSED_PARAM(callee);
     RELEASE_ASSERT_NOT_REACHED();
     return nullptr;
 #endif // ENABLE(WEBASSEMBLY)
@@ -598,18 +595,23 @@ void linkFor(
     ASSERT(!callLinkInfo.stub());
 
     CallFrame* callerFrame = exec->callerFrame();
+    // Our caller must have a cell for a callee. When calling
+    // this from Wasm, we ensure the callee is a cell.
+    ASSERT(callerFrame->callee().isCell());
+
     VM& vm = callerFrame->vm();
     CodeBlock* callerCodeBlock = callerFrame->codeBlock();
 
     // WebAssembly -> JS stubs don't have a valid CodeBlock.
-    JSCell* owner = isWebAssemblyToJSCallee(vm, callerFrame->callee()) ? webAssemblyOwner(vm) : callerCodeBlock;
+    JSCell* owner = isWebAssemblyToJSCallee(callerFrame->callee().asCell()) ? webAssemblyOwner(callerFrame->callee().asCell()) : callerCodeBlock;
     ASSERT(owner);
 
     ASSERT(!callLinkInfo.isLinked());
     callLinkInfo.setCallee(vm, owner, callee);
     callLinkInfo.setLastSeenCallee(vm, owner, callee);
     if (shouldDumpDisassemblyFor(callerCodeBlock))
-        dataLog("Linking call in ", *callerCodeBlock, " at ", callLinkInfo.codeOrigin(), " to ", pointerDump(calleeCodeBlock), ", entrypoint at ", codePtr, "\n");
+        dataLog("Linking call in ", FullCodeOrigin(callerCodeBlock, callLinkInfo.codeOrigin()), " to ", pointerDump(calleeCodeBlock), ", entrypoint at ", codePtr, "\n");
+
     MacroAssembler::repatchNearCall(callLinkInfo.hotPathOther(), CodeLocationLabel(codePtr));
 
     if (calleeCodeBlock)
@@ -636,7 +638,8 @@ void linkDirectFor(
     ASSERT(!callLinkInfo.isLinked());
     callLinkInfo.setCodeBlock(*vm, callerCodeBlock, jsCast<FunctionCodeBlock*>(calleeCodeBlock));
     if (shouldDumpDisassemblyFor(callerCodeBlock))
-        dataLog("Linking call in ", *callerCodeBlock, " at ", callLinkInfo.codeOrigin(), " to ", pointerDump(calleeCodeBlock), ", entrypoint at ", codePtr, "\n");
+        dataLog("Linking call in ", FullCodeOrigin(callerCodeBlock, callLinkInfo.codeOrigin()), " to ", pointerDump(calleeCodeBlock), ", entrypoint at ", codePtr, "\n");
+
     if (callLinkInfo.callType() == CallLinkInfo::DirectTailCall)
         MacroAssembler::repatchJumpToNop(callLinkInfo.patchableJump());
     MacroAssembler::repatchNearCall(callLinkInfo.hotPathOther(), CodeLocationLabel(codePtr));
@@ -691,7 +694,7 @@ void linkVirtualFor(ExecState* exec, CallLinkInfo& callLinkInfo)
     CodeBlock* callerCodeBlock = callerFrame->codeBlock();
 
     if (shouldDumpDisassemblyFor(callerCodeBlock))
-        dataLog("Linking virtual call at ", *callerCodeBlock, " ", callerFrame->codeOrigin(), "\n");
+        dataLog("Linking virtual call at ", FullCodeOrigin(callerCodeBlock, callerFrame->codeOrigin()), "\n");
 
     MacroAssemblerCodeRef virtualThunk = virtualThunkFor(&vm, callLinkInfo);
     revertCall(&vm, callLinkInfo, virtualThunk);
@@ -718,12 +721,17 @@ void linkPolymorphicCall(
     }
 
     CallFrame* callerFrame = exec->callerFrame();
+
+    // Our caller must be have a cell for a callee. When calling
+    // this from Wasm, we ensure the callee is a cell.
+    ASSERT(callerFrame->callee().isCell());
+
     VM& vm = callerFrame->vm();
     CodeBlock* callerCodeBlock = callerFrame->codeBlock();
-    bool isWebAssembly = isWebAssemblyToJSCallee(vm, callerFrame->callee());
+    bool isWebAssembly = isWebAssemblyToJSCallee(callerFrame->callee().asCell());
 
     // WebAssembly -> JS stubs don't have a valid CodeBlock.
-    JSCell* owner = isWebAssembly ? webAssemblyOwner(vm) : callerCodeBlock;
+    JSCell* owner = isWebAssembly ? webAssemblyOwner(callerFrame->callee().asCell()) : callerCodeBlock;
     ASSERT(owner);
 
     CallVariantList list;
@@ -754,7 +762,7 @@ void linkPolymorphicCall(
     // Figure out what our cases are.
     for (CallVariant variant : list) {
         CodeBlock* codeBlock;
-        if (isWebAssembly || variant.executable()->isHostFunction())
+        if (variant.executable()->isHostFunction())
             codeBlock = nullptr;
         else {
             ExecutableBase* executable = variant.executable();
@@ -786,7 +794,7 @@ void linkPolymorphicCall(
     
     GPRReg calleeGPR = static_cast<GPRReg>(callLinkInfo.calleeGPR());
     
-    CCallHelpers stubJit(&vm, callerCodeBlock);
+    CCallHelpers stubJit(callerCodeBlock);
     
     CCallHelpers::JumpList slowPath;
     
@@ -932,7 +940,7 @@ void linkPolymorphicCall(
     stubJit.restoreReturnAddressBeforeReturn(GPRInfo::regT4);
     AssemblyHelpers::Jump slow = stubJit.jump();
         
-    LinkBuffer patchBuffer(vm, stubJit, owner, JITCompilationCanFail);
+    LinkBuffer patchBuffer(stubJit, owner, JITCompilationCanFail);
     if (patchBuffer.didFailToAllocate()) {
         linkVirtualFor(exec, callLinkInfo);
         return;
@@ -982,7 +990,7 @@ void linkPolymorphicCall(
 void resetGetByID(CodeBlock* codeBlock, StructureStubInfo& stubInfo, GetByIDKind kind)
 {
     ftlThunkAwareRepatchCall(codeBlock, stubInfo.slowPathCallLocation(), appropriateOptimizingGetByIdFunction(kind));
-    InlineAccess::rewireStubAsJump(*codeBlock->vm(), stubInfo, stubInfo.slowPathStartLocation());
+    InlineAccess::rewireStubAsJump(stubInfo, stubInfo.slowPathStartLocation());
 }
 
 void resetPutByID(CodeBlock* codeBlock, StructureStubInfo& stubInfo)
@@ -1001,7 +1009,7 @@ void resetPutByID(CodeBlock* codeBlock, StructureStubInfo& stubInfo)
     }
 
     ftlThunkAwareRepatchCall(codeBlock, stubInfo.slowPathCallLocation(), optimizedFunction);
-    InlineAccess::rewireStubAsJump(*codeBlock->vm(), stubInfo, stubInfo.slowPathStartLocation());
+    InlineAccess::rewireStubAsJump(stubInfo, stubInfo.slowPathStartLocation());
 }
 
 void resetIn(CodeBlock*, StructureStubInfo& stubInfo)

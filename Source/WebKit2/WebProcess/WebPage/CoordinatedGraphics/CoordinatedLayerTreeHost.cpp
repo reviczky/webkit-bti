@@ -31,7 +31,6 @@
 #include "CoordinatedLayerTreeHost.h"
 
 #include "DrawingArea.h"
-#include "WebCoordinatedSurface.h"
 #include "WebPage.h"
 #include "WebPageProxyMessages.h"
 #include <WebCore/FrameView.h>
@@ -40,6 +39,10 @@
 
 #if USE(COORDINATED_GRAPHICS_THREADED)
 #include "ThreadSafeCoordinatedSurface.h"
+#endif
+
+#if USE(GLIB_EVENT_LOOP)
+#include <wtf/glib/RunLoopSourcePriority.h>
 #endif
 
 using namespace WebCore;
@@ -60,6 +63,10 @@ CoordinatedLayerTreeHost::CoordinatedLayerTreeHost(WebPage& webPage)
     , m_coordinator(webPage.corePage(), *this)
     , m_layerFlushTimer(RunLoop::main(), this, &CoordinatedLayerTreeHost::layerFlushTimerFired)
 {
+#if USE(GLIB_EVENT_LOOP)
+    m_layerFlushTimer.setPriority(RunLoopSourcePriority::LayerFlushTimer);
+    m_layerFlushTimer.setName("[WebKit] CoordinatedLayerTreeHost");
+#endif
     m_coordinator.createRootLayer(m_webPage.size());
 
     CoordinatedSurface::setFactory(createCoordinatedSurface);
@@ -77,7 +84,7 @@ void CoordinatedLayerTreeHost::scheduleLayerFlush()
     }
 
     if (!m_layerFlushTimer.isActive())
-        m_layerFlushTimer.startOneShot(0);
+        m_layerFlushTimer.startOneShot(0_s);
 }
 
 void CoordinatedLayerTreeHost::cancelPendingLayerFlush()
@@ -227,7 +234,7 @@ void CoordinatedLayerTreeHost::scheduleAnimation()
         return;
 
     scheduleLayerFlush();
-    m_layerFlushTimer.startOneShot(m_coordinator.nextAnimationServiceTime());
+    m_layerFlushTimer.startOneShot(1_s * m_coordinator.nextAnimationServiceTime());
 }
 
 void CoordinatedLayerTreeHost::commitScrollOffset(uint32_t layerID, const WebCore::IntSize& offset)

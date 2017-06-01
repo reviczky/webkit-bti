@@ -1,6 +1,6 @@
 /*
  * (C) 1999 Lars Knoll (knoll@kde.org)
- * Copyright (C) 2004-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2017 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -114,8 +114,11 @@ public:
     String(Ref<AtomicStringImpl>&&);
     String(RefPtr<AtomicStringImpl>&&);
 
+    String(StaticStringImpl&);
+    String(StaticStringImpl*);
+
     // Construct a string from a constant string literal.
-    WTF_EXPORT_STRING_API String(ASCIILiteral characters);
+    WTF_EXPORT_STRING_API String(ASCIILiteral);
 
     // Construct a string from a constant string literal.
     // This constructor is the "big" version, as it put the length in the function call and generate bigger code.
@@ -433,6 +436,7 @@ public:
     static String fromUTF8(const char* s, size_t length) { return fromUTF8(reinterpret_cast<const LChar*>(s), length); };
     static String fromUTF8(const char* s) { return fromUTF8(reinterpret_cast<const LChar*>(s)); };
     WTF_EXPORT_STRING_API static String fromUTF8(const CString&);
+    static String fromUTF8(const Vector<LChar>& characters);
 
     // Tries to convert the passed in string to UTF-8, but will fall back to Latin-1 if the string is not valid UTF-8.
     WTF_EXPORT_STRING_API static String fromUTF8WithLatin1Fallback(const LChar*, size_t);
@@ -487,6 +491,8 @@ private:
 
     RefPtr<StringImpl> m_impl;
 };
+
+static_assert(sizeof(String) == sizeof(void*), "String should effectively be a pointer to a StringImpl, and efficient to pass by value");
 
 inline bool operator==(const String& a, const String& b) { return equal(a.impl(), b.impl()); }
 inline bool operator==(const String& a, const LChar* b) { return equal(a.impl(), b); }
@@ -554,6 +560,16 @@ inline String::String(Ref<AtomicStringImpl>&& impl)
 
 inline String::String(RefPtr<AtomicStringImpl>&& impl)
     : m_impl(WTFMove(impl))
+{
+}
+
+inline String::String(StaticStringImpl& impl)
+    : m_impl(reinterpret_cast<StringImpl*>(&impl))
+{
+}
+
+inline String::String(StaticStringImpl* impl)
+    : m_impl(reinterpret_cast<StringImpl*>(impl))
 {
 }
 
@@ -694,6 +710,13 @@ private:
 // Shared global empty string.
 WTF_EXPORT_STRING_API const String& emptyString();
 
+inline String String::fromUTF8(const Vector<LChar>& characters)
+{
+    if (characters.isEmpty())
+        return emptyString();
+    return fromUTF8(characters.data(), characters.size());
+}
+
 template<unsigned length> inline bool equalLettersIgnoringASCIICase(const String& string, const char (&lowercaseLetters)[length])
 {
     return equalLettersIgnoringASCIICase(string.impl(), lowercaseLetters);
@@ -720,7 +743,7 @@ template<> struct IntegerToStringConversionTrait<String> {
     static String flush(LChar* characters, unsigned length, void*) { return { characters, length }; }
 };
 
-}
+} // namespace WTF
 
 using WTF::CString;
 using WTF::KeepTrailingZeros;

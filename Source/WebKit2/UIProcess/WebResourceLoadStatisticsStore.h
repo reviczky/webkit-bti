@@ -23,15 +23,19 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef WebResourceLoadStatisticsStore_h
-#define WebResourceLoadStatisticsStore_h
+#pragma once
 
 #include "APIObject.h"
 #include "Connection.h"
+#include "ResourceLoadStatisticsClassifier.h"
 #include "WebsiteDataRecord.h"
 #include <WebCore/ResourceLoadStatisticsStore.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
+
+#if HAVE(CORE_PREDICTION)
+#include "ResourceLoadStatisticsClassifierCocoa.h"
+#endif
 
 namespace WTF {
 class WorkQueue;
@@ -59,6 +63,7 @@ public:
     void setResourceLoadStatisticsEnabled(bool);
     bool resourceLoadStatisticsEnabled() const;
     void registerSharedResourceLoadObserver();
+    void registerSharedResourceLoadObserver(std::function<void(const Vector<String>& domainsToRemove, const Vector<String>& domainsToAdd, bool clearFirst)>&& shouldPartitionCookiesForDomainsHandler);
     
     void resourceLoadStatisticsUpdated(const Vector<WebCore::ResourceLoadStatistics>& origins);
 
@@ -76,7 +81,6 @@ private:
 
     void processStatisticsAndDataRecords();
 
-    bool hasPrevalentResourceCharacteristics(const WebCore::ResourceLoadStatistics&);
     void classifyResource(WebCore::ResourceLoadStatistics&);
     void removeDataRecords();
 
@@ -85,18 +89,22 @@ private:
     // IPC::MessageReceiver
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
 
+    void grandfatherExistingWebsiteData();
+
+    void writeStoreToDisk();
     void writeEncoderToDisk(WebCore::KeyedEncoder&, const String& label) const;
     std::unique_ptr<WebCore::KeyedDecoder> createDecoderFromDisk(const String& label) const;
+    void platformExcludeFromBackup() const;
 
     Ref<WebCore::ResourceLoadStatisticsStore> m_resourceLoadStatisticsStore;
+#if HAVE(CORE_PREDICTION)
+    ResourceLoadStatisticsClassifierCocoa m_resourceLoadStatisticsClassifier;
+#else
+    ResourceLoadStatisticsClassifier m_resourceLoadStatisticsClassifier;
+#endif
     Ref<WTF::WorkQueue> m_statisticsQueue;
-    String m_storagePath;
+    String m_statisticsStoragePath;
     bool m_resourceLoadStatisticsEnabled { false };
-
-    double m_lastTimeDataRecordsWereRemoved { 0 };
-    bool m_dataRecordsRemovalPending { false };
 };
 
 } // namespace WebKit
-
-#endif // WebResourceLoadStatisticsStore_h

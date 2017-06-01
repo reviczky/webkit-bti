@@ -43,7 +43,7 @@ using namespace JSC;
 
 namespace WebCore {
 
-const ClassInfo JSDOMWindowShell::s_info = { "JSDOMWindowShell", &Base::s_info, 0, CREATE_METHOD_TABLE(JSDOMWindowShell) };
+const ClassInfo JSDOMWindowShell::s_info = { "JSDOMWindowShell", &Base::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(JSDOMWindowShell) };
 
 JSDOMWindowShell::JSDOMWindowShell(VM& vm, Structure* structure, DOMWrapperWorld& world)
     : Base(vm, structure)
@@ -81,14 +81,14 @@ void JSDOMWindowShell::setWindow(RefPtr<DOMWindow>&& domWindow)
     // constructed, it can mark its own prototype.)
     
     VM& vm = commonVM();
-    Structure* prototypeStructure = JSDOMWindowPrototype::createStructure(vm, 0, jsNull());
-    Strong<JSDOMWindowPrototype> prototype(vm, JSDOMWindowPrototype::create(vm, 0, prototypeStructure));
+    Structure* prototypeStructure = JSDOMWindowPrototype::createStructure(vm, nullptr, jsNull());
+    Strong<JSDOMWindowPrototype> prototype(vm, JSDOMWindowPrototype::create(vm, nullptr, prototypeStructure));
 
-    Structure* structure = JSDOMWindow::createStructure(vm, 0, prototype.get());
+    Structure* structure = JSDOMWindow::createStructure(vm, nullptr, prototype.get());
     JSDOMWindow* jsDOMWindow = JSDOMWindow::create(vm, structure, *domWindow, this);
     prototype->structure()->setGlobalObject(vm, jsDOMWindow);
 
-    Structure* windowPropertiesStructure = JSDOMWindowProperties::createStructure(vm, jsDOMWindow, JSEventTarget::prototype(vm, jsDOMWindow));
+    Structure* windowPropertiesStructure = JSDOMWindowProperties::createStructure(vm, jsDOMWindow, JSEventTarget::prototype(vm, *jsDOMWindow));
     JSDOMWindowProperties* windowProperties = JSDOMWindowProperties::create(windowPropertiesStructure, *jsDOMWindow);
 
     prototype->structure()->setPrototypeWithoutTransition(vm, windowProperties);

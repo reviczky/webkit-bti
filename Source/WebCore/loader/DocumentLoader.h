@@ -242,6 +242,9 @@ public:
     AutoplayPolicy autoplayPolicy() const { return m_autoplayPolicy; }
     void setAutoplayPolicy(AutoplayPolicy policy) { m_autoplayPolicy = policy; }
 
+    bool allowsAutoplayQuirks() const { return m_allowsAutoplayQuirks; }
+    void setAllowsAutoplayQuirks(bool allowsQuirks) { m_allowsAutoplayQuirks = allowsQuirks; }
+
     void addSubresourceLoader(ResourceLoader*);
     void removeSubresourceLoader(ResourceLoader*);
     void addPlugInStreamLoader(ResourceLoader&);
@@ -319,7 +322,7 @@ private:
 #endif
 
     void willSendRequest(ResourceRequest&, const ResourceResponse&);
-    void finishedLoading(double finishTime);
+    void finishedLoading();
     void mainReceivedError(const ResourceError&);
     WEBCORE_EXPORT void redirectReceived(CachedResource&, ResourceRequest&, const ResourceResponse&) override;
     WEBCORE_EXPORT void responseReceived(CachedResource&, const ResourceResponse&) override;
@@ -472,6 +475,7 @@ private:
 #endif
     bool m_userContentExtensionsEnabled { true };
     AutoplayPolicy m_autoplayPolicy { AutoplayPolicy::Default };
+    bool m_allowsAutoplayQuirks { false };
 
 #ifndef NDEBUG
     bool m_hasEverBeenAttached { false };

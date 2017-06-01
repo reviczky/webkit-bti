@@ -9,7 +9,7 @@ if (MSVC)
     # FIXME: Some codegenerators don't support paths with spaces. So use the executable name only.
     get_filename_component(CODE_GENERATOR_PREPROCESSOR_EXECUTABLE ${CMAKE_CXX_COMPILER} ABSOLUTE)
 
-    set(CODE_GENERATOR_PREPROCESSOR_ARGUMENTS "/nologo /EP")
+    set(CODE_GENERATOR_PREPROCESSOR_ARGUMENTS "/nologo /EP /TP")
     set(CODE_GENERATOR_PREPROCESSOR "\"${CODE_GENERATOR_PREPROCESSOR_EXECUTABLE}\" ${CODE_GENERATOR_PREPROCESSOR_ARGUMENTS}")
 
     set(CODE_GENERATOR_PREPROCESSOR_WITH_LINEMARKERS ${CODE_GENERATOR_PREPROCESSOR})
@@ -228,6 +228,7 @@ include(CheckIncludeFile)
 include(CheckFunctionExists)
 include(CheckSymbolExists)
 include(CheckStructHasMember)
+include(CheckTypeSize)
 
 macro(_HAVE_CHECK_INCLUDE _variable _header)
     check_include_file(${_header} ${_variable}_value)
@@ -272,6 +273,7 @@ _HAVE_CHECK_FUNCTION(HAVE_TIMEGM timegm)
 _HAVE_CHECK_FUNCTION(HAVE_VASPRINTF vasprintf)
 
 # Check for symbols
+_HAVE_CHECK_SYMBOL(HAVE_REGEX_H regexec regex.h)
 # Windows has signal.h but is missing symbols that are used in calls to signal.
 _HAVE_CHECK_SYMBOL(HAVE_SIGNAL_H SIGTRAP signal.h)
 
@@ -279,3 +281,10 @@ _HAVE_CHECK_SYMBOL(HAVE_SIGNAL_H SIGTRAP signal.h)
 _HAVE_CHECK_STRUCT(HAVE_STAT_BIRTHTIME "struct stat" st_birthtime sys/stat.h)
 _HAVE_CHECK_STRUCT(HAVE_TM_GMTOFF "struct tm" tm_gmtoff time.h)
 _HAVE_CHECK_STRUCT(HAVE_TM_ZONE "struct tm" tm_zone time.h)
+
+# Check for int types
+check_type_size("__int128_t" INT128_VALUE)
+
+if (HAVE_INT128_VALUE)
+  SET_AND_EXPOSE_TO_BUILD(HAVE_INT128_T INT128_VALUE)
+endif ()

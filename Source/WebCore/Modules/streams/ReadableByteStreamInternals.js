@@ -23,8 +23,25 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-// @conditional=ENABLE(READABLE_STREAM_API) && ENABLE(READABLE_BYTE_STREAM_API)
+// @conditional=ENABLE(STREAMS_API)
 // @internal
+
+function privateInitializeReadableStreamBYOBReader(stream)
+{
+    "use strict";
+
+    if (!@isReadableStream(stream))
+        @throwTypeError("ReadableStreamBYOBReader needs a ReadableStream");
+    if (!@isReadableByteStreamController(stream.@readableStreamController))
+        @throwTypeError("ReadableStreamBYOBReader needs a ReadableByteStreamController");
+    if (@isReadableStreamLocked(stream))
+        @throwTypeError("ReadableStream is locked");
+
+    @readableStreamReaderGenericInitialize(this, stream);
+    this.@readIntoRequests = [];
+
+    return this;
+}
 
 function privateInitializeReadableByteStreamController(stream, underlyingByteSource, highWaterMark)
 {
@@ -78,6 +95,14 @@ function privateInitializeReadableByteStreamController(stream, underlyingByteSou
     return this;
 }
 
+function privateInitializeReadableStreamBYOBRequest(controller, view)
+{
+    "use strict";
+
+    this.@associatedReadableByteStreamController = controller;
+    this.@view = view;
+}
+
 function isReadableByteStreamController(controller)
 {
     "use strict";
@@ -87,14 +112,23 @@ function isReadableByteStreamController(controller)
     return @isObject(controller) && !!controller.@underlyingByteSource;
 }
 
+function isReadableStreamBYOBRequest(byobRequest)
+{
+    "use strict";
+
+    // Same test mechanism as in isReadableStreamDefaultController (ReadableStreamInternals.js).
+    // See corresponding function for explanations.
+    return @isObject(byobRequest) && !!byobRequest.@associatedReadableByteStreamController;
+}
+
 function isReadableStreamBYOBReader(reader)
 {
     "use strict";
 
-    // FIXME: Since BYOBReader is not yet implemented, always return false.
-    // To be implemented at the same time as BYOBReader (see isReadableStreamDefaultReader
-    // to apply same model).
-    return false;
+    // Spec tells to return true only if reader has a readIntoRequests internal slot.
+    // However, since it is a private slot, it cannot be checked using hasOwnProperty().
+    // Since readIntoRequests is initialized with an empty array, the following test is ok.
+    return @isObject(reader) && !!reader.@readIntoRequests;
 }
 
 function readableByteStreamControllerCancel(controller, reason)
@@ -151,6 +185,13 @@ function readableByteStreamControllerClearPendingPullIntos(controller)
 function readableByteStreamControllerGetDesiredSize(controller)
 {
    "use strict";
+
+   const stream = controller.@controlledReadableStream;
+
+   if (stream.@state === @streamErrored)
+       return null;
+   if (stream.@state === @streamClosed)
+       return 0;
 
    return controller.@strategyHWM - controller.@totalQueuedBytes;
 }
@@ -297,7 +338,7 @@ function readableByteStreamControllerEnqueue(controller, chunk)
 
     if (@readableStreamHasDefaultReader(stream)) {
         if (!stream.@reader.@readRequests.length)
-            @readableByteStreamControllerEnqueueChunkToQueue(controller, transferredBuffer, byteOffset, byteLength);
+            @readableByteStreamControllerEnqueueChunk(controller, transferredBuffer, byteOffset, byteLength);
         else {
             @assert(!controller.@queue.length);
             let transferredView = new @Uint8Array(transferredBuffer, byteOffset, byteLength);
@@ -314,10 +355,11 @@ function readableByteStreamControllerEnqueue(controller, chunk)
     }
 
     @assert(!@isReadableStreamLocked(stream));
-    @readableByteStreamControllerEnqueueChunkToQueue(controller, transferredBuffer, byteOffset, byteLength);
+    @readableByteStreamControllerEnqueueChunk(controller, transferredBuffer, byteOffset, byteLength);
 }
 
-function readableByteStreamControllerEnqueueChunkToQueue(controller, buffer, byteOffset, byteLength)
+// Spec name: readableByteStreamControllerEnqueueChunkToQueue.
+function readableByteStreamControllerEnqueueChunk(controller, buffer, byteOffset, byteLength)
 {
     "use strict";
 
@@ -327,4 +369,235 @@ function readableByteStreamControllerEnqueueChunkToQueue(controller, buffer, byt
         byteLength: byteLength
     });
     controller.@totalQueuedBytes += byteLength;
+}
+
+function readableByteStreamControllerRespondWithNewView(controller, view)
+{
+    "use strict";
+
+    @assert(controller.@pendingPullIntos.length > 0);
+
+    let firstDescriptor = controller.@pendingPullIntos[0];
+
+    if (firstDescriptor.byteOffset + firstDescriptor.bytesFilled !== view.byteOffset)
+        @throwRangeError("Invalid value for view.byteOffset");
+
+    if (firstDescriptor.byteLength !== view.byteLength)
+        @throwRangeError("Invalid value for view.byteLength");
+
+    firstDescriptor.buffer = view.buffer;
+    @readableByteStreamControllerRespondInternal(controller, view.byteLength);
+}
+
+function readableByteStreamControllerRespond(controller, bytesWritten)
+{
+    "use strict";
+
+    bytesWritten = @Number(bytesWritten);
+
+    if (@isNaN(bytesWritten) || bytesWritten === @Number.POSITIVE_INFINITY || bytesWritten < 0 )
+        @throwRangeError("bytesWritten has an incorrect value");
+
+    @assert(controller.@pendingPullIntos.length > 0);
+
+    @readableByteStreamControllerRespondInternal(controller, bytesWritten);
+}
+
+function readableByteStreamControllerRespondInternal(controller, bytesWritten)
+{
+    "use strict";
+
+    let firstDescriptor = controller.@pendingPullIntos[0];
+    let stream = controller.@controlledReadableStream;
+
+    if (stream.@state === @streamClosed) {
+        if (bytesWritten !== 0)
+            @throwTypeError("bytesWritten is different from 0 even though stream is closed");
+        @readableByteStreamControllerRespondInClosedState(controller, firstDescriptor);
+    } else {
+        @assert(stream.@state === @streamReadable);
+        @readableByteStreamControllerRespondInReadableState(controller, bytesWritten, firstDescriptor);
+    }
+}
+
+function readableByteStreamControllerRespondInReadableState(controller, bytesWritten, pullIntoDescriptor)
+{
+    "use strict";
+
+    if (pullIntoDescriptor.bytesFilled + bytesWritten > pullIntoDescriptor.byteLength)
+        @throwRangeError("bytesWritten value is too great");
+
+    @assert(controller.@pendingPullIntos.length === 0 || controller.@pendingPullIntos[0] === pullIntoDescriptor);
+    @readableByteStreamControllerInvalidateBYOBRequest(controller);
+    pullIntoDescriptor.bytesFilled += bytesWritten;
+
+    if (pullIntoDescriptor.bytesFilled < pullIntoDescriptor.elementSize)
+        return;
+
+    @readableByteStreamControllerShiftPendingDescriptor(controller);
+    const remainderSize = pullIntoDescriptor.bytesFilled % pullIntoDescriptor.elementSize;
+
+    if (remainderSize > 0) {
+        const end = pullIntoDescriptor.byteOffset + pullIntoDescriptor.bytesFilled;
+        const remainder = @cloneArrayBuffer(pullIntoDescriptor.buffer, end - remainderSize, remainderSize);
+        @readableByteStreamControllerEnqueueChunk(controller, remainder, 0, remainder.byteLength);
+    }
+
+    pullIntoDescriptor.buffer = @transferBufferToCurrentRealm(pullIntoDescriptor.buffer);
+    pullIntoDescriptor.bytesFilled -= remainderSize;
+    @readableByteStreamControllerCommitDescriptor(controller.@controlledReadableStream, pullIntoDescriptor);
+    @readableByteStreamControllerProcessPullDescriptors(controller);
+}
+
+function readableByteStreamControllerRespondInClosedState(controller, firstDescriptor)
+{
+    "use strict";
+
+    firstDescriptor.buffer = @transferBufferToCurrentRealm(firstDescriptor.buffer);
+    @assert(firstDescriptor.bytesFilled === 0);
+
+    // FIXME: Spec does not describe below test. However, only ReadableStreamBYOBReader has a readIntoRequests
+    // property. This issue has been reported through WHATWG/streams GitHub
+    // (https://github.com/whatwg/streams/issues/686), but no solution has been provided for the moment.
+    // Therefore, below test is added as a temporary fix.
+    if (!@isReadableStreamBYOBReader(controller.@reader))
+        return;
+
+    while (controller.@reader.@readIntoRequests.length > 0) {
+        let pullIntoDescriptor = @readableByteStreamControllerShiftPendingDescriptor(controller);
+        @readableByteStreamControllerCommitDescriptor(controller.@controlledReadableStream, pullIntoDescriptor);
+    }
+}
+
+// Spec name: readableByteStreamControllerProcessPullIntoDescriptorsUsingQueue (shortened for readability).
+function readableByteStreamControllerProcessPullDescriptors(controller)
+{
+    "use strict";
+
+    @assert(!controller.@closeRequested);
+    while (controller.@pendingPullIntos.length > 0) {
+        if (controller.@totalQueuedBytes === 0)
+            return;
+        let pullIntoDescriptor = controller.@pendingPullIntos[0];
+        if (@readableByteStreamControllerFillDescriptorFromQueue(controller, pullIntoDescriptor)) {
+            @readableByteStreamControllerShiftPendingDescriptor(controller);
+            @readableByteStreamControllerCommitDescriptor(controller.@controlledReadableStream, pullIntoDescriptor);
+        }
+    }
+}
+
+// Spec name: readableByteStreamControllerFillPullIntoDescriptorFromQueue (shortened for readability).
+function readableByteStreamControllerFillDescriptorFromQueue(controller, pullIntoDescriptor)
+{
+    "use strict";
+
+    const currentAlignedBytes = pullIntoDescriptor.bytesFilled - (pullIntoDescriptor.bytesFilled % pullIntoDescriptor.elementSize);
+    const maxBytesToCopy = controller.@totalQueuedBytes < pullIntoDescriptor.byteLength - pullIntoDescriptor.bytesFilled ?
+                controller.@totalQueuedBytes : pullIntoDescriptor.byteLength - pullIntoDescriptor.bytesFilled;
+    const maxBytesFilled = pullIntoDescriptor.bytesFilled + maxBytesToCopy;
+    const maxAlignedBytes = maxBytesFilled - (maxBytesFilled % pullIntoDescriptor.elementSize);
+    let totalBytesToCopyRemaining = maxBytesToCopy;
+    let ready = false;
+
+    if (maxAlignedBytes > currentAlignedBytes) {
+        totalBytesToCopyRemaining = maxAlignedBytes - pullIntoDescriptor.bytesFilled;
+        ready = true;
+    }
+
+    while (totalBytesToCopyRemaining > 0) {
+        let headOfQueue = controller.@queue[0];
+        const bytesToCopy = totalBytesToCopyRemaining < headOfQueue.byteLength ? totalBytesToCopyRemaining : headOfQueue.byteLength;
+        // Copy appropriate part of pullIntoDescriptor.buffer to headOfQueue.buffer.
+        // Remark: this implementation is not completely aligned on the definition of CopyDataBlockBytes
+        // operation of ECMAScript (the case of Shared Data Block is not considered here, but it doesn't seem to be an issue).
+        let fromIndex = pullIntoDescriptor.byteOffset + pullIntoDescriptor.bytesFilled;
+        let count = bytesToCopy;
+        let toIndex = headOfQueue.byteOffset;
+        while (count > 0) {
+            headOfQueue.buffer[toIndex] = pullIntoDescriptor.buffer[fromIndex];
+            toIndex++;
+            fromIndex++;
+            count--;
+        }
+
+        if (headOfQueue.byteLength === bytesToCopy)
+            controller.@queue.@shift();
+        else {
+            headOfQueue.byteOffset += bytesToCopy;
+            headOfQueue.byteLength -= bytesToCopy;
+        }
+
+        controller.@totalQueuedBytes -= bytesToCopy;
+        @assert(controller.@pendingPullIntos.length === 0 || controller.@pendingPullIntos[0] === pullIntoDescriptor);
+        @readableByteStreamControllerInvalidateBYOBRequest(controller);
+        pullIntoDescriptor.bytesFilled += bytesToCopy;
+        totalBytesToCopyRemaining -= bytesToCopy;
+    }
+
+    if (!ready) {
+        @assert(controller.@totalQueuedBytes === 0);
+        @assert(pullIntoDescriptor.bytesFilled > 0);
+        @assert(pullIntoDescriptor.bytesFilled < pullIntoDescriptor.elementSize);
+    }
+
+    return ready;
+}
+
+// Spec name: readableByteStreamControllerShiftPendingPullInto (renamed for consistency).
+function readableByteStreamControllerShiftPendingDescriptor(controller)
+{
+    "use strict";
+
+    let descriptor = controller.@pendingPullIntos.@shift();
+    @readableByteStreamControllerInvalidateBYOBRequest(controller);
+    return descriptor;
+}
+
+function readableByteStreamControllerInvalidateBYOBRequest(controller)
+{
+    "use strict";
+
+    if (controller.@byobRequest === @undefined)
+        return;
+    controller.@byobRequest.@associatedReadableByteStreamController = @undefined;
+    controller.@byobRequest.@view = @undefined;
+    controller.@byobRequest = @undefined;
+}
+
+// Spec name: readableByteStreamControllerCommitPullIntoDescriptor (shortened for readability).
+function readableByteStreamControllerCommitDescriptor(stream, pullIntoDescriptor)
+{
+    "use strict";
+
+    @assert(stream.@state !== @streamErrored);
+    let done = false;
+    if (stream.@state === @streamClosed) {
+        @assert(!pullIntoDescriptor.bytesFilled);
+        done = true;
+    }
+    let filledView = @readableByteStreamControllerConvertDescriptor(pullIntoDescriptor);
+    if (pullIntoDescriptor.readerType === "default")
+        @readableStreamFulfillReadRequest(stream, filledView, done);
+    else {
+        @assert(pullIntoDescriptor.readerType === "byob");
+        @readableStreamFulfillReadIntoRequest(stream, filledView, done);
+    }
+}
+
+// Spec name: readableByteStreamControllerConvertPullIntoDescriptor (shortened for readability).
+function readableByteStreamControllerConvertDescriptor(pullIntoDescriptor)
+{
+    "use strict";
+
+    @assert(pullIntoDescriptor.bytesFilled <= pullIntoDescriptor.byteLength);
+    @assert(pullIntoDescriptor.bytesFilled % pullIntoDescriptor.elementSize === 0);
+
+    return new pullIntoDescriptor.ctor(pullIntoDescriptor.buffer, pullIntoDescriptor.byteOffset, pullIntoDescriptor.bytesFilled / pullIntoDescriptor.elementSize);
+}
+
+function readableStreamFulfillReadIntoRequest(stream, chunk, done)
+{
+    "use strict";
+
+    stream.@reader.@readIntoRequests.@shift().@resolve.@call(@undefined, {value: chunk, done: done});
 }

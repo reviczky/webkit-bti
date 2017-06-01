@@ -39,7 +39,7 @@
 
 namespace JSC {
 
-const ClassInfo SetPrototype::s_info = { "Set", &Base::s_info, &setPrototypeTable, CREATE_METHOD_TABLE(SetPrototype) };
+const ClassInfo SetPrototype::s_info = { "Set", &Base::s_info, &setPrototypeTable, nullptr, CREATE_METHOD_TABLE(SetPrototype) };
 
 /* Source for SetIteratorPrototype.lut.h
 @begin setPrototypeTable
@@ -133,7 +133,7 @@ EncodedJSValue JSC_HOST_CALL setProtoFuncSize(CallFrame* callFrame)
     JSSet* set = getSet(callFrame, callFrame->thisValue());
     if (!set)
         return JSValue::encode(jsUndefined());
-    return JSValue::encode(jsNumber(set->size(callFrame)));
+    return JSValue::encode(jsNumber(set->size()));
 }
     
 EncodedJSValue JSC_HOST_CALL setProtoFuncValues(CallFrame* callFrame)

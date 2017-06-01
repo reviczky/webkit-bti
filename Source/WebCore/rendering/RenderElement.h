@@ -36,7 +36,8 @@ class RenderElement : public RenderObject {
 public:
     virtual ~RenderElement();
 
-    static RenderPtr<RenderElement> createFor(Element&, RenderStyle&&);
+    enum RendererCreationType { CreateAllRenderers, OnlyCreateBlockAndFlexboxRenderers };
+    static RenderPtr<RenderElement> createFor(Element&, RenderStyle&&, RendererCreationType = CreateAllRenderers);
 
     bool hasInitializedStyle() const { return m_hasInitializedStyle; }
 
@@ -140,6 +141,7 @@ public:
 
     bool borderImageIsLoadedAndCanBeRendered() const;
     bool mayCauseRepaintInsideViewport(const IntRect* visibleRect = nullptr) const;
+    bool isVisibleInDocumentRect(const IntRect& documentRect) const;
 
     // Returns true if this renderer requires a new stacking context.
     static bool createsGroupForStyle(const RenderStyle&);
@@ -188,9 +190,12 @@ public:
 
     void registerForVisibleInViewportCallback();
     void unregisterForVisibleInViewportCallback();
-    void visibleInViewportStateChanged(VisibleInViewportState);
 
-    bool repaintForPausedImageAnimationsIfNeeded(const IntRect& visibleRect);
+    VisibleInViewportState visibleInViewportState() const { return static_cast<VisibleInViewportState>(m_visibleInViewportState); }
+    void setVisibleInViewportState(VisibleInViewportState);
+    virtual void visibleInViewportStateChanged();
+
+    bool repaintForPausedImageAnimationsIfNeeded(const IntRect& visibleRect, CachedImage&);
     bool hasPausedImageAnimations() const { return m_hasPausedImageAnimations; }
     void setHasPausedImageAnimations(bool b) { m_hasPausedImageAnimations = b; }
 
@@ -219,6 +224,11 @@ public:
     RespectImageOrientationEnum shouldRespectImageOrientation() const;
 
     void removeFromRenderFlowThread();
+    virtual void resetFlowThreadContainingBlockAndChildInfoIncludingDescendants(RenderFlowThread*);
+
+    // Called before anonymousChild.setStyle(). Override to set custom styles for
+    // the child.
+    virtual void updateAnonymousChildStyle(const RenderObject&, RenderStyle&) const { };
 
 protected:
     enum BaseTypeFlag {
@@ -308,7 +318,10 @@ private:
     std::unique_ptr<RenderStyle> computeFirstLineStyle() const;
     void invalidateCachedFirstLineStyle();
 
-    void newImageAnimationFrameAvailable(CachedImage&) final;
+    bool isVisibleInViewport() const;
+    bool canDestroyDecodedData() final { return !isVisibleInViewport(); }
+    VisibleInViewportState imageFrameAvailable(CachedImage&, ImageAnimatingState, const IntRect* changeRect) final;
+    void didRemoveCachedImageClient(CachedImage&) final;
 
     bool getLeadingCorner(FloatPoint& output, bool& insideFixed) const;
     bool getTrailingCorner(FloatPoint& output, bool& insideFixed) const;
@@ -336,6 +349,9 @@ private:
     unsigned m_renderBlockShouldForceRelayoutChildren : 1;
     unsigned m_renderBlockFlowHasMarkupTruncation : 1;
     unsigned m_renderBlockFlowLineLayoutPath : 2;
+
+    unsigned m_isRegisteredForVisibleInViewportCallback : 1;
+    unsigned m_visibleInViewportState : 2;
 
     RenderObject* m_firstChild;
     RenderObject* m_lastChild;

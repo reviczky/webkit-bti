@@ -72,7 +72,7 @@ public:
     URL(const URL& base, const String& relative, const TextEncoding&);
 
     static URL fakeURLWithRelativePart(const String&);
-    static URL fileURLWithFileSystemPath(const String&);
+    WEBCORE_EXPORT static URL fileURLWithFileSystemPath(const String&);
 
     String strippedForUseAsReferrer() const;
 
@@ -312,6 +312,7 @@ WEBCORE_EXPORT const URL& blankURL();
 
 WEBCORE_EXPORT bool protocolIs(const String& url, const char* protocol);
 WEBCORE_EXPORT bool protocolIsJavaScript(const String& url);
+bool protocolIsJavaScript(StringView url);
 WEBCORE_EXPORT bool protocolIsInHTTPFamily(const String& url);
 
 std::optional<uint16_t> defaultPortForProtocol(StringView protocol);

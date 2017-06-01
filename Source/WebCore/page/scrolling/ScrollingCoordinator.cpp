@@ -335,9 +335,7 @@ SynchronousScrollingReasons ScrollingCoordinator::synchronousScrollingReasons(co
 #endif
     if (frameView.hasSlowRepaintObjects())
         synchronousScrollingReasons |= HasSlowRepaintObjects;
-    if (!supportsFixedPositionLayers() && frameView.hasViewportConstrainedObjects())
-        synchronousScrollingReasons |= HasViewportConstrainedObjectsWithoutSupportingFixedLayers;
-    if (supportsFixedPositionLayers() && hasVisibleSlowRepaintViewportConstrainedObjects(frameView))
+    if (hasVisibleSlowRepaintViewportConstrainedObjects(frameView))
         synchronousScrollingReasons |= HasNonLayerViewportConstrainedObjects;
     if (frameView.frame().mainFrame().document() && frameView.frame().document()->isImageDocument())
         synchronousScrollingReasons |= IsImageDocument;
@@ -345,14 +343,14 @@ SynchronousScrollingReasons ScrollingCoordinator::synchronousScrollingReasons(co
     return synchronousScrollingReasons;
 }
 
-void ScrollingCoordinator::updateSynchronousScrollingReasons(const FrameView& frameView)
+void ScrollingCoordinator::updateSynchronousScrollingReasons(FrameView& frameView)
 {
     // FIXME: Once we support async scrolling of iframes, we'll have to track the synchronous scrolling
     // reasons per frame (maybe on scrolling tree nodes).
     if (!frameView.frame().isMainFrame())
         return;
 
-    setSynchronousScrollingReasons(synchronousScrollingReasons(frameView));
+    setSynchronousScrollingReasons(frameView, synchronousScrollingReasons(frameView));
 }
 
 void ScrollingCoordinator::setForceSynchronousScrollLayerPositionUpdates(bool forceSynchronousScrollLayerPositionUpdates)
@@ -388,7 +386,7 @@ ScrollingNodeID ScrollingCoordinator::uniqueScrollLayerID()
     return uniqueScrollLayerID++;
 }
 
-String ScrollingCoordinator::scrollingStateTreeAsText() const
+String ScrollingCoordinator::scrollingStateTreeAsText(ScrollingStateTreeAsTextBehavior) const
 {
     return String();
 }
@@ -419,6 +417,20 @@ String ScrollingCoordinator::synchronousScrollingReasonsAsText() const
         return synchronousScrollingReasonsAsText(synchronousScrollingReasons(*frameView));
 
     return String();
+}
+
+TextStream& operator<<(TextStream& ts, ScrollableAreaParameters scrollableAreaParameters)
+{
+    ts.dumpProperty("horizontal scroll elasticity", scrollableAreaParameters.horizontalScrollElasticity);
+    ts.dumpProperty("vertical scroll elasticity", scrollableAreaParameters.verticalScrollElasticity);
+    ts.dumpProperty("horizontal scrollbar mode", scrollableAreaParameters.horizontalScrollbarMode);
+    ts.dumpProperty("vertical scrollbar mode", scrollableAreaParameters.verticalScrollbarMode);
+    if (scrollableAreaParameters.hasEnabledHorizontalScrollbar)
+        ts.dumpProperty("has enabled horizontal scrollbar", scrollableAreaParameters.hasEnabledHorizontalScrollbar);
+    if (scrollableAreaParameters.hasEnabledVerticalScrollbar)
+        ts.dumpProperty("has enabled vertical scrollbar", scrollableAreaParameters.hasEnabledVerticalScrollbar);
+
+    return ts;
 }
 
 TextStream& operator<<(TextStream& ts, ScrollingNodeType nodeType)

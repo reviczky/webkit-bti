@@ -29,7 +29,7 @@
 #if ENABLE(INSPECTOR_SERVER)
 
 #include <WebCore/SocketStreamHandleClient.h>
-#include <wtf/PassRefPtr.h>
+#include <wtf/Ref.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
@@ -69,7 +69,8 @@ private:
     // SocketStreamHandleClient implementation.
     void didOpenSocketStream(WebCore::SocketStreamHandle&) final { }
     void didCloseSocketStream(WebCore::SocketStreamHandle&) final;
-    void didReceiveSocketStreamData(WebCore::SocketStreamHandle&, const char* data, std::optional<size_t> length) final;
+    void didReceiveSocketStreamData(WebCore::SocketStreamHandle&, const char*, size_t) final;
+    void didFailToReceiveSocketStreamData(WebCore::SocketStreamHandle&) final { }
     void didUpdateBufferedAmount(WebCore::SocketStreamHandle&, size_t bufferedAmount) final;
     void didFailSocketStream(WebCore::SocketStreamHandle&, const WebCore::SocketStreamError&) final { }
 
@@ -77,7 +78,7 @@ private:
     void readHTTPMessage();
 
     // WebSocket Mode.
-    void upgradeToWebSocketServerConnection(PassRefPtr<HTTPRequest>);
+    void upgradeToWebSocketServerConnection(Ref<HTTPRequest>&&);
     void readWebSocketFrames();
     bool readWebSocketFrame();
 

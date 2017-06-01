@@ -276,7 +276,7 @@ void RenderImage::imageChanged(WrappedImagePtr newImage, const IntRect* rect)
 
 void RenderImage::updateIntrinsicSizeIfNeeded(const LayoutSize& newSize)
 {
-    if (imageResource().errorOccurred() || !m_imageResource->hasImage())
+    if (imageResource().errorOccurred() || !m_imageResource->cachedImage())
         return;
     setIntrinsicSize(newSize);
 }
@@ -355,6 +355,25 @@ void RenderImage::notifyFinished(CachedResource& newImage)
     }
 }
 
+bool RenderImage::isShowingMissingOrImageError() const
+{
+    return !imageResource().cachedImage() || imageResource().errorOccurred();
+}
+
+bool RenderImage::isShowingAltText() const
+{
+    return isShowingMissingOrImageError() && !m_altText.isEmpty();
+}
+
+bool RenderImage::hasNonBitmapImage() const
+{
+    if (!imageResource().cachedImage())
+        return false;
+
+    Image* image = cachedImage()->imageForRenderer(this);
+    return image && !is<BitmapImage>(image);
+}
+
 void RenderImage::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
     LayoutSize contentSize = this->contentSize();
@@ -362,7 +381,7 @@ void RenderImage::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paintOf
     GraphicsContext& context = paintInfo.context();
     float deviceScaleFactor = document().deviceScaleFactor();
 
-    if (!imageResource().hasImage() || imageResource().errorOccurred()) {
+    if (!imageResource().cachedImage() || imageResource().errorOccurred()) {
         if (paintInfo.phase == PaintPhaseSelection)
             return;
 
@@ -542,7 +561,7 @@ void RenderImage::areaElementFocusChanged(HTMLAreaElement* element)
 
 void RenderImage::paintIntoRect(GraphicsContext& context, const FloatRect& rect)
 {
-    if (!imageResource().hasImage() || imageResource().errorOccurred() || rect.width() <= 0 || rect.height() <= 0)
+    if (!imageResource().cachedImage() || imageResource().errorOccurred() || rect.width() <= 0 || rect.height() <= 0)
         return;
 
     RefPtr<Image> img = imageResource().image(flooredIntSize(rect.size()));
@@ -561,8 +580,12 @@ void RenderImage::paintIntoRect(GraphicsContext& context, const FloatRect& rect)
         downcast<PDFDocumentImage>(*image).setPdfImageCachingPolicy(settings().pdfImageCachingPolicy());
 #endif
 
+    if (is<BitmapImage>(image))
+        downcast<BitmapImage>(*image).updateFromSettings(settings());
+
     ImageOrientationDescription orientationDescription(shouldRespectImageOrientation(), style().imageOrientation());
-    context.drawImage(*img, rect, ImagePaintingOptions(compositeOperator, BlendModeNormal, orientationDescription, interpolation));
+    auto decodingMode = (view().frameView().paintBehavior() & PaintBehaviorFlattenCompositingLayers) ? DecodingMode::Synchronous : DecodingMode::Asynchronous;
+    context.drawImage(*img, rect, ImagePaintingOptions(compositeOperator, BlendModeNormal, decodingMode, orientationDescription, interpolation));
 }
 
 bool RenderImage::boxShadowShouldBeAppliedToBackground(const LayoutPoint& paintOffset, BackgroundBleedAvoidance bleedAvoidance, InlineFlowBox*) const
@@ -576,7 +599,7 @@ bool RenderImage::boxShadowShouldBeAppliedToBackground(const LayoutPoint& paintO
 bool RenderImage::foregroundIsKnownToBeOpaqueInRect(const LayoutRect& localRect, unsigned maxDepthToTest) const
 {
     UNUSED_PARAM(maxDepthToTest);
-    if (!imageResource().hasImage() || imageResource().errorOccurred())
+    if (!imageResource().cachedImage() || imageResource().errorOccurred())
         return false;
     if (cachedImage() && !cachedImage()->isLoaded())
         return false;

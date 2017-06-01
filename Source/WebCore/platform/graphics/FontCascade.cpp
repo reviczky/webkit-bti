@@ -25,6 +25,7 @@
 #include "FontCascade.h"
 
 #include "CharacterProperties.h"
+#include "ComplexTextController.h"
 #include "FloatRect.h"
 #include "FontCache.h"
 #include "GlyphBuffer.h"
@@ -121,7 +122,7 @@ FontCascade::FontCascade(const FontPlatformData& fontData, FontSmoothingMode fon
     m_fontDescription.setSpecifiedSize(CTFontGetSize(fontData.font()));
     m_fontDescription.setComputedSize(CTFontGetSize(fontData.font()));
     m_fontDescription.setIsItalic(CTFontGetSymbolicTraits(fontData.font()) & kCTFontTraitItalic);
-    m_fontDescription.setWeight((CTFontGetSymbolicTraits(fontData.font()) & kCTFontTraitBold) ? FontWeightBold : FontWeightNormal);
+    m_fontDescription.setWeight((CTFontGetSymbolicTraits(fontData.font()) & kCTFontTraitBold) ? boldWeightValue() : normalWeightValue());
 #endif
 }
 
@@ -306,12 +307,6 @@ float FontCascade::glyphBufferForTextRun(CodePath codePathToUse, const TextRun& 
 
 float FontCascade::drawText(GraphicsContext& context, const TextRun& run, const FloatPoint& point, unsigned from, std::optional<unsigned> to, CustomFontNotReadyAction customFontNotReadyAction) const
 {
-    // Don't draw anything while we are using custom fonts that are in the process of loading,
-    // except if the 'force' argument is set to true (in which case it will use a fallback
-    // font).
-    if (isLoadingCustomFonts() && customFontNotReadyAction == DoNotPaintIfFontNotReady)
-        return 0;
-
     unsigned destination = to.value_or(run.length());
 
     CodePath codePathToUse = codePath(run);
@@ -326,7 +321,7 @@ float FontCascade::drawText(GraphicsContext& context, const TextRun& run, const 
         return 0;
     // Draw the glyph buffer now at the starting point returned in startX.
     FloatPoint startPoint(startX, point.y());
-    drawGlyphBuffer(context, glyphBuffer, startPoint);
+    drawGlyphBuffer(context, glyphBuffer, startPoint, customFontNotReadyAction);
     return startPoint.x() - startX;
 }
 
@@ -346,6 +341,43 @@ void FontCascade::drawEmphasisMarks(GraphicsContext& context, const TextRun& run
         drawEmphasisMarksForSimpleText(context, run, mark, point, from, destination);
     else
         drawEmphasisMarksForComplexText(context, run, mark, point, from, destination);
+}
+
+float FontCascade::widthOfTextRange(const TextRun& run, unsigned from, unsigned to, HashSet<const Font*>* fallbackFonts, float* outWidthBeforeRange, float* outWidthAfterRange) const
+{
+    ASSERT(from <= to);
+    ASSERT(to <= run.length());
+
+    float offsetBeforeRange = 0;
+    float offsetAfterRange = 0;
+    float totalWidth = 0;
+
+    auto codePathToUse = codePath(run);
+    if (codePathToUse == Complex) {
+        ComplexTextController complexIterator(*this, run, false, fallbackFonts);
+        complexIterator.advance(from, nullptr, IncludePartialGlyphs, fallbackFonts);
+        offsetBeforeRange = complexIterator.runWidthSoFar();
+        complexIterator.advance(to, nullptr, IncludePartialGlyphs, fallbackFonts);
+        offsetAfterRange = complexIterator.runWidthSoFar();
+        complexIterator.advance(run.length(), nullptr, IncludePartialGlyphs, fallbackFonts);
+        totalWidth = complexIterator.runWidthSoFar();
+    } else {
+        WidthIterator simpleIterator(this, run, fallbackFonts);
+        simpleIterator.advance(from, nullptr);
+        offsetBeforeRange = simpleIterator.runWidthSoFar();
+        simpleIterator.advance(to, nullptr);
+        offsetAfterRange = simpleIterator.runWidthSoFar();
+        simpleIterator.advance(run.length(), nullptr);
+        totalWidth = simpleIterator.runWidthSoFar();
+    }
+
+    if (outWidthBeforeRange)
+        *outWidthBeforeRange = offsetBeforeRange;
+
+    if (outWidthAfterRange)
+        *outWidthAfterRange = totalWidth - offsetAfterRange;
+
+    return offsetAfterRange - offsetBeforeRange;
 }
 
 float FontCascade::width(const TextRun& run, HashSet<const Font*>* fallbackFonts, GlyphOverflow* glyphOverflow) const
@@ -749,17 +781,71 @@ FontCascade::CodePath FontCascade::characterRangeCodePath(const UChar* character
 
             UChar32 supplementaryCharacter = U16_GET_SUPPLEMENTARY(c, next);
 
+            if (supplementaryCharacter < 0x10A00)
+                continue;
+            if (supplementaryCharacter < 0x10A60) // Kharoshthi
+                return Complex;
+            if (supplementaryCharacter < 0x11000)
+                continue;
+            if (supplementaryCharacter < 0x11080) // Brahmi
+                return Complex;
+            if (supplementaryCharacter < 0x110D0) // Kaithi
+                return Complex;
+            if (supplementaryCharacter < 0x11100)
+                continue;
+            if (supplementaryCharacter < 0x11150) // Chakma
+                return Complex;
+            if (supplementaryCharacter < 0x11180) // Mahajani
+                return Complex;
+            if (supplementaryCharacter < 0x111E0) // Sharada
+                return Complex;
+            if (supplementaryCharacter < 0x11200)
+                continue;
+            if (supplementaryCharacter < 0x11250) // Khojki
+                return Complex;
+            if (supplementaryCharacter < 0x112B0)
+                continue;
+            if (supplementaryCharacter < 0x11300) // Khudawadi
+                return Complex;
+            if (supplementaryCharacter < 0x11380) // Grantha
+                return Complex;
+            if (supplementaryCharacter < 0x11400)
+                continue;
+            if (supplementaryCharacter < 0x11480) // Newa
+                return Complex;
+            if (supplementaryCharacter < 0x114E0) // Tirhuta
+                return Complex;
+            if (supplementaryCharacter < 0x11580)
+                continue;
+            if (supplementaryCharacter < 0x11600) // Siddham
+                return Complex;
+            if (supplementaryCharacter < 0x11660) // Modi
+                return Complex;
+            if (supplementaryCharacter < 0x11680)
+                continue;
+            if (supplementaryCharacter < 0x116D0) // Takri
+                return Complex;
+            if (supplementaryCharacter < 0x11C00)
+                continue;
+            if (supplementaryCharacter < 0x11C70) // Bhaiksuki
+                return Complex;
+            if (supplementaryCharacter < 0x11CC0) // Marchen
+                return Complex;
+            if (supplementaryCharacter < 0x1E900)
+                continue;
+            if (supplementaryCharacter < 0x1E960) // Adlam
+                return Complex;
             if (supplementaryCharacter < 0x1F1E6) // U+1F1E6 through U+1F1FF Regional Indicator Symbols
                 continue;
             if (supplementaryCharacter <= 0x1F1FF)
                 return Complex;
 
+            if (isEmojiFitzpatrickModifier(supplementaryCharacter))
+                return Complex;
             if (isEmojiGroupCandidate(supplementaryCharacter)) {
                 previousCharacterIsEmojiGroupCandidate = true;
                 continue;
             }
-            if (isEmojiFitzpatrickModifier(supplementaryCharacter))
-                return Complex;
             if (supplementaryCharacter < 0xE0100) // U+E0100 through U+E01EF Unicode variation selectors.
                 continue;
             if (supplementaryCharacter <= 0xE01EF)
@@ -1308,7 +1394,15 @@ void FontCascade::drawEmphasisMarksForSimpleText(GraphicsContext& context, const
     drawEmphasisMarks(context, glyphBuffer, mark, FloatPoint(point.x() + initialAdvance, point.y()));
 }
 
-void FontCascade::drawGlyphBuffer(GraphicsContext& context, const GlyphBuffer& glyphBuffer, FloatPoint& point) const
+inline bool shouldDrawIfLoading(const Font& font, FontCascade::CustomFontNotReadyAction customFontNotReadyAction)
+{
+    // Don't draw anything while we are using custom fonts that are in the process of loading,
+    // except if the 'customFontNotReadyAction' argument is set to UseFallbackIfFontNotReady
+    // (in which case "font" will be a fallback font).
+    return !font.isInterstitial() || font.visibility() == Font::Visibility::Visible || customFontNotReadyAction == FontCascade::CustomFontNotReadyAction::UseFallbackIfFontNotReady;
+}
+
+void FontCascade::drawGlyphBuffer(GraphicsContext& context, const GlyphBuffer& glyphBuffer, FloatPoint& point, CustomFontNotReadyAction customFontNotReadyAction) const
 {
     // Draw each contiguous run of glyphs that use the same font data.
     const Font* fontData = glyphBuffer.fontAt(0);
@@ -1323,7 +1417,8 @@ void FontCascade::drawGlyphBuffer(GraphicsContext& context, const GlyphBuffer& g
         FloatSize nextOffset = glyphBuffer.offsetAt(nextGlyph);
 
         if (nextFontData != fontData || nextOffset != offset) {
-            context.drawGlyphs(*this, *fontData, glyphBuffer, lastFrom, nextGlyph - lastFrom, startPoint);
+            if (shouldDrawIfLoading(*fontData, customFontNotReadyAction))
+                context.drawGlyphs(*this, *fontData, glyphBuffer, lastFrom, nextGlyph - lastFrom, startPoint);
 
             lastFrom = nextGlyph;
             fontData = nextFontData;
@@ -1336,7 +1431,8 @@ void FontCascade::drawGlyphBuffer(GraphicsContext& context, const GlyphBuffer& g
         nextGlyph++;
     }
 
-    context.drawGlyphs(*this, *fontData, glyphBuffer, lastFrom, nextGlyph - lastFrom, startPoint);
+    if (shouldDrawIfLoading(*fontData, customFontNotReadyAction))
+        context.drawGlyphs(*this, *fontData, glyphBuffer, lastFrom, nextGlyph - lastFrom, startPoint);
     point.setX(nextX);
 }
 
@@ -1381,7 +1477,7 @@ void FontCascade::drawEmphasisMarks(GraphicsContext& context, const GlyphBuffer&
     }
     markBuffer.add(glyphBuffer.glyphAt(glyphBuffer.size() - 1) ? markGlyph : spaceGlyph, markFontData, 0);
 
-    drawGlyphBuffer(context, markBuffer, startPoint);
+    drawGlyphBuffer(context, markBuffer, startPoint, CustomFontNotReadyAction::DoNotPaintIfFontNotReady);
 }
 
 float FontCascade::floatWidthForSimpleText(const TextRun& run, HashSet<const Font*>* fallbackFonts, GlyphOverflow* glyphOverflow) const

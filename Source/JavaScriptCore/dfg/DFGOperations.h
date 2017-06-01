@@ -27,6 +27,7 @@
 
 #if ENABLE(DFG_JIT)
 
+#include "DFGArithMode.h"
 #include "JITOperations.h"
 #include "PutKind.h"
 
@@ -54,19 +55,21 @@ EncodedJSValue JIT_OPERATION operationValueAddNotNumber(ExecState*, EncodedJSVal
 EncodedJSValue JIT_OPERATION operationValueDiv(ExecState*, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2) WTF_INTERNAL;
 double JIT_OPERATION operationArithAbs(ExecState*, EncodedJSValue encodedOp1) WTF_INTERNAL;
 int32_t JIT_OPERATION operationArithClz32(ExecState*, EncodedJSValue encodedOp1) WTF_INTERNAL;
-double JIT_OPERATION operationArithCos(ExecState*, EncodedJSValue encodedOp1) WTF_INTERNAL;
-double JIT_OPERATION operationArithTan(ExecState*, EncodedJSValue encodedOp1) WTF_INTERNAL;
 double JIT_OPERATION operationArithFRound(ExecState*, EncodedJSValue encodedOp1) WTF_INTERNAL;
-double JIT_OPERATION operationArithLog(ExecState*, EncodedJSValue encodedOp1) WTF_INTERNAL;
-double JIT_OPERATION operationArithSin(ExecState*, EncodedJSValue encodedOp1) WTF_INTERNAL;
 double JIT_OPERATION operationArithSqrt(ExecState*, EncodedJSValue encodedOp1) WTF_INTERNAL;
+
+#define DFG_ARITH_UNARY(capitalizedName, lowerName) \
+double JIT_OPERATION operationArith##capitalizedName(ExecState*, EncodedJSValue encodedOp1) WTF_INTERNAL;
+    FOR_EACH_DFG_ARITH_UNARY_OP(DFG_ARITH_UNARY)
+#undef DFG_ARITH_UNARY
+
 EncodedJSValue JIT_OPERATION operationArithRound(ExecState*, EncodedJSValue) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationArithFloor(ExecState*, EncodedJSValue) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationArithCeil(ExecState*, EncodedJSValue) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationArithTrunc(ExecState*, EncodedJSValue) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationGetByVal(ExecState*, EncodedJSValue encodedBase, EncodedJSValue encodedProperty) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationGetByValCell(ExecState*, JSCell*, EncodedJSValue encodedProperty) WTF_INTERNAL;
-EncodedJSValue JIT_OPERATION operationGetByValArrayInt(ExecState*, JSArray*, int32_t) WTF_INTERNAL;
+EncodedJSValue JIT_OPERATION operationGetByValObjectInt(ExecState*, JSObject*, int32_t) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationGetByValStringInt(ExecState*, JSString*, int32_t) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationToPrimitive(ExecState*, EncodedJSValue) WTF_INTERNAL;
 EncodedJSValue JIT_OPERATION operationToNumber(ExecState*, EncodedJSValue) WTF_INTERNAL;
@@ -207,6 +210,7 @@ JSCell* JIT_OPERATION operationSpreadGeneric(ExecState*, JSCell*);
 JSCell* JIT_OPERATION operationNewArrayWithSpreadSlow(ExecState*, void*, uint32_t);
 
 JSCell* JIT_OPERATION operationResolveScope(ExecState*, JSScope*, UniquedStringImpl*);
+EncodedJSValue JIT_OPERATION operationResolveScopeForHoistingFuncDeclInEval(ExecState*, JSScope*, UniquedStringImpl*);
 EncodedJSValue JIT_OPERATION operationGetDynamicVar(ExecState*, JSObject* scope, UniquedStringImpl*, unsigned);
 void JIT_OPERATION operationPutDynamicVar(ExecState*, JSObject* scope, EncodedJSValue, UniquedStringImpl*, unsigned);
 

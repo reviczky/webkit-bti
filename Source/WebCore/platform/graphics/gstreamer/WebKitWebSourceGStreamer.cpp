@@ -111,12 +111,12 @@ private:
     void didReceiveResponse(ResourceHandle*, ResourceResponse&&) override;
     void didReceiveData(ResourceHandle*, const char*, unsigned, int) override;
     void didReceiveBuffer(ResourceHandle*, Ref<SharedBuffer>&&, int encodedLength) override;
-    void didFinishLoading(ResourceHandle*, double) override;
+    void didFinishLoading(ResourceHandle*) override;
     void didFail(ResourceHandle*, const ResourceError&) override;
     void wasBlocked(ResourceHandle*) override;
     void cannotShowURL(ResourceHandle*) override;
 
-    ThreadIdentifier m_thread { 0 };
+    RefPtr<Thread> m_thread;
     Lock m_initializeRunLoopConditionMutex;
     Condition m_initializeRunLoopCondition;
     RunLoop* m_runLoop { nullptr };
@@ -1108,7 +1108,7 @@ ResourceHandleStreamingClient::ResourceHandleStreamingClient(WebKitWebSrc* src, 
     : StreamingClient(src, WTFMove(request))
 {
     LockHolder locker(m_initializeRunLoopConditionMutex);
-    m_thread = createThread("ResourceHandleStreamingClient", [this] {
+    m_thread = Thread::create("ResourceHandleStreamingClient", [this] {
         {
             LockHolder locker(m_initializeRunLoopConditionMutex);
             m_runLoop = &RunLoop::current();
@@ -1133,8 +1133,8 @@ ResourceHandleStreamingClient::ResourceHandleStreamingClient(WebKitWebSrc* src, 
 ResourceHandleStreamingClient::~ResourceHandleStreamingClient()
 {
     if (m_thread) {
-        detachThread(m_thread);
-        m_thread = 0;
+        m_thread->detach();
+        m_thread = nullptr;
     }
 }
 
@@ -1206,16 +1206,11 @@ void ResourceHandleStreamingClient::didReceiveBuffer(ResourceHandle*, Ref<Shared
     if (!m_resource)
         return;
 
-    // This pattern is suggested by SharedBuffer.h.
-    const char* segment;
-    unsigned position = 0;
-    while (unsigned length = buffer->getSomeData(segment, position)) {
-        handleDataReceived(segment, length);
-        position += length;
-    }
+    for (const auto& segment : buffer.get())
+        handleDataReceived(segment->data(), segment->size());
 }
 
-void ResourceHandleStreamingClient::didFinishLoading(ResourceHandle*, double)
+void ResourceHandleStreamingClient::didFinishLoading(ResourceHandle*)
 {
     if (m_resource)
         handleNotifyFinished();

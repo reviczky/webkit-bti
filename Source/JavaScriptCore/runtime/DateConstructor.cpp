@@ -61,7 +61,7 @@ EncodedJSValue JSC_HOST_CALL dateUTC(ExecState*);
 
 namespace JSC {
 
-const ClassInfo DateConstructor::s_info = { "Function", &InternalFunction::s_info, &dateConstructorTable, CREATE_METHOD_TABLE(DateConstructor) };
+const ClassInfo DateConstructor::s_info = { "Function", &InternalFunction::s_info, &dateConstructorTable, nullptr, CREATE_METHOD_TABLE(DateConstructor) };
 
 /* Source for DateConstructor.lut.h
 @begin dateConstructorTable
@@ -104,7 +104,7 @@ void DateConstructor::finishCreation(VM& vm, DatePrototype* datePrototype)
 {
     Base::finishCreation(vm, "Date");
     putDirectWithoutTransition(vm, vm.propertyNames->prototype, datePrototype, DontEnum | DontDelete | ReadOnly);
-    putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(7), ReadOnly | DontEnum | DontDelete);
+    putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(7), ReadOnly | DontEnum);
 }
 
 static double millisecondsFromComponents(ExecState* exec, const ArgList& args, WTF::TimeType timeType)

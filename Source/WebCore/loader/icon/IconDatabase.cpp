@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006, 2007, 2008, 2009, 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2017 Apple Inc. All rights reserved.
  * Copyright (C) 2007 Justin Haygood (jhaygood@reaktix.com)
  *
  * Redistribution and use in source and binary forms, with or without
@@ -47,7 +47,7 @@
 #define ASSERT_NOT_SYNC_THREAD() ASSERT(!m_syncThreadRunning || !IS_ICON_SYNC_THREAD())
 
 // For methods that are meant to support the sync thread ONLY
-#define IS_ICON_SYNC_THREAD() (m_syncThread == currentThread())
+#define IS_ICON_SYNC_THREAD() (m_syncThread->id() == currentThread())
 #define ASSERT_ICON_SYNC_THREAD() ASSERT(IS_ICON_SYNC_THREAD())
 
 #if PLATFORM(GTK)
@@ -67,7 +67,7 @@ static const int currentDatabaseVersion = 6;
 // Icons expire once every 4 days
 static const int iconExpirationTime = 60*60*24*4; 
 
-static const int updateTimerDelay = 5; 
+static const Seconds updateTimerDelay { 5_s };
 
 static bool checkIntegrityOnOpen = false;
 
@@ -141,7 +141,7 @@ bool IconDatabase::open(const String& directory, const String& filename)
     // Lock here as well as first thing in the thread so the thread doesn't actually commence until the createThread() call 
     // completes and m_syncThreadRunning is properly set
     m_syncLock.lock();
-    m_syncThread = createThread(IconDatabase::iconDatabaseSyncThreadStart, this, "WebCore: IconDatabase");
+    m_syncThread = Thread::create(IconDatabase::iconDatabaseSyncThreadStart, this, "WebCore: IconDatabase");
     m_syncThreadRunning = m_syncThread;
     m_syncLock.unlock();
     if (!m_syncThread)
@@ -161,7 +161,7 @@ void IconDatabase::close()
         wakeSyncThread();
         
         // Wait for the sync thread to terminate
-        waitForThreadCompletion(m_syncThread);
+        m_syncThread->waitForCompletion();
     }
 
     m_syncThreadRunning = false;    
@@ -880,7 +880,7 @@ String IconDatabase::databasePath() const
 
 String IconDatabase::defaultDatabaseFilename()
 {
-    static NeverDestroyed<String> defaultDatabaseFilename(ASCIILiteral("WebpageIcons.db"));
+    static NeverDestroyed<String> defaultDatabaseFilename(MAKE_STATIC_STRING_IMPL("WebpageIcons.db"));
     return defaultDatabaseFilename.get().isolatedCopy();
 }
 

@@ -44,6 +44,7 @@
 #include "PageConfiguration.h"
 #include "PolygonShape.h"
 #include "PseudoElement.h"
+#include "RTCController.h"
 #include "RectangleShape.h"
 #include "RenderBoxModelObject.h"
 #include "RenderElement.h"
@@ -341,7 +342,7 @@ void InspectorOverlay::update()
     drawPaintRects();
 
     // Position DOM elements.
-    overlayPage()->mainFrame().document()->recalcStyle(Style::Force);
+    overlayPage()->mainFrame().document()->resolveStyle(Document::ResolveStyleType::Rebuild);
     if (overlayView->needsLayout())
         overlayView->layout();
 
@@ -512,8 +513,8 @@ void InspectorOverlay::showPaintRect(const FloatRect& rect)
     m_paintRects.append(TimeRectPair(removeTime, rootRect));
 
     if (!m_paintRectUpdateTimer.isActive()) {
-        const double paintRectsUpdateIntervalSeconds = 0.032;
-        m_paintRectUpdateTimer.startRepeating(paintRectsUpdateIntervalSeconds);
+        const Seconds paintRectsUpdateInterval { 32_ms };
+        m_paintRectUpdateTimer.startRepeating(paintRectsUpdateInterval);
     }
 
     drawPaintRects();

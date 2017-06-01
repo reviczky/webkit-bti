@@ -20,6 +20,7 @@
 #include "config.h"
 #include "WebKitWebContext.h"
 
+#include "APIAutomationClient.h"
 #include "APICustomProtocolManagerClient.h"
 #include "APIDownloadClient.h"
 #include "APIPageConfiguration.h"
@@ -27,8 +28,10 @@
 #include "APIString.h"
 #include "TextChecker.h"
 #include "TextCheckerState.h"
+#include "WebAutomationSession.h"
 #include "WebCertificateInfo.h"
 #include "WebGeolocationManagerProxy.h"
+#include "WebKitAutomationSessionPrivate.h"
 #include "WebKitCustomProtocolManagerClient.h"
 #include "WebKitDownloadClient.h"
 #include "WebKitDownloadPrivate.h"
@@ -39,6 +42,7 @@
 #include "WebKitNotificationProvider.h"
 #include "WebKitPluginPrivate.h"
 #include "WebKitPrivate.h"
+#include "WebKitRemoteInspectorProtocolHandler.h"
 #include "WebKitSecurityManagerPrivate.h"
 #include "WebKitSecurityOriginPrivate.h"
 #include "WebKitSettingsPrivate.h"
@@ -50,6 +54,7 @@
 #include "WebKitWebsiteDataManagerPrivate.h"
 #include "WebNotificationManagerProxy.h"
 #include "WebsiteDataType.h"
+#include <JavaScriptCore/RemoteInspector.h>
 #include <WebCore/FileSystem.h>
 #include <WebCore/IconDatabase.h>
 #include <WebCore/Language.h>
@@ -58,8 +63,8 @@
 #include <memory>
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
-#include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
+#include <wtf/RefPtr.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/text/CString.h>
@@ -109,6 +114,7 @@ enum {
     DOWNLOAD_STARTED,
     INITIALIZE_WEB_EXTENSIONS,
     INITIALIZE_NOTIFICATION_PERMISSIONS,
+    AUTOMATION_STARTED,
 
     LAST_SIGNAL
 };
@@ -149,6 +155,8 @@ private:
 typedef HashMap<String, RefPtr<WebKitURISchemeHandler> > URISchemeHandlerMap;
 typedef HashMap<uint64_t, GRefPtr<WebKitURISchemeRequest> > URISchemeRequestMap;
 
+class WebKitAutomationClient;
+
 struct _WebKitWebContextPrivate {
     RefPtr<WebProcessPool> processPool;
     bool clientsDetached;
@@ -160,9 +168,7 @@ struct _WebKitWebContextPrivate {
 #if ENABLE(GEOLOCATION)
     RefPtr<WebKitGeolocationProvider> geolocationProvider;
 #endif
-#if ENABLE(NOTIFICATIONS)
     RefPtr<WebKitNotificationProvider> notificationProvider;
-#endif
     GRefPtr<WebKitWebsiteDataManager> websiteDataManager;
 
     CString faviconDatabaseDirectory;
@@ -177,9 +183,43 @@ struct _WebKitWebContextPrivate {
     GRefPtr<GVariant> webExtensionsInitializationUserData;
 
     CString localStorageDirectory;
+#if ENABLE(REMOTE_INSPECTOR)
+    std::unique_ptr<RemoteInspectorProtocolHandler> remoteInspectorProtocolHandler;
+    std::unique_ptr<WebKitAutomationClient> automationClient;
+    GRefPtr<WebKitAutomationSession> automationSession;
+#endif
 };
 
 static guint signals[LAST_SIGNAL] = { 0, };
+
+#if ENABLE(REMOTE_INSPECTOR)
+class WebKitAutomationClient final : Inspector::RemoteInspector::Client {
+public:
+    explicit WebKitAutomationClient(WebKitWebContext* context)
+        : m_webContext(context)
+    {
+        Inspector::RemoteInspector::singleton().setClient(this);
+    }
+
+    ~WebKitAutomationClient()
+    {
+        Inspector::RemoteInspector::singleton().setClient(nullptr);
+    }
+
+private:
+    bool remoteAutomationAllowed() const override { return true; }
+
+    void requestAutomationSession(const String& sessionIdentifier) override
+    {
+        ASSERT(!m_webContext->priv->automationSession);
+        m_webContext->priv->automationSession = adoptGRef(webkitAutomationSessionCreate(sessionIdentifier.utf8().data()));
+        m_webContext->priv->processPool->setAutomationSession(&webkitAutomationSessionGetSession(m_webContext->priv->automationSession.get()));
+        g_signal_emit(m_webContext, signals[AUTOMATION_STARTED], 0, m_webContext->priv->automationSession.get());
+    }
+
+    WebKitWebContext* m_webContext;
+};
+#endif // ENABLE(REMOTE_INSPECTOR)
 
 WEBKIT_DEFINE_TYPE(WebKitWebContext, webkit_web_context, G_TYPE_OBJECT)
 
@@ -285,8 +325,9 @@ static void webkitWebContextConstructed(GObject* object)
 #if ENABLE(GEOLOCATION)
     priv->geolocationProvider = WebKitGeolocationProvider::create(priv->processPool->supplement<WebGeolocationManagerProxy>());
 #endif
-#if ENABLE(NOTIFICATIONS)
     priv->notificationProvider = WebKitNotificationProvider::create(priv->processPool->supplement<WebNotificationManagerProxy>(), webContext);
+#if ENABLE(REMOTE_INSPECTOR)
+    priv->remoteInspectorProtocolHandler = std::make_unique<RemoteInspectorProtocolHandler>(webContext);
 #endif
 }
 
@@ -297,7 +338,7 @@ static void webkitWebContextDispose(GObject* object)
         priv->clientsDetached = true;
         priv->processPool->initializeInjectedBundleClient(nullptr);
         priv->processPool->setDownloadClient(nullptr);
-        priv->processPool->setCustomProtocolManagerClient(nullptr);
+        priv->processPool->setLegacyCustomProtocolManagerClient(nullptr);
     }
 
     if (priv->websiteDataManager) {
@@ -416,6 +457,27 @@ static void webkit_web_context_class_init(WebKitWebContextClass* webContextClass
             nullptr, nullptr,
             g_cclosure_marshal_VOID__VOID,
             G_TYPE_NONE, 0);
+
+    /**
+     * WebKitWebContext::automation-started:
+     * @context: the #WebKitWebContext
+     * @session: the #WebKitAutomationSession associated with this event
+     *
+     * This signal is emitted when a new automation request is made.
+     * Note that it will never be emitted if automation is not enabled in @context,
+     * see webkit_web_context_set_automation_allowed() for more details.
+     *
+     * Since: 2.18
+     */
+    signals[AUTOMATION_STARTED] =
+        g_signal_new("automation-started",
+            G_TYPE_FROM_CLASS(gObjectClass),
+            G_SIGNAL_RUN_LAST,
+            G_STRUCT_OFFSET(WebKitWebContextClass, automation_started),
+            nullptr, nullptr,
+            g_cclosure_marshal_VOID__OBJECT,
+            G_TYPE_NONE, 1,
+            WEBKIT_TYPE_AUTOMATION_SESSION);
 }
 
 static gpointer createDefaultWebContext(gpointer)
@@ -520,6 +582,62 @@ gboolean webkit_web_context_is_ephemeral(WebKitWebContext* context)
     g_return_val_if_fail(WEBKIT_IS_WEB_CONTEXT(context), FALSE);
 
     return webkit_website_data_manager_is_ephemeral(context->priv->websiteDataManager.get());
+}
+
+/**
+ * webkit_web_context_is_automation_allowed:
+ * @context: the #WebKitWebContext
+ *
+ * Get whether automation is allowed in @context.
+ * See also webkit_web_context_set_automation_allowed().
+ *
+ * Returns: %TRUE if automation is allowed or %FALSE otherwise.
+ *
+ * Since: 2.18
+ */
+gboolean webkit_web_context_is_automation_allowed(WebKitWebContext* context)
+{
+    g_return_val_if_fail(WEBKIT_IS_WEB_CONTEXT(context), FALSE);
+
+#if ENABLE(REMOTE_INSPECTOR)
+    return !!context->priv->automationClient;
+#else
+    return FALSE;
+#endif
+}
+
+/**
+ * webkit_web_context_set_automation_allowed:
+ * @context: the #WebKitWebContext
+ * @allowed: value to set
+ *
+ * Set whether automation is allowed in @context. When automation is enabled the browser could
+ * be controlled by another process by requesting an automation session. When a new automation
+ * session is requested the signal #WebKitWebContext::automation-started is emitted.
+ * Automation is disabled by default, so you need to explicitly call this method passing %TRUE
+ * to enable it.
+ *
+ * Note that only one #WebKitWebContext can have automation enabled, so this will do nothing
+ * if there's another #WebKitWebContext with automation already enabled.
+ *
+ * Since: 2.18
+ */
+void webkit_web_context_set_automation_allowed(WebKitWebContext* context, gboolean allowed)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_CONTEXT(context));
+
+    if (webkit_web_context_is_automation_allowed(context) == allowed)
+        return;
+#if ENABLE(REMOTE_INSPECTOR)
+    if (allowed) {
+        if (Inspector::RemoteInspector::singleton().client()) {
+            g_warning("Not enabling automation on WebKitWebContext because there's another context with automation enabled, only one is allowed");
+            return;
+        }
+        context->priv->automationClient = std::make_unique<WebKitAutomationClient>(context);
+    } else
+        context->priv->automationClient = nullptr;
+#endif
 }
 
 /**
@@ -675,7 +793,7 @@ static DownloadsMap& downloadsMap()
  * starting a download from a particular #WebKitWebView use
  * webkit_web_view_download_uri() instead.
  *
- * Returns: (transfer full): a new #WebKitDownload representing the
+ * Returns: (transfer full): a new #WebKitDownload representing
  *    the download operation.
  */
 WebKitDownload* webkit_web_context_download_uri(WebKitWebContext* context, const gchar* uri)
@@ -1440,7 +1558,7 @@ WebProcessPool& webkitWebContextGetProcessPool(WebKitWebContext* context)
     return *context->priv->processPool;
 }
 
-void webkitWebContextStartLoadingCustomProtocol(WebKitWebContext* context, uint64_t customProtocolID, const WebCore::ResourceRequest& resourceRequest, CustomProtocolManagerProxy& manager)
+void webkitWebContextStartLoadingCustomProtocol(WebKitWebContext* context, uint64_t customProtocolID, const WebCore::ResourceRequest& resourceRequest, LegacyCustomProtocolManagerProxy& manager)
 {
     GRefPtr<WebKitURISchemeRequest> request = adoptGRef(webkitURISchemeRequestCreate(customProtocolID, context, resourceRequest, manager));
     String scheme(String::fromUTF8(webkit_uri_scheme_request_get_scheme(request.get())));
@@ -1461,7 +1579,7 @@ void webkitWebContextStopLoadingCustomProtocol(WebKitWebContext* context, uint64
     webkitURISchemeRequestCancel(request.get());
 }
 
-void webkitWebContextInvalidateCustomProtocolRequests(WebKitWebContext* context, CustomProtocolManagerProxy& manager)
+void webkitWebContextInvalidateCustomProtocolRequests(WebKitWebContext* context, LegacyCustomProtocolManagerProxy& manager)
 {
     Vector<GRefPtr<WebKitURISchemeRequest>> requests;
     copyValuesToVector(context->priv->uriSchemeRequests, requests);
@@ -1494,6 +1612,7 @@ void webkitWebContextCreatePageForWebView(WebKitWebContext* context, WebKitWebVi
     pageConfiguration->setPreferences(webkitSettingsGetPreferences(webkit_web_view_get_settings(webView)));
     pageConfiguration->setRelatedPage(relatedView ? webkitWebViewBaseGetPage(WEBKIT_WEB_VIEW_BASE(relatedView)) : nullptr);
     pageConfiguration->setUserContentController(userContentManager ? webkitUserContentManagerGetUserContentControllerProxy(userContentManager) : nullptr);
+    pageConfiguration->setControlledByAutomation(webkit_web_view_is_controlled_by_automation(webView));
 
     WebKitWebsiteDataManager* manager = webkitWebViewGetWebsiteDataManager(webView);
     if (!manager)

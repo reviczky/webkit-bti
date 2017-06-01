@@ -398,14 +398,14 @@ bool GraphicsContext3D::checkVaryingsPacking(Platform3DObject vertexShader, Plat
         variables.push_back(varyingSymbol);
 
     GC3Dint maxVaryingVectors = 0;
-#if !PLATFORM(IOS) && !((PLATFORM(WIN) || PLATFORM(GTK)) && USE(OPENGL_ES_2))
+#if !PLATFORM(IOS) && !((PLATFORM(WIN) || PLATFORM(GTK) || PLATFORM(WPE)) && USE(OPENGL_ES_2))
     GC3Dint maxVaryingFloats = 0;
     ::glGetIntegerv(GL_MAX_VARYING_FLOATS, &maxVaryingFloats);
     maxVaryingVectors = maxVaryingFloats / 4;
 #else
     ::glGetIntegerv(MAX_VARYING_VECTORS, &maxVaryingVectors);
 #endif
-    return ShCheckVariablesWithinPackingLimits(maxVaryingVectors, variables);
+    return sh::CheckVariablesWithinPackingLimits(maxVaryingVectors, variables);
 }
 
 bool GraphicsContext3D::precisionsMatch(Platform3DObject vertexShader, Platform3DObject fragmentShader) const
@@ -1892,6 +1892,14 @@ void GraphicsContext3D::recycleContext()
 #if ENABLE(WEBGL)
     if (m_webglContext)
         m_webglContext->recycleContext();
+#endif
+}
+
+void GraphicsContext3D::dispatchContextChangedNotification()
+{
+#if ENABLE(WEBGL)
+    if (m_webglContext)
+        m_webglContext->dispatchContextChangedEvent();
 #endif
 }
 

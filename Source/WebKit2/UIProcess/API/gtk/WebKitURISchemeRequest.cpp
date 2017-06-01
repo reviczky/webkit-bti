@@ -30,6 +30,7 @@
 #include <WebCore/ResourceError.h>
 #include <libsoup/soup.h>
 #include <wtf/glib/GRefPtr.h>
+#include <wtf/glib/RunLoopSourcePriority.h>
 #include <wtf/text/CString.h>
 
 using namespace WebKit;
@@ -55,7 +56,7 @@ static const unsigned int gReadBufferSize = 8192;
 
 struct _WebKitURISchemeRequestPrivate {
     WebKitWebContext* webContext;
-    CustomProtocolManagerProxy* manager;
+    LegacyCustomProtocolManagerProxy* manager;
     RefPtr<WebPageProxy> initiatingPage;
     uint64_t requestID;
     CString uri;
@@ -75,7 +76,7 @@ static void webkit_uri_scheme_request_class_init(WebKitURISchemeRequestClass*)
 {
 }
 
-WebKitURISchemeRequest* webkitURISchemeRequestCreate(uint64_t requestID, WebKitWebContext* webContext, const ResourceRequest& resourceRequest, CustomProtocolManagerProxy& manager)
+WebKitURISchemeRequest* webkitURISchemeRequestCreate(uint64_t requestID, WebKitWebContext* webContext, const ResourceRequest& resourceRequest, LegacyCustomProtocolManagerProxy& manager)
 {
     WebKitURISchemeRequest* request = WEBKIT_URI_SCHEME_REQUEST(g_object_new(WEBKIT_TYPE_URI_SCHEME_REQUEST, nullptr));
     request->priv->webContext = webContext;
@@ -91,7 +92,7 @@ void webkitURISchemeRequestCancel(WebKitURISchemeRequest* request)
     g_cancellable_cancel(request->priv->cancellable.get());
 }
 
-CustomProtocolManagerProxy* webkitURISchemeRequestGetManager(WebKitURISchemeRequest* request)
+LegacyCustomProtocolManagerProxy* webkitURISchemeRequestGetManager(WebKitURISchemeRequest* request)
 {
     return request->priv->manager;
 }
@@ -207,7 +208,7 @@ static void webkitURISchemeRequestReadCallback(GInputStream* inputStream, GAsync
     }
 
     priv->bytesRead += bytesRead;
-    g_input_stream_read_async(inputStream, priv->readBuffer, gReadBufferSize, G_PRIORITY_DEFAULT, priv->cancellable.get(),
+    g_input_stream_read_async(inputStream, priv->readBuffer, gReadBufferSize, RunLoopSourcePriority::AsyncIONetwork, priv->cancellable.get(),
         reinterpret_cast<GAsyncReadyCallback>(webkitURISchemeRequestReadCallback), g_object_ref(request.get()));
 }
 
@@ -232,7 +233,7 @@ void webkit_uri_scheme_request_finish(WebKitURISchemeRequest* request, GInputStr
     request->priv->cancellable = adoptGRef(g_cancellable_new());
     request->priv->bytesRead = 0;
     request->priv->mimeType = mimeType;
-    g_input_stream_read_async(inputStream, request->priv->readBuffer, gReadBufferSize, G_PRIORITY_DEFAULT, request->priv->cancellable.get(),
+    g_input_stream_read_async(inputStream, request->priv->readBuffer, gReadBufferSize, RunLoopSourcePriority::AsyncIONetwork, request->priv->cancellable.get(),
         reinterpret_cast<GAsyncReadyCallback>(webkitURISchemeRequestReadCallback), g_object_ref(request));
 }
 

@@ -84,12 +84,31 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << availableScreenSize;
     encoder << textAutosizingWidth;
     encoder << ignoresViewportScaleLimits;
+    encoder << allowsBlockSelection;
+#endif
+#if PLATFORM(COCOA)
+    encoder << smartInsertDeleteEnabled;
 #endif
     encoder << appleMailPaginationQuirkEnabled;
     encoder << shouldScaleViewToFitDocument;
     encoder.encodeEnum(userInterfaceLayoutDirection);
     encoder.encodeEnum(observedLayoutMilestones);
     encoder << overrideContentSecurityPolicy;
+    encoder << cpuLimit;
+    encoder << urlSchemeHandlers;
+#if ENABLE(WEB_RTC)
+    encoder << iceCandidateFilteringEnabled;
+#if USE(LIBWEBRTC)
+    encoder << enumeratingAllNetworkInterfacesEnabled;
+#endif
+#endif
+    encoder << userContentWorlds;
+    encoder << userScripts;
+    encoder << userStyleSheets;
+    encoder << messageHandlers;
+#if ENABLE(CONTENT_EXTENSIONS)
+    encoder << contentRuleLists;
+#endif
 }
 
 bool WebPageCreationParameters::decode(IPC::Decoder& decoder, WebPageCreationParameters& parameters)
@@ -192,6 +211,13 @@ bool WebPageCreationParameters::decode(IPC::Decoder& decoder, WebPageCreationPar
         return false;
     if (!decoder.decode(parameters.ignoresViewportScaleLimits))
         return false;
+    if (!decoder.decode(parameters.allowsBlockSelection))
+        return false;
+#endif
+
+#if PLATFORM(COCOA)
+    if (!decoder.decode(parameters.smartInsertDeleteEnabled))
+        return false;
 #endif
 
     if (!decoder.decode(parameters.appleMailPaginationQuirkEnabled))
@@ -208,6 +234,32 @@ bool WebPageCreationParameters::decode(IPC::Decoder& decoder, WebPageCreationPar
     if (!decoder.decode(parameters.overrideContentSecurityPolicy))
         return false;
 
+    if (!decoder.decode(parameters.cpuLimit))
+        return false;
+
+    if (!decoder.decode(parameters.urlSchemeHandlers))
+        return false;
+
+#if ENABLE(WEB_RTC)
+    if (!decoder.decode(parameters.iceCandidateFilteringEnabled))
+        return false;
+#if USE(LIBWEBRTC)
+    if (!decoder.decode(parameters.enumeratingAllNetworkInterfacesEnabled))
+        return false;
+#endif
+#endif
+    if (!decoder.decode(parameters.userContentWorlds))
+        return false;
+    if (!decoder.decode(parameters.userScripts))
+        return false;
+    if (!decoder.decode(parameters.userStyleSheets))
+        return false;
+    if (!decoder.decode(parameters.messageHandlers))
+        return false;
+#if ENABLE(CONTENT_EXTENSIONS)
+    if (!decoder.decode(parameters.contentRuleLists))
+        return false;
+#endif
     return true;
 }
 

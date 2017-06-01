@@ -48,14 +48,32 @@ class MacOSMediaControls extends MediaControls
         this.tracksButton.on = true;
         this.tracksButton.element.blur();
         this.controlsBar.userInteractionEnabled = false;
+        this.controlsBar.hasSecondaryUIAttached = true;
         this.tracksPanel.presentInParent(this);
+
+        const controlsBounds = this.element.getBoundingClientRect();
+        const controlsBarBounds = this.controlsBar.element.getBoundingClientRect();
+        const tracksButtonBounds = this.tracksButton.element.getBoundingClientRect();
+        this.tracksPanel.rightX = this.width - (tracksButtonBounds.right - controlsBounds.left);
+        this.tracksPanel.bottomY = this.height - (controlsBarBounds.top - controlsBounds.top) + 1;
+        this.tracksPanel.maxHeight = this.height - this.tracksPanel.bottomY - 10;
     }
 
     hideTracksPanel()
     {
+        let shouldFadeControlsBar = true;
+        if (window.event instanceof MouseEvent) {
+            const x = window.event.clientX;
+            const y = window.event.clientY;
+            const bounds = this.controlsBar.element.getBoundingClientRect();
+            shouldFadeControlsBar = x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom;
+        }
+            
         this.tracksButton.on = false;
         this.tracksButton.element.focus();
         this.controlsBar.userInteractionEnabled = true;
+        this.controlsBar.hasSecondaryUIAttached = false;
+        this.controlsBar.faded = shouldFadeControlsBar;
         this.tracksPanel.hide();
     }
 
@@ -68,8 +86,9 @@ class MacOSMediaControls extends MediaControls
 
         // Only notify that the background was clicked when the "mousedown" event
         // was also received, which wouldn't happen if the "mousedown" event caused
-        // the tracks panel to be hidden.
-        if (event.type === "mousedown")
+        // the tracks panel to be hidden, unless we're in fullscreen in which case
+        // we can simply check that the panel is not currently presented.
+        if (event.type === "mousedown" && !this.tracksPanel.presented)
             this._receivedMousedown = true;
         else if (event.type === "click") {
             if (this._receivedMousedown && event.target === this.element && this.delegate && typeof this.delegate.macOSControlsBackgroundWasClicked === "function")

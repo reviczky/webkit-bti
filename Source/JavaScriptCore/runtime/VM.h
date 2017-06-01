@@ -44,6 +44,7 @@
 #include "JSLock.h"
 #include "JSSegmentedVariableObjectSubspace.h"
 #include "JSStringSubspace.h"
+#include "JSWebAssemblyCodeBlockSubspace.h"
 #include "MacroAssemblerCodeRef.h"
 #include "Microtask.h"
 #include "NumericStrings.h"
@@ -56,9 +57,11 @@
 #include "TemplateRegistryKeyTable.h"
 #include "ThunkGenerators.h"
 #include "VMEntryRecord.h"
+#include "VMTraps.h"
 #include "Watchpoint.h"
 #include <wtf/Bag.h>
 #include <wtf/BumpPointerAllocator.h>
+#include <wtf/CheckedArithmetic.h>
 #include <wtf/DateMath.h>
 #include <wtf/Deque.h>
 #include <wtf/DoublyLinkedList.h>
@@ -74,6 +77,10 @@
 #include <wtf/text/WTFString.h>
 #if ENABLE(REGEXP_TRACING)
 #include <wtf/ListHashSet.h>
+#endif
+
+#if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
+#include <wtf/StackTrace.h>
 #endif
 
 namespace WTF {
@@ -105,6 +112,7 @@ class JSObject;
 class JSWebAssemblyInstance;
 class LLIntOffsetsExtractor;
 class NativeExecutable;
+class PromiseDeferredTimer;
 class RegExpCache;
 class Register;
 class RegisterAtOffsetList;
@@ -133,11 +141,6 @@ class Watchdog;
 class Watchpoint;
 class WatchpointSet;
 
-#if ENABLE(DFG_JIT)
-namespace DFG {
-class LongLivedState;
-}
-#endif // ENABLE(DFG_JIT)
 #if ENABLE(FTL_JIT)
 namespace FTL {
 class Thunks;
@@ -152,11 +155,6 @@ class Database;
 namespace DOMJIT {
 class Signature;
 }
-#if ENABLE(WEBASSEMBLY)
-namespace Wasm {
-class SignatureInformation;
-}
-#endif
 
 struct HashTable;
 struct Instruction;
@@ -222,7 +220,7 @@ struct ScratchBuffer {
         return result;
     }
 
-    static size_t allocationSize(size_t bufferSize) { return sizeof(ScratchBuffer) + bufferSize; }
+    static size_t allocationSize(Checked<size_t> bufferSize) { return (sizeof(ScratchBuffer) + bufferSize).unsafeGet(); }
     void setActiveLength(size_t activeLength) { u.m_activeLength = activeLength; }
     size_t activeLength() const { return u.m_activeLength; };
     size_t* activeLengthPtr() { return &u.m_activeLength; };
@@ -268,7 +266,7 @@ public:
     static Ref<VM> createContextGroup(HeapType = SmallHeap);
     JS_EXPORT_PRIVATE ~VM();
 
-    JS_EXPORT_PRIVATE Watchdog& ensureWatchdog();
+    Watchdog& ensureWatchdog();
     Watchdog* watchdog() { return m_watchdog.get(); }
 
     HeapProfiler* heapProfiler() const { return m_heapProfiler.get(); }
@@ -283,14 +281,6 @@ private:
     RefPtr<JSLock> m_apiLock;
 
 public:
-#if ENABLE(ASSEMBLER)
-    // executableAllocator should be destructed after the heap, as the heap can call executableAllocator
-    // in its destructor.
-    ExecutableAllocator executableAllocator;
-#endif
-
-    // The heap should be just after executableAllocator and before other members to ensure that it's
-    // destructed after all the objects that reference it.
     Heap heap;
     
     Subspace auxiliarySpace;
@@ -301,10 +291,9 @@ public:
     JSStringSubspace stringSpace;
     JSDestructibleObjectSubspace destructibleObjectSpace;
     JSSegmentedVariableObjectSubspace segmentedVariableObjectSpace;
-
-#if ENABLE(DFG_JIT)
-    std::unique_ptr<DFG::LongLivedState> dfgState;
-#endif // ENABLE(DFG_JIT)
+#if ENABLE(WEBASSEMBLY)
+    JSWebAssemblyCodeBlockSubspace webAssemblyCodeBlockSpace;
+#endif
 
     VMType vmType;
     ClientData* clientData;
@@ -313,8 +302,9 @@ public:
     // topVMEntryFrame.
     // FIXME: This should be a void*, because it might not point to a CallFrame.
     // https://bugs.webkit.org/show_bug.cgi?id=160441
-    ExecState* topCallFrame;
-    JSWebAssemblyInstance* topJSWebAssemblyInstance;
+    ExecState* topCallFrame { nullptr };
+    // FIXME: Save this state elsewhere to allow PIC. https://bugs.webkit.org/show_bug.cgi?id=169773
+    JSWebAssemblyInstance* wasmContext { nullptr };
     Strong<Structure> structureStructure;
     Strong<Structure> structureRareDataStructure;
     Strong<Structure> terminatedExecutionErrorStructure;
@@ -331,9 +321,7 @@ public:
     Strong<Structure> programExecutableStructure;
     Strong<Structure> functionExecutableStructure;
 #if ENABLE(WEBASSEMBLY)
-    Strong<Structure> webAssemblyCalleeStructure;
-    Strong<Structure> webAssemblyToJSCalleeStructure;
-    Strong<JSCell> webAssemblyToJSCallee;
+    Strong<Structure> webAssemblyCodeBlockStructure;
 #endif
     Strong<Structure> moduleProgramExecutableStructure;
     Strong<Structure> regExpStructure;
@@ -373,10 +361,7 @@ public:
     Strong<JSCell> iterationTerminator;
     Strong<JSCell> emptyPropertyNameEnumerator;
 
-#if ENABLE(WEBASSEMBLY)
-    std::once_flag m_wasmSignatureInformationOnceFlag;
-    std::unique_ptr<Wasm::SignatureInformation> m_wasmSignatureInformation;
-#endif
+    std::unique_ptr<PromiseDeferredTimer> promiseDeferredTimer;
     
     JSCell* currentlyDestructingCallbackObject;
     const ClassInfo* currentlyDestructingCallbackObjectClassInfo;
@@ -460,9 +445,7 @@ public:
         return jitStubs->ctiStub(this, generator);
     }
     
-    std::unique_ptr<RegisterAtOffsetList> allCalleeSaveRegisterOffsets;
-    
-    RegisterAtOffsetList* getAllCalleeSaveRegisterOffsets() { return allCalleeSaveRegisterOffsets.get(); }
+    static RegisterAtOffsetList* getAllCalleeSaveRegisterOffsets();
 
 #endif // ENABLE(JIT)
     std::unique_ptr<CommonSlowPaths::ArityCheckData> arityCheckData;
@@ -485,6 +468,11 @@ public:
     static ptrdiff_t targetMachinePCForThrowOffset()
     {
         return OBJECT_OFFSETOF(VM, targetMachinePCForThrow);
+    }
+
+    static ptrdiff_t topVMEntryFrameOffset()
+    {
+        return OBJECT_OFFSETOF(VM, topVMEntryFrame);
     }
 
     void restorePreviousException(Exception* exception) { setException(exception); }
@@ -610,10 +598,6 @@ public:
     RTTraceList* m_rtTraceList;
 #endif
 
-    bool hasExclusiveThread() const { return m_apiLock->hasExclusiveThread(); }
-    std::thread::id exclusiveThread() const { return m_apiLock->exclusiveThread(); }
-    void setExclusiveThread(std::thread::id threadId) { m_apiLock->setExclusiveThread(threadId); }
-
     JS_EXPORT_PRIVATE void resetDateCache();
 
     RegExpCache* regExpCache() { return m_regExpCache; }
@@ -659,12 +643,10 @@ public:
     bool enableControlFlowProfiler();
     bool disableControlFlowProfiler();
 
-    JS_EXPORT_PRIVATE void queueMicrotask(JSGlobalObject*, Ref<Microtask>&&);
+    void queueMicrotask(JSGlobalObject&, Ref<Microtask>&&);
     JS_EXPORT_PRIVATE void drainMicrotasks();
     void setGlobalConstRedeclarationShouldThrow(bool globalConstRedeclarationThrow) { m_globalConstRedeclarationShouldThrow = globalConstRedeclarationThrow; }
     ALWAYS_INLINE bool globalConstRedeclarationShouldThrow() const { return m_globalConstRedeclarationShouldThrow; }
-
-    inline bool shouldTriggerTermination(ExecState*);
 
     void setShouldBuildPCToCodeOriginMapping() { m_shouldBuildPCToCodeOriginMapping = true; }
     bool shouldBuilderPCToCodeOriginMapping() const { return m_shouldBuildPCToCodeOriginMapping; }
@@ -675,6 +657,25 @@ public:
     
     template<typename Func>
     void logEvent(CodeBlock*, const char* summary, const Func& func);
+
+    std::optional<RefPtr<Thread>> ownerThread() const { return m_apiLock->ownerThread(); }
+
+    VMTraps& traps() { return m_traps; }
+
+    void handleTraps(ExecState* exec, VMTraps::Mask mask = VMTraps::Mask::allEventTypes()) { m_traps.handleTraps(exec, mask); }
+
+    bool needTrapHandling() { return m_traps.needTrapHandling(); }
+    bool needTrapHandling(VMTraps::Mask mask) { return m_traps.needTrapHandling(mask); }
+    void* needTrapHandlingAddress() { return m_traps.needTrapHandlingAddress(); }
+
+    void notifyNeedDebuggerBreak() { m_traps.fireTrap(VMTraps::NeedDebuggerBreak); }
+    void notifyNeedTermination() { m_traps.fireTrap(VMTraps::NeedTermination); }
+    void notifyNeedWatchdogCheck() { m_traps.fireTrap(VMTraps::NeedWatchdogCheck); }
+
+#if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
+    StackTrace* nativeStackTraceOfLastThrow() const { return m_nativeStackTraceOfLastThrow.get(); }
+    ThreadIdentifier throwingThread() const { return m_throwingThread; }
+#endif
 
 private:
     friend class LLIntOffsetsExtractor;
@@ -708,6 +709,8 @@ private:
     {
 #if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
         m_needExceptionCheck = false;
+        m_nativeStackTraceOfLastThrow = nullptr;
+        m_throwingThread = 0;
 #endif
         m_exception = nullptr;
     }
@@ -754,6 +757,8 @@ private:
     ExceptionEventLocation m_simulatedThrowPointLocation;
     unsigned m_simulatedThrowPointRecursionDepth { 0 };
     mutable bool m_needExceptionCheck { false };
+    std::unique_ptr<StackTrace> m_nativeStackTraceOfLastThrow;
+    ThreadIdentifier m_throwingThread;
 #endif
 
     bool m_failNextNewCodeBlock { false };
@@ -771,6 +776,7 @@ private:
     unsigned m_controlFlowProfilerEnabledCount;
     Deque<std::unique_ptr<QueuedTask>> m_microtaskQueue;
     MallocPtr<EncodedJSValue> m_exceptionFuzzBuffer;
+    VMTraps m_traps;
     RefPtr<Watchdog> m_watchdog;
     std::unique_ptr<HeapProfiler> m_heapProfiler;
 #if ENABLE(SAMPLING_PROFILER)
@@ -787,6 +793,7 @@ private:
     friend class CatchScope;
     friend class ExceptionScope;
     friend class ThrowScope;
+    friend class VMTraps;
     friend class WTF::DoublyLinkedListNode<VM>;
 };
 

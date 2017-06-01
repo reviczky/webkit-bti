@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2013-2016 Apple Inc.
+ * Copyright (C) 2008-2017 Apple Inc.
  * Copyright (C) 2009, 2010 University of Szeged
  * All rights reserved.
  *
@@ -955,6 +955,8 @@ public:
         m_assembler.bkpt(0);
     }
 
+    static bool isBreakpoint(void* address) { return ARMAssembler::isBkpt(address); }
+
     Call nearCall()
     {
         m_assembler.loadBranchTarget(ARMRegisters::S1, ARMAssembler::AL, true);
@@ -1183,6 +1185,12 @@ public:
     static bool supportsFloatingPointAbs() { return false; }
     static bool supportsFloatingPointRounding() { return false; }
 
+
+    void loadFloat(ImplicitAddress address, FPRegisterID dest)
+    {
+        m_assembler.dataTransferFloat(ARMAssembler::LoadFloat, dest, address.base, address.offset);
+    }
+
     void loadFloat(BaseIndex address, FPRegisterID dest)
     {
         m_assembler.baseIndexTransferFloat(ARMAssembler::LoadFloat, dest, address.base, address.index, static_cast<int>(address.scale), address.offset);
@@ -1220,6 +1228,11 @@ public:
     {
         ASSERT(!supportsFloatingPointRounding());
         CRASH();
+    }
+
+    void storeFloat(FPRegisterID src, ImplicitAddress address)
+    {
+        m_assembler.dataTransferFloat(ARMAssembler::StoreFloat, src, address.base, address.offset);
     }
 
     void storeFloat(FPRegisterID src, BaseIndex address)
@@ -1480,6 +1493,11 @@ public:
         return FunctionPtr(reinterpret_cast<void(*)()>(ARMAssembler::readCallTarget(call.dataLocation())));
     }
 
+    static void replaceWithBreakpoint(CodeLocationLabel instructionStart)
+    {
+        ARMAssembler::replaceWithBkpt(instructionStart.executableAddress());
+    }
+
     static void replaceWithJump(CodeLocationLabel instructionStart, CodeLocationLabel destination)
     {
         ARMAssembler::replaceWithJump(instructionStart.dataLocation(), destination.dataLocation());
@@ -1541,7 +1559,7 @@ public:
     }
 
 #if ENABLE(MASM_PROBE)
-    void probe(ProbeFunction, void* arg1, void* arg2);
+    void probe(ProbeFunction, void* arg);
 #endif // ENABLE(MASM_PROBE)
 
 protected:

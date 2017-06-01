@@ -40,6 +40,14 @@ OBJC_CLASS NSString;
 typedef RetainPtr<NSDictionary> TargetListing;
 #endif
 
+#if USE(GLIB)
+#include <wtf/glib/GRefPtr.h>
+typedef GRefPtr<GVariant> TargetListing;
+typedef struct _GCancellable GCancellable;
+typedef struct _GDBusConnection GDBusConnection;
+typedef struct _GDBusInterfaceVTable GDBusInterfaceVTable;
+#endif
+
 namespace Inspector {
 
 class RemoteAutomationTarget;
@@ -74,7 +82,8 @@ public:
     void updateTarget(RemoteControllableTarget*);
     void sendMessageToRemote(unsigned targetIdentifier, const String& message);
 
-    void setRemoteInspectorClient(RemoteInspector::Client*);
+    RemoteInspector::Client* client() const { return m_client; }
+    void setClient(RemoteInspector::Client*);
     void clientCapabilitiesDidChange();
 
     void setupFailed(unsigned targetIdentifier);
@@ -96,6 +105,14 @@ public:
     void setParentProcessInfomationIsDelayed();
 #endif
 
+    void updateTargetListing(unsigned targetIdentifier);
+
+#if USE(GLIB)
+    void requestAutomationSession(const char* sessionID);
+    void setup(unsigned targetIdentifier);
+    void sendMessageToTarget(unsigned targetIdentifier, const char* message);
+#endif
+
 private:
     RemoteInspector();
 
@@ -107,6 +124,16 @@ private:
 #if PLATFORM(COCOA)
     void setupXPCConnectionIfNeeded();
 #endif
+#if USE(GLIB)
+    void setupConnection(GRefPtr<GDBusConnection>&&);
+    static const GDBusInterfaceVTable s_interfaceVTable;
+
+    void receivedGetTargetListMessage();
+    void receivedSetupMessage(unsigned targetIdentifier);
+    void receivedDataMessage(unsigned targetIdentifier, const char* message);
+    void receivedCloseMessage(unsigned targetIdentifier);
+    void receivedAutomationSessionRequestMessage(const char* sessionID);
+#endif
 
     TargetListing listingForTarget(const RemoteControllableTarget&) const;
     TargetListing listingForInspectionTarget(const RemoteInspectionTarget&) const;
@@ -115,7 +142,6 @@ private:
     void pushListingsNow();
     void pushListingsSoon();
 
-    void updateTargetListing(unsigned targetIdentifier);
     void updateTargetListing(const RemoteControllableTarget&);
 
     void updateHasActiveDebugSession();
@@ -154,6 +180,10 @@ private:
 
 #if PLATFORM(COCOA)
     RefPtr<RemoteInspectorXPCConnection> m_relayConnection;
+#endif
+#if USE(GLIB)
+    GRefPtr<GDBusConnection> m_dbusConnection;
+    GRefPtr<GCancellable> m_cancellable;
 #endif
 
     RemoteInspector::Client* m_client { nullptr };

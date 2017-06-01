@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2009, 2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,7 +45,7 @@ namespace JSC {
 
 STATIC_ASSERT_IS_TRIVIALLY_DESTRUCTIBLE(TerminatedExecutionError);
 
-const ClassInfo TerminatedExecutionError::s_info = { "TerminatedExecutionError", &Base::s_info, 0, CREATE_METHOD_TABLE(TerminatedExecutionError) };
+const ClassInfo TerminatedExecutionError::s_info = { "TerminatedExecutionError", &Base::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(TerminatedExecutionError) };
 
 JSValue TerminatedExecutionError::defaultValue(const JSObject*, ExecState* exec, PreferredPrimitiveType hint)
 {
@@ -69,7 +69,12 @@ bool isTerminatedExecutionException(VM& vm, Exception* exception)
 
 JSObject* createStackOverflowError(ExecState* exec)
 {
-    return createRangeError(exec, ASCIILiteral("Maximum call stack size exceeded."));
+    return createStackOverflowError(exec, exec->lexicalGlobalObject());
+}
+
+JSObject* createStackOverflowError(ExecState* exec, JSGlobalObject* globalObject)
+{
+    return createRangeError(exec, globalObject, ASCIILiteral("Maximum call stack size exceeded."));
 }
 
 JSObject* createUndefinedVariableError(ExecState* exec, const Identifier& ident)
@@ -127,7 +132,7 @@ static String functionCallBase(const String& sourceText)
         // and their closing parenthesis, the text range passed into the message appender 
         // will not inlcude the text in between these parentheses, it will just be the desired
         // text that precedes the parentheses.
-        return sourceText;
+        return String();
     }
 
     unsigned parenStack = 1;
@@ -135,26 +140,32 @@ static String functionCallBase(const String& sourceText)
     idx -= 1;
     // Note that we're scanning text right to left instead of the more common left to right, 
     // so syntax detection is backwards.
-    while (parenStack > 0) {
+    while (parenStack && idx) {
         UChar curChar = sourceText[idx];
-        if (isInMultiLineComment)  {
-            if (idx > 0 && curChar == '*' && sourceText[idx - 1] == '/') {
+        if (isInMultiLineComment) {
+            if (curChar == '*' && sourceText[idx - 1] == '/') {
                 isInMultiLineComment = false;
-                idx -= 1;
+                --idx;
             }
         } else if (curChar == '(')
-            parenStack -= 1;
+            --parenStack;
         else if (curChar == ')')
-            parenStack += 1;
-        else if (idx > 0 && curChar == '/' && sourceText[idx - 1] == '*') {
+            ++parenStack;
+        else if (curChar == '/' && sourceText[idx - 1] == '*') {
             isInMultiLineComment = true;
-            idx -= 1;
+            --idx;
         }
 
-        if (!idx)
-            break;
+        if (idx)
+            --idx;
+    }
 
-        idx -= 1;
+    if (parenStack) {
+        // As noted in the FIXME at the top of this function, there are bugs
+        // in the above string processing. This algorithm is mostly best effort
+        // and it works for most JS text in practice. However, if we determine
+        // that the algorithm failed, we should just return the empty value.
+        return String();
     }
 
     return sourceText.left(idx + 1);
@@ -177,6 +188,8 @@ static String notAFunctionSourceAppender(const String& originalMessage, const St
         displayValue = StringView(originalMessage.characters16(), notAFunctionIndex - 1);
 
     String base = functionCallBase(sourceText);
+    if (!base)
+        return defaultApproximateSourceError(originalMessage, sourceText);
     StringBuilder builder;
     builder.append(base);
     builder.appendLiteral(" is not a function. (In '");
@@ -205,7 +218,12 @@ static String invalidParameterInSourceAppender(const String& originalMessage, co
 
     ASSERT(occurrence == ErrorInstance::FoundExactSource);
     auto inIndex = sourceText.reverseFind("in");
-    RELEASE_ASSERT(inIndex != notFound);
+    if (inIndex == notFound) {
+        // This should basically never happen, since JS code must use the literal
+        // text "in" for the `in` operation. However, if we fail to find "in"
+        // for any reason, just fail gracefully.
+        return originalMessage;
+    }
     if (sourceText.find("in") != inIndex)
         return makeString(originalMessage, " (evaluating '", sourceText, "')");
 
@@ -246,7 +264,7 @@ JSObject* createError(ExecState* exec, JSValue value, const String& message, Err
     auto scope = DECLARE_CATCH_SCOPE(vm);
 
     String errorMessage = makeString(errorDescriptionForValue(exec, value)->value(exec), ' ', message);
-    ASSERT_UNUSED(scope, !scope.exception());
+    scope.assertNoException();
     JSObject* exception = createTypeError(exec, errorMessage, appender, runtimeTypeForValue(value));
     ASSERT(exception->isErrorInstance());
     return exception;
@@ -269,7 +287,7 @@ JSObject* createInvalidInstanceofParameterErrorNotFunction(ExecState* exec, JSVa
     return createError(exec, value, makeString(" is not a function"), invalidParameterInstanceofNotFunctionSourceAppender);
 }
 
-JSObject* createInvalidInstanceofParameterErrorhasInstanceValueNotFunction(ExecState* exec, JSValue value)
+JSObject* createInvalidInstanceofParameterErrorHasInstanceValueNotFunction(ExecState* exec, JSValue value)
 {
     return createError(exec, value, makeString("[Symbol.hasInstance] is not a function, undefined, or null"), invalidParameterInstanceofhasInstanceValueNotFunctionSourceAppender);
 }

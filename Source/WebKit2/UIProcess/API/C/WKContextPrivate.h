@@ -62,8 +62,6 @@ WK_EXPORT void WKContextSetCanHandleHTTPSServerTrustEvaluation(WKContextRef cont
 
 WK_EXPORT void WKContextSetDiskCacheSpeculativeValidationEnabled(WKContextRef context, bool value);
 
-WK_EXPORT void WKContextSetUnresponsiveBackgroundProcessesTerminationEnabled(WKContextRef context, bool value);
-
 WK_EXPORT void WKContextSetIconDatabasePath(WKContextRef context, WKStringRef iconDatabasePath);
 
 WK_EXPORT void WKContextAllowSpecificHTTPSCertificateForHost(WKContextRef context, WKCertificateInfoRef certificate, WKStringRef host);
@@ -83,6 +81,10 @@ WK_EXPORT void WKContextWarmInitialProcess(WKContextRef context);
 // At some point it should be removed.
 WK_EXPORT void WKContextSetUsesNetworkProcess(WKContextRef, bool);
 
+WK_EXPORT void WKContextTerminateNetworkProcess(WKContextRef);
+
+WK_EXPORT void WKContextSetAllowsAnySSLCertificateForWebSocketTesting(WKContextRef, bool);
+    
 // Test only. Should be called before any secondary processes are started.
 WK_EXPORT void WKContextUseTestingNetworkSession(WKContextRef context);
 

@@ -63,7 +63,7 @@ namespace WebCore {
         static bool shouldInterruptScript(const JSC::JSGlobalObject*);
         static bool shouldInterruptScriptBeforeTimeout(const JSC::JSGlobalObject*);
         static JSC::RuntimeFlags javaScriptRuntimeFlags(const JSC::JSGlobalObject*);
-        static void queueTaskToEventLoop(const JSC::JSGlobalObject*, Ref<JSC::Microtask>&&);
+        static void queueTaskToEventLoop(JSC::JSGlobalObject&, Ref<JSC::Microtask>&&);
         
         void printErrorMessage(const String&) const;
 
@@ -80,6 +80,7 @@ namespace WebCore {
         static JSC::JSInternalPromise* moduleLoaderFetch(JSC::JSGlobalObject*, JSC::ExecState*, JSC::JSModuleLoader*, JSC::JSValue, JSC::JSValue);
         static JSC::JSValue moduleLoaderEvaluate(JSC::JSGlobalObject*, JSC::ExecState*, JSC::JSModuleLoader*, JSC::JSValue, JSC::JSValue, JSC::JSValue);
         static JSC::JSInternalPromise* moduleLoaderImportModule(JSC::JSGlobalObject*, JSC::ExecState*, JSC::JSModuleLoader*, JSC::JSString*, const JSC::SourceOrigin&);
+        static void promiseRejectionTracker(JSC::JSGlobalObject*, JSC::ExecState*, JSC::JSPromise*, JSC::JSPromiseRejectionOperation);
 
         RefPtr<DOMWindow> m_wrapped;
         JSDOMWindowShell* m_shell;
@@ -97,7 +98,13 @@ namespace WebCore {
     JSDOMWindow* toJSDOMWindow(Frame*, DOMWrapperWorld&);
     WEBCORE_EXPORT JSDOMWindow* toJSDOMWindow(JSC::VM&, JSC::JSValue);
 
-    DOMWindow& callerDOMWindow(JSC::ExecState*);
+    // DOMWindow associated with global object of the "most-recently-entered author function or script
+    // on the stack, or the author function or script that originally scheduled the currently-running callback."
+    // (<https://html.spec.whatwg.org/multipage/webappapis.html#concept-incumbent-everything>, 27 April 2017)
+    // FIXME: Make this work for an "author function or script that originally scheduled the currently-running callback."
+    // See <https://bugs.webkit.org/show_bug.cgi?id=163412>.
+    DOMWindow& incumbentDOMWindow(JSC::ExecState*);
+
     DOMWindow& activeDOMWindow(JSC::ExecState*);
     DOMWindow& firstDOMWindow(JSC::ExecState*);
 

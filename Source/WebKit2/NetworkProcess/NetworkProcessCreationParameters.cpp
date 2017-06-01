@@ -27,13 +27,10 @@
 #include "NetworkProcessCreationParameters.h"
 
 #include "ArgumentCoders.h"
+#include "WebCoreArgumentCoders.h"
 
 #if PLATFORM(COCOA)
 #include "ArgumentCodersCF.h"
-#endif
-
-#if USE(SOUP)
-#include "WebCoreArgumentCoders.h"
 #endif
 
 namespace WebKit {
@@ -69,6 +66,7 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << shouldUseTestingNetworkSession;
     encoder << loadThrottleLatency;
     encoder << urlSchemesRegisteredForCustomProtocols;
+    encoder << presentingApplicationPID;
 #if PLATFORM(COCOA)
     encoder << parentProcessName;
     encoder << uiProcessBundleIdentifier;
@@ -76,6 +74,7 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << nsURLCacheDiskCapacity;
     encoder << sourceApplicationBundleIdentifier;
     encoder << sourceApplicationSecondaryIdentifier;
+    encoder << allowsCellularAccess;
 #if PLATFORM(IOS)
     encoder << ctDataConnectionServiceType;
 #endif
@@ -102,7 +101,7 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << recordReplayCacheLocation;
 #endif
 #if ENABLE(WEB_RTC)
-    encoder << webRTCEnabled;
+    encoder << webRTCNetworkingHandle;
 #endif
 }
 
@@ -150,6 +149,8 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
         return false;
     if (!decoder.decode(result.urlSchemesRegisteredForCustomProtocols))
         return false;
+    if (!decoder.decode(result.presentingApplicationPID))
+        return false;
 #if PLATFORM(COCOA)
     if (!decoder.decode(result.parentProcessName))
         return false;
@@ -162,6 +163,8 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
     if (!decoder.decode(result.sourceApplicationBundleIdentifier))
         return false;
     if (!decoder.decode(result.sourceApplicationSecondaryIdentifier))
+        return false;
+    if (!decoder.decode(result.allowsCellularAccess))
         return false;
 #if PLATFORM(IOS)
     if (!decoder.decode(result.ctDataConnectionServiceType))
@@ -205,8 +208,9 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
     if (!decoder.decode(result.recordReplayCacheLocation))
         return false;
 #endif
+
 #if ENABLE(WEB_RTC)
-    if (!decoder.decode(result.webRTCEnabled))
+    if (!decoder.decode(result.webRTCNetworkingHandle))
         return false;
 #endif
 

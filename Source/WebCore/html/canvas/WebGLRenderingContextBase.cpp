@@ -100,9 +100,9 @@
 
 namespace WebCore {
 
-const double secondsBetweenRestoreAttempts = 1.0;
+static const Seconds secondsBetweenRestoreAttempts { 1_s };
 const int maxGLErrorsAllowedToConsole = 256;
-static const std::chrono::seconds checkContextLossHandlingDelay { 3 };
+static const Seconds checkContextLossHandlingDelay { 3_s };
 
 namespace {
     
@@ -460,8 +460,7 @@ std::unique_ptr<WebGLRenderingContextBase> WebGLRenderingContextBase::create(HTM
 }
 
 WebGLRenderingContextBase::WebGLRenderingContextBase(HTMLCanvasElement& passedCanvas, WebGLContextAttributes attributes)
-    : CanvasRenderingContext(passedCanvas)
-    , ActiveDOMObject(&passedCanvas.document())
+    : GPUBasedCanvasRenderingContext(passedCanvas)
     , m_dispatchContextLostEventTimer(*this, &WebGLRenderingContextBase::dispatchContextLostEvent)
     , m_restoreTimer(*this, &WebGLRenderingContextBase::maybeRestoreContext)
     , m_attributes(attributes)
@@ -474,8 +473,7 @@ WebGLRenderingContextBase::WebGLRenderingContextBase(HTMLCanvasElement& passedCa
 }
 
 WebGLRenderingContextBase::WebGLRenderingContextBase(HTMLCanvasElement& passedCanvas, Ref<GraphicsContext3D>&& context, WebGLContextAttributes attributes)
-    : CanvasRenderingContext(passedCanvas)
-    , ActiveDOMObject(&passedCanvas.document())
+    : GPUBasedCanvasRenderingContext(passedCanvas)
     , m_context(WTFMove(context))
     , m_dispatchContextLostEventTimer(*this, &WebGLRenderingContextBase::dispatchContextLostEvent)
     , m_restoreTimer(*this, &WebGLRenderingContextBase::maybeRestoreContext)
@@ -710,6 +708,17 @@ void WebGLRenderingContextBase::markContextChanged()
             canvas().didDraw(FloatRect(FloatPoint(0, 0), clampedCanvasSize()));
         }
     }
+}
+
+void WebGLRenderingContextBase::markContextChangedAndNotifyCanvasObserver()
+{
+    markContextChanged();
+    if (!isAccelerated())
+        return;
+    
+    RenderBox* renderBox = canvas().renderBox();
+    if (renderBox && renderBox->hasAcceleratedCompositing())
+        canvas().notifyObserversCanvasChanged(FloatRect(FloatPoint(0, 0), clampedCanvasSize()));
 }
 
 bool WebGLRenderingContextBase::clearIfComposited(GC3Dbitfield mask)
@@ -1989,7 +1998,7 @@ void WebGLRenderingContextBase::drawArrays(GC3Denum mode, GC3Dint first, GC3Dsiz
         restoreStatesAfterVertexAttrib0Simulation();
     if (usesFallbackTexture)
         checkTextureCompleteness("drawArrays", false);
-    markContextChanged();
+    markContextChangedAndNotifyCanvasObserver();
 }
 
 void WebGLRenderingContextBase::drawElements(GC3Denum mode, GC3Dsizei count, GC3Denum type, long long offset)
@@ -2017,7 +2026,7 @@ void WebGLRenderingContextBase::drawElements(GC3Denum mode, GC3Dsizei count, GC3
         restoreStatesAfterVertexAttrib0Simulation();
     if (usesFallbackTexture)
         checkTextureCompleteness("drawElements", false);
-    markContextChanged();
+    markContextChangedAndNotifyCanvasObserver();
 }
 
 void WebGLRenderingContextBase::enable(GC3Denum cap)
@@ -4604,7 +4613,7 @@ void WebGLRenderingContextBase::loseContextImpl(WebGLRenderingContextBase::LostC
 
     // Always defer the dispatch of the context lost event, to implement
     // the spec behavior of queueing a task.
-    m_dispatchContextLostEventTimer.startOneShot(0);
+    m_dispatchContextLostEventTimer.startOneShot(0_s);
 }
 
 void WebGLRenderingContextBase::forceRestoreContext()
@@ -4621,7 +4630,7 @@ void WebGLRenderingContextBase::forceRestoreContext()
     }
 
     if (!m_restoreTimer.isActive())
-        m_restoreTimer.startOneShot(0);
+        m_restoreTimer.startOneShot(0_s);
 }
 
 PlatformLayer* WebGLRenderingContextBase::platformLayer() const
@@ -5556,7 +5565,7 @@ void WebGLRenderingContextBase::dispatchContextLostEvent()
     canvas().dispatchEvent(event);
     m_restoreAllowed = event->defaultPrevented();
     if (m_contextLostMode == RealLostContext && m_restoreAllowed)
-        m_restoreTimer.startOneShot(0);
+        m_restoreTimer.startOneShot(0_s);
 }
 
 void WebGLRenderingContextBase::maybeRestoreContext()
@@ -5635,6 +5644,17 @@ void WebGLRenderingContextBase::maybeRestoreContext()
     initializeNewContext();
     initializeVertexArrayObjects();
     canvas().dispatchEvent(WebGLContextEvent::create(eventNames().webglcontextrestoredEvent, false, true, emptyString()));
+}
+
+void WebGLRenderingContextBase::dispatchContextChangedEvent()
+{
+    canvas().dispatchEvent(WebGLContextEvent::create(eventNames().webglcontextchangedEvent, false, true, emptyString()));
+}
+
+void WebGLRenderingContextBase::simulateContextChanged()
+{
+    if (m_context)
+        m_context->simulateContextChanged();
 }
 
 String WebGLRenderingContextBase::ensureNotNull(const String& text) const
@@ -5823,7 +5843,7 @@ void WebGLRenderingContextBase::drawArraysInstanced(GC3Denum mode, GC3Dint first
         restoreStatesAfterVertexAttrib0Simulation();
     if (!isGLES2NPOTStrict())
         checkTextureCompleteness("drawArraysInstanced", false);
-    markContextChanged();
+    markContextChangedAndNotifyCanvasObserver();
 }
 
 void WebGLRenderingContextBase::drawElementsInstanced(GC3Denum mode, GC3Dsizei count, GC3Denum type, long long offset, GC3Dsizei primcount)
@@ -5854,7 +5874,7 @@ void WebGLRenderingContextBase::drawElementsInstanced(GC3Denum mode, GC3Dsizei c
         restoreStatesAfterVertexAttrib0Simulation();
     if (!isGLES2NPOTStrict())
         checkTextureCompleteness("drawElementsInstanced", false);
-    markContextChanged();
+    markContextChangedAndNotifyCanvasObserver();
 }
 
 void WebGLRenderingContextBase::vertexAttribDivisor(GC3Duint index, GC3Duint divisor)

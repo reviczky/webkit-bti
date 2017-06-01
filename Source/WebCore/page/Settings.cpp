@@ -48,6 +48,10 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/StdLibExtras.h>
 
+#if ENABLE(MEDIA_STREAM) && USE(AVFOUNDATION)
+#include "RealtimeMediaSourceCenterMac.h"
+#endif
+
 #if ENABLE(MEDIA_STREAM)
 #include "MockRealtimeMediaSourceCenter.h"
 #endif
@@ -94,6 +98,7 @@ bool Settings::gMockScrollAnimatorEnabled = false;
 #if ENABLE(MEDIA_STREAM)
 bool Settings::gMockCaptureDevicesEnabled = false;
 bool Settings::gMediaCaptureRequiresSecureConnection = true;
+bool Settings::gUseAVFoundationAudioCapture = false;
 #endif
 
 #if PLATFORM(WIN)
@@ -142,7 +147,6 @@ static const bool defaultYouTubeFlashPluginReplacementEnabled = false;
 #endif
 
 #if PLATFORM(IOS)
-static const bool defaultFixedPositionCreatesStackingContext = true;
 static const bool defaultFixedBackgroundsPaintRelativeToDocument = true;
 static const bool defaultAcceleratedCompositingForFixedPositionEnabled = true;
 static const bool defaultAllowsInlineMediaPlayback = false;
@@ -156,7 +160,6 @@ static const bool defaultScrollingTreeIncludesFrames = true;
 static const bool defaultMediaControlsScaleWithPageZoom = true;
 static const bool defaultQuickTimePluginReplacementEnabled = true;
 #else
-static const bool defaultFixedPositionCreatesStackingContext = false;
 static const bool defaultFixedBackgroundsPaintRelativeToDocument = false;
 static const bool defaultAcceleratedCompositingForFixedPositionEnabled = false;
 static const bool defaultAllowsInlineMediaPlayback = true;
@@ -214,7 +217,7 @@ Settings::Settings(Page* page)
     , m_touchEventEmulationEnabled(false)
 #endif
     , m_scrollingPerformanceLoggingEnabled(false)
-    , m_timeWithoutMouseMovementBeforeHidingControls(3)
+    , m_timeWithoutMouseMovementBeforeHidingControls(3_s)
     , m_setImageLoadingSettingsTimer(*this, &Settings::imageLoadingSettingsTimerFired)
     , m_hiddenPageDOMTimerThrottlingEnabled(false)
     , m_hiddenPageCSSAnimationSuspensionEnabled(false)
@@ -371,7 +374,7 @@ void Settings::setLoadsImagesAutomatically(bool loadsImagesAutomatically)
     // Starting these loads synchronously is not important.  By putting it on a 0-delay, properly closing the Page cancels them
     // before they have a chance to really start.
     // See http://webkit.org/b/60572 for more discussion.
-    m_setImageLoadingSettingsTimer.startOneShot(0);
+    m_setImageLoadingSettingsTimer.startOneShot(0_s);
 }
 
 void Settings::imageLoadingSettingsTimerFired()
@@ -409,7 +412,7 @@ void Settings::setImagesEnabled(bool areImagesEnabled)
     m_areImagesEnabled = areImagesEnabled;
 
     // See comment in setLoadsImagesAutomatically.
-    m_setImageLoadingSettingsTimer.startOneShot(0);
+    m_setImageLoadingSettingsTimer.startOneShot(0_s);
 }
 
 void Settings::setPreferMIMETypeForImages(bool preferMIMETypeForImages)
@@ -449,17 +452,16 @@ void Settings::setNeedsAdobeFrameReloadingQuirk(bool shouldNotReloadIFramesForUn
     m_needsAdobeFrameReloadingQuirk = shouldNotReloadIFramesForUnchangedSRC;
 }
 
-void Settings::setMinimumDOMTimerInterval(std::chrono::milliseconds interval)
+void Settings::setMinimumDOMTimerInterval(Seconds interval)
 {
-    auto oldTimerInterval = m_minimumDOMTimerInterval;
-    m_minimumDOMTimerInterval = interval;
+    auto oldTimerInterval = std::exchange(m_minimumDOMTimerInterval, interval);
 
     if (!m_page)
         return;
 
     for (Frame* frame = &m_page->mainFrame(); frame; frame = frame->tree().traverseNext()) {
         if (frame->document())
-            frame->document()->adjustMinimumTimerInterval(oldTimerInterval);
+            frame->document()->adjustMinimumDOMTimerInterval(oldTimerInterval);
     }
 }
 
@@ -617,6 +619,19 @@ bool Settings::mediaCaptureRequiresSecureConnection() const
 void Settings::setMediaCaptureRequiresSecureConnection(bool mediaCaptureRequiresSecureConnection)
 {
     gMediaCaptureRequiresSecureConnection = mediaCaptureRequiresSecureConnection;
+}
+
+bool Settings::useAVFoundationAudioCapture()
+{
+    return gUseAVFoundationAudioCapture;
+}
+
+void Settings::setUseAVFoundationAudioCapture(bool useAVFoundationAudioCapture)
+{
+    gUseAVFoundationAudioCapture = useAVFoundationAudioCapture;
+#if USE(AVFOUNDATION)
+    RealtimeMediaSourceCenterMac::singleton().setUseAVFoundationAudioCapture(useAVFoundationAudioCapture);
+#endif
 }
 #endif
 

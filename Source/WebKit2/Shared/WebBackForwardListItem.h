@@ -28,7 +28,7 @@
 
 #include "APIObject.h"
 #include "SessionState.h"
-#include <wtf/PassRefPtr.h>
+#include <wtf/RefPtr.h>
 #include <wtf/text/WTFString.h>
 
 namespace API {
@@ -52,6 +52,7 @@ public:
     uint64_t pageID() const { return m_pageID; }
 
     void setPageState(PageState pageState) { m_itemState.pageState = WTFMove(pageState); }
+    const PageState& pageState() const { return m_itemState.pageState; }
 
     const String& originalURL() const { return m_itemState.pageState.mainFrameState.originalURLString; }
     const String& url() const { return m_itemState.pageState.mainFrameState.urlString; }
@@ -61,7 +62,7 @@ public:
 
 #if PLATFORM(COCOA)
     ViewSnapshot* snapshot() const { return m_itemState.snapshot.get(); }
-    void setSnapshot(PassRefPtr<ViewSnapshot> snapshot) { m_itemState.snapshot = snapshot; }
+    void setSnapshot(RefPtr<ViewSnapshot>&& snapshot) { m_itemState.snapshot = WTFMove(snapshot); }
 #endif
 
     static uint64_t highestUsedItemID();

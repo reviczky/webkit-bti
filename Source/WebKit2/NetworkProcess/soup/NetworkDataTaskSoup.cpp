@@ -41,6 +41,7 @@
 #include <WebCore/SharedBuffer.h>
 #include <WebCore/SoupNetworkSession.h>
 #include <wtf/MainThread.h>
+#include <wtf/glib/RunLoopSourcePriority.h>
 
 using namespace WebCore;
 
@@ -60,7 +61,7 @@ NetworkDataTaskSoup::NetworkDataTaskSoup(NetworkSession& session, NetworkDataTas
     auto request = requestWithCredentials;
     if (request.url().protocolIsInHTTPFamily()) {
 #if ENABLE(WEB_TIMING)
-        m_startTime = monotonicallyIncreasingTimeMS();
+        m_startTime = MonotonicTime::now();
 #endif
         auto url = request.url();
         if (m_storedCredentials == AllowStoredCredentials) {
@@ -285,13 +286,13 @@ void NetworkDataTaskSoup::timeoutFired()
 
     RefPtr<NetworkDataTaskSoup> protectedThis(this);
     invalidateAndCancel();
-    m_client->didCompleteWithError(ResourceError::timeoutError(m_firstRequest.url()));
+    dispatchDidCompleteWithError(ResourceError::timeoutError(m_firstRequest.url()));
 }
 
 void NetworkDataTaskSoup::startTimeout()
 {
     if (m_firstRequest.timeoutInterval() > 0)
-        m_timeoutSource.startOneShot(m_firstRequest.timeoutInterval());
+        m_timeoutSource.startOneShot(1_s * m_firstRequest.timeoutInterval());
 }
 
 void NetworkDataTaskSoup::stopTimeout()
@@ -343,7 +344,7 @@ void NetworkDataTaskSoup::didSendRequest(GRefPtr<GInputStream>&& inputStream)
             m_inputStream = WTFMove(inputStream);
 
 #if ENABLE(WEB_TIMING)
-        m_response.networkLoadTiming().responseStart = monotonicallyIncreasingTimeMS() - m_startTime;
+        m_networkLoadMetrics.responseStart = MonotonicTime::now() - m_startTime;
 #endif
     } else {
         m_response.setURL(m_firstRequest.url());
@@ -363,6 +364,19 @@ void NetworkDataTaskSoup::didSendRequest(GRefPtr<GInputStream>&& inputStream)
 void NetworkDataTaskSoup::dispatchDidReceiveResponse()
 {
     ASSERT(!m_response.isNull());
+
+#if ENABLE(WEB_TIMING)
+    // FIXME: Remove this once nobody depends on deprecatedNetworkLoadMetrics.
+    NetworkLoadMetrics& deprecatedResponseMetrics = m_response.deprecatedNetworkLoadMetrics();
+    deprecatedResponseMetrics.responseStart = m_networkLoadMetrics.responseStart;
+    deprecatedResponseMetrics.domainLookupStart = m_networkLoadMetrics.domainLookupStart;
+    deprecatedResponseMetrics.domainLookupEnd = m_networkLoadMetrics.domainLookupEnd;
+    deprecatedResponseMetrics.connectStart = m_networkLoadMetrics.connectStart;
+    deprecatedResponseMetrics.secureConnectionStart = m_networkLoadMetrics.secureConnectionStart;
+    deprecatedResponseMetrics.connectEnd = m_networkLoadMetrics.connectEnd;
+    deprecatedResponseMetrics.requestStart = m_networkLoadMetrics.requestStart;
+    deprecatedResponseMetrics.responseStart = m_networkLoadMetrics.responseStart;
+#endif
 
     didReceiveResponse(ResourceResponse(m_response), [this, protectedThis = makeRef(*this)](PolicyAction policyAction) {
         if (m_state == State::Canceling || m_state == State::Completed) {
@@ -390,6 +404,16 @@ void NetworkDataTaskSoup::dispatchDidReceiveResponse()
     });
 }
 
+void NetworkDataTaskSoup::dispatchDidCompleteWithError(const ResourceError& error)
+{
+#if ENABLE(WEB_TIMING)
+    m_networkLoadMetrics.responseEnd = MonotonicTime::now() - m_startTime;
+    m_networkLoadMetrics.markComplete();
+#endif
+
+    m_client->didCompleteWithError(error, m_networkLoadMetrics);
+}
+
 void NetworkDataTaskSoup::tlsErrorsChangedCallback(SoupMessage* soupMessage, GParamSpec*, NetworkDataTaskSoup* task)
 {
     if (task->state() == State::Canceling || task->state() == State::Completed || !task->m_client) {
@@ -410,7 +434,7 @@ void NetworkDataTaskSoup::tlsErrorsChanged()
 
         RefPtr<NetworkDataTaskSoup> protectedThis(this);
         invalidateAndCancel();
-        m_client->didCompleteWithError(error);
+        dispatchDidCompleteWithError(error);
     });
 }
 
@@ -554,7 +578,7 @@ void NetworkDataTaskSoup::skipInputStreamForRedirection()
 {
     ASSERT(m_inputStream);
     RefPtr<NetworkDataTaskSoup> protectedThis(this);
-    g_input_stream_skip_async(m_inputStream.get(), gDefaultReadBufferSize, G_PRIORITY_DEFAULT, m_cancellable.get(),
+    g_input_stream_skip_async(m_inputStream.get(), gDefaultReadBufferSize, RunLoopSourcePriority::AsyncIONetwork, m_cancellable.get(),
         reinterpret_cast<GAsyncReadyCallback>(skipInputStreamForRedirectionCallback), protectedThis.leakRef());
 }
 
@@ -664,8 +688,10 @@ void NetworkDataTaskSoup::continueHTTPRedirection()
         auto request = newRequest;
         if (request.url().protocolIsInHTTPFamily()) {
 #if ENABLE(WEB_TIMING)
-            if (isCrossOrigin)
-                m_startTime = monotonicallyIncreasingTimeMS();
+            if (isCrossOrigin) {
+                m_startTime = MonotonicTime::now();
+                m_networkLoadMetrics.reset();
+            }
 #endif
             applyAuthenticationToRequest(request);
         }
@@ -707,7 +733,7 @@ void NetworkDataTaskSoup::read()
     RefPtr<NetworkDataTaskSoup> protectedThis(this);
     ASSERT(m_inputStream);
     m_readBuffer.grow(gDefaultReadBufferSize);
-    g_input_stream_read_async(m_inputStream.get(), m_readBuffer.data(), m_readBuffer.size(), G_PRIORITY_DEFAULT, m_cancellable.get(),
+    g_input_stream_read_async(m_inputStream.get(), m_readBuffer.data(), m_readBuffer.size(), RunLoopSourcePriority::AsyncIONetwork, m_cancellable.get(),
         reinterpret_cast<GAsyncReadyCallback>(readCallback), protectedThis.leakRef());
 }
 
@@ -719,7 +745,7 @@ void NetworkDataTaskSoup::didRead(gssize bytesRead)
         writeDownload();
     } else {
         ASSERT(m_client);
-        m_client->didReceiveData(SharedBuffer::adoptVector(m_readBuffer));
+        m_client->didReceiveData(SharedBuffer::create(WTFMove(m_readBuffer)));
         read();
     }
 }
@@ -741,7 +767,7 @@ void NetworkDataTaskSoup::didFinishRead()
 
     clearRequest();
     ASSERT(m_client);
-    m_client->didCompleteWithError({ });
+    dispatchDidCompleteWithError({ });
 }
 
 void NetworkDataTaskSoup::requestNextPartCallback(SoupMultipartInputStream* multipartInputStream, GAsyncResult* result, NetworkDataTaskSoup* task)
@@ -774,7 +800,7 @@ void NetworkDataTaskSoup::requestNextPart()
     RefPtr<NetworkDataTaskSoup> protectedThis(this);
     ASSERT(m_multipartInputStream);
     ASSERT(!m_inputStream);
-    soup_multipart_input_stream_next_part_async(m_multipartInputStream.get(), G_PRIORITY_DEFAULT, m_cancellable.get(),
+    soup_multipart_input_stream_next_part_async(m_multipartInputStream.get(), RunLoopSourcePriority::AsyncIONetwork, m_cancellable.get(),
         reinterpret_cast<GAsyncReadyCallback>(requestNextPartCallback), protectedThis.leakRef());
 }
 
@@ -794,7 +820,7 @@ void NetworkDataTaskSoup::didFinishRequestNextPart()
     ASSERT(m_multipartInputStream);
     g_input_stream_close(G_INPUT_STREAM(m_multipartInputStream.get()), nullptr, nullptr);
     clearRequest();
-    m_client->didCompleteWithError({ });
+    dispatchDidCompleteWithError({ });
 }
 
 void NetworkDataTaskSoup::gotHeadersCallback(SoupMessage* soupMessage, NetworkDataTaskSoup* task)
@@ -818,6 +844,22 @@ void NetworkDataTaskSoup::didGetHeaders()
         m_protectionSpaceForPersistentStorage = ProtectionSpace();
         m_credentialForPersistentStorage = Credential();
     }
+
+    // Soup adds more headers to the request after starting signal is emitted, and got-headers
+    // is the first one we receive after starting, so we use it also to get information about the
+    // request headers.
+#if ENABLE(WEB_TIMING)
+    if (shouldCaptureExtraNetworkLoadMetrics()) {
+        HTTPHeaderMap requestHeaders;
+        SoupMessageHeadersIter headersIter;
+        soup_message_headers_iter_init(&headersIter, m_soupMessage->request_headers);
+        const char* headerName;
+        const char* headerValue;
+        while (soup_message_headers_iter_next(&headersIter, &headerName, &headerValue))
+            requestHeaders.set(String(headerName), String(headerValue));
+        m_networkLoadMetrics.requestHeaders = WTFMove(requestHeaders);
+    }
+#endif
 }
 
 void NetworkDataTaskSoup::wroteBodyDataCallback(SoupMessage* soupMessage, SoupBuffer* buffer, NetworkDataTaskSoup* task)
@@ -844,7 +886,7 @@ void NetworkDataTaskSoup::download()
     ASSERT(!m_response.isNull());
 
     if (m_response.httpStatusCode() >= 400) {
-        didFailDownload(platformDownloadNetworkError(m_response.httpStatusCode(), m_response.url(), m_response.httpStatusText()));
+        didFailDownload(downloadNetworkError(m_response.url(), m_response.httpStatusText()));
         return;
     }
 
@@ -859,7 +901,7 @@ void NetworkDataTaskSoup::download()
     else
         outputStream = adoptGRef(g_file_create(m_downloadDestinationFile.get(), G_FILE_CREATE_NONE, nullptr, &error.outPtr()));
     if (!outputStream) {
-        didFailDownload(platformDownloadDestinationError(m_response, error->message));
+        didFailDownload(downloadDestinationError(m_response, error->message));
         return;
     }
 
@@ -868,7 +910,7 @@ void NetworkDataTaskSoup::download()
     m_downloadIntermediateFile = adoptGRef(g_file_new_for_uri(intermediateURI.get()));
     outputStream = adoptGRef(g_file_replace(m_downloadIntermediateFile.get(), 0, TRUE, G_FILE_CREATE_NONE, 0, &error.outPtr()));
     if (!outputStream) {
-        didFailDownload(platformDownloadDestinationError(m_response, error->message));
+        didFailDownload(downloadDestinationError(m_response, error->message));
         return;
     }
     m_downloadOutputStream = adoptGRef(G_OUTPUT_STREAM(outputStream.leakRef()));
@@ -902,7 +944,7 @@ void NetworkDataTaskSoup::writeDownloadCallback(GOutputStream* outputStream, GAs
         bytesWritten = writeTaskResult;
 #endif
     if (error)
-        task->didFailDownload(platformDownloadDestinationError(task->m_response, error->message));
+        task->didFailDownload(downloadDestinationError(task->m_response, error->message));
     else
         task->didWriteDownload(bytesWritten);
 }
@@ -911,7 +953,7 @@ void NetworkDataTaskSoup::writeDownload()
 {
     RefPtr<NetworkDataTaskSoup> protectedThis(this);
 #if GLIB_CHECK_VERSION(2, 44, 0)
-    g_output_stream_write_all_async(m_downloadOutputStream.get(), m_readBuffer.data(), m_readBuffer.size(), G_PRIORITY_DEFAULT, m_cancellable.get(),
+    g_output_stream_write_all_async(m_downloadOutputStream.get(), m_readBuffer.data(), m_readBuffer.size(), RunLoopSourcePriority::AsyncIONetwork, m_cancellable.get(),
         reinterpret_cast<GAsyncReadyCallback>(writeDownloadCallback), protectedThis.leakRef());
 #else
     GRefPtr<GTask> writeTask = adoptGRef(g_task_new(m_downloadOutputStream.get(), m_cancellable.get(),
@@ -957,7 +999,7 @@ void NetworkDataTaskSoup::didFinishDownload()
     ASSERT(m_downloadIntermediateFile);
     GUniqueOutPtr<GError> error;
     if (!g_file_move(m_downloadIntermediateFile.get(), m_downloadDestinationFile.get(), G_FILE_COPY_OVERWRITE, m_cancellable.get(), nullptr, nullptr, &error.outPtr())) {
-        didFailDownload(platformDownloadDestinationError(m_response, error->message));
+        didFailDownload(downloadDestinationError(m_response, error->message));
         return;
     }
 
@@ -965,7 +1007,7 @@ void NetworkDataTaskSoup::didFinishDownload()
     CString uri = m_response.url().string().utf8();
     g_file_info_set_attribute_string(info.get(), "metadata::download-uri", uri.data());
     g_file_info_set_attribute_string(info.get(), "xattr::xdg.origin.url", uri.data());
-    g_file_set_attributes_async(m_downloadDestinationFile.get(), info.get(), G_FILE_QUERY_INFO_NONE, G_PRIORITY_DEFAULT, nullptr, nullptr, nullptr);
+    g_file_set_attributes_async(m_downloadDestinationFile.get(), info.get(), G_FILE_QUERY_INFO_NONE, RunLoopSourcePriority::AsyncIONetwork, nullptr, nullptr, nullptr);
 
     clearRequest();
     auto* download = NetworkProcess::singleton().downloadManager().download(m_pendingDownloadID);
@@ -978,7 +1020,7 @@ void NetworkDataTaskSoup::didFailDownload(const ResourceError& error)
     clearRequest();
     cleanDownloadFiles();
     if (m_client)
-        m_client->didCompleteWithError(error);
+        dispatchDidCompleteWithError(error);
     else {
         auto* download = NetworkProcess::singleton().downloadManager().download(m_pendingDownloadID);
         ASSERT(download);
@@ -1001,13 +1043,13 @@ void NetworkDataTaskSoup::cleanDownloadFiles()
 void NetworkDataTaskSoup::didFail(const ResourceError& error)
 {
     if (isDownload()) {
-        didFailDownload(platformDownloadNetworkError(error.errorCode(), error.failingURL(), error.localizedDescription()));
+        didFailDownload(downloadNetworkError(error.failingURL(), error.localizedDescription()));
         return;
     }
 
     clearRequest();
     ASSERT(m_client);
-    m_client->didCompleteWithError(error);
+    dispatchDidCompleteWithError(error);
 }
 
 #if ENABLE(WEB_TIMING)
@@ -1022,17 +1064,16 @@ void NetworkDataTaskSoup::networkEventCallback(SoupMessage* soupMessage, GSocket
 
 void NetworkDataTaskSoup::networkEvent(GSocketClientEvent event)
 {
-    double deltaTime = monotonicallyIncreasingTimeMS() - m_startTime;
-    auto& loadTiming = m_response.networkLoadTiming();
+    Seconds deltaTime = MonotonicTime::now() - m_startTime;
     switch (event) {
     case G_SOCKET_CLIENT_RESOLVING:
-        loadTiming.domainLookupStart = deltaTime;
+        m_networkLoadMetrics.domainLookupStart = deltaTime;
         break;
     case G_SOCKET_CLIENT_RESOLVED:
-        loadTiming.domainLookupEnd = deltaTime;
+        m_networkLoadMetrics.domainLookupEnd = deltaTime;
         break;
     case G_SOCKET_CLIENT_CONNECTING:
-        loadTiming.connectStart = deltaTime;
+        m_networkLoadMetrics.connectStart = deltaTime;
         break;
     case G_SOCKET_CLIENT_CONNECTED:
         // Web Timing considers that connection time involves dns, proxy & TLS negotiation...
@@ -1043,12 +1084,12 @@ void NetworkDataTaskSoup::networkEvent(GSocketClientEvent event)
     case G_SOCKET_CLIENT_PROXY_NEGOTIATED:
         break;
     case G_SOCKET_CLIENT_TLS_HANDSHAKING:
-        loadTiming.secureConnectionStart = deltaTime;
+        m_networkLoadMetrics.secureConnectionStart = deltaTime;
         break;
     case G_SOCKET_CLIENT_TLS_HANDSHAKED:
         break;
     case G_SOCKET_CLIENT_COMPLETE:
-        loadTiming.connectEnd = deltaTime;
+        m_networkLoadMetrics.connectEnd = deltaTime;
         break;
     default:
         ASSERT_NOT_REACHED();
@@ -1081,7 +1122,7 @@ void NetworkDataTaskSoup::requestStartedCallback(SoupSession* session, SoupMessa
 
 void NetworkDataTaskSoup::didStartRequest()
 {
-    m_response.networkLoadTiming().requestStart = monotonicallyIncreasingTimeMS() - m_startTime;
+    m_networkLoadMetrics.requestStart = MonotonicTime::now() - m_startTime;
 }
 
 void NetworkDataTaskSoup::restartedCallback(SoupMessage* soupMessage, NetworkDataTaskSoup* task)
@@ -1097,7 +1138,8 @@ void NetworkDataTaskSoup::restartedCallback(SoupMessage* soupMessage, NetworkDat
 
 void NetworkDataTaskSoup::didRestart()
 {
-    m_startTime = monotonicallyIncreasingTimeMS();
+    m_startTime = MonotonicTime::now();
+    m_networkLoadMetrics.reset();
 }
 #endif // ENABLE(WEB_TIMING)
 
