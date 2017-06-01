@@ -68,6 +68,7 @@ Ref<PageConfiguration> PageConfiguration::copy() const
     copy->m_alwaysRunsAtForegroundPriority = this->m_alwaysRunsAtForegroundPriority;
 #endif
     copy->m_initialCapitalizationEnabled = this->m_initialCapitalizationEnabled;
+    copy->m_cpuLimit = this->m_cpuLimit;
     copy->m_controlledByAutomation = this->m_controlledByAutomation;
     copy->m_overrideContentSecurityPolicy = this->m_overrideContentSecurityPolicy;
 
@@ -153,6 +154,11 @@ void PageConfiguration::setWebsiteDataStore(API::WebsiteDataStore* websiteDataSt
 
 WebCore::SessionID PageConfiguration::sessionID()
 {
+#if !ASSERT_DISABLED
+    if (m_websiteDataStore)
+        ASSERT(m_websiteDataStore->websiteDataStore().sessionID() == m_sessionID);
+#endif
+
     return m_sessionID;
 }
 

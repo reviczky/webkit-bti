@@ -40,20 +40,25 @@
 #include "Settings.h"
 #include <wtf/Ref.h>
 #include <wtf/SystemTracing.h>
+#include <wtf/text/StringBuilder.h>
 
 #if USE(REQUEST_ANIMATION_FRAME_TIMER)
 #include <algorithm>
 #include <wtf/CurrentTime.h>
 
 // Allow a little more than 60fps to make sure we can at least hit that frame rate.
-#define MinimumAnimationInterval 0.015
-#define MinimumThrottledAnimationInterval 10
+static const Seconds fullSpeedAnimationInterval { 15_ms };
+// Allow a little more than 30fps to make sure we can at least hit that frame rate.
+static const Seconds halfSpeedThrottlingAnimationInterval { 30_ms };
+static const Seconds aggressiveThrottlingAnimationInterval { 10_s };
 #endif
+
+#define RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(page() && page()->isAlwaysOnLoggingAllowed(), PerformanceLogging, "%p - ScriptedAnimationController::" fmt, this, ##__VA_ARGS__)
 
 namespace WebCore {
 
-ScriptedAnimationController::ScriptedAnimationController(Document* document, PlatformDisplayID displayID)
-    : m_document(document)
+ScriptedAnimationController::ScriptedAnimationController(Document& document, PlatformDisplayID displayID)
+    : m_document(&document)
 #if USE(REQUEST_ANIMATION_FRAME_TIMER)
     , m_animationTimer(*this, &ScriptedAnimationController::animationTimerFired)
 #endif
@@ -72,11 +77,15 @@ bool ScriptedAnimationController::requestAnimationFrameEnabled() const
 
 void ScriptedAnimationController::suspend()
 {
+    dispatchLoggingEventIfRequired("raf-suspend");
+    if (m_document && m_document->frame() && m_document->frame()->settings().shouldDispatchRequestAnimationFrameEvents())
+        WTFReportBacktrace();
     ++m_suspendCount;
 }
 
 void ScriptedAnimationController::resume()
 {
+    dispatchLoggingEventIfRequired("raf-resume");
     // It would be nice to put an ASSERT(m_suspendCount > 0) here, but in WK1 resume() can be called
     // even when suspend hasn't (if a tab was created in the background).
     if (m_suspendCount > 0)
@@ -86,28 +95,82 @@ void ScriptedAnimationController::resume()
         scheduleAnimation();
 }
 
-void ScriptedAnimationController::setThrottled(bool isThrottled)
+#if USE(REQUEST_ANIMATION_FRAME_TIMER) && USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR) && !RELEASE_LOG_DISABLED
+
+static const char* throttlingReasonToString(ScriptedAnimationController::ThrottlingReason reason)
+{
+    switch (reason) {
+    case ScriptedAnimationController::ThrottlingReason::VisuallyIdle:
+        return "VisuallyIdle";
+    case ScriptedAnimationController::ThrottlingReason::OutsideViewport:
+        return "OutsideViewport";
+    case ScriptedAnimationController::ThrottlingReason::LowPowerMode:
+        return "LowPowerMode";
+    case ScriptedAnimationController::ThrottlingReason::NonInteractedCrossOriginFrame:
+        return "NonInteractiveCrossOriginFrame";
+    }
+}
+
+static String throttlingReasonsToString(OptionSet<ScriptedAnimationController::ThrottlingReason> reasons)
+{
+    if (reasons.isEmpty())
+        return ASCIILiteral("[Unthrottled]");
+
+    StringBuilder builder;
+    for (auto reason : reasons) {
+        if (!builder.isEmpty())
+            builder.append('|');
+        builder.append(throttlingReasonToString(reason));
+    }
+    return builder.toString();
+}
+
+#endif
+
+void ScriptedAnimationController::addThrottlingReason(ThrottlingReason reason)
 {
 #if USE(REQUEST_ANIMATION_FRAME_TIMER) && USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-    if (m_isThrottled == isThrottled)
+    if (m_throttlingReasons.contains(reason))
         return;
 
-    LOG(Animations, "%p - Setting RequestAnimationFrame throttling state to %d in frame %p (isMainFrame: %d)", this, isThrottled, m_document->frame(), m_document->frame() ? m_document->frame()->isMainFrame() : 0);
+    m_throttlingReasons |= reason;
 
-    m_isThrottled = isThrottled;
+    RELEASE_LOG_IF_ALLOWED("addThrottlingReason(%s) -> %s", throttlingReasonToString(reason), throttlingReasonsToString(m_throttlingReasons).utf8().data());
+    dispatchLoggingEventIfRequired("raf-add-throttling-reason");
+
     if (m_animationTimer.isActive()) {
         m_animationTimer.stop();
         scheduleAnimation();
     }
 #else
-    UNUSED_PARAM(isThrottled);
+    UNUSED_PARAM(reason);
+#endif
+}
+
+void ScriptedAnimationController::removeThrottlingReason(ThrottlingReason reason)
+{
+#if USE(REQUEST_ANIMATION_FRAME_TIMER) && USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+    if (!m_throttlingReasons.contains(reason))
+        return;
+
+    m_throttlingReasons -= reason;
+
+    RELEASE_LOG_IF_ALLOWED("removeThrottlingReason(%s) -> %s", throttlingReasonToString(reason), throttlingReasonsToString(m_throttlingReasons).utf8().data());
+    dispatchLoggingEventIfRequired("raf-remove-throttling-reason");
+
+    if (m_animationTimer.isActive()) {
+        m_animationTimer.stop();
+        scheduleAnimation();
+    }
+#else
+    UNUSED_PARAM(reason);
 #endif
 }
 
 bool ScriptedAnimationController::isThrottled() const
 {
 #if USE(REQUEST_ANIMATION_FRAME_TIMER) && USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-    return m_isThrottled;
+    return !m_throttlingReasons.isEmpty();
 #else
     return false;
 #endif
@@ -121,6 +184,7 @@ ScriptedAnimationController::CallbackId ScriptedAnimationController::registerCal
     m_callbacks.append(WTFMove(callback));
 
     InspectorInstrumentation::didRequestAnimationFrame(m_document, id);
+    dispatchLoggingEventIfRequired("raf-register-callback");
 
     if (!m_suspendCount)
         scheduleAnimation();
@@ -129,11 +193,13 @@ ScriptedAnimationController::CallbackId ScriptedAnimationController::registerCal
 
 void ScriptedAnimationController::cancelCallback(CallbackId id)
 {
+    dispatchLoggingEventIfRequired("raf-cancel-callback");
     for (size_t i = 0; i < m_callbacks.size(); ++i) {
         if (m_callbacks[i]->m_id == id) {
             m_callbacks[i]->m_firedOrCancelled = true;
             InspectorInstrumentation::didCancelAnimationFrame(m_document, id);
             m_callbacks.remove(i);
+            dispatchLoggingEventIfRequired("raf-did-cancel-callback");
             return;
         }
     }
@@ -141,6 +207,7 @@ void ScriptedAnimationController::cancelCallback(CallbackId id)
 
 void ScriptedAnimationController::serviceScriptedAnimations(double timestamp)
 {
+    dispatchLoggingEventIfRequired("raf-service-scripted-animations");
     if (!m_callbacks.size() || m_suspendCount || !requestAnimationFrameEnabled())
         return;
 
@@ -161,11 +228,13 @@ void ScriptedAnimationController::serviceScriptedAnimations(double timestamp)
         if (!callback->m_firedOrCancelled) {
             callback->m_firedOrCancelled = true;
             InspectorInstrumentationCookie cookie = InspectorInstrumentation::willFireAnimationFrame(m_document, callback->m_id);
+            dispatchLoggingEventIfRequired("raf-will-fire");
             if (callback->m_useLegacyTimeBase)
                 callback->handleEvent(legacyHighResNowMs);
             else
                 callback->handleEvent(highResNowMs);
             InspectorInstrumentation::didFireAnimationFrame(cookie);
+            dispatchLoggingEventIfRequired("raf-did-fire");
         }
     }
 
@@ -192,34 +261,69 @@ void ScriptedAnimationController::windowScreenDidChange(PlatformDisplayID displa
 #endif
 }
 
+Seconds ScriptedAnimationController::interval() const
+{
+#if USE(REQUEST_ANIMATION_FRAME_TIMER) && USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+    if (m_throttlingReasons.contains(ThrottlingReason::VisuallyIdle) || m_throttlingReasons.contains(ThrottlingReason::OutsideViewport))
+        return aggressiveThrottlingAnimationInterval;
+
+    if (m_throttlingReasons.contains(ThrottlingReason::LowPowerMode))
+        return halfSpeedThrottlingAnimationInterval;
+
+    if (m_throttlingReasons.contains(ThrottlingReason::NonInteractedCrossOriginFrame))
+        return halfSpeedThrottlingAnimationInterval;
+
+    ASSERT(m_throttlingReasons.isEmpty());
+#endif
+    return fullSpeedAnimationInterval;
+}
+
+Page* ScriptedAnimationController::page() const
+{
+    return m_document ? m_document->page() : nullptr;
+}
+
 void ScriptedAnimationController::scheduleAnimation()
 {
+    dispatchLoggingEventIfRequired("raf-schedule-animation");
     if (!requestAnimationFrameEnabled())
         return;
 
 #if USE(REQUEST_ANIMATION_FRAME_TIMER)
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-    if (!m_isUsingTimer && !m_isThrottled) {
+    if (!m_isUsingTimer && !isThrottled()) {
         if (DisplayRefreshMonitorManager::sharedManager().scheduleAnimation(*this))
             return;
 
         m_isUsingTimer = true;
+        dispatchLoggingEventIfRequired("raf-schedule-animation-display-refresh-monitor");
     }
 #endif
     if (m_animationTimer.isActive())
         return;
 
-    double animationInterval = MinimumAnimationInterval;
-#if USE(REQUEST_ANIMATION_FRAME_TIMER) && USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-    if (m_isThrottled)
-        animationInterval = MinimumThrottledAnimationInterval;
-#endif
+    Seconds animationInterval = interval();
+    Seconds scheduleDelay = std::max(animationInterval - Seconds(m_document->domWindow()->nowTimestamp() - m_lastAnimationFrameTimestamp), 0_s);
 
-    double scheduleDelay = std::max<double>(animationInterval - (m_document->domWindow()->nowTimestamp() - m_lastAnimationFrameTimestamp), 0);
+    if (isThrottled()) {
+        // FIXME: not ideal to snapshot time both in now() and nowTimestamp(), the latter of which also has reduced resolution.
+        MonotonicTime now = MonotonicTime::now();
+
+        MonotonicTime fireTime = now + scheduleDelay;
+        Seconds alignmentInterval = 10_ms;
+        // Snap to the nearest alignmentInterval.
+        Seconds alignment = (fireTime + alignmentInterval / 2) % alignmentInterval;
+        MonotonicTime alignedFireTime = fireTime - alignment;
+        scheduleDelay = alignedFireTime - now;
+    }
+
     m_animationTimer.startOneShot(scheduleDelay);
+
+    dispatchLoggingEventIfRequired("raf-schedule-animation-timer");
 #else
     if (FrameView* frameView = m_document->view())
         frameView->scheduleAnimation();
+    dispatchLoggingEventIfRequired("raf-schedule-animation-frame-view");
 #endif
 }
 
@@ -250,5 +354,11 @@ RefPtr<DisplayRefreshMonitor> ScriptedAnimationController::createDisplayRefreshM
     return DisplayRefreshMonitor::createDefaultDisplayRefreshMonitor(displayID);
 }
 #endif
+
+void ScriptedAnimationController::dispatchLoggingEventIfRequired(const AtomicString& type)
+{
+    if (m_document && m_document->frame() && m_document->frame()->settings().shouldDispatchRequestAnimationFrameEvents())
+        m_document->dispatchEvent(Event::create(type, false, false));
+}
 
 }

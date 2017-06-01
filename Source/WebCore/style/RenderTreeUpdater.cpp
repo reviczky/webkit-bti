@@ -40,6 +40,7 @@
 #include "RenderNamedFlowThread.h"
 #include "StyleResolver.h"
 #include "StyleTreeResolver.h"
+#include <wtf/SystemTracing.h>
 
 #if PLATFORM(IOS)
 #include "WKContentObservation.h"
@@ -112,6 +113,8 @@ void RenderTreeUpdater::commit(std::unique_ptr<const Style::Update> styleUpdate)
 
     if (!m_document.shouldCreateRenderers() || !m_document.renderView())
         return;
+    
+    TraceScope scope(RenderTreeBuildStart, RenderTreeBuildEnd);
 
     Style::PostResolutionCallbackDisabler callbackDisabler(m_document);
 
@@ -385,7 +388,7 @@ static bool textRendererIsNeeded(const Text& textNode, const RenderTreePosition&
     if (!textNode.containsOnlyWhitespace())
         return true;
     // This text node has nothing but white space. We may still need a renderer in some cases.
-    if (parentRenderer.isTable() || parentRenderer.isTableRow() || parentRenderer.isTableSection() || parentRenderer.isRenderTableCol() || parentRenderer.isFrameSet())
+    if (parentRenderer.isTable() || parentRenderer.isTableRow() || parentRenderer.isTableSection() || parentRenderer.isRenderTableCol() || parentRenderer.isFrameSet() || (parentRenderer.isFlexibleBox() && !parentRenderer.isRenderButton()))
         return false;
     if (parentRenderer.style().preserveNewline()) // pre/pre-wrap/pre-line always make renderers.
         return true;

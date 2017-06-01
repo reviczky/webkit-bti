@@ -59,7 +59,9 @@
 #endif
 
 #if USE(EGL)
+#if !PLATFORM(WPE)
 #include "GLContextEGL.h"
+#endif
 #include <gst/gl/egl/gstgldisplay_egl.h>
 #endif
 
@@ -69,6 +71,8 @@
 
 #if PLATFORM(WAYLAND)
 #include "PlatformDisplayWayland.h"
+#elif PLATFORM(WPE)
+#include "PlatformDisplayWPE.h"
 #endif
 
 // gstglapi.h may include eglplatform.h and it includes X.h, which
@@ -96,7 +100,6 @@
 #include "SharedBuffer.h"
 #include "WebKitClearKeyDecryptorGStreamer.h"
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
-#include "UUID.h"
 #include <runtime/JSCInlines.h>
 #include <runtime/TypedArrayInlines.h>
 #include <runtime/Uint8Array.h>
@@ -124,6 +127,22 @@ void registerWebKitGStreamerElements()
     if (!clearKeyDecryptorFactory)
         gst_element_register(nullptr, "webkitclearkey", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_MEDIA_CK_DECRYPT);
 #endif
+}
+
+bool MediaPlayerPrivateGStreamerBase::initializeGStreamerAndRegisterWebKitElements()
+{
+    if (!initializeGStreamer())
+        return false;
+
+    registerWebKitGStreamerElements();
+
+    GRefPtr<GstElementFactory> srcFactory = adoptGRef(gst_element_factory_find("webkitwebsrc"));
+    if (!srcFactory) {
+        GST_DEBUG_CATEGORY_INIT(webkit_media_player_debug, "webkitmediaplayer", 0, "WebKit media player");
+        gst_element_register(0, "webkitwebsrc", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_WEB_SRC);
+    }
+
+    return true;
 }
 
 static int greatestCommonDivisor(int a, int b)
@@ -437,6 +456,11 @@ bool MediaPlayerPrivateGStreamerBase::ensureGstGLContext()
 #if PLATFORM(WAYLAND)
         if (is<PlatformDisplayWayland>(sharedDisplay))
             m_glDisplay = GST_GL_DISPLAY(gst_gl_display_egl_new_with_egl_display(downcast<PlatformDisplayWayland>(sharedDisplay).eglDisplay()));
+#endif
+
+#if PLATFORM(WPE)
+        ASSERT(is<PlatformDisplayWPE>(sharedDisplay));
+        m_glDisplay = GST_GL_DISPLAY(gst_gl_display_egl_new_with_egl_display(downcast<PlatformDisplayWPE>(sharedDisplay).eglDisplay()));
 #endif
 
         ASSERT(m_glDisplay);
@@ -767,7 +791,7 @@ void MediaPlayerPrivateGStreamerBase::triggerRepaint(GstSample* sample)
 #if USE(COORDINATED_GRAPHICS_THREADED)
     if (!m_renderingCanBeAccelerated) {
         LockHolder locker(m_drawMutex);
-        m_drawTimer.startOneShot(0);
+        m_drawTimer.startOneShot(0_s);
         m_drawCondition.wait(m_drawMutex);
         return;
     }
@@ -789,7 +813,7 @@ void MediaPlayerPrivateGStreamerBase::triggerRepaint(GstSample* sample)
         ASSERT(!isMainThread());
 
         LockHolder locker(m_drawMutex);
-        m_drawTimer.startOneShot(0);
+        m_drawTimer.startOneShot(0_s);
         m_drawCondition.wait(m_drawMutex);
     }
 #else
@@ -844,7 +868,7 @@ void MediaPlayerPrivateGStreamerBase::paint(GraphicsContext& context, const Floa
     if (!gstImage)
         return;
 
-    if (Image* image = reinterpret_cast<Image*>(gstImage->image().get()))
+    if (Image* image = reinterpret_cast<Image*>(gstImage->image()))
         context.drawImage(*image, rect, gstImage->rect(), paintingOptions);
 }
 

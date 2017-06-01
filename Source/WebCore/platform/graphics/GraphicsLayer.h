@@ -314,7 +314,7 @@ public:
 
     // approximatePosition, if set, overrides position() and is used during coverage rect computation.
     FloatPoint approximatePosition() const { return m_approximatePosition ? m_approximatePosition.value() : m_position; }
-    void setApproximatePosition(std::optional<FloatPoint> p) { m_approximatePosition = p; }
+    virtual void setApproximatePosition(const FloatPoint& p) { m_approximatePosition = p; }
 
     // For platforms that move underlying platform layers on a different thread for scrolling; just update the GraphicsLayer state.
     virtual void syncPosition(const FloatPoint& p) { m_position = p; }
@@ -373,6 +373,9 @@ public:
     // opaque means that we know the layer contents have no alpha
     bool contentsOpaque() const { return m_contentsOpaque; }
     virtual void setContentsOpaque(bool b) { m_contentsOpaque = b; }
+
+    bool supportsSubpixelAntialiasedText() const { return m_supportsSubpixelAntialiasedText; }
+    virtual void setSupportsSubpixelAntialiasedText(bool b) { m_supportsSubpixelAntialiasedText = b; }
 
     bool backfaceVisibility() const { return m_backfaceVisibility; }
     virtual void setBackfaceVisibility(bool b) { m_backfaceVisibility = b; }
@@ -551,6 +554,7 @@ public:
     static bool supportsBackgroundColorContent();
     static bool supportsLayerType(Type);
     static bool supportsContentsTiling();
+    static bool supportsSubpixelAntialiasedLayerText();
 
     void updateDebugIndicators();
 
@@ -631,6 +635,7 @@ protected:
     const Type m_type;
 
     bool m_contentsOpaque : 1;
+    bool m_supportsSubpixelAntialiasedText : 1;
     bool m_preserves3D: 1;
     bool m_backfaceVisibility : 1;
     bool m_masksToBounds : 1;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013, 2015-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -40,7 +40,6 @@ void computeUsesForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     // No uses.
     case op_new_regexp:
     case op_new_array_buffer:
-    case op_throw_static_error:
     case op_debug:
     case op_jneq_ptr:
     case op_loop_hint:
@@ -53,7 +52,7 @@ void computeUsesForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_create_direct_arguments:
     case op_create_cloned_arguments:
     case op_get_rest_length:
-    case op_watchdog:
+    case op_check_traps:
     case op_get_argument:
         return;
     case op_assert:
@@ -70,7 +69,8 @@ void computeUsesForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_jneq_null:
     case op_dec:
     case op_inc:
-    case op_log_shadow_chicken_prologue: {
+    case op_log_shadow_chicken_prologue:
+    case op_throw_static_error: {
         ASSERT(opcodeLengths[opcodeID] > 1);
         functor(codeBlock, instruction, opcodeID, instruction[1].u.operand);
         return;
@@ -170,6 +170,7 @@ void computeUsesForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_to_index_string:
     case op_create_lexical_environment:
     case op_resolve_scope:
+    case op_resolve_scope_for_hoisting_func_decl_in_eval:
     case op_get_from_scope:
     case op_to_primitive:
     case op_try_get_by_id:
@@ -359,7 +360,7 @@ void computeDefsForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_profile_control_flow:
     case op_put_to_arguments:
     case op_set_function_name:
-    case op_watchdog:
+    case op_check_traps:
     case op_log_shadow_chicken_prologue:
     case op_log_shadow_chicken_tail:
     case op_yield:
@@ -382,6 +383,7 @@ void computeDefsForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_push_with_scope:
     case op_create_lexical_environment:
     case op_resolve_scope:
+    case op_resolve_scope_for_hoisting_func_decl_in_eval:
     case op_strcat:
     case op_to_primitive:
     case op_create_this:

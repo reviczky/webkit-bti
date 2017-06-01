@@ -271,6 +271,11 @@ void InjectedBundle::didReceiveMessageToPage(WKBundlePageRef page, WKStringRef m
         return;
     }
 
+    if (WKStringIsEqualToUTF8CString(messageName, "WebsiteDataScanForTopPrivatelyControlledDomainsFinished")) {
+        m_testRunner->statisticsDidScanDataRecordsCallback();
+        return;
+    }
+
     WKRetainPtr<WKStringRef> errorMessageName(AdoptWK, WKStringCreateWithUTF8CString("Error"));
     WKRetainPtr<WKStringRef> errorMessageBody(AdoptWK, WKStringCreateWithUTF8CString("Unknown"));
     WKBundlePagePostMessage(page, errorMessageName.get(), errorMessageBody.get());
@@ -324,14 +329,11 @@ void InjectedBundle::beginTesting(WKDictionaryRef settings)
     m_testRunner->setUserStyleSheetEnabled(false);
     m_testRunner->setXSSAuditorEnabled(false);
 
-    m_testRunner->setShadowDOMEnabled(true);
-    m_testRunner->setCustomElementsEnabled(true);
-
     m_testRunner->setWebGL2Enabled(true);
+    m_testRunner->setWebGPUEnabled(true);
 
-    m_testRunner->setFetchAPIEnabled(true);
-
-    m_testRunner->setDownloadAttributeEnabled(true);
+    m_testRunner->setWritableStreamAPIEnabled(true);
+    m_testRunner->setReadableByteStreamAPIEnabled(true);
 
     m_testRunner->setEncryptedMediaAPIEnabled(true);
 
@@ -341,9 +343,6 @@ void InjectedBundle::beginTesting(WKDictionaryRef settings)
     m_testRunner->clearTestRunnerCallbacks();
 
     m_testRunner->setSubtleCryptoEnabled(true);
-
-    m_testRunner->setMediaStreamEnabled(true);
-    m_testRunner->setPeerConnectionEnabled(true);
 
     if (m_timeout > 0)
         m_testRunner->setCustomTimeout(m_timeout);

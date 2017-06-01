@@ -343,6 +343,36 @@ String DiagnosticLoggingKeys::documentLoaderStoppingKey()
     return ASCIILiteral("documentLoaderStopping");
 }
 
+String DiagnosticLoggingKeys::domainCausingEnergyDrainKey()
+{
+    return ASCIILiteral("DomainCausingEnergyDrain");
+}
+
+String DiagnosticLoggingKeys::domainCausingJetsamKey()
+{
+    return ASCIILiteral("DomainCausingJetsam");
+}
+
+String DiagnosticLoggingKeys::simulatedPageCrashKey()
+{
+    return ASCIILiteral("SimulatedPageCrash");
+}
+
+String DiagnosticLoggingKeys::exceededActiveMemoryLimitKey()
+{
+    return ASCIILiteral("ExceededActiveMemoryLimit");
+}
+
+String DiagnosticLoggingKeys::exceededInactiveMemoryLimitKey()
+{
+    return ASCIILiteral("ExceededInactiveMemoryLimit");
+}
+
+String DiagnosticLoggingKeys::exceededBackgroundCPULimitKey()
+{
+    return ASCIILiteral("ExceededBackgroundCPULimit");
+}
+
 String DiagnosticLoggingKeys::domainVisitedKey()
 {
     return ASCIILiteral("DomainVisited");
@@ -476,6 +506,11 @@ String DiagnosticLoggingKeys::revalidatingKey()
 String DiagnosticLoggingKeys::reloadFromOriginKey()
 {
     return ASCIILiteral("reloadFromOrigin");
+}
+
+String DiagnosticLoggingKeys::reloadRevalidatingExpiredKey()
+{
+    return ASCIILiteral("reloadRevalidatingExpired");
 }
 
 String DiagnosticLoggingKeys::sameLoadKey()

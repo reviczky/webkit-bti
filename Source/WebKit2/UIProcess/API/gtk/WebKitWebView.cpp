@@ -155,6 +155,7 @@ enum {
     PROP_IS_LOADING,
     PROP_IS_PLAYING_AUDIO,
     PROP_IS_EPHEMERAL,
+    PROP_IS_CONTROLLED_BY_AUTOMATION,
     PROP_EDITABLE
 };
 
@@ -180,6 +181,7 @@ struct _WebKitWebViewPrivate {
     CString activeURI;
     bool isLoading;
     bool isEphemeral;
+    bool isControlledByAutomation;
 
     std::unique_ptr<PageLoadStateObserver> loadObserver;
 
@@ -536,11 +538,11 @@ static gboolean webkitWebViewAuthenticate(WebKitWebView* webView, WebKitAuthenti
     return TRUE;
 }
 
-static void fileChooserDialogResponseCallback(GtkDialog* dialog, gint responseID, WebKitFileChooserRequest* request)
+static void fileChooserDialogResponseCallback(GtkFileChooser* dialog, gint responseID, WebKitFileChooserRequest* request)
 {
     GRefPtr<WebKitFileChooserRequest> adoptedRequest = adoptGRef(request);
     if (responseID == GTK_RESPONSE_ACCEPT) {
-        GUniquePtr<GSList> filesList(gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER(dialog)));
+        GUniquePtr<GSList> filesList(gtk_file_chooser_get_filenames(dialog));
         GRefPtr<GPtrArray> filesArray = adoptGRef(g_ptr_array_new());
         for (GSList* file = filesList.get(); file; file = g_slist_next(file))
             g_ptr_array_add(filesArray.get(), file->data);
@@ -549,7 +551,11 @@ static void fileChooserDialogResponseCallback(GtkDialog* dialog, gint responseID
     } else
         webkit_file_chooser_request_cancel(adoptedRequest.get());
 
+#if GTK_CHECK_VERSION(3, 20, 0)
+    g_object_unref(dialog);
+#else
     gtk_widget_destroy(GTK_WIDGET(dialog));
+#endif
 }
 
 static gboolean webkitWebViewRunFileChooser(WebKitWebView* webView, WebKitFileChooserRequest* request)
@@ -559,12 +565,22 @@ static gboolean webkitWebViewRunFileChooser(WebKitWebView* webView, WebKitFileCh
         toplevel = 0;
 
     gboolean allowsMultipleSelection = webkit_file_chooser_request_get_select_multiple(request);
+
+#if GTK_CHECK_VERSION(3, 20, 0)
+    GtkFileChooserNative* dialog = gtk_file_chooser_native_new(allowsMultipleSelection ? _("Select Files") : _("Select File"),
+        toplevel ? GTK_WINDOW(toplevel) : nullptr, GTK_FILE_CHOOSER_ACTION_OPEN, nullptr, nullptr);
+    if (toplevel)
+        gtk_native_dialog_set_modal(GTK_NATIVE_DIALOG(dialog), TRUE);
+#else
     GtkWidget* dialog = gtk_file_chooser_dialog_new(allowsMultipleSelection ? _("Select Files") : _("Select File"),
                                                     toplevel ? GTK_WINDOW(toplevel) : 0,
                                                     GTK_FILE_CHOOSER_ACTION_OPEN,
                                                     GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
                                                     GTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT,
                                                     NULL);
+    if (toplevel)
+        gtk_window_set_modal(GTK_WINDOW(dialog), TRUE);
+#endif
 
     if (GtkFileFilter* filter = webkit_file_chooser_request_get_mime_types_filter(request))
         gtk_file_chooser_set_filter(GTK_FILE_CHOOSER(dialog), filter);
@@ -574,7 +590,12 @@ static gboolean webkitWebViewRunFileChooser(WebKitWebView* webView, WebKitFileCh
         gtk_file_chooser_select_filename(GTK_FILE_CHOOSER(dialog), selectedFiles[0]);
 
     g_signal_connect(dialog, "response", G_CALLBACK(fileChooserDialogResponseCallback), g_object_ref(request));
+
+#if GTK_CHECK_VERSION(3, 20, 0)
+    gtk_native_dialog_show(GTK_NATIVE_DIALOG(dialog));
+#else
     gtk_widget_show(dialog);
+#endif
 
     return TRUE;
 }
@@ -648,6 +669,7 @@ static void webkitWebViewConstructed(GObject* object)
     if (priv->relatedView) {
         priv->context = webkit_web_view_get_context(priv->relatedView);
         priv->isEphemeral = webkit_web_view_is_ephemeral(priv->relatedView);
+        priv->isControlledByAutomation = webkit_web_view_is_controlled_by_automation(priv->relatedView);
     } else if (!priv->context)
         priv->context = webkit_web_context_get_default();
     else if (!priv->isEphemeral)
@@ -655,6 +677,9 @@ static void webkitWebViewConstructed(GObject* object)
 
     if (!priv->settings)
         priv->settings = adoptGRef(webkit_settings_new());
+
+    if (!priv->userContentManager)
+        priv->userContentManager = adoptGRef(webkit_user_content_manager_new());
 
     if (priv->isEphemeral && !webkit_web_context_is_ephemeral(priv->context.get())) {
         priv->websiteDataManager = adoptGRef(webkit_website_data_manager_new_ephemeral());
@@ -717,6 +742,9 @@ static void webkitWebViewSetProperty(GObject* object, guint propId, const GValue
     case PROP_IS_EPHEMERAL:
         webView->priv->isEphemeral = g_value_get_boolean(value);
         break;
+    case PROP_IS_CONTROLLED_BY_AUTOMATION:
+        webView->priv->isControlledByAutomation = g_value_get_boolean(value);
+        break;
     case PROP_EDITABLE:
         webkit_web_view_set_editable(webView, g_value_get_boolean(value));
         break;
@@ -762,6 +790,9 @@ static void webkitWebViewGetProperty(GObject* object, guint propId, GValue* valu
         break;
     case PROP_IS_EPHEMERAL:
         g_value_set_boolean(value, webkit_web_view_is_ephemeral(webView));
+        break;
+    case PROP_IS_CONTROLLED_BY_AUTOMATION:
+        g_value_set_boolean(value, webkit_web_view_is_controlled_by_automation(webView));
         break;
     case PROP_EDITABLE:
         g_value_set_boolean(value, webkit_web_view_is_editable(webView));
@@ -1026,6 +1057,25 @@ static void webkit_web_view_class_init(WebKitWebViewClass* webViewClass)
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
 
     /**
+     * WebKitWebView:is-controlled-by-automation:
+     *
+     * Whether the #WebKitWebView is controlled by automation. This should only be used when
+     * creating a new #WebKitWebView as a response to #WebKitAutomationSession::create-web-view
+     * signal request.
+     *
+     * Since: 2.18
+     */
+    g_object_class_install_property(
+        gObjectClass,
+        PROP_IS_CONTROLLED_BY_AUTOMATION,
+        g_param_spec_boolean(
+            "is-controlled-by-automation",
+            "Is Controlled By Automation",
+            _("Whether the web view is crontrolled by automation"),
+            FALSE,
+            static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
+
+    /**
      * WebKitWebView:editable:
      *
      * Whether the pages loaded inside #WebKitWebView are editable. For more
@@ -1048,7 +1098,7 @@ static void webkit_web_view_class_init(WebKitWebViewClass* webViewClass)
      * @web_view: the #WebKitWebView on which the signal is emitted
      * @load_event: the #WebKitLoadEvent
      *
-     * Emitted when the a load operation in @web_view changes.
+     * Emitted when a load operation in @web_view changes.
      * The signal is always emitted with %WEBKIT_LOAD_STARTED when a
      * new load request is made and %WEBKIT_LOAD_FINISHED when the load
      * finishes successfully or due to an error. When the ongoing load
@@ -1233,7 +1283,7 @@ static void webkit_web_view_class_init(WebKitWebViewClass* webViewClass)
      * <function>window.showModalDialog</function>. The purpose of
      * this signal is to allow the client application to prepare the
      * new view to behave as modal. Once the signal is emitted a new
-     * mainloop will be run to block user interaction in the parent
+     * main loop will be run to block user interaction in the parent
      * #WebKitWebView until the new dialog is closed.
      */
     signals[RUN_AS_MODAL] =
@@ -1460,7 +1510,7 @@ static void webkit_web_view_class_init(WebKitWebViewClass* webViewClass)
      * @web_view: the #WebKitWebView on which the signal is emitted
      * @print_operation: the #WebKitPrintOperation that will handle the print request
      *
-     * Emitted when printing is requested on @web_view, usually by a javascript call,
+     * Emitted when printing is requested on @web_view, usually by a JavaScript call,
      * before the print dialog is shown. This signal can be used to set the initial
      * print settings and page setup of @print_operation to be used as default values in
      * the print dialog. You can call webkit_print_operation_set_print_settings() and
@@ -2260,8 +2310,7 @@ WebKitWebContext* webkit_web_view_get_context(WebKitWebView *webView)
  * webkit_web_view_get_user_content_manager:
  * @web_view: a #WebKitWebView
  *
- * Gets the user content manager associated to @web_view, or %NULL if the
- * view does not have an user content manager.
+ * Gets the user content manager associated to @web_view.
  *
  * Returns: (transfer none): the #WebKitUserContentManager associated with the view
  *
@@ -2279,7 +2328,7 @@ WebKitUserContentManager* webkit_web_view_get_user_content_manager(WebKitWebView
  * @web_view: a #WebKitWebView
  *
  * Get whether a #WebKitWebView is ephemeral. To create an ephemeral #WebKitWebView you need to
- * use g_object_new() and pass is-ephemeral propery with %TRUE value. See
+ * use g_object_new() and pass is-ephemeral property with %TRUE value. See
  * #WebKitWebView:is-ephemeral for more details.
  * If @web_view was created with a ephemeral #WebKitWebView:related-view or an
  * ephemeral #WebKitWebView:web-context it will also be ephemeral.
@@ -2293,6 +2342,25 @@ gboolean webkit_web_view_is_ephemeral(WebKitWebView* webView)
     g_return_val_if_fail(WEBKIT_IS_WEB_VIEW(webView), FALSE);
 
     return webView->priv->isEphemeral;
+}
+
+/**
+ * webkit_web_view_is_controlled_by_automation:
+ * @web_view: a #WebKitWebView
+ *
+ * Get whether a #WebKitWebView was created with #WebKitWebView:is-controlled-by-automation
+ * property enabled. Only #WebKitWebView<!-- -->s controlled by automation can be used in an
+ * automation session.
+ *
+ * Returns: %TRUE if @web_view is controlled by automation, or %FALSE otherwise.
+ *
+ * Since: 2.18
+ */
+gboolean webkit_web_view_is_controlled_by_automation(WebKitWebView* webView)
+{
+    g_return_val_if_fail(WEBKIT_IS_WEB_VIEW(webView), FALSE);
+
+    return webView->priv->isControlledByAutomation;
 }
 
 /**
@@ -2387,7 +2455,7 @@ void webkit_web_view_load_html(WebKitWebView* webView, const gchar* content, con
  * Load the given @content string for the URI @content_uri.
  * This allows clients to display page-loading errors in the #WebKitWebView itself.
  * When this method is called from #WebKitWebView::load-failed signal to show an
- * error page, the the back-forward list is maintained appropriately.
+ * error page, then the back-forward list is maintained appropriately.
  * For everything else this method works the same way as webkit_web_view_load_html().
  */
 void webkit_web_view_load_alternate_html(WebKitWebView* webView, const gchar* content, const gchar* contentURI, const gchar* baseURI)
@@ -2518,9 +2586,7 @@ void webkit_web_view_reload(WebKitWebView* webView)
 {
     g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
 
-    const bool reloadFromOrigin = false;
-    const bool contentBlockersEnabled = true;
-    getPage(webView)->reload(reloadFromOrigin, contentBlockersEnabled);
+    getPage(webView)->reload({ });
 }
 
 /**
@@ -2534,9 +2600,7 @@ void webkit_web_view_reload_bypass_cache(WebKitWebView* webView)
 {
     g_return_if_fail(WEBKIT_IS_WEB_VIEW(webView));
 
-    const bool reloadFromOrigin = true;
-    const bool contentBlockersEnabled = true;
-    getPage(webView)->reload(reloadFromOrigin, contentBlockersEnabled);
+    getPage(webView)->reload(WebCore::ReloadOption::FromOrigin);
 }
 
 /**
@@ -2563,7 +2627,7 @@ void webkit_web_view_stop_loading(WebKitWebView* webView)
  * Gets the value of the #WebKitWebView:is-loading property.
  * You can monitor when a #WebKitWebView is loading a page by connecting to
  * notify::is-loading signal of @web_view. This is useful when you are
- * interesting in knowing when the view is loding something but not in the
+ * interesting in knowing when the view is loading something but not in the
  * details about the status of the load operation, for example to start a spinner
  * when the view is loading a page and stop it when it finishes.
  *
@@ -3465,7 +3529,7 @@ gboolean webkit_web_view_save_to_file_finish(WebKitWebView* webView, GAsyncResul
  *
  * Requests downloading of the specified URI string for @web_view.
  *
- * Returns: (transfer full): a new #WebKitDownload representing the
+ * Returns: (transfer full): a new #WebKitDownload representing
  *    the download operation.
  */
 WebKitDownload* webkit_web_view_download_uri(WebKitWebView* webView, const char* uri)

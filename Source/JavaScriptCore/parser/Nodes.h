@@ -633,7 +633,7 @@ namespace JSC {
 
         ArgumentListNode* toArgumentList(ParserArena&, int, int) const;
 
-        ElementNode* elements() const { ASSERT(isSimpleArray()); return m_element; }
+        ElementNode* elements() const { return m_element; }
     private:
         RegisterID* emitBytecode(BytecodeGenerator&, RegisterID* = 0) override;
 
@@ -871,18 +871,20 @@ namespace JSC {
 
     class CallFunctionCallDotNode : public FunctionCallDotNode {
     public:
-        CallFunctionCallDotNode(const JSTokenLocation&, ExpressionNode* base, const Identifier&, ArgumentsNode*, const JSTextPosition& divot, const JSTextPosition& divotStart, const JSTextPosition& divotEnd);
+        CallFunctionCallDotNode(const JSTokenLocation&, ExpressionNode* base, const Identifier&, ArgumentsNode*, const JSTextPosition& divot, const JSTextPosition& divotStart, const JSTextPosition& divotEnd, size_t distanceToInnermostCallOrApply);
 
     private:
         RegisterID* emitBytecode(BytecodeGenerator&, RegisterID* = 0) override;
+        size_t m_distanceToInnermostCallOrApply;
     };
     
     class ApplyFunctionCallDotNode : public FunctionCallDotNode {
     public:
-        ApplyFunctionCallDotNode(const JSTokenLocation&, ExpressionNode* base, const Identifier&, ArgumentsNode*, const JSTextPosition& divot, const JSTextPosition& divotStart, const JSTextPosition& divotEnd);
+        ApplyFunctionCallDotNode(const JSTokenLocation&, ExpressionNode* base, const Identifier&, ArgumentsNode*, const JSTextPosition& divot, const JSTextPosition& divotStart, const JSTextPosition& divotEnd, size_t distanceToInnermostCallOrApply);
 
     private:
         RegisterID* emitBytecode(BytecodeGenerator&, RegisterID* = 0) override;
+        size_t m_distanceToInnermostCallOrApply;
     };
 
     class DeleteResolveNode : public ExpressionNode, public ThrowableExpressionData {
@@ -2074,6 +2076,7 @@ namespace JSC {
         virtual void toString(StringBuilder&) const = 0;
 
         virtual bool isBindingNode() const { return false; }
+        virtual bool isAssignmentElementNode() const { return false; }
         virtual bool isRestParameter() const { return false; }
         virtual RegisterID* emitDirectBinding(BytecodeGenerator&, RegisterID*, ExpressionNode*) { return 0; }
         
@@ -2118,12 +2121,12 @@ namespace JSC {
         ObjectPatternNode();
         void appendEntry(const JSTokenLocation&, const Identifier& identifier, bool wasString, DestructuringPatternNode* pattern, ExpressionNode* defaultValue)
         {
-            m_targetPatterns.append(Entry{ identifier, nullptr, wasString, pattern, defaultValue });
+            m_targetPatterns.append(Entry { identifier, nullptr, wasString, pattern, defaultValue });
         }
 
         void appendEntry(const JSTokenLocation&, ExpressionNode* propertyExpression, DestructuringPatternNode* pattern, ExpressionNode* defaultValue)
         {
-            m_targetPatterns.append(Entry{ Identifier(), propertyExpression, false, pattern, defaultValue });
+            m_targetPatterns.append(Entry { Identifier(), propertyExpression, false, pattern, defaultValue });
         }
 
     private:
@@ -2140,7 +2143,7 @@ namespace JSC {
         Vector<Entry> m_targetPatterns;
     };
 
-    class BindingNode : public DestructuringPatternNode {
+    class BindingNode final: public DestructuringPatternNode {
     public:
         BindingNode(const Identifier& boundProperty, const JSTextPosition& start, const JSTextPosition& end, AssignmentContext);
         const Identifier& boundProperty() const { return m_boundProperty; }
@@ -2161,7 +2164,7 @@ namespace JSC {
         AssignmentContext m_bindingContext;
     };
 
-    class RestParameterNode : public DestructuringPatternNode {
+    class RestParameterNode final : public DestructuringPatternNode {
     public:
         RestParameterNode(DestructuringPatternNode*, unsigned numParametersToSkip);
 
@@ -2178,7 +2181,7 @@ namespace JSC {
         unsigned m_numParametersToSkip;
     };
 
-    class AssignmentElementNode : public DestructuringPatternNode {
+    class AssignmentElementNode final : public DestructuringPatternNode {
     public:
         AssignmentElementNode(ExpressionNode* assignmentTarget, const JSTextPosition& start, const JSTextPosition& end);
         const ExpressionNode* assignmentTarget() { return m_assignmentTarget; }
@@ -2190,6 +2193,8 @@ namespace JSC {
         void collectBoundIdentifiers(Vector<Identifier>&) const override;
         void bindValue(BytecodeGenerator&, RegisterID*) const override;
         void toString(StringBuilder&) const override;
+
+        bool isAssignmentElementNode() const override { return true; }
 
         JSTextPosition m_divotStart;
         JSTextPosition m_divotEnd;

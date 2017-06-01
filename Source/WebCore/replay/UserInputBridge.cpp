@@ -69,9 +69,9 @@ InputCursor& UserInputBridge::activeCursor() const
 #endif
 
 #if ENABLE(CONTEXT_MENUS)
-bool UserInputBridge::handleContextMenuEvent(const PlatformMouseEvent& mouseEvent, const Frame* frame, InputSource)
+bool UserInputBridge::handleContextMenuEvent(const PlatformMouseEvent& mouseEvent, Frame& frame, InputSource)
 {
-    return frame->eventHandler().sendContextMenuEvent(mouseEvent);
+    return frame.eventHandler().sendContextMenuEvent(mouseEvent);
 }
 #endif
 
@@ -242,9 +242,9 @@ void UserInputBridge::loadRequest(const FrameLoadRequest& request, InputSource)
     m_page.mainFrame().loader().load(request);
 }
 
-void UserInputBridge::reloadFrame(Frame* frame, bool endToEndReload, bool contentBlockersEnabled, InputSource)
+void UserInputBridge::reloadFrame(Frame* frame, OptionSet<ReloadOption> options, InputSource)
 {
-    frame->loader().reload(endToEndReload, contentBlockersEnabled);
+    frame->loader().reload(options);
 }
 
 void UserInputBridge::stopLoadingFrame(Frame* frame, InputSource)

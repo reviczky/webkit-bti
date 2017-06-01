@@ -31,13 +31,13 @@
 
 namespace API {
 
-RefPtr<WebsiteDataStore> WebsiteDataStore::defaultDataStore()
+Ref<WebsiteDataStore> WebsiteDataStore::defaultDataStore()
 {
     WebKit::InitializeWebKit2();
 
-    static WebsiteDataStore* defaultDataStore = adoptRef(new WebsiteDataStore(defaultDataStoreConfiguration())).leakRef();
+    static WebsiteDataStore* defaultDataStore = adoptRef(new WebsiteDataStore(defaultDataStoreConfiguration(), WebCore::SessionID::defaultSessionID())).leakRef();
 
-    return defaultDataStore;
+    return *defaultDataStore;
 }
 
 Ref<WebsiteDataStore> WebsiteDataStore::createNonPersistentDataStore()
@@ -45,9 +45,9 @@ Ref<WebsiteDataStore> WebsiteDataStore::createNonPersistentDataStore()
     return adoptRef(*new WebsiteDataStore);
 }
 
-Ref<WebsiteDataStore> WebsiteDataStore::create(WebKit::WebsiteDataStore::Configuration configuration)
+Ref<WebsiteDataStore> WebsiteDataStore::createLegacy(WebKit::WebsiteDataStore::Configuration configuration)
 {
-    return adoptRef(*new WebsiteDataStore(WTFMove(configuration)));
+    return adoptRef(*new WebsiteDataStore(WTFMove(configuration), WebCore::SessionID::defaultSessionID()));
 }
 
 WebsiteDataStore::WebsiteDataStore()
@@ -55,13 +55,21 @@ WebsiteDataStore::WebsiteDataStore()
 {
 }
 
-WebsiteDataStore::WebsiteDataStore(WebKit::WebsiteDataStore::Configuration configuration)
-    : m_websiteDataStore(WebKit::WebsiteDataStore::create(WTFMove(configuration)))
+WebsiteDataStore::WebsiteDataStore(WebKit::WebsiteDataStore::Configuration configuration, WebCore::SessionID sessionID)
+    : m_websiteDataStore(WebKit::WebsiteDataStore::create(WTFMove(configuration), sessionID))
 {
 }
 
 WebsiteDataStore::~WebsiteDataStore()
 {
+}
+
+HTTPCookieStore& WebsiteDataStore::httpCookieStore()
+{
+    if (!m_apiHTTPCookieStore)
+        m_apiHTTPCookieStore = HTTPCookieStore::create(*this);
+
+    return *m_apiHTTPCookieStore;
 }
 
 bool WebsiteDataStore::isPersistent()
@@ -79,11 +87,6 @@ void WebsiteDataStore::setResourceLoadStatisticsEnabled(bool enabled)
     m_websiteDataStore->setResourceLoadStatisticsEnabled(enabled);
 }
 
-void WebsiteDataStore::registerSharedResourceLoadObserver()
-{
-    m_websiteDataStore->registerSharedResourceLoadObserver();
-}
-    
 #if !PLATFORM(COCOA) && !PLATFORM(GTK)
 WebKit::WebsiteDataStore::Configuration WebsiteDataStore::defaultDataStoreConfiguration()
 {
@@ -147,6 +150,12 @@ String WebsiteDataStore::defaultResourceLoadStatisticsDirectory()
 String WebsiteDataStore::defaultMediaCacheDirectory()
 {
     // FIXME: Implement. https://bugs.webkit.org/show_bug.cgi?id=156369 and https://bugs.webkit.org/show_bug.cgi?id=156370
+    return String();
+}
+
+String WebsiteDataStore::defaultJavaScriptConfigurationDirectory()
+{
+    // FIXME: Implement.
     return String();
 }
 #endif

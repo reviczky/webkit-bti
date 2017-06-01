@@ -109,12 +109,32 @@ void UserMediaProcessManager::removeUserMediaPermissionRequestManagerProxy(UserM
     }
 }
 
+void UserMediaProcessManager::willEnableMediaStreamInPage(WebPageProxy& pageStartingCapture)
+{
+#if PLATFORM(COCOA)
+    for (auto& state : stateMap()) {
+        for (auto& manager : state.value->managers()) {
+            if (&manager->page() == &pageStartingCapture)
+                continue;
+
+            manager->page().setMuted(WebCore::MediaProducer::CaptureDevicesAreMuted);
+        }
+    }
+#else
+    UNUSED_PARAM(pageStartingCapture);
+#endif
+}
+
 void UserMediaProcessManager::willCreateMediaStream(UserMediaPermissionRequestManagerProxy& proxy, bool withAudio, bool withVideo)
 {
 #if ENABLE(SANDBOX_EXTENSIONS)
-    ASSERT(stateMap().contains(&proxy.page().process()));
+    auto& processStartingCapture = proxy.page().process();
 
-    auto& state = processState(proxy.page().process());
+    ASSERT(stateMap().contains(&processStartingCapture));
+
+    willEnableMediaStreamInPage(proxy.page());
+
+    auto& state = processState(processStartingCapture);
     size_t extensionCount = 0;
     unsigned requiredExtensions = ProcessState::SandboxExtensionsGranted::None;
 
@@ -128,6 +148,12 @@ void UserMediaProcessManager::willCreateMediaStream(UserMediaPermissionRequestMa
     }
 
     unsigned currentExtensions = state.sandboxExtensionsGranted();
+
+#if ENABLE(WEB_RTC) && USE(LIBWEBRTC)
+    if (currentExtensions == ProcessState::SandboxExtensionsGranted::None && (withAudio || withVideo))
+        processStartingCapture.send(Messages::WebPage::DisableICECandidateFiltering(), proxy.page().pageID());
+#endif
+
     if (!(requiredExtensions & currentExtensions)) {
         SandboxExtension::HandleArray handles;
         handles.allocate(extensionCount);
@@ -150,7 +176,7 @@ void UserMediaProcessManager::willCreateMediaStream(UserMediaPermissionRequestMa
         }
 
         state.setSandboxExtensionsGranted(currentExtensions);
-        proxy.page().process().send(Messages::WebPage::GrantUserMediaDeviceSandboxExtensions(MediaDeviceSandboxExtensions(ids, WTFMove(handles))), proxy.page().pageID());
+        processStartingCapture.send(Messages::WebPage::GrantUserMediaDeviceSandboxExtensions(MediaDeviceSandboxExtensions(ids, WTFMove(handles))), proxy.page().pageID());
     }
 #endif
 }
@@ -192,9 +218,31 @@ void UserMediaProcessManager::endedCaptureSession(UserMediaPermissionRequestMana
     if (params.isEmpty())
         return;
 
+#if ENABLE(WEB_RTC) && USE(LIBWEBRTC)
+    // FIXME: We should only do EnableICECandidateFiltering when the page is being reloaded.
+    if (currentExtensions == ProcessState::SandboxExtensionsGranted::None)
+        proxy.page().process().send(Messages::WebPage::EnableICECandidateFiltering(), proxy.page().pageID());
+#endif
+
     state.setSandboxExtensionsGranted(currentExtensions);
     proxy.page().process().send(Messages::WebPage::RevokeUserMediaDeviceSandboxExtensions(params), proxy.page().pageID());
 #endif
+}
+
+void UserMediaProcessManager::setCaptureEnabled(bool enabled)
+{
+    if (enabled == m_captureEnabled)
+        return;
+
+    m_captureEnabled = enabled;
+
+    if (enabled)
+        return;
+
+    for (auto& state : stateMap()) {
+        for (auto& manager : state.value->managers())
+            manager->stopCapture();
+    }
 }
 
 } // namespace WebKit

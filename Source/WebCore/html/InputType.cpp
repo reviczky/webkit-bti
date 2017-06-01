@@ -171,8 +171,7 @@ InputType::~InputType()
 
 bool InputType::themeSupportsDataListUI(InputType* type)
 {
-    Document& document = type->element().document();
-    return RenderTheme::themeForPage(document.page())->supportsDataListUI(type->formControlType());
+    return RenderTheme::singleton().supportsDataListUI(type->formControlType());
 }
 
 bool InputType::isTextField() const
@@ -741,15 +740,11 @@ Icon* InputType::icon() const
     return nullptr;
 }
 
-#if PLATFORM(IOS)
-
 String InputType::displayString() const
 {
     ASSERT_NOT_REACHED();
     return String();
 }
-
-#endif
 
 bool InputType::shouldResetOnDocumentActivation()
 {

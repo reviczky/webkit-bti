@@ -32,11 +32,13 @@
 #ifndef HTTPRequest_h
 #define HTTPRequest_h
 
+#if ENABLE(INSPECTOR_SERVER)
+
 #include <WebCore/HTTPHeaderMap.h>
 #include <WebCore/HTTPParsers.h>
 #include <WebCore/URL.h>
-#include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
+#include <wtf/RefPtr.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebKit {
@@ -45,7 +47,7 @@ class HTTPRequest : public RefCounted<HTTPRequest> {
 public:
     static Ref<HTTPRequest> create() { return adoptRef(*new HTTPRequest()); }
     static Ref<HTTPRequest> create(const String& requestMethod, const WebCore::URL& url, WebCore::HTTPVersion version) { return adoptRef(*new HTTPRequest(requestMethod, url, version)); }
-    static PassRefPtr<HTTPRequest> parseHTTPRequestFromBuffer(const char* data, size_t length, String& failureReason);
+    static RefPtr<HTTPRequest> parseHTTPRequestFromBuffer(const char* data, size_t length, String& failureReason);
     virtual ~HTTPRequest();
 
     String requestMethod() const { return m_requestMethod; }
@@ -77,5 +79,7 @@ protected:
 };
 
 } // namespace WebKit
+
+#endif // ENABLE(INSPECTOR_SERVER)
 
 #endif // HTTPRequest_h

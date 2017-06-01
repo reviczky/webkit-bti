@@ -277,16 +277,16 @@ void RenderSVGShape::strokeShape(GraphicsContext& context)
 
 void RenderSVGShape::fillStrokeMarkers(PaintInfo& childPaintInfo)
 {
-    auto paintOrder = style().paintTypesForPaintOrder();
+    auto paintOrder = RenderStyle::paintTypesForPaintOrder(style().paintOrder());
     for (unsigned i = 0; i < paintOrder.size(); ++i) {
         switch (paintOrder.at(i)) {
-        case PaintTypeFill:
+        case PaintType::Fill:
             fillShape(style(), childPaintInfo.context());
             break;
-        case PaintTypeStroke:
+        case PaintType::Stroke:
             strokeShape(childPaintInfo.context());
             break;
-        case PaintTypeMarkers:
+        case PaintType::Markers:
             if (!m_markerPositions.isEmpty())
                 drawMarkers(childPaintInfo);
             break;
@@ -445,7 +445,7 @@ bool RenderSVGShape::hasSmoothStroke() const
 {
     const SVGRenderStyle& svgStyle = style().svgStyle();
     return svgStyle.strokeDashArray().isEmpty()
-        && svgStyle.strokeMiterLimit() == svgStyle.initialStrokeMiterLimit()
+        && style().strokeMiterLimit() == style().initialStrokeMiterLimit()
         && style().joinStyle() == style().initialJoinStyle()
         && style().capStyle() == style().initialCapStyle();
 }

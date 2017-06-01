@@ -33,8 +33,12 @@
 #include "TextureMapperLayer.h"
 #include "TextureMapperPlatformLayerBuffer.h"
 
-const double s_releaseUnusedSecondsTolerance = 1;
-const double s_releaseUnusedBuffersTimerInterval = 0.5;
+#if USE(GLIB_EVENT_LOOP)
+#include <wtf/glib/RunLoopSourcePriority.h>
+#endif
+
+static const double releaseUnusedSecondsTolerance = 1;
+static const Seconds releaseUnusedBuffersTimerInterval = { 500_ms };
 
 namespace WebCore {
 
@@ -43,6 +47,9 @@ TextureMapperPlatformLayerProxy::TextureMapperPlatformLayerProxy()
     , m_targetLayer(nullptr)
     , m_releaseUnusedBuffersTimer(RunLoop::current(), this, &TextureMapperPlatformLayerProxy::releaseUnusedBuffersTimerFired)
 {
+#if USE(GLIB_EVENT_LOOP)
+    m_releaseUnusedBuffersTimer.setPriority(RunLoopSourcePriority::ReleaseUnusedResourcesTimer);
+#endif
 }
 
 TextureMapperPlatformLayerProxy::~TextureMapperPlatformLayerProxy()
@@ -67,6 +74,9 @@ void TextureMapperPlatformLayerProxy::activateOnCompositingThread(Compositor* co
         m_targetLayer->setContentsLayer(m_currentBuffer.get());
 
     m_compositorThreadUpdateTimer = std::make_unique<RunLoop::Timer<TextureMapperPlatformLayerProxy>>(RunLoop::current(), this, &TextureMapperPlatformLayerProxy::compositorThreadUpdateTimerFired);
+#if USE(GLIB_EVENT_LOOP)
+    m_compositorThreadUpdateTimer->setPriority(RunLoopSourcePriority::CompositingThreadUpdateTimer);
+#endif
 }
 
 void TextureMapperPlatformLayerProxy::invalidate()
@@ -134,7 +144,7 @@ std::unique_ptr<TextureMapperPlatformLayerBuffer> TextureMapperPlatformLayerProx
 void TextureMapperPlatformLayerProxy::scheduleReleaseUnusedBuffers()
 {
     if (!m_releaseUnusedBuffersTimer.isActive())
-        m_releaseUnusedBuffersTimer.startOneShot(s_releaseUnusedBuffersTimerInterval);
+        m_releaseUnusedBuffersTimer.startOneShot(releaseUnusedBuffersTimerInterval);
 }
 
 void TextureMapperPlatformLayerProxy::releaseUnusedBuffersTimerFired()
@@ -144,7 +154,7 @@ void TextureMapperPlatformLayerProxy::releaseUnusedBuffersTimerFired()
         return;
 
     auto buffers = WTFMove(m_usedBuffers);
-    double minUsedTime = monotonicallyIncreasingTime() - s_releaseUnusedSecondsTolerance;
+    double minUsedTime = monotonicallyIncreasingTime() - releaseUnusedSecondsTolerance;
 
     for (auto& buffer : buffers) {
         if (buffer && buffer->lastUsedTime() >= minUsedTime)
@@ -175,7 +185,7 @@ bool TextureMapperPlatformLayerProxy::scheduleUpdateOnCompositorThread(Function<
         return false;
 
     m_compositorThreadUpdateFunction = WTFMove(updateFunction);
-    m_compositorThreadUpdateTimer->startOneShot(0);
+    m_compositorThreadUpdateTimer->startOneShot(0_s);
     return true;
 }
 

@@ -47,7 +47,7 @@
 #include <wtf/spi/darwin/XPCSPI.h>
 #endif
 
-#if PLATFORM(GTK)
+#if USE(GLIB)
 #include "GSocketMonitor.h"
 #endif
 
@@ -189,7 +189,7 @@ public:
 
 #if PLATFORM(COCOA)
     bool kill();
-    void terminateSoon(double intervalInSeconds);
+    void terminateSoon(Seconds);
 #endif
 
     bool isValid() const { return m_isValid; }
@@ -315,7 +315,7 @@ private:
     Vector<int> m_fileDescriptors;
     int m_socketDescriptor;
     std::unique_ptr<UnixMessage> m_pendingOutputMessage;
-#if PLATFORM(GTK)
+#if USE(GLIB)
     GRefPtr<GSocket> m_socket;
     GSocketMonitor m_readSocketMonitor;
     GSocketMonitor m_writeSocketMonitor;

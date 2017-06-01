@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2011 Google Inc. All rights reserved.
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -97,21 +97,6 @@ static bool decodeBuffer(const char* buffer, unsigned size, const String& textEn
     return false;
 }
 
-static bool prepareCachedResourceBuffer(CachedResource* cachedResource, bool* hasZeroSize)
-{
-    *hasZeroSize = false;
-    if (!cachedResource)
-        return false;
-
-    // Zero-sized resources don't have data at all -- so fake the empty buffer, instead of indicating error by returning 0.
-    if (!cachedResource->encodedSize()) {
-        *hasZeroSize = true;
-        return true;
-    }
-
-    return true;
-}
-
 static bool hasTextContent(CachedResource* cachedResource)
 {
     // FIXME: <https://webkit.org/b/165495> Web Inspector: XHR / Fetch for non-text content should not show garbled text
@@ -127,28 +112,22 @@ static bool hasTextContent(CachedResource* cachedResource)
 
 bool InspectorPageAgent::cachedResourceContent(CachedResource* cachedResource, String* result, bool* base64Encoded)
 {
-    // FIXME: result should be a String& and base64Encoded should be a bool&.
-    bool hasZeroSize;
-    bool prepared = prepareCachedResourceBuffer(cachedResource, &hasZeroSize);
-    if (!prepared)
+    if (!cachedResource)
         return false;
 
     *base64Encoded = !hasTextContent(cachedResource);
+
+    if (!cachedResource->encodedSize()) {
+        *result = emptyString();
+        return true;
+    }
+
     if (*base64Encoded) {
-        if (hasZeroSize) {
-            *result = { };
-            return true;
-        }
         if (auto* buffer = cachedResource->resourceBuffer()) {
             *result = base64Encode(buffer->data(), buffer->size());
             return true;
         }
         return false;
-    }
-
-    if (hasZeroSize) {
-        *result = emptyString();
-        return true;
     }
 
     if (cachedResource) {
@@ -226,8 +205,8 @@ void InspectorPageAgent::resourceContent(ErrorString& errorString, Frame* frame,
 //static
 String InspectorPageAgent::sourceMapURLForResource(CachedResource* cachedResource)
 {
-    static NeverDestroyed<String> sourceMapHTTPHeader(ASCIILiteral("SourceMap"));
-    static NeverDestroyed<String> sourceMapHTTPHeaderDeprecated(ASCIILiteral("X-SourceMap"));
+    static NeverDestroyed<String> sourceMapHTTPHeader(MAKE_STATIC_STRING_IMPL("SourceMap"));
+    static NeverDestroyed<String> sourceMapHTTPHeaderDeprecated(MAKE_STATIC_STRING_IMPL("X-SourceMap"));
 
     if (!cachedResource)
         return String();
@@ -423,7 +402,11 @@ void InspectorPageAgent::removeScriptToEvaluateOnLoad(ErrorString& error, const 
 void InspectorPageAgent::reload(ErrorString&, const bool* const optionalIgnoreCache, const String* optionalScriptToEvaluateOnLoad)
 {
     m_pendingScriptToEvaluateOnLoadOnce = optionalScriptToEvaluateOnLoad ? *optionalScriptToEvaluateOnLoad : emptyString();
-    m_page.mainFrame().loader().reload(optionalIgnoreCache ? *optionalIgnoreCache : false);
+
+    OptionSet<ReloadOption> reloadOptions;
+    if (optionalIgnoreCache && *optionalIgnoreCache)
+        reloadOptions |= ReloadOption::FromOrigin;
+    m_page.mainFrame().loader().reload(reloadOptions);
 }
 
 void InspectorPageAgent::navigate(ErrorString&, const String& url)
@@ -802,9 +785,9 @@ void InspectorPageAgent::frameStoppedLoading(Frame& frame)
     m_frontendDispatcher->frameStoppedLoading(frameId(&frame));
 }
 
-void InspectorPageAgent::frameScheduledNavigation(Frame& frame, double delay)
+void InspectorPageAgent::frameScheduledNavigation(Frame& frame, Seconds delay)
 {
-    m_frontendDispatcher->frameScheduledNavigation(frameId(&frame), delay);
+    m_frontendDispatcher->frameScheduledNavigation(frameId(&frame), delay.value());
 }
 
 void InspectorPageAgent::frameClearedScheduledNavigation(Frame& frame)
@@ -900,7 +883,7 @@ Ref<Inspector::Protocol::Page::FrameResourceTree> InspectorPageAgent::buildObjec
             .release();
         if (cachedResource->wasCanceled())
             resourceObject->setCanceled(true);
-        else if (cachedResource->status() == CachedResource::LoadError)
+        else if (cachedResource->status() == CachedResource::LoadError || cachedResource->status() == CachedResource::DecodeError)
             resourceObject->setFailed(true);
         String sourceMappingURL = InspectorPageAgent::sourceMapURLForResource(cachedResource);
         if (!sourceMappingURL.isEmpty())

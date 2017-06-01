@@ -301,19 +301,31 @@ Node::~Node()
         clearEventTargetData();
 
     document().decrementReferencingNodeCount();
+
+#if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS) && (!ASSERT_DISABLED || ENABLE(SECURITY_ASSERTIONS))
+    for (auto* document : Document::allDocuments()) {
+        ASSERT_WITH_SECURITY_IMPLICATION(!document->touchEventListenersContain(*this));
+        ASSERT_WITH_SECURITY_IMPLICATION(!document->touchEventHandlersContain(*this));
+        ASSERT_WITH_SECURITY_IMPLICATION(!document->touchEventTargetsContain(*this));
+    }
+#endif
 }
 
 void Node::willBeDeletedFrom(Document& document)
 {
     if (hasEventTargetData()) {
         document.didRemoveWheelEventHandler(*this, EventHandlerRemoval::All);
-#if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS)
-        document.removeTouchEventListener(this, true);
-        document.removeTouchEventHandler(this, true);
-#else
-        // FIXME: This should call didRemoveTouchEventHandler().
+#if ENABLE(TOUCH_EVENTS)
+#if PLATFORM(IOS)
+        document.removeTouchEventListener(*this, EventHandlerRemoval::All);
+#endif
+        document.didRemoveTouchEventHandler(*this, EventHandlerRemoval::All);
 #endif
     }
+
+#if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS)
+    document.removeTouchEventHandler(*this, EventHandlerRemoval::All);
+#endif
 
     if (AXObjectCache* cache = document.existingAXObjectCache())
         cache->remove(this);
@@ -826,54 +838,74 @@ bool shouldInvalidateNodeListCachesForAttr<numNodeListInvalidationTypes>(const u
     return false;
 }
 
-bool Document::shouldInvalidateNodeListAndCollectionCaches(const QualifiedName* attrName) const
+inline bool Document::shouldInvalidateNodeListAndCollectionCaches() const
 {
-    if (attrName)
-        return shouldInvalidateNodeListCachesForAttr<DoNotInvalidateOnAttributeChanges + 1>(m_nodeListAndCollectionCounts, *attrName);
-
-    for (int type = 0; type < numNodeListInvalidationTypes; type++) {
+    for (int type = 0; type < numNodeListInvalidationTypes; ++type) {
         if (m_nodeListAndCollectionCounts[type])
             return true;
     }
-
     return false;
 }
 
-void Document::invalidateNodeListAndCollectionCaches(const QualifiedName* attrName)
+inline bool Document::shouldInvalidateNodeListAndCollectionCachesForAttribute(const QualifiedName& attrName) const
+{
+    return shouldInvalidateNodeListCachesForAttr<DoNotInvalidateOnAttributeChanges + 1>(m_nodeListAndCollectionCounts, attrName);
+}
+
+template <typename InvalidationFunction>
+void Document::invalidateNodeListAndCollectionCaches(InvalidationFunction invalidate)
 {
     Vector<LiveNodeList*, 8> lists;
     copyToVector(m_listsInvalidatedAtDocument, lists);
     for (auto* list : lists)
-        list->invalidateCacheForAttribute(attrName);
+        invalidate(*list);
 
     Vector<HTMLCollection*, 8> collections;
     copyToVector(m_collectionsInvalidatedAtDocument, collections);
     for (auto* collection : collections)
-        collection->invalidateCacheForAttribute(attrName);
+        invalidate(*collection);
 }
 
-void Node::invalidateNodeListAndCollectionCachesInAncestors(const QualifiedName* attrName, Element* attributeOwnerElement)
+void Node::invalidateNodeListAndCollectionCachesInAncestors()
 {
-    if (hasRareData() && (!attrName || isAttributeNode())) {
-        if (NodeListsNodeData* lists = rareData()->nodeLists())
+    if (hasRareData()) {
+        if (auto* lists = rareData()->nodeLists())
             lists->clearChildNodeListCache();
     }
 
-    // Modifications to attributes that are not associated with an Element can't invalidate NodeList caches.
-    if (attrName && !attributeOwnerElement)
+    if (!document().shouldInvalidateNodeListAndCollectionCaches())
         return;
 
-    if (!document().shouldInvalidateNodeListAndCollectionCaches(attrName))
-        return;
+    document().invalidateNodeListAndCollectionCaches([](auto& list) {
+        list.invalidateCache();
+    });
 
-    document().invalidateNodeListAndCollectionCaches(attrName);
-
-    for (Node* node = this; node; node = node->parentNode()) {
+    for (auto* node = this; node; node = node->parentNode()) {
         if (!node->hasRareData())
             continue;
-        NodeRareData* data = node->rareData();
-        if (data->nodeLists())
-            data->nodeLists()->invalidateCaches(attrName);
+
+        if (auto* lists = node->rareData()->nodeLists())
+            lists->invalidateCaches();
+    }
+}
+
+void Node::invalidateNodeListAndCollectionCachesInAncestorsForAttribute(const QualifiedName& attrName)
+{
+    ASSERT(is<Element>(*this));
+
+    if (!document().shouldInvalidateNodeListAndCollectionCachesForAttribute(attrName))
+        return;
+
+    document().invalidateNodeListAndCollectionCaches([&attrName](auto& list) {
+        list.invalidateCacheForAttribute(attrName);
+    });
+
+    for (auto* node = this; node; node = node->parentNode()) {
+        if (!node->hasRareData())
+            continue;
+
+        if (auto* lists = node->rareData()->nodeLists())
+            lists->invalidateCachesForAttribute(attrName);
     }
 }
 
@@ -1457,14 +1489,19 @@ static void appendTextContent(const Node* node, bool convertBRsToNewlines, bool&
     case Node::CDATA_SECTION_NODE:
     case Node::COMMENT_NODE:
         isNullString = false;
-        content.append(static_cast<const CharacterData*>(node)->data());
+        content.append(downcast<CharacterData>(*node).data());
         break;
 
     case Node::PROCESSING_INSTRUCTION_NODE:
         isNullString = false;
-        content.append(static_cast<const ProcessingInstruction*>(node)->data());
+        content.append(downcast<ProcessingInstruction>(*node).data());
         break;
     
+    case Node::ATTRIBUTE_NODE:
+        isNullString = false;
+        content.append(downcast<Attr>(*node).value());
+        break;
+
     case Node::ELEMENT_NODE:
         if (node->hasTagName(brTag) && convertBRsToNewlines) {
             isNullString = false;
@@ -1472,7 +1509,6 @@ static void appendTextContent(const Node* node, bool convertBRsToNewlines, bool&
             break;
         }
         FALLTHROUGH;
-    case Node::ATTRIBUTE_NODE:
     case Node::DOCUMENT_FRAGMENT_NODE:
         isNullString = false;
         for (Node* child = node->firstChild(); child; child = child->nextSibling()) {
@@ -1848,19 +1884,25 @@ void Node::showTreeForThisAcrossFrame() const
 
 // --------
 
-void NodeListsNodeData::invalidateCaches(const QualifiedName* attrName)
+void NodeListsNodeData::invalidateCaches()
+{
+    for (auto& atomicName : m_atomicNameCaches)
+        atomicName.value->invalidateCache();
+
+    for (auto& collection : m_cachedCollections)
+        collection.value->invalidateCache();
+
+    for (auto& tagCollection : m_tagCollectionNSCache)
+        tagCollection.value->invalidateCache();
+}
+
+void NodeListsNodeData::invalidateCachesForAttribute(const QualifiedName& attrName)
 {
     for (auto& atomicName : m_atomicNameCaches)
         atomicName.value->invalidateCacheForAttribute(attrName);
 
     for (auto& collection : m_cachedCollections)
         collection.value->invalidateCacheForAttribute(attrName);
-
-    if (attrName)
-        return;
-
-    for (auto& tagCollection : m_tagCollectionNSCache)
-        tagCollection.value->invalidateCacheForAttribute(nullptr);
 }
 
 void Node::getSubresourceURLs(ListHashSet<URL>& urls) const
@@ -1908,14 +1950,30 @@ void Node::didMoveToNewDocument(Document& oldDocument)
         document().didAddWheelEventHandler(*this);
     }
 
-    unsigned numTouchEventHandlers = 0;
+    unsigned numTouchEventListeners = 0;
     for (auto& name : eventNames().touchEventNames())
-        numTouchEventHandlers += eventListeners(name).size();
+        numTouchEventListeners += eventListeners(name).size();
 
-    for (unsigned i = 0; i < numTouchEventHandlers; ++i) {
+    for (unsigned i = 0; i < numTouchEventListeners; ++i) {
         oldDocument.didRemoveTouchEventHandler(*this);
         document().didAddTouchEventHandler(*this);
+
+#if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS)
+        oldDocument.removeTouchEventListener(*this);
+        document().addTouchEventListener(*this);
+#endif
     }
+
+#if ENABLE(TOUCH_EVENTS) && ENABLE(IOS_GESTURE_EVENTS)
+    unsigned numGestureEventListeners = 0;
+    for (auto& name : eventNames().gestureEventNames())
+        numGestureEventListeners += eventListeners(name).size();
+
+    for (unsigned i = 0; i < numGestureEventListeners; ++i) {
+        oldDocument.removeTouchEventHandler(*this);
+        document().addTouchEventHandler(*this);
+    }
+#endif
 
     if (auto* registry = mutationObserverRegistry()) {
         for (auto& registration : *registry)
@@ -1926,6 +1984,16 @@ void Node::didMoveToNewDocument(Document& oldDocument)
         for (auto& registration : *transientRegistry)
             document().addMutationObserverTypes(registration->mutationTypes());
     }
+
+#if !ASSERT_DISABLED || ENABLE(SECURITY_ASSERTIONS)
+#if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS)
+    ASSERT_WITH_SECURITY_IMPLICATION(!oldDocument.touchEventListenersContain(*this));
+    ASSERT_WITH_SECURITY_IMPLICATION(!oldDocument.touchEventHandlersContain(*this));
+#endif
+#if ENABLE(TOUCH_EVENTS) && ENABLE(IOS_GESTURE_EVENTS)
+    ASSERT_WITH_SECURITY_IMPLICATION(!oldDocument.touchEventTargetsContain(*this));
+#endif
+#endif
 }
 
 static inline bool tryAddEventListener(Node* targetNode, const AtomicString& eventType, Ref<EventListener>&& listener, const EventTarget::AddEventListenerOptions& options)
@@ -1952,13 +2020,13 @@ static inline bool tryAddEventListener(Node* targetNode, const AtomicString& eve
 
 #if ENABLE(TOUCH_EVENTS)
     if (eventNames().isTouchEventType(eventType))
-        targetNode->document().addTouchEventListener(targetNode);
+        targetNode->document().addTouchEventListener(*targetNode);
 #endif
 #endif // PLATFORM(IOS)
 
 #if ENABLE(IOS_GESTURE_EVENTS) && ENABLE(TOUCH_EVENTS)
-    if (eventType == eventNames().gesturestartEvent || eventType == eventNames().gesturechangeEvent || eventType == eventNames().gestureendEvent)
-        targetNode->document().addTouchEventHandler(targetNode);
+    if (eventNames().isGestureEventType(eventType))
+        targetNode->document().addTouchEventHandler(*targetNode);
 #endif
 
     return true;
@@ -1993,13 +2061,13 @@ static inline bool tryRemoveEventListener(Node* targetNode, const AtomicString& 
 
 #if ENABLE(TOUCH_EVENTS)
     if (eventNames().isTouchEventType(eventType))
-        targetNode->document().removeTouchEventListener(targetNode);
+        targetNode->document().removeTouchEventListener(*targetNode);
 #endif
 #endif // PLATFORM(IOS)
 
 #if ENABLE(IOS_GESTURE_EVENTS) && ENABLE(TOUCH_EVENTS)
-    if (eventType == eventNames().gesturestartEvent || eventType == eventNames().gesturechangeEvent || eventType == eventNames().gestureendEvent)
-        targetNode->document().removeTouchEventHandler(targetNode);
+    if (eventNames().isGestureEventType(eventType))
+        targetNode->document().removeTouchEventHandler(*targetNode);
 #endif
 
     return true;

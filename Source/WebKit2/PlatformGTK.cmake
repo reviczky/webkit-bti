@@ -28,9 +28,7 @@ set(WebKit2_USE_PREFIX_HEADER ON)
 list(APPEND WebKit2_SOURCES
     DatabaseProcess/gtk/DatabaseProcessMainGtk.cpp
 
-    NetworkProcess/CustomProtocols/soup/CustomProtocolManagerSoup.cpp
-
-    NetworkProcess/Downloads/gtk/DownloadSoupErrorsGtk.cpp
+    NetworkProcess/CustomProtocols/soup/LegacyCustomProtocolManagerSoup.cpp
 
     NetworkProcess/cache/NetworkCacheCodersSoup.cpp
     NetworkProcess/cache/NetworkCacheDataSoup.cpp
@@ -46,6 +44,8 @@ list(APPEND WebKit2_SOURCES
     Platform/IPC/unix/AttachmentUnix.cpp
     Platform/IPC/unix/ConnectionUnix.cpp
 
+    Platform/classifier/ResourceLoadStatisticsClassifier.cpp
+
     Platform/glib/ModuleGlib.cpp
 
     Platform/unix/LoggingUnix.cpp
@@ -59,11 +59,22 @@ list(APPEND WebKit2_SOURCES
 
     Shared/Authentication/soup/AuthenticationManagerSoup.cpp
 
+    Shared/CoordinatedGraphics/CoordinatedBackingStore.cpp
+    Shared/CoordinatedGraphics/CoordinatedGraphicsScene.cpp
+    Shared/CoordinatedGraphics/SimpleViewportController.cpp
+
+    Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.cpp
+    Shared/CoordinatedGraphics/threadedcompositor/ThreadSafeCoordinatedSurface.cpp
+    Shared/CoordinatedGraphics/threadedcompositor/ThreadedDisplayRefreshMonitor.cpp
+    Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
+
     Shared/Plugins/Netscape/x11/NetscapePluginModuleX11.cpp
 
     Shared/Plugins/unix/PluginSearchPath.cpp
 
     Shared/cairo/ShareableBitmapCairo.cpp
+
+    Shared/glib/WebErrorsGlib.cpp
 
     Shared/gtk/ArgumentCodersGtk.cpp
     Shared/gtk/NativeWebKeyboardEventGtk.cpp
@@ -73,12 +84,14 @@ list(APPEND WebKit2_SOURCES
     Shared/gtk/PrintInfoGtk.cpp
     Shared/gtk/ProcessExecutablePathGtk.cpp
     Shared/gtk/WebContextMenuItemGtk.cpp
+    Shared/gtk/WebErrorsGtk.cpp
     Shared/gtk/WebEventFactory.cpp
     Shared/gtk/WebSelectionData.cpp
 
     Shared/linux/WebMemorySamplerLinux.cpp
 
     Shared/soup/WebCoreArgumentCodersSoup.cpp
+    Shared/soup/WebErrorsSoup.cpp
 
     Shared/unix/ChildProcessMain.cpp
 
@@ -111,6 +124,9 @@ list(APPEND WebKit2_SOURCES
     UIProcess/API/gtk/WebKitAuthenticationRequest.cpp
     UIProcess/API/gtk/WebKitAuthenticationRequest.h
     UIProcess/API/gtk/WebKitAutocleanups.h
+    UIProcess/API/gtk/WebKitAutomationSession.cpp
+    UIProcess/API/gtk/WebKitAutomationSession.h
+    UIProcess/API/gtk/WebKitAutomationSessionPrivate.h
     UIProcess/API/gtk/WebKitBackForwardList.cpp
     UIProcess/API/gtk/WebKitBackForwardList.h
     UIProcess/API/gtk/WebKitBackForwardListItem.cpp
@@ -218,6 +234,8 @@ list(APPEND WebKit2_SOURCES
     UIProcess/API/gtk/WebKitPrintOperationPrivate.h
     UIProcess/API/gtk/WebKitPrivate.cpp
     UIProcess/API/gtk/WebKitPrivate.h
+    UIProcess/API/gtk/WebKitRemoteInspectorProtocolHandler.cpp
+    UIProcess/API/gtk/WebKitRemoteInspectorProtocolHandler.h
     UIProcess/API/gtk/WebKitResponsePolicyDecision.cpp
     UIProcess/API/gtk/WebKitResponsePolicyDecision.h
     UIProcess/API/gtk/WebKitResponsePolicyDecisionPrivate.h
@@ -286,9 +304,7 @@ list(APPEND WebKit2_SOURCES
     UIProcess/API/gtk/WebKitWindowPropertiesPrivate.h
     UIProcess/API/gtk/webkit2.h
 
-    UIProcess/InspectorServer/gtk/WebInspectorServerGtk.cpp
-
-    UIProcess/InspectorServer/soup/WebSocketServerSoup.cpp
+    UIProcess/Automation/gtk/WebAutomationSessionGtk.cpp
 
     UIProcess/Launcher/gtk/ProcessLauncherGtk.cpp
 
@@ -305,6 +321,8 @@ list(APPEND WebKit2_SOURCES
 
     UIProcess/cairo/BackingStoreCairo.cpp
 
+    UIProcess/glib/RemoteInspectorClient.cpp
+
     UIProcess/gstreamer/InstallMissingMediaPluginsPermissionRequest.cpp
     UIProcess/gstreamer/WebPageProxyGStreamer.cpp
 
@@ -316,6 +334,7 @@ list(APPEND WebKit2_SOURCES
     UIProcess/gtk/HardwareAccelerationManager.cpp
     UIProcess/gtk/InputMethodFilter.cpp
     UIProcess/gtk/KeyBindingTranslator.cpp
+    UIProcess/gtk/RemoteWebInspectorProxyGtk.cpp
     UIProcess/gtk/TextCheckerGtk.cpp
     UIProcess/gtk/WaylandCompositor.cpp
     UIProcess/gtk/WebColorPickerGtk.cpp
@@ -323,6 +342,7 @@ list(APPEND WebKit2_SOURCES
     UIProcess/gtk/WebFullScreenClientGtk.cpp
     UIProcess/gtk/WebInspectorClientGtk.cpp
     UIProcess/gtk/WebInspectorProxyGtk.cpp
+    UIProcess/gtk/WebKitInspectorWindow.cpp
     UIProcess/gtk/WebPageProxyGtk.cpp
     UIProcess/gtk/WebPasteboardProxyGtk.cpp
     UIProcess/gtk/WebPopupMenuProxyGtk.cpp
@@ -349,6 +369,8 @@ list(APPEND WebKit2_SOURCES
     WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMCSSStyleSheet.cpp
     WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMCSSValue.cpp
     WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMCharacterData.cpp
+    WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMClientRect.cpp
+    WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMClientRectList.cpp
     WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMComment.cpp
     WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMDOMImplementation.cpp
     WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMDOMSelection.cpp
@@ -463,19 +485,25 @@ list(APPEND WebKit2_SOURCES
     WebProcess/WebCoreSupport/gtk/WebContextMenuClientGtk.cpp
     WebProcess/WebCoreSupport/gtk/WebDragClientGtk.cpp
     WebProcess/WebCoreSupport/gtk/WebEditorClientGtk.cpp
-    WebProcess/WebCoreSupport/gtk/WebErrorsGtk.cpp
     WebProcess/WebCoreSupport/gtk/WebPopupMenuGtk.cpp
 
     WebProcess/WebCoreSupport/soup/WebFrameNetworkingContext.cpp
 
     WebProcess/WebPage/AcceleratedDrawingArea.cpp
+    WebProcess/WebPage/AcceleratedSurface.cpp
+
+    WebProcess/WebPage/CoordinatedGraphics/AreaAllocator.cpp
+    WebProcess/WebPage/CoordinatedGraphics/CompositingCoordinator.cpp
+    WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
+    WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.cpp
+    WebProcess/WebPage/CoordinatedGraphics/UpdateAtlas.cpp
+
     WebProcess/WebPage/DrawingAreaImpl.cpp
 
     WebProcess/WebPage/atk/WebPageAccessibilityObjectAtk.cpp
 
     WebProcess/WebPage/gstreamer/WebPageGStreamer.cpp
 
-    WebProcess/WebPage/gtk/AcceleratedSurface.cpp
     WebProcess/WebPage/gtk/AcceleratedSurfaceWayland.cpp
     WebProcess/WebPage/gtk/AcceleratedSurfaceX11.cpp
     WebProcess/WebPage/gtk/PrinterListGtk.cpp
@@ -493,7 +521,6 @@ list(APPEND WebKit2_SOURCES
 
 list(APPEND WebKit2_DERIVED_SOURCES
     ${DERIVED_SOURCES_WEBKIT2GTK_DIR}/InspectorGResourceBundle.c
-    ${DERIVED_SOURCES_WEBKIT2GTK_DIR}/WebKit2InspectorGResourceBundle.c
     ${DERIVED_SOURCES_WEBKIT2GTK_DIR}/WebKit2ResourcesGResourceBundle.c
 
     ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitEnumTypes.cpp
@@ -511,6 +538,7 @@ set(WebKit2GTK_INSTALLED_HEADERS
     ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitVersion.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitAuthenticationRequest.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitAutocleanups.h
+    ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitAutomationSession.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitBackForwardList.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitBackForwardListItem.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitColorChooserRequest.h
@@ -587,6 +615,8 @@ set(WebKitDOM_INSTALLED_HEADERS
     ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMBlob.h
     ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMCDATASection.h
     ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMCharacterData.h
+    ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMClientRect.h
+    ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMClientRectList.h
     ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMComment.h
     ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMCSSRule.h
     ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMCSSRuleList.h
@@ -698,6 +728,8 @@ set(WebKitDOM_GTKDOC_HEADERS
     ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMBlob.h
     ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMCDATASection.h
     ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMCharacterData.h
+    ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMClientRect.h
+    ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMClientRectList.h
     ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMComment.h
     ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMCSSRule.h
     ${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/gtk/DOM/WebKitDOMCSSRuleList.h
@@ -851,7 +883,10 @@ list(APPEND WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/NetworkProcess/unix"
     "${WEBKIT2_DIR}/Platform/IPC/glib"
     "${WEBKIT2_DIR}/Platform/IPC/unix"
+    "${WEBKIT2_DIR}/Platform/classifier"
     "${WEBKIT2_DIR}/Shared/API/c/gtk"
+    "${WEBKIT2_DIR}/Shared/CoordinatedGraphics"
+    "${WEBKIT2_DIR}/Shared/CoordinatedGraphics/threadedcompositor"
     "${WEBKIT2_DIR}/Shared/Plugins/unix"
     "${WEBKIT2_DIR}/Shared/glib"
     "${WEBKIT2_DIR}/Shared/gtk"
@@ -865,6 +900,7 @@ list(APPEND WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/UIProcess/API/gtk"
     "${WEBKIT2_DIR}/UIProcess/Network/CustomProtocols/soup"
     "${WEBKIT2_DIR}/UIProcess/Plugins/gtk"
+    "${WEBKIT2_DIR}/UIProcess/glib"
     "${WEBKIT2_DIR}/UIProcess/gstreamer"
     "${WEBKIT2_DIR}/UIProcess/gtk"
     "${WEBKIT2_DIR}/UIProcess/linux"
@@ -878,6 +914,7 @@ list(APPEND WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/WebProcess/unix"
     "${WEBKIT2_DIR}/WebProcess/WebCoreSupport/gtk"
     "${WEBKIT2_DIR}/WebProcess/WebCoreSupport/soup"
+    "${WEBKIT2_DIR}/WebProcess/WebPage/CoordinatedGraphics"
     "${WEBKIT2_DIR}/WebProcess/WebPage/atk"
     "${WEBKIT2_DIR}/WebProcess/WebPage/gtk"
 )
@@ -984,14 +1021,6 @@ add_custom_command(
     OUTPUT ${DERIVED_SOURCES_WEBKIT2GTK_DIR}/InspectorGResourceBundle.c
     DEPENDS ${DERIVED_SOURCES_WEBKIT2GTK_DIR}/InspectorGResourceBundle.xml
     COMMAND glib-compile-resources --generate --sourcedir=${CMAKE_SOURCE_DIR}/Source/WebInspectorUI --sourcedir=${DERIVED_SOURCES_WEBINSPECTORUI_DIR} --target=${DERIVED_SOURCES_WEBKIT2GTK_DIR}/InspectorGResourceBundle.c ${DERIVED_SOURCES_WEBKIT2GTK_DIR}/InspectorGResourceBundle.xml
-    VERBATIM
-)
-
-add_custom_command(
-    OUTPUT ${DERIVED_SOURCES_WEBKIT2GTK_DIR}/WebKit2InspectorGResourceBundle.c
-    DEPENDS ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKit2InspectorGResourceBundle.xml
-            ${WEBKIT2_DIR}/UIProcess/InspectorServer/front-end/inspectorPageIndex.html
-    COMMAND glib-compile-resources --generate --sourcedir=${WEBKIT2_DIR}/UIProcess/InspectorServer/front-end --target=${DERIVED_SOURCES_WEBKIT2GTK_DIR}/WebKit2InspectorGResourceBundle.c ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKit2InspectorGResourceBundle.xml
     VERBATIM
 )
 
@@ -1178,33 +1207,6 @@ endif () # ENABLE_PLUGIN_PROCESS_GTK2
 list(APPEND PluginProcess_SOURCES
     PluginProcess/EntryPoint/unix/PluginProcessMain.cpp
 )
-
-if (ENABLE_THREADED_COMPOSITOR)
-    list(APPEND WebKit2_SOURCES
-        Shared/CoordinatedGraphics/CoordinatedBackingStore.cpp
-        Shared/CoordinatedGraphics/CoordinatedGraphicsScene.cpp
-        Shared/CoordinatedGraphics/SimpleViewportController.cpp
-
-        Shared/CoordinatedGraphics/threadedcompositor/CompositingRunLoop.cpp
-        Shared/CoordinatedGraphics/threadedcompositor/ThreadSafeCoordinatedSurface.cpp
-        Shared/CoordinatedGraphics/threadedcompositor/ThreadedCompositor.cpp
-
-        WebProcess/WebPage/CoordinatedGraphics/AreaAllocator.cpp
-        WebProcess/WebPage/CoordinatedGraphics/CompositingCoordinator.cpp
-        WebProcess/WebPage/CoordinatedGraphics/CoordinatedLayerTreeHost.cpp
-        WebProcess/WebPage/CoordinatedGraphics/ThreadedCoordinatedLayerTreeHost.cpp
-        WebProcess/WebPage/CoordinatedGraphics/UpdateAtlas.cpp
-    )
-    list(APPEND WebKit2_INCLUDE_DIRECTORIES
-        "${WEBKIT2_DIR}/Shared/CoordinatedGraphics"
-        "${WEBKIT2_DIR}/Shared/CoordinatedGraphics/threadedcompositor"
-        "${WEBKIT2_DIR}/WebProcess/WebPage/CoordinatedGraphics"
-    )
-else (ENABLE_THREADED_COMPOSITOR)
-    list(APPEND WebKit2_SOURCES
-        WebProcess/WebPage/gtk/LayerTreeHostGtk.cpp
-    )
-endif ()
 
 # Commands for building the built-in injected bundle.
 include_directories(

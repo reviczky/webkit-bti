@@ -112,6 +112,9 @@ WebInspector.loaded = function()
     // This lets us save a state cookie before any managers or sidebars do any resets that would affect state (namely TimelineManager).
     WebInspector.Frame.addEventListener(WebInspector.Frame.Event.ProvisionalLoadStarted, this._provisionalLoadStarted, this);
 
+    // Populate any UIStrings that must be done early after localized strings have loaded.
+    WebInspector.KeyboardShortcut.Key.Space._displayName = WebInspector.UIString("Space");
+
     // Create the singleton managers next, before the user interface elements, so the user interface can register
     // as event listeners on these managers.
     this.targetManager = new WebInspector.TargetManager;
@@ -135,6 +138,7 @@ WebInspector.loaded = function()
     this.probeManager = new WebInspector.ProbeManager;
     this.workerManager = new WebInspector.WorkerManager;
     this.replayManager = new WebInspector.ReplayManager;
+    this.domDebuggerManager = new WebInspector.DOMDebuggerManager;
 
     // Enable the Console Agent after creating the singleton managers.
     ConsoleAgent.enable();
@@ -190,6 +194,13 @@ WebInspector.loaded = function()
     this.showPrintStylesSetting = new WebInspector.Setting("show-print-styles", false);
     if (this.showPrintStylesSetting.value && window.PageAgent)
         PageAgent.setEmulatedMedia("print");
+
+    // COMPATIBILITY (iOS 10.3): Network.setDisableResourceCaching did not exist.
+    this.resourceCachingDisabledSetting = new WebInspector.Setting("disable-resource-caching", false);
+    if (window.NetworkAgent && NetworkAgent.setResourceCachingDisabled && this.resourceCachingDisabledSetting.value) {
+        NetworkAgent.setResourceCachingDisabled(true);
+        this.resourceCachingDisabledSetting.addEventListener(WebInspector.Setting.Event.Changed, this._resourceCachingDisabledSettingChanged, this);
+    }
 
     this.setZoomFactor(WebInspector.settings.zoomFactor.value);
 
@@ -268,9 +279,7 @@ WebInspector.contentLoaded = function()
     this._settingsKeyboardShortcut = new WebInspector.KeyboardShortcut(WebInspector.KeyboardShortcut.Modifier.CommandOrControl, WebInspector.KeyboardShortcut.Key.Comma, this._showSettingsTab.bind(this));
 
     // Create the user interface elements.
-    this.toolbar = new WebInspector.Toolbar(document.getElementById("toolbar"), null, true);
-    this.toolbar.displayMode = WebInspector.Toolbar.DisplayMode.IconOnly;
-    this.toolbar.sizeMode = WebInspector.Toolbar.SizeMode.Small;
+    this.toolbar = new WebInspector.Toolbar(document.getElementById("toolbar"));
 
     this.tabBar = new WebInspector.TabBar(document.getElementById("tab-bar"));
     this.tabBar.addEventListener(WebInspector.TabBar.Event.OpenDefaultTab, this._openDefaultTab, this);
@@ -375,7 +384,7 @@ WebInspector.contentLoaded = function()
     if (WebInspector.debuggableType === WebInspector.DebuggableType.JavaScript)
         toolTip = WebInspector.UIString("Restart (%s)").format(this._reloadPageKeyboardShortcut.displayName);
     else
-        toolTip = WebInspector.UIString("Reload page (%s)\nReload ignoring cache (%s)").format(this._reloadPageKeyboardShortcut.displayName, this._reloadPageIgnoringCacheKeyboardShortcut.displayName);
+        toolTip = WebInspector.UIString("Reload this page (%s)\nReload ignoring cache (%s)").format(this._reloadPageKeyboardShortcut.displayName, this._reloadPageIgnoringCacheKeyboardShortcut.displayName);
 
     this._reloadToolbarButton = new WebInspector.ButtonToolbarItem("reload", toolTip, null, "Images/ReloadToolbar.svg");
     this._reloadToolbarButton.addEventListener(WebInspector.ButtonNavigationItem.Event.Clicked, this._reloadPageClicked, this);
@@ -795,7 +804,7 @@ WebInspector.updateVisibilityState = function(visible)
     this.notifications.dispatchEventToListeners(WebInspector.Notification.VisibilityStateDidChange);
 };
 
-WebInspector.handlePossibleLinkClick = function(event, frame, alwaysOpenExternally)
+WebInspector.handlePossibleLinkClick = function(event, frame, options = {})
 {
     var anchorElement = event.target.enclosingNodeOrSelfWithNodeName("a");
     if (!anchorElement || !anchorElement.href)
@@ -810,24 +819,24 @@ WebInspector.handlePossibleLinkClick = function(event, frame, alwaysOpenExternal
     event.preventDefault();
     event.stopPropagation();
 
-    this.openURL(anchorElement.href, frame, false, anchorElement.lineNumber);
+    this.openURL(anchorElement.href, frame, Object.shallowMerge(options, {lineNumber: anchorElement.lineNumber}));
 
     return true;
 };
 
-WebInspector.openURL = function(url, frame, alwaysOpenExternally, lineNumber)
+WebInspector.openURL = function(url, frame, options = {})
 {
     console.assert(url);
     if (!url)
         return;
 
-    console.assert(typeof lineNumber === "undefined" || typeof lineNumber === "number", "lineNumber should be a number.");
+    console.assert(typeof options.lineNumber === "undefined" || typeof options.lineNumber === "number", "lineNumber should be a number.");
 
     // If alwaysOpenExternally is not defined, base it off the command/meta key for the current event.
-    if (alwaysOpenExternally === undefined || alwaysOpenExternally === null)
-        alwaysOpenExternally = window.event ? window.event.metaKey : false;
+    if (options.alwaysOpenExternally === undefined || options.alwaysOpenExternally === null)
+        options.alwaysOpenExternally = window.event ? window.event.metaKey : false;
 
-    if (alwaysOpenExternally) {
+    if (options.alwaysOpenExternally) {
         InspectorFrontendHost.openInNewTab(url);
         return;
     }
@@ -844,8 +853,8 @@ WebInspector.openURL = function(url, frame, alwaysOpenExternally, lineNumber)
     let simplifiedURL = removeURLFragment(url);
     var resource = frame.url === simplifiedURL ? frame.mainResource : frame.resourceForURL(simplifiedURL, searchChildFrames);
     if (resource) {
-        var position = new WebInspector.SourceCodePosition(lineNumber, 0);
-        this.showSourceCode(resource, position);
+        let positionToReveal = new WebInspector.SourceCodePosition(options.lineNumber, 0);
+        this.showSourceCode(resource, Object.shallowMerge(options, {positionToReveal}));
         return;
     }
 
@@ -873,15 +882,15 @@ WebInspector.saveDataToFile = function(saveData, forceSaveAs)
         return;
     }
 
-    console.assert(saveData.url);
     console.assert(saveData.content);
-    if (!saveData.url || !saveData.content)
+    if (!saveData.content)
         return;
 
-    let suggestedName = parseURL(saveData.url).lastPathComponent;
+    let url = saveData.url || "";
+    let suggestedName = parseURL(url).lastPathComponent;
     if (!suggestedName) {
         suggestedName = WebInspector.UIString("Untitled");
-        let dataURLTypeMatch = /^data:([^;]+)/.exec(saveData.url);
+        let dataURLTypeMatch = /^data:([^;]+)/.exec(url);
         if (dataURLTypeMatch)
             suggestedName += WebInspector.fileExtensionForMIMEType(dataURLTypeMatch[1]) || "";
     }
@@ -1002,14 +1011,17 @@ WebInspector.showElementsTab = function()
     this.tabBrowser.showTabForContentView(tabContentView);
 };
 
-WebInspector.showDebuggerTab = function(breakpointToSelect)
+WebInspector.showDebuggerTab = function(options)
 {
     var tabContentView = this.tabBrowser.bestTabContentViewForClass(WebInspector.DebuggerTabContentView);
     if (!tabContentView)
         tabContentView = new WebInspector.DebuggerTabContentView;
 
-    if (breakpointToSelect instanceof WebInspector.Breakpoint)
-        tabContentView.revealAndSelectBreakpoint(breakpointToSelect);
+    if (options.breakpointToSelect instanceof WebInspector.Breakpoint)
+        tabContentView.revealAndSelectBreakpoint(options.breakpointToSelect);
+
+    if (options.showScopeChainSidebar)
+        tabContentView.showScopeChainDetailsSidebarPanel();
 
     this.tabBrowser.showTabForContentView(tabContentView);
 };
@@ -1025,6 +1037,11 @@ WebInspector.showResourcesTab = function()
     if (!tabContentView)
         tabContentView = new WebInspector.ResourcesTabContentView;
     this.tabBrowser.showTabForContentView(tabContentView);
+};
+
+WebInspector.isShowingResourcesTab = function()
+{
+    return this.tabBrowser.selectedTabContentView instanceof WebInspector.ResourcesTabContentView;
 };
 
 WebInspector.showStorageTab = function()
@@ -1049,33 +1066,6 @@ WebInspector.showTimelineTab = function()
     if (!tabContentView)
         tabContentView = new WebInspector.TimelineTabContentView;
     this.tabBrowser.showTabForContentView(tabContentView);
-};
-
-WebInspector.unlocalizedString = function(string)
-{
-    // Intentionally do nothing, since this is for engineering builds
-    // (such as in Debug UI) or in text that is standardized in English.
-    // For example, CSS property names and values are never localized.
-    return string;
-};
-
-WebInspector.UIString = function(string, vararg)
-{
-    if (WebInspector.dontLocalizeUserInterface)
-        return string;
-
-    if (window.localizedStrings && string in window.localizedStrings)
-        return window.localizedStrings[string];
-
-    if (!this._missingLocalizedStrings)
-        this._missingLocalizedStrings = {};
-
-    if (!(string in this._missingLocalizedStrings)) {
-        console.error("Localized string \"" + string + "\" was not found.");
-        this._missingLocalizedStrings[string] = true;
-    }
-
-    return "LOCALIZED STRING NOT FOUND";
 };
 
 WebInspector.indentString = function()
@@ -1225,7 +1215,7 @@ WebInspector.showSourceCode = function(sourceCode, options = {})
 WebInspector.showSourceCodeLocation = function(sourceCodeLocation, options = {})
 {
     this.showSourceCode(sourceCodeLocation.displaySourceCode, Object.shallowMerge(options, {
-        positionToReveal: sourceCodeLocation.displayPosition()
+        positionToReveal: sourceCodeLocation.displayPosition(),
     }));
 };
 
@@ -1233,14 +1223,14 @@ WebInspector.showOriginalUnformattedSourceCodeLocation = function(sourceCodeLoca
 {
     this.showSourceCode(sourceCodeLocation.sourceCode, Object.shallowMerge(options, {
         positionToReveal: sourceCodeLocation.position(),
-        forceUnformatted: true
+        forceUnformatted: true,
     }));
 };
 
 WebInspector.showOriginalOrFormattedSourceCodeLocation = function(sourceCodeLocation, options = {})
 {
     this.showSourceCode(sourceCodeLocation.sourceCode, Object.shallowMerge(options, {
-        positionToReveal: sourceCodeLocation.formattedPosition()
+        positionToReveal: sourceCodeLocation.formattedPosition(),
     }));
 };
 
@@ -1249,7 +1239,7 @@ WebInspector.showOriginalOrFormattedSourceCodeTextRange = function(sourceCodeTex
     var textRangeToSelect = sourceCodeTextRange.formattedTextRange;
     this.showSourceCode(sourceCodeTextRange.sourceCode, Object.shallowMerge(options, {
         positionToReveal: textRangeToSelect.startPosition(),
-        textRangeToSelect
+        textRangeToSelect,
     }));
 };
 
@@ -1323,7 +1313,13 @@ WebInspector._focusChanged = function(event)
             this.previousFocusElement = this.currentFocusElement;
             this.currentFocusElement = codeMirrorEditorElement;
         }
-        return;
+
+        // Due to the change in WebInspector.isEventTargetAnEditableField (r196271), this return
+        // will also get run when WebInspector.startEditing is called on an element. We do not want
+        // to return early in this case, as WebInspector.EditingConfig handles its own editing
+        // completion, so only return early if the focus change target is not from WebInspector.startEditing.
+        if (!WebInspector.isBeingEdited(event.target))
+            return;
     }
 
     var selection = window.getSelection();
@@ -1375,8 +1371,7 @@ WebInspector._captureDidStart = function(event)
 
 WebInspector._debuggerDidPause = function(event)
 {
-    // FIXME: <webkit.org/b/###> Web Inspector: Preference for Auto Showing Scope Chain sidebar on pause
-    this.showDebuggerTab();
+    this.showDebuggerTab({showScopeChainSidebar: WebInspector.settings.showScopeChainOnPause.value});
 
     this._dashboardContainer.showDashboardViewForRepresentedObject(this.dashboardManager.dashboards.debugger);
 
@@ -1399,7 +1394,11 @@ WebInspector._frameWasAdded = function(event)
 
     function delayedWork()
     {
-        this.showSourceCodeForFrame(frame.id);
+        const options = {
+            ignoreNetworkTab: true,
+            ignoreSearchTab: true,
+        };
+        this.showSourceCodeForFrame(frame.id, options);
     }
 
     // Delay showing the frame since FrameWasAdded is called before MainFrameChanged.
@@ -2108,6 +2107,12 @@ WebInspector._copy = function(event)
             return;
         }
 
+        let tabContentView = this.tabBrowser.selectedTabContentView;
+        if (tabContentView && typeof tabContentView.handleCopyEvent === "function") {
+            tabContentView.handleCopyEvent(event);
+            return;
+        }
+
         return;
     }
 
@@ -2170,7 +2175,7 @@ WebInspector.resolvedLayoutDirection = function()
         layoutDirection = InspectorFrontendHost.userInterfaceLayoutDirection();
 
     return layoutDirection;
-}
+};
 
 WebInspector.setLayoutDirection = function(value)
 {
@@ -2182,10 +2187,10 @@ WebInspector.setLayoutDirection = function(value)
 
     WebInspector.settings.layoutDirection.value = value;
 
-    if (value === WebInspector.LayoutDirection.RTL && this._dockConfiguration === WebInspector.DockConfiguration.Right)
+    if (WebInspector.resolvedLayoutDirection() === WebInspector.LayoutDirection.RTL && this._dockConfiguration === WebInspector.DockConfiguration.Right)
         this._dockLeft();
 
-    if (value === WebInspector.LayoutDirection.LTR && this._dockConfiguration === WebInspector.DockConfiguration.Left)
+    if (WebInspector.resolvedLayoutDirection() === WebInspector.LayoutDirection.LTR && this._dockConfiguration === WebInspector.DockConfiguration.Left)
         this._dockRight();
 
     window.location.reload();
@@ -2218,6 +2223,11 @@ WebInspector._enableControlFlowProfilerSettingChanged = function(event)
             target.RuntimeAgent.disableControlFlowProfiler();
     }
 };
+
+WebInspector._resourceCachingDisabledSettingChanged = function(event)
+{
+    NetworkAgent.setResourceCachingDisabled(this.resourceCachingDisabledSetting.value);
+}
 
 WebInspector.elementDragStart = function(element, dividerDrag, elementDragEnd, event, cursor, eventTarget)
 {
@@ -2289,7 +2299,7 @@ WebInspector.createGoToArrowButton = function()
     return button;
 };
 
-WebInspector.createSourceCodeLocationLink = function(sourceCodeLocation, dontFloat, useGoToArrowButton)
+WebInspector.createSourceCodeLocationLink = function(sourceCodeLocation, options = {})
 {
     console.assert(sourceCodeLocation);
     if (!sourceCodeLocation)
@@ -2297,42 +2307,42 @@ WebInspector.createSourceCodeLocationLink = function(sourceCodeLocation, dontFlo
 
     var linkElement = document.createElement("a");
     linkElement.className = "go-to-link";
-    WebInspector.linkifyElement(linkElement, sourceCodeLocation);
+    WebInspector.linkifyElement(linkElement, sourceCodeLocation, options);
     sourceCodeLocation.populateLiveDisplayLocationTooltip(linkElement);
 
-    if (useGoToArrowButton)
+    if (options.useGoToArrowButton)
         linkElement.appendChild(WebInspector.createGoToArrowButton());
     else
         sourceCodeLocation.populateLiveDisplayLocationString(linkElement, "textContent");
 
-    if (dontFloat)
+    if (options.dontFloat)
         linkElement.classList.add("dont-float");
 
     return linkElement;
 };
 
-WebInspector.linkifyLocation = function(url, lineNumber, columnNumber, className)
+WebInspector.linkifyLocation = function(url, sourceCodePosition, options = {})
 {
     var sourceCode = WebInspector.sourceCodeForURL(url);
 
     if (!sourceCode) {
         var anchor = document.createElement("a");
         anchor.href = url;
-        anchor.lineNumber = lineNumber;
-        if (className)
-            anchor.className = className;
-        anchor.append(WebInspector.displayNameForURL(url) + ":" + lineNumber);
+        anchor.lineNumber = sourceCodePosition.lineNumber;
+        if (options.className)
+            anchor.className = options.className;
+        anchor.append(WebInspector.displayNameForURL(url) + ":" + sourceCodePosition.lineNumber);
         return anchor;
     }
 
-    var sourceCodeLocation = sourceCode.createSourceCodeLocation(lineNumber, columnNumber);
-    var linkElement = WebInspector.createSourceCodeLocationLink(sourceCodeLocation, true);
-    if (className)
-        linkElement.classList.add(className);
+    let sourceCodeLocation = sourceCode.createSourceCodeLocation(sourceCodePosition.lineNumber, sourceCodePosition.columnNumber);
+    let linkElement = WebInspector.createSourceCodeLocationLink(sourceCodeLocation, Object.shallowMerge(options, {dontFloat: true}));
+    if (options.className)
+        linkElement.classList.add(options.className);
     return linkElement;
 };
 
-WebInspector.linkifyElement = function(linkElement, sourceCodeLocation) {
+WebInspector.linkifyElement = function(linkElement, sourceCodeLocation, options = {}) {
     console.assert(sourceCodeLocation);
 
     function showSourceCodeLocation(event)
@@ -2341,12 +2351,16 @@ WebInspector.linkifyElement = function(linkElement, sourceCodeLocation) {
         event.preventDefault();
 
         if (event.metaKey)
-            this.showOriginalUnformattedSourceCodeLocation(sourceCodeLocation);
+            this.showOriginalUnformattedSourceCodeLocation(sourceCodeLocation, options);
         else
-            this.showSourceCodeLocation(sourceCodeLocation);
+            this.showSourceCodeLocation(sourceCodeLocation, options);
     }
 
     linkElement.addEventListener("click", showSourceCodeLocation.bind(this));
+    linkElement.addEventListener("contextmenu", (event) => {
+        let contextMenu = WebInspector.ContextMenu.createFromEvent(event);
+        WebInspector.appendContextMenuItemsForSourceCode(contextMenu, sourceCodeLocation);
+    });
 };
 
 WebInspector.sourceCodeForURL = function(url)

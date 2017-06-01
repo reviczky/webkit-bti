@@ -49,18 +49,18 @@ struct NetworkProcessCreationParameters {
     void encode(IPC::Encoder&) const;
     static bool decode(IPC::Decoder&, NetworkProcessCreationParameters&);
 
-    bool privateBrowsingEnabled;
-    CacheModel cacheModel;
+    bool privateBrowsingEnabled { false };
+    CacheModel cacheModel { CacheModelDocumentViewer };
     int64_t diskCacheSizeOverride { -1 };
-    bool canHandleHTTPSServerTrustEvaluation;
+    bool canHandleHTTPSServerTrustEvaluation { true };
 
     String diskCacheDirectory;
     SandboxExtension::Handle diskCacheDirectoryExtensionHandle;
 #if ENABLE(NETWORK_CACHE)
-    bool shouldEnableNetworkCache;
-    bool shouldEnableNetworkCacheEfficacyLogging;
+    bool shouldEnableNetworkCache { false };
+    bool shouldEnableNetworkCacheEfficacyLogging { false };
 #if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
-    bool shouldEnableNetworkCacheSpeculativeRevalidation;
+    bool shouldEnableNetworkCacheSpeculativeRevalidation { false };
 #endif
 #endif
 #if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100
@@ -72,10 +72,11 @@ struct NetworkProcessCreationParameters {
     SandboxExtension::Handle parentBundleDirectoryExtensionHandle;
 #endif
     bool shouldSuppressMemoryPressureHandler { false };
-    bool shouldUseTestingNetworkSession;
-    std::chrono::milliseconds loadThrottleLatency { 0ms };
+    bool shouldUseTestingNetworkSession { false };
+    Seconds loadThrottleLatency;
 
     Vector<String> urlSchemesRegisteredForCustomProtocols;
+    pid_t presentingApplicationPID { 0 };
 
 #if PLATFORM(COCOA)
     String parentProcessName;
@@ -84,6 +85,7 @@ struct NetworkProcessCreationParameters {
     uint64_t nsURLCacheDiskCapacity;
     String sourceApplicationBundleIdentifier;
     String sourceApplicationSecondaryIdentifier;
+    bool allowsCellularAccess { true };
 #if PLATFORM(IOS)
     String ctDataConnectionServiceType;
 #endif
@@ -97,9 +99,9 @@ struct NetworkProcessCreationParameters {
 
 #if USE(SOUP)
     String cookiePersistentStoragePath;
-    uint32_t cookiePersistentStorageType;
-    HTTPCookieAcceptPolicy cookieAcceptPolicy;
-    bool ignoreTLSErrors;
+    uint32_t cookiePersistentStorageType { 0 };
+    HTTPCookieAcceptPolicy cookieAcceptPolicy { HTTPCookieAcceptPolicyAlways };
+    bool ignoreTLSErrors { false };
     Vector<String> languages;
     WebCore::SoupNetworkProxySettings proxySettings;
 #endif
@@ -112,9 +114,8 @@ struct NetworkProcessCreationParameters {
     String recordReplayMode;
     String recordReplayCacheLocation;
 #endif
-
 #if ENABLE(WEB_RTC)
-    bool webRTCEnabled { false };
+    SandboxExtension::Handle webRTCNetworkingHandle;
 #endif
 };
 

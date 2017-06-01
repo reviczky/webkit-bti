@@ -118,6 +118,7 @@ function installDependenciesWithApt {
         libgudev-1.0-dev \
         libhyphen-dev \
         libjpeg-dev \
+        libmount-dev \
         libmpg123-dev \
         libnotify-dev \
         libopus-dev \
@@ -128,9 +129,11 @@ function installDependenciesWithApt {
         libsecret-1-dev \
         libsoup2.4-dev \
         libsqlite3-dev \
+        libsrtp0-dev \
         libtheora-dev \
         libtool \
         libvorbis-dev \
+        libvpx-dev \
         libwebp-dev \
         libxcomposite-dev \
         libxt-dev \
@@ -150,6 +153,7 @@ function installDependenciesWithApt {
         gdb \
         libapache2-mod-bw \
         $(aptIfElse libapache2-mod-php7.0 libapache2-mod-php5) \
+        libcgi-pm-perl \
         libgpg-error-dev \
         psmisc \
         pulseaudio-utils \
@@ -180,6 +184,7 @@ function installDependenciesWithApt {
         libjson-glib-dev \
         libinput-dev \
         libmtdev-dev \
+        liborc-0.4-dev \
         libp11-kit-dev \
         libpciaccess-dev \
         libproxy-dev \
@@ -272,10 +277,12 @@ function installDependenciesWithPacman {
         librsvg \
         libsecret \
         libsoup \
+        libsrtp \
         sqlite \
         libtheora \
         libtool \
         libvorbis \
+        libvpx \
         libwebp \
         libxcomposite \
         libxt \
@@ -283,6 +290,7 @@ function installDependenciesWithPacman {
         libxtst \
         ninja \
         ruby \
+        util-linux \
         xorg-font-utils \
         wayland"
 
@@ -330,6 +338,7 @@ function installDependenciesWithPacman {
         libxcb \
         libxkbfile \
         mtdev \
+        orc \
         python2 \
         python2-lxml \
         ragel \
@@ -390,17 +399,23 @@ function installDependenciesWithDnf {
         libgcrypt-devel \
         libgudev1-devel \
         libjpeg-turbo-devel \
+        libmount-devel \
         libnotify-devel \
         libpng-devel \
         libsecret-devel \
         libsoup-devel \
+        libsrtp-devel \
+        libtheora-devel \
         libv4l-devel \
+        libvorbis-devel \
+        libvpx-devel \
         libwebp-devel \
         libwayland-client-devel \
         libwayland-server-devel \
         mesa-libGL-devel \
         ninja-build \
         openssl-devel \
+        opus-devel \
         patch \
         pcre-devel \
         perl-Switch \
@@ -459,6 +474,7 @@ function installDependenciesWithDnf {
         libxkbfile-devel \
         mesa-libEGL-devel \
         mtdev-devel \
+        orc-devel \
         ragel \
         systemd-devel \
         xorg-x11-font-utils \

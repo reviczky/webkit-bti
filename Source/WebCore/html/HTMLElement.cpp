@@ -58,6 +58,7 @@
 #include "NodeTraversal.h"
 #include "RenderElement.h"
 #include "ScriptController.h"
+#include "ShadowRoot.h"
 #include "SimulatedClick.h"
 #include "StyleProperties.h"
 #include "SubframeLoader.h"
@@ -93,16 +94,16 @@ String HTMLElement::nodeName() const
 static inline CSSValueID unicodeBidiAttributeForDirAuto(HTMLElement& element)
 {
     if (element.hasTagName(preTag) || element.hasTagName(textareaTag))
-        return CSSValueWebkitPlaintext;
+        return CSSValuePlaintext;
     // FIXME: For bdo element, dir="auto" should result in "bidi-override isolate" but we don't support having multiple values in unicode-bidi yet.
     // See https://bugs.webkit.org/show_bug.cgi?id=73164.
-    return CSSValueWebkitIsolate;
+    return CSSValueIsolate;
 }
 
 unsigned HTMLElement::parseBorderWidthAttribute(const AtomicString& value) const
 {
-    if (std::optional<unsigned> borderWidth = parseHTMLNonNegativeInteger(value))
-        return borderWidth.value();
+    if (auto optionalBorderWidth = parseHTMLNonNegativeInteger(value))
+        return optionalBorderWidth.value();
 
     return hasTagName(tableTag) ? 1 : 0;
 }
@@ -183,7 +184,7 @@ void HTMLElement::collectStyleForPresentationAttribute(const QualifiedName& name
         case ContentEditableType::True:
             addPropertyToPresentationAttributeStyle(style, CSSPropertyWordWrap, CSSValueBreakWord);
             addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitNbspMode, CSSValueSpace);
-            addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitLineBreak, CSSValueAfterWhiteSpace);
+            addPropertyToPresentationAttributeStyle(style, CSSPropertyLineBreak, CSSValueAfterWhiteSpace);
 #if PLATFORM(IOS)
             addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitTextSizeAdjust, CSSValueNone);
 #endif
@@ -402,6 +403,10 @@ Node::Editability HTMLElement::editabilityFromContentEditableAttr(const Node& no
         }
     }
 
+    auto* containingShadowRoot = node.containingShadowRoot();
+    if (containingShadowRoot && containingShadowRoot->mode() == ShadowRootMode::UserAgent)
+        return Editability::ReadOnly;
+
     auto& document = node.document();
     if (is<HTMLDocument>(document))
         return downcast<HTMLDocument>(document).inDesignMode() ? Editability::CanEditRichly : Editability::ReadOnly;
@@ -424,8 +429,8 @@ void HTMLElement::parseAttribute(const QualifiedName& name, const AtomicString& 
     if (name == tabindexAttr) {
         if (value.isEmpty())
             clearTabIndexExplicitlyIfNeeded();
-        else if (std::optional<int> tabIndex = parseHTMLInteger(value))
-            setTabIndexExplicitly(tabIndex.value());
+        else if (auto optionalTabIndex = parseHTMLInteger(value))
+            setTabIndexExplicitly(optionalTabIndex.value());
         return;
     }
 
@@ -451,7 +456,10 @@ static Ref<DocumentFragment> textToFragment(Document& document, const String& te
                 break;
         }
 
-        fragment->appendChild(Text::create(document, text.substring(start, i - start)));
+        // If text is not the empty string, then append a new Text node whose data is text and node document is document to fragment.
+        if (i > start)
+            fragment->appendChild(Text::create(document, text.substring(start, i - start)));
+
         if (i == length)
             break;
 

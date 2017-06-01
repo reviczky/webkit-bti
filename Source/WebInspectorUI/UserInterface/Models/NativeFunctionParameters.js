@@ -408,8 +408,6 @@ WebInspector.NativePrototypeFunctionParameters = {
         removeAttribute: "attributeName",
         removeAttributeNS: "namespace, attributeName",
         removeAttributeNode: "attributeName",
-        scrollByLines: "[lines]",
-        scrollByPages: "[pages]",
         scrollIntoView: "[alignWithTop]",
         scrollIntoViewIfNeeded: "[centerIfNeeded]",
         setAttribute: "name, value",
@@ -696,11 +694,6 @@ WebInspector.NativePrototypeFunctionParameters = {
         __proto__: null,
     },
 
-    ClientRectList: {
-        item: "[index]",
-        __proto__: null,
-    },
-
     CommandLineAPIHost: {
         copyText: "text",
         databaseId: "database",
@@ -728,7 +721,7 @@ WebInspector.NativePrototypeFunctionParameters = {
     },
 
     CustomEvent: {
-        initCustomEvent: "[typeArg], [canBubbleArg], [cancelableArg], [detailArg]",
+        initCustomEvent: "type, [bubbles], [cancelable], [detail]",
         __proto__: null,
     },
 
@@ -820,7 +813,7 @@ WebInspector.NativePrototypeFunctionParameters = {
     },
 
     Event: {
-        initEvent: "type, canBubble, cancelable",
+        initEvent: "type, [bubbles], [cancelable]",
         __proto__: null,
     },
 
@@ -1119,8 +1112,7 @@ WebInspector.NativePrototypeFunctionParameters = {
     },
 
     MessageEvent: {
-        initMessageEvent: "[typeArg], [canBubbleArg], [cancelableArg], [dataArg], [originArg], [lastEventIdArg], [sourceArg], [messagePorts]",
-        webkitInitMessageEvent: "[typeArg], [canBubbleArg], [cancelableArg], [dataArg], [originArg], [lastEventIdArg], [sourceArg], [transferables]",
+        initMessageEvent: "type, [bubbles], [cancelable], [data], [origin], [lastEventId], [source], [messagePorts]",
         __proto__: null,
     },
 

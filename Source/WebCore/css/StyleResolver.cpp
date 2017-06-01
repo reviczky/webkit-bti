@@ -135,6 +135,7 @@
 #include "WebKitCSSRegionRule.h"
 #include "WebKitFontFamilyNames.h"
 #include <bitset>
+#include <wtf/Seconds.h>
 #include <wtf/SetForScope.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/Vector.h>
@@ -227,7 +228,8 @@ void StyleResolver::MatchResult::addMatchedProperties(const StyleProperties& pro
 }
 
 StyleResolver::StyleResolver(Document& document)
-    : m_matchedPropertiesCacheAdditionsSinceLastSweep(0)
+    : m_ruleSets(*this)
+    , m_matchedPropertiesCacheAdditionsSinceLastSweep(0)
     , m_matchedPropertiesCacheSweepTimer(*this, &StyleResolver::sweepMatchedPropertiesCache)
     , m_document(document)
     , m_matchAuthorAndUserStyles(m_document.settings().authorAndUserStylesEnabled())
@@ -265,8 +267,6 @@ StyleResolver::StyleResolver(Document& document)
         m_mediaQueryEvaluator = MediaQueryEvaluator { view->mediaType(), m_document, m_rootDefaultStyle.get() };
 
     m_ruleSets.resetAuthorStyle();
-
-    m_ruleSets.initUserStyle(m_document.extensionStyleSheets(), m_mediaQueryEvaluator, *this);
 
 #if ENABLE(SVG_FONTS)
     if (m_document.svgExtensions()) {
@@ -913,7 +913,7 @@ void StyleResolver::adjustRenderStyle(RenderStyle& style, const RenderStyle& par
             || style.hasBlendMode()
             || style.hasIsolation()
             || style.position() == StickyPosition
-            || (style.position() == FixedPosition && settings().fixedPositionCreatesStackingContext())
+            || style.position() == FixedPosition
             || style.hasFlowFrom()
             || style.willChangeCreatesStackingContext())
             style.setZIndex(0);
@@ -930,10 +930,20 @@ void StyleResolver::adjustRenderStyle(RenderStyle& style, const RenderStyle& par
         if (!element->shadowPseudoId().isNull())
             style.setUserModify(READ_ONLY);
 
-        // For now, <marquee> requires an overflow clip to work properly.
         if (is<HTMLMarqueeElement>(*element)) {
+            // For now, <marquee> requires an overflow clip to work properly.
             style.setOverflowX(OHIDDEN);
             style.setOverflowY(OHIDDEN);
+
+            bool isVertical = style.marqueeDirection() == MUP || style.marqueeDirection() == MDOWN;
+            // Make horizontal marquees not wrap.
+            if (!isVertical) {
+                style.setWhiteSpace(NOWRAP);
+                style.setTextAlign(TASTART);
+            }
+            // Apparently this is the expected legacy behavior.
+            if (isVertical && style.height().isAuto())
+                style.setHeight(Length(200, Fixed));
         }
     }
 
@@ -998,7 +1008,7 @@ void StyleResolver::adjustRenderStyle(RenderStyle& style, const RenderStyle& par
 
     // Let the theme also have a crack at adjusting the style.
     if (style.hasAppearance())
-        RenderTheme::defaultTheme()->adjustStyle(*this, style, element, m_state.hasUAAppearance(), m_state.borderData(), m_state.backgroundData(), m_state.backgroundColor());
+        RenderTheme::singleton().adjustStyle(*this, style, element, m_state.hasUAAppearance(), m_state.borderData(), m_state.backgroundData(), m_state.backgroundColor());
 
     // If we have first-letter pseudo style, do not share this style.
     if (style.hasPseudoStyle(FIRST_LETTER))
@@ -1030,6 +1040,37 @@ void StyleResolver::adjustRenderStyle(RenderStyle& style, const RenderStyle& par
         if ((element->hasTagName(SVGNames::foreignObjectTag) || element->hasTagName(SVGNames::textTag)) && style.isDisplayInlineType())
             style.setDisplay(BLOCK);
     }
+    
+    adjustStyleForAlignment(style, parentStyle);
+}
+    
+void StyleResolver::adjustStyleForAlignment(RenderStyle& style, const RenderStyle& parentStyle)
+{
+    // To avoid needing to copy the StyleRareNonInheritedData, we repurpose the 'auto'
+    // flag to not just mean 'auto' prior to running adjustRenderStyle but also
+    // mean 'normal' after running it.
+    
+    // If the inherited value of justify-items includes the 'legacy' keyword,
+    // 'auto' computes to the the inherited value. Otherwise, 'auto' computes to
+    // 'normal'.
+    if (style.justifyItems().position() == ItemPositionAuto) {
+        if (parentStyle.justifyItems().positionType() == LegacyPosition)
+            style.setJustifyItems(parentStyle.justifyItems());
+    }
+    
+    // The 'auto' keyword computes the computed value of justify-items on the
+    // parent (minus any legacy keywords), or 'normal' if the box has no parent.
+    if (style.justifySelf().position() == ItemPositionAuto) {
+        if (parentStyle.justifyItems().positionType() == LegacyPosition)
+            style.setJustifySelfPosition(parentStyle.justifyItems().position());
+        else if (parentStyle.justifyItems().position() != ItemPositionAuto)
+            style.setJustifySelf(parentStyle.justifyItems());
+    }
+    
+    // The 'auto' keyword computes the computed value of align-items on the parent
+    // or 'normal' if the box has no parent.
+    if (style.alignSelf().position() == ItemPositionAuto && parentStyle.alignItems().position() != RenderStyle::initialDefaultAlignment().position())
+        style.setAlignSelf(parentStyle.alignItems());
 }
 
 bool StyleResolver::checkRegionStyle(const Element* regionElement)
@@ -1094,8 +1135,8 @@ Vector<RefPtr<StyleRule>> StyleResolver::styleRulesForElement(const Element* ele
 
 Vector<RefPtr<StyleRule>> StyleResolver::pseudoStyleRulesForElement(const Element* element, PseudoId pseudoId, unsigned rulesToInclude)
 {
-    if (!element || !element->document().haveStylesheetsLoaded())
-        return Vector<RefPtr<StyleRule>>();
+    if (!element)
+        return { };
 
     m_state = State(*element, nullptr);
 
@@ -1222,8 +1263,8 @@ void StyleResolver::addToMatchedPropertiesCache(const RenderStyle* style, const 
     static const unsigned matchedDeclarationCacheAdditionsBetweenSweeps = 100;
     if (++m_matchedPropertiesCacheAdditionsSinceLastSweep >= matchedDeclarationCacheAdditionsBetweenSweeps
         && !m_matchedPropertiesCacheSweepTimer.isActive()) {
-        static const unsigned matchedDeclarationCacheSweepTimeInSeconds = 60;
-        m_matchedPropertiesCacheSweepTimer.startOneShot(matchedDeclarationCacheSweepTimeInSeconds);
+        static const Seconds matchedDeclarationCacheSweepTime { 1_min };
+        m_matchedPropertiesCacheSweepTimer.startOneShot(matchedDeclarationCacheSweepTime);
     }
 
     ASSERT(hash);
@@ -1438,6 +1479,7 @@ inline bool isValidVisitedLinkProperty(CSSPropertyID id)
     case CSSPropertyWebkitTextStrokeColor:
     case CSSPropertyFill:
     case CSSPropertyStroke:
+    case CSSPropertyStrokeColor:
         return true;
     default:
         break;

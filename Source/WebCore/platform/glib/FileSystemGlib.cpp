@@ -25,10 +25,10 @@
 
 #include "FileMetadata.h"
 #include "NotImplemented.h"
-#include "UUID.h"
 #include <gio/gio.h>
 #include <glib.h>
 #include <glib/gstdio.h>
+#include <wtf/UUID.h>
 #include <wtf/glib/GLibUtilities.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
@@ -213,6 +213,9 @@ CString sharedResourcesPath()
     if (!cachedPath.isNull())
         return cachedPath;
 
+#if PLATFORM(WPE)
+    GUniquePtr<gchar> dataPath(g_build_filename(DATA_DIR, "wpe", nullptr));
+#elif PLATFORM(GTK)
 #if OS(WINDOWS)
     HMODULE hmodule = 0;
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, reinterpret_cast<char*>(sharedResourcesPath), &hmodule);
@@ -221,6 +224,7 @@ CString sharedResourcesPath()
     GUniquePtr<gchar> dataPath(g_build_filename(runtimeDir.get(), "share", "webkitgtk-" WEBKITGTK_API_VERSION_STRING, NULL));
 #else
     GUniquePtr<gchar> dataPath(g_build_filename(DATA_DIR, "webkitgtk-" WEBKITGTK_API_VERSION_STRING, NULL));
+#endif
 #endif
 
     cachedPath = dataPath.get();

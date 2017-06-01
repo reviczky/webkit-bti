@@ -97,10 +97,13 @@ enum EventThrottlingBehavior {
     boolean isPreloaded(DOMString url);
     boolean isLoadingFromMemoryCache(DOMString url);
     DOMString xhrResponseSource(XMLHttpRequest xhr);
+    sequence<DOMString> mediaResponseSources(HTMLMediaElement media);
+    sequence<DOMString> mediaResponseContentRanges(HTMLMediaElement media);
     boolean isSharingStyleSheetContents(HTMLLinkElement a, HTMLLinkElement b);
     boolean isStyleSheetLoadingSubresources(HTMLLinkElement link);
     void clearMemoryCache();
     void pruneMemoryCacheToSize(long size);
+    void destroyDecodedDataForAllImages();
     long memoryCacheSize();
     void setOverrideCachePolicy(CachePolicy policy);
     void setOverrideResourceLoadPriority(ResourceLoadPriority priority);
@@ -135,6 +138,7 @@ enum EventThrottlingBehavior {
     [MayThrowException] boolean animationsAreSuspended();
     [MayThrowException] boolean pauseAnimationAtTimeOnElement(DOMString animationName, unrestricted double pauseTime, Element element);
     [MayThrowException] boolean pauseAnimationAtTimeOnPseudoElement(DOMString animationName, unrestricted double pauseTime, Element element, DOMString pseudoId);
+    readonly attribute double animationsInterval;
 
     // CSS Transition testing.
     [MayThrowException] boolean pauseTransitionAtTimeOnElement(DOMString propertyName, unrestricted double pauseTime, Element element);
@@ -145,11 +149,11 @@ enum EventThrottlingBehavior {
     [MayThrowException] sequence<DOMString> formControlStateOfPreviousHistoryItem();
     [MayThrowException] void setFormControlStateOfPreviousHistoryItem(sequence<DOMString> values);
 
-    [MayThrowException] ClientRect absoluteCaretBounds();
+    [MayThrowException] DOMRect absoluteCaretBounds();
 
-    ClientRect boundingBox(Element element);
+    DOMRect boundingBox(Element element);
 
-    [MayThrowException] ClientRectList inspectorHighlightRects();
+    [MayThrowException] sequence<DOMRect> inspectorHighlightRects();
     [MayThrowException] DOMString inspectorHighlightObject();
 
     [MayThrowException] unsigned long markerCountForNode(Node node, DOMString markerType);
@@ -160,11 +164,12 @@ enum EventThrottlingBehavior {
     [MayThrowException] void setMarkedTextMatchesAreHighlighted(boolean flag);
 
     void invalidateFontCache();
+    void setFontSmoothingEnabled(boolean enabled);
 
     [MayThrowException] void setScrollViewPosition(long x, long y);
 
-    [MayThrowException] ClientRect layoutViewportRect();
-    [MayThrowException] ClientRect visualViewportRect();
+    [MayThrowException] DOMRect layoutViewportRect();
+    [MayThrowException] DOMRect visualViewportRect();
 
     [MayThrowException] void setViewBaseBackgroundColor(DOMString colorValue);
 
@@ -211,6 +216,9 @@ enum EventThrottlingBehavior {
     [MayThrowException] unsigned long wheelEventHandlerCount();
     [MayThrowException] unsigned long touchEventHandlerCount();
 
+    [MayThrowException] sequence<DOMRect> touchEventRectsForEvent(DOMString eventName);
+    [MayThrowException] sequence<DOMRect> passiveTouchEventListenerRects();
+
     [MayThrowException] NodeList? nodesFromRect(Document document, long x, long y,
         unsigned long topPadding, unsigned long rightPadding, unsigned long bottomPadding, unsigned long leftPadding,
         boolean ignoreClipping, boolean allowShadowContent, boolean allowChildFrameContent);
@@ -242,11 +250,16 @@ enum EventThrottlingBehavior {
     unsigned long imageFrameIndex(HTMLImageElement element);
     void setImageFrameDecodingDuration(HTMLImageElement element, unrestricted float duration);
     void resetImageAnimation(HTMLImageElement element);
+    boolean isImageAnimating(HTMLImageElement element);
+    void setClearDecoderAfterAsyncFrameRequestForTesting(HTMLImageElement element, boolean value);
+
+    void setGridMaxTracksLimit(unsigned long maxTracksLimit);
 
     readonly attribute InternalSettings settings;
     readonly attribute unsigned long workerThreadCount;
 
-    readonly attribute boolean areSVGAnimationsPaused;
+    [MayThrowException] readonly attribute boolean areSVGAnimationsPaused;
+    [MayThrowException] double svgAnimationsInterval(SVGSVGElement element);
 
     // Flags for layerTreeAsText.
     const unsigned short LAYER_TREE_INCLUDES_VISIBLE_RECTS = 1;
@@ -257,9 +270,11 @@ enum EventThrottlingBehavior {
     const unsigned short LAYER_TREE_INCLUDES_ACCELERATES_DRAWING = 32;
     [MayThrowException] DOMString layerTreeAsText(Document document, optional unsigned short flags = 0);
 
+    [MayThrowException] unsigned long long layerIDForElement(Element element);
+
     [MayThrowException] DOMString scrollingStateTreeAsText();
     [MayThrowException] DOMString mainThreadScrollingReasons(); // FIXME: rename to synchronousScrollingReasons().
-    [MayThrowException] ClientRectList? nonFastScrollableRects();
+    [MayThrowException] sequence<DOMRect> nonFastScrollableRects();
 
     [MayThrowException] DOMString repaintRectsAsText();
 
@@ -308,6 +323,7 @@ enum EventThrottlingBehavior {
 
     [MayThrowException] void setUseFixedLayout(boolean useFixedLayout);
     [MayThrowException] void setFixedLayoutSize(long width, long height);
+    void setPrinting(long width, long height);
 
     [MayThrowException] void setViewExposedRect(unrestricted float x, unrestricted float y, unrestricted float width, unrestricted float height);
 
@@ -350,6 +366,9 @@ enum EventThrottlingBehavior {
     boolean isRequestAnimationFrameThrottled();
     boolean areTimersThrottled();
 
+    [MayThrowException] void setLowPowerModeEnabled(boolean enabled);
+    readonly attribute double requestAnimationFrameInterval;
+
     // Override the behavior of WebPage::eventThrottlingDelay(), which only affects iOS.
     attribute EventThrottlingBehavior? eventThrottlingBehaviorOverride;
 
@@ -383,6 +402,7 @@ enum EventThrottlingBehavior {
     void setUsesMockScrollAnimator(boolean enabled);
 
     void forceReload(boolean endToEnd);
+    void reloadExpiredOnly();
 
     void enableAutoSizeMode(boolean enabled, long minimumWidth, long minimumHeight, long maximumWidth, long maximumHeight);
 
@@ -407,14 +427,10 @@ enum EventThrottlingBehavior {
 
     boolean isSelectPopupVisible(HTMLSelectElement element);
 
-#if defined(ENABLE_VIBRATION) && ENABLE_VIBRATION
-    boolean isVibrating();
-#endif
-
     [MayThrowException] boolean isPluginUnavailabilityIndicatorObscured(Element element);
     boolean isPluginSnapshotted(Element element);
 
-    [MayThrowException] ClientRect selectionBounds();
+    [MayThrowException] DOMRect selectionBounds();
 
     [Conditional=MEDIA_SOURCE] void initializeMockMediaSource();
     [Conditional=MEDIA_SOURCE] sequence<DOMString> bufferedSamplesForTrackID(SourceBuffer buffer, DOMString trackID);
@@ -438,8 +454,12 @@ enum EventThrottlingBehavior {
     [Conditional=WIRELESS_PLAYBACK_TARGET] void setMockMediaPlaybackTargetPickerEnabled(boolean enabled);
     [Conditional=WIRELESS_PLAYBACK_TARGET, MayThrowException] void setMockMediaPlaybackTargetPickerState(DOMString deviceName, DOMString deviceState);
     [Conditional=MEDIA_STREAM] void setMockMediaCaptureDevicesEnabled(boolean enabled);
+
     [Conditional=WEB_RTC] void emulateRTCPeerConnectionPlatformEvent(RTCPeerConnection connection, DOMString action);
     [Conditional=WEB_RTC] void useMockRTCPeerConnectionFactory(DOMString testCase);
+    [Conditional=WEB_RTC] void setICECandidateFiltering(boolean enabled);
+    [Conditional=WEB_RTC] void setEnumeratingAllNetworkInterfacesEnabled(boolean enabled);
+    [Conditional=WEB_RTC] void stopPeerConnection(RTCPeerConnection connection);
 
     [Conditional=VIDEO] void simulateSystemSleep();
     [Conditional=VIDEO] void simulateSystemWake();
@@ -472,7 +492,8 @@ enum EventThrottlingBehavior {
 
     void setShowAllPlugins(boolean showAll);
 
-    [Conditional=READABLE_STREAM_API, CallWith=ScriptState] boolean isReadableStreamDisturbed(any stream);
+    [Conditional=STREAMS_API, CallWith=ScriptState] any cloneArrayBuffer(any buffer, any srcByteOffset, any byteLength);
+    [Conditional=STREAMS_API, CallWith=ScriptState] boolean isReadableStreamDisturbed(any stream);
 
     DOMString resourceLoadStatisticsForOrigin(DOMString domain);
     void setResourceLoadStatisticsEnabled(boolean enable);
@@ -482,6 +503,7 @@ enum EventThrottlingBehavior {
     DOMString composedTreeAsText(Node parent);
 
     boolean isProcessingUserGesture();
+    double lastHandledUserGestureTimestamp();
 
     GCObservation? observeGC(any observed);
 
@@ -504,4 +526,16 @@ enum EventThrottlingBehavior {
     [CallWith=Document] void setAsRunningUserScripts();
 
     void disableTileSizeUpdateDelay();
+    void setSpeculativeTilingDelayDisabledForTesting(boolean disabled);
+
+    [Conditional=WEBGL] void simulateWebGLContextChanged(WebGLRenderingContext context);
+
+    void setPageVisibility(boolean isVisible);
+
+    [Conditional=MEDIA_STREAM] void observeMediaStreamTrack(MediaStreamTrack track);
+    [Conditional=MEDIA_STREAM] Promise<ImageData> grabNextMediaStreamTrackFrame();
+    [Conditional=MEDIA_STREAM] readonly attribute unsigned long trackAudioSampleCount;
+    [Conditional=MEDIA_STREAM] readonly attribute unsigned long trackVideoSampleCount;
+    [Conditional=MEDIA_STREAM, MayThrowException] void setMediaDeviceState(DOMString deviceID, DOMString property, boolean value);
+    [Conditional=MEDIA_STREAM] void delayMediaStreamTrackSamples(MediaStreamTrack track, float delay);
 };

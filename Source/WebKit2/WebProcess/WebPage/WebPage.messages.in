@@ -140,7 +140,7 @@ messages -> WebPage LegacyReceiver {
 
     NavigateToPDFLinkWithSimulatedClick(String url, WebCore::IntPoint documentPoint, WebCore::IntPoint screenPoint)
 
-    Reload(uint64_t navigationID, bool reloadFromOrigin, bool contentBlockersEnabled, WebKit::SandboxExtension::Handle sandboxExtensionHandle)
+    Reload(uint64_t navigationID, uint32_t reloadOptions, WebKit::SandboxExtension::Handle sandboxExtensionHandle)
     StopLoading()
 
     StopLoadingFrame(uint64_t frameID)
@@ -298,13 +298,22 @@ messages -> WebPage LegacyReceiver {
 
 #if ENABLE(MEDIA_STREAM)
     # MediaSteam
-    UserMediaAccessWasGranted(uint64_t userMediaID, String audioDeviceUID, String videoDeviceUID)
+    UserMediaAccessWasGranted(uint64_t userMediaID, String audioDeviceUID, String videoDeviceUID, String mediaDeviceIdentifierHashSalt)
     UserMediaAccessWasDenied(uint64_t userMediaID, uint64_t reason, String invalidConstraint)
     DidCompleteMediaDeviceEnumeration(uint64_t userMediaID, Vector<WebCore::CaptureDevice> devices, String mediaDeviceIdentifierHashSalt, bool hasPersistentAccess)
 #if ENABLE(SANDBOX_EXTENSIONS)
     GrantUserMediaDeviceSandboxExtensions(WebKit::MediaDeviceSandboxExtensions sandboxExtensions)
     RevokeUserMediaDeviceSandboxExtensions(Vector<String> sandboxExtensionIDs)
 #endif
+#endif
+
+#if ENABLE(WEB_RTC)
+    DisableICECandidateFiltering()
+    EnableICECandidateFiltering()
+#endif
+#if ENABLE(WEB_RTC) && USE(LIBWEBRTC)
+    EnableEnumeratingAllNetworkInterfaces()
+    DisableEnumeratingAllNetworkInterfaces()
 #endif
 
     # Notification
@@ -329,6 +338,7 @@ messages -> WebPage LegacyReceiver {
     SetMediaVolume(float volume)
     SetMuted(WebCore::MediaProducer::MutedStateFlags muted)
     SetMayStartMediaWhenInWindow(bool mayStartMedia)
+    StopMediaCapture()
 
 #if ENABLE(MEDIA_SESSION)
     HandleMediaEvent(uint32_t eventType)
@@ -460,4 +470,10 @@ messages -> WebPage LegacyReceiver {
 #if USE(QUICK_LOOK)
     DidReceivePasswordForQuickLookDocument(String password)
 #endif
+
+    RegisterURLSchemeHandler(uint64_t identifier, String scheme)
+
+    URLSchemeTaskDidReceiveResponse(uint64_t providerIdentifier, uint64_t taskIdentifier, WebCore::ResourceResponse response)
+    URLSchemeTaskDidReceiveData(uint64_t providerIdentifier, uint64_t taskIdentifier, IPC::DataReference data)
+    URLSchemeTaskDidComplete(uint64_t providerIdentifier, uint64_t taskIdentifier, WebCore::ResourceError error)
 }

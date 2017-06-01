@@ -42,7 +42,7 @@
 
 namespace JSC {
 
-const ClassInfo ScriptExecutable::s_info = { "ScriptExecutable", &ExecutableBase::s_info, 0, CREATE_METHOD_TABLE(ScriptExecutable) };
+const ClassInfo ScriptExecutable::s_info = { "ScriptExecutable", &ExecutableBase::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(ScriptExecutable) };
 
 ScriptExecutable::ScriptExecutable(Structure* structure, VM& vm, const SourceCode& source, bool isInStrictContext, DerivedContextType derivedContextType, bool isInArrowFunctionContext, EvalContextType evalContextType, Intrinsic intrinsic)
     : ExecutableBase(vm, structure, NUM_PARAMETERS_NOT_COMPILED, intrinsic)
@@ -176,14 +176,24 @@ CodeBlock* ScriptExecutable::newCodeBlockFor(
     ASSERT(vm->heap.isDeferred());
     ASSERT(endColumn() != UINT_MAX);
 
+    JSGlobalObject* globalObject = scope->globalObject();
+    ExecState* exec = globalObject->globalExec();
+
     if (classInfo(*vm) == EvalExecutable::info()) {
         EvalExecutable* executable = jsCast<EvalExecutable*>(this);
         RELEASE_ASSERT(kind == CodeForCall);
         RELEASE_ASSERT(!executable->m_evalCodeBlock);
         RELEASE_ASSERT(!function);
-        return EvalCodeBlock::create(vm,
+        auto codeBlock = EvalCodeBlock::create(vm,
             executable, executable->m_unlinkedEvalCodeBlock.get(), scope,
             executable->source().provider());
+        if (!codeBlock) {
+            exception = throwException(
+                exec, throwScope,
+                createOutOfMemoryError(exec));
+            return nullptr;
+        }
+        return codeBlock;
     }
     
     if (classInfo(*vm) == ProgramExecutable::info()) {
@@ -191,9 +201,16 @@ CodeBlock* ScriptExecutable::newCodeBlockFor(
         RELEASE_ASSERT(kind == CodeForCall);
         RELEASE_ASSERT(!executable->m_programCodeBlock);
         RELEASE_ASSERT(!function);
-        return ProgramCodeBlock::create(vm,
+        auto codeBlock = ProgramCodeBlock::create(vm,
             executable, executable->m_unlinkedProgramCodeBlock.get(), scope,
             executable->source().provider(), startColumn());
+        if (!codeBlock) {
+            exception = throwException(
+                exec, throwScope,
+                createOutOfMemoryError(exec));
+            return nullptr;
+        }
+        return codeBlock;
     }
 
     if (classInfo(*vm) == ModuleProgramExecutable::info()) {
@@ -201,16 +218,22 @@ CodeBlock* ScriptExecutable::newCodeBlockFor(
         RELEASE_ASSERT(kind == CodeForCall);
         RELEASE_ASSERT(!executable->m_moduleProgramCodeBlock);
         RELEASE_ASSERT(!function);
-        return ModuleProgramCodeBlock::create(vm,
+        auto codeBlock = ModuleProgramCodeBlock::create(vm,
             executable, executable->m_unlinkedModuleProgramCodeBlock.get(), scope,
             executable->source().provider(), startColumn());
+        if (!codeBlock) {
+            exception = throwException(
+                exec, throwScope,
+                createOutOfMemoryError(exec));
+            return nullptr;
+        }
+        return codeBlock;
     }
 
     RELEASE_ASSERT(classInfo(*vm) == FunctionExecutable::info());
     RELEASE_ASSERT(function);
     FunctionExecutable* executable = jsCast<FunctionExecutable*>(this);
     RELEASE_ASSERT(!executable->codeBlockFor(kind));
-    JSGlobalObject* globalObject = scope->globalObject();
     ParserError error;
     DebuggerMode debuggerMode = globalObject->hasInteractiveDebugger() ? DebuggerOn : DebuggerOff;
     UnlinkedFunctionCodeBlock* unlinkedCodeBlock = 

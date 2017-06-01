@@ -70,7 +70,10 @@ WebInspector.SearchTabContentView = class SearchTabContentView extends WebInspec
 
     canShowRepresentedObject(representedObject)
     {
-        return representedObject instanceof WebInspector.Resource || representedObject instanceof WebInspector.Script || representedObject instanceof WebInspector.DOMTree;
+        if (!(representedObject instanceof WebInspector.Resource) && !(representedObject instanceof WebInspector.Script) && !(representedObject instanceof WebInspector.DOMTree))
+            return false;
+
+        return !!this._navigationSidebarPanel.contentTreeOutline.getCachedTreeElement(representedObject);
     }
 
     focusSearchField()
@@ -83,6 +86,17 @@ WebInspector.SearchTabContentView = class SearchTabContentView extends WebInspec
     performSearch(searchQuery)
     {
         this.navigationSidebarPanel.performSearch(searchQuery);
+    }
+
+    handleCopyEvent(event)
+    {
+        let selectedTreeElement = this.navigationSidebarPanel.contentTreeOutline.selectedTreeElement;
+        if (!selectedTreeElement)
+            return;
+
+        event.clipboardData.setData("text/plain", selectedTreeElement.synthesizedTextValue);
+        event.stopPropagation();
+        event.preventDefault();
     }
 
     // Protected

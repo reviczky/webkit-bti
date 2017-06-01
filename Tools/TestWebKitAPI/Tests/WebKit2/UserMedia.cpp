@@ -25,15 +25,19 @@
 #include "PlatformUtilities.h"
 #include "PlatformWebView.h"
 #include "Test.h"
+#include <WebKit/WKPagePrivate.h>
+#include <WebKit/WKPreferencesRef.h>
+#include <WebKit/WKPreferencesRefPrivate.h>
 #include <WebKit/WKRetainPtr.h>
+#include <WebKit/WKUserMediaPermissionCheck.h>
 #include <string.h>
 #include <vector>
 
 namespace TestWebKitAPI {
 
-static bool done;
+static bool wasPrompted;
 
-void decidePolicyForUserMediaPermissionRequestCallBack(WKPageRef, WKFrameRef, WKSecurityOriginRef, WKSecurityOriginRef, WKUserMediaPermissionRequestRef permissionRequest, const void* /* clientInfo */)
+static void decidePolicyForUserMediaPermissionRequestCallBack(WKPageRef, WKFrameRef, WKSecurityOriginRef, WKSecurityOriginRef, WKUserMediaPermissionRequestRef permissionRequest, const void* /* clientInfo */)
 {
     WKRetainPtr<WKArrayRef> audioDeviceUIDs = WKUserMediaPermissionRequestAudioDeviceUIDs(permissionRequest);
     WKRetainPtr<WKArrayRef> videoDeviceUIDs = WKUserMediaPermissionRequestVideoDeviceUIDs(permissionRequest);
@@ -54,27 +58,41 @@ void decidePolicyForUserMediaPermissionRequestCallBack(WKPageRef, WKFrameRef, WK
         WKUserMediaPermissionRequestAllow(permissionRequest, audioDeviceUID.get(), videoDeviceUID.get());
     }
 
-    done = true;
+    wasPrompted = true;
 }
 
-TEST(WebKit2, DISABLED_UserMediaBasic)
+static void checkUserMediaPermissionCallback(WKPageRef, WKFrameRef, WKSecurityOriginRef, WKSecurityOriginRef, WKUserMediaPermissionCheckRef permissionRequest, const void*)
+{
+    WKUserMediaPermissionCheckSetUserMediaAccessInfo(permissionRequest, WKStringCreateWithUTF8CString("0x123456789"), false);
+}
+
+TEST(WebKit2, UserMediaBasic)
 {
     auto context = adoptWK(WKContextCreate());
-    PlatformWebView webView(context.get());
-    WKPageUIClientV5 uiClient;
+
+    WKRetainPtr<WKPageGroupRef> pageGroup(AdoptWK, WKPageGroupCreateWithIdentifier(Util::toWK("GetUserMedia").get()));
+    WKPreferencesRef preferences = WKPageGroupGetPreferences(pageGroup.get());
+    WKPreferencesSetMediaDevicesEnabled(preferences, true);
+    WKPreferencesSetFileAccessFromFileURLsAllowed(preferences, true);
+    WKPreferencesSetMediaCaptureRequiresSecureConnection(preferences, false);
+    WKPreferencesSetMockCaptureDevicesEnabled(preferences, true);
+
+    WKPageUIClientV6 uiClient;
     memset(&uiClient, 0, sizeof(uiClient));
-
-
-    uiClient.base.version = 5;
+    uiClient.base.version = 6;
     uiClient.decidePolicyForUserMediaPermissionRequest = decidePolicyForUserMediaPermissionRequestCallBack;
-
+    uiClient.checkUserMediaPermissionForOrigin = checkUserMediaPermissionCallback;
+    
+    PlatformWebView webView(context.get(), pageGroup.get());
     WKPageSetPageUIClient(webView.page(), &uiClient.base);
 
-    done = false;
+    wasPrompted = false;
     auto url = adoptWK(Util::createURLForResource("getUserMedia", "html"));
+    ASSERT(url.get());
+
     WKPageLoadURL(webView.page(), url.get());
 
-    Util::run(&done);
+    Util::run(&wasPrompted);
 }
 
 } // namespace TestWebKitAPI

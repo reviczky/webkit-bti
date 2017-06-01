@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2003, 2006, 2007, 2008, 2009, 2010, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2003-2017 Apple Inc. All rights reserved.
  * Copyright (C) 2009 Rob Buis (rwlbuis@gmail.com)
  * Copyright (C) 2011 Google Inc. All rights reserved.
  *
@@ -54,7 +54,9 @@
 #include "StyleResolveForDocument.h"
 #include "StyleScope.h"
 #include "StyleSheetContents.h"
+#include "SubresourceIntegrity.h"
 #include <wtf/Ref.h>
+#include <wtf/SetForScope.h>
 #include <wtf/StdLibExtras.h>
 
 namespace WebCore {
@@ -224,6 +226,10 @@ void HTMLLinkElement::process()
         return;
     }
 
+    // Prevent recursive loading of link.
+    if (m_isHandlingBeforeLoad)
+        return;
+
     URL url = getNonEmptyURLAttribute(hrefAttr);
 
     if (!m_linkLoader.loadLink(m_relAttribute, url, attributeWithoutSynchronization(asAttr), attributeWithoutSynchronization(crossoriginAttr), document()))
@@ -234,7 +240,7 @@ void HTMLLinkElement::process()
 
     if (m_disabledState != Disabled && treatAsStyleSheet && document().frame() && url.isValid()) {
         String charset = attributeWithoutSynchronization(charsetAttr);
-        if (charset.isEmpty() && document().frame())
+        if (charset.isEmpty())
             charset = document().charset();
 
         if (m_cachedSheet) {
@@ -243,8 +249,11 @@ void HTMLLinkElement::process()
             m_cachedSheet = nullptr;
         }
 
+        {
+        SetForScope<bool> change(m_isHandlingBeforeLoad, true);
         if (!shouldLoadLink())
             return;
+        }
 
         m_loading = true;
 
@@ -267,6 +276,9 @@ void HTMLLinkElement::process()
         if (!isActive)
             priority = ResourceLoadPriority::VeryLow;
 
+        if (document().settings().subresourceIntegrityEnabled())
+            m_integrityMetadataForPendingSheetRequest = attributeWithoutSynchronization(HTMLNames::integrityAttr);
+
         ResourceLoaderOptions options = CachedResourceLoader::defaultCachedResourceOptions();
         options.sameOriginDataURLFlag = SameOriginDataURLFlag::Set;
         if (document().contentSecurityPolicy()->allowStyleWithNonce(attributeWithoutSynchronization(HTMLNames::nonceAttr)))
@@ -274,9 +286,9 @@ void HTMLLinkElement::process()
 
         CachedResourceRequest request(url, options, priority, WTFMove(charset));
         request.setInitiator(*this);
-
         request.setAsPotentiallyCrossOrigin(crossOrigin(), document());
 
+        ASSERT_WITH_SECURITY_IMPLICATION(!m_cachedSheet);
         m_cachedSheet = document().cachedResourceLoader().requestCSSStyleSheet(WTFMove(request));
 
         if (m_cachedSheet)
@@ -284,7 +296,8 @@ void HTMLLinkElement::process()
         else {
             // The request may have been denied if (for example) the stylesheet is local and the document is remote.
             m_loading = false;
-            removePendingSheet();
+            sheetLoaded();
+            notifyLoadedSheetAndAllCriticalSubresources(false);
         }
     } else if (m_sheet) {
         // we no longer contain a stylesheet, e.g. perhaps rel or type was changed
@@ -337,7 +350,6 @@ void HTMLLinkElement::removedFrom(ContainerNode& insertionPoint)
         m_styleScope->removeStyleSheetCandidateNode(*this);
         m_styleScope = nullptr;
     }
-
 }
 
 void HTMLLinkElement::finishParsingChildren()
@@ -371,8 +383,17 @@ void HTMLLinkElement::setCSSStyleSheet(const String& href, const URL& baseURL, c
     // Completing the sheet load may cause scripts to execute.
     Ref<HTMLLinkElement> protectedThis(*this);
 
+    if (!cachedStyleSheet->errorOccurred() && !matchIntegrityMetadata(*cachedStyleSheet, m_integrityMetadataForPendingSheetRequest)) {
+        document().addConsoleMessage(MessageSource::Security, MessageLevel::Error, makeString("Cannot load stylesheet ", cachedStyleSheet->url().stringCenterEllipsizedToLength(), ". Failed integrity metadata check."));
+
+        m_loading = false;
+        sheetLoaded();
+        notifyLoadedSheetAndAllCriticalSubresources(true);
+        return;
+    }
+
     CSSParserContext parserContext(document(), baseURL, charset);
-    auto cachePolicy = frame->loader().subresourceCachePolicy();
+    auto cachePolicy = frame->loader().subresourceCachePolicy(baseURL);
 
     if (auto restoredSheet = const_cast<CachedCSSStyleSheet*>(cachedStyleSheet)->restoreParsedStyleSheet(parserContext, cachePolicy)) {
         ASSERT(restoredSheet->isCacheable());
@@ -555,7 +576,7 @@ void HTMLLinkElement::addPendingSheet(PendingSheetType type)
     if (m_pendingSheetType == InactiveSheet)
         return;
     ASSERT(m_styleScope);
-    m_styleScope->addPendingSheet();
+    m_styleScope->addPendingSheet(*this);
 }
 
 void HTMLLinkElement::removePendingSheet()
@@ -573,7 +594,7 @@ void HTMLLinkElement::removePendingSheet()
         return;
     }
 
-    m_styleScope->removePendingSheet();
+    m_styleScope->removePendingSheet(*this);
 }
 
 } // namespace WebCore

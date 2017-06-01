@@ -50,10 +50,11 @@ WebInspector.ContentBrowserTabContentView = class ContentBrowserTabContentView e
         this._contentBrowser.updateHierarchicalPathForCurrentContentView();
 
         if (navigationSidebarPanel) {
-            var showToolTip = WebInspector.UIString("Show the navigation sidebar (%s)").format(WebInspector.navigationSidebarKeyboardShortcut.displayName);
-            var hideToolTip = WebInspector.UIString("Hide the navigation sidebar (%s)").format(WebInspector.navigationSidebarKeyboardShortcut.displayName);
+            let showToolTip = WebInspector.UIString("Show the navigation sidebar (%s)").format(WebInspector.navigationSidebarKeyboardShortcut.displayName);
+            let hideToolTip = WebInspector.UIString("Hide the navigation sidebar (%s)").format(WebInspector.navigationSidebarKeyboardShortcut.displayName);
+            let image = WebInspector.resolvedLayoutDirection() == WebInspector.LayoutDirection.RTL ? "Images/ToggleRightSidebar.svg" : "Images/ToggleLeftSidebar.svg";
 
-            this._showNavigationSidebarItem = new WebInspector.ActivateButtonNavigationItem("toggle-navigation-sidebar", showToolTip, hideToolTip, "Images/ToggleLeftSidebar.svg", 16, 16);
+            this._showNavigationSidebarItem = new WebInspector.ActivateButtonNavigationItem("toggle-navigation-sidebar", showToolTip, hideToolTip, image, 16, 16);
             this._showNavigationSidebarItem.addEventListener(WebInspector.ButtonNavigationItem.Event.Clicked, WebInspector.toggleNavigationSidebar, WebInspector);
             this._showNavigationSidebarItem.activated = !WebInspector.navigationSidebar.collapsed;
 
@@ -66,10 +67,11 @@ WebInspector.ContentBrowserTabContentView = class ContentBrowserTabContentView e
         }
 
         if (detailsSidebarPanels && detailsSidebarPanels.length) {
-            var showToolTip = WebInspector.UIString("Show the details sidebar (%s)").format(WebInspector.detailsSidebarKeyboardShortcut.displayName);
-            var hideToolTip = WebInspector.UIString("Hide the details sidebar (%s)").format(WebInspector.detailsSidebarKeyboardShortcut.displayName);
+            let showToolTip = WebInspector.UIString("Show the details sidebar (%s)").format(WebInspector.detailsSidebarKeyboardShortcut.displayName);
+            let hideToolTip = WebInspector.UIString("Hide the details sidebar (%s)").format(WebInspector.detailsSidebarKeyboardShortcut.displayName);
+            let image = WebInspector.resolvedLayoutDirection() == WebInspector.LayoutDirection.RTL ? "Images/ToggleLeftSidebar.svg" : "Images/ToggleRightSidebar.svg";
 
-            this._showDetailsSidebarItem = new WebInspector.ActivateButtonNavigationItem("toggle-details-sidebar", showToolTip, hideToolTip, "Images/ToggleRightSidebar.svg", 16, 16);
+            this._showDetailsSidebarItem = new WebInspector.ActivateButtonNavigationItem("toggle-details-sidebar", showToolTip, hideToolTip, image, 16, 16);
             this._showDetailsSidebarItem.addEventListener(WebInspector.ButtonNavigationItem.Event.Clicked, WebInspector.toggleDetailsSidebar, WebInspector);
             this._showDetailsSidebarItem.activated = !WebInspector.detailsSidebar.collapsed;
             this._showDetailsSidebarItem.enabled = false;
@@ -140,6 +142,8 @@ WebInspector.ContentBrowserTabContentView = class ContentBrowserTabContentView e
         this._ignoreDetailsSidebarPanelSelectedEvent = true;
         this._ignoreDetailsSidebarPanelCollapsedEvent = true;
 
+        let hiddenSidebarPanels = 0;
+
         for (var i = 0; i < this.detailsSidebarPanels.length; ++i) {
             var sidebarPanel = this.detailsSidebarPanels[i];
             if (sidebarPanel.inspect(currentRepresentedObjects)) {
@@ -149,7 +153,8 @@ WebInspector.ContentBrowserTabContentView = class ContentBrowserTabContentView e
                 }
 
                 // The sidebar panel was not previously showing, so add the panel.
-                WebInspector.detailsSidebar.addSidebarPanel(sidebarPanel);
+                let index = i - hiddenSidebarPanels;
+                WebInspector.detailsSidebar.insertSidebarPanel(sidebarPanel, index);
 
                 if (this._lastSelectedDetailsSidebarPanelSetting.value === sidebarPanel.identifier) {
                     // Restore the sidebar panel selection if this sidebar panel was the last one selected by the user.
@@ -158,6 +163,7 @@ WebInspector.ContentBrowserTabContentView = class ContentBrowserTabContentView e
             } else {
                 // The sidebar panel can't inspect the current represented objects, so remove the panel and hide the toolbar item.
                 WebInspector.detailsSidebar.removeSidebarPanel(sidebarPanel);
+                hiddenSidebarPanels++;
             }
         }
 

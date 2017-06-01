@@ -93,6 +93,14 @@
 </tr>
 <tr>
 <td class="function_type">
+<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-is-controlled-by-automation" title="webkit_web_view_is_controlled_by_automation ()">webkit_web_view_is_controlled_by_automation</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
 <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="returnvalue">WebKitWebContext</span></a> *
 </td>
 <td class="function_name">
@@ -707,6 +715,11 @@
 </tr>
 <tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
+<td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--is-controlled-by-automation" title="The “is-controlled-by-automation” property">is-controlled-by-automation</a></td>
+<td class="property_flags">Read / Write / Construct Only</td>
+</tr>
+<tr>
+<td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="WebKitWebView.html#WebKitWebView--is-ephemeral" title="The “is-ephemeral” property">is-ephemeral</a></td>
 <td class="property_flags">Read / Write / Construct Only</td>
 </tr>
@@ -1162,7 +1175,7 @@ in the view by the user content manager.</p>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_web_view_is_ephemeral (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
 <p>Get whether a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> is ephemeral. To create an ephemeral <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> you need to
-use <a href="../gobject/gobject-The-Base-Object-Type.html#g-object-new"><code class="function">g_object_new()</code></a> and pass is-ephemeral propery with <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> value. See
+use <a href="../gobject/gobject-The-Base-Object-Type.html#g-object-new"><code class="function">g_object_new()</code></a> and pass is-ephemeral property with <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> value. See
 <a class="link" href="WebKitWebView.html#WebKitWebView--is-ephemeral" title="The “is-ephemeral” property"><span class="type">“is-ephemeral”</span></a> for more details.
 If <em class="parameter"><code>web_view</code></em>
  was created with a ephemeral <a class="link" href="WebKitWebView.html#WebKitWebView--related-view" title="The “related-view” property"><span class="type">“related-view”</span></a> or an
@@ -1188,6 +1201,37 @@ ephemeral <a class="link" href="WebKitWebView.html#WebKitWebView--web-context" t
 is ephemeral or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-is-controlled-by-automation"></a><h3>webkit_web_view_is_controlled_by_automation ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_web_view_is_controlled_by_automation
+                               (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+<p>Get whether a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> was created with <a class="link" href="WebKitWebView.html#WebKitWebView--is-controlled-by-automation" title="The “is-controlled-by-automation” property"><span class="type">“is-controlled-by-automation”</span></a>
+property enabled. Only <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a>s controlled by automation can be used in an
+automation session.</p>
+<div class="refsect3">
+<a name="webkit-web-view-is-controlled-by-automation.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-web-view-is-controlled-by-automation.returns"></a><h4>Returns</h4>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if <em class="parameter"><code>web_view</code></em>
+is controlled by automation, or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -1224,8 +1268,7 @@ webkit_web_view_get_context (<em class="parameter"><code><a class="link" href="W
 webkit_web_view_get_user_content_manager
                                (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
 <p>Gets the user content manager associated to <em class="parameter"><code>web_view</code></em>
-, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if the
-view does not have an user content manager.</p>
+.</p>
 <div class="refsect3">
 <a name="webkit-web-view-get-user-content-manager.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -1408,7 +1451,7 @@ webkit_web_view_load_alternate_html (<em class="parameter"><code><a class="link"
 .
 This allows clients to display page-loading errors in the <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> itself.
 When this method is called from <a class="link" href="WebKitWebView.html#WebKitWebView-load-failed" title="The “load-failed” signal"><span class="type">“load-failed”</span></a> signal to show an
-error page, the the back-forward list is maintained appropriately.
+error page, then the back-forward list is maintained appropriately.
 For everything else this method works the same way as <a class="link" href="WebKitWebView.html#webkit-web-view-load-html" title="webkit_web_view_load_html ()"><code class="function">webkit_web_view_load_html()</code></a>.</p>
 <div class="refsect3">
 <a name="webkit-web-view-load-alternate-html.parameters"></a><h4>Parameters</h4>
@@ -1816,7 +1859,7 @@ webkit_web_view_is_loading (<em class="parameter"><code><a class="link" href="We
 You can monitor when a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> is loading a page by connecting to
 notify::is-loading signal of <em class="parameter"><code>web_view</code></em>
 . This is useful when you are
-interesting in knowing when the view is loding something but not in the
+interesting in knowing when the view is loading something but not in the
 details about the status of the load operation, for example to start a spinner
 when the view is loading a page and stop it when it finishes.</p>
 <div class="refsect3">
@@ -3145,7 +3188,7 @@ webkit_web_view_download_uri (<em class="parameter"><code><a class="link" href="
 </div>
 <div class="refsect3">
 <a name="webkit-web-view-download-uri.returns"></a><h4>Returns</h4>
-<p> a new <a class="link" href="WebKitDownload.html" title="WebKitDownload"><span class="type">WebKitDownload</span></a> representing the
+<p> a new <a class="link" href="WebKitDownload.html" title="WebKitDownload"><span class="type">WebKitDownload</span></a> representing
 the download operation. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
@@ -4018,7 +4061,7 @@ a server redirect.</p>
 <td class="enum_member_name"><p><a name="WEBKIT-LOAD-COMMITTED:CAPS"></a>WEBKIT_LOAD_COMMITTED</p></td>
 <td class="enum_member_description">
 <p>The content started arriving for a page load.
-The necessary transport requirements are stabilished, and the
+The necessary transport requirements are established, and the
 load is being performed.</p>
 </td>
 <td class="enum_member_annotations"> </td>
@@ -4415,6 +4458,17 @@ and child documents.</p>
 <p>The favicon currently associated to the <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a>.
 See <a class="link" href="WebKitWebView.html#webkit-web-view-get-favicon" title="webkit_web_view_get_favicon ()"><code class="function">webkit_web_view_get_favicon()</code></a> for more details.</p>
 <p>Flags: Read</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitWebView--is-controlled-by-automation"></a><h3>The <code class="literal">“is-controlled-by-automation”</code> property</h3>
+<pre class="programlisting">  “is-controlled-by-automation” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
+<p>Whether the <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> is controlled by automation. This should only be used when
+creating a new <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> as a response to <a class="link" href="WebKitAutomationSession.html#WebKitAutomationSession-create-web-view" title="The “create-web-view” signal"><span class="type">“create-web-view”</span></a>
+signal request.</p>
+<p>Flags: Read / Write / Construct Only</p>
+<p>Default value: FALSE</p>
+<p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -5048,7 +5102,7 @@ client code to restore widgets hidden during the
 user_function (<a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a>  *web_view,
                <a class="link" href="WebKitWebView.html#WebKitLoadEvent" title="enum WebKitLoadEvent"><span class="type">WebKitLoadEvent</span></a> load_event,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>        user_data)</pre>
-<p>Emitted when the a load operation in <em class="parameter"><code>web_view</code></em>
+<p>Emitted when a load operation in <em class="parameter"><code>web_view</code></em>
  changes.
 The signal is always emitted with <a class="link" href="WebKitWebView.html#WEBKIT-LOAD-STARTED:CAPS"><code class="literal">WEBKIT_LOAD_STARTED</code></a> when a
 new load request is made and <a class="link" href="WebKitWebView.html#WEBKIT-LOAD-FINISHED:CAPS"><code class="literal">WEBKIT_LOAD_FINISHED</code></a> when the load
@@ -5459,7 +5513,7 @@ user_function (<a class="link" href="WebKitWebView.html" title="WebKitWebView"><
                <a class="link" href="WebKitPrintOperation.html" title="WebKitPrintOperation"><span class="type">WebKitPrintOperation</span></a> *print_operation,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>              user_data)</pre>
 <p>Emitted when printing is requested on <em class="parameter"><code>web_view</code></em>
-, usually by a javascript call,
+, usually by a JavaScript call,
 before the print dialog is shown. This signal can be used to set the initial
 print settings and page setup of <em class="parameter"><code>print_operation</code></em>
  to be used as default values in
@@ -5598,7 +5652,7 @@ created <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span cl
 <code class="function">window.showModalDialog</code>. The purpose of
 this signal is to allow the client application to prepare the
 new view to behave as modal. Once the signal is emitted a new
-mainloop will be run to block user interaction in the parent
+main loop will be run to block user interaction in the parent
 <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> until the new dialog is closed.</p>
 <div class="refsect3">
 <a name="WebKitWebView-run-as-modal.parameters"></a><h4>Parameters</h4>

@@ -65,6 +65,7 @@ struct WebProcessCreationParameters {
 
     String injectedBundlePath;
     SandboxExtension::Handle injectedBundlePathExtensionHandle;
+    SandboxExtension::HandleArray additionalSandboxExtensionHandles;
 
     UserData initializationUserData;
 
@@ -75,6 +76,8 @@ struct WebProcessCreationParameters {
     SandboxExtension::Handle webSQLDatabaseDirectoryExtensionHandle;
     String mediaCacheDirectory;
     SandboxExtension::Handle mediaCacheDirectoryExtensionHandle;
+    String javaScriptConfigurationDirectory;
+    SandboxExtension::Handle javaScriptConfigurationDirectoryExtensionHandle;
 #if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100
     Vector<uint8_t> uiProcessCookieStorageIdentifier;
 #endif
@@ -86,6 +89,7 @@ struct WebProcessCreationParameters {
     SandboxExtension::Handle mediaKeyStorageDirectoryExtensionHandle;
 #if ENABLE(MEDIA_STREAM)
     SandboxExtension::Handle audioCaptureExtensionHandle;
+    bool shouldCaptureAudioInUIProcess { false };
 #endif
     String mediaKeyStorageDirectory;
 
@@ -123,7 +127,7 @@ struct WebProcessCreationParameters {
     bool hasRichContentServices { false };
 #endif
 
-    double terminationTimeout { 0 };
+    Seconds terminationTimeout;
 
     TextCheckerState textCheckerState;
 
@@ -131,9 +135,9 @@ struct WebProcessCreationParameters {
     String uiProcessBundleIdentifier;
 #endif
 
-#if PLATFORM(COCOA)
-    pid_t presenterApplicationPid { 0 };
+    pid_t presentingApplicationPID { 0 };
 
+#if PLATFORM(COCOA)
     WebCore::MachSendRight acceleratedCompositingPort;
 
     String uiProcessBundleResourcePath;
@@ -146,7 +150,7 @@ struct WebProcessCreationParameters {
     RefPtr<API::Data> bundleParameterData;
 #endif // PLATFORM(COCOA)
 
-#if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
+#if ENABLE(NOTIFICATIONS)
     HashMap<String, bool> notificationPermissions;
 #endif
 

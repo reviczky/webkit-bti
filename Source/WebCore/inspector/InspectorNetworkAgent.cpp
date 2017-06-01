@@ -114,7 +114,7 @@ public:
         m_responseText.append(m_decoder->decode(data, dataLength));
     }
 
-    void didFinishLoading(unsigned long, double) override
+    void didFinishLoading(unsigned long) override
     {
         if (m_decoder)
             m_responseText.append(m_decoder->flush());
@@ -179,21 +179,65 @@ static Ref<InspectorObject> buildObjectForHeaders(const HTTPHeaderMap& headers)
     return headersObject;
 }
 
-Ref<Inspector::Protocol::Network::ResourceTiming> InspectorNetworkAgent::buildObjectForTiming(const NetworkLoadTiming& timing, ResourceLoader& resourceLoader)
+Ref<Inspector::Protocol::Network::ResourceTiming> InspectorNetworkAgent::buildObjectForTiming(const NetworkLoadMetrics& timing, ResourceLoader& resourceLoader)
 {
     MonotonicTime startTime = resourceLoader.loadTiming().startTime();
     double startTimeInInspector = m_environment.executionStopwatch()->elapsedTimeSince(startTime);
 
     return Inspector::Protocol::Network::ResourceTiming::create()
         .setStartTime(startTimeInInspector)
-        .setDomainLookupStart(timing.domainLookupStart)
-        .setDomainLookupEnd(timing.domainLookupEnd)
-        .setConnectStart(timing.connectStart)
-        .setConnectEnd(timing.connectEnd)
-        .setSecureConnectionStart(timing.secureConnectionStart)
-        .setRequestStart(timing.requestStart)
-        .setResponseStart(timing.responseStart)
+        .setDomainLookupStart(timing.domainLookupStart.milliseconds())
+        .setDomainLookupEnd(timing.domainLookupEnd.milliseconds())
+        .setConnectStart(timing.connectStart.milliseconds())
+        .setConnectEnd(timing.connectEnd.milliseconds())
+        .setSecureConnectionStart(timing.secureConnectionStart.milliseconds())
+        .setRequestStart(timing.requestStart.milliseconds())
+        .setResponseStart(timing.responseStart.milliseconds())
         .release();
+}
+
+static Inspector::Protocol::Network::Metrics::Priority toProtocol(NetworkLoadPriority priority)
+{
+    switch (priority) {
+    case NetworkLoadPriority::Low:
+        return Inspector::Protocol::Network::Metrics::Priority::Low;
+    case NetworkLoadPriority::Medium:
+        return Inspector::Protocol::Network::Metrics::Priority::Medium;
+    case NetworkLoadPriority::High:
+        return Inspector::Protocol::Network::Metrics::Priority::High;
+    }
+
+    ASSERT_NOT_REACHED();
+    return Inspector::Protocol::Network::Metrics::Priority::Medium;
+}
+
+Ref<Inspector::Protocol::Network::Metrics> InspectorNetworkAgent::buildObjectForMetrics(const NetworkLoadMetrics& networkLoadMetrics)
+{
+    auto metrics = Inspector::Protocol::Network::Metrics::create().release();
+
+    if (!networkLoadMetrics.protocol.isNull())
+        metrics->setProtocol(networkLoadMetrics.protocol);
+    if (networkLoadMetrics.priority)
+        metrics->setPriority(toProtocol(*networkLoadMetrics.priority));
+    if (networkLoadMetrics.remoteAddress)
+        metrics->setRemoteAddress(*networkLoadMetrics.remoteAddress);
+    if (networkLoadMetrics.connectionIdentifier)
+        metrics->setConnectionIdentifier(*networkLoadMetrics.connectionIdentifier);
+    if (networkLoadMetrics.requestHeaders)
+        metrics->setRequestHeaders(buildObjectForHeaders(*networkLoadMetrics.requestHeaders));
+
+    if (networkLoadMetrics.requestHeaderBytesSent)
+        metrics->setRequestHeaderBytesSent(*networkLoadMetrics.requestHeaderBytesSent);
+    if (networkLoadMetrics.requestBodyBytesSent)
+        metrics->setRequestBodyBytesSent(*networkLoadMetrics.requestBodyBytesSent);
+    if (networkLoadMetrics.responseHeaderBytesReceived)
+        metrics->setResponseHeaderBytesReceived(*networkLoadMetrics.responseHeaderBytesReceived);
+    if (networkLoadMetrics.responseBodyBytesReceived)
+        metrics->setResponseBodyBytesReceived(*networkLoadMetrics.responseBodyBytesReceived);
+    if (networkLoadMetrics.responseBodyDecodedSize)
+        metrics->setResponseBodyDecodedSize(*networkLoadMetrics.responseBodyDecodedSize);
+
+    return metrics;
 }
 
 static Ref<Inspector::Protocol::Network::Request> buildObjectForResourceRequest(const ResourceRequest& request)
@@ -211,6 +255,25 @@ static Ref<Inspector::Protocol::Network::Request> buildObjectForResourceRequest(
     return requestObject;
 }
 
+static Inspector::Protocol::Network::Response::Source responseSource(ResourceResponse::Source source)
+{
+    switch (source) {
+    case ResourceResponse::Source::Unknown:
+        return Inspector::Protocol::Network::Response::Source::Unknown;
+    case ResourceResponse::Source::Network:
+        return Inspector::Protocol::Network::Response::Source::Network;
+    case ResourceResponse::Source::MemoryCache:
+    case ResourceResponse::Source::MemoryCacheAfterValidation:
+        return Inspector::Protocol::Network::Response::Source::MemoryCache;
+    case ResourceResponse::Source::DiskCache:
+    case ResourceResponse::Source::DiskCacheAfterValidation:
+        return Inspector::Protocol::Network::Response::Source::DiskCache;
+    }
+
+    ASSERT_NOT_REACHED();
+    return Inspector::Protocol::Network::Response::Source::Unknown;
+}
+
 RefPtr<Inspector::Protocol::Network::Response> InspectorNetworkAgent::buildObjectForResourceResponse(const ResourceResponse& response, ResourceLoader* resourceLoader)
 {
     if (response.isNull())
@@ -225,11 +288,11 @@ RefPtr<Inspector::Protocol::Network::Response> InspectorNetworkAgent::buildObjec
         .setStatusText(response.httpStatusText())
         .setHeaders(WTFMove(headers))
         .setMimeType(response.mimeType())
+        .setSource(responseSource(response.source()))
         .release();
 
-    responseObject->setFromDiskCache(response.source() == ResourceResponse::Source::DiskCache || response.source() == ResourceResponse::Source::DiskCacheAfterValidation);
     if (resourceLoader)
-        responseObject->setTiming(buildObjectForTiming(response.networkLoadTiming(), *resourceLoader));
+        responseObject->setTiming(buildObjectForTiming(response.deprecatedNetworkLoadMetrics(), *resourceLoader));
 
     return WTFMove(responseObject);
 }
@@ -292,29 +355,12 @@ void InspectorNetworkAgent::willSendRequest(unsigned long identifier, DocumentLo
     for (auto& entry : m_extraRequestHeaders)
         request.setHTTPHeaderField(entry.key, entry.value);
 
-    request.setReportLoadTiming(true);
-    request.setReportRawHeaders(true);
-
-    if (m_cacheDisabled) {
-        request.setHTTPHeaderField(HTTPHeaderName::Pragma, "no-cache");
-        request.setCachePolicy(ReloadIgnoringCacheData);
-        request.setHTTPHeaderField(HTTPHeaderName::CacheControl, "no-cache");
-    }
-
     Inspector::Protocol::Page::ResourceType resourceType = InspectorPageAgent::resourceTypeJson(type);
 
     RefPtr<Inspector::Protocol::Network::Initiator> initiatorObject = buildInitiatorObject(loader.frame() ? loader.frame()->document() : nullptr);
     String targetId = request.initiatorIdentifier();
 
     m_frontendDispatcher->requestWillBeSent(requestId, m_pageAgent->frameId(loader.frame()), m_pageAgent->loaderId(&loader), loader.url().string(), buildObjectForResourceRequest(request), timestamp(), initiatorObject, buildObjectForResourceResponse(redirectResponse, nullptr), type != InspectorPageAgent::OtherResource ? &resourceType : nullptr, targetId.isEmpty() ? nullptr : &targetId);
-}
-
-void InspectorNetworkAgent::markResourceAsCached(unsigned long identifier)
-{
-    if (m_hiddenRequestIdentifiers.contains(identifier))
-        return;
-
-    m_frontendDispatcher->requestServedFromCache(IdentifiersFactory::requestId(identifier));
 }
 
 void InspectorNetworkAgent::didReceiveResponse(unsigned long identifier, DocumentLoader& loader, const ResourceResponse& response, ResourceLoader* resourceLoader)
@@ -380,10 +426,18 @@ void InspectorNetworkAgent::didReceiveData(unsigned long identifier, const char*
     m_frontendDispatcher->dataReceived(requestId, timestamp(), dataLength, encodedDataLength);
 }
 
-void InspectorNetworkAgent::didFinishLoading(unsigned long identifier, DocumentLoader& loader, double finishTime)
+void InspectorNetworkAgent::didFinishLoading(unsigned long identifier, DocumentLoader& loader, const NetworkLoadMetrics& networkLoadMetrics, ResourceLoader* resourceLoader)
 {
     if (m_hiddenRequestIdentifiers.remove(identifier))
         return;
+
+    double elapsedFinishTime;
+    if (resourceLoader && networkLoadMetrics.isComplete()) {
+        MonotonicTime startTime = resourceLoader->loadTiming().startTime();
+        double startTimeInInspector = m_environment.executionStopwatch()->elapsedTimeSince(startTime);
+        elapsedFinishTime = startTimeInInspector + networkLoadMetrics.responseEnd.seconds();
+    } else
+        elapsedFinishTime = timestamp();
 
     String requestId = IdentifiersFactory::requestId(identifier);
     if (m_resourcesData->resourceType(requestId) == InspectorPageAgent::DocumentResource)
@@ -391,14 +445,14 @@ void InspectorNetworkAgent::didFinishLoading(unsigned long identifier, DocumentL
 
     m_resourcesData->maybeDecodeDataToContent(requestId);
 
-    double elapsedFinishTime = finishTime ? m_environment.executionStopwatch()->elapsedTimeSince(MonotonicTime::fromRawSeconds(finishTime)) : timestamp();
-
     String sourceMappingURL;
     NetworkResourcesData::ResourceData const* resourceData = m_resourcesData->data(requestId);
     if (resourceData && resourceData->cachedResource())
         sourceMappingURL = InspectorPageAgent::sourceMapURLForResource(resourceData->cachedResource());
 
-    m_frontendDispatcher->loadingFinished(requestId, elapsedFinishTime, !sourceMappingURL.isEmpty() ? &sourceMappingURL : nullptr);
+    RefPtr<Inspector::Protocol::Network::Metrics> metrics = buildObjectForMetrics(networkLoadMetrics);
+
+    m_frontendDispatcher->loadingFinished(requestId, elapsedFinishTime, !sourceMappingURL.isEmpty() ? &sourceMappingURL : nullptr, metrics);
 }
 
 void InspectorNetworkAgent::didFailLoading(unsigned long identifier, DocumentLoader& loader, const ResourceError& error)
@@ -427,10 +481,15 @@ void InspectorNetworkAgent::didLoadResourceFromMemoryCache(DocumentLoader& loade
     String frameId = m_pageAgent->frameId(loader.frame());
     unsigned long identifier = loader.frame()->page()->progress().createUniqueIdentifier();
     String requestId = IdentifiersFactory::requestId(identifier);
+
     m_resourcesData->resourceCreated(requestId, loaderId);
     m_resourcesData->addCachedResource(requestId, &resource);
 
     RefPtr<Inspector::Protocol::Network::Initiator> initiatorObject = buildInitiatorObject(loader.frame() ? loader.frame()->document() : nullptr);
+
+    // FIXME: It would be ideal to generate the Network.Response with the MemoryCache source
+    // instead of whatever ResourceResponse::Source the CachedResources's response has.
+    // The frontend already knows for certain that this was served from the memory cache.
 
     m_frontendDispatcher->requestServedFromMemoryCache(requestId, frameId, loaderId, loader.url().string(), timestamp(), initiatorObject, buildObjectForCachedResource(&resource));
 }
@@ -540,7 +599,7 @@ void InspectorNetworkAgent::willSendWebSocketHandshakeRequest(unsigned long iden
     auto requestObject = Inspector::Protocol::Network::WebSocketRequest::create()
         .setHeaders(buildObjectForHeaders(request.httpHeaderFields()))
         .release();
-    m_frontendDispatcher->webSocketWillSendHandshakeRequest(IdentifiersFactory::requestId(identifier), timestamp(), WTFMove(requestObject));
+    m_frontendDispatcher->webSocketWillSendHandshakeRequest(IdentifiersFactory::requestId(identifier), timestamp(), currentTime(), WTFMove(requestObject));
 }
 
 void InspectorNetworkAgent::didReceiveWebSocketHandshakeResponse(unsigned long identifier, const ResourceResponse& response)
@@ -563,7 +622,8 @@ void InspectorNetworkAgent::didReceiveWebSocketFrame(unsigned long identifier, c
     auto frameObject = Inspector::Protocol::Network::WebSocketFrame::create()
         .setOpcode(frame.opCode)
         .setMask(frame.masked)
-        .setPayloadData(String(frame.payload, frame.payloadLength))
+        .setPayloadData(String::fromUTF8WithLatin1Fallback(frame.payload, frame.payloadLength))
+        .setPayloadLength(frame.payloadLength)
         .release();
     m_frontendDispatcher->webSocketFrameReceived(IdentifiersFactory::requestId(identifier), timestamp(), WTFMove(frameObject));
 }
@@ -573,7 +633,8 @@ void InspectorNetworkAgent::didSendWebSocketFrame(unsigned long identifier, cons
     auto frameObject = Inspector::Protocol::Network::WebSocketFrame::create()
         .setOpcode(frame.opCode)
         .setMask(frame.masked)
-        .setPayloadData(String(frame.payload, frame.payloadLength))
+        .setPayloadData(String::fromUTF8WithLatin1Fallback(frame.payload, frame.payloadLength))
+        .setPayloadLength(frame.payloadLength)
         .release();
     m_frontendDispatcher->webSocketFrameSent(IdentifiersFactory::requestId(identifier), timestamp(), WTFMove(frameObject));
 }
@@ -602,6 +663,8 @@ void InspectorNetworkAgent::disable(ErrorString&)
     m_instrumentingAgents.setInspectorNetworkAgent(nullptr);
     m_resourcesData->clear();
     m_extraRequestHeaders.clear();
+
+    m_pageAgent->page().setResourceCachingDisabledOverride(false);
 }
 
 void InspectorNetworkAgent::setExtraHTTPHeaders(ErrorString&, const InspectorObject& headers)
@@ -646,11 +709,9 @@ void InspectorNetworkAgent::getResponseBody(ErrorString& errorString, const Stri
     errorString = ASCIILiteral("No data found for resource with given identifier");
 }
 
-void InspectorNetworkAgent::setCacheDisabled(ErrorString&, bool cacheDisabled)
+void InspectorNetworkAgent::setResourceCachingDisabled(ErrorString&, bool disabled)
 {
-    m_cacheDisabled = cacheDisabled;
-    if (cacheDisabled)
-        MemoryCache::singleton().evictResources();
+    m_pageAgent->page().setResourceCachingDisabledOverride(disabled);
 }
 
 void InspectorNetworkAgent::loadResource(ErrorString& errorString, const String& frameId, const String& urlString, Ref<LoadResourceCallback>&& callback)
@@ -731,9 +792,6 @@ void InspectorNetworkAgent::searchInRequest(ErrorString& errorString, const Stri
 
 void InspectorNetworkAgent::mainFrameNavigated(DocumentLoader& loader)
 {
-    if (m_cacheDisabled)
-        MemoryCache::singleton().evictResources();
-
     m_resourcesData->clear(m_pageAgent->loaderId(&loader));
 }
 

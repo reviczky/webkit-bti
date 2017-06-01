@@ -71,42 +71,31 @@ class MacOSFullscreenMediaControls extends MacOSMediaControls
             rightMargin: 12
         });
 
-        this.controlsBar.children = [new BackgroundTint, this._leftContainer, this._centerContainer, this._rightContainer, this.timeControl];
+        this.controlsBar.children = [new BackgroundTint, this._leftContainer, this._centerContainer, this._rightContainer];
 
-        this.element.addEventListener("mousedown", this);
-    }
-
-    // Public
-
-    showTracksPanel()
-    {
-        super.showTracksPanel();
-
-        const tracksButtonBounds = this.tracksButton.element.getBoundingClientRect();
-        this.tracksPanel.rightX = window.innerWidth - tracksButtonBounds.right;
-        this.tracksPanel.bottomY = window.innerHeight - tracksButtonBounds.top + 1;
+        this.controlsBar.element.addEventListener("mousedown", this);
     }
 
     // Protected
 
     handleEvent(event)
     {
-        switch (event.type) {
-        case "mousedown":
+        if (event.type === "mousedown" && event.currentTarget === this.controlsBar.element)
             this._handleMousedown(event);
-            break;
-        case "mousemove":
+        else if (event.type === "mousemove" && event.currentTarget === this.element)
             this._handleMousemove(event);
-            break;
-        case "mouseup":
+        else if (event.type === "mouseup" && event.currentTarget === this.element)
             this._handleMouseup(event);
-            break;
-        }
+        else
+            super.handleEvent(event);
     }
 
     layout()
     {
         super.layout();
+
+        if (!this._rightContainer)
+            return;
 
         const numberOfEnabledButtons = this._rightContainer.buttons.filter(button => button.enabled).length;
 
@@ -118,22 +107,30 @@ class MacOSFullscreenMediaControls extends MacOSMediaControls
 
         this._rightContainer.buttonMargin = buttonMargin;
 
+        this._leftContainer.layout();
         this._centerContainer.layout();
         this._rightContainer.layout();
 
-        this.timeControl.width = FullscreenTimeControlWidth;
+        if (this.statusLabel.enabled && this.statusLabel.parent !== this.controlsBar) {
+            this.timeControl.remove();
+            this.controlsBar.addChild(this.statusLabel);
+        } else if (!this.statusLabel.enabled && this.timeControl.parent !== this.controlsBar) {
+            this.statusLabel.remove();
+            this.controlsBar.addChild(this.timeControl);
+            this.timeControl.width = FullscreenTimeControlWidth;
+        }
     }
 
     // Private
 
     _handleMousedown(event)
     {
-        super.handleEvent(event);
-
-        if (event.target !== this.controlsBar.element)
+        // We don't allow dragging when the interaction is initiated on an interactive element. 
+        if (event.target.localName === "button" || event.target.localName === "input")
             return;
 
         event.preventDefault();
+        event.stopPropagation();
 
         this._lastDragPoint = this._pointForEvent(event);
 

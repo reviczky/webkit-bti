@@ -28,17 +28,22 @@
 
 #include "APIProcessPoolConfiguration.h"
 #include "APIWebsiteDataRecord.h"
+#include "DatabaseProcessCreationParameters.h"
 #include "NetworkProcessMessages.h"
 #include "StorageManager.h"
+#include "WebCookieManagerProxy.h"
 #include "WebProcessMessages.h"
 #include "WebProcessPool.h"
 #include "WebResourceLoadStatisticsStore.h"
 #include "WebResourceLoadStatisticsStoreMessages.h"
 #include "WebsiteData.h"
+#include "WebsiteDataStoreParameters.h"
 #include <WebCore/ApplicationCacheStorage.h>
 #include <WebCore/DatabaseTracker.h>
+#include <WebCore/FileSystem.h>
 #include <WebCore/HTMLMediaElement.h>
 #include <WebCore/OriginLock.h>
+#include <WebCore/ResourceLoadObserver.h>
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SecurityOriginData.h>
 #include <wtf/RunLoop.h>
@@ -49,14 +54,6 @@
 
 namespace WebKit {
 
-static WebCore::SessionID generateNonPersistentSessionID()
-{
-    // FIXME: We count backwards here to not conflict with API::Session.
-    static uint64_t sessionID = std::numeric_limits<uint64_t>::max();
-
-    return WebCore::SessionID(--sessionID);
-}
-
 static uint64_t generateIdentifier()
 {
     static uint64_t identifier;
@@ -66,17 +63,17 @@ static uint64_t generateIdentifier()
 
 Ref<WebsiteDataStore> WebsiteDataStore::createNonPersistent()
 {
-    return adoptRef(*new WebsiteDataStore(generateNonPersistentSessionID()));
+    return adoptRef(*new WebsiteDataStore(WebCore::SessionID::generateEphemeralSessionID()));
 }
 
-Ref<WebsiteDataStore> WebsiteDataStore::create(Configuration configuration)
+Ref<WebsiteDataStore> WebsiteDataStore::create(Configuration configuration, WebCore::SessionID sessionID)
 {
-    return adoptRef(*new WebsiteDataStore(WTFMove(configuration)));
+    return adoptRef(*new WebsiteDataStore(WTFMove(configuration), sessionID));
 }
 
-WebsiteDataStore::WebsiteDataStore(Configuration configuration)
+WebsiteDataStore::WebsiteDataStore(Configuration configuration, WebCore::SessionID sessionID)
     : m_identifier(generateIdentifier())
-    , m_sessionID(WebCore::SessionID::defaultSessionID())
+    , m_sessionID(sessionID)
     , m_configuration(WTFMove(configuration))
     , m_storageManager(StorageManager::create(m_configuration.localStorageDirectory))
     , m_resourceLoadStatistics(WebResourceLoadStatisticsStore::create(m_configuration.resourceLoadStatisticsDirectory))
@@ -98,9 +95,40 @@ WebsiteDataStore::~WebsiteDataStore()
 {
     platformDestroy();
 
-    if (m_sessionID.isEphemeral()) {
+    if (m_sessionID.isValid() && m_sessionID != WebCore::SessionID::defaultSessionID()) {
         for (auto& processPool : WebProcessPool::allProcessPools())
-            processPool->sendToNetworkingProcess(Messages::NetworkProcess::DestroyPrivateBrowsingSession(m_sessionID));
+            processPool->sendToNetworkingProcess(Messages::NetworkProcess::DestroySession(m_sessionID));
+    }
+}
+
+WebProcessPool* WebsiteDataStore::processPoolForCookieStorageOperations()
+{
+    auto pools = processPools(1, false);
+    return pools.isEmpty() ? nullptr : pools.begin()->get();
+}
+
+void WebsiteDataStore::resolveDirectoriesIfNecessary()
+{
+    if (m_hasResolvedDirectories)
+        return;
+    m_hasResolvedDirectories = true;
+
+    // Resolve directory paths.
+    m_resolvedConfiguration.applicationCacheDirectory = resolveAndCreateReadWriteDirectoryForSandboxExtension(m_configuration.applicationCacheDirectory);
+    m_resolvedConfiguration.mediaCacheDirectory = resolveAndCreateReadWriteDirectoryForSandboxExtension(m_configuration.mediaCacheDirectory);
+    m_resolvedConfiguration.mediaKeysStorageDirectory = resolveAndCreateReadWriteDirectoryForSandboxExtension(m_configuration.mediaKeysStorageDirectory);
+    m_resolvedConfiguration.webSQLDatabaseDirectory = resolveAndCreateReadWriteDirectoryForSandboxExtension(m_configuration.webSQLDatabaseDirectory);
+
+    if (!m_configuration.indexedDBDatabaseDirectory.isEmpty())
+        m_resolvedConfiguration.indexedDBDatabaseDirectory = resolveAndCreateReadWriteDirectoryForSandboxExtension(m_configuration.indexedDBDatabaseDirectory);
+
+    if (!m_configuration.javaScriptConfigurationDirectory.isEmpty())
+        m_resolvedConfiguration.javaScriptConfigurationDirectory = resolvePathForSandboxExtension(m_configuration.javaScriptConfigurationDirectory);
+
+    // Resolve directories for file paths.
+    if (!m_configuration.cookieStorageFile.isEmpty()) {
+        m_resolvedConfiguration.cookieStorageFile = resolveAndCreateReadWriteDirectoryForSandboxExtension(WebCore::directoryName(m_configuration.cookieStorageFile));
+        m_resolvedConfiguration.cookieStorageFile = WebCore::pathByAppendingComponent(m_resolvedConfiguration.cookieStorageFile, WebCore::pathGetFileName(m_configuration.cookieStorageFile));
     }
 }
 
@@ -257,7 +285,7 @@ void WebsiteDataStore::fetchData(OptionSet<WebsiteDataType> dataTypes, OptionSet
 #if ENABLE(VIDEO)
     if (dataTypes.contains(WebsiteDataType::DiskCache)) {
         callbackAggregator->addPendingCallback();
-        m_queue->dispatch([fetchOptions, mediaCacheDirectory = m_configuration.mediaCacheDirectory.isolatedCopy(), callbackAggregator] {
+        m_queue->dispatch([mediaCacheDirectory = m_configuration.mediaCacheDirectory.isolatedCopy(), callbackAggregator] {
             // FIXME: Make HTMLMediaElement::originsInMediaCache return a collection of SecurityOriginDatas.
             HashSet<RefPtr<WebCore::SecurityOrigin>> origins = WebCore::HTMLMediaElement::originsInMediaCache(mediaCacheDirectory);
             WebsiteData websiteData;
@@ -391,7 +419,7 @@ void WebsiteDataStore::fetchData(OptionSet<WebsiteDataType> dataTypes, OptionSet
 #if ENABLE(DATABASE_PROCESS)
     if (dataTypes.contains(WebsiteDataType::IndexedDBDatabases) && isPersistent()) {
         for (auto& processPool : processPools()) {
-            processPool->ensureDatabaseProcess();
+            processPool->ensureDatabaseProcessAndWebsiteDataStore(this);
 
             callbackAggregator->addPendingCallback();
             processPool->databaseProcess()->fetchWebsiteData(m_sessionID, dataTypes, [callbackAggregator, processPool](WebsiteData websiteData) {
@@ -473,35 +501,38 @@ void WebsiteDataStore::fetchData(OptionSet<WebsiteDataType> dataTypes, OptionSet
     callbackAggregator->callIfNeeded();
 }
 
-void WebsiteDataStore::fetchDataForTopPrivatelyOwnedDomains(OptionSet<WebsiteDataType> dataTypes, OptionSet<WebsiteDataFetchOption> fetchOptions, const Vector<String>& topPrivatelyOwnedDomains, std::function<void(Vector<WebsiteDataRecord>)> completionHandler)
+void WebsiteDataStore::fetchDataForTopPrivatelyControlledDomains(OptionSet<WebsiteDataType> dataTypes, OptionSet<WebsiteDataFetchOption> fetchOptions, Vector<String>&& topPrivatelyControlledDomains, std::function<void(Vector<WebsiteDataRecord>&&, Vector<String>&&)> completionHandler)
 {
-    fetchData(dataTypes, fetchOptions, [topPrivatelyOwnedDomains, completionHandler, this](auto existingDataRecords) {
+    fetchData(dataTypes, fetchOptions, [topPrivatelyControlledDomains = WTFMove(topPrivatelyControlledDomains), completionHandler](auto&& existingDataRecords) {
         Vector<WebsiteDataRecord> matchingDataRecords;
-        Vector<String> domainsWithDataRecords;
-        for (auto& dataRecord : existingDataRecords) {
-            bool dataRecordAdded;
-            for (auto& dataRecordOriginData : dataRecord.origins) {
-                dataRecordAdded = false;
-                String dataRecordHost = dataRecordOriginData.securityOrigin().get().host();
-                for (auto& topPrivatelyOwnedDomain : topPrivatelyOwnedDomains) {
-                    if (dataRecordHost.endsWithIgnoringASCIICase(topPrivatelyOwnedDomain)) {
-                        auto suffixStart = dataRecordHost.length() - topPrivatelyOwnedDomain.length();
-                        if (!suffixStart || dataRecordHost[suffixStart - 1] == '.') {
-                            matchingDataRecords.append(dataRecord);
-                            domainsWithDataRecords.append(topPrivatelyOwnedDomain);
-                            dataRecordAdded = true;
-                            break;
-                        }
-                    }
-                }
-                if (dataRecordAdded)
+        Vector<String> domainsWithMatchingDataRecords;
+        for (auto&& dataRecord : existingDataRecords) {
+            for (auto&& topPrivatelyControlledDomain : topPrivatelyControlledDomains) {
+                if (dataRecord.matchesTopPrivatelyControlledDomain(topPrivatelyControlledDomain)) {
+                    matchingDataRecords.append(WTFMove(dataRecord));
+                    domainsWithMatchingDataRecords.append(topPrivatelyControlledDomain);
                     break;
+                }
             }
         }
-        completionHandler(matchingDataRecords);
+        completionHandler(WTFMove(matchingDataRecords), WTFMove(domainsWithMatchingDataRecords));
     });
 }
     
+void WebsiteDataStore::topPrivatelyControlledDomainsWithWebsiteData(OptionSet<WebsiteDataType> dataTypes, OptionSet<WebsiteDataFetchOption> fetchOptions, std::function<void(HashSet<String>&&)> completionHandler)
+{
+    fetchData(dataTypes, fetchOptions, [completionHandler, this](auto&& existingDataRecords) {
+        HashSet<String> domainsWithDataRecords;
+        for (auto&& dataRecord : existingDataRecords) {
+            String domain = dataRecord.topPrivatelyControlledDomain();
+            if (domain.isEmpty())
+                continue;
+            domainsWithDataRecords.add(domain);
+        }
+        completionHandler(WTFMove(domainsWithDataRecords));
+    });
+}
+
 static ProcessAccessType computeNetworkProcessAccessTypeForDataRemoval(OptionSet<WebsiteDataType> dataTypes, bool isNonPersistentStore)
 {
     ProcessAccessType processAccessType = ProcessAccessType::None;
@@ -674,7 +705,7 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, std::chr
 #if ENABLE(DATABASE_PROCESS)
     if (dataTypes.contains(WebsiteDataType::IndexedDBDatabases) && isPersistent()) {
         for (auto& processPool : processPools()) {
-            processPool->ensureDatabaseProcess();
+            processPool->ensureDatabaseProcessAndWebsiteDataStore(this);
 
             callbackAggregator->addPendingCallback();
             processPool->databaseProcess()->deleteWebsiteData(m_sessionID, dataTypes, modifiedSince, [callbackAggregator, processPool] {
@@ -756,6 +787,9 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, std::chr
         State::deleteData(*callbackAggregator, plugins(), modifiedSince);
     }
 #endif
+
+    if (dataTypes.contains(WebsiteDataType::WebsiteDataTypeResourceLoadStatistics))
+        WebCore::ResourceLoadObserver::sharedObserver().clearInMemoryAndPersistentStore(modifiedSince);
 
     // There's a chance that we don't have any pending callbacks. If so, we want to dispatch the completion handler right away.
     callbackAggregator->callIfNeeded();
@@ -939,7 +973,7 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, const Ve
 #if ENABLE(DATABASE_PROCESS)
     if (dataTypes.contains(WebsiteDataType::IndexedDBDatabases) && isPersistent()) {
         for (auto& processPool : processPools()) {
-            processPool->ensureDatabaseProcess();
+            processPool->ensureDatabaseProcessAndWebsiteDataStore(this);
 
             callbackAggregator->addPendingCallback();
             processPool->databaseProcess()->deleteWebsiteDataForOrigins(m_sessionID, dataTypes, origins, [callbackAggregator, processPool] {
@@ -1023,18 +1057,29 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, const Ve
     }
 #endif
 
+    if (dataTypes.contains(WebsiteDataType::WebsiteDataTypeResourceLoadStatistics))
+        WebCore::ResourceLoadObserver::sharedObserver().clearInMemoryAndPersistentStore();
+
     // There's a chance that we don't have any pending callbacks. If so, we want to dispatch the completion handler right away.
     callbackAggregator->callIfNeeded();
 }
 
-void WebsiteDataStore::removeDataForTopPrivatelyOwnedDomains(OptionSet<WebsiteDataType> dataTypes, OptionSet<WebsiteDataFetchOption> fetchOptions, const Vector<String>& topPrivatelyOwnedDomains, std::function<void()> completionHandler)
+void WebsiteDataStore::removeDataForTopPrivatelyControlledDomains(OptionSet<WebsiteDataType> dataTypes, OptionSet<WebsiteDataFetchOption> fetchOptions, Vector<String>&& topPrivatelyControlledDomains, std::function<void(Vector<String>)> completionHandler)
 {
-    fetchDataForTopPrivatelyOwnedDomains(dataTypes, fetchOptions, topPrivatelyOwnedDomains, [dataTypes, completionHandler, this](auto websiteDataRecords) {
-        this->removeData(dataTypes, websiteDataRecords, [completionHandler]() {
-            completionHandler();
+    fetchDataForTopPrivatelyControlledDomains(dataTypes, fetchOptions, WTFMove(topPrivatelyControlledDomains), [dataTypes, completionHandler, this](auto websiteDataRecords, auto domainsWithDataRecords) {
+        this->removeData(dataTypes, websiteDataRecords, [domainsWithDataRecords, completionHandler]() {
+            completionHandler(domainsWithDataRecords);
         });
     });
 }
+
+#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+void WebsiteDataStore::shouldPartitionCookiesForTopPrivatelyOwnedDomains(const Vector<String>& domainsToRemove, const Vector<String>& domainsToAdd, bool clearFirst)
+{
+    for (auto& processPool : WebProcessPool::allProcessPools())
+        processPool->sendToNetworkingProcess(Messages::NetworkProcess::ShouldPartitionCookiesForTopPrivatelyOwnedDomains(domainsToRemove, domainsToAdd, clearFirst));
+}
+#endif
 
 void WebsiteDataStore::webPageWasAdded(WebPageProxy& webPageProxy)
 {
@@ -1078,7 +1123,12 @@ void WebsiteDataStore::webProcessDidCloseConnection(WebProcessProxy& webProcessP
         m_storageManager->processDidCloseConnection(webProcessProxy, connection);
 }
 
-HashSet<RefPtr<WebProcessPool>> WebsiteDataStore::processPools() const
+bool WebsiteDataStore::isAssociatedProcessPool(WebProcessPool& processPool) const
+{
+    return &processPool.websiteDataStore().websiteDataStore() == this;
+}
+
+HashSet<RefPtr<WebProcessPool>> WebsiteDataStore::processPools(size_t count, bool ensureAPoolExists) const
 {
     HashSet<RefPtr<WebProcessPool>> processPools;
     for (auto& process : processes())
@@ -1087,16 +1137,17 @@ HashSet<RefPtr<WebProcessPool>> WebsiteDataStore::processPools() const
     if (processPools.isEmpty()) {
         // Check if we're one of the legacy data stores.
         for (auto& processPool : WebProcessPool::allProcessPools()) {
-            if (auto dataStore = processPool->websiteDataStore()) {
-                if (&dataStore->websiteDataStore() == this) {
-                    processPools.add(processPool);
-                    break;
-                }
-            }
+            if (!isAssociatedProcessPool(*processPool))
+                continue;
+
+            processPools.add(processPool);
+
+            if (processPools.size() == count)
+                break;
         }
     }
 
-    if (processPools.isEmpty()) {
+    if (processPools.isEmpty() && count && ensureAPoolExists) {
         auto processPool = WebProcessPool::create(API::ProcessPoolConfiguration::createWithWebsiteDataStoreConfiguration(m_configuration));
         processPools.add(processPool.ptr());
     }
@@ -1200,8 +1251,59 @@ void WebsiteDataStore::registerSharedResourceLoadObserver()
 {
     if (!m_resourceLoadStatistics)
         return;
-
+    
+#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+    m_resourceLoadStatistics->registerSharedResourceLoadObserver(
+        [this] (const Vector<String>& domainsToRemove, const Vector<String>& domainsToAdd, bool clearFirst) {
+            this->shouldPartitionCookiesForTopPrivatelyOwnedDomains(domainsToRemove, domainsToAdd, clearFirst);
+        });
+#else
     m_resourceLoadStatistics->registerSharedResourceLoadObserver();
+#endif
 }
+
+DatabaseProcessCreationParameters WebsiteDataStore::databaseProcessParameters()
+{
+    resolveDirectoriesIfNecessary();
+
+    DatabaseProcessCreationParameters parameters;
+
+    parameters.sessionID = m_sessionID;
+
+#if ENABLE(INDEXED_DATABASE)
+    parameters.indexedDatabaseDirectory = resolvedIndexedDatabaseDirectory();
+    if (!parameters.indexedDatabaseDirectory.isEmpty())
+        SandboxExtension::createHandleForReadWriteDirectory(parameters.indexedDatabaseDirectory, parameters.indexedDatabaseDirectoryExtensionHandle);
+#endif
+
+    return parameters;
+}
+
+Vector<WebCore::Cookie> WebsiteDataStore::pendingCookies() const
+{
+    Vector<WebCore::Cookie> cookies;
+    copyToVector(m_pendingCookies, cookies);
+    return cookies;
+}
+
+void WebsiteDataStore::addPendingCookie(const WebCore::Cookie& cookie)
+{
+    m_pendingCookies.add(cookie);
+}
+
+void WebsiteDataStore::removePendingCookie(const WebCore::Cookie& cookie)
+{
+    m_pendingCookies.remove(cookie);
+}
+
+#if !PLATFORM(COCOA)
+WebsiteDataStoreParameters WebsiteDataStore::parameters()
+{
+    // FIXME: Implement cookies.
+    WebsiteDataStoreParameters parameters;
+    parameters.sessionID = m_sessionID;
+    return parameters;
+}
+#endif
 
 }

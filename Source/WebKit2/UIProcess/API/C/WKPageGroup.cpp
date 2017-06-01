@@ -26,7 +26,7 @@
 #include "config.h"
 #include "WKPageGroup.h"
 
-#include "APIUserContentExtension.h"
+#include "APIContentRuleList.h"
 #include "APIUserContentWorld.h"
 #include "APIUserScript.h"
 #include "APIUserStyleSheet.h"
@@ -45,7 +45,7 @@ WKTypeID WKPageGroupGetTypeID()
 WKPageGroupRef WKPageGroupCreateWithIdentifier(WKStringRef identifier)
 {
     auto pageGroup = WebPageGroup::create(toWTFString(identifier));
-    return toAPI(pageGroup.leakRef());
+    return toAPI(&pageGroup.leakRef());
 }
 
 void WKPageGroupSetPreferences(WKPageGroupRef pageGroupRef, WKPreferencesRef preferencesRef)

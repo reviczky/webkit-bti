@@ -39,7 +39,6 @@
 #include "JSMainThreadExecState.h"
 #include "LoadableModuleScript.h"
 #include "MainFrame.h"
-#include "MemoryPressureHandler.h"
 #include "ModuleFetchFailureKind.h"
 #include "NP_jsobject.h"
 #include "Page.h"
@@ -63,6 +62,7 @@
 #include <runtime/JSModuleRecord.h>
 #include <runtime/JSNativeStdFunction.h>
 #include <runtime/JSScriptFetcher.h>
+#include <wtf/MemoryPressureHandler.h>
 #include <wtf/SetForScope.h>
 #include <wtf/Threading.h>
 #include <wtf/text/TextPosition.h>
@@ -529,15 +529,15 @@ Bindings::RootObject* ScriptController::bindingRootObject()
     return m_bindingRootObject.get();
 }
 
-RefPtr<Bindings::RootObject> ScriptController::createRootObject(void* nativeHandle)
+Ref<Bindings::RootObject> ScriptController::createRootObject(void* nativeHandle)
 {
     RootObjectMap::iterator it = m_rootObjects.find(nativeHandle);
     if (it != m_rootObjects.end())
-        return it->value;
+        return it->value.copyRef();
 
-    RefPtr<Bindings::RootObject> rootObject = Bindings::RootObject::create(nativeHandle, globalObject(pluginWorld()));
+    auto rootObject = Bindings::RootObject::create(nativeHandle, globalObject(pluginWorld()));
 
-    m_rootObjects.set(nativeHandle, rootObject);
+    m_rootObjects.set(nativeHandle, rootObject.copyRef());
     return rootObject;
 }
 

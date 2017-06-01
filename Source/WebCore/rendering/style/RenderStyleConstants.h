@@ -508,26 +508,31 @@ enum EVisibility { VISIBLE, HIDDEN, COLLAPSE };
 enum ECursor {
     // The following must match the order in CSSValueKeywords.in.
     CursorAuto,
-    CursorCross,
     CursorDefault,
-    CursorPointer,
-    CursorMove,
-    CursorVerticalText,
-    CursorCell,
+    // CursorNone
     CursorContextMenu,
-    CursorAlias,
+    CursorHelp,
+    CursorPointer,
     CursorProgress,
+    CursorWait,
+    CursorCell,
+    CursorCrosshair,
+    CursorText,
+    CursorVerticalText,
+    CursorAlias,
+    // CursorCopy
+    CursorMove,
     CursorNoDrop,
     CursorNotAllowed,
-    CursorZoomIn,
-    CursorZoomOut,
+    CursorGrab,
+    CursorGrabbing,
     CursorEResize,
+    CursorNResize,
     CursorNeResize,
     CursorNwResize,
-    CursorNResize,
+    CursorSResize,
     CursorSeResize,
     CursorSwResize,
-    CursorSResize,
     CursorWResize,
     CursorEwResize,
     CursorNsResize,
@@ -535,12 +540,9 @@ enum ECursor {
     CursorNwseResize,
     CursorColResize,
     CursorRowResize,
-    CursorText,
-    CursorWait,
-    CursorHelp,
     CursorAllScroll,
-    CursorWebkitGrab,
-    CursorWebkitGrabbing,
+    CursorZoomIn,
+    CursorZoomOut,
 
     // The following are handled as exceptions so don't need to match.
     CursorCopy,
@@ -725,5 +727,24 @@ TextStream& operator<<(TextStream&, EFillBox);
 TextStream& operator<<(TextStream&, EFillRepeat);
 TextStream& operator<<(TextStream&, EMaskSourceType);
 TextStream& operator<<(TextStream&, Edge);
+
+// These are all minimized combinations of paint-order.
+enum class PaintOrder {
+    Normal,
+    Fill,
+    FillMarkers,
+    Stroke,
+    StrokeMarkers,
+    Markers,
+    MarkersStroke
+};
+
+enum class PaintType {
+    Fill,
+    Stroke,
+    Markers
+};
+
+extern const float defaultMiterLimit;
 
 } // namespace WebCore

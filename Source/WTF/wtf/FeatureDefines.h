@@ -239,10 +239,6 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #define ENABLE_INPUT_TYPE_COLOR_POPOVER 1
 #endif
 
-#if !defined(ENABLE_FILE_REPLACEMENT)
-#define ENABLE_FILE_REPLACEMENT 1
-#endif
-
 #if !defined(ENABLE_PRIMARY_SNAPSHOTTED_PLUGIN_HEURISTIC)
 #define ENABLE_PRIMARY_SNAPSHOTTED_PLUGIN_HEURISTIC 1
 #endif
@@ -257,6 +253,10 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 
 #if !defined(ENABLE_DATA_DETECTION)
 #define ENABLE_DATA_DETECTION 1
+#endif
+
+#if !defined(ENABLE_FILE_REPLACEMENT)
+#define ENABLE_FILE_REPLACEMENT 1
 #endif
 
 #if !defined(ENABLE_KEYBOARD_KEY_ATTRIBUTE)
@@ -538,10 +538,6 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #define ENABLE_LEGACY_ENCRYPTED_MEDIA 0
 #endif
 
-#if !defined(ENABLE_LEGACY_NOTIFICATIONS)
-#define ENABLE_LEGACY_NOTIFICATIONS 0
-#endif
-
 #if !defined(ENABLE_LEGACY_VENDOR_PREFIXES)
 #define ENABLE_LEGACY_VENDOR_PREFIXES 0
 #endif
@@ -664,27 +660,8 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #define ENABLE_SPELLCHECK 0
 #endif
 
-#if !defined(ENABLE_READABLE_STREAM_API)
-#if PLATFORM(WIN)
-#define ENABLE_READABLE_STREAM_API 0
-#else
-#define ENABLE_READABLE_STREAM_API 1
-#endif
-#if !defined(ENABLE_READABLE_BYTE_STREAM_API)
-#if PLATFORM(WIN)
-#define ENABLE_READABLE_BYTE_STREAM_API 0
-#else
-#define ENABLE_READABLE_BYTE_STREAM_API 1
-#endif
-#endif
-#endif
-
-#if !defined(ENABLE_WRITABLE_STREAM_API)
-#if PLATFORM(WIN)
-#define ENABLE_WRITABLE_STREAM_API 0
-#else
-#define ENABLE_WRITABLE_STREAM_API 1
-#endif
+#if !defined(ENABLE_STREAMS_API)
+#define ENABLE_STREAMS_API 1
 #endif
 
 #if !defined(ENABLE_SVG_FONTS)
@@ -709,10 +686,6 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 
 #if !defined(ENABLE_TOUCH_ICON_LOADING)
 #define ENABLE_TOUCH_ICON_LOADING 0
-#endif
-
-#if !defined(ENABLE_VIBRATION)
-#define ENABLE_VIBRATION 0
 #endif
 
 #if !defined(ENABLE_VIDEO)

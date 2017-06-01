@@ -23,8 +23,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-const CompactModeMaxWidth = 241;
-const ReducedPaddingMaxWidth = 300;
 const AudioTightPaddingMaxWidth = 400;
 
 class MediaController
@@ -38,14 +36,16 @@ class MediaController
 
         this.container = shadowRoot.appendChild(document.createElement("div"));
         this.container.className = "media-controls-container";
-        this.container.addEventListener("click", this, true);
 
         if (host) {
             host.controlsDependOnPageScaleFactor = this.layoutTraits & LayoutTraits.iOS;
             this.container.appendChild(host.textTrackContainer);
+            if (host.isInMediaDocument)
+                this.mediaDocumentController = new MediaDocumentController(this);
         }
 
         this._updateControlsIfNeeded();
+        scheduler.flushScheduledLayoutCallbacks();
 
         shadowRoot.addEventListener("resize", this);
 
@@ -60,6 +60,19 @@ class MediaController
 
     // Public
 
+    get isAudio()
+    {
+        if (this.media instanceof HTMLAudioElement)
+            return true;
+
+        if (this.media.readyState < HTMLMediaElement.HAVE_METADATA)
+            return false;
+
+        const isLiveBroadcast = this.media.duration === Number.POSITIVE_INFINITY;
+        const hasVideoTracks = this.media.videoWidth != 0;
+        return !isLiveBroadcast && !hasVideoTracks;
+    }
+
     get layoutTraits()
     {
         let traits = window.navigator.platform === "MacIntel" ? LayoutTraits.macOS : LayoutTraits.iOS;
@@ -69,16 +82,11 @@ class MediaController
         } else if (this.media.webkitDisplayingFullscreen)
             return traits | LayoutTraits.Fullscreen;
 
-        const controlsWidth = this._controlsWidth();
-        if (controlsWidth <= CompactModeMaxWidth)
+        if (traits & LayoutTraits.macOS)
             return traits | LayoutTraits.Compact;
 
-        const isAudio = this.media instanceof HTMLAudioElement || this.media.videoTracks.length === 0;
-        if (isAudio && controlsWidth <= AudioTightPaddingMaxWidth)
+        if (this.isAudio && this._controlsWidth() <= AudioTightPaddingMaxWidth)
             return traits | LayoutTraits.TightPadding;
-
-        if (!isAudio && controlsWidth <= ReducedPaddingMaxWidth)
-            return traits | LayoutTraits.ReducedPadding;
 
         return traits;
     }
@@ -104,6 +112,11 @@ class MediaController
         this.controls.usesLTRUserInterfaceLayoutDirection = flag;
     }
 
+    controlsBarFadedStateDidChange()
+    {
+        this._updateTextTracksClassList();
+    }
+
     macOSControlsBackgroundWasClicked()
     {
         // Toggle playback when clicking on the video but not on any controls on macOS.
@@ -115,11 +128,11 @@ class MediaController
     {
         if (event instanceof TrackEvent && event.currentTarget === this.media.videoTracks)
             this._updateControlsIfNeeded();
-        else if (event.type === "resize" && event.currentTarget === this.shadowRoot)
+        else if (event.type === "resize" && event.currentTarget === this.shadowRoot) {
             this._updateControlsIfNeeded();
-        else if (event.type === "click" && event.currentTarget === this.container)
-            this._containerWasClicked(event);
-        else if (event.currentTarget === this.media) {
+            // We must immediately perform layouts so that we don't lag behind the media layout size.
+            scheduler.flushScheduledLayoutCallbacks();
+        } else if (event.currentTarget === this.media) {
             this._updateControlsIfNeeded();
             if (event.type === "webkitpresentationmodechanged")
                 this._returnMediaLayerToInlineIfNeeded();
@@ -128,13 +141,6 @@ class MediaController
 
     // Private
 
-    _containerWasClicked(event)
-    {
-        // We need to call preventDefault() here since, in the case of Media Documents,
-        // playback may be toggled when clicking on the video.
-        event.preventDefault();
-    }
-
     _updateControlsIfNeeded()
     {
         const layoutTraits = this.layoutTraits;
@@ -142,6 +148,7 @@ class MediaController
         const ControlsClass = this._controlsClassForLayoutTraits(layoutTraits);
         if (previousControls && previousControls.constructor === ControlsClass) {
             this.controls.layoutTraits = layoutTraits;
+            this._updateTextTracksClassList();
             this._updateControlsSize();
             return;
         }
@@ -167,6 +174,7 @@ class MediaController
             this.container.appendChild(this.controls.element);
 
         this.controls.layoutTraits = layoutTraits;
+        this._updateTextTracksClassList();
         this._updateControlsSize();
 
         this._supportingObjects = [AirplaySupport, ControlsVisibilitySupport, FullscreenSupport, MuteSupport, PiPSupport, PlacardSupport, PlaybackSupport, ScrubbingSupport, SeekBackwardSupport, SeekForwardSupport, SkipBackSupport, StartSupport, StatusSupport, TimeLabelsSupport, TracksSupport, VolumeSupport, VolumeDownSupport, VolumeUpSupport].map(SupportClass => {
@@ -177,12 +185,13 @@ class MediaController
     _updateControlsSize()
     {
         this.controls.width = this._controlsWidth();
-        this.controls.height = Math.round(this.media.offsetHeight * this.controls.scaleFactor);
+        this.controls.height = Math.round(this.container.getBoundingClientRect().height * this.controls.scaleFactor);
+        this.controls.shouldCenterControlsVertically = this.isAudio;
     }
 
     _controlsWidth()
     {
-        return Math.round(this.media.offsetWidth * (this.controls ? this.controls.scaleFactor : 1));
+        return Math.round(this.container.getBoundingClientRect().width * (this.controls ? this.controls.scaleFactor : 1));
     }
 
     _returnMediaLayerToInlineIfNeeded()
@@ -198,6 +207,19 @@ class MediaController
         if (layoutTraits & LayoutTraits.Fullscreen)
             return MacOSFullscreenMediaControls;
         return MacOSInlineMediaControls;
+    }
+
+    _updateTextTracksClassList()
+    {
+        if (!this.host)
+            return;
+
+        const layoutTraits = this.layoutTraits;
+        if (layoutTraits & LayoutTraits.Fullscreen)
+            return;
+
+        this.host.textTrackContainer.classList.toggle("visible-controls-bar", !this.controls.controlsBar.faded);
+        this.host.textTrackContainer.classList.toggle("compact-controls-bar", !!(layoutTraits & LayoutTraits.Compact));
     }
 
 }

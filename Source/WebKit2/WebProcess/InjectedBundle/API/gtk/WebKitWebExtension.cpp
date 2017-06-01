@@ -185,7 +185,7 @@ static void didReceiveMessage(WKBundleRef, WKStringRef name, WKTypeRef messageBo
 static void didReceiveMessageToPage(WKBundleRef, WKBundlePageRef page, WKStringRef name, WKTypeRef messageBody, const void* clientInfo)
 {
     ASSERT(WKGetTypeID(messageBody) == WKDictionaryGetTypeID());
-    if (WebKitWebPage* webPage = WEBKIT_WEB_EXTENSION(clientInfo)->priv->pages.get(toImpl(page)).get())
+    if (WebKitWebPage* webPage = WEBKIT_WEB_EXTENSION(clientInfo)->priv->pages.get(toImpl(page)))
         webkitWebPageDidReceiveMessage(webPage, toImpl(name)->string(), *toImpl(static_cast<WKDictionaryRef>(messageBody)));
 }
 
@@ -217,7 +217,7 @@ WebKitWebExtension* webkitWebExtensionCreate(InjectedBundle* bundle)
  * Get the web page of the given @page_id.
  *
  * Returns: (transfer none): the #WebKitWebPage for the given @page_id, or %NULL if the
- *    identifier doesn't correspond to an exsiting web page.
+ *    identifier doesn't correspond to an existing web page.
  */
 WebKitWebPage* webkit_web_extension_get_page(WebKitWebExtension* extension, guint64 pageID)
 {

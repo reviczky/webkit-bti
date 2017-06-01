@@ -40,6 +40,9 @@ class ControlsBar extends LayoutNode
 
         this.fadesWhileIdle = false;
         this.userInteractionEnabled = true;
+        this.hasSecondaryUIAttached = false;
+
+        this.element.addEventListener("focusin", this);
     }
 
     // Public
@@ -144,6 +147,8 @@ class ControlsBar extends LayoutNode
             delete this._enforceAutoHideTimer;
 
         this.markDirtyProperty("faded");
+
+        this._mediaControls.controlsBarFadedStateDidChange();
     }
 
     // Protected
@@ -154,7 +159,7 @@ class ControlsBar extends LayoutNode
             if (event.type === "mousemove") {
                 this.faded = false;
                 this._resetAutoHideTimer(true);
-            } else if (event.type === "mouseleave" && this._fadesWhileIdle && !this._enforceAutoHideTimer)
+            } else if (event.type === "mouseleave" && this._fadesWhileIdle && !this.hasSecondaryUIAttached && !this._enforceAutoHideTimer)
                 this.faded = true;
         } else if (event.currentTarget === this.element) {
             if (event.type === "mouseenter") {
@@ -163,7 +168,7 @@ class ControlsBar extends LayoutNode
             } else if (event.type === "mouseleave") {
                 delete this._disableAutoHiding;
                 this._resetAutoHideTimer(true);
-            } else if (event.type === "focus")
+            } else if (event.type === "focusin")
                 this.faded = false;
         }
     }
@@ -240,7 +245,7 @@ class ControlsBar extends LayoutNode
             return;
 
         this._cancelAutoHideTimer();
-        this.faded = this._fadesWhileIdle;
+        this.faded = this._fadesWhileIdle && !this.hasSecondaryUIAttached;
     }
 
 }

@@ -26,8 +26,10 @@
 #include "config.h"
 #include "FontFace.h"
 
+#include "CSSComputedStyleDeclaration.h"
 #include "CSSFontFaceSource.h"
 #include "CSSFontFeatureValue.h"
+#include "CSSFontStyleValue.h"
 #include "CSSParser.h"
 #include "CSSUnicodeRangeValue.h"
 #include "CSSValueList.h"
@@ -39,6 +41,7 @@
 #include <runtime/ArrayBuffer.h>
 #include <runtime/ArrayBufferView.h>
 #include <runtime/JSCInlines.h>
+#include <wtf/text/StringBuilder.h>
 
 namespace WebCore {
 
@@ -104,7 +107,8 @@ ExceptionOr<Ref<FontFace>> FontFace::create(Document& document, const String& fa
 
     if (!dataRequiresAsynchronousLoading) {
         result->backing().load();
-        ASSERT(result->backing().status() == CSSFontFace::Status::Success);
+        auto status = result->backing().status();
+        ASSERT_UNUSED(status, status == CSSFontFace::Status::Success || status == CSSFontFace::Status::Failure);
     }
 
     return WTFMove(result);
@@ -163,12 +167,11 @@ ExceptionOr<void> FontFace::setStyle(const String& style)
     if (style.isEmpty())
         return Exception { SYNTAX_ERR };
 
-    bool success = false;
-    if (auto value = parseString(style, CSSPropertyFontStyle))
-        success = m_backing->setStyle(*value);
-    if (!success)
-        return Exception { SYNTAX_ERR };
-    return { };
+    if (auto value = parseString(style, CSSPropertyFontStyle)) {
+        m_backing->setStyle(*value);
+        return { };
+    }
+    return Exception { SYNTAX_ERR };
 }
 
 ExceptionOr<void> FontFace::setWeight(const String& weight)
@@ -176,18 +179,23 @@ ExceptionOr<void> FontFace::setWeight(const String& weight)
     if (weight.isEmpty())
         return Exception { SYNTAX_ERR };
 
-    bool success = false;
-    if (auto value = parseString(weight, CSSPropertyFontWeight))
-        success = m_backing->setWeight(*value);
-    if (!success)
-        return Exception { SYNTAX_ERR };
-    return { };
+    if (auto value = parseString(weight, CSSPropertyFontWeight)) {
+        m_backing->setWeight(*value);
+        return { };
+    }
+    return Exception { SYNTAX_ERR };
 }
 
-ExceptionOr<void> FontFace::setStretch(const String&)
+ExceptionOr<void> FontFace::setStretch(const String& stretch)
 {
-    // We don't support font-stretch. Swallow the call.
-    return { };
+    if (stretch.isEmpty())
+        return Exception { SYNTAX_ERR };
+
+    if (auto value = parseString(stretch, CSSPropertyFontStretch)) {
+        m_backing->setStretch(*value);
+        return { };
+    }
+    return Exception { SYNTAX_ERR };
 }
 
 ExceptionOr<void> FontFace::setUnicodeRange(const String& unicodeRange)
@@ -279,46 +287,73 @@ String FontFace::family() const
 String FontFace::style() const
 {
     m_backing->updateStyleIfNeeded();
-    switch (m_backing->traitsMask() & FontStyleMask) {
-    case FontStyleNormalMask:
-        return String("normal", String::ConstructFromLiteral);
-    case FontStyleItalicMask:
-        return String("italic", String::ConstructFromLiteral);
+    auto style = m_backing->italic();
+
+    auto minimum = ComputedStyleExtractor::fontStyleFromStyleValue(style.minimum);
+    auto maximum = ComputedStyleExtractor::fontStyleFromStyleValue(style.maximum);
+
+    if (minimum.get().equals(maximum.get()))
+        return minimum->cssText();
+
+    auto minimumNonKeyword = ComputedStyleExtractor::fontNonKeywordStyleFromStyleValue(style.minimum);
+    auto maximumNonKeyword = ComputedStyleExtractor::fontNonKeywordStyleFromStyleValue(style.maximum);
+
+    ASSERT(minimumNonKeyword->fontStyleValue->valueID() == CSSValueOblique);
+    ASSERT(maximumNonKeyword->fontStyleValue->valueID() == CSSValueOblique);
+
+    StringBuilder builder;
+    builder.append(minimumNonKeyword->fontStyleValue->cssText());
+    builder.append(' ');
+    if (minimum->obliqueValue.get() == maximum->obliqueValue.get())
+        builder.append(minimumNonKeyword->obliqueValue->cssText());
+    else {
+        builder.append(minimumNonKeyword->obliqueValue->cssText());
+        builder.append(' ');
+        builder.append(maximumNonKeyword->obliqueValue->cssText());
     }
-    ASSERT_NOT_REACHED();
-    return String("normal", String::ConstructFromLiteral);
+    return builder.toString();
 }
 
 String FontFace::weight() const
 {
     m_backing->updateStyleIfNeeded();
-    switch (m_backing->traitsMask() & FontWeightMask) {
-    case FontWeight100Mask:
-        return String("100", String::ConstructFromLiteral);
-    case FontWeight200Mask:
-        return String("200", String::ConstructFromLiteral);
-    case FontWeight300Mask:
-        return String("300", String::ConstructFromLiteral);
-    case FontWeight400Mask:
-        return String("normal", String::ConstructFromLiteral);
-    case FontWeight500Mask:
-        return String("500", String::ConstructFromLiteral);
-    case FontWeight600Mask:
-        return String("600", String::ConstructFromLiteral);
-    case FontWeight700Mask:
-        return String("bold", String::ConstructFromLiteral);
-    case FontWeight800Mask:
-        return String("800", String::ConstructFromLiteral);
-    case FontWeight900Mask:
-        return String("900", String::ConstructFromLiteral);
-    }
-    ASSERT_NOT_REACHED();
-    return String("normal", String::ConstructFromLiteral);
+    auto weight = m_backing->weight();
+
+    auto minimum = ComputedStyleExtractor::fontWeightFromStyleValue(weight.minimum);
+    auto maximum = ComputedStyleExtractor::fontWeightFromStyleValue(weight.maximum);
+
+    if (minimum.get().equals(maximum.get()))
+        return minimum->cssText();
+
+    auto minimumNonKeyword = ComputedStyleExtractor::fontNonKeywordWeightFromStyleValue(weight.minimum);
+    auto maximumNonKeyword = ComputedStyleExtractor::fontNonKeywordWeightFromStyleValue(weight.maximum);
+
+    StringBuilder builder;
+    builder.append(minimumNonKeyword->cssText());
+    builder.append(' ');
+    builder.append(maximumNonKeyword->cssText());
+    return builder.toString();
 }
 
 String FontFace::stretch() const
 {
-    return ASCIILiteral("normal");
+    m_backing->updateStyleIfNeeded();
+    auto stretch = m_backing->stretch();
+
+    auto minimum = ComputedStyleExtractor::fontStretchFromStyleValue(stretch.minimum);
+    auto maximum = ComputedStyleExtractor::fontStretchFromStyleValue(stretch.maximum);
+
+    if (minimum.get().equals(maximum.get()))
+        return minimum->cssText();
+
+    auto minimumNonKeyword = ComputedStyleExtractor::fontNonKeywordStretchFromStyleValue(stretch.minimum);
+    auto maximumNonKeyword = ComputedStyleExtractor::fontNonKeywordStretchFromStyleValue(stretch.maximum);
+
+    StringBuilder builder;
+    builder.append(minimumNonKeyword->cssText());
+    builder.append(' ');
+    builder.append(maximumNonKeyword->cssText());
+    return builder.toString();
 }
 
 String FontFace::unicodeRange() const

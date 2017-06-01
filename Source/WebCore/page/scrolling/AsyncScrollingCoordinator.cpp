@@ -28,6 +28,7 @@
 #if ENABLE(ASYNC_SCROLLING)
 #include "AsyncScrollingCoordinator.h"
 
+#include "DebugPageOverlays.h"
 #include "Document.h"
 #include "EditorClient.h"
 #include "Frame.h"
@@ -196,12 +197,13 @@ void AsyncScrollingCoordinator::updateExpectsWheelEventTestTriggerWithFrameView(
     node->setExpectsWheelEventTestTrigger(page->expectsWheelEventTriggers());
 }
 
-void AsyncScrollingCoordinator::frameViewEventTrackingRegionsChanged(FrameView&)
+void AsyncScrollingCoordinator::frameViewEventTrackingRegionsChanged(FrameView& frameView)
 {
     if (!m_scrollingStateTree->rootStateNode())
         return;
 
     setEventTrackingRegionsDirty();
+    DebugPageOverlays::didChangeEventHandlers(frameView.frame());
 }
 
 void AsyncScrollingCoordinator::frameViewRootLayerDidChange(FrameView& frameView)
@@ -282,7 +284,7 @@ void AsyncScrollingCoordinator::scheduleUpdateScrollPositionAfterAsyncScroll(Scr
     }
 
     m_scheduledScrollUpdate = scrollUpdate;
-    m_updateNodeScrollPositionTimer.startOneShot(0);
+    m_updateNodeScrollPositionTimer.startOneShot(0_s);
 }
 
 void AsyncScrollingCoordinator::updateScrollPositionAfterAsyncScrollTimerFired()
@@ -559,8 +561,6 @@ void AsyncScrollingCoordinator::updateOverflowScrollingNode(ScrollingNodeID node
 
 void AsyncScrollingCoordinator::updateViewportConstrainedNode(ScrollingNodeID nodeID, const ViewportConstraints& constraints, GraphicsLayer* graphicsLayer)
 {
-    ASSERT(supportsFixedPositionLayers());
-
     ScrollingStateNode* node = m_scrollingStateTree->stateNodeForID(nodeID);
     if (!node)
         return;
@@ -581,32 +581,25 @@ void AsyncScrollingCoordinator::updateViewportConstrainedNode(ScrollingNodeID no
     }
 }
 
-void AsyncScrollingCoordinator::setSynchronousScrollingReasons(SynchronousScrollingReasons reasons)
+void AsyncScrollingCoordinator::setSynchronousScrollingReasons(FrameView& frameView, SynchronousScrollingReasons reasons)
 {
-    if (!m_scrollingStateTree->rootStateNode())
+    ScrollingStateFrameScrollingNode* scrollingStateNode = static_cast<ScrollingStateFrameScrollingNode*>(m_scrollingStateTree->stateNodeForID(frameView.scrollLayerID()));
+    if (!scrollingStateNode)
         return;
 
     // The FrameView's GraphicsLayer is likely to be out-of-synch with the PlatformLayer
     // at this point. So we'll update it before we switch back to main thread scrolling
     // in order to avoid layer positioning bugs.
     if (reasons)
-        updateMainFrameScrollLayerPosition();
-    m_scrollingStateTree->rootStateNode()->setSynchronousScrollingReasons(reasons);
+        updateScrollLayerPosition(frameView);
+    scrollingStateNode->setSynchronousScrollingReasons(reasons);
 }
 
-void AsyncScrollingCoordinator::updateMainFrameScrollLayerPosition()
+void AsyncScrollingCoordinator::updateScrollLayerPosition(FrameView& frameView)
 {
     ASSERT(isMainThread());
-
-    if (!m_page)
-        return;
-
-    FrameView* frameView = m_page->mainFrame().view();
-    if (!frameView)
-        return;
-
-    if (GraphicsLayer* scrollLayer = scrollLayerForFrameView(*frameView))
-        scrollLayer->setPosition(-frameView->scrollPosition());
+    if (GraphicsLayer* scrollLayer = scrollLayerForFrameView(frameView))
+        scrollLayer->setPosition(-frameView.scrollPosition());
 }
 
 bool AsyncScrollingCoordinator::isRubberBandInProgress() const
@@ -624,12 +617,12 @@ bool AsyncScrollingCoordinator::visualViewportEnabled() const
     return m_page->mainFrame().settings().visualViewportEnabled();
 }
 
-String AsyncScrollingCoordinator::scrollingStateTreeAsText() const
+String AsyncScrollingCoordinator::scrollingStateTreeAsText(ScrollingStateTreeAsTextBehavior behavior) const
 {
     if (m_scrollingStateTree->rootStateNode()) {
         if (m_eventTrackingRegionsDirty)
             m_scrollingStateTree->rootStateNode()->setEventTrackingRegions(absoluteEventTrackingRegions());
-        return m_scrollingStateTree->rootStateNode()->scrollingStateTreeAsText();
+        return m_scrollingStateTree->rootStateNode()->scrollingStateTreeAsText(behavior);
     }
 
     return String();

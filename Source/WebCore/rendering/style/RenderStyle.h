@@ -164,9 +164,9 @@ public:
     ContentPosition resolvedAlignContentPosition(const StyleContentAlignmentData& normalValueBehavior) const;
     ContentDistributionType resolvedAlignContentDistribution(const StyleContentAlignmentData& normalValueBehavior) const;
     StyleSelfAlignmentData resolvedAlignItems(ItemPosition normalValueBehaviour) const;
-    StyleSelfAlignmentData resolvedAlignSelf(const RenderStyle& parentStyle, ItemPosition normalValueBehaviour) const;
+    StyleSelfAlignmentData resolvedAlignSelf(const RenderStyle* parentStyle, ItemPosition normalValueBehaviour) const;
     StyleSelfAlignmentData resolvedJustifyItems(ItemPosition normalValueBehaviour) const;
-    StyleSelfAlignmentData resolvedJustifySelf(const RenderStyle& parentStyle, ItemPosition normalValueBehaviour) const;
+    StyleSelfAlignmentData resolvedJustifySelf(const RenderStyle* parentStyle, ItemPosition normalValueBehaviour) const;
 
     PseudoId styleType() const { return m_nonInheritedFlags.styleType(); }
     void setStyleType(PseudoId styleType) { m_nonInheritedFlags.setStyleType(styleType); }
@@ -323,7 +323,9 @@ public:
     
     EOverflow overflowX() const { return m_nonInheritedFlags.overflowX(); }
     EOverflow overflowY() const { return m_nonInheritedFlags.overflowY(); }
-
+    EOverflow overflowInlineDirection() const { return isHorizontalWritingMode() ? overflowX() : overflowY(); }
+    EOverflow overflowBlockDirection() const { return isHorizontalWritingMode() ? overflowY() : overflowX(); }
+    
     EVisibility visibility() const { return static_cast<EVisibility>(m_inheritedFlags.visibility); }
     EVerticalAlign verticalAlign() const { return m_nonInheritedFlags.verticalAlign(); }
     const Length& verticalAlignLength() const { return m_boxData->verticalAlign(); }
@@ -351,6 +353,9 @@ public:
 #if ENABLE(VARIATION_FONTS)
     FontVariationSettings fontVariationSettings() const { return fontDescription().variationSettings(); }
 #endif
+    FontSelectionValue fontWeight() const { return fontDescription().weight(); }
+    FontSelectionValue fontStretch() const { return fontDescription().stretch(); }
+    FontSelectionValue fontItalic() const { return fontDescription().italic(); }
 
     const Length& textIndent() const { return m_rareInheritedData->indent; }
     ETextAlign textAlign() const { return static_cast<ETextAlign>(m_inheritedFlags.textAlign); }
@@ -898,6 +903,9 @@ public:
 #if ENABLE(VARIATION_FONTS)
     void setFontVariationSettings(FontVariationSettings);
 #endif
+    void setFontWeight(FontSelectionValue);
+    void setFontStretch(FontSelectionValue);
+    void setFontItalic(FontSelectionValue);
 
     void setColor(const Color&);
     void setTextIndent(Length&& length) { SET_VAR(m_rareInheritedData, indent, WTFMove(length)); }
@@ -1055,6 +1063,7 @@ public:
     void setJustifyContentPosition(ContentPosition position) { m_rareNonInheritedData.access().justifyContent.setPosition(position); }
     void setJustifyItems(const StyleSelfAlignmentData& data) { SET_VAR(m_rareNonInheritedData, justifyItems, data); }
     void setJustifySelf(const StyleSelfAlignmentData& data) { SET_VAR(m_rareNonInheritedData, justifySelf, data); }
+    void setJustifySelfPosition(ItemPosition position) { m_rareNonInheritedData.access().justifySelf.setPosition(position); }
 
 #if ENABLE(CSS_BOX_DECORATION_BREAK)
     void setBoxDecorationBreak(EBoxDecorationBreak b) { SET_VAR(m_boxData, m_boxDecorationBreak, b); }
@@ -1236,11 +1245,11 @@ public:
     void setApplePayButtonType(ApplePayButtonType type) { SET_VAR(m_rareNonInheritedData, applePayButtonType, static_cast<unsigned>(type)); }
 #endif
 
-    // Support for paint-order, stroke-linecap, and stroke-linejoin from https://drafts.fxtf.org/paint/.
-    void setPaintOrder(PaintOrder order) { SET_VAR(m_rareInheritedData, paintOrder, order); }
+    // Support for paint-order, stroke-linecap, stroke-linejoin, and stroke-miterlimit from https://drafts.fxtf.org/paint/.
+    void setPaintOrder(PaintOrder order) { SET_VAR(m_rareInheritedData, paintOrder, static_cast<unsigned>(order)); }
     PaintOrder paintOrder() const { return static_cast<PaintOrder>(m_rareInheritedData->paintOrder); }
-    static PaintOrder initialPaintOrder() { return PaintOrderNormal; }
-    Vector<PaintType, 3> paintTypesForPaintOrder() const;
+    static PaintOrder initialPaintOrder() { return PaintOrder::Normal; }
+    static Vector<PaintType, 3> paintTypesForPaintOrder(PaintOrder);
     
     void setCapStyle(LineCap val) { SET_VAR(m_rareInheritedData, capStyle, val); }
     LineCap capStyle() const { return static_cast<LineCap>(m_rareInheritedData->capStyle); }
@@ -1254,7 +1263,23 @@ public:
     void setStrokeWidth(Length&& w) { SET_VAR(m_rareInheritedData, strokeWidth, WTFMove(w)); }
     bool hasVisibleStroke() const { return svgStyle().hasStroke() && !strokeWidth().isZero(); }
 
+    float computedStrokeWidth(const IntSize& viewportSize) const;
+    void setHasExplicitlySetStrokeWidth(bool v) { SET_VAR(m_rareInheritedData, hasSetStrokeWidth, static_cast<unsigned>(v)); }
+    bool hasExplicitlySetStrokeWidth() const { return m_rareInheritedData->hasSetStrokeWidth; };
+    bool hasPositiveStrokeWidth() const;
     
+    Color strokeColor() const { return m_rareInheritedData->strokeColor; }
+    void setStrokeColor(const Color& v)  { SET_VAR(m_rareInheritedData, strokeColor, v); }
+    void setVisitedLinkStrokeColor(const Color& v) { SET_VAR(m_rareInheritedData, visitedLinkStrokeColor, v); }
+    const Color& visitedLinkStrokeColor() const { return m_rareInheritedData->visitedLinkStrokeColor; }
+    void setHasExplicitlySetStrokeColor(bool v) { SET_VAR(m_rareInheritedData, hasSetStrokeColor, static_cast<unsigned>(v)); }
+    bool hasExplicitlySetStrokeColor() const { return m_rareInheritedData->hasSetStrokeColor; };
+    
+    float strokeMiterLimit() const { return m_rareInheritedData->miterLimit; }
+    void setStrokeMiterLimit(float f) { SET_VAR(m_rareInheritedData, miterLimit, f); }
+    static float initialStrokeMiterLimit() { return defaultMiterLimit; }
+
+
     const SVGRenderStyle& svgStyle() const { return m_svgStyle; }
     SVGRenderStyle& accessSVGStyle() { return m_svgStyle.access(); }
 
@@ -1273,8 +1298,6 @@ public:
     void setStrokeDashArray(Vector<SVGLengthValue> array) { accessSVGStyle().setStrokeDashArray(array); }
     const Length& strokeDashOffset() const { return svgStyle().strokeDashOffset(); }
     void setStrokeDashOffset(Length&& d) { accessSVGStyle().setStrokeDashOffset(WTFMove(d)); }
-    float strokeMiterLimit() const { return svgStyle().strokeMiterLimit(); }
-    void setStrokeMiterLimit(float f) { accessSVGStyle().setStrokeMiterLimit(f); }
 
     const Length& cx() const { return svgStyle().cx(); }
     void setCx(Length&& cx) { accessSVGStyle().setCx(WTFMove(cx)); }
@@ -1648,8 +1671,9 @@ public:
     static Isolation initialIsolation() { return IsolationAuto; }
 #endif
 
-    bool isPlaceholderStyle() const { return m_rareNonInheritedData->isPlaceholderStyle; }
-    void setIsPlaceholderStyle() { SET_VAR(m_rareNonInheritedData, isPlaceholderStyle, true); }
+    // Indicates the style is likely to change due to a pending stylesheet load.
+    bool isNotFinal() const { return m_rareNonInheritedData->isNotFinal; }
+    void setIsNotFinal() { SET_VAR(m_rareNonInheritedData, isNotFinal, true); }
 
     void setVisitedLinkColor(const Color&);
     void setVisitedLinkBackgroundColor(const Color& v) { SET_VAR(m_rareNonInheritedData, visitedLinkBackgroundColor, v); }
@@ -1903,7 +1927,7 @@ private:
 #endif
         unsigned direction : 1; // TextDirection
         unsigned whiteSpace : 3; // EWhiteSpace
-        // 32 bits
+        // 35 bits
         unsigned borderCollapse : 1; // EBorderCollapse
         unsigned boxDirection : 1; // EBoxDirection (CSS3 box_direction property, flexible box layout module)
 
@@ -1913,11 +1937,11 @@ private:
         unsigned pointerEvents : 4; // EPointerEvents
         unsigned insideLink : 2; // EInsideLink
         unsigned insideDefaultButton : 1;
-        // 44 bits
+        // 46 bits
 
         // CSS Text Layout Module Level 3: Vertical writing support
         unsigned writingMode : 2; // WritingMode
-        // 46 bits
+        // 48 bits
     };
 
     // This constructor is used to implement the replace operation.

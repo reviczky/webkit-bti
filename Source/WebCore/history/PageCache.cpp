@@ -44,11 +44,11 @@
 #include "IgnoreOpensDuringUnloadCountIncrementer.h"
 #include "Logging.h"
 #include "MainFrame.h"
-#include "MemoryPressureHandler.h"
 #include "NoEventDispatchAssertion.h"
 #include "Page.h"
 #include "Settings.h"
 #include "SubframeLoader.h"
+#include <wtf/MemoryPressureHandler.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/SetForScope.h>
 #include <wtf/text/CString.h>
@@ -249,6 +249,13 @@ static bool canCachePage(Page& page)
         isCacheable = false;
         break;
     }
+    case FrameLoadType::ReloadExpiredOnly: {
+        // No point writing to the cache on a reload, since we will just write over it again when we leave that page.
+        PCLOG("   -Load type is: ReloadRevalidatingExpired");
+        logPageCacheFailureDiagnosticMessage(diagnosticLoggingClient, DiagnosticLoggingKeys::reloadRevalidatingExpiredKey());
+        isCacheable = false;
+        break;
+    }
     case FrameLoadType::Standard:
     case FrameLoadType::Back:
     case FrameLoadType::Forward:
@@ -367,7 +374,7 @@ static void setPageCacheState(Page& page, Document::PageCacheState pageCacheStat
 // Note that destruction happens bottom-up so that the main frame's tree dies last.
 static void destroyRenderTree(MainFrame& mainFrame)
 {
-    for (Frame* frame = mainFrame.tree().traversePreviousWithWrap(true); frame; frame = frame->tree().traversePreviousWithWrap(false)) {
+    for (Frame* frame = mainFrame.tree().traversePrevious(CanWrap::Yes); frame; frame = frame->tree().traversePrevious(CanWrap::No)) {
         if (!frame->document())
             continue;
         auto& document = *frame->document();

@@ -70,7 +70,7 @@ public:
     JSStringRef copyEncodedHostName(JSStringRef name);
     void dispatchPendingLoadRequests();
     void display();
-    void displayInvalidatedRegion();
+    void displayAndTrackRepaints();
     void execCommand(JSStringRef name, JSStringRef value);
     bool findString(JSContextRef, JSStringRef, JSObjectRef optionsArray);
     void goBack();
@@ -377,6 +377,9 @@ public:
 
     void setSpellCheckerLoggingEnabled(bool);
 
+    const std::vector<std::string>& openPanelFiles() const { return m_openPanelFiles; }
+    void setOpenPanelFiles(JSContextRef, JSValueRef);
+
 private:
     TestRunner(const std::string& testURL, const std::string& expectedPixelHash);
 
@@ -466,6 +469,8 @@ private:
 
     std::unique_ptr<WTR::UIScriptContext> m_UIScriptContext;
     UIScriptInvocationData* m_pendingUIScriptInvocationData { nullptr };
+
+    std::vector<std::string> m_openPanelFiles;
 
     static JSClassRef getJSClass();
     static JSStaticValue* staticValues();

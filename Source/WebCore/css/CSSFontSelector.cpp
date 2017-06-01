@@ -33,6 +33,8 @@
 #include "CSSFontFaceSource.h"
 #include "CSSFontFamily.h"
 #include "CSSFontFeatureValue.h"
+#include "CSSFontStyleRangeValue.h"
+#include "CSSFontStyleValue.h"
 #include "CSSPrimitiveValue.h"
 #include "CSSPrimitiveValueMappings.h"
 #include "CSSPropertyNames.h"
@@ -145,6 +147,7 @@ void CSSFontSelector::addFontFaceRule(StyleRuleFontFace& fontFaceRule, bool isIn
     RefPtr<CSSValue> fontFamily = style.getPropertyCSSValue(CSSPropertyFontFamily);
     RefPtr<CSSValue> fontStyle = style.getPropertyCSSValue(CSSPropertyFontStyle);
     RefPtr<CSSValue> fontWeight = style.getPropertyCSSValue(CSSPropertyFontWeight);
+    RefPtr<CSSValue> fontStretch = style.getPropertyCSSValue(CSSPropertyFontStretch);
     RefPtr<CSSValue> src = style.getPropertyCSSValue(CSSPropertySrc);
     RefPtr<CSSValue> unicodeRange = style.getPropertyCSSValue(CSSPropertyUnicodeRange);
     RefPtr<CSSValue> featureSettings = style.getPropertyCSSValue(CSSPropertyFontFeatureSettings);
@@ -161,12 +164,6 @@ void CSSFontSelector::addFontFaceRule(StyleRuleFontFace& fontFaceRule, bool isIn
     if (!familyList.length())
         return;
 
-    if (!fontStyle)
-        fontStyle = CSSValuePool::singleton().createIdentifierValue(CSSValueNormal).ptr();
-
-    if (!fontWeight)
-        fontWeight = CSSValuePool::singleton().createIdentifierValue(CSSValueNormal);
-
     CSSValueList* rangeList = downcast<CSSValueList>(unicodeRange.get());
 
     CSSValueList& srcList = downcast<CSSValueList>(*src);
@@ -178,10 +175,12 @@ void CSSFontSelector::addFontFaceRule(StyleRuleFontFace& fontFaceRule, bool isIn
 
     if (!fontFace->setFamilies(*fontFamily))
         return;
-    if (!fontFace->setStyle(*fontStyle))
-        return;
-    if (!fontFace->setWeight(*fontWeight))
-        return;
+    if (fontStyle)
+        fontFace->setStyle(*fontStyle);
+    if (fontWeight)
+        fontFace->setWeight(*fontWeight);
+    if (fontStretch)
+        fontFace->setStretch(*fontStretch);
     if (rangeList && !fontFace->setUnicodeRange(*rangeList))
         return;
     if (variantLigatures && !fontFace->setVariantLigatures(*variantLigatures))
@@ -295,7 +294,7 @@ FontRanges CSSFontSelector::fontRangesForFamily(const FontDescription& fontDescr
     bool resolveGenericFamilyFirst = familyName == standardFamily;
 
     AtomicString familyForLookup = resolveGenericFamilyFirst ? resolveGenericFamily(m_document, fontDescription, familyName) : familyName;
-    auto* face = m_cssFontFaceSet->fontFace(fontDescription.traitsMask(), familyForLookup);
+    auto* face = m_cssFontFaceSet->fontFace(fontDescription.fontSelectionRequest(), familyForLookup);
     if (!face) {
         if (!resolveGenericFamilyFirst)
             familyForLookup = resolveGenericFamily(m_document, fontDescription, familyName);
@@ -333,12 +332,14 @@ void CSSFontSelector::beginLoadingFontSoon(CachedFont& font)
     if (!m_document)
         return;
 
-    m_fontsToBeginLoading.append(&font);
-    // Increment the request count now, in order to prevent didFinishLoad from being dispatched
-    // after this font has been requested but before it began loading. Balanced by
-    // decrementRequestCount() in beginLoadTimerFired() and in clearDocument().
-    m_document->cachedResourceLoader().incrementRequestCount(font);
-    m_beginLoadingTimer.startOneShot(0);
+    if (!m_document->settings().webFontsAlwaysFallBack()) {
+        m_fontsToBeginLoading.append(&font);
+        // Increment the request count now, in order to prevent didFinishLoad from being dispatched
+        // after this font has been requested but before it began loading. Balanced by
+        // decrementRequestCount() in beginLoadTimerFired() and in clearDocument().
+        m_document->cachedResourceLoader().incrementRequestCount(font);
+    }
+    m_beginLoadingTimer.startOneShot(0_s);
 }
 
 void CSSFontSelector::beginLoadTimerFired()

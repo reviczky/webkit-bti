@@ -40,6 +40,7 @@
 #include "RenderText.h"
 #include "RenderView.h"
 #include "Settings.h"
+#include "SimpleLineLayoutFlowContents.h"
 #include "SimpleLineLayoutResolver.h"
 #include "Text.h"
 #include "TextDecorationPainter.h"
@@ -53,22 +54,11 @@
 namespace WebCore {
 namespace SimpleLineLayout {
 
-static void paintDebugBorders(GraphicsContext& context, LayoutRect borderRect, const LayoutPoint& paintOffset)
-{
-    borderRect.moveBy(paintOffset);
-    IntRect snappedRect = snappedIntRect(borderRect);
-    if (snappedRect.isEmpty())
-        return;
-    GraphicsContextStateSaver stateSaver(context);
-    context.setStrokeColor(Color(0, 255, 0));
-    context.setFillColor(Color::transparent);
-    context.drawRect(snappedRect);
-}
-
-static FloatRect computeOverflow(const RenderBlockFlow& flow, const FloatRect& layoutRect)
+FloatRect computeOverflow(const RenderBlockFlow& flow, const FloatRect& layoutRect)
 {
     auto overflowRect = layoutRect;
-    auto strokeOverflow = std::ceil(flow.style().textStrokeWidth());
+    auto viewportSize = flow.frame().view() ? flow.frame().view()->size() : IntSize();
+    auto strokeOverflow = std::ceil(flow.style().computedStrokeWidth(viewportSize));
     overflowRect.inflate(strokeOverflow);
 
     auto letterSpacing = flow.style().fontCascade().letterSpacing();
@@ -88,11 +78,15 @@ void paintFlow(const RenderBlockFlow& flow, const Layout& layout, PaintInfo& pai
     if (style.visibility() != VISIBLE)
         return;
 
-    bool debugBordersEnabled = flow.settings().simpleLineLayoutDebugBordersEnabled();
-
     TextPainter textPainter(paintInfo.context());
     textPainter.setFont(style.fontCascade());
     textPainter.setTextPaintStyle(computeTextPaintStyle(flow.frame(), style, paintInfo));
+
+    std::unique_ptr<ShadowData> debugShadow = nullptr;
+    if (flow.settings().simpleLineLayoutDebugBordersEnabled()) {
+        debugShadow = std::make_unique<ShadowData>(IntPoint(0, 0), 10, 20, ShadowStyle::Normal, true, Color(0, 255, 0, 200));
+        textPainter.addTextShadow(debugShadow.get(), nullptr);
+    }
 
     std::optional<TextDecorationPainter> textDecorationPainter;
     if (style.textDecorationsInEffect() != TextDecorationNone) {
@@ -130,8 +124,6 @@ void paintFlow(const RenderBlockFlow& flow, const Layout& layout, PaintInfo& pai
             textDecorationPainter->setWidth(rect.width());
             textDecorationPainter->paintTextDecoration(textRun, textOrigin, rect.location() + paintOffset);
         }
-        if (debugBordersEnabled)
-            paintDebugBorders(paintInfo.context(), LayoutRect(run.rect()), paintOffset);
     }
 }
 
@@ -261,6 +253,11 @@ Vector<FloatQuad> collectAbsoluteQuadsForRange(const RenderObject& renderer, uns
         quads.append(renderer.localToAbsoluteQuad(FloatQuad(runRect), UseTransforms, wasFixed));
     }
     return quads;
+}
+
+const RenderObject& rendererForPosition(const FlowContents& flowContents, unsigned position)
+{
+    return flowContents.segmentForPosition(position).renderer;
 }
 
 #if ENABLE(TREE_DEBUGGING)

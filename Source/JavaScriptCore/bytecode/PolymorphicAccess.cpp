@@ -31,6 +31,7 @@
 #include "BinarySwitch.h"
 #include "CCallHelpers.h"
 #include "CodeBlock.h"
+#include "FullCodeOrigin.h"
 #include "Heap.h"
 #include "JITOperations.h"
 #include "JSCInlines.h"
@@ -175,14 +176,14 @@ CallSiteIndex AccessGenerationState::originalCallSiteIndex() const { return stub
 void AccessGenerationState::emitExplicitExceptionHandler()
 {
     restoreScratch();
-    jit->copyCalleeSavesToVMEntryFrameCalleeSavesBuffer();
+    jit->copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(m_vm);
     if (needsToRestoreRegistersIfException()) {
         // To the JIT that produces the original exception handling
         // call site, they will expect the OSR exit to be arrived
         // at from genericUnwind. Therefore we must model what genericUnwind
         // does here. I.e, set callFrameForCatch and copy callee saves.
 
-        jit->storePtr(GPRInfo::callFrameRegister, jit->vm()->addressOfCallFrameForCatch());
+        jit->storePtr(GPRInfo::callFrameRegister, m_vm.addressOfCallFrameForCatch());
         CCallHelpers::Jump jumpToOSRExitExceptionHandler = jit->jump();
 
         // We don't need to insert a new exception handler in the table
@@ -194,13 +195,13 @@ void AccessGenerationState::emitExplicitExceptionHandler()
                 linkBuffer.link(jumpToOSRExitExceptionHandler, originalHandler.nativeCode);
             });
     } else {
-        jit->setupArguments(CCallHelpers::TrustedImmPtr(jit->vm()), GPRInfo::callFrameRegister);
+        jit->setupArguments(CCallHelpers::TrustedImmPtr(&m_vm), GPRInfo::callFrameRegister);
         CCallHelpers::Call lookupExceptionHandlerCall = jit->call();
         jit->addLinkTask(
             [=] (LinkBuffer& linkBuffer) {
                 linkBuffer.link(lookupExceptionHandlerCall, lookupExceptionHandler);
             });
-        jit->jumpToExceptionHandler();
+        jit->jumpToExceptionHandler(m_vm);
     }
 }
 
@@ -335,18 +336,21 @@ AccessGenerationResult PolymorphicAccess::regenerate(
     if (verbose)
         dataLog("Regenerate with m_list: ", listDump(m_list), "\n");
     
-    AccessGenerationState state;
+    AccessGenerationState state(vm);
 
     state.access = this;
     state.stubInfo = &stubInfo;
     state.ident = &ident;
     
     state.baseGPR = static_cast<GPRReg>(stubInfo.patch.baseGPR);
+    state.thisGPR = static_cast<GPRReg>(stubInfo.patch.thisGPR);
     state.valueRegs = stubInfo.valueRegs();
 
     ScratchRegisterAllocator allocator(stubInfo.patch.usedRegisters);
     state.allocator = &allocator;
     allocator.lock(state.baseGPR);
+    if (state.thisGPR != InvalidGPRReg)
+        allocator.lock(state.thisGPR);
     allocator.lock(state.valueRegs);
 #if USE(JSVALUE32_64)
     allocator.lock(static_cast<GPRReg>(stubInfo.patch.baseTagGPR));
@@ -354,7 +358,7 @@ AccessGenerationResult PolymorphicAccess::regenerate(
 
     state.scratchGPR = allocator.allocateScratchGPR();
     
-    CCallHelpers jit(&vm, codeBlock);
+    CCallHelpers jit(codeBlock);
     state.jit = &jit;
 
     state.preservedReusedRegisterState =
@@ -510,7 +514,7 @@ AccessGenerationResult PolymorphicAccess::regenerate(
         callSiteIndexForExceptionHandling = state.callSiteIndexForExceptionHandling();
     }
 
-    LinkBuffer linkBuffer(vm, jit, codeBlock, JITCompilationCanFail);
+    LinkBuffer linkBuffer(jit, codeBlock, JITCompilationCanFail);
     if (linkBuffer.didFailToAllocate()) {
         if (verbose)
             dataLog("Did fail to allocate.\n");
@@ -524,7 +528,7 @@ AccessGenerationResult PolymorphicAccess::regenerate(
     linkBuffer.link(failure, stubInfo.slowPathStartLocation());
     
     if (verbose)
-        dataLog(*codeBlock, " ", stubInfo.codeOrigin, ": Generating polymorphic access stub for ", listDump(cases), "\n");
+        dataLog(FullCodeOrigin(codeBlock, stubInfo.codeOrigin), ": Generating polymorphic access stub for ", listDump(cases), "\n");
 
     MacroAssemblerCodeRef code = FINALIZE_CODE_FOR(
         codeBlock, linkBuffer,

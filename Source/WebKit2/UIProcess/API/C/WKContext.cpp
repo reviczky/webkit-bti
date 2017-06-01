@@ -397,11 +397,6 @@ void WKContextSetDiskCacheSpeculativeValidationEnabled(WKContextRef contextRef, 
     toImpl(contextRef)->configuration().setDiskCacheSpeculativeValidationEnabled(value);
 }
 
-void WKContextSetUnresponsiveBackgroundProcessesTerminationEnabled(WKContextRef contextRef, bool value)
-{
-    toImpl(contextRef)->configuration().setUnresponsiveBackgroundProcessesTerminationEnabled(value);
-}
-
 WKCookieManagerRef WKContextGetCookieManager(WKContextRef contextRef)
 {
     return toAPI(toImpl(contextRef)->supplement<WebCookieManagerProxy>());
@@ -409,7 +404,7 @@ WKCookieManagerRef WKContextGetCookieManager(WKContextRef contextRef)
 
 WKWebsiteDataStoreRef WKContextGetWebsiteDataStore(WKContextRef context)
 {
-    return toAPI(toImpl(context)->websiteDataStore());
+    return toAPI(&toImpl(context)->websiteDataStore());
 }
 
 WKApplicationCacheManagerRef WKContextGetApplicationCacheManager(WKContextRef context)
@@ -507,6 +502,16 @@ void WKContextGetStatisticsWithOptions(WKContextRef contextRef, WKStatisticsOpti
     toImpl(contextRef)->getStatistics(optionsMask, toGenericCallbackFunction(context, callback));
 }
 
+bool WKContextJavaScriptConfigurationFileEnabled(WKContextRef contextRef)
+{
+    return toImpl(contextRef)->javaScriptConfigurationFileEnabled();
+}
+
+void WKContextSetJavaScriptConfigurationFileEnabled(WKContextRef contextRef, bool enable)
+{
+    toImpl(contextRef)->setJavaScriptConfigurationFileEnabled(enable);
+}
+
 void WKContextGarbageCollectJavaScriptObjects(WKContextRef contextRef)
 {
     toImpl(contextRef)->garbageCollectJavaScriptObjects();
@@ -522,6 +527,11 @@ void WKContextUseTestingNetworkSession(WKContextRef context)
     toImpl(context)->useTestingNetworkSession();
 }
 
+void WKContextSetAllowsAnySSLCertificateForWebSocketTesting(WKContextRef context, bool allows)
+{
+    toImpl(context)->setAllowsAnySSLCertificateForWebSocket(allows);
+}
+
 void WKContextClearCachedCredentials(WKContextRef context)
 {
     toImpl(context)->clearCachedCredentials();
@@ -529,7 +539,7 @@ void WKContextClearCachedCredentials(WKContextRef context)
 
 WKDictionaryRef WKContextCopyPlugInAutoStartOriginHashes(WKContextRef contextRef)
 {
-    return toAPI(toImpl(contextRef)->plugInAutoStartOriginHashes().leakRef());
+    return toAPI(&toImpl(contextRef)->plugInAutoStartOriginHashes().leakRef());
 }
 
 void WKContextSetPlugInAutoStartOriginHashes(WKContextRef contextRef, WKDictionaryRef dictionaryRef)
@@ -566,6 +576,11 @@ void WKContextSetMemoryCacheDisabled(WKContextRef contextRef, bool disabled)
 void WKContextSetFontWhitelist(WKContextRef contextRef, WKArrayRef arrayRef)
 {
     toImpl(contextRef)->setFontWhitelist(toImpl(arrayRef));
+}
+
+void WKContextTerminateNetworkProcess(WKContextRef context)
+{
+    toImpl(context)->terminateNetworkProcess();
 }
 
 pid_t WKContextGetNetworkProcessIdentifier(WKContextRef contextRef)

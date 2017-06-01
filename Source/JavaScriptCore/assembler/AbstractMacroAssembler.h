@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2012, 2014-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,12 +36,18 @@
 #include <wtf/CryptographicallyRandomNumber.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/SharedTask.h>
+#include <wtf/Vector.h>
 #include <wtf/WeakRandom.h>
 
 namespace JSC {
 
 #if ENABLE(ASSEMBLER)
 
+#if ENABLE(MASM_PROBE)
+struct ProbeContext;
+typedef void (*ProbeFunction)(struct ProbeContext*);
+#endif
+    
 class AllowMacroScratchRegisterUsage;
 class DisallowMacroScratchRegisterUsage;
 class LinkBuffer;
@@ -50,8 +56,28 @@ namespace DFG {
 struct OSRExit;
 }
 
+class AbstractMacroAssemblerBase {
+public:
+    enum StatusCondition {
+        Success,
+        Failure
+    };
+    
+    static StatusCondition invert(StatusCondition condition)
+    {
+        switch (condition) {
+        case Success:
+            return Failure;
+        case Failure:
+            return Success;
+        }
+        RELEASE_ASSERT_NOT_REACHED();
+        return Success;
+    }
+};
+
 template <class AssemblerType, class MacroAssemblerType>
-class AbstractMacroAssembler {
+class AbstractMacroAssembler : public AbstractMacroAssemblerBase {
 public:
     typedef AbstractMacroAssembler<AssemblerType, MacroAssemblerType> AbstractMacroAssemblerType;
     typedef AssemblerType AssemblerType_T;
@@ -91,6 +117,15 @@ public:
     
     struct BaseIndex;
     
+    static RegisterID withSwappedRegister(RegisterID original, RegisterID left, RegisterID right)
+    {
+        if (original == left)
+            return right;
+        if (original == right)
+            return left;
+        return original;
+    }
+    
     // Address:
     //
     // Describes a simple base-offset address.
@@ -104,6 +139,11 @@ public:
         Address withOffset(int32_t additionalOffset)
         {
             return Address(base, offset + additionalOffset);
+        }
+        
+        Address withSwappedRegister(RegisterID left, RegisterID right)
+        {
+            return Address(AbstractMacroAssembler::withSwappedRegister(base, left, right), offset);
         }
         
         BaseIndex indexedBy(RegisterID index, Scale) const;
@@ -174,6 +214,11 @@ public:
         BaseIndex withOffset(int32_t additionalOffset)
         {
             return BaseIndex(base, index, scale, offset + additionalOffset);
+        }
+
+        BaseIndex withSwappedRegister(RegisterID left, RegisterID right)
+        {
+            return BaseIndex(AbstractMacroAssembler::withSwappedRegister(base, left, right), AbstractMacroAssembler::withSwappedRegister(index, left, right), scale, offset);
         }
     };
 
@@ -676,7 +721,8 @@ public:
         
         void append(Jump jump)
         {
-            m_jumps.append(jump);
+            if (jump.isSet())
+                m_jumps.append(jump);
         }
         
         void append(const JumpList& other)
@@ -857,22 +903,6 @@ public:
         }
     };
 
-    struct ProbeContext;
-    typedef void (*ProbeFunction)(struct ProbeContext*);
-
-    struct ProbeContext {
-        ProbeFunction probeFunction;
-        void* arg1;
-        void* arg2;
-        CPUState cpu;
-
-        // Convenience methods:
-        void*& gpr(RegisterID regID) { return cpu.gpr(regID); }
-        double& fpr(FPRegisterID regID) { return cpu.fpr(regID); }
-        const char* gprName(RegisterID regID) { return cpu.gprName(regID); }
-        const char* fprName(FPRegisterID regID) { return cpu.fprName(regID); }
-    };
-
     // This function emits code to preserve the CPUState (e.g. registers),
     // call a user supplied probe function, and restore the CPUState before
     // continuing with other JIT generated code.
@@ -892,7 +922,7 @@ public:
     // Note: probe() should be implemented by the target specific MacroAssembler.
     // This prototype is only provided here to document the interface.
 
-    void probe(ProbeFunction, void* arg1, void* arg2);
+    void probe(ProbeFunction, void* arg);
 
 #endif // ENABLE(MASM_PROBE)
 
@@ -1087,6 +1117,7 @@ protected:
     }
 
     friend class AllowMacroScratchRegisterUsage;
+    friend class AllowMacroScratchRegisterUsageIf;
     friend class DisallowMacroScratchRegisterUsage;
     unsigned m_tempRegistersValidBits;
     bool m_allowScratchRegister { true };
@@ -1108,3 +1139,16 @@ AbstractMacroAssembler<AssemblerType, MacroAssemblerType>::Address::indexedBy(
 #endif // ENABLE(ASSEMBLER)
 
 } // namespace JSC
+
+#if ENABLE(ASSEMBLER)
+
+namespace WTF {
+
+class PrintStream;
+
+void printInternal(PrintStream& out, JSC::AbstractMacroAssemblerBase::StatusCondition);
+
+} // namespace WTF
+
+#endif // ENABLE(ASSEMBLER)
+

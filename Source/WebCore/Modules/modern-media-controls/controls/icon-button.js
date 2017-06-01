@@ -55,6 +55,7 @@ class IconButton extends Button
             return;
 
         this._loadImage(iconName);
+        this.element.setAttribute("aria-label", iconName.label);
     }
 
     get on()
@@ -76,9 +77,12 @@ class IconButton extends Button
 
     handleEvent(event)
     {
-        if (event.type === "load" && event.target === this._image)
-            this._imageDidLoad();
-        else
+        if (event.target === this._image) {
+            if (event.type === "load")
+                this._imageDidLoad();
+            else if (event.type === "error")
+                console.error(`IconButton failed to load, iconName = ${this._iconName.name}, layoutTraits = ${this._iconLayoutTraits}, src = ${this._image.src}`);
+        } else
             super.handleEvent(event);
     }
 
@@ -98,14 +102,17 @@ class IconButton extends Button
             this._image.removeEventListener("load", this);
 
         this._iconLayoutTraits = this.layoutTraits;
-        this._image = iconService.imageForIconNameAndLayoutTraits(iconName, this._iconLayoutTraits);
+
+        this._image = iconService.imageForIconNameAndLayoutTraits(iconName.name, this._iconLayoutTraits);
 
         this._iconName = iconName;
 
         if (this._image.complete)
             this._updateImage();
-        else
+        else {
             this._image.addEventListener("load", this);
+            this._image.addEventListener("error", this);
+        }
     }
 
     _imageDidLoad()

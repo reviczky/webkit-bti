@@ -37,6 +37,10 @@
 #include <WebCore/Page.h>
 #include <WebCore/Settings.h>
 
+#if USE(GLIB_EVENT_LOOP)
+#include <wtf/glib/RunLoopSourcePriority.h>
+#endif
+
 using namespace WebCore;
 
 namespace WebKit {
@@ -49,6 +53,9 @@ DrawingAreaImpl::DrawingAreaImpl(WebPage& webPage, const WebPageCreationParamete
     : AcceleratedDrawingArea(webPage, parameters)
     , m_displayTimer(RunLoop::main(), this, &DrawingAreaImpl::displayTimerFired)
 {
+#if USE(GLIB_EVENT_LOOP)
+    m_displayTimer.setPriority(RunLoopSourcePriority::NonAcceleratedDrawingTimer);
+#endif
 }
 
 void DrawingAreaImpl::setNeedsDisplay()
@@ -183,7 +190,6 @@ void DrawingAreaImpl::updatePreferences(const WebPreferencesStore& store)
     // Fixed position elements need to be composited and create stacking contexts
     // in order to be scrolled by the ScrollingCoordinator.
     settings.setAcceleratedCompositingForFixedPositionEnabled(settings.acceleratedCompositingEnabled());
-    settings.setFixedPositionCreatesStackingContext(settings.acceleratedCompositingEnabled());
 #endif
 
     m_alwaysUseCompositing = settings.acceleratedCompositingEnabled() && settings.forceCompositingMode();
@@ -340,7 +346,7 @@ void DrawingAreaImpl::scheduleDisplay()
     if (m_displayTimer.isActive())
         return;
 
-    m_displayTimer.startOneShot(0);
+    m_displayTimer.startOneShot(0_s);
 }
 
 void DrawingAreaImpl::displayTimerFired()

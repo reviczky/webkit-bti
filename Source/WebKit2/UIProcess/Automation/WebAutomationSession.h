@@ -52,8 +52,12 @@ class IntRect;
 struct Cookie;
 }
 
-#if USE(APPKIT)
+#if PLATFORM(COCOA)
 OBJC_CLASS NSArray;
+typedef unsigned short unichar;
+#endif
+
+#if USE(APPKIT)
 OBJC_CLASS NSEvent;
 #endif
 
@@ -105,6 +109,8 @@ public:
     void createBrowsingContext(Inspector::ErrorString&, String*) override;
     void closeBrowsingContext(Inspector::ErrorString&, const String&) override;
     void switchToBrowsingContext(Inspector::ErrorString&, const String& browsingContextHandle, const String* optionalFrameHandle) override;
+    void resizeWindowOfBrowsingContext(Inspector::ErrorString&, const String& handle, const Inspector::InspectorObject& size) override;
+    void moveWindowOfBrowsingContext(Inspector::ErrorString&, const String& handle, const Inspector::InspectorObject& position) override;
     void navigateBrowsingContext(Inspector::ErrorString&, const String& handle, const String& url, Ref<NavigateBrowsingContextCallback>&&) override;
     void goBackInBrowsingContext(Inspector::ErrorString&, const String&, Ref<GoBackInBrowsingContextCallback>&&) override;
     void goForwardInBrowsingContext(Inspector::ErrorString&, const String&, Ref<GoForwardInBrowsingContextCallback>&&) override;
@@ -128,8 +134,6 @@ public:
 
     // Platform: macOS
 #if PLATFORM(MAC)
-    void resizeWindowOfBrowsingContext(Inspector::ErrorString&, const String& handle, const Inspector::InspectorObject& size) override;
-    void moveWindowOfBrowsingContext(Inspector::ErrorString&, const String& handle, const Inspector::InspectorObject& position) override;
     void inspectBrowsingContext(Inspector::ErrorString&, const String&, const bool* optionalEnableAutoCapturing, Ref<InspectBrowsingContextCallback>&&) override;
 #endif
 
@@ -169,8 +173,12 @@ private:
     // Get base64 encoded PNG data from a bitmap.
     std::optional<String> platformGetBase64EncodedPNGData(const ShareableBitmap::Handle&);
 
-#if PLATFORM(MAC)
+#if PLATFORM(COCOA)
+    // The type parameter of the NSArray argument is platform-dependent.
     void sendSynthesizedEventsToPage(WebPageProxy&, NSArray *eventsToSend);
+
+    std::optional<unichar> charCodeForVirtualKey(Inspector::Protocol::Automation::VirtualKey) const;
+    std::optional<unichar> charCodeIgnoringModifiersForVirtualKey(Inspector::Protocol::Automation::VirtualKey) const;
 #endif
 
     WebProcessPool* m_processPool { nullptr };
@@ -215,6 +223,13 @@ private:
 
 #if ENABLE(REMOTE_INSPECTOR)
     Inspector::FrontendChannel* m_remoteChannel { nullptr };
+#endif
+
+#if PLATFORM(IOS) || PLATFORM(GTK)
+    // Keep track of currently active modifiers across multiple keystrokes.
+    // We don't synthesize platform keyboard events on iOS, so we need to track it ourselves.
+    // GTK+ doesn't keep track of the active modifiers when using synthesized events.
+    unsigned m_currentModifiers { 0 };
 #endif
 };
 

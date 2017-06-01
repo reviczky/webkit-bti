@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2016 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2008-2017 Apple Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -60,7 +60,7 @@ public:
     bool start();
     void stop();
 
-    ThreadIdentifier threadID() const { return m_threadID; }
+    ThreadIdentifier threadID() const { return m_thread ? m_thread->id() : 0; }
     WorkerRunLoop& runLoop() { return m_runLoop; }
     WorkerLoaderProxy& workerLoaderProxy() const { return m_workerLoaderProxy; }
     WorkerReportingProxy& workerReportingProxy() const { return m_workerReportingProxy; }
@@ -69,7 +69,7 @@ public:
     WEBCORE_EXPORT static unsigned workerThreadCount();
     static void releaseFastMallocFreeMemoryInAllThreads();
 
-#if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
+#if ENABLE(NOTIFICATIONS)
     NotificationClient* getNotificationClient() { return m_notificationClient; }
     void setNotificationClient(NotificationClient* client) { m_notificationClient = client; }
 #endif
@@ -98,7 +98,7 @@ private:
     static void workerThreadStart(void*);
     void workerThread();
 
-    ThreadIdentifier m_threadID;
+    RefPtr<Thread> m_thread;
     WorkerRunLoop m_runLoop;
     WorkerLoaderProxy& m_workerLoaderProxy;
     WorkerReportingProxy& m_workerReportingProxy;
@@ -106,11 +106,11 @@ private:
     bool m_pausedForDebugger { false };
 
     RefPtr<WorkerGlobalScope> m_workerGlobalScope;
-    Lock m_threadCreationMutex;
+    Lock m_threadCreationAndWorkerGlobalScopeMutex;
 
     std::unique_ptr<WorkerThreadStartupData> m_startupData;
 
-#if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
+#if ENABLE(NOTIFICATIONS)
     NotificationClient* m_notificationClient { nullptr };
 #endif
 

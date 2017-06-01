@@ -37,10 +37,9 @@
 
 namespace WebCore {
 
-class ClientRect;
-class ClientRectList;
 class CustomElementReactionQueue;
 class DatasetDOMStringMap;
+class DOMRect;
 class DOMTokenList;
 class ElementRareData;
 class HTMLDocument;
@@ -173,8 +172,8 @@ public:
 
     WEBCORE_EXPORT IntRect boundsInRootViewSpace();
 
-    Ref<ClientRectList> getClientRects();
-    Ref<ClientRect> getBoundingClientRect();
+    Vector<Ref<DOMRect>> getClientRects();
+    Ref<DOMRect> getBoundingClientRect();
 
     // Returns the absolute bounding box translated into client coordinates.
     WEBCORE_EXPORT IntRect clientRect() const;
@@ -197,8 +196,6 @@ public:
     Ref<Attr> ensureAttr(const QualifiedName&);
 
     const Vector<RefPtr<Attr>>& attrNodeList();
-
-    virtual CSSStyleDeclaration* cssomStyle();
 
     const QualifiedName& tagQName() const { return m_tagName; }
 #if ENABLE(JIT)
@@ -400,9 +397,6 @@ public:
     virtual void didBecomeFullscreenElement() { }
     virtual void willStopBeingFullscreenElement() { }
 
-    // Use Document::registerForVisibilityStateChangedCallbacks() to subscribe to this.
-    virtual void visibilityStateChanged() { }
-
 #if ENABLE(VIDEO_TRACK)
     virtual void captionPreferencesChanged() { }
 #endif
@@ -495,6 +489,7 @@ public:
     void dispatchFocusOutEvent(const AtomicString& eventType, RefPtr<Element>&& newFocusedElement);
     virtual void dispatchFocusEvent(RefPtr<Element>&& oldFocusedElement, FocusDirection);
     virtual void dispatchBlurEvent(RefPtr<Element>&& newFocusedElement);
+    void dispatchWebKitImageReadyEventForTesting();
 
     WEBCORE_EXPORT bool dispatchMouseForceWillBegin();
 
@@ -549,8 +544,6 @@ public:
 
     bool hasDisplayContents() const;
     void setHasDisplayContents(bool);
-
-    virtual void isVisibleInViewportChanged() { }
 
     using ContainerNode::setAttributeEventListener;
     void setAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& value);

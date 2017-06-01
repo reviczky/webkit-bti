@@ -109,10 +109,14 @@ public:
     ForcedAccessibilityValue forcedPrefersReducedMotionAccessibilityValue() const;
     void setForcedPrefersReducedMotionAccessibilityValue(ForcedAccessibilityValue);
 
+    bool shouldDispatchRequestAnimationFrameEvents();
+    void setShouldDispatchRequestAnimationFrameEvents(bool);
+
     // RuntimeEnabledFeatures.
     static void setIndexedDBWorkersEnabled(bool);
     static void setCSSGridLayoutEnabled(bool);
     static void setWebGL2Enabled(bool);
+    static void setWebGPUEnabled(bool);
 
 private:
     explicit InternalSettings(Page*);
@@ -147,7 +151,7 @@ private:
         bool m_originalUsesOverlayScrollbars;
         bool m_imagesEnabled;
         bool m_preferMIMETypeForImages;
-        std::chrono::milliseconds m_minimumTimerInterval;
+        Seconds m_minimumDOMTimerInterval;
 #if ENABLE(VIDEO_TRACK)
         bool m_shouldDisplaySubtitles;
         bool m_shouldDisplayCaptions;
@@ -155,7 +159,7 @@ private:
 #endif
         String m_defaultVideoPosterURL;
         bool m_forcePendingWebGLPolicy;
-        bool m_originalTimeWithoutMouseMovementBeforeHidingControls;
+        Seconds m_originalTimeWithoutMouseMovementBeforeHidingControls;
         bool m_useLegacyBackgroundSizeShorthandBehavior;
         bool m_autoscrollForDragAndDropEnabled;
         bool m_quickTimePluginReplacementEnabled;
@@ -189,6 +193,7 @@ private:
         bool m_indexedDBWorkersEnabled;
         bool m_cssGridLayoutEnabled;
         bool m_webGL2Enabled;
+        bool m_webGPUEnabled;
     };
 
     Page* m_page;

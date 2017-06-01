@@ -149,7 +149,7 @@ public:
     void print();
     void stop();
 
-    WEBCORE_EXPORT RefPtr<DOMWindow> open(const String& urlString, const AtomicString& frameName, const String& windowFeaturesString, DOMWindow& activeWindow, DOMWindow& firstWindow);
+    WEBCORE_EXPORT RefPtr<DOMWindow> open(DOMWindow& activeWindow, DOMWindow& firstWindow, const String& urlString, const AtomicString& frameName, const String& windowFeaturesString);
 
     void showModalDialog(const String& urlString, const String& dialogFeaturesString, DOMWindow& activeWindow, DOMWindow& firstWindow, std::function<void(DOMWindow&)> prepareDialogFunction);
 
@@ -193,6 +193,8 @@ public:
     DOMWindow* opener() const;
     DOMWindow* parent() const;
     DOMWindow* top() const;
+
+    String origin() const;
 
     // DOM Level 2 AbstractView Interface
 
@@ -301,7 +303,7 @@ public:
     void resetAllGeolocationPermission();
 
 #if ENABLE(IOS_TOUCH_EVENTS) || ENABLE(IOS_GESTURE_EVENTS)
-    bool hasTouchEventListeners() const { return m_touchEventListenerCount > 0; }
+    bool hasTouchOrGestureEventListeners() const { return m_touchAndGestureEventListenerCount > 0; }
 #endif
 
 #if ENABLE(USER_MESSAGE_HANDLERS)
@@ -388,7 +390,7 @@ private:
 #endif
 
 #if ENABLE(IOS_TOUCH_EVENTS) || ENABLE(IOS_GESTURE_EVENTS)
-    unsigned m_touchEventListenerCount { 0 };
+    unsigned m_touchAndGestureEventListenerCount { 0 };
 #endif
 
 #if ENABLE(GAMEPAD)

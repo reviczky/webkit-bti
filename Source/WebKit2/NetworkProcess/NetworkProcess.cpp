@@ -30,9 +30,9 @@
 #include "Attachment.h"
 #include "AuthenticationManager.h"
 #include "ChildProcessMessages.h"
-#include "CustomProtocolManager.h"
 #include "DataReference.h"
 #include "DownloadProxyMessages.h"
+#include "LegacyCustomProtocolManager.h"
 #include "Logging.h"
 #include "NetworkConnectionToWebProcess.h"
 #include "NetworkProcessCreationParameters.h"
@@ -49,6 +49,7 @@
 #include "WebProcessPoolMessages.h"
 #include "WebsiteData.h"
 #include "WebsiteDataFetchOption.h"
+#include "WebsiteDataStoreParameters.h"
 #include "WebsiteDataType.h"
 #include <WebCore/DNS.h>
 #include <WebCore/DiagnosticLoggingClient.h>
@@ -61,6 +62,7 @@
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/SecurityOriginHash.h>
 #include <WebCore/SessionID.h>
+#include <WebCore/Settings.h>
 #include <WebCore/URLParser.h>
 #include <wtf/OptionSet.h>
 #include <wtf/RunLoop.h>
@@ -109,9 +111,9 @@ NetworkProcess::NetworkProcess()
 
     addSupplement<AuthenticationManager>();
     addSupplement<WebCookieManager>();
-    addSupplement<CustomProtocolManager>();
+    addSupplement<LegacyCustomProtocolManager>();
 #if USE(NETWORK_SESSION) && PLATFORM(COCOA)
-    NetworkSessionCocoa::setCustomProtocolManager(supplement<CustomProtocolManager>());
+    NetworkSessionCocoa::setLegacyCustomProtocolManager(supplement<LegacyCustomProtocolManager>());
 #endif
 }
 
@@ -201,9 +203,10 @@ void NetworkProcess::lowMemoryHandler(Critical critical)
 
 void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&& parameters)
 {
+    WebCore::setPresentingApplicationPID(parameters.presentingApplicationPID);
     platformInitializeNetworkProcess(parameters);
 
-    WTF::setCurrentThreadIsUserInitiated();
+    WTF::Thread::setCurrentThreadIsUserInitiated();
 
     m_suppressMemoryPressureHandler = parameters.shouldSuppressMemoryPressureHandler;
     m_loadThrottleLatency = parameters.loadThrottleLatency;
@@ -234,7 +237,7 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
 
     // FIXME: instead of handling this here, a message should be sent later (scales to multiple sessions)
     if (parameters.privateBrowsingEnabled)
-        RemoteNetworkingContext::ensurePrivateBrowsingSession(SessionID::legacyPrivateSessionID());
+        RemoteNetworkingContext::ensurePrivateBrowsingSession({SessionID::legacyPrivateSessionID(), { }, { }, { }});
 
     if (parameters.shouldUseTestingNetworkSession)
         NetworkStorageSession::switchToNewTestingSession();
@@ -285,12 +288,17 @@ void NetworkProcess::clearCachedCredentials()
 #endif
 }
 
-void NetworkProcess::ensurePrivateBrowsingSession(SessionID sessionID)
+void NetworkProcess::ensurePrivateBrowsingSession(WebsiteDataStoreParameters&& parameters)
 {
-    RemoteNetworkingContext::ensurePrivateBrowsingSession(sessionID);
+    RemoteNetworkingContext::ensurePrivateBrowsingSession(WTFMove(parameters));
 }
 
-void NetworkProcess::destroyPrivateBrowsingSession(SessionID sessionID)
+void NetworkProcess::addWebsiteDataStore(WebsiteDataStoreParameters&& parameters)
+{
+    RemoteNetworkingContext::ensureWebsiteDataStoreSession(WTFMove(parameters));
+}
+
+void NetworkProcess::destroySession(SessionID sessionID)
 {
     SessionTracker::destroySession(sessionID);
 }
@@ -309,6 +317,13 @@ void NetworkProcess::didGrantSandboxExtensionsToDatabaseProcessForBlobs(uint64_t
     if (auto handler = m_sandboxExtensionForBlobsCompletionHandlers.take(requestID))
         handler();
 }
+
+#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+void NetworkProcess::shouldPartitionCookiesForTopPrivatelyOwnedDomains(const Vector<String>& domainsToRemove, const Vector<String>& domainsToAdd,  bool clearFirst)
+{
+    NetworkStorageSession::defaultStorageSession().setShouldPartitionCookiesForHosts(domainsToRemove, domainsToAdd, clearFirst);
+}
+#endif
 
 static void fetchDiskCacheEntries(SessionID sessionID, OptionSet<WebsiteDataFetchOption> fetchOptions, Function<void (Vector<WebsiteData::Entry>)>&& completionHandler)
 {
@@ -579,6 +594,11 @@ void NetworkProcess::getNetworkProcessStatistics(uint64_t callbackID)
     parentProcessConnection()->send(Messages::WebProcessPool::DidGetStatistics(data, callbackID), 0);
 }
 
+void NetworkProcess::setAllowsAnySSLCertificateForWebSocket(bool allows)
+{
+    Settings::setAllowsAnySSLCertificate(allows);
+}
+
 void NetworkProcess::logDiagnosticMessage(uint64_t webPageID, const String& message, const String& description, ShouldSample shouldSample)
 {
     if (!DiagnosticLoggingClient::shouldLogAfterSampling(shouldSample))
@@ -657,6 +677,10 @@ void NetworkProcess::initializeProcessName(const ChildProcessInitializationParam
 }
 
 void NetworkProcess::initializeSandbox(const ChildProcessInitializationParameters&, SandboxInitializationParameters&)
+{
+}
+
+void NetworkProcess::syncAllCookies()
 {
 }
 #endif

@@ -56,14 +56,64 @@ bool WKResourceLoadStatisticsManagerIsHasHadUserInteraction(WKStringRef hostName
     return WebResourceLoadStatisticsManager::hasHadUserInteraction(toWTFString(hostName));
 }
 
+void WKResourceLoadStatisticsManagerSetGrandfathered(WKStringRef hostName, bool value)
+{
+    WebResourceLoadStatisticsManager::setGrandfathered(toWTFString(hostName), value);
+}
+
+bool WKResourceLoadStatisticsManagerIsGrandfathered(WKStringRef hostName)
+{
+    return WebResourceLoadStatisticsManager::isGrandfathered(toWTFString(hostName));
+}
+
+void WKResourceLoadStatisticsManagerSetSubframeUnderTopFrameOrigin(WKStringRef hostName, WKStringRef topFrameHostName)
+{
+    WebResourceLoadStatisticsManager::setSubframeUnderTopFrameOrigin(toWTFString(hostName), toWTFString(topFrameHostName));
+}
+
+void WKResourceLoadStatisticsManagerSetSubresourceUnderTopFrameOrigin(WKStringRef hostName, WKStringRef topFrameHostName)
+{
+    WebResourceLoadStatisticsManager::setSubresourceUnderTopFrameOrigin(toWTFString(hostName), toWTFString(topFrameHostName));
+}
+
+void WKResourceLoadStatisticsManagerSetSubresourceUniqueRedirectTo(WKStringRef hostName, WKStringRef hostNameRedirectedTo)
+{
+    WebResourceLoadStatisticsManager::setSubresourceUniqueRedirectTo(toWTFString(hostName), toWTFString(hostNameRedirectedTo));
+}
+
 void WKResourceLoadStatisticsManagerSetTimeToLiveUserInteraction(double seconds)
 {
     WebResourceLoadStatisticsManager::setTimeToLiveUserInteraction(seconds);
 }
 
+void WKResourceLoadStatisticsManagerSetTimeToLiveCookiePartitionFree(double seconds)
+{
+    WebResourceLoadStatisticsManager::setTimeToLiveCookiePartitionFree(seconds);
+}
+
+void WKResourceLoadStatisticsManagerSetMinimumTimeBetweeenDataRecordsRemoval(double seconds)
+{
+    WebResourceLoadStatisticsManager::setMinimumTimeBetweeenDataRecordsRemoval(seconds);
+}
+
+void WKResourceLoadStatisticsManagerSetGrandfatheringTime(double seconds)
+{
+    WebResourceLoadStatisticsManager::setGrandfatheringTime(seconds);
+}
+
 void WKResourceLoadStatisticsManagerFireDataModificationHandler()
 {
     WebResourceLoadStatisticsManager::fireDataModificationHandler();
+}
+
+void WKResourceLoadStatisticsManagerFireShouldPartitionCookiesHandler()
+{
+    WebResourceLoadStatisticsManager::fireShouldPartitionCookiesHandler();
+}
+
+void WKResourceLoadStatisticsManagerFireShouldPartitionCookiesHandlerForOneDomain(WKStringRef hostName, bool value)
+{
+    WebResourceLoadStatisticsManager::fireShouldPartitionCookiesHandlerForOneDomain(toWTFString(hostName), value);
 }
 
 void WKResourceLoadStatisticsManagerSetNotifyPagesWhenDataRecordsWereScanned(bool value)
@@ -76,9 +126,14 @@ void WKResourceLoadStatisticsManagerSetShouldClassifyResourcesBeforeDataRecordsR
     WebResourceLoadStatisticsManager::setShouldClassifyResourcesBeforeDataRecordsRemoval(value);
 }
 
-void WKResourceLoadStatisticsManagerSetMinimumTimeBetweeenDataRecordsRemoval(double seconds)
+void WKResourceLoadStatisticsManagerClearInMemoryAndPersistentStore()
 {
-    WebResourceLoadStatisticsManager::setMinimumTimeBetweeenDataRecordsRemoval(seconds);
+    WebResourceLoadStatisticsManager::clearInMemoryAndPersistentStore();
+}
+
+void WKResourceLoadStatisticsManagerClearInMemoryAndPersistentStoreModifiedSinceHours(unsigned hours)
+{
+    WebResourceLoadStatisticsManager::clearInMemoryAndPersistentStoreModifiedSinceHours(hours);
 }
 
 void WKResourceLoadStatisticsManagerResetToConsistentState()

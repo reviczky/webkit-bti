@@ -133,6 +133,7 @@ public:
     void setHandlesAuthenticationChallenges(bool value) { m_handlesAuthenticationChallenges = value; }
     void setAuthenticationUsername(String username) { m_authenticationUsername = username; }
     void setAuthenticationPassword(String password) { m_authenticationPassword = password; }
+    void setAllowsAnySSLCertificate(bool);
 
     void setBlockAllPlugins(bool shouldBlock) { m_shouldBlockAllPlugins = shouldBlock; }
 
@@ -152,13 +153,29 @@ public:
     bool isStatisticsPrevalentResource(WKStringRef hostName);
     void setStatisticsHasHadUserInteraction(WKStringRef hostName, bool value);
     bool isStatisticsHasHadUserInteraction(WKStringRef hostName);
+    void setStatisticsGrandfathered(WKStringRef hostName, bool value);
+    bool isStatisticsGrandfathered(WKStringRef hostName);
+    void setStatisticsSubframeUnderTopFrameOrigin(WKStringRef hostName, WKStringRef topFrameHostName);
+    void setStatisticsSubresourceUnderTopFrameOrigin(WKStringRef hostName, WKStringRef topFrameHostName);
+    void setStatisticsSubresourceUniqueRedirectTo(WKStringRef hostName, WKStringRef hostNameRedirectedTo);
     void setStatisticsTimeToLiveUserInteraction(double seconds);
+    void setStatisticsTimeToLiveCookiePartitionFree(double seconds);
     void statisticsFireDataModificationHandler();
+    void statisticsFireShouldPartitionCookiesHandler();
+    void statisticsFireShouldPartitionCookiesHandlerForOneDomain(WKStringRef hostName, bool value);
     void setStatisticsNotifyPagesWhenDataRecordsWereScanned(bool);
     void setStatisticsShouldClassifyResourcesBeforeDataRecordsRemoval(bool);
     void setStatisticsMinimumTimeBetweeenDataRecordsRemoval(double);
+    void setStatisticsGrandfatheringTime(double seconds);
+    void statisticsClearInMemoryAndPersistentStore();
+    void statisticsClearInMemoryAndPersistentStoreModifiedSinceHours(unsigned);
     void statisticsResetToConsistentState();
 
+    WKArrayRef openPanelFileURLs() const { return m_openPanelFileURLs.get(); }
+    void setOpenPanelFileURLs(WKArrayRef fileURLs) { m_openPanelFileURLs = fileURLs; }
+
+    void terminateNetworkProcess();
+    
 private:
     WKRetainPtr<WKPageConfigurationRef> generatePageConfiguration(WKContextConfigurationRef);
     WKRetainPtr<WKContextConfigurationRef> generateContextConfiguration() const;
@@ -184,6 +201,7 @@ private:
     void platformWillRunTest(const TestInvocation&);
     void platformRunUntil(bool& done, double timeout);
     void platformDidCommitLoadForFrame(WKPageRef, WKFrameRef);
+    WKContextRef platformContext();
     WKPreferencesRef platformPreferences();
     void initializeInjectedBundlePath();
     void initializeTestPluginDirectory();
@@ -359,6 +377,8 @@ private:
     bool m_shouldShowWebView { false };
     
     bool m_shouldDecideNavigationPolicyAfterDelay { false };
+
+    WKRetainPtr<WKArrayRef> m_openPanelFileURLs;
 
     std::unique_ptr<EventSenderProxy> m_eventSenderProxy;
 

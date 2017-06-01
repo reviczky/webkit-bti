@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include "FrameLoaderTypes.h"
 #include "ScrollTypes.h"
 #include <wtf/Noncopyable.h>
 
@@ -71,7 +72,7 @@ public:
 
     // User input APIs.
 #if ENABLE(CONTEXT_MENUS)
-    WEBCORE_EXPORT bool handleContextMenuEvent(const PlatformMouseEvent&, const Frame*, InputSource source = InputSource::User);
+    WEBCORE_EXPORT bool handleContextMenuEvent(const PlatformMouseEvent&, Frame&, InputSource = InputSource::User);
 #endif
     WEBCORE_EXPORT bool handleMousePressEvent(const PlatformMouseEvent&, InputSource source = InputSource::User);
     WEBCORE_EXPORT bool handleMouseReleaseEvent(const PlatformMouseEvent&, InputSource source = InputSource::User);
@@ -88,7 +89,7 @@ public:
 
     // Navigation APIs.
     WEBCORE_EXPORT void loadRequest(const FrameLoadRequest&, InputSource source = InputSource::User);
-    WEBCORE_EXPORT void reloadFrame(Frame*, bool endToEndReload, bool contentBlockersEnabled, InputSource = InputSource::User);
+    WEBCORE_EXPORT void reloadFrame(Frame*, OptionSet<ReloadOption>, InputSource = InputSource::User);
     WEBCORE_EXPORT void stopLoadingFrame(Frame*, InputSource source = InputSource::User);
     WEBCORE_EXPORT bool tryClosePage(InputSource source = InputSource::User);
 

@@ -27,17 +27,14 @@
 
 #include "CacheModel.h"
 #include "ChildProcess.h"
-#include "DrawingArea.h"
-#include "LibWebRTCNetwork.h"
 #include "PluginProcessConnectionManager.h"
 #include "ResourceCachesToClear.h"
 #include "SandboxExtension.h"
-#include "SharedMemory.h"
 #include "TextCheckerState.h"
 #include "ViewUpdateDispatcher.h"
-#include "VisitedLinkTable.h"
+#include "WebInspectorInterruptDispatcher.h"
+#include <WebCore/ActivityState.h>
 #include <WebCore/HysteresisActivity.h>
-#include <WebCore/ResourceLoadStatisticsStore.h>
 #include <WebCore/SessionID.h>
 #include <WebCore/Timer.h>
 #include <wtf/Forward.h>
@@ -61,11 +58,13 @@ class Object;
 
 namespace WebCore {
 class ApplicationCacheStorage;
+class CPUMonitor;
 class CertificateInfo;
 class PageGroup;
 class ResourceRequest;
 class SessionID;
 class UserGestureToken;
+class ResourceLoadStatisticsStore;
 struct PluginInfo;
 struct SecurityOriginData;
 struct SoupNetworkProxySettings;
@@ -76,6 +75,7 @@ namespace WebKit {
 class EventDispatcher;
 class GamepadData;
 class InjectedBundle;
+class LibWebRTCNetwork;
 class NetworkProcessConnection;
 class ObjCObjectGraph;
 class UserData;
@@ -93,6 +93,7 @@ struct WebPageGroupData;
 struct WebPreferencesStore;
 struct WebProcessCreationParameters;
 struct WebsiteData;
+struct WebsiteDataStoreParameters;
 
 #if ENABLE(DATABASE_PROCESS)
 class WebToDatabaseProcessConnection;
@@ -146,10 +147,6 @@ public:
 
     uint64_t userGestureTokenIdentifier(RefPtr<WebCore::UserGestureToken>);
     void userGestureTokenDestroyed(WebCore::UserGestureToken&);
-
-#if PLATFORM(COCOA)
-    pid_t presenterApplicationPid() const { return m_presenterApplicationPid; }
-#endif
     
     const TextCheckerState& textCheckerState() const { return m_textCheckerState; }
     void setTextCheckerState(const TextCheckerState&);
@@ -178,8 +175,9 @@ public:
     void setCacheModel(uint32_t);
 
     void ensurePrivateBrowsingSession(WebCore::SessionID);
-    void destroyPrivateBrowsingSession(WebCore::SessionID);
     void ensureLegacyPrivateBrowsingSessionInNetworkProcess();
+    void addWebsiteDataStore(WebsiteDataStoreParameters&&);
+    void destroySession(WebCore::SessionID);
 
     void pageDidEnterWindow(uint64_t pageID);
     void pageWillLeaveWindow(uint64_t pageID);
@@ -193,8 +191,9 @@ public:
 #endif
 
     void updateActivePages();
+    void pageActivityStateDidChange(uint64_t pageID, WebCore::ActivityState::Flags changed);
 
-    void setHiddenPageTimerThrottlingIncreaseLimit(int milliseconds);
+    void setHiddenPageDOMTimerThrottlingIncreaseLimit(int milliseconds);
 
     void processWillSuspendImminently(bool& handled);
     void prepareToSuspend();
@@ -282,6 +281,7 @@ private:
     void setJavaScriptGarbageCollectorTimerEnabled(bool flag);
 
     void mainThreadPing();
+    void backgroundResponsivenessPing();
 
 #if ENABLE(GAMEPAD)
     void setInitialGamepads(const Vector<GamepadData>&);
@@ -316,6 +316,10 @@ private:
     void destroyAutomationSessionProxy();
 
     void logDiagnosticMessageForNetworkProcessCrash();
+    bool hasVisibleWebPage() const;
+    void updateCPULimit();
+    enum class CPUMonitorUpdateReason { LimitHasChanged, VisibilityHasChanged };
+    void updateCPUMonitorState(CPUMonitorUpdateReason);
 
     // ChildProcess
     void initializeProcess(const ChildProcessInitializationParameters&) override;
@@ -351,6 +355,7 @@ private:
 #if PLATFORM(IOS)
     RefPtr<ViewUpdateDispatcher> m_viewUpdateDispatcher;
 #endif
+    RefPtr<WebInspectorInterruptDispatcher> m_webInspectorInterruptDispatcher;
 
     HashMap<WebCore::SessionID, HashMap<unsigned, double>> m_plugInAutoStartOriginHashes;
     HashSet<String> m_plugInAutoStartOrigins;
@@ -360,7 +365,6 @@ private:
 
 #if PLATFORM(COCOA)
     WebCore::MachSendRight m_compositingRenderServerPort;
-    pid_t m_presenterApplicationPid;
 #endif
 
     bool m_fullKeyboardAccessEnabled { false };
@@ -416,6 +420,10 @@ private:
 
     unsigned m_pagesMarkingLayersAsVolatile { 0 };
     bool m_suppressMemoryPressureHandler { false };
+#if PLATFORM(MAC)
+    std::unique_ptr<WebCore::CPUMonitor> m_cpuMonitor;
+    std::optional<double> m_cpuLimit;
+#endif
 
     HashMap<WebCore::UserGestureToken *, uint64_t> m_userGestureTokens;
 

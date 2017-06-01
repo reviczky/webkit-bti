@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007-2009, 2011, 2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2007-2009, 2011, 2016, 2017 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -39,7 +39,14 @@
 #include <wtf/GetPtr.h>
 
 #if ENABLE(WEBGL)
-#include "JSWebGLRenderingContextBase.h"
+#include "JSWebGLRenderingContext.h"
+#if ENABLE(WEBGL2)
+#include "JSWebGL2RenderingContext.h"
+#endif
+#endif
+
+#if ENABLE(WEBGPU)
+#include "JSWebGPURenderingContext.h"
 #endif
 
 #if ENABLE(TOUCH_EVENTS)
@@ -137,9 +144,9 @@ JSValue JSDocument::getCSSCanvasContext(JSC::ExecState& state)
     RETURN_IF_EXCEPTION(scope, JSValue());
     auto name = state.uncheckedArgument(1).toWTFString(&state);
     RETURN_IF_EXCEPTION(scope, JSValue());
-    auto width = convert<IDLLong>(state, state.uncheckedArgument(2), IntegerConversionConfiguration::Normal);
+    auto width = convert<IDLLong>(state, state.uncheckedArgument(2));
     RETURN_IF_EXCEPTION(scope, JSValue());
-    auto height = convert<IDLLong>(state, state.uncheckedArgument(3), IntegerConversionConfiguration::Normal);
+    auto height = convert<IDLLong>(state, state.uncheckedArgument(3));
     RETURN_IF_EXCEPTION(scope, JSValue());
 
     auto* context = wrapped().getCSSCanvasContext(WTFMove(contextId), WTFMove(name), WTFMove(width), WTFMove(height));
@@ -147,8 +154,16 @@ JSValue JSDocument::getCSSCanvasContext(JSC::ExecState& state)
         return jsNull();
 
 #if ENABLE(WEBGL)
-    if (is<WebGLRenderingContextBase>(*context))
-        return toJS(&state, globalObject(), downcast<WebGLRenderingContextBase>(*context));
+    if (is<WebGLRenderingContext>(*context))
+        return toJS(&state, globalObject(), downcast<WebGLRenderingContext>(*context));
+#if ENABLE(WEBGL2)
+    if (is<WebGL2RenderingContext>(*context))
+        return toJS(&state, globalObject(), downcast<WebGL2RenderingContext>(*context));
+#endif
+#endif
+#if ENABLE(WEBGPU)
+    if (is<WebGPURenderingContext>(*context))
+        return toJS(&state, globalObject(), downcast<WebGPURenderingContext>(*context));
 #endif
 
     return toJS(&state, globalObject(), downcast<CanvasRenderingContext2D>(*context));

@@ -60,7 +60,7 @@
 #include <wtf/RetainPtr.h>
 OBJC_CLASS CALayer;
 OBJC_CLASS WebGLLayer;
-#elif PLATFORM(GTK) || PLATFORM(WIN_CAIRO)
+#elif PLATFORM(GTK) || PLATFORM(WIN_CAIRO) || PLATFORM(WPE)
 typedef unsigned int GLuint;
 #endif
 
@@ -1133,6 +1133,9 @@ public:
     void forceContextLost();
     void recycleContext();
 
+    void dispatchContextChangedNotification();
+    void simulateContextChanged();
+
     void paintRenderingResultsToCanvas(ImageBuffer*);
     RefPtr<ImageData> paintRenderingResultsToImageData();
     bool paintCompositedResultsToCanvas(ImageBuffer*);
@@ -1370,7 +1373,7 @@ private:
 
     std::unique_ptr<ShaderNameHash> nameHashMapForShaders;
 
-#if ((PLATFORM(GTK) || PLATFORM(WIN)) && USE(OPENGL_ES_2))
+#if ((PLATFORM(GTK) || PLATFORM(WIN) || PLATFORM(WPE)) && USE(OPENGL_ES_2))
     friend class Extensions3DOpenGLES;
     std::unique_ptr<Extensions3DOpenGLES> m_extensions;
 #else
@@ -1427,7 +1430,8 @@ private:
     friend class GraphicsContext3DPrivate;
     std::unique_ptr<GraphicsContext3DPrivate> m_private;
 #endif
-    
+
+    // FIXME: Layering violation.
     WebGLRenderingContextBase* m_webglContext;
 
     bool m_isForWebGL2 { false };

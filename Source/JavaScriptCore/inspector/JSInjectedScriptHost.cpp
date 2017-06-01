@@ -62,7 +62,7 @@ using namespace JSC;
 
 namespace Inspector {
 
-const ClassInfo JSInjectedScriptHost::s_info = { "InjectedScriptHost", &Base::s_info, 0, CREATE_METHOD_TABLE(JSInjectedScriptHost) };
+const ClassInfo JSInjectedScriptHost::s_info = { "InjectedScriptHost", &Base::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(JSInjectedScriptHost) };
 
 JSInjectedScriptHost::JSInjectedScriptHost(VM& vm, Structure* structure, Ref<InjectedScriptHost>&& impl)
     : JSDestructibleObject(vm, structure)
@@ -190,11 +190,15 @@ JSValue JSInjectedScriptHost::subtype(ExecState* exec)
     if (object && object->getDirect(exec->vm(), exec->vm().propertyNames->builtinNames().arrayIteratorNextIndexPrivateName()))
         return jsNontrivialString(exec, ASCIILiteral("iterator"));
 
-    if (value.inherits(vm, JSInt8Array::info()) || value.inherits(vm, JSInt16Array::info()) || value.inherits(vm, JSInt32Array::info()))
-        return jsNontrivialString(exec, ASCIILiteral("array"));
-    if (value.inherits(vm, JSUint8Array::info()) || value.inherits(vm, JSUint16Array::info()) || value.inherits(vm, JSUint32Array::info()))
-        return jsNontrivialString(exec, ASCIILiteral("array"));
-    if (value.inherits(vm, JSFloat32Array::info()) || value.inherits(vm, JSFloat64Array::info()))
+    if (value.inherits(vm, JSInt8Array::info())
+        || value.inherits(vm, JSInt16Array::info())
+        || value.inherits(vm, JSInt32Array::info())
+        || value.inherits(vm, JSUint8Array::info())
+        || value.inherits(vm, JSUint8ClampedArray::info())
+        || value.inherits(vm, JSUint16Array::info())
+        || value.inherits(vm, JSUint32Array::info())
+        || value.inherits(vm, JSFloat32Array::info())
+        || value.inherits(vm, JSFloat64Array::info()))
         return jsNontrivialString(exec, ASCIILiteral("array"));
 
     return impl().subtype(exec, value);
@@ -301,7 +305,7 @@ JSValue JSInjectedScriptHost::getInternalProperties(ExecState* exec)
         RETURN_IF_EXCEPTION(scope, JSValue());
         if (boundFunction->boundArgs()) {
             scope.release();
-            array->putDirectIndex(exec, index++, constructInternalProperty(exec, "boundArgs", boundFunction->boundArgs()));
+            array->putDirectIndex(exec, index++, constructInternalProperty(exec, "boundArgs", boundFunction->boundArgsCopy(exec)));
             return array;
         }
         return array;

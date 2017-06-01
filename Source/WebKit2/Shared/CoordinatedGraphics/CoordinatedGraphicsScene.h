@@ -80,9 +80,12 @@ public:
     void setActive(bool);
 
     void commitSceneState(const WebCore::CoordinatedGraphicsState&);
+    void renderNextFrame();
 
     void setViewBackgroundColor(const WebCore::Color& color) { m_viewBackgroundColor = color; }
     WebCore::Color viewBackgroundColor() const { return m_viewBackgroundColor; }
+
+    void releaseUpdateAtlases(const Vector<uint32_t>&);
 
 private:
     void setRootLayerID(WebCore::CoordinatedLayerID);
@@ -99,12 +102,12 @@ private:
     void setLayerRepaintCountIfNeeded(WebCore::TextureMapperLayer*, const WebCore::CoordinatedGraphicsLayerState&);
 
     void syncUpdateAtlases(const WebCore::CoordinatedGraphicsState&);
-    void createUpdateAtlas(uint32_t atlasID, PassRefPtr<WebCore::CoordinatedSurface>);
+    void createUpdateAtlas(uint32_t atlasID, RefPtr<WebCore::CoordinatedSurface>&&);
     void removeUpdateAtlas(uint32_t atlasID);
 
     void syncImageBackings(const WebCore::CoordinatedGraphicsState&);
     void createImageBacking(WebCore::CoordinatedImageBackingID);
-    void updateImageBacking(WebCore::CoordinatedImageBackingID, PassRefPtr<WebCore::CoordinatedSurface>);
+    void updateImageBacking(WebCore::CoordinatedImageBackingID, RefPtr<WebCore::CoordinatedSurface>&&);
     void clearImageBackingContents(WebCore::CoordinatedImageBackingID);
     void removeImageBacking(WebCore::CoordinatedImageBackingID);
 
@@ -123,7 +126,6 @@ private:
     void dispatchOnMainThread(Function<void()>&&);
     void dispatchOnClientRunLoop(Function<void()>&&);
     void updateViewport();
-    void renderNextFrame();
 
     void createLayer(WebCore::CoordinatedLayerID);
     void deleteLayer(WebCore::CoordinatedLayerID);

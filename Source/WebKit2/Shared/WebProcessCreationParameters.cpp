@@ -46,6 +46,7 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 {
     encoder << injectedBundlePath;
     encoder << injectedBundlePathExtensionHandle;
+    encoder << additionalSandboxExtensionHandles;
     encoder << initializationUserData;
     encoder << applicationCacheDirectory;
     encoder << applicationCacheFlatFileSubdirectoryName;
@@ -54,6 +55,8 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << webSQLDatabaseDirectoryExtensionHandle;
     encoder << mediaCacheDirectory;
     encoder << mediaCacheDirectoryExtensionHandle;
+    encoder << javaScriptConfigurationDirectory;
+    encoder << javaScriptConfigurationDirectoryExtensionHandle;
 #if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100
     encoder << uiProcessCookieStorageIdentifier;
 #endif
@@ -66,6 +69,7 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << mediaKeyStorageDirectoryExtensionHandle;
 #if ENABLE(MEDIA_STREAM)
     encoder << audioCaptureExtensionHandle;
+    encoder << shouldCaptureAudioInUIProcess;
 #endif
     encoder << shouldUseTestingNetworkSession;
     encoder << urlSchemesRegisteredAsEmptyDocument;
@@ -94,8 +98,8 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 #if PLATFORM(COCOA) || USE(CFURLCONNECTION)
     encoder << uiProcessBundleIdentifier;
 #endif
+    encoder << presentingApplicationPID;
 #if PLATFORM(COCOA)
-    encoder << presenterApplicationPid;
     encoder << accessibilityEnhancedUserInterfaceEnabled;
     encoder << acceleratedCompositingPort;
     encoder << uiProcessBundleResourcePath;
@@ -107,7 +111,7 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
         encoder << bundleParameterData->dataReference();
 #endif
 
-#if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
+#if ENABLE(NOTIFICATIONS)
     encoder << notificationPermissions;
 #endif
 
@@ -148,6 +152,8 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
         return false;
     if (!decoder.decode(parameters.injectedBundlePathExtensionHandle))
         return false;
+    if (!decoder.decode(parameters.additionalSandboxExtensionHandles))
+        return false;
     if (!decoder.decode(parameters.initializationUserData))
         return false;
     if (!decoder.decode(parameters.applicationCacheDirectory))
@@ -163,6 +169,10 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     if (!decoder.decode(parameters.mediaCacheDirectory))
         return false;
     if (!decoder.decode(parameters.mediaCacheDirectoryExtensionHandle))
+        return false;
+    if (!decoder.decode(parameters.javaScriptConfigurationDirectory))
+        return false;
+    if (!decoder.decode(parameters.javaScriptConfigurationDirectoryExtensionHandle))
         return false;
 #if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100
     if (!decoder.decode(parameters.uiProcessCookieStorageIdentifier))
@@ -182,6 +192,8 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
         return false;
 #if ENABLE(MEDIA_STREAM)
     if (!decoder.decode(parameters.audioCaptureExtensionHandle))
+        return false;
+    if (!decoder.decode(parameters.shouldCaptureAudioInUIProcess))
         return false;
 #endif
     if (!decoder.decode(parameters.shouldUseTestingNetworkSession))
@@ -236,10 +248,9 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     if (!decoder.decode(parameters.uiProcessBundleIdentifier))
         return false;
 #endif
-
-#if PLATFORM(COCOA)
-    if (!decoder.decode(parameters.presenterApplicationPid))
+    if (!decoder.decode(parameters.presentingApplicationPID))
         return false;
+#if PLATFORM(COCOA)
     if (!decoder.decode(parameters.accessibilityEnhancedUserInterfaceEnabled))
         return false;
     if (!decoder.decode(parameters.acceleratedCompositingPort))
@@ -266,7 +277,7 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     }
 #endif
 
-#if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
+#if ENABLE(NOTIFICATIONS)
     if (!decoder.decode(parameters.notificationPermissions))
         return false;
 #endif

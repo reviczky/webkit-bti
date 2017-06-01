@@ -33,9 +33,11 @@
 #include "ShareableResource.h"
 #include <WebCore/ResourceResponse.h>
 #include <wtf/Function.h>
+#include <wtf/OptionSet.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
+class LowPowerModeNotifier;
 class ResourceRequest;
 class SharedBuffer;
 class URL;
@@ -93,13 +95,15 @@ class Cache {
     WTF_MAKE_NONCOPYABLE(Cache);
     friend class WTF::NeverDestroyed<Cache>;
 public:
-    struct Parameters {
-        bool enableEfficacyLogging;
+    enum class Option {
+        EfficacyLogging = 1 << 0,
+        // In testing mode we try to eliminate sources of randomness. Cache does not shrink and there are no read timeouts.
+        TestingMode = 1 << 1,
 #if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
-        bool enableNetworkCacheSpeculativeRevalidation;
+        SpeculativeRevalidation = 1 << 2,
 #endif
     };
-    bool initialize(const String& cachePath, const Parameters&);
+    bool initialize(const String& cachePath, OptionSet<Option>);
     void setCapacity(size_t);
 
     bool isEnabled() const { return !!m_storage; }
@@ -147,6 +151,7 @@ private:
 
     std::unique_ptr<Storage> m_storage;
 #if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
+    std::unique_ptr<WebCore::LowPowerModeNotifier> m_lowPowerModeNotifier;
     std::unique_ptr<SpeculativeLoadManager> m_speculativeLoadManager;
 #endif
     std::unique_ptr<Statistics> m_statistics;

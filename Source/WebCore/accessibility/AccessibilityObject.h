@@ -66,6 +66,8 @@ typedef WebAccessibilityObjectWrapper AccessibilityObjectWrapper;
 #elif PLATFORM(GTK)
 typedef struct _AtkObject AtkObject;
 typedef struct _AtkObject AccessibilityObjectWrapper;
+#elif PLATFORM(WPE)
+class AccessibilityObjectWrapper : public RefCounted<AccessibilityObjectWrapper> { };
 #else
 class AccessibilityObjectWrapper;
 #endif
@@ -95,9 +97,11 @@ enum AccessibilityRole {
     ApplicationAlertRole,
     ApplicationAlertDialogRole,
     ApplicationDialogRole,
+    ApplicationGroupRole,
     ApplicationLogRole,
     ApplicationMarqueeRole,
     ApplicationStatusRole,
+    ApplicationTextGroupRole,
     ApplicationTimerRole,
     AudioRole,
     BlockquoteRole,
@@ -126,6 +130,8 @@ enum AccessibilityRole {
     DocumentNoteRole,
     DrawerRole,
     EditableTextRole,
+    FeedRole,
+    FigureRole,
     FooterRole,
     FormRole,
     GridRole,
@@ -145,6 +151,7 @@ enum AccessibilityRole {
     LandmarkBannerRole,
     LandmarkComplementaryRole,
     LandmarkContentInfoRole,
+    LandmarkDocRegionRole,
     LandmarkMainRole,
     LandmarkNavigationRole,
     LandmarkRegionRole,
@@ -210,6 +217,9 @@ enum AccessibilityRole {
     TableRole,
     TableHeaderContainerRole,
     TextAreaRole,
+    TextGroupRole,
+    TermRole,
+    TimeRole,
     TreeRole,
     TreeGridRole,
     TreeItemRole,
@@ -281,6 +291,24 @@ struct AccessibilityTextUnderElementMode {
         , ignoredChildNode(ignored)
         { }
 };
+
+// Use this struct to store the isIgnored data that depends on the parents, so that in addChildren()
+// we avoid going up the parent chain for each element while traversing the tree with useful information already.
+struct AccessibilityIsIgnoredFromParentData {
+    AccessibilityObject* parent;
+    bool isARIAHidden;
+    bool isPresentationalChildOfAriaRole;
+    bool isDescendantOfBarrenParent;
+    
+    AccessibilityIsIgnoredFromParentData(AccessibilityObject* parent = nullptr)
+        : parent(parent)
+        , isARIAHidden(false)
+        , isPresentationalChildOfAriaRole(false)
+        , isDescendantOfBarrenParent(false)
+        { }
+    
+    bool isNull() const { return !parent; }
+};
     
 enum AccessibilityOrientation {
     AccessibilityOrientationVertical,
@@ -314,6 +342,7 @@ enum AccessibilitySearchDirection {
 
 enum AccessibilitySearchKey {
     AnyTypeSearchKey = 1,
+    ArticleSearchKey,
     BlockquoteSameLevelSearchKey,
     BlockquoteSearchKey,
     BoldFontSearchKey,
@@ -540,6 +569,7 @@ public:
     bool isRadioGroup() const { return roleValue() == RadioGroupRole; }
     bool isComboBox() const { return roleValue() == ComboBoxRole; }
     bool isTree() const { return roleValue() == TreeRole; }
+    bool isTreeGrid() const { return roleValue() == TreeGridRole; }
     bool isTreeItem() const { return roleValue() == TreeItemRole; }
     bool isScrollbar() const { return roleValue() == ScrollBarRole; }
     bool isButton() const;
@@ -558,7 +588,7 @@ public:
     bool isStyleFormatGroup() const;
     bool isSubscriptStyleGroup() const;
     bool isSuperscriptStyleGroup() const;
-    bool isFigure() const;
+    bool isFigureElement() const;
     bool isSummary() const { return roleValue() == SummaryRole; }
     bool isOutput() const;
     
@@ -597,7 +627,8 @@ public:
     bool hasHighlighting() const;
 
     bool supportsDatetimeAttribute() const;
-
+    const AtomicString& datetimeAttributeValue() const;
+    
     virtual bool canSetFocusAttribute() const { return false; }
     virtual bool canSetTextRangeAttributes() const { return false; }
     virtual bool canSetValueAttribute() const { return false; }
@@ -637,6 +668,8 @@ public:
     void ariaOwnsElements(AccessibilityChildrenVector&) const;
 
     virtual bool ariaHasPopup() const { return false; }
+    String ariaPopupValue() const;
+    bool supportsARIAHasPopup() const;
     bool ariaPressedIsPresent() const;
     bool ariaIsMultiline() const;
     String invalidStatus() const;
@@ -650,10 +683,13 @@ public:
     void classList(Vector<String>&) const;
     virtual String roleDescription() const;
     AccessibilityARIACurrentState ariaCurrentState() const;
+    String ariaCurrentValue() const;
+    bool supportsARIACurrent() const;
     
     // This function checks if the object should be ignored when there's a modal dialog displayed.
     bool ignoredFromARIAModalPresence() const;
     bool isAriaModalDescendant(Node*) const;
+    bool isAriaModalNode() const;
     
     bool supportsARIASetSize() const;
     bool supportsARIAPosInSet() const;
@@ -812,7 +848,9 @@ public:
     virtual bool hasChildren() const { return m_haveChildren; }
     virtual void updateChildrenIfNecessary();
     virtual void setNeedsToUpdateChildren() { }
+    virtual void setNeedsToUpdateSubtree() { }
     virtual void clearChildren();
+    virtual bool needsToUpdateChildren() const { return false; }
 #if PLATFORM(COCOA)
     virtual void detachFromParent();
 #else
@@ -931,7 +969,10 @@ public:
     bool hasContentEditableAttributeSet() const;
 
     bool supportsARIAReadOnly() const;
-    String ariaReadOnlyValue() const;
+    virtual String ariaReadOnlyValue() const;
+
+    bool supportsARIAAutoComplete() const;
+    String ariaAutoCompleteValue() const;
     
     bool supportsARIAAttributes() const;
     
@@ -1068,12 +1109,18 @@ public:
     
     static const AccessibilityObject* matchedParent(const AccessibilityObject&, bool includeSelf, const std::function<bool(const AccessibilityObject&)>&);
     
+    void clearIsIgnoredFromParentData() { m_isIgnoredFromParentData = AccessibilityIsIgnoredFromParentData(); }
+    void setIsIgnoredFromParentDataForChild(AccessibilityObject*);
+    
 protected:
     AXID m_id;
     AccessibilityChildrenVector m_children;
     mutable bool m_haveChildren;
     AccessibilityRole m_role;
     AccessibilityObjectInclusion m_lastKnownIsIgnoredValue;
+    AccessibilityIsIgnoredFromParentData m_isIgnoredFromParentData;
+    
+    void setIsIgnoredFromParentData(AccessibilityIsIgnoredFromParentData& data) { m_isIgnoredFromParentData = data; }
 
     virtual bool computeAccessibilityIsIgnored() const { return true; }
 
@@ -1107,6 +1154,8 @@ protected:
     COMPtr<AccessibilityObjectWrapper> m_wrapper;
 #elif PLATFORM(GTK)
     AtkObject* m_wrapper;
+#elif PLATFORM(WPE)
+    RefPtr<AccessibilityObjectWrapper> m_wrapper;
 #endif
 };
 

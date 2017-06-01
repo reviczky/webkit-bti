@@ -45,6 +45,7 @@ class Node;
 class Page;
 class RenderBlock;
 class RenderObject;
+class RenderText;
 class ScrollView;
 class VisiblePosition;
 class Widget;
@@ -143,7 +144,7 @@ public:
     // For AX objects with elements that back them.
     AccessibilityObject* getOrCreate(RenderObject*);
     AccessibilityObject* getOrCreate(Widget*);
-    AccessibilityObject* getOrCreate(Node*);
+    WEBCORE_EXPORT AccessibilityObject* getOrCreate(Node*);
 
     // used for objects without backing elements
     AccessibilityObject* getOrCreate(AccessibilityRole);
@@ -222,7 +223,7 @@ public:
     CharacterOffset nextCharacterOffset(const CharacterOffset&, bool ignoreNextNodeStart = true);
     CharacterOffset previousCharacterOffset(const CharacterOffset&, bool ignorePreviousNodeEnd = true);
     void startOrEndTextMarkerDataForRange(TextMarkerData&, RefPtr<Range>, bool);
-    CharacterOffset startOrEndCharacterOffsetForRange(RefPtr<Range>, bool);
+    CharacterOffset startOrEndCharacterOffsetForRange(RefPtr<Range>, bool, bool enterTextControls = false);
     AccessibilityObject* accessibilityObjectForTextMarkerData(TextMarkerData&);
     RefPtr<Range> rangeForUnorderedCharacterOffsets(const CharacterOffset&, const CharacterOffset&);
     static RefPtr<Range> rangeForNodeContents(Node*);
@@ -262,6 +263,7 @@ public:
         AXAutocorrectionOccured,
         AXCheckedStateChanged,
         AXChildrenChanged,
+        AXCurrentChanged,
         AXFocusedUIElementChanged,
         AXLayoutComplete,
         AXLoadComplete,
@@ -325,8 +327,9 @@ public:
 #if PLATFORM(MAC)
     static void setShouldRepostNotificationsForTests(bool value);
 #endif
-    void recomputeDeferredIsIgnored(RenderBlock& renderer);
-    void performDeferredIsIgnoredChange();
+    void deferRecomputeIsIgnored(Element*);
+    void deferTextChangedIfNeeded(Node*);
+    void performDeferredCacheUpdate();
 
 protected:
     void postPlatformNotification(AccessibilityObject*, AXNotification);
@@ -351,7 +354,7 @@ protected:
     bool isNodeInUse(Node* n) { return m_textMarkerNodes.contains(n); }
     
     // CharacterOffset functions.
-    enum TraverseOption { TraverseOptionDefault = 1 << 0, TraverseOptionToNodeEnd = 1 << 1, TraverseOptionIncludeStart = 1 << 2, TraverseOptionValidateOffset = 1 << 3 };
+    enum TraverseOption { TraverseOptionDefault = 1 << 0, TraverseOptionToNodeEnd = 1 << 1, TraverseOptionIncludeStart = 1 << 2, TraverseOptionValidateOffset = 1 << 3, TraverseOptionDoNotEnterTextControls = 1 << 4 };
     Node* nextNode(Node*) const;
     Node* previousNode(Node*) const;
     CharacterOffset traverseToOffsetInRange(RefPtr<Range>, int, TraverseOption = TraverseOptionDefault, bool stayWithinRange = false);
@@ -428,7 +431,8 @@ private:
 
     AXTextStateChangeIntent m_textSelectionIntent;
     bool m_isSynchronizingSelection { false };
-    ListHashSet<RenderBlock*> m_deferredIsIgnoredChangeList;
+    ListHashSet<Element*> m_deferredRecomputeIsIgnoredList;
+    ListHashSet<Node*> m_deferredTextChangedList;
 };
 
 class AXAttributeCacheEnabler
@@ -490,8 +494,9 @@ inline void AXObjectCache::handleFocusedUIElementChanged(Node*, Node*) { }
 inline void AXObjectCache::handleScrollbarUpdate(ScrollView*) { }
 inline void AXObjectCache::handleAttributeChanged(const QualifiedName&, Element*) { }
 inline void AXObjectCache::recomputeIsIgnored(RenderObject*) { }
-inline void AXObjectCache::recomputeDeferredIsIgnored(RenderBlock&) { }
-inline void AXObjectCache::performDeferredIsIgnoredChange() { }
+inline void AXObjectCache::deferRecomputeIsIgnored(Element*) { }
+inline void AXObjectCache::deferTextChangedIfNeeded(Node*) { }
+inline void AXObjectCache::performDeferredCacheUpdate() { }
 inline void AXObjectCache::handleScrolledToAnchor(const Node*) { }
 inline void AXObjectCache::postTextStateChangeNotification(Node*, const AXTextStateChangeIntent&, const VisibleSelection&) { }
 inline void AXObjectCache::postTextStateChangeNotification(Node*, AXTextEditType, const String&, const VisiblePosition&) { }

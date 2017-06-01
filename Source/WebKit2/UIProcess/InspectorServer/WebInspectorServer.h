@@ -53,16 +53,13 @@ private:
     ~WebInspectorServer();
 
     // WebSocketServerClient implementation. Events coming from remote connections.
-    void didReceiveUnrecognizedHTTPRequest(WebSocketServerConnection*, PassRefPtr<HTTPRequest>) final;
-    bool didReceiveWebSocketUpgradeHTTPRequest(WebSocketServerConnection*, PassRefPtr<HTTPRequest>) final;
-    void didEstablishWebSocketConnection(WebSocketServerConnection*, PassRefPtr<HTTPRequest>) final;
+    void didReceiveUnrecognizedHTTPRequest(WebSocketServerConnection*, Ref<HTTPRequest>&&) final;
+    bool didReceiveWebSocketUpgradeHTTPRequest(WebSocketServerConnection*, Ref<HTTPRequest>&&) final;
+    void didEstablishWebSocketConnection(WebSocketServerConnection*, Ref<HTTPRequest>&&) final;
     void didReceiveWebSocketMessage(WebSocketServerConnection*, const String& message) final;
     void didCloseWebSocketConnection(WebSocketServerConnection*) final;
 
     bool platformResourceForPath(const String& path, Vector<char>& data, String& contentType);
-#if PLATFORM(GTK)
-    void buildPageList(Vector<char>& data, String& contentType);
-#endif
 
     void closeConnection(WebInspectorProxy*, WebSocketServerConnection*);
 

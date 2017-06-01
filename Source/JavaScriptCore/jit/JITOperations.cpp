@@ -265,6 +265,43 @@ EncodedJSValue JIT_OPERATION operationGetByIdOptimize(ExecState* exec, Structure
     }));
 }
 
+EncodedJSValue JIT_OPERATION operationGetByIdWithThisGeneric(ExecState* exec, StructureStubInfo* stubInfo, EncodedJSValue base, EncodedJSValue thisEncoded, UniquedStringImpl* uid)
+{
+    SuperSamplerScope superSamplerScope(false);
+
+    VM* vm = &exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+    Identifier ident = Identifier::fromUid(vm, uid);
+
+    stubInfo->tookSlowPath = true;
+
+    JSValue baseValue = JSValue::decode(base);
+    JSValue thisValue = JSValue::decode(thisEncoded);
+    PropertySlot slot(thisValue, PropertySlot::InternalMethodType::Get);
+
+    return JSValue::encode(baseValue.get(exec, ident, slot));
+}
+
+EncodedJSValue JIT_OPERATION operationGetByIdWithThisOptimize(ExecState* exec, StructureStubInfo* stubInfo, EncodedJSValue base, EncodedJSValue thisEncoded, UniquedStringImpl* uid)
+{
+    SuperSamplerScope superSamplerScope(false);
+    
+    VM* vm = &exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+    Identifier ident = Identifier::fromUid(vm, uid);
+
+    JSValue baseValue = JSValue::decode(base);
+    JSValue thisValue = JSValue::decode(thisEncoded);
+    LOG_IC((ICEvent::OperationGetByIdWithThisOptimize, baseValue.classInfoOrNull(*vm), ident));
+
+    PropertySlot slot(thisValue, PropertySlot::InternalMethodType::Get);
+    return JSValue::encode(baseValue.getPropertySlot(exec, ident, slot, [&] (bool found, PropertySlot& slot) -> JSValue {
+        if (stubInfo->considerCaching(exec->codeBlock(), baseValue.structureOrNull()))
+            repatchGetByID(exec, baseValue, ident, slot, *stubInfo, GetByIDKind::WithThis);
+        return found ? slot.getValue(exec, ident) : jsUndefined();
+    }));
+}
+
 EncodedJSValue JIT_OPERATION operationInOptimize(ExecState* exec, StructureStubInfo* stubInfo, JSCell* base, UniquedStringImpl* key)
 {
     SuperSamplerScope superSamplerScope(false);
@@ -547,15 +584,20 @@ static void directPutByVal(CallFrame* callFrame, JSObject* baseObject, JSValue s
         byValInfo->tookSlowPath = true;
         uint32_t index = subscript.asUInt32();
         ASSERT(isIndex(index));
-        if (baseObject->canSetIndexQuicklyForPutDirect(index)) {
-            baseObject->setIndexQuickly(callFrame->vm(), index, value);
-            return;
+
+        switch (baseObject->indexingType()) {
+        case ALL_INT32_INDEXING_TYPES:
+        case ALL_DOUBLE_INDEXING_TYPES:
+        case ALL_CONTIGUOUS_INDEXING_TYPES:
+        case ALL_ARRAY_STORAGE_INDEXING_TYPES:
+            if (index < baseObject->butterfly()->vectorLength())
+                break;
+            FALLTHROUGH;
+        default:
+            byValInfo->arrayProfile->setOutOfBounds();
+            break;
         }
 
-        // FIXME: This will make us think that in-bounds typed array accesses are actually
-        // out-of-bounds.
-        // https://bugs.webkit.org/show_bug.cgi?id=149886
-        byValInfo->arrayProfile->setOutOfBounds();
         baseObject->putDirectIndex(callFrame, index, value, 0, isStrictMode ? PutDirectIndexShouldThrow : PutDirectIndexShouldNotThrow);
         return;
     }
@@ -695,7 +737,7 @@ static OptimizationResult tryDirectPutByValOptimize(ExecState* exec, JSObject* o
         if (hasOptimizableIndexing(structure)) {
             // Attempt to optimize.
             JITArrayMode arrayMode = jitArrayModeForStructure(structure);
-            if (jitArrayModePermitsPut(arrayMode) && arrayMode != byValInfo->arrayMode) {
+            if (jitArrayModePermitsPutDirect(arrayMode) && arrayMode != byValInfo->arrayMode) {
                 CodeBlock* codeBlock = exec->codeBlock();
                 ConcurrentJSLocker locker(codeBlock->m_lock);
                 byValInfo->arrayProfile->computeUpdatedPrediction(locker, codeBlock, structure);
@@ -797,7 +839,7 @@ EncodedJSValue JIT_OPERATION operationCallEval(ExecState* exec, ExecState* execC
 
     execCallee->setCodeBlock(0);
     
-    if (!isHostFunction(execCallee->calleeAsValue(), globalFuncEval))
+    if (!isHostFunction(execCallee->guaranteedJSValueCallee(), globalFuncEval))
         return JSValue::encode(JSValue());
 
     JSValue result = eval(execCallee);
@@ -880,7 +922,7 @@ SlowPathReturnType JIT_OPERATION operationLinkCall(ExecState* execCallee, CallLi
     
     RELEASE_ASSERT(!callLinkInfo->isDirect());
     
-    JSValue calleeAsValue = execCallee->calleeAsValue();
+    JSValue calleeAsValue = execCallee->guaranteedJSValueCallee();
     JSCell* calleeAsFunctionCell = getJSFunction(calleeAsValue);
     if (!calleeAsFunctionCell) {
         // FIXME: We should cache these kinds of calls. They can be common and currently they are
@@ -997,7 +1039,7 @@ inline SlowPathReturnType virtualForWithFunction(
     CodeSpecializationKind kind = callLinkInfo->specializationKind();
     NativeCallFrameTracer tracer(vm, exec);
 
-    JSValue calleeAsValue = execCallee->calleeAsValue();
+    JSValue calleeAsValue = execCallee->guaranteedJSValueCallee();
     calleeAsFunctionCell = getJSFunction(calleeAsValue);
     if (UNLIKELY(!calleeAsFunctionCell))
         return handleHostCall(execCallee, calleeAsValue, callLinkInfo);
@@ -1205,18 +1247,15 @@ EncodedJSValue JIT_OPERATION operationNewRegexp(ExecState* exec, void* regexpPtr
 }
 
 // The only reason for returning an UnusedPtr (instead of void) is so that we can reuse the
-// existing DFG slow path generator machinery when creating the slow path for CheckWatchdogTimer
+// existing DFG slow path generator machinery when creating the slow path for CheckTraps
 // in the DFG. If a DFG slow path generator that supports a void return type is added in the
 // future, we can switch to using that then.
-UnusedPtr JIT_OPERATION operationHandleWatchdogTimer(ExecState* exec)
+UnusedPtr JIT_OPERATION operationHandleTraps(ExecState* exec)
 {
     VM& vm = exec->vm();
     NativeCallFrameTracer tracer(&vm, exec);
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
-    if (UNLIKELY(vm.shouldTriggerTermination(exec)))
-        throwException(exec, scope, createTerminatedExecutionException(&vm));
-
+    ASSERT(vm.needTrapHandling());
+    vm.handleTraps(exec);
     return nullptr;
 }
 
@@ -2341,7 +2380,7 @@ EncodedJSValue JIT_OPERATION operationValueAddProfiledOptimize(ExecState* exec, 
     ASSERT(arithProfile);
     arithProfile->observeLHSAndRHS(op1, op2);
     auto nonOptimizeVariant = operationValueAddProfiledNoOptimize;
-    addIC->generateOutOfLine(*vm, exec->codeBlock(), nonOptimizeVariant);
+    addIC->generateOutOfLine(exec->codeBlock(), nonOptimizeVariant);
 
 #if ENABLE(MATH_IC_STATS)
     exec->codeBlock()->dumpMathICStats();
@@ -2374,7 +2413,7 @@ EncodedJSValue JIT_OPERATION operationValueAddOptimize(ExecState* exec, EncodedJ
     auto nonOptimizeVariant = operationValueAddNoOptimize;
     if (ArithProfile* arithProfile = addIC->arithProfile())
         arithProfile->observeLHSAndRHS(op1, op2);
-    addIC->generateOutOfLine(*vm, exec->codeBlock(), nonOptimizeVariant);
+    addIC->generateOutOfLine(exec->codeBlock(), nonOptimizeVariant);
 
 #if ENABLE(MATH_IC_STATS)
     exec->codeBlock()->dumpMathICStats();
@@ -2451,7 +2490,7 @@ EncodedJSValue JIT_OPERATION operationValueMulOptimize(ExecState* exec, EncodedJ
     auto nonOptimizeVariant = operationValueMulNoOptimize;
     if (ArithProfile* arithProfile = mulIC->arithProfile())
         arithProfile->observeLHSAndRHS(JSValue::decode(encodedOp1), JSValue::decode(encodedOp2));
-    mulIC->generateOutOfLine(*vm, exec->codeBlock(), nonOptimizeVariant);
+    mulIC->generateOutOfLine(exec->codeBlock(), nonOptimizeVariant);
 
 #if ENABLE(MATH_IC_STATS)
     exec->codeBlock()->dumpMathICStats();
@@ -2478,7 +2517,7 @@ EncodedJSValue JIT_OPERATION operationValueMulProfiledOptimize(ExecState* exec, 
     ASSERT(arithProfile);
     arithProfile->observeLHSAndRHS(JSValue::decode(encodedOp1), JSValue::decode(encodedOp2));
     auto nonOptimizeVariant = operationValueMulProfiledNoOptimize;
-    mulIC->generateOutOfLine(*vm, exec->codeBlock(), nonOptimizeVariant);
+    mulIC->generateOutOfLine(exec->codeBlock(), nonOptimizeVariant);
 
 #if ENABLE(MATH_IC_STATS)
     exec->codeBlock()->dumpMathICStats();
@@ -2549,7 +2588,7 @@ EncodedJSValue JIT_OPERATION operationArithNegateProfiledOptimize(ExecState* exe
     ArithProfile* arithProfile = negIC->arithProfile();
     ASSERT(arithProfile);
     arithProfile->observeLHS(operand);
-    negIC->generateOutOfLine(vm, exec->codeBlock(), operationArithNegateProfiled);
+    negIC->generateOutOfLine(exec->codeBlock(), operationArithNegateProfiled);
 
 #if ENABLE(MATH_IC_STATS)
     exec->codeBlock()->dumpMathICStats();
@@ -2573,7 +2612,7 @@ EncodedJSValue JIT_OPERATION operationArithNegateOptimize(ExecState* exec, Encod
 
     if (ArithProfile* arithProfile = negIC->arithProfile())
         arithProfile->observeLHS(operand);
-    negIC->generateOutOfLine(vm, exec->codeBlock(), operationArithNegate);
+    negIC->generateOutOfLine(exec->codeBlock(), operationArithNegate);
 
 #if ENABLE(MATH_IC_STATS)
     exec->codeBlock()->dumpMathICStats();
@@ -2641,7 +2680,7 @@ EncodedJSValue JIT_OPERATION operationValueSubOptimize(ExecState* exec, EncodedJ
     auto nonOptimizeVariant = operationValueSubNoOptimize;
     if (ArithProfile* arithProfile = subIC->arithProfile())
         arithProfile->observeLHSAndRHS(JSValue::decode(encodedOp1), JSValue::decode(encodedOp2));
-    subIC->generateOutOfLine(*vm, exec->codeBlock(), nonOptimizeVariant);
+    subIC->generateOutOfLine(exec->codeBlock(), nonOptimizeVariant);
 
 #if ENABLE(MATH_IC_STATS)
     exec->codeBlock()->dumpMathICStats();
@@ -2667,7 +2706,7 @@ EncodedJSValue JIT_OPERATION operationValueSubProfiledOptimize(ExecState* exec, 
     ASSERT(arithProfile);
     arithProfile->observeLHSAndRHS(JSValue::decode(encodedOp1), JSValue::decode(encodedOp2));
     auto nonOptimizeVariant = operationValueSubProfiledNoOptimize;
-    subIC->generateOutOfLine(*vm, exec->codeBlock(), nonOptimizeVariant);
+    subIC->generateOutOfLine(exec->codeBlock(), nonOptimizeVariant);
 
 #if ENABLE(MATH_IC_STATS)
     exec->codeBlock()->dumpMathICStats();

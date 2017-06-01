@@ -34,6 +34,7 @@
 #include "RenderElement.h"
 #include "RenderObject.h"
 #include "RenderView.h"
+#include "TextIndicator.h"
 
 namespace WebCore {
 
@@ -122,7 +123,7 @@ DragImageRef createDragImageForNode(Frame& frame, Node& node)
 
 #if !ENABLE(DATA_INTERACTION)
 
-DragImageRef createDragImageForSelection(Frame& frame, bool forceBlackText)
+DragImageRef createDragImageForSelection(Frame& frame, TextIndicatorData&, bool forceBlackText)
 {
     SnapshotOptions options = forceBlackText ? SnapshotOptionsForceBlackText : SnapshotOptionsNone;
     return createDragImageFromSnapshot(snapshotSelection(frame, options), nullptr);
@@ -219,9 +220,25 @@ DragImageRef platformAdjustDragImageForDeviceScaleFactor(DragImageRef image, flo
 #endif
 
 #if !PLATFORM(COCOA) && !PLATFORM(WIN)
-DragImageRef createDragImageForLink(URL&, const String&, FontRenderingMode)
+DragImageRef createDragImageForLink(Element&, URL&, const String&, FontRenderingMode, float)
 {
     return nullptr;
+}
+#endif
+
+#if !PLATFORM(MAC)
+const int linkDragBorderInset = 2;
+
+IntPoint dragOffsetForLinkDragImage(DragImageRef dragImage)
+{
+    IntSize size = dragImageSize(dragImage);
+    return { -size.width() / 2, -linkDragBorderInset };
+}
+
+FloatPoint anchorPointForLinkDragImage(DragImageRef dragImage)
+{
+    IntSize size = dragImageSize(dragImage);
+    return { 0.5, static_cast<float>((size.height() - linkDragBorderInset) / size.height()) };
 }
 #endif
 
@@ -238,6 +255,7 @@ DragImage::DragImage(DragImageRef dragImageRef)
 DragImage::DragImage(DragImage&& other)
     : m_dragImageRef { std::exchange(other.m_dragImageRef, nullptr) }
 {
+    m_indicatorData = other.m_indicatorData;
 }
 
 DragImage& DragImage::operator=(DragImage&& other)
@@ -246,6 +264,7 @@ DragImage& DragImage::operator=(DragImage&& other)
         deleteDragImage(m_dragImageRef);
 
     m_dragImageRef = std::exchange(other.m_dragImageRef, nullptr);
+    m_indicatorData = other.m_indicatorData;
 
     return *this;
 }
