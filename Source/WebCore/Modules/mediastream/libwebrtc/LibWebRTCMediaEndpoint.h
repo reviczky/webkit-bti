@@ -31,6 +31,7 @@
 #include "RTCRtpReceiver.h"
 #include "RealtimeOutgoingAudioSource.h"
 #include "RealtimeOutgoingVideoSource.h"
+#include <Timer.h>
 
 #include <webrtc/api/jsep.h>
 #include <webrtc/api/peerconnectioninterface.h>
@@ -56,7 +57,7 @@ class LibWebRTCPeerConnectionBackend;
 class MediaStreamTrack;
 class RTCSessionDescription;
 
-class LibWebRTCMediaEndpoint : public ThreadSafeRefCounted<LibWebRTCMediaEndpoint>, private webrtc::PeerConnectionObserver {
+class LibWebRTCMediaEndpoint : public ThreadSafeRefCounted<LibWebRTCMediaEndpoint>, private webrtc::PeerConnectionObserver, private webrtc::RTCStatsCollectorCallback {
 public:
     static Ref<LibWebRTCMediaEndpoint> create(LibWebRTCPeerConnectionBackend& peerConnection, LibWebRTCProvider& client) { return adoptRef(*new LibWebRTCMediaEndpoint(peerConnection, client)); }
     virtual ~LibWebRTCMediaEndpoint() { }
@@ -110,10 +111,18 @@ private:
     void removeRemoteStream(webrtc::MediaStreamInterface&);
     void addDataChannel(rtc::scoped_refptr<webrtc::DataChannelInterface>&&);
 
+    void OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>&) final;
+    void gatherStatsForLogging();
+    void startLoggingStats();
+    void stopLoggingStats();
+
     MediaStream& mediaStreamFromRTCStream(webrtc::MediaStreamInterface&);
 
     int AddRef() const { ref(); return static_cast<int>(refCount()); }
     int Release() const { deref(); return static_cast<int>(refCount()); }
+
+    bool shouldOfferAllowToReceiveAudio() const;
+    bool shouldOfferAllowToReceiveVideo() const;
 
     class CreateSessionDescriptionObserver final : public webrtc::CreateSessionDescriptionObserver {
     public:
@@ -182,6 +191,8 @@ private:
     HashMap<RTCRtpSender*, rtc::scoped_refptr<webrtc::RtpSenderInterface>> m_senders;
 
     bool m_isInitiator { false };
+    Timer m_statsLogTimer;
+    int64_t m_statsTimestamp { 0 };
 };
 
 } // namespace WebCore

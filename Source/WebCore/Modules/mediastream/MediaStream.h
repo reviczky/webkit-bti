@@ -29,7 +29,7 @@
 
 #if ENABLE(MEDIA_STREAM)
 
-#include "ContextDestructionObserver.h"
+#include "ActiveDOMObject.h"
 #include "EventTarget.h"
 #include "ExceptionBase.h"
 #include "MediaCanStartListener.h"
@@ -51,10 +51,9 @@ class Document;
 class MediaStream final
     : public URLRegistrable
     , public EventTargetWithInlineData
-    , public ContextDestructionObserver
+    , public ActiveDOMObject
     , public MediaStreamTrack::Observer
     , public MediaStreamPrivate::Observer
-    , private MediaProducer
     , private MediaCanStartListener
     , private PlatformMediaSessionClient
     , public RefCounted<MediaStream> {
@@ -84,7 +83,7 @@ public:
     RefPtr<MediaStream> clone();
 
     bool active() const { return m_isActive; }
-    bool muted() const { return m_isMuted; }
+    bool muted() const { return m_private->muted(); }
 
     MediaStreamPrivate& privateStream() { return m_private.get(); }
 
@@ -110,15 +109,18 @@ public:
 
     Document* document() const;
 
+    // ActiveDOMObject API.
+    bool hasPendingActivity() const final;
+
+    enum class StreamModifier { DomAPI, Platform };
+    bool internalAddTrack(Ref<MediaStreamTrack>&&, StreamModifier);
+    WEBCORE_EXPORT bool internalRemoveTrack(const String&, StreamModifier);
+
 protected:
     MediaStream(ScriptExecutionContext&, const MediaStreamTrackVector&);
     MediaStream(ScriptExecutionContext&, Ref<MediaStreamPrivate>&&);
 
-    // ContextDestructionObserver
-    void contextDestroyed() final;
-
 private:
-    enum class StreamModifier { DomAPI, Platform };
 
     // EventTarget
     void refEventTarget() final { ref(); }
@@ -133,9 +135,7 @@ private:
     void didRemoveTrack(MediaStreamTrackPrivate&) final;
     void characteristicsChanged() final;
 
-    // MediaProducer
-    void pageMutedStateDidChange() final;
-    MediaProducer::MediaStateFlags mediaState() const final;
+    MediaProducer::MediaStateFlags mediaState() const;
 
     // MediaCanStartListener
     void mediaCanStart(Document&) final;
@@ -155,8 +155,10 @@ private:
     const Document* hostingDocument() const final { return document(); }
     bool processingUserGestureForMedia() const final;
 
-    bool internalAddTrack(Ref<MediaStreamTrack>&&, StreamModifier);
-    bool internalRemoveTrack(const String&, StreamModifier);
+    // ActiveDOMObject API.
+    void stop() final;
+    const char* activeDOMObjectName() const final;
+    bool canSuspendForDocumentSuspension() const final;
 
     void scheduleActiveStateChange();
     void activityEventTimerFired();
@@ -175,8 +177,9 @@ private:
     Vector<Observer*> m_observers;
     std::unique_ptr<PlatformMediaSession> m_mediaSession;
 
+    MediaProducer::MediaStateFlags m_state { MediaProducer::IsNotPlaying };
+
     bool m_isActive { false };
-    bool m_isMuted { true };
     bool m_isProducingData { false };
     bool m_isWaitingUntilMediaCanStart { false };
 };

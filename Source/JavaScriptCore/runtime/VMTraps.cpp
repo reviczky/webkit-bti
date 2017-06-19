@@ -53,11 +53,11 @@ ALWAYS_INLINE VM& VMTraps::vm() const
 #if ENABLE(SIGNAL_BASED_VM_TRAPS)
 
 struct SignalContext {
-    SignalContext(mcontext_t& mcontext)
-        : mcontext(mcontext)
-        , trapPC(MachineContext::instructionPointer(mcontext))
-        , stackPointer(MachineContext::stackPointer(mcontext))
-        , framePointer(MachineContext::framePointer(mcontext))
+    SignalContext(PlatformRegisters& registers)
+        : registers(registers)
+        , trapPC(MachineContext::instructionPointer(registers))
+        , stackPointer(MachineContext::stackPointer(registers))
+        , framePointer(MachineContext::framePointer(registers))
     {
 #if CPU(X86_64) || CPU(X86)
         // On X86_64, SIGTRAP reports the address after the trapping PC. So, dec by 1.
@@ -68,11 +68,11 @@ struct SignalContext {
     void adjustPCToPointToTrappingInstruction()
     {
 #if CPU(X86_64) || CPU(X86)
-        MachineContext::instructionPointer(mcontext) = trapPC;
+        MachineContext::instructionPointer(registers) = trapPC;
 #endif
     }
 
-    mcontext_t& mcontext;
+    PlatformRegisters& registers;
     void* trapPC;
     void* stackPointer;
     void* framePointer;
@@ -130,8 +130,8 @@ static Expected<VMAndStackBounds, VMTraps::Error> findActiveVMAndStackBounds(Sig
 
 static void installSignalHandler()
 {
-    installSignalHandler(Signal::Trap, [] (int, siginfo_t*, void* uap) -> SignalAction {
-        SignalContext context(static_cast<ucontext_t*>(uap)->uc_mcontext);
+    installSignalHandler(Signal::Trap, [] (Signal, SigInfo&, PlatformRegisters& registers) -> SignalAction {
+        SignalContext context(registers);
 
         if (!isJITPC(context.trapPC))
             return SignalAction::NotHandled;
@@ -338,18 +338,6 @@ void VMTraps::invalidateCodeBlocksOnStack(Locker<Lock>&, ExecState* topCallFrame
 
 #endif // ENABLE(SIGNAL_BASED_VM_TRAPS)
 
-VMTraps::VMTraps()
-{
-#if ENABLE(SIGNAL_BASED_VM_TRAPS)
-    if (!Options::usePollingTraps()) {
-        static std::once_flag once;
-        std::call_once(once, [] {
-            installSignalHandler();
-        });
-    }
-#endif
-}
-
 void VMTraps::willDestroyVM()
 {
     m_isShuttingDown = true;
@@ -394,6 +382,11 @@ void VMTraps::SignalSender::willDestroyVM()
 
 void VMTraps::SignalSender::send()
 {
+    static std::once_flag once;
+    std::call_once(once, [] {
+        installSignalHandler();
+    });
+
     while (true) {
         // We need a nested scope so that we'll release the lock before we sleep below.
         {
@@ -404,8 +397,8 @@ void VMTraps::SignalSender::send()
             VM& vm = *m_vm;
             auto optionalOwnerThread = vm.ownerThread();
             if (optionalOwnerThread) {
-                sendMessage(*optionalOwnerThread.value().get(), [] (siginfo_t*, ucontext_t* ucontext) -> void {
-                    SignalContext context(ucontext->uc_mcontext);
+                sendMessage(*optionalOwnerThread.value().get(), [] (PlatformRegisters& registers) -> void {
+                    SignalContext context(registers);
                     auto activeVMAndStackBounds = findActiveVMAndStackBounds(context);
                     if (activeVMAndStackBounds) {
                         VM* vm = activeVMAndStackBounds.value().vm;

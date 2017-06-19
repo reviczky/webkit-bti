@@ -66,7 +66,7 @@
 #include "HitTestResult.h"
 #include "ImageBuffer.h"
 #include "InspectorInstrumentation.h"
-#include "JSDOMWindowShell.h"
+#include "JSDOMWindowProxy.h"
 #include "Logging.h"
 #include "MainFrame.h"
 #include "MathMLNames.h"
@@ -271,7 +271,10 @@ void Frame::setDocument(RefPtr<Document>&& newDocument)
         return;
 
     m_documentIsBeingReplaced = true;
-    
+
+    if (isMainFrame())
+        m_loader.client().dispatchDidChangeMainDocument();
+
     if (m_doc && m_doc->pageCacheState() != Document::InPageCache)
         m_doc->prepareForDestruction();
 

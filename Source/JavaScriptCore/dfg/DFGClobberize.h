@@ -33,7 +33,7 @@
 #include "DFGHeapLocation.h"
 #include "DFGLazyNode.h"
 #include "DFGPureValue.h"
-#include "DOMJITCallDOMGetterPatchpoint.h"
+#include "DOMJITCallDOMGetterSnippet.h"
 #include "DOMJITSignature.h"
 
 namespace JSC { namespace DFG {
@@ -538,6 +538,31 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         read(HeapObjectCount);
         write(HeapObjectCount);
         return;
+
+    case ArrayIndexOf: {
+        // FIXME: Should support a CSE rule.
+        // https://bugs.webkit.org/show_bug.cgi?id=173173
+        read(MiscFields);
+        read(JSCell_indexingType);
+        read(JSCell_structureID);
+        read(JSObject_butterfly);
+        read(Butterfly_publicLength);
+        switch (node->arrayMode().type()) {
+        case Array::Double:
+            read(IndexedDoubleProperties);
+            return;
+        case Array::Int32:
+            read(IndexedInt32Properties);
+            return;
+        case Array::Contiguous:
+            read(IndexedContiguousProperties);
+            return;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+            return;
+        }
+        return;
+    }
         
     case GetById:
     case GetByIdFlush:
@@ -992,8 +1017,8 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         return;
 
     case CallDOMGetter: {
-        DOMJIT::CallDOMGetterPatchpoint* patchpoint = node->callDOMGetterData()->patchpoint;
-        DOMJIT::Effect effect = patchpoint->effect;
+        DOMJIT::CallDOMGetterSnippet* snippet = node->callDOMGetterData()->snippet;
+        DOMJIT::Effect effect = snippet->effect;
         if (effect.reads) {
             if (effect.reads == DOMJIT::HeapRange::top())
                 read(World);

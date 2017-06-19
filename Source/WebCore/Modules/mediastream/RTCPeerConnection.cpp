@@ -430,8 +430,12 @@ const char* RTCPeerConnection::activeDOMObjectName() const
 
 bool RTCPeerConnection::canSuspendForDocumentSuspension() const
 {
-    // FIXME: We should try and do better here.
-    return false;
+    return !hasPendingActivity();
+}
+
+bool RTCPeerConnection::hasPendingActivity() const
+{
+    return !m_isStopped;
 }
 
 void RTCPeerConnection::addTransceiver(Ref<RTCRtpTransceiver>&& transceiver)
@@ -554,8 +558,11 @@ void RTCPeerConnection::fireEvent(Event& event)
 
 void RTCPeerConnection::enqueueReplaceTrackTask(RTCRtpSender& sender, Ref<MediaStreamTrack>&& withTrack, DOMPromiseDeferred<void>&& promise)
 {
-    scriptExecutionContext()->postTask([protectedSender = makeRef(sender), promise = WTFMove(promise), withTrack = WTFMove(withTrack)](ScriptExecutionContext&) mutable {
+    scriptExecutionContext()->postTask([protectedThis = makeRef(*this), protectedSender = makeRef(sender), promise = WTFMove(promise), withTrack = WTFMove(withTrack)](ScriptExecutionContext&) mutable {
+        if (protectedThis->isClosed())
+            return;
         protectedSender->setTrack(WTFMove(withTrack));
+        protectedThis->m_backend->notifyAddedTrack(protectedSender.get());
         promise.resolve();
     });
 }

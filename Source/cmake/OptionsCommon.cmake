@@ -6,22 +6,15 @@ add_definitions(-DHAVE_CONFIG_H=1)
 # WebCore. Investigating whether make_names.pl should be changed instead is left as an exercise to
 # the reader.
 if (MSVC)
-    # FIXME: Some codegenerators don't support paths with spaces. So use the executable name only.
-    get_filename_component(CODE_GENERATOR_PREPROCESSOR_EXECUTABLE ${CMAKE_CXX_COMPILER} ABSOLUTE)
-
     set(CODE_GENERATOR_PREPROCESSOR_ARGUMENTS "/nologo /EP /TP")
-    set(CODE_GENERATOR_PREPROCESSOR "\"${CODE_GENERATOR_PREPROCESSOR_EXECUTABLE}\" ${CODE_GENERATOR_PREPROCESSOR_ARGUMENTS}")
-
-    set(CODE_GENERATOR_PREPROCESSOR_WITH_LINEMARKERS ${CODE_GENERATOR_PREPROCESSOR})
+    set(CODE_GENERATOR_PREPROCESSOR_WITH_LINEMARKERS_ARGUMENTS ${CODE_GENERATOR_PREPROCESSOR_ARGUMENTS})
 else ()
-    set(CODE_GENERATOR_PREPROCESSOR_EXECUTABLE ${CMAKE_CXX_COMPILER})
-
     set(CODE_GENERATOR_PREPROCESSOR_ARGUMENTS "-E -P -x c++")
-    set(CODE_GENERATOR_PREPROCESSOR "${CODE_GENERATOR_PREPROCESSOR_EXECUTABLE} ${CODE_GENERATOR_PREPROCESSOR_ARGUMENTS}")
-
     set(CODE_GENERATOR_PREPROCESSOR_WITH_LINEMARKERS_ARGUMENTS "-E -x c++")
-    set(CODE_GENERATOR_PREPROCESSOR_WITH_LINEMARKERS "${CODE_GENERATOR_PREPROCESSOR_EXECUTABLE} ${CODE_GENERATOR_PREPROCESSOR_WITH_LINEMARKERS_ARGUMENTS}")
 endif ()
+
+set(CODE_GENERATOR_PREPROCESSOR "\"${CMAKE_CXX_COMPILER}\" ${CODE_GENERATOR_PREPROCESSOR_ARGUMENTS}")
+set(CODE_GENERATOR_PREPROCESSOR_WITH_LINEMARKERS "\"${CMAKE_CXX_COMPILER}\" ${CODE_GENERATOR_PREPROCESSOR_WITH_LINEMARKERS_ARGUMENTS}")
 
 option(USE_THIN_ARCHIVES "Produce all static libraries as thin archives" ON)
 if (USE_THIN_ARCHIVES)
@@ -41,11 +34,24 @@ if (COMPILER_IS_GCC_OR_CLANG)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-exceptions -fno-strict-aliasing")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-strict-aliasing -fno-rtti")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y")
+    if (NOT (COMPILER_IS_CLANG AND "${CLANG_VERSION}" VERSION_LESS 4.0.0))
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-expansion-to-defined")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-expansion-to-defined")
+    endif ()
 endif ()
 
-if (COMPILER_IS_CLANG AND CMAKE_GENERATOR STREQUAL "Ninja")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fcolor-diagnostics")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcolor-diagnostics")
+if (CMAKE_GENERATOR STREQUAL "Ninja")
+    if (COMPILER_IS_CLANG)
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fcolor-diagnostics")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fcolor-diagnostics")
+    else ()
+        if (CMAKE_COMPILER_IS_GNUCC)
+            set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fdiagnostics-color=always")
+        endif ()
+        if (CMAKE_COMPILER_IS_GNUCXX)
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fdiagnostics-color=always")
+        endif ()
+    endif ()
 endif ()
 
 if (WIN32 AND COMPILER_IS_GCC_OR_CLANG)
@@ -173,7 +179,7 @@ if (COMPILER_IS_CLANG)
 endif ()
 
 string(TOLOWER ${CMAKE_HOST_SYSTEM_PROCESSOR} LOWERCASE_CMAKE_HOST_SYSTEM_PROCESSOR)
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND "${LOWERCASE_CMAKE_HOST_SYSTEM_PROCESSOR}" MATCHES "(i[3-6]86|x86|armhf)")
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND NOT "${LOWERCASE_CMAKE_HOST_SYSTEM_PROCESSOR}" MATCHES "x86_64")
     # To avoid out of memory when building with debug option in 32bit system.
     # See https://bugs.webkit.org/show_bug.cgi?id=77327
     set(CMAKE_SHARED_LINKER_FLAGS_DEBUG "-Wl,--no-keep-memory ${CMAKE_SHARED_LINKER_FLAGS_DEBUG}")
@@ -210,17 +216,10 @@ endif ()
 
 # The Ninja generator does not yet know how to build archives in pieces, and so response
 # files must be used to deal with very long linker command lines.
-# See https://bugs.webkit.org/show_bug.cgi?id=129771
-# The Apple Toolchain doesn't support response files.
-if (NOT APPLE)
-   # If using Ninja with cmake >= 3.6.0 and icecream, then the build is broken
-   # if enable the response files. See https://bugs.webkit.org/show_bug.cgi?id=168770
-   if (NOT ((((${CMAKE_CXX_COMPILER} MATCHES ".*ccache.*") AND ($ENV{CCACHE_PREFIX} MATCHES ".*icecc.*"))
-        OR (${CMAKE_CXX_COMPILER} MATCHES ".*icecc.*")
-        OR (${AR_VERSION} MATCHES "^BSD ar [^ ]* - libarchive"))
-       AND (CMAKE_GENERATOR STREQUAL "Ninja") AND (${CMAKE_VERSION} VERSION_GREATER 3.5)))
-      set(CMAKE_NINJA_FORCE_RESPONSE_FILE 1)
-   endif ()
+# CMake does this automatically, but the condition was wrong on Linux until CMake 3.2.
+# See https://cmake.org/Bug/view.php?id=14892
+if ((CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux") AND (CMAKE_VERSION VERSION_LESS 3.2))
+    set(CMAKE_NINJA_FORCE_RESPONSE_FILE 1)
 endif ()
 
 # Macros for determining HAVE values.

@@ -442,7 +442,7 @@ public:
 
     // Transitions are identified by a special animation name that cannot clash with a keyframe identifier.
     static String animationNameForTransition(AnimatedPropertyID);
-    
+
     // Return true if the animation is handled by the compositing system. If this returns
     // false, the animation will be run by CSSAnimationController.
     // These methods handle both transitions and keyframe animations.
@@ -452,7 +452,7 @@ public:
 
     WEBCORE_EXPORT virtual void suspendAnimations(double time);
     WEBCORE_EXPORT virtual void resumeAnimations();
-    
+
     // Layer contents
     virtual void setContentsToImage(Image*) { }
     virtual bool shouldDirectlyCompositeImage(Image*) const { return true; }
@@ -465,11 +465,11 @@ public:
     virtual bool usesContentsLayer() const { return false; }
 
     // Callback from the underlying graphics system to draw layer contents.
-    void paintGraphicsLayerContents(GraphicsContext&, const FloatRect& clip);
-    
+    void paintGraphicsLayerContents(GraphicsContext&, const FloatRect& clip, GraphicsLayerPaintFlags = GraphicsLayerPaintFlags::None);
+
     // For hosting this GraphicsLayer in a native layer hierarchy.
     virtual PlatformLayer* platformLayer() const { return 0; }
-    
+
     enum CompositingCoordinatesOrientation { CompositingCoordinatesTopDown, CompositingCoordinatesBottomUp };
 
     // Flippedness of the contents of this layer. Does not affect sublayer geometry.
@@ -545,6 +545,11 @@ public:
 
     // Return an estimate of the backing store memory cost (in bytes). May be incorrect for tiled layers.
     WEBCORE_EXPORT virtual double backingStoreMemoryEstimate() const;
+
+    virtual bool backingStoreAttached() const { return true; }
+
+    void setCanDetachBackingStore(bool b) { m_canDetachBackingStore = b; }
+    bool canDetachBackingStore() const { return m_canDetachBackingStore; }
 
     virtual TiledBacking* tiledBacking() const { return 0; }
 
@@ -649,6 +654,7 @@ protected:
     bool m_isMaskLayer : 1;
     bool m_isTrackingDisplayListReplay : 1;
     bool m_userInteractionEnabled : 1;
+    bool m_canDetachBackingStore : 1;
     
     GraphicsLayerPaintingPhase m_paintingPhase;
     CompositingCoordinatesOrientation m_contentsOrientation; // affects orientation of layer contents

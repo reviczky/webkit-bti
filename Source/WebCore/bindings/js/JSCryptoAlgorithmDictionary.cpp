@@ -41,7 +41,9 @@
 #include "ExceptionCode.h"
 #include "JSCryptoOperationData.h"
 #include "JSDOMBinding.h"
-#include "JSDOMConvert.h"
+#include "JSDOMConvertBufferSource.h"
+#include "JSDOMConvertNumbers.h"
+#include "JSDOMConvertStrings.h"
 
 using namespace JSC;
 
@@ -316,7 +318,6 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
         return nullptr;
     case CryptoAlgorithmIdentifier::AES_CBC:
         return createAesCbcParams(state, value);
-    case CryptoAlgorithmIdentifier::AES_CMAC:
     case CryptoAlgorithmIdentifier::AES_GCM:
     case CryptoAlgorithmIdentifier::AES_CFB:
         throwNotSupportedError(state, scope);
@@ -324,13 +325,11 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
     case CryptoAlgorithmIdentifier::AES_KW:
         return adoptRef(*new CryptoAlgorithmParametersDeprecated);
     case CryptoAlgorithmIdentifier::HMAC:
-    case CryptoAlgorithmIdentifier::DH:
     case CryptoAlgorithmIdentifier::SHA_1:
     case CryptoAlgorithmIdentifier::SHA_224:
     case CryptoAlgorithmIdentifier::SHA_256:
     case CryptoAlgorithmIdentifier::SHA_384:
     case CryptoAlgorithmIdentifier::SHA_512:
-    case CryptoAlgorithmIdentifier::CONCAT:
     case CryptoAlgorithmIdentifier::HKDF:
     case CryptoAlgorithmIdentifier::PBKDF2:
         throwNotSupportedError(state, scope);
@@ -358,7 +357,6 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
         return nullptr;
     case CryptoAlgorithmIdentifier::AES_CBC:
         return createAesCbcParams(state, value);
-    case CryptoAlgorithmIdentifier::AES_CMAC:
     case CryptoAlgorithmIdentifier::AES_GCM:
     case CryptoAlgorithmIdentifier::AES_CFB:
         throwNotSupportedError(state, scope);
@@ -366,13 +364,11 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
     case CryptoAlgorithmIdentifier::AES_KW:
         return adoptRef(*new CryptoAlgorithmParametersDeprecated);
     case CryptoAlgorithmIdentifier::HMAC:
-    case CryptoAlgorithmIdentifier::DH:
     case CryptoAlgorithmIdentifier::SHA_1:
     case CryptoAlgorithmIdentifier::SHA_224:
     case CryptoAlgorithmIdentifier::SHA_256:
     case CryptoAlgorithmIdentifier::SHA_384:
     case CryptoAlgorithmIdentifier::SHA_512:
-    case CryptoAlgorithmIdentifier::CONCAT:
     case CryptoAlgorithmIdentifier::HKDF:
     case CryptoAlgorithmIdentifier::PBKDF2:
         throwNotSupportedError(state, scope);
@@ -396,7 +392,6 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
     case CryptoAlgorithmIdentifier::ECDH:
     case CryptoAlgorithmIdentifier::AES_CTR:
     case CryptoAlgorithmIdentifier::AES_CBC:
-    case CryptoAlgorithmIdentifier::AES_CMAC:
     case CryptoAlgorithmIdentifier::AES_GCM:
     case CryptoAlgorithmIdentifier::AES_CFB:
     case CryptoAlgorithmIdentifier::AES_KW:
@@ -404,13 +399,11 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
         return nullptr;
     case CryptoAlgorithmIdentifier::HMAC:
         return createHmacParams(state, value);
-    case CryptoAlgorithmIdentifier::DH:
     case CryptoAlgorithmIdentifier::SHA_1:
     case CryptoAlgorithmIdentifier::SHA_224:
     case CryptoAlgorithmIdentifier::SHA_256:
     case CryptoAlgorithmIdentifier::SHA_384:
     case CryptoAlgorithmIdentifier::SHA_512:
-    case CryptoAlgorithmIdentifier::CONCAT:
     case CryptoAlgorithmIdentifier::HKDF:
     case CryptoAlgorithmIdentifier::PBKDF2:
         throwNotSupportedError(state, scope);
@@ -434,7 +427,6 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
     case CryptoAlgorithmIdentifier::ECDH:
     case CryptoAlgorithmIdentifier::AES_CTR:
     case CryptoAlgorithmIdentifier::AES_CBC:
-    case CryptoAlgorithmIdentifier::AES_CMAC:
     case CryptoAlgorithmIdentifier::AES_GCM:
     case CryptoAlgorithmIdentifier::AES_CFB:
     case CryptoAlgorithmIdentifier::AES_KW:
@@ -442,13 +434,11 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
         return nullptr;
     case CryptoAlgorithmIdentifier::HMAC:
         return createHmacParams(state, value);
-    case CryptoAlgorithmIdentifier::DH:
     case CryptoAlgorithmIdentifier::SHA_1:
     case CryptoAlgorithmIdentifier::SHA_224:
     case CryptoAlgorithmIdentifier::SHA_256:
     case CryptoAlgorithmIdentifier::SHA_384:
     case CryptoAlgorithmIdentifier::SHA_512:
-    case CryptoAlgorithmIdentifier::CONCAT:
     case CryptoAlgorithmIdentifier::HKDF:
     case CryptoAlgorithmIdentifier::PBKDF2:
         throwNotSupportedError(state, scope);
@@ -469,12 +459,10 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
     case CryptoAlgorithmIdentifier::ECDH:
     case CryptoAlgorithmIdentifier::AES_CTR:
     case CryptoAlgorithmIdentifier::AES_CBC:
-    case CryptoAlgorithmIdentifier::AES_CMAC:
     case CryptoAlgorithmIdentifier::AES_GCM:
     case CryptoAlgorithmIdentifier::AES_CFB:
     case CryptoAlgorithmIdentifier::AES_KW:
     case CryptoAlgorithmIdentifier::HMAC:
-    case CryptoAlgorithmIdentifier::DH:
         throwNotSupportedError(state, scope);
         return nullptr;
     case CryptoAlgorithmIdentifier::SHA_1:
@@ -483,7 +471,6 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
     case CryptoAlgorithmIdentifier::SHA_384:
     case CryptoAlgorithmIdentifier::SHA_512:
         return adoptRef(*new CryptoAlgorithmParametersDeprecated);
-    case CryptoAlgorithmIdentifier::CONCAT:
     case CryptoAlgorithmIdentifier::HKDF:
     case CryptoAlgorithmIdentifier::PBKDF2:
         throwNotSupportedError(state, scope);
@@ -507,20 +494,17 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
         return nullptr;
     case CryptoAlgorithmIdentifier::AES_CTR:
     case CryptoAlgorithmIdentifier::AES_CBC:
-    case CryptoAlgorithmIdentifier::AES_CMAC:
     case CryptoAlgorithmIdentifier::AES_GCM:
     case CryptoAlgorithmIdentifier::AES_CFB:
     case CryptoAlgorithmIdentifier::AES_KW:
         return createAesKeyGenParams(state, value);
     case CryptoAlgorithmIdentifier::HMAC:
         return createHmacKeyParams(state, value);
-    case CryptoAlgorithmIdentifier::DH:
     case CryptoAlgorithmIdentifier::SHA_1:
     case CryptoAlgorithmIdentifier::SHA_224:
     case CryptoAlgorithmIdentifier::SHA_256:
     case CryptoAlgorithmIdentifier::SHA_384:
     case CryptoAlgorithmIdentifier::SHA_512:
-    case CryptoAlgorithmIdentifier::CONCAT:
     case CryptoAlgorithmIdentifier::HKDF:
     case CryptoAlgorithmIdentifier::PBKDF2:
         throwNotSupportedError(state, scope);
@@ -541,18 +525,15 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
     case CryptoAlgorithmIdentifier::ECDH:
     case CryptoAlgorithmIdentifier::AES_CTR:
     case CryptoAlgorithmIdentifier::AES_CBC:
-    case CryptoAlgorithmIdentifier::AES_CMAC:
     case CryptoAlgorithmIdentifier::AES_GCM:
     case CryptoAlgorithmIdentifier::AES_CFB:
     case CryptoAlgorithmIdentifier::AES_KW:
     case CryptoAlgorithmIdentifier::HMAC:
-    case CryptoAlgorithmIdentifier::DH:
     case CryptoAlgorithmIdentifier::SHA_1:
     case CryptoAlgorithmIdentifier::SHA_224:
     case CryptoAlgorithmIdentifier::SHA_256:
     case CryptoAlgorithmIdentifier::SHA_384:
     case CryptoAlgorithmIdentifier::SHA_512:
-    case CryptoAlgorithmIdentifier::CONCAT:
     case CryptoAlgorithmIdentifier::HKDF:
     case CryptoAlgorithmIdentifier::PBKDF2:
         throwNotSupportedError(state, scope);
@@ -573,18 +554,15 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
     case CryptoAlgorithmIdentifier::ECDH:
     case CryptoAlgorithmIdentifier::AES_CTR:
     case CryptoAlgorithmIdentifier::AES_CBC:
-    case CryptoAlgorithmIdentifier::AES_CMAC:
     case CryptoAlgorithmIdentifier::AES_GCM:
     case CryptoAlgorithmIdentifier::AES_CFB:
     case CryptoAlgorithmIdentifier::AES_KW:
     case CryptoAlgorithmIdentifier::HMAC:
-    case CryptoAlgorithmIdentifier::DH:
     case CryptoAlgorithmIdentifier::SHA_1:
     case CryptoAlgorithmIdentifier::SHA_224:
     case CryptoAlgorithmIdentifier::SHA_256:
     case CryptoAlgorithmIdentifier::SHA_384:
     case CryptoAlgorithmIdentifier::SHA_512:
-    case CryptoAlgorithmIdentifier::CONCAT:
     case CryptoAlgorithmIdentifier::HKDF:
     case CryptoAlgorithmIdentifier::PBKDF2:
         throwNotSupportedError(state, scope);
@@ -606,21 +584,17 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
     case CryptoAlgorithmIdentifier::ECDH:
     case CryptoAlgorithmIdentifier::AES_CTR:
     case CryptoAlgorithmIdentifier::AES_CBC:
-    case CryptoAlgorithmIdentifier::AES_CMAC:
     case CryptoAlgorithmIdentifier::AES_GCM:
     case CryptoAlgorithmIdentifier::AES_CFB:
     case CryptoAlgorithmIdentifier::AES_KW:
         return adoptRef(*new CryptoAlgorithmParametersDeprecated);
     case CryptoAlgorithmIdentifier::HMAC:
         return createHmacParams(state, value);
-    case CryptoAlgorithmIdentifier::DH:
-        return adoptRef(*new CryptoAlgorithmParametersDeprecated);
     case CryptoAlgorithmIdentifier::SHA_1:
     case CryptoAlgorithmIdentifier::SHA_224:
     case CryptoAlgorithmIdentifier::SHA_256:
     case CryptoAlgorithmIdentifier::SHA_384:
     case CryptoAlgorithmIdentifier::SHA_512:
-    case CryptoAlgorithmIdentifier::CONCAT:
     case CryptoAlgorithmIdentifier::HKDF:
     case CryptoAlgorithmIdentifier::PBKDF2:
         throwNotSupportedError(state, scope);
@@ -641,19 +615,16 @@ RefPtr<CryptoAlgorithmParametersDeprecated> JSCryptoAlgorithmDictionary::createP
     case CryptoAlgorithmIdentifier::ECDH:
     case CryptoAlgorithmIdentifier::AES_CTR:
     case CryptoAlgorithmIdentifier::AES_CBC:
-    case CryptoAlgorithmIdentifier::AES_CMAC:
     case CryptoAlgorithmIdentifier::AES_GCM:
     case CryptoAlgorithmIdentifier::AES_CFB:
     case CryptoAlgorithmIdentifier::AES_KW:
     case CryptoAlgorithmIdentifier::HMAC:
-    case CryptoAlgorithmIdentifier::DH:
         return adoptRef(*new CryptoAlgorithmParametersDeprecated);
     case CryptoAlgorithmIdentifier::SHA_1:
     case CryptoAlgorithmIdentifier::SHA_224:
     case CryptoAlgorithmIdentifier::SHA_256:
     case CryptoAlgorithmIdentifier::SHA_384:
     case CryptoAlgorithmIdentifier::SHA_512:
-    case CryptoAlgorithmIdentifier::CONCAT:
     case CryptoAlgorithmIdentifier::HKDF:
     case CryptoAlgorithmIdentifier::PBKDF2:
         throwNotSupportedError(state, scope);

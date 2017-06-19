@@ -157,13 +157,14 @@ void AcceleratedDrawingArea::updatePreferences(const WebPreferencesStore& store)
 
 void AcceleratedDrawingArea::mainFrameContentSizeChanged(const IntSize& size)
 {
-    if (m_webPage.useFixedLayout()) {
-        if (m_layerTreeHost)
-            m_layerTreeHost->sizeDidChange(size);
-        else if (m_previousLayerTreeHost)
-            m_previousLayerTreeHost->sizeDidChange(size);
-    }
-    m_webPage.mainFrame()->pageOverlayController().didChangeDocumentSize();
+#if USE(COORDINATED_GRAPHICS_THREADED)
+    if (m_layerTreeHost)
+        m_layerTreeHost->contentsSizeChanged(size);
+    else if (m_previousLayerTreeHost)
+        m_previousLayerTreeHost->contentsSizeChanged(size);
+#else
+    UNUSED_PARAM(size);
+#endif
 }
 
 void AcceleratedDrawingArea::layerHostDidFlushLayers()
@@ -379,6 +380,16 @@ void AcceleratedDrawingArea::exitAcceleratedCompositingModeSoon()
 
     m_exitCompositingTimer.startOneShot(0_s);
 }
+
+#if USE(COORDINATED_GRAPHICS)
+void AcceleratedDrawingArea::resetUpdateAtlasForTesting()
+{
+    if (!m_layerTreeHost || exitAcceleratedCompositingModePending())
+        return;
+
+    m_layerTreeHost->clearUpdateAtlases();
+}
+#endif
 
 void AcceleratedDrawingArea::exitAcceleratedCompositingModeNow()
 {

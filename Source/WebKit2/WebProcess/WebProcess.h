@@ -132,6 +132,7 @@ public:
     void plugInDidStartFromOrigin(const String& pageOrigin, const String& pluginOrigin, const String& mimeType, WebCore::SessionID);
     void plugInDidReceiveUserInteraction(const String& pageOrigin, const String& pluginOrigin, const String& mimeType, WebCore::SessionID);
     void setPluginLoadClientPolicy(uint8_t policy, const String& host, const String& bundleIdentifier, const String& versionString);
+    void resetPluginLoadClientPolicies(const HashMap<String, HashMap<String, HashMap<String, uint8_t>>>&);
     void clearPluginClientPolicies();
     void refreshPlugins();
 
@@ -239,7 +240,7 @@ private:
     void registerWithStateDumper();
 #endif
 
-    void markAllLayersVolatile(std::function<void()> completionHandler);
+    void markAllLayersVolatile(WTF::Function<void()>&& completionHandler);
     void cancelMarkAllLayersVolatile();
     void setAllLayerTreeStatesFrozen(bool);
     void processSuspensionCleanupTimerFired();
@@ -417,6 +418,7 @@ private:
 #endif
 
     Ref<WebCore::ResourceLoadStatisticsStore> m_resourceLoadStatisticsStore;
+    Ref<WTF::WorkQueue> m_statisticsQueue;
 
     unsigned m_pagesMarkingLayersAsVolatile { 0 };
     bool m_suppressMemoryPressureHandler { false };

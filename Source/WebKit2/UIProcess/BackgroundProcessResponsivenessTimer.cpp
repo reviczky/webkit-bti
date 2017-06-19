@@ -60,10 +60,8 @@ void BackgroundProcessResponsivenessTimer::updateState()
         return;
     }
 
-    if (!m_responsivenessCheckTimer.isActive()) {
-        ASSERT(!m_timeoutTimer.isActive());
+    if (!isActive())
         m_responsivenessCheckTimer.startOneShot(m_checkingInterval);
-    }
 }
 
 void BackgroundProcessResponsivenessTimer::didReceiveBackgroundResponsivenessPong()
@@ -123,10 +121,10 @@ void BackgroundProcessResponsivenessTimer::setResponsive(bool isResponsive)
     client().didChangeIsResponsive();
 
     if (m_isResponsive) {
-        RELEASE_LOG_ERROR(PerformanceLogging, "Notifying the client that a background WebProcess has become responsive again");
+        RELEASE_LOG_ERROR(PerformanceLogging, "Notifying the client that background WebProcess with pid %d has become responsive again", m_webProcessProxy.processIdentifier());
         client().didBecomeResponsive();
     } else {
-        RELEASE_LOG_ERROR(PerformanceLogging, "Notifying the client that a background WebProcess has become unresponsive");
+        RELEASE_LOG_ERROR(PerformanceLogging, "Notifying the client that background WebProcess with pid %d has become unresponsive", m_webProcessProxy.processIdentifier());
         client().didBecomeUnresponsive();
     }
 }
@@ -141,11 +139,15 @@ bool BackgroundProcessResponsivenessTimer::shouldBeActive() const
 #endif
 }
 
+bool BackgroundProcessResponsivenessTimer::isActive() const
+{
+    return m_responsivenessCheckTimer.isActive() || m_timeoutTimer.isActive();
+}
+
 void BackgroundProcessResponsivenessTimer::scheduleNextResponsivenessCheck()
 {
     // Exponential backoff to avoid waking up the process too often.
     ASSERT(!m_responsivenessCheckTimer.isActive());
-    ASSERT(!m_timeoutTimer.isActive());
     m_checkingInterval = std::min(m_checkingInterval * 2, maximumCheckingInterval);
     m_responsivenessCheckTimer.startOneShot(m_checkingInterval);
 }

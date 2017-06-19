@@ -30,6 +30,7 @@
 #include "AXObjectCache.h"
 #include "ActiveDOMCallbackMicrotask.h"
 #include "ApplicationCacheStorage.h"
+#include "AudioSession.h"
 #include "Autofill.h"
 #include "BackForwardController.h"
 #include "BitmapImage.h"
@@ -44,6 +45,7 @@
 #include "Cursor.h"
 #include "DOMPath.h"
 #include "DOMRect.h"
+#include "DOMRectList.h"
 #include "DOMStringList.h"
 #include "DOMWindow.h"
 #include "DisplayList.h"
@@ -194,6 +196,7 @@
 #endif
 
 #if ENABLE(MEDIA_STREAM)
+#include "MediaStream.h"
 #include "MockRealtimeMediaSourceCenter.h"
 #endif
 
@@ -407,6 +410,7 @@ void Internals::resetToConsistentState(Page& page)
         mainFrameView->setFixedLayoutSize(IntSize());
 #if USE(COORDINATED_GRAPHICS)
         mainFrameView->setFixedVisibleContentRect(IntRect());
+        page.chrome().client().resetUpdateAtlasForTesting();
 #endif
         if (auto* backing = mainFrameView->tiledBacking())
             backing->setTileSizeUpdateDelayDisabledForTesting(false);
@@ -460,6 +464,9 @@ void Internals::resetToConsistentState(Page& page)
 
 Internals::Internals(Document& document)
     : ContextDestructionObserver(&document)
+#if ENABLE(MEDIA_STREAM)
+    , m_orientationNotifier(0)
+#endif
 {
 #if ENABLE(VIDEO_TRACK)
     if (document.page())
@@ -472,7 +479,7 @@ Internals::Internals(Document& document)
 #endif
 
 #if ENABLE(WEB_RTC)
-#if PLATFORM(GTK)
+#if USE(OPENWEBRTC)
     enableMockMediaEndpoint();
 #endif
 #if USE(LIBWEBRTC)
@@ -794,7 +801,7 @@ bool Internals::isImageAnimating(HTMLImageElement& element)
     if (!image)
         return false;
 
-    return image->isAnimating();
+    return image->isAnimating() || image->animationPending();
 }
 
 void Internals::setClearDecoderAfterAsyncFrameRequestForTesting(HTMLImageElement& element, bool value)
@@ -1259,13 +1266,12 @@ void Internals::enableMockSpeechSynthesizer()
 
 #if ENABLE(WEB_RTC)
 
+#if USE(OPENWEBRTC)
 void Internals::enableMockMediaEndpoint()
 {
-    if (!LibWebRTCProvider::webRTCAvailable())
-        return;
-
     MediaEndpoint::create = MockMediaEndpoint::create;
 }
+#endif
 
 void Internals::emulateRTCPeerConnectionPlatformEvent(RTCPeerConnection& connection, const String& action)
 {
@@ -1325,6 +1331,10 @@ void Internals::stopPeerConnection(RTCPeerConnection& connection)
     object.stop();
 }
 
+void Internals::applyRotationForOutgoingVideoSources(RTCPeerConnection& connection)
+{
+    connection.applyRotationForOutgoingVideoSources();
+}
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -1354,7 +1364,7 @@ Ref<DOMRect> Internals::boundingBox(Element& element)
     return DOMRect::create(renderer->absoluteBoundingBoxRectIgnoringTransforms());
 }
 
-ExceptionOr<Vector<Ref<DOMRect>>> Internals::inspectorHighlightRects()
+ExceptionOr<Ref<DOMRectList>> Internals::inspectorHighlightRects()
 {
     Document* document = contextDocument();
     if (!document || !document->page())
@@ -1362,7 +1372,7 @@ ExceptionOr<Vector<Ref<DOMRect>>> Internals::inspectorHighlightRects()
 
     Highlight highlight;
     document->page()->inspectorController().getHighlight(highlight, InspectorOverlay::CoordinateSystem::View);
-    return createDOMRectVector(highlight.quads);
+    return DOMRectList::create(highlight.quads);
 }
 
 ExceptionOr<String> Internals::inspectorHighlightObject()
@@ -1798,7 +1808,7 @@ ExceptionOr<unsigned> Internals::touchEventHandlerCount()
     return document->touchEventHandlerCount();
 }
 
-ExceptionOr<Vector<Ref<DOMRect>>> Internals::touchEventRectsForEvent(const String& eventName)
+ExceptionOr<Ref<DOMRectList>> Internals::touchEventRectsForEvent(const String& eventName)
 {
     Document* document = contextDocument();
     if (!document || !document->page())
@@ -1807,7 +1817,7 @@ ExceptionOr<Vector<Ref<DOMRect>>> Internals::touchEventRectsForEvent(const Strin
     return document->page()->touchEventRectsForEvent(eventName);
 }
 
-ExceptionOr<Vector<Ref<DOMRect>>> Internals::passiveTouchEventListenerRects()
+ExceptionOr<Ref<DOMRectList>> Internals::passiveTouchEventListenerRects()
 {
     Document* document = contextDocument();
     if (!document || !document->page())
@@ -2185,6 +2195,11 @@ unsigned Internals::numberOfLiveDocuments() const
     return Document::allDocuments().size();
 }
 
+unsigned Internals::referencingNodeCount(const Document& document) const
+{
+    return document.referencingNodeCount();
+}
+
 RefPtr<DOMWindow> Internals::openDummyInspectorFrontend(const String& url)
 {
     auto* inspectedPage = contextDocument()->frame()->page();
@@ -2261,6 +2276,8 @@ static LayerTreeFlags toLayerTreeFlags(unsigned short flags)
         layerTreeFlags |= LayerTreeFlagsIncludeContentLayers;
     if (flags & Internals::LAYER_TREE_INCLUDES_ACCELERATES_DRAWING)
         layerTreeFlags |= LayerTreeFlagsIncludeAcceleratesDrawing;
+    if (flags & Internals::LAYER_TREE_INCLUDES_BACKING_STORE_ATTACHED)
+        layerTreeFlags |= LayerTreeFlagsIncludeBackingStoreAttached;
 
     return layerTreeFlags;
 }
@@ -2329,7 +2346,7 @@ ExceptionOr<String> Internals::mainThreadScrollingReasons() const
     return page->synchronousScrollingReasonsAsText();
 }
 
-ExceptionOr<Vector<Ref<DOMRect>>> Internals::nonFastScrollableRects() const
+ExceptionOr<Ref<DOMRectList>> Internals::nonFastScrollableRects() const
 {
     Document* document = contextDocument();
     if (!document || !document->frame())
@@ -2337,7 +2354,7 @@ ExceptionOr<Vector<Ref<DOMRect>>> Internals::nonFastScrollableRects() const
 
     Page* page = document->page();
     if (!page)
-        return Vector<Ref<DOMRect>> { };
+        return DOMRectList::create();
 
     return page->nonFastScrollableRects();
 }
@@ -3220,14 +3237,24 @@ void Internals::endMediaSessionInterruption(const String& flagsString)
     PlatformMediaSessionManager::sharedManager().endInterruption(flags);
 }
 
-void Internals::applicationDidEnterForeground() const
+void Internals::applicationWillBecomeInactive()
 {
-    PlatformMediaSessionManager::sharedManager().applicationDidEnterForeground();
+    PlatformMediaSessionManager::sharedManager().applicationWillBecomeInactive();
 }
 
-void Internals::applicationWillEnterBackground() const
+void Internals::applicationDidBecomeActive()
 {
-    PlatformMediaSessionManager::sharedManager().applicationWillEnterBackground();
+    PlatformMediaSessionManager::sharedManager().applicationDidBecomeActive();
+}
+
+void Internals::applicationWillEnterForeground(bool suspendedUnderLock) const
+{
+    PlatformMediaSessionManager::sharedManager().applicationWillEnterForeground(suspendedUnderLock);
+}
+
+void Internals::applicationDidEnterBackground(bool suspendedUnderLock) const
+{
+    PlatformMediaSessionManager::sharedManager().applicationDidEnterBackground(suspendedUnderLock);
 }
 
 static PlatformMediaSession::MediaType mediaTypeFromString(const String& mediaTypeString)
@@ -3266,6 +3293,10 @@ ExceptionOr<void> Internals::setMediaSessionRestrictions(const String& mediaType
             restrictions |= PlatformMediaSessionManager::BackgroundTabPlaybackRestricted;
         if (equalLettersIgnoringASCIICase(restrictionString, "interruptedplaybacknotpermitted"))
             restrictions |= PlatformMediaSessionManager::InterruptedPlaybackNotPermitted;
+        if (equalLettersIgnoringASCIICase(restrictionString, "inactiveprocessplaybackrestricted"))
+            restrictions |= PlatformMediaSessionManager::InactiveProcessPlaybackRestricted;
+        if (equalLettersIgnoringASCIICase(restrictionString, "suspendedunderlockplaybackrestricted"))
+            restrictions |= PlatformMediaSessionManager::SuspendedUnderLockPlaybackRestricted;
     }
     PlatformMediaSessionManager::sharedManager().addRestriction(mediaType, restrictions);
     return { };
@@ -3984,6 +4015,11 @@ void Internals::simulateWebGLContextChanged(WebGLRenderingContext& context)
 {
     context.simulateContextChanged();
 }
+
+void Internals::failNextGPUStatusCheck(WebGLRenderingContext& context)
+{
+    context.setFailNextGPUStatusCheck();
+}
 #endif
 
 void Internals::setPageVisibility(bool isVisible)
@@ -4003,6 +4039,16 @@ void Internals::setPageVisibility(bool isVisible)
 }
 
 #if ENABLE(MEDIA_STREAM)
+
+void Internals::setCameraMediaStreamTrackOrientation(MediaStreamTrack& track, int orientation)
+{
+    auto& source = track.source();
+    if (!source.isCaptureSource())
+        return;
+    m_orientationNotifier.orientationChanged(orientation);
+    source.monitorOrientation(m_orientationNotifier);
+}
+
 void Internals::observeMediaStreamTrack(MediaStreamTrack& track)
 {
     m_track = &track;
@@ -4062,6 +4108,39 @@ void Internals::delayMediaStreamTrackSamples(MediaStreamTrack& track, float dela
     track.source().delaySamples(delay);
 }
 
+void Internals::setMediaStreamTrackMuted(MediaStreamTrack& track, bool muted)
+{
+    track.source().setMuted(muted);
+}
+
+void Internals::removeMediaStreamTrack(MediaStream& stream, MediaStreamTrack& track)
+{
+    stream.internalRemoveTrack(track.id(), MediaStream::StreamModifier::Platform);
+}
+
 #endif
+
+String Internals::audioSessionCategory() const
+{
+#if USE(AUDIO_SESSION)
+    switch (AudioSession::sharedSession().category()) {
+    case AudioSession::AmbientSound:
+        return ASCIILiteral("AmbientSound");
+    case AudioSession::SoloAmbientSound:
+        return ASCIILiteral("SoloAmbientSound");
+    case AudioSession::MediaPlayback:
+        return ASCIILiteral("MediaPlayback");
+    case AudioSession::RecordAudio:
+        return ASCIILiteral("RecordAudio");
+    case AudioSession::PlayAndRecord:
+        return ASCIILiteral("PlayAndRecord");
+    case AudioSession::AudioProcessing:
+        return ASCIILiteral("AudioProcessing");
+    case AudioSession::None:
+        return ASCIILiteral("None");
+    }
+#endif
+    return emptyString();
+}
 
 } // namespace WebCore

@@ -23,13 +23,12 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef NetworkCacheFileSystem_h
-#define NetworkCacheFileSystem_h
+#pragma once
 
 #if ENABLE(NETWORK_CACHE)
 
 #include <WebCore/FileSystem.h>
-#include <functional>
+#include <chrono>
 
 namespace WebKit {
 namespace NetworkCache {
@@ -52,6 +51,3 @@ bool canUseSharedMemoryForPath(const String& path);
 }
 
 #endif 
-
-#endif
-

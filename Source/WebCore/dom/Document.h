@@ -52,7 +52,6 @@
 #include "TreeScope.h"
 #include "UserActionElementSet.h"
 #include "ViewportArguments.h"
-#include <chrono>
 #include <memory>
 #include <wtf/Deque.h>
 #include <wtf/HashCountedSet.h>
@@ -276,7 +275,14 @@ enum class HttpEquivPolicy {
     DisabledByContentDispositionAttachmentSandbox
 };
 
-enum class CustomElementNameValidationStatus { Valid, ConflictsWithBuiltinNames, NoHyphen, ContainsUpperCase };
+enum class CustomElementNameValidationStatus {
+    Valid,
+    FirstCharacterIsNotLowercaseASCIILetter,
+    ContainsNoHyphen,
+    ContainsUppercaseASCIILetter,
+    ContainsDisallowedCharacter,
+    ConflictsWithStandardElementName
+};
 
 class Document
     : public ContainerNode
@@ -590,10 +596,16 @@ public:
     
     WEBCORE_EXPORT DocumentLoader* loader() const;
 
-    WEBCORE_EXPORT void open(Document* ownerDocument = nullptr);
+    WEBCORE_EXPORT ExceptionOr<RefPtr<DOMWindow>> openForBindings(DOMWindow& activeWindow, DOMWindow& firstWindow, const String& url, const AtomicString& name, const String& features);
+    WEBCORE_EXPORT ExceptionOr<Document&> openForBindings(Document* responsibleDocument, const String& type, const String& replace);
+
+    // FIXME: We should rename this at some point and give back the name 'open' to the HTML specified ones.
+    WEBCORE_EXPORT void open(Document* responsibleDocument = nullptr);
     void implicitOpen();
 
-    // close() is the DOM API document.close()
+    WEBCORE_EXPORT ExceptionOr<void> closeForBindings();
+
+    // FIXME: We should rename this at some point and give back the name 'close' to the HTML specified one.
     WEBCORE_EXPORT void close();
     // In some situations (see the code), we ignore document.close().
     // explicitClose() bypass these checks and actually tries to close the
@@ -604,9 +616,9 @@ public:
 
     void cancelParsing();
 
-    void write(SegmentedString&& text, Document* ownerDocument = nullptr);
-    WEBCORE_EXPORT void write(const String& text, Document* ownerDocument = nullptr);
-    WEBCORE_EXPORT void writeln(const String& text, Document* ownerDocument = nullptr);
+    void write(Document* responsibleDocument, SegmentedString&&);
+    WEBCORE_EXPORT ExceptionOr<void> write(Document* responsibleDocument, Vector<String>&&);
+    WEBCORE_EXPORT ExceptionOr<void> writeln(Document* responsibleDocument, Vector<String>&&);
 
     bool wellFormed() const { return m_wellFormed; }
 
@@ -1055,6 +1067,7 @@ public:
     bool loadEventFinished() const { return m_loadEventFinished; }
 
     bool isContextThread() const final;
+    bool isSecureContext() const final;
     bool isJSExecutionForbidden() const final { return false; }
 
     void enqueueWindowEvent(Ref<Event>&&);
@@ -1283,6 +1296,9 @@ public:
     void setDeviceIDHashSalt(const String& salt) { m_idHashSalt = salt; }
     String deviceIDHashSalt() const { return m_idHashSalt; }
     void stopMediaCapture();
+    void registerForMediaStreamStateChangeCallbacks(HTMLMediaElement&);
+    void unregisterForMediaStreamStateChangeCallbacks(HTMLMediaElement&);
+    void mediaStreamCaptureStateChanged();
 #endif
 
 // FIXME: Find a better place for this functionality.
@@ -1312,6 +1328,24 @@ public:
 
     void orientationChanged(int orientation);
     OrientationNotifier& orientationNotifier() { return m_orientationNotifier; }
+
+    WEBCORE_EXPORT const AtomicString& bgColor() const;
+    WEBCORE_EXPORT void setBgColor(const String&);
+    WEBCORE_EXPORT const AtomicString& fgColor() const;
+    WEBCORE_EXPORT void setFgColor(const String&);
+    WEBCORE_EXPORT const AtomicString& alinkColor() const;
+    WEBCORE_EXPORT void setAlinkColor(const String&);
+    WEBCORE_EXPORT const AtomicString& linkColorForBindings() const;
+    WEBCORE_EXPORT void setLinkColorForBindings(const String&);
+    WEBCORE_EXPORT const AtomicString& vlinkColor() const;
+    WEBCORE_EXPORT void setVlinkColor(const String&);
+
+    // Per https://html.spec.whatwg.org/multipage/obsolete.html#dom-document-clear, this method does nothing.
+    void clear() { }
+    // Per https://html.spec.whatwg.org/multipage/obsolete.html#dom-document-captureevents, this method does nothing.
+    void captureEvents() { }
+    // Per https://html.spec.whatwg.org/multipage/obsolete.html#dom-document-releaseevents, this method does nothing.
+    void releaseEvents() { }
 
 protected:
     enum ConstructionFlags { Synthesized = 1, NonRenderedPlaceholder = 1 << 1 };
@@ -1601,7 +1635,7 @@ private:
     void clearScriptedAnimationController();
     RefPtr<ScriptedAnimationController> m_scriptedAnimationController;
 
-    void notifyVisibilityChangedToMediaCapture();
+    void notifyMediaCaptureOfVisibilityChanged();
 
 #if ENABLE(DEVICE_ORIENTATION) && PLATFORM(IOS)
     std::unique_ptr<DeviceMotionClient> m_deviceMotionClient;
@@ -1765,6 +1799,7 @@ private:
 #endif
 
 #if ENABLE(MEDIA_STREAM)
+    HashSet<HTMLMediaElement*> m_mediaStreamStateChangeElements;
     String m_idHashSalt;
     bool m_hasHadActiveMediaStreamTrack { false };
 #endif
@@ -1800,11 +1835,6 @@ inline AXObjectCache* Document::existingAXObjectCache() const
 }
 
 // These functions are here because they require the Document class definition and we want to inline them.
-
-inline bool Node::isDocumentNode() const
-{
-    return this == &document();
-}
 
 inline ScriptExecutionContext* Node::scriptExecutionContext() const
 {

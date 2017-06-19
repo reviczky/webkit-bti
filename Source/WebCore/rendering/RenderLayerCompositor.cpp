@@ -1003,8 +1003,7 @@ bool RenderLayerCompositor::updateBacking(RenderLayer& layer, CompositingChangeR
 
             layer.ensureBacking();
 
-            // At this time, the ScrollingCoordinator only supports the top-level frame.
-            if (layer.isRootLayer() && isMainFrameCompositor()) {
+            if (layer.isRootLayer() && useCoordinatedScrollingForLayer(layer)) {
                 updateScrollCoordinatedStatus(layer);
                 if (ScrollingCoordinator* scrollingCoordinator = this->scrollingCoordinator())
                     scrollingCoordinator->frameViewRootLayerDidChange(m_renderView.frameView());
@@ -1828,6 +1827,8 @@ String RenderLayerCompositor::layerTreeAsText(LayerTreeFlags flags)
         layerTreeBehavior |= LayerTreeAsTextIncludeContentLayers;
     if (flags & LayerTreeFlagsIncludeAcceleratesDrawing)
         layerTreeBehavior |= LayerTreeAsTextIncludeAcceleratesDrawing;
+    if (flags & LayerTreeFlagsIncludeBackingStoreAttached)
+        layerTreeBehavior |= LayerTreeAsTextIncludeBackingStoreAttached;
 
     // We skip dumping the scroll and clip layers to keep layerTreeAsText output
     // similar between platforms.
@@ -2467,7 +2468,12 @@ bool RenderLayerCompositor::requiresCompositingForScrollableFrame() const
     if (isMainFrameCompositor())
         return false;
 
-    if (!(m_compositingTriggers & ChromeClient::ScrollableInnerFrameTrigger))
+#if PLATFORM(MAC)
+    if (!m_renderView.settings().scrollingTreeIncludesFrames())
+        return false;
+#endif
+
+    if (!(m_compositingTriggers & ChromeClient::ScrollableNonMainFrameTrigger))
         return false;
 
     // Need this done first to determine overflow.
@@ -2551,6 +2557,9 @@ bool RenderLayerCompositor::requiresCompositingForPlugin(RenderLayerModelObject&
     m_reevaluateCompositingAfterLayout = true;
     
     RenderWidget& pluginRenderer = downcast<RenderWidget>(renderer);
+    if (pluginRenderer.style().visibility() != VISIBLE)
+        return false;
+
     // If we can't reliably know the size of the plugin yet, don't change compositing state.
     if (pluginRenderer.needsLayout())
         return pluginRenderer.isComposited();
@@ -2566,6 +2575,9 @@ bool RenderLayerCompositor::requiresCompositingForFrame(RenderLayerModelObject& 
         return false;
 
     auto& frameRenderer = downcast<RenderWidget>(renderer);
+    if (frameRenderer.style().visibility() != VISIBLE)
+        return false;
+
     if (!frameRenderer.requiresAcceleratedCompositing())
         return false;
 
@@ -2718,9 +2730,9 @@ bool RenderLayerCompositor::isViewportConstrainedFixedOrStickyLayer(const Render
     return true;
 }
 
-static bool useCoordinatedScrollingForLayer(RenderView& view, const RenderLayer& layer)
+bool RenderLayerCompositor::useCoordinatedScrollingForLayer(const RenderLayer& layer) const
 {
-    if (layer.isRootLayer() && view.frameView().frame().isMainFrame())
+    if (layer.isRootLayer() && hasCoordinatedScrolling())
         return true;
 
     return layer.usesAcceleratedScrolling();
@@ -2863,7 +2875,7 @@ void paintScrollbar(Scrollbar* scrollbar, GraphicsContext& context, const IntRec
     context.restore();
 }
 
-void RenderLayerCompositor::paintContents(const GraphicsLayer* graphicsLayer, GraphicsContext& context, GraphicsLayerPaintingPhase, const FloatRect& clip)
+void RenderLayerCompositor::paintContents(const GraphicsLayer* graphicsLayer, GraphicsContext& context, GraphicsLayerPaintingPhase, const FloatRect& clip, GraphicsLayerPaintFlags)
 {
     IntRect pixelSnappedRectForIntegralPositionedItems = snappedIntRect(LayoutRect(clip));
     if (graphicsLayer == layerForHorizontalScrollbar())
@@ -3307,6 +3319,7 @@ void RenderLayerCompositor::updateOverflowControlsLayers()
     if (requiresHorizontalScrollbarLayer()) {
         if (!m_layerForHorizontalScrollbar) {
             m_layerForHorizontalScrollbar = GraphicsLayer::create(graphicsLayerFactory(), *this);
+            m_layerForHorizontalScrollbar->setCanDetachBackingStore(false);
             m_layerForHorizontalScrollbar->setShowDebugBorder(m_showDebugBorders);
             m_layerForHorizontalScrollbar->setName("horizontal scrollbar container");
 #if PLATFORM(COCOA) && USE(CA)
@@ -3328,6 +3341,7 @@ void RenderLayerCompositor::updateOverflowControlsLayers()
     if (requiresVerticalScrollbarLayer()) {
         if (!m_layerForVerticalScrollbar) {
             m_layerForVerticalScrollbar = GraphicsLayer::create(graphicsLayerFactory(), *this);
+            m_layerForVerticalScrollbar->setCanDetachBackingStore(false);
             m_layerForVerticalScrollbar->setShowDebugBorder(m_showDebugBorders);
             m_layerForVerticalScrollbar->setName("vertical scrollbar container");
 #if PLATFORM(COCOA) && USE(CA)
@@ -3349,6 +3363,7 @@ void RenderLayerCompositor::updateOverflowControlsLayers()
     if (requiresScrollCornerLayer()) {
         if (!m_layerForScrollCorner) {
             m_layerForScrollCorner = GraphicsLayer::create(graphicsLayerFactory(), *this);
+            m_layerForScrollCorner->setCanDetachBackingStore(false);
             m_layerForScrollCorner->setShowDebugBorder(m_showDebugBorders);
             m_layerForScrollCorner->setName("scroll corner");
 #if PLATFORM(COCOA) && USE(CA)
@@ -3644,7 +3659,7 @@ void RenderLayerCompositor::updateScrollCoordinatedStatus(RenderLayer& layer)
     if (isViewportConstrainedFixedOrStickyLayer(layer))
         coordinationRoles |= ViewportConstrained;
 
-    if (useCoordinatedScrollingForLayer(m_renderView, layer))
+    if (useCoordinatedScrollingForLayer(layer))
         coordinationRoles |= Scrolling;
 
     if (coordinationRoles) {

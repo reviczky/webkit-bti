@@ -27,6 +27,7 @@
 
 #include "Comment.h"
 #include "DOMRect.h"
+#include "DOMRectList.h"
 #include "DocumentFragment.h"
 #include "Editing.h"
 #include "Event.h"
@@ -1762,9 +1763,9 @@ ExceptionOr<void> Range::expand(const String& unit)
     return setEnd(*endContainer, end.deepEquivalent().computeOffsetInContainerNode());
 }
 
-Vector<Ref<DOMRect>> Range::getClientRects() const
+Ref<DOMRectList> Range::getClientRects() const
 {
-    return createDOMRectVector(borderAndTextQuads(CoordinateSpace::Client));
+    return DOMRectList::create(borderAndTextQuads(CoordinateSpace::Client));
 }
 
 Ref<DOMRect> Range::getBoundingClientRect() const
@@ -1836,7 +1837,7 @@ void showTree(const WebCore::Range* range)
 {
     if (range && range->boundaryPointsValid()) {
         range->startContainer().showTreeAndMark(&range->startContainer(), "S", &range->endContainer(), "E");
-        fprintf(stderr, "start offset: %d, end offset: %d\n", range->startOffset(), range->endOffset());
+        WTFLogAlways("start offset: %d, end offset: %d\n", range->startOffset(), range->endOffset());
     }
 }
 

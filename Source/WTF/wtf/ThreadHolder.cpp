@@ -34,31 +34,18 @@
 
 #include "Threading.h"
 
+#include <wtf/threads/Signals.h>
+
 namespace WTF {
 
 ThreadSpecificKey ThreadHolder::m_key = InvalidThreadSpecificKey;
 
 ThreadHolder::~ThreadHolder()
 {
-    m_thread->didExit();
-}
-
-void ThreadHolder::initialize(Thread& thread)
-{
-    if (!current()) {
-        // Ideally we'd have this as a release assert everywhere, but that would hurt performance.
-        // Having this release assert here means that we will catch "didn't call
-        // WTF::initializeThreading() soon enough" bugs in release mode.
-        ASSERT(m_key != InvalidThreadSpecificKey);
-#if !OS(WINDOWS)
-        threadSpecificSet(m_key, new ThreadHolder(thread));
-#else
-        // FIXME: Remove this workaround code once <rdar://problem/31793213> is fixed.
-        auto* holder = new ThreadHolder(thread);
-        threadSpecificSet(m_key, holder);
-        platformInitialize(holder);
+#if HAVE(MACH_EXCEPTIONS)
+    unregisterThreadForMachExceptionHandling(&m_thread.get());
 #endif
-    }
+    m_thread->didExit();
 }
 
 } // namespace WTF

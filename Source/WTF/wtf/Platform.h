@@ -547,6 +547,7 @@
 #define HAVE_DTRACE 0
 
 #if !PLATFORM(WATCHOS) && !PLATFORM(APPLETV)
+#define ENABLE_DATA_DETECTION 1
 #define HAVE_AVKIT 1
 #define HAVE_PARENTAL_CONTROLS 1
 #endif
@@ -668,6 +669,10 @@
 #define HAVE_READLINE 1
 #define HAVE_SYS_TIMEB_H 1
 
+#if __has_include(<mach/mach_exc.defs>) && !(PLATFORM(WATCHOS) || PLATFORM(APPLETV))
+#define HAVE_MACH_EXCEPTIONS 1
+#endif
+
 #if !PLATFORM(GTK)
 #define USE_ACCELERATE 1
 #endif
@@ -705,10 +710,6 @@
 
 /* Include feature macros */
 #include <wtf/FeatureDefines.h>
-
-#if USE(APPLE_INTERNAL_SDK) && __has_include(<WebKitAdditions/AdditionalFeatureDefines.h>)
-#include <WebKitAdditions/AdditionalFeatureDefines.h>
-#endif
 
 #if OS(WINDOWS)
 #define USE_SYSTEM_MALLOC 1
@@ -916,6 +917,15 @@
 #define ENABLE_COMPUTED_GOTO_OPCODES 1
 #endif
 
+#if ENABLE(JIT) && !COMPILER(MSVC) && \
+    (CPU(X86) || CPU(X86_64) || CPU(ARM64) || (CPU(ARM_THUMB2) && OS(DARWIN)))
+/* This feature works by embedding the OpcodeID in the 32 bit just before the generated LLint code
+   that executes each opcode. It cannot be supported by the CLoop since there's no way to embed the
+   OpcodeID word in the CLoop's switch statement cases. It is also currently not implemented for MSVC.
+*/
+#define USE_LLINT_EMBEDDED_OPCODE_ID 1
+#endif
+
 /* Regular Expression Tracing - Set to 1 to trace RegExp's in jsc.  Results dumped at exit */
 #define ENABLE_REGEXP_TRACING 0
 
@@ -1087,10 +1097,6 @@
 #define USE_VIDEOTOOLBOX 1
 #endif
 
-#if PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE) || (PLATFORM(WIN) && !USE(WINGDI))
-#define USE_REQUEST_ANIMATION_FRAME_TIMER 1
-#endif
-
 #if PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)
 #define USE_REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR 1
 #endif
@@ -1255,6 +1261,10 @@
 
 #if PLATFORM(COCOA) && ENABLE(WEB_RTC)
 #define USE_LIBWEBRTC 1
+#endif
+
+#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101300) || (PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 110000) || USE(GCRYPT)
+#define HAVE_RSA_PSS 1
 #endif
 
 #endif /* WTF_Platform_h */

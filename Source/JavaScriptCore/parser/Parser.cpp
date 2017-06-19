@@ -170,6 +170,14 @@ public:
         : SetForScope<bool>(scope->m_isGenerator, shouldParseAsGenerator) { }
 };
 
+struct DepthManager : private SetForScope<int> {
+public:
+    DepthManager(int* depth)
+        : SetForScope<int>(*depth, *depth)
+    {
+    }
+};
+
 template <typename LexerType>
 Parser<LexerType>::~Parser()
 {
@@ -3319,11 +3327,14 @@ template <class TreeBuilder> TreeStatement Parser<LexerType>::parseExportDeclara
             result = parseClassDeclaration(context, ExportType::Exported);
             break;
 
-        case ASYNC:
+        case ASYNC: {
             next();
             semanticFailIfFalse(match(FUNCTION) && !m_lexer->prevTerminator(), "Expected 'function' keyword following 'async' keyword with no preceding line terminator");
+            DepthManager statementDepth(&m_statementDepth);
+            m_statementDepth = 1;
             result = parseAsyncFunctionDeclaration(context, ExportType::Exported);
             break;
+        }
 
         default:
             failWithMessage("Expected either a declaration or a variable statement");
@@ -4785,6 +4796,9 @@ template <typename LexerType> void Parser<LexerType>::printUnexpectedTokenText(W
         return;
     case INVALID_IDENTIFIER_ESCAPE_ERRORTOK:
         out.print("Invalid escape in identifier: '", getToken(), "'");
+        return;
+    case UNEXPECTED_ESCAPE_ERRORTOK:
+        out.print("Unexpected escaped characters in keyword tocken: '", getToken(), "'");
         return;
     case INVALID_IDENTIFIER_UNICODE_ESCAPE_ERRORTOK:
         out.print("Invalid unicode escape in identifier: '", getToken(), "'");

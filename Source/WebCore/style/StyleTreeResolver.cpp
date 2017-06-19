@@ -26,6 +26,7 @@
 #include "config.h"
 #include "StyleTreeResolver.h"
 
+#include "CSSAnimationController.h"
 #include "CSSFontSelector.h"
 #include "ComposedTreeAncestorIterator.h"
 #include "ComposedTreeIterator.h"
@@ -421,7 +422,8 @@ void TreeResolver::resolveComposedTree()
 
         bool shouldResolve = shouldResolveElement(element, parent.change) || affectedByPreviousSibling;
         if (shouldResolve) {
-            element.resetComputedStyle();
+            if (!element.hasDisplayContents())
+                element.resetComputedStyle();
             element.resetStyleRelations();
 
             if (element.hasCustomStyleResolveCallbacks())

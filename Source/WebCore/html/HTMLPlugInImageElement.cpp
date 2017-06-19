@@ -28,6 +28,9 @@
 #include "EventNames.h"
 #include "FrameLoaderClient.h"
 #include "HTMLImageLoader.h"
+#include "JSDOMConvertBoolean.h"
+#include "JSDOMConvertInterface.h"
+#include "JSDOMConvertStrings.h"
 #include "JSShadowRoot.h"
 #include "LocalizedStrings.h"
 #include "Logging.h"
@@ -266,17 +269,18 @@ void HTMLPlugInImageElement::finishParsingChildren()
         invalidateStyleForSubtree();
 }
 
-void HTMLPlugInImageElement::didMoveToNewDocument(Document& oldDocument)
+void HTMLPlugInImageElement::didMoveToNewDocument(Document& oldDocument, Document& newDocument)
 {
+    ASSERT_WITH_SECURITY_IMPLICATION(&document() == &newDocument);
     if (m_needsDocumentActivationCallbacks) {
         oldDocument.unregisterForDocumentSuspensionCallbacks(this);
-        document().registerForDocumentSuspensionCallbacks(this);
+        newDocument.registerForDocumentSuspensionCallbacks(this);
     }
 
     if (m_imageLoader)
         m_imageLoader->elementDidMoveToNewDocument();
 
-    HTMLPlugInElement::didMoveToNewDocument(oldDocument);
+    HTMLPlugInElement::didMoveToNewDocument(oldDocument, newDocument);
 }
 
 void HTMLPlugInImageElement::prepareForDocumentSuspension()

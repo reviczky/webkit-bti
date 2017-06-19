@@ -619,7 +619,7 @@ void FrameLoader::clear(Document* newDocument, bool clearWindowProperties, bool 
     if (clearWindowProperties) {
         InspectorInstrumentation::frameWindowDiscarded(m_frame, m_frame.document()->domWindow());
         m_frame.document()->domWindow()->resetUnlessSuspendedForDocumentSuspension();
-        m_frame.script().clearWindowShellsNotMatchingDOMWindow(newDocument->domWindow(), m_frame.document()->pageCacheState() == Document::AboutToEnterPageCache);
+        m_frame.script().clearWindowProxiesNotMatchingDOMWindow(newDocument->domWindow(), m_frame.document()->pageCacheState() == Document::AboutToEnterPageCache);
 
         if (shouldClearWindowName(m_frame, *newDocument))
             m_frame.tree().setName(nullAtom);
@@ -638,7 +638,7 @@ void FrameLoader::clear(Document* newDocument, bool clearWindowProperties, bool 
     subframeLoader().clear();
 
     if (clearWindowProperties)
-        m_frame.script().setDOMWindowForWindowShell(newDocument->domWindow());
+        m_frame.script().setDOMWindowForWindowProxy(newDocument->domWindow());
 
     if (clearScriptObjects)
         m_frame.script().clearScriptObjects();
@@ -674,7 +674,7 @@ void FrameLoader::receivedFirstData()
     auto& document = *m_frame.document();
 
     ASSERT(m_frame.document());
-    LinkLoader::loadLinksFromHeader(m_documentLoader->response().httpHeaderField(HTTPHeaderName::Link), m_frame.document()->url(), *m_frame.document());
+    LinkLoader::loadLinksFromHeader(m_documentLoader->response().httpHeaderField(HTTPHeaderName::Link), m_frame.document()->url(), *m_frame.document(), LinkLoader::MediaAttributeCheck::MediaAttributeEmpty);
 
     double delay;
     String urlString;
@@ -1306,9 +1306,9 @@ SubstituteData FrameLoader::defaultSubstituteDataForURL(const URL& url)
 {
     if (!shouldTreatURLAsSrcdocDocument(url))
         return SubstituteData();
-    String srcdoc = m_frame.ownerElement()->attributeWithoutSynchronization(srcdocAttr);
+    auto& srcdoc = m_frame.ownerElement()->attributeWithoutSynchronization(srcdocAttr);
     ASSERT(!srcdoc.isNull());
-    CString encodedSrcdoc = srcdoc.utf8();
+    CString encodedSrcdoc = srcdoc.string().utf8();
 
     ResourceResponse response(URL(), ASCIILiteral("text/html"), encodedSrcdoc.length(), ASCIILiteral("UTF-8"));
     return SubstituteData(SharedBuffer::create(encodedSrcdoc.data(), encodedSrcdoc.length()), URL(), response, SubstituteData::SessionHistoryVisibility::Hidden);
@@ -3160,7 +3160,9 @@ void FrameLoader::continueLoadAfterNewWindowPolicy(const ResourceRequest& reques
     if (!mainFrame)
         return;
 
-    mainFrame->loader().forceSandboxFlags(frame->loader().effectiveSandboxFlags());
+    SandboxFlags sandboxFlags = frame->loader().effectiveSandboxFlags();
+    if (sandboxFlags & SandboxPropagatesToAuxiliaryBrowsingContexts)
+        mainFrame->loader().forceSandboxFlags(sandboxFlags);
 
     if (!equalIgnoringASCIICase(frameName, "_blank"))
         mainFrame->tree().setName(frameName);
@@ -3530,7 +3532,7 @@ void FrameLoader::dispatchDidClearWindowObjectsInAllWorlds()
 
 void FrameLoader::dispatchDidClearWindowObjectInWorld(DOMWrapperWorld& world)
 {
-    if (!m_frame.script().canExecuteScripts(NotAboutToExecuteScript) || !m_frame.script().existingWindowShell(world))
+    if (!m_frame.script().canExecuteScripts(NotAboutToExecuteScript) || !m_frame.script().existingWindowProxy(world))
         return;
 
     m_client.dispatchDidClearWindowObjectInWorld(world);
@@ -3704,7 +3706,8 @@ RefPtr<Frame> createWindow(Frame& openerFrame, Frame& lookupFrame, const FrameLo
 
     RefPtr<Frame> frame = &page->mainFrame();
 
-    frame->loader().forceSandboxFlags(openerFrame.document()->sandboxFlags());
+    if (isDocumentSandboxed(openerFrame, SandboxPropagatesToAuxiliaryBrowsingContexts))
+        frame->loader().forceSandboxFlags(openerFrame.document()->sandboxFlags());
 
     if (!equalIgnoringASCIICase(request.frameName(), "_blank"))
         frame->tree().setName(request.frameName());

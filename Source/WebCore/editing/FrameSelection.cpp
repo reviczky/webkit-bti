@@ -111,6 +111,7 @@ FrameSelection::FrameSelection(Frame* frame)
     , m_xPosForVerticalArrowNavigation(NoXPosForVerticalArrowNavigation())
     , m_granularity(CharacterGranularity)
     , m_caretBlinkTimer(*this, &FrameSelection::caretBlinkTimerFired)
+    , m_appearanceUpdateTimer(*this, &FrameSelection::appearanceUpdateTimerFired)
     , m_caretInsidePositionFixed(false)
     , m_absCaretBoundsDirty(true)
     , m_caretPaint(true)
@@ -332,6 +333,7 @@ bool FrameSelection::setSelectionWithoutUpdatingAppearance(const VisibleSelectio
 
 void FrameSelection::setSelection(const VisibleSelection& selection, SetSelectionOptions options, AXTextStateChangeIntent intent, CursorAlignOnScroll align, TextGranularity granularity)
 {
+    RefPtr<Frame> protectedFrame(m_frame);
     if (!setSelectionWithoutUpdatingAppearance(selection, options, align, granularity))
         return;
 
@@ -1752,11 +1754,11 @@ void FrameSelection::debugRenderer(RenderObject* renderer, bool selected) const
 {
     if (is<Element>(*renderer->node())) {
         Element& element = downcast<Element>(*renderer->node());
-        fprintf(stderr, "%s%s\n", selected ? "==> " : "    ", element.localName().string().utf8().data());
+        WTFLogAlways("%s%s\n", selected ? "==> " : "    ", element.localName().string().utf8().data());
     } else if (is<RenderText>(*renderer)) {
         RenderText& textRenderer = downcast<RenderText>(*renderer);
         if (!textRenderer.textLength() || !textRenderer.firstTextBox()) {
-            fprintf(stderr, "%s#text (empty)\n", selected ? "==> " : "    ");
+            WTFLogAlways("%s#text (empty)\n", selected ? "==> " : "    ");
             return;
         }
         
@@ -1798,17 +1800,17 @@ void FrameSelection::debugRenderer(RenderObject* renderer, bool selected) const
             
             show.replace('\n', ' ');
             show.replace('\r', ' ');
-            fprintf(stderr, "==> #text : \"%s\" at offset %d\n", show.utf8().data(), pos);
-            fprintf(stderr, "           ");
+            WTFLogAlways("==> #text : \"%s\" at offset %d\n", show.utf8().data(), pos);
+            WTFLogAlways("           ");
             for (int i = 0; i < caret; i++)
-                fprintf(stderr, " ");
-            fprintf(stderr, "^\n");
+                WTFLogAlways(" ");
+            WTFLogAlways("^\n");
         } else {
             if ((int)text.length() > max)
                 text = text.left(max - 3) + "...";
             else
                 text = text.left(max);
-            fprintf(stderr, "    #text : \"%s\"\n", text.utf8().data());
+            WTFLogAlways("    #text : \"%s\"\n", text.utf8().data());
         }
     }
 }
@@ -2395,6 +2397,22 @@ void FrameSelection::setShouldShowBlockCursor(bool shouldShowBlockCursor)
 }
 
 void FrameSelection::updateAppearanceAfterLayout()
+{
+    m_appearanceUpdateTimer.stop();
+    updateAppearanceAfterLayoutOrStyleChange();
+}
+
+void FrameSelection::scheduleAppearanceUpdateAfterStyleChange()
+{
+    m_appearanceUpdateTimer.startOneShot(0_s);
+}
+
+void FrameSelection::appearanceUpdateTimerFired()
+{
+    updateAppearanceAfterLayoutOrStyleChange();
+}
+
+void FrameSelection::updateAppearanceAfterLayoutOrStyleChange()
 {
     if (auto* client = m_frame->editor().client())
         client->updateEditorStateAfterLayoutIfEditabilityChanged();

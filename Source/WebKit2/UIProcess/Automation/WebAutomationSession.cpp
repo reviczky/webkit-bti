@@ -63,7 +63,7 @@ WebAutomationSession::~WebAutomationSession()
         m_processPool->removeMessageReceiver(Messages::WebAutomationSession::messageReceiverName());
 }
 
-void WebAutomationSession::setClient(std::unique_ptr<API::AutomationSessionClient> client)
+void WebAutomationSession::setClient(std::unique_ptr<API::AutomationSessionClient>&& client)
 {
     m_client = WTFMove(client);
 }
@@ -91,9 +91,10 @@ void WebAutomationSession::dispatchMessageFromRemote(const String& message)
     m_backendDispatcher->dispatch(message);
 }
 
-void WebAutomationSession::connect(Inspector::FrontendChannel* channel, bool isAutomaticConnection)
+void WebAutomationSession::connect(Inspector::FrontendChannel* channel, bool isAutomaticConnection, bool immediatelyPause)
 {
     UNUSED_PARAM(isAutomaticConnection);
+    UNUSED_PARAM(immediatelyPause);
 
     m_remoteChannel = channel;
     m_frontendRouter->connectFrontend(channel);
@@ -855,6 +856,8 @@ static WebEvent::Modifiers protocolModifierToWebEventModifier(Inspector::Protoco
     case Inspector::Protocol::Automation::KeyModifier::CapsLock:
         return WebEvent::CapsLockKey;
     }
+
+    RELEASE_ASSERT_NOT_REACHED();
 }
 #endif // USE(APPKIT)
 
@@ -926,7 +929,7 @@ void WebAutomationSession::performKeyboardInteractions(ErrorString& errorString,
         FAIL_WITH_PREDEFINED_ERROR_AND_DETAILS(InvalidParameter, "The parameter 'interactions' was not found or empty.");
 
     // Validate all of the parameters before performing any interactions with the browsing context under test.
-    Vector<std::function<void()>> actionsToPerform;
+    Vector<WTF::Function<void()>> actionsToPerform;
     actionsToPerform.reserveCapacity(interactions.length());
 
     for (auto interaction : interactions) {

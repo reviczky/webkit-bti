@@ -32,6 +32,7 @@
 #include "ContextMenuClient.h"
 #include "ContextMenuController.h"
 #include "DOMRect.h"
+#include "DOMRectList.h"
 #include "DatabaseProvider.h"
 #include "DiagnosticLoggingClient.h"
 #include "DiagnosticLoggingKeys.h"
@@ -69,6 +70,7 @@
 #include "PageDebuggable.h"
 #include "PageGroup.h"
 #include "PageOverlayController.h"
+#include "PerformanceLoggingClient.h"
 #include "PerformanceMonitor.h"
 #include "PlatformMediaSessionManager.h"
 #include "PlugInClient.h"
@@ -209,6 +211,7 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_plugInClient(pageConfiguration.plugInClient)
     , m_validationMessageClient(WTFMove(pageConfiguration.validationMessageClient))
     , m_diagnosticLoggingClient(WTFMove(pageConfiguration.diagnosticLoggingClient))
+    , m_performanceLoggingClient(WTFMove(pageConfiguration.performanceLoggingClient))
     , m_webGLStateTracker(WTFMove(pageConfiguration.webGLStateTracker))
     , m_libWebRTCProvider(WTFMove(pageConfiguration.libWebRTCProvider))
     , m_openedByDOM(false)
@@ -306,6 +309,7 @@ Page::~Page()
 
     m_validationMessageClient = nullptr;
     m_diagnosticLoggingClient = nullptr;
+    m_performanceLoggingClient = nullptr;
     m_mainFrame->setView(nullptr);
     setGroupName(String());
     allPages->remove(this);
@@ -405,7 +409,7 @@ String Page::synchronousScrollingReasonsAsText()
     return String();
 }
 
-Vector<Ref<DOMRect>> Page::nonFastScrollableRects()
+Ref<DOMRectList> Page::nonFastScrollableRects()
 {
     if (Document* document = m_mainFrame->document())
         document->updateLayout();
@@ -421,10 +425,10 @@ Vector<Ref<DOMRect>> Page::nonFastScrollableRects()
     for (size_t i = 0; i < rects.size(); ++i)
         quads[i] = FloatRect(rects[i]);
 
-    return createDOMRectVector(quads);
+    return DOMRectList::create(quads);
 }
 
-Vector<Ref<DOMRect>> Page::touchEventRectsForEvent(const String& eventName)
+Ref<DOMRectList> Page::touchEventRectsForEvent(const String& eventName)
 {
     if (Document* document = m_mainFrame->document()) {
         document->updateLayout();
@@ -444,10 +448,10 @@ Vector<Ref<DOMRect>> Page::touchEventRectsForEvent(const String& eventName)
     for (size_t i = 0; i < rects.size(); ++i)
         quads[i] = FloatRect(rects[i]);
 
-    return createDOMRectVector(quads);
+    return DOMRectList::create(quads);
 }
 
-Vector<Ref<DOMRect>> Page::passiveTouchEventListenerRects()
+Ref<DOMRectList> Page::passiveTouchEventListenerRects()
 {
     if (Document* document = m_mainFrame->document()) {
         document->updateLayout();
@@ -464,7 +468,7 @@ Vector<Ref<DOMRect>> Page::passiveTouchEventListenerRects()
     for (size_t i = 0; i < rects.size(); ++i)
         quads[i] = FloatRect(rects[i]);
 
-    return createDOMRectVector(quads);
+    return DOMRectList::create(quads);
 }
 
 #if ENABLE(VIEW_MODE_CSS_MEDIA)
@@ -1141,8 +1145,6 @@ void Page::removeActivityStateChangeObserver(ActivityStateChangeObserver& observ
 
 void Page::suspendScriptedAnimations()
 {
-    if (settings().shouldDispatchRequestAnimationFrameEvents())
-        WTFReportBacktrace();
     m_scriptedAnimationsSuspended = true;
     for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
         if (frame->document())

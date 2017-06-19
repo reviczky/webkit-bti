@@ -320,6 +320,8 @@ WebInspector.RulesStyleDetailsPanel = class RulesStyleDetailsPanel extends WebIn
             if (section !== focusedSection)
                 section.clearSelection();
         }
+
+        this._sectionWithActiveEditor = focusedSection;
     }
 
     cssStyleDeclarationSectionEditorNextRule(currentSection)
@@ -395,6 +397,32 @@ WebInspector.RulesStyleDetailsPanel = class RulesStyleDetailsPanel extends WebIn
         this.nodeStyles.addRule(newInspectorRuleSelector);
     }
 
+    newRuleButtonContextMenu(event)
+    {
+        if (this.nodeStyles.node.isInUserAgentShadowTree())
+            return;
+
+        let styleSheets = WebInspector.cssStyleManager.styleSheets.filter(styleSheet => styleSheet.hasInfo() && !styleSheet.isInlineStyleTag() && !styleSheet.isInlineStyleAttributeStyleSheet());
+        if (!styleSheets.length)
+            return;
+
+        const justSelector = true;
+        let selector = this.nodeStyles.node.appropriateSelectorFor(justSelector);
+
+        let contextMenu = WebInspector.ContextMenu.createFromEvent(event);
+
+        const handler = null;
+        const disabled = true;
+        contextMenu.appendItem(WebInspector.UIString("Available Style Sheets"), handler, disabled);
+
+        for (let styleSheet of styleSheets) {
+            contextMenu.appendItem(styleSheet.displayName, () => {
+                const text = "";
+                this.nodeStyles.addRule(selector, text, styleSheet.id);
+            });
+        }
+    }
+
     sectionForStyle(style)
     {
         if (style.__rulesSection)
@@ -433,6 +461,11 @@ WebInspector.RulesStyleDetailsPanel = class RulesStyleDetailsPanel extends WebIn
             section.style.__rulesSection = section;
             section.updateLayout();
         }
+
+        // If there was an active section and the panel was hidden, refresh the section in case
+        // changes were made to the underlying resource.
+        if (this._sectionWithActiveEditor)
+            this._sectionWithActiveEditor.refreshEditor();
     }
 
     hidden()

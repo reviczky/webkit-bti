@@ -26,6 +26,7 @@
 #include "config.h"
 #include "WKContextConfigurationRef.h"
 
+#include "APIArray.h"
 #include "APIProcessPoolConfiguration.h"
 #include "WKAPICast.h"
 
@@ -115,6 +116,16 @@ WKStringRef WKContextConfigurationCopyMediaKeysStorageDirectory(WKContextConfigu
 void WKContextConfigurationSetMediaKeysStorageDirectory(WKContextConfigurationRef configuration, WKStringRef mediaKeysStorageDirectory)
 {
     toImpl(configuration)->setMediaKeysStorageDirectory(toImpl(mediaKeysStorageDirectory)->string());
+}
+
+WKStringRef WKContextConfigurationCopyResourceLoadStatisticsDirectory(WKContextConfigurationRef configuration)
+{
+    return toCopiedAPI(toImpl(configuration)->resourceLoadStatisticsDirectory());
+}
+
+void WKContextConfigurationSetResourceLoadStatisticsDirectory(WKContextConfigurationRef configuration, WKStringRef resourceLoadStatisticsDirectory)
+{
+    toImpl(configuration)->setResourceLoadStatisticsDirectory(toImpl(resourceLoadStatisticsDirectory)->string());
 }
 
 bool WKContextConfigurationFullySynchronousModeIsAllowedForTesting(WKContextConfigurationRef configuration)

@@ -21,8 +21,6 @@
 #include "WebKitFaviconDatabase.h"
 
 #include "WebKitFaviconDatabasePrivate.h"
-#include "WebKitMarshal.h"
-#include "WebKitPrivate.h"
 #include <WebCore/FileSystem.h>
 #include <WebCore/Image.h>
 #include <WebCore/IntSize.h>
@@ -31,7 +29,9 @@
 #include <wtf/RunLoop.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
+#include <wtf/glib/WTFGType.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/StringHash.h>
 
 using namespace WebKit;
 using namespace WebCore;
@@ -68,6 +68,11 @@ typedef Vector<GRefPtr<GTask> > PendingIconRequestVector;
 typedef HashMap<String, PendingIconRequestVector*> PendingIconRequestMap;
 
 struct _WebKitFaviconDatabasePrivate {
+    ~_WebKitFaviconDatabasePrivate()
+    {
+        iconDatabase->setClient(nullptr);
+    }
+
     RefPtr<WebIconDatabase> iconDatabase;
     PendingIconRequestMap pendingIconRequests;
     HashMap<String, String> pageURLToIconURLMap;
@@ -104,16 +109,15 @@ static void webkit_favicon_database_class_init(WebKitFaviconDatabaseClass* favic
      * #WebKitWebView it's easier to use the #WebKitWebView:favicon
      * property. See webkit_web_view_get_favicon() for more details.
      */
-    signals[FAVICON_CHANGED] =
-        g_signal_new(
-            "favicon-changed",
-            G_TYPE_FROM_CLASS(faviconDatabaseClass),
-            G_SIGNAL_RUN_LAST,
-            0, 0, 0,
-            webkit_marshal_VOID__STRING_STRING,
-            G_TYPE_NONE, 2,
-            G_TYPE_STRING,
-            G_TYPE_STRING);
+    signals[FAVICON_CHANGED] = g_signal_new(
+        "favicon-changed",
+        G_TYPE_FROM_CLASS(faviconDatabaseClass),
+        G_SIGNAL_RUN_LAST,
+        0, nullptr, nullptr,
+        g_cclosure_marshal_generic,
+        G_TYPE_NONE, 2,
+        G_TYPE_STRING,
+        G_TYPE_STRING);
 }
 
 struct GetFaviconSurfaceAsyncData {
@@ -181,49 +185,48 @@ static void processPendingIconsForPageURL(WebKitFaviconDatabase* database, const
     deletePendingIconRequests(database, pendingIconRequests, pageURL);
 }
 
-static void didChangeIconForPageURLCallback(WKIconDatabaseRef, WKURLRef wkPageURL, const void* clientInfo)
-{
-    WebKitFaviconDatabase* database = WEBKIT_FAVICON_DATABASE(clientInfo);
-    if (!database->priv->iconDatabase->isUrlImportCompleted())
-        return;
+class WebKitIconDatabaseClient final : public API::IconDatabaseClient {
+public:
+    explicit WebKitIconDatabaseClient(WebKitFaviconDatabase* database)
+        : m_database(database)
+    {
+    }
 
-    // Wait until there's an icon record in the database for this page URL.
-    String pageURL = toImpl(wkPageURL)->string();
-    WebCore::Image* iconImage = database->priv->iconDatabase->imageForPageURL(pageURL, WebCore::IntSize(1, 1));
-    if (!iconImage || iconImage->isNull())
-        return;
+private:
+    void didChangeIconForPageURL(WebIconDatabase&, const String& pageURL) override
+    {
+        if (!m_database->priv->iconDatabase->isUrlImportCompleted())
+            return;
 
-    String currentIconURL;
-    database->priv->iconDatabase->synchronousIconURLForPageURL(pageURL, currentIconURL);
-    const String& iconURL = database->priv->pageURLToIconURLMap.get(pageURL);
-    if (iconURL == currentIconURL)
-        return;
+        // Wait until there's an icon record in the database for this page URL.
+        WebCore::Image* iconImage = m_database->priv->iconDatabase->imageForPageURL(pageURL, WebCore::IntSize(1, 1));
+        if (!iconImage || iconImage->isNull())
+            return;
 
-    database->priv->pageURLToIconURLMap.set(pageURL, currentIconURL);
-    g_signal_emit(database, signals[FAVICON_CHANGED], 0, pageURL.utf8().data(), currentIconURL.utf8().data());
-}
+        String currentIconURL;
+        m_database->priv->iconDatabase->synchronousIconURLForPageURL(pageURL, currentIconURL);
+        const String& iconURL = m_database->priv->pageURLToIconURLMap.get(pageURL);
+        if (iconURL == currentIconURL)
+            return;
 
-static void iconDataReadyForPageURLCallback(WKIconDatabaseRef, WKURLRef wkPageURL, const void* clientInfo)
-{
-    ASSERT(RunLoop::isMain());
-    processPendingIconsForPageURL(WEBKIT_FAVICON_DATABASE(clientInfo), toImpl(wkPageURL)->string());
-}
+        m_database->priv->pageURLToIconURLMap.set(pageURL, currentIconURL);
+        g_signal_emit(m_database, signals[FAVICON_CHANGED], 0, pageURL.utf8().data(), currentIconURL.utf8().data());
+    }
+
+    void iconDataReadyForPageURL(WebIconDatabase&, const String& pageURL) override
+    {
+        ASSERT(RunLoop::isMain());
+        processPendingIconsForPageURL(m_database, pageURL);
+    }
+
+    WebKitFaviconDatabase* m_database;
+};
 
 WebKitFaviconDatabase* webkitFaviconDatabaseCreate(WebIconDatabase* iconDatabase)
 {
     WebKitFaviconDatabase* faviconDatabase = WEBKIT_FAVICON_DATABASE(g_object_new(WEBKIT_TYPE_FAVICON_DATABASE, NULL));
     faviconDatabase->priv->iconDatabase = iconDatabase;
-
-    WKIconDatabaseClientV1 wkIconDatabaseClient = {
-        {
-            1, // version
-            faviconDatabase, // clientInfo
-        },
-        didChangeIconForPageURLCallback,
-        0, // didRemoveAllIconsCallback
-        iconDataReadyForPageURLCallback,
-    };
-    WKIconDatabaseSetIconDatabaseClient(toAPI(iconDatabase), &wkIconDatabaseClient.base);
+    iconDatabase->setClient(std::make_unique<WebKitIconDatabaseClient>(faviconDatabase));
     return faviconDatabase;
 }
 

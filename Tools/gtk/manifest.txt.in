@@ -43,7 +43,7 @@ exclude \.xcconfig$
 exclude \.xcodeproj$
 
 # Exclude directories from other ports
-exclude .*\/(Configurations|mac|ios|cf|cg|cocoa|Cocoa|objc|avfoundation|ca|curl|efl|win|wpe)\/.*$
+exclude .*\/(Configurations|mac|ios|cf|cg|cocoa|Cocoa|objc|avfoundation|ca|curl|win|wpe)\/.*$
 
 directory Source
 exclude Source/JavaScriptCore/tests
@@ -51,16 +51,12 @@ exclude Source/ThirdParty/libwebrtc
 exclude Source/ThirdParty/qunit
 exclude Source/WebCore/platform/audio/resources
 exclude Source/WebCore/bindings/scripts/test
-exclude Source/WebCore/platform/efl/DefaultTheme
 exclude Source/WebCore/Resources
 exclude Source/WebKit/.*
-exclude Source/cmake/EFLHelpers.cmake$
 exclude Source/cmake/OptionsWinCairo.cmake$
 exclude Source/cmake/OptionsWindows.cmake$
 exclude Source/cmake/OptionsAppleWin.cmake$
-exclude Source/cmake/OptionsEfl.cmake$
 exclude Source/cmake/OptionsWPE.cmake$
-exclude Source/cmake/eflsymbols.filter$
 exclude Source/WebInspectorUI/Tools
 exclude Source/WebInspectorUI/UserInterface/Images
 
@@ -85,23 +81,17 @@ file Source/WebCore/Resources/urlIcon.png
 file Source/WebCore/platform/audio/resources/Composite.wav
 
 directory Tools/gtk
-directory Tools/ImageDiff
+exclude Tools/gtk/patches
+exclude Tools/gtk/jhbuild.modules
+exclude Tools/gtk/jhbuildrc
+exclude Tools/gtk/make-dist.py
+exclude Tools/gtk/ycm_extra_conf.py
+
 directory Tools/MiniBrowser
 directory Tools/TestWebKitAPI
 
-directory Tools/DumpRenderTree
-exclude Tools/DumpRenderTree/fonts
-
-directory Tools/WebKitTestRunner
-exclude Tools/WebKitTestRunner/fonts/
-
 file CMakeLists.txt
 file Tools/CMakeLists.txt
-file Tools/Scripts/VCSUtils.pm
-file Tools/Scripts/run-gtk-tests
-file Tools/Scripts/webkit-build-directory
-file Tools/Scripts/webkitdirs.pm
-file Tools/jhbuild/jhbuildutils.py
 
 directory ${CMAKE_BINARY_DIR}/Documentation/webkit2gtk-${WEBKITGTK_API_VERSION}/html Documentation/webkit2gtk-${WEBKITGTK_API_VERSION}/html
 directory ${CMAKE_BINARY_DIR}/Documentation/webkitdomgtk-${WEBKITGTK_API_VERSION}/html Documentation/webkitdomgtk-${WEBKITGTK_API_VERSION}/html

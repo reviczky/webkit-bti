@@ -448,6 +448,7 @@ static void logResourceLoaded(Frame* frame, CachedResource::Type type)
         resourceType = DiagnosticLoggingKeys::fontKey();
         break;
     case CachedResource::MediaResource:
+    case CachedResource::Icon:
     case CachedResource::RawResource:
         resourceType = DiagnosticLoggingKeys::rawKey();
         break;
@@ -505,7 +506,7 @@ bool SubresourceLoader::checkRedirectionCrossOriginAccessControl(const ResourceR
         if (!crossOriginFlag && isNextRequestCrossOrigin)
             redirectingToNewOrigin = true;
         else
-            redirectingToNewOrigin = !SecurityOrigin::create(previousRequest.url())->canRequest(newRequest.url());
+            redirectingToNewOrigin = !protocolHostAndPortAreEqual(previousRequest.url(), newRequest.url());
     }
 
     // Implementing https://fetch.spec.whatwg.org/#concept-http-redirect-fetch step 10.

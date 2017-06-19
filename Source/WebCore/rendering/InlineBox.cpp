@@ -39,11 +39,11 @@ struct SameSizeAsInlineBox {
     void* a[4];
     FloatPoint b;
     float c[2];
-    unsigned d; /*InlineBoxBitfields m_bitfields is padded to 32bits*/
+    unsigned d : 23;
 #if !ASSERT_WITH_SECURITY_IMPLICATION_DISABLED
-    bool i;
     unsigned s;
     bool f;
+    bool i;
 #endif
 };
 
@@ -107,15 +107,15 @@ void InlineBox::showLineTreeAndMark(const InlineBox* markedBox, int depth) const
 
 void InlineBox::showLineBox(bool mark, int depth) const
 {
-    fprintf(stderr, "-------- %c-", isDirty() ? 'D' : '-');
+    WTFLogAlways("-------- %c-", isDirty() ? 'D' : '-');
     int printedCharacters = 0;
     if (mark) {
-        fprintf(stderr, "*");
+        WTFLogAlways("*");
         ++printedCharacters;
     }
     while (++printedCharacters <= depth * 2)
         fputc(' ', stderr);
-    fprintf(stderr, "%s  (%.2f, %.2f) (%.2f, %.2f) (%p) renderer->(%p)\n", boxName(), x(), y(), width(), height(), this, &renderer());
+    WTFLogAlways("%s  (%.2f, %.2f) (%.2f, %.2f) (%p) renderer->(%p)\n", boxName(), x(), y(), width(), height(), this, &renderer());
 }
 
 #endif // ENABLE(TREE_DEBUGGING)

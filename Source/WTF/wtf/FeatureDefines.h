@@ -252,7 +252,7 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #if PLATFORM(COCOA)
 
 #if !defined(ENABLE_DATA_DETECTION)
-#define ENABLE_DATA_DETECTION 1
+#define ENABLE_DATA_DETECTION 0
 #endif
 
 #if !defined(ENABLE_FILE_REPLACEMENT)
@@ -438,10 +438,6 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 
 #if !defined(ENABLE_FILTERS_LEVEL_2)
 #define ENABLE_FILTERS_LEVEL_2 0
-#endif
-
-#if !defined(ENABLE_FONT_LOAD_EVENTS)
-#define ENABLE_FONT_LOAD_EVENTS 0
 #endif
 
 #if !defined(ENABLE_FTPDIR)

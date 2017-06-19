@@ -43,6 +43,7 @@
 #include <wtf/StdLibExtras.h>
 #include <wtf/StringExtras.h>
 #include <wtf/text/StringBuilder.h>
+#include <wtf/threads/Signals.h>
 
 #if PLATFORM(COCOA)
 #include <crt_externs.h>
@@ -358,6 +359,10 @@ static void overrideDefaults()
 #if !ENABLE(WEBASSEMBLY_FAST_MEMORY)
     Options::useWebAssemblyFastMemory() = false;
 #endif
+
+#if !HAVE(MACH_EXCEPTIONS)
+    Options::useMachForExceptions() = false;
+#endif
 }
 
 static void recomputeDependentOptions()
@@ -426,6 +431,7 @@ static void recomputeDependentOptions()
         || Options::reportFTLCompileTimes()
         || Options::reportDFGPhaseTimes()
         || Options::verboseCFA()
+        || Options::verboseDFGFailure()
         || Options::verboseFTLFailure())
         Options::alwaysComputeHash() = true;
     
@@ -550,6 +556,11 @@ void Options::initialize()
 
             dumpOptionsIfNeeded();
             ensureOptionsAreCoherent();
+
+#if HAVE(MACH_EXCEPTIONS)
+            if (Options::useMachForExceptions())
+                handleSignalsWithMach();
+#endif
         });
 }
 

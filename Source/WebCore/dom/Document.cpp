@@ -616,11 +616,11 @@ Document::~Document()
     if (hasRareData())
         clearRareData();
 
-    ASSERT(!m_listsInvalidatedAtDocument.size());
-    ASSERT(!m_collectionsInvalidatedAtDocument.size());
+    ASSERT(m_listsInvalidatedAtDocument.isEmpty());
+    ASSERT(m_collectionsInvalidatedAtDocument.isEmpty());
 
-    for (unsigned i = 0; i < WTF_ARRAY_LENGTH(m_nodeListAndCollectionCounts); ++i)
-        ASSERT(!m_nodeListAndCollectionCounts[i]);
+    for (unsigned count : m_nodeListAndCollectionCounts)
+        ASSERT_UNUSED(count, !count);
 }
 
 void Document::removedLastRef()
@@ -991,7 +991,7 @@ ExceptionOr<Ref<Node>> Document::adoptNode(Node& source)
         ASSERT_WITH_SECURITY_IMPLICATION(!source.parentNode());
     }
 
-    adoptIfNeeded(source);
+    source.setTreeScopeRecursively(*this);
 
     return Ref<Node> { source };
 }
@@ -1062,18 +1062,79 @@ Ref<Element> Document::createElement(const QualifiedName& name, bool createdByPa
     return element.releaseNonNull();
 }
 
+// https://html.spec.whatwg.org/#valid-custom-element-name
+
+struct UnicodeCodePointRange {
+    UChar32 minimum;
+    UChar32 maximum;
+};
+
+#if !ASSERT_DISABLED
+
+static inline bool operator<(const UnicodeCodePointRange& a, const UnicodeCodePointRange& b)
+{
+    ASSERT(a.minimum <= a.maximum);
+    ASSERT(b.minimum <= b.maximum);
+    return a.maximum < b.minimum;
+}
+
+#endif
+
+static inline bool operator<(const UnicodeCodePointRange& a, UChar32 b)
+{
+    ASSERT(a.minimum <= a.maximum);
+    return a.maximum < b;
+}
+
+static inline bool operator<(UChar32 a, const UnicodeCodePointRange& b)
+{
+    ASSERT(b.minimum <= b.maximum);
+    return a < b.minimum;
+}
+
+static inline bool isPotentialCustomElementNameCharacter(UChar32 character)
+{
+    static const UnicodeCodePointRange ranges[] = {
+        { '-', '.' },
+        { '0', '9' },
+        { '_', '_' },
+        { 'a', 'z' },
+        { 0xB7, 0xB7 },
+        { 0xC0, 0xD6 },
+        { 0xD8, 0xF6 },
+        { 0xF8, 0x37D },
+        { 0x37F, 0x1FFF },
+        { 0x200C, 0x200D },
+        { 0x203F, 0x2040 },
+        { 0x2070, 0x218F },
+        { 0x2C00, 0x2FEF },
+        { 0x3001, 0xD7FF },
+        { 0xF900, 0xFDCF },
+        { 0xFDF0, 0xFFFD },
+        { 0x10000, 0xEFFFF },
+    };
+
+    ASSERT(std::is_sorted(std::begin(ranges), std::end(ranges)));
+    return std::binary_search(std::begin(ranges), std::end(ranges), character);
+}
+
 CustomElementNameValidationStatus Document::validateCustomElementName(const AtomicString& localName)
 {
+    if (!isASCIILower(localName[0]))
+        return CustomElementNameValidationStatus::FirstCharacterIsNotLowercaseASCIILetter;
+
     bool containsHyphen = false;
-    for (auto character : StringView(localName).codeUnits()) {
+    for (auto character : StringView(localName).codePoints()) {
         if (isASCIIUpper(character))
-            return CustomElementNameValidationStatus::ContainsUpperCase;
+            return CustomElementNameValidationStatus::ContainsUppercaseASCIILetter;
+        if (!isPotentialCustomElementNameCharacter(character))
+            return CustomElementNameValidationStatus::ContainsDisallowedCharacter;
         if (character == '-')
             containsHyphen = true;
     }
 
     if (!containsHyphen)
-        return CustomElementNameValidationStatus::NoHyphen;
+        return CustomElementNameValidationStatus::ContainsNoHyphen;
 
 #if ENABLE(MATHML)
     const auto& annotationXmlLocalName = MathMLNames::annotation_xmlTag.localName();
@@ -1089,7 +1150,7 @@ CustomElementNameValidationStatus Document::validateCustomElementName(const Atom
         || localName == SVGNames::font_face_uriTag.localName()
         || localName == SVGNames::missing_glyphTag.localName()
         || localName == annotationXmlLocalName)
-        return CustomElementNameValidationStatus::ConflictsWithBuiltinNames;
+        return CustomElementNameValidationStatus::ConflictsWithStandardElementName;
 
     return CustomElementNameValidationStatus::Valid;
 }
@@ -1547,7 +1608,7 @@ void Document::visibilityStateChanged()
     for (auto* client : m_visibilityStateCallbackClients)
         client->visibilityStateChanged();
 
-    notifyVisibilityChangedToMediaCapture();
+    notifyMediaCaptureOfVisibilityChanged();
 }
 
 auto Document::visibilityState() const -> VisibilityState
@@ -1786,8 +1847,9 @@ void Document::resolveStyle(ResolveStyleType type)
     if (updatedCompositingLayers && !frameView.needsLayout())
         frameView.viewportContentsChanged();
 
+    // Usually this is handled by post-layout.
     if (!frameView.needsLayout())
-        frameView.frame().selection().updateAppearanceAfterLayout();
+        frameView.frame().selection().scheduleAppearanceUpdateAfterStyleChange();
 
     // As a result of the style recalculation, the currently hovered element might have been
     // detached (for example, by setting display:none in the :hover style), schedule another mouseMove event
@@ -1797,6 +1859,8 @@ void Document::resolveStyle(ResolveStyleType type)
 
     if (m_gotoAnchorNeededAfterStylesheetsLoad && !styleScope().hasPendingSheets())
         frameView.scrollToFragment(m_url);
+
+    // FIXME: Ideally we would ASSERT(!needsStyleRecalc()) here but we have some cases where it is not true.
 }
 
 bool Document::needsStyleRecalc() const
@@ -2152,9 +2216,8 @@ void Document::destroyRenderTree()
 {
     ASSERT(hasLivingRenderTree());
     ASSERT(frame());
+    ASSERT(frame()->document() == this);
     ASSERT(page());
-
-    FrameView* frameView = frame()->document() == this ? frame()->view() : nullptr;
 
     // Prevent Widget tree changes from committing until the RenderView is dead and gone.
     WidgetHierarchyUpdatesSuspensionScope suspendWidgetHierarchyUpdates;
@@ -2166,8 +2229,8 @@ void Document::destroyRenderTree()
 
     documentWillBecomeInactive();
 
-    if (frameView)
-        frameView->willDestroyRenderTree();
+    if (view())
+        view()->willDestroyRenderTree();
 
 #if ENABLE(FULLSCREEN_API)
     if (m_fullScreenRenderer)
@@ -2194,8 +2257,8 @@ void Document::destroyRenderTree()
     m_textAutoSizedNodes.clear();
 #endif
 
-    if (frameView)
-        frameView->didDestroyRenderTree();
+    if (view())
+        view()->didDestroyRenderTree();
 }
 
 void Document::prepareForDestruction()
@@ -2436,15 +2499,35 @@ ScriptableDocumentParser* Document::scriptableDocumentParser() const
     return parser() ? parser()->asScriptableDocumentParser() : nullptr;
 }
 
-void Document::open(Document* ownerDocument)
+ExceptionOr<RefPtr<DOMWindow>> Document::openForBindings(DOMWindow& activeWindow, DOMWindow& firstWindow, const String& url, const AtomicString& name, const String& features)
+{
+    if (!m_domWindow)
+        return Exception { INVALID_ACCESS_ERR };
+
+    return m_domWindow->open(activeWindow, firstWindow, url, name, features);
+}
+
+// FIXME: Add support for the 'type' and 'replace' parameters.
+ExceptionOr<Document&> Document::openForBindings(Document* responsibleDocument, const String&, const String&)
+{
+    if (!isHTMLDocument())
+        return Exception { INVALID_STATE_ERR };
+
+    // FIXME: This should also throw if "document's throw-on-dynamic-markup-insertion counter is greater than 0".
+
+    open(responsibleDocument);
+    return *this;
+}
+
+void Document::open(Document* responsibleDocument)
 {
     if (m_ignoreOpensDuringUnloadCount)
         return;
 
-    if (ownerDocument) {
-        setURL(ownerDocument->url());
-        setCookieURL(ownerDocument->cookieURL());
-        setSecurityOriginPolicy(ownerDocument->securityOriginPolicy());
+    if (responsibleDocument) {
+        setURL(responsibleDocument->url());
+        setCookieURL(responsibleDocument->cookieURL());
+        setSecurityOriginPolicy(responsibleDocument->securityOriginPolicy());
     }
 
     if (m_frame) {
@@ -2559,11 +2642,22 @@ HTMLHeadElement* Document::head()
     return nullptr;
 }
 
-void Document::close()
+ExceptionOr<void> Document::closeForBindings()
 {
     // FIXME: We should follow the specification more closely:
     //        http://www.whatwg.org/specs/web-apps/current-work/#dom-document-close
 
+    if (!isHTMLDocument())
+        return Exception { INVALID_STATE_ERR };
+
+    // FIXME: This should also throw if "document's throw-on-dynamic-markup-insertion counter is greater than 0".
+
+    close();
+    return { };
+}
+
+void Document::close()
+{
     if (!scriptableDocumentParser() || !scriptableDocumentParser()->wasCreatedByScript() || !scriptableDocumentParser()->isParsing())
         return;
 
@@ -2758,7 +2852,7 @@ Seconds Document::timeSinceDocumentCreation() const
     return MonotonicTime::now() - m_documentCreationTime;
 }
 
-void Document::write(SegmentedString&& text, Document* ownerDocument)
+void Document::write(Document* responsibleDocument, SegmentedString&& text)
 {
     NestingLevelIncrementer nestingLevelIncrementer(m_writeRecursionDepth);
 
@@ -2773,22 +2867,43 @@ void Document::write(SegmentedString&& text, Document* ownerDocument)
         return;
 
     if (!hasInsertionPoint)
-        open(ownerDocument);
+        open(responsibleDocument);
 
     ASSERT(m_parser);
     m_parser->insert(WTFMove(text));
 }
 
-void Document::write(const String& text, Document* ownerDocument)
+ExceptionOr<void> Document::write(Document* responsibleDocument, Vector<String>&& strings)
 {
-    write(SegmentedString { text }, ownerDocument);
+    if (!isHTMLDocument())
+        return Exception { INVALID_STATE_ERR };
+
+    // FIXME: This should also throw if "document's throw-on-dynamic-markup-insertion counter is greater than 0".
+
+    SegmentedString text;
+    for (auto& string : strings)
+        text.append(WTFMove(string));
+
+    write(responsibleDocument, WTFMove(text));
+
+    return { };
 }
 
-void Document::writeln(const String& text, Document* ownerDocument)
+ExceptionOr<void> Document::writeln(Document* responsibleDocument, Vector<String>&& strings)
 {
-    SegmentedString textWithNewline { text };
-    textWithNewline.append(String { "\n" });
-    write(WTFMove(textWithNewline), ownerDocument);
+    if (!isHTMLDocument())
+        return Exception { INVALID_STATE_ERR };
+
+    // FIXME: This should also throw if "document's throw-on-dynamic-markup-insertion counter is greater than 0".
+
+    SegmentedString text;
+    for (auto& string : strings)
+        text.append(WTFMove(string));
+
+    text.append(ASCIILiteral { "\n" });
+    write(responsibleDocument, WTFMove(text));
+
+    return { };
 }
 
 Seconds Document::minimumDOMTimerInterval() const
@@ -3483,10 +3598,19 @@ void Document::updateIsPlayingMedia(uint64_t sourceElementID)
     if (state == m_mediaState)
         return;
 
+#if ENABLE(MEDIA_STREAM)
+    bool captureStateChanged = MediaProducer::isCapturing(m_mediaState) != MediaProducer::isCapturing(state);
+#endif
+    
     m_mediaState = state;
 
     if (page())
         page()->updateIsPlayingMedia(sourceElementID);
+
+#if ENABLE(MEDIA_STREAM)
+    if (captureStateChanged)
+        mediaStreamCaptureStateChanged();
+#endif
 }
 
 void Document::pageMutedStateDidChange()
@@ -5251,6 +5375,19 @@ bool Document::isContextThread() const
     return isMainThread();
 }
 
+bool Document::isSecureContext() const
+{
+    if (!m_frame)
+        return true;
+    if (!securityOrigin().isPotentionallyTrustworthy())
+        return false;
+    for (Frame* frame = m_frame->tree().parent(); frame; frame = frame->tree().parent()) {
+        if (!frame->document()->securityOrigin().isPotentionallyTrustworthy())
+            return false;
+    }
+    return true;
+}
+
 void Document::updateURLForPushOrReplaceState(const URL& url)
 {
     Frame* f = frame();
@@ -5325,8 +5462,10 @@ CanvasRenderingContext* Document::getCSSCanvasContext(const String& type, const 
 HTMLCanvasElement* Document::getCSSCanvasElement(const String& name)
 {
     RefPtr<HTMLCanvasElement>& element = m_cssCanvasElements.add(name, nullptr).iterator->value;
-    if (!element)
+    if (!element) {
         element = HTMLCanvasElement::create(*this);
+        InspectorInstrumentation::didCreateCSSCanvas(*element, name);
+    }
     return element.get();
 }
 
@@ -6065,13 +6204,6 @@ int Document::requestAnimationFrame(Ref<RequestAnimationFrameCallback>&& callbac
 
         if (!topOrigin().canAccess(securityOrigin()) && !hasHadUserInteraction())
             m_scriptedAnimationController->addThrottlingReason(ScriptedAnimationController::ThrottlingReason::NonInteractedCrossOriginFrame);
-
-        if (settings().shouldDispatchRequestAnimationFrameEvents()) {
-            if (!page())
-                dispatchEvent(Event::create("raf-no-page", false, false));
-            else if (page()->scriptedAnimationsSuspended())
-                dispatchEvent(Event::create("raf-scripted-animations-suspended-on-page", false, false));
-        }
     }
 
     return m_scriptedAnimationController->registerCallback(WTFMove(callback));
@@ -6392,7 +6524,7 @@ bool Document::processingUserGestureForMedia() const
         return topDocument().hasHadUserInteraction();
 
     auto* loader = this->loader();
-    if (loader && loader->allowsAutoplayQuirks())
+    if (loader && loader->allowedAutoplayQuirks().contains(AutoplayQuirk::InheritedUserGestures))
         return topDocument().hasHadUserInteraction();
 
     return false;
@@ -7003,10 +7135,13 @@ void Document::orientationChanged(int orientation)
     m_orientationNotifier.orientationChanged(orientation);
 }
 
-void Document::notifyVisibilityChangedToMediaCapture()
+void Document::notifyMediaCaptureOfVisibilityChanged()
 {
 #if ENABLE(MEDIA_STREAM)
-    RealtimeMediaSourceCenter::singleton().setVisibility(!hidden());
+    if (!page())
+        return;
+
+    RealtimeMediaSourceCenter::singleton().setVideoCapturePageState(hidden(), page()->isMediaCaptureMuted());
 #endif
 }
 
@@ -7018,6 +7153,95 @@ void Document::stopMediaCapture()
             stream.endCaptureTracks();
     });
 }
+
+void Document::registerForMediaStreamStateChangeCallbacks(HTMLMediaElement& element)
+{
+    m_mediaStreamStateChangeElements.add(&element);
+}
+
+void Document::unregisterForMediaStreamStateChangeCallbacks(HTMLMediaElement& element)
+{
+    m_mediaStreamStateChangeElements.remove(&element);
+}
+
+void Document::mediaStreamCaptureStateChanged()
+{
+    if (!MediaProducer::isCapturing(m_mediaState))
+        return;
+
+    for (auto* mediaElement : m_mediaStreamStateChangeElements)
+        mediaElement->mediaStreamCaptureStarted();
+}
 #endif
+
+const AtomicString& Document::bgColor() const
+{
+    auto* bodyElement = body();
+    if (!bodyElement)
+        return emptyAtom;
+    return bodyElement->attributeWithoutSynchronization(bgcolorAttr);
+}
+
+void Document::setBgColor(const String& value)
+{
+    if (auto* bodyElement = body())
+        bodyElement->setAttributeWithoutSynchronization(bgcolorAttr, value);
+}
+
+const AtomicString& Document::fgColor() const
+{
+    auto* bodyElement = body();
+    if (!bodyElement)
+        return emptyAtom;
+    return bodyElement->attributeWithoutSynchronization(textAttr);
+}
+
+void Document::setFgColor(const String& value)
+{
+    if (auto* bodyElement = body())
+        bodyElement->setAttributeWithoutSynchronization(textAttr, value);
+}
+
+const AtomicString& Document::alinkColor() const
+{
+    auto* bodyElement = body();
+    if (!bodyElement)
+        return emptyAtom;
+    return bodyElement->attributeWithoutSynchronization(alinkAttr);
+}
+
+void Document::setAlinkColor(const String& value)
+{
+    if (auto* bodyElement = body())
+        bodyElement->setAttributeWithoutSynchronization(alinkAttr, value);
+}
+
+const AtomicString& Document::linkColorForBindings() const
+{
+    auto* bodyElement = body();
+    if (!bodyElement)
+        return emptyAtom;
+    return bodyElement->attributeWithoutSynchronization(linkAttr);
+}
+
+void Document::setLinkColorForBindings(const String& value)
+{
+    if (auto* bodyElement = body())
+        bodyElement->setAttributeWithoutSynchronization(linkAttr, value);
+}
+
+const AtomicString& Document::vlinkColor() const
+{
+    auto* bodyElement = body();
+    if (!bodyElement)
+        return emptyAtom;
+    return bodyElement->attributeWithoutSynchronization(vlinkAttr);
+}
+
+void Document::setVlinkColor(const String& value)
+{
+    if (auto* bodyElement = body())
+        bodyElement->setAttributeWithoutSynchronization(vlinkAttr, value);
+}
 
 } // namespace WebCore

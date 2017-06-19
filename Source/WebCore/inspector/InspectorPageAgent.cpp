@@ -140,6 +140,7 @@ bool InspectorPageAgent::cachedResourceContent(CachedResource* cachedResource, S
             *result = downcast<CachedScript>(*cachedResource).script().toString();
             return true;
         case CachedResource::MediaResource:
+        case CachedResource::Icon:
         case CachedResource::RawResource: {
             auto* buffer = cachedResource->resourceBuffer();
             if (!buffer)
@@ -291,6 +292,7 @@ InspectorPageAgent::ResourceType InspectorPageAgent::cachedResourceType(const Ca
     case CachedResource::MainResource:
         return InspectorPageAgent::DocumentResource;
     case CachedResource::MediaResource:
+    case CachedResource::Icon:
     case CachedResource::RawResource: {
         switch (cachedResource.resourceRequest().requester()) {
         case ResourceRequest::Requester::Fetch:
@@ -399,13 +401,19 @@ void InspectorPageAgent::removeScriptToEvaluateOnLoad(ErrorString& error, const 
     m_scriptsToEvaluateOnLoad->remove(identifier);
 }
 
-void InspectorPageAgent::reload(ErrorString&, const bool* const optionalIgnoreCache, const String* optionalScriptToEvaluateOnLoad)
+void InspectorPageAgent::reload(ErrorString&, const bool* const optionalIgnoreCache, const bool* const optionalRevalidateAllResources, const String* optionalScriptToEvaluateOnLoad)
 {
     m_pendingScriptToEvaluateOnLoadOnce = optionalScriptToEvaluateOnLoad ? *optionalScriptToEvaluateOnLoad : emptyString();
 
+    bool reloadFromOrigin = optionalIgnoreCache && *optionalIgnoreCache;
+    bool revalidateAllResources = optionalRevalidateAllResources && *optionalRevalidateAllResources;
+
     OptionSet<ReloadOption> reloadOptions;
-    if (optionalIgnoreCache && *optionalIgnoreCache)
+    if (reloadFromOrigin)
         reloadOptions |= ReloadOption::FromOrigin;
+    if (!revalidateAllResources)
+        reloadOptions |= ReloadOption::ExpiredOnly;
+
     m_page.mainFrame().loader().reload(reloadOptions);
 }
 

@@ -35,6 +35,7 @@
 #include "ImageOrientation.h"
 #include "ImageTypes.h"
 #include "NativeImage.h"
+#include "Timer.h"
 #include <wtf/Optional.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
@@ -129,10 +130,12 @@ public:
     // Animation begins whenever someone draws the image, so startAnimation() is not normally called.
     // It will automatically pause once all observers no longer want to render the image anywhere.
     virtual void startAnimation() { }
+    void startAnimationAsynchronously();
     virtual void stopAnimation() {}
     virtual void resetAnimation() {}
     virtual void imageFrameAvailableAtIndex(size_t) { }
     virtual bool isAnimating() const { return false; }
+    bool animationPending() const { return m_animationStartTimer.isActive(); }
     
     // Typically the CachedImage that owns us.
     ImageObserver* imageObserver() const { return m_imageObserver; }
@@ -198,6 +201,7 @@ protected:
 private:
     RefPtr<SharedBuffer> m_encodedImageData;
     ImageObserver* m_imageObserver;
+    Timer m_animationStartTimer;
 };
 
 TextStream& operator<<(TextStream&, const Image&);

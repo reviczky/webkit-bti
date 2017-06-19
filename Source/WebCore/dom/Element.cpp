@@ -38,6 +38,7 @@
 #include "CustomElementReactionQueue.h"
 #include "CustomElementRegistry.h"
 #include "DOMRect.h"
+#include "DOMRectList.h"
 #include "DOMTokenList.h"
 #include "DocumentAnimation.h"
 #include "DocumentSharedObjectPool.h"
@@ -1144,13 +1145,13 @@ LayoutRect Element::absoluteEventHandlerBounds(bool& includesFixedPositionElemen
     return absoluteEventBoundsOfElementAndDescendants(includesFixedPositionElements);
 }
 
-Vector<Ref<DOMRect>> Element::getClientRects()
+Ref<DOMRectList> Element::getClientRects()
 {
     document().updateLayoutIgnorePendingStylesheets();
 
     RenderBoxModelObject* renderBoxModelObject = this->renderBoxModelObject();
     if (!renderBoxModelObject)
-        return { };
+        return DOMRectList::create();
 
     // FIXME: Handle SVG elements.
     // FIXME: Handle table/inline-table with a caption.
@@ -1158,7 +1159,7 @@ Vector<Ref<DOMRect>> Element::getClientRects()
     Vector<FloatQuad> quads;
     renderBoxModelObject->absoluteQuads(quads);
     document().convertAbsoluteToClientQuads(quads, renderBoxModelObject->style());
-    return createDOMRectVector(quads);
+    return DOMRectList::create(quads);
 }
 
 Ref<DOMRect> Element::getBoundingClientRect()
@@ -1467,14 +1468,17 @@ WebAnimationVector Element::getAnimations()
 
 bool Element::hasDisplayContents() const
 {
-    return hasRareData() && elementRareData()->hasDisplayContents();
+    if (renderer() || !hasRareData())
+        return false;
+    const RenderStyle* style = elementRareData()->computedStyle();
+    return style && style->display() == CONTENTS;
 }
 
-void Element::setHasDisplayContents(bool value)
+void Element::storeDisplayContentsStyle(std::unique_ptr<RenderStyle> style)
 {
-    if (hasDisplayContents() == value)
-        return;
-    ensureElementRareData().setHasDisplayContents(value);
+    ASSERT(style && style->display() == CONTENTS);
+    ASSERT(!renderer());
+    ensureElementRareData().setComputedStyle(WTFMove(style));
 }
 
 // Returns true is the given attribute is an event handler.
@@ -1526,9 +1530,10 @@ void Element::parserDidSetAttributes()
 {
 }
 
-void Element::didMoveToNewDocument(Document& oldDocument)
+void Element::didMoveToNewDocument(Document& oldDocument, Document& newDocument)
 {
-    Node::didMoveToNewDocument(oldDocument);
+    ASSERT_WITH_SECURITY_IMPLICATION(&document() == &newDocument);
+    Node::didMoveToNewDocument(oldDocument, newDocument);
 
     if (oldDocument.inQuirksMode() != document().inQuirksMode()) {
         // ElementData::m_classNames or ElementData::m_idForStyleResolution need to be updated with the right case.
@@ -1539,7 +1544,7 @@ void Element::didMoveToNewDocument(Document& oldDocument)
     }
 
     if (UNLIKELY(isDefinedCustomElement()))
-        CustomElementReactionQueue::enqueueAdoptedCallbackIfNeeded(*this, oldDocument, document());
+        CustomElementReactionQueue::enqueueAdoptedCallbackIfNeeded(*this, oldDocument, newDocument);
 }
 
 bool Element::hasAttributes() const
@@ -2123,7 +2128,6 @@ void Element::attachAttributeNodeIfNeeded(Attr& attrNode)
     NoEventDispatchAssertion assertNoEventDispatch;
 
     attrNode.attachToElement(*this);
-    treeScope().adoptIfNeeded(attrNode);
     ensureAttrNodeListForElement(*this).append(&attrNode);
 }
 
@@ -3408,7 +3412,7 @@ Ref<Attr> Element::ensureAttr(const QualifiedName& name)
     RefPtr<Attr> attrNode = findAttrNodeInList(attrNodeList, name);
     if (!attrNode) {
         attrNode = Attr::create(*this, name);
-        treeScope().adoptIfNeeded(*attrNode);
+        attrNode->setTreeScopeRecursively(treeScope());
         attrNodeList.append(attrNode);
     }
     return attrNode.releaseNonNull();

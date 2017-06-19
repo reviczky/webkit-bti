@@ -85,10 +85,6 @@
 #include "RemoteScrollingCoordinator.h"
 #endif
 
-#if USE(COORDINATED_GRAPHICS)
-#include "LayerTreeHost.h"
-#endif
-
 #if PLATFORM(GTK)
 #include "PrinterListGtk.h"
 #endif
@@ -371,7 +367,7 @@ bool WebChromeClient::runBeforeUnloadConfirmPanel(const String& message, Frame& 
 
     HangDetectionDisabler hangDetectionDisabler;
 
-    if (!WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::RunBeforeUnloadConfirmPanel(message, webFrame->frameID()), Messages::WebPageProxy::RunBeforeUnloadConfirmPanel::Reply(shouldClose), m_page.pageID(), Seconds::infinity(), IPC::SendSyncOption::InformPlatformProcessWillSuspend))
+    if (!WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::RunBeforeUnloadConfirmPanel(webFrame->frameID(), SecurityOriginData::fromFrame(&frame), message), Messages::WebPageProxy::RunBeforeUnloadConfirmPanel::Reply(shouldClose), m_page.pageID(), Seconds::infinity(), IPC::SendSyncOption::InformPlatformProcessWillSuspend))
         return false;
 
     return shouldClose;
@@ -530,6 +526,11 @@ void WebChromeClient::scroll(const IntSize& scrollDelta, const IntRect& scrollRe
 void WebChromeClient::delegatedScrollRequested(const IntPoint& scrollOffset)
 {
     m_page.pageDidRequestScroll(scrollOffset);
+}
+
+void WebChromeClient::resetUpdateAtlasForTesting()
+{
+    m_page.drawingArea()->resetUpdateAtlasForTesting();
 }
 #endif
 
@@ -801,17 +802,6 @@ void WebChromeClient::setCursorHiddenUntilMouseMoves(bool hiddenUntilMouseMoves)
 RefPtr<Icon> WebChromeClient::createIconForFiles(const Vector<String>& filenames)
 {
     return Icon::createIconForFiles(filenames);
-}
-
-#endif
-
-#if !USE(REQUEST_ANIMATION_FRAME_TIMER)
-
-void WebChromeClient::scheduleAnimation()
-{
-#if USE(COORDINATED_GRAPHICS)
-    m_page.drawingArea()->layerTreeHost()->scheduleAnimation();
-#endif
 }
 
 #endif

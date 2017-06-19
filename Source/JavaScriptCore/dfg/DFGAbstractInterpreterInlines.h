@@ -1708,6 +1708,11 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         forNode(node).set(m_graph, structureSet);
         break;
     }
+
+    case ArrayIndexOf: {
+        forNode(node).setType(SpecInt32Only);
+        break;
+    }
             
     case ArrayPop:
         clobberWorld(node->origin.semantic, clobberLimit);
@@ -2406,8 +2411,8 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     }
     case CallDOMGetter: {
         CallDOMGetterData* callDOMGetterData = node->callDOMGetterData();
-        DOMJIT::CallDOMGetterPatchpoint* patchpoint = callDOMGetterData->patchpoint;
-        if (patchpoint->effect.writes)
+        DOMJIT::CallDOMGetterSnippet* snippet = callDOMGetterData->snippet;
+        if (snippet->effect.writes)
             clobberWorld(node->origin.semantic, clobberLimit);
         forNode(node).setType(m_graph, callDOMGetterData->domJIT->resultType());
         break;

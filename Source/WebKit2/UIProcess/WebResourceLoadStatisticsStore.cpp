@@ -36,6 +36,7 @@
 #include <WebCore/KeyedCoding.h>
 #include <WebCore/ResourceLoadObserver.h>
 #include <WebCore/ResourceLoadStatistics.h>
+#include <wtf/CrossThreadCopier.h>
 #include <wtf/MainThread.h>
 #include <wtf/MathExtras.h>
 #include <wtf/RunLoop.h>
@@ -91,7 +92,6 @@ static inline void initializeDataTypesToRemove()
     dataTypesToRemove |= WebsiteDataType::WebSQLDatabases;
     dataTypesToRemove |= WebsiteDataType::IndexedDBDatabases;
     dataTypesToRemove |= WebsiteDataType::MediaKeys;
-    dataTypesToRemove |= WebsiteDataType::HSTSCache;
     dataTypesToRemove |= WebsiteDataType::SearchFieldRecentSearches;
 #if ENABLE(NETSCAPE_PLUGIN_API)
     dataTypesToRemove |= WebsiteDataType::PlugInData;
@@ -103,6 +103,8 @@ static inline void initializeDataTypesToRemove()
     
 void WebResourceLoadStatisticsStore::removeDataRecords()
 {
+    ASSERT(!isMainThread());
+    
     if (!coreStore().shouldRemoveDataRecords())
         return;
 
@@ -116,24 +118,36 @@ void WebResourceLoadStatisticsStore::removeDataRecords()
         initializeDataTypesToRemove();
 
     // Switch to the main thread to get the default website data store
-    RunLoop::main().dispatch([prevalentResourceDomains = WTFMove(prevalentResourceDomains), this] () mutable {
-        WebProcessProxy::deleteWebsiteDataForTopPrivatelyControlledDomainsInAllPersistentDataStores(dataTypesToRemove, WTFMove(prevalentResourceDomains), notifyPages, [this](Vector<String> domainsWithDeletedWebsiteData) mutable {
-            this->coreStore().updateStatisticsForRemovedDataRecords(domainsWithDeletedWebsiteData);
-            this->coreStore().dataRecordsWereRemoved();
+    RunLoop::main().dispatch([prevalentResourceDomains = CrossThreadCopier<Vector<String>>::copy(prevalentResourceDomains), this, protectedThis = makeRef(*this)] () mutable {
+        WebProcessProxy::deleteWebsiteDataForTopPrivatelyControlledDomainsInAllPersistentDataStores(dataTypesToRemove, WTFMove(prevalentResourceDomains), notifyPages, [this, protectedThis = WTFMove(protectedThis)](Vector<String> domainsWithDeletedWebsiteData) mutable {
+            // But always touch the ResourceLoadStatistics store on the worker queue.
+            m_statisticsQueue->dispatch([protectedThis = WTFMove(protectedThis), topDomains = CrossThreadCopier<Vector<String>>::copy(domainsWithDeletedWebsiteData)] () mutable {
+                protectedThis->coreStore().updateStatisticsForRemovedDataRecords(topDomains);
+                protectedThis->coreStore().dataRecordsWereRemoved();
+            });
         });
     });
 }
 
 void WebResourceLoadStatisticsStore::processStatisticsAndDataRecords()
 {
-    if (shouldClassifyResourcesBeforeDataRecordsRemoval) {
-        coreStore().processStatistics([this] (ResourceLoadStatistics& resourceStatistic) {
-            classifyResource(resourceStatistic);
-        });
-    }
-    removeDataRecords();
-
-    writeStoreToDisk();
+    m_statisticsQueue->dispatch([this, protectedThis = makeRef(*this)] () {
+        auto locker = holdLock(coreStore().statisticsLock());
+        if (shouldClassifyResourcesBeforeDataRecordsRemoval) {
+            coreStore().processStatistics([this] (ResourceLoadStatistics& resourceStatistic) {
+                classifyResource(resourceStatistic);
+            });
+        }
+        removeDataRecords();
+        
+        if (notifyPages) {
+            RunLoop::main().dispatch([] () mutable {
+                WebProcessProxy::notifyPageStatisticsAndDataRecordsProcessed();
+            });
+        }
+            
+        writeStoreToDisk();
+    });
 }
 
 void WebResourceLoadStatisticsStore::resourceLoadStatisticsUpdated(const Vector<WebCore::ResourceLoadStatistics>& origins)
@@ -162,16 +176,21 @@ bool WebResourceLoadStatisticsStore::resourceLoadStatisticsEnabled() const
 
 void WebResourceLoadStatisticsStore::registerSharedResourceLoadObserver()
 {
+    ASSERT(isMainThread());
+    
     ResourceLoadObserver::sharedObserver().setStatisticsStore(m_resourceLoadStatisticsStore.copyRef());
-    m_resourceLoadStatisticsStore->setNotificationCallback([this] {
+    ResourceLoadObserver::sharedObserver().setStatisticsQueue(m_statisticsQueue.copyRef());
+    m_resourceLoadStatisticsStore->setNotificationCallback([this, protectedThis = makeRef(*this)] {
         if (m_resourceLoadStatisticsStore->isEmpty())
             return;
         processStatisticsAndDataRecords();
     });
-    m_resourceLoadStatisticsStore->setWritePersistentStoreCallback([this]() {
-        writeStoreToDisk();
+    m_resourceLoadStatisticsStore->setWritePersistentStoreCallback([this, protectedThis = makeRef(*this)] {
+        m_statisticsQueue->dispatch([this, protectedThis = protectedThis.copyRef()] {
+            writeStoreToDisk();
+        });
     });
-    m_resourceLoadStatisticsStore->setGrandfatherExistingWebsiteDataCallback([this]() {
+    m_resourceLoadStatisticsStore->setGrandfatherExistingWebsiteDataCallback([this, protectedThis = makeRef(*this)]() {
         grandfatherExistingWebsiteData();
     });
 #if PLATFORM(COCOA)
@@ -179,8 +198,10 @@ void WebResourceLoadStatisticsStore::registerSharedResourceLoadObserver()
 #endif
 }
     
-void WebResourceLoadStatisticsStore::registerSharedResourceLoadObserver(std::function<void(const Vector<String>& domainsToRemove, const Vector<String>& domainsToAdd, bool clearFirst)>&& shouldPartitionCookiesForDomainsHandler)
+void WebResourceLoadStatisticsStore::registerSharedResourceLoadObserver(WTF::Function<void(const Vector<String>& domainsToRemove, const Vector<String>& domainsToAdd, bool clearFirst)>&& shouldPartitionCookiesForDomainsHandler)
 {
+    ASSERT(isMainThread());
+    
     registerSharedResourceLoadObserver();
     m_resourceLoadStatisticsStore->setShouldPartitionCookiesCallback([shouldPartitionCookiesForDomainsHandler = WTFMove(shouldPartitionCookiesForDomainsHandler)] (const Vector<String>& domainsToRemove, const Vector<String>& domainsToAdd, bool clearFirst) {
         shouldPartitionCookiesForDomainsHandler(domainsToRemove, domainsToAdd, clearFirst);
@@ -193,9 +214,12 @@ void WebResourceLoadStatisticsStore::grandfatherExistingWebsiteData()
         initializeDataTypesToRemove();
     
     // Switch to the main thread to get the default website data store
-    RunLoop::main().dispatch([this] () mutable {
-        WebProcessProxy::topPrivatelyControlledDomainsWithWebiteData(dataTypesToRemove, notifyPages, [this](HashSet<String>&& topPrivatelyControlledDomainsWithWebsiteData) mutable {
-            this->coreStore().handleFreshStartWithEmptyOrNoStore(WTFMove(topPrivatelyControlledDomainsWithWebsiteData));
+    RunLoop::main().dispatch([this, protectedThis = makeRef(*this)] () mutable {
+        WebProcessProxy::topPrivatelyControlledDomainsWithWebiteData(dataTypesToRemove, notifyPages, [this, protectedThis = WTFMove(protectedThis)] (HashSet<String>&& topPrivatelyControlledDomainsWithWebsiteData) mutable {
+            // But always touch the ResourceLoadStatistics store on the worker queue
+            m_statisticsQueue->dispatch([protectedThis = WTFMove(protectedThis), topDomains = CrossThreadCopier<HashSet<String>>::copy(topPrivatelyControlledDomainsWithWebsiteData)] () mutable {
+                protectedThis->coreStore().handleFreshStartWithEmptyOrNoStore(WTFMove(topDomains));
+            });
         });
     });
 }
@@ -206,14 +230,14 @@ void WebResourceLoadStatisticsStore::readDataFromDiskIfNeeded()
         return;
 
     m_statisticsQueue->dispatch([this, protectedThis = makeRef(*this)] {
-        coreStore().clearInMemory();
-
         auto decoder = createDecoderFromDisk("full_browsing_session");
         if (!decoder) {
             grandfatherExistingWebsiteData();
             return;
         }
-
+        
+        auto locker = holdLock(coreStore().statisticsLock());
+        coreStore().clearInMemory();
         coreStore().readDataFromDecoder(*decoder);
 
         if (coreStore().isEmpty())
@@ -252,12 +276,16 @@ String WebResourceLoadStatisticsStore::persistentStoragePath(const String& label
 
 void WebResourceLoadStatisticsStore::writeStoreToDisk()
 {
+    ASSERT(!isMainThread());
+    
     auto encoder = coreStore().createEncoderFromData();
     writeEncoderToDisk(*encoder.get(), "full_browsing_session");
 }
 
 void WebResourceLoadStatisticsStore::writeEncoderToDisk(KeyedEncoder& encoder, const String& label) const
 {
+    ASSERT(!isMainThread());
+    
     RefPtr<SharedBuffer> rawData = encoder.finishEncoding();
     if (!rawData)
         return;

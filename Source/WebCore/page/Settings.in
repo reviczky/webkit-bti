@@ -215,6 +215,7 @@ mediaSourceEnabled initial=true, conditional=MEDIA_SOURCE
 allowMultiElementImplicitSubmission initial=false
 
 allowsAirPlayForMediaPlayback initial=true, conditional=WIRELESS_PLAYBACK_TARGET
+mediaDocumentEntersFullscreenAutomatically initial=false
 
 shouldConvertPositionStyleOnCopy initial=false
 
@@ -270,12 +271,12 @@ springTimingFunctionEnabled initial=false
 
 treatIPAddressAsDomain initial=false
 
+mediaPreloadingEnabled initial=false
+
 # Runtime-enabled features
 visualViewportEnabled initial=false, setNeedsStyleRecalcInAllFrames=1
 
 inputEventsEnabled initial=true
-
-shouldDispatchRequestAnimationFrameEvents initial=false
 
 quickTimePluginReplacementEnabled initial=defaultQuickTimePluginReplacementEnabled
 youTubeFlashPluginReplacementEnabled initial=defaultYouTubeFlashPluginReplacementEnabled

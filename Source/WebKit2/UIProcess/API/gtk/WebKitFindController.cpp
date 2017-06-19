@@ -20,12 +20,12 @@
 #include "config.h"
 #include "WebKitFindController.h"
 
+#include "APIFindClient.h"
 #include "WebKitEnumTypes.h"
-#include "WebKitPrivate.h"
-#include "WebKitWebView.h"
-#include "WebKitWebViewBasePrivate.h"
+#include "WebKitWebViewPrivate.h"
 #include <glib/gi18n-lib.h>
 #include <wtf/glib/GRefPtr.h>
+#include <wtf/glib/WTFGType.h>
 #include <wtf/text/CString.h>
 
 using namespace WebKit;
@@ -101,40 +101,51 @@ static inline WebKitFindOptions toWebKitFindOptions(uint32_t findOptions)
         | (findOptions & FindOptionsWrapAround ? WEBKIT_FIND_OPTIONS_WRAP_AROUND : 0));
 }
 
-static void didFindString(WKPageRef, WKStringRef, unsigned matchCount, const void* clientInfo)
+static inline WebPageProxy& getPage(WebKitFindController* findController)
 {
-    g_signal_emit(WEBKIT_FIND_CONTROLLER(clientInfo), signals[FOUND_TEXT], 0, matchCount);
+    return webkitWebViewGetPage(findController->priv->webView);
 }
 
-static void didFailToFindString(WKPageRef, WKStringRef, const void* clientInfo)
-{
-    g_signal_emit(WEBKIT_FIND_CONTROLLER(clientInfo), signals[FAILED_TO_FIND_TEXT], 0);
-}
+class FindClient final : public API::FindClient {
+public:
+    explicit FindClient(WebKitFindController* findController)
+        : m_findController(findController)
+    {
+    }
 
-static void didCountStringMatches(WKPageRef, WKStringRef, unsigned matchCount, const void* clientInfo)
-{
-    g_signal_emit(WEBKIT_FIND_CONTROLLER(clientInfo), signals[COUNTED_MATCHES], 0, matchCount);
-}
+private:
+    void didCountStringMatches(WebPageProxy*, const String&, uint32_t matchCount) override
+    {
+        g_signal_emit(m_findController, signals[COUNTED_MATCHES], 0, matchCount);
+    }
 
-static inline WebPageProxy* getPage(WebKitFindController* findController)
+    void didFindString(WebPageProxy*, const String&, const Vector<IntRect>&, uint32_t matchCount, int32_t, bool /*didWrapAround*/) override
+    {
+        g_signal_emit(m_findController, signals[FOUND_TEXT], 0, matchCount);
+    }
+
+    void didFailToFindString(WebPageProxy*, const String&) override
+    {
+        g_signal_emit(m_findController, signals[FAILED_TO_FIND_TEXT], 0);
+    }
+
+    WebKitFindController* m_findController;
+};
+
+static void webkitFindControllerDispose(GObject* object)
 {
-    return webkitWebViewBaseGetPage(reinterpret_cast<WebKitWebViewBase*>(findController->priv->webView));
+    WebKitFindController* findController = WEBKIT_FIND_CONTROLLER(object);
+    getPage(findController).setFindClient(nullptr);
+
+    G_OBJECT_CLASS(webkit_find_controller_parent_class)->dispose(object);
 }
 
 static void webkitFindControllerConstructed(GObject* object)
 {
-    WebKitFindController* findController = WEBKIT_FIND_CONTROLLER(object);
-    WKPageFindClientV0 wkFindClient = {
-        {
-            0, // version
-            findController, // clientInfo
-        },
-        didFindString,
-        didFailToFindString,
-        didCountStringMatches
-    };
+    G_OBJECT_CLASS(webkit_find_controller_parent_class)->constructed(object);
 
-    WKPageSetPageFindClient(toAPI(getPage(findController)), &wkFindClient.base);
+    WebKitFindController* findController = WEBKIT_FIND_CONTROLLER(object);
+    getPage(findController).setFindClient(std::make_unique<FindClient>(findController));
 }
 
 static void webkitFindControllerGetProperty(GObject* object, guint propId, GValue* value, GParamSpec* paramSpec)
@@ -175,6 +186,7 @@ static void webkitFindControllerSetProperty(GObject* object, guint propId, const
 static void webkit_find_controller_class_init(WebKitFindControllerClass* findClass)
 {
     GObjectClass* gObjectClass = G_OBJECT_CLASS(findClass);
+    gObjectClass->dispose = webkitFindControllerDispose;
     gObjectClass->constructed = webkitFindControllerConstructed;
     gObjectClass->get_property = webkitFindControllerGetProperty;
     gObjectClass->set_property = webkitFindControllerSetProperty;
@@ -361,7 +373,7 @@ static void webKitFindControllerPerform(WebKitFindController* findController, We
 {
     WebKitFindControllerPrivate* priv = findController->priv;
     if (operation == CountOperation) {
-        getPage(findController)->countStringMatches(String::fromUTF8(priv->searchText.data()),
+        getPage(findController).countStringMatches(String::fromUTF8(priv->searchText.data()),
             static_cast<WebKit::FindOptions>(priv->findOptions), priv->maxMatchCount);
         return;
     }
@@ -377,8 +389,7 @@ static void webKitFindControllerPerform(WebKitFindController* findController, We
         // extra unmarkAllTextMatches() + markAllTextMatches()
         findOptions |= FindOptionsShowHighlight;
 
-    getPage(findController)->findString(String::fromUTF8(priv->searchText.data()), static_cast<WebKit::FindOptions>(findOptions),
-                                        priv->maxMatchCount);
+    getPage(findController).findString(String::fromUTF8(priv->searchText.data()), static_cast<WebKit::FindOptions>(findOptions), priv->maxMatchCount);
 }
 
 static inline void webKitFindControllerSetSearchData(WebKitFindController* findController, const gchar* searchText, guint32 findOptions, guint maxMatchCount)
@@ -495,5 +506,5 @@ void webkit_find_controller_search_finish(WebKitFindController* findController)
 {
     g_return_if_fail(WEBKIT_IS_FIND_CONTROLLER(findController));
 
-    getPage(findController)->hideFindUI();
+    getPage(findController).hideFindUI();
 }

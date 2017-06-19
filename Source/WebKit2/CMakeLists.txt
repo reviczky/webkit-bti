@@ -37,7 +37,6 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/UIProcess/Databases"
     "${WEBKIT2_DIR}/UIProcess/Downloads"
     "${WEBKIT2_DIR}/UIProcess/Gamepad"
-    "${WEBKIT2_DIR}/UIProcess/InspectorServer"
     "${WEBKIT2_DIR}/UIProcess/Launcher"
     "${WEBKIT2_DIR}/UIProcess/Network"
     "${WEBKIT2_DIR}/UIProcess/Network/CustomProtocols"
@@ -368,7 +367,6 @@ set(WebKit2_SOURCES
     UIProcess/API/C/WKGeolocationManager.cpp
     UIProcess/API/C/WKGeolocationPermissionRequest.cpp
     UIProcess/API/C/WKGeolocationPosition.cpp
-    UIProcess/API/C/WKGrammarDetail.cpp
     UIProcess/API/C/WKHitTestResult.cpp
     UIProcess/API/C/WKIconDatabase.cpp
     UIProcess/API/C/WKInspector.cpp
@@ -413,11 +411,6 @@ set(WebKit2_SOURCES
 
     UIProcess/Gamepad/UIGamepad.cpp
     UIProcess/Gamepad/UIGamepadProvider.cpp
-
-    UIProcess/InspectorServer/HTTPRequest.cpp
-    UIProcess/InspectorServer/WebInspectorServer.cpp
-    UIProcess/InspectorServer/WebSocketServer.cpp
-    UIProcess/InspectorServer/WebSocketServerConnection.cpp
 
     UIProcess/Launcher/ProcessLauncher.cpp
 
@@ -554,6 +547,7 @@ set(WebKit2_SOURCES
     WebProcess/WebCoreSupport/WebGeolocationClient.cpp
     WebProcess/WebCoreSupport/WebInspectorClient.cpp
     WebProcess/WebCoreSupport/WebNotificationClient.cpp
+    WebProcess/WebCoreSupport/WebPerformanceLoggingClient.cpp
     WebProcess/WebCoreSupport/WebPlatformStrategies.cpp
     WebProcess/WebCoreSupport/WebPlugInClient.cpp
     WebProcess/WebCoreSupport/WebPopupMenu.cpp

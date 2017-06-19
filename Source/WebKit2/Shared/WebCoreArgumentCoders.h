@@ -85,7 +85,6 @@ class StickyPositionViewportConstraints;
 class TextCheckingRequestData;
 class TransformationMatrix;
 class UserStyleSheet;
-class UserScript;
 class URL;
 struct CompositionUnderline;
 struct DictationAlternative;
@@ -476,11 +475,6 @@ template<> struct ArgumentCoder<WebCore::UserStyleSheet> {
     static bool decode(Decoder&, WebCore::UserStyleSheet&);
 };
 
-template<> struct ArgumentCoder<WebCore::UserScript> {
-    static void encode(Encoder&, const WebCore::UserScript&);
-    static bool decode(Decoder&, WebCore::UserScript&);
-};
-
 template<> struct ArgumentCoder<WebCore::ScrollableAreaParameters> {
     static void encode(Encoder&, const WebCore::ScrollableAreaParameters&);
     static bool decode(Decoder&, WebCore::ScrollableAreaParameters&);
@@ -702,9 +696,8 @@ template<> struct EnumTraits<WebCore::AutoplayEvent> {
         WebCore::AutoplayEvent,
         WebCore::AutoplayEvent::DidPreventMediaFromPlaying,
         WebCore::AutoplayEvent::DidPlayMediaPreventedFromPlaying,
-        WebCore::AutoplayEvent::DidEndMediaPlaybackWithoutUserInterference,
-        WebCore::AutoplayEvent::UserDidInterfereWithPlayback,
-        WebCore::AutoplayEvent::UserNeverPlayedMediaPreventedFromPlaying
+        WebCore::AutoplayEvent::DidAutoplayMediaPastThresholdWithoutUserInterference,
+        WebCore::AutoplayEvent::UserDidInterfereWithPlayback
     >;
 };
 

@@ -23,6 +23,7 @@
 #include "APIAutomationClient.h"
 #include "APICustomProtocolManagerClient.h"
 #include "APIDownloadClient.h"
+#include "APIInjectedBundleClient.h"
 #include "APIPageConfiguration.h"
 #include "APIProcessPoolConfiguration.h"
 #include "APIString.h"
@@ -49,7 +50,6 @@
 #include "WebKitURISchemeRequestPrivate.h"
 #include "WebKitUserContentManagerPrivate.h"
 #include "WebKitWebContextPrivate.h"
-#include "WebKitWebViewBasePrivate.h"
 #include "WebKitWebViewPrivate.h"
 #include "WebKitWebsiteDataManagerPrivate.h"
 #include "WebNotificationManagerProxy.h"
@@ -67,6 +67,7 @@
 #include <wtf/RefPtr.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
+#include <wtf/glib/WTFGType.h>
 #include <wtf/text/CString.h>
 
 using namespace WebKit;
@@ -166,9 +167,9 @@ struct _WebKitWebContextPrivate {
     URISchemeHandlerMap uriSchemeHandlers;
     URISchemeRequestMap uriSchemeRequests;
 #if ENABLE(GEOLOCATION)
-    RefPtr<WebKitGeolocationProvider> geolocationProvider;
+    std::unique_ptr<WebKitGeolocationProvider> geolocationProvider;
 #endif
-    RefPtr<WebKitNotificationProvider> notificationProvider;
+    std::unique_ptr<WebKitNotificationProvider> notificationProvider;
     GRefPtr<WebKitWebsiteDataManager> websiteDataManager;
 
     CString faviconDatabaseDirectory;
@@ -323,9 +324,9 @@ static void webkitWebContextConstructed(GObject* object)
     attachCustomProtocolManagerClientToContext(webContext);
 
 #if ENABLE(GEOLOCATION)
-    priv->geolocationProvider = WebKitGeolocationProvider::create(priv->processPool->supplement<WebGeolocationManagerProxy>());
+    priv->geolocationProvider = std::make_unique<WebKitGeolocationProvider>(priv->processPool->supplement<WebGeolocationManagerProxy>());
 #endif
-    priv->notificationProvider = WebKitNotificationProvider::create(priv->processPool->supplement<WebNotificationManagerProxy>(), webContext);
+    priv->notificationProvider = std::make_unique<WebKitNotificationProvider>(priv->processPool->supplement<WebNotificationManagerProxy>(), webContext);
 #if ENABLE(REMOTE_INSPECTOR)
     priv->remoteInspectorProtocolHandler = std::make_unique<RemoteInspectorProtocolHandler>(webContext);
 #endif
@@ -336,7 +337,7 @@ static void webkitWebContextDispose(GObject* object)
     WebKitWebContextPrivate* priv = WEBKIT_WEB_CONTEXT(object)->priv;
     if (!priv->clientsDetached) {
         priv->clientsDetached = true;
-        priv->processPool->initializeInjectedBundleClient(nullptr);
+        priv->processPool->setInjectedBundleClient(nullptr);
         priv->processPool->setDownloadClient(nullptr);
         priv->processPool->setLegacyCustomProtocolManagerClient(nullptr);
     }
@@ -1468,11 +1469,11 @@ guint webkit_web_context_get_web_process_count_limit(WebKitWebContext* context)
     return context->priv->processCountLimit;
 }
 
-static void addOriginToMap(WebKitSecurityOrigin* origin, HashMap<String, RefPtr<API::Object>>* map, bool allowed)
+static void addOriginToMap(WebKitSecurityOrigin* origin, HashMap<String, bool>* map, bool allowed)
 {
     String string = webkitSecurityOriginGetSecurityOrigin(origin).toString();
     if (string != "null")
-        map->set(string, API::Boolean::create(allowed));
+        map->set(string, allowed);
 }
 
 /**
@@ -1501,12 +1502,12 @@ static void addOriginToMap(WebKitSecurityOrigin* origin, HashMap<String, RefPtr<
  */
 void webkit_web_context_initialize_notification_permissions(WebKitWebContext* context, GList* allowedOrigins, GList* disallowedOrigins)
 {
-    HashMap<String, RefPtr<API::Object>> map;
+    HashMap<String, bool> map;
     g_list_foreach(allowedOrigins, [](gpointer data, gpointer userData) {
-        addOriginToMap(static_cast<WebKitSecurityOrigin*>(data), static_cast<HashMap<String, RefPtr<API::Object>>*>(userData), true);
+        addOriginToMap(static_cast<WebKitSecurityOrigin*>(data), static_cast<HashMap<String, bool>*>(userData), true);
     }, &map);
     g_list_foreach(disallowedOrigins, [](gpointer data, gpointer userData) {
-        addOriginToMap(static_cast<WebKitSecurityOrigin*>(data), static_cast<HashMap<String, RefPtr<API::Object>>*>(userData), false);
+        addOriginToMap(static_cast<WebKitSecurityOrigin*>(data), static_cast<HashMap<String, bool>*>(userData), false);
     }, &map);
     context->priv->notificationProvider->setNotificationPermissions(WTFMove(map));
 }
@@ -1601,8 +1602,6 @@ bool webkitWebContextIsLoadingCustomProtocol(WebKitWebContext* context, uint64_t
 
 void webkitWebContextCreatePageForWebView(WebKitWebContext* context, WebKitWebView* webView, WebKitUserContentManager* userContentManager, WebKitWebView* relatedView)
 {
-    WebKitWebViewBase* webViewBase = WEBKIT_WEB_VIEW_BASE(webView);
-
     // FIXME: icon database private mode is global, not per page, so while there are
     // pages in private mode we need to enable the private mode in the icon database.
     webkitWebContextEnableIconDatabasePrivateBrowsingIfNeeded(context, webView);
@@ -1610,7 +1609,7 @@ void webkitWebContextCreatePageForWebView(WebKitWebContext* context, WebKitWebVi
     auto pageConfiguration = API::PageConfiguration::create();
     pageConfiguration->setProcessPool(context->priv->processPool.get());
     pageConfiguration->setPreferences(webkitSettingsGetPreferences(webkit_web_view_get_settings(webView)));
-    pageConfiguration->setRelatedPage(relatedView ? webkitWebViewBaseGetPage(WEBKIT_WEB_VIEW_BASE(relatedView)) : nullptr);
+    pageConfiguration->setRelatedPage(relatedView ? &webkitWebViewGetPage(relatedView) : nullptr);
     pageConfiguration->setUserContentController(userContentManager ? webkitUserContentManagerGetUserContentControllerProxy(userContentManager) : nullptr);
     pageConfiguration->setControlledByAutomation(webkit_web_view_is_controlled_by_automation(webView));
 
@@ -1619,17 +1618,15 @@ void webkitWebContextCreatePageForWebView(WebKitWebContext* context, WebKitWebVi
         manager = context->priv->websiteDataManager.get();
     pageConfiguration->setWebsiteDataStore(&webkitWebsiteDataManagerGetDataStore(manager));
     pageConfiguration->setSessionID(pageConfiguration->websiteDataStore()->websiteDataStore().sessionID());
-    webkitWebViewBaseCreateWebPage(webViewBase, WTFMove(pageConfiguration));
+    webkitWebViewCreatePage(webView, WTFMove(pageConfiguration));
 
-    WebPageProxy* page = webkitWebViewBaseGetPage(webViewBase);
-    context->priv->webViews.set(page->pageID(), webView);
+    context->priv->webViews.set(webkit_web_view_get_page_id(webView), webView);
 }
 
 void webkitWebContextWebViewDestroyed(WebKitWebContext* context, WebKitWebView* webView)
 {
     webkitWebContextDisableIconDatabasePrivateBrowsingIfNeeded(context, webView);
-    WebPageProxy* page = webkitWebViewBaseGetPage(WEBKIT_WEB_VIEW_BASE(webView));
-    context->priv->webViews.remove(page->pageID());
+    context->priv->webViews.remove(webkit_web_view_get_page_id(webView));
 }
 
 WebKitWebView* webkitWebContextGetWebViewForPage(WebKitWebContext* context, WebPageProxy* page)

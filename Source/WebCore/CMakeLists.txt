@@ -166,10 +166,17 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/airplay/WebKitPlaybackTargetAvailabilityEvent.idl
 
     Modules/credentials/BasicCredential.idl
+    Modules/credentials/CredentialCreationOptions.idl
     Modules/credentials/CredentialData.idl
+    Modules/credentials/CredentialRequestOptions.idl
+    Modules/credentials/CredentialUserData.idl
+    Modules/credentials/CredentialsContainer.idl
+    Modules/credentials/FederatedCredential.idl
+    Modules/credentials/FederatedCredentialInit.idl
+    Modules/credentials/FederatedCredentialRequestOptions.idl
+    Modules/credentials/NavigatorCredentials.idl
     Modules/credentials/PasswordCredential.idl
-    Modules/credentials/SiteBoundCredential.idl
-    Modules/credentials/SiteBoundCredentialData.idl
+    Modules/credentials/PasswordCredentialData.idl
 
     Modules/fetch/DOMWindowFetch.idl
     Modules/fetch/FetchBody.idl
@@ -359,8 +366,8 @@ set(WebCore_NON_SVG_IDL_FILES
     crypto/parameters/RsaHashedKeyGenParams.idl
     crypto/parameters/RsaKeyGenParams.idl
     crypto/parameters/RsaOaepParams.idl
+    crypto/parameters/RsaPssParams.idl
 
-    css/CSSFontFaceLoadEvent.idl
     css/CSSFontFaceRule.idl
     css/CSSImportRule.idl
     css/CSSKeyframeRule.idl
@@ -417,8 +424,11 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/DOMPoint.idl
     dom/DOMPointInit.idl
     dom/DOMPointReadOnly.idl
+    dom/DOMQuad.idl
+    dom/DOMQuadInit.idl
     dom/DOMRect.idl
     dom/DOMRectInit.idl
+    dom/DOMRectList.idl
     dom/DOMRectReadOnly.idl
     dom/DOMStringList.idl
     dom/DOMStringMap.idl
@@ -849,8 +859,10 @@ set(WebCore_SOURCES
     Modules/airplay/WebKitPlaybackTargetAvailabilityEvent.cpp
 
     Modules/credentials/BasicCredential.cpp
+    Modules/credentials/CredentialsContainer.cpp
+    Modules/credentials/FederatedCredential.cpp
+    Modules/credentials/NavigatorCredentials.cpp
     Modules/credentials/PasswordCredential.cpp
-    Modules/credentials/SiteBoundCredential.cpp
 
     Modules/fetch/DOMWindowFetch.cpp
     Modules/fetch/FetchBody.cpp
@@ -1150,17 +1162,17 @@ set(WebCore_SOURCES
     bindings/js/JSDOMBuiltinConstructorBase.cpp
     bindings/js/JSDOMConstructorBase.cpp
     bindings/js/JSDOMConstructorWithDocument.cpp
+    bindings/js/JSDOMQuadCustom.cpp
     bindings/js/JSDOMExceptionHandling.cpp
     bindings/js/JSDOMGlobalObject.cpp
     bindings/js/JSDOMGlobalObjectTask.cpp
     bindings/js/JSDOMGuardedObject.cpp
     bindings/js/JSDOMMapLike.cpp
     bindings/js/JSDOMPromiseDeferred.cpp
-    bindings/js/JSDOMStringMapCustom.cpp
     bindings/js/JSDOMWindowBase.cpp
     bindings/js/JSDOMWindowCustom.cpp
     bindings/js/JSDOMWindowProperties.cpp
-    bindings/js/JSDOMWindowShell.cpp
+    bindings/js/JSDOMWindowProxy.cpp
     bindings/js/JSDOMWrapper.cpp
     bindings/js/JSDOMWrapperCache.cpp
     bindings/js/JSDocumentCustom.cpp
@@ -1177,10 +1189,7 @@ set(WebCore_SOURCES
     bindings/js/JSHTMLDocumentCustom.cpp
     bindings/js/JSHTMLElementCustom.cpp
     bindings/js/JSHTMLEmbedElementCustom.cpp
-    bindings/js/JSHTMLFrameSetElementCustom.cpp
     bindings/js/JSHTMLObjectElementCustom.cpp
-    bindings/js/JSHTMLOptionsCollectionCustom.cpp
-    bindings/js/JSHTMLSelectElementCustom.cpp
     bindings/js/JSHTMLTemplateElementCustom.cpp
     bindings/js/JSHistoryCustom.cpp
     bindings/js/JSIDBCursorCustom.cpp
@@ -1201,7 +1210,6 @@ set(WebCore_SOURCES
     bindings/js/JSMutationCallback.cpp
     bindings/js/JSMutationObserverCustom.cpp
     bindings/js/JSNodeCustom.cpp
-    bindings/js/JSNodeFilterCustom.cpp
     bindings/js/JSNodeIteratorCustom.cpp
     bindings/js/JSNodeListCustom.cpp
     bindings/js/JSPerformanceEntryCustom.cpp
@@ -1209,7 +1217,6 @@ set(WebCore_SOURCES
     bindings/js/JSPopStateEventCustom.cpp
     bindings/js/JSReadableStreamPrivateConstructors.cpp
     bindings/js/JSReadableStreamSourceCustom.cpp
-    bindings/js/JSSQLStatementErrorCallbackCustom.cpp
     bindings/js/JSSVGPathSegCustom.cpp
     bindings/js/JSStorageCustom.cpp
     bindings/js/JSStyleSheetCustom.cpp
@@ -1302,7 +1309,6 @@ set(WebCore_SOURCES
     css/FontFace.cpp
     css/CSSFontFace.cpp
     css/CSSFontFaceSet.cpp
-    css/CSSFontFaceLoadEvent.cpp
     css/CSSFontFaceRule.cpp
     css/CSSFontFaceSource.cpp
     css/CSSFontFaceSrcValue.cpp
@@ -1451,7 +1457,9 @@ set(WebCore_SOURCES
     dom/DOMError.cpp
     dom/DOMImplementation.cpp
     dom/DOMNamedFlowCollection.cpp
-    dom/DOMRect.cpp
+    dom/DOMPointReadOnly.cpp
+    dom/DOMQuad.cpp
+    dom/DOMRectList.cpp
     dom/DOMStringList.cpp
     dom/DataTransfer.cpp
     dom/DataTransferItem.cpp
@@ -1527,6 +1535,7 @@ set(WebCore_SOURCES
     dom/PromiseRejectionEvent.cpp
     dom/PseudoElement.cpp
     dom/QualifiedName.cpp
+    dom/QualifiedNameCache.cpp
     dom/RadioButtonGroups.cpp
     dom/Range.cpp
     dom/RejectedPromiseTracker.cpp
@@ -1561,7 +1570,6 @@ set(WebCore_SOURCES
     dom/TransitionEvent.cpp
     dom/Traversal.cpp
     dom/TreeScope.cpp
-    dom/TreeScopeAdopter.cpp
     dom/TreeWalker.cpp
     dom/UIEvent.cpp
     dom/UIEventWithKeyState.cpp
@@ -1885,6 +1893,7 @@ set(WebCore_SOURCES
     inspector/DOMPatchSupport.cpp
     inspector/InspectorApplicationCacheAgent.cpp
     inspector/InspectorCSSAgent.cpp
+    inspector/InspectorCanvasAgent.cpp
     inspector/InspectorClient.cpp
     inspector/InspectorController.cpp
     inspector/InspectorDOMAgent.cpp
@@ -2077,6 +2086,7 @@ set(WebCore_SOURCES
     page/Performance.cpp
     page/PerformanceEntry.cpp
     page/PerformanceLogging.cpp
+    page/PerformanceLoggingClient.cpp
     page/PerformanceMonitor.cpp
     page/PerformanceNavigation.cpp
     page/PerformanceObserver.cpp
@@ -2155,7 +2165,6 @@ set(WebCore_SOURCES
     platform/Cursor.cpp
     platform/DateComponents.cpp
     platform/Decimal.cpp
-    platform/DisplaySleepDisabler.cpp
     platform/DragData.cpp
     platform/DragImage.cpp
     platform/EventTrackingRegions.cpp
@@ -2192,6 +2201,7 @@ set(WebCore_SOURCES
     platform/ScrollbarThemeComposite.cpp
     platform/SharedBuffer.cpp
     platform/SharedBufferChunkReader.cpp
+    platform/SleepDisabler.cpp
     platform/StaticPasteboard.cpp
     platform/SystemSleepListener.cpp
     platform/Theme.cpp
@@ -2267,6 +2277,7 @@ set(WebCore_SOURCES
     platform/graphics/FontCascade.cpp
     platform/graphics/FontCascadeFonts.cpp
     platform/graphics/FontDescription.cpp
+    platform/graphics/FontFamilySpecificationNull.cpp
     platform/graphics/FontSelectionAlgorithm.cpp
     platform/graphics/FontTaggedSettings.cpp
     platform/graphics/FontGenericFamilies.cpp
