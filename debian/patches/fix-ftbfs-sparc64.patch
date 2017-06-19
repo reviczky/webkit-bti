@@ -27,7 +27,7 @@ Index: webkitgtk/Source/WTF/wtf/Platform.h
  #define WTF_CPU_NEEDS_ALIGNED_ACCESS 1
  #endif
  
-@@ -720,6 +726,7 @@
+@@ -721,6 +727,7 @@
      || CPU(ALPHA) \
      || CPU(ARM64) \
      || CPU(S390X) \
