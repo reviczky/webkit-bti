@@ -1373,12 +1373,12 @@ bool WKPreferencesGetPeerConnectionEnabled(WKPreferencesRef preferencesRef)
 
 void WKPreferencesSetWebRTCLegacyAPIEnabled(WKPreferencesRef preferencesRef, bool enabled)
 {
-    toImpl(preferencesRef)->setWebRTCLegacyAPIEnabled(enabled);
+    toImpl(preferencesRef)->setWebRTCLegacyAPIDisabled(!enabled);
 }
 
 bool WKPreferencesGetWebRTCLegacyAPIEnabled(WKPreferencesRef preferencesRef)
 {
-    return toImpl(preferencesRef)->webRTCLegacyAPIEnabled();
+    return !toImpl(preferencesRef)->webRTCLegacyAPIDisabled();
 }
 
 void WKPreferencesSetSpatialNavigationEnabled(WKPreferencesRef preferencesRef, bool enabled)
@@ -1611,16 +1611,6 @@ bool WKPreferencesGetMediaCaptureRequiresSecureConnection(WKPreferencesRef prefe
     return toImpl(preferencesRef)->mediaCaptureRequiresSecureConnection();
 }
 
-void WKPreferencesSetUseAVFoundationAudioCapture(WKPreferencesRef preferencesRef, bool enabled)
-{
-    toImpl(preferencesRef)->setUseAVFoundationAudioCapture(enabled);
-}
-
-bool WKPreferencesGetUseAVFoundationAudioCapture(WKPreferencesRef preferencesRef)
-{
-    return toImpl(preferencesRef)->useAVFoundationAudioCapture();
-}
-
 void WKPreferencesSetFetchAPIEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setFetchAPIEnabled(flag);
@@ -1629,6 +1619,16 @@ void WKPreferencesSetFetchAPIEnabled(WKPreferencesRef preferencesRef, bool flag)
 bool WKPreferencesGetFetchAPIEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->fetchAPIEnabled();
+}
+
+void WKPreferencesSetDisplayContentsEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setDisplayContentsEnabled(flag);
+}
+
+bool WKPreferencesGetDisplayContentsEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->displayContentsEnabled();
 }
 
 void WKPreferencesSetDownloadAttributeEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -1711,16 +1711,6 @@ void WKPreferencesSetApplePayCapabilityDisclosureAllowed(WKPreferencesRef prefer
     WebKit::toImpl(preferencesRef)->setApplePayCapabilityDisclosureAllowed(allowed);
 }
 
-void WKPreferencesSetSubtleCryptoEnabled(WKPreferencesRef preferencesRef, bool flag)
-{
-    toImpl(preferencesRef)->setSubtleCryptoEnabled(flag);
-}
-
-bool WKPreferencesGetSubtleCryptoEnabled(WKPreferencesRef preferencesRef)
-{
-    return toImpl(preferencesRef)->subtleCryptoEnabled();
-}
-
 void WKPreferencesSetLinkPreloadEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setLinkPreloadEnabled(flag);
@@ -1729,6 +1719,16 @@ void WKPreferencesSetLinkPreloadEnabled(WKPreferencesRef preferencesRef, bool fl
 bool WKPreferencesGetLinkPreloadEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->linkPreloadEnabled();
+}
+
+void WKPreferencesSetMediaPreloadingEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setMediaPreloadingEnabled(flag);
+}
+
+bool WKPreferencesGetMediaPreloadingEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->mediaPreloadingEnabled();
 }
 
 void WKPreferencesSetLargeImageAsyncDecodingEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -1769,4 +1769,24 @@ void WKPreferencesSetMediaUserGestureInheritsFromDocument(WKPreferencesRef prefe
 bool WKPreferencesGetMediaUserGestureInheritsFromDocument(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->mediaUserGestureInheritsFromDocument();
+}
+
+void WKPreferencesSetMediaContentTypesRequiringHardwareSupport(WKPreferencesRef preferencesRef, WKStringRef codecs)
+{
+    toImpl(preferencesRef)->setMediaContentTypesRequiringHardwareSupport(toWTFString(codecs));
+}
+
+WKStringRef WKPreferencesCopyMediaContentTypesRequiringHardwareSupport(WKPreferencesRef preferencesRef)
+{
+    return toCopiedAPI(toImpl(preferencesRef)->mediaContentTypesRequiringHardwareSupport());
+}
+
+void WKPreferencesSetIsSecureContextAttributeEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setIsSecureContextAttributeEnabled(flag);
+}
+
+bool WKPreferencesGetIsSecureContextAttributeEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->isSecureContextAttributeEnabled();
 }

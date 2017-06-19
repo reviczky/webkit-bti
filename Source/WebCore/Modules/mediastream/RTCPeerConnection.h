@@ -147,6 +147,9 @@ public:
 
     void clearController() { m_controller = nullptr; }
 
+    // ActiveDOMObject.
+    bool hasPendingActivity() const final;
+
 private:
     RTCPeerConnection(ScriptExecutionContext&);
 
@@ -154,6 +157,9 @@ private:
 
     void registerToController(RTCController&);
     void unregisterFromController();
+
+    friend class Internals;
+    void applyRotationForOutgoingVideoSources() { m_backend->applyRotationForOutgoingVideoSources(); }
 
     // EventTarget implementation.
     void refEventTarget() final { ref(); }

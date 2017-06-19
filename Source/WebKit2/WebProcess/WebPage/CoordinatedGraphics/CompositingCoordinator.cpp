@@ -137,6 +137,9 @@ bool CompositingCoordinator::flushPendingLayerChanges()
 
         m_client.commitSceneState(m_state);
 
+        if (!m_atlasesToRemove.isEmpty())
+            m_client.releaseUpdateAtlases(WTFMove(m_atlasesToRemove));
+
         clearPendingStateChanges();
         m_shouldSyncFrame = false;
     }
@@ -154,11 +157,6 @@ double CompositingCoordinator::timestamp() const
 
 void CompositingCoordinator::syncDisplayState()
 {
-#if !USE(REQUEST_ANIMATION_FRAME_TIMER) && !USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-    // Make sure that any previously registered animation callbacks are being executed before we flush the layers.
-    m_lastAnimationServiceTime = timestamp();
-    m_page->mainFrame().view()->serviceScriptedAnimations();
-#endif
     m_page->mainFrame().view()->updateLayoutAndStyleIfNeededRecursive();
 }
 
@@ -268,7 +266,7 @@ void CompositingCoordinator::notifyFlushRequired(const GraphicsLayer*)
         m_client.notifyFlushRequired();
 }
 
-void CompositingCoordinator::paintContents(const GraphicsLayer* graphicsLayer, GraphicsContext& graphicsContext, GraphicsLayerPaintingPhase, const FloatRect& clipRect)
+void CompositingCoordinator::paintContents(const GraphicsLayer* graphicsLayer, GraphicsContext& graphicsContext, GraphicsLayerPaintingPhase, const FloatRect& clipRect, GraphicsLayerPaintFlags)
 {
     m_client.paintLayerContents(graphicsLayer, graphicsContext, enclosingIntRect(clipRect));
 }
@@ -442,6 +440,18 @@ void CompositingCoordinator::releaseAtlases(ReleaseAtlasPolicy policy)
 
     if (m_updateAtlases.size() <= 1)
         m_releaseInactiveAtlasesTimer.stop();
+
+    if (!m_atlasesToRemove.isEmpty())
+        m_client.releaseUpdateAtlases(WTFMove(m_atlasesToRemove));
+}
+
+void CompositingCoordinator::clearUpdateAtlases()
+{
+    if (m_isPurging)
+        return;
+
+    m_releaseInactiveAtlasesTimer.stop();
+    m_updateAtlases.clear();
 
     if (!m_atlasesToRemove.isEmpty())
         m_client.releaseUpdateAtlases(WTFMove(m_atlasesToRemove));

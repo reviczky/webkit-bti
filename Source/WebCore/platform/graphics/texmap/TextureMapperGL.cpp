@@ -409,6 +409,18 @@ static void prepareFilterProgram(TextureMapperShaderProgram& program, const Filt
     }
 }
 
+static TransformationMatrix colorSpaceMatrixForFlags(TextureMapperGL::Flags flags)
+{
+    // The matrix is initially the identity one, which means no color conversion.
+    TransformationMatrix matrix;
+    if (flags & TextureMapperGL::ShouldConvertTextureBGRAToRGBA)
+        matrix.setMatrix(0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+    else if (flags & TextureMapperGL::ShouldConvertTextureARGBToRGBA)
+        matrix.setMatrix(0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0);
+
+    return matrix;
+}
+
 void TextureMapperGL::drawTexture(const BitmapTexture& texture, const FloatRect& targetRect, const TransformationMatrix& matrix, float opacity, unsigned exposedEdges)
 {
     if (!texture.isValid())
@@ -598,6 +610,7 @@ void TextureMapperGL::drawTexturedQuadWithProgram(TextureMapperShaderProgram& pr
         patternTransform.translate(0, -1);
 
     program.setMatrix(program.textureSpaceMatrixLocation(), patternTransform);
+    program.setMatrix(program.textureColorSpaceMatrixLocation(), colorSpaceMatrixForFlags(flags));
     m_context3D->uniform1f(program.opacityLocation(), opacity);
 
     if (opacity < 1)
@@ -746,9 +759,9 @@ IntRect TextureMapperGL::clipBounds()
     return clipStack().current().scissorBox;
 }
 
-Ref<BitmapTexture> TextureMapperGL::createTexture()
+Ref<BitmapTexture> TextureMapperGL::createTexture(GC3Dint internalFormat)
 {
-    return BitmapTextureGL::create(*m_context3D);
+    return BitmapTextureGL::create(*m_context3D, internalFormat);
 }
 
 std::unique_ptr<TextureMapper> TextureMapper::platformCreateAccelerated()

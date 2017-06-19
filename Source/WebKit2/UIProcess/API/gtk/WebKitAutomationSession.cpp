@@ -22,10 +22,9 @@
 
 #include "APIAutomationSessionClient.h"
 #include "WebKitAutomationSessionPrivate.h"
-#include "WebKitPrivate.h"
-#include "WebKitWebView.h"
-#include "WebKitWebViewBasePrivate.h"
+#include "WebKitWebViewPrivate.h"
 #include <glib/gi18n-lib.h>
+#include <wtf/glib/WTFGType.h>
 #include <wtf/text/CString.h>
 
 using namespace WebKit;
@@ -86,7 +85,7 @@ private:
         if (!webView || !webkit_web_view_is_controlled_by_automation(webView))
             return nullptr;
 
-        return webkitWebViewBaseGetPage(WEBKIT_WEB_VIEW_BASE(webView));
+        return &webkitWebViewGetPage(webView);
     }
 
     WebKitAutomationSession* m_session;

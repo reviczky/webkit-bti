@@ -46,6 +46,7 @@
 #include <wtf/MediaTime.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/glib/GUniquePtr.h>
+#include <wtf/glib/RunLoopSourcePriority.h>
 #include <wtf/text/CString.h>
 
 #if ENABLE(VIDEO_TRACK)
@@ -604,7 +605,7 @@ bool MediaPlayerPrivateGStreamer::seeking() const
 
 void MediaPlayerPrivateGStreamer::videoChangedCallback(MediaPlayerPrivateGStreamer* player)
 {
-    player->m_notifier.notify(MainThreadNotification::VideoChanged, [player] { player->notifyPlayerOfVideo(); });
+    player->m_notifier->notify(MainThreadNotification::VideoChanged, [player] { player->notifyPlayerOfVideo(); });
 }
 
 void MediaPlayerPrivateGStreamer::notifyPlayerOfVideo()
@@ -658,7 +659,7 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfVideo()
 
 void MediaPlayerPrivateGStreamer::videoSinkCapsChangedCallback(MediaPlayerPrivateGStreamer* player)
 {
-    player->m_notifier.notify(MainThreadNotification::VideoCapsChanged, [player] { player->notifyPlayerOfVideoCaps(); });
+    player->m_notifier->notify(MainThreadNotification::VideoCapsChanged, [player] { player->notifyPlayerOfVideoCaps(); });
 }
 
 void MediaPlayerPrivateGStreamer::notifyPlayerOfVideoCaps()
@@ -669,7 +670,7 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfVideoCaps()
 
 void MediaPlayerPrivateGStreamer::audioChangedCallback(MediaPlayerPrivateGStreamer* player)
 {
-    player->m_notifier.notify(MainThreadNotification::AudioChanged, [player] { player->notifyPlayerOfAudio(); });
+    player->m_notifier->notify(MainThreadNotification::AudioChanged, [player] { player->notifyPlayerOfAudio(); });
 }
 
 void MediaPlayerPrivateGStreamer::notifyPlayerOfAudio()
@@ -722,7 +723,7 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfAudio()
 #if ENABLE(VIDEO_TRACK)
 void MediaPlayerPrivateGStreamer::textChangedCallback(MediaPlayerPrivateGStreamer* player)
 {
-    player->m_notifier.notify(MainThreadNotification::TextChanged, [player] { player->notifyPlayerOfText(); });
+    player->m_notifier->notify(MainThreadNotification::TextChanged, [player] { player->notifyPlayerOfText(); });
 }
 
 void MediaPlayerPrivateGStreamer::notifyPlayerOfText()
@@ -1030,14 +1031,6 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
                 m_player->client().requestInstallMissingPlugins(String::fromUTF8(detail.get()), String::fromUTF8(description.get()), *m_missingPluginsCallback);
             }
         }
-#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
-        else if (gst_structure_has_name(structure, "drm-key-needed")) {
-            GST_DEBUG("drm-key-needed message from %s", GST_MESSAGE_SRC_NAME(message));
-            GRefPtr<GstEvent> event;
-            gst_structure_get(structure, "event", GST_TYPE_EVENT, &event.outPtr(), nullptr);
-            handleProtectionEvent(event.get());
-        }
-#endif
 #if ENABLE(VIDEO_TRACK) && USE(GSTREAMER_MPEGTS)
         else {
             GstMpegtsSection* section = gst_message_parse_mpegts_section(message);
@@ -1902,12 +1895,12 @@ MediaPlayer::SupportsType MediaPlayerPrivateGStreamer::supportsType(const MediaE
     if (parameters.isMediaStream)
         return result;
 
-    if (parameters.type.isNull() || parameters.type.isEmpty())
+    if (parameters.type.isEmpty())
         return result;
 
     // spec says we should not return "probably" if the codecs string is empty
-    if (mimeTypeSet().contains(parameters.type))
-        result = parameters.codecs.isEmpty() ? MediaPlayer::MayBeSupported : MediaPlayer::IsSupported;
+    if (mimeTypeSet().contains(parameters.type.containerType()))
+        result = parameters.type.codecs().isEmpty() ? MediaPlayer::MayBeSupported : MediaPlayer::IsSupported;
 
     return extendedSupportsType(parameters, result);
 }
@@ -2060,7 +2053,7 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin()
     }, this, nullptr);
 
     // Let also other listeners subscribe to (application) messages in this bus.
-    gst_bus_add_signal_watch(bus.get());
+    gst_bus_add_signal_watch_full(bus.get(), RunLoopSourcePriority::RunLoopDispatcher);
     g_signal_connect(bus.get(), "message", G_CALLBACK(busMessageCallback), this);
 
     g_object_set(m_pipeline.get(), "mute", m_player->muted(), nullptr);

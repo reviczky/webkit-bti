@@ -748,7 +748,7 @@ bool ordinarySetSlow(ExecState* exec, JSObject* object, PropertyName propertyNam
 // ECMA 8.6.2.2
 bool JSObject::put(JSCell* cell, ExecState* exec, PropertyName propertyName, JSValue value, PutPropertySlot& slot)
 {
-    return putInline(cell, exec, propertyName, value, slot);
+    return putInlineForJSObject(cell, exec, propertyName, value, slot);
 }
 
 bool JSObject::putInlineSlow(ExecState* exec, PropertyName propertyName, JSValue value, PutPropertySlot& slot)
@@ -1001,7 +1001,7 @@ void JSObject::notifyPresenceOfIndexedAccessors(VM& vm)
 
 Butterfly* JSObject::createInitialIndexedStorage(VM& vm, unsigned length)
 {
-    ASSERT(length < MAX_ARRAY_INDEX);
+    ASSERT(length <= MAX_STORAGE_VECTOR_LENGTH);
     IndexingType oldType = indexingType();
     ASSERT_UNUSED(oldType, !hasIndexedProperties(oldType));
     ASSERT(!structure()->needsSlowPutIndexing());
@@ -3129,7 +3129,7 @@ bool JSObject::ensureLengthSlow(VM& vm, unsigned length)
 {
     Butterfly* butterfly = m_butterfly.get();
     
-    ASSERT(length < MAX_ARRAY_INDEX);
+    ASSERT(length <= MAX_STORAGE_VECTOR_LENGTH);
     ASSERT(hasContiguous(indexingType()) || hasInt32(indexingType()) || hasDouble(indexingType()) || hasUndecided(indexingType()));
     ASSERT(length > butterfly->vectorLength());
     
@@ -3181,8 +3181,7 @@ bool JSObject::ensureLengthSlow(VM& vm, unsigned length)
 
 void JSObject::reallocateAndShrinkButterfly(VM& vm, unsigned length)
 {
-    ASSERT(length < MAX_ARRAY_INDEX);
-    ASSERT(length < MAX_STORAGE_VECTOR_LENGTH);
+    ASSERT(length <= MAX_STORAGE_VECTOR_LENGTH);
     ASSERT(hasContiguous(indexingType()) || hasInt32(indexingType()) || hasDouble(indexingType()) || hasUndecided(indexingType()));
     ASSERT(m_butterfly.get()->vectorLength() > length);
     ASSERT(!m_butterfly.get()->indexingHeader()->preCapacity(structure()));

@@ -55,10 +55,13 @@ bool WebPaymentCoordinator::supportsVersion(unsigned version)
 {
     ASSERT(version > 0);
 
-    if (version <= 2)
-        return true;
+#if !ENABLE(APPLE_PAY_SESSION_V3)
+    static const unsigned currentVersion = 2;
+#else
+    static const unsigned currentVersion = 3;
+#endif
 
-    return false;
+    return version <= currentVersion;
 }
 
 bool WebPaymentCoordinator::canMakePayments()
@@ -77,7 +80,7 @@ static uint64_t generateCanMakePaymentsWithActiveCardReplyID()
     return ++canMakePaymentsWithActiveCardReplyID;
 }
 
-void WebPaymentCoordinator::canMakePaymentsWithActiveCard(const String& merchantIdentifier, const String& domainName, std::function<void (bool)> completionHandler)
+void WebPaymentCoordinator::canMakePaymentsWithActiveCard(const String& merchantIdentifier, const String& domainName, WTF::Function<void (bool)>&& completionHandler)
 {
     auto replyID = generateCanMakePaymentsWithActiveCardReplyID();
 
@@ -92,7 +95,7 @@ static uint64_t generateOpenPaymentSetupReplyID()
     return ++openPaymentSetupReplyID;
 }
 
-void WebPaymentCoordinator::openPaymentSetup(const String& merchantIdentifier, const String& domainName, std::function<void (bool)> completionHandler)
+void WebPaymentCoordinator::openPaymentSetup(const String& merchantIdentifier, const String& domainName, WTF::Function<void (bool)>&& completionHandler)
 {
     auto replyID = generateOpenPaymentSetupReplyID();
 

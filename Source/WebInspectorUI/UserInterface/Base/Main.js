@@ -55,9 +55,6 @@ WebInspector.LayoutDirection = {
 
 WebInspector.loaded = function()
 {
-    // Initialize WebSocket to communication.
-    this._initializeWebSocketIfNeeded();
-
     this.debuggableType = InspectorFrontendHost.debuggableType() === "web" ? WebInspector.DebuggableType.Web : WebInspector.DebuggableType.JavaScript;
     this.hasExtraDomains = false;
 
@@ -98,6 +95,8 @@ WebInspector.loaded = function()
         InspectorBackend.registerWorkerDispatcher(new WebInspector.WorkerObserver);
     if (InspectorBackend.registerReplayDispatcher)
         InspectorBackend.registerReplayDispatcher(new WebInspector.ReplayObserver);
+    if (InspectorBackend.registerCanvasDispatcher)
+        InspectorBackend.registerCanvasDispatcher(new WebInspector.CanvasObserver);
 
     // Main backend target.
     WebInspector.mainTarget = new WebInspector.MainTarget;
@@ -139,6 +138,7 @@ WebInspector.loaded = function()
     this.workerManager = new WebInspector.WorkerManager;
     this.replayManager = new WebInspector.ReplayManager;
     this.domDebuggerManager = new WebInspector.DOMDebuggerManager;
+    this.canvasManager = new WebInspector.CanvasManager;
 
     // Enable the Console Agent after creating the singleton managers.
     ConsoleAgent.enable();
@@ -425,17 +425,6 @@ WebInspector.contentLoaded = function()
 
     this.toolbar.addToolbarItem(this._searchToolbarItem, WebInspector.Toolbar.Section.Right);
 
-    this.resourceDetailsSidebarPanel = new WebInspector.ResourceDetailsSidebarPanel;
-    this.domNodeDetailsSidebarPanel = new WebInspector.DOMNodeDetailsSidebarPanel;
-    this.cssStyleDetailsSidebarPanel = new WebInspector.CSSStyleDetailsSidebarPanel;
-    this.applicationCacheDetailsSidebarPanel = new WebInspector.ApplicationCacheDetailsSidebarPanel;
-    this.indexedDatabaseDetailsSidebarPanel = new WebInspector.IndexedDatabaseDetailsSidebarPanel;
-    this.scopeChainDetailsSidebarPanel = new WebInspector.ScopeChainDetailsSidebarPanel;
-    this.probeDetailsSidebarPanel = new WebInspector.ProbeDetailsSidebarPanel;
-
-    if (window.LayerTreeAgent)
-        this.layerTreeDetailsSidebarPanel = new WebInspector.LayerTreeDetailsSidebarPanel;
-
     this.modifierKeys = {altKey: false, metaKey: false, shiftKey: false};
 
     let dockedResizerElement = document.getElementById("docked-resizer");
@@ -524,6 +513,20 @@ WebInspector.contentLoaded = function()
 
     if (this.runBootstrapOperations)
         this.runBootstrapOperations();
+};
+
+// This function returns a lazily constructed instance of a class scoped to this WebInspector
+// instance. In the unlikely event that we ever need to construct multiple WebInspector instances
+// this allows us to scope objects within the WebInspector.
+// Currently it is only used for sidebars.
+WebInspector.instanceForClass = function(constructor)
+{
+    console.assert(typeof constructor === "function");
+
+    let key = `__${constructor.name}`;
+    if (!WebInspector[key])
+        WebInspector[key] = new constructor;
+    return WebInspector[key];
 };
 
 WebInspector.isTabTypeAllowed = function(tabType)
@@ -1125,7 +1128,10 @@ WebInspector.tabContentViewClassForRepresentedObject = function(representedObjec
             return WebInspector.DebuggerTabContentView;
     }
 
-    if (representedObject instanceof WebInspector.Frame || representedObject instanceof WebInspector.Resource || representedObject instanceof WebInspector.Script)
+    if (representedObject instanceof WebInspector.Frame
+        || representedObject instanceof WebInspector.Resource
+        || representedObject instanceof WebInspector.Script
+        || representedObject instanceof WebInspector.CSSStyleSheet)
         return WebInspector.ResourcesTabContentView;
 
     // FIXME: Move Content Flows to the Elements tab?
@@ -1647,27 +1653,6 @@ WebInspector._tabBrowserSelectedTabContentViewDidChange = function(event)
         this.quickConsole.consoleLogVisibilityChanged(this.isShowingConsoleTab());
 };
 
-WebInspector._initializeWebSocketIfNeeded = function()
-{
-    if (!InspectorFrontendHost.initializeWebSocket)
-        return;
-
-    var queryParams = parseLocationQueryParameters();
-
-    if ("ws" in queryParams)
-        var url = "ws://" + queryParams.ws;
-    else if ("page" in queryParams) {
-        var page = queryParams.page;
-        var host = "host" in queryParams ? queryParams.host : window.location.host;
-        var url = "ws://" + host + "/devtools/page/" + page;
-    }
-
-    if (!url)
-        return;
-
-    InspectorFrontendHost.initializeWebSocket(url);
-};
-
 WebInspector._updateSplitConsoleHeight = function(height)
 {
     const minimumHeight = 64;
@@ -1909,7 +1894,7 @@ WebInspector._reloadPage = function(event)
 WebInspector._reloadPageClicked = function(event)
 {
     // Ignore cache when the shift key is pressed.
-    PageAgent.reload(window.event ? window.event.shiftKey : false);
+    PageAgent.reload.invoke({shouldIgnoreCache: window.event ? window.event.shiftKey : false});
 };
 
 WebInspector._reloadPageIgnoringCache = function(event)
@@ -2313,7 +2298,7 @@ WebInspector.createSourceCodeLocationLink = function(sourceCodeLocation, options
     if (options.useGoToArrowButton)
         linkElement.appendChild(WebInspector.createGoToArrowButton());
     else
-        sourceCodeLocation.populateLiveDisplayLocationString(linkElement, "textContent");
+        sourceCodeLocation.populateLiveDisplayLocationString(linkElement, "textContent", options.columnStyle, options.nameStyle, options.prefix);
 
     if (options.dontFloat)
         linkElement.classList.add("dont-float");

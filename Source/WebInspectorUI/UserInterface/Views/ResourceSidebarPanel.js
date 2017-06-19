@@ -63,6 +63,8 @@ WebInspector.ResourceSidebarPanel = class ResourceSidebarPanel extends WebInspec
         WebInspector.debuggerManager.addEventListener(WebInspector.DebuggerManager.Event.ScriptRemoved, this._scriptWasRemoved, this);
         WebInspector.debuggerManager.addEventListener(WebInspector.DebuggerManager.Event.ScriptsCleared, this._scriptsCleared, this);
 
+        WebInspector.cssStyleManager.addEventListener(WebInspector.CSSStyleManager.Event.StyleSheetAdded, this._styleSheetAdded, this);
+
         WebInspector.targetManager.addEventListener(WebInspector.TargetManager.Event.TargetRemoved, this._targetRemoved, this);
 
         WebInspector.notifications.addEventListener(WebInspector.Notification.ExtraDomainsActivated, this._extraDomainsActivated, this);
@@ -74,9 +76,6 @@ WebInspector.ResourceSidebarPanel = class ResourceSidebarPanel extends WebInspec
             this.contentTreeOutline.disclosureButtons = false;
             WebInspector.SourceCode.addEventListener(WebInspector.SourceCode.Event.SourceMapAdded, () => { this.contentTreeOutline.disclosureButtons = true; }, this);
         }
-
-        if (WebInspector.frameResourceManager.mainFrame)
-            this._mainFrameMainResourceDidChange(WebInspector.frameResourceManager.mainFrame);
     }
 
     // Public
@@ -189,6 +188,14 @@ WebInspector.ResourceSidebarPanel = class ResourceSidebarPanel extends WebInspec
     }
 
     // Protected
+
+    initialLayout()
+    {
+        super.initialLayout();
+
+        if (WebInspector.frameResourceManager.mainFrame)
+            this._mainFrameMainResourceDidChange(WebInspector.frameResourceManager.mainFrame);
+    }
 
     hasCustomFilters()
     {
@@ -392,6 +399,19 @@ WebInspector.ResourceSidebarPanel = class ResourceSidebarPanel extends WebInspec
         }
     }
 
+    _styleSheetAdded(event)
+    {
+        let styleSheet = event.data.styleSheet;
+        if (!styleSheet.isInspectorStyleSheet())
+            return;
+
+        let frameTreeElement = this.treeElementForRepresentedObject(styleSheet.parentFrame);
+        if (!frameTreeElement)
+            return;
+
+        frameTreeElement.addRepresentedObjectToNewChildQueue(styleSheet);
+    }
+
     _addTargetWithMainResource(target)
     {
         console.assert(target.type === WebInspector.Target.Type.Worker);
@@ -414,6 +434,9 @@ WebInspector.ResourceSidebarPanel = class ResourceSidebarPanel extends WebInspec
 
     _treeSelectionDidChange(event)
     {
+        if (!this.visible)
+            return;
+
         let treeElement = event.data.selectedElement;
         if (!treeElement)
             return;
@@ -421,6 +444,7 @@ WebInspector.ResourceSidebarPanel = class ResourceSidebarPanel extends WebInspec
         if (treeElement instanceof WebInspector.FolderTreeElement
             || treeElement instanceof WebInspector.ResourceTreeElement
             || treeElement instanceof WebInspector.ScriptTreeElement
+            || treeElement instanceof WebInspector.CSSStyleSheetTreeElement
             || treeElement instanceof WebInspector.ContentFlowTreeElement) {
             const cookie = null;
             const options = {

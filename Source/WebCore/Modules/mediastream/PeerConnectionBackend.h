@@ -35,6 +35,7 @@
 
 #include "JSDOMPromiseDeferred.h"
 #include "RTCRtpParameters.h"
+#include "RTCSessionDescription.h"
 #include "RTCSignalingState.h"
 
 namespace WebCore {
@@ -56,7 +57,7 @@ struct RTCDataChannelInit;
 struct RTCOfferOptions;
 
 namespace PeerConnection {
-using SessionDescriptionPromise = DOMPromiseDeferred<IDLInterface<RTCSessionDescription>>;
+using SessionDescriptionPromise = DOMPromiseDeferred<IDLDictionary<RTCSessionDescription::Init>>;
 using StatsPromise = DOMPromiseDeferred<IDLInterface<RTCStatsReport>>;
 }
 
@@ -110,6 +111,8 @@ public:
     void disableICECandidateFiltering();
     void enableICECandidateFiltering();
 
+    virtual void applyRotationForOutgoingVideoSources() { }
+
 protected:
     void fireICECandidateEvent(RefPtr<RTCIceCandidate>&&);
     void doneGatheringCandidates();
@@ -130,6 +133,8 @@ protected:
 
     void addIceCandidateSucceeded();
     void addIceCandidateFailed(Exception&&);
+
+    String filterSDP(String&&) const;
 
 private:
     virtual void doCreateOffer(RTCOfferOptions&&) = 0;

@@ -44,6 +44,10 @@
 #include <WebCore/TextureMapperPlatformLayerProxy.h>
 #endif
 
+namespace WebCore {
+class TextureMapperGL;
+}
+
 namespace WebKit {
 
 class CoordinatedBackingStore;
@@ -66,7 +70,7 @@ public:
     virtual ~CoordinatedGraphicsScene();
     void paintToCurrentGLContext(const WebCore::TransformationMatrix&, float, const WebCore::FloatRect&, const WebCore::Color& backgroundColor, bool drawsBackground, const WebCore::FloatPoint&, WebCore::TextureMapper::PaintFlags = 0);
     void detach();
-    void appendUpdate(std::function<void()>&&);
+    void appendUpdate(Function<void()>&&);
 
     WebCore::TextureMapperLayer* findScrollableContentsLayerAt(const WebCore::FloatPoint&);
 
@@ -142,10 +146,11 @@ private:
 
 #if USE(COORDINATED_GRAPHICS_THREADED)
     void onNewBufferAvailable() override;
+    WebCore::TextureMapperGL* texmapGL() override;
 #endif
 
     // Render queue can be accessed ony from main thread or updatePaintNode call stack!
-    Vector<std::function<void()>> m_renderQueue;
+    Vector<Function<void()>> m_renderQueue;
     Lock m_renderQueueMutex;
 
     std::unique_ptr<WebCore::TextureMapper> m_textureMapper;

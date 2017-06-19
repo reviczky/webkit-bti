@@ -39,7 +39,6 @@ messages -> WebPageProxy {
 #endif // ENABLE(WEBGL)
     DidChangeViewportProperties(struct WebCore::ViewportAttributes attributes)
     DidReceiveEvent(uint32_t type, bool handled)
-    StopResponsivenessTimer()
 #if !PLATFORM(IOS)
     SetCursor(WebCore::Cursor cursor)
     SetCursorHiddenUntilMouseMoves(bool hiddenUntilMouseMoves)
@@ -74,7 +73,7 @@ messages -> WebPageProxy {
     RootViewToAccessibilityScreen(WebCore::IntRect rect) -> (WebCore::IntRect screenFrame)
 #endif
 
-    RunBeforeUnloadConfirmPanel(String message, uint64_t frameID) -> (bool shouldClose) Delayed
+    RunBeforeUnloadConfirmPanel(uint64_t frameID, struct WebCore::SecurityOriginData frameSecurityOrigin, String message) -> (bool shouldClose) Delayed
     PageDidScroll()
     RunOpenPanel(uint64_t frameID, struct WebCore::SecurityOriginData frameSecurityOrigin, struct WebCore::FileChooserSettings parameters)
     PrintFrame(uint64_t frameID) -> ()
@@ -133,6 +132,7 @@ messages -> WebPageProxy {
     DidRunInsecureContentForFrame(uint64_t frameID, WebKit::UserData userData)
     DidDetectXSSForFrame(uint64_t frameID, WebKit::UserData userData)
     DidSameDocumentNavigationForFrame(uint64_t frameID, uint64_t navigationID, uint32_t type, String url, WebKit::UserData userData)
+    DidChangeMainDocument(uint64_t frameID);
     DidDestroyNavigation(uint64_t navigationID)
 
     HasInsecureContent() -> (enum WebCore::HasInsecureContent hasInsecureContent)
@@ -230,6 +230,9 @@ messages -> WebPageProxy {
     LogDiagnosticMessageWithValue(String message, String description, double value, unsigned significantFigures, enum WebCore::ShouldSample shouldSample)
     LogDiagnosticMessageWithEnhancedPrivacy(String message, String description, enum WebCore::ShouldSample shouldSample)
 
+    # Performance logging
+    LogScrollingEvent(uint32_t eventType, MonotonicTime timestamp, uint64_t data)
+
     # Editor notifications
     EditorStateChanged(struct WebKit::EditorState editorState)
     CompositionWasCanceled()
@@ -295,7 +298,7 @@ messages -> WebPageProxy {
 
     # Drag and drop messages
 #if ENABLE(DRAG_SUPPORT)
-    DidPerformDragControllerAction(uint64_t dragOperation, bool mouseIsOverFileInput, unsigned numberOfItemsToBeAccepted, WebCore::IntRect insertionRect, bool isHandlingNonDefaultDrag)
+    DidPerformDragControllerAction(uint64_t dragOperation, bool mouseIsOverFileInput, unsigned numberOfItemsToBeAccepted, WebCore::IntRect insertionRect)
     DidEndDragging();
 #endif
 #if PLATFORM(COCOA) && ENABLE(DRAG_SUPPORT)

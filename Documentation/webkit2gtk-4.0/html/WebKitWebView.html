@@ -898,6 +898,11 @@
 <td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
 </tr>
 <tr>
+<td class="signal_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a></td>
+<td class="signal_name"><a class="link" href="WebKitWebView.html#WebKitWebView-show-option-menu" title="The “show-option-menu” signal">show-option-menu</a></td>
+<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+</tr>
+<tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitWebView.html#WebKitWebView-submit-form" title="The “submit-form” signal">submit-form</a></td>
 <td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
@@ -5893,6 +5898,73 @@ support for it.</p>
 </div>
 <p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
 <p class="since">Since: <a class="link" href="api-index-2-8.html#api-index-2.8">2.8</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitWebView-show-option-menu"></a><h3>The <code class="literal">“show-option-menu”</code> signal</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+user_function (<a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a>    *web_view,
+               <a class="link" href="WebKitOptionMenu.html" title="WebKitOptionMenu"><span class="type">WebKitOptionMenu</span></a> *menu,
+               <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a>         *event,
+               <a href="../gdk3/gdk3-Points-Rectangles-and-Regions.html#GdkRectangle"><span class="type">GdkRectangle</span></a>     *rectangle,
+               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>          user_data)</pre>
+<p>This signal is emitted when a select element in <em class="parameter"><code>web_view</code></em>
+ needs to display a
+dropdown menu. This signal can be used to show a custom menu, using <em class="parameter"><code>menu</code></em>
+ to get
+the details of all items that should be displayed. The area of the element in the
+<a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> is given as <em class="parameter"><code>rectangle</code></em>
+ parameter, it can be used to position the
+menu. If this was triggered by a user interaction, like a mouse click,
+<em class="parameter"><code>event</code></em>
+ parameter provides the <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a>.
+To handle this signal asynchronously you should keep a ref of the <em class="parameter"><code>menu</code></em>
+.</p>
+<p>The default signal handler will pop up a <a href="../gtk3/GtkMenu.html#GtkMenu-struct"><span class="type">GtkMenu</span></a>.</p>
+<div class="refsect3">
+<a name="WebKitWebView-show-option-menu.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>the <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> on which the signal is emitted</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>menu</p></td>
+<td class="parameter_description"><p>the <a class="link" href="WebKitOptionMenu.html" title="WebKitOptionMenu"><span class="type">WebKitOptionMenu</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>event</p></td>
+<td class="parameter_description"><p>the <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a> that triggered the menu, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>rectangle</p></td>
+<td class="parameter_description"><p>the option element area</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>user_data</p></td>
+<td class="parameter_description"><p>user data set when the signal handler was connected.</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="WebKitWebView-show-option-menu.returns"></a><h4>Returns</h4>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> to stop other handlers from being invoked for the event.
+<a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> to propagate the event further.</p>
+</div>
+<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p class="since">Since: 2.18.</p>
 </div>
 <hr>
 <div class="refsect2">

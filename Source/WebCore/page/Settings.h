@@ -27,6 +27,7 @@
 #pragma once
 
 #include "ClipboardAccessPolicy.h"
+#include "ContentType.h"
 #include "EditingBehaviorTypes.h"
 #include "IntSize.h"
 #include "SecurityOrigin.h"
@@ -35,7 +36,6 @@
 #include "Timer.h"
 #include "URL.h"
 #include "WritingMode.h"
-#include <chrono>
 #include <runtime/RuntimeFlags.h>
 #include <unicode/uscript.h>
 #include <wtf/HashMap.h>
@@ -291,7 +291,9 @@ public:
 
     static void setShouldOptOutOfNetworkStateObservation(bool flag) { gShouldOptOutOfNetworkStateObservation = flag; }
     static bool shouldOptOutOfNetworkStateObservation() { return gShouldOptOutOfNetworkStateObservation; }
+#endif
 
+#if USE(AUDIO_SESSION)
     static void setShouldManageAudioSessionCategory(bool flag) { gManageAudioSession = flag; }
     static bool shouldManageAudioSessionCategory() { return gManageAudioSession; }
 #endif
@@ -310,9 +312,6 @@ public:
 
     bool mediaCaptureRequiresSecureConnection() const;
     WEBCORE_EXPORT static void setMediaCaptureRequiresSecureConnection(bool);
-
-    static bool useAVFoundationAudioCapture();
-    WEBCORE_EXPORT static void setUseAVFoundationAudioCapture(bool);
 #endif
 
 #if ENABLE(APPLE_PAY)
@@ -328,6 +327,11 @@ public:
 
     WEBCORE_EXPORT static void setAllowsAnySSLCertificate(bool);
     static bool allowsAnySSLCertificate();
+
+    WEBCORE_EXPORT static const String& defaultMediaContentTypesRequiringHardwareSupport();
+    WEBCORE_EXPORT void setMediaContentTypesRequiringHardwareSupport(const Vector<ContentType>&);
+    WEBCORE_EXPORT void setMediaContentTypesRequiringHardwareSupport(const String&);
+    const Vector<ContentType>& mediaContentTypesRequiringHardwareSupport() const { return m_mediaContentTypesRequiringHardwareSupport; }
 
 private:
     explicit Settings(Page*);
@@ -407,8 +411,8 @@ private:
     static bool gNetworkDataUsageTrackingEnabled;
     WEBCORE_EXPORT static bool gAVKitEnabled;
     WEBCORE_EXPORT static bool gShouldOptOutOfNetworkStateObservation;
-    WEBCORE_EXPORT static bool gManageAudioSession;
 #endif
+    WEBCORE_EXPORT static bool gManageAudioSession;
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     String m_mediaKeysStorageDirectory;
@@ -418,7 +422,6 @@ private:
     String m_mediaDeviceIdentifierStorageDirectory;
     static bool gMockCaptureDevicesEnabled;
     static bool gMediaCaptureRequiresSecureConnection;
-    static bool gUseAVFoundationAudioCapture;
 #endif
 
 #if ENABLE(APPLE_PAY)
@@ -429,6 +432,8 @@ private:
     static bool gLowPowerVideoAudioBufferSizeEnabled;
     static bool gResourceLoadStatisticsEnabledEnabled;
     static bool gAllowsAnySSLCertificate;
+
+    Vector<ContentType> m_mediaContentTypesRequiringHardwareSupport;
 };
 
 inline bool Settings::isPostLoadCPUUsageMeasurementEnabled()

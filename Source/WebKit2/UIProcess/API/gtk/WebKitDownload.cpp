@@ -23,7 +23,6 @@
 #include "DownloadProxy.h"
 #include "WebErrors.h"
 #include "WebKitDownloadPrivate.h"
-#include "WebKitMarshal.h"
 #include "WebKitPrivate.h"
 #include "WebKitURIRequestPrivate.h"
 #include "WebKitURIResponsePrivate.h"
@@ -31,6 +30,8 @@
 #include <glib/gi18n-lib.h>
 #include <wtf/glib/GRefPtr.h>
 #include <wtf/glib/GUniquePtr.h>
+#include <wtf/glib/WTFGType.h>
+#include <wtf/text/CString.h>
 
 using namespace WebKit;
 using namespace WebCore;
@@ -225,14 +226,14 @@ static void webkit_download_class_init(WebKitDownloadClass* downloadClass)
      * every time new data has been written to the destination. It's
      * useful to know the progress of the download operation.
      */
-    signals[RECEIVED_DATA] =
-        g_signal_new("received-data",
-                     G_TYPE_FROM_CLASS(objectClass),
-                     G_SIGNAL_RUN_LAST,
-                     0, 0, 0,
-                     webkit_marshal_VOID__UINT64,
-                     G_TYPE_NONE, 1,
-                     G_TYPE_UINT64);
+    signals[RECEIVED_DATA] = g_signal_new(
+        "received-data",
+        G_TYPE_FROM_CLASS(objectClass),
+        G_SIGNAL_RUN_LAST,
+        0, nullptr, nullptr,
+        g_cclosure_marshal_generic,
+        G_TYPE_NONE, 1,
+        G_TYPE_UINT64);
 
     /**
      * WebKitDownload::finished:
@@ -284,15 +285,15 @@ static void webkit_download_class_init(WebKitDownloadClass* downloadClass)
      * Returns: %TRUE to stop other handlers from being invoked for the event.
      *   %FALSE to propagate the event further.
      */
-    signals[DECIDE_DESTINATION] =
-        g_signal_new("decide-destination",
-                     G_TYPE_FROM_CLASS(objectClass),
-                     G_SIGNAL_RUN_LAST,
-                     G_STRUCT_OFFSET(WebKitDownloadClass, decide_destination),
-                     g_signal_accumulator_true_handled, NULL,
-                     webkit_marshal_BOOLEAN__STRING,
-                     G_TYPE_BOOLEAN, 1,
-                     G_TYPE_STRING);
+    signals[DECIDE_DESTINATION] = g_signal_new(
+        "decide-destination",
+        G_TYPE_FROM_CLASS(objectClass),
+        G_SIGNAL_RUN_LAST,
+        G_STRUCT_OFFSET(WebKitDownloadClass, decide_destination),
+        g_signal_accumulator_true_handled, NULL,
+        g_cclosure_marshal_generic,
+        G_TYPE_BOOLEAN, 1,
+        G_TYPE_STRING);
 
     /**
      * WebKitDownload::created-destination:
@@ -402,21 +403,26 @@ void webkitDownloadFinished(WebKitDownload* download)
     g_signal_emit(download, signals[FINISHED], 0, NULL);
 }
 
-CString webkitDownloadDecideDestinationWithSuggestedFilename(WebKitDownload* download, const CString& suggestedFilename, bool& allowOverwrite)
+String webkitDownloadDecideDestinationWithSuggestedFilename(WebKitDownload* download, const CString& suggestedFilename, bool& allowOverwrite)
 {
     if (download->priv->isCancelled)
-        return "";
+        return emptyString();
     gboolean returnValue;
     g_signal_emit(download, signals[DECIDE_DESTINATION], 0, suggestedFilename.data(), &returnValue);
     allowOverwrite = download->priv->allowOverwrite;
-    return download->priv->destinationURI;
+    GUniquePtr<char> destinationPath(g_filename_from_uri(download->priv->destinationURI.data(), nullptr, nullptr));
+    if (!destinationPath)
+        return emptyString();
+    return String::fromUTF8(destinationPath.get());
 }
 
-void webkitDownloadDestinationCreated(WebKitDownload* download, const CString& destinationURI)
+void webkitDownloadDestinationCreated(WebKitDownload* download, const String& destinationPath)
 {
     if (download->priv->isCancelled)
         return;
-    g_signal_emit(download, signals[CREATED_DESTINATION], 0, destinationURI.data(), nullptr);
+    GUniquePtr<char> destinationURI(g_filename_to_uri(destinationPath.utf8().data(), nullptr, nullptr));
+    ASSERT(destinationURI);
+    g_signal_emit(download, signals[CREATED_DESTINATION], 0, destinationURI.get());
 }
 
 /**

@@ -332,7 +332,7 @@ private:
 
     // GraphicsLayerClient implementation
     void notifyFlushRequired(const GraphicsLayer*) override;
-    void paintContents(const GraphicsLayer*, GraphicsContext&, GraphicsLayerPaintingPhase, const FloatRect&) override;
+    void paintContents(const GraphicsLayer*, GraphicsContext&, GraphicsLayerPaintingPhase, const FloatRect&, GraphicsLayerPaintFlags) override;
     void customPositionForVisibleRectComputation(const GraphicsLayer*, FloatPoint&) const override;
     bool isTrackingRepaints() const override;
     
@@ -460,6 +460,7 @@ private:
 
     // True if the FrameView uses a ScrollingCoordinator.
     bool hasCoordinatedScrolling() const;
+    bool useCoordinatedScrollingForLayer(const RenderLayer&) const;
 
     bool isAsyncScrollableStickyLayer(const RenderLayer&, const RenderLayer** enclosingAcceleratedOverflowLayer = nullptr) const;
     bool isViewportConstrainedFixedOrStickyLayer(const RenderLayer&) const;

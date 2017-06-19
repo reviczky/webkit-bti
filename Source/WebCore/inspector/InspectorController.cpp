@@ -38,6 +38,7 @@
 #include "GraphicsContext.h"
 #include "InspectorApplicationCacheAgent.h"
 #include "InspectorCSSAgent.h"
+#include "InspectorCanvasAgent.h"
 #include "InspectorClient.h"
 #include "InspectorDOMAgent.h"
 #include "InspectorDOMDebuggerAgent.h"
@@ -183,6 +184,10 @@ InspectorController::InspectorController(Page& page, InspectorClient* inspectorC
     m_agents.append(std::make_unique<InspectorLayerTreeAgent>(pageContext));
     m_agents.append(std::make_unique<InspectorWorkerAgent>(pageContext));
 
+    auto canvasAgentPtr = std::make_unique<InspectorCanvasAgent>(pageContext, pageAgent);
+    m_instrumentingAgents->setInspectorCanvasAgent(canvasAgentPtr.get());
+    m_agents.append(WTFMove(canvasAgentPtr));
+
     ASSERT(m_injectedScriptManager->commandLineAPIHost());
     if (CommandLineAPIHost* commandLineAPIHost = m_injectedScriptManager->commandLineAPIHost()) {
         commandLineAPIHost->init(m_inspectorAgent
@@ -246,13 +251,14 @@ void InspectorController::didClearWindowObjectInWorld(Frame& frame, DOMWrapperWo
         m_inspectorFrontendClient->windowObjectCleared();
 }
 
-void InspectorController::connectFrontend(Inspector::FrontendChannel* frontendChannel, bool isAutomaticInspection)
+void InspectorController::connectFrontend(Inspector::FrontendChannel* frontendChannel, bool isAutomaticInspection, bool immediatelyPause)
 {
     ASSERT_ARG(frontendChannel, frontendChannel);
     ASSERT(m_inspectorClient);
 
     bool connectedFirstFrontend = !m_frontendRouter->hasFrontends();
     m_isAutomaticInspection = isAutomaticInspection;
+    m_pauseAfterInitialization = immediatelyPause;
 
     m_frontendRouter->connectFrontend(frontendChannel);
 
@@ -272,7 +278,9 @@ void InspectorController::connectFrontend(Inspector::FrontendChannel* frontendCh
 void InspectorController::disconnectFrontend(FrontendChannel* frontendChannel)
 {
     m_frontendRouter->disconnectFrontend(frontendChannel);
+
     m_isAutomaticInspection = false;
+    m_pauseAfterInitialization = false;
 
     InspectorInstrumentation::frontendDeleted();
 
@@ -323,6 +331,7 @@ void InspectorController::disconnectAllFrontends()
     // Disconnect any remaining remote frontends.
     m_frontendRouter->disconnectAllFrontends();
     m_isAutomaticInspection = false;
+    m_pauseAfterInitialization = false;
 
 #if ENABLE(REMOTE_INSPECTOR)
     m_page.remoteInspectorInformationDidChange();
@@ -455,6 +464,14 @@ InspectorEvaluateHandler InspectorController::evaluateHandler() const
 
 void InspectorController::frontendInitialized()
 {
+    if (m_pauseAfterInitialization) {
+        m_pauseAfterInitialization = false;
+        if (PageDebuggerAgent* debuggerAgent = m_instrumentingAgents->pageDebuggerAgent()) {
+            ErrorString ignored;
+            debuggerAgent->pause(ignored);
+        }
+    }
+
 #if ENABLE(REMOTE_INSPECTOR)
     if (m_isAutomaticInspection)
         m_page.inspectorDebuggable().unpauseForInitializedInspector();

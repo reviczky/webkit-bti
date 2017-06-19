@@ -74,6 +74,7 @@ list(APPEND WebKit2_SOURCES
 
     Shared/cairo/ShareableBitmapCairo.cpp
 
+    Shared/glib/WebContextMenuItemGlib.cpp
     Shared/glib/WebErrorsGlib.cpp
 
     Shared/gtk/ArgumentCodersGtk.cpp
@@ -83,7 +84,6 @@ list(APPEND WebKit2_SOURCES
     Shared/gtk/NativeWebWheelEventGtk.cpp
     Shared/gtk/PrintInfoGtk.cpp
     Shared/gtk/ProcessExecutablePathGtk.cpp
-    Shared/gtk/WebContextMenuItemGtk.cpp
     Shared/gtk/WebErrorsGtk.cpp
     Shared/gtk/WebEventFactory.cpp
     Shared/gtk/WebSelectionData.cpp
@@ -105,16 +105,13 @@ list(APPEND WebKit2_SOURCES
     UIProcess/WebTextChecker.cpp
     UIProcess/WebTextCheckerClient.cpp
 
+    UIProcess/API/C/WKGrammarDetail.cpp
     UIProcess/API/C/WKResourceLoadStatisticsManager.cpp
 
     UIProcess/API/C/cairo/WKIconDatabaseCairo.cpp
 
-    UIProcess/API/C/gtk/WKFullScreenClientGtk.cpp
-    UIProcess/API/C/gtk/WKInspectorClientGtk.cpp
     UIProcess/API/C/gtk/WKTextCheckerGtk.cpp
     UIProcess/API/C/gtk/WKView.cpp
-
-    UIProcess/API/C/soup/WKCookieManagerSoup.cpp
 
     UIProcess/API/gtk/APIWebsiteDataStoreGtk.cpp
     UIProcess/API/gtk/PageClientImpl.cpp
@@ -176,8 +173,6 @@ list(APPEND WebKit2_SOURCES
     UIProcess/API/gtk/WebKitFormSubmissionRequest.h
     UIProcess/API/gtk/WebKitFormSubmissionRequestPrivate.h
     UIProcess/API/gtk/WebKitForwardDeclarations.h
-    UIProcess/API/gtk/WebKitFullscreenClient.cpp
-    UIProcess/API/gtk/WebKitFullscreenClient.h
     UIProcess/API/gtk/WebKitGeolocationPermissionRequest.cpp
     UIProcess/API/gtk/WebKitGeolocationPermissionRequest.h
     UIProcess/API/gtk/WebKitGeolocationPermissionRequestPrivate.h
@@ -216,6 +211,12 @@ list(APPEND WebKit2_SOURCES
     UIProcess/API/gtk/WebKitNotificationPrivate.h
     UIProcess/API/gtk/WebKitNotificationProvider.cpp
     UIProcess/API/gtk/WebKitNotificationProvider.h
+    UIProcess/API/gtk/WebKitOptionMenu.cpp
+    UIProcess/API/gtk/WebKitOptionMenu.h
+    UIProcess/API/gtk/WebKitOptionMenuPrivate.h
+    UIProcess/API/gtk/WebKitOptionMenuItem.cpp
+    UIProcess/API/gtk/WebKitOptionMenuItem.h
+    UIProcess/API/gtk/WebKitOptionMenuItemPrivate.h
     UIProcess/API/gtk/WebKitPermissionRequest.cpp
     UIProcess/API/gtk/WebKitPermissionRequest.h
     UIProcess/API/gtk/WebKitPlugin.cpp
@@ -226,6 +227,7 @@ list(APPEND WebKit2_SOURCES
     UIProcess/API/gtk/WebKitPolicyDecision.cpp
     UIProcess/API/gtk/WebKitPolicyDecision.h
     UIProcess/API/gtk/WebKitPolicyDecisionPrivate.h
+    UIProcess/API/gtk/WebKitPopupMenu.cpp
     UIProcess/API/gtk/WebKitPrintCustomWidget.cpp
     UIProcess/API/gtk/WebKitPrintCustomWidget.h
     UIProcess/API/gtk/WebKitPrintCustomWidgetPrivate.h
@@ -339,8 +341,6 @@ list(APPEND WebKit2_SOURCES
     UIProcess/gtk/WaylandCompositor.cpp
     UIProcess/gtk/WebColorPickerGtk.cpp
     UIProcess/gtk/WebContextMenuProxyGtk.cpp
-    UIProcess/gtk/WebFullScreenClientGtk.cpp
-    UIProcess/gtk/WebInspectorClientGtk.cpp
     UIProcess/gtk/WebInspectorProxyGtk.cpp
     UIProcess/gtk/WebKitInspectorWindow.cpp
     UIProcess/gtk/WebPageProxyGtk.cpp
@@ -524,7 +524,6 @@ list(APPEND WebKit2_DERIVED_SOURCES
     ${DERIVED_SOURCES_WEBKIT2GTK_DIR}/WebKit2ResourcesGResourceBundle.c
 
     ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitEnumTypes.cpp
-    ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitMarshal.cpp
 )
 
 if (ENABLE_WAYLAND_TARGET)
@@ -567,6 +566,8 @@ set(WebKit2GTK_INSTALLED_HEADERS
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitNetworkProxySettings.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitNotificationPermissionRequest.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitNotification.h
+    ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitOptionMenu.h
+    ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitOptionMenuItem.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitPermissionRequest.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitPlugin.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitPolicyDecision.h
@@ -895,7 +896,6 @@ list(APPEND WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/Shared/unix"
     "${WEBKIT2_DIR}/UIProcess/API/C/cairo"
     "${WEBKIT2_DIR}/UIProcess/API/C/gtk"
-    "${WEBKIT2_DIR}/UIProcess/API/C/soup"
     "${WEBKIT2_DIR}/UIProcess/API/cpp/gtk"
     "${WEBKIT2_DIR}/UIProcess/API/gtk"
     "${WEBKIT2_DIR}/UIProcess/Network/CustomProtocols/soup"
@@ -981,19 +981,6 @@ list(APPEND WebKit2_LIBRARIES
 endif ()
 
 ADD_WHOLE_ARCHIVE_TO_LIBRARIES(WebKit2_LIBRARIES)
-
-set(WebKit2_MARSHAL_LIST ${WEBKIT2_DIR}/UIProcess/API/gtk/webkit2marshal.list)
-add_custom_command(
-    OUTPUT ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitMarshal.cpp
-           ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitMarshal.h
-    MAIN_DEPENDENCY ${WebKit2_MARSHAL_LIST}
-
-    COMMAND echo extern \"C\" { > ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitMarshal.cpp
-    COMMAND glib-genmarshal --prefix=webkit_marshal ${WebKit2_MARSHAL_LIST} --body >> ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitMarshal.cpp
-    COMMAND echo } >> ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitMarshal.cpp
-
-    COMMAND glib-genmarshal --prefix=webkit_marshal ${WebKit2_MARSHAL_LIST} --header > ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitMarshal.h
-    VERBATIM)
 
 # To generate WebKitEnumTypes.h we want to use all installed headers, except WebKitEnumTypes.h itself.
 set(WebKit2GTK_ENUM_GENERATION_HEADERS ${WebKit2GTK_INSTALLED_HEADERS})

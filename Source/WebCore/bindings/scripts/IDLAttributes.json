@@ -36,7 +36,7 @@
         },
         "CallWith": {
             "contextsAllowed": ["attribute", "operation"],
-            "values": ["Document", "ScriptExecutionContext", "ScriptState", "ScriptArguments", "CallStack", "GlobalObject", "ActiveWindow", "FirstWindow", "CallerDocument", "CallerWindow"]
+            "values": ["Document", "ScriptExecutionContext", "ScriptState", "ScriptArguments", "CallStack", "GlobalObject", "ActiveWindow", "FirstWindow", "ResponsibleDocument"]
         },
         "CheckSecurity": {
             "contextsAllowed": ["interface"]
@@ -80,6 +80,12 @@
         "CustomConstructor": {
             "contextsAllowed": ["interface"]
         },
+        "CustomDefineOwnProperty": {
+            "contextsAllowed": ["interface"]
+        },
+        "CustomDefineOwnPropertyOnPrototype": {
+            "contextsAllowed": ["interface"]
+        },
         "CustomDeleteProperty": {
             "contextsAllowed": ["interface"]
         },
@@ -87,6 +93,12 @@
             "contextsAllowed": ["interface"]
         },
         "CustomGetOwnPropertySlot": {
+            "contextsAllowed": ["interface"]
+        },
+        "CustomGetOwnPropertySlotByIndex": {
+            "contextsAllowed": ["interface"]
+        },
+        "CustomGetOwnPropertySlotAndDescriptor": {
             "contextsAllowed": ["interface"]
         },
         "CustomGetPrototype": {
@@ -101,7 +113,7 @@
         "CustomIsReachable": {
             "contextsAllowed": ["interface"]
         },
-        "CustomNamedGetter": {
+        "CustomNamedGetterOnPrototype": {
             "contextsAllowed": ["interface"]
         },
         "CustomNamedSetter": {
@@ -111,6 +123,9 @@
             "contextsAllowed": ["interface"]
         },
         "CustomProxyToJSObject": {
+            "contextsAllowed": ["interface"]
+        },
+        "CustomPushEventHandlerScope": {
             "contextsAllowed": ["interface"]
         },
         "CustomPutFunction": {
@@ -222,28 +237,13 @@
         "JSBuiltinConstructor": {
             "contextsAllowed": ["interface"]
         },
-        "JSCustomDefineOwnProperty": {
-            "contextsAllowed": ["interface"]
-        },
-        "JSCustomDefineOwnPropertyOnPrototype": {
-            "contextsAllowed": ["interface"]
-        },
         "JSCustomFinalize": {
-            "contextsAllowed": ["interface"]
-        },
-        "JSCustomGetOwnPropertySlotAndDescriptor": {
             "contextsAllowed": ["interface"]
         },
         "JSCustomHeader": {
             "contextsAllowed": ["interface"]
         },
         "JSCustomMarkFunction": {
-            "contextsAllowed": ["interface"]
-        },
-        "JSCustomNamedGetterOnPrototype": {
-            "contextsAllowed": ["interface"]
-        },
-        "JSCustomPushEventHandlerScope": {
             "contextsAllowed": ["interface"]
         },
         "JSCustomToNativeObject": {
@@ -270,6 +270,13 @@
             "contextsAllowed": ["interface"],
             "standard": {
                 "url": "https://heycam.github.io/webidl/#LegacyUnenumerableNamedProperties"
+            }
+        },
+        "LegacyWindowAlias": {
+            "contextsAllowed": ["interface"],
+            "values": ["*"],
+            "standard": {
+                "url": "https://heycam.github.io/webidl/#LegacyWindowAlias"
             }
         },
         "LenientSetter": {
@@ -369,6 +376,12 @@
         "RequiresExistingAtomicString": {
             "contextsAllowed": ["type"]
         },
+        "RethrowException": {
+            "contextsAllowed": ["operation", "callback-function"]
+        },
+        "ReturnsOwnPromise": {
+            "contextsAllowed": ["operation"]
+        },
         "SameObject": {
             "contextsAllowed": ["attribute"],
             "standard": {
@@ -380,8 +393,7 @@
             "contextsAllowed": ["interface", "dictionary", "enum", "attribute", "operation", "constant"],
             "standard": {
                 "url": "https://heycam.github.io/webidl/#SecureContext"
-            },
-            "unsupported": true
+            }
         },
         "SetterCallWith": {
             "contextsAllowed": ["attribute"],
@@ -389,6 +401,9 @@
         },
         "SetterMayThrowException": {
             "contextsAllowed": ["attribute"]
+        },
+        "SkipCallbackInvokeCheck": {
+            "contextsAllowed": ["operation", "callback-function"]
         },
         "SkipVTableValidation": {
             "contextsAllowed": ["interface"]

@@ -172,6 +172,7 @@ WebProcess::WebProcess()
     , m_webSQLiteDatabaseTracker(*this)
 #endif
     , m_resourceLoadStatisticsStore(WebCore::ResourceLoadStatisticsStore::create())
+    , m_statisticsQueue(WorkQueue::create("ResourceLoadStatisticsStore Process Data Queue"))
 {
     // Initialize our platform strategies.
     WebPlatformStrategies::initialize();
@@ -198,6 +199,7 @@ WebProcess::WebProcess()
     m_plugInAutoStartOriginHashes.add(SessionID::defaultSessionID(), HashMap<unsigned, double>());
 
     ResourceLoadObserver::sharedObserver().setStatisticsStore(m_resourceLoadStatisticsStore.copyRef());
+    ResourceLoadObserver::sharedObserver().setStatisticsQueue(m_statisticsQueue.copyRef());
     m_resourceLoadStatisticsStore->setNotificationCallback([this] {
         if (m_statisticsChangedTimer.isActive())
             return;
@@ -289,11 +291,11 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
         memoryPressureHandler.install();
     }
 
-    if (!parameters.injectedBundlePath.isEmpty())
-        m_injectedBundle = InjectedBundle::create(parameters, transformHandlesToObjects(parameters.initializationUserData.object()).get());
-
     for (size_t i = 0, size = parameters.additionalSandboxExtensionHandles.size(); i < size; ++i)
         SandboxExtension::consumePermanently(parameters.additionalSandboxExtensionHandles[i]);
+
+    if (!parameters.injectedBundlePath.isEmpty())
+        m_injectedBundle = InjectedBundle::create(parameters, transformHandlesToObjects(parameters.initializationUserData.object()).get());
 
     for (auto& supplement : m_supplements.values())
         supplement->initialize(parameters);
@@ -398,12 +400,7 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
 #endif
 
 #if ENABLE(NETSCAPE_PLUGIN_API) && PLATFORM(MAC)
-    for (auto hostIter = parameters.pluginLoadClientPolicies.begin(); hostIter != parameters.pluginLoadClientPolicies.end(); ++hostIter) {
-        for (auto bundleIdentifierIter = hostIter->value.begin(); bundleIdentifierIter != hostIter->value.end(); ++bundleIdentifierIter) {
-            for (auto versionIter = bundleIdentifierIter->value.begin(); versionIter != bundleIdentifierIter->value.end(); ++versionIter)
-                WebPluginInfoProvider::singleton().setPluginLoadClientPolicy(static_cast<PluginLoadClientPolicy>(versionIter->value), hostIter->key, bundleIdentifierIter->key, versionIter->key);
-        }
-    }
+    resetPluginLoadClientPolicies(parameters.pluginLoadClientPolicies);
 #endif
 
 #if ENABLE(GAMEPAD)
@@ -924,6 +921,20 @@ void WebProcess::setPluginLoadClientPolicy(uint8_t policy, const String& host, c
 #endif
 }
 
+void WebProcess::resetPluginLoadClientPolicies(const HashMap<WTF::String, HashMap<WTF::String, HashMap<WTF::String, uint8_t>>>& pluginLoadClientPolicies)
+{
+#if ENABLE(NETSCAPE_PLUGIN_API) && PLATFORM(MAC)
+    clearPluginClientPolicies();
+
+    for (auto& hostPair : pluginLoadClientPolicies) {
+        for (auto& bundleIdentifierPair : hostPair.value) {
+            for (auto& versionPair : bundleIdentifierPair.value)
+                WebPluginInfoProvider::singleton().setPluginLoadClientPolicy(static_cast<PluginLoadClientPolicy>(versionPair.value), hostPair.key, bundleIdentifierPair.key, versionPair.key);
+        }
+    }
+#endif
+}
+
 void WebProcess::clearPluginClientPolicies()
 {
 #if ENABLE(NETSCAPE_PLUGIN_API) && PLATFORM(MAC)
@@ -1242,6 +1253,11 @@ void WebProcess::fetchWebsiteData(WebCore::SessionID sessionID, OptionSet<Websit
         for (auto& origin : MemoryCache::singleton().originsWithCache(sessionID))
             websiteData.entries.append(WebsiteData::Entry { SecurityOriginData::fromSecurityOrigin(*origin), WebsiteDataType::MemoryCache, 0 });
     }
+
+    if (websiteDataTypes.contains(WebsiteDataType::Credentials)) {
+        if (NetworkStorageSession::storageSession(sessionID))
+            websiteData.originsWithCredentials = NetworkStorageSession::storageSession(sessionID)->credentialStorage().originsWithCredentials();
+    }
 }
 
 void WebProcess::deleteWebsiteData(SessionID sessionID, OptionSet<WebsiteDataType> websiteDataTypes, std::chrono::system_clock::time_point modifiedSince)
@@ -1253,6 +1269,11 @@ void WebProcess::deleteWebsiteData(SessionID sessionID, OptionSet<WebsiteDataTyp
         MemoryCache::singleton().evictResources(sessionID);
 
         CrossOriginPreflightResultCache::singleton().empty();
+    }
+
+    if (websiteDataTypes.contains(WebsiteDataType::Credentials)) {
+        if (WebCore::NetworkStorageSession::storageSession(sessionID))
+            NetworkStorageSession::storageSession(sessionID)->credentialStorage().clearCredentials();
     }
 }
 
@@ -1375,7 +1396,7 @@ void WebProcess::cancelPrepareToSuspend()
     parentProcessConnection()->send(Messages::WebProcessProxy::DidCancelProcessSuspension(), 0);
 }
 
-void WebProcess::markAllLayersVolatile(std::function<void()> completionHandler)
+void WebProcess::markAllLayersVolatile(WTF::Function<void()>&& completionHandler)
 {
     RELEASE_LOG(ProcessSuspension, "%p - WebProcess::markAllLayersVolatile()", this);
     m_pagesMarkingLayersAsVolatile = m_pageMap.size();
@@ -1384,7 +1405,7 @@ void WebProcess::markAllLayersVolatile(std::function<void()> completionHandler)
         return;
     }
     for (auto& page : m_pageMap.values()) {
-        page->markLayersVolatile([this, completionHandler] {
+        page->markLayersVolatile([this, completionHandler = WTFMove(completionHandler)] {
             ASSERT(m_pagesMarkingLayersAsVolatile);
             if (!--m_pagesMarkingLayersAsVolatile)
                 completionHandler();

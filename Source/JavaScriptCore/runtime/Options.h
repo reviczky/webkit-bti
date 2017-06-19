@@ -176,6 +176,7 @@ typedef const char* optionString;
     v(bool, validateGraphAtEachPhase, false, Normal, nullptr) \
     v(bool, verboseValidationFailure, false, Normal, nullptr) \
     v(bool, verboseOSR, false, Normal, nullptr) \
+    v(bool, verboseDFGOSRExit, false, Normal, nullptr) \
     v(bool, verboseFTLOSRExit, false, Normal, nullptr) \
     v(bool, verboseCallLink, false, Normal, nullptr) \
     v(bool, verboseCompilationQueue, false, Normal, nullptr) \
@@ -187,6 +188,7 @@ typedef const char* optionString;
     v(bool, reportTotalCompileTimes, false, Normal, nullptr) \
     v(bool, verboseExitProfile, false, Normal, nullptr) \
     v(bool, verboseCFA, false, Normal, nullptr) \
+    v(bool, verboseDFGFailure, false, Normal, nullptr) \
     v(bool, verboseFTLToJSThunk, false, Normal, nullptr) \
     v(bool, verboseFTLFailure, false, Normal, nullptr) \
     v(bool, alwaysComputeHash, false, Normal, nullptr) \
@@ -207,7 +209,7 @@ typedef const char* optionString;
     v(double, mediumHeapRAMFraction, 0.5, Normal, nullptr) \
     v(double, mediumHeapGrowthFactor, 1.5, Normal, nullptr) \
     v(double, largeHeapGrowthFactor, 1.24, Normal, nullptr) \
-    v(double, criticalGCMemoryThreshold, 0.88, Normal, "percent memory in use the GC considers critical.  The collector is much more aggressive above this threshold") \
+    v(double, criticalGCMemoryThreshold, 0.80, Normal, "percent memory in use the GC considers critical.  The collector is much more aggressive above this threshold") \
     v(double, minimumMutatorUtilization, 0, Normal, nullptr) \
     v(double, maximumMutatorUtilization, 0.7, Normal, nullptr) \
     v(double, epsilonMutatorUtilization, 0.01, Normal, nullptr) \
@@ -362,7 +364,7 @@ typedef const char* optionString;
     v(gcLogLevel, logGC, GCLogging::None, Normal, "debugging option to log GC activity (0 = None, 1 = Basic, 2 = Verbose)") \
     v(bool, useGC, true, Normal, nullptr) \
     v(bool, gcAtEnd, false, Normal, "If true, the jsc CLI will do a GC before exiting") \
-    v(bool, forceGCSlowPaths, false, Normal, "If true, we will force all JIT fast allocations down their slow paths.")\
+    v(bool, forceGCSlowPaths, false, Normal, "If true, we will force all JIT fast allocations down their slow paths.") \
     v(unsigned, gcMaxHeapSize, 0, Normal, nullptr) \
     v(unsigned, forceRAMSize, 0, Normal, nullptr) \
     v(bool, recordGCPauseTimes, false, Normal, nullptr) \
@@ -423,6 +425,8 @@ typedef const char* optionString;
     v(unsigned, watchdog, 0, Normal, "watchdog timeout (0 = Disabled, N = a timeout period of N milliseconds)") \
     v(bool, usePollingTraps, false, Normal, "use polling (instead of signalling) VM traps") \
     \
+    v(bool, useMachForExceptions, true, Normal, "Use mach exceptions rather than signals to handle faults and pass thread messages. (This does nothing on platforms without mach)") \
+    \
     v(bool, useICStats, false, Normal, nullptr) \
     \
     v(unsigned, prototypeHitCountForLLIntCaching, 2, Normal, "Number of prototype property hits before caching a prototype in the LLInt. A count of 0 means never cache.") \
@@ -446,6 +450,7 @@ typedef const char* optionString;
     v(unsigned, webAssemblyBBQOptimizationLevel, 1, Normal, "B3 Optimization level for BBQ Web Assembly module compilations.") \
     v(unsigned, webAssemblyOMGOptimizationLevel, Options::defaultB3OptLevel(), Normal, "B3 Optimization level for OMG Web Assembly module compilations.") \
     \
+    v(bool, useBBQTierUpChecks, true, Normal, "Enables tier up checks for our BBQ code.") \
     v(unsigned, webAssemblyOMGTierUpCount, 5000, Normal, "The countdown before we tier up a function to OMG.") \
     v(unsigned, webAssemblyLoopDecrement, 15, Normal, "The amount the tier up countdown is decremented on each loop backedge.") \
     v(unsigned, webAssemblyFunctionEntryDecrement, 1, Normal, "The amount the tier up countdown is decremented on each function entry.") \

@@ -17,14 +17,11 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef WebKitDownloadPrivate_h
-#define WebKitDownloadPrivate_h
+#pragma once
 
 #include "WebKitDownload.h"
-#include "WebKitPrivate.h"
 #include <WebCore/ResourceError.h>
 #include <WebCore/ResourceRequest.h>
-#include <wtf/text/CString.h>
 
 WebKitDownload* webkitDownloadCreate(WebKit::DownloadProxy*);
 bool webkitDownloadIsCancelled(WebKitDownload*);
@@ -34,7 +31,5 @@ void webkitDownloadNotifyProgress(WebKitDownload*, guint64 bytesReceived);
 void webkitDownloadFailed(WebKitDownload*, const WebCore::ResourceError&);
 void webkitDownloadCancelled(WebKitDownload*);
 void webkitDownloadFinished(WebKitDownload*);
-CString webkitDownloadDecideDestinationWithSuggestedFilename(WebKitDownload*, const CString& suggestedFilename, bool& allowOverwrite);
-void webkitDownloadDestinationCreated(WebKitDownload*, const CString& destinationURI);
-
-#endif // WebKitDownloadPrivate_h
+String webkitDownloadDecideDestinationWithSuggestedFilename(WebKitDownload*, const CString& suggestedFilename, bool& allowOverwrite);
+void webkitDownloadDestinationCreated(WebKitDownload*, const String& destinationPath);

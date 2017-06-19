@@ -23,13 +23,12 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef InjectedBundle_h
-#define InjectedBundle_h
+#pragma once
 
+#include "APIInjectedBundleBundleClient.h"
 #include "APIObject.h"
-#include "InjectedBundleClient.h"
 #include "SandboxExtension.h"
-#include "WKBundle.h"
+#include <JavaScriptCore/JavaScript.h>
 #include <WebCore/UserContentTypes.h>
 #include <WebCore/UserScriptTypes.h>
 #include <wtf/RefPtr.h>
@@ -85,7 +84,7 @@ public:
     void setBundleParameters(const IPC::DataReference&);
 
     // API
-    void initializeClient(const WKBundleClientBase*);
+    void setClient(std::unique_ptr<API::InjectedBundle::Client>&&);
     void postMessage(const String&, API::Object*);
     void postSynchronousMessage(const String&, API::Object*, RefPtr<API::Object>& returnData);
 
@@ -120,7 +119,7 @@ public:
     Ref<API::Data> createWebDataFromUint8Array(JSContextRef, JSValueRef);
 
     // UserContent API
-    void addUserScript(WebPageGroupProxy*, InjectedBundleScriptWorld*, const String& source, const String& url, API::Array* whitelist, API::Array* blacklist, WebCore::UserScriptInjectionTime, WebCore::UserContentInjectedFrames);
+    void addUserScript(WebPageGroupProxy*, InjectedBundleScriptWorld*, String&& source, String&& url, API::Array* whitelist, API::Array* blacklist, WebCore::UserScriptInjectionTime, WebCore::UserContentInjectedFrames);
     void addUserStyleSheet(WebPageGroupProxy*, InjectedBundleScriptWorld*, const String& source, const String& url, API::Array* whitelist, API::Array* blacklist, WebCore::UserContentInjectedFrames);
     void removeUserScript(WebPageGroupProxy*, InjectedBundleScriptWorld*, const String& url);
     void removeUserStyleSheet(WebPageGroupProxy*, InjectedBundleScriptWorld*, const String& url);
@@ -162,7 +161,7 @@ private:
 
     RefPtr<SandboxExtension> m_sandboxExtension;
 
-    InjectedBundleClient m_client;
+    std::unique_ptr<API::InjectedBundle::Client> m_client;
 
 #if PLATFORM(COCOA) && WK_API_ENABLED
     RetainPtr<WKWebProcessBundleParameters> m_bundleParameters;
@@ -171,4 +170,3 @@ private:
 
 } // namespace WebKit
 
-#endif // InjectedBundle_h

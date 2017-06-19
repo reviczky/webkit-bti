@@ -60,6 +60,7 @@ static void releaseNoncriticalMemory()
     RenderTheme::singleton().purgeCaches();
 
     FontCache::singleton().purgeInactiveFontData();
+    FontDescription::invalidateCaches();
 
     clearWidthCaches();
 
@@ -190,6 +191,7 @@ void logMemoryStatisticsAtTimeOfDeath()
 void platformReleaseMemory(Critical) { }
 void jettisonExpensiveObjectsOnTopLevelNavigation() { }
 void registerMemoryReleaseNotifyCallbacks() { }
+void registerSQLiteMemoryPressureHandler() { }
 #endif
 
 } // namespace WebCore

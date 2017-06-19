@@ -1252,13 +1252,13 @@ void MediaControlTextTrackContainerElement::updateTextStrokeStyle()
             break;
         }
     }
-    
+
     float strokeWidth;
     bool important;
-    
+
     // FIXME: find a way to set this property in the stylesheet like the other user style preferences, see <https://bugs.webkit.org/show_bug.cgi?id=169874>.
     if (document().page()->group().captionPreferences().captionStrokeWidthForFont(m_fontSize, language, strokeWidth, important))
-        setInlineStyleProperty(CSSPropertyStrokeWidth, strokeWidth, CSSPrimitiveValue::CSS_PT, important);
+        setInlineStyleProperty(CSSPropertyStrokeWidth, strokeWidth, CSSPrimitiveValue::CSS_PX, important);
 }
 
 void MediaControlTextTrackContainerElement::updateTimerFired()
@@ -1280,8 +1280,13 @@ void MediaControlTextTrackContainerElement::updateTextTrackRepresentation()
     if (!mediaElement)
         return;
 
-    if (!mediaElement->requiresTextTrackRepresentation())
+    if (!mediaElement->requiresTextTrackRepresentation()) {
+        if (m_textTrackRepresentation) {
+            clearTextTrackRepresentation();
+            updateSizes(true);
+        }
         return;
+    }
 
     if (!m_textTrackRepresentation) {
         m_textTrackRepresentation = TextTrackRepresentation::create(*this);
@@ -1289,6 +1294,7 @@ void MediaControlTextTrackContainerElement::updateTextTrackRepresentation()
         mediaElement->setTextTrackRepresentation(m_textTrackRepresentation.get());
     }
 
+    hide();
     m_textTrackRepresentation->update();
     updateStyleForTextTrackRepresentation();
 }
@@ -1402,7 +1408,7 @@ RefPtr<Image> MediaControlTextTrackContainerElement::createTextTrackRepresentati
     if (!buffer)
         return nullptr;
 
-    layer->paint(buffer->context(), paintingRect, LayoutSize(), PaintBehaviorFlattenCompositingLayers, nullptr, RenderLayer::PaintLayerPaintingCompositingAllPhases);
+    layer->paint(buffer->context(), paintingRect, LayoutSize(), PaintBehaviorFlattenCompositingLayers | PaintBehaviorSnapshotting, nullptr, RenderLayer::PaintLayerPaintingCompositingAllPhases);
 
     return ImageBuffer::sinkIntoImage(WTFMove(buffer));
 }

@@ -110,7 +110,10 @@ struct PasteboardImage {
 #if !(PLATFORM(GTK) || PLATFORM(WIN))
     RefPtr<SharedBuffer> resourceData;
     String resourceMIMEType;
+    Vector<String> clientTypes;
+    Vector<RefPtr<SharedBuffer>> clientData;
 #endif
+    String suggestedName;
 };
 
 // For reading from the pasteboard.

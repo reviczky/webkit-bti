@@ -89,7 +89,7 @@
 #include <wtf/SetForScope.h>
 #endif
 
-#if PLATFORM(COCOA)
+#if ENABLE(DATA_DETECTION)
 #include "DataDetection.h"
 #endif
 
@@ -101,7 +101,7 @@ bool isDraggableLink(const Element& element)
         auto& anchorElement = downcast<HTMLAnchorElement>(element);
         if (!anchorElement.isLiveLink())
             return false;
-#if PLATFORM(COCOA)
+#if ENABLE(DATA_DETECTION)
         return !DataDetection::isDataDetectorURL(anchorElement.href());
 #else
         return true;
@@ -309,7 +309,6 @@ DragOperation DragController::dragEnteredOrUpdated(const DragData& dragData)
 {
     mouseMovedIntoDocument(m_page.mainFrame().documentAtPoint(dragData.clientPosition()));
 
-    m_preferredTypeIdentifiersToLoad = { };
     m_dragDestinationAction = dragData.dragDestinationAction();
     if (m_dragDestinationAction == DragDestinationActionNone) {
         clearDragCaret(); // FIXME: Why not call mouseMovedIntoDocument(nullptr)?
@@ -324,7 +323,7 @@ DragOperation DragController::dragEnteredOrUpdated(const DragData& dragData)
             m_dragHandlingMethod = DragHandlingMethod::PageLoad;
     }
 
-    updatePreferredTypeIdentifiersForDragHandlingMethod(m_dragHandlingMethod, dragData);
+    updateSupportedTypeIdentifiersForDragHandlingMethod(m_dragHandlingMethod, dragData);
     return dragOperation;
 }
 
@@ -365,7 +364,7 @@ static Element* elementUnderMouse(Document* documentUnderMouse, const IntPoint& 
 
 #if !ENABLE(DATA_INTERACTION)
 
-void DragController::updatePreferredTypeIdentifiersForDragHandlingMethod(DragHandlingMethod, const DragData&) const
+void DragController::updateSupportedTypeIdentifiersForDragHandlingMethod(DragHandlingMethod, const DragData&) const
 {
 }
 
@@ -569,18 +568,23 @@ bool DragController::concludeEditDrag(const DragData& dragData)
         return false;
 
     ResourceCacheValidationSuppressor validationSuppressor(range->ownerDocument().cachedResourceLoader());
-    if (dragIsMove(innerFrame->selection(), dragData) || dragCaret.isContentRichlyEditable()) {
+    auto& editor = innerFrame->editor();
+    bool isMove = dragIsMove(innerFrame->selection(), dragData);
+    if (isMove || dragCaret.isContentRichlyEditable()) {
         bool chosePlainText = false;
         RefPtr<DocumentFragment> fragment = documentFragmentFromDragData(dragData, *innerFrame, *range, true, chosePlainText);
-        if (!fragment || !innerFrame->editor().shouldInsertFragment(*fragment, range.get(), EditorInsertAction::Dropped)) {
+        if (!fragment || !editor.shouldInsertFragment(*fragment, range.get(), EditorInsertAction::Dropped))
             return false;
-        }
 
         m_client.willPerformDragDestinationAction(DragDestinationActionEdit, dragData);
-        if (dragIsMove(innerFrame->selection(), dragData)) {
+
+        if (editor.client() && editor.client()->performTwoStepDrop(*fragment, *range, isMove))
+            return true;
+
+        if (isMove) {
             // NSTextView behavior is to always smart delete on moving a selection,
             // but only to smart insert if the selection granularity is word granularity.
-            bool smartDelete = innerFrame->editor().smartInsertDeleteEnabled();
+            bool smartDelete = editor.smartInsertDeleteEnabled();
             bool smartInsert = smartDelete && innerFrame->selection().granularity() == WordGranularity && dragData.canSmartReplace();
             MoveSelectionCommand::create(fragment.releaseNonNull(), dragCaret.base(), smartInsert, smartDelete)->apply();
         } else {
@@ -595,13 +599,19 @@ bool DragController::concludeEditDrag(const DragData& dragData)
         }
     } else {
         String text = dragData.asPlainText();
-        if (text.isEmpty() || !innerFrame->editor().shouldInsertText(text, range.get(), EditorInsertAction::Dropped)) {
+        if (text.isEmpty() || !editor.shouldInsertText(text, range.get(), EditorInsertAction::Dropped))
             return false;
-        }
 
         m_client.willPerformDragDestinationAction(DragDestinationActionEdit, dragData);
+        RefPtr<DocumentFragment> fragment = createFragmentFromText(*range, text);
+        if (!fragment)
+            return false;
+
+        if (editor.client() && editor.client()->performTwoStepDrop(*fragment, *range, isMove))
+            return true;
+
         if (setSelectionToDragCaret(innerFrame.get(), dragCaret, range, point))
-            ReplaceSelectionCommand::create(*m_documentUnderMouse, createFragmentFromText(*range, text),  ReplaceSelectionCommand::SelectReplacement | ReplaceSelectionCommand::MatchStyle | ReplaceSelectionCommand::PreventNesting, EditActionInsertFromDrop)->apply();
+            ReplaceSelectionCommand::create(*m_documentUnderMouse, fragment.get(), ReplaceSelectionCommand::SelectReplacement | ReplaceSelectionCommand::MatchStyle | ReplaceSelectionCommand::PreventNesting, EditActionInsertFromDrop)->apply();
     }
 
     if (rootEditableElement) {

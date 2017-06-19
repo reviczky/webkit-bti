@@ -153,7 +153,7 @@ enum EventThrottlingBehavior {
 
     DOMRect boundingBox(Element element);
 
-    [MayThrowException] sequence<DOMRect> inspectorHighlightRects();
+    [MayThrowException] DOMRectList inspectorHighlightRects();
     [MayThrowException] DOMString inspectorHighlightObject();
 
     [MayThrowException] unsigned long markerCountForNode(Node node, DOMString markerType);
@@ -216,8 +216,8 @@ enum EventThrottlingBehavior {
     [MayThrowException] unsigned long wheelEventHandlerCount();
     [MayThrowException] unsigned long touchEventHandlerCount();
 
-    [MayThrowException] sequence<DOMRect> touchEventRectsForEvent(DOMString eventName);
-    [MayThrowException] sequence<DOMRect> passiveTouchEventListenerRects();
+    [MayThrowException] DOMRectList touchEventRectsForEvent(DOMString eventName);
+    [MayThrowException] DOMRectList passiveTouchEventListenerRects();
 
     [MayThrowException] NodeList? nodesFromRect(Document document, long x, long y,
         unsigned long topPadding, unsigned long rightPadding, unsigned long bottomPadding, unsigned long leftPadding,
@@ -268,13 +268,14 @@ enum EventThrottlingBehavior {
     const unsigned short LAYER_TREE_INCLUDES_PAINTING_PHASES = 8;
     const unsigned short LAYER_TREE_INCLUDES_CONTENT_LAYERS = 16;
     const unsigned short LAYER_TREE_INCLUDES_ACCELERATES_DRAWING = 32;
+    const unsigned short LAYER_TREE_INCLUDES_BACKING_STORE_ATTACHED = 64;
     [MayThrowException] DOMString layerTreeAsText(Document document, optional unsigned short flags = 0);
 
     [MayThrowException] unsigned long long layerIDForElement(Element element);
 
     [MayThrowException] DOMString scrollingStateTreeAsText();
     [MayThrowException] DOMString mainThreadScrollingReasons(); // FIXME: rename to synchronousScrollingReasons().
-    [MayThrowException] sequence<DOMRect> nonFastScrollableRects();
+    [MayThrowException] DOMRectList nonFastScrollableRects();
 
     [MayThrowException] DOMString repaintRectsAsText();
 
@@ -304,6 +305,7 @@ enum EventThrottlingBehavior {
 
     unsigned long numberOfLiveNodes();
     unsigned long numberOfLiveDocuments();
+    unsigned long referencingNodeCount(Document document);
     DOMWindow? openDummyInspectorFrontend(DOMString url);
     void closeDummyInspectorFrontend();
     [MayThrowException] void setInspectorIsUnderTest(boolean isUnderTest);
@@ -444,8 +446,10 @@ enum EventThrottlingBehavior {
     [Conditional=MEDIA_SESSION] DOMString mediaSessionCurrentState(MediaSession session);
     [Conditional=MEDIA_SESSION] double mediaElementPlayerVolume(HTMLMediaElement element);
     [Conditional=MEDIA_SESSION] void sendMediaControlEvent(MediaControlEvent event);
-    [Conditional=VIDEO] void applicationDidEnterForeground();
-    [Conditional=VIDEO] void applicationWillEnterBackground();
+    [Conditional=VIDEO] void applicationWillBecomeInactive();
+    [Conditional=VIDEO] void applicationDidBecomeActive();
+    [Conditional=VIDEO] void applicationWillEnterForeground(optional boolean suspendedUnderLock = false);
+    [Conditional=VIDEO] void applicationDidEnterBackground(optional boolean suspendedUnderLock = false);
     [Conditional=VIDEO, MayThrowException] void setMediaSessionRestrictions(DOMString mediaType, DOMString restrictions);
     [Conditional=VIDEO, MayThrowException] DOMString mediaSessionRestrictions(DOMString mediaType);
     [Conditional=VIDEO] void setMediaElementRestrictions(HTMLMediaElement element, DOMString restrictions);
@@ -529,13 +533,21 @@ enum EventThrottlingBehavior {
     void setSpeculativeTilingDelayDisabledForTesting(boolean disabled);
 
     [Conditional=WEBGL] void simulateWebGLContextChanged(WebGLRenderingContext context);
+    [Conditional=WEBGL] void failNextGPUStatusCheck(WebGLRenderingContext context);
 
     void setPageVisibility(boolean isVisible);
 
+    [Conditional=WEB_RTC] void applyRotationForOutgoingVideoSources(RTCPeerConnection connection);
+
+    [Conditional=MEDIA_STREAM] void setCameraMediaStreamTrackOrientation(MediaStreamTrack track, short orientation);
     [Conditional=MEDIA_STREAM] void observeMediaStreamTrack(MediaStreamTrack track);
     [Conditional=MEDIA_STREAM] Promise<ImageData> grabNextMediaStreamTrackFrame();
     [Conditional=MEDIA_STREAM] readonly attribute unsigned long trackAudioSampleCount;
     [Conditional=MEDIA_STREAM] readonly attribute unsigned long trackVideoSampleCount;
     [Conditional=MEDIA_STREAM, MayThrowException] void setMediaDeviceState(DOMString deviceID, DOMString property, boolean value);
     [Conditional=MEDIA_STREAM] void delayMediaStreamTrackSamples(MediaStreamTrack track, float delay);
+    [Conditional=MEDIA_STREAM] void setMediaStreamTrackMuted(MediaStreamTrack track, boolean muted);
+    [Conditional=MEDIA_STREAM] void removeMediaStreamTrack(MediaStream stream, MediaStreamTrack track);
+
+    DOMString audioSessionCategory();
 };

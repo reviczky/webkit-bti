@@ -886,7 +886,7 @@ private:
         // inlined tail call frames, we use SpecFullTop
         // to avoid a spurious OSR exit.
         Instruction* instruction = m_inlineStackTop->m_profiledBlock->instructions().begin() + bytecodeIndex;
-        OpcodeID opcodeID = m_vm->interpreter->getOpcodeID(instruction->u.opcode);
+        OpcodeID opcodeID = Interpreter::getOpcodeID(instruction->u.opcode);
 
         switch (opcodeID) {
         case op_tail_call:
@@ -2323,6 +2323,7 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, int resultOperand, Intrin
             InlineWatchpointSet& arrayPrototypeTransition = globalObject->arrayPrototype()->structure()->transitionWatchpointSet();
 
             // FIXME: We could easily relax the Array/Object.prototype transition as long as we OSR exitted if we saw a hole.
+            // https://bugs.webkit.org/show_bug.cgi?id=173171
             if (globalObject->arraySpeciesWatchpoint().state() == IsWatched
                 && globalObject->havingABadTimeWatchpoint()->isStillValid()
                 && arrayPrototypeTransition.isStillValid()
@@ -2378,6 +2379,72 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, int resultOperand, Intrin
 
         RELEASE_ASSERT_NOT_REACHED();
         return false;
+    }
+
+    case ArrayIndexOfIntrinsic: {
+        if (argumentCountIncludingThis < 2)
+            return false;
+
+        if (m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadIndexingType)
+            || m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadConstantCache)
+            || m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadCache)
+            || m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, BadType))
+            return false;
+
+        ArrayMode arrayMode = getArrayMode(m_currentInstruction[OPCODE_LENGTH(op_call) - 2].u.arrayProfile);
+        if (!arrayMode.isJSArray())
+            return false;
+
+        if (arrayMode.arrayClass() != Array::OriginalArray)
+            return false;
+
+        // We do not want to convert arrays into one type just to perform indexOf.
+        if (arrayMode.doesConversion())
+            return false;
+
+        switch (arrayMode.type()) {
+        case Array::Double:
+        case Array::Int32:
+        case Array::Contiguous: {
+            JSGlobalObject* globalObject = m_graph.globalObjectFor(currentNodeOrigin().semantic);
+
+            InlineWatchpointSet& objectPrototypeTransition = globalObject->objectPrototype()->structure()->transitionWatchpointSet();
+            InlineWatchpointSet& arrayPrototypeTransition = globalObject->arrayPrototype()->structure()->transitionWatchpointSet();
+
+            // FIXME: We could easily relax the Array/Object.prototype transition as long as we OSR exitted if we saw a hole.
+            // https://bugs.webkit.org/show_bug.cgi?id=173171
+            if (globalObject->havingABadTimeWatchpoint()->isStillValid()
+                && arrayPrototypeTransition.isStillValid()
+                && objectPrototypeTransition.isStillValid()
+                && globalObject->arrayPrototypeChainIsSane()) {
+
+                m_graph.watchpoints().addLazily(globalObject->havingABadTimeWatchpoint());
+                m_graph.watchpoints().addLazily(arrayPrototypeTransition);
+                m_graph.watchpoints().addLazily(objectPrototypeTransition);
+
+                insertChecks();
+
+                Node* array = get(virtualRegisterForArgument(0, registerOffset));
+                addVarArgChild(array);
+                addVarArgChild(get(virtualRegisterForArgument(1, registerOffset))); // Search element.
+                if (argumentCountIncludingThis >= 3)
+                    addVarArgChild(get(virtualRegisterForArgument(2, registerOffset))); // Start index.
+                addVarArgChild(nullptr);
+
+                Node* node = addToGraph(Node::VarArg, ArrayIndexOf, OpInfo(arrayMode.asWord()), OpInfo());
+                set(VirtualRegister(resultOperand), node);
+                return true;
+            }
+
+            return false;
+        }
+        default:
+            return false;
+        }
+
+        RELEASE_ASSERT_NOT_REACHED();
+        return false;
+
     }
         
     case ArrayPopIntrinsic: {
@@ -2975,8 +3042,8 @@ bool ByteCodeParser::handleIntrinsicGetter(int resultOperand, const GetByIdVaria
 
 static void blessCallDOMGetter(Node* node)
 {
-    DOMJIT::CallDOMGetterPatchpoint* patchpoint = node->callDOMGetterData()->patchpoint;
-    if (!patchpoint->effect.mustGenerate())
+    DOMJIT::CallDOMGetterSnippet* snippet = node->callDOMGetterData()->snippet;
+    if (!snippet->effect.mustGenerate())
         node->clearFlags(NodeMustGenerate);
 }
 
@@ -2997,16 +3064,16 @@ bool ByteCodeParser::handleDOMJITGetter(int resultOperand, const GetByIdVariant&
     addToGraph(CheckSubClass, OpInfo(domJIT->thisClassInfo()), thisNode);
 
     CallDOMGetterData* callDOMGetterData = m_graph.m_callDOMGetterData.add();
-    Ref<DOMJIT::CallDOMGetterPatchpoint> callDOMGetterPatchpoint = domJIT->callDOMGetter();
-    m_graph.m_domJITPatchpoints.append(callDOMGetterPatchpoint.ptr());
+    Ref<DOMJIT::CallDOMGetterSnippet> callDOMGetterSnippet = domJIT->callDOMGetter();
+    m_graph.m_domJITSnippets.append(callDOMGetterSnippet.copyRef());
 
     callDOMGetterData->domJIT = domJIT;
-    callDOMGetterData->patchpoint = callDOMGetterPatchpoint.ptr();
+    callDOMGetterData->snippet = callDOMGetterSnippet.ptr();
     callDOMGetterData->identifierNumber = identifierNumber;
 
     Node* callDOMGetterNode = nullptr;
     // GlobalObject of thisNode is always used to create a DOMWrapper.
-    if (callDOMGetterPatchpoint->requireGlobalObject) {
+    if (callDOMGetterSnippet->requireGlobalObject) {
         Node* globalObject = addToGraph(GetGlobalObject, thisNode);
         callDOMGetterNode = addToGraph(CallDOMGetter, OpInfo(callDOMGetterData), OpInfo(prediction), thisNode, globalObject);
     } else
@@ -3995,7 +4062,6 @@ bool ByteCodeParser::parseBlock(unsigned limit)
 {
     bool shouldContinueParsing = true;
 
-    Interpreter* interpreter = m_vm->interpreter;
     Instruction* instructionsBegin = m_inlineStackTop->m_codeBlock->instructions().begin();
     unsigned blockBegin = m_currentIndex;
 
@@ -4048,7 +4114,7 @@ bool ByteCodeParser::parseBlock(unsigned limit)
         // Switch on the current bytecode opcode.
         Instruction* currentInstruction = instructionsBegin + m_currentIndex;
         m_currentInstruction = currentInstruction; // Some methods want to use this, and we'd rather not thread it through calls.
-        OpcodeID opcodeID = interpreter->getOpcodeID(currentInstruction->u.opcode);
+        OpcodeID opcodeID = Interpreter::getOpcodeID(currentInstruction->u.opcode);
         
         if (Options::verboseDFGByteCodeParsing())
             dataLog("    parsing ", currentCodeOrigin(), ": ", opcodeID, "\n");
@@ -5550,6 +5616,11 @@ bool ByteCodeParser::parseBlock(unsigned limit)
             addToGraph(CheckTraps);
             NEXT_OPCODE(op_check_traps);
         }
+
+        case op_nop: {
+            addToGraph(Check); // We add a nop here so that basic block linking doesn't break.
+            NEXT_OPCODE(op_nop);
+        }
             
         case op_create_lexical_environment: {
             VirtualRegister symbolTableRegister(currentInstruction[3].u.operand);
@@ -5797,6 +5868,12 @@ bool ByteCodeParser::parseBlock(unsigned limit)
                 addToGraph(LogShadowChickenTail, get(VirtualRegister(currentInstruction[1].u.operand)), get(VirtualRegister(currentInstruction[2].u.operand)));
             }
             NEXT_OPCODE(op_log_shadow_chicken_tail);
+        }
+            
+        case op_unreachable: {
+            flushForTerminal();
+            addToGraph(Unreachable);
+            LAST_OPCODE(op_unreachable);
         }
 
         default:

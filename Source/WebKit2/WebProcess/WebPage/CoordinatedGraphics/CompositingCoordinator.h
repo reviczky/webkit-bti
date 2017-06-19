@@ -67,6 +67,7 @@ public:
     virtual ~CompositingCoordinator();
 
     void invalidate();
+    void clearUpdateAtlases();
 
     void setRootCompositingLayer(WebCore::GraphicsLayer*);
     void setViewOverlayRootLayer(WebCore::GraphicsLayer*);
@@ -81,6 +82,8 @@ public:
     WebCore::GraphicsLayer* rootLayer() const { return m_rootLayer.get(); }
     WebCore::GraphicsLayer* rootCompositingLayer() const { return m_rootCompositingLayer; }
     WebCore::CoordinatedGraphicsLayer* mainContentsLayer();
+
+    void forceFrameSync() { m_shouldSyncFrame = true; }
 
     bool flushPendingLayerChanges();
     WebCore::CoordinatedGraphicsState& state() { return m_state; }
@@ -98,7 +101,7 @@ private:
     // GraphicsLayerClient
     void notifyAnimationStarted(const WebCore::GraphicsLayer*, const String&, double time) override;
     void notifyFlushRequired(const WebCore::GraphicsLayer*) override;
-    void paintContents(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, WebCore::GraphicsLayerPaintingPhase, const WebCore::FloatRect& clipRect) override;
+    void paintContents(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, WebCore::GraphicsLayerPaintingPhase, const WebCore::FloatRect& clipRect, WebCore::GraphicsLayerPaintFlags) override;
     float deviceScaleFactor() const override;
     float pageScaleFactor() const override;
 

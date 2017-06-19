@@ -25,10 +25,8 @@
 #include "WebKitGeolocationPermissionRequestPrivate.h"
 #include "WebKitNavigationActionPrivate.h"
 #include "WebKitNotificationPermissionRequestPrivate.h"
-#include "WebKitPrivate.h"
 #include "WebKitURIRequestPrivate.h"
 #include "WebKitUserMediaPermissionRequestPrivate.h"
-#include "WebKitWebViewBasePrivate.h"
 #include "WebKitWebViewPrivate.h"
 #include "WebKitWindowPropertiesPrivate.h"
 #include "WebPageProxy.h"
@@ -86,7 +84,7 @@ private:
 
     bool canRunBeforeUnloadConfirmPanel() const override { return true; }
 
-    void runBeforeUnloadConfirmPanel(WebPageProxy*, const String& message, WebFrameProxy*, Function<void (bool)>&& completionHandler) override
+    void runBeforeUnloadConfirmPanel(WebPageProxy*, const String& message, WebFrameProxy*, const WebCore::SecurityOriginData&, Function<void (bool)>&& completionHandler) override
     {
         completionHandler(webkitWebViewRunJavaScriptBeforeUnloadConfirm(m_webView, message.utf8()));
     }
@@ -217,7 +215,6 @@ private:
 
 void attachUIClientToView(WebKitWebView* webView)
 {
-    WebPageProxy* page = webkitWebViewBaseGetPage(WEBKIT_WEB_VIEW_BASE(webView));
-    page->setUIClient(std::make_unique<UIClient>(webView));
+    webkitWebViewGetPage(webView).setUIClient(std::make_unique<UIClient>(webView));
 }
 

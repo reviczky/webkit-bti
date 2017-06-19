@@ -25,6 +25,7 @@
 #include "WebKitContextMenuItemPrivate.h"
 #include "WebKitContextMenuPrivate.h"
 #include <wtf/glib/GRefPtr.h>
+#include <wtf/glib/WTFGType.h>
 
 using namespace WebKit;
 using namespace WebCore;
@@ -76,11 +77,11 @@ void webkitContextMenuPopulate(WebKitContextMenu* menu, Vector<WebContextMenuIte
     }
 }
 
-void webkitContextMenuPopulate(WebKitContextMenu* menu, Vector<WebContextMenuItemGtk>& contextMenuItems)
+void webkitContextMenuPopulate(WebKitContextMenu* menu, Vector<WebContextMenuItemGlib>& contextMenuItems)
 {
     for (GList* item = menu->priv->items; item; item = g_list_next(item)) {
         WebKitContextMenuItem* menuItem = WEBKIT_CONTEXT_MENU_ITEM(item->data);
-        contextMenuItems.append(webkitContextMenuItemToWebContextMenuItemGtk(menuItem));
+        contextMenuItems.append(webkitContextMenuItemToWebContextMenuItemGlib(menuItem));
     }
 }
 

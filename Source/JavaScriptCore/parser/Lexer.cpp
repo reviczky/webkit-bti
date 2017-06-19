@@ -827,7 +827,7 @@ static ALWAYS_INLINE bool isIdentPartIncludingEscape(const UChar* code, const UC
 static inline LChar singleEscape(int c)
 {
     if (c < 128) {
-        ASSERT(static_cast<size_t>(c) < ARRAY_SIZE(singleCharacterEscapeValuesForASCII));
+        ASSERT(static_cast<size_t>(c) < WTF_ARRAY_LENGTH(singleCharacterEscapeValuesForASCII));
         return singleCharacterEscapeValuesForASCII[c];
     }
     return 0;
@@ -1129,7 +1129,8 @@ template<typename CharacterType> template<bool shouldCreateIdentifier> JSTokenTy
         if (!entry)
             return IDENT;
         JSTokenType token = static_cast<JSTokenType>(entry->lexerValue());
-        return (token != RESERVED_IF_STRICT) || strictMode ? token : IDENT;
+        if ((token != RESERVED_IF_STRICT) || strictMode)
+            return bufferRequired ? UNEXPECTED_ESCAPE_ERRORTOK : token;
     }
 
     return IDENT;

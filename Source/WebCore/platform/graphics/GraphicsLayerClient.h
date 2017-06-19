@@ -23,8 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#ifndef GraphicsLayerClient_h
-#define GraphicsLayerClient_h
+#pragma once
 
 #include "IntSize.h"
 #include "TiledBacking.h"
@@ -73,9 +72,12 @@ enum LayerTreeAsTextBehaviorFlags {
     LayerTreeAsTextIncludeContentLayers         = 1 << 5,
     LayerTreeAsTextIncludePageOverlayLayers     = 1 << 6,
     LayerTreeAsTextIncludeAcceleratesDrawing    = 1 << 7,
+    LayerTreeAsTextIncludeBackingStoreAttached  = 1 << 8,
 };
 typedef unsigned LayerTreeAsTextBehavior;
 
+enum class GraphicsLayerPaintFlags { None, Snapshotting };
+    
 class GraphicsLayerClient {
 public:
     virtual ~GraphicsLayerClient() {}
@@ -93,7 +95,7 @@ public:
     // Notification that this layer requires a flush before the next display refresh.
     virtual void notifyFlushBeforeDisplayRefresh(const GraphicsLayer*) { }
 
-    virtual void paintContents(const GraphicsLayer*, GraphicsContext&, GraphicsLayerPaintingPhase, const FloatRect& /* inClip */) { }
+    virtual void paintContents(const GraphicsLayer*, GraphicsContext&, GraphicsLayerPaintingPhase, const FloatRect& /* inClip */, GraphicsLayerPaintFlags) { }
     virtual void didCommitChangesForLayer(const GraphicsLayer*) const { }
 
     // Provides current transform (taking transform-origin and animations into account). Input matrix has been
@@ -127,6 +129,8 @@ public:
 
     virtual bool needsIOSDumpRenderTreeMainFrameRenderViewLayerIsAlwaysOpaqueHack(const GraphicsLayer&) const { return false; }
 
+    virtual void logFilledVisibleFreshTile(unsigned) { };
+
 #ifndef NDEBUG
     // RenderLayerBacking overrides this to verify that it is not
     // currently painting contents. An ASSERT fails, if it is.
@@ -139,4 +143,3 @@ public:
 
 } // namespace WebCore
 
-#endif // GraphicsLayerClient_h

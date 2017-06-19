@@ -245,13 +245,12 @@ void ResourceLoader::loadDataURL()
     auto url = m_request.url();
     ASSERT(url.protocolIsData());
 
-    RefPtr<ResourceLoader> protectedThis(this);
     DataURLDecoder::ScheduleContext scheduleContext;
 #if HAVE(RUNLOOP_TIMER)
     if (auto* scheduledPairs = m_frame->page()->scheduledRunLoopPairs())
         scheduleContext.scheduledPairs = *scheduledPairs;
 #endif
-    DataURLDecoder::decode(url, scheduleContext, [protectedThis, url](auto decodeResult) {
+    DataURLDecoder::decode(url, scheduleContext, [protectedThis = makeRef(*this), url](auto decodeResult) {
         if (protectedThis->reachedTerminalState())
             return;
         if (!decodeResult) {
@@ -267,6 +266,7 @@ void ResourceLoader::loadDataURL()
         dataResponse.setHTTPStatusCode(200);
         dataResponse.setHTTPStatusText(ASCIILiteral("OK"));
         dataResponse.setHTTPHeaderField(HTTPHeaderName::ContentType, result.contentType);
+        dataResponse.setSource(ResourceResponse::Source::Network);
         protectedThis->didReceiveResponse(dataResponse);
 
         if (!protectedThis->reachedTerminalState() && dataSize)
@@ -403,7 +403,7 @@ void ResourceLoader::willSendRequestInternal(ResourceRequest& request, const Res
     }
 }
 
-void ResourceLoader::willSendRequest(ResourceRequest&& request, const ResourceResponse& redirectResponse, std::function<void(ResourceRequest&&)>&& callback)
+void ResourceLoader::willSendRequest(ResourceRequest&& request, const ResourceResponse& redirectResponse, WTF::Function<void(ResourceRequest&&)>&& callback)
 {
     willSendRequestInternal(request, redirectResponse);
     callback(WTFMove(request));

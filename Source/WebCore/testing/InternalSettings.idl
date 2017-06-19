@@ -96,11 +96,12 @@ enum ForcedAccessibilityValue { "system", "on", "off" };
     [MayThrowException] boolean deferredCSSParserEnabled();
     [MayThrowException] void setDeferredCSSParserEnabled(boolean enabled);
 
-    boolean shouldDispatchRequestAnimationFrameEvents();
-    void setShouldDispatchRequestAnimationFrameEvents(boolean shouldDispatchRequestAnimationFrameEvents);
+    [MayThrowException] void setShouldMockBoldSystemFontForAccessibility(boolean shouldMock);
 
     attribute ForcedAccessibilityValue forcedColorsAreInvertedAccessibilityValue;
     attribute ForcedAccessibilityValue forcedDisplayIsMonochromeAccessibilityValue;
     attribute ForcedAccessibilityValue forcedPrefersReducedMotionAccessibilityValue;
+
+    [MayThrowException] void setShouldManageAudioSessionCategory(boolean should);
 };
 

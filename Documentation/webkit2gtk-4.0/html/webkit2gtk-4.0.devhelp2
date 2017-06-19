@@ -37,6 +37,8 @@
       <sub name="WebKitVersion" link="webkit2gtk-4.0-WebKitVersion.html"/>
       <sub name="WebKitContextMenu" link="WebKitContextMenu.html"/>
       <sub name="WebKitContextMenuItem" link="WebKitContextMenuItem.html"/>
+      <sub name="WebKitOptionMenu" link="WebKitOptionMenu.html"/>
+      <sub name="WebKitOptionMenuItem" link="WebKitOptionMenuItem.html"/>
       <sub name="WebKitFormSubmissionRequest" link="WebKitFormSubmissionRequest.html"/>
       <sub name="WebKitSecurityManager" link="WebKitSecurityManager.html"/>
       <sub name="WebKitUserContentManager" link="WebKitUserContentManager.html"/>
@@ -259,6 +261,7 @@
     <keyword type="signal" name="The “run-file-chooser” signal" link="WebKitWebView.html#WebKitWebView-run-file-chooser"/>
     <keyword type="signal" name="The “script-dialog” signal" link="WebKitWebView.html#WebKitWebView-script-dialog"/>
     <keyword type="signal" name="The “show-notification” signal" link="WebKitWebView.html#WebKitWebView-show-notification"/>
+    <keyword type="signal" name="The “show-option-menu” signal" link="WebKitWebView.html#WebKitWebView-show-option-menu"/>
     <keyword type="signal" name="The “submit-form” signal" link="WebKitWebView.html#WebKitWebView-submit-form"/>
     <keyword type="signal" name="The “web-process-crashed” signal" link="WebKitWebView.html#WebKitWebView-web-process-crashed"/>
     <keyword type="function" name="webkit_authentication_request_authenticate ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-authenticate" since="2.2"/>
@@ -767,6 +770,22 @@
     <keyword type="function" name="webkit_context_menu_item_get_submenu ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-get-submenu"/>
     <keyword type="struct" name="WebKitContextMenuItem" link="WebKitContextMenuItem.html#WebKitContextMenuItem-struct"/>
     <keyword type="enum" name="enum WebKitContextMenuAction" link="WebKitContextMenuItem.html#WebKitContextMenuAction"/>
+    <keyword type="function" name="webkit_option_menu_get_n_items ()" link="WebKitOptionMenu.html#webkit-option-menu-get-n-items" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_get_item ()" link="WebKitOptionMenu.html#webkit-option-menu-get-item" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_select_item ()" link="WebKitOptionMenu.html#webkit-option-menu-select-item" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_activate_item ()" link="WebKitOptionMenu.html#webkit-option-menu-activate-item" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_close ()" link="WebKitOptionMenu.html#webkit-option-menu-close" since="2.18"/>
+    <keyword type="struct" name="struct WebKitOptionMenu" link="WebKitOptionMenu.html#WebKitOptionMenu-struct"/>
+    <keyword type="signal" name="The “close” signal" link="WebKitOptionMenu.html#WebKitOptionMenu-close"/>
+    <keyword type="function" name="webkit_option_menu_item_copy ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-copy" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_free ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-free" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_get_label ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-get-label" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_get_tooltip ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-get-tooltip" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_is_group_label ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-is-group-label" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_is_group_child ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-is-group-child" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_is_enabled ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-is-enabled" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_is_selected ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-is-selected" since="2.18"/>
+    <keyword type="struct" name="WebKitOptionMenuItem" link="WebKitOptionMenuItem.html#WebKitOptionMenuItem-struct"/>
     <keyword type="function" name="webkit_form_submission_request_get_text_fields ()" link="WebKitFormSubmissionRequest.html#webkit-form-submission-request-get-text-fields"/>
     <keyword type="function" name="webkit_form_submission_request_submit ()" link="WebKitFormSubmissionRequest.html#webkit-form-submission-request-submit"/>
     <keyword type="struct" name="struct WebKitFormSubmissionRequest" link="WebKitFormSubmissionRequest.html#WebKitFormSubmissionRequest-struct"/>

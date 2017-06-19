@@ -144,13 +144,6 @@ public:
     virtual void didFailProvisionalLoadForMainFrame() { };
     virtual void didCommitLoadForMainFrame(const String& mimeType, bool useCustomContentProvider) = 0;
 
-#if USE(COORDINATED_GRAPHICS_MULTIPROCESS)
-    virtual void pageDidRequestScroll(const WebCore::IntPoint&) = 0;
-    virtual void didRenderFrame(const WebCore::IntSize& contentsSize, const WebCore::IntRect& coveredRect) = 0;
-    virtual void pageTransitionViewportReady() = 0;
-    virtual void didFindZoomableArea(const WebCore::IntPoint&, const WebCore::IntRect&) = 0;
-#endif
-
     virtual void handleDownloadRequest(DownloadProxy*) = 0;
 
     virtual bool handleRunOpenPanel(WebPageProxy*, WebFrameProxy*, API::OpenPanelParameters*, WebOpenPanelResultListenerProxy*) { return false; }
@@ -218,7 +211,7 @@ public:
 
     virtual RefPtr<WebPopupMenuProxy> createPopupMenuProxy(WebPageProxy&) = 0;
 #if ENABLE(CONTEXT_MENUS)
-    virtual std::unique_ptr<WebContextMenuProxy> createContextMenuProxy(WebPageProxy&, const ContextMenuContextData&, const UserData&) = 0;
+    virtual RefPtr<WebContextMenuProxy> createContextMenuProxy(WebPageProxy&, const ContextMenuContextData&, const UserData&) = 0;
 #endif
 
 #if ENABLE(INPUT_TYPE_COLOR)
@@ -243,7 +236,6 @@ public:
     virtual void pluginFocusOrWindowFocusChanged(uint64_t pluginComplexTextInputIdentifier, bool pluginHasFocusAndWindowHasFocus) = 0;
     virtual void setPluginComplexTextInputState(uint64_t pluginComplexTextInputIdentifier, PluginComplexTextInputState) = 0;
     virtual void didPerformDictionaryLookup(const WebCore::DictionaryPopupInfo&) = 0;
-    virtual void dismissContentRelativeChildWindows(bool withAnimation = true) = 0;
     virtual void showCorrectionPanel(WebCore::AlternativeTextType, const WebCore::FloatRect& boundingBoxOfReplacedString, const String& replacedString, const String& replacementString, const Vector<String>& alternativeReplacementStrings) = 0;
     virtual void dismissCorrectionPanel(WebCore::ReasonForDismissingAlternativeText) = 0;
     virtual String dismissCorrectionPanelSoon(WebCore::ReasonForDismissingAlternativeText) = 0;
@@ -375,7 +367,7 @@ public:
     virtual WebCore::UserInterfaceLayoutDirection userInterfaceLayoutDirection() = 0;
 
 #if USE(QUICK_LOOK)
-    virtual void requestPasswordForQuickLookDocument(const String& fileName, std::function<void(const String&)>&&) = 0;
+    virtual void requestPasswordForQuickLookDocument(const String& fileName, WTF::Function<void(const String&)>&&) = 0;
 #endif
 
 #if ENABLE(DATA_INTERACTION)

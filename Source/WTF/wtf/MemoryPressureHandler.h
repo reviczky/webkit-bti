@@ -28,9 +28,9 @@
 
 #include <atomic>
 #include <ctime>
-#include <functional>
 #include <wtf/FastMalloc.h>
 #include <wtf/Forward.h>
+#include <wtf/Function.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/Optional.h>
 #include <wtf/RunLoop.h>
@@ -59,7 +59,7 @@ enum class WebsamProcessState {
 enum class Critical { No, Yes };
 enum class Synchronous { No, Yes };
 
-typedef std::function<void(Critical, Synchronous)> LowMemoryHandler;
+typedef WTF::Function<void(Critical, Synchronous)> LowMemoryHandler;
 
 class MemoryPressureHandler {
     friend class WTF::NeverDestroyed<MemoryPressureHandler>;
@@ -70,16 +70,23 @@ public:
 
     WTF_EXPORT_PRIVATE void setShouldUsePeriodicMemoryMonitor(bool);
 
-    void setMemoryKillCallback(WTF::Function<void()> function) { m_memoryKillCallback = WTFMove(function); }
-    void setMemoryPressureStatusChangedCallback(WTF::Function<void(bool)> function) { m_memoryPressureStatusChangedCallback = WTFMove(function); }
-    void setDidExceedInactiveLimitWhileActiveCallback(WTF::Function<void()> function) { m_didExceedInactiveLimitWhileActiveCallback = WTFMove(function); }
+    void setMemoryKillCallback(WTF::Function<void()>&& function) { m_memoryKillCallback = WTFMove(function); }
+    void setMemoryPressureStatusChangedCallback(WTF::Function<void(bool)>&& function) { m_memoryPressureStatusChangedCallback = WTFMove(function); }
+    void setDidExceedInactiveLimitWhileActiveCallback(WTF::Function<void()>&& function) { m_didExceedInactiveLimitWhileActiveCallback = WTFMove(function); }
 
     void setLowMemoryHandler(LowMemoryHandler&& handler)
     {
         m_lowMemoryHandler = WTFMove(handler);
     }
 
-    WTF_EXPORT_PRIVATE static bool isUnderMemoryPressure();
+    bool isUnderMemoryPressure() const
+    {
+        return m_underMemoryPressure
+#if PLATFORM(MAC)
+            || m_memoryUsagePolicy >= MemoryUsagePolicy::Strict
+#endif
+            || m_isSimulatingMemoryPressure;
+    }
     void setUnderMemoryPressure(bool);
 
 #if OS(LINUX)
@@ -165,14 +172,14 @@ private:
     class EventFDPoller {
         WTF_MAKE_NONCOPYABLE(EventFDPoller); WTF_MAKE_FAST_ALLOCATED;
     public:
-        EventFDPoller(int fd, std::function<void ()>&& notifyHandler);
+        EventFDPoller(int fd, WTF::Function<void ()>&& notifyHandler);
         ~EventFDPoller();
 
     private:
         void readAndNotify() const;
 
         std::optional<int> m_fd;
-        std::function<void ()> m_notifyHandler;
+        WTF::Function<void ()> m_notifyHandler;
 #if USE(GLIB)
         GRefPtr<GSource> m_source;
 #else
@@ -181,7 +188,7 @@ private:
     };
 #endif
 
-    WebsamProcessState m_processState { WebsamProcessState::Active };
+    WebsamProcessState m_processState { WebsamProcessState::Inactive };
 
     bool m_installed { false };
     LowMemoryHandler m_lowMemoryHandler;

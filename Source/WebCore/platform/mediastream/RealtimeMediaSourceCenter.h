@@ -100,7 +100,7 @@ public:
     void removeDevicesChangedObserver(DevicesChangedObserverToken);
     void captureDevicesChanged();
 
-    void setVisibility(bool isVisible);
+    void setVideoCapturePageState(bool, bool);
 
 protected:
     RealtimeMediaSourceCenter();

@@ -57,6 +57,8 @@ protected:
     void deviceOrPageScaleFactorChanged() override;
     void pageBackgroundTransparencyChanged() override;
 
+    void clearUpdateAtlases() override;
+
     void setVisibleContentsRect(const WebCore::FloatRect&, const WebCore::FloatPoint&);
     void renderNextFrame();
     void commitScrollOffset(uint32_t layerID, const WebCore::IntSize& offset);
@@ -82,7 +84,10 @@ private:
     CompositingCoordinator m_coordinator;
     bool m_isWaitingForRenderer { true };
     bool m_scheduledWhileWaitingForRenderer { false };
-    uint64_t m_forceRepaintAsyncCallbackID { 0 };
+    struct {
+        uint64_t callbackID { 0 };
+        bool needsFreshFlush { false };
+    } m_forceRepaintAsync;
     RunLoop::Timer<CoordinatedLayerTreeHost> m_layerFlushTimer;
 };
 
