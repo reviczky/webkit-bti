@@ -3,7 +3,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  NetworkProcessMainUnix@Base 2.5.3
  PluginProcessMainUnix@Base 2.5.3
  WebProcessMainUnix@Base 2.5.3
- (c++)"WebKit::WebGtkExtensionManager::initialize(OpaqueWKBundle const*, void const*)@Base" 2.5.3
+ (c++)"WebKit::WebGtkExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.4
  (c++)"WebKit::WebGtkExtensionManager::singleton()@Base" 2.8.1
  webkit_authentication_dialog_get_type@Base 2.5.3
  webkit_authentication_request_authenticate@Base 2.5.3
@@ -1487,20 +1487,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_javascript_result_ref@Base 2.5.3
  webkit_javascript_result_unref@Base 2.5.3
  webkit_load_event_get_type@Base 2.5.3
- webkit_marshal_BOOLEAN__BOXED@Base 2.5.3
- webkit_marshal_BOOLEAN__BOXED_STRING@Base 2.5.3
- webkit_marshal_BOOLEAN__OBJECT@Base 2.5.3
- webkit_marshal_BOOLEAN__OBJECT_BOXED_OBJECT@Base 2.5.3
- webkit_marshal_BOOLEAN__OBJECT_ENUM@Base 2.5.3
- webkit_marshal_BOOLEAN__OBJECT_OBJECT@Base 2.5.3
- webkit_marshal_BOOLEAN__STRING@Base 2.5.3
- webkit_marshal_BOOLEAN__VOID@Base 2.5.3
- webkit_marshal_OBJECT__VOID@Base 2.5.3
- webkit_marshal_VOID__OBJECT_OBJECT@Base 2.5.3
- webkit_marshal_VOID__OBJECT_POINTER@Base 2.5.3
- webkit_marshal_VOID__OBJECT_UINT@Base 2.5.3
- webkit_marshal_VOID__STRING_STRING@Base 2.5.3
- webkit_marshal_VOID__UINT64@Base 2.5.3
  webkit_mime_info_get_description@Base 2.5.3
  webkit_mime_info_get_extensions@Base 2.5.3
  webkit_mime_info_get_mime_type@Base 2.5.3
@@ -1539,6 +1525,21 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_notification_get_title@Base 2.8.1
  webkit_notification_get_type@Base 2.8.1
  webkit_notification_permission_request_get_type@Base 2.8.1
+ webkit_option_menu_activate_item@Base 2.17.4
+ webkit_option_menu_close@Base 2.17.4
+ webkit_option_menu_get_item@Base 2.17.4
+ webkit_option_menu_get_n_items@Base 2.17.4
+ webkit_option_menu_get_type@Base 2.17.4
+ webkit_option_menu_item_copy@Base 2.17.4
+ webkit_option_menu_item_free@Base 2.17.4
+ webkit_option_menu_item_get_label@Base 2.17.4
+ webkit_option_menu_item_get_tooltip@Base 2.17.4
+ webkit_option_menu_item_get_type@Base 2.17.4
+ webkit_option_menu_item_is_enabled@Base 2.17.4
+ webkit_option_menu_item_is_group_child@Base 2.17.4
+ webkit_option_menu_item_is_group_label@Base 2.17.4
+ webkit_option_menu_item_is_selected@Base 2.17.4
+ webkit_option_menu_select_item@Base 2.17.4
  webkit_permission_request_allow@Base 2.5.3
  webkit_permission_request_deny@Base 2.5.3
  webkit_permission_request_get_type@Base 2.5.3
