@@ -1,3 +1,10 @@
+webkit2gtk (2.16.4-1) UNRELEASED; urgency=high
+
+  * New upstream release.
+    + This fixes CVE-2017-2538.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 20 Jun 2017 15:08:48 +0300
+
 webkit2gtk (2.16.3-2) unstable; urgency=medium
 
   * Upload to unstable (Closes: #836055).
