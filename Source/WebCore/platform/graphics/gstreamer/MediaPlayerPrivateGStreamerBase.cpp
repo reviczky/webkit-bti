@@ -200,7 +200,8 @@ private:
 #endif // USE(COORDINATED_GRAPHICS_THREADED) && USE(GSTREAMER_GL)
 
 MediaPlayerPrivateGStreamerBase::MediaPlayerPrivateGStreamerBase(MediaPlayer* player)
-    : m_player(player)
+    : m_notifier(MainThreadNotifier<MainThreadNotification>::create())
+    , m_player(player)
     , m_fpsSink(nullptr)
     , m_readyState(MediaPlayer::HaveNothing)
     , m_networkState(MediaPlayer::Empty)
@@ -223,15 +224,10 @@ MediaPlayerPrivateGStreamerBase::~MediaPlayerPrivateGStreamerBase()
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     m_protectionCondition.notifyOne();
 #endif
-    m_notifier.cancelPendingNotifications();
 
-#if USE(GSTREAMER_GL) || USE(COORDINATED_GRAPHICS_THREADED)
-    m_drawTimer.stop();
-    {
-        LockHolder locker(m_drawMutex);
-        m_drawCondition.notifyOne();
-    }
-#endif
+    m_notifier->invalidate();
+
+    cancelRepaint();
 
     if (m_videoSink) {
         g_signal_handlers_disconnect_matched(m_videoSink.get(), G_SIGNAL_MATCH_DATA, 0, 0, nullptr, nullptr, this);
@@ -572,7 +568,7 @@ void MediaPlayerPrivateGStreamerBase::volumeChangedCallback(MediaPlayerPrivateGS
     // This is called when m_volumeElement receives the notify::volume signal.
     GST_DEBUG("Volume changed to: %f", player->volume());
 
-    player->m_notifier.notify(MainThreadNotification::VolumeChanged, [player] { player->notifyPlayerOfVolumeChange(); });
+    player->m_notifier->notify(MainThreadNotification::VolumeChanged, [player] { player->notifyPlayerOfVolumeChange(); });
 }
 
 MediaPlayer::NetworkState MediaPlayerPrivateGStreamerBase::networkState() const
@@ -621,7 +617,7 @@ void MediaPlayerPrivateGStreamerBase::notifyPlayerOfMute()
 void MediaPlayerPrivateGStreamerBase::muteChangedCallback(MediaPlayerPrivateGStreamerBase* player)
 {
     // This is called when m_volumeElement receives the notify::mute signal.
-    player->m_notifier.notify(MainThreadNotification::MuteChanged, [player] { player->notifyPlayerOfMute(); });
+    player->m_notifier->notify(MainThreadNotification::MuteChanged, [player] { player->notifyPlayerOfMute(); });
 }
 
 void MediaPlayerPrivateGStreamerBase::acceleratedRenderingStateChanged()
@@ -761,7 +757,7 @@ void MediaPlayerPrivateGStreamerBase::triggerRepaint(GstSample* sample)
 
     if (triggerResize) {
         GST_DEBUG("First sample reached the sink, triggering video dimensions update");
-        m_notifier.notify(MainThreadNotification::SizeChanged, [this] { m_player->sizeChanged(); });
+        m_notifier->notify(MainThreadNotification::SizeChanged, [this] { m_player->sizeChanged(); });
     }
 
 #if USE(COORDINATED_GRAPHICS_THREADED)
@@ -801,6 +797,20 @@ void MediaPlayerPrivateGStreamerBase::triggerRepaint(GstSample* sample)
 void MediaPlayerPrivateGStreamerBase::repaintCallback(MediaPlayerPrivateGStreamerBase* player, GstSample* sample)
 {
     player->triggerRepaint(sample);
+}
+
+void MediaPlayerPrivateGStreamerBase::cancelRepaint()
+{
+#if USE(TEXTURE_MAPPER_GL) || USE(COORDINATED_GRAPHICS_THREADED)
+    m_drawTimer.stop();
+    LockHolder locker(m_drawMutex);
+    m_drawCondition.notifyOne();
+#endif
+}
+
+void MediaPlayerPrivateGStreamerBase::repaintCancelledCallback(MediaPlayerPrivateGStreamerBase* player)
+{
+    player->cancelRepaint();
 }
 
 #if USE(GSTREAMER_GL)
@@ -1140,6 +1150,7 @@ GstElement* MediaPlayerPrivateGStreamerBase::createVideoSink()
         m_usingFallbackVideoSink = true;
         m_videoSink = webkitVideoSinkNew();
         g_signal_connect_swapped(m_videoSink.get(), "repaint-requested", G_CALLBACK(repaintCallback), this);
+        g_signal_connect_swapped(m_videoSink.get(), "repaint-cancelled", G_CALLBACK(repaintCancelledCallback), this);
     }
 
     GstElement* videoSink = nullptr;
