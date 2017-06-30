@@ -1,3 +1,9 @@
+webkit2gtk (2.16.5-1~bpo9+1) stretch-backports; urgency=medium
+
+  * Rebuild for stretch-backports.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 30 Jun 2017 14:09:40 +0300
+
 webkit2gtk (2.16.5-1) unstable; urgency=medium
 
   * New upstream release (Closes: #865772).
