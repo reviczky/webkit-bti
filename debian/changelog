@@ -1,3 +1,11 @@
+webkit2gtk (2.16.5-1~bpo8+1) jessie-backports-sloppy; urgency=medium
+
+  * Rebuild for jessie-backports-sloppy.
+  * debian/control:
+    + Build using libgeoclue-dev instead of libgeoclue-2-dev.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 12 Jul 2017 16:40:46 +0200
+
 webkit2gtk (2.16.5-1) unstable; urgency=medium
 
   * New upstream release (Closes: #865772).
