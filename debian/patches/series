@@ -2,3 +2,4 @@ fix-ftbfs-sparc64.patch
 fix-ftbfs-alpha.patch
 fix-ftbfs-armel.patch
 fix-ftbfs-hurd.patch
+fix-ftbfs-m68k.patch
