@@ -14,6 +14,10 @@ webkit2gtk (2.16.6-1) UNRELEASED; urgency=high
       CVE-2017-7056, CVE-2017-7061, CVE-2017-7064 (fixed in 2.16.6).
   * debian/patches/fix-ftbfs-m68k.patch:
     + Fix FTBFS in m68k (Closes: #868126).
+  * Override typelib-package-name-does-not-match and
+    gir-missing-typelib-dependency lintian warnings in
+    gir1.2-javascriptcoregtk-4.0, gir1.2-webkit2-4.0,
+    libjavascriptcoregtk-4.0-dev and libwebkit2gtk-4.0-dev.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 20 Jul 2017 12:00:59 +0200
 
