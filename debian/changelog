@@ -1,4 +1,4 @@
-webkit2gtk (2.16.6-1) UNRELEASED; urgency=high
+webkit2gtk (2.16.6-1) unstable; urgency=high
 
   * New upstream release.
   * The WebKitGTK+ security advisory WSA-2017-0006 lists the following
@@ -19,7 +19,7 @@ webkit2gtk (2.16.6-1) UNRELEASED; urgency=high
     gir1.2-javascriptcoregtk-4.0, gir1.2-webkit2-4.0,
     libjavascriptcoregtk-4.0-dev and libwebkit2gtk-4.0-dev.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 20 Jul 2017 12:00:59 +0200
+ -- Alberto Garcia <berto@igalia.com>  Thu, 27 Jul 2017 02:16:11 +0200
 
 webkit2gtk (2.16.5-1) unstable; urgency=medium
 
