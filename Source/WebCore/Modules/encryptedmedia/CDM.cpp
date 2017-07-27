@@ -31,7 +31,7 @@
 #include "CDMPrivate.h"
 #include "Document.h"
 #include "InitDataRegistry.h"
-#include "MediaKeysRestrictions.h"
+#include "MediaKeysRequirement.h"
 #include "MediaPlayer.h"
 #include "NotImplemented.h"
 #include "ParsedContentType.h"
@@ -161,7 +161,7 @@ void CDM::doSupportedConfigurationStep(MediaKeySystemConfiguration&& candidateCo
         // 23. Return accumulated configuration.
         callback(WTFMove(configuration));
     };
-    getConsentStatus(WTFMove(optionalConfiguration.value()), WTFMove(restrictions), consentCallback);
+    getConsentStatus(WTFMove(optionalConfiguration.value()), WTFMove(restrictions), WTFMove(consentCallback));
 }
 
 bool CDM::isPersistentType(MediaKeySessionType sessionType)
@@ -181,6 +181,9 @@ bool CDM::isPersistentType(MediaKeySessionType sessionType)
         // ↳ "persistent-license"
         return true;
     }
+
+    ASSERT_NOT_REACHED();
+    return false;
 }
 
 std::optional<MediaKeySystemConfiguration> CDM::getSupportedConfiguration(const MediaKeySystemConfiguration& candidateConfiguration, MediaKeysRestrictions& restrictions)

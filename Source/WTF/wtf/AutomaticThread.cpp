@@ -27,6 +27,7 @@
 #include "AutomaticThread.h"
 
 #include "DataLog.h"
+#include "Threading.h"
 
 namespace WTF {
 
@@ -79,6 +80,11 @@ void AutomaticThreadCondition::notifyAll(const AbstractLocker& locker)
 void AutomaticThreadCondition::wait(Lock& lock)
 {
     m_condition.wait(lock);
+}
+
+bool AutomaticThreadCondition::waitFor(Lock& lock, Seconds time)
+{
+    return m_condition.waitFor(lock, time);
 }
 
 void AutomaticThreadCondition::add(const AbstractLocker&, AutomaticThread* thread)

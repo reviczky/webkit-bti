@@ -31,7 +31,6 @@
 #include "EventNames.h"
 #include "FrameView.h"
 #include "GraphicsLayer.h"
-#include "IntRect.h"
 #include "MainFrame.h"
 #include "Page.h"
 #include "PlatformWheelEvent.h"
@@ -47,11 +46,6 @@
 
 #if USE(COORDINATED_GRAPHICS)
 #include "ScrollingCoordinatorCoordinatedGraphics.h"
-#endif
-
-#if ENABLE(WEB_REPLAY)
-#include "ReplayController.h"
-#include <replay/InputCursor.h>
 #endif
 
 namespace WebCore {
@@ -88,7 +82,11 @@ bool ScrollingCoordinator::coordinatesScrollingForFrameView(const FrameView& fra
     ASSERT(isMainThread());
     ASSERT(m_page);
 
-    if (!frameView.frame().isMainFrame() && !m_page->settings().scrollingTreeIncludesFrames())
+    if (!frameView.frame().isMainFrame() && !m_page->settings().scrollingTreeIncludesFrames()
+#if PLATFORM(MAC)
+        && !m_page->settings().asyncFrameScrollingEnabled()
+#endif
+    )
         return false;
 
     RenderView* renderView = frameView.frame().contentRenderer();
@@ -328,11 +326,6 @@ SynchronousScrollingReasons ScrollingCoordinator::synchronousScrollingReasons(co
 
     if (m_forceSynchronousScrollLayerPositionUpdates)
         synchronousScrollingReasons |= ForcedOnMainThread;
-#if ENABLE(WEB_REPLAY)
-    InputCursor& cursor = m_page->replayController().activeInputCursor();
-    if (cursor.isCapturing() || cursor.isReplaying())
-        synchronousScrollingReasons |= ForcedOnMainThread;
-#endif
     if (frameView.hasSlowRepaintObjects())
         synchronousScrollingReasons |= HasSlowRepaintObjects;
     if (hasVisibleSlowRepaintViewportConstrainedObjects(frameView))
@@ -375,13 +368,6 @@ bool ScrollingCoordinator::shouldUpdateScrollLayerPositionSynchronously(const Fr
     
     return true;
 }
-
-#if ENABLE(WEB_REPLAY)
-void ScrollingCoordinator::replaySessionStateDidChange()
-{
-    updateSynchronousScrollingReasonsForAllFrames();
-}
-#endif
 
 ScrollingNodeID ScrollingCoordinator::uniqueScrollLayerID()
 {
@@ -466,6 +452,22 @@ TextStream& operator<<(TextStream& ts, ScrollingLayerPositionAction action)
         break;
     case ScrollingLayerPositionAction::Sync:
         ts << "sync";
+        break;
+    }
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, ViewportRectStability stability)
+{
+    switch (stability) {
+    case ViewportRectStability::Stable:
+        ts << "stable";
+        break;
+    case ViewportRectStability::Unstable:
+        ts << "unstable";
+        break;
+    case ViewportRectStability::ChangingObscuredInsetsInteractively:
+        ts << "changing obscured insets interactively";
         break;
     }
     return ts;

@@ -228,7 +228,7 @@ WebKitSettings *setting = webkit_web_view_get_settings (WEBKIT_WEB_VIEW(my_webvi
 g_object_set (G_OBJECT(settings), <span class="number">&quot;enable-developer-extras&quot;</span>, TRUE, <span class="number">NULL</span>);
 
 <span class="comment">/*</span><span class="comment"> Load some data or reload to be able to inspect the page</span><span class="comment">*/</span>
-webkit_web_load_uri (WEBKIT_WEB_VIEW(my_webview), <span class="number">&quot;<a href="http://www.gnome.org">http://www.gnome.org</a>&quot;</span>);
+webkit_web_view_load_uri (WEBKIT_WEB_VIEW(my_webview), <span class="number">&quot;<a href="http://www.gnome.org">http://www.gnome.org</a>&quot;</span>);
 
 <span class="comment">/*</span><span class="comment"> Show the inspector </span><span class="comment">*/</span>
 WebKitWebInspector *inspector = webkit_web_view_get_inspector (WEBKIT_WEB_VIEW(my_webview));

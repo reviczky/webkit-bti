@@ -112,6 +112,10 @@ void JSWebAssemblyInstance::finalizeCreation(VM& vm, ExecState* exec, Ref<Wasm::
         m_codeBlock.set(vm, this, codeBlock);
     } else {
         codeBlock = JSWebAssemblyCodeBlock::create(vm, wasmCodeBlock.copyRef(), m_module.get());
+        if (UNLIKELY(!codeBlock->runnable())) {
+            throwException(exec, scope, JSWebAssemblyLinkError::create(exec, vm, globalObject()->WebAssemblyLinkErrorStructure(), codeBlock->errorMessage()));
+            return;
+        }
         m_codeBlock.set(vm, this, codeBlock);
         module()->setCodeBlock(vm, memoryMode(), codeBlock);
     }
@@ -136,6 +140,9 @@ JSWebAssemblyInstance* JSWebAssemblyInstance::create(VM& vm, ExecState* exec, JS
         throwException(exec, throwScope, error);
         return nullptr;
     };
+
+    if (!globalObject->webAssemblyEnabled())
+        return exception(createEvalError(exec, globalObject->webAssemblyDisabledErrorMessage()));
 
     auto importFailMessage = [&] (const Wasm::Import& import, const char* before, const char* after) {
         return makeString(before, " ", String::fromUTF8(import.module), ":", String::fromUTF8(import.field), " ", after);
@@ -315,7 +322,7 @@ JSWebAssemblyInstance* JSWebAssemblyInstance::create(VM& vm, ExecState* exec, JS
                 return exception(createOutOfMemoryError(exec));
 
             instance->m_memory.set(vm, instance,
-                JSWebAssemblyMemory::create(vm, exec->lexicalGlobalObject()->WebAssemblyMemoryStructure(), memory.releaseNonNull()));
+                JSWebAssemblyMemory::create(exec, vm, exec->lexicalGlobalObject()->WebAssemblyMemoryStructure(), memory.releaseNonNull()));
             RETURN_IF_EXCEPTION(throwScope, nullptr);
         }
     }
@@ -341,7 +348,8 @@ JSWebAssemblyInstance* JSWebAssemblyInstance::create(VM& vm, ExecState* exec, JS
     
     if (!instance->memory()) {
         // Make sure we have a dummy memory, so that wasm -> wasm thunks avoid checking for a nullptr Memory when trying to set pinned registers.
-        instance->m_memory.set(vm, instance, JSWebAssemblyMemory::create(vm, exec->lexicalGlobalObject()->WebAssemblyMemoryStructure(), adoptRef(*(new Wasm::Memory()))));
+        instance->m_memory.set(vm, instance, JSWebAssemblyMemory::create(exec, vm, exec->lexicalGlobalObject()->WebAssemblyMemoryStructure(), adoptRef(*(new Wasm::Memory()))));
+        RETURN_IF_EXCEPTION(throwScope, nullptr);
     }
     
     // Globals

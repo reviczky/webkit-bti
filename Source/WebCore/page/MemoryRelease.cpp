@@ -26,6 +26,7 @@
 #include "config.h"
 #include "MemoryRelease.h"
 
+#include "CSSFontSelector.h"
 #include "CSSValuePool.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
@@ -84,8 +85,10 @@ static void releaseCriticalMemory(Synchronous synchronous)
 
     Vector<RefPtr<Document>> documents;
     copyToVector(Document::allDocuments(), documents);
-    for (auto& document : documents)
+    for (auto& document : documents) {
         document->styleScope().clearResolver();
+        document->fontSelector().emptyCaches();
+    }
 
     GCController::singleton().deleteAllCode(JSC::DeleteAllCodeIfNotCollecting);
 
@@ -125,9 +128,7 @@ void releaseMemory(Critical critical, Synchronous synchronous)
         // FastMalloc has lock-free thread specific caches that can only be cleared from the thread itself.
         WorkerThread::releaseFastMallocFreeMemoryInAllThreads();
 #if ENABLE(ASYNC_SCROLLING) && !PLATFORM(IOS)
-        ScrollingThread::dispatch([]() {
-            WTF::releaseFastMallocFreeMemory();
-        });
+        ScrollingThread::dispatch(WTF::releaseFastMallocFreeMemory);
 #endif
         WTF::releaseFastMallocFreeMemory();
     }
@@ -191,7 +192,6 @@ void logMemoryStatisticsAtTimeOfDeath()
 void platformReleaseMemory(Critical) { }
 void jettisonExpensiveObjectsOnTopLevelNavigation() { }
 void registerMemoryReleaseNotifyCallbacks() { }
-void registerSQLiteMemoryPressureHandler() { }
 #endif
 
 } // namespace WebCore

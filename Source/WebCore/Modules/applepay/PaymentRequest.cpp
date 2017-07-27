@@ -29,7 +29,7 @@
 #if ENABLE(APPLE_PAY)
 
 #include "PaymentAuthorizationStatus.h"
-#include "SoftLinking.h"
+#include <wtf/SoftLinking.h>
 
 namespace WebCore {
 
@@ -58,6 +58,8 @@ bool PaymentRequest::isValidSupportedNetwork(unsigned version, const String& sup
     if (supportedNetwork == "visa")
         return true;
     if (version >= 2 && supportedNetwork == "jcb")
+        return true;
+    if (version >= 3 && supportedNetwork == "carteBancaire")
         return true;
 
     return false;

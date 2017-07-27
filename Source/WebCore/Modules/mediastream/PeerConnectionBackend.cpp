@@ -56,7 +56,7 @@ void PeerConnectionBackend::createOffer(RTCOfferOptions&& options, PeerConnectio
 void PeerConnectionBackend::createOfferSucceeded(String&& sdp)
 {
     ASSERT(isMainThread());
-    RELEASE_LOG(WebRTC, "Creating offer succeeded:\n%s\n", sdp.utf8().data());
+    RELEASE_LOG(WebRTC, "Creating offer succeeded:\n%{public}s\n", sdp.utf8().data());
 
     if (m_peerConnection.isClosed())
         return;
@@ -69,7 +69,7 @@ void PeerConnectionBackend::createOfferSucceeded(String&& sdp)
 void PeerConnectionBackend::createOfferFailed(Exception&& exception)
 {
     ASSERT(isMainThread());
-    RELEASE_LOG(WebRTC, "Creating offer failed:\n%s\n", exception.message().utf8().data());
+    RELEASE_LOG(WebRTC, "Creating offer failed:\n%{public}s\n", exception.message().utf8().data());
 
     if (m_peerConnection.isClosed())
         return;
@@ -91,7 +91,7 @@ void PeerConnectionBackend::createAnswer(RTCAnswerOptions&& options, PeerConnect
 void PeerConnectionBackend::createAnswerSucceeded(String&& sdp)
 {
     ASSERT(isMainThread());
-    RELEASE_LOG(WebRTC, "Creating answer succeeded:\n%s\n", sdp.utf8().data());
+    RELEASE_LOG(WebRTC, "Creating answer succeeded:\n%{public}s\n", sdp.utf8().data());
 
     if (m_peerConnection.isClosed())
         return;
@@ -104,7 +104,7 @@ void PeerConnectionBackend::createAnswerSucceeded(String&& sdp)
 void PeerConnectionBackend::createAnswerFailed(Exception&& exception)
 {
     ASSERT(isMainThread());
-    RELEASE_LOG(WebRTC, "Creating answer failed:\n%s\n", exception.message().utf8().data());
+    RELEASE_LOG(WebRTC, "Creating answer failed:\n%{public}s\n", exception.message().utf8().data());
 
     if (m_peerConnection.isClosed())
         return;
@@ -138,7 +138,7 @@ void PeerConnectionBackend::setLocalDescription(RTCSessionDescription& sessionDe
     ASSERT(!m_peerConnection.isClosed());
 
     if (!isLocalDescriptionTypeValidForState(sessionDescription.type(), m_peerConnection.signalingState())) {
-        promise.reject(INVALID_STATE_ERR, "Description type incompatible with current signaling state");
+        promise.reject(InvalidStateError, "Description type incompatible with current signaling state");
         return;
     }
 
@@ -163,7 +163,7 @@ void PeerConnectionBackend::setLocalDescriptionSucceeded()
 void PeerConnectionBackend::setLocalDescriptionFailed(Exception&& exception)
 {
     ASSERT(isMainThread());
-    RELEASE_LOG(WebRTC, "Setting local description failed:\n%s\n", exception.message().utf8().data());
+    RELEASE_LOG(WebRTC, "Setting local description failed:\n%{public}s\n", exception.message().utf8().data());
 
     if (m_peerConnection.isClosed())
         return;
@@ -198,7 +198,7 @@ void PeerConnectionBackend::setRemoteDescription(RTCSessionDescription& sessionD
     ASSERT(!m_peerConnection.isClosed());
 
     if (!isRemoteDescriptionTypeValidForState(sessionDescription.type(), m_peerConnection.signalingState())) {
-        promise.reject(INVALID_STATE_ERR, "Description type incompatible with current signaling state");
+        promise.reject(InvalidStateError, "Description type incompatible with current signaling state");
         return;
     }
 
@@ -223,7 +223,7 @@ void PeerConnectionBackend::setRemoteDescriptionSucceeded()
 void PeerConnectionBackend::setRemoteDescriptionFailed(Exception&& exception)
 {
     ASSERT(isMainThread());
-    RELEASE_LOG(WebRTC, "Setting remote description failed:\n%s\n", exception.message().utf8().data());
+    RELEASE_LOG(WebRTC, "Setting remote description failed:\n%{public}s\n", exception.message().utf8().data());
 
     if (m_peerConnection.isClosed())
         return;
@@ -270,7 +270,7 @@ void PeerConnectionBackend::addIceCandidateSucceeded()
 void PeerConnectionBackend::addIceCandidateFailed(Exception&& exception)
 {
     ASSERT(isMainThread());
-    RELEASE_LOG(WebRTC, "Adding ice candidate failed:\n%s\n", exception.message().utf8().data());
+    RELEASE_LOG(WebRTC, "Adding ice candidate failed:\n%{public}s\n", exception.message().utf8().data());
 
     if (m_peerConnection.isClosed())
         return;
@@ -297,7 +297,7 @@ void PeerConnectionBackend::disableICECandidateFiltering()
 {
     m_shouldFilterICECandidates = false;
     for (auto& pendingICECandidate : m_pendingICECandidates)
-        fireICECandidateEvent(RTCIceCandidate::create(WTFMove(pendingICECandidate.sdp), WTFMove(pendingICECandidate.mid), 0));
+        fireICECandidateEvent(RTCIceCandidate::create(WTFMove(pendingICECandidate.sdp), WTFMove(pendingICECandidate.mid), pendingICECandidate.sdpMLineIndex));
     m_pendingICECandidates.clear();
 }
 
@@ -323,7 +323,7 @@ static String filterICECandidate(String&& sdp)
         if (isFirst)
             isFirst = false;
         else
-            filteredSDP.append(" ");
+            filteredSDP.append(' ');
         filteredSDP.append(item);
     });
     return filteredSDP.toString();
@@ -347,19 +347,19 @@ String PeerConnectionBackend::filterSDP(String&& sdp) const
     return filteredSDP.toString();
 }
 
-void PeerConnectionBackend::newICECandidate(String&& sdp, String&& mid)
+void PeerConnectionBackend::newICECandidate(String&& sdp, String&& mid, unsigned short sdpMLineIndex)
 {
-    RELEASE_LOG(WebRTC, "Gathered ice candidate:\n%s\n", sdp.utf8().data());
+    RELEASE_LOG(WebRTC, "Gathered ice candidate:\n%{public}s\n", sdp.utf8().data());
 
     if (!m_shouldFilterICECandidates) {
-        fireICECandidateEvent(RTCIceCandidate::create(WTFMove(sdp), WTFMove(mid), 0));
+        fireICECandidateEvent(RTCIceCandidate::create(WTFMove(sdp), WTFMove(mid), sdpMLineIndex));
         return;
     }
     if (sdp.find(" host ", 0) != notFound) {
-        m_pendingICECandidates.append(PendingICECandidate { WTFMove(sdp), WTFMove(mid)});
+        m_pendingICECandidates.append(PendingICECandidate { WTFMove(sdp), WTFMove(mid), sdpMLineIndex});
         return;
     }
-    fireICECandidateEvent(RTCIceCandidate::create(filterICECandidate(WTFMove(sdp)), WTFMove(mid), 0));
+    fireICECandidateEvent(RTCIceCandidate::create(filterICECandidate(WTFMove(sdp)), WTFMove(mid), sdpMLineIndex));
 }
 
 void PeerConnectionBackend::doneGatheringCandidates()

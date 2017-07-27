@@ -188,7 +188,7 @@ struct MediaPlayerFactory {
     MediaEngineSupportsKeySystem supportsKeySystem;
 };
 
-static void addMediaEngine(CreateMediaEnginePlayer, MediaEngineSupportedTypes, MediaEngineSupportsType, MediaEngineOriginsInMediaCache, MediaEngineClearMediaCache, MediaEngineClearMediaCacheForOrigins, MediaEngineSupportsKeySystem);
+static void addMediaEngine(CreateMediaEnginePlayer&&, MediaEngineSupportedTypes, MediaEngineSupportsType, MediaEngineOriginsInMediaCache, MediaEngineClearMediaCache, MediaEngineClearMediaCacheForOrigins, MediaEngineSupportsKeySystem);
 
 static Lock& mediaEngineVectorLock()
 {
@@ -269,14 +269,14 @@ static const Vector<MediaPlayerFactory>& installedMediaEngines()
     return mutableInstalledMediaEnginesVector();
 }
 
-static void addMediaEngine(CreateMediaEnginePlayer constructor, MediaEngineSupportedTypes getSupportedTypes, MediaEngineSupportsType supportsType,
+static void addMediaEngine(CreateMediaEnginePlayer&& constructor, MediaEngineSupportedTypes getSupportedTypes, MediaEngineSupportsType supportsType,
     MediaEngineOriginsInMediaCache originsInMediaCache, MediaEngineClearMediaCache clearMediaCache, MediaEngineClearMediaCacheForOrigins clearMediaCacheForOrigins, MediaEngineSupportsKeySystem supportsKeySystem)
 {
     ASSERT(constructor);
     ASSERT(getSupportedTypes);
     ASSERT(supportsType);
 
-    mutableInstalledMediaEnginesVector().append(MediaPlayerFactory { constructor, getSupportedTypes, supportsType, originsInMediaCache, clearMediaCache, clearMediaCacheForOrigins, supportsKeySystem });
+    mutableInstalledMediaEnginesVector().append(MediaPlayerFactory { WTFMove(constructor), getSupportedTypes, supportsType, originsInMediaCache, clearMediaCache, clearMediaCacheForOrigins, supportsKeySystem });
 }
 
 static const AtomicString& applicationOctetStream()
@@ -680,9 +680,9 @@ PlatformLayer* MediaPlayer::platformLayer() const
 }
     
 #if PLATFORM(IOS) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
-void MediaPlayer::setVideoFullscreenLayer(PlatformLayer* layer, std::function<void()> completionHandler)
+void MediaPlayer::setVideoFullscreenLayer(PlatformLayer* layer, WTF::Function<void()>&& completionHandler)
 {
-    m_private->setVideoFullscreenLayer(layer, completionHandler);
+    m_private->setVideoFullscreenLayer(layer, WTFMove(completionHandler));
 }
 
 void MediaPlayer::setVideoFullscreenFrame(FloatRect frame)
@@ -1126,7 +1126,8 @@ bool MediaPlayer::supportsKeySystem(const String& keySystem, const String& mimeT
 void MediaPlayer::setPrivateBrowsingMode(bool privateBrowsingMode)
 {
     m_privateBrowsing = privateBrowsingMode;
-    m_private->setPrivateBrowsingMode(m_privateBrowsing);
+    if (m_private)
+        m_private->setPrivateBrowsingMode(m_privateBrowsing);
 }
 
 // Client callbacks.
@@ -1479,6 +1480,11 @@ bool MediaPlayer::shouldDisableSleep() const
 const Vector<ContentType>& MediaPlayer::mediaContentTypesRequiringHardwareSupport() const
 {
     return client().mediaContentTypesRequiringHardwareSupport();
+}
+
+bool MediaPlayer::shouldCheckHardwareSupport() const
+{
+    return client().mediaPlayerShouldCheckHardwareSupport();
 }
 
 }

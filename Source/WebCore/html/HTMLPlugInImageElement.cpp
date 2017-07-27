@@ -37,6 +37,7 @@
 #include "MainFrame.h"
 #include "MouseEvent.h"
 #include "Page.h"
+#include "PlatformMouseEvent.h"
 #include "PlugInClient.h"
 #include "PluginViewBase.h"
 #include "RenderImage.h"
@@ -50,6 +51,7 @@
 #include "StyleTreeResolver.h"
 #include "SubframeLoader.h"
 #include "TypedElementDescendantIterator.h"
+#include <runtime/CatchScope.h>
 
 namespace WebCore {
 

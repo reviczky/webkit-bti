@@ -85,6 +85,8 @@ public:
 
     bool isOriginClean(SecurityOrigin*);
 
+    void addPendingImageDrawingClient(CachedImageClient&);
+
 private:
     void clear();
 
@@ -132,7 +134,7 @@ private:
         void didDraw(const Image&) final;
 
         bool canDestroyDecodedData(const Image&) final;
-        void imageFrameAvailable(const Image&, ImageAnimatingState, const IntRect* changeRect = nullptr) final;
+        void imageFrameAvailable(const Image&, ImageAnimatingState, const IntRect* changeRect = nullptr, DecodingStatus = DecodingStatus::Invalid) final;
         void changedInRect(const Image&, const IntRect*) final;
 
         HashSet<CachedImage*> m_cachedImages;
@@ -141,7 +143,7 @@ private:
     void decodedSizeChanged(const Image&, long long delta);
     void didDraw(const Image&);
     bool canDestroyDecodedData(const Image&);
-    void imageFrameAvailable(const Image&, ImageAnimatingState, const IntRect* changeRect = nullptr);
+    void imageFrameAvailable(const Image&, ImageAnimatingState, const IntRect* changeRect = nullptr, DecodingStatus = DecodingStatus::Invalid);
     void changedInRect(const Image&, const IntRect*);
 
     void addIncrementalDataBuffer(SharedBuffer&);
@@ -151,6 +153,8 @@ private:
     typedef std::pair<LayoutSize, float> SizeAndZoom;
     typedef HashMap<const CachedImageClient*, SizeAndZoom> ContainerSizeRequests;
     ContainerSizeRequests m_pendingContainerSizeRequests;
+
+    HashSet<CachedImageClient*> m_pendingImageDrawingClients;
 
     RefPtr<CachedImageObserver> m_imageObserver;
     RefPtr<Image> m_image;

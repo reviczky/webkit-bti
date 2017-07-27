@@ -30,16 +30,6 @@ endif ()
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 define_property(TARGET PROPERTY FOLDER INHERITED BRIEF_DOCS "folder" FULL_DOCS "IDE folder name")
 
-if (COMPILER_IS_GCC_OR_CLANG)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-exceptions -fno-strict-aliasing")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-exceptions -fno-strict-aliasing -fno-rtti")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y")
-    if (NOT (COMPILER_IS_CLANG AND "${CLANG_VERSION}" VERSION_LESS 4.0.0))
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-expansion-to-defined")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-expansion-to-defined")
-    endif ()
-endif ()
-
 if (CMAKE_GENERATOR STREQUAL "Ninja")
     if (COMPILER_IS_CLANG)
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fcolor-diagnostics")
@@ -54,9 +44,39 @@ if (CMAKE_GENERATOR STREQUAL "Ninja")
     endif ()
 endif ()
 
-if (WIN32 AND COMPILER_IS_GCC_OR_CLANG)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mno-ms-bitfields -Wno-unknown-pragmas")
-    add_definitions(-D__USE_MINGW_ANSI_STDIO=1)
+# FIXME: Some warning flags should probably be set in WEBKIT_SET_EXTRA_COMPILER_FLAGS instead.
+# But language-specific warnings probably cannot be moved there.
+if (COMPILER_IS_GCC_OR_CLANG)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-strict-aliasing")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-strict-aliasing")
+
+    if (COMPILER_IS_CLANG_CL)
+        # clang-cl.exe impersonates cl.exe so some clang arguments like -fno-rtti are
+        # represented using cl.exe's options and should not be passed as flags, so 
+        # we do not add -fno-rtti or -fno-exceptions for clang-cl
+
+        # FIXME: These warnings should be addressed
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-undef -Wno-macro-redefined -Wno-unknown-pragmas -Wno-nonportable-include-path -Wno-unknown-argument")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-undef -Wno-macro-redefined -Wno-unknown-pragmas -Wno-nonportable-include-path -Wno-unknown-argument")
+    else ()
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-exceptions")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1y -fno-exceptions -fno-rtti")
+
+        if (WIN32)
+            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mno-ms-bitfields -Wno-unknown-pragmas")
+            add_definitions(-D{CMAKE_CXX_FLAGS} -mno-ms-bitfields -Wno-unknown-pragmas)
+            add_definitions(-D__USE_MINGW_ANSI_STDIO=1)
+        endif ()
+    endif ()
+
+    if (NOT (COMPILER_IS_CLANG AND "${CLANG_VERSION}" VERSION_LESS 4.0.0))
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-expansion-to-defined")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-expansion-to-defined")
+    endif ()
+
+    if (CMAKE_COMPILER_IS_GNUCXX AND ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER "7.0")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-noexcept-type")
+    endif ()
 endif ()
 
 # Ensure that the default include system directories are added to the list of CMake implicit includes.
@@ -107,7 +127,6 @@ if (WTF_CPU_ARM64_CORTEXA53)
     if (NOT WTF_CPU_ARM64)
         message(FATAL_ERROR "WTF_CPU_ARM64_CORTEXA53 set without WTF_CPU_ARM64")
     endif ()
-    include(TestCXXAcceptsFlag)
     CHECK_CXX_ACCEPTS_FLAG(-mfix-cortex-a53-835769 CXX_ACCEPTS_MFIX_CORTEX_A53_835769)
     if (CXX_ACCEPTS_MFIX_CORTEX_A53_835769)
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mfix-cortex-a53-835769")
@@ -128,7 +147,6 @@ if (WTF_CPU_ARM)
     int main() {}
    ")
 
-    include(CheckCXXSourceCompiles)
     CHECK_CXX_SOURCE_COMPILES("${ARM_THUMB2_TEST_SOURCE}" ARM_THUMB2_DETECTED)
     if (NOT ARM_THUMB2_DETECTED)
         set(ARM_TRADITIONAL_DETECTED TRUE)
@@ -138,7 +156,6 @@ if (WTF_CPU_ARM)
 endif ()
 
 # Use ld.gold if it is available and isn't disabled explicitly
-include(CMakeDependentOption)
 CMAKE_DEPENDENT_OPTION(USE_LD_GOLD "Use GNU gold linker" ON
                        "NOT CXX_ACCEPTS_MFIX_CORTEX_A53_835769;NOT ARM_TRADITIONAL_DETECTED;NOT WIN32;NOT APPLE" OFF)
 if (USE_LD_GOLD)
@@ -154,7 +171,6 @@ endif ()
 
 set(ENABLE_DEBUG_FISSION_DEFAULT OFF)
 if (USE_LD_GOLD AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    include(TestCXXAcceptsFlag)
     CHECK_CXX_ACCEPTS_FLAG(-gsplit-dwarf CXX_ACCEPTS_GSPLIT_DWARF)
     if (CXX_ACCEPTS_GSPLIT_DWARF)
         set(ENABLE_DEBUG_FISSION_DEFAULT ON)
@@ -214,21 +230,7 @@ if (NOT PORT STREQUAL "GTK")
     set(LIBEXEC_INSTALL_DIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE PATH "Absolute path to install executables executed by the library")
 endif ()
 
-# The Ninja generator does not yet know how to build archives in pieces, and so response
-# files must be used to deal with very long linker command lines.
-# CMake does this automatically, but the condition was wrong on Linux until CMake 3.2.
-# See https://cmake.org/Bug/view.php?id=14892
-if ((CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux") AND (CMAKE_VERSION VERSION_LESS 3.2))
-    set(CMAKE_NINJA_FORCE_RESPONSE_FILE 1)
-endif ()
-
 # Macros for determining HAVE values.
-include(CheckIncludeFile)
-include(CheckFunctionExists)
-include(CheckSymbolExists)
-include(CheckStructHasMember)
-include(CheckTypeSize)
-
 macro(_HAVE_CHECK_INCLUDE _variable _header)
     check_include_file(${_header} ${_variable}_value)
     SET_AND_EXPOSE_TO_BUILD(${_variable} ${_variable}_value)

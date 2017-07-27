@@ -418,7 +418,7 @@ void GraphicsLayer::setBackgroundColor(const Color& color)
     m_backgroundColor = color;
 }
 
-void GraphicsLayer::paintGraphicsLayerContents(GraphicsContext& context, const FloatRect& clip, GraphicsLayerPaintFlags flags)
+void GraphicsLayer::paintGraphicsLayerContents(GraphicsContext& context, const FloatRect& clip, GraphicsLayerPaintBehavior layerPaintBehavior)
 {
     FloatSize offset = offsetFromRenderer();
     context.translate(-offset);
@@ -426,7 +426,7 @@ void GraphicsLayer::paintGraphicsLayerContents(GraphicsContext& context, const F
     FloatRect clipRect(clip);
     clipRect.move(offset);
 
-    m_client.paintContents(this, context, m_paintingPhase, clipRect, flags);
+    m_client.paintContents(this, context, m_paintingPhase, clipRect, layerPaintBehavior);
 }
 
 String GraphicsLayer::animationNameForTransition(AnimatedPropertyID property)
@@ -672,7 +672,7 @@ void GraphicsLayer::addRepaintRect(const FloatRect& repaintRect)
     }
 }
 
-void GraphicsLayer::traverse(GraphicsLayer& layer, std::function<void (GraphicsLayer&)> traversalFunc)
+void GraphicsLayer::traverse(GraphicsLayer& layer, const WTF::Function<void (GraphicsLayer&)>& traversalFunc)
 {
     traversalFunc(layer);
 
@@ -970,6 +970,6 @@ void showGraphicsLayerTree(const WebCore::GraphicsLayer* layer)
         return;
 
     String output = layer->layerTreeAsText(WebCore::LayerTreeAsTextDebug | WebCore::LayerTreeAsTextIncludeVisibleRects | WebCore::LayerTreeAsTextIncludeTileCaches | WebCore::LayerTreeAsTextIncludeContentLayers);
-    WTFLogAlways("%s\n", output.utf8().data());
+    fprintf(stderr, "%s\n", output.utf8().data());
 }
 #endif

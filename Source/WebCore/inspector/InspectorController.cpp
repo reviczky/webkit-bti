@@ -34,6 +34,7 @@
 
 #include "CommandLineAPIHost.h"
 #include "CommonVM.h"
+#include "DOMWindow.h"
 #include "DOMWrapperWorld.h"
 #include "GraphicsContext.h"
 #include "InspectorApplicationCacheAgent.h"
@@ -51,7 +52,6 @@
 #include "InspectorMemoryAgent.h"
 #include "InspectorNetworkAgent.h"
 #include "InspectorPageAgent.h"
-#include "InspectorReplayAgent.h"
 #include "InspectorTimelineAgent.h"
 #include "InspectorWorkerAgent.h"
 #include "InstrumentingAgents.h"
@@ -153,10 +153,6 @@ InspectorController::InspectorController(Page& page, InspectorClient* inspectorC
     m_agents.append(std::make_unique<InspectorMemoryAgent>(pageContext));
 #endif
 
-#if ENABLE(WEB_REPLAY)
-    m_agents.append(std::make_unique<InspectorReplayAgent>(pageContext));
-#endif
-
     auto domStorageAgentPtr = std::make_unique<InspectorDOMStorageAgent>(pageContext, m_pageAgent);
     InspectorDOMStorageAgent* domStorageAgent = domStorageAgentPtr.get();
     m_agents.append(WTFMove(domStorageAgentPtr));
@@ -184,7 +180,7 @@ InspectorController::InspectorController(Page& page, InspectorClient* inspectorC
     m_agents.append(std::make_unique<InspectorLayerTreeAgent>(pageContext));
     m_agents.append(std::make_unique<InspectorWorkerAgent>(pageContext));
 
-    auto canvasAgentPtr = std::make_unique<InspectorCanvasAgent>(pageContext, pageAgent);
+    auto canvasAgentPtr = std::make_unique<InspectorCanvasAgent>(pageContext);
     m_instrumentingAgents->setInspectorCanvasAgent(canvasAgentPtr.get());
     m_agents.append(WTFMove(canvasAgentPtr));
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2015  Apple Inc. All Rights Reserved.
+ * Copyright (C) 2006-2017 Apple Inc. All rights reserved.
  * Copyright (C) 2008 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
  *
  * This library is free software; you can redistribute it and/or
@@ -53,6 +53,7 @@
 #include "FrameTree.h"
 #include "FrameView.h"
 #include "HTMLElement.h"
+#include "HTMLMediaElement.h"
 #include "HistoryController.h"
 #include "HistoryItem.h"
 #include "InspectorController.h"
@@ -115,11 +116,6 @@
 #include <wtf/text/Base64.h>
 #include <wtf/text/StringHash.h>
 
-#if ENABLE(WEB_REPLAY)
-#include "ReplayController.h"
-#include <replay/InputCursor.h>
-#endif
-
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
 #include "HTMLVideoElement.h"
 #include "MediaPlaybackTarget.h"
@@ -140,7 +136,12 @@
 
 namespace WebCore {
 
-static HashSet<Page*>* allPages;
+static HashSet<Page*>& allPages()
+{
+    static NeverDestroyed<HashSet<Page*>> set;
+    return set;
+}
+
 static unsigned nonUtilityPageCount { 0 };
 
 static inline bool isUtilityPageChromeClient(ChromeClient& chromeClient)
@@ -150,11 +151,9 @@ static inline bool isUtilityPageChromeClient(ChromeClient& chromeClient)
 
 DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, pageCounter, ("Page"));
 
-void Page::forEachPage(std::function<void(Page&)> function)
+void Page::forEachPage(const WTF::Function<void(Page&)>& function)
 {
-    if (!allPages)
-        return;
-    for (Page* page : *allPages)
+    for (auto* page : allPages())
         function(*page);
 }
 
@@ -167,15 +166,15 @@ void Page::updateValidationBubbleStateIfNeeded()
 static void networkStateChanged(bool isOnLine)
 {
     Vector<Ref<Frame>> frames;
-    
+
     // Get all the frames of all the pages in all the page groups
-    for (auto& page : *allPages) {
+    for (auto* page : allPages()) {
         for (Frame* frame = &page->mainFrame(); frame; frame = frame->tree().traverseNext())
             frames.append(*frame);
         InspectorInstrumentation::networkStateChanged(*page);
     }
 
-    AtomicString eventName = isOnLine ? eventNames().onlineEvent : eventNames().offlineEvent;
+    auto& eventName = isOnLine ? eventNames().onlineEvent : eventNames().offlineEvent;
     for (auto& frame : frames) {
         if (!frame->document())
             continue;
@@ -196,9 +195,6 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_contextMenuController(std::make_unique<ContextMenuController>(*this, *pageConfiguration.contextMenuClient))
 #endif
     , m_userInputBridge(std::make_unique<UserInputBridge>(*this))
-#if ENABLE(WEB_REPLAY)
-    , m_replayController(std::make_unique<ReplayController>(*this))
-#endif
     , m_inspectorController(std::make_unique<InspectorController>(*this, pageConfiguration.inspectorClient))
 #if ENABLE(POINTER_LOCK)
     , m_pointerLockController(std::make_unique<PointerLockController>(*this))
@@ -214,50 +210,16 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_performanceLoggingClient(WTFMove(pageConfiguration.performanceLoggingClient))
     , m_webGLStateTracker(WTFMove(pageConfiguration.webGLStateTracker))
     , m_libWebRTCProvider(WTFMove(pageConfiguration.libWebRTCProvider))
-    , m_openedByDOM(false)
-    , m_tabKeyCyclesThroughElements(true)
-    , m_defersLoading(false)
-    , m_defersLoadingCallCount(0)
-    , m_inLowQualityInterpolationMode(false)
-    , m_areMemoryCacheClientCallsEnabled(true)
-    , m_mediaVolume(1)
-    , m_pageScaleFactor(1)
-    , m_zoomedOutPageScaleFactor(0)
-    , m_topContentInset(0)
-#if ENABLE(TEXT_AUTOSIZING)
-    , m_textAutosizingWidth(0)
-#endif
-    , m_suppressScrollbarAnimations(false)
     , m_verticalScrollElasticity(ScrollElasticityAllowed)
     , m_horizontalScrollElasticity(ScrollElasticityAllowed)
-    , m_didLoadUserStyleSheet(false)
-    , m_userStyleSheetModificationTime(0)
-    , m_group(nullptr)
-    , m_debugger(nullptr)
-    , m_canStartMedia(true)
-#if ENABLE(VIEW_MODE_CSS_MEDIA)
-    , m_viewMode(ViewModeWindowed)
-#endif // ENABLE(VIEW_MODE_CSS_MEDIA)
     , m_domTimerAlignmentInterval(DOMTimer::defaultAlignmentInterval())
     , m_domTimerAlignmentIntervalIncreaseTimer(*this, &Page::domTimerAlignmentIntervalIncreaseTimerFired)
-    , m_isEditable(false)
-    , m_isPrerender(false)
     , m_activityState(PageInitialActivityState)
-    , m_requestedLayoutMilestones(0)
-    , m_headerHeight(0)
-    , m_footerHeight(0)
-    , m_isCountingRelevantRepaintedObjects(false)
-#ifndef NDEBUG
-    , m_isPainting(false)
-#endif
     , m_alternativeTextClient(pageConfiguration.alternativeTextClient)
-    , m_scriptedAnimationsSuspended(false)
     , m_consoleClient(std::make_unique<PageConsoleClient>(*this))
 #if ENABLE(REMOTE_INSPECTOR)
     , m_inspectorDebuggable(std::make_unique<PageDebuggable>(*this))
 #endif
-    , m_lastSpatialNavigationCandidatesCount(0) // NOTE: Only called from Internals for Spatial Navigation testing.
-    , m_forbidPromptsDepth(0)
     , m_socketProvider(WTFMove(pageConfiguration.socketProvider))
     , m_applicationCacheStorage(*WTFMove(pageConfiguration.applicationCacheStorage))
     , m_databaseProvider(*WTFMove(pageConfiguration.databaseProvider))
@@ -266,7 +228,6 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_userContentProvider(*WTFMove(pageConfiguration.userContentProvider))
     , m_visitedLinkStore(*WTFMove(pageConfiguration.visitedLinkStore))
     , m_sessionID(SessionID::defaultSessionID())
-    , m_isClosing(false)
     , m_isUtilityPage(isUtilityPageChromeClient(chrome().client()))
     , m_performanceMonitor(isUtilityPage() ? nullptr : std::make_unique<PerformanceMonitor>(*this))
     , m_lowPowerModeNotifier(std::make_unique<LowPowerModeNotifier>([this](bool isLowPowerModeEnabled) { handleLowModePowerChange(isLowPowerModeEnabled); }))
@@ -278,16 +239,19 @@ Page::Page(PageConfiguration&& pageConfiguration)
     m_userContentProvider->addPage(*this);
     m_visitedLinkStore->addPage(*this);
 
-    if (!allPages) {
-        allPages = new HashSet<Page*>;
-        
-        networkStateNotifier().addNetworkStateChangeListener(networkStateChanged);
+    static bool addedListener;
+    if (!addedListener) {
+        NetworkStateNotifier::singleton().addListener(&networkStateChanged);
+        addedListener = true;
     }
 
-    ASSERT(!allPages->contains(this));
-    allPages->add(this);
-    if (!isUtilityPage())
+    ASSERT(!allPages().contains(this));
+    allPages().add(this);
+
+    if (!isUtilityPage()) {
         ++nonUtilityPageCount;
+        MemoryPressureHandler::setPageCount(nonUtilityPageCount);
+    }
 
 #ifndef NDEBUG
     pageCounter.increment();
@@ -312,9 +276,11 @@ Page::~Page()
     m_performanceLoggingClient = nullptr;
     m_mainFrame->setView(nullptr);
     setGroupName(String());
-    allPages->remove(this);
-    if (!isUtilityPage())
+    allPages().remove(this);
+    if (!isUtilityPage()) {
         --nonUtilityPageCount;
+        MemoryPressureHandler::setPageCount(nonUtilityPageCount);
+    }
     
     m_settings->pageDestroyed();
 
@@ -334,7 +300,8 @@ Page::~Page()
         m_scrollingCoordinator->pageDestroyed();
 
     backForward().close();
-    PageCache::singleton().removeAllItemsForPage(*this);
+    if (!isUtilityPage())
+        PageCache::singleton().removeAllItemsForPage(*this);
 
 #ifndef NDEBUG
     pageCounter.decrement();
@@ -348,11 +315,8 @@ Page::~Page()
 
 void Page::clearPreviousItemFromAllPages(HistoryItem* item)
 {
-    if (!allPages)
-        return;
-
-    for (auto& page : *allPages) {
-        HistoryController& controller = page->mainFrame().loader().history();
+    for (auto* page : allPages()) {
+        auto& controller = page->mainFrame().loader().history();
         if (item == controller.previousItem()) {
             controller.clearPreviousItem();
             return;
@@ -551,7 +515,7 @@ void Page::setGroupName(const String& name)
 
 const String& Page::groupName() const
 {
-    return m_group ? m_group->name() : nullAtom.string();
+    return m_group ? m_group->name() : nullAtom().string();
 }
 
 void Page::initGroup()
@@ -564,9 +528,7 @@ void Page::initGroup()
 
 void Page::updateStyleForAllPagesAfterGlobalChangeInEnvironment()
 {
-    if (!allPages)
-        return;
-    for (auto& page : *allPages) {
+    for (auto* page : allPages()) {
         for (Frame* frame = &page->mainFrame(); frame; frame = frame->tree().traverseNext()) {
             // If a change in the global environment has occurred, we need to
             // make sure all the properties a recomputed, therefore we invalidate
@@ -591,12 +553,9 @@ void Page::setNeedsRecalcStyleInAllFrames()
 
 void Page::refreshPlugins(bool reload)
 {
-    if (!allPages)
-        return;
-
     HashSet<PluginInfoProvider*> pluginInfoProviders;
 
-    for (auto& page : *allPages)
+    for (auto* page : allPages())
         pluginInfoProviders.add(&page->pluginInfoProvider());
 
     for (auto& pluginInfoProvider : pluginInfoProviders)
@@ -987,6 +946,14 @@ void Page::setUserInterfaceLayoutDirection(UserInterfaceLayoutDirection userInte
     }
 #endif
 }
+
+#if ENABLE(VIDEO)
+void Page::updateMediaElementRateChangeRestrictions()
+{
+    for (auto* mediaElement : HTMLMediaElement::allMediaElements())
+        mediaElement->updateRateChangeRestrictions();
+}
+#endif
 
 void Page::didStartProvisionalLoad()
 {
@@ -1691,13 +1658,6 @@ void Page::setIsVisibleInternal(bool isVisible)
         }
     }
 
-    Vector<Ref<Document>> documents;
-    for (Frame* frame = &m_mainFrame.get(); frame; frame = frame->tree().traverseNext())
-        documents.append(*frame->document());
-
-    for (auto& document : documents)
-        document->visibilityStateChanged();
-
     if (!isVisible) {
         if (m_settings->hiddenPageCSSAnimationSuspensionEnabled())
             mainFrame().animation().suspendAnimations();
@@ -1707,11 +1667,19 @@ void Page::setIsVisibleInternal(bool isVisible)
 #if PLATFORM(IOS)
         suspendDeviceMotionAndOrientationUpdates();
 #endif
+
         suspendScriptedAnimations();
 
         if (FrameView* view = mainFrame().view())
             view->hide();
     }
+
+    Vector<Ref<Document>> documents;
+    for (Frame* frame = &m_mainFrame.get(); frame; frame = frame->tree().traverseNext())
+        documents.append(*frame->document());
+
+    for (auto& document : documents)
+        document->visibilityStateChanged();
 }
 
 void Page::setIsPrerender()
@@ -1783,19 +1751,18 @@ void Page::decrementNestedRunLoopCount()
 
             // This callback may destruct the Page.
             if (m_unnestCallback) {
-                auto callback = m_unnestCallback;
-                m_unnestCallback = nullptr;
+                auto callback = WTFMove(m_unnestCallback);
                 callback();
             }
         });
     }
 }
 
-void Page::whenUnnested(std::function<void()> callback)
+void Page::whenUnnested(WTF::Function<void()>&& callback)
 {
     ASSERT(!m_unnestCallback);
 
-    m_unnestCallback = callback;
+    m_unnestCallback = WTFMove(callback);
 }
 
 #if ENABLE(REMOTE_INSPECTOR)
@@ -2404,5 +2371,28 @@ bool Page::hasSelectionAtPosition(const FloatPoint& position) const
 }
 
 #endif
+
+void Page::disableICECandidateFiltering()
+{
+    m_shouldEnableICECandidateFilteringByDefault = false;
+#if ENABLE(WEB_RTC)
+    m_rtcController.disableICECandidateFiltering();
+#endif
+}
+
+void Page::enableICECandidateFiltering()
+{
+    m_shouldEnableICECandidateFilteringByDefault = true;
+#if ENABLE(WEB_RTC)
+    m_rtcController.enableICECandidateFiltering();
+#endif
+}
+
+void Page::didChangeMainDocument()
+{
+#if ENABLE(WEB_RTC)
+    m_rtcController.reset(m_shouldEnableICECandidateFilteringByDefault);
+#endif
+}
 
 } // namespace WebCore

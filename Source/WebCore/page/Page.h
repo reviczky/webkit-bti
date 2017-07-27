@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2010, 2013, 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2017 Apple Inc. All rights reserved.
  * Copyright (C) 2008 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
  *
  * This library is free software; you can redistribute it and/or
@@ -29,7 +29,6 @@
 #include "MediaProducer.h"
 #include "PageVisibilityState.h"
 #include "Pagination.h"
-#include "PlatformScreen.h"
 #include "RTCController.h"
 #include "Region.h"
 #include "ScrollTypes.h"
@@ -41,11 +40,10 @@
 #include "WheelEventTestTrigger.h"
 #include <memory>
 #include <wtf/Forward.h>
-#include <wtf/HashMap.h>
+#include <wtf/Function.h>
 #include <wtf/HashSet.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/Ref.h>
-#include <wtf/RefCounted.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/text/WTFString.h>
 
@@ -121,7 +119,6 @@ class ProgressTrackerClient;
 class Range;
 class RenderObject;
 class RenderTheme;
-class ReplayController;
 class ResourceUsageOverlay;
 class VisibleSelection;
 class ScrollableArea;
@@ -193,7 +190,7 @@ public:
 
     PageGroup& group();
 
-    static void forEachPage(std::function<void(Page&)>);
+    static void forEachPage(const WTF::Function<void(Page&)>&);
 
     void incrementSubframeCount() { ++m_subframeCount; }
     void decrementSubframeCount() { ASSERT(m_subframeCount); --m_subframeCount; }
@@ -202,7 +199,7 @@ public:
     void incrementNestedRunLoopCount();
     void decrementNestedRunLoopCount();
     bool insideNestedRunLoop() const { return m_nestedRunLoopCount > 0; }
-    WEBCORE_EXPORT void whenUnnested(std::function<void()>);
+    WEBCORE_EXPORT void whenUnnested(WTF::Function<void()>&&);
 
 #if ENABLE(REMOTE_INSPECTOR)
     WEBCORE_EXPORT bool remoteInspectionAllowed() const;
@@ -222,15 +219,18 @@ public:
     ContextMenuController& contextMenuController() const { return *m_contextMenuController; }
 #endif
     UserInputBridge& userInputBridge() const { return *m_userInputBridge; }
-#if ENABLE(WEB_REPLAY)
-    ReplayController& replayController() const { return *m_replayController; }
-#endif
     InspectorController& inspectorController() const { return *m_inspectorController; }
 #if ENABLE(POINTER_LOCK)
     PointerLockController& pointerLockController() const { return *m_pointerLockController; }
 #endif
     LibWebRTCProvider& libWebRTCProvider() { return m_libWebRTCProvider.get(); }
     RTCController& rtcController() { return m_rtcController; }
+    WEBCORE_EXPORT void disableICECandidateFiltering();
+    WEBCORE_EXPORT void enableICECandidateFiltering();
+    bool shouldEnableICECandidateFilteringByDefault() const { return m_shouldEnableICECandidateFilteringByDefault; }
+
+    void didChangeMainDocument();
+
     PerformanceMonitor* performanceMonitor() { return m_performanceMonitor.get(); }
 
     ValidationMessageClient* validationMessageClient() const { return m_validationMessageClient.get(); }
@@ -312,6 +312,8 @@ public:
 
     UserInterfaceLayoutDirection userInterfaceLayoutDirection() const { return m_userInterfaceLayoutDirection; }
     WEBCORE_EXPORT void setUserInterfaceLayoutDirection(UserInterfaceLayoutDirection);
+
+    WEBCORE_EXPORT void updateMediaElementRateChangeRestrictions();
 
     void didStartProvisionalLoad();
     void didFinishLoad(); // Called when the load has been committed in the main frame.
@@ -651,9 +653,6 @@ private:
     const std::unique_ptr<ContextMenuController> m_contextMenuController;
 #endif
     const std::unique_ptr<UserInputBridge> m_userInputBridge;
-#if ENABLE(WEB_REPLAY)
-    const std::unique_ptr<ReplayController> m_replayController;
-#endif
     const std::unique_ptr<InspectorController> m_inspectorController;
 #if ENABLE(POINTER_LOCK)
     const std::unique_ptr<PointerLockController> m_pointerLockController;
@@ -680,27 +679,27 @@ private:
     RTCController m_rtcController;
 
     int m_nestedRunLoopCount { 0 };
-    std::function<void()> m_unnestCallback;
+    WTF::Function<void()> m_unnestCallback;
 
     int m_subframeCount { 0 };
     String m_groupName;
-    bool m_openedByDOM;
+    bool m_openedByDOM { false };
 
-    bool m_tabKeyCyclesThroughElements;
-    bool m_defersLoading;
-    unsigned m_defersLoadingCallCount;
+    bool m_tabKeyCyclesThroughElements { true };
+    bool m_defersLoading { false };
+    unsigned m_defersLoadingCallCount { 0 };
 
-    bool m_inLowQualityInterpolationMode;
-    bool m_areMemoryCacheClientCallsEnabled;
-    float m_mediaVolume;
+    bool m_inLowQualityInterpolationMode { false };
+    bool m_areMemoryCacheClientCallsEnabled { true };
+    float m_mediaVolume { 1 };
     MediaProducer::MutedStateFlags m_mutedState { MediaProducer::NoneMuted };
 
-    float m_pageScaleFactor;
-    float m_zoomedOutPageScaleFactor;
+    float m_pageScaleFactor { 1 };
+    float m_zoomedOutPageScaleFactor { 0 };
     float m_deviceScaleFactor { 1 };
     float m_viewScaleFactor { 1 };
 
-    float m_topContentInset;
+    float m_topContentInset { 0 };
     FloatBoxExtent m_obscuredInsets;
     FloatBoxExtent m_unobscuredSafeAreaInsets;
 
@@ -709,10 +708,10 @@ private:
 #endif
 
 #if ENABLE(TEXT_AUTOSIZING)
-    float m_textAutosizingWidth;
+    float m_textAutosizingWidth { 0 };
 #endif
     
-    bool m_suppressScrollbarAnimations;
+    bool m_suppressScrollbarAnimations { false };
     
     unsigned m_verticalScrollElasticity : 2; // ScrollElasticity
     unsigned m_horizontalScrollElasticity : 2; // ScrollElasticity    
@@ -722,24 +721,24 @@ private:
 
     String m_userStyleSheetPath;
     mutable String m_userStyleSheet;
-    mutable bool m_didLoadUserStyleSheet;
-    mutable time_t m_userStyleSheetModificationTime;
+    mutable bool m_didLoadUserStyleSheet { false };
+    mutable time_t m_userStyleSheetModificationTime { 0 };
 
     String m_captionUserPreferencesStyleSheet;
 
     std::unique_ptr<PageGroup> m_singlePageGroup;
-    PageGroup* m_group;
+    PageGroup* m_group { nullptr };
 
-    JSC::Debugger* m_debugger;
+    JSC::Debugger* m_debugger { nullptr };
 
-    bool m_canStartMedia;
+    bool m_canStartMedia { true };
 
     RefPtr<StorageNamespace> m_sessionStorage;
     RefPtr<StorageNamespace> m_ephemeralLocalStorage;
 
 #if ENABLE(VIEW_MODE_CSS_MEDIA)
-    ViewMode m_viewMode;
-#endif // ENABLE(VIEW_MODE_CSS_MEDIA)
+    ViewMode m_viewMode { ViewModeWindowed };
+#endif
 
     TimerThrottlingState m_timerThrottlingState { TimerThrottlingState::Disabled };
     MonotonicTime m_timerThrottlingStateLastChangedTime;
@@ -747,26 +746,26 @@ private:
     Timer m_domTimerAlignmentIntervalIncreaseTimer;
     Seconds m_domTimerAlignmentIntervalIncreaseLimit;
 
-    bool m_isEditable;
-    bool m_isPrerender;
+    bool m_isEditable { false };
+    bool m_isPrerender { false };
     ActivityState::Flags m_activityState;
 
-    LayoutMilestones m_requestedLayoutMilestones;
+    LayoutMilestones m_requestedLayoutMilestones { 0 };
 
-    int m_headerHeight;
-    int m_footerHeight;
+    int m_headerHeight { 0 };
+    int m_footerHeight { 0 };
 
     HashSet<RenderObject*> m_relevantUnpaintedRenderObjects;
     Region m_topRelevantPaintedRegion;
     Region m_bottomRelevantPaintedRegion;
     Region m_relevantUnpaintedRegion;
-    bool m_isCountingRelevantRepaintedObjects;
+    bool m_isCountingRelevantRepaintedObjects { false };
 #ifndef NDEBUG
-    bool m_isPainting;
+    bool m_isPainting { false };
 #endif
     AlternativeTextClient* m_alternativeTextClient;
 
-    bool m_scriptedAnimationsSuspended;
+    bool m_scriptedAnimationsSuspended { false };
     const std::unique_ptr<PageConsoleClient> m_consoleClient;
 
 #if ENABLE(REMOTE_INSPECTOR)
@@ -780,8 +779,8 @@ private:
     HashSet<String> m_seenPlugins;
     HashSet<String> m_seenMediaEngines;
 
-    unsigned m_lastSpatialNavigationCandidatesCount;
-    unsigned m_forbidPromptsDepth;
+    unsigned m_lastSpatialNavigationCandidatesCount { 0 };
+    unsigned m_forbidPromptsDepth { 0 };
 
     Ref<SocketProvider> m_socketProvider;
     Ref<ApplicationCacheStorage> m_applicationCacheStorage;
@@ -800,7 +799,7 @@ private:
 
     SessionID m_sessionID;
 
-    bool m_isClosing;
+    bool m_isClosing { false };
 
     MediaProducer::MediaStateFlags m_mediaState { MediaProducer::IsNotPlaying };
     
@@ -823,6 +822,7 @@ private:
     std::optional<Navigation> m_navigationToLogWhenVisible;
 
     bool m_isRunningUserScripts { false };
+    bool m_shouldEnableICECandidateFilteringByDefault { true };
 };
 
 inline PageGroup& Page::group()

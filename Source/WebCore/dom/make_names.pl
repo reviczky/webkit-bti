@@ -806,11 +806,11 @@ sub printNamesCppFile
     print F StaticString::GenerateStringAsserts(\%allStrings);
 
     if (keys %allTags) {
-        my $tagsNamespace = $parameters{tagsNullNamespace} ? "nullAtom" : "${lowercaseNamespacePrefix}NS";
+        my $tagsNamespace = $parameters{tagsNullNamespace} ? "nullAtom()" : "${lowercaseNamespacePrefix}NS";
         printDefinitions($F, \%allTags, "tags", $tagsNamespace);
     }
     if (keys %allAttrs) {
-        my $attrsNamespace = $parameters{attrsNullNamespace} ? "nullAtom" : "${lowercaseNamespacePrefix}NS";
+        my $attrsNamespace = $parameters{attrsNullNamespace} ? "nullAtom()" : "${lowercaseNamespacePrefix}NS";
         printDefinitions($F, \%allAttrs, "attributes", $attrsNamespace);
     }
 
@@ -921,7 +921,7 @@ print F <<END
     for (auto& entry : ${type}Table)
 END
 ;
-    if ($namespaceURI eq "nullAtom") {
+    if ($namespaceURI eq "nullAtom()") {
         print F "        createQualifiedName(entry.targetAddress, &entry.name);\n";
     } else {
         print F "        createQualifiedName(entry.targetAddress, &entry.name, $namespaceURI);\n";
@@ -1008,7 +1008,7 @@ struct ConstructorFunctionMapEntry {
     const QualifiedName* qualifiedName; // Use pointer instead of reference so that emptyValue() in HashMap is cheap to create.
 };
 
-static NEVER_INLINE void populate$parameters{namespace}FactoryMap(HashMap<AtomicStringImpl*, ConstructorFunctionMapEntry>& map)
+static NEVER_INLINE HashMap<AtomicStringImpl*, ConstructorFunctionMapEntry> create$parameters{namespace}FactoryMap()
 {
     struct TableEntry {
         const QualifiedName& name;
@@ -1024,15 +1024,15 @@ END
     print F <<END
     };
 
+    HashMap<AtomicStringImpl*, ConstructorFunctionMapEntry> map;
     for (auto& entry : table)
         map.add(entry.name.localName().impl(), ConstructorFunctionMapEntry(entry.function, entry.name));
+    return map;
 }
 
 static ConstructorFunctionMapEntry find$parameters{namespace}ElementConstructorFunction(const AtomicString& localName)
 {
-    static NeverDestroyed<HashMap<AtomicStringImpl*, ConstructorFunctionMapEntry>> map;
-    if (map.get().isEmpty())
-        populate$parameters{namespace}FactoryMap(map);
+    static const auto map = makeNeverDestroyed(create$parameters{namespace}FactoryMap());
     return map.get().get(localName.impl());
 }
 
@@ -1063,7 +1063,7 @@ Ref<$parameters{namespace}Element> $parameters{namespace}ElementFactory::createE
         const auto& name = *entry.qualifiedName;
         return entry.function($argumentList);
     }
-    return $parameters{fallbackInterfaceName}::create(QualifiedName(nullAtom, localName, ${lowercaseNamespacePrefix}NamespaceURI), document);
+    return $parameters{fallbackInterfaceName}::create(QualifiedName(nullAtom(), localName, ${lowercaseNamespacePrefix}NamespaceURI), document);
 }
 
 Ref<$parameters{namespace}Element> $parameters{namespace}ElementFactory::createElement(const QualifiedName& name, Document& document$formElementArgumentForDefinition, bool createdByParser)
@@ -1267,7 +1267,7 @@ END
 
 print F <<END
 
-static NEVER_INLINE void populate$parameters{namespace}WrapperMap(HashMap<AtomicStringImpl*, Create$parameters{namespace}ElementWrapperFunction>& map)
+static NEVER_INLINE HashMap<AtomicStringImpl*, Create$parameters{namespace}ElementWrapperFunction> create$parameters{namespace}WrapperMap()
 {
     struct TableEntry {
         const QualifiedName& name;
@@ -1305,15 +1305,15 @@ END
     print F <<END
     };
 
+    HashMap<AtomicStringImpl*, Create$parameters{namespace}ElementWrapperFunction> map;
     for (auto& entry : table)
         map.add(entry.name.localName().impl(), entry.function);
+    return map;
 }
 
 JSDOMObject* createJS$parameters{namespace}Wrapper(JSDOMGlobalObject* globalObject, Ref<$parameters{namespace}Element>&& element)
 {
-    static NeverDestroyed<HashMap<AtomicStringImpl*, Create$parameters{namespace}ElementWrapperFunction>> functions;
-    if (functions.get().isEmpty())
-        populate$parameters{namespace}WrapperMap(functions);
+    static const auto functions = makeNeverDestroyed(create$parameters{namespace}WrapperMap());
     if (auto function = functions.get().get(element->localName().impl()))
         return function(globalObject, WTFMove(element));
 END

@@ -31,7 +31,6 @@
 #include <wtf/FastMalloc.h>
 #include <wtf/Forward.h>
 #include <wtf/Function.h>
-#include <wtf/NeverDestroyed.h>
 #include <wtf/Optional.h>
 #include <wtf/RunLoop.h>
 
@@ -147,6 +146,8 @@ public:
     WTF_EXPORT_PRIVATE void setProcessState(WebsamProcessState);
     WebsamProcessState processState() const { return m_processState; }
 
+    WTF_EXPORT_PRIVATE static void setPageCount(unsigned);
+
 private:
     size_t thresholdForMemoryKill();
     void memoryPressureStatusChanged();
@@ -189,6 +190,8 @@ private:
 #endif
 
     WebsamProcessState m_processState { WebsamProcessState::Inactive };
+
+    unsigned m_pageCount { 0 };
 
     bool m_installed { false };
     LowMemoryHandler m_lowMemoryHandler;

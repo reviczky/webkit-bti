@@ -37,7 +37,7 @@
 
 namespace JSC {
 
-class MacroAssemblerX86Common : public AbstractMacroAssembler<X86Assembler, MacroAssemblerX86Common> {
+class MacroAssemblerX86Common : public AbstractMacroAssembler<X86Assembler> {
 public:
 #if CPU(X86_64)
     // Use this directly only if you're not generating code with it.
@@ -3803,9 +3803,9 @@ public:
     }
 #endif
 
-    static void replaceWithBreakpoint(CodeLocationLabel instructionStart)
+    static void replaceWithVMHalt(CodeLocationLabel instructionStart)
     {
-        X86Assembler::replaceWithInt3(instructionStart.executableAddress());
+        X86Assembler::replaceWithHlt(instructionStart.executableAddress());
     }
 
     static void replaceWithJump(CodeLocationLabel instructionStart, CodeLocationLabel destination)
@@ -3869,10 +3869,6 @@ public:
         s_sse4_1CheckState = (flags & (1 << 19)) ? CPUIDCheckState::Set : CPUIDCheckState::Clear;
         s_avxCheckState = (flags & (1 << 28)) ? CPUIDCheckState::Set : CPUIDCheckState::Clear;
     }
-
-#if ENABLE(MASM_PROBE)
-    void probe(ProbeFunction, void* arg);
-#endif // ENABLE(MASM_PROBE)
 
 protected:
     X86Assembler::Condition x86Condition(RelationalCondition cond)

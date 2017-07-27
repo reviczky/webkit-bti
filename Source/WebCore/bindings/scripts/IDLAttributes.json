@@ -34,9 +34,12 @@
         "CallbackNeedsOperatorEqual": {
             "contextsAllowed": ["callback-function"]
         },
+        "CallNamedSetterOnlyForSupportedProperties": {
+            "contextsAllowed": ["operation"]
+        },
         "CallWith": {
             "contextsAllowed": ["attribute", "operation"],
-            "values": ["Document", "ScriptExecutionContext", "ScriptState", "ScriptArguments", "CallStack", "GlobalObject", "ActiveWindow", "FirstWindow", "ResponsibleDocument"]
+            "values": ["Document", "ScriptExecutionContext", "ScriptState", "GlobalObject", "ActiveWindow", "FirstWindow", "ResponsibleDocument", "World"]
         },
         "CheckSecurity": {
             "contextsAllowed": ["interface"]
@@ -52,6 +55,10 @@
         },
         "Conditional": {
             "contextsAllowed": ["interface", "dictionary", "dictionary-member", "enum", "attribute", "operation", "constant", "callback-function"],
+            "values": ["*"]
+        },
+        "ConditionallyReadWrite": {
+            "contextsAllowed": ["attribute"],
             "values": ["*"]
         },
         "ConstantsScope": {
@@ -74,9 +81,6 @@
         "Custom": {
             "contextsAllowed": ["attribute", "operation"]
         },
-        "CustomCall": {
-            "contextsAllowed": ["interface"]
-        },
         "CustomConstructor": {
             "contextsAllowed": ["interface"]
         },
@@ -89,16 +93,13 @@
         "CustomDeleteProperty": {
             "contextsAllowed": ["interface"]
         },
-        "CustomEnumerateProperty": {
+        "CustomGetCallData": {
+            "contextsAllowed": ["interface"]
+        },
+        "CustomGetOwnPropertyNames": {
             "contextsAllowed": ["interface"]
         },
         "CustomGetOwnPropertySlot": {
-            "contextsAllowed": ["interface"]
-        },
-        "CustomGetOwnPropertySlotByIndex": {
-            "contextsAllowed": ["interface"]
-        },
-        "CustomGetOwnPropertySlotAndDescriptor": {
             "contextsAllowed": ["interface"]
         },
         "CustomGetPrototype": {
@@ -113,12 +114,6 @@
         "CustomIsReachable": {
             "contextsAllowed": ["interface"]
         },
-        "CustomNamedGetterOnPrototype": {
-            "contextsAllowed": ["interface"]
-        },
-        "CustomNamedSetter": {
-            "contextsAllowed": ["interface"]
-        },
         "CustomPreventExtensions": {
             "contextsAllowed": ["interface"]
         },
@@ -128,7 +123,10 @@
         "CustomPushEventHandlerScope": {
             "contextsAllowed": ["interface"]
         },
-        "CustomPutFunction": {
+        "CustomPut": {
+            "contextsAllowed": ["interface"]
+        },
+        "CustomPutOnPrototype": {
             "contextsAllowed": ["interface"]
         },
         "CustomSetter": {
@@ -143,6 +141,9 @@
         "DOMJIT": {
             "contextsAllowed": ["interface", "attribute", "operation"],
             "values": ["", "ReadDOM", "Getter"]
+        },
+        "DefaultDefineOwnProperty": {
+            "contextsAllowed": ["interface"]
         },
         "DoNotCheckConstants": {
             "contextsAllowed": ["interface"]
@@ -337,6 +338,10 @@
             "contextsAllowed": ["operation"],
             "notes" : "Only used by WebKitTestRunner and DumpRenderTree"
         },
+        "Plugin": {
+            "contextsAllowed": ["interface"],
+            "notes" : "Should only be used by elements that forward to Netscape plug-ins"
+        },
         "PrimaryGlobal": {
             "contextsAllowed": ["interface"],
             "values": ["*"],
@@ -382,6 +387,9 @@
         "ReturnsOwnPromise": {
             "contextsAllowed": ["operation"]
         },
+        "ReturnValue": {
+            "contextsAllowed": ["argument"]
+        },
         "SameObject": {
             "contextsAllowed": ["attribute"],
             "standard": {
@@ -397,7 +405,7 @@
         },
         "SetterCallWith": {
             "contextsAllowed": ["attribute"],
-            "values": ["ScriptExecutionContext", "ScriptState", "ScriptArguments", "CallStack", "GlobalObject", "ActiveWindow", "FirstWindow"]
+            "values": ["ScriptExecutionContext", "ScriptState", "GlobalObject", "ActiveWindow", "FirstWindow"]
         },
         "SetterMayThrowException": {
             "contextsAllowed": ["attribute"]

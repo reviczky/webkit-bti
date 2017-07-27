@@ -33,6 +33,7 @@
 #include "BatchedTransitionOptimizer.h"
 #include "Bytecodes.h"
 #include "CallFrameClosure.h"
+#include "CatchScope.h"
 #include "CodeBlock.h"
 #include "DirectArguments.h"
 #include "Heap.h"
@@ -43,6 +44,7 @@
 #include "EvalCodeBlock.h"
 #include "Exception.h"
 #include "ExceptionHelpers.h"
+#include "FrameTracers.h"
 #include "FunctionCodeBlock.h"
 #include "InterpreterInlines.h"
 #include "JSArrayInlines.h"
@@ -365,9 +367,9 @@ void Interpreter::dumpCallFrame(CallFrame* callFrame)
     dumpRegisters(callFrame);
 }
 
-class DumpRegisterFunctor {
+class DumpReturnVirtualPCFunctor {
 public:
-    DumpRegisterFunctor(const Register*& it)
+    DumpReturnVirtualPCFunctor(const Register*& it)
         : m_hasSkippedFirstFrame(false)
         , m_it(it)
     {
@@ -429,7 +431,7 @@ void Interpreter::dumpRegisters(CallFrame* callFrame)
         dataLogF("[ReturnJITPC]              | %10p | %p \n", it, pc.jitReturnAddress().value());
 #endif
 
-    DumpRegisterFunctor functor(it);
+    DumpReturnVirtualPCFunctor functor(it);
     callFrame->iterate(functor);
 
     dataLogF("[CodeBlock]                | %10p | %p \n", it, callFrame->codeBlock());

@@ -40,6 +40,7 @@
 #include "B3ValueInlines.h"
 #include "RegisterSet.h"
 #include <wtf/HashMap.h>
+#include <wtf/ListDump.h>
 
 namespace JSC { namespace B3 { namespace Air {
 
@@ -180,7 +181,7 @@ void lowerAfterRegAlloc(Code& code)
                 regsToSave.exclude(RegisterSet::stackRegisters());
                 regsToSave.exclude(RegisterSet::reservedHardwareRegisters());
 
-                RegisterSet preUsed = regsToSave;
+                RegisterSet preUsed = liveRegs;
                 Vector<Arg> destinations = computeCCallingConvention(code, value);
                 Tmp result = cCallResult(value->type());
                 Arg originalResult = result ? inst.args[1] : Arg();
@@ -231,7 +232,7 @@ void lowerAfterRegAlloc(Code& code)
                     inst.kind.effects = true;
 
                 // Now we need to emit code to restore registers.
-                pairs.resize(0);
+                pairs.shrink(0);
                 unsigned stackSlotIndex = 0;
                 regsToSave.forEach(
                     [&] (Reg reg) {

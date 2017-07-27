@@ -32,10 +32,12 @@
 #include "Color.h"
 #include "CounterDirectives.h"
 #include "DataRef.h"
+#include "FilterOperations.h"
 #include "FontDescription.h"
 #include "GraphicsTypes.h"
 #include "Length.h"
 #include "LengthBox.h"
+#include "LengthFunctions.h"
 #include "LengthPoint.h"
 #include "LengthSize.h"
 #include "LineClampValue.h"
@@ -101,7 +103,6 @@ class BorderData;
 class ContentData;
 class CounterContent;
 class CursorList;
-class FilterOperations;
 class FontCascade;
 class FontMetrics;
 class IntRect;
@@ -347,7 +348,7 @@ public:
     WEBCORE_EXPORT const FontCascadeDescription& fontDescription() const;
     float specifiedFontSize() const;
     float computedFontSize() const;
-    int fontSize() const;
+    unsigned computedFontPixelSize() const;
     std::pair<FontOrientation, NonCJKGlyphOrientation> fontAndGlyphOrientation();
 
 #if ENABLE(VARIATION_FONTS)
@@ -1266,6 +1267,7 @@ public:
     const Length& strokeWidth() const { return m_rareInheritedData->strokeWidth; }
     void setStrokeWidth(Length&& w) { SET_VAR(m_rareInheritedData, strokeWidth, WTFMove(w)); }
     bool hasVisibleStroke() const { return svgStyle().hasStroke() && !strokeWidth().isZero(); }
+    static Length initialStrokeWidth() { return initialOneLength(); }
 
     float computedStrokeWidth(const IntSize& viewportSize) const;
     void setHasExplicitlySetStrokeWidth(bool v) { SET_VAR(m_rareInheritedData, hasSetStrokeWidth, static_cast<unsigned>(v)); }
@@ -1278,6 +1280,7 @@ public:
     const Color& visitedLinkStrokeColor() const { return m_rareInheritedData->visitedLinkStrokeColor; }
     void setHasExplicitlySetStrokeColor(bool v) { SET_VAR(m_rareInheritedData, hasSetStrokeColor, static_cast<unsigned>(v)); }
     bool hasExplicitlySetStrokeColor() const { return m_rareInheritedData->hasSetStrokeColor; };
+    static Color initialStrokeColor() { return Color(Color::transparent); }
     
     float strokeMiterLimit() const { return m_rareInheritedData->miterLimit; }
     void setStrokeMiterLimit(float f) { SET_VAR(m_rareInheritedData, miterLimit, f); }
@@ -1521,7 +1524,7 @@ public:
     static short initialHyphenationLimitBefore() { return -1; }
     static short initialHyphenationLimitAfter() { return -1; }
     static short initialHyphenationLimitLines() { return -1; }
-    static const AtomicString& initialHyphenationString() { return nullAtom; }
+    static const AtomicString& initialHyphenationString() { return nullAtom(); }
     static EBorderFit initialBorderFit() { return BorderFitBorder; }
     static EResize initialResize() { return RESIZE_NONE; }
     static ControlPart initialAppearance() { return NoControlPart; }
@@ -1548,7 +1551,7 @@ public:
     static Color initialTextEmphasisColor() { return TextEmphasisFillFilled; }
     static TextEmphasisFill initialTextEmphasisFill() { return TextEmphasisFillFilled; }
     static TextEmphasisMark initialTextEmphasisMark() { return TextEmphasisMarkNone; }
-    static const AtomicString& initialTextEmphasisCustomMark() { return nullAtom; }
+    static const AtomicString& initialTextEmphasisCustomMark() { return nullAtom(); }
     static TextEmphasisPosition initialTextEmphasisPosition() { return TextEmphasisPositionOver | TextEmphasisPositionRight; }
     static RubyPosition initialRubyPosition() { return RubyPositionBefore; }
     static LineBoxContain initialLineBoxContain() { return LineBoxContainBlock | LineBoxContainInline | LineBoxContainReplaced; }
@@ -1561,7 +1564,7 @@ public:
     static StyleImage* initialMaskBoxImageSource() { return nullptr; }
     static PrintColorAdjust initialPrintColorAdjust() { return PrintColorAdjustEconomy; }
     static QuotesData* initialQuotes() { return nullptr; }
-    static const AtomicString& initialContentAltText() { return emptyAtom; }
+    static const AtomicString& initialContentAltText() { return emptyAtom(); }
 
 #if ENABLE(CSS3_TEXT)
     static TextIndentLine initialTextIndentLine() { return TextIndentFirstLine; }
@@ -1636,12 +1639,12 @@ public:
 
     static unsigned initialTabSize() { return 8; }
 
-    static const AtomicString& initialLineGrid() { return nullAtom; }
+    static const AtomicString& initialLineGrid() { return nullAtom(); }
     static LineSnap initialLineSnap() { return LineSnapNone; }
     static LineAlign initialLineAlign() { return LineAlignNone; }
 
-    static const AtomicString& initialFlowThread() { return nullAtom; }
-    static const AtomicString& initialRegionThread() { return nullAtom; }
+    static const AtomicString& initialFlowThread() { return nullAtom(); }
+    static const AtomicString& initialRegionThread() { return nullAtom(); }
     static RegionFragment initialRegionFragment() { return AutoRegionFragment; }
 
     static IntSize initialInitialLetter() { return IntSize(); }
