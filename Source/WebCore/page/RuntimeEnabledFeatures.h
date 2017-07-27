@@ -32,7 +32,8 @@
 #pragma once
 
 #include "PlatformExportMacros.h"
-#include <wtf/NeverDestroyed.h>
+#include <wtf/Forward.h>
+#include <wtf/Noncopyable.h>
 
 namespace WebCore {
 
@@ -191,6 +192,11 @@ public:
     bool encryptedMediaAPIEnabled() const { return m_encryptedMediaAPIEnabled; }
 #endif
 
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
+    void setLegacyEncryptedMediaAPIEnabled(bool isEnabled) { m_legacyEncryptedMediaAPIEnabled = isEnabled; }
+    bool legacyEncryptedMediaAPIEnabled() const { return m_legacyEncryptedMediaAPIEnabled; }
+#endif
+
 #if ENABLE(VIDEO)
     bool audioEnabled() const;
 #endif
@@ -206,7 +212,7 @@ private:
     RuntimeEnabledFeatures();
 
     bool m_areModernMediaControlsEnabled { false };
-    bool m_isLinkPreloadEnabled { false };
+    bool m_isLinkPreloadEnabled { true };
     bool m_isMediaPreloadingEnabled { false };
     bool m_isResourceTimingEnabled { false };
     bool m_isUserTimingEnabled { false };
@@ -298,6 +304,10 @@ private:
 
 #if ENABLE(ENCRYPTED_MEDIA)
     bool m_encryptedMediaAPIEnabled { false };
+#endif
+
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
+    bool m_legacyEncryptedMediaAPIEnabled { false };
 #endif
 
 #if ENABLE(INTERSECTION_OBSERVER)

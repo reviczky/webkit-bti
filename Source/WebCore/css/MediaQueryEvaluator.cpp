@@ -33,10 +33,7 @@
 #include "CSSPrimitiveValue.h"
 #include "CSSToLengthConversionData.h"
 #include "CSSValueKeywords.h"
-#include "CSSValueList.h"
-#include "FloatRect.h"
 #include "FrameView.h"
-#include "IntRect.h"
 #include "MainFrame.h"
 #include "MediaFeatureNames.h"
 #include "MediaList.h"
@@ -46,7 +43,6 @@
 #include "PlatformScreen.h"
 #include "RenderStyle.h"
 #include "RenderView.h"
-#include "Screen.h"
 #include "Settings.h"
 #include "StyleResolver.h"
 #include "Theme.h"
@@ -687,14 +683,18 @@ static bool prefersReducedMotionEvaluate(CSSValue* value, const CSSToLengthConve
 {
     bool userPrefersReducedMotion = false;
 
-    if (frame.settings().forcedPrefersReducedMotionAccessibilityValue() == Settings::ForcedAccessibilityValue::On)
+    switch (frame.settings().forcedPrefersReducedMotionAccessibilityValue()) {
+    case Settings::ForcedAccessibilityValue::On:
         userPrefersReducedMotion = true;
-    else if (frame.settings().forcedPrefersReducedMotionAccessibilityValue() == Settings::ForcedAccessibilityValue::Off)
-        userPrefersReducedMotion = false;
-#if PLATFORM(IOS) || USE(NEW_THEME)
-    else
-        userPrefersReducedMotion = platformTheme()->userPrefersReducedMotion();
+        break;
+    case Settings::ForcedAccessibilityValue::Off:
+        break;
+    case Settings::ForcedAccessibilityValue::System:
+#if USE(NEW_THEME)
+        userPrefersReducedMotion = Theme::singleton().userPrefersReducedMotion();
 #endif
+        break;
+    }
 
     if (!value)
         return userPrefersReducedMotion;

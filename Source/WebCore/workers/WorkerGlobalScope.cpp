@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2008-2017 Apple Inc. All Rights Reserved.
  * Copyright (C) 2009, 2011 Google Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,7 +30,6 @@
 
 #include "ContentSecurityPolicy.h"
 #include "Crypto.h"
-#include "ExceptionCode.h"
 #include "IDBConnectionProxy.h"
 #include "InspectorInstrumentation.h"
 #include "Performance.h"
@@ -152,6 +151,11 @@ void WorkerGlobalScope::disableEval(const String& errorMessage)
     m_script->disableEval(errorMessage);
 }
 
+void WorkerGlobalScope::disableWebAssembly(const String& errorMessage)
+{
+    m_script->disableWebAssembly(errorMessage);
+}
+
 #if ENABLE(WEB_SOCKETS)
 
 SocketProvider* WorkerGlobalScope::socketProvider()
@@ -218,8 +222,16 @@ void WorkerGlobalScope::postTask(Task&& task)
     thread().runLoop().postTask(WTFMove(task));
 }
 
-int WorkerGlobalScope::setTimeout(std::unique_ptr<ScheduledAction> action, int timeout)
+ExceptionOr<int> WorkerGlobalScope::setTimeout(JSC::ExecState& state, std::unique_ptr<ScheduledAction> action, int timeout, Vector<JSC::Strong<JSC::Unknown>>&& arguments)
 {
+    // FIXME: Should this check really happen here? Or should it happen when code is about to eval?
+    if (action->type() == ScheduledAction::Type::Code) {
+        if (!contentSecurityPolicy()->allowEval(&state))
+            return 0;
+    }
+
+    action->addArguments(WTFMove(arguments));
+
     return DOMTimer::install(*this, WTFMove(action), Seconds::fromMilliseconds(timeout), true);
 }
 
@@ -228,8 +240,16 @@ void WorkerGlobalScope::clearTimeout(int timeoutId)
     DOMTimer::removeById(*this, timeoutId);
 }
 
-int WorkerGlobalScope::setInterval(std::unique_ptr<ScheduledAction> action, int timeout)
+ExceptionOr<int> WorkerGlobalScope::setInterval(JSC::ExecState& state, std::unique_ptr<ScheduledAction> action, int timeout, Vector<JSC::Strong<JSC::Unknown>>&& arguments)
 {
+    // FIXME: Should this check really happen here? Or should it happen when code is about to eval?
+    if (action->type() == ScheduledAction::Type::Code) {
+        if (!contentSecurityPolicy()->allowEval(&state))
+            return 0;
+    }
+
+    action->addArguments(WTFMove(arguments));
+
     return DOMTimer::install(*this, WTFMove(action), Seconds::fromMilliseconds(timeout), false);
 }
 
@@ -247,7 +267,7 @@ ExceptionOr<void> WorkerGlobalScope::importScripts(const Vector<String>& urls)
     for (auto& entry : urls) {
         URL url = completeURL(entry);
         if (!url.isValid())
-            return Exception { SYNTAX_ERR };
+            return Exception { SyntaxError };
         completedURLs.uncheckedAppend(WTFMove(url));
     }
 
@@ -255,14 +275,14 @@ ExceptionOr<void> WorkerGlobalScope::importScripts(const Vector<String>& urls)
         // FIXME: Convert this to check the isolated world's Content Security Policy once webkit.org/b/104520 is solved.
         bool shouldBypassMainWorldContentSecurityPolicy = this->shouldBypassMainWorldContentSecurityPolicy();
         if (!shouldBypassMainWorldContentSecurityPolicy && !contentSecurityPolicy()->allowScriptFromSource(url))
-            return Exception { NETWORK_ERR };
+            return Exception { NetworkError };
 
         auto scriptLoader = WorkerScriptLoader::create();
         scriptLoader->loadSynchronously(this, url, FetchOptions::Mode::NoCors, shouldBypassMainWorldContentSecurityPolicy ? ContentSecurityPolicyEnforcement::DoNotEnforce : ContentSecurityPolicyEnforcement::EnforceScriptSrcDirective, resourceRequestIdentifier());
 
-        // If the fetching attempt failed, throw a NETWORK_ERR exception and abort all these steps.
+        // If the fetching attempt failed, throw a NetworkError exception and abort all these steps.
         if (scriptLoader->failed())
-            return Exception { NETWORK_ERR };
+            return Exception { NetworkError };
 
         InspectorInstrumentation::scriptImported(*this, scriptLoader->identifier(), scriptLoader->script());
 

@@ -35,7 +35,6 @@
 #include "Event.h"
 #include "EventListener.h"
 #include "EventNames.h"
-#include "ExceptionCode.h"
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "FrameView.h"
@@ -369,15 +368,15 @@ const AtomicString& HTMLElement::eventNameForEventHandlerAttribute(const Qualifi
 
     // Event handler attributes have no namespace.
     if (!attributeName.namespaceURI().isNull())
-        return nullAtom;
+        return nullAtom();
 
     // Fast early return for names that don't start with "on".
     AtomicStringImpl& localName = *attributeName.localName().impl();
     if (localName.length() < 3 || localName[0] != 'o' || localName[1] != 'n')
-        return nullAtom;
+        return nullAtom();
 
     auto it = map.find(&localName);
-    return it == map.end() ? nullAtom : it->value;
+    return it == map.end() ? nullAtom() : it->value;
 }
 
 const AtomicString& HTMLElement::eventNameForEventHandlerAttribute(const QualifiedName& attributeName)
@@ -489,7 +488,7 @@ static inline const AtomicString& toValidDirValue(const AtomicString& value)
         return rtlValue;
     if (equalLettersIgnoringASCIICase(value, "auto"))
         return autoValue;
-    return nullAtom;
+    return nullAtom();
 }
 
 const AtomicString& HTMLElement::dir() const
@@ -542,7 +541,7 @@ ExceptionOr<void> HTMLElement::setOuterText(const String& text)
 {
     RefPtr<ContainerNode> parent = parentNode();
     if (!parent)
-        return Exception { NO_MODIFICATION_ALLOWED_ERR };
+        return Exception { NoModificationAllowedError };
 
     RefPtr<Node> prev = previousSibling();
     RefPtr<Node> next = nextSibling();
@@ -555,7 +554,7 @@ ExceptionOr<void> HTMLElement::setOuterText(const String& text)
         newChild = Text::create(document(), text);
 
     if (!parentNode())
-        return Exception { HIERARCHY_REQUEST_ERR };
+        return Exception { HierarchyRequestError };
 
     auto replaceResult = parent->replaceChild(*newChild, *this);
     if (replaceResult.hasException())
@@ -646,7 +645,7 @@ ExceptionOr<void> HTMLElement::setContentEditable(const String& enabled)
     else if (equalLettersIgnoringASCIICase(enabled, "inherit"))
         removeAttribute(contenteditableAttr);
     else
-        return Exception { SYNTAX_ERR };
+        return Exception { SyntaxError };
     return { };
 }
 

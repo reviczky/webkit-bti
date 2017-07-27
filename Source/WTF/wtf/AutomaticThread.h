@@ -29,9 +29,7 @@
 #include <wtf/Box.h>
 #include <wtf/Condition.h>
 #include <wtf/Lock.h>
-#include <wtf/Ref.h>
 #include <wtf/ThreadSafeRefCounted.h>
-#include <wtf/Threading.h>
 #include <wtf/Vector.h>
 
 namespace WTF {
@@ -61,7 +59,7 @@ namespace WTF {
 // The terminology we use is:
 //
 // [1] PollResult AutomaticThread::poll()
-// [2] WordResult AutomaticThread::work()
+// [2] WorkResult AutomaticThread::work()
 //
 // Note that poll() and work() may not be called on the same thread every time, since this will shut
 // down the thread as necessary. This is legal since m_condition.wait(m_lock) can drop the lock, and
@@ -84,6 +82,7 @@ public:
     // threads. In such cases, the thread doing the notifyAll() can wake up at most one thread -
     // its partner.
     WTF_EXPORT_PRIVATE void wait(Lock&);
+    WTF_EXPORT_PRIVATE bool waitFor(Lock&, Seconds);
     
 private:
     friend class AutomaticThread;

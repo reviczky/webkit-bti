@@ -26,6 +26,8 @@
 #include "config.h"
 #include "ScriptedAnimationController.h"
 
+#include "Chrome.h"
+#include "ChromeClient.h"
 #include "DOMWindow.h"
 #include "DisplayRefreshMonitor.h"
 #include "DisplayRefreshMonitorManager.h"
@@ -73,7 +75,6 @@ bool ScriptedAnimationController::requestAnimationFrameEnabled() const
 void ScriptedAnimationController::suspend()
 {
     ++m_suspendCount;
-    logSuspendCount();
 }
 
 void ScriptedAnimationController::resume()
@@ -83,18 +84,8 @@ void ScriptedAnimationController::resume()
     if (m_suspendCount > 0)
         --m_suspendCount;
 
-    logSuspendCount();
-
     if (!m_suspendCount && m_callbacks.size())
         scheduleAnimation();
-}
-
-void ScriptedAnimationController::logSuspendCount()
-{
-#if !defined(NDEBUG)
-    WTFLogAlways("ScriptedAnimationController::m_suspendCount = %d", m_suspendCount);
-    WTFReportBacktrace();
-#endif
 }
 
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR) && !RELEASE_LOG_DISABLED
@@ -183,7 +174,8 @@ ScriptedAnimationController::CallbackId ScriptedAnimationController::registerCal
     callback->m_id = id;
     m_callbacks.append(WTFMove(callback));
 
-    InspectorInstrumentation::didRequestAnimationFrame(m_document, id);
+    if (m_document)
+        InspectorInstrumentation::didRequestAnimationFrame(*m_document, id);
 
     if (!m_suspendCount)
         scheduleAnimation();
@@ -195,7 +187,7 @@ void ScriptedAnimationController::cancelCallback(CallbackId id)
     for (size_t i = 0; i < m_callbacks.size(); ++i) {
         if (m_callbacks[i]->m_id == id) {
             m_callbacks[i]->m_firedOrCancelled = true;
-            InspectorInstrumentation::didCancelAnimationFrame(m_document, id);
+            InspectorInstrumentation::didCancelAnimationFrame(*m_document, id);
             m_callbacks.remove(i);
             return;
         }
@@ -223,7 +215,7 @@ void ScriptedAnimationController::serviceScriptedAnimations(double timestamp)
     for (auto& callback : callbacks) {
         if (!callback->m_firedOrCancelled) {
             callback->m_firedOrCancelled = true;
-            InspectorInstrumentationCookie cookie = InspectorInstrumentation::willFireAnimationFrame(m_document, callback->m_id);
+            InspectorInstrumentationCookie cookie = InspectorInstrumentation::willFireAnimationFrame(*m_document, callback->m_id);
             if (callback->m_useLegacyTimeBase)
                 callback->handleEvent(legacyHighResNowMs);
             else

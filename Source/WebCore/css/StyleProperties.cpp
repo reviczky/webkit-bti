@@ -41,7 +41,6 @@
 
 #ifndef NDEBUG
 #include <stdio.h>
-#include <wtf/ASCIICType.h>
 #include <wtf/text/CString.h>
 #endif
 
@@ -1147,7 +1146,7 @@ void MutableStyleProperties::mergeAndOverrideOnConflict(const StyleProperties& o
         addParsedProperty(other.propertyAt(i).toCSSProperty());
 }
 
-bool StyleProperties::traverseSubresources(const std::function<bool (const CachedResource&)>& handler) const
+bool StyleProperties::traverseSubresources(const WTF::Function<bool (const CachedResource&)>& handler) const
 {
     unsigned size = propertyCount();
     for (unsigned i = 0; i < size; ++i) {
@@ -1363,7 +1362,7 @@ COMPILE_ASSERT(sizeof(StyleProperties) == sizeof(SameSizeAsStyleProperties), sty
 #ifndef NDEBUG
 void StyleProperties::showStyle()
 {
-    WTFLogAlways("%s\n", asText().ascii().data());
+    fprintf(stderr, "%s\n", asText().ascii().data());
 }
 #endif
 

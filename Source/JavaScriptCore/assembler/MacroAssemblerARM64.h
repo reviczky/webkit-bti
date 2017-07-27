@@ -34,7 +34,7 @@
 
 namespace JSC {
 
-class MacroAssemblerARM64 : public AbstractMacroAssembler<ARM64Assembler, MacroAssemblerARM64> {
+class MacroAssemblerARM64 : public AbstractMacroAssembler<ARM64Assembler> {
 public:
     static const unsigned numGPRs = 32;
     static const unsigned numFPRs = 32;
@@ -1341,6 +1341,16 @@ public:
     void store64(RegisterID src, RegisterID dest, PostIndex simm)
     {
         m_assembler.str<64>(src, dest, simm);
+    }
+    
+    void storeZero64(ImplicitAddress address)
+    {
+        store64(ARM64Registers::zr, address);
+    }
+    
+    void storeZero64(BaseIndex address)
+    {
+        store64(ARM64Registers::zr, address);
     }
     
     DataLabel32 store64WithAddressOffsetPatch(RegisterID src, Address address)
@@ -3713,9 +3723,9 @@ public:
         return FunctionPtr(reinterpret_cast<void(*)()>(ARM64Assembler::readCallTarget(call.dataLocation())));
     }
 
-    static void replaceWithBreakpoint(CodeLocationLabel instructionStart)
+    static void replaceWithVMHalt(CodeLocationLabel instructionStart)
     {
-        ARM64Assembler::replaceWithBkpt(instructionStart.executableAddress());
+        ARM64Assembler::replaceWithVMHalt(instructionStart.executableAddress());
     }
 
     static void replaceWithJump(CodeLocationLabel instructionStart, CodeLocationLabel destination)
@@ -3784,10 +3794,6 @@ public:
     {
         ARM64Assembler::repatchPointer(call.dataLabelPtrAtOffset(REPATCH_OFFSET_CALL_TO_POINTER).dataLocation(), destination.executableAddress());
     }
-
-#if ENABLE(MASM_PROBE)
-    void probe(ProbeFunction, void* arg);
-#endif // ENABLE(MASM_PROBE)
 
 protected:
     ALWAYS_INLINE Jump makeBranch(ARM64Assembler::Condition cond)

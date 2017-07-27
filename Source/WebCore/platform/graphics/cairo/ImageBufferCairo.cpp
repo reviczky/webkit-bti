@@ -50,6 +50,10 @@
 #if ENABLE(ACCELERATED_2D_CANVAS)
 #include "GLContext.h"
 #include "TextureMapperGL.h"
+
+#if USE(EGL) && USE(LIBEPOXY)
+#include "EpoxyEGL.h"
+#endif
 #include <cairo-gl.h>
 
 #if USE(OPENGL_ES_2)
@@ -293,7 +297,7 @@ void ImageBuffer::drawPattern(GraphicsContext& context, const FloatRect& destRec
         image->drawPattern(context, destRect, srcRect, patternTransform, phase, spacing, op);
 }
 
-void ImageBuffer::platformTransformColorSpace(const Vector<int>& lookUpTable)
+void ImageBuffer::platformTransformColorSpace(const std::array<uint8_t, 256>& lookUpTable)
 {
     // FIXME: Enable color space conversions on accelerated canvases.
     if (cairo_surface_get_type(m_data.m_surface.get()) != CAIRO_SURFACE_TYPE_IMAGE)

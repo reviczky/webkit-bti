@@ -39,7 +39,6 @@
 #include "ElementTraversal.h"
 #include "EventDispatcher.h"
 #include "EventHandler.h"
-#include "ExceptionCode.h"
 #include "FrameView.h"
 #include "HTMLBodyElement.h"
 #include "HTMLCollection.h"
@@ -409,28 +408,28 @@ Element* Node::nextElementSibling() const
 ExceptionOr<void> Node::insertBefore(Node& newChild, Node* refChild)
 {
     if (!is<ContainerNode>(*this))
-        return Exception { HIERARCHY_REQUEST_ERR };
+        return Exception { HierarchyRequestError };
     return downcast<ContainerNode>(*this).insertBefore(newChild, refChild);
 }
 
 ExceptionOr<void> Node::replaceChild(Node& newChild, Node& oldChild)
 {
     if (!is<ContainerNode>(*this))
-        return Exception { HIERARCHY_REQUEST_ERR };
+        return Exception { HierarchyRequestError };
     return downcast<ContainerNode>(*this).replaceChild(newChild, oldChild);
 }
 
 ExceptionOr<void> Node::removeChild(Node& oldChild)
 {
     if (!is<ContainerNode>(*this))
-        return Exception { NOT_FOUND_ERR };
+        return Exception { NotFoundError };
     return downcast<ContainerNode>(*this).removeChild(oldChild);
 }
 
 ExceptionOr<void> Node::appendChild(Node& newChild)
 {
     if (!is<ContainerNode>(*this))
-        return Exception { HIERARCHY_REQUEST_ERR };
+        return Exception { HierarchyRequestError };
     return downcast<ContainerNode>(*this).appendChild(newChild);
 }
 
@@ -622,32 +621,32 @@ void Node::normalize()
 ExceptionOr<Ref<Node>> Node::cloneNodeForBindings(bool deep)
 {
     if (UNLIKELY(isShadowRoot()))
-        return Exception { NOT_SUPPORTED_ERR };
+        return Exception { NotSupportedError };
     return cloneNode(deep);
 }
 
 const AtomicString& Node::prefix() const
 {
     // For nodes other than elements and attributes, the prefix is always null
-    return nullAtom;
+    return nullAtom();
 }
 
 ExceptionOr<void> Node::setPrefix(const AtomicString&)
 {
     // The spec says that for nodes other than elements and attributes, prefix is always null.
     // It does not say what to do when the user tries to set the prefix on another type of
-    // node, however Mozilla throws a NAMESPACE_ERR exception.
-    return Exception { NAMESPACE_ERR };
+    // node, however Mozilla throws a NamespaceError exception.
+    return Exception { NamespaceError };
 }
 
 const AtomicString& Node::localName() const
 {
-    return nullAtom;
+    return nullAtom();
 }
 
 const AtomicString& Node::namespaceURI() const
 {
-    return nullAtom;
+    return nullAtom();
 }
 
 bool Node::isContentEditable()
@@ -924,15 +923,15 @@ ExceptionOr<void> Node::checkSetPrefix(const AtomicString& prefix)
     // Element::setPrefix() and Attr::setPrefix()
 
     if (!prefix.isEmpty() && !Document::isValidName(prefix))
-        return Exception { INVALID_CHARACTER_ERR };
+        return Exception { InvalidCharacterError };
 
-    // FIXME: Raise NAMESPACE_ERR if prefix is malformed per the Namespaces in XML specification.
+    // FIXME: Raise NamespaceError if prefix is malformed per the Namespaces in XML specification.
 
     auto& namespaceURI = this->namespaceURI();
     if (namespaceURI.isEmpty() && !prefix.isEmpty())
-        return Exception { NAMESPACE_ERR };
-    if (prefix == xmlAtom && namespaceURI != XMLNames::xmlNamespaceURI)
-        return Exception { NAMESPACE_ERR };
+        return Exception { NamespaceError };
+    if (prefix == xmlAtom() && namespaceURI != XMLNames::xmlNamespaceURI)
+        return Exception { NamespaceError };
 
     // Attribute-specific checks are in Attr::setPrefix().
 
@@ -1392,44 +1391,44 @@ static const AtomicString& locateDefaultNamespace(const Node& node, const Atomic
                 if (attribute.namespaceURI() != XMLNSNames::xmlnsNamespaceURI)
                     continue;
 
-                if ((prefix.isNull() && attribute.prefix().isNull() && attribute.localName() == xmlnsAtom) || (attribute.prefix() == xmlnsAtom && attribute.localName() == prefix)) {
+                if ((prefix.isNull() && attribute.prefix().isNull() && attribute.localName() == xmlnsAtom()) || (attribute.prefix() == xmlnsAtom() && attribute.localName() == prefix)) {
                     auto& result = attribute.value();
-                    return result.isEmpty() ? nullAtom : result;
+                    return result.isEmpty() ? nullAtom() : result;
                 }
             }
         }
         auto* parent = node.parentElement();
-        return parent ? locateDefaultNamespace(*parent, prefix) : nullAtom;
+        return parent ? locateDefaultNamespace(*parent, prefix) : nullAtom();
     }
     case Node::DOCUMENT_NODE:
         if (auto* documentElement = downcast<Document>(node).documentElement())
             return locateDefaultNamespace(*documentElement, prefix);
-        return nullAtom;
+        return nullAtom();
     case Node::DOCUMENT_TYPE_NODE:
     case Node::DOCUMENT_FRAGMENT_NODE:
-        return nullAtom;
+        return nullAtom();
     case Node::ATTRIBUTE_NODE:
         if (auto* ownerElement = downcast<Attr>(node).ownerElement())
             return locateDefaultNamespace(*ownerElement, prefix);
-        return nullAtom;
+        return nullAtom();
     default:
         if (auto* parent = node.parentElement())
             return locateDefaultNamespace(*parent, prefix);
-        return nullAtom;
+        return nullAtom();
     }
 }
 
 // https://dom.spec.whatwg.org/#dom-node-isdefaultnamespace
 bool Node::isDefaultNamespace(const AtomicString& potentiallyEmptyNamespace) const
 {
-    const AtomicString& namespaceURI = potentiallyEmptyNamespace.isEmpty() ? nullAtom : potentiallyEmptyNamespace;
-    return locateDefaultNamespace(*this, nullAtom) == namespaceURI;
+    const AtomicString& namespaceURI = potentiallyEmptyNamespace.isEmpty() ? nullAtom() : potentiallyEmptyNamespace;
+    return locateDefaultNamespace(*this, nullAtom()) == namespaceURI;
 }
 
 // https://dom.spec.whatwg.org/#dom-node-lookupnamespaceuri
 const AtomicString& Node::lookupNamespaceURI(const AtomicString& potentiallyEmptyPrefix) const
 {
-    const AtomicString& prefix = potentiallyEmptyPrefix.isEmpty() ? nullAtom : potentiallyEmptyPrefix;
+    const AtomicString& prefix = potentiallyEmptyPrefix.isEmpty() ? nullAtom() : potentiallyEmptyPrefix;
     return locateDefaultNamespace(*this, prefix);
 }
 
@@ -1441,19 +1440,19 @@ static const AtomicString& locateNamespacePrefix(const Element& element, const A
 
     if (element.hasAttributes()) {
         for (auto& attribute : element.attributesIterator()) {
-            if (attribute.prefix() == xmlnsAtom && attribute.value() == namespaceURI)
+            if (attribute.prefix() == xmlnsAtom() && attribute.value() == namespaceURI)
                 return attribute.localName();
         }
     }
     auto* parent = element.parentElement();
-    return parent ? locateNamespacePrefix(*parent, namespaceURI) : nullAtom;
+    return parent ? locateNamespacePrefix(*parent, namespaceURI) : nullAtom();
 }
 
 // https://dom.spec.whatwg.org/#dom-node-lookupprefix
 const AtomicString& Node::lookupPrefix(const AtomicString& namespaceURI) const
 {
     if (namespaceURI.isEmpty())
-        return nullAtom;
+        return nullAtom();
     
     switch (nodeType()) {
     case ELEMENT_NODE:
@@ -1461,18 +1460,18 @@ const AtomicString& Node::lookupPrefix(const AtomicString& namespaceURI) const
     case DOCUMENT_NODE:
         if (auto* documentElement = downcast<Document>(*this).documentElement())
             return locateNamespacePrefix(*documentElement, namespaceURI);
-        return nullAtom;
+        return nullAtom();
     case DOCUMENT_FRAGMENT_NODE:
     case DOCUMENT_TYPE_NODE:
-        return nullAtom;
+        return nullAtom();
     case ATTRIBUTE_NODE:
         if (auto* ownerElement = downcast<Attr>(*this).ownerElement())
             return locateNamespacePrefix(*ownerElement, namespaceURI);
-        return nullAtom;
+        return nullAtom();
     default:
         if (auto* parent = parentElement())
             return locateNamespacePrefix(*parent, namespaceURI);
-        return nullAtom;
+        return nullAtom();
     }
 }
 
@@ -1729,12 +1728,12 @@ void Node::showNode(const char* prefix) const
         String value = nodeValue();
         value.replaceWithLiteral('\\', "\\\\");
         value.replaceWithLiteral('\n', "\\n");
-        WTFLogAlways("%s%s\t%p \"%s\"\n", prefix, nodeName().utf8().data(), this, value.utf8().data());
+        fprintf(stderr, "%s%s\t%p \"%s\"\n", prefix, nodeName().utf8().data(), this, value.utf8().data());
     } else {
         StringBuilder attrs;
         appendAttributeDesc(this, attrs, classAttr, " CLASS=");
         appendAttributeDesc(this, attrs, styleAttr, " STYLE=");
-        WTFLogAlways("%s%s\t%p (renderer %p) %s%s%s\n", prefix, nodeName().utf8().data(), this, renderer(), attrs.toString().utf8().data(), needsStyleRecalc() ? " (needs style recalc)" : "", childNeedsStyleRecalc() ? " (child needs style recalc)" : "");
+        fprintf(stderr, "%s%s\t%p (renderer %p) %s%s%s\n", prefix, nodeName().utf8().data(), this, renderer(), attrs.toString().utf8().data(), needsStyleRecalc() ? " (needs style recalc)" : "", childNeedsStyleRecalc() ? " (child needs style recalc)" : "");
     }
 }
 
@@ -1757,13 +1756,13 @@ void Node::showNodePathForThis() const
             int count = 0;
             for (const ShadowRoot* shadowRoot = downcast<ShadowRoot>(node); shadowRoot && shadowRoot != node; shadowRoot = shadowRoot->shadowRoot())
                 ++count;
-            WTFLogAlways("/#shadow-root[%d]", count);
+            fprintf(stderr, "/#shadow-root[%d]", count);
             continue;
         }
 
         switch (node->nodeType()) {
         case ELEMENT_NODE: {
-            WTFLogAlways("/%s", node->nodeName().utf8().data());
+            fprintf(stderr, "/%s", node->nodeName().utf8().data());
 
             const Element& element = downcast<Element>(*node);
             const AtomicString& idattr = element.getIdAttribute();
@@ -1774,39 +1773,39 @@ void Node::showNodePathForThis() const
                     if (previous->nodeName() == node->nodeName())
                         ++count;
                 if (hasIdAttr)
-                    WTFLogAlways("[@id=\"%s\" and position()=%d]", idattr.string().utf8().data(), count);
+                    fprintf(stderr, "[@id=\"%s\" and position()=%d]", idattr.string().utf8().data(), count);
                 else
-                    WTFLogAlways("[%d]", count);
+                    fprintf(stderr, "[%d]", count);
             } else if (hasIdAttr)
-                WTFLogAlways("[@id=\"%s\"]", idattr.string().utf8().data());
+                fprintf(stderr, "[@id=\"%s\"]", idattr.string().utf8().data());
             break;
         }
         case TEXT_NODE:
-            WTFLogAlways("/text()");
+            fprintf(stderr, "/text()");
             break;
         case ATTRIBUTE_NODE:
-            WTFLogAlways("/@%s", node->nodeName().utf8().data());
+            fprintf(stderr, "/@%s", node->nodeName().utf8().data());
             break;
         default:
             break;
         }
     }
-    WTFLogAlways("\n");
+    fprintf(stderr, "\n");
 }
 
 static void traverseTreeAndMark(const String& baseIndent, const Node* rootNode, const Node* markedNode1, const char* markedLabel1, const Node* markedNode2, const char* markedLabel2)
 {
     for (const Node* node = rootNode; node; node = NodeTraversal::next(*node)) {
         if (node == markedNode1)
-            WTFLogAlways("%s", markedLabel1);
+            fprintf(stderr, "%s", markedLabel1);
         if (node == markedNode2)
-            WTFLogAlways("%s", markedLabel2);
+            fprintf(stderr, "%s", markedLabel2);
 
         StringBuilder indent;
         indent.append(baseIndent);
         for (const Node* tmpNode = node; tmpNode && tmpNode != rootNode; tmpNode = tmpNode->parentOrShadowHostNode())
             indent.append('\t');
-        WTFLogAlways("%s", indent.toString().utf8().data());
+        fprintf(stderr, "%s", indent.toString().utf8().data());
         node->showNode();
         indent.append('\t');
         if (!node->isShadowRoot()) {

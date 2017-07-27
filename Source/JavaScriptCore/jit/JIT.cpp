@@ -48,6 +48,7 @@
 #include "ResultType.h"
 #include "SlowPathCall.h"
 #include "StackAlignment.h"
+#include "ThunkGenerators.h"
 #include "TypeProfilerLog.h"
 #include <wtf/CryptographicallyRandomNumber.h>
 #include <wtf/GraphNodeWorklist.h>
@@ -88,7 +89,6 @@ JIT::JIT(VM* vm, CodeBlock* codeBlock, unsigned loopOSREntryBytecodeOffset)
     , m_putByIdIndex(UINT_MAX)
     , m_byValInstructionIndex(UINT_MAX)
     , m_callLinkInfoIndex(UINT_MAX)
-    , m_randomGenerator(cryptographicallyRandomNumber())
     , m_pcToCodeOriginMapBuilder(*vm)
     , m_canBeOptimized(false)
     , m_shouldEmitProfiling(false)
@@ -627,7 +627,7 @@ void JIT::compileWithoutLinking(JITCompilationEffort effort)
         m_disassembler->setStartOfCode(label());
 
     // Just add a little bit of randomness to the codegen
-    if (m_randomGenerator.getUint32() & 1)
+    if (random() & 1)
         nop();
 
     emitFunctionPrologue();
@@ -660,8 +660,13 @@ void JIT::compileWithoutLinking(JITCompilationEffort effort)
         }
     }
 
-    addPtr(TrustedImm32(stackPointerOffsetFor(m_codeBlock) * sizeof(Register)), callFrameRegister, regT1);
-    Jump stackOverflow = branchPtr(Above, AbsoluteAddress(m_vm->addressOfSoftStackLimit()), regT1);
+    int frameTopOffset = stackPointerOffsetFor(m_codeBlock) * sizeof(Register);
+    unsigned maxFrameSize = -frameTopOffset;
+    addPtr(TrustedImm32(frameTopOffset), callFrameRegister, regT1);
+    JumpList stackOverflow;
+    if (UNLIKELY(maxFrameSize > Options::reservedZoneSize()))
+        stackOverflow.append(branchPtr(Above, regT1, callFrameRegister));
+    stackOverflow.append(branchPtr(Above, AbsoluteAddress(m_vm->addressOfSoftStackLimit()), regT1));
 
     move(regT1, stackPointerRegister);
     checkStackPointerAlignment();

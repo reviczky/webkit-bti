@@ -28,6 +28,7 @@
 #include "HTMLDocumentParser.h"
 
 #include "DocumentFragment.h"
+#include "DocumentLoader.h"
 #include "Frame.h"
 #include "HTMLDocument.h"
 #include "HTMLParserScheduler.h"
@@ -37,6 +38,7 @@
 #include "HTMLUnknownElement.h"
 #include "JSCustomElementInterface.h"
 #include "LinkLoader.h"
+#include "NavigationScheduler.h"
 #include "ScriptElement.h"
 
 namespace WebCore {

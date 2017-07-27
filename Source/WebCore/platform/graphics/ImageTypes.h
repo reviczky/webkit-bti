@@ -78,4 +78,18 @@ enum class EncodedDataStatus {
     Complete
 };
 
+enum class DecodingStatus {
+    Invalid,
+    Partial,
+    Complete,
+    Decoding
+};
+
+enum class ImageDrawResult {
+    DidNothing,
+    DidRequestDecoding,
+    DidRecord,
+    DidDraw
+};
+
 }

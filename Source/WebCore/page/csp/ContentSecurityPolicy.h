@@ -30,6 +30,7 @@
 #include "ContentSecurityPolicyResponseHeaders.h"
 #include "SecurityOrigin.h"
 #include "SecurityOriginHash.h"
+#include <functional>
 #include <wtf/HashSet.h>
 #include <wtf/OptionSet.h>
 #include <wtf/Vector.h>
@@ -206,6 +207,7 @@ private:
     String m_selfSourceProtocol;
     CSPDirectiveListVector m_policies;
     String m_lastPolicyEvalDisabledErrorMessage;
+    String m_lastPolicyWebAssemblyDisabledErrorMessage;
     SandboxFlags m_sandboxFlags;
     bool m_overrideInlineStyleAllowed { false };
     bool m_isReportingEnabled { true };

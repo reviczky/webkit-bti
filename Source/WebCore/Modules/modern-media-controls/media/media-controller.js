@@ -32,19 +32,23 @@ class MediaController
         this.media = media;
         this.host = host;
 
+        this.fullscreenChangeEventType = media.webkitSupportsPresentationMode ? "webkitpresentationmodechanged" : "webkitfullscreenchange";
+
         this.hasPlayed = false;
 
         this.container = shadowRoot.appendChild(document.createElement("div"));
         this.container.className = "media-controls-container";
 
+        this._updateControlsIfNeeded();
+        this._usesLTRUserInterfaceLayoutDirection = false;
+
         if (host) {
             host.controlsDependOnPageScaleFactor = this.layoutTraits & LayoutTraits.iOS;
-            this.container.appendChild(host.textTrackContainer);
+            this.container.insertBefore(host.textTrackContainer, this.controls.element);
             if (host.isInMediaDocument)
                 this.mediaDocumentController = new MediaDocumentController(this);
         }
 
-        this._updateControlsIfNeeded();
         scheduler.flushScheduledLayoutCallbacks();
 
         shadowRoot.addEventListener("resize", this);
@@ -52,10 +56,7 @@ class MediaController
         media.videoTracks.addEventListener("addtrack", this);
         media.videoTracks.addEventListener("removetrack", this);
 
-        if (media.webkitSupportsPresentationMode)
-            media.addEventListener("webkitpresentationmodechanged", this);
-        else
-            media.addEventListener("webkitfullscreenchange", this);
+        media.addEventListener(this.fullscreenChangeEventType, this);
     }
 
     // Public
@@ -114,6 +115,10 @@ class MediaController
 
     set usesLTRUserInterfaceLayoutDirection(flag)
     {
+        if (this._usesLTRUserInterfaceLayoutDirection === flag)
+            return;
+
+        this._usesLTRUserInterfaceLayoutDirection = flag;
         this.controls.usesLTRUserInterfaceLayoutDirection = flag;
     }
 

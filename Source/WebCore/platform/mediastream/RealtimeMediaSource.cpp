@@ -116,17 +116,6 @@ void RealtimeMediaSource::notifyMutedObservers() const
         observer.sourceMutedChanged();
 }
 
-void RealtimeMediaSource::setEnabled(bool enabled)
-{
-    if (m_enabled == enabled)
-        return;
-
-    m_enabled = enabled;
-
-    for (Observer& observer : m_observers)
-        observer.sourceEnabledChanged();
-}
-
 void RealtimeMediaSource::settingsDidChange()
 {
     ASSERT(isMainThread());
@@ -163,6 +152,9 @@ void RealtimeMediaSource::start()
     m_isProducingData = true;
     startProducingData();
 
+    if (!m_isProducingData)
+        return;
+
     for (Observer& observer : m_observers)
         observer.sourceStarted();
 }
@@ -192,6 +184,15 @@ void RealtimeMediaSource::requestStop(Observer* callingObserver)
         if (&observer != callingObserver)
             observer.sourceStopped();
     }
+}
+
+void RealtimeMediaSource::captureFailed()
+{
+    m_isProducingData = false;
+    m_captureDidFailed = true;
+
+    for (Observer& observer : m_observers)
+        observer.sourceStopped();
 }
 
 bool RealtimeMediaSource::supportsSizeAndFrameRate(std::optional<int>, std::optional<int>, std::optional<double>)
@@ -893,7 +894,7 @@ void RealtimeMediaSource::setEchoCancellation(bool echoCancellation)
     settingsDidChange();
 }
 
-void RealtimeMediaSource::scheduleDeferredTask(std::function<void()>&& function)
+void RealtimeMediaSource::scheduleDeferredTask(WTF::Function<void()>&& function)
 {
     ASSERT(function);
     callOnMainThread([weakThis = createWeakPtr(), function = WTFMove(function)] {

@@ -2180,7 +2180,7 @@ bool RenderLayer::hasTouchScrollableOverflow() const
 bool RenderLayer::handleTouchEvent(const PlatformTouchEvent& touchEvent)
 {
     // If we have accelerated scrolling, let the scrolling be handled outside of WebKit.
-    if (hasTouchScrollableOverflow())
+    if (usesAcceleratedScrolling())
         return false;
 
     return ScrollableArea::handleTouchEvent(touchEvent);
@@ -2219,7 +2219,7 @@ void RenderLayer::unregisterAsTouchEventListenerForScrolling()
 
 bool RenderLayer::usesCompositedScrolling() const
 {
-    return isComposited() && backing()->scrollingLayer();
+    return isComposited() && backing()->hasScrollingLayer();
 }
 
 bool RenderLayer::usesAsyncScrolling() const
@@ -2406,7 +2406,6 @@ void RenderLayer::scrollTo(const ScrollPosition& position)
         return;
     }
     
-    ScrollPosition oldPosition = IntPoint(m_scrollPosition);
     m_scrollPosition = newPosition;
 
     RenderView& view = renderer().view();
@@ -2457,10 +2456,8 @@ void RenderLayer::scrollTo(const ScrollPosition& position)
         renderer().repaintUsingContainer(repaintContainer, rectForRepaint);
 
     // Schedule the scroll and scroll-related DOM events.
-    if (Element* element = renderer().element()) {
+    if (Element* element = renderer().element())
         element->document().eventQueue().enqueueOrDispatchScrollEvent(*element);
-        element->document().sendWillRevealEdgeEventsIfNeeded(oldPosition, newPosition, visibleContentRect(), contentsSize(), element);
-    }
 
     if (scrollsOverflow())
         view.frameView().didChangeScrollOffset();
@@ -4386,9 +4383,12 @@ void RenderLayer::paintLayerContents(GraphicsContext& context, const LayerPainti
 
         if (paintingInfo.paintBehavior & PaintBehaviorFlattenCompositingLayers)
             paintBehavior |= PaintBehaviorFlattenCompositingLayers;
-            
+        
         if (paintingInfo.paintBehavior & PaintBehaviorSnapshotting)
             paintBehavior |= PaintBehaviorSnapshotting;
+        
+        if (paintingInfo.paintBehavior & PaintBehaviorTileFirstPaint)
+            paintBehavior |= PaintBehaviorTileFirstPaint;
 
         if (paintingInfo.paintBehavior & PaintBehaviorExcludeSelection)
             paintBehavior |= PaintBehaviorExcludeSelection;
@@ -4468,9 +4468,12 @@ void RenderLayer::paintLayerContents(GraphicsContext& context, const LayerPainti
         PaintBehavior paintBehavior = PaintBehaviorNormal;
         if (paintingInfo.paintBehavior & PaintBehaviorFlattenCompositingLayers)
             paintBehavior |= PaintBehaviorFlattenCompositingLayers;
-
+        
         if (paintingInfo.paintBehavior & PaintBehaviorSnapshotting)
             paintBehavior |= PaintBehaviorSnapshotting;
+        
+        if (paintingInfo.paintBehavior & PaintBehaviorTileFirstPaint)
+            paintBehavior |= PaintBehaviorTileFirstPaint;
 
         if (shouldPaintMask(paintingInfo.paintBehavior, localPaintFlags)) {
             // Paint the mask for the fragments.
@@ -4800,9 +4803,12 @@ void RenderLayer::paintForegroundForFragments(const LayerFragments& layerFragmen
 
     if (localPaintingInfo.paintBehavior & PaintBehaviorExcludeSelection)
         localPaintBehavior |= PaintBehaviorExcludeSelection;
-
+    
     if (localPaintingInfo.paintBehavior & PaintBehaviorSnapshotting)
         localPaintBehavior |= PaintBehaviorSnapshotting;
+    
+    if (localPaintingInfo.paintBehavior & PaintBehaviorTileFirstPaint)
+        localPaintBehavior |= PaintBehaviorTileFirstPaint;
 
     // Optimize clipping for the single fragment case.
     bool shouldClip = localPaintingInfo.clipToDirtyRect && layerFragments.size() == 1 && layerFragments[0].shouldPaintContent && !layerFragments[0].foregroundRect.isEmpty();
@@ -4927,9 +4933,17 @@ bool RenderLayer::hitTest(const HitTestRequest& request, const HitTestLocation& 
     
     updateLayerListsIfNeeded();
 
-    LayoutRect hitTestArea = isOutOfFlowRenderFlowThread() ? downcast<RenderFlowThread>(renderer()).visualOverflowRect() : renderer().view().documentRect();
-    if (!request.ignoreClipping())
-        hitTestArea.intersect(renderer().view().frameView().visibleContentRect(LegacyIOSDocumentVisibleRect));
+    ASSERT(!isRenderFlowThread());
+    LayoutRect hitTestArea = renderer().view().documentRect();
+    if (!request.ignoreClipping()) {
+        if (renderer().settings().visualViewportEnabled()) {
+            auto& frameView = renderer().view().frameView();
+            LayoutRect layoutViewportBounds({ }, frameView.layoutViewportRect().size());
+            LayoutRect absoluteLayoutViewportRect = LayoutRect(frameView.layoutViewportToAbsoluteRect(layoutViewportBounds));
+            hitTestArea.intersect(absoluteLayoutViewportRect);
+        } else
+            hitTestArea.intersect(renderer().view().frameView().visibleContentRect(LegacyIOSDocumentVisibleRect));
+    }
 
     RenderLayer* insideLayer = hitTestLayer(this, nullptr, request, result, hitTestArea, hitTestLocation, false);
     if (!insideLayer) {
@@ -7235,7 +7249,7 @@ void showLayerTree(const WebCore::RenderLayer* layer)
         return;
 
     WTF::String output = externalRepresentation(&layer->renderer().frame(), WebCore::RenderAsTextShowAllLayers | WebCore::RenderAsTextShowLayerNesting | WebCore::RenderAsTextShowCompositedLayers | WebCore::RenderAsTextShowAddresses | WebCore::RenderAsTextShowIDAndClass | WebCore::RenderAsTextDontUpdateLayout | WebCore::RenderAsTextShowLayoutState | WebCore::RenderAsTextShowOverflow | WebCore::RenderAsTextShowSVGGeometry | WebCore::RenderAsTextShowLayerFragments);
-    WTFLogAlways("\n%s\n", output.utf8().data());
+    fprintf(stderr, "\n%s\n", output.utf8().data());
 }
 
 void showLayerTree(const WebCore::RenderObject* renderer)

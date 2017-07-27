@@ -47,11 +47,13 @@
 #include "LocalizedStrings.h"
 #include "Logging.h"
 #include "MediaControls.h"
+#include "MouseEvent.h"
 #include "Page.h"
 #include "PageGroup.h"
 #include "RenderLayer.h"
 #include "RenderMediaControlElements.h"
 #include "RenderSlider.h"
+#include "RenderTheme.h"
 #include "RenderVideo.h"
 #include "RenderView.h"
 #include "Settings.h"
@@ -1294,7 +1296,6 @@ void MediaControlTextTrackContainerElement::updateTextTrackRepresentation()
         mediaElement->setTextTrackRepresentation(m_textTrackRepresentation.get());
     }
 
-    hide();
     m_textTrackRepresentation->update();
     updateStyleForTextTrackRepresentation();
 }

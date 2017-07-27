@@ -94,8 +94,8 @@
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #define GCC_VERSION_AT_LEAST(major, minor, patch) (GCC_VERSION >= (major * 10000 + minor * 100 + patch))
 
-#if !GCC_VERSION_AT_LEAST(4, 9, 0)
-#error "Please use a newer version of GCC. WebKit requires GCC 4.9.0 or newer to compile."
+#if !GCC_VERSION_AT_LEAST(5, 0, 0)
+#error "Please use a newer version of GCC. WebKit requires GCC 5.0.0 or newer to compile."
 #endif
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
@@ -212,6 +212,14 @@
 #define FALLTHROUGH [[gnu::fallthrough]]
 #endif
 
+#elif !defined(FALLTHROUGH) && !defined(__cplusplus)
+
+#if COMPILER(GCC)
+#if GCC_VERSION_AT_LEAST(7, 0, 0)
+#define FALLTHROUGH __attribute__ ((fallthrough))
+#endif
+#endif
+
 #endif // !defined(FALLTHROUGH) && defined(__cplusplus) && defined(__has_cpp_attribute)
 
 #if !defined(FALLTHROUGH)
@@ -254,6 +262,18 @@
 
 #if !defined(NO_RETURN)
 #define NO_RETURN
+#endif
+
+/* NOT_TAIL_CALLED */
+
+#if !defined(NOT_TAIL_CALLED) && defined(__has_attribute)
+#if __has_attribute(not_tail_called)
+#define NOT_TAIL_CALLED __attribute__((not_tail_called))
+#endif
+#endif
+
+#if !defined(NOT_TAIL_CALLED)
+#define NOT_TAIL_CALLED
 #endif
 
 /* RETURNS_NONNULL */

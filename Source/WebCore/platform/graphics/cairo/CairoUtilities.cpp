@@ -43,6 +43,9 @@
 #include <wtf/Vector.h>
 
 #if ENABLE(ACCELERATED_2D_CANVAS)
+#if USE(EGL) && USE(LIBEPOXY)
+#include "EpoxyEGL.h"
+#endif
 #include <cairo-gl.h>
 #endif
 

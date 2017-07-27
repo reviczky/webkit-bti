@@ -727,8 +727,16 @@ static GstURIType webKitWebSrcUriGetType(GType)
 
 const gchar* const* webKitWebSrcGetProtocols(GType)
 {
-    static const char* protocols[] = {"http", "https", "blob", nullptr };
+    static const char* protocols[] = {"webkit+http", "webkit+https", "blob", nullptr };
     return protocols;
+}
+
+static URL convertPlaybinURI(const char* uriString)
+{
+    URL url(URL(), uriString);
+    ASSERT(url.protocol().substring(0, 7) == "webkit+");
+    url.setProtocol(url.protocol().substring(7).toString());
+    return url;
 }
 
 static gchar* webKitWebSrcGetUri(GstURIHandler* handler)
@@ -758,7 +766,7 @@ static gboolean webKitWebSrcSetUri(GstURIHandler* handler, const gchar* uri, GEr
     if (!uri)
         return TRUE;
 
-    URL url(URL(), uri);
+    URL url = convertPlaybinURI(uri);
     if (!urlHasSupportedProtocol(url)) {
         g_set_error(error, GST_URI_ERROR, GST_URI_ERROR_BAD_URI, "Invalid URI '%s'", uri);
         return FALSE;
@@ -956,7 +964,16 @@ void StreamingClient::handleResponseReceived(const ResourceResponse& response)
     } else
         gst_app_src_set_size(priv->appsrc, -1);
 
-    gst_app_src_set_caps(priv->appsrc, nullptr);
+    // Signal to downstream if this is an Icecast stream.
+    GRefPtr<GstCaps> caps;
+    String metadataIntervalAsString = response.httpHeaderField(HTTPHeaderName::IcyMetaInt);
+    if (!metadataIntervalAsString.isEmpty()) {
+        bool isMetadataIntervalParsed;
+        int metadataInterval = metadataIntervalAsString.toInt(&isMetadataIntervalParsed);
+        if (isMetadataIntervalParsed && metadataInterval > 0)
+            caps = adoptGRef(gst_caps_new_simple("application/x-icy", "metadata-interval", G_TYPE_INT, metadataInterval, nullptr));
+    }
+    gst_app_src_set_caps(priv->appsrc, caps.get());
 
     // Emit a GST_EVENT_CUSTOM_DOWNSTREAM_STICKY event to let GStreamer know about the HTTP headers sent and received.
     GstStructure* httpHeaders = gst_structure_new_empty("http-headers");

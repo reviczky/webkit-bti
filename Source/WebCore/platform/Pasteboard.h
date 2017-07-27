@@ -32,8 +32,11 @@
 #include <wtf/text/WTFString.h>
 
 #if PLATFORM(IOS)
-OBJC_CLASS NSArray;
 OBJC_CLASS NSString;
+#endif
+
+#if PLATFORM(COCOA)
+OBJC_CLASS NSArray;
 #endif
 
 #if PLATFORM(WIN)
@@ -114,6 +117,7 @@ struct PasteboardImage {
     Vector<RefPtr<SharedBuffer>> clientData;
 #endif
     String suggestedName;
+    FloatSize imageSize;
 };
 
 // For reading from the pasteboard.
@@ -206,13 +210,14 @@ public:
 #if PLATFORM(IOS)
     explicit Pasteboard(long changeCount);
 
-    static NSArray* supportedPasteboardTypes();
+    static NSArray *supportedWebContentPasteboardTypes();
     static String resourceMIMEType(const NSString *mimeType);
 #endif
 
 #if PLATFORM(COCOA)
     explicit Pasteboard(const String& pasteboardName);
 
+    WEBCORE_EXPORT static NSArray *supportedFileUploadPasteboardTypes();
     const String& name() const { return m_pasteboardName; }
 #endif
 

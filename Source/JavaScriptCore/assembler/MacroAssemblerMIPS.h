@@ -33,7 +33,7 @@
 
 namespace JSC {
 
-class MacroAssemblerMIPS : public AbstractMacroAssembler<MIPSAssembler, MacroAssemblerMIPS> {
+class MacroAssemblerMIPS : public AbstractMacroAssembler<MIPSAssembler> {
 public:
     typedef MIPSRegisters::FPRegisterID FPRegisterID;
     static const unsigned numGPRs = 32;
@@ -3070,11 +3070,6 @@ public:
     static FunctionPtr readCallTarget(CodeLocationCall call)
     {
         return FunctionPtr(reinterpret_cast<void(*)()>(MIPSAssembler::readCallTarget(call.dataLocation())));
-    }
-
-    static void replaceWithBreakpoint(CodeLocationLabel instructionStart)
-    {
-        MIPSAssembler::replaceWithBkpt(instructionStart.executableAddress());
     }
 
     static void replaceWithJump(CodeLocationLabel instructionStart, CodeLocationLabel destination)

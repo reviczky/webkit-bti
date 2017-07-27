@@ -40,6 +40,8 @@
 #include "CachedImage.h"
 #include "CanvasGradient.h"
 #include "CanvasPattern.h"
+#include "DOMMatrix.h"
+#include "DOMMatrixInit.h"
 #include "DOMPath.h"
 #include "DisplayListRecorder.h"
 #include "DisplayListReplayer.h"
@@ -795,6 +797,11 @@ void CanvasRenderingContext2D::transform(float m11, float m12, float m21, float 
     modifiableState().hasInvertibleTransform = false;
 }
 
+Ref<DOMMatrix> CanvasRenderingContext2D::getTransform() const
+{
+    return DOMMatrix::create(state().transform.toTransformationMatrix(), DOMMatrixReadOnly::Is2D::Yes);
+}
+
 void CanvasRenderingContext2D::setTransform(float m11, float m12, float m21, float m22, float dx, float dy)
 {
     GraphicsContext* c = drawingContext();
@@ -806,6 +813,17 @@ void CanvasRenderingContext2D::setTransform(float m11, float m12, float m21, flo
 
     resetTransform();
     transform(m11, m12, m21, m22, dx, dy);
+}
+
+ExceptionOr<void> CanvasRenderingContext2D::setTransform(DOMMatrixInit&& matrixInit)
+{
+    auto checkValid = DOMMatrixReadOnly::validateAndFixup(matrixInit);
+    if (checkValid.hasException())
+        return checkValid.releaseException();
+
+    setTransform(matrixInit.a.value_or(1), matrixInit.b.value_or(0), matrixInit.c.value_or(0), matrixInit.d.value_or(1), matrixInit.e.value_or(0), matrixInit.f.value_or(0));
+
+    return { };
 }
 
 void CanvasRenderingContext2D::resetTransform()
@@ -1394,7 +1412,7 @@ ExceptionOr<void> CanvasRenderingContext2D::drawImage(HTMLImageElement& imageEle
 
     FloatRect imageRect = FloatRect(FloatPoint(), size(imageElement, ImageSizeType::BeforeDevicePixelRatio));
     if (!srcRect.width() || !srcRect.height())
-        return Exception { INDEX_SIZE_ERR };
+        return Exception { IndexSizeError };
 
     // When the source rectangle is outside the source image, the source rectangle must be clipped
     // to the source image and the destination rectangle must be clipped in the same proportion.
@@ -1462,10 +1480,10 @@ ExceptionOr<void> CanvasRenderingContext2D::drawImage(HTMLCanvasElement& sourceC
     FloatRect srcCanvasRect = FloatRect(FloatPoint(), sourceCanvas.size());
 
     if (!srcCanvasRect.width() || !srcCanvasRect.height())
-        return Exception { INVALID_STATE_ERR };
+        return Exception { InvalidStateError };
 
     if (!srcRect.width() || !srcRect.height())
-        return Exception { INDEX_SIZE_ERR };
+        return Exception { IndexSizeError };
 
     if (!srcCanvasRect.contains(normalizeRect(srcRect)) || !dstRect.width() || !dstRect.height())
         return { };
@@ -1521,7 +1539,7 @@ ExceptionOr<void> CanvasRenderingContext2D::drawImage(HTMLVideoElement& video, c
 
     FloatRect videoRect = FloatRect(FloatPoint(), size(video));
     if (!srcRect.width() || !srcRect.height())
-        return Exception { INDEX_SIZE_ERR };
+        return Exception { IndexSizeError };
 
     if (!videoRect.contains(normalizeRect(srcRect)) || !dstRect.width() || !dstRect.height())
         return { };
@@ -1743,7 +1761,7 @@ void CanvasRenderingContext2D::setFillStyle(CanvasRenderingContext2D::Style&& st
 ExceptionOr<Ref<CanvasGradient>> CanvasRenderingContext2D::createLinearGradient(float x0, float y0, float x1, float y1)
 {
     if (!std::isfinite(x0) || !std::isfinite(y0) || !std::isfinite(x1) || !std::isfinite(y1))
-        return Exception { NOT_SUPPORTED_ERR };
+        return Exception { NotSupportedError };
 
     auto gradient = CanvasGradient::create(FloatPoint(x0, y0), FloatPoint(x1, y1));
     prepareGradientForDashboard(gradient.get());
@@ -1753,10 +1771,10 @@ ExceptionOr<Ref<CanvasGradient>> CanvasRenderingContext2D::createLinearGradient(
 ExceptionOr<Ref<CanvasGradient>> CanvasRenderingContext2D::createRadialGradient(float x0, float y0, float r0, float x1, float y1, float r1)
 {
     if (!std::isfinite(x0) || !std::isfinite(y0) || !std::isfinite(r0) || !std::isfinite(x1) || !std::isfinite(y1) || !std::isfinite(r1))
-        return Exception { NOT_SUPPORTED_ERR };
+        return Exception { NotSupportedError };
 
     if (r0 < 0 || r1 < 0)
-        return Exception { INDEX_SIZE_ERR };
+        return Exception { IndexSizeError };
 
     auto gradient = CanvasGradient::create(FloatPoint(x0, y0), r0, FloatPoint(x1, y1), r1);
     prepareGradientForDashboard(gradient.get());
@@ -1767,7 +1785,7 @@ ExceptionOr<RefPtr<CanvasPattern>> CanvasRenderingContext2D::createPattern(Canva
 {
     bool repeatX, repeatY;
     if (!CanvasPattern::parseRepetitionType(repetition, repeatX, repeatY))
-        return Exception { SYNTAX_ERR };
+        return Exception { SyntaxError };
 
     return WTF::switchOn(image,
         [&] (auto& element) -> ExceptionOr<RefPtr<CanvasPattern>> { return this->createPattern(*element, repeatX, repeatY); }
@@ -1783,7 +1801,7 @@ ExceptionOr<RefPtr<CanvasPattern>> CanvasRenderingContext2D::createPattern(HTMLI
         return nullptr;
 
     if (cachedImage->status() == CachedResource::LoadError)
-        return Exception { INVALID_STATE_ERR };
+        return Exception { InvalidStateError };
 
     bool originClean = cachedImage->isOriginClean(canvas().securityOrigin());
 
@@ -1802,7 +1820,7 @@ ExceptionOr<RefPtr<CanvasPattern>> CanvasRenderingContext2D::createPattern(HTMLI
 ExceptionOr<RefPtr<CanvasPattern>> CanvasRenderingContext2D::createPattern(HTMLCanvasElement& canvas, bool repeatX, bool repeatY)
 {
     if (!canvas.width() || !canvas.height() || !canvas.buffer())
-        return Exception { INVALID_STATE_ERR };
+        return Exception { InvalidStateError };
 
     return RefPtr<CanvasPattern> { CanvasPattern::create(*canvas.copiedImage(), repeatX, repeatY, canvas.originClean()) };
 }
@@ -1945,7 +1963,7 @@ static RefPtr<ImageData> createEmptyImageData(const IntSize& size)
 ExceptionOr<RefPtr<ImageData>> CanvasRenderingContext2D::createImageData(ImageData* imageData) const
 {
     if (!imageData)
-        return Exception { NOT_SUPPORTED_ERR };
+        return Exception { NotSupportedError };
 
     return createEmptyImageData(imageData->size());
 }
@@ -1953,7 +1971,7 @@ ExceptionOr<RefPtr<ImageData>> CanvasRenderingContext2D::createImageData(ImageDa
 ExceptionOr<RefPtr<ImageData>> CanvasRenderingContext2D::createImageData(float sw, float sh) const
 {
     if (!sw || !sh)
-        return Exception { INDEX_SIZE_ERR };
+        return Exception { IndexSizeError };
 
     FloatSize logicalSize(std::abs(sw), std::abs(sh));
     if (!logicalSize.isExpressibleAsIntSize())
@@ -1983,11 +2001,11 @@ ExceptionOr<RefPtr<ImageData>> CanvasRenderingContext2D::getImageData(ImageBuffe
     if (!canvas().originClean()) {
         static NeverDestroyed<String> consoleMessage(MAKE_STATIC_STRING_IMPL("Unable to get image data from canvas because the canvas has been tainted by cross-origin data."));
         canvas().document().addConsoleMessage(MessageSource::Security, MessageLevel::Error, consoleMessage);
-        return Exception { SECURITY_ERR };
+        return Exception { SecurityError };
     }
 
     if (!sw || !sh)
-        return Exception { INDEX_SIZE_ERR };
+        return Exception { IndexSizeError };
 
     if (sw < 0) {
         sx += sw;
@@ -2020,7 +2038,7 @@ ExceptionOr<RefPtr<ImageData>> CanvasRenderingContext2D::getImageData(ImageBuffe
         consoleMessage.appendNumber(imageDataRect.height());
 
         canvas().document().addConsoleMessage(MessageSource::Rendering, MessageLevel::Error, consoleMessage.toString());
-        return Exception { INVALID_STATE_ERR };
+        return Exception { InvalidStateError };
     }
 
     return ImageData::create(imageDataRect.size(), byteArray.releaseNonNull());

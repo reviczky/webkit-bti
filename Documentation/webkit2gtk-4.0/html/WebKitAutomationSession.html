@@ -30,7 +30,7 @@
 <div class="refnamediv"><table width="100%"><tr>
 <td valign="top">
 <h2><span class="refentrytitle"><a name="WebKitAutomationSession.top_of_page"></a>WebKitAutomationSession</span></h2>
-<p>WebKitAutomationSession — Automation Session</p>
+<p>WebKitAutomationSession</p>
 </td>
 <td class="gallery_image" valign="top" align="right"></td>
 </tr></table></div>
@@ -103,12 +103,6 @@
 </div>
 <div class="refsect1">
 <a name="WebKitAutomationSession.description"></a><h2>Description</h2>
-<p>WebKitAutomationSession represents an automation session of a WebKitWebContext.
-When a new session is requested, a WebKitAutomationSession is created and the signal
-WebKitWebContext::automation-started is emitted with the WebKitAutomationSession as
-argument. Then, the automation client can request the session to create a new
-<a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> to interact with it. When this happens the signal <a class="link" href="WebKitAutomationSession.html#WebKitAutomationSession-create-web-view" title="The “create-web-view” signal"><span class="type">“create-web-view”</span></a>
-is emitted.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitAutomationSession.functions_details"></a><h2>Functions</h2>
@@ -116,28 +110,6 @@ is emitted.</p>
 <a name="webkit-automation-session-get-id"></a><h3>webkit_automation_session_get_id ()</h3>
 <pre class="programlisting">const <span class="returnvalue">char</span> *
 webkit_automation_session_get_id (<em class="parameter"><code><a class="link" href="WebKitAutomationSession.html" title="WebKitAutomationSession"><span class="type">WebKitAutomationSession</span></a> *session</code></em>);</pre>
-<p>Get the unique identifier of a <a class="link" href="WebKitAutomationSession.html" title="WebKitAutomationSession"><span class="type">WebKitAutomationSession</span></a></p>
-<div class="refsect3">
-<a name="webkit-automation-session-get-id.parameters"></a><h4>Parameters</h4>
-<div class="informaltable"><table class="informaltable" width="100%" border="0">
-<colgroup>
-<col width="150px" class="parameters_name">
-<col class="parameters_description">
-<col width="200px" class="parameters_annotations">
-</colgroup>
-<tbody><tr>
-<td class="parameter_name"><p>session</p></td>
-<td class="parameter_description"><p>a <a class="link" href="WebKitAutomationSession.html" title="WebKitAutomationSession"><span class="type">WebKitAutomationSession</span></a></p></td>
-<td class="parameter_annotations"> </td>
-</tr></tbody>
-</table></div>
-</div>
-<div class="refsect3">
-<a name="webkit-automation-session-get-id.returns"></a><h4>Returns</h4>
-<p> the unique identifier of <em class="parameter"><code>session</code></em>
-</p>
-</div>
-<p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
 </div>
 <div class="refsect1">
@@ -152,10 +124,9 @@ webkit_automation_session_get_id (<em class="parameter"><code><a class="link" hr
 <div class="refsect2">
 <a name="WebKitAutomationSession--id"></a><h3>The <code class="literal">“id”</code> property</h3>
 <pre class="programlisting">  “id”                       <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
-<p>The session unique identifier.</p>
+<p>The automation session identifier.</p>
 <p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
-<p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
 </div>
 <div class="refsect1">
@@ -163,42 +134,9 @@ webkit_automation_session_get_id (<em class="parameter"><code><a class="link" hr
 <div class="refsect2">
 <a name="WebKitAutomationSession-create-web-view"></a><h3>The <code class="literal">“create-web-view”</code> signal</h3>
 <pre class="programlisting"><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="returnvalue">WebKitWebView</span></a>*
-user_function (<a class="link" href="WebKitAutomationSession.html" title="WebKitAutomationSession"><span class="type">WebKitAutomationSession</span></a> *session,
+user_function (<a class="link" href="WebKitAutomationSession.html" title="WebKitAutomationSession"><span class="type">WebKitAutomationSession</span></a> *webkitautomationsession,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                 user_data)</pre>
-<p>This signal is emitted when the automation client requests a new
-browsing context to interact with it. The callback handler should
-return a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> created with <a class="link" href="WebKitWebView.html#WebKitWebView--is-controlled-by-automation" title="The “is-controlled-by-automation” property"><span class="type">“is-controlled-by-automation”</span></a>
-construct property enabled. The returned <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> could be an existing
-web view or a new one created and added to a new tab or window.</p>
-<div class="refsect3">
-<a name="WebKitAutomationSession-create-web-view.parameters"></a><h4>Parameters</h4>
-<div class="informaltable"><table class="informaltable" width="100%" border="0">
-<colgroup>
-<col width="150px" class="parameters_name">
-<col class="parameters_description">
-<col width="200px" class="parameters_annotations">
-</colgroup>
-<tbody>
-<tr>
-<td class="parameter_name"><p>session</p></td>
-<td class="parameter_description"><p>a <a class="link" href="WebKitAutomationSession.html" title="WebKitAutomationSession"><span class="type">WebKitAutomationSession</span></a></p></td>
-<td class="parameter_annotations"> </td>
-</tr>
-<tr>
-<td class="parameter_name"><p>user_data</p></td>
-<td class="parameter_description"><p>user data set when the signal handler was connected.</p></td>
-<td class="parameter_annotations"> </td>
-</tr>
-</tbody>
-</table></div>
-</div>
-<div class="refsect3">
-<a name="WebKitAutomationSession-create-web-view.returns"></a><h4>Returns</h4>
-<p> a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> widget. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
-</div>
 <p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
-<p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
 </div>
 </div>
 </div>

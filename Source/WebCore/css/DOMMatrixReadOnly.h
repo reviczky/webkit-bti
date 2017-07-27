@@ -65,10 +65,17 @@ public:
         return adoptRef(*new DOMMatrixReadOnly(matrix, is2D));
     }
 
+    static Ref<DOMMatrixReadOnly> create(TransformationMatrix&& matrix, Is2D is2D)
+    {
+        return adoptRef(*new DOMMatrixReadOnly(WTFMove(matrix), is2D));
+    }
+
     static ExceptionOr<Ref<DOMMatrixReadOnly>> fromMatrix(DOMMatrixInit&&);
 
     static ExceptionOr<Ref<DOMMatrixReadOnly>> fromFloat32Array(Ref<Float32Array>&&);
     static ExceptionOr<Ref<DOMMatrixReadOnly>> fromFloat64Array(Ref<Float64Array>&&);
+
+    static ExceptionOr<void> validateAndFixup(DOMMatrixInit&);
 
     double a() const { return m_matrix.a(); }
     double b() const { return m_matrix.b(); }
@@ -125,13 +132,12 @@ public:
 protected:
     DOMMatrixReadOnly() = default;
     DOMMatrixReadOnly(const TransformationMatrix&, Is2D);
+    DOMMatrixReadOnly(TransformationMatrix&&, Is2D);
 
     Ref<DOMMatrix> cloneAsDOMMatrix() const;
 
     template <typename T>
     static ExceptionOr<Ref<T>> fromMatrixHelper(DOMMatrixInit&&);
-
-    static ExceptionOr<void> validateAndFixup(DOMMatrixInit&);
 
     TransformationMatrix m_matrix;
     bool m_is2D { true };

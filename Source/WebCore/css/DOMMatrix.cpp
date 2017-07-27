@@ -26,7 +26,6 @@
 #include "config.h"
 #include "DOMMatrix.h"
 
-#include "ExceptionCode.h"
 #include <cmath>
 #include <limits>
 
@@ -34,6 +33,11 @@ namespace WebCore {
 
 DOMMatrix::DOMMatrix(const TransformationMatrix& matrix, Is2D is2D)
     : DOMMatrixReadOnly(matrix, is2D)
+{
+}
+
+DOMMatrix::DOMMatrix(TransformationMatrix&& matrix, Is2D is2D)
+    : DOMMatrixReadOnly(WTFMove(matrix), is2D)
 {
 }
 

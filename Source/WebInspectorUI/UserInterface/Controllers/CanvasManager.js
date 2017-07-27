@@ -53,6 +53,8 @@ WebInspector.CanvasManager = class CanvasManager extends WebInspector.Object
         let canvas = WebInspector.Canvas.fromPayload(canvasPayload);
         this._canvasIdentifierMap.set(canvas.identifier, canvas);
 
+        canvas.frame.canvasCollection.add(canvas);
+
         this.dispatchEventToListeners(WebInspector.CanvasManager.Event.CanvasWasAdded, {canvas});
     }
 
@@ -65,7 +67,33 @@ WebInspector.CanvasManager = class CanvasManager extends WebInspector.Object
         if (!canvas)
             return;
 
+        canvas.frame.canvasCollection.remove(canvas);
+
         this.dispatchEventToListeners(WebInspector.CanvasManager.Event.CanvasWasRemoved, {canvas});
+    }
+
+    canvasMemoryChanged(canvasIdentifier, memoryCost)
+    {
+        // Called from WebInspector.CanvasObserver.
+
+        let canvas = this._canvasIdentifierMap.get(canvasIdentifier);
+        console.assert(canvas);
+        if (!canvas)
+            return;
+
+        canvas.memoryCost = memoryCost;
+    }
+
+    cssCanvasClientNodesChanged(canvasIdentifier)
+    {
+        // Called from WebInspector.CanvasObserver.
+
+        let canvas = this._canvasIdentifierMap.get(canvasIdentifier);
+        console.assert(canvas);
+        if (!canvas)
+            return;
+
+        canvas.cssCanvasClientNodesChanged();
     }
 
     // Private

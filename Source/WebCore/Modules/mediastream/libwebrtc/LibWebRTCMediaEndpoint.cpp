@@ -59,14 +59,21 @@ namespace WebCore {
 LibWebRTCMediaEndpoint::LibWebRTCMediaEndpoint(LibWebRTCPeerConnectionBackend& peerConnection, LibWebRTCProvider& client)
     : m_peerConnectionBackend(peerConnection)
     , m_peerConnectionFactory(*client.factory())
-    , m_backend(client.createPeerConnection(*this))
     , m_createSessionDescriptionObserver(*this)
     , m_setLocalSessionDescriptionObserver(*this)
     , m_setRemoteSessionDescriptionObserver(*this)
     , m_statsLogTimer(*this, &LibWebRTCMediaEndpoint::gatherStatsForLogging)
 {
-    ASSERT(m_backend);
     ASSERT(client.factory());
+}
+
+bool LibWebRTCMediaEndpoint::setConfiguration(LibWebRTCProvider& client, webrtc::PeerConnectionInterface::RTCConfiguration&& configuration)
+{
+    if (!m_backend) {
+        m_backend = client.createPeerConnection(*this, WTFMove(configuration));
+        return !!m_backend;
+    }
+    return m_backend->SetConfiguration(WTFMove(configuration));
 }
 
 // FIXME: unify with MediaEndpointSessionDescription::typeString()
@@ -110,37 +117,38 @@ static inline RefPtr<RTCSessionDescription> fromSessionDescription(const webrtc:
 // FIXME: We might want to create a new object only if the session actually changed for all description getters.
 RefPtr<RTCSessionDescription> LibWebRTCMediaEndpoint::currentLocalDescription() const
 {
-    return fromSessionDescription(m_backend->current_local_description());
+    return m_backend ? fromSessionDescription(m_backend->current_local_description()) : nullptr;
 }
 
 RefPtr<RTCSessionDescription> LibWebRTCMediaEndpoint::currentRemoteDescription() const
 {
-    return fromSessionDescription(m_backend->current_remote_description());
+    return m_backend ? fromSessionDescription(m_backend->current_remote_description()) : nullptr;
 }
 
 RefPtr<RTCSessionDescription> LibWebRTCMediaEndpoint::pendingLocalDescription() const
 {
-    return fromSessionDescription(m_backend->pending_local_description());
+    return m_backend ? fromSessionDescription(m_backend->pending_local_description()) : nullptr;
 }
 
 RefPtr<RTCSessionDescription> LibWebRTCMediaEndpoint::pendingRemoteDescription() const
 {
-    return fromSessionDescription(m_backend->pending_remote_description());
+    return m_backend ? fromSessionDescription(m_backend->pending_remote_description()) : nullptr;
 }
 
 RefPtr<RTCSessionDescription> LibWebRTCMediaEndpoint::localDescription() const
 {
-    return fromSessionDescription(m_backend->local_description());
+    return m_backend ? fromSessionDescription(m_backend->local_description()) : nullptr;
 }
 
 RefPtr<RTCSessionDescription> LibWebRTCMediaEndpoint::remoteDescription() const
 {
-    // FIXME: We might want to create a new object only if the session actually changed.
-    return fromSessionDescription(m_backend->remote_description());
+    return m_backend ? fromSessionDescription(m_backend->remote_description()) : nullptr;
 }
 
 void LibWebRTCMediaEndpoint::doSetLocalDescription(RTCSessionDescription& description)
 {
+    ASSERT(m_backend);
+
     webrtc::SdpParseError error;
     std::unique_ptr<webrtc::SessionDescriptionInterface> sessionDescription(webrtc::CreateSessionDescription(sessionDescriptionType(description.type()), description.sdp().utf8().data(), &error));
 
@@ -149,11 +157,20 @@ void LibWebRTCMediaEndpoint::doSetLocalDescription(RTCSessionDescription& descri
         m_peerConnectionBackend.setLocalDescriptionFailed(Exception { OperationError, WTFMove(errorMessage) });
         return;
     }
+
+    // FIXME: See https://bugs.webkit.org/show_bug.cgi?id=173783. Remove this test once fixed at LibWebRTC level.
+    if (description.type() == RTCSdpType::Answer && !m_backend->pending_remote_description()) {
+        m_peerConnectionBackend.setLocalDescriptionFailed(Exception { InvalidStateError, ASCIILiteral("Failed to set local answer sdp: no pending remote description.") });
+        return;
+    }
+
     m_backend->SetLocalDescription(&m_setLocalSessionDescriptionObserver, sessionDescription.release());
 }
 
 void LibWebRTCMediaEndpoint::doSetRemoteDescription(RTCSessionDescription& description)
 {
+    ASSERT(m_backend);
+
     webrtc::SdpParseError error;
     std::unique_ptr<webrtc::SessionDescriptionInterface> sessionDescription(webrtc::CreateSessionDescription(sessionDescriptionType(description.type()), description.sdp().utf8().data(), &error));
     if (!sessionDescription) {
@@ -168,6 +185,8 @@ void LibWebRTCMediaEndpoint::doSetRemoteDescription(RTCSessionDescription& descr
 
 void LibWebRTCMediaEndpoint::addTrack(RTCRtpSender& sender, MediaStreamTrack& track, const Vector<String>& mediaStreamIds)
 {
+    ASSERT(m_backend);
+
     std::vector<webrtc::MediaStreamInterface*> mediaStreams;
     rtc::scoped_refptr<webrtc::MediaStreamInterface> mediaStream = nullptr;
     if (mediaStreamIds.size()) {
@@ -176,17 +195,16 @@ void LibWebRTCMediaEndpoint::addTrack(RTCRtpSender& sender, MediaStreamTrack& tr
         mediaStreams.push_back(mediaStream.get());
     }
     
-    auto& source = track.source();
-    switch (source.type()) {
+    switch (track.privateTrack().type()) {
     case RealtimeMediaSource::Type::Audio: {
-        auto trackSource = RealtimeOutgoingAudioSource::create(source);
+        auto trackSource = RealtimeOutgoingAudioSource::create(track.privateTrack());
         auto audioTrack = m_peerConnectionFactory.CreateAudioTrack(track.id().utf8().data(), trackSource.ptr());
         m_peerConnectionBackend.addAudioSource(WTFMove(trackSource));
         m_senders.add(&sender, m_backend->AddTrack(audioTrack.get(), WTFMove(mediaStreams)));
         return;
     }
     case RealtimeMediaSource::Type::Video: {
-        auto videoSource = RealtimeOutgoingVideoSource::create(source);
+        auto videoSource = RealtimeOutgoingVideoSource::create(track.privateTrack());
         auto videoTrack = m_peerConnectionFactory.CreateVideoTrack(track.id().utf8().data(), videoSource.ptr());
         m_peerConnectionBackend.addVideoSource(WTFMove(videoSource));
         m_senders.add(&sender, m_backend->AddTrack(videoTrack.get(), WTFMove(mediaStreams)));
@@ -199,6 +217,8 @@ void LibWebRTCMediaEndpoint::addTrack(RTCRtpSender& sender, MediaStreamTrack& tr
 
 void LibWebRTCMediaEndpoint::removeTrack(RTCRtpSender& sender)
 {
+    ASSERT(m_backend);
+
     auto rtcSender = m_senders.get(&sender);
     if (!rtcSender)
         return;
@@ -237,6 +257,8 @@ bool LibWebRTCMediaEndpoint::shouldOfferAllowToReceiveVideo() const
 
 void LibWebRTCMediaEndpoint::doCreateOffer(const RTCOfferOptions& options)
 {
+    ASSERT(m_backend);
+
     m_isInitiator = true;
     webrtc::PeerConnectionInterface::RTCOfferAnswerOptions rtcOptions;
     rtcOptions.ice_restart = options.iceRestart;
@@ -251,15 +273,19 @@ void LibWebRTCMediaEndpoint::doCreateOffer(const RTCOfferOptions& options)
 
 void LibWebRTCMediaEndpoint::doCreateAnswer()
 {
+    ASSERT(m_backend);
+
     m_isInitiator = false;
     m_backend->CreateAnswer(&m_createSessionDescriptionObserver, nullptr);
 }
 
 void LibWebRTCMediaEndpoint::getStats(MediaStreamTrack* track, const DeferredPromise& promise)
 {
-    UNUSED_PARAM(track);
-    UNUSED_PARAM(promise);
-    m_backend->GetStats(StatsCollector::create(*this, promise, track).get());
+    auto collector = StatsCollector::create(*this, promise, track);
+    LibWebRTCProvider::callOnWebRTCSignalingThread([protectedThis = makeRef(*this), collector = WTFMove(collector)] {
+        if (protectedThis->m_backend)
+            protectedThis->m_backend->GetStats(collector.get());
+    });
 }
 
 LibWebRTCMediaEndpoint::StatsCollector::StatsCollector(Ref<LibWebRTCMediaEndpoint>&& endpoint, const DeferredPromise& promise, MediaStreamTrack* track)
@@ -699,6 +725,8 @@ void LibWebRTCMediaEndpoint::OnAddTrack(rtc::scoped_refptr<webrtc::RtpReceiverIn
 
 std::unique_ptr<RTCDataChannelHandler> LibWebRTCMediaEndpoint::createDataChannel(const String& label, const RTCDataChannelInit& options)
 {
+    ASSERT(m_backend);
+
     webrtc::DataChannelInit init;
     if (options.ordered)
         init.ordered = *options.ordered;
@@ -760,9 +788,11 @@ void LibWebRTCMediaEndpoint::OnDataChannel(rtc::scoped_refptr<webrtc::DataChanne
 
 void LibWebRTCMediaEndpoint::stop()
 {
+    if (!m_backend)
+        return;
+
     stopLoggingStats();
 
-    ASSERT(m_backend);
     m_backend->Close();
     m_backend = nullptr;
     m_streams.clear();
@@ -835,10 +865,12 @@ void LibWebRTCMediaEndpoint::OnIceCandidate(const webrtc::IceCandidateInterface 
     auto mid = rtcCandidate->sdp_mid();
     String candidateMid(mid.data(), mid.size());
 
-    callOnMainThread([protectedThis = makeRef(*this), mid = WTFMove(candidateMid), sdp = WTFMove(candidateSDP)] {
+    auto sdpMLineIndex = safeCast<unsigned short>(rtcCandidate->sdp_mline_index());
+
+    callOnMainThread([protectedThis = makeRef(*this), mid = WTFMove(candidateMid), sdp = WTFMove(candidateSDP), sdpMLineIndex] {
         if (protectedThis->isStopped())
             return;
-        protectedThis->m_peerConnectionBackend.newICECandidate(String(sdp), String(mid));
+        protectedThis->m_peerConnectionBackend.newICECandidate(String(sdp), String(mid), sdpMLineIndex);
     });
 }
 
@@ -847,7 +879,7 @@ void LibWebRTCMediaEndpoint::OnIceCandidatesRemoved(const std::vector<cricket::C
     ASSERT_NOT_REACHED();
 }
 
-void LibWebRTCMediaEndpoint::createSessionDescriptionSucceeded(webrtc::SessionDescriptionInterface* description)
+void LibWebRTCMediaEndpoint::createSessionDescriptionSucceeded(std::unique_ptr<webrtc::SessionDescriptionInterface>&& description)
 {
     std::string sdp;
     description->ToString(&sdp);
@@ -1025,18 +1057,19 @@ RTCRtpParameters LibWebRTCMediaEndpoint::getRTCRtpSenderParameters(RTCRtpSender&
 
 void LibWebRTCMediaEndpoint::gatherStatsForLogging()
 {
-    ASSERT(m_backend);
-    if (m_backend)
-        m_backend->GetStats(this);
+    LibWebRTCProvider::callOnWebRTCSignalingThread([protectedThis = makeRef(*this)] {
+        if (protectedThis->m_backend)
+            protectedThis->m_backend->GetStats(protectedThis.ptr());
+    });
 }
 
 void LibWebRTCMediaEndpoint::OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>& report)
 {
     if (!m_statsTimestamp)
         m_statsTimestamp = report->timestamp_us();
-    else if (m_statsLogTimer.repeatInterval() == 1_s && (report->timestamp_us() - m_statsTimestamp) > 30000000) {
+    else if (m_statsLogTimer.repeatInterval() == 2_s && (report->timestamp_us() - m_statsTimestamp) > 15000000) {
         callOnMainThread([protectedThis = makeRef(*this)] {
-            protectedThis->m_statsLogTimer.augmentRepeatInterval(4_s);
+            protectedThis->m_statsLogTimer.augmentRepeatInterval(9_s);
         });
     }
 
@@ -1045,7 +1078,7 @@ void LibWebRTCMediaEndpoint::OnStatsDelivered(const rtc::scoped_refptr<const web
     for (auto iterator = report->begin(); iterator != report->end(); ++iterator) {
         if (iterator->type() == webrtc::RTCCodecStats::kType)
             continue;
-        RELEASE_LOG(WebRTC, "WebRTC stats for %p: %s", this, iterator->ToString().c_str());
+        RELEASE_LOG(WebRTC, "WebRTC stats for %p: %{public}s", this, iterator->ToString().c_str());
     }
 #else
     UNUSED_PARAM(report);
@@ -1057,7 +1090,7 @@ void LibWebRTCMediaEndpoint::startLoggingStats()
 #if !RELEASE_LOG_DISABLED
     if (m_statsLogTimer.isActive())
         m_statsLogTimer.stop();
-    m_statsLogTimer.startRepeating(1_s);
+    m_statsLogTimer.startRepeating(2_s);
 #endif
 }
 

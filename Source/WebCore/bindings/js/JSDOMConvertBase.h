@@ -26,6 +26,7 @@
 #pragma once
 
 #include "JSDOMExceptionHandling.h"
+#include <runtime/Error.h>
 
 namespace WebCore {
 
@@ -197,5 +198,8 @@ template<typename T> struct DefaultConverter {
     // toBoolean() in JS can't call arbitrary functions.
     static constexpr bool conversionHasSideEffects = true;
 };
+
+// Conversion from JSValue -> Implementation for variadic arguments
+template<typename IDLType> struct VariadicConverter;
 
 } // namespace WebCore

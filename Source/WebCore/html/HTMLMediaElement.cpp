@@ -43,7 +43,7 @@
 #include "DiagnosticLoggingKeys.h"
 #include "Document.h"
 #include "DocumentLoader.h"
-#include "ElementIterator.h"
+#include "ElementChildIterator.h"
 #include "EventNames.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
@@ -74,6 +74,7 @@
 #include "PlatformMediaSessionManager.h"
 #include "ProgressTracker.h"
 #include "RenderLayerCompositor.h"
+#include "RenderTheme.h"
 #include "RenderVideo.h"
 #include "RenderView.h"
 #include "ResourceLoadInfo.h"
@@ -789,6 +790,10 @@ void HTMLMediaElement::parseAttribute(const QualifiedName& name, const AtomicStr
 
     } else if (name == mediagroupAttr)
         setMediaGroup(value);
+    else if (name == autoplayAttr) {
+        if (processingUserGestureForMedia())
+            removeBehaviorsRestrictionsAfterFirstUserGesture();
+    }
     else
         HTMLElement::parseAttribute(name, value);
 }
@@ -1322,6 +1327,11 @@ void HTMLMediaElement::selectMediaResource()
         } else if (hasAttributeWithoutSynchronization(srcAttr)) {
             //    Otherwise, if the media element has no assigned media provider object but has a src attribute, then let mode be attribute.
             mode = Attribute;
+            ASSERT(m_player);
+            if (!m_player) {
+                RELEASE_LOG_ERROR(Media, "HTMLMediaElement::selectMediaResource(%p) - has srcAttr but m_player is not created", this);
+                return;
+            }
         } else if (auto firstSource = childrenOfType<HTMLSourceElement>(*this).first()) {
             //    Otherwise, if the media element does not have an assigned media provider object and does not have a src attribute,
             //    but does have a source element child, then let mode be children and let candidate be the first such source element
@@ -2473,6 +2483,9 @@ RefPtr<ArrayBuffer> HTMLMediaElement::mediaPlayerCachedKeyForKeyId(const String&
 
 bool HTMLMediaElement::mediaPlayerKeyNeeded(MediaPlayer*, Uint8Array* initData)
 {
+    if (!RuntimeEnabledFeatures::sharedFeatures().legacyEncryptedMediaAPIEnabled())
+        return false;
+
     if (!hasEventListeners("webkitneedkey")) {
         m_error = MediaError::create(MediaError::MEDIA_ERR_ENCRYPTED);
         scheduleEvent(eventNames().errorEvent);
@@ -2497,6 +2510,9 @@ String HTMLMediaElement::mediaPlayerMediaKeysStorageDirectory() const
 
 void HTMLMediaElement::webkitSetMediaKeys(WebKitMediaKeys* mediaKeys)
 {
+    if (!RuntimeEnabledFeatures::sharedFeatures().legacyEncryptedMediaAPIEnabled())
+        return;
+
     if (m_webKitMediaKeys == mediaKeys)
         return;
 
@@ -2509,6 +2525,9 @@ void HTMLMediaElement::webkitSetMediaKeys(WebKitMediaKeys* mediaKeys)
 
 void HTMLMediaElement::keyAdded()
 {
+    if (!RuntimeEnabledFeatures::sharedFeatures().legacyEncryptedMediaAPIEnabled())
+        return;
+
     if (m_player)
         m_player->keyAdded();
 }
@@ -2931,7 +2950,7 @@ void HTMLMediaElement::setCurrentTime(const MediaTime& time)
 ExceptionOr<void> HTMLMediaElement::setCurrentTimeForBindings(double time)
 {
     if (m_mediaController)
-        return Exception { INVALID_STATE_ERR };
+        return Exception { InvalidStateError };
     seek(MediaTime::createWithDouble(time));
     return { };
 }
@@ -3135,7 +3154,7 @@ void HTMLMediaElement::play(DOMPromiseDeferred<void>&& promise)
     }
 
     if (m_error && m_error->code() == MediaError::MEDIA_ERR_SRC_NOT_SUPPORTED) {
-        promise.reject(NOT_SUPPORTED_ERR, "The operation is not supported.");
+        promise.reject(NotSupportedError, "The operation is not supported.");
         return;
     }
 
@@ -3241,7 +3260,9 @@ bool HTMLMediaElement::playInternal()
 void HTMLMediaElement::pause()
 {
     LOG(Media, "HTMLMediaElement::pause(%p)", this);
-
+    
+    m_temporarilyAllowingInlinePlaybackAfterFullscreen = false;
+    
     if (!m_mediaSession->playbackPermitted(*this))
         return;
 
@@ -3342,7 +3363,7 @@ ExceptionOr<void> HTMLMediaElement::setVolume(double volume)
     LOG(Media, "HTMLMediaElement::setVolume(%p) - %f", this, volume);
 
     if (!(volume >= 0 && volume <= 1))
-        return Exception { INDEX_SIZE_ERR };
+        return Exception { IndexSizeError };
 
 #if !PLATFORM(IOS)
     if (m_volume == volume)
@@ -4201,7 +4222,7 @@ bool HTMLMediaElement::havePotentialSourceChild()
     // Stash the current <source> node and next nodes so we can restore them after checking
     // to see there is another potential.
     RefPtr<HTMLSourceElement> currentSourceNode = m_currentSourceNode;
-    RefPtr<Node> nextNode = m_nextChildNodeToConsider;
+    RefPtr<HTMLSourceElement> nextNode = m_nextChildNodeToConsider;
 
     URL nextURL = selectNextSourceChild(0, 0, DoNothing);
 
@@ -4229,31 +4250,21 @@ URL HTMLMediaElement::selectNextSourceChild(ContentType* contentType, String* ke
         return URL();
     }
 
-    URL mediaURL;
-    HTMLSourceElement* source = nullptr;
-    String type;
-    bool lookingForStartNode = m_nextChildNodeToConsider;
-    bool canUseSourceElement = false;
-    bool okToLoadSourceURL;
+    // Because the DOM may be mutated in the course of the following algorithm,
+    // keep strong references to each of the child source nodes, and verify that
+    // each still is a child of this media element before using.
+    Vector<Ref<HTMLSourceElement>> potentialSourceNodes;
+    auto sources = childrenOfType<HTMLSourceElement>(*this);
+    for (auto next = m_nextChildNodeToConsider ? sources.beginAt(*m_nextChildNodeToConsider) : sources.begin(), end = sources.end(); next != end; ++next)
+        potentialSourceNodes.append(*next);
 
-    NodeVector potentialSourceNodes;
-    getChildNodes(*this, potentialSourceNodes);
-
-    for (unsigned i = 0; !canUseSourceElement && i < potentialSourceNodes.size(); ++i) {
-        Node& node = potentialSourceNodes[i].get();
-        if (lookingForStartNode && m_nextChildNodeToConsider != &node)
+    for (auto& source : potentialSourceNodes) {
+        if (source->parentNode() != this)
             continue;
-        lookingForStartNode = false;
-
-        if (!node.hasTagName(sourceTag))
-            continue;
-        if (node.parentNode() != this)
-            continue;
-
-        source = downcast<HTMLSourceElement>(&node);
 
         // If candidate does not have a src attribute, or if its src attribute's value is the empty string ... jump down to the failed step below
-        mediaURL = source->getNonEmptyURLAttribute(srcAttr);
+        auto mediaURL = source->getNonEmptyURLAttribute(srcAttr);
+        String type;
 #if !LOG_DISABLED
         if (shouldLog)
             LOG(Media, "HTMLMediaElement::selectNextSourceChild(%p) - 'src' is %s", this, urlForLoggingMedia(mediaURL).utf8().data());
@@ -4288,48 +4299,49 @@ URL HTMLMediaElement::selectNextSourceChild(ContentType* contentType, String* ke
 #if ENABLE(MEDIA_STREAM)
             parameters.isMediaStream = mediaURL.protocolIs(mediaStreamBlobProtocol);
 #endif
-            parameters.contentTypesRequiringHardwareSupport = mediaContentTypesRequiringHardwareSupport();
+            if (!document().settings().allowMediaContentTypesRequiringHardwareSupportAsFallback() || Traversal<HTMLSourceElement>::nextSkippingChildren(source))
+                parameters.contentTypesRequiringHardwareSupport = mediaContentTypesRequiringHardwareSupport();
 
             if (!MediaPlayer::supportsType(parameters, this))
                 goto CheckAgain;
         }
 
         // Is it safe to load this url?
-        okToLoadSourceURL = isSafeToLoadURL(mediaURL, actionIfInvalid) && dispatchBeforeLoadEvent(mediaURL.string());
+        if (!isSafeToLoadURL(mediaURL, actionIfInvalid) || !dispatchBeforeLoadEvent(mediaURL.string()))
+            goto CheckAgain;
 
         // A 'beforeload' event handler can mutate the DOM, so check to see if the source element is still a child node.
-        if (node.parentNode() != this) {
+        if (source->parentNode() != this) {
             LOG(Media, "HTMLMediaElement::selectNextSourceChild(%p) - 'beforeload' removed current element", this);
-            source = nullptr;
-            goto CheckAgain;
+            continue;
         }
 
-        if (!okToLoadSourceURL)
-            goto CheckAgain;
-
         // Making it this far means the <source> looks reasonable.
-        canUseSourceElement = true;
+        if (contentType)
+            *contentType = ContentType(type);
+        m_nextChildNodeToConsider = Traversal<HTMLSourceElement>::nextSkippingChildren(source);
+        m_currentSourceNode = WTFMove(source);
+
+#if !LOG_DISABLED
+        if (shouldLog)
+            LOG(Media, "HTMLMediaElement::selectNextSourceChild(%p) -> %p, %s", this, m_currentSourceNode.get(), urlForLoggingMedia(mediaURL).utf8().data());
+#endif
+
+        return mediaURL;
 
 CheckAgain:
-        if (!canUseSourceElement && actionIfInvalid == Complain && source)
+        if (actionIfInvalid == Complain)
             source->scheduleErrorEvent();
     }
 
-    if (canUseSourceElement) {
-        if (contentType)
-            *contentType = ContentType(type);
-        m_currentSourceNode = source;
-        m_nextChildNodeToConsider = source->nextSibling();
-    } else {
-        m_currentSourceNode = nullptr;
-        m_nextChildNodeToConsider = nullptr;
-    }
+    m_currentSourceNode = nullptr;
+    m_nextChildNodeToConsider = nullptr;
 
 #if !LOG_DISABLED
     if (shouldLog)
-        LOG(Media, "HTMLMediaElement::selectNextSourceChild(%p) -> %p, %s", this, m_currentSourceNode.get(), canUseSourceElement ? urlForLoggingMedia(mediaURL).utf8().data() : "");
+        LOG(Media, "HTMLMediaElement::selectNextSourceChild(%p) -> %p, failed", this, m_currentSourceNode.get());
 #endif
-    return canUseSourceElement ? mediaURL : URL();
+    return URL();
 }
 
 void HTMLMediaElement::sourceWasAdded(HTMLSourceElement& source)
@@ -4350,13 +4362,16 @@ void HTMLMediaElement::sourceWasAdded(HTMLSourceElement& source)
     // 4.8.8 - If a source element is inserted as a child of a media element that has no src 
     // attribute and whose networkState has the value NETWORK_EMPTY, the user agent must invoke 
     // the media element's resource selection algorithm.
-    if (networkState() == HTMLMediaElement::NETWORK_EMPTY) {
+    if (m_networkState == NETWORK_EMPTY) {
         m_nextChildNodeToConsider = &source;
-        selectMediaResource();
+#if PLATFORM(IOS)
+        if (m_mediaSession->dataLoadingPermitted(*this))
+#endif
+            selectMediaResource();
         return;
     }
 
-    if (m_currentSourceNode && &source == m_currentSourceNode->nextSibling()) {
+    if (m_currentSourceNode && &source == Traversal<HTMLSourceElement>::nextSibling(*m_currentSourceNode)) {
         LOG(Media, "HTMLMediaElement::sourceWasAdded(%p) - <source> inserted immediately after current source", this);
         m_nextChildNodeToConsider = &source;
         return;
@@ -4395,8 +4410,7 @@ void HTMLMediaElement::sourceWasRemoved(HTMLSourceElement& source)
         return;
 
     if (&source == m_nextChildNodeToConsider) {
-        if (m_currentSourceNode)
-            m_nextChildNodeToConsider = m_currentSourceNode->nextSibling();
+        m_nextChildNodeToConsider = m_currentSourceNode ? Traversal<HTMLSourceElement>::nextSibling(*m_currentSourceNode) : nullptr;
         LOG(Media, "HTMLMediaElement::sourceRemoved(%p) - m_nextChildNodeToConsider set to %p", this, m_nextChildNodeToConsider.get());
     } else if (&source == m_currentSourceNode) {
         // Clear the current source node pointer, but don't change the movie as the spec says:
@@ -5339,7 +5353,7 @@ void HTMLMediaElement::mediaVolumeDidChange()
 
 void HTMLMediaElement::visibilityStateChanged()
 {
-    m_elementIsHidden = document().hidden() && m_videoFullscreenMode == VideoFullscreenModeNone;
+    m_elementIsHidden = document().hidden() && m_videoFullscreenMode != VideoFullscreenModePictureInPicture;
     LOG(Media, "HTMLMediaElement::visibilityStateChanged(%p) - visible = %s", this, boolString(!m_elementIsHidden));
     updateSleepDisabling();
     m_mediaSession->visibilityChanged();
@@ -5698,7 +5712,7 @@ void HTMLMediaElement::setPreparedToReturnVideoLayerToInline(bool value)
     }
 }
 
-void HTMLMediaElement::waitForPreparedForInlineThen(std::function<void()> completionHandler)
+void HTMLMediaElement::waitForPreparedForInlineThen(WTF::Function<void()>&& completionHandler)
 {
     ASSERT(!m_preparedForInlineCompletionHandler);
     if (m_preparedForInline)  {
@@ -5706,7 +5720,7 @@ void HTMLMediaElement::waitForPreparedForInlineThen(std::function<void()> comple
         return;
     }
     
-    m_preparedForInlineCompletionHandler = completionHandler;
+    m_preparedForInlineCompletionHandler = WTFMove(completionHandler);
 }
 
 #if PLATFORM(IOS) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
@@ -5716,7 +5730,7 @@ bool HTMLMediaElement::isVideoLayerInline()
     return !m_videoFullscreenLayer;
 };
     
-void HTMLMediaElement::setVideoFullscreenLayer(PlatformLayer* platformLayer, std::function<void()> completionHandler)
+void HTMLMediaElement::setVideoFullscreenLayer(PlatformLayer* platformLayer, WTF::Function<void()>&& completionHandler)
 {
     m_videoFullscreenLayer = platformLayer;
     if (!m_player) {
@@ -5724,7 +5738,7 @@ void HTMLMediaElement::setVideoFullscreenLayer(PlatformLayer* platformLayer, std
         return;
     }
     
-    m_player->setVideoFullscreenLayer(platformLayer, completionHandler);
+    m_player->setVideoFullscreenLayer(platformLayer, WTFMove(completionHandler));
     invalidateStyleAndLayerComposition();
 #if ENABLE(VIDEO_TRACK)
     updateTextTrackDisplay();
@@ -6652,6 +6666,20 @@ const Vector<ContentType>& HTMLMediaElement::mediaContentTypesRequiringHardwareS
     return document().settings().mediaContentTypesRequiringHardwareSupport();
 }
 
+bool HTMLMediaElement::mediaPlayerShouldCheckHardwareSupport() const
+{
+    if (!document().settings().allowMediaContentTypesRequiringHardwareSupportAsFallback())
+        return true;
+
+    if (m_loadState == LoadingFromSourceElement && m_currentSourceNode && !m_nextChildNodeToConsider)
+        return false;
+
+    if (m_loadState == LoadingFromSrcAttr)
+        return false;
+
+    return true;
+}
+
 #if USE(GSTREAMER)
 void HTMLMediaElement::requestInstallMissingPlugins(const String& details, const String& description, MediaPlayerRequestInstallMissingPluginsCallback& callback)
 {
@@ -6679,6 +6707,24 @@ void HTMLMediaElement::removeBehaviorsRestrictionsAfterFirstUserGesture(MediaEle
         | MediaElementSession::RequireUserGestureToControlControlsManager);
 
     m_mediaSession->removeBehaviorRestriction(restrictionsToRemove);
+}
+
+void HTMLMediaElement::updateRateChangeRestrictions()
+{
+    const auto& document = this->document();
+    if (!document.ownerElement() && document.isMediaDocument())
+        return;
+
+    const auto& topDocument = document.topDocument();
+    if (topDocument.videoPlaybackRequiresUserGesture())
+        m_mediaSession->addBehaviorRestriction(MediaElementSession::RequireUserGestureForVideoRateChange);
+    else
+        m_mediaSession->removeBehaviorRestriction(MediaElementSession::RequireUserGestureForVideoRateChange);
+
+    if (topDocument.audioPlaybackRequiresUserGesture())
+        m_mediaSession->addBehaviorRestriction(MediaElementSession::RequireUserGestureForAudioRateChange);
+    else
+        m_mediaSession->removeBehaviorRestriction(MediaElementSession::RequireUserGestureForAudioRateChange);
 }
 
 #if ENABLE(MEDIA_SOURCE)
@@ -7282,7 +7328,7 @@ bool HTMLMediaElement::effectiveMuted() const
 
 bool HTMLMediaElement::doesHaveAttribute(const AtomicString& attribute, AtomicString* value) const
 {
-    QualifiedName attributeName(nullAtom, attribute, nullAtom);
+    QualifiedName attributeName(nullAtom(), attribute, nullAtom());
 
     auto& elementValue = attributeWithoutSynchronization(attributeName);
     if (elementValue.isNull())
