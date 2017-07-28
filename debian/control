@@ -34,8 +34,9 @@ Build-Depends: gawk,
                libpng-dev,
                libwebp-dev,
                libxt-dev,
-               libgstreamer1.0-dev (>= 1.0.3),
-               libgstreamer-plugins-base1.0-dev (>= 1.0.3),
+               libgstreamer1.0-dev (>= 1.2.3),
+               libgstreamer-plugins-base1.0-dev (>= 1.2.3),
+               libgstreamer-plugins-bad1.0-dev (>= 1.2.3),
                libenchant-dev (>= 0.22),
                gtk-doc-tools,
                geoclue-2.0,
@@ -44,7 +45,7 @@ Build-Depends: gawk,
                libgirepository1.0-dev (>= 0.9.12-4),
                libegl1-mesa-dev,
                libgl1-mesa-dev [!armel !armhf !arm64],
-               libgles2-mesa-dev [armel armhf arm64]
+               libgles2-mesa-dev
 Build-Conflicts: gir-repository-dev
 Standards-Version: 3.9.8
 Homepage: https://webkitgtk.org/
