@@ -11,6 +11,8 @@ webkit2gtk (2.17.5-1) UNRELEASED; urgency=medium
       GStreamerGL and bump all GStreamer dependencies to >= 1.2.3.
     + Add build dependency on libgles2-mesa-dev for all
       architectures (GStreamerGL needs GLES3/gl3.h).
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 27 Jul 2017 10:07:34 +0200
 

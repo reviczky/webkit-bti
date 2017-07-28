@@ -3,8 +3,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  NetworkProcessMainUnix@Base 2.5.3
  PluginProcessMainUnix@Base 2.5.3
  WebProcessMainUnix@Base 2.5.3
- (c++)"WebKit::WebGtkExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.4
- (c++)"WebKit::WebGtkExtensionManager::singleton()@Base" 2.8.1
+ (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
+ (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
  webkit_authentication_dialog_get_type@Base 2.5.3
  webkit_authentication_request_authenticate@Base 2.5.3
  webkit_authentication_request_can_save_credentials@Base 2.5.3
@@ -1721,7 +1721,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_snapshot_error_quark@Base 2.5.3
  webkit_snapshot_options_get_type@Base 2.5.3
  webkit_snapshot_region_get_type@Base 2.5.3
- (optional)webkit_soup_cookie_jar_sqlite_get_type@Base 2.5.3
  (optional)webkit_soup_request_generic_get_type@Base 2.5.3
  (optional)webkit_soup_request_input_stream_get_type@Base 2.5.3
  webkit_tls_errors_policy_get_type@Base 2.5.3
