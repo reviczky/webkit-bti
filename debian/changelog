@@ -8,6 +8,7 @@ webkit2gtk (2.17.5-2) UNRELEASED; urgency=medium
     + Add build dependency on mesa-common-dev (GStreamerGL needs GL/gl.h),
       this is automatically pulled in some architectures by
       libgl1-mesa-dev, but without it the build fails in all others.
+  * Refresh debian/patches/fix-ftbfs-m68k.patch.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 04 Aug 2017 15:06:11 +0300
 
