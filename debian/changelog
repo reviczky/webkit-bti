@@ -3,6 +3,7 @@ webkit2gtk (2.17.5-2) UNRELEASED; urgency=medium
   * debian/rules:
     + Don't pass -DENABLE_DISASSEMBLER=0, this is no longer necessary.
     + Don't disable JIT in arm64.
+    + Don't disable the gold linker in any architecture.
   * debian/control:
     + Add build dependency on mesa-common-dev (GStreamerGL needs GL/gl.h),
       this is automatically pulled in some architectures by

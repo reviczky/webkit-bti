@@ -24,10 +24,6 @@ ifeq ($(DEB_BUILD_ARCH),alpha)
 	LDFLAGS += -Wl,--no-relax
 endif
 
-ifneq (,$(filter $(DEB_BUILD_ARCH),arm64 kfreebsd-i386 kfreebsd-amd64))
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_LD_GOLD=OFF
-endif
-
 # The debug packages produced by webkit are huge and cause problems in
 # most buildds, so use -g1 in all architectures except the ones that
 # are known to work fine
