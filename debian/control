@@ -43,6 +43,7 @@ Build-Depends: gawk,
                libsecret-1-dev,
                gobject-introspection (>= 1.32.0),
                libgirepository1.0-dev (>= 0.9.12-4),
+               mesa-common-dev,
                libegl1-mesa-dev,
                libgl1-mesa-dev [!armel !armhf !arm64],
                libgles2-mesa-dev
