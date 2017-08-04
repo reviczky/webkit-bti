@@ -35,10 +35,8 @@ ifeq (,$(filter $(DEB_BUILD_ARCH),amd64 ppc64 ppc64el))
 	CFLAGS := $(CFLAGS:-g=-g1)
 endif
 
-# See https://bugs.webkit.org/show_bug.cgi?id=113638
 ifeq (,$(filter $(DEB_BUILD_ARCH),i386 amd64 hurd-i386 kfreebsd-i386 kfreebsd-amd64 armhf))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF
-	CPPFLAGS += -DENABLE_ASSEMBLER=0
 endif
 
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
