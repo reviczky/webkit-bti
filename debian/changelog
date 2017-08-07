@@ -1,3 +1,13 @@
+webkit2gtk (2.17.5-3) UNRELEASED; urgency=medium
+
+  * Disable GStreamerGL in armel and armhf, the usage of two different GL
+    implementations causes a build failure (see WebKit but #175127).
+    + debian/control: Don't install libgstreamer-plugins-bad1.0-dev in
+      those architectures.
+    + debian/rules: Pass -DUSE_GSTREAMER_GL=OFF.
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 07 Aug 2017 16:24:19 +0300
+
 webkit2gtk (2.17.5-2) experimental; urgency=medium
 
   * debian/rules:
