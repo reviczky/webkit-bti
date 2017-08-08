@@ -1,4 +1,32 @@
 ==================
+WebKitGTK+  2.16.6
+==================
+
+  - Fix rendering of spin buttons with GTK+ >= 3.20 when the entry width is too short.
+  - Fix the build when Wayland target is enabled and X11 disabled.
+  - Fix several crashes and rendering issues.
+  - Security fixes: CVE-2017-7039, CVE-2017-7018, CVE-2017-7030, CVE-2017-7037, CVE-2017-7034,
+    CVE-2017-7055, CVE-2017-7056, CVE-2017-7064, CVE-2017-7061, CVE-2017-7048, CVE-2017-7046.
+
+==================
+WebKitGTK+  2.16.5
+==================
+
+  - Fix a web process crash when page finishes loading in several web sites.
+  - Fix the menu of select elements not showing in some cases under Wayland.
+
+==================
+WebKitGTK+  2.16.4
+==================
+
+  - Fix web process deadlock when seeking youtube videos.
+  - Fix blob downloads.
+  - Improve theme rendering performance when using GTK+ >= 3.20.
+  - Fix positioning of popup menus in Wayland.
+  - Fix several crashes and rendering issues.
+  - Security fixes: CVE-2017-2538.
+
+==================
 WebKitGTK+  2.16.3
 ==================
 

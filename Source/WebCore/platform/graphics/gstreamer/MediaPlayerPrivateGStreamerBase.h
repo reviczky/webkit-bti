@@ -172,8 +172,10 @@ protected:
 
     void triggerRepaint(GstSample*);
     void repaint();
+    void cancelRepaint();
 
     static void repaintCallback(MediaPlayerPrivateGStreamerBase*, GstSample*);
+    static void repaintCancelledCallback(MediaPlayerPrivateGStreamerBase*);
 
     void notifyPlayerOfVolumeChange();
     void notifyPlayerOfMute();
@@ -193,7 +195,7 @@ protected:
         SizeChanged = 1 << 6
     };
 
-    MainThreadNotifier<MainThreadNotification> m_notifier;
+    Ref<MainThreadNotifier<MainThreadNotification>> m_notifier;
     MediaPlayer* m_player;
     GRefPtr<GstElement> m_pipeline;
     GRefPtr<GstStreamVolume> m_volumeElement;

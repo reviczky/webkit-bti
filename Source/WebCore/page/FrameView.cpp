@@ -1575,9 +1575,9 @@ void FrameView::layout(bool allowSubtree)
             // can make us need to update again, and we can get stuck in a nasty cycle unless
             // we call it through the timer here.
             m_postLayoutTasksTimer.startOneShot(0);
-            if (needsLayout())
-                layout();
         }
+        if (needsLayout())
+            layout();
     }
 
     InspectorInstrumentation::didLayout(cookie, *root);
@@ -3540,7 +3540,7 @@ void FrameView::performPostLayoutTasks()
     updateScrollSnapState();
 
     if (AXObjectCache* cache = frame().document()->existingAXObjectCache())
-        cache->performDeferredIsIgnoredChange();
+        cache->performDeferredCacheUpdate();
 }
 
 IntSize FrameView::sizeForResizeEvent() const
@@ -4428,18 +4428,16 @@ void FrameView::paintContents(GraphicsContext& context, const IntRect& dirtyRect
         context.fillRect(dirtyRect, Color(0xFF, 0, 0));
 #endif
 
-    if (m_layoutPhase == InViewSizeAdjust)
-        return;
-
-    TraceScope tracingScope(PaintViewStart, PaintViewEnd);
-
-    ASSERT(m_layoutPhase == InPostLayerPositionsUpdatedAfterLayout || m_layoutPhase == OutsideLayout);
-    
     RenderView* renderView = this->renderView();
     if (!renderView) {
         LOG_ERROR("called FrameView::paint with nil renderer");
         return;
     }
+
+    if (!inPaintableState())
+        return;
+
+    TraceScope tracingScope(PaintViewStart, PaintViewEnd);
 
     ASSERT(!needsLayout());
     if (needsLayout())

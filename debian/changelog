@@ -1,3 +1,18 @@
+webkit2gtk (2.16.6-0+deb9u1) stretch; urgency=medium
+
+  * Team upload.
+  * New upstream security and bugfix release.
+  * Fixes these security issues reported in WSA-2017-0005 and
+    WSA-2017-0006:
+    + CVE-2017-2538, CVE-2017-7052 (fixed in 2.16.4)
+    + CVE-2017-7018, CVE-2017-7030, CVE-2017-7034, CVE-2017-7037,
+      CVE-2017-7039, CVE-2017-7046, CVE-2017-7048, CVE-2017-7055,
+      CVE-2017-7056, CVE-2017-7061, CVE-2017-7064 (fixed in 2.16.6).
+  * Add debian/patches/fix-ftbfs-m68k.patch:
+    + Fix FTBFS in m68k (Closes: #868126).
+
+ -- Jeremy Bicha <jbicha@ubuntu.com>  Mon, 07 Aug 2017 00:35:25 -0400
+
 webkit2gtk (2.16.3-2) unstable; urgency=medium
 
   * Upload to unstable (Closes: #836055).
