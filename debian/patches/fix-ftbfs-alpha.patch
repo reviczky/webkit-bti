@@ -18,7 +18,7 @@ Index: webkitgtk/Source/JavaScriptCore/CMakeLists.txt
 ===================================================================
 --- webkitgtk.orig/Source/JavaScriptCore/CMakeLists.txt
 +++ webkitgtk/Source/JavaScriptCore/CMakeLists.txt
-@@ -1502,6 +1502,7 @@ list(APPEND JavaScriptCore_HEADERS ${DER
+@@ -1505,6 +1505,7 @@ list(APPEND JavaScriptCore_HEADERS ${DER
  
  if (WTF_CPU_ARM)
  elseif (WTF_CPU_ARM64)

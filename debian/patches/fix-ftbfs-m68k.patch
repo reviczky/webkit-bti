@@ -19,7 +19,7 @@ Index: webkitgtk/Source/JavaScriptCore/CMakeLists.txt
 ===================================================================
 --- webkitgtk.orig/Source/JavaScriptCore/CMakeLists.txt
 +++ webkitgtk/Source/JavaScriptCore/CMakeLists.txt
-@@ -1509,6 +1509,7 @@ elseif (WTF_CPU_PPC64)
+@@ -1512,6 +1512,7 @@ elseif (WTF_CPU_PPC64)
  elseif (WTF_CPU_PPC64LE)
  elseif (WTF_CPU_S390)
  elseif (WTF_CPU_S390X)
@@ -176,7 +176,7 @@ Index: webkitgtk/Source/WebCore/css/RuleSet.h
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/RuleSet.h
 +++ webkitgtk/Source/WebCore/css/RuleSet.h
-@@ -141,7 +141,11 @@ struct SameSizeAsRuleData {
+@@ -142,7 +142,11 @@ struct SameSizeAsRuleData {
      unsigned d[4];
  };
  
