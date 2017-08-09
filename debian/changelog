@@ -4,6 +4,8 @@ webkit2gtk (2.17.90-1) UNRELEASED; urgency=medium
   * Refresh all patches.
   * debian/control:
     + Add build dependency on libtasn1-6-dev (for Web Crypto).
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
   * Disable GStreamerGL in armel and armhf, the usage of two different GL
     implementations causes a build failure (see WebKit but #175127).
     + debian/control: Don't install libgstreamer-plugins-bad1.0-dev in
