@@ -152,9 +152,9 @@
 #if PLATFORM(COCOA)
 #include "RemoteLayerTreeDrawingAreaProxy.h"
 #include "RemoteLayerTreeScrollingPerformanceData.h"
+#include "VideoFullscreenManagerProxy.h"
+#include "VideoFullscreenManagerProxyMessages.h"
 #include "ViewSnapshotStore.h"
-#include "WebVideoFullscreenManagerProxy.h"
-#include "WebVideoFullscreenManagerProxyMessages.h"
 #include <WebCore/MachSendRight.h>
 #include <WebCore/RunLoopObserver.h>
 #include <WebCore/TextIndicatorWindow.h>
@@ -180,7 +180,7 @@
 #endif
 
 #if PLATFORM(IOS) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
-#include "WebPlaybackSessionManagerProxy.h"
+#include "PlaybackSessionManagerProxy.h"
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -394,8 +394,8 @@ WebPageProxy::WebPageProxy(PageClient& pageClient, WebProcessProxy& process, uin
     m_fullScreenManager = WebFullScreenManagerProxy::create(*this, m_pageClient.fullScreenManagerProxyClient());
 #endif
 #if PLATFORM(IOS) && HAVE(AVKIT) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
-    m_playbackSessionManager = WebPlaybackSessionManagerProxy::create(*this);
-    m_videoFullscreenManager = WebVideoFullscreenManagerProxy::create(*this, *m_playbackSessionManager);
+    m_playbackSessionManager = PlaybackSessionManagerProxy::create(*this);
+    m_videoFullscreenManager = VideoFullscreenManagerProxy::create(*this, *m_playbackSessionManager);
 #endif
 
 #if ENABLE(APPLE_PAY)
@@ -636,8 +636,8 @@ void WebPageProxy::reattachToWebProcess()
     m_fullScreenManager = WebFullScreenManagerProxy::create(*this, m_pageClient.fullScreenManagerProxyClient());
 #endif
 #if PLATFORM(IOS) && HAVE(AVKIT) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
-    m_playbackSessionManager = WebPlaybackSessionManagerProxy::create(*this);
-    m_videoFullscreenManager = WebVideoFullscreenManagerProxy::create(*this, *m_playbackSessionManager);
+    m_playbackSessionManager = PlaybackSessionManagerProxy::create(*this);
+    m_videoFullscreenManager = VideoFullscreenManagerProxy::create(*this, *m_playbackSessionManager);
 #endif
 
 #if ENABLE(APPLE_PAY)
@@ -740,6 +740,11 @@ void WebPageProxy::close()
     if (m_activePopupMenu)
         m_activePopupMenu->cancelTracking();
 
+    if (m_controlledByAutomation) {
+        if (auto* automationSession = process().processPool().automationSession())
+            automationSession->willClosePage(*this);
+    }
+
 #if ENABLE(CONTEXT_MENUS)
     m_activeContextMenu = nullptr;
 #endif
@@ -781,6 +786,8 @@ void WebPageProxy::close()
     // Make sure we don't hold a process assertion after getting closed.
     m_activityToken = nullptr;
 #endif
+
+    stopAllURLSchemeTasks();
 }
 
 bool WebPageProxy::tryClose()
@@ -3362,6 +3369,11 @@ void WebPageProxy::didFinishDocumentLoadForFrame(uint64_t frameID, uint64_t navi
     WebFrameProxy* frame = m_process->webFrame(frameID);
     MESSAGE_CHECK(frame);
 
+    if (m_controlledByAutomation) {
+        if (auto* automationSession = process().processPool().automationSession())
+            automationSession->documentLoadedForFrame(*frame);
+    }
+
     // FIXME: We should message check that navigationID is not zero here, but it's currently zero for some navigations through the page cache.
     RefPtr<API::Navigation> navigation;
     if (frame->isMainFrame() && navigationID)
@@ -4325,12 +4337,12 @@ void WebPageProxy::setFullscreenClient(std::unique_ptr<API::FullscreenClient>&& 
 #endif
     
 #if (PLATFORM(IOS) && HAVE(AVKIT)) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
-WebPlaybackSessionManagerProxy* WebPageProxy::playbackSessionManager()
+PlaybackSessionManagerProxy* WebPageProxy::playbackSessionManager()
 {
     return m_playbackSessionManager.get();
 }
 
-WebVideoFullscreenManagerProxy* WebPageProxy::videoFullscreenManager()
+VideoFullscreenManagerProxy* WebPageProxy::videoFullscreenManager()
 {
     return m_videoFullscreenManager.get();
 }
@@ -4689,12 +4701,12 @@ void WebPageProxy::didChooseFilesForOpenPanelWithDisplayStringAndIcon(const Vect
         return;
 
 #if ENABLE(SANDBOX_EXTENSIONS)
-    for (size_t i = 0; i < fileURLs.size(); ++i) {
-        SandboxExtension::HandleArray sandboxExtensionHandles;
-        sandboxExtensionHandles.allocate(fileURLs.size());
+    SandboxExtension::HandleArray sandboxExtensionHandles;
+    sandboxExtensionHandles.allocate(fileURLs.size());
+    for (size_t i = 0; i < fileURLs.size(); ++i)
         SandboxExtension::createHandle(fileURLs[i], SandboxExtension::ReadOnly, sandboxExtensionHandles[i]);
-        m_process->send(Messages::WebPage::ExtendSandboxForFilesFromOpenPanel(sandboxExtensionHandles), m_pageID);
-    }
+
+    m_process->send(Messages::WebPage::ExtendSandboxForFilesFromOpenPanel(sandboxExtensionHandles), m_pageID);
 #endif
 
     m_process->send(Messages::WebPage::DidChooseFilesForOpenPanelWithDisplayStringAndIcon(fileURLs, displayString, iconData ? iconData->dataReference() : IPC::DataReference()), m_pageID);
@@ -4710,9 +4722,9 @@ void WebPageProxy::didChooseFilesForOpenPanel(const Vector<String>& fileURLs)
         return;
 
 #if ENABLE(SANDBOX_EXTENSIONS)
+    SandboxExtension::HandleArray sandboxExtensionHandles;
+    sandboxExtensionHandles.allocate(fileURLs.size());
     for (size_t i = 0; i < fileURLs.size(); ++i) {
-        SandboxExtension::HandleArray sandboxExtensionHandles;
-        sandboxExtensionHandles.allocate(fileURLs.size());
         bool createdExtension = SandboxExtension::createHandle(fileURLs[i], SandboxExtension::ReadOnly, sandboxExtensionHandles[i]);
         if (!createdExtension) {
             // This can legitimately fail if a directory containing the file is deleted after the file was chosen.
@@ -4720,8 +4732,9 @@ void WebPageProxy::didChooseFilesForOpenPanel(const Vector<String>& fileURLs)
             WTFLogAlways("WebPageProxy::didChooseFilesForOpenPanel: could not create a sandbox extension for '%s'\n", fileURLs[i].utf8().data());
             continue;
         }
-        m_process->send(Messages::WebPage::ExtendSandboxForFilesFromOpenPanel(sandboxExtensionHandles), m_pageID);
     }
+
+    m_process->send(Messages::WebPage::ExtendSandboxForFilesFromOpenPanel(sandboxExtensionHandles), m_pageID);
 #endif
 
     m_process->send(Messages::WebPage::DidChooseFilesForOpenPanel(fileURLs), m_pageID);
@@ -5354,6 +5367,18 @@ void WebPageProxy::processDidTerminate(ProcessTerminationReason reason)
         if (auto* automationSession = process().processPool().automationSession())
             automationSession->terminate();
     }
+
+    stopAllURLSchemeTasks();
+}
+
+void WebPageProxy::stopAllURLSchemeTasks()
+{
+    HashSet<WebURLSchemeHandler*> handlers;
+    for (auto& handler : m_urlSchemeHandlersByScheme.values())
+        handlers.add(handler.ptr());
+
+    for (auto* handler : handlers)
+        handler->stopAllTasksForPage(*this);
 }
 
 #if PLATFORM(IOS)
@@ -5494,8 +5519,6 @@ void WebPageProxy::resetState(ResetStateReason resetStateReason)
 #if ENABLE(POINTER_LOCK)
     requestPointerUnlock();
 #endif
-
-    m_avoidsUnsafeArea = true;
 }
 
 void WebPageProxy::resetStateAfterProcessExited()
@@ -6928,16 +6951,6 @@ void WebPageProxy::stopURLSchemeTask(uint64_t handlerIdentifier, uint64_t taskId
     ASSERT(iterator != m_urlSchemeHandlersByIdentifier.end());
 
     iterator->value->stopTask(*this, taskIdentifier);
-}
-
-void WebPageProxy::setAvoidsUnsafeArea(bool avoidsUnsafeArea)
-{
-    if (m_avoidsUnsafeArea == avoidsUnsafeArea)
-        return;
-
-    m_avoidsUnsafeArea = avoidsUnsafeArea;
-
-    m_pageClient.didChangeAvoidsUnsafeArea(avoidsUnsafeArea);
 }
 
 } // namespace WebKit

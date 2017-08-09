@@ -201,9 +201,9 @@ class WebBackForwardListItem;
 class WebContextMenuProxy;
 class WebEditCommandProxy;
 class WebFullScreenManagerProxy;
-class WebPlaybackSessionManagerProxy;
+class PlaybackSessionManagerProxy;
 class WebNavigationState;
-class WebVideoFullscreenManagerProxy;
+class VideoFullscreenManagerProxy;
 class WebKeyboardEvent;
 class WebURLSchemeHandler;
 class WebMouseEvent;
@@ -343,8 +343,8 @@ public:
     void setFullscreenClient(std::unique_ptr<API::FullscreenClient>&&);
 #endif
 #if (PLATFORM(IOS) && HAVE(AVKIT)) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
-    WebPlaybackSessionManagerProxy* playbackSessionManager();
-    WebVideoFullscreenManagerProxy* videoFullscreenManager();
+    PlaybackSessionManagerProxy* playbackSessionManager();
+    VideoFullscreenManagerProxy* videoFullscreenManager();
 #endif
 
 #if PLATFORM(IOS)
@@ -1201,9 +1201,6 @@ public:
     void createSandboxExtensionsIfNeeded(const Vector<String>& files, SandboxExtension::Handle& fileReadHandle, SandboxExtension::HandleArray& fileUploadHandles);
 #endif
 
-    void setAvoidsUnsafeArea(bool);
-    bool avoidsUnsafeArea() const { return m_avoidsUnsafeArea; }
-
 private:
     WebPageProxy(PageClient&, WebProcessProxy&, uint64_t pageID, Ref<API::PageConfiguration>&&);
     void platformInitialize();
@@ -1623,6 +1620,8 @@ private:
 
     void viewIsBecomingVisible();
 
+    void stopAllURLSchemeTasks();
+
     PageClient& m_pageClient;
     Ref<API::PageConfiguration> m_configuration;
 
@@ -1680,8 +1679,8 @@ private:
 #endif
 
 #if (PLATFORM(IOS) && HAVE(AVKIT)) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
-    RefPtr<WebPlaybackSessionManagerProxy> m_playbackSessionManager;
-    RefPtr<WebVideoFullscreenManagerProxy> m_videoFullscreenManager;
+    RefPtr<PlaybackSessionManagerProxy> m_playbackSessionManager;
+    RefPtr<VideoFullscreenManagerProxy> m_videoFullscreenManager;
 #endif
 
 #if PLATFORM(IOS)
@@ -1997,8 +1996,6 @@ private:
 #endif
 
     bool m_isUsingHighPerformanceWebGL { false };
-
-    bool m_avoidsUnsafeArea { true };
 
     WeakPtrFactory<WebPageProxy> m_weakPtrFactory;
 

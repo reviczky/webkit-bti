@@ -81,7 +81,7 @@ public:
     void close();
 
     virtual ExceptionOr<void> importScripts(const Vector<String>& urls);
-    WorkerNavigator& navigator() const;
+    WorkerNavigator& navigator();
 
     ExceptionOr<int> setTimeout(JSC::ExecState&, std::unique_ptr<ScheduledAction>, int timeout, Vector<JSC::Strong<JSC::Unknown>>&& arguments);
     void clearTimeout(int timeoutId);
@@ -102,10 +102,7 @@ public:
     void addConsoleMessage(std::unique_ptr<Inspector::ConsoleMessage>&&) final;
 
     Crypto& crypto();
-
-#if ENABLE(WEB_TIMING)
     Performance& performance() const;
-#endif
 
     void removeAllEventListeners() final;
 
@@ -138,10 +135,7 @@ private:
     EventTarget* errorEventTarget() final;
     WorkerEventQueue& eventQueue() const final;
     String resourceRequestIdentifier() const final { return m_identifier; }
-
-#if ENABLE(WEB_SOCKETS)
     SocketProvider* socketProvider() final;
-#endif
 
     bool shouldBypassMainWorldContentSecurityPolicy() const final { return m_shouldBypassMainWorldContentSecurityPolicy; }
     bool isJSExecutionForbidden() const final;
@@ -181,14 +175,9 @@ private:
     RefPtr<IDBClient::IDBConnectionProxy> m_connectionProxy;
 #endif
 
-#if ENABLE(WEB_SOCKETS)
     RefPtr<SocketProvider> m_socketProvider;
-#endif
 
-#if ENABLE(WEB_TIMING)
     RefPtr<Performance> m_performance;
-#endif
-
     mutable RefPtr<Crypto> m_crypto;
 };
 

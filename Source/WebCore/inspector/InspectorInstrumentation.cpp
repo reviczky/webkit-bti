@@ -61,6 +61,7 @@
 #include "RenderObject.h"
 #include "RenderView.h"
 #include "ScriptController.h"
+#include "ScriptExecutionContext.h"
 #include "WebConsoleAgent.h"
 #include "WebGLRenderingContextBase.h"
 #include "WebSocketFrame.h"
@@ -350,6 +351,18 @@ void InspectorInstrumentation::didRemoveTimerImpl(InstrumentingAgents& instrumen
         timelineAgent->didRemoveTimer(timerId, frameForScriptExecutionContext(context));
 }
 
+void InspectorInstrumentation::didAddEventListenerImpl(InstrumentingAgents& instrumentingAgents, EventTarget& target, const AtomicString& eventType)
+{
+    if (PageDebuggerAgent* pageDebuggerAgent = instrumentingAgents.pageDebuggerAgent())
+        pageDebuggerAgent->didAddEventListener(target, eventType);
+}
+
+void InspectorInstrumentation::willRemoveEventListenerImpl(InstrumentingAgents& instrumentingAgents, EventTarget& target, const AtomicString& eventType, EventListener& listener, bool capture)
+{
+    if (PageDebuggerAgent* pageDebuggerAgent = instrumentingAgents.pageDebuggerAgent())
+        pageDebuggerAgent->willRemoveEventListener(target, eventType, listener, capture);
+}
+
 InspectorInstrumentationCookie InspectorInstrumentation::willCallFunctionImpl(InstrumentingAgents& instrumentingAgents, const String& scriptName, int scriptLine, ScriptExecutionContext* context)
 {
     int timelineAgentId = 0;
@@ -378,9 +391,18 @@ InspectorInstrumentationCookie InspectorInstrumentation::willDispatchEventImpl(I
     return InspectorInstrumentationCookie(instrumentingAgents, timelineAgentId);
 }
 
-void InspectorInstrumentation::willHandleEventImpl(InstrumentingAgents& instrumentingAgents, const Event& event)
+void InspectorInstrumentation::willHandleEventImpl(InstrumentingAgents& instrumentingAgents, const Event& event, const RegisteredEventListener& listener)
 {
+    if (PageDebuggerAgent* pageDebuggerAgent = instrumentingAgents.pageDebuggerAgent())
+        pageDebuggerAgent->willHandleEvent(listener);
+
     pauseOnNativeEventIfNeeded(instrumentingAgents, true, event.type(), false);
+}
+
+void InspectorInstrumentation::didHandleEventImpl(InstrumentingAgents& instrumentingAgents)
+{
+    if (InspectorDebuggerAgent* debuggerAgent = instrumentingAgents.inspectorDebuggerAgent())
+        debuggerAgent->didDispatchAsyncCall();
 }
 
 void InspectorInstrumentation::didDispatchEventImpl(const InspectorInstrumentationCookie& cookie)
@@ -909,7 +931,6 @@ void InspectorInstrumentation::workerTerminatedImpl(InstrumentingAgents& instrum
         workerAgent->workerTerminated(proxy);
 }
 
-#if ENABLE(WEB_SOCKETS)
 void InspectorInstrumentation::didCreateWebSocketImpl(InstrumentingAgents& instrumentingAgents, unsigned long identifier, const URL& requestURL)
 {
     if (!instrumentingAgents.inspectorEnvironment().developerExtrasEnabled())
@@ -954,31 +975,56 @@ void InspectorInstrumentation::didSendWebSocketFrameImpl(InstrumentingAgents& in
     if (InspectorNetworkAgent* networkAgent = instrumentingAgents.inspectorNetworkAgent())
         networkAgent->didSendWebSocketFrame(identifier, frame);
 }
-#endif
 
-void InspectorInstrumentation::didCreateCSSCanvasImpl(InstrumentingAgents* instrumentingAgents, HTMLCanvasElement& canvasElement, const String& name)
+void InspectorInstrumentation::didCreateCSSCanvasImpl(InstrumentingAgents& instrumentingAgents, HTMLCanvasElement& canvasElement, const String& name)
 {
-    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents->inspectorCanvasAgent())
+    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents.inspectorCanvasAgent())
         canvasAgent->didCreateCSSCanvas(canvasElement, name);
 }
 
-void InspectorInstrumentation::didChangeCSSCanvasClientNodesImpl(InstrumentingAgents* instrumentingAgents, HTMLCanvasElement& canvasElement)
+void InspectorInstrumentation::didChangeCSSCanvasClientNodesImpl(InstrumentingAgents& instrumentingAgents, HTMLCanvasElement& canvasElement)
 {
-    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents->inspectorCanvasAgent())
+    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents.inspectorCanvasAgent())
         canvasAgent->didChangeCSSCanvasClientNodes(canvasElement);
 }
 
-void InspectorInstrumentation::didCreateCanvasRenderingContextImpl(InstrumentingAgents* instrumentingAgents, HTMLCanvasElement& canvasElement)
+void InspectorInstrumentation::didCreateCanvasRenderingContextImpl(InstrumentingAgents& instrumentingAgents, HTMLCanvasElement& canvasElement)
 {
-    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents->inspectorCanvasAgent())
+    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents.inspectorCanvasAgent())
         canvasAgent->didCreateCanvasRenderingContext(canvasElement);
 }
 
-void InspectorInstrumentation::didChangeCanvasMemoryImpl(InstrumentingAgents* instrumentingAgents, HTMLCanvasElement& canvasElement)
+void InspectorInstrumentation::didChangeCanvasMemoryImpl(InstrumentingAgents& instrumentingAgents, HTMLCanvasElement& canvasElement)
 {
-    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents->inspectorCanvasAgent())
+    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents.inspectorCanvasAgent())
         canvasAgent->didChangeCanvasMemory(canvasElement);
 }
+
+void InspectorInstrumentation::recordCanvasActionImpl(InstrumentingAgents& instrumentingAgents, CanvasRenderingContext& canvasRenderingContext, const String& name, Vector<RecordCanvasActionVariant>&& parameters)
+{
+    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents.inspectorCanvasAgent())
+        canvasAgent->recordCanvasAction(canvasRenderingContext, name, WTFMove(parameters));
+}
+
+void InspectorInstrumentation::didFinishRecordingCanvasFrameImpl(InstrumentingAgents& instrumentingAgents, HTMLCanvasElement& canvasElement, bool forceDispatch)
+{
+    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents.inspectorCanvasAgent())
+        canvasAgent->didFinishRecordingCanvasFrame(canvasElement, forceDispatch);
+}
+
+#if ENABLE(WEBGL)
+void InspectorInstrumentation::didCreateProgramImpl(InstrumentingAgents& instrumentingAgents, WebGLRenderingContextBase& context, WebGLProgram& program)
+{
+    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents.inspectorCanvasAgent())
+        canvasAgent->didCreateProgram(context, program);
+}
+
+void InspectorInstrumentation::willDeleteProgramImpl(InstrumentingAgents& instrumentingAgents, WebGLProgram& program)
+{
+    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents.inspectorCanvasAgent())
+        canvasAgent->willDeleteProgram(program);
+}
+#endif
 
 #if ENABLE(RESOURCE_USAGE)
 void InspectorInstrumentation::didHandleMemoryPressureImpl(InstrumentingAgents& instrumentingAgents, Critical critical)

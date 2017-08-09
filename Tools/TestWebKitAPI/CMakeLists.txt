@@ -55,13 +55,16 @@ set(TestWTF_SOURCES
     ${TESTWEBKITAPI_DIR}/Tests/WTF/HashMap.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/HashSet.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/IntegerToStringConversion.cpp
+    ${TESTWEBKITAPI_DIR}/Tests/WTF/LifecycleLogger.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/ListHashSet.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/Lock.cpp
+    ${TESTWEBKITAPI_DIR}/Tests/WTF/Logger.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/MD5.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/MathExtras.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/MediaTime.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/MetaAllocator.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/NakedPtr.cpp
+    ${TESTWEBKITAPI_DIR}/Tests/WTF/NeverDestroyed.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/Optional.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/OptionSet.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/ParkingLot.cpp
@@ -148,6 +151,13 @@ if (ENABLE_WEBKIT)
 
     target_link_libraries(TestWebKitAPIInjectedBundle ${TestWebKitAPI_LIBRARIES})
     add_dependencies(TestWebKitAPIInjectedBundle WTF ${ForwardingHeadersForTestWebKitAPI_NAME})
+
+    if (COMPILER_IS_GCC_OR_CLANG)
+        WEBKIT_ADD_TARGET_CXX_FLAGS(TestWebKitAPIInjectedBundle -Wno-dangling-else
+                                                                -Wno-sign-compare
+                                                                -Wno-undef
+                                                                -Wno-unused-parameter)
+    endif ()
 endif ()
 
 if (WIN32)
@@ -183,16 +193,12 @@ set_target_properties(TestWTF PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${TESTWEBKITAPI_RUNTIME_OUTPUT_DIRECTORY_WTF}
 )
 
-# FIXME: EFL is the only port that separates the WebCore binaries. Each port ought to do closer to the same thing.
-foreach (testName ${test_webcore_BINARIES})
-    add_executable(${testName} ${test_main_SOURCES} ${TESTWEBKITAPI_DIR}/TestsController.cpp ${TESTWEBKITAPI_DIR}/Tests/WebCore/${testName}.cpp)
-    add_test(${testName} ${TESTWEBKITAPI_RUNTIME_OUTPUT_DIRECTORY}/WebCore/${testName})
-    set_tests_properties(${testName} PROPERTIES TIMEOUT 60)
-    target_link_libraries(${testName} ${test_webcore_LIBRARIES})
-    set_target_properties(${testName} PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${TESTWEBKITAPI_RUNTIME_OUTPUT_DIRECTORY}/WebCore
-    )
-endforeach ()
+if (COMPILER_IS_GCC_OR_CLANG)
+    WEBKIT_ADD_TARGET_CXX_FLAGS(TestWTF -Wno-dangling-else
+                                        -Wno-sign-compare
+                                        -Wno-undef
+                                        -Wno-unused-parameter)
+endif ()
 
 if (ENABLE_WEBKIT)
     add_library(TestWebKitAPIBase
@@ -207,25 +213,9 @@ if (ENABLE_WEBKIT)
 
     add_dependencies(TestWebKitAPIBase WebKit2 ${ForwardingHeadersForTestWebKitAPI_NAME} ${ForwardingNetworkHeadersForTestWebKitAPI_NAME})
 
-    foreach (testName ${test_webkit2_api_BINARIES})
-        get_filename_component(testBaseName ${testName} NAME)
-        add_executable(${testBaseName} ${TESTWEBKITAPI_DIR}/Tests/WebKit/${testName}.cpp)
-        add_test(${testBaseName} ${TESTWEBKITAPI_RUNTIME_OUTPUT_DIRECTORY}/WebKit/${testBaseName})
-        set_tests_properties(${testBaseName} PROPERTIES TIMEOUT 60)
-        target_link_libraries(${testBaseName} ${test_webkit2_api_LIBRARIES})
-        set_target_properties(${testBaseName} PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY ${TESTWEBKITAPI_RUNTIME_OUTPUT_DIRECTORY}/WebKit
-        )
-    endforeach ()
-
-    # We don't run tests that are expected to fail. We could use the WILL_FAIL
-    # property, but it reports failure when the test crashes or timeouts and would
-    # make the bot red.
-    foreach (testName ${test_webkit2_api_fail_BINARIES})
-        add_executable(${testName} ${TESTWEBKITAPI_DIR}/Tests/WebKit/${testName}.cpp)
-        target_link_libraries(${testName} ${test_webkit2_api_LIBRARIES})
-        set_target_properties(${testName} PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY ${TESTWEBKITAPI_RUNTIME_OUTPUT_DIRECTORY}/WebKit/failure
-        )
-    endforeach ()
+    if (COMPILER_IS_GCC_OR_CLANG)
+        WEBKIT_ADD_TARGET_CXX_FLAGS(TestWebKitAPIBase -Wno-sign-compare
+                                                      -Wno-undef
+                                                      -Wno-unused-parameter)
+    endif ()
 endif ()

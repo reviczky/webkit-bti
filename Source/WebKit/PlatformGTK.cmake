@@ -2,9 +2,8 @@ set(WebKit2_OUTPUT_NAME webkit2gtk-${WEBKITGTK_API_VERSION})
 set(WebKit2_WebProcess_OUTPUT_NAME WebKitWebProcess)
 set(WebKit2_NetworkProcess_OUTPUT_NAME WebKitNetworkProcess)
 set(WebKit2_PluginProcess_OUTPUT_NAME WebKitPluginProcess)
-set(WebKit2_DatabaseProcess_OUTPUT_NAME WebKitDatabaseProcess)
+set(WebKit2_StorageProcess_OUTPUT_NAME WebKitStorageProcess)
 
-file(MAKE_DIRECTORY ${DERIVED_SOURCES_WEBKIT2_DIR})
 file(MAKE_DIRECTORY ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR})
 file(MAKE_DIRECTORY ${FORWARDING_HEADERS_WEBKIT2GTK_DIR})
 file(MAKE_DIRECTORY ${FORWARDING_HEADERS_WEBKIT2GTK_EXTENSION_DIR})
@@ -26,8 +25,6 @@ add_definitions(-DDATADIR="${CMAKE_INSTALL_FULL_DATADIR}")
 set(WebKit2_USE_PREFIX_HEADER ON)
 
 list(APPEND WebKit2_SOURCES
-    DatabaseProcess/gtk/DatabaseProcessMainGtk.cpp
-
     NetworkProcess/CustomProtocols/soup/LegacyCustomProtocolManagerSoup.cpp
 
     NetworkProcess/cache/NetworkCacheCodersSoup.cpp
@@ -102,6 +99,8 @@ list(APPEND WebKit2_SOURCES
 
     Shared/unix/ChildProcessMain.cpp
 
+    StorageProcess/gtk/StorageProcessMainGtk.cpp
+
     UIProcess/AcceleratedDrawingAreaProxy.cpp
     UIProcess/BackingStore.cpp
     UIProcess/DefaultUndoController.cpp
@@ -117,7 +116,9 @@ list(APPEND WebKit2_SOURCES
     UIProcess/API/C/gtk/WKTextCheckerGtk.cpp
     UIProcess/API/C/gtk/WKView.cpp
 
+    UIProcess/API/glib/APIWebsiteDataStoreGLib.cpp
     UIProcess/API/glib/IconDatabase.cpp
+    UIProcess/API/glib/WebKitApplicationInfo.cpp
     UIProcess/API/glib/WebKitAuthenticationRequest.cpp
     UIProcess/API/glib/WebKitAutomationSession.cpp
     UIProcess/API/glib/WebKitBackForwardList.cpp
@@ -172,7 +173,6 @@ list(APPEND WebKit2_SOURCES
     UIProcess/API/glib/WebKitWebsiteDataManager.cpp
     UIProcess/API/glib/WebKitWindowProperties.cpp
 
-    UIProcess/API/gtk/APIWebsiteDataStoreGtk.cpp
     UIProcess/API/gtk/PageClientImpl.cpp
     UIProcess/API/gtk/WebKitAuthenticationDialog.cpp
     UIProcess/API/gtk/WebKitColorChooser.cpp
@@ -183,6 +183,7 @@ list(APPEND WebKit2_SOURCES
     UIProcess/API/gtk/WebKitPrintCustomWidget.cpp
     UIProcess/API/gtk/WebKitPrintOperation.cpp
     UIProcess/API/gtk/WebKitRemoteInspectorProtocolHandler.cpp
+    UIProcess/API/gtk/WebKitScriptDialogGtk.cpp
     UIProcess/API/gtk/WebKitVersion.cpp
     UIProcess/API/gtk/WebKitVersion.h.in
     UIProcess/API/gtk/WebKitWebInspector.cpp
@@ -201,7 +202,7 @@ list(APPEND WebKit2_SOURCES
     UIProcess/Plugins/unix/PluginInfoStoreUnix.cpp
     UIProcess/Plugins/unix/PluginProcessProxyUnix.cpp
 
-    UIProcess/Storage/StorageManager.cpp
+    UIProcess/WebStorage/StorageManager.cpp
 
     UIProcess/WebsiteData/unix/WebsiteDataStoreUnix.cpp
 
@@ -418,6 +419,7 @@ endif ()
 set(WebKit2GTK_INSTALLED_HEADERS
     ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitEnumTypes.h
     ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitVersion.h
+    ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitApplicationInfo.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitAuthenticationRequest.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitAutocleanups.h
     ${WEBKIT2_DIR}/UIProcess/API/gtk/WebKitAutomationSession.h
@@ -759,7 +761,6 @@ list(INSERT WebKit2_INCLUDE_DIRECTORIES 0
 
 list(APPEND WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/PluginProcess/unix"
-    "${WEBKIT2_DIR}/DatabaseProcess/unix"
     "${WEBKIT2_DIR}/NetworkProcess/CustomProtocols/soup"
     "${WEBKIT2_DIR}/NetworkProcess/Downloads/soup"
     "${WEBKIT2_DIR}/NetworkProcess/gtk"
@@ -778,6 +779,7 @@ list(APPEND WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/Shared/linux"
     "${WEBKIT2_DIR}/Shared/soup"
     "${WEBKIT2_DIR}/Shared/unix"
+    "${WEBKIT2_DIR}/StorageProcess/unix"
     "${WEBKIT2_DIR}/UIProcess/API/C/cairo"
     "${WEBKIT2_DIR}/UIProcess/API/C/gtk"
     "${WEBKIT2_DIR}/UIProcess/API/glib"
@@ -837,8 +839,8 @@ list(APPEND NetworkProcess_SOURCES
     NetworkProcess/EntryPoint/unix/NetworkProcessMain.cpp
 )
 
-list(APPEND DatabaseProcess_SOURCES
-    DatabaseProcess/EntryPoint/unix/DatabaseProcessMain.cpp
+list(APPEND StorageProcess_SOURCES
+    StorageProcess/EntryPoint/unix/StorageProcessMain.cpp
 )
 
 set(SharedWebKit2Libraries
@@ -1064,6 +1066,10 @@ if (ENABLE_PLUGIN_PROCESS_GTK2)
     add_dependencies(WebKitPluginProcess2 WebKit2)
 
     install(TARGETS WebKitPluginProcess2 DESTINATION "${LIBEXEC_INSTALL_DIR}")
+
+    if (COMPILER_IS_GCC_OR_CLANG)
+        WEBKIT_ADD_TARGET_CXX_FLAGS(WebKitPluginProcess2 -Wno-unused-parameter)
+    endif ()
 endif () # ENABLE_PLUGIN_PROCESS_GTK2
 
 # GTK3 PluginProcess
@@ -1087,6 +1093,10 @@ include_directories(
 add_library(webkit2gtkinjectedbundle MODULE "${WEBKIT2_DIR}/WebProcess/InjectedBundle/API/glib/WebKitInjectedBundleMain.cpp")
 add_webkit2_prefix_header(webkit2gtkinjectedbundle)
 target_link_libraries(webkit2gtkinjectedbundle WebKit2)
+
+if (COMPILER_IS_GCC_OR_CLANG)
+    WEBKIT_ADD_TARGET_CXX_FLAGS(webkit2gtkinjectedbundle -Wno-unused-parameter)
+endif ()
 
 # Add ${CMAKE_LIBRARY_OUTPUT_DIRECTORY} to LD_LIBRARY_PATH or DYLD_LIBRARY_PATH
 if (APPLE)

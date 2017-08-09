@@ -39,6 +39,7 @@
 #include "PluginInfoStore.h"
 #include "ProcessThrottler.h"
 #include "StatisticsRequest.h"
+#include "StorageProcessProxy.h"
 #include "VisitedLinkStore.h"
 #include "WebContextClient.h"
 #include "WebContextConnectionClient.h"
@@ -52,10 +53,6 @@
 #include <wtf/RefPtr.h>
 #include <wtf/text/StringHash.h>
 #include <wtf/text/WTFString.h>
-
-#if ENABLE(DATABASE_PROCESS)
-#include "DatabaseProcessProxy.h"
-#endif
 
 #if ENABLE(MEDIA_SESSION)
 #include "WebMediaSessionFocusManager.h"
@@ -163,8 +160,8 @@ public:
     template<typename T, typename U> void sendSyncToNetworkingProcess(T&& message, U&& reply);
     template<typename T> void sendToNetworkingProcessRelaunchingIfNecessary(T&& message);
 
-    // Sends the message to WebProcess or DatabaseProcess as approporiate for current process model.
-    template<typename T> void sendToDatabaseProcessRelaunchingIfNecessary(T&& message);
+    // Sends the message to WebProcess or StorageProcess as approporiate for current process model.
+    template<typename T> void sendToStorageProcessRelaunchingIfNecessary(T&& message);
 
     void processDidFinishLaunching(WebProcessProxy*);
 
@@ -202,7 +199,7 @@ public:
 #endif
 
     pid_t networkProcessIdentifier();
-    pid_t databaseProcessIdentifier();
+    pid_t storageProcessIdentifier();
 
     void setAlwaysUsesComplexTextCodePath(bool);
     void setShouldUseFontSmoothing(bool);
@@ -258,7 +255,7 @@ public:
     void setAllowsAnySSLCertificateForWebSocket(bool);
 
     void clearCachedCredentials();
-    void terminateDatabaseProcess();
+    void terminateStorageProcess();
     void terminateNetworkProcess();
 
     void syncNetworkProcessCookies();
@@ -315,12 +312,10 @@ public:
 
     void getNetworkProcessConnection(Ref<Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply>&&);
 
-#if ENABLE(DATABASE_PROCESS)
-    void ensureDatabaseProcessAndWebsiteDataStore(WebsiteDataStore* relevantDataStore);
-    DatabaseProcessProxy* databaseProcess() { return m_databaseProcess.get(); }
-    void getDatabaseProcessConnection(Ref<Messages::WebProcessProxy::GetDatabaseProcessConnection::DelayedReply>&&);
-    void databaseProcessCrashed(DatabaseProcessProxy*);
-#endif
+    void ensureStorageProcessAndWebsiteDataStore(WebsiteDataStore* relevantDataStore);
+    StorageProcessProxy* storageProcess() { return m_storageProcess.get(); }
+    void getStorageProcessConnection(Ref<Messages::WebProcessProxy::GetStorageProcessConnection::DelayedReply>&&);
+    void storageProcessCrashed(StorageProcessProxy*);
 
 #if PLATFORM(COCOA)
     bool processSuppressionEnabled() const;
@@ -393,6 +388,7 @@ public:
 
     bool resourceLoadStatisticsEnabled() { return m_resourceLoadStatisticsEnabled; }
     void setResourceLoadStatisticsEnabled(bool);
+    void clearResourceLoadStatistics();
 
     bool alwaysRunsAtBackgroundPriority() const { return m_alwaysRunsAtBackgroundPriority; }
     bool shouldTakeUIBackgroundAssertion() const { return m_shouldTakeUIBackgroundAssertion; }
@@ -554,11 +550,8 @@ private:
     bool m_canHandleHTTPSServerTrustEvaluation;
     bool m_didNetworkProcessCrash;
     RefPtr<NetworkProcessProxy> m_networkProcess;
+    RefPtr<StorageProcessProxy> m_storageProcess;
 
-#if ENABLE(DATABASE_PROCESS)
-    RefPtr<DatabaseProcessProxy> m_databaseProcess;
-#endif
-    
     HashMap<uint64_t, RefPtr<DictionaryCallback>> m_dictionaryCallbacks;
     HashMap<uint64_t, RefPtr<StatisticsRequest>> m_statisticsRequests;
 
@@ -635,14 +628,10 @@ void WebProcessPool::sendToNetworkingProcessRelaunchingIfNecessary(T&& message)
 }
 
 template<typename T>
-void WebProcessPool::sendToDatabaseProcessRelaunchingIfNecessary(T&& message)
+void WebProcessPool::sendToStorageProcessRelaunchingIfNecessary(T&& message)
 {
-#if ENABLE(DATABASE_PROCESS)
-    ensureDatabaseProcessAndWebsiteDataStore(nullptr);
-    m_databaseProcess->send(std::forward<T>(message), 0);
-#else
-    sendToAllProcessesRelaunchingThemIfNecessary(std::forward<T>(message));
-#endif
+    ensureStorageProcessAndWebsiteDataStore(nullptr);
+    m_storageProcess->send(std::forward<T>(message), 0);
 }
 
 template<typename T>

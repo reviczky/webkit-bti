@@ -4,8 +4,6 @@ set_property(DIRECTORY . PROPERTY FOLDER "WebKit2")
 
 set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}"
-    "${WEBKIT2_DIR}/DatabaseProcess"
-    "${WEBKIT2_DIR}/DatabaseProcess/IndexedDB"
     "${WEBKIT2_DIR}/NetworkProcess"
     "${WEBKIT2_DIR}/NetworkProcess/CustomProtocols"
     "${WEBKIT2_DIR}/NetworkProcess/Downloads"
@@ -28,7 +26,10 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/Shared/Plugins"
     "${WEBKIT2_DIR}/Shared/Plugins/Netscape"
     "${WEBKIT2_DIR}/Shared/Plugins/Netscape/x11"
+    "${WEBKIT2_DIR}/Shared/Storage"
     "${WEBKIT2_DIR}/Shared/WebsiteData"
+    "${WEBKIT2_DIR}/StorageProcess"
+    "${WEBKIT2_DIR}/StorageProcess/IndexedDB"
     "${WEBKIT2_DIR}/UIProcess"
     "${WEBKIT2_DIR}/UIProcess/API"
     "${WEBKIT2_DIR}/UIProcess/API/C"
@@ -36,7 +37,6 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/UIProcess/ApplePay"
     "${WEBKIT2_DIR}/UIProcess/Authentication"
     "${WEBKIT2_DIR}/UIProcess/Automation"
-    "${WEBKIT2_DIR}/UIProcess/Databases"
     "${WEBKIT2_DIR}/UIProcess/Downloads"
     "${WEBKIT2_DIR}/UIProcess/Gamepad"
     "${WEBKIT2_DIR}/UIProcess/Launcher"
@@ -46,6 +46,7 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/UIProcess/Plugins"
     "${WEBKIT2_DIR}/UIProcess/Storage"
     "${WEBKIT2_DIR}/UIProcess/UserContent"
+    "${WEBKIT2_DIR}/UIProcess/WebStorage"
     "${WEBKIT2_DIR}/UIProcess/WebsiteData"
     "${WEBKIT2_DIR}/WebProcess"
     "${WEBKIT2_DIR}/WebProcess/ApplePay"
@@ -77,6 +78,7 @@ set(WebKit2_INCLUDE_DIRECTORIES
     "${WEBKIT2_DIR}/WebProcess/UserContent"
     "${WEBKIT2_DIR}/WebProcess/WebCoreSupport"
     "${WEBKIT2_DIR}/WebProcess/WebPage"
+    "${WEBKIT2_DIR}/WebProcess/WebStorage"
     "${DERIVED_SOURCES_WEBKIT2_DIR}"
     "${DERIVED_SOURCES_WEBKIT2_DIR}/include"
     "${CMAKE_SOURCE_DIR}/WebKitLibraries"
@@ -88,19 +90,7 @@ set(WebKit2_SYSTEM_INCLUDE_DIRECTORIES
     ${ICU_INCLUDE_DIRS}
 )
 
-if (ENABLE_GRAPHICS_CONTEXT_3D)
-    list(APPEND WebKit2_INCLUDE_DIRECTORIES
-        "${THIRDPARTY_DIR}/ANGLE"
-        "${THIRDPARTY_DIR}/ANGLE/include/KHR"
-    )
-endif ()
-
 set(WebKit2_SOURCES
-    DatabaseProcess/DatabaseProcess.cpp
-    DatabaseProcess/DatabaseToWebProcessConnection.cpp
-
-    DatabaseProcess/IndexedDB/WebIDBConnectionToClient.cpp
-
     NetworkProcess/CustomProtocols/LegacyCustomProtocolManager.cpp
 
     NetworkProcess/Downloads/BlobDownloadClient.cpp
@@ -110,6 +100,7 @@ set(WebKit2_SOURCES
 
     NetworkProcess/FileAPI/NetworkBlobRegistry.cpp
 
+    NetworkProcess/NetworkCORSPreflightChecker.cpp
     NetworkProcess/NetworkConnectionToWebProcess.cpp
     NetworkProcess/NetworkDataTask.cpp
     NetworkProcess/NetworkDataTaskBlob.cpp
@@ -121,6 +112,7 @@ set(WebKit2_SOURCES
     NetworkProcess/NetworkResourceLoader.cpp
     NetworkProcess/NetworkSession.cpp
     NetworkProcess/NetworkSocketStream.cpp
+    NetworkProcess/PingLoad.cpp
 
     NetworkProcess/cache/NetworkCache.cpp
     NetworkProcess/cache/NetworkCacheBlobStorage.cpp
@@ -254,8 +246,6 @@ set(WebKit2_SOURCES
 
     Shared/Authentication/AuthenticationManager.cpp
 
-    Shared/Databases/DatabaseProcessCreationParameters.cpp
-
     Shared/Databases/IndexedDB/IDBUtilities.cpp
     Shared/Databases/IndexedDB/WebIDBResult.cpp
 
@@ -272,8 +262,14 @@ set(WebKit2_SOURCES
     Shared/Plugins/Netscape/NetscapePluginModuleNone.cpp
     Shared/Plugins/Netscape/PluginInformation.cpp
 
+    Shared/Storage/StorageProcessCreationParameters.cpp
+
     Shared/WebsiteData/WebsiteData.cpp
 
+    StorageProcess/StorageProcess.cpp
+    StorageProcess/StorageToWebProcessConnection.cpp
+
+    StorageProcess/IndexedDB/WebIDBConnectionToClient.cpp
     UIProcess/BackgroundProcessResponsivenessTimer.cpp
     UIProcess/ChildProcessProxy.cpp
     UIProcess/DrawingAreaProxy.cpp
@@ -284,6 +280,7 @@ set(WebKit2_SOURCES
     UIProcess/ProcessAssertion.cpp
     UIProcess/ProcessThrottler.cpp
     UIProcess/RemoteWebInspectorProxy.cpp
+    UIProcess/ResourceLoadStatisticsPersistentStorage.cpp
     UIProcess/ResponsivenessTimer.cpp
     UIProcess/StatisticsRequest.cpp
     UIProcess/TextCheckerCompletion.cpp
@@ -404,8 +401,6 @@ set(WebKit2_SOURCES
 
     UIProcess/Automation/WebAutomationSession.cpp
 
-    UIProcess/Databases/DatabaseProcessProxy.cpp
-
     UIProcess/Downloads/DownloadProxy.cpp
     UIProcess/Downloads/DownloadProxyMap.cpp
 
@@ -429,12 +424,13 @@ set(WebKit2_SOURCES
     UIProcess/Plugins/PluginProcessManager.cpp
     UIProcess/Plugins/PluginProcessProxy.cpp
 
-    UIProcess/Storage/LocalStorageDatabase.cpp
-    UIProcess/Storage/LocalStorageDatabaseTracker.cpp
-    UIProcess/Storage/ResourceLoadStatisticsPersistentStorage.cpp
+    UIProcess/Storage/StorageProcessProxy.cpp
 
     UIProcess/UserContent/WebScriptMessageHandler.cpp
     UIProcess/UserContent/WebUserContentControllerProxy.cpp
+
+    UIProcess/WebStorage/LocalStorageDatabase.cpp
+    UIProcess/WebStorage/LocalStorageDatabaseTracker.cpp
 
     UIProcess/WebsiteData/WebsiteDataRecord.cpp
     UIProcess/WebsiteData/WebsiteDataStore.cpp
@@ -447,7 +443,6 @@ set(WebKit2_SOURCES
     WebProcess/Cookies/WebCookieManager.cpp
 
     WebProcess/Databases/WebDatabaseProvider.cpp
-    WebProcess/Databases/WebToDatabaseProcessConnection.cpp
 
     WebProcess/Databases/IndexedDB/WebIDBConnectionToServer.cpp
 
@@ -527,10 +522,7 @@ set(WebKit2_SOURCES
     WebProcess/Plugins/Netscape/NetscapePluginNone.cpp
     WebProcess/Plugins/Netscape/NetscapePluginStream.cpp
 
-    WebProcess/Storage/StorageAreaImpl.cpp
-    WebProcess/Storage/StorageAreaMap.cpp
-    WebProcess/Storage/StorageNamespaceImpl.cpp
-    WebProcess/Storage/WebStorageNamespaceProvider.cpp
+    WebProcess/Storage/WebToStorageProcessConnection.cpp
 
     WebProcess/UserContent/WebUserContentController.cpp
 
@@ -576,14 +568,14 @@ set(WebKit2_SOURCES
     WebProcess/WebPage/WebURLSchemeHandlerProxy.cpp
     WebProcess/WebPage/WebURLSchemeTaskProxy.cpp
     WebProcess/WebPage/WebUndoStep.cpp
+
+    WebProcess/WebStorage/StorageAreaImpl.cpp
+    WebProcess/WebStorage/StorageAreaMap.cpp
+    WebProcess/WebStorage/StorageNamespaceImpl.cpp
+    WebProcess/WebStorage/WebStorageNamespaceProvider.cpp
 )
 
 set(WebKit2_MESSAGES_IN_FILES
-    DatabaseProcess/DatabaseProcess.messages.in
-    DatabaseProcess/DatabaseToWebProcessConnection.messages.in
-
-    DatabaseProcess/IndexedDB/WebIDBConnectionToClient.messages.in
-
     NetworkProcess/CustomProtocols/LegacyCustomProtocolManager.messages.in
 
     NetworkProcess/NetworkConnectionToWebProcess.messages.in
@@ -606,6 +598,11 @@ set(WebKit2_MESSAGES_IN_FILES
 
     Shared/Plugins/NPObjectMessageReceiver.messages.in
 
+    StorageProcess/StorageProcess.messages.in
+    StorageProcess/StorageToWebProcessConnection.messages.in
+
+    StorageProcess/IndexedDB/WebIDBConnectionToClient.messages.in
+
     UIProcess/DrawingAreaProxy.messages.in
     UIProcess/RemoteWebInspectorProxy.messages.in
     UIProcess/VisitedLinkStore.messages.in
@@ -621,8 +618,6 @@ set(WebKit2_MESSAGES_IN_FILES
 
     UIProcess/Automation/WebAutomationSession.messages.in
 
-    UIProcess/Databases/DatabaseProcessProxy.messages.in
-
     UIProcess/Downloads/DownloadProxy.messages.in
 
     UIProcess/Network/NetworkProcessProxy.messages.in
@@ -631,9 +626,11 @@ set(WebKit2_MESSAGES_IN_FILES
 
     UIProcess/Plugins/PluginProcessProxy.messages.in
 
-    UIProcess/Storage/StorageManager.messages.in
+    UIProcess/Storage/StorageProcessProxy.messages.in
 
     UIProcess/UserContent/WebUserContentControllerProxy.messages.in
+
+    UIProcess/WebStorage/StorageManager.messages.in
 
     WebProcess/WebProcess.messages.in
 
@@ -661,8 +658,6 @@ set(WebKit2_MESSAGES_IN_FILES
     WebProcess/Plugins/PluginProcessConnectionManager.messages.in
     WebProcess/Plugins/PluginProxy.messages.in
 
-    WebProcess/Storage/StorageAreaMap.messages.in
-
     WebProcess/UserContent/WebUserContentController.messages.in
 
     WebProcess/WebPage/DrawingArea.messages.in
@@ -673,6 +668,8 @@ set(WebKit2_MESSAGES_IN_FILES
     WebProcess/WebPage/WebInspectorInterruptDispatcher.messages.in
     WebProcess/WebPage/WebInspectorUI.messages.in
     WebProcess/WebPage/WebPage.messages.in
+
+    WebProcess/WebStorage/StorageAreaMap.messages.in
 )
 
 set(WebProcess_LIBRARIES
@@ -683,7 +680,7 @@ set(NetworkProcess_LIBRARIES
     WebKit2
 )
 
-set(DatabaseProcess_LIBRARIES
+set(StorageProcess_LIBRARIES
     WebKit2
 )
 
@@ -702,6 +699,53 @@ endif ()
 set(PluginProcess_LIBRARIES
     WebKit2
 )
+
+if (ENABLE_GRAPHICS_CONTEXT_3D)
+    # For platforms that want to use system-provided OpenGL (ES) / EGL headers,
+    # these include directories, libraries or definitions need to be
+    # added before the ANGLE directories.
+    if (USE_LIBEPOXY)
+        list(APPEND WebKit2_SYSTEM_INCLUDE_DIRECTORIES
+            ${LIBEPOXY_INCLUDE_DIRS}
+        )
+        list(APPEND WebKit2_LIBRARIES
+            ${LIBEPOXY_LIBRARIES}
+        )
+    else ()
+        if (USE_OPENGL)
+            list(APPEND WebKit2_SYSTEM_INCLUDE_DIRECTORIES
+                ${OPENGL_INCLUDE_DIRS}
+            )
+            list(APPEND WebKit2_LIBRARIES
+                ${OPENGL_LIBRARIES}
+            )
+            add_definitions(${OPENGL_DEFINITIONS})
+        elseif (USE_OPENGL_ES_2)
+            list(APPEND WebKit2_SYSTEM_INCLUDE_DIRECTORIES
+                ${OPENGLES2_INCLUDE_DIRS}
+            )
+            list(APPEND WebKit2_LIBRARIES
+                ${OPENGLES2_LIBRARIES}
+            )
+            add_definitions(${OPENGLES2_DEFINITIONS})
+        endif ()
+
+        if (USE_EGL)
+            list(APPEND WebKit2_SYSTEM_INCLUDE_DIRECTORIES
+                ${EGL_INCLUDE_DIRS}
+            )
+            list(APPEND WebKit2_LIBRARIES
+                ${EGL_LIBRARIES}
+            )
+            add_definitions(${EGL_DEFINITIONS})
+        endif ()
+    endif ()
+
+    list(APPEND WebKit2_INCLUDE_DIRECTORIES
+        "${THIRDPARTY_DIR}/ANGLE"
+        "${THIRDPARTY_DIR}/ANGLE/include/KHR"
+    )
+endif ()
 
 if (WIN32 AND INTERNAL_BUILD)
     set(JavaScriptCore_SCRIPTS_DIR "${CMAKE_BINARY_DIR}/../include/private/JavaScriptCore/Scripts")
@@ -838,11 +882,6 @@ if (COMPILER_IS_GCC_OR_CLANG AND NOT APPLE)
     target_link_libraries(WebKit2 -Wl,--start-group WebCore WebCoreDerivedSources -Wl,--end-group)
 endif ()
 
-# Suppress unused parameter warnings for sources in WebKit2.
-if (COMPILER_IS_GCC_OR_CLANG)
-    WEBKIT_ADD_TARGET_PROPERTIES(WebKit2 COMPILE_FLAGS "-Wno-unused-parameter")
-endif ()
-
 if (WebKit2_VERSION_SCRIPT)
     WEBKIT_ADD_TARGET_PROPERTIES(WebKit2 LINK_FLAGS "${WebKit2_VERSION_SCRIPT}")
 endif ()
@@ -863,6 +902,28 @@ if (WebKit2_NetworkProcess_OUTPUT_NAME)
     set_target_properties(NetworkProcess PROPERTIES OUTPUT_NAME ${WebKit2_NetworkProcess_OUTPUT_NAME})
 endif ()
 
+if (NOT "${PORT}" STREQUAL "Mac")
+    add_executable(StorageProcess ${StorageProcess_SOURCES})
+    add_webkit2_prefix_header(StorageProcess)
+    target_link_libraries(StorageProcess ${StorageProcess_LIBRARIES})
+    install(TARGETS StorageProcess DESTINATION "${LIBEXEC_INSTALL_DIR}")
+
+    if (COMPILER_IS_GCC_OR_CLANG)
+        WEBKIT_ADD_TARGET_CXX_FLAGS(StorageProcess -Wno-unused-parameter)
+    endif ()
+
+    if (WebKit2_StorageProcess_OUTPUT_NAME)
+        set_target_properties(StorageProcess PROPERTIES OUTPUT_NAME ${WebKit2_StorageProcess_OUTPUT_NAME})
+    endif ()
+endif ()
+
+# Suppress unused parameter warnings for sources in WebKit2.
+if (COMPILER_IS_GCC_OR_CLANG)
+    WEBKIT_ADD_TARGET_CXX_FLAGS(WebKit2 -Wno-unused-parameter)
+    WEBKIT_ADD_TARGET_CXX_FLAGS(WebProcess -Wno-unused-parameter)
+    WEBKIT_ADD_TARGET_CXX_FLAGS(NetworkProcess -Wno-unused-parameter)
+endif ()
+
 if (ENABLE_PLUGIN_PROCESS AND NOT "${PORT}" STREQUAL "Mac")
     add_definitions(-DENABLE_PLUGIN_PROCESS=1)
     add_executable(PluginProcess ${PluginProcess_SOURCES})
@@ -870,20 +931,12 @@ if (ENABLE_PLUGIN_PROCESS AND NOT "${PORT}" STREQUAL "Mac")
     target_link_libraries(PluginProcess ${PluginProcess_LIBRARIES})
     install(TARGETS PluginProcess DESTINATION "${LIBEXEC_INSTALL_DIR}")
 
+    if (COMPILER_IS_GCC_OR_CLANG)
+        WEBKIT_ADD_TARGET_CXX_FLAGS(PluginProcess -Wno-unused-parameter)
+    endif ()
+
     if (WebKit2_PluginProcess_OUTPUT_NAME)
       set_target_properties(PluginProcess PROPERTIES OUTPUT_NAME ${WebKit2_PluginProcess_OUTPUT_NAME})
-    endif ()
-endif ()
-
-if (ENABLE_DATABASE_PROCESS AND NOT "${PORT}" STREQUAL "Mac")
-    add_definitions(-DENABLE_DATABASE_PROCESS=1)
-    add_executable(DatabaseProcess ${DatabaseProcess_SOURCES})
-    add_webkit2_prefix_header(DatabaseProcess)
-    target_link_libraries(DatabaseProcess ${DatabaseProcess_LIBRARIES})
-    install(TARGETS DatabaseProcess DESTINATION "${LIBEXEC_INSTALL_DIR}")
-
-    if (WebKit2_DatabaseProcess_OUTPUT_NAME)
-        set_target_properties(DatabaseProcess PROPERTIES OUTPUT_NAME ${WebKit2_DatabaseProcess_OUTPUT_NAME})
     endif ()
 endif ()
 

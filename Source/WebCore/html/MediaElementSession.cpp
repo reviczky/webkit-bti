@@ -148,6 +148,26 @@ void MediaElementSession::removeBehaviorRestriction(BehaviorRestrictions restric
     m_restrictions &= ~restriction;
 }
 
+#if PLATFORM(MAC)
+static bool needsDocumentLevelMediaUserGestureQuirk(Document& document)
+{
+    if (!document.settings().needsSiteSpecificQuirks())
+        return false;
+
+    String host = document.topDocument().url().host();
+    if (equalLettersIgnoringASCIICase(host, "slate.com") || host.endsWithIgnoringASCIICase(".slate.com"))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "ign.com") || host.endsWithIgnoringASCIICase(".ign.com"))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "washingtonpost.com") || host.endsWithIgnoringASCIICase(".washingtonpost.com"))
+        return true;
+
+    return false;
+}
+#endif // PLATFORM(MAC)
+
 SuccessOr<MediaPlaybackDenialReason> MediaElementSession::playbackPermitted(const HTMLMediaElement& element) const
 {
     if (element.document().isMediaDocument() && !element.document().ownerElement())
@@ -171,6 +191,11 @@ SuccessOr<MediaPlaybackDenialReason> MediaElementSession::playbackPermitted(cons
         if (element.document().mediaState() & MediaProducer::IsPlayingAudio)
             return { };
     }
+#endif
+
+#if PLATFORM(MAC)
+    if (element.document().topDocument().mediaState() & MediaProducer::HasUserInteractedWithMediaElement && needsDocumentLevelMediaUserGestureQuirk(element.document()))
+        return { };
 #endif
 
     if (m_restrictions & RequireUserGestureForVideoRateChange && element.isVideo() && !element.document().processingUserGestureForMedia()) {
@@ -560,6 +585,13 @@ bool MediaElementSession::requiresFullscreenForVideoPlayback(const HTMLMediaElem
     if (is<HTMLAudioElement>(element))
         return false;
 
+    if (element.document().isMediaDocument()) {
+        ASSERT(is<HTMLVideoElement>(element));
+        const HTMLVideoElement& videoElement = *downcast<const HTMLVideoElement>(&element);
+        if (element.readyState() < HTMLVideoElement::HAVE_METADATA || !videoElement.hasEverHadVideo())
+            return false;
+    }
+
     if (element.isTemporarilyAllowingInlinePlaybackAfterFullscreen())
         return false;
 
@@ -575,6 +607,10 @@ bool MediaElementSession::requiresFullscreenForVideoPlayback(const HTMLMediaElem
     if (dyld_get_program_sdk_version() < DYLD_IOS_VERSION_10_0)
         return !element.hasAttributeWithoutSynchronization(HTMLNames::webkit_playsinlineAttr);
 #endif
+
+    if (element.document().isMediaDocument() && element.document().ownerElement())
+        return false;
+
     return !element.hasAttributeWithoutSynchronization(HTMLNames::playsinlineAttr);
 }
 

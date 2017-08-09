@@ -85,9 +85,10 @@ namespace WebCore {
         void dataReceived(CachedResource&, const char* data, int dataLength) override;
         void redirectReceived(CachedResource&, ResourceRequest&, const ResourceResponse&) override;
         void finishedTimingForWorkerLoad(CachedResource&, const ResourceTiming&) override;
+        void finishedTimingForWorkerLoad(const ResourceTiming&);
         void notifyFinished(CachedResource&) override;
 
-        void didReceiveResponse(unsigned long identifier, const ResourceResponse&, ResourceResponse::Tainting);
+        void didReceiveResponse(unsigned long identifier, const ResourceResponse&);
         void didReceiveData(unsigned long identifier, const char* data, int dataLength);
         void didFinishLoading(unsigned long identifier);
         void didFail(unsigned long identifier, const ResourceError&);
@@ -96,10 +97,6 @@ namespace WebCore {
         void makeCrossOriginAccessRequestWithPreflight(ResourceRequest&&);
         void preflightSuccess(ResourceRequest&&);
         void preflightFailure(unsigned long identifier, const ResourceError&);
-
-#if ENABLE(WEB_TIMING)
-        void finishedTimingForWorkerLoad(const ResourceTiming&);
-#endif
 
         void loadRequest(ResourceRequest&&, SecurityCheckPolicy);
         bool isAllowedRedirect(const URL&);

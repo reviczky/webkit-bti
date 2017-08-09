@@ -31,8 +31,15 @@
         "CachedAttribute": {
             "contextsAllowed": ["attribute"]
         },
+        "CallTracingCallback": {
+            "contextsAllowed": ["interface", "attribute", "operation"],
+            "values": ["*"]
+        },
         "CallbackNeedsOperatorEqual": {
             "contextsAllowed": ["callback-function"]
+        },
+        "CallbackThisObject": {
+            "contextsAllowed": ["callback-function", "operation"]
         },
         "CallNamedSetterOnlyForSupportedProperties": {
             "contextsAllowed": ["operation"]
@@ -351,6 +358,9 @@
         },
         "PrivateIdentifier": {
             "contextsAllowed": ["interface", "attribute", "operation"]
+        },
+        "PromiseProxy": {
+            "contextsAllowed": ["operation"]
         },
         "PublicIdentifier": {
             "contextsAllowed": ["interface", "attribute", "operation"]

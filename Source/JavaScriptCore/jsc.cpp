@@ -31,6 +31,7 @@
 #include "CodeBlock.h"
 #include "Completion.h"
 #include "ConfigFile.h"
+#include "DOMAttributeGetterSetter.h"
 #include "DOMJITGetterSetter.h"
 #include "Disassembler.h"
 #include "Exception.h"
@@ -77,6 +78,7 @@
 #include "TestRunnerUtils.h"
 #include "TypeProfiler.h"
 #include "TypeProfilerLog.h"
+#include "TypedArrayInlines.h"
 #include "WasmContext.h"
 #include "WasmFaultSignalHandler.h"
 #include "WasmMemory.h"
@@ -646,10 +648,17 @@ public:
         return getter;
     }
 
-    class DOMJITNodeDOMJIT : public DOMJIT::GetterSetter {
+    class DOMJITAttribute : public DOMJIT::GetterSetter {
     public:
-        DOMJITNodeDOMJIT()
-            : DOMJIT::GetterSetter(DOMJITGetter::customGetter, nullptr, DOMJITNode::info(), SpecInt32Only)
+        constexpr DOMJITAttribute()
+            : DOMJIT::GetterSetter(
+                DOMJITGetter::customGetter,
+#if ENABLE(JIT)
+                &callDOMGetter,
+#else
+                nullptr,
+#endif
+                SpecInt32Only)
         {
         }
 
@@ -660,7 +669,7 @@ public:
             return JSValue::encode(jsNumber(static_cast<DOMJITGetter*>(pointer)->value()));
         }
 
-        Ref<DOMJIT::CallDOMGetterSnippet> callDOMGetter() override
+        static Ref<DOMJIT::CallDOMGetterSnippet> callDOMGetter()
         {
             Ref<DOMJIT::CallDOMGetterSnippet> snippet = DOMJIT::CallDOMGetterSnippet::create();
             snippet->requireGlobalObject = false;
@@ -676,32 +685,27 @@ public:
 #endif
     };
 
-    static DOMJIT::GetterSetter* domJITNodeGetterSetter()
-    {
-        static NeverDestroyed<DOMJITNodeDOMJIT> graph;
-        return &graph.get();
-    }
-
 private:
-    void finishCreation(VM& vm)
-    {
-        Base::finishCreation(vm);
-        DOMJIT::GetterSetter* domJIT = domJITNodeGetterSetter();
-        CustomGetterSetter* customGetterSetter = CustomGetterSetter::create(vm, domJIT->getter(), domJIT->setter(), domJIT);
-        putDirectCustomAccessor(vm, Identifier::fromString(&vm, "customGetter"), customGetterSetter, ReadOnly | CustomAccessor);
-    }
+    void finishCreation(VM&);
 
     static EncodedJSValue customGetter(ExecState* exec, EncodedJSValue thisValue, PropertyName)
     {
         VM& vm = exec->vm();
-        auto scope = DECLARE_THROW_SCOPE(vm);
-
         DOMJITNode* thisObject = jsDynamicCast<DOMJITNode*>(vm, JSValue::decode(thisValue));
-        if (!thisObject)
-            return throwVMTypeError(exec, scope);
+        ASSERT(thisObject);
         return JSValue::encode(jsNumber(thisObject->value()));
     }
 };
+
+static const DOMJITGetter::DOMJITAttribute DOMJITGetterDOMJIT;
+
+void DOMJITGetter::finishCreation(VM& vm)
+{
+    Base::finishCreation(vm);
+    const DOMJIT::GetterSetter* domJIT = &DOMJITGetterDOMJIT;
+    auto* customGetterSetter = DOMAttributeGetterSetter::create(vm, domJIT->getter(), nullptr, DOMAttributeAnnotation { DOMJITNode::info(), domJIT });
+    putDirectCustomAccessor(vm, Identifier::fromString(&vm, "customGetter"), customGetterSetter, ReadOnly | CustomAccessor);
+}
 
 class DOMJITGetterComplex : public DOMJITNode {
 public:
@@ -726,10 +730,17 @@ public:
         return getter;
     }
 
-    class DOMJITNodeDOMJIT : public DOMJIT::GetterSetter {
+    class DOMJITAttribute : public DOMJIT::GetterSetter {
     public:
-        DOMJITNodeDOMJIT()
-            : DOMJIT::GetterSetter(DOMJITGetterComplex::customGetter, nullptr, DOMJITNode::info(), SpecInt32Only)
+        constexpr DOMJITAttribute()
+            : DOMJIT::GetterSetter(
+                DOMJITGetterComplex::customGetter,
+#if ENABLE(JIT)
+                &callDOMGetter,
+#else
+                nullptr,
+#endif
+                SpecInt32Only)
         {
         }
 
@@ -748,42 +759,29 @@ public:
             return JSValue::encode(jsNumber(object->value()));
         }
 
-        Ref<DOMJIT::CallDOMGetterSnippet> callDOMGetter() override
+        static Ref<DOMJIT::CallDOMGetterSnippet> callDOMGetter()
         {
-            RefPtr<DOMJIT::CallDOMGetterSnippet> snippet = DOMJIT::CallDOMGetterSnippet::create();
+            Ref<DOMJIT::CallDOMGetterSnippet> snippet = DOMJIT::CallDOMGetterSnippet::create();
             static_assert(GPRInfo::numberOfRegisters >= 4, "Number of registers should be larger or equal to 4.");
-            snippet->numGPScratchRegisters = GPRInfo::numberOfRegisters - 4;
+            unsigned numGPScratchRegisters = GPRInfo::numberOfRegisters - 4;
+            snippet->numGPScratchRegisters = numGPScratchRegisters;
             snippet->numFPScratchRegisters = 3;
             snippet->setGenerator([=](CCallHelpers& jit, SnippetParams& params) {
                 JSValueRegs results = params[0].jsValueRegs();
                 GPRReg domGPR = params[1].gpr();
-                for (unsigned i = 0; i < snippet->numGPScratchRegisters; ++i)
+                for (unsigned i = 0; i < numGPScratchRegisters; ++i)
                     jit.move(CCallHelpers::TrustedImm32(42), params.gpScratch(i));
 
                 params.addSlowPathCall(jit.jump(), jit, slowCall, results, domGPR);
                 return CCallHelpers::JumpList();
-
             });
-            return *snippet.get();
+            return snippet;
         }
 #endif
     };
 
-    static DOMJIT::GetterSetter* domJITNodeGetterSetter()
-    {
-        static NeverDestroyed<DOMJITNodeDOMJIT> graph;
-        return &graph.get();
-    }
-
 private:
-    void finishCreation(VM& vm, JSGlobalObject* globalObject)
-    {
-        Base::finishCreation(vm);
-        DOMJIT::GetterSetter* domJIT = domJITNodeGetterSetter();
-        CustomGetterSetter* customGetterSetter = CustomGetterSetter::create(vm, domJIT->getter(), domJIT->setter(), domJIT);
-        putDirectCustomAccessor(vm, Identifier::fromString(&vm, "customGetter"), customGetterSetter, ReadOnly | CustomAccessor);
-        putDirectNativeFunction(vm, globalObject, Identifier::fromString(&vm, "enableException"), 0, functionEnableException, NoIntrinsic, 0);
-    }
+    void finishCreation(VM&, JSGlobalObject*);
 
     static EncodedJSValue JSC_HOST_CALL functionEnableException(ExecState* exec)
     {
@@ -799,18 +797,26 @@ private:
         VM& vm = exec->vm();
         auto scope = DECLARE_THROW_SCOPE(vm);
 
-        auto* thisObject = jsDynamicCast<DOMJITNode*>(vm, JSValue::decode(thisValue));
-        if (!thisObject)
-            return throwVMTypeError(exec, scope);
-        if (auto* domjitGetterComplex = jsDynamicCast<DOMJITGetterComplex*>(vm, JSValue::decode(thisValue))) {
-            if (domjitGetterComplex->m_enableException)
-                return JSValue::encode(throwException(exec, scope, createError(exec, ASCIILiteral("DOMJITGetterComplex slow call exception"))));
-        }
+        auto* thisObject = jsDynamicCast<DOMJITGetterComplex*>(vm, JSValue::decode(thisValue));
+        ASSERT(thisObject);
+        if (thisObject->m_enableException)
+            return JSValue::encode(throwException(exec, scope, createError(exec, ASCIILiteral("DOMJITGetterComplex slow call exception"))));
         return JSValue::encode(jsNumber(thisObject->value()));
     }
 
     bool m_enableException { false };
 };
+
+static const DOMJITGetterComplex::DOMJITAttribute DOMJITGetterComplexDOMJIT;
+
+void DOMJITGetterComplex::finishCreation(VM& vm, JSGlobalObject* globalObject)
+{
+    Base::finishCreation(vm);
+    const DOMJIT::GetterSetter* domJIT = &DOMJITGetterComplexDOMJIT;
+    auto* customGetterSetter = DOMAttributeGetterSetter::create(vm, domJIT->getter(), nullptr, DOMAttributeAnnotation { DOMJITGetterComplex::info(), domJIT });
+    putDirectCustomAccessor(vm, Identifier::fromString(&vm, "customGetter"), customGetterSetter, ReadOnly | CustomAccessor);
+    putDirectNativeFunction(vm, globalObject, Identifier::fromString(&vm, "enableException"), 0, functionEnableException, NoIntrinsic, 0);
+}
 
 class DOMJITFunctionObject : public DOMJITNode {
 public:
@@ -979,6 +985,7 @@ void Element::finishCreation(VM& vm, Root* root)
 }
 
 static bool fillBufferWithContentsOfFile(const String& fileName, Vector<char>& buffer);
+static RefPtr<Uint8Array> fillBufferWithContentsOfFile(const String& fileName);
 
 class CommandLine;
 class GlobalObject;
@@ -1703,6 +1710,32 @@ static void convertShebangToJSComment(Vector<char>& buffer)
     }
 }
 
+static RefPtr<Uint8Array> fillBufferWithContentsOfFile(FILE* file)
+{
+    fseek(file, 0, SEEK_END);
+    size_t bufferCapacity = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    RefPtr<Uint8Array> result = Uint8Array::create(bufferCapacity);
+    size_t readSize = fread(result->data(), 1, bufferCapacity, file);
+    if (readSize != bufferCapacity)
+        return nullptr;
+    return result;
+}
+
+static RefPtr<Uint8Array> fillBufferWithContentsOfFile(const String& fileName)
+{
+    FILE* f = fopen(fileName.utf8().data(), "rb");
+    if (!f) {
+        fprintf(stderr, "Could not open file: %s\n", fileName.utf8().data());
+        return nullptr;
+    }
+
+    RefPtr<Uint8Array> result = fillBufferWithContentsOfFile(f);
+    fclose(f);
+
+    return result;
+}
+
 static bool fillBufferWithContentsOfFile(FILE* file, Vector<char>& buffer)
 {
     // We might have injected "use strict"; at the top.
@@ -2271,16 +2304,15 @@ EncodedJSValue JSC_HOST_CALL functionReadFile(ExecState* exec)
         isBinary = true;
     }
 
-    Vector<char> content;
-    if (!fillBufferWithContentsOfFile(fileName, content))
+    RefPtr<Uint8Array> content = fillBufferWithContentsOfFile(fileName);
+    if (!content)
         return throwVMError(exec, scope, "Could not open file.");
 
     if (!isBinary)
-        return JSValue::encode(jsString(exec, stringFromUTF(content)));
+        return JSValue::encode(jsString(exec, String::fromUTF8WithLatin1Fallback(content->data(), content->length())));
 
     Structure* structure = exec->lexicalGlobalObject()->typedArrayStructure(TypeUint8);
-    auto length = content.size();
-    JSObject* result = createUint8TypedArray(exec, structure, ArrayBuffer::createFromBytes(content.releaseBuffer().leakPtr(), length, [] (void* p) { fastFree(p); }), 0, length);
+    JSObject* result = JSUint8Array::create(vm, structure, WTFMove(content));
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
 
     return JSValue::encode(result);
@@ -3788,6 +3820,7 @@ int jscmain(int argc, char** argv)
 #if ENABLE(WEBASSEMBLY)
     JSC::Wasm::enableFastMemory();
 #endif
+    Gigacage::disableDisablingPrimitiveGigacageIfShouldBeEnabled();
 
     int result;
     result = runJSC(

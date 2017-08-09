@@ -47,6 +47,8 @@
 #include "PerActivityStateCPUUsageSampler.h"
 #include "SandboxExtension.h"
 #include "StatisticsData.h"
+#include "StorageProcessCreationParameters.h"
+#include "StorageProcessMessages.h"
 #include "TextChecker.h"
 #include "UIGamepad.h"
 #include "UIGamepadProvider.h"
@@ -82,11 +84,6 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RunLoop.h>
 #include <wtf/text/StringBuilder.h>
-
-#if ENABLE(DATABASE_PROCESS)
-#include "DatabaseProcessCreationParameters.h"
-#include "DatabaseProcessMessages.h"
-#endif
 
 #if ENABLE(SERVICE_CONTROLS)
 #include "ServicesController.h"
@@ -517,17 +514,16 @@ void WebProcessPool::getNetworkProcessConnection(Ref<Messages::WebProcessProxy::
     m_networkProcess->getNetworkProcessConnection(WTFMove(reply));
 }
 
-#if ENABLE(DATABASE_PROCESS)
-void WebProcessPool::ensureDatabaseProcessAndWebsiteDataStore(WebsiteDataStore* relevantDataStore)
+void WebProcessPool::ensureStorageProcessAndWebsiteDataStore(WebsiteDataStore* relevantDataStore)
 {
     // *********
     // IMPORTANT: Do not change the directory structure for indexed databases on disk without first consulting a reviewer from Apple (<rdar://problem/17454712>)
     // *********
 
-    if (!m_databaseProcess) {
-        m_databaseProcess = DatabaseProcessProxy::create(this);
+    if (!m_storageProcess) {
+        m_storageProcess = StorageProcessProxy::create(this);
 
-        DatabaseProcessCreationParameters parameters;
+        StorageProcessCreationParameters parameters;
 #if ENABLE(INDEXED_DATABASE)
         ASSERT(!m_configuration->indexedDBDatabaseDirectory().isEmpty());
 
@@ -537,34 +533,33 @@ void WebProcessPool::ensureDatabaseProcessAndWebsiteDataStore(WebsiteDataStore* 
 #endif
 
         ASSERT(!parameters.indexedDatabaseDirectory.isEmpty());
-        m_databaseProcess->send(Messages::DatabaseProcess::InitializeWebsiteDataStore(parameters), 0);
+        m_storageProcess->send(Messages::StorageProcess::InitializeWebsiteDataStore(parameters), 0);
     }
 
     if (!relevantDataStore || relevantDataStore == &websiteDataStore().websiteDataStore())
         return;
 
-    m_databaseProcess->send(Messages::DatabaseProcess::InitializeWebsiteDataStore(relevantDataStore->databaseProcessParameters()), 0);
+    m_storageProcess->send(Messages::StorageProcess::InitializeWebsiteDataStore(relevantDataStore->storageProcessParameters()), 0);
 }
 
-void WebProcessPool::getDatabaseProcessConnection(Ref<Messages::WebProcessProxy::GetDatabaseProcessConnection::DelayedReply>&& reply)
+void WebProcessPool::getStorageProcessConnection(Ref<Messages::WebProcessProxy::GetStorageProcessConnection::DelayedReply>&& reply)
 {
-    ensureDatabaseProcessAndWebsiteDataStore(nullptr);
+    ensureStorageProcessAndWebsiteDataStore(nullptr);
 
-    m_databaseProcess->getDatabaseProcessConnection(WTFMove(reply));
+    m_storageProcess->getStorageProcessConnection(WTFMove(reply));
 }
 
-void WebProcessPool::databaseProcessCrashed(DatabaseProcessProxy* databaseProcessProxy)
+void WebProcessPool::storageProcessCrashed(StorageProcessProxy* storageProcessProxy)
 {
-    ASSERT(m_databaseProcess);
-    ASSERT(databaseProcessProxy == m_databaseProcess.get());
+    ASSERT(m_storageProcess);
+    ASSERT(storageProcessProxy == m_storageProcess.get());
 
     for (auto& supplement : m_supplements.values())
-        supplement->processDidClose(databaseProcessProxy);
+        supplement->processDidClose(storageProcessProxy);
 
-    m_client.databaseProcessDidCrash(this);
-    m_databaseProcess = nullptr;
+    m_client.storageProcessDidCrash(this);
+    m_storageProcess = nullptr;
 }
-#endif
 
 void WebProcessPool::willStartUsingPrivateBrowsing()
 {
@@ -964,9 +959,9 @@ void WebProcessPool::pageAddedToProcess(WebPageProxy& page)
         page.process().send(Messages::WebProcess::AddWebsiteDataStore(page.websiteDataStore().parameters()), 0);
 
 #if ENABLE(INDEXED_DATABASE)
-        auto databaseParameters = page.websiteDataStore().databaseProcessParameters();
-        if (!databaseParameters.indexedDatabaseDirectory.isEmpty())
-            sendToDatabaseProcessRelaunchingIfNecessary(Messages::DatabaseProcess::InitializeWebsiteDataStore(databaseParameters));
+        auto storageParameters = page.websiteDataStore().storageProcessParameters();
+        if (!storageParameters.indexedDatabaseDirectory.isEmpty())
+            sendToStorageProcessRelaunchingIfNecessary(Messages::StorageProcess::InitializeWebsiteDataStore(storageParameters));
 #endif
     }
 }
@@ -1078,16 +1073,12 @@ pid_t WebProcessPool::networkProcessIdentifier()
     return m_networkProcess->processIdentifier();
 }
 
-pid_t WebProcessPool::databaseProcessIdentifier()
+pid_t WebProcessPool::storageProcessIdentifier()
 {
-#if ENABLE(DATABASE_PROCESS)
-    if (!m_databaseProcess)
+    if (!m_storageProcess)
         return 0;
 
-    return m_databaseProcess->processIdentifier();
-#else
-    return 0;
-#endif
+    return m_storageProcess->processIdentifier();
 }
 
 void WebProcessPool::setAlwaysUsesComplexTextCodePath(bool alwaysUseComplexText)
@@ -1106,6 +1097,11 @@ void WebProcessPool::setResourceLoadStatisticsEnabled(bool enabled)
 {
     m_resourceLoadStatisticsEnabled = enabled;
     sendToAllProcesses(Messages::WebProcess::SetResourceLoadStatisticsEnabled(enabled));
+}
+
+void WebProcessPool::clearResourceLoadStatistics()
+{
+    sendToAllProcesses(Messages::WebProcess::ClearResourceLoadStatistics());
 }
 
 void WebProcessPool::registerURLSchemeAsEmptyDocument(const String& urlScheme)
@@ -1311,15 +1307,13 @@ void WebProcessPool::clearCachedCredentials()
         m_networkProcess->send(Messages::NetworkProcess::ClearCachedCredentials(), 0);
 }
 
-void WebProcessPool::terminateDatabaseProcess()
+void WebProcessPool::terminateStorageProcess()
 {
-#if ENABLE(DATABASE_PROCESS)
-    if (!m_databaseProcess)
+    if (!m_storageProcess)
         return;
 
-    m_databaseProcess->terminate();
-    m_databaseProcess = nullptr;
-#endif
+    m_storageProcess->terminate();
+    m_storageProcess = nullptr;
 }
 
 void WebProcessPool::terminateNetworkProcess()

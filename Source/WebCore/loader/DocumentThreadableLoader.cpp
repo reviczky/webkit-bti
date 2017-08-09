@@ -290,10 +290,10 @@ void DocumentThreadableLoader::dataSent(CachedResource& resource, unsigned long 
 void DocumentThreadableLoader::responseReceived(CachedResource& resource, const ResourceResponse& response)
 {
     ASSERT_UNUSED(resource, &resource == m_resource);
-    didReceiveResponse(m_resource->identifier(), response, m_resource->responseTainting());
+    didReceiveResponse(m_resource->identifier(), response);
 }
 
-void DocumentThreadableLoader::didReceiveResponse(unsigned long identifier, const ResourceResponse& response, ResourceResponse::Tainting tainting)
+void DocumentThreadableLoader::didReceiveResponse(unsigned long identifier, const ResourceResponse& response)
 {
     ASSERT(m_client);
     ASSERT(response.type() != ResourceResponse::Type::Error);
@@ -309,8 +309,8 @@ void DocumentThreadableLoader::didReceiveResponse(unsigned long identifier, cons
     }
 
     if (response.type() == ResourceResponse::Type::Default) {
-        m_client->didReceiveResponse(identifier, ResourceResponse::filterResponse(response, tainting));
-        if (tainting == ResourceResponse::Tainting::Opaque) {
+        m_client->didReceiveResponse(identifier, ResourceResponseBase::filter(response));
+        if (response.tainting() == ResourceResponse::Tainting::Opaque) {
             clearResource();
             if (m_client)
                 m_client->didFinishLoading(identifier);
@@ -341,21 +341,16 @@ void DocumentThreadableLoader::finishedTimingForWorkerLoad(CachedResource& resou
 {
     ASSERT(m_client);
     ASSERT_UNUSED(resource, &resource == m_resource);
-    UNUSED_PARAM(resourceTiming);
 
-#if ENABLE(WEB_TIMING)
     finishedTimingForWorkerLoad(resourceTiming);
-#endif
 }
 
-#if ENABLE(WEB_TIMING)
 void DocumentThreadableLoader::finishedTimingForWorkerLoad(const ResourceTiming& resourceTiming)
 {
     ASSERT(m_options.initiatorContext == InitiatorContext::Worker);
 
     m_client->didFinishTiming(resourceTiming);
 }
-#endif
 
 void DocumentThreadableLoader::notifyFinished(CachedResource& resource)
 {
@@ -385,9 +380,8 @@ void DocumentThreadableLoader::didFinishLoading(unsigned long identifier)
             m_client->didReceiveData(m_resource->resourceBuffer()->data(), m_resource->resourceBuffer()->size());
         } else {
             ASSERT(response.type() == ResourceResponse::Type::Default);
-            
-            auto tainting = m_resource->responseTainting();
-            m_client->didReceiveResponse(identifier, ResourceResponse::filterResponse(response, tainting));
+
+            m_client->didReceiveResponse(identifier, ResourceResponseBase::filter(response));
             m_client->didReceiveData(m_resource->resourceBuffer()->data(), m_resource->resourceBuffer()->size());
         }
     }
@@ -470,10 +464,8 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
     // If credentials mode is 'Omit', we should disable cookie sending.
     ASSERT(m_options.credentials != FetchOptions::Credentials::Omit);
 
-#if ENABLE(WEB_TIMING)
     LoadTiming loadTiming;
     loadTiming.markStartTimeAndFetchStart();
-#endif
 
     // FIXME: ThreadableLoaderOptions.sniffContent is not supported for synchronous requests.
     RefPtr<SharedBuffer> data;
@@ -487,15 +479,13 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
         identifier = frameLoader.loadResourceSynchronously(request, m_options.allowCredentials, m_options.clientCredentialPolicy, error, response, data);
     }
 
-#if ENABLE(WEB_TIMING)
     loadTiming.setResponseEnd(MonotonicTime::now());
-#endif
 
     if (!error.isNull() && response.httpStatusCode() <= 0) {
         if (requestURL.isLocalFile()) {
             // We don't want XMLHttpRequest to raise an exception for file:// resources, see <rdar://problem/4962298>.
             // FIXME: XMLHttpRequest quirks should be in XMLHttpRequest code, not in DocumentThreadableLoader.cpp.
-            didReceiveResponse(identifier, response, ResourceResponse::Tainting::Basic);
+            didReceiveResponse(identifier, response);
             didFinishLoading(identifier);
             return;
         }
@@ -518,13 +508,12 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
         }
     }
 
-    ResourceResponse::Tainting tainting = ResourceResponse::Tainting::Basic;
     if (!m_sameOriginRequest) {
         if (m_options.mode == FetchOptions::Mode::NoCors)
-            tainting = ResourceResponse::Tainting::Opaque;
+            response.setTainting(ResourceResponse::Tainting::Opaque);
         else {
             ASSERT(m_options.mode == FetchOptions::Mode::Cors);
-            tainting = ResourceResponse::Tainting::Cors;
+            response.setTainting(ResourceResponse::Tainting::Cors);
             String accessControlErrorDescription;
             if (!passesAccessControlCheck(response, m_options.allowCredentials, securityOrigin(), accessControlErrorDescription)) {
                 logErrorAndFail(ResourceError(errorDomainWebKitInternal, 0, response.url(), accessControlErrorDescription, ResourceError::Type::AccessControl));
@@ -532,12 +521,11 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
             }
         }
     }
-    didReceiveResponse(identifier, response, tainting);
+    didReceiveResponse(identifier, response);
 
     if (data)
         didReceiveData(identifier, data->data(), data->size());
 
-#if ENABLE(WEB_TIMING)
     if (RuntimeEnabledFeatures::sharedFeatures().resourceTimingEnabled()) {
         auto resourceTiming = ResourceTiming::fromSynchronousLoad(requestURL, m_options.initiator, loadTiming, response.deprecatedNetworkLoadMetrics(), response, securityOrigin());
         if (options().initiatorContext == InitiatorContext::Worker)
@@ -545,9 +533,8 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
         else {
             if (document().domWindow() && document().domWindow()->performance())
                 document().domWindow()->performance()->addResourceTiming(WTFMove(resourceTiming));
-        }        
+        }
     }
-#endif
 
     didFinishLoading(identifier);
 }
