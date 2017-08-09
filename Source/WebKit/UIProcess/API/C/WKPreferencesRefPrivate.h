@@ -203,6 +203,10 @@ WK_EXPORT bool WKPreferencesGetMediaPlaybackAllowsInline(WKPreferencesRef prefer
 WK_EXPORT void WKPreferencesSetInlineMediaPlaybackRequiresPlaysInlineAttribute(WKPreferencesRef preferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetInlineMediaPlaybackRequiresPlaysInlineAttribute(WKPreferencesRef preferencesRef);
 
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetBeaconAPIEnabled(WKPreferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetBeaconAPIEnabled(WKPreferencesRef);
+
 // Defaults to false on iOS, true elsewhere.
 WK_EXPORT void WKPreferencesSetMediaControlsScaleWithPageZoom(WKPreferencesRef preferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetMediaControlsScaleWithPageZoom(WKPreferencesRef preferencesRef);
@@ -504,6 +508,10 @@ WK_EXPORT WKStringRef WKPreferencesCopyMediaContentTypesRequiringHardwareSupport
 // Defaults to false.
 WK_EXPORT void WKPreferencesSetIsSecureContextAttributeEnabled(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetIsSecureContextAttributeEnabled(WKPreferencesRef);
+
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetInspectorAdditionsEnabled(WKPreferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetInspectorAdditionsEnabled(WKPreferencesRef);
 
 #ifdef __cplusplus
 }

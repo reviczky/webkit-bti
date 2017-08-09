@@ -64,6 +64,7 @@
 #include "WebProcessProxyMessages.h"
 #include "WebResourceLoadStatisticsStoreMessages.h"
 #include "WebSocketStream.h"
+#include "WebToStorageProcessConnection.h"
 #include "WebsiteData.h"
 #include "WebsiteDataType.h"
 #include <JavaScriptCore/JSLock.h>
@@ -124,10 +125,6 @@
 
 #if ENABLE(SEC_ITEM_SHIM)
 #include "SecItemShim.h"
-#endif
-
-#if ENABLE(DATABASE_PROCESS)
-#include "WebToDatabaseProcessConnection.h"
 #endif
 
 #if ENABLE(NOTIFICATIONS)
@@ -199,6 +196,8 @@ WebProcess::WebProcess()
         ASSERT(!statistics.isEmpty());
         parentProcessConnection()->send(Messages::WebResourceLoadStatisticsStore::ResourceLoadStatisticsUpdated(WTFMove(statistics)), 0);
     });
+
+    Gigacage::disableDisablingPrimitiveGigacageIfShouldBeEnabled();
 }
 
 WebProcess::~WebProcess()
@@ -1132,6 +1131,9 @@ void WebProcess::networkProcessConnectionClosed(NetworkProcessConnection* connec
 
     m_webLoaderStrategy.networkProcessCrashed();
     WebSocketStream::networkProcessCrashed();
+
+    for (auto& page : m_pageMap.values())
+        page->stopAllURLSchemeTasks();
 }
 
 WebLoaderStrategy& WebProcess::webLoaderStrategy()
@@ -1139,32 +1141,30 @@ WebLoaderStrategy& WebProcess::webLoaderStrategy()
     return m_webLoaderStrategy;
 }
 
-#if ENABLE(DATABASE_PROCESS)
-void WebProcess::webToDatabaseProcessConnectionClosed(WebToDatabaseProcessConnection* connection)
+void WebProcess::webToStorageProcessConnectionClosed(WebToStorageProcessConnection* connection)
 {
-    ASSERT(m_webToDatabaseProcessConnection);
-    ASSERT(m_webToDatabaseProcessConnection == connection);
+    ASSERT(m_webToStorageProcessConnection);
+    ASSERT(m_webToStorageProcessConnection == connection);
 
-    m_webToDatabaseProcessConnection = nullptr;
+    m_webToStorageProcessConnection = nullptr;
 }
 
-WebToDatabaseProcessConnection* WebProcess::webToDatabaseProcessConnection()
+WebToStorageProcessConnection* WebProcess::webToStorageProcessConnection()
 {
-    if (!m_webToDatabaseProcessConnection)
-        ensureWebToDatabaseProcessConnection();
+    if (!m_webToStorageProcessConnection)
+        ensureWebToStorageProcessConnection();
 
-    return m_webToDatabaseProcessConnection.get();
+    return m_webToStorageProcessConnection.get();
 }
 
-void WebProcess::ensureWebToDatabaseProcessConnection()
+void WebProcess::ensureWebToStorageProcessConnection()
 {
-    if (m_webToDatabaseProcessConnection)
+    if (m_webToStorageProcessConnection)
         return;
 
     IPC::Attachment encodedConnectionIdentifier;
 
-    if (!parentProcessConnection()->sendSync(Messages::WebProcessProxy::GetDatabaseProcessConnection(),
-        Messages::WebProcessProxy::GetDatabaseProcessConnection::Reply(encodedConnectionIdentifier), 0))
+    if (!parentProcessConnection()->sendSync(Messages::WebProcessProxy::GetStorageProcessConnection(), Messages::WebProcessProxy::GetStorageProcessConnection::Reply(encodedConnectionIdentifier), 0))
         return;
 
 #if USE(UNIX_DOMAIN_SOCKETS)
@@ -1176,10 +1176,8 @@ void WebProcess::ensureWebToDatabaseProcessConnection()
 #endif
     if (IPC::Connection::identifierIsNull(connectionIdentifier))
         return;
-    m_webToDatabaseProcessConnection = WebToDatabaseProcessConnection::create(connectionIdentifier);
+    m_webToStorageProcessConnection = WebToStorageProcessConnection::create(connectionIdentifier);
 }
-
-#endif // ENABLED(DATABASE_PROCESS)
 
 void WebProcess::setEnhancedAccessibility(bool flag)
 {
@@ -1445,6 +1443,11 @@ void WebProcess::nonVisibleProcessCleanupTimerFired()
 void WebProcess::setResourceLoadStatisticsEnabled(bool enabled)
 {
     WebCore::Settings::setResourceLoadStatisticsEnabled(enabled);
+}
+
+void WebProcess::clearResourceLoadStatistics()
+{
+    ResourceLoadObserver::shared().clearState();
 }
 
 RefPtr<API::Object> WebProcess::transformHandlesToObjects(API::Object* object)

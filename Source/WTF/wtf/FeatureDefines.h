@@ -322,8 +322,8 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 
 #endif /* PLATFORM(WIN_CAIRO) */
 
-/* --------- Gtk port (Unix, Windows, Mac) --------- */
-#if PLATFORM(GTK)
+/* --------- Gtk port (Unix, Windows, Mac) and WPE --------- */
+#if PLATFORM(GTK) || PLATFORM(WPE)
 #if !defined(ENABLE_KEYBOARD_KEY_ATTRIBUTE)
 #define ENABLE_KEYBOARD_KEY_ATTRIBUTE 1
 #endif
@@ -331,7 +331,7 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #if !defined(ENABLE_KEYBOARD_CODE_ATTRIBUTE)
 #define ENABLE_KEYBOARD_CODE_ATTRIBUTE 1
 #endif
-#endif /* PLATFORM(GTK) */
+#endif /* PLATFORM(GTK) || PLATFORM(WPE) */
 
 /* ENABLE macro defaults for WebCore */
 /* Do not use PLATFORM() tests in this section ! */
@@ -350,10 +350,6 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 
 #if !defined(ENABLE_APNG)
 #define ENABLE_APNG 1
-#endif
-
-#if !defined(ENABLE_CANVAS_PATH)
-#define ENABLE_CANVAS_PATH 1
 #endif
 
 #if !defined(ENABLE_CANVAS_PROXY)
@@ -430,10 +426,6 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 
 #if !defined(ENABLE_ENCRYPTED_MEDIA)
 #define ENABLE_ENCRYPTED_MEDIA 0
-#endif
-
-#if !defined(ENABLE_FETCH_API)
-#define ENABLE_FETCH_API 1
 #endif
 
 #if !defined(ENABLE_FILTERS_LEVEL_2)
@@ -712,14 +704,6 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #define ENABLE_WEB_AUDIO 0
 #endif
 
-#if !defined(ENABLE_WEB_SOCKETS)
-#define ENABLE_WEB_SOCKETS 1
-#endif
-
-#if !defined(ENABLE_WEB_TIMING)
-#define ENABLE_WEB_TIMING 0
-#endif
-
 #if !defined(ENABLE_XSLT)
 #define ENABLE_XSLT 1
 #endif
@@ -734,6 +718,10 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 
 #if !defined(ENABLE_DATA_INTERACTION)
 #define ENABLE_DATA_INTERACTION 0
+#endif
+
+#if !defined(ENABLE_SERVICE_WORKER)
+#define ENABLE_SERVICE_WORKER 1
 #endif
 
 /* Asserts, invariants for macro definitions */

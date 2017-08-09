@@ -573,12 +573,10 @@ void WebProcessProxy::getNetworkProcessConnection(Ref<Messages::WebProcessProxy:
     m_processPool->getNetworkProcessConnection(WTFMove(reply));
 }
 
-#if ENABLE(DATABASE_PROCESS)
-void WebProcessProxy::getDatabaseProcessConnection(Ref<Messages::WebProcessProxy::GetDatabaseProcessConnection::DelayedReply>&& reply)
+void WebProcessProxy::getStorageProcessConnection(Ref<Messages::WebProcessProxy::GetStorageProcessConnection::DelayedReply>&& reply)
 {
-    m_processPool->getDatabaseProcessConnection(WTFMove(reply));
+    m_processPool->getStorageProcessConnection(WTFMove(reply));
 }
-#endif // ENABLE(DATABASE_PROCESS)
 
 #if !PLATFORM(COCOA)
 bool WebProcessProxy::platformIsBeingDebugged() const

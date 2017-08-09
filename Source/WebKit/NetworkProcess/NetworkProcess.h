@@ -63,6 +63,10 @@ enum class WebsiteDataType;
 struct NetworkProcessCreationParameters;
 struct WebsiteDataStoreParameters;
 
+namespace NetworkCache {
+class Cache;
+}
+
 class NetworkProcess : public ChildProcess, private DownloadManager::Client {
     WTF_MAKE_NONCOPYABLE(NetworkProcess);
     friend class NeverDestroyed<NetworkProcess>;
@@ -86,6 +90,9 @@ public:
 
     AuthenticationManager& authenticationManager();
     DownloadManager& downloadManager();
+
+    NetworkCache::Cache* cache() { return m_cache.get(); }
+
     bool canHandleHTTPSServerTrustEvaluation() const { return m_canHandleHTTPSServerTrustEvaluation; }
 
     void processWillSuspendImminently(bool& handled);
@@ -115,7 +122,7 @@ public:
 
     void ensurePrivateBrowsingSession(WebsiteDataStoreParameters&&);
 
-    void grantSandboxExtensionsToDatabaseProcessForBlobs(const Vector<String>& filenames, Function<void ()>&& completionHandler);
+    void grantSandboxExtensionsToStorageProcessForBlobs(const Vector<String>& filenames, Function<void ()>&& completionHandler);
 
 #if HAVE(CFNETWORK_STORAGE_PARTITIONING)
     void updateCookiePartitioningForTopPrivatelyOwnedDomains(const Vector<String>& domainsToRemove, const Vector<String>& domainsToAdd, bool shouldClearFirst);
@@ -197,7 +204,7 @@ private:
     void setAllowsAnySSLCertificateForWebSocket(bool);
     void syncAllCookies();
 
-    void didGrantSandboxExtensionsToDatabaseProcessForBlobs(uint64_t requestID);
+    void didGrantSandboxExtensionsToStorageProcessForBlobs(uint64_t requestID);
 
 #if USE(SOUP)
     void setIgnoreTLSErrors(bool);
@@ -219,6 +226,8 @@ private:
     bool m_diskCacheIsDisabledForTesting;
     bool m_canHandleHTTPSServerTrustEvaluation;
     Seconds m_loadThrottleLatency;
+
+    RefPtr<NetworkCache::Cache> m_cache;
 
     typedef HashMap<const char*, std::unique_ptr<NetworkProcessSupplement>, PtrHash<const char*>> NetworkProcessSupplementMap;
     NetworkProcessSupplementMap m_supplements;

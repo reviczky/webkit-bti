@@ -824,6 +824,16 @@ bool WKPreferencesGetInlineMediaPlaybackRequiresPlaysInlineAttribute(WKPreferenc
     return toImpl(preferencesRef)->inlineMediaPlaybackRequiresPlaysInlineAttribute();
 }
 
+void WKPreferencesSetBeaconAPIEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setBeaconAPIEnabled(flag);
+}
+
+bool WKPreferencesGetBeaconAPIEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->beaconAPIEnabled();
+}
+
 void WKPreferencesSetMediaControlsScaleWithPageZoom(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setMediaControlsScaleWithPageZoom(flag);
@@ -1813,3 +1823,12 @@ void WKPreferencesSetAllowMediaContentTypesRequiringHardwareSupportAsFallback(WK
     return toImpl(preferencesRef)->setAllowMediaContentTypesRequiringHardwareSupportAsFallback(allow);
 }
 
+void WKPreferencesSetInspectorAdditionsEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setInspectorAdditionsEnabled(flag);
+}
+
+bool WKPreferencesGetInspectorAdditionsEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->inspectorAdditionsEnabled();
+}

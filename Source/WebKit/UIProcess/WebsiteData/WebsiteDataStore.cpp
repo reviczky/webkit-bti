@@ -28,9 +28,9 @@
 
 #include "APIProcessPoolConfiguration.h"
 #include "APIWebsiteDataRecord.h"
-#include "DatabaseProcessCreationParameters.h"
 #include "NetworkProcessMessages.h"
 #include "StorageManager.h"
+#include "StorageProcessCreationParameters.h"
 #include "WebCookieManagerProxy.h"
 #include "WebProcessMessages.h"
 #include "WebProcessPool.h"
@@ -431,18 +431,16 @@ void WebsiteDataStore::fetchDataAndApply(OptionSet<WebsiteDataType> dataTypes, O
         });
     }
 
-#if ENABLE(DATABASE_PROCESS)
     if (dataTypes.contains(WebsiteDataType::IndexedDBDatabases) && isPersistent()) {
         for (auto& processPool : processPools()) {
-            processPool->ensureDatabaseProcessAndWebsiteDataStore(this);
+            processPool->ensureStorageProcessAndWebsiteDataStore(this);
 
             callbackAggregator->addPendingCallback();
-            processPool->databaseProcess()->fetchWebsiteData(m_sessionID, dataTypes, [callbackAggregator, processPool](WebsiteData websiteData) {
+            processPool->storageProcess()->fetchWebsiteData(m_sessionID, dataTypes, [callbackAggregator, processPool](WebsiteData websiteData) {
                 callbackAggregator->removePendingCallback(WTFMove(websiteData));
             });
         }
     }
-#endif
 
     if (dataTypes.contains(WebsiteDataType::MediaKeys) && isPersistent()) {
         callbackAggregator->addPendingCallback();
@@ -727,18 +725,16 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, std::chr
         });
     }
 
-#if ENABLE(DATABASE_PROCESS)
     if (dataTypes.contains(WebsiteDataType::IndexedDBDatabases) && isPersistent()) {
         for (auto& processPool : processPools()) {
-            processPool->ensureDatabaseProcessAndWebsiteDataStore(this);
+            processPool->ensureStorageProcessAndWebsiteDataStore(this);
 
             callbackAggregator->addPendingCallback();
-            processPool->databaseProcess()->deleteWebsiteData(m_sessionID, dataTypes, modifiedSince, [callbackAggregator, processPool] {
+            processPool->storageProcess()->deleteWebsiteData(m_sessionID, dataTypes, modifiedSince, [callbackAggregator, processPool] {
                 callbackAggregator->removePendingCallback();
             });
         }
     }
-#endif
 
     if (dataTypes.contains(WebsiteDataType::MediaKeys) && isPersistent()) {
         callbackAggregator->addPendingCallback();
@@ -825,6 +821,8 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, std::chr
             m_resourceLoadStatistics->scheduleClearInMemoryAndPersistent(modifiedSince, WebResourceLoadStatisticsStore::ShouldGrandfather::No);
         else
             m_resourceLoadStatistics->scheduleClearInMemoryAndPersistent(modifiedSince, WebResourceLoadStatisticsStore::ShouldGrandfather::Yes);
+
+        clearResourceLoadStatisticsInWebProcesses();
     }
 
     // There's a chance that we don't have any pending callbacks. If so, we want to dispatch the completion handler right away.
@@ -1006,18 +1004,16 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, const Ve
         });
     }
 
-#if ENABLE(DATABASE_PROCESS)
     if (dataTypes.contains(WebsiteDataType::IndexedDBDatabases) && isPersistent()) {
         for (auto& processPool : processPools()) {
-            processPool->ensureDatabaseProcessAndWebsiteDataStore(this);
+            processPool->ensureStorageProcessAndWebsiteDataStore(this);
 
             callbackAggregator->addPendingCallback();
-            processPool->databaseProcess()->deleteWebsiteDataForOrigins(m_sessionID, dataTypes, origins, [callbackAggregator, processPool] {
+            processPool->storageProcess()->deleteWebsiteDataForOrigins(m_sessionID, dataTypes, origins, [callbackAggregator, processPool] {
                 callbackAggregator->removePendingCallback();
             });
         }
     }
-#endif
 
     if (dataTypes.contains(WebsiteDataType::MediaKeys) && isPersistent()) {
         HashSet<WebCore::SecurityOriginData> origins;
@@ -1105,6 +1101,8 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, const Ve
             m_resourceLoadStatistics->scheduleClearInMemoryAndPersistent(WebResourceLoadStatisticsStore::ShouldGrandfather::No);
         else
             m_resourceLoadStatistics->scheduleClearInMemoryAndPersistent(WebResourceLoadStatisticsStore::ShouldGrandfather::Yes);
+
+        clearResourceLoadStatisticsInWebProcesses();
     }
 
     // There's a chance that we don't have any pending callbacks. If so, we want to dispatch the completion handler right away.
@@ -1314,18 +1312,27 @@ void WebsiteDataStore::enableResourceLoadStatisticsAndSetTestingCallback(Functio
         updateCookiePartitioningForTopPrivatelyOwnedDomains(domainsToRemove, domainsToAdd, shouldClearFirst);
     });
 #else
-    m_resourceLoadStatistics = WebResourceLoadStatisticsStore::create(m_configuration.resourceLoadStatisticsDirectory, nullptr);
+    m_resourceLoadStatistics = WebResourceLoadStatisticsStore::create(m_configuration.resourceLoadStatisticsDirectory, WTFMove(callback));
 #endif
 
     for (auto& processPool : processPools())
         processPool->setResourceLoadStatisticsEnabled(true);
 }
 
-DatabaseProcessCreationParameters WebsiteDataStore::databaseProcessParameters()
+void WebsiteDataStore::clearResourceLoadStatisticsInWebProcesses()
+{
+    if (!resourceLoadStatisticsEnabled())
+        return;
+
+    for (auto& processPool : processPools())
+        processPool->clearResourceLoadStatistics();
+}
+
+StorageProcessCreationParameters WebsiteDataStore::storageProcessParameters()
 {
     resolveDirectoriesIfNecessary();
 
-    DatabaseProcessCreationParameters parameters;
+    StorageProcessCreationParameters parameters;
 
     parameters.sessionID = m_sessionID;
 

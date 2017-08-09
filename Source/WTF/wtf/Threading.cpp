@@ -34,10 +34,9 @@
 #include <wtf/PrintStream.h>
 #include <wtf/RandomNumberSeed.h>
 #include <wtf/ThreadGroup.h>
-#include <wtf/ThreadHolder.h>
 #include <wtf/ThreadMessage.h>
 #include <wtf/ThreadingPrimitives.h>
-#include <wtf/WTFThreadData.h>
+#include <wtf/text/AtomicStringTable.h>
 #include <wtf/text/StringView.h>
 
 #if HAVE(QOS_CLASSES)
@@ -46,17 +45,25 @@
 
 namespace WTF {
 
-enum class Stage {
-    Start, EstablishedHandle, Initialized
-};
+struct Thread::NewThreadContext : public ThreadSafeRefCounted<NewThreadContext> {
+public:
+    NewThreadContext(const char* name, Function<void()>&& entryPoint, Ref<Thread>&& thread)
+        : name(name)
+        , entryPoint(WTFMove(entryPoint))
+        , thread(WTFMove(thread))
+    {
+    }
 
-struct Thread::NewThreadContext {
     const char* name;
     Function<void()> entryPoint;
-    Stage stage;
+    Ref<Thread> thread;
     Mutex mutex;
+    enum class Stage { Start, EstablishedHandle, Initialized };
+    Stage stage { Stage::Start };
+
+#if !HAVE(STACK_BOUNDS_FOR_NEW_THREAD)
     ThreadCondition condition;
-    Thread& thread;
+#endif
 };
 
 const char* Thread::normalizeThreadName(const char* threadName)
@@ -86,52 +93,74 @@ const char* Thread::normalizeThreadName(const char* threadName)
 #endif
 }
 
-void Thread::entryPoint(NewThreadContext* context)
+void Thread::initializeInThread()
+{
+    if (m_stack.isEmpty())
+        m_stack = StackBounds::currentThreadStackBounds();
+    m_savedLastStackTop = stack().origin();
+    AtomicStringTable::create(*this);
+    m_currentAtomicStringTable = m_defaultAtomicStringTable;
+}
+
+void Thread::entryPoint(NewThreadContext* newThreadContext)
 {
     Function<void()> function;
     {
+        // Ref is already incremented by Thread::create.
+        Ref<NewThreadContext> context = adoptRef(*newThreadContext);
         // Block until our creating thread has completed any extra setup work, including establishing ThreadIdentifier.
         MutexLocker locker(context->mutex);
-        ASSERT(context->stage == Stage::EstablishedHandle);
+        ASSERT(context->stage == NewThreadContext::Stage::EstablishedHandle);
 
-        // Initialize thread holder with established ID.
-        ThreadHolder::initialize(context->thread);
-
-        Thread::initializeCurrentThreadInternal(context->thread, context->name);
+        Thread::initializeCurrentThreadInternal(context->name);
         function = WTFMove(context->entryPoint);
+        context->thread->initializeInThread();
 
+        Thread::initializeTLS(WTFMove(context->thread));
+
+#if !HAVE(STACK_BOUNDS_FOR_NEW_THREAD)
         // Ack completion of initialization to the creating thread.
-        context->stage = Stage::Initialized;
+        context->stage = NewThreadContext::Stage::Initialized;
         context->condition.signal();
+#endif
     }
+
+    ASSERT(!Thread::current().stack().isEmpty());
     function();
 }
 
 RefPtr<Thread> Thread::create(const char* name, Function<void()>&& entryPoint)
 {
+    WTF::initializeThreading();
     Ref<Thread> thread = adoptRef(*new Thread());
-    NewThreadContext context { name, WTFMove(entryPoint), Stage::Start, { }, { }, thread.get() };
-    MutexLocker locker(context.mutex);
-    if (!thread->establishHandle(&context))
-        return nullptr;
-    context.stage = Stage::EstablishedHandle;
-    // After establishing Thread, release the mutex and wait for completion of initialization.
-    while (context.stage != Stage::Initialized)
-        context.condition.wait(context.mutex);
+    Ref<NewThreadContext> context = adoptRef(*new NewThreadContext { name, WTFMove(entryPoint), thread.copyRef() });
+    // Increment the context ref on behalf of the created thread. We do not just use a unique_ptr and leak it to the created thread because both the creator and created thread has a need to keep the context alive:
+    // 1. the created thread needs to keep it alive because Thread::create() can exit before the created thread has a chance to use the context.
+    // 2. the creator thread (if HAVE(STACK_BOUNDS_FOR_NEW_THREAD) is false) needs to keep it alive because the created thread may exit before the creator has a chance to wake up from waiting for the completion of the created thread's initialization. This waiting uses a condition variable in the context.
+    // Hence, a joint ownership model is needed if HAVE(STACK_BOUNDS_FOR_NEW_THREAD) is false. To simplify the code, we just go with joint ownership by both the creator and created threads,
+    // and make the context ThreadSafeRefCounted.
+    context->ref();
+    {
+        MutexLocker locker(context->mutex);
+        if (!thread->establishHandle(context.ptr())) {
+            context->deref();
+            return nullptr;
+        }
+        context->stage = NewThreadContext::Stage::EstablishedHandle;
+
+#if HAVE(STACK_BOUNDS_FOR_NEW_THREAD)
+        thread->m_stack = StackBounds::newThreadStackBounds(thread->m_handle);
+#else
+        // In platforms which do not support StackBounds::newThreadStackBounds(), we do not have a way to get stack
+        // bounds outside the target thread itself. Thus, we need to initialize thread information in the target thread
+        // and wait for completion of initialization in the caller side.
+        while (context->stage != NewThreadContext::Stage::Initialized)
+            context->condition.wait(context->mutex);
+#endif
+    }
+
+    ASSERT(!thread->stack().isEmpty());
     return WTFMove(thread);
-}
-
-Thread* Thread::currentMayBeNull()
-{
-    ThreadHolder* data = ThreadHolder::current();
-    if (data)
-        return &data->thread();
-    return nullptr;
-}
-
-void Thread::initialize()
-{
-    m_stack = StackBounds::currentThreadStackBounds();
 }
 
 static bool shouldRemoveThreadFromThreadGroup()
@@ -168,6 +197,9 @@ void Thread::didExit()
             threadGroup->m_threads.remove(*this);
         }
     }
+    if (m_atomicStringTableDestructor)
+        m_atomicStringTableDestructor(m_defaultAtomicStringTable);
+
     // We would like to say "thread is exited" after unregistering threads from thread groups.
     // So we need to separate m_isShuttingDown from m_didExit.
     std::lock_guard<std::mutex> locker(m_mutex);
@@ -244,13 +276,18 @@ void Thread::dump(PrintStream& out) const
     out.print(m_id);
 }
 
+#if !HAVE(FAST_TLS)
+ThreadSpecificKey Thread::s_key = InvalidThreadSpecificKey;
+#endif
+
 void initializeThreading()
 {
-    static std::once_flag initializeKey;
-    std::call_once(initializeKey, [] {
-        ThreadHolder::initializeOnce();
+    static std::once_flag onceKey;
+    std::call_once(onceKey, [] {
         initializeRandomNumberGenerator();
-        wtfThreadData();
+#if !HAVE(FAST_TLS)
+        Thread::initializeTLSKey();
+#endif
         initializeDates();
         Thread::initializePlatformThreading();
     });

@@ -26,6 +26,7 @@
 // This all-in-one cpp file cuts down on template bloat to allow us to build our Windows release build.
 
 #include "CachedModuleScriptLoader.cpp"
+#include "CallTracer.cpp"
 #include "DOMWrapperWorld.cpp"
 #include "GCController.cpp"
 #include "JSAnimationTimelineCustom.cpp"
@@ -84,7 +85,6 @@
 #include "JSPopStateEventCustom.cpp"
 #include "JSReadableStreamPrivateConstructors.cpp"
 #include "JSSVGPathSegCustom.cpp"
-#include "JSStorageCustom.cpp"
 #include "JSStyleSheetCustom.cpp"
 #include "JSTextCustom.cpp"
 #include "JSTextTrackCueCustom.cpp"
@@ -103,7 +103,6 @@
 #include "ScheduledAction.cpp"
 #include "ScriptCachedFrameData.cpp"
 #include "ScriptController.cpp"
-#include "ScriptGlobalObject.cpp"
 #include "ScriptModuleLoader.cpp"
 #include "ScriptState.cpp"
 #include "SerializedScriptValue.cpp"

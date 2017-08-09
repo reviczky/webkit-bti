@@ -65,21 +65,11 @@ WorkerGlobalScope::WorkerGlobalScope(const URL& url, const String& identifier, c
 #if ENABLE(INDEXED_DATABASE)
     , m_connectionProxy(connectionProxy)
 #endif
-#if ENABLE(WEB_SOCKETS)
     , m_socketProvider(socketProvider)
-#endif
-#if ENABLE(WEB_TIMING)
     , m_performance(Performance::create(*this, timeOrigin))
-#endif
 {
 #if !ENABLE(INDEXED_DATABASE)
     UNUSED_PARAM(connectionProxy);
-#endif
-#if !ENABLE(WEB_SOCKETS)
-    UNUSED_PARAM(socketProvider);
-#endif
-#if !ENABLE(WEB_TIMING)
-    UNUSED_PARAM(timeOrigin);
 #endif
 
     auto origin = SecurityOrigin::create(url);
@@ -96,10 +86,7 @@ WorkerGlobalScope::~WorkerGlobalScope()
 {
     ASSERT(currentThread() == thread().threadID());
 
-#if ENABLE(WEB_TIMING)
     m_performance = nullptr;
-#endif
-
     m_crypto = nullptr;
 
     // Notify proxy that we are going away. This can free the WorkerThread object, so do not access it after this.
@@ -115,10 +102,7 @@ String WorkerGlobalScope::origin() const
 void WorkerGlobalScope::removeAllEventListeners()
 {
     EventTarget::removeAllEventListeners();
-
-#if ENABLE(WEB_TIMING)
     m_performance->removeAllEventListeners();
-#endif
 }
 
 bool WorkerGlobalScope::isSecureContext() const
@@ -156,14 +140,10 @@ void WorkerGlobalScope::disableWebAssembly(const String& errorMessage)
     m_script->disableWebAssembly(errorMessage);
 }
 
-#if ENABLE(WEB_SOCKETS)
-
 SocketProvider* WorkerGlobalScope::socketProvider()
 {
     return m_socketProvider.get();
 }
-
-#endif
 
 #if ENABLE(INDEXED_DATABASE)
 
@@ -210,10 +190,10 @@ void WorkerGlobalScope::close()
     } });
 }
 
-WorkerNavigator& WorkerGlobalScope::navigator() const
+WorkerNavigator& WorkerGlobalScope::navigator()
 {
     if (!m_navigator)
-        m_navigator = WorkerNavigator::create(m_userAgent);
+        m_navigator = WorkerNavigator::create(*this, m_userAgent);
     return *m_navigator;
 }
 
@@ -400,13 +380,9 @@ Crypto& WorkerGlobalScope::crypto()
     return *m_crypto;
 }
 
-#if ENABLE(WEB_TIMING)
-
 Performance& WorkerGlobalScope::performance() const
 {
     return *m_performance;
 }
-
-#endif
 
 } // namespace WebCore

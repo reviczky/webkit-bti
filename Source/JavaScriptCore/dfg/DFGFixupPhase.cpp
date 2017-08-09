@@ -1398,7 +1398,8 @@ private:
         case CheckStructure:
         case CheckCell:
         case CreateThis:
-        case GetButterfly: {
+        case GetButterfly:
+        case GetButterflyWithoutCaging: {
             fixEdge<CellUse>(node->child1());
             break;
         }
@@ -1889,7 +1890,7 @@ private:
         case CallDOMGetter: {
             DOMJIT::CallDOMGetterSnippet* snippet = node->callDOMGetterData()->snippet;
             fixEdge<CellUse>(node->child1()); // DOM.
-            if (snippet->requireGlobalObject)
+            if (snippet && snippet->requireGlobalObject)
                 fixEdge<KnownCellUse>(node->child2()); // GlobalObject.
             break;
         }

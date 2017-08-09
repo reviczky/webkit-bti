@@ -1122,6 +1122,8 @@ DragSourceAction EventHandler::updateDragSourceActionsAllowed() const
 
 HitTestResult EventHandler::hitTestResultAtPoint(const LayoutPoint& point, HitTestRequest::HitTestRequestType hitType, const LayoutSize& padding) const
 {
+    ASSERT((hitType & HitTestRequest::CollectMultipleElements) || padding.isEmpty());
+
     Ref<Frame> protectedFrame(m_frame);
 
     // We always send hitTestResultAtPoint to the main frame if we have one,
@@ -3170,7 +3172,11 @@ bool EventHandler::internalKeyEvent(const PlatformKeyboardEvent& initialKeyEvent
     if (!element)
         return false;
 
-    UserGestureIndicator gestureIndicator(ProcessingUserGesture, m_frame.document());
+    UserGestureType gestureType = UserGestureType::Other;
+    if (initialKeyEvent.windowsVirtualKeyCode() == VK_ESCAPE)
+        gestureType = UserGestureType::EscapeKey;
+
+    UserGestureIndicator gestureIndicator(ProcessingUserGesture, m_frame.document(), gestureType);
     UserTypingGestureIndicator typingGestureIndicator(m_frame);
 
     if (FrameView* view = m_frame.view())

@@ -22,9 +22,6 @@
 
 VPATH = \
     $(WebKit2) \
-    $(WebKit2)/DatabaseProcess \
-    $(WebKit2)/DatabaseProcess/IndexedDB \
-    $(WebKit2)/DatabaseProcess/mac \
     $(WebKit2)/NetworkProcess \
     $(WebKit2)/NetworkProcess/CustomProtocols \
     $(WebKit2)/NetworkProcess/mac \
@@ -36,6 +33,9 @@ VPATH = \
     $(WebKit2)/Shared/API/Cocoa \
     $(WebKit2)/Shared/Authentication \
     $(WebKit2)/Shared/mac \
+    $(WebKit2)/StorageProcess \
+    $(WebKit2)/StorageProcess/IndexedDB \
+    $(WebKit2)/StorageProcess/mac \
     $(WebKit2)/WebProcess/ApplePay \
     $(WebKit2)/WebProcess/ApplicationCache \
     $(WebKit2)/WebProcess/Automation \
@@ -57,6 +57,7 @@ VPATH = \
     $(WebKit2)/WebProcess/UserContent \
     $(WebKit2)/WebProcess/WebCoreSupport \
     $(WebKit2)/WebProcess/WebPage \
+    $(WebKit2)/WebProcess/WebStorage \
     $(WebKit2)/WebProcess/cocoa \
     $(WebKit2)/WebProcess/ios \
     $(WebKit2)/WebProcess \
@@ -73,6 +74,7 @@ VPATH = \
     $(WebKit2)/UIProcess/Plugins \
     $(WebKit2)/UIProcess/Storage \
     $(WebKit2)/UIProcess/UserContent \
+    $(WebKit2)/UIProcess/WebStorage \
     $(WebKit2)/UIProcess/mac \
     $(WebKit2)/UIProcess/ios \
     $(WEBKITADDITIONS_HEADER_SEARCH_PATHS) \
@@ -90,9 +92,6 @@ endif
 MESSAGE_RECEIVERS = \
     AuthenticationManager \
     ChildProcess \
-    DatabaseProcess \
-    DatabaseProcessProxy \
-    DatabaseToWebProcessConnection \
     DownloadProxy \
     DrawingArea \
     DrawingAreaProxy \
@@ -124,6 +123,9 @@ MESSAGE_RECEIVERS = \
     SmartMagnificationController \
     StorageAreaMap \
     StorageManager \
+    StorageProcess \
+    StorageProcessProxy \
+    StorageToWebProcessConnection \
     UserMediaCaptureManager \
     UserMediaCaptureManagerProxy \
     ViewGestureController \
@@ -152,8 +154,8 @@ MESSAGE_RECEIVERS = \
     WebPasteboardProxy \
     WebPaymentCoordinator \
     WebPaymentCoordinatorProxy \
-    WebPlaybackSessionManager \
-    WebPlaybackSessionManagerProxy \
+    PlaybackSessionManager \
+    PlaybackSessionManagerProxy \
     WebProcess \
     WebProcessConnection \
     WebProcessPool \
@@ -166,8 +168,8 @@ MESSAGE_RECEIVERS = \
     WebSocketStream \
     WebUserContentController \
     WebUserContentControllerProxy \
-    WebVideoFullscreenManager \
-    WebVideoFullscreenManagerProxy \
+    VideoFullscreenManager \
+    VideoFullscreenManagerProxy \
 #
 
 SCRIPTS = \

@@ -39,7 +39,7 @@
 #include <wtf/text/WTFString.h>
 
 #if PLATFORM(COCOA)
-#include <WebCore/CFNetworkSPI.h>
+#include <pal/spi/cf/CFNetworkSPI.h>
 #endif
 
 namespace WebCore {
@@ -54,7 +54,7 @@ class WebProcessPool;
 class WebResourceLoadStatisticsStore;
 enum class WebsiteDataFetchOption;
 enum class WebsiteDataType;
-struct DatabaseProcessCreationParameters;
+struct StorageProcessCreationParameters;
 struct WebsiteDataRecord;
 struct WebsiteDataStoreParameters;
 
@@ -92,6 +92,7 @@ public:
     bool resourceLoadStatisticsEnabled() const;
     void setResourceLoadStatisticsEnabled(bool);
     WebResourceLoadStatisticsStore* resourceLoadStatistics() const { return m_resourceLoadStatistics.get(); }
+    void clearResourceLoadStatisticsInWebProcesses();
 
     static void cloneSessionData(WebPageProxy& sourcePage, WebPageProxy& newPage);
 
@@ -121,7 +122,7 @@ public:
     bool isAssociatedProcessPool(WebProcessPool&) const;
 
     WebsiteDataStoreParameters parameters();
-    DatabaseProcessCreationParameters databaseProcessParameters();
+    StorageProcessCreationParameters storageProcessParameters();
 
     Vector<WebCore::Cookie> pendingCookies() const;
     void addPendingCookie(const WebCore::Cookie&);

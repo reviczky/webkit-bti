@@ -218,10 +218,10 @@
 
 #if PLATFORM(COCOA)
 #include "PDFPlugin.h"
+#include "PlaybackSessionManager.h"
 #include "RemoteLayerTreeTransaction.h"
+#include "VideoFullscreenManager.h"
 #include "WKStringCF.h"
-#include "WebPlaybackSessionManager.h"
-#include "WebVideoFullscreenManager.h"
 #include <WebCore/LegacyWebArchive.h>
 #endif
 
@@ -3182,6 +3182,10 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
     settings.setImageControlsEnabled(store.getBoolValueForKey(WebPreferencesKey::imageControlsEnabledKey()));
 #endif
 
+#if ENABLE(SERVICE_WORKER)
+    RuntimeEnabledFeatures::sharedFeatures().setServiceWorkerEnabled(store.getBoolValueForKey(WebPreferencesKey::serviceWorkersEnabledKey()));
+#endif
+
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     settings.setAllowsAirPlayForMediaPlayback(store.getBoolValueForKey(WebPreferencesKey::allowsAirPlayForMediaPlaybackKey()));
 #endif
@@ -3298,9 +3302,8 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
     settings.setServiceControlsEnabled(store.getBoolValueForKey(WebPreferencesKey::serviceControlsEnabledKey()));
 #endif
 
-#if ENABLE(FETCH_API)
+    RuntimeEnabledFeatures::sharedFeatures().setCacheAPIEnabled(store.getBoolValueForKey(WebPreferencesKey::cacheAPIEnabledKey()));
     RuntimeEnabledFeatures::sharedFeatures().setFetchAPIEnabled(store.getBoolValueForKey(WebPreferencesKey::fetchAPIEnabledKey()));
-#endif
 
 #if ENABLE(DOWNLOAD_ATTRIBUTE)
     RuntimeEnabledFeatures::sharedFeatures().setDownloadAttributeEnabled(store.getBoolValueForKey(WebPreferencesKey::downloadAttributeEnabledKey()));
@@ -3360,6 +3363,7 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
     }
 
     settings.setSubresourceIntegrityEnabled(store.getBoolValueForKey(WebPreferencesKey::subresourceIntegrityEnabledKey()));
+    settings.setBeaconAPIEnabled(store.getBoolValueForKey(WebPreferencesKey::beaconAPIEnabledKey()));
 
     platformPreferencesDidChange(store);
 
@@ -3377,11 +3381,11 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
     settings.setMediaContentTypesRequiringHardwareSupport(store.getStringValueForKey(WebPreferencesKey::mediaContentTypesRequiringHardwareSupportKey()));
     settings.setAllowMediaContentTypesRequiringHardwareSupportAsFallback(store.getBoolValueForKey(WebPreferencesKey::allowMediaContentTypesRequiringHardwareSupportAsFallbackKey()));
 
-    settings.setMediaDocumentEntersFullscreenAutomatically(store.getBoolValueForKey(WebPreferencesKey::mediaDocumentEntersFullscreenAutomaticallyKey()));
-
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     RuntimeEnabledFeatures::sharedFeatures().setLegacyEncryptedMediaAPIEnabled(store.getBoolValueForKey(WebPreferencesKey::legacyEncryptedMediaAPIEnabledKey()));
 #endif
+
+    RuntimeEnabledFeatures::sharedFeatures().setInspectorAdditionsEnabled(store.getBoolValueForKey(WebPreferencesKey::inspectorAdditionsEnabledKey()));
 }
 
 #if ENABLE(DATA_DETECTION)
@@ -3471,17 +3475,17 @@ RemoteWebInspectorUI* WebPage::remoteInspectorUI()
 }
 
 #if (PLATFORM(IOS) && HAVE(AVKIT)) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
-WebPlaybackSessionManager& WebPage::playbackSessionManager()
+PlaybackSessionManager& WebPage::playbackSessionManager()
 {
     if (!m_playbackSessionManager)
-        m_playbackSessionManager = WebPlaybackSessionManager::create(*this);
+        m_playbackSessionManager = PlaybackSessionManager::create(*this);
     return *m_playbackSessionManager;
 }
 
-WebVideoFullscreenManager& WebPage::videoFullscreenManager()
+VideoFullscreenManager& WebPage::videoFullscreenManager()
 {
     if (!m_videoFullscreenManager)
-        m_videoFullscreenManager = WebVideoFullscreenManager::create(*this, playbackSessionManager());
+        m_videoFullscreenManager = VideoFullscreenManager::create(*this, playbackSessionManager());
     return *m_videoFullscreenManager;
 }
 #endif
@@ -5906,6 +5910,16 @@ void WebPage::setUseIconLoadingClient(bool useIconLoadingClient)
 WebURLSchemeHandlerProxy* WebPage::urlSchemeHandlerForScheme(const String& scheme)
 {
     return m_schemeToURLSchemeHandlerProxyMap.get(scheme);
+}
+
+void WebPage::stopAllURLSchemeTasks()
+{
+    HashSet<WebURLSchemeHandlerProxy*> handlers;
+    for (auto& handler : m_schemeToURLSchemeHandlerProxyMap.values())
+        handlers.add(handler.get());
+
+    for (auto* handler : handlers)
+        handler->stopAllTasks();
 }
 
 void WebPage::registerURLSchemeHandler(uint64_t handlerIdentifier, const String& scheme)

@@ -117,7 +117,7 @@
 
 #if PLATFORM(IOS)
 #include "RuntimeApplicationChecks.h"
-#include "WebVideoFullscreenInterfaceAVKit.h"
+#include "VideoFullscreenInterfaceAVKit.h"
 #endif
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -156,7 +156,7 @@
 #endif
 
 #if PLATFORM(IOS) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
-#include "WebVideoFullscreenModel.h"
+#include "VideoFullscreenModel.h"
 #endif
 
 #define RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(document().page() && document().page()->isAlwaysOnLoggingAllowed(), Media, "%p - HTMLMediaElement::" fmt, this, ##__VA_ARGS__)
@@ -463,8 +463,9 @@ HTMLMediaElement::HTMLMediaElement(const QualifiedName& tagName, Document& docum
 
     if (document.ownerElement() || !document.isMediaDocument()) {
         const auto& topDocument = document.topDocument();
-        bool shouldAudioPlaybackRequireUserGesture = topDocument.audioPlaybackRequiresUserGesture();
-        bool shouldVideoPlaybackRequireUserGesture = topDocument.videoPlaybackRequiresUserGesture();
+        const bool isProcessingUserGesture = processingUserGestureForMedia();
+        const bool shouldAudioPlaybackRequireUserGesture = topDocument.audioPlaybackRequiresUserGesture() && !isProcessingUserGesture;
+        const bool shouldVideoPlaybackRequireUserGesture = topDocument.videoPlaybackRequiresUserGesture() && !isProcessingUserGesture;
 
         if (shouldVideoPlaybackRequireUserGesture) {
             m_mediaSession->addBehaviorRestriction(MediaElementSession::RequireUserGestureForVideoRateChange);
@@ -2414,12 +2415,17 @@ void HTMLMediaElement::setReadyState(MediaPlayer::ReadyState state)
 
     bool shouldUpdateDisplayState = false;
 
-    if (m_readyState >= HAVE_CURRENT_DATA && oldState < HAVE_CURRENT_DATA && !m_haveFiredLoadedData) {
-        m_haveFiredLoadedData = true;
-        shouldUpdateDisplayState = true;
-        scheduleEvent(eventNames().loadeddataEvent);
+    if (m_readyState >= HAVE_CURRENT_DATA && oldState < HAVE_CURRENT_DATA) {
+        if (!m_haveFiredLoadedData) {
+            m_haveFiredLoadedData = true;
+            scheduleEvent(eventNames().loadeddataEvent);
+            // FIXME: It's not clear that it's correct to skip these two operations just
+            // because m_haveFiredLoadedData is already true. At one time we were skipping
+            // the call to setShouldDelayLoadEvent, which was definitely incorrect.
+            shouldUpdateDisplayState = true;
+            applyMediaFragmentURI();
+        }
         setShouldDelayLoadEvent(false);
-        applyMediaFragmentURI();
     }
 
     bool isPotentiallyPlaying = potentiallyPlaying();
@@ -2621,11 +2627,10 @@ void HTMLMediaElement::fastSeek(const MediaTime& time)
     // position. Similarly, if the new playback position before this step is after current playback position,
     // then the adjusted new playback position must also be after the current playback position.
     refreshCachedTime();
-    MediaTime delta = time - currentMediaTime();
-    MediaTime negativeTolerance = delta >= MediaTime::zeroTime() ? delta : MediaTime::positiveInfiniteTime();
-    MediaTime positiveTolerance = delta < MediaTime::zeroTime() ? -delta : MediaTime::positiveInfiniteTime();
 
-    seekWithTolerance(time, negativeTolerance, positiveTolerance, true);
+    MediaTime delta = time - currentMediaTime();
+    MediaTime negativeTolerance = delta < MediaTime::zeroTime() ? MediaTime::positiveInfiniteTime() : delta;
+    seekWithTolerance(time, negativeTolerance, MediaTime::zeroTime(), true);
 }
 
 void HTMLMediaElement::seek(const MediaTime& time)
@@ -6707,6 +6712,7 @@ void HTMLMediaElement::removeBehaviorsRestrictionsAfterFirstUserGesture(MediaEle
         | MediaElementSession::RequireUserGestureToControlControlsManager);
 
     m_mediaSession->removeBehaviorRestriction(restrictionsToRemove);
+    document().topDocument().noteUserInteractionWithMediaElement();
 }
 
 void HTMLMediaElement::updateRateChangeRestrictions()

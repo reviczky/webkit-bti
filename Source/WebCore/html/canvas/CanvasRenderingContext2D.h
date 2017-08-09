@@ -135,6 +135,7 @@ public:
     void beginPath();
 
     enum class WindingRule { Nonzero, Evenodd };
+    static String stringForWindingRule(WindingRule);
 
     void fill(WindingRule = WindingRule::Nonzero);
     void stroke();
@@ -220,8 +221,13 @@ public:
     void setImageSmoothingEnabled(bool);
 
     enum class ImageSmoothingQuality { Low, Medium, High };
+    static String stringForImageSmoothingQuality(ImageSmoothingQuality);
+
     ImageSmoothingQuality imageSmoothingQuality() const;
     void setImageSmoothingQuality(ImageSmoothingQuality);
+
+    void setPath(DOMPath&);
+    Ref<DOMPath> getPath() const;
 
     bool usesDisplayListDrawing() const { return m_usesDisplayListDrawing; };
     void setUsesDisplayListDrawing(bool flag) { m_usesDisplayListDrawing = flag; };
@@ -232,7 +238,6 @@ public:
     String displayListAsText(DisplayList::AsTextFlags) const;
     String replayDisplayListAsText(DisplayList::AsTextFlags) const;
 
-private:
     enum class Direction {
         Inherit,
         RTL,
@@ -248,9 +253,9 @@ private:
 
         bool realized() const { return m_font.fontSelector(); }
         void initialize(FontSelector&, const RenderStyle&);
-        FontMetrics fontMetrics() const;
+        const FontMetrics& fontMetrics() const;
         const FontCascadeDescription& fontDescription() const;
-        float width(const TextRun&) const;
+        float width(const TextRun&, GlyphOverflow* = 0) const;
         void drawBidiText(GraphicsContext&, const TextRun&, const FloatPoint&, FontCascade::CustomFontNotReadyAction) const;
 
     private:
@@ -296,6 +301,9 @@ private:
         FontProxy font;
     };
 
+    const State& state() const { return m_stateStack.last(); }
+
+private:
     enum CanvasDidDrawOption {
         CanvasDidDrawApplyNone = 0,
         CanvasDidDrawApplyTransform = 1,
@@ -305,7 +313,6 @@ private:
     };
 
     State& modifiableState() { ASSERT(!m_unrealizedSaveCount || m_stateStack.size() >= MaxSaveCount); return m_stateStack.last(); }
-    const State& state() const { return m_stateStack.last(); }
 
     void applyLineDash() const;
     void setShadow(const FloatSize& offset, float blur, const Color&);
@@ -385,6 +392,8 @@ private:
 
     bool hasInvertibleTransform() const override { return state().hasInvertibleTransform; }
     TextDirection toTextDirection(Direction, const RenderStyle** computedStyle = nullptr) const;
+
+    FloatPoint textOffset(float width, TextDirection);
 
 #if ENABLE(ACCELERATED_2D_CANVAS)
     PlatformLayer* platformLayer() const override;

@@ -37,6 +37,8 @@ if (NOT HAS_RUN_WEBKIT_COMMON)
     # -----------------------------------------------------------------------------
 
     # To prevent multiple inclusion, most modules should be included once here.
+    include(CheckCCompilerFlag)
+    include(CheckCXXCompilerFlag)
     include(CheckCXXSourceCompiles)
     include(CheckFunctionExists)
     include(CheckIncludeFile)
@@ -46,19 +48,39 @@ if (NOT HAS_RUN_WEBKIT_COMMON)
     include(CMakeDependentOption)
     include(CMakeParseArguments)
     include(ProcessorCount)
-    include(TestCXXAcceptsFlag)
 
     include(WebKitPackaging)
     include(WebKitMacros)
     include(WebKitFS)
+    include(WebKitCompilerFlags)
     include(WebKitFeatures)
 
     include(OptionsCommon)
     include(Options${PORT})
 
     # -----------------------------------------------------------------------------
-    # config.h
+    # Create derived sources directories
     # -----------------------------------------------------------------------------
 
+    if (ENABLE_WEBCORE)
+        file(MAKE_DIRECTORY ${DERIVED_SOURCES_WEBCORE_DIR})
+    endif ()
+
+    if (ENABLE_WEBKIT)
+        file(MAKE_DIRECTORY ${DERIVED_SOURCES_WEBKIT2_DIR})
+    endif ()
+
+    if (ENABLE_WEBKIT_LEGACY)
+        file(MAKE_DIRECTORY ${DERIVED_SOURCES_WEBKITLEGACY_DIR})
+        file(MAKE_DIRECTORY ${DERIVED_SOURCES_WEBKIT_DIR})
+    endif ()
+
+    if (ENABLE_WEBDRIVER)
+        file(MAKE_DIRECTORY ${DERIVED_SOURCES_WEBDRIVER_DIR})
+    endif ()
+
+    # -----------------------------------------------------------------------------
+    # config.h
+    # -----------------------------------------------------------------------------
     CREATE_CONFIGURATION_HEADER()
 endif ()

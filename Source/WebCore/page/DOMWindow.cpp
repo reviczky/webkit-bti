@@ -424,9 +424,7 @@ DOMWindow::~DOMWindow()
         ASSERT(!m_statusbar);
         ASSERT(!m_toolbar);
         ASSERT(!m_navigator);
-#if ENABLE(WEB_TIMING)
         ASSERT(!m_performance);
-#endif
         ASSERT(!m_location);
         ASSERT(!m_media);
         ASSERT(!m_sessionStorage);
@@ -608,10 +606,7 @@ void DOMWindow::resetDOMWindowProperties()
     m_sessionStorage = nullptr;
     m_statusbar = nullptr;
     m_toolbar = nullptr;
-
-#if ENABLE(WEB_TIMING)
     m_performance = nullptr;
-#endif
 }
 
 bool DOMWindow::isCurrentlyDisplayedInFrame() const
@@ -791,12 +786,14 @@ Navigator* DOMWindow::navigator() const
 {
     if (!isCurrentlyDisplayedInFrame())
         return nullptr;
-    if (!m_navigator)
-        m_navigator = Navigator::create(*m_frame);
+
+    if (!m_navigator) {
+        ASSERT(scriptExecutionContext());
+        m_navigator = Navigator::create(*scriptExecutionContext(), *m_frame);
+    }
+
     return m_navigator.get();
 }
-
-#if ENABLE(WEB_TIMING)
 
 Performance* DOMWindow::performance() const
 {
@@ -809,15 +806,9 @@ Performance* DOMWindow::performance() const
     return m_performance.get();
 }
 
-#endif
-
 double DOMWindow::nowTimestamp() const
 {
-#if ENABLE(WEB_TIMING)
     return performance() ? performance()->now() / 1000 : 0;
-#else
-    return document() ? document()->monotonicTimestamp() : 0;
-#endif
 }
 
 Location* DOMWindow::location() const
@@ -877,20 +868,14 @@ ExceptionOr<Storage*> DOMWindow::sessionStorage() const
     if (!document->securityOrigin().canAccessSessionStorage(document->topOrigin()))
         return Exception { SecurityError };
 
-    if (m_sessionStorage) {
-        if (!m_sessionStorage->area().canAccessStorage(m_frame))
-            return Exception { SecurityError };
+    if (m_sessionStorage)
         return m_sessionStorage.get();
-    }
 
     auto* page = document->page();
     if (!page)
         return nullptr;
 
     auto storageArea = page->sessionStorage()->storageArea(SecurityOriginData::fromSecurityOrigin(document->securityOrigin()));
-    if (!storageArea->canAccessStorage(m_frame))
-        return Exception { SecurityError };
-
     m_sessionStorage = Storage::create(m_frame, WTFMove(storageArea));
     return m_sessionStorage.get();
 }
@@ -911,11 +896,8 @@ ExceptionOr<Storage*> DOMWindow::localStorage() const
     // FIXME: We should consider supporting access/modification to local storage
     // after calling window.close(). See <https://bugs.webkit.org/show_bug.cgi?id=135330>.
     if (!page || !page->isClosing()) {
-        if (m_localStorage) {
-            if (!m_localStorage->area().canAccessStorage(m_frame))
-                return Exception { SecurityError };
+        if (m_localStorage)
             return m_localStorage.get();
-        }
     }
 
     if (!page)
@@ -928,10 +910,6 @@ ExceptionOr<Storage*> DOMWindow::localStorage() const
         return nullptr;
 
     auto storageArea = page->storageNamespaceProvider().localStorageArea(*document);
-
-    if (!storageArea->canAccessStorage(m_frame))
-        return Exception { SecurityError };
-
     m_localStorage = Storage::create(m_frame, WTFMove(storageArea));
     return m_localStorage.get();
 }
@@ -2061,10 +2039,8 @@ void DOMWindow::removeAllEventListeners()
         controller->removeAllDeviceEventListeners(this);
 #endif
 
-#if ENABLE(WEB_TIMING)
     if (m_performance)
         m_performance->removeAllEventListeners();
-#endif
 
     removeAllUnloadEventListeners(this);
     removeAllBeforeUnloadEventListeners(this);

@@ -140,6 +140,7 @@
 #include "PointerLockController.h"
 #include "PopStateEvent.h"
 #include "ProcessingInstruction.h"
+#include "PublicSuffix.h"
 #include "RealtimeMediaSourceCenter.h"
 #include "RenderChildIterator.h"
 #include "RenderLayerCompositor.h"
@@ -501,9 +502,7 @@ Document::Document(Frame* frame, const URL& url, unsigned documentClasses, unsig
     , m_fontSelector(CSSFontSelector::create(*this))
     , m_didAssociateFormControlsTimer(*this, &Document::didAssociateFormControlsTimerFired)
     , m_cookieCacheExpiryTimer(*this, &Document::invalidateDOMCookieCache)
-#if ENABLE(WEB_SOCKETS)
     , m_socketProvider(page() ? &page()->socketProvider() : nullptr)
-#endif
     , m_isSynthesized(constructionFlags & Synthesized)
     , m_isNonRenderedPlaceholder(constructionFlags & NonRenderedPlaceholder)
     , m_orientationNotifier(currentOrientation(frame))
@@ -1208,7 +1207,6 @@ void Document::setReadyState(ReadyState readyState)
     if (readyState == m_readyState)
         return;
 
-#if ENABLE(WEB_TIMING)
     switch (readyState) {
     case Loading:
         if (!m_documentTiming.domLoading)
@@ -1223,11 +1221,10 @@ void Document::setReadyState(ReadyState readyState)
             m_documentTiming.domComplete = MonotonicTime::now();
         break;
     }
-#endif
 
     m_readyState = readyState;
     dispatchEvent(Event::create(eventNames().readystatechangeEvent, false, false));
-    
+
     if (settings().suppressesIncrementalRendering())
         setVisualUpdatesAllowed(readyState);
 }
@@ -1869,6 +1866,18 @@ void Document::resolveStyle(ResolveStyleType type)
         frameView.scrollToFragment(m_url);
 
     // FIXME: Ideally we would ASSERT(!needsStyleRecalc()) here but we have some cases where it is not true.
+}
+
+void Document::updateTextRenderer(Text& text)
+{
+    ASSERT(!m_inRenderTreeUpdate);
+    SetForScope<bool> inRenderTreeUpdate(m_inRenderTreeUpdate, true);
+
+    auto textUpdate = std::make_unique<Style::Update>(*this);
+    textUpdate->addText(text);
+
+    RenderTreeUpdater renderTreeUpdater(*this);
+    renderTreeUpdater.commit(WTFMove(textUpdate));
 }
 
 bool Document::needsStyleRecalc() const
@@ -3060,7 +3069,6 @@ void Document::disableWebAssembly(const String& errorMessage)
 }
 
 #if ENABLE(INDEXED_DATABASE)
-
 IDBClient::IDBConnectionProxy* Document::idbConnectionProxy()
 {
     if (!m_idbConnectionProxy) {
@@ -3071,17 +3079,12 @@ IDBClient::IDBConnectionProxy* Document::idbConnectionProxy()
     }
     return m_idbConnectionProxy.get();
 }
-
 #endif
-
-#if ENABLE(WEB_SOCKETS)
 
 SocketProvider* Document::socketProvider()
 {
     return m_socketProvider.get();
 }
-
-#endif
     
 bool Document::canNavigate(Frame* targetFrame)
 {
@@ -3379,19 +3382,27 @@ void Document::processReferrerPolicy(const String& policy)
         return;
 #endif
 
-    // Note that we're supporting both the standard and legacy keywords for referrer
-    // policies, as defined by http://www.w3.org/TR/referrer-policy/#referrer-policy-delivery-meta
+    // "never" / "default" / "always" are legacy keywords that we will support. They were defined in:
+    // https://www.w3.org/TR/2014/WD-referrer-policy-20140807/#referrer-policy-delivery-meta
     if (equalLettersIgnoringASCIICase(policy, "no-referrer") || equalLettersIgnoringASCIICase(policy, "never"))
-        setReferrerPolicy(ReferrerPolicy::Never);
+        setReferrerPolicy(ReferrerPolicy::NoReferrer);
     else if (equalLettersIgnoringASCIICase(policy, "unsafe-url") || equalLettersIgnoringASCIICase(policy, "always"))
-        setReferrerPolicy(ReferrerPolicy::Always);
+        setReferrerPolicy(ReferrerPolicy::UnsafeUrl);
     else if (equalLettersIgnoringASCIICase(policy, "origin"))
         setReferrerPolicy(ReferrerPolicy::Origin);
+    else if (equalLettersIgnoringASCIICase(policy, "origin-when-cross-origin"))
+        setReferrerPolicy(ReferrerPolicy::OriginWhenCrossOrigin);
+    else if (equalLettersIgnoringASCIICase(policy, "same-origin"))
+        setReferrerPolicy(ReferrerPolicy::SameOrigin);
+    else if (equalLettersIgnoringASCIICase(policy, "strict-origin"))
+        setReferrerPolicy(ReferrerPolicy::StrictOrigin);
+    else if (equalLettersIgnoringASCIICase(policy, "strict-origin-when-cross-origin"))
+        setReferrerPolicy(ReferrerPolicy::StrictOriginWhenCrossOrigin);
     else if (equalLettersIgnoringASCIICase(policy, "no-referrer-when-downgrade") || equalLettersIgnoringASCIICase(policy, "default"))
-        setReferrerPolicy(ReferrerPolicy::Default);
+        setReferrerPolicy(ReferrerPolicy::NoReferrerWhenDowngrade);
     else {
-        addConsoleMessage(MessageSource::Rendering, MessageLevel::Error, "Failed to set referrer policy: The value '" + policy + "' is not one of 'no-referrer', 'origin', 'no-referrer-when-downgrade', or 'unsafe-url'. Defaulting to 'no-referrer'.");
-        setReferrerPolicy(ReferrerPolicy::Never);
+        addConsoleMessage(MessageSource::Rendering, MessageLevel::Error, "Failed to set referrer policy: The value '" + policy + "' is not one of 'no-referrer', 'no-referrer-when-downgrade', 'same-origin', 'origin', 'strict-origin', 'origin-when-cross-origin', 'strict-origin-when-cross-origin' or 'unsafe-url'. Defaulting to 'no-referrer'.");
+        setReferrerPolicy(ReferrerPolicy::NoReferrer);
     }
 }
 
@@ -3631,6 +3642,9 @@ void Document::updateIsPlayingMedia(uint64_t sourceElementID)
         }
     }
 #endif
+
+    if (m_userHasInteractedWithMediaElement)
+        state |= MediaProducer::HasUserInteractedWithMediaElement;
 
     if (state == m_mediaState)
         return;
@@ -4437,44 +4451,68 @@ String Document::domain() const
     return securityOrigin().domain();
 }
 
-ExceptionOr<void> Document::setDomain(const String& newDomain)
+bool Document::domainIsRegisterable(const String& newDomain) const
 {
-    if (SchemeRegistry::isDomainRelaxationForbiddenForURLScheme(securityOrigin().protocol()))
-        return Exception { SecurityError };
+    if (newDomain.isEmpty())
+        return false;
 
-    // Both NS and IE specify that changing the domain is only allowed when
-    // the new domain is a suffix of the old domain.
+    const String& effectiveDomain = domain();
 
-    // FIXME: We should add logging indicating why a domain was not allowed.
-
-    String oldDomain = domain();
-
-    // If the new domain is the same as the old domain, still call
-    // securityOrigin().setDomainForDOM. This will change the
+    // If the new domain is the same as the old domain, return true so that
+    // we still call securityOrigin().setDomainForDOM. This will change the
     // security check behavior. For example, if a page loaded on port 8000
     // assigns its current domain using document.domain, the page will
     // allow other pages loaded on different ports in the same domain that
     // have also assigned to access this page.
-    if (equalIgnoringASCIICase(oldDomain, newDomain)) {
-        securityOrigin().setDomainFromDOM(newDomain);
-        return { };
-    }
+    if (equalIgnoringASCIICase(effectiveDomain, newDomain))
+        return true;
 
     // e.g. newDomain = webkit.org (10) and domain() = www.webkit.org (14)
-    unsigned oldLength = oldDomain.length();
+    unsigned oldLength = effectiveDomain.length();
     unsigned newLength = newDomain.length();
     if (newLength >= oldLength)
-        return Exception { SecurityError };
+        return false;
 
     auto ipAddressSetting = settings().treatIPAddressAsDomain() ? OriginAccessEntry::TreatIPAddressAsDomain : OriginAccessEntry::TreatIPAddressAsIPAddress;
     OriginAccessEntry accessEntry { securityOrigin().protocol(), newDomain, OriginAccessEntry::AllowSubdomains, ipAddressSetting };
     if (!accessEntry.matchesOrigin(securityOrigin()))
+        return false;
+
+    if (effectiveDomain[oldLength - newLength - 1] != '.')
+        return false;
+    if (StringView { effectiveDomain }.substring(oldLength - newLength) != newDomain)
+        return false;
+
+    auto potentialPublicSuffix = newDomain;
+    if (potentialPublicSuffix.startsWith('.'))
+        potentialPublicSuffix.remove(0, 1);
+
+#if ENABLE(PUBLIC_SUFFIX_LIST)
+    return !isPublicSuffix(potentialPublicSuffix);
+#else
+    return true;
+#endif
+}
+
+ExceptionOr<void> Document::setDomain(const String& newDomain)
+{
+    if (!frame())
+        return Exception { SecurityError, "A browsing context is required to set a domain." };
+
+    if (isSandboxed(SandboxDocumentDomain))
+        return Exception { SecurityError, "Assignment is forbidden for sandboxed iframes." };
+
+    if (SchemeRegistry::isDomainRelaxationForbiddenForURLScheme(securityOrigin().protocol()))
         return Exception { SecurityError };
 
-    if (oldDomain[oldLength - newLength - 1] != '.')
-        return Exception { SecurityError };
-    if (StringView { oldDomain }.substring(oldLength - newLength) != newDomain)
-        return Exception { SecurityError };
+    // FIXME: We should add logging indicating why a domain was not allowed.
+
+    const String& effectiveDomain = domain();
+    if (effectiveDomain.isEmpty())
+        return Exception { SecurityError, "The document has a null effectiveDomain." };
+
+    if (!domainIsRegisterable(newDomain))
+        return Exception { SecurityError, "Attempted to use a non-registrable domain." };
 
     securityOrigin().setDomainFromDOM(newDomain);
     return { };
@@ -5154,19 +5192,15 @@ void Document::finishedParsing()
     ASSERT(!scriptableDocumentParser() || m_readyState != Loading);
     setParsing(false);
 
-#if ENABLE(WEB_TIMING)
     if (!m_documentTiming.domContentLoadedEventStart)
         m_documentTiming.domContentLoadedEventStart = MonotonicTime::now();
-#endif
 
     dispatchEvent(Event::create(eventNames().DOMContentLoadedEvent, true, false));
 
-#if ENABLE(WEB_TIMING)
     if (!m_documentTiming.domContentLoadedEventEnd)
         m_documentTiming.domContentLoadedEventEnd = MonotonicTime::now();
-#endif
 
-    if (RefPtr<Frame> f = frame()) {
+    if (RefPtr<Frame> frame = this->frame()) {
         // FrameLoader::finishedParsing() might end up calling Document::implicitClose() if all
         // resource loads are complete. HTMLObjectElements can start loading their resources from
         // post attach callbacks triggered by resolveStyle(). This means if we parse out an <object>
@@ -5176,9 +5210,8 @@ void Document::finishedParsing()
         // See https://bugs.webkit.org/show_bug.cgi?id=36864 starting around comment 35.
         updateStyleIfNeeded();
 
-        f->loader().finishedParsing();
-
-        InspectorInstrumentation::domContentLoadedEventFired(*f);
+        frame->loader().finishedParsing();
+        InspectorInstrumentation::domContentLoadedEventFired(*frame);
     }
 
     // Schedule dropping of the DocumentSharedObjectPool. We keep it alive for a while after parsing finishes
@@ -5785,8 +5818,15 @@ void Document::requestFullScreenForElement(Element* element, FullScreenCheckType
         //   An algorithm is allowed to show a pop-up if, in the task in which the algorithm is running, either:
         //   - an activation behavior is currently being processed whose click event was trusted, or
         //   - the event listener for a trusted click event is being handled.
-        if (!ScriptController::processingUserGesture())
+        if (!UserGestureIndicator::processingUserGesture())
             break;
+
+        // We do not allow pressing the Escape key as a user gesture to enter fullscreen since this is the key
+        // to exit fullscreen.
+        if (UserGestureIndicator::currentUserGesture()->gestureType() == UserGestureType::EscapeKey) {
+            addConsoleMessage(MessageSource::Security, MessageLevel::Error, ASCIILiteral("The Escape key may not be used as a user gesture to enter fullscreen"));
+            break;
+        }
 
         // There is a previously-established user preference, security risk, or platform limitation.
         if (!page() || !page()->settings().fullScreenEnabled())
@@ -6222,7 +6262,13 @@ void Document::decrementLoadEventDelayCount()
 
 void Document::loadEventDelayTimerFired()
 {
+    // FIXME: Should the call to FrameLoader::checkLoadComplete be moved inside Document::checkCompleted?
+    // FIXME: Should this also call DocumentLoader::checkLoadComplete?
+    // FIXME: Not obvious why checkCompleted needs to go first. The order these are called is
+    // visible to WebKit clients, but it's more like a race than a well-defined relationship.
     checkCompleted();
+    if (auto* frame = this->frame())
+        frame->loader().checkLoadComplete();
 }
 
 void Document::checkCompleted()
@@ -6605,7 +6651,7 @@ void Document::decrementActiveParserCount()
     if (!frame())
         return;
 
-    // FIXME: We should call loader()->checkLoadComplete() as well here,
+    // FIXME: We should call DocumentLoader::checkLoadComplete as well here,
     // but it seems to cause http/tests/security/feed-urls-from-remote.html
     // to timeout on Mac WK1; see http://webkit.org/b/110554 and http://webkit.org/b/110401.
     frame()->loader().checkLoadComplete();
@@ -7030,7 +7076,9 @@ void Document::applyQuickLookSandbox()
     // The sandbox directive is only allowed if the policy is from an HTTP header.
     contentSecurityPolicy()->didReceiveHeader(quickLookCSP, ContentSecurityPolicyHeaderType::Enforce, ContentSecurityPolicy::PolicyFrom::HTTPHeader);
 
-    setReferrerPolicy(ReferrerPolicy::Never);
+    disableSandboxFlags(SandboxNavigation);
+
+    setReferrerPolicy(ReferrerPolicy::NoReferrer);
 }
 #endif
 
@@ -7051,7 +7099,7 @@ void Document::applyContentDispositionAttachmentSandbox()
 {
     ASSERT(shouldEnforceContentDispositionAttachmentSandbox());
 
-    setReferrerPolicy(ReferrerPolicy::Never);
+    setReferrerPolicy(ReferrerPolicy::NoReferrer);
     if (!isMediaDocument())
         enforceSandboxFlags(SandboxAll);
     else

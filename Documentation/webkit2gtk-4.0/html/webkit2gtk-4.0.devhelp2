@@ -50,6 +50,7 @@
       <sub name="WebKitWebsiteData" link="WebKitWebsiteData.html"/>
       <sub name="WebKitNetworkProxySettings" link="WebKitNetworkProxySettings.html"/>
       <sub name="WebKitAutomationSession" link="WebKitAutomationSession.html"/>
+      <sub name="WebKitApplicationInfo" link="WebKitApplicationInfo.html"/>
     </sub>
     <sub name="Web Extensions" link="ch02.html">
       <sub name="WebKitWebExtension" link="WebKitWebExtension.html"/>
@@ -885,9 +886,19 @@
     <keyword type="function" name="webkit_network_proxy_settings_add_proxy_for_scheme ()" link="WebKitNetworkProxySettings.html#webkit-network-proxy-settings-add-proxy-for-scheme"/>
     <keyword type="struct" name="WebKitNetworkProxySettings" link="WebKitNetworkProxySettings.html#WebKitNetworkProxySettings-struct"/>
     <keyword type="function" name="webkit_automation_session_get_id ()" link="WebKitAutomationSession.html#webkit-automation-session-get-id"/>
+    <keyword type="function" name="webkit_automation_session_set_application_info ()" link="WebKitAutomationSession.html#webkit-automation-session-set-application-info"/>
+    <keyword type="function" name="webkit_automation_session_get_application_info ()" link="WebKitAutomationSession.html#webkit-automation-session-get-application-info"/>
     <keyword type="struct" name="struct WebKitAutomationSession" link="WebKitAutomationSession.html#WebKitAutomationSession-struct"/>
     <keyword type="property" name="The “id” property" link="WebKitAutomationSession.html#WebKitAutomationSession--id"/>
     <keyword type="signal" name="The “create-web-view” signal" link="WebKitAutomationSession.html#WebKitAutomationSession-create-web-view"/>
+    <keyword type="function" name="webkit_application_info_new ()" link="WebKitApplicationInfo.html#webkit-application-info-new"/>
+    <keyword type="function" name="webkit_application_info_ref ()" link="WebKitApplicationInfo.html#webkit-application-info-ref"/>
+    <keyword type="function" name="webkit_application_info_unref ()" link="WebKitApplicationInfo.html#webkit-application-info-unref"/>
+    <keyword type="function" name="webkit_application_info_set_name ()" link="WebKitApplicationInfo.html#webkit-application-info-set-name"/>
+    <keyword type="function" name="webkit_application_info_get_name ()" link="WebKitApplicationInfo.html#webkit-application-info-get-name"/>
+    <keyword type="function" name="webkit_application_info_set_version ()" link="WebKitApplicationInfo.html#webkit-application-info-set-version"/>
+    <keyword type="function" name="webkit_application_info_get_version ()" link="WebKitApplicationInfo.html#webkit-application-info-get-version"/>
+    <keyword type="struct" name="WebKitApplicationInfo" link="WebKitApplicationInfo.html#WebKitApplicationInfo-struct"/>
     <keyword type="function" name="WebKitWebExtensionInitializeFunction ()" link="WebKitWebExtension.html#WebKitWebExtensionInitializeFunction"/>
     <keyword type="function" name="WebKitWebExtensionInitializeWithUserDataFunction ()" link="WebKitWebExtension.html#WebKitWebExtensionInitializeWithUserDataFunction" since="2.4"/>
     <keyword type="function" name="webkit_web_extension_get_page ()" link="WebKitWebExtension.html#webkit-web-extension-get-page"/>

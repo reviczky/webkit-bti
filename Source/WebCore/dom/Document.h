@@ -658,9 +658,7 @@ public:
 #if ENABLE(INDEXED_DATABASE)
     IDBClient::IDBConnectionProxy* idbConnectionProxy() final;
 #endif
-#if ENABLE(WEB_SOCKETS)
     SocketProvider* socketProvider() final;
-#endif
 
     bool canNavigate(Frame* targetFrame);
     Frame* findUnsafeParentScrollPropagationBoundary();
@@ -1150,9 +1148,7 @@ public:
     DeviceOrientationController* deviceOrientationController() const;
 #endif
 
-#if ENABLE(WEB_TIMING)
     const DocumentTiming& timing() const { return m_documentTiming; }
-#endif
 
     double monotonicTimestamp() const;
 
@@ -1241,6 +1237,8 @@ public:
     bool inStyleRecalc() const { return m_inStyleRecalc; }
     bool inRenderTreeUpdate() const { return m_inRenderTreeUpdate; }
 
+    void updateTextRenderer(Text&);
+
     // Return a Locale for the default locale if the argument is null or empty.
     Locale& getCachedLocale(const AtomicString& locale = nullAtom());
 
@@ -1281,6 +1279,7 @@ public:
     WEBCORE_EXPORT void addAudioProducer(MediaProducer*);
     WEBCORE_EXPORT void removeAudioProducer(MediaProducer*);
     MediaProducer::MediaStateFlags mediaState() const { return m_mediaState; }
+    void noteUserInteractionWithMediaElement() { m_userHasInteractedWithMediaElement = true; }
     bool isCapturing() const { return MediaProducer::isCapturing(m_mediaState); }
     WEBCORE_EXPORT void updateIsPlayingMedia(uint64_t = HTMLMediaElementInvalidID);
     void pageMutedStateDidChange();
@@ -1471,6 +1470,8 @@ private:
 
     void platformSuspendOrStopActiveDOMObjects();
 
+    bool domainIsRegisterable(const String&) const;
+
     const Ref<Settings> m_settings;
 
     std::unique_ptr<StyleResolver> m_userAgentShadowTreeStyleResolver;
@@ -1635,9 +1636,7 @@ private:
 
     ViewportArguments m_viewportArguments;
 
-#if ENABLE(WEB_TIMING)
     DocumentTiming m_documentTiming;
-#endif
 
     RefPtr<MediaQueryMatcher> m_mediaQueryMatcher;
     
@@ -1713,9 +1712,7 @@ private:
     Timer m_didAssociateFormControlsTimer;
     Timer m_cookieCacheExpiryTimer;
 
-#if ENABLE(WEB_SOCKETS)
     RefPtr<SocketProvider> m_socketProvider;
-#endif
 
     String m_cachedDOMCookies;
 
@@ -1740,8 +1737,9 @@ private:
 
     InheritedBool m_designMode { inherit };
     MediaProducer::MediaStateFlags m_mediaState { MediaProducer::IsNotPlaying };
+    bool m_userHasInteractedWithMediaElement { false };
     PageCacheState m_pageCacheState { NotInPageCache };
-    ReferrerPolicy m_referrerPolicy { ReferrerPolicy::Default };
+    ReferrerPolicy m_referrerPolicy { ReferrerPolicy::NoReferrerWhenDowngrade };
     ReadyState m_readyState { Complete };
     SelectionRestorationMode m_updateFocusAppearanceRestoresSelection { SelectionRestorationMode::SetDefault };
 

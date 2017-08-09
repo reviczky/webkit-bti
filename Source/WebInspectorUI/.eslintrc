@@ -48,6 +48,7 @@
         "MemoryAgent": true,
         "NetworkAgent": true,
         "PageAgent": true,
+        "RecordingAgent": true,
         "RuntimeAgent": true,
         "ScriptProfilerAgent": true,
         "TimelineAgent": true,
@@ -71,7 +72,7 @@
         "SyncTestSuite": true,
         "TestHarness": true,
         "TestSuite": true,
-        "WebInspector": true,
+        "WI": true,
 
         // Externals
         "CodeMirror": true,

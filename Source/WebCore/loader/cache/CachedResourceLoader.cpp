@@ -108,6 +108,8 @@ static CachedResource* createResource(CachedResource::Type type, CachedResourceR
     case CachedResource::Icon:
     case CachedResource::MainResource:
         return new CachedRawResource(WTFMove(request), type, sessionID);
+    case CachedResource::Beacon:
+        return new CachedResource(WTFMove(request), CachedResource::Beacon, sessionID);
 #if ENABLE(XSLT)
     case CachedResource::XSLStyleSheet:
         return new CachedXSLStyleSheet(WTFMove(request), sessionID);
@@ -287,6 +289,11 @@ CachedResourceHandle<CachedRawResource> CachedResourceLoader::requestRawResource
     return downcast<CachedRawResource>(requestResource(CachedResource::RawResource, WTFMove(request)).get());
 }
 
+CachedResourceHandle<CachedResource> CachedResourceLoader::requestBeaconResource(CachedResourceRequest&& request)
+{
+    return requestResource(CachedResource::Beacon, WTFMove(request)).get();
+}
+
 CachedResourceHandle<CachedRawResource> CachedResourceLoader::requestMainResource(CachedResourceRequest&& request)
 {
     return downcast<CachedRawResource>(requestResource(CachedResource::MainResource, WTFMove(request)).get());
@@ -312,6 +319,7 @@ static MixedContentChecker::ContentType contentTypeFromResourceType(CachedResour
         return MixedContentChecker::ContentType::Active;
 #endif
 
+    case CachedResource::Beacon:
     case CachedResource::RawResource:
     case CachedResource::Icon:
     case CachedResource::SVGDocumentResource:
@@ -381,6 +389,7 @@ bool CachedResourceLoader::checkInsecureContent(CachedResource::Type type, const
         break;
     }
     case CachedResource::MainResource:
+    case CachedResource::Beacon:
 #if ENABLE(LINK_PREFETCH)
     case CachedResource::LinkPrefetch:
     case CachedResource::LinkSubresource:
@@ -431,6 +440,7 @@ bool CachedResourceLoader::allowedByContentSecurityPolicy(CachedResource::Type t
         if (!m_document->contentSecurityPolicy()->allowMediaFromSource(url, redirectResponseReceived))
             return false;
         break;
+    case CachedResource::Beacon:
     case CachedResource::RawResource:
         return true;
     default:
@@ -626,6 +636,9 @@ static inline bool isResourceSuitableForDirectReuse(const CachedResource& resour
     if (resource.type() == CachedResource::Type::RawResource || resource.type() == CachedResource::Type::MediaResource)
         return false;
 
+    if (resource.type() == CachedResource::Beacon)
+        return false;
+
     return true;
 }
 
@@ -670,7 +683,7 @@ void CachedResourceLoader::updateHTTPRequestHeaders(CachedResource::Type type, C
         // In some cases we may try to load resources in frameless documents. Such loads always fail.
         // FIXME: We shouldn't need to do the check on frame.
         if (auto* frame = this->frame())
-            request.updateReferrerOriginAndUserAgentHeaders(frame->loader(), document() ? document()->referrerPolicy() : ReferrerPolicy::Default);
+            request.updateReferrerOriginAndUserAgentHeaders(frame->loader(), document() ? document()->referrerPolicy() : ReferrerPolicy::NoReferrerWhenDowngrade);
     }
 
     request.updateAccordingCacheMode();
@@ -725,11 +738,9 @@ CachedResourceHandle<CachedResource> CachedResourceLoader::requestResource(Cache
     }
 #endif
 
-#if ENABLE(WEB_TIMING)
     LoadTiming loadTiming;
     loadTiming.markStartTimeAndFetchStart();
     InitiatorContext initiatorContext = request.options().initiatorContext;
-#endif
 
     if (request.resourceRequest().url().protocolIsInHTTPFamily())
         updateHTTPRequestHeaders(type, request);
@@ -781,9 +792,9 @@ CachedResourceHandle<CachedResource> CachedResourceLoader::requestResource(Cache
             if (!shouldContinueAfterNotifyingLoadedFromMemoryCache(request, resource.get()))
                 return nullptr;
             logMemoryCacheResourceRequest(frame(), DiagnosticLoggingKeys::memoryCacheEntryDecisionKey(), DiagnosticLoggingKeys::usedKey());
-            memoryCache.resourceAccessed(*resource);
-#if ENABLE(WEB_TIMING)
             loadTiming.setResponseEnd(MonotonicTime::now());
+
+            memoryCache.resourceAccessed(*resource);
 
             if (RuntimeEnabledFeatures::sharedFeatures().resourceTimingEnabled() && document() && !resource->isLoading()) {
                 auto resourceTiming = ResourceTiming::fromCache(url, request.initiatorName(), loadTiming, resource->response(), *request.origin());
@@ -796,7 +807,7 @@ CachedResourceHandle<CachedResource> CachedResourceLoader::requestResource(Cache
                     m_resourceTimingInfo.addResourceTiming(*resource.get(), *document(), WTFMove(resourceTiming));
                 }
             }
-#endif
+
             if (forPreload == ForPreload::No)
                 resource->setLoadPriority(request.priority());
         }
@@ -862,10 +873,10 @@ CachedResourceHandle<CachedResource> CachedResourceLoader::revalidateResource(Ca
 
     memoryCache.remove(resource);
     memoryCache.add(*newResource);
-#if ENABLE(WEB_TIMING)
+
     if (RuntimeEnabledFeatures::sharedFeatures().resourceTimingEnabled())
         m_resourceTimingInfo.storeResourceTimingInitiatorInformation(newResource, newResource->initiatorName(), frame());
-#endif
+
     return newResource;
 }
 
@@ -881,10 +892,10 @@ CachedResourceHandle<CachedResource> CachedResourceLoader::loadResource(CachedRe
 
     if (resource->allowsCaching() && !memoryCache.add(*resource))
         resource->setOwningCachedResourceLoader(this);
-#if ENABLE(WEB_TIMING)
+
     if (RuntimeEnabledFeatures::sharedFeatures().resourceTimingEnabled())
         m_resourceTimingInfo.storeResourceTimingInitiatorInformation(resource, resource->initiatorName(), frame());
-#endif
+
     return resource;
 }
 

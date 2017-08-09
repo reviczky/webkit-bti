@@ -9,10 +9,21 @@
             "description": "Unique canvas identifier."
         },
         {
+            "id": "ProgramId",
+            "type": "string",
+            "description": "Unique shader program identifier."
+        },
+        {
             "id": "ContextType",
             "type": "string",
             "enum": ["canvas-2d", "webgl", "webgl2", "webgpu"],
             "description": "The type of rendering context backing the canvas element."
+        },
+        {
+            "id": "ShaderType",
+            "type": "string",
+            "enum": ["fragment", "vertex"],
+            "description": "Shader type. WebGL supports vertex and fragment shaders."
         },
         {
             "id": "ContextAttributes",
@@ -92,6 +103,42 @@
             "returns": [
                 { "name": "object", "$ref": "Runtime.RemoteObject", "description": "JavaScript object wrapper for given canvas context." }
             ]
+        },
+        {
+            "name": "requestRecording",
+            "description": "Requests that the next frame or up to the given number of bytes of data be recorded for the given canvas.",
+            "parameters": [
+                { "name": "canvasId", "$ref": "CanvasId" },
+                { "name": "singleFrame", "type": "boolean", "optional": true, "description": "Whether to record a single frame or until the memory limit is reached." },
+                { "name": "memoryLimit", "type": "integer", "optional": true, "description": "Memory limit of recorded data." }
+            ]
+        },
+        {
+            "name": "cancelRecording",
+            "description": "Cancels a requested recording for the given canvas.",
+            "parameters": [
+                { "name": "canvasId", "$ref": "CanvasId" }
+            ]
+        },
+        {
+            "name": "requestShaderSource",
+            "description": "Requests the source of the shader of the given type from the program with the given id.",
+            "parameters": [
+                { "name": "programId", "$ref": "ProgramId" },
+                { "name": "shaderType", "$ref": "ShaderType" }
+            ],
+            "returns": [
+                { "name": "content", "type": "string" }
+            ]
+        },
+        {
+            "name": "updateShader",
+            "description": "Compiles and links the shader with identifier and type with the given source code.",
+            "parameters": [
+                { "name": "programId", "$ref": "ProgramId" },
+                { "name": "shaderType", "$ref": "ShaderType" },
+                { "name": "source", "type": "string" }
+            ]
         }
     ],
     "events": [
@@ -118,6 +165,26 @@
             "name": "cssCanvasClientNodesChanged",
             "parameters": [
                 { "name": "canvasId", "$ref": "CanvasId", "description": "Identifier of canvas that changed." }
+            ]
+        },
+        {
+            "name": "recordingFinished",
+            "parameters": [
+                { "name": "canvasId", "$ref": "CanvasId" },
+                { "name": "recording", "$ref": "Recording.Recording" }
+            ]
+        },
+        {
+            "name": "programCreated",
+            "parameters": [
+                { "name": "canvasId", "$ref": "CanvasId", "description": "Canvas identifier." },
+                { "name": "programId", "$ref": "ProgramId", "description": "Program identifier." }
+            ]
+        },
+        {
+            "name": "programDeleted",
+            "parameters": [
+                { "name": "programId", "$ref": "ProgramId", "description": "Program identifier." }
             ]
         }
     ]
