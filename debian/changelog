@@ -1,4 +1,4 @@
-webkit2gtk (2.17.90-1) UNRELEASED; urgency=medium
+webkit2gtk (2.17.90-1) experimental; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
@@ -14,7 +14,7 @@ webkit2gtk (2.17.90-1) UNRELEASED; urgency=medium
   * debian/patches/no-whole-archive.patch:
     + Don't use --whole-archive for the WebKit2 target libraries.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 07 Aug 2017 16:24:19 +0300
+ -- Alberto Garcia <berto@igalia.com>  Thu, 10 Aug 2017 12:45:07 +0300
 
 webkit2gtk (2.17.5-2) experimental; urgency=medium
 
