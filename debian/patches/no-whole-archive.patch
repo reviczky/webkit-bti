@@ -1,0 +1,16 @@
+From: Zan Dobersek <zdobersek@igalia.com>
+Subject: Don't use --whole-archive linking flags for the WebKit2 target libraries
+Bug: https://bugs.webkit.org/show_bug.cgi?id=175416
+Index: webkitgtk/Source/WebKit/PlatformGTK.cmake
+===================================================================
+--- webkitgtk.orig/Source/WebKit/PlatformGTK.cmake
++++ webkitgtk/Source/WebKit/PlatformGTK.cmake
+@@ -858,8 +858,6 @@ list(APPEND WebKit2_LIBRARIES
+ )
+ endif ()
+ 
+-ADD_WHOLE_ARCHIVE_TO_LIBRARIES(WebKit2_LIBRARIES)
+-
+ # To generate WebKitEnumTypes.h we want to use all installed headers, except WebKitEnumTypes.h itself.
+ set(WebKit2GTK_ENUM_GENERATION_HEADERS ${WebKit2GTK_INSTALLED_HEADERS})
+ list(REMOVE_ITEM WebKit2GTK_ENUM_GENERATION_HEADERS ${DERIVED_SOURCES_WEBKIT2GTK_API_DIR}/WebKitEnumTypes.h)
