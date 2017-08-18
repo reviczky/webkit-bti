@@ -2,6 +2,8 @@ webkit2gtk (2.17.91-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
   * Refresh all patches and remove no-whole-archive.patch.
+  * debian/patches/fix-ftbfs-hurd.patch:
+    + Work around missing PATH_MAX definition in ConfigFile.h
   * Disable GStreamerGL in kFreeBSD and sparc64:
     + Pass -DUSE_GSTREAMER_GL=OFF in debian/rules.
     + Remove build dependency on libgstreamer-plugins-bad1.0-dev from
