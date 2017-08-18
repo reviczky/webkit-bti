@@ -4,4 +4,3 @@ fix-ftbfs-armel.patch
 fix-ftbfs-hurd.patch
 fix-ftbfs-x86.patch
 fix-ftbfs-m68k.patch
-no-whole-archive.patch

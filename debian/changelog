@@ -1,6 +1,7 @@
 webkit2gtk (2.17.91-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * Refresh all patches and remove no-whole-archive.patch.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 18 Aug 2017 14:32:00 +0300
 
