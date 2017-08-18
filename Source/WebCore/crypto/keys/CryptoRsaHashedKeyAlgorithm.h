@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Samsung Electronics. All rights reserved.
+ * Copyright (C) 2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,41 +23,16 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef WebDeviceProximityClient_h
-#define WebDeviceProximityClient_h
+#pragma once
 
-#if ENABLE(PROXIMITY_EVENTS)
+#include "CryptoRsaKeyAlgorithm.h"
 
-#include <WebCore/DeviceProximityClient.h>
+namespace WebCore {
 
-namespace WebKit {
-
-class WebPage;
-
-class WebDeviceProximityClient : public WebCore::DeviceProximityClient {
-public:
-    explicit WebDeviceProximityClient(WebPage*);
-    virtual ~WebDeviceProximityClient() { }
-
-    void startUpdating();
-    void stopUpdating();
-
-    bool hasLastData() override;
-    double value() override { return m_value; }
-    double min() override { return m_min; }
-    double max() override { return m_max; }
-
-private:
-    WebPage* m_page;
-    
-    bool m_isUpdating;
-    double m_value;
-    double m_min;
-    double m_max;
+struct CryptoRsaHashedKeyAlgorithm : CryptoRsaKeyAlgorithm {
+    // The hash algorithm that is used with this key
+    CryptoKeyAlgorithm hash;
 };
 
-} // namespace WebKit
-
-#endif // PROXIMITY_EVENTS
-#endif // WebDeviceProximityClient_h
+}
 

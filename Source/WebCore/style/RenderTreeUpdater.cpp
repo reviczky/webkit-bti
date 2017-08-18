@@ -37,8 +37,12 @@
 #include "InspectorInstrumentation.h"
 #include "NodeRenderStyle.h"
 #include "PseudoElement.h"
+#include "RenderDescendantIterator.h"
 #include "RenderFullScreen.h"
+#include "RenderListItem.h"
 #include "RenderNamedFlowThread.h"
+#include "RenderQuote.h"
+#include "RenderTreeUpdaterFirstLetter.h"
 #include "StyleResolver.h"
 #include "StyleTreeResolver.h"
 #include <wtf/SystemTracing.h>
@@ -124,7 +128,11 @@ void RenderTreeUpdater::commit(std::unique_ptr<const Style::Update> styleUpdate)
     for (auto* root : findRenderingRoots(*m_styleUpdate))
         updateRenderTree(*root);
 
-    m_document.renderView()->updateSpecialRenderers();
+    if (m_document.renderView()->hasQuotesNeedingUpdate()) {
+        updateQuotesUpTo(nullptr);
+        m_previousUpdatedQuote = nullptr;
+        m_document.renderView()->setHasQuotesNeedingUpdate(false);
+    }
 
     m_styleUpdate = nullptr;
 }
@@ -164,8 +172,9 @@ void RenderTreeUpdater::updateRenderTree(ContainerNode& root)
 
         if (is<Text>(node)) {
             auto& text = downcast<Text>(node);
-            if (parent().styleChange == Style::Detach || m_styleUpdate->textUpdate(text) || m_invalidatedWhitespaceOnlyTextSiblings.contains(&text))
-                updateTextRenderer(text);
+            auto* textUpdate = m_styleUpdate->textUpdate(text);
+            if (parent().styleChange == Style::Detach || textUpdate || m_invalidatedWhitespaceOnlyTextSiblings.contains(&text))
+                updateTextRenderer(text, textUpdate);
 
             it.traverseNextSkippingChildren();
             continue;
@@ -225,8 +234,15 @@ void RenderTreeUpdater::popParent()
     if (parent.element) {
         updateBeforeOrAfterPseudoElement(*parent.element, AFTER);
 
-        if (parent.element->hasCustomStyleResolveCallbacks() && parent.styleChange == Style::Detach && parent.element->renderer())
-            parent.element->didAttachRenderers();
+        if (auto* renderer = parent.element->renderer()) {
+            if (is<RenderBlock>(*renderer))
+                FirstLetter::update(downcast<RenderBlock>(*renderer));
+            if (is<RenderListItem>(*renderer))
+                downcast<RenderListItem>(*renderer).updateMarkerRenderer();
+
+            if (parent.element->hasCustomStyleResolveCallbacks() && parent.styleChange == Style::Detach)
+                parent.element->didAttachRenderers();
+        }
     }
     m_parentStack.removeLast();
 }
@@ -443,13 +459,16 @@ static void createTextRenderer(Text& textNode, RenderTreePosition& renderTreePos
     renderTreePosition.insert(*newRenderer.leakPtr());
 }
 
-void RenderTreeUpdater::updateTextRenderer(Text& text)
+void RenderTreeUpdater::updateTextRenderer(Text& text, const Style::TextUpdate* textUpdate)
 {
-    bool hasRenderer = text.renderer();
+    auto* existingRenderer = text.renderer();
     bool needsRenderer = textRendererIsNeeded(text, renderTreePosition());
-    if (hasRenderer) {
-        if (needsRenderer)
+    if (existingRenderer) {
+        if (needsRenderer) {
+            if (textUpdate)
+                existingRenderer->setTextWithOffset(text.data(), textUpdate->offset, textUpdate->length);
             return;
+        }
         tearDownRenderer(text);
         invalidateWhitespaceOnlyTextSiblingsAfterAttachIfNeeded(text);
         return;
@@ -538,10 +557,21 @@ void RenderTreeUpdater::updateBeforeOrAfterPseudoElement(Element& current, Pseud
 
     updateElementRenderer(*pseudoElement, elementUpdate);
 
+    auto* pseudoRenderer = pseudoElement->renderer();
+    if (!pseudoRenderer)
+        return;
+
     if (elementUpdate.change == Style::Detach)
         pseudoElement->didAttachRenderers();
     else
         pseudoElement->didRecalcStyle(elementUpdate.change);
+
+    if (m_document.renderView()->hasQuotesNeedingUpdate()) {
+        for (auto& child : descendantsOfType<RenderQuote>(*pseudoRenderer))
+            updateQuotesUpTo(&child);
+    }
+    if (is<RenderListItem>(*pseudoRenderer))
+        downcast<RenderListItem>(*pseudoRenderer).updateMarkerRenderer();
 }
 
 void RenderTreeUpdater::tearDownRenderers(Element& root, TeardownType teardownType)
@@ -597,6 +627,22 @@ void RenderTreeUpdater::tearDownRenderer(Text& text)
         return;
     renderer->destroyAndCleanupAnonymousWrappers();
     text.setRenderer(nullptr);
+}
+
+void RenderTreeUpdater::updateQuotesUpTo(RenderQuote* lastQuote)
+{
+    auto quoteRenderers = descendantsOfType<RenderQuote>(*m_document.renderView());
+    auto it = m_previousUpdatedQuote ? ++quoteRenderers.at(*m_previousUpdatedQuote) : quoteRenderers.begin();
+    auto end = quoteRenderers.end();
+    for (; it != end; ++it) {
+        auto& quote = *it;
+        // Quote character depends on quote depth so we chain the updates.
+        quote.updateRenderer(m_previousUpdatedQuote);
+        m_previousUpdatedQuote = &quote;
+        if (&quote == lastQuote)
+            return;
+    }
+    ASSERT(!lastQuote);
 }
 
 #if PLATFORM(IOS)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Samsung Electronics. All rights reserved.
+ * Copyright (C) 2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,30 +25,17 @@
 
 #pragma once
 
-#if ENABLE(PROXIMITY_EVENTS)
-
-#include "DeviceController.h"
+#include "CryptoKeyAlgorithm.h"
+#include <runtime/Uint8Array.h>
 
 namespace WebCore {
 
-class DeviceProximityClient;
-
-class DeviceProximityController : public DeviceController {
-public:
-    explicit DeviceProximityController(DeviceProximityClient*);
-    ~DeviceProximityController() { }
-
-    void didChangeDeviceProximity(const double value, const double min, const double max);
-    DeviceProximityClient* deviceProximityClient();
-
-    virtual bool hasLastData();
-    virtual RefPtr<Event> getLastEvent();
-
-    static const char* supplementName();
-    static DeviceProximityController* from(Page*);
-    static bool isActiveAt(Page*);
+struct CryptoRsaKeyAlgorithm : CryptoKeyAlgorithm {
+    // The length, in bits, of the RSA modulus
+    unsigned modulusLength;
+    // The RSA public exponent
+    RefPtr<Uint8Array> publicExponent;
 };
 
-} // namespace WebCore
+}
 
-#endif // PROXIMITY_EVENTS

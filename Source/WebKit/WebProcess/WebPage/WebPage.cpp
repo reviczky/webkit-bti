@@ -212,10 +212,6 @@
 #include <WebCore/PointerLockController.h>
 #endif
 
-#if ENABLE(PROXIMITY_EVENTS)
-#include "WebDeviceProximityClient.h"
-#endif
-
 #if PLATFORM(COCOA)
 #include "PDFPlugin.h"
 #include "PlaybackSessionManager.h"
@@ -433,9 +429,6 @@ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
 #endif
 #if ENABLE(NOTIFICATIONS)
     WebCore::provideNotification(m_page.get(), new WebNotificationClient(this));
-#endif
-#if ENABLE(PROXIMITY_EVENTS)
-    WebCore::provideDeviceProximityTo(m_page.get(), new WebDeviceProximityClient(this));
 #endif
 #if ENABLE(MEDIA_STREAM)
     WebCore::provideUserMediaTo(m_page.get(), new WebUserMediaClient(*this));
@@ -4669,7 +4662,7 @@ void WebPage::setCompositionForTesting(const String& compositionString, uint64_t
         return;
 
     Vector<CompositionUnderline> underlines;
-    underlines.append(CompositionUnderline(0, compositionString.length(), Color(Color::black), false));
+    underlines.append(CompositionUnderline(0, compositionString.length(), CompositionUnderlineColor::TextColor, Color(Color::black), false));
     frame.editor().setComposition(compositionString, underlines, from, from + length);
 }
 
@@ -5703,7 +5696,7 @@ void WebPage::updateCachedDocumentLoader(WebDocumentLoader& documentLoader, Fram
 
 void WebPage::getBytecodeProfile(CallbackID callbackID)
 {
-    if (!commonVM().m_perBytecodeProfiler) {
+    if (LIKELY(!commonVM().m_perBytecodeProfiler)) {
         send(Messages::WebPageProxy::StringCallback(String(), callbackID));
         return;
     }

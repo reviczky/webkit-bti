@@ -839,7 +839,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
 
 CodeBlock::~CodeBlock()
 {
-    if (m_vm->m_perBytecodeProfiler)
+    if (UNLIKELY(m_vm->m_perBytecodeProfiler))
         m_vm->m_perBytecodeProfiler->notifyDestruction(this);
 
     if (unlinkedCodeBlock()->didOptimize() == MixedTriState)
@@ -877,12 +877,13 @@ void CodeBlock::setConstantIdentifierSetRegisters(VM& vm, const Vector<ConstantI
     ExecState* exec = globalObject->globalExec();
 
     for (const auto& entry : constants) {
+        const IdentifierSet& set = entry.first;
+
         Structure* setStructure = globalObject->setStructure();
         RETURN_IF_EXCEPTION(scope, void());
-        JSSet* jsSet = JSSet::create(exec, vm, setStructure);
+        JSSet* jsSet = JSSet::create(exec, vm, setStructure, set.size());
         RETURN_IF_EXCEPTION(scope, void());
 
-        const IdentifierSet& set = entry.first;
         for (auto setEntry : set) {
             JSString* jsString = jsOwnedString(&vm, setEntry.get()); 
             jsSet->add(exec, jsString);
@@ -1916,7 +1917,8 @@ void CodeBlock::jettison(Profiler::JettisonReason reason, ReoptimizationMode mod
 
 #if ENABLE(DFG_JIT)
     if (reason != Profiler::JettisonDueToOldAge) {
-        if (Profiler::Compilation* compilation = jitCode()->dfgCommon()->compilation.get())
+        Profiler::Compilation* compilation = jitCode()->dfgCommon()->compilation.get();
+        if (UNLIKELY(compilation))
             compilation->setJettisonReason(reason, detail);
         
         // This accomplishes (1), and does its own book-keeping about whether it has already happened.

@@ -92,9 +92,9 @@
 #include "StyleResolver.h"
 #include "StyleScope.h"
 #include "TextResourceDecoder.h"
-#include "TextStream.h"
 #include "TiledBacking.h"
 #include "WheelEventTestTrigger.h"
+#include <wtf/text/TextStream.h>
 
 #include <wtf/CurrentTime.h>
 #include <wtf/MemoryPressureHandler.h>
@@ -889,7 +889,7 @@ void FrameView::updateCompositingLayersAfterLayout()
 
     // This call will make sure the cached hasAcceleratedCompositing is updated from the pref
     renderView->compositor().cacheAcceleratedCompositingFlags();
-    renderView->compositor().updateCompositingLayers(CompositingUpdateAfterLayout);
+    renderView->compositor().updateCompositingLayers(CompositingUpdateType::AfterLayout);
 }
 
 void FrameView::clearBackingStores()
@@ -2690,7 +2690,7 @@ void FrameView::updateCompositingLayersAfterScrolling()
 
     if (m_nestedLayoutCount <= 1 && hasViewportConstrainedObjects()) {
         if (RenderView* renderView = this->renderView())
-            renderView->compositor().updateCompositingLayers(CompositingUpdateOnScroll);
+            renderView->compositor().updateCompositingLayers(CompositingUpdateType::OnScroll);
     }
 }
 
