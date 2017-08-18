@@ -172,7 +172,7 @@ TextureMapperGL::TextureMapperGL()
 
     m_data = new TextureMapperGLData(*m_context3D);
 #if USE(TEXTURE_MAPPER_GL)
-    m_texturePool = std::make_unique<BitmapTexturePool>(m_contextAttributes, m_context3D.copyRef());
+    m_texturePool = std::make_unique<BitmapTexturePool>(m_contextAttributes);
 #endif
 }
 
@@ -649,7 +649,7 @@ TextureMapperGL::~TextureMapperGL()
 
 void TextureMapperGL::bindDefaultSurface()
 {
-    m_context3D->bindFramebuffer(GraphicsContext3D::FRAMEBUFFER, data().targetFrameBuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, data().targetFrameBuffer);
     auto& viewport = data().viewport;
     data().projectionMatrix = createProjectionMatrix(IntSize(viewport[2], viewport[3]), data().PaintFlags & PaintingMirrored);
     m_context3D->viewport(viewport[0], viewport[1], viewport[2], viewport[3]);
@@ -664,7 +664,7 @@ void TextureMapperGL::bindSurface(BitmapTexture *surface)
         return;
     }
 
-    static_cast<BitmapTextureGL*>(surface)->bindAsSurface(m_context3D.get());
+    static_cast<BitmapTextureGL*>(surface)->bindAsSurface();
     data().projectionMatrix = createProjectionMatrix(surface->size(), true /* mirrored */);
     data().currentSurface = surface;
 }
@@ -760,7 +760,7 @@ IntRect TextureMapperGL::clipBounds()
 
 Ref<BitmapTexture> TextureMapperGL::createTexture(GC3Dint internalFormat)
 {
-    return BitmapTextureGL::create(m_contextAttributes, *m_context3D, internalFormat);
+    return BitmapTextureGL::create(m_contextAttributes, internalFormat);
 }
 
 std::unique_ptr<TextureMapper> TextureMapper::platformCreateAccelerated()

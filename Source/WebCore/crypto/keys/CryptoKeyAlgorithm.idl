@@ -1,5 +1,5 @@
 /*
- * Copyright 2012 Samsung Electronics. All rights reserved.
+ * Copyright (C) 2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,39 +23,9 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "config.h"
-#include "WebDeviceProximityClient.h"
-
-#if ENABLE(PROXIMITY_EVENTS)
-
-#include <WebCore/DeviceProximityController.h>
-
-namespace WebKit {
-
-WebDeviceProximityClient::WebDeviceProximityClient(WebPage* page)
-    : m_page(page)
-    , m_value(std::numeric_limits<double>::infinity())
-    , m_min(-std::numeric_limits<double>::infinity())
-    , m_max(std::numeric_limits<double>::infinity())
-{
-}
-
-void WebDeviceProximityClient::startUpdating()
-{
-    // FIXME : Start getting proximity data from device.
-}
-
-void WebDeviceProximityClient::stopUpdating()
-{
-    // FIXME : Stop getting proximity data from device.
-}
-
-bool WebDeviceProximityClient::hasLastData()
-{
-    return m_value == std::numeric_limits<double>::infinity() ? false : true;
-}
-
-} // namespace WebKit
-
-#endif // PROXIMITY_EVENTS
-
+[
+    Conditional=SUBTLE_CRYPTO,
+    JSGenerateToJSObject
+] dictionary CryptoKeyAlgorithm {
+    required DOMString name;
+};

@@ -34,7 +34,6 @@ set(WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/Modules/navigatorcontentutils"
     "${WEBCORE_DIR}/Modules/notifications"
     "${WEBCORE_DIR}/Modules/plugins"
-    "${WEBCORE_DIR}/Modules/proximity"
     "${WEBCORE_DIR}/Modules/quota"
     "${WEBCORE_DIR}/Modules/speech"
     "${WEBCORE_DIR}/Modules/streams"
@@ -158,7 +157,6 @@ set(WebCore_IDL_INCLUDES
     Modules/mediasession
     Modules/mediastream
     Modules/notifications
-    Modules/proximity
     Modules/quota
     Modules/speech
     Modules/streams
@@ -297,8 +295,6 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/notifications/NotificationPermission.idl
     Modules/notifications/NotificationPermissionCallback.idl
 
-    Modules/proximity/DeviceProximityEvent.idl
-
     Modules/speech/DOMWindowSpeechSynthesis.idl
     Modules/speech/SpeechSynthesis.idl
     Modules/speech/SpeechSynthesisEvent.idl
@@ -377,6 +373,13 @@ set(WebCore_NON_SVG_IDL_FILES
     crypto/RsaOtherPrimesInfo.idl
     crypto/SubtleCrypto.idl
     crypto/WebKitSubtleCrypto.idl
+
+    crypto/keys/CryptoAesKeyAlgorithm.idl
+    crypto/keys/CryptoEcKeyAlgorithm.idl
+    crypto/keys/CryptoHmacKeyAlgorithm.idl
+    crypto/keys/CryptoKeyAlgorithm.idl
+    crypto/keys/CryptoRsaHashedKeyAlgorithm.idl
+    crypto/keys/CryptoRsaKeyAlgorithm.idl
 
     crypto/parameters/AesCbcCfbParams.idl
     crypto/parameters/AesCtrParams.idl
@@ -1033,9 +1036,6 @@ set(WebCore_SOURCES
     Modules/notifications/Notification.cpp
     Modules/notifications/NotificationController.cpp
 
-    Modules/proximity/DeviceProximityController.cpp
-    Modules/proximity/DeviceProximityEvent.cpp
-
     Modules/speech/DOMWindowSpeechSynthesis.cpp
     Modules/speech/SpeechSynthesis.cpp
     Modules/speech/SpeechSynthesisEvent.cpp
@@ -1183,9 +1183,7 @@ set(WebCore_SOURCES
     bindings/js/JSDeprecatedCSSOMValueCustom.cpp
     bindings/js/JSCallbackData.cpp
     bindings/js/JSCanvasRenderingContext2DCustom.cpp
-    bindings/js/JSCryptoAlgorithmBuilder.cpp
     bindings/js/JSCryptoAlgorithmDictionary.cpp
-    bindings/js/JSCryptoKeyCustom.cpp
     bindings/js/JSCryptoKeySerializationJWK.cpp
     bindings/js/JSCryptoOperationData.cpp
     bindings/js/JSCustomElementInterface.cpp
@@ -2533,7 +2531,6 @@ set(WebCore_SOURCES
     platform/text/TextEncoding.cpp
     platform/text/TextEncodingDetectorICU.cpp
     platform/text/TextEncodingRegistry.cpp
-    platform/text/TextStream.cpp
 
     plugins/DOMMimeType.cpp
     plugins/DOMMimeTypeArray.cpp
@@ -2798,6 +2795,7 @@ set(WebCore_SOURCES
     style/InlineTextBoxStyle.cpp
     style/RenderTreePosition.cpp
     style/RenderTreeUpdater.cpp
+    style/RenderTreeUpdaterFirstLetter.cpp
     style/StyleChange.cpp
     style/StyleFontSizeFunctions.cpp
     style/StyleInvalidator.cpp
