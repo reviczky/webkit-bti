@@ -1,3 +1,12 @@
+webkit2gtk (2.17.91-2) UNRELEASED; urgency=medium
+
+  * Disable GStreamerGL in the Hurd:
+    + Pass -DUSE_GSTREAMER_GL=OFF in debian/rules.
+    + Remove build dependency on libgstreamer-plugins-bad1.0-dev from
+      debian/control.
+
+ -- Alberto Garcia <berto@igalia.com>  Sat, 19 Aug 2017 22:17:22 +0300
+
 webkit2gtk (2.17.91-1) experimental; urgency=medium
 
   * New upstream development release.
