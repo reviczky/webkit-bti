@@ -134,6 +134,7 @@ Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          ${misc:Depends}
 Recommends: gstreamer1.0-plugins-base,
             gstreamer1.0-plugins-good,
+            libgl1-mesa-dri,
             ${gst:Recommends}
 Suggests: libwebkit2gtk-4.0-37-gtk2
 Description: Web content engine library for GTK+
