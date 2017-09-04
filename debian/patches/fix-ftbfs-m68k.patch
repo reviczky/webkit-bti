@@ -144,18 +144,6 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
  
  struct SameSizeAsRenderStyle {
      void* dataRefs[7];
-@@ -81,7 +85,11 @@ struct SameSizeAsRenderStyle {
- #endif
- };
- 
-+#if CPU(M68K)
-+COMPILE_ASSERT(sizeof(RenderStyle) <= sizeof(SameSizeAsRenderStyle), RenderStyle_should_stay_small);
-+#else
- COMPILE_ASSERT(sizeof(RenderStyle) == sizeof(SameSizeAsRenderStyle), RenderStyle_should_stay_small);
-+#endif
- 
- RenderStyle& RenderStyle::defaultStyle()
- {
 Index: webkitgtk/Source/WebCore/rendering/style/StyleBoxData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/style/StyleBoxData.cpp
@@ -188,3 +176,19 @@ Index: webkitgtk/Source/WebCore/css/RuleSet.h
  
  class RuleSet {
      WTF_MAKE_NONCOPYABLE(RuleSet); WTF_MAKE_FAST_ALLOCATED;
+Index: webkitgtk/Source/WebCore/platform/graphics/FontDescription.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/platform/graphics/FontDescription.cpp
++++ webkitgtk/Source/WebCore/platform/graphics/FontDescription.cpp
+@@ -52,7 +52,11 @@ struct SameSizeAsFontCascadeDescription
+     unsigned bitfields3 : 10;
+ };
+ 
++#if CPU(M68K)
++COMPILE_ASSERT(sizeof(FontCascadeDescription) <= sizeof(SameSizeAsFontCascadeDescription), FontCascadeDescription_should_stay_small);
++#else
+ COMPILE_ASSERT(sizeof(FontCascadeDescription) == sizeof(SameSizeAsFontCascadeDescription), FontCascadeDescription_should_stay_small);
++#endif
+ 
+ FontDescription::FontDescription()
+     : m_fontSelectionRequest(FontCascadeDescription::initialWeight(), FontCascadeDescription::initialStretch(), FontCascadeDescription::initialItalic())

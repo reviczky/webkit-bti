@@ -7,6 +7,8 @@ webkit2gtk (2.17.92-1) UNRELEASED; urgency=medium
       debian/control.
   * debian/control:
     + Recommmend libgl1-mesa-dri (Closes: #873084).
+  * debian/patches/fix-ftbfs-m68k.patch:
+    + Refresh.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 19 Aug 2017 22:17:22 +0300
 
