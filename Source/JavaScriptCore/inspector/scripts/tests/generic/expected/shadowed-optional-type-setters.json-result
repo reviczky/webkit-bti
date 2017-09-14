@@ -262,7 +262,7 @@ class FrontendRouter;
 #include "config.h"
 #include "TestFrontendDispatchers.h"
 
-#include "InspectorFrontendRouter.h"
+#include <inspector/InspectorFrontendRouter.h>
 #include <wtf/text/CString.h>
 
 namespace Inspector {
@@ -1061,7 +1061,7 @@ using namespace Inspector;
 
     self.string = payload[@"string"];
 
-    self.array = objcArrayFromPayload<NSString>(payload[@"array"]);
+    self.array = payload[@"array"];
 
     return self;
 }

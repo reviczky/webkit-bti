@@ -24,10 +24,6 @@ ifeq ($(DEB_BUILD_ARCH),alpha)
 	LDFLAGS += -Wl,--no-relax
 endif
 
-ifneq (,$(filter $(DEB_BUILD_ARCH),arm64 kfreebsd-i386 kfreebsd-amd64))
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_LD_GOLD=OFF
-endif
-
 # The debug packages produced by webkit are huge and cause problems in
 # most buildds, so use -g1 in all architectures except the ones that
 # are known to work fine
@@ -35,10 +31,13 @@ ifeq (,$(filter $(DEB_BUILD_ARCH),amd64 ppc64 ppc64el))
 	CFLAGS := $(CFLAGS:-g=-g1)
 endif
 
-# See https://bugs.webkit.org/show_bug.cgi?id=113638
-ifeq (,$(filter $(DEB_BUILD_ARCH),i386 amd64 hurd-i386 kfreebsd-i386 kfreebsd-amd64 armhf))
+ifeq (,$(filter $(DEB_BUILD_ARCH),i386 amd64 hurd-i386 kfreebsd-i386 kfreebsd-amd64 armhf arm64))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF
-	CPPFLAGS += -DENABLE_ASSEMBLER=0
+endif
+
+# https://bugs.webkit.org/show_bug.cgi?id=175127
+ifneq (,$(filter $(DEB_BUILD_ARCH),armel armhf sparc64 hurd-i386 kfreebsd-i386 kfreebsd-amd64))
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_GSTREAMER_GL=OFF
 endif
 
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
@@ -53,6 +52,7 @@ else
 endif
 
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_GSTREAMER_GL=OFF
 	DEB_DH_GENCONTROL_ARGS += -- -Vgst:Recommends=""
 else
 	DEB_DH_GENCONTROL_ARGS += -- -Vgst:Recommends="gstreamer1.0-plugins-bad, gstreamer1.0-libav,"

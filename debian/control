@@ -32,19 +32,22 @@ Build-Depends: gawk,
                ruby,
                libjpeg-dev,
                libpng-dev,
+               libtasn1-6-dev,
                libwebp-dev,
                libxt-dev,
-               libgstreamer1.0-dev (>= 1.0.3),
-               libgstreamer-plugins-base1.0-dev (>= 1.0.3),
+               libgstreamer1.0-dev (>= 1.2.3),
+               libgstreamer-plugins-base1.0-dev (>= 1.2.3),
+               libgstreamer-plugins-bad1.0-dev (>= 1.2.3) [!armel !armhf !sparc64 !hurd-i386 !kfreebsd-i386 !kfreebsd-amd64],
                libenchant-dev (>= 0.22),
                gtk-doc-tools,
                geoclue-2.0,
                libsecret-1-dev,
                gobject-introspection (>= 1.32.0),
                libgirepository1.0-dev (>= 0.9.12-4),
+               mesa-common-dev,
                libegl1-mesa-dev,
                libgl1-mesa-dev [!armel !armhf !arm64],
-               libgles2-mesa-dev [armel armhf arm64]
+               libgles2-mesa-dev
 Build-Conflicts: gir-repository-dev
 Standards-Version: 3.9.8
 Homepage: https://webkitgtk.org/
@@ -131,6 +134,7 @@ Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          ${misc:Depends}
 Recommends: gstreamer1.0-plugins-base,
             gstreamer1.0-plugins-good,
+            libgl1-mesa-dri,
             ${gst:Recommends}
 Suggests: libwebkit2gtk-4.0-37-gtk2
 Description: Web content engine library for GTK+

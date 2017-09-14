@@ -8,7 +8,7 @@
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitBackForwardListItem.html" title="WebKitBackForwardListItem">
 <link rel="next" href="WebKitURIRequest.html" title="WebKitURIRequest">
-<meta name="generator" content="GTK-Doc V1.25.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.26.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -1188,10 +1188,70 @@ contains default settings.</p>
       <tr>
         <td class="listing_lines" align="right"><pre>1
 2
-3</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="comment">/*</span><span class="comment"> Disable JavaScript. </span><span class="comment">*/</span>
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33</pre></td>
+        <td class="listing_code"><pre class="programlisting"><?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>/tmp/tmpI3lyCL.h.xhtml</title>
+<meta name="Generator" content="Vim/8.0" />
+<meta name="plugin-version" content="vim7.4_v2" />
+<meta name="syntax" content="c" />
+<meta name="settings" content="use_xhtml,use_css,pre_wrap,no_foldcolumn,prevent_copy=" />
+<meta name="colorscheme" content="none" />
+<style type="text/css">
+
+pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
+body { font-family: monospace; color: #000000; background-color: #ffffff; }
+* { font-size: 1em; }
+.Comment { color: #c00000; font-weight: bold; }
+
+</style>
+
+<script type='text/javascript'>
+//<![CDATA[
+
+//]]>
+</script>
+</head>
+<body>
+<span class="comment">/*</span><span class="comment"> Disable JavaScript. </span><span class="comment">*/</span>
 WebKitSettings *settings = webkit_web_view_group_get_settings (my_view_group);
-webkit_settings_set_enable_javascript (settings, FALSE);</pre></td>
+webkit_settings_set_enable_javascript (settings, FALSE);
+
+</body>
+</html>
+<!-- vim: set foldmethod=manual : --></pre></td>
       </tr>
     </tbody>
   </table>
@@ -3093,7 +3153,7 @@ webkit_settings_get_enable_webgl (<em class="parameter"><code><a class="link" hr
 </div>
 <div class="refsect3">
 <a name="webkit-settings-get-enable-webgl.returns"></a><h4>Returns</h4>
-<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> If webgl support is enabled or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> If WebGL support is enabled or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
 </div>
 </div>
 <hr>
@@ -3638,7 +3698,7 @@ webkit_settings_set_user_agent (<em class="parameter"><code><a class="link" href
 </tr>
 <tr>
 <td class="parameter_name"><p>user_agent</p></td>
-<td class="parameter_description"><p> The new custom user agent string or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to use the default user agent. </p></td>
+<td class="parameter_description"><p>The new custom user agent string or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to use the default user agent. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -3672,12 +3732,12 @@ the version is given, the default engine version is used with the given applicat
 </tr>
 <tr>
 <td class="parameter_name"><p>application_name</p></td>
-<td class="parameter_description"><p> The application name used for the user agent or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to use the default user agent. </p></td>
+<td class="parameter_description"><p>The application name used for the user agent or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to use the default user agent. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>application_version</p></td>
-<td class="parameter_description"><p> The application version for the user agent or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to user the default version. </p></td>
+<td class="parameter_description"><p>The application version for the user agent or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to user the default version. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -4546,7 +4606,7 @@ http://webkit.org/blog/427/webkit-page-cache-i-the-basics/</p>
 will disable history, cache and form auto-fill for any pages visited.</p>
 <div class="warning">
 <p><code class="literal">WebKitSettings:enable-private-browsing</code> has been deprecated since version 2.16. and should not be used in newly-written code.</p>
-<p>Use <a class="link" href="WebKitWebView.html#WebKitWebView--is-ephemeral" title="The “is-ephemeral” property"><span class="type">“is-ephemeral”</span></a> or <span class="type">“is-ephemeral”</span> instead.</p>
+<p>Use <a class="link" href="WebKitWebView.html#WebKitWebView--is-ephemeral" title="The “is-ephemeral” property"><span class="type">“is-ephemeral”</span></a> or <a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--is-ephemeral" title="The “is-ephemeral” property"><span class="type">“is-ephemeral”</span></a> instead.</p>
 </div>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
@@ -4566,7 +4626,7 @@ will disable history, cache and form auto-fill for any pages visited.</p>
 <p>Whether to turn on site-specific quirks. Turning this on will
 tell WebKit to use some site-specific workarounds for
 better web compatibility. For example, older versions of
-MediaWiki will incorrectly send to WebKit a css file with KHTML
+MediaWiki will incorrectly send to WebKit a CSS file with KHTML
 workarounds. By turning on site-specific quirks, WebKit will
 special-case this and other cases to make some specific sites work.</p>
 <p>Flags: Read / Write / Construct</p>
@@ -4661,8 +4721,8 @@ reflective XSS attacks on vulnerable web sites.</p>
 <p>The <a class="link" href="WebKitSettings.html#WebKitHardwareAccelerationPolicy" title="enum WebKitHardwareAccelerationPolicy"><span class="type">WebKitHardwareAccelerationPolicy</span></a> to decide how to enable and disable
 hardware acceleration. The default value <a class="link" href="WebKitSettings.html#WEBKIT-HARDWARE-ACCELERATION-POLICY-ON-DEMAND:CAPS"><code class="literal">WEBKIT_HARDWARE_ACCELERATION_POLICY_ON_DEMAND</code></a>
 enables the hardware acceleration when the web contents request it, disabling it again
-when no longer needed. It's possible to enfore hardware acceleration to be always enabled
-by using <a class="link" href="WebKitSettings.html#WEBKIT-HARDWARE-ACCELERATION-POLICY-ALWAYS:CAPS"><code class="literal">WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS</code></a>. And it's also posible to disable it
+when no longer needed. It's possible to enforce hardware acceleration to be always enabled
+by using <a class="link" href="WebKitSettings.html#WEBKIT-HARDWARE-ACCELERATION-POLICY-ALWAYS:CAPS"><code class="literal">WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS</code></a>. And it's also possible to disable it
 completely using <a class="link" href="WebKitSettings.html#WEBKIT-HARDWARE-ACCELERATION-POLICY-NEVER:CAPS"><code class="literal">WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER</code></a>. Note that disabling hardware
 acceleration might cause some websites to not render correctly or consume more CPU.</p>
 <p>Note that changing this setting might not be possible if hardware acceleration is not
@@ -4799,6 +4859,6 @@ this property is enabled.</p>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.25.1</div>
+<hr>Generated by GTK-Doc V1.26.1</div>
 </body>
 </html>
