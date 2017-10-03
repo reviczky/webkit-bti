@@ -11,6 +11,9 @@ webkit2gtk (2.18.1-1) UNRELEASED; urgency=medium
       CVE-2017-7098, CVE-2017-7100, CVE-2017-7102, CVE-2017-7104,
       CVE-2017-7107, CVE-2017-7109, CVE-2017-7111, CVE-2017-7117,
       CVE-2017-7120 (fixed in 2.18.0).
+  * debian/control:
+    + Recommend the Pulseaudio or ALSA GStreamer plugins, since they're
+      needed for audio playback (Closes: #877281).
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 18 Oct 2017 14:36:55 +0300
 
