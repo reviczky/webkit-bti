@@ -20,6 +20,8 @@ webkit2gtk (2.18.1-1) UNRELEASED; urgency=medium
   * debian/control:
     + Remove 'Priority: extra' fields, all packages have optional priority
       now (the 'extra' priority has been deprecated).
+  * debian/copyright:
+    + Use https for the Format URL.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 18 Oct 2017 14:36:55 +0300
 
