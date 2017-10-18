@@ -161,7 +161,12 @@ void RenderBox::willBeDestroyed()
 
     view().unscheduleLazyRepaint(*this);
     removeControlStatesForRenderer(*this);
-    
+
+#if ENABLE(CSS_SCROLL_SNAP)
+    if (hasInitializedStyle() && style().scrollSnapArea().hasSnapPosition())
+        view().unregisterBoxWithScrollSnapPositions(*this);
+#endif
+
     RenderBoxModelObject::willBeDestroyed();
 }
 
@@ -367,14 +372,10 @@ void RenderBox::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle
     // If our zoom factor changes and we have a defined scrollLeft/Top, we need to adjust that value into the
     // new zoomed coordinate space.
     if (hasOverflowClip() && layer() && oldStyle && oldStyle->effectiveZoom() != newStyle.effectiveZoom()) {
-        if (int left = layer()->scrollOffset().x()) {
-            left = (left / oldStyle->effectiveZoom()) * newStyle.effectiveZoom();
-            layer()->scrollToXOffset(left);
-        }
-        if (int top = layer()->scrollOffset().y()) {
-            top = (top / oldStyle->effectiveZoom()) * newStyle.effectiveZoom();
-            layer()->scrollToYOffset(top);
-        }
+        ScrollPosition scrollPosition = layer()->scrollPosition();
+        float zoomScaleFactor = newStyle.effectiveZoom() / oldStyle->effectiveZoom();
+        scrollPosition.scale(zoomScaleFactor);
+        layer()->setPostLayoutScrollPosition(scrollPosition);
     }
 
     // Our opaqueness might have changed without triggering layout.
@@ -453,17 +454,6 @@ void RenderBox::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle
         updateShapeOutsideInfoAfterStyleChange(style(), oldStyle);
     updateGridPositionAfterStyleChange(style(), oldStyle);
 }
-
-void RenderBox::willBeRemovedFromTree()
-{
-#if ENABLE(CSS_SCROLL_SNAP)
-    if (hasInitializedStyle() && style().scrollSnapArea().hasSnapPosition())
-        view().unregisterBoxWithScrollSnapPositions(*this);
-#endif
-    
-    RenderBoxModelObject::willBeRemovedFromTree();
-}
-    
 
 void RenderBox::updateGridPositionAfterStyleChange(const RenderStyle& style, const RenderStyle* oldStyle)
 {
@@ -2445,12 +2435,12 @@ void RenderBox::computeLogicalWidthInRegion(LogicalExtentComputedValues& compute
 #endif
         && !cb.isRenderGrid()
         ) {
-        LayoutUnit newMargin = containerLogicalWidth - computedValues.m_extent - cb.marginStartForChild(*this);
+        LayoutUnit newMarginTotal = containerLogicalWidth - computedValues.m_extent;
         bool hasInvertedDirection = cb.style().isLeftToRightDirection() != style().isLeftToRightDirection();
         if (hasInvertedDirection)
-            computedValues.m_margins.m_start = newMargin;
+            computedValues.m_margins.m_start = newMarginTotal - computedValues.m_margins.m_end;
         else
-            computedValues.m_margins.m_end = newMargin;
+            computedValues.m_margins.m_end = newMarginTotal - computedValues.m_margins.m_start;
     }
 }
 

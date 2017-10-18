@@ -24,12 +24,12 @@
  */
 
 #include "config.h"
-#if PLUGIN_ARCHITECTURE(X11) && ENABLE(NETSCAPE_PLUGIN_API)
-
 #include "NetscapePluginModule.h"
 
-#include "PluginProcessProxy.h"
+#if PLUGIN_ARCHITECTURE(UNIX) && ENABLE(NETSCAPE_PLUGIN_API)
+
 #include "NetscapeBrowserFuncs.h"
+#include "PluginProcessProxy.h"
 #include <WebCore/FileSystem.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -181,6 +181,8 @@ void NetscapePluginModule::determineQuirks()
 
     Vector<MimeClassInfo> mimeTypes;
     parseMIMEDescription(metaData.mimeDescription, mimeTypes);
+
+#if PLATFORM(X11)
     for (size_t i = 0; i < mimeTypes.size(); ++i) {
         if (mimeTypes[i].type == "application/x-shockwave-flash") {
 #if CPU(X86_64)
@@ -190,6 +192,7 @@ void NetscapePluginModule::determineQuirks()
             break;
         }
     }
+#endif // PLATFORM(X11)
 }
 
 static void writeCharacter(char byte)
@@ -246,4 +249,4 @@ bool NetscapePluginModule::scanPlugin(const String& pluginPath)
 
 } // namespace WebKit
 
-#endif // PLUGIN_ARCHITECTURE(X11) && ENABLE(NETSCAPE_PLUGIN_API)
+#endif // PLUGIN_ARCHITECTURE(UNIX) && ENABLE(NETSCAPE_PLUGIN_API)

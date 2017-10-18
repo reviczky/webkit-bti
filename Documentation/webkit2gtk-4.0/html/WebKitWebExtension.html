@@ -132,88 +132,24 @@ web process is initialized.</p>
 14
 15
 16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49</pre></td>
-        <td class="listing_code"><pre class="programlisting"><?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<title>/tmp/tmp2UTPfh.h.xhtml</title>
-<meta name="Generator" content="Vim/8.0" />
-<meta name="plugin-version" content="vim7.4_v2" />
-<meta name="syntax" content="c" />
-<meta name="settings" content="use_xhtml,use_css,pre_wrap,no_foldcolumn,prevent_copy=" />
-<meta name="colorscheme" content="none" />
-<style type="text/css">
+17</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
+<span class="function">web_page_created_callback</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitWebExtension</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">extension</span><span class="symbol">,</span>
+<span class="normal">                           </span><span class="usertype">WebKitWebPage</span><span class="normal">      </span><span class="symbol">*</span><span class="normal">web_page</span><span class="symbol">,</span>
+<span class="normal">                           </span><span class="usertype">gpointer</span><span class="normal">            user_data</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="function"><a href="../glib/glib-Warnings-and-Assertions.html#g-print">g_print</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"Page %d created for %s</span><span class="specialchar">\n</span><span class="string">"</span><span class="symbol">,</span>
+<span class="normal">             </span><span class="function"><a href="WebKitWebPage.html#webkit-web-page-get-id">webkit_web_page_get_id</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_page</span><span class="symbol">),</span>
+<span class="normal">             </span><span class="function"><a href="WebKitWebPage.html#webkit-web-page-get-uri">webkit_web_page_get_uri</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_page</span><span class="symbol">));</span>
+<span class="cbracket">}</span>
 
-pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
-body { font-family: monospace; color: #000000; background-color: #ffffff; }
-* { font-size: 1em; }
-.Constant { color: #0000c0; text-decoration: underline; }
-.Type { color: #008000; text-decoration: underline; }
-.Special { color: #c000c0; font-weight: bold; }
-
-</style>
-
-<script type='text/javascript'>
-//<![CDATA[
-
-//]]>
-</script>
-</head>
-<body>
-<span class="type">static</span> <span class="type">void</span>
-web_page_created_callback (WebKitWebExtension *extension,
-                           WebKitWebPage      *web_page,
-                           gpointer            user_data)
-{
-    g_print (<span class="number">&quot;Page </span><span class="symbol">%d</span><span class="number"> created for </span><span class="symbol">%s</span><span class="symbol">\n</span><span class="number">&quot;</span>,
-             webkit_web_page_get_id (web_page),
-             webkit_web_page_get_uri (web_page));
-}
-
-G_MODULE_EXPORT <span class="type">void</span>
-webkit_web_extension_initialize (WebKitWebExtension *extension)
-{
-    g_signal_connect (extension, <span class="number">&quot;page-created&quot;</span>,
-                      G_CALLBACK (web_page_created_callback),
-                      <span class="number">NULL</span>);
-}
-
-</body>
-</html>
-<!-- vim: set foldmethod=manual : --></pre></td>
+<span class="normal"><a href="../glib/glib-Dynamic-Loading-of-Modules.html#G-MODULE-EXPORT:CAPS">G_MODULE_EXPORT</a> </span><span class="type">void</span>
+<span class="function">webkit_web_extension_initialize</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitWebExtension</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">extension</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="function"><a href="../gobject/gobject-Signals.html#g-signal-connect">g_signal_connect</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">extension</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"page-created"</span><span class="symbol">,</span>
+<span class="normal">                      </span><span class="function"><a href="../gobject/gobject-Closures.html#G-CALLBACK:CAPS">G_CALLBACK</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_page_created_callback</span><span class="symbol">),</span>
+<span class="normal">                      <a href="../glib/glib-Standard-Macros.html#NULL:CAPS">NULL</a></span><span class="symbol">);</span>
+<span class="cbracket">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -256,99 +192,33 @@ the desired data as parameter. You can see an example of this in the following p
 23
 24
 25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59</pre></td>
-        <td class="listing_code"><pre class="programlisting"><?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<title>/tmp/tmpMMPz_D.h.xhtml</title>
-<meta name="Generator" content="Vim/8.0" />
-<meta name="plugin-version" content="vim7.4_v2" />
-<meta name="syntax" content="c" />
-<meta name="settings" content="use_xhtml,use_css,pre_wrap,no_foldcolumn,prevent_copy=" />
-<meta name="colorscheme" content="none" />
-<style type="text/css">
+26</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="preproc">#define</span><span class="normal"> WEB_EXTENSIONS_DIRECTORY </span><span class="comment">/* ... */</span>
 
-pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
-body { font-family: monospace; color: #000000; background-color: #ffffff; }
-* { font-size: 1em; }
-.Comment { color: #c00000; font-weight: bold; }
-.Constant { color: #0000c0; text-decoration: underline; }
-.PreProc { color: #c000c0; text-decoration: underline; }
-.Type { color: #008000; text-decoration: underline; }
+<span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
+<span class="function">initialize_web_extensions</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitWebContext</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">context</span><span class="symbol">,</span>
+<span class="normal">                           </span><span class="usertype">gpointer</span><span class="normal">          user_data</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">  </span><span class="comment">/* Web Extensions get a different ID for each Web Process */</span>
+<span class="normal">  </span><span class="keyword">static</span><span class="normal"> </span><span class="usertype">guint32</span><span class="normal"> unique_id </span><span class="symbol">=</span><span class="normal"> </span><span class="number">0</span><span class="symbol">;</span>
 
-</style>
+<span class="normal">  </span><span class="function"><a href="WebKitWebContext.html#webkit-web-context-set-web-extensions-directory">webkit_web_context_set_web_extensions_directory</a></span><span class="normal"> </span><span class="symbol">(</span>
+<span class="normal">     context</span><span class="symbol">,</span><span class="normal"> WEB_EXTENSIONS_DIRECTORY</span><span class="symbol">);</span>
+<span class="normal">  </span><span class="function"><a href="WebKitWebContext.html#webkit-web-context-set-web-extensions-initialization-user-data">webkit_web_context_set_web_extensions_initialization_user_data</a></span><span class="normal"> </span><span class="symbol">(</span>
+<span class="normal">     context</span><span class="symbol">,</span><span class="normal"> </span><span class="function"><a href="../glib/glib-GVariant.html#g-variant-new-uint32">g_variant_new_uint32</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">unique_id</span><span class="symbol">++));</span>
+<span class="cbracket">}</span>
 
-<script type='text/javascript'>
-//<![CDATA[
+<span class="type">int</span><span class="normal"> </span><span class="function">main</span><span class="normal"> </span><span class="symbol">(</span><span class="type">int</span><span class="normal"> argc</span><span class="symbol">,</span><span class="normal"> </span><span class="type">char</span><span class="normal"> </span><span class="symbol">**</span><span class="normal">argv</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">  </span><span class="function"><a href="../gobject/gobject-Signals.html#g-signal-connect">g_signal_connect</a></span><span class="normal"> </span><span class="symbol">(</span><span class="function"><a href="WebKitWebContext.html#webkit-web-context-get-default">webkit_web_context_get_default</a></span><span class="normal"> </span><span class="symbol">(),</span>
+<span class="normal">                   </span><span class="string">"initialize-web-extensions"</span><span class="symbol">,</span>
+<span class="normal">                    </span><span class="function"><a href="../gobject/gobject-Closures.html#G-CALLBACK:CAPS">G_CALLBACK</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">initialize_web_extensions</span><span class="symbol">),</span>
+<span class="normal">                    <a href="../glib/glib-Standard-Macros.html#NULL:CAPS">NULL</a></span><span class="symbol">);</span>
 
-//]]>
-</script>
-</head>
-<body>
-<span class="preproc">#define WEB_EXTENSIONS_DIRECTORY </span><span class="comment">/*</span><span class="comment"> ... </span><span class="comment">*/</span>
+<span class="normal">  </span><span class="usertype">GtkWidget</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">view </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-new">webkit_web_view_new</a></span><span class="normal"> </span><span class="symbol">();</span>
 
-<span class="type">static</span> <span class="type">void</span>
-initialize_web_extensions (WebKitWebContext *context,
-                           gpointer          user_data)
-{
-  <span class="comment">/*</span><span class="comment"> Web Extensions get a different ID for each Web Process </span><span class="comment">*/</span>
-  <span class="type">static</span> guint32 unique_id = <span class="number">0</span>;
-
-  webkit_web_context_set_web_extensions_directory (
-     context, WEB_EXTENSIONS_DIRECTORY);
-  webkit_web_context_set_web_extensions_initialization_user_data (
-     context, g_variant_new_uint32 (unique_id++));
-}
-
-<span class="type">int</span> main (<span class="type">int</span> argc, <span class="type">char</span> **argv)
-{
-  g_signal_connect (webkit_web_context_get_default (),
-                   <span class="number">&quot;initialize-web-extensions&quot;</span>,
-                    G_CALLBACK (initialize_web_extensions),
-                    <span class="number">NULL</span>);
-
-  GtkWidget *view = webkit_web_view_new ();
-
-  <span class="comment">/*</span><span class="comment"> ... </span><span class="comment">*/</span>
-}
-
-</body>
-</html>
-<!-- vim: set foldmethod=manual : --></pre></td>
+<span class="normal">  </span><span class="comment">/* ... */</span>
+<span class="cbracket">}</span></pre></td>
       </tr>
     </tbody>
   </table>

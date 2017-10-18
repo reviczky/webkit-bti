@@ -166,8 +166,10 @@ public:
     ContentDistributionType resolvedAlignContentDistribution(const StyleContentAlignmentData& normalValueBehavior) const;
     StyleSelfAlignmentData resolvedAlignItems(ItemPosition normalValueBehaviour) const;
     StyleSelfAlignmentData resolvedAlignSelf(const RenderStyle* parentStyle, ItemPosition normalValueBehaviour) const;
+    StyleContentAlignmentData resolvedAlignContent(const StyleContentAlignmentData& normalValueBehaviour) const;
     StyleSelfAlignmentData resolvedJustifyItems(ItemPosition normalValueBehaviour) const;
     StyleSelfAlignmentData resolvedJustifySelf(const RenderStyle* parentStyle, ItemPosition normalValueBehaviour) const;
+    StyleContentAlignmentData resolvedJustifyContent(const StyleContentAlignmentData& normalValueBehaviour) const;
 
     PseudoId styleType() const { return static_cast<PseudoId>(m_nonInheritedFlags.styleType); }
     void setStyleType(PseudoId styleType) { m_nonInheritedFlags.styleType = styleType; }
@@ -662,7 +664,7 @@ public:
     AnimationList* animations() { return m_rareNonInheritedData->animations.get(); }
     AnimationList* transitions() { return m_rareNonInheritedData->transitions.get(); }
     
-    bool hasAnimationsOrTransitions() const { return m_rareNonInheritedData->hasAnimationsOrTransitions(); }
+    bool hasAnimationsOrTransitions() const { return hasAnimations() || hasTransitions(); }
 
     AnimationList& ensureAnimations();
     AnimationList& ensureTransitions();
