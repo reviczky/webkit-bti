@@ -14,6 +14,9 @@ webkit2gtk (2.18.1-1) UNRELEASED; urgency=medium
   * debian/control:
     + Recommend the Pulseaudio or ALSA GStreamer plugins, since they're
       needed for audio playback (Closes: #877281).
+  * debian/patches/fix-ftbfs-alpha.patch:
+    + This patch is no longer needed, drop it.
+  * Refresh all other patches.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 18 Oct 2017 14:36:55 +0300
 
