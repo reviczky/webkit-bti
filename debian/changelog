@@ -1,6 +1,16 @@
 webkit2gtk (2.18.1-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * The WebKitGTK+ security advisory WSA-2017-0008 lists the following
+    security fixes in the latest versions of WebKitGTK+:
+    + CVE-2017-7081 and CVE-2017-7142 (fixed in 2.16.1).
+    + CVE-2017-7094 (fixed in 2.16.3).
+    + CVE-2017-7099 (fixed in 2.16.4).
+    + CVE-2017-7087, CVE-2017-7089, CVE-2017-7090, CVE-2017-7091,
+      CVE-2017-7092, CVE-2017-7093, CVE-2017-7095, CVE-2017-7096,
+      CVE-2017-7098, CVE-2017-7100, CVE-2017-7102, CVE-2017-7104,
+      CVE-2017-7107, CVE-2017-7109, CVE-2017-7111, CVE-2017-7117,
+      CVE-2017-7120 (fixed in 2.18.0).
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 18 Oct 2017 14:36:55 +0300
 
