@@ -1680,7 +1680,7 @@ String AccessibilityObject::ariaReadOnlyValue() const
 
 bool AccessibilityObject::supportsARIAAutoComplete() const
 {
-    return isARIATextControl() && hasAttribute(aria_autocompleteAttr);
+    return (isComboBox() || isARIATextControl()) && hasAttribute(aria_autocompleteAttr);
 }
 
 String AccessibilityObject::ariaAutoCompleteValue() const
@@ -2444,6 +2444,11 @@ const AtomicString& AccessibilityObject::datetimeAttributeValue() const
     return getAttribute(datetimeAttr);
 }
     
+const AtomicString& AccessibilityObject::ariaKeyShortcutsValue() const
+{
+    return getAttribute(aria_keyshortcutsAttr);
+}
+
 Element* AccessibilityObject::element() const
 {
     Node* node = this->node();
@@ -2497,14 +2502,16 @@ const AtomicString& AccessibilityObject::placeholderValue() const
     return nullAtom();
 }
     
-bool AccessibilityObject::isInsideARIALiveRegion() const
+bool AccessibilityObject::isInsideARIALiveRegion(bool excludeIfOff) const
 {
-    if (supportsARIALiveRegion())
-        return true;
+    return ariaLiveRegionAncestor(excludeIfOff);
+}
     
-    return AccessibilityObject::matchedParent(*this, false, [] (const AccessibilityObject& object) {
-        return object.supportsARIALiveRegion();
-    }) != nullptr;
+AccessibilityObject* AccessibilityObject::ariaLiveRegionAncestor(bool excludeIfOff) const
+{
+    return const_cast<AccessibilityObject*>(AccessibilityObject::matchedParent(*this, true, [excludeIfOff] (const AccessibilityObject& object) {
+        return object.supportsARIALiveRegion(excludeIfOff);
+    }));
 }
 
 bool AccessibilityObject::supportsARIAAttributes() const
@@ -2535,9 +2542,10 @@ bool AccessibilityObject::liveRegionStatusIsEnabled(const AtomicString& liveRegi
     return equalLettersIgnoringASCIICase(liveRegionStatus, "polite") || equalLettersIgnoringASCIICase(liveRegionStatus, "assertive");
 }
     
-bool AccessibilityObject::supportsARIALiveRegion() const
+bool AccessibilityObject::supportsARIALiveRegion(bool excludeIfOff) const
 {
-    return liveRegionStatusIsEnabled(ariaLiveRegionStatus());
+    const AtomicString& liveRegionStatus = ariaLiveRegionStatus();
+    return excludeIfOff ? liveRegionStatusIsEnabled(liveRegionStatus) : !liveRegionStatus.isEmpty();
 }
 
 AccessibilityObject* AccessibilityObject::elementAccessibilityHitTest(const IntPoint& point) const
@@ -2584,6 +2592,10 @@ AccessibilityObject* AccessibilityObject::focusedUIElement() const
     
 AccessibilitySortDirection AccessibilityObject::sortDirection() const
 {
+    AccessibilityRole role = roleValue();
+    if (role != RowHeaderRole && role != ColumnHeaderRole)
+        return SortDirectionInvalid;
+
     const AtomicString& sortAttribute = getAttribute(aria_sortAttr);
     if (equalLettersIgnoringASCIICase(sortAttribute, "ascending"))
         return SortDirectionAscending;
@@ -3304,6 +3316,13 @@ AccessibilityObject* AccessibilityObject::highestEditableAncestor()
         editableAncestor = editableAncestor->editableAncestor();
     }
     return previousEditableAncestor;
+}
+
+AccessibilityObject* AccessibilityObject::radioGroupAncestor() const
+{
+    return const_cast<AccessibilityObject*>(AccessibilityObject::matchedParent(*this, false, [] (const AccessibilityObject& object) {
+        return object.isRadioGroup();
+    }));
 }
 
 bool AccessibilityObject::isStyleFormatGroup() const

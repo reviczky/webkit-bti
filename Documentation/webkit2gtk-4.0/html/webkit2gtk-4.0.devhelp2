@@ -567,12 +567,12 @@
     <keyword type="function" name="webkit_hit_test_result_context_is_media ()" link="WebKitHitTestResult.html#webkit-hit-test-result-context-is-media"/>
     <keyword type="function" name="webkit_hit_test_result_context_is_editable ()" link="WebKitHitTestResult.html#webkit-hit-test-result-context-is-editable"/>
     <keyword type="function" name="webkit_hit_test_result_context_is_selection ()" link="WebKitHitTestResult.html#webkit-hit-test-result-context-is-selection" since="2.8"/>
+    <keyword type="function" name="webkit_hit_test_result_context_is_scrollbar ()" link="WebKitHitTestResult.html#webkit-hit-test-result-context-is-scrollbar"/>
     <keyword type="function" name="webkit_hit_test_result_get_link_uri ()" link="WebKitHitTestResult.html#webkit-hit-test-result-get-link-uri"/>
     <keyword type="function" name="webkit_hit_test_result_get_link_title ()" link="WebKitHitTestResult.html#webkit-hit-test-result-get-link-title"/>
     <keyword type="function" name="webkit_hit_test_result_get_link_label ()" link="WebKitHitTestResult.html#webkit-hit-test-result-get-link-label"/>
     <keyword type="function" name="webkit_hit_test_result_get_image_uri ()" link="WebKitHitTestResult.html#webkit-hit-test-result-get-image-uri"/>
     <keyword type="function" name="webkit_hit_test_result_get_media_uri ()" link="WebKitHitTestResult.html#webkit-hit-test-result-get-media-uri"/>
-    <keyword type="function" name="webkit_hit_test_result_context_is_scrollbar ()" link="WebKitHitTestResult.html#webkit-hit-test-result-context-is-scrollbar"/>
     <keyword type="struct" name="struct WebKitHitTestResult" link="WebKitHitTestResult.html#WebKitHitTestResult-struct"/>
     <keyword type="enum" name="enum WebKitHitTestResultContext" link="WebKitHitTestResult.html#WebKitHitTestResultContext"/>
     <keyword type="property" name="The “context” property" link="WebKitHitTestResult.html#WebKitHitTestResult--context"/>

@@ -2740,120 +2740,54 @@ a string:</p>
 44
 45
 46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59
-60
-61
-62
-63
-64
-65
-66
-67
-68
-69
-70
-71
-72
-73
-74
-75
-76
-77
-78
-79
-80</pre></td>
-        <td class="listing_code"><pre class="programlisting"><?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<title>/tmp/tmp6EAl4w.h.xhtml</title>
-<meta name="Generator" content="Vim/8.0" />
-<meta name="plugin-version" content="vim7.4_v2" />
-<meta name="syntax" content="c" />
-<meta name="settings" content="use_xhtml,use_css,pre_wrap,no_foldcolumn,prevent_copy=" />
-<meta name="colorscheme" content="none" />
-<style type="text/css">
+47</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
+<span class="function">web_view_javascript_finished</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">GObject</span><span class="normal">      </span><span class="symbol">*</span><span class="normal">object</span><span class="symbol">,</span>
+<span class="normal">                              </span><span class="usertype">GAsyncResult</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">result</span><span class="symbol">,</span>
+<span class="normal">                              </span><span class="usertype">gpointer</span><span class="normal">      user_data</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="usertype">WebKitJavascriptResult</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">js_result</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="usertype">JSValueRef</span><span class="normal">              value</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="usertype">JSGlobalContextRef</span><span class="normal">      context</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="usertype">GError</span><span class="normal">                 </span><span class="symbol">*</span><span class="normal">error </span><span class="symbol">=</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#NULL:CAPS">NULL</a></span><span class="symbol">;</span>
 
-pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
-body { font-family: monospace; color: #000000; background-color: #ffffff; }
-* { font-size: 1em; }
-.Constant { color: #0000c0; text-decoration: underline; }
-.Statement { color: #008080; font-weight: bold; }
-.Type { color: #008000; text-decoration: underline; }
-.Special { color: #c000c0; font-weight: bold; }
+<span class="normal">    js_result </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-run-javascript-finish">webkit_web_view_run_javascript_finish</a></span><span class="normal"> </span><span class="symbol">(</span><span class="function">WEBKIT_WEB_VIEW</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">object</span><span class="symbol">),</span><span class="normal"> result</span><span class="symbol">,</span><span class="normal"> </span><span class="symbol">&amp;</span><span class="normal">error</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="normal">js_result</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="function"><a href="../glib/glib-Message-Logging.html#g-warning">g_warning</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"Error running javascript: %s"</span><span class="symbol">,</span><span class="normal"> error</span><span class="symbol">-&gt;</span><span class="normal">message</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="function"><a href="../glib/glib-Error-Reporting.html#g-error-free">g_error_free</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">error</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="keyword">return</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="cbracket">}</span>
 
-</style>
+<span class="normal">    context </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitWebView.html#webkit-javascript-result-get-global-context">webkit_javascript_result_get_global_context</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">js_result</span><span class="symbol">);</span>
+<span class="normal">    value </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitWebView.html#webkit-javascript-result-get-value">webkit_javascript_result_get_value</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">js_result</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(</span><span class="function">JSValueIsString</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">context</span><span class="symbol">,</span><span class="normal"> value</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="usertype">JSStringRef</span><span class="normal"> js_str_value</span><span class="symbol">;</span>
+<span class="normal">        </span><span class="usertype">gchar</span><span class="normal">      </span><span class="symbol">*</span><span class="normal">str_value</span><span class="symbol">;</span>
+<span class="normal">        </span><span class="usertype">gsize</span><span class="normal">       str_length</span><span class="symbol">;</span>
 
-<script type='text/javascript'>
-//<![CDATA[
+<span class="normal">        js_str_value </span><span class="symbol">=</span><span class="normal"> </span><span class="function">JSValueToStringCopy</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">context</span><span class="symbol">,</span><span class="normal"> value</span><span class="symbol">,</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#NULL:CAPS">NULL</a></span><span class="symbol">);</span>
+<span class="normal">        str_length </span><span class="symbol">=</span><span class="normal"> </span><span class="function">JSStringGetMaximumUTF8CStringSize</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">js_str_value</span><span class="symbol">);</span>
+<span class="normal">        str_value </span><span class="symbol">=</span><span class="normal"> </span><span class="symbol">(</span><span class="normal"><a href="../glib/glib-Basic-Types.html#gchar">gchar</a> </span><span class="symbol">*)</span><span class="function"><a href="../glib/glib-Memory-Allocation.html#g-malloc">g_malloc</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">str_length</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="function">JSStringGetUTF8CString</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">js_str_value</span><span class="symbol">,</span><span class="normal"> str_value</span><span class="symbol">,</span><span class="normal"> str_length</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="function">JSStringRelease</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">js_str_value</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="function"><a href="../glib/glib-Warnings-and-Assertions.html#g-print">g_print</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"Script result: %s</span><span class="specialchar">\n</span><span class="string">"</span><span class="symbol">,</span><span class="normal"> str_value</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="function"><a href="../glib/glib-Memory-Allocation.html#g-free">g_free</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">str_value</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="function"><a href="../glib/glib-Message-Logging.html#g-warning">g_warning</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"Error running javascript: unexpected return value"</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="cbracket">}</span>
+<span class="normal">    </span><span class="function"><a href="WebKitWebView.html#webkit-javascript-result-unref">webkit_javascript_result_unref</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">js_result</span><span class="symbol">);</span>
+<span class="cbracket">}</span>
 
-//]]>
-</script>
-</head>
-<body>
-<span class="type">static</span> <span class="type">void</span>
-web_view_javascript_finished (GObject      *object,
-                              GAsyncResult *result,
-                              gpointer      user_data)
-{
-    WebKitJavascriptResult *js_result;
-    JSValueRef              value;
-    JSGlobalContextRef      context;
-    GError                 *error = <span class="number">NULL</span>;
+<span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
+<span class="function">web_view_get_link_url</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitWebView</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">web_view</span><span class="symbol">,</span>
+<span class="normal">                       </span><span class="keyword">const</span><span class="normal"> </span><span class="usertype">gchar</span><span class="normal">   </span><span class="symbol">*</span><span class="normal">link_id</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="usertype">gchar</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">script</span><span class="symbol">;</span>
 
-    js_result = webkit_web_view_run_javascript_finish (WEBKIT_WEB_VIEW (object), result, &amp;error);
-    <span class="keyword">if</span> (!js_result) {
-        g_warning (<span class="number">&quot;Error running javascript: </span><span class="symbol">%s</span><span class="number">&quot;</span>, error-&gt;message);
-        g_error_free (error);
-        <span class="keyword">return</span>;
-    }
-
-    context = webkit_javascript_result_get_global_context (js_result);
-    value = webkit_javascript_result_get_value (js_result);
-    <span class="keyword">if</span> (JSValueIsString (context, value)) {
-        JSStringRef js_str_value;
-        gchar      *str_value;
-        gsize       str_length;
-
-        js_str_value = JSValueToStringCopy (context, value, <span class="number">NULL</span>);
-        str_length = JSStringGetMaximumUTF8CStringSize (js_str_value);
-        str_value = (gchar *)g_malloc (str_length);
-        JSStringGetUTF8CString (js_str_value, str_value, str_length);
-        JSStringRelease (js_str_value);
-        g_print (<span class="number">&quot;Script result: </span><span class="symbol">%s</span><span class="symbol">\n</span><span class="number">&quot;</span>, str_value);
-        g_free (str_value);
-    } <span class="keyword">else</span> {
-        g_warning (<span class="number">&quot;Error running javascript: unexpected return value&quot;</span>);
-    }
-    webkit_javascript_result_unref (js_result);
-}
-
-<span class="type">static</span> <span class="type">void</span>
-web_view_get_link_url (WebKitWebView *web_view,
-                       <span class="type">const</span> gchar   *link_id)
-{
-    gchar *script;
-
-    script = g_strdup_printf (<span class="number">&quot;window.document.getElementById('</span><span class="symbol">%s</span><span class="number">').href;&quot;</span>, link_id);
-    webkit_web_view_run_javascript (web_view, script, <span class="number">NULL</span>, web_view_javascript_finished, <span class="number">NULL</span>);
-    g_free (script);
-}
-
-</body>
-</html>
-<!-- vim: set foldmethod=manual : --></pre></td>
+<span class="normal">    script </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strdup-printf">g_strdup_printf</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"window.document.getElementById('%s').href;"</span><span class="symbol">,</span><span class="normal"> link_id</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-run-javascript">webkit_web_view_run_javascript</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_view</span><span class="symbol">,</span><span class="normal"> script</span><span class="symbol">,</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#NULL:CAPS">NULL</a></span><span class="symbol">,</span><span class="normal"> web_view_javascript_finished</span><span class="symbol">,</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#NULL:CAPS">NULL</a></span><span class="symbol">);</span>
+<span class="normal">    </span><span class="function"><a href="../glib/glib-Memory-Allocation.html#g-free">g_free</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">script</span><span class="symbol">);</span>
+<span class="cbracket">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -3461,85 +3395,23 @@ Note that the parent window must have a RGBA visual and
 13
 14
 15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47</pre></td>
-        <td class="listing_code"><pre class="programlisting"><?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<title>/tmp/tmp9tMtQ8.h.xhtml</title>
-<meta name="Generator" content="Vim/8.0" />
-<meta name="plugin-version" content="vim7.4_v2" />
-<meta name="syntax" content="c" />
-<meta name="settings" content="use_xhtml,use_css,pre_wrap,no_foldcolumn,prevent_copy=" />
-<meta name="colorscheme" content="none" />
-<style type="text/css">
+16</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span><span class="normal"> </span><span class="function">browser_window_set_background_color</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">BrowserWindow</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">window</span><span class="symbol">,</span>
+<span class="normal">                                                 </span><span class="keyword">const</span><span class="normal"> </span><span class="usertype">GdkRGBA</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">rgba</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="usertype">WebKitWebView</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">web_view</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="usertype">GdkScreen</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">screen </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../gtk3/GtkWindow.html#gtk-window-get-screen">gtk_window_get_screen</a></span><span class="normal"> </span><span class="symbol">(</span><span class="function">GTK_WINDOW</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">window</span><span class="symbol">));</span>
+<span class="normal">    </span><span class="usertype">GdkVisual</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">rgba_visual </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../gdk3/GdkScreen.html#gdk-screen-get-rgba-visual">gdk_screen_get_rgba_visual</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">screen</span><span class="symbol">);</span>
 
-pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
-body { font-family: monospace; color: #000000; background-color: #ffffff; }
-* { font-size: 1em; }
-.Statement { color: #008080; font-weight: bold; }
-.Type { color: #008000; text-decoration: underline; }
+<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="normal">rgba_visual</span><span class="symbol">)</span>
+<span class="normal">         </span><span class="keyword">return</span><span class="symbol">;</span>
 
-</style>
+<span class="normal">    </span><span class="function"><a href="../gtk3/GtkWidget.html#gtk-widget-set-visual">gtk_widget_set_visual</a></span><span class="normal"> </span><span class="symbol">(</span><span class="function">GTK_WIDGET</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">window</span><span class="symbol">),</span><span class="normal"> rgba_visual</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="function"><a href="../gtk3/GtkWidget.html#gtk-widget-set-app-paintable">gtk_widget_set_app_paintable</a></span><span class="normal"> </span><span class="symbol">(</span><span class="function">GTK_WIDGET</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">window</span><span class="symbol">),</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS">TRUE</a></span><span class="symbol">);</span>
 
-<script type='text/javascript'>
-//<![CDATA[
-
-//]]>
-</script>
-</head>
-<body>
-<span class="type">static</span> <span class="type">void</span> browser_window_set_background_color (BrowserWindow *window,
-                                                 <span class="type">const</span> GdkRGBA *rgba)
-{
-    WebKitWebView *web_view;
-    GdkScreen *screen = gtk_window_get_screen (GTK_WINDOW (window));
-    GdkVisual *rgba_visual = gdk_screen_get_rgba_visual (screen);
-
-    <span class="keyword">if</span> (!rgba_visual)
-         <span class="keyword">return</span>;
-
-    gtk_widget_set_visual (GTK_WIDGET (window), rgba_visual);
-    gtk_widget_set_app_paintable (GTK_WIDGET (window), TRUE);
-
-    web_view = browser_window_get_web_view (window);
-    webkit_web_view_set_background_color (web_view, rgba);
-}
-
-</body>
-</html>
-<!-- vim: set foldmethod=manual : --></pre></td>
+<span class="normal">    web_view </span><span class="symbol">=</span><span class="normal"> </span><span class="function">browser_window_get_web_view</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">window</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-set-background-color">webkit_web_view_set_background_color</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_view</span><span class="symbol">,</span><span class="normal"> rgba</span><span class="symbol">);</span>
+<span class="cbracket">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -5026,95 +4898,31 @@ specific type when making the decision. For example:</p>
 21
 22
 23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56</pre></td>
-        <td class="listing_code"><pre class="programlisting"><?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<title>/tmp/tmpxyelbG.h.xhtml</title>
-<meta name="Generator" content="Vim/8.0" />
-<meta name="plugin-version" content="vim7.4_v2" />
-<meta name="syntax" content="c" />
-<meta name="settings" content="use_xhtml,use_css,pre_wrap,no_foldcolumn,prevent_copy=" />
-<meta name="colorscheme" content="none" />
-<style type="text/css">
-
-pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
-body { font-family: monospace; color: #000000; background-color: #ffffff; }
-* { font-size: 1em; }
-.Statement { color: #008080; font-weight: bold; }
-.Comment { color: #c00000; font-weight: bold; }
-.Type { color: #008000; text-decoration: underline; }
-
-</style>
-
-<script type='text/javascript'>
-//<![CDATA[
-
-//]]>
-</script>
-</head>
-<body>
-<span class="type">static</span> gboolean
-decide_policy_cb (WebKitWebView *web_view,
-                  WebKitPolicyDecision *decision,
-                  WebKitPolicyDecisionType type)
-{
-    <span class="keyword">switch</span> (type) {
-    <span class="keyword">case</span> WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION:
-        WebKitNavigationPolicyDecision *navigation_decision = WEBKIT_NAVIGATION_POLICY_DECISION (decision);
-        <span class="comment">/*</span><span class="comment"> Make a policy decision here. </span><span class="comment">*/</span>
-        <span class="keyword">break</span>;
-    <span class="keyword">case</span> WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION:
-        WebKitNavigationPolicyDecision *navigation_decision = WEBKIT_NAVIGATION_POLICY_DECISION (decision);
-        <span class="comment">/*</span><span class="comment"> Make a policy decision here. </span><span class="comment">*/</span>
-        <span class="keyword">break</span>;
-    <span class="keyword">case</span> WEBKIT_POLICY_DECISION_TYPE_RESPONSE:
-        WebKitResponsePolicyDecision *response = WEBKIT_RESPONSE_POLICY_DECISION (decision);
-        <span class="comment">/*</span><span class="comment"> Make a policy decision here. </span><span class="comment">*/</span>
-        <span class="keyword">break</span>;
-    <span class="keyword">default</span>:
-        <span class="comment">/*</span><span class="comment"> Making no decision results in webkit_policy_decision_use(). </span><span class="comment">*/</span>
-        <span class="keyword">return</span> FALSE;
-    }
-    <span class="keyword">return</span> TRUE;
-}
-
-</body>
-</html>
-<!-- vim: set foldmethod=manual : --></pre></td>
+24</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> <a href="../glib/glib-Basic-Types.html#gboolean">gboolean</a></span>
+<span class="function">decide_policy_cb</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitWebView</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">web_view</span><span class="symbol">,</span>
+<span class="normal">                  </span><span class="usertype">WebKitPolicyDecision</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">decision</span><span class="symbol">,</span>
+<span class="normal">                  </span><span class="usertype">WebKitPolicyDecisionType</span><span class="normal"> type</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="keyword">switch</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">type</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-POLICY-DECISION-TYPE-NAVIGATION-ACTION:CAPS">WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION</a></span><span class="symbol">:</span>
+<span class="normal">        </span><span class="usertype">WebKitNavigationPolicyDecision</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">navigation_decision </span><span class="symbol">=</span><span class="normal"> </span><span class="function">WEBKIT_NAVIGATION_POLICY_DECISION</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">decision</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="comment">/* Make a policy decision here. */</span>
+<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-POLICY-DECISION-TYPE-NEW-WINDOW-ACTION:CAPS">WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION</a></span><span class="symbol">:</span>
+<span class="normal">        </span><span class="usertype">WebKitNavigationPolicyDecision</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">navigation_decision </span><span class="symbol">=</span><span class="normal"> </span><span class="function">WEBKIT_NAVIGATION_POLICY_DECISION</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">decision</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="comment">/* Make a policy decision here. */</span>
+<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-POLICY-DECISION-TYPE-RESPONSE:CAPS">WEBKIT_POLICY_DECISION_TYPE_RESPONSE</a></span><span class="symbol">:</span>
+<span class="normal">        </span><span class="usertype">WebKitResponsePolicyDecision</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">response </span><span class="symbol">=</span><span class="normal"> </span><span class="function">WEBKIT_RESPONSE_POLICY_DECISION</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">decision</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="comment">/* Make a policy decision here. */</span>
+<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
+<span class="label">    default:</span>
+<span class="normal">        </span><span class="comment">/* Making no decision results in webkit_policy_decision_use(). */</span>
+<span class="normal">        </span><span class="keyword">return</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS">FALSE</a></span><span class="symbol">;</span>
+<span class="normal">    </span><span class="cbracket">}</span>
+<span class="normal">    </span><span class="keyword">return</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS">TRUE</a></span><span class="symbol">;</span>
+<span class="cbracket">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -5344,97 +5152,33 @@ load operation.</p>
 23
 24
 25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58</pre></td>
-        <td class="listing_code"><pre class="programlisting"><?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<title>/tmp/tmpAsVfHk.h.xhtml</title>
-<meta name="Generator" content="Vim/8.0" />
-<meta name="plugin-version" content="vim7.4_v2" />
-<meta name="syntax" content="c" />
-<meta name="settings" content="use_xhtml,use_css,pre_wrap,no_foldcolumn,prevent_copy=" />
-<meta name="colorscheme" content="none" />
-<style type="text/css">
-
-pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
-body { font-family: monospace; color: #000000; background-color: #ffffff; }
-* { font-size: 1em; }
-.Statement { color: #008080; font-weight: bold; }
-.Comment { color: #c00000; font-weight: bold; }
-.Type { color: #008000; text-decoration: underline; }
-
-</style>
-
-<script type='text/javascript'>
-//<![CDATA[
-
-//]]>
-</script>
-</head>
-<body>
-<span class="type">static</span> <span class="type">void</span> web_view_load_changed (WebKitWebView  *web_view,
-                                   WebKitLoadEvent load_event,
-                                   gpointer        user_data)
-{
-    <span class="keyword">switch</span> (load_event) {
-    <span class="keyword">case</span> WEBKIT_LOAD_STARTED:
-        <span class="comment">/*</span><span class="comment"> New load, we have now a provisional URI </span><span class="comment">*/</span>
-        provisional_uri = webkit_web_view_get_uri (web_view);
-        <span class="comment">/*</span><span class="comment"> Here we could start a spinner or update the</span>
-<span class="comment">         * location bar with the provisional URI </span><span class="comment">*/</span>
-        <span class="keyword">break</span>;
-    <span class="keyword">case</span> WEBKIT_LOAD_REDIRECTED:
-        redirected_uri = webkit_web_view_get_uri (web_view);
-        <span class="keyword">break</span>;
-    <span class="keyword">case</span> WEBKIT_LOAD_COMMITTED:
-        <span class="comment">/*</span><span class="comment"> The load is being performed. Current URI is</span>
+26</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span><span class="normal"> </span><span class="function">web_view_load_changed</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitWebView</span><span class="normal">  </span><span class="symbol">*</span><span class="normal">web_view</span><span class="symbol">,</span>
+<span class="normal">                                   </span><span class="usertype">WebKitLoadEvent</span><span class="normal"> load_event</span><span class="symbol">,</span>
+<span class="normal">                                   </span><span class="usertype">gpointer</span><span class="normal">        user_data</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="keyword">switch</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">load_event</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-LOAD-STARTED:CAPS">WEBKIT_LOAD_STARTED</a></span><span class="symbol">:</span>
+<span class="normal">        </span><span class="comment">/* New load, we have now a provisional URI */</span>
+<span class="normal">        provisional_uri </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-get-uri">webkit_web_view_get_uri</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_view</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="comment">/* Here we could start a spinner or update the</span>
+<span class="comment">         * location bar with the provisional URI */</span>
+<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-LOAD-REDIRECTED:CAPS">WEBKIT_LOAD_REDIRECTED</a></span><span class="symbol">:</span>
+<span class="normal">        redirected_uri </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-get-uri">webkit_web_view_get_uri</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_view</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-LOAD-COMMITTED:CAPS">WEBKIT_LOAD_COMMITTED</a></span><span class="symbol">:</span>
+<span class="normal">        </span><span class="comment">/* The load is being performed. Current URI is</span>
 <span class="comment">         * the final one and it won't change unless a new</span>
 <span class="comment">         * load is requested or a navigation within the</span>
-<span class="comment">         * same page is performed </span><span class="comment">*/</span>
-        uri = webkit_web_view_get_uri (web_view);
-        <span class="keyword">break</span>;
-    <span class="keyword">case</span> WEBKIT_LOAD_FINISHED:
-        <span class="comment">/*</span><span class="comment"> Load finished, we can now stop the spinner </span><span class="comment">*/</span>
-        <span class="keyword">break</span>;
-    }
-}
-
-</body>
-</html>
-<!-- vim: set foldmethod=manual : --></pre></td>
+<span class="comment">         * same page is performed */</span>
+<span class="normal">        uri </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-get-uri">webkit_web_view_get_uri</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_view</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-LOAD-FINISHED:CAPS">WEBKIT_LOAD_FINISHED</a></span><span class="symbol">:</span>
+<span class="normal">        </span><span class="comment">/* Load finished, we can now stop the spinner */</span>
+<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="cbracket">}</span>
+<span class="cbracket">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -5691,95 +5435,31 @@ allowing the user decide what to do with the request:</p>
 21
 22
 23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56</pre></td>
-        <td class="listing_code"><pre class="programlisting"><?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<title>/tmp/tmpLFiJnY.h.xhtml</title>
-<meta name="Generator" content="Vim/8.0" />
-<meta name="plugin-version" content="vim7.4_v2" />
-<meta name="syntax" content="c" />
-<meta name="settings" content="use_xhtml,use_css,pre_wrap,no_foldcolumn,prevent_copy=" />
-<meta name="colorscheme" content="none" />
-<style type="text/css">
+24</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="usertype">gboolean</span><span class="normal"> </span><span class="function">permission_request_cb</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitWebView</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">web_view</span><span class="symbol">,</span>
+<span class="normal">                                       </span><span class="usertype">WebKitPermissionRequest</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">request</span><span class="symbol">,</span>
+<span class="normal">                                       </span><span class="usertype">GtkWindow</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">parent_window</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="usertype">GtkWidget</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">dialog </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../gtk3/GtkMessageDialog.html#gtk-message-dialog-new">gtk_message_dialog_new</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">parent_window</span><span class="symbol">,</span>
+<span class="normal">                                                <a href="../gtk3/GtkDialog.html#GTK-DIALOG-MODAL:CAPS">GTK_DIALOG_MODAL</a></span><span class="symbol">,</span>
+<span class="normal">                                                <a href="../gtk3/GtkMessageDialog.html#GTK-MESSAGE-QUESTION:CAPS">GTK_MESSAGE_QUESTION</a></span><span class="symbol">,</span>
+<span class="normal">                                                <a href="../gtk3/GtkMessageDialog.html#GTK-BUTTONS-YES-NO:CAPS">GTK_BUTTONS_YES_NO</a></span><span class="symbol">,</span>
+<span class="normal">                                                </span><span class="string">"Allow Permission Request?"</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="function"><a href="../gtk3/GtkWidget.html#gtk-widget-show">gtk_widget_show</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">dialog</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="usertype">gint</span><span class="normal"> result </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../gtk3/GtkDialog.html#gtk-dialog-run">gtk_dialog_run</a></span><span class="normal"> </span><span class="symbol">(</span><span class="function">GTK_DIALOG</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">dialog</span><span class="symbol">));</span>
 
-pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
-body { font-family: monospace; color: #000000; background-color: #ffffff; }
-* { font-size: 1em; }
-.Constant { color: #0000c0; text-decoration: underline; }
-.Statement { color: #008080; font-weight: bold; }
-.Type { color: #008000; text-decoration: underline; }
+<span class="normal">    </span><span class="keyword">switch</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">result</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="../gtk3/GtkDialog.html#GTK-RESPONSE-YES:CAPS">GTK_RESPONSE_YES</a></span><span class="symbol">:</span>
+<span class="normal">        </span><span class="function"><a href="WebKitPermissionRequest.html#webkit-permission-request-allow">webkit_permission_request_allow</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
+<span class="label">    default:</span>
+<span class="normal">        </span><span class="function"><a href="WebKitPermissionRequest.html#webkit-permission-request-deny">webkit_permission_request_deny</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="cbracket">}</span>
+<span class="normal">    </span><span class="function"><a href="../gtk3/GtkWidget.html#gtk-widget-destroy">gtk_widget_destroy</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">dialog</span><span class="symbol">);</span>
 
-</style>
-
-<script type='text/javascript'>
-//<![CDATA[
-
-//]]>
-</script>
-</head>
-<body>
-<span class="type">static</span> gboolean permission_request_cb (WebKitWebView *web_view,
-                                       WebKitPermissionRequest *request,
-                                       GtkWindow *parent_window)
-{
-    GtkWidget *dialog = gtk_message_dialog_new (parent_window,
-                                                GTK_DIALOG_MODAL,
-                                                GTK_MESSAGE_QUESTION,
-                                                GTK_BUTTONS_YES_NO,
-                                                <span class="number">&quot;Allow Permission Request?&quot;</span>);
-    gtk_widget_show (dialog);
-    gint result = gtk_dialog_run (GTK_DIALOG (dialog));
-
-    <span class="keyword">switch</span> (result) {
-    <span class="keyword">case</span> GTK_RESPONSE_YES:
-        webkit_permission_request_allow (request);
-        <span class="keyword">break</span>;
-    <span class="keyword">default</span>:
-        webkit_permission_request_deny (request);
-        <span class="keyword">break</span>;
-    }
-    gtk_widget_destroy (dialog);
-
-    <span class="keyword">return</span> TRUE;
-}
-
-</body>
-</html>
-<!-- vim: set foldmethod=manual : --></pre></td>
+<span class="normal">    </span><span class="keyword">return</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS">TRUE</a></span><span class="symbol">;</span>
+<span class="cbracket">}</span></pre></td>
       </tr>
     </tbody>
   </table>

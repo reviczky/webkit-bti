@@ -1843,107 +1843,39 @@ when the data of the request is available or
 29
 30
 31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59
-60
-61
-62
-63
-64
-65
-66</pre></td>
-        <td class="listing_code"><pre class="programlisting"><?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<title>/tmp/tmpBQtokQ.h.xhtml</title>
-<meta name="Generator" content="Vim/8.0" />
-<meta name="plugin-version" content="vim7.4_v2" />
-<meta name="syntax" content="c" />
-<meta name="settings" content="use_xhtml,use_css,pre_wrap,no_foldcolumn,prevent_copy=" />
-<meta name="colorscheme" content="none" />
-<style type="text/css">
+32</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
+<span class="function">about_uri_scheme_request_cb</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitURISchemeRequest</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">request</span><span class="symbol">,</span>
+<span class="normal">                             </span><span class="usertype">gpointer</span><span class="normal">                user_data</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="usertype">GInputStream</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">stream</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="usertype">gsize</span><span class="normal">         stream_length</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="keyword">const</span><span class="normal"> </span><span class="usertype">gchar</span><span class="normal">  </span><span class="symbol">*</span><span class="normal">path</span><span class="symbol">;</span>
 
-pre { white-space: pre-wrap; font-family: monospace; color: #000000; background-color: #ffffff; }
-body { font-family: monospace; color: #000000; background-color: #ffffff; }
-* { font-size: 1em; }
-.Constant { color: #0000c0; text-decoration: underline; }
-.Statement { color: #008080; font-weight: bold; }
-.Comment { color: #c00000; font-weight: bold; }
-.Type { color: #008000; text-decoration: underline; }
-.Special { color: #c000c0; font-weight: bold; }
+<span class="normal">    path </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitURISchemeRequest.html#webkit-uri-scheme-request-get-path">webkit_uri_scheme_request_get_path</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">path</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"plugins"</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="comment">/* Create a GInputStream with the contents of plugins about page, and set its length to stream_length */</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">path</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"memory"</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="comment">/* Create a GInputStream with the contents of memory about page, and set its length to stream_length */</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">path</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"applications"</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="comment">/* Create a GInputStream with the contents of applications about page, and set its length to stream_length */</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">path</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"example"</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="usertype">gchar</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">contents</span><span class="symbol">;</span>
 
-</style>
+<span class="normal">        contents </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strdup-printf">g_strdup_printf</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"&lt;html&gt;&lt;body&gt;&lt;p&gt;Example about page&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;"</span><span class="symbol">);</span>
+<span class="normal">        stream_length </span><span class="symbol">=</span><span class="normal"> </span><span class="function">strlen</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">contents</span><span class="symbol">);</span>
+<span class="normal">        stream </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../gio/GMemoryInputStream.html#g-memory-input-stream-new-from-data">g_memory_input_stream_new_from_data</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">contents</span><span class="symbol">,</span><span class="normal"> stream_length</span><span class="symbol">,</span><span class="normal"> <a href="../glib/glib-Memory-Allocation.html#g-free">g_free</a></span><span class="symbol">);</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="usertype">GError</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">error</span><span class="symbol">;</span>
 
-<script type='text/javascript'>
-//<![CDATA[
-
-//]]>
-</script>
-</head>
-<body>
-<span class="type">static</span> <span class="type">void</span>
-about_uri_scheme_request_cb (WebKitURISchemeRequest *request,
-                             gpointer                user_data)
-{
-    GInputStream *stream;
-    gsize         stream_length;
-    <span class="type">const</span> gchar  *path;
-
-    path = webkit_uri_scheme_request_get_path (request);
-    <span class="keyword">if</span> (!g_strcmp0 (path, <span class="number">&quot;plugins&quot;</span>)) {
-        <span class="comment">/*</span><span class="comment"> Create a GInputStream with the contents of plugins about page, and set its length to stream_length </span><span class="comment">*/</span>
-    } <span class="keyword">else</span> <span class="keyword">if</span> (!g_strcmp0 (path, <span class="number">&quot;memory&quot;</span>)) {
-        <span class="comment">/*</span><span class="comment"> Create a GInputStream with the contents of memory about page, and set its length to stream_length </span><span class="comment">*/</span>
-    } <span class="keyword">else</span> <span class="keyword">if</span> (!g_strcmp0 (path, <span class="number">&quot;applications&quot;</span>)) {
-        <span class="comment">/*</span><span class="comment"> Create a GInputStream with the contents of applications about page, and set its length to stream_length </span><span class="comment">*/</span>
-    } <span class="keyword">else</span> <span class="keyword">if</span> (!g_strcmp0 (path, <span class="number">&quot;example&quot;</span>)) {
-        gchar *contents;
-
-        contents = g_strdup_printf (<span class="number">&quot;&lt;html&gt;&lt;body&gt;&lt;p&gt;Example about page&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;&quot;</span>);
-        stream_length = strlen (contents);
-        stream = g_memory_input_stream_new_from_data (contents, stream_length, g_free);
-    } <span class="keyword">else</span> {
-        GError *error;
-
-        error = g_error_new (ABOUT_HANDLER_ERROR, ABOUT_HANDLER_ERROR_INVALID, <span class="number">&quot;Invalid about:</span><span class="symbol">%s</span><span class="number"> page.&quot;</span>, path);
-        webkit_uri_scheme_request_finish_error (request, error);
-        g_error_free (error);
-        <span class="keyword">return</span>;
-    }
-    webkit_uri_scheme_request_finish (request, stream, stream_length, <span class="number">&quot;text/html&quot;</span>);
-    g_object_unref (stream);
-}
-
-</body>
-</html>
-<!-- vim: set foldmethod=manual : --></pre></td>
+<span class="normal">        error </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../glib/glib-Error-Reporting.html#g-error-new">g_error_new</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">ABOUT_HANDLER_ERROR</span><span class="symbol">,</span><span class="normal"> ABOUT_HANDLER_ERROR_INVALID</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"Invalid about:%s page."</span><span class="symbol">,</span><span class="normal"> path</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="function"><a href="WebKitURISchemeRequest.html#webkit-uri-scheme-request-finish-error">webkit_uri_scheme_request_finish_error</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">,</span><span class="normal"> error</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="function"><a href="../glib/glib-Error-Reporting.html#g-error-free">g_error_free</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">error</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="keyword">return</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="cbracket">}</span>
+<span class="normal">    </span><span class="function"><a href="WebKitURISchemeRequest.html#webkit-uri-scheme-request-finish">webkit_uri_scheme_request_finish</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">,</span><span class="normal"> stream</span><span class="symbol">,</span><span class="normal"> stream_length</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"text/html"</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="function"><a href="../gobject/gobject-The-Base-Object-Type.html#g-object-unref">g_object_unref</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">stream</span><span class="symbol">);</span>
+<span class="cbracket">}</span></pre></td>
       </tr>
     </tbody>
   </table>

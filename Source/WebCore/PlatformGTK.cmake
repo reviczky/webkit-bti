@@ -114,6 +114,8 @@ list(APPEND WebCore_SOURCES
     platform/gtk/ScrollAnimatorGtk.cpp
     platform/gtk/SelectionData.cpp
 
+    platform/network/glib/NetworkStateNotifierGLib.cpp
+
     platform/network/soup/AuthenticationChallengeSoup.cpp
     platform/network/soup/CertificateInfo.cpp
     platform/network/soup/CookieJarSoup.cpp
@@ -152,7 +154,8 @@ list(APPEND WebCorePlatformGTK_SOURCES
     editing/gtk/EditorGtk.cpp
 
     page/gtk/DragControllerGtk.cpp
-    page/gtk/EventHandlerGtk.cpp
+
+    platform/glib/EventHandlerGLib.cpp
 
     platform/graphics/PlatformDisplay.cpp
 

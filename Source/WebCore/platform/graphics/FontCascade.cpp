@@ -40,10 +40,6 @@
 #include <wtf/text/AtomicStringHash.h>
 #include <wtf/text/StringBuilder.h>
 
-#if USE(CAIRO)
-#include <cairo.h>
-#endif
-
 using namespace WTF;
 using namespace Unicode;
 
@@ -415,13 +411,7 @@ float FontCascade::widthForSimpleText(StringView text) const
         runWidth += glyphWidth;
         if (!hasKerningOrLigatures)
             continue;
-#if USE(CAIRO)
-        cairo_glyph_t cairoGlyph;
-        cairoGlyph.index = glyph;
-        glyphs.append(cairoGlyph);
-#else
         glyphs.append(glyph);
-#endif
         advances.append(FloatSize(glyphWidth, 0));
     }
     if (hasKerningOrLigatures) {
@@ -819,6 +809,11 @@ FontCascade::CodePath FontCascade::characterRangeCodePath(const UChar* character
                 previousCharacterIsEmojiGroupCandidate = true;
                 continue;
             }
+
+            if (supplementaryCharacter < 0xE0000)
+                continue;
+            if (supplementaryCharacter < 0xE0080) // Tags
+                return Complex;
             if (supplementaryCharacter < 0xE0100) // U+E0100 through U+E01EF Unicode variation selectors.
                 continue;
             if (supplementaryCharacter <= 0xE01EF)

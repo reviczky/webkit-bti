@@ -51,12 +51,6 @@
 #define DEFAULT_PDFPLUGIN_ENABLED false
 #endif
 
-#if PLATFORM(COCOA)
-#define DEFAULT_HTML_INTERACTIVE_FORM_VALIDATION_ENABLED true
-#else
-#define DEFAULT_HTML_INTERACTIVE_FORM_VALIDATION_ENABLED false
-#endif
-
 #if PLATFORM(IOS)
 #define DEFAULT_ALLOWS_PICTURE_IN_PICTURE_MEDIA_PLAYBACK true
 #define DEFAULT_BACKSPACE_KEY_NAVIGATION_ENABLED false
@@ -280,7 +274,7 @@
     macro(EncryptedMediaAPIEnabled, encryptedMediaAPIEnabled, Bool, bool, false, "", "") \
     macro(MediaPreloadingEnabled, mediaPreloadingEnabled, Bool, bool, false, "", "") \
     macro(IntersectionObserverEnabled, intersectionObserverEnabled, Bool, bool, false, "Intersection Observer", "Enable Intersection Observer support") \
-    macro(InteractiveFormValidationEnabled, interactiveFormValidationEnabled, Bool, bool, DEFAULT_HTML_INTERACTIVE_FORM_VALIDATION_ENABLED, "HTML Interactive Form Validation", "HTML interactive form validation") \
+    macro(InteractiveFormValidationEnabled, interactiveFormValidationEnabled, Bool, bool, true, "HTML Interactive Form Validation", "HTML interactive form validation") \
     macro(ShouldSuppressKeyboardInputDuringProvisionalNavigation, shouldSuppressKeyboardInputDuringProvisionalNavigation, Bool, bool, false, "", "") \
     macro(CSSGridLayoutEnabled, cssGridLayoutEnabled, Bool, bool, true, "CSS Grid", "CSS Grid Layout Module support") \
     macro(GamepadsEnabled, gamepadsEnabled, Bool, bool, true, "Gamepads", "Web Gamepad API support") \
@@ -360,7 +354,7 @@
 
 #define FOR_EACH_WEBKIT_EXPERIMENTAL_FEATURE_PREFERENCE(macro) \
     macro(BeaconAPIEnabled, beaconAPIEnabled, Bool, bool, false, "Beacon API", "Beacon API prototype") \
-    macro(ConstantPropertiesEnabled, constantPropertiesEnabled, Bool, bool, true, "Constant Properties", "Enable CSS constant() properties") \
+    macro(ConstantPropertiesEnabled, constantPropertiesEnabled, Bool, bool, DEFAULT_EXPERIMENTAL_FEATURES_ENABLED, "Constant Properties", "Enable CSS constant() properties") \
     macro(DisplayContentsEnabled, displayContentsEnabled, Bool, bool, false, "CSS display: contents", "Enable CSS display: contents support") \
     macro(SpringTimingFunctionEnabled, springTimingFunctionEnabled, Bool, bool, DEFAULT_EXPERIMENTAL_FEATURES_ENABLED, "CSS Spring Animations", "CSS Spring Animation prototype") \
     macro(LinkPreloadEnabled, linkPreloadEnabled, Bool, bool, DEFAULT_EXPERIMENTAL_FEATURES_ENABLED, "Link Preload", "Link preload support") \

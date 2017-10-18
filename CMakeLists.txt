@@ -1,4 +1,15 @@
+# -----------------------------------------------------------------------------
+# Determine CMake version and build type.
+# -----------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.3)
+
+if (NOT CMAKE_BUILD_TYPE)
+    message(WARNING "No CMAKE_BUILD_TYPE value specified, defaulting to RelWithDebInfo.")
+    set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Choose the type of build." FORCE)
+else ()
+    message(STATUS "The CMake build type is: ${CMAKE_BUILD_TYPE}")
+endif ()
+
 project(WebKit)
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/Source/cmake")
@@ -69,6 +80,8 @@ if (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "^arm")
     set(WTF_CPU_ARM 1)
 elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "^aarch64")
     set(WTF_CPU_ARM64 1)
+elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "alpha*")
+    set(WTF_CPU_ALPHA 1)
 elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "^mips")
     set(WTF_CPU_MIPS 1)
 elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "sh4")
