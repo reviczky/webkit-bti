@@ -17,6 +17,9 @@ webkit2gtk (2.18.1-1) UNRELEASED; urgency=medium
   * debian/patches/fix-ftbfs-alpha.patch:
     + This patch is no longer needed, drop it.
   * Refresh all other patches.
+  * debian/control:
+    + Remove 'Priority: extra' fields, all packages have optional priority
+      now (the 'extra' priority has been deprecated).
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 18 Oct 2017 14:36:55 +0300
 

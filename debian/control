@@ -73,7 +73,6 @@ Description: JavaScript engine library from WebKitGTK+
 
 Package: libjavascriptcoregtk-4.0-dev
 Section: libdevel
-Priority: extra
 Architecture: any
 Multi-Arch: same
 Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
@@ -156,7 +155,6 @@ Description: Web content engine library for GTK+
 
 Package: libwebkit2gtk-4.0-dev
 Section: libdevel
-Priority: extra
 Architecture: any
 Multi-Arch: same
 Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
@@ -183,7 +181,6 @@ Description: Web content engine library for GTK+ - development files
 
 Package: libwebkit2gtk-4.0-doc
 Section: doc
-Priority: extra
 Architecture: all
 Depends: ${misc:Depends}
 Suggests: devhelp
