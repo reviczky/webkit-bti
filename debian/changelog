@@ -1,5 +1,6 @@
-webkit2gtk (2.18.1-2) UNRELEASED; urgency=medium
+webkit2gtk (2.18.2-1) UNRELEASED; urgency=medium
 
+  * New upstream release.
   * debian/control:
     + Set the minimum versions of these build dependencies: cmake >= 3.3,
       libcairo2-dev >= 1.10.2, libfontconfig1-dev >= 2.8, and
