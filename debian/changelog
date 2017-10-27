@@ -1,4 +1,4 @@
-webkit2gtk (2.18.2-1) UNRELEASED; urgency=medium
+webkit2gtk (2.18.2-1) unstable; urgency=medium
 
   * New upstream release.
   * debian/control:
@@ -6,7 +6,7 @@ webkit2gtk (2.18.2-1) UNRELEASED; urgency=medium
       libcairo2-dev >= 1.10.2, libfontconfig1-dev >= 2.8, and
       libgcrypt20-dev >= 1.7.0, libxml2-dev >= 2.8.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 26 Oct 2017 21:47:00 +0200
+ -- Alberto Garcia <berto@igalia.com>  Fri, 27 Oct 2017 15:05:15 +0200
 
 webkit2gtk (2.18.1-1) unstable; urgency=medium
 
