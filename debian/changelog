@@ -4,6 +4,8 @@ webkit2gtk (2.19.1-1) UNRELEASED; urgency=medium
   * Refresh all patches.
   * debian/watch, debian/gbp.conf:
     + Update for 2.19.x packages in experimental.
+  * debian/control:
+    + Add build dependency on libupower-glib-dev.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 02 Nov 2017 14:56:41 +0200
 
