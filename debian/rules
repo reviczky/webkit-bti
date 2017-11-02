@@ -73,6 +73,7 @@ override_dh_auto_configure:
 	   -DCMAKE_CXX_FLAGS_RELEASE="" \
 	   -DCMAKE_CXX_FLAGS_DEBUG="" \
 	   -DENABLE_MINIBROWSER=ON \
+	   -DUSE_WOFF2=OFF \
 	   $(EXTRA_CMAKE_ARGUMENTS)
 
 override_dh_strip:
