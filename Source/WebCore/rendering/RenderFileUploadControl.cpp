@@ -61,9 +61,7 @@ RenderFileUploadControl::RenderFileUploadControl(HTMLInputElement& input, Render
 {
 }
 
-RenderFileUploadControl::~RenderFileUploadControl()
-{
-}
+RenderFileUploadControl::~RenderFileUploadControl() = default;
 
 HTMLInputElement& RenderFileUploadControl::inputElement() const
 {
@@ -241,7 +239,7 @@ void RenderFileUploadControl::computePreferredLogicalWidths()
     setPreferredLogicalWidthsDirty(false);
 }
 
-VisiblePosition RenderFileUploadControl::positionForPoint(const LayoutPoint&, const RenderRegion*)
+VisiblePosition RenderFileUploadControl::positionForPoint(const LayoutPoint&, const RenderFragmentContainer*)
 {
     return VisiblePosition();
 }

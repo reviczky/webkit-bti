@@ -52,8 +52,8 @@ GStreamerMediaSample::GStreamerMediaSample(GstSample* sample, const FloatSize& p
 
     if (GST_BUFFER_PTS_IS_VALID(buffer))
         m_pts = createMediaTime(GST_BUFFER_PTS(buffer));
-    if (GST_BUFFER_DTS_IS_VALID(buffer))
-        m_dts = createMediaTime(GST_BUFFER_DTS(buffer));
+    if (GST_BUFFER_DTS_IS_VALID(buffer) || GST_BUFFER_PTS_IS_VALID(buffer))
+        m_dts = createMediaTime(GST_BUFFER_DTS_OR_PTS(buffer));
     if (GST_BUFFER_DURATION_IS_VALID(buffer))
         m_duration = createMediaTime(GST_BUFFER_DURATION(buffer));
 
@@ -93,8 +93,8 @@ void GStreamerMediaSample::offsetTimestampsBy(const MediaTime& timestampOffset)
     m_dts += timestampOffset;
     GstBuffer* buffer = gst_sample_get_buffer(m_sample.get());
     if (buffer) {
-        GST_BUFFER_PTS(buffer) = toGstClockTime(m_pts.toFloat());
-        GST_BUFFER_DTS(buffer) = toGstClockTime(m_dts.toFloat());
+        GST_BUFFER_PTS(buffer) = toGstClockTime(m_pts);
+        GST_BUFFER_DTS(buffer) = toGstClockTime(m_dts);
     }
 }
 

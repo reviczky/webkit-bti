@@ -134,7 +134,7 @@ public:
 
     HTMLElement* containerElement() const;
     
-    TextControlInnerTextElement* innerTextElement() const final;
+    RefPtr<TextControlInnerTextElement> innerTextElement() const final;
     RenderStyle createInnerTextStyle(const RenderStyle&) const override;
 
     HTMLElement* innerBlockElement() const;
@@ -238,6 +238,9 @@ public:
 
     AutoFillButtonType autoFillButtonType() const { return (AutoFillButtonType)m_autoFillButtonType; }
     WEBCORE_EXPORT void setShowAutoFillButton(AutoFillButtonType);
+
+    bool isAutoFillAvailable() const { return m_isAutoFillAvailable; }
+    void setAutoFillAvailable(bool autoFillAvailable) { m_isAutoFillAvailable = autoFillAvailable; }
 
     WEBCORE_EXPORT FileList* files();
     WEBCORE_EXPORT void setFiles(RefPtr<FileList>&&);
@@ -347,9 +350,9 @@ private:
 
     void willChangeForm() final;
     void didChangeForm() final;
-    InsertionNotificationRequest insertedInto(ContainerNode&) final;
-    void finishedInsertingSubtree() final;
-    void removedFrom(ContainerNode&) final;
+    InsertedIntoAncestorResult insertedIntoAncestor(InsertionType, ContainerNode&) final;
+    void didFinishInsertingNode() final;
+    void removedFromAncestor(RemovalType, ContainerNode&) final;
     void didMoveToNewDocument(Document& oldDocument, Document& newDocument) final;
 
     bool hasCustomFocusLogic() const final;
@@ -382,7 +385,7 @@ private:
 
     void copyNonAttributePropertiesFromElement(const Element&) final;
 
-    bool appendFormData(FormDataList&, bool) final;
+    bool appendFormData(DOMFormData&, bool) final;
 
     bool isSuccessfulSubmitButton() const final;
     bool matchesDefaultPseudoClass() const final;
@@ -449,6 +452,7 @@ private:
     unsigned m_autocomplete : 2; // AutoCompleteSetting
     bool m_isAutoFilled : 1;
     unsigned m_autoFillButtonType : 2; // AutoFillButtonType;
+    bool m_isAutoFillAvailable : 1;
 #if ENABLE(DATALIST_ELEMENT)
     bool m_hasNonEmptyList : 1;
 #endif

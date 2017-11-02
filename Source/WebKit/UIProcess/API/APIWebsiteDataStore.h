@@ -28,7 +28,7 @@
 
 #include "APIHTTPCookieStore.h"
 #include "WebsiteDataStore.h"
-#include <WebCore/SessionID.h>
+#include <pal/SessionID.h>
 #include <wtf/text/WTFString.h>
 
 namespace API {
@@ -36,10 +36,12 @@ namespace API {
 class WebsiteDataStore final : public ObjectImpl<Object::Type::WebsiteDataStore> {
 public:
     static Ref<WebsiteDataStore> defaultDataStore();
+    static bool defaultDataStoreExists();
+
     static Ref<WebsiteDataStore> createNonPersistentDataStore();
     static Ref<WebsiteDataStore> createLegacy(WebKit::WebsiteDataStore::Configuration);
 
-    explicit WebsiteDataStore(WebKit::WebsiteDataStore::Configuration, WebCore::SessionID);
+    explicit WebsiteDataStore(WebKit::WebsiteDataStore::Configuration, PAL::SessionID);
     virtual ~WebsiteDataStore();
 
     bool isPersistent();
@@ -51,6 +53,7 @@ public:
     HTTPCookieStore& httpCookieStore();
 
     static String defaultApplicationCacheDirectory();
+    static String defaultCacheStorageDirectory();
     static String defaultNetworkCacheDirectory();
     static String defaultMediaCacheDirectory();
 

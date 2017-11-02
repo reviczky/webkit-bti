@@ -25,7 +25,7 @@
 
 WI.Canvas = class Canvas extends WI.Object
 {
-    constructor(identifier, contextType, frame, {domNode, cssCanvasName, contextAttributes, memoryCost} = {})
+    constructor(identifier, contextType, frame, {domNode, cssCanvasName, contextAttributes, memoryCost, backtrace} = {})
     {
         super();
 
@@ -40,11 +40,15 @@ WI.Canvas = class Canvas extends WI.Object
         this._cssCanvasName = cssCanvasName || "";
         this._contextAttributes = contextAttributes || {};
         this._memoryCost = memoryCost || NaN;
+        this._backtrace = backtrace || [];
 
         this._cssCanvasClientNodes = null;
-        this._shaderProgramCollection = new WI.Collection(WI.Collection.TypeVerifier.ShaderProgram);
+        this._shaderProgramCollection = new WI.ShaderProgramCollection;
+        this._recordingCollection = new WI.RecordingCollection;
 
         this._nextShaderProgramDisplayNumber = 1;
+
+        this._requestNodePromise = null;
     }
 
     // Static
@@ -75,6 +79,7 @@ WI.Canvas = class Canvas extends WI.Object
             cssCanvasName: payload.cssCanvasName,
             contextAttributes: payload.contextAttributes,
             memoryCost: payload.memoryCost,
+            backtrace: Array.isArray(payload.backtrace) ? payload.backtrace.map((item) => WI.CallFrame.fromPayload(WI.mainTarget, item)) : [],
         });
     }
 
@@ -106,7 +111,14 @@ WI.Canvas = class Canvas extends WI.Object
     get frame() { return this._frame; }
     get cssCanvasName() { return this._cssCanvasName; }
     get contextAttributes() { return this._contextAttributes; }
+    get backtrace() { return this._backtrace; }
     get shaderProgramCollection() { return this._shaderProgramCollection; }
+    get recordingCollection() { return this._recordingCollection; }
+
+    get isRecording()
+    {
+        return WI.canvasManager.recordingCanvas === this;
+    }
 
     get memoryCost()
     {
@@ -139,36 +151,29 @@ WI.Canvas = class Canvas extends WI.Object
         return WI.UIString("Canvas %d").format(this._uniqueDisplayNameNumber);
     }
 
-    requestNode(callback)
+    requestNode()
     {
-        if (this._domNode) {
-            callback(this._domNode);
-            return;
+        if (!this._requestNodePromise) {
+            this._requestNodePromise = new Promise((resolve, reject) => {
+                WI.domTreeManager.ensureDocument();
+
+                CanvasAgent.requestNode(this._identifier).then((result) => {
+                    this._domNode = WI.domTreeManager.nodeForId(result.nodeId);
+                    if (!this._domNode) {
+                        reject(`No DOM node for identifier: ${result.nodeId}.`);
+                        return;
+                    }
+                    resolve(this._domNode);
+                }).catch(reject);
+            });
         }
 
-        WI.domTreeManager.ensureDocument();
-
-        CanvasAgent.requestNode(this._identifier, (error, nodeId) => {
-            if (error) {
-                callback(null);
-                return;
-            }
-
-            this._domNode = WI.domTreeManager.nodeForId(nodeId);
-            callback(this._domNode);
-        });
+        return this._requestNodePromise;
     }
 
-    requestContent(callback)
+    requestContent()
     {
-        CanvasAgent.requestContent(this._identifier, (error, content) => {
-            if (error) {
-                callback(null);
-                return;
-            }
-
-            callback(content);
-        });
+        return CanvasAgent.requestContent(this._identifier).then((result) => result.content).catch((error) => console.error(error));
     }
 
     requestCSSCanvasClientNodes(callback)
@@ -193,17 +198,60 @@ WI.Canvas = class Canvas extends WI.Object
 
             clientNodeIds = Array.isArray(clientNodeIds) ? clientNodeIds : [];
             this._cssCanvasClientNodes = clientNodeIds.map((clientNodeId) => WI.domTreeManager.nodeForId(clientNodeId));
-
             callback(this._cssCanvasClientNodes);
         });
     }
 
-    toggleRecording(flag, singleFrame, callback)
+    requestSize()
     {
-        if (flag)
-            CanvasAgent.requestRecording(this._identifier, singleFrame, callback);
-        else
-            CanvasAgent.cancelRecording(this._identifier, callback);
+        function calculateSize(domNode) {
+            function getAttributeValue(name) {
+                let value = Number(domNode.getAttribute(name));
+                if (!Number.isInteger(value) || value < 0)
+                    return NaN;
+                return value;
+            }
+
+            return {
+                width: getAttributeValue("width"),
+                height: getAttributeValue("height")
+            };
+        }
+
+        function getPropertyValue(remoteObject, name) {
+            return new Promise((resolve, reject) => {
+                remoteObject.getProperty(name, (error, result) => {
+                    if (error) {
+                        reject(error);
+                        return;
+                    }
+                    resolve(result);
+                });
+            });
+        }
+
+        return this.requestNode().then((domNode) => {
+            let size = calculateSize(domNode);
+            if (!isNaN(size.width) && !isNaN(size.height))
+                return size;
+
+            // Since the "width" and "height" properties of canvas elements are more than just
+            // attributes, we need to invoke the getter for each to get the actual value.
+            //  - https://html.spec.whatwg.org/multipage/canvas.html#attr-canvas-width
+            //  - https://html.spec.whatwg.org/multipage/canvas.html#attr-canvas-height
+            let remoteObject = null;
+            return WI.RemoteObject.resolveNode(domNode).then((object) => {
+                remoteObject = object;
+                return Promise.all([getPropertyValue(object, "width"), getPropertyValue(object, "height")]);
+            }).then((values) => {
+                let width = values[0].value;
+                let height = values[1].value;
+                values[0].release();
+                values[1].release();
+                remoteObject.release();
+                return {width, height};
+            });
+        });
     }
 
     saveIdentityToCookie(cookie)
@@ -248,8 +296,6 @@ WI.Canvas.ContextType = {
     WebGL2: "webgl2",
     WebGPU: "webgpu",
 };
-
-WI.Canvas.ResourceSidebarType = "resource-type-canvas";
 
 WI.Canvas.Event = {
     MemoryChanged: "canvas-memory-changed",

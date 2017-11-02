@@ -31,13 +31,21 @@
 
 namespace API {
 
+static WebsiteDataStore* globalDefaultDataStore;
+
 Ref<WebsiteDataStore> WebsiteDataStore::defaultDataStore()
 {
     WebKit::InitializeWebKit2();
 
-    static WebsiteDataStore* defaultDataStore = adoptRef(new WebsiteDataStore(defaultDataStoreConfiguration(), WebCore::SessionID::defaultSessionID())).leakRef();
+    if (!globalDefaultDataStore)
+        globalDefaultDataStore = adoptRef(new WebsiteDataStore(defaultDataStoreConfiguration(), PAL::SessionID::defaultSessionID())).leakRef();
 
-    return *defaultDataStore;
+    return *globalDefaultDataStore;
+}
+
+bool WebsiteDataStore::defaultDataStoreExists()
+{
+    return globalDefaultDataStore;
 }
 
 Ref<WebsiteDataStore> WebsiteDataStore::createNonPersistentDataStore()
@@ -47,7 +55,7 @@ Ref<WebsiteDataStore> WebsiteDataStore::createNonPersistentDataStore()
 
 Ref<WebsiteDataStore> WebsiteDataStore::createLegacy(WebKit::WebsiteDataStore::Configuration configuration)
 {
-    return adoptRef(*new WebsiteDataStore(WTFMove(configuration), WebCore::SessionID::defaultSessionID()));
+    return adoptRef(*new WebsiteDataStore(WTFMove(configuration), PAL::SessionID::defaultSessionID()));
 }
 
 WebsiteDataStore::WebsiteDataStore()
@@ -55,7 +63,7 @@ WebsiteDataStore::WebsiteDataStore()
 {
 }
 
-WebsiteDataStore::WebsiteDataStore(WebKit::WebsiteDataStore::Configuration configuration, WebCore::SessionID sessionID)
+WebsiteDataStore::WebsiteDataStore(WebKit::WebsiteDataStore::Configuration configuration, PAL::SessionID sessionID)
     : m_websiteDataStore(WebKit::WebsiteDataStore::create(WTFMove(configuration), sessionID))
 {
 }

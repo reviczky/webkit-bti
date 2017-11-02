@@ -25,7 +25,7 @@
 
 WI.ContentBrowser = class ContentBrowser extends WI.View
 {
-    constructor(element, delegate, disableBackForward, disableFindBanner, flexibleNavigationItem)
+    constructor(element, delegate, disableBackForward, disableFindBanner, flexibleNavigationItem, contentViewNavigationItemGroup)
     {
         super(element);
 
@@ -57,12 +57,13 @@ WI.ContentBrowser = class ContentBrowser extends WI.View
             this._backNavigationItem = new WI.ButtonNavigationItem("back", WI.UIString("Back (%s)").format(this._backKeyboardShortcut.displayName), backButtonImage, 8, 13);
             this._backNavigationItem.addEventListener(WI.ButtonNavigationItem.Event.Clicked, goBack);
             this._backNavigationItem.enabled = false;
-            this._navigationBar.addNavigationItem(this._backNavigationItem);
 
             this._forwardNavigationItem = new WI.ButtonNavigationItem("forward", WI.UIString("Forward (%s)").format(this._forwardKeyboardShortcut.displayName), forwardButtonImage, 8, 13);
             this._forwardNavigationItem.addEventListener(WI.ButtonNavigationItem.Event.Clicked, goForward);
             this._forwardNavigationItem.enabled = false;
-            this._navigationBar.addNavigationItem(this._forwardNavigationItem);
+
+            let navigationButtonsGroup = new WI.GroupNavigationItem([this._backNavigationItem, this._forwardNavigationItem]);
+            this._navigationBar.addNavigationItem(navigationButtonsGroup);
 
             this._navigationBar.addNavigationItem(new WI.DividerNavigationItem);
         }
@@ -81,6 +82,8 @@ WI.ContentBrowser = class ContentBrowser extends WI.View
 
         this._flexibleNavigationItem = flexibleNavigationItem || new WI.FlexibleSpaceNavigationItem;
         this._navigationBar.addNavigationItem(this._flexibleNavigationItem);
+
+        this._currentContentViewNavigationItemsGroup = contentViewNavigationItemGroup || null;
 
         WI.ContentView.addEventListener(WI.ContentView.Event.SelectionPathComponentsDidChange, this._contentViewSelectionPathComponentDidChange, this);
         WI.ContentView.addEventListener(WI.ContentView.Event.SupplementalRepresentedObjectsDidChange, this._contentViewSupplementalRepresentedObjectsDidChange, this);
@@ -226,9 +229,48 @@ WI.ContentBrowser = class ContentBrowser extends WI.View
         this._findBanner.show();
     }
 
+    shown()
+    {
+        this._contentViewContainer.shown();
+    }
+
+    hidden()
+    {
+        this._contentViewContainer.hidden();
+    }
+
+    // Global ContentBrowser KeyboardShortcut handlers
+
+    handlePopulateFindShortcut()
+    {
+        let currentContentView = this.currentContentView;
+        if (!currentContentView || !currentContentView.supportsSearch)
+            return;
+
+        let searchQuery = currentContentView.searchQueryWithSelection();
+        if (!searchQuery)
+            return;
+
+        this._findBanner.searchQuery = searchQuery;
+
+        currentContentView.performSearch(this._findBanner.searchQuery);
+    }
+
+    handleFindNextShortcut()
+    {
+        this.findBannerRevealNextResult(this._findBanner);
+    }
+
+    handleFindPreviousShortcut()
+    {
+        this.findBannerRevealPreviousResult(this._findBanner);
+    }
+
+    // FindBanner delegate
+
     findBannerPerformSearch(findBanner, query)
     {
-        var currentContentView = this.currentContentView;
+        let currentContentView = this.currentContentView;
         if (!currentContentView || !currentContentView.supportsSearch)
             return;
 
@@ -237,25 +279,16 @@ WI.ContentBrowser = class ContentBrowser extends WI.View
 
     findBannerSearchCleared(findBanner)
     {
-        var currentContentView = this.currentContentView;
+        let currentContentView = this.currentContentView;
         if (!currentContentView || !currentContentView.supportsSearch)
             return;
 
         currentContentView.searchCleared();
     }
 
-    findBannerSearchQueryForSelection(findBanner)
-    {
-        var currentContentView = this.currentContentView;
-        if (!currentContentView || !currentContentView.supportsSearch)
-            return null;
-
-        return currentContentView.searchQueryWithSelection();
-    }
-
     findBannerRevealPreviousResult(findBanner)
     {
-        var currentContentView = this.currentContentView;
+        let currentContentView = this.currentContentView;
         if (!currentContentView || !currentContentView.supportsSearch)
             return;
 
@@ -264,27 +297,11 @@ WI.ContentBrowser = class ContentBrowser extends WI.View
 
     findBannerRevealNextResult(findBanner)
     {
-        var currentContentView = this.currentContentView;
+        let currentContentView = this.currentContentView;
         if (!currentContentView || !currentContentView.supportsSearch)
             return;
 
         currentContentView.revealNextSearchResult(!findBanner.showing);
-    }
-
-    shown()
-    {
-        this._contentViewContainer.shown();
-
-        if (this._findBanner)
-            this._findBanner.enableKeyboardShortcuts();
-    }
-
-    hidden()
-    {
-        this._contentViewContainer.hidden();
-
-        if (this._findBanner)
-            this._findBanner.disableKeyboardShortcuts();
     }
 
     // Private
@@ -343,6 +360,9 @@ WI.ContentBrowser = class ContentBrowser extends WI.View
         var selectionPathComponents = contentView ? contentView.selectionPathComponents || [] : [];
         this._contentViewSelectionPathNavigationItem.components = selectionPathComponents;
 
+        if (this._currentContentViewNavigationItemsGroup)
+            return;
+
         if (!selectionPathComponents.length) {
             this._hierarchicalPathNavigationItem.alwaysShowLastPathComponentSeparator = false;
             this._navigationBar.removeNavigationItem(this._contentViewSelectionPathNavigationItem);
@@ -373,6 +393,8 @@ WI.ContentBrowser = class ContentBrowser extends WI.View
         if (!currentContentView) {
             this._removeAllNavigationItems();
             this._currentContentViewNavigationItems = [];
+            if (this._currentContentViewNavigationItemsGroup)
+                this._currentContentViewNavigationItems.push(this._contentViewSelectionPathNavigationItem);
             return;
         }
 
@@ -397,18 +419,24 @@ WI.ContentBrowser = class ContentBrowser extends WI.View
 
         // Keep track of items we'll be adding to the navigation bar.
         let newNavigationItems = [];
+        let shouldInsert = !this._currentContentViewNavigationItemsGroup;
 
         // Go through each of the items of the new content view and add a divider before them.
         currentContentView.navigationItems.forEach(function(navigationItem, index) {
             // Add dividers before items unless it's the first item and not a button.
             if (index !== 0 || navigationItem instanceof WI.ButtonNavigationItem) {
                 let divider = new WI.DividerNavigationItem;
-                navigationBar.insertNavigationItem(divider, insertionIndex++);
+                if (shouldInsert)
+                    navigationBar.insertNavigationItem(divider, insertionIndex++);
                 newNavigationItems.push(divider);
             }
-            navigationBar.insertNavigationItem(navigationItem, insertionIndex++);
+            if (shouldInsert)
+                navigationBar.insertNavigationItem(navigationItem, insertionIndex++);
             newNavigationItems.push(navigationItem);
         });
+
+        if (this._currentContentViewNavigationItemsGroup)
+            this._currentContentViewNavigationItemsGroup.navigationItems = [this._contentViewSelectionPathNavigationItem].concat(newNavigationItems);
 
         // Remember the navigation items we inserted so we can remove them
         // for the next content view.
@@ -417,9 +445,13 @@ WI.ContentBrowser = class ContentBrowser extends WI.View
 
     _removeAllNavigationItems()
     {
-        for (let navigationItem of this._currentContentViewNavigationItems) {
-            if (navigationItem.parentNavigationBar)
-                navigationItem.parentNavigationBar.removeNavigationItem(navigationItem);
+        if (this._currentContentViewNavigationItemsGroup)
+            this._currentContentViewNavigationItemsGroup.navigationItems = [];
+        else {
+            for (let navigationItem of this._currentContentViewNavigationItems) {
+                if (navigationItem.parentNavigationBar)
+                    navigationItem.parentNavigationBar.removeNavigationItem(navigationItem);
+            }
         }
     }
 

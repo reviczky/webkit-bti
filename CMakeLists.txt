@@ -135,8 +135,8 @@ endif ()
 set(WTF_LIBRARY_TYPE STATIC)
 set(JavaScriptCore_LIBRARY_TYPE SHARED)
 set(PAL_LIBRARY_TYPE STATIC)
+set(WebKitLegacy_LIBRARY_TYPE SHARED)
 set(WebKit_LIBRARY_TYPE SHARED)
-set(WebKit2_LIBRARY_TYPE SHARED)
 set(WebCoreTestSupport_LIBRARY_TYPE STATIC)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE True)
@@ -175,6 +175,14 @@ add_subdirectory(Source)
 # -----------------------------------------------------------------------------
 if (ENABLE_TOOLS)
     add_subdirectory(Tools)
+endif ()
+
+if ("${PORT}" STREQUAL "GTK" OR "${PORT}" STREQUAL "WPE")
+    if (DEVELOPER_MODE)
+        add_subdirectory(PerformanceTests)
+    endif ()
+else ()
+    add_subdirectory(PerformanceTests)
 endif ()
 
 # -----------------------------------------------------------------------------

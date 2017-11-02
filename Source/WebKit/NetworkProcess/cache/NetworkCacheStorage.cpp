@@ -26,8 +26,6 @@
 #include "config.h"
 #include "NetworkCacheStorage.h"
 
-#if ENABLE(NETWORK_CACHE)
-
 #include "Logging.h"
 #include "NetworkCacheCoders.h"
 #include "NetworkCacheFileSystem.h"
@@ -846,10 +844,7 @@ void Storage::store(const Record& record, MappedBodyHandler&& mappedBodyHandler)
     if (!isInitialWrite)
         return;
 
-    // Delay the start of writes a bit to avoid affecting early page load.
-    // Completing writes will dispatch more writes without delay.
-    static const Seconds initialWriteDelay = 1_s;
-    m_writeOperationDispatchTimer.startOneShot(initialWriteDelay);
+    m_writeOperationDispatchTimer.startOneShot(m_initialWriteDelay);
 }
 
 void Storage::traverse(const String& type, TraverseFlags flags, TraverseHandler&& traverseHandler)
@@ -864,7 +859,7 @@ void Storage::traverse(const String& type, TraverseFlags flags, TraverseHandler&
 
     ioQueue().dispatch([this, &traverseOperation] {
         traverseRecordsFiles(recordsPath(), traverseOperation.type, [this, &traverseOperation](const String& fileName, const String& hashString, const String& type, bool isBlob, const String& recordDirectoryPath) {
-            ASSERT(type == traverseOperation.type);
+            ASSERT(type == traverseOperation.type || traverseOperation.type.isEmpty());
             if (isBlob)
                 return;
 
@@ -1103,5 +1098,3 @@ void Storage::deleteOldVersions()
 
 }
 }
-
-#endif

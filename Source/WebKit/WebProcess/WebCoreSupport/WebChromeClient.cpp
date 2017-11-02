@@ -566,7 +566,9 @@ PlatformPageClient WebChromeClient::platformPageClient() const
 
 void WebChromeClient::contentsSizeChanged(Frame& frame, const IntSize& size) const
 {
-    if (m_page.corePage()->settings().frameFlattening() == FrameFlatteningDisabled) {
+    FrameView* frameView = frame.view();
+
+    if (frameView && frameView->effectiveFrameFlattening() == FrameFlattening::Disabled) {
         WebFrame* largestFrame = findLargestFrameInFrameSet(m_page);
         if (largestFrame != m_cachedFrameSetLargestFrame.get()) {
             m_cachedFrameSetLargestFrame = largestFrame;
@@ -581,7 +583,6 @@ void WebChromeClient::contentsSizeChanged(Frame& frame, const IntSize& size) con
 
     m_page.drawingArea()->mainFrameContentSizeChanged(size);
 
-    FrameView* frameView = frame.view();
     if (frameView && !frameView->delegatesScrolling())  {
         bool hasHorizontalScrollbar = frameView->horizontalScrollbar();
         bool hasVerticalScrollbar = frameView->verticalScrollbar();
@@ -638,11 +639,6 @@ void WebChromeClient::unavailablePluginButtonClicked(Element& element, RenderEmb
     UNUSED_PARAM(element);
     UNUSED_PARAM(pluginUnavailabilityReason);
 #endif // ENABLE(NETSCAPE_PLUGIN_API)
-}
-
-void WebChromeClient::scrollbarsModeDidChange() const
-{
-    notImplemented();
 }
 
 void WebChromeClient::mouseDidMoveOverElement(const HitTestResult& hitTestResult, unsigned modifierFlags)
@@ -828,12 +824,6 @@ bool WebChromeClient::selectItemAlignmentFollowsMenuWritingDirection()
     return true;
 }
 
-bool WebChromeClient::hasOpenedPopup() const
-{
-    notImplemented();
-    return false;
-}
-
 RefPtr<PopupMenu> WebChromeClient::createPopupMenu(PopupMenuClient& client) const
 {
     return WebPopupMenu::create(&m_page, &client);
@@ -883,6 +873,20 @@ void WebChromeClient::scheduleCompositingLayerFlush()
 {
     if (m_page.drawingArea())
         m_page.drawingArea()->scheduleCompositingLayerFlush();
+}
+
+void WebChromeClient::contentRuleListNotification(const URL& url, const HashSet<std::pair<String, String>>& notificationPairs)
+{
+    Vector<String> identifiers;
+    Vector<String> notifications;
+    identifiers.reserveInitialCapacity(notificationPairs.size());
+    notifications.reserveInitialCapacity(notificationPairs.size());
+    for (auto& notification : notificationPairs) {
+        identifiers.uncheckedAppend(notification.first);
+        notifications.uncheckedAppend(notification.second);
+    }
+
+    m_page.send(Messages::WebPageProxy::ContentRuleListNotification(url, identifiers, notifications));
 }
 
 bool WebChromeClient::adjustLayerFlushThrottling(LayerFlushThrottleState::Flags flags)
@@ -1218,6 +1222,11 @@ void WebChromeClient::requestInstallMissingMediaPlugins(const String& details, c
 void WebChromeClient::didInvalidateDocumentMarkerRects()
 {
     m_page.findController().didInvalidateDocumentMarkerRects();
+}
+
+void WebChromeClient::requestStorageAccess(String&& subFrameHost, String&& topFrameHost, WTF::Function<void (bool)>&& callback)
+{
+    m_page.requestStorageAccess(WTFMove(subFrameHost), WTFMove(topFrameHost), WTFMove(callback));
 }
 
 } // namespace WebKit

@@ -31,7 +31,6 @@
 #include "Page.h"
 #include "RenderIterator.h"
 #include "RenderLayer.h"
-#include "RenderNamedFlowFragment.h"
 #include "RenderSVGResource.h"
 #include "RenderSVGResourceContainer.h"
 #include "RenderSVGResourceFilter.h"
@@ -57,9 +56,7 @@ RenderSVGRoot::RenderSVGRoot(SVGSVGElement& element, RenderStyle&& style)
 {
 }
 
-RenderSVGRoot::~RenderSVGRoot()
-{
-}
+RenderSVGRoot::~RenderSVGRoot() = default;
 
 SVGSVGElement& RenderSVGRoot::svgSVGElement() const
 {
@@ -109,11 +106,6 @@ bool RenderSVGRoot::isEmbeddedThroughFrameContainingSVGDocument() const
     if (!frame().ownerRenderer())
         return false;
     return frame().document()->isSVGDocument();
-}
-
-static inline LayoutUnit resolveLengthAttributeForSVG(const Length& length, float scale, float maxSize)
-{
-    return valueForLength(length, maxSize) * (length.isFixed() ? scale : 1);
 }
 
 LayoutUnit RenderSVGRoot::computeReplacedLogicalWidth(ShouldComputePreferred shouldComputePreferred) const
@@ -246,7 +238,7 @@ void RenderSVGRoot::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paint
 
     // Apply initial viewport clip
     if (shouldApplyViewportClip())
-        childPaintInfo.context().clip(snappedIntRect(overflowClipRect(paintOffset, currentRenderNamedFlowFragment())));
+        childPaintInfo.context().clip(snappedIntRect(overflowClipRect(paintOffset)));
 
     // Convert from container offsets (html renderers) to a relative transform (svg renderers).
     // Transform from our paint container's coordinate system to our local coords.
@@ -306,16 +298,17 @@ void RenderSVGRoot::styleDidChange(StyleDifference diff, const RenderStyle* oldS
     SVGResourcesCache::clientStyleChanged(*this, diff, style());
 }
 
-void RenderSVGRoot::addChild(RenderObject* child, RenderObject* beforeChild)
+void RenderSVGRoot::addChild(RenderPtr<RenderObject> newChild, RenderObject* beforeChild)
 {
-    RenderReplaced::addChild(child, beforeChild);
-    SVGResourcesCache::clientWasAddedToTree(*child);
+    auto& child = *newChild;
+    RenderReplaced::addChild(WTFMove(newChild), beforeChild);
+    SVGResourcesCache::clientWasAddedToTree(child);
 }
 
-void RenderSVGRoot::removeChild(RenderObject& child)
+RenderPtr<RenderObject> RenderSVGRoot::takeChild(RenderObject& child)
 {
     SVGResourcesCache::clientWillBeRemovedFromTree(child);
-    RenderReplaced::removeChild(child);
+    return RenderReplaced::takeChild(child);
 }
 
 // RenderBox methods will expect coordinates w/o any transforms in coordinates
@@ -411,9 +404,9 @@ bool RenderSVGRoot::nodeAtPoint(const HitTestRequest& request, HitTestResult& re
     LayoutPoint pointInParent = locationInContainer.point() - toLayoutSize(accumulatedOffset);
     LayoutPoint pointInBorderBox = pointInParent - toLayoutSize(location());
 
-    // Only test SVG content if the point is in our content box.
+    // Test SVG content if the point is in our content box or it is inside the visualOverflowRect and the overflow is visible.
     // FIXME: This should be an intersection when rect-based hit tests are supported by nodeAtFloatPoint.
-    if (contentBoxRect().contains(pointInBorderBox)) {
+    if (contentBoxRect().contains(pointInBorderBox) || (!shouldApplyViewportClip() && visualOverflowRect().contains(pointInParent))) {
         FloatPoint localPoint = localToParentTransform().inverse().value_or(AffineTransform()).mapPoint(FloatPoint(pointInParent));
 
         for (RenderObject* child = lastChild(); child; child = child->previousSibling()) {

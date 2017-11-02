@@ -113,7 +113,7 @@ static void requestStartedCallback(SoupSession*, SoupMessage* soupMessage, SoupS
 }
 #endif
 
-SoupNetworkSession::SoupNetworkSession(SessionID sessionID, SoupCookieJar* cookieJar)
+SoupNetworkSession::SoupNetworkSession(PAL::SessionID sessionID, SoupCookieJar* cookieJar)
     : m_soupSession(adoptGRef(soup_session_async_new()))
 {
     // Values taken from http://www.browserscope.org/ following
@@ -152,6 +152,8 @@ SoupNetworkSession::SoupNetworkSession(SessionID sessionID, SoupCookieJar* cooki
             SOUP_SESSION_ADD_FEATURE_BY_TYPE, SOUP_TYPE_AUTH_NEGOTIATE,
             nullptr);
     }
+#else
+    UNUSED_PARAM(sessionID);
 #endif
 
     if (gProxySettings.mode != SoupNetworkProxySettings::Mode::Default)
@@ -164,9 +166,7 @@ SoupNetworkSession::SoupNetworkSession(SessionID sessionID, SoupCookieJar* cooki
 #endif
 }
 
-SoupNetworkSession::~SoupNetworkSession()
-{
-}
+SoupNetworkSession::~SoupNetworkSession() = default;
 
 void SoupNetworkSession::setupLogger()
 {

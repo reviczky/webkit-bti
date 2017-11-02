@@ -512,7 +512,7 @@
     <keyword type="function" name="webkit_dom_element_request_pointer_lock ()" link="WebKitDOMElement.html#webkit-dom-element-request-pointer-lock" since="2.16"/>
     <keyword type="function" name="webkit_dom_element_remove ()" link="WebKitDOMElement.html#webkit-dom-element-remove" since="2.16"/>
     <keyword type="function" name="webkit_dom_element_get_class_list ()" link="WebKitDOMElement.html#webkit-dom-element-get-class-list" since="2.16"/>
-    <keyword type="function" name="webkit_dom_element_get_webkit_region_overset ()" link="WebKitDOMElement.html#webkit-dom-element-get-webkit-region-overset" since="2.16"/>
+    <keyword type="function" name="webkit_dom_element_get_webkit_region_overset ()" link="WebKitDOMElement.html#webkit-dom-element-get-webkit-region-overset" deprecated="2.20"/>
     <keyword type="struct" name="struct WebKitDOMElement" link="WebKitDOMElement.html#WebKitDOMElement-struct"/>
     <keyword type="macro" name="WEBKIT_DOM_ELEMENT_ALLOW_KEYBOARD_INPUT" link="WebKitDOMElement.html#WEBKIT-DOM-ELEMENT-ALLOW-KEYBOARD-INPUT:CAPS"/>
     <keyword type="property" name="The “attributes” property" link="WebKitDOMElement.html#WebKitDOMElement--attributes"/>

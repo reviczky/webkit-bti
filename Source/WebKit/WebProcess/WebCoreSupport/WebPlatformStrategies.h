@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2012, 2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,11 +47,11 @@ private:
     WebCore::BlobRegistry* createBlobRegistry() override;
 
     // WebCore::CookiesStrategy
-    String cookiesForDOM(const WebCore::NetworkStorageSession&, const WebCore::URL& firstParty, const WebCore::URL&) override;
+    std::pair<String, bool> cookiesForDOM(const WebCore::NetworkStorageSession&, const WebCore::URL& firstParty, const WebCore::URL&, WebCore::IncludeSecureCookies) override;
     void setCookiesFromDOM(const WebCore::NetworkStorageSession&, const WebCore::URL& firstParty, const WebCore::URL&, const String&) override;
-    bool cookiesEnabled(const WebCore::NetworkStorageSession&, const WebCore::URL& firstParty, const WebCore::URL&) override;
-    String cookieRequestHeaderFieldValue(const WebCore::NetworkStorageSession&, const WebCore::URL& firstParty, const WebCore::URL&) override;
-    String cookieRequestHeaderFieldValue(WebCore::SessionID, const WebCore::URL& firstParty, const WebCore::URL&) override;
+    bool cookiesEnabled(const WebCore::NetworkStorageSession&) override;
+    std::pair<String, bool> cookieRequestHeaderFieldValue(const WebCore::NetworkStorageSession&, const WebCore::URL& firstParty, const WebCore::URL&, WebCore::IncludeSecureCookies) override;
+    std::pair<String, bool> cookieRequestHeaderFieldValue(PAL::SessionID, const WebCore::URL& firstParty, const WebCore::URL&, WebCore::IncludeSecureCookies) override;
     bool getRawCookies(const WebCore::NetworkStorageSession&, const WebCore::URL& firstParty, const WebCore::URL&, Vector<WebCore::Cookie>&) override;
     void deleteCookie(const WebCore::NetworkStorageSession&, const WebCore::URL&, const String&) override;
 
@@ -82,7 +82,6 @@ private:
 
     long addTypes(const Vector<String>& pasteboardTypes, const String& pasteboardName) override;
     long setTypes(const Vector<String>& pasteboardTypes, const String& pasteboardName) override;
-    long copy(const String& fromPasteboard, const String& toPasteboard) override;
     long setBufferForType(WebCore::SharedBuffer*, const String& pasteboardType, const String& pasteboardName) override;
     long setPathnamesForType(const Vector<String>&, const String& pasteboardType, const String& pasteboardName) override;
     long setStringForType(const String&, const String& pasteboardType, const String& pasteboardName) override;
@@ -97,6 +96,9 @@ private:
     void writeToPasteboard(const WebCore::PasteboardWebContent&) override;
     void writeToPasteboard(const String& pasteboardType, const String&) override;
 #endif
+
+    Vector<String> typesSafeForDOMToReadAndWrite(const String& pasteboardName, const String& origin) override;
+    long writeCustomData(const WebCore::PasteboardCustomData&, const String&) override;
 };
 
 } // namespace WebKit

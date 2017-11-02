@@ -58,9 +58,9 @@
 #include "JSWebGPURenderingContext.h"
 #endif
 
-using namespace Inspector;
 
 namespace WebCore {
+using namespace Inspector;
 
 InspectorCanvasAgent::InspectorCanvasAgent(WebAgentContext& context)
     : InspectorAgentBase(ASCIILiteral("Canvas"), context)
@@ -94,8 +94,9 @@ void InspectorCanvasAgent::enable(ErrorString&)
 
     m_enabled = true;
 
+    const bool captureBacktrace = false;
     for (auto& inspectorCanvas : m_identifierToInspectorCanvas.values())
-        m_frontendDispatcher->canvasAdded(inspectorCanvas->buildObjectForCanvas(m_instrumentingAgents));
+        m_frontendDispatcher->canvasAdded(inspectorCanvas->buildObjectForCanvas(m_instrumentingAgents, captureBacktrace));
 
 #if ENABLE(WEBGL)
     for (auto& inspectorProgram : m_identifierToInspectorProgram.values()) {
@@ -237,7 +238,7 @@ void InspectorCanvasAgent::resolveCanvasContext(ErrorString& errorString, const 
     result = injectedScript.wrapObject(value, objectGroupName);
 }
 
-void InspectorCanvasAgent::requestRecording(ErrorString& errorString, const String& canvasId, const bool* const singleFrame, const int* const memoryLimit)
+void InspectorCanvasAgent::startRecording(ErrorString& errorString, const String& canvasId, const bool* const singleFrame, const int* const memoryLimit)
 {
     auto* inspectorCanvas = assertInspectorCanvas(errorString, canvasId);
     if (!inspectorCanvas)
@@ -257,7 +258,7 @@ void InspectorCanvasAgent::requestRecording(ErrorString& errorString, const Stri
     inspectorCanvas->canvas().renderingContext()->setCallTracingActive(true);
 }
 
-void InspectorCanvasAgent::cancelRecording(ErrorString& errorString, const String& canvasId)
+void InspectorCanvasAgent::stopRecording(ErrorString& errorString, const String& canvasId)
 {
     auto* inspectorCanvas = assertInspectorCanvas(errorString, canvasId);
     if (!inspectorCanvas)
@@ -324,6 +325,21 @@ void InspectorCanvasAgent::updateShader(ErrorString& errorString, const String& 
 #endif
 }
 
+void InspectorCanvasAgent::setShaderProgramDisabled(ErrorString& errorString, const String& programId, bool disabled)
+{
+#if ENABLE(WEBGL)
+    auto* inspectorProgram = assertInspectorProgram(errorString, programId);
+    if (!inspectorProgram)
+        return;
+
+    inspectorProgram->setDisabled(disabled);
+#else
+    UNUSED_PARAM(programId);
+    UNUSED_PARAM(disabled);
+    errorString = ASCIILiteral("WebGL is not supported.");
+#endif
+}
+
 void InspectorCanvasAgent::frameNavigated(Frame& frame)
 {
     if (frame.isMainFrame()) {
@@ -376,8 +392,10 @@ void InspectorCanvasAgent::didCreateCanvasRenderingContext(HTMLCanvasElement& ca
     String cssCanvasName = m_canvasToCSSCanvasName.take(&canvasElement);
     auto inspectorCanvas = InspectorCanvas::create(canvasElement, cssCanvasName);
 
-    if (m_enabled)
-        m_frontendDispatcher->canvasAdded(inspectorCanvas->buildObjectForCanvas(m_instrumentingAgents));
+    if (m_enabled) {
+        const bool captureBacktrace = true;
+        m_frontendDispatcher->canvasAdded(inspectorCanvas->buildObjectForCanvas(m_instrumentingAgents, captureBacktrace));
+    }
 
     m_identifierToInspectorCanvas.set(inspectorCanvas->identifier(), WTFMove(inspectorCanvas));
 }
@@ -445,8 +463,14 @@ void InspectorCanvasAgent::didFinishRecordingCanvasFrame(HTMLCanvasElement& canv
     if (!canvasRenderingContext->callTracingActive())
         return;
 
-    if (!inspectorCanvas->hasRecordingData())
+    if (!inspectorCanvas->hasRecordingData()) {
+        if (forceDispatch) {
+            m_frontendDispatcher->recordingFinished(inspectorCanvas->identifier(), nullptr);
+
+            inspectorCanvas->resetRecordingData();
+        }
         return;
+    }
 
     if (!forceDispatch && !inspectorCanvas->singleFrame()) {
         inspectorCanvas->markNewFrame();
@@ -456,11 +480,15 @@ void InspectorCanvasAgent::didFinishRecordingCanvasFrame(HTMLCanvasElement& canv
     if (forceDispatch)
         inspectorCanvas->markCurrentFrameIncomplete();
 
-    // <https://webkit.org/b/174483> Web Inspector: Record actions performed on WebGLRenderingContext
+    // FIXME: <https://webkit.org/b/176008> Web Inspector: Record actions performed on WebGL2RenderingContext
 
     Inspector::Protocol::Recording::Type type;
     if (is<CanvasRenderingContext2D>(canvasRenderingContext))
         type = Inspector::Protocol::Recording::Type::Canvas2D;
+#if ENABLE(WEBGL)
+    else if (is<WebGLRenderingContext>(canvasRenderingContext))
+        type = Inspector::Protocol::Recording::Type::CanvasWebGL;
+#endif
     else {
         ASSERT_NOT_REACHED();
         type = Inspector::Protocol::Recording::Type::Canvas2D;
@@ -504,6 +532,15 @@ void InspectorCanvasAgent::willDeleteProgram(WebGLProgram& program)
     String identifier = unbindProgram(*inspectorProgram);
     if (m_enabled)
         m_frontendDispatcher->programDeleted(identifier);
+}
+
+bool InspectorCanvasAgent::isShaderProgramDisabled(WebGLProgram& program)
+{
+    auto* inspectorProgram = findInspectorProgram(program);
+    if (!inspectorProgram)
+        return false;
+
+    return inspectorProgram->disabled();
 }
 #endif
 

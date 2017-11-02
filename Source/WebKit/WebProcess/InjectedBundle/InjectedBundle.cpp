@@ -29,6 +29,7 @@
 #include "APIArray.h"
 #include "APIData.h"
 #include "InjectedBundleScriptWorld.h"
+#include "NetworkSessionCreationParameters.h"
 #include "NotificationPermissionRequestManager.h"
 #include "SessionTracker.h"
 #include "UserData.h"
@@ -46,6 +47,7 @@
 #include "WebProcessMessages.h"
 #include "WebProcessPoolMessages.h"
 #include "WebUserContentController.h"
+#include "WebsiteDataStoreParameters.h"
 #include <JavaScriptCore/APICast.h>
 #include <JavaScriptCore/Exception.h>
 #include <JavaScriptCore/JSLock.h>
@@ -71,11 +73,11 @@
 #include <WebCore/ScriptController.h>
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/SecurityPolicy.h>
-#include <WebCore/SessionID.h>
 #include <WebCore/Settings.h>
 #include <WebCore/UserGestureIndicator.h>
 #include <WebCore/UserScript.h>
 #include <WebCore/UserStyleSheet.h>
+#include <pal/SessionID.h>
 
 #if ENABLE(NOTIFICATIONS)
 #include "WebNotificationManager.h"
@@ -180,10 +182,8 @@ void InjectedBundle::overrideBoolPreferenceForTestRunner(WebPageGroupProxy* page
         RuntimeEnabledFeatures::sharedFeatures().setAnimationTriggersEnabled(enabled);
 #endif
 
-#if ENABLE(WEB_ANIMATIONS)
     if (preference == "WebKitWebAnimationsEnabled")
         RuntimeEnabledFeatures::sharedFeatures().setWebAnimationsEnabled(enabled);
-#endif
 
     if (preference == "WebKitCacheAPIEnabled")
         RuntimeEnabledFeatures::sharedFeatures().setCacheAPIEnabled(enabled);
@@ -215,8 +215,10 @@ void InjectedBundle::overrideBoolPreferenceForTestRunner(WebPageGroupProxy* page
         RuntimeEnabledFeatures::sharedFeatures().setModernMediaControlsEnabled(enabled);
 
 #if ENABLE(ENCRYPTED_MEDIA)
-    if (preference == "WebKitEncryptedMediaAPIEnabled")
+    if (preference == "WebKitEncryptedMediaAPIEnabled") {
+        WebPreferencesStore::overrideBoolValueForKey(WebPreferencesKey::encryptedMediaAPIEnabledKey(), enabled);
         RuntimeEnabledFeatures::sharedFeatures().setEncryptedMediaAPIEnabled(enabled);
+    }
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -298,7 +300,7 @@ void InjectedBundle::setFrameFlatteningEnabled(WebPageGroupProxy* pageGroup, boo
 {
     const HashSet<Page*>& pages = PageGroup::pageGroup(pageGroup->identifier())->pages();
     for (HashSet<Page*>::iterator iter = pages.begin(); iter != pages.end(); ++iter)
-        (*iter)->settings().setFrameFlattening(enabled ? FrameFlatteningFullyEnabled : FrameFlatteningDisabled);
+        (*iter)->settings().setFrameFlattening(enabled ? FrameFlattening::FullyEnabled : FrameFlattening::Disabled);
 }
 
 void InjectedBundle::setAsyncFrameScrollingEnabled(WebPageGroupProxy* pageGroup, bool enabled)
@@ -319,9 +321,9 @@ void InjectedBundle::setPrivateBrowsingEnabled(WebPageGroupProxy* pageGroup, boo
 {
     if (enabled) {
         WebProcess::singleton().ensureLegacyPrivateBrowsingSessionInNetworkProcess();
-        WebFrameNetworkingContext::ensurePrivateBrowsingSession(SessionID::legacyPrivateSessionID());
+        WebFrameNetworkingContext::ensurePrivateBrowsingSession({ { }, { }, { }, { }, { }, { }, { PAL::SessionID::legacyPrivateSessionID(), { }, { }, AllowsCellularAccess::Yes }});
     } else
-        SessionTracker::destroySession(SessionID::legacyPrivateSessionID());
+        SessionTracker::destroySession(PAL::SessionID::legacyPrivateSessionID());
 
     const HashSet<Page*>& pages = PageGroup::pageGroup(pageGroup->identifier())->pages();
     for (HashSet<Page*>::iterator iter = pages.begin(); iter != pages.end(); ++iter)
@@ -599,11 +601,7 @@ void InjectedBundle::setCSSAnimationTriggersEnabled(bool enabled)
 
 void InjectedBundle::setWebAnimationsEnabled(bool enabled)
 {
-#if ENABLE(WEB_ANIMATIONS)
     RuntimeEnabledFeatures::sharedFeatures().setWebAnimationsEnabled(enabled);
-#else
-    UNUSED_PARAM(enabled);
-#endif
 }
 
 } // namespace WebKit

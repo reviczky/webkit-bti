@@ -69,7 +69,8 @@ public:
 
     virtual void didStartProvisionalNavigation(WebKit::WebPageProxy&, Navigation*, Object*) { }
     virtual void didReceiveServerRedirectForProvisionalNavigation(WebKit::WebPageProxy&, Navigation*, Object*) { }
-    virtual void didPerformClientRedirectForNavigation(WebKit::WebPageProxy&, Navigation*) { }
+    virtual void willPerformClientRedirect(WebKit::WebPageProxy&, const WTF::String&, double) { }
+    virtual void didCancelClientRedirect(WebKit::WebPageProxy&) { }
     virtual void didFailProvisionalNavigationWithError(WebKit::WebPageProxy&, WebKit::WebFrameProxy&, Navigation*, const WebCore::ResourceError&, Object*) { }
     virtual void didFailProvisionalLoadInSubframeWithError(WebKit::WebPageProxy&, WebKit::WebFrameProxy&, const WebCore::SecurityOriginData&, Navigation*, const WebCore::ResourceError&, Object*) { }
     virtual void didCommitNavigation(WebKit::WebPageProxy&, Navigation*, Object*) { }
@@ -81,7 +82,7 @@ public:
     virtual void renderingProgressDidChange(WebKit::WebPageProxy&, WebCore::LayoutMilestones) { }
 
     virtual bool canAuthenticateAgainstProtectionSpace(WebKit::WebPageProxy&, WebKit::WebProtectionSpace*) { return false; }
-    virtual void didReceiveAuthenticationChallenge(WebKit::WebPageProxy&, WebKit::AuthenticationChallengeProxy*) { }
+    virtual void didReceiveAuthenticationChallenge(WebKit::WebPageProxy&, WebKit::AuthenticationChallengeProxy&) { }
 
     // FIXME: These function should not be part of this client.
     virtual void processDidTerminate(WebKit::WebPageProxy&, WebKit::ProcessTerminationReason) { }
@@ -105,17 +106,28 @@ public:
         listener->use({ });
     }
     
+    virtual void contentRuleListNotification(WebKit::WebPageProxy&, WebCore::URL&&, Vector<WTF::String>&&, Vector<WTF::String>&&) { };
+    
 #if ENABLE(NETSCAPE_PLUGIN_API)
+    virtual bool didFailToInitializePlugIn(WebKit::WebPageProxy&, API::Dictionary&) { return false; }
     virtual WebKit::PluginModuleLoadPolicy decidePolicyForPluginLoad(WebKit::WebPageProxy&, WebKit::PluginModuleLoadPolicy currentPluginLoadPolicy, Dictionary*, WTF::String&)
     {
         return currentPluginLoadPolicy;
     }
 #endif
 
+#if ENABLE(WEBGL)
+    virtual void webGLLoadPolicy(WebKit::WebPageProxy&, const WebCore::URL&, WTF::Function<void(WebCore::WebGLLoadPolicy)>&& completionHandler) const { completionHandler(WebCore::WebGLLoadPolicy::WebGLAllowCreation); }
+    virtual void resolveWebGLLoadPolicy(WebKit::WebPageProxy&, const WebCore::URL&, WTF::Function<void(WebCore::WebGLLoadPolicy)>&& completionHandler) const { completionHandler(WebCore::WebGLLoadPolicy::WebGLAllowCreation); }
+#endif
+    
+    virtual bool willGoToBackForwardListItem(WebKit::WebPageProxy&, WebKit::WebBackForwardListItem&, bool inPageCache, Object*) { return false; }
+
     virtual void didBeginNavigationGesture(WebKit::WebPageProxy&) { }
     virtual void willEndNavigationGesture(WebKit::WebPageProxy&, bool willNavigate, WebKit::WebBackForwardListItem&) { }
     virtual void didEndNavigationGesture(WebKit::WebPageProxy&, bool willNavigate, WebKit::WebBackForwardListItem&) { }
     virtual void didRemoveNavigationGestureSnapshot(WebKit::WebPageProxy&) { }
+    virtual bool didChangeBackForwardList(WebKit::WebPageProxy&, WebKit::WebBackForwardListItem*, const Vector<Ref<WebKit::WebBackForwardListItem>>&) { return false; }
 };
 
 } // namespace API

@@ -145,13 +145,13 @@ bool WKPreferencesGetXSSAuditorEnabled(WKPreferencesRef preferencesRef)
 void WKPreferencesSetFrameFlatteningEnabled(WKPreferencesRef preferencesRef, bool frameFlatteningEnabled)
 {
     // FIXME: Expose more frame flattening values.
-    toImpl(preferencesRef)->setFrameFlattening(frameFlatteningEnabled ? WebCore::FrameFlatteningFullyEnabled : WebCore::FrameFlatteningDisabled);
+    toImpl(preferencesRef)->setFrameFlattening(frameFlatteningEnabled ? static_cast<uint32_t>(WebCore::FrameFlattening::FullyEnabled) : static_cast<uint32_t>(WebCore::FrameFlattening::Disabled));
 }
 
 bool WKPreferencesGetFrameFlatteningEnabled(WKPreferencesRef preferencesRef)
 {
     // FIXME: Expose more frame flattening values.
-    return toImpl(preferencesRef)->frameFlattening() != WebCore::FrameFlatteningDisabled;
+    return toImpl(preferencesRef)->frameFlattening() != static_cast<uint32_t>(WebCore::FrameFlattening::Disabled);
 }
 
 void WKPreferencesSetPluginsEnabled(WKPreferencesRef preferencesRef, bool pluginsEnabled)
@@ -826,12 +826,28 @@ bool WKPreferencesGetInlineMediaPlaybackRequiresPlaysInlineAttribute(WKPreferenc
 
 void WKPreferencesSetBeaconAPIEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
+#if ENABLE(BEACON_API)
     toImpl(preferencesRef)->setBeaconAPIEnabled(flag);
+#endif
 }
 
 bool WKPreferencesGetBeaconAPIEnabled(WKPreferencesRef preferencesRef)
 {
+#if ENABLE(BEACON_API)
     return toImpl(preferencesRef)->beaconAPIEnabled();
+#else
+    return false;
+#endif
+}
+
+void WKPreferencesSetDirectoryUploadEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setDirectoryUploadEnabled(flag);
+}
+
+bool WKPreferencesGetDirectoryUploadEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->directoryUploadEnabled();
 }
 
 void WKPreferencesSetMediaControlsScaleWithPageZoom(WKPreferencesRef preferencesRef, bool flag)
@@ -892,6 +908,16 @@ void WKPreferencesSetMockScrollbarsEnabled(WKPreferencesRef preferencesRef, bool
 bool WKPreferencesGetMockScrollbarsEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->mockScrollbarsEnabled();
+}
+
+void WKPreferencesSetAttachmentElementEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setAttachmentElementEnabled(flag);
+}
+
+bool WKPreferencesGetAttachmentElementEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->attachmentElementEnabled();
 }
 
 void WKPreferencesSetWebAudioEnabled(WKPreferencesRef preferencesRef, bool enabled)
@@ -1313,14 +1339,15 @@ bool WKPreferencesGetSimpleLineLayoutDebugBordersEnabled(WKPreferencesRef prefer
     return toImpl(preferencesRef)->simpleLineLayoutDebugBordersEnabled();
 }
 
-void WKPreferencesSetNewBlockInsideInlineModelEnabled(WKPreferencesRef preferencesRef, bool flag)
+void WKPreferencesSetNewBlockInsideInlineModelEnabled(WKPreferencesRef, bool)
 {
-    toImpl(preferencesRef)->setNewBlockInsideInlineModelEnabled(flag);
+    // FIXME: Remove Safari call to this.
 }
 
-bool WKPreferencesGetNewBlockInsideInlineModelEnabled(WKPreferencesRef preferencesRef)
+bool WKPreferencesGetNewBlockInsideInlineModelEnabled(WKPreferencesRef)
 {
-    return toImpl(preferencesRef)->newBlockInsideInlineModelEnabled();
+    // FIXME: Remove Safari call for this.
+    return false;
 }
 
 void WKPreferencesSetDeferredCSSParserEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -1623,6 +1650,16 @@ bool WKPreferencesGetMediaCaptureRequiresSecureConnection(WKPreferencesRef prefe
     return toImpl(preferencesRef)->mediaCaptureRequiresSecureConnection();
 }
 
+void WKPreferencesSetInactiveMediaCaptureSteamRepromptIntervalInMinutes(WKPreferencesRef preferencesRef, double interval)
+{
+    toImpl(preferencesRef)->setInactiveMediaCaptureSteamRepromptIntervalInMinutes(interval);
+}
+
+double WKPreferencesGetInactiveMediaCaptureSteamRepromptIntervalInMinutes(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->inactiveMediaCaptureSteamRepromptIntervalInMinutes();
+}
+
 void WKPreferencesSetFetchAPIEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setFetchAPIEnabled(flag);
@@ -1641,6 +1678,26 @@ void WKPreferencesSetDisplayContentsEnabled(WKPreferencesRef preferencesRef, boo
 bool WKPreferencesGetDisplayContentsEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->displayContentsEnabled();
+}
+
+void WKPreferencesSetDataTransferItemsEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setDataTransferItemsEnabled(flag);
+}
+
+bool WKPreferencesGetDataTransferItemsEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->dataTransferItemsEnabled();
+}
+
+void WKPreferencesSetCustomPasteboardDataEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setCustomPasteboardDataEnabled(flag);
+}
+
+bool WKPreferencesGetCustomPasteboardDataEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->customPasteboardDataEnabled();
 }
 
 void WKPreferencesSetDownloadAttributeEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -1765,12 +1822,12 @@ bool WKPreferencesGetAnimatedImageAsyncDecodingEnabled(WKPreferencesRef preferen
 
 void WKPreferencesSetShouldSuppressKeyboardInputDuringProvisionalNavigation(WKPreferencesRef preferencesRef, bool flag)
 {
-    toImpl(preferencesRef)->setShouldSuppressKeyboardInputDuringProvisionalNavigation(flag);
+    toImpl(preferencesRef)->setShouldSuppressTextInputFromEditingDuringProvisionalNavigation(flag);
 }
 
 bool WKPreferencesGetShouldSuppressKeyboardInputDuringProvisionalNavigation(WKPreferencesRef preferencesRef)
 {
-    return toImpl(preferencesRef)->shouldSuppressKeyboardInputDuringProvisionalNavigation();
+    return toImpl(preferencesRef)->shouldSuppressTextInputFromEditingDuringProvisionalNavigation();
 }
 
 void WKPreferencesSetMediaUserGestureInheritsFromDocument(WKPreferencesRef preferencesRef, bool flag)
@@ -1831,4 +1888,14 @@ void WKPreferencesSetInspectorAdditionsEnabled(WKPreferencesRef preferencesRef, 
 bool WKPreferencesGetInspectorAdditionsEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->inspectorAdditionsEnabled();
+}
+
+void WKPreferencesSetStorageAccessAPIEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setStorageAccessAPIEnabled(flag);
+}
+
+bool WKPreferencesGetStorageAccessAPIEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->storageAccessAPIEnabled();
 }

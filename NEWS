@@ -1,83 +1,15 @@
-==================
-WebKitGTK+  2.18.2
-==================
+=================
+WebKitGTK+ 2.19.1
+=================
 
-What's new in WebKitGTK+ 2.18.2?
+What's new in WebKitGTK+ 2.19.1?
 
-  - Fix rendering of arabic text.
-  - Fix a crash in the web process when decoding GIF images.
-  - Fix rendering of wind in Windy.com.
-  - Fix several crashes and rendering issues.
-
-==================
-WebKitGTK+  2.18.1
-==================
-
-What's new in WebKitGTK+ 2.18.1?
-
-  - Improve performance of GIF animations.
-  - Fix garbled display in GMail.
-  - Fix rendering of several material design icons when using the web font.
-  - Fix flickering when resizing the window in Wayland.
-  - Prevent default kerberos authentication credentials from being used in ephemeral sessions.
-  - Fix a crash when webkit_web_resource_get_data() is cancelled.
-  - Correctly handle touchmove and touchend events in WebKitWebView.
-  - Fix the build with enchant 2.1.1.
-  - Fix the build in HPPA and Alpha.
-  - Fix several crashes and rendering issues.
-
-==================
-WebKitGTK+  2.18.0
-==================
-
-What's new in WebKitGTK+ 2.18.0?
-
-  - Fix the API documentation generation.
-  - Fix the build in ARM with NEON.
-  - Fix the build for Clang with libc++.
-
-==================
-WebKitGTK+ 2.17.92
-==================
-
-What's new in WebKitGTK+ 2.17.92?
-
-  - Improve CPU usage when rendering under Wayland in accelerated compositing mode.
-  - Improve the memory consumption of the UI process under Wayland.
-  - Fix rendering issues in some web sites with accelerated compositing enabled.
-  - Fix a web process crash when closing the WebView.
-  - Initialize libgcrypt in the network process too.
-  - Show controls if a video element isn't allowed to play inline.
-  - Add support for cookies and screenshots commands in WebDriver.
-  - Fix several crashes and rendering issues.
-  - Translation updates: Brazilian Portuguese, Polish.
-
-==================
-WebKitGTK+ 2.17.91
-==================
-
-What's new in WebKitGTK+ 2.17.91?
-
-  - Fix proxy HTTP authentication for HTTPS requests.
-  - Stop kinetic scrolling when a zero movement is reached.
-  - Fix UI process crash when selecting text.
-  - Fix UI process crash when loading a favicon.
-  - Properly handle WebDriver click command on option elements.
-  - Fix web process crash when resizing the window with accelerated compositing enabled.
-  - Fix crashes in 32 bit systems due to incorrect use of GVariant.
-  - Fix several crashes and rendering issues.
-
-==================
-WebKitGTK+ 2.17.90
-==================
-
-What's new in WebKitGTK+ 2.17.90?
-
-  - WebCrypto API support is now enabled by default.
-  - Add API to provide browser information required by automation.
-  - Fix the expiration date of manually added cookies.
-  - Add support for alerts in WebDriver.
-  - WebKitDatabaseProcess binary has been renamed to WebKitStorageProcess.
+  - Add initial resource load statistics support.
+  - Add API to expose availability of certain editing commands in WebKitEditorState.
+  - Add API to query whether a WebKitNavigationAction is a redirect or not.
+  - Improve complex text rendering.
+  - Add support for the "system" CSS font family.
+  - Implement low power mode.
   - Fix several crashes and rendering issues.
 
 =================

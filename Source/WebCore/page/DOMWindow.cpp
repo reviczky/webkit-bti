@@ -66,7 +66,6 @@
 #include "History.h"
 #include "InspectorInstrumentation.h"
 #include "JSMainThreadExecState.h"
-#include "Language.h"
 #include "Location.h"
 #include "MainFrame.h"
 #include "MediaQueryList.h"
@@ -110,6 +109,7 @@
 #include <inspector/ScriptCallStackFactory.h>
 #include <memory>
 #include <wtf/CurrentTime.h>
+#include <wtf/Language.h>
 #include <wtf/MainThread.h>
 #include <wtf/MathExtras.h>
 #include <wtf/NeverDestroyed.h>
@@ -140,9 +140,9 @@
 #include "WKContentObservationInternal.h"
 #endif
 
-using namespace Inspector;
 
 namespace WebCore {
+using namespace Inspector;
 
 class PostMessageTimer : public TimerBase {
 public:
@@ -297,10 +297,9 @@ void DOMWindow::dispatchAllPendingUnloadEvents()
     if (alreadyDispatched)
         return;
 
-    Vector<Ref<DOMWindow>> windows;
-    windows.reserveInitialCapacity(set.size());
-    for (auto& keyValue : set)
-        windows.uncheckedAppend(*keyValue.key);
+    auto windows = WTF::map(set, [] (auto& keyValue) {
+        return Ref<DOMWindow>(*(keyValue.key));
+    });
 
     for (auto& window : windows) {
         if (!set.contains(window.ptr()))
@@ -395,7 +394,6 @@ void DOMWindow::setCanShowModalDialogOverride(bool allow)
 DOMWindow::DOMWindow(Document& document)
     : ContextDestructionObserver(&document)
     , FrameDestructionObserver(document.frame())
-    , m_weakPtrFactory(this)
 {
     ASSERT(frame());
     addLanguageChangeObserver(this, &languagesChangedCallback);
@@ -484,9 +482,7 @@ void DOMWindow::willDestroyCachedFrame()
 {
     // It is necessary to copy m_properties to a separate vector because the DOMWindowProperties may
     // unregister themselves from the DOMWindow as a result of the call to willDestroyGlobalObjectInCachedFrame.
-    Vector<DOMWindowProperty*> properties;
-    copyToVector(m_properties, properties);
-    for (auto& property : properties)
+    for (auto& property : copyToVector(m_properties))
         property->willDestroyGlobalObjectInCachedFrame();
 }
 
@@ -494,9 +490,7 @@ void DOMWindow::willDestroyDocumentInFrame()
 {
     // It is necessary to copy m_properties to a separate vector because the DOMWindowProperties may
     // unregister themselves from the DOMWindow as a result of the call to willDestroyGlobalObjectInFrame.
-    Vector<DOMWindowProperty*> properties;
-    copyToVector(m_properties, properties);
-    for (auto& property : properties)
+    for (auto& property : copyToVector(m_properties))
         property->willDestroyGlobalObjectInFrame();
 }
 
@@ -504,9 +498,7 @@ void DOMWindow::willDetachDocumentFromFrame()
 {
     // It is necessary to copy m_properties to a separate vector because the DOMWindowProperties may
     // unregister themselves from the DOMWindow as a result of the call to willDetachGlobalObjectFromFrame.
-    Vector<DOMWindowProperty*> properties;
-    copyToVector(m_properties, properties);
-    for (auto& property : properties)
+    for (auto& property : copyToVector(m_properties))
         property->willDetachGlobalObjectFromFrame();
 
     if (m_performance)
@@ -565,9 +557,7 @@ void DOMWindow::disconnectDOMWindowProperties()
 {
     // It is necessary to copy m_properties to a separate vector because the DOMWindowProperties may
     // unregister themselves from the DOMWindow as a result of the call to disconnectFrameForDocumentSuspension.
-    Vector<DOMWindowProperty*> properties;
-    copyToVector(m_properties, properties);
-    for (auto& property : properties)
+    for (auto& property : copyToVector(m_properties))
         property->disconnectFrameForDocumentSuspension();
 }
 
@@ -576,9 +566,7 @@ void DOMWindow::reconnectDOMWindowProperties()
     ASSERT(m_suspendedForDocumentSuspension);
     // It is necessary to copy m_properties to a separate vector because the DOMWindowProperties may
     // unregister themselves from the DOMWindow as a result of the call to reconnectFromPageCache.
-    Vector<DOMWindowProperty*> properties;
-    copyToVector(m_properties, properties);
-    for (auto& property : properties)
+    for (auto& property : copyToVector(m_properties))
         property->reconnectFrameFromDocumentSuspension(m_frame);
 }
 
@@ -956,6 +944,8 @@ ExceptionOr<void> DOMWindow::postMessage(JSC::ExecState& state, DOMWindow& incum
     auto* timer = new PostMessageTimer(*this, message.releaseReturnValue(), sourceOrigin, incumbentWindow, channels.releaseReturnValue(), WTFMove(target), WTFMove(stackTrace));
     timer->startOneShot(0_s);
 
+    InspectorInstrumentation::didPostMessage(*m_frame, *timer, state);
+
     return { };
 }
 
@@ -974,11 +964,17 @@ void DOMWindow::postMessageTimerFired(PostMessageTimer& timer)
                 else
                     pageConsole->addMessage(MessageSource::Security, MessageLevel::Error, message);
             }
+
+            InspectorInstrumentation::didFailPostMessage(*m_frame, timer);
             return;
         }
     }
 
+    InspectorInstrumentation::willDispatchPostMessage(*m_frame, timer);
+
     dispatchEvent(timer.event(*document()));
+
+    InspectorInstrumentation::didDispatchPostMessage(*m_frame, timer);
 }
 
 DOMSelection* DOMWindow::getSelection()
@@ -1119,6 +1115,11 @@ void DOMWindow::alert(const String& message)
     if (!m_frame)
         return;
 
+    if (document()->isSandboxed(SandboxModals)) {
+        printErrorMessage("Use of window.alert is not allowed in a sandboxed frame when the allow-modals flag is not set.");
+        return;
+    }
+
     auto* page = m_frame->page();
     if (!page)
         return;
@@ -1141,6 +1142,11 @@ bool DOMWindow::confirm(const String& message)
     if (!m_frame)
         return false;
     
+    if (document()->isSandboxed(SandboxModals)) {
+        printErrorMessage("Use of window.confirm is not allowed in a sandboxed frame when the allow-modals flag is not set.");
+        return false;
+    }
+
     auto* page = m_frame->page();
     if (!page)
         return false;
@@ -1162,6 +1168,11 @@ String DOMWindow::prompt(const String& message, const String& defaultValue)
 {
     if (!m_frame)
         return String();
+
+    if (document()->isSandboxed(SandboxModals)) {
+        printErrorMessage("Use of window.prompt is not allowed in a sandboxed frame when the allow-modals flag is not set.");
+        return String();
+    }
 
     auto* page = m_frame->page();
     if (!page)
@@ -1732,6 +1743,26 @@ void DOMWindow::cancelAnimationFrame(int id)
     document->cancelAnimationFrame(id);
 }
 
+void DOMWindow::createImageBitmap(ImageBitmap::Source&& source, ImageBitmapOptions&& options, ImageBitmap::Promise&& promise)
+{
+    auto* document = this->document();
+    if (!document) {
+        promise.reject(InvalidStateError);
+        return;
+    }
+    ImageBitmap::createPromise(*document, WTFMove(source), WTFMove(options), WTFMove(promise));
+}
+
+void DOMWindow::createImageBitmap(ImageBitmap::Source&& source, int sx, int sy, int sw, int sh, ImageBitmapOptions&& options, ImageBitmap::Promise&& promise)
+{
+    auto* document = this->document();
+    if (!document) {
+        promise.reject(InvalidStateError);
+        return;
+    }
+    ImageBitmap::createPromise(*document, WTFMove(source), WTFMove(options), sx, sy, sw, sh, WTFMove(promise));
+}
+
 bool DOMWindow::isSecureContext() const
 {
     auto* document = this->document();
@@ -1981,6 +2012,10 @@ bool DOMWindow::dispatchEvent(Event& event, EventTarget* target)
 
     InspectorInstrumentation::didDispatchEventOnWindow(cookie);
 
+    event.setCurrentTarget(nullptr);
+    event.setEventPhase(Event::NONE);
+    event.resetPropagationFlags();
+
     return result;
 }
 
@@ -2229,7 +2264,7 @@ RefPtr<DOMWindow> DOMWindow::open(DOMWindow& activeWindow, DOMWindow& firstWindo
         && firstFrame->mainFrame().document()
         && firstFrame->mainFrame().document()->loader()) {
         ResourceLoadInfo resourceLoadInfo { firstFrame->document()->completeURL(urlString), firstFrame->mainFrame().document()->url(), ResourceType::Popup };
-        for (auto& action : firstFrame->page()->userContentProvider().actionsForResourceLoad(resourceLoadInfo, *firstFrame->mainFrame().document()->loader())) {
+        for (auto& action : firstFrame->page()->userContentProvider().actionsForResourceLoad(resourceLoadInfo, *firstFrame->mainFrame().document()->loader()).first) {
             if (action.type() == ContentExtensions::ActionType::BlockLoad)
                 return nullptr;
         }

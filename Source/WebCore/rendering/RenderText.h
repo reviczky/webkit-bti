@@ -80,7 +80,7 @@ public:
     Vector<FloatQuad> absoluteQuadsClippedToEllipsis() const;
 
     Position positionForPoint(const LayoutPoint&) override;
-    VisiblePosition positionForPoint(const LayoutPoint&, const RenderRegion*) override;
+    VisiblePosition positionForPoint(const LayoutPoint&, const RenderFragmentContainer*) override;
 
     bool is8Bit() const { return m_text.impl()->is8Bit(); }
     const LChar* characters8() const { return m_text.impl()->characters8(); }
@@ -179,6 +179,11 @@ public:
 
     Vector<std::pair<unsigned, unsigned>> draggedContentRangesBetweenOffsets(unsigned startOffset, unsigned endOffset) const;
 
+    RenderInline* inlineWrapperForDisplayContents();
+    void setInlineWrapperForDisplayContents(RenderInline*);
+
+    static RenderText* findByDisplayContentsInlineWrapperCandidate(RenderElement&);
+
 protected:
     virtual void computePreferredLogicalWidths(float leadWidth);
     void willBeDestroyed() override;
@@ -233,6 +238,7 @@ private:
     mutable unsigned m_knownToHaveNoOverflowAndNoFallbackFonts : 1;
     unsigned m_useBackslashAsYenSymbol : 1;
     unsigned m_originalTextDiffersFromRendered : 1;
+    unsigned m_hasInlineWrapperForDisplayContents : 1;
     unsigned m_canUseSimplifiedTextMeasuring : 1;
 
 #if ENABLE(TEXT_AUTOSIZING)

@@ -163,14 +163,14 @@ void ProcessingInstruction::checkStyleSheet()
             if (m_isXSL) {
                 auto options = CachedResourceLoader::defaultCachedResourceOptions();
                 options.mode = FetchOptions::Mode::SameOrigin;
-                m_cachedSheet = document().cachedResourceLoader().requestXSLStyleSheet({ResourceRequest(document().completeURL(href)), options});
+                m_cachedSheet = document().cachedResourceLoader().requestXSLStyleSheet({ResourceRequest(document().completeURL(href)), options}).valueOr(nullptr);
             } else
 #endif
             {
                 String charset = attrs.get("charset");
                 CachedResourceRequest request(document().completeURL(href), CachedResourceLoader::defaultCachedResourceOptions(), std::nullopt, charset.isEmpty() ? document().charset() : WTFMove(charset));
 
-                m_cachedSheet = document().cachedResourceLoader().requestCSSStyleSheet(WTFMove(request));
+                m_cachedSheet = document().cachedResourceLoader().requestCSSStyleSheet(WTFMove(request)).valueOr(nullptr);
             }
             if (m_cachedSheet)
                 m_cachedSheet->addClient(*this);
@@ -275,20 +275,24 @@ void ProcessingInstruction::addSubresourceAttributeURLs(ListHashSet<URL>& urls) 
     addSubresourceURL(urls, sheet()->baseURL());
 }
 
-Node::InsertionNotificationRequest ProcessingInstruction::insertedInto(ContainerNode& insertionPoint)
+Node::InsertedIntoAncestorResult ProcessingInstruction::insertedIntoAncestor(InsertionType insertionType, ContainerNode& parentOfInsertedTree)
 {
-    CharacterData::insertedInto(insertionPoint);
-    if (!insertionPoint.isConnected())
-        return InsertionDone;
+    CharacterData::insertedIntoAncestor(insertionType, parentOfInsertedTree);
+    if (!insertionType.connectedToDocument)
+        return InsertedIntoAncestorResult::Done;
     document().styleScope().addStyleSheetCandidateNode(*this, m_createdByParser);
-    checkStyleSheet();
-    return InsertionDone;
+    return InsertedIntoAncestorResult::NeedsPostInsertionCallback;
 }
 
-void ProcessingInstruction::removedFrom(ContainerNode& insertionPoint)
+void ProcessingInstruction::didFinishInsertingNode()
 {
-    CharacterData::removedFrom(insertionPoint);
-    if (!insertionPoint.isConnected())
+    checkStyleSheet();
+}
+
+void ProcessingInstruction::removedFromAncestor(RemovalType removalType, ContainerNode& oldParentOfRemovedTree)
+{
+    CharacterData::removedFromAncestor(removalType, oldParentOfRemovedTree);
+    if (!removalType.disconnectedFromDocument)
         return;
     
     document().styleScope().removeStyleSheetCandidateNode(*this);

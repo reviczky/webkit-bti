@@ -33,11 +33,6 @@ WI.ContentViewCookieType = {
     Timelines: "timelines"
 };
 
-WI.DebuggableType = {
-    Web: "web",
-    JavaScript: "javascript"
-};
-
 WI.SelectedSidebarPanelCookieKey = "selected-sidebar-panel";
 WI.TypeIdentifierCookieKey = "represented-object-type";
 
@@ -55,9 +50,6 @@ WI.LayoutDirection = {
 
 WI.loaded = function()
 {
-    this.debuggableType = InspectorFrontendHost.debuggableType() === "web" ? WI.DebuggableType.Web : WI.DebuggableType.JavaScript;
-    this.hasExtraDomains = false;
-
     // Register observers for events from the InspectorBackend.
     if (InspectorBackend.registerInspectorDispatcher)
         InspectorBackend.registerInspectorDispatcher(new WI.InspectorObserver);
@@ -191,8 +183,9 @@ WI.loaded = function()
 
     // COMPATIBILITY (iOS 10.3): Network.setDisableResourceCaching did not exist.
     this.resourceCachingDisabledSetting = new WI.Setting("disable-resource-caching", false);
-    if (window.NetworkAgent && NetworkAgent.setResourceCachingDisabled && this.resourceCachingDisabledSetting.value) {
-        NetworkAgent.setResourceCachingDisabled(true);
+    if (window.NetworkAgent && NetworkAgent.setResourceCachingDisabled) {
+        if (this.resourceCachingDisabledSetting.value)
+            NetworkAgent.setResourceCachingDisabled(true);
         this.resourceCachingDisabledSetting.addEventListener(WI.Setting.Event.Changed, this._resourceCachingDisabledSettingChanged, this);
     }
 
@@ -247,7 +240,7 @@ WI.contentLoaded = function()
             document.body.classList.add("legacy-mac");
     }
 
-    document.body.classList.add(this.debuggableType);
+    document.body.classList.add(WI.sharedApp.debuggableType);
     document.body.setAttribute("dir", this.resolvedLayoutDirection());
 
     function setTabSize() {
@@ -287,6 +280,12 @@ WI.contentLoaded = function()
     this.consoleDrawer.addEventListener(WI.ConsoleDrawer.Event.Resized, this._consoleDrawerDidResize, this);
 
     this.clearKeyboardShortcut = new WI.KeyboardShortcut(WI.KeyboardShortcut.Modifier.CommandOrControl, "K", this._clear.bind(this));
+
+    // FIXME: <https://webkit.org/b/151310> Web Inspector: Command-E should propagate to other search fields (including the system)
+    this.populateFindKeyboardShortcut = new WI.KeyboardShortcut(WI.KeyboardShortcut.Modifier.CommandOrControl, "E", this._populateFind.bind(this));
+    this.populateFindKeyboardShortcut.implicitlyPreventsDefault = false;
+    this.findNextKeyboardShortcut = new WI.KeyboardShortcut(WI.KeyboardShortcut.Modifier.CommandOrControl, "G", this._findNext.bind(this));
+    this.findPreviousKeyboardShortcut = new WI.KeyboardShortcut(WI.KeyboardShortcut.Modifier.Shift | WI.KeyboardShortcut.Modifier.CommandOrControl, "G", this._findPrevious.bind(this));
 
     this.quickConsole = new WI.QuickConsole(document.getElementById("quick-console"));
 
@@ -328,8 +327,8 @@ WI.contentLoaded = function()
     this.tabBrowser.addEventListener(WI.TabBrowser.Event.SelectedTabContentViewDidChange, this._tabBrowserSelectedTabContentViewDidChange, this);
 
     this._reloadPageKeyboardShortcut = new WI.KeyboardShortcut(WI.KeyboardShortcut.Modifier.CommandOrControl, "R", this._reloadPage.bind(this));
-    this._reloadPageIgnoringCacheKeyboardShortcut = new WI.KeyboardShortcut(WI.KeyboardShortcut.Modifier.CommandOrControl | WI.KeyboardShortcut.Modifier.Shift, "R", this._reloadPageIgnoringCache.bind(this));
-    this._reloadPageKeyboardShortcut.implicitlyPreventsDefault = this._reloadPageIgnoringCacheKeyboardShortcut.implicitlyPreventsDefault = false;
+    this._reloadPageFromOriginKeyboardShortcut = new WI.KeyboardShortcut(WI.KeyboardShortcut.Modifier.CommandOrControl | WI.KeyboardShortcut.Modifier.Option, "R", this._reloadPageFromOrigin.bind(this));
+    this._reloadPageKeyboardShortcut.implicitlyPreventsDefault = this._reloadPageFromOriginKeyboardShortcut.implicitlyPreventsDefault = false;
 
     this._consoleTabKeyboardShortcut = new WI.KeyboardShortcut(WI.KeyboardShortcut.Modifier.Option | WI.KeyboardShortcut.Modifier.CommandOrControl, "C", this._showConsoleTab.bind(this));
     this._quickConsoleKeyboardShortcut = new WI.KeyboardShortcut(WI.KeyboardShortcut.Modifier.Control, WI.KeyboardShortcut.Key.Apostrophe, this._focusConsolePrompt.bind(this));
@@ -371,33 +370,31 @@ WI.contentLoaded = function()
 
     this._togglePreviousDockConfigurationKeyboardShortcut = new WI.KeyboardShortcut(WI.KeyboardShortcut.Modifier.CommandOrControl | WI.KeyboardShortcut.Modifier.Shift, "D", this._togglePreviousDockConfiguration.bind(this));
 
-    var toolTip;
+    let reloadToolTip;
     if (WI.debuggableType === WI.DebuggableType.JavaScript)
-        toolTip = WI.UIString("Restart (%s)").format(this._reloadPageKeyboardShortcut.displayName);
+        reloadToolTip = WI.UIString("Restart (%s)").format(this._reloadPageKeyboardShortcut.displayName);
     else
-        toolTip = WI.UIString("Reload this page (%s)\nReload ignoring cache (%s)").format(this._reloadPageKeyboardShortcut.displayName, this._reloadPageIgnoringCacheKeyboardShortcut.displayName);
-
-    this._reloadToolbarButton = new WI.ButtonToolbarItem("reload", toolTip, "Images/ReloadToolbar.svg");
-    this._reloadToolbarButton.addEventListener(WI.ButtonNavigationItem.Event.Clicked, this._reloadPageClicked, this);
+        reloadToolTip = WI.UIString("Reload page (%s)\nReload page ignoring cache (%s)").format(this._reloadPageKeyboardShortcut.displayName, this._reloadPageFromOriginKeyboardShortcut.displayName);
+    this._reloadToolbarButton = new WI.ButtonToolbarItem("reload", reloadToolTip, "Images/ReloadToolbar.svg");
+    this._reloadToolbarButton.addEventListener(WI.ButtonNavigationItem.Event.Clicked, this._reloadToolbarButtonClicked, this);
 
     this._downloadToolbarButton = new WI.ButtonToolbarItem("download", WI.UIString("Download Web Archive"), "Images/DownloadArrow.svg");
     this._downloadToolbarButton.addEventListener(WI.ButtonNavigationItem.Event.Clicked, this._downloadWebArchive, this);
 
+    let elementSelectionToolTip = WI.UIString("Start element selection (%s)").format(WI._inspectModeKeyboardShortcut.displayName);
+    let activatedElementSelectionToolTip = WI.UIString("Stop element selection (%s)").format(WI._inspectModeKeyboardShortcut.displayName);
+    this._inspectModeToolbarButton = new WI.ActivateButtonToolbarItem("inspect", elementSelectionToolTip, activatedElementSelectionToolTip, "Images/Crosshair.svg");
+    this._inspectModeToolbarButton.addEventListener(WI.ButtonNavigationItem.Event.Clicked, this._toggleInspectMode, this);
+
     this._updateReloadToolbarButton();
     this._updateDownloadToolbarButton();
-
-    // The toolbar button for node inspection.
-    if (this.debuggableType === WI.DebuggableType.Web) {
-        var toolTip = WI.UIString("Start element selection (%s)").format(WI._inspectModeKeyboardShortcut.displayName);
-        var activatedToolTip = WI.UIString("Stop element selection (%s)").format(WI._inspectModeKeyboardShortcut.displayName);
-        this._inspectModeToolbarButton = new WI.ActivateButtonToolbarItem("inspect", toolTip, activatedToolTip, "Images/Crosshair.svg");
-        this._inspectModeToolbarButton.addEventListener(WI.ButtonNavigationItem.Event.Clicked, this._toggleInspectMode, this);
-    }
+    this._updateInspectModeToolbarButton();
 
     this._dashboardContainer = new WI.DashboardContainerView;
     this._dashboardContainer.showDashboardViewForRepresentedObject(this.dashboardManager.dashboards.default);
 
-    this._searchToolbarItem = new WI.SearchBar("inspector-search", WI.UIString("Search"), true);
+    const incremental = false;
+    this._searchToolbarItem = new WI.SearchBar("inspector-search", WI.UIString("Search"), incremental);
     this._searchToolbarItem.addEventListener(WI.SearchBar.Event.TextChanged, this._searchTextDidChange, this);
 
     this.toolbar.addToolbarItem(this._closeToolbarButton, WI.Toolbar.Section.Control);
@@ -411,8 +408,7 @@ WI.contentLoaded = function()
 
     this.toolbar.addToolbarItem(this._dashboardContainer.toolbarItem, WI.Toolbar.Section.Center);
 
-    if (this._inspectModeToolbarButton)
-        this.toolbar.addToolbarItem(this._inspectModeToolbarButton, WI.Toolbar.Section.CenterRight);
+    this.toolbar.addToolbarItem(this._inspectModeToolbarButton, WI.Toolbar.Section.CenterRight);
 
     this.toolbar.addToolbarItem(this._searchToolbarItem, WI.Toolbar.Section.Right);
 
@@ -430,12 +426,13 @@ WI.contentLoaded = function()
     // These tabs are always available for selecting, modulo isTabAllowed().
     // Other tabs may be engineering-only or toggled at runtime if incomplete.
     let productionTabClasses = [
+        WI.CanvasTabContentView,
         WI.ConsoleTabContentView,
         WI.DebuggerTabContentView,
         WI.ElementsTabContentView,
+        WI.LayersTabContentView,
         WI.NetworkTabContentView,
         WI.NewTabContentView,
-        WI.RecordingTabContentView,
         WI.ResourcesTabContentView,
         WI.SearchTabContentView,
         WI.SettingsTabContentView,
@@ -698,20 +695,14 @@ WI.registerTabClass = function(tabClass)
 
 WI.activateExtraDomains = function(domains)
 {
-    this.hasExtraDomains = true;
-
-    for (var domain of domains) {
-        var agent = InspectorBackend.activateDomain(domain);
-        if (agent.enable)
-            agent.enable();
-    }
-
-    this.notifications.dispatchEventToListeners(WI.Notification.ExtraDomainsActivated, {"domains": domains});
+    this.notifications.dispatchEventToListeners(WI.Notification.ExtraDomainsActivated, {domains});
 
     WI.CSSCompletions.requestCSSCompletions();
 
     this._updateReloadToolbarButton();
     this._updateDownloadToolbarButton();
+    this._updateInspectModeToolbarButton();
+
     this._tryToRestorePendingTabs();
 };
 
@@ -726,7 +717,7 @@ WI.updateWindowTitle = function()
     var lastPathComponent;
     try {
         lastPathComponent = decodeURIComponent(urlComponents.lastPathComponent || "");
-    } catch (e) {
+    } catch {
         lastPathComponent = urlComponents.lastPathComponent;
     }
 
@@ -995,9 +986,10 @@ WI.showStorageTab = function()
 
 WI.showNetworkTab = function()
 {
-    var tabContentView = this.tabBrowser.bestTabContentViewForClass(WI.NetworkTabContentView);
+    let tabContentView = this.tabBrowser.bestTabContentViewForClass(WI.NetworkTabContentView);
     if (!tabContentView)
         tabContentView = new WI.NetworkTabContentView;
+
     this.tabBrowser.showTabForContentView(tabContentView);
 };
 
@@ -1046,6 +1038,30 @@ WI.toggleDetailsSidebar = function(event)
     this.detailsSidebar.collapsed = false;
 };
 
+WI.getMaximumSidebarWidth = function(sidebar)
+{
+    console.assert(sidebar instanceof WI.Sidebar);
+
+    const minimumContentBrowserWidth = 100;
+
+    let minimumWidth = window.innerWidth - minimumContentBrowserWidth;
+    let tabContentView = this.tabBrowser.selectedTabContentView;
+    console.assert(tabContentView);
+    if (!tabContentView)
+        return minimumWidth;
+
+    let otherSidebar = null;
+    if (sidebar === this.navigationSidebar)
+        otherSidebar = tabContentView.detailsSidebarPanels.length ? this.detailsSidebar : null;
+    else
+        otherSidebar = tabContentView.navigationSidebarPanel ? this.navigationSidebar : null;
+
+    if (otherSidebar)
+        minimumWidth -= otherSidebar.width;
+
+    return minimumWidth;
+};
+
 WI.tabContentViewClassForRepresentedObject = function(representedObject)
 {
     if (representedObject instanceof WI.DOMTree)
@@ -1070,12 +1086,7 @@ WI.tabContentViewClassForRepresentedObject = function(representedObject)
         || representedObject instanceof WI.Resource
         || representedObject instanceof WI.Script
         || representedObject instanceof WI.CSSStyleSheet
-        || representedObject instanceof WI.Canvas
-        || representedObject instanceof WI.ShaderProgram)
-        return WI.ResourcesTabContentView;
-
-    // FIXME: Move Content Flows to the Elements tab?
-    if (representedObject instanceof WI.ContentFlow)
+        || (representedObject instanceof WI.Collection && !(representedObject instanceof WI.CanvasCollection)))
         return WI.ResourcesTabContentView;
 
     // FIXME: Move these to a Storage tab.
@@ -1085,8 +1096,11 @@ WI.tabContentViewClassForRepresentedObject = function(representedObject)
         representedObject instanceof WI.IndexedDatabaseObjectStoreIndex)
         return WI.ResourcesTabContentView;
 
+    if (representedObject instanceof WI.CanvasCollection)
+        return WI.CanvasTabContentView;
+
     if (representedObject instanceof WI.Recording)
-        return WI.RecordingTabContentView;
+        return WI.CanvasTabContentView;
 
     return null;
 };
@@ -1427,9 +1441,13 @@ WI._windowResized = function(event)
 
 WI._updateModifierKeys = function(event)
 {
-    var didChange = this.modifierKeys.altKey !== event.altKey || this.modifierKeys.metaKey !== event.metaKey || this.modifierKeys.shiftKey !== event.shiftKey;
+    let metaKeyDidChange = this.modifierKeys.metaKey !== event.metaKey;
+    let didChange = this.modifierKeys.altKey !== event.altKey || metaKeyDidChange || this.modifierKeys.shiftKey !== event.shiftKey;
 
     this.modifierKeys = {altKey: event.altKey, metaKey: event.metaKey, shiftKey: event.shiftKey};
+
+    if (metaKeyDidChange)
+        document.body.classList.toggle("meta-key-pressed", this.modifierKeys.metaKey);
 
     if (didChange)
         this.notifications.dispatchEventToListeners(WI.Notification.GlobalModifierKeysDidChange, event);
@@ -1791,18 +1809,18 @@ WI._reloadPage = function(event)
     event.preventDefault();
 };
 
-WI._reloadPageClicked = function(event)
+WI._reloadToolbarButtonClicked = function(event)
 {
-    // Ignore cache when the shift key is pressed.
-    PageAgent.reload.invoke({shouldIgnoreCache: window.event ? window.event.shiftKey : false});
+    // Reload page from origin if the button is clicked while the shift key is pressed down.
+    PageAgent.reload.invoke({ignoreCache: this.modifierKeys.shiftKey});
 };
 
-WI._reloadPageIgnoringCache = function(event)
+WI._reloadPageFromOrigin = function(event)
 {
     if (!window.PageAgent)
         return;
 
-    PageAgent.reload(true);
+    PageAgent.reload.invoke({ignoreCache: true});
     event.preventDefault();
 };
 
@@ -1819,7 +1837,7 @@ WI._updateReloadToolbarButton = function()
 WI._updateDownloadToolbarButton = function()
 {
     // COMPATIBILITY (iOS 7): Page.archive did not exist yet.
-    if (!window.PageAgent || !PageAgent.archive || this.debuggableType !== WI.DebuggableType.Web) {
+    if (!window.PageAgent || !PageAgent.archive || this.sharedApp.debuggableType !== WI.DebuggableType.Web) {
         this._downloadToolbarButton.hidden = true;
         return;
     }
@@ -1830,6 +1848,16 @@ WI._updateDownloadToolbarButton = function()
     }
 
     this._downloadToolbarButton.enabled = this.canArchiveMainFrame();
+};
+
+WI._updateInspectModeToolbarButton = function()
+{
+    if (!window.DOMAgent || !DOMAgent.setInspectModeEnabled) {
+        this._inspectModeToolbarButton.hidden = true;
+        return;
+    }
+
+    this._inspectModeToolbarButton.hidden = false;
 };
 
 WI._toggleInspectMode = function(event)
@@ -1849,9 +1877,15 @@ WI._focusConsolePrompt = function(event)
 
 WI._focusedContentBrowser = function()
 {
+    if (this.currentFocusElement) {
+        let contentBrowserElement = this.currentFocusElement.enclosingNodeOrSelfWithClass("content-browser");
+        if (contentBrowserElement && contentBrowserElement.__view && contentBrowserElement.__view instanceof WI.ContentBrowser)
+            return contentBrowserElement.__view;
+    }
+
     if (this.tabBrowser.element.isSelfOrAncestor(this.currentFocusElement) || document.activeElement === document.body) {
-        var tabContentView = this.tabBrowser.selectedTabContentView;
-        if (tabContentView instanceof WI.ContentBrowserTabContentView)
+        let tabContentView = this.tabBrowser.selectedTabContentView;
+        if (tabContentView.contentBrowser)
             return tabContentView.contentBrowser;
         return null;
     }
@@ -1867,7 +1901,7 @@ WI._focusedContentView = function()
 {
     if (this.tabBrowser.element.isSelfOrAncestor(this.currentFocusElement) || document.activeElement === document.body) {
         var tabContentView = this.tabBrowser.selectedTabContentView;
-        if (tabContentView instanceof WI.ContentBrowserTabContentView)
+        if (tabContentView.contentBrowser)
             return tabContentView.contentBrowser.currentContentView;
         return tabContentView;
     }
@@ -1886,7 +1920,7 @@ WI._focusedOrVisibleContentBrowser = function()
         return focusedContentBrowser;
 
     var tabContentView = this.tabBrowser.selectedTabContentView;
-    if (tabContentView instanceof WI.ContentBrowserTabContentView)
+    if (tabContentView.contentBrowser)
         return tabContentView.contentBrowser;
 
     return null;
@@ -1899,7 +1933,7 @@ WI.focusedOrVisibleContentView = function()
         return focusedContentView;
 
     var tabContentView = this.tabBrowser.selectedTabContentView;
-    if (tabContentView instanceof WI.ContentBrowserTabContentView)
+    if (tabContentView.contentBrowser)
         return tabContentView.contentBrowser.currentContentView;
     return tabContentView;
 };
@@ -1971,6 +2005,60 @@ WI._clear = function(event)
     }
 
     contentView.handleClearShortcut(event);
+};
+
+WI._populateFind = function(event)
+{
+    let focusedContentView = this._focusedContentView();
+    if (!focusedContentView)
+        return;
+
+    if (focusedContentView.supportsCustomFindBanner) {
+        focusedContentView.handlePopulateFindShortcut();
+        return;
+    }
+
+    let contentBrowser = this._focusedOrVisibleContentBrowser();
+    if (!contentBrowser)
+        return;
+
+    contentBrowser.handlePopulateFindShortcut();
+};
+
+WI._findNext = function(event)
+{
+    let focusedContentView = this._focusedContentView();
+    if (!focusedContentView)
+        return;
+
+    if (focusedContentView.supportsCustomFindBanner) {
+        focusedContentView.handleFindNextShortcut();
+        return;
+    }
+
+    let contentBrowser = this._focusedOrVisibleContentBrowser();
+    if (!contentBrowser)
+        return;
+
+    contentBrowser.handleFindNextShortcut();
+};
+
+WI._findPrevious = function(event)
+{
+    let focusedContentView = this._focusedContentView();
+    if (!focusedContentView)
+        return;
+
+    if (focusedContentView.supportsCustomFindBanner) {
+        focusedContentView.handleFindPreviousShortcut();
+        return;
+    }
+
+    let contentBrowser = this._focusedOrVisibleContentBrowser();
+    if (!contentBrowser)
+        return;
+
+    contentBrowser.handleFindPreviousShortcut();
 };
 
 WI._copy = function(event)
@@ -2112,7 +2200,7 @@ WI._enableControlFlowProfilerSettingChanged = function(event)
 WI._resourceCachingDisabledSettingChanged = function(event)
 {
     NetworkAgent.setResourceCachingDisabled(this.resourceCachingDisabledSetting.value);
-}
+};
 
 WI.elementDragStart = function(element, dividerDrag, elementDragEnd, event, cursor, eventTarget)
 {
@@ -2264,7 +2352,7 @@ WI.linkifyURLAsNode = function(url, linkText, classes)
     if (!linkText)
         linkText = url;
 
-    classes = (classes ? classes + " " : "");
+    classes = classes ? classes + " " : "";
 
     var a = document.createElement("a");
     a.href = url;
@@ -2456,7 +2544,7 @@ WI.highlightRangesWithStyleClass = function(element, resultRanges, styleClass, c
     return highlightNodes;
 };
 
-WI.revertDomChanges = function(domChanges)
+WI.revertDOMChanges = function(domChanges)
 {
     for (var i = domChanges.length - 1; i >= 0; --i) {
         var entry = domChanges[i];
@@ -2494,7 +2582,7 @@ WI.archiveMainFrame = function()
 WI.canArchiveMainFrame = function()
 {
     // COMPATIBILITY (iOS 7): Page.archive did not exist yet.
-    if (!PageAgent.archive || this.debuggableType !== WI.DebuggableType.Web)
+    if (!PageAgent.archive || this.sharedApp.debuggableType !== WI.DebuggableType.Web)
         return false;
 
     if (!WI.frameResourceManager.mainFrame || !WI.frameResourceManager.mainFrame.mainResource)
@@ -2539,13 +2627,13 @@ WI._sharedWindowKeydownListener = function(event)
     }
 };
 
-WI.reportInternalError = function(errorOrString, details={})
+WI.reportInternalError = function(errorOrString, details = {})
 {
     // The 'details' object includes additional information from the caller as free-form string keys and values.
     // Each key and value will be shown in the uncaught exception reporter, console error message, or in
     // a pre-filled bug report generated for this internal error.
 
-    let error = (errorOrString instanceof Error) ? errorOrString : new Error(errorOrString);
+    let error = errorOrString instanceof Error ? errorOrString : new Error(errorOrString);
     error.details = details;
 
     // The error will be displayed in the Uncaught Exception Reporter sheet if DebugUI is enabled.

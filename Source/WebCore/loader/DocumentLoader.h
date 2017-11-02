@@ -69,6 +69,7 @@ class ContentFilter;
 class FormState;
 class Frame;
 class FrameLoader;
+class HTTPHeaderField;
 class IconLoader;
 class Page;
 class PreviewConverter;
@@ -89,6 +90,7 @@ enum class AutoplayPolicy {
 enum class AutoplayQuirk {
     SynthesizedPauseEvents = 1 << 0,
     InheritedUserGestures = 1 << 1,
+    ArbitraryUserGestures = 1 << 2,
 };
 
 class DocumentLoader : public RefCounted<DocumentLoader>, public FrameDestructionObserver, private CachedRawResourceClient {
@@ -142,10 +144,9 @@ public:
     const ResourceError& mainDocumentError() const { return m_mainDocumentError; }
 
     const ResourceResponse& response() const { return m_response; }
-#if PLATFORM(IOS)
+
     // FIXME: This method seems to violate the encapsulation of this class.
     void setResponse(const ResourceResponse& response) { m_response = response; }
-#endif
 
     bool isClientRedirect() const { return m_isClientRedirect; }
     void setIsClientRedirect(bool isClientRedirect) { m_isClientRedirect = isClientRedirect; }
@@ -295,6 +296,9 @@ public:
 
     const Vector<LinkIcon>& linkIcons() const { return m_linkIcons; }
 
+    WEBCORE_EXPORT void setCustomHeaderFields(Vector<HTTPHeaderField>&& fields);
+    const Vector<HTTPHeaderField>& customHeaderFields() { return m_customHeaderFields; }
+    
 protected:
     WEBCORE_EXPORT DocumentLoader(const ResourceRequest&, const SubstituteData&);
 
@@ -452,6 +456,8 @@ private:
     HashMap<std::unique_ptr<IconLoader>, uint64_t> m_iconLoaders;
     Vector<LinkIcon> m_linkIcons;
 
+    Vector<HTTPHeaderField> m_customHeaderFields;
+    
     bool m_subresourceLoadersArePageCacheAcceptable { false };
     ShouldOpenExternalURLsPolicy m_shouldOpenExternalURLsPolicy { ShouldOpenExternalURLsPolicy::ShouldNotAllow };
 

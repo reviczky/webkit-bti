@@ -34,6 +34,10 @@
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 
+namespace IPC {
+class MessageSender;
+}
+
 namespace WebCore {
 class AuthenticationChallenge;
 class CertificateInfo;
@@ -45,7 +49,6 @@ namespace WebKit {
 class ChildProcess;
 class Download;
 class DownloadID;
-class PendingDownload;
 class WebFrame;
 
 enum class AuthenticationChallengeDisposition {
@@ -59,13 +62,13 @@ using ChallengeCompletionHandler = CompletionHandler<void(AuthenticationChalleng
 class AuthenticationManager : public WebProcessSupplement, public NetworkProcessSupplement, public IPC::MessageReceiver {
     WTF_MAKE_NONCOPYABLE(AuthenticationManager);
 public:
-    explicit AuthenticationManager(ChildProcess*);
+    explicit AuthenticationManager(ChildProcess&);
 
     static const char* supplementName();
 
 #if USE(NETWORK_SESSION)
     void didReceiveAuthenticationChallenge(uint64_t pageID, uint64_t frameID, const WebCore::AuthenticationChallenge&, ChallengeCompletionHandler&&);
-    void didReceiveAuthenticationChallenge(PendingDownload&, const WebCore::AuthenticationChallenge&, ChallengeCompletionHandler&&);
+    void didReceiveAuthenticationChallenge(IPC::MessageSender& download, const WebCore::AuthenticationChallenge&, ChallengeCompletionHandler&&);
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
     void continueCanAuthenticateAgainstProtectionSpace(DownloadID, bool canAuthenticate);
 #endif
@@ -118,7 +121,7 @@ private:
 
     Vector<uint64_t> coalesceChallengesMatching(uint64_t challengeID) const;
 
-    ChildProcess* m_process;
+    ChildProcess& m_process;
 
     HashMap<uint64_t, Challenge> m_challenges;
 };

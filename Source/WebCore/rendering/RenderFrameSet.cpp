@@ -53,9 +53,7 @@ RenderFrameSet::RenderFrameSet(HTMLFrameSetElement& frameSet, RenderStyle&& styl
     setInline(false);
 }
 
-RenderFrameSet::~RenderFrameSet()
-{
-}
+RenderFrameSet::~RenderFrameSet() = default;
 
 HTMLFrameSetElement& RenderFrameSet::frameSetElement() const
 {
@@ -651,7 +649,7 @@ void RenderFrameSet::positionFramesWithFlattening()
 
 bool RenderFrameSet::flattenFrameSet() const
 {
-    return settings().frameFlattening() != FrameFlatteningDisabled;
+    return view().frameView().effectiveFrameFlattening() != FrameFlattening::Disabled;
 }
 
 void RenderFrameSet::startResizing(GridAxis& axis, int position)

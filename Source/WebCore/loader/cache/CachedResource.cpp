@@ -37,32 +37,33 @@
 #include "FrameLoaderClient.h"
 #include "HTTPHeaderNames.h"
 #include "InspectorInstrumentation.h"
-#include "URL.h"
 #include "LoaderStrategy.h"
 #include "Logging.h"
 #include "MainFrame.h"
 #include "MemoryCache.h"
 #include "PlatformStrategies.h"
+#include "ProgressTracker.h"
 #include "ResourceHandle.h"
 #include "SchemeRegistry.h"
 #include "SecurityOrigin.h"
 #include "SubresourceLoader.h"
+#include "URL.h"
 #include <wtf/CurrentTime.h>
 #include <wtf/MathExtras.h>
 #include <wtf/RefCountedLeakCounter.h>
 #include <wtf/StdLibExtras.h>
-#include <wtf/text/CString.h>
 #include <wtf/Vector.h>
+#include <wtf/text/CString.h>
 
 #if USE(QUICK_LOOK)
 #include "QuickLook.h"
 #endif
 
-using namespace WTF;
 
 #define RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(cachedResourceLoader.isAlwaysOnLoggingAllowed(), Network, "%p - CachedResource::" fmt, this, ##__VA_ARGS__)
 
 namespace WebCore {
+using namespace WTF;
 
 ResourceLoadPriority CachedResource::defaultPriorityForResourceType(Type type)
 {
@@ -115,7 +116,7 @@ static Seconds deadDecodedDataDeletionIntervalForResourceType(CachedResource::Ty
 
 DEFINE_DEBUG_ONLY_GLOBAL(RefCountedLeakCounter, cachedResourceLeakCounter, ("CachedResource"));
 
-CachedResource::CachedResource(CachedResourceRequest&& request, Type type, SessionID sessionID)
+CachedResource::CachedResource(CachedResourceRequest&& request, Type type, PAL::SessionID sessionID)
     : m_resourceRequest(request.releaseResourceRequest())
     , m_options(request.options())
     , m_decodedDataDeletionTimer(*this, &CachedResource::destroyDecodedData, deadDecodedDataDeletionIntervalForResourceType(type))
@@ -145,7 +146,7 @@ CachedResource::CachedResource(CachedResourceRequest&& request, Type type, Sessi
 }
 
 // FIXME: For this constructor, we should probably mandate that the URL has no fragment identifier.
-CachedResource::CachedResource(const URL& url, Type type, SessionID sessionID)
+CachedResource::CachedResource(const URL& url, Type type, PAL::SessionID sessionID)
     : m_resourceRequest(url)
     , m_decodedDataDeletionTimer(*this, &CachedResource::destroyDecodedData, deadDecodedDataDeletionIntervalForResourceType(type))
     , m_sessionID(sessionID)
@@ -260,11 +261,36 @@ void CachedResource::load(CachedResourceLoader& cachedResourceLoader)
         m_fragmentIdentifierForRequest = String();
     }
 
-    // FIXME: We should not special-case Beacon here.
-    if (m_options.keepAlive && type() == CachedResource::Beacon) {
-        ASSERT(m_origin);
-        platformStrategies()->loaderStrategy()->createPingHandle(frame.loader().networkingContext(), request, *m_origin, m_options);
-        return;
+    if (m_options.keepAlive) {
+        if (!cachedResourceLoader.keepaliveRequestTracker().tryRegisterRequest(*this)) {
+            setResourceError({ errorDomainWebKitInternal, 0, request.url(), ASCIILiteral("Reached maximum amount of queued data of 64Kb for keepalive requests") });
+            failBeforeStarting();
+            return;
+        }
+        // FIXME: We should not special-case Beacon here.
+        if (shouldUsePingLoad(type())) {
+            ASSERT(m_originalRequest);
+            CachedResourceHandle<CachedResource> protectedThis(this);
+
+            // FIXME: Move beacon loads to normal subresource loading to get normal inspector request instrumentation hooks.
+            unsigned long identifier = frame.page()->progress().createUniqueIdentifier();
+            InspectorInstrumentation::willSendRequestOfType(&frame, identifier, frameLoader.activeDocumentLoader(), request, InspectorInstrumentation::LoadType::Beacon);
+
+            platformStrategies()->loaderStrategy()->startPingLoad(frame, request, m_originalRequest->httpHeaderFields(), m_options, [this, protectedThis = WTFMove(protectedThis), protectedFrame = makeRef(frame), identifier] (const ResourceError& error, const ResourceResponse& response) {
+                if (!response.isNull())
+                    InspectorInstrumentation::didReceiveResourceResponse(protectedFrame, identifier, protectedFrame->loader().activeDocumentLoader(), response, nullptr);
+                if (error.isNull()) {
+                    finishLoading(nullptr);
+                    NetworkLoadMetrics emptyMetrics;
+                    InspectorInstrumentation::didFinishLoading(protectedFrame.ptr(), protectedFrame->loader().activeDocumentLoader(), identifier, emptyMetrics, nullptr);
+                } else {
+                    setResourceError(error);
+                    this->error(LoadError);
+                    InspectorInstrumentation::didFailLoading(protectedFrame.ptr(), protectedFrame->loader().activeDocumentLoader(), identifier, error);
+                }
+            });
+            return;
+        }
     }
 
     m_loader = platformStrategies()->loaderStrategy()->loadResource(frame, *this, request, m_options);
@@ -286,7 +312,7 @@ void CachedResource::loadFrom(const CachedResource& resource)
     if (isCrossOrigin() && m_options.mode == FetchOptions::Mode::Cors) {
         ASSERT(m_origin);
         String errorMessage;
-        if (!WebCore::passesAccessControlCheck(resource.response(), m_options.allowCredentials, *m_origin, errorMessage)) {
+        if (!WebCore::passesAccessControlCheck(resource.response(), m_options.storedCredentialsPolicy, *m_origin, errorMessage)) {
             setResourceError(ResourceError(String(), 0, url(), errorMessage, ResourceError::Type::AccessControl));
             return;
         }
@@ -316,12 +342,12 @@ void CachedResource::checkNotify()
         client->notifyFinished(*this);
 }
 
-void CachedResource::addDataBuffer(SharedBuffer&)
+void CachedResource::updateBuffer(SharedBuffer&)
 {
     ASSERT(dataBufferingPolicy() == BufferData);
 }
 
-void CachedResource::addData(const char*, unsigned)
+void CachedResource::updateData(const char*, unsigned)
 {
     ASSERT(dataBufferingPolicy() == DoNotBufferData);
 }

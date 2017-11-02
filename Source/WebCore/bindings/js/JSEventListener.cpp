@@ -39,9 +39,9 @@
 #include <runtime/Watchdog.h>
 #include <wtf/Ref.h>
 
-using namespace JSC;
 
 namespace WebCore {
+using namespace JSC;
 
 JSEventListener::JSEventListener(JSObject* function, JSObject* wrapper, bool isAttribute, DOMWrapperWorld& isolatedWorld)
     : EventListener(JSEventListenerType)
@@ -56,9 +56,7 @@ JSEventListener::JSEventListener(JSObject* function, JSObject* wrapper, bool isA
         ASSERT(!function);
 }
 
-JSEventListener::~JSEventListener()
-{
-}
+JSEventListener::~JSEventListener() = default;
 
 JSObject* JSEventListener::initializeJSFunction(ScriptExecutionContext&) const
 {

@@ -36,7 +36,6 @@
 #include "JSDOMWindowCustom.h"
 #include "JSMainThreadExecState.h"
 #include "JSNode.h"
-#include "Language.h"
 #include "Logging.h"
 #include "Page.h"
 #include "RejectedPromiseTracker.h"
@@ -51,15 +50,16 @@
 #include <runtime/JSInternalPromise.h>
 #include <runtime/JSInternalPromiseDeferred.h>
 #include <runtime/Microtask.h>
+#include <wtf/Language.h>
 #include <wtf/MainThread.h>
 
 #if PLATFORM(IOS)
 #include "ChromeClient.h"
 #endif
 
-using namespace JSC;
 
 namespace WebCore {
+using namespace JSC;
 
 const ClassInfo JSDOMWindowBase::s_info = { "Window", &JSDOMGlobalObject::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(JSDOMWindowBase) };
 
@@ -72,7 +72,7 @@ const GlobalObjectMethodTable JSDOMWindowBase::s_globalObjectMethodTable = {
     &moduleLoaderImportModule,
     &moduleLoaderResolve,
     &moduleLoaderFetch,
-    nullptr, // moduleLoaderInstantiate
+    nullptr, // moduleLoaderCreateImportMetaProperties
     &moduleLoaderEvaluate,
     &promiseRejectionTracker,
     &defaultLanguage
@@ -91,9 +91,11 @@ void JSDOMWindowBase::finishCreation(VM& vm, JSDOMWindowProxy* proxy)
     Base::finishCreation(vm, proxy);
     ASSERT(inherits(vm, info()));
 
+    auto& builtinNames = static_cast<JSVMClientData*>(vm.clientData)->builtinNames();
+
     GlobalPropertyInfo staticGlobals[] = {
-        GlobalPropertyInfo(vm.propertyNames->document, jsNull(), DontDelete | ReadOnly),
-        GlobalPropertyInfo(vm.propertyNames->window, m_proxy, DontDelete | ReadOnly),
+        GlobalPropertyInfo(builtinNames.documentPublicName(), jsNull(), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
+        GlobalPropertyInfo(builtinNames.windowPublicName(), m_proxy, PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
     };
 
     addStaticGlobals(staticGlobals, WTF_ARRAY_LENGTH(staticGlobals));
@@ -117,7 +119,7 @@ void JSDOMWindowBase::updateDocument()
     bool shouldThrowReadOnlyError = false;
     bool ignoreReadOnlyErrors = true;
     bool putResult = false;
-    symbolTablePutTouchWatchpointSet(this, exec, exec->vm().propertyNames->document, toJS(exec, this, m_wrapped->document()), shouldThrowReadOnlyError, ignoreReadOnlyErrors, putResult);
+    symbolTablePutTouchWatchpointSet(this, exec, static_cast<JSVMClientData*>(exec->vm().clientData)->builtinNames().documentPublicName(), toJS(exec, this, m_wrapped->document()), shouldThrowReadOnlyError, ignoreReadOnlyErrors, putResult);
 }
 
 ScriptExecutionContext* JSDOMWindowBase::scriptExecutionContext() const
@@ -280,7 +282,7 @@ JSDOMWindow* toJSDOMWindow(JSC::VM& vm, JSValue value)
             return jsCast<JSDOMWindow*>(object);
         if (classInfo == JSDOMWindowProxy::info())
             return jsCast<JSDOMWindowProxy*>(object)->window();
-        value = object->getPrototypeDirect();
+        value = object->getPrototypeDirect(vm);
     }
     return nullptr;
 }
@@ -362,20 +364,19 @@ void JSDOMWindowBase::fireFrameClearedWatchpointsForWindow(DOMWindow* window)
     }
 }
 
-JSC::JSInternalPromise* JSDOMWindowBase::moduleLoaderResolve(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSModuleLoader* moduleLoader, JSC::JSValue moduleName, JSC::JSValue importerModuleKey, JSC::JSValue scriptFetcher)
+JSC::Identifier JSDOMWindowBase::moduleLoaderResolve(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSModuleLoader* moduleLoader, JSC::JSValue moduleName, JSC::JSValue importerModuleKey, JSC::JSValue scriptFetcher)
 {
     JSDOMWindowBase* thisObject = JSC::jsCast<JSDOMWindowBase*>(globalObject);
     if (RefPtr<Document> document = thisObject->wrapped().document())
         return document->moduleLoader()->resolve(globalObject, exec, moduleLoader, moduleName, importerModuleKey, scriptFetcher);
-    JSC::JSInternalPromiseDeferred* deferred = JSC::JSInternalPromiseDeferred::create(exec, globalObject);
-    return deferred->reject(exec, jsUndefined());
+    return { };
 }
 
-JSC::JSInternalPromise* JSDOMWindowBase::moduleLoaderFetch(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSModuleLoader* moduleLoader, JSC::JSValue moduleKey, JSC::JSValue scriptFetcher)
+JSC::JSInternalPromise* JSDOMWindowBase::moduleLoaderFetch(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSModuleLoader* moduleLoader, JSC::JSValue moduleKey, JSC::JSValue parameters, JSC::JSValue scriptFetcher)
 {
     JSDOMWindowBase* thisObject = JSC::jsCast<JSDOMWindowBase*>(globalObject);
     if (RefPtr<Document> document = thisObject->wrapped().document())
-        return document->moduleLoader()->fetch(globalObject, exec, moduleLoader, moduleKey, scriptFetcher);
+        return document->moduleLoader()->fetch(globalObject, exec, moduleLoader, moduleKey, parameters, scriptFetcher);
     JSC::JSInternalPromiseDeferred* deferred = JSC::JSInternalPromiseDeferred::create(exec, globalObject);
     return deferred->reject(exec, jsUndefined());
 }
@@ -388,11 +389,11 @@ JSC::JSValue JSDOMWindowBase::moduleLoaderEvaluate(JSC::JSGlobalObject* globalOb
     return JSC::jsUndefined();
 }
 
-JSC::JSInternalPromise* JSDOMWindowBase::moduleLoaderImportModule(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSModuleLoader* moduleLoader, JSC::JSString* moduleName, const JSC::SourceOrigin& sourceOrigin)
+JSC::JSInternalPromise* JSDOMWindowBase::moduleLoaderImportModule(JSC::JSGlobalObject* globalObject, JSC::ExecState* exec, JSC::JSModuleLoader* moduleLoader, JSC::JSString* moduleName, JSC::JSValue parameters, const JSC::SourceOrigin& sourceOrigin)
 {
     JSDOMWindowBase* thisObject = JSC::jsCast<JSDOMWindowBase*>(globalObject);
     if (RefPtr<Document> document = thisObject->wrapped().document())
-        return document->moduleLoader()->importModule(globalObject, exec, moduleLoader, moduleName, sourceOrigin);
+        return document->moduleLoader()->importModule(globalObject, exec, moduleLoader, moduleName, parameters, sourceOrigin);
     JSC::JSInternalPromiseDeferred* deferred = JSC::JSInternalPromiseDeferred::create(exec, globalObject);
     return deferred->reject(exec, jsUndefined());
 }

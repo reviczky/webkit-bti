@@ -145,7 +145,7 @@ static void appendServerMapMousePosition(StringBuilder& url, Event& event)
     auto& mouseEvent = downcast<MouseEvent>(event);
 
     ASSERT(mouseEvent.target());
-    auto* target = mouseEvent.target()->toNode();
+    auto target = mouseEvent.target()->toNode();
     ASSERT(target);
     if (!is<HTMLImageElement>(*target))
         return;
@@ -307,7 +307,7 @@ bool HTMLAnchorElement::hasRel(Relation relation) const
 DOMTokenList& HTMLAnchorElement::relList()
 {
     if (!m_relList) 
-        m_relList = std::make_unique<DOMTokenList>(*this, HTMLNames::relAttr, [](StringView token) {
+        m_relList = std::make_unique<DOMTokenList>(*this, HTMLNames::relAttr, [](Document&, StringView token) {
             return equalIgnoringASCIICase(token, "noreferrer") || equalIgnoringASCIICase(token, "noopener");
         });
     return *m_relList;
@@ -366,7 +366,7 @@ void HTMLAnchorElement::handleClick(Event& event)
 {
     event.setDefaultHandled();
 
-    Frame* frame = document().frame();
+    RefPtr<Frame> frame = document().frame();
     if (!frame)
         return;
 

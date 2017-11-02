@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2003-2017 Apple Inc. All rights reserved.
  * Copyright (C) 2008-2009 Torch Mobile, Inc.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -445,6 +445,7 @@ public:
 #if PLATFORM(MAC)
     void drawFocusRing(const Path&, double timeOffset, bool& needsRedraw);
     void drawFocusRing(const Vector<FloatRect>&, double timeOffset, bool& needsRedraw);
+    static CGColorRef focusRingColor();
 #endif
 
     void setLineCap(LineCap);
@@ -475,6 +476,7 @@ public:
     WEBCORE_EXPORT void scale(const FloatSize&);
     void rotate(float angleInRadians);
     void translate(const FloatSize& size) { translate(size.width(), size.height()); }
+    void translate(const FloatPoint& p) { translate(p.x(), p.y()); }
     WEBCORE_EXPORT void translate(float x, float y);
 
     void setURLForRect(const URL&, const FloatRect&);
@@ -487,13 +489,6 @@ public:
 
     enum IncludeDeviceScale { DefinitelyIncludeDeviceScale, PossiblyIncludeDeviceScale };
     AffineTransform getCTM(IncludeDeviceScale includeScale = PossiblyIncludeDeviceScale) const;
-
-#if ENABLE(3D_TRANSFORMS) && USE(TEXTURE_MAPPER)
-    // This is needed when using accelerated-compositing in software mode, like in TextureMapper.
-    void concat3DTransform(const TransformationMatrix&);
-    void set3DTransform(const TransformationMatrix&);
-    TransformationMatrix get3DTransform() const;
-#endif
 
     // This function applies the device scale factor to the context, making the context capable of
     // acting as a base-level context for a HiDPI environment.

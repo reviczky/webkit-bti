@@ -68,7 +68,7 @@ public:
     virtual EventTargetInterface eventTargetInterface() const = 0;
     virtual ScriptExecutionContext* scriptExecutionContext() const = 0;
 
-    virtual Node* toNode();
+    virtual RefPtr<Node> toNode();
     virtual DOMWindow* toDOMWindow();
     virtual bool isMessagePort() const;
 
@@ -81,13 +81,13 @@ public:
     };
 
     struct AddEventListenerOptions : ListenerOptions {
-        AddEventListenerOptions(bool capture = false, bool passive = false, bool once = false)
+        AddEventListenerOptions(bool capture = false, std::optional<bool> passive = std::nullopt, bool once = false)
             : ListenerOptions(capture)
             , passive(passive)
             , once(once)
         { }
 
-        bool passive;
+        std::optional<bool> passive;
         bool once;
     };
 

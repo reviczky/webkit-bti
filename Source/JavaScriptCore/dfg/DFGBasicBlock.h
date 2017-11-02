@@ -82,17 +82,9 @@ struct BasicBlock : RefCounted<BasicBlock> {
         size_t i = size();
         while (i--) {
             Node* node = at(i);
-            switch (node->op()) {
-            case Jump:
-            case Branch:
-            case Switch:
-            case Return:
-            case TailCall:
-            case DirectTailCall:
-            case TailCallVarargs:
-            case TailCallForwardVarargs:
-            case Unreachable:
+            if (node->isTerminal())
                 return NodeAndIndex(node, i);
+            switch (node->op()) {
             // The bitter end can contain Phantoms and the like. There will probably only be one or two nodes after the terminal. They are all no-ops and will not have any checked children.
             case Check: // This is here because it's our universal no-op.
             case Phantom:
@@ -185,6 +177,7 @@ struct BasicBlock : RefCounted<BasicBlock> {
     BlockIndex index;
     
     bool isOSRTarget;
+    bool isCatchEntrypoint;
     bool cfaHasVisited;
     bool cfaShouldRevisit;
     bool cfaFoundConstants;
@@ -228,8 +221,6 @@ struct BasicBlock : RefCounted<BasicBlock> {
     
     float executionCount;
     
-    // These fields are reserved for NaturalLoops.
-    
     struct SSAData {
         WTF_MAKE_FAST_ALLOCATED;
     public:
@@ -260,21 +251,6 @@ private:
 };
 
 typedef Vector<BasicBlock*, 5> BlockList;
-
-struct UnlinkedBlock {
-    BasicBlock* m_block;
-    bool m_needsNormalLinking;
-    bool m_needsEarlyReturnLinking;
-    
-    UnlinkedBlock() { }
-    
-    explicit UnlinkedBlock(BasicBlock* block)
-        : m_block(block)
-        , m_needsNormalLinking(true)
-        , m_needsEarlyReturnLinking(false)
-    {
-    }
-};
     
 static inline unsigned getBytecodeBeginForBlock(BasicBlock** basicBlock)
 {

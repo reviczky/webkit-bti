@@ -77,6 +77,12 @@
 
 namespace JSC {
 
+#if ENABLE(DFG_JIT)
+namespace DFG {
+struct OSRExitState;
+} // namespace DFG
+#endif
+
 class BytecodeLivenessAnalysis;
 class CodeBlockSet;
 class ExecState;
@@ -109,6 +115,7 @@ class CodeBlock : public JSCell {
     };
 
 public:
+
     enum CopyParsedBlockTag { CopyParsedBlock };
 
     static const unsigned StructureFlags = Base::StructureFlags | StructureIsImmortal;
@@ -534,7 +541,7 @@ public:
     {
         unsigned result = m_constantRegisters.size();
         m_constantRegisters.append(WriteBarrier<Unknown>());
-        m_constantRegisters.last().set(m_globalObject->vm(), this, v);
+        m_constantRegisters.last().set(*m_vm, this, v);
         m_constantsSourceCodeRepresentation.append(SourceCodeRepresentation::Other);
         return result;
     }
@@ -594,12 +601,7 @@ public:
 
     BytecodeLivenessAnalysis& livenessAnalysis()
     {
-        {
-            ConcurrentJSLocker locker(m_lock);
-            if (!!m_livenessAnalysis)
-                return *m_livenessAnalysis;
-        }
-        return livenessAnalysisSlow();
+        return m_unlinkedCode->livenessAnalysis(this);
     }
     
     void validate();
@@ -762,7 +764,10 @@ public:
 
     void countOSRExit() { m_osrExitCounter++; }
 
-    uint32_t* addressOfOSRExitCounter() { return &m_osrExitCounter; }
+    enum class OptimizeAction { None, ReoptimizeNow };
+#if ENABLE(DFG_JIT)
+    OptimizeAction updateOSRExitCounterAndCheckIfNeedToReoptimize(DFG::OSRExitState&);
+#endif
 
     static ptrdiff_t offsetOfOSRExitCounter() { return OBJECT_OFFSETOF(CodeBlock, m_osrExitCounter); }
 
@@ -891,6 +896,26 @@ public:
 
     CallSiteIndex newExceptionHandlingCallSiteIndex(CallSiteIndex originalCallSite);
 
+    void ensureCatchLivenessIsComputedForBytecodeOffset(unsigned bytecodeOffset)
+    {
+        if (!!m_instructions[bytecodeOffset + 3].u.pointer) {
+#if !ASSERT_DISABLED
+            ConcurrentJSLocker locker(m_lock);
+            bool found = false;
+            for (auto& profile : m_catchProfiles) {
+                if (profile.get() == m_instructions[bytecodeOffset + 3].u.pointer) {
+                    found = true;
+                    break;
+                }
+            }
+            ASSERT(found);
+#endif
+            return;
+        }
+
+        ensureCatchLivenessIsComputedForBytecodeOffsetSlow(bytecodeOffset);
+    }
+
 #if ENABLE(JIT)
     void setPCToCodeOriginMap(std::unique_ptr<PCToCodeOriginMap>&&);
     std::optional<CodeOrigin> findPC(void* pc);
@@ -926,7 +951,7 @@ private:
     void replaceConstant(int index, JSValue value)
     {
         ASSERT(isConstantRegisterIndex(index) && static_cast<size_t>(index - FirstConstantRegisterIndex) < m_constantRegisters.size());
-        m_constantRegisters[index - FirstConstantRegisterIndex].set(m_globalObject->vm(), this, value);
+        m_constantRegisters[index - FirstConstantRegisterIndex].set(*m_vm, this, value);
     }
 
     bool shouldVisitStrongly(const ConcurrentJSLocker&);
@@ -953,6 +978,7 @@ private:
     }
 
     void insertBasicBlockBoundariesForControlFlowProfiler(RefCountedArray<Instruction>&);
+    void ensureCatchLivenessIsComputedForBytecodeOffsetSlow(unsigned);
 
     WriteBarrier<UnlinkedCodeBlock> m_unlinkedCode;
     int m_numParameters;
@@ -1003,6 +1029,7 @@ private:
 #endif
     RefCountedArray<ValueProfile> m_argumentValueProfiles;
     RefCountedArray<ValueProfile> m_valueProfiles;
+    Vector<std::unique_ptr<ValueProfileAndOperandBuffer>> m_catchProfiles;
     SegmentedVector<RareCaseProfile, 8> m_rareCaseProfiles;
     RefCountedArray<ArrayAllocationProfile> m_arrayAllocationProfiles;
     ArrayProfileVector m_arrayProfiles;
@@ -1027,8 +1054,6 @@ private:
     uint16_t m_reoptimizationRetryCounter;
 
     std::chrono::steady_clock::time_point m_creationTime;
-
-    std::unique_ptr<BytecodeLivenessAnalysis> m_livenessAnalysis;
 
     std::unique_ptr<RareData> m_rareData;
 

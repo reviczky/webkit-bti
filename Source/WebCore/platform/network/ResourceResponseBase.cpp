@@ -232,6 +232,12 @@ void ResourceResponseBase::setTextEncodingName(const String& encodingName)
     // FIXME: Should invalidate or update platform response if present.
 }
 
+void ResourceResponseBase::setType(Type type)
+{
+    m_isNull = false;
+    m_type = type;
+}
+
 void ResourceResponseBase::includeCertificateInfo() const
 {
     if (m_certificateInfo)
@@ -275,6 +281,7 @@ void ResourceResponseBase::setHTTPStatusCode(int statusCode)
     lazyInit(CommonFieldsOnly);
 
     m_httpStatusCode = statusCode;
+    m_isNull = false;
 
     // FIXME: Should invalidate or update platform response if present.
 }

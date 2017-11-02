@@ -28,9 +28,9 @@
 #include "RenderBox.h"
 #include "RenderView.h"
 
-using namespace WTF;
 
 namespace WebCore {
+using namespace WTF;
 
 struct SameSizeAsFloatingObject {
     void* pointers[2];
@@ -133,7 +133,7 @@ public:
     {
     }
 
-    virtual ~ComputeFloatOffsetAdapter() { }
+    virtual ~ComputeFloatOffsetAdapter() = default;
 
     LayoutUnit lowValue() const { return m_lineTop; }
     LayoutUnit highValue() const { return m_lineBottom; }
@@ -159,7 +159,7 @@ public:
     {
     }
 
-    virtual ~ComputeFloatOffsetForFloatLayoutAdapter() { }
+    virtual ~ComputeFloatOffsetForFloatLayoutAdapter() = default;
 
     LayoutUnit heightRemaining() const;
 
@@ -175,7 +175,7 @@ public:
     {
     }
 
-    virtual ~ComputeFloatOffsetForLineLayoutAdapter() { }
+    virtual ~ComputeFloatOffsetForLineLayoutAdapter() = default;
 
 protected:
     bool updateOffsetIfNeeded(const FloatingObject&) final;
@@ -254,16 +254,14 @@ FloatingObjects::FloatingObjects(const RenderBlockFlow& renderer)
 {
 }
 
-FloatingObjects::~FloatingObjects()
-{
-}
+FloatingObjects::~FloatingObjects() = default;
 
 void FloatingObjects::clearLineBoxTreePointers()
 {
     // Clear references to originating lines, since the lines are being deleted
     for (auto it = m_set.begin(), end = m_set.end(); it != end; ++it) {
         ASSERT(!((*it)->originatingLine()) || &((*it)->originatingLine()->renderer()) == &m_renderer);
-        (*it)->setOriginatingLine(0);
+        (*it)->clearOriginatingLine();
     }
 }
 

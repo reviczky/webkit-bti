@@ -28,6 +28,7 @@
 #include "config.h"
 #include "SVGImage.h"
 
+#include "CacheStorageProvider.h"
 #include "Chrome.h"
 #include "CommonVM.h"
 #include "DOMWindow.h"
@@ -297,20 +298,20 @@ ImageDrawResult SVGImage::draw(GraphicsContext& context, const FloatRect& dstRec
         context.setCompositeOperation(CompositeSourceOver, BlendModeNormal);
     }
 
-    FloatSize scale(dstRect.width() / srcRect.width(), dstRect.height() / srcRect.height());
+    FloatSize scale(dstRect.size() / srcRect.size());
     
     // We can only draw the entire frame, clipped to the rect we want. So compute where the top left
     // of the image would be if we were drawing without clipping, and translate accordingly.
     FloatSize topLeftOffset(srcRect.location().x() * scale.width(), srcRect.location().y() * scale.height());
     FloatPoint destOffset = dstRect.location() - topLeftOffset;
 
-    context.translate(destOffset.x(), destOffset.y());
+    context.translate(destOffset);
     context.scale(scale);
 
     view->resize(containerSize());
 
     if (view->needsLayout())
-        view->layout();
+        view->layoutContext().layout();
 
     view->paint(context, intersection(context.clipBounds(), enclosingIntRect(srcRect)));
 
@@ -427,7 +428,8 @@ EncodedDataStatus SVGImage::dataChanged(bool allDataReceived)
         PageConfiguration pageConfiguration(
             createEmptyEditorClient(),
             SocketProvider::create(),
-            makeUniqueRef<LibWebRTCProvider>()
+            LibWebRTCProvider::create(),
+            CacheStorageProvider::create()
         );
         fillWithEmptyClients(pageConfiguration);
         m_chromeClient = std::make_unique<SVGImageChromeClient>(this);

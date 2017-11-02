@@ -28,7 +28,6 @@
 
 #include <gst/audio/audio-info.h>
 #include <gst/gst.h>
-#include <wtf/MathExtras.h>
 #include <wtf/glib/GUniquePtr.h>
 
 #if ENABLE(VIDEO_TRACK) && USE(GSTREAMER_MPEGTS)
@@ -175,16 +174,15 @@ unsigned getGstPlayFlag(const char* nick)
     return flag->value;
 }
 
-GstClockTime toGstClockTime(float time)
+// Convert a MediaTime in seconds to a GstClockTime. Note that we can get MediaTime objects with a time scale that isn't a GST_SECOND, since they can come to
+// us through the internal testing API, the DOM and internally. It would be nice to assert the format of the incoming time, but all the media APIs assume time
+// is passed around in fractional seconds, so we'll just have to assume the same.
+uint64_t toGstUnsigned64Time(const MediaTime& mediaTime)
 {
-    // Extract the integer part of the time (seconds) and the fractional part (microseconds). Attempt to
-    // round the microseconds so no floating point precision is lost and we can perform an accurate seek.
-    float seconds;
-    float microSeconds = modff(time, &seconds) * 1000000;
-    GTimeVal timeValue;
-    timeValue.tv_sec = static_cast<glong>(seconds);
-    timeValue.tv_usec = static_cast<glong>(floor(microSeconds + 0.5));
-    return GST_TIMEVAL_TO_TIME(timeValue);
+    MediaTime time = mediaTime.toTimeScale(GST_SECOND);
+    if (time.isInvalid())
+        return GST_CLOCK_TIME_NONE;
+    return time.timeValue();
 }
 
 bool gstRegistryHasElementForMediaType(GList* elementFactories, const char* capsString)
@@ -196,46 +194,6 @@ bool gstRegistryHasElementForMediaType(GList* elementFactories, const char* caps
     gst_plugin_feature_list_free(candidates);
     return result;
 }
-
-#if GST_CHECK_VERSION(1, 5, 3) && ENABLE(ENCRYPTED_MEDIA)
-GstElement* createGstDecryptor(const gchar* protectionSystem)
-{
-    GstElement* decryptor = nullptr;
-    GList* decryptors = gst_element_factory_list_get_elements(GST_ELEMENT_FACTORY_TYPE_DECRYPTOR, GST_RANK_MARGINAL);
-
-    GST_TRACE("looking for decryptor for %s", protectionSystem);
-
-    for (GList* walk = decryptors; !decryptor && walk; walk = g_list_next(walk)) {
-        GstElementFactory* factory = reinterpret_cast<GstElementFactory*>(walk->data);
-
-        GST_TRACE("checking factory %s", GST_OBJECT_NAME(factory));
-
-        for (const GList* current = gst_element_factory_get_static_pad_templates(factory); current && !decryptor; current = g_list_next(current)) {
-            GstStaticPadTemplate* staticPadTemplate = static_cast<GstStaticPadTemplate*>(current->data);
-            GRefPtr<GstCaps> caps = adoptGRef(gst_static_pad_template_get_caps(staticPadTemplate));
-            unsigned length = gst_caps_get_size(caps.get());
-
-            GST_TRACE("factory %s caps has size %u", GST_OBJECT_NAME(factory), length);
-            for (unsigned i = 0; !decryptor && i < length; ++i) {
-                GstStructure* structure = gst_caps_get_structure(caps.get(), i);
-                GST_TRACE("checking structure %s", gst_structure_get_name(structure));
-                if (gst_structure_has_field_typed(structure, GST_PROTECTION_SYSTEM_ID_CAPS_FIELD, G_TYPE_STRING)) {
-                    const gchar* sysId = gst_structure_get_string(structure, GST_PROTECTION_SYSTEM_ID_CAPS_FIELD);
-                    GST_TRACE("structure %s has protection system %s", gst_structure_get_name(structure), sysId);
-                    if (!g_ascii_strcasecmp(protectionSystem, sysId)) {
-                        GST_DEBUG("found decryptor %s for %s", GST_OBJECT_NAME(factory), protectionSystem);
-                        decryptor = gst_element_factory_create(factory, nullptr);
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    gst_plugin_feature_list_free(decryptors);
-    GST_TRACE("returning decryptor %p", decryptor);
-    return decryptor;
-}
-#endif
 
 }
 

@@ -29,18 +29,20 @@
 #include <WebCore/BlobDataFileReference.h>
 #include <WebCore/ResourceLoaderOptions.h>
 #include <WebCore/ResourceRequest.h>
-#include <WebCore/SessionID.h>
+#include <pal/SessionID.h>
 
 namespace WebKit {
+
+enum class PreconnectOnly { No, Yes };
 
 class NetworkLoadParameters {
 public:
     uint64_t webPageID { 0 };
     uint64_t webFrameID { 0 };
-    WebCore::SessionID sessionID { WebCore::SessionID::emptySessionID() };
+    PAL::SessionID sessionID { PAL::SessionID::emptySessionID() };
     WebCore::ResourceRequest request;
     WebCore::ContentSniffingPolicy contentSniffingPolicy { WebCore::SniffContent };
-    WebCore::StoredCredentials allowStoredCredentials { WebCore::DoNotAllowStoredCredentials };
+    WebCore::StoredCredentialsPolicy storedCredentialsPolicy { WebCore::StoredCredentialsPolicy::DoNotUse };
     WebCore::ClientCredentialPolicy clientCredentialPolicy { WebCore::ClientCredentialPolicy::CannotAskClientForCredentials };
     bool shouldFollowRedirects { true };
     bool shouldClearReferrerOnHTTPSToHTTPRedirect { true };
@@ -49,6 +51,7 @@ public:
 #if USE(NETWORK_SESSION)
     Vector<RefPtr<WebCore::BlobDataFileReference>> blobFileReferences;
 #endif
+    PreconnectOnly shouldPreconnectOnly { PreconnectOnly::No };
 };
 
 } // namespace WebKit

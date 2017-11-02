@@ -55,11 +55,11 @@
 #include "WebsiteDataType.h"
 #include <JavaScriptCore/RemoteInspector.h>
 #include <WebCore/FileSystem.h>
-#include <WebCore/Language.h>
 #include <glib/gi18n-lib.h>
 #include <libintl.h>
 #include <memory>
 #include <wtf/HashMap.h>
+#include <wtf/Language.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
@@ -310,6 +310,7 @@ static inline WebsiteDataStore::Configuration websiteDataStoreConfigurationForWe
     configuration.webSQLDatabaseDirectory = processPoolconfigurarion.webSQLDatabaseDirectory();
     configuration.localStorageDirectory = processPoolconfigurarion.localStorageDirectory();
     configuration.mediaKeysStorageDirectory = processPoolconfigurarion.mediaKeysStorageDirectory();
+    configuration.resourceLoadStatisticsDirectory = processPoolconfigurarion.resourceLoadStatisticsDirectory();
     return configuration;
 }
 
@@ -332,6 +333,7 @@ static void webkitWebContextConstructed(GObject* object)
         configuration.setApplicationCacheDirectory(WebCore::stringFromFileSystemRepresentation(webkit_website_data_manager_get_offline_application_cache_directory(priv->websiteDataManager.get())));
         configuration.setIndexedDBDatabaseDirectory(WebCore::stringFromFileSystemRepresentation(webkit_website_data_manager_get_indexeddb_directory(priv->websiteDataManager.get())));
         configuration.setWebSQLDatabaseDirectory(WebCore::stringFromFileSystemRepresentation(webkit_website_data_manager_get_websql_directory(priv->websiteDataManager.get())));
+        configuration.setResourceLoadStatisticsDirectory(WebCore::stringFromFileSystemRepresentation(webkit_website_data_manager_get_resource_load_statistics_directory(priv->websiteDataManager.get())));
     } else if (!priv->localStorageDirectory.isNull())
         configuration.setLocalStorageDirectory(WebCore::stringFromFileSystemRepresentation(priv->localStorageDirectory.data()));
 
@@ -1256,7 +1258,7 @@ void webkit_web_context_set_preferred_languages(WebKitWebContext* context, const
         else
             languages.append(String::fromUTF8(languageList[i]).convertToASCIILowercase().replace("_", "-"));
     }
-    WebCore::overrideUserPreferredLanguages(languages);
+    overrideUserPreferredLanguages(languages);
 }
 
 /**
@@ -1616,9 +1618,7 @@ void webkitWebContextStopLoadingCustomProtocol(WebKitWebContext* context, uint64
 
 void webkitWebContextInvalidateCustomProtocolRequests(WebKitWebContext* context, LegacyCustomProtocolManagerProxy& manager)
 {
-    Vector<GRefPtr<WebKitURISchemeRequest>> requests;
-    copyValuesToVector(context->priv->uriSchemeRequests, requests);
-    for (auto& request : requests) {
+    for (auto& request : copyToVector(context->priv->uriSchemeRequests.values())) {
         if (webkitURISchemeRequestGetManager(request.get()) == &manager)
             webkitURISchemeRequestInvalidate(request.get());
     }

@@ -50,8 +50,8 @@
 #include "JITRightShiftGenerator.h"
 #include "JITSubGenerator.h"
 #include "JSAsyncFunction.h"
+#include "JSAsyncGeneratorFunction.h"
 #include "JSCInlines.h"
-#include "JSEnvironmentRecord.h"
 #include "JSFixedArray.h"
 #include "JSGeneratorFunction.h"
 #include "JSLexicalEnvironment.h"
@@ -171,7 +171,7 @@ void SpeculativeJIT::emitAllocateRawObject(GPRReg resultGPR, RegisteredStructure
 void SpeculativeJIT::emitGetLength(InlineCallFrame* inlineCallFrame, GPRReg lengthGPR, bool includeThis)
 {
     if (inlineCallFrame && !inlineCallFrame->isVarargs())
-        m_jit.move(TrustedImm32(inlineCallFrame->arguments.size() - !includeThis), lengthGPR);
+        m_jit.move(TrustedImm32(inlineCallFrame->argumentCountIncludingThis - !includeThis), lengthGPR);
     else {
         VirtualRegister argumentCountRegister = m_jit.argumentCount(inlineCallFrame);
         m_jit.load32(JITCompiler::payloadFor(argumentCountRegister), lengthGPR);
@@ -1124,6 +1124,36 @@ void SpeculativeJIT::compileDeleteByVal(Node* node)
     unblessedBooleanResult(resultGPR, node, UseChildrenCalledExplicitly);
 }
 
+void SpeculativeJIT::compilePushWithScope(Node* node)
+{
+    SpeculateCellOperand currentScope(this, node->child1());
+    GPRReg currentScopeGPR = currentScope.gpr();
+
+    GPRFlushedCallResult result(this);
+    GPRReg resultGPR = result.gpr();
+
+    auto objectEdge = node->child2();
+    if (objectEdge.useKind() == ObjectUse) {
+        SpeculateCellOperand object(this, objectEdge);
+        GPRReg objectGPR = object.gpr();
+        speculateObject(objectEdge, objectGPR);
+
+        flushRegisters();
+        callOperation(operationPushWithScopeObject, resultGPR, currentScopeGPR, objectGPR);
+        // No exception check here as we did not have to call toObject().
+    } else {
+        ASSERT(objectEdge.useKind() == UntypedUse);
+        JSValueOperand object(this, objectEdge);
+        JSValueRegs objectRegs = object.jsValueRegs();
+
+        flushRegisters();
+        callOperation(operationPushWithScope, resultGPR, currentScopeGPR, objectRegs);
+        m_jit.exceptionCheck();
+    }
+    
+    cellResult(resultGPR, node);
+}
+
 bool SpeculativeJIT::nonSpeculativeCompare(Node* node, MacroAssembler::RelationalCondition cond, S_JITOperation_EJJ helperFunction)
 {
     unsigned branchIndexInBlock = detectPeepHoleBranch();
@@ -1676,6 +1706,13 @@ void SpeculativeJIT::compileCurrentBlock()
         return;
     }
 
+    if (m_block->isCatchEntrypoint) {
+        m_jit.addPtr(CCallHelpers::TrustedImm32(m_jit.graph().stackPointerOffset() * sizeof(Register)), GPRInfo::callFrameRegister,  CCallHelpers::stackPointerRegister);
+        m_jit.emitSaveCalleeSaves();
+        m_jit.emitMaterializeTagCheckRegisters();
+        m_jit.emitPutToCallFrameHeader(m_jit.codeBlock(), CallFrameSlot::codeBlock);
+    }
+
     m_stream->appendAndLog(VariableEvent::reset());
     
     m_jit.jitAssertHasValidCallFrame();
@@ -1770,8 +1807,9 @@ void SpeculativeJIT::checkArgumentTypes()
     ASSERT(!m_currentNode);
     m_origin = NodeOrigin(CodeOrigin(0), CodeOrigin(0), true);
 
+    auto& arguments = m_jit.graph().m_rootToArguments.find(m_jit.graph().block(0))->value;
     for (int i = 0; i < m_jit.codeBlock()->numParameters(); ++i) {
-        Node* node = m_jit.graph().m_arguments[i];
+        Node* node = arguments[i];
         if (!node) {
             // The argument is dead. We don't do any checks for such arguments.
             continue;
@@ -1855,12 +1893,11 @@ void SpeculativeJIT::createOSREntries()
         BasicBlock* block = m_jit.graph().block(blockIndex);
         if (!block)
             continue;
-        if (!block->isOSRTarget)
-            continue;
-        
-        // Currently we don't have OSR entry trampolines. We could add them
-        // here if need be.
-        m_osrEntryHeads.append(m_jit.blockHeads()[blockIndex]);
+        if (block->isOSRTarget || block->isCatchEntrypoint) {
+            // Currently we don't have OSR entry trampolines. We could add them
+            // here if need be.
+            m_osrEntryHeads.append(m_jit.blockHeads()[blockIndex]);
+        }
     }
 }
 
@@ -1871,10 +1908,30 @@ void SpeculativeJIT::linkOSREntries(LinkBuffer& linkBuffer)
         BasicBlock* block = m_jit.graph().block(blockIndex);
         if (!block)
             continue;
-        if (!block->isOSRTarget)
+        if (!block->isOSRTarget && !block->isCatchEntrypoint)
             continue;
-        m_jit.noticeOSREntry(*block, m_osrEntryHeads[osrEntryIndex++], linkBuffer);
+        if (block->isCatchEntrypoint) {
+            auto& argumentsVector = m_jit.graph().m_rootToArguments.find(block)->value;
+            Vector<FlushFormat> argumentFormats;
+            argumentFormats.reserveInitialCapacity(argumentsVector.size());
+            for (Node* setArgument : argumentsVector) {
+                if (setArgument) {
+                    FlushFormat flushFormat = setArgument->variableAccessData()->flushFormat();
+                    ASSERT(flushFormat == FlushedInt32 || flushFormat == FlushedCell || flushFormat == FlushedBoolean || flushFormat == FlushedJSValue);
+                    argumentFormats.uncheckedAppend(flushFormat);
+                } else
+                    argumentFormats.uncheckedAppend(DeadFlush);
+            }
+            m_jit.noticeCatchEntrypoint(*block, m_osrEntryHeads[osrEntryIndex++], linkBuffer, WTFMove(argumentFormats));
+        } else {
+            ASSERT(block->isOSRTarget);
+            m_jit.noticeOSREntry(*block, m_osrEntryHeads[osrEntryIndex++], linkBuffer);
+        }
     }
+
+    m_jit.jitCode()->finalizeOSREntrypoints();
+    m_jit.jitCode()->common.finalizeCatchEntrypoints();
+
     ASSERT(osrEntryIndex == m_osrEntryHeads.size());
     
     if (verboseCompilationEnabled()) {
@@ -2080,14 +2137,11 @@ void SpeculativeJIT::compileGetByValOnString(Node* node)
             // on a stringPrototypeChainIsSane() guaranteeing that the prototypes have no negative
             // indexed properties either.
             // https://bugs.webkit.org/show_bug.cgi?id=144668
-            m_jit.graph().watchpoints().addLazily(globalObject->stringPrototype()->structure()->transitionWatchpointSet());
-            m_jit.graph().watchpoints().addLazily(globalObject->objectPrototype()->structure()->transitionWatchpointSet());
+            m_jit.graph().registerAndWatchStructureTransition(globalObject->stringPrototype()->structure());
+            m_jit.graph().registerAndWatchStructureTransition(globalObject->objectPrototype()->structure());
             prototypeChainIsSane = globalObject->stringPrototypeChainIsSane();
         }
         if (prototypeChainIsSane) {
-            m_jit.graph().watchpoints().addLazily(globalObject->stringPrototype()->structure()->transitionWatchpointSet());
-            m_jit.graph().watchpoints().addLazily(globalObject->objectPrototype()->structure()->transitionWatchpointSet());
-            
 #if USE(JSVALUE64)
             addSlowPathGenerator(std::make_unique<SaneStringGetByValSlowPathGenerator>(
                 outOfBounds, this, JSValueRegs(scratchReg), baseReg, propertyReg));
@@ -3086,7 +3140,101 @@ void SpeculativeJIT::compilePutByValForFloatTypedArray(GPRReg base, GPRReg prope
     noResult(node);
 }
 
-void SpeculativeJIT::compileInstanceOfForObject(Node*, GPRReg valueReg, GPRReg prototypeReg, GPRReg scratchReg, GPRReg scratch2Reg)
+void SpeculativeJIT::compileGetByValForObjectWithString(Node* node)
+{
+    SpeculateCellOperand arg1(this, node->child1());
+    SpeculateCellOperand arg2(this, node->child2());
+
+    GPRReg arg1GPR = arg1.gpr();
+    GPRReg arg2GPR = arg2.gpr();
+
+    speculateObject(node->child1(), arg1GPR);
+    speculateString(node->child2(), arg2GPR);
+
+    GPRFlushedCallResult resultPayload(this);
+    GPRReg resultPayloadGPR = resultPayload.gpr();
+#if USE(JSVALUE64)
+    JSValueRegs resultRegs(resultPayloadGPR);
+#else
+    GPRFlushedCallResult2 resultTag(this);
+    GPRReg resultTagGPR = resultTag.gpr();
+    JSValueRegs resultRegs(resultTagGPR, resultPayloadGPR);
+#endif
+
+    flushRegisters();
+    callOperation(operationGetByValObjectString, extractResult(resultRegs), arg1GPR, arg2GPR);
+    m_jit.exceptionCheck();
+
+    jsValueResult(resultRegs, node);
+}
+
+void SpeculativeJIT::compileGetByValForObjectWithSymbol(Node* node)
+{
+    SpeculateCellOperand arg1(this, node->child1());
+    SpeculateCellOperand arg2(this, node->child2());
+
+    GPRReg arg1GPR = arg1.gpr();
+    GPRReg arg2GPR = arg2.gpr();
+
+    speculateObject(node->child1(), arg1GPR);
+    speculateSymbol(node->child2(), arg2GPR);
+
+    GPRFlushedCallResult resultPayload(this);
+    GPRReg resultPayloadGPR = resultPayload.gpr();
+#if USE(JSVALUE64)
+    JSValueRegs resultRegs(resultPayloadGPR);
+#else
+    GPRFlushedCallResult2 resultTag(this);
+    GPRReg resultTagGPR = resultTag.gpr();
+    JSValueRegs resultRegs(resultTagGPR, resultPayloadGPR);
+#endif
+
+    flushRegisters();
+    callOperation(operationGetByValObjectSymbol, extractResult(resultRegs), arg1GPR, arg2GPR);
+    m_jit.exceptionCheck();
+
+    jsValueResult(resultRegs, node);
+}
+
+void SpeculativeJIT::compilePutByValForCellWithString(Node* node, Edge& child1, Edge& child2, Edge& child3)
+{
+    SpeculateCellOperand arg1(this, child1);
+    SpeculateCellOperand arg2(this, child2);
+    JSValueOperand arg3(this, child3);
+
+    GPRReg arg1GPR = arg1.gpr();
+    GPRReg arg2GPR = arg2.gpr();
+    JSValueRegs arg3Regs = arg3.jsValueRegs();
+
+    speculateString(child2, arg2GPR);
+
+    flushRegisters();
+    callOperation(m_jit.isStrictModeFor(node->origin.semantic) ? operationPutByValCellStringStrict : operationPutByValCellStringNonStrict, arg1GPR, arg2GPR, arg3Regs);
+    m_jit.exceptionCheck();
+
+    noResult(node);
+}
+
+void SpeculativeJIT::compilePutByValForCellWithSymbol(Node* node, Edge& child1, Edge& child2, Edge& child3)
+{
+    SpeculateCellOperand arg1(this, child1);
+    SpeculateCellOperand arg2(this, child2);
+    JSValueOperand arg3(this, child3);
+
+    GPRReg arg1GPR = arg1.gpr();
+    GPRReg arg2GPR = arg2.gpr();
+    JSValueRegs arg3Regs = arg3.jsValueRegs();
+
+    speculateSymbol(child2, arg2GPR);
+
+    flushRegisters();
+    callOperation(m_jit.isStrictModeFor(node->origin.semantic) ? operationPutByValCellSymbolStrict : operationPutByValCellSymbolNonStrict, arg1GPR, arg2GPR, arg3Regs);
+    m_jit.exceptionCheck();
+
+    noResult(node);
+}
+
+void SpeculativeJIT::compileInstanceOfForObject(Node*, GPRReg valueReg, GPRReg prototypeReg, GPRReg scratchReg, GPRReg scratch2Reg, GPRReg scratch3Reg)
 {
     // Check that prototype is an object.
     speculationCheck(BadType, JSValueRegs(), 0, m_jit.branchIfNotObject(prototypeReg));
@@ -3098,8 +3246,22 @@ void SpeculativeJIT::compileInstanceOfForObject(Node*, GPRReg valueReg, GPRReg p
     MacroAssembler::Label loop(&m_jit);
     MacroAssembler::Jump performDefaultHasInstance = m_jit.branch8(MacroAssembler::Equal,
         MacroAssembler::Address(scratchReg, JSCell::typeInfoTypeOffset()), TrustedImm32(ProxyObjectType));
-    m_jit.emitLoadStructure(*m_jit.vm(), scratchReg, scratchReg, scratch2Reg);
-    m_jit.loadPtr(MacroAssembler::Address(scratchReg, Structure::prototypeOffset() + CellPayloadOffset), scratchReg);
+    m_jit.emitLoadStructure(*m_jit.vm(), scratchReg, scratch3Reg, scratch2Reg);
+#if USE(JSVALUE64)
+    m_jit.load64(MacroAssembler::Address(scratch3Reg, Structure::prototypeOffset()), scratch3Reg);
+    auto hasMonoProto = m_jit.branchTest64(JITCompiler::NonZero, scratch3Reg);
+    m_jit.load64(JITCompiler::Address(scratchReg, offsetRelativeToBase(knownPolyProtoOffset)), scratch3Reg);
+    hasMonoProto.link(&m_jit);
+    m_jit.move(scratch3Reg, scratchReg);
+#else
+    m_jit.load32(MacroAssembler::Address(scratch3Reg, Structure::prototypeOffset() + TagOffset), scratch2Reg);
+    m_jit.load32(MacroAssembler::Address(scratch3Reg, Structure::prototypeOffset() + PayloadOffset), scratch3Reg);
+    auto hasMonoProto = m_jit.branch32(CCallHelpers::NotEqual, scratch2Reg, TrustedImm32(JSValue::EmptyValueTag));
+    m_jit.load32(JITCompiler::Address(scratchReg, offsetRelativeToBase(knownPolyProtoOffset) + PayloadOffset), scratch3Reg);
+    hasMonoProto.link(&m_jit);
+    m_jit.move(scratch3Reg, scratchReg);
+#endif
+
     MacroAssembler::Jump isInstance = m_jit.branchPtr(MacroAssembler::Equal, scratchReg, prototypeReg);
 #if USE(JSVALUE64)
     m_jit.branchIfCell(JSValueRegs(scratchReg)).linkTo(loop, &m_jit);
@@ -3230,10 +3392,12 @@ void SpeculativeJIT::compileInstanceOf(Node* node)
         SpeculateCellOperand prototype(this, node->child2());
         GPRTemporary scratch(this);
         GPRTemporary scratch2(this);
+        GPRTemporary scratch3(this);
         
         GPRReg prototypeReg = prototype.gpr();
         GPRReg scratchReg = scratch.gpr();
         GPRReg scratch2Reg = scratch2.gpr();
+        GPRReg scratch3Reg = scratch3.gpr();
         
         MacroAssembler::Jump isCell = m_jit.branchIfCell(value.jsValueRegs());
         GPRReg valueReg = value.jsValueRegs().payloadGPR();
@@ -3243,7 +3407,7 @@ void SpeculativeJIT::compileInstanceOf(Node* node)
         
         isCell.link(&m_jit);
         
-        compileInstanceOfForObject(node, valueReg, prototypeReg, scratchReg, scratch2Reg);
+        compileInstanceOfForObject(node, valueReg, prototypeReg, scratchReg, scratch2Reg, scratch3Reg);
         
         done.link(&m_jit);
 
@@ -3256,13 +3420,15 @@ void SpeculativeJIT::compileInstanceOf(Node* node)
     
     GPRTemporary scratch(this);
     GPRTemporary scratch2(this);
+    GPRTemporary scratch3(this);
     
     GPRReg valueReg = value.gpr();
     GPRReg prototypeReg = prototype.gpr();
     GPRReg scratchReg = scratch.gpr();
     GPRReg scratch2Reg = scratch2.gpr();
+    GPRReg scratch3Reg = scratch3.gpr();
     
-    compileInstanceOfForObject(node, valueReg, prototypeReg, scratchReg, scratch2Reg);
+    compileInstanceOfForObject(node, valueReg, prototypeReg, scratchReg, scratch2Reg, scratch3Reg);
 
     blessedBooleanResult(scratchReg, node);
 }
@@ -5559,6 +5725,11 @@ bool SpeculativeJIT::compare(Node* node, MacroAssembler::RelationalCondition con
     return false;
 }
 
+void SpeculativeJIT::compileCompareUnsigned(Node* node, MacroAssembler::RelationalCondition condition)
+{
+    compileInt32Compare(node, condition);
+}
+
 bool SpeculativeJIT::compileStrictEq(Node* node)
 {
     // FIXME: Currently, we have op_jless, op_jgreater etc. But we don't have op_jeq, op_jstricteq etc.
@@ -6126,6 +6297,25 @@ void SpeculativeJIT::compileConstantStoragePointer(Node* node)
     storageResult(storageGPR, node);
 }
 
+void SpeculativeJIT::cageTypedArrayStorage(GPRReg storageReg)
+{
+#if GIGACAGE_ENABLED
+    if (!Gigacage::shouldBeEnabled())
+        return;
+    
+    if (Gigacage::canPrimitiveGigacageBeDisabled()) {
+        if (m_jit.vm()->primitiveGigacageEnabled().isStillValid())
+            m_jit.graph().watchpoints().addLazily(m_jit.vm()->primitiveGigacageEnabled());
+        else
+            return;
+    }
+    
+    m_jit.cage(Gigacage::Primitive, storageReg);
+#else
+    UNUSED_PARAM(storageReg);
+#endif
+}
+
 void SpeculativeJIT::compileGetIndexedPropertyStorage(Node* node)
 {
     SpeculateCellOperand base(this, node->child1());
@@ -6150,6 +6340,7 @@ void SpeculativeJIT::compileGetIndexedPropertyStorage(Node* node)
         ASSERT(isTypedView(node->arrayMode().typedArrayType()));
 
         m_jit.loadPtr(JITCompiler::Address(baseReg, JSArrayBufferView::offsetOfVector()), storageReg);
+        cageTypedArrayStorage(storageReg);
         break;
     }
     
@@ -6172,8 +6363,14 @@ void SpeculativeJIT::compileGetTypedArrayByteOffset(Node* node)
         TrustedImm32(WastefulTypedArray));
 
     m_jit.loadPtr(MacroAssembler::Address(baseGPR, JSObject::butterflyOffset()), dataGPR);
+    m_jit.cage(Gigacage::JSValue, dataGPR);
     m_jit.loadPtr(MacroAssembler::Address(baseGPR, JSArrayBufferView::offsetOfVector()), vectorGPR);
+    JITCompiler::Jump nullVector = m_jit.branchTestPtr(JITCompiler::Zero, vectorGPR);
+    cageTypedArrayStorage(vectorGPR);
+    nullVector.link(&m_jit);
     m_jit.loadPtr(MacroAssembler::Address(dataGPR, Butterfly::offsetOfArrayBuffer()), dataGPR);
+    // FIXME: This needs caging.
+    // https://bugs.webkit.org/show_bug.cgi?id=175515
     m_jit.loadPtr(MacroAssembler::Address(dataGPR, ArrayBuffer::offsetOfData()), dataGPR);
     m_jit.subPtr(dataGPR, vectorGPR);
     
@@ -6221,6 +6418,8 @@ void SpeculativeJIT::compileGetByValOnDirectArguments(Node* node)
         m_jit.branch32(
             MacroAssembler::AboveOrEqual, propertyReg,
             MacroAssembler::Address(baseReg, DirectArguments::offsetOfLength())));
+    
+    m_jit.cage(Gigacage::JSValue, baseReg);
     
     m_jit.loadValue(
         MacroAssembler::BaseIndex(
@@ -6276,6 +6475,7 @@ void SpeculativeJIT::compileGetByValOnScopedArguments(Node* node)
     m_jit.loadPtr(
         MacroAssembler::Address(scratchReg, ScopedArgumentsTable::offsetOfArguments()),
         scratchReg);
+    m_jit.cage(ScopedArgumentsTable::ArgumentsPtr::kind, scratchReg);
     m_jit.load32(
         MacroAssembler::BaseIndex(scratchReg, propertyReg, MacroAssembler::TimesFour),
         scratchReg);
@@ -6285,10 +6485,12 @@ void SpeculativeJIT::compileGetByValOnScopedArguments(Node* node)
         m_jit.branch32(
             MacroAssembler::Equal, scratchReg, TrustedImm32(ScopeOffset::invalidOffset)));
     
+    m_jit.cage(Gigacage::JSValue, scratch2Reg);
+    
     m_jit.loadValue(
         MacroAssembler::BaseIndex(
             scratch2Reg, propertyReg, MacroAssembler::TimesEight,
-            JSEnvironmentRecord::offsetOfVariables()),
+            JSLexicalEnvironment::offsetOfVariables()),
         resultRegs);
     
     MacroAssembler::Jump done = m_jit.jump();
@@ -6296,6 +6498,8 @@ void SpeculativeJIT::compileGetByValOnScopedArguments(Node* node)
     
     m_jit.sub32(propertyReg, scratch2Reg);
     m_jit.neg32(scratch2Reg);
+    
+    m_jit.cage(Gigacage::JSValue, baseReg);
     
     m_jit.loadValue(
         MacroAssembler::BaseIndex(
@@ -6333,6 +6537,15 @@ void SpeculativeJIT::compileGetGlobalObject(Node* node)
     m_jit.emitLoadStructure(*m_jit.vm(), object.gpr(), result.gpr(), scratch.gpr());
     m_jit.loadPtr(JITCompiler::Address(result.gpr(), Structure::globalObjectOffset()), result.gpr());
     cellResult(result.gpr(), node);
+}
+
+void SpeculativeJIT::compileGetGlobalThis(Node* node)
+{
+    GPRTemporary result(this);
+    GPRReg resultGPR = result.gpr();
+    auto* globalObject = m_jit.graph().globalObjectFor(node->origin.semantic);
+    m_jit.loadPtr(globalObject->addressOfGlobalThis(), resultGPR);
+    cellResult(resultGPR, node);
 }
 
 void SpeculativeJIT::compileGetArrayLength(Node* node)
@@ -6465,7 +6678,7 @@ template <typename ClassType> void SpeculativeJIT::compileNewFunctionCommon(GPRR
 void SpeculativeJIT::compileNewFunction(Node* node)
 {
     NodeType nodeType = node->op();
-    ASSERT(nodeType == NewFunction || nodeType == NewGeneratorFunction || nodeType == NewAsyncFunction);
+    ASSERT(nodeType == NewFunction || nodeType == NewGeneratorFunction || nodeType == NewAsyncFunction || nodeType == NewAsyncGeneratorFunction);
     
     SpeculateCellOperand scope(this, node->child1());
     GPRReg scopeGPR = scope.gpr();
@@ -6482,6 +6695,8 @@ void SpeculativeJIT::compileNewFunction(Node* node)
             callOperation(operationNewGeneratorFunction, resultGPR, scopeGPR, executable);
         else if (nodeType == NewAsyncFunction)
             callOperation(operationNewAsyncFunction, resultGPR, scopeGPR, executable);
+        else if (nodeType == NewAsyncGeneratorFunction)
+            callOperation(operationNewAsyncGeneratorFunction, resultGPR, scopeGPR, executable);
         else
             callOperation(operationNewFunction, resultGPR, scopeGPR, executable);
         m_jit.exceptionCheck();
@@ -6492,6 +6707,7 @@ void SpeculativeJIT::compileNewFunction(Node* node)
     RegisteredStructure structure = m_jit.graph().registerStructure(
         nodeType == NewGeneratorFunction ? m_jit.graph().globalObjectFor(node->origin.semantic)->generatorFunctionStructure() :
         nodeType == NewAsyncFunction ? m_jit.graph().globalObjectFor(node->origin.semantic)->asyncFunctionStructure() :
+        nodeType == NewAsyncGeneratorFunction ? m_jit.graph().globalObjectFor(node->origin.semantic)->asyncGeneratorFunctionStructure() :
         m_jit.graph().globalObjectFor(node->origin.semantic)->functionStructure());
     
     GPRTemporary result(this);
@@ -6522,6 +6738,12 @@ void SpeculativeJIT::compileNewFunction(Node* node)
         addSlowPathGenerator(slowPathCall(slowPath, this, operationNewAsyncFunctionWithInvalidatedReallocationWatchpoint, resultGPR, scopeGPR, executable));
     }
 
+    if (nodeType == NewAsyncGeneratorFunction) {
+        compileNewFunctionCommon<JSAsyncGeneratorFunction>(resultGPR, structure, scratch1GPR, scratch2GPR, scopeGPR, slowPath, JSAsyncGeneratorFunction::allocationSize(0), executable, JSAsyncGeneratorFunction::offsetOfScopeChain(), JSAsyncGeneratorFunction::offsetOfExecutable(), JSAsyncGeneratorFunction::offsetOfRareData());
+        
+        addSlowPathGenerator(slowPathCall(slowPath, this, operationNewAsyncGeneratorFunctionWithInvalidatedReallocationWatchpoint, resultGPR, scopeGPR, executable));
+    }
+    
     cellResult(resultGPR, node);
 }
 
@@ -6698,7 +6920,7 @@ void SpeculativeJIT::compileCreateDirectArguments(Node* node)
     bool lengthIsKnown; // if false, lengthGPR will have the length.
     if (node->origin.semantic.inlineCallFrame
         && !node->origin.semantic.inlineCallFrame->isVarargs()) {
-        knownLength = node->origin.semantic.inlineCallFrame->arguments.size() - 1;
+        knownLength = node->origin.semantic.inlineCallFrame->argumentCountIncludingThis - 1;
         lengthIsKnown = true;
     } else {
         knownLength = UINT_MAX;
@@ -6971,6 +7193,7 @@ void SpeculativeJIT::compileCreateRest(Node* node)
         GPRReg butterflyGPR = butterfly.gpr();
 
         m_jit.loadPtr(MacroAssembler::Address(arrayResultGPR, JSObject::butterflyOffset()), butterflyGPR);
+        m_jit.cage(Gigacage::JSValue, butterflyGPR);
 
         CCallHelpers::Jump skipLoop = m_jit.branch32(MacroAssembler::Equal, arrayLengthGPR, TrustedImm32(0));
         m_jit.zeroExtend32ToPtr(arrayLengthGPR, currentLengthGPR);
@@ -7040,6 +7263,7 @@ void SpeculativeJIT::compileSpread(Node* node)
         slowPath.append(m_jit.branch32(MacroAssembler::Above, scratch1GPR, TrustedImm32(ContiguousShape - Int32Shape)));
 
         m_jit.loadPtr(MacroAssembler::Address(argument, JSObject::butterflyOffset()), lengthGPR);
+        m_jit.cage(Gigacage::JSValue, lengthGPR);
         m_jit.load32(MacroAssembler::Address(lengthGPR, Butterfly::offsetOfPublicLength()), lengthGPR);
         static_assert(sizeof(JSValue) == 8 && 1 << 3 == 8, "This is strongly assumed in the code below.");
         m_jit.move(lengthGPR, scratch1GPR);
@@ -7050,6 +7274,7 @@ void SpeculativeJIT::compileSpread(Node* node)
         m_jit.store32(lengthGPR, MacroAssembler::Address(resultGPR, JSFixedArray::offsetOfSize()));
 
         m_jit.loadPtr(MacroAssembler::Address(argument, JSObject::butterflyOffset()), scratch1GPR);
+        m_jit.cage(Gigacage::JSValue, scratch1GPR);
 
         MacroAssembler::JumpList done;
 
@@ -7159,6 +7384,7 @@ void SpeculativeJIT::compileNewArrayWithSpread(Node* node)
 
         m_jit.move(TrustedImm32(0), indexGPR);
         m_jit.loadPtr(MacroAssembler::Address(resultGPR, JSObject::butterflyOffset()), storageGPR);
+        m_jit.cage(Gigacage::JSValue, storageGPR);
 
         for (unsigned i = 0; i < node->numChildren(); ++i) {
             Edge use = m_jit.graph().varArgChild(node, i);
@@ -7415,6 +7641,7 @@ void SpeculativeJIT::compileArraySlice(Node* node)
     GPRReg resultButterfly = temp2.gpr();
 
     m_jit.loadPtr(MacroAssembler::Address(resultGPR, JSObject::butterflyOffset()), resultButterfly);
+    m_jit.cage(Gigacage::JSValue, resultButterfly);
     m_jit.zeroExtend32ToPtr(tempGPR, tempGPR);
     m_jit.zeroExtend32ToPtr(loadIndex, loadIndex);
     auto done = m_jit.branchPtr(MacroAssembler::AboveOrEqual, loadIndex, tempGPR);
@@ -7659,6 +7886,278 @@ void SpeculativeJIT::compileArrayIndexOf(Node* node)
     }
 }
 
+void SpeculativeJIT::compileArrayPush(Node* node)
+{
+    ASSERT(node->arrayMode().isJSArray());
+
+    Edge& storageEdge = m_jit.graph().varArgChild(node, 0);
+    Edge& arrayEdge = m_jit.graph().varArgChild(node, 1);
+
+    SpeculateCellOperand base(this, arrayEdge);
+    GPRTemporary storageLength(this);
+
+    GPRReg baseGPR = base.gpr();
+    GPRReg storageLengthGPR = storageLength.gpr();
+
+    StorageOperand storage(this, storageEdge);
+    GPRReg storageGPR = storage.gpr();
+    unsigned elementOffset = 2;
+    unsigned elementCount = node->numChildren() - elementOffset;
+
+#if USE(JSVALUE32_64)
+    GPRTemporary tag(this);
+    GPRReg tagGPR = tag.gpr();
+    JSValueRegs resultRegs { tagGPR, storageLengthGPR };
+#else
+    JSValueRegs resultRegs { storageLengthGPR };
+#endif
+
+    auto getStorageBufferAddress = [&] (GPRReg storageGPR, GPRReg indexGPR, int32_t offset, GPRReg bufferGPR) {
+#if USE(JSVALUE32_64)
+        static_assert(sizeof(JSValue) == 8 && 1 << 3 == 8, "This is strongly assumed in the code below.");
+        m_jit.move(indexGPR, bufferGPR);
+        m_jit.lshift32(TrustedImm32(3), bufferGPR);
+        m_jit.add32(storageGPR, bufferGPR);
+        if (offset)
+            m_jit.add32(TrustedImm32(offset), bufferGPR);
+#else
+        m_jit.getEffectiveAddress64(MacroAssembler::BaseIndex(storageGPR, indexGPR, MacroAssembler::TimesEight, offset), bufferGPR);
+#endif
+    };
+
+    switch (node->arrayMode().type()) {
+    case Array::Int32:
+    case Array::Contiguous: {
+        if (elementCount == 1) {
+            Edge& element = m_jit.graph().varArgChild(node, elementOffset);
+            JSValueOperand value(this, element, ManualOperandSpeculation);
+            JSValueRegs valueRegs = value.jsValueRegs();
+
+            if (node->arrayMode().type() == Array::Int32)
+                RELEASE_ASSERT(!needsTypeCheck(element, SpecInt32Only));
+
+            m_jit.load32(MacroAssembler::Address(storageGPR, Butterfly::offsetOfPublicLength()), storageLengthGPR);
+            MacroAssembler::Jump slowPath = m_jit.branch32(MacroAssembler::AboveOrEqual, storageLengthGPR, MacroAssembler::Address(storageGPR, Butterfly::offsetOfVectorLength()));
+            m_jit.storeValue(valueRegs, MacroAssembler::BaseIndex(storageGPR, storageLengthGPR, MacroAssembler::TimesEight));
+            m_jit.add32(TrustedImm32(1), storageLengthGPR);
+            m_jit.store32(storageLengthGPR, MacroAssembler::Address(storageGPR, Butterfly::offsetOfPublicLength()));
+            m_jit.boxInt32(storageLengthGPR, resultRegs);
+
+            addSlowPathGenerator(
+                slowPathCall(slowPath, this, operationArrayPush, resultRegs, valueRegs, baseGPR));
+
+            jsValueResult(resultRegs, node);
+            return;
+        }
+
+        GPRTemporary buffer(this);
+        GPRReg bufferGPR = buffer.gpr();
+
+        m_jit.load32(MacroAssembler::Address(storageGPR, Butterfly::offsetOfPublicLength()), storageLengthGPR);
+        m_jit.move(storageLengthGPR, bufferGPR);
+        m_jit.add32(TrustedImm32(elementCount), bufferGPR);
+        MacroAssembler::Jump slowPath = m_jit.branch32(MacroAssembler::Above, bufferGPR, MacroAssembler::Address(storageGPR, Butterfly::offsetOfVectorLength()));
+
+        m_jit.store32(bufferGPR, MacroAssembler::Address(storageGPR, Butterfly::offsetOfPublicLength()));
+        getStorageBufferAddress(storageGPR, storageLengthGPR, 0, bufferGPR);
+        m_jit.add32(TrustedImm32(elementCount), storageLengthGPR);
+        m_jit.boxInt32(storageLengthGPR, resultRegs);
+        auto storageDone = m_jit.jump();
+
+        slowPath.link(&m_jit);
+
+        size_t scratchSize = sizeof(EncodedJSValue) * elementCount;
+        ScratchBuffer* scratchBuffer = m_jit.vm()->scratchBufferForSize(scratchSize);
+        m_jit.move(TrustedImmPtr(static_cast<EncodedJSValue*>(scratchBuffer->dataBuffer())), bufferGPR);
+        m_jit.move(TrustedImmPtr(scratchBuffer->addressOfActiveLength()), storageLengthGPR);
+        m_jit.storePtr(TrustedImmPtr(scratchSize), MacroAssembler::Address(storageLengthGPR));
+
+        storageDone.link(&m_jit);
+        for (unsigned elementIndex = 0; elementIndex < elementCount; ++elementIndex) {
+            Edge& element = m_jit.graph().varArgChild(node, elementIndex + elementOffset);
+            JSValueOperand value(this, element, ManualOperandSpeculation);
+            JSValueRegs valueRegs = value.jsValueRegs();
+
+            if (node->arrayMode().type() == Array::Int32)
+                RELEASE_ASSERT(!needsTypeCheck(element, SpecInt32Only));
+
+            m_jit.storeValue(valueRegs, MacroAssembler::Address(bufferGPR, sizeof(EncodedJSValue) * elementIndex));
+            value.use();
+        }
+
+        MacroAssembler::Jump fastPath = m_jit.branchPtr(MacroAssembler::NotEqual, bufferGPR, TrustedImmPtr(static_cast<EncodedJSValue*>(scratchBuffer->dataBuffer())));
+
+        addSlowPathGenerator(slowPathCall(m_jit.jump(), this, operationArrayPushMultiple, resultRegs, baseGPR, bufferGPR, TrustedImm32(elementCount)));
+
+        m_jit.move(TrustedImmPtr(scratchBuffer->addressOfActiveLength()), bufferGPR);
+        m_jit.storePtr(TrustedImmPtr(nullptr), MacroAssembler::Address(bufferGPR));
+
+        base.use();
+        storage.use();
+
+        fastPath.link(&m_jit);
+        jsValueResult(resultRegs, node, DataFormatJS, UseChildrenCalledExplicitly);
+        return;
+    }
+
+    case Array::Double: {
+        if (elementCount == 1) {
+            Edge& element = m_jit.graph().varArgChild(node, elementOffset);
+            SpeculateDoubleOperand value(this, element);
+            FPRReg valueFPR = value.fpr();
+
+            RELEASE_ASSERT(!needsTypeCheck(element, SpecDoubleReal));
+
+            m_jit.load32(MacroAssembler::Address(storageGPR, Butterfly::offsetOfPublicLength()), storageLengthGPR);
+            MacroAssembler::Jump slowPath = m_jit.branch32(MacroAssembler::AboveOrEqual, storageLengthGPR, MacroAssembler::Address(storageGPR, Butterfly::offsetOfVectorLength()));
+            m_jit.storeDouble(valueFPR, MacroAssembler::BaseIndex(storageGPR, storageLengthGPR, MacroAssembler::TimesEight));
+            m_jit.add32(TrustedImm32(1), storageLengthGPR);
+            m_jit.store32(storageLengthGPR, MacroAssembler::Address(storageGPR, Butterfly::offsetOfPublicLength()));
+            m_jit.boxInt32(storageLengthGPR, resultRegs);
+
+            addSlowPathGenerator(
+                slowPathCall(slowPath, this, operationArrayPushDouble, resultRegs, valueFPR, baseGPR));
+
+            jsValueResult(resultRegs, node);
+            return;
+        }
+
+        GPRTemporary buffer(this);
+        GPRReg bufferGPR = buffer.gpr();
+
+        m_jit.load32(MacroAssembler::Address(storageGPR, Butterfly::offsetOfPublicLength()), storageLengthGPR);
+        m_jit.move(storageLengthGPR, bufferGPR);
+        m_jit.add32(TrustedImm32(elementCount), bufferGPR);
+        MacroAssembler::Jump slowPath = m_jit.branch32(MacroAssembler::Above, bufferGPR, MacroAssembler::Address(storageGPR, Butterfly::offsetOfVectorLength()));
+
+        m_jit.store32(bufferGPR, MacroAssembler::Address(storageGPR, Butterfly::offsetOfPublicLength()));
+        getStorageBufferAddress(storageGPR, storageLengthGPR, 0, bufferGPR);
+        m_jit.add32(TrustedImm32(elementCount), storageLengthGPR);
+        m_jit.boxInt32(storageLengthGPR, resultRegs);
+        auto storageDone = m_jit.jump();
+
+        slowPath.link(&m_jit);
+
+        size_t scratchSize = sizeof(double) * elementCount;
+        ScratchBuffer* scratchBuffer = m_jit.vm()->scratchBufferForSize(scratchSize);
+        m_jit.move(TrustedImmPtr(static_cast<EncodedJSValue*>(scratchBuffer->dataBuffer())), bufferGPR);
+        m_jit.move(TrustedImmPtr(scratchBuffer->addressOfActiveLength()), storageLengthGPR);
+        m_jit.storePtr(TrustedImmPtr(scratchSize), MacroAssembler::Address(storageLengthGPR));
+
+        storageDone.link(&m_jit);
+        for (unsigned elementIndex = 0; elementIndex < elementCount; ++elementIndex) {
+            Edge& element = m_jit.graph().varArgChild(node, elementIndex + elementOffset);
+            SpeculateDoubleOperand value(this, element);
+            FPRReg valueFPR = value.fpr();
+
+            RELEASE_ASSERT(!needsTypeCheck(element, SpecDoubleReal));
+
+            m_jit.storeDouble(valueFPR, MacroAssembler::Address(bufferGPR, sizeof(double) * elementIndex));
+            value.use();
+        }
+
+        MacroAssembler::Jump fastPath = m_jit.branchPtr(MacroAssembler::NotEqual, bufferGPR, TrustedImmPtr(static_cast<EncodedJSValue*>(scratchBuffer->dataBuffer())));
+
+        addSlowPathGenerator(slowPathCall(m_jit.jump(), this, operationArrayPushDoubleMultiple, resultRegs, baseGPR, bufferGPR, TrustedImm32(elementCount)));
+
+        m_jit.move(TrustedImmPtr(scratchBuffer->addressOfActiveLength()), bufferGPR);
+        m_jit.storePtr(TrustedImmPtr(nullptr), MacroAssembler::Address(bufferGPR));
+
+        base.use();
+        storage.use();
+
+        fastPath.link(&m_jit);
+        jsValueResult(resultRegs, node, DataFormatJS, UseChildrenCalledExplicitly);
+        return;
+    }
+
+    case Array::ArrayStorage: {
+        // This ensures that the result of ArrayPush is Int32 in AI.
+        int32_t largestPositiveInt32Length = 0x7fffffff - elementCount;
+        if (elementCount == 1) {
+            Edge& element = m_jit.graph().varArgChild(node, elementOffset);
+            JSValueOperand value(this, element);
+            JSValueRegs valueRegs = value.jsValueRegs();
+
+            m_jit.load32(MacroAssembler::Address(storageGPR, ArrayStorage::lengthOffset()), storageLengthGPR);
+
+            // Refuse to handle bizarre lengths.
+            speculationCheck(Uncountable, JSValueRegs(), 0, m_jit.branch32(MacroAssembler::Above, storageLengthGPR, TrustedImm32(largestPositiveInt32Length)));
+
+            MacroAssembler::Jump slowPath = m_jit.branch32(MacroAssembler::AboveOrEqual, storageLengthGPR, MacroAssembler::Address(storageGPR, ArrayStorage::vectorLengthOffset()));
+
+            m_jit.storeValue(valueRegs, MacroAssembler::BaseIndex(storageGPR, storageLengthGPR, MacroAssembler::TimesEight, ArrayStorage::vectorOffset()));
+
+            m_jit.add32(TrustedImm32(1), storageLengthGPR);
+            m_jit.store32(storageLengthGPR, MacroAssembler::Address(storageGPR, ArrayStorage::lengthOffset()));
+            m_jit.add32(TrustedImm32(1), MacroAssembler::Address(storageGPR, OBJECT_OFFSETOF(ArrayStorage, m_numValuesInVector)));
+            m_jit.boxInt32(storageLengthGPR, resultRegs);
+
+            addSlowPathGenerator(
+                slowPathCall(slowPath, this, operationArrayPush, resultRegs, valueRegs, baseGPR));
+
+            jsValueResult(resultRegs, node);
+            return;
+        }
+
+        GPRTemporary buffer(this);
+        GPRReg bufferGPR = buffer.gpr();
+
+        m_jit.load32(MacroAssembler::Address(storageGPR, ArrayStorage::lengthOffset()), storageLengthGPR);
+
+        // Refuse to handle bizarre lengths.
+        speculationCheck(Uncountable, JSValueRegs(), 0, m_jit.branch32(MacroAssembler::Above, storageLengthGPR, TrustedImm32(largestPositiveInt32Length)));
+
+        m_jit.move(storageLengthGPR, bufferGPR);
+        m_jit.add32(TrustedImm32(elementCount), bufferGPR);
+        MacroAssembler::Jump slowPath = m_jit.branch32(MacroAssembler::Above, bufferGPR, MacroAssembler::Address(storageGPR, ArrayStorage::vectorLengthOffset()));
+
+        m_jit.store32(bufferGPR, MacroAssembler::Address(storageGPR, ArrayStorage::lengthOffset()));
+        getStorageBufferAddress(storageGPR, storageLengthGPR, ArrayStorage::vectorOffset(), bufferGPR);
+        m_jit.add32(TrustedImm32(elementCount), MacroAssembler::Address(storageGPR, OBJECT_OFFSETOF(ArrayStorage, m_numValuesInVector)));
+        m_jit.add32(TrustedImm32(elementCount), storageLengthGPR);
+        m_jit.boxInt32(storageLengthGPR, resultRegs);
+        auto storageDone = m_jit.jump();
+
+        slowPath.link(&m_jit);
+
+        size_t scratchSize = sizeof(EncodedJSValue) * elementCount;
+        ScratchBuffer* scratchBuffer = m_jit.vm()->scratchBufferForSize(scratchSize);
+        m_jit.move(TrustedImmPtr(static_cast<EncodedJSValue*>(scratchBuffer->dataBuffer())), bufferGPR);
+        m_jit.move(TrustedImmPtr(scratchBuffer->addressOfActiveLength()), storageLengthGPR);
+        m_jit.storePtr(TrustedImmPtr(scratchSize), MacroAssembler::Address(storageLengthGPR));
+
+        storageDone.link(&m_jit);
+        for (unsigned elementIndex = 0; elementIndex < elementCount; ++elementIndex) {
+            Edge& element = m_jit.graph().varArgChild(node, elementIndex + elementOffset);
+            JSValueOperand value(this, element);
+            JSValueRegs valueRegs = value.jsValueRegs();
+
+            m_jit.storeValue(valueRegs, MacroAssembler::Address(bufferGPR, sizeof(EncodedJSValue) * elementIndex));
+            value.use();
+        }
+
+        MacroAssembler::Jump fastPath = m_jit.branchPtr(MacroAssembler::NotEqual, bufferGPR, TrustedImmPtr(static_cast<EncodedJSValue*>(scratchBuffer->dataBuffer())));
+
+        addSlowPathGenerator(
+            slowPathCall(m_jit.jump(), this, operationArrayPushMultiple, resultRegs, baseGPR, bufferGPR, TrustedImm32(elementCount)));
+
+        m_jit.move(TrustedImmPtr(scratchBuffer->addressOfActiveLength()), bufferGPR);
+        m_jit.storePtr(TrustedImmPtr(nullptr), MacroAssembler::Address(bufferGPR));
+
+        base.use();
+        storage.use();
+
+        fastPath.link(&m_jit);
+        jsValueResult(resultRegs, node, DataFormatJS, UseChildrenCalledExplicitly);
+        return;
+    }
+
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+}
+
 void SpeculativeJIT::compileNotifyWrite(Node* node)
 {
     WatchpointSet* set = node->watchpointSet();
@@ -7786,7 +8285,7 @@ void SpeculativeJIT::compileTypeOf(Node* node)
     cellResult(resultGPR, node);
 }
 
-void SpeculativeJIT::compileCheckStructure(Node* node, GPRReg cellGPR, GPRReg tempGPR)
+void SpeculativeJIT::emitStructureCheck(Node* node, GPRReg cellGPR, GPRReg tempGPR)
 {
     ASSERT(node->structureSet().size());
     
@@ -7831,7 +8330,7 @@ void SpeculativeJIT::compileCheckStructure(Node* node)
     case CellUse:
     case KnownCellUse: {
         SpeculateCellOperand cell(this, node->child1());
-        compileCheckStructure(node, cell.gpr(), InvalidGPRReg);
+        emitStructureCheck(node, cell.gpr(), InvalidGPRReg);
         noResult(node);
         return;
     }
@@ -7849,7 +8348,7 @@ void SpeculativeJIT::compileCheckStructure(Node* node)
             m_jit.branchIfNotOther(valueRegs, tempGPR));
         JITCompiler::Jump done = m_jit.jump();
         cell.link(&m_jit);
-        compileCheckStructure(node, valueRegs.payloadGPR(), tempGPR);
+        emitStructureCheck(node, valueRegs.payloadGPR(), tempGPR);
         done.link(&m_jit);
         noResult(node);
         return;
@@ -7983,9 +8482,7 @@ void SpeculativeJIT::compileGetButterfly(Node* node)
     GPRReg resultGPR = result.gpr();
     
     m_jit.loadPtr(JITCompiler::Address(baseGPR, JSObject::butterflyOffset()), resultGPR);
-    
-    // FIXME: Implement caging!
-    // https://bugs.webkit.org/show_bug.cgi?id=174918
+    m_jit.cage(Gigacage::JSValue, resultGPR);
 
     storageResult(resultGPR, node);
 }
@@ -8251,7 +8748,7 @@ void SpeculativeJIT::compileToStringOrCallStringConstructor(Node* node)
     case Int32Use:
     case Int52RepUse:
     case DoubleRepUse:
-        compileToStringOrCallStringConstructorOnNumber(node);
+        compileNumberToStringWithValidRadixConstant(node, 10);
         return;
 
     default:
@@ -8332,11 +8829,16 @@ void SpeculativeJIT::compileToStringOrCallStringConstructor(Node* node)
     }
 }
 
-void SpeculativeJIT::compileToStringOrCallStringConstructorOnNumber(Node* node)
+void SpeculativeJIT::compileNumberToStringWithValidRadixConstant(Node* node)
+{
+    compileNumberToStringWithValidRadixConstant(node, node->validRadixConstant());
+}
+
+void SpeculativeJIT::compileNumberToStringWithValidRadixConstant(Node* node, int32_t radix)
 {
     auto callToString = [&] (auto operation, GPRReg resultGPR, auto valueReg) {
         flushRegisters();
-        callOperation(operation, resultGPR, valueReg, CCallHelpers::TrustedImm32(10));
+        callOperation(operation, resultGPR, valueReg, TrustedImm32(radix));
         m_jit.exceptionCheck();
         cellResult(resultGPR, node);
     };
@@ -8680,13 +9182,23 @@ void SpeculativeJIT::speculateObject(Edge edge)
     speculateObject(edge, operand.gpr());
 }
 
+void SpeculativeJIT::speculateFunction(Edge edge, GPRReg cell)
+{
+    speculateCellType(edge, cell, SpecFunction, JSFunctionType);
+}
+
 void SpeculativeJIT::speculateFunction(Edge edge)
 {
     if (!needsTypeCheck(edge, SpecFunction))
         return;
     
     SpeculateCellOperand operand(this, edge);
-    speculateCellType(edge, operand.gpr(), SpecFunction, JSFunctionType);
+    speculateFunction(edge, operand.gpr());
+}
+
+void SpeculativeJIT::speculateFinalObject(Edge edge, GPRReg cell)
+{
+    speculateCellType(edge, cell, SpecFinalObject, FinalObjectType);
 }
 
 void SpeculativeJIT::speculateFinalObject(Edge edge)
@@ -8695,7 +9207,7 @@ void SpeculativeJIT::speculateFinalObject(Edge edge)
         return;
     
     SpeculateCellOperand operand(this, edge);
-    speculateCellType(edge, operand.gpr(), SpecFinalObject, FinalObjectType);
+    speculateFinalObject(edge, operand.gpr());
 }
 
 void SpeculativeJIT::speculateRegExpObject(Edge edge, GPRReg cell)
@@ -8780,6 +9292,34 @@ void SpeculativeJIT::speculateSetObject(Edge edge)
 
     SpeculateCellOperand operand(this, edge);
     speculateSetObject(edge, operand.gpr());
+}
+
+void SpeculativeJIT::speculateWeakMapObject(Edge edge, GPRReg cell)
+{
+    speculateCellType(edge, cell, SpecWeakMapObject, JSWeakMapType);
+}
+
+void SpeculativeJIT::speculateWeakMapObject(Edge edge)
+{
+    if (!needsTypeCheck(edge, SpecWeakMapObject))
+        return;
+
+    SpeculateCellOperand operand(this, edge);
+    speculateWeakMapObject(edge, operand.gpr());
+}
+
+void SpeculativeJIT::speculateWeakSetObject(Edge edge, GPRReg cell)
+{
+    speculateCellType(edge, cell, SpecWeakSetObject, JSWeakSetType);
+}
+
+void SpeculativeJIT::speculateWeakSetObject(Edge edge)
+{
+    if (!needsTypeCheck(edge, SpecWeakSetObject))
+        return;
+
+    SpeculateCellOperand operand(this, edge);
+    speculateWeakSetObject(edge, operand.gpr());
 }
 
 void SpeculativeJIT::speculateObjectOrOther(Edge edge)
@@ -9099,6 +9639,12 @@ void SpeculativeJIT::speculate(Node*, Edge edge)
         break;
     case SetObjectUse:
         speculateSetObject(edge);
+        break;
+    case WeakMapObjectUse:
+        speculateWeakMapObject(edge);
+        break;
+    case WeakSetObjectUse:
+        speculateWeakSetObject(edge);
         break;
     case ObjectOrOtherUse:
         speculateObjectOrOther(edge);
@@ -9932,19 +10478,6 @@ void SpeculativeJIT::compileRecordRegExpCachedResult(Node* node)
     noResult(node);
 }
 
-void SpeculativeJIT::compileCompareEqPtr(Node* node)
-{
-    JSValueOperand operand(this, node->child1());
-    GPRTemporary result(this);
-    JSValueRegs regs = operand.jsValueRegs();
-    GPRReg resultGPR = result.gpr();
-    m_jit.boxBooleanPayload(false, resultGPR);
-    JITCompiler::JumpList notEqual = m_jit.branchIfNotEqual(regs, node->cellOperand()->value());
-    m_jit.boxBooleanPayload(true, resultGPR);
-    notEqual.link(&m_jit);
-    blessedBooleanResult(resultGPR, node);
-}
-
 void SpeculativeJIT::compileDefineDataProperty(Node* node)
 {
 #if USE(JSVALUE64)
@@ -10117,6 +10650,242 @@ void SpeculativeJIT::emitAllocateButterfly(GPRReg storageResultGPR, GPRReg sizeG
 
     m_jit.store32(sizeGPR, MacroAssembler::Address(storageResultGPR, Butterfly::offsetOfPublicLength()));
     m_jit.store32(sizeGPR, MacroAssembler::Address(storageResultGPR, Butterfly::offsetOfVectorLength()));
+}
+
+void SpeculativeJIT::compileGetMapBucketHead(Node* node)
+{
+    SpeculateCellOperand map(this, node->child1());
+    GPRTemporary bucket(this);
+
+    GPRReg mapGPR = map.gpr();
+    GPRReg bucketGPR = bucket.gpr();
+
+    if (node->child1().useKind() == MapObjectUse)
+        speculateMapObject(node->child1(), mapGPR);
+    else if (node->child1().useKind() == SetObjectUse)
+        speculateSetObject(node->child1(), mapGPR);
+    else
+        RELEASE_ASSERT_NOT_REACHED();
+
+    ASSERT(HashMapImpl<HashMapBucket<HashMapBucketDataKey>>::offsetOfHead() == HashMapImpl<HashMapBucket<HashMapBucketDataKeyValue>>::offsetOfHead());
+    m_jit.loadPtr(MacroAssembler::Address(mapGPR, HashMapImpl<HashMapBucket<HashMapBucketDataKey>>::offsetOfHead()), bucketGPR);
+    cellResult(bucketGPR, node);
+}
+
+void SpeculativeJIT::compileGetMapBucketNext(Node* node)
+{
+    SpeculateCellOperand bucket(this, node->child1());
+    GPRTemporary result(this);
+
+    GPRReg bucketGPR = bucket.gpr();
+    GPRReg resultGPR = result.gpr();
+
+    ASSERT(HashMapBucket<HashMapBucketDataKey>::offsetOfNext() == HashMapBucket<HashMapBucketDataKeyValue>::offsetOfNext());
+    ASSERT(HashMapBucket<HashMapBucketDataKey>::offsetOfDeleted() == HashMapBucket<HashMapBucketDataKeyValue>::offsetOfDeleted());
+    m_jit.loadPtr(MacroAssembler::Address(bucketGPR, HashMapBucket<HashMapBucketDataKeyValue>::offsetOfNext()), resultGPR);
+
+    MacroAssembler::Label loop = m_jit.label();
+    auto notBucket = m_jit.branchTestPtr(MacroAssembler::Zero, resultGPR);
+    auto done = m_jit.branchTest32(MacroAssembler::Zero, MacroAssembler::Address(resultGPR, HashMapBucket<HashMapBucketDataKeyValue>::offsetOfDeleted()));
+    m_jit.loadPtr(MacroAssembler::Address(resultGPR, HashMapBucket<HashMapBucketDataKeyValue>::offsetOfNext()), resultGPR);
+    m_jit.jump().linkTo(loop, &m_jit);
+
+    notBucket.link(&m_jit);
+    JSCell* sentinel = nullptr;
+    if (node->bucketOwnerType() == BucketOwnerType::Map)
+        sentinel = m_jit.vm()->sentinelMapBucket.get();
+    else {
+        ASSERT(node->bucketOwnerType() == BucketOwnerType::Set);
+        sentinel = m_jit.vm()->sentinelSetBucket.get();
+    }
+    m_jit.move(TrustedImmPtr::weakPointer(m_jit.graph(), sentinel), resultGPR);
+    done.link(&m_jit);
+
+    cellResult(resultGPR, node);
+}
+
+void SpeculativeJIT::compileLoadKeyFromMapBucket(Node* node)
+{
+    SpeculateCellOperand bucket(this, node->child1());
+    JSValueRegsTemporary result(this);
+
+    GPRReg bucketGPR = bucket.gpr();
+    JSValueRegs resultRegs = result.regs();
+
+    m_jit.loadValue(MacroAssembler::Address(bucketGPR, HashMapBucket<HashMapBucketDataKeyValue>::offsetOfKey()), resultRegs);
+    jsValueResult(resultRegs, node);
+}
+
+void SpeculativeJIT::compileLoadValueFromMapBucket(Node* node)
+{
+    SpeculateCellOperand bucket(this, node->child1());
+    JSValueRegsTemporary result(this);
+
+    GPRReg bucketGPR = bucket.gpr();
+    JSValueRegs resultRegs = result.regs();
+
+    m_jit.loadValue(MacroAssembler::Address(bucketGPR, HashMapBucket<HashMapBucketDataKeyValue>::offsetOfValue()), resultRegs);
+    jsValueResult(resultRegs, node);
+}
+
+void SpeculativeJIT::compileThrow(Node* node)
+{
+    JSValueOperand value(this, node->child1());
+    JSValueRegs valueRegs = value.jsValueRegs();
+    flushRegisters();
+    callOperation(operationThrowDFG, valueRegs);
+    m_jit.exceptionCheck();
+    m_jit.breakpoint();
+    noResult(node);
+}
+
+void SpeculativeJIT::compileThrowStaticError(Node* node)
+{
+    SpeculateCellOperand message(this, node->child1());
+    GPRReg messageGPR = message.gpr();
+    speculateString(node->child1(), messageGPR);
+    flushRegisters();
+    callOperation(operationThrowStaticError, messageGPR, node->errorType());
+    m_jit.exceptionCheck();
+    m_jit.breakpoint();
+    noResult(node);
+}
+
+void SpeculativeJIT::compileWeakMapGet(Node* node)
+{
+    SpeculateCellOperand weakMap(this, node->child1());
+    SpeculateCellOperand object(this, node->child2());
+    SpeculateInt32Operand hash(this, node->child3());
+    JSValueRegsTemporary result(this);
+
+    GPRReg weakMapGPR = weakMap.gpr();
+    GPRReg objectGPR = object.gpr();
+    GPRReg hashGPR = hash.gpr();
+    JSValueRegs resultRegs = result.regs();
+
+    speculateWeakMapObject(node->child1(), weakMapGPR);
+    speculateObject(node->child2(), objectGPR);
+
+    flushRegisters();
+    callOperation(operationWeakMapGet, resultRegs, weakMapGPR, objectGPR, hashGPR);
+    // No exception check here since operationWeakMapGet never throws an exception.
+
+    jsValueResult(resultRegs, node);
+}
+
+void SpeculativeJIT::compileGetPrototypeOf(Node* node)
+{
+    switch (node->child1().useKind()) {
+    case ArrayUse:
+    case FunctionUse:
+    case FinalObjectUse: {
+        SpeculateCellOperand object(this, node->child1());
+        GPRTemporary temp(this);
+        GPRTemporary temp2(this);
+
+        GPRReg objectGPR = object.gpr();
+        GPRReg tempGPR = temp.gpr();
+        GPRReg temp2GPR = temp2.gpr();
+
+        switch (node->child1().useKind()) {
+        case ArrayUse:
+            speculateArray(node->child1(), objectGPR);
+            break;
+        case FunctionUse:
+            speculateFunction(node->child1(), objectGPR);
+            break;
+        case FinalObjectUse:
+            speculateFinalObject(node->child1(), objectGPR);
+            break;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+            break;
+        }
+
+        m_jit.emitLoadStructure(*m_jit.vm(), objectGPR, tempGPR, temp2GPR);
+
+        AbstractValue& value = m_state.forNode(node->child1());
+        if ((value.m_type && !(value.m_type & ~SpecObject)) && value.m_structure.isFinite()) {
+            bool hasPolyProto = false;
+            bool hasMonoProto = false;
+            value.m_structure.forEach([&] (RegisteredStructure structure) {
+                if (structure->hasPolyProto())
+                    hasPolyProto = true;
+                else
+                    hasMonoProto = true;
+            });
+
+            if (hasMonoProto && !hasPolyProto) {
+#if USE(JSVALUE64)
+                m_jit.load64(MacroAssembler::Address(tempGPR, Structure::prototypeOffset()), tempGPR);
+                jsValueResult(tempGPR, node);
+#else
+                m_jit.load32(MacroAssembler::Address(tempGPR, Structure::prototypeOffset() + TagOffset), temp2GPR);
+                m_jit.load32(MacroAssembler::Address(tempGPR, Structure::prototypeOffset() + PayloadOffset), tempGPR);
+                jsValueResult(temp2GPR, tempGPR, node);
+#endif
+                return;
+            }
+
+            if (hasPolyProto && !hasMonoProto) {
+#if USE(JSVALUE64)
+                m_jit.load64(JITCompiler::Address(objectGPR, offsetRelativeToBase(knownPolyProtoOffset)), tempGPR);
+                jsValueResult(tempGPR, node);
+#else
+                m_jit.load32(JITCompiler::Address(objectGPR, offsetRelativeToBase(knownPolyProtoOffset) + TagOffset), temp2GPR);
+                m_jit.load32(JITCompiler::Address(objectGPR, offsetRelativeToBase(knownPolyProtoOffset) + PayloadOffset), tempGPR);
+                jsValueResult(temp2GPR, tempGPR, node);
+#endif
+                return;
+            }
+        }
+
+#if USE(JSVALUE64)
+        m_jit.load64(MacroAssembler::Address(tempGPR, Structure::prototypeOffset()), tempGPR);
+        auto hasMonoProto = m_jit.branchTest64(JITCompiler::NonZero, tempGPR);
+        m_jit.load64(JITCompiler::Address(objectGPR, offsetRelativeToBase(knownPolyProtoOffset)), tempGPR);
+        hasMonoProto.link(&m_jit);
+        jsValueResult(tempGPR, node);
+#else
+        m_jit.load32(MacroAssembler::Address(tempGPR, Structure::prototypeOffset() + TagOffset), temp2GPR);
+        m_jit.load32(MacroAssembler::Address(tempGPR, Structure::prototypeOffset() + PayloadOffset), tempGPR);
+        auto hasMonoProto = m_jit.branch32(CCallHelpers::NotEqual, temp2GPR, TrustedImm32(JSValue::EmptyValueTag));
+        m_jit.load32(JITCompiler::Address(objectGPR, offsetRelativeToBase(knownPolyProtoOffset) + TagOffset), temp2GPR);
+        m_jit.load32(JITCompiler::Address(objectGPR, offsetRelativeToBase(knownPolyProtoOffset) + PayloadOffset), tempGPR);
+        hasMonoProto.link(&m_jit);
+        jsValueResult(temp2GPR, tempGPR, node);
+#endif
+        return;
+    }
+    case ObjectUse: {
+        SpeculateCellOperand value(this, node->child1());
+        JSValueRegsTemporary result(this);
+
+        GPRReg valueGPR = value.gpr();
+        JSValueRegs resultRegs = result.regs();
+
+        speculateObject(node->child1(), valueGPR);
+
+        flushRegisters();
+        callOperation(operationGetPrototypeOfObject, resultRegs, valueGPR);
+        m_jit.exceptionCheck();
+        jsValueResult(resultRegs, node);
+        return;
+    }
+    default: {
+        JSValueOperand value(this, node->child1());
+        JSValueRegsTemporary result(this);
+
+        JSValueRegs valueRegs = value.jsValueRegs();
+        JSValueRegs resultRegs = result.regs();
+
+        flushRegisters();
+        callOperation(operationGetPrototypeOf, resultRegs, valueRegs);
+        m_jit.exceptionCheck();
+        jsValueResult(resultRegs, node);
+        return;
+    }
+    }
 }
 
 } } // namespace JSC::DFG

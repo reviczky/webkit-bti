@@ -58,6 +58,7 @@ namespace WebCore {
 // Editing style properties must be preserved during editing operation.
 // e.g. when a user inserts a new paragraph, all properties listed here must be copied to the new paragraph.
 static const CSSPropertyID editingProperties[] = {
+    CSSPropertyCaretColor,
     CSSPropertyColor,
     CSSPropertyFontFamily,
     CSSPropertyFontSize,
@@ -159,8 +160,8 @@ class HTMLElementEquivalent {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     HTMLElementEquivalent(CSSPropertyID, CSSValueID primitiveValue, const QualifiedName& tagName);
+    virtual ~HTMLElementEquivalent() = default;
 
-    virtual ~HTMLElementEquivalent() { }
     virtual bool matches(const Element& element) const { return !m_tagName || element.hasTagName(*m_tagName); }
     virtual bool hasAttribute() const { return false; }
     virtual bool propertyExistsInStyle(const EditingStyle& style) const { return style.m_mutableStyle && style.m_mutableStyle->getPropertyCSSValue(m_propertyID); }
@@ -379,9 +380,7 @@ EditingStyle::EditingStyle(CSSPropertyID propertyID, CSSValueID value)
     extractFontSizeDelta();
 }
 
-EditingStyle::~EditingStyle()
-{
-}
+EditingStyle::~EditingStyle() = default;
 
 static Color cssValueToColor(CSSValue* colorValue)
 {
@@ -1413,6 +1412,11 @@ int EditingStyle::legacyFontSize(Document* document) const
         m_shouldUseFixedDefaultFontSize, AlwaysUseLegacyFontSize);
 }
 
+bool EditingStyle::hasStyle(CSSPropertyID propertyID, const String& value)
+{
+    return EditingStyle::create(propertyID, value)->triStateOfStyle(this) != FalseTriState;
+}
+
 RefPtr<EditingStyle> EditingStyle::styleAtSelectionStart(const VisibleSelection& selection, bool shouldUseBackgroundColorInEffect)
 {
     if (selection.isNone())
@@ -1439,9 +1443,10 @@ RefPtr<EditingStyle> EditingStyle::styleAtSelectionStart(const VisibleSelection&
     // Also, if the selection is a range, ignore the background color at the start of selection,
     // and find the background color of the common ancestor.
     if (shouldUseBackgroundColorInEffect && (selection.isRange() || hasTransparentBackgroundColor(style->m_mutableStyle.get()))) {
-        RefPtr<Range> range(selection.toNormalizedRange());
-        if (auto value = backgroundColorInEffect(range->commonAncestorContainer()))
-            style->setProperty(CSSPropertyBackgroundColor, value->cssText());
+        if (auto range = selection.toNormalizedRange()) {
+            if (auto value = backgroundColorInEffect(range->commonAncestorContainer()))
+                style->setProperty(CSSPropertyBackgroundColor, value->cssText());
+        }
     }
 
     return WTFMove(style);

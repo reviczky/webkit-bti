@@ -23,8 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef Download_h
-#define Download_h
+#pragma once
 
 #include "DownloadID.h"
 #include "MessageSender.h"
@@ -32,12 +31,14 @@
 #include <WebCore/ResourceHandle.h>
 #include <WebCore/ResourceHandleClient.h>
 #include <WebCore/ResourceRequest.h>
-#include <WebCore/SessionID.h>
 #include <memory>
+#include <pal/SessionID.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/RetainPtr.h>
 
 #if USE(NETWORK_SESSION)
+#include "NetworkDataTask.h"
+#include <WebCore/AuthenticationChallenge.h>
 #if PLATFORM(COCOA)
 OBJC_CLASS NSURLSessionDownloadTask;
 #endif
@@ -62,6 +63,7 @@ class BlobDataFileReference;
 class Credential;
 class ResourceError;
 class ResourceHandle;
+class ResourceRequest;
 class ResourceResponse;
 }
 
@@ -76,9 +78,9 @@ class Download : public IPC::MessageSender {
     WTF_MAKE_NONCOPYABLE(Download); WTF_MAKE_FAST_ALLOCATED;
 public:
 #if USE(NETWORK_SESSION)
-    Download(DownloadManager&, DownloadID, NetworkDataTask&, const WebCore::SessionID& sessionID, const String& suggestedFilename = { });
+    Download(DownloadManager&, DownloadID, NetworkDataTask&, const PAL::SessionID& sessionID, const String& suggestedFilename = { });
 #if PLATFORM(COCOA)
-    Download(DownloadManager&, DownloadID, NSURLSessionDownloadTask*, const WebCore::SessionID& sessionID, const String& suggestedFilename = { });
+    Download(DownloadManager&, DownloadID, NSURLSessionDownloadTask*, const PAL::SessionID& sessionID, const String& suggestedFilename = { });
 #endif
 #else
     Download(DownloadManager&, DownloadID, const WebCore::ResourceRequest&, const String& suggestedFilename = { });
@@ -100,10 +102,12 @@ public:
 
 #if USE(NETWORK_SESSION)
     void setSandboxExtension(RefPtr<SandboxExtension>&& sandboxExtension) { m_sandboxExtension = WTFMove(sandboxExtension); }
+    void didReceiveChallenge(const WebCore::AuthenticationChallenge&, ChallengeCompletionHandler&&);
 #else
     const WebCore::ResourceRequest& request() const { return m_request; }
     void didReceiveAuthenticationChallenge(const WebCore::AuthenticationChallenge&);
     void didStart();
+    void willSendRedirectedRequest(WebCore::ResourceRequest&&, WebCore::ResourceResponse&&);
     void didReceiveResponse(const WebCore::ResourceResponse&);
     bool shouldDecodeSourceDataOfMIMEType(const String& mimeType);
     String decideDestinationWithSuggestedFilename(const String& filename, bool& allowOverwrite);
@@ -143,7 +147,7 @@ private:
 #if PLATFORM(COCOA)
     RetainPtr<NSURLSessionDownloadTask> m_downloadTask;
 #endif
-    WebCore::SessionID m_sessionID;
+    PAL::SessionID m_sessionID;
 #else // USE(NETWORK_SESSION)
     WebCore::ResourceRequest m_request;
     String m_responseMIMEType;
@@ -162,5 +166,3 @@ private:
 };
 
 } // namespace WebKit
-
-#endif // Download_h

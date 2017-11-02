@@ -62,10 +62,11 @@ private:
     void didBeginEditing() final;
     void respondToChangedContents() final;
     void respondToChangedSelection(WebCore::Frame*) final;
-    void didChangeSelectionAndUpdateLayout() final;
+    void didEndUserTriggeredSelectionChanges() final;
     void updateEditorStateAfterLayoutIfEditabilityChanged() final;
     void discardedComposition(WebCore::Frame*) final;
     void canceledComposition() final;
+    void didUpdateComposition() final;
     void didEndEditing() final;
     void willWriteSelectionToPasteboard(WebCore::Range*) final;
     void didWriteSelectionToPasteboard() final;
@@ -95,10 +96,7 @@ private:
     void overflowScrollPositionChanged() final;
 
 #if PLATFORM(COCOA)
-    NSString *userVisibleString(NSURL *) final;
     void setInsertionPasteboard(const String& pasteboardName) final;
-    NSURL *canonicalizeURL(NSURL *) final;
-    NSURL *canonicalizeURLString(NSString *) final;
 #endif
 
 #if USE(APPKIT)
@@ -158,14 +156,10 @@ private:
 #if PLATFORM(IOS)
     void startDelayingAndCoalescingContentChangeNotifications() final;
     void stopDelayingAndCoalescingContentChangeNotifications() final;
-    void writeDataToPasteboard(NSDictionary*) final;
-    NSArray *supportedPasteboardTypesForCurrentSelection() final;
-    NSArray *readDataFromPasteboard(NSString* type, int index) final;
     bool hasRichlyEditableSelection() final;
     int getPasteboardItemsCount() final;
     RefPtr<WebCore::DocumentFragment> documentFragmentFromDelegate(int index) final;
     bool performsTwoStepPaste(WebCore::DocumentFragment*) final;
-    int pasteboardChangeCount() final;
 #endif
 
     bool performTwoStepDrop(WebCore::DocumentFragment&, WebCore::Range&, bool isMove) final;

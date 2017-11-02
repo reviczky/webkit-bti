@@ -170,7 +170,7 @@ foreach my $idlFile (@supplementedIdlFiles) {
                 next unless shouldPropertyBeExposed($attribute, \@targetGlobalContexts);
 
                 # Record that this attribute is implemented by $interfaceName.
-                $attribute->extendedAttributes->{"ImplementedBy"} = $interfaceName if $interface->isPartial;
+                $attribute->extendedAttributes->{"ImplementedBy"} = $interfaceName if $interface->isPartial && !$attribute->extendedAttributes->{Reflect};
 
                 # Add interface-wide extended attributes to each attribute.
                 foreach my $extendedAttributeName (keys %{$interface->extendedAttributes}) {
@@ -207,7 +207,7 @@ foreach my $idlFile (@supplementedIdlFiles) {
                 push(@{$targetDataNode->constants}, $constant);
             }
         } else {
-            die "$idlFile is not a supplemental dependency of $targetIdlFile. There maybe a bug in the the supplemental dependency generator (preprocess-idls.pl).\n";
+            die "$idlFile is not a supplemental dependency of $targetIdlFile. There maybe a bug in the supplemental dependency generator (preprocess-idls.pl).\n";
         }
     }
 }

@@ -403,9 +403,9 @@ void SubresourceLoader::didReceiveDataOrBuffer(const char* data, int length, Ref
 
     if (!m_loadingMultipartContent) {
         if (auto* resourceData = this->resourceData())
-            m_resource->addDataBuffer(*resourceData);
+            m_resource->updateBuffer(*resourceData);
         else
-            m_resource->addData(buffer ? buffer->data() : data, buffer ? buffer->size() : length);
+            m_resource->updateData(buffer ? buffer->data() : data, buffer ? buffer->size() : length);
     }
 }
 
@@ -479,7 +479,7 @@ bool SubresourceLoader::checkResponseCrossOriginAccessControl(const ResourceResp
         return true;
 
     ASSERT(m_origin);
-    return passesAccessControlCheck(response, options().allowCredentials, *m_origin, errorDescription);
+    return passesAccessControlCheck(response, options().storedCredentialsPolicy, *m_origin, errorDescription);
 }
 
 bool SubresourceLoader::checkRedirectionCrossOriginAccessControl(const ResourceRequest& previousRequest, const ResourceResponse& redirectResponse, ResourceRequest& newRequest, String& errorMessage)
@@ -502,7 +502,7 @@ bool SubresourceLoader::checkRedirectionCrossOriginAccessControl(const ResourceR
     }
 
     ASSERT(m_origin);
-    if (crossOriginFlag && !passesAccessControlCheck(redirectResponse, options().allowCredentials, *m_origin, errorMessage))
+    if (crossOriginFlag && !passesAccessControlCheck(redirectResponse, options().storedCredentialsPolicy, *m_origin, errorMessage))
         return false;
 
     bool redirectingToNewOrigin = false;
@@ -519,7 +519,7 @@ bool SubresourceLoader::checkRedirectionCrossOriginAccessControl(const ResourceR
 
     if (redirectingToNewOrigin) {
         cleanRedirectedRequestForAccessControl(newRequest);
-        updateRequestForAccessControl(newRequest, *m_origin, options().allowCredentials);
+        updateRequestForAccessControl(newRequest, *m_origin, options().storedCredentialsPolicy);
     }
 
     return true;

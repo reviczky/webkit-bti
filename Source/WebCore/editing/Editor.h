@@ -26,7 +26,6 @@
 #pragma once
 
 #include "CompositionUnderline.h"
-#include "DataTransferAccessPolicy.h"
 #include "DictationAlternative.h"
 #include "DocumentMarker.h"
 #include "EditAction.h"
@@ -93,15 +92,6 @@ enum class MailBlockquoteHandling {
     IgnoreBlockquote,
 };
 
-#if PLATFORM(COCOA)
-
-struct FragmentAndResources {
-    RefPtr<DocumentFragment> fragment;
-    Vector<Ref<ArchiveResource>> resources;
-};
-
-#endif
-
 enum TemporarySelectionOption : uint8_t {
     // By default, no additional options are enabled.
     TemporarySelectionOptionDefault = 0,
@@ -156,7 +146,6 @@ public:
     WEBCORE_EXPORT bool canDHTMLPaste();
     bool tryDHTMLCopy();
     bool tryDHTMLCut();
-    WEBCORE_EXPORT bool tryDHTMLPaste();
 
     WEBCORE_EXPORT bool canCut() const;
     WEBCORE_EXPORT bool canCopy() const;
@@ -219,9 +208,7 @@ public:
 #if PLATFORM(IOS)
     WEBCORE_EXPORT void removeUnchangeableStyles();
 #endif
-    
-    bool dispatchCPPEvent(const AtomicString&, DataTransferAccessPolicy);
-    
+
     WEBCORE_EXPORT void applyStyle(StyleProperties*, EditAction = EditActionUnspecified);
     void applyStyle(RefPtr<EditingStyle>&&, EditAction);
     void applyParagraphStyle(StyleProperties*, EditAction = EditActionUnspecified);
@@ -316,9 +303,9 @@ public:
     bool shouldEndEditing(Range*);
 
     void clearUndoRedoOperations();
-    bool canUndo();
+    WEBCORE_EXPORT bool canUndo() const;
     void undo();
-    bool canRedo();
+    WEBCORE_EXPORT bool canRedo() const;
     void redo();
 
     void didBeginEditing();
@@ -491,7 +478,7 @@ public:
     WEBCORE_EXPORT void replaceSelectionWithAttributedString(NSAttributedString *, MailBlockquoteHandling = MailBlockquoteHandling::RespectBlockquote);
 #endif
 
-#if PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(WPE)
+#if !PLATFORM(WIN)
     WEBCORE_EXPORT void writeSelectionToPasteboard(Pasteboard&);
     WEBCORE_EXPORT void writeImageToPasteboard(Pasteboard&, Element& imageElement, const URL&, const String& title);
     void writeSelection(PasteboardWriterData&);
@@ -511,11 +498,7 @@ public:
     void setIsGettingDictionaryPopupInfo(bool b) { m_isGettingDictionaryPopupInfo = b; }
     bool isGettingDictionaryPopupInfo() const { return m_isGettingDictionaryPopupInfo; }
 
-    Ref<DocumentFragment> createFragmentForImageAndURL(const String&);
-
 private:
-    class WebContentReader;
-
     Document& document() const;
 
     bool canDeleteRange(Range*) const;
@@ -551,11 +534,7 @@ private:
     RefPtr<SharedBuffer> selectionInWebArchiveFormat();
     String selectionInHTMLFormat();
     RefPtr<SharedBuffer> imageInWebArchiveFormat(Element&);
-    RefPtr<DocumentFragment> createFragmentForImageResourceAndAddResource(RefPtr<ArchiveResource>&&);
-    RefPtr<DocumentFragment> createFragmentAndAddResources(NSAttributedString *);
-    FragmentAndResources createFragment(NSAttributedString *);
-    String userVisibleString(const URL&);
-
+    static String userVisibleString(const URL&);
     static RefPtr<SharedBuffer> dataInRTFDFormat(NSAttributedString *);
     static RefPtr<SharedBuffer> dataInRTFFormat(NSAttributedString *);
 #endif

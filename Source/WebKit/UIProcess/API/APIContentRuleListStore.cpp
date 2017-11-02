@@ -40,8 +40,8 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RunLoop.h>
 #include <wtf/WorkQueue.h>
-#include <wtf/persistence/Decoder.h>
-#include <wtf/persistence/Encoder.h>
+#include <wtf/persistence/PersistentDecoder.h>
+#include <wtf/persistence/PersistentEncoder.h>
 
 using namespace WebKit::NetworkCache;
 
@@ -504,6 +504,7 @@ void ContentRuleListStore::getContentRuleListSource(const WTF::String& identifie
         
         switch (metaData.version) {
         case 9:
+        case 10:
             if (!metaData.sourceSize) {
                 complete({ });
                 return;

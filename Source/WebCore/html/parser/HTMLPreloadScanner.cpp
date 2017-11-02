@@ -35,6 +35,7 @@
 #include "InputTypeNames.h"
 #include "LinkLoader.h"
 #include "LinkRelAttribute.h"
+#include "Logging.h"
 #include "MediaList.h"
 #include "MediaQueryEvaluator.h"
 #include "RenderView.h"
@@ -215,6 +216,7 @@ private:
                 m_mediaAttribute = attributeValue;
                 auto mediaSet = MediaQuerySet::create(attributeValue);
                 auto* documentElement = document.documentElement();
+                LOG(MediaQueries, "HTMLPreloadScanner %p processAttribute evaluating media queries", this);
                 m_mediaMatched = MediaQueryEvaluator { document.printing() ? "print" : "screen", document, documentElement ? documentElement->computedStyle() : nullptr }.evaluate(mediaSet.get());
             }
             break;
@@ -230,7 +232,7 @@ private:
             if (match(attributeName, hrefAttr))
                 setUrlToLoad(attributeValue);
             else if (match(attributeName, relAttr)) {
-                LinkRelAttribute parsedAttribute { attributeValue };
+                LinkRelAttribute parsedAttribute { document, attributeValue };
                 m_linkIsStyleSheet = relAttributeIsStyleSheet(parsedAttribute);
                 m_linkIsPreload = parsedAttribute.isLinkPreload;
             } else if (match(attributeName, mediaAttr))
@@ -425,7 +427,7 @@ void TokenPreloadScanner::scan(const HTMLToken& token, Vector<std::unique_ptr<Pr
 void TokenPreloadScanner::updatePredictedBaseURL(const HTMLToken& token)
 {
     ASSERT(m_predictedBaseElementURL.isEmpty());
-    if (auto* hrefAttribute = findAttribute(token.attributes(), hrefAttr.localName().string()))
+    if (auto* hrefAttribute = findAttribute(token.attributes(), hrefAttr->localName().string()))
         m_predictedBaseElementURL = URL(m_documentURL, stripLeadingAndTrailingHTMLSpaces(StringImpl::create8BitIfPossible(hrefAttribute->value))).isolatedCopy();
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2013-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2009-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,6 +27,7 @@
 
 #include "ScriptExecutable.h"
 #include "SourceCode.h"
+#include <wtf/Box.h>
 
 namespace JSC {
 
@@ -125,6 +126,7 @@ public:
     bool isGetter() const { return parseMode() == SourceParseMode::GetterMode; }
     bool isSetter() const { return parseMode() == SourceParseMode::SetterMode; }
     bool isGenerator() const { return isGeneratorParseMode(parseMode()); }
+    bool isAsyncGenerator() const { return SourceParseModeSet(SourceParseMode::AsyncGeneratorWrapperFunctionMode, SourceParseMode::AsyncGeneratorBodyMode).contains(parseMode()); }
     bool isMethod() const { return parseMode() == SourceParseMode::MethodMode; }
     bool hasCallerAndArgumentsProperties() const
     {
@@ -138,7 +140,9 @@ public:
             SourceParseMode::NormalFunctionMode,
             SourceParseMode::GeneratorBodyMode,
             SourceParseMode::GeneratorWrapperFunctionMode,
-            SourceParseMode::GeneratorWrapperMethodMode
+            SourceParseMode::GeneratorWrapperMethodMode,
+            SourceParseMode::AsyncGeneratorWrapperFunctionMode,
+            SourceParseMode::AsyncGeneratorBodyMode
         ).contains(parseMode()) || isClass();
     }
     DerivedContextType derivedContextType() const { return m_unlinkedExecutable->derivedContextType(); }
@@ -169,6 +173,18 @@ public:
     DECLARE_INFO;
 
     InferredValue* singletonFunction() { return m_singletonFunction.get(); }
+    // Cached poly proto structure for the result of constructing this executable.
+    Structure* cachedPolyProtoStructure() { return m_cachedPolyProtoStructure.get(); }
+    void setCachedPolyProtoStructure(VM& vm, Structure* structure) { m_cachedPolyProtoStructure.set(vm, this, structure); }
+
+    InlineWatchpointSet& ensurePolyProtoWatchpoint()
+    {
+        if (!m_polyProtoWatchpoint)
+            m_polyProtoWatchpoint = Box<InlineWatchpointSet>::create(IsWatched);
+        return *m_polyProtoWatchpoint;
+    }
+
+    Box<InlineWatchpointSet> sharedPolyProtoWatchpoint() const { return m_polyProtoWatchpoint; }
 
 private:
     friend class ExecutableBase;
@@ -186,6 +202,8 @@ private:
     WriteBarrier<FunctionCodeBlock> m_codeBlockForConstruct;
     RefPtr<TypeSet> m_returnStatementTypeSet;
     WriteBarrier<InferredValue> m_singletonFunction;
+    WriteBarrier<Structure> m_cachedPolyProtoStructure;
+    Box<InlineWatchpointSet> m_polyProtoWatchpoint;
 };
 
 } // namespace JSC

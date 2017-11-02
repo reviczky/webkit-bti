@@ -116,8 +116,6 @@ WI.DebuggerSidebarPanel = class DebuggerSidebarPanel extends WI.NavigationSideba
 
         this.suppressFilteringOnTreeElements([this._allExceptionsBreakpointTreeElement, this._allUncaughtExceptionsBreakpointTreeElement, this._assertionsBreakpointTreeElement]);
 
-        this.filterBar.placeholder = WI.UIString("Filter List");
-
         function showResourcesWithIssuesOnlyFilterFunction(treeElement)
         {
             // Issues are only shown in the scripts tree outline.
@@ -269,8 +267,10 @@ WI.DebuggerSidebarPanel = class DebuggerSidebarPanel extends WI.NavigationSideba
     {
         super.closed();
 
-        this._domBreakpointTreeController.disconnect();
-        this._domBreakpointTreeController = null;
+        if (this._domBreakpointTreeController) {
+            this._domBreakpointTreeController.disconnect();
+            this._domBreakpointTreeController = null;
+        }
 
         WI.Frame.removeEventListener(null, null, this);
         WI.debuggerManager.removeEventListener(null, null, this);
@@ -378,7 +378,8 @@ WI.DebuggerSidebarPanel = class DebuggerSidebarPanel extends WI.NavigationSideba
         else if (cookie[WI.DebuggerSidebarPanel.SelectedAssertionsCookieKey])
             this._assertionsBreakpointTreeElement.revealAndSelect();
         else if (cookie[WI.DebuggerSidebarPanel.SelectedAllRequestsCookieKey])
-            this._xhrBreakpointTreeController.revealAndSelect(WI.domDebuggerManager.allRequestsBreakpoint);
+            if (this._xhrBreakpointTreeController)
+                this._xhrBreakpointTreeController.revealAndSelect(WI.domDebuggerManager.allRequestsBreakpoint);
         else
             super.restoreStateFromCookie(cookie, relaxedMatchDelay);
     }

@@ -52,6 +52,7 @@ public:
 
     ResourceRequest&& releaseResourceRequest() { return WTFMove(m_resourceRequest); }
     const ResourceRequest& resourceRequest() const { return m_resourceRequest; }
+    ResourceRequest& resourceRequest() { return m_resourceRequest; }
     const String& charset() const { return m_charset; }
     void setCharset(const String& charset) { m_charset = charset; }
     const ResourceLoaderOptions& options() const { return m_options; }
@@ -67,6 +68,8 @@ public:
     bool ignoreForRequestCount() const { return m_ignoreForRequestCount; }
     void setIgnoreForRequestCount(bool ignoreForRequestCount) { m_ignoreForRequestCount = ignoreForRequestCount; }
 
+    void setDestinationIfNotSet(FetchOptions::Destination);
+
     void setAsPotentiallyCrossOrigin(const String&, Document&);
     void updateForAccessControl(Document&);
 
@@ -76,7 +79,7 @@ public:
     void updateAccordingCacheMode();
     void removeFragmentIdentifierIfNeeded();
 #if ENABLE(CONTENT_EXTENSIONS)
-    void applyBlockedStatus(const ContentExtensions::BlockedStatus&);
+    void applyBlockedStatus(const ContentExtensions::BlockedStatus&, Page*);
 #endif
     void setDomainForCachePartition(Document&);
     void setDomainForCachePartition(const String&);
@@ -91,6 +94,10 @@ public:
     void clearFragmentIdentifier() { m_fragmentIdentifier = { }; }
 
     static String splitFragmentIdentifierFromRequestURL(ResourceRequest&);
+
+#if ENABLE(SERVICE_WORKER)
+    void setSelectedServiceWorkerIdentifierIfNeeded(uint64_t serviceWorkerIdentifier);
+#endif
 
 private:
     ResourceRequest m_resourceRequest;

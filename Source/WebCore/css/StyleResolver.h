@@ -62,7 +62,6 @@ class KeyframeList;
 class KeyframeValue;
 class MediaQueryEvaluator;
 class Node;
-class RenderRegion;
 class RenderScrollbar;
 class RuleData;
 class RuleSet;
@@ -76,7 +75,6 @@ class StyleProperties;
 class StyleRule;
 class StyleRuleKeyframes;
 class StyleRulePage;
-class StyleRuleRegion;
 class StyleSheet;
 class StyleSheetList;
 class StyledElement;
@@ -131,7 +129,7 @@ public:
     StyleResolver(Document&);
     ~StyleResolver();
 
-    ElementStyle styleForElement(const Element&, const RenderStyle* parentStyle, const RenderStyle* parentBoxStyle = nullptr, RuleMatchingBehavior = MatchAllRules, const RenderRegion* regionForStyling = nullptr, const SelectorFilter* = nullptr);
+    ElementStyle styleForElement(const Element&, const RenderStyle* parentStyle, const RenderStyle* parentBoxStyle = nullptr, RuleMatchingBehavior = MatchAllRules, const SelectorFilter* = nullptr);
 
     void keyframeStylesForAnimation(const Element&, const RenderStyle*, KeyframeList&);
 
@@ -211,8 +209,6 @@ public:
     bool hasMediaQueriesAffectedByAccessibilitySettingsChange() const;
 
     void addKeyframeStyle(Ref<StyleRuleKeyframes>&&);
-
-    bool checkRegionStyle(const Element* regionElement);
 
     bool usesFirstLineRules() const { return m_ruleSets.features().usesFirstLineRules; }
     bool usesFirstLetterRules() const { return m_ruleSets.features().usesFirstLetterRules; }
@@ -347,7 +343,7 @@ public:
     class State {
     public:
         State() { }
-        State(const Element&, const RenderStyle* parentStyle, const RenderStyle* documentElementStyle = nullptr, const RenderRegion* regionForStyling = nullptr, const SelectorFilter* = nullptr);
+        State(const Element&, const RenderStyle* parentStyle, const RenderStyle* documentElementStyle = nullptr, const SelectorFilter* = nullptr);
 
     public:
         void clear();
@@ -363,7 +359,6 @@ public:
         const RenderStyle* parentStyle() const { return m_parentStyle; }
         const RenderStyle* rootElementStyle() const { return m_rootElementStyle; }
 
-        const RenderRegion* regionForStyling() const { return m_regionForStyling; }
         EInsideLink elementLinkState() const { return m_elementLinkState; }
 
         void setApplyPropertyToRegularStyle(bool isApply) { m_applyPropertyToRegularStyle = isApply; }
@@ -416,8 +411,6 @@ public:
         std::unique_ptr<RenderStyle> m_ownedParentStyle;
         const RenderStyle* m_rootElementStyle { nullptr };
 
-        const RenderRegion* m_regionForStyling { nullptr };
-        
         EInsideLink m_elementLinkState { NotInsideLink };
 
         bool m_applyPropertyToRegularStyle { true };
@@ -540,21 +533,6 @@ inline bool StyleResolver::hasSelectorForId(const AtomicString& idValue) const
 {
     ASSERT(!idValue.isEmpty());
     return m_ruleSets.features().idsInRules.contains(idValue);
-}
-
-inline bool checkRegionSelector(const CSSSelector* regionSelector, const Element* regionElement)
-{
-    if (!regionSelector || !regionElement)
-        return false;
-
-    SelectorChecker selectorChecker(regionElement->document());
-    for (const CSSSelector* s = regionSelector; s; s = CSSSelectorList::next(s)) {
-        SelectorChecker::CheckingContext selectorCheckingContext(SelectorChecker::Mode::QueryingRules);
-        unsigned ignoredSpecificity;
-        if (selectorChecker.match(*s, *regionElement, selectorCheckingContext, ignoredSpecificity))
-            return true;
-    }
-    return false;
 }
 
 } // namespace WebCore

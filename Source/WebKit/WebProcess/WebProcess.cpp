@@ -39,11 +39,14 @@
 #include "NetworkConnectionToWebProcessMessages.h"
 #include "NetworkProcessConnection.h"
 #include "NetworkSession.h"
+#include "NetworkSessionCreationParameters.h"
 #include "PluginProcessConnectionManager.h"
 #include "SessionTracker.h"
 #include "StatisticsData.h"
+#include "StorageProcessMessages.h"
 #include "UserData.h"
 #include "WebAutomationSessionProxy.h"
+#include "WebCacheStorageProvider.h"
 #include "WebConnectionToUIProcess.h"
 #include "WebCookieManager.h"
 #include "WebCoreArgumentCoders.h"
@@ -63,9 +66,13 @@
 #include "WebProcessPoolMessages.h"
 #include "WebProcessProxyMessages.h"
 #include "WebResourceLoadStatisticsStoreMessages.h"
+#include "WebSWContextManagerConnection.h"
+#include "WebSWContextManagerConnectionMessages.h"
+#include "WebServiceWorkerProvider.h"
 #include "WebSocketStream.h"
 #include "WebToStorageProcessConnection.h"
 #include "WebsiteData.h"
+#include "WebsiteDataStoreParameters.h"
 #include "WebsiteDataType.h"
 #include <JavaScriptCore/JSLock.h>
 #include <JavaScriptCore/MemoryStatistics.h>
@@ -77,8 +84,10 @@
 #include <WebCore/CommonVM.h>
 #include <WebCore/CrossOriginPreflightResultCache.h>
 #include <WebCore/DNS.h>
+#include <WebCore/DOMWindow.h>
 #include <WebCore/DatabaseManager.h>
 #include <WebCore/DatabaseTracker.h>
+#include <WebCore/DeprecatedGlobalSettings.h>
 #include <WebCore/DiagnosticLoggingClient.h>
 #include <WebCore/DiagnosticLoggingKeys.h>
 #include <WebCore/FontCache.h>
@@ -89,7 +98,6 @@
 #include <WebCore/GlyphPage.h>
 #include <WebCore/HTMLMediaElement.h>
 #include <WebCore/JSDOMWindow.h>
-#include <WebCore/Language.h>
 #include <WebCore/MainFrame.h>
 #include <WebCore/MemoryCache.h>
 #include <WebCore/MemoryRelease.h>
@@ -104,12 +112,13 @@
 #include <WebCore/RuntimeApplicationChecks.h>
 #include <WebCore/SchemeRegistry.h>
 #include <WebCore/SecurityOrigin.h>
+#include <WebCore/ServiceWorkerContextData.h>
 #include <WebCore/Settings.h>
 #include <WebCore/URLParser.h>
 #include <WebCore/UserGestureIndicator.h>
 #include <unistd.h>
 #include <wtf/CurrentTime.h>
-#include <wtf/HashCountedSet.h>
+#include <wtf/Language.h>
 #include <wtf/RunLoop.h>
 #include <wtf/text/StringHash.h>
 
@@ -159,7 +168,8 @@ WebProcess::WebProcess()
 #endif
     , m_webInspectorInterruptDispatcher(WebInspectorInterruptDispatcher::create())
     , m_webLoaderStrategy(*new WebLoaderStrategy)
-    , m_dnsPrefetchHystereris([this](HysteresisState state) { if (state == HysteresisState::Stopped) m_dnsPrefetchedHosts.clear(); })
+    , m_cacheStorageProvider(WebCacheStorageProvider::create())
+    , m_dnsPrefetchHystereris([this](PAL::HysteresisState state) { if (state == PAL::HysteresisState::Stopped) m_dnsPrefetchedHosts.clear(); })
 #if ENABLE(NETSCAPE_PLUGIN_API)
     , m_pluginProcessConnectionManager(PluginProcessConnectionManager::create())
 #endif
@@ -190,7 +200,7 @@ WebProcess::WebProcess()
     addSupplement<UserMediaCaptureManager>();
 #endif
 
-    m_plugInAutoStartOriginHashes.add(SessionID::defaultSessionID(), HashMap<unsigned, double>());
+    m_plugInAutoStartOriginHashes.add(PAL::SessionID::defaultSessionID(), HashMap<unsigned, double>());
 
     ResourceLoadObserver::shared().setNotificationCallback([this] (Vector<ResourceLoadStatistics>&& statistics) {
         ASSERT(!statistics.isEmpty());
@@ -213,7 +223,9 @@ void WebProcess::initializeConnection(IPC::Connection* connection)
 {
     ChildProcess::initializeConnection(connection);
 
+#if !PLATFORM(GTK) && !PLATFORM(WPE)
     connection->setShouldExitOnSyncMessageSendFailure(true);
+#endif
 
 #if HAVE(QOS_CLASSES)
     connection->setShouldBoostMainThreadOnSyncMessage(true);
@@ -254,6 +266,10 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
 #endif
 
     platformInitializeWebProcess(WTFMove(parameters));
+
+#if USE(NETWORK_SESSION)
+    SessionTracker::setSession(PAL::SessionID::defaultSessionID(), NetworkSession::create({ }));
+#endif
 
     // Match the QoS of the UIProcess and the scrolling thread but use a slightly lower priority.
     WTF::Thread::setCurrentThreadIsUserInteractive(-1);
@@ -392,6 +408,10 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
     GamepadProvider::singleton().setSharedProvider(WebGamepadProvider::singleton());
 #endif
 
+#if ENABLE(SERVICE_WORKER)
+    ServiceWorkerProvider::setSharedProvider(WebServiceWorkerProvider::singleton());
+#endif
+
 #if ENABLE(WEBASSEMBLY)
     JSC::Wasm::enableFastMemory();
 #endif
@@ -488,7 +508,6 @@ void WebProcess::setShouldUseFontSmoothing(bool useFontSmoothing)
 void WebProcess::userPreferredLanguagesChanged(const Vector<String>& languages) const
 {
     overrideUserPreferredLanguages(languages);
-    languageDidChange();
 }
 
 void WebProcess::fullKeyboardAccessModeChanged(bool fullKeyboardAccessEnabled)
@@ -496,9 +515,9 @@ void WebProcess::fullKeyboardAccessModeChanged(bool fullKeyboardAccessEnabled)
     m_fullKeyboardAccessEnabled = fullKeyboardAccessEnabled;
 }
 
-void WebProcess::ensurePrivateBrowsingSession(SessionID sessionID)
+void WebProcess::ensurePrivateBrowsingSession(PAL::SessionID sessionID)
 {
-    WebFrameNetworkingContext::ensurePrivateBrowsingSession(sessionID);
+    WebFrameNetworkingContext::ensurePrivateBrowsingSession({ { }, { }, { }, { }, { }, { }, { sessionID, { }, { }, AllowsCellularAccess::Yes }});
 }
 
 void WebProcess::addWebsiteDataStore(WebsiteDataStoreParameters&& parameters)
@@ -506,7 +525,7 @@ void WebProcess::addWebsiteDataStore(WebsiteDataStoreParameters&& parameters)
     WebFrameNetworkingContext::ensureWebsiteDataStoreSession(WTFMove(parameters));
 }
 
-void WebProcess::destroySession(SessionID sessionID)
+void WebProcess::destroySession(PAL::SessionID sessionID)
 {
     SessionTracker::destroySession(sessionID);
 }
@@ -552,7 +571,10 @@ void WebProcess::clearCachedCredentials()
 {
     NetworkStorageSession::defaultStorageSession().credentialStorage().clearCredentials();
 #if USE(NETWORK_SESSION)
-    NetworkSession::defaultSession().clearCredentials();
+    if (auto* networkSession = SessionTracker::networkSession(PAL::SessionID::defaultSessionID()))
+        networkSession->clearCredentials();
+    else
+        ASSERT_NOT_REACHED();
 #endif
 }
 
@@ -651,18 +673,23 @@ void WebProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& de
         return;
     }
 
+#if ENABLE(SERVICE_WORKER)
+    if (decoder.messageReceiverName() == Messages::WebSWContextManagerConnection::messageReceiverName()) {
+        ASSERT(SWContextManager::singleton().connection());
+        if (auto* contextManagerConnection = SWContextManager::singleton().connection())
+            static_cast<WebSWContextManagerConnection&>(*contextManagerConnection).didReceiveMessage(connection, decoder);
+        return;
+    }
+#endif
+
     LOG_ERROR("Unhandled web process message '%s:%s'", decoder.messageReceiverName().toString().data(), decoder.messageName().toString().data());
 }
 
 void WebProcess::didClose(IPC::Connection&)
 {
 #ifndef NDEBUG
-    // Close all the live pages.
-    Vector<RefPtr<WebPage>> pages;
-    copyValuesToVector(m_pageMap, pages);
-    for (auto& page : pages)
+    for (auto& page : copyToVector(m_pageMap.values()))
         page->close();
-    pages.clear();
 
     GCController::singleton().garbageCollectSoon();
     FontCache::singleton().invalidate();
@@ -793,9 +820,9 @@ static unsigned hashForPlugInOrigin(const String& pageOrigin, const String& plug
     return hasher.hash();
 }
 
-bool WebProcess::isPlugInAutoStartOriginHash(unsigned plugInOriginHash, SessionID sessionID)
+bool WebProcess::isPlugInAutoStartOriginHash(unsigned plugInOriginHash, PAL::SessionID sessionID)
 {
-    HashMap<WebCore::SessionID, HashMap<unsigned, double>>::const_iterator sessionIterator = m_plugInAutoStartOriginHashes.find(sessionID);
+    HashMap<PAL::SessionID, HashMap<unsigned, double>>::const_iterator sessionIterator = m_plugInAutoStartOriginHashes.find(sessionID);
     HashMap<unsigned, double>::const_iterator it;
     bool contains = false;
 
@@ -804,7 +831,7 @@ bool WebProcess::isPlugInAutoStartOriginHash(unsigned plugInOriginHash, SessionI
         contains = it != sessionIterator->value.end();
     }
     if (!contains) {
-        sessionIterator = m_plugInAutoStartOriginHashes.find(SessionID::defaultSessionID());
+        sessionIterator = m_plugInAutoStartOriginHashes.find(PAL::SessionID::defaultSessionID());
         it = sessionIterator->value.find(plugInOriginHash);
         if (it == sessionIterator->value.end())
             return false;
@@ -829,7 +856,7 @@ bool WebProcess::shouldPlugInAutoStartFromOrigin(WebPage& webPage, const String&
     return isPlugInAutoStartOriginHash(hashForPlugInOrigin(pageOrigin, pluginOrigin, mimeType), webPage.sessionID());
 }
 
-void WebProcess::plugInDidStartFromOrigin(const String& pageOrigin, const String& pluginOrigin, const String& mimeType, SessionID sessionID)
+void WebProcess::plugInDidStartFromOrigin(const String& pageOrigin, const String& pluginOrigin, const String& mimeType, PAL::SessionID sessionID)
 {
     if (pageOrigin.isEmpty()) {
         LOG(Plugins, "Not adding empty page origin");
@@ -851,7 +878,7 @@ void WebProcess::plugInDidStartFromOrigin(const String& pageOrigin, const String
     parentProcessConnection()->send(Messages::WebProcessPool::AddPlugInAutoStartOriginHash(pageOrigin, plugInOriginHash, sessionID), 0);
 }
 
-void WebProcess::didAddPlugInAutoStartOriginHash(unsigned plugInOriginHash, double expirationTime, SessionID sessionID)
+void WebProcess::didAddPlugInAutoStartOriginHash(unsigned plugInOriginHash, double expirationTime, PAL::SessionID sessionID)
 {
     // When called, some web process (which also might be this one) added the origin for auto-starting,
     // or received user interaction.
@@ -862,15 +889,15 @@ void WebProcess::didAddPlugInAutoStartOriginHash(unsigned plugInOriginHash, doub
 void WebProcess::resetPlugInAutoStartOriginDefaultHashes(const HashMap<unsigned, double>& hashes)
 {
     m_plugInAutoStartOriginHashes.clear();
-    m_plugInAutoStartOriginHashes.add(SessionID::defaultSessionID(), HashMap<unsigned, double>()).iterator->value.swap(const_cast<HashMap<unsigned, double>&>(hashes));
+    m_plugInAutoStartOriginHashes.add(PAL::SessionID::defaultSessionID(), HashMap<unsigned, double>()).iterator->value.swap(const_cast<HashMap<unsigned, double>&>(hashes));
 }
 
-void WebProcess::resetPlugInAutoStartOriginHashes(const HashMap<SessionID, HashMap<unsigned, double>>& hashes)
+void WebProcess::resetPlugInAutoStartOriginHashes(const HashMap<PAL::SessionID, HashMap<unsigned, double>>& hashes)
 {
-    m_plugInAutoStartOriginHashes.swap(const_cast<HashMap<SessionID, HashMap<unsigned, double>>&>(hashes));
+    m_plugInAutoStartOriginHashes.swap(const_cast<HashMap<PAL::SessionID, HashMap<unsigned, double>>&>(hashes));
 }
 
-void WebProcess::plugInDidReceiveUserInteraction(const String& pageOrigin, const String& pluginOrigin, const String& mimeType, SessionID sessionID)
+void WebProcess::plugInDidReceiveUserInteraction(const String& pageOrigin, const String& pluginOrigin, const String& mimeType, PAL::SessionID sessionID)
 {
     if (pageOrigin.isEmpty())
         return;
@@ -879,7 +906,7 @@ void WebProcess::plugInDidReceiveUserInteraction(const String& pageOrigin, const
     if (!plugInOriginHash)
         return;
 
-    HashMap<WebCore::SessionID, HashMap<unsigned, double>>::const_iterator sessionIterator = m_plugInAutoStartOriginHashes.find(sessionID);
+    HashMap<PAL::SessionID, HashMap<unsigned, double>>::const_iterator sessionIterator = m_plugInAutoStartOriginHashes.find(sessionID);
     HashMap<unsigned, double>::const_iterator it;
     bool contains = false;
     if (sessionIterator != m_plugInAutoStartOriginHashes.end()) {
@@ -887,7 +914,7 @@ void WebProcess::plugInDidReceiveUserInteraction(const String& pageOrigin, const
         contains = it != sessionIterator->value.end();
     }
     if (!contains) {
-        sessionIterator = m_plugInAutoStartOriginHashes.find(SessionID::defaultSessionID());
+        sessionIterator = m_plugInAutoStartOriginHashes.find(PAL::SessionID::defaultSessionID());
         it = sessionIterator->value.find(plugInOriginHash);
         if (it == sessionIterator->value.end())
             return;
@@ -1171,6 +1198,8 @@ void WebProcess::ensureWebToStorageProcessConnection()
     IPC::Connection::Identifier connectionIdentifier = encodedConnectionIdentifier.releaseFileDescriptor();
 #elif OS(DARWIN)
     IPC::Connection::Identifier connectionIdentifier(encodedConnectionIdentifier.port());
+#elif OS(WINDOWS)
+    IPC::Connection::Identifier connectionIdentifier(encodedConnectionIdentifier.handle());
 #else
     ASSERT_NOT_REACHED();
 #endif
@@ -1225,7 +1254,7 @@ void WebProcess::releasePageCache()
     PageCache::singleton().pruneToSizeNow(0, PruningReason::MemoryPressure);
 }
 
-void WebProcess::fetchWebsiteData(WebCore::SessionID sessionID, OptionSet<WebsiteDataType> websiteDataTypes, WebsiteData& websiteData)
+void WebProcess::fetchWebsiteData(PAL::SessionID sessionID, OptionSet<WebsiteDataType> websiteDataTypes, WebsiteData& websiteData)
 {
     if (websiteDataTypes.contains(WebsiteDataType::MemoryCache)) {
         for (auto& origin : MemoryCache::singleton().originsWithCache(sessionID))
@@ -1238,7 +1267,7 @@ void WebProcess::fetchWebsiteData(WebCore::SessionID sessionID, OptionSet<Websit
     }
 }
 
-void WebProcess::deleteWebsiteData(SessionID sessionID, OptionSet<WebsiteDataType> websiteDataTypes, std::chrono::system_clock::time_point modifiedSince)
+void WebProcess::deleteWebsiteData(PAL::SessionID sessionID, OptionSet<WebsiteDataType> websiteDataTypes, std::chrono::system_clock::time_point modifiedSince)
 {
     UNUSED_PARAM(modifiedSince);
 
@@ -1255,7 +1284,7 @@ void WebProcess::deleteWebsiteData(SessionID sessionID, OptionSet<WebsiteDataTyp
     }
 }
 
-void WebProcess::deleteWebsiteDataForOrigins(WebCore::SessionID sessionID, OptionSet<WebsiteDataType> websiteDataTypes, const Vector<WebCore::SecurityOriginData>& originDatas)
+void WebProcess::deleteWebsiteDataForOrigins(PAL::SessionID sessionID, OptionSet<WebsiteDataType> websiteDataTypes, const Vector<WebCore::SecurityOriginData>& originDatas)
 {
     if (websiteDataTypes.contains(WebsiteDataType::MemoryCache)) {
         HashSet<RefPtr<SecurityOrigin>> origins;
@@ -1441,7 +1470,7 @@ void WebProcess::nonVisibleProcessCleanupTimerFired()
 
 void WebProcess::setResourceLoadStatisticsEnabled(bool enabled)
 {
-    WebCore::Settings::setResourceLoadStatisticsEnabled(enabled);
+    WebCore::DeprecatedGlobalSettings::setResourceLoadStatisticsEnabled(enabled);
 }
 
 void WebProcess::clearResourceLoadStatistics()
@@ -1607,6 +1636,34 @@ LibWebRTCNetwork& WebProcess::libWebRTCNetwork()
     if (!m_libWebRTCNetwork)
         m_libWebRTCNetwork = std::make_unique<LibWebRTCNetwork>();
     return *m_libWebRTCNetwork;
+}
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+void WebProcess::getWorkerContextConnection(uint64_t pageID, const WebPreferencesStore& store)
+{
+#if USE(UNIX_DOMAIN_SOCKETS)
+    IPC::Connection::SocketPair socketPair = IPC::Connection::createPlatformConnection();
+    IPC::Connection::Identifier connectionIdentifier(socketPair.server);
+    IPC::Attachment connectionClientPort(socketPair.client);
+#elif OS(DARWIN)
+    mach_port_t listeningPort;
+    if (mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &listeningPort) != KERN_SUCCESS)
+        CRASH();
+
+    if (mach_port_insert_right(mach_task_self(), listeningPort, listeningPort, MACH_MSG_TYPE_MAKE_SEND) != KERN_SUCCESS)
+        CRASH();
+
+    IPC::Connection::Identifier connectionIdentifier(listeningPort);
+    IPC::Attachment connectionClientPort(listeningPort, MACH_MSG_TYPE_MOVE_SEND);
+#else
+    RELEASE_ASSERT_NOT_REACHED();
+#endif
+
+    auto workerContextConnection = IPC::Connection::createServerConnection(connectionIdentifier, *this);
+    workerContextConnection->open();
+    SWContextManager::singleton().setConnection(std::make_unique<WebSWContextManagerConnection>(WTFMove(workerContextConnection), pageID, store));
+    WebProcess::singleton().parentProcessConnection()->send(Messages::WebProcessProxy::DidGetWorkerContextConnection(connectionClientPort), 0);
 }
 #endif
 

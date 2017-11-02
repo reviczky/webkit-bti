@@ -47,7 +47,10 @@ public:
     WebGLProgram& program() const { return m_program; }
     WebGLShader* shaderForType(const String&);
 
-    ~InspectorShaderProgram() { }
+    bool disabled() const { return m_disabled; }
+    void setDisabled(bool disabled) { m_disabled = disabled; }
+
+    ~InspectorShaderProgram() = default;
 
 private:
     InspectorShaderProgram(WebGLProgram&, InspectorCanvas&);
@@ -55,6 +58,8 @@ private:
     String m_identifier;
     WebGLProgram& m_program;
     InspectorCanvas& m_canvas;
+
+    bool m_disabled { false };
 };
 
 } // namespace WebCore

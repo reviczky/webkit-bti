@@ -38,13 +38,10 @@ namespace WebCore {
 
 RenderSVGForeignObject::RenderSVGForeignObject(SVGForeignObjectElement& element, RenderStyle&& style)
     : RenderSVGBlock(element, WTFMove(style))
-    , m_needsTransformUpdate(true)
 {
 }
 
-RenderSVGForeignObject::~RenderSVGForeignObject()
-{
-}
+RenderSVGForeignObject::~RenderSVGForeignObject() = default;
 
 SVGForeignObjectElement& RenderSVGForeignObject::foreignObjectElement() const
 {
@@ -111,7 +108,7 @@ LayoutRect RenderSVGForeignObject::computeRectForRepaint(const LayoutRect& repai
 const AffineTransform& RenderSVGForeignObject::localToParentTransform() const
 {
     m_localToParentTransform = localTransform();
-    m_localToParentTransform.translate(m_viewport.x(), m_viewport.y());
+    m_localToParentTransform.translate(m_viewport.location());
     return m_localToParentTransform;
 }
 

@@ -46,10 +46,10 @@
 #include <runtime/JSPromise.h>
 #include <runtime/WeakGCMapInlines.h>
 
-using namespace JSC;
-using namespace Inspector;
 
 namespace WebCore {
+using namespace JSC;
+using namespace Inspector;
 
 class UnhandledPromise {
     WTF_MAKE_NONCOPYABLE(UnhandledPromise);
@@ -84,9 +84,7 @@ RejectedPromiseTracker::RejectedPromiseTracker(ScriptExecutionContext& context, 
 {
 }
 
-RejectedPromiseTracker::~RejectedPromiseTracker()
-{
-}
+RejectedPromiseTracker::~RejectedPromiseTracker() = default;
 
 static RefPtr<ScriptCallStack> createScriptCallStackFromReason(ExecState& state, JSValue reason)
 {
@@ -166,7 +164,7 @@ void RejectedPromiseTracker::reportUnhandledRejections(Vector<UnhandledPromise>&
 
         PromiseRejectionEvent::Init initializer;
         initializer.cancelable = true;
-        initializer.promise = &promise;
+        initializer.promise = &domPromise;
         initializer.reason = promise.result(vm);
 
         auto event = PromiseRejectionEvent::create(state, eventNames().unhandledrejectionEvent, initializer);
@@ -195,7 +193,7 @@ void RejectedPromiseTracker::reportRejectionHandled(Ref<DOMPromise>&& rejectedPr
     auto& promise = *rejectedPromise->promise();
 
     PromiseRejectionEvent::Init initializer;
-    initializer.promise = &promise;
+    initializer.promise = rejectedPromise.ptr();
     initializer.reason = promise.result(vm);
 
     auto event = PromiseRejectionEvent::create(state, eventNames().rejectionhandledEvent, initializer);

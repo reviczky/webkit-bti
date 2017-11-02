@@ -61,7 +61,7 @@ using AsTextFlags = unsigned;
 
 class CanvasObserver {
 public:
-    virtual ~CanvasObserver() { }
+    virtual ~CanvasObserver() = default;
 
     virtual bool isCanvasObserverProxy() const { return false; }
 
@@ -83,10 +83,10 @@ public:
     unsigned width() const { return size().width(); }
     unsigned height() const { return size().height(); }
 
-    const IntSize& size() const { return m_size; }
+    WEBCORE_EXPORT ExceptionOr<void> setWidth(unsigned);
+    WEBCORE_EXPORT ExceptionOr<void> setHeight(unsigned);
 
-    WEBCORE_EXPORT void setWidth(unsigned);
-    WEBCORE_EXPORT void setHeight(unsigned);
+    const IntSize& size() const { return m_size; }
 
     void setSize(const IntSize& newSize)
     { 
@@ -104,16 +104,23 @@ public:
     CanvasRenderingContext* getContext(const String&);
 
     static bool is2dType(const String&);
+    CanvasRenderingContext2D* createContext2d(const String& type);
     CanvasRenderingContext2D* getContext2d(const String&);
 
 #if ENABLE(WEBGL)
-    static bool is3dType(const String&);
+    static bool isWebGLType(const String&);
+    WebGLRenderingContextBase* createContextWebGL(const String&, WebGLContextAttributes&& = { });
     WebGLRenderingContextBase* getContextWebGL(const String&, WebGLContextAttributes&& = { });
 #endif
 #if ENABLE(WEBGPU)
     static bool isWebGPUType(const String&);
+    WebGPURenderingContext* createContextWebGPU(const String&);
     WebGPURenderingContext* getContextWebGPU(const String&);
 #endif
+
+    static bool isBitmapRendererType(const String&);
+    ImageBitmapRenderingContext* createContextBitmapRenderer(const String&);
+    ImageBitmapRenderingContext* getContextBitmapRenderer(const String&);
 
     WEBCORE_EXPORT ExceptionOr<UncachedString> toDataURL(const String& mimeType, JSC::JSValue quality);
     WEBCORE_EXPORT ExceptionOr<UncachedString> toDataURL(const String& mimeType);
@@ -143,6 +150,7 @@ public:
     void clearPresentationCopy();
 
     SecurityOrigin* securityOrigin() const;
+    void setOriginClean() { m_originClean = true; }
     void setOriginTainted() { m_originClean = false; }
     bool originClean() const { return m_originClean; }
 
@@ -161,6 +169,10 @@ public:
     size_t memoryCost() const;
     size_t externalMemoryCost() const;
 
+    // FIXME: Only some canvas rendering contexts need an ImageBuffer.
+    // It would be better to have the contexts own the buffers.
+    void setImageBufferAndMarkDirty(std::unique_ptr<ImageBuffer>&&);
+
 private:
     HTMLCanvasElement(const QualifiedName&, Document&);
 
@@ -176,7 +188,7 @@ private:
     void clearImageBuffer() const;
 
     void setSurfaceSize(const IntSize&);
-    void setImageBuffer(std::unique_ptr<ImageBuffer>) const;
+    void setImageBuffer(std::unique_ptr<ImageBuffer>&&) const;
     void releaseImageBufferAndContext();
 
     bool paintsIntoCanvasBuffer() const;

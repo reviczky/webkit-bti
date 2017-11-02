@@ -28,7 +28,6 @@
 #include "Document.h"
 #include "ElementData.h"
 #include "HTMLNames.h"
-#include "RegionOversetState.h"
 #include "ScrollToOptions.h"
 #include "ScrollTypes.h"
 #include "ShadowRootMode.h"
@@ -52,7 +51,6 @@ class PlatformKeyboardEvent;
 class PlatformMouseEvent;
 class PlatformWheelEvent;
 class PseudoElement;
-class RenderNamedFlowFragment;
 class RenderTreePosition;
 class WebAnimation;
 struct ElementStyle;
@@ -244,6 +242,9 @@ public:
     // Only called by the parser immediately after element construction.
     void parserSetAttributes(const Vector<Attribute>&);
 
+    bool isEventHandlerAttribute(const Attribute&) const;
+    bool isJavaScriptURLAttribute(const Attribute&) const;
+
     // Remove attributes that might introduce scripting from the vector leaving the element unchanged.
     void stripScriptingAttributes(Vector<Attribute>&) const;
 
@@ -258,6 +259,8 @@ public:
 
     // Clones all attribute-derived data, including subclass specifics (through copyNonAttributeProperties.)
     void cloneDataFromElement(const Element&);
+
+    virtual void didMoveToNewDocument(Document& oldDocument, Document& newDocument);
 
     bool hasEquivalentAttributes(const Element* other) const;
 
@@ -274,7 +277,7 @@ public:
     };
     ExceptionOr<ShadowRoot&> attachShadow(const ShadowRootInit&);
 
-    ShadowRoot* userAgentShadowRoot() const;
+    RefPtr<ShadowRoot> userAgentShadowRoot() const;
     WEBCORE_EXPORT ShadowRoot& ensureUserAgentShadowRoot();
 
     void setIsDefinedCustomElement(JSCustomElementInterface&);
@@ -307,7 +310,7 @@ public:
 
     virtual int tabIndex() const;
     WEBCORE_EXPORT void setTabIndex(int);
-    virtual Element* focusDelegate();
+    virtual RefPtr<Element> focusDelegate();
 
     WEBCORE_EXPORT ExceptionOr<Element*> insertAdjacentElement(const String& where, Element& newChild);
     WEBCORE_EXPORT ExceptionOr<void> insertAdjacentHTML(const String& where, const String& html);
@@ -344,9 +347,6 @@ public:
     void setAffectsNextSiblingElementStyle() { setFlag(AffectsNextSiblingElementStyle); }
     void setStyleIsAffectedByPreviousSibling() { setFlag(StyleIsAffectedByPreviousSibling); }
     void setChildIndex(unsigned);
-
-    void setRegionOversetState(RegionOversetState);
-    RegionOversetState regionOversetState() const;
 
     AtomicString computeInheritedLanguage() const;
     Locale& locale() const;
@@ -454,6 +454,10 @@ public:
     void clearHasPendingResources();
     virtual void buildPendingResource() { };
 
+    bool hasCSSAnimation() const;
+    void setHasCSSAnimation();
+    void clearHasCSSAnimation();
+
 #if ENABLE(FULLSCREEN_API)
     WEBCORE_EXPORT bool containsFullScreenElement() const;
     void setContainsFullScreenElement(bool);
@@ -466,15 +470,6 @@ public:
 #endif
 
     bool isSpellCheckingEnabled() const;
-
-    RenderNamedFlowFragment* renderNamedFlowFragment() const;
-
-#if ENABLE(CSS_REGIONS)
-    virtual bool shouldMoveToFlowThread(const RenderStyle&) const;
-    
-    WEBCORE_EXPORT const AtomicString& webkitRegionOverset() const;
-    Vector<RefPtr<Range>> webkitGetRegionFlowRanges() const;
-#endif
 
     bool hasID() const;
     bool hasClass() const;
@@ -553,25 +548,16 @@ public:
     using ContainerNode::setAttributeEventListener;
     void setAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& value);
 
-    bool isNamedFlowContentElement() const { return hasRareData() && rareDataIsNamedFlowContentElement(); }
-    void setIsNamedFlowContentElement();
-    void clearIsNamedFlowContentElement();
-
-#if ENABLE(WEB_ANIMATIONS)
-    Vector<WebAnimation*> getAnimations();
-#endif
-
     Element* findAnchorElementForLink(String& outAnchorName);
 
 protected:
     Element(const QualifiedName&, Document&, ConstructionType);
 
-    InsertionNotificationRequest insertedInto(ContainerNode&) override;
-    void removedFrom(ContainerNode&) override;
+    InsertedIntoAncestorResult insertedIntoAncestor(InsertionType, ContainerNode&) override;
+    void removedFromAncestor(RemovalType, ContainerNode&) override;
     void childrenChanged(const ChildChange&) override;
     void removeAllEventListeners() final;
     virtual void parserDidSetAttributes();
-    void didMoveToNewDocument(Document& oldDocument, Document& newDocument) override;
 
     void clearTabIndexExplicitlyIfNeeded();
     void setTabIndexExplicitly(int);
@@ -639,8 +625,6 @@ private:
     void formatForDebugger(char* buffer, unsigned length) const override;
 #endif
 
-    void cancelFocusAppearanceUpdate();
-
     // The cloneNode function is private so that non-virtual cloneElementWith/WithoutChildren are used instead.
     Ref<Node> cloneNodeInternal(Document&, CloningOperation) override;
     virtual Ref<Element> cloneElementWithoutAttributesAndChildren(Document&);
@@ -652,7 +636,6 @@ private:
 
     bool rareDataStyleAffectedByEmpty() const;
     bool rareDataStyleAffectedByFocusWithin() const;
-    bool rareDataIsNamedFlowContentElement() const;
     bool rareDataChildrenAffectedByHover() const;
     bool rareDataStyleAffectedByActive() const;
     bool rareDataChildrenAffectedByDrag() const;
@@ -663,8 +646,6 @@ private:
 
     SpellcheckAttributeState spellcheckAttributeState() const;
 
-    void unregisterNamedFlowContentElement();
-
     void createUniqueElementData();
 
     ElementRareData* elementRareData() const;
@@ -672,8 +653,6 @@ private:
 
     void detachAllAttrNodesFromElement();
     void detachAttrNodeFromElementWithValue(Attr*, const AtomicString& value);
-
-    bool isJavaScriptURLAttribute(const Attribute&) const;
 
     // Anyone thinking of using this should call document instead of ownerDocument.
     void ownerDocument() const = delete;

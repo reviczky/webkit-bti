@@ -40,11 +40,7 @@ namespace Gigacage {
 
 void* tryMalloc(Kind, size_t size)
 {
-    auto result = tryFastMalloc(size);
-    void* realResult;
-    if (result.getValue(realResult))
-        return realResult;
-    return nullptr;
+    return FastMalloc::tryMalloc(size);
 }
 
 void* tryAllocateVirtualPages(Kind, size_t size)
@@ -117,4 +113,31 @@ void freeVirtualPages(Kind kind, void* basePtr, size_t)
 
 } // namespace Gigacage
 #endif
+
+namespace Gigacage {
+
+void* tryMallocArray(Kind kind, size_t numElements, size_t elementSize)
+{
+    Checked<size_t, RecordOverflow> checkedSize = elementSize;
+    checkedSize *= numElements;
+    if (checkedSize.hasOverflowed())
+        return nullptr;
+    return tryMalloc(kind, checkedSize.unsafeGet());
+}
+
+void* malloc(Kind kind, size_t size)
+{
+    void* result = tryMalloc(kind, size);
+    RELEASE_ASSERT(result);
+    return result;
+}
+
+void* mallocArray(Kind kind, size_t numElements, size_t elementSize)
+{
+    void* result = tryMallocArray(kind, numElements, elementSize);
+    RELEASE_ASSERT(result);
+    return result;
+}
+
+} // namespace Gigacage
 

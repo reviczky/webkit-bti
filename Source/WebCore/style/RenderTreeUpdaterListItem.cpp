@@ -26,7 +26,7 @@
 
 #include "RenderChildIterator.h"
 #include "RenderListMarker.h"
-#include "RenderMultiColumnFlowThread.h"
+#include "RenderMultiColumnFlow.h"
 #include "RenderRuby.h"
 #include "RenderTable.h"
 
@@ -76,21 +76,21 @@ void RenderTreeUpdater::ListItem::updateMarker(RenderListItem& listItemRenderer)
     auto& style = listItemRenderer.style();
 
     if (style.listStyleType() == NoneListStyle && (!style.listStyleImage() || style.listStyleImage()->errorOccurred())) {
-        if (listItemRenderer.markerRenderer()) {
-            listItemRenderer.markerRenderer()->destroy();
-            ASSERT(!listItemRenderer.markerRenderer());
-        }
+        if (auto* marker = listItemRenderer.markerRenderer())
+            marker->removeFromParentAndDestroy();
         return;
     }
 
     auto newStyle = listItemRenderer.computeMarkerStyle();
+    RenderPtr<RenderListMarker> newMarkerRenderer;
     auto* markerRenderer = listItemRenderer.markerRenderer();
     if (markerRenderer)
         markerRenderer->setStyle(WTFMove(newStyle));
     else {
-        markerRenderer = WebCore::createRenderer<RenderListMarker>(listItemRenderer, WTFMove(newStyle)).leakPtr();
-        markerRenderer->initializeStyle();
-        listItemRenderer.setMarkerRenderer(markerRenderer);
+        newMarkerRenderer = WebCore::createRenderer<RenderListMarker>(listItemRenderer, WTFMove(newStyle));
+        newMarkerRenderer->initializeStyle();
+        markerRenderer = newMarkerRenderer.get();
+        listItemRenderer.setMarkerRenderer(*markerRenderer);
     }
 
     RenderElement* currentParent = markerRenderer->parent();
@@ -102,18 +102,21 @@ void RenderTreeUpdater::ListItem::updateMarker(RenderListItem& listItemRenderer)
         // in this case.
         if (currentParent && currentParent->isAnonymousBlock())
             return;
-        if (auto* multiColumnFlowThread = listItemRenderer.multiColumnFlowThread())
-            newParent = multiColumnFlowThread;
+        if (auto* multiColumnFlow = listItemRenderer.multiColumnFlow())
+            newParent = multiColumnFlow;
         else
             newParent = &listItemRenderer;
     }
 
     if (newParent != currentParent) {
-        markerRenderer->removeFromParent();
-        newParent->addChild(markerRenderer, firstNonMarkerChild(*newParent));
+        if (currentParent)
+            newParent->addChild(currentParent->takeChild(*markerRenderer), firstNonMarkerChild(*newParent));
+        else
+            newParent->addChild(WTFMove(newMarkerRenderer), firstNonMarkerChild(*newParent));
+
         // If current parent is an anonymous block that has lost all its children, destroy it.
         if (currentParent && currentParent->isAnonymousBlock() && !currentParent->firstChild() && !downcast<RenderBlock>(*currentParent).continuation())
-            currentParent->destroy();
+            currentParent->removeFromParentAndDestroy();
     }
 }
 

@@ -41,6 +41,7 @@ class Identifier;
     macro(argument) \
     macro(argumentCount) \
     macro(assert) \
+    macro(idWithProfile) \
     macro(isObject) \
     macro(isJSArray) \
     macro(isProxyObject) \
@@ -79,12 +80,21 @@ class Identifier;
     macro(promiseStatePending) \
     macro(promiseStateFulfilled) \
     macro(promiseStateRejected) \
+    macro(sentinelMapBucket) \
+    macro(sentinelSetBucket) \
     macro(GeneratorResumeModeNormal) \
     macro(GeneratorResumeModeThrow) \
     macro(GeneratorResumeModeReturn) \
     macro(GeneratorStateCompleted) \
     macro(GeneratorStateExecuting) \
-
+    macro(AsyncGeneratorStateCompleted) \
+    macro(AsyncGeneratorStateExecuting) \
+    macro(AsyncGeneratorStateAwaitingReturn) \
+    macro(AsyncGeneratorStateSuspendedStart) \
+    macro(AsyncGeneratorStateSuspendedYield) \
+    macro(AsyncGeneratorSuspendReasonYield) \
+    macro(AsyncGeneratorSuspendReasonAwait) \
+    macro(AsyncGeneratorSuspendReasonNone) \
 
 class BytecodeIntrinsicRegistry {
     WTF_MAKE_NONCOPYABLE(BytecodeIntrinsicRegistry);

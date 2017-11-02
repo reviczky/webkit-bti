@@ -31,7 +31,6 @@
 #include "CSSAnimationController.h"
 #include "Editing.h"
 #include "FloatQuad.h"
-#include "FlowThreadController.h"
 #include "FrameSelection.h"
 #include "FrameView.h"
 #include "GeometryUtilities.h"
@@ -47,15 +46,13 @@
 #include "PseudoElement.h"
 #include "RenderChildIterator.h"
 #include "RenderCounter.h"
-#include "RenderFlowThread.h"
+#include "RenderFragmentedFlow.h"
 #include "RenderGeometryMap.h"
 #include "RenderInline.h"
 #include "RenderIterator.h"
 #include "RenderLayer.h"
 #include "RenderLayerBacking.h"
-#include "RenderMultiColumnFlowThread.h"
-#include "RenderNamedFlowFragment.h"
-#include "RenderNamedFlowThread.h"
+#include "RenderMultiColumnFlow.h"
 #include "RenderRuby.h"
 #include "RenderSVGBlock.h"
 #include "RenderSVGInline.h"
@@ -99,8 +96,8 @@ RenderObject::SetLayoutNeededForbiddenScope::~SetLayoutNeededForbiddenScope()
 #endif
 
 struct SameSizeAsRenderObject {
-    virtual ~SameSizeAsRenderObject() { } // Allocate vtable pointer.
-    void* pointers[4];
+    virtual ~SameSizeAsRenderObject() = default; // Allocate vtable pointer.
+    void* pointers[5];
 #ifndef NDEBUG
     unsigned m_debugBitfields : 2;
 #endif
@@ -110,6 +107,11 @@ struct SameSizeAsRenderObject {
 COMPILE_ASSERT(sizeof(RenderObject) == sizeof(SameSizeAsRenderObject), RenderObject_should_stay_small);
 
 DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, renderObjectCounter, ("RenderObject"));
+
+void RenderObjectDeleter::operator() (RenderObject* renderer) const
+{
+    renderer->destroy();
+}
 
 RenderObject::RenderObject(Node& node)
     : CachedImageClient()
@@ -170,73 +172,73 @@ bool RenderObject::isHTMLMarquee() const
     return node() && node()->renderer() == this && node()->hasTagName(marqueeTag);
 }
 
-void RenderObject::setFlowThreadStateIncludingDescendants(FlowThreadState state)
+void RenderObject::setFragmentedFlowStateIncludingDescendants(FragmentedFlowState state)
 {
-    setFlowThreadState(state);
+    setFragmentedFlowState(state);
 
     if (!is<RenderElement>(*this))
         return;
 
     for (auto& child : childrenOfType<RenderObject>(downcast<RenderElement>(*this))) {
         // If the child is a fragmentation context it already updated the descendants flag accordingly.
-        if (child.isRenderFlowThread())
+        if (child.isRenderFragmentedFlow())
             continue;
-        ASSERT(state != child.flowThreadState());
-        child.setFlowThreadStateIncludingDescendants(state);
+        ASSERT(state != child.fragmentedFlowState());
+        child.setFragmentedFlowStateIncludingDescendants(state);
     }
 }
 
-RenderObject::FlowThreadState RenderObject::computedFlowThreadState(const RenderObject& renderer)
+RenderObject::FragmentedFlowState RenderObject::computedFragmentedFlowState(const RenderObject& renderer)
 {
     if (!renderer.parent())
-        return renderer.flowThreadState();
+        return renderer.fragmentedFlowState();
 
-    auto inheritedFlowState = RenderObject::NotInsideFlowThread;
+    auto inheritedFlowState = RenderObject::NotInsideFragmentedFlow;
     if (is<RenderText>(renderer))
-        inheritedFlowState = renderer.parent()->flowThreadState();
+        inheritedFlowState = renderer.parent()->fragmentedFlowState();
     else if (is<RenderSVGBlock>(renderer) || is<RenderSVGInline>(renderer) || is<RenderSVGModelObject>(renderer)) {
         // containingBlock() skips svg boundary (SVG root is a RenderReplaced).
         if (auto* svgRoot = SVGRenderSupport::findTreeRootObject(downcast<RenderElement>(renderer)))
-            inheritedFlowState = svgRoot->flowThreadState();
+            inheritedFlowState = svgRoot->fragmentedFlowState();
     } else if (auto* container = renderer.container())
-        inheritedFlowState = container->flowThreadState();
+        inheritedFlowState = container->fragmentedFlowState();
     else {
         // Splitting lines or doing continuation, so just keep the current state.
-        inheritedFlowState = renderer.flowThreadState();
+        inheritedFlowState = renderer.fragmentedFlowState();
     }
     return inheritedFlowState;
 }
 
-void RenderObject::initializeFlowThreadStateOnInsertion()
+void RenderObject::initializeFragmentedFlowStateOnInsertion()
 {
     ASSERT(parent());
 
-    // A RenderFlowThread is always considered to be inside itself, so it never has to change its state in response to parent changes.
-    if (isRenderFlowThread())
+    // A RenderFragmentedFlow is always considered to be inside itself, so it never has to change its state in response to parent changes.
+    if (isRenderFragmentedFlow())
         return;
 
-    auto computedState = computedFlowThreadState(*this);
-    if (flowThreadState() == computedState)
+    auto computedState = computedFragmentedFlowState(*this);
+    if (fragmentedFlowState() == computedState)
         return;
 
-    setFlowThreadStateIncludingDescendants(computedState);
+    setFragmentedFlowStateIncludingDescendants(computedState);
 }
 
-void RenderObject::resetFlowThreadStateOnRemoval()
+void RenderObject::resetFragmentedFlowStateOnRemoval()
 {
-    if (flowThreadState() == NotInsideFlowThread)
+    if (fragmentedFlowState() == NotInsideFragmentedFlow)
         return;
 
     if (!renderTreeBeingDestroyed() && is<RenderElement>(*this)) {
-        downcast<RenderElement>(*this).removeFromRenderFlowThread();
+        downcast<RenderElement>(*this).removeFromRenderFragmentedFlow();
         return;
     }
 
-    // A RenderFlowThread is always considered to be inside itself, so it never has to change its state in response to parent changes.
-    if (isRenderFlowThread())
+    // A RenderFragmentedFlow is always considered to be inside itself, so it never has to change its state in response to parent changes.
+    if (isRenderFragmentedFlow())
         return;
 
-    setFlowThreadStateIncludingDescendants(NotInsideFlowThread);
+    setFragmentedFlowStateIncludingDescendants(NotInsideFragmentedFlow);
 }
 
 void RenderObject::setParent(RenderElement* parent)
@@ -244,10 +246,10 @@ void RenderObject::setParent(RenderElement* parent)
     m_parent = parent;
 }
 
-void RenderObject::removeFromParent()
+void RenderObject::removeFromParentAndDestroy()
 {
-    if (parent())
-        parent()->removeChild(*this);
+    ASSERT(m_parent);
+    m_parent->removeAndDestroyChild(*this);
 }
 
 RenderObject* RenderObject::nextInPreOrder() const
@@ -432,27 +434,6 @@ RenderBoxModelObject& RenderObject::enclosingBoxModelObject() const
     return *lineageOfType<RenderBoxModelObject>(const_cast<RenderObject&>(*this)).first();
 }
 
-bool RenderObject::fixedPositionedWithNamedFlowContainingBlock() const
-{
-    return ((flowThreadState() == RenderObject::InsideOutOfFlowThread)
-        && (style().position() == FixedPosition)
-        && (containingBlock()->isOutOfFlowRenderFlowThread()));
-}
-
-static bool hasFixedPosInNamedFlowContainingBlock(const RenderObject* renderer)
-{
-    ASSERT(renderer->flowThreadState() != RenderObject::NotInsideFlowThread);
-
-    RenderObject* curr = const_cast<RenderObject*>(renderer);
-    while (curr && !is<RenderView>(*curr)) {
-        if (curr->fixedPositionedWithNamedFlowContainingBlock())
-            return true;
-        curr = curr->containingBlock();
-    }
-
-    return false;
-}
-
 RenderBlock* RenderObject::firstLineBlock() const
 {
     return nullptr;
@@ -501,12 +482,12 @@ void RenderObject::clearNeedsLayout()
 static void scheduleRelayoutForSubtree(RenderElement& renderer)
 {
     if (is<RenderView>(renderer)) {
-        downcast<RenderView>(renderer).frameView().scheduleRelayout();
+        downcast<RenderView>(renderer).frameView().layoutContext().scheduleLayout();
         return;
     }
 
     if (renderer.isRooted())
-        renderer.view().frameView().scheduleRelayoutOfSubtree(renderer);
+        renderer.view().frameView().layoutContext().scheduleSubtreeLayout(renderer);
 }
 
 void RenderObject::markContainingBlocksForLayout(ScheduleRelayout scheduleRelayout, RenderElement* newRoot)
@@ -817,20 +798,16 @@ RenderLayerModelObject* RenderObject::containerForRepaint() const
         }
     }
 
-    // If we have a flow thread, then we need to do individual repaints within the RenderRegions instead.
+    // If we have a flow thread, then we need to do individual repaints within the RenderFragmentContainers instead.
     // Return the flow thread as a repaint container in order to create a chokepoint that allows us to change
     // repainting to do individual region repaints.
-    RenderFlowThread* parentRenderFlowThread = flowThreadContainingBlock();
-    if (parentRenderFlowThread) {
-        // If the element has a fixed positioned element with named flow as CB along the CB chain
-        // then the repaint container is not the flow thread.
-        if (hasFixedPosInNamedFlowContainingBlock(this))
-            return repaintContainer;
+    RenderFragmentedFlow* parentRenderFragmentedFlow = enclosingFragmentedFlow();
+    if (parentRenderFragmentedFlow) {
         // If we have already found a repaint container then we will repaint into that container only if it is part of the same
         // flow thread. Otherwise we will need to catch the repaint call and send it to the flow thread.
-        RenderFlowThread* repaintContainerFlowThread = repaintContainer ? repaintContainer->flowThreadContainingBlock() : nullptr;
-        if (!repaintContainerFlowThread || repaintContainerFlowThread != parentRenderFlowThread)
-            repaintContainer = parentRenderFlowThread;
+        RenderFragmentedFlow* repaintContainerFragmentedFlow = repaintContainer ? repaintContainer->enclosingFragmentedFlow() : nullptr;
+        if (!repaintContainerFragmentedFlow || repaintContainerFragmentedFlow != parentRenderFragmentedFlow)
+            repaintContainer = parentRenderFragmentedFlow;
     }
     return repaintContainer;
 }
@@ -840,7 +817,7 @@ void RenderObject::propagateRepaintToParentWithOutlineAutoIfNeeded(const RenderL
     if (!hasOutlineAutoAncestor())
         return;
 
-    // FIXME: We should really propagate only when the the child renderer sticks out.
+    // FIXME: We should really propagate only when the child renderer sticks out.
     bool repaintRectNeedsConverting = false;
     // Issue repaint on the renderer with outline: auto.
     for (const auto* renderer = this; renderer; renderer = renderer->parent()) {
@@ -875,8 +852,8 @@ void RenderObject::repaintUsingContainer(const RenderLayerModelObject* repaintCo
     if (!repaintContainer)
         repaintContainer = &view();
 
-    if (is<RenderFlowThread>(*repaintContainer)) {
-        downcast<RenderFlowThread>(*repaintContainer).repaintRectangleInRegions(r);
+    if (is<RenderFragmentedFlow>(*repaintContainer)) {
+        downcast<RenderFragmentedFlow>(*repaintContainer).repaintRectangleInFragments(r);
         return;
     }
 
@@ -1044,41 +1021,41 @@ void RenderObject::showLineTreeForThis() const
     WTFLogAlways("%s", stream.release().utf8().data());
 }
 
-static const RenderFlowThread* flowThreadContainingBlockFromRenderer(const RenderObject* renderer)
+static const RenderFragmentedFlow* enclosingFragmentedFlowFromRenderer(const RenderObject* renderer)
 {
     if (!renderer)
         return nullptr;
 
-    if (renderer->flowThreadState() == RenderObject::NotInsideFlowThread)
+    if (renderer->fragmentedFlowState() == RenderObject::NotInsideFragmentedFlow)
         return nullptr;
 
-    if (is<RenderFlowThread>(*renderer))
-        return downcast<RenderFlowThread>(renderer);
+    if (is<RenderFragmentedFlow>(*renderer))
+        return downcast<RenderFragmentedFlow>(renderer);
 
     if (is<RenderBlock>(*renderer))
-        return downcast<RenderBlock>(*renderer).cachedFlowThreadContainingBlock();
+        return downcast<RenderBlock>(*renderer).cachedEnclosingFragmentedFlow();
 
     return nullptr;
 }
 
 void RenderObject::outputRegionsInformation(TextStream& stream) const
 {
-    const RenderFlowThread* ftcb = flowThreadContainingBlockFromRenderer(this);
+    const RenderFragmentedFlow* ftcb = enclosingFragmentedFlowFromRenderer(this);
 
     if (!ftcb) {
         // Only the boxes have region range information.
         // Try to get the flow thread containing block information
         // from the containing block of this box.
         if (is<RenderBox>(*this))
-            ftcb = flowThreadContainingBlockFromRenderer(containingBlock());
+            ftcb = enclosingFragmentedFlowFromRenderer(containingBlock());
     }
 
     if (!ftcb)
         return;
 
-    RenderRegion* startRegion = nullptr;
-    RenderRegion* endRegion = nullptr;
-    ftcb->getRegionRangeForBox(downcast<RenderBox>(this), startRegion, endRegion);
+    RenderFragmentContainer* startRegion = nullptr;
+    RenderFragmentContainer* endRegion = nullptr;
+    ftcb->getFragmentRangeForBox(downcast<RenderBox>(this), startRegion, endRegion);
     stream << " [Rs:" << startRegion << " Re:" << endRegion << "]";
 }
 
@@ -1230,28 +1207,6 @@ void RenderObject::outputRenderSubTreeAndMark(TextStream& stream, const RenderOb
 
 #endif // NDEBUG
 
-SelectionSubtreeRoot& RenderObject::selectionRoot() const
-{
-    RenderFlowThread* flowThread = flowThreadContainingBlock();
-    if (!flowThread)
-        return view();
-
-    if (is<RenderNamedFlowThread>(*flowThread))
-        return downcast<RenderNamedFlowThread>(*flowThread);
-    if (is<RenderMultiColumnFlowThread>(*flowThread)) {
-        if (!flowThread->containingBlock())
-            return view();
-        return flowThread->containingBlock()->selectionRoot();
-    }
-    ASSERT_NOT_REACHED();
-    return view();
-}
-
-void RenderObject::selectionStartEnd(unsigned& spos, unsigned& epos) const
-{
-    selectionRoot().selectionData().selectionStartEndPositions(spos, epos);
-}
-
 FloatPoint RenderObject::localToAbsolute(const FloatPoint& localPoint, MapCoordinatesFlags mode, bool* wasFixed) const
 {
     TransformState transformState(TransformState::ApplyTransformDirection, localPoint);
@@ -1393,7 +1348,7 @@ LayoutSize RenderObject::offsetFromContainer(RenderElement& container, const Lay
         offset -= toLayoutSize(downcast<RenderBox>(container).scrollPosition());
 
     if (offsetDependsOnPoint)
-        *offsetDependsOnPoint = is<RenderFlowThread>(container);
+        *offsetDependsOnPoint = is<RenderFragmentedFlow>(container);
 
     return offset;
 }
@@ -1467,33 +1422,17 @@ bool RenderObject::isSelectionBorder() const
     return st == SelectionStart
         || st == SelectionEnd
         || st == SelectionBoth
-        || view().selectionUnsplitStart() == this
-        || view().selectionUnsplitEnd() == this;
+        || view().selection().start() == this
+        || view().selection().end() == this;
 }
 
 void RenderObject::willBeDestroyed()
 {
-    // For accessibility management, notify the parent of the imminent change to its child set.
-    // We do it now, before remove(), while the parent pointer is still available.
-    if (AXObjectCache* cache = document().existingAXObjectCache())
-        cache->childrenChanged(this->parent());
-
-    removeFromParent();
-
+    ASSERT(!m_parent);
     ASSERT(renderTreeBeingDestroyed() || !is<RenderElement>(*this) || !view().frameView().hasSlowRepaintObject(downcast<RenderElement>(*this)));
 
-    // The remove() call above may invoke axObjectCache()->childrenChanged() on the parent, which may require the AX render
-    // object for this renderer. So we remove the AX render object now, after the renderer is removed.
     if (AXObjectCache* cache = document().existingAXObjectCache())
         cache->remove(this);
-
-    // FIXME: Would like to do this in RenderBoxModelObject, but the timing is so complicated that this can't easily
-    // be moved into RenderLayerModelObject::willBeDestroyed().
-    // FIXME: Is this still true?
-    if (hasLayer()) {
-        setHasLayer(false);
-        downcast<RenderLayerModelObject>(*this).destroyLayer();
-    }
 
     removeRareData();
 }
@@ -1505,8 +1444,8 @@ void RenderObject::insertedIntoTree()
     if (!isFloating() && parent()->childrenInline())
         parent()->dirtyLinesFromChangedChild(*this);
 
-    if (RenderFlowThread* flowThread = flowThreadContainingBlock())
-        flowThread->flowThreadDescendantInserted(*this);
+    if (RenderFragmentedFlow* fragmentedFlow = enclosingFragmentedFlow())
+        fragmentedFlow->fragmentedFlowDescendantInserted(*this);
 }
 
 void RenderObject::willBeRemovedFromTree()
@@ -1516,38 +1455,52 @@ void RenderObject::willBeRemovedFromTree()
     parent()->setNeedsBoundariesUpdate();
 }
 
-void RenderObject::destroyAndCleanupAnonymousWrappers()
+static RenderObject& findDestroyRootIncludingAnonymous(RenderObject& renderer)
+{
+    auto* destroyRoot = &renderer;
+    while (true) {
+        auto* destroyRootParent = destroyRoot->parent();
+        if (!destroyRootParent->isAnonymous())
+            break;
+        if (destroyRootParent->isRenderView())
+            break;
+        if (destroyRootParent->isRenderFragmentedFlow())
+            break;
+        // FIXME: Destroy continuations here too.
+        if (destroyRootParent->isContinuation())
+            break;
+        bool destroyingOnlyChild = destroyRootParent->firstChild() == destroyRoot && destroyRootParent->lastChild() == destroyRoot;
+        if (!destroyingOnlyChild)
+            break;
+        destroyRoot = destroyRootParent;
+    }
+    return *destroyRoot;
+}
+
+void RenderObject::removeFromParentAndDestroyCleaningUpAnonymousWrappers()
 {
     // If the tree is destroyed, there is no need for a clean-up phase.
     if (renderTreeBeingDestroyed()) {
-        destroy();
+        removeFromParentAndDestroy();
         return;
     }
 
-    auto* destroyRoot = this;
-    auto* destroyRootParent = destroyRoot->parent();
-    while (destroyRootParent && destroyRootParent->isAnonymous()) {
-        if (!destroyRootParent->isTableCell() && !destroyRootParent->isTableRow()
-            && !destroyRootParent->isTableCaption() && !destroyRootParent->isTableSection() && !destroyRootParent->isTable())
-            break;
-        // single child?
-        if (!(destroyRootParent->firstChild() == destroyRoot && destroyRootParent->lastChild() == destroyRoot))
-            break;
-        destroyRoot = destroyRootParent;
-        destroyRootParent = destroyRootParent->parent();
-    }
+    auto& destroyRoot = findDestroyRootIncludingAnonymous(*this);
 
-    if (is<RenderTableRow>(*destroyRoot)) {
-        downcast<RenderTableRow>(*destroyRoot).destroyAndCollapseAnonymousSiblingRows();
-        return;
-    }
+    if (is<RenderTableRow>(destroyRoot))
+        downcast<RenderTableRow>(destroyRoot).collapseAndDestroyAnonymousSiblingRows();
 
-    destroyRoot->destroy();
+    destroyRoot.removeFromParentAndDestroy();
     // WARNING: |this| is deleted here.
 }
 
 void RenderObject::destroy()
 {
+    RELEASE_ASSERT(!m_parent);
+    RELEASE_ASSERT(!m_next);
+    RELEASE_ASSERT(!m_previous);
+    RELEASE_ASSERT(!m_bitfields.beingDestroyed());
+
     m_bitfields.setBeingDestroyed(true);
 
 #if PLATFORM(IOS)
@@ -1569,7 +1522,7 @@ Position RenderObject::positionForPoint(const LayoutPoint& point)
     return positionForPoint(point, nullptr).deepEquivalent();
 }
 
-VisiblePosition RenderObject::positionForPoint(const LayoutPoint&, const RenderRegion*)
+VisiblePosition RenderObject::positionForPoint(const LayoutPoint&, const RenderFragmentContainer*)
 {
     return createVisiblePosition(caretMinOffset(), DOWNSTREAM);
 }
@@ -1593,11 +1546,6 @@ void RenderObject::updateDragState(bool dragOn)
 bool RenderObject::isComposited() const
 {
     return hasLayer() && downcast<RenderLayerModelObject>(*this).layer()->isComposited();
-}
-
-bool RenderObject::isAnonymousInlineBlock() const
-{
-    return isAnonymous() && style().display() == INLINE_BLOCK && style().styleType() == NOPSEUDO && isRenderBlockFlow() && !isRubyRun() && !isRubyBase() && !isRuby(parent());
 }
 
 bool RenderObject::hitTest(const HitTestRequest& request, HitTestResult& result, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestFilter hitTestFilter)
@@ -1772,7 +1720,7 @@ RenderBoxModelObject* RenderObject::offsetParent() const
     bool skipTables = isPositioned();
     float currZoom = style().effectiveZoom();
     auto current = parent();
-    while (current && (!current->element() || (!current->isPositioned() && !current->isBody())) && !is<RenderNamedFlowThread>(*current)) {
+    while (current && (!current->element() || (!current->isPositioned() && !current->isBody()))) {
         Element* element = current->element();
         if (!skipTables && element && (is<HTMLTableElement>(*element) || is<HTMLTableCellElement>(*element)))
             break;
@@ -1783,13 +1731,7 @@ RenderBoxModelObject* RenderObject::offsetParent() const
         currZoom = newZoom;
         current = current->parent();
     }
-    
-    // CSS regions specification says that region flows should return the body element as their offsetParent.
-    if (is<RenderNamedFlowThread>(current)) {
-        auto* body = document().bodyOrFrameset();
-        current = body ? body->renderer() : nullptr;
-    }
-    
+
     return is<RenderBoxModelObject>(current) ? downcast<RenderBoxModelObject>(current) : nullptr;
 }
 
@@ -1928,24 +1870,10 @@ bool RenderObject::nodeAtFloatPoint(const HitTestRequest&, HitTestResult&, const
     return false;
 }
 
-RenderNamedFlowFragment* RenderObject::currentRenderNamedFlowFragment() const
-{
-    RenderFlowThread* flowThread = flowThreadContainingBlock();
-    if (!is<RenderNamedFlowThread>(flowThread))
-        return nullptr;
-
-    // FIXME: Once regions are fully integrated with the compositing system we should uncomment this assert.
-    // This assert needs to be disabled because it's possible to ask for the ancestor clipping rectangle of
-    // a layer without knowing the containing region in advance.
-    // ASSERT(flowThread->currentRegion() && flowThread->currentRegion()->isRenderNamedFlowFragment());
-
-    return downcast<RenderNamedFlowFragment>(flowThread->currentRegion());
-}
-
-RenderFlowThread* RenderObject::locateFlowThreadContainingBlock() const
+RenderFragmentedFlow* RenderObject::locateEnclosingFragmentedFlow() const
 {
     RenderBlock* containingBlock = this->containingBlock();
-    return containingBlock ? containingBlock->flowThreadContainingBlock() : nullptr;
+    return containingBlock ? containingBlock->enclosingFragmentedFlow() : nullptr;
 }
 
 void RenderObject::calculateBorderStyleColor(const EBorderStyle& style, const BoxSide& side, Color& color)
@@ -1980,10 +1908,10 @@ void RenderObject::setHasReflection(bool hasReflection)
         ensureRareData().setHasReflection(hasReflection);
 }
 
-void RenderObject::setIsRenderFlowThread(bool isFlowThread)
+void RenderObject::setIsRenderFragmentedFlow(bool isFragmentedFlow)
 {
-    if (isFlowThread || hasRareData())
-        ensureRareData().setIsRenderFlowThread(isFlowThread);
+    if (isFragmentedFlow || hasRareData())
+        ensureRareData().setIsRenderFragmentedFlow(isFragmentedFlow);
 }
 
 void RenderObject::setHasOutlineAutoAncestor(bool hasOutlineAutoAncestor)

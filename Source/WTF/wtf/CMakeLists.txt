@@ -14,6 +14,7 @@ set(WTF_HEADERS
     ByteOrder.h
     CPUTime.h
     CagedPtr.h
+    CagedUniquePtr.h
     ClockType.h
     CompilationThread.h
     Compiler.h
@@ -59,6 +60,7 @@ set(WTF_HEADERS
     IndexedContainerIterator.h
     IteratorAdaptors.h
     IteratorRange.h
+    Language.h
     ListHashSet.h
     Liveness.h
     Lock.h
@@ -176,11 +178,14 @@ set(WTF_HEADERS
     text/CString.h
     text/IntegerToStringConversion.h
     text/LChar.h
+    text/LineEnding.h
     text/LineBreakIteratorPoolICU.h
     text/StringBuffer.h
     text/StringCommon.h
     text/StringHash.h
     text/StringImpl.h
+    text/StringMalloc.h
+    text/StringVector.h
     text/StringView.h
     text/SymbolImpl.h
     text/SymbolRegistry.h
@@ -226,6 +231,7 @@ set(WTF_SOURCES
     GlobalVersion.cpp
     GregorianDateTime.cpp
     HashTable.cpp
+    Language.cpp
     Lock.cpp
     LockedPrintStream.cpp
     MD5.cpp
@@ -273,17 +279,20 @@ set(WTF_SOURCES
     dtoa/fixed-dtoa.cc
     dtoa/strtod.cc
 
-    persistence/Coders.cpp
-    persistence/Decoder.cpp
-    persistence/Encoder.cpp
+    persistence/PersistentCoders.cpp
+    persistence/PersistentDecoder.cpp
+    persistence/PersistentEncoder.cpp
 
     text/AtomicString.cpp
     text/AtomicStringImpl.cpp
     text/AtomicStringTable.cpp
     text/Base64.cpp
     text/CString.cpp
+    text/LineEnding.cpp
     text/StringBuilder.cpp
+    text/StringBuilderJSON.cpp
     text/StringImpl.cpp
+    text/StringMalloc.cpp
     text/StringView.cpp
     text/SymbolImpl.cpp
     text/SymbolRegistry.cpp
@@ -386,3 +395,11 @@ if (MSVC)
         COMMAND ${PERL_EXECUTABLE} ${WEBKIT_LIBRARIES_DIR}/tools/scripts/version-stamp.pl ${DERIVED_SOURCES_DIR} $<TARGET_FILE:WTF>
         VERBATIM)
 endif ()
+
+file(MAKE_DIRECTORY ${FORWARDING_HEADERS_DIR}/WTF/Scripts)
+
+file(COPY
+    ../Scripts/generate-unified-source-bundles.rb
+    DESTINATION
+    ${FORWARDING_HEADERS_DIR}/WTF/Scripts
+)

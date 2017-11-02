@@ -96,6 +96,7 @@ enum EventThrottlingBehavior {
     [MayThrowException] DOMString elementRenderTreeAsText(Element element);
     boolean isPreloaded(DOMString url);
     boolean isLoadingFromMemoryCache(DOMString url);
+    DOMString fetchResponseSource(FetchResponse response);
     DOMString xhrResponseSource(XMLHttpRequest xhr);
     boolean isSharingStyleSheetContents(HTMLLinkElement a, HTMLLinkElement b);
     boolean isStyleSheetLoadingSubresources(HTMLLinkElement link);
@@ -496,6 +497,7 @@ enum EventThrottlingBehavior {
 
     DOMString resourceLoadStatisticsForOrigin(DOMString domain);
     void setResourceLoadStatisticsEnabled(boolean enable);
+    [EnabledBySetting=StorageAccessAPI] void setUserGrantsStorageAccess(boolean value);
 
     [MayThrowException] void setCanShowModalDialogOverride(boolean allow);
 
@@ -544,5 +546,23 @@ enum EventThrottlingBehavior {
     [Conditional=MEDIA_STREAM] void removeMediaStreamTrack(MediaStream stream, MediaStreamTrack track);
     [Conditional=MEDIA_STREAM] void simulateMediaStreamTrackCaptureSourceFailure(MediaStreamTrack track);
 
+    Promise<void> clearCacheStorageMemoryRepresentation();
+    Promise<DOMString> cacheStorageEngineRepresentation();
+    void setResponseSizeWithPadding(FetchResponse response, unsigned long long size);
+    unsigned long long responseSizeWithPadding(FetchResponse response);
+
+    void setConsoleMessageListener(StringCallback callback);
+
     DOMString audioSessionCategory();
+
+    [Conditional=SERVICE_WORKER] Promise<Response> waitForFetchEventToFinish(FetchEvent event);
+    [Conditional=SERVICE_WORKER] Promise<void> waitForExtendableEventToFinish(ExtendableEvent event);
+    [Conditional=SERVICE_WORKER, CallWith=ScriptExecutionContext] FetchEvent createBeingDispatchedFetchEvent();
+    [Conditional=SERVICE_WORKER] ExtendableEvent createTrustedExtendableEvent();
+
+    boolean hasServiceWorkerRegisteredForOrigin(DOMString origin);
+
+    [EnabledAtRuntime=WebAnimations] DOMString timelineDescription(AnimationTimeline timeline);
+    [EnabledAtRuntime=WebAnimations] void setTimelineCurrentTime(AnimationTimeline timeline, double currentTime);
+    [Conditional=APPLE_PAY] readonly attribute MockPaymentCoordinator mockPaymentCoordinator;
 };

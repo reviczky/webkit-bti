@@ -33,9 +33,7 @@ RenderSVGResourceMarker::RenderSVGResourceMarker(SVGMarkerElement& element, Rend
 {
 }
 
-RenderSVGResourceMarker::~RenderSVGResourceMarker()
-{
-}
+RenderSVGResourceMarker::~RenderSVGResourceMarker() = default;
 
 void RenderSVGResourceMarker::layout()
 {
@@ -105,7 +103,7 @@ AffineTransform RenderSVGResourceMarker::markerTransformation(const FloatPoint& 
     bool useStrokeWidth = markerElement().markerUnits() == SVGMarkerUnitsStrokeWidth;
 
     AffineTransform transform;
-    transform.translate(origin.x(), origin.y());
+    transform.translate(origin);
     transform.rotate(markerAngle == -1 ? autoAngle : markerAngle);
     transform = markerContentTransformation(transform, referencePoint(), useStrokeWidth ? strokeWidth : -1);
     return transform;
@@ -132,7 +130,7 @@ AffineTransform RenderSVGResourceMarker::markerContentTransformation(const Affin
     if (strokeWidth != -1)
         transformation.scaleNonUniform(strokeWidth, strokeWidth);
 
-    transformation.translate(-mappedOrigin.x(), -mappedOrigin.y());
+    transformation.translate(-mappedOrigin);
     return transformation;
 }
 

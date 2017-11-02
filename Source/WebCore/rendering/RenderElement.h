@@ -83,12 +83,12 @@ public:
     bool isRenderBlockFlow() const;
     bool isRenderReplaced() const;
     bool isRenderInline() const;
-    bool isRenderNamedFlowFragmentContainer() const;
 
     virtual bool isChildAllowed(const RenderObject&, const RenderStyle&) const { return true; }
-    virtual void addChild(RenderObject* newChild, RenderObject* beforeChild = nullptr);
-    virtual void addChildIgnoringContinuation(RenderObject* newChild, RenderObject* beforeChild = nullptr) { return addChild(newChild, beforeChild); }
-    virtual void removeChild(RenderObject&);
+    virtual void addChild(RenderPtr<RenderObject>, RenderObject* beforeChild = nullptr);
+    virtual void addChildIgnoringContinuation(RenderPtr<RenderObject> newChild, RenderObject* beforeChild = nullptr) { addChild(WTFMove(newChild), beforeChild); }
+    virtual RenderPtr<RenderObject> takeChild(RenderObject&) WARN_UNUSED_RETURN;
+    void removeAndDestroyChild(RenderObject&);
 
     // The following functions are used when the render tree hierarchy changes to make sure layers get
     // properly added and removed. Since containership can be implemented by any subclass, and since a hierarchy
@@ -99,8 +99,8 @@ public:
     RenderLayer* findNextLayer(RenderLayer* parentLayer, RenderObject* startPoint, bool checkParent = true);
 
     enum NotifyChildrenType { NotifyChildren, DontNotifyChildren };
-    void insertChildInternal(RenderObject*, RenderObject* beforeChild, NotifyChildrenType);
-    void removeChildInternal(RenderObject&, NotifyChildrenType);
+    void insertChildInternal(RenderPtr<RenderObject>, RenderObject* beforeChild, NotifyChildrenType);
+    RenderPtr<RenderObject> takeChildInternal(RenderObject&, NotifyChildrenType) WARN_UNUSED_RETURN;
 
     virtual RenderElement* hoverAncestor() const;
 
@@ -130,9 +130,6 @@ public:
     // Updates only the local style ptr of the object. Does not update the state of the object,
     // and so only should be called when the style is known not to have changed (or from setStyle).
     void setStyleInternal(RenderStyle&& style) { m_style = WTFMove(style); }
-
-    bool hasInitialAnimatedStyle() const { return m_hasInitialAnimatedStyle; }
-    void setHasInitialAnimatedStyle(bool b) { m_hasInitialAnimatedStyle = b; }
 
     // Repaint only if our old bounds and new bounds are different. The caller may pass in newBounds and newOutlineBox if they are known.
     bool repaintAfterLayoutIfNeeded(const RenderLayerModelObject* repaintContainer, const LayoutRect& oldBounds, const LayoutRect& oldOutlineBox, const LayoutRect* newBoundsPtr = nullptr, const LayoutRect* newOutlineBoxPtr = nullptr);
@@ -207,7 +204,6 @@ public:
     void drawLineForBoxSide(GraphicsContext&, const FloatRect&, BoxSide, Color, EBorderStyle, float adjacentWidth1, float adjacentWidth2, bool antialias = false) const;
 
     bool childRequiresTable(const RenderObject& child) const;
-    bool hasContinuation() const { return m_hasContinuation; }
 
 #if ENABLE(TEXT_AUTOSIZING)
     void adjustComputedFontSizesOnBlocks(float size, float visibleWidth);
@@ -218,12 +214,18 @@ public:
 
     RespectImageOrientationEnum shouldRespectImageOrientation() const;
 
-    void removeFromRenderFlowThread();
-    virtual void resetFlowThreadContainingBlockAndChildInfoIncludingDescendants(RenderFlowThread*);
+    void removeFromRenderFragmentedFlow();
+    virtual void resetEnclosingFragmentedFlowAndChildInfoIncludingDescendants(RenderFragmentedFlow*);
 
     // Called before anonymousChild.setStyle(). Override to set custom styles for
     // the child.
     virtual void updateAnonymousChildStyle(const RenderObject&, RenderStyle&) const { };
+
+    bool hasContinuation() const { return m_hasContinuation; }
+    bool isContinuation() const { return m_isContinuation; }
+    void setIsContinuation() { m_isContinuation = true; }
+    bool isElementContinuation() const { return isContinuation() && !isAnonymous(); }
+    bool isInlineElementContinuation() const { return isElementContinuation() && isInline(); }
 
 protected:
     enum BaseTypeFlag {
@@ -280,8 +282,8 @@ protected:
     void paintOutline(PaintInfo&, const LayoutRect&);
     void updateOutlineAutoAncestor(bool hasOutlineAuto);
 
-    void removeFromRenderFlowThreadIncludingDescendants(bool shouldUpdateState);
-    void adjustFlowThreadStateOnContainingBlockChangeIfNeeded();
+    void removeFromRenderFragmentedFlowIncludingDescendants(bool shouldUpdateState);
+    void adjustFragmentedFlowStateOnContainingBlockChangeIfNeeded();
     
     bool noLongerAffectsParentBlock() const { return s_noLongerAffectsParentBlock; }
     bool isVisibleInViewport() const;
@@ -321,7 +323,7 @@ private:
     bool getLeadingCorner(FloatPoint& output, bool& insideFixed) const;
     bool getTrailingCorner(FloatPoint& output, bool& insideFixed) const;
 
-    void clearLayoutRootIfNeeded() const;
+    void clearSubtreeLayoutRootIfNeeded() const;
     
     bool shouldWillChangeCreateStackingContext() const;
     void issueRepaintForOutlineAuto(float outlineSize);
@@ -329,13 +331,13 @@ private:
     unsigned m_baseTypeFlags : 6;
     unsigned m_ancestorLineBoxDirty : 1;
     unsigned m_hasInitializedStyle : 1;
-    unsigned m_hasInitialAnimatedStyle : 1;
 
     unsigned m_renderInlineAlwaysCreatesLineBoxes : 1;
     unsigned m_renderBoxNeedsLazyRepaint : 1;
     unsigned m_hasPausedImageAnimations : 1;
     unsigned m_hasCounterNodeMap : 1;
     unsigned m_hasContinuation : 1;
+    unsigned m_isContinuation : 1;
     mutable unsigned m_hasValidCachedFirstLineStyle : 1;
 
     unsigned m_renderBlockHasMarginBeforeQuirk : 1;
@@ -356,11 +358,6 @@ private:
     // Store state between styleWillChange and styleDidChange
     static bool s_affectsParentBlock;
     static bool s_noLongerAffectsParentBlock;
-
-protected:
-#if !ASSERT_DISABLED
-    bool m_reparentingChild { false };
-#endif
 };
 
 inline void RenderElement::setAncestorLineBoxDirty(bool f)
@@ -422,8 +419,6 @@ inline bool RenderElement::isRenderInline() const
 
 inline Element* RenderElement::generatingElement() const
 {
-    if (parent() && isRenderNamedFlowFragment())
-        return parent()->generatingElement();
     return downcast<Element>(RenderObject::generatingNode());
 }
 
@@ -432,7 +427,7 @@ inline bool RenderElement::canContainFixedPositionObjects() const
     return isRenderView()
         || (hasTransform() && isRenderBlock())
         || isSVGForeignObject()
-        || isOutOfFlowRenderFlowThread();
+        || isOutOfFlowRenderFragmentedFlow();
 }
 
 inline bool RenderElement::canContainAbsolutelyPositionedObjects() const

@@ -43,7 +43,6 @@
 #include "FrameLoader.h"
 #include "HTTPHeaderMap.h"
 #include "HTTPHeaderNames.h"
-#include "InspectorPageAgent.h"
 #include "InspectorTimelineAgent.h"
 #include "InstrumentingAgents.h"
 #include "JSMainThreadExecState.h"
@@ -78,11 +77,11 @@
 #include <wtf/Stopwatch.h>
 #include <wtf/text/StringBuilder.h>
 
-using namespace Inspector;
 
 typedef Inspector::NetworkBackendDispatcherHandler::LoadResourceCallback LoadResourceCallback;
 
 namespace WebCore {
+using namespace Inspector;
 
 namespace {
 
@@ -92,7 +91,7 @@ public:
     InspectorThreadableLoaderClient(RefPtr<LoadResourceCallback>&& callback)
         : m_callback(WTFMove(callback)) { }
 
-    virtual ~InspectorThreadableLoaderClient() { }
+    virtual ~InspectorThreadableLoaderClient() = default;
 
     void didReceiveResponse(unsigned long, const ResourceResponse& response) override
     {
@@ -181,7 +180,7 @@ void InspectorNetworkAgent::willDestroyFrontendAndBackend(Inspector::DisconnectR
 static Ref<InspectorObject> buildObjectForHeaders(const HTTPHeaderMap& headers)
 {
     Ref<InspectorObject> headersObject = InspectorObject::create();
-    
+
     for (const auto& header : headers)
         headersObject->setString(header.key, header.value);
     return headersObject;
@@ -256,8 +255,7 @@ static Ref<Inspector::Protocol::Network::Request> buildObjectForResourceRequest(
         .setHeaders(buildObjectForHeaders(request.httpHeaderFields()))
         .release();
     if (request.httpBody() && !request.httpBody()->isEmpty()) {
-        Vector<char> bytes;
-        request.httpBody()->flatten(bytes);
+        auto bytes = request.httpBody()->flatten();
         requestObject->setPostData(String::fromUTF8WithLatin1Fallback(bytes.data(), bytes.size()));
     }
     return requestObject;
@@ -276,6 +274,9 @@ static Inspector::Protocol::Network::Response::Source responseSource(ResourceRes
     case ResourceResponse::Source::DiskCache:
     case ResourceResponse::Source::DiskCacheAfterValidation:
         return Inspector::Protocol::Network::Response::Source::DiskCache;
+    // FIXME: https://bugs.webkit.org/show_bug.cgi?id=178597. Add an Inspector ServiceWorker source.
+    case ResourceResponse::Source::ServiceWorker:
+        return Inspector::Protocol::Network::Response::Source::Unknown;
     }
 
     ASSERT_NOT_REACHED();
@@ -309,7 +310,7 @@ Ref<Inspector::Protocol::Network::CachedResource> InspectorNetworkAgent::buildOb
 {
     auto resourceObject = Inspector::Protocol::Network::CachedResource::create()
         .setUrl(cachedResource->url())
-        .setType(InspectorPageAgent::cachedResourceTypeJson(*cachedResource))
+        .setType(InspectorPageAgent::cachedResourceTypeJSON(*cachedResource))
         .setBodySize(cachedResource->encodedSize())
         .release();
 
@@ -337,18 +338,19 @@ double InspectorNetworkAgent::timestamp()
     return m_environment.executionStopwatch()->elapsedTime();
 }
 
-void InspectorNetworkAgent::willSendRequest(unsigned long identifier, DocumentLoader& loader, ResourceRequest& request, const ResourceResponse& redirectResponse)
+void InspectorNetworkAgent::willSendRequest(unsigned long identifier, DocumentLoader& loader, ResourceRequest& request, const ResourceResponse& redirectResponse, InspectorPageAgent::ResourceType type)
 {
     if (request.hiddenFromInspector()) {
         m_hiddenRequestIdentifiers.add(identifier);
         return;
     }
 
+    double sendTimestamp = timestamp();
+    double walltime = currentTime();
+
     String requestId = IdentifiersFactory::requestId(identifier);
     m_resourcesData->resourceCreated(requestId, m_pageAgent->loaderId(&loader));
 
-    CachedResource* cachedResource = InspectorPageAgent::cachedResource(loader.frame(), request.url());
-    InspectorPageAgent::ResourceType type = cachedResource ? InspectorPageAgent::cachedResourceType(*cachedResource) : m_resourcesData->resourceType(requestId);
     if (type == InspectorPageAgent::OtherResource) {
         if (m_loadingXHRSynchronously)
             type = InspectorPageAgent::XHRResource;
@@ -369,12 +371,43 @@ void InspectorNetworkAgent::willSendRequest(unsigned long identifier, DocumentLo
     for (auto& entry : m_extraRequestHeaders)
         request.setHTTPHeaderField(entry.key, entry.value);
 
-    Inspector::Protocol::Page::ResourceType resourceType = InspectorPageAgent::resourceTypeJson(type);
+    auto protocolResourceType = InspectorPageAgent::resourceTypeJSON(type);
 
     RefPtr<Inspector::Protocol::Network::Initiator> initiatorObject = buildInitiatorObject(loader.frame() ? loader.frame()->document() : nullptr);
     String targetId = request.initiatorIdentifier();
 
-    m_frontendDispatcher->requestWillBeSent(requestId, m_pageAgent->frameId(loader.frame()), m_pageAgent->loaderId(&loader), loader.url().string(), buildObjectForResourceRequest(request), timestamp(), initiatorObject, buildObjectForResourceResponse(redirectResponse, nullptr), type != InspectorPageAgent::OtherResource ? &resourceType : nullptr, targetId.isEmpty() ? nullptr : &targetId);
+    m_frontendDispatcher->requestWillBeSent(requestId, m_pageAgent->frameId(loader.frame()), m_pageAgent->loaderId(&loader), loader.url().string(), buildObjectForResourceRequest(request), sendTimestamp, walltime, initiatorObject, buildObjectForResourceResponse(redirectResponse, nullptr), type != InspectorPageAgent::OtherResource ? &protocolResourceType : nullptr, targetId.isEmpty() ? nullptr : &targetId);
+}
+
+static InspectorPageAgent::ResourceType resourceTypeForCachedResource(CachedResource* resource)
+{
+    if (resource)
+        return InspectorPageAgent::inspectorResourceType(*resource);
+    return InspectorPageAgent::OtherResource;
+}
+
+static InspectorPageAgent::ResourceType resourceTypeForLoadType(InspectorInstrumentation::LoadType loadType)
+{
+    switch (loadType) {
+    case InspectorInstrumentation::LoadType::Ping:
+        return InspectorPageAgent::PingResource;
+    case InspectorInstrumentation::LoadType::Beacon:
+        return InspectorPageAgent::BeaconResource;
+    }
+
+    ASSERT_NOT_REACHED();
+    return InspectorPageAgent::OtherResource;
+}
+
+void InspectorNetworkAgent::willSendRequest(unsigned long identifier, DocumentLoader& loader, ResourceRequest& request, const ResourceResponse& redirectResponse)
+{
+    auto* cachedResource = InspectorPageAgent::cachedResource(loader.frame(), request.url());
+    willSendRequest(identifier, loader, request, redirectResponse, resourceTypeForCachedResource(cachedResource));
+}
+
+void InspectorNetworkAgent::willSendRequestOfType(unsigned long identifier, DocumentLoader& loader, ResourceRequest& request, InspectorInstrumentation::LoadType loadType)
+{
+    willSendRequest(identifier, loader, request, ResourceResponse(), resourceTypeForLoadType(loadType));
 }
 
 void InspectorNetworkAgent::didReceiveResponse(unsigned long identifier, DocumentLoader& loader, const ResourceResponse& response, ResourceLoader* resourceLoader)
@@ -401,7 +434,7 @@ void InspectorNetworkAgent::didReceiveResponse(unsigned long identifier, Documen
     }
 
     InspectorPageAgent::ResourceType type = m_resourcesData->resourceType(requestId);
-    InspectorPageAgent::ResourceType newType = cachedResource ? InspectorPageAgent::cachedResourceType(*cachedResource) : type;
+    InspectorPageAgent::ResourceType newType = cachedResource ? InspectorPageAgent::inspectorResourceType(*cachedResource) : type;
 
     // FIXME: XHRResource is returned for CachedResource::RawResource, it should be OtherResource unless it truly is an XHR.
     // RawResource is used for loading worker scripts, and those should stay as ScriptResource and not change to XHRResource.
@@ -411,7 +444,7 @@ void InspectorNetworkAgent::didReceiveResponse(unsigned long identifier, Documen
     m_resourcesData->responseReceived(requestId, m_pageAgent->frameId(loader.frame()), response);
     m_resourcesData->setResourceType(requestId, type);
 
-    m_frontendDispatcher->responseReceived(requestId, m_pageAgent->frameId(loader.frame()), m_pageAgent->loaderId(&loader), timestamp(), InspectorPageAgent::resourceTypeJson(type), resourceResponse);
+    m_frontendDispatcher->responseReceived(requestId, m_pageAgent->frameId(loader.frame()), m_pageAgent->loaderId(&loader), timestamp(), InspectorPageAgent::resourceTypeJSON(type), resourceResponse);
 
     // If we revalidated the resource and got Not modified, send content length following didReceiveResponse
     // as there will be no calls to didReceiveData from the network stack.

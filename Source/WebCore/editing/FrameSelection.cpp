@@ -363,10 +363,15 @@ void FrameSelection::setSelection(const VisibleSelection& selection, SetSelectio
         return;
 
     FrameView* frameView = document->view();
-    if (frameView && frameView->layoutPending())
+    if (frameView && frameView->layoutContext().isLayoutPending())
         return;
 
     updateAndRevealSelection(intent);
+
+    if (options & IsUserTriggered) {
+        if (auto* client = m_frame->editor().client())
+            client->didEndUserTriggeredSelectionChanges();
+    }
 }
 
 static void updateSelectionByUpdatingLayoutOrStyle(Frame& frame)
@@ -382,7 +387,7 @@ void FrameSelection::setNeedsSelectionUpdate()
 {
     m_pendingSelectionUpdate = true;
     if (RenderView* view = m_frame->contentRenderer())
-        view->clearSelection();
+        view->selection().clear();
 }
 
 void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& intent)
@@ -406,9 +411,6 @@ void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& int
     }
 
     notifyAccessibilityForSelectionChange(intent);
-
-    if (auto* client = m_frame->editor().client())
-        client->didChangeSelectionAndUpdateLayout();
 }
 
 void FrameSelection::updateDataDetectorsForSelection()
@@ -441,7 +443,7 @@ void DragCaretController::nodeWillBeRemoved(Node& node)
         return;
 
     if (RenderView* view = node.document().renderView())
-        view->clearSelection();
+        view->selection().clear();
 
     clear();
 }
@@ -504,7 +506,7 @@ void FrameSelection::respondToNodeModification(Node& node, bool baseRemoved, boo
 
     if (clearRenderTreeSelection) {
         if (auto* renderView = node.document().renderView()) {
-            renderView->clearSelection();
+            renderView->selection().clear();
 
             // Trigger a selection update so the selection will be set again.
             m_pendingSelectionUpdate = true;
@@ -1515,9 +1517,8 @@ void FrameSelection::prepareForDestruction()
     m_caretBlinkTimer.stop();
 #endif
 
-    RenderView* view = m_frame->contentRenderer();
-    if (view)
-        view->clearSelection();
+    if (auto* view = m_frame->contentRenderer())
+        view->selection().clear();
 
     setSelectionWithoutUpdatingAppearance(VisibleSelection(), defaultSetSelectionOptions(), AlignCursorOnScrollIfNeeded, CharacterGranularity);
     m_previousCaretNode = nullptr;
@@ -1713,13 +1714,6 @@ void FrameSelection::paintCaret(GraphicsContext& context, const LayoutPoint& pai
         CaretBase::paintCaret(m_selection.start().deprecatedNode(), context, paintOffset, clipRect);
 }
 
-#if ENABLE(TEXT_CARET)
-static inline bool disappearsIntoBackground(const Color& foreground, const Color& background)
-{
-    return background.blend(foreground) == background;
-}
-#endif
-
 void CaretBase::paintCaret(Node* node, GraphicsContext& context, const LayoutPoint& paintOffset, const LayoutRect& clipRect) const
 {
 #if ENABLE(TEXT_CARET)
@@ -1736,22 +1730,21 @@ void CaretBase::paintCaret(Node* node, GraphicsContext& context, const LayoutPoi
 
     Color caretColor = Color::black;
     Element* element = is<Element>(*node) ? downcast<Element>(node) : node->parentElement();
-    Element* rootEditableElement = node->rootEditableElement();
-
     if (element && element->renderer()) {
-        bool setToRootEditableElement = false;
-        if (rootEditableElement && rootEditableElement->renderer()) {
-            const auto& rootEditableStyle = rootEditableElement->renderer()->style();
-            const auto& elementStyle = element->renderer()->style();
-            auto rootEditableBGColor = rootEditableStyle.visitedDependentColor(CSSPropertyBackgroundColor);
-            auto elementBGColor = elementStyle.visitedDependentColor(CSSPropertyBackgroundColor);
-            if (disappearsIntoBackground(elementBGColor, rootEditableBGColor)) {
-                caretColor = rootEditableStyle.visitedDependentColor(CSSPropertyColor);
-                setToRootEditableElement = true;
+        auto computeCaretColor = [] (const RenderStyle& elementStyle, const RenderStyle* rootEditableStyle) {
+            // CSS value "auto" is treated as an invalid color.
+            if (!elementStyle.caretColor().isValid() && rootEditableStyle) {
+                auto rootEditableBackgroundColor = rootEditableStyle->visitedDependentColor(CSSPropertyBackgroundColor);
+                auto elementBackgroundColor = elementStyle.visitedDependentColor(CSSPropertyBackgroundColor);
+                auto disappearsIntoBackground = rootEditableBackgroundColor.blend(elementBackgroundColor) == rootEditableBackgroundColor;
+                if (disappearsIntoBackground)
+                    return rootEditableStyle->visitedDependentColor(CSSPropertyCaretColor);
             }
-        }
-        if (!setToRootEditableElement)
-            caretColor = element->renderer()->style().visitedDependentColor(CSSPropertyColor);
+            return elementStyle.visitedDependentColor(CSSPropertyCaretColor);
+        };
+        auto* rootEditableElement = node->rootEditableElement();
+        auto* rootEditableStyle = rootEditableElement && rootEditableElement->renderer() ? &rootEditableElement->renderer()->style() : nullptr;
+        caretColor = computeCaretColor(element->renderer()->style(), rootEditableStyle);
     }
 
     context.fillRect(caret, caretColor);
@@ -1980,7 +1973,7 @@ bool FrameSelection::setSelectedRange(Range* range, EAffinity affinity, bool clo
             return false;
     }
 
-    setSelection(newSelection, ClearTypingStyle | (closeTyping ? CloseTyping : 0));
+    setSelection(newSelection, ClearTypingStyle | (closeTyping ? CloseTyping : 0) | (userTriggered == UserTriggered ? IsUserTriggered : 0));
     return true;
 }
 
@@ -2001,7 +1994,7 @@ void FrameSelection::focusedOrActiveStateChanged()
     // RenderObject::selectionForegroundColor() check if the frame is active,
     // we have to update places those colors were painted.
     if (RenderView* view = document->renderView())
-        view->repaintSelection();
+        view->selection().repaint();
 
     // Caret appears in the active frame.
     if (activeAndFocused)
@@ -2096,7 +2089,7 @@ void FrameSelection::updateAppearance()
 #endif
 
     if (!selection.isRange()) {
-        view->clearSelection();
+        view->selection().clear();
         return;
     }
 
@@ -2121,7 +2114,7 @@ void FrameSelection::updateAppearance()
         RenderObject* endRenderer = endPos.deprecatedNode()->renderer();
         int endOffset = endPos.deprecatedEditingOffset();
         ASSERT(startOffset >= 0 && endOffset >= 0);
-        view->setSelection(startRenderer, startOffset, endRenderer, endOffset);
+        view->selection().set({ startRenderer, endRenderer, static_cast<unsigned>(startOffset), static_cast<unsigned>(endOffset) });
     }
 }
 
@@ -2238,13 +2231,13 @@ FloatRect FrameSelection::selectionBounds(bool clipToVisibleContent) const
         return LayoutRect();
 
     updateSelectionByUpdatingLayoutOrStyle(*m_frame);
-    RenderView* root = m_frame->contentRenderer();
-    FrameView* view = m_frame->view();
-    if (!root || !view)
+    auto* renderView = m_frame->contentRenderer();
+    if (!renderView)
         return LayoutRect();
 
-    LayoutRect selectionRect = root->selectionBounds(clipToVisibleContent);
-    return clipToVisibleContent ? intersection(selectionRect, view->visibleContentRect(ScrollableArea::LegacyIOSDocumentVisibleRect)) : selectionRect;
+    auto& selection = renderView->selection();
+    auto selectionRect = clipToVisibleContent ? selection.boundsClippedToVisibleContent() : selection.bounds();
+    return clipToVisibleContent ? intersection(selectionRect, renderView->frameView().visibleContentRect(ScrollableArea::LegacyIOSDocumentVisibleRect)) : selectionRect;
 }
 
 void FrameSelection::getClippedVisibleTextRectangles(Vector<FloatRect>& rectangles, TextRectangleHeight textRectHeight) const

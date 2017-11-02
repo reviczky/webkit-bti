@@ -533,7 +533,7 @@ bool URLParser::shouldCopyFileURL(CodePointIterator<CharacterType> iterator)
     return !isSlashQuestionOrHash(*iterator);
 }
 
-static void percentEncodeByte(uint8_t byte, Vector<LChar>& buffer)
+static void percentEncodeByte(uint8_t byte, StringVector<LChar>& buffer)
 {
     buffer.append('%');
     buffer.append(upperNibbleToASCIIHexDigit(byte));
@@ -1728,8 +1728,11 @@ void URLParser::parse(const CharacterType* input, const unsigned length, const U
             break;
         case State::PathStart:
             LOG_STATE("PathStart");
-            if (*c != '/' && *c != '\\')
-                ++c;
+            if (*c != '/' && *c != '\\') {
+                syntaxViolation(c);
+                appendToASCIIBuffer('/');
+            }
+            m_url.m_pathAfterLastSlash = currentPosition(c);
             state = State::Path;
             break;
         case State::Path:
@@ -2815,7 +2818,7 @@ auto URLParser::parseURLEncodedForm(StringView input) -> URLEncodedForm
     return output;
 }
 
-static void serializeURLEncodedForm(const String& input, Vector<LChar>& output)
+static void serializeURLEncodedForm(const String& input, StringVector<LChar>& output)
 {
     auto utf8 = input.utf8(StrictConversion);
     const char* data = utf8.data();
@@ -2841,7 +2844,7 @@ String URLParser::serialize(const URLEncodedForm& tuples)
     if (tuples.isEmpty())
         return { };
 
-    Vector<LChar> output;
+    StringVector<LChar> output;
     for (auto& tuple : tuples) {
         if (!output.isEmpty())
             output.append('&');
@@ -2858,6 +2861,8 @@ const UIDNA& URLParser::internationalDomainNameTranscoder()
     static std::once_flag onceFlag;
     std::call_once(onceFlag, [] {
         UErrorCode error = U_ZERO_ERROR;
+        // Warning: Please contact a WebKitGTK+ developer if changing these flags.
+        // They should be synced with ephy_uri_decode() in ephy-uri-helpers.c.
         encoder = uidna_openUTS46(UIDNA_CHECK_BIDI | UIDNA_CHECK_CONTEXTJ | UIDNA_NONTRANSITIONAL_TO_UNICODE | UIDNA_NONTRANSITIONAL_TO_ASCII, &error);
         RELEASE_ASSERT(U_SUCCESS(error));
         RELEASE_ASSERT(encoder);

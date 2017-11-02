@@ -55,7 +55,6 @@
 
 .sidebar > .panel.details.css-style > .content > .pseudo-classes > .group > label {
     color: hsl(0, 0%, 37%);
-    text-shadow: white 0 1px 0;
 
     margin: 0 5px;
     min-width: 55px;
@@ -70,13 +69,13 @@
     position: absolute;
     z-index: 1;
     width: 100%;
-    background-color: white;
     border-top: 1px solid var(--border-color);
 }
 
 .sidebar > .panel.details.css-style > .content ~ .options-container {
     bottom: 0;
-    height: var(--console-prompt-min-height);
+    height: calc(var(--console-prompt-min-height) - 1px);
+    padding-top: 1px;
 }
 
 .sidebar > .panel.details.css-style > .content:not(.supports-new-rule, .has-filter-bar) ~ :matches(.options-container, .class-list-container) {
@@ -143,9 +142,10 @@ body[dir=rtl] .sidebar > .panel.details.css-style > .content ~ .options-containe
 
 .sidebar > .panel.details.css-style > .content ~ .class-list-container {
     flex-wrap: wrap;
-    bottom: var(--console-prompt-min-height);
+    bottom: calc(var(--console-prompt-min-height) - 1px);
     max-height: 75px;
     padding: 3px 2px;
+    background-color: var(--panel-background-color);
     overflow-y: scroll;
 }
 

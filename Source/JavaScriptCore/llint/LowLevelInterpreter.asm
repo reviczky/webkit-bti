@@ -163,7 +163,7 @@ else
 end
 const SlotSize = 8
 
-const JSEnvironmentRecord_variables = (sizeof JSEnvironmentRecord + SlotSize - 1) & ~(SlotSize - 1)
+const JSLexicalEnvironment_variables = (sizeof JSLexicalEnvironment + SlotSize - 1) & ~(SlotSize - 1)
 const DirectArguments_storage = (sizeof DirectArguments + SlotSize - 1) & ~(SlotSize - 1)
 
 const StackAlignment = 16
@@ -293,13 +293,29 @@ if JSVALUE64
     macro loadpFromInstruction(offset, dest)
         loadp offset * 8[PB, PC, 8], dest
     end
-    
+
+    macro loadisFromStruct(offset, dest)
+        loadis offset[PB, PC, 8], dest
+    end
+
+    macro loadpFromStruct(offset, dest)
+        loadp offset[PB, PC, 8], dest
+    end
+
     macro storeisToInstruction(value, offset)
         storei value, offset * 8[PB, PC, 8]
     end
 
     macro storepToInstruction(value, offset)
         storep value, offset * 8[PB, PC, 8]
+    end
+
+    macro storeisFromStruct(value, offset)
+        storei value, offset[PB, PC, 8]
+    end
+
+    macro storepFromStruct(value, offset)
+        storep value, offset[PB, PC, 8]
     end
 
 else
@@ -314,6 +330,18 @@ else
 
     macro storeisToInstruction(value, offset)
         storei value, offset * 4[PC]
+    end
+
+    macro loadisFromStruct(offset, dest)
+        loadis offset[PC], dest
+    end
+
+    macro loadpFromStruct(offset, dest)
+        loadp offset[PC], dest
+    end
+
+    macro storeisToStruct(value, offset)
+        storei value, offset[PC]
     end
 end
 
@@ -631,7 +659,7 @@ end
 
 macro copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(vm, temp)
     if ARM64 or X86_64 or X86_64_WIN
-        loadp VM::topVMEntryFrame[vm], temp
+        loadp VM::topEntryFrame[vm], temp
         vmEntryRecord(temp, temp)
         leap VMEntryRecord::calleeSaveRegistersBuffer[temp], temp
         if ARM64
@@ -673,7 +701,7 @@ end
 
 macro restoreCalleeSavesFromVMEntryFrameCalleeSavesBuffer(vm, temp)
     if ARM64 or X86_64 or X86_64_WIN
-        loadp VM::topVMEntryFrame[vm], temp
+        loadp VM::topEntryFrame[vm], temp
         vmEntryRecord(temp, temp)
         leap VMEntryRecord::calleeSaveRegistersBuffer[temp], temp
         if ARM64
@@ -1116,7 +1144,7 @@ if not C_LOOP
         storep address, VM::m_lastStackTop[vm]
         ret
     
-    # VMEntryRecord* vmEntryRecord(const VMEntryFrame* entryFrame)
+    # VMEntryRecord* vmEntryRecord(const EntryFrame* entryFrame)
     global _vmEntryRecord
     _vmEntryRecord:
         if X86 or X86_WIN
@@ -1294,6 +1322,15 @@ _llint_op_new_generator_func:
     callOpcodeSlowPath(_llint_slow_path_new_generator_func)
     dispatch(constexpr op_new_generator_func_length)
 
+_llint_op_new_async_generator_func:
+    traceExecution()
+    callSlowPath(_llint_slow_path_new_async_generator_func)
+    dispatch(constexpr op_new_async_generator_func_length)
+
+_llint_op_new_async_generator_func_exp:
+    traceExecution()
+    callSlowPath(_llint_slow_path_new_async_generator_func_exp)
+    dispatch(constexpr op_new_async_generator_func_exp_length)
 
 _llint_op_new_async_func:
     traceExecution()
@@ -1359,6 +1396,18 @@ _llint_op_greatereq:
     traceExecution()
     callOpcodeSlowPath(_slow_path_greatereq)
     dispatch(constexpr op_greatereq_length)
+
+
+_llint_op_below:
+    traceExecution()
+    compareUnsigned(
+        macro (left, right, result) cib left, right, result end)
+
+
+_llint_op_beloweq:
+    traceExecution()
+    compareUnsigned(
+        macro (left, right, result) cibeq left, right, result end)
 
 
 _llint_op_mod:
@@ -1538,6 +1587,18 @@ _llint_op_jngreatereq:
         macro (left, right, target) bilt left, right, target end,
         macro (left, right, target) bdltun left, right, target end,
         _llint_slow_path_jngreatereq)
+
+
+_llint_op_jbelow:
+    traceExecution()
+    compareUnsignedJump(
+        macro (left, right, target) bib left, right, target end)
+
+
+_llint_op_jbeloweq:
+    traceExecution()
+    compareUnsignedJump(
+        macro (left, right, target) bibeq left, right, target end)
 
 
 _llint_op_loop_hint:
@@ -1721,6 +1782,11 @@ _llint_op_assert:
     traceExecution()
     callOpcodeSlowPath(_slow_path_assert)
     dispatch(constexpr op_assert_length)
+
+
+_llint_op_identity_with_profile:
+    traceExecution()
+    dispatch(constexpr op_identity_with_profile_length)
 
 
 _llint_op_unreachable:

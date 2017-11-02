@@ -44,6 +44,7 @@
 #include "SecurityOriginHash.h"
 #include "Timer.h"
 #include "VideoTrackPrivate.h"
+#include <pal/Logger.h>
 #include <runtime/Uint8Array.h>
 #include <wtf/Forward.h>
 #include <wtf/Function.h>
@@ -71,6 +72,9 @@ namespace WebCore {
 
 class AudioSourceProvider;
 class AuthenticationChallenge;
+#if ENABLE(ENCRYPTED_MEDIA)
+class CDMInstance;
+#endif
 class MediaPlaybackTarget;
 #if ENABLE(MEDIA_SOURCE)
 class MediaSourcePrivateClient;
@@ -109,7 +113,7 @@ struct PlatformMedia {
 
 struct MediaEngineSupportParameters {
 
-    MediaEngineSupportParameters() { }
+    MediaEngineSupportParameters() = default;
 
     ContentType type;
     URL url;
@@ -118,9 +122,24 @@ struct MediaEngineSupportParameters {
     Vector<ContentType> contentTypesRequiringHardwareSupport;
 };
 
+struct PlatformVideoPlaybackQualityMetrics {
+    PlatformVideoPlaybackQualityMetrics(unsigned long totalVideoFrames, unsigned long droppedVideoFrames, unsigned long corruptedVideoFrames, double totalFrameDelay)
+        : totalVideoFrames(totalVideoFrames)
+        , droppedVideoFrames(droppedVideoFrames)
+        , corruptedVideoFrames(corruptedVideoFrames)
+        , totalFrameDelay(totalFrameDelay)
+    {
+    }
+
+    unsigned long totalVideoFrames;
+    unsigned long droppedVideoFrames;
+    unsigned long corruptedVideoFrames;
+    double totalFrameDelay;
+};
+
 extern const PlatformMedia NoPlatformMedia;
 
-class CDMSessionClient;
+class LegacyCDMSessionClient;
 class CachedResourceLoader;
 class ContentType;
 class GraphicsContext;
@@ -142,7 +161,7 @@ class MediaPlayerRequestInstallMissingPluginsCallback;
 
 class MediaPlayerClient {
 public:
-    virtual ~MediaPlayerClient() { }
+    virtual ~MediaPlayerClient() = default;
 
     // the network state has changed
     virtual void mediaPlayerNetworkStateChanged(MediaPlayer*) { }
@@ -213,6 +232,10 @@ public:
     virtual bool mediaPlayerKeyNeeded(MediaPlayer*, Uint8Array*) { return false; }
     virtual String mediaPlayerMediaKeysStorageDirectory() const { return emptyString(); }
 #endif
+
+#if ENABLE(ENCRYPTED_MEDIA)
+    virtual void mediaPlayerInitializationDataEncountered(const String&, RefPtr<ArrayBuffer>&&) { }
+#endif
     
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     virtual void mediaPlayerCurrentPlaybackTargetIsWirelessChanged(MediaPlayer*) { };
@@ -277,11 +300,16 @@ public:
     virtual bool mediaPlayerShouldDisableSleep() const { return false; }
     virtual const Vector<ContentType>& mediaContentTypesRequiringHardwareSupport() const;
     virtual bool mediaPlayerShouldCheckHardwareSupport() const { return false; }
+
+#if !RELEASE_LOG_DISABLED
+    virtual const void* mediaPlayerLogIdentifier() { return nullptr; }
+    virtual const PAL::Logger& mediaPlayerLogger() = 0;
+#endif
 };
 
 class MediaPlayerSupportsTypeClient {
 public:
-    virtual ~MediaPlayerSupportsTypeClient() { }
+    virtual ~MediaPlayerSupportsTypeClient() = default;
 
     virtual bool mediaPlayerNeedsSiteSpecificHacks() const { return false; }
     virtual String mediaPlayerDocumentHost() const { return String(); }
@@ -360,9 +388,15 @@ public:
     // This is different from the asynchronous MediaKeyError.
     enum MediaKeyException { NoError, InvalidPlayerState, KeySystemNotSupported };
 
-    std::unique_ptr<CDMSession> createSession(const String& keySystem, CDMSessionClient*);
-    void setCDMSession(CDMSession*);
+    std::unique_ptr<LegacyCDMSession> createSession(const String& keySystem, LegacyCDMSessionClient*);
+    void setCDMSession(LegacyCDMSession*);
     void keyAdded();
+#endif
+
+#if ENABLE(ENCRYPTED_MEDIA)
+    void cdmInstanceAttached(const CDMInstance&);
+    void cdmInstanceDetached(const CDMInstance&);
+    void attemptToDecryptWithInstance(const CDMInstance&);
 #endif
 
     bool paused() const;
@@ -529,6 +563,10 @@ public:
     String mediaKeysStorageDirectory() const;
 #endif
 
+#if ENABLE(ENCRYPTED_MEDIA)
+    void initializationDataEncountered(const String&, RefPtr<ArrayBuffer>&&);
+#endif
+
     String referrer() const;
     String userAgent() const;
 
@@ -574,10 +612,7 @@ public:
     unsigned long long fileSize() const;
 
 #if ENABLE(MEDIA_SOURCE)
-    unsigned long totalVideoFrames();
-    unsigned long droppedVideoFrames();
-    unsigned long corruptedVideoFrames();
-    MediaTime totalFrameDelay();
+    std::optional<PlatformVideoPlaybackQualityMetrics> videoPlaybackQualityMetrics();
 #endif
 
     bool shouldWaitForResponseToAuthenticationChallenge(const AuthenticationChallenge&);
@@ -596,6 +631,11 @@ public:
 
     const Vector<ContentType>& mediaContentTypesRequiringHardwareSupport() const;
     bool shouldCheckHardwareSupport() const;
+
+#if !RELEASE_LOG_DISABLED
+    const PAL::Logger& mediaPlayerLogger();
+    const void* mediaPlayerLogIdentifier() { return client().mediaPlayerLogIdentifier(); }
+#endif
 
 private:
     MediaPlayer(MediaPlayerClient&);
@@ -647,6 +687,20 @@ public:
     WEBCORE_EXPORT static void callRegisterMediaEngine(MediaEngineRegister);
 };
 
+} // namespace WebCore
+
+namespace PAL {
+
+template<typename Type>
+struct LogArgument;
+
+template <>
+struct LogArgument<WTF::MediaTime> {
+    static String toString(const WTF::MediaTime& time)
+    {
+        return time.toString();
+    }
+};
 }
 
 #endif // ENABLE(VIDEO)

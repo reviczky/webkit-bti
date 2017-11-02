@@ -77,8 +77,8 @@ static inline RenderWidget* findWidgetRenderer(const Node* node)
 
 RenderWidget* HTMLEmbedElement::renderWidgetLoadingPlugin() const
 {
-    FrameView* view = document().view();
-    if (!view || (!view->isInRenderTreeLayout() && !view->isPainting())) {
+    RefPtr<FrameView> view = document().view();
+    if (!view || (!view->layoutContext().isInRenderTreeLayout() && !view->isPainting())) {
         // Needs to load the plugin immediatedly because this function is called
         // when JavaScript code accesses the plugin.
         // FIXME: <rdar://16893708> Check if dispatching events here is safe.
@@ -199,8 +199,8 @@ bool HTMLEmbedElement::rendererIsNeeded(const RenderStyle& style)
 
     // If my parent is an <object> and is not set to use fallback content, I
     // should be ignored and not get a renderer.
-    ContainerNode* parent = parentNode();
-    if (is<HTMLObjectElement>(parent)) {
+    RefPtr<ContainerNode> parent = parentNode();
+    if (is<HTMLObjectElement>(parent.get())) {
         if (!parent->renderer())
             return false;
         if (!downcast<HTMLObjectElement>(*parent).useFallbackContent()) {

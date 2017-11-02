@@ -101,7 +101,7 @@ public:
     // ImageFrame metadata which forces caching or re-caching the ImageFrame.
     IntSize frameSizeAtIndex(size_t index, SubsamplingLevel subsamplingLevel = SubsamplingLevel::Default) { return m_frameCache->frameSizeAtIndex(index, subsamplingLevel); }
     unsigned frameBytesAtIndex(size_t index, SubsamplingLevel subsamplingLevel = SubsamplingLevel::Default) { return m_frameCache->frameBytesAtIndex(index, subsamplingLevel); }
-    float frameDurationAtIndex(size_t index) { return m_frameCache->frameDurationAtIndex(index); }
+    Seconds frameDurationAtIndex(size_t index) { return m_frameCache->frameDurationAtIndex(index); }
     ImageOrientation frameOrientationAtIndex(size_t index) { return m_frameCache->frameOrientationAtIndex(index); }
 
     NativeImagePtr frameImageAtIndex(size_t index) { return m_frameCache->frameImageAtIndex(index); }
@@ -120,12 +120,6 @@ private:
     RefPtr<ImageDecoder> m_decoder;
 
     std::optional<SubsamplingLevel> m_maximumSubsamplingLevel;
-
-#if PLATFORM(IOS)
-    // FIXME: We should expose a setting to enable/disable progressive loading so that we can remove the PLATFORM(IOS)-guard.
-    double m_progressiveLoadChunkTime { 0 };
-    uint16_t m_progressiveLoadChunkCount { 0 };
-#endif
 
     AlphaOption m_alphaOption { AlphaOption::Premultiplied };
     GammaAndColorProfileOption m_gammaAndColorProfileOption { GammaAndColorProfileOption::Applied };

@@ -42,9 +42,11 @@ _ALWAYS_SPECIALCASED_ENUM_VALUE_SUBSTRINGS = set(['2D', 'API', 'CSS', 'DOM', 'HT
 _ALWAYS_SPECIALCASED_ENUM_VALUE_LOOKUP_TABLE = dict([(s.upper(), s) for s in _ALWAYS_SPECIALCASED_ENUM_VALUE_SUBSTRINGS])
 
 _ENUM_IDENTIFIER_RENAME_MAP = {
+    'canvas-webgl': 'CanvasWebGL',  # Recording.Type.canvas-webgl
     'webgl': 'WebGL',  # Canvas.ContextType.webgl
     'webgl2': 'WebGL2',  # Canvas.ContextType.webgl2
     'webgpu': 'WebGPU',  # Canvas.ContextType.webgpu
+    'webrtc': 'WebRTC',  # Console.ChannelSource.webrtc
 }
 
 # These objects are built manually by creating and setting InspectorValues.

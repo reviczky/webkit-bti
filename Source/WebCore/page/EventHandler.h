@@ -75,6 +75,7 @@ class HitTestResult;
 class KeyboardEvent;
 class MouseEventWithHitTestResults;
 class Node;
+class Pasteboard;
 class PlatformGestureEvent;
 class PlatformKeyboardEvent;
 class PlatformTouchEvent;
@@ -155,9 +156,21 @@ public:
     WEBCORE_EXPORT void setCapturingMouseEventsElement(Element*);
 
 #if ENABLE(DRAG_SUPPORT)
-    bool updateDragAndDrop(const PlatformMouseEvent&, DataTransfer&);
-    void cancelDragAndDrop(const PlatformMouseEvent&, DataTransfer&);
-    bool performDragAndDrop(const PlatformMouseEvent&, DataTransfer&);
+    struct DragTargetResponse {
+#if !COMPILER_SUPPORTS(NSDMI_FOR_AGGREGATES)
+        DragTargetResponse() = default;
+        DragTargetResponse(bool accept, std::optional<DragOperation> operation)
+            : accept(accept)
+            , operation(operation)
+        {
+        }
+#endif
+        bool accept { false };
+        std::optional<DragOperation> operation;
+    };
+    DragTargetResponse updateDragAndDrop(const PlatformMouseEvent&, const std::function<std::unique_ptr<Pasteboard>()>&, DragOperation sourceOperation, bool draggingFiles);
+    void cancelDragAndDrop(const PlatformMouseEvent&, std::unique_ptr<Pasteboard>&&, DragOperation, bool draggingFiles);
+    bool performDragAndDrop(const PlatformMouseEvent&, std::unique_ptr<Pasteboard>&&, DragOperation, bool draggingFiles);
     void updateDragStateAfterEditDragIfNeeded(Element& rootEditableElement);
     RefPtr<Element> draggedElement() const;
 #endif
@@ -256,7 +269,7 @@ public:
     
     WEBCORE_EXPORT void didStartDrag();
     WEBCORE_EXPORT void dragCancelled();
-    WEBCORE_EXPORT void dragSourceEndedAt(const PlatformMouseEvent&, DragOperation);
+    WEBCORE_EXPORT void dragSourceEndedAt(const PlatformMouseEvent&, DragOperation, MayExtendDragSession = MayExtendDragSession::No);
 #endif
 
     void focusDocumentView();
@@ -323,8 +336,7 @@ public:
 private:
 #if ENABLE(DRAG_SUPPORT)
     static DragState& dragState();
-    static const double TextDragDelay;
-    Ref<DataTransfer> createDraggingDataTransfer() const;
+    static const Seconds TextDragDelay;
 #endif
 
     bool eventActivatedView(const PlatformMouseEvent&) const;
@@ -393,7 +405,8 @@ private:
     bool dispatchMouseEvent(const AtomicString& eventType, Node* target, bool cancelable, int clickCount, const PlatformMouseEvent&, bool setUnder);
 
 #if ENABLE(DRAG_SUPPORT)
-    bool dispatchDragEvent(const AtomicString& eventType, Element& target, const PlatformMouseEvent&, DataTransfer*);
+    bool dispatchDragEvent(const AtomicString& eventType, Element& target, const PlatformMouseEvent&, DataTransfer&);
+    DragTargetResponse dispatchDragEnterOrDragOverEvent(const AtomicString& eventType, Element& target, const PlatformMouseEvent&, std::unique_ptr<Pasteboard>&& , DragOperation, bool draggingFiles);
     void invalidateDataTransfer();
 
     bool handleDrag(const MouseEventWithHitTestResults&, CheckDragHysteresis);
@@ -405,6 +418,7 @@ private:
     void clearDragState();
 
     bool dispatchDragSrcEvent(const AtomicString& eventType, const PlatformMouseEvent&);
+    bool dispatchDragStartEventOnSourceElement(DataTransfer&);
 
     bool dragHysteresisExceeded(const FloatPoint&) const;
     bool dragHysteresisExceeded(const IntPoint&) const;
@@ -563,7 +577,7 @@ private:
     IntPoint m_lastKnownMousePosition;
     IntPoint m_lastKnownMouseGlobalPosition;
     IntPoint m_mouseDownPos; // In our view's coords.
-    double m_mouseDownTimestamp { 0 };
+    WallTime m_mouseDownTimestamp;
     PlatformMouseEvent m_mouseDown;
 
 #if PLATFORM(COCOA)

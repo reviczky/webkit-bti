@@ -385,7 +385,7 @@ void RenderSVGText::layout()
     ASSERT(!simplifiedLayout());
     ASSERT(!scrollsOverflow());
     ASSERT(!hasControlClip());
-    ASSERT(!multiColumnFlowThread());
+    ASSERT(!multiColumnFlow());
     ASSERT(!positionedObjects());
     ASSERT(!m_overflow);
     ASSERT(!isAnonymousBlock());
@@ -452,7 +452,7 @@ bool RenderSVGText::nodeAtPoint(const HitTestRequest&, HitTestResult&, const Hit
     return false;
 }
 
-VisiblePosition RenderSVGText::positionForPoint(const LayoutPoint& pointInContents, const RenderRegion* region)
+VisiblePosition RenderSVGText::positionForPoint(const LayoutPoint& pointInContents, const RenderFragmentContainer* fragment)
 {
     RootInlineBox* rootBox = firstRootBox();
     if (!rootBox)
@@ -465,7 +465,7 @@ VisiblePosition RenderSVGText::positionForPoint(const LayoutPoint& pointInConten
     if (!closestBox)
         return createVisiblePosition(0, DOWNSTREAM);
 
-    return closestBox->renderer().positionForPoint(LayoutPoint(pointInContents.x(), closestBox->y()), region);
+    return closestBox->renderer().positionForPoint(LayoutPoint(pointInContents.x(), closestBox->y()), fragment);
 }
 
 void RenderSVGText::absoluteQuads(Vector<FloatQuad>& quads, bool* wasFixed) const
@@ -517,22 +517,24 @@ FloatRect RenderSVGText::repaintRectInLocalCoordinates() const
     return repaintRect;
 }
 
-void RenderSVGText::addChild(RenderObject* child, RenderObject* beforeChild)
+void RenderSVGText::addChild(RenderPtr<RenderObject> newChild, RenderObject* beforeChild)
 {
-    RenderSVGBlock::addChild(child, beforeChild);
+    auto& child = *newChild;
+    RenderSVGBlock::addChild(WTFMove(newChild), beforeChild);
 
-    SVGResourcesCache::clientWasAddedToTree(*child);
-    subtreeChildWasAdded(child);
+    SVGResourcesCache::clientWasAddedToTree(child);
+    subtreeChildWasAdded(&child);
 }
 
-void RenderSVGText::removeChild(RenderObject& child)
+RenderPtr<RenderObject> RenderSVGText::takeChild(RenderObject& child)
 {
     SVGResourcesCache::clientWillBeRemovedFromTree(child);
 
     Vector<SVGTextLayoutAttributes*, 2> affectedAttributes;
     subtreeChildWillBeRemoved(&child, affectedAttributes);
-    RenderSVGBlock::removeChild(child);
+    auto takenChild = RenderSVGBlock::takeChild(child);
     subtreeChildWasRemoved(affectedAttributes);
+    return takenChild;
 }
 
 // Fix for <rdar://problem/8048875>. We should not render :first-line CSS Style

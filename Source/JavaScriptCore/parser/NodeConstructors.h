@@ -171,8 +171,19 @@ namespace JSC {
     {
     }
 
-    inline NewTargetNode::NewTargetNode(const JSTokenLocation& location)
+    inline MetaPropertyNode::MetaPropertyNode(const JSTokenLocation& location)
         : ExpressionNode(location)
+    {
+    }
+
+    inline NewTargetNode::NewTargetNode(const JSTokenLocation& location)
+        : MetaPropertyNode(location)
+    {
+    }
+
+    inline ImportMetaNode::ImportMetaNode(const JSTokenLocation& location, ExpressionNode* expr)
+        : MetaPropertyNode(location)
+        , m_expr(expr)
     {
     }
 
@@ -1040,8 +1051,9 @@ namespace JSC {
     {
     }
     
-    inline ForOfNode::ForOfNode(const JSTokenLocation& location, ExpressionNode* lexpr, ExpressionNode* expr, StatementNode* statement, VariableEnvironment& lexicalVariables)
+    inline ForOfNode::ForOfNode(bool isForAwait, const JSTokenLocation& location, ExpressionNode* lexpr, ExpressionNode* expr, StatementNode* statement, VariableEnvironment& lexicalVariables)
         : EnumerationNode(location, lexpr, expr, statement, lexicalVariables)
+        , m_isForAwait(isForAwait)
     {
     }
     

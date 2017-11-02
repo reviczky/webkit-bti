@@ -40,7 +40,6 @@ static WebPaymentCoordinatorProxy* activePaymentCoordinatorProxy;
 
 WebPaymentCoordinatorProxy::WebPaymentCoordinatorProxy(WebPageProxy& webPageProxy)
     : m_webPageProxy(webPageProxy)
-    , m_weakPtrFactory(this)
     , m_state(State::Idle)
     , m_merchantValidationState(MerchantValidationState::Idle)
 {
@@ -65,7 +64,7 @@ void WebPaymentCoordinatorProxy::canMakePayments(bool& reply)
 
 void WebPaymentCoordinatorProxy::canMakePaymentsWithActiveCard(const String& merchantIdentifier, const String& domainName, uint64_t requestID)
 {
-    auto weakThis = m_weakPtrFactory.createWeakPtr();
+    auto weakThis = m_weakPtrFactory.createWeakPtr(*this);
     platformCanMakePaymentsWithActiveCard(merchantIdentifier, domainName, [weakThis, requestID](bool canMakePayments) {
         auto paymentCoordinatorProxy = weakThis.get();
         if (!paymentCoordinatorProxy)
@@ -77,7 +76,7 @@ void WebPaymentCoordinatorProxy::canMakePaymentsWithActiveCard(const String& mer
 
 void WebPaymentCoordinatorProxy::openPaymentSetup(const String& merchantIdentifier, const String& domainName, uint64_t requestID)
 {
-    auto weakThis = m_weakPtrFactory.createWeakPtr();
+    auto weakThis = m_weakPtrFactory.createWeakPtr(*this);
     platformOpenPaymentSetup(merchantIdentifier, domainName, [weakThis, requestID](bool result) {
         auto paymentCoordinatorProxy = weakThis.get();
         if (!paymentCoordinatorProxy)
@@ -87,7 +86,7 @@ void WebPaymentCoordinatorProxy::openPaymentSetup(const String& merchantIdentifi
     });
 }
 
-void WebPaymentCoordinatorProxy::showPaymentUI(const String& originatingURLString, const Vector<String>& linkIconURLStrings, const WebCore::PaymentRequest& paymentRequest, bool& result)
+void WebPaymentCoordinatorProxy::showPaymentUI(const String& originatingURLString, const Vector<String>& linkIconURLStrings, const WebCore::ApplePaySessionPaymentRequest& paymentRequest, bool& result)
 {
     // FIXME: Make this a message check.
     ASSERT(canBegin());
@@ -234,7 +233,7 @@ void WebPaymentCoordinatorProxy::didAuthorizePayment(const WebCore::Payment& pay
     m_webPageProxy.send(Messages::WebPaymentCoordinator::DidAuthorizePayment(payment));
 }
 
-void WebPaymentCoordinatorProxy::didSelectShippingMethod(const WebCore::PaymentRequest::ShippingMethod& shippingMethod)
+void WebPaymentCoordinatorProxy::didSelectShippingMethod(const WebCore::ApplePaySessionPaymentRequest::ShippingMethod& shippingMethod)
 {
     ASSERT(m_state == State::Active);
 

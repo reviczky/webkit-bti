@@ -29,14 +29,15 @@
 #include "SandboxExtension.h"
 #include "TextCheckerState.h"
 #include "UserData.h"
-#include <WebCore/SessionID.h>
+#include <pal/SessionID.h>
+#include <wtf/HashMap.h>
+#include <wtf/ProcessID.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/Vector.h>
 #include <wtf/text/StringHash.h>
 #include <wtf/text/WTFString.h>
 
 #if PLATFORM(COCOA)
-#include "MachPort.h"
 #include <WebCore/MachSendRight.h>
 #endif
 
@@ -93,6 +94,8 @@ struct WebProcessCreationParameters {
 #endif
     String mediaKeyStorageDirectory;
 
+    String webCoreLoggingChannels;
+
     Vector<String> urlSchemesRegisteredAsEmptyDocument;
     Vector<String> urlSchemesRegisteredAsSecure;
     Vector<String> urlSchemesRegisteredAsBypassingContentSecurityPolicy;
@@ -134,7 +137,7 @@ struct WebProcessCreationParameters {
     String uiProcessBundleIdentifier;
 #endif
 
-    pid_t presentingApplicationPID { 0 };
+    ProcessID presentingApplicationPID { 0 };
 
 #if PLATFORM(COCOA)
     WebCore::MachSendRight acceleratedCompositingPort;
@@ -153,7 +156,7 @@ struct WebProcessCreationParameters {
     HashMap<String, bool> notificationPermissions;
 #endif
 
-    HashMap<WebCore::SessionID, HashMap<unsigned, double>> plugInAutoStartOriginHashes;
+    HashMap<PAL::SessionID, HashMap<unsigned, double>> plugInAutoStartOriginHashes;
     Vector<String> plugInAutoStartOrigins;
 
 #if ENABLE(NETSCAPE_PLUGIN_API)

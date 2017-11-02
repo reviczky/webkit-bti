@@ -27,10 +27,10 @@
 #include "config.h"
 #include "NavigatorBase.h"
 
-#include "Language.h"
 #include "NetworkStateNotifier.h"
 #include "ServiceWorkerContainer.h"
 #include <mutex>
+#include <wtf/Language.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/NumberOfCores.h>
 #include <wtf/text/WTFString.h>
@@ -86,9 +86,7 @@ NavigatorBase::NavigatorBase(ScriptExecutionContext& context)
 #endif
 }
 
-NavigatorBase::~NavigatorBase()
-{
-}
+NavigatorBase::~NavigatorBase() = default;
 
 String NavigatorBase::appName()
 {

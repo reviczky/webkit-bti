@@ -44,7 +44,6 @@
 #include <runtime/ConsoleTypes.h>
 #include <wtf/Forward.h>
 #include <wtf/Seconds.h>
-#include <wtf/Vector.h>
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
 #include "MediaPlaybackTargetContext.h"
@@ -178,7 +177,6 @@ public:
 #endif    
 
     virtual PlatformPageClient platformPageClient() const = 0;
-    virtual void scrollbarsModeDidChange() const = 0;
 
 #if ENABLE(CURSOR_SUPPORT)
     virtual void setCursor(const Cursor&) = 0;
@@ -372,6 +370,8 @@ public:
     virtual void enableSuddenTermination() { }
     virtual void disableSuddenTermination() { }
 
+    virtual void contentRuleListNotification(const WebCore::URL&, const HashSet<std::pair<String, String>>&) { };
+
 #if PLATFORM(WIN)
     virtual void setLastSetCursorToCurrentCursor() = 0;
     virtual void AXStartFrameLoad() = 0;
@@ -381,7 +381,6 @@ public:
     virtual bool selectItemWritingDirectionIsNatural() = 0;
     virtual bool selectItemAlignmentFollowsMenuWritingDirection() = 0;
     // Checks if there is an opened popup, called by RenderMenuList::showPopup().
-    virtual bool hasOpenedPopup() const = 0;
     virtual RefPtr<PopupMenu> createPopupMenu(PopupMenuClient&) const = 0;
     virtual RefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient&) const = 0;
 
@@ -465,8 +464,10 @@ public:
     virtual void reportProcessCPUTime(Seconds, ActivityStateForCPUSampling) { }
     virtual RefPtr<Icon> createIconForFiles(const Vector<String>& /* filenames */) = 0;
 
+    virtual void requestStorageAccess(String&& /*subFrameHost*/, String&& /*topFrameHost*/, WTF::Function<void (bool)>&& callback) { callback(false); }
+
 protected:
-    virtual ~ChromeClient() { }
+    virtual ~ChromeClient() = default;
 };
 
 } // namespace WebCore

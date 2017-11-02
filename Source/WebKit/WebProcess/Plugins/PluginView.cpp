@@ -897,7 +897,7 @@ std::unique_ptr<WebEvent> PluginView::createWebEvent(MouseEvent& event) const
     if (event.metaKey())
         modifiers |= WebEvent::MetaKey;
 
-    return std::make_unique<WebMouseEvent>(type, button, m_plugin->convertToRootView(IntPoint(event.offsetX(), event.offsetY())), event.screenLocation(), 0, 0, 0, clickCount, static_cast<WebEvent::Modifiers>(modifiers), 0, 0);
+    return std::make_unique<WebMouseEvent>(type, button, event.buttons(), m_plugin->convertToRootView(IntPoint(event.offsetX(), event.offsetY())), event.screenLocation(), 0, 0, 0, clickCount, static_cast<WebEvent::Modifiers>(modifiers), WallTime { }, 0);
 }
 
 void PluginView::handleEvent(Event& event)
@@ -1284,11 +1284,8 @@ void PluginView::removeStream(Stream* stream)
 
 void PluginView::cancelAllStreams()
 {
-    Vector<RefPtr<Stream>> streams;
-    copyValuesToVector(m_streams, streams);
-    
-    for (size_t i = 0; i < streams.size(); ++i)
-        streams[i]->cancel();
+    for (auto& stream : copyToVector(m_streams.values()))
+        stream->cancel();
 
     // Cancelling a stream removes it from the m_streams map, so if we cancel all streams the map should be empty.
     ASSERT(m_streams.isEmpty());

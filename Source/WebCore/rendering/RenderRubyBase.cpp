@@ -44,9 +44,7 @@ RenderRubyBase::RenderRubyBase(Document& document, RenderStyle&& style)
     setInline(false);
 }
 
-RenderRubyBase::~RenderRubyBase()
-{
-}
+RenderRubyBase::~RenderRubyBase() = default;
 
 bool RenderRubyBase::isChildAllowed(const RenderObject& child, const RenderStyle&) const
 {
@@ -96,8 +94,9 @@ void RenderRubyBase::moveInlineChildren(RenderRubyBase* toBase, RenderObject* be
         if (lastChild && lastChild->isAnonymousBlock() && lastChild->childrenInline())
             toBlock = downcast<RenderBlock>(lastChild);
         else {
-            toBlock = toBase->createAnonymousBlock();
-            toBase->insertChildInternal(toBlock, nullptr, NotifyChildren);
+            auto newToBlock = toBase->createAnonymousBlock();
+            toBlock = newToBlock.get();
+            toBase->insertChildInternal(WTFMove(newToBlock), nullptr, NotifyChildren);
         }
     }
     // Move our inline children into the target block we determined above.
@@ -124,7 +123,7 @@ void RenderRubyBase::moveBlockChildren(RenderRubyBase* toBase, RenderObject* bef
         RenderBlock* anonBlockThere = downcast<RenderBlock>(lastChildThere);
         anonBlockHere->moveAllChildrenTo(anonBlockThere, true);
         anonBlockHere->deleteLines();
-        anonBlockHere->destroy();
+        anonBlockHere->removeFromParentAndDestroy();
     }
     // Move all remaining children normally.
     moveChildrenTo(toBase, firstChild(), beforeChild);

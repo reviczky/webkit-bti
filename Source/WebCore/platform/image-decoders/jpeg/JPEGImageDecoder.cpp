@@ -502,17 +502,15 @@ void term_source(j_decompress_ptr jd)
 }
 
 JPEGImageDecoder::JPEGImageDecoder(AlphaOption alphaOption, GammaAndColorProfileOption gammaAndColorProfileOption)
-    : ImageDecoder(alphaOption, gammaAndColorProfileOption)
+    : ScalableImageDecoder(alphaOption, gammaAndColorProfileOption)
 {
 }
 
-JPEGImageDecoder::~JPEGImageDecoder()
-{
-}
+JPEGImageDecoder::~JPEGImageDecoder() = default;
 
 bool JPEGImageDecoder::setSize(const IntSize& size)
 {
-    if (!ImageDecoder::setSize(size))
+    if (!ScalableImageDecoder::setSize(size))
         return false;
 
     prepareScaleDataIfNecessary();
@@ -536,7 +534,7 @@ ImageFrame* JPEGImageDecoder::frameBufferAtIndex(size_t index)
 bool JPEGImageDecoder::setFailed()
 {
     m_reader = nullptr;
-    return ImageDecoder::setFailed();
+    return ScalableImageDecoder::setFailed();
 }
 
 template <J_COLOR_SPACE colorSpace>

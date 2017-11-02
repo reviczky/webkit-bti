@@ -108,4 +108,43 @@ WI.TextRange = class TextRange
 
         return true;
     }
+
+    clone()
+    {
+        console.assert(!isNaN(this._startLine), "TextRange needs line/column data.");
+        return new WI.TextRange(this._startLine, this._startColumn, this._endLine, this._endColumn);
+    }
+
+    cloneAndModify(deltaStartLine, deltaStartColumn, deltaEndLine, deltaEndColumn)
+    {
+        console.assert(!isNaN(this._startLine), "TextRange needs line/column data.");
+
+        let startLine = this._startLine + deltaStartLine;
+        let startColumn = this._startColumn + deltaStartColumn;
+        let endLine = this._endLine + deltaEndLine;
+        let endColumn = this._endColumn + deltaEndColumn;
+        console.assert(startLine >= 0 && startColumn >= 0 && endLine >= 0 && endColumn >= 0, `Cannot have negative numbers in TextRange ${startLine}:${startColumn}...${endLine}:${endColumn}`);
+
+        return new WI.TextRange(startLine, startColumn, endLine, endColumn);
+    }
+
+    collapseToEnd()
+    {
+        console.assert(!isNaN(this._endLine), "TextRange needs line/column data.");
+        return new WI.TextRange(this._endLine, this._endColumn, this._endLine, this._endColumn);
+    }
+
+    relativeTo(line, column)
+    {
+        let deltaStartColumn = 0;
+        if (this._startLine === line)
+            deltaStartColumn = -column;
+
+        let deltaEndColumn = 0;
+        if (this._endLine === line)
+            deltaEndColumn = -column;
+
+        return this.cloneAndModify(-line, deltaStartColumn, -line, deltaEndColumn);
+    }
+
 };

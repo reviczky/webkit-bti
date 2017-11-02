@@ -2,6 +2,57 @@
 # exclusively needed in only one subdirectory of Source (e.g. only needed by
 # WebCore), then put it there instead.
 
+macro(WEBKIT_COMPUTE_SOURCES _framework)
+    foreach (_sourcesListFile IN LISTS ${_framework}_UNIFIED_SOURCE_LIST_FILES)
+      configure_file("${CMAKE_CURRENT_SOURCE_DIR}/${_sourcesListFile}" "${DERIVED_SOURCES_DIR}/${_framework}/${_sourcesListFile}" COPYONLY)
+      message(STATUS "Using source list file: ${_sourcesListFile}")
+
+      list(APPEND _sourceListFileTruePaths "${CMAKE_CURRENT_SOURCE_DIR}/${_sourcesListFile}")
+    endforeach ()
+
+    if (WIN32 AND INTERNAL_BUILD)
+        set(WTF_SCRIPTS_DIR "${CMAKE_BINARY_DIR}/../include/private/WTF/Scripts")
+    else ()
+        set(WTF_SCRIPTS_DIR "${FORWARDING_HEADERS_DIR}/WTF/Scripts")
+    endif ()
+
+    execute_process(COMMAND ${RUBY_EXECUTABLE} ${WTF_SCRIPTS_DIR}/generate-unified-source-bundles.rb
+        "--derived-sources-path" "${DERIVED_SOURCES_DIR}/${_framework}"
+        "--source-tree-path" ${CMAKE_CURRENT_SOURCE_DIR}
+        "--print-bundled-sources"
+        "--feature-flags" "${UNIFIED_SOURCE_LIST_ENABLED_FEATURES}"
+        ${_sourceListFileTruePaths}
+        RESULT_VARIABLE _resultTmp
+        OUTPUT_VARIABLE _outputTmp)
+
+    if (${_resultTmp})
+         message(FATAL_ERROR "generate-unified-source-bundles.rb exited with non-zero status, exiting")
+    endif ()
+
+    foreach (_sourceFileTmp IN LISTS _outputTmp)
+        set_source_files_properties(${_sourceFileTmp} PROPERTIES HEADER_FILE_ONLY ON)
+        list(APPEND ${_framework}_HEADERS ${_sourceFileTmp})
+    endforeach ()
+    unset(_sourceFileTmp)
+
+    execute_process(COMMAND ${RUBY_EXECUTABLE} ${WTF_SCRIPTS_DIR}/generate-unified-source-bundles.rb
+        "--derived-sources-path" "${DERIVED_SOURCES_DIR}/${_framework}"
+        "--source-tree-path" ${CMAKE_CURRENT_SOURCE_DIR}
+        "--feature-flags" "${UNIFIED_SOURCE_LIST_ENABLED_FEATURES}"
+        ${_sourceListFileTruePaths}
+        RESULT_VARIABLE  _resultTmp
+        OUTPUT_VARIABLE _outputTmp)
+
+    if (${_resultTmp})
+        message(FATAL_ERROR "generate-unified-source-bundles.rb exited with non-zero status, exiting")
+    endif ()
+
+    list(APPEND ${_framework}_SOURCES ${_outputTmp})
+    unset(_platformSourcesFile)
+    unset(_resultTmp)
+    unset(_outputTmp)
+endmacro()
+
 macro(WEBKIT_INCLUDE_CONFIG_FILES_IF_EXISTS)
     set(_file ${CMAKE_CURRENT_SOURCE_DIR}/Platform${PORT}.cmake)
     if (EXISTS ${_file})
@@ -205,4 +256,11 @@ macro(WEBKIT_POPULATE_LIBRARY_VERSION library_name)
     if (NOT DEFINED ${library_name}_VERSION)
         set(${library_name}_VERSION ${PROJECT_VERSION})
     endif ()
+endmacro()
+
+macro(WEBKIT_CREATE_SYMLINK target src dest)
+    add_custom_command(TARGET ${target} POST_BUILD
+        COMMAND ln -sf ${src} ${dest}
+        DEPENDS ${dest}
+        COMMENT "Create symlink from ${src} to ${dest}")
 endmacro()

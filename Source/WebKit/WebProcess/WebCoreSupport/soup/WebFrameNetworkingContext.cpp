@@ -28,21 +28,24 @@
 #include "WebFrameNetworkingContext.h"
 
 #include "NetworkSession.h"
+#include "NetworkSessionCreationParameters.h"
 #include "SessionTracker.h"
 #include "WebFrame.h"
 #include "WebPage.h"
+#include "WebsiteDataStoreParameters.h"
 #include <WebCore/FrameLoader.h>
 #include <WebCore/NetworkStorageSession.h>
-#include <WebCore/SessionID.h>
 #include <WebCore/Settings.h>
 #include <WebCore/SoupNetworkSession.h>
+#include <pal/SessionID.h>
 
 using namespace WebCore;
 
 namespace WebKit {
 
-void WebFrameNetworkingContext::ensurePrivateBrowsingSession(SessionID sessionID)
+void WebFrameNetworkingContext::ensurePrivateBrowsingSession(WebsiteDataStoreParameters&& parameters)
 {
+    auto sessionID = parameters.networkSessionParameters.sessionID;
     ASSERT(RunLoop::isMain());
     ASSERT(sessionID.isEphemeral());
 
@@ -50,7 +53,7 @@ void WebFrameNetworkingContext::ensurePrivateBrowsingSession(SessionID sessionID
         return;
 
     NetworkStorageSession::ensurePrivateBrowsingSession(sessionID, String::number(sessionID.sessionID()));
-    SessionTracker::setSession(sessionID, NetworkSession::create(sessionID));
+    SessionTracker::setSession(sessionID, NetworkSession::create(WTFMove(parameters.networkSessionParameters)));
 }
 
 void WebFrameNetworkingContext::ensureWebsiteDataStoreSession(WebsiteDataStoreParameters&&)

@@ -66,7 +66,7 @@
 #include "HTMLTextAreaElement.h"
 #include "InspectorInstrumentation.h"
 #include "KeyframeList.h"
-#include "LinkHash.h"
+#include "Logging.h"
 #include "MathMLElement.h"
 #include "MathMLNames.h"
 #include "MediaList.h"
@@ -74,7 +74,6 @@
 #include "NodeRenderStyle.h"
 #include "PageRuleCollector.h"
 #include "Pair.h"
-#include "RenderRegion.h"
 #include "RenderScrollbar.h"
 #include "RenderStyleConstants.h"
 #include "RenderTheme.h"
@@ -89,6 +88,7 @@
 #include "SVGURIReference.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
+#include "SharedStringHash.h"
 #include "StyleBuilder.h"
 #include "StyleColor.h"
 #include "StyleCachedImage.h"
@@ -140,7 +140,6 @@ inline void StyleResolver::State::clear()
     m_element = nullptr;
     m_parentStyle = nullptr;
     m_ownedParentStyle = nullptr;
-    m_regionForStyling = nullptr;
     m_cssToLengthConversionData = CSSToLengthConversionData();
 }
 
@@ -297,10 +296,9 @@ void StyleResolver::sweepMatchedPropertiesCache()
     m_matchedPropertiesCacheAdditionsSinceLastSweep = 0;
 }
 
-StyleResolver::State::State(const Element& element, const RenderStyle* parentStyle, const RenderStyle* documentElementStyle, const RenderRegion* regionForStyling, const SelectorFilter* selectorFilter)
+StyleResolver::State::State(const Element& element, const RenderStyle* parentStyle, const RenderStyle* documentElementStyle, const SelectorFilter* selectorFilter)
     : m_element(&element)
     , m_parentStyle(parentStyle)
-    , m_regionForStyling(regionForStyling)
     , m_elementLinkState(element.document().visitedLinkState().determineLinkState(element))
     , m_selectorFilter(selectorFilter)
 {
@@ -341,11 +339,11 @@ static inline bool isAtShadowBoundary(const Element& element)
     return parentNode && parentNode->isShadowRoot();
 }
 
-ElementStyle StyleResolver::styleForElement(const Element& element, const RenderStyle* parentStyle, const RenderStyle* parentBoxStyle, RuleMatchingBehavior matchingBehavior, const RenderRegion* regionForStyling, const SelectorFilter* selectorFilter)
+ElementStyle StyleResolver::styleForElement(const Element& element, const RenderStyle* parentStyle, const RenderStyle* parentBoxStyle, RuleMatchingBehavior matchingBehavior, const SelectorFilter* selectorFilter)
 {
     RELEASE_ASSERT(!m_isDeleted);
 
-    m_state = State(element, parentStyle, m_overrideDocumentElementStyle, regionForStyling, selectorFilter);
+    m_state = State(element, parentStyle, m_overrideDocumentElementStyle, selectorFilter);
     State& state = m_state;
 
     if (state.parentStyle()) {
@@ -372,7 +370,6 @@ ElementStyle StyleResolver::styleForElement(const Element& element, const Render
     CSSDefaultStyleSheets::ensureDefaultStyleSheetsForElement(element);
 
     ElementRuleCollector collector(element, m_ruleSets, m_state.selectorFilter());
-    collector.setRegionForStyling(regionForStyling);
     collector.setMedium(&m_mediaQueryEvaluator);
 
     if (matchingBehavior == MatchOnlyUserAgentRules)
@@ -754,23 +751,23 @@ static bool hasEffectiveDisplayNoneForDisplayContents(const Element& element)
     // https://drafts.csswg.org/css-display-3/#unbox-html
     static NeverDestroyed<HashSet<AtomicString>> tagNames = [] {
         static const HTMLQualifiedName* const tagList[] = {
-            &brTag,
-            &wbrTag,
-            &meterTag,
-            &appletTag,
-            &progressTag,
-            &canvasTag,
-            &embedTag,
-            &objectTag,
-            &audioTag,
-            &iframeTag,
-            &imgTag,
-            &videoTag,
-            &frameTag,
-            &framesetTag,
-            &inputTag,
-            &textareaTag,
-            &selectTag,
+            &brTag.get(),
+            &wbrTag.get(),
+            &meterTag.get(),
+            &appletTag.get(),
+            &progressTag.get(),
+            &canvasTag.get(),
+            &embedTag.get(),
+            &objectTag.get(),
+            &audioTag.get(),
+            &iframeTag.get(),
+            &imgTag.get(),
+            &videoTag.get(),
+            &frameTag.get(),
+            &framesetTag.get(),
+            &inputTag.get(),
+            &textareaTag.get(),
+            &selectTag.get(),
         };
         HashSet<AtomicString> set;
         for (auto& name : tagList)
@@ -782,12 +779,30 @@ static bool hasEffectiveDisplayNoneForDisplayContents(const Element& element)
     // FIXME: <g>, <use> and <tspan> have special (?) behavior for display:contents in the current draft spec.
     if (is<SVGElement>(element))
         return true;
+#if ENABLE(MATHML)
     // Not sure MathML code can handle it.
     if (is<MathMLElement>(element))
         return true;
+#endif // ENABLE(MATHML)
     if (!is<HTMLElement>(element))
         return false;
     return tagNames.get().contains(element.localName());
+}
+
+static void adjustDisplayContentsStyle(RenderStyle& style, const Element* element)
+{
+    bool displayContentsEnabled = is<HTMLSlotElement>(element) || RuntimeEnabledFeatures::sharedFeatures().displayContentsEnabled();
+    if (!displayContentsEnabled) {
+        style.setDisplay(INLINE);
+        return;
+    }
+    if (!element) {
+        if (style.styleType() != BEFORE && style.styleType() != AFTER)
+            style.setDisplay(NONE);
+        return;
+    }
+    if (hasEffectiveDisplayNoneForDisplayContents(*element))
+        style.setDisplay(NONE);
 }
 
 void StyleResolver::adjustRenderStyle(RenderStyle& style, const RenderStyle& parentStyle, const RenderStyle* parentBoxStyle, const Element* element)
@@ -800,13 +815,8 @@ void StyleResolver::adjustRenderStyle(RenderStyle& style, const RenderStyle& par
     // Cache our original display.
     style.setOriginalDisplay(style.display());
 
-    if (style.display() == CONTENTS) {
-        bool elementSupportsDisplayContents = is<HTMLSlotElement>(element) || RuntimeEnabledFeatures::sharedFeatures().displayContentsEnabled();
-        if (!elementSupportsDisplayContents)
-            style.setDisplay(INLINE);
-        else if (!element || hasEffectiveDisplayNoneForDisplayContents(*element))
-            style.setDisplay(NONE);
-    }
+    if (style.display() == CONTENTS)
+        adjustDisplayContentsStyle(style, element);
 
     if (style.display() != NONE && style.display() != CONTENTS) {
         if (element) {
@@ -922,7 +932,6 @@ void StyleResolver::adjustRenderStyle(RenderStyle& style, const RenderStyle& par
             || style.hasIsolation()
             || style.position() == StickyPosition
             || style.position() == FixedPosition
-            || style.hasFlowFrom()
             || style.willChangeCreatesStackingContext())
             style.setZIndex(0);
     }
@@ -1050,33 +1059,12 @@ void StyleResolver::adjustRenderStyle(RenderStyle& style, const RenderStyle& par
     }
 
     // If the inherited value of justify-items includes the 'legacy' keyword,
-    // 'auto' computes to the the inherited value. Otherwise, 'auto' computes to
+    // 'auto' computes to the inherited value. Otherwise, 'auto' computes to
     // 'normal'.
     if (style.justifyItems().position() == ItemPositionAuto) {
         if (parentBoxStyle->justifyItems().positionType() == LegacyPosition)
             style.setJustifyItems(parentBoxStyle->justifyItems());
     }
-}
-
-bool StyleResolver::checkRegionStyle(const Element* regionElement)
-{
-    unsigned rulesSize = m_ruleSets.authorStyle().regionSelectorsAndRuleSets().size();
-    for (unsigned i = 0; i < rulesSize; ++i) {
-        ASSERT(m_ruleSets.authorStyle().regionSelectorsAndRuleSets().at(i).ruleSet.get());
-        if (checkRegionSelector(m_ruleSets.authorStyle().regionSelectorsAndRuleSets().at(i).selector, regionElement))
-            return true;
-    }
-
-    if (m_ruleSets.userStyle()) {
-        rulesSize = m_ruleSets.userStyle()->regionSelectorsAndRuleSets().size();
-        for (unsigned i = 0; i < rulesSize; ++i) {
-            ASSERT(m_ruleSets.userStyle()->regionSelectorsAndRuleSets().at(i).ruleSet.get());
-            if (checkRegionSelector(m_ruleSets.userStyle()->regionSelectorsAndRuleSets().at(i).selector, regionElement))
-                return true;
-        }
-    }
-
-    return false;
 }
 
 static void checkForOrientationChange(RenderStyle* style)
@@ -1455,6 +1443,7 @@ inline bool isValidVisitedLinkProperty(CSSPropertyID id)
     case CSSPropertyBorderRightColor:
     case CSSPropertyBorderTopColor:
     case CSSPropertyBorderBottomColor:
+    case CSSPropertyCaretColor:
     case CSSPropertyColor:
     case CSSPropertyOutlineColor:
     case CSSPropertyColumnRuleColor:
@@ -1499,21 +1488,6 @@ static inline bool isValidMarkerStyleProperty(CSSPropertyID id)
     default:
         break;
     }
-    return false;
-}
-
-// http://dev.w3.org/csswg/css3-regions/#the-at-region-style-rule
-// FIXME: Add incremental support for other region styling properties.
-static inline bool isValidRegionStyleProperty(CSSPropertyID id)
-{
-    switch (id) {
-    case CSSPropertyBackgroundColor:
-    case CSSPropertyColor:
-        return true;
-    default:
-        break;
-    }
-
     return false;
 }
 
@@ -1871,6 +1845,7 @@ void StyleResolver::addViewportDependentMediaQueryResult(const MediaQueryExpress
 
 bool StyleResolver::hasMediaQueriesAffectedByViewportChange() const
 {
+    LOG(MediaQueries, "StyleResolver::hasMediaQueriesAffectedByViewportChange evaluating queries");
     for (auto& result : m_viewportDependentMediaQueryResults) {
         if (m_mediaQueryEvaluator.evaluate(result.expression) != result.result)
             return true;
@@ -1885,6 +1860,7 @@ void StyleResolver::addAccessibilitySettingsDependentMediaQueryResult(const Medi
 
 bool StyleResolver::hasMediaQueriesAffectedByAccessibilitySettingsChange() const
 {
+    LOG(MediaQueries, "StyleResolver::hasMediaQueriesAffectedByAccessibilitySettingsChange evaluating queries");
     for (auto& result : m_accessibilitySettingsDependentMediaQueryResults) {
         if (m_mediaQueryEvaluator.evaluate(result.expression) != result.result)
             return true;
@@ -2053,13 +2029,9 @@ bool StyleResolver::createFilterOperations(const CSSValue& inValue, FilterOperat
     return true;
 }
 
-inline StyleResolver::MatchedProperties::MatchedProperties()
-{
-}
+inline StyleResolver::MatchedProperties::MatchedProperties() = default;
 
-StyleResolver::MatchedProperties::~MatchedProperties()
-{
-}
+StyleResolver::MatchedProperties::~MatchedProperties() = default;
 
 StyleResolver::CascadedProperties::CascadedProperties(TextDirection direction, WritingMode writingMode)
     : m_direction(direction)
@@ -2175,8 +2147,6 @@ void StyleResolver::CascadedProperties::addMatch(const MatchResult& matchResult,
         }
         CSSPropertyID propertyID = current.id();
 
-        if (propertyWhitelistType == PropertyWhitelistRegion && !isValidRegionStyleProperty(propertyID))
-            continue;
 #if ENABLE(VIDEO_TRACK)
         if (propertyWhitelistType == PropertyWhitelistCue && !isValidCueStyleProperty(propertyID))
             continue;

@@ -71,9 +71,7 @@ static void sendRequestCallback(GObject*, GAsyncResult*, gpointer);
 static void readCallback(GObject*, GAsyncResult*, gpointer);
 static void continueAfterDidReceiveResponse(ResourceHandle*);
 
-ResourceHandleInternal::~ResourceHandleInternal()
-{
-}
+ResourceHandleInternal::~ResourceHandleInternal() = default;
 
 static SoupSession* sessionFromContext(NetworkingContext* context)
 {
@@ -964,7 +962,7 @@ void ResourceHandle::platformSetDefersLoading(bool defersLoading)
     }
 }
 
-void ResourceHandle::platformLoadResourceSynchronously(NetworkingContext*, const ResourceRequest&, StoredCredentials, ResourceError&, ResourceResponse&, Vector<char>&)
+void ResourceHandle::platformLoadResourceSynchronously(NetworkingContext*, const ResourceRequest&, StoredCredentialsPolicy, ResourceError&, ResourceResponse&, Vector<char>&)
 {
     ASSERT_NOT_REACHED();
 }

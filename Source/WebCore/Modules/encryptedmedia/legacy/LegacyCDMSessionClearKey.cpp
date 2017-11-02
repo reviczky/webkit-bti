@@ -39,9 +39,9 @@
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
 
-using namespace JSC;
 
 namespace WebCore {
+using namespace JSC;
 
 static VM& clearKeyVM()
 {
@@ -49,15 +49,13 @@ static VM& clearKeyVM()
     return vm;
 }
 
-CDMSessionClearKey::CDMSessionClearKey(CDMSessionClient* client)
+CDMSessionClearKey::CDMSessionClearKey(LegacyCDMSessionClient* client)
     : m_client(client)
     , m_sessionId(createCanonicalUUIDString())
 {
 }
 
-CDMSessionClearKey::~CDMSessionClearKey()
-{
-}
+CDMSessionClearKey::~CDMSessionClearKey() = default;
 
 RefPtr<Uint8Array> CDMSessionClearKey::generateKeyRequest(const String& mimeType, Uint8Array* initData, String& destinationURL, unsigned short& errorCode, uint32_t& systemCode)
 {

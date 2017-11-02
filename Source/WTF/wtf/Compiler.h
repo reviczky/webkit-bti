@@ -42,7 +42,7 @@
 #define COMPILER_HAS_CLANG_BUILTIN(x) 0
 #endif
 
-/* COMPILER_HAS_CLANG_HEATURE() - whether the compiler supports a particular language or library feature. */
+/* COMPILER_HAS_CLANG_FEATURE() - whether the compiler supports a particular language or library feature. */
 /* http://clang.llvm.org/docs/LanguageExtensions.html#has-feature-and-has-extension */
 #ifdef __has_feature
 #define COMPILER_HAS_CLANG_FEATURE(x) __has_feature(x)
@@ -136,12 +136,6 @@
 
 #endif
 
-/* COMPILER(SUNCC) */
-
-#if defined(__SUNPRO_CC) || defined(__SUNPRO_C)
-#define WTF_COMPILER_SUNCC 1
-#endif
-
 #if !COMPILER(CLANG) && !COMPILER(MSVC)
 #define WTF_COMPILER_QUIRK_CONSIDERS_UNREACHABLE_CODE 1
 #endif
@@ -152,6 +146,12 @@
 
 #if defined(__ARM_EABI__) || defined(__EABI__)
 #define WTF_COMPILER_SUPPORTS_EABI 1
+#endif
+
+/* Non-static data member initializer (NSDMI) for aggregates */
+
+#if defined(__cpp_aggregate_nsdmi) && __cpp_aggregate_nsdmi >= 201304
+#define WTF_COMPILER_SUPPORTS_NSDMI_FOR_AGGREGATES 1
 #endif
 
 /* RELAXED_CONSTEXPR */

@@ -25,7 +25,6 @@
 
 #include "Attribute.h"
 #include "ElementIterator.h"
-#include "FormDataList.h"
 #include "HTMLDivElement.h"
 #include "HTMLFormElement.h"
 #include "HTMLNames.h"
@@ -47,9 +46,7 @@ HTMLMeterElement::HTMLMeterElement(const QualifiedName& tagName, Document& docum
     ASSERT(hasTagName(meterTag));
 }
 
-HTMLMeterElement::~HTMLMeterElement()
-{
-}
+HTMLMeterElement::~HTMLMeterElement() = default;
 
 Ref<HTMLMeterElement> HTMLMeterElement::create(const QualifiedName& tagName, Document& document)
 {

@@ -47,8 +47,11 @@
 #include "LinkHeader.h"
 #include "LinkPreloadResourceClients.h"
 #include "LinkRelAttribute.h"
+#include "LoaderStrategy.h"
 #include "MIMETypeRegistry.h"
 #include "MediaQueryEvaluator.h"
+#include "PlatformStrategies.h"
+#include "ResourceError.h"
 #include "RuntimeEnabledFeatures.h"
 #include "Settings.h"
 #include "StyleResolver.h"
@@ -57,7 +60,6 @@ namespace WebCore {
 
 LinkLoader::LinkLoader(LinkLoaderClient& client)
     : m_client(client)
-    , m_weakPtrFactory(this)
 {
 }
 
@@ -103,7 +105,7 @@ void LinkLoader::loadLinksFromHeader(const String& headerValue, const URL& baseU
                 continue;
         }
 
-        LinkRelAttribute relAttribute(header.rel());
+        LinkRelAttribute relAttribute(document, header.rel());
         URL url(baseURL, header.url());
         // Sanity check to avoid re-entrancy here.
         if (equalIgnoringFragmentIdentifier(url, baseURL))
@@ -229,7 +231,7 @@ std::unique_ptr<LinkPreloadResourceClient> LinkLoader::preloadIfNeeded(const Lin
     linkRequest.setIsLinkPreload();
 
     linkRequest.setAsPotentiallyCrossOrigin(crossOriginMode, document);
-    CachedResourceHandle<CachedResource> cachedLinkResource = document.cachedResourceLoader().preload(type.value(), WTFMove(linkRequest));
+    auto cachedLinkResource = document.cachedResourceLoader().preload(type.value(), WTFMove(linkRequest)).valueOr(nullptr);
 
     if (cachedLinkResource && loader)
         return createLinkPreloadResourceClient(*cachedLinkResource, *loader, type.value());
@@ -249,6 +251,23 @@ bool LinkLoader::loadLink(const LinkRelAttribute& relAttribute, const URL& href,
         // to complete that as URL <https://bugs.webkit.org/show_bug.cgi?id=48857>.
         if (document.settings().dnsPrefetchingEnabled() && href.isValid() && !href.isEmpty() && document.frame())
             document.frame()->loader().client().prefetchDNS(href.host());
+    }
+
+    if (relAttribute.isLinkPreconnect && href.isValid() && href.protocolIsInHTTPFamily() && document.frame()) {
+        ASSERT(document.settings().linkPreconnectEnabled());
+        StoredCredentialsPolicy storageCredentialsPolicy = StoredCredentialsPolicy::Use;
+        if (equalIgnoringASCIICase(crossOrigin, "anonymous") && document.securityOrigin().canAccess(SecurityOrigin::create(href)))
+            storageCredentialsPolicy = StoredCredentialsPolicy::DoNotUse;
+        ASSERT(document.frame()->loader().networkingContext());
+        platformStrategies()->loaderStrategy()->preconnectTo(*document.frame()->loader().networkingContext(), href, storageCredentialsPolicy, [weakDocument = document.createWeakPtr(), href](ResourceError error) {
+            if (!weakDocument)
+                return;
+
+            if (!error.isNull())
+                weakDocument->addConsoleMessage(MessageSource::Network, MessageLevel::Error, makeString(ASCIILiteral("Failed to preconnect to "), href.string(), ASCIILiteral(". Error: "), error.localizedDescription()));
+            else
+                weakDocument->addConsoleMessage(MessageSource::Network, MessageLevel::Info, makeString(ASCIILiteral("Successfuly preconnected to "), href.string()));
+        });
     }
 
     if (m_client.shouldLoadLink()) {
@@ -279,7 +298,7 @@ bool LinkLoader::loadLink(const LinkRelAttribute& relAttribute, const URL& href,
         }
         ResourceLoaderOptions options = CachedResourceLoader::defaultCachedResourceOptions();
         options.contentSecurityPolicyImposition = ContentSecurityPolicyImposition::SkipPolicyCheck;
-        m_cachedLinkResource = document.cachedResourceLoader().requestLinkResource(type, CachedResourceRequest(ResourceRequest(document.completeURL(href)), options, priority));
+        m_cachedLinkResource = document.cachedResourceLoader().requestLinkResource(type, CachedResourceRequest(ResourceRequest(document.completeURL(href)), options, priority)).valueOr(nullptr);
         if (m_cachedLinkResource)
             m_cachedLinkResource->addClient(*this);
     }

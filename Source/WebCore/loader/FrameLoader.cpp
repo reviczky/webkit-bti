@@ -119,6 +119,7 @@
 #include "UserContentController.h"
 #include "WindowFeatures.h"
 #include "XMLDocumentParser.h"
+#include <wtf/CompletionHandler.h>
 #include <wtf/CurrentTime.h>
 #include <wtf/Ref.h>
 #include <wtf/StdLibExtras.h>
@@ -312,17 +313,16 @@ void FrameLoader::init()
     m_progressTracker = std::make_unique<FrameProgressTracker>(m_frame);
 }
 
-#if PLATFORM(IOS)
 void FrameLoader::initForSynthesizedDocument(const URL&)
 {
     // FIXME: We need to initialize the document URL to the specified URL. Currently the URL is empty and hence
     // FrameLoader::checkCompleted() will overwrite the URL of the document to be activeDocumentLoader()->documentURL().
 
-    RefPtr<DocumentLoader> loader = m_client.createDocumentLoader(ResourceRequest(URL(ParsedURLString, emptyString())), SubstituteData());
+    auto loader = m_client.createDocumentLoader(ResourceRequest(URL(ParsedURLString, emptyString())), SubstituteData());
     loader->attachToFrame(m_frame);
     loader->setResponse(ResourceResponse(URL(), ASCIILiteral("text/html"), 0, String()));
     loader->setCommitted(true);
-    setDocumentLoader(loader.get());
+    setDocumentLoader(loader.ptr());
 
     m_stateMachine.advanceTo(FrameLoaderStateMachine::DisplayingInitialEmptyDocument);
     m_stateMachine.advanceTo(FrameLoaderStateMachine::DisplayingInitialEmptyDocumentPostCommit);
@@ -337,7 +337,6 @@ void FrameLoader::initForSynthesizedDocument(const URL&)
     m_networkingContext = m_client.createNetworkingContext();
     m_progressTracker = std::make_unique<FrameProgressTracker>(m_frame);
 }
-#endif
 
 void FrameLoader::setDefersLoading(bool defers)
 {
@@ -1688,7 +1687,7 @@ void FrameLoader::stopForUserCancel(bool deferCheckLoadComplete)
     // but haven't laid out/painted yet.
     // FIXME: Is this behavior specific to iOS? Or should we expose a setting to toggle this behavior?
     if (m_frame.view() && !m_frame.view()->didFirstLayout())
-        m_frame.view()->layout();
+        m_frame.view()->layoutContext().layout();
 #endif
 
     if (deferCheckLoadComplete)
@@ -2048,12 +2047,6 @@ void FrameLoader::clientRedirected(const URL& url, double seconds, double fireDa
     // no "original" load on which to base a redirect, so we treat the redirect as a normal load.
     // Loads triggered by JavaScript form submissions never count as quick redirects.
     m_quickRedirectComing = (lockBackForwardList == LockBackForwardList::Yes || history().currentItemShouldBeReplaced()) && m_documentLoader && !m_isExecutingJavaScriptFormAction;
-}
-
-void FrameLoader::performClientRedirect(FrameLoadRequest&& frameLoadRequest)
-{
-    changeLocation(WTFMove(frameLoadRequest));
-    m_client.dispatchDidPerformClientRedirect();
 }
 
 bool FrameLoader::shouldReload(const URL& currentURL, const URL& destinationURL)
@@ -2761,7 +2754,7 @@ void FrameLoader::loadPostRequest(FrameLoadRequest&& request, const String& refe
     }
 }
 
-unsigned long FrameLoader::loadResourceSynchronously(const ResourceRequest& request, StoredCredentials storedCredentials, ClientCredentialPolicy clientCredentialPolicy, ResourceError& error, ResourceResponse& response, RefPtr<SharedBuffer>& data)
+unsigned long FrameLoader::loadResourceSynchronously(const ResourceRequest& request, StoredCredentialsPolicy storedCredentialsPolicy, ClientCredentialPolicy clientCredentialPolicy, ResourceError& error, ResourceResponse& response, RefPtr<SharedBuffer>& data)
 {
     ASSERT(m_frame.document());
     String referrer = SecurityPolicy::generateReferrerHeader(m_frame.document()->referrerPolicy(), request.url(), outgoingReferrer());
@@ -2786,7 +2779,7 @@ unsigned long FrameLoader::loadResourceSynchronously(const ResourceRequest& requ
         if (auto* page = m_frame.page()) {
             if (m_documentLoader) {
                 auto blockedStatus = page->userContentProvider().processContentExtensionRulesForLoad(newRequest.url(), ResourceType::Raw, *m_documentLoader);
-                applyBlockedStatusToRequest(blockedStatus, newRequest);
+                applyBlockedStatusToRequest(blockedStatus, page, newRequest);
                 if (blockedStatus.blockedLoad) {
                     newRequest = { };
                     error = ResourceError(errorDomainWebKitInternal, 0, initialRequest.url(), emptyString());
@@ -2805,7 +2798,7 @@ unsigned long FrameLoader::loadResourceSynchronously(const ResourceRequest& requ
 
         if (!documentLoader()->applicationCacheHost().maybeLoadSynchronously(newRequest, error, response, data)) {
             Vector<char> buffer;
-            platformStrategies()->loaderStrategy()->loadResourceSynchronously(networkingContext(), identifier, newRequest, storedCredentials, clientCredentialPolicy, error, response, buffer);
+            platformStrategies()->loaderStrategy()->loadResourceSynchronously(networkingContext(), identifier, newRequest, storedCredentialsPolicy, clientCredentialPolicy, error, response, buffer);
             data = SharedBuffer::create(WTFMove(buffer));
             documentLoader()->applicationCacheHost().maybeLoadFallbackSynchronously(newRequest, error, response, data);
             ResourceLoadObserver::shared().logSubresourceLoading(&m_frame, newRequest, response);
@@ -3018,6 +3011,10 @@ void FrameLoader::dispatchUnloadEvents(UnloadEventPolicy unloadEventPolicy)
 
 static bool shouldAskForNavigationConfirmation(Document& document, const BeforeUnloadEvent& event)
 {
+    // Confirmation dialog should not be displayed when the allow-modals flag is not set.
+    if (document.isSandboxed(SandboxModals))
+        return false;
+
     bool userDidInteractWithPage = document.topDocument().userDidInteractWithPage();
     // Web pages can request we ask for confirmation before navigating by:
     // - Cancelling the BeforeUnloadEvent (modern way)
@@ -3238,39 +3235,38 @@ void FrameLoader::requestFromDelegate(ResourceRequest& request, unsigned long& i
     request = newRequest;
 }
 
-void FrameLoader::loadedResourceFromMemoryCache(CachedResource* resource, ResourceRequest& newRequest)
+void FrameLoader::loadedResourceFromMemoryCache(CachedResource& resource, ResourceRequest& newRequest, ResourceError& error)
 {
     Page* page = m_frame.page();
     if (!page)
         return;
 
-    if (!resource->shouldSendResourceLoadCallbacks() || m_documentLoader->haveToldClientAboutLoad(resource->url()))
+    if (!resource.shouldSendResourceLoadCallbacks() || m_documentLoader->haveToldClientAboutLoad(resource.url()))
         return;
 
     // Main resource delegate messages are synthesized in MainResourceLoader, so we must not send them here.
-    if (resource->type() == CachedResource::MainResource)
+    if (resource.type() == CachedResource::MainResource)
         return;
 
     if (!page->areMemoryCacheClientCallsEnabled()) {
-        InspectorInstrumentation::didLoadResourceFromMemoryCache(*page, m_documentLoader.get(), resource);
-        m_documentLoader->recordMemoryCacheLoadForFutureClientNotification(resource->resourceRequest());
-        m_documentLoader->didTellClientAboutLoad(resource->url());
+        InspectorInstrumentation::didLoadResourceFromMemoryCache(*page, m_documentLoader.get(), &resource);
+        m_documentLoader->recordMemoryCacheLoadForFutureClientNotification(resource.resourceRequest());
+        m_documentLoader->didTellClientAboutLoad(resource.url());
         return;
     }
 
-    if (m_client.dispatchDidLoadResourceFromMemoryCache(m_documentLoader.get(), newRequest, resource->response(), resource->encodedSize())) {
-        InspectorInstrumentation::didLoadResourceFromMemoryCache(*page, m_documentLoader.get(), resource);
-        m_documentLoader->didTellClientAboutLoad(resource->url());
+    if (m_client.dispatchDidLoadResourceFromMemoryCache(m_documentLoader.get(), newRequest, resource.response(), resource.encodedSize())) {
+        InspectorInstrumentation::didLoadResourceFromMemoryCache(*page, m_documentLoader.get(), &resource);
+        m_documentLoader->didTellClientAboutLoad(resource.url());
         return;
     }
 
     unsigned long identifier;
-    ResourceError error;
     requestFromDelegate(newRequest, identifier, error);
 
-    ResourceResponse response = resource->response();
+    ResourceResponse response = resource.response();
     response.setSource(ResourceResponse::Source::MemoryCache);
-    notifier().sendRemainingDelegateMessages(m_documentLoader.get(), identifier, newRequest, response, 0, resource->encodedSize(), 0, error);
+    notifier().sendRemainingDelegateMessages(m_documentLoader.get(), identifier, newRequest, response, 0, resource.encodedSize(), 0, error);
 }
 
 void FrameLoader::applyUserAgent(ResourceRequest& request)
@@ -3555,6 +3551,15 @@ RetainPtr<CFDictionaryRef> FrameLoader::connectionProperties(ResourceLoader* loa
 }
 #endif
 
+ReferrerPolicy FrameLoader::effectiveReferrerPolicy() const
+{
+    if (auto* parentFrame = m_frame.tree().parent())
+        return parentFrame->document()->referrerPolicy();
+    if (m_opener)
+        return m_opener->document()->referrerPolicy();
+    return ReferrerPolicy::NoReferrerWhenDowngrade;
+}
+
 String FrameLoader::referrer() const
 {
     return m_documentLoader ? m_documentLoader->request().httpReferrer() : emptyString();
@@ -3813,9 +3818,9 @@ RefPtr<Frame> createWindow(Frame& openerFrame, Frame& lookupFrame, FrameLoadRequ
     return frame;
 }
 
-bool FrameLoader::shouldSuppressKeyboardInput() const
+bool FrameLoader::shouldSuppressTextInputFromEditing() const
 {
-    return m_frame.settings().shouldSuppressKeyboardInputDuringProvisionalNavigation() && m_state == FrameStateProvisional;
+    return m_frame.settings().shouldSuppressTextInputFromEditingDuringProvisionalNavigation() && m_state == FrameStateProvisional;
 }
 
 } // namespace WebCore
