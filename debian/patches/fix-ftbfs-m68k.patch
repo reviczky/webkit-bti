@@ -19,7 +19,7 @@ Index: webkitgtk/Source/JavaScriptCore/CMakeLists.txt
 ===================================================================
 --- webkitgtk.orig/Source/JavaScriptCore/CMakeLists.txt
 +++ webkitgtk/Source/JavaScriptCore/CMakeLists.txt
-@@ -1532,6 +1532,7 @@ elseif (WTF_CPU_PPC64)
+@@ -579,6 +579,7 @@ elseif (WTF_CPU_PPC64)
  elseif (WTF_CPU_PPC64LE)
  elseif (WTF_CPU_S390)
  elseif (WTF_CPU_S390X)
@@ -44,7 +44,7 @@ Index: webkitgtk/Source/WTF/wtf/Platform.h
  /* CPU(MIPS) - MIPS 32-bit and 64-bit */
  #if (defined(mips) || defined(__mips__) || defined(MIPS) || defined(_MIPS_) || defined(__mips64))
  #if defined(_ABI64) && (_MIPS_SIM == _ABI64)
-@@ -927,7 +933,7 @@
+@@ -956,7 +962,7 @@
  #define ENABLE_REGEXP_TRACING 0
  
  /* Yet Another Regex Runtime - turned on by default for JIT enabled ports. */
@@ -86,7 +86,7 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ElementRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/ElementRareData.cpp
-@@ -47,6 +47,10 @@ struct SameSizeAsElementRareData : NodeR
+@@ -46,6 +46,10 @@ struct SameSizeAsElementRareData : NodeR
      void* pointers[8];
  };
  
@@ -164,7 +164,7 @@ Index: webkitgtk/Source/WebCore/css/RuleSet.h
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/RuleSet.h
 +++ webkitgtk/Source/WebCore/css/RuleSet.h
-@@ -142,7 +142,11 @@ struct SameSizeAsRuleData {
+@@ -139,7 +139,11 @@ struct SameSizeAsRuleData {
      unsigned d[4];
  };
  
