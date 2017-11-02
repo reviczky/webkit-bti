@@ -124,7 +124,7 @@ static inline TransformOperations blendFunc(const AnimationBase* animation, cons
 {
     if (animation->transformFunctionListsMatch())
         return to.blendByMatchingOperations(from, progress);
-    return to.blendByUsingMatrixInterpolation(from, progress, is<RenderBox>(*animation->renderer()) ? downcast<RenderBox>(*animation->renderer()).borderBoxRect().size() : LayoutSize());
+    return to.blendByUsingMatrixInterpolation(from, progress, is<RenderBox>(animation->renderer()) ? downcast<RenderBox>(*animation->renderer()).borderBoxRect().size() : LayoutSize());
 }
 
 static inline RefPtr<ClipPathOperation> blendFunc(const AnimationBase*, ClipPathOperation* from, ClipPathOperation* to, double progress)
@@ -165,13 +165,9 @@ static inline RefPtr<ShapeValue> blendFunc(const AnimationBase*, ShapeValue* fro
     return ShapeValue::create(toShape.blend(fromShape, progress), to->cssBox());
 }
 
-static inline RefPtr<FilterOperation> blendFunc(const AnimationBase* animation, FilterOperation* fromOp, FilterOperation* toOp, double progress, bool blendToPassthrough = false)
+static inline RefPtr<FilterOperation> blendFunc(const AnimationBase*, FilterOperation* fromOp, FilterOperation* toOp, double progress, bool blendToPassthrough = false)
 {
     ASSERT(toOp);
-    if (toOp->blendingNeedsRendererSize()) {
-        LayoutSize size = is<RenderBox>(*animation->renderer()) ? downcast<RenderBox>(*animation->renderer()).borderBoxRect().size() : LayoutSize();
-        return toOp->blend(fromOp, progress, size, blendToPassthrough);
-    }
     return toOp->blend(fromOp, progress, blendToPassthrough);
 }
 
@@ -226,7 +222,7 @@ static inline RefPtr<StyleImage> blendFilter(const AnimationBase* anim, CachedIm
     FilterOperations filterResult = blendFilterOperations(anim, from, to, progress);
 
     auto imageValue = CSSImageValue::create(*image);
-    auto filterValue = ComputedStyleExtractor::valueForFilter(anim->renderer()->style(), filterResult, DoNotAdjustPixelValues);
+    auto filterValue = ComputedStyleExtractor::valueForFilter(anim->currentStyle(), filterResult, DoNotAdjustPixelValues);
 
     auto result = CSSFilterImageValue::create(WTFMove(imageValue), WTFMove(filterValue));
     result.get().setFilterOperations(filterResult);
@@ -365,8 +361,10 @@ static inline NinePieceImage blendFunc(const AnimationBase* anim, const NinePiec
     if (from.imageSlices() != to.imageSlices() || from.borderSlices() != to.borderSlices() || from.outset() != to.outset() || from.fill() != to.fill() || from.horizontalRule() != to.horizontalRule() || from.verticalRule() != to.verticalRule())
         return to;
 
-    if (from.image()->imageSize(anim->renderer(), 1.0) != to.image()->imageSize(anim->renderer(), 1.0))
-        return to;
+    if (auto* renderer = anim->renderer()) {
+        if (from.image()->imageSize(renderer, 1.0) != to.image()->imageSize(renderer, 1.0))
+            return to;
+    }
 
     return NinePieceImage(blendFunc(anim, from.image(), to.image(), progress),
         from.imageSlices(), from.fill(), from.borderSlices(), from.outset(), from.horizontalRule(), from.verticalRule());
@@ -406,8 +404,7 @@ public:
         : m_prop(prop)
     {
     }
-
-    virtual ~AnimationPropertyWrapperBase() { }
+    virtual ~AnimationPropertyWrapperBase() = default;
 
     virtual bool isShorthandWrapper() const { return false; }
     virtual bool equals(const RenderStyle* a, const RenderStyle* b) const = 0;
@@ -968,10 +965,9 @@ public:
         : m_property(property)
     {
     }
-    
-    CSSPropertyID property() const { return m_property; }
+    virtual ~FillLayerAnimationPropertyWrapperBase() = default;
 
-    virtual ~FillLayerAnimationPropertyWrapperBase() { }
+    CSSPropertyID property() const { return m_property; }
 
     virtual bool equals(const FillLayer*, const FillLayer*) const = 0;
     virtual void blend(const AnimationBase*, FillLayer*, const FillLayer*, const FillLayer*, double) const = 0;
@@ -1493,6 +1489,9 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
         new LengthPropertyWrapper<Length>(CSSPropertyPaddingRight, &RenderStyle::paddingRight, &RenderStyle::setPaddingRight),
         new LengthPropertyWrapper<Length>(CSSPropertyPaddingTop, &RenderStyle::paddingTop, &RenderStyle::setPaddingTop),
         new LengthPropertyWrapper<Length>(CSSPropertyPaddingBottom, &RenderStyle::paddingBottom, &RenderStyle::setPaddingBottom),
+
+        new PropertyWrapperVisitedAffectedColor(CSSPropertyCaretColor, &RenderStyle::caretColor, &RenderStyle::setCaretColor, &RenderStyle::visitedLinkCaretColor, &RenderStyle::setVisitedLinkCaretColor),
+
         new PropertyWrapperVisitedAffectedColor(CSSPropertyColor, &RenderStyle::color, &RenderStyle::setColor, &RenderStyle::visitedLinkColor, &RenderStyle::setVisitedLinkColor),
 
         new PropertyWrapperVisitedAffectedColor(CSSPropertyBackgroundColor, &RenderStyle::backgroundColor, &RenderStyle::setBackgroundColor, &RenderStyle::visitedLinkBackgroundColor, &RenderStyle::setVisitedLinkBackgroundColor),

@@ -25,7 +25,7 @@
 
 #pragma once
 
-#include "LogMacros.h"
+#include <pal/LogMacros.h>
 #include <wtf/Assertions.h>
 #include <wtf/Forward.h>
 
@@ -63,6 +63,7 @@ namespace WebCore {
     M(Loading) \
     M(Media) \
     M(MediaCaptureSamples) \
+    M(MediaQueries) \
     M(MediaSource) \
     M(MediaStream) \
     M(MediaSourceSamples) \
@@ -81,6 +82,7 @@ namespace WebCore {
     M(ResourceLoadStatistics) \
     M(Scrolling) \
     M(Services) \
+    M(ServiceWorker) \
     M(SpellingAndGrammar) \
     M(SQLDatabase) \
     M(StorageAPI) \
@@ -104,10 +106,9 @@ WEBCORE_LOG_CHANNELS(DECLARE_LOG_CHANNEL)
 String logLevelString();
 bool isLogChannelEnabled(const String& name);
 WEBCORE_EXPORT void setLogChannelToAccumulate(const String& name);
-#ifndef NDEBUG
-void registerNotifyCallback(const String& notifyID, WTF::Function<void()>&& callback);
-#endif
 
 #endif // !LOG_DISABLED || !RELEASE_LOG_DISABLED
+
+WEBCORE_EXPORT WTFLogChannel* getLogChannel(const String& name);
 
 } // namespace WebCore

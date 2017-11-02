@@ -48,13 +48,14 @@
 #include "MacroAssemblerCodeRef.h"
 #include "Microtask.h"
 #include "NumericStrings.h"
-#include "PrototypeMap.h"
 #include "SmallStrings.h"
 #include "Strong.h"
+#include "StructureCache.h"
 #include "Subspace.h"
 #include "TemplateRegistryKeyTable.h"
 #include "VMEntryRecord.h"
 #include "VMTraps.h"
+#include "WasmContext.h"
 #include "Watchpoint.h"
 #include <wtf/BumpPointerAllocator.h>
 #include <wtf/CheckedArithmetic.h>
@@ -146,9 +147,6 @@ namespace FTL {
 class Thunks;
 }
 #endif // ENABLE(FTL_JIT)
-namespace CommonSlowPaths {
-struct ArityCheckData;
-}
 namespace Profiler {
 class Database;
 }
@@ -308,6 +306,8 @@ public:
             return primitiveGigacageAuxiliarySpace;
         case Gigacage::JSValue:
             return jsValueGigacageAuxiliarySpace;
+        case Gigacage::String:
+            break;
         }
         RELEASE_ASSERT_NOT_REACHED();
         return primitiveGigacageAuxiliarySpace;
@@ -315,6 +315,7 @@ public:
     
     // Whenever possible, use subspaceFor<CellType>(vm) to get one of these subspaces.
     Subspace cellSpace;
+    Subspace jsValueGigacageCellSpace;
     Subspace destructibleCellSpace;
     JSStringSubspace stringSpace;
     JSDestructibleObjectSubspace destructibleObjectSpace;
@@ -326,14 +327,15 @@ public:
 
     VMType vmType;
     ClientData* clientData;
-    VMEntryFrame* topVMEntryFrame;
+    EntryFrame* topEntryFrame;
     // NOTE: When throwing an exception while rolling back the call frame, this may be equal to
-    // topVMEntryFrame.
+    // topEntryFrame.
     // FIXME: This should be a void*, because it might not point to a CallFrame.
     // https://bugs.webkit.org/show_bug.cgi?id=160441
     ExecState* topCallFrame { nullptr };
-    // FIXME: Save this state elsewhere to allow PIC. https://bugs.webkit.org/show_bug.cgi?id=169773
-    JSWebAssemblyInstance* wasmContext { nullptr };
+#if ENABLE(WEBASSEMBLY)
+    Wasm::Context wasmContext;
+#endif
     Strong<Structure> structureStructure;
     Strong<Structure> structureRareDataStructure;
     Strong<Structure> terminatedExecutionErrorStructure;
@@ -358,6 +360,7 @@ public:
     Strong<Structure> fixedArrayStructure;
     Strong<Structure> sourceCodeStructure;
     Strong<Structure> scriptFetcherStructure;
+    Strong<Structure> scriptFetchParametersStructure;
     Strong<Structure> structureChainStructure;
     Strong<Structure> sparseArrayValueMapStructure;
     Strong<Structure> templateRegistryKeyStructure;
@@ -382,8 +385,12 @@ public:
     Strong<Structure> functionCodeBlockStructure;
     Strong<Structure> hashMapBucketSetStructure;
     Strong<Structure> hashMapBucketMapStructure;
+    Strong<Structure> setIteratorStructure;
+    Strong<Structure> mapIteratorStructure;
 
     Strong<JSCell> emptyPropertyNameEnumerator;
+    Strong<JSCell> sentinelSetBucket;
+    Strong<JSCell> sentinelMapBucket;
 
     std::unique_ptr<PromiseDeferredTimer> promiseDeferredTimer;
     
@@ -457,7 +464,7 @@ public:
     SourceProviderCache* addSourceProviderCache(SourceProvider*);
     void clearSourceProviderCaches();
 
-    PrototypeMap prototypeMap;
+    StructureCache structureCache;
 
     typedef HashMap<RefPtr<SourceProvider>, RefPtr<SourceProviderCache>> SourceProviderCacheMap;
     SourceProviderCacheMap sourceProviderCacheMap;
@@ -468,11 +475,8 @@ public:
     {
         return jitStubs->ctiStub(this, generator);
     }
-    
-    static RegisterAtOffsetList* getAllCalleeSaveRegisterOffsets();
 
 #endif // ENABLE(JIT)
-    std::unique_ptr<CommonSlowPaths::ArityCheckData> arityCheckData;
 #if ENABLE(FTL_JIT)
     std::unique_ptr<FTL::Thunks> ftlThunks;
 #endif
@@ -494,9 +498,9 @@ public:
         return OBJECT_OFFSETOF(VM, targetMachinePCForThrow);
     }
 
-    static ptrdiff_t topVMEntryFrameOffset()
+    static ptrdiff_t topEntryFrameOffset()
     {
-        return OBJECT_OFFSETOF(VM, topVMEntryFrame);
+        return OBJECT_OFFSETOF(VM, topEntryFrame);
     }
 
     void restorePreviousException(Exception* exception) { setException(exception); }
@@ -546,6 +550,7 @@ public:
         return isSafeToRecurse(m_stackLimit);
     }
 
+    void** addressOfLastStackTop() { return &m_lastStackTop; }
     void* lastStackTop() { return m_lastStackTop; }
     void setLastStackTop(void*);
     
@@ -769,7 +774,7 @@ private:
 #if !ENABLE(JIT)
     void* m_cloopStackLimit { nullptr };
 #endif
-    void* m_lastStackTop;
+    void* m_lastStackTop { nullptr };
 
     Exception* m_exception { nullptr };
     Exception* m_lastException { nullptr };
@@ -779,6 +784,7 @@ private:
     unsigned m_simulatedThrowPointRecursionDepth { 0 };
     mutable bool m_needExceptionCheck { false };
     std::unique_ptr<StackTrace> m_nativeStackTraceOfLastThrow;
+    std::unique_ptr<StackTrace> m_nativeStackTraceOfLastSimulatedThrow;
     ThreadIdentifier m_throwingThread;
 #endif
 

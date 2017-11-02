@@ -40,7 +40,6 @@
 #include "CachedScript.h"
 #include "Cookie.h"
 #include "CookieJar.h"
-#include "DOMWrapperWorld.h"
 #include "Document.h"
 #include "DocumentLoader.h"
 #include "Frame.h"
@@ -81,9 +80,9 @@
 #include "LegacyWebArchive.h"
 #endif
 
-using namespace Inspector;
 
 namespace WebCore {
+using namespace Inspector;
 
 static bool decodeBuffer(const char* buffer, unsigned size, const String& textEncodingName, String* result)
 {
@@ -102,7 +101,7 @@ static bool hasTextContent(CachedResource* cachedResource)
     // FIXME: <https://webkit.org/b/165495> Web Inspector: XHR / Fetch for non-text content should not show garbled text
     // We should not assume XHR / Fetch have text content.
 
-    InspectorPageAgent::ResourceType type = InspectorPageAgent::cachedResourceType(*cachedResource);
+    InspectorPageAgent::ResourceType type = InspectorPageAgent::inspectorResourceType(*cachedResource);
     return type == InspectorPageAgent::DocumentResource
         || type == InspectorPageAgent::StylesheetResource
         || type == InspectorPageAgent::ScriptResource
@@ -247,7 +246,7 @@ CachedResource* InspectorPageAgent::cachedResource(Frame* frame, const URL& url)
     return cachedResource;
 }
 
-Inspector::Protocol::Page::ResourceType InspectorPageAgent::resourceTypeJson(InspectorPageAgent::ResourceType resourceType)
+Inspector::Protocol::Page::ResourceType InspectorPageAgent::resourceTypeJSON(InspectorPageAgent::ResourceType resourceType)
 {
     switch (resourceType) {
     case DocumentResource:
@@ -264,6 +263,10 @@ Inspector::Protocol::Page::ResourceType InspectorPageAgent::resourceTypeJson(Ins
         return Inspector::Protocol::Page::ResourceType::XHR;
     case FetchResource:
         return Inspector::Protocol::Page::ResourceType::Fetch;
+    case PingResource:
+        return Inspector::Protocol::Page::ResourceType::Ping;
+    case BeaconResource:
+        return Inspector::Protocol::Page::ResourceType::Beacon;
     case WebSocketResource:
         return Inspector::Protocol::Page::ResourceType::WebSocket;
     case OtherResource:
@@ -272,9 +275,9 @@ Inspector::Protocol::Page::ResourceType InspectorPageAgent::resourceTypeJson(Ins
     return Inspector::Protocol::Page::ResourceType::Other;
 }
 
-InspectorPageAgent::ResourceType InspectorPageAgent::cachedResourceType(const CachedResource& cachedResource)
+InspectorPageAgent::ResourceType InspectorPageAgent::inspectorResourceType(CachedResource::Type type)
 {
-    switch (cachedResource.type()) {
+    switch (type) {
     case CachedResource::ImageResource:
         return InspectorPageAgent::ImageResource;
 #if ENABLE(SVG_FONTS)
@@ -291,9 +294,19 @@ InspectorPageAgent::ResourceType InspectorPageAgent::cachedResourceType(const Ca
         return InspectorPageAgent::ScriptResource;
     case CachedResource::MainResource:
         return InspectorPageAgent::DocumentResource;
+    case CachedResource::Beacon:
+        return InspectorPageAgent::BeaconResource;
     case CachedResource::MediaResource:
     case CachedResource::Icon:
-    case CachedResource::RawResource: {
+    case CachedResource::RawResource:
+    default:
+        return InspectorPageAgent::OtherResource;
+    }
+}
+
+InspectorPageAgent::ResourceType InspectorPageAgent::inspectorResourceType(const CachedResource& cachedResource)
+{
+    if (cachedResource.type() == CachedResource::RawResource) {
         switch (cachedResource.resourceRequest().requester()) {
         case ResourceRequest::Requester::Fetch:
             return InspectorPageAgent::FetchResource;
@@ -303,15 +316,13 @@ InspectorPageAgent::ResourceType InspectorPageAgent::cachedResourceType(const Ca
             return InspectorPageAgent::XHRResource;
         }
     }
-    default:
-        break;
-    }
-    return InspectorPageAgent::OtherResource;
+
+    return inspectorResourceType(cachedResource.type());
 }
 
-Inspector::Protocol::Page::ResourceType InspectorPageAgent::cachedResourceTypeJson(const CachedResource& cachedResource)
+Inspector::Protocol::Page::ResourceType InspectorPageAgent::cachedResourceTypeJSON(const CachedResource& cachedResource)
 {
-    return resourceTypeJson(cachedResourceType(cachedResource));
+    return resourceTypeJSON(inspectorResourceType(cachedResource));
 }
 
 RefPtr<TextResourceDecoder> InspectorPageAgent::createTextDecoder(const String& mimeType, const String& textEncodingName)
@@ -376,11 +387,9 @@ void InspectorPageAgent::disable(ErrorString&)
     setEmulatedMedia(unused, emptyString());
 }
 
-void InspectorPageAgent::reload(ErrorString&, const bool* const optionalIgnoreCache, const bool* const optionalRevalidateAllResources, const String* optionalScriptToEvaluateOnLoad)
+void InspectorPageAgent::reload(ErrorString&, const bool* const optionalReloadFromOrigin, const bool* const optionalRevalidateAllResources)
 {
-    m_pendingScriptToEvaluateOnLoadOnce = optionalScriptToEvaluateOnLoad ? *optionalScriptToEvaluateOnLoad : emptyString();
-
-    bool reloadFromOrigin = optionalIgnoreCache && *optionalIgnoreCache;
+    bool reloadFromOrigin = optionalReloadFromOrigin && *optionalReloadFromOrigin;
     bool revalidateAllResources = optionalRevalidateAllResources && *optionalRevalidateAllResources;
 
     OptionSet<ReloadOption> reloadOptions;
@@ -639,15 +648,6 @@ void InspectorPageAgent::setShowPaintRects(ErrorString&, bool show)
     m_overlay->setShowingPaintRects(show);
 }
 
-void InspectorPageAgent::didClearWindowObjectInWorld(Frame* frame, DOMWrapperWorld& world)
-{
-    if (&world != &mainThreadNormalWorld())
-        return;
-
-    if (!m_scriptToEvaluateOnLoadOnce.isEmpty())
-        frame->script().executeScript(m_scriptToEvaluateOnLoadOnce);
-}
-
 void InspectorPageAgent::domContentEventFired()
 {
     m_isFirstLayoutAfterOnLoad = true;
@@ -661,10 +661,6 @@ void InspectorPageAgent::loadEventFired()
 
 void InspectorPageAgent::frameNavigated(Frame& frame)
 {
-    if (frame.isMainFrame()) {
-        m_scriptToEvaluateOnLoadOnce = m_pendingScriptToEvaluateOnLoadOnce;
-        m_pendingScriptToEvaluateOnLoadOnce = String();
-    }
     m_frontendDispatcher->frameNavigated(buildObjectForFrame(&frame));
 }
 
@@ -853,7 +849,7 @@ Ref<Inspector::Protocol::Page::FrameResourceTree> InspectorPageAgent::buildObjec
     for (auto* cachedResource : cachedResourcesForFrame(frame)) {
         auto resourceObject = Inspector::Protocol::Page::FrameResource::create()
             .setUrl(cachedResource->url())
-            .setType(cachedResourceTypeJson(*cachedResource))
+            .setType(cachedResourceTypeJSON(*cachedResource))
             .setMimeType(cachedResource->response().mimeType())
             .release();
         if (cachedResource->wasCanceled())

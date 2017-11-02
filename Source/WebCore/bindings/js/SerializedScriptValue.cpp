@@ -27,19 +27,14 @@
 #include "config.h"
 #include "SerializedScriptValue.h"
 
-#include "Blob.h"
 #include "BlobRegistry.h"
 #include "CryptoKeyAES.h"
-#include "CryptoKeyDataOctetSequence.h"
-#include "CryptoKeyDataRSAComponents.h"
 #include "CryptoKeyEC.h"
 #include "CryptoKeyHMAC.h"
 #include "CryptoKeyRSA.h"
+#include "CryptoKeyRSAComponents.h"
 #include "CryptoKeyRaw.h"
-#include "File.h"
-#include "FileList.h"
 #include "IDBValue.h"
-#include "ImageData.h"
 #include "JSBlob.h"
 #include "JSCryptoKey.h"
 #include "JSDOMBinding.h"
@@ -84,12 +79,12 @@
 #include <runtime/TypedArrayInlines.h>
 #include <runtime/TypedArrays.h>
 #include <wasm/js/JSWebAssemblyModule.h>
+#include <wasm/WasmModule.h>
 #include <wtf/HashTraits.h>
 #include <wtf/MainThread.h>
 #include <wtf/RunLoop.h>
 #include <wtf/Vector.h>
 
-using namespace JSC;
 
 #if CPU(BIG_ENDIAN) || CPU(MIDDLE_ENDIAN) || CPU(NEEDS_ALIGNED_ACCESS)
 #define ASSUME_LITTLE_ENDIAN 0
@@ -98,6 +93,7 @@ using namespace JSC;
 #endif
 
 namespace WebCore {
+using namespace JSC;
 
 static const unsigned maximumFilterRecursion = 40000;
 
@@ -930,7 +926,7 @@ private:
             return false;
 
         if (value.isObject()) {
-            JSObject* obj = asObject(value);
+            auto* obj = asObject(value);
             if (obj->inherits(vm, BooleanObject::info())) {
                 if (!startObjectInternal(obj)) // handle duplicates
                     return true;
@@ -952,20 +948,19 @@ private:
                 write(obj->internalValue().asNumber());
                 return true;
             }
-            if (File* file = JSFile::toWrapped(vm, obj)) {
+            if (auto* file = JSFile::toWrapped(vm, obj)) {
                 write(FileTag);
-                write(file);
+                write(*file);
                 return true;
             }
-            if (FileList* list = JSFileList::toWrapped(vm, obj)) {
+            if (auto* list = JSFileList::toWrapped(vm, obj)) {
                 write(FileListTag);
-                unsigned length = list->length();
-                write(length);
-                for (unsigned i = 0; i < length; i++)
-                    write(list->item(i));
+                write(list->length());
+                for (auto& file : list->files())
+                    write(file.get());
                 return true;
             }
-            if (Blob* blob = JSBlob::toWrapped(vm, obj)) {
+            if (auto* blob = JSBlob::toWrapped(vm, obj)) {
                 write(BlobTag);
                 m_blobURLs.append(blob->url());
                 write(blob->url());
@@ -973,7 +968,7 @@ private:
                 write(blob->size());
                 return true;
             }
-            if (ImageData* data = JSImageData::toWrapped(vm, obj)) {
+            if (auto* data = JSImageData::toWrapped(vm, obj)) {
                 write(ImageDataTag);
                 write(data->width());
                 write(data->height());
@@ -982,7 +977,7 @@ private:
                 return true;
             }
             if (obj->inherits(vm, RegExpObject::info())) {
-                RegExpObject* regExp = asRegExpObject(obj);
+                auto* regExp = asRegExpObject(obj);
                 char flags[3];
                 int flagCount = 0;
                 if (regExp->regExp()->global())
@@ -997,7 +992,7 @@ private:
                 return true;
             }
             if (obj->inherits(vm, JSMessagePort::info())) {
-                ObjectPool::iterator index = m_transferredMessagePorts.find(obj);
+                auto index = m_transferredMessagePorts.find(obj);
                 if (index != m_transferredMessagePorts.end()) {
                     write(MessagePortReferenceTag);
                     write(index->value);
@@ -1007,12 +1002,12 @@ private:
                 code = SerializationReturnCode::ValidationError;
                 return true;
             }
-            if (ArrayBuffer* arrayBuffer = toPossiblySharedArrayBuffer(vm, obj)) {
+            if (auto* arrayBuffer = toPossiblySharedArrayBuffer(vm, obj)) {
                 if (arrayBuffer->isNeutered()) {
                     code = SerializationReturnCode::ValidationError;
                     return true;
                 }
-                ObjectPool::iterator index = m_transferredArrayBuffers.find(obj);
+                auto index = m_transferredArrayBuffers.find(obj);
                 if (index != m_transferredArrayBuffers.end()) {
                     write(ArrayBufferTransferTag);
                     write(index->value);
@@ -1021,8 +1016,7 @@ private:
                 if (!startObjectInternal(obj)) // handle duplicates
                     return true;
                 
-                if (arrayBuffer->isShared()
-                    && m_context == SerializationContext::WorkerPostMessage) {
+                if (arrayBuffer->isShared() && m_context == SerializationContext::WorkerPostMessage) {
                     uint32_t index = m_sharedBuffers.size();
                     ArrayBufferContents contents;
                     if (arrayBuffer->shareWith(contents)) {
@@ -1046,7 +1040,7 @@ private:
                 return success;
             }
 #if ENABLE(SUBTLE_CRYPTO)
-            if (CryptoKey* key = JSCryptoKey::toWrapped(vm, obj)) {
+            if (auto* key = JSCryptoKey::toWrapped(vm, obj)) {
                 write(CryptoKeyTag);
                 Vector<uint8_t> serializedKey;
                 Vector<String> dummyBlobURLs;
@@ -1242,13 +1236,13 @@ private:
         writeLittleEndian(m_buffer, vector.data(), size);
     }
 
-    void write(const File* file)
+    void write(const File& file)
     {
-        m_blobURLs.append(file->url());
-        write(file->path());
-        write(file->url());
-        write(file->type());
-        write(file->name());
+        m_blobURLs.append(file.url());
+        write(file.path());
+        write(file.url());
+        write(file.type());
+        write(file.name());
     }
 
 #if ENABLE(SUBTLE_CRYPTO)
@@ -1315,24 +1309,24 @@ private:
         }
     }
 
-    void write(CryptoKeyDataRSAComponents::Type type)
+    void write(CryptoKeyRSAComponents::Type type)
     {
         switch (type) {
-        case CryptoKeyDataRSAComponents::Type::Public:
+        case CryptoKeyRSAComponents::Type::Public:
             write(CryptoKeyAsymmetricTypeSubtag::Public);
             return;
-        case CryptoKeyDataRSAComponents::Type::Private:
+        case CryptoKeyRSAComponents::Type::Private:
             write(CryptoKeyAsymmetricTypeSubtag::Private);
             return;
         }
     }
 
-    void write(const CryptoKeyDataRSAComponents& key)
+    void write(const CryptoKeyRSAComponents& key)
     {
         write(key.type());
         write(key.modulus());
         write(key.exponent());
-        if (key.type() == CryptoKeyDataRSAComponents::Type::Public)
+        if (key.type() == CryptoKeyRSAComponents::Type::Public)
             return;
 
         write(key.privateExponent());
@@ -1427,7 +1421,7 @@ private:
             write(isRestrictedToHash);
             if (isRestrictedToHash)
                 write(hash);
-            write(downcast<CryptoKeyDataRSAComponents>(*key->exportData()));
+            write(*downcast<CryptoKeyRSA>(*key).exportData());
             break;
         }
     }
@@ -1491,8 +1485,8 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                     indexStack.removeLast();
                     lengthStack.removeLast();
 
-                    propertyStack.append(PropertyNameArray(m_exec, PropertyNameMode::Strings));
-                    array->methodTable()->getOwnNonIndexPropertyNames(array, m_exec, propertyStack.last(), EnumerationMode());
+                    propertyStack.append(PropertyNameArray(&vm, PropertyNameMode::Strings, PrivateSymbolMode::Exclude));
+                    array->methodTable(vm)->getOwnNonIndexPropertyNames(array, m_exec, propertyStack.last(), EnumerationMode());
                     if (propertyStack.last().size()) {
                         write(NonIndexPropertiesTag);
                         indexStack.append(0);
@@ -1541,8 +1535,8 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                     return SerializationReturnCode::DataCloneError;
                 inputObjectStack.append(inObject);
                 indexStack.append(0);
-                propertyStack.append(PropertyNameArray(m_exec, PropertyNameMode::Strings));
-                inObject->methodTable()->getOwnPropertyNames(inObject, m_exec, propertyStack.last(), EnumerationMode());
+                propertyStack.append(PropertyNameArray(&vm, PropertyNameMode::Strings, PrivateSymbolMode::Exclude));
+                inObject->methodTable(vm)->getOwnPropertyNames(inObject, m_exec, propertyStack.last(), EnumerationMode());
             }
             objectStartVisitMember:
             FALLTHROUGH;
@@ -1594,7 +1588,7 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                 JSMap* inMap = jsCast<JSMap*>(inValue);
                 if (!startMap(inMap))
                     break;
-                JSMapIterator* iterator = JSMapIterator::create(vm, m_exec->lexicalGlobalObject()->mapIteratorStructure(), inMap, IterateKeyValue);
+                JSMapIterator* iterator = JSMapIterator::create(vm, vm.mapIteratorStructure.get(), inMap, IterateKeyValue);
                 m_gcBuffer.append(inMap);
                 m_gcBuffer.append(iterator);
                 mapIteratorStack.append(iterator);
@@ -1609,8 +1603,8 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                     mapIteratorStack.removeLast();
                     JSObject* object = inputObjectStack.last();
                     ASSERT(jsDynamicDowncast<JSMap*>(vm, object));
-                    propertyStack.append(PropertyNameArray(m_exec, PropertyNameMode::Strings));
-                    object->methodTable()->getOwnPropertyNames(object, m_exec, propertyStack.last(), EnumerationMode());
+                    propertyStack.append(PropertyNameArray(&vm, PropertyNameMode::Strings, PrivateSymbolMode::Exclude));
+                    object->methodTable(vm)->getOwnPropertyNames(object, m_exec, propertyStack.last(), EnumerationMode());
                     write(NonMapPropertiesTag);
                     indexStack.append(0);
                     goto objectStartVisitMember;
@@ -1638,7 +1632,7 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                 JSSet* inSet = jsCast<JSSet*>(inValue);
                 if (!startSet(inSet))
                     break;
-                JSSetIterator* iterator = JSSetIterator::create(vm, m_exec->lexicalGlobalObject()->setIteratorStructure(), inSet, IterateKey);
+                JSSetIterator* iterator = JSSetIterator::create(vm, vm.setIteratorStructure.get(), inSet, IterateKey);
                 m_gcBuffer.append(inSet);
                 m_gcBuffer.append(iterator);
                 setIteratorStack.append(iterator);
@@ -1653,8 +1647,8 @@ SerializationReturnCode CloneSerializer::serialize(JSValue in)
                     setIteratorStack.removeLast();
                     JSObject* object = inputObjectStack.last();
                     ASSERT(jsDynamicDowncast<JSSet*>(vm, object));
-                    propertyStack.append(PropertyNameArray(m_exec, PropertyNameMode::Strings));
-                    object->methodTable()->getOwnPropertyNames(object, m_exec, propertyStack.last(), EnumerationMode());
+                    propertyStack.append(PropertyNameArray(&vm, PropertyNameMode::Strings, PrivateSymbolMode::Exclude));
+                    object->methodTable(vm)->getOwnPropertyNames(object, m_exec, propertyStack.last(), EnumerationMode());
                     write(NonSetPropertiesTag);
                     indexStack.append(0);
                     goto objectStartVisitMember;
@@ -1722,7 +1716,7 @@ public:
         return str;
     }
 
-    static DeserializationResult deserialize(ExecState* exec, JSGlobalObject* globalObject, Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContentsArray, const Vector<uint8_t>& buffer, const Vector<String>& blobURLs, const Vector<String> blobFilePaths, ArrayBufferContentsArray* sharedBuffers
+    static DeserializationResult deserialize(ExecState* exec, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContentsArray, const Vector<uint8_t>& buffer, const Vector<String>& blobURLs, const Vector<String> blobFilePaths, ArrayBufferContentsArray* sharedBuffers
 #if ENABLE(WEBASSEMBLY)
         , WasmModuleArray* wasmModules
 #endif
@@ -1779,7 +1773,7 @@ private:
         size_t m_index;
     };
 
-    CloneDeserializer(ExecState* exec, JSGlobalObject* globalObject, Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents,
+    CloneDeserializer(ExecState* exec, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents,
 #if ENABLE(WEBASSEMBLY)
         WasmModuleArray* wasmModules,
 #endif
@@ -1801,7 +1795,7 @@ private:
             m_version = 0xFFFFFFFF;
     }
 
-    CloneDeserializer(ExecState* exec, JSGlobalObject* globalObject, Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents, const Vector<uint8_t>& buffer, const Vector<String>& blobURLs, const Vector<String> blobFilePaths, ArrayBufferContentsArray* sharedBuffers
+    CloneDeserializer(ExecState* exec, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, ArrayBufferContentsArray* arrayBufferContents, const Vector<uint8_t>& buffer, const Vector<String>& blobURLs, const Vector<String> blobFilePaths, ArrayBufferContentsArray* sharedBuffers
 #if ENABLE(WEBASSEMBLY)
         , WasmModuleArray* wasmModules
 #endif
@@ -1951,7 +1945,7 @@ private:
         str = String(reinterpret_cast<const UChar*>(ptr), length);
         ptr += length * sizeof(UChar);
 #else
-        Vector<UChar> buffer;
+        StringVector<UChar> buffer;
         buffer.reserveCapacity(length);
         for (unsigned i = 0; i < length; i++) {
             uint16_t ch;
@@ -2034,16 +2028,16 @@ private:
     {
         CachedStringRef path;
         if (!readStringData(path))
-            return 0;
+            return false;
         CachedStringRef url;
         if (!readStringData(url))
-            return 0;
+            return false;
         CachedStringRef type;
         if (!readStringData(type))
-            return 0;
+            return false;
         CachedStringRef name;
         if (!readStringData(name))
-            return 0;
+            return false;
 
         // If the blob URL for this file has an associated blob file path, prefer that one over the "built-in" path.
         String filePath = blobFilePathForBlobURL(url->string());
@@ -2293,7 +2287,7 @@ private:
             return false;
 
         if (type == CryptoKeyAsymmetricTypeSubtag::Public) {
-            auto keyData = CryptoKeyDataRSAComponents::createPublic(modulus, exponent);
+            auto keyData = CryptoKeyRSAComponents::createPublic(modulus, exponent);
             auto key = CryptoKeyRSA::create(algorithm, hash, isRestrictedToHash, *keyData, extractable, usages);
             result = WTFMove(key);
             return true;
@@ -2308,7 +2302,7 @@ private:
             return false;
 
         if (!primeCount) {
-            auto keyData = CryptoKeyDataRSAComponents::createPrivate(modulus, exponent, privateExponent);
+            auto keyData = CryptoKeyRSAComponents::createPrivate(modulus, exponent, privateExponent);
             auto key = CryptoKeyRSA::create(algorithm, hash, isRestrictedToHash, *keyData, extractable, usages);
             result = WTFMove(key);
             return true;
@@ -2317,9 +2311,9 @@ private:
         if (primeCount < 2)
             return false;
 
-        CryptoKeyDataRSAComponents::PrimeInfo firstPrimeInfo;
-        CryptoKeyDataRSAComponents::PrimeInfo secondPrimeInfo;
-        Vector<CryptoKeyDataRSAComponents::PrimeInfo> otherPrimeInfos(primeCount - 2);
+        CryptoKeyRSAComponents::PrimeInfo firstPrimeInfo;
+        CryptoKeyRSAComponents::PrimeInfo secondPrimeInfo;
+        Vector<CryptoKeyRSAComponents::PrimeInfo> otherPrimeInfos(primeCount - 2);
 
         if (!read(firstPrimeInfo.primeFactor))
             return false;
@@ -2340,7 +2334,7 @@ private:
                 return false;
         }
 
-        auto keyData = CryptoKeyDataRSAComponents::createPrivateWithAdditionalData(modulus, exponent, privateExponent, firstPrimeInfo, secondPrimeInfo, otherPrimeInfos);
+        auto keyData = CryptoKeyRSAComponents::createPrivateWithAdditionalData(modulus, exponent, privateExponent, firstPrimeInfo, secondPrimeInfo, otherPrimeInfos);
         auto key = CryptoKeyRSA::create(algorithm, hash, isRestrictedToHash, *keyData, extractable, usages);
         result = WTFMove(key);
         return true;
@@ -2698,13 +2692,13 @@ private:
             unsigned length = 0;
             if (!read(length))
                 return JSValue();
-            Vector<RefPtr<File>> files;
+            Vector<Ref<File>> files;
             for (unsigned i = 0; i < length; i++) {
                 RefPtr<File> file;
                 if (!readFile(file))
                     return JSValue();
                 if (m_isDOMGlobalObject)
-                    files.append(WTFMove(file));
+                    files.append(file.releaseNonNull());
             }
             if (!m_isDOMGlobalObject)
                 return jsNull();
@@ -2941,7 +2935,7 @@ private:
     const uint8_t* m_end;
     unsigned m_version;
     Vector<CachedString> m_constantPool;
-    Vector<RefPtr<MessagePort>>& m_messagePorts;
+    const Vector<RefPtr<MessagePort>>& m_messagePorts;
     ArrayBufferContentsArray* m_arrayBufferContents;
     Vector<RefPtr<JSC::ArrayBuffer>> m_arrayBuffers;
     Vector<String> m_blobURLs;
@@ -3150,9 +3144,7 @@ error:
     return std::make_pair(JSValue(), SerializationReturnCode::ValidationError);
 }
 
-SerializedScriptValue::~SerializedScriptValue()
-{
-}
+SerializedScriptValue::~SerializedScriptValue() = default;
 
 SerializedScriptValue::SerializedScriptValue(Vector<uint8_t>&& buffer)
     : m_data(WTFMove(buffer))
@@ -3366,18 +3358,17 @@ String SerializedScriptValue::toString()
 
 JSValue SerializedScriptValue::deserialize(ExecState& exec, JSGlobalObject* globalObject, SerializationErrorMode throwExceptions)
 {
-    Vector<RefPtr<MessagePort>> dummyMessagePorts;
-    return deserialize(exec, globalObject, dummyMessagePorts, throwExceptions);
+    return deserialize(exec, globalObject, { }, throwExceptions);
 }
 
-JSValue SerializedScriptValue::deserialize(ExecState& exec, JSGlobalObject* globalObject, Vector<RefPtr<MessagePort>>& messagePorts, SerializationErrorMode throwExceptions)
+JSValue SerializedScriptValue::deserialize(ExecState& exec, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, SerializationErrorMode throwExceptions)
 {
     Vector<String> dummyBlobs;
     Vector<String> dummyPaths;
     return deserialize(exec, globalObject, messagePorts, dummyBlobs, dummyPaths, throwExceptions);
 }
 
-JSValue SerializedScriptValue::deserialize(ExecState& exec, JSGlobalObject* globalObject, Vector<RefPtr<MessagePort>>& messagePorts, const Vector<String>& blobURLs, const Vector<String>& blobFilePaths, SerializationErrorMode throwExceptions)
+JSValue SerializedScriptValue::deserialize(ExecState& exec, JSGlobalObject* globalObject, const Vector<RefPtr<MessagePort>>& messagePorts, const Vector<String>& blobURLs, const Vector<String>& blobFilePaths, SerializationErrorMode throwExceptions)
 {
     DeserializationResult result = CloneDeserializer::deserialize(&exec, globalObject, messagePorts, m_arrayBufferContentsArray.get(), m_data, blobURLs, blobFilePaths, m_sharedBufferContentsArray.get()
 #if ENABLE(WEBASSEMBLY)

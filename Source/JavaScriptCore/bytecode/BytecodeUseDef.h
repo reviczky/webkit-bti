@@ -32,7 +32,7 @@ namespace JSC {
 template<typename Block, typename Functor, typename Instruction>
 void computeUsesForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instruction* instruction, const Functor& functor)
 {
-    if (opcodeID != op_enter && codeBlock->wasCompiledWithDebuggingOpcodes() && codeBlock->scopeRegister().isValid())
+    if (opcodeID != op_enter && (codeBlock->wasCompiledWithDebuggingOpcodes() || codeBlock->usesEval()) && codeBlock->scopeRegister().isValid())
         functor(codeBlock, instruction, opcodeID, codeBlock->scopeRegister().offset());
 
     switch (opcodeID) {
@@ -60,8 +60,10 @@ void computeUsesForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_get_scope:
     case op_to_this:
     case op_check_tdz:
+    case op_identity_with_profile:
     case op_profile_type:
     case op_throw:
+    case op_throw_static_error:
     case op_end:
     case op_ret:
     case op_jtrue:
@@ -70,8 +72,7 @@ void computeUsesForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_jneq_null:
     case op_dec:
     case op_inc:
-    case op_log_shadow_chicken_prologue:
-    case op_throw_static_error: {
+    case op_log_shadow_chicken_prologue: {
         ASSERT(opcodeLengths[opcodeID] > 1);
         functor(codeBlock, instruction, opcodeID, instruction[1].u.operand);
         return;
@@ -84,6 +85,8 @@ void computeUsesForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_jngreater:
     case op_jngreatereq:
     case op_jless:
+    case op_jbelow:
+    case op_jbeloweq:
     case op_set_function_name:
     case op_log_shadow_chicken_tail: {
         ASSERT(opcodeLengths[opcodeID] > 2);
@@ -200,6 +203,8 @@ void computeUsesForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_del_by_id:
     case op_unsigned:
     case op_new_func:
+    case op_new_async_generator_func:
+    case op_new_async_generator_func_exp:
     case op_new_generator_func:
     case op_new_async_func:
     case op_get_parent_scope:
@@ -234,6 +239,8 @@ void computeUsesForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_lesseq:
     case op_greater:
     case op_greatereq:
+    case op_below:
+    case op_beloweq:
     case op_nstricteq:
     case op_stricteq:
     case op_neq:
@@ -340,6 +347,8 @@ void computeDefsForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_jnlesseq:
     case op_jngreater:
     case op_jngreatereq:
+    case op_jbelow:
+    case op_jbeloweq:
     case op_loop_hint:
     case op_switch_imm:
     case op_switch_char:
@@ -400,6 +409,8 @@ void computeDefsForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_new_func_exp:
     case op_new_generator_func:
     case op_new_generator_func_exp:
+    case op_new_async_generator_func:
+    case op_new_async_generator_func_exp:
     case op_new_async_func:
     case op_new_async_func_exp:
     case op_call_varargs:
@@ -423,6 +434,7 @@ void computeDefsForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_instanceof_custom:
     case op_get_by_val:
     case op_typeof:
+    case op_identity_with_profile:
     case op_is_empty:
     case op_is_undefined:
     case op_is_boolean:
@@ -457,6 +469,8 @@ void computeDefsForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, Instructi
     case op_lesseq:
     case op_greater:
     case op_greatereq:
+    case op_below:
+    case op_beloweq:
     case op_neq_null:
     case op_eq_null:
     case op_not:

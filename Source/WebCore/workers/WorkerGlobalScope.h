@@ -27,14 +27,18 @@
 #pragma once
 
 #include "Base64Utilities.h"
+#include "CacheStorageConnection.h"
 #include "EventTarget.h"
+#include "ImageBitmap.h"
 #include "ScriptExecutionContext.h"
 #include "Supplementable.h"
 #include "URL.h"
+#include "WorkerCacheStorageConnection.h"
 #include "WorkerEventQueue.h"
 #include "WorkerScriptController.h"
 #include <inspector/ConsoleMessage.h>
 #include <memory>
+#include <pal/SessionID.h>
 
 namespace WebCore {
 
@@ -56,14 +60,17 @@ public:
     virtual ~WorkerGlobalScope();
 
     virtual bool isDedicatedWorkerGlobalScope() const { return false; }
+    virtual bool isServiceWorkerGlobalScope() const { return false; }
 
     const URL& url() const final { return m_url; }
-    String origin() const;
+    String origin() const final;
 
 #if ENABLE(INDEXED_DATABASE)
     IDBClient::IDBConnectionProxy* idbConnectionProxy() final;
     void stopIndexedDatabase();
 #endif
+
+    CacheStorageConnection& cacheStorageConnection();
 
     WorkerScriptController* script() { return m_script.get(); }
     void clearScript() { m_script = nullptr; }
@@ -106,8 +113,11 @@ public:
 
     void removeAllEventListeners() final;
 
+    void createImageBitmap(ImageBitmap::Source&&, ImageBitmapOptions&&, ImageBitmap::Promise&&);
+    void createImageBitmap(ImageBitmap::Source&&, int sx, int sy, int sw, int sh, ImageBitmapOptions&&, ImageBitmap::Promise&&);
+
 protected:
-    WorkerGlobalScope(const URL&, const String& identifier, const String& userAgent, WorkerThread&, bool shouldBypassMainWorldContentSecurityPolicy, Ref<SecurityOrigin>&& topOrigin, MonotonicTime timeOrigin, IDBClient::IDBConnectionProxy*, SocketProvider*);
+    WorkerGlobalScope(const URL&, const String& identifier, const String& userAgent, WorkerThread&, bool shouldBypassMainWorldContentSecurityPolicy, Ref<SecurityOrigin>&& topOrigin, MonotonicTime timeOrigin, IDBClient::IDBConnectionProxy*, SocketProvider*, PAL::SessionID);
 
     void applyContentSecurityPolicyResponseHeaders(const ContentSecurityPolicyResponseHeaders&);
 
@@ -129,6 +139,7 @@ private:
 
     ScriptExecutionContext* scriptExecutionContext() const final { return const_cast<WorkerGlobalScope*>(this); }
     URL completeURL(const String&) const final;
+    PAL::SessionID sessionID() const final { return m_sessionID; }
     String userAgent(const URL&) const final;
     void disableEval(const String& errorMessage) final;
     void disableWebAssembly(const String& errorMessage) final;
@@ -179,6 +190,9 @@ private:
 
     RefPtr<Performance> m_performance;
     mutable RefPtr<Crypto> m_crypto;
+
+    PAL::SessionID m_sessionID;
+    RefPtr<WorkerCacheStorageConnection> m_cacheStorageConnection;
 };
 
 } // namespace WebCore

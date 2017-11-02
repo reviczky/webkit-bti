@@ -28,10 +28,10 @@
 #if USE(NETWORK_SESSION)
 
 #include "NetworkDataTask.h"
-#include <WebCore/ResourceHandleTypes.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/ResourceResponse.h>
-#include <WebCore/SessionID.h>
+#include <WebCore/StoredCredentialsPolicy.h>
+#include <pal/SessionID.h>
 #include <wtf/Function.h>
 
 namespace WebCore {
@@ -46,14 +46,15 @@ public:
     struct Parameters {
         WebCore::ResourceRequest originalRequest;
         Ref<WebCore::SecurityOrigin> sourceOrigin;
-        WebCore::SessionID sessionID;
-        WebCore::StoredCredentials allowStoredCredentials;
+        PAL::SessionID sessionID;
+        WebCore::StoredCredentialsPolicy storedCredentialsPolicy;
     };
     enum class Result { Success, Failure };
     using CompletionCallback = WTF::Function<void(Result)>;
 
     NetworkCORSPreflightChecker(Parameters&&, CompletionCallback&&);
     ~NetworkCORSPreflightChecker();
+    const WebCore::ResourceRequest& originalRequest() const { return m_parameters.originalRequest; }
 
     void startPreflight();
 

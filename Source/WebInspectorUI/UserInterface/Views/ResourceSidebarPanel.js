@@ -31,8 +31,6 @@ WI.ResourceSidebarPanel = class ResourceSidebarPanel extends WI.NavigationSideba
 
         this.contentBrowser = contentBrowser;
 
-        this.filterBar.placeholder = WI.UIString("Filter Resource List");
-
         this._navigationBar = new WI.NavigationBar;
         this.addSubview(this._navigationBar);
 
@@ -48,12 +46,6 @@ WI.ResourceSidebarPanel = class ResourceSidebarPanel extends WI.NavigationSideba
             var scopeBarItem = new WI.ScopeBarItem(scopeItemPrefix + value, WI.Resource.displayNameForType(value, true));
             scopeBarItem[WI.ResourceSidebarPanel.ResourceTypeSymbol] = value;
             scopeBarItems.push(scopeBarItem);
-        }
-
-        if (window.CanvasAgent && WI.settings.experimentalShowCanvasContextsInResources.value) {
-            let canvasesScopeBarItem = new WI.ScopeBarItem(scopeItemPrefix + WI.Canvas.ResourceSidebarType, WI.UIString("Canvases"));
-            canvasesScopeBarItem[WI.ResourceSidebarPanel.ResourceTypeSymbol] = WI.Canvas.ResourceSidebarType;
-            scopeBarItems.insertAtIndex(canvasesScopeBarItem, scopeBarItems.length - 1);
         }
 
         this._scopeBar = new WI.ScopeBar("resource-sidebar-scope-bar", scopeBarItems, scopeBarItems[0], true);
@@ -78,7 +70,7 @@ WI.ResourceSidebarPanel = class ResourceSidebarPanel extends WI.NavigationSideba
         this.contentTreeOutline.addEventListener(WI.TreeOutline.Event.SelectionDidChange, this._treeSelectionDidChange, this);
         this.contentTreeOutline.includeSourceMapResourceChildren = true;
 
-        if (WI.debuggableType === WI.DebuggableType.JavaScript) {
+        if (WI.sharedApp.debuggableType === WI.DebuggableType.JavaScript) {
             this.contentTreeOutline.disclosureButtons = false;
             WI.SourceCode.addEventListener(WI.SourceCode.Event.SourceMapAdded, () => { this.contentTreeOutline.disclosureButtons = true; }, this);
         }
@@ -176,7 +168,7 @@ WI.ResourceSidebarPanel = class ResourceSidebarPanel extends WI.NavigationSideba
         // we have a ScriptContentView asking for the tree element we will make a ScriptTreeElement on demand and add it.
 
         if (!this._anonymousScriptsFolderTreeElement) {
-            let collection = new WI.Collection(WI.Collection.TypeVerifier.Script);
+            let collection = new WI.ScriptCollection;
             this._anonymousScriptsFolderTreeElement = new WI.FolderTreeElement(WI.UIString("Anonymous Scripts"), collection);
         }
 
@@ -205,7 +197,7 @@ WI.ResourceSidebarPanel = class ResourceSidebarPanel extends WI.NavigationSideba
         for (let script of WI.debuggerManager.knownNonResourceScripts) {
             this._addScript(script);
 
-            if (script.sourceMaps.length && WI.debuggableType === WI.DebuggableType.JavaScript)
+            if (script.sourceMaps.length && WI.sharedApp.debuggableType === WI.DebuggableType.JavaScript)
                 this.contentTreeOutline.disclosureButtons = true;
         }
     }
@@ -237,9 +229,6 @@ WI.ResourceSidebarPanel = class ResourceSidebarPanel extends WI.NavigationSideba
 
             if (treeElement instanceof WI.ScriptTreeElement)
                 return selectedScopeBarItem[WI.ResourceSidebarPanel.ResourceTypeSymbol] === WI.Resource.Type.Script;
-
-            if (treeElement instanceof WI.CanvasTreeElement || treeElement instanceof WI.ShaderProgramTreeElement)
-                return selectedScopeBarItem[WI.ResourceSidebarPanel.ResourceTypeSymbol] === WI.Canvas.ResourceSidebarType;
 
             if (treeElement instanceof WI.CSSStyleSheetTreeElement)
                 return selectedScopeBarItem[WI.ResourceSidebarPanel.ResourceTypeSymbol] === WI.Resource.Type.Stylesheet;
@@ -331,17 +320,17 @@ WI.ResourceSidebarPanel = class ResourceSidebarPanel extends WI.NavigationSideba
 
         if (script.injected) {
             if (!this._extensionScriptsFolderTreeElement) {
-                let collection = new WI.Collection(WI.Collection.TypeVerifier.Script);
+                let collection = new WI.ScriptCollection;
                 this._extensionScriptsFolderTreeElement = new WI.FolderTreeElement(WI.UIString("Extension Scripts"), collection);
             }
 
             parentFolderTreeElement = this._extensionScriptsFolderTreeElement;
         } else {
-            if (WI.debuggableType === WI.DebuggableType.JavaScript && !WI.hasExtraDomains)
+            if (WI.sharedApp.debuggableType === WI.DebuggableType.JavaScript && !WI.sharedApp.hasExtraDomains)
                 insertIntoTopLevel = true;
             else {
                 if (!this._extraScriptsFolderTreeElement) {
-                    let collection = new WI.Collection(WI.Collection.TypeVerifier.Script);
+                    let collection = new WI.ScriptCollection;
                     this._extraScriptsFolderTreeElement = new WI.FolderTreeElement(WI.UIString("Extra Scripts"), collection);
                 }
 
@@ -466,10 +455,7 @@ WI.ResourceSidebarPanel = class ResourceSidebarPanel extends WI.NavigationSideba
         if (treeElement instanceof WI.FolderTreeElement
             || treeElement instanceof WI.ResourceTreeElement
             || treeElement instanceof WI.ScriptTreeElement
-            || treeElement instanceof WI.CSSStyleSheetTreeElement
-            || treeElement instanceof WI.ContentFlowTreeElement
-            || treeElement instanceof WI.CanvasTreeElement
-            || treeElement instanceof WI.ShaderProgramTreeElement) {
+            || treeElement instanceof WI.CSSStyleSheetTreeElement) {
             const cookie = null;
             const options = {
                 ignoreNetworkTab: true,
@@ -498,7 +484,7 @@ WI.ResourceSidebarPanel = class ResourceSidebarPanel extends WI.NavigationSideba
 
     _extraDomainsActivated()
     {
-        if (WI.debuggableType === WI.DebuggableType.JavaScript)
+        if (WI.sharedApp.debuggableType === WI.DebuggableType.JavaScript)
             this.contentTreeOutline.disclosureButtons = true;
     }
 

@@ -68,6 +68,8 @@ enum Intrinsic {
     RegExpExecIntrinsic,
     RegExpTestIntrinsic,
     RegExpTestFastIntrinsic,
+    ObjectGetPrototypeOfIntrinsic,
+    ReflectGetPrototypeOfIntrinsic,
     StringPrototypeValueOfIntrinsic,
     StringPrototypeReplaceIntrinsic,
     StringPrototypeReplaceRegExpIntrinsic,
@@ -81,7 +83,15 @@ enum Intrinsic {
     BoundThisNoArgsFunctionCallIntrinsic,
     JSMapGetIntrinsic,
     JSMapHasIntrinsic,
+    JSMapBucketHeadIntrinsic,
+    JSMapBucketNextIntrinsic,
+    JSMapBucketKeyIntrinsic,
+    JSMapBucketValueIntrinsic,
     JSSetHasIntrinsic,
+    JSSetBucketHeadIntrinsic,
+    JSSetBucketNextIntrinsic,
+    JSSetBucketKeyIntrinsic,
+    JSWeakMapGetIntrinsic,
     HasOwnPropertyIntrinsic,
     AtomicsAddIntrinsic,
     AtomicsAndIntrinsic,
@@ -101,6 +111,7 @@ enum Intrinsic {
     TypedArrayLengthIntrinsic,
     TypedArrayByteLengthIntrinsic,
     TypedArrayByteOffsetIntrinsic,
+    UnderscoreProtoIntrinsic,
 
     // Debugging intrinsics. These are meant to be used as testing hacks within
     // jsc.cpp and should never be exposed to users.

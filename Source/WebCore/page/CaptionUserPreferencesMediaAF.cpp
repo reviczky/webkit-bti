@@ -33,11 +33,10 @@
 
 #include "AudioTrackList.h"
 #if PLATFORM(WIN)
-#include "CoreTextSPIWin.h"
+#include <pal/spi/win/CoreTextSPIWin.h>
 #endif
 #include "FloatConversion.h"
 #include "HTMLMediaElement.h"
-#include "Language.h"
 #include "LocalizedStrings.h"
 #include "Logging.h"
 #include "MediaControlElements.h"
@@ -46,8 +45,8 @@
 #include "UserStyleSheetTypes.h"
 #include "VTTCue.h"
 #include <algorithm>
+#include <wtf/Language.h>
 #include <wtf/NeverDestroyed.h>
-#include <wtf/PlatformUserPreferredLanguages.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/SoftLinking.h>
 #include <wtf/text/CString.h>

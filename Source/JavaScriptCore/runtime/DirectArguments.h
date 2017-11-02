@@ -46,6 +46,13 @@ private:
     DirectArguments(VM&, Structure*, unsigned length, unsigned capacity);
     
 public:
+    template<typename CellType>
+    static Subspace* subspaceFor(VM& vm)
+    {
+        RELEASE_ASSERT(!CellType::needsDestruction);
+        return &vm.jsValueGigacageCellSpace;
+    }
+
     // Creates an arguments object but leaves it uninitialized. This is dangerous if we GC right
     // after allocation.
     static DirectArguments* createUninitialized(VM&, Structure*, unsigned length, unsigned capacity);
@@ -67,8 +74,14 @@ public:
     
     uint32_t length(ExecState* exec) const
     {
-        if (UNLIKELY(m_mappedArguments))
-            return get(exec, exec->propertyNames().length).toUInt32(exec);
+        if (UNLIKELY(m_mappedArguments)) {
+            VM& vm = exec->vm();
+            auto scope = DECLARE_THROW_SCOPE(vm);
+            JSValue value = get(exec, vm.propertyNames->length);
+            RETURN_IF_EXCEPTION(scope, 0);
+            scope.release();
+            return value.toUInt32(exec);
+        }
         return m_length;
     }
     
@@ -157,7 +170,7 @@ public:
 private:
     WriteBarrier<Unknown>* storage()
     {
-        return bitwise_cast<WriteBarrier<Unknown>*>(bitwise_cast<char*>(this) + storageOffset());
+        return bitwise_cast<WriteBarrier<Unknown>*>(bitwise_cast<char*>(Gigacage::caged(Gigacage::JSValue, this)) + storageOffset());
     }
     
     unsigned mappedArgumentsSize();

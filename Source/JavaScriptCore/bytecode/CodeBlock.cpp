@@ -66,6 +66,7 @@
 #include "LLIntPrototypeLoadAdaptiveStructureWatchpoint.h"
 #include "LowLevelInterpreter.h"
 #include "ModuleProgramCodeBlock.h"
+#include "ObjectAllocationProfileInlines.h"
 #include "PCToCodeOriginMap.h"
 #include "PolymorphicAccess.h"
 #include "ProfilerDatabase.h"
@@ -359,7 +360,7 @@ void CodeBlock::finishCreation(VM& vm, CopyParsedBlockTag, CodeBlock& other)
 CodeBlock::CodeBlock(VM* vm, Structure* structure, ScriptExecutable* ownerExecutable, UnlinkedCodeBlock* unlinkedCodeBlock,
     JSScope* scope, RefPtr<SourceProvider>&& sourceProvider, unsigned sourceOffset, unsigned firstLineColumnOffset)
     : JSCell(*vm, structure)
-    , m_globalObject(scope->globalObject()->vm(), this, scope->globalObject())
+    , m_globalObject(*vm, this, scope->globalObject())
     , m_numCalleeLocals(unlinkedCodeBlock->m_numCalleeLocals)
     , m_numVars(unlinkedCodeBlock->m_numVars)
     , m_shouldAlwaysBeInlined(true)
@@ -372,12 +373,12 @@ CodeBlock::CodeBlock(VM* vm, Structure* structure, ScriptExecutable* ownerExecut
     , m_isConstructor(unlinkedCodeBlock->isConstructor())
     , m_isStrictMode(unlinkedCodeBlock->isStrictMode())
     , m_codeType(unlinkedCodeBlock->codeType())
-    , m_unlinkedCode(m_globalObject->vm(), this, unlinkedCodeBlock)
+    , m_unlinkedCode(*vm, this, unlinkedCodeBlock)
     , m_hasDebuggerStatement(false)
     , m_steppingMode(SteppingModeDisabled)
     , m_numBreakpoints(0)
-    , m_ownerExecutable(m_globalObject->vm(), this, ownerExecutable)
-    , m_vm(unlinkedCodeBlock->vm())
+    , m_ownerExecutable(*vm, this, ownerExecutable)
+    , m_vm(vm)
     , m_thisRegister(unlinkedCodeBlock->thisRegister())
     , m_scopeRegister(unlinkedCodeBlock->scopeRegister())
     , m_source(WTFMove(sourceProvider))
@@ -397,10 +398,19 @@ CodeBlock::CodeBlock(VM* vm, Structure* structure, ScriptExecutable* ownerExecut
     setNumParameters(unlinkedCodeBlock->numParameters());
 }
 
+// The main purpose of this function is to generate linked bytecode from unlinked bytecode. The process
+// of linking is taking an abstract representation of bytecode and tying it to a GlobalObject and scope
+// chain. For example, this process allows us to cache the depth of lexical environment reads that reach
+// outside of this CodeBlock's compilation unit. It also allows us to generate particular constants that
+// we can't generate during unlinked bytecode generation. This process is not allowed to generate control
+// flow or introduce new locals. The reason for this is we rely on liveness analysis to be the same for
+// all the CodeBlocks of an UnlinkedCodeBlock. We rely on this fact by caching the liveness analysis
+// inside UnlinkedCodeBlock.
 bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, UnlinkedCodeBlock* unlinkedCodeBlock,
     JSScope* scope)
 {
     Base::finishCreation(vm);
+
     auto throwScope = DECLARE_THROW_SCOPE(vm);
 
     if (vm.typeProfiler() || vm.controlFlowProfiler())
@@ -593,7 +603,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
             int inferredInlineCapacity = pc[opLength - 2].u.operand;
 
             instructions[i + opLength - 1] = objectAllocationProfile;
-            objectAllocationProfile->initialize(vm,
+            objectAllocationProfile->initializeProfile(vm,
                 m_globalObject.get(), this, m_globalObject->objectPrototype(), inferredInlineCapacity);
             break;
         }
@@ -623,6 +633,8 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
             int localScopeDepth = pc[5].u.operand;
 
             ResolveOp op = JSScope::abstractResolve(m_globalObject->globalExec(), localScopeDepth, scope, ident, Get, type, InitializationMode::NotInitialization);
+            RETURN_IF_EXCEPTION(throwScope, false);
+
             instructions[i + 4].u.operand = op.type;
             instructions[i + 5].u.operand = op.depth;
             if (op.lexicalEnvironment) {
@@ -657,6 +669,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
 
             const Identifier& ident = identifier(pc[3].u.operand);
             ResolveOp op = JSScope::abstractResolve(m_globalObject->globalExec(), localScopeDepth, scope, ident, Get, getPutInfo.resolveType(), InitializationMode::NotInitialization);
+            RETURN_IF_EXCEPTION(throwScope, false);
 
             instructions[i + 4].u.operand = GetPutInfo(getPutInfo.resolveMode(), op.type, getPutInfo.initializationMode()).operand();
             if (op.type == ModuleVar)
@@ -692,6 +705,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
             int localScopeDepth = pc[5].u.operand;
             instructions[i + 5].u.pointer = nullptr;
             ResolveOp op = JSScope::abstractResolve(m_globalObject->globalExec(), localScopeDepth, scope, ident, Put, getPutInfo.resolveType(), getPutInfo.initializationMode());
+            RETURN_IF_EXCEPTION(throwScope, false);
 
             instructions[i + 4].u.operand = GetPutInfo(getPutInfo.resolveMode(), op.type, getPutInfo.initializationMode()).operand();
             if (op.type == GlobalVar || op.type == GlobalVarWithVarInjectionChecks || op.type == GlobalLexicalVar || op.type == GlobalLexicalVarWithVarInjectionChecks)
@@ -726,6 +740,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
                 // Even though type profiling may be profiling either a Get or a Put, we can always claim a Get because
                 // we're abstractly "read"ing from a JSScope.
                 ResolveOp op = JSScope::abstractResolve(m_globalObject->globalExec(), localScopeDepth, scope, ident, Get, type, InitializationMode::NotInitialization);
+                RETURN_IF_EXCEPTION(throwScope, false);
 
                 if (op.type == ClosureVar || op.type == ModuleVar)
                     symbolTable = op.lexicalEnvironment->symbolTable();
@@ -805,10 +820,11 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
             m_numberOfArgumentsToSkip = numberOfArgumentsToSkip;
             break;
         }
-
+        
         default:
             break;
         }
+
         i += opLength;
     }
 
@@ -830,10 +846,10 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
 
     if (Options::dumpGeneratedBytecodes())
         dumpBytecode();
-    
+
     heap()->m_codeBlocks->add(this);
     heap()->reportExtraMemoryAllocated(m_instructions.size() * sizeof(Instruction));
-    
+
     return true;
 }
 
@@ -1703,6 +1719,43 @@ CallSiteIndex CodeBlock::newExceptionHandlingCallSiteIndex(CallSiteIndex origina
 #endif
 }
 
+void CodeBlock::ensureCatchLivenessIsComputedForBytecodeOffsetSlow(unsigned bytecodeOffset)
+{
+    ASSERT(Interpreter::getOpcodeID(m_instructions[bytecodeOffset]) == op_catch);
+    BytecodeLivenessAnalysis& bytecodeLiveness = livenessAnalysis();
+
+    // We get the live-out set of variables at op_catch, not the live-in. This
+    // is because the variables that the op_catch defines might be dead, and
+    // we can avoid profiling them and extracting them when doing OSR entry
+    // into the DFG.
+    FastBitVector liveLocals = bytecodeLiveness.getLivenessInfoAtBytecodeOffset(this, bytecodeOffset + OPCODE_LENGTH(op_catch));
+    Vector<VirtualRegister> liveOperands;
+    liveOperands.reserveInitialCapacity(liveLocals.bitCount());
+    liveLocals.forEachSetBit([&] (unsigned liveLocal) {
+        liveOperands.append(virtualRegisterForLocal(liveLocal));
+    });
+
+    for (int i = 0; i < numParameters(); ++i)
+        liveOperands.append(virtualRegisterForArgument(i));
+
+    auto profiles = std::make_unique<ValueProfileAndOperandBuffer>(liveOperands.size());
+    RELEASE_ASSERT(profiles->m_size == liveOperands.size());
+    for (unsigned i = 0; i < profiles->m_size; ++i)
+        profiles->m_buffer.get()[i].m_operand = liveOperands[i].offset();
+
+    // The compiler thread will read this pointer value and then proceed to dereference it
+    // if it is not null. We need to make sure all above stores happen before this store so
+    // the compiler thread reads fully initialized data.
+    WTF::storeStoreFence(); 
+
+    m_instructions[bytecodeOffset + 3].u.pointer = profiles.get();
+
+    {
+        ConcurrentJSLocker locker(m_lock);
+        m_catchProfiles.append(WTFMove(profiles));
+    }
+}
+
 void CodeBlock::removeExceptionHandlerForCallSite(CallSiteIndex callSiteIndex)
 {
     RELEASE_ASSERT(m_rareData);
@@ -1961,7 +2014,7 @@ void CodeBlock::jettison(Profiler::JettisonReason reason, ReoptimizationMode mod
 
     // This accomplishes (2).
     ownerScriptExecutable()->installCode(
-        m_globalObject->vm(), alternative(), codeType(), specializationKind());
+        *m_vm, alternative(), codeType(), specializationKind());
 
 #if ENABLE(DFG_JIT)
     if (DFG::shouldDumpDisassembly())
@@ -2283,6 +2336,55 @@ bool CodeBlock::checkIfOptimizationThresholdReached()
     return m_jitExecuteCounter.checkIfThresholdCrossedAndSet(this);
 }
 
+#if ENABLE(DFG_JIT)
+auto CodeBlock::updateOSRExitCounterAndCheckIfNeedToReoptimize(DFG::OSRExitState& exitState) -> OptimizeAction
+{
+    DFG::OSRExitBase& exit = exitState.exit;
+    if (!exitKindMayJettison(exit.m_kind)) {
+        // FIXME: We may want to notice that we're frequently exiting
+        // at an op_catch that we didn't compile an entrypoint for, and
+        // then trigger a reoptimization of this CodeBlock:
+        // https://bugs.webkit.org/show_bug.cgi?id=175842
+        return OptimizeAction::None;
+    }
+
+    exit.m_count++;
+    m_osrExitCounter++;
+
+    CodeBlock* baselineCodeBlock = exitState.baselineCodeBlock;
+    ASSERT(baselineCodeBlock == baselineAlternative());
+    if (UNLIKELY(baselineCodeBlock->jitExecuteCounter().hasCrossedThreshold()))
+        return OptimizeAction::ReoptimizeNow;
+
+    // We want to figure out if there's a possibility that we're in a loop. For the outermost
+    // code block in the inline stack, we handle this appropriately by having the loop OSR trigger
+    // check the exit count of the replacement of the CodeBlock from which we are OSRing. The
+    // problem is the inlined functions, which might also have loops, but whose baseline versions
+    // don't know where to look for the exit count. Figure out if those loops are severe enough
+    // that we had tried to OSR enter. If so, then we should use the loop reoptimization trigger.
+    // Otherwise, we should use the normal reoptimization trigger.
+
+    bool didTryToEnterInLoop = false;
+    for (InlineCallFrame* inlineCallFrame = exit.m_codeOrigin.inlineCallFrame; inlineCallFrame; inlineCallFrame = inlineCallFrame->directCaller.inlineCallFrame) {
+        if (inlineCallFrame->baselineCodeBlock->ownerScriptExecutable()->didTryToEnterInLoop()) {
+            didTryToEnterInLoop = true;
+            break;
+        }
+    }
+
+    uint32_t exitCountThreshold = didTryToEnterInLoop
+        ? exitCountThresholdForReoptimizationFromLoop()
+        : exitCountThresholdForReoptimization();
+
+    if (m_osrExitCounter > exitCountThreshold)
+        return OptimizeAction::ReoptimizeNow;
+
+    // Too few fails. Adjust the execution counter such that the target is to only optimize after a while.
+    baselineCodeBlock->m_jitExecuteCounter.setNewThresholdForOSRExit(exitState.activeThreshold, exitState.memoryUsageAdjustedThreshold);
+    return OptimizeAction::None;
+}
+#endif
+
 void CodeBlock::optimizeNextInvocation()
 {
     if (Options::verboseOSR())
@@ -2486,9 +2588,10 @@ const Identifier& CodeBlock::identifier(int index) const
 void CodeBlock::updateAllPredictionsAndCountLiveness(unsigned& numberOfLiveNonArgumentValueProfiles, unsigned& numberOfSamplesInProfiles)
 {
     ConcurrentJSLocker locker(m_lock);
-    
+
     numberOfLiveNonArgumentValueProfiles = 0;
     numberOfSamplesInProfiles = 0; // If this divided by ValueProfile::numberOfBuckets equals numberOfValueProfiles() then value profiles are full.
+
     for (unsigned i = 0; i < totalNumberOfValueProfiles(); ++i) {
         ValueProfile& profile = getFromAllValueProfiles(i);
         unsigned numSamples = profile.totalNumberOfSamples();
@@ -2502,6 +2605,12 @@ void CodeBlock::updateAllPredictionsAndCountLiveness(unsigned& numberOfLiveNonAr
         if (profile.numberOfSamples() || profile.m_prediction != SpecNone)
             numberOfLiveNonArgumentValueProfiles++;
         profile.computeUpdatedPrediction(locker);
+    }
+
+    for (auto& profileBucket : m_catchProfiles) {
+        profileBucket->forEach([&] (ValueProfileAndOperand& profile) {
+            profile.m_profile.computeUpdatedPrediction(locker);
+        });
     }
     
 #if ENABLE(DFG_JIT)
@@ -2524,7 +2633,7 @@ void CodeBlock::updateAllArrayPredictions()
     
     // Don't count these either, for similar reasons.
     for (unsigned i = m_arrayAllocationProfiles.size(); i--;)
-        m_arrayAllocationProfiles[i].updateIndexingType();
+        m_arrayAllocationProfiles[i].updateProfile();
 }
 
 void CodeBlock::updateAllPredictions()
@@ -2758,7 +2867,7 @@ void CodeBlock::validate()
 {
     BytecodeLivenessAnalysis liveness(this); // Compute directly from scratch so it doesn't effect CodeBlock footprint.
     
-    FastBitVector liveAtHead = liveness.getLivenessInfoAtBytecodeOffset(0);
+    FastBitVector liveAtHead = liveness.getLivenessInfoAtBytecodeOffset(this, 0);
     
     if (liveAtHead.numBits() != static_cast<size_t>(m_numCalleeLocals)) {
         beginValidationDidFail();
@@ -2785,6 +2894,23 @@ void CodeBlock::validate()
             dataLog("    Value profiles are not sorted.\n");
             endValidationDidFail();
         }
+    }
+     
+    for (unsigned bytecodeOffset = 0; bytecodeOffset < m_instructions.size(); ) {
+        OpcodeID opcode = Interpreter::getOpcodeID(m_instructions[bytecodeOffset]);
+        if (!!baselineAlternative()->handlerForBytecodeOffset(bytecodeOffset)) {
+            if (opcode == op_catch || opcode == op_enter) {
+                // op_catch/op_enter logically represent an entrypoint. Entrypoints are not allowed to be
+                // inside of a try block because they are responsible for bootstrapping state. And they
+                // are never allowed throw an exception because of this. We rely on this when compiling
+                // in the DFG. Because an entrypoint never throws, the bytecode generator will never
+                // allow once inside a try block.
+                beginValidationDidFail();
+                dataLog("    entrypoint not allowed inside a try block.");
+                endValidationDidFail();
+            }
+        }
+        bytecodeOffset += opcodeLength(opcode);
     }
 }
 
@@ -3113,17 +3239,6 @@ void CodeBlock::dumpMathICStats()
 
     dataLog("-----------------------\n");
 #endif
-}
-
-BytecodeLivenessAnalysis& CodeBlock::livenessAnalysisSlow()
-{
-    std::unique_ptr<BytecodeLivenessAnalysis> analysis = std::make_unique<BytecodeLivenessAnalysis>(this);
-    {
-        ConcurrentJSLocker locker(m_lock);
-        if (!m_livenessAnalysis)
-            m_livenessAnalysis = WTFMove(analysis);
-        return *m_livenessAnalysis;
-    }
 }
 
 void setPrinter(Printer::PrintRecord& record, CodeBlock* codeBlock)

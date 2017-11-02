@@ -47,10 +47,10 @@ class CachedImage final : public CachedResource {
     friend class MemoryCache;
 
 public:
-    CachedImage(CachedResourceRequest&&, SessionID);
-    CachedImage(Image*, SessionID);
+    CachedImage(CachedResourceRequest&&, PAL::SessionID);
+    CachedImage(Image*, PAL::SessionID);
     // Constructor to use for manually cached images.
-    CachedImage(const URL&, Image*, SessionID, const String& domainForCachePartition);
+    CachedImage(const URL&, Image*, PAL::SessionID, const String& domainForCachePartition);
     virtual ~CachedImage();
 
     WEBCORE_EXPORT Image* image(); // Returns the nullImage() if the image is not available yet.
@@ -68,7 +68,7 @@ public:
     bool imageHasRelativeWidth() const { return m_image && m_image->hasRelativeWidth(); }
     bool imageHasRelativeHeight() const { return m_image && m_image->hasRelativeHeight(); }
 
-    void addDataBuffer(SharedBuffer&) override;
+    void updateBuffer(SharedBuffer&) override;
     void finishLoading(SharedBuffer*) override;
 
     enum SizeType {
@@ -90,7 +90,7 @@ public:
 private:
     void clear();
 
-    CachedImage(CachedImage&, const ResourceRequest&, SessionID);
+    CachedImage(CachedImage&, const ResourceRequest&, PAL::SessionID);
 
     void setBodyDataFrom(const CachedResource&) final;
 
@@ -109,8 +109,10 @@ private:
     void allClientsRemoved() override;
     void destroyDecodedData() override;
 
-    EncodedDataStatus setImageDataBuffer(SharedBuffer*, bool allDataReceived);
-    void addData(const char* data, unsigned length) override;
+    bool shouldDeferUpdateImageData() const;
+    void didUpdateImageData();
+    EncodedDataStatus updateImageData(SharedBuffer*, bool allDataReceived);
+    void updateData(const char* data, unsigned length) override;
     void error(CachedResource::Status) override;
     void responseReceived(const ResourceResponse&) override;
 
@@ -130,6 +132,9 @@ private:
 
         // ImageObserver API
         URL sourceUrl() const override { return !m_cachedImages.isEmpty() ? (*m_cachedImages.begin())->url() : URL(); }
+        String mimeType() const override { return !m_cachedImages.isEmpty() ? (*m_cachedImages.begin())->mimeType() : emptyString(); }
+        long long expectedContentLength() const override { return !m_cachedImages.isEmpty() ? (*m_cachedImages.begin())->expectedContentLength() : 0; }
+
         void decodedSizeChanged(const Image&, long long delta) final;
         void didDraw(const Image&) final;
 
@@ -146,7 +151,7 @@ private:
     void imageFrameAvailable(const Image&, ImageAnimatingState, const IntRect* changeRect = nullptr, DecodingStatus = DecodingStatus::Invalid);
     void changedInRect(const Image&, const IntRect*);
 
-    void addIncrementalDataBuffer(SharedBuffer&);
+    void updateBufferInternal(SharedBuffer&);
 
     void didReplaceSharedBufferContents() override;
 
@@ -163,6 +168,9 @@ private:
 
     RefPtr<CachedImageObserver> m_imageObserver;
     RefPtr<Image> m_image;
+    MonotonicTime m_lastUpdateImageDataTime;
+    unsigned m_updateImageDataCount { 0 };
+
     std::unique_ptr<SVGImageCache> m_svgImageCache;
     bool m_isManuallyCached { false };
     bool m_shouldPaintBrokenImage { true };

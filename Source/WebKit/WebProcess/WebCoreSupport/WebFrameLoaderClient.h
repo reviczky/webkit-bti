@@ -27,7 +27,7 @@
 
 #include <WebCore/FrameLoaderClient.h>
 
-namespace WebCore {
+namespace PAL {
 class SessionID;
 }
 
@@ -35,6 +35,7 @@ namespace WebKit {
 
 class PluginView;
 class WebFrame;
+struct WebsitePolicies;
     
 class WebFrameLoaderClient final : public WebCore::FrameLoaderClient {
 public:
@@ -47,6 +48,12 @@ public:
     bool frameHasCustomContentProvider() const { return m_frameHasCustomContentProvider; }
 
     void setUseIconLoadingClient(bool useIconLoadingClient) { m_useIconLoadingClient = useIconLoadingClient; }
+
+    void applyToDocumentLoader(const WebsitePolicies&);
+
+    uint64_t pageID() const final;
+    uint64_t frameID() const final;
+    PAL::SessionID sessionID() const final;
 
 private:
     void frameLoaderDestroyed() final;
@@ -88,7 +95,6 @@ private:
 
     void dispatchDidDispatchOnloadEvents() final;
     void dispatchDidReceiveServerRedirectForProvisionalLoad() final;
-    void dispatchDidPerformClientRedirect() final;
     void dispatchDidChangeProvisionalURL() final;
     void dispatchDidCancelClientRedirect() final;
     void dispatchWillPerformClientRedirect(const WebCore::URL&, double interval, double fireDate) final;
@@ -113,7 +119,7 @@ private:
     
     void dispatchDecidePolicyForResponse(const WebCore::ResourceResponse&, const WebCore::ResourceRequest&, WebCore::FramePolicyFunction&&) final;
     void dispatchDecidePolicyForNewWindowAction(const WebCore::NavigationAction&, const WebCore::ResourceRequest&, WebCore::FormState*, const String& frameName, WebCore::FramePolicyFunction&&) final;
-    void dispatchDecidePolicyForNavigationAction(const WebCore::NavigationAction&, const WebCore::ResourceRequest&, WebCore::FormState*, WebCore::FramePolicyFunction&&) final;
+    void dispatchDecidePolicyForNavigationAction(const WebCore::NavigationAction&, const WebCore::ResourceRequest&, bool didReceiveRedirectResponse, WebCore::FormState*, WebCore::FramePolicyFunction&&) final;
     void cancelPolicyCheck() final;
     
     void dispatchUnableToImplementPolicy(const WebCore::ResourceError&) final;
@@ -196,7 +202,7 @@ private:
     void dispatchDidBecomeFrameset(bool) final;
 
     bool canCachePage() const final;
-    void convertMainResourceLoadToDownload(WebCore::DocumentLoader*, WebCore::SessionID, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&) final;
+    void convertMainResourceLoadToDownload(WebCore::DocumentLoader*, PAL::SessionID, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&) final;
 
     RefPtr<WebCore::Frame> createFrame(const WebCore::URL&, const String& name, WebCore::HTMLFrameOwnerElement&, const String& referrer, bool allowsScrolling, int marginWidth, int marginHeight) final;
 
@@ -205,8 +211,8 @@ private:
     void redirectDataToPlugin(WebCore::Widget&) final;
     
 #if ENABLE(WEBGL)
-    WebCore::WebGLLoadPolicy webGLPolicyForURL(const String&) const final;
-    WebCore::WebGLLoadPolicy resolveWebGLPolicyForURL(const String&) const final;
+    WebCore::WebGLLoadPolicy webGLPolicyForURL(const WebCore::URL&) const final;
+    WebCore::WebGLLoadPolicy resolveWebGLPolicyForURL(const WebCore::URL&) const final;
 #endif // ENABLE(WEBGL)
 
     RefPtr<WebCore::Widget> createJavaAppletWidget(const WebCore::IntSize&, WebCore::HTMLAppletElement&, const WebCore::URL& baseURL, const Vector<String>& paramNames, const Vector<String>& paramValues) final;

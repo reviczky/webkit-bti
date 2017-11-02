@@ -34,9 +34,15 @@
 #include "DownloadProxyMessages.h"
 #include "Logging.h"
 #include "NetworkDataTask.h"
+#include "NetworkProcess.h"
+#include "NetworkSession.h"
 #include "SandboxExtension.h"
 #include "WebCoreArgumentCoders.h"
 #include <WebCore/NotImplemented.h>
+
+#if PLATFORM(COCOA)
+#include "NetworkDataTaskCocoa.h"
+#endif
 
 using namespace WebCore;
 
@@ -45,7 +51,7 @@ using namespace WebCore;
 namespace WebKit {
 
 #if USE(NETWORK_SESSION)
-Download::Download(DownloadManager& downloadManager, DownloadID downloadID, NetworkDataTask& download, const SessionID& sessionID, const String& suggestedName)
+Download::Download(DownloadManager& downloadManager, DownloadID downloadID, NetworkDataTask& download, const PAL::SessionID& sessionID, const String& suggestedName)
     : m_downloadManager(downloadManager)
     , m_downloadID(downloadID)
     , m_download(&download)
@@ -57,7 +63,7 @@ Download::Download(DownloadManager& downloadManager, DownloadID downloadID, Netw
     m_downloadManager.didCreateDownload();
 }
 #if PLATFORM(COCOA)
-Download::Download(DownloadManager& downloadManager, DownloadID downloadID, NSURLSessionDownloadTask* download, const SessionID& sessionID, const String& suggestedName)
+Download::Download(DownloadManager& downloadManager, DownloadID downloadID, NSURLSessionDownloadTask* download, const PAL::SessionID& sessionID, const String& suggestedName)
     : m_downloadManager(downloadManager)
     , m_downloadID(downloadID)
     , m_downloadTask(download)
@@ -146,10 +152,27 @@ void Download::cancel()
     platformCancelNetworkLoad();
 }
 
+#if USE(NETWORK_SESSION)
+void Download::didReceiveChallenge(const WebCore::AuthenticationChallenge& challenge, ChallengeCompletionHandler&& completionHandler)
+{
+    if (challenge.protectionSpace().isPasswordBased() && !challenge.proposedCredential().isEmpty() && !challenge.previousFailureCount()) {
+        completionHandler(AuthenticationChallengeDisposition::UseCredential, challenge.proposedCredential());
+        return;
+    }
+
+    NetworkProcess::singleton().authenticationManager().didReceiveAuthenticationChallenge(*this, challenge, WTFMove(completionHandler));
+}
+#endif // USE(NETWORK_SESSION)
+
 #if !USE(NETWORK_SESSION)
 void Download::didStart()
 {
     send(Messages::DownloadProxy::DidStart(m_request, m_suggestedName));
+}
+
+void Download::willSendRedirectedRequest(WebCore::ResourceRequest&& redirectRequest, WebCore::ResourceResponse&& redirectResponse)
+{
+    send(Messages::DownloadProxy::WillSendRequest(WTFMove(redirectRequest), WTFMove(redirectResponse)));
 }
 
 void Download::didReceiveAuthenticationChallenge(const AuthenticationChallenge& authenticationChallenge)

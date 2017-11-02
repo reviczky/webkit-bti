@@ -36,10 +36,10 @@
 #include <wtf/text/StringBuilder.h>
 #include <wtf/unicode/CharacterNames.h>
 
-using namespace WTF;
-using namespace Unicode;
 
 namespace WebCore {
+using namespace WTF;
+using namespace Unicode;
 
 const int cMarkerPadding = 7;
 
@@ -1133,10 +1133,8 @@ RenderListMarker::~RenderListMarker()
 
 void RenderListMarker::willBeDestroyed()
 {
-    m_listItem.setMarkerRenderer(nullptr);
     if (m_image)
         m_image->removeClient(this);
-
     RenderBox::willBeDestroyed();
 }
 

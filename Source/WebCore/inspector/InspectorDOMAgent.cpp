@@ -42,6 +42,7 @@
 #include "CSSStyleRule.h"
 #include "CSSStyleSheet.h"
 #include "CharacterData.h"
+#include "CommandLineAPIHost.h"
 #include "ContainerNode.h"
 #include "Cookie.h"
 #include "CookieJar.h"
@@ -92,6 +93,7 @@
 #include "Text.h"
 #include "TextNodeTraversal.h"
 #include "Timer.h"
+#include "WebInjectedScriptManager.h"
 #include "XPathResult.h"
 #include "markup.h"
 #include <inspector/IdentifiersFactory.h>
@@ -103,9 +105,9 @@
 #include <wtf/text/CString.h>
 #include <wtf/text/WTFString.h>
 
-using namespace Inspector;
 
 namespace WebCore {
+using namespace Inspector;
 
 using namespace HTMLNames;
 
@@ -199,6 +201,21 @@ void RevalidateStyleAttributeTask::timerFired()
 
     m_elements.clear();
 }
+
+class InspectableNode final : public CommandLineAPIHost::InspectableObject {
+public:
+    explicit InspectableNode(Node* node)
+        : m_node(node)
+    {
+    }
+
+    JSC::JSValue get(JSC::ExecState& state) final
+    {
+        return InspectorDOMAgent::nodeAsScriptValue(state, m_node.get());
+    }
+private:
+    RefPtr<Node> m_node;
+};
 
 String InspectorDOMAgent::toErrorString(ExceptionCode ec)
 {
@@ -469,6 +486,7 @@ void InspectorDOMAgent::discardBindings()
 {
     m_documentNodeToIdMap.clear();
     m_idToNode.clear();
+    m_eventListenerEntries.clear();
     releaseDanglingNodes();
     m_childrenRequested.clear();
     m_backendIdToNode.clear();
@@ -813,12 +831,31 @@ void InspectorDOMAgent::getEventListenersForNode(ErrorString& errorString, int n
     Vector<EventListenerInfo> eventInformation;
     getEventListeners(node, eventInformation, true);
 
+    auto addListener = [&] (RegisteredEventListener& listener, const EventListenerInfo& info) {
+        int identifier = 0;
+        bool disabled = false;
+
+        auto it = m_eventListenerEntries.find(&listener.callback());
+        if (it == m_eventListenerEntries.end()) {
+            InspectorEventListener inspectorEventListener(m_lastEventListenerId++, *info.node, info.eventType, listener.useCapture());
+            m_eventListenerEntries.add(&listener.callback(), inspectorEventListener);
+
+            identifier = inspectorEventListener.identifier;
+            disabled = inspectorEventListener.disabled;
+        } else {
+            identifier = it->value.identifier;
+            disabled = it->value.disabled;
+        }
+
+        listenersArray->addItem(buildObjectForEventListener(listener, identifier, info.eventType, info.node, objectGroup, disabled));
+    };
+
     // Get Capturing Listeners (in this order)
     size_t eventInformationLength = eventInformation.size();
     for (auto& info : eventInformation) {
         for (auto& listener : info.eventListenerVector) {
             if (listener->useCapture())
-                listenersArray->addItem(buildObjectForEventListener(*listener, info.eventType, info.node, objectGroup));
+                addListener(*listener, info);
         }
     }
 
@@ -827,7 +864,7 @@ void InspectorDOMAgent::getEventListenersForNode(ErrorString& errorString, int n
         const EventListenerInfo& info = eventInformation[i - 1];
         for (auto& listener : info.eventListenerVector) {
             if (!listener->useCapture())
-                listenersArray->addItem(buildObjectForEventListener(*listener, info.eventType, info.node, objectGroup));
+                addListener(*listener, info);
         }
     }
 }
@@ -862,6 +899,18 @@ void InspectorDOMAgent::getEventListeners(Node* node, Vector<EventListenerInfo>&
                 eventInformation.append(EventListenerInfo(ancestor, type, WTFMove(filteredListeners)));
         }
     }
+}
+
+void InspectorDOMAgent::setEventListenerDisabled(ErrorString& errorString, int eventListenerId, bool disabled)
+{
+    for (InspectorEventListener& inspectorEventListener : m_eventListenerEntries.values()) {
+        if (inspectorEventListener.identifier == eventListenerId) {
+            inspectorEventListener.disabled = disabled;
+            return;
+        }
+    }
+
+    errorString = ASCIILiteral("No event listener for given identifier.");
 }
 
 void InspectorDOMAgent::getAccessibilityPropertiesForNode(ErrorString& errorString, int nodeId, RefPtr<Inspector::Protocol::DOM::AccessibilityProperties>& axProperties)
@@ -1255,6 +1304,18 @@ void InspectorDOMAgent::focus(ErrorString& errorString, int nodeId)
     element->focus();
 }
 
+void InspectorDOMAgent::setInspectedNode(ErrorString& errorString, int nodeId)
+{
+    Node* node = nodeForId(nodeId);
+    if (!node || node->isInUserAgentShadowTree()) {
+        errorString = ASCIILiteral("No node with given id found");
+        return;
+    }
+
+    if (CommandLineAPIHost* commandLineAPIHost = static_cast<WebInjectedScriptManager&>(m_injectedScriptManager).commandLineAPIHost())
+        commandLineAPIHost->addInspectedObject(std::make_unique<InspectableNode>(node));
+}
+
 void InspectorDOMAgent::resolveNode(ErrorString& errorString, int nodeId, const String* const objectGroup, RefPtr<Inspector::Protocol::Runtime::RemoteObject>& result)
 {
     String objectGroupName = objectGroup ? *objectGroup : emptyString();
@@ -1525,7 +1586,7 @@ RefPtr<Inspector::Protocol::Array<Inspector::Protocol::DOM::Node>> InspectorDOMA
     return WTFMove(pseudoElements);
 }
 
-Ref<Inspector::Protocol::DOM::EventListener> InspectorDOMAgent::buildObjectForEventListener(const RegisteredEventListener& registeredEventListener, const AtomicString& eventType, Node* node, const String* objectGroupId)
+Ref<Inspector::Protocol::DOM::EventListener> InspectorDOMAgent::buildObjectForEventListener(const RegisteredEventListener& registeredEventListener, int identifier, const AtomicString& eventType, Node* node, const String* objectGroupId, bool disabled)
 {
     Ref<EventListener> eventListener = registeredEventListener.callback();
 
@@ -1556,6 +1617,7 @@ Ref<Inspector::Protocol::DOM::EventListener> InspectorDOMAgent::buildObjectForEv
     }
 
     auto value = Inspector::Protocol::DOM::EventListener::create()
+        .setEventListenerId(identifier)
         .setType(eventType)
         .setUseCapture(registeredEventListener.useCapture())
         .setIsAttribute(eventListener->isAttribute())
@@ -1581,6 +1643,8 @@ Ref<Inspector::Protocol::DOM::EventListener> InspectorDOMAgent::buildObjectForEv
         value->setPassive(true);
     if (registeredEventListener.isOnce())
         value->setOnce(true);
+    if (disabled)
+        value->setDisabled(disabled);
     return value;
 }
     
@@ -1664,10 +1728,10 @@ RefPtr<Inspector::Protocol::DOM::AccessibilityProperties> InspectorDOMAgent::bui
 
             supportsChecked = axObject->supportsChecked();
             if (supportsChecked) {
-                int checkValue = axObject->checkboxOrRadioValue(); // Element using aria-checked.
-                if (checkValue == 1)
+                AccessibilityButtonState checkValue = axObject->checkboxOrRadioValue(); // Element using aria-checked.
+                if (checkValue == AccessibilityButtonState::On)
                     checked = Inspector::Protocol::DOM::AccessibilityProperties::Checked::True;
-                else if (checkValue == 2)
+                else if (checkValue == AccessibilityButtonState::Mixed)
                     checked = Inspector::Protocol::DOM::AccessibilityProperties::Checked::Mixed;
                 else if (axObject->isChecked()) // Native checkbox.
                     checked = Inspector::Protocol::DOM::AccessibilityProperties::Checked::True;
@@ -1684,26 +1748,25 @@ RefPtr<Inspector::Protocol::DOM::AccessibilityProperties> InspectorDOMAgent::bui
             }
             
             switch (axObject->ariaCurrentState()) {
-            case ARIACurrentFalse:
+            case AccessibilityARIACurrentState::False:
                 currentState = Inspector::Protocol::DOM::AccessibilityProperties::Current::False;
                 break;
-            case ARIACurrentPage:
+            case AccessibilityARIACurrentState::Page:
                 currentState = Inspector::Protocol::DOM::AccessibilityProperties::Current::Page;
                 break;
-            case ARIACurrentStep:
+            case AccessibilityARIACurrentState::Step:
                 currentState = Inspector::Protocol::DOM::AccessibilityProperties::Current::Step;
                 break;
-            case ARIACurrentLocation:
+            case AccessibilityARIACurrentState::Location:
                 currentState = Inspector::Protocol::DOM::AccessibilityProperties::Current::Location;
                 break;
-            case ARIACurrentDate:
+            case AccessibilityARIACurrentState::Date:
                 currentState = Inspector::Protocol::DOM::AccessibilityProperties::Current::Date;
                 break;
-            case ARIACurrentTime:
+            case AccessibilityARIACurrentState::Time:
                 currentState = Inspector::Protocol::DOM::AccessibilityProperties::Current::Time;
                 break;
-            default:
-            case ARIACurrentTrue:
+            case AccessibilityARIACurrentState::True:
                 currentState = Inspector::Protocol::DOM::AccessibilityProperties::Current::True;
                 break;
             }
@@ -2176,6 +2239,57 @@ void InspectorDOMAgent::pseudoElementDestroyed(PseudoElement& pseudoElement)
 
     unbind(&pseudoElement, &m_documentNodeToIdMap);
     m_frontendDispatcher->pseudoElementRemoved(parentId, pseudoElementId);
+}
+
+void InspectorDOMAgent::didAddEventListener(EventTarget& target)
+{
+    auto node = target.toNode();
+    if (!node)
+        return;
+
+    int nodeId = boundNodeId(node.get());
+    if (!nodeId)
+        return;
+
+    m_frontendDispatcher->didAddEventListener(nodeId);
+}
+
+void InspectorDOMAgent::willRemoveEventListener(EventTarget& target, const AtomicString& eventType, EventListener& listener, bool capture)
+{
+    auto node = target.toNode();
+    if (!node)
+        return;
+
+    int nodeId = boundNodeId(node.get());
+    if (!nodeId)
+        return;
+
+    bool listenerExists = false;
+    for (const RefPtr<RegisteredEventListener>& item : node->eventListeners(eventType)) {
+        if (item->callback() == listener && item->useCapture() == capture) {
+            listenerExists = true;
+            break;
+        }
+    }
+
+    if (!listenerExists)
+        return;
+
+    m_eventListenerEntries.remove(&listener);
+
+    m_frontendDispatcher->willRemoveEventListener(nodeId);
+}
+
+bool InspectorDOMAgent::isEventListenerDisabled(EventTarget& target, const AtomicString& eventType, EventListener& listener, bool capture)
+{
+    auto it = m_eventListenerEntries.find(&listener);
+    if (it == m_eventListenerEntries.end())
+        return false;
+
+    if (!it->value.disabled)
+        return false;
+
+    return it->value.eventTarget.get() == &target && it->value.eventType == eventType && it->value.useCapture == capture;
 }
 
 Node* InspectorDOMAgent::nodeForPath(const String& path)

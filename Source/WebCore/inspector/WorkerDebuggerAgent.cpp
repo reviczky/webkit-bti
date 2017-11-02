@@ -34,10 +34,10 @@
 #include <inspector/ScriptCallStack.h>
 #include <inspector/ScriptCallStackFactory.h>
 
-using namespace JSC;
-using namespace Inspector;
 
 namespace WebCore {
+using namespace JSC;
+using namespace Inspector;
 
 WorkerDebuggerAgent::WorkerDebuggerAgent(WorkerAgentContext& context)
     : WebDebuggerAgent(context)
@@ -45,9 +45,7 @@ WorkerDebuggerAgent::WorkerDebuggerAgent(WorkerAgentContext& context)
 {
 }
 
-WorkerDebuggerAgent::~WorkerDebuggerAgent()
-{
-}
+WorkerDebuggerAgent::~WorkerDebuggerAgent() = default;
 
 void WorkerDebuggerAgent::breakpointActionLog(ExecState& state, const String& message)
 {

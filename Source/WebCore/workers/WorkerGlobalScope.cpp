@@ -31,6 +31,7 @@
 #include "ContentSecurityPolicy.h"
 #include "Crypto.h"
 #include "IDBConnectionProxy.h"
+#include "ImageBitmapOptions.h"
 #include "InspectorInstrumentation.h"
 #include "Performance.h"
 #include "ScheduledAction.h"
@@ -48,11 +49,10 @@
 #include <inspector/ScriptArguments.h>
 #include <inspector/ScriptCallStack.h>
 
+namespace WebCore {
 using namespace Inspector;
 
-namespace WebCore {
-
-WorkerGlobalScope::WorkerGlobalScope(const URL& url, const String& identifier, const String& userAgent, WorkerThread& thread, bool shouldBypassMainWorldContentSecurityPolicy, Ref<SecurityOrigin>&& topOrigin, MonotonicTime timeOrigin, IDBClient::IDBConnectionProxy* connectionProxy, SocketProvider* socketProvider)
+WorkerGlobalScope::WorkerGlobalScope(const URL& url, const String& identifier, const String& userAgent, WorkerThread& thread, bool shouldBypassMainWorldContentSecurityPolicy, Ref<SecurityOrigin>&& topOrigin, MonotonicTime timeOrigin, IDBClient::IDBConnectionProxy* connectionProxy, SocketProvider* socketProvider, PAL::SessionID sessionID)
     : m_url(url)
     , m_identifier(identifier)
     , m_userAgent(userAgent)
@@ -67,6 +67,7 @@ WorkerGlobalScope::WorkerGlobalScope(const URL& url, const String& identifier, c
 #endif
     , m_socketProvider(socketProvider)
     , m_performance(Performance::create(*this, timeOrigin))
+    , m_sessionID(sessionID)
 {
 #if !ENABLE(INDEXED_DATABASE)
     UNUSED_PARAM(connectionProxy);
@@ -108,7 +109,7 @@ void WorkerGlobalScope::removeAllEventListeners()
 
 bool WorkerGlobalScope::isSecureContext() const
 {
-    return securityOrigin() && securityOrigin()->isPotentionallyTrustworthy();
+    return securityOrigin() && securityOrigin()->isPotentiallyTrustworthy();
 }
 
 void WorkerGlobalScope::applyContentSecurityPolicyResponseHeaders(const ContentSecurityPolicyResponseHeaders& contentSecurityPolicyResponseHeaders)
@@ -384,6 +385,23 @@ Crypto& WorkerGlobalScope::crypto()
 Performance& WorkerGlobalScope::performance() const
 {
     return *m_performance;
+}
+
+CacheStorageConnection& WorkerGlobalScope::cacheStorageConnection()
+{
+    if (!m_cacheStorageConnection)
+        m_cacheStorageConnection = WorkerCacheStorageConnection::create(*this);
+    return *m_cacheStorageConnection;
+}
+
+void WorkerGlobalScope::createImageBitmap(ImageBitmap::Source&& source, ImageBitmapOptions&& options, ImageBitmap::Promise&& promise)
+{
+    ImageBitmap::createPromise(*this, WTFMove(source), WTFMove(options), WTFMove(promise));
+}
+
+void WorkerGlobalScope::createImageBitmap(ImageBitmap::Source&& source, int sx, int sy, int sw, int sh, ImageBitmapOptions&& options, ImageBitmap::Promise&& promise)
+{
+    ImageBitmap::createPromise(*this, WTFMove(source), WTFMove(options), sx, sy, sw, sh, WTFMove(promise));
 }
 
 } // namespace WebCore

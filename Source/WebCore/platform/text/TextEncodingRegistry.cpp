@@ -43,10 +43,6 @@
 #include <wtf/StdLibExtras.h>
 #include <wtf/StringExtras.h>
 
-#if PLATFORM(COCOA)
-#include "WebCoreSystemInterface.h"
-#endif
-
 #if PLATFORM(MAC)
 #include "TextCodecMac.h"
 #endif
@@ -54,9 +50,9 @@
 #include <wtf/CurrentTime.h>
 #include <wtf/text/CString.h>
 
-using namespace WTF;
 
 namespace WebCore {
+using namespace WTF;
 
 const size_t maxEncodingNameLength = 63;
 
@@ -366,7 +362,7 @@ bool noExtendedTextEncodingNameUsed()
 String defaultTextEncodingNameForSystemLanguage()
 {
 #if PLATFORM(COCOA)
-    String systemEncodingName = CFStringConvertEncodingToIANACharSetName(wkGetWebDefaultCFStringEncoding());
+    String systemEncodingName = CFStringConvertEncodingToIANACharSetName(webDefaultCFStringEncoding());
 
     // CFStringConvertEncodingToIANACharSetName() returns cp949 for kTextEncodingDOSKorean AKA "extended EUC-KR" AKA windows-949.
     // ICU uses this name for a different encoding, so we need to change the name to a value that actually gives us windows-949.

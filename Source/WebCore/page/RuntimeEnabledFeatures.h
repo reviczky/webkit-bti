@@ -73,6 +73,17 @@ public:
     void setCustomElementsEnabled(bool areEnabled) { m_areCustomElementsEnabled = areEnabled; }
     bool customElementsEnabled() const { return m_areCustomElementsEnabled; }
 
+    void setDirectoryUploadEnabled(bool isEnabled) { m_isDirectoryUploadEnabled = isEnabled; }
+    bool directoryUploadEnabled() const { return m_isDirectoryUploadEnabled; }
+
+    void setDataTransferItemsEnabled(bool areEnabled) { m_areDataTransferItemsEnabled = areEnabled; }
+    bool dataTransferItemsEnabled() const { return m_areDataTransferItemsEnabled; }
+
+#if ENABLE(ATTACHMENT_ELEMENT)
+    void setAttachmentElementEnabled(bool areEnabled) { m_isAttachmentElementEnabled = areEnabled; }
+    bool attachmentElementEnabled() const { return m_isAttachmentElementEnabled; }
+#endif
+
     void setModernMediaControlsEnabled(bool areEnabled) { m_areModernMediaControlsEnabled = areEnabled; }
     bool modernMediaControlsEnabled() const { return m_areModernMediaControlsEnabled; }
 
@@ -147,10 +158,8 @@ public:
     bool animationTriggersEnabled() const { return m_areAnimationTriggersEnabled; }
 #endif
 
-#if ENABLE(WEB_ANIMATIONS)
     void setWebAnimationsEnabled(bool areEnabled) { m_areWebAnimationsEnabled = areEnabled; }
     bool webAnimationsEnabled() const { return m_areWebAnimationsEnabled; }
-#endif
 
 #if ENABLE(WEBGL2)
     void setWebGL2Enabled(bool isEnabled) { m_isWebGL2Enabled = isEnabled; }
@@ -210,6 +219,9 @@ public:
     void setInspectorAdditionsEnabled(bool isEnabled) { m_inspectorAdditionsEnabled = isEnabled; }
     bool inspectorAdditionsEnabled() const { return m_inspectorAdditionsEnabled; }
 
+    void setWebVREnabled(bool isEnabled) { m_webVREnabled = isEnabled; }
+    bool webVREnabled() const { return m_webVREnabled; }
+
     WEBCORE_EXPORT static RuntimeEnabledFeatures& sharedFeatures();
 
 private:
@@ -228,7 +240,13 @@ private:
     bool m_isDisplayContentsEnabled { false };
     bool m_isShadowDOMEnabled { true };
     bool m_areCustomElementsEnabled { true };
+    bool m_isDirectoryUploadEnabled { false };
+    bool m_areDataTransferItemsEnabled { false };
     bool m_inputEventsEnabled { true };
+
+#if ENABLE(ATTACHMENT_ELEMENT)
+    bool m_isAttachmentElementEnabled { false };
+#endif
 
 #if ENABLE(INDEXED_DATABASE_IN_WORKERS)
     bool m_isIndexedDBWorkersEnabled { true };
@@ -285,9 +303,7 @@ private:
     bool m_isWritableStreamAPIEnabled { false };
 #endif
 
-#if ENABLE(WEB_ANIMATIONS)
     bool m_areWebAnimationsEnabled { false };
-#endif
 
 #if ENABLE(WEBGL2)
     bool m_isWebGL2Enabled { false };
@@ -323,6 +339,7 @@ private:
 #endif
 
     bool m_inspectorAdditionsEnabled { false };
+    bool m_webVREnabled { false };
 
     friend class WTF::NeverDestroyed<RuntimeEnabledFeatures>;
 };

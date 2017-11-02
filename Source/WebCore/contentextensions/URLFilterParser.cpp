@@ -101,7 +101,7 @@ public:
         sinkFloatingTermIfNecessary();
         ASSERT(!m_floatingTerm.isValid());
 
-        if (builtInCharacterClassID == JSC::Yarr::NewlineClassID && inverted)
+        if (builtInCharacterClassID == JSC::Yarr::BuiltInCharacterClassID::DotClassID && !inverted)
             m_floatingTerm = Term(Term::UniversalTransition);
         else
             fail(URLFilterParser::UnsupportedCharacterClass);
@@ -125,6 +125,11 @@ public:
     }
 
     void atomBackReference(unsigned)
+    {
+        fail(URLFilterParser::BackReference);
+    }
+
+    void atomNamedBackReference(String)
     {
         fail(URLFilterParser::BackReference);
     }
@@ -203,7 +208,7 @@ public:
         fail(URLFilterParser::AtomCharacter);
     }
 
-    void atomParenthesesSubpatternBegin(bool = true)
+    void atomParenthesesSubpatternBegin(bool = true, std::optional<String> = std::nullopt)
     {
         if (hasError())
             return;
@@ -332,9 +337,7 @@ URLFilterParser::URLFilterParser(CombinedURLFilters& combinedURLFilters)
 {
 }
 
-URLFilterParser::~URLFilterParser()
-{
-}
+URLFilterParser::~URLFilterParser() = default;
 
 URLFilterParser::ParseStatus URLFilterParser::addPattern(const String& pattern, bool patternIsCaseSensitive, uint64_t patternId)
 {

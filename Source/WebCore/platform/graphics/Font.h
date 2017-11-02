@@ -39,7 +39,6 @@
 #include <wtf/text/StringHash.h>
 
 #if PLATFORM(COCOA)
-#include "WebCoreSystemInterface.h"
 #include <wtf/RetainPtr.h>
 #endif
 
@@ -48,7 +47,7 @@
 #endif
 
 #if USE(CG)
-#include "CoreGraphicsSPI.h"
+#include <pal/spi/cg/CoreGraphicsSPI.h>
 #endif
 
 #if USE(DIRECT2D)

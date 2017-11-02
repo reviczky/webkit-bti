@@ -45,7 +45,7 @@ void QualifiedName::init()
     if (initialized)
         return;
 
-    AtomicString::init();
+    ASSERT_WITH_MESSAGE(WTF::nullAtomData.isConstructed(), "AtomicString::init should have been called");
     anyName.construct(nullAtom(), starAtom(), starAtom());
     initialized = true;
 }
@@ -69,12 +69,12 @@ unsigned QualifiedName::QualifiedNameImpl::computeHash() const
     return hashComponents(components);
 }
 
-void createQualifiedName(void* targetAddress, StringImpl* name, const AtomicString& nameNamespace)
+void createQualifiedName(void* targetAddress, const StaticStringImpl* name, const AtomicString& nameNamespace)
 {
     new (NotNull, reinterpret_cast<void*>(targetAddress)) QualifiedName(nullAtom(), AtomicString(name), nameNamespace);
 }
 
-void createQualifiedName(void* targetAddress, StringImpl* name)
+void createQualifiedName(void* targetAddress, const StaticStringImpl* name)
 {
     new (NotNull, reinterpret_cast<void*>(targetAddress)) QualifiedName(nullAtom(), AtomicString(name), nullAtom());
 }

@@ -25,8 +25,6 @@
 
 #pragma once
 
-#if ENABLE(NETWORK_CACHE)
-
 #include "NetworkCacheBlobStorage.h"
 #include "NetworkCacheData.h"
 #include "NetworkCacheKey.h"
@@ -103,6 +101,8 @@ public:
     bool canUseSharedMemoryForBodyData() const { return m_canUseSharedMemoryForBodyData; }
 
     ~Storage();
+
+    void writeWithoutWaiting() { m_initialWriteDelay = 0_s; };
 
 private:
     Storage(const String& directoryPath, Mode, Salt);
@@ -182,6 +182,10 @@ private:
     Ref<WorkQueue> m_serialBackgroundIOQueue;
 
     BlobStorage m_blobStorage;
+
+    // By default, delay the start of writes a bit to avoid affecting early page load.
+    // Completing writes will dispatch more writes without delay.
+    Seconds m_initialWriteDelay { 1_s };
 };
 
 // FIXME: Remove, used by NetworkCacheStatistics only.
@@ -190,4 +194,3 @@ void traverseRecordsFiles(const String& recordsPath, const String& type, const R
 
 }
 }
-#endif

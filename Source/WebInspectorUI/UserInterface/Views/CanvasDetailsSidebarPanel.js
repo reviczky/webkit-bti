@@ -33,6 +33,9 @@ WI.CanvasDetailsSidebarPanel = class CanvasDetailsSidebarPanel extends WI.Detail
 
         this._canvas = null;
         this._node = null;
+
+        this._sections = [];
+        this._emptyContentPlaceholder = null;
     }
 
     // Public
@@ -42,11 +45,17 @@ WI.CanvasDetailsSidebarPanel = class CanvasDetailsSidebarPanel extends WI.Detail
         if (!(objects instanceof Array))
             objects = [objects];
 
-        objects = objects.map((object) => object instanceof WI.Recording ? object.source : object);
+        objects = objects.map((object) => {
+            if (object instanceof WI.Recording)
+                return object.source;
+            if (object instanceof WI.ShaderProgram)
+                return object.canvas;
+            return object;
+        });
 
         this.canvas = objects.find((object) => object instanceof WI.Canvas);
 
-        return !!this._canvas;
+        return true;
     }
 
     get canvas()
@@ -94,7 +103,7 @@ WI.CanvasDetailsSidebarPanel = class CanvasDetailsSidebarPanel extends WI.Detail
 
         let identitySection = new WI.DetailsSection("canvas-details", WI.UIString("Identity"));
         identitySection.groups = [new WI.DetailsSectionGroup([this._nameRow, this._typeRow, this._memoryRow])];
-        this.contentView.element.appendChild(identitySection.element);
+        this._sections.push(identitySection);
 
         this._nodeRow = new WI.DetailsSectionSimpleRow(WI.UIString("Node"));
         this._cssCanvasRow = new WI.DetailsSectionSimpleRow(WI.UIString("CSS Canvas"));
@@ -104,33 +113,51 @@ WI.CanvasDetailsSidebarPanel = class CanvasDetailsSidebarPanel extends WI.Detail
 
         let sourceSection = new WI.DetailsSection("canvas-source", WI.UIString("Source"));
         sourceSection.groups = [new WI.DetailsSectionGroup([this._nodeRow, this._cssCanvasRow, this._widthRow, this._heightRow, this._datachedRow])];
-        this.contentView.element.appendChild(sourceSection.element);
+        this._sections.push(sourceSection);
 
         this._attributesDataGridRow = new WI.DetailsSectionDataGridRow(null, WI.UIString("No Attributes"));
 
         let attributesSection = new WI.DetailsSection("canvas-attributes", WI.UIString("Attributes"));
         attributesSection.groups = [new WI.DetailsSectionGroup([this._attributesDataGridRow])];
-        this.contentView.element.appendChild(attributesSection.element);
+        this._sections.push(attributesSection);
 
         this._cssCanvasClientsRow = new WI.DetailsSectionSimpleRow(WI.UIString("Nodes"));
 
         this._cssCanvasSection = new WI.DetailsSection("canvas-css", WI.UIString("CSS"));
         this._cssCanvasSection.groups = [new WI.DetailsSectionGroup([this._cssCanvasClientsRow])];
         this._cssCanvasSection.element.hidden = true;
-        this.contentView.element.appendChild(this._cssCanvasSection.element);
+        this._sections.push(this._cssCanvasSection);
+
+        this._backtraceSection = new WI.DetailsSection("canvas-backtrace", WI.UIString("Backtrace"));
+        this._backtraceSection.element.hidden = true;
+        this._sections.push(this._backtraceSection);
+
+        this._emptyContentPlaceholder = document.createElement("div");
+        this._emptyContentPlaceholder.className = "empty-content-placeholder";
+
+        let emptyContentPlaceholderMessage = this._emptyContentPlaceholder.appendChild(document.createElement("div"));
+        emptyContentPlaceholderMessage.className = "message";
+        emptyContentPlaceholderMessage.textContent = WI.UIString("No Canvas Selected");
     }
 
     layout()
     {
         super.layout();
 
-        if (!this._canvas)
+        this.contentView.element.removeChildren();
+
+        if (!this._canvas) {
+            this.contentView.element.appendChild(this._emptyContentPlaceholder);
             return;
+        }
+
+        this.contentView.element.append(...this._sections.map(section => section.element));
 
         this._refreshIdentitySection();
         this._refreshSourceSection();
         this._refreshAttributesSection();
         this._refreshCSSCanvasSection();
+        this._refreshBacktraceSection();
     }
 
     sizeDidChange()
@@ -161,10 +188,7 @@ WI.CanvasDetailsSidebarPanel = class CanvasDetailsSidebarPanel extends WI.Detail
         this._heightRow.value = emDash;
         this._datachedRow.value = null;
 
-        this._canvas.requestNode((node) => {
-            if (!node)
-                return;
-
+        this._canvas.requestNode().then((node) => {
             if (node !== this._node) {
                 if (this._node) {
                     this._node.removeEventListener(WI.DOMNode.Event.AttributeModified, this._refreshSourceSection, this);
@@ -198,10 +222,7 @@ WI.CanvasDetailsSidebarPanel = class CanvasDetailsSidebarPanel extends WI.Detail
                 // attributes, we need to invoke the getter for each to get the actual value.
                 //  - https://html.spec.whatwg.org/multipage/canvas.html#attr-canvas-width
                 //  - https://html.spec.whatwg.org/multipage/canvas.html#attr-canvas-height
-                WI.RemoteObject.resolveNode(node, "", (remoteObject) => {
-                    if (!remoteObject)
-                        return;
-
+                WI.RemoteObject.resolveNode(node).then((remoteObject) => {
                     function setRowValueToPropertyValue(row, property) {
                         remoteObject.getProperty(property, (error, result, wasThrown) => {
                             if (!error && result.type === "number")
@@ -270,6 +291,18 @@ WI.CanvasDetailsSidebarPanel = class CanvasDetailsSidebarPanel extends WI.Detail
             for (let clientNode of cssCanvasClientNodes)
                 fragment.appendChild(WI.linkifyNodeReference(clientNode));
             this._cssCanvasClientsRow.value = fragment;
+        });
+    }
+
+    _refreshBacktraceSection()
+    {
+        this._backtraceSection.element.hidden = !this._canvas.backtrace.length;
+
+        const showFunctionName = true;
+        this._backtraceSection.groups = this._canvas.backtrace.map((callFrame) => {
+            return {
+                element: new WI.CallFrameView(callFrame, showFunctionName),
+            };
         });
     }
 

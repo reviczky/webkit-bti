@@ -35,9 +35,9 @@
 #include <runtime/JSCInlines.h>
 #include <runtime/Protect.h>
 
-using namespace JSC;
 
 namespace WebCore {
+using namespace JSC;
 
 DataCue::DataCue(ScriptExecutionContext& context, const MediaTime& start, const MediaTime& end, ArrayBuffer& data, const String& type)
     : TextTrackCue(context, start, end)
@@ -186,6 +186,18 @@ JSValue DataCue::valueOrNull() const
         return m_value;
 
     return jsNull();
+}
+
+String DataCue::toString() const
+{
+    StringBuilder builder;
+
+    builder.append(TextTrackCue::toString());
+
+    builder.appendLiteral(", type = ");
+    builder.append(m_type);
+
+    return builder.toString();
 }
 
 } // namespace WebCore

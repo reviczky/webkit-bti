@@ -32,10 +32,9 @@
 #include "InlineElementBox.h"
 #include "LayoutRepainter.h"
 #include "RenderBlock.h"
-#include "RenderFlowThread.h"
+#include "RenderFragmentedFlow.h"
 #include "RenderImage.h"
 #include "RenderLayer.h"
-#include "RenderNamedFlowFragment.h"
 #include "RenderTheme.h"
 #include "RenderView.h"
 #include "RenderedDocumentMarker.h"
@@ -68,9 +67,7 @@ RenderReplaced::RenderReplaced(Document& document, RenderStyle&& style, const La
     setReplaced(true);
 }
 
-RenderReplaced::~RenderReplaced()
-{
-}
+RenderReplaced::~RenderReplaced() = default;
 
 void RenderReplaced::willBeDestroyed()
 {
@@ -245,11 +242,6 @@ bool RenderReplaced::shouldPaint(PaintInfo& paintInfo, const LayoutPoint& paintO
     if (style().visibility() != VISIBLE)
         return false;
     
-    RenderNamedFlowFragment* namedFlowFragment = currentRenderNamedFlowFragment();
-    // Check our region range to make sure we need to be painting in this region.
-    if (namedFlowFragment && !namedFlowFragment->flowThread()->objectShouldFragmentInFlowRegion(this, namedFlowFragment))
-        return false;
-
     LayoutPoint adjustedPaintOffset = paintOffset + location();
 
     // Early exit if the element touches the edges.
@@ -583,7 +575,7 @@ void RenderReplaced::computePreferredLogicalWidths()
     setPreferredLogicalWidthsDirty(false);
 }
 
-VisiblePosition RenderReplaced::positionForPoint(const LayoutPoint& point, const RenderRegion* region)
+VisiblePosition RenderReplaced::positionForPoint(const LayoutPoint& point, const RenderFragmentContainer* fragment)
 {
     // FIXME: This code is buggy if the replaced element is relative positioned.
     InlineBox* box = inlineBoxWrapper();
@@ -607,7 +599,7 @@ VisiblePosition RenderReplaced::positionForPoint(const LayoutPoint& point, const
         return createVisiblePosition(1, DOWNSTREAM);
     }
 
-    return RenderBox::positionForPoint(point, region);
+    return RenderBox::positionForPoint(point, fragment);
 }
 
 LayoutRect RenderReplaced::selectionRectForRepaint(const RenderLayerModelObject* repaintContainer, bool clipToVisibleContent)
@@ -650,23 +642,22 @@ void RenderReplaced::setSelectionState(SelectionState state)
 
 bool RenderReplaced::isSelected() const
 {
-    SelectionState s = selectionState();
-    if (s == SelectionNone)
+    SelectionState state = selectionState();
+    if (state == SelectionNone)
         return false;
-    if (s == SelectionInside)
+    if (state == SelectionInside)
         return true;
 
-    unsigned selectionStart, selectionEnd;
-    selectionStartEnd(selectionStart, selectionEnd);
-    if (s == SelectionStart)
-        return selectionStart == 0;
-        
+    auto selectionStart = view().selection().startPosition();
+    auto selectionEnd = view().selection().endPosition();
+    if (state == SelectionStart)
+        return !selectionStart;
+
     unsigned end = element()->hasChildNodes() ? element()->countChildNodes() : 1;
-    if (s == SelectionEnd)
+    if (state == SelectionEnd)
         return selectionEnd == end;
-    if (s == SelectionBoth)
-        return selectionStart == 0 && selectionEnd == end;
-        
+    if (state == SelectionBoth)
+        return !selectionStart && selectionEnd == end;
     ASSERT_NOT_REACHED();
     return false;
 }

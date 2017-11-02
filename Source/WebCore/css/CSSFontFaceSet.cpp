@@ -114,7 +114,7 @@ void CSSFontFaceSet::ensureLocalFontFacesForFamilyRegistered(const String& famil
         face->setFamilies(familyList.get());
         face->setFontSelectionCapabilities(item);
         face->adoptSource(std::make_unique<CSSFontFaceSource>(face.get(), familyName));
-        ASSERT(!face->allSourcesFailed());
+        ASSERT(!face->computeFailureState());
         faces.append(WTFMove(face));
     }
     m_locallyInstalledFacesLookupTable.add(familyName, WTFMove(faces));
@@ -131,19 +131,19 @@ String CSSFontFaceSet::familyNameFromPrimitive(const CSSPrimitiveValue& value)
     // defining what font to use for those types.
     switch (value.valueID()) {
     case CSSValueSerif:
-        return serifFamily;
+        return serifFamily.get();
     case CSSValueSansSerif:
-        return sansSerifFamily;
+        return sansSerifFamily.get();
     case CSSValueCursive:
-        return cursiveFamily;
+        return cursiveFamily.get();
     case CSSValueFantasy:
-        return fantasyFamily;
+        return fantasyFamily.get();
     case CSSValueMonospace:
-        return monospaceFamily;
+        return monospaceFamily.get();
     case CSSValueWebkitPictograph:
-        return pictographFamily;
+        return pictographFamily.get();
     case CSSValueSystemUi:
-        return systemUiFamily;
+        return systemUiFamily.get();
     default:
         return { };
     }

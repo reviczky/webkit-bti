@@ -28,18 +28,27 @@
 #include <wtf/FastMalloc.h>
 
 #if defined(USE_SYSTEM_MALLOC) && USE_SYSTEM_MALLOC
-#define GIGACAGE_MASK 0
 #define GIGACAGE_ENABLED 0
+#define PRIMITIVE_GIGACAGE_MASK 0
+#define JSVALUE_GIGACAGE_MASK 0
+#define GIGACAGE_BASE_PTRS_SIZE 8192
 
 extern "C" {
-extern WTF_EXPORTDATA void* g_gigacageBasePtr;
+extern WTF_EXPORTDATA char g_gigacageBasePtrs[GIGACAGE_BASE_PTRS_SIZE];
 }
 
 namespace Gigacage {
 
+struct BasePtrs {
+    void* primitive;
+    void* jsValue;
+    void* string;
+};
+
 enum Kind {
     Primitive,
-    JSValue
+    JSValue,
+    String
 };
 
 inline void ensureGigacage() { }
@@ -62,15 +71,33 @@ ALWAYS_INLINE const char* name(Kind kind)
         return "Primitive";
     case JSValue:
         return "JSValue";
+    case String:
+        return "String";
     }
     RELEASE_ASSERT_NOT_REACHED();
     return nullptr;
 }
 
-ALWAYS_INLINE void*& basePtr(Kind)
+ALWAYS_INLINE void*& basePtr(BasePtrs& basePtrs, Kind kind)
 {
-    return g_gigacageBasePtr;
+    switch (kind) {
+    case Primitive:
+        return basePtrs.primitive;
+    case JSValue:
+        return basePtrs.jsValue;
+    case String:
+        return basePtrs.string;
+    }
+    RELEASE_ASSERT_NOT_REACHED();
+    return basePtrs.primitive;
 }
+
+ALWAYS_INLINE BasePtrs& basePtrs()
+{
+    return *reinterpret_cast<BasePtrs*>(g_gigacageBasePtrs);
+}
+
+ALWAYS_INLINE size_t mask(Kind) { return 0; }
 
 template<typename T>
 inline T* caged(Kind, T* ptr) { return ptr; }
@@ -101,4 +128,14 @@ WTF_EXPORT_PRIVATE void freeVirtualPages(Kind, void* basePtr, size_t size);
 
 } // namespace Gigacage
 #endif
+
+namespace Gigacage {
+
+WTF_EXPORT_PRIVATE void* tryMallocArray(Kind, size_t numElements, size_t elementSize);
+
+WTF_EXPORT_PRIVATE void* malloc(Kind, size_t);
+WTF_EXPORT_PRIVATE void* mallocArray(Kind, size_t numElements, size_t elementSize);
+
+} // namespace Gigacage
+
 

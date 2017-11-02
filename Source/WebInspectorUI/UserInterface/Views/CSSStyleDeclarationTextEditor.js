@@ -189,7 +189,7 @@ WI.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor extends W
     {
         function propertiesMatch(cssProperty)
         {
-            if (cssProperty.enabled && !cssProperty.overridden) {
+            if (cssProperty.attached && !cssProperty.overridden) {
                 if (cssProperty.canonicalName === property.canonicalName || hasMatchingLonghandProperty(cssProperty))
                     return true;
             }
@@ -394,6 +394,16 @@ WI.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor extends W
         completionController.updateCompletions(defaultCompletions.concat(variableNames));
     }
 
+    completionControllerCSSFunctionValuesNeeded(completionController, functionName, defaultCompletions)
+    {
+        if (functionName === "attr") {
+            let attributes = this._style.node.attributes().map((attribute) => attribute.name);
+            return defaultCompletions.concat(attributes);
+        }
+
+        return defaultCompletions;
+    }
+
     layout()
     {
         this._codeMirror.refresh();
@@ -573,8 +583,8 @@ WI.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor extends W
     {
         function switchRule()
         {
-            if (this._delegate && typeof this._delegate.cssStyleDeclarationTextEditorSwitchRule === "function") {
-                this._delegate.cssStyleDeclarationTextEditorSwitchRule(true);
+            if (this._delegate && typeof this._delegate.cssStyleDeclarationEditorStartEditingAdjacentRule === "function") {
+                this._delegate.cssStyleDeclarationEditorStartEditingAdjacentRule(true);
                 return;
             }
 
@@ -629,8 +639,8 @@ WI.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor extends W
     _handleTabKey(codeMirror)
     {
         function switchRule() {
-            if (this._delegate && typeof this._delegate.cssStyleDeclarationTextEditorSwitchRule === "function") {
-                this._delegate.cssStyleDeclarationTextEditorSwitchRule();
+            if (this._delegate && typeof this._delegate.cssStyleDeclarationEditorStartEditingAdjacentRule === "function") {
+                this._delegate.cssStyleDeclarationEditorStartEditingAdjacentRule();
                 return;
             }
 
@@ -730,7 +740,7 @@ WI.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor extends W
     _formattedContent()
     {
         // Start with the prefix whitespace we stripped.
-        var content = WI.CSSStyleDeclarationTextEditor.PrefixWhitespace;
+        var content = WI.CSSStyleDeclaration.PrefixWhitespace;
 
         // Get each line and add the line prefix whitespace and newlines.
         var lineCount = this._codeMirror.lineCount();
@@ -989,7 +999,7 @@ WI.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor extends W
         if (!this._codeMirror.getOption("readOnly")) {
             // Create a new checkbox element and marker.
 
-            console.assert(property.enabled);
+            console.assert(property.attached);
 
             var checkboxElement = document.createElement("input");
             checkboxElement.type = "checkbox";
@@ -1047,7 +1057,7 @@ WI.CSSStyleDeclarationTextEditor = class CSSStyleDeclarationTextEditor extends W
         else if (!property.valid && (!propertyNameIsValid || duplicatePropertyExistsBelow.call(this, property)))
             classNames.push("invalid");
 
-        if (!property.enabled)
+        if (!property.attached)
             classNames.push("disabled");
 
         if (property.__filterResultClassName && !property.__filterResultNeedlePosition)
@@ -1791,7 +1801,6 @@ WI.CSSStyleDeclarationTextEditor.PropertyVisibilityMode = {
     HideNonVariables: Symbol("variable-visibility-hide-non-variables"),
 };
 
-WI.CSSStyleDeclarationTextEditor.PrefixWhitespace = "\n";
 WI.CSSStyleDeclarationTextEditor.SuffixWhitespace = "\n";
 WI.CSSStyleDeclarationTextEditor.StyleClassName = "css-style-text-editor";
 WI.CSSStyleDeclarationTextEditor.ReadOnlyStyleClassName = "read-only";

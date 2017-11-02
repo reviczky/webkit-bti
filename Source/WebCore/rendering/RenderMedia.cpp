@@ -28,7 +28,7 @@
 #if ENABLE(VIDEO)
 #include "RenderMedia.h"
 
-#include "RenderFlowThread.h"
+#include "RenderFragmentedFlow.h"
 #include "RenderView.h"
 #include <wtf/StackStats.h>
 
@@ -47,9 +47,7 @@ RenderMedia::RenderMedia(HTMLMediaElement& element, RenderStyle&& style, const I
     setHasShadowControls(true);
 }
 
-RenderMedia::~RenderMedia()
-{
-}
+RenderMedia::~RenderMedia() = default;
 
 void RenderMedia::paintReplaced(PaintInfo&, const LayoutPoint&)
 {

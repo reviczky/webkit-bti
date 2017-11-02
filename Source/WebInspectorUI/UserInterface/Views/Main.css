@@ -28,7 +28,7 @@
 }
 
 body {
-    font-family: -apple-system, sans-serif;
+    font-family: -webkit-system-font, sans-serif;
     font-size: 11px;
 
     position: absolute;
@@ -131,6 +131,7 @@ input[type=range]::-webkit-slider-runnable-track {
     bottom: 0;
 
     display: flex;
+    flex-direction: column;
 
     background-color: white;
 
@@ -149,10 +150,8 @@ body.docked:matches(.right, .left) #navigation-sidebar.collapsed > .resizer {
 
 #content {
     display: flex;
-    flex-direction: column;
-    flex: 1;
-
     height: 100%; /* This reduces paint areas when typing in the console. http://webkit.org/b/145324 */
+    flex: 1;
 }
 
 #tab-browser {
@@ -193,20 +192,6 @@ body.docked:matches(.right, .left) #navigation-sidebar.collapsed > .resizer {
 
 .message-text-view.error {
     color: hsl(0, 86%, 47%);
-}
-
-.message-text-view.error::before {
-    display: inline-block;
-
-    width: 20px;
-    height: 20px;
-    flex-shrink: 0;
-    margin-right: 4px;
-    vertical-align: bottom;
-
-    background-image: url(../Images/Error.svg);
-    background-size: 100% 100%;
-    content: "";
 }
 
 .resource-link {
@@ -326,10 +311,8 @@ body[dir=rtl] .go-to-arrow {
     z-index: var(--z-index-highlight);
 
     box-shadow: inset hsl(50, 91%, 76%) 0 -1px 0, hsl(52, 56%, 60%) 0 1px 1px, hsla(0, 0%, 0%, 0.33) 0 1px 2px 1px;
-    text-shadow: white 0 0 2px;
 
-    background: linear-gradient(to bottom, hsl(54, 93%, 70%), hsl(50, 84%, 67%));
-    border-radius: 7px;
+    background-color: hsl(54, 93%, 70%);
 
     padding: 2px 4px;
     margin-top: -2px;

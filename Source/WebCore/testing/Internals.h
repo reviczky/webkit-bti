@@ -42,13 +42,18 @@
 
 namespace WebCore {
 
+class AnimationTimeline;
 class AudioContext;
+class CacheStorageConnection;
 class DOMRect;
 class DOMRectList;
 class DOMURL;
 class DOMWindow;
 class Document;
 class Element;
+class ExtendableEvent;
+class FetchEvent;
+class FetchResponse;
 class File;
 class Frame;
 class GCObservation;
@@ -68,6 +73,7 @@ class MemoryInfo;
 class MockCDMFactory;
 class MockContentFilterSettings;
 class MockPageOverlay;
+class MockPaymentCoordinator;
 class NodeList;
 class Page;
 class Range;
@@ -76,6 +82,7 @@ class RTCPeerConnection;
 class SVGSVGElement;
 class SerializedScriptValue;
 class SourceBuffer;
+class StringCallback;
 class StyleSheet;
 class TimeRanges;
 class TypeConversions;
@@ -103,6 +110,7 @@ public:
 
     bool isPreloaded(const String& url);
     bool isLoadingFromMemoryCache(const String& url);
+    String fetchResponseSource(FetchResponse&);
     String xhrResponseSource(XMLHttpRequest&);
     bool isSharingStyleSheetContents(HTMLLinkElement&, HTMLLinkElement&);
     bool isStyleSheetLoadingSubresources(HTMLLinkElement&);
@@ -427,9 +435,6 @@ public:
 #endif
 
 #if ENABLE(WEB_RTC)
-#if USE(OPENWEBRTC)
-    void enableMockMediaEndpoint();
-#endif
     void emulateRTCPeerConnectionPlatformEvent(RTCPeerConnection&, const String& action);
     void useMockRTCPeerConnectionFactory(const String&);
     void setICECandidateFiltering(bool);
@@ -537,6 +542,7 @@ public:
 
     String resourceLoadStatisticsForOrigin(const String& origin);
     void setResourceLoadStatisticsEnabled(bool);
+    void setUserGrantsStorageAccess(bool);
 
 #if ENABLE(STREAMS_API)
     bool isReadableStreamDisturbed(JSC::ExecState&, JSC::JSValue);
@@ -598,6 +604,29 @@ public:
 
     String audioSessionCategory() const;
 
+    void clearCacheStorageMemoryRepresentation(DOMPromiseDeferred<void>&&);
+    void cacheStorageEngineRepresentation(DOMPromiseDeferred<IDLDOMString>&&);
+    void setResponseSizeWithPadding(FetchResponse&, uint64_t size);
+    uint64_t responseSizeWithPadding(FetchResponse&) const;
+
+    void setConsoleMessageListener(RefPtr<StringCallback>&&);
+
+#if ENABLE(SERVICE_WORKER)
+    void waitForFetchEventToFinish(FetchEvent&, DOMPromiseDeferred<IDLInterface<FetchResponse>>&&);
+    void waitForExtendableEventToFinish(ExtendableEvent&, DOMPromiseDeferred<void>&&);
+    Ref<FetchEvent> createBeingDispatchedFetchEvent(ScriptExecutionContext&);
+    Ref<ExtendableEvent> createTrustedExtendableEvent();
+#endif
+
+    bool hasServiceWorkerRegisteredForOrigin(const String&);
+        
+#if ENABLE(APPLE_PAY)
+    MockPaymentCoordinator& mockPaymentCoordinator() const;
+#endif
+
+    String timelineDescription(AnimationTimeline&);
+    void setTimelineCurrentTime(AnimationTimeline&, double);
+
 private:
     explicit Internals(Document&);
     Document* contextDocument() const;
@@ -618,6 +647,11 @@ private:
 #endif
 
     std::unique_ptr<InspectorStubFrontend> m_inspectorFrontend;
+    RefPtr<CacheStorageConnection> m_cacheStorageConnection;
+
+#if ENABLE(APPLE_PAY)
+    MockPaymentCoordinator* m_mockPaymentCoordinator { nullptr };
+#endif
 };
 
 } // namespace WebCore

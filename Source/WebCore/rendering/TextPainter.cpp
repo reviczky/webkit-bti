@@ -194,6 +194,7 @@ void TextPainter::paint(const TextRun& textRun, unsigned length, const FloatRect
     bool paintSelectedTextOnly, bool paintSelectedTextSeparately, bool paintNonSelectedTextOnly)
 {
     ASSERT(m_font);
+    ASSERT(length <= textRun.length());
     if (!paintSelectedTextOnly) {
         // For stroked painting, we have to change the text drawing mode. It's probably dangerous to leave that mutated as a side
         // effect, so only when we know we're stroking, do a save/restore.

@@ -27,18 +27,18 @@
 #include "LayoutRect.h"
 #include "LengthBox.h"
 #include "MediaProducer.h"
-#include "PageVisibilityState.h"
 #include "Pagination.h"
 #include "RTCController.h"
 #include "Region.h"
 #include "ScrollTypes.h"
-#include "SessionID.h"
 #include "Supplementable.h"
 #include "Timer.h"
 #include "UserInterfaceLayoutDirection.h"
 #include "ViewportArguments.h"
+#include "VisibilityState.h"
 #include "WheelEventTestTrigger.h"
 #include <memory>
+#include <pal/SessionID.h>
 #include <wtf/Forward.h>
 #include <wtf/Function.h>
 #include <wtf/HashSet.h>
@@ -46,10 +46,6 @@
 #include <wtf/Ref.h>
 #include <wtf/UniqueRef.h>
 #include <wtf/text/WTFString.h>
-
-#if OS(SOLARIS)
-#include <sys/time.h> // For time_t structure.
-#endif
 
 #if PLATFORM(COCOA)
 #include <wtf/SchedulePair.h>
@@ -77,6 +73,7 @@ class AlternativeTextClient;
 class ApplicationCacheStorage;
 class BackForwardController;
 class BackForwardClient;
+class CacheStorageProvider;
 class Chrome;
 class ChromeClient;
 class Color;
@@ -134,7 +131,7 @@ class ActivityStateChangeObserver;
 class VisitedLinkStore;
 class WebGLStateTracker;
 
-typedef uint64_t LinkHash;
+typedef uint64_t SharedStringHash;
 
 enum FindDirection {
     FindDirectionForward,
@@ -152,7 +149,7 @@ enum class DidWrap : bool;
 class Page : public Supplementable<Page> {
     WTF_MAKE_NONCOPYABLE(Page);
     WTF_MAKE_FAST_ALLOCATED;
-    friend class Settings;
+    friend class SettingsBase;
 
 public:
     WEBCORE_EXPORT static void updateStyleForAllPagesAfterGlobalChangeInEnvironment();
@@ -401,7 +398,7 @@ public:
     JSC::Debugger* debugger() const { return m_debugger; }
 
     WEBCORE_EXPORT void invalidateStylesForAllLinks();
-    WEBCORE_EXPORT void invalidateStylesForLink(LinkHash);
+    WEBCORE_EXPORT void invalidateStylesForLink(SharedStringHash);
 
     void invalidateInjectedStyleSheetCacheInAllFrames();
 
@@ -426,7 +423,7 @@ public:
     void setEditable(bool isEditable) { m_isEditable = isEditable; }
     bool isEditable() { return m_isEditable; }
 
-    WEBCORE_EXPORT PageVisibilityState visibilityState() const;
+    WEBCORE_EXPORT VisibilityState visibilityState() const;
     WEBCORE_EXPORT void resumeAnimatingImages();
 
     WEBCORE_EXPORT void addLayoutMilestones(LayoutMilestones);
@@ -495,6 +492,7 @@ public:
 
     ApplicationCacheStorage& applicationCacheStorage() { return m_applicationCacheStorage; }
     DatabaseProvider& databaseProvider() { return m_databaseProvider; }
+    CacheStorageProvider& cacheStorageProvider() { return m_cacheStorageProvider; }
     SocketProvider& socketProvider() { return m_socketProvider; }
 
     StorageNamespaceProvider& storageNamespaceProvider() { return m_storageNamespaceProvider.get(); }
@@ -502,14 +500,14 @@ public:
 
     PluginInfoProvider& pluginInfoProvider();
 
-    UserContentProvider& userContentProvider();
+    WEBCORE_EXPORT UserContentProvider& userContentProvider();
     WEBCORE_EXPORT void setUserContentProvider(Ref<UserContentProvider>&&);
 
     VisitedLinkStore& visitedLinkStore();
     WEBCORE_EXPORT void setVisitedLinkStore(Ref<VisitedLinkStore>&&);
 
-    WEBCORE_EXPORT SessionID sessionID() const;
-    WEBCORE_EXPORT void setSessionID(SessionID);
+    WEBCORE_EXPORT PAL::SessionID sessionID() const;
+    WEBCORE_EXPORT void setSessionID(PAL::SessionID);
     WEBCORE_EXPORT void enableLegacyPrivateBrowsing(bool privateBrowsingEnabled);
     bool usesEphemeralSession() const { return m_sessionID.isEphemeral(); }
 
@@ -765,6 +763,7 @@ private:
 
     Ref<SocketProvider> m_socketProvider;
     Ref<ApplicationCacheStorage> m_applicationCacheStorage;
+    Ref<CacheStorageProvider> m_cacheStorageProvider;
     Ref<DatabaseProvider> m_databaseProvider;
     Ref<PluginInfoProvider> m_pluginInfoProvider;
     Ref<StorageNamespaceProvider> m_storageNamespaceProvider;
@@ -778,7 +777,7 @@ private:
     std::unique_ptr<ResourceUsageOverlay> m_resourceUsageOverlay;
 #endif
 
-    SessionID m_sessionID;
+    PAL::SessionID m_sessionID;
 
     bool m_isClosing { false };
 

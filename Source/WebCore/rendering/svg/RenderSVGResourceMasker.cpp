@@ -34,9 +34,7 @@ RenderSVGResourceMasker::RenderSVGResourceMasker(SVGMaskElement& element, Render
 {
 }
 
-RenderSVGResourceMasker::~RenderSVGResourceMasker()
-{
-}
+RenderSVGResourceMasker::~RenderSVGResourceMasker() = default;
 
 void RenderSVGResourceMasker::removeAllClientsFromCache(bool markForInvalidation)
 {
@@ -93,8 +91,8 @@ bool RenderSVGResourceMasker::drawContentIntoMaskImage(MaskerData* maskerData, C
     AffineTransform maskContentTransformation;
     if (maskElement().maskContentUnits() == SVGUnitTypes::SVG_UNIT_TYPE_OBJECTBOUNDINGBOX) {
         FloatRect objectBoundingBox = object->objectBoundingBox();
-        maskContentTransformation.translate(objectBoundingBox.x(), objectBoundingBox.y());
-        maskContentTransformation.scaleNonUniform(objectBoundingBox.width(), objectBoundingBox.height());
+        maskContentTransformation.translate(objectBoundingBox.location());
+        maskContentTransformation.scale(objectBoundingBox.size());
         maskImageContext.concatCTM(maskContentTransformation);
     }
 
@@ -152,8 +150,8 @@ FloatRect RenderSVGResourceMasker::resourceBoundingBox(const RenderObject& objec
     FloatRect maskRect = m_maskContentBoundaries;
     if (maskElement().maskContentUnits() == SVGUnitTypes::SVG_UNIT_TYPE_OBJECTBOUNDINGBOX) {
         AffineTransform transform;
-        transform.translate(objectBoundingBox.x(), objectBoundingBox.y());
-        transform.scaleNonUniform(objectBoundingBox.width(), objectBoundingBox.height());
+        transform.translate(objectBoundingBox.location());
+        transform.scale(objectBoundingBox.size());
         maskRect = transform.mapRect(maskRect);
     }
 

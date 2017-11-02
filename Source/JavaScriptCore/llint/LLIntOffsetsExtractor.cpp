@@ -26,6 +26,7 @@
 #include "config.h"
 
 #include "ArrayProfile.h"
+#include "BytecodeStructs.h"
 #include "CodeBlock.h"
 #include "CommonSlowPaths.h"
 #include "DirectArguments.h"
@@ -38,9 +39,9 @@
 #include "JSArray.h"
 #include "JSArrayBufferView.h"
 #include "JSCell.h"
-#include "JSEnvironmentRecord.h"
 #include "JSFunction.h"
 #include "JSGlobalObject.h"
+#include "JSLexicalEnvironment.h"
 #include "JSModuleRecord.h"
 #include "JSObject.h"
 #include "JSString.h"

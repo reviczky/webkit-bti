@@ -29,13 +29,13 @@
 #include "MediaPlayer.h"
 
 #include "ContentType.h"
+#include "DeprecatedGlobalSettings.h"
 #include "Document.h"
 #include "IntRect.h"
 #include "Logging.h"
 #include "MIMETypeRegistry.h"
 #include "MediaPlayerPrivate.h"
 #include "PlatformTimeRanges.h"
-#include "Settings.h"
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/CString.h>
 
@@ -53,9 +53,6 @@
 
 #if USE(GSTREAMER)
 #include "MediaPlayerPrivateGStreamer.h"
-#if ENABLE(MEDIA_STREAM) && USE(OPENWEBRTC)
-#include "MediaPlayerPrivateGStreamerOwr.h"
-#endif
 #define PlatformMediaEngineClassName MediaPlayerPrivateGStreamer
 #if ENABLE(VIDEO) && ENABLE(MEDIA_SOURCE) && ENABLE(VIDEO_TRACK)
 #include "MediaPlayerPrivateGStreamerMSE.h"
@@ -93,6 +90,14 @@
 namespace WebCore {
 
 const PlatformMedia NoPlatformMedia = { PlatformMedia::None, {0} };
+
+#if !RELEASE_LOG_DISABLED
+static RefPtr<PAL::Logger>& nullLogger()
+{
+    static NeverDestroyed<RefPtr<PAL::Logger>> logger;
+    return logger;
+}
+#endif
 
 // a null player to make MediaPlayer logic simpler
 
@@ -164,6 +169,21 @@ public:
     bool hasSingleSecurityOrigin() const override { return true; }
 };
 
+class NullMediaPlayerClient : public MediaPlayerClient {
+public:
+#if !RELEASE_LOG_DISABLED
+    const PAL::Logger& mediaPlayerLogger() final
+    {
+        if (!nullLogger().get()) {
+            nullLogger() = PAL::Logger::create(this);
+            nullLogger()->setEnabled(this, false);
+        }
+
+        return *nullLogger().get();
+    }
+#endif
+};
+
 const Vector<ContentType>& MediaPlayerClient::mediaContentTypesRequiringHardwareSupport() const
 {
     static NeverDestroyed<Vector<ContentType>> contentTypes;
@@ -172,7 +192,7 @@ const Vector<ContentType>& MediaPlayerClient::mediaContentTypesRequiringHardware
 
 static MediaPlayerClient& nullMediaPlayerClient()
 {
-    static NeverDestroyed<MediaPlayerClient> client;
+    static NeverDestroyed<NullMediaPlayerClient> client;
     return client.get();
 }
 
@@ -213,7 +233,7 @@ static void buildMediaEnginesVector()
     ASSERT(mediaEngineVectorLock().isLocked());
 
 #if USE(AVFOUNDATION)
-    if (Settings::isAVFoundationEnabled()) {
+    if (DeprecatedGlobalSettings::isAVFoundationEnabled()) {
 
 #if PLATFORM(COCOA)
         MediaPlayerPrivateAVFoundationObjC::registerMediaEngine(addMediaEngine);
@@ -234,24 +254,19 @@ static void buildMediaEnginesVector()
 #endif // USE(AVFOUNDATION)
 
 #if PLATFORM(MAC) && USE(QTKIT)
-    if (Settings::isQTKitEnabled())
+    if (DeprecatedGlobalSettings::isQTKitEnabled())
         MediaPlayerPrivateQTKit::registerMediaEngine(addMediaEngine);
 #endif
 
 #if defined(PlatformMediaEngineClassName)
 #if USE(GSTREAMER)
-    if (Settings::isGStreamerEnabled())
+    if (DeprecatedGlobalSettings::isGStreamerEnabled())
 #endif
         PlatformMediaEngineClassName::registerMediaEngine(addMediaEngine);
 #endif
 
-#if ENABLE(MEDIA_STREAM) && USE(GSTREAMER) && USE(OPENWEBRTC)
-    if (Settings::isGStreamerEnabled())
-        MediaPlayerPrivateGStreamerOwr::registerMediaEngine(addMediaEngine);
-#endif
-
 #if ENABLE(VIDEO) && USE(GSTREAMER) && ENABLE(MEDIA_SOURCE) && ENABLE(VIDEO_TRACK)
-    if (Settings::isGStreamerEnabled())
+    if (DeprecatedGlobalSettings::isGStreamerEnabled())
         MediaPlayerPrivateGStreamerMSE::registerMediaEngine(addMediaEngine);
 #endif
 
@@ -402,7 +417,7 @@ bool MediaPlayer::load(const URL& url, const ContentType& contentType, const Str
                 String extension = lastPathComponent.substring(pos + 1);
                 String mediaType = MIMETypeRegistry::getMediaMIMETypeForExtension(extension);
                 if (!mediaType.isEmpty()) {
-                    m_contentType = ContentType(mediaType);
+                    m_contentType = ContentType { WTFMove(mediaType) };
                     m_contentMIMETypeWasInferredFromExtension = true;
                 }
             }
@@ -568,12 +583,12 @@ void MediaPlayer::setShouldBufferData(bool shouldBuffer)
 }
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
-std::unique_ptr<CDMSession> MediaPlayer::createSession(const String& keySystem, CDMSessionClient* client)
+std::unique_ptr<LegacyCDMSession> MediaPlayer::createSession(const String& keySystem, LegacyCDMSessionClient* client)
 {
     return m_private->createSession(keySystem, client);
 }
 
-void MediaPlayer::setCDMSession(CDMSession* session)
+void MediaPlayer::setCDMSession(LegacyCDMSession* session)
 {
     m_private->setCDMSession(session);
 }
@@ -584,6 +599,23 @@ void MediaPlayer::keyAdded()
 }
 #endif
     
+#if ENABLE(ENCRYPTED_MEDIA)
+void MediaPlayer::cdmInstanceAttached(const CDMInstance& instance)
+{
+    m_private->cdmInstanceAttached(instance);
+}
+
+void MediaPlayer::cdmInstanceDetached(const CDMInstance& instance)
+{
+    m_private->cdmInstanceDetached(instance);
+}
+
+void MediaPlayer::attemptToDecryptWithInstance(const CDMInstance& instance)
+{
+    m_private->attemptToDecryptWithInstance(instance);
+}
+#endif
+
 MediaTime MediaPlayer::duration() const
 {
     return m_private->durationMediaTime();
@@ -923,6 +955,10 @@ void MediaPlayer::getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>& t
 
 bool MediaPlayer::isAvailable()
 {
+#if PLATFORM(IOS)
+    if (DeprecatedGlobalSettings::isAVFoundationEnabled())
+        return true;
+#endif
     return !installedMediaEngines().isEmpty();
 }
 
@@ -1231,6 +1267,13 @@ String MediaPlayer::mediaKeysStorageDirectory() const
 }
 #endif
 
+#if ENABLE(ENCRYPTED_MEDIA)
+void MediaPlayer::initializationDataEncountered(const String& initDataType, RefPtr<ArrayBuffer>&& initData)
+{
+    client().mediaPlayerInitializationDataEncountered(initDataType, WTFMove(initData));
+}
+#endif
+
 String MediaPlayer::referrer() const
 {
     return client().mediaPlayerReferrer();
@@ -1391,36 +1434,12 @@ bool MediaPlayer::ended() const
 }
 
 #if ENABLE(MEDIA_SOURCE)
-unsigned long MediaPlayer::totalVideoFrames()
+std::optional<PlatformVideoPlaybackQualityMetrics> MediaPlayer::videoPlaybackQualityMetrics()
 {
     if (!m_private)
-        return 0;
+        return std::nullopt;
 
-    return m_private->totalVideoFrames();
-}
-
-unsigned long MediaPlayer::droppedVideoFrames()
-{
-    if (!m_private)
-        return 0;
-
-    return m_private->droppedVideoFrames();
-}
-
-unsigned long MediaPlayer::corruptedVideoFrames()
-{
-    if (!m_private)
-        return 0;
-
-    return m_private->corruptedVideoFrames();
-}
-
-MediaTime MediaPlayer::totalFrameDelay()
-{
-    if (!m_private)
-        return MediaTime::zeroTime();
-
-    return m_private->totalFrameDelay();
+    return m_private->videoPlaybackQualityMetrics();
 }
 #endif
 
@@ -1486,6 +1505,13 @@ bool MediaPlayer::shouldCheckHardwareSupport() const
 {
     return client().mediaPlayerShouldCheckHardwareSupport();
 }
+
+#if !RELEASE_LOG_DISABLED
+const PAL::Logger& MediaPlayer::mediaPlayerLogger()
+{
+    return client().mediaPlayerLogger();
+}
+#endif
 
 }
 

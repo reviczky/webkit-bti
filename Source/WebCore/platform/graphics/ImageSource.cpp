@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006, 2010, 2011, 2012, 2014, 2016 Apple Inc.  All rights reserved.
+ * Copyright (C) 2006-2017 Apple Inc. All rights reserved.
  * Copyright (C) 2007 Alp Toker <alp.toker@collabora.co.uk>
  * Copyright (C) 2008, Google Inc. All rights reserved.
  * Copyright (C) 2007-2009 Torch Mobile, Inc
@@ -59,9 +59,7 @@ ImageSource::ImageSource(Image* image, AlphaOption alphaOption, GammaAndColorPro
 {
 }
 
-ImageSource::~ImageSource()
-{
-}
+ImageSource::~ImageSource() = default;
 
 void ImageSource::clearFrameBufferCache(size_t clearBeforeFrame)
 {
@@ -75,9 +73,12 @@ bool ImageSource::ensureDecoderAvailable(SharedBuffer* data)
     if (!data || isDecoderAvailable())
         return true;
 
-    m_decoder = ImageDecoder::create(*data, m_alphaOption, m_gammaAndColorProfileOption);
+    m_decoder = ImageDecoder::create(*data, m_frameCache->mimeType(), m_alphaOption, m_gammaAndColorProfileOption);
     if (!isDecoderAvailable())
         return false;
+
+    if (auto expectedContentLength = m_frameCache->expectedContentLength())
+        m_decoder->setExpectedContentSize(expectedContentLength);
 
     m_frameCache->setDecoder(m_decoder.get());
     return true;
@@ -113,34 +114,13 @@ void ImageSource::resetData(SharedBuffer* data)
 
 EncodedDataStatus ImageSource::dataChanged(SharedBuffer* data, bool allDataReceived)
 {
-#if PLATFORM(IOS)
-    // FIXME: We should expose a setting to enable/disable progressive loading and make this
-    // code conditional on it. Then we can remove the PLATFORM(IOS)-guard.
-    static const double chunkLoadIntervals[] = {0, 1, 3, 6, 15};
-    double interval = chunkLoadIntervals[std::min(m_progressiveLoadChunkCount, static_cast<uint16_t>(4))];
-
-    bool needsUpdate = false;
-
-    // The first time through, the chunk time will be 0 and the image will get an update.
-    if (currentTime() - m_progressiveLoadChunkTime > interval) {
-        needsUpdate = true;
-        m_progressiveLoadChunkTime = currentTime();
-        ASSERT(m_progressiveLoadChunkCount <= std::numeric_limits<uint16_t>::max());
-        ++m_progressiveLoadChunkCount;
-    }
-
-    if (needsUpdate || allDataReceived)
-        setData(data, allDataReceived);
-#else
     setData(data, allDataReceived);
-#endif
-
     m_frameCache->clearMetadata();
-    EncodedDataStatus status = encodedDataStatus();
-    if (status < EncodedDataStatus::SizeAvailable)
-        return status;
 
-    m_frameCache->growFrames();
+    EncodedDataStatus status = encodedDataStatus();
+    if (status >= EncodedDataStatus::SizeAvailable)
+        m_frameCache->growFrames();
+
     return status;
 }
 
@@ -184,7 +164,7 @@ SubsamplingLevel ImageSource::subsamplingLevelForScaleFactor(GraphicsContext& co
 {
 #if USE(CG)
     // Never use subsampled images for drawing into PDF contexts.
-    if (wkCGContextIsPDFContext(context.platformContext()))
+    if (CGContextGetType(context.platformContext()) == kCGContextTypePDF)
         return SubsamplingLevel::Default;
 
     float scale = std::min(float(1), std::max(scaleFactor.width(), scaleFactor.height()));

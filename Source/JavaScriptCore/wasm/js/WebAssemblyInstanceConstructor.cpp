@@ -32,12 +32,14 @@
 #include "JSCInlines.h"
 #include "JSModuleEnvironment.h"
 #include "JSModuleNamespaceObject.h"
+#include "JSToWasm.h"
 #include "JSWebAssemblyHelpers.h"
 #include "JSWebAssemblyInstance.h"
 #include "JSWebAssemblyLinkError.h"
 #include "JSWebAssemblyMemory.h"
 #include "JSWebAssemblyModule.h"
 #include "WasmPlan.h"
+#include "WasmToJS.h"
 #include "WasmWorklist.h"
 #include "WebAssemblyFunction.h"
 #include "WebAssemblyInstancePrototype.h"
@@ -75,10 +77,10 @@ static EncodedJSValue JSC_HOST_CALL constructJSWebAssemblyInstance(ExecState* ex
     Structure* instanceStructure = InternalFunction::createSubclassStructure(exec, exec->newTarget(), exec->lexicalGlobalObject()->WebAssemblyInstanceStructure());
     RETURN_IF_EXCEPTION(scope, { });
 
-    JSWebAssemblyInstance* instance = JSWebAssemblyInstance::create(vm, exec, module, importObject, instanceStructure);
+    JSWebAssemblyInstance* instance = JSWebAssemblyInstance::create(vm, exec, module, importObject, instanceStructure, Wasm::Instance::create(&vm.wasmContext, Ref<Wasm::Module>(module->module()), &vm.topEntryFrame));
     RETURN_IF_EXCEPTION(scope, { });
 
-    instance->finalizeCreation(vm, exec, module->module().compileSync(instance->memoryMode()));
+    instance->finalizeCreation(vm, exec, module->module().compileSync(&vm.wasmContext, instance->memoryMode(), &Wasm::createJSToWasmWrapper, &Wasm::wasmToJSException));
     RETURN_IF_EXCEPTION(scope, { });
     return JSValue::encode(instance);
 }
@@ -105,8 +107,8 @@ Structure* WebAssemblyInstanceConstructor::createStructure(VM& vm, JSGlobalObjec
 void WebAssemblyInstanceConstructor::finishCreation(VM& vm, WebAssemblyInstancePrototype* prototype)
 {
     Base::finishCreation(vm, ASCIILiteral("Instance"));
-    putDirectWithoutTransition(vm, vm.propertyNames->prototype, prototype, DontEnum | DontDelete | ReadOnly);
-    putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(1), ReadOnly | DontEnum | DontDelete);
+    putDirectWithoutTransition(vm, vm.propertyNames->prototype, prototype, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly);
+    putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(1), PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum | PropertyAttribute::DontDelete);
 }
 
 WebAssemblyInstanceConstructor::WebAssemblyInstanceConstructor(VM& vm, Structure* structure)

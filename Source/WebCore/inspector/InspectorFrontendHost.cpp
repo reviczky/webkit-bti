@@ -57,9 +57,9 @@
 #include <pal/system/Sound.h>
 #include <wtf/StdLibExtras.h>
 
-using namespace Inspector;
 
 namespace WebCore {
+using namespace Inspector;
 
 #if ENABLE(CONTEXT_MENUS)
 class FrontendMenuProvider : public ContextMenuProvider {
@@ -278,8 +278,6 @@ String InspectorFrontendHost::platform()
     return ASCIILiteral("freebsd");
 #elif OS(OPENBSD)
     return ASCIILiteral("openbsd");
-#elif OS(SOLARIS)
-    return ASCIILiteral("solaris");
 #else
     return ASCIILiteral("unknown");
 #endif

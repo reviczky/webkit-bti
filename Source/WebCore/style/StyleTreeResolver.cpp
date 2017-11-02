@@ -59,9 +59,7 @@ TreeResolver::TreeResolver(Document& document)
 {
 }
 
-TreeResolver::~TreeResolver()
-{
-}
+TreeResolver::~TreeResolver() = default;
 
 TreeResolver::Scope::Scope(Document& document)
     : styleResolver(document.styleScope().resolver())
@@ -127,7 +125,7 @@ std::unique_ptr<RenderStyle> TreeResolver::styleForElement(Element& element, con
     if (auto style = scope().sharingResolver.resolve(element, *m_update))
         return style;
 
-    auto elementStyle = scope().styleResolver.styleForElement(element, &inheritedStyle, parentBoxStyle(), MatchAllRules, nullptr, &scope().selectorFilter);
+    auto elementStyle = scope().styleResolver.styleForElement(element, &inheritedStyle, parentBoxStyle(), MatchAllRules, &scope().selectorFilter);
 
     if (elementStyle.relations)
         commitRelations(WTFMove(elementStyle.relations), *m_update);
@@ -165,10 +163,6 @@ static bool affectsRenderedSubtree(Element& element, const RenderStyle& newStyle
         return true;
     if (element.rendererIsNeeded(newStyle))
         return true;
-#if ENABLE(CSS_REGIONS)
-    if (element.shouldMoveToFlowThread(newStyle))
-        return true;
-#endif
     return false;
 }
 
@@ -181,7 +175,7 @@ static const RenderStyle* renderOrDisplayContentsStyle(const Element& element)
     return nullptr;
 }
 
-ElementUpdate TreeResolver::resolveElement(Element& element)
+ElementUpdates TreeResolver::resolveElement(Element& element)
 {
     if (m_didSeePendingStylesheet && !element.renderer() && !m_document.isIgnoringPendingStylesheets()) {
         m_document.setHasNodesWithMissingStyle();
@@ -225,7 +219,43 @@ ElementUpdate TreeResolver::resolveElement(Element& element)
             update.change = Detach;
     }
 
-    return update;
+    auto beforeUpdate = resolvePseudoStyle(element, update, BEFORE);
+    auto afterUpdate = resolvePseudoStyle(element, update, AFTER);
+
+    return { WTFMove(update), WTFMove(beforeUpdate), WTFMove(afterUpdate) };
+}
+
+ElementUpdate TreeResolver::resolvePseudoStyle(Element& element, const ElementUpdate& elementUpdate, PseudoId pseudoId)
+{
+    if (elementUpdate.style->display() == NONE)
+        return { };
+    if (!elementUpdate.style->hasPseudoStyle(pseudoId))
+        return { };
+
+    auto pseudoStyle = scope().styleResolver.pseudoStyleForElement(element, { pseudoId }, *elementUpdate.style);
+    if (!pseudoStyle)
+        return { };
+
+    PseudoElement* pseudoElement = pseudoId == BEFORE ? element.beforePseudoElement() : element.afterPseudoElement();
+    if (!pseudoElement) {
+        auto newPseudoElement = PseudoElement::create(element, pseudoId);
+        pseudoElement = newPseudoElement.ptr();
+        if (pseudoId == BEFORE)
+            element.setBeforePseudoElement(WTFMove(newPseudoElement));
+        else
+            element.setAfterPseudoElement(WTFMove(newPseudoElement));
+    }
+
+    if (pseudoStyle->display() == CONTENTS) {
+        // For display:contents we create an inline wrapper that inherits its style from the display:contents style.
+        auto contentsStyle = RenderStyle::createPtr();
+        contentsStyle->setStyleType(pseudoId);
+        contentsStyle->inheritFrom(*pseudoStyle);
+        contentsStyle->copyContentFrom(*pseudoStyle);
+        pseudoStyle = WTFMove(contentsStyle);
+    }
+
+    return createAnimatedElementUpdate(WTFMove(pseudoStyle), *pseudoElement, elementUpdate.change);
 }
 
 const RenderStyle* TreeResolver::parentBoxStyle() const
@@ -244,52 +274,25 @@ const RenderStyle* TreeResolver::parentBoxStyle() const
 
 ElementUpdate TreeResolver::createAnimatedElementUpdate(std::unique_ptr<RenderStyle> newStyle, Element& element, Change parentChange)
 {
+    auto& animationController = m_document.frame()->animation();
+
+    auto* oldStyle = renderOrDisplayContentsStyle(element);
+    auto animationUpdate = animationController.updateAnimations(element, *newStyle, oldStyle);
+
+    if (animationUpdate.style)
+        newStyle = WTFMove(animationUpdate.style);
+
+    auto change = oldStyle ? determineChange(*oldStyle, *newStyle) : Detach;
+
     auto validity = element.styleValidity();
-    bool recompositeLayer = element.styleResolutionShouldRecompositeLayer();
+    if (validity >= Validity::SubtreeInvalid)
+        change = std::max(change, validity == Validity::SubtreeAndRenderersInvalid ? Detach : Force);
+    if (parentChange >= Force)
+        change = std::max(change, parentChange);
 
-    auto makeUpdate = [&] (std::unique_ptr<RenderStyle> style, Change change) {
-        if (validity >= Validity::SubtreeInvalid)
-            change = std::max(change, validity == Validity::SubtreeAndRenderersInvalid ? Detach : Force);
-        if (parentChange >= Force)
-            change = std::max(change, parentChange);
-        return ElementUpdate { WTFMove(style), change, recompositeLayer };
-    };
+    bool shouldRecompositeLayer = element.styleResolutionShouldRecompositeLayer() || animationUpdate.stateChanged;
 
-    auto* renderer = element.renderer();
-
-    bool shouldReconstruct = validity >= Validity::SubtreeAndRenderersInvalid || parentChange == Detach;
-    if (shouldReconstruct)
-        return makeUpdate(WTFMove(newStyle), Detach);
-
-    if (!renderer) {
-        auto change = Detach;
-        if (auto* oldStyle = renderOrDisplayContentsStyle(element))
-            change = determineChange(*oldStyle, *newStyle);
-        return makeUpdate(WTFMove(newStyle), change);
-    }
-
-    std::unique_ptr<RenderStyle> animatedStyle;
-    if (element.document().frame()->animation().updateAnimations(*renderer, *newStyle, animatedStyle))
-        recompositeLayer = true;
-
-    if (animatedStyle) {
-        auto change = determineChange(renderer->style(), *animatedStyle);
-        if (renderer->hasInitialAnimatedStyle()) {
-            renderer->setHasInitialAnimatedStyle(false);
-            // When we initialize a newly created renderer with initial animated style we don't inherit it to descendants.
-            // The first animation frame needs to correct this.
-            // FIXME: We should compute animated style correctly during initial style resolution when we don't have renderers yet.
-            //        https://bugs.webkit.org/show_bug.cgi?id=171926
-            change = std::max(change, Inherit);
-        }
-        // If animation forces render tree reconstruction pass the original style. The animation will be applied on renderer construction.
-        // FIXME: We should always use the animated style here.
-        auto style = change == Detach ? WTFMove(newStyle) : WTFMove(animatedStyle);
-        return makeUpdate(WTFMove(style), change);
-    }
-
-    auto change = determineChange(renderer->style(), *newStyle);
-    return makeUpdate(WTFMove(newStyle), change);
+    return { WTFMove(newStyle), change, shouldRecompositeLayer };
 }
 
 void TreeResolver::pushParent(Element& element, const RenderStyle& style, Change change)
@@ -384,6 +387,18 @@ static bool hasLoadingStylesheet(const Style::Scope& styleScope, const Element& 
     return false;
 }
 
+static std::unique_ptr<RenderStyle> createInheritedDisplayContentsStyleIfNeeded(const RenderStyle& parentElementStyle, const RenderStyle* parentBoxStyle)
+{
+    if (parentElementStyle.display() != CONTENTS)
+        return nullptr;
+    if (parentBoxStyle && !parentBoxStyle->inheritedNotEqual(&parentElementStyle))
+        return nullptr;
+    // Compute style for imaginary unstyled <span> around the text node.
+    auto style = RenderStyle::createPtr();
+    style->inheritFrom(parentElementStyle);
+    return style;
+}
+
 void TreeResolver::resolveComposedTree()
 {
     ASSERT(m_parentStack.size() == 1);
@@ -408,8 +423,13 @@ void TreeResolver::resolveComposedTree()
 
         if (is<Text>(node)) {
             auto& text = downcast<Text>(node);
-            if (text.styleValidity() >= Validity::SubtreeAndRenderersInvalid && parent.change != Detach)
-                m_update->addText(text, parent.element, { });
+            
+            if ((text.styleValidity() >= Validity::SubtreeAndRenderersInvalid && parent.change != Detach) || parent.style.display() == CONTENTS) {
+                TextUpdate textUpdate;
+                textUpdate.inheritedDisplayContentsStyle = createInheritedDisplayContentsStyleIfNeeded(parent.style, parentBoxStyle());
+
+                m_update->addText(text, parent.element, WTFMove(textUpdate));
+            }
 
             text.setHasValidStyle();
             it.traverseNextSkippingChildren();
@@ -442,19 +462,19 @@ void TreeResolver::resolveComposedTree()
             if (element.hasCustomStyleResolveCallbacks())
                 element.willRecalcStyle(parent.change);
 
-            auto elementUpdate = resolveElement(element);
+            auto elementUpdates = resolveElement(element);
 
             if (element.hasCustomStyleResolveCallbacks())
-                element.didRecalcStyle(elementUpdate.change);
+                element.didRecalcStyle(elementUpdates.update.change);
 
-            style = elementUpdate.style.get();
-            change = elementUpdate.change;
+            style = elementUpdates.update.style.get();
+            change = elementUpdates.update.change;
 
             if (affectedByPreviousSibling && change != Detach)
                 change = Force;
 
-            if (elementUpdate.style)
-                m_update->addElement(element, parent.element, WTFMove(elementUpdate));
+            if (elementUpdates.update.style)
+                m_update->addElement(element, parent.element, WTFMove(elementUpdates));
 
             clearNeedsStyleResolution(element);
         }

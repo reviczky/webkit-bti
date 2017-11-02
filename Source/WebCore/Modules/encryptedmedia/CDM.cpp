@@ -59,12 +59,11 @@ Ref<CDM> CDM::create(Document& document, const String& keySystem)
 CDM::CDM(Document& document, const String& keySystem)
     : ContextDestructionObserver(&document)
     , m_keySystem(keySystem)
-    , m_weakPtrFactory(this)
 {
     ASSERT(supportsKeySystem(keySystem));
     for (auto* factory : CDMFactory::registeredFactories()) {
         if (factory->supportsKeySystem(keySystem)) {
-            m_private = factory->createCDM();
+            m_private = factory->createCDM(keySystem);
             break;
         }
     }

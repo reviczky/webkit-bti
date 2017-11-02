@@ -247,11 +247,7 @@ Plan::CompilationPath Plan::compileInThreadImpl()
     }
     
     Graph dfg(*vm, *this);
-    
-    if (!parse(dfg)) {
-        finalizer = std::make_unique<FailedFinalizer>(*this);
-        return FailPath;
-    }
+    parse(dfg);
 
     codeBlock->setCalleeSaveRegisters(RegisterSet::dfgCalleeSaveRegisters());
 
@@ -366,9 +362,8 @@ Plan::CompilationPath Plan::compileInThreadImpl()
     // If we're doing validation, then run some analyses, to give them an opportunity
     // to self-validate. Now is as good a time as any to do this.
     if (validationEnabled()) {
-        dfg.ensureDominators();
-        dfg.ensureNaturalLoops();
-        dfg.ensurePrePostNumbering();
+        dfg.ensureCPSDominators();
+        dfg.ensureCPSNaturalLoops();
     }
 
     switch (mode) {
@@ -702,7 +697,8 @@ void Plan::cleanMustHandleValuesIfNecessary()
     if (!mustHandleValues.numberOfLocals())
         return;
     
-    FastBitVector liveness = codeBlock->alternative()->livenessAnalysis().getLivenessInfoAtBytecodeOffset(osrEntryBytecodeIndex);
+    CodeBlock* alternative = codeBlock->alternative();
+    FastBitVector liveness = alternative->livenessAnalysis().getLivenessInfoAtBytecodeOffset(alternative, osrEntryBytecodeIndex);
     
     for (unsigned local = mustHandleValues.numberOfLocals(); local--;) {
         if (!liveness[local])

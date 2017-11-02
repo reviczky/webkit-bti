@@ -70,9 +70,13 @@
 #include "JSInternalPromiseDeferred.h"
 #include "JSLock.h"
 #include "JSMap.h"
+#include "JSMapIterator.h"
 #include "JSPromiseDeferred.h"
 #include "JSPropertyNameEnumerator.h"
+#include "JSScriptFetchParameters.h"
 #include "JSScriptFetcher.h"
+#include "JSSet.h"
+#include "JSSetIterator.h"
 #include "JSSourceCode.h"
 #include "JSTemplateRegistryKey.h"
 #include "JSWebAssembly.h"
@@ -170,6 +174,7 @@ VM::VM(VMType vmType, HeapType heapType)
     , primitiveGigacageAuxiliarySpace("Primitive Gigacage Auxiliary", heap, AllocatorAttributes(DoesNotNeedDestruction, HeapCell::Auxiliary), primitiveGigacageAllocator.get())
     , jsValueGigacageAuxiliarySpace("JSValue Gigacage Auxiliary", heap, AllocatorAttributes(DoesNotNeedDestruction, HeapCell::Auxiliary), jsValueGigacageAllocator.get())
     , cellSpace("JSCell", heap, AllocatorAttributes(DoesNotNeedDestruction, HeapCell::JSCell), fastMallocAllocator.get())
+    , jsValueGigacageCellSpace("JSValue Gigacage JSCell", heap, AllocatorAttributes(DoesNotNeedDestruction, HeapCell::JSCell), jsValueGigacageAllocator.get())
     , destructibleCellSpace("Destructible JSCell", heap, AllocatorAttributes(NeedsDestruction, HeapCell::JSCell), fastMallocAllocator.get())
     , stringSpace("JSString", heap, fastMallocAllocator.get())
     , destructibleObjectSpace("JSDestructibleObject", heap, fastMallocAllocator.get())
@@ -180,7 +185,7 @@ VM::VM(VMType vmType, HeapType heapType)
 #endif
     , vmType(vmType)
     , clientData(0)
-    , topVMEntryFrame(nullptr)
+    , topEntryFrame(nullptr)
     , topCallFrame(CallFrame::noCaller())
     , promiseDeferredTimer(std::make_unique<PromiseDeferredTimer>(*this))
     , m_atomicStringTable(vmType == Default ? Thread::current().atomicStringTable() : new AtomicStringTable)
@@ -190,7 +195,7 @@ VM::VM(VMType vmType, HeapType heapType)
     , customGetterSetterFunctionMap(*this)
     , stringCache(*this)
     , symbolImplToSymbolMap(*this)
-    , prototypeMap(*this)
+    , structureCache(*this)
     , interpreter(0)
     , entryScope(0)
     , m_regExpCache(new RegExpCache(this))
@@ -249,6 +254,7 @@ VM::VM(VMType vmType, HeapType heapType)
     fixedArrayStructure.set(*this, JSFixedArray::createStructure(*this, 0, jsNull()));
     sourceCodeStructure.set(*this, JSSourceCode::createStructure(*this, 0, jsNull()));
     scriptFetcherStructure.set(*this, JSScriptFetcher::createStructure(*this, 0, jsNull()));
+    scriptFetchParametersStructure.set(*this, JSScriptFetchParameters::createStructure(*this, 0, jsNull()));
     structureChainStructure.set(*this, StructureChain::createStructure(*this, 0, jsNull()));
     sparseArrayValueMapStructure.set(*this, SparseArrayValueMap::createStructure(*this, 0, jsNull()));
     templateRegistryKeyStructure.set(*this, JSTemplateRegistryKey::createStructure(*this, 0, jsNull()));
@@ -272,6 +278,11 @@ VM::VM(VMType vmType, HeapType heapType)
     functionCodeBlockStructure.set(*this, FunctionCodeBlock::createStructure(*this, 0, jsNull()));
     hashMapBucketSetStructure.set(*this, HashMapBucket<HashMapBucketDataKey>::createStructure(*this, 0, jsNull()));
     hashMapBucketMapStructure.set(*this, HashMapBucket<HashMapBucketDataKeyValue>::createStructure(*this, 0, jsNull()));
+    setIteratorStructure.set(*this, JSSetIterator::createStructure(*this, 0, jsNull()));
+    mapIteratorStructure.set(*this, JSMapIterator::createStructure(*this, 0, jsNull()));
+
+    sentinelSetBucket.set(*this, JSSet::BucketType::createSentinel(*this));
+    sentinelMapBucket.set(*this, JSMap::BucketType::createSentinel(*this));
 
     nativeStdFunctionCellStructure.set(*this, NativeStdFunctionCell::createStructure(*this, 0, jsNull()));
     smallStrings.initializeCommonStrings(*this);
@@ -281,7 +292,6 @@ VM::VM(VMType vmType, HeapType heapType)
 #if ENABLE(JIT)
     jitStubs = std::make_unique<JITThunks>();
 #endif
-    arityCheckData = std::make_unique<CommonSlowPaths::ArityCheckData>();
 
 #if ENABLE(FTL_JIT)
     ftlThunks = std::make_unique<FTL::Thunks>();
@@ -359,7 +369,7 @@ VM::~VM()
     promiseDeferredTimer->stopRunningTasks();
 #if ENABLE(WEBASSEMBLY)
     if (Wasm::existingWorklistOrNull())
-        Wasm::ensureWorklist().stopAllPlansForVM(*this);
+        Wasm::ensureWorklist().stopAllPlansForContext(wasmContext);
 #endif
     if (UNLIKELY(m_watchdog))
         m_watchdog->willDestroyVM(this);
@@ -756,11 +766,12 @@ void logSanitizeStack(VM* vm)
 {
     if (Options::verboseSanitizeStack() && vm->topCallFrame) {
         int dummy;
+        auto& stackBounds = Thread::current().stack();
         dataLog(
-            "Sanitizing stack with top call frame at ", RawPointer(vm->topCallFrame),
+            "Sanitizing stack for VM = ", RawPointer(vm), " with top call frame at ", RawPointer(vm->topCallFrame),
             ", current stack pointer at ", RawPointer(&dummy), ", in ",
-            pointerDump(vm->topCallFrame->codeBlock()), " and last code origin = ",
-            vm->topCallFrame->codeOrigin(), "\n");
+            pointerDump(vm->topCallFrame->codeBlock()), ", last code origin = ",
+            vm->topCallFrame->codeOrigin(), ", last stack top = ", RawPointer(vm->lastStackTop()), ", in stack range [", RawPointer(stackBounds.origin()), ", ", RawPointer(stackBounds.end()), "]\n");
     }
 }
 
@@ -910,6 +921,11 @@ void QueuedTask::run()
 void sanitizeStackForVM(VM* vm)
 {
     logSanitizeStack(vm);
+    if (vm->topCallFrame) {
+        auto& stackBounds = Thread::current().stack();
+        ASSERT(vm->currentThreadIsHoldingAPILock());
+        ASSERT_UNUSED(stackBounds, stackBounds.contains(vm->lastStackTop()));
+    }
 #if !ENABLE(JIT)
     vm->interpreter->cloopStack().sanitizeStack();
 #else
@@ -961,24 +977,23 @@ void VM::verifyExceptionCheckNeedIsSatisfied(unsigned recursionDepth, ExceptionE
             "        (ExceptionScope::m_recursionDepth was ", recursionDepth, ")\n"
             "\n");
 
+        StringPrintStream out;
+        std::unique_ptr<StackTrace> currentTrace = StackTrace::captureStackTrace(Options::unexpectedExceptionStackTraceLimit());
+
+        if (Options::dumpSimulatedThrows()) {
+            out.println("The simulated exception was thrown at:");
+            m_nativeStackTraceOfLastSimulatedThrow->dump(out, "    ");
+            out.println();
+        }
+        out.println("Unchecked exception detected at:");
+        currentTrace->dump(out, "    ");
+        out.println();
+
+        dataLog(out.toCString());
         RELEASE_ASSERT(!m_needExceptionCheck);
     }
 }
 #endif
-
-#if ENABLE(JIT)
-RegisterAtOffsetList* VM::getAllCalleeSaveRegisterOffsets()
-{
-    static RegisterAtOffsetList* result;
-
-    static std::once_flag calleeSavesFlag;
-    std::call_once(calleeSavesFlag, [] () {
-        result = new RegisterAtOffsetList(RegisterSet::vmCalleeSaveRegisters(), RegisterAtOffsetList::ZeroBased);
-    });
-
-    return result;
-}
-#endif // ENABLE(JIT)
 
 #if USE(CF)
 void VM::registerRunLoopTimer(JSRunLoopTimer* timer)

@@ -58,9 +58,9 @@
 #include "JSWebGLVertexArrayObject.h"
 #include "JSWebGLVertexArrayObjectOES.h"
 
-using namespace JSC;
 
 namespace WebCore {
+using namespace JSC;
 
 // FIXME: This should use the IDLUnion JSConverter.
 JSValue convertToJSValue(ExecState& state, JSDOMGlobalObject& globalObject, const WebGLAny& any)
@@ -91,6 +91,12 @@ JSValue convertToJSValue(ExecState& state, JSDOMGlobalObject& globalObject, cons
             MarkedArgumentBuffer list;
             for (auto& value : values)
                 list.append(jsBoolean(value));
+            return constructArray(&state, 0, &globalObject, list);
+        },
+        [&] (const Vector<int>& values) {
+            MarkedArgumentBuffer list;
+            for (auto& value : values)
+                list.append(jsNumber(value));
             return constructArray(&state, 0, &globalObject, list);
         },
         [&] (const RefPtr<Float32Array>& array) {

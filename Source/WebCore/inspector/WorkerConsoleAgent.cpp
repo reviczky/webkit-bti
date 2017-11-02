@@ -26,18 +26,13 @@
 #include "config.h"
 #include "WorkerConsoleAgent.h"
 
-using namespace Inspector;
 
 namespace WebCore {
+using namespace Inspector;
 
 WorkerConsoleAgent::WorkerConsoleAgent(WorkerAgentContext& context, InspectorHeapAgent* heapAgent)
     : WebConsoleAgent(context, heapAgent)
 {
-}
-
-void WorkerConsoleAgent::addInspectedNode(ErrorString& errorString, int)
-{
-    errorString = ASCIILiteral("Unsupported for Workers.");
 }
 
 } // namespace WebCore

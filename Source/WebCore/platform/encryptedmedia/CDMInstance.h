@@ -45,7 +45,7 @@ struct CDMKeySystemConfiguration;
 
 class CDMInstance : public RefCounted<CDMInstance> {
 public:
-    virtual ~CDMInstance() { }
+    virtual ~CDMInstance() = default;
 
     enum class ImplementationType {
         Mock,
@@ -94,6 +94,8 @@ public:
     virtual void removeSessionData(const String& sessionId, LicenseType, RemoveSessionDataCallback) = 0;
 
     virtual void storeRecordOfKeyUsage(const String& sessionId) = 0;
+
+    virtual const String& keySystem() const = 0;
 };
 
 } // namespace WebCore

@@ -28,7 +28,7 @@
 
 #if ENABLE(INDEXED_DATABASE)
 
-#include "DOMError.h"
+#include "DOMException.h"
 #include "DOMStringList.h"
 #include "DOMWindow.h"
 #include "Event.h"
@@ -55,9 +55,9 @@
 #include "SerializedScriptValue.h"
 #include "TransactionOperation.h"
 
-using namespace JSC;
 
 namespace WebCore {
+using namespace JSC;
 
 Ref<IDBTransaction> IDBTransaction::create(IDBDatabase& database, const IDBTransactionInfo& info)
 {
@@ -134,7 +134,7 @@ IDBDatabase* IDBTransaction::db()
     return m_database.ptr();
 }
 
-DOMError* IDBTransaction::error() const
+DOMException* IDBTransaction::error() const
 {
     ASSERT(currentThread() == m_database->originThreadID());
     return m_domError.get();
@@ -181,7 +181,7 @@ ExceptionOr<Ref<IDBObjectStore>> IDBTransaction::objectStore(const String& objec
 }
 
 
-void IDBTransaction::abortDueToFailedRequest(DOMError& error)
+void IDBTransaction::abortDueToFailedRequest(DOMException& error)
 {
     LOG(IndexedDB, "IDBTransaction::abortDueToFailedRequest");
     ASSERT(currentThread() == m_database->originThreadID());
@@ -759,7 +759,7 @@ void IDBTransaction::didCreateIndexOnServer(const IDBResultData& resultData)
         return;
 
     // Otherwise, failure to create an index forced abortion of the transaction.
-    abortDueToFailedRequest(DOMError::create(resultData.error().name(), resultData.error().message()));
+    abortDueToFailedRequest(DOMException::create(resultData.error().message(), resultData.error().name()));
 }
 
 void IDBTransaction::renameIndex(IDBIndex& index, const String& newName)
@@ -1368,9 +1368,7 @@ void IDBTransaction::connectionClosedFromServer(const IDBError& error)
 
     abortInProgressOperations(error);
 
-    Vector<RefPtr<IDBClient::TransactionOperation>> operations;
-    copyValuesToVector(m_transactionOperationMap, operations);
-
+    auto operations = copyToVector(m_transactionOperationMap.values());
     for (auto& operation : operations) {
         m_currentlyCompletingRequest = nullptr;
         m_transactionOperationsInProgressQueue.append(operation.get());
@@ -1385,7 +1383,7 @@ void IDBTransaction::connectionClosedFromServer(const IDBError& error)
     m_transactionOperationMap.clear();
 
     m_idbError = error;
-    m_domError = error.toDOMError();
+    m_domError = error.toDOMException();
     fireOnAbort();
 }
 

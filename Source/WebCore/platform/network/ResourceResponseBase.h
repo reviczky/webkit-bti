@@ -134,7 +134,7 @@ public:
     WEBCORE_EXPORT std::optional<std::chrono::system_clock::time_point> lastModified() const;
     ParsedContentRange& contentRange() const;
 
-    enum class Source { Unknown, Network, DiskCache, DiskCacheAfterValidation, MemoryCache, MemoryCacheAfterValidation };
+    enum class Source { Unknown, Network, DiskCache, DiskCacheAfterValidation, MemoryCache, MemoryCacheAfterValidation, ServiceWorker };
     WEBCORE_EXPORT Source source() const;
     void setSource(Source source) { m_source = source; }
 
@@ -153,10 +153,11 @@ public:
         return 1280;
     }
 
+    WEBCORE_EXPORT void setType(Type);
     Type type() const { return m_type; }
-    void setType(Type type) { m_type = type; }
-    bool isRedirected() const { return m_isRedirected; }
+
     void setRedirected(bool isRedirected) { m_isRedirected = isRedirected; }
+    bool isRedirected() const { return m_isRedirected; }
 
     void setTainting(Tainting tainting) { m_tainting = tainting; }
     Tainting tainting() const { return m_tainting; }

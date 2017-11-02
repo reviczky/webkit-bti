@@ -34,6 +34,7 @@
 
 #if ENABLE(VIDEO_TRACK)
 
+#include "Document.h"
 #include "Event.h"
 #include "HTMLMediaElement.h"
 #include "SourceBuffer.h"
@@ -234,9 +235,9 @@ void TextTrack::setMode(Mode mode)
 
     if (mode != Mode::Showing && m_cues) {
         for (size_t i = 0; i < m_cues->length(); ++i) {
-            TextTrackCue* cue = m_cues->item(i);
+            RefPtr<TextTrackCue> cue = m_cues->item(i);
             if (cue->isRenderable())
-                toVTTCue(cue)->removeDisplayTree();
+                toVTTCue(cue.get())->removeDisplayTree();
         }
     }
 
@@ -316,7 +317,7 @@ ExceptionOr<void> TextTrack::addCue(Ref<TextTrackCue>&& cue)
     // 2. Add cue to the method's TextTrack object's text track's text track list of cues.
     cue->setTrack(this);
     ensureTextTrackCueList().add(cue.copyRef());
-    
+
     if (m_client)
         m_client->textTrackAddCue(*this, cue);
 
@@ -335,6 +336,8 @@ ExceptionOr<void> TextTrack::removeCue(TextTrackCue& cue)
         return Exception { NotFoundError };
     if (!m_cues)
         return Exception { InvalidStateError };
+
+    DEBUG_LOG(LOGIDENTIFIER, cue);
 
     // 2. Remove cue from the method's TextTrack object's text track's text track list of cues.
     m_cues->remove(cue);
@@ -483,7 +486,7 @@ bool TextTrack::hasCue(TextTrackCue* cue, TextTrackCue::CueMatchRules match)
         ASSERT(searchStart <= m_cues->length());
         ASSERT(searchEnd <= m_cues->length());
         
-        TextTrackCue* existingCue;
+        RefPtr<TextTrackCue> existingCue;
         
         // Cues in the TextTrackCueList are maintained in start time order.
         if (searchStart == searchEnd) {
@@ -542,7 +545,6 @@ bool TextTrack::containsOnlyForcedSubtitles() const
 }
 
 #if ENABLE(MEDIA_SOURCE)
-
 void TextTrack::setLanguage(const AtomicString& language)
 {
     // 11.1 language, on setting:
@@ -564,7 +566,6 @@ void TextTrack::setLanguage(const AtomicString& language)
     if (mediaElement())
         mediaElement()->textTracks().scheduleChangeEvent();
 }
-
 #endif
 
 } // namespace WebCore

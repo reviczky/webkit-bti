@@ -26,6 +26,7 @@
 #include "BackForwardClient.h"
 #include "BackForwardController.h"
 #include "CSSAnimationController.h"
+#include "CacheStorageProvider.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "ConstantPropertyMap.h"
@@ -222,12 +223,13 @@ Page::Page(PageConfiguration&& pageConfiguration)
 #endif
     , m_socketProvider(WTFMove(pageConfiguration.socketProvider))
     , m_applicationCacheStorage(*WTFMove(pageConfiguration.applicationCacheStorage))
+    , m_cacheStorageProvider(WTFMove(pageConfiguration.cacheStorageProvider))
     , m_databaseProvider(*WTFMove(pageConfiguration.databaseProvider))
     , m_pluginInfoProvider(*WTFMove(pageConfiguration.pluginInfoProvider))
     , m_storageNamespaceProvider(*WTFMove(pageConfiguration.storageNamespaceProvider))
     , m_userContentProvider(*WTFMove(pageConfiguration.userContentProvider))
     , m_visitedLinkStore(*WTFMove(pageConfiguration.visitedLinkStore))
-    , m_sessionID(SessionID::defaultSessionID())
+    , m_sessionID(PAL::SessionID::defaultSessionID())
     , m_isUtilityPage(isUtilityPageChromeClient(chrome().client()))
     , m_performanceMonitor(isUtilityPage() ? nullptr : std::make_unique<PerformanceMonitor>(*this))
     , m_lowPowerModeNotifier(std::make_unique<LowPowerModeNotifier>([this](bool isLowPowerModeEnabled) { handleLowModePowerChange(isLowPowerModeEnabled); }))
@@ -841,7 +843,7 @@ void Page::setPageScaleFactor(float scale, const IntPoint& origin, bool inStable
 
     if (view && view->scrollPosition() != origin) {
         if (!m_settings->delegatesPageScaling() && document->renderView() && document->renderView()->needsLayout() && view->didFirstLayout())
-            view->layout();
+            view->layoutContext().layout();
 
         if (!view->delegatesScrolling())
             view->setScrollPosition(origin);
@@ -1199,7 +1201,7 @@ void Page::invalidateStylesForAllLinks()
     }
 }
 
-void Page::invalidateStylesForLink(LinkHash linkHash)
+void Page::invalidateStylesForLink(SharedStringHash linkHash)
 {
     for (Frame* frame = &m_mainFrame.get(); frame; frame = frame->tree().traverseNext()) {
         if (!frame->document())
@@ -1426,9 +1428,9 @@ void Page::storageBlockingStateChanged()
 void Page::enableLegacyPrivateBrowsing(bool privateBrowsingEnabled)
 {
     // Don't allow changing the legacy private browsing state if we have set a session ID.
-    ASSERT(m_sessionID == SessionID::defaultSessionID() || m_sessionID == SessionID::legacyPrivateSessionID());
+    ASSERT(m_sessionID == PAL::SessionID::defaultSessionID() || m_sessionID == PAL::SessionID::legacyPrivateSessionID());
 
-    setSessionID(privateBrowsingEnabled ? SessionID::legacyPrivateSessionID() : SessionID::defaultSessionID());
+    setSessionID(privateBrowsingEnabled ? PAL::SessionID::legacyPrivateSessionID() : PAL::SessionID::defaultSessionID());
 }
 
 void Page::updateIsPlayingMedia(uint64_t sourceElementID)
@@ -1649,13 +1651,13 @@ void Page::setIsPrerender()
     updateDOMTimerAlignmentInterval();
 }
 
-PageVisibilityState Page::visibilityState() const
+VisibilityState Page::visibilityState() const
 {
     if (isVisible())
-        return PageVisibilityState::Visible;
+        return VisibilityState::Visible;
     if (m_isPrerender)
-        return PageVisibilityState::Prerender;
-    return PageVisibilityState::Hidden;
+        return VisibilityState::Prerender;
+    return VisibilityState::Hidden;
 }
 
 #if ENABLE(RUBBER_BANDING)
@@ -2103,12 +2105,12 @@ void Page::setVisitedLinkStore(Ref<VisitedLinkStore>&& visitedLinkStore)
     invalidateStylesForAllLinks();
 }
 
-SessionID Page::sessionID() const
+PAL::SessionID Page::sessionID() const
 {
     return m_sessionID;
 }
 
-void Page::setSessionID(SessionID sessionID)
+void Page::setSessionID(PAL::SessionID sessionID)
 {
     ASSERT(sessionID.isValid());
 

@@ -46,6 +46,7 @@
 #include "JITExceptions.h"
 #include "JITWorklist.h"
 #include "JSAsyncFunction.h"
+#include "JSAsyncGeneratorFunction.h"
 #include "JSCInlines.h"
 #include "JSCJSValue.h"
 #include "JSGeneratorFunction.h"
@@ -480,13 +481,13 @@ LLINT_SLOW_PATH_DECL(stack_check)
     VM& vm = exec->vm();
     auto throwScope = DECLARE_THROW_SCOPE(vm);
 
-    VMEntryFrame* vmEntryFrame = vm.topVMEntryFrame;
-    CallFrame* callerFrame = exec->callerFrame(vmEntryFrame);
+    EntryFrame* topEntryFrame = vm.topEntryFrame;
+    CallFrame* callerFrame = exec->callerFrame(topEntryFrame);
     if (!callerFrame) {
         callerFrame = exec;
-        vmEntryFrame = vm.topVMEntryFrame;
+        topEntryFrame = vm.topEntryFrame;
     }
-    NativeCallFrameTracerWithRestore tracer(&vm, vmEntryFrame, callerFrame);
+    NativeCallFrameTracerWithRestore tracer(&vm, topEntryFrame, callerFrame);
 
     LLINT_SET_PC_FOR_STUBS();
 
@@ -666,6 +667,24 @@ LLINT_SLOW_PATH_DECL(slow_path_get_by_id)
         && baseValue.isCell()
         && slot.isCacheable()) {
 
+        {
+            StructureID oldStructureID = pc[4].u.structureID;
+            if (oldStructureID) {
+                auto opcode = Interpreter::getOpcodeID(pc[0]);
+                if (opcode == op_get_by_id
+                    || opcode == op_get_by_id_unset
+                    || opcode == op_get_by_id_proto_load) {
+                    Structure* a = vm.heap.structureIDTable().get(oldStructureID);
+                    Structure* b = baseValue.asCell()->structure(vm);
+
+                    if (Structure::shouldConvertToPolyProto(a, b)) {
+                        ASSERT(a->rareData()->sharedPolyProtoWatchpoint().get() == b->rareData()->sharedPolyProtoWatchpoint().get());
+                        a->rareData()->sharedPolyProtoWatchpoint()->invalidate(vm, StringFireDetail("Detected poly proto opportunity."));
+                    }
+                }
+            }
+        }
+
         JSCell* baseCell = baseValue.asCell();
         Structure* structure = baseCell->structure();
         if (slot.isValue() && slot.slotBase() == baseValue) {
@@ -694,7 +713,7 @@ LLINT_SLOW_PATH_DECL(slow_path_get_by_id)
         }
     } else if (!LLINT_ALWAYS_ACCESS_SLOW
         && isJSArray(baseValue)
-        && ident == exec->propertyNames().length) {
+        && ident == vm.propertyNames->length) {
         pc[0].u.opcode = LLInt::getOpcode(op_get_array_length);
         ArrayProfile* arrayProfile = codeBlock->getOrAddArrayProfile(pc - codeBlock->instructions().begin());
         arrayProfile->observeStructure(baseValue.asCell()->structure());
@@ -736,6 +755,22 @@ LLINT_SLOW_PATH_DECL(slow_path_put_by_id)
         && baseValue.isCell()
         && slot.isCacheablePut()) {
 
+
+        {
+            StructureID oldStructureID = pc[4].u.structureID;
+            if (oldStructureID) {
+                Structure* a = vm.heap.structureIDTable().get(oldStructureID);
+                Structure* b = baseValue.asCell()->structure(vm);
+                if (slot.type() == PutPropertySlot::NewProperty)
+                    b = b->previousID();
+
+                if (Structure::shouldConvertToPolyProto(a, b)) {
+                    a->rareData()->sharedPolyProtoWatchpoint()->invalidate(vm, StringFireDetail("Detected poly proto opportunity."));
+                    b->rareData()->sharedPolyProtoWatchpoint()->invalidate(vm, StringFireDetail("Detected poly proto opportunity."));
+                }
+            }
+        }
+
         // Start out by clearing out the old cache.
         pc[4].u.pointer = nullptr; // old structure
         pc[5].u.pointer = nullptr; // offset
@@ -759,16 +794,17 @@ LLINT_SLOW_PATH_DECL(slow_path_put_by_id)
                 if (!structure->isDictionary() && structure->previousID()->outOfLineCapacity() == structure->outOfLineCapacity()) {
                     ASSERT(structure->previousID()->transitionWatchpointSetHasBeenInvalidated());
 
-                    if (normalizePrototypeChain(exec, structure) != InvalidPrototypeChain) {
+                    bool sawPolyProto = false;
+                    auto result = normalizePrototypeChain(exec, baseCell, sawPolyProto);
+                    if (result != InvalidPrototypeChain && !sawPolyProto) {
                         ASSERT(structure->previousID()->isObject());
                         pc[4].u.structureID = structure->previousID()->id();
                         pc[5].u.operand = slot.cachedOffset();
                         pc[6].u.structureID = structure->id();
                         if (!(pc[8].u.putByIdFlags & PutByIdIsDirect)) {
-                            StructureChain* chain = structure->prototypeChain(exec);
+                            StructureChain* chain = structure->prototypeChain(exec, asObject(baseCell));
                             ASSERT(chain);
-                            pc[7].u.structureChain.set(
-                                vm, codeBlock, chain);
+                            pc[7].u.structureChain.set(vm, codeBlock, chain);
                         }
                         pc[8].u.putByIdFlags = static_cast<PutByIdFlags>(
                             pc[8].u.putByIdFlags |
@@ -795,7 +831,7 @@ LLINT_SLOW_PATH_DECL(slow_path_del_by_id)
     CodeBlock* codeBlock = exec->codeBlock();
     JSObject* baseObject = LLINT_OP_C(2).jsValue().toObject(exec);
     LLINT_CHECK_EXCEPTION();
-    bool couldDelete = baseObject->methodTable()->deleteProperty(baseObject, exec, codeBlock->identifier(pc[3].u.operand));
+    bool couldDelete = baseObject->methodTable(vm)->deleteProperty(baseObject, exec, codeBlock->identifier(pc[3].u.operand));
     LLINT_CHECK_EXCEPTION();
     if (!couldDelete && codeBlock->isStrictMode())
         LLINT_THROW(createTypeError(exec, UnableToDeletePropertyError));
@@ -818,8 +854,10 @@ static ALWAYS_INLINE JSValue getByVal(VM& vm, ExecState* exec, JSValue baseValue
     
     if (subscript.isUInt32()) {
         uint32_t i = subscript.asUInt32();
-        if (isJSString(baseValue) && asString(baseValue)->canGetIndex(i))
+        if (isJSString(baseValue) && asString(baseValue)->canGetIndex(i)) {
+            scope.release();
             return asString(baseValue)->getIndex(exec, i);
+        }
         scope.release();
         return baseValue.get(exec, i);
     }
@@ -854,7 +892,7 @@ LLINT_SLOW_PATH_DECL(slow_path_put_by_val)
             if (object->canSetIndexQuickly(i))
                 object->setIndexQuickly(vm, i, value);
             else
-                object->methodTable()->putByIndex(object, exec, i, value, isStrictMode);
+                object->methodTable(vm)->putByIndex(object, exec, i, value, isStrictMode);
             LLINT_END();
         }
         baseValue.putByIndex(exec, i, value, isStrictMode);
@@ -903,7 +941,7 @@ LLINT_SLOW_PATH_DECL(slow_path_put_by_val_direct)
         baseObject->putDirectIndex(exec, index.value(), value, 0, isStrictMode ? PutDirectIndexShouldThrow : PutDirectIndexShouldNotThrow);
     else {
         PutPropertySlot slot(baseObject, isStrictMode);
-        baseObject->putDirect(exec->vm(), property, value, slot);
+        baseObject->putDirect(vm, property, value, slot);
     }
     LLINT_END();
 }
@@ -921,14 +959,15 @@ LLINT_SLOW_PATH_DECL(slow_path_del_by_val)
     
     uint32_t i;
     if (subscript.getUInt32(i))
-        couldDelete = baseObject->methodTable()->deletePropertyByIndex(baseObject, exec, i);
+        couldDelete = baseObject->methodTable(vm)->deletePropertyByIndex(baseObject, exec, i);
     else {
         LLINT_CHECK_EXCEPTION();
         auto property = subscript.toPropertyKey(exec);
         LLINT_CHECK_EXCEPTION();
-        couldDelete = baseObject->methodTable()->deleteProperty(baseObject, exec, property);
+        couldDelete = baseObject->methodTable(vm)->deleteProperty(baseObject, exec, property);
     }
-    
+    LLINT_CHECK_EXCEPTION();
+
     if (!couldDelete && exec->codeBlock()->isStrictMode())
         LLINT_THROW(createTypeError(exec, UnableToDeletePropertyError));
     
@@ -1175,6 +1214,17 @@ LLINT_SLOW_PATH_DECL(slow_path_new_async_func)
     LLINT_RETURN(JSAsyncFunction::create(vm, codeBlock->functionDecl(pc[3].u.operand), scope));
 }
 
+LLINT_SLOW_PATH_DECL(slow_path_new_async_generator_func)
+{
+    LLINT_BEGIN();
+    CodeBlock* codeBlock = exec->codeBlock();
+    JSScope* scope = exec->uncheckedR(pc[2].u.operand).Register::scope();
+#if LLINT_SLOW_PATH_TRACING
+    dataLogF("Creating async generator function!\n");
+#endif
+    LLINT_RETURN(JSAsyncGeneratorFunction::create(vm, codeBlock->functionDecl(pc[3].u.operand), scope));
+}
+    
 LLINT_SLOW_PATH_DECL(slow_path_new_func_exp)
 {
     LLINT_BEGIN();
@@ -1206,6 +1256,17 @@ LLINT_SLOW_PATH_DECL(slow_path_new_async_func_exp)
     FunctionExecutable* executable = codeBlock->functionExpr(pc[3].u.operand);
     
     LLINT_RETURN(JSAsyncFunction::create(vm, executable, scope));
+}
+    
+LLINT_SLOW_PATH_DECL(slow_path_new_async_generator_func_exp)
+{
+    LLINT_BEGIN();
+        
+    CodeBlock* codeBlock = exec->codeBlock();
+    JSScope* scope = exec->uncheckedR(pc[2].u.operand).Register::scope();
+    FunctionExecutable* executable = codeBlock->functionExpr(pc[3].u.operand);
+        
+    LLINT_RETURN(JSAsyncGeneratorFunction::create(vm, executable, scope));
 }
 
 LLINT_SLOW_PATH_DECL(slow_path_set_function_name)
@@ -1308,7 +1369,7 @@ inline SlowPathReturnType setUpCall(ExecState* execCallee, Instruction* pc, Code
 
         CodeBlock** codeBlockSlot = execCallee->addressOfCodeBlock();
         JSObject* error = functionExecutable->prepareForExecution<FunctionExecutable>(vm, callee, scope, kind, *codeBlockSlot);
-        ASSERT(throwScope.exception() == error);
+        EXCEPTION_ASSERT(throwScope.exception() == error);
         if (UNLIKELY(error))
             LLINT_CALL_THROW(exec, error);
         codeBlock = *codeBlockSlot;
@@ -1594,7 +1655,7 @@ LLINT_SLOW_PATH_DECL(slow_path_put_to_scope)
         LLINT_THROW(createUndefinedVariableError(exec, ident));
 
     PutPropertySlot slot(scope, codeBlock->isStrictMode(), PutPropertySlot::UnknownContext, isInitialization(getPutInfo.initializationMode()));
-    scope->methodTable()->put(scope, exec, ident, value, slot);
+    scope->methodTable(vm)->put(scope, exec, ident, value, slot);
     
     CommonSlowPaths::tryCachePutToScopeGlobal(exec, codeBlock, pc, scope, getPutInfo, slot, ident);
 
@@ -1635,6 +1696,20 @@ LLINT_SLOW_PATH_DECL(slow_path_log_shadow_chicken_tail)
 #endif
     vm.shadowChicken().log(vm, exec, ShadowChicken::Packet::tail(exec, thisValue, scope, exec->codeBlock(), callSiteIndex));
     
+    LLINT_END();
+}
+
+LLINT_SLOW_PATH_DECL(slow_path_profile_catch)
+{
+    LLINT_BEGIN();
+
+    exec->codeBlock()->ensureCatchLivenessIsComputedForBytecodeOffset(exec->bytecodeOffset());
+
+    ValueProfileAndOperandBuffer* buffer = static_cast<ValueProfileAndOperandBuffer*>(pc[3].u.pointer);
+    buffer->forEach([&] (ValueProfileAndOperand& profile) {
+        profile.m_profile.m_buckets[0] = JSValue::encode(exec->uncheckedR(profile.m_operand).jsValue());
+    });
+
     LLINT_END();
 }
 

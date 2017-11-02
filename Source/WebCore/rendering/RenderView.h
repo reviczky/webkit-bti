@@ -26,23 +26,18 @@
 #include "Region.h"
 #include "RenderBlockFlow.h"
 #include "RenderWidget.h"
-#include "SelectionSubtreeRoot.h"
+#include "SelectionRangeData.h"
 #include <memory>
 #include <wtf/HashSet.h>
 #include <wtf/ListHashSet.h>
 
-#if ENABLE(SERVICE_CONTROLS)
-#include "SelectionRectGatherer.h"
-#endif
-
 namespace WebCore {
 
-class FlowThreadController;
 class ImageQualityController;
 class RenderLayerCompositor;
 class RenderQuote;
 
-class RenderView final : public RenderBlockFlow, public SelectionSubtreeRoot {
+class RenderView final : public RenderBlockFlow {
 public:
     RenderView(Document&, RenderStyle&&);
     virtual ~RenderView();
@@ -86,14 +81,7 @@ public:
     // Return the renderer whose background style is used to paint the root background.
     RenderElement* rendererForRootBackground() const;
 
-    enum SelectionRepaintMode { RepaintNewXOROld, RepaintNewMinusOld, RepaintNothing };
-    void setSelection(RenderObject* start, std::optional<unsigned> startPos, RenderObject* endObject, std::optional<unsigned> endPos, SelectionRepaintMode = RepaintNewXOROld);
-    void getSelection(RenderObject*& startRenderer, std::optional<unsigned>& startOffset, RenderObject*& endRenderer, std::optional<unsigned>& endOffset) const;
-    void clearSelection();
-    RenderObject* selectionUnsplitStart() const { return m_selectionUnsplitStart; }
-    RenderObject* selectionUnsplitEnd() const { return m_selectionUnsplitEnd; }
-    IntRect selectionBounds(bool clipToVisibleContent = true) const;
-    void repaintSelection() const;
+    SelectionRangeData& selection() { return m_selection; }
 
     bool printing() const;
 
@@ -129,7 +117,7 @@ public:
     }
 #endif
 
-    bool doingFullRepaint() const { return frameView().needsFullRepaint(); }
+    bool doingFullRepaint() const { return frameView().layoutContext().needsFullRepaint(); }
 
     // Subtree push/pop
     void pushLayoutState(RenderObject&);
@@ -187,10 +175,6 @@ public:
 
     // Renderer that paints the root background has background-images which all have background-attachment: fixed.
     bool rootBackgroundIsEntirelyFixed() const;
-    
-    bool hasRenderNamedFlowThreads() const;
-    bool checkTwoPassLayoutForAutoHeightRegions() const;
-    FlowThreadController& flowThreadController();
 
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle) override;
 
@@ -198,9 +182,6 @@ public:
 
     bool hasQuotesNeedingUpdate() const { return m_hasQuotesNeedingUpdate; }
     void setHasQuotesNeedingUpdate(bool b) { m_hasQuotesNeedingUpdate = b; }
-
-    // FIXME: see class RenderTreeInternalMutation below.
-    bool renderTreeIsBeingMutatedInternally() const { return !!m_renderTreeInternalMutationCounter; }
 
     // FIXME: This is a work around because the current implementation of counters
     // requires walking the entire tree repeatedly and most pages don't actually use either
@@ -238,8 +219,6 @@ public:
         bool m_wasAccumulatingRepaintRegion;
     };
 
-    WeakPtr<RenderView> createWeakPtr() { return m_weakFactory.createWeakPtr(); }
-
     void scheduleLazyRepaint(RenderBox&);
     void unscheduleLazyRepaint(RenderBox&);
 
@@ -274,10 +253,9 @@ private:
     bool pushLayoutState(RenderBox& renderer, const LayoutSize& offset, LayoutUnit pageHeight = 0, bool pageHeightChanged = false)
     {
         // We push LayoutState even if layoutState is disabled because it stores layoutDelta too.
-        if (!doingFullRepaint() || m_layoutState->isPaginated() || renderer.flowThreadContainingBlock()
+        if (!doingFullRepaint() || m_layoutState->isPaginated() || renderer.enclosingFragmentedFlow()
             || m_layoutState->lineGrid() || (renderer.style().lineGrid() != RenderStyle::initialLineGrid() && renderer.isRenderBlockFlow())) {
             m_layoutState = std::make_unique<LayoutState>(WTFMove(m_layoutState), &renderer, offset, pageHeight, pageHeightChanged);
-            pushLayoutStateForCurrentFlowThread(renderer);
             return true;
         }
         return false;
@@ -285,19 +263,7 @@ private:
 
     void popLayoutState()
     {
-        popLayoutStateForCurrentFlowThread();
         m_layoutState = WTFMove(m_layoutState->m_next);
-    }
-
-    enum class RenderTreeInternalMutation { On, Off };
-    void setRenderTreeInternalMutation(RenderTreeInternalMutation state)
-    {
-        if (state == RenderTreeInternalMutation::On)
-            ++m_renderTreeInternalMutationCounter;
-        else {
-            ASSERT(m_renderTreeInternalMutationCounter);
-            --m_renderTreeInternalMutationCounter;
-        }
     }
 
     // Suspends the LayoutState optimization. Used under transforms that cannot be represented by
@@ -309,42 +275,26 @@ private:
     void enableLayoutState() { ASSERT(m_layoutStateDisableCount > 0); m_layoutStateDisableCount--; }
 
     void layoutContent(const LayoutState&);
-    void layoutContentInAutoLogicalHeightRegions(const LayoutState&);
-    void layoutContentToComputeOverflowInRegions(const LayoutState&);
 #ifndef NDEBUG
     void checkLayoutState(const LayoutState&);
 #endif
 
-    void pushLayoutStateForCurrentFlowThread(const RenderObject&);
-    void popLayoutStateForCurrentFlowThread();
-
     friend class LayoutStateMaintainer;
     friend class LayoutStateDisabler;
     friend class SubtreeLayoutStateMaintainer;
-    friend class RenderTreeInternalMutationScope;
 
     bool isScrollableOrRubberbandableBox() const override;
 
-    void splitSelectionBetweenSubtrees(const RenderObject* startRenderer, std::optional<unsigned> startPos, const RenderObject* endRenderer, std::optional<unsigned> endPos, SelectionRepaintMode blockRepaintMode);
-    void clearSubtreeSelection(const SelectionSubtreeRoot&, SelectionRepaintMode, OldSelectionData&) const;
-    void updateSelectionForSubtrees(RenderSubtreesMap&, SelectionRepaintMode);
-    void applySubtreeSelection(const SelectionSubtreeRoot&, SelectionRepaintMode, const OldSelectionData&);
-    LayoutRect subtreeSelectionBounds(const SelectionSubtreeRoot&, bool clipToVisibleContent = true) const;
-    void repaintSubtreeSelection(const SelectionSubtreeRoot&) const;
+    void willBeDestroyed() override;
 
 private:
     FrameView& m_frameView;
-
-    WeakPtrFactory<RenderView> m_weakFactory;
-    RenderObject* m_selectionUnsplitStart { nullptr };
-    RenderObject* m_selectionUnsplitEnd { nullptr };
-    std::optional<unsigned> m_selectionUnsplitStartPos;
-    std::optional<unsigned> m_selectionUnsplitEndPos;
 
     // Include this RenderView.
     uint64_t m_rendererCount { 1 };
 
     mutable std::unique_ptr<Region> m_accumulatedRepaintRegion;
+    SelectionRangeData m_selection;
 
     // FIXME: Only used by embedded WebViews inside AppKit NSViews.  Find a way to remove.
     struct LegacyPrinting {
@@ -370,14 +320,11 @@ private:
     std::unique_ptr<LayoutState> m_layoutState;
     unsigned m_layoutStateDisableCount { 0 };
     std::unique_ptr<RenderLayerCompositor> m_compositor;
-    std::unique_ptr<FlowThreadController> m_flowThreadController;
 
     bool m_hasQuotesNeedingUpdate { false };
 
     unsigned m_renderCounterCount { 0 };
-    unsigned m_renderTreeInternalMutationCounter { 0 };
 
-    bool m_selectionWasCaret { false };
     bool m_hasSoftwareFilters { false };
     bool m_usesFirstLineRules { false };
     bool m_usesFirstLetterRules { false };
@@ -389,9 +336,6 @@ private:
     HashSet<RenderElement*> m_visibleInViewportRenderers;
     Vector<RefPtr<RenderWidget>> m_protectedRenderWidgets;
 
-#if ENABLE(SERVICE_CONTROLS)
-    SelectionRectGatherer m_selectionRectGatherer;
-#endif
 #if ENABLE(CSS_SCROLL_SNAP)
     HashSet<const RenderBox*> m_boxesWithScrollSnapPositions;
 #endif
@@ -467,25 +411,6 @@ public:
     ~LayoutStateDisabler()
     {
         m_view.enableLayoutState();
-    }
-
-private:
-    RenderView& m_view;
-};
-
-// FIXME: This is a temporary workaround to mute unintended activities triggered by render tree mutations.
-class RenderTreeInternalMutationScope {
-    WTF_MAKE_NONCOPYABLE(RenderTreeInternalMutationScope);
-public:
-    RenderTreeInternalMutationScope(RenderView& view)
-        : m_view(view)
-    {
-        m_view.setRenderTreeInternalMutation(RenderView::RenderTreeInternalMutation::On);
-    }
-
-    ~RenderTreeInternalMutationScope()
-    {
-        m_view.setRenderTreeInternalMutation(RenderView::RenderTreeInternalMutation::Off);
     }
 
 private:

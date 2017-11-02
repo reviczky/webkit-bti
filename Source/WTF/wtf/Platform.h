@@ -339,6 +339,19 @@
 #define WTF_CPU_ARM_VFP 1
 #endif
 
+/* If CPU(ARM_NEON) is not enabled, we'll conservatively assume only VFP2 or VFPv3D16
+   support is available. Hence, only the first 16 64-bit floating point registers
+   are available. See:
+   NEON registers: http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0473c/CJACABEJ.html
+   VFP2 and VFP3 registers: http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0473c/CIHDIBDG.html
+   NEON to VFP register mapping: http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0473c/CJAIJHFC.html
+*/
+#if CPU(ARM_NEON)
+#define WTF_CPU_ARM_VFP_V3_D32 1
+#else
+#define WTF_CPU_ARM_VFP_V2 1
+#endif
+
 #if defined(__ARM_ARCH_7K__)
 #define WTF_CPU_APPLE_ARMV7K 1
 #endif
@@ -409,11 +422,6 @@
 #define WTF_OS_OPENBSD 1
 #endif
 
-/* OS(SOLARIS) - Solaris */
-#if defined(sun) || defined(__sun)
-#define WTF_OS_SOLARIS 1
-#endif
-
 /* OS(WINDOWS) - Any version of Windows */
 #if defined(WIN32) || defined(_WIN32)
 #define WTF_OS_WINDOWS 1
@@ -430,7 +438,6 @@
     || OS(LINUX)            \
     || OS(NETBSD)           \
     || OS(OPENBSD)          \
-    || OS(SOLARIS)          \
     || defined(unix)        \
     || defined(__unix)      \
     || defined(__unix__)
@@ -544,7 +551,6 @@
 #define USE_CF 1
 #define USE_FOUNDATION 1
 #define USE_NETWORK_CFDATA_ARRAY_CALLBACK 1
-#define ENABLE_USER_MESSAGE_HANDLERS 1
 #define HAVE_OUT_OF_PROCESS_LAYER_HOSTING 1
 #define HAVE_DTRACE 0
 #define USE_FILE_LOCK 1
@@ -609,10 +615,6 @@
 
 #endif /* PLATFORM(IOS) */
 
-#if PLATFORM(WIN) && !USE(WINGDI)
-#define USE_CF 1
-#endif
-
 #if PLATFORM(WIN) && !USE(WINGDI) && !PLATFORM(WIN_CAIRO)
 #define USE_CFURLCONNECTION 1
 #endif
@@ -659,7 +661,7 @@
 #define HAVE_READLINE 1
 #define HAVE_SYS_TIMEB_H 1
 
-#if __has_include(<mach/mach_exc.defs>) && !(PLATFORM(WATCHOS) || PLATFORM(APPLETV))
+#if __has_include(<mach/mach_exc.defs>)
 #define HAVE_MACH_EXCEPTIONS 1
 #endif
 
@@ -676,7 +678,7 @@
 #define HAVE_CFNETWORK_STORAGE_PARTITIONING 1
 #endif
 
-#if OS(DARWIN) || ((OS(FREEBSD) || defined(__GLIBC__)) && (CPU(X86) || CPU(X86_64) || CPU(ARM) || CPU(ARM64) || CPU(MIPS)))
+#if OS(DARWIN) || ((OS(FREEBSD) || defined(__GLIBC__) || defined(__BIONIC__)) && (CPU(X86) || CPU(X86_64) || CPU(ARM) || CPU(ARM64) || CPU(MIPS)))
 #define HAVE_MACHINE_CONTEXT 1
 #endif
 
@@ -709,7 +711,7 @@
 #if (CPU(X86_64) && !defined(__ILP32__) && (OS(UNIX) || OS(WINDOWS))) \
     || (CPU(IA64) && !CPU(IA64_32)) \
     || CPU(ALPHA) \
-    || CPU(ARM64) \
+    || (CPU(ARM64) && !defined(__ILP32__)) \
     || CPU(S390X) \
     || CPU(MIPS64) \
     || CPU(PPC64) \
@@ -722,7 +724,7 @@
 
 /* The JIT is enabled by default on all x86, x86-64, ARM & MIPS platforms except ARMv7k. */
 #if !defined(ENABLE_JIT) \
-    && (CPU(X86) || CPU(X86_64) || CPU(ARM) || CPU(ARM64) || CPU(MIPS)) \
+    && (CPU(X86) || CPU(X86_64) || CPU(ARM) || (CPU(ARM64) && !defined(__ILP32__)) || CPU(MIPS)) \
     && !CPU(APPLE_ARMV7K) \
     && !CPU(ARM64E)
 #define ENABLE_JIT 1
@@ -770,17 +772,20 @@
 
 #if !defined(ENABLE_DFG_JIT) && ENABLE(JIT)
 /* Enable the DFG JIT on X86 and X86_64. */
-#if (CPU(X86) || CPU(X86_64)) && (OS(DARWIN) || OS(LINUX) || OS(FREEBSD) || OS(WINDOWS) || OS(HURD))
+#if (CPU(X86) || CPU(X86_64)) && (OS(DARWIN) || OS(LINUX) || OS(FREEBSD) || OS(HURD) || OS(WINDOWS))
 #define ENABLE_DFG_JIT 1
 #endif
-/* Enable the DFG JIT on ARMv7.  Only tested on iOS and Qt/GTK+ Linux. */
+/* Enable the DFG JIT on ARMv7.  Only tested on iOS and GTK+/WPE Linux. */
 #if (CPU(ARM_THUMB2) || CPU(ARM64)) && (PLATFORM(IOS) || PLATFORM(GTK) || PLATFORM(WPE))
 #define ENABLE_DFG_JIT 1
 #endif
-/* Enable the DFG JIT on ARM and MIPS. */
-#if CPU(ARM_TRADITIONAL) || CPU(MIPS)
+/* Enable the DFG JIT on ARM. */
+#if CPU(ARM_TRADITIONAL)
 #define ENABLE_DFG_JIT 1
 #endif
+/* FIXME: MIPS cannot enable the DFG until it has support for MacroAssembler::probe().
+   https://bugs.webkit.org/show_bug.cgi?id=175447
+*/
 #endif
 
 /* Concurrent JS only works on 64-bit platforms because it requires that
@@ -799,19 +804,43 @@
 #define ENABLE_FAST_TLS_JIT 1
 #endif
 
+#if CPU(X86) || CPU(X86_64) || CPU(ARM_THUMB2) || CPU(ARM64) || CPU(ARM_TRADITIONAL)
+#define ENABLE_MASM_PROBE 1
+#else
+#define ENABLE_MASM_PROBE 0
+#endif
+
+#if !ENABLE(JIT)
+#undef ENABLE_MASM_PROBE
+#define ENABLE_MASM_PROBE 0
+#endif
+
+/* If the baseline jit is not available, then disable upper tiers as well.
+   The MacroAssembler::probe() is also required for supporting the upper tiers. */
+#if !ENABLE(JIT) || !ENABLE(MASM_PROBE)
+#undef ENABLE_DFG_JIT
+#undef ENABLE_FTL_JIT
+#define ENABLE_DFG_JIT 0
+#define ENABLE_FTL_JIT 0
+#endif
+
+/* If the DFG jit is not available, then disable upper tiers as well: */
+#if !ENABLE(DFG_JIT)
+#undef ENABLE_FTL_JIT
+#define ENABLE_FTL_JIT 0
+#endif
+
 /* This controls whether B3 is built. B3 is needed for FTL JIT and WebAssembly */
-#if ENABLE(FTL_JIT) || ENABLE(WEBASSEMBLY)
+#if ENABLE(FTL_JIT)
 #define ENABLE_B3_JIT 1
 #endif
 
-/* If the baseline jit is not available, then disable upper tiers as well: */
-#if !ENABLE(JIT)
-#undef ENABLE_DFG_JIT
-#undef ENABLE_FTL_JIT
-#undef ENABLE_B3_JIT
-#define ENABLE_DFG_JIT 0
-#define ENABLE_FTL_JIT 0
-#define ENABLE_B3_JIT 0
+#if !defined(ENABLE_WEBASSEMBLY)
+#if ENABLE(B3_JIT) && PLATFORM(COCOA)
+#define ENABLE_WEBASSEMBLY 1
+#else
+#define ENABLE_WEBASSEMBLY 0
+#endif
 #endif
 
 /* The SamplingProfiler is the probabilistic and low-overhead profiler used by
@@ -948,14 +977,6 @@
 #endif
 #endif
 
-/* Enable the following if you want to use the MacroAssembler::probe() facility
-   to do JIT debugging. */
-#if (CPU(X86) || CPU(X86_64) || CPU(ARM64) || (CPU(ARM_THUMB2) && PLATFORM(IOS))) && ENABLE(JIT) && OS(DARWIN)
-#define ENABLE_MASM_PROBE 1
-#else
-#define ENABLE_MASM_PROBE 0
-#endif
-
 #ifndef ENABLE_EXCEPTION_SCOPE_VERIFICATION
 #ifdef NDEBUG
 #define ENABLE_EXCEPTION_SCOPE_VERIFICATION 0
@@ -964,7 +985,7 @@
 #endif
 #endif
 
-#if ENABLE(JIT) && HAVE(MACHINE_CONTEXT) && (CPU(X86) || CPU(X86_64) || CPU(ARM64))
+#if ENABLE(DFG_JIT) && HAVE(MACHINE_CONTEXT) && (CPU(X86) || CPU(X86_64) || CPU(ARM64))
 #define ENABLE_SIGNAL_BASED_VM_TRAPS 1
 #endif
 
@@ -1057,21 +1078,6 @@
 #define USE_AVFOUNDATION 1
 #endif
 
-#if PLATFORM(WIN) && !USE(WINGDI)
-#include <wtf/AVFoundationHeaderDetection.h>
-#endif
-
-#if PLATFORM(WIN) && USE(CG) && HAVE(AVCF)
-#define USE_AVFOUNDATION 1
-
-#if HAVE(AVCF_LEGIBLE_OUTPUT)
-#define HAVE_AVFOUNDATION_MEDIA_SELECTION_GROUP 1
-#define HAVE_AVFOUNDATION_LEGIBLE_OUTPUT_SUPPORT 1
-#define HAVE_MEDIA_ACCESSIBILITY_FRAMEWORK 1
-#endif
-
-#endif
-
 #if !defined(ENABLE_TREE_DEBUGGING)
 #if !defined(NDEBUG)
 #define ENABLE_TREE_DEBUGGING 1
@@ -1149,6 +1155,10 @@
 #define USE_INSERTION_UNDO_GROUPING 1
 #endif
 
+#if PLATFORM(MAC)
+#define HAVE_AVSAMPLEBUFFERGENERATOR 1
+#endif
+
 #if PLATFORM(COCOA)
 #define HAVE_TIMINGDATAOPTIONS 1
 #endif
@@ -1169,10 +1179,6 @@
 #undef ENABLE_OPENTYPE_VERTICAL
 #define ENABLE_OPENTYPE_VERTICAL 1
 #define ENABLE_CSS3_TEXT_DECORATION_SKIP_INK 1
-#endif
-
-#if PLATFORM(GTK)
-#define USE_WOFF2 1
 #endif
 
 #if PLATFORM(COCOA)
@@ -1267,7 +1273,7 @@
 #define HAVE_RSA_PSS 1
 #endif
 
-#if !OS(WINDOWS) && !OS(SOLARIS)
+#if !OS(WINDOWS)
 #define HAVE_STACK_BOUNDS_FOR_NEW_THREAD 1
 #endif
 

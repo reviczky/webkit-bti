@@ -31,17 +31,17 @@
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
 #include "Geolocation.h"
-#include "Language.h"
 #include "Page.h"
 #include "PluginData.h"
 #include "ScriptController.h"
 #include "SecurityOrigin.h"
 #include "Settings.h"
+#include <wtf/Language.h>
 #include <wtf/StdLibExtras.h>
 
-using namespace WTF;
 
 namespace WebCore {
+using namespace WTF;
 
 Navigator::Navigator(ScriptExecutionContext& context, Frame& frame)
     : NavigatorBase(context)
@@ -49,9 +49,7 @@ Navigator::Navigator(ScriptExecutionContext& context, Frame& frame)
 {
 }
 
-Navigator::~Navigator()
-{
-}
+Navigator::~Navigator() = default;
 
 // If this function returns true, we need to hide the substring "4." that would otherwise
 // appear in the appVersion string. This is to avoid problems with old versions of a

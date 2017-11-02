@@ -198,7 +198,7 @@ public:
 
 private:
     struct PendingCallback {
-        virtual ~PendingCallback() { }
+        virtual ~PendingCallback() = default;
         virtual void call(XMLDocumentParser* parser) = 0;
     };
 
@@ -452,7 +452,7 @@ static void* openFunc(const char* uri)
         // FIXME: We should restore the original global error handler as well.
 
         if (cachedResourceLoader->frame())
-            cachedResourceLoader->frame()->loader().loadResourceSynchronously(url, AllowStoredCredentials, ClientCredentialPolicy::MayAskClientForCredentials, error, response, data);
+            cachedResourceLoader->frame()->loader().loadResourceSynchronously(url, StoredCredentialsPolicy::Use, ClientCredentialPolicy::MayAskClientForCredentials, error, response, data);
     }
 
     // We have to check the URL again after the load to catch redirects.
@@ -548,8 +548,8 @@ RefPtr<XMLParserContext> XMLParserContext::createMemoryParser(xmlSAXHandlerPtr h
     parser->sax2 = 1;
     parser->instate = XML_PARSER_CONTENT; // We are parsing a CONTENT
     parser->depth = 0;
-    parser->str_xml = xmlDictLookup(parser->dict, BAD_CAST "xml", 3);
-    parser->str_xmlns = xmlDictLookup(parser->dict, BAD_CAST "xmlns", 5);
+    parser->str_xml = xmlDictLookup(parser->dict, reinterpret_cast<xmlChar*>(const_cast<char*>("xml")), 3);
+    parser->str_xmlns = xmlDictLookup(parser->dict, reinterpret_cast<xmlChar*>(const_cast<char*>("xmlns")), 5);
     parser->str_xml_ns = xmlDictLookup(parser->dict, XML_XML_NAMESPACE, 36);
     parser->_private = userData;
 

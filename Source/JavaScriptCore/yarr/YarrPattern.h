@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2013-2014, 2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2009, 2013-2017 Apple Inc. All rights reserved.
  * Copyright (C) 2010 Peter Varga (pvarga@inf.u-szeged.hu), University of Szeged
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,7 +27,9 @@
 #pragma once
 
 #include "RegExpKey.h"
+#include "YarrUnicodeProperties.h"
 #include <wtf/CheckedArithmetic.h>
+#include <wtf/HashMap.h>
 #include <wtf/PrintStream.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
@@ -38,8 +40,8 @@ struct YarrPattern;
 struct PatternDisjunction;
 
 struct CharacterRange {
-    UChar32 begin;
-    UChar32 end;
+    UChar32 begin { 0 };
+    UChar32 end { 0x10ffff };
 
     CharacterRange(UChar32 begin, UChar32 end)
         : begin(begin)
@@ -56,13 +58,26 @@ public:
     // specified matches and ranges)
     CharacterClass()
         : m_table(0)
+        , m_hasNonBMPCharacters(false)
     {
     }
     CharacterClass(const char* table, bool inverted)
         : m_table(table)
         , m_tableInverted(inverted)
+        , m_hasNonBMPCharacters(false)
     {
     }
+    CharacterClass(std::initializer_list<UChar32> matches, std::initializer_list<CharacterRange> ranges, std::initializer_list<UChar32> matchesUnicode, std::initializer_list<CharacterRange> rangesUnicode)
+        : m_matches(matches)
+        , m_ranges(ranges)
+        , m_matchesUnicode(matchesUnicode)
+        , m_rangesUnicode(rangesUnicode)
+        , m_table(0)
+        , m_tableInverted(false)
+        , m_hasNonBMPCharacters(false)
+    {
+    }
+
     Vector<UChar32> m_matches;
     Vector<CharacterRange> m_ranges;
     Vector<UChar32> m_matchesUnicode;
@@ -70,6 +85,7 @@ public:
 
     const char* m_table;
     bool m_tableInverted;
+    bool m_hasNonBMPCharacters;
 };
 
 enum QuantifierType {
@@ -302,6 +318,8 @@ public:
 // (please to be calling newlineCharacterClass() et al on your
 // friendly neighborhood YarrPattern instance to get nicely
 // cached copies).
+
+std::unique_ptr<CharacterClass> anycharCreate();
 std::unique_ptr<CharacterClass> newlineCreate();
 std::unique_ptr<CharacterClass> digitsCreate();
 std::unique_ptr<CharacterClass> spacesCreate();
@@ -334,12 +352,15 @@ struct YarrPattern {
         MissingParentheses,
         ParenthesesUnmatched,
         ParenthesesTypeInvalid,
+        InvalidGroupName,
+        DuplicateGroupName,
         CharacterClassUnmatched,
         CharacterClassOutOfOrder,
         EscapeUnterminated,
         InvalidUnicodeEscape,
         InvalidBackreference,
         InvalidIdentityEscape,
+        InvalidUnicodePropertyExpression,
         TooManyDisjunctions,
         OffsetTooLarge,
         InvalidRegularExpressionFlags,
@@ -360,6 +381,7 @@ struct YarrPattern {
         m_hasCopiedParenSubexpressions = false;
         m_saveInitialStartValue = false;
 
+        anycharCached = 0;
         newlineCached = 0;
         digitsCached = 0;
         spacesCached = 0;
@@ -369,9 +391,11 @@ struct YarrPattern {
         nonspacesCached = 0;
         nonwordcharCached = 0;
         nonwordUnicodeIgnoreCasecharCached = 0;
+        unicodePropertiesCached.clear();
 
         m_disjunctions.clear();
         m_userCharacterClasses.clear();
+        m_captureGroupNames.shrink(0);
     }
 
     bool containsIllegalBackReference()
@@ -384,6 +408,14 @@ struct YarrPattern {
         return m_containsUnsignedLengthPattern;
     }
 
+    CharacterClass* anyCharacterClass()
+    {
+        if (!anycharCached) {
+            m_userCharacterClasses.append(anycharCreate());
+            anycharCached = m_userCharacterClasses.last().get();
+        }
+        return anycharCached;
+    }
     CharacterClass* newlineCharacterClass()
     {
         if (!newlineCached) {
@@ -456,6 +488,21 @@ struct YarrPattern {
         }
         return nonwordUnicodeIgnoreCasecharCached;
     }
+    CharacterClass* unicodeCharacterClassFor(BuiltInCharacterClassID unicodeClassID)
+    {
+        ASSERT(unicodeClassID >= BuiltInCharacterClassID::BaseUnicodePropertyID);
+
+        unsigned classID = static_cast<unsigned>(unicodeClassID);
+
+        if (unicodePropertiesCached.find(classID) == unicodePropertiesCached.end()) {
+            m_userCharacterClasses.append(createUnicodeCharacterClassFor(unicodeClassID));
+            CharacterClass* result = m_userCharacterClasses.last().get();
+            unicodePropertiesCached.add(classID, result);
+            return result;
+        }
+
+        return unicodePropertiesCached.get(classID);
+    }
 
     void dumpPattern(const String& pattern);
     void dumpPattern(PrintStream& out, const String& pattern);
@@ -465,6 +512,7 @@ struct YarrPattern {
     bool multiline() const { return m_flags & FlagMultiline; }
     bool sticky() const { return m_flags & FlagSticky; }
     bool unicode() const { return m_flags & FlagUnicode; }
+    bool dotAll() const { return m_flags & FlagDotAll; }
 
     bool m_containsBackreferences : 1;
     bool m_containsBOL : 1;
@@ -478,10 +526,13 @@ struct YarrPattern {
     PatternDisjunction* m_body;
     Vector<std::unique_ptr<PatternDisjunction>, 4> m_disjunctions;
     Vector<std::unique_ptr<CharacterClass>> m_userCharacterClasses;
+    Vector<String> m_captureGroupNames;
+    HashMap<String, unsigned> m_namedGroupToParenIndex;
 
 private:
     const char* compile(const String& patternString, void* stackLimit);
 
+    CharacterClass* anycharCached;
     CharacterClass* newlineCached;
     CharacterClass* digitsCached;
     CharacterClass* spacesCached;
@@ -491,6 +542,55 @@ private:
     CharacterClass* nonspacesCached;
     CharacterClass* nonwordcharCached;
     CharacterClass* nonwordUnicodeIgnoreCasecharCached;
+    HashMap<unsigned, CharacterClass*> unicodePropertiesCached;
 };
+
+    struct BackTrackInfoPatternCharacter {
+        uintptr_t begin; // Only needed for unicode patterns
+        uintptr_t matchAmount;
+
+        static unsigned beginIndex() { return offsetof(BackTrackInfoPatternCharacter, begin) / sizeof(uintptr_t); }
+        static unsigned matchAmountIndex() { return offsetof(BackTrackInfoPatternCharacter, matchAmount) / sizeof(uintptr_t); }
+    };
+
+    struct BackTrackInfoCharacterClass {
+        uintptr_t begin; // Only needed for unicode patterns
+        uintptr_t matchAmount;
+
+        static unsigned beginIndex() { return offsetof(BackTrackInfoCharacterClass, begin) / sizeof(uintptr_t); }
+        static unsigned matchAmountIndex() { return offsetof(BackTrackInfoCharacterClass, matchAmount) / sizeof(uintptr_t); }
+    };
+
+    struct BackTrackInfoBackReference {
+        uintptr_t begin; // Not really needed for greedy quantifiers.
+        uintptr_t matchAmount; // Not really needed for fixed quantifiers.
+
+        unsigned beginIndex() { return offsetof(BackTrackInfoBackReference, begin) / sizeof(uintptr_t); }
+        unsigned matchAmountIndex() { return offsetof(BackTrackInfoBackReference, matchAmount) / sizeof(uintptr_t); }
+    };
+
+    struct BackTrackInfoAlternative {
+        uintptr_t offset;
+
+        static unsigned offsetIndex() { return offsetof(BackTrackInfoAlternative, offset) / sizeof(uintptr_t); }
+    };
+
+    struct BackTrackInfoParentheticalAssertion {
+        uintptr_t begin;
+
+        static unsigned beginIndex() { return offsetof(BackTrackInfoParentheticalAssertion, begin) / sizeof(uintptr_t); }
+    };
+
+    struct BackTrackInfoParenthesesOnce {
+        uintptr_t begin;
+
+        static unsigned beginIndex() { return offsetof(BackTrackInfoParenthesesOnce, begin) / sizeof(uintptr_t); }
+    };
+
+    struct BackTrackInfoParenthesesTerminal {
+        uintptr_t begin;
+
+        static unsigned beginIndex() { return offsetof(BackTrackInfoParenthesesTerminal, begin) / sizeof(uintptr_t); }
+    };
 
 } } // namespace JSC::Yarr

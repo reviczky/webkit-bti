@@ -159,6 +159,7 @@ public:
 
     void inheritFrom(const RenderStyle& inheritParent);
     void copyNonInheritedFrom(const RenderStyle&);
+    void copyContentFrom(const RenderStyle&);
 
     ContentPosition resolvedJustifyContentPosition(const StyleContentAlignmentData& normalValueBehavior) const;
     ContentDistributionType resolvedJustifyContentDistribution(const StyleContentAlignmentData& normalValueBehavior) const;
@@ -647,12 +648,6 @@ public:
 
     // End CSS3 Getters
 
-    bool hasFlowInto() const { return !m_rareNonInheritedData->flowThread.isNull(); }
-    const AtomicString& flowThread() const { return m_rareNonInheritedData->flowThread; }
-    bool hasFlowFrom() const { return !m_rareNonInheritedData->regionThread.isNull(); }
-    const AtomicString& regionThread() const { return m_rareNonInheritedData->regionThread; }
-    RegionFragment regionFragment() const { return static_cast<RegionFragment>(m_rareNonInheritedData->regionFragment); }
-
     const AtomicString& lineGrid() const { return m_rareInheritedData->lineGrid; }
     LineSnap lineSnap() const { return static_cast<LineSnap>(m_rareInheritedData->lineSnap); }
     LineAlign lineAlign() const { return static_cast<LineAlign>(m_rareInheritedData->lineAlign); }
@@ -1038,6 +1033,7 @@ public:
     void setTextStrokeColor(const Color& c) { SET_VAR(m_rareInheritedData, textStrokeColor, c); }
     void setTextStrokeWidth(float w) { SET_VAR(m_rareInheritedData, textStrokeWidth, w); }
     void setTextFillColor(const Color& c) { SET_VAR(m_rareInheritedData, textFillColor, c); }
+    void setCaretColor(const Color& c) { SET_VAR(m_rareInheritedData, caretColor, c); }
     void setOpacity(float f) { float v = clampTo<float>(f, 0, 1); SET_VAR(m_rareNonInheritedData, opacity, v); }
     void setAppearance(ControlPart a) { SET_VAR(m_rareNonInheritedData, appearance, a); }
     // For valid values of box-align see http://www.w3.org/TR/2009/WD-css3-flexbox-20090723/#alignment
@@ -1180,10 +1176,6 @@ public:
     void setLineGrid(const AtomicString& lineGrid) { SET_VAR(m_rareInheritedData, lineGrid, lineGrid); }
     void setLineSnap(LineSnap lineSnap) { SET_VAR(m_rareInheritedData, lineSnap, lineSnap); }
     void setLineAlign(LineAlign lineAlign) { SET_VAR(m_rareInheritedData, lineAlign, lineAlign); }
-
-    void setFlowThread(const AtomicString& flowThread) { SET_VAR(m_rareNonInheritedData, flowThread, flowThread); }
-    void setRegionThread(const AtomicString& regionThread) { SET_VAR(m_rareNonInheritedData, regionThread, regionThread); }
-    void setRegionFragment(RegionFragment regionFragment) { SET_VAR(m_rareNonInheritedData, regionFragment, regionFragment); }
 
     void setPointerEvents(EPointerEvents p) { m_inheritedFlags.pointerEvents = p; }
 
@@ -1645,10 +1637,6 @@ public:
     static LineSnap initialLineSnap() { return LineSnapNone; }
     static LineAlign initialLineAlign() { return LineAlignNone; }
 
-    static const AtomicString& initialFlowThread() { return nullAtom(); }
-    static const AtomicString& initialRegionThread() { return nullAtom(); }
-    static RegionFragment initialRegionFragment() { return AutoRegionFragment; }
-
     static IntSize initialInitialLetter() { return IntSize(); }
     static LineClampValue initialLineClamp() { return LineClampValue(); }
     static ETextSecurity initialTextSecurity() { return TSNONE; }
@@ -1697,6 +1685,7 @@ public:
     void setVisitedLinkTextEmphasisColor(const Color& v) { SET_VAR(m_rareInheritedData, visitedLinkTextEmphasisColor, v); }
     void setVisitedLinkTextFillColor(const Color& v) { SET_VAR(m_rareInheritedData, visitedLinkTextFillColor, v); }
     void setVisitedLinkTextStrokeColor(const Color& v) { SET_VAR(m_rareInheritedData, visitedLinkTextStrokeColor, v); }
+    void setVisitedLinkCaretColor(const Color& v) { SET_VAR(m_rareInheritedData, visitedLinkCaretColor, v); }
 
     void inheritUnicodeBidiFrom(const RenderStyle* parent) { m_nonInheritedFlags.unicodeBidi = parent->m_nonInheritedFlags.unicodeBidi; }
     void getShadowExtent(const ShadowData*, LayoutUnit& top, LayoutUnit& right, LayoutUnit& bottom, LayoutUnit& left) const;
@@ -1717,6 +1706,7 @@ public:
     const Color& textEmphasisColor() const { return m_rareInheritedData->textEmphasisColor; }
     const Color& textFillColor() const { return m_rareInheritedData->textFillColor; }
     const Color& textStrokeColor() const { return m_rareInheritedData->textStrokeColor; }
+    const Color& caretColor() const { return m_rareInheritedData->caretColor; }
     const Color& visitedLinkColor() const;
     const Color& visitedLinkBackgroundColor() const { return m_rareNonInheritedData->visitedLinkBackgroundColor; }
     const Color& visitedLinkBorderLeftColor() const { return m_rareNonInheritedData->visitedLinkBorderLeftColor; }
@@ -1730,6 +1720,7 @@ public:
     const Color& visitedLinkTextEmphasisColor() const { return m_rareInheritedData->visitedLinkTextEmphasisColor; }
     const Color& visitedLinkTextFillColor() const { return m_rareInheritedData->visitedLinkTextFillColor; }
     const Color& visitedLinkTextStrokeColor() const { return m_rareInheritedData->visitedLinkTextStrokeColor; }
+    const Color& visitedLinkCaretColor() const { return m_rareInheritedData->visitedLinkCaretColor; }
 
     const Color& stopColor() const { return svgStyle().stopColor(); }
     const Color& floodColor() const { return svgStyle().floodColor(); }
@@ -2246,7 +2237,7 @@ inline void RenderStyle::setBoxReflect(RefPtr<StyleReflection>&& reflect)
 
 inline bool pseudoElementRendererIsNeeded(const RenderStyle* style)
 {
-    return style && style->display() != NONE && (style->contentData() || style->hasFlowFrom());
+    return style && style->display() != NONE && style->contentData();
 }
 
 } // namespace WebCore

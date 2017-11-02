@@ -29,9 +29,9 @@
 #include "Document.h"
 #include "InstrumentingAgents.h"
 
-using namespace Inspector;
 
 namespace WebCore {
+using namespace Inspector;
 
 InspectorWorkerAgent::InspectorWorkerAgent(PageAgentContext& context)
     : InspectorAgentBase(ASCIILiteral("Worker"), context)
@@ -145,9 +145,7 @@ void InspectorWorkerAgent::connectToAllWorkerInspectorProxiesForPage()
 
 void InspectorWorkerAgent::disconnectFromAllWorkerInspectorProxies()
 {
-    Vector<WorkerInspectorProxy*> proxies;
-    copyValuesToVector(m_connectedProxies, proxies);
-    for (auto* proxy : proxies)
+    for (auto* proxy : copyToVector(m_connectedProxies.values()))
         proxy->disconnectFromWorkerInspectorController();
 
     m_connectedProxies.clear();

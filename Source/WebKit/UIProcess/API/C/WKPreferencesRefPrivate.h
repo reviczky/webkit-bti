@@ -207,6 +207,10 @@ WK_EXPORT bool WKPreferencesGetInlineMediaPlaybackRequiresPlaysInlineAttribute(W
 WK_EXPORT void WKPreferencesSetBeaconAPIEnabled(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetBeaconAPIEnabled(WKPreferencesRef);
 
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetDirectoryUploadEnabled(WKPreferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetDirectoryUploadEnabled(WKPreferencesRef);
+
 // Defaults to false on iOS, true elsewhere.
 WK_EXPORT void WKPreferencesSetMediaControlsScaleWithPageZoom(WKPreferencesRef preferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetMediaControlsScaleWithPageZoom(WKPreferencesRef preferencesRef);
@@ -437,6 +441,10 @@ WK_EXPORT bool WKPreferencesGetEnumeratingAllNetworkInterfacesEnabled(WKPreferen
 WK_EXPORT void WKPreferencesSetMediaCaptureRequiresSecureConnection(WKPreferencesRef, bool);
 WK_EXPORT bool WKPreferencesGetMediaCaptureRequiresSecureConnection(WKPreferencesRef);
 
+// Defaults to 1 minute on iOS, 10 minutes elsewhere
+WK_EXPORT void WKPreferencesSetInactiveMediaCaptureSteamRepromptIntervalInMinutes(WKPreferencesRef, double);
+WK_EXPORT double WKPreferencesGetInactiveMediaCaptureSteamRepromptIntervalInMinutes(WKPreferencesRef);
+
 // Defaults to false
 WK_EXPORT void WKPreferencesSetFetchAPIEnabled(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetFetchAPIEnabled(WKPreferencesRef);
@@ -453,6 +461,10 @@ WK_EXPORT bool WKPreferencesGetSelectionPaintingWithoutSelectionGapsEnabled(WKPr
 WK_EXPORT void WKPreferencesSetAllowsPictureInPictureMediaPlayback(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetAllowsPictureInPictureMediaPlayback(WKPreferencesRef);
 
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetAttachmentElementEnabled(WKPreferencesRef preferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetAttachmentElementEnabled(WKPreferencesRef preferencesRef);
+
 // Defaults to false
 WK_EXPORT void WKPreferencesSetIntersectionObserverEnabled(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetIntersectionObserverEnabled(WKPreferencesRef);
@@ -460,6 +472,14 @@ WK_EXPORT bool WKPreferencesGetIntersectionObserverEnabled(WKPreferencesRef);
 // Defaults to false
 WK_EXPORT void WKPreferencesSetDisplayContentsEnabled(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetDisplayContentsEnabled(WKPreferencesRef);
+    
+// Defaults to false
+WK_EXPORT void WKPreferencesSetDataTransferItemsEnabled(WKPreferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetDataTransferItemsEnabled(WKPreferencesRef);
+
+// Defaults to false
+WK_EXPORT void WKPreferencesSetCustomPasteboardDataEnabled(WKPreferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetCustomPasteboardDataEnabled(WKPreferencesRef);
 
 // Defaults to false
 WK_EXPORT void WKPreferencesSetUserTimingEnabled(WKPreferencesRef, bool flag);
@@ -513,6 +533,10 @@ WK_EXPORT bool WKPreferencesGetIsSecureContextAttributeEnabled(WKPreferencesRef)
 WK_EXPORT void WKPreferencesSetInspectorAdditionsEnabled(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetInspectorAdditionsEnabled(WKPreferencesRef);
 
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetStorageAccessAPIEnabled(WKPreferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetStorageAccessAPIEnabled(WKPreferencesRef);
+    
 #ifdef __cplusplus
 }
 #endif

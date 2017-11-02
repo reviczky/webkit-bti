@@ -49,12 +49,14 @@ bool doesGC(Graph& graph, Node* node)
     case Int52Constant:
     case LazyJSConstant:
     case Identity:
+    case IdentityWithProfile:
     case GetCallee:
     case GetArgumentCountIncludingThis:
     case GetRestLength:
     case GetLocal:
     case SetLocal:
     case MovHint:
+    case InitializeEntrypointArguments:
     case ZombieHint:
     case ExitOK:
     case Phantom:
@@ -113,6 +115,8 @@ bool doesGC(Graph& graph, Node* node)
     case DeleteById:
     case DeleteByVal:
     case CheckStructure:
+    case CheckStructureOrEmpty:
+    case CheckStructureImmediate:
     case GetExecutable:
     case GetButterfly:
     case GetButterflyWithoutCaging:
@@ -121,6 +125,7 @@ bool doesGC(Graph& graph, Node* node)
     case GetScope:
     case SkipScope:
     case GetGlobalObject:
+    case GetGlobalThis:
     case GetClosureVar:
     case PutClosureVar:
     case GetRegExpObjectLastIndex:
@@ -138,6 +143,8 @@ bool doesGC(Graph& graph, Node* node)
     case CompareLessEq:
     case CompareGreater:
     case CompareGreaterEq:
+    case CompareBelow:
+    case CompareBelowEq:
     case CompareEq:
     case CompareStrictEq:
     case CompareEqPtr:
@@ -177,11 +184,13 @@ bool doesGC(Graph& graph, Node* node)
     case ToString:
     case CallStringConstructor:
     case NumberToStringWithRadix:
+    case NumberToStringWithValidRadixConstant:
     case In:
     case HasOwnProperty:
     case Jump:
     case Branch:
     case Switch:
+    case EntrySwitch:
     case Return:
     case TailCall:
     case DirectTailCall:
@@ -193,9 +202,13 @@ bool doesGC(Graph& graph, Node* node)
     case StringFromCharCode:
     case MapHash:
     case GetMapBucket:
-    case LoadFromJSMapBucket:
-    case IsNonEmptyMapBucket:
+    case GetMapBucketHead:
+    case GetMapBucketNext:
+    case LoadKeyFromMapBucket:
+    case LoadValueFromMapBucket:
+    case WeakMapGet:
     case Unreachable:
+    case ExtractCatchLocal:
     case ExtractOSREntryLocal:
     case CheckTierUpInLoop:
     case CheckTierUpAtReturn:
@@ -225,6 +238,7 @@ bool doesGC(Graph& graph, Node* node)
     case StringCharAt:
     case StringCharCodeAt:
     case GetTypedArrayByteOffset:
+    case GetPrototypeOf:
     case PutByValDirect:
     case PutByVal:
     case PutByValAlias:
@@ -245,6 +259,7 @@ bool doesGC(Graph& graph, Node* node)
     case PhantomNewFunction:
     case PhantomNewGeneratorFunction:
     case PhantomNewAsyncFunction:
+    case PhantomNewAsyncGeneratorFunction:
     case PhantomCreateActivation:
     case PhantomDirectArguments:
     case PhantomCreateRest:
@@ -255,7 +270,6 @@ bool doesGC(Graph& graph, Node* node)
     case GetMyArgumentByValOutOfBounds:
     case ForwardVarargs:
     case PutHint:
-    case CheckStructureImmediate:
     case PutStack:
     case KillStack:
     case GetStack:
@@ -281,6 +295,7 @@ bool doesGC(Graph& graph, Node* node)
     case AtomicsIsLockFree:
         return false;
 
+    case PushWithScope:
     case CreateActivation:
     case CreateDirectArguments:
     case CreateScopedArguments:
@@ -303,6 +318,7 @@ bool doesGC(Graph& graph, Node* node)
     case MakeRope:
     case NewFunction:
     case NewGeneratorFunction:
+    case NewAsyncGeneratorFunction:
     case NewAsyncFunction:
     case NewTypedArray:
     case ThrowStaticError:

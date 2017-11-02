@@ -50,6 +50,7 @@
 #include "WebUserContentControllerProxy.h"
 #include "WebsiteData.h"
 #include <WebCore/DiagnosticLoggingKeys.h>
+#include <WebCore/PublicSuffix.h>
 #include <WebCore/SuddenTermination.h>
 #include <WebCore/URL.h>
 #include <stdio.h>
@@ -76,7 +77,7 @@ using namespace WebCore;
 
 namespace WebKit {
 
-static uint64_t generatePageID()
+uint64_t WebProcessProxy::generatePageID()
 {
     static uint64_t uniquePageID;
     return ++uniquePageID;
@@ -181,18 +182,15 @@ void WebProcessProxy::shutDown()
     m_backgroundResponsivenessTimer.invalidate();
     m_tokenForHoldingLockedFiles = nullptr;
 
-    Vector<RefPtr<WebFrameProxy>> frames;
-    copyValuesToVector(m_frameMap, frames);
-
-    for (size_t i = 0, size = frames.size(); i < size; ++i)
-        frames[i]->webProcessWillShutDown();
+    for (auto& frame : copyToVector(m_frameMap.values()))
+        frame->webProcessWillShutDown();
     m_frameMap.clear();
 
-    for (VisitedLinkStore* visitedLinkStore : m_visitedLinkStores)
+    for (auto* visitedLinkStore : m_visitedLinkStores)
         visitedLinkStore->removeProcess(*this);
     m_visitedLinkStores.clear();
 
-    for (WebUserContentControllerProxy* webUserContentControllerProxy : m_webUserContentControllerProxies)
+    for (auto* webUserContentControllerProxy : m_webUserContentControllerProxies)
         webUserContentControllerProxy->removeProcess(*this);
     m_webUserContentControllerProxies.clear();
 
@@ -247,7 +245,7 @@ void WebProcessProxy::deleteWebsiteDataForTopPrivatelyControlledDomainsInAllPers
     
     RefPtr<CallbackAggregator> callbackAggregator = adoptRef(new CallbackAggregator(WTFMove(completionHandler)));
 
-    HashSet<WebCore::SessionID> visitedSessionIDs;
+    HashSet<PAL::SessionID> visitedSessionIDs;
     for (auto& page : globalPageMap()) {
         auto& dataStore = page.value->websiteDataStore();
         if (!dataStore.isPersistent() || visitedSessionIDs.contains(dataStore.sessionID()))
@@ -309,7 +307,7 @@ void WebProcessProxy::topPrivatelyControlledDomainsWithWebsiteData(OptionSet<Web
     
     RefPtr<CallbackAggregator> callbackAggregator = adoptRef(new CallbackAggregator(WTFMove(completionHandler)));
     
-    HashSet<WebCore::SessionID> visitedSessionIDs;
+    HashSet<PAL::SessionID> visitedSessionIDs;
     for (auto& page : globalPageMap()) {
         auto& dataStore = page.value->websiteDataStore();
         if (!dataStore.isPersistent() || visitedSessionIDs.contains(dataStore.sessionID()))
@@ -424,13 +422,13 @@ WebBackForwardListItem* WebProcessProxy::webBackForwardItem(uint64_t itemID) con
     return m_backForwardListItemMap.get(itemID);
 }
 
-void WebProcessProxy::registerNewWebBackForwardListItem(WebBackForwardListItem* item)
+void WebProcessProxy::registerNewWebBackForwardListItem(WebBackForwardListItem& item)
 {
     // This item was just created by the UIProcess and is being added to the map for the first time
     // so we should not already have an item for this ID.
-    ASSERT(!m_backForwardListItemMap.contains(item->itemID()));
+    ASSERT(!m_backForwardListItemMap.contains(item.itemID()));
 
-    m_backForwardListItemMap.set(item->itemID(), item);
+    m_backForwardListItemMap.set(item.itemID(), &item);
 }
 
 void WebProcessProxy::removeBackForwardItem(uint64_t itemID)
@@ -625,13 +623,21 @@ void WebProcessProxy::didClose(IPC::Connection&)
 
     webConnection()->didClose();
 
-    Vector<RefPtr<WebPageProxy>> pages;
-    copyValuesToVector(m_pageMap, pages);
+    auto pages = copyToVector(m_pageMap.values());
 
     shutDown();
 
-    for (size_t i = 0, size = pages.size(); i < size; ++i)
-        pages[i]->processDidTerminate(ProcessTerminationReason::Crash);
+#if ENABLE(PUBLIC_SUFFIX_LIST)
+    if (pages.size() == 1) {
+        auto& page = *pages[0];
+        String domain = topPrivatelyControlledDomain(WebCore::URL(WebCore::ParsedURLString, page.currentURL()).host());
+        if (!domain.isEmpty())
+            page.logDiagnosticMessageWithEnhancedPrivacy(WebCore::DiagnosticLoggingKeys::domainCausingCrashKey(), domain, WebCore::ShouldSample::No);
+    }
+#endif
+
+    for (auto& page : pages)
+        page->processDidTerminate(ProcessTerminationReason::Crash);
 
 }
 
@@ -653,12 +659,9 @@ void WebProcessProxy::didBecomeUnresponsive()
 {
     m_isResponsive = NoOrMaybe::No;
 
-    Vector<RefPtr<WebPageProxy>> pages;
-    copyValuesToVector(m_pageMap, pages);
-
     auto isResponsiveCallbacks = WTFMove(m_isResponsiveCallbacks);
 
-    for (auto& page : pages)
+    for (auto& page : copyToVector(m_pageMap.values()))
         page->processDidBecomeUnresponsive();
 
     bool isWebProcessResponsive = false;
@@ -670,25 +673,19 @@ void WebProcessProxy::didBecomeResponsive()
 {
     m_isResponsive = NoOrMaybe::Maybe;
 
-    Vector<RefPtr<WebPageProxy>> pages;
-    copyValuesToVector(m_pageMap, pages);
-    for (auto& page : pages)
+    for (auto& page : copyToVector(m_pageMap.values()))
         page->processDidBecomeResponsive();
 }
 
 void WebProcessProxy::willChangeIsResponsive()
 {
-    Vector<RefPtr<WebPageProxy>> pages;
-    copyValuesToVector(m_pageMap, pages);
-    for (auto& page : pages)
+    for (auto& page : copyToVector(m_pageMap.values()))
         page->willChangeProcessIsResponsive();
 }
 
 void WebProcessProxy::didChangeIsResponsive()
 {
-    Vector<RefPtr<WebPageProxy>> pages;
-    copyValuesToVector(m_pageMap, pages);
-    for (auto& page : pages)
+    for (auto& page : copyToVector(m_pageMap.values()))
         page->didChangeProcessIsResponsive();
 }
 
@@ -748,19 +745,17 @@ void WebProcessProxy::didDestroyFrame(uint64_t frameID)
 
 void WebProcessProxy::disconnectFramesFromPage(WebPageProxy* page)
 {
-    Vector<RefPtr<WebFrameProxy>> frames;
-    copyValuesToVector(m_frameMap, frames);
-    for (size_t i = 0, size = frames.size(); i < size; ++i) {
-        if (frames[i]->page() == page)
-            frames[i]->webProcessWillShutDown();
+    for (auto& frame : copyToVector(m_frameMap.values())) {
+        if (frame->page() == page)
+            frame->webProcessWillShutDown();
     }
 }
 
 size_t WebProcessProxy::frameCountInPage(WebPageProxy* page) const
 {
     size_t result = 0;
-    for (HashMap<uint64_t, RefPtr<WebFrameProxy>>::const_iterator iter = m_frameMap.begin(); iter != m_frameMap.end(); ++iter) {
-        if (iter->value->page() == page)
+    for (auto& frame : m_frameMap.values()) {
+        if (frame->page() == page)
             ++result;
     }
     return result;
@@ -834,7 +829,7 @@ void WebProcessProxy::windowServerConnectionStateChanged()
         page->activityStateDidChange(ActivityState::IsVisuallyIdle);
 }
 
-void WebProcessProxy::fetchWebsiteData(SessionID sessionID, OptionSet<WebsiteDataType> dataTypes, Function<void(WebsiteData)>&& completionHandler)
+void WebProcessProxy::fetchWebsiteData(PAL::SessionID sessionID, OptionSet<WebsiteDataType> dataTypes, Function<void(WebsiteData)>&& completionHandler)
 {
     ASSERT(canSendMessage());
 
@@ -852,7 +847,7 @@ void WebProcessProxy::fetchWebsiteData(SessionID sessionID, OptionSet<WebsiteDat
     });
 }
 
-void WebProcessProxy::deleteWebsiteData(SessionID sessionID, OptionSet<WebsiteDataType> dataTypes, std::chrono::system_clock::time_point modifiedSince, Function<void()>&& completionHandler)
+void WebProcessProxy::deleteWebsiteData(PAL::SessionID sessionID, OptionSet<WebsiteDataType> dataTypes, std::chrono::system_clock::time_point modifiedSince, Function<void()>&& completionHandler)
 {
     ASSERT(canSendMessage());
 
@@ -865,7 +860,7 @@ void WebProcessProxy::deleteWebsiteData(SessionID sessionID, OptionSet<WebsiteDa
     });
 }
 
-void WebProcessProxy::deleteWebsiteDataForOrigins(SessionID sessionID, OptionSet<WebsiteDataType> dataTypes, const Vector<WebCore::SecurityOriginData>& origins, Function<void()>&& completionHandler)
+void WebProcessProxy::deleteWebsiteDataForOrigins(PAL::SessionID sessionID, OptionSet<WebsiteDataType> dataTypes, const Vector<WebCore::SecurityOriginData>& origins, Function<void()>&& completionHandler)
 {
     ASSERT(canSendMessage());
 
@@ -888,13 +883,12 @@ void WebProcessProxy::requestTermination(ProcessTerminationReason reason)
     if (webConnection())
         webConnection()->didClose();
 
-    Vector<RefPtr<WebPageProxy>> pages;
-    copyValuesToVector(m_pageMap, pages);
+    auto pages = copyToVector(m_pageMap.values());
 
     shutDown();
 
-    for (size_t i = 0, size = pages.size(); i < size; ++i)
-        pages[i]->processDidTerminate(reason);
+    for (auto& page : pages)
+        page->processDidTerminate(reason);
 }
 
 void WebProcessProxy::stopResponsivenessTimer()
@@ -1230,6 +1224,13 @@ const HashSet<String>& WebProcessProxy::platformPathsWithAssumedReadAccess()
 {
     static NeverDestroyed<HashSet<String>> platformPathsWithAssumedReadAccess;
     return platformPathsWithAssumedReadAccess;
+}
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+void WebProcessProxy::didGetWorkerContextConnection(const IPC::Attachment& connection)
+{
+    m_processPool->didGetWorkerContextProcessConnection(connection);
 }
 #endif
 

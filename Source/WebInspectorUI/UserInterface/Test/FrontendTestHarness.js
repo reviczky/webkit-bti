@@ -120,7 +120,7 @@ FrontendTestHarness = class FrontendTestHarness extends TestHarness
             this.completeTest();
     }
 
-    reloadPage(options={})
+    reloadPage(options = {})
     {
         console.assert(!this._testPageIsReloading);
         console.assert(!this._testPageReloadedOnce);
@@ -128,16 +128,56 @@ FrontendTestHarness = class FrontendTestHarness extends TestHarness
         this._testPageIsReloading = true;
 
         let {ignoreCache, revalidateAllResources} = options;
-        let shouldIgnoreCache = !!ignoreCache;
+        ignoreCache = !!ignoreCache;
         revalidateAllResources = !!revalidateAllResources;
 
-        return PageAgent.reload.invoke({shouldIgnoreCache, revalidateAllResources})
+        return PageAgent.reload.invoke({ignoreCache, revalidateAllResources})
             .then(() => {
                 this._shouldResendResults = true;
                 this._testPageReloadedOnce = true;
 
                 return Promise.resolve(null);
             });
+    }
+
+    redirectRequestAnimationFrame()
+    {
+        console.assert(!this._originalRequestAnimationFrame);
+        if (this._originalRequestAnimationFrame)
+            return;
+
+        this._originalRequestAnimationFrame = window.requestAnimationFrame;
+        this._requestAnimationFrameCallbacks = new Map;
+        this._nextRequestIdentifier = 1;
+
+        window.requestAnimationFrame = (callback) => {
+            let requestIdentifier = this._nextRequestIdentifier++;
+            this._requestAnimationFrameCallbacks.set(requestIdentifier, callback);
+            if (this._requestAnimationFrameTimer)
+                return requestIdentifier;
+
+            let dispatchCallbacks = () => {
+                let callbacks = this._requestAnimationFrameCallbacks;
+                this._requestAnimationFrameCallbacks = new Map;
+                this._requestAnimationFrameTimer = undefined;
+                let timestamp = window.performance.now();
+                for (let callback of callbacks.values())
+                    callback(timestamp);
+            };
+
+            this._requestAnimationFrameTimer = setTimeout(dispatchCallbacks, 0);
+            return requestIdentifier;
+        };
+
+        window.cancelAnimationFrame = (requestIdentifier) => {
+            if (!this._requestAnimationFrameCallbacks.delete(requestIdentifier))
+                return;
+
+            if (!this._requestAnimationFrameCallbacks.size) {
+                clearTimeout(this._requestAnimationFrameTimer);
+                this._requestAnimationFrameTimer = undefined;
+            }
+        };
     }
 
     redirectConsoleToTestOutput()

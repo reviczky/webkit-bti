@@ -32,6 +32,7 @@
 #include "config.h"
 #include "InspectorInstrumentation.h"
 
+#include "CachedResource.h"
 #include "DOMWindow.h"
 #include "DOMWrapperWorld.h"
 #include "Database.h"
@@ -72,9 +73,9 @@
 #include <runtime/ConsoleTypes.h>
 #include <wtf/StdLibExtras.h>
 
-using namespace Inspector;
 
 namespace WebCore {
+using namespace Inspector;
 
 static const char* const requestAnimationFrameEventName = "requestAnimationFrame";
 static const char* const cancelAnimationFrameEventName = "cancelAnimationFrame";
@@ -118,8 +119,6 @@ static Frame* frameForScriptExecutionContext(ScriptExecutionContext& context)
 void InspectorInstrumentation::didClearWindowObjectInWorldImpl(InstrumentingAgents& instrumentingAgents, Frame& frame, DOMWrapperWorld& world)
 {
     InspectorPageAgent* pageAgent = instrumentingAgents.inspectorPageAgent();
-    if (pageAgent)
-        pageAgent->didClearWindowObjectInWorld(&frame, world);
     if (PageDebuggerAgent* debuggerAgent = instrumentingAgents.pageDebuggerAgent()) {
         if (pageAgent && &world == &mainThreadNormalWorld() && &frame == &pageAgent->mainFrame())
             debuggerAgent->didClearMainFrameWindowObject();
@@ -249,42 +248,6 @@ void InspectorInstrumentation::pseudoElementDestroyedImpl(InstrumentingAgents& i
         layerTreeAgent->pseudoElementDestroyed(pseudoElement);
 }
 
-void InspectorInstrumentation::didCreateNamedFlowImpl(InstrumentingAgents& instrumentingAgents, Document* document, WebKitNamedFlow& namedFlow)
-{
-    if (!document)
-        return;
-
-    if (InspectorCSSAgent* cssAgent = instrumentingAgents.inspectorCSSAgent())
-        cssAgent->didCreateNamedFlow(*document, namedFlow);
-}
-
-void InspectorInstrumentation::willRemoveNamedFlowImpl(InstrumentingAgents& instrumentingAgents, Document* document, WebKitNamedFlow& namedFlow)
-{
-    if (!document)
-        return;
-
-    if (InspectorCSSAgent* cssAgent = instrumentingAgents.inspectorCSSAgent())
-        cssAgent->willRemoveNamedFlow(*document, namedFlow);
-}
-
-void InspectorInstrumentation::didChangeRegionOversetImpl(InstrumentingAgents& instrumentingAgents, Document& document, WebKitNamedFlow& namedFlow)
-{
-    if (InspectorCSSAgent* cssAgent = instrumentingAgents.inspectorCSSAgent())
-        cssAgent->didChangeRegionOverset(document, namedFlow);
-}
-
-void InspectorInstrumentation::didRegisterNamedFlowContentElementImpl(InstrumentingAgents& instrumentingAgents, Document& document, WebKitNamedFlow& namedFlow, Node& contentElement, Node* nextContentElement)
-{
-    if (InspectorCSSAgent* cssAgent = instrumentingAgents.inspectorCSSAgent())
-        cssAgent->didRegisterNamedFlowContentElement(document, namedFlow, contentElement, nextContentElement);
-}
-
-void InspectorInstrumentation::didUnregisterNamedFlowContentElementImpl(InstrumentingAgents& instrumentingAgents, Document& document, WebKitNamedFlow& namedFlow, Node& contentElement)
-{
-    if (InspectorCSSAgent* cssAgent = instrumentingAgents.inspectorCSSAgent())
-        cssAgent->didUnregisterNamedFlowContentElement(document, namedFlow, contentElement);
-}
-
 void InspectorInstrumentation::mouseDidMoveOverElementImpl(InstrumentingAgents& instrumentingAgents, const HitTestResult& result, unsigned modifierFlags)
 {
     if (InspectorDOMAgent* domAgent = instrumentingAgents.inspectorDOMAgent())
@@ -355,12 +318,47 @@ void InspectorInstrumentation::didAddEventListenerImpl(InstrumentingAgents& inst
 {
     if (PageDebuggerAgent* pageDebuggerAgent = instrumentingAgents.pageDebuggerAgent())
         pageDebuggerAgent->didAddEventListener(target, eventType);
+    if (InspectorDOMAgent* domAgent = instrumentingAgents.inspectorDOMAgent())
+        domAgent->didAddEventListener(target);
 }
 
 void InspectorInstrumentation::willRemoveEventListenerImpl(InstrumentingAgents& instrumentingAgents, EventTarget& target, const AtomicString& eventType, EventListener& listener, bool capture)
 {
     if (PageDebuggerAgent* pageDebuggerAgent = instrumentingAgents.pageDebuggerAgent())
         pageDebuggerAgent->willRemoveEventListener(target, eventType, listener, capture);
+    if (InspectorDOMAgent* domAgent = instrumentingAgents.inspectorDOMAgent())
+        domAgent->willRemoveEventListener(target, eventType, listener, capture);
+}
+
+bool InspectorInstrumentation::isEventListenerDisabledImpl(InstrumentingAgents& instrumentingAgents, EventTarget& target, const AtomicString& eventType, EventListener& listener, bool capture)
+{
+    if (InspectorDOMAgent* domAgent = instrumentingAgents.inspectorDOMAgent())
+        return domAgent->isEventListenerDisabled(target, eventType, listener, capture);
+    return false;
+}
+
+void InspectorInstrumentation::didPostMessageImpl(InstrumentingAgents& instrumentingAgents, const TimerBase& timer, JSC::ExecState& state)
+{
+    if (PageDebuggerAgent* pageDebuggerAgent = instrumentingAgents.pageDebuggerAgent())
+        pageDebuggerAgent->didPostMessage(timer, state);
+}
+
+void InspectorInstrumentation::didFailPostMessageImpl(InstrumentingAgents& instrumentingAgents, const TimerBase& timer)
+{
+    if (PageDebuggerAgent* pageDebuggerAgent = instrumentingAgents.pageDebuggerAgent())
+        pageDebuggerAgent->didFailPostMessage(timer);
+}
+
+void InspectorInstrumentation::willDispatchPostMessageImpl(InstrumentingAgents& instrumentingAgents, const TimerBase& timer)
+{
+    if (PageDebuggerAgent* pageDebuggerAgent = instrumentingAgents.pageDebuggerAgent())
+        pageDebuggerAgent->willDispatchPostMessage(timer);
+}
+
+void InspectorInstrumentation::didDispatchPostMessageImpl(InstrumentingAgents& instrumentingAgents, const TimerBase& timer)
+{
+    if (PageDebuggerAgent* pageDebuggerAgent = instrumentingAgents.pageDebuggerAgent())
+        pageDebuggerAgent->didDispatchPostMessage(timer);
 }
 
 InspectorInstrumentationCookie InspectorInstrumentation::willCallFunctionImpl(InstrumentingAgents& instrumentingAgents, const String& scriptName, int scriptLine, ScriptExecutionContext* context)
@@ -570,9 +568,13 @@ void InspectorInstrumentation::willSendRequestImpl(InstrumentingAgents& instrume
         networkAgent->willSendRequest(identifier, *loader, request, redirectResponse);
 }
 
-void InspectorInstrumentation::continueAfterPingLoaderImpl(InstrumentingAgents& instrumentingAgents, unsigned long identifier, DocumentLoader* loader, ResourceRequest& request, const ResourceResponse& response)
+void InspectorInstrumentation::willSendRequestOfTypeImpl(InstrumentingAgents& instrumentingAgents, unsigned long identifier, DocumentLoader* loader, ResourceRequest& request, LoadType loadType)
 {
-    willSendRequestImpl(instrumentingAgents, identifier, loader, request, response);
+    if (!loader)
+        return;
+
+    if (InspectorNetworkAgent* networkAgent = instrumentingAgents.inspectorNetworkAgent())
+        networkAgent->willSendRequestOfType(identifier, *loader, request, loadType);
 }
 
 void InspectorInstrumentation::didLoadResourceFromMemoryCacheImpl(InstrumentingAgents& instrumentingAgents, DocumentLoader* loader, CachedResource* cachedResource)
@@ -630,10 +632,8 @@ void InspectorInstrumentation::didFailLoadingImpl(InstrumentingAgents& instrumen
         consoleAgent->didFailLoading(identifier, error); // This should come AFTER resource notification, front-end relies on this.
 }
 
-void InspectorInstrumentation::didFinishXHRLoadingImpl(InstrumentingAgents& instrumentingAgents, unsigned long identifier, std::optional<String> decodedText, const String& url, const String& sendURL, unsigned sendLineNumber, unsigned sendColumnNumber)
+void InspectorInstrumentation::didFinishXHRLoadingImpl(InstrumentingAgents& instrumentingAgents, unsigned long identifier, std::optional<String> decodedText)
 {
-    if (WebConsoleAgent* consoleAgent = instrumentingAgents.webConsoleAgent())
-        consoleAgent->didFinishXHRLoading(identifier, url, sendURL, sendLineNumber, sendColumnNumber);
     if (InspectorNetworkAgent* networkAgent = instrumentingAgents.inspectorNetworkAgent()) {
         if (decodedText)
             networkAgent->didFinishXHRLoading(identifier, *decodedText);
@@ -1023,6 +1023,13 @@ void InspectorInstrumentation::willDeleteProgramImpl(InstrumentingAgents& instru
 {
     if (InspectorCanvasAgent* canvasAgent = instrumentingAgents.inspectorCanvasAgent())
         canvasAgent->willDeleteProgram(program);
+}
+
+bool InspectorInstrumentation::isShaderProgramDisabledImpl(InstrumentingAgents& instrumentingAgents, WebGLProgram& program)
+{
+    if (InspectorCanvasAgent* canvasAgent = instrumentingAgents.inspectorCanvasAgent())
+        return canvasAgent->isShaderProgramDisabled(program);
+    return false;
 }
 #endif
 

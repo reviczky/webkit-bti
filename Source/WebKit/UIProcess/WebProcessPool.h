@@ -44,11 +44,12 @@
 #include "WebContextClient.h"
 #include "WebContextConnectionClient.h"
 #include "WebProcessProxy.h"
-#include <WebCore/LinkHash.h>
-#include <WebCore/SessionID.h>
+#include <WebCore/SharedStringHash.h>
+#include <pal/SessionID.h>
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
+#include <wtf/ProcessID.h>
 #include <wtf/RefCounter.h>
 #include <wtf/RefPtr.h>
 #include <wtf/text/StringHash.h>
@@ -84,6 +85,7 @@ class DownloadProxy;
 class HighPerformanceGraphicsUsageSampler;
 class UIGamepad;
 class PerActivityStateCPUUsageSampler;
+class ServiceWorkerProcessProxy;
 class WebAutomationSession;
 class WebContextSupplement;
 class WebPageGroup;
@@ -168,7 +170,8 @@ public:
     // Disconnect the process from the context.
     void disconnectProcess(WebProcessProxy*);
 
-    API::WebsiteDataStore& websiteDataStore() const { return m_websiteDataStore.get(); }
+    API::WebsiteDataStore* websiteDataStore() const { return m_websiteDataStore.get(); }
+    void setPrimaryDataStore(API::WebsiteDataStore& dataStore) { m_websiteDataStore = &dataStore; }
 
     Ref<WebPageProxy> createWebPage(PageClient&, Ref<API::PageConfiguration>&&);
 
@@ -198,8 +201,8 @@ public:
     const HashMap<String, HashMap<String, HashMap<String, uint8_t>>>& pluginLoadClientPolicies() const { return m_pluginLoadClientPolicies; }
 #endif
 
-    pid_t networkProcessIdentifier();
-    pid_t storageProcessIdentifier();
+    ProcessID networkProcessIdentifier();
+    ProcessID storageProcessIdentifier();
 
     void setAlwaysUsesComplexTextCodePath(bool);
     void setShouldUseFontSmoothing(bool);
@@ -214,6 +217,7 @@ public:
     void registerURLSchemeAsDisplayIsolated(const String&);
     void registerURLSchemeAsCORSEnabled(const String&);
     void registerURLSchemeAsCachePartitioned(const String&);
+    void preconnectToServer(const WebCore::URL&);
 
     VisitedLinkStore& visitedLinkStore() { return m_visitedLinkStore.get(); }
 
@@ -232,7 +236,7 @@ public:
     void setEnhancedAccessibility(bool);
     
     // Downloads.
-    DownloadProxy* createDownloadProxy(const WebCore::ResourceRequest&);
+    DownloadProxy* createDownloadProxy(const WebCore::ResourceRequest&, WebPageProxy* originatingPage);
     API::DownloadClient& downloadClient() { return *m_downloadClient; }
 
     API::LegacyContextHistoryClient& historyClient() { return *m_historyClient; }
@@ -316,6 +320,9 @@ public:
     StorageProcessProxy* storageProcess() { return m_storageProcess.get(); }
     void getStorageProcessConnection(Ref<Messages::WebProcessProxy::GetStorageProcessConnection::DelayedReply>&&);
     void storageProcessCrashed(StorageProcessProxy*);
+#if ENABLE(SERVICE_WORKER)
+    void getWorkerContextProcessConnection(StorageProcessProxy&);
+#endif
 
 #if PLATFORM(COCOA)
     bool processSuppressionEnabled() const;
@@ -408,6 +415,10 @@ public:
     static uint64_t registerProcessPoolCreationListener(Function<void(WebProcessPool&)>&&);
     static void unregisterProcessPoolCreationListener(uint64_t identifier);
 
+#if ENABLE(SERVICE_WORKER)
+    void didGetWorkerContextProcessConnection(const IPC::Attachment& connection);
+#endif
+
 private:
     void platformInitialize();
 
@@ -415,6 +426,7 @@ private:
     void platformInvalidateContext();
 
     WebProcessProxy& createNewWebProcess(WebsiteDataStore&);
+    void initializeNewWebProcess(WebProcessProxy&, WebsiteDataStore&);
 
     void requestWebContentStatistics(StatisticsRequest*);
     void requestNetworkingStatistics(StatisticsRequest*);
@@ -457,8 +469,8 @@ private:
     void unregisterNotificationObservers();
 #endif
 
-    void addPlugInAutoStartOriginHash(const String& pageOrigin, unsigned plugInOriginHash, WebCore::SessionID);
-    void plugInDidReceiveUserInteraction(unsigned plugInOriginHash, WebCore::SessionID);
+    void addPlugInAutoStartOriginHash(const String& pageOrigin, unsigned plugInOriginHash, PAL::SessionID);
+    void plugInDidReceiveUserInteraction(unsigned plugInOriginHash, PAL::SessionID);
 
     void setAnyPageGroupMightHavePrivateBrowsingEnabled(bool);
 
@@ -473,6 +485,10 @@ private:
     bool m_haveInitialEmptyProcess;
 
     WebProcessProxy* m_processWithPageCache;
+#if ENABLE(SERVICE_WORKER)
+    ServiceWorkerProcessProxy* m_serviceWorkerProcess { nullptr };
+    bool m_waitingForWorkerContextProcessConnection { false };
+#endif
 
     Ref<WebPageGroup> m_defaultPageGroup;
 
@@ -519,7 +535,7 @@ private:
     bool m_memorySamplerEnabled;
     double m_memorySamplerInterval;
 
-    const Ref<API::WebsiteDataStore> m_websiteDataStore;
+    RefPtr<API::WebsiteDataStore> m_websiteDataStore;
 
     typedef HashMap<const char*, RefPtr<WebContextSupplement>, PtrHash<const char*>> WebContextSupplementMap;
     WebContextSupplementMap m_supplements;
@@ -610,7 +626,7 @@ private:
     };
     Paths m_resolvedPaths;
 
-    HashMap<WebCore::SessionID, HashSet<WebPageProxy*>> m_sessionToPagesMap;
+    HashMap<PAL::SessionID, HashSet<WebPageProxy*>> m_sessionToPagesMap;
 };
 
 template<typename T>

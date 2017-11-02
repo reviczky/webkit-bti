@@ -25,7 +25,11 @@
 
 #pragma once
 
+#include <WebCore/HTTPHeaderField.h>
+#include <wtf/EnumTraits.h>
 #include <wtf/OptionSet.h>
+#include <wtf/Optional.h>
+#include <wtf/Vector.h>
 
 namespace WebKit {
 
@@ -39,6 +43,7 @@ enum class WebsiteAutoplayPolicy {
 enum class WebsiteAutoplayQuirk {
     SynthesizedPauseEvents = 1 << 0,
     InheritedUserGestures = 1 << 1,
+    ArbitraryUserGestures = 1 << 2,
 };
 
 struct WebsitePolicies {
@@ -46,27 +51,66 @@ struct WebsitePolicies {
     bool contentBlockersEnabled { true };
     OptionSet<WebsiteAutoplayQuirk> allowedAutoplayQuirks;
     WebsiteAutoplayPolicy autoplayPolicy { WebsiteAutoplayPolicy::Default };
+    Vector<WebCore::HTTPHeaderField> customHeaderFields;
 
     template<class Encoder> void encode(Encoder&) const;
-    template<class Decoder> static bool decode(Decoder&, WebsitePolicies&);
+    template<class Decoder> static std::optional<WebsitePolicies> decode(Decoder&);
 };
+
+} // namespace WebKit
+
+namespace WTF {
+
+template<> struct EnumTraits<WebKit::WebsiteAutoplayPolicy> {
+    using values = EnumValues<
+        WebKit::WebsiteAutoplayPolicy,
+        WebKit::WebsiteAutoplayPolicy::Default,
+        WebKit::WebsiteAutoplayPolicy::Allow,
+        WebKit::WebsiteAutoplayPolicy::AllowWithoutSound,
+        WebKit::WebsiteAutoplayPolicy::Deny
+    >;
+};
+
+} // namespace WTF
+
+namespace WebKit {
 
 template<class Encoder> void WebsitePolicies::encode(Encoder& encoder) const
 {
     encoder << contentBlockersEnabled;
-    encoder.encodeEnum(autoplayPolicy);
+    encoder << autoplayPolicy;
     encoder << allowedAutoplayQuirks;
+    encoder << customHeaderFields;
 }
 
-template<class Decoder> bool WebsitePolicies::decode(Decoder& decoder, WebsitePolicies& result)
+template<class Decoder> std::optional<WebsitePolicies> WebsitePolicies::decode(Decoder& decoder)
 {
-    if (!decoder.decode(result.contentBlockersEnabled))
-        return false;
-    if (!decoder.decodeEnum(result.autoplayPolicy))
-        return false;
-    if (!decoder.decode(result.allowedAutoplayQuirks))
-        return false;
-    return true;
+    std::optional<bool> contentBlockersEnabled;
+    decoder >> contentBlockersEnabled;
+    if (!contentBlockersEnabled)
+        return std::nullopt;
+    
+    std::optional<WebsiteAutoplayPolicy> autoplayPolicy;
+    decoder >> autoplayPolicy;
+    if (!autoplayPolicy)
+        return std::nullopt;
+
+    std::optional<OptionSet<WebsiteAutoplayQuirk>> allowedAutoplayQuirks;
+    decoder >> allowedAutoplayQuirks;
+    if (!allowedAutoplayQuirks)
+        return std::nullopt;
+    
+    std::optional<Vector<WebCore::HTTPHeaderField>> customHeaderFields;
+    decoder >> customHeaderFields;
+    if (!customHeaderFields)
+        return std::nullopt;
+
+    return { {
+        WTFMove(*contentBlockersEnabled),
+        WTFMove(*allowedAutoplayQuirks),
+        WTFMove(*autoplayPolicy),
+        WTFMove(*customHeaderFields),
+    } };
 }
 
 } // namespace WebKit

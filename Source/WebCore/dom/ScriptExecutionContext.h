@@ -50,6 +50,10 @@ class ConsoleMessage;
 class ScriptCallStack;
 }
 
+namespace PAL {
+class SessionID;
+}
+
 namespace WebCore {
 
 class CachedScript;
@@ -63,6 +67,11 @@ class ResourceRequest;
 class SecurityOrigin;
 class SocketProvider;
 class URL;
+
+#if ENABLE(SERVICE_WORKER)
+class ServiceWorker;
+class ServiceWorkerContainer;
+#endif
 
 namespace IDBClient {
 class IDBConnectionProxy;
@@ -81,6 +90,7 @@ public:
 
     virtual const URL& url() const = 0;
     virtual URL completeURL(const String& url) const = 0;
+    virtual PAL::SessionID sessionID() const = 0;
 
     virtual String userAgent(const URL&) const = 0;
 
@@ -106,6 +116,7 @@ public:
     virtual void addConsoleMessage(MessageSource, MessageLevel, const String& message, unsigned long requestIdentifier = 0) = 0;
 
     virtual SecurityOrigin& topOrigin() const = 0;
+    virtual String origin() const = 0;
 
     virtual bool shouldBypassMainWorldContentSecurityPolicy() const { return false; }
 
@@ -225,6 +236,13 @@ public:
 
     JSC::ExecState* execState();
 
+#if ENABLE(SERVICE_WORKER)
+    ServiceWorker* activeServiceWorker() const;
+    void setActiveServiceWorker(RefPtr<ServiceWorker>&&);
+
+    ServiceWorkerContainer* serviceWorkerContainer();
+#endif
+
 protected:
     class AddConsoleMessageTask : public Task {
     public:
@@ -291,6 +309,10 @@ private:
 #endif
 #if !ASSERT_DISABLED || ENABLE(SECURITY_ASSERTIONS)
     bool m_activeDOMObjectRemovalForbidden { false };
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    RefPtr<ServiceWorker> m_activeServiceWorker;
 #endif
 };
 

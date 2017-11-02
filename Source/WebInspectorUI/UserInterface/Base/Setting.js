@@ -61,7 +61,7 @@ WI.Setting = class Setting extends WI.Object
         if (!window.InspectorTest && window.localStorage && this._localStorageKey in window.localStorage) {
             try {
                 this._value = JSON.parse(window.localStorage[this._localStorageKey]);
-            } catch (e) {
+            } catch {
                 delete window.localStorage[this._localStorageKey];
             }
         }
@@ -83,7 +83,7 @@ WI.Setting = class Setting extends WI.Object
                     delete window.localStorage[this._localStorageKey];
                 else
                     window.localStorage[this._localStorageKey] = JSON.stringify(this._value);
-            } catch (e) {
+            } catch {
                 console.error("Error saving setting with name: " + this._name);
             }
         }
@@ -106,6 +106,7 @@ WI.settings = {
     autoLogProtocolMessages: new WI.Setting("auto-collect-protocol-messages", false),
     autoLogTimeStats: new WI.Setting("auto-collect-time-stats", false),
     enableUncaughtExceptionReporter: new WI.Setting("enable-uncaught-exception-reporter", true),
+    enableLayoutFlashing: new WI.Setting("enable-layout-flashing", false),
     enableLineWrapping: new WI.Setting("enable-line-wrapping", false),
     indentUnit: new WI.Setting("indent-unit", 4),
     tabSize: new WI.Setting("tab-size", 4),
@@ -122,8 +123,9 @@ WI.settings = {
     showScopeChainOnPause: new WI.Setting("show-scope-chain-sidebar", true),
     showImageGrid: new WI.Setting("show-image-grid", false),
     showCanvasPath: new WI.Setting("show-canvas-path", false),
+    selectedNetworkDetailContentViewIdentifier: new WI.Setting("network-detail-content-view-identifier", "preview"),
 
     // Experimental
-    experimentalShowCanvasContextsInResources: new WI.Setting("experimental-show-canvas-contexts-in-resources", false),
     experimentalSpreadsheetStyleEditor: new WI.Setting("experimental-spreadsheet-style-editor", false),
+    experimentalEnableLayersTab: new WI.Setting("experimental-enable-layers-tab", false),
 };

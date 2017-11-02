@@ -73,8 +73,50 @@ public:
     template<typename IndexType>
     T& operator[](IndexType index) const { return get()[index]; }
     
-private:
+protected:
     T* m_ptr;
+};
+
+template<Gigacage::Kind passedKind>
+class CagedPtr<passedKind, void> {
+public:
+    static constexpr Gigacage::Kind kind = passedKind;
+    
+    CagedPtr(void* ptr = nullptr)
+        : m_ptr(ptr)
+    {
+    }
+    
+    void* get() const
+    {
+        ASSERT(m_ptr);
+        return Gigacage::caged(kind, m_ptr);
+    }
+    
+    void* getMayBeNull() const
+    {
+        if (!m_ptr)
+            return nullptr;
+        return get();
+    }
+    
+    bool operator==(const CagedPtr& other) const
+    {
+        return getMayBeNull() == other.getMayBeNull();
+    }
+    
+    bool operator!=(const CagedPtr& other) const
+    {
+        return !(*this == other);
+    }
+    
+    explicit operator bool() const
+    {
+        return *this != CagedPtr();
+    }
+    
+protected:
+    void* m_ptr;
 };
 
 } // namespace WTF

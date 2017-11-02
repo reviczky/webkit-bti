@@ -129,8 +129,8 @@ macro doVMEntry(makeCall)
     storep vm, VMEntryRecord::m_vm[sp]
     loadp VM::topCallFrame[vm], t4
     storep t4, VMEntryRecord::m_prevTopCallFrame[sp]
-    loadp VM::topVMEntryFrame[vm], t4
-    storep t4, VMEntryRecord::m_prevTopVMEntryFrame[sp]
+    loadp VM::topEntryFrame[vm], t4
+    storep t4, VMEntryRecord::m_prevTopEntryFrame[sp]
 
     loadi ProtoCallFrame::paddedArgCount[protoCallFrame], t4
     addp CallFrameHeaderSlots, t4, t4
@@ -171,8 +171,8 @@ macro doVMEntry(makeCall)
     loadp VMEntryRecord::m_vm[t4], vm
     loadp VMEntryRecord::m_prevTopCallFrame[t4], extraTempReg
     storep extraTempReg, VM::topCallFrame[vm]
-    loadp VMEntryRecord::m_prevTopVMEntryFrame[t4], extraTempReg
-    storep extraTempReg, VM::topVMEntryFrame[vm]
+    loadp VMEntryRecord::m_prevTopEntryFrame[t4], extraTempReg
+    storep extraTempReg, VM::topEntryFrame[vm]
 
     subp cfr, CalleeRegisterSaveSize, sp
 
@@ -220,7 +220,7 @@ macro doVMEntry(makeCall)
     else
         storep sp, VM::topCallFrame[vm]
     end
-    storep cfr, VM::topVMEntryFrame[vm]
+    storep cfr, VM::topEntryFrame[vm]
 
     checkStackPointerAlignment(extraTempReg, 0xbad0dc02)
 
@@ -236,8 +236,8 @@ macro doVMEntry(makeCall)
     loadp VMEntryRecord::m_vm[t4], vm
     loadp VMEntryRecord::m_prevTopCallFrame[t4], t2
     storep t2, VM::topCallFrame[vm]
-    loadp VMEntryRecord::m_prevTopVMEntryFrame[t4], t2
-    storep t2, VM::topVMEntryFrame[vm]
+    loadp VMEntryRecord::m_prevTopEntryFrame[t4], t2
+    storep t2, VM::topEntryFrame[vm]
 
     subp cfr, CalleeRegisterSaveSize, sp
 
@@ -276,7 +276,6 @@ macro makeHostFunctionCall(entry, temp)
     end
 end
 
-
 _handleUncaughtException:
     loadp Callee[cfr], t3
     andp MarkedBlockMask, t3
@@ -291,8 +290,8 @@ _handleUncaughtException:
     loadp VMEntryRecord::m_vm[t2], t3
     loadp VMEntryRecord::m_prevTopCallFrame[t2], extraTempReg
     storep extraTempReg, VM::topCallFrame[t3]
-    loadp VMEntryRecord::m_prevTopVMEntryFrame[t2], extraTempReg
-    storep extraTempReg, VM::topVMEntryFrame[t3]
+    loadp VMEntryRecord::m_prevTopEntryFrame[t2], extraTempReg
+    storep extraTempReg, VM::topEntryFrame[t3]
 
     subp cfr, CalleeRegisterSaveSize, sp
 
@@ -376,12 +375,12 @@ macro checkSwitchToJITForLoop()
         end)
 end
 
-macro loadCaged(basePtr, source, dest, scratch)
+macro loadCaged(basePtr, mask, source, dest, scratch)
     loadp source, dest
     if GIGACAGE_ENABLED and not C_LOOP
         loadp basePtr, scratch
         btpz scratch, .done
-        andp constexpr GIGACAGE_MASK, dest
+        andp mask, dest
         addp scratch, dest
     .done:
     end
@@ -515,7 +514,7 @@ macro functionArityCheck(doneLabel, slowPath)
     jmp _llint_throw_from_slow_path_trampoline
 
 .noError:
-    loadi CommonSlowPaths::ArityCheckData::paddedStackSpace[r1], t1
+    move r1, t1 # r1 contains slotsToAdd.
     btiz t1, .continue
     loadi PayloadOffset + ArgumentCount[cfr], t2
     addi CallFrameHeaderSlots, t2
@@ -1090,16 +1089,16 @@ _llint_op_bitor:
 
 _llint_op_overrides_has_instance:
     traceExecution()
-    loadisFromInstruction(1, t3)
+    loadisFromStruct(OpOverridesHasInstance::m_dst, t3)
 
-    loadisFromInstruction(3, t1)
+    loadisFromStruct(OpOverridesHasInstance::m_hasInstanceValue, t1)
     loadConstantOrVariable(t1, t0)
     loadp CodeBlock[cfr], t2
     loadp CodeBlock::m_globalObject[t2], t2
     loadp JSGlobalObject::m_functionProtoHasInstanceSymbolFunction[t2], t2
     bqneq t0, t2, .opOverridesHasInstanceNotDefaultSymbol
 
-    loadisFromInstruction(2, t1)
+    loadisFromStruct(OpOverridesHasInstance::m_constructor, t1)
     loadConstantOrVariable(t1, t0)
     tbz JSCell::m_flags[t0], ImplementsDefaultHasInstance, t1
     orq ValueFalse, t1
@@ -1209,7 +1208,7 @@ _llint_op_is_object:
 
 macro loadPropertyAtVariableOffset(propertyOffsetAsInt, objectAndStorage, value)
     bilt propertyOffsetAsInt, firstOutOfLineOffset, .isInline
-    loadCaged(_g_jsValueGigacageBasePtr, JSObject::m_butterfly[objectAndStorage], objectAndStorage, value)
+    loadCaged(_g_gigacageBasePtrs + Gigacage::BasePtrs::jsValue, constexpr JSVALUE_GIGACAGE_MASK, JSObject::m_butterfly[objectAndStorage], objectAndStorage, value)
     negi propertyOffsetAsInt
     sxi2q propertyOffsetAsInt, propertyOffsetAsInt
     jmp .ready
@@ -1222,7 +1221,7 @@ end
 
 macro storePropertyAtVariableOffset(propertyOffsetAsInt, objectAndStorage, value, scratch)
     bilt propertyOffsetAsInt, firstOutOfLineOffset, .isInline
-    loadCaged(_g_jsValueGigacageBasePtr, JSObject::m_butterfly[objectAndStorage], objectAndStorage, scratch)
+    loadCaged(_g_gigacageBasePtrs + Gigacage::BasePtrs::jsValue, constexpr JSVALUE_GIGACAGE_MASK, JSObject::m_butterfly[objectAndStorage], objectAndStorage, scratch)
     negi propertyOffsetAsInt
     sxi2q propertyOffsetAsInt, propertyOffsetAsInt
     jmp .ready
@@ -1298,7 +1297,7 @@ _llint_op_get_array_length:
     btiz t2, IsArray, .opGetArrayLengthSlow
     btiz t2, IndexingShapeMask, .opGetArrayLengthSlow
     loadisFromInstruction(1, t1)
-    loadCaged(_g_jsValueGigacageBasePtr, JSObject::m_butterfly[t3], t0, t2)
+    loadCaged(_g_gigacageBasePtrs + Gigacage::BasePtrs::jsValue, constexpr JSVALUE_GIGACAGE_MASK, JSObject::m_butterfly[t3], t0, t2)
     loadi -sizeof IndexingHeader + IndexingHeader::u.lengths.publicLength[t0], t0
     bilt t0, 0, .opGetArrayLengthSlow
     orq tagTypeNumber, t0
@@ -1481,7 +1480,7 @@ _llint_op_get_by_val:
     loadisFromInstruction(3, t3)
     loadConstantOrVariableInt32(t3, t1, .opGetByValSlow)
     sxi2q t1, t1
-    loadCaged(_g_jsValueGigacageBasePtr, JSObject::m_butterfly[t0], t3, t5)
+    loadCaged(_g_gigacageBasePtrs + Gigacage::BasePtrs::jsValue, constexpr JSVALUE_GIGACAGE_MASK, JSObject::m_butterfly[t0], t3, t5)
     andi IndexingShapeMask, t2
     bieq t2, Int32Shape, .opGetByValIsContiguous
     bineq t2, ContiguousShape, .opGetByValNotContiguous
@@ -1528,7 +1527,7 @@ _llint_op_get_by_val:
     bia t2, LastArrayType - FirstArrayType, .opGetByValSlow
     
     # Sweet, now we know that we have a typed array. Do some basic things now.
-    loadCaged(_g_primitiveGigacageBasePtr, JSArrayBufferView::m_vector[t0], t3, t5)
+    loadCaged(_g_gigacageBasePtrs + Gigacage::BasePtrs::primitive, constexpr PRIMITIVE_GIGACAGE_MASK, JSArrayBufferView::m_vector[t0], t3, t5)
     biaeq t1, JSArrayBufferView::m_length[t0], .opGetByValSlow
     
     # Now bisect through the various types. Note that we can treat Uint8ArrayType and
@@ -1619,7 +1618,7 @@ macro putByVal(slowPath)
     loadisFromInstruction(2, t0)
     loadConstantOrVariableInt32(t0, t3, .opPutByValSlow)
     sxi2q t3, t3
-    loadCaged(_g_jsValueGigacageBasePtr, JSObject::m_butterfly[t1], t0, t5)
+    loadCaged(_g_gigacageBasePtrs + Gigacage::BasePtrs::jsValue, constexpr JSVALUE_GIGACAGE_MASK, JSObject::m_butterfly[t1], t0, t5)
     andi IndexingShapeMask, t2
     bineq t2, Int32Shape, .opPutByValNotInt32
     contiguousPutByVal(
@@ -1813,6 +1812,33 @@ macro compare(integerCompare, doubleCompare, slowPath)
 end
 
 
+macro compareUnsignedJump(integerCompare)
+    loadisFromInstruction(1, t2)
+    loadisFromInstruction(2, t3)
+    loadConstantOrVariable(t2, t0)
+    loadConstantOrVariable(t3, t1)
+    integerCompare(t0, t1, .jumpTarget)
+    dispatch(4)
+
+.jumpTarget:
+    dispatchIntIndirect(3)
+end
+
+
+macro compareUnsigned(integerCompareAndSet)
+    traceExecution()
+    loadisFromInstruction(3, t0)
+    loadisFromInstruction(2, t2)
+    loadisFromInstruction(1, t3)
+    loadConstantOrVariable(t0, t1)
+    loadConstantOrVariable(t2, t0)
+    integerCompareAndSet(t0, t1, t0)
+    orq ValueFalse, t0
+    storeq t0, [cfr, t3, 8]
+    dispatch(4)
+end
+
+
 _llint_op_switch_imm:
     traceExecution()
     loadisFromInstruction(3, t2)
@@ -1974,6 +2000,9 @@ _llint_op_catch:
     storeq t3, [cfr, t2, 8]
 
     traceExecution()
+
+    callOpcodeSlowPath(_llint_slow_path_profile_catch)
+
     dispatch(constexpr op_catch_length)
 
 
@@ -2164,7 +2193,7 @@ end
 
 macro getClosureVar()
     loadisFromInstruction(6, t1)
-    loadq JSEnvironmentRecord_variables[t0, t1, 8], t0
+    loadq JSLexicalEnvironment_variables[t0, t1, 8], t0
     valueProfile(t0, 7, t1)
     loadisFromInstruction(1, t1)
     storeq t0, [cfr, t1, 8]
@@ -2253,7 +2282,7 @@ macro putClosureVar()
     loadisFromInstruction(3, t1)
     loadConstantOrVariable(t1, t2)
     loadisFromInstruction(6, t1)
-    storeq t2, JSEnvironmentRecord_variables[t0, t1, 8]
+    storeq t2, JSLexicalEnvironment_variables[t0, t1, 8]
 end
 
 macro putLocalClosureVar()
@@ -2264,7 +2293,7 @@ macro putLocalClosureVar()
     notifyWrite(t3, .pDynamic)
 .noVariableWatchpointSet:
     loadisFromInstruction(6, t1)
-    storeq t2, JSEnvironmentRecord_variables[t0, t1, 8]
+    storeq t2, JSLexicalEnvironment_variables[t0, t1, 8]
 end
 
 macro checkTDZInGlobalPutToScopeIfNecessary()

@@ -43,6 +43,7 @@
 #include "AccessibilityListBoxOption.h"
 #include "AccessibilityMathMLElement.h"
 #include "AccessibilityMediaControls.h"
+#include "AccessibilityMediaObject.h"
 #include "AccessibilityMenuList.h"
 #include "AccessibilityMenuListOption.h"
 #include "AccessibilityMenuListPopup.h"
@@ -119,8 +120,8 @@ static const Seconds accessibilityFocusAriaModalNodeNotificationInterval { 50_ms
 
 AccessibilityObjectInclusion AXComputedObjectAttributeCache::getIgnored(AXID id) const
 {
-    HashMap<AXID, CachedAXObjectAttributes>::const_iterator it = m_idMapping.find(id);
-    return it != m_idMapping.end() ? it->value.ignored : DefaultBehavior;
+    auto it = m_idMapping.find(id);
+    return it != m_idMapping.end() ? it->value.ignored : AccessibilityObjectInclusion::DefaultBehavior;
 }
 
 void AXComputedObjectAttributeCache::setIgnored(AXID id, AccessibilityObjectInclusion inclusion)
@@ -202,8 +203,8 @@ AXObjectCache::~AXObjectCache()
     m_focusAriaModalNodeTimer.stop();
 
     for (const auto& object : m_objects.values()) {
-        detachWrapper(object.get(), CacheDestroyed);
-        object->detach(CacheDestroyed);
+        detachWrapper(object.get(), AccessibilityDetachmentType::CacheDestroyed);
+        object->detach(AccessibilityDetachmentType::CacheDestroyed);
         removeAXID(object.get());
     }
 }
@@ -444,6 +445,11 @@ static Ref<AccessibilityObject> createFromRenderer(RenderObject* renderer)
     if (node && is<HTMLLabelElement>(node) && nodeHasRole(node, nullAtom()))
         return AccessibilityLabel::create(renderer);
 
+#if PLATFORM(IOS)
+    if (is<HTMLMediaElement>(node) && nodeHasRole(node, nullAtom()))
+        return AccessibilityMediaObject::create(renderer);
+#endif
+
 #if ENABLE(VIDEO)
     // media controls
     if (node && node->isMediaControlElement())
@@ -641,31 +647,31 @@ AccessibilityObject* AXObjectCache::getOrCreate(AccessibilityRole role)
     
     // will be filled in...
     switch (role) {
-    case ListBoxOptionRole:
+    case AccessibilityRole::ListBoxOption:
         obj = AccessibilityListBoxOption::create();
         break;
-    case ImageMapLinkRole:
+    case AccessibilityRole::ImageMapLink:
         obj = AccessibilityImageMapLink::create();
         break;
-    case ColumnRole:
+    case AccessibilityRole::Column:
         obj = AccessibilityTableColumn::create();
         break;            
-    case TableHeaderContainerRole:
+    case AccessibilityRole::TableHeaderContainer:
         obj = AccessibilityTableHeaderContainer::create();
         break;   
-    case SliderThumbRole:
+    case AccessibilityRole::SliderThumb:
         obj = AccessibilitySliderThumb::create();
         break;
-    case MenuListPopupRole:
+    case AccessibilityRole::MenuListPopup:
         obj = AccessibilityMenuListPopup::create();
         break;
-    case MenuListOptionRole:
+    case AccessibilityRole::MenuListOption:
         obj = AccessibilityMenuListOption::create();
         break;
-    case SpinButtonRole:
+    case AccessibilityRole::SpinButton:
         obj = AccessibilitySpinButton::create();
         break;
-    case SpinButtonPartRole:
+    case AccessibilityRole::SpinButtonPart:
         obj = AccessibilitySpinButtonPart::create();
         break;
     default:
@@ -693,8 +699,8 @@ void AXObjectCache::remove(AXID axID)
     if (!obj)
         return;
     
-    detachWrapper(obj, ElementDestroyed);
-    obj->detach(ElementDestroyed, this);
+    detachWrapper(obj, AccessibilityDetachmentType::ElementDestroyed);
+    obj->detach(AccessibilityDetachmentType::ElementDestroyed, this);
     removeAXID(obj);
     
     // finally remove the object
@@ -914,7 +920,7 @@ void AXObjectCache::notificationPostTimerFired()
         // the axChildren when the menu is marked as opening.
         if (notification == AXMenuOpened) {
             obj->updateChildrenIfNecessary();
-            if (obj->roleValue() != MenuRole)
+            if (obj->roleValue() != AccessibilityRole::Menu)
                 continue;
         }
         
@@ -1736,13 +1742,6 @@ RefPtr<Range> AXObjectCache::rangeForNodeContents(Node* node)
             return nullptr;
     }
     return WTFMove(range);
-}
-    
-static VisiblePosition visiblePositionForPositionWithOffset(const VisiblePosition& position, int32_t offset)
-{
-    RefPtr<ContainerNode> root;
-    unsigned startIndex = indexForVisiblePosition(position, root);
-    return visiblePositionForIndex(startIndex + offset, root.get());
 }
     
 RefPtr<Range> AXObjectCache::rangeMatchesTextNearRange(RefPtr<Range> originalRange, const String& matchText)
@@ -2808,7 +2807,7 @@ static bool rendererNeedsDeferredUpdate(RenderObject& renderer)
 {
     ASSERT(!renderer.beingDestroyed());
     auto& document = renderer.document();
-    return renderer.needsLayout() || document.needsStyleRecalc() || document.inRenderTreeUpdate() || (document.view() && document.view()->isInRenderTreeLayout());
+    return renderer.needsLayout() || document.needsStyleRecalc() || document.inRenderTreeUpdate() || (document.view() && document.view()->layoutContext().isInRenderTreeLayout());
 }
 
 void AXObjectCache::deferRecomputeIsIgnoredIfNeeded(Element* element)

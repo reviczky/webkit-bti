@@ -38,11 +38,12 @@
 #include "VisibleWebPageCounter.h"
 #include "WebConnectionToWebProcess.h"
 #include "WebProcessProxyMessages.h"
-#include <WebCore/LinkHash.h>
-#include <WebCore/SessionID.h>
+#include <WebCore/SharedStringHash.h>
 #include <memory>
+#include <pal/SessionID.h>
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
+#include <wtf/HashSet.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 
@@ -98,7 +99,7 @@ public:
     void addExistingWebPage(WebPageProxy&, uint64_t pageID);
     void removeWebPage(WebPageProxy&, uint64_t pageID);
 
-    WTF::IteratorRange<WebPageProxyMap::const_iterator::Values> pages() const { return m_pageMap.values(); }
+    typename WebPageProxyMap::ValuesConstIteratorRange pages() const { return m_pageMap.values(); }
     unsigned pageCount() const { return m_pageMap.size(); }
     unsigned visiblePageCount() const { return m_visiblePageCounter.value(); }
 
@@ -123,7 +124,7 @@ public:
 
     void updateTextCheckerState();
 
-    void registerNewWebBackForwardListItem(WebBackForwardListItem*);
+    void registerNewWebBackForwardListItem(WebBackForwardListItem&);
     void removeBackForwardItem(uint64_t);
 
     void willAcquireUniversalFileReadSandboxExtension() { m_mayHaveUniversalFileReadSandboxExtension = true; }
@@ -138,9 +139,9 @@ public:
     void didSaveToPageCache();
     void releasePageCache();
 
-    void fetchWebsiteData(WebCore::SessionID, OptionSet<WebsiteDataType>, Function<void(WebsiteData)>&& completionHandler);
-    void deleteWebsiteData(WebCore::SessionID, OptionSet<WebsiteDataType>, std::chrono::system_clock::time_point modifiedSince, Function<void()>&& completionHandler);
-    void deleteWebsiteDataForOrigins(WebCore::SessionID, OptionSet<WebsiteDataType>, const Vector<WebCore::SecurityOriginData>&, Function<void()>&& completionHandler);
+    void fetchWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, Function<void(WebsiteData)>&& completionHandler);
+    void deleteWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, std::chrono::system_clock::time_point modifiedSince, Function<void()>&& completionHandler);
+    void deleteWebsiteDataForOrigins(PAL::SessionID, OptionSet<WebsiteDataType>, const Vector<WebCore::SecurityOriginData>&, Function<void()>&& completionHandler);
     static void deleteWebsiteDataForTopPrivatelyControlledDomainsInAllPersistentDataStores(OptionSet<WebsiteDataType>, Vector<String>&& topPrivatelyControlledDomains, bool shouldNotifyPages, Function<void (const HashSet<String>&)>&& completionHandler);
     static void topPrivatelyControlledDomainsWithWebsiteData(OptionSet<WebsiteDataType> dataTypes, bool shouldNotifyPage, Function<void(HashSet<String>&&)>&& completionHandler);
     static void notifyPageStatisticsAndDataRecordsProcessed();
@@ -181,15 +182,21 @@ public:
     bool isUnderMemoryPressure() const { return m_isUnderMemoryPressure; }
     void didExceedInactiveMemoryLimitWhileActive();
 
+#if ENABLE(SERVICE_WORKER)
+    void didGetWorkerContextConnection(const IPC::Attachment& connection);
+#endif
+
     void processTerminated();
 
     void didExceedCPULimit();
     void didExceedActiveMemoryLimit();
     void didExceedInactiveMemoryLimit();
 
-private:
+protected:
+    static uint64_t generatePageID();
     explicit WebProcessProxy(WebProcessPool&, WebsiteDataStore&);
 
+private:
     // From ChildProcessProxy
     void getLaunchOptions(ProcessLauncher::LaunchOptions&) override;
     void connectionWillOpen(IPC::Connection&) override;

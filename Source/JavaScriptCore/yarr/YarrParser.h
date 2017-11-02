@@ -27,17 +27,14 @@
 
 #include "Yarr.h"
 #include "YarrPattern.h"
+#include "YarrUnicodeProperties.h"
 #include <wtf/ASCIICType.h>
+#include <wtf/HashSet.h>
+#include <wtf/Optional.h>
+#include <wtf/text/StringBuilder.h>
 #include <wtf/text/WTFString.h>
 
 namespace JSC { namespace Yarr {
-
-enum BuiltInCharacterClassID {
-    DigitClassID,
-    SpaceClassID,
-    WordClassID,
-    NewlineClassID,
-};
 
 // The Parser class should not be used directly - only via the Yarr::parse() method.
 template<class Delegate, typename CharType>
@@ -197,6 +194,7 @@ private:
         // invoked with inCharacterClass set.
         NO_RETURN_DUE_TO_ASSERT void assertionWordBoundary(bool) { RELEASE_ASSERT_NOT_REACHED(); }
         NO_RETURN_DUE_TO_ASSERT void atomBackReference(unsigned) { RELEASE_ASSERT_NOT_REACHED(); }
+        NO_RETURN_DUE_TO_ASSERT void atomNamedBackReference(String) { RELEASE_ASSERT_NOT_REACHED(); }
 
     private:
         Delegate& m_delegate;
@@ -298,27 +296,27 @@ private:
         // CharacterClassEscape
         case 'd':
             consume();
-            delegate.atomBuiltInCharacterClass(DigitClassID, false);
+            delegate.atomBuiltInCharacterClass(BuiltInCharacterClassID::DigitClassID, false);
             break;
         case 's':
             consume();
-            delegate.atomBuiltInCharacterClass(SpaceClassID, false);
+            delegate.atomBuiltInCharacterClass(BuiltInCharacterClassID::SpaceClassID, false);
             break;
         case 'w':
             consume();
-            delegate.atomBuiltInCharacterClass(WordClassID, false);
+            delegate.atomBuiltInCharacterClass(BuiltInCharacterClassID::WordClassID, false);
             break;
         case 'D':
             consume();
-            delegate.atomBuiltInCharacterClass(DigitClassID, true);
+            delegate.atomBuiltInCharacterClass(BuiltInCharacterClassID::DigitClassID, true);
             break;
         case 'S':
             consume();
-            delegate.atomBuiltInCharacterClass(SpaceClassID, true);
+            delegate.atomBuiltInCharacterClass(BuiltInCharacterClassID::SpaceClassID, true);
             break;
         case 'W':
             consume();
-            delegate.atomBuiltInCharacterClass(WordClassID, true);
+            delegate.atomBuiltInCharacterClass(BuiltInCharacterClassID::WordClassID, true);
             break;
 
         // DecimalEscape
@@ -416,6 +414,53 @@ private:
                 delegate.atomPatternCharacter('x');
             } else
                 delegate.atomPatternCharacter(x);
+            break;
+        }
+
+        // Named backreference
+        case 'k': {
+            consume();
+            ParseState state = saveState();
+            if (!atEndOfPattern() && !inCharacterClass) {
+                if (consume() == '<') {
+                    auto groupName = tryConsumeGroupName();
+                    if (groupName && m_captureGroupNames.contains(groupName.value())) {
+                        delegate.atomNamedBackReference(groupName.value());
+                        break;
+                    }
+                    if (m_isUnicode) {
+                        m_err = YarrPattern::InvalidBackreference;
+                        break;
+                    }
+                }
+            }
+            restoreState(state);
+            delegate.atomPatternCharacter('k');
+            break;
+        }
+
+        // Unicode property escapes
+        case 'p':
+        case 'P': {
+            int escapeChar = consume();
+
+            if (!m_isUnicode) {
+                if (isIdentityEscapeAnError(escapeChar))
+                    break;
+                delegate.atomPatternCharacter(escapeChar);
+                break;
+            }
+
+            if (!atEndOfPattern() && peek() == '{') {
+                consume();
+                auto optClassID = tryConsumeUnicodePropertyExpression();
+                if (!optClassID) {
+                    // tryConsumeUnicodePropertyExpression() will set m_err for a malformed property expression
+                    break;
+                }
+                delegate.atomBuiltInCharacterClass(optClassID.value(), escapeChar == 'P');
+            } else
+                m_err = YarrPattern::InvalidUnicodePropertyExpression;
             break;
         }
 
@@ -599,7 +644,21 @@ private:
             case '!':
                 m_delegate.atomParentheticalAssertionBegin(true);
                 break;
-            
+
+            case '<': {
+                auto groupName = tryConsumeGroupName();
+                if (groupName) {
+                    auto setAddResult = m_captureGroupNames.add(groupName.value());
+                    if (setAddResult.isNewEntry)
+                        m_delegate.atomParenthesesSubpatternBegin(true, groupName);
+                    else
+                        m_err = YarrPattern::DuplicateGroupName;
+                } else
+                    m_err = YarrPattern::InvalidGroupName;
+
+                break;
+            }
+
             default:
                 m_err = YarrPattern::ParenthesesTypeInvalid;
             }
@@ -694,7 +753,7 @@ private:
 
             case '.':
                 consume();
-                m_delegate.atomBuiltInCharacterClass(NewlineClassID, true);
+                m_delegate.atomBuiltInCharacterClass(BuiltInCharacterClassID::DotClassID, false);
                 lastTokenWasAnAtom = true;
                 break;
 
@@ -824,6 +883,87 @@ private:
         return peek() - '0';
     }
 
+    int tryConsumeUnicodeEscape()
+    {
+        if (!tryConsume('u'))
+            return -1;
+
+        if (m_isUnicode && tryConsume('{')) {
+            int codePoint = 0;
+            do {
+                if (atEndOfPattern() || !isASCIIHexDigit(peek())) {
+                    m_err = YarrPattern::InvalidUnicodeEscape;
+                    return -1;
+                }
+
+                codePoint = (codePoint << 4) | toASCIIHexValue(consume());
+
+                if (codePoint > UCHAR_MAX_VALUE) {
+                    m_err = YarrPattern::InvalidUnicodeEscape;
+                    return -1;
+                }
+            } while (!atEndOfPattern() && peek() != '}');
+            if (!atEndOfPattern() && peek() == '}')
+                consume();
+            else if (!m_err)
+                m_err = YarrPattern::InvalidUnicodeEscape;
+            if (m_err)
+                return -1;
+
+            return codePoint;
+        }
+
+        int u = tryConsumeHex(4);
+        if (u == -1)
+            return -1;
+
+        // If we have the first of a surrogate pair, look for the second.
+        if (U16_IS_LEAD(u) && m_isUnicode && (patternRemaining() >= 6) && peek() == '\\') {
+            ParseState state = saveState();
+            consume();
+
+            if (tryConsume('u')) {
+                int surrogate2 = tryConsumeHex(4);
+                if (U16_IS_TRAIL(surrogate2)) {
+                    u = U16_GET_SUPPLEMENTARY(u, surrogate2);
+                    return u;
+                }
+            }
+
+            restoreState(state);
+        }
+
+        return u;
+    }
+
+    int tryConsumeIdentifierCharacter()
+    {
+        int ch = peek();
+
+        if (ch == '\\') {
+            consume();
+            ch = tryConsumeUnicodeEscape();
+        } else
+            consume();
+
+        return ch;
+    }
+
+    bool isIdentifierStart(int ch)
+    {
+        return (WTF::isASCII(ch) && (WTF::isASCIIAlpha(ch) || ch == '_' || ch == '$')) || (U_GET_GC_MASK(ch) & U_GC_L_MASK);
+    }
+
+    bool isIdentifierPart(int ch)
+    {
+        return (WTF::isASCII(ch) && (WTF::isASCIIAlpha(ch) || ch == '_' || ch == '$')) || (U_GET_GC_MASK(ch) & (U_GC_L_MASK | U_GC_MN_MASK | U_GC_MC_MASK | U_GC_ND_MASK | U_GC_PC_MASK)) || ch == 0x200C || ch == 0x200D;
+    }
+
+    bool isUnicodePropertyValueExpressionChar(int ch)
+    {
+        return WTF::isASCIIAlphanumeric(ch) || ch == '_' || ch == '=';
+    }
+
     int consume()
     {
         ASSERT(m_index < m_size);
@@ -880,6 +1020,90 @@ private:
         return n;
     }
 
+    std::optional<String> tryConsumeGroupName()
+    {
+        if (atEndOfPattern())
+            return std::nullopt;
+
+        ParseState state = saveState();
+        
+        int ch = tryConsumeIdentifierCharacter();
+
+        if (isIdentifierStart(ch)) {
+            StringBuilder identifierBuilder;
+            identifierBuilder.append(ch);
+
+            while (!atEndOfPattern()) {
+                ch = tryConsumeIdentifierCharacter();
+                if (ch == '>')
+                    return std::optional<String>(identifierBuilder.toString());
+
+                if (!isIdentifierPart(ch))
+                    break;
+
+                identifierBuilder.append(ch);
+            }
+        }
+
+        restoreState(state);
+
+        return std::nullopt;
+    }
+
+    std::optional<BuiltInCharacterClassID> tryConsumeUnicodePropertyExpression()
+    {
+        if (atEndOfPattern() || !isUnicodePropertyValueExpressionChar(peek())) {
+            m_err = YarrPattern::InvalidUnicodePropertyExpression;
+            return std::nullopt;
+        }
+
+        StringBuilder expressionBuilder;
+        String unicodePropertyName;
+        bool foundEquals = false;
+        unsigned errors = 0;
+
+        expressionBuilder.append(consume());
+
+        while (!atEndOfPattern()) {
+            int ch = peek();
+            if (ch == '}') {
+                consume();
+                if (errors) {
+                    m_err = YarrPattern::InvalidUnicodePropertyExpression;
+                    return std::nullopt;
+                }
+
+                if (foundEquals) {
+                    auto result = unicodeMatchPropertyValue(unicodePropertyName, expressionBuilder.toString());
+                    if (!result)
+                        m_err = YarrPattern::InvalidUnicodePropertyExpression;
+                    return result;
+                }
+
+                auto result = unicodeMatchProperty(expressionBuilder.toString());
+                if (!result)
+                    m_err = YarrPattern::InvalidUnicodePropertyExpression;
+                return result;
+            }
+
+            consume();
+            if (ch == '=') {
+                if (!foundEquals) {
+                    foundEquals = true;
+                    unicodePropertyName = expressionBuilder.toString();
+                    expressionBuilder.clear();
+                } else
+                    errors++;
+            } else if (!isUnicodePropertyValueExpressionChar(ch))
+                errors++;
+            else
+                expressionBuilder.append(ch);
+        }
+
+        m_err = YarrPattern::InvalidUnicodePropertyExpression;
+        return std::nullopt;
+    }
+
     Delegate& m_delegate;
     unsigned m_backReferenceLimit;
     YarrPattern::ErrorCode m_err;
@@ -888,6 +1112,7 @@ private:
     unsigned m_index;
     bool m_isUnicode;
     unsigned m_parenthesesNestingDepth;
+    HashSet<String> m_captureGroupNames;
 
     // Derived by empirical testing of compile time in PCRE and WREC.
     static const unsigned MAX_PATTERN_SIZE = 1024 * 1024;
@@ -914,10 +1139,11 @@ private:
  *    void atomCharacterClassRange(UChar32 begin, UChar32 end)
  *    void atomCharacterClassBuiltIn(BuiltInCharacterClassID classID, bool invert)
  *    void atomCharacterClassEnd()
- *    void atomParenthesesSubpatternBegin(bool capture = true);
+ *    void atomParenthesesSubpatternBegin(bool capture = true, std::optional<String> groupName);
  *    void atomParentheticalAssertionBegin(bool invert = false);
  *    void atomParenthesesEnd();
  *    void atomBackReference(unsigned subpatternId);
+ *    void atomNamedBackReference(String subpatternName);
  *
  *    void quantifyAtom(unsigned min, unsigned max, bool greedy);
  *

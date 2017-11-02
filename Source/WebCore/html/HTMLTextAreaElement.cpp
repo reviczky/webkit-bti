@@ -28,13 +28,13 @@
 
 #include "BeforeTextInsertedEvent.h"
 #include "CSSValueKeywords.h"
+#include "DOMFormData.h"
 #include "Document.h"
 #include "Editor.h"
 #include "ElementChildIterator.h"
 #include "Event.h"
 #include "EventNames.h"
 #include "FormController.h"
-#include "FormDataList.h"
 #include "Frame.h"
 #include "FrameSelection.h"
 #include "HTMLNames.h"
@@ -217,19 +217,19 @@ RenderPtr<RenderElement> HTMLTextAreaElement::createElementRenderer(RenderStyle&
     return createRenderer<RenderTextControlMultiLine>(*this, WTFMove(style));
 }
 
-bool HTMLTextAreaElement::appendFormData(FormDataList& encoding, bool)
+bool HTMLTextAreaElement::appendFormData(DOMFormData& formData, bool)
 {
     if (name().isEmpty())
         return false;
 
     document().updateLayout();
 
-    const String& text = (m_wrap == HardWrap) ? valueWithHardLineBreaks() : value();
-    encoding.appendData(name(), text);
+    formData.append(name(), m_wrap == HardWrap ? valueWithHardLineBreaks() : value());
 
-    const AtomicString& dirnameAttrValue = attributeWithoutSynchronization(dirnameAttr);
+    auto& dirnameAttrValue = attributeWithoutSynchronization(dirnameAttr);
     if (!dirnameAttrValue.isNull())
-        encoding.appendData(dirnameAttrValue, directionForFormData());
+        formData.append(dirnameAttrValue, directionForFormData());
+
     return true;    
 }
 
@@ -287,7 +287,7 @@ void HTMLTextAreaElement::subtreeHasChanged()
     if (!focused())
         return;
 
-    if (Frame* frame = document().frame())
+    if (RefPtr<Frame> frame = document().frame())
         frame->editor().textDidChangeInTextArea(this);
     // When typing in a textarea, childrenChanged is not called, so we need to force the directionality check.
     calculateAndAdjustDirectionality();
@@ -325,9 +325,9 @@ String HTMLTextAreaElement::sanitizeUserInputValue(const String& proposedValue, 
     return proposedValue.left(numCharactersInGraphemeClusters(proposedValue, maxLength));
 }
 
-TextControlInnerTextElement* HTMLTextAreaElement::innerTextElement() const
+RefPtr<TextControlInnerTextElement> HTMLTextAreaElement::innerTextElement() const
 {
-    ShadowRoot* root = userAgentShadowRoot();
+    RefPtr<ShadowRoot> root = userAgentShadowRoot();
     if (!root)
         return nullptr;
     

@@ -27,16 +27,15 @@
 #include "JSDOMPromiseDeferred.h"
 
 #include "DOMWindow.h"
-#include "JSDOMError.h"
 #include "JSDOMWindow.h"
 #include <builtins/BuiltinNames.h>
 #include <runtime/Exception.h>
 #include <runtime/JSONObject.h>
 #include <runtime/JSPromiseConstructor.h>
 
-using namespace JSC;
 
 namespace WebCore {
+using namespace JSC;
 
 JSC::JSValue DeferredPromise::promise() const
 {
@@ -63,7 +62,7 @@ void DeferredPromise::callFunction(ExecState& exec, JSValue function, JSValue re
 
     // DeferredPromise should only be used by internal implementations that are well behaved.
     // In practice, the only exception we should ever see here is the TerminatedExecutionException.
-    ASSERT_UNUSED(scope, !scope.exception() || isTerminatedExecutionException(vm, scope.exception()));
+    EXCEPTION_ASSERT_UNUSED(scope, !scope.exception() || isTerminatedExecutionException(vm, scope.exception()));
 
     if (m_mode == Mode::ClearPromiseOnResolve)
         clear();
@@ -103,6 +102,18 @@ void DeferredPromise::reject(Exception exception)
     auto& state = *m_globalObject->globalExec();
     JSC::JSLockHolder locker(&state);
 
+    if (exception.code() == ExistingExceptionError) {
+        auto scope = DECLARE_CATCH_SCOPE(state.vm());
+
+        EXCEPTION_ASSERT(scope.exception());
+
+        auto error = scope.exception()->value();
+        scope.clearException();
+
+        reject<IDLAny>(error);
+        return;
+    }
+
     auto scope = DECLARE_THROW_SCOPE(state.vm());
     auto error = createDOMException(state, WTFMove(exception));
     if (UNLIKELY(scope.exception())) {
@@ -122,6 +133,18 @@ void DeferredPromise::reject(ExceptionCode ec, const String& message)
     ASSERT(m_globalObject);
     auto& state = *m_globalObject->globalExec();
     JSC::JSLockHolder locker(&state);
+
+    if (ec == ExistingExceptionError) {
+        auto scope = DECLARE_CATCH_SCOPE(state.vm());
+
+        EXCEPTION_ASSERT(scope.exception());
+
+        auto error = scope.exception()->value();
+        scope.clearException();
+
+        reject<IDLAny>(error);
+        return;
+    }
 
     auto scope = DECLARE_THROW_SCOPE(state.vm());
     auto error = createDOMException(&state, ec, message);

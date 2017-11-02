@@ -34,6 +34,7 @@
 
 #include "DOMWrapperWorld.h"
 #include "EventNames.h"
+#include "HTMLBodyElement.h"
 #include "InspectorInstrumentation.h"
 #include "JSEventListener.h"
 #include "NoEventDispatchAssertion.h"
@@ -47,11 +48,11 @@
 #include <wtf/StdLibExtras.h>
 #include <wtf/Vector.h>
 
-using namespace WTF;
 
 namespace WebCore {
+using namespace WTF;
 
-Node* EventTarget::toNode()
+RefPtr<Node> EventTarget::toNode()
 {
     return nullptr;
 }
@@ -68,9 +69,20 @@ bool EventTarget::isMessagePort() const
 
 bool EventTarget::addEventListener(const AtomicString& eventType, Ref<EventListener>&& listener, const AddEventListenerOptions& options)
 {
+    auto passive = options.passive;
+
+    if (!passive.has_value() && eventNames().isTouchScrollBlockingEventType(eventType)) {
+        if (toDOMWindow())
+            passive = true;
+        else if (auto node = toNode()) {
+            if (node->isDocumentNode() || node->document().documentElement() == node || node->document().body() == node)
+                passive = true;
+        }
+    }
+
     bool listenerCreatedFromScript = listener->type() == EventListener::JSEventListenerType && !listener->wasCreatedFromMarkup();
 
-    if (!ensureEventTargetData().eventListenerMap.add(eventType, WTFMove(listener), { options.capture, options.passive, options.once }))
+    if (!ensureEventTargetData().eventListenerMap.add(eventType, WTFMove(listener), { options.capture, passive.value_or(false), options.once }))
         return false;
 
     if (listenerCreatedFromScript)
@@ -127,7 +139,12 @@ bool EventTarget::setAttributeEventListener(const AtomicString& eventType, RefPt
         return false;
     }
     if (existingListener) {
+        InspectorInstrumentation::willRemoveEventListener(*this, eventType, *existingListener, false);
+
         eventTargetData()->eventListenerMap.replace(eventType, *existingListener, listener.releaseNonNull(), { });
+
+        InspectorInstrumentation::didAddEventListener(*this, eventType);
+
         return true;
     }
     return addEventListener(eventType, listener.releaseNonNull());
@@ -259,6 +276,9 @@ void EventTarget::fireEventListeners(Event& event, EventListenerVector listeners
         if (event.eventPhase() == Event::CAPTURING_PHASE && !registeredListener->useCapture())
             continue;
         if (event.eventPhase() == Event::BUBBLING_PHASE && registeredListener->useCapture())
+            continue;
+
+        if (InspectorInstrumentation::isEventListenerDisabled(*this, event.type(), registeredListener->callback(), registeredListener->useCapture()))
             continue;
 
         // If stopImmediatePropagation has been called, we just break out immediately, without

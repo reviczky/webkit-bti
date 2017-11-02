@@ -125,8 +125,8 @@ macro doVMEntry(makeCall)
     storep vm, VMEntryRecord::m_vm[sp]
     loadp VM::topCallFrame[vm], t4
     storep t4, VMEntryRecord::m_prevTopCallFrame[sp]
-    loadp VM::topVMEntryFrame[vm], t4
-    storep t4, VMEntryRecord::m_prevTopVMEntryFrame[sp]
+    loadp VM::topEntryFrame[vm], t4
+    storep t4, VMEntryRecord::m_prevTopEntryFrame[sp]
 
     # Align stack pointer
     if X86_WIN or MIPS
@@ -189,8 +189,8 @@ macro doVMEntry(makeCall)
     loadp VMEntryRecord::m_vm[sp], t5
     loadp VMEntryRecord::m_prevTopCallFrame[sp], t4
     storep t4, VM::topCallFrame[t5]
-    loadp VMEntryRecord::m_prevTopVMEntryFrame[sp], t4
-    storep t4, VM::topVMEntryFrame[t5]
+    loadp VMEntryRecord::m_prevTopEntryFrame[sp], t4
+    storep t4, VM::topEntryFrame[t5]
 
     if ARMv7
         subp cfr, CalleeRegisterSaveSize, t5
@@ -241,7 +241,7 @@ macro doVMEntry(makeCall)
 
 .copyArgsDone:
     storep sp, VM::topCallFrame[vm]
-    storep cfr, VM::topVMEntryFrame[vm]
+    storep cfr, VM::topEntryFrame[vm]
 
     makeCall(entry, t3, t4)
 
@@ -255,8 +255,8 @@ macro doVMEntry(makeCall)
     loadp VMEntryRecord::m_vm[sp], t5
     loadp VMEntryRecord::m_prevTopCallFrame[sp], t4
     storep t4, VM::topCallFrame[t5]
-    loadp VMEntryRecord::m_prevTopVMEntryFrame[sp], t4
-    storep t4, VM::topVMEntryFrame[t5]
+    loadp VMEntryRecord::m_prevTopEntryFrame[sp], t4
+    storep t4, VM::topEntryFrame[t5]
 
     if ARMv7
         subp cfr, CalleeRegisterSaveSize, t5
@@ -324,8 +324,8 @@ _handleUncaughtException:
     loadp VMEntryRecord::m_vm[sp], t3
     loadp VMEntryRecord::m_prevTopCallFrame[sp], t5
     storep t5, VM::topCallFrame[t3]
-    loadp VMEntryRecord::m_prevTopVMEntryFrame[sp], t5
-    storep t5, VM::topVMEntryFrame[t3]
+    loadp VMEntryRecord::m_prevTopEntryFrame[sp], t5
+    storep t5, VM::topEntryFrame[t3]
 
     if ARMv7
         subp cfr, CalleeRegisterSaveSize, t3
@@ -579,20 +579,7 @@ macro functionArityCheck(doneLabel, slowPath)
     jmp _llint_throw_from_slow_path_trampoline
 
 .noError:
-    # r1 points to ArityCheckData.
-    loadp CommonSlowPaths::ArityCheckData::thunkToCall[r1], t3
-    btpz t3, .proceedInline
-    
-    loadp CommonSlowPaths::ArityCheckData::paddedStackSpace[r1], a0
-    call t3
-    if ASSERT_ENABLED
-        loadp ReturnPC[cfr], t0
-        loadp [t0], t0
-    end
-    jmp .continue
-
-.proceedInline:
-    loadi CommonSlowPaths::ArityCheckData::paddedStackSpace[r1], t1
+    move r1, t1 # r1 contains slotsToAdd.
     btiz t1, .continue
     loadi PayloadOffset + ArgumentCount[cfr], t2
     addi CallFrameHeaderSlots, t2
@@ -1185,11 +1172,11 @@ _llint_op_bitor:
 _llint_op_overrides_has_instance:
     traceExecution()
 
-    loadisFromInstruction(1, t3)
+    loadisFromStruct(OpOverridesHasInstance::m_dst, t3)
     storei BooleanTag, TagOffset[cfr, t3, 8]
 
     # First check if hasInstanceValue is the one on Function.prototype[Symbol.hasInstance]
-    loadisFromInstruction(3, t0)
+    loadisFromStruct(OpOverridesHasInstance::m_hasInstanceValue, t0)
     loadConstantOrVariablePayload(t0, CellTag, t2, .opOverrideshasInstanceValueNotCell)
     loadConstantOrVariable(t0, t1, t2)
     bineq t1, CellTag, .opOverrideshasInstanceValueNotCell
@@ -1201,7 +1188,7 @@ _llint_op_overrides_has_instance:
     bineq t1, t2, .opOverrideshasInstanceValueNotDefault
 
     # We know the constructor is a cell.
-    loadisFromInstruction(2, t0)
+    loadisFromStruct(OpOverridesHasInstance::m_constructor, t0)
     loadConstantOrVariablePayloadUnchecked(t0, t1)
     tbz JSCell::m_flags[t1], ImplementsDefaultHasInstance, t0
     storei t0, PayloadOffset[cfr, t3, 8]
@@ -1796,6 +1783,32 @@ _llint_op_jneq_ptr:
     dispatch(constexpr op_jneq_ptr_length)
 
 
+macro compareUnsignedJump(integerCompare)
+    loadi 4[PC], t2
+    loadi 8[PC], t3
+    loadConstantOrVariable(t2, t0, t1)
+    loadConstantOrVariable2Reg(t3, t2, t3)
+    integerCompare(t1, t3, .jumpTarget)
+    dispatch(4)
+
+.jumpTarget:
+    dispatchBranch(12[PC])
+end
+
+
+macro compareUnsigned(integerCompareAndSet)
+    loadi 12[PC], t2
+    loadi 8[PC], t0
+    loadConstantOrVariable(t2, t3, t1)
+    loadConstantOrVariable2Reg(t0, t2, t0)
+    integerCompareAndSet(t0, t1, t0)
+    loadi 4[PC], t2
+    storei BooleanTag, TagOffset[cfr, t2, 8]
+    storei t0, PayloadOffset[cfr, t2, 8]
+    dispatch(4)
+end
+
+
 macro compare(integerCompare, doubleCompare, slowPath)
     loadi 4[PC], t2
     loadi 8[PC], t3
@@ -1997,7 +2010,10 @@ _llint_op_catch:
     storei t1, TagOffset[cfr, t2, 8]
 
     traceExecution()  # This needs to be here because we don't want to clobber t0, t1, t2, t3 above.
-    dispatch(3)
+
+    callOpcodeSlowPath(_llint_slow_path_profile_catch)
+
+    dispatch(constexpr op_catch_length)
 
 _llint_op_end:
     traceExecution()
@@ -2203,8 +2219,8 @@ end
 
 macro getClosureVar()
     loadisFromInstruction(6, t3)
-    loadp JSEnvironmentRecord_variables + TagOffset[t0, t3, 8], t1
-    loadp JSEnvironmentRecord_variables + PayloadOffset[t0, t3, 8], t2
+    loadp JSLexicalEnvironment_variables + TagOffset[t0, t3, 8], t1
+    loadp JSLexicalEnvironment_variables + PayloadOffset[t0, t3, 8], t2
     valueProfile(t1, t2, 28, t0)
     loadisFromInstruction(1, t0)
     storei t1, TagOffset[cfr, t0, 8]
@@ -2295,8 +2311,8 @@ macro putClosureVar()
     loadisFromInstruction(3, t1)
     loadConstantOrVariable(t1, t2, t3)
     loadisFromInstruction(6, t1)
-    storei t2, JSEnvironmentRecord_variables + TagOffset[t0, t1, 8]
-    storei t3, JSEnvironmentRecord_variables + PayloadOffset[t0, t1, 8]
+    storei t2, JSLexicalEnvironment_variables + TagOffset[t0, t1, 8]
+    storei t3, JSLexicalEnvironment_variables + PayloadOffset[t0, t1, 8]
 end
 
 macro putLocalClosureVar()
@@ -2307,8 +2323,8 @@ macro putLocalClosureVar()
     notifyWrite(t5, .pDynamic)
 .noVariableWatchpointSet:
     loadisFromInstruction(6, t1)
-    storei t2, JSEnvironmentRecord_variables + TagOffset[t0, t1, 8]
-    storei t3, JSEnvironmentRecord_variables + PayloadOffset[t0, t1, 8]
+    storei t2, JSLexicalEnvironment_variables + TagOffset[t0, t1, 8]
+    storei t3, JSLexicalEnvironment_variables + PayloadOffset[t0, t1, 8]
 end
 
 

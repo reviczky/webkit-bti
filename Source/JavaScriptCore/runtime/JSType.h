@@ -52,6 +52,7 @@ enum JSType : uint8_t {
     JSFixedArrayType,
     JSSourceCodeType,
     JSScriptFetcherType,
+    JSScriptFetchParametersType,
 
     // The ObjectType value must come before any JSType that is a subclass of JSObject.
     ObjectType,
@@ -94,6 +95,8 @@ enum JSType : uint8_t {
     ProxyObjectType,
     JSMapType,
     JSSetType,
+    JSWeakMapType,
+    JSWeakSetType,
 
     WebAssemblyFunctionType,
 

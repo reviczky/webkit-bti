@@ -85,6 +85,7 @@ class ResourceResponse;
 class ScriptExecutionContext;
 class SecurityOrigin;
 class ShadowRoot;
+class TimerBase;
 class URL;
 #if ENABLE(WEBGL)
 class WebGLProgram;
@@ -136,10 +137,16 @@ public:
     static void didInstallTimer(ScriptExecutionContext&, int timerId, Seconds timeout, bool singleShot);
     static void didRemoveTimer(ScriptExecutionContext&, int timerId);
 
+    static void didPostMessage(Frame&, TimerBase&, JSC::ExecState&);
+    static void didFailPostMessage(Frame&, TimerBase&);
+    static void willDispatchPostMessage(Frame&, TimerBase&);
+    static void didDispatchPostMessage(Frame&, TimerBase&);
+
     static InspectorInstrumentationCookie willCallFunction(ScriptExecutionContext*, const String& scriptName, int scriptLine);
     static void didCallFunction(const InspectorInstrumentationCookie&, ScriptExecutionContext*);
     static void didAddEventListener(EventTarget&, const AtomicString& eventType);
     static void willRemoveEventListener(EventTarget&, const AtomicString& eventType, EventListener&, bool capture);
+    static bool isEventListenerDisabled(EventTarget&, const AtomicString& eventType, EventListener&, bool capture);
     static InspectorInstrumentationCookie willDispatchEvent(Document&, const Event&, bool hasEventListeners);
     static void didDispatchEvent(const InspectorInstrumentationCookie&);
     static void willHandleEvent(ScriptExecutionContext&, const Event&, const RegisteredEventListener&);
@@ -164,7 +171,6 @@ public:
 
     static void applyEmulatedMedia(Frame&, String&);
     static void willSendRequest(Frame*, unsigned long identifier, DocumentLoader*, ResourceRequest&, const ResourceResponse& redirectResponse);
-    static void continueAfterPingLoader(Frame&, unsigned long identifier, DocumentLoader*, ResourceRequest&, const ResourceResponse&);
     static void didLoadResourceFromMemoryCache(Page&, DocumentLoader*, CachedResource*);
     static void didReceiveResourceResponse(Frame&, unsigned long identifier, DocumentLoader*, const ResourceResponse&, ResourceLoader*);
     static void didReceiveThreadableLoaderResponse(DocumentThreadableLoader&, unsigned long identifier);
@@ -175,7 +181,13 @@ public:
     static void continueWithPolicyDownload(Frame&, unsigned long identifier, DocumentLoader&, const ResourceResponse&);
     static void continueWithPolicyIgnore(Frame&, unsigned long identifier, DocumentLoader&, const ResourceResponse&);
 
-    static void didFinishXHRLoading(ScriptExecutionContext*, unsigned long identifier, std::optional<String> decodedText, const String& url, const String& sendURL, unsigned sendLineNumber, unsigned sendColumnNumber);
+    // Some network requests do not go through the normal network loading path.
+    // These network requests have to issue their own willSendRequest / didReceiveResponse / didFinishLoading / didFailLoading
+    // instrumentation calls. Some of these loads are for resources that lack a CachedResource::Type.
+    enum class LoadType { Ping, Beacon };
+    static void willSendRequestOfType(Frame*, unsigned long identifier, DocumentLoader*, ResourceRequest&, LoadType);
+
+    static void didFinishXHRLoading(ScriptExecutionContext*, unsigned long identifier, std::optional<String> decodedText);
     static void willLoadXHRSynchronously(ScriptExecutionContext*);
     static void didLoadXHRSynchronously(ScriptExecutionContext*);
     static void scriptImported(ScriptExecutionContext&, unsigned long identifier, const String& sourceString);
@@ -242,6 +254,7 @@ public:
 #if ENABLE(WEBGL)
     static void didCreateProgram(WebGLRenderingContextBase&, WebGLProgram&);
     static void willDeleteProgram(WebGLRenderingContextBase&, WebGLProgram&);
+    static bool isShaderProgramDisabled(WebGLRenderingContextBase&, WebGLProgram&);
 #endif
 
     static void networkStateChanged(Page&);
@@ -302,10 +315,16 @@ private:
     static void didInstallTimerImpl(InstrumentingAgents&, int timerId, Seconds timeout, bool singleShot, ScriptExecutionContext&);
     static void didRemoveTimerImpl(InstrumentingAgents&, int timerId, ScriptExecutionContext&);
 
+    static void didPostMessageImpl(InstrumentingAgents&, const TimerBase&, JSC::ExecState&);
+    static void didFailPostMessageImpl(InstrumentingAgents&, const TimerBase&);
+    static void willDispatchPostMessageImpl(InstrumentingAgents&, const TimerBase&);
+    static void didDispatchPostMessageImpl(InstrumentingAgents&, const TimerBase&);
+
     static InspectorInstrumentationCookie willCallFunctionImpl(InstrumentingAgents&, const String& scriptName, int scriptLine, ScriptExecutionContext*);
     static void didCallFunctionImpl(const InspectorInstrumentationCookie&, ScriptExecutionContext*);
     static void didAddEventListenerImpl(InstrumentingAgents&, EventTarget&, const AtomicString& eventType);
     static void willRemoveEventListenerImpl(InstrumentingAgents&, EventTarget&, const AtomicString& eventType, EventListener&, bool capture);
+    static bool isEventListenerDisabledImpl(InstrumentingAgents&, EventTarget&, const AtomicString& eventType, EventListener&, bool capture);
     static InspectorInstrumentationCookie willDispatchEventImpl(InstrumentingAgents&, Document&, const Event&, bool hasEventListeners);
     static void willHandleEventImpl(InstrumentingAgents&, const Event&, const RegisteredEventListener&);
     static void didHandleEventImpl(InstrumentingAgents&);
@@ -330,7 +349,7 @@ private:
 
     static void applyEmulatedMediaImpl(InstrumentingAgents&, String&);
     static void willSendRequestImpl(InstrumentingAgents&, unsigned long identifier, DocumentLoader*, ResourceRequest&, const ResourceResponse& redirectResponse);
-    static void continueAfterPingLoaderImpl(InstrumentingAgents&, unsigned long identifier, DocumentLoader*, ResourceRequest&, const ResourceResponse&);
+    static void willSendRequestOfTypeImpl(InstrumentingAgents&, unsigned long identifier, DocumentLoader*, ResourceRequest&, LoadType);
     static void markResourceAsCachedImpl(InstrumentingAgents&, unsigned long identifier);
     static void didLoadResourceFromMemoryCacheImpl(InstrumentingAgents&, DocumentLoader*, CachedResource*);
     static void didReceiveResourceResponseImpl(InstrumentingAgents&, unsigned long identifier, DocumentLoader*, const ResourceResponse&, ResourceLoader*);
@@ -338,7 +357,7 @@ private:
     static void didReceiveDataImpl(InstrumentingAgents&, unsigned long identifier, const char* data, int dataLength, int encodedDataLength);
     static void didFinishLoadingImpl(InstrumentingAgents&, unsigned long identifier, DocumentLoader*, const NetworkLoadMetrics&, ResourceLoader*);
     static void didFailLoadingImpl(InstrumentingAgents&, unsigned long identifier, DocumentLoader*, const ResourceError&);
-    static void didFinishXHRLoadingImpl(InstrumentingAgents&, unsigned long identifier, std::optional<String> decodedText, const String& url, const String& sendURL, unsigned sendLineNumber, unsigned sendColumnNumber);
+    static void didFinishXHRLoadingImpl(InstrumentingAgents&, unsigned long identifier, std::optional<String> decodedText);
     static void willLoadXHRSynchronouslyImpl(InstrumentingAgents&);
     static void didLoadXHRSynchronouslyImpl(InstrumentingAgents&);
     static void scriptImportedImpl(InstrumentingAgents&, unsigned long identifier, const String& sourceString);
@@ -406,6 +425,7 @@ private:
 #if ENABLE(WEBGL)
     static void didCreateProgramImpl(InstrumentingAgents&, WebGLRenderingContextBase&, WebGLProgram&);
     static void willDeleteProgramImpl(InstrumentingAgents&, WebGLProgram&);
+    static bool isShaderProgramDisabledImpl(InstrumentingAgents&, WebGLProgram&);
 #endif
 
     static void layerTreeDidChangeImpl(InstrumentingAgents&);
@@ -669,6 +689,42 @@ inline void InspectorInstrumentation::willRemoveEventListener(EventTarget& targe
         willRemoveEventListenerImpl(*instrumentingAgents, target, eventType, listener, capture);
 }
 
+inline bool InspectorInstrumentation::isEventListenerDisabled(EventTarget& target, const AtomicString& eventType, EventListener& listener, bool capture)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(false);
+    if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForContext(target.scriptExecutionContext()))
+        return isEventListenerDisabledImpl(*instrumentingAgents, target, eventType, listener, capture);
+    return false;
+}
+
+inline void InspectorInstrumentation::didPostMessage(Frame& frame, TimerBase& timer, JSC::ExecState& state)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(void());
+    if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForFrame(frame))
+        didPostMessageImpl(*instrumentingAgents, timer, state);
+}
+
+inline void InspectorInstrumentation::didFailPostMessage(Frame& frame, TimerBase& timer)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(void());
+    if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForFrame(frame))
+        didFailPostMessageImpl(*instrumentingAgents, timer);
+}
+
+inline void InspectorInstrumentation::willDispatchPostMessage(Frame& frame, TimerBase& timer)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(void());
+    if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForFrame(frame))
+        willDispatchPostMessageImpl(*instrumentingAgents, timer);
+}
+
+inline void InspectorInstrumentation::didDispatchPostMessage(Frame& frame, TimerBase& timer)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(void());
+    if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForFrame(frame))
+        didDispatchPostMessageImpl(*instrumentingAgents, timer);
+}
+
 inline InspectorInstrumentationCookie InspectorInstrumentation::willCallFunction(ScriptExecutionContext* context, const String& scriptName, int scriptLine)
 {
     FAST_RETURN_IF_NO_FRONTENDS(InspectorInstrumentationCookie());
@@ -849,10 +905,10 @@ inline void InspectorInstrumentation::willSendRequest(Frame* frame, unsigned lon
         willSendRequestImpl(*instrumentingAgents, identifier, loader, request, redirectResponse);
 }
 
-inline void InspectorInstrumentation::continueAfterPingLoader(Frame& frame, unsigned long identifier, DocumentLoader* loader, ResourceRequest& request, const ResourceResponse& response)
+inline void InspectorInstrumentation::willSendRequestOfType(Frame* frame, unsigned long identifier, DocumentLoader* loader, ResourceRequest& request, LoadType loadType)
 {
     if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForFrame(frame))
-        InspectorInstrumentation::continueAfterPingLoaderImpl(*instrumentingAgents, identifier, loader, request, response);
+        willSendRequestOfTypeImpl(*instrumentingAgents, identifier, loader, request, loadType);
 }
 
 inline void InspectorInstrumentation::didLoadResourceFromMemoryCache(Page& page, DocumentLoader* loader, CachedResource* resource)
@@ -911,10 +967,10 @@ inline void InspectorInstrumentation::continueWithPolicyIgnore(Frame& frame, uns
         didReceiveResourceResponseImpl(*instrumentingAgents, identifier, &loader, response, nullptr);
 }
 
-inline void InspectorInstrumentation::didFinishXHRLoading(ScriptExecutionContext* context, unsigned long identifier, std::optional<String> decodedText, const String& url, const String& sendURL, unsigned sendLineNumber, unsigned sendColumnNumber)
+inline void InspectorInstrumentation::didFinishXHRLoading(ScriptExecutionContext* context, unsigned long identifier, std::optional<String> decodedText)
 {
     if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForContext(context))
-        didFinishXHRLoadingImpl(*instrumentingAgents, identifier, decodedText, url, sendURL, sendLineNumber, sendColumnNumber);
+        didFinishXHRLoadingImpl(*instrumentingAgents, identifier, decodedText);
 }
 
 inline void InspectorInstrumentation::willLoadXHRSynchronously(ScriptExecutionContext* context)
@@ -1156,6 +1212,14 @@ inline void InspectorInstrumentation::willDeleteProgram(WebGLRenderingContextBas
 {
     if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(context.canvas().document()))
         willDeleteProgramImpl(*instrumentingAgents, program);
+}
+
+inline bool InspectorInstrumentation::isShaderProgramDisabled(WebGLRenderingContextBase& context, WebGLProgram& program)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(false);
+    if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(context.canvas().document()))
+        return isShaderProgramDisabledImpl(*instrumentingAgents, program);
+    return false;
 }
 #endif
 

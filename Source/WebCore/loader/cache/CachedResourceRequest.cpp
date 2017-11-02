@@ -99,8 +99,8 @@ void CachedResourceRequest::setAsPotentiallyCrossOrigin(const String& mode, Docu
         ? FetchOptions::Credentials::Omit : equalLettersIgnoringASCIICase(mode, "use-credentials")
         ? FetchOptions::Credentials::Include : FetchOptions::Credentials::SameOrigin;
     m_options.credentials = credentials;
-    m_options.allowCredentials = credentials == FetchOptions::Credentials::Include ? AllowStoredCredentials : DoNotAllowStoredCredentials;
-    WebCore::updateRequestForAccessControl(m_resourceRequest, document.securityOrigin(), m_options.allowCredentials);
+    m_options.storedCredentialsPolicy = credentials == FetchOptions::Credentials::Include ? StoredCredentialsPolicy::Use : StoredCredentialsPolicy::DoNotUse;
+    WebCore::updateRequestForAccessControl(m_resourceRequest, document.securityOrigin(), m_options.storedCredentialsPolicy);
 }
 
 void CachedResourceRequest::updateForAccessControl(Document& document)
@@ -108,7 +108,7 @@ void CachedResourceRequest::updateForAccessControl(Document& document)
     ASSERT(m_options.mode == FetchOptions::Mode::Cors);
 
     m_origin = &document.securityOrigin();
-    WebCore::updateRequestForAccessControl(m_resourceRequest, *m_origin, m_options.allowCredentials);
+    WebCore::updateRequestForAccessControl(m_resourceRequest, *m_origin, m_options.storedCredentialsPolicy);
 }
 
 void upgradeInsecureResourceRequestIfNeeded(ResourceRequest& request, Document& document)
@@ -212,9 +212,9 @@ void CachedResourceRequest::removeFragmentIdentifierIfNeeded()
 
 #if ENABLE(CONTENT_EXTENSIONS)
 
-void CachedResourceRequest::applyBlockedStatus(const ContentExtensions::BlockedStatus& blockedStatus)
+void CachedResourceRequest::applyBlockedStatus(const ContentExtensions::BlockedStatus& blockedStatus, Page* page)
 {
-    ContentExtensions::applyBlockedStatusToRequest(blockedStatus, m_resourceRequest);
+    ContentExtensions::applyBlockedStatusToRequest(blockedStatus, page, m_resourceRequest);
 }
 
 #endif
@@ -265,5 +265,29 @@ bool isRequestCrossOrigin(SecurityOrigin* origin, const URL& requestURL, const R
 
     return !origin->canRequest(requestURL);
 }
+
+void CachedResourceRequest::setDestinationIfNotSet(FetchOptions::Destination destination)
+{
+    if (m_options.destination != FetchOptions::Destination::EmptyString)
+        return;
+    m_options.destination = destination;
+}
+
+#if ENABLE(SERVICE_WORKER)
+void CachedResourceRequest::setSelectedServiceWorkerIdentifierIfNeeded(uint64_t serviceWorkerIdentifier)
+{
+    if (isNonSubresourceRequest(m_options.destination))
+        return;
+    if (isPotentialNavigationOrSubresourceRequest(m_options.destination))
+        return;
+
+    if (m_options.serviceWorkersMode != ServiceWorkersMode::All)
+        return;
+    if (m_options.serviceWorkerIdentifier)
+        return;
+
+    m_options.serviceWorkerIdentifier = serviceWorkerIdentifier;
+}
+#endif
 
 } // namespace WebCore

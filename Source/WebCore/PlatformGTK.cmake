@@ -3,7 +3,6 @@ include(platform/FreeType.cmake)
 include(platform/GCrypt.cmake)
 include(platform/GStreamer.cmake)
 include(platform/ImageDecoders.cmake)
-include(platform/Linux.cmake)
 
 if (USE_TEXTURE_MAPPER)
     include(platform/TextureMapper.cmake)
@@ -17,9 +16,6 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/accessibility/atk"
     "${WEBCORE_DIR}/editing/atk"
     "${WEBCORE_DIR}/page/gtk"
-    "${WEBCORE_DIR}/platform/gamepad"
-    "${WEBCORE_DIR}/platform/gamepad/deprecated"
-    "${WEBCORE_DIR}/platform/gamepad/glib"
     "${WEBCORE_DIR}/platform/geoclue"
     "${WEBCORE_DIR}/platform/gtk"
     "${WEBCORE_DIR}/platform/graphics/egl"
@@ -69,15 +65,14 @@ list(APPEND WebCore_SOURCES
 
     platform/audio/glib/AudioBusGLib.cpp
 
-    platform/gamepad/glib/GamepadsGlib.cpp
-
-    platform/geoclue/GeolocationProviderGeoclue1.cpp
-    platform/geoclue/GeolocationProviderGeoclue2.cpp
+    platform/geoclue/GeolocationProviderGeoclue.cpp
 
     platform/glib/EventLoopGlib.cpp
+    platform/glib/FileMonitorGLib.cpp
     platform/glib/FileSystemGlib.cpp
     platform/glib/KeyedDecoderGlib.cpp
     platform/glib/KeyedEncoderGlib.cpp
+    platform/glib/LowPowerModeNotifierGLib.cpp
     platform/glib/MainThreadSharedTimerGLib.cpp
     platform/glib/SSLKeyGeneratorGLib.cpp
     platform/glib/SharedBufferGlib.cpp
@@ -184,7 +179,7 @@ list(APPEND WebCorePlatformGTK_SOURCES
     rendering/RenderThemeGtk.cpp
 )
 
-if (USE_GEOCLUE2)
+if (ENABLE_GEOLOCATION)
     list(APPEND WebCore_DERIVED_SOURCES
         ${DERIVED_SOURCES_WEBCORE_DIR}/Geoclue2Interface.c
     )
@@ -212,19 +207,15 @@ list(APPEND WebCore_LIBRARIES
     ${ATK_LIBRARIES}
     ${CAIRO_LIBRARIES}
     ${ENCHANT_LIBRARIES}
-    ${GEOCLUE_LIBRARIES}
     ${GLIB_GIO_LIBRARIES}
     ${GLIB_GMODULE_LIBRARIES}
     ${GLIB_GOBJECT_LIBRARIES}
     ${GLIB_LIBRARIES}
-    ${GUDEV_LIBRARIES}
     ${LIBSECRET_LIBRARIES}
     ${LIBSOUP_LIBRARIES}
     ${LIBTASN1_LIBRARIES}
-    ${LIBXML2_LIBRARIES}
-    ${LIBXSLT_LIBRARIES}
     ${HYPHEN_LIBRARIES}
-    ${SQLITE_LIBRARIES}
+    ${UPOWERGLIB_LIBRARIES}
     ${X11_X11_LIB}
     ${X11_Xcomposite_LIB}
     ${X11_Xdamage_LIB}
@@ -240,16 +231,12 @@ list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
     ${ATK_INCLUDE_DIRS}
     ${CAIRO_INCLUDE_DIRS}
     ${ENCHANT_INCLUDE_DIRS}
-    ${GEOCLUE_INCLUDE_DIRS}
     ${GIO_UNIX_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}
-    ${GUDEV_INCLUDE_DIRS}
     ${LIBSECRET_INCLUDE_DIRS}
     ${LIBSOUP_INCLUDE_DIRS}
     ${LIBTASN1_INCLUDE_DIRS}
-    ${LIBXML2_INCLUDE_DIR}
-    ${LIBXSLT_INCLUDE_DIR}
-    ${SQLITE_INCLUDE_DIR}
+    ${UPOWERGLIB_INCLUDE_DIRS}
     ${ZLIB_INCLUDE_DIRS}
 )
 

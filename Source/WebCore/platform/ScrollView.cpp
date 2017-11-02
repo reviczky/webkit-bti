@@ -40,13 +40,9 @@
 
 namespace WebCore {
 
-ScrollView::ScrollView()
-{
-}
+ScrollView::ScrollView() = default;
 
-ScrollView::~ScrollView()
-{
-}
+ScrollView::~ScrollView() = default;
 
 void ScrollView::addChild(Widget& child)
 {
@@ -190,11 +186,6 @@ bool ScrollView::canBlitOnScroll() const
 void ScrollView::setPaintsEntireContents(bool paintsEntireContents)
 {
     m_paintsEntireContents = paintsEntireContents;
-}
-
-void ScrollView::setClipsRepaints(bool clipsRepaints)
-{
-    m_clipsRepaints = clipsRepaints;
 }
 
 void ScrollView::setDelegatesScrolling(bool delegatesScrolling)
@@ -1071,7 +1062,7 @@ void ScrollView::positionScrollbarLayers()
 void ScrollView::repaintContentRectangle(const IntRect& rect)
 {
     IntRect paintRect = rect;
-    if (clipsRepaints() && !paintsEntireContents())
+    if (!paintsEntireContents())
         paintRect.intersect(visibleContentRect(LegacyIOSDocumentVisibleRect));
     if (paintRect.isEmpty())
         return;

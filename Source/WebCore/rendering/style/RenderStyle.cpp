@@ -74,14 +74,14 @@ struct SameSizeAsRenderStyle {
     } m_inheritedFlags;
 
     struct NonInheritedFlags {
-        uint64_t m_bitfields;
+        unsigned m_bitfields[2];
     } m_nonInheritedFlags;
 #if !ASSERT_DISABLED || ENABLE(SECURITY_ASSERTIONS)
     bool deletionCheck;
 #endif
 };
 
-static_assert(sizeof(RenderStyle) <= sizeof(SameSizeAsRenderStyle), "RenderStyle should stay small");
+static_assert(sizeof(RenderStyle) == sizeof(SameSizeAsRenderStyle), "RenderStyle should stay small");
 
 RenderStyle& RenderStyle::defaultStyle()
 {
@@ -352,6 +352,13 @@ void RenderStyle::copyNonInheritedFrom(const RenderStyle& other)
     ASSERT(zoom() == initialZoom());
 }
 
+void RenderStyle::copyContentFrom(const RenderStyle& other)
+{
+    if (!other.m_rareNonInheritedData->content)
+        return;
+    m_rareNonInheritedData.access().content = other.m_rareNonInheritedData->content->clone();
+}
+
 bool RenderStyle::operator==(const RenderStyle& other) const
 {
     // compare everything except the pseudoStyle pointer
@@ -586,9 +593,6 @@ bool RenderStyle::changeRequiresLayout(const RenderStyle& other, unsigned& chang
             || m_rareNonInheritedData->lineClamp != other.m_rareNonInheritedData->lineClamp
             || m_rareNonInheritedData->initialLetter != other.m_rareNonInheritedData->initialLetter
             || m_rareNonInheritedData->textOverflow != other.m_rareNonInheritedData->textOverflow)
-            return true;
-
-        if (m_rareNonInheritedData->regionFragment != other.m_rareNonInheritedData->regionFragment)
             return true;
 
         if (m_rareNonInheritedData->shapeMargin != other.m_rareNonInheritedData->shapeMargin)
@@ -945,7 +949,8 @@ bool RenderStyle::changeRequiresRepaintIfTextOrBorderOrOutline(const RenderStyle
         || m_rareInheritedData->textStrokeColor != other.m_rareInheritedData->textStrokeColor
         || m_rareInheritedData->textEmphasisColor != other.m_rareInheritedData->textEmphasisColor
         || m_rareInheritedData->textEmphasisFill != other.m_rareInheritedData->textEmphasisFill
-        || m_rareInheritedData->strokeColor != other.m_rareInheritedData->strokeColor)
+        || m_rareInheritedData->strokeColor != other.m_rareInheritedData->strokeColor
+        || m_rareInheritedData->caretColor != other.m_rareInheritedData->caretColor)
         return true;
 
     return false;
@@ -1736,7 +1741,7 @@ LayoutBoxExtent RenderStyle::getShadowInsetExtent(const ShadowData* shadow) cons
         left = std::max<LayoutUnit>(left, shadow->x() + extentAndSpread);
     }
 
-    return LayoutBoxExtent(top, right, bottom, left);
+    return LayoutBoxExtent(WTFMove(top), WTFMove(right), WTFMove(bottom), WTFMove(left));
 }
 
 void RenderStyle::getShadowHorizontalExtent(const ShadowData* shadow, LayoutUnit &left, LayoutUnit &right) const
@@ -1791,6 +1796,9 @@ Color RenderStyle::colorIncludingFallback(int colorProperty, bool visitedLink) c
     case CSSPropertyBorderBottomColor:
         result = visitedLink ? visitedLinkBorderBottomColor() : borderBottomColor();
         borderStyle = borderBottomStyle();
+        break;
+    case CSSPropertyCaretColor:
+        result = visitedLink ? visitedLinkCaretColor() : caretColor();
         break;
     case CSSPropertyColor:
         result = visitedLink ? visitedLinkColor() : color();

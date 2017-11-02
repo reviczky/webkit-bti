@@ -135,6 +135,7 @@ CapabilityLevel capabilityLevel(OpcodeID opcodeID, CodeBlock* codeBlock, Instruc
     case op_profile_control_flow:
     case op_mov:
     case op_overrides_has_instance:
+    case op_identity_with_profile:
     case op_instanceof:
     case op_instanceof_custom:
     case op_is_empty:
@@ -150,6 +151,8 @@ CapabilityLevel capabilityLevel(OpcodeID opcodeID, CodeBlock* codeBlock, Instruc
     case op_lesseq:
     case op_greater:
     case op_greatereq:
+    case op_below:
+    case op_beloweq:
     case op_eq:
     case op_eq_null:
     case op_stricteq:
@@ -191,6 +194,8 @@ CapabilityLevel capabilityLevel(OpcodeID opcodeID, CodeBlock* codeBlock, Instruc
     case op_jnlesseq:
     case op_jngreater:
     case op_jngreatereq:
+    case op_jbelow:
+    case op_jbeloweq:
     case op_loop_hint:
     case op_check_traps:
     case op_nop:
@@ -241,10 +246,13 @@ CapabilityLevel capabilityLevel(OpcodeID opcodeID, CodeBlock* codeBlock, Instruc
     case op_new_func_exp:
     case op_new_generator_func:
     case op_new_generator_func_exp:
+    case op_new_async_generator_func:
+    case op_new_async_generator_func_exp:
     case op_new_async_func:
     case op_new_async_func_exp:
     case op_set_function_name:
     case op_create_lexical_environment:
+    case op_push_with_scope:
     case op_get_parent_scope:
     case op_catch:
     case op_create_rest:

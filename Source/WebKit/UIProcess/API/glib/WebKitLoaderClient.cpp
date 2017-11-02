@@ -100,14 +100,14 @@ private:
         webkitWebViewInsecureContentDetected(m_webView, WEBKIT_INSECURE_CONTENT_RUN);
     }
 
-    void didChangeBackForwardList(WebPageProxy&, WebBackForwardListItem* addedItem, Vector<RefPtr<WebBackForwardListItem>> removedItems) override
+    void didChangeBackForwardList(WebPageProxy&, WebBackForwardListItem* addedItem, Vector<Ref<WebBackForwardListItem>>&& removedItems) override
     {
-        webkitBackForwardListChanged(webkit_web_view_get_back_forward_list(m_webView), addedItem, removedItems);
+        webkitBackForwardListChanged(webkit_web_view_get_back_forward_list(m_webView), addedItem, WTFMove(removedItems));
     }
 
-    void didReceiveAuthenticationChallengeInFrame(WebPageProxy&, WebFrameProxy&, AuthenticationChallengeProxy* authenticationChallenge) override
+    void didReceiveAuthenticationChallengeInFrame(WebPageProxy&, WebFrameProxy&, AuthenticationChallengeProxy& authenticationChallenge) override
     {
-        webkitWebViewHandleAuthenticationChallenge(m_webView, authenticationChallenge);
+        webkitWebViewHandleAuthenticationChallenge(m_webView, &authenticationChallenge);
     }
 
     void processDidCrash(WebPageProxy&) override

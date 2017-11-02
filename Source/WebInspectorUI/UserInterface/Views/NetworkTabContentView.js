@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,16 +23,30 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-WI.NetworkTabContentView = class NetworkTabContentView extends WI.ContentBrowserTabContentView
+WI.NetworkTabContentView = class NetworkTabContentView extends WI.TabContentView
 {
     constructor(identifier)
     {
         let {image, title} = WI.NetworkTabContentView.tabInfo();
         let tabBarItem = new WI.GeneralTabBarItem(image, title);
-        let detailsSidebarPanelConstructors = [WI.ResourceDetailsSidebarPanel, WI.ProbeDetailsSidebarPanel];
 
-        super(identifier || "network", "network", tabBarItem, WI.NetworkSidebarPanel, detailsSidebarPanelConstructors);
+        super(identifier || "network", "network", tabBarItem);
+
+        this._networkTableContentView = new WI.NetworkTableContentView;
+
+        const disableBackForward = true;
+        const disableFindBanner = true;
+        this._contentBrowser = new WI.ContentBrowser(null, this, disableBackForward, disableFindBanner);
+        this._contentBrowser.showContentView(this._networkTableContentView);
+
+        let filterNavigationItems = this._networkTableContentView.filterNavigationItems;
+        for (let i = 0; i < filterNavigationItems.length; ++i)
+            this._contentBrowser.navigationBar.insertNavigationItem(filterNavigationItems[i], i);
+
+        this.addSubview(this._contentBrowser);
     }
+
+    // Static
 
     static tabInfo()
     {
@@ -47,7 +61,32 @@ WI.NetworkTabContentView = class NetworkTabContentView extends WI.ContentBrowser
         return !!window.NetworkAgent && !!window.PageAgent;
     }
 
+    // Protected
+
+    shown()
+    {
+        super.shown();
+
+        this._contentBrowser.shown();
+    }
+
+    hidden()
+    {
+        this._contentBrowser.hidden();
+
+        super.hidden();
+    }
+
+    closed()
+    {
+        this._contentBrowser.contentViewContainer.closeAllContentViews();
+
+        super.closed();
+    }
+
     // Public
+
+    get contentBrowser() { return this._contentBrowser; }
 
     get type()
     {
@@ -56,17 +95,12 @@ WI.NetworkTabContentView = class NetworkTabContentView extends WI.ContentBrowser
 
     canShowRepresentedObject(representedObject)
     {
-        if (!(representedObject instanceof WI.Resource))
-            return false;
-
-        return !!this.navigationSidebarPanel.contentTreeOutline.getCachedTreeElement(representedObject);
+        return representedObject instanceof WI.Resource;
     }
 
     get supportsSplitContentBrowser()
     {
-        // Since the Network tab has a real sidebar, showing the split console would cause items in
-        // the sidebar to be aligned with an item in the datagrid that isn't shown.
-        return false;
+        return true;
     }
 };
 

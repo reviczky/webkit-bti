@@ -27,8 +27,9 @@
 #include "config.h"
 #include "FileSystem.h"
 
-#include "ScopeGuard.h"
+#include "FileMetadata.h"
 #include <wtf/HexNumber.h>
+#include <wtf/Scope.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 
@@ -212,7 +213,7 @@ bool appendFileContentsToFileHandle(const String& path, PlatformFileHandle& targ
     static int bufferSize = 1 << 19;
     Vector<char> buffer(bufferSize);
 
-    ScopeGuard fileCloser([source]() {
+    auto fileCloser = WTF::makeScopeExit([source]() {
         PlatformFileHandle handle = source;
         closeFile(handle);
     });
@@ -255,7 +256,7 @@ bool filesHaveSameVolume(const String& fileA, const String& fileB)
 
 #if !PLATFORM(MAC)
 
-void setMetadataURL(const String&, const String&)
+void setMetadataURL(const String&, const String&, const String&)
 {
 }
 
@@ -348,6 +349,14 @@ void unlockAndCloseFile(PlatformFileHandle handle)
     ASSERT_UNUSED(unlocked, unlocked);
 #endif
     closeFile(handle);
+}
+
+bool fileIsDirectory(const String& path, ShouldFollowSymbolicLinks shouldFollowSymbolicLinks)
+{
+    auto metadata = shouldFollowSymbolicLinks == ShouldFollowSymbolicLinks::Yes ? fileMetadataFollowingSymlinks(path) : fileMetadata(path);
+    if (!metadata)
+        return false;
+    return metadata.value().type == FileMetadata::Type::Directory;
 }
 
 } // namespace WebCore

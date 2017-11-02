@@ -26,7 +26,9 @@
 #include "config.h"
 #include "JSFunction.h"
 
+#include "AsyncGeneratorPrototype.h"
 #include "BuiltinNames.h"
+#include "CatchScope.h"
 #include "ClonedArguments.h"
 #include "CodeBlock.h"
 #include "CommonIdentifiers.h"
@@ -90,6 +92,17 @@ JSFunction::JSFunction(VM& vm, JSGlobalObject* globalObject, Structure* structur
 {
 }
 
+
+void JSFunction::finishCreation(VM& vm)
+{
+    Base::finishCreation(vm);
+    ASSERT(inherits(vm, info()));
+    if (isBuiltinFunction() && jsExecutable()->name().isPrivateName()) {
+        // This is anonymous builtin function.
+        rareData(vm)->setHasReifiedName();
+    }
+}
+
 void JSFunction::finishCreation(VM& vm, NativeExecutable* executable, int length, const String& name)
 {
     Base::finishCreation(vm);
@@ -97,22 +110,8 @@ void JSFunction::finishCreation(VM& vm, NativeExecutable* executable, int length
     m_executable.set(vm, this, executable);
     // Some NativeExecutable functions, like JSBoundFunction, decide to lazily allocate their name string.
     if (!name.isNull())
-        putDirect(vm, vm.propertyNames->name, jsString(&vm, name), ReadOnly | DontEnum);
-    putDirect(vm, vm.propertyNames->length, jsNumber(length), ReadOnly | DontEnum);
-}
-
-JSFunction* JSFunction::createBuiltinFunction(VM& vm, FunctionExecutable* executable, JSGlobalObject* globalObject)
-{
-    JSFunction* function = create(vm, executable, globalObject);
-    function->putDirect(vm, vm.propertyNames->name, jsString(&vm, executable->name().string()), ReadOnly | DontEnum);
-    return function;
-}
-
-JSFunction* JSFunction::createBuiltinFunction(VM& vm, FunctionExecutable* executable, JSGlobalObject* globalObject, const String& name)
-{
-    JSFunction* function = create(vm, executable, globalObject);
-    function->putDirect(vm, vm.propertyNames->name, jsString(&vm, name), ReadOnly | DontEnum);
-    return function;
+        putDirect(vm, vm.propertyNames->name, jsString(&vm, name), PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum);
+    putDirect(vm, vm.propertyNames->length, jsNumber(length), PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum);
 }
 
 FunctionRareData* JSFunction::allocateRareData(VM& vm)
@@ -128,16 +127,24 @@ FunctionRareData* JSFunction::allocateRareData(VM& vm)
     return m_rareData.get();
 }
 
+JSObject* JSFunction::prototypeForConstruction(VM& vm, ExecState* exec)
+{
+    auto scope = DECLARE_CATCH_SCOPE(vm);
+    JSValue prototype = get(exec, vm.propertyNames->prototype);
+    ASSERT_UNUSED(scope, !scope.exception());
+    if (prototype.isObject())
+        return asObject(prototype);
+
+    return globalObject(vm)->objectPrototype();
+}
+
 FunctionRareData* JSFunction::allocateAndInitializeRareData(ExecState* exec, size_t inlineCapacity)
 {
     ASSERT(!m_rareData);
     VM& vm = exec->vm();
-    JSObject* prototype = jsDynamicCast<JSObject*>(vm, get(exec, vm.propertyNames->prototype));
-    JSGlobalObject* globalObject = this->globalObject(vm);
-    if (!prototype)
-        prototype = globalObject->objectPrototype();
+    JSObject* prototype = prototypeForConstruction(vm, exec);
     FunctionRareData* rareData = FunctionRareData::create(vm);
-    rareData->initializeObjectAllocationProfile(vm, globalObject, prototype, inlineCapacity);
+    rareData->initializeObjectAllocationProfile(vm, globalObject(vm), prototype, inlineCapacity, this);
 
     // A DFG compilation thread may be trying to read the rare data
     // We want to ensure that it sees it properly allocated
@@ -151,11 +158,8 @@ FunctionRareData* JSFunction::initializeRareData(ExecState* exec, size_t inlineC
 {
     ASSERT(!!m_rareData);
     VM& vm = exec->vm();
-    JSObject* prototype = jsDynamicCast<JSObject*>(vm, get(exec, vm.propertyNames->prototype));
-    JSGlobalObject* globalObject = this->globalObject(vm);
-    if (!prototype)
-        prototype = globalObject->objectPrototype();
-    m_rareData->initializeObjectAllocationProfile(vm, globalObject, prototype, inlineCapacity);
+    JSObject* prototype = prototypeForConstruction(vm, exec);
+    m_rareData->initializeObjectAllocationProfile(vm, globalObject(vm), prototype, inlineCapacity, this);
     return m_rareData.get();
 }
 
@@ -362,32 +366,33 @@ bool JSFunction::getOwnPropertySlot(JSObject* object, ExecState* exec, PropertyN
                 // property does not have a constructor property whose value is the GeneratorFunction instance.
                 // https://tc39.github.io/ecma262/#sec-generatorfunction-instances-prototype
                 prototype = constructEmptyObject(exec, thisObject->globalObject(vm)->generatorPrototype());
-            } else {
+            } else if (thisObject->jsExecutable()->parseMode() == SourceParseMode::AsyncGeneratorWrapperFunctionMode)
+                prototype = constructEmptyObject(exec, thisObject->globalObject(vm)->asyncGeneratorPrototype());
+            else {
                 prototype = constructEmptyObject(exec);
-                prototype->putDirect(vm, vm.propertyNames->constructor, thisObject, DontEnum);
+                prototype->putDirect(vm, vm.propertyNames->constructor, thisObject, static_cast<unsigned>(PropertyAttribute::DontEnum));
             }
 
-            thisObject->putDirect(vm, vm.propertyNames->prototype, prototype, DontDelete | DontEnum);
+            thisObject->putDirect(vm, vm.propertyNames->prototype, prototype, PropertyAttribute::DontDelete | PropertyAttribute::DontEnum);
             offset = thisObject->getDirectOffset(vm, vm.propertyNames->prototype, attributes);
             ASSERT(isValidOffset(offset));
         }
-
         slot.setValue(thisObject, attributes, thisObject->getDirect(offset), offset);
     }
 
-    if (propertyName == exec->propertyNames().arguments) {
+    if (propertyName == vm.propertyNames->arguments) {
         if (!thisObject->jsExecutable()->hasCallerAndArgumentsProperties())
             return Base::getOwnPropertySlot(thisObject, exec, propertyName, slot);
         
-        slot.setCacheableCustom(thisObject, ReadOnly | DontEnum | DontDelete, argumentsGetter);
+        slot.setCacheableCustom(thisObject, PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum | PropertyAttribute::DontDelete, argumentsGetter);
         return true;
     }
 
-    if (propertyName == exec->propertyNames().caller) {
+    if (propertyName == vm.propertyNames->caller) {
         if (!thisObject->jsExecutable()->hasCallerAndArgumentsProperties())
             return Base::getOwnPropertySlot(thisObject, exec, propertyName, slot);
 
-        slot.setCacheableCustom(thisObject, ReadOnly | DontEnum | DontDelete, callerGetter);
+        slot.setCacheableCustom(thisObject, PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum | PropertyAttribute::DontDelete, callerGetter);
         return true;
     }
 
@@ -417,7 +422,7 @@ void JSFunction::getOwnNonIndexPropertyNames(JSObject* object, ExecState* exec, 
         } else {
             if (thisObject->isBuiltinFunction() && !thisObject->hasReifiedLength())
                 propertyNames.add(vm.propertyNames->length);
-            if (thisObject->inherits(vm, JSBoundFunction::info()) && !thisObject->hasReifiedName())
+            if ((thisObject->isBuiltinFunction() || thisObject->inherits(vm, JSBoundFunction::info())) && !thisObject->hasReifiedName())
                 propertyNames.add(vm.propertyNames->name);
         }
     }
@@ -487,10 +492,10 @@ bool JSFunction::deleteProperty(JSCell* cell, ExecState* exec, PropertyName prop
         // For non-host functions, don't let these properties by deleted - except by DefineOwnProperty.
         FunctionExecutable* executable = thisObject->jsExecutable();
         
-        if (propertyName == exec->propertyNames().caller || propertyName == exec->propertyNames().arguments)
+        if (propertyName == vm.propertyNames->caller || propertyName == vm.propertyNames->arguments)
             return !executable->hasCallerAndArgumentsProperties();
 
-        if (propertyName == exec->propertyNames().prototype && !executable->isArrowFunction())
+        if (propertyName == vm.propertyNames->prototype && !executable->isArrowFunction())
             return false;
 
         thisObject->reifyLazyPropertyIfNeeded(vm, exec, propertyName);
@@ -532,7 +537,7 @@ bool JSFunction::defineOwnProperty(JSObject* object, ExecState* exec, PropertyNa
             }
             PropertySlot slot(thisObject, PropertySlot::InternalMethodType::VMInquiry);
             if (!Base::getOwnPropertySlot(thisObject, exec, propertyName, slot))
-                thisObject->putDirectAccessor(exec, propertyName, thisObject->globalObject(vm)->throwTypeErrorArgumentsCalleeAndCallerGetterSetter(), DontDelete | DontEnum | Accessor);
+                thisObject->putDirectAccessor(exec, propertyName, thisObject->globalObject(vm)->throwTypeErrorArgumentsCalleeAndCallerGetterSetter(), PropertyAttribute::DontDelete | PropertyAttribute::DontEnum | PropertyAttribute::Accessor);
             scope.release();
             return Base::defineOwnProperty(object, exec, propertyName, descriptor, throwException);
         }
@@ -546,7 +551,7 @@ bool JSFunction::defineOwnProperty(JSObject* object, ExecState* exec, PropertyNa
             }
             PropertySlot slot(thisObject, PropertySlot::InternalMethodType::VMInquiry);
             if (!Base::getOwnPropertySlot(thisObject, exec, propertyName, slot))
-                thisObject->putDirectAccessor(exec, propertyName, thisObject->globalObject(vm)->throwTypeErrorArgumentsCalleeAndCallerGetterSetter(), DontDelete | DontEnum | Accessor);
+                thisObject->putDirectAccessor(exec, propertyName, thisObject->globalObject(vm)->throwTypeErrorArgumentsCalleeAndCallerGetterSetter(), PropertyAttribute::DontDelete | PropertyAttribute::DontEnum | PropertyAttribute::Accessor);
             scope.release();
             return Base::defineOwnProperty(object, exec, propertyName, descriptor, throwException);
         }
@@ -635,7 +640,7 @@ void JSFunction::reifyLength(VM& vm)
     ASSERT(!hasReifiedLength());
     ASSERT(!isHostFunction());
     JSValue initialValue = jsNumber(jsExecutable()->parameterCount());
-    unsigned initialAttributes = DontEnum | ReadOnly;
+    unsigned initialAttributes = PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly;
     const Identifier& identifier = vm.propertyNames->length;
     putDirect(vm, identifier, initialValue, initialAttributes);
 
@@ -649,8 +654,8 @@ void JSFunction::reifyName(VM& vm, ExecState* exec)
     // https://tc39.github.io/ecma262/#sec-exports-runtime-semantics-evaluation
     // When the ident is "*default*", we need to set "default" for the ecma name.
     // This "*default*" name is never shown to users.
-    if (ecmaName == exec->propertyNames().builtinNames().starDefaultPrivateName())
-        name = exec->propertyNames().defaultKeyword.string();
+    if (ecmaName == vm.propertyNames->builtinNames().starDefaultPrivateName())
+        name = vm.propertyNames->defaultKeyword.string();
     else
         name = ecmaName.string();
     reifyName(vm, exec, name);
@@ -662,7 +667,7 @@ void JSFunction::reifyName(VM& vm, ExecState* exec, String name)
 
     ASSERT(!hasReifiedName());
     ASSERT(!isHostFunction());
-    unsigned initialAttributes = DontEnum | ReadOnly;
+    unsigned initialAttributes = PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly;
     const Identifier& propID = vm.propertyNames->name;
 
     if (exec->lexicalGlobalObject()->needsSiteSpecificQuirks()) {
@@ -723,10 +728,12 @@ JSFunction::LazyPropertyType JSFunction::reifyLazyBoundNameIfNeeded(VM& vm, Exec
     if (hasReifiedName())
         return LazyPropertyType::IsLazyProperty;
 
-    if (this->inherits(vm, JSBoundFunction::info())) {
+    if (isBuiltinFunction())
+        reifyName(vm, exec);
+    else if (this->inherits(vm, JSBoundFunction::info())) {
         FunctionRareData* rareData = this->rareData(vm);
         String name = makeString("bound ", static_cast<NativeExecutable*>(m_executable.get())->name());
-        unsigned initialAttributes = DontEnum | ReadOnly;
+        unsigned initialAttributes = PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly;
         putDirect(vm, nameIdent, jsString(exec, name), initialAttributes);
         rareData->setHasReifiedName();
     }

@@ -145,7 +145,7 @@ inline Structure* getBoundFunctionStructure(VM& vm, ExecState* exec, JSGlobalObj
     // currently. Whoever works on caching structure changes for prototype transistions should consider this problem as well.
     // See: https://bugs.webkit.org/show_bug.cgi?id=152738
     if (prototype.isObject() && prototype.getObject()->globalObject() == globalObject) {
-        result = vm.prototypeMap.emptyStructureForPrototypeFromBaseStructure(globalObject, prototype.getObject(), result);
+        result = vm.structureCache.emptyStructureForPrototypeFromBaseStructure(globalObject, prototype.getObject(), result);
         ASSERT_WITH_SECURITY_IMPLICATION(result->globalObject() == globalObject);
     } else
         result = Structure::create(vm, globalObject, prototype, result->typeInfo(), result->classInfo());
@@ -210,8 +210,8 @@ void JSBoundFunction::finishCreation(VM& vm, NativeExecutable* executable, int l
     Base::finishCreation(vm, executable, length, name);
     ASSERT(inherits(vm, info()));
 
-    putDirectNonIndexAccessor(vm, vm.propertyNames->arguments, globalObject()->throwTypeErrorArgumentsCalleeAndCallerGetterSetter(), DontDelete | DontEnum | Accessor);
-    putDirectNonIndexAccessor(vm, vm.propertyNames->caller, globalObject()->throwTypeErrorArgumentsCalleeAndCallerGetterSetter(), DontDelete | DontEnum | Accessor);
+    putDirectNonIndexAccessor(vm, vm.propertyNames->arguments, globalObject()->throwTypeErrorArgumentsCalleeAndCallerGetterSetter(), PropertyAttribute::DontDelete | PropertyAttribute::DontEnum | PropertyAttribute::Accessor);
+    putDirectNonIndexAccessor(vm, vm.propertyNames->caller, globalObject()->throwTypeErrorArgumentsCalleeAndCallerGetterSetter(), PropertyAttribute::DontDelete | PropertyAttribute::DontEnum | PropertyAttribute::Accessor);
 }
 
 void JSBoundFunction::visitChildren(JSCell* cell, SlotVisitor& visitor)

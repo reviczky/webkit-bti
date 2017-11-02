@@ -53,7 +53,7 @@ public:
     bool tooLong() const final;
     bool isValidValue(const String&) const;
     
-    TextControlInnerTextElement* innerTextElement() const final;
+    RefPtr<TextControlInnerTextElement> innerTextElement() const final;
     RenderStyle createInnerTextStyle(const RenderStyle&) const final;
     void copyNonAttributePropertiesFromElement(const Element&) final;
 
@@ -109,7 +109,7 @@ private:
     bool isPresentationAttribute(const QualifiedName&) const final;
     void collectStyleForPresentationAttribute(const QualifiedName&, const AtomicString&, MutableStyleProperties&) final;
     RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) final;
-    bool appendFormData(FormDataList&, bool) final;
+    bool appendFormData(DOMFormData&, bool) final;
     void reset() final;
     bool hasCustomFocusLogic() const final;
     bool isMouseFocusable() const final;

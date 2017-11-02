@@ -28,6 +28,7 @@
 #include "config.h"
 #include "WorkerMessagingProxy.h"
 
+#include "CacheStorageProvider.h"
 #include "ContentSecurityPolicy.h"
 #include "DOMWindow.h"
 #include "DedicatedWorkerGlobalScope.h"
@@ -36,6 +37,7 @@
 #include "ErrorEvent.h"
 #include "EventNames.h"
 #include "MessageEvent.h"
+#include "Page.h"
 #include "ScriptExecutionContext.h"
 #include "Worker.h"
 #include "WorkerInspectorProxy.h"
@@ -70,7 +72,7 @@ WorkerMessagingProxy::~WorkerMessagingProxy()
         || (is<WorkerGlobalScope>(*m_scriptExecutionContext) && currentThread() == downcast<WorkerGlobalScope>(*m_scriptExecutionContext).thread().threadID()));
 }
 
-void WorkerMessagingProxy::startWorkerGlobalScope(const URL& scriptURL, const String& userAgent, const String& sourceCode, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicyResponseHeaders, bool shouldBypassMainWorldContentSecurityPolicy, MonotonicTime timeOrigin, JSC::RuntimeFlags runtimeFlags)
+void WorkerMessagingProxy::startWorkerGlobalScope(const URL& scriptURL, const String& userAgent, const String& sourceCode, const ContentSecurityPolicyResponseHeaders& contentSecurityPolicyResponseHeaders, bool shouldBypassMainWorldContentSecurityPolicy, MonotonicTime timeOrigin, JSC::RuntimeFlags runtimeFlags, PAL::SessionID sessionID)
 {
     // FIXME: This need to be revisited when we support nested worker one day
     ASSERT(m_scriptExecutionContext);
@@ -86,7 +88,7 @@ void WorkerMessagingProxy::startWorkerGlobalScope(const URL& scriptURL, const St
 
     SocketProvider* socketProvider = document.socketProvider();
 
-    auto thread = DedicatedWorkerThread::create(scriptURL, identifier, userAgent, sourceCode, *this, *this, startMode, contentSecurityPolicyResponseHeaders, shouldBypassMainWorldContentSecurityPolicy, document.topOrigin(), timeOrigin, proxy, socketProvider, runtimeFlags);
+    auto thread = DedicatedWorkerThread::create(scriptURL, identifier, userAgent, sourceCode, *this, *this, *this, startMode, contentSecurityPolicyResponseHeaders, shouldBypassMainWorldContentSecurityPolicy, document.topOrigin(), timeOrigin, proxy, socketProvider, runtimeFlags, sessionID);
 
     workerThreadCreated(thread.get());
     thread->start();
@@ -94,7 +96,7 @@ void WorkerMessagingProxy::startWorkerGlobalScope(const URL& scriptURL, const St
     m_inspectorProxy->workerStarted(m_scriptExecutionContext.get(), thread.ptr(), scriptURL);
 }
 
-void WorkerMessagingProxy::postMessageToWorkerObject(RefPtr<SerializedScriptValue>&& message, std::unique_ptr<MessagePortChannelArray> channels)
+void WorkerMessagingProxy::postMessageToWorkerObject(Ref<SerializedScriptValue>&& message, std::unique_ptr<MessagePortChannelArray>&& channels)
 {
     m_scriptExecutionContext->postTask([this, channels = WTFMove(channels), message = WTFMove(message)] (ScriptExecutionContext& context) mutable {
         Worker* workerObject = this->workerObject();
@@ -106,7 +108,7 @@ void WorkerMessagingProxy::postMessageToWorkerObject(RefPtr<SerializedScriptValu
     });
 }
 
-void WorkerMessagingProxy::postMessageToWorkerGlobalScope(RefPtr<SerializedScriptValue>&& message, std::unique_ptr<MessagePortChannelArray> channels)
+void WorkerMessagingProxy::postMessageToWorkerGlobalScope(Ref<SerializedScriptValue>&& message, std::unique_ptr<MessagePortChannelArray>&& channels)
 {
     if (m_askedToTerminate)
         return;
@@ -131,6 +133,13 @@ void WorkerMessagingProxy::postTaskToLoader(ScriptExecutionContext::Task&& task)
     // FIXME: In case of nested workers, this should go directly to the root Document context.
     ASSERT(m_scriptExecutionContext->isDocument());
     m_scriptExecutionContext->postTask(WTFMove(task));
+}
+
+Ref<CacheStorageConnection> WorkerMessagingProxy::createCacheStorageConnection()
+{
+    ASSERT(isMainThread());
+    auto& document = downcast<Document>(*m_scriptExecutionContext);
+    return document.page()->cacheStorageProvider().createCacheStorageConnection(document.page()->sessionID());
 }
 
 bool WorkerMessagingProxy::postTaskForModeToWorkerGlobalScope(ScriptExecutionContext::Task&& task, const String& mode)
@@ -159,7 +168,7 @@ void WorkerMessagingProxy::postExceptionToWorkerObject(const String& errorMessag
     });
 }
 
-void WorkerMessagingProxy::postMessageToPageInspector(const String& message)
+void WorkerMessagingProxy::postMessageToDebugger(const String& message)
 {
     RunLoop::main().dispatch([this, protectedThis = makeRef(*this), message = message.isolatedCopy()] {
         if (!m_mayBeDestroyed)

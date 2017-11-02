@@ -29,14 +29,14 @@
 namespace WebCore {
 
 class Position;
-class RenderRegion;
+class RenderFragmentContainer;
 
 class RenderInline : public RenderBoxModelObject {
 public:
     RenderInline(Element&, RenderStyle&&);
     RenderInline(Document&, RenderStyle&&);
 
-    void addChild(RenderObject* newChild, RenderObject* beforeChild = 0) override;
+    void addChild(RenderPtr<RenderObject> newChild, RenderObject* beforeChild = 0) override;
 
     LayoutUnit marginLeft() const final;
     LayoutUnit marginRight() const final;
@@ -59,7 +59,7 @@ public:
 
     WEBCORE_EXPORT IntRect linesBoundingBox() const;
     LayoutRect linesVisualOverflowBoundingBox() const;
-    LayoutRect linesVisualOverflowBoundingBoxInRegion(const RenderRegion*) const;
+    LayoutRect linesVisualOverflowBoundingBoxInFragment(const RenderFragmentContainer*) const;
 
     InlineFlowBox* createAndAppendInlineFlowBox();
 
@@ -78,7 +78,6 @@ public:
     void absoluteQuadsForSelection(Vector<FloatQuad>& quads) const override;
 #endif
 
-    RenderBoxModelObject* virtualContinuation() const final { return continuation(); }
     RenderInline* inlineElementContinuation() const;
 
     void updateDragState(bool dragOn) final;
@@ -121,13 +120,11 @@ private:
     template<typename GeneratorContext>
     void generateCulledLineBoxRects(GeneratorContext& yield, const RenderInline* container) const;
 
-    void addChildToContinuation(RenderObject* newChild, RenderObject* beforeChild);
-    void addChildIgnoringContinuation(RenderObject* newChild, RenderObject* beforeChild = nullptr) final;
+    void addChildToContinuation(RenderPtr<RenderObject> newChild, RenderObject* beforeChild);
+    void addChildIgnoringContinuation(RenderPtr<RenderObject> newChild, RenderObject* beforeChild = nullptr) final;
 
-    void splitInlines(RenderBlock* fromBlock, RenderBlock* toBlock, RenderBlock* middleBlock,
-                      RenderObject* beforeChild, RenderBoxModelObject* oldCont);
-    void splitFlow(RenderObject* beforeChild, RenderBlock* newBlockBox,
-                   RenderObject* newChild, RenderBoxModelObject* oldCont);
+    void splitInlines(RenderBlock* fromBlock, RenderBlock* toBlock, RenderBlock* middleBlock, RenderObject* beforeChild, RenderBoxModelObject* oldCont);
+    void splitFlow(RenderObject* beforeChild, RenderPtr<RenderBlock> newBlockBox, RenderPtr<RenderObject> newChild, RenderBoxModelObject* oldCont);
 
     void layout() final { ASSERT_NOT_REACHED(); } // Do nothing for layout()
 
@@ -149,7 +146,7 @@ private:
     void mapLocalToContainer(const RenderLayerModelObject* repaintContainer, TransformState&, MapCoordinatesFlags, bool* wasFixed) const override;
     const RenderObject* pushMappingToContainer(const RenderLayerModelObject* ancestorToStopAt, RenderGeometryMap&) const override;
 
-    VisiblePosition positionForPoint(const LayoutPoint&, const RenderRegion*) final;
+    VisiblePosition positionForPoint(const LayoutPoint&, const RenderFragmentContainer*) final;
 
     LayoutRect frameRectForStickyPositioning() const final { return linesBoundingBox(); }
 
@@ -170,7 +167,7 @@ private:
     void addAnnotatedRegions(Vector<AnnotatedRegionValue>&) final;
 #endif
     
-    RenderPtr<RenderInline> clone() const;
+    RenderPtr<RenderInline> cloneAsContinuation() const;
 
     void paintOutlineForLine(GraphicsContext&, const LayoutPoint&, const LayoutRect& prevLine, const LayoutRect& thisLine, const LayoutRect& nextLine, const Color&);
     RenderBoxModelObject* continuationBefore(RenderObject* beforeChild);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,19 +32,10 @@ WI.RecordingNavigationSidebarPanel = class RecordingNavigationSidebarPanel exten
         this.contentTreeOutline.customIndent = true;
         this.contentTreeOutline.registerScrollVirtualizer(this.contentView.element, 20);
 
-        this.filterBar.placeholder = WI.UIString("Filter Actions");
-
         this.recording = null;
 
         this._importButton = null;
         this._exportButton = null;
-    }
-
-    // Static
-
-    static disallowInstanceForClass()
-    {
-        return true;
     }
 
     // Public
@@ -58,11 +49,19 @@ WI.RecordingNavigationSidebarPanel = class RecordingNavigationSidebarPanel exten
 
         this._recording = recording;
 
-        if (this._recording) {
-            this.contentTreeOutline.element.dataset.indent = Number.countDigits(this._recording.actions.length);
+        this.updateEmptyContentPlaceholder(WI.UIString("No Recording Data"));
 
-            if (this._recording.actions[0] instanceof WI.RecordingInitialStateAction)
-                this.contentTreeOutline.appendChild(new WI.RecordingActionTreeElement(this._recording.actions[0], 0, this._recording.type));
+        if (!this._recording) {
+            if (this._exportButton)
+                this._exportButton.disabled = true;
+            return;
+        }
+
+        this._recording.actions.then((actions) => {
+            this.contentTreeOutline.element.dataset.indent = Number.countDigits(actions.length);
+
+            if (actions[0] instanceof WI.RecordingInitialStateAction)
+                this.contentTreeOutline.appendChild(new WI.RecordingActionTreeElement(actions[0], 0, this._recording.type));
 
             let cumulativeActionIndex = 1;
             this._recording.frames.forEach((frame, frameIndex) => {
@@ -80,41 +79,38 @@ WI.RecordingNavigationSidebarPanel = class RecordingNavigationSidebarPanel exten
 
                 cumulativeActionIndex += frame.actions.length;
             });
-        }
 
-        this.updateEmptyContentPlaceholder(WI.UIString("No Recording Data"));
+            this._exportButton.disabled = !actions.length;
 
-        if (this._exportButton)
-            this._exportButton.disabled = !this.contentTreeOutline.children.length;
+            let index = this._recording[WI.RecordingNavigationSidebarPanel.SelectedActionIndexSymbol] || 0;
+            this.updateActionIndex(index);
+        });
     }
 
     updateActionIndex(index, options = {})
     {
-        console.assert(!this._recording || (index >= 0 && index < this._recording.actions.length));
-        if (!this._recording || index < 0 || index >= this._recording.actions.length)
+        if (!this._recording)
             return;
 
-        let treeOutline = this.contentTreeOutline;
-        if (!(this._recording.actions[0] instanceof WI.RecordingInitialStateAction) || index) {
-            treeOutline = treeOutline.children[0];
-            while (index > treeOutline.children.length) {
-                index -= treeOutline.children.length;
-                treeOutline = treeOutline.nextSibling;
-            }
+        this._recording.actions.then((actions) => {
+            let recordingAction = actions[index];
+            console.assert(recordingAction, "Invalid recording action index.", index);
+            if (!recordingAction)
+                return;
 
-            // Must subtract one from the final result since the initial state is considered index 0.
-            --index;
-        }
+            let treeElement = this.contentTreeOutline.findTreeElement(recordingAction);
+            console.assert(treeElement, "Missing tree element for recording action.", recordingAction);
+            if (!treeElement)
+                return;
 
-        let treeElementToSelect = treeOutline.children[index];
-        if (treeElementToSelect.parent && !treeElementToSelect.parent.expanded)
-            treeElementToSelect = treeElementToSelect.parent;
+            this._recording[WI.RecordingNavigationSidebarPanel.SelectedActionIndexSymbol] = index;
 
-        const omitFocus = false;
-        const selectedByUser = false;
-        let suppressOnSelect = !(treeElementToSelect instanceof WI.FolderTreeElement);
-        const suppressOnDeselect = true;
-        treeElementToSelect.revealAndSelect(omitFocus, selectedByUser, suppressOnSelect, suppressOnDeselect);
+            const omitFocus = false;
+            const selectedByUser = false;
+            const suppressOnSelect = true;
+            const suppressOnDeselect = true;
+            treeElement.revealAndSelect(omitFocus, selectedByUser, suppressOnSelect, suppressOnDeselect);
+        });
     }
 
     // Protected
@@ -142,13 +138,34 @@ WI.RecordingNavigationSidebarPanel = class RecordingNavigationSidebarPanel exten
 
         const element = null;
         this.addSubview(new WI.NavigationBar(element, [importNavigationItem, exportNavigationItem]));
+
+        let filterFunction = (treeElement) => {
+            if (!(treeElement instanceof WI.RecordingActionTreeElement))
+                return false;
+
+            return treeElement.representedObject.isVisual;
+        };
+
+        const activatedByDefault = false;
+        const defaultToolTip = WI.UIString("Only show visual actions");
+        const activatedToolTip = WI.UIString("Show all actions");
+        this.filterBar.addFilterBarButton("recording-show-visual-only", filterFunction, activatedByDefault, defaultToolTip, activatedToolTip, "Images/Paint.svg", 15, 15);
+    }
+
+    matchTreeElementAgainstCustomFilters(treeElement)
+    {
+        // Keep recording frame tree elements.
+        if (treeElement instanceof WI.FolderTreeElement)
+            return true;
+
+        return super.matchTreeElementAgainstCustomFilters(treeElement);
     }
 
     // Private
 
     _importNavigationItemClicked(event)
     {
-        WI.loadDataFromFile((data) => {
+        WI.loadDataFromFile((data, filename) => {
             if (!data)
                 return;
 
@@ -160,22 +177,21 @@ WI.RecordingNavigationSidebarPanel = class RecordingNavigationSidebarPanel exten
                 return;
             }
 
-            this.dispatchEventToListeners(WI.RecordingNavigationSidebarPanel.Event.Import, {payload});
+            this.dispatchEventToListeners(WI.RecordingNavigationSidebarPanel.Event.Import, {payload, filename});
         });
     }
 
     _exportNavigationItemClicked(event)
     {
-        if (!this._recording)
+        if (!this._recording || !this.contentBrowser || !this.contentBrowser.currentContentView || !this.contentBrowser.currentContentView.supportsSave)
             return;
 
         const forceSaveAs = true;
-        WI.saveDataToFile({
-            url: "web-inspector:///Recording.json",
-            content: JSON.stringify(this._recording.toJSON()),
-        }, forceSaveAs);
+        WI.saveDataToFile(this.contentBrowser.currentContentView.saveData, forceSaveAs);
     }
 };
+
+WI.RecordingNavigationSidebarPanel.SelectedActionIndexSymbol = Symbol("selected-action-index");
 
 WI.RecordingNavigationSidebarPanel.Event = {
     Import: "recording-navigation-sidebar-panel-import",

@@ -41,24 +41,22 @@
 #include "ResourceHandle.h"
 #include "ResourceRequest.h"
 #include "ResourceResponse.h"
-#include "ScopeGuard.h"
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/Scope.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/WorkQueue.h>
 
 namespace WebCore {
 
-BlobRegistryImpl::~BlobRegistryImpl()
-{
-}
+BlobRegistryImpl::~BlobRegistryImpl() = default;
 
 static Ref<ResourceHandle> createBlobResourceHandle(const ResourceRequest& request, ResourceHandleClient* client)
 {
     return static_cast<BlobRegistryImpl&>(blobRegistry()).createResourceHandle(request, client);
 }
 
-static void loadBlobResourceSynchronously(NetworkingContext*, const ResourceRequest& request, StoredCredentials, ResourceError& error, ResourceResponse& response, Vector<char>& data)
+static void loadBlobResourceSynchronously(NetworkingContext*, const ResourceRequest& request, StoredCredentialsPolicy, ResourceError& error, ResourceResponse& response, Vector<char>& data)
 {
     BlobData* blobData = static_cast<BlobRegistryImpl&>(blobRegistry()).getBlobDataFromURL(request.url());
     BlobResourceHandle::loadResourceSynchronously(blobData, request, error, response, data);
@@ -288,7 +286,7 @@ void BlobRegistryImpl::writeBlobsToTemporaryFiles(const Vector<String>& blobURLs
                 PlatformFileHandle file;
                 String tempFilePath = openTemporaryFile(ASCIILiteral("Blob"), file);
 
-                ScopeGuard fileCloser([file]() mutable {
+                auto fileCloser = WTF::makeScopeExit([file]() mutable {
                     closeFile(file);
                 });
                 

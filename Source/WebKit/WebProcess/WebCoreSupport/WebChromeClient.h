@@ -124,7 +124,6 @@ private:
     bool shouldUnavailablePluginMessageBeButton(WebCore::RenderEmbeddedObject::PluginUnavailabilityReason) const final;
     void unavailablePluginButtonClicked(WebCore::Element&, WebCore::RenderEmbeddedObject::PluginUnavailabilityReason) const final;
 
-    void scrollbarsModeDidChange() const final;
     void mouseDidMoveOverElement(const WebCore::HitTestResult&, unsigned modifierFlags) final;
 
     void setToolTip(const String&, WebCore::TextDirection) final;
@@ -199,7 +198,6 @@ private:
 
     bool selectItemWritingDirectionIsNatural() final;
     bool selectItemAlignmentFollowsMenuWritingDirection() final;
-    bool hasOpenedPopup() const final;
     RefPtr<WebCore::PopupMenu> createPopupMenu(WebCore::PopupMenuClient&) const final;
     RefPtr<WebCore::SearchPopupMenu> createSearchPopupMenu(WebCore::PopupMenuClient&) const final;
 
@@ -210,6 +208,8 @@ private:
     void scheduleCompositingLayerFlush() final;
     bool adjustLayerFlushThrottling(WebCore::LayerFlushThrottleState::Flags) final;
 
+    void contentRuleListNotification(const WebCore::URL&, const HashSet<std::pair<String, String>>&) final;
+    
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
     RefPtr<WebCore::DisplayRefreshMonitor> createDisplayRefreshMonitor(WebCore::PlatformDisplayID) const final;
 #endif
@@ -341,6 +341,8 @@ private:
 #endif
 
     void didInvalidateDocumentMarkerRects() final;
+
+    void requestStorageAccess(String&& subFrameHost, String&& topFrameHost, WTF::Function<void (bool)>&&);
 
     String m_cachedToolTip;
     mutable RefPtr<WebFrame> m_cachedFrameSetLargestFrame;

@@ -25,7 +25,7 @@
 
 #include "RenderBlock.h"
 #include "RenderIterator.h"
-#include "RenderMultiColumnFlowThread.h"
+#include "RenderMultiColumnFlow.h"
 #include "Text.h"
 
 namespace WebCore {
@@ -55,9 +55,7 @@ RenderTextFragment::RenderTextFragment(Document& textNode, const String& text)
 {
 }
 
-RenderTextFragment::~RenderTextFragment()
-{
-}
+RenderTextFragment::~RenderTextFragment() = default;
 
 bool RenderTextFragment::canBeSelectionLeaf() const
 {
@@ -75,7 +73,7 @@ void RenderTextFragment::styleDidChange(StyleDifference diff, const RenderStyle*
 void RenderTextFragment::willBeDestroyed()
 {
     if (m_firstLetter)
-        m_firstLetter->destroy();
+        m_firstLetter->removeFromParentAndDestroy();
     RenderText::willBeDestroyed();
 }
 
@@ -87,8 +85,8 @@ void RenderTextFragment::setText(const String& text, bool force)
     m_end = textLength();
     if (!m_firstLetter)
         return;
-    m_firstLetter->destroy();
-    m_firstLetter = 0;
+    m_firstLetter->removeFromParentAndDestroy();
+    ASSERT(!m_firstLetter);
     if (!textNode())
         return;
     ASSERT(!textNode()->renderer());
@@ -111,7 +109,7 @@ RenderBlock* RenderTextFragment::blockForAccompanyingFirstLetter()
     if (!m_firstLetter)
         return nullptr;
     for (auto& block : ancestorsOfType<RenderBlock>(*m_firstLetter)) {
-        if (is<RenderMultiColumnFlowThread>(block))
+        if (is<RenderMultiColumnFlow>(block))
             break;
         if (block.style().hasPseudoStyle(FIRST_LETTER) && block.canHaveChildren())
             return &block;

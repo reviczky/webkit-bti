@@ -60,7 +60,7 @@ class InspectorCanvasAgent final : public InspectorAgentBase, public CanvasObser
     WTF_MAKE_FAST_ALLOCATED;
 public:
     explicit InspectorCanvasAgent(WebAgentContext&);
-    virtual ~InspectorCanvasAgent() { }
+    virtual ~InspectorCanvasAgent() = default;
 
     void didCreateFrontendAndBackend(Inspector::FrontendRouter*, Inspector::BackendDispatcher*) override;
     void willDestroyFrontendAndBackend(Inspector::DisconnectReason) override;
@@ -73,10 +73,11 @@ public:
     void requestContent(ErrorString&, const String& canvasId, String* content) override;
     void requestCSSCanvasClientNodes(ErrorString&, const String& canvasId, RefPtr<Inspector::Protocol::Array<int>>&) override;
     void resolveCanvasContext(ErrorString&, const String& canvasId, const String* const objectGroup, RefPtr<Inspector::Protocol::Runtime::RemoteObject>&) override;
-    void requestRecording(ErrorString&, const String& canvasId, const bool* const singleFrame, const int* const memoryLimit) override;
-    void cancelRecording(ErrorString&, const String& canvasId) override;
+    void startRecording(ErrorString&, const String& canvasId, const bool* const singleFrame, const int* const memoryLimit) override;
+    void stopRecording(ErrorString&, const String& canvasId) override;
     void requestShaderSource(ErrorString&, const String& programId, const String& shaderType, String*) override;
     void updateShader(ErrorString&, const String& programId, const String& shaderType, const String& source) override;
+    void setShaderProgramDisabled(ErrorString&, const String& programId, bool disabled) override;
 
     // InspectorInstrumentation
     void frameNavigated(Frame&);
@@ -89,6 +90,7 @@ public:
 #if ENABLE(WEBGL)
     void didCreateProgram(WebGLRenderingContextBase&, WebGLProgram&);
     void willDeleteProgram(WebGLProgram&);
+    bool isShaderProgramDisabled(WebGLProgram&);
 #endif
 
     // CanvasObserver

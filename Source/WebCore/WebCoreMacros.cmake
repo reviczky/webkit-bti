@@ -203,22 +203,32 @@ endmacro()
 
 
 macro(GENERATE_SETTINGS_MACROS _infile _outfile)
-    set(NAMES_GENERATOR ${WEBCORE_DIR}/page/make_settings.pl)
+    set(NAMES_GENERATOR ${WEBCORE_DIR}/Scripts/GenerateSettings.rb)
 
     # Do not list the output in more than one independent target that may
     # build in parallel or the two instances of the rule may conflict.
     # <https://cmake.org/cmake/help/v3.0/command/add_custom_command.html>
     set(_extra_output
+        ${DERIVED_SOURCES_WEBCORE_DIR}/Settings.cpp
         ${DERIVED_SOURCES_WEBCORE_DIR}/InternalSettingsGenerated.h
         ${DERIVED_SOURCES_WEBCORE_DIR}/InternalSettingsGenerated.cpp
         ${DERIVED_SOURCES_WEBCORE_DIR}/InternalSettingsGenerated.idl
     )
+
+    set(GENERATE_SETTINGS_SCRIPTS
+        ${WEBCORE_DIR}/Scripts/SettingsTemplates/InternalSettingsGenerated.cpp.erb
+        ${WEBCORE_DIR}/Scripts/SettingsTemplates/InternalSettingsGenerated.idl.erb
+        ${WEBCORE_DIR}/Scripts/SettingsTemplates/InternalSettingsGenerated.h.erb
+        ${WEBCORE_DIR}/Scripts/SettingsTemplates/Settings.cpp.erb
+        ${WEBCORE_DIR}/Scripts/SettingsTemplates/Settings.h.erb
+    )
+
     set(_args BYPRODUCTS ${_extra_output})
     add_custom_command(
         OUTPUT ${DERIVED_SOURCES_WEBCORE_DIR}/${_outfile}
         MAIN_DEPENDENCY ${_infile}
-        DEPENDS ${NAMES_GENERATOR} ${SCRIPTS_BINDINGS}
-        COMMAND ${PERL_EXECUTABLE} ${NAMES_GENERATOR} --input ${_infile} --outputDir ${DERIVED_SOURCES_WEBCORE_DIR}
+        DEPENDS ${NAMES_GENERATOR} ${GENERATE_SETTINGS_SCRIPTS} ${SCRIPTS_BINDINGS}
+        COMMAND ${RUBY_EXECUTABLE} ${NAMES_GENERATOR} --input ${_infile} --outputDir ${DERIVED_SOURCES_WEBCORE_DIR}
         VERBATIM ${_args})
 endmacro()
 

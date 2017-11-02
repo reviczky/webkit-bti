@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011, 2012, 2015, 2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -59,10 +59,10 @@
 #include <WebCore/PlatformPasteboard.h>
 #include <WebCore/ProgressTracker.h>
 #include <WebCore/ResourceError.h>
-#include <WebCore/SessionID.h>
 #include <WebCore/StorageNamespace.h>
 #include <WebCore/SubframeLoader.h>
 #include <WebCore/URL.h>
+#include <pal/SessionID.h>
 #include <wtf/Atomics.h>
 
 #if PLATFORM(MAC)
@@ -109,12 +109,14 @@ BlobRegistry* WebPlatformStrategies::createBlobRegistry()
 
 // CookiesStrategy
 
-String WebPlatformStrategies::cookiesForDOM(const NetworkStorageSession& session, const URL& firstParty, const URL& url)
+std::pair<String, bool> WebPlatformStrategies::cookiesForDOM(const NetworkStorageSession& session, const URL& firstParty, const URL& url, IncludeSecureCookies includeSecureCookies)
 {
-    String result;
-    if (!WebProcess::singleton().networkConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::CookiesForDOM(session.sessionID(), firstParty, url), Messages::NetworkConnectionToWebProcess::CookiesForDOM::Reply(result), 0))
-        return String();
-    return result;
+    String cookieString;
+    bool secureCookiesAccessed = false;
+    if (!WebProcess::singleton().networkConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::CookiesForDOM(session.sessionID(), firstParty, url, includeSecureCookies), Messages::NetworkConnectionToWebProcess::CookiesForDOM::Reply(cookieString, secureCookiesAccessed), 0))
+        return { String(), false };
+
+    return { cookieString, secureCookiesAccessed };
 }
 
 void WebPlatformStrategies::setCookiesFromDOM(const NetworkStorageSession& session, const URL& firstParty, const URL& url, const String& cookieString)
@@ -122,25 +124,26 @@ void WebPlatformStrategies::setCookiesFromDOM(const NetworkStorageSession& sessi
     WebProcess::singleton().networkConnection().connection().send(Messages::NetworkConnectionToWebProcess::SetCookiesFromDOM(session.sessionID(), firstParty, url, cookieString), 0);
 }
 
-bool WebPlatformStrategies::cookiesEnabled(const NetworkStorageSession& session, const URL& firstParty, const URL& url)
+bool WebPlatformStrategies::cookiesEnabled(const NetworkStorageSession& session)
 {
     bool result;
-    if (!WebProcess::singleton().networkConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::CookiesEnabled(session.sessionID(), firstParty, url), Messages::NetworkConnectionToWebProcess::CookiesEnabled::Reply(result), 0))
+    if (!WebProcess::singleton().networkConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::CookiesEnabled(session.sessionID()), Messages::NetworkConnectionToWebProcess::CookiesEnabled::Reply(result), 0))
         return false;
     return result;
 }
 
-String WebPlatformStrategies::cookieRequestHeaderFieldValue(const NetworkStorageSession& session, const URL& firstParty, const URL& url)
+std::pair<String, bool> WebPlatformStrategies::cookieRequestHeaderFieldValue(const NetworkStorageSession& session, const URL& firstParty, const URL& url, IncludeSecureCookies includeSecureCookies)
 {
-    return cookieRequestHeaderFieldValue(session.sessionID(), firstParty, url);
+    return cookieRequestHeaderFieldValue(session.sessionID(), firstParty, url, includeSecureCookies);
 }
 
-String WebPlatformStrategies::cookieRequestHeaderFieldValue(SessionID sessionID, const URL& firstParty, const URL& url)
+std::pair<String, bool> WebPlatformStrategies::cookieRequestHeaderFieldValue(PAL::SessionID sessionID, const URL& firstParty, const URL& url, IncludeSecureCookies includeSecureCookies)
 {
-    String result;
-    if (!WebProcess::singleton().networkConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::CookieRequestHeaderFieldValue(sessionID, firstParty, url), Messages::NetworkConnectionToWebProcess::CookieRequestHeaderFieldValue::Reply(result), 0))
-        return String();
-    return result;
+    String cookieString;
+    bool secureCookiesAccessed = false;
+    if (!WebProcess::singleton().networkConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::CookieRequestHeaderFieldValue(sessionID, firstParty, url, includeSecureCookies), Messages::NetworkConnectionToWebProcess::CookieRequestHeaderFieldValue::Reply(cookieString, secureCookiesAccessed), 0))
+        return { String(), false };
+    return { cookieString, secureCookiesAccessed };
 }
 
 bool WebPlatformStrategies::getRawCookies(const NetworkStorageSession& session, const URL& firstParty, const URL& url, Vector<Cookie>& rawCookies)
@@ -189,7 +192,14 @@ RefPtr<WebCore::SharedBuffer> WebPlatformStrategies::bufferForType(const String&
 
 void WebPlatformStrategies::getPathnamesForType(Vector<String>& pathnames, const String& pasteboardType, const String& pasteboardName)
 {
-    WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPasteboardProxy::GetPasteboardPathnamesForType(pasteboardName, pasteboardType), Messages::WebPasteboardProxy::GetPasteboardPathnamesForType::Reply(pathnames), 0);
+    SandboxExtension::HandleArray sandboxExtensionsHandleArray;
+    WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPasteboardProxy::GetPasteboardPathnamesForType(pasteboardName, pasteboardType),
+        Messages::WebPasteboardProxy::GetPasteboardPathnamesForType::Reply(pathnames, sandboxExtensionsHandleArray), 0);
+    ASSERT(pathnames.size() == sandboxExtensionsHandleArray.size());
+    for (size_t i = 0; i < sandboxExtensionsHandleArray.size(); i++) {
+        if (RefPtr<SandboxExtension> extension = SandboxExtension::create(sandboxExtensionsHandleArray[i]))
+            extension->consumePermanently();
+    }
 }
 
 String WebPlatformStrategies::stringForType(const String& pasteboardType, const String& pasteboardName)
@@ -197,13 +207,6 @@ String WebPlatformStrategies::stringForType(const String& pasteboardType, const 
     String value;
     WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPasteboardProxy::GetPasteboardStringForType(pasteboardName, pasteboardType), Messages::WebPasteboardProxy::GetPasteboardStringForType::Reply(value), 0);
     return value;
-}
-
-long WebPlatformStrategies::copy(const String& fromPasteboard, const String& toPasteboard)
-{
-    uint64_t newChangeCount;
-    WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPasteboardProxy::PasteboardCopy(fromPasteboard, toPasteboard), Messages::WebPasteboardProxy::PasteboardCopy::Reply(newChangeCount), 0);
-    return newChangeCount;
 }
 
 long WebPlatformStrategies::changeCount(const WTF::String &pasteboardName)
@@ -401,5 +404,19 @@ void WebPlatformStrategies::writeToPasteboard(const String& pasteboardType, cons
 }
 
 #endif // PLATFORM(WPE)
+
+Vector<String> WebPlatformStrategies::typesSafeForDOMToReadAndWrite(const String& pasteboardName, const String& origin)
+{
+    Vector<String> types;
+    WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPasteboardProxy::TypesSafeForDOMToReadAndWrite(pasteboardName, origin), Messages::WebPasteboardProxy::TypesSafeForDOMToReadAndWrite::Reply(types), 0);
+    return types;
+}
+
+long WebPlatformStrategies::writeCustomData(const WebCore::PasteboardCustomData& data, const String& pasteboardName)
+{
+    uint64_t newChangeCount;
+    WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPasteboardProxy::WriteCustomData(data, pasteboardName), Messages::WebPasteboardProxy::WriteCustomData::Reply(newChangeCount), 0);
+    return newChangeCount;
+}
 
 } // namespace WebKit
