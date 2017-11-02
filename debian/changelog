@@ -1,3 +1,10 @@
+webkit2gtk (2.18.2-2) UNRELEASED; urgency=medium
+
+  * debian/watch, debian/gbp.conf:
+    + Update for 2.19.x packages in experimental.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 02 Nov 2017 14:56:41 +0200
+
 webkit2gtk (2.18.2-1) unstable; urgency=medium
 
   * New upstream release.
