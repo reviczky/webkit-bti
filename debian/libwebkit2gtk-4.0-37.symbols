@@ -1432,6 +1432,11 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_download_set_destination@Base 2.5.3
  webkit_editor_state_get_type@Base 2.10.0
  webkit_editor_state_get_typing_attributes@Base 2.10.0
+ webkit_editor_state_is_copy_available@Base 2.19.1
+ webkit_editor_state_is_cut_available@Base 2.19.1
+ webkit_editor_state_is_paste_available@Base 2.19.1
+ webkit_editor_state_is_redo_available@Base 2.19.1
+ webkit_editor_state_is_undo_available@Base 2.19.1
  webkit_editor_typing_attributes_get_type@Base 2.10.0
  webkit_favicon_database_clear@Base 2.5.3
  webkit_favicon_database_error_get_type@Base 2.5.3
@@ -1510,6 +1515,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_navigation_action_get_navigation_type@Base 2.5.3
  webkit_navigation_action_get_request@Base 2.5.3
  webkit_navigation_action_get_type@Base 2.5.3
+ webkit_navigation_action_is_redirect@Base 2.19.1
  webkit_navigation_action_is_user_gesture@Base 2.5.3
  webkit_navigation_policy_decision_get_frame_name@Base 2.5.3
  webkit_navigation_policy_decision_get_modifiers@Base 2.5.3
@@ -1935,6 +1941,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_get_indexeddb_directory@Base 2.10.0
  webkit_website_data_manager_get_local_storage_directory@Base 2.10.0
  webkit_website_data_manager_get_offline_application_cache_directory@Base 2.10.0
+ webkit_website_data_manager_get_resource_load_statistics_directory@Base 2.19.1
+ webkit_website_data_manager_get_resource_load_statistics_enabled@Base 2.19.1
  webkit_website_data_manager_get_type@Base 2.10.0
  webkit_website_data_manager_get_websql_directory@Base 2.10.0
  webkit_website_data_manager_is_ephemeral@Base 2.15.4
@@ -1942,6 +1950,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_new_ephemeral@Base 2.15.4
  webkit_website_data_manager_remove@Base 2.15.4
  webkit_website_data_manager_remove_finish@Base 2.15.4
+ webkit_website_data_manager_set_resource_load_statistics_enabled@Base 2.19.1
  webkit_website_data_ref@Base 2.15.4
  webkit_website_data_types_get_type@Base 2.15.4
  webkit_website_data_unref@Base 2.15.4
