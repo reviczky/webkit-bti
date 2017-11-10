@@ -2,6 +2,16 @@ webkit2gtk (2.18.3-1) UNRELEASED; urgency=high
 
   * New upstream release.
     + This fixes CVE-2017-13798, CVE-2017-13788 and CVE-2017-13803.
+  * Several cross-compilation fixes in debian/rules (thanks, Helmut
+    Grohne) (Closes: #881341):
+    + Include /usr/share/dpkg/architecture.mk instead of calling
+      dpkg-architecture manually to set the DEB_*_ARCH variables.
+    + Use DEB_BUILD_ARCH_BITS to decide whether to pass --no-keep-memory
+      to the linker.
+    + Use DEB_HOST_ARCH to decide whether to use -g1, -DENABLE_JIT=OFF and
+      -DUSE_GSTREAMER_GL=OFF.
+    + Remove the --no-relax flag for alpha, this was a workaround for a 10
+      year old binutils bug.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 10 Nov 2017 16:01:09 +0200
 
