@@ -1,3 +1,10 @@
+webkit2gtk (2.18.3-1) UNRELEASED; urgency=high
+
+  * New upstream release.
+    + This fixes CVE-2017-13798, CVE-2017-13788 and CVE-2017-13803.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 10 Nov 2017 16:01:09 +0200
+
 webkit2gtk (2.18.2-1) unstable; urgency=medium
 
   * New upstream release.
