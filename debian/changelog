@@ -1,7 +1,12 @@
 webkit2gtk (2.18.3-1) UNRELEASED; urgency=high
 
   * New upstream release.
-    + This fixes CVE-2017-13798, CVE-2017-13788 and CVE-2017-13803.
+  * The WebKitGTK+ security advisory WSA-2017-0009 lists the following
+    security fixes in the latest versions of WebKitGTK+:
+    + CVE-2017-13783, CVE-2017-13784, CVE-2017-13785, CVE-2017-13791,
+      CVE-2017-13792, CVE-2017-13793, CVE-2017-13794, CVE-2017-13795,
+      CVE-2017-13796 and CVE-2017-13802 (fixed in 2.18.1).
+    + CVE-2017-13788, CVE-2017-13798, CVE-2017-13803 (fixed in 2.18.3)
   * Several cross-compilation fixes in debian/rules (thanks, Helmut
     Grohne) (Closes: #881341):
     + Include /usr/share/dpkg/architecture.mk instead of calling
