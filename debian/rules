@@ -56,6 +56,8 @@ endif
 	dh $@ --parallel --with gir
 
 override_dh_auto_configure:
+	CC=clang-3.8 \
+	CXX=clang++-3.8 \
 	CFLAGS="$(CFLAGS) $(CPPFLAGS)" \
 	CXXFLAGS="$(CFLAGS) $(CPPFLAGS)" \
 	LDFLAGS="$(LDFLAGS)" \

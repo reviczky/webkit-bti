@@ -1,3 +1,15 @@
+webkit2gtk (2.18.3-1~bpo8+1) jessie-backports-sloppy; urgency=medium
+
+  * Rebuild for jessie-backports-sloppy.
+  * debian/control:
+    + Build using libgeoclue-dev instead of libgeoclue-2-dev.
+    + Build depend on clang-3.8.
+  * debian/rules:
+    + Pass CC and CXX to dh_auto_configure so it uses clang instead of
+      gcc.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 14 Nov 2017 11:07:16 +0200
+
 webkit2gtk (2.18.3-1) unstable; urgency=high
 
   * New upstream release.
