@@ -2,6 +2,8 @@ webkit2gtk (2.19.2-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
+  * debian/control:
+    + Request native version of the Ruby package (thanks, Helmut Grohne)
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 21 Nov 2017 10:17:12 +0200
 
