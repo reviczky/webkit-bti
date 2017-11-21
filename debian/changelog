@@ -10,6 +10,9 @@ webkit2gtk (2.19.2-1) UNRELEASED; urgency=medium
       - Disable USE_GSTREAMER_GL if GStreamerGL is not found.
     + debian/rules:
       - Remove the list of architectures that are not using GStreamerGL.
+  * debian/control:
+    + Don't require libgstreamer-plugins-bad1.0-dev in hppa, m68k,
+      powerpcspe, sh4 or x32.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 21 Nov 2017 10:17:12 +0200
 
