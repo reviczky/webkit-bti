@@ -4,6 +4,12 @@ webkit2gtk (2.19.2-1) UNRELEASED; urgency=medium
   * Refresh all patches.
   * debian/control:
     + Request native version of the Ruby package (thanks, Helmut Grohne)
+  * Instead of passing -DUSE_GSTREAMER_GL=OFF explicitly, let CMake do it
+    if libgstreamer-plugins-bad1.0-dev is not installed.
+    + debian/patches/detect-gstreamer-gl.patch:
+      - Disable USE_GSTREAMER_GL if GStreamerGL is not found.
+    + debian/rules:
+      - Remove the list of architectures that are not using GStreamerGL.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 21 Nov 2017 10:17:12 +0200
 
