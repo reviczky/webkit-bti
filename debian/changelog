@@ -14,6 +14,8 @@ webkit2gtk (2.19.2-1) UNRELEASED; urgency=medium
   * debian/control:
     + Don't require libgstreamer-plugins-bad1.0-dev in hppa, m68k,
       powerpcspe, sh4 or x32.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 21 Nov 2017 10:17:12 +0200
 

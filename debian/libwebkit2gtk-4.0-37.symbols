@@ -90,10 +90,16 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_context_menu_remove_all@Base 2.5.3
  webkit_context_menu_set_user_data@Base 2.8.1
  webkit_cookie_accept_policy_get_type@Base 2.5.3
+ webkit_cookie_manager_add_cookie@Base 2.19.2
+ webkit_cookie_manager_add_cookie_finish@Base 2.19.2
  webkit_cookie_manager_delete_all_cookies@Base 2.5.3
+ webkit_cookie_manager_delete_cookie@Base 2.19.2
+ webkit_cookie_manager_delete_cookie_finish@Base 2.19.2
  webkit_cookie_manager_delete_cookies_for_domain@Base 2.5.3
  webkit_cookie_manager_get_accept_policy@Base 2.5.3
  webkit_cookie_manager_get_accept_policy_finish@Base 2.5.3
+ webkit_cookie_manager_get_cookies@Base 2.19.2
+ webkit_cookie_manager_get_cookies_finish@Base 2.19.2
  webkit_cookie_manager_get_domains_with_cookies@Base 2.5.3
  webkit_cookie_manager_get_domains_with_cookies_finish@Base 2.5.3
  webkit_cookie_manager_get_type@Base 2.5.3
@@ -1627,6 +1633,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_security_origin_ref@Base 2.15.3
  webkit_security_origin_to_string@Base 2.15.3
  webkit_security_origin_unref@Base 2.15.3
+ webkit_settings_font_size_to_pixels@Base 2.19.2
+ webkit_settings_font_size_to_points@Base 2.19.2
  webkit_settings_get_allow_file_access_from_file_urls@Base 2.10.0
  webkit_settings_get_allow_modal_dialogs@Base 2.5.3
  webkit_settings_get_allow_universal_access_from_file_urls@Base 2.13.4
