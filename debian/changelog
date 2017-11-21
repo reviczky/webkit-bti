@@ -4,6 +4,7 @@ webkit2gtk (2.19.2-1) UNRELEASED; urgency=medium
   * Refresh all patches.
   * debian/control:
     + Request native version of the Ruby package (thanks, Helmut Grohne)
+    + Build depend on libfile-copy-recursive-perl.
   * Instead of passing -DUSE_GSTREAMER_GL=OFF explicitly, let CMake do it
     if libgstreamer-plugins-bad1.0-dev is not installed.
     + debian/patches/detect-gstreamer-gl.patch:
