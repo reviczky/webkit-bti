@@ -132,7 +132,6 @@ set(WTF_HEADERS
     StackBounds.h
     StackStats.h
     StackTrace.h
-    StaticConstructors.h
     StdLibExtras.h
     Stopwatch.h
     StringExtras.h
@@ -146,6 +145,7 @@ set(WTF_HEADERS
     Threading.h
     ThreadingPrimitives.h
     TimeWithDynamicClockType.h
+    TimingScope.h
     TinyPtrSet.h
     UUID.h
     UniqueRef.h
@@ -264,6 +264,7 @@ set(WTF_SOURCES
     ThreadMessage.cpp
     Threading.cpp
     TimeWithDynamicClockType.cpp
+    TimingScope.cpp
     UUID.cpp
     WallTime.cpp
     WordLock.cpp
