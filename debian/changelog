@@ -2,6 +2,13 @@ webkit2gtk (2.19.2-2) UNRELEASED; urgency=medium
 
   [ Jeremy Bicha ]
   * debian/control: Update Vcs-Git to point to correct branch.
+  * Allow setting the distributor name in the User Agent string. Ubuntu
+    wants this patch, but since it makes it easier to identify the user
+    let's leave it disabled in Debian (Closes: #883712).
+    + debian/patches/user-agent-branding.patch:
+      - Patch to support updating the User-Agent string.
+    + debian/rules:
+      - Pass -DUSER_AGENT_GTK_DISTRIBUTOR_NAME when building for Ubuntu.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 12 Dec 2017 11:24:26 +0100
 
