@@ -1,3 +1,10 @@
+webkit2gtk (2.19.2-2) UNRELEASED; urgency=medium
+
+  [ Jeremy Bicha ]
+  * debian/control: Update Vcs-Git to point to correct branch.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 12 Dec 2017 11:24:26 +0100
+
 webkit2gtk (2.19.2-1) experimental; urgency=medium
 
   * New upstream development release.
