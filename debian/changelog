@@ -10,6 +10,17 @@ webkit2gtk (2.19.2-2) UNRELEASED; urgency=medium
     + debian/rules:
       - Pass -DUSER_AGENT_GTK_DISTRIBUTOR_NAME when building for Ubuntu.
 
+  [ Alberto Garcia ]
+  * Several cross-compilation fixes in debian/rules (thanks, Helmut
+    Grohne).
+    + Include /usr/share/dpkg/architecture.mk instead of calling
+      dpkg-architecture manually to set the DEB_*_ARCH variables.
+    + Use DEB_BUILD_ARCH_BITS to decide whether to pass --no-keep-memory
+      to the linker.
+    + Use DEB_HOST_ARCH to decide whether to use -g1 and -DENABLE_JIT=OFF.
+    + Remove the --no-relax flag for alpha, this was a workaround for a 10
+      year old binutils bug.
+
  -- Alberto Garcia <berto@igalia.com>  Tue, 12 Dec 2017 11:24:26 +0100
 
 webkit2gtk (2.19.2-1) experimental; urgency=medium
