@@ -1,4 +1,4 @@
-webkit2gtk (2.19.3-1) UNRELEASED; urgency=medium
+webkit2gtk (2.19.3-1) experimental; urgency=medium
 
   * New upstream development release (Closes: #882387).
 
@@ -24,7 +24,7 @@ webkit2gtk (2.19.3-1) UNRELEASED; urgency=medium
     + Remove the --no-relax flag for alpha, this was a workaround for a 10
       year old binutils bug.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 12 Dec 2017 11:24:26 +0100
+ -- Alberto Garcia <berto@igalia.com>  Wed, 13 Dec 2017 14:26:06 +0100
 
 webkit2gtk (2.19.2-1) experimental; urgency=medium
 
