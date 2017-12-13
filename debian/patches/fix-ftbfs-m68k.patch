@@ -116,7 +116,7 @@ Index: webkitgtk/Source/WebCore/css/RuleSet.h
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/RuleSet.h
 +++ webkitgtk/Source/WebCore/css/RuleSet.h
-@@ -139,7 +139,11 @@ struct SameSizeAsRuleData {
+@@ -130,7 +130,11 @@ struct SameSizeAsRuleData {
      unsigned d[4];
  };
  
@@ -143,4 +143,4 @@ Index: webkitgtk/Source/WebCore/platform/graphics/FontDescription.cpp
 +#endif
  
  FontDescription::FontDescription()
-     : m_fontSelectionRequest(FontCascadeDescription::initialWeight(), FontCascadeDescription::initialStretch(), FontCascadeDescription::initialItalic())
+     : m_fontSelectionRequest { FontCascadeDescription::initialWeight(), FontCascadeDescription::initialStretch(), FontCascadeDescription::initialItalic() }

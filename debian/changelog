@@ -13,6 +13,7 @@ webkit2gtk (2.19.3-1) UNRELEASED; urgency=medium
       - Pass -DUSER_AGENT_GTK_DISTRIBUTOR_NAME when building for Ubuntu.
 
   [ Alberto Garcia ]
+  * Refresh all patches.
   * Several cross-compilation fixes in debian/rules (thanks, Helmut
     Grohne).
     + Include /usr/share/dpkg/architecture.mk instead of calling

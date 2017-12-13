@@ -9,7 +9,7 @@ Index: webkitgtk/CMakeLists.txt
 ===================================================================
 --- webkitgtk.orig/CMakeLists.txt
 +++ webkitgtk/CMakeLists.txt
-@@ -82,6 +82,10 @@ elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR
+@@ -89,6 +89,10 @@ elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR
      set(WTF_CPU_ARM64 1)
  elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "^mips")
      set(WTF_CPU_MIPS 1)
