@@ -35,8 +35,10 @@
 #if ENABLE(MEDIA_STREAM)
 
 #include "ActiveDOMObject.h"
+#include "CaptureDevice.h"
 #include "JSDOMPromiseDeferred.h"
 #include "MediaConstraints.h"
+#include "MediaStreamPrivate.h"
 
 namespace WebCore {
 
@@ -53,7 +55,7 @@ public:
     void start();
 
     WEBCORE_EXPORT void setAllowedMediaDeviceUIDs(const String& audioDeviceUID, const String& videoDeviceUID);
-    WEBCORE_EXPORT void allow(String&& audioDeviceUID, String&& videoDeviceUID, String&& deviceIdentifierHashSalt);
+    WEBCORE_EXPORT void allow(CaptureDevice&& audioDevice, CaptureDevice&& videoDevice, String&& deviceIdentifierHashSalt);
 
     enum MediaAccessDenialReason { NoConstraints, UserMediaDisabled, NoCaptureDevices, InvalidConstraint, HardwareError, PermissionDenied, OtherFailure };
     WEBCORE_EXPORT void deny(MediaAccessDenialReason, const String& invalidConstraint);
@@ -64,9 +66,6 @@ public:
     const MediaConstraints& audioConstraints() const { return m_audioConstraints; }
     const MediaConstraints& videoConstraints() const { return m_videoConstraints; }
 
-    const String& allowedAudioDeviceUID() const { return m_allowedAudioDeviceUID; }
-    const String& allowedVideoDeviceUID() const { return m_allowedVideoDeviceUID; }
-
     WEBCORE_EXPORT SecurityOrigin* userMediaDocumentOrigin() const;
     WEBCORE_EXPORT SecurityOrigin* topLevelDocumentOrigin() const;
     WEBCORE_EXPORT Document* document() const;
@@ -75,19 +74,39 @@ private:
     UserMediaRequest(Document&, UserMediaController&, MediaConstraints&& audioConstraints, MediaConstraints&& videoConstraints, DOMPromiseDeferred<IDLInterface<MediaStream>>&&);
 
     void contextDestroyed() final;
-    
+
+    void mediaStreamIsReady(Ref<MediaStream>&&);
+
+    class PendingActivationMediaStream : public RefCounted<PendingActivationMediaStream>, private MediaStreamPrivate::Observer {
+    public:
+        static Ref<PendingActivationMediaStream> create(Ref<UserMediaRequest>&& request, Ref<MediaStream>&& stream)
+        {
+            return adoptRef(*new PendingActivationMediaStream { WTFMove(request), WTFMove(stream) });
+        }
+        ~PendingActivationMediaStream();
+
+    private:
+        PendingActivationMediaStream(Ref<UserMediaRequest>&&, Ref<MediaStream>&&);
+
+        void characteristicsChanged() final;
+
+        Ref<UserMediaRequest> m_request;
+        Ref<MediaStream> m_mediaStream;
+    };
+
     MediaConstraints m_audioConstraints;
     MediaConstraints m_videoConstraints;
 
     Vector<String> m_videoDeviceUIDs;
     Vector<String> m_audioDeviceUIDs;
 
-    String m_allowedVideoDeviceUID;
-    String m_allowedAudioDeviceUID;
+    CaptureDevice m_allowedVideoDevice;
+    CaptureDevice m_allowedAudioDevice;
 
     UserMediaController* m_controller;
     DOMPromiseDeferred<IDLInterface<MediaStream>> m_promise;
     RefPtr<UserMediaRequest> m_protector;
+    RefPtr<PendingActivationMediaStream> m_pendingActivationMediaStream;
 };
 
 } // namespace WebCore

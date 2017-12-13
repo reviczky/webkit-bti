@@ -92,9 +92,9 @@ namespace WebCore {
 const PlatformMedia NoPlatformMedia = { PlatformMedia::None, {0} };
 
 #if !RELEASE_LOG_DISABLED
-static RefPtr<PAL::Logger>& nullLogger()
+static RefPtr<Logger>& nullLogger()
 {
-    static NeverDestroyed<RefPtr<PAL::Logger>> logger;
+    static NeverDestroyed<RefPtr<Logger>> logger;
     return logger;
 }
 #endif
@@ -172,10 +172,10 @@ public:
 class NullMediaPlayerClient : public MediaPlayerClient {
 public:
 #if !RELEASE_LOG_DISABLED
-    const PAL::Logger& mediaPlayerLogger() final
+    const Logger& mediaPlayerLogger() final
     {
         if (!nullLogger().get()) {
-            nullLogger() = PAL::Logger::create(this);
+            nullLogger() = Logger::create(this);
             nullLogger()->setEnabled(this, false);
         }
 
@@ -210,11 +210,7 @@ struct MediaPlayerFactory {
 
 static void addMediaEngine(CreateMediaEnginePlayer&&, MediaEngineSupportedTypes, MediaEngineSupportsType, MediaEngineOriginsInMediaCache, MediaEngineClearMediaCache, MediaEngineClearMediaCacheForOrigins, MediaEngineSupportsKeySystem);
 
-static Lock& mediaEngineVectorLock()
-{
-    static NeverDestroyed<Lock> lock;
-    return lock;
-}
+static StaticLock mediaEngineVectorLock;
 
 static bool& haveMediaEnginesVector()
 {
@@ -230,7 +226,7 @@ static Vector<MediaPlayerFactory>& mutableInstalledMediaEnginesVector()
 
 static void buildMediaEnginesVector()
 {
-    ASSERT(mediaEngineVectorLock().isLocked());
+    ASSERT(mediaEngineVectorLock.isLocked());
 
 #if USE(AVFOUNDATION)
     if (DeprecatedGlobalSettings::isAVFoundationEnabled()) {
@@ -276,7 +272,7 @@ static void buildMediaEnginesVector()
 static const Vector<MediaPlayerFactory>& installedMediaEngines()
 {
     {
-        LockHolder lock(mediaEngineVectorLock());
+        auto locker = holdLock(mediaEngineVectorLock);
         if (!haveMediaEnginesVector())
             buildMediaEnginesVector();
     }
@@ -600,17 +596,17 @@ void MediaPlayer::keyAdded()
 #endif
     
 #if ENABLE(ENCRYPTED_MEDIA)
-void MediaPlayer::cdmInstanceAttached(const CDMInstance& instance)
+void MediaPlayer::cdmInstanceAttached(CDMInstance& instance)
 {
     m_private->cdmInstanceAttached(instance);
 }
 
-void MediaPlayer::cdmInstanceDetached(const CDMInstance& instance)
+void MediaPlayer::cdmInstanceDetached(CDMInstance& instance)
 {
     m_private->cdmInstanceDetached(instance);
 }
 
-void MediaPlayer::attemptToDecryptWithInstance(const CDMInstance& instance)
+void MediaPlayer::attemptToDecryptWithInstance(CDMInstance& instance)
 {
     m_private->attemptToDecryptWithInstance(instance);
 }
@@ -933,8 +929,8 @@ MediaPlayer::SupportsType MediaPlayer::supportsType(const MediaEngineSupportPara
     // slow connections. <https://bugs.webkit.org/show_bug.cgi?id=86409>
     if (client && client->mediaPlayerNeedsSiteSpecificHacks()) {
         String host = client->mediaPlayerDocumentHost();
-        if ((host.endsWith(".youtube.com", false) || equalLettersIgnoringASCIICase(host, "youtube.com"))
-            && (containerType.startsWith("video/webm", false) || containerType.startsWith("video/x-flv", false)))
+        if ((host.endsWithIgnoringASCIICase(".youtube.com") || equalLettersIgnoringASCIICase(host, "youtube.com"))
+            && (startsWithLettersIgnoringASCIICase(containerType, "video/webm") || startsWithLettersIgnoringASCIICase(containerType, "video/x-flv")))
             return IsNotSupported;
     }
 #else
@@ -1388,7 +1384,7 @@ Vector<RefPtr<PlatformTextTrack>> MediaPlayer::outOfBandTrackSources()
 
 void MediaPlayer::resetMediaEngines()
 {
-    LockHolder lock(mediaEngineVectorLock());
+    auto locker = holdLock(mediaEngineVectorLock);
 
     mutableInstalledMediaEnginesVector().clear();
     haveMediaEnginesVector() = false;
@@ -1507,7 +1503,7 @@ bool MediaPlayer::shouldCheckHardwareSupport() const
 }
 
 #if !RELEASE_LOG_DISABLED
-const PAL::Logger& MediaPlayer::mediaPlayerLogger()
+const Logger& MediaPlayer::mediaPlayerLogger()
 {
     return client().mediaPlayerLogger();
 }

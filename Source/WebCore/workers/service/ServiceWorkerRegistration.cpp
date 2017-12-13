@@ -114,15 +114,7 @@ ServiceWorkerUpdateViaCache ServiceWorkerRegistration::updateViaCache() const
 
 void ServiceWorkerRegistration::update(Ref<DeferredPromise>&& promise)
 {
-    auto* context = scriptExecutionContext();
-    if (!context) {
-        ASSERT_NOT_REACHED();
-        promise->reject(Exception(InvalidStateError));
-        return;
-    }
-
-    auto* container = context->serviceWorkerContainer();
-    if (!container) {
+    if (m_isStopped) {
         promise->reject(Exception(InvalidStateError));
         return;
     }
@@ -134,25 +126,17 @@ void ServiceWorkerRegistration::update(Ref<DeferredPromise>&& promise)
     }
 
     // FIXME: Support worker types.
-    container->updateRegistration(m_registrationData.scopeURL, newestWorker->scriptURL(), WorkerType::Classic, WTFMove(promise));
+    m_container->updateRegistration(m_registrationData.scopeURL, newestWorker->scriptURL(), WorkerType::Classic, WTFMove(promise));
 }
 
 void ServiceWorkerRegistration::unregister(Ref<DeferredPromise>&& promise)
 {
-    auto* context = scriptExecutionContext();
-    if (!context) {
-        ASSERT_NOT_REACHED();
+    if (m_isStopped) {
         promise->reject(Exception(InvalidStateError));
         return;
     }
 
-    auto* container = context->serviceWorkerContainer();
-    if (!container) {
-        promise->reject(Exception(InvalidStateError));
-        return;
-    }
-
-    container->removeRegistration(m_registrationData.scopeURL, WTFMove(promise));
+    m_container->removeRegistration(m_registrationData.scopeURL, WTFMove(promise));
 }
 
 void ServiceWorkerRegistration::updateStateFromServer(ServiceWorkerRegistrationState state, RefPtr<ServiceWorker>&& serviceWorker)
@@ -209,6 +193,7 @@ bool ServiceWorkerRegistration::canSuspendForDocumentSuspension() const
 void ServiceWorkerRegistration::stop()
 {
     m_isStopped = true;
+    removeAllEventListeners();
     updatePendingActivityForEventDispatch();
 }
 

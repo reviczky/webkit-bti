@@ -57,7 +57,9 @@ public:
     WorkerObjectProxy& workerObjectProxy() const { return m_workerObjectProxy; }
 
     WEBCORE_EXPORT void postFetchTask(Ref<ServiceWorkerFetch::Client>&&, ResourceRequest&&, FetchOptions&&);
-    WEBCORE_EXPORT void postMessageToServiceWorkerGlobalScope(Ref<SerializedScriptValue>&&, std::unique_ptr<MessagePortChannelArray>&&, ServiceWorkerClientIdentifier sourceIdentifier, ServiceWorkerClientData&& sourceData);
+    WEBCORE_EXPORT void postFetchTask(Ref<ServiceWorkerFetch::Client>&&, std::optional<ServiceWorkerClientIdentifier>&&, ResourceRequest&&, FetchOptions&&);
+    WEBCORE_EXPORT void postMessageToServiceWorker(Ref<SerializedScriptValue>&&, std::unique_ptr<MessagePortChannelArray>&&, ServiceWorkerOrClientData&& sourceData);
+
     void fireInstallEvent();
     void fireActivateEvent();
 
@@ -70,14 +72,10 @@ protected:
     void runEventLoop() override;
 
 private:
-    WEBCORE_EXPORT ServiceWorkerThread(const ServiceWorkerContextData&, PAL::SessionID, WorkerLoaderProxy&, WorkerDebuggerProxy&);
-
-    void updateExtendedEventsSet(ExtendableEvent* newEvent = nullptr);
-    bool hasPendingEvents() const { return !m_extendedEvents.isEmpty(); }
+    WEBCORE_EXPORT ServiceWorkerThread(const ServiceWorkerContextData&, PAL::SessionID, String&& userAgent, WorkerLoaderProxy&, WorkerDebuggerProxy&, IDBClient::IDBConnectionProxy*, SocketProvider*);
 
     ServiceWorkerContextData m_data;
     WorkerObjectProxy& m_workerObjectProxy;
-    Vector<Ref<ExtendableEvent>> m_extendedEvents;
 };
 
 } // namespace WebCore

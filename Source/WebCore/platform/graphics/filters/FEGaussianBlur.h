@@ -46,6 +46,8 @@ public:
 private:
     FEGaussianBlur(Filter&, float, float, EdgeModeType);
 
+    const char* filterName() const final { return "FEGaussianBlur"; }
+
     static const int s_minimalRectDimension = 100 * 100; // Empirical data limit for parallel jobs
 
     template<typename Type>
@@ -53,8 +55,8 @@ private:
 
     struct PlatformApplyParameters {
         FEGaussianBlur* filter;
-        RefPtr<Uint8ClampedArray> srcPixelArray;
-        RefPtr<Uint8ClampedArray> dstPixelArray;
+        RefPtr<Uint8ClampedArray> ioPixelArray;
+        RefPtr<Uint8ClampedArray> tmpPixelArray;
         int width;
         int height;
         unsigned kernelSizeX;
@@ -65,11 +67,11 @@ private:
 
     void determineAbsolutePaintRect() override;
 
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, int indention) const override;
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
     static void platformApplyWorker(PlatformApplyParameters*);
-    inline void platformApply(Uint8ClampedArray* srcPixelArray, Uint8ClampedArray* tmpPixelArray, unsigned kernelSizeX, unsigned kernelSizeY, IntSize& paintSize);
-    inline void platformApplyGeneric(Uint8ClampedArray* srcPixelArray, Uint8ClampedArray* tmpPixelArray, unsigned kernelSizeX, unsigned kernelSizeY, IntSize& paintSize);
+    void platformApply(Uint8ClampedArray& ioBuffer, Uint8ClampedArray& tempBuffer, unsigned kernelSizeX, unsigned kernelSizeY, IntSize& paintSize);
+    void platformApplyGeneric(Uint8ClampedArray& ioBuffer, Uint8ClampedArray& tempBuffer, unsigned kernelSizeX, unsigned kernelSizeY, IntSize& paintSize);
 
     float m_stdX;
     float m_stdY;

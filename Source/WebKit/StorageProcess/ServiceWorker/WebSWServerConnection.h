@@ -31,12 +31,14 @@
 #include "MessageSender.h"
 #include <WebCore/SWServer.h>
 #include <pal/SessionID.h>
+#include <wtf/HashMap.h>
 
 namespace IPC {
 class FormDataReference;
 }
 
 namespace WebCore {
+struct ClientOrigin;
 struct ExceptionData;
 struct ServiceWorkerClientData;
 class ServiceWorkerRegistrationKey;
@@ -50,8 +52,11 @@ public:
     WebSWServerConnection(const WebSWServerConnection&) = delete;
     ~WebSWServerConnection() final;
 
+    IPC::Connection& ipcConnection() const { return m_contentConnection.get(); }
+
     void disconnectedFromWebProcess();
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
+    void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
 
     PAL::SessionID sessionID() const { return m_sessionID; }
 
@@ -62,7 +67,7 @@ public:
     void didFailFetch(uint64_t fetchIdentifier);
     void didNotHandleFetch(uint64_t fetchIdentifier);
 
-    void postMessageToServiceWorkerClient(uint64_t destinationScriptExecutionContextIdentifier, const IPC::DataReference& message, WebCore::ServiceWorkerIdentifier sourceServiceWorkerIdentifier, const String& sourceOrigin);
+    void postMessageToServiceWorkerClient(WebCore::DocumentIdentifier destinationContextIdentifier, const IPC::DataReference& message, WebCore::ServiceWorkerIdentifier sourceServiceWorkerIdentifier, const String& sourceOrigin);
 
 private:
     // Implement SWServer::Connection (Messages to the client WebProcess)
@@ -73,25 +78,29 @@ private:
     void updateRegistrationStateInClient(WebCore::ServiceWorkerRegistrationIdentifier, WebCore::ServiceWorkerRegistrationState, const std::optional<WebCore::ServiceWorkerData>&) final;
     void updateWorkerStateInClient(WebCore::ServiceWorkerIdentifier, WebCore::ServiceWorkerState) final;
     void fireUpdateFoundEvent(WebCore::ServiceWorkerRegistrationIdentifier) final;
-    void notifyClientsOfControllerChange(const HashSet<uint64_t>& scriptExecutionContexts, const WebCore::ServiceWorkerData& newController);
+    void notifyClientsOfControllerChange(const HashSet<WebCore::DocumentIdentifier>& contextIdentifiers, const WebCore::ServiceWorkerData& newController);
+    void registrationReady(uint64_t registrationReadyRequestIdentifier, WebCore::ServiceWorkerRegistrationData&&) final;
 
-    void startFetch(uint64_t fetchIdentifier, std::optional<WebCore::ServiceWorkerIdentifier>, const WebCore::ResourceRequest&, const WebCore::FetchOptions&, const IPC::FormDataReference&);
+    void startFetch(uint64_t fetchIdentifier, WebCore::ServiceWorkerIdentifier, WebCore::ResourceRequest&&, WebCore::FetchOptions&&, IPC::FormDataReference&&);
 
-    void postMessageToServiceWorkerGlobalScope(WebCore::ServiceWorkerIdentifier destinationIdentifier, const IPC::DataReference& message, uint64_t sourceContextIdentifier, WebCore::ServiceWorkerClientData&& source);
+    void postMessageToServiceWorker(WebCore::ServiceWorkerIdentifier destination, IPC::DataReference&& message, const WebCore::ServiceWorkerOrClientIdentifier& source);
 
     void matchRegistration(uint64_t registrationMatchRequestIdentifier, const WebCore::SecurityOriginData& topOrigin, const WebCore::URL& clientURL);
     void getRegistrations(uint64_t registrationMatchRequestIdentifier, const WebCore::SecurityOriginData& topOrigin, const WebCore::URL& clientURL);
+
+    void registerServiceWorkerClient(WebCore::SecurityOriginData&& topOrigin, WebCore::ServiceWorkerClientData&&, const std::optional<WebCore::ServiceWorkerIdentifier>&);
+    void unregisterServiceWorkerClient(const WebCore::ServiceWorkerClientIdentifier&);
 
     IPC::Connection* messageSenderConnection() final { return m_contentConnection.ptr(); }
     uint64_t messageSenderDestinationID() final { return identifier().toUInt64(); }
     
     template<typename U> void sendToContextProcess(U&& message);
+    template<typename U> static void sendToContextProcess(WebCore::SWServerToContextConnection&, U&& message);
 
     PAL::SessionID m_sessionID;
-
     Ref<IPC::Connection> m_contentConnection;
-    RefPtr<IPC::Connection> m_contextConnection;
-}; // class WebSWServerConnection
+    HashMap<WebCore::ServiceWorkerClientIdentifier, WebCore::ClientOrigin> m_clientOrigins;
+};
 
 } // namespace WebKit
 

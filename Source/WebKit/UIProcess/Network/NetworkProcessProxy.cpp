@@ -28,7 +28,9 @@
 
 #include "AuthenticationChallengeProxy.h"
 #include "DownloadProxyMessages.h"
+#if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
 #include "LegacyCustomProtocolManagerProxyMessages.h"
+#endif
 #include "Logging.h"
 #include "NetworkProcessCreationParameters.h"
 #include "NetworkProcessMessages.h"
@@ -70,7 +72,9 @@ NetworkProcessProxy::NetworkProcessProxy(WebProcessPool& processPool)
     : ChildProcessProxy(processPool.alwaysRunsAtBackgroundPriority())
     , m_processPool(processPool)
     , m_numPendingConnectionRequests(0)
+#if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
     , m_customProtocolManagerProxy(*this)
+#endif
     , m_throttler(*this, processPool.shouldTakeUIBackgroundAssertion())
 {
     connect();
@@ -235,7 +239,9 @@ void NetworkProcessProxy::didClose(IPC::Connection&)
 {
     if (m_downloadProxyMap)
         m_downloadProxyMap->processDidClose();
+#if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
     m_customProtocolManagerProxy.invalidate();
+#endif
 
     m_tokenForHoldingLockedFiles = nullptr;
 
@@ -402,12 +408,12 @@ static uint64_t nextRequestStorageAccessContextId()
     return ++nextContextId;
 }
 
-void NetworkProcessProxy::updateStorageAccessForPrevalentDomains(PAL::SessionID sessionID, const String& resourceDomain, const String& firstPartyDomain, bool value, WTF::CompletionHandler<void(bool)>&& callback)
+void NetworkProcessProxy::updateStorageAccessForPrevalentDomains(PAL::SessionID sessionID, const String& resourceDomain, const String& firstPartyDomain, uint64_t frameID, uint64_t pageID, bool value, WTF::CompletionHandler<void(bool)>&& callback)
 {
     auto contextId = nextRequestStorageAccessContextId();
     auto addResult = m_storageAccessResponseCallbackMap.add(contextId, WTFMove(callback));
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
-    send(Messages::NetworkProcess::UpdateStorageAccessForPrevalentDomains(sessionID, resourceDomain, firstPartyDomain, value, contextId), 0);
+    send(Messages::NetworkProcess::UpdateStorageAccessForPrevalentDomains(sessionID, resourceDomain, firstPartyDomain, frameID, pageID, value, contextId), 0);
 }
 
 void NetworkProcessProxy::storageAccessRequestResult(bool wasGranted, uint64_t contextId)

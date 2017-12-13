@@ -44,8 +44,10 @@
 #include "RejectedPromiseTracker.h"
 #include "ResourceRequest.h"
 #include "SWClientConnection.h"
+#include "SWContextManager.h"
 #include "ScriptState.h"
 #include "ServiceWorker.h"
+#include "ServiceWorkerGlobalScope.h"
 #include "ServiceWorkerProvider.h"
 #include "Settings.h"
 #include "WorkerGlobalScope.h"
@@ -164,7 +166,7 @@ void ScriptExecutionContext::dispatchMessagePortEvents()
 void ScriptExecutionContext::createdMessagePort(MessagePort& messagePort)
 {
     ASSERT((is<Document>(*this) && isMainThread())
-        || (is<WorkerGlobalScope>(*this) && currentThread() == downcast<WorkerGlobalScope>(*this).thread().threadID()));
+        || (is<WorkerGlobalScope>(*this) && downcast<WorkerGlobalScope>(*this).thread().thread() == &Thread::current()));
 
     m_messagePorts.add(&messagePort);
 }
@@ -172,7 +174,7 @@ void ScriptExecutionContext::createdMessagePort(MessagePort& messagePort)
 void ScriptExecutionContext::destroyedMessagePort(MessagePort& messagePort)
 {
     ASSERT((is<Document>(*this) && isMainThread())
-        || (is<WorkerGlobalScope>(*this) && currentThread() == downcast<WorkerGlobalScope>(*this).thread().threadID()));
+        || (is<WorkerGlobalScope>(*this) && downcast<WorkerGlobalScope>(*this).thread().thread() == &Thread::current()));
 
     m_messagePorts.remove(&messagePort);
 }
@@ -543,21 +545,18 @@ ServiceWorker* ScriptExecutionContext::activeServiceWorker() const
 
 void ScriptExecutionContext::setActiveServiceWorker(RefPtr<ServiceWorker>&& serviceWorker)
 {
-    // Add support for workers.
-    if (!is<Document>(*this))
-        return;
-
-    if (m_activeServiceWorker == serviceWorker)
-        return;
-
-    auto& connection = ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(sessionID());
-    if (m_activeServiceWorker)
-        connection.serviceWorkerStoppedControllingClient(m_activeServiceWorker->identifier(), downcast<Document>(*this).identifier());
-
     m_activeServiceWorker = WTFMove(serviceWorker);
+}
 
-    if (m_activeServiceWorker)
-        connection.serviceWorkerStartedControllingClient(m_activeServiceWorker->identifier(), downcast<Document>(*this).identifier());
+void ScriptExecutionContext::registerServiceWorker(ServiceWorker& serviceWorker)
+{
+    auto addResult = m_serviceWorkers.add(serviceWorker.identifier(), &serviceWorker);
+    ASSERT_UNUSED(addResult, addResult.isNewEntry);
+}
+
+void ScriptExecutionContext::unregisterServiceWorker(ServiceWorker& serviceWorker)
+{
+    m_serviceWorkers.remove(serviceWorker.identifier());
 }
 
 ServiceWorkerContainer* ScriptExecutionContext::serviceWorkerContainer()
@@ -569,7 +568,25 @@ ServiceWorkerContainer* ScriptExecutionContext::serviceWorkerContainer()
     } else
         navigator = downcast<WorkerGlobalScope>(*this).optionalNavigator();
 
-    return navigator ? navigator->serviceWorker() : nullptr;
+    return navigator ? &navigator->serviceWorker() : nullptr;
+}
+
+void ScriptExecutionContext::postTaskTo(const DocumentOrWorkerIdentifier& contextIdentifier, WTF::Function<void(ScriptExecutionContext&)>&& task)
+{
+    ASSERT(isMainThread());
+
+    switchOn(contextIdentifier, [&] (DocumentIdentifier identifier) {
+        auto* document = Document::allDocumentsMap().get(identifier);
+        if (!document)
+            return;
+        document->postTask([task = WTFMove(task)](auto& scope) {
+            task(scope);
+        });
+    }, [&](ServiceWorkerIdentifier identifier) {
+        SWContextManager::singleton().postTaskToServiceWorker(identifier, [task = WTFMove(task)](auto& scope) {
+            task(scope);
+        });
+    });
 }
 #endif
 

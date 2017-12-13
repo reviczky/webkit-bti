@@ -126,8 +126,8 @@ void ImageBuffer::transformColorSpace(ColorSpace srcColorSpace, ColorSpace dstCo
         return;
 
     // only sRGB <-> linearRGB are supported at the moment
-    if ((srcColorSpace != ColorSpaceLinearRGB && srcColorSpace != ColorSpaceDeviceRGB)
-        || (dstColorSpace != ColorSpaceLinearRGB && dstColorSpace != ColorSpaceDeviceRGB))
+    if ((srcColorSpace != ColorSpaceLinearRGB && srcColorSpace != ColorSpaceSRGB)
+        || (dstColorSpace != ColorSpaceLinearRGB && dstColorSpace != ColorSpaceSRGB))
         return;
 
     if (dstColorSpace == ColorSpaceLinearRGB) {
@@ -143,7 +143,7 @@ void ImageBuffer::transformColorSpace(ColorSpace srcColorSpace, ColorSpace dstCo
             return array;
         }();
         platformTransformColorSpace(linearRgbLUT);
-    } else if (dstColorSpace == ColorSpaceDeviceRGB) {
+    } else if (dstColorSpace == ColorSpaceSRGB) {
         static const std::array<uint8_t, 256> deviceRgbLUT= [] {
             std::array<uint8_t, 256> array;
             for (unsigned i = 0; i < 256; i++) {
@@ -164,21 +164,23 @@ void ImageBuffer::transformColorSpace(ColorSpace srcColorSpace, ColorSpace dstCo
 inline void ImageBuffer::genericConvertToLuminanceMask()
 {
     IntRect luminanceRect(IntPoint(), internalSize());
-    RefPtr<Uint8ClampedArray> srcPixelArray = getUnmultipliedImageData(luminanceRect);
+    auto srcPixelArray = getUnmultipliedImageData(luminanceRect);
+    if (!srcPixelArray)
+        return;
     
     unsigned pixelArrayLength = srcPixelArray->length();
     for (unsigned pixelOffset = 0; pixelOffset < pixelArrayLength; pixelOffset += 4) {
-        unsigned char a = srcPixelArray->item(pixelOffset + 3);
+        uint8_t a = srcPixelArray->item(pixelOffset + 3);
         if (!a)
             continue;
-        unsigned char r = srcPixelArray->item(pixelOffset);
-        unsigned char g = srcPixelArray->item(pixelOffset + 1);
-        unsigned char b = srcPixelArray->item(pixelOffset + 2);
+        uint8_t r = srcPixelArray->item(pixelOffset);
+        uint8_t g = srcPixelArray->item(pixelOffset + 1);
+        uint8_t b = srcPixelArray->item(pixelOffset + 2);
         
         double luma = (r * 0.2125 + g * 0.7154 + b * 0.0721) * ((double)a / 255.0);
         srcPixelArray->set(pixelOffset + 3, luma);
     }
-    putByteArray(Unmultiplied, srcPixelArray.get(), luminanceRect.size(), luminanceRect, IntPoint());
+    putByteArray(*srcPixelArray, AlphaPremultiplication::Unpremultiplied, luminanceRect.size(), luminanceRect, IntPoint());
 }
 
 void ImageBuffer::convertToLuminanceMask()

@@ -76,6 +76,7 @@
 #include "HTMLLabelElement.h"
 #include "HTMLMeterElement.h"
 #include "HTMLNames.h"
+#include "HTMLParserIdioms.h"
 #include "HTMLTextFormControlElement.h"
 #include "InlineElementBox.h"
 #include "MathMLElement.h"
@@ -715,25 +716,22 @@ void AXObjectCache::remove(RenderObject* renderer)
     remove(m_renderObjectMapping.take(renderer));
 }
 
-void AXObjectCache::remove(Node* node)
+void AXObjectCache::remove(Node& node)
 {
-    if (!node)
-        return;
-
-    if (is<Element>(*node)) {
-        m_deferredRecomputeIsIgnoredList.remove(downcast<Element>(node));
-        m_deferredSelectedChildredChangedList.remove(downcast<Element>(node));
+    if (is<Element>(node)) {
+        m_deferredRecomputeIsIgnoredList.remove(downcast<Element>(&node));
+        m_deferredSelectedChildredChangedList.remove(downcast<Element>(&node));
     }
-    m_deferredTextChangedList.remove(node);
+    m_deferredTextChangedList.remove(&node);
     removeNodeForUse(node);
 
-    remove(m_nodeObjectMapping.take(node));
+    remove(m_nodeObjectMapping.take(&node));
 
-    if (m_currentModalNode == node)
+    if (m_currentModalNode == &node)
         m_currentModalNode = nullptr;
-    m_modalNodesSet.remove(node);
+    m_modalNodesSet.remove(&node);
 
-    remove(node->renderer());
+    remove(node.renderer());
 }
 
 void AXObjectCache::remove(Widget* view)
@@ -1615,14 +1613,14 @@ CharacterOffset AXObjectCache::traverseToOffsetInRange(RefPtr<Range>range, int o
         } else {
             // Ignore space, new line, tag node.
             if (currentLength == 1) {
-                if (isSpaceOrNewline(iterator.text()[0])) {
+                if (isHTMLSpace(iterator.text()[0])) {
                     // If the node has BR tag, we want to set the currentNode to it.
                     int subOffset = iterator.range()->startOffset();
                     Node* childNode = node.traverseToChildAt(subOffset);
                     if (childNode && childNode->renderer() && childNode->renderer()->isBR()) {
                         currentNode = childNode;
                         hasReplacedNodeOrBR = true;
-                    } else if (Element *shadowHost = currentNode->shadowHost()) {
+                    } else if (auto* shadowHost = currentNode->shadowHost()) {
                         // Since we are entering text controls, we should set the currentNode
                         // to be the shadow host when there's no content.
                         if (nodeIsTextControl(shadowHost) && currentNode->isShadowRoot()) {
@@ -1735,7 +1733,7 @@ RefPtr<Range> AXObjectCache::rangeMatchesTextNearRange(RefPtr<Range> originalRan
     
     RefPtr<Range> range = Range::create(m_document, startPosition, originalRange->startPosition());
     unsigned targetOffset = TextIterator::rangeLength(range.get(), true);
-    return findClosestPlainText(*searchRange.get(), matchText, 0, targetOffset);
+    return findClosestPlainText(*searchRange.get(), matchText, { }, targetOffset);
 }
 
 static bool isReplacedNodeOrBR(Node* node)
@@ -2727,20 +2725,27 @@ const Element* AXObjectCache::rootAXEditableElement(const Node* node)
     return result;
 }
 
-void AXObjectCache::clearTextMarkerNodesInUse(Document* document)
+template<typename T>
+static void filterForRemoval(const ListHashSet<T>& list, const Document& document, HashSet<Node*>& nodesToRemove)
 {
-    if (!document)
-        return;
-    
-    // Check each node to see if it's inside the document being deleted, of if it no longer belongs to a document.
-    HashSet<Node*> nodesToDelete;
-    for (const auto& node : m_textMarkerNodes) {
-        if (!node->isConnected() || &(node)->document() == document)
-            nodesToDelete.add(node);
+    for (auto* node : list) {
+        if (node->isConnected() && &node->document() != &document)
+            continue;
+        nodesToRemove.add(node);
     }
-    
-    for (const auto& node : nodesToDelete)
-        m_textMarkerNodes.remove(node);
+}
+
+void AXObjectCache::prepareForDocumentDestruction(const Document& document)
+{
+    HashSet<Node*> nodesToRemove;
+    filterForRemoval(m_textMarkerNodes, document, nodesToRemove);
+    filterForRemoval(m_modalNodesSet, document, nodesToRemove);
+    filterForRemoval(m_deferredRecomputeIsIgnoredList, document, nodesToRemove);
+    filterForRemoval(m_deferredTextChangedList, document, nodesToRemove);
+    filterForRemoval(m_deferredSelectedChildredChangedList, document, nodesToRemove);
+
+    for (auto* node : nodesToRemove)
+        remove(*node);
 }
     
 bool AXObjectCache::nodeIsTextControl(const Node* node)

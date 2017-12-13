@@ -402,6 +402,8 @@
     <keyword type="function" name="webkit_settings_set_enable_spatial_navigation ()" link="WebKitSettings.html#webkit-settings-set-enable-spatial-navigation" since="2.2"/>
     <keyword type="function" name="webkit_settings_get_enable_mediasource ()" link="WebKitSettings.html#webkit-settings-get-enable-mediasource" since="2.4"/>
     <keyword type="function" name="webkit_settings_set_enable_mediasource ()" link="WebKitSettings.html#webkit-settings-set-enable-mediasource" since="2.4"/>
+    <keyword type="function" name="webkit_settings_get_enable_encrypted_media ()" link="WebKitSettings.html#webkit-settings-get-enable-encrypted-media" since="2.20"/>
+    <keyword type="function" name="webkit_settings_set_enable_encrypted_media ()" link="WebKitSettings.html#webkit-settings-set-enable-encrypted-media" since="2.20"/>
     <keyword type="function" name="webkit_settings_get_allow_file_access_from_file_urls ()" link="WebKitSettings.html#webkit-settings-get-allow-file-access-from-file-urls" since="2.10"/>
     <keyword type="function" name="webkit_settings_set_allow_file_access_from_file_urls ()" link="WebKitSettings.html#webkit-settings-set-allow-file-access-from-file-urls" since="2.10"/>
     <keyword type="function" name="webkit_settings_get_allow_universal_access_from_file_urls ()" link="WebKitSettings.html#webkit-settings-get-allow-universal-access-from-file-urls" since="2.14"/>
@@ -426,6 +428,7 @@
     <keyword type="property" name="The “enable-caret-browsing” property" link="WebKitSettings.html#WebKitSettings--enable-caret-browsing"/>
     <keyword type="property" name="The “enable-developer-extras” property" link="WebKitSettings.html#WebKitSettings--enable-developer-extras"/>
     <keyword type="property" name="The “enable-dns-prefetching” property" link="WebKitSettings.html#WebKitSettings--enable-dns-prefetching"/>
+    <keyword type="property" name="The “enable-encrypted-media” property" link="WebKitSettings.html#WebKitSettings--enable-encrypted-media"/>
     <keyword type="property" name="The “enable-frame-flattening” property" link="WebKitSettings.html#WebKitSettings--enable-frame-flattening"/>
     <keyword type="property" name="The “enable-fullscreen” property" link="WebKitSettings.html#WebKitSettings--enable-fullscreen"/>
     <keyword type="property" name="The “enable-html5-database” property" link="WebKitSettings.html#WebKitSettings--enable-html5-database"/>

@@ -280,6 +280,7 @@ public:
 
     RefPtr<ShadowRoot> userAgentShadowRoot() const;
     WEBCORE_EXPORT ShadowRoot& ensureUserAgentShadowRoot();
+    void removeShadowRoot();
 
     void setIsDefinedCustomElement(JSCustomElementInterface&);
     void setIsFailedCustomElement(JSCustomElementInterface&);
@@ -435,7 +436,8 @@ public:
 
     virtual bool isFormControlElement() const { return false; }
     virtual bool isSpinButtonElement() const { return false; }
-    virtual bool isTextFormControl() const { return false; }
+    virtual bool isTextFormControlElement() const { return false; }
+    virtual bool isTextField() const { return false; }
     virtual bool isOptionalFormControl() const { return false; }
     virtual bool isRequiredFormControl() const { return false; }
     virtual bool isInRange() const { return false; }
@@ -635,8 +637,6 @@ private:
     // The cloneNode function is private so that non-virtual cloneElementWith/WithoutChildren are used instead.
     Ref<Node> cloneNodeInternal(Document&, CloningOperation) override;
     virtual Ref<Element> cloneElementWithoutAttributesAndChildren(Document&);
-
-    void removeShadowRoot();
 
     const RenderStyle& resolveComputedStyle();
     const RenderStyle& resolvePseudoElementStyle(PseudoId);

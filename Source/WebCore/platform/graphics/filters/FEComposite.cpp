@@ -104,8 +104,7 @@ static unsigned char clampByte(int c)
 }
 
 template <int b1, int b4>
-static inline void computeArithmeticPixels(unsigned char* source, unsigned char* destination, int pixelArrayLength,
-                                    float k1, float k2, float k3, float k4)
+static inline void computeArithmeticPixels(unsigned char* source, unsigned char* destination, int pixelArrayLength, float k1, float k2, float k3, float k4)
 {
     float scaledK1;
     float scaledK4;
@@ -190,17 +189,16 @@ static inline void arithmeticSoftware(unsigned char* source, unsigned char* dest
 }
 #endif
 
-inline void FEComposite::platformArithmeticSoftware(Uint8ClampedArray* source, Uint8ClampedArray* destination,
-    float k1, float k2, float k3, float k4)
+inline void FEComposite::platformArithmeticSoftware(const Uint8ClampedArray& source, Uint8ClampedArray& destination, float k1, float k2, float k3, float k4)
 {
-    int length = source->length();
-    ASSERT(length == static_cast<int>(destination->length()));
+    int length = source.length();
+    ASSERT(length == static_cast<int>(destination.length()));
     // The selection here eventually should happen dynamically.
 #if HAVE(ARM_NEON_INTRINSICS)
     ASSERT(!(length & 0x3));
-    platformArithmeticNeon(source->data(), destination->data(), length, k1, k2, k3, k4);
+    platformArithmeticNeon(source.data(), destination.data(), length, k1, k2, k3, k4);
 #else
-    arithmeticSoftware(source->data(), destination->data(), length, k1, k2, k3, k4);
+    arithmeticSoftware(source.data(), destination.data(), length, k1, k2, k3, k4);
 #endif
 }
 
@@ -237,12 +235,14 @@ void FEComposite::platformApplySoftware()
             return;
 
         IntRect effectADrawingRect = requestedRegionOfInputImageData(in->absolutePaintRect());
-        RefPtr<Uint8ClampedArray> srcPixelArray = in->asPremultipliedImage(effectADrawingRect);
+        auto srcPixelArray = in->premultipliedResult(effectADrawingRect);
+        if (!srcPixelArray)
+            return;
 
         IntRect effectBDrawingRect = requestedRegionOfInputImageData(in2->absolutePaintRect());
-        in2->copyPremultipliedImage(dstPixelArray, effectBDrawingRect);
+        in2->copyPremultipliedResult(*dstPixelArray, effectBDrawingRect);
 
-        platformArithmeticSoftware(srcPixelArray.get(), dstPixelArray, m_k1, m_k2, m_k3, m_k4);
+        platformArithmeticSoftware(*srcPixelArray, *dstPixelArray, m_k1, m_k2, m_k3, m_k4);
         return;
     }
 
@@ -251,8 +251,8 @@ void FEComposite::platformApplySoftware()
         return;
     GraphicsContext& filterContext = resultImage->context();
 
-    ImageBuffer* imageBuffer = in->asImageBuffer();
-    ImageBuffer* imageBuffer2 = in2->asImageBuffer();
+    ImageBuffer* imageBuffer = in->imageBufferResult();
+    ImageBuffer* imageBuffer2 = in2->imageBufferResult();
     if (!imageBuffer || !imageBuffer2)
         return;
 
@@ -327,17 +327,18 @@ static TextStream& operator<<(TextStream& ts, const CompositeOperationType& type
     return ts;
 }
 
-TextStream& FEComposite::externalRepresentation(TextStream& ts, int indent) const
+TextStream& FEComposite::externalRepresentation(TextStream& ts, RepresentationType representation) const
 {
-    writeIndent(ts, indent);
-    ts << "[feComposite";
-    FilterEffect::externalRepresentation(ts);
+    ts << indent << "[feComposite";
+    FilterEffect::externalRepresentation(ts, representation);
     ts << " operation=\"" << m_type << "\"";
     if (m_type == FECOMPOSITE_OPERATOR_ARITHMETIC)
         ts << " k1=\"" << m_k1 << "\" k2=\"" << m_k2 << "\" k3=\"" << m_k3 << "\" k4=\"" << m_k4 << "\"";
     ts << "]\n";
-    inputEffect(0)->externalRepresentation(ts, indent + 1);
-    inputEffect(1)->externalRepresentation(ts, indent + 1);
+
+    TextStream::IndentScope indentScope(ts);
+    inputEffect(0)->externalRepresentation(ts, representation);
+    inputEffect(1)->externalRepresentation(ts, representation);
     return ts;
 }
 

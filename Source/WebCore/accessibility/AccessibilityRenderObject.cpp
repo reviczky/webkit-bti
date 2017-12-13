@@ -1121,7 +1121,7 @@ bool AccessibilityRenderObject::isAllowedChildOfTree() const
 static AccessibilityObjectInclusion objectInclusionFromAltText(const String& altText)
 {
     // Don't ignore an image that has an alt tag.
-    if (!altText.containsOnlyWhitespace())
+    if (!altText.isAllSpecialCharacters<isHTMLSpace>())
         return AccessibilityObjectInclusion::IncludeObject;
     
     // The informal standard is to ignore images with zero-length alt strings.
@@ -1251,7 +1251,7 @@ bool AccessibilityRenderObject::computeAccessibilityIsIgnored() const
         }
 
         // text elements that are just empty whitespace should not be returned
-        return renderText.text()->containsOnlyWhitespace();
+        return renderText.text().isAllSpecialCharacters<isHTMLSpace>();
     }
     
     if (isHeading())
@@ -2438,15 +2438,8 @@ AccessibilityObject* AccessibilityRenderObject::activeDescendant() const
     if (!m_renderer)
         return nullptr;
     
-    const AtomicString& activeDescendantAttrStr = getAttribute(aria_activedescendantAttr);
-    if (activeDescendantAttrStr.isNull() || activeDescendantAttrStr.isEmpty())
-        return nullptr;
     
-    Element* element = this->element();
-    if (!element)
-        return nullptr;
-    
-    Element* target = element->treeScope().getElementById(activeDescendantAttrStr);
+    Element* target = elementValueForProperty(AXPropertyName::ActiveDescendant);
     if (!target)
         return nullptr;
     

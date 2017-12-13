@@ -141,7 +141,7 @@ void GraphicsContext::drawNativeImage(const NativeImagePtr& image, const FloatSi
     }
 
     ASSERT(hasPlatformContext());
-    Cairo::drawNativeImage(*platformContext(), image, destRect, srcRect, compositeOperator, blendMode, orientation, *this);
+    Cairo::drawNativeImage(*platformContext(), image.get(), destRect, srcRect, compositeOperator, blendMode, orientation, *this);
 }
 
 // This is only used to draw borders, so we should not draw shadows.
@@ -267,9 +267,12 @@ void GraphicsContext::clipToImageBuffer(ImageBuffer& buffer, const FloatRect& de
         return;
 
     RefPtr<Image> image = buffer.copyImage(DontCopyBackingStore);
+    if (!image)
+        return;
 
     ASSERT(hasPlatformContext());
-    Cairo::clipToImageBuffer(*platformContext(), *image, destRect);
+    if (auto surface = image->nativeImageForCurrentFrame())
+        Cairo::clipToImageBuffer(*platformContext(), surface.get(), destRect);
 }
 
 IntRect GraphicsContext::clipBounds() const
@@ -689,7 +692,8 @@ void GraphicsContext::drawPattern(Image& image, const FloatRect& destRect, const
     }
 
     ASSERT(hasPlatformContext());
-    Cairo::drawPattern(*platformContext(), image, destRect, tileRect, patternTransform, phase, compositeOperator, blendMode);
+    if (auto surface = image.nativeImageForCurrentFrame())
+        Cairo::drawPattern(*platformContext(), surface.get(), IntSize(image.size()), destRect, tileRect, patternTransform, phase, compositeOperator, blendMode);
 }
 
 void GraphicsContext::setPlatformShouldAntialias(bool enable)

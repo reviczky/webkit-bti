@@ -65,8 +65,8 @@ void FEBlend::platformApplySoftware()
         return;
     GraphicsContext& filterContext = resultImage->context();
 
-    ImageBuffer* imageBuffer = in->asImageBuffer();
-    ImageBuffer* imageBuffer2 = in2->asImageBuffer();
+    ImageBuffer* imageBuffer = in->imageBufferResult();
+    ImageBuffer* imageBuffer2 = in2->imageBufferResult();
     if (!imageBuffer || !imageBuffer2)
         return;
 
@@ -75,14 +75,15 @@ void FEBlend::platformApplySoftware()
 }
 #endif
 
-TextStream& FEBlend::externalRepresentation(TextStream& ts, int indent) const
+TextStream& FEBlend::externalRepresentation(TextStream& ts, RepresentationType representation) const
 {
-    writeIndent(ts, indent);
-    ts << "[feBlend";
-    FilterEffect::externalRepresentation(ts);
+    ts << indent << "[feBlend";
+    FilterEffect::externalRepresentation(ts, representation);
     ts << " mode=\"" << (m_mode == BlendModeNormal ? "normal" : compositeOperatorName(CompositeSourceOver, m_mode)) << "\"]\n";
-    inputEffect(0)->externalRepresentation(ts, indent + 1);
-    inputEffect(1)->externalRepresentation(ts, indent + 1);
+
+    TextStream::IndentScope indentScope(ts);
+    inputEffect(0)->externalRepresentation(ts, representation);
+    inputEffect(1)->externalRepresentation(ts, representation);
     return ts;
 }
 

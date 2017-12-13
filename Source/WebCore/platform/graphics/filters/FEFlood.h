@@ -47,11 +47,13 @@ public:
 private:
     FEFlood(Filter&, const Color&, float);
 
+    const char* filterName() const final { return "FEFlood"; }
+
     void platformApplySoftware() override;
 
     void determineAbsolutePaintRect() override { setAbsolutePaintRect(enclosingIntRect(maxEffectRect())); }
 
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, int indention) const override;
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
     Color m_floodColor;
     float m_floodOpacity;

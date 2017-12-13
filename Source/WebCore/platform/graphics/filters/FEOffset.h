@@ -39,11 +39,13 @@ public:
 private:
     FEOffset(Filter&, float dx, float dy);
 
+    const char* filterName() const final { return "FEOffset"; }
+
     void platformApplySoftware() override;
     
     void determineAbsolutePaintRect() override;
 
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, int indention) const override;
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
     float m_dx;
     float m_dy;

@@ -28,6 +28,7 @@
 
 #include "Logging.h"
 #include "StorageProcess.h"
+#include "StorageProcessMessages.h"
 #include "StorageToWebProcessConnectionMessages.h"
 #include "WebIDBConnectionToClient.h"
 #include "WebIDBConnectionToClientMessages.h"
@@ -60,17 +61,17 @@ StorageToWebProcessConnection::StorageToWebProcessConnection(IPC::Connection::Id
 StorageToWebProcessConnection::~StorageToWebProcessConnection()
 {
     m_connection->invalidate();
-
-#if ENABLE(SERVICE_WORKER)
-    for (auto& connection : m_swConnections.values())
-        StorageProcess::singleton().unregisterSWServerConnection(*connection);
-#endif
 }
 
 void StorageToWebProcessConnection::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
 {
     if (decoder.messageReceiverName() == Messages::StorageToWebProcessConnection::messageReceiverName()) {
         didReceiveStorageToWebProcessConnectionMessage(connection, decoder);
+        return;
+    }
+
+    if (decoder.messageReceiverName() == Messages::StorageProcess::messageReceiverName()) {
+        StorageProcess::singleton().didReceiveStorageProcessMessage(connection, decoder);
         return;
     }
 
@@ -107,11 +108,29 @@ void StorageToWebProcessConnection::didReceiveSyncMessage(IPC::Connection& conne
         return;
     }
 
+#if ENABLE(SERVICE_WORKER)
+    if (decoder.messageReceiverName() == Messages::WebSWServerConnection::messageReceiverName()) {
+        auto iterator = m_swConnections.find(makeObjectIdentifier<SWServerConnectionIdentifierType>(decoder.destinationID()));
+        if (iterator != m_swConnections.end())
+            iterator->value->didReceiveSyncMessage(connection, decoder, replyEncoder);
+        return;
+    }
+#endif
+
     ASSERT_NOT_REACHED();
 }
 
-void StorageToWebProcessConnection::didClose(IPC::Connection&)
+void StorageToWebProcessConnection::didClose(IPC::Connection& connection)
 {
+    UNUSED_PARAM(connection);
+
+#if ENABLE(SERVICE_WORKER)
+    if (StorageProcess::singleton().globalServerToContextConnection() && StorageProcess::singleton().globalServerToContextConnection()->ipcConnection() == &connection) {
+        // Service Worker process exited.
+        StorageProcess::singleton().connectionToContextProcessWasClosed();
+    }
+#endif
+
 #if ENABLE(INDEXED_DATABASE)
     auto idbConnections = m_webIDBConnections;
     for (auto& connection : idbConnections.values())
@@ -149,9 +168,7 @@ void StorageToWebProcessConnection::establishSWServerConnection(SessionID sessio
     ASSERT(!m_swConnections.contains(serverConnectionIdentifier));
 
     auto addResult = m_swConnections.add(serverConnectionIdentifier, WTFMove(connection));
-    ASSERT(addResult.isNewEntry);
-
-    StorageProcess::singleton().registerSWServerConnection(*(addResult.iterator->value));
+    ASSERT_UNUSED(addResult, addResult.isNewEntry);
 
     if (!StorageProcess::singleton().globalServerToContextConnection())
         StorageProcess::singleton().createServerToContextConnection();
@@ -162,7 +179,6 @@ void StorageToWebProcessConnection::removeSWServerConnection(WebCore::SWServer::
     ASSERT(m_swConnections.contains(serverConnectionIdentifier));
 
     auto connection = m_swConnections.take(serverConnectionIdentifier);
-    StorageProcess::singleton().unregisterSWServerConnection(*connection);
     connection->disconnectedFromWebProcess();
 }
 

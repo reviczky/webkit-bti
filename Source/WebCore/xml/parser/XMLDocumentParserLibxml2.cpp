@@ -53,7 +53,6 @@
 #include "XMLNSNames.h"
 #include "XMLDocumentParserScope.h"
 #include <libxml/parserInternals.h>
-#include <wtf/StringExtras.h>
 #include <wtf/unicode/UTF8.h>
 
 #if ENABLE(XSLT)
@@ -340,13 +339,13 @@ private:
 // --------------------------------
 
 static int globalDescriptor = 0;
-static ThreadIdentifier libxmlLoaderThread = 0;
+static Thread* libxmlLoaderThread { nullptr };
 
 static int matchFunc(const char*)
 {
     // Only match loads initiated due to uses of libxml2 from within XMLDocumentParser to avoid
     // interfering with client applications that also use libxml2.  http://bugs.webkit.org/show_bug.cgi?id=17353
-    return XMLDocumentParserScope::currentCachedResourceLoader && currentThread() == libxmlLoaderThread;
+    return XMLDocumentParserScope::currentCachedResourceLoader && libxmlLoaderThread == &Thread::current();
 }
 
 class OffsetBuffer {
@@ -399,22 +398,20 @@ static bool shouldAllowExternalLoad(const URL& url)
 {
     String urlString = url.string();
 
-    // On non-Windows platforms libxml asks for this URL, the
-    // "XML_XML_DEFAULT_CATALOG", on initialization.
+    // On non-Windows platforms libxml asks for this URL, the "XML_XML_DEFAULT_CATALOG", on initialization.
     if (urlString == "file:///etc/xml/catalog")
         return false;
 
     // On Windows, libxml computes a URL relative to where its DLL resides.
-    if (urlString.startsWith("file:///", false) && urlString.endsWith("/etc/catalog", false))
+    if (startsWithLettersIgnoringASCIICase(urlString, "file:///") && urlString.endsWithIgnoringASCIICase("/etc/catalog"))
         return false;
 
-    // The most common DTD.  There isn't much point in hammering www.w3c.org
-    // by requesting this URL for every XHTML document.
-    if (urlString.startsWith("http://www.w3.org/TR/xhtml", false))
+    // The most common DTD. There isn't much point in hammering www.w3c.org by requesting this for every XHTML document.
+    if (startsWithLettersIgnoringASCIICase(urlString, "http://www.w3.org/tr/xhtml"))
         return false;
 
     // Similarly, there isn't much point in requesting the SVG DTD.
-    if (urlString.startsWith("http://www.w3.org/Graphics/SVG", false))
+    if (startsWithLettersIgnoringASCIICase(urlString, "http://www.w3.org/graphics/svg"))
         return false;
 
     // The libxml doesn't give us a lot of context for deciding whether to
@@ -434,7 +431,7 @@ static bool shouldAllowExternalLoad(const URL& url)
 static void* openFunc(const char* uri)
 {
     ASSERT(XMLDocumentParserScope::currentCachedResourceLoader);
-    ASSERT(currentThread() == libxmlLoaderThread);
+    ASSERT(libxmlLoaderThread == &Thread::current());
 
     URL url(URL(), uri);
 
@@ -497,17 +494,20 @@ static void errorFunc(void*, const char*, ...)
 }
 #endif
 
-static bool didInit = false;
-
-Ref<XMLParserContext> XMLParserContext::createStringParser(xmlSAXHandlerPtr handlers, void* userData)
+static void initializeXMLParser()
 {
-    if (!didInit) {
+    static std::once_flag flag;
+    std::call_once(flag, [&] {
         xmlInitParser();
         xmlRegisterInputCallbacks(matchFunc, openFunc, readFunc, closeFunc);
         xmlRegisterOutputCallbacks(matchFunc, openFunc, writeFunc, closeFunc);
-        libxmlLoaderThread = currentThread();
-        didInit = true;
-    }
+        libxmlLoaderThread = &Thread::current();
+    });
+}
+
+Ref<XMLParserContext> XMLParserContext::createStringParser(xmlSAXHandlerPtr handlers, void* userData)
+{
+    initializeXMLParser();
 
     xmlParserCtxtPtr parser = xmlCreatePushParserCtxt(handlers, 0, 0, 0, 0);
     parser->_private = userData;
@@ -524,13 +524,7 @@ Ref<XMLParserContext> XMLParserContext::createStringParser(xmlSAXHandlerPtr hand
 // Chunk should be encoded in UTF-8
 RefPtr<XMLParserContext> XMLParserContext::createMemoryParser(xmlSAXHandlerPtr handlers, void* userData, const CString& chunk)
 {
-    if (!didInit) {
-        xmlInitParser();
-        xmlRegisterInputCallbacks(matchFunc, openFunc, readFunc, closeFunc);
-        xmlRegisterOutputCallbacks(matchFunc, openFunc, writeFunc, closeFunc);
-        libxmlLoaderThread = currentThread();
-        didInit = true;
-    }
+    initializeXMLParser();
 
     // appendFragmentSource() checks that the length doesn't overflow an int.
     xmlParserCtxtPtr parser = xmlCreateMemoryParserCtxt(chunk.data(), chunk.length());

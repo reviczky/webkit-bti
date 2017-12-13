@@ -36,13 +36,15 @@ public:
     bool setBlendMode(BlendMode);
 
 private:
+    const char* filterName() const final { return "FEBlend"; }
+
     void platformApplySoftware() override;
     void platformApplyGeneric(unsigned char* srcPixelArrayA, unsigned char* srcPixelArrayB, unsigned char* dstPixelArray,
                            unsigned colorArrayLength);
     void platformApplyNEON(unsigned char* srcPixelArrayA, unsigned char* srcPixelArrayB, unsigned char* dstPixelArray,
                            unsigned colorArrayLength);
 
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, int indention) const override;
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
     FEBlend(Filter&, BlendMode);
 

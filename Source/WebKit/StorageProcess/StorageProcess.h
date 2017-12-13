@@ -96,6 +96,12 @@ public:
     void unregisterSWServerConnection(WebSWServerConnection&);
 #endif
 
+    void didReceiveStorageProcessMessage(IPC::Connection&, IPC::Decoder&);
+
+#if ENABLE(SERVICE_WORKER)
+    void connectionToContextProcessWasClosed();
+#endif
+
 private:
     StorageProcess();
 
@@ -109,11 +115,10 @@ private:
     // IPC::Connection::Client
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
     void didClose(IPC::Connection&) override;
-    void didReceiveStorageProcessMessage(IPC::Connection&, IPC::Decoder&);
 
     // Message Handlers
     void initializeWebsiteDataStore(const StorageProcessCreationParameters&);
-    void createStorageToWebProcessConnection();
+    void createStorageToWebProcessConnection(bool isServiceWorkerProcess);
 
     void fetchWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType> websiteDataTypes, uint64_t callbackID);
     void deleteWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType> websiteDataTypes, std::chrono::system_clock::time_point modifiedSince, uint64_t callbackID);
@@ -123,8 +128,6 @@ private:
     void didGetSandboxExtensionsForBlobFiles(uint64_t requestID, SandboxExtension::HandleArray&&);
 #endif
 #if ENABLE(SERVICE_WORKER)
-    void didGetWorkerContextProcessConnection(IPC::Attachment&& encodedConnectionIdentifier);
-
     void didReceiveFetchResponse(WebCore::SWServerConnectionIdentifier, uint64_t fetchIdentifier, const WebCore::ResourceResponse&);
     void didReceiveFetchData(WebCore::SWServerConnectionIdentifier, uint64_t fetchIdentifier, const IPC::DataReference&, int64_t encodedDataLength);
     void didReceiveFetchFormData(WebCore::SWServerConnectionIdentifier, uint64_t fetchIdentifier, const IPC::FormDataReference&);
@@ -134,6 +137,7 @@ private:
 
     void postMessageToServiceWorkerClient(const WebCore::ServiceWorkerClientIdentifier& destinationIdentifier, const IPC::DataReference& message, WebCore::ServiceWorkerIdentifier sourceIdentifier, const String& sourceOrigin);
     WebSWOriginStore& swOriginStoreForSession(PAL::SessionID);
+    bool needsServerToContextConnection() const;
 #endif
 #if ENABLE(INDEXED_DATABASE)
     Vector<WebCore::SecurityOriginData> indexedDatabaseOrigins(const String& path);
@@ -162,6 +166,7 @@ private:
 
     RefPtr<WebSWServerToContextConnection> m_serverToContextConnection;
     bool m_waitingForServerToContextProcessConnection { false };
+    HashMap<PAL::SessionID, String> m_swDatabasePaths;
     HashMap<PAL::SessionID, std::unique_ptr<WebCore::SWServer>> m_swServers;
     HashMap<WebCore::SWServerConnectionIdentifier, WebSWServerConnection*> m_swServerConnections;
 #endif

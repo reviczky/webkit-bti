@@ -18,9 +18,14 @@ set(WTF_HEADERS
     ClockType.h
     CompilationThread.h
     Compiler.h
+    ConcurrentBuffer.h
+    ConcurrentPtrHashSet.h
+    ConcurrentVector.h
     Condition.h
+    CountingLock.h
     CrossThreadCopier.h
     CrossThreadTask.h
+    CrossThreadTaskHandler.h
     CryptographicUtilities.h
     CryptographicallyRandomNumber.h
     CurrentTime.h
@@ -60,6 +65,7 @@ set(WTF_HEADERS
     IndexedContainerIterator.h
     IteratorAdaptors.h
     IteratorRange.h
+    JSONValues.h
     Language.h
     ListHashSet.h
     Liveness.h
@@ -103,6 +109,7 @@ set(WTF_HEADERS
     ParkingLot.h
     Platform.h
     PlatformRegisters.h
+    Poisoned.h
     PrintStream.h
     ProcessID.h
     RAMSize.h
@@ -130,6 +137,8 @@ set(WTF_HEADERS
     SegmentedVector.h
     SmallPtrSet.h
     StackBounds.h
+    StackShot.h
+    StackShotProfiler.h
     StackStats.h
     StackTrace.h
     StdLibExtras.h
@@ -183,6 +192,7 @@ set(WTF_HEADERS
     text/StringBuffer.h
     text/StringCommon.h
     text/StringHash.h
+    text/StringHasher.h
     text/StringImpl.h
     text/StringMalloc.h
     text/StringVector.h
@@ -216,7 +226,10 @@ set(WTF_SOURCES
     CPUTime.cpp
     ClockType.cpp
     CompilationThread.cpp
+    ConcurrentPtrHashSet.cpp
+    CountingLock.cpp
     CrossThreadCopier.cpp
+    CrossThreadTaskHandler.cpp
     CryptographicUtilities.cpp
     CryptographicallyRandomNumber.cpp
     CurrentTime.cpp
@@ -231,6 +244,8 @@ set(WTF_SOURCES
     GlobalVersion.cpp
     GregorianDateTime.cpp
     HashTable.cpp
+    JSONValues.cpp
+    JSValueMalloc.cpp
     Language.cpp
     Lock.cpp
     LockedPrintStream.cpp
@@ -246,6 +261,7 @@ set(WTF_SOURCES
     ParallelHelperPool.cpp
     ParallelJobsGeneric.cpp
     ParkingLot.cpp
+    Poisoned.cpp
     PrintStream.cpp
     RAMSize.cpp
     RandomDevice.cpp

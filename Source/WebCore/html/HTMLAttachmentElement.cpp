@@ -28,14 +28,22 @@
 
 #if ENABLE(ATTACHMENT_ELEMENT)
 
+#include "DOMURL.h"
+#include "Document.h"
 #include "Editor.h"
 #include "File.h"
 #include "FileReaderLoader.h"
 #include "FileReaderLoaderClient.h"
 #include "Frame.h"
+#include "HTMLImageElement.h"
 #include "HTMLNames.h"
+#include "HTMLVideoElement.h"
+#include "MIMETypeRegistry.h"
 #include "RenderAttachment.h"
+#include "RenderBlockFlow.h"
+#include "ShadowRoot.h"
 #include "SharedBuffer.h"
+#include <pal/FileSizeFormatter.h>
 
 namespace WebCore {
 
@@ -86,6 +94,11 @@ Ref<HTMLAttachmentElement> HTMLAttachmentElement::create(const QualifiedName& ta
 
 RenderPtr<RenderElement> HTMLAttachmentElement::createElementRenderer(RenderStyle&& style, const RenderTreePosition&)
 {
+    if (!style.hasAppearance()) {
+        // If this attachment element doesn't have an appearance, defer rendering to child elements.
+        return createRenderer<RenderBlockFlow>(*this, WTFMove(style));
+    }
+
     return createRenderer<RenderAttachment>(*this, WTFMove(style));
 }
 
@@ -105,8 +118,29 @@ void HTMLAttachmentElement::setFile(RefPtr<File>&& file)
 
     setAttributeWithoutSynchronization(HTMLNames::webkitattachmentbloburlAttr, m_file ? m_file->url() : emptyString());
 
-    if (auto* renderer = this->renderer())
-        renderer->invalidate();
+    if (auto* renderAttachment = attachmentRenderer())
+        renderAttachment->invalidate();
+
+    invalidateShadowRootChildrenIfNecessary();
+    populateShadowRootIfNecessary();
+}
+
+void HTMLAttachmentElement::invalidateShadowRootChildrenIfNecessary()
+{
+    if (auto image = innerImage()) {
+        image->setAttributeWithoutSynchronization(srcAttr, emptyString());
+        image->setInlineStyleProperty(CSSPropertyDisplay, CSSValueNone, true);
+    }
+    if (auto video = innerVideo()) {
+        video->setAttributeWithoutSynchronization(srcAttr, emptyString());
+        video->setInlineStyleProperty(CSSPropertyDisplay, CSSValueNone, true);
+    }
+}
+
+RenderAttachment* HTMLAttachmentElement::attachmentRenderer() const
+{
+    auto* renderer = this->renderer();
+    return is<RenderAttachment>(renderer) ? downcast<RenderAttachment>(renderer) : nullptr;
 }
 
 Node::InsertedIntoAncestorResult HTMLAttachmentElement::insertedIntoAncestor(InsertionType type, ContainerNode& ancestor)
@@ -127,8 +161,8 @@ void HTMLAttachmentElement::removedFromAncestor(RemovalType type, ContainerNode&
 void HTMLAttachmentElement::parseAttribute(const QualifiedName& name, const AtomicString& value)
 {
     if (name == progressAttr || name == subtitleAttr || name == titleAttr || name == typeAttr) {
-        if (auto* renderer = this->renderer())
-            renderer->invalidate();
+        if (auto* renderAttachment = attachmentRenderer())
+            renderAttachment->invalidate();
     }
 
     HTMLElement::parseAttribute(name, value);
@@ -160,6 +194,97 @@ String HTMLAttachmentElement::attachmentType() const
 String HTMLAttachmentElement::attachmentPath() const
 {
     return attributeWithoutSynchronization(webkitattachmentpathAttr);
+}
+
+void HTMLAttachmentElement::updateDisplayMode(AttachmentDisplayMode mode)
+{
+    mode = mode == AttachmentDisplayMode::Auto ? defaultDisplayMode() : mode;
+
+    switch (mode) {
+    case AttachmentDisplayMode::InPlace:
+        populateShadowRootIfNecessary();
+        setInlineStyleProperty(CSSPropertyWebkitAppearance, CSSValueNone, true);
+        setInlineStyleProperty(CSSPropertyDisplay, CSSValueInlineBlock, true);
+        break;
+    case AttachmentDisplayMode::AsIcon:
+        removeInlineStyleProperty(CSSPropertyWebkitAppearance);
+        removeInlineStyleProperty(CSSPropertyDisplay);
+        break;
+    default:
+        ASSERT_NOT_REACHED();
+        break;
+    }
+
+    invalidateStyleAndRenderersForSubtree();
+}
+
+void HTMLAttachmentElement::updateFileWithData(Ref<SharedBuffer>&& data, std::optional<String>&& newContentType, std::optional<String>&& newFilename)
+{
+    auto filename = newFilename ? *newFilename : attachmentTitle();
+    auto contentType = newContentType ? *newContentType : File::contentTypeForFile(filename);
+    auto file = File::create(Blob::create(WTFMove(data), contentType), filename);
+
+    setAttributeWithoutSynchronization(titleAttr, filename);
+    setAttributeWithoutSynchronization(subtitleAttr, fileSizeDescription(file->size()));
+    setAttributeWithoutSynchronization(typeAttr, contentType);
+    setFile(WTFMove(file));
+}
+
+Ref<HTMLImageElement> HTMLAttachmentElement::ensureInnerImage()
+{
+    if (auto image = innerImage())
+        return *image;
+
+    auto image = HTMLImageElement::create(document());
+    ensureUserAgentShadowRoot().appendChild(image);
+    return image;
+}
+
+Ref<HTMLVideoElement> HTMLAttachmentElement::ensureInnerVideo()
+{
+    if (auto video = innerVideo())
+        return *video;
+
+    auto video = HTMLVideoElement::create(document());
+    ensureUserAgentShadowRoot().appendChild(video);
+    return video;
+}
+
+RefPtr<HTMLImageElement> HTMLAttachmentElement::innerImage() const
+{
+    if (auto root = userAgentShadowRoot())
+        return childrenOfType<HTMLImageElement>(*root).first();
+    return nullptr;
+}
+
+RefPtr<HTMLVideoElement> HTMLAttachmentElement::innerVideo() const
+{
+    if (auto root = userAgentShadowRoot())
+        return childrenOfType<HTMLVideoElement>(*root).first();
+    return nullptr;
+}
+
+void HTMLAttachmentElement::populateShadowRootIfNecessary()
+{
+    auto mimeType = attachmentType();
+    if (!m_file || mimeType.isEmpty())
+        return;
+
+    if (MIMETypeRegistry::isSupportedImageMIMEType(mimeType) || MIMETypeRegistry::isPDFMIMEType(mimeType)) {
+        auto image = ensureInnerImage();
+        if (image->attributeWithoutSynchronization(srcAttr).isEmpty()) {
+            image->setAttributeWithoutSynchronization(srcAttr, DOMURL::createObjectURL(document(), *m_file));
+            image->setInlineStyleProperty(CSSPropertyDisplay, CSSValueInline, true);
+        }
+
+    } else if (MIMETypeRegistry::isSupportedMediaMIMEType(mimeType)) {
+        auto video = ensureInnerVideo();
+        if (video->attributeWithoutSynchronization(srcAttr).isEmpty()) {
+            video->setAttributeWithoutSynchronization(srcAttr, DOMURL::createObjectURL(document(), *m_file));
+            video->setAttributeWithoutSynchronization(controlsAttr, emptyString());
+            video->setInlineStyleProperty(CSSPropertyDisplay, CSSValueInline, true);
+        }
+    }
 }
 
 void HTMLAttachmentElement::requestData(Function<void(RefPtr<SharedBuffer>&&)>&& callback)

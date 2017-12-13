@@ -27,12 +27,15 @@
 
 #if ENABLE(ATTACHMENT_ELEMENT)
 
+#include "AttachmentTypes.h"
 #include "HTMLElement.h"
 
 namespace WebCore {
 
 class AttachmentDataReader;
 class File;
+class HTMLImageElement;
+class HTMLVideoElement;
 class RenderAttachment;
 class SharedBuffer;
 
@@ -47,6 +50,9 @@ public:
     WEBCORE_EXPORT String uniqueIdentifier() const;
     void setUniqueIdentifier(const String&);
 
+    WEBCORE_EXPORT void updateDisplayMode(AttachmentDisplayMode);
+    WEBCORE_EXPORT void updateFileWithData(Ref<SharedBuffer>&& data, std::optional<String>&& newContentType = std::nullopt, std::optional<String>&& newFilename = std::nullopt);
+
     InsertedIntoAncestorResult insertedIntoAncestor(InsertionType, ContainerNode&) final;
     void removedFromAncestor(RemovalType, ContainerNode&) final;
 
@@ -54,7 +60,7 @@ public:
     String attachmentType() const;
     String attachmentPath() const;
 
-    RenderAttachment* renderer() const;
+    RenderAttachment* attachmentRenderer() const;
 
     WEBCORE_EXPORT void requestData(Function<void(RefPtr<SharedBuffer>&&)>&& callback);
     void destroyReader(AttachmentDataReader&);
@@ -64,6 +70,21 @@ private:
     virtual ~HTMLAttachmentElement();
 
     RenderPtr<RenderElement> createElementRenderer(RenderStyle&&, const RenderTreePosition&) final;
+    Ref<HTMLImageElement> ensureInnerImage();
+    Ref<HTMLVideoElement> ensureInnerVideo();
+    RefPtr<HTMLImageElement> innerImage() const;
+    RefPtr<HTMLVideoElement> innerVideo() const;
+
+    void populateShadowRootIfNecessary();
+    void invalidateShadowRootChildrenIfNecessary();
+
+    AttachmentDisplayMode defaultDisplayMode() const
+    {
+        // FIXME: For now, all attachment elements automatically display using a file icon.
+        // In a followup patch, we'll change the default behavior to use in-place presentation
+        // for certain image MIME types.
+        return AttachmentDisplayMode::AsIcon;
+    }
 
     bool shouldSelectOnMouseDown() final {
 #if PLATFORM(IOS)

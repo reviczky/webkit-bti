@@ -27,17 +27,13 @@
 
 #include "AnimationEffect.h"
 #include "CSSPropertyBlendingClient.h"
+#include "KeyframeList.h"
 #include "RenderStyle.h"
 #include <wtf/Ref.h>
 
 namespace WebCore {
 
 class Element;
-
-struct Keyframe {
-    RenderStyle style;
-    Vector<CSSPropertyID> properties;
-};
 
 class KeyframeEffect final : public AnimationEffect
     , public CSSPropertyBlendingClient {
@@ -47,7 +43,10 @@ public:
 
     Element* target() const { return m_target.get(); }
     ExceptionOr<void> setKeyframes(JSC::ExecState&, JSC::Strong<JSC::JSObject>&&);
+    void getAnimatedStyle(std::unique_ptr<RenderStyle>& animatedStyle);
     void applyAtLocalTime(Seconds, RenderStyle&) override;
+    void startOrStopAccelerated();
+    bool isRunningAccelerated() const { return m_startedAccelerated; }
 
     RenderElement* renderer() const override;
     const RenderStyle& currentStyle() const override;
@@ -62,10 +61,13 @@ private:
     KeyframeEffect(Element*);
     ExceptionOr<void> processKeyframes(JSC::ExecState&, JSC::Strong<JSC::JSObject>&&);
     void computeStackingContextImpact();
+    bool shouldRunAccelerated();
 
     RefPtr<Element> m_target;
-    Vector<Keyframe> m_keyframes;
+    KeyframeList m_keyframes;
     bool m_triggersStackingContext { false };
+    bool m_started { false };
+    bool m_startedAccelerated { false };
 
 };
 

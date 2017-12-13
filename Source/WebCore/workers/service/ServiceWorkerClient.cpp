@@ -34,18 +34,32 @@
 #include "SerializedScriptValue.h"
 #include "ServiceWorkerGlobalScope.h"
 #include "ServiceWorkerThread.h"
+#include "ServiceWorkerWindowClient.h"
 
 namespace WebCore {
 
-ServiceWorkerClient::ServiceWorkerClient(ScriptExecutionContext& context, ServiceWorkerClientIdentifier identifier, ServiceWorkerClientData&& data)
+Ref<ServiceWorkerClient> ServiceWorkerClient::getOrCreate(ServiceWorkerGlobalScope& context, ServiceWorkerClientData&& data)
+{
+    if (auto* client = context.serviceWorkerClient(data.identifier))
+        return *client;
+
+    if (data.type == ServiceWorkerClientType::Window)
+        return ServiceWorkerWindowClient::create(context, WTFMove(data));
+
+    return adoptRef(*new ServiceWorkerClient { context, WTFMove(data) });
+}
+
+ServiceWorkerClient::ServiceWorkerClient(ServiceWorkerGlobalScope& context, ServiceWorkerClientData&& data)
     : ContextDestructionObserver(&context)
-    , m_identifier(identifier)
     , m_data(WTFMove(data))
 {
+    context.addServiceWorkerClient(*this);
 }
 
 ServiceWorkerClient::~ServiceWorkerClient()
 {
+    if (auto* context = scriptExecutionContext())
+        downcast<ServiceWorkerGlobalScope>(*context).removeServiceWorkerClient(*this);
 }
 
 const URL& ServiceWorkerClient::url() const

@@ -13007,7 +13007,7 @@ void testInterpreter()
     polyJump->effects.terminal = true;
     polyJump->appendSomeRegister(opcode);
     polyJump->clobber(RegisterSet::macroScratchRegisters());
-    polyJump->numGPScratchRegisters++;
+    polyJump->numGPScratchRegisters = 2;
     dispatch->appendSuccessor(FrequentedBlock(addToDataPointer));
     dispatch->appendSuccessor(FrequentedBlock(addToCodePointer));
     dispatch->appendSuccessor(FrequentedBlock(addToData));
@@ -13029,9 +13029,15 @@ void testInterpreter()
             MacroAssemblerCodePtr* jumpTable = bitwise_cast<MacroAssemblerCodePtr*>(
                 params.proc().addDataSection(sizeof(MacroAssemblerCodePtr) * labels.size()));
 
-            jit.move(CCallHelpers::TrustedImmPtr(jumpTable), params.gpScratch(0));
-            jit.jump(CCallHelpers::BaseIndex(params.gpScratch(0), params[0].gpr(), CCallHelpers::timesPtr()));
-            
+            GPRReg scratch = params.gpScratch(0);
+            GPRReg poisonScratch = params.gpScratch(1);
+
+            jit.move(CCallHelpers::TrustedImmPtr(jumpTable), scratch);
+            jit.move(CCallHelpers::TrustedImm64(g_jitCodePoison), poisonScratch);
+            jit.load64(CCallHelpers::BaseIndex(scratch, params[0].gpr(), CCallHelpers::timesPtr()), scratch);
+            jit.xor64(poisonScratch, scratch);
+            jit.jump(scratch);
+
             jit.addLinkTask(
                 [&, jumpTable, labels] (LinkBuffer& linkBuffer) {
                     for (unsigned i = labels.size(); i--;)
@@ -17788,7 +17794,7 @@ void run(const char* filter)
 
     Lock lock;
 
-    Vector<RefPtr<Thread>> threads;
+    Vector<Ref<Thread>> threads;
     for (unsigned i = filter ? 1 : WTF::numberOfProcessorCores(); i--;) {
         threads.append(
             Thread::create(
@@ -17808,7 +17814,7 @@ void run(const char* filter)
                 }));
     }
 
-    for (RefPtr<Thread> thread : threads)
+    for (auto& thread : threads)
         thread->waitForCompletion();
     crashLock.lock();
 }

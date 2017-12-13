@@ -34,6 +34,7 @@
 
 namespace WebCore {
 class SharedBuffer;
+struct AttachmentDisplayOptions;
 }
 
 namespace WebKit {
@@ -49,6 +50,8 @@ public:
 
     const WTF::String& identifier() const { return m_identifier; }
     void requestData(Function<void(RefPtr<WebCore::SharedBuffer>, WebKit::CallbackBase::Error)>&&);
+    void setDisplayOptions(WebCore::AttachmentDisplayOptions, Function<void(WebKit::CallbackBase::Error)>&&);
+    void setDataAndContentType(WebCore::SharedBuffer&, const WTF::String& newContentType, const WTF::String& newFilename, Function<void(WebKit::CallbackBase::Error)>&&);
 
 private:
     explicit Attachment(const WTF::String& identifier, WebKit::WebPageProxy&);

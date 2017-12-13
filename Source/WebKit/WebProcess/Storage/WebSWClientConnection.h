@@ -46,35 +46,42 @@ namespace WebKit {
 class WebSWOriginTable;
 class WebServiceWorkerProvider;
 
-class WebSWClientConnection : public WebCore::SWClientConnection, public IPC::MessageSender, public IPC::MessageReceiver {
+class WebSWClientConnection final : public WebCore::SWClientConnection, public IPC::MessageSender, public IPC::MessageReceiver {
 public:
-    WebSWClientConnection(IPC::Connection&, PAL::SessionID);
-    WebSWClientConnection(const WebSWClientConnection&) = delete;
-    ~WebSWClientConnection() final;
+    static Ref<WebSWClientConnection> create(IPC::Connection& connection, PAL::SessionID sessionID) { return adoptRef(*new WebSWClientConnection { connection, sessionID }); }
+    ~WebSWClientConnection();
 
     WebCore::SWServerConnectionIdentifier serverConnectionIdentifier() const final { return m_identifier; }
 
-    void addServiceWorkerRegistrationInServer(const WebCore::ServiceWorkerRegistrationKey&, WebCore::ServiceWorkerRegistrationIdentifier) final;
-    void removeServiceWorkerRegistrationInServer(const WebCore::ServiceWorkerRegistrationKey&, WebCore::ServiceWorkerRegistrationIdentifier) final;
+    void addServiceWorkerRegistrationInServer(WebCore::ServiceWorkerRegistrationIdentifier) final;
+    void removeServiceWorkerRegistrationInServer(WebCore::ServiceWorkerRegistrationIdentifier) final;
 
     void disconnectedFromWebProcess();
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
 
     bool mayHaveServiceWorkerRegisteredForOrigin(const WebCore::SecurityOrigin&) const final;
-    Ref<ServiceWorkerClientFetch> startFetch(WebServiceWorkerProvider&, Ref<WebCore::ResourceLoader>&&, uint64_t identifier, ServiceWorkerClientFetch::Callback&&);
+    void startFetch(const WebCore::ResourceLoader&, uint64_t identifier);
 
-    void postMessageToServiceWorkerClient(uint64_t destinationScriptExecutionContextIdentifier, const IPC::DataReference& message, WebCore::ServiceWorkerData&& source, const String& sourceOrigin);
+    void postMessageToServiceWorkerClient(WebCore::DocumentIdentifier destinationContextIdentifier, const IPC::DataReference& message, WebCore::ServiceWorkerData&& source, const String& sourceOrigin);
+
+    void connectionToServerLost();
+
+    void syncTerminateWorker(WebCore::ServiceWorkerIdentifier) final;
 
 private:
+    WebSWClientConnection(IPC::Connection&, PAL::SessionID);
+
     void scheduleJobInServer(const WebCore::ServiceWorkerJobData&) final;
     void finishFetchingScriptInServer(const WebCore::ServiceWorkerFetchResult&) final;
-    void postMessageToServiceWorkerGlobalScope(WebCore::ServiceWorkerIdentifier destinationIdentifier, Ref<WebCore::SerializedScriptValue>&&, uint64_t sourceContextIdentifier, WebCore::ServiceWorkerClientData&& source) final;
-    void serviceWorkerStartedControllingClient(WebCore::ServiceWorkerIdentifier, uint64_t scriptExecutionContextIdentifier) final;
-    void serviceWorkerStoppedControllingClient(WebCore::ServiceWorkerIdentifier, uint64_t scriptExecutionContextIdentifier) final;
+    void postMessageToServiceWorker(WebCore::ServiceWorkerIdentifier destinationIdentifier, Ref<WebCore::SerializedScriptValue>&&, const WebCore::ServiceWorkerOrClientIdentifier& source) final;
+    void registerServiceWorkerClient(const WebCore::SecurityOrigin& topOrigin, const WebCore::ServiceWorkerClientData&, const std::optional<WebCore::ServiceWorkerIdentifier>&) final;
+    void unregisterServiceWorkerClient(WebCore::DocumentIdentifier) final;
 
     void matchRegistration(const WebCore::SecurityOrigin& topOrigin, const WebCore::URL& clientURL, RegistrationCallback&&) final;
     void didMatchRegistration(uint64_t matchRequestIdentifier, std::optional<WebCore::ServiceWorkerRegistrationData>&&);
     void didGetRegistrations(uint64_t matchRequestIdentifier, Vector<WebCore::ServiceWorkerRegistrationData>&&);
+    void whenRegistrationReady(const WebCore::SecurityOrigin& topOrigin, const WebCore::URL& clientURL, WhenRegistrationReadyCallback&&) final;
+    void registrationReady(uint64_t callbackID, WebCore::ServiceWorkerRegistrationData&&);
 
     void getRegistrations(const WebCore::SecurityOrigin& topOrigin, const WebCore::URL& clientURL, GetRegistrationsCallback&&) final;
 
@@ -82,11 +89,13 @@ private:
 
     void scheduleStorageJob(const WebCore::ServiceWorkerJobData&);
 
+    void runOrDelayTaskForImport(WTF::Function<void()>&& task);
+
     IPC::Connection* messageSenderConnection() final { return m_connection.ptr(); }
     uint64_t messageSenderDestinationID() final { return m_identifier.toUInt64(); }
 
     void setSWOriginTableSharedMemory(const SharedMemory::Handle&);
-    void initializeSWOriginTableAsEmpty();
+    void setSWOriginTableIsImported();
 
     PAL::SessionID m_sessionID;
     WebCore::SWServerConnectionIdentifier m_identifier;
@@ -94,11 +103,11 @@ private:
     Ref<IPC::Connection> m_connection;
     UniqueRef<WebSWOriginTable> m_swOriginTable;
 
-    uint64_t m_previousMatchRegistrationTaskIdentifier { 0 };
+    uint64_t m_previousCallbackIdentifier { 0 };
     HashMap<uint64_t, RegistrationCallback> m_ongoingMatchRegistrationTasks;
-
-    uint64_t m_previousGetRegistrationsTaskIdentifier { 0 };
     HashMap<uint64_t, GetRegistrationsCallback> m_ongoingGetRegistrationsTasks;
+    HashMap<uint64_t, WhenRegistrationReadyCallback> m_ongoingRegistrationReadyTasks;
+    Deque<WTF::Function<void()>> m_tasksPendingOriginImport;
 
 }; // class WebSWServerConnection
 

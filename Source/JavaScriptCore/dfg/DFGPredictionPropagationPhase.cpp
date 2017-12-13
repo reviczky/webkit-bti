@@ -462,6 +462,13 @@ private:
             break;
         }
 
+        case NormalizeMapKey: {
+            SpeculatedType prediction = node->child1()->prediction();
+            if (prediction)
+                changed |= mergePrediction(prediction);
+            break;
+        }
+
         default:
             break;
         }
@@ -725,12 +732,13 @@ private:
         case GetArgument:
         case CallDOMGetter:
         case GetDynamicVar:
-        case WeakMapGet:
-        case GetPrototypeOf: {
+        case GetPrototypeOf:
+        case ExtractValueFromWeakMapGet: {
             setPrediction(m_currentNode->getHeapPrediction());
             break;
         }
 
+        case WeakMapGet:
         case ResolveScopeForHoistingFuncDeclInEval: {
             setPrediction(SpecBytecodeTop);
             break;
@@ -848,7 +856,6 @@ private:
             break;
         }
         case GetButterfly:
-        case GetButterflyWithoutCaging:
         case GetIndexedPropertyStorage:
         case AllocatePropertyStorage:
         case ReallocatePropertyStorage: {
@@ -1024,6 +1031,7 @@ private:
         case GetByVal:
         case ToThis:
         case ToPrimitive: 
+        case NormalizeMapKey:
         case AtomicsAdd:
         case AtomicsAnd:
         case AtomicsCompareExchange:
@@ -1052,7 +1060,6 @@ private:
 
         case PutByValAlias:
         case DoubleAsInt32:
-        case GetLocalUnlinked:
         case CheckArray:
         case CheckTypeInfoFlags:
         case Arrayify:
@@ -1173,6 +1180,8 @@ private:
         case PutDynamicVar:
         case NukeStructureAndSetButterfly:
         case InitializeEntrypointArguments:
+        case SetAdd:
+        case MapSet:
             break;
             
         // This gets ignored because it only pretends to produce a value.

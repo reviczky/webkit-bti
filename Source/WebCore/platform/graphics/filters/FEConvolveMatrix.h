@@ -69,8 +69,8 @@ public:
 private:
 
     struct PaintingData {
-        Uint8ClampedArray* srcPixelArray;
-        Uint8ClampedArray* dstPixelArray;
+        const Uint8ClampedArray& srcPixelArray;
+        Uint8ClampedArray& dstPixelArray;
         int width;
         int height;
         float bias;
@@ -80,11 +80,13 @@ private:
     FEConvolveMatrix(Filter&, const IntSize&, float, float,
             const IntPoint&, EdgeModeType, const FloatPoint&, bool, const Vector<float>&);
 
+    const char* filterName() const final { return "FEConvolveMatrix"; }
+
     void determineAbsolutePaintRect() override { setAbsolutePaintRect(enclosingIntRect(maxEffectRect())); }
 
     void platformApplySoftware() override;
 
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, int indention) const override;
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
     template<bool preserveAlphaValues>
     ALWAYS_INLINE void fastSetInteriorPixels(PaintingData&, int clipRight, int clipBottom, int yStart, int yEnd);
