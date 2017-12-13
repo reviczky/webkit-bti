@@ -140,7 +140,7 @@ bool WorkerThread::start(WTF::Function<void(const String&)>&& evaluateCallback)
 
     m_evaluateCallback = WTFMove(evaluateCallback);
 
-    m_thread = Thread::create("WebCore: Worker", [this] {
+    m_thread = Thread::tryCreate("WebCore: Worker", [this] {
         workerThread();
     });
 
@@ -149,6 +149,8 @@ bool WorkerThread::start(WTF::Function<void(const String&)>&& evaluateCallback)
 
 void WorkerThread::workerThread()
 {
+    auto protectedThis = makeRef(*this);
+
     // Propagate the mainThread's fenv to workers.
 #if PLATFORM(IOS)
     FloatingPointEnvironment::singleton().propagateMainThreadEnvironment();
@@ -230,6 +232,9 @@ void WorkerThread::workerThread()
 
     // Clean up WebCore::ThreadGlobalData before WTF::Thread goes away!
     threadGlobalData().destroy();
+
+    // Send the last WorkerThread Ref to be Deref'ed on the main thread.
+    callOnMainThread([protectedThis = WTFMove(protectedThis)] { });
 
     // The thread object may be already destroyed from notification now, don't try to access "this".
     protector->detach();

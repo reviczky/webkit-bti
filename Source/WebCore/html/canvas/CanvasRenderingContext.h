@@ -62,6 +62,7 @@ public:
     virtual bool isAccelerated() const { return false; }
     virtual bool isBitmapRenderer() const { return false; }
     virtual bool isPlaceholder() const { return false; }
+    virtual bool isOffscreen2d() const { return false; }
 
     virtual void paintRenderingResultsToCanvas() {}
     virtual PlatformLayer* platformLayer() const { return 0; }
@@ -70,7 +71,7 @@ public:
     void setCallTracingActive(bool callTracingActive) { m_callTracingActive = callTracingActive; }
 
 protected:
-    CanvasRenderingContext(CanvasBase&);
+    explicit CanvasRenderingContext(CanvasBase&);
     bool wouldTaintOrigin(const CanvasPattern*);
     bool wouldTaintOrigin(const HTMLCanvasElement*);
     bool wouldTaintOrigin(const HTMLImageElement*);

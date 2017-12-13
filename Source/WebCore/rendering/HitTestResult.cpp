@@ -394,7 +394,7 @@ URL HitTestResult::absolutePDFURL() const
     if (!url.isValid())
         return URL();
 
-    if (element.serviceType() == "application/pdf" || (element.serviceType().isEmpty() && url.path().endsWith(".pdf", false)))
+    if (element.serviceType() == "application/pdf" || (element.serviceType().isEmpty() && url.path().endsWithIgnoringASCIICase(".pdf")))
         return url;
     return URL();
 }
@@ -572,7 +572,7 @@ bool HitTestResult::isOverTextInsideFormControlElement() const
     if (!node)
         return false;
 
-    if (!is<HTMLTextFormControlElement>(*node))
+    if (!is<Element>(*node) || !downcast<Element>(*node).isTextField())
         return false;
 
     Frame* frame = node->document().frame();

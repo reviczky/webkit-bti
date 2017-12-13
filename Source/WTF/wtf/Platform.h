@@ -345,12 +345,12 @@
 
 /* OS(IOS) - iOS */
 /* OS(MAC_OS_X) - Mac OS X (not including iOS) */
-#if OS(DARWIN) && ((defined(TARGET_OS_EMBEDDED) && TARGET_OS_EMBEDDED) \
-    || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)                 \
-    || (defined(TARGET_IPHONE_SIMULATOR) && TARGET_IPHONE_SIMULATOR))
+#if OS(DARWIN)
+#if TARGET_OS_IPHONE
 #define WTF_OS_IOS 1
-#elif OS(DARWIN) && defined(TARGET_OS_MAC) && TARGET_OS_MAC
+#elif TARGET_OS_MAC
 #define WTF_OS_MAC_OS_X 1
+#endif
 #endif
 
 /* OS(FREEBSD) - FreeBSD */
@@ -489,7 +489,7 @@
 #define WTF_PLATFORM_MAC 1
 #elif OS(IOS)
 #define WTF_PLATFORM_IOS 1
-#if defined(TARGET_IPHONE_SIMULATOR) && TARGET_IPHONE_SIMULATOR
+#if TARGET_OS_SIMULATOR
 #define WTF_PLATFORM_IOS_SIMULATOR 1
 #endif
 #elif OS(WINDOWS)
@@ -803,9 +803,10 @@
 #if CPU(ARM_TRADITIONAL)
 #define ENABLE_DFG_JIT 1
 #endif
-/* FIXME: MIPS cannot enable the DFG until it has support for MacroAssembler::probe().
-   https://bugs.webkit.org/show_bug.cgi?id=175447
-*/
+/* Enable the DFG JIT on MIPS. */
+#if CPU(MIPS)
+#define ENABLE_DFG_JIT 1
+#endif
 #endif
 
 /* Concurrent JS only works on 64-bit platforms because it requires that
@@ -824,7 +825,7 @@
 #define ENABLE_FAST_TLS_JIT 1
 #endif
 
-#if CPU(X86) || CPU(X86_64) || CPU(ARM_THUMB2) || CPU(ARM64) || CPU(ARM_TRADITIONAL)
+#if CPU(X86) || CPU(X86_64) || CPU(ARM_THUMB2) || CPU(ARM64) || CPU(ARM_TRADITIONAL) || CPU(MIPS)
 #define ENABLE_MASM_PROBE 1
 #else
 #define ENABLE_MASM_PROBE 0

@@ -30,6 +30,7 @@
 #include "Color.h"
 #include "ContainerNode.h"
 #include "DocumentEventQueue.h"
+#include "DocumentIdentifier.h"
 #include "DocumentTiming.h"
 #include "FocusDirection.h"
 #include "FontSelectorClient.h"
@@ -50,12 +51,13 @@
 #include "UserActionElementSet.h"
 #include "ViewportArguments.h"
 #include "VisibilityState.h"
-#include <pal/Logger.h>
 #include <pal/SessionID.h>
 #include <wtf/Deque.h>
 #include <wtf/Forward.h>
 #include <wtf/HashCountedSet.h>
 #include <wtf/HashSet.h>
+#include <wtf/Logger.h>
+#include <wtf/ObjectIdentifier.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/AtomicStringHash.h>
 
@@ -152,6 +154,7 @@ class RenderView;
 class RequestAnimationFrameCallback;
 class SVGDocumentExtensions;
 class SVGSVGElement;
+class SWClientConnection;
 class ScriptElementData;
 class ScriptModuleLoader;
 class ScriptRunner;
@@ -310,7 +313,7 @@ class Document
     , public FontSelectorClient
     , public FrameDestructionObserver
     , public Supplementable<Document>
-    , public PAL::Logger::Observer {
+    , public Logger::Observer {
 public:
     static Ref<Document> create(Frame* frame, const URL& url)
     {
@@ -352,9 +355,9 @@ public:
 
     void removedLastRef();
 
-    uint64_t identifier() const { return m_identifier; }
+    DocumentIdentifier identifier() const { return m_identifier; }
 
-    using DocumentsMap = HashMap<uint64_t, Document*>;
+    using DocumentsMap = HashMap<DocumentIdentifier, Document*>;
     WEBCORE_EXPORT static DocumentsMap::ValuesIteratorRange allDocuments();
     WEBCORE_EXPORT static DocumentsMap& allDocumentsMap();
 
@@ -1368,9 +1371,9 @@ public:
     TextAutoSizing& textAutoSizing();
 #endif
 
-    PAL::Logger& logger();
+    Logger& logger();
 
-    bool hasStorageAccess() const { return m_hasStorageAccess; };
+    void hasStorageAccess(Ref<DeferredPromise>&& passedPromise);
     void requestStorageAccess(Ref<DeferredPromise>&& passedPromise);
     void setUserGrantsStorageAccessOverride(bool value) { m_grantStorageAccessOverride = value; }
 
@@ -1384,6 +1387,10 @@ public:
     void didInsertAttachmentElement(HTMLAttachmentElement&);
     void didRemoveAttachmentElement(HTMLAttachmentElement&);
     WEBCORE_EXPORT RefPtr<HTMLAttachmentElement> attachmentForIdentifier(const String& identifier) const;
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    void setServiceWorkerConnection(SWClientConnection*);
 #endif
 
 protected:
@@ -1684,7 +1691,7 @@ private:
 
     void notifyMediaCaptureOfVisibilityChanged();
 
-    void didLogMessage(const WTFLogChannel&, WTFLogLevel, const String&) final;
+    void didLogMessage(const WTFLogChannel&, WTFLogLevel, Vector<JSONLogValue>&&) final;
 
 #if ENABLE(DEVICE_ORIENTATION) && PLATFORM(IOS)
     std::unique_ptr<DeviceMotionClient> m_deviceMotionClient;
@@ -1848,16 +1855,20 @@ private:
 
     OrientationNotifier m_orientationNotifier;
     mutable PAL::SessionID m_sessionID;
-    mutable RefPtr<PAL::Logger> m_logger;
+    mutable RefPtr<Logger> m_logger;
     RefPtr<StringCallback> m_consoleMessageListener;
 
     static bool hasEverCreatedAnAXObjectCache;
 
-    bool m_hasStorageAccess { false };
+    bool m_hasFrameSpecificStorageAccess { false };
     bool m_grantStorageAccessOverride { false };
 
     RefPtr<DocumentTimeline> m_timeline;
-    uint64_t m_identifier;
+    DocumentIdentifier m_identifier;
+
+#if ENABLE(SERVICE_WORKER)
+    RefPtr<SWClientConnection> m_serviceWorkerConnection;
+#endif
 };
 
 Element* eventTargetElementForDocument(Document*);

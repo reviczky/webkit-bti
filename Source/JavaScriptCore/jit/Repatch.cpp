@@ -91,8 +91,7 @@ void ftlThunkAwareRepatchCall(CodeBlock* codeBlock, CodeLocationCall call, Funct
             MacroAssemblerCodePtr::createFromExecutableAddress(
                 MacroAssembler::readCallTarget(call).executableAddress()));
         key = key.withCallTarget(newCalleeFunction.executableAddress());
-        newCalleeFunction = FunctionPtr(
-            thunks.getSlowPathCallThunk(key).code().executableAddress());
+        newCalleeFunction = FunctionPtr(thunks.getSlowPathCallThunk(key).code());
     }
 #else // ENABLE(FTL_JIT)
     UNUSED_PARAM(codeBlock);
@@ -321,13 +320,9 @@ static InlineCacheAction tryCacheGetByID(ExecState* exec, JSValue baseValue, con
                     RELEASE_ASSERT_NOT_REACHED();
 
                 newCase = ProxyableAccessCase::create(vm, codeBlock, type, offset, structure, conditionSet, loadTargetFromProxy, slot.watchpointSet(), WTFMove(prototypeAccessChain));
-            } else if (!loadTargetFromProxy && getter && IntrinsicGetterAccessCase::canEmitIntrinsicGetter(getter, structure) && !prototypeAccessChain) {
-                // FIXME: We should make this work with poly proto, but for our own sanity, we probably
-                // want to do a pointer check on the actual getter. A good time to make this work would
-                // be when we can inherit from builtin types in poly proto fashion:
-                // https://bugs.webkit.org/show_bug.cgi?id=177318
-                newCase = IntrinsicGetterAccessCase::create(vm, codeBlock, slot.cachedOffset(), structure, conditionSet, getter);
-            } else {
+            } else if (!loadTargetFromProxy && getter && IntrinsicGetterAccessCase::canEmitIntrinsicGetter(getter, structure))
+                newCase = IntrinsicGetterAccessCase::create(vm, codeBlock, slot.cachedOffset(), structure, conditionSet, getter, WTFMove(prototypeAccessChain));
+            else {
                 if (slot.isCacheableValue() || slot.isUnset()) {
                     newCase = ProxyableAccessCase::create(vm, codeBlock, slot.isUnset() ? AccessCase::Miss : AccessCase::Load,
                         offset, structure, conditionSet, loadTargetFromProxy, slot.watchpointSet(), WTFMove(prototypeAccessChain));
@@ -427,6 +422,14 @@ static InlineCacheAction tryCachePutByID(ExecState* exec, JSValue baseValue, Str
 
         if (slot.base() == baseValue && slot.isCacheablePut()) {
             if (slot.type() == PutPropertySlot::ExistingProperty) {
+                // This assert helps catch bugs if we accidentally forget to disable caching
+                // when we transition then store to an existing property. This is common among
+                // paths that reify lazy properties. If we reify a lazy property and forget
+                // to disable caching, we may come down this path. The Replace IC does not
+                // know how to model these types of structure transitions (or any structure
+                // transition for that matter).
+                RELEASE_ASSERT(baseValue.asCell()->structure(vm) == structure);
+
                 structure->didCachePropertyReplacement(vm, slot.cachedOffset());
             
                 if (stubInfo.cacheType == CacheType::Unset

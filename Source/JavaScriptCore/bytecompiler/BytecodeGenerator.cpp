@@ -39,7 +39,9 @@
 #include "DefinePropertyAttributes.h"
 #include "Interpreter.h"
 #include "JSAsyncGeneratorFunction.h"
+#include "JSBigInt.h"
 #include "JSCInlines.h"
+#include "JSFixedArray.h"
 #include "JSFunction.h"
 #include "JSGeneratorFunction.h"
 #include "JSLexicalEnvironment.h"
@@ -1783,6 +1785,14 @@ RegisterID* BytecodeGenerator::emitEqualityOp(OpcodeID opcodeID, RegisterID* dst
                 instructions().append(SymbolType);
                 return dst;
             }
+            if (Options::useBigInt() && value == "bigint") {
+                rewindUnaryOp();
+                emitOpcode(op_is_cell_with_type);
+                instructions().append(dst->index());
+                instructions().append(srcIndex);
+                instructions().append(BigIntType);
+                return dst;
+            }
             if (value == "object") {
                 rewindUnaryOp();
                 emitOpcode(op_is_object_or_null);
@@ -3120,9 +3130,17 @@ RegisterID* BytecodeGenerator::emitNewObject(RegisterID* dst)
     return dst;
 }
 
-unsigned BytecodeGenerator::addConstantBuffer(unsigned length)
+JSValue BytecodeGenerator::addBigIntConstant(const Identifier& identifier, uint8_t radix)
 {
-    return m_codeBlock->addConstantBuffer(length);
+    return m_bigIntMap.ensure(BigIntMapEntry(identifier.impl(), radix), [&] {
+        JSBigInt* bigIntInMap = JSBigInt::parseInt(nullptr, *vm(), identifier.string(), radix);
+        // FIXME: [ESNext] Enables a way to throw an error on ByteCodeGenerator step
+        // https://bugs.webkit.org/show_bug.cgi?id=180139
+        RELEASE_ASSERT(bigIntInMap);
+        addConstantValue(bigIntInMap);
+
+        return bigIntInMap;
+    }).iterator->value;
 }
 
 JSString* BytecodeGenerator::addStringConstant(const Identifier& identifier)
@@ -3165,17 +3183,15 @@ RegisterID* BytecodeGenerator::emitNewArray(RegisterID* dst, ElementNode* elemen
         }
         if (!hadVariableExpression) {
             ASSERT(length == checkLength);
-            unsigned constantBufferIndex = addConstantBuffer(length);
-            JSValue* constantBuffer = m_codeBlock->constantBuffer(constantBufferIndex).data();
+            auto* array = JSFixedArray::create(*m_vm, length);
             unsigned index = 0;
             for (ElementNode* n = elements; index < length; n = n->next()) {
                 ASSERT(n->value()->isConstant());
-                constantBuffer[index++] = static_cast<ConstantNode*>(n->value())->jsValue(*this);
+                array->set(*m_vm, index++, static_cast<ConstantNode*>(n->value())->jsValue(*this));
             }
             emitOpcode(op_new_array_buffer);
             instructions().append(dst->index());
-            instructions().append(constantBufferIndex);
-            instructions().append(length);
+            instructions().append(addConstantValue(array)->index());
             instructions().append(newArrayAllocationProfile());
             return dst;
         }

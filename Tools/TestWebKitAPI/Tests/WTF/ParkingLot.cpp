@@ -51,7 +51,6 @@ struct SingleLatchTest {
                 Thread::create(
                     "Parking Test Thread",
                     [&] () {
-                        EXPECT_NE(0u, currentThread());
                         down();
 
                         std::lock_guard<std::mutex> locker(lock);
@@ -128,8 +127,8 @@ struct SingleLatchTest {
                 condition.wait(locker);
         }
 
-        for (RefPtr<Thread> threadIdentifier : threads)
-            threadIdentifier->waitForCompletion();
+        for (auto& thread : threads)
+            thread->waitForCompletion();
     }
 
     // Semaphore operations.
@@ -179,7 +178,7 @@ struct SingleLatchTest {
     std::mutex lock;
     std::condition_variable condition;
     HashSet<Ref<Thread>> awake;
-    Vector<RefPtr<Thread>> threads;
+    Vector<Ref<Thread>> threads;
     RefPtr<Thread> lastAwoken;
 };
 

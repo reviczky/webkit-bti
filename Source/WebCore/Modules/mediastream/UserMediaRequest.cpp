@@ -36,6 +36,7 @@
 
 #if ENABLE(MEDIA_STREAM)
 
+#include "CaptureDeviceManager.h"
 #include "DeprecatedGlobalSettings.h"
 #include "Document.h"
 #include "DocumentLoader.h"
@@ -154,14 +155,13 @@ void UserMediaRequest::start()
     m_controller->requestUserMediaAccess(*this);
 }
 
-void UserMediaRequest::allow(String&& audioDeviceUID, String&& videoDeviceUID, String&& deviceIdentifierHashSalt)
+void UserMediaRequest::allow(CaptureDevice&& audioDevice, CaptureDevice&& videoDevice, String&& deviceIdentifierHashSalt)
 {
-    RELEASE_LOG(MediaStream, "UserMediaRequest::allow %s %s", audioDeviceUID.utf8().data(), videoDeviceUID.utf8().data());
-    m_allowedAudioDeviceUID = WTFMove(audioDeviceUID);
-    m_allowedVideoDeviceUID = WTFMove(videoDeviceUID);
+    RELEASE_LOG(MediaStream, "UserMediaRequest::allow %s %s", audioDevice ? audioDevice.persistentId().utf8().data() : "", videoDevice ? videoDevice.persistentId().utf8().data() : "");
+    m_allowedAudioDevice = audioDevice;
+    m_allowedVideoDevice = videoDevice;
 
-    RefPtr<UserMediaRequest> protectedThis = this;
-    RealtimeMediaSourceCenter::NewMediaStreamHandler callback = [this, protectedThis = WTFMove(protectedThis)](RefPtr<MediaStreamPrivate>&& privateStream) mutable {
+    auto callback = [this, protectedThis = makeRef(*this)](RefPtr<MediaStreamPrivate>&& privateStream) mutable {
         if (!m_scriptExecutionContext)
             return;
 
@@ -177,15 +177,13 @@ void UserMediaRequest::allow(String&& audioDeviceUID, String&& videoDeviceUID, S
             return;
         }
 
-        stream->startProducingData();
-        
-        m_promise.resolve(stream);
+        m_pendingActivationMediaStream = PendingActivationMediaStream::create(WTFMove(protectedThis), WTFMove(stream));
     };
 
     m_audioConstraints.deviceIDHashSalt = deviceIdentifierHashSalt;
     m_videoConstraints.deviceIDHashSalt = WTFMove(deviceIdentifierHashSalt);
 
-    RealtimeMediaSourceCenter::singleton().createMediaStream(WTFMove(callback), m_allowedAudioDeviceUID, m_allowedVideoDeviceUID, &m_audioConstraints, &m_videoConstraints);
+    RealtimeMediaSourceCenter::singleton().createMediaStream(WTFMove(callback), WTFMove(audioDevice), WTFMove(videoDevice), &m_audioConstraints, &m_videoConstraints);
 
     if (!m_scriptExecutionContext)
         return;
@@ -242,11 +240,38 @@ void UserMediaRequest::contextDestroyed()
         m_controller->cancelUserMediaAccessRequest(*this);
         m_controller = nullptr;
     }
+    m_pendingActivationMediaStream = nullptr;
 }
 
 Document* UserMediaRequest::document() const
 {
     return downcast<Document>(m_scriptExecutionContext);
+}
+
+UserMediaRequest::PendingActivationMediaStream::PendingActivationMediaStream(Ref<UserMediaRequest>&& request, Ref<MediaStream>&& stream)
+    : m_request(WTFMove(request))
+    , m_mediaStream(WTFMove(stream))
+{
+    m_mediaStream->privateStream().addObserver(*this);
+    m_mediaStream->startProducingData();
+}
+
+UserMediaRequest::PendingActivationMediaStream::~PendingActivationMediaStream()
+{
+    m_mediaStream->privateStream().removeObserver(*this);
+}
+
+void UserMediaRequest::PendingActivationMediaStream::characteristicsChanged()
+{
+    if (m_mediaStream->privateStream().hasVideo() || m_mediaStream->privateStream().hasAudio())
+        m_request->mediaStreamIsReady(m_mediaStream.copyRef());
+}
+
+void UserMediaRequest::mediaStreamIsReady(Ref<MediaStream>&& stream)
+{
+    m_promise.resolve(WTFMove(stream));
+    // We are in an observer iterator loop, we do not want to change the observers within this loop.
+    callOnMainThread([stream = WTFMove(m_pendingActivationMediaStream)] { });
 }
 
 } // namespace WebCore

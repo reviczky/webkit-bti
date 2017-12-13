@@ -30,6 +30,7 @@
 
 #include "CallData.h"
 #include "CodeSpecializationKind.h"
+#include "CompleteSubspace.h"
 #include "ConcurrentJSLock.h"
 #include "ControlFlowProfiler.h"
 #include "DateInstanceCache.h"
@@ -39,20 +40,17 @@
 #include "FunctionHasExecutedCache.h"
 #include "Heap.h"
 #include "Intrinsic.h"
+#include "IsoCellSet.h"
+#include "IsoSubspace.h"
 #include "JITThunks.h"
 #include "JSCJSValue.h"
-#include "JSDestructibleObjectSubspace.h"
 #include "JSLock.h"
-#include "JSSegmentedVariableObjectSubspace.h"
-#include "JSStringSubspace.h"
-#include "JSWebAssemblyCodeBlockSubspace.h"
 #include "MacroAssemblerCodeRef.h"
 #include "Microtask.h"
 #include "NumericStrings.h"
 #include "SmallStrings.h"
 #include "Strong.h"
 #include "StructureCache.h"
-#include "Subspace.h"
 #include "TemplateRegistryKeyTable.h"
 #include "VMEntryRecord.h"
 #include "VMTraps.h"
@@ -108,9 +106,13 @@ class HeapProfiler;
 class Identifier;
 class Interpreter;
 class JSCustomGetterSetterFunction;
+class JSDestructibleObjectHeapCellType;
 class JSGlobalObject;
 class JSObject;
 class JSRunLoopTimer;
+class JSSegmentedVariableObjectHeapCellType;
+class JSStringHeapCellType;
+class JSWebAssemblyCodeBlockHeapCellType;
 class JSWebAssemblyInstance;
 class LLIntOffsetsExtractor;
 class NativeExecutable;
@@ -290,9 +292,19 @@ public:
     std::unique_ptr<FastMallocAlignedMemoryAllocator> fastMallocAllocator;
     std::unique_ptr<GigacageAlignedMemoryAllocator> primitiveGigacageAllocator;
     std::unique_ptr<GigacageAlignedMemoryAllocator> jsValueGigacageAllocator;
+
+    std::unique_ptr<HeapCellType> auxiliaryHeapCellType;
+    std::unique_ptr<HeapCellType> cellHeapCellType;
+    std::unique_ptr<HeapCellType> destructibleCellHeapCellType;
+    std::unique_ptr<JSStringHeapCellType> stringHeapCellType;
+    std::unique_ptr<JSDestructibleObjectHeapCellType> destructibleObjectHeapCellType;
+    std::unique_ptr<JSSegmentedVariableObjectHeapCellType> segmentedVariableObjectHeapCellType;
+#if ENABLE(WEBASSEMBLY)
+    std::unique_ptr<JSWebAssemblyCodeBlockHeapCellType> webAssemblyCodeBlockHeapCellType;
+#endif
     
-    Subspace primitiveGigacageAuxiliarySpace; // Typed arrays, strings, bitvectors, etc go here.
-    Subspace jsValueGigacageAuxiliarySpace; // Butterflies, arrays of JSValues, etc go here.
+    CompleteSubspace primitiveGigacageAuxiliarySpace; // Typed arrays, strings, bitvectors, etc go here.
+    CompleteSubspace jsValueGigacageAuxiliarySpace; // Butterflies, arrays of JSValues, etc go here.
 
     // We make cross-cutting assumptions about typed arrays being in the primitive Gigacage and butterflies
     // being in the JSValue gigacage. For some types, it's super obvious where they should go, and so we
@@ -300,7 +312,7 @@ public:
     // constant somewhere.
     // FIXME: Maybe it would be better if everyone abstracted this?
     // https://bugs.webkit.org/show_bug.cgi?id=175248
-    ALWAYS_INLINE Subspace& gigacageAuxiliarySpace(Gigacage::Kind kind)
+    ALWAYS_INLINE CompleteSubspace& gigacageAuxiliarySpace(Gigacage::Kind kind)
     {
         switch (kind) {
         case Gigacage::Primitive:
@@ -315,16 +327,29 @@ public:
     }
     
     // Whenever possible, use subspaceFor<CellType>(vm) to get one of these subspaces.
-    Subspace cellSpace;
-    Subspace jsValueGigacageCellSpace;
-    Subspace destructibleCellSpace;
-    JSStringSubspace stringSpace;
-    JSDestructibleObjectSubspace destructibleObjectSpace;
-    JSDestructibleObjectSubspace eagerlySweptDestructibleObjectSpace;
-    JSSegmentedVariableObjectSubspace segmentedVariableObjectSpace;
+    CompleteSubspace cellSpace;
+    CompleteSubspace jsValueGigacageCellSpace;
+    CompleteSubspace destructibleCellSpace;
+    CompleteSubspace stringSpace;
+    CompleteSubspace destructibleObjectSpace;
+    CompleteSubspace eagerlySweptDestructibleObjectSpace;
+    CompleteSubspace segmentedVariableObjectSpace;
 #if ENABLE(WEBASSEMBLY)
-    JSWebAssemblyCodeBlockSubspace webAssemblyCodeBlockSpace;
+    CompleteSubspace webAssemblyCodeBlockSpace;
 #endif
+    
+    IsoSubspace directEvalExecutableSpace;
+    IsoSubspace functionExecutableSpace;
+    IsoSubspace indirectEvalExecutableSpace;
+    IsoSubspace inferredTypeSpace;
+    IsoSubspace moduleProgramExecutableSpace;
+    IsoSubspace nativeExecutableSpace;
+    IsoSubspace programExecutableSpace;
+    IsoSubspace propertyTableSpace;
+    IsoSubspace structureRareDataSpace;
+    IsoSubspace structureSpace;
+    
+    IsoCellSet inferredTypesWithFinalizers;
 
     VMType vmType;
     ClientData* clientData;
@@ -372,9 +397,9 @@ public:
     Strong<Structure> unlinkedFunctionCodeBlockStructure;
     Strong<Structure> unlinkedModuleProgramCodeBlockStructure;
     Strong<Structure> propertyTableStructure;
-    Strong<Structure> inferredValueStructure;
     Strong<Structure> inferredTypeStructure;
     Strong<Structure> inferredTypeTableStructure;
+    Strong<Structure> inferredValueStructure;
     Strong<Structure> functionRareDataStructure;
     Strong<Structure> exceptionStructure;
     Strong<Structure> promiseDeferredStructure;
@@ -388,6 +413,7 @@ public:
     Strong<Structure> hashMapBucketMapStructure;
     Strong<Structure> setIteratorStructure;
     Strong<Structure> mapIteratorStructure;
+    Strong<Structure> bigIntStructure;
 
     Strong<JSCell> emptyPropertyNameEnumerator;
     Strong<JSCell> sentinelSetBucket;
@@ -396,7 +422,7 @@ public:
     std::unique_ptr<PromiseDeferredTimer> promiseDeferredTimer;
     
     JSCell* currentlyDestructingCallbackObject;
-    const ClassInfo* currentlyDestructingCallbackObjectClassInfo;
+    PoisonedClassInfoPtr currentlyDestructingCallbackObjectClassInfo;
 
     AtomicStringTable* m_atomicStringTable;
     WTF::SymbolRegistry m_symbolRegistry;
@@ -693,7 +719,7 @@ public:
 
 #if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
     StackTrace* nativeStackTraceOfLastThrow() const { return m_nativeStackTraceOfLastThrow.get(); }
-    ThreadIdentifier throwingThread() const { return m_throwingThread; }
+    Thread* throwingThread() const { return m_throwingThread.get(); }
 #endif
 
 #if USE(CF)
@@ -736,7 +762,7 @@ private:
 #if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
         m_needExceptionCheck = false;
         m_nativeStackTraceOfLastThrow = nullptr;
-        m_throwingThread = 0;
+        m_throwingThread = nullptr;
 #endif
         m_exception = nullptr;
     }
@@ -788,7 +814,7 @@ private:
     mutable bool m_needExceptionCheck { false };
     std::unique_ptr<StackTrace> m_nativeStackTraceOfLastThrow;
     std::unique_ptr<StackTrace> m_nativeStackTraceOfLastSimulatedThrow;
-    ThreadIdentifier m_throwingThread;
+    RefPtr<Thread> m_throwingThread;
 #endif
 
     bool m_failNextNewCodeBlock { false };

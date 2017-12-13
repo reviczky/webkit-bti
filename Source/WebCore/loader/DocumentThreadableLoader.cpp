@@ -128,7 +128,7 @@ DocumentThreadableLoader::DocumentThreadableLoader(Document& document, Threadabl
     if (request.url().protocolIsData())
         m_sameOriginRequest = options.sameOriginDataURLFlag == SameOriginDataURLFlag::Set;
 
-    if (m_sameOriginRequest || m_options.mode == FetchOptions::Mode::NoCors) {
+    if (m_sameOriginRequest || m_options.mode == FetchOptions::Mode::NoCors || m_options.mode == FetchOptions::Mode::Navigate) {
         loadRequest(WTFMove(request), DoSecurityCheck);
         return;
     }
@@ -405,9 +405,13 @@ void DocumentThreadableLoader::didFail(unsigned long, const ResourceError& error
 {
     ASSERT(m_client);
 #if ENABLE(SERVICE_WORKER)
-    if (m_bypassingPreflightForServiceWorkerRequest) {
+    if (m_bypassingPreflightForServiceWorkerRequest && error.isCancellation()) {
+        clearResource();
+
         m_options.serviceWorkersMode = ServiceWorkersMode::None;
-        makeCrossOriginAccessRequest(WTFMove(m_bypassingPreflightForServiceWorkerRequest.value()));
+        makeCrossOriginAccessRequestWithPreflight(WTFMove(m_bypassingPreflightForServiceWorkerRequest.value()));
+        ASSERT(m_bypassingPreflightForServiceWorkerRequest->isNull());
+        m_bypassingPreflightForServiceWorkerRequest = std::nullopt;
         return;
     }
 #endif
@@ -469,7 +473,7 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
         }
 
         auto cachedResource = m_document.cachedResourceLoader().requestRawResource(WTFMove(newRequest));
-        m_resource = cachedResource.valueOr(nullptr);
+        m_resource = cachedResource.value_or(nullptr);
         if (m_resource)
             m_resource->addClient(*this);
         else

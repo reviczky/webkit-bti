@@ -152,6 +152,7 @@
 #include "RenderWidget.h"
 #include "RequestAnimationFrameCallback.h"
 #include "ResourceLoadObserver.h"
+#include "RuntimeApplicationChecks.h"
 #include "RuntimeEnabledFeatures.h"
 #include "SVGDocumentExtensions.h"
 #include "SVGElement.h"
@@ -160,12 +161,14 @@
 #include "SVGSVGElement.h"
 #include "SVGTitleElement.h"
 #include "SVGZoomEvent.h"
+#include "SWClientConnection.h"
 #include "SchemeRegistry.h"
 #include "ScopedEventQueue.h"
 #include "ScriptController.h"
 #include "ScriptModuleLoader.h"
 #include "ScriptRunner.h"
 #include "ScriptSourceCode.h"
+#include "ScriptState.h"
 #include "ScriptedAnimationController.h"
 #include "ScrollingCoordinator.h"
 #include "SecurityOrigin.h"
@@ -174,6 +177,8 @@
 #include "SecurityPolicy.h"
 #include "SegmentedString.h"
 #include "SelectorQuery.h"
+#include "ServiceWorkerClientData.h"
+#include "ServiceWorkerProvider.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
 #include "SocketProvider.h"
@@ -210,7 +215,6 @@
 #include <ctime>
 #include <inspector/ConsoleMessage.h>
 #include <inspector/ScriptCallStack.h>
-#include <pal/Logger.h>
 #include <wtf/CurrentTime.h>
 #include <wtf/Language.h>
 #include <wtf/NeverDestroyed.h>
@@ -218,6 +222,7 @@
 #include <wtf/SystemTracing.h>
 #include <wtf/UUID.h>
 #include <wtf/text/StringBuffer.h>
+#include <wtf/text/TextStream.h>
 #include <yarr/RegularExpression.h>
 
 #if ENABLE(DEVICE_ORIENTATION)
@@ -437,12 +442,6 @@ static void printNavigationErrorMessage(Frame* frame, const URL& activeURL, cons
 
 uint64_t Document::s_globalTreeVersion = 0;
 
-static uint64_t generateDocumentIdentifier()
-{
-    static uint64_t identifier = 0;
-    return ++identifier;
-}
-
 auto Document::allDocumentsMap() -> DocumentsMap&
 {
     static NeverDestroyed<DocumentsMap> documents;
@@ -512,7 +511,7 @@ Document::Document(Frame* frame, const URL& url, unsigned documentClasses, unsig
     , m_isSynthesized(constructionFlags & Synthesized)
     , m_isNonRenderedPlaceholder(constructionFlags & NonRenderedPlaceholder)
     , m_orientationNotifier(currentOrientation(frame))
-    , m_identifier(generateDocumentIdentifier())
+    , m_identifier(generateObjectIdentifier<DocumentIdentifierType>())
 {
     auto addResult = allDocumentsMap().add(m_identifier, this);
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
@@ -1926,15 +1925,9 @@ bool Document::needsStyleRecalc() const
 
 inline bool static isSafeToUpdateStyleOrLayout(FrameView* frameView)
 {
-#if USE(WEB_THREAD)
-    // FIXME: Remove this code: <rdar://problem/35522719>
-    bool usingWebThread = WebThreadIsEnabled();
-#else
-    bool usingWebThread = false;
-#endif
     bool isSafeToExecuteScript = NoEventDispatchAssertion::InMainThread::isEventAllowed();
     bool isInFrameFlattening = frameView && frameView->isInChildFrameWithFrameFlattening();
-    return isSafeToExecuteScript || isInFrameFlattening || usingWebThread;
+    return isSafeToExecuteScript || isInFrameFlattening || !isInWebProcess();
 }
 
 bool Document::updateStyleIfNeeded()
@@ -2333,6 +2326,7 @@ void Document::prepareForDestruction()
 
 #if ENABLE(SERVICE_WORKER)
     setActiveServiceWorker(nullptr);
+    setServiceWorkerConnection(nullptr);
 #endif
 
 #if ENABLE(IOS_TOUCH_EVENTS)
@@ -2340,10 +2334,10 @@ void Document::prepareForDestruction()
 #endif
 
 #if HAVE(ACCESSIBILITY)
-    // Sub-frames need to cleanup Nodes in the text marker cache when the Document disappears.
     if (this != &topDocument()) {
-        if (AXObjectCache* cache = existingAXObjectCache())
-            cache->clearTextMarkerNodesInUse(this);
+        // Let the ax cache know that this subframe goes out of scope.
+        if (auto* cache = existingAXObjectCache())
+            cache->prepareForDocumentDestruction(*this);
     }
 #endif
 
@@ -2516,10 +2510,7 @@ void Document::clearAXObjectCache()
 AXObjectCache* Document::existingAXObjectCacheSlow() const
 {
     ASSERT(hasEverCreatedAnAXObjectCache);
-    Document& topDocument = this->topDocument();
-    if (!topDocument.hasLivingRenderTree())
-        return nullptr;
-    return topDocument.m_axObjectCache.get();
+    return topDocument().m_axObjectCache.get();
 }
 
 AXObjectCache* Document::axObjectCache() const
@@ -3384,10 +3375,14 @@ void Document::processViewport(const String& features, ViewportArguments::Type o
 {
     ASSERT(!features.isNull());
 
+    LOG_WITH_STREAM(Viewports, stream << "Document::processViewport " << features);
+
     if (origin < m_viewportArguments.type)
         return;
 
     m_viewportArguments = ViewportArguments(origin);
+
+    LOG_WITH_STREAM(Viewports, stream  << " resolved to " << m_viewportArguments);
 
     processFeaturesString(features, FeatureMode::Viewport, [this](StringView key, StringView value) {
         setViewportFeature(m_viewportArguments, *this, key, value);
@@ -4970,6 +4965,11 @@ void Document::privateBrowsingStateDidChange()
 
     for (auto* element : m_privateBrowsingStateChangedElements)
         element->privateBrowsingStateDidChange();
+
+#if ENABLE(SERVICE_WORKER)
+    if (RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled())
+        setServiceWorkerConnection(&ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(sessionID()));
+#endif
 }
 
 void Document::registerForPrivateBrowsingStateChangedCallbacks(Element* e)
@@ -5465,7 +5465,13 @@ void Document::initSecurityContext()
     if (shouldEnforceContentDispositionAttachmentSandbox())
         applyContentDispositionAttachmentSandbox();
 
-    setSecurityOriginPolicy(SecurityOriginPolicy::create(isSandboxed(SandboxOrigin) ? SecurityOrigin::createUnique() : SecurityOrigin::create(m_url)));
+    bool isSecurityOriginUnique = isSandboxed(SandboxOrigin);
+    if (!isSecurityOriginUnique) {
+        auto* loader = m_frame->loader().documentLoader();
+        isSecurityOriginUnique = loader && loader->response().tainting() == ResourceResponse::Tainting::Opaque;
+    }
+
+    setSecurityOriginPolicy(SecurityOriginPolicy::create(isSecurityOriginUnique ? SecurityOrigin::createUnique() : SecurityOrigin::create(m_url)));
     setContentSecurityPolicy(std::make_unique<ContentSecurityPolicy>(*this));
 
     String overrideContentSecurityPolicy = m_frame->loader().client().overrideContentSecurityPolicy();
@@ -6654,7 +6660,7 @@ void Document::updateLastHandledUserGestureTimestamp(MonotonicTime time)
 
 bool Document::processingUserGestureForMedia() const
 {
-    if (ScriptController::processingUserGestureForMedia())
+    if (UserGestureIndicator::processingUserGestureForMedia())
         return true;
 
     if (settings().mediaUserGestureInheritsFromDocument())
@@ -7394,16 +7400,56 @@ Logger& Document::logger()
     return *m_logger;
 }
 
+void Document::hasStorageAccess(Ref<DeferredPromise>&& passedPromise)
+{
+    ASSERT(settings().storageAccessAPIEnabled());
+
+    RefPtr<DeferredPromise> promise(WTFMove(passedPromise));
+
+    if (m_hasFrameSpecificStorageAccess)
+        promise->resolve<IDLBoolean>(true);
+    
+    if (!m_frame || securityOrigin().isUnique()) {
+        promise->resolve<IDLBoolean>(false);
+        return;
+    }
+    
+    if (m_frame->isMainFrame()) {
+        promise->resolve<IDLBoolean>(true);
+        return;
+    }
+    
+    auto& securityOrigin = this->securityOrigin();
+    auto& topSecurityOrigin = topDocument().securityOrigin();
+    if (securityOrigin.equal(&topSecurityOrigin)) {
+        promise->resolve<IDLBoolean>(true);
+        return;
+    }
+
+    if (Page* page = this->page()) {
+        auto iframeHost = securityOrigin.host();
+        auto topHost = topSecurityOrigin.host();
+        page->chrome().client().hasStorageAccess(WTFMove(iframeHost), WTFMove(topHost), [documentReference = m_weakFactory.createWeakPtr(*this), promise] (bool hasAccess) {
+            Document* document = documentReference.get();
+            if (!document)
+                return;
+            
+            promise->resolve<IDLBoolean>(hasAccess);
+        });
+        return;
+    }
+
+    promise->reject();
+}
+
 void Document::requestStorageAccess(Ref<DeferredPromise>&& passedPromise)
 {
     ASSERT(settings().storageAccessAPIEnabled());
     
     RefPtr<DeferredPromise> promise(WTFMove(passedPromise));
     
-    if (m_hasStorageAccess) {
+    if (m_hasFrameSpecificStorageAccess)
         promise->resolve();
-        return;
-    }
     
     if (!m_frame || securityOrigin().isUnique()) {
         promise->reject();
@@ -7411,7 +7457,14 @@ void Document::requestStorageAccess(Ref<DeferredPromise>&& passedPromise)
     }
     
     if (m_frame->isMainFrame()) {
-        m_hasStorageAccess = true;
+        promise->resolve();
+        return;
+    }
+    
+    auto& topDocument = this->topDocument();
+    auto& topSecurityOrigin = topDocument.securityOrigin();
+    auto& securityOrigin = this->securityOrigin();
+    if (securityOrigin.equal(&topSecurityOrigin)) {
         promise->resolve();
         return;
     }
@@ -7423,20 +7476,11 @@ void Document::requestStorageAccess(Ref<DeferredPromise>&& passedPromise)
     }
 
     // The iframe has to be a direct child of the top document.
-    auto& topDocument = this->topDocument();
     if (&topDocument != parentDocument()) {
         promise->reject();
         return;
     }
 
-    auto& securityOrigin = this->securityOrigin();
-    auto& topSecurityOrigin = topDocument.securityOrigin();
-    if (securityOrigin.equal(&topSecurityOrigin)) {
-        m_hasStorageAccess = true;
-        promise->resolve();
-        return;
-    }
-    
     if (!UserGestureIndicator::processingUserGesture()) {
         promise->reject();
         return;
@@ -7451,15 +7495,20 @@ void Document::requestStorageAccess(Ref<DeferredPromise>&& passedPromise)
     builder.append(topHost);
     builder.appendLiteral("?");
     Page* page = this->page();
+
+    ASSERT(m_frame);
+    auto frameID = m_frame->loader().client().frameID();
+    auto pageID = m_frame->loader().client().pageID();
+
     // FIXME: Don't use runJavaScriptConfirm because it responds synchronously.
     if ((page && page->chrome().runJavaScriptConfirm(*m_frame, builder.toString())) || m_grantStorageAccessOverride) {
-        page->chrome().client().requestStorageAccess(WTFMove(iframeHost), WTFMove(topHost), [documentReference = m_weakFactory.createWeakPtr(*this), promise] (bool wasGranted) {
+        page->chrome().client().requestStorageAccess(WTFMove(iframeHost), WTFMove(topHost), frameID, pageID, [documentReference = m_weakFactory.createWeakPtr(*this), promise] (bool wasGranted) {
             Document* document = documentReference.get();
             if (!document)
                 return;
 
             if (wasGranted) {
-                document->m_hasStorageAccess = true;
+                document->m_hasFrameSpecificStorageAccess = true;
                 promise->resolve();
             } else
                 promise->reject();
@@ -7565,26 +7614,34 @@ static MessageLevel messageLevelFromWTFLogLevel(WTFLogLevel level)
     return MessageLevel::Log;
 }
 
-void Document::didLogMessage(const WTFLogChannel& channel, WTFLogLevel level, const String& logMessage)
+void Document::didLogMessage(const WTFLogChannel& channel, WTFLogLevel level, Vector<JSONLogValue>&& logMessages)
 {
-    if (!this->page())
+    if (!page())
         return;
 
     ASSERT(sessionID().isAlwaysOnLoggingAllowed());
 
     auto messageSource = messageSourceForWTFLogChannel(channel);
     auto messageLevel = messageLevelFromWTFLogLevel(level);
+    auto message = std::make_unique<Inspector::ConsoleMessage>(messageSource, MessageType::Log, messageLevel, WTFMove(logMessages), mainWorldExecState(frame()));
 
-    callOnMainThread([documentReference = m_weakFactory.createWeakPtr(*this), messageSource, messageLevel, logMessage]() mutable {
-        ASSERT(isMainThread());
-
-        Document* document = documentReference.get();
-        if (!document)
-            return;
-
-        auto message = std::make_unique<Inspector::ConsoleMessage>(messageSource, MessageType::Log, messageLevel, logMessage);
-        document->addConsoleMessage(WTFMove(message));
-    });
+    addConsoleMessage(WTFMove(message));
 }
+
+#if ENABLE(SERVICE_WORKER)
+void Document::setServiceWorkerConnection(SWClientConnection* serviceWorkerConnection)
+{
+    if (m_serviceWorkerConnection)
+        m_serviceWorkerConnection->unregisterServiceWorkerClient(identifier());
+
+    m_serviceWorkerConnection = serviceWorkerConnection;
+
+    if (!m_serviceWorkerConnection)
+        return;
+
+    auto controllingServiceWorkerIdentifier = activeServiceWorker() ? std::make_optional<ServiceWorkerIdentifier>(activeServiceWorker()->identifier()) : std::nullopt;
+    m_serviceWorkerConnection->registerServiceWorkerClient(topOrigin(), ServiceWorkerClientData::from(*this, *serviceWorkerConnection), controllingServiceWorkerIdentifier);
+}
+#endif
 
 } // namespace WebCore

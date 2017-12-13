@@ -245,13 +245,13 @@ void WebResourceLoadStatisticsStore::resourceLoadStatisticsUpdated(Vector<WebCor
     processStatisticsAndDataRecords();
 }
 
-void WebResourceLoadStatisticsStore::requestStorageAccess(String&& subFrameHost, String&& topFrameHost, WTF::Function<void (bool)>&& callback)
+void WebResourceLoadStatisticsStore::hasStorageAccess(String&& subFrameHost, String&& topFrameHost, WTF::CompletionHandler<void (bool)>&& callback)
 {
     ASSERT(subFrameHost != topFrameHost);
     ASSERT(RunLoop::isMain());
-
+    
     m_statisticsQueue->dispatch([this, protectedThis = makeRef(*this), subFramePrimaryDomain = isolatedPrimaryDomain(subFrameHost), topFramePrimaryDomain = isolatedPrimaryDomain(topFrameHost), callback = WTFMove(callback)] () mutable {
-
+        
         auto& topFrameStatistic = ensureResourceStatisticsForPrimaryDomain(topFramePrimaryDomain);
         if (topFrameStatistic.storageAccessUnderTopFrameOrigins.contains(subFramePrimaryDomain)) {
             callback(true);
@@ -264,12 +264,29 @@ void WebResourceLoadStatisticsStore::requestStorageAccess(String&& subFrameHost,
             return;
         }
         
+        callback(!shouldPartitionCookies(subFrameStatistic));
+    });
+}
+
+void WebResourceLoadStatisticsStore::requestStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t pageID, WTF::CompletionHandler<void (bool)>&& callback)
+{
+    ASSERT(subFrameHost != topFrameHost);
+    ASSERT(RunLoop::isMain());
+
+    m_statisticsQueue->dispatch([this, protectedThis = makeRef(*this), subFramePrimaryDomain = isolatedPrimaryDomain(subFrameHost), topFramePrimaryDomain = isolatedPrimaryDomain(topFrameHost), frameID, pageID, callback = WTFMove(callback)] () mutable {
+
+        auto& subFrameStatistic = ensureResourceStatisticsForPrimaryDomain(subFramePrimaryDomain);
+        if (shouldBlockCookies(subFrameStatistic)) {
+            callback(false);
+            return;
+        }
+        
         if (!shouldPartitionCookies(subFrameStatistic)) {
             callback(true);
             return;
         }
         
-        m_updateStorageAccessForPrevalentDomainsHandler(subFramePrimaryDomain, topFramePrimaryDomain, true, WTFMove(callback));
+        m_updateStorageAccessForPrevalentDomainsHandler(subFramePrimaryDomain, topFramePrimaryDomain, frameID, pageID, true, WTFMove(callback));
     });
 }
     

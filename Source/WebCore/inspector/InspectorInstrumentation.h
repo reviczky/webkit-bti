@@ -43,10 +43,12 @@
 #include "HitTestResult.h"
 #include "InspectorController.h"
 #include "InspectorInstrumentationCookie.h"
+#include "OffscreenCanvas.h"
 #include "Page.h"
 #include "StorageArea.h"
 #include "WorkerGlobalScope.h"
 #include "WorkerInspectorController.h"
+#include <runtime/JSCInlines.h>
 #include <wtf/MemoryPressureHandler.h>
 #include <wtf/RefPtr.h>
 
@@ -193,7 +195,6 @@ public:
     static void continueAfterXFrameOptionsDenied(Frame&, unsigned long identifier, DocumentLoader&, const ResourceResponse&);
     static void continueWithPolicyDownload(Frame&, unsigned long identifier, DocumentLoader&, const ResourceResponse&);
     static void continueWithPolicyIgnore(Frame&, unsigned long identifier, DocumentLoader&, const ResourceResponse&);
-    static void didFinishXHRLoading(ScriptExecutionContext*, unsigned long identifier, std::optional<String> decodedText);
     static void willLoadXHRSynchronously(ScriptExecutionContext*);
     static void didLoadXHRSynchronously(ScriptExecutionContext*);
     static void scriptImported(ScriptExecutionContext&, unsigned long identifier, const String& sourceString);
@@ -224,6 +225,7 @@ public:
     static void consoleTimeStamp(Frame&, Ref<Inspector::ScriptArguments>&&);
     static void startProfiling(Page&, JSC::ExecState*, const String& title);
     static void stopProfiling(Page&, JSC::ExecState*, const String& title);
+    static void consoleStartRecordingCanvas(HTMLCanvasElement&, JSC::ExecState&, JSC::JSObject* options);
 
     static void didRequestAnimationFrame(Document&, int callbackId);
     static void didCancelAnimationFrame(Document&, int callbackId);
@@ -363,7 +365,6 @@ private:
     static void didReceiveDataImpl(InstrumentingAgents&, unsigned long identifier, const char* data, int dataLength, int encodedDataLength);
     static void didFinishLoadingImpl(InstrumentingAgents&, unsigned long identifier, DocumentLoader*, const NetworkLoadMetrics&, ResourceLoader*);
     static void didFailLoadingImpl(InstrumentingAgents&, unsigned long identifier, DocumentLoader*, const ResourceError&);
-    static void didFinishXHRLoadingImpl(InstrumentingAgents&, unsigned long identifier, std::optional<String> decodedText);
     static void willLoadXHRSynchronouslyImpl(InstrumentingAgents&);
     static void didLoadXHRSynchronouslyImpl(InstrumentingAgents&);
     static void scriptImportedImpl(InstrumentingAgents&, unsigned long identifier, const String& sourceString);
@@ -390,14 +391,14 @@ private:
     static void stopConsoleTimingImpl(InstrumentingAgents&, Frame&, const String& title, Ref<Inspector::ScriptCallStack>&&);
     static void stopConsoleTimingImpl(InstrumentingAgents&, const String& title, Ref<Inspector::ScriptCallStack>&&);
     static void consoleTimeStampImpl(InstrumentingAgents&, Frame&, Ref<Inspector::ScriptArguments>&&);
+    static void startProfilingImpl(InstrumentingAgents&, JSC::ExecState*, const String& title);
+    static void stopProfilingImpl(InstrumentingAgents&, JSC::ExecState*, const String& title);
+    static void consoleStartRecordingCanvasImpl(InstrumentingAgents&, HTMLCanvasElement&, JSC::ExecState&, JSC::JSObject* options);
 
     static void didRequestAnimationFrameImpl(InstrumentingAgents&, int callbackId, Document&);
     static void didCancelAnimationFrameImpl(InstrumentingAgents&, int callbackId, Document&);
     static InspectorInstrumentationCookie willFireAnimationFrameImpl(InstrumentingAgents&, int callbackId, Document&);
     static void didFireAnimationFrameImpl(const InspectorInstrumentationCookie&);
-
-    static void startProfilingImpl(InstrumentingAgents&, JSC::ExecState*, const String& title);
-    static void stopProfilingImpl(InstrumentingAgents&, JSC::ExecState*, const String& title);
 
     static void didOpenDatabaseImpl(InstrumentingAgents&, RefPtr<Database>&&, const String& domain, const String& name, const String& version);
 
@@ -1008,13 +1009,6 @@ inline void InspectorInstrumentation::continueWithPolicyIgnore(Frame& frame, uns
         didReceiveResourceResponseImpl(*instrumentingAgents, identifier, &loader, response, nullptr);
 }
 
-inline void InspectorInstrumentation::didFinishXHRLoading(ScriptExecutionContext* context, unsigned long identifier, std::optional<String> decodedText)
-{
-    FAST_RETURN_IF_NO_FRONTENDS(void());
-    if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForContext(context))
-        didFinishXHRLoadingImpl(*instrumentingAgents, identifier, decodedText);
-}
-
 inline void InspectorInstrumentation::willLoadXHRSynchronously(ScriptExecutionContext* context)
 {
     FAST_RETURN_IF_NO_FRONTENDS(void());
@@ -1236,7 +1230,8 @@ inline void InspectorInstrumentation::didChangeCanvasMemory(HTMLCanvasElement& c
 inline void InspectorInstrumentation::recordCanvasAction(CanvasRenderingContext& canvasRenderingContext, const String& name, Vector<RecordCanvasActionVariant>&& parameters)
 {
     FAST_RETURN_IF_NO_FRONTENDS(void());
-    auto* canvasElement = canvasRenderingContext.canvasBase().asHTMLCanvasElement();
+    auto& canvasBase = canvasRenderingContext.canvasBase();
+    auto* canvasElement = is<HTMLCanvasElement>(canvasBase) ? &downcast<HTMLCanvasElement>(canvasBase) : nullptr;
     if (canvasElement) {
         if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(&canvasElement->document()))
             recordCanvasActionImpl(*instrumentingAgents, canvasRenderingContext, name, WTFMove(parameters));
@@ -1254,37 +1249,57 @@ inline void InspectorInstrumentation::didFinishRecordingCanvasFrame(HTMLCanvasEl
 inline void InspectorInstrumentation::didEnableExtension(WebGLRenderingContextBase& context, const String& extension)
 {
     FAST_RETURN_IF_NO_FRONTENDS(void());
-
-    if (auto* canvasElement = context.canvas()) {
-        if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(canvasElement->document()))
-            didEnableExtensionImpl(*instrumentingAgents, context, extension);
-    }
+    auto canvas = context.canvas();
+    WTF::switchOn(canvas,
+        [&] (const RefPtr<HTMLCanvasElement>& htmlCanvasElement) {
+            if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(htmlCanvasElement->document()))
+                didEnableExtensionImpl(*instrumentingAgents, context, extension);
+        },
+        [&] (const RefPtr<OffscreenCanvas>&) {
+        }
+    );
 }
 
 inline void InspectorInstrumentation::didCreateProgram(WebGLRenderingContextBase& context, WebGLProgram& program)
 {
-    if (auto* canvasElement = context.canvas()) {
-        if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(canvasElement->document()))
-            didCreateProgramImpl(*instrumentingAgents, context, program);
-    }
+    auto canvas = context.canvas();
+    WTF::switchOn(canvas,
+        [&] (const RefPtr<HTMLCanvasElement>& htmlCanvasElement) {
+            if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(htmlCanvasElement->document()))
+                didCreateProgramImpl(*instrumentingAgents, context, program);
+        },
+        [&] (const RefPtr<OffscreenCanvas>&) {
+        }
+    );
 }
 
 inline void InspectorInstrumentation::willDeleteProgram(WebGLRenderingContextBase& context, WebGLProgram& program)
 {
-    if (auto* canvasElement = context.canvas()) {
-        if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(canvasElement->document()))
-            willDeleteProgramImpl(*instrumentingAgents, program);
-    }
+    auto canvas = context.canvas();
+    WTF::switchOn(canvas,
+        [&] (const RefPtr<HTMLCanvasElement>& htmlCanvasElement) {
+            if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(htmlCanvasElement->document()))
+                willDeleteProgramImpl(*instrumentingAgents, program);
+        },
+        [&] (const RefPtr<OffscreenCanvas>&) {
+        }
+    );
 }
 
 inline bool InspectorInstrumentation::isShaderProgramDisabled(WebGLRenderingContextBase& context, WebGLProgram& program)
 {
     FAST_RETURN_IF_NO_FRONTENDS(false);
-    if (auto* canvasElement = context.canvas()) {
-        if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(canvasElement->document()))
-            return isShaderProgramDisabledImpl(*instrumentingAgents, program);
-    }
-    return false;
+    auto canvas = context.canvas();
+    return WTF::switchOn(canvas,
+        [&] (const RefPtr<HTMLCanvasElement>& htmlCanvasElement) {
+            if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(htmlCanvasElement->document()))
+                return isShaderProgramDisabledImpl(*instrumentingAgents, program);
+            return false;
+        },
+        [&] (const RefPtr<OffscreenCanvas>&) {
+            return false;
+        }
+    );
 }
 #endif
 
@@ -1365,6 +1380,13 @@ inline void InspectorInstrumentation::startProfiling(Page& page, JSC::ExecState*
 inline void InspectorInstrumentation::stopProfiling(Page& page, JSC::ExecState* exec, const String &title)
 {
     stopProfilingImpl(instrumentingAgentsForPage(page), exec, title);
+}
+
+inline void InspectorInstrumentation::consoleStartRecordingCanvas(HTMLCanvasElement& canvasElement, JSC::ExecState& exec, JSC::JSObject* options)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(void());
+    if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(&canvasElement.document()))
+        consoleStartRecordingCanvasImpl(*instrumentingAgents, canvasElement, exec, options);
 }
 
 inline void InspectorInstrumentation::didRequestAnimationFrame(Document& document, int callbackId)

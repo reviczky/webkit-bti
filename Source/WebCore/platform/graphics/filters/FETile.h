@@ -33,13 +33,15 @@ public:
 private:
     FETile(Filter&);
 
+    const char* filterName() const final { return "FETile"; }
+
     FilterEffectType filterEffectType() const override { return FilterEffectTypeTile; }
 
     void platformApplySoftware() override;
 
     void determineAbsolutePaintRect() override { setAbsolutePaintRect(enclosingIntRect(maxEffectRect())); }
 
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, int indention) const override;
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 };
 
 } // namespace WebCore

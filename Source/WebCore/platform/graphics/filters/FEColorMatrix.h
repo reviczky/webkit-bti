@@ -52,9 +52,11 @@ public:
 private:
     FEColorMatrix(Filter&, ColorMatrixType, const Vector<float>&);
 
+    const char* filterName() const final { return "FEColorMatrix"; }
+
     void platformApplySoftware() override;
 
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, int indention) const override;
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
     ColorMatrixType m_type;
     Vector<float> m_values;

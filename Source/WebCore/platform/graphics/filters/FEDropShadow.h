@@ -50,11 +50,13 @@ public:
 private:
     FEDropShadow(Filter&, float, float, float, float, const Color&, float);
 
+    const char* filterName() const final { return "FEDropShadow"; }
+
     void platformApplySoftware() override;
 
     void determineAbsolutePaintRect() override;
 
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, int indention) const override;
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
     float m_stdX;
     float m_stdY;

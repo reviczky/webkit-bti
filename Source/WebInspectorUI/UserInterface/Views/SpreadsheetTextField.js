@@ -58,8 +58,6 @@ WI.SpreadsheetTextField = class SpreadsheetTextField
     get value() { return this._element.textContent; }
     set value(value) { this._element.textContent = value; }
 
-    get valueBeforeEditing() { return this._valueBeforeEditing; }
-
     get suggestionHint()
     {
         return this._suggestionHintElement.textContent;
@@ -212,7 +210,7 @@ WI.SpreadsheetTextField = class SpreadsheetTextField
         this._applyCompletionHint();
         this.discardCompletion();
 
-        this._delegate.spreadsheetTextFieldDidBlur(this);
+        this._delegate.spreadsheetTextFieldDidBlur(this, event);
         this.stopEditing();
     }
 
@@ -260,6 +258,18 @@ WI.SpreadsheetTextField = class SpreadsheetTextField
 
             if (this._delegate && typeof this._delegate.spreadsheetTextFieldDidChange === "function")
                 this._delegate.spreadsheetTextFieldDidChange(this);
+        }
+
+        if (event.key === "Backspace") {
+            if (!this.value) {
+                event.stop();
+                this.stopEditing();
+
+                if (this._delegate && this._delegate.spreadsheetTextFieldDidBackspace)
+                    this._delegate.spreadsheetTextFieldDidBackspace(this);
+
+                return;
+            }
         }
 
         if (event.key === "Escape") {

@@ -481,12 +481,12 @@ bool AccessibilityNodeObject::isSearchField() const
 
     // Check the node name of the input type, sometimes it's "search".
     const AtomicString& nameAttribute = getAttribute(nameAttr);
-    if (nameAttribute.contains("search", false))
+    if (nameAttribute.containsIgnoringASCIICase("search"))
         return true;
 
     // Check the form action and the name, which will sometimes be "search".
     auto* form = inputElement.form();
-    if (form && (form->name().contains("search", false) || form->action().contains("search", false)))
+    if (form && (form->name().containsIgnoringASCIICase("search") || form->action().containsIgnoringASCIICase("search")))
         return true;
 
     return false;
@@ -1900,12 +1900,7 @@ void AccessibilityNodeObject::colorValue(int& r, int& g, int& b) const
     if (!is<HTMLInputElement>(node()))
         return;
 
-    auto& input = downcast<HTMLInputElement>(*node());
-    if (!input.isColorControl())
-        return;
-
-    // HTMLInputElement::value always returns a string parseable by Color().
-    Color color(input.value());
+    auto color = downcast<HTMLInputElement>(*node()).valueAsColor();
     r = color.red();
     g = color.green();
     b = color.blue();

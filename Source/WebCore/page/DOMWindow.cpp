@@ -62,9 +62,9 @@
 #include "FrameLoaderClient.h"
 #include "FrameTree.h"
 #include "FrameView.h"
-#include "HTMLFrameOwnerElement.h"
 #include "History.h"
 #include "InspectorInstrumentation.h"
+#include "JSDOMWindowBase.h"
 #include "JSMainThreadExecState.h"
 #include "Location.h"
 #include "MainFrame.h"
@@ -83,7 +83,6 @@
 #include "RuntimeEnabledFeatures.h"
 #include "ScheduledAction.h"
 #include "Screen.h"
-#include "ScriptController.h"
 #include "SecurityOrigin.h"
 #include "SecurityOriginData.h"
 #include "SecurityPolicy.h"
@@ -101,6 +100,7 @@
 #include "SuddenTermination.h"
 #include "URL.h"
 #include "UserGestureIndicator.h"
+#include "VisualViewport.h"
 #include "WebKitPoint.h"
 #include "WindowFeatures.h"
 #include "WindowFocusAllowedIndicator.h"
@@ -358,7 +358,7 @@ FloatRect DOMWindow::adjustWindowRect(Page& page, const FloatRect& pendingChange
 
 bool DOMWindow::allowPopUp(Frame& firstFrame)
 {
-    return ScriptController::processingUserGesture()
+    return UserGestureIndicator::processingUserGesture()
         || firstFrame.settings().javaScriptCanOpenWindowsAutomatically();
 }
 
@@ -424,6 +424,7 @@ DOMWindow::~DOMWindow()
         ASSERT(!m_sessionStorage);
         ASSERT(!m_localStorage);
         ASSERT(!m_applicationCache);
+        ASSERT(!m_visualViewport);
     }
 #endif
 
@@ -586,6 +587,7 @@ void DOMWindow::resetDOMWindowProperties()
     m_statusbar = nullptr;
     m_toolbar = nullptr;
     m_performance = nullptr;
+    m_visualViewport = nullptr;
 }
 
 bool DOMWindow::isCurrentlyDisplayedInFrame() const
@@ -799,6 +801,15 @@ Location* DOMWindow::location() const
     return m_location.get();
 }
 
+VisualViewport* DOMWindow::visualViewport() const
+{
+    if (!isCurrentlyDisplayedInFrame())
+        return nullptr;
+    if (!m_visualViewport)
+        m_visualViewport = VisualViewport::create(m_frame);
+    return m_visualViewport.get();
+}
+
 #if ENABLE(USER_MESSAGE_HANDLERS)
 
 bool DOMWindow::shouldHaveWebKitNamespaceForWorld(DOMWrapperWorld& world)
@@ -916,7 +927,7 @@ ExceptionOr<void> DOMWindow::postMessage(JSC::ExecState& state, DOMWindow& incum
     }
 
     Vector<RefPtr<MessagePort>> ports;
-    auto message = SerializedScriptValue::create(state, messageValue, WTFMove(transfer), ports);
+    auto message = SerializedScriptValue::create(state, messageValue, WTFMove(transfer), ports, SerializationContext::WindowPostMessage);
     if (message.hasException())
         return message.releaseException();
 
@@ -1196,7 +1207,13 @@ bool DOMWindow::find(const String& string, bool caseSensitive, bool backwards, b
         return false;
 
     // FIXME (13016): Support wholeWord, searchInFrames and showDialog.    
-    FindOptions options = (backwards ? Backwards : 0) | (caseSensitive ? 0 : CaseInsensitive) | (wrap ? WrapAround : 0);
+    FindOptions options;
+    if (backwards)
+        options |= Backwards;
+    if (!caseSensitive)
+        options |= CaseInsensitive;
+    if (wrap)
+        options |= WrapAround;
     return m_frame->editor().findString(string, options | DoNotTraverseFlatTree);
 }
 
@@ -1242,6 +1259,10 @@ int DOMWindow::innerHeight() const
     if (!m_frame)
         return 0;
 
+    // Force enough layout in the parent document to ensure that the FrameView has been resized.
+    if (auto* frameElement = this->frameElement())
+        frameElement->document().updateLayoutIfDimensionsOutOfDate(*frameElement, HeightDimensionsCheck);
+
     FrameView* view = m_frame->view();
     if (!view)
         return 0;
@@ -1253,6 +1274,10 @@ int DOMWindow::innerWidth() const
 {
     if (!m_frame)
         return 0;
+
+    // Force enough layout in the parent document to ensure that the FrameView has been resized.
+    if (auto* frameElement = this->frameElement())
+        frameElement->document().updateLayoutIfDimensionsOutOfDate(*frameElement, WidthDimensionsCheck);
 
     FrameView* view = m_frame->view();
     if (!view)
@@ -1464,8 +1489,6 @@ RefPtr<CSSRuleList> DOMWindow::getMatchedCSSRules(Element* element, const String
     unsigned rulesToInclude = StyleResolver::AuthorCSSRules;
     if (!authorOnly)
         rulesToInclude |= StyleResolver::UAAndUserCSSRules;
-    if (m_frame->settings().crossOriginCheckInGetMatchedCSSRulesDisabled())
-        rulesToInclude |= StyleResolver::CrossOriginCSSRules;
 
     PseudoId pseudoId = CSSSelector::pseudoId(pseudoType);
 
@@ -1473,9 +1496,17 @@ RefPtr<CSSRuleList> DOMWindow::getMatchedCSSRules(Element* element, const String
     if (matchedRules.isEmpty())
         return nullptr;
 
+    bool allowCrossOrigin = m_frame->settings().crossOriginCheckInGetMatchedCSSRulesDisabled();
+
     RefPtr<StaticCSSRuleList> ruleList = StaticCSSRuleList::create();
-    for (auto& rule : matchedRules)
+    for (auto& rule : matchedRules) {
+        if (!allowCrossOrigin && !rule->hasDocumentSecurityOrigin())
+            continue;
         ruleList->rules().append(rule->createCSSOMWrapper());
+    }
+
+    if (ruleList->rules().isEmpty())
+        return nullptr;
 
     return ruleList;
 }
@@ -2103,7 +2134,7 @@ void DOMWindow::setLocation(DOMWindow& activeWindow, DOMWindow& firstWindow, con
         return;
 
     // We want a new history item if we are processing a user gesture.
-    LockHistory lockHistory = (locking != LockHistoryBasedOnGestureState || !ScriptController::processingUserGesture()) ? LockHistory::Yes : LockHistory::No;
+    LockHistory lockHistory = (locking != LockHistoryBasedOnGestureState || !UserGestureIndicator::processingUserGesture()) ? LockHistory::Yes : LockHistory::No;
     LockBackForwardList lockBackForwardList = (locking != LockHistoryBasedOnGestureState) ? LockBackForwardList::Yes : LockBackForwardList::No;
     m_frame->navigationScheduler().scheduleLocationChange(*activeDocument, activeDocument->securityOrigin(),
         // FIXME: What if activeDocument()->frame() is 0?
@@ -2232,7 +2263,7 @@ RefPtr<Frame> DOMWindow::createWindow(const String& urlString, const AtomicStrin
         FrameLoadRequest frameLoadRequest { *activeWindow.document(), activeWindow.document()->securityOrigin(), resourceRequest, ASCIILiteral("_self"), LockHistory::No, LockBackForwardList::No, MaybeSendReferrer, AllowNavigationToInvalidURL::Yes, NewFrameOpenerPolicy::Allow, activeDocument->shouldOpenExternalURLsPolicyToPropagate(), initiatedByMainFrame };
         newFrame->loader().changeLocation(WTFMove(frameLoadRequest));
     } else if (!urlString.isEmpty()) {
-        LockHistory lockHistory = ScriptController::processingUserGesture() ? LockHistory::No : LockHistory::Yes;
+        LockHistory lockHistory = UserGestureIndicator::processingUserGesture() ? LockHistory::No : LockHistory::Yes;
         newFrame->navigationScheduler().scheduleLocationChange(*activeDocument, activeDocument->securityOrigin(), completedURL, referrer, lockHistory, LockBackForwardList::No);
     }
 
@@ -2301,7 +2332,7 @@ RefPtr<DOMWindow> DOMWindow::open(DOMWindow& activeWindow, DOMWindow& firstWindo
 
         // For whatever reason, Firefox uses the first window rather than the active window to
         // determine the outgoing referrer. We replicate that behavior here.
-        LockHistory lockHistory = ScriptController::processingUserGesture() ? LockHistory::No : LockHistory::Yes;
+        LockHistory lockHistory = UserGestureIndicator::processingUserGesture() ? LockHistory::No : LockHistory::Yes;
         targetFrame->navigationScheduler().scheduleLocationChange(*activeDocument, activeDocument->securityOrigin(), completedURL, firstFrame->loader().outgoingReferrer(),
             lockHistory, LockBackForwardList::No);
         return targetFrame->document()->domWindow();

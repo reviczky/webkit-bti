@@ -35,6 +35,7 @@ namespace WebCore {
     macro(Animation) \
     macro(AnimationEffect) \
     macro(AnimationEffectTiming) \
+    macro(AnimationPlaybackEvent) \
     macro(AnimationTimeline) \
     macro(ApplePaySession) \
     macro(AttachmentElement) \
@@ -77,6 +78,7 @@ namespace WebCore {
     macro(IDBRequest) \
     macro(IDBTransaction) \
     macro(IDBVersionChangeEvent) \
+    macro(ImageBitmap) \
     macro(InputEvent) \
     macro(IntersectionObserver) \
     macro(IntersectionObserverEntry) \
@@ -95,6 +97,8 @@ namespace WebCore {
     macro(NavigatorCredentials) \
     macro(NavigatorMediaDevices) \
     macro(NavigatorUserMedia) \
+    macro(OffscreenCanvas) \
+    macro(OffscreenCanvasRenderingContext2D) \
     macro(PasswordCredential) \
     macro(PaymentAddress) \
     macro(PaymentRequest) \
@@ -141,6 +145,7 @@ namespace WebCore {
     macro(VRFieldOfView) \
     macro(VRFrameData) \
     macro(VRStageParameters) \
+    macro(VisualViewport) \
     macro(WebGL2RenderingContext) \
     macro(WebGLVertexArrayObject) \
     macro(WebGPUBuffer) \
@@ -194,6 +199,7 @@ namespace WebCore {
     macro(consumeChunk) \
     macro(controlledReadableStream) \
     macro(controller) \
+    macro(createImageBitmap) \
     macro(createReadableStream) \
     macro(customElements) \
     macro(disturbed) \
@@ -279,6 +285,7 @@ namespace WebCore {
     macro(underlyingSink) \
     macro(underlyingSource) \
     macro(view) \
+    macro(visualViewport) \
     macro(webRTCLegacyAPIEnabled) \
     macro(webkit) \
     macro(webkitAudioContext) \

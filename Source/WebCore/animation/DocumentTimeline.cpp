@@ -32,7 +32,9 @@
 #include "DisplayRefreshMonitor.h"
 #include "DisplayRefreshMonitorManager.h"
 #include "Document.h"
+#include "KeyframeEffect.h"
 #include "Page.h"
+#include "RenderElement.h"
 
 static const Seconds animationInterval { 15_ms };
 
@@ -57,6 +59,7 @@ DocumentTimeline::DocumentTimeline(Document& document, PlatformDisplayID display
 DocumentTimeline::~DocumentTimeline()
 {
     m_invalidationTaskQueue.close();
+    m_eventDispatchTaskQueue.close();
 }
 
 void DocumentTimeline::detachFromDocument()
@@ -165,8 +168,80 @@ void DocumentTimeline::updateAnimations()
         m_document->updateStyleIfNeeded();
     }
 
+    for (auto animation : m_acceleratedAnimationsPendingRunningStateChange)
+        animation->startOrStopAccelerated();
+    m_acceleratedAnimationsPendingRunningStateChange.clear();
+
     // Time has advanced, the timing model requires invalidation now.
     animationTimingModelDidChange();
+}
+
+std::unique_ptr<RenderStyle> DocumentTimeline::animatedStyleForRenderer(RenderElement& renderer)
+{
+    std::unique_ptr<RenderStyle> result;
+
+    if (auto* element = renderer.element()) {
+        for (auto animation : animationsForElement(*element)) {
+            if (animation->effect() && animation->effect()->isKeyframeEffect())
+                downcast<KeyframeEffect>(animation->effect())->getAnimatedStyle(result);
+        }
+    }
+
+    if (!result)
+        result = RenderStyle::clonePtr(renderer.style());
+
+    return result;
+}
+
+void DocumentTimeline::animationAcceleratedRunningStateDidChange(WebAnimation& animation)
+{
+    m_acceleratedAnimationsPendingRunningStateChange.add(&animation);
+}
+
+bool DocumentTimeline::runningAnimationsForElementAreAllAccelerated(Element& element)
+{
+    // FIXME: This will let animations run using hardware compositing even if later in the active
+    // span of the current animations a new animation should require hardware compositing to be
+    // disabled (webkit.org/b/179974).
+    auto animations = animationsForElement(element);
+    for (const auto& animation : animations) {
+        if (animation->effect() && animation->effect()->isKeyframeEffect() && !downcast<KeyframeEffect>(animation->effect())->isRunningAccelerated())
+            return false;
+    }
+    return !animations.isEmpty();
+}
+
+void DocumentTimeline::enqueueAnimationPlaybackEvent(AnimationPlaybackEvent& event)
+{
+    m_pendingAnimationEvents.append(event);
+
+    if (!m_eventDispatchTaskQueue.hasPendingTasks())
+        m_eventDispatchTaskQueue.enqueueTask(std::bind(&DocumentTimeline::performEventDispatchTask, this));
+}
+
+static inline bool compareAnimationPlaybackEvents(const Ref<WebCore::AnimationPlaybackEvent>& lhs, const Ref<WebCore::AnimationPlaybackEvent>& rhs)
+{
+    // Sort the events by their scheduled event time such that events that were scheduled to occur earlier, sort before events scheduled to occur later
+    // and events whose scheduled event time is unresolved sort before events with a resolved scheduled event time.
+    if (lhs->timelineTime() && !rhs->timelineTime())
+        return false;
+    if (!lhs->timelineTime() && rhs->timelineTime())
+        return true;
+    if (!lhs->timelineTime() && !rhs->timelineTime())
+        return true;
+    return lhs->timelineTime().value() < rhs->timelineTime().value();
+}
+
+void DocumentTimeline::performEventDispatchTask()
+{
+    if (m_pendingAnimationEvents.isEmpty())
+        return;
+
+    auto pendingAnimationEvents = WTFMove(m_pendingAnimationEvents);
+
+    std::stable_sort(pendingAnimationEvents.begin(), pendingAnimationEvents.end(), compareAnimationPlaybackEvents);
+    for (auto& pendingEvent : pendingAnimationEvents)
+        pendingEvent->target()->dispatchEvent(pendingEvent);
 }
 
 void DocumentTimeline::windowScreenDidChange(PlatformDisplayID displayID)

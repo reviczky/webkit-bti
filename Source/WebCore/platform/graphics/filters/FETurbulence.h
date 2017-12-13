@@ -108,15 +108,17 @@ private:
 
     FETurbulence(Filter&, TurbulenceType, float, float, int, float, bool);
 
+    const char* filterName() const final { return "FETurbulence"; }
+
     void platformApplySoftware() override;
     void determineAbsolutePaintRect() override { setAbsolutePaintRect(enclosingIntRect(maxEffectRect())); }
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, int indention) const override;
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
     void initPaint(PaintingData&);
     StitchData computeStitching(IntSize tileSize, float& baseFrequencyX, float& baseFrequencyY) const;
     FloatComponents noise2D(const PaintingData&, const StitchData&, const FloatPoint&) const;
     ColorComponents calculateTurbulenceValueForPoint(const PaintingData&, StitchData, const FloatPoint&) const;
-    void fillRegion(Uint8ClampedArray*, const PaintingData&, StitchData, int startY, int endY) const;
+    void fillRegion(Uint8ClampedArray&, const PaintingData&, StitchData, int startY, int endY) const;
 
     static void fillRegionWorker(void*);
 

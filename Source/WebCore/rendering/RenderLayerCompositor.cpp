@@ -32,6 +32,7 @@
 #include "CanvasRenderingContext.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
+#include "DocumentTimeline.h"
 #include "Frame.h"
 #include "FrameView.h"
 #include "GraphicsLayer.h"
@@ -2470,6 +2471,13 @@ bool RenderLayerCompositor::requiresCompositingForAnimation(RenderLayerModelObje
     if (!(m_compositingTriggers & ChromeClient::AnimationTrigger))
         return false;
 
+    if (auto* element = renderer.element()) {
+        if (auto* timeline = element->document().existingTimeline()) {
+            if (timeline->runningAnimationsForElementAreAllAccelerated(*element))
+                return true;
+        }
+    }
+
     const AnimationBase::RunningState activeAnimationState = AnimationBase::Running | AnimationBase::Paused;
     auto& animController = renderer.animation();
     return (animController.isRunningAnimationOnRenderer(renderer, CSSPropertyOpacity, activeAnimationState)
@@ -2870,6 +2878,9 @@ bool RenderLayerCompositor::shouldCompositeOverflowControls() const
         return false;
 
     if (documentUsesTiledBacking())
+        return true;
+
+    if (m_overflowControlsHostLayer && isMainFrameCompositor())
         return true;
 
 #if !USE(COORDINATED_GRAPHICS_THREADED)

@@ -69,7 +69,7 @@ void FEOffset::platformApplySoftware()
     FilterEffect* in = inputEffect(0);
 
     ImageBuffer* resultImage = createImageBufferResult();
-    ImageBuffer* inBuffer = in->asImageBuffer();
+    ImageBuffer* inBuffer = in->imageBufferResult();
     if (!resultImage || !inBuffer)
         return;
 
@@ -81,13 +81,14 @@ void FEOffset::platformApplySoftware()
     resultImage->context().drawImageBuffer(*inBuffer, drawingRegion);
 }
 
-TextStream& FEOffset::externalRepresentation(TextStream& ts, int indent) const
+TextStream& FEOffset::externalRepresentation(TextStream& ts, RepresentationType representation) const
 {
-    writeIndent(ts, indent);
-    ts << "[feOffset"; 
-    FilterEffect::externalRepresentation(ts);
+    ts << indent << "[feOffset";
+    FilterEffect::externalRepresentation(ts, representation);
     ts << " dx=\"" << dx() << "\" dy=\"" << dy() << "\"]\n";
-    inputEffect(0)->externalRepresentation(ts, indent + 1);
+
+    TextStream::IndentScope indentScope(ts);
+    inputEffect(0)->externalRepresentation(ts, representation);
     return ts;
 }
 

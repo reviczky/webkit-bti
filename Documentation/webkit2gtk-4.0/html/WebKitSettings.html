@@ -829,6 +829,22 @@
 <a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 </td>
 <td class="function_name">
+<a class="link" href="WebKitSettings.html#webkit-settings-get-enable-encrypted-media" title="webkit_settings_get_enable_encrypted_media ()">webkit_settings_get_enable_encrypted_media</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitSettings.html#webkit-settings-set-enable-encrypted-media" title="webkit_settings_set_enable_encrypted_media ()">webkit_settings_set_enable_encrypted_media</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+</td>
+<td class="function_name">
 <a class="link" href="WebKitSettings.html#webkit-settings-get-allow-file-access-from-file-urls" title="webkit_settings_get_allow_file_access_from_file_urls ()">webkit_settings_get_allow_file_access_from_file_urls</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
@@ -971,6 +987,11 @@
 <tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="WebKitSettings.html#WebKitSettings--enable-dns-prefetching" title="The “enable-dns-prefetching” property">enable-dns-prefetching</a></td>
+<td class="property_flags">Read / Write / Construct</td>
+</tr>
+<tr>
+<td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
+<td class="property_name"><a class="link" href="WebKitSettings.html#WebKitSettings--enable-encrypted-media" title="The “enable-encrypted-media” property">enable-encrypted-media</a></td>
 <td class="property_flags">Read / Write / Construct</td>
 </tr>
 <tr>
@@ -4061,6 +4082,66 @@ webkit_settings_set_enable_mediasource
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-settings-get-enable-encrypted-media"></a><h3>webkit_settings_get_enable_encrypted_media ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_settings_get_enable_encrypted_media
+                               (<em class="parameter"><code><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> *settings</code></em>);</pre>
+<p>Get the <a class="link" href="WebKitSettings.html#WebKitSettings--enable-encrypted-media" title="The “enable-encrypted-media” property"><span class="type">“enable-encrypted-media”</span></a> property.</p>
+<div class="refsect3">
+<a name="webkit-settings-get-enable-encrypted-media.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>settings</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-settings-get-enable-encrypted-media.returns"></a><h4>Returns</h4>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if EncryptedMedia support is enabled or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-20.html#api-index-2.20">2.20</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-settings-set-enable-encrypted-media"></a><h3>webkit_settings_set_enable_encrypted_media ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_settings_set_enable_encrypted_media
+                               (<em class="parameter"><code><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> *settings</code></em>,
+                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> enabled</code></em>);</pre>
+<p>Set the <a class="link" href="WebKitSettings.html#WebKitSettings--enable-encrypted-media" title="The “enable-encrypted-media” property"><span class="type">“enable-encrypted-media”</span></a> property.</p>
+<div class="refsect3">
+<a name="webkit-settings-set-enable-encrypted-media.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>settings</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>enabled</p></td>
+<td class="parameter_description"><p>Value to be set</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-20.html#api-index-2.20">2.20</a></p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="webkit-settings-get-allow-file-access-from-file-urls"></a><h3>webkit_settings_get_allow_file_access_from_file_urls ()</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_settings_get_allow_file_access_from_file_urls
@@ -4484,6 +4565,19 @@ using hardware accelerated drawing operations.</p>
 to resolve domain names before a user tries to follow a link.</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitSettings--enable-encrypted-media"></a><h3>The <code class="literal">“enable-encrypted-media”</code> property</h3>
+<pre class="programlisting">  “enable-encrypted-media”   <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
+<p>Enable or disable support for Encrypted Media API on pages.
+EncryptedMedia is an experimental JavaScript API for playing encrypted media in HTML.
+This property will only work as intended if the EncryptedMedia feature is enabled at build time
+with the ENABLE_ENCRYPTED_MEDIA flag.</p>
+<p>See https://www.w3.org/TR/encrypted-media/</p>
+<p>Flags: Read / Write / Construct</p>
+<p>Default value: FALSE</p>
+<p class="since">Since: <a class="link" href="api-index-2-20.html#api-index-2.20">2.20</a></p>
 </div>
 <hr>
 <div class="refsect2">

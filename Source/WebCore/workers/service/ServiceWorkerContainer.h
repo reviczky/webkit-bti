@@ -53,13 +53,12 @@ public:
     ServiceWorkerContainer(ScriptExecutionContext&, NavigatorBase&);
     ~ServiceWorkerContainer();
 
-    typedef WebCore::RegistrationOptions RegistrationOptions;
-
     ServiceWorker* controller() const;
 
     using ReadyPromise = DOMPromiseProxy<IDLInterface<ServiceWorkerRegistration>>;
-    ReadyPromise& ready() { return m_readyPromise; }
+    ReadyPromise& ready();
 
+    using RegistrationOptions = ServiceWorkerRegistrationOptions;
     void addRegistration(const String& scriptURL, const RegistrationOptions&, Ref<DeferredPromise>&&);
     void removeRegistration(const URL& scopeURL, Ref<DeferredPromise>&&);
     void updateRegistration(const URL& scopeURL, const URL& scriptURL, WorkerType, Ref<DeferredPromise>&&);
@@ -69,8 +68,7 @@ public:
     void scheduleTaskToFireUpdateFoundEvent(ServiceWorkerRegistrationIdentifier);
     void scheduleTaskToFireControllerChangeEvent();
 
-    using RegistrationsPromise = DOMPromiseDeferred<IDLSequence<IDLInterface<ServiceWorkerRegistration>>>;
-    void getRegistrations(RegistrationsPromise&&);
+    void getRegistrations(Ref<DeferredPromise>&&);
 
     ServiceWorkerRegistration* registration(ServiceWorkerRegistrationIdentifier identifier) const { return m_registrations.get(identifier); }
 
@@ -88,7 +86,7 @@ private:
     void scheduleJob(Ref<ServiceWorkerJob>&&);
 
     void jobFailedWithException(ServiceWorkerJob&, const Exception&) final;
-    void jobResolvedWithRegistration(ServiceWorkerJob&, ServiceWorkerRegistrationData&&, WTF::Function<void()>&& promiseResolvedHandler) final;
+    void jobResolvedWithRegistration(ServiceWorkerJob&, ServiceWorkerRegistrationData&&, ShouldNotifyWhenResolved) final;
     void jobResolvedWithUnregistrationResult(ServiceWorkerJob&, bool unregistrationResult) final;
     void startScriptFetchForJob(ServiceWorkerJob&) final;
     void jobFinishedLoadingScript(ServiceWorkerJob&, const String&) final;
@@ -96,7 +94,13 @@ private:
 
     void jobDidFinish(ServiceWorkerJob&);
 
+    void didFinishGetRegistrationRequest(uint64_t requestIdentifier, std::optional<ServiceWorkerRegistrationData>&&);
+    void didFinishGetRegistrationsRequest(uint64_t requestIdentifier, Vector<ServiceWorkerRegistrationData>&&);
+
     SWServerConnectionIdentifier connectionIdentifier() final;
+    DocumentOrWorkerIdentifier contextIdentifier() final;
+
+    SWClientConnection& ensureSWClientConnection();
 
     const char* activeDOMObjectName() const final;
     bool canSuspendForDocumentSuspension() const final;
@@ -104,9 +108,9 @@ private:
     EventTargetInterface eventTargetInterface() const final { return ServiceWorkerContainerEventTargetInterfaceType; }
     void refEventTarget() final;
     void derefEventTarget() final;
-    void stop() final { m_isStopped = true; }
+    void stop() final;
 
-    ReadyPromise m_readyPromise;
+    std::unique_ptr<ReadyPromise> m_readyPromise;
 
     NavigatorBase& m_navigator;
 
@@ -117,8 +121,21 @@ private:
     HashMap<ServiceWorkerRegistrationIdentifier, ServiceWorkerRegistration*> m_registrations;
 
 #ifndef NDEBUG
-    ThreadIdentifier m_creationThread { currentThread() };
+    Ref<Thread> m_creationThread { Thread::current() };
 #endif
+
+    struct PendingPromise {
+        PendingPromise(Ref<DeferredPromise>&& promise, Ref<PendingActivity<ServiceWorkerContainer>>&& pendingActivity)
+            : promise(WTFMove(promise))
+            , pendingActivity(WTFMove(pendingActivity))
+        { }
+
+        Ref<DeferredPromise> promise;
+        Ref<PendingActivity<ServiceWorkerContainer>> pendingActivity;
+    };
+
+    uint64_t m_lastPendingPromiseIdentifier { 0 };
+    HashMap<uint64_t, std::unique_ptr<PendingPromise>> m_pendingPromises;
 };
 
 } // namespace WebCore

@@ -39,9 +39,11 @@ private:
         setOperatingColorSpace(ColorSpaceSRGB);
     }
 
+    const char* filterName() const final { return "SourceGraphic"; }
+
     void determineAbsolutePaintRect() override;
     void platformApplySoftware() override;
-    WTF::TextStream& externalRepresentation(WTF::TextStream&, int indention) const override;
+    WTF::TextStream& externalRepresentation(WTF::TextStream&, RepresentationType) const override;
 
     FilterEffectType filterEffectType() const override { return FilterEffectTypeSourceInput; }
 };

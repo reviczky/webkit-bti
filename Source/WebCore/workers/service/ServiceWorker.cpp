@@ -35,37 +35,17 @@
 #include "ScriptExecutionContext.h"
 #include "SerializedScriptValue.h"
 #include "ServiceWorkerClientData.h"
+#include "ServiceWorkerGlobalScope.h"
 #include "ServiceWorkerProvider.h"
 #include <runtime/JSCJSValueInlines.h>
 #include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
 
-const HashMap<ServiceWorkerIdentifier, HashSet<ServiceWorker*>>& ServiceWorker::allWorkers()
-{
-    return mutableAllWorkers();
-}
-
-HashMap<ServiceWorkerIdentifier, HashSet<ServiceWorker*>>& ServiceWorker::mutableAllWorkers()
-{
-    // FIXME: Once we support service workers from workers, this will need to change.
-    RELEASE_ASSERT(isMainThread());
-    
-    static NeverDestroyed<HashMap<ServiceWorkerIdentifier, HashSet<ServiceWorker*>>> allWorkersMap;
-    return allWorkersMap;
-}
-
 Ref<ServiceWorker> ServiceWorker::getOrCreate(ScriptExecutionContext& context, ServiceWorkerData&& data)
 {
-    auto it = allWorkers().find(data.identifier);
-    if (it != allWorkers().end()) {
-        for (auto& worker : it->value) {
-            if (worker->scriptExecutionContext() == &context) {
-                ASSERT(!worker->m_isStopped);
-                return *worker;
-            }
-        }
-    }
+    if (auto existingServiceWorker = context.serviceWorker(data.identifier))
+        return *existingServiceWorker;
     return adoptRef(*new ServiceWorker(context, WTFMove(data)));
 }
 
@@ -75,10 +55,7 @@ ServiceWorker::ServiceWorker(ScriptExecutionContext& context, ServiceWorkerData&
 {
     suspendIfNeeded();
 
-    auto result = mutableAllWorkers().ensure(identifier(), [] {
-        return HashSet<ServiceWorker*>();
-    });
-    result.iterator->value.add(this);
+    context.registerServiceWorker(*this);
 
     relaxAdoptionRequirement();
     updatePendingActivityForEventDispatch();
@@ -86,20 +63,12 @@ ServiceWorker::ServiceWorker(ScriptExecutionContext& context, ServiceWorkerData&
 
 ServiceWorker::~ServiceWorker()
 {
-    auto iterator = mutableAllWorkers().find(identifier());
-
-    ASSERT(iterator->value.contains(this));
-    iterator->value.remove(this);
-
-    if (iterator->value.isEmpty())
-        mutableAllWorkers().remove(iterator);
+    if (auto* context = scriptExecutionContext())
+        context->unregisterServiceWorker(*this);
 }
 
 void ServiceWorker::scheduleTaskToUpdateState(State state)
 {
-    // FIXME: Once we support service workers from workers, this might need to change.
-    RELEASE_ASSERT(isMainThread());
-
     auto* context = scriptExecutionContext();
     if (!context)
         return;
@@ -119,6 +88,9 @@ void ServiceWorker::scheduleTaskToUpdateState(State state)
 
 ExceptionOr<void> ServiceWorker::postMessage(ScriptExecutionContext& context, JSC::JSValue messageValue, Vector<JSC::Strong<JSC::JSObject>>&& transfer)
 {
+    if (m_isStopped)
+        return Exception { InvalidStateError };
+
     if (state() == State::Redundant)
         return Exception { InvalidStateError, ASCIILiteral("Service Worker state is redundant") };
 
@@ -142,15 +114,18 @@ ExceptionOr<void> ServiceWorker::postMessage(ScriptExecutionContext& context, JS
     if (channels && !channels->isEmpty())
         return Exception { NotSupportedError, ASCIILiteral("Passing MessagePort objects to postMessage is not yet supported") };
 
-    // FIXME: We should add support for workers.
-    if (!is<Document>(context))
-        return Exception { NotSupportedError, ASCIILiteral("serviceWorkerClient.postMessage() from workers is not yet supported") };
+    ServiceWorkerOrClientIdentifier sourceIdentifier;
+    if (is<ServiceWorkerGlobalScope>(context))
+        sourceIdentifier = downcast<ServiceWorkerGlobalScope>(context).thread().identifier();
+    else {
+        auto& connection = ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(context.sessionID());
+        sourceIdentifier = ServiceWorkerClientIdentifier { connection.serverConnectionIdentifier(), downcast<Document>(context).identifier() };
+    }
 
-    auto sourceClientData = ServiceWorkerClientData::from(context);
-
-    auto& swConnection = ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(context.sessionID());
-    swConnection.postMessageToServiceWorkerGlobalScope(identifier(), message.releaseReturnValue(), downcast<Document>(context).identifier(), WTFMove(sourceClientData));
-
+    callOnMainThread([sessionID = context.sessionID(), destinationIdentifier = identifier(), message = WTFMove(message), sourceIdentifier = WTFMove(sourceIdentifier)]() mutable {
+        auto& connection = ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(sessionID);
+        connection.postMessageToServiceWorker(destinationIdentifier, message.releaseReturnValue(), sourceIdentifier);
+    });
     return { };
 }
 
@@ -178,6 +153,8 @@ bool ServiceWorker::canSuspendForDocumentSuspension() const
 void ServiceWorker::stop()
 {
     m_isStopped = true;
+    removeAllEventListeners();
+    scriptExecutionContext()->unregisterServiceWorker(*this);
     updatePendingActivityForEventDispatch();
 }
 

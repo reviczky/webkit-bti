@@ -165,7 +165,7 @@ public:
 
     EventDispatcher& eventDispatcher() { return *m_eventDispatcher; }
 
-    NetworkProcessConnection& networkConnection();
+    NetworkProcessConnection& ensureNetworkProcessConnection();
     void networkProcessConnectionClosed(NetworkProcessConnection*);
     WebLoaderStrategy& webLoaderStrategy();
 
@@ -174,7 +174,7 @@ public:
 #endif
 
     void webToStorageProcessConnectionClosed(WebToStorageProcessConnection*);
-    WebToStorageProcessConnection* webToStorageProcessConnection();
+    WebToStorageProcessConnection& ensureWebToStorageProcessConnection();
 
     void setCacheModel(uint32_t);
 
@@ -231,6 +231,10 @@ public:
     WebAutomationSessionProxy* automationSessionProxy() { return m_automationSessionProxy.get(); }
 
     WebCacheStorageProvider& cacheStorageProvider() { return m_cacheStorageProvider.get(); }
+
+#if PLATFORM(IOS)
+    void accessibilityProcessSuspendedNotification(bool);
+#endif
 
 private:
     WebProcess();
@@ -297,7 +301,7 @@ private:
     void setNetworkProxySettings(const WebCore::SoupNetworkProxySettings&);
 #endif
 #if ENABLE(SERVICE_WORKER)
-    void getWorkerContextConnection(uint64_t pageID, const WebPreferencesStore&);
+    void establishWorkerContextConnectionToStorageProcess(uint64_t pageID, const WebPreferencesStore&);
 #endif
 
     void releasePageCache();
@@ -383,7 +387,6 @@ private:
 
     TextCheckerState m_textCheckerState;
 
-    void ensureNetworkProcessConnection();
     RefPtr<NetworkProcessConnection> m_networkProcessConnection;
     WebLoaderStrategy& m_webLoaderStrategy;
 
@@ -398,7 +401,6 @@ private:
 
     std::unique_ptr<WebAutomationSessionProxy> m_automationSessionProxy;
 
-    void ensureWebToStorageProcessConnection();
     RefPtr<WebToStorageProcessConnection> m_webToStorageProcessConnection;
 
 #if ENABLE(NETSCAPE_PLUGIN_API)

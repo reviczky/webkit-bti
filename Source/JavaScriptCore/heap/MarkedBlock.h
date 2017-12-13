@@ -29,6 +29,7 @@
 #include <wtf/Atomics.h>
 #include <wtf/Bitmap.h>
 #include <wtf/HashFunctions.h>
+#include <wtf/CountingLock.h>
 #include <wtf/StdLibExtras.h>
 
 namespace JSC {
@@ -132,7 +133,7 @@ public:
         
         // This is to be called by Subspace.
         template<typename DestroyFunc>
-        void finishSweepKnowingSubspace(FreeList*, const DestroyFunc&);
+        void finishSweepKnowingHeapCellType(FreeList*, const DestroyFunc&);
         
         void unsweepWithNoNewlyAllocated();
         
@@ -161,8 +162,10 @@ public:
         size_t markCount();
         size_t size();
         
-        inline bool isLive(HeapVersion markingVersion, bool isMarking, const HeapCell*);
-        inline bool isLiveCell(HeapVersion markingVersion, bool isMarking, const void*);
+        bool isAllocated();
+        
+        bool isLive(HeapVersion markingVersion, HeapVersion newlyAllocatedVersion, bool isMarking, const HeapCell*);
+        inline bool isLiveCell(HeapVersion markingVersion, HeapVersion newlyAllocatedVersion, bool isMarking, const void*);
 
         bool isLive(const HeapCell*);
         bool isLiveCell(const void*);
@@ -172,6 +175,7 @@ public:
         bool isNewlyAllocated(const void*);
         void setNewlyAllocated(const void*);
         void clearNewlyAllocated(const void*);
+        const Bitmap<atomsPerBlock>& newlyAllocated() const;
         
         HeapVersion newlyAllocatedVersion() const { return m_newlyAllocatedVersion; }
         
@@ -226,7 +230,7 @@ public:
         size_t m_atomsPerCell { std::numeric_limits<size_t>::max() };
         size_t m_endAtom { std::numeric_limits<size_t>::max() }; // This is a fuzzy end. Always test for < m_endAtom.
             
-        WTF::Bitmap<atomsPerBlock> m_newlyAllocated;
+        Bitmap<atomsPerBlock> m_newlyAllocated;
             
         AllocatorAttributes m_attributes;
         bool m_isFreeListed { false };
@@ -258,7 +262,6 @@ public:
 
     bool isMarked(const void*);
     bool isMarked(HeapVersion markingVersion, const void*);
-    bool isMarkedConcurrently(HeapVersion markingVersion, const void*);
     bool isMarked(const void*, Dependency);
     bool testAndSetMarked(const void*, Dependency);
         
@@ -280,7 +283,6 @@ public:
 
     JS_EXPORT_PRIVATE bool areMarksStale();
     bool areMarksStale(HeapVersion markingVersion);
-    DependencyWith<bool> areMarksStaleWithDependency(HeapVersion markingVersion);
     
     Dependency aboutToMark(HeapVersion markingVersion);
         
@@ -290,15 +292,14 @@ public:
     JS_EXPORT_PRIVATE void assertMarksNotStale();
 #endif
         
-    bool needsDestruction() const { return m_needsDestruction; }
-    
-    // This is usually a no-op, and we use it as a no-op that touches the page in isPagedOut().
-    void updateNeedsDestruction();
-    
     void resetMarks();
     
     bool isMarkedRaw(const void* p);
     HeapVersion markingVersion() const { return m_markingVersion; }
+    
+    const Bitmap<atomsPerBlock>& marks() const;
+    
+    CountingLock& lock() { return m_lock; }
 
 private:
     static const size_t atomAlignmentMask = atomSize - 1;
@@ -314,11 +315,12 @@ private:
     void noteMarkedSlow();
     
     inline bool marksConveyLivenessDuringMarking(HeapVersion markingVersion);
+    inline bool marksConveyLivenessDuringMarking(HeapVersion myMarkingVersion, HeapVersion markingVersion);
         
-    WTF::Bitmap<atomsPerBlock> m_marks;
+    Handle& m_handle;
+    VM* m_vm;
 
-    bool m_needsDestruction;
-    Lock m_lock;
+    CountingLock m_lock;
     
     // The actual mark count can be computed by doing: m_biasedMarkCount - m_markCountBias. Note
     // that this count is racy. It will accurately detect whether or not exactly zero things were
@@ -348,9 +350,8 @@ private:
     int16_t m_markCountBias;
 
     HeapVersion m_markingVersion;
-    
-    Handle& m_handle;
-    VM* m_vm;
+
+    Bitmap<atomsPerBlock> m_marks;
 };
 
 inline MarkedBlock::Handle& MarkedBlock::handle()
@@ -498,18 +499,12 @@ inline bool MarkedBlock::areMarksStale(HeapVersion markingVersion)
     return markingVersion != m_markingVersion;
 }
 
-ALWAYS_INLINE DependencyWith<bool> MarkedBlock::areMarksStaleWithDependency(HeapVersion markingVersion)
-{
-    HeapVersion version = m_markingVersion;
-    return dependencyWith(dependency(version), version != markingVersion);
-}
-
 inline Dependency MarkedBlock::aboutToMark(HeapVersion markingVersion)
 {
-    auto result = areMarksStaleWithDependency(markingVersion);
-    if (UNLIKELY(result.value))
+    HeapVersion version = m_markingVersion;
+    if (UNLIKELY(version != markingVersion))
         aboutToMarkSlow(markingVersion);
-    return result.dependency;
+    return Dependency::fence(version);
 }
 
 inline void MarkedBlock::Handle::assertMarksNotStale()
@@ -524,15 +519,10 @@ inline bool MarkedBlock::isMarkedRaw(const void* p)
 
 inline bool MarkedBlock::isMarked(HeapVersion markingVersion, const void* p)
 {
-    return areMarksStale(markingVersion) ? false : isMarkedRaw(p);
-}
-
-inline bool MarkedBlock::isMarkedConcurrently(HeapVersion markingVersion, const void* p)
-{
-    auto result = areMarksStaleWithDependency(markingVersion);
-    if (result.value)
+    HeapVersion version = m_markingVersion;
+    if (UNLIKELY(version != markingVersion))
         return false;
-    return m_marks.get(atomNumber(p), result.dependency);
+    return m_marks.get(atomNumber(p), Dependency::fence(version));
 }
 
 inline bool MarkedBlock::isMarked(const void* p, Dependency dependency)
@@ -545,6 +535,11 @@ inline bool MarkedBlock::testAndSetMarked(const void* p, Dependency dependency)
 {
     assertMarksNotStale();
     return m_marks.concurrentTestAndSet(atomNumber(p), dependency);
+}
+
+inline const Bitmap<MarkedBlock::atomsPerBlock>& MarkedBlock::marks() const
+{
+    return m_marks;
 }
 
 inline bool MarkedBlock::Handle::isNewlyAllocated(const void* p)
@@ -560,6 +555,11 @@ inline void MarkedBlock::Handle::setNewlyAllocated(const void* p)
 inline void MarkedBlock::Handle::clearNewlyAllocated(const void* p)
 {
     m_newlyAllocated.clear(m_block->atomNumber(p));
+}
+
+inline const Bitmap<MarkedBlock::atomsPerBlock>& MarkedBlock::Handle::newlyAllocated() const
+{
+    return m_newlyAllocated;
 }
 
 inline bool MarkedBlock::isAtom(const void* p)
