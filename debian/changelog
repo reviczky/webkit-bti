@@ -4,6 +4,7 @@ webkit2gtk (2.18.4-1) UNRELEASED; urgency=high
   * New upstream release.
     + This fixes CVE-2017-13866, CVE-2017-13870, CVE-2017-7156 and
       CVE-2017-13856.
+  * Refresh all patches.
   * debian/control:
     + Request native version of the Ruby package (thanks, Helmut Grohne)
       (Closes: #881637).
