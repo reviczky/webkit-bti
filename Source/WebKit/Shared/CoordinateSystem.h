@@ -20,40 +20,32 @@
  * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
  * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
 #pragma once
 
-#include <inspector/InspectorProtocolObjects.h>
+#include <wtf/EnumTraits.h>
 
-namespace WebCore {
+namespace WebKit {
 
-class InspectorCanvas;
-class WebGLProgram;
-class WebGLRenderingContextBase;
-class WebGLShader;
-
-typedef String ErrorString;
-
-class InspectorShaderProgram final : public RefCounted<InspectorShaderProgram> {
-public:
-    static Ref<InspectorShaderProgram> create(WebGLProgram&, InspectorCanvas&);
-
-    const String& identifier() const { return m_identifier; }
-    InspectorCanvas& canvas() const { return m_canvas; }
-    WebGLRenderingContextBase* context() const;
-    WebGLProgram& program() const { return m_program; }
-    WebGLShader* shaderForType(const String&);
-
-    ~InspectorShaderProgram() { }
-
-private:
-    InspectorShaderProgram(WebGLProgram&, InspectorCanvas&);
-
-    String m_identifier;
-    WebGLProgram& m_program;
-    InspectorCanvas& m_canvas;
+enum class CoordinateSystem {
+    Page = 0,
+    LayoutViewport,
+    VisualViewport,
 };
 
-} // namespace WebCore
+} // namespace WebKit
+
+namespace WTF {
+
+template<> struct EnumTraits<WebKit::CoordinateSystem> {
+    using values = EnumValues<
+    WebKit::CoordinateSystem,
+    WebKit::CoordinateSystem::Page,
+    WebKit::CoordinateSystem::LayoutViewport,
+    WebKit::CoordinateSystem::VisualViewport
+    >;
+};
+
+} // namespace WTF

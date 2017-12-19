@@ -173,7 +173,7 @@ typedef String ErrorString;
 #include "TestBackendDispatchers.h"
 
 #include <inspector/InspectorFrontendRouter.h>
-#include <inspector/InspectorValues.h>
+#include <wtf/JSONValues.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/CString.h>
 
@@ -223,7 +223,7 @@ namespace Inspector {
 #pragma once
 
 #include "TestProtocolObjects.h"
-#include <inspector/InspectorValues.h>
+#include <wtf/JSONValues.h>
 #include <wtf/text/WTFString.h>
 
 namespace Inspector {
@@ -353,7 +353,7 @@ template<typename T> String getEnumConstantValue(T enumValue)
 
 namespace Database {
 /* Database error. */
-class Error : public Inspector::InspectorObjectBase {
+class Error : public JSON::ObjectBase {
 public:
     enum {
         NoFieldsSet = 0,
@@ -365,14 +365,14 @@ public:
     template<int STATE>
     class Builder {
     private:
-        RefPtr<InspectorObject> m_result;
+        RefPtr<JSON::Object> m_result;
 
         template<int STEP> Builder<STATE | STEP>& castState()
         {
             return *reinterpret_cast<Builder<STATE | STEP>*>(this);
         }
 
-        Builder(Ref</*Error*/InspectorObject>&& object)
+        Builder(Ref</*Error*/JSON::Object>&& object)
             : m_result(WTFMove(object))
         {
             COMPILE_ASSERT(STATE == NoFieldsSet, builder_created_in_non_init_state);
@@ -397,9 +397,9 @@ public:
         Ref<Error> release()
         {
             COMPILE_ASSERT(STATE == AllFieldsSet, result_is_not_ready);
-            COMPILE_ASSERT(sizeof(Error) == sizeof(InspectorObject), cannot_cast);
+            COMPILE_ASSERT(sizeof(Error) == sizeof(JSON::Object), cannot_cast);
 
-            Ref<InspectorObject> result = m_result.releaseNonNull();
+            Ref<JSON::Object> result = m_result.releaseNonNull();
             return WTFMove(*reinterpret_cast<Ref<Error>*>(&result));
         }
     };
@@ -413,7 +413,7 @@ public:
      */
     static Builder<NoFieldsSet> create()
     {
-        return Builder<NoFieldsSet>(InspectorObject::create());
+        return Builder<NoFieldsSet>(JSON::Object::create());
     }
 };
 
@@ -424,7 +424,7 @@ enum class MouseButton {
     Middle = 2,
     Right = 3,
 }; // enum class MouseButton
-class OptionalParameterBundle : public Inspector::InspectorObjectBase {
+class OptionalParameterBundle : public JSON::ObjectBase {
 public:
     // Named after property name 'directionality' while generating OptionalParameterBundle.
     enum class Directionality {
@@ -439,14 +439,14 @@ public:
     template<int STATE>
     class Builder {
     private:
-        RefPtr<InspectorObject> m_result;
+        RefPtr<JSON::Object> m_result;
 
         template<int STEP> Builder<STATE | STEP>& castState()
         {
             return *reinterpret_cast<Builder<STATE | STEP>*>(this);
         }
 
-        Builder(Ref</*OptionalParameterBundle*/InspectorObject>&& object)
+        Builder(Ref</*OptionalParameterBundle*/JSON::Object>&& object)
             : m_result(WTFMove(object))
         {
             COMPILE_ASSERT(STATE == NoFieldsSet, builder_created_in_non_init_state);
@@ -457,9 +457,9 @@ public:
         Ref<OptionalParameterBundle> release()
         {
             COMPILE_ASSERT(STATE == AllFieldsSet, result_is_not_ready);
-            COMPILE_ASSERT(sizeof(OptionalParameterBundle) == sizeof(InspectorObject), cannot_cast);
+            COMPILE_ASSERT(sizeof(OptionalParameterBundle) == sizeof(JSON::Object), cannot_cast);
 
-            Ref<InspectorObject> result = m_result.releaseNonNull();
+            Ref<JSON::Object> result = m_result.releaseNonNull();
             return WTFMove(*reinterpret_cast<Ref<OptionalParameterBundle>*>(&result));
         }
     };
@@ -471,56 +471,56 @@ public:
      */
     static Builder<NoFieldsSet> create()
     {
-        return Builder<NoFieldsSet>(InspectorObject::create());
+        return Builder<NoFieldsSet>(JSON::Object::create());
     }
 
     void setColumnNames(RefPtr<Inspector::Protocol::Array<String>> value)
     {
-        InspectorObjectBase::setArray(ASCIILiteral("columnNames"), WTFMove(value));
+        JSON::ObjectBase::setArray(ASCIILiteral("columnNames"), WTFMove(value));
     }
 
     void setButtons(RefPtr<Inspector::Protocol::Array<Inspector::Protocol::Database::MouseButton>> value)
     {
-        InspectorObjectBase::setArray(ASCIILiteral("buttons"), WTFMove(value));
+        JSON::ObjectBase::setArray(ASCIILiteral("buttons"), WTFMove(value));
     }
 
     void setDirectionality(Directionality value)
     {
-        InspectorObjectBase::setString(ASCIILiteral("directionality"), Inspector::Protocol::TestHelpers::getEnumConstantValue(value));
+        JSON::ObjectBase::setString(ASCIILiteral("directionality"), Inspector::Protocol::TestHelpers::getEnumConstantValue(value));
     }
 
     void setNotes(const String& value)
     {
-        InspectorObjectBase::setString(ASCIILiteral("notes"), value);
+        JSON::ObjectBase::setString(ASCIILiteral("notes"), value);
     }
 
     void setTimestamp(double value)
     {
-        InspectorObjectBase::setDouble(ASCIILiteral("timestamp"), value);
+        JSON::ObjectBase::setDouble(ASCIILiteral("timestamp"), value);
     }
 
-    void setValues(RefPtr<Inspector::InspectorObject> value)
+    void setValues(RefPtr<JSON::Object> value)
     {
-        InspectorObjectBase::setObject(ASCIILiteral("values"), WTFMove(value));
+        JSON::ObjectBase::setObject(ASCIILiteral("values"), WTFMove(value));
     }
 
-    void setPayload(RefPtr<Inspector::InspectorValue> value)
+    void setPayload(RefPtr<JSON::Value> value)
     {
-        InspectorObjectBase::setValue(ASCIILiteral("payload"), WTFMove(value));
+        JSON::ObjectBase::setValue(ASCIILiteral("payload"), WTFMove(value));
     }
 
     void setError(RefPtr<Inspector::Protocol::Database::Error> value)
     {
-        InspectorObjectBase::setObject(ASCIILiteral("error"), WTFMove(value));
+        JSON::ObjectBase::setObject(ASCIILiteral("error"), WTFMove(value));
     }
 
     void setErrorList(RefPtr<Inspector::Protocol::Database::ErrorList> value)
     {
-        InspectorObjectBase::setArray(ASCIILiteral("errorList"), WTFMove(value));
+        JSON::ObjectBase::setArray(ASCIILiteral("errorList"), WTFMove(value));
     }
 };
 
-class ParameterBundle : public Inspector::InspectorObjectBase {
+class ParameterBundle : public JSON::ObjectBase {
 public:
     // Named after property name 'directionality' while generating ParameterBundle.
     enum class Directionality {
@@ -544,14 +544,14 @@ public:
     template<int STATE>
     class Builder {
     private:
-        RefPtr<InspectorObject> m_result;
+        RefPtr<JSON::Object> m_result;
 
         template<int STEP> Builder<STATE | STEP>& castState()
         {
             return *reinterpret_cast<Builder<STATE | STEP>*>(this);
         }
 
-        Builder(Ref</*ParameterBundle*/InspectorObject>&& object)
+        Builder(Ref</*ParameterBundle*/JSON::Object>&& object)
             : m_result(WTFMove(object))
         {
             COMPILE_ASSERT(STATE == NoFieldsSet, builder_created_in_non_init_state);
@@ -594,14 +594,14 @@ public:
             return castState<TimestampSet>();
         }
 
-        Builder<STATE | ValuesSet>& setValues(RefPtr<Inspector::InspectorObject> value)
+        Builder<STATE | ValuesSet>& setValues(RefPtr<JSON::Object> value)
         {
             COMPILE_ASSERT(!(STATE & ValuesSet), property_values_already_set);
             m_result->setObject(ASCIILiteral("values"), value);
             return castState<ValuesSet>();
         }
 
-        Builder<STATE | PayloadSet>& setPayload(RefPtr<Inspector::InspectorValue> value)
+        Builder<STATE | PayloadSet>& setPayload(RefPtr<JSON::Value> value)
         {
             COMPILE_ASSERT(!(STATE & PayloadSet), property_payload_already_set);
             m_result->setValue(ASCIILiteral("payload"), value);
@@ -625,9 +625,9 @@ public:
         Ref<ParameterBundle> release()
         {
             COMPILE_ASSERT(STATE == AllFieldsSet, result_is_not_ready);
-            COMPILE_ASSERT(sizeof(ParameterBundle) == sizeof(InspectorObject), cannot_cast);
+            COMPILE_ASSERT(sizeof(ParameterBundle) == sizeof(JSON::Object), cannot_cast);
 
-            Ref<InspectorObject> result = m_result.releaseNonNull();
+            Ref<JSON::Object> result = m_result.releaseNonNull();
             return WTFMove(*reinterpret_cast<Ref<ParameterBundle>*>(&result));
         }
     };
@@ -648,12 +648,12 @@ public:
      */
     static Builder<NoFieldsSet> create()
     {
-        return Builder<NoFieldsSet>(InspectorObject::create());
+        return Builder<NoFieldsSet>(JSON::Object::create());
     }
 };
 
 /* Conflicted names may cause generated getters/setters to clash with built-in InspectorObject methods. */
-class ObjectWithPropertyNameConflicts : public Inspector::InspectorObjectBase {
+class ObjectWithPropertyNameConflicts : public JSON::ObjectBase {
 public:
     enum {
         NoFieldsSet = 0,
@@ -668,14 +668,14 @@ public:
     template<int STATE>
     class Builder {
     private:
-        RefPtr<InspectorObject> m_result;
+        RefPtr<JSON::Object> m_result;
 
         template<int STEP> Builder<STATE | STEP>& castState()
         {
             return *reinterpret_cast<Builder<STATE | STEP>*>(this);
         }
 
-        Builder(Ref</*ObjectWithPropertyNameConflicts*/InspectorObject>&& object)
+        Builder(Ref</*ObjectWithPropertyNameConflicts*/JSON::Object>&& object)
             : m_result(WTFMove(object))
         {
             COMPILE_ASSERT(STATE == NoFieldsSet, builder_created_in_non_init_state);
@@ -721,9 +721,9 @@ public:
         Ref<ObjectWithPropertyNameConflicts> release()
         {
             COMPILE_ASSERT(STATE == AllFieldsSet, result_is_not_ready);
-            COMPILE_ASSERT(sizeof(ObjectWithPropertyNameConflicts) == sizeof(InspectorObject), cannot_cast);
+            COMPILE_ASSERT(sizeof(ObjectWithPropertyNameConflicts) == sizeof(JSON::Object), cannot_cast);
 
-            Ref<InspectorObject> result = m_result.releaseNonNull();
+            Ref<JSON::Object> result = m_result.releaseNonNull();
             return WTFMove(*reinterpret_cast<Ref<ObjectWithPropertyNameConflicts>*>(&result));
         }
     };
@@ -740,14 +740,14 @@ public:
      */
     static Builder<NoFieldsSet> create()
     {
-        return Builder<NoFieldsSet>(InspectorObject::create());
+        return Builder<NoFieldsSet>(JSON::Object::create());
     }
 };
 
 } // Database
 
 namespace Test {
-class ParameterBundle : public Inspector::InspectorObjectBase {
+class ParameterBundle : public JSON::ObjectBase {
 public:
     // Named after property name 'directionality' while generating ParameterBundle.
     enum class Directionality {
@@ -770,14 +770,14 @@ public:
     template<int STATE>
     class Builder {
     private:
-        RefPtr<InspectorObject> m_result;
+        RefPtr<JSON::Object> m_result;
 
         template<int STEP> Builder<STATE | STEP>& castState()
         {
             return *reinterpret_cast<Builder<STATE | STEP>*>(this);
         }
 
-        Builder(Ref</*ParameterBundle*/InspectorObject>&& object)
+        Builder(Ref</*ParameterBundle*/JSON::Object>&& object)
             : m_result(WTFMove(object))
         {
             COMPILE_ASSERT(STATE == NoFieldsSet, builder_created_in_non_init_state);
@@ -820,14 +820,14 @@ public:
             return castState<TimestampSet>();
         }
 
-        Builder<STATE | ValuesSet>& setValues(RefPtr<Inspector::InspectorObject> value)
+        Builder<STATE | ValuesSet>& setValues(RefPtr<JSON::Object> value)
         {
             COMPILE_ASSERT(!(STATE & ValuesSet), property_values_already_set);
             m_result->setObject(ASCIILiteral("values"), value);
             return castState<ValuesSet>();
         }
 
-        Builder<STATE | PayloadSet>& setPayload(RefPtr<Inspector::InspectorValue> value)
+        Builder<STATE | PayloadSet>& setPayload(RefPtr<JSON::Value> value)
         {
             COMPILE_ASSERT(!(STATE & PayloadSet), property_payload_already_set);
             m_result->setValue(ASCIILiteral("payload"), value);
@@ -844,9 +844,9 @@ public:
         Ref<ParameterBundle> release()
         {
             COMPILE_ASSERT(STATE == AllFieldsSet, result_is_not_ready);
-            COMPILE_ASSERT(sizeof(ParameterBundle) == sizeof(InspectorObject), cannot_cast);
+            COMPILE_ASSERT(sizeof(ParameterBundle) == sizeof(JSON::Object), cannot_cast);
 
-            Ref<InspectorObject> result = m_result.releaseNonNull();
+            Ref<JSON::Object> result = m_result.releaseNonNull();
             return WTFMove(*reinterpret_cast<Ref<ParameterBundle>*>(&result));
         }
     };
@@ -866,7 +866,7 @@ public:
      */
     static Builder<NoFieldsSet> create()
     {
-        return Builder<NoFieldsSet>(InspectorObject::create());
+        return Builder<NoFieldsSet>(JSON::Object::create());
     }
 };
 
@@ -1105,7 +1105,7 @@ namespace Inspector {
 
 #include "TestProtocolInternal.h"
 #include "TestProtocolTypeConversions.h"
-#include <JavaScriptCore/InspectorValues.h>
+#include <wtf/JSONValues.h>
 
 namespace Inspector {
 
@@ -1254,7 +1254,7 @@ using namespace Inspector;
 #import "TestProtocolInternal.h"
 
 #import "TestProtocolTypeConversions.h"
-#import <JavaScriptCore/InspectorValues.h>
+#import <wtf/JSONValues.h>
 
 using namespace Inspector;
 
@@ -1449,7 +1449,7 @@ __attribute__((visibility ("default")))
 #import "TestProtocol.h"
 #import "TestProtocolJSONObjectPrivate.h"
 #import <JavaScriptCore/AugmentableInspectorController.h>
-#import <JavaScriptCore/InspectorValues.h>
+#import <wtf/JSONValues.h>
 
 
 
@@ -1768,8 +1768,8 @@ using namespace Inspector;
 
 #import "TestProtocolTypeConversions.h"
 #import <WebInspector/RWIProtocolJSONObjectPrivate.h>
-#import <JavaScriptCore/InspectorValues.h>
 #import <wtf/Assertions.h>
+#import <wtf/JSONValues.h>
 
 using namespace Inspector;
 
