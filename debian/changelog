@@ -1,4 +1,4 @@
-webkit2gtk (2.18.4-1) UNRELEASED; urgency=high
+webkit2gtk (2.18.4-1) unstable; urgency=high
 
   [ Alberto Garcia ]
   * New upstream release.
@@ -28,7 +28,7 @@ webkit2gtk (2.18.4-1) UNRELEASED; urgency=high
     + debian/rules:
       - Pass -DUSER_AGENT_GTK_DISTRIBUTOR_NAME when building for Ubuntu.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 14 Nov 2017 13:10:04 +0200
+ -- Alberto Garcia <berto@igalia.com>  Tue, 19 Dec 2017 18:31:33 +0200
 
 webkit2gtk (2.18.3-1) unstable; urgency=high
 
