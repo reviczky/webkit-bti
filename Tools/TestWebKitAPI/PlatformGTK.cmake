@@ -63,11 +63,6 @@ list(APPEND TestWebKitAPI_LIBRARIES
     ${GTK3_LIBRARIES}
 )
 
-list(APPEND TestJavaScriptCore_LIBRARIES
-    ${GDK3_LIBRARIES}
-    ${GTK3_LIBRARIES}
-)
-
 add_executable(TestWebKit2
     ${TESTWEBKITAPI_DIR}/Tests/WebKit/AboutBlankLoad.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WebKit/CanHandleRequest.cpp
