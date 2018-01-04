@@ -251,3 +251,26 @@ Description: Web content engine library for GTK+ - GTK+2 plugin process
  .
  This package adds support for NPAPI plugins that depend on the GTK+ 2
  library, such as the Adobe Flash and Google Talk/Hangouts plugins.
+
+Package: webkit2gtk-driver
+Architecture: any
+Pre-Depends: ${misc:Pre-Depends}
+Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
+         ${shlibs:Depends},
+         ${misc:Depends}
+Description: WebKitGTK+ WebDriver support
+ WebKit is a web content engine, derived from KHTML and KJS from KDE, and
+ used primarily in Apple's Safari browser.  It is made to be embedded in
+ other applications, such as mail readers, or web browsers.
+ .
+ It is able to display content such as HTML, SVG, XML, and others. It also
+ supports DOM, XMLHttpRequest, XSLT, CSS, JavaScript/ECMAScript and more.
+ .
+ WebKit2 is an API layer for WebKit designed from the ground up to
+ support a split process model, where the web content lives in a
+ separate process from the application UI.
+ .
+ This build comes from the GTK+ port of WebKit (API version 4.0).
+ .
+ This package provides the WebDriver service implementation for
+ WebKitGTK+.

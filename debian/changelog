@@ -7,6 +7,14 @@ webkit2gtk (2.19.3-2) UNRELEASED; urgency=medium
       - Remove -DUSE_WOFF2=OFF.
     + debian/libwebkit2gtk-4.0-37.symbols:
       - Add new symbols.
+  * Add new webkit2gtk-driver package containing the WebKitWebDriver
+    binary.
+    + debian/control:
+      - Add the entry for the new package.
+    + debian/webkit2gtk-driver.install:
+      - Install the WebKitWebDriver binary.
+    + debian/webkit2gtk-driver.manpages, debian/WebKitWebDriver.1:
+      - Add manpage.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 04 Jan 2018 10:11:20 +0200
 
