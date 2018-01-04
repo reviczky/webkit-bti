@@ -1,3 +1,15 @@
+webkit2gtk (2.19.3-2) UNRELEASED; urgency=medium
+
+  * WOFF2 is now available in Debian, so build webkit2gtk with it:
+    + debian/control:
+      - Add build dependency on libwoff-dev.
+    + debian/rules:
+      - Remove -DUSE_WOFF2=OFF.
+    + debian/libwebkit2gtk-4.0-37.symbols:
+      - Add new symbols.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 04 Jan 2018 10:11:20 +0200
+
 webkit2gtk (2.19.3-1) experimental; urgency=medium
 
   * New upstream development release (Closes: #882387).
