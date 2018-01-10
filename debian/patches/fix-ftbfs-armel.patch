@@ -5,7 +5,7 @@ Index: webkitgtk/Source/WTF/wtf/CMakeLists.txt
 ===================================================================
 --- webkitgtk.orig/Source/WTF/wtf/CMakeLists.txt
 +++ webkitgtk/Source/WTF/wtf/CMakeLists.txt
-@@ -220,7 +220,6 @@ set(WTF_HEADERS
+@@ -222,7 +222,6 @@ set(WTF_HEADERS
  
  set(WTF_SOURCES
      Assertions.cpp
@@ -13,7 +13,7 @@ Index: webkitgtk/Source/WTF/wtf/CMakeLists.txt
      AutomaticThread.cpp
      BitVector.cpp
      CPUTime.cpp
-@@ -362,6 +361,16 @@ if (NOT USE_SYSTEM_MALLOC)
+@@ -365,6 +364,16 @@ if (NOT USE_SYSTEM_MALLOC)
      list(APPEND WTF_LIBRARIES bmalloc)
  endif ()
  
