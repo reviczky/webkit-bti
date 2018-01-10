@@ -176,8 +176,8 @@ public:
 
     Ref<WebPageProxy> createWebPage(PageClient&, Ref<API::PageConfiguration>&&);
 
-    void pageAddedToProcess(WebPageProxy&);
-    void pageRemovedFromProcess(WebPageProxy&);
+    void pageBeginUsingWebsiteDataStore(WebPageProxy&);
+    void pageEndUsingWebsiteDataStore(WebPageProxy&);
 
     const String& injectedBundlePath() const { return m_configuration->injectedBundlePath(); }
 
@@ -218,6 +218,7 @@ public:
     void registerURLSchemeAsDisplayIsolated(const String&);
     void registerURLSchemeAsCORSEnabled(const String&);
     void registerURLSchemeAsCachePartitioned(const String&);
+    void registerURLSchemeServiceWorkersCanHandle(const String&);
     void preconnectToServer(const WebCore::URL&);
 
     VisitedLinkStore& visitedLinkStore() { return m_visitedLinkStore.get(); }
@@ -320,10 +321,10 @@ public:
 
     void ensureStorageProcessAndWebsiteDataStore(WebsiteDataStore* relevantDataStore);
     StorageProcessProxy* storageProcess() { return m_storageProcess.get(); }
-    void getStorageProcessConnection(bool isServiceWorkerProcess, Ref<Messages::WebProcessProxy::GetStorageProcessConnection::DelayedReply>&&);
+    void getStorageProcessConnection(bool isServiceWorkerProcess, PAL::SessionID initialSessionID, Ref<Messages::WebProcessProxy::GetStorageProcessConnection::DelayedReply>&&);
     void storageProcessCrashed(StorageProcessProxy*);
 #if ENABLE(SERVICE_WORKER)
-    void establishWorkerContextConnectionToStorageProcess(StorageProcessProxy&);
+    void establishWorkerContextConnectionToStorageProcess(StorageProcessProxy&, std::optional<PAL::SessionID>);
     bool isServiceWorker(uint64_t pageID) const { return m_serviceWorkerProcess && m_serviceWorkerProcess->pageID() == pageID; }
     ServiceWorkerProcessProxy* serviceWorkerProxy() const { return m_serviceWorkerProcess; }
     void setAllowsAnySSLCertificateForServiceWorker(bool allows) { m_allowsAnySSLCertificateForServiceWorker = allows; }
@@ -425,6 +426,11 @@ public:
     static uint64_t registerProcessPoolCreationListener(Function<void(WebProcessPool&)>&&);
     static void unregisterProcessPoolCreationListener(uint64_t identifier);
 
+#if PLATFORM(IOS)
+    ForegroundWebProcessToken foregroundWebProcessToken() const { return ForegroundWebProcessToken(m_foregroundWebProcessCounter.count()); }
+    BackgroundWebProcessToken backgroundWebProcessToken() const { return BackgroundWebProcessToken(m_backgroundWebProcessCounter.count()); }
+#endif
+
 private:
     void platformInitialize();
 
@@ -450,6 +456,9 @@ private:
 
     void processStoppedUsingGamepads(WebProcessProxy&);
 #endif
+
+    void reinstateNetworkProcessAssertionState(NetworkProcessProxy&);
+    void updateProcessAssertions();
 
     // IPC::MessageReceiver.
     // Implemented in generated WebProcessPoolMessageReceiver.cpp
@@ -496,6 +505,7 @@ private:
     bool m_waitingForWorkerContextProcessConnection { false };
     bool m_allowsAnySSLCertificateForServiceWorker { false };
     String m_serviceWorkerUserAgent;
+    std::optional<WebPreferencesStore> m_serviceWorkerPreferences;
 #endif
 
     Ref<WebPageGroup> m_defaultPageGroup;
@@ -530,6 +540,7 @@ private:
     HashSet<String> m_schemesToRegisterAsCORSEnabled;
     HashSet<String> m_schemesToRegisterAsAlwaysRevalidated;
     HashSet<String> m_schemesToRegisterAsCachePartitioned;
+    HashSet<String> m_schemesServiceWorkersCanHandle;
 
     bool m_alwaysUsesComplexTextCodePath { false };
     bool m_shouldUseFontSmoothing { true };
@@ -637,6 +648,17 @@ private:
 
     HashMap<PAL::SessionID, HashSet<WebPageProxy*>> m_sessionToPagesMap;
     RunLoop::Timer<WebProcessPool> m_serviceWorkerProcessTerminationTimer;
+
+#if PLATFORM(IOS)
+    ForegroundWebProcessCounter m_foregroundWebProcessCounter;
+    BackgroundWebProcessCounter m_backgroundWebProcessCounter;
+    ProcessThrottler::ForegroundActivityToken m_foregroundTokenForNetworkProcess;
+    ProcessThrottler::BackgroundActivityToken m_backgroundTokenForNetworkProcess;
+#if ENABLE(SERVICE_WORKER)
+    ProcessThrottler::ForegroundActivityToken m_foregroundTokenForServiceWorkerProcess;
+    ProcessThrottler::BackgroundActivityToken m_backgroundTokenForServiceWorkerProcess;
+#endif
+#endif
 };
 
 template<typename T>

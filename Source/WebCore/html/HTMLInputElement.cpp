@@ -31,7 +31,9 @@
 
 #include "AXObjectCache.h"
 #include "BeforeTextInsertedEvent.h"
+#include "CSSGradientValue.h"
 #include "CSSPropertyNames.h"
+#include "CSSValuePool.h"
 #include "DateTimeChooser.h"
 #include "Document.h"
 #include "Editor.h"
@@ -65,11 +67,6 @@
 
 #if ENABLE(TOUCH_EVENTS)
 #include "TouchEvent.h"
-#endif
-
-#if ENABLE(ALTERNATIVE_PRESENTATION_BUTTON_ELEMENT)
-#include "AlternativePresentationButtonInputType.h"
-#include "InputTypeNames.h"
 #endif
 
 namespace WebCore {
@@ -109,6 +106,7 @@ HTMLInputElement::HTMLInputElement(const QualifiedName& tagName, Document& docum
     , m_autocomplete(Uninitialized)
     , m_isAutoFilled(false)
     , m_autoFillButtonType(static_cast<uint8_t>(AutoFillButtonType::None))
+    , m_lastAutoFillButtonType(static_cast<uint8_t>(AutoFillButtonType::None))
     , m_isAutoFillAvailable(false)
 #if ENABLE(DATALIST_ELEMENT)
     , m_hasNonEmptyList(false)
@@ -234,13 +232,6 @@ HTMLElement* HTMLInputElement::placeholderElement() const
 {
     return m_inputType->placeholderElement();
 }
-
-#if ENABLE(ALTERNATIVE_PRESENTATION_BUTTON_ELEMENT)
-HTMLElement* HTMLInputElement::alternativePresentationButtonElement() const
-{
-    return m_inputType->alternativePresentationButtonElement();
-}
-#endif
 
 bool HTMLInputElement::shouldAutocomplete() const
 {
@@ -491,28 +482,12 @@ void HTMLInputElement::setType(const AtomicString& type)
     setAttributeWithoutSynchronization(typeAttr, type);
 }
 
-#if ENABLE(ALTERNATIVE_PRESENTATION_BUTTON_ELEMENT)
-void HTMLInputElement::setTypeWithoutUpdatingAttribute(const AtomicString& type)
-{
-    updateType(type);
-}
-#endif
-
-inline std::unique_ptr<InputType> HTMLInputElement::createInputType(const AtomicString& type)
-{
-#if ENABLE(ALTERNATIVE_PRESENTATION_BUTTON_ELEMENT)
-    if (type == InputTypeNames::alternativePresentationButton())
-        return std::make_unique<AlternativePresentationButtonInputType>(*this);
-#endif
-    return InputType::create(*this, type);
-}
-
-void HTMLInputElement::updateType(const AtomicString& newType)
+void HTMLInputElement::updateType()
 {
     ASSERT(m_inputType);
-    auto newInputType = createInputType(newType);
+    auto newType = InputType::create(*this, attributeWithoutSynchronization(typeAttr));
     m_hasType = true;
-    if (m_inputType->formControlType() == newInputType->formControlType())
+    if (m_inputType->formControlType() == newType->formControlType())
         return;
 
     removeFromRadioButtonGroup();
@@ -522,9 +497,9 @@ void HTMLInputElement::updateType(const AtomicString& newType)
     bool didRespectHeightAndWidth = m_inputType->shouldRespectHeightAndWidthAttributes();
     bool wasSuccessfulSubmitButtonCandidate = m_inputType->canBeSuccessfulSubmitButton();
 
-    std::unique_ptr<InputType> oldInputType = WTFMove(m_inputType);
-    m_inputType = WTFMove(newInputType);
-    oldInputType->destroyShadowSubtree();
+    m_inputType->destroyShadowSubtree();
+
+    m_inputType = WTFMove(newType);
     m_inputType->createShadowSubtree();
     updateInnerTextElementEditability();
 
@@ -718,7 +693,7 @@ void HTMLInputElement::parseAttribute(const QualifiedName& name, const AtomicStr
                 unregisterForSuspensionCallbackIfNeeded();
         }
     } else if (name == typeAttr)
-        updateType(value);
+        updateType();
     else if (name == valueAttr) {
         // Changes to the value attribute may change whether or not this element has a default value.
         // If this field is autocomplete=off that might affect the return value of needsSuspensionCallback.
@@ -838,7 +813,7 @@ RenderPtr<RenderElement> HTMLInputElement::createElementRenderer(RenderStyle&& s
 void HTMLInputElement::willAttachRenderers()
 {
     if (!m_hasType)
-        updateType(attributeWithoutSynchronization(typeAttr));
+        updateType();
 }
 
 void HTMLInputElement::didAttachRenderers()
@@ -912,6 +887,7 @@ void HTMLInputElement::reset()
         setValue(String());
 
     setAutoFilled(false);
+    setShowAutoFillButton(AutoFillButtonType::None);
     setChecked(hasAttributeWithoutSynchronization(checkedAttr));
     m_reflectsCheckedAttribute = true;
 }
@@ -1368,8 +1344,11 @@ void HTMLInputElement::setShowAutoFillButton(AutoFillButtonType autoFillButtonTy
     if (static_cast<uint8_t>(autoFillButtonType) == m_autoFillButtonType)
         return;
 
+    m_lastAutoFillButtonType = m_autoFillButtonType;
     m_autoFillButtonType = static_cast<uint8_t>(autoFillButtonType);
     m_inputType->updateAutoFillButton();
+    updateInnerTextElementEditability();
+    invalidateStyleForSubtree();
 }
 
 FileList* HTMLInputElement::files()
@@ -2034,7 +2013,24 @@ ExceptionOr<void> HTMLInputElement::setSelectionRangeForBindings(int start, int 
     return { };
 }
 
-RenderStyle HTMLInputElement::createInnerTextStyle(const RenderStyle& style) const
+static Ref<CSSLinearGradientValue> autoFillStrongPasswordMaskImage()
+{
+    CSSGradientColorStop firstStop;
+    firstStop.m_color = CSSValuePool::singleton().createColorValue(Color::black);
+    firstStop.m_position = CSSValuePool::singleton().createValue(3, CSSPrimitiveValue::UnitType::CSS_EMS);
+
+    CSSGradientColorStop secondStop;
+    secondStop.m_color = CSSValuePool::singleton().createColorValue(Color::transparent);
+    secondStop.m_position = CSSValuePool::singleton().createValue(7, CSSPrimitiveValue::UnitType::CSS_EMS);
+
+    auto gradient = CSSLinearGradientValue::create(CSSGradientRepeat::NonRepeating, CSSGradientType::CSSLinearGradient);
+    gradient->setAngle(CSSValuePool::singleton().createValue(90, CSSPrimitiveValue::UnitType::CSS_DEG));
+    gradient->addStop(firstStop);
+    gradient->addStop(secondStop);
+    return gradient;
+}
+
+RenderStyle HTMLInputElement::createInnerTextStyle(const RenderStyle& style)
 {
     auto textBlockStyle = RenderStyle::create();
     textBlockStyle.inheritFrom(style);
@@ -2046,11 +2042,20 @@ RenderStyle HTMLInputElement::createInnerTextStyle(const RenderStyle& style) con
     textBlockStyle.setOverflowY(OHIDDEN);
     textBlockStyle.setTextOverflow(shouldTruncateText(style) ? TextOverflowEllipsis : TextOverflowClip);
 
+    textBlockStyle.setDisplay(BLOCK);
+
+    if (hasAutoFillStrongPasswordButton()) {
+        textBlockStyle.setColor({ 0.0f, 0.0f, 0.0f, 0.6f });
+        textBlockStyle.setTextOverflow(TextOverflowClip);
+        textBlockStyle.setMaskImage(styleResolver().styleImage(autoFillStrongPasswordMaskImage()));
+        // A stacking context is needed for the mask.
+        if (textBlockStyle.hasAutoZIndex())
+            textBlockStyle.setZIndex(0);
+    }
+
     // Do not allow line-height to be smaller than our default.
     if (textBlockStyle.fontMetrics().lineSpacing() > style.computedLineHeight())
         textBlockStyle.setLineHeight(RenderStyle::initialLineHeight());
-
-    textBlockStyle.setDisplay(BLOCK);
 
     return textBlockStyle;
 }

@@ -27,6 +27,7 @@
 #ifndef WTF_StdLibExtras_h
 #define WTF_StdLibExtras_h
 
+#include <algorithm>
 #include <cstring>
 #include <memory>
 #include <type_traits>
@@ -445,6 +446,31 @@ IteratorTypeDst mergeDeduplicatedSorted(IteratorTypeLeft leftBegin, IteratorType
     return dstIter;
 }
 
+// libstdc++5 does not have constexpr std::tie. Since we cannot redefine std::tie with constexpr, we define WTF::tie instead.
+// This workaround can be removed after 2019-04 and all users of WTF::tie can be converted to std::tie
+// For more info see: https://bugs.webkit.org/show_bug.cgi?id=180692 and https://gcc.gnu.org/bugzilla/show_bug.cgi?id=65978
+template <class ...Args>
+inline constexpr std::tuple<Args&...> tie(Args&... values) noexcept
+{
+    return std::tuple<Args&...>(values...);
+}
+
+// libstdc++4 does not have constexpr std::min or std::max.
+// As a workaround this defines WTF::min and WTF::max with constexpr, to be used when a constexpr result is expected.
+// This workaround can be removed after 2018-06 and all users of WTF::min and WTF::max can be converted to std::min and std::max.
+// For more info see: https://bugs.webkit.org/show_bug.cgi?id=181160
+template <class T>
+inline constexpr const T& min(const T& a, const T& b)
+{
+    return std::min(a, b);
+}
+
+template <class T>
+inline constexpr const T& max(const T& a, const T& b)
+{
+    return std::max(a, b);
+}
+
 } // namespace WTF
 
 // This version of placement new omits a 0 check.
@@ -539,6 +565,23 @@ template <size_t I> struct in_place_index_t {
 template <size_t I>
 __IN_PLACE_INLINE_VARIABLE constexpr in_place_index_t<I> in_place_index { };
 #endif // __cplusplus < 201703L
+
+enum class ZeroStatus {
+    MayBeZero,
+    NonZero
+};
+
+constexpr size_t clz(uint32_t value, ZeroStatus mightBeZero = ZeroStatus::MayBeZero)
+{
+    if (mightBeZero == ZeroStatus::MayBeZero && value) {
+#if COMPILER(MSVC)
+        return __lzcnt(value);
+#else
+        return __builtin_clz(value);
+#endif
+    }
+    return 32;
+}
 
 } // namespace std
 

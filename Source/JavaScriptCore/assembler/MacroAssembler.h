@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -592,6 +592,11 @@ public:
         urshift32(trustedImm32ForShift(imm), srcDest);
     }
 
+    void urshiftPtr(RegisterID shiftAmmount, RegisterID srcDest)
+    {
+        urshift32(shiftAmmount, srcDest);
+    }
+
     void negPtr(RegisterID dest)
     {
         neg32(dest);
@@ -645,6 +650,11 @@ public:
     void xorPtr(TrustedImm32 imm, RegisterID srcDest)
     {
         xor32(imm, srcDest);
+    }
+
+    void xorPtr(TrustedImmPtr imm, RegisterID srcDest)
+    {
+        xor32(TrustedImm32(imm), srcDest);
     }
 
     void xorPtr(Address src, RegisterID dest)
@@ -906,6 +916,11 @@ public:
         urshift64(trustedImm32ForShift(imm), srcDest);
     }
 
+    void urshiftPtr(RegisterID shiftAmmount, RegisterID srcDest)
+    {
+        urshift64(shiftAmmount, srcDest);
+    }
+
     void negPtr(RegisterID dest)
     {
         neg64(dest);
@@ -979,6 +994,12 @@ public:
     void xorPtr(TrustedImm32 imm, RegisterID srcDest)
     {
         xor64(imm, srcDest);
+    }
+
+    // FIXME: Look into making the need for a scratch register explicit, or providing the option to specify a scratch register.
+    void xorPtr(TrustedImmPtr imm, RegisterID srcDest)
+    {
+        xor64(TrustedImm64(imm), srcDest);
     }
 
     void loadPtr(ImplicitAddress address, RegisterID dest)

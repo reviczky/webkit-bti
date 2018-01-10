@@ -94,6 +94,7 @@
 #include "StyleScope.h"
 #include "TextResourceDecoder.h"
 #include "TiledBacking.h"
+#include "VisualViewport.h"
 #include "WheelEventTestTrigger.h"
 #include <wtf/text/TextStream.h>
 
@@ -171,6 +172,7 @@ FrameView::FrameView(Frame& frame)
     : m_frame(frame)
     , m_canHaveScrollbars(true)
     , m_updateEmbeddedObjectsTimer(*this, &FrameView::updateEmbeddedObjectsTimerFired)
+    , m_updateWidgetPositionsTimer(*this, &FrameView::updateWidgetPositionsTimerFired)
     , m_isTransparent(false)
     , m_baseBackgroundColor(Color::white)
     , m_mediaType("screen")
@@ -1672,6 +1674,10 @@ void FrameView::updateLayoutViewport()
             LayoutPoint newOrigin = computeLayoutViewportOrigin(visualViewportRect(), minStableLayoutViewportOrigin(), maxStableLayoutViewportOrigin(), layoutViewport, StickToDocumentBounds);
             setLayoutViewportOverrideRect(LayoutRect(newOrigin, m_layoutViewportOverrideRect.value().size()));
         }
+        if (frame().settings().visualViewportAPIEnabled()) {
+            if (Document* document = frame().document())
+                document->domWindow()->visualViewport()->update();
+        }
         return;
     }
 
@@ -1679,6 +1685,10 @@ void FrameView::updateLayoutViewport()
     if (newLayoutViewportOrigin != m_layoutViewportOrigin) {
         setBaseLayoutViewportOrigin(newLayoutViewportOrigin);
         LOG_WITH_STREAM(Scrolling, stream << "layoutViewport changed to " << layoutViewportRect());
+    }
+    if (frame().settings().visualViewportAPIEnabled()) {
+        if (Document* document = frame().document())
+            document->domWindow()->visualViewport()->update();
     }
 }
 
@@ -4908,6 +4918,7 @@ static Vector<RefPtr<Widget>> collectAndProtectWidgets(const HashSet<Widget*>& s
 
 void FrameView::updateWidgetPositions()
 {
+    m_updateWidgetPositionsTimer.stop();
     // updateWidgetPosition() can possibly cause layout to be re-entered (via plug-ins running
     // scripts in response to NPP_SetWindow, for example), so we need to keep the Widgets
     // alive during enumeration.
@@ -4917,6 +4928,17 @@ void FrameView::updateWidgetPositions()
             UNUSED_PARAM(ignoreWidgetState);
         }
     }
+}
+
+void FrameView::scheduleUpdateWidgetPositions()
+{
+    if (!m_updateWidgetPositionsTimer.isActive())
+        m_updateWidgetPositionsTimer.startOneShot(0_s);
+}
+
+void FrameView::updateWidgetPositionsTimerFired()
+{
+    updateWidgetPositions();
 }
 
 void FrameView::notifyWidgets(WidgetNotification notification)

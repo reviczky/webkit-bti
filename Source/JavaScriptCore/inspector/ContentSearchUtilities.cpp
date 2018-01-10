@@ -174,10 +174,12 @@ static String stylesheetCommentPattern(const String& name)
 
 static String findMagicComment(const String& content, const String& patternString)
 {
-    ASSERT(!content.isNull());
-    const char* error = nullptr;
-    YarrPattern pattern(patternString, JSC::RegExpFlags::FlagMultiline, &error);
-    ASSERT(!error);
+    if (content.isEmpty())
+        return String();
+
+    JSC::Yarr::ErrorCode error { JSC::Yarr::ErrorCode::NoError };
+    YarrPattern pattern(patternString, JSC::RegExpFlags::FlagMultiline, error);
+    ASSERT(!hasError(error));
     BumpPointerAllocator regexAllocator;
     auto bytecodePattern = byteCompile(pattern, &regexAllocator);
     ASSERT(bytecodePattern);

@@ -215,6 +215,9 @@ namespace WebCore {
     
     String AXAutoFillCredentialsLabel();
     String AXAutoFillContactsLabel();
+    String AXAutoFillStrongPasswordLabel();
+    String AXAutoFillStrongConfirmationPasswordLabel();
+    String autoFillStrongPasswordLabel();
 
     String missingPluginText();
     String crashedPluginText();
@@ -310,12 +313,6 @@ namespace WebCore {
     WEBCORE_EXPORT String insertListTypeNumbered();
     WEBCORE_EXPORT String insertListTypeNumberedAccessibilityTitle();
     WEBCORE_EXPORT String exitFullScreenButtonAccessibilityTitle();
-#endif
-
-#if ENABLE(ALTERNATIVE_PRESENTATION_BUTTON_ELEMENT)
-    String AXAlternativePresentationButtonLabel();
-    String alternativePresentationButtonTitle();
-    String alternativePresentationButtonSubtitle();
 #endif
 
 #if USE(GLIB) && defined(GETTEXT_PACKAGE)
