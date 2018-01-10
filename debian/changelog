@@ -1,3 +1,11 @@
+webkit2gtk (2.18.5-1) UNRELEASED; urgency=high
+
+  * New upstream release.
+    + This includes fixes to mitigate the effects of the Spectre
+      vulnerability (CVE-2017-5753 and CVE-2017-5715).
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 10 Jan 2018 14:23:33 +0200
+
 webkit2gtk (2.18.4-1) unstable; urgency=high
 
   [ Alberto Garcia ]
