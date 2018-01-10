@@ -3,6 +3,8 @@ webkit2gtk (2.19.5-1) UNRELEASED; urgency=medium
   * New upstream development release.
   * debian/patches/fix-ftbfs-armel.patch:
     + Refresh.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 10 Jan 2018 13:21:48 +0200
 
