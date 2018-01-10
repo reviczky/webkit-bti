@@ -41,11 +41,11 @@
 #include "HTMLParserIdioms.h"
 #include "LayoutDisallowedScope.h"
 #include "Logging.h"
-#include "NoEventDispatchAssertion.h"
 #include "NodeTraversal.h"
 #include "Page.h"
 #include "RenderTextControlSingleLine.h"
 #include "RenderTheme.h"
+#include "ScriptDisallowedScope.h"
 #include "ShadowRoot.h"
 #include "Text.h"
 #include "TextControlInnerElements.h"
@@ -511,10 +511,17 @@ void HTMLTextFormControlElement::readOnlyAttributeChanged()
     updateInnerTextElementEditability();
 }
 
+bool HTMLTextFormControlElement::isInnerTextElementEditable() const
+{
+    return !isDisabledOrReadOnly();
+}
+
 void HTMLTextFormControlElement::updateInnerTextElementEditability()
 {
-    if (auto innerText = innerTextElement())
-        innerText->setAttributeWithoutSynchronization(contenteditableAttr, isDisabledOrReadOnly() ? "false" : "plaintext-only");
+    if (auto innerText = innerTextElement()) {
+        auto value = isInnerTextElementEditable() ? AtomicString { "plaintext-only", AtomicString::ConstructFromLiteral } : AtomicString { "false", AtomicString::ConstructFromLiteral };
+        innerText->setAttributeWithoutSynchronization(contenteditableAttr, value);
+    }
 }
 
 bool HTMLTextFormControlElement::lastChangeWasUserEdit() const
@@ -565,7 +572,7 @@ void HTMLTextFormControlElement::setInnerTextValue(const String& value)
 
         {
             // Events dispatched on the inner text element cannot execute arbitrary author scripts.
-            NoEventDispatchAssertion::EventAllowedScope allowedScope(*userAgentShadowRoot());
+            ScriptDisallowedScope::EventAllowedScope allowedScope(*userAgentShadowRoot());
 
             innerText->setInnerText(value);
 
@@ -576,7 +583,7 @@ void HTMLTextFormControlElement::setInnerTextValue(const String& value)
 #if HAVE(ACCESSIBILITY) && PLATFORM(COCOA)
         if (textIsChanged && renderer()) {
             if (AXObjectCache* cache = document().existingAXObjectCache())
-                cache->postTextReplacementNotificationForTextControl(*this, previousValue, value);
+                cache->deferTextReplacementNotificationForTextControl(*this, previousValue);
         }
 #endif
     }

@@ -31,6 +31,7 @@
 #include "ExceptionData.h"
 #include "SWServer.h"
 #include "SWServerWorker.h"
+#include "SchemeRegistry.h"
 #include "SecurityOrigin.h"
 #include "ServiceWorkerFetchResult.h"
 #include "ServiceWorkerRegistrationData.h"
@@ -80,14 +81,22 @@ void SWServerJobQueue::scriptFetchFinished(SWServer::Connection& connection, con
         return;
     }
 
-    // FIXME: If newestWorker is not null, newestWorker's script url equals job's script url with the exclude fragments
+    // If newestWorker is not null, newestWorker's script url equals job's script url with the exclude fragments
     // flag set, and script's source text is a byte-for-byte match with newestWorker's script resource's source
     // text, then:
-    // - Invoke Resolve Job Promise with job and registration.
-    // - Invoke Finish Job with job and abort these steps.
+    if (newestWorker && equalIgnoringFragmentIdentifier(newestWorker->scriptURL(), job.scriptURL) && result.script == newestWorker->script()) {
+        // FIXME: for non classic scripts, check the script’s module record's [[ECMAScriptCode]].
+
+        // Invoke Resolve Job Promise with job and registration.
+        m_server.resolveRegistrationJob(job, registration->data(), ShouldNotifyWhenResolved::No);
+
+        // Invoke Finish Job with job and abort these steps.
+        finishCurrentJob();
+        return;
+    }
 
     // FIXME: Support the proper worker type (classic vs module)
-    m_server.updateWorker(connection, job.identifier(), *registration, job.scriptURL, result.script, WorkerType::Classic);
+    m_server.updateWorker(connection, job.identifier(), *registration, job.scriptURL, result.script, result.contentSecurityPolicy, WorkerType::Classic);
 }
 
 // https://w3c.github.io/ServiceWorker/#update-algorithm
@@ -231,7 +240,7 @@ void SWServerJobQueue::runRegisterJob(const ServiceWorkerJobData& job)
 {
     ASSERT(job.type == ServiceWorkerJobType::Register);
 
-    if (!shouldTreatAsPotentiallyTrustworthy(job.scriptURL))
+    if (!shouldTreatAsPotentiallyTrustworthy(job.scriptURL) && !SchemeRegistry::isServiceWorkerContainerCustomScheme(job.scriptURL.protocol().toStringWithoutCopying()))
         return rejectCurrentJob(ExceptionData { SecurityError, ASCIILiteral("Script URL is not potentially trustworthy") });
 
     // If the origin of job's script url is not job's referrer's origin, then:
@@ -251,6 +260,9 @@ void SWServerJobQueue::runRegisterJob(const ServiceWorkerJobData& job)
             finishCurrentJob();
             return;
         }
+        // This is not specified yet (https://github.com/w3c/ServiceWorker/issues/1189).
+        if (registration->updateViaCache() != job.registrationOptions.updateViaCache)
+            registration->setUpdateViaCache(job.registrationOptions.updateViaCache);
     } else {
         auto newRegistration = std::make_unique<SWServerRegistration>(m_server, m_registrationKey, job.registrationOptions.updateViaCache, job.scopeURL, job.scriptURL);
         m_server.addRegistration(WTFMove(newRegistration));
@@ -307,7 +319,17 @@ void SWServerJobQueue::runUpdateJob(const ServiceWorkerJobData& job)
     if (job.type == ServiceWorkerJobType::Update && newestWorker && !equalIgnoringFragmentIdentifier(job.scriptURL, newestWorker->scriptURL()))
         return rejectCurrentJob(ExceptionData { TypeError, ASCIILiteral("Cannot update a service worker with a requested script URL whose newest worker has a different script URL") });
 
-    m_server.startScriptFetch(job);
+    FetchOptions::Cache cachePolicy = FetchOptions::Cache::Default;
+    // Set request's cache mode to "no-cache" if any of the following are true:
+    // - registration's update via cache mode is not "all".
+    // - job's force bypass cache flag is set.
+    // - newestWorker is not null, and registration's last update check time is not null and the time difference in seconds calculated by the
+    //   current time minus registration's last update check time is greater than 86400.
+    if (registration->updateViaCache() != ServiceWorkerUpdateViaCache::All
+        || (newestWorker && registration->lastUpdateTime() && (WallTime::now() - registration->lastUpdateTime()) > 86400_s)) {
+        cachePolicy = FetchOptions::Cache::NoCache;
+    }
+    m_server.startScriptFetch(job, cachePolicy);
 }
 
 void SWServerJobQueue::rejectCurrentJob(const ExceptionData& exceptionData)

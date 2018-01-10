@@ -154,6 +154,7 @@ class RenderView;
 class RequestAnimationFrameCallback;
 class SVGDocumentExtensions;
 class SVGSVGElement;
+class SVGUseElement;
 class SWClientConnection;
 class ScriptElementData;
 class ScriptModuleLoader;
@@ -824,7 +825,8 @@ public:
         FORCEWILLBEGIN_LISTENER              = 1 << 13,
         FORCECHANGED_LISTENER                = 1 << 14,
         FORCEDOWN_LISTENER                   = 1 << 15,
-        FORCEUP_LISTENER                     = 1 << 16
+        FORCEUP_LISTENER                     = 1 << 16,
+        RESIZE_LISTENER                      = 1 << 17
     };
 
     bool hasListenerType(ListenerType listenerType) const { return (m_listenerTypes & listenerType); }
@@ -987,6 +989,7 @@ public:
     // Extension for manipulating canvas drawing contexts for use in CSS
     std::optional<RenderingContext> getCSSCanvasContext(const String& type, const String& name, int width, int height);
     HTMLCanvasElement* getCSSCanvasElement(const String& name);
+    String nameForCSSCanvasElement(const HTMLCanvasElement&) const;
 
     bool isDNSPrefetchEnabled() const { return m_isDNSPrefetchEnabled; }
     void parseDNSPrefetchControlHeader(const String&);
@@ -1076,6 +1079,10 @@ public:
 
     WEBCORE_EXPORT const SVGDocumentExtensions* svgExtensions();
     WEBCORE_EXPORT SVGDocumentExtensions& accessSVGExtensions();
+
+    void addSVGUseElement(SVGUseElement&);
+    void removeSVGUseElement(SVGUseElement&);
+    HashSet<SVGUseElement*> const svgUseElements() const { return m_svgUseElements; }
 
     void initSecurityContext();
     void initContentSecurityPolicy();
@@ -1612,6 +1619,7 @@ private:
     RefPtr<XPathEvaluator> m_xpathEvaluator;
 
     std::unique_ptr<SVGDocumentExtensions> m_svgExtensions;
+    HashSet<SVGUseElement*> m_svgUseElements;
 
 #if ENABLE(DASHBOARD_SUPPORT)
     Vector<AnnotatedRegionValue> m_annotatedRegions;
@@ -1692,6 +1700,11 @@ private:
     void notifyMediaCaptureOfVisibilityChanged();
 
     void didLogMessage(const WTFLogChannel&, WTFLogLevel, Vector<JSONLogValue>&&) final;
+
+#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+    bool hasFrameSpecificStorageAccess() const;
+    void setHasFrameSpecificStorageAccess(bool);
+#endif
 
 #if ENABLE(DEVICE_ORIENTATION) && PLATFORM(IOS)
     std::unique_ptr<DeviceMotionClient> m_deviceMotionClient;

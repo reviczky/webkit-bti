@@ -1,4 +1,4 @@
-# Copyright (C) 2011-2017 Apple Inc. All rights reserved.
+# Copyright (C) 2011-2018 Apple Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -45,6 +45,7 @@ macro dispatchAfterCall()
     loadi ArgumentCount + TagOffset[cfr], PC
     loadp CodeBlock[cfr], PB
     loadp CodeBlock::m_instructions[PB], PB
+    unpoison(CodeBlockPoison, PB)
     loadisFromInstruction(1, t1)
     storeq r0, [cfr, t1, 8]
     valueProfile(r0, (CallOpCodeSize - 1), t3)
@@ -481,7 +482,8 @@ end
 
 macro structureIDToStructureWithScratch(structureIDThenStructure, scratch)
     loadp CodeBlock[cfr], scratch
-    loadp CodeBlock::m_vm[scratch], scratch
+    loadp CodeBlock::m_poisonedVM[scratch], scratch
+    unpoison(CodeBlockPoison, scratch)
     loadp VM::heap + Heap::m_structureIDTable + StructureIDTable::m_table[scratch], scratch
     loadp [scratch, structureIDThenStructure, 8], structureIDThenStructure
 end
@@ -494,7 +496,8 @@ end
 macro loadStructureAndClobberFirstArg(cell, structure)
     loadi JSCell::m_structureID[cell], structure
     loadp CodeBlock[cfr], cell
-    loadp CodeBlock::m_vm[cell], cell
+    loadp CodeBlock::m_poisonedVM[cell], cell
+    unpoison(CodeBlockPoison, cell)
     loadp VM::heap + Heap::m_structureIDTable + StructureIDTable::m_table[cell], cell
     loadp [cell, structure, 8], structure
 end
@@ -559,6 +562,7 @@ macro functionArityCheck(doneLabel, slowPath)
     # Reload CodeBlock and reset PC, since the slow_path clobbered them.
     loadp CodeBlock[cfr], t1
     loadp CodeBlock::m_instructions[t1], PB
+    unpoison(CodeBlockPoison, PB)
     move 0, PC
     jmp doneLabel
 end
@@ -1500,9 +1504,10 @@ _llint_op_get_by_val:
     andi IndexingShapeMask, t2
     bieq t2, Int32Shape, .opGetByValIsContiguous
     bineq t2, ContiguousShape, .opGetByValNotContiguous
-.opGetByValIsContiguous:
 
+.opGetByValIsContiguous:
     biaeq t1, -sizeof IndexingHeader + IndexingHeader::u.lengths.publicLength[t3], .opGetByValOutOfBounds
+    andi JSObject::m_butterflyIndexingMask[t0], t1
     loadisFromInstruction(1, t0)
     loadq [t3, t1, 8], t2
     btqz t2, .opGetByValOutOfBounds
@@ -1511,7 +1516,8 @@ _llint_op_get_by_val:
 .opGetByValNotContiguous:
     bineq t2, DoubleShape, .opGetByValNotDouble
     biaeq t1, -sizeof IndexingHeader + IndexingHeader::u.lengths.publicLength[t3], .opGetByValOutOfBounds
-    loadis 8[PB, PC, 8], t0
+    andi JSObject::m_butterflyIndexingMask[t0], t1
+    loadisFromInstruction(1 ,t0)
     loadd [t3, t1, 8], ft0
     bdnequn ft0, ft0, .opGetByValOutOfBounds
     fd2q ft0, t2
@@ -1522,6 +1528,7 @@ _llint_op_get_by_val:
     subi ArrayStorageShape, t2
     bia t2, SlowPutArrayStorageShape - ArrayStorageShape, .opGetByValNotIndexedStorage
     biaeq t1, -sizeof IndexingHeader + IndexingHeader::u.lengths.vectorLength[t3], .opGetByValOutOfBounds
+    andi JSObject::m_butterflyIndexingMask[t0], t1
     loadisFromInstruction(1, t0)
     loadq ArrayStorage::m_vector[t3, t1, 8], t2
     btqz t2, .opGetByValOutOfBounds
@@ -1946,14 +1953,14 @@ macro doCall(slowPath, prepareCall)
     storei PC, ArgumentCount + TagOffset[cfr]
     storei t2, ArgumentCount + PayloadOffset[t3]
     move t3, sp
-    if X86_64_WIN
-        prepareCall(LLIntCallLinkInfo::machineCodeTarget[t1], t2, t3, t4)
-        callTargetFunction(LLIntCallLinkInfo::machineCodeTarget[t1])
-    else
+    if POISON
         loadp _g_jitCodePoison, t2
         xorp LLIntCallLinkInfo::machineCodeTarget[t1], t2
         prepareCall(t2, t1, t3, t4)
         callTargetFunction(t2)
+    else
+        prepareCall(LLIntCallLinkInfo::machineCodeTarget[t1], t2, t3, t4)
+        callTargetFunction(LLIntCallLinkInfo::machineCodeTarget[t1])
     end
 
 .opCallSlow:
@@ -2000,6 +2007,7 @@ _llint_op_catch:
 
     loadp CodeBlock[cfr], PB
     loadp CodeBlock::m_instructions[PB], PB
+    unpoison(CodeBlockPoison, PB)
     loadp VM::targetInterpreterPCForThrow[t3], PC
     subp PB, PC
     rshiftp 3, PC
@@ -2491,7 +2499,8 @@ _llint_op_get_parent_scope:
 _llint_op_profile_type:
     traceExecution()
     loadp CodeBlock[cfr], t1
-    loadp CodeBlock::m_vm[t1], t1
+    loadp CodeBlock::m_poisonedVM[t1], t1
+    unpoison(CodeBlockPoison, t1)
     # t1 is holding the pointer to the typeProfilerLog.
     loadp VM::m_typeProfilerLog[t1], t1
     # t2 is holding the pointer to the current log entry.

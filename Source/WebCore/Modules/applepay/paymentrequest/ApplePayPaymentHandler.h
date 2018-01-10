@@ -27,6 +27,7 @@
 
 #if ENABLE(APPLE_PAY) && ENABLE(PAYMENT_REQUEST)
 
+#include "ApplePayPaymentMethodType.h"
 #include "ApplePayRequest.h"
 #include "ContextDestructionObserver.h"
 #include "PaymentHandler.h"
@@ -48,8 +49,10 @@ private:
     friend class PaymentHandler;
     explicit ApplePayPaymentHandler(Document&, const PaymentRequest::MethodIdentifier&, PaymentRequest&);
 
-    Document& document();
-    PaymentCoordinator& paymentCoordinator();
+    Document& document() const;
+    PaymentCoordinator& paymentCoordinator() const;
+
+    ExceptionOr<ApplePaySessionPaymentRequest::TotalAndLineItems> computeTotalAndLineItems();
 
     ExceptionOr<void> shippingAddressUpdated(const String& error);
     ExceptionOr<void> shippingOptionUpdated();
@@ -64,6 +67,7 @@ private:
     void complete(std::optional<PaymentComplete>&&) final;
 
     // PaymentSession
+    unsigned version() const final;
     void validateMerchant(const URL&) final;
     void didAuthorizePayment(const Payment&) final;
     void didSelectShippingMethod(const ApplePaySessionPaymentRequest::ShippingMethod&) final;
@@ -74,6 +78,7 @@ private:
     PaymentRequest::MethodIdentifier m_identifier;
     Ref<PaymentRequest> m_paymentRequest;
     std::optional<ApplePayRequest> m_applePayRequest;
+    std::optional<ApplePayPaymentMethodType> m_selectedPaymentMethodType;
 };
 
 } // namespace WebCore

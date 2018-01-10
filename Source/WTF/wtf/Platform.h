@@ -668,7 +668,7 @@
 #define HAVE_READLINE 1
 #define HAVE_SYS_TIMEB_H 1
 
-#if __has_include(<mach/mach_exc.defs>)
+#if __has_include(<mach/mach_exc.defs>) && !PLATFORM(GTK)
 #define HAVE_MACH_EXCEPTIONS 1
 #endif
 
@@ -1216,6 +1216,9 @@
 #if PLATFORM(MAC)
 #define HAVE_NS_ACTIVITY 1
 #endif
+
+/* Disable SharedArrayBuffers until Spectre security concerns are mitigated. */
+#define ENABLE_SHARED_ARRAY_BUFFER 0
 
 #if (OS(DARWIN) && USE(CG)) || (USE(FREETYPE) && !PLATFORM(GTK)) || (PLATFORM(WIN) && (USE(CG) || USE(CAIRO)))
 #undef ENABLE_OPENTYPE_MATH

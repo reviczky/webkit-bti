@@ -1,0 +1,14 @@
+{
+global:
+  webkit_*;
+  WebProcessMainUnix;
+  NetworkProcessMainUnix;
+  PluginProcessMainUnix;
+  StorageProcessMainUnix;
+  extern "C++" {
+    "WebKit::WebKitExtensionManager::singleton()";
+    "WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)";
+  };
+local:
+  *;
+};

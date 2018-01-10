@@ -72,10 +72,10 @@
 #include "InspectorInstrumentation.h"
 #include "JSLazyEventListener.h"
 #include "KeyboardEvent.h"
+#include "KeyframeEffect.h"
 #include "MainFrame.h"
 #include "MutationObserverInterestGroup.h"
 #include "MutationRecord.h"
-#include "NoEventDispatchAssertion.h"
 #include "NodeRenderStyle.h"
 #include "PlatformWheelEvent.h"
 #include "PointerLockController.h"
@@ -91,6 +91,7 @@
 #include "SVGElement.h"
 #include "SVGNames.h"
 #include "SVGSVGElement.h"
+#include "ScriptDisallowedScope.h"
 #include "ScrollLatchingState.h"
 #include "SelectorQuery.h"
 #include "Settings.h"
@@ -102,6 +103,7 @@
 #include "StyleTreeResolver.h"
 #include "TextIterator.h"
 #include "VoidCallback.h"
+#include "WebAnimation.h"
 #include "WheelEvent.h"
 #include "XLinkNames.h"
 #include "XMLNSNames.h"
@@ -349,11 +351,6 @@ Ref<Node> Element::cloneNodeInternal(Document& targetDocument, CloningOperation 
 Ref<Element> Element::cloneElementWithChildren(Document& targetDocument)
 {
     Ref<Element> clone = cloneElementWithoutChildren(targetDocument);
-
-    // It's safe to dispatch events on the cloned node since author scripts have no access to it yet.
-    // This is needed for SVGUseElement::cloneTarget.
-    NoEventDispatchAssertion::EventAllowedScope allowedScope(clone.get());
-
     cloneChildNodes(clone);
     return clone;
 }
@@ -361,10 +358,6 @@ Ref<Element> Element::cloneElementWithChildren(Document& targetDocument)
 Ref<Element> Element::cloneElementWithoutChildren(Document& targetDocument)
 {
     Ref<Element> clone = cloneElementWithoutAttributesAndChildren(targetDocument);
-
-    // It's safe to dispatch events on the cloned node since author scripts have no access to it yet.
-    // This is needed for SVGUseElement::cloneTarget.
-    NoEventDispatchAssertion::EventAllowedScope allowedScope(clone.get());
 
     // This will catch HTML elements in the wrong namespace that are not correctly copied.
     // This is a sanity check as HTML overloads some of the DOM methods.
@@ -1148,9 +1141,6 @@ LayoutRect Element::absoluteEventHandlerBounds(bool& includesFixedPositionElemen
     if (!frameView)
         return LayoutRect();
 
-    if (frameView->needsLayout())
-        frameView->layoutContext().layout();
-
     return absoluteEventBoundsOfElementAndDescendants(includesFixedPositionElements);
 }
 
@@ -1783,7 +1773,7 @@ void Element::addShadowRoot(Ref<ShadowRoot>&& newShadowRoot)
 
     ShadowRoot& shadowRoot = newShadowRoot;
     {
-        NoEventDispatchAssertion::InMainThread noEventDispatchAssertion;
+        ScriptDisallowedScope::InMainThread scriptDisallowedScope;
         if (renderer())
             RenderTreeUpdater::tearDownRenderers(*this);
 
@@ -2158,7 +2148,7 @@ void Element::attachAttributeNodeIfNeeded(Attr& attrNode)
     if (attrNode.ownerElement() == this)
         return;
 
-    NoEventDispatchAssertion::InMainThread assertNoEventDispatch;
+    ScriptDisallowedScope::InMainThread scriptDisallowedScope;
 
     attrNode.attachToElement(*this);
     ensureAttrNodeListForElement(*this).append(&attrNode);
@@ -2176,7 +2166,7 @@ ExceptionOr<RefPtr<Attr>> Element::setAttributeNode(Attr& attrNode)
         return Exception { InUseAttributeError };
 
     {
-        NoEventDispatchAssertion::InMainThread assertNoEventDispatch;
+        ScriptDisallowedScope::InMainThread scriptDisallowedScope;
         synchronizeAllAttributes();
     }
 
@@ -2227,7 +2217,7 @@ ExceptionOr<RefPtr<Attr>> Element::setAttributeNodeNS(Attr& attrNode)
     auto attrNodeValue = attrNode.value();
     unsigned index = 0;
     {
-        NoEventDispatchAssertion::InMainThread assertNoEventDispatch;
+        ScriptDisallowedScope::InMainThread scriptDisallowedScope;
         synchronizeAllAttributes();
         auto& elementData = ensureUniqueElementData();
 
@@ -2484,14 +2474,14 @@ void Element::blur()
 
 void Element::dispatchFocusInEvent(const AtomicString& eventType, RefPtr<Element>&& oldFocusedElement)
 {
-    ASSERT_WITH_SECURITY_IMPLICATION(NoEventDispatchAssertion::InMainThread::isEventAllowed());
+    ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::InMainThread::isScriptAllowed());
     ASSERT(eventType == eventNames().focusinEvent || eventType == eventNames().DOMFocusInEvent);
     dispatchScopedEvent(FocusEvent::create(eventType, true, false, document().defaultView(), 0, WTFMove(oldFocusedElement)));
 }
 
 void Element::dispatchFocusOutEvent(const AtomicString& eventType, RefPtr<Element>&& newFocusedElement)
 {
-    ASSERT_WITH_SECURITY_IMPLICATION(NoEventDispatchAssertion::InMainThread::isEventAllowed());
+    ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::InMainThread::isScriptAllowed());
     ASSERT(eventType == eventNames().focusoutEvent || eventType == eventNames().DOMFocusOutEvent);
     dispatchScopedEvent(FocusEvent::create(eventType, true, false, document().defaultView(), 0, WTFMove(newFocusedElement)));
 }
@@ -2925,8 +2915,7 @@ static void disconnectPseudoElement(PseudoElement* pseudoElement)
 {
     if (!pseudoElement)
         return;
-    if (pseudoElement->renderer())
-        RenderTreeUpdater::tearDownRenderers(*pseudoElement);
+    ASSERT(!pseudoElement->renderer());
     ASSERT(pseudoElement->hostElement());
     pseudoElement->clearHostElement();
 }
@@ -3404,12 +3393,6 @@ void Element::resetStyleRelations()
     elementRareData()->resetStyleRelations();
 }
 
-void Element::clearStyleDerivedDataBeforeDetachingRenderer()
-{
-    clearBeforePseudoElement();
-    clearAfterPseudoElement();
-}
-
 void Element::clearHoverAndActiveStatusBeforeDetachingRenderer()
 {
     if (!isUserActionElement())
@@ -3701,6 +3684,32 @@ Element* Element::findAnchorElementForLink(String& outAnchorName)
     }
 
     return nullptr;
+}
+
+ExceptionOr<Ref<WebAnimation>> Element::animate(JSC::ExecState& state, JSC::Strong<JSC::JSObject>&& keyframes, std::optional<Variant<double, KeyframeAnimationOptions>>&& options)
+{
+    std::optional<Variant<double, KeyframeEffectOptions>> keyframeEffectOptions;
+    if (options) {
+        auto optionsValue = options.value();
+        Variant<double, KeyframeEffectOptions> keyframeEffectOptionsVariant;
+        if (WTF::holds_alternative<double>(optionsValue))
+            keyframeEffectOptionsVariant = WTF::get<double>(optionsValue);
+        else
+            keyframeEffectOptionsVariant = WTF::get<KeyframeAnimationOptions>(optionsValue);
+        keyframeEffectOptions = keyframeEffectOptionsVariant;
+    }
+
+    auto keyframeEffectResult = KeyframeEffect::create(state, this, WTFMove(keyframes), WTFMove(keyframeEffectOptions));
+    if (keyframeEffectResult.hasException())
+        return keyframeEffectResult.releaseException();
+
+    auto animation = WebAnimation::create(document(), &keyframeEffectResult.returnValue().get(), nullptr);
+
+    auto animationPlayResult = animation->play();
+    if (animationPlayResult.hasException())
+        return animationPlayResult.releaseException();
+
+    return WTFMove(animation);
 }
 
 Vector<RefPtr<WebAnimation>> Element::getAnimations()

@@ -130,9 +130,8 @@ JSObject* JSValue::synthesizePrototype(ExecState* exec) const
     if (isCell()) {
         if (isString())
             return exec->lexicalGlobalObject()->stringPrototype();
-        // FIXME: [ESNext][BigInt] Implement BigIntConstructor and BigIntPrototype
-        // https://bugs.webkit.org/show_bug.cgi?id=175359
-        RELEASE_ASSERT(!isBigInt());
+        if (isBigInt())
+            return exec->lexicalGlobalObject()->bigIntPrototype();
         ASSERT(isSymbol());
         return exec->lexicalGlobalObject()->symbolPrototype();
     }
@@ -383,7 +382,9 @@ JSString* JSValue::toStringSlowCase(ExecState* exec, bool returnEmptyStringOnErr
         JSBigInt* bigInt = asBigInt(*this);
         if (auto digit = bigInt->singleDigitValueForString())
             return vm.smallStrings.singleCharacterString(*digit + '0');
-        return jsNontrivialString(&vm, bigInt->toString(*exec, 10));
+        JSString* returnString = jsNontrivialString(&vm, bigInt->toString(*exec, 10));
+        RETURN_IF_EXCEPTION(scope, errorValue());
+        return returnString;
     }
 
     ASSERT(isCell());

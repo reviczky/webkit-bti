@@ -1154,7 +1154,11 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         break;
 
     case SetAdd:
+        forNode(node).set(m_graph, m_vm.hashMapBucketSetStructure.get());
+        break;
+
     case MapSet:
+        forNode(node).set(m_graph, m_vm.hashMapBucketMapStructure.get());
         break;
 
     case WeakMapGet:
@@ -2243,6 +2247,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case PhantomCreateRest:
     case PhantomSpread:
     case PhantomNewArrayWithSpread:
+    case PhantomNewArrayBuffer:
     case BottomValue:
         m_state.setDidClobber(true); // Prevent constant folding.
         // This claims to return bottom.
@@ -2298,15 +2303,12 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             m_graph, m_codeBlock->globalObjectFor(node->origin.semantic)->asyncFunctionStructure());
         break;
 
-    case NewFunction:
-        if (node->castOperand<FunctionExecutable*>()->isStrictMode()) {
-            forNode(node).set(
-                m_graph, m_codeBlock->globalObjectFor(node->origin.semantic)->strictFunctionStructure());
-        } else {
-            forNode(node).set(
-                m_graph, m_codeBlock->globalObjectFor(node->origin.semantic)->sloppyFunctionStructure());
-        }
+    case NewFunction: {
+        JSGlobalObject* globalObject = m_codeBlock->globalObjectFor(node->origin.semantic);
+        Structure* structure = JSFunction::selectStructureForNewFuncExp(globalObject, node->castOperand<FunctionExecutable*>());
+        forNode(node).set(m_graph, structure);
         break;
+    }
         
     case GetCallee:
         if (FunctionExecutable* executable = jsDynamicCast<FunctionExecutable*>(m_vm, m_codeBlock->ownerExecutable())) {
