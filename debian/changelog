@@ -1,4 +1,4 @@
-webkit2gtk (2.18.5-1) UNRELEASED; urgency=high
+webkit2gtk (2.18.5-1) unstable; urgency=high
 
   * New upstream release.
     + This includes fixes to mitigate the effects of the Spectre
