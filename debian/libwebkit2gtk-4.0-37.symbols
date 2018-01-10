@@ -13,7 +13,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_application_info_set_name@Base 2.17.90
  webkit_application_info_set_version@Base 2.17.90
  webkit_application_info_unref@Base 2.17.90
- webkit_authentication_dialog_get_type@Base 2.5.3
  webkit_authentication_request_authenticate@Base 2.5.3
  webkit_authentication_request_can_save_credentials@Base 2.5.3
  webkit_authentication_request_cancel@Base 2.5.3
@@ -59,6 +58,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_console_message_get_source_id@Base 2.12.0
  webkit_console_message_get_text@Base 2.12.0
  webkit_console_message_get_type@Base 2.12.0
+ webkit_console_message_level_get_type@Base 2.19.4
+ webkit_console_message_source_get_type@Base 2.19.4
  webkit_context_menu_action_get_type@Base 2.5.3
  webkit_context_menu_append@Base 2.5.3
  webkit_context_menu_first@Base 2.5.3
@@ -1471,7 +1472,9 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_find_options_get_type@Base 2.5.3
  webkit_form_submission_request_get_text_fields@Base 2.5.3
  webkit_form_submission_request_get_type@Base 2.5.3
+ webkit_form_submission_request_list_text_fields@Base 2.19.4
  webkit_form_submission_request_submit@Base 2.5.3
+ webkit_form_submission_step_get_type@Base 2.19.4
  webkit_frame_get_javascript_context_for_script_world@Base 2.5.3
  webkit_frame_get_javascript_global_context@Base 2.5.3
  webkit_frame_get_type@Base 2.5.3
@@ -1497,7 +1500,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_hit_test_result_get_media_uri@Base 2.5.3
  webkit_hit_test_result_get_type@Base 2.5.3
  webkit_insecure_content_event_get_type@Base 2.5.3
- webkit_inspector_window_get_type@Base 2.17.3
  webkit_install_missing_media_plugins_permission_request_get_description@Base 2.10.0
  webkit_install_missing_media_plugins_permission_request_get_type@Base 2.10.0
  webkit_javascript_error_get_type@Base 2.5.3
@@ -1508,14 +1510,12 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_javascript_result_ref@Base 2.5.3
  webkit_javascript_result_unref@Base 2.5.3
  webkit_load_event_get_type@Base 2.5.3
- webkit_media_src_get_type@Base 2.19.3-2~
  webkit_mime_info_get_description@Base 2.5.3
  webkit_mime_info_get_extensions@Base 2.5.3
  webkit_mime_info_get_mime_type@Base 2.5.3
  webkit_mime_info_get_type@Base 2.5.3
  webkit_mime_info_ref@Base 2.5.3
  webkit_mime_info_unref@Base 2.5.3
- webkit_mse_debug@Base 2.19.3-2~
  webkit_navigation_action_copy@Base 2.5.3
  webkit_navigation_action_free@Base 2.5.3
  webkit_navigation_action_get_modifiers@Base 2.5.3
@@ -1749,8 +1749,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_snapshot_error_quark@Base 2.5.3
  webkit_snapshot_options_get_type@Base 2.5.3
  webkit_snapshot_region_get_type@Base 2.5.3
- (optional)webkit_soup_request_generic_get_type@Base 2.5.3
- (optional)webkit_soup_request_input_stream_get_type@Base 2.5.3
  webkit_tls_errors_policy_get_type@Base 2.5.3
  webkit_uri_request_get_http_headers@Base 2.5.3
  webkit_uri_request_get_http_method@Base 2.12.0
@@ -1856,13 +1854,12 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_page_get_main_frame@Base 2.5.3
  webkit_web_page_get_type@Base 2.5.3
  webkit_web_page_get_uri@Base 2.5.3
+ webkit_web_process_termination_reason_get_type@Base 2.19.4
  webkit_web_resource_get_data@Base 2.5.3
  webkit_web_resource_get_data_finish@Base 2.5.3
  webkit_web_resource_get_response@Base 2.5.3
  webkit_web_resource_get_type@Base 2.5.3
  webkit_web_resource_get_uri@Base 2.5.3
- webkit_web_src_get_type@Base 2.5.3
- webkit_web_view_base_accessible_get_type@Base 2.5.3
  webkit_web_view_base_get_type@Base 2.5.3
  webkit_web_view_can_execute_editing_command@Base 2.5.3
  webkit_web_view_can_execute_editing_command_finish@Base 2.5.3
