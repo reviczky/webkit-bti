@@ -1,3 +1,9 @@
+webkit2gtk (2.19.5-1) UNRELEASED; urgency=medium
+
+  * New upstream development release.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 10 Jan 2018 13:21:48 +0200
+
 webkit2gtk (2.19.3-2) experimental; urgency=medium
 
   * WOFF2 is now available in Debian, so build webkit2gtk with it:
