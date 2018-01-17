@@ -198,6 +198,7 @@ public:
     DOMWindow* frames() const { return self(); }
 
     DOMWindow* opener() const;
+    void disownOpener();
     DOMWindow* parent() const;
     DOMWindow* top() const;
 
@@ -305,7 +306,7 @@ public:
 #endif
 
     Performance* performance() const;
-    double nowTimestamp() const;
+    WEBCORE_EXPORT double nowTimestamp() const;
 
 #if PLATFORM(IOS)
     void incrementScrollEventListenersCount();

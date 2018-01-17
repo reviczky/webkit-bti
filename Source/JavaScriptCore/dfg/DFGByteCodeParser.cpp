@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -81,6 +81,51 @@ static const bool verbose = true;
 if (DFGByteCodeParserInternal::verbose && Options::verboseDFGBytecodeParsing()) \
 dataLog(__VA_ARGS__); \
 } while (false)
+
+template <typename F1, typename F2>
+static ALWAYS_INLINE void flushImpl(Graph& graph, InlineCallFrame* inlineCallFrame, const F1& addFlushDirect, const F2& addPhantomLocalDirect)
+{
+    int numArguments;
+    if (inlineCallFrame) {
+        ASSERT(!graph.hasDebuggerEnabled());
+        numArguments = inlineCallFrame->argumentsWithFixup.size();
+        if (inlineCallFrame->isClosureCall)
+            addFlushDirect(remapOperand(inlineCallFrame, VirtualRegister(CallFrameSlot::callee)));
+        if (inlineCallFrame->isVarargs())
+            addFlushDirect(remapOperand(inlineCallFrame, VirtualRegister(CallFrameSlot::argumentCount)));
+    } else
+        numArguments = graph.baselineCodeBlockFor(inlineCallFrame)->numParameters();
+
+    for (unsigned argument = numArguments; argument-- > 1;)
+        addFlushDirect(remapOperand(inlineCallFrame, virtualRegisterForArgument(argument)));
+
+    if (!inlineCallFrame && graph.needsFlushedThis())
+        addFlushDirect(remapOperand(inlineCallFrame, virtualRegisterForArgument(0)));
+    else
+        addPhantomLocalDirect(remapOperand(inlineCallFrame, virtualRegisterForArgument(0)));
+
+    if (graph.needsScopeRegister())
+        addFlushDirect(graph.m_codeBlock->scopeRegister());
+}
+
+template <typename F1, typename F2>
+static ALWAYS_INLINE void flushForTerminalImpl(Graph& graph, CodeOrigin origin, const F1& addFlushDirect, const F2& addPhantomLocalDirect)
+{
+    origin.walkUpInlineStack([&] (CodeOrigin origin) {
+        unsigned bytecodeIndex = origin.bytecodeIndex;
+        InlineCallFrame* inlineCallFrame = origin.inlineCallFrame;
+        flushImpl(graph, inlineCallFrame, addFlushDirect, addPhantomLocalDirect);
+
+        CodeBlock* codeBlock = graph.baselineCodeBlockFor(inlineCallFrame);
+        FullBytecodeLiveness& fullLiveness = graph.livenessFor(codeBlock);
+        const FastBitVector& livenessAtBytecode = fullLiveness.getLiveness(bytecodeIndex);
+
+        for (unsigned local = codeBlock->m_numCalleeLocals; local--;) {
+            if (livenessAtBytecode[local])
+                addPhantomLocalDirect(remapOperand(inlineCallFrame, virtualRegisterForLocal(local)));
+        }
+    });
+}
 
 // === ByteCodeParser ===
 //
@@ -561,55 +606,16 @@ private:
 
     void flush(InlineStackEntry* inlineStackEntry)
     {
-        int numArguments;
-        if (InlineCallFrame* inlineCallFrame = inlineStackEntry->m_inlineCallFrame) {
-            ASSERT(!m_hasDebuggerEnabled);
-            numArguments = inlineCallFrame->argumentsWithFixup.size();
-            if (inlineCallFrame->isClosureCall)
-                flushDirect(inlineStackEntry->remapOperand(VirtualRegister(CallFrameSlot::callee)));
-            if (inlineCallFrame->isVarargs())
-                flushDirect(inlineStackEntry->remapOperand(VirtualRegister(CallFrameSlot::argumentCount)));
-        } else
-            numArguments = inlineStackEntry->m_codeBlock->numParameters();
-        for (unsigned argument = numArguments; argument-- > 1;)
-            flushDirect(inlineStackEntry->remapOperand(virtualRegisterForArgument(argument)));
-        if (!inlineStackEntry->m_inlineCallFrame && m_graph.needsFlushedThis())
-            flushDirect(virtualRegisterForArgument(0));
-        else
-            phantomLocalDirect(virtualRegisterForArgument(0));
-
-        if (m_graph.needsScopeRegister())
-            flushDirect(m_codeBlock->scopeRegister());
+        auto addFlushDirect = [&] (VirtualRegister reg) { flushDirect(reg); };
+        auto addPhantomLocalDirect = [&] (VirtualRegister reg) { phantomLocalDirect(reg); };
+        flushImpl(m_graph, inlineStackEntry->m_inlineCallFrame, addFlushDirect, addPhantomLocalDirect);
     }
 
     void flushForTerminal()
     {
-        CodeOrigin origin = currentCodeOrigin();
-        unsigned bytecodeIndex = origin.bytecodeIndex;
-
-        for (InlineStackEntry* inlineStackEntry = m_inlineStackTop; inlineStackEntry; inlineStackEntry = inlineStackEntry->m_caller) {
-            flush(inlineStackEntry);
-
-            ASSERT(origin.inlineCallFrame == inlineStackEntry->m_inlineCallFrame);
-            InlineCallFrame* inlineCallFrame = inlineStackEntry->m_inlineCallFrame;
-            CodeBlock* codeBlock = m_graph.baselineCodeBlockFor(inlineCallFrame);
-            FullBytecodeLiveness& fullLiveness = m_graph.livenessFor(codeBlock);
-            const FastBitVector& livenessAtBytecode = fullLiveness.getLiveness(bytecodeIndex);
-
-            for (unsigned local = codeBlock->m_numCalleeLocals; local--;) {
-                if (livenessAtBytecode[local]) {
-                    VirtualRegister reg = virtualRegisterForLocal(local);
-                    if (inlineCallFrame)
-                        reg = inlineStackEntry->remapOperand(reg);
-                    phantomLocalDirect(reg);
-                }
-            }
-
-            if (inlineCallFrame) {
-                bytecodeIndex = inlineCallFrame->directCaller.bytecodeIndex;
-                origin = inlineCallFrame->directCaller;
-            }
-        }
+        auto addFlushDirect = [&] (VirtualRegister reg) { flushDirect(reg); };
+        auto addPhantomLocalDirect = [&] (VirtualRegister reg) { phantomLocalDirect(reg); };
+        flushForTerminalImpl(m_graph, currentCodeOrigin(), addFlushDirect, addPhantomLocalDirect);
     }
 
     void flushForReturn()
@@ -694,7 +700,10 @@ private:
     
     Node* addToGraph(Node* node)
     {
+        m_hasAnyForceOSRExits |= (node->op() == ForceOSRExit);
+
         VERBOSE_LOG("        appended ", node, " ", Graph::opName(node->op()), "\n");
+
         m_currentBlock->append(node);
         if (clobbersExitState(m_graph, node))
             m_exitOK = false;
@@ -1141,6 +1150,7 @@ private:
     
     Instruction* m_currentInstruction;
     bool m_hasDebuggerEnabled;
+    bool m_hasAnyForceOSRExits { false };
 };
 
 BasicBlock* ByteCodeParser::allocateTargetableBlock(unsigned bytecodeIndex)
@@ -1975,6 +1985,9 @@ ByteCodeParser::CallOptimizationResult ByteCodeParser::handleInlining(
         BasicBlock* calleeEntryBlock = allocateUntargetableBlock();
         m_currentBlock = calleeEntryBlock;
         prepareToParseBlock();
+
+        // At the top of each switch case, we can exit.
+        m_exitOK = true;
         
         Node* myCallTargetNode = getDirect(calleeReg);
         
@@ -2613,6 +2626,15 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, int resultOperand, Intrin
         Node* regExpExec = addToGraph(RegExpTest, OpInfo(0), OpInfo(prediction), addToGraph(GetGlobalObject, callee), regExpObject, get(virtualRegisterForArgument(1, registerOffset)));
         set(VirtualRegister(resultOperand), regExpExec);
         
+        return true;
+    }
+
+    case RegExpMatchFastIntrinsic: {
+        RELEASE_ASSERT(argumentCountIncludingThis == 2);
+
+        insertChecks();
+        Node* regExpMatch = addToGraph(RegExpMatchFast, OpInfo(0), OpInfo(prediction), addToGraph(GetGlobalObject, callee), get(virtualRegisterForArgument(0, registerOffset)), get(virtualRegisterForArgument(1, registerOffset)));
+        set(VirtualRegister(resultOperand), regExpMatch);
         return true;
     }
 
@@ -6372,9 +6394,10 @@ ByteCodeParser::InlineStackEntry::InlineStackEntry(
     , m_caller(byteCodeParser->m_inlineStackTop)
 {
     {
+        m_exitProfile.initialize(m_profiledBlock->unlinkedCodeBlock());
+
         ConcurrentJSLocker locker(m_profiledBlock->m_lock);
         m_lazyOperands.initialize(locker, m_profiledBlock->lazyOperandValueProfiles());
-        m_exitProfile.initialize(locker, profiledBlock->exitProfile());
         
         // We do this while holding the lock because we want to encourage StructureStubInfo's
         // to be potentially added to operations and because the profiled block could be in the
@@ -6558,6 +6581,68 @@ void ByteCodeParser::parse()
     
     parseCodeBlock();
     linkBlocks(inlineStackEntry.m_unlinkedBlocks, inlineStackEntry.m_blockLinkingTargets);
+
+    if (m_hasAnyForceOSRExits) {
+        InsertionSet insertionSet(m_graph);
+        Operands<VariableAccessData*> mapping(OperandsLike, m_graph.block(0)->variablesAtHead);
+
+        for (BasicBlock* block : m_graph.blocksInNaturalOrder()) {
+            mapping.fill(nullptr);
+            if (validationEnabled()) {
+                // Verify that it's correct to fill mapping with nullptr.
+                for (unsigned i = 0; i < block->variablesAtHead.size(); ++i) {
+                    Node* node = block->variablesAtHead.at(i);
+                    RELEASE_ASSERT(!node);
+                }
+            }
+
+            for (unsigned nodeIndex = 0; nodeIndex < block->size(); ++nodeIndex) {
+                Node* node = block->at(nodeIndex);
+
+                if (node->hasVariableAccessData(m_graph))
+                    mapping.operand(node->local()) = node->variableAccessData();
+
+                if (node->op() == ForceOSRExit) {
+                    NodeOrigin endOrigin = node->origin.withExitOK(true);
+
+                    if (validationEnabled()) {
+                        // This verifies that we don't need to change any of the successors's predecessor
+                        // list after planting the Unreachable below. At this point in the bytecode
+                        // parser, we haven't linked up the predecessor lists yet.
+                        for (BasicBlock* successor : block->successors())
+                            RELEASE_ASSERT(successor->predecessors.isEmpty());
+                    }
+
+                    block->resize(nodeIndex + 1);
+
+                    insertionSet.insertNode(block->size(), SpecNone, ExitOK, endOrigin);
+
+                    auto insertLivenessPreservingOp = [&] (NodeType op, VirtualRegister operand) {
+                        VariableAccessData* variable = mapping.operand(operand);
+                        if (!variable) {
+                            variable = newVariableAccessData(operand);
+                            mapping.operand(operand) = variable;
+                        }
+                        insertionSet.insertNode(block->size(), SpecNone, op, endOrigin, OpInfo(variable));
+                    };
+                    auto addFlushDirect = [&] (VirtualRegister operand) { insertLivenessPreservingOp(Flush, operand); };
+                    auto addPhantomLocalDirect = [&] (VirtualRegister operand) { insertLivenessPreservingOp(PhantomLocal, operand); };
+
+                    flushForTerminalImpl(m_graph, endOrigin.semantic, addFlushDirect, addPhantomLocalDirect);
+
+                    insertionSet.insertNode(block->size(), SpecNone, Unreachable, endOrigin);
+                    insertionSet.execute(block);
+                    break;
+                }
+            }
+        }
+    } else if (validationEnabled()) {
+        // Ensure our bookkeeping for ForceOSRExit nodes is working.
+        for (BasicBlock* block : m_graph.blocksInNaturalOrder()) {
+            for (Node* node : *block)
+                RELEASE_ASSERT(node->op() != ForceOSRExit);
+        }
+    }
 
     m_graph.determineReachability();
     m_graph.killUnreachableBlocks();

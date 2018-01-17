@@ -29,6 +29,7 @@
 #include "Document.h"
 
 #include "AXObjectCache.h"
+#include "ApplicationStateChangeListener.h"
 #include "Attr.h"
 #include "BeforeUnloadEvent.h"
 #include "CDATASection.h"
@@ -1935,10 +1936,10 @@ bool Document::needsStyleRecalc() const
     return false;
 }
 
-inline bool static isSafeToUpdateStyleOrLayout(FrameView* frameView)
+bool Document::isSafeToUpdateStyleOrLayout() const
 {
     bool isSafeToExecuteScript = ScriptDisallowedScope::InMainThread::isScriptAllowed();
-    bool isInFrameFlattening = frameView && frameView->isInChildFrameWithFrameFlattening();
+    bool isInFrameFlattening = view() && view()->isInChildFrameWithFrameFlattening();
     return isSafeToExecuteScript || isInFrameFlattening || !isInWebProcess();
 }
 
@@ -1960,7 +1961,7 @@ bool Document::updateStyleIfNeeded()
     }
 
     // The early exit above for !needsStyleRecalc() is needed when updateWidgetPositions() is called in runOrScheduleAsynchronousTasks().
-    RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(isSafeToUpdateStyleOrLayout(frameView.get()));
+    RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(isSafeToUpdateStyleOrLayout());
 
     resolveStyle();
     return true;
@@ -1976,7 +1977,7 @@ void Document::updateLayout()
         ASSERT_NOT_REACHED();
         return;
     }
-    RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(isSafeToUpdateStyleOrLayout(frameView.get()));
+    RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(isSafeToUpdateStyleOrLayout());
 
     RenderView::RepaintRegionAccumulator repaintRegionAccumulator(renderView());
 
@@ -4878,6 +4879,13 @@ void Document::suspend(ActiveDOMObject::ReasonForSuspension reason)
             view->compositor().cancelCompositingLayerUpdate();
     }
 
+#if ENABLE(SERVICE_WORKER)
+    if (RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled() && reason == ActiveDOMObject::ReasonForSuspension::PageCache) {
+        ASSERT_WITH_MESSAGE(!activeServiceWorker(), "Documents with an active service worker should not go into PageCache in the first place");
+        setServiceWorkerConnection(nullptr);
+    }
+#endif
+
     suspendScheduledTasks(reason);
 
     ASSERT(m_frame);
@@ -4908,6 +4916,13 @@ void Document::resume(ActiveDOMObject::ReasonForSuspension reason)
     m_frame->animation().resumeAnimationsForDocument(this);
 
     resumeScheduledTasks(reason);
+
+#if ENABLE(SERVICE_WORKER)
+    if (RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled() && reason == ActiveDOMObject::ReasonForSuspension::PageCache) {
+        ASSERT_WITH_MESSAGE(!activeServiceWorker(), "Documents with an active service worker should not go into PageCache in the first place");
+        setServiceWorkerConnection(&ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(sessionID()));
+    }
+#endif
 
     m_visualUpdatesAllowed = true;
 
@@ -7356,6 +7371,22 @@ void Document::mediaStreamCaptureStateChanged()
         mediaElement->mediaStreamCaptureStarted();
 }
 #endif
+
+void Document::addApplicationStateChangeListener(ApplicationStateChangeListener& listener)
+{
+    m_applicationStateChangeListeners.add(&listener);
+}
+
+void Document::removeApplicationStateChangeListener(ApplicationStateChangeListener& listener)
+{
+    m_applicationStateChangeListeners.remove(&listener);
+}
+
+void Document::forEachApplicationStateChangeListener(const Function<void(ApplicationStateChangeListener&)>& functor)
+{
+    for (auto* listener : m_applicationStateChangeListeners)
+        functor(*listener);
+}
 
 const AtomicString& Document::bgColor() const
 {

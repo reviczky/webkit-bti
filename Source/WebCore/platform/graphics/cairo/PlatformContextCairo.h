@@ -40,6 +40,7 @@ struct GraphicsContextState;
 namespace Cairo {
 struct FillSource;
 struct StrokeSource;
+struct ShadowState;
 }
 
 // Much like PlatformContextSkia in the Skia port, this class holds information that
@@ -59,7 +60,6 @@ public:
     GraphicsContextPlatformPrivate* graphicsContextPrivate() { return m_graphicsContextPrivate; }
     void setGraphicsContextPrivate(GraphicsContextPlatformPrivate* graphicsContextPrivate) { m_graphicsContextPrivate = graphicsContextPrivate; }
 
-    ShadowBlur& shadowBlur() { return m_shadowBlur; }
     Vector<float>& layers() { return m_layers; }
 
     void save();
@@ -68,20 +68,12 @@ public:
     float globalAlpha() const;
 
     void pushImageMask(cairo_surface_t*, const FloatRect&);
-    void drawSurfaceToContext(cairo_surface_t*, const FloatRect& destRect, const FloatRect& srcRect, GraphicsContext&);
+    WEBCORE_EXPORT void drawSurfaceToContext(cairo_surface_t*, const FloatRect& destRect, const FloatRect& srcRect, const Cairo::ShadowState&, GraphicsContext&);
 
     void setImageInterpolationQuality(InterpolationQuality);
     InterpolationQuality imageInterpolationQuality() const;
 
-    enum PatternAdjustment { NoAdjustment, AdjustPatternForGlobalAlpha };
-    void prepareForFilling(const Cairo::FillSource&, PatternAdjustment);
-
-    enum AlphaPreservation { DoNotPreserveAlpha, PreserveAlpha };
-    void prepareForStroking(const Cairo::StrokeSource&, AlphaPreservation);
-
 private:
-    void clipForPatternFilling(const FloatSize&, const AffineTransform&, bool, bool);
-
     RefPtr<cairo_t> m_cr;
 
     // Keeping a pointer to GraphicsContextPlatformPrivate here enables calling
@@ -93,9 +85,6 @@ private:
     State* m_state;
     WTF::Vector<State> m_stateStack;
 
-    // GraphicsContext is responsible for managing the state of the ShadowBlur,
-    // so it does not need to be on the state stack.
-    ShadowBlur m_shadowBlur;
     // Transparency layers.
     Vector<float> m_layers;
 };

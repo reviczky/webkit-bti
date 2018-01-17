@@ -2402,7 +2402,7 @@ void Element::focus(bool restorePreviousSelection, FocusDirection direction)
     // If not, we continue and set the focused node on the focus controller below so
     // that it can be updated soon after attach. 
     if (document().haveStylesheetsLoaded()) {
-        document().updateLayoutIgnorePendingStylesheets();
+        document().updateStyleIfNeeded();
         if (!isFocusable())
             return;
     }
@@ -3688,14 +3688,18 @@ Element* Element::findAnchorElementForLink(String& outAnchorName)
 
 ExceptionOr<Ref<WebAnimation>> Element::animate(JSC::ExecState& state, JSC::Strong<JSC::JSObject>&& keyframes, std::optional<Variant<double, KeyframeAnimationOptions>>&& options)
 {
+    String id = "";
     std::optional<Variant<double, KeyframeEffectOptions>> keyframeEffectOptions;
     if (options) {
         auto optionsValue = options.value();
         Variant<double, KeyframeEffectOptions> keyframeEffectOptionsVariant;
         if (WTF::holds_alternative<double>(optionsValue))
             keyframeEffectOptionsVariant = WTF::get<double>(optionsValue);
-        else
-            keyframeEffectOptionsVariant = WTF::get<KeyframeAnimationOptions>(optionsValue);
+        else {
+            auto keyframeEffectOptions = WTF::get<KeyframeAnimationOptions>(optionsValue);
+            id = keyframeEffectOptions.id;
+            keyframeEffectOptionsVariant = WTFMove(keyframeEffectOptions);
+        }
         keyframeEffectOptions = keyframeEffectOptionsVariant;
     }
 
@@ -3704,6 +3708,7 @@ ExceptionOr<Ref<WebAnimation>> Element::animate(JSC::ExecState& state, JSC::Stro
         return keyframeEffectResult.releaseException();
 
     auto animation = WebAnimation::create(document(), &keyframeEffectResult.returnValue().get(), nullptr);
+    animation->setId(id);
 
     auto animationPlayResult = animation->play();
     if (animationPlayResult.hasException())

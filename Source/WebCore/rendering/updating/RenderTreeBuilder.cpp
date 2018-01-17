@@ -41,6 +41,7 @@
 #include "RenderTreeBuilderFormControls.h"
 #include "RenderTreeBuilderInline.h"
 #include "RenderTreeBuilderList.h"
+#include "RenderTreeBuilderMathML.h"
 #include "RenderTreeBuilderMultiColumn.h"
 #include "RenderTreeBuilderRuby.h"
 #include "RenderTreeBuilderSVG.h"
@@ -114,6 +115,7 @@ RenderTreeBuilder::RenderTreeBuilder(RenderView& view)
     , m_blockFlowBuilder(std::make_unique<BlockFlow>(*this))
     , m_inlineBuilder(std::make_unique<Inline>(*this))
     , m_svgBuilder(std::make_unique<SVG>(*this))
+    , m_mathMLBuilder(std::make_unique<MathML>(*this))
 {
     RELEASE_ASSERT(!s_current || &m_view != &s_current->m_view);
     m_previous = s_current;
@@ -188,6 +190,25 @@ void RenderTreeBuilder::insertChild(RenderElement& parent, RenderPtr<RenderObjec
 void RenderTreeBuilder::insertChild(RenderTreePosition& position, RenderPtr<RenderObject> child)
 {
     insertChild(position.parent(), WTFMove(child), position.nextSibling());
+}
+
+void RenderTreeBuilder::insertChildToRenderElement(RenderElement& parent, RenderPtr<RenderObject> child, RenderObject* beforeChild)
+{
+    if (tableBuilder().childRequiresTable(parent, *child)) {
+        RenderTable* table;
+        RenderObject* afterChild = beforeChild ? beforeChild->previousSibling() : parent.lastChild();
+        if (afterChild && afterChild->isAnonymous() && is<RenderTable>(*afterChild) && !afterChild->isBeforeContent())
+            table = downcast<RenderTable>(afterChild);
+        else {
+            auto newTable = RenderTable::createAnonymousWithParentRenderer(parent);
+            table = newTable.get();
+            insertChild(parent, WTFMove(newTable), beforeChild);
+        }
+
+        insertChild(*table, WTFMove(child));
+        return;
+    }
+    parent.RenderElement::insertChildInternal(WTFMove(child), beforeChild);
 }
 
 void RenderTreeBuilder::insertChildToRenderBlock(RenderBlock& parent, RenderPtr<RenderObject> child, RenderObject* beforeChild)
@@ -329,9 +350,19 @@ void RenderTreeBuilder::splitFlow(RenderInline& parent, RenderObject* beforeChil
     inlineBuilder().splitFlow(parent, beforeChild, WTFMove(newBlockBox), WTFMove(child), oldCont);
 }
 
+void RenderTreeBuilder::moveRubyChildren(RenderRubyBase& from, RenderRubyBase& to)
+{
+    rubyBuilder().moveChildren(from, to);
+}
+
 void RenderTreeBuilder::insertChildToRenderBlockFlow(RenderBlockFlow& parent, RenderPtr<RenderObject> child, RenderObject* beforeChild)
 {
     blockFlowBuilder().insertChild(parent, WTFMove(child), beforeChild);
+}
+
+void RenderTreeBuilder::insertChildToRenderMathMLFenced(RenderMathMLFenced& parent, RenderPtr<RenderObject> child, RenderObject* beforeChild)
+{
+    mathMLBuilder().insertChild(parent, WTFMove(child), beforeChild);
 }
 
 void RenderTreeBuilder::updateAfterDescendants(RenderElement& renderer)

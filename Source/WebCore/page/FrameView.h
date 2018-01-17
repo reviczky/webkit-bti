@@ -219,7 +219,7 @@ public:
     float visibleContentScaleFactor() const final;
 
 #if USE(COORDINATED_GRAPHICS)
-    void setFixedVisibleContentRect(const IntRect&) final;
+    WEBCORE_EXPORT void setFixedVisibleContentRect(const IntRect&) final;
 #endif
     WEBCORE_EXPORT void setScrollPosition(const ScrollPosition&) final;
     void updateLayerPositionsAfterScrolling() final;
@@ -521,7 +521,8 @@ public:
     bool containsScrollableArea(ScrollableArea*) const;
     const ScrollableAreaSet* scrollableAreas() const { return m_scrollableAreas.get(); }
 
-    void removeChild(Widget&) final;
+    WEBCORE_EXPORT void addChild(Widget&) final;
+    WEBCORE_EXPORT void removeChild(Widget&) final;
 
     // This function exists for ports that need to handle wheel events manually.
     // On Mac WebKit1 the underlying NSScrollView just does the scrolling, but on most other platforms
