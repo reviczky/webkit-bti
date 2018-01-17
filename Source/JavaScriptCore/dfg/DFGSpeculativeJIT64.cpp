@@ -3438,6 +3438,11 @@ void SpeculativeJIT::compile(Node* node)
         break;
     }
 
+    case RegExpMatchFast: {
+        compileRegExpMatchFast(node);
+        break;
+    }
+
     case StringReplace:
     case StringReplaceRegExp: {
         compileStringReplace(node);
@@ -4211,6 +4216,18 @@ void SpeculativeJIT::compile(Node* node)
         JSValueOperand operand(this, node->child1());
         GPRReg gpr = operand.gpr();
         speculationCheck(TDZFailure, JSValueSource(), nullptr, m_jit.branchTest64(JITCompiler::Zero, gpr));
+        noResult(node);
+        break;
+    }
+
+    case AssertNotEmpty: {
+        if (validationEnabled()) {
+            JSValueOperand operand(this, node->child1());
+            GPRReg input = operand.gpr();
+            auto done = m_jit.branchTest64(MacroAssembler::NonZero, input);
+            m_jit.breakpoint();
+            done.link(&m_jit);
+        }
         noResult(node);
         break;
     }

@@ -101,6 +101,7 @@ const WebDriverService::Command WebDriverService::s_commands[] = {
     { HTTPMethod::Post, "/session", &WebDriverService::newSession },
     { HTTPMethod::Delete, "/session/$sessionId", &WebDriverService::deleteSession },
     { HTTPMethod::Get, "/status", &WebDriverService::status },
+    { HTTPMethod::Get, "/session/$sessionId/timeouts", &WebDriverService::getTimeouts },
     { HTTPMethod::Post, "/session/$sessionId/timeouts", &WebDriverService::setTimeouts },
 
     { HTTPMethod::Post, "/session/$sessionId/url", &WebDriverService::go },
@@ -270,6 +271,22 @@ void WebDriverService::sendResponse(Function<void (HTTPRequestHandler::Response&
     replyHandler({ result.httpStatusCode(), responseObject->toJSONString().utf8(), ASCIILiteral("application/json; charset=utf-8") });
 }
 
+static bool integerValue(JSON::Value& value, int& output)
+{
+    // Bail if an integer value cannot be retrieved.
+    if (!value.asInteger(output))
+        return false;
+
+    // If the contained value is a double, bail in case it doesn't match the integer
+    // value, i.e. if the double value was not originally in integer form.
+    // https://w3c.github.io/webdriver/webdriver-spec.html#dfn-integer
+    double doubleValue;
+    if (value.asDouble(doubleValue) && doubleValue != output)
+        return false;
+
+    return true;
+}
+
 static std::optional<Timeouts> deserializeTimeouts(JSON::Object& timeoutsObject)
 {
     // §8.5 Set Timeouts.
@@ -281,7 +298,7 @@ static std::optional<Timeouts> deserializeTimeouts(JSON::Object& timeoutsObject)
             continue;
 
         int timeoutMS;
-        if (it->value->type() != JSON::Value::Type::Integer || !it->value->asInteger(timeoutMS) || timeoutMS < 0 || timeoutMS > INT_MAX)
+        if (!integerValue(*it->value, timeoutMS) || timeoutMS < 0 || timeoutMS > INT_MAX)
             return std::nullopt;
 
         if (it->key == "script")
@@ -701,6 +718,16 @@ void WebDriverService::status(RefPtr<JSON::Object>&&, Function<void (CommandResu
     body->setBoolean(ASCIILiteral("ready"), !m_session);
     body->setString(ASCIILiteral("message"), m_session ? ASCIILiteral("A session already exists") : ASCIILiteral("No sessions"));
     completionHandler(CommandResult::success(WTFMove(body)));
+}
+
+void WebDriverService::getTimeouts(RefPtr<JSON::Object>&& parameters, Function<void (CommandResult&&)>&& completionHandler)
+{
+    // §8.4 Get Timeouts.
+    // https://w3c.github.io/webdriver/webdriver-spec.html#get-timeouts
+    if (!findSessionOrCompleteWithError(*parameters, completionHandler))
+        return;
+
+    m_session->getTimeouts(WTFMove(completionHandler));
 }
 
 void WebDriverService::setTimeouts(RefPtr<JSON::Object>&& parameters, Function<void (CommandResult&&)>&& completionHandler)

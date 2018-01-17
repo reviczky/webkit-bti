@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,22 +23,32 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "config.h"
+#include "JSCPoison.h"
 
-#include <wtf/Poisoned.h>
+#include "Options.h"
+#include <mutex>
+#include <wtf/HashSet.h>
 
 namespace JSC {
 
-extern "C" JS_EXPORTDATA uintptr_t g_globalDataPoison;
-extern "C" JS_EXPORTDATA uintptr_t g_jitCodePoison;
-extern "C" JS_EXPORTDATA uintptr_t g_nativeCodePoison;
+#define DEFINE_POISON(poisonID) \
+    uintptr_t POISON(poisonID);
+FOR_EACH_JSC_POISON(DEFINE_POISON)
 
-struct ClassInfo;
+void initializePoison()
+{
+    static std::once_flag initializeOnceFlag;
+    std::call_once(initializeOnceFlag, [] {
+        if (!Options::usePoisoning())
+            return;
 
-using PoisonedClassInfoPtr = Poisoned<g_globalDataPoison, const ClassInfo*>;
-using PoisonedMasmPtr = Poisoned<g_jitCodePoison, void*>;
+#define INITIALIZE_POISON(poisonID) \
+    POISON(poisonID) = makePoison();
 
-void initializePoison();
+        FOR_EACH_JSC_POISON(INITIALIZE_POISON)
+    });
+}
 
 } // namespace JSC
 

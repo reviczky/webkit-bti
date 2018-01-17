@@ -1964,6 +1964,12 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             clobberWorld(node->origin.semantic, clobberLimit);
         forNode(node).setType(SpecBoolean);
         break;
+
+    case RegExpMatchFast:
+        ASSERT(node->child2().useKind() == RegExpObjectUse);
+        ASSERT(node->child3().useKind() == StringUse);
+        forNode(node).setType(m_graph, SpecOther | SpecArray);
+        break;
             
     case StringReplace:
     case StringReplaceRegExp:
@@ -2995,6 +3001,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         break;
     }
 
+    case AssertNotEmpty:
     case CheckNotEmpty: {
         AbstractValue& value = forNode(node->child1());
         if (!(value.m_type & SpecEmpty)) {

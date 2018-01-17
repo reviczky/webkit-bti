@@ -20,29 +20,22 @@
  * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
  * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#include "config.h"
-#include "JSCPoisonedPtr.h"
+#pragma once
 
-#include <mutex>
+namespace WebCore {
 
-namespace JSC {
+class Document;
 
-uintptr_t g_globalDataPoison;
-uintptr_t g_jitCodePoison;
-uintptr_t g_nativeCodePoison;
+class ApplicationStateChangeListener {
+public:
+    virtual void applicationWillResignActive() { }
+    virtual void applicationDidBecomeActive() { }
 
-void initializePoison()
-{
-    static std::once_flag initializeOnceFlag;
-    std::call_once(initializeOnceFlag, [] {
-        g_globalDataPoison = makePoison();
-        g_jitCodePoison = makePoison();
-        g_nativeCodePoison = makePoison();
-    });
-}
+protected:
+    virtual ~ApplicationStateChangeListener() = default;
+};
 
-} // namespace JSC
-
+} // namespace WebCore
