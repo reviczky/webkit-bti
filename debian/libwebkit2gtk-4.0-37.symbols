@@ -5,6 +5,18 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  StorageProcessMainUnix@Base 2.17.90
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
+ (optional)_ZGVN7bmalloc10PerProcessINS_11PerHeapKindINS_4HeapEEEE7s_mutexE@Base 2.19.6
+ (optional)_ZGVN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE7s_mutexE@Base 2.19.6
+ (optional)_ZGVN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_objectE@Base 2.19.6
+ (optional)_ZGVN7bmalloc10PerProcessINS_9ScavengerEE7s_mutexE@Base 2.19.6
+ (optional)_ZGVN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.19.6
+ (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE7s_mutexE@Base 2.19.6
+ (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_memoryE@Base 2.19.6
+ (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_objectE@Base 2.19.6
+ (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE7s_mutexE@Base 2.19.6
+ (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE8s_memoryE@Base 2.19.6
+ (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.19.6
+ (optional)_ZZN7bmalloc10vmPageSizeEvE6cached@Base 2.19.6
  webkit_application_info_get_name@Base 2.17.90
  webkit_application_info_get_type@Base 2.17.90
  webkit_application_info_get_version@Base 2.17.90
@@ -13,6 +25,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_application_info_set_name@Base 2.17.90
  webkit_application_info_set_version@Base 2.17.90
  webkit_application_info_unref@Base 2.17.90
+ (optional)webkit_authentication_dialog_get_type@Base 2.19.6
  webkit_authentication_request_authenticate@Base 2.5.3
  webkit_authentication_request_can_save_credentials@Base 2.5.3
  webkit_authentication_request_cancel@Base 2.5.3
@@ -1500,6 +1513,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_hit_test_result_get_media_uri@Base 2.5.3
  webkit_hit_test_result_get_type@Base 2.5.3
  webkit_insecure_content_event_get_type@Base 2.5.3
+ (optional)webkit_inspector_window_get_type@Base 2.19.6
  webkit_install_missing_media_plugins_permission_request_get_description@Base 2.10.0
  webkit_install_missing_media_plugins_permission_request_get_type@Base 2.10.0
  webkit_javascript_error_get_type@Base 2.5.3
@@ -1510,12 +1524,15 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_javascript_result_ref@Base 2.5.3
  webkit_javascript_result_unref@Base 2.5.3
  webkit_load_event_get_type@Base 2.5.3
+ (optional)webkit_media_player_debug@Base 2.19.6
+ (optional)webkit_media_src_get_type@Base 2.19.6
  webkit_mime_info_get_description@Base 2.5.3
  webkit_mime_info_get_extensions@Base 2.5.3
  webkit_mime_info_get_mime_type@Base 2.5.3
  webkit_mime_info_get_type@Base 2.5.3
  webkit_mime_info_ref@Base 2.5.3
  webkit_mime_info_unref@Base 2.5.3
+ (optional)webkit_mse_debug@Base 2.19.6
  webkit_navigation_action_copy@Base 2.5.3
  webkit_navigation_action_free@Base 2.5.3
  webkit_navigation_action_get_modifiers@Base 2.5.3
@@ -1749,6 +1766,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_snapshot_error_quark@Base 2.5.3
  webkit_snapshot_options_get_type@Base 2.5.3
  webkit_snapshot_region_get_type@Base 2.5.3
+ (optional)webkit_soup_request_generic_get_type@Base 2.19.6
+ (optional)webkit_soup_request_input_stream_get_type@Base 2.19.6
  webkit_tls_errors_policy_get_type@Base 2.5.3
  webkit_uri_request_get_http_headers@Base 2.5.3
  webkit_uri_request_get_http_method@Base 2.12.0
@@ -1860,6 +1879,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_resource_get_response@Base 2.5.3
  webkit_web_resource_get_type@Base 2.5.3
  webkit_web_resource_get_uri@Base 2.5.3
+ (optional)webkit_web_src_get_type@Base 2.19.6
+ (optional)webkit_web_view_base_accessible_get_type@Base 2.19.6
  webkit_web_view_base_get_type@Base 2.5.3
  webkit_web_view_can_execute_editing_command@Base 2.5.3
  webkit_web_view_can_execute_editing_command_finish@Base 2.5.3

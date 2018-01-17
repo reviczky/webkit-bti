@@ -1,6 +1,8 @@
 webkit2gtk (2.19.6-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 17 Jan 2018 13:48:46 +0200
 
