@@ -63,6 +63,7 @@ private:
     void newSession(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
     void deleteSession(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
     void status(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
+    void getTimeouts(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
     void setTimeouts(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
     void go(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
     void getCurrentURL(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
@@ -86,6 +87,7 @@ private:
     void isElementSelected(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
     void getElementAttribute(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
     void getElementProperty(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
+    void getElementCSSValue(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
     void getElementText(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
     void getElementTagName(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
     void getElementRect(RefPtr<JSON::Object>&&, Function<void (CommandResult&&)>&&);
