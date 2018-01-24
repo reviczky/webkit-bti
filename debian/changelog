@@ -1,4 +1,4 @@
-webkit2gtk (2.18.6-1) UNRELEASED; urgency=high
+webkit2gtk (2.18.6-1) unstable; urgency=high
 
   * New upstream release.
     + This fixes CVE-2018-4088, CVE-2017-13885, CVE-2017-7165,
