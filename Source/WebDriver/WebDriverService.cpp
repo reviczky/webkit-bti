@@ -101,6 +101,7 @@ const WebDriverService::Command WebDriverService::s_commands[] = {
     { HTTPMethod::Post, "/session", &WebDriverService::newSession },
     { HTTPMethod::Delete, "/session/$sessionId", &WebDriverService::deleteSession },
     { HTTPMethod::Get, "/status", &WebDriverService::status },
+    { HTTPMethod::Get, "/session/$sessionId/timeouts", &WebDriverService::getTimeouts },
     { HTTPMethod::Post, "/session/$sessionId/timeouts", &WebDriverService::setTimeouts },
 
     { HTTPMethod::Post, "/session/$sessionId/url", &WebDriverService::go },
@@ -128,6 +129,7 @@ const WebDriverService::Command WebDriverService::s_commands[] = {
     { HTTPMethod::Get, "/session/$sessionId/element/$elementId/selected", &WebDriverService::isElementSelected },
     { HTTPMethod::Get, "/session/$sessionId/element/$elementId/attribute/$name", &WebDriverService::getElementAttribute },
     { HTTPMethod::Get, "/session/$sessionId/element/$elementId/property/$name", &WebDriverService::getElementProperty },
+    { HTTPMethod::Get, "/session/$sessionId/element/$elementId/css/$name", &WebDriverService::getElementCSSValue },
     { HTTPMethod::Get, "/session/$sessionId/element/$elementId/text", &WebDriverService::getElementText },
     { HTTPMethod::Get, "/session/$sessionId/element/$elementId/name", &WebDriverService::getElementTagName },
     { HTTPMethod::Get, "/session/$sessionId/element/$elementId/rect", &WebDriverService::getElementRect },
@@ -270,6 +272,22 @@ void WebDriverService::sendResponse(Function<void (HTTPRequestHandler::Response&
     replyHandler({ result.httpStatusCode(), responseObject->toJSONString().utf8(), ASCIILiteral("application/json; charset=utf-8") });
 }
 
+static bool integerValue(JSON::Value& value, int& output)
+{
+    // Bail if an integer value cannot be retrieved.
+    if (!value.asInteger(output))
+        return false;
+
+    // If the contained value is a double, bail in case it doesn't match the integer
+    // value, i.e. if the double value was not originally in integer form.
+    // https://w3c.github.io/webdriver/webdriver-spec.html#dfn-integer
+    double doubleValue;
+    if (value.asDouble(doubleValue) && doubleValue != output)
+        return false;
+
+    return true;
+}
+
 static std::optional<Timeouts> deserializeTimeouts(JSON::Object& timeoutsObject)
 {
     // §8.5 Set Timeouts.
@@ -281,7 +299,7 @@ static std::optional<Timeouts> deserializeTimeouts(JSON::Object& timeoutsObject)
             continue;
 
         int timeoutMS;
-        if (it->value->type() != JSON::Value::Type::Integer || !it->value->asInteger(timeoutMS) || timeoutMS < 0 || timeoutMS > INT_MAX)
+        if (!integerValue(*it->value, timeoutMS) || timeoutMS < 0 || timeoutMS > INT_MAX)
             return std::nullopt;
 
         if (it->key == "script")
@@ -328,6 +346,9 @@ void WebDriverService::parseCapabilities(const JSON::Object& matchedCapabilities
     bool acceptInsecureCerts;
     if (matchedCapabilities.getBoolean(ASCIILiteral("acceptInsecureCerts"), acceptInsecureCerts))
         capabilities.acceptInsecureCerts = acceptInsecureCerts;
+    bool setWindowRect;
+    if (matchedCapabilities.getBoolean(ASCIILiteral("setWindowRect"), setWindowRect))
+        capabilities.setWindowRect = setWindowRect;
     String browserName;
     if (matchedCapabilities.getString(ASCIILiteral("browserName"), browserName))
         capabilities.browserName = browserName;
@@ -421,12 +442,8 @@ RefPtr<JSON::Object> WebDriverService::mergeCapabilities(const JSON::Object& req
         result->setValue(it->key, RefPtr<JSON::Value>(it->value));
 
     auto firstMatchEnd = firstMatchCapabilities.end();
-    for (auto it = firstMatchCapabilities.begin(); it != firstMatchEnd; ++it) {
-        if (requiredCapabilities.find(it->key) != requiredEnd)
-            return nullptr;
-
+    for (auto it = firstMatchCapabilities.begin(); it != firstMatchEnd; ++it)
         result->setValue(it->key, RefPtr<JSON::Value>(it->value));
-    }
 
     return result;
 }
@@ -448,6 +465,8 @@ RefPtr<JSON::Object> WebDriverService::matchCapabilities(const JSON::Object& mer
         matchedCapabilities->setString(ASCIILiteral("platformName"), platformCapabilities.platformName.value());
     if (platformCapabilities.acceptInsecureCerts)
         matchedCapabilities->setBoolean(ASCIILiteral("acceptInsecureCerts"), platformCapabilities.acceptInsecureCerts.value());
+    if (platformCapabilities.setWindowRect)
+        matchedCapabilities->setBoolean(ASCIILiteral("setWindowRect"), platformCapabilities.setWindowRect.value());
 
     auto end = mergedCapabilities.end();
     for (auto it = mergedCapabilities.begin(); it != end; ++it) {
@@ -552,6 +571,18 @@ RefPtr<JSON::Object> WebDriverService::processCapabilities(const JSON::Object& p
             completionHandler(CommandResult::fail(CommandResult::ErrorCode::InvalidArgument, String("Invalid firstMatch capabilities")));
             return nullptr;
         }
+
+        // Validate here that firstMatchCapabilities don't shadow alwaysMatchCapabilities.
+        auto requiredEnd = requiredCapabilities->end();
+        auto firstMatchEnd = firstMatchCapabilities->end();
+        for (auto it = firstMatchCapabilities->begin(); it != firstMatchEnd; ++it) {
+            if (requiredCapabilities->find(it->key) != requiredEnd) {
+                completionHandler(CommandResult::fail(CommandResult::ErrorCode::InvalidArgument,
+                    makeString("Invalid firstMatch capabilities: key ", it->key, " is present in alwaysMatch")));
+                return nullptr;
+            }
+        }
+
         // 5.2. Append validated capabilities to validated first match capabilities.
         validatedFirstMatchCapabilitiesList.uncheckedAppend(WTFMove(firstMatchCapabilities));
     }
@@ -594,9 +625,9 @@ void WebDriverService::newSession(RefPtr<JSON::Object>&& parameters, Function<vo
     parseCapabilities(*matchedCapabilities, capabilities);
     auto sessionHost = std::make_unique<SessionHost>(WTFMove(capabilities));
     auto* sessionHostPtr = sessionHost.get();
-    sessionHostPtr->connectToBrowser([this, sessionHost = WTFMove(sessionHost), completionHandler = WTFMove(completionHandler)](SessionHost::Succeeded succeeded) mutable {
-        if (succeeded == SessionHost::Succeeded::No) {
-            completionHandler(CommandResult::fail(CommandResult::ErrorCode::SessionNotCreated, String("Failed to connect to browser")));
+    sessionHostPtr->connectToBrowser([this, sessionHost = WTFMove(sessionHost), completionHandler = WTFMove(completionHandler)](std::optional<String> error) mutable {
+        if (error) {
+            completionHandler(CommandResult::fail(CommandResult::ErrorCode::SessionNotCreated, makeString("Failed to connect to browser: ", error.value())));
             return;
         }
 
@@ -624,29 +655,8 @@ void WebDriverService::newSession(RefPtr<JSON::Object>&& parameters, Function<vo
                 capabilitiesObject->setString(ASCIILiteral("platformName"), capabilities.platformName.value());
             if (capabilities.acceptInsecureCerts)
                 capabilitiesObject->setBoolean(ASCIILiteral("acceptInsecureCerts"), capabilities.acceptInsecureCerts.value());
-            if (capabilities.timeouts) {
-                RefPtr<JSON::Object> timeoutsObject = JSON::Object::create();
-                if (capabilities.timeouts.value().script)
-                    timeoutsObject->setInteger(ASCIILiteral("script"), capabilities.timeouts.value().script.value().millisecondsAs<int>());
-                if (capabilities.timeouts.value().pageLoad)
-                    timeoutsObject->setInteger(ASCIILiteral("pageLoad"), capabilities.timeouts.value().pageLoad.value().millisecondsAs<int>());
-                if (capabilities.timeouts.value().implicit)
-                    timeoutsObject->setInteger(ASCIILiteral("implicit"), capabilities.timeouts.value().implicit.value().millisecondsAs<int>());
-                capabilitiesObject->setObject(ASCIILiteral("timeouts"), WTFMove(timeoutsObject));
-            }
-            if (capabilities.pageLoadStrategy) {
-                switch (capabilities.pageLoadStrategy.value()) {
-                case PageLoadStrategy::None:
-                    capabilitiesObject->setString(ASCIILiteral("pageLoadStrategy"), "none");
-                    break;
-                case PageLoadStrategy::Normal:
-                    capabilitiesObject->setString(ASCIILiteral("pageLoadStrategy"), "normal");
-                    break;
-                case PageLoadStrategy::Eager:
-                    capabilitiesObject->setString(ASCIILiteral("pageLoadStrategy"), "eager");
-                    break;
-                }
-            }
+            if (capabilities.setWindowRect)
+                capabilitiesObject->setBoolean(ASCIILiteral("setWindowRect"), capabilities.setWindowRect.value());
             if (capabilities.unhandledPromptBehavior) {
                 switch (capabilities.unhandledPromptBehavior.value()) {
                 case UnhandledPromptBehavior::Dismiss:
@@ -666,6 +676,25 @@ void WebDriverService::newSession(RefPtr<JSON::Object>&& parameters, Function<vo
                     break;
                 }
             }
+            switch (capabilities.pageLoadStrategy.value_or(PageLoadStrategy::Normal)) {
+            case PageLoadStrategy::None:
+                capabilitiesObject->setString(ASCIILiteral("pageLoadStrategy"), "none");
+                break;
+            case PageLoadStrategy::Normal:
+                capabilitiesObject->setString(ASCIILiteral("pageLoadStrategy"), "normal");
+                break;
+            case PageLoadStrategy::Eager:
+                capabilitiesObject->setString(ASCIILiteral("pageLoadStrategy"), "eager");
+                break;
+            }
+            // FIXME: implement proxy support.
+            capabilitiesObject->setObject(ASCIILiteral("proxy"), JSON::Object::create());
+            RefPtr<JSON::Object> timeoutsObject = JSON::Object::create();
+            timeoutsObject->setInteger(ASCIILiteral("script"), m_session->scriptTimeout().millisecondsAs<int>());
+            timeoutsObject->setInteger(ASCIILiteral("pageLoad"), m_session->pageLoadTimeout().millisecondsAs<int>());
+            timeoutsObject->setInteger(ASCIILiteral("implicit"), m_session->implicitWaitTimeout().millisecondsAs<int>());
+            capabilitiesObject->setObject(ASCIILiteral("timeouts"), WTFMove(timeoutsObject));
+
             resultObject->setObject(ASCIILiteral("capabilities"), WTFMove(capabilitiesObject));
             completionHandler(CommandResult::success(WTFMove(resultObject)));
         });
@@ -701,6 +730,16 @@ void WebDriverService::status(RefPtr<JSON::Object>&&, Function<void (CommandResu
     body->setBoolean(ASCIILiteral("ready"), !m_session);
     body->setString(ASCIILiteral("message"), m_session ? ASCIILiteral("A session already exists") : ASCIILiteral("No sessions"));
     completionHandler(CommandResult::success(WTFMove(body)));
+}
+
+void WebDriverService::getTimeouts(RefPtr<JSON::Object>&& parameters, Function<void (CommandResult&&)>&& completionHandler)
+{
+    // §8.4 Get Timeouts.
+    // https://w3c.github.io/webdriver/webdriver-spec.html#get-timeouts
+    if (!findSessionOrCompleteWithError(*parameters, completionHandler))
+        return;
+
+    m_session->getTimeouts(WTFMove(completionHandler));
 }
 
 void WebDriverService::setTimeouts(RefPtr<JSON::Object>&& parameters, Function<void (CommandResult&&)>&& completionHandler)
@@ -1162,6 +1201,26 @@ void WebDriverService::getElementProperty(RefPtr<JSON::Object>&& parameters, Fun
     }
 
     m_session->getElementProperty(elementID.value(), attribute, WTFMove(completionHandler));
+}
+
+void WebDriverService::getElementCSSValue(RefPtr<JSON::Object>&& parameters, Function<void (CommandResult&&)>&& completionHandler)
+{
+    // §13.4 Get Element CSS Value
+    // https://w3c.github.io/webdriver/webdriver-spec.html#get-element-css-value
+    if (!findSessionOrCompleteWithError(*parameters, completionHandler))
+        return;
+
+    auto elementID = findElementOrCompleteWithError(*parameters, completionHandler);
+    if (!elementID)
+        return;
+
+    String cssProperty;
+    if (!parameters->getString(ASCIILiteral("name"), cssProperty)) {
+        completionHandler(CommandResult::fail(CommandResult::ErrorCode::InvalidArgument));
+        return;
+    }
+
+    m_session->getElementCSSValue(elementID.value(), cssProperty, WTFMove(completionHandler));
 }
 
 void WebDriverService::getElementText(RefPtr<JSON::Object>&& parameters, Function<void (CommandResult&&)>&& completionHandler)

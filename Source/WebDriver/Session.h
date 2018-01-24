@@ -49,10 +49,12 @@ public:
 
     const String& id() const { return m_id; }
     const Capabilities& capabilities() const;
+    Seconds scriptTimeout() const  { return m_scriptTimeout; }
+    Seconds pageLoadTimeout() const { return m_pageLoadTimeout; }
+    Seconds implicitWaitTimeout() const { return m_implicitWaitTimeout; }
 
     enum class FindElementsMode { Single, Multiple };
     enum class ExecuteScriptMode { Sync, Async };
-    enum class Timeout { Script, PageLoad, Implicit };
 
     struct Cookie {
         String name;
@@ -89,6 +91,7 @@ public:
     void isElementSelected(const String& elementID, Function<void (CommandResult&&)>&&);
     void getElementAttribute(const String& elementID, const String& attribute, Function<void (CommandResult&&)>&&);
     void getElementProperty(const String& elementID, const String& attribute, Function<void (CommandResult&&)>&&);
+    void getElementCSSValue(const String& elementID, const String& cssProperty, Function<void (CommandResult&&)>&&);
     void getElementText(const String& elementID, Function<void (CommandResult&&)>&&);
     void getElementTagName(const String& elementID, Function<void (CommandResult&&)>&&);
     void getElementRect(const String& elementID, Function<void (CommandResult&&)>&&);
@@ -179,8 +182,10 @@ private:
     void performKeyboardInteractions(Vector<KeyboardInteraction>&&, Function<void (CommandResult&&)>&&);
 
     std::unique_ptr<SessionHost> m_host;
-    Timeouts m_timeouts;
     String m_id;
+    Seconds m_scriptTimeout;
+    Seconds m_pageLoadTimeout;
+    Seconds m_implicitWaitTimeout;
     std::optional<String> m_toplevelBrowsingContext;
     std::optional<String> m_currentBrowsingContext;
 };
