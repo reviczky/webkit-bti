@@ -3,6 +3,7 @@ webkit2gtk (2.19.90-1) UNRELEASED; urgency=medium
   * New upstream development release.
   * debian/rules:
     + Use -O1 in sh3 and sh4 (thanks, John Paul Adrian Glaubitz).
+  * Refresh all patches.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 05 Feb 2018 14:19:43 +0200
 
