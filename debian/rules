@@ -25,6 +25,11 @@ ifeq (,$(filter $(DEB_HOST_ARCH),amd64 ppc64 ppc64el))
 	CFLAGS := $(CFLAGS:-g=-g1)
 endif
 
+# See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=81426
+ifneq (,$(filter $(DEB_HOST_ARCH),sh3 sh4))
+	CFLAGS := $(CFLAGS:-O2=-O1)
+endif
+
 ifeq (,$(filter $(DEB_HOST_ARCH),i386 amd64 hurd-i386 kfreebsd-i386 kfreebsd-amd64 armhf arm64))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF
 endif
