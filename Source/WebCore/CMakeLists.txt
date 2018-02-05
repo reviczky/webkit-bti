@@ -18,6 +18,7 @@ list(APPEND WebCore_UNIFIED_SOURCE_LIST_FILES
 set(WebCore_INCLUDE_DIRECTORIES
     "${CMAKE_BINARY_DIR}"
     "${WEBCORE_DIR}"
+    "${WEBCORE_DIR}/ForwardingHeaders"
     "${WEBCORE_DIR}/Modules/airplay"
     "${WEBCORE_DIR}/Modules/beacon"
     "${WEBCORE_DIR}/Modules/applepay"
@@ -68,6 +69,7 @@ set(WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/cssjit"
     "${WEBCORE_DIR}/dom"
     "${WEBCORE_DIR}/dom/default"
+    "${WEBCORE_DIR}/dom/messageports"
     "${WEBCORE_DIR}/domjit"
     "${WEBCORE_DIR}/editing"
     "${WEBCORE_DIR}/fileapi"
@@ -142,7 +144,6 @@ set(WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/xml/parser"
     "${DERIVED_SOURCES_WEBCORE_DIR}"
     "${PAL_DIR}"
-    "${CMAKE_SOURCE_DIR}/Source"
 )
 
 set(WebCore_SYSTEM_INCLUDE_DIRECTORIES
@@ -449,6 +450,7 @@ set(WebCore_NON_SVG_IDL_FILES
     animation/AnimationPlaybackEventInit.idl
     animation/AnimationTimeline.idl
     animation/CompositeOperation.idl
+    animation/ComputedTimingProperties.idl
     animation/DocumentTimeline.idl
     animation/FillMode.idl
     animation/IterationCompositeOperation.idl
@@ -1126,8 +1128,6 @@ if (ENABLE_ENCRYPTED_MEDIA)
         html/MediaEncryptedEvent.cpp
     )
     list(APPEND WebCore_IDL_FILES
-    )
-    list(APPEND WebCore_IDL_FILES
         Modules/encryptedmedia/MediaKeyMessageEvent.idl
         Modules/encryptedmedia/MediaKeySession.idl
         Modules/encryptedmedia/MediaKeySessionType.idl
@@ -1194,8 +1194,6 @@ if (ENABLE_WEBGL)
         html/canvas/WebGLVertexArrayObject.cpp
         html/canvas/WebGLVertexArrayObjectBase.cpp
         html/canvas/WebGLVertexArrayObjectOES.cpp
-
-        inspector/InspectorShaderProgram.cpp
     )
     list(APPEND WebCore_IDL_FILES
         html/canvas/ANGLEInstancedArrays.idl
@@ -1525,6 +1523,11 @@ if (ENABLE_USER_MESSAGE_HANDLERS)
         page/UserMessageHandlersNamespace.cpp
         page/WebKitNamespace.cpp
     )
+endif ()
+
+if (USE_OPENVR)
+  list(APPEND WebCore_INCLUDE_DIRECTORIES "${THIRDPARTY_DIR}/openvr/headers")
+  list(APPEND WebCore_LIBRARIES openvr_api)
 endif ()
 
 if (USE_WOFF2)
@@ -1949,6 +1952,7 @@ endif ()
 add_library(WebCoreTestSupport ${WebCoreTestSupport_LIBRARY_TYPE} ${WebCoreTestSupport_SOURCES})
 add_dependencies(WebCoreTestSupport WebCore WebCoreTestSupportBindings)
 target_include_directories(WebCoreTestSupport PUBLIC ${WebCoreTestSupport_INCLUDE_DIRECTORIES} ${WebCore_INCLUDE_DIRECTORIES})
+target_include_directories(WebCoreTestSupport SYSTEM PUBLIC ${WebCore_SYSTEM_INCLUDE_DIRECTORIES})
 target_link_libraries(WebCoreTestSupport ${WebCoreTestSupport_LIBRARIES})
 
 if (WebCoreTestSupport_OUTPUT_NAME)

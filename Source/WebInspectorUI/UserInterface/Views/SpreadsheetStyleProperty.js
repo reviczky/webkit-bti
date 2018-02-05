@@ -25,7 +25,7 @@
 
 WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
 {
-    constructor(delegate, property, index)
+    constructor(delegate, property)
     {
         super();
 
@@ -34,7 +34,6 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
         this._delegate = delegate || null;
         this._property = property;
         this._element = document.createElement("div");
-        this._element.dataset.propertyIndex = index;
 
         this._contentElement = null;
         this._nameElement = null;
@@ -57,6 +56,12 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
     get element() { return this._element; }
     get nameTextField() { return this._nameTextField; }
     get valueTextField() { return this._valueTextField; }
+    get enabled() { return this._property.enabled; }
+
+    set index(index)
+    {
+        this._element.dataset.propertyIndex = index;
+    }
 
     detached()
     {
@@ -143,10 +148,15 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
 
     // Private
 
-    _remove()
+    _remove(replacement = "")
     {
         this.element.remove();
-        this._property.remove();
+
+        if (replacement)
+            this._property.replaceWithText(replacement);
+        else
+            this._property.remove();
+
         this.detached();
 
         if (this._delegate && typeof this._delegate.spreadsheetStylePropertyRemoved === "function")
@@ -191,6 +201,7 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
         if (this._property.editable && this._property.enabled) {
             this._nameElement.tabIndex = 0;
             this._nameElement.addEventListener("beforeinput", this._handleNameBeforeInput.bind(this));
+            this._nameElement.addEventListener("paste", this._handleNamePaste.bind(this));
 
             this._nameTextField = new WI.SpreadsheetTextField(this, this._nameElement, this._nameCompletionDataProvider.bind(this));
 
@@ -260,9 +271,9 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
             }
         }
 
-        if (typeof this._delegate.spreadsheetCSSStyleDeclarationEditorFocusMoved === "function") {
+        if (typeof this._delegate.spreadsheetStylePropertyFocusMoved === "function") {
             // Move focus away from the current property, to the next or previous one, if exists, or to the next or previous rule, if exists.
-            this._delegate.spreadsheetCSSStyleDeclarationEditorFocusMoved({direction, willRemoveProperty, movedFromProperty: this});
+            this._delegate.spreadsheetStylePropertyFocusMoved(this, {direction, willRemoveProperty});
         }
 
         if (willRemoveProperty)
@@ -353,6 +364,18 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
             innerElement.textContent = value;
             this._handleValueChange();
         }, this);
+
+        if (typeof this._delegate.stylePropertyInlineSwatchActivated === "function") {
+            swatch.addEventListener(WI.InlineSwatch.Event.Activated, () => {
+                this._delegate.stylePropertyInlineSwatchActivated();
+            });
+        }
+
+        if (typeof this._delegate.stylePropertyInlineSwatchDeactivated === "function") {
+            swatch.addEventListener(WI.InlineSwatch.Event.Deactivated, () => {
+                this._delegate.stylePropertyInlineSwatchDeactivated();
+            });
+        }
 
         tokenElement.append(swatch.element, innerElement);
 
@@ -543,6 +566,23 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
         event.preventDefault();
         this._nameTextField.discardCompletion();
         this._valueTextField.startEditing();
+    }
+
+    _handleNamePaste(event)
+    {
+        let text = event.clipboardData.getData("text/plain");
+        if (!text || !text.includes(":"))
+            return;
+
+        event.preventDefault();
+
+        this._remove(text);
+
+        if (this._delegate.spreadsheetStylePropertyAddBlankPropertySoon) {
+            this._delegate.spreadsheetStylePropertyAddBlankPropertySoon(this, {
+                index: parseInt(this._element.dataset.propertyIndex) + 1,
+            });
+        }
     }
 
     _nameCompletionDataProvider(prefix)

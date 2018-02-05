@@ -254,7 +254,7 @@ public:
     LayoutUnit m_pageLogicalOffset;
     LayoutUnit m_intrinsicBorderForFieldset;
     
-    std::optional<RenderFragmentedFlow*> m_enclosingFragmentedFlow;
+    std::optional<WeakPtr<RenderFragmentedFlow>> m_enclosingFragmentedFlow;
 };
 
 typedef HashMap<const RenderBlock*, std::unique_ptr<RenderBlockRareData>> RenderBlockRareDataMap;
@@ -582,12 +582,12 @@ void RenderBlock::dropAnonymousBoxChild(RenderBlock& child)
     child.deleteLines();
 }
 
-RenderPtr<RenderObject> RenderBlock::takeChild(RenderObject& oldChild)
+RenderPtr<RenderObject> RenderBlock::takeChild(RenderTreeBuilder& builder, RenderObject& oldChild)
 {
     // No need to waste time in merging or removing empty anonymous blocks.
     // We can just bail out if our document is getting destroyed.
     if (renderTreeBeingDestroyed())
-        return RenderBox::takeChild(oldChild);
+        return RenderBox::takeChild(builder, oldChild);
 
     // If this child is a block, and if our previous and next siblings are both anonymous blocks
     // with inline content, then we can fold the inline content back together.
@@ -637,7 +637,7 @@ RenderPtr<RenderObject> RenderBlock::takeChild(RenderObject& oldChild)
 
     invalidateLineLayoutPath();
 
-    auto takenChild = RenderBox::takeChild(oldChild);
+    auto takenChild = RenderBox::takeChild(builder, oldChild);
 
     RenderObject* child = prev ? prev : next;
     if (canMergeAnonymousBlocks && child && !child->previousSibling() && !child->nextSibling() && canDropAnonymousBlockChild()) {
@@ -2225,6 +2225,9 @@ bool RenderBlock::nodeAtPoint(const HitTestRequest& request, HitTestResult& resu
         }
     }
 
+    if (!checkChildren && hitTestExcludedChildrenInBorder(request, result, locationInContainer, adjustedLocation, hitTestAction))
+        return true;
+
     // Check if the point is outside radii.
     if (!isRenderView() && style().hasBorderRadius()) {
         LayoutRect borderRect = borderBoxRect();
@@ -2830,7 +2833,7 @@ RenderFragmentedFlow* RenderBlock::cachedEnclosingFragmentedFlow() const
     if (!rareData || !rareData->m_enclosingFragmentedFlow)
         return nullptr;
 
-    return rareData->m_enclosingFragmentedFlow.value();
+    return rareData->m_enclosingFragmentedFlow.value().get();
 }
 
 bool RenderBlock::cachedEnclosingFragmentedFlowNeedsUpdate() const
@@ -2852,7 +2855,7 @@ void RenderBlock::setCachedEnclosingFragmentedFlowNeedsUpdate()
 RenderFragmentedFlow* RenderBlock::updateCachedEnclosingFragmentedFlow(RenderFragmentedFlow* fragmentedFlow) const
 {
     RenderBlockRareData& rareData = ensureBlockRareData(*this);
-    rareData.m_enclosingFragmentedFlow = fragmentedFlow;
+    rareData.m_enclosingFragmentedFlow = makeWeakPtr(fragmentedFlow);
 
     return fragmentedFlow;
 }
@@ -2864,7 +2867,7 @@ RenderFragmentedFlow* RenderBlock::locateEnclosingFragmentedFlow() const
         return updateCachedEnclosingFragmentedFlow(RenderBox::locateEnclosingFragmentedFlow());
 
     ASSERT(rareData->m_enclosingFragmentedFlow.value() == RenderBox::locateEnclosingFragmentedFlow());
-    return rareData->m_enclosingFragmentedFlow.value();
+    return rareData->m_enclosingFragmentedFlow.value().get();
 }
 
 void RenderBlock::resetEnclosingFragmentedFlowAndChildInfoIncludingDescendants(RenderFragmentedFlow*)
@@ -2973,14 +2976,6 @@ const RenderStyle& RenderBlock::outlineStyleForRepaint() const
     if (auto* continuation = this->continuation())
         return continuation->style();
     return RenderElement::outlineStyleForRepaint();
-}
-
-void RenderBlock::childBecameNonInline(RenderElement&)
-{
-    RenderTreeBuilder::current()->makeChildrenNonInline(*this);
-    if (isAnonymousBlock() && is<RenderBlock>(parent()))
-        downcast<RenderBlock>(*parent()).removeLeftoverAnonymousBlock(this);
-    // |this| may be dead here
 }
 
 void RenderBlock::updateHitTestResult(HitTestResult& result, const LayoutPoint& point)
@@ -3655,6 +3650,22 @@ void RenderBlock::paintExcludedChildrenInBorder(PaintInfo& paintInfo, const Layo
     
     LayoutPoint childPoint = flipForWritingModeForChild(box, paintOffset);
     box->paintAsInlineBlock(paintInfo, childPoint);
+}
+
+bool RenderBlock::hitTestExcludedChildrenInBorder(const HitTestRequest& request, HitTestResult& result, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, HitTestAction hitTestAction)
+{
+    if (!isFieldset())
+        return false;
+
+    auto* legend = findFieldsetLegend();
+    if (!legend || !legend->isExcludedFromNormalLayout() || legend->hasSelfPaintingLayer())
+        return false;
+
+    HitTestAction childHitTest = hitTestAction;
+    if (hitTestAction == HitTestChildBlockBackgrounds)
+        childHitTest = HitTestChildBlockBackground;
+    LayoutPoint childPoint = flipForWritingModeForChild(legend, accumulatedOffset);
+    return legend->nodeAtPoint(request, result, locationInContainer, childPoint, childHitTest);
 }
     
 } // namespace WebCore

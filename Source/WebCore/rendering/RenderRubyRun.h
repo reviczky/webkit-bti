@@ -50,14 +50,13 @@ public:
     bool hasRubyBase() const;
     RenderRubyText* rubyText() const;
     RenderRubyBase* rubyBase() const;
-    RenderRubyBase* rubyBaseSafe(); // creates the base if it doesn't already exist
 
     void layoutExcludedChildren(bool relayoutChildren) override;
     void layout() override;
     void layoutBlock(bool relayoutChildren, LayoutUnit pageHeight = 0) override;
 
     bool isChildAllowed(const RenderObject&, const RenderStyle&) const override;
-    RenderPtr<RenderObject> takeChild(RenderObject&) override;
+    RenderPtr<RenderObject> takeChild(RenderTreeBuilder&, RenderObject&) override;
 
     RenderBlock* firstLineBlock() const override;
 
@@ -73,7 +72,6 @@ public:
     }
     bool canBreakBefore(const LazyLineBreakIterator&) const;
     
-protected:
     RenderPtr<RenderRubyBase> createRubyBase() const;
 
 private:

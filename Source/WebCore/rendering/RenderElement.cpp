@@ -68,6 +68,7 @@
 #include "RenderTheme.h"
 #include "RenderTreeBuilder.h"
 #include "RenderView.h"
+#include "SVGImage.h"
 #include "SVGRenderSupport.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
@@ -479,14 +480,14 @@ void RenderElement::addChildIgnoringContinuation(RenderTreeBuilder& builder, Ren
     builder.insertChild(*this, WTFMove(newChild), beforeChild);
 }
 
-RenderPtr<RenderObject> RenderElement::takeChild(RenderObject& oldChild)
+RenderPtr<RenderObject> RenderElement::takeChild(RenderTreeBuilder&, RenderObject& oldChild)
 {
     return takeChildInternal(oldChild);
 }
 
-void RenderElement::removeAndDestroyChild(RenderObject& oldChild)
+void RenderElement::removeAndDestroyChild(RenderTreeBuilder& builder, RenderObject& oldChild)
 {
-    auto toDestroy = takeChild(oldChild);
+    auto toDestroy = takeChild(builder, oldChild);
 }
 
 void RenderElement::destroyLeftoverChildren()
@@ -494,7 +495,7 @@ void RenderElement::destroyLeftoverChildren()
     while (m_firstChild) {
         if (auto* node = m_firstChild->node())
             node->setRenderer(nullptr);
-        removeAndDestroyChild(*m_firstChild);
+        removeAndDestroyChild(*RenderTreeBuilder::current(), *m_firstChild);
     }
 }
 
@@ -902,26 +903,6 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
         view().frameView().updateExtendBackgroundIfNecessary();
 }
 
-void RenderElement::handleDynamicFloatPositionChange()
-{
-    // We have gone from not affecting the inline status of the parent flow to suddenly
-    // having an impact.  See if there is a mismatch between the parent flow's
-    // childrenInline() state and our state.
-    setInline(style().isDisplayInlineType());
-    if (isInline() != parent()->childrenInline()) {
-        if (!isInline())
-            downcast<RenderBoxModelObject>(*parent()).childBecameNonInline(*this);
-        else {
-            // An anonymous block must be made to wrap this inline.
-            auto newBlock = downcast<RenderBlock>(*parent()).createAnonymousBlock();
-            auto& block = *newBlock;
-            parent()->insertChildInternal(WTFMove(newBlock), this);
-            auto thisToMove = parent()->takeChildInternal(*this);
-            block.insertChildInternal(WTFMove(thisToMove), nullptr);
-        }
-    }
-}
-
 void RenderElement::removeAnonymousWrappersForInlinesIfNecessary()
 {
     // FIXME: Move to RenderBlock.
@@ -972,8 +953,14 @@ void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldS
     updateImage(oldStyle ? oldStyle->maskBoxImage().image() : nullptr, m_style.maskBoxImage().image());
     updateShapeImage(oldStyle ? oldStyle->shapeOutside() : nullptr, m_style.shapeOutside());
 
-    if (s_affectsParentBlock)
-        handleDynamicFloatPositionChange();
+    if (s_affectsParentBlock) {
+        // We have gone from not affecting the inline status of the parent flow to suddenly
+        // having an impact. See if there is a mismatch between the parent flow's
+        // childrenInline() state and our state.
+        setInline(style().isDisplayInlineType());
+        if (isInline() != parent()->childrenInline())
+            RenderTreeBuilder::current()->childFlowStateChangesAndAffectsParentBlock(*this);
+    }
 
     if (s_noLongerAffectsParentBlock)
         parent()->removeAnonymousWrappersForInlinesIfNecessary();
@@ -1482,8 +1469,12 @@ bool RenderElement::repaintForPausedImageAnimationsIfNeeded(const IntRect& visib
 
     repaint();
 
-    if (auto* image = cachedImage.image())
-        image->startAnimation();
+    if (auto* image = cachedImage.image()) {
+        if (is<SVGImage>(image))
+            downcast<SVGImage>(image)->scheduleStartAnimation();
+        else
+            image->startAnimation();
+    }
 
     // For directly-composited animated GIFs it does not suffice to call repaint() to resume animation. We need to mark the image as changed.
     if (is<RenderBoxModelObject>(*this))
