@@ -78,29 +78,18 @@ RenderRubyText* RenderRubyRun::rubyText() const
     // If in future it becomes necessary to support floating or positioned ruby text,
     // layout will have to be changed to handle them properly.
     ASSERT(!child || !child->isRubyText() || !child->isFloatingOrOutOfFlowPositioned());
-    return child && child->isRubyText() ? static_cast<RenderRubyText*>(child) : 0;
+    return child && child->isRubyText() ? static_cast<RenderRubyText*>(child) : nullptr;
 }
 
 RenderRubyBase* RenderRubyRun::rubyBase() const
 {
     RenderObject* child = lastChild();
-    return child && child->isRubyBase() ? static_cast<RenderRubyBase*>(child) : 0;
-}
-
-RenderRubyBase* RenderRubyRun::rubyBaseSafe()
-{
-    RenderRubyBase* base = rubyBase();
-    if (!base) {
-        auto newBase = createRubyBase();
-        base = newBase.get();
-        RenderTreeBuilder::current()->insertChildToRenderBlockFlow(*this, WTFMove(newBase));
-    }
-    return base;
+    return child && child->isRubyBase() ? static_cast<RenderRubyBase*>(child) : nullptr;
 }
 
 RenderBlock* RenderRubyRun::firstLineBlock() const
 {
-    return 0;
+    return nullptr;
 }
 
 bool RenderRubyRun::isChildAllowed(const RenderObject& child, const RenderStyle&) const
@@ -108,7 +97,7 @@ bool RenderRubyRun::isChildAllowed(const RenderObject& child, const RenderStyle&
     return child.isInline() || child.isRubyText();
 }
 
-RenderPtr<RenderObject> RenderRubyRun::takeChild(RenderObject& child)
+RenderPtr<RenderObject> RenderRubyRun::takeChild(RenderTreeBuilder& builder, RenderObject& child)
 {
     // If the child is a ruby text, then merge the ruby base with the base of
     // the right sibling run, if possible.
@@ -119,7 +108,7 @@ RenderPtr<RenderObject> RenderRubyRun::takeChild(RenderObject& child)
             // Ruby run without a base can happen only at the first run.
             RenderRubyRun& rightRun = downcast<RenderRubyRun>(*rightNeighbour);
             if (rightRun.hasRubyBase()) {
-                RenderRubyBase* rightBase = rightRun.rubyBaseSafe();
+                RenderRubyBase* rightBase = rightRun.rubyBase();
                 // Collect all children in a single base, then swap the bases.
                 RenderTreeBuilder::current()->moveRubyChildren(*rightBase, *base);
                 moveChildTo(&rightRun, base, RenderBoxModelObject::NormalizeAfterInsertion::No);
@@ -130,13 +119,13 @@ RenderPtr<RenderObject> RenderRubyRun::takeChild(RenderObject& child)
         }
     }
 
-    auto takenChild = RenderBlockFlow::takeChild(child);
+    auto takenChild = RenderBlockFlow::takeChild(builder, child);
 
     if (!beingDestroyed() && !renderTreeBeingDestroyed()) {
         // Check if our base (if any) is now empty. If so, destroy it.
         RenderBlock* base = rubyBase();
         if (base && !base->firstChild()) {
-            auto takenBase = RenderBlockFlow::takeChild(*base);
+            auto takenBase = RenderBlockFlow::takeChild(builder, *base);
             base->deleteLines();
         }
     }

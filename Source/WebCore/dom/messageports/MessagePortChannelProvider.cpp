@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -24,32 +24,31 @@
  */
 
 #include "config.h"
-#include "AuthenticationManager.h"
+#include "MessagePortChannelProvider.h"
 
-#if !USE(NETWORK_SESSION)
-using namespace WebCore;
+#include "MessagePortChannelProviderImpl.h"
+#include <wtf/MainThread.h>
 
-namespace WebKit {
+namespace WebCore {
 
-void AuthenticationManager::receivedCredential(const AuthenticationChallenge&, const Credential&)
+static MessagePortChannelProvider* globalProvider;
+
+MessagePortChannelProvider& MessagePortChannelProvider::singleton()
 {
+    static std::once_flag onceFlag;
+    std::call_once(onceFlag, [] {
+        if (!globalProvider)
+            globalProvider = new MessagePortChannelProviderImpl;
+    });
+
+    return *globalProvider;
 }
 
-void AuthenticationManager::receivedRequestToContinueWithoutCredential(const AuthenticationChallenge&)
+void MessagePortChannelProvider::setSharedProvider(MessagePortChannelProvider& provider)
 {
+    RELEASE_ASSERT(isMainThread());
+    RELEASE_ASSERT(!globalProvider);
+    globalProvider = &provider;
 }
 
-void AuthenticationManager::receivedCancellation(const AuthenticationChallenge&)
-{
-}
-
-void AuthenticationManager::receivedRequestToPerformDefaultHandling(const AuthenticationChallenge&)
-{
-}
-
-void AuthenticationManager::receivedChallengeRejection(const AuthenticationChallenge&)
-{
-}
-
-}
-#endif
+} // namespace WebCore

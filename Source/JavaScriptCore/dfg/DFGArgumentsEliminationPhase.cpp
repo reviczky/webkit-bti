@@ -484,7 +484,9 @@ private:
                         }
                         ASSERT(!heap.payload().isTop());
                         VirtualRegister reg(heap.payload().value32());
-                        clobberedByThisBlock.operand(reg) = true;
+                        // The register may not point to an argument or local, for example if we are looking at SetArgumentCountIncludingThis.
+                        if (!reg.isHeader())
+                            clobberedByThisBlock.operand(reg) = true;
                     },
                     NoOpClobberize());
             }
@@ -687,7 +689,7 @@ private:
                         break;
                     
                     DFG_ASSERT(
-                        m_graph, node, node->child1()->op() == PhantomDirectArguments);
+                        m_graph, node, node->child1()->op() == PhantomDirectArguments, node->child1()->op());
                     VirtualRegister reg =
                         virtualRegisterForArgument(node->capturedArgumentsOffset().offset() + 1) +
                         node->origin.semantic.stackOffset();
@@ -880,7 +882,7 @@ private:
                             if (argumentCountIncludingThis <= varargsData->limit) {
                                 storeArgumentCountIncludingThis(argumentCountIncludingThis);
 
-                                DFG_ASSERT(m_graph, node, varargsData->limit - 1 >= varargsData->mandatoryMinimum);
+                                DFG_ASSERT(m_graph, node, varargsData->limit - 1 >= varargsData->mandatoryMinimum, varargsData->limit, varargsData->mandatoryMinimum);
                                 // Define our limit to exclude "this", since that's a bit easier to reason about.
                                 unsigned limit = varargsData->limit - 1;
 
@@ -969,7 +971,7 @@ private:
                                 
                                 storeArgumentCountIncludingThis(argumentCountIncludingThis);
 
-                                DFG_ASSERT(m_graph, node, varargsData->limit - 1 >= varargsData->mandatoryMinimum);
+                                DFG_ASSERT(m_graph, node, varargsData->limit - 1 >= varargsData->mandatoryMinimum, varargsData->limit, varargsData->mandatoryMinimum);
                                 // Define our limit to exclude "this", since that's a bit easier to reason about.
                                 unsigned limit = varargsData->limit - 1;
                                 Node* undefined = nullptr;

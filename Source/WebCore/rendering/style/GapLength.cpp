@@ -1,6 +1,5 @@
 /*
- * Copyright (C) 2009 Google Inc. All rights reserved.
- * Copyright (C) 2013 Apple Inc. All rights reserved.
+ * Copyright (C) 2018 Igalia S.L.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -30,24 +29,19 @@
  */
 
 #include "config.h"
-#include "MessagePortChannel.h"
+#include "GapLength.h"
 
-#include "InProcessMessagePortChannel.h"
-#include "MessagePort.h"
-#include "ScriptExecutionContext.h"
+#include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
-void MessagePortChannel::createChannelBetweenPorts(MessagePort& port1, MessagePort& port2)
+TextStream& operator<<(TextStream& ts, const GapLength& gapLength)
 {
-    // FIXME: Later this will become client-configurable.
-    // e.g. WK1 will use the InProcessMessagePortChannel, but WK2 will install a multi-process aware channel.
-    InProcessMessagePortChannel::createChannelBetweenPorts(port1, port2);
-}
-
-MessagePortChannel::MessagePortChannel()
-{
+    if (gapLength.isNormal())
+        ts << "normal";
+    else
+        ts << gapLength.length();
+    return ts;
 }
 
 } // namespace WebCore
-
