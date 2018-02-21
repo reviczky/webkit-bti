@@ -127,7 +127,7 @@ RenderBlockFlow::~RenderBlockFlow()
     // Do not add any code here. Add it to willBeDestroyed() instead.
 }
 
-void RenderBlockFlow::willBeDestroyed()
+void RenderBlockFlow::willBeDestroyed(RenderTreeBuilder& builder)
 {
     if (!renderTreeBeingDestroyed()) {
         if (firstRootBox()) {
@@ -154,7 +154,7 @@ void RenderBlockFlow::willBeDestroyed()
     blockWillBeDestroyed();
 
     // NOTE: This jumps down to RenderBox, bypassing RenderBlock since it would do duplicate work.
-    RenderBox::willBeDestroyed();
+    RenderBox::willBeDestroyed(builder);
 }
 
 RenderBlockFlow* RenderBlockFlow::previousSiblingWithOverhangingFloats(bool& parentHasFloats) const
@@ -2023,7 +2023,7 @@ void RenderBlockFlow::styleDidChange(StyleDifference diff, const RenderStyle* ol
     // Fresh floats need to be reparented if they actually belong to the previous anonymous block.
     // It copies the logic of RenderBlock::addChildIgnoringContinuation
     if (noLongerAffectsParentBlock() && style().isFloating() && previousSibling() && previousSibling()->isAnonymousBlock())
-        downcast<RenderBoxModelObject>(*parent()).moveChildTo(&downcast<RenderBoxModelObject>(*previousSibling()), this, RenderBoxModelObject::NormalizeAfterInsertion::No);
+        RenderTreeBuilder::current()->moveChildTo(downcast<RenderBoxModelObject>(*parent()), downcast<RenderBoxModelObject>(*previousSibling()), *this, RenderTreeBuilder::NormalizeAfterInsertion::No);
 
     if (diff >= StyleDifferenceRepaint) {
         // FIXME: This could use a cheaper style-only test instead of SimpleLineLayout::canUseFor.
@@ -2103,13 +2103,6 @@ void RenderBlockFlow::addFloatsToNewParent(RenderBlockFlow& toBlockFlow) const
             continue;
         toBlockFlow.m_floatingObjects->add(floatingObject->cloneForNewParent());
     }
-}
-
-void RenderBlockFlow::moveAllChildrenIncludingFloatsTo(RenderBlock& toBlock, RenderBoxModelObject::NormalizeAfterInsertion normalizeAfterInsertion)
-{
-    auto& toBlockFlow = downcast<RenderBlockFlow>(toBlock);
-    moveAllChildrenTo(&toBlockFlow, normalizeAfterInsertion);
-    addFloatsToNewParent(toBlockFlow);
 }
 
 void RenderBlockFlow::addOverflowFromFloats()
@@ -3842,21 +3835,6 @@ void RenderBlockFlow::layoutExcludedChildren(bool relayoutChildren)
     determineLogicalLeftPositionForChild(*fragmentedFlow);
     
     fragmentedFlow->layoutFlowExcludedObjects(relayoutChildren);
-}
-
-void RenderBlockFlow::addChild(RenderTreeBuilder& builder, RenderPtr<RenderObject> newChild, RenderObject* beforeChild)
-{
-    builder.insertChildToRenderBlockFlow(*this, WTFMove(newChild), beforeChild);
-}
-
-RenderPtr<RenderObject> RenderBlockFlow::takeChild(RenderTreeBuilder& builder, RenderObject& oldChild)
-{
-    if (!renderTreeBeingDestroyed()) {
-        RenderFragmentedFlow* fragmentedFlow = multiColumnFlow();
-        if (fragmentedFlow && fragmentedFlow != &oldChild)
-            fragmentedFlow->fragmentedFlowRelativeWillBeRemoved(oldChild);
-    }
-    return RenderBlock::takeChild(builder, oldChild);
 }
 
 void RenderBlockFlow::checkForPaginationLogicalHeightChange(bool& relayoutChildren, LayoutUnit& pageLogicalHeight, bool& pageLogicalHeightChanged)

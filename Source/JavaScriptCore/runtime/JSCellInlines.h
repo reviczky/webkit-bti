@@ -29,7 +29,7 @@
 #include "CallFrame.h"
 #include "DeferGC.h"
 #include "Handle.h"
-#include "JSCell.h"
+#include "JSCast.h"
 #include "JSDestructibleObject.h"
 #include "JSObject.h"
 #include "JSString.h"
@@ -139,7 +139,7 @@ CompleteSubspace* JSCell::subspaceFor(VM& vm)
 {
     if (CellType::needsDestruction)
         return &vm.destructibleCellSpace;
-    return &vm.cellSpace;
+    return &vm.cellDangerousBitsSpace;
 }
 
 template<typename T>

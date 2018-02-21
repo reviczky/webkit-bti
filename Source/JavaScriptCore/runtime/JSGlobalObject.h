@@ -41,7 +41,6 @@
 #include "SpecialPointer.h"
 #include "StringPrototype.h"
 #include "SymbolPrototype.h"
-#include "TemplateRegistry.h"
 #include "VM.h"
 #include "Watchpoint.h"
 #include <JavaScriptCore/JSBase.h>
@@ -459,8 +458,6 @@ public:
     bool isMapPrototypeSetFastAndNonObservable();
     bool isSetPrototypeAddFastAndNonObservable();
 
-    TemplateRegistry m_templateRegistry;
-
     bool m_evalEnabled { true };
     bool m_webAssemblyEnabled { true };
     String m_evalDisabledErrorMessage;
@@ -491,7 +488,7 @@ public:
     const RuntimeFlags& runtimeFlags() const { return m_runtimeFlags; }
 
 protected:
-    JS_EXPORT_PRIVATE explicit JSGlobalObject(VM&, Structure*, const GlobalObjectMethodTable* = 0, RefPtr<ThreadLocalCache> = nullptr);
+    JS_EXPORT_PRIVATE explicit JSGlobalObject(VM&, Structure*, const GlobalObjectMethodTable* = nullptr, RefPtr<ThreadLocalCache> = nullptr);
 
     JS_EXPORT_PRIVATE void finishCreation(VM&);
 
@@ -879,8 +876,6 @@ public:
         createRareDataIfNeeded();
         return m_rareData->opaqueJSClassData;
     }
-
-    TemplateRegistry& templateRegistry() { return m_templateRegistry; }
 
     static ptrdiff_t weakRandomOffset() { return OBJECT_OFFSETOF(JSGlobalObject, m_weakRandom); }
     double weakRandomNumber() { return m_weakRandom.get(); }

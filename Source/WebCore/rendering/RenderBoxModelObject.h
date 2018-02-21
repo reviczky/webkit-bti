@@ -245,7 +245,7 @@ protected:
     RenderBoxModelObject(Element&, RenderStyle&&, BaseTypeFlags);
     RenderBoxModelObject(Document&, RenderStyle&&, BaseTypeFlags);
 
-    void willBeDestroyed() override;
+    void willBeDestroyed(RenderTreeBuilder&) override;
 
     LayoutPoint adjustedPositionRelativeToOffsetParent(const LayoutPoint&) const;
 
@@ -275,29 +275,6 @@ public:
     void setFirstLetterRemainingText(RenderTextFragment&);
     void clearFirstLetterRemainingText();
 
-    // NormalizeAfterInsertion::Yes ensures that the destination subtree is consistent after the insertion (anonymous wrappers etc).
-    enum class NormalizeAfterInsertion { No, Yes };
-    void moveChildTo(RenderBoxModelObject* toBoxModelObject, RenderObject* child, RenderObject* beforeChild, NormalizeAfterInsertion);
-    void moveChildTo(RenderBoxModelObject* toBoxModelObject, RenderObject* child, NormalizeAfterInsertion normalizeAfterInsertion)
-    {
-        moveChildTo(toBoxModelObject, child, nullptr, normalizeAfterInsertion);
-    }
-    void moveAllChildrenTo(RenderBoxModelObject* toBoxModelObject, NormalizeAfterInsertion normalizeAfterInsertion)
-    {
-        moveAllChildrenTo(toBoxModelObject, nullptr, normalizeAfterInsertion);
-    }
-    void moveAllChildrenTo(RenderBoxModelObject* toBoxModelObject, RenderObject* beforeChild, NormalizeAfterInsertion normalizeAfterInsertion)
-    {
-        moveChildrenTo(toBoxModelObject, firstChild(), nullptr, beforeChild, normalizeAfterInsertion);
-    }
-    // Move all of the kids from |startChild| up to but excluding |endChild|. 0 can be passed as the |endChild| to denote
-    // that all the kids from |startChild| onwards should be moved.
-    void moveChildrenTo(RenderBoxModelObject* toBoxModelObject, RenderObject* startChild, RenderObject* endChild, NormalizeAfterInsertion normalizeAfterInsertion)
-    {
-        moveChildrenTo(toBoxModelObject, startChild, endChild, nullptr, normalizeAfterInsertion);
-    }
-    void moveChildrenTo(RenderBoxModelObject* toBoxModelObject, RenderObject* startChild, RenderObject* endChild, RenderObject* beforeChild, NormalizeAfterInsertion);
-
     enum ScaleByEffectiveZoomOrNot { ScaleByEffectiveZoom, DoNotScaleByEffectiveZoom };
     LayoutSize calculateImageIntrinsicDimensions(StyleImage*, const LayoutSize& scaledPositioningAreaSize, ScaleByEffectiveZoomOrNot) const;
 
@@ -307,7 +284,7 @@ public:
 
 private:
     ContinuationChainNode& ensureContinuationChainNode();
-    void removeAndDestroyAllContinuations();
+    void removeAndDestroyAllContinuations(RenderTreeBuilder&);
 
     LayoutUnit computedCSSPadding(const Length&) const;
     
