@@ -39,7 +39,7 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 --- webkitgtk.orig/Source/WebCore/dom/ElementRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 @@ -46,6 +46,10 @@ struct SameSizeAsElementRareData : NodeR
-     void* pointers[9];
+     void* pointers[8];
  };
  
 +#if defined(__m68k__)
@@ -116,7 +116,7 @@ Index: webkitgtk/Source/WebCore/css/RuleSet.h
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/RuleSet.h
 +++ webkitgtk/Source/WebCore/css/RuleSet.h
-@@ -130,7 +130,11 @@ struct SameSizeAsRuleData {
+@@ -98,7 +98,11 @@ struct SameSizeAsRuleData {
      unsigned d[4];
  };
  

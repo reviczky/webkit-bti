@@ -28,5 +28,5 @@ Index: webkitgtk/Source/WTF/wtf/CMakeLists.txt
 +file(REMOVE ${CMAKE_BINARY_DIR}/test_atomics.cpp)
 +
  list(APPEND WTF_SOURCES
-     unicode/icu/CollatorICU.cpp
- )
+     unicode/CollatorDefault.cpp
+ 
