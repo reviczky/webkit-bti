@@ -18,7 +18,6 @@ list(APPEND WebCore_UNIFIED_SOURCE_LIST_FILES
 set(WebCore_INCLUDE_DIRECTORIES
     "${CMAKE_BINARY_DIR}"
     "${WEBCORE_DIR}"
-    "${WEBCORE_DIR}/ForwardingHeaders"
     "${WEBCORE_DIR}/Modules/airplay"
     "${WEBCORE_DIR}/Modules/beacon"
     "${WEBCORE_DIR}/Modules/applepay"
@@ -439,8 +438,6 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/webvr/VRLayerInit.idl
     Modules/webvr/VRPose.idl
     Modules/webvr/VRStageParameters.idl
-
-    accessibility/AccessibleNode.idl
 
     animation/Animatable.idl
     animation/AnimationEffect.idl

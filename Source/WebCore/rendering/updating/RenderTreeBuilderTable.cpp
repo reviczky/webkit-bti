@@ -166,8 +166,12 @@ void RenderTreeBuilder::Table::insertChild(RenderTableRow& parent, RenderPtr<Ren
     if (beforeChild && beforeChild->parent() != &parent)
         beforeChild = m_builder.splitAnonymousBoxesAroundChild(parent, beforeChild);
 
+    auto& newChild = *child.get();
     ASSERT(!beforeChild || is<RenderTableCell>(*beforeChild));
-    parent.RenderBox::addChild(m_builder, WTFMove(child), beforeChild);
+    m_builder.insertChildToRenderElement(parent, WTFMove(child), beforeChild);
+    // FIXME: child should always be a RenderTableCell at this point.
+    if (is<RenderTableCell>(newChild))
+        parent.didInsertTableCell(downcast<RenderTableCell>(newChild), beforeChild);
 }
 
 void RenderTreeBuilder::Table::insertChild(RenderTableSection& parent, RenderPtr<RenderObject> child, RenderObject* beforeChild)
@@ -175,8 +179,11 @@ void RenderTreeBuilder::Table::insertChild(RenderTableSection& parent, RenderPtr
     if (beforeChild && beforeChild->parent() != &parent)
         beforeChild = m_builder.splitAnonymousBoxesAroundChild(parent, beforeChild);
 
+    // FIXME: child should always be a RenderTableRow at this point.
+    if (is<RenderTableRow>(*child.get()))
+        parent.willInsertTableRow(downcast<RenderTableRow>(*child.get()), beforeChild);
     ASSERT(!beforeChild || is<RenderTableRow>(*beforeChild));
-    parent.RenderBox::addChild(m_builder, WTFMove(child), beforeChild);
+    m_builder.insertChildToRenderElement(parent, WTFMove(child), beforeChild);
 }
 
 void RenderTreeBuilder::Table::insertChild(RenderTable& parent, RenderPtr<RenderObject> child, RenderObject* beforeChild)
@@ -184,7 +191,13 @@ void RenderTreeBuilder::Table::insertChild(RenderTable& parent, RenderPtr<Render
     if (beforeChild && beforeChild->parent() != &parent)
         beforeChild = m_builder.splitAnonymousBoxesAroundChild(parent, beforeChild);
 
-    parent.RenderBox::addChild(m_builder, WTFMove(child), beforeChild);
+    auto& newChild = *child.get();
+    if (is<RenderTableSection>(newChild))
+        parent.willInsertTableSection(downcast<RenderTableSection>(newChild), beforeChild);
+    else if (is<RenderTableCol>(newChild))
+        parent.willInsertTableColumn(downcast<RenderTableCol>(newChild), beforeChild);
+
+    m_builder.insertChildToRenderElement(parent, WTFMove(child), beforeChild);
 }
 
 bool RenderTreeBuilder::Table::childRequiresTable(const RenderElement& parent, const RenderObject& child)
@@ -235,8 +248,8 @@ void RenderTreeBuilder::Table::collapseAndDestroyAnonymousSiblingRows(RenderTabl
             currentRow = currentRow->nextRow();
             continue;
         }
-        currentRow->moveAllChildrenTo(rowToInsertInto, RenderBoxModelObject::NormalizeAfterInsertion::No);
-        auto toDestroy = section->takeChild(m_builder, *currentRow);
+        m_builder.moveAllChildrenTo(*currentRow, *rowToInsertInto, RenderTreeBuilder::NormalizeAfterInsertion::No);
+        auto toDestroy = m_builder.takeChild(*section, *currentRow);
         currentRow = currentRow->nextRow();
     }
     if (rowToInsertInto)

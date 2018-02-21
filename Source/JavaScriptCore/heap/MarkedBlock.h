@@ -25,6 +25,7 @@
 #include "DestructionMode.h"
 #include "HeapCell.h"
 #include "IterationStatus.h"
+#include "SecurityOriginToken.h"
 #include "WeakSet.h"
 #include <wtf/Atomics.h>
 #include <wtf/Bitmap.h>
@@ -189,10 +190,12 @@ public:
         
         void removeFromDirectory();
         
-        void didAddToDirectory(BlockDirectory*, size_t index);
+        void didAddToDirectory(BlockDirectory*, size_t index, SecurityOriginToken);
         void didRemoveFromDirectory();
         
         void dumpState(PrintStream&);
+        
+        SecurityOriginToken securityOriginToken() const { return m_securityOriginToken; }
         
     private:
         Handle(Heap&, AlignedMemoryAllocator*, void*);
@@ -229,6 +232,8 @@ public:
         WeakSet m_weakSet;
         
         MarkedBlock* m_block { nullptr };
+        
+        SecurityOriginToken m_securityOriginToken { 0 };
     };
 
 private:    

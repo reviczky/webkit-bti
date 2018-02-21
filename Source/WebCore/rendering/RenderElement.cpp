@@ -136,6 +136,7 @@ RenderElement::RenderElement(Document& document, RenderStyle&& style, BaseTypeFl
 RenderElement::~RenderElement()
 {
     // Do not add any code here. Add it to willBeDestroyed() instead.
+    ASSERT(!m_firstChild);
 }
 
 RenderPtr<RenderElement> RenderElement::createFor(Element& element, RenderStyle&& style, RendererCreationType creationType)
@@ -455,11 +456,8 @@ void RenderElement::setStyle(RenderStyle&& style, StyleDifference minimalStyleDi
     }
 }
 
-void RenderElement::addChild(RenderTreeBuilder& builder, RenderPtr<RenderObject> newChild, RenderObject* beforeChild)
+void RenderElement::didInsertChild(RenderObject& child, RenderObject*)
 {
-    auto& child = *newChild;
-    builder.insertChildToRenderElement(*this, WTFMove(newChild), beforeChild);
-
     if (is<RenderText>(child))
         downcast<RenderText>(child).styleDidChange(StyleDifferenceEqual, nullptr);
     // SVG creates renderers for <g display="none">, as SVG requires children of hidden
@@ -475,158 +473,49 @@ void RenderElement::addChild(RenderTreeBuilder& builder, RenderPtr<RenderObject>
     SVGRenderSupport::childAdded(*this, child);
 }
 
-void RenderElement::addChildIgnoringContinuation(RenderTreeBuilder& builder, RenderPtr<RenderObject> newChild, RenderObject* beforeChild)
+RenderObject* RenderElement::attachRendererInternal(RenderPtr<RenderObject> child, RenderObject* beforeChild)
 {
-    builder.insertChild(*this, WTFMove(newChild), beforeChild);
-}
-
-RenderPtr<RenderObject> RenderElement::takeChild(RenderTreeBuilder&, RenderObject& oldChild)
-{
-    return takeChildInternal(oldChild);
-}
-
-void RenderElement::removeAndDestroyChild(RenderTreeBuilder& builder, RenderObject& oldChild)
-{
-    auto toDestroy = takeChild(builder, oldChild);
-}
-
-void RenderElement::destroyLeftoverChildren()
-{
-    while (m_firstChild) {
-        if (auto* node = m_firstChild->node())
-            node->setRenderer(nullptr);
-        removeAndDestroyChild(*RenderTreeBuilder::current(), *m_firstChild);
-    }
-}
-
-void RenderElement::insertChildInternal(RenderPtr<RenderObject> newChildPtr, RenderObject* beforeChild)
-{
-    RELEASE_ASSERT_WITH_MESSAGE(!view().frameView().layoutContext().layoutState(), "Layout must not mutate render tree");
-
-    ASSERT(canHaveChildren() || canHaveGeneratedChildren());
-    ASSERT(!newChildPtr->parent());
-    ASSERT(!isRenderBlockFlow() || (!newChildPtr->isTableSection() && !newChildPtr->isTableRow() && !newChildPtr->isTableCell()));
-
-    while (beforeChild && beforeChild->parent() && beforeChild->parent() != this)
-        beforeChild = beforeChild->parent();
-
-    ASSERT(!beforeChild || beforeChild->parent() == this);
-    ASSERT(!is<RenderText>(beforeChild) || !downcast<RenderText>(*beforeChild).inlineWrapperForDisplayContents());
-
-    // Take the ownership.
-    auto* newChild = newChildPtr.release();
-
-    newChild->setParent(this);
+    child->setParent(this);
 
     if (m_firstChild == beforeChild)
-        m_firstChild = newChild;
+        m_firstChild = child.get();
 
     if (beforeChild) {
-        RenderObject* previousSibling = beforeChild->previousSibling();
+        auto* previousSibling = beforeChild->previousSibling();
         if (previousSibling)
-            previousSibling->setNextSibling(newChild);
-        newChild->setPreviousSibling(previousSibling);
-        newChild->setNextSibling(beforeChild);
-        beforeChild->setPreviousSibling(newChild);
-    } else {
-        if (lastChild())
-            lastChild()->setNextSibling(newChild);
-        newChild->setPreviousSibling(lastChild());
-        m_lastChild = newChild;
+            previousSibling->setNextSibling(child.get());
+        child->setPreviousSibling(previousSibling);
+        child->setNextSibling(beforeChild);
+        beforeChild->setPreviousSibling(child.get());
+        return child.release();
     }
-
-    newChild->initializeFragmentedFlowStateOnInsertion();
-    if (!renderTreeBeingDestroyed()) {
-        newChild->insertedIntoTree();
-        if (is<RenderElement>(*newChild))
-            RenderCounter::rendererSubtreeAttached(downcast<RenderElement>(*newChild));
-    }
-
-    newChild->setNeedsLayoutAndPrefWidthsRecalc();
-    setPreferredLogicalWidthsDirty(true);
-    if (!normalChildNeedsLayout())
-        setChildNeedsLayout(); // We may supply the static position for an absolute positioned child.
-
-    if (AXObjectCache* cache = document().axObjectCache())
-        cache->childrenChanged(this, newChild);
-    if (is<RenderBlockFlow>(*this))
-        downcast<RenderBlockFlow>(*this).invalidateLineLayoutPath();
-    if (hasOutlineAutoAncestor() || outlineStyleForRepaint().outlineStyleIsAuto())
-        newChild->setHasOutlineAutoAncestor();
+    if (m_lastChild)
+        m_lastChild->setNextSibling(child.get());
+    child->setPreviousSibling(m_lastChild);
+    m_lastChild = child.get();
+    return child.release();
 }
 
-RenderPtr<RenderObject> RenderElement::takeChildInternal(RenderObject& oldChild)
+RenderPtr<RenderObject> RenderElement::detachRendererInternal(RenderObject& renderer)
 {
-    RELEASE_ASSERT_WITH_MESSAGE(!view().frameView().layoutContext().layoutState(), "Layout must not mutate render tree");
+    auto* parent = renderer.parent();
+    ASSERT(parent);
+    auto* nextSibling = renderer.nextSibling();
 
-    ASSERT(canHaveChildren() || canHaveGeneratedChildren());
-    ASSERT(oldChild.parent() == this);
-
-    if (oldChild.isFloatingOrOutOfFlowPositioned())
-        downcast<RenderBox>(oldChild).removeFloatingOrPositionedChildFromBlockLists();
-
-    // So that we'll get the appropriate dirty bit set (either that a normal flow child got yanked or
-    // that a positioned child got yanked). We also repaint, so that the area exposed when the child
-    // disappears gets repainted properly.
-    if (!renderTreeBeingDestroyed() && oldChild.everHadLayout()) {
-        oldChild.setNeedsLayoutAndPrefWidthsRecalc();
-        // We only repaint |oldChild| if we have a RenderLayer as its visual overflow may not be tracked by its parent.
-        if (oldChild.isBody())
-            view().repaintRootContents();
-        else
-            oldChild.repaint();
-    }
-
-    // If we have a line box wrapper, delete it.
-    if (is<RenderBox>(oldChild))
-        downcast<RenderBox>(oldChild).deleteLineBoxWrapper();
-    else if (is<RenderLineBreak>(oldChild))
-        downcast<RenderLineBreak>(oldChild).deleteInlineBoxWrapper();
-    
-    if (!renderTreeBeingDestroyed() && is<RenderFlexibleBox>(this) && !oldChild.isFloatingOrOutOfFlowPositioned() && oldChild.isBox())
-        downcast<RenderFlexibleBox>(this)->clearCachedChildIntrinsicContentLogicalHeight(downcast<RenderBox>(oldChild));
-
-    // If oldChild is the start or end of the selection, then clear the selection to
-    // avoid problems of invalid pointers.
-    if (!renderTreeBeingDestroyed() && oldChild.isSelectionBorder())
-        frame().selection().setNeedsSelectionUpdate();
-
-    if (!renderTreeBeingDestroyed())
-        oldChild.willBeRemovedFromTree();
-
-    oldChild.resetFragmentedFlowStateOnRemoval();
-
-    // WARNING: There should be no code running between willBeRemovedFromTree and the actual removal below.
-    // This is needed to avoid race conditions where willBeRemovedFromTree would dirty the tree's structure
-    // and the code running here would force an untimely rebuilding, leaving |oldChild| dangling.
-    
-    RenderObject* nextSibling = oldChild.nextSibling();
-
-    if (oldChild.previousSibling())
-        oldChild.previousSibling()->setNextSibling(nextSibling);
+    if (renderer.previousSibling())
+        renderer.previousSibling()->setNextSibling(nextSibling);
     if (nextSibling)
-        nextSibling->setPreviousSibling(oldChild.previousSibling());
+        nextSibling->setPreviousSibling(renderer.previousSibling());
 
-    if (m_firstChild == &oldChild)
-        m_firstChild = nextSibling;
-    if (m_lastChild == &oldChild)
-        m_lastChild = oldChild.previousSibling();
+    if (parent->firstChild() == &renderer)
+        parent->m_firstChild = nextSibling;
+    if (parent->lastChild() == &renderer)
+        parent->m_lastChild = renderer.previousSibling();
 
-    oldChild.setPreviousSibling(nullptr);
-    oldChild.setNextSibling(nullptr);
-    oldChild.setParent(nullptr);
-
-    // rendererRemovedFromTree walks the whole subtree. We can improve performance
-    // by skipping this step when destroying the entire tree.
-    if (!renderTreeBeingDestroyed() && is<RenderElement>(oldChild))
-        RenderCounter::rendererRemovedFromTree(downcast<RenderElement>(oldChild));
-
-    if (!renderTreeBeingDestroyed()) {
-        if (AXObjectCache* cache = document().existingAXObjectCache())
-            cache->childrenChanged(this);
-    }
-
-    return RenderPtr<RenderObject>(&oldChild);
+    renderer.setPreviousSibling(nullptr);
+    renderer.setNextSibling(nullptr);
+    renderer.setParent(nullptr);
+    return RenderPtr<RenderObject>(&renderer);
 }
 
 RenderBlock* RenderElement::containingBlockForFixedPosition() const
@@ -903,35 +792,6 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
         view().frameView().updateExtendBackgroundIfNecessary();
 }
 
-void RenderElement::removeAnonymousWrappersForInlinesIfNecessary()
-{
-    // FIXME: Move to RenderBlock.
-    if (!is<RenderBlock>(*this))
-        return;
-    RenderBlock& thisBlock = downcast<RenderBlock>(*this);
-    if (!thisBlock.canDropAnonymousBlockChild())
-        return;
-
-    // We have changed to floated or out-of-flow positioning so maybe all our parent's
-    // children can be inline now. Bail if there are any block children left on the line,
-    // otherwise we can proceed to stripping solitary anonymous wrappers from the inlines.
-    // FIXME: We should also handle split inlines here - we exclude them at the moment by returning
-    // if we find a continuation.
-    RenderObject* current = firstChild();
-    while (current && ((current->isAnonymousBlock() && !downcast<RenderBlock>(*current).isContinuation()) || current->style().isFloating() || current->style().hasOutOfFlowPosition()))
-        current = current->nextSibling();
-
-    if (current)
-        return;
-
-    RenderObject* next;
-    for (current = firstChild(); current; current = next) {
-        next = current->nextSibling();
-        if (current->isAnonymousBlock())
-            thisBlock.dropAnonymousBoxChild(downcast<RenderBlock>(*current));
-    }
-}
-
 #if !PLATFORM(IOS)
 static bool areNonIdenticalCursorListsEqual(const RenderStyle* a, const RenderStyle* b)
 {
@@ -963,7 +823,7 @@ void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldS
     }
 
     if (s_noLongerAffectsParentBlock)
-        parent()->removeAnonymousWrappersForInlinesIfNecessary();
+        RenderTreeBuilder::current()->childFlowStateChangesAndNoLongerAffectsParentBlock(*this);
 
     SVGRenderSupport::styleChanged(*this, oldStyle);
 
@@ -1067,7 +927,7 @@ inline void RenderElement::clearSubtreeLayoutRootIfNeeded() const
     view().frameView().layoutContext().clearSubtreeLayoutRoot();
 }
 
-void RenderElement::willBeDestroyed()
+void RenderElement::willBeDestroyed(RenderTreeBuilder& builder)
 {
     if (m_style.hasFixedBackgroundImage() && !settings().fixedBackgroundsPaintRelativeToDocument())
         view().frameView().removeSlowRepaintObject(*this);
@@ -1077,7 +937,7 @@ void RenderElement::willBeDestroyed()
     if (hasCounterNodeMap())
         RenderCounter::destroyCounterNodes(*this);
 
-    RenderObject::willBeDestroyed();
+    RenderObject::willBeDestroyed(builder);
 
     clearSubtreeLayoutRootIfNeeded();
 

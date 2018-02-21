@@ -28,23 +28,22 @@
 
 #if ENABLE(MEMORY_SAMPLER)
 
+#include <JavaScriptCore/JSCInlines.h>
+#include <JavaScriptCore/JSLock.h>
 #include <JavaScriptCore/MemoryStatistics.h>
 #include <WebCore/CommonVM.h>
 #include <WebCore/JSDOMWindow.h>
 #include <WebCore/NotImplemented.h>
-#include <runtime/JSCInlines.h>
-#include <runtime/JSLock.h>
 #include <string.h>
 #include <sys/sysinfo.h>
 #include <wtf/CurrentTime.h>
 #include <wtf/linux/CurrentProcessMemoryStatus.h>
 #include <wtf/text/WTFString.h>
 
+namespace WebKit {
 using namespace WebCore;
 using namespace JSC;
 using namespace WTF;
-
-namespace WebKit {
 
 static const unsigned int maxBuffer = 128;
 static const unsigned int maxProcessPath = 35;

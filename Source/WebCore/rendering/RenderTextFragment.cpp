@@ -26,6 +26,7 @@
 #include "RenderBlock.h"
 #include "RenderIterator.h"
 #include "RenderMultiColumnFlow.h"
+#include "RenderTreeBuilder.h"
 #include "Text.h"
 #include <wtf/IsoMallocInlines.h>
 
@@ -73,11 +74,11 @@ void RenderTextFragment::styleDidChange(StyleDifference diff, const RenderStyle*
         block->mutableStyle().removeCachedPseudoStyle(FIRST_LETTER);
 }
 
-void RenderTextFragment::willBeDestroyed()
+void RenderTextFragment::willBeDestroyed(RenderTreeBuilder& builder)
 {
     if (m_firstLetter)
-        m_firstLetter->removeFromParentAndDestroy();
-    RenderText::willBeDestroyed();
+        builder.removeAndDestroy(*m_firstLetter);
+    RenderText::willBeDestroyed(builder);
 }
 
 void RenderTextFragment::setText(const String& newText, bool force)
@@ -87,7 +88,10 @@ void RenderTextFragment::setText(const String& newText, bool force)
     m_end = text().length();
     if (!m_firstLetter)
         return;
-    m_firstLetter->removeFromParentAndDestroy();
+    if (RenderTreeBuilder::current())
+        RenderTreeBuilder::current()->removeAndDestroy(*m_firstLetter);
+    else
+        RenderTreeBuilder(*document().renderView()).removeAndDestroy(*m_firstLetter);
     ASSERT(!m_firstLetter);
     ASSERT(!textNode() || textNode()->renderer() == this);
 }

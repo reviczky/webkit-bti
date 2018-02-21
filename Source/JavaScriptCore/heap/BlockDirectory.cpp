@@ -33,6 +33,7 @@
 #include "JSCInlines.h"
 #include "MarkedBlockInlines.h"
 #include "SuperSampler.h"
+#include "ThreadLocalCacheInlines.h"
 #include "VM.h"
 #include <wtf/CurrentTime.h>
 
@@ -55,7 +56,7 @@ void BlockDirectory::setSubspace(Subspace* subspace)
     m_subspace = subspace;
 }
 
-bool BlockDirectory::isPagedOut(double deadline)
+bool BlockDirectory::isPagedOut(MonotonicTime deadline)
 {
     unsigned itersSinceLastTimeCheck = 0;
     for (auto* block : m_blocks) {
@@ -63,7 +64,7 @@ bool BlockDirectory::isPagedOut(double deadline)
             holdLock(block->block().lock());
         ++itersSinceLastTimeCheck;
         if (itersSinceLastTimeCheck >= Heap::s_timeCheckResolution) {
-            double currentTime = WTF::monotonicallyIncreasingTime();
+            MonotonicTime currentTime = MonotonicTime::now();
             if (currentTime > deadline)
                 return true;
             itersSinceLastTimeCheck = 0;
@@ -80,14 +81,20 @@ MarkedBlock::Handle* BlockDirectory::findEmptyBlockToSteal()
     return m_blocks[m_emptyCursor];
 }
 
-MarkedBlock::Handle* BlockDirectory::findBlockForAllocation()
+MarkedBlock::Handle* BlockDirectory::findBlockForAllocation(LocalAllocator& allocator)
 {
-    m_allocationCursor = (m_canAllocateButNotEmpty | m_empty).findBit(m_allocationCursor, true);
-    if (m_allocationCursor >= m_blocks.size())
-        return nullptr;
-    
-    setIsCanAllocateButNotEmpty(NoLockingNecessary, m_allocationCursor, false);
-    return m_blocks[m_allocationCursor];
+    for (;;) {
+        allocator.m_allocationCursor = (m_canAllocateButNotEmpty | m_empty).findBit(allocator.m_allocationCursor, true);
+        if (allocator.m_allocationCursor >= m_blocks.size())
+            return nullptr;
+        
+        size_t blockIndex = allocator.m_allocationCursor++;
+        MarkedBlock::Handle* result = m_blocks[blockIndex];
+        if (result->securityOriginToken() == allocator.tlc()->securityOriginToken()) {
+            setIsCanAllocateButNotEmpty(NoLockingNecessary, blockIndex, false);
+            return result;
+        }
+    }
 }
 
 MarkedBlock::Handle* BlockDirectory::tryAllocateBlock()
@@ -103,7 +110,7 @@ MarkedBlock::Handle* BlockDirectory::tryAllocateBlock()
     return handle;
 }
 
-void BlockDirectory::addBlock(MarkedBlock::Handle* block)
+void BlockDirectory::addBlock(MarkedBlock::Handle* block, SecurityOriginToken securityOriginToken)
 {
     size_t index;
     if (m_freeBlockIndices.isEmpty()) {
@@ -141,7 +148,7 @@ void BlockDirectory::addBlock(MarkedBlock::Handle* block)
         });
 
     // This is the point at which the block learns of its cellSize() and attributes().
-    block->didAddToDirectory(this, index);
+    block->didAddToDirectory(this, index, securityOriginToken);
     
     setIsLive(NoLockingNecessary, index, true);
     setIsEmpty(NoLockingNecessary, index, true);
@@ -183,8 +190,6 @@ void BlockDirectory::prepareForAllocation()
             allocator->prepareForAllocation();
         });
     
-    m_allocationCursor = 0;
-    m_emptyCursor = 0;
     m_unsweptCursor = 0;
     
     m_eden.clearAll();
