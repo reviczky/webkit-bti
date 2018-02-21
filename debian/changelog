@@ -4,6 +4,8 @@ webkit2gtk (2.19.91-1) UNRELEASED; urgency=medium
   * Refresh all patches.
   * debian/rules:
     + Use -O1 in powerpc as well.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 21 Feb 2018 11:08:14 +0200
 

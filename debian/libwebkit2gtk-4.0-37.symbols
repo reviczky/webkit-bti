@@ -8,14 +8,9 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (optional)_ZGVN7bmalloc10PerProcessINS_11PerHeapKindINS_4HeapEEEE7s_mutexE@Base 2.19.6
  (optional)_ZGVN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE7s_mutexE@Base 2.19.6
  (optional)_ZGVN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_objectE@Base 2.19.6
- (optional)_ZGVN7bmalloc10PerProcessINS_9ScavengerEE7s_mutexE@Base 2.19.6
- (optional)_ZGVN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.19.6
  (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE7s_mutexE@Base 2.19.6
  (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_memoryE@Base 2.19.6
  (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_objectE@Base 2.19.6
- (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE7s_mutexE@Base 2.19.6
- (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE8s_memoryE@Base 2.19.6
- (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.19.6
  (optional)_ZZN7bmalloc10vmPageSizeEvE6cached@Base 2.19.6
  webkit_application_info_get_name@Base 2.17.90
  webkit_application_info_get_type@Base 2.17.90
