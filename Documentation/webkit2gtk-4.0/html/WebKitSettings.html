@@ -8,7 +8,7 @@
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitBackForwardListItem.html" title="WebKitBackForwardListItem">
 <link rel="next" href="WebKitURIRequest.html" title="WebKitURIRequest">
-<meta name="generator" content="GTK-Doc V1.25.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.26.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -1189,9 +1189,9 @@ contains default settings.</p>
         <td class="listing_lines" align="right"><pre>1
 2
 3</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="comment">/*</span><span class="comment"> Disable JavaScript. </span><span class="comment">*/</span>
-WebKitSettings *settings = webkit_web_view_group_get_settings (my_view_group);
-webkit_settings_set_enable_javascript (settings, FALSE);</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="comment">/* Disable JavaScript. */</span>
+<span class="usertype">WebKitSettings</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">settings </span><span class="symbol">=</span><span class="normal"> </span><span class="function">webkit_web_view_group_get_settings</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">my_view_group</span><span class="symbol">);</span>
+<span class="function"><a href="WebKitSettings.html#webkit-settings-set-enable-javascript">webkit_settings_set_enable_javascript</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">settings</span><span class="symbol">,</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS">FALSE</a></span><span class="symbol">);</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -3093,7 +3093,7 @@ webkit_settings_get_enable_webgl (<em class="parameter"><code><a class="link" hr
 </div>
 <div class="refsect3">
 <a name="webkit-settings-get-enable-webgl.returns"></a><h4>Returns</h4>
-<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> If webgl support is enabled or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> If WebGL support is enabled or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
 </div>
 </div>
 <hr>
@@ -3638,7 +3638,7 @@ webkit_settings_set_user_agent (<em class="parameter"><code><a class="link" href
 </tr>
 <tr>
 <td class="parameter_name"><p>user_agent</p></td>
-<td class="parameter_description"><p> The new custom user agent string or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to use the default user agent. </p></td>
+<td class="parameter_description"><p>The new custom user agent string or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to use the default user agent. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -3672,12 +3672,12 @@ the version is given, the default engine version is used with the given applicat
 </tr>
 <tr>
 <td class="parameter_name"><p>application_name</p></td>
-<td class="parameter_description"><p> The application name used for the user agent or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to use the default user agent. </p></td>
+<td class="parameter_description"><p>The application name used for the user agent or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to use the default user agent. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>application_version</p></td>
-<td class="parameter_description"><p> The application version for the user agent or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to user the default version. </p></td>
+<td class="parameter_description"><p>The application version for the user agent or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to user the default version. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -4546,7 +4546,7 @@ http://webkit.org/blog/427/webkit-page-cache-i-the-basics/</p>
 will disable history, cache and form auto-fill for any pages visited.</p>
 <div class="warning">
 <p><code class="literal">WebKitSettings:enable-private-browsing</code> has been deprecated since version 2.16. and should not be used in newly-written code.</p>
-<p>Use <a class="link" href="WebKitWebView.html#WebKitWebView--is-ephemeral" title="The “is-ephemeral” property"><span class="type">“is-ephemeral”</span></a> or <span class="type">“is-ephemeral”</span> instead.</p>
+<p>Use <a class="link" href="WebKitWebView.html#WebKitWebView--is-ephemeral" title="The “is-ephemeral” property"><span class="type">“is-ephemeral”</span></a> or <a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--is-ephemeral" title="The “is-ephemeral” property"><span class="type">“is-ephemeral”</span></a> instead.</p>
 </div>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
@@ -4566,7 +4566,7 @@ will disable history, cache and form auto-fill for any pages visited.</p>
 <p>Whether to turn on site-specific quirks. Turning this on will
 tell WebKit to use some site-specific workarounds for
 better web compatibility. For example, older versions of
-MediaWiki will incorrectly send to WebKit a css file with KHTML
+MediaWiki will incorrectly send to WebKit a CSS file with KHTML
 workarounds. By turning on site-specific quirks, WebKit will
 special-case this and other cases to make some specific sites work.</p>
 <p>Flags: Read / Write / Construct</p>
@@ -4661,8 +4661,8 @@ reflective XSS attacks on vulnerable web sites.</p>
 <p>The <a class="link" href="WebKitSettings.html#WebKitHardwareAccelerationPolicy" title="enum WebKitHardwareAccelerationPolicy"><span class="type">WebKitHardwareAccelerationPolicy</span></a> to decide how to enable and disable
 hardware acceleration. The default value <a class="link" href="WebKitSettings.html#WEBKIT-HARDWARE-ACCELERATION-POLICY-ON-DEMAND:CAPS"><code class="literal">WEBKIT_HARDWARE_ACCELERATION_POLICY_ON_DEMAND</code></a>
 enables the hardware acceleration when the web contents request it, disabling it again
-when no longer needed. It's possible to enfore hardware acceleration to be always enabled
-by using <a class="link" href="WebKitSettings.html#WEBKIT-HARDWARE-ACCELERATION-POLICY-ALWAYS:CAPS"><code class="literal">WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS</code></a>. And it's also posible to disable it
+when no longer needed. It's possible to enforce hardware acceleration to be always enabled
+by using <a class="link" href="WebKitSettings.html#WEBKIT-HARDWARE-ACCELERATION-POLICY-ALWAYS:CAPS"><code class="literal">WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS</code></a>. And it's also possible to disable it
 completely using <a class="link" href="WebKitSettings.html#WEBKIT-HARDWARE-ACCELERATION-POLICY-NEVER:CAPS"><code class="literal">WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER</code></a>. Note that disabling hardware
 acceleration might cause some websites to not render correctly or consume more CPU.</p>
 <p>Note that changing this setting might not be possible if hardware acceleration is not
@@ -4799,6 +4799,6 @@ this property is enabled.</p>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.25.1</div>
+<hr>Generated by GTK-Doc V1.26.1</div>
 </body>
 </html>

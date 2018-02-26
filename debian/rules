@@ -2,9 +2,7 @@
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 
-DEB_BUILD_ARCH     ?= $(shell dpkg-architecture -qDEB_BUILD_ARCH)
-DEB_HOST_ARCH_BITS ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_BITS)
-DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+include /usr/share/dpkg/architecture.mk
 
 CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS) -Wall
 CFLAGS = $(shell dpkg-buildflags --get CFLAGS)
@@ -16,29 +14,19 @@ EXTRA_CMAKE_ARGUMENTS =
 
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
-ifeq ($(DEB_HOST_ARCH_BITS),32)
+ifeq ($(DEB_BUILD_ARCH_BITS),32)
 	LDFLAGS += -Wl,--no-keep-memory
-endif
-
-ifeq ($(DEB_BUILD_ARCH),alpha)
-	LDFLAGS += -Wl,--no-relax
-endif
-
-ifneq (,$(filter $(DEB_BUILD_ARCH),arm64 kfreebsd-i386 kfreebsd-amd64))
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_LD_GOLD=OFF
 endif
 
 # The debug packages produced by webkit are huge and cause problems in
 # most buildds, so use -g1 in all architectures except the ones that
 # are known to work fine
-ifeq (,$(filter $(DEB_BUILD_ARCH),amd64 ppc64 ppc64el))
+ifeq (,$(filter $(DEB_HOST_ARCH),amd64 ppc64 ppc64el))
 	CFLAGS := $(CFLAGS:-g=-g1)
 endif
 
-# See https://bugs.webkit.org/show_bug.cgi?id=113638
-ifeq (,$(filter $(DEB_BUILD_ARCH),i386 amd64 hurd-i386 kfreebsd-i386 kfreebsd-amd64 armhf))
+ifeq (,$(filter $(DEB_HOST_ARCH),i386 amd64 hurd-i386 kfreebsd-i386 kfreebsd-amd64 armhf arm64))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF
-	CPPFLAGS += -DENABLE_ASSEMBLER=0
 endif
 
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
@@ -53,6 +41,7 @@ else
 endif
 
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_GSTREAMER_GL=OFF -DUSER_AGENT_GTK_DISTRIBUTOR_NAME=\'\\"Ubuntu\\"\'
 	DEB_DH_GENCONTROL_ARGS += -- -Vgst:Recommends=""
 else
 	DEB_DH_GENCONTROL_ARGS += -- -Vgst:Recommends="gstreamer1.0-plugins-bad, gstreamer1.0-libav,"

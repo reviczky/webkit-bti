@@ -37,6 +37,8 @@
       <sub name="WebKitVersion" link="webkit2gtk-4.0-WebKitVersion.html"/>
       <sub name="WebKitContextMenu" link="WebKitContextMenu.html"/>
       <sub name="WebKitContextMenuItem" link="WebKitContextMenuItem.html"/>
+      <sub name="WebKitOptionMenu" link="WebKitOptionMenu.html"/>
+      <sub name="WebKitOptionMenuItem" link="WebKitOptionMenuItem.html"/>
       <sub name="WebKitFormSubmissionRequest" link="WebKitFormSubmissionRequest.html"/>
       <sub name="WebKitSecurityManager" link="WebKitSecurityManager.html"/>
       <sub name="WebKitUserContentManager" link="WebKitUserContentManager.html"/>
@@ -47,6 +49,8 @@
       <sub name="WebKitWebsiteDataManager" link="WebKitWebsiteDataManager.html"/>
       <sub name="WebKitWebsiteData" link="WebKitWebsiteData.html"/>
       <sub name="WebKitNetworkProxySettings" link="WebKitNetworkProxySettings.html"/>
+      <sub name="WebKitAutomationSession" link="WebKitAutomationSession.html"/>
+      <sub name="WebKitApplicationInfo" link="WebKitApplicationInfo.html"/>
     </sub>
     <sub name="Web Extensions" link="ch02.html">
       <sub name="WebKitWebExtension" link="WebKitWebExtension.html"/>
@@ -67,6 +71,7 @@
     <sub name="Index of new symbols in 2.12" link="api-index-2-12.html"/>
     <sub name="Index of new symbols in 2.14" link="api-index-2-14.html"/>
     <sub name="Index of new symbols in 2.16" link="api-index-2-16.html"/>
+    <sub name="Index of new symbols in 2.18" link="api-index-2-18.html"/>
     <sub name="Annotation Glossary" link="annotation-glossary.html"/>
   </chapters>
   <functions>
@@ -75,6 +80,8 @@
     <keyword type="function" name="webkit_web_context_new_ephemeral ()" link="WebKitWebContext.html#webkit-web-context-new-ephemeral" since="2.16"/>
     <keyword type="function" name="webkit_web_context_new_with_website_data_manager ()" link="WebKitWebContext.html#webkit-web-context-new-with-website-data-manager" since="2.10"/>
     <keyword type="function" name="webkit_web_context_is_ephemeral ()" link="WebKitWebContext.html#webkit-web-context-is-ephemeral" since="2.16"/>
+    <keyword type="function" name="webkit_web_context_is_automation_allowed ()" link="WebKitWebContext.html#webkit-web-context-is-automation-allowed" since="2.18"/>
+    <keyword type="function" name="webkit_web_context_set_automation_allowed ()" link="WebKitWebContext.html#webkit-web-context-set-automation-allowed" since="2.18"/>
     <keyword type="function" name="webkit_web_context_get_website_data_manager ()" link="WebKitWebContext.html#webkit-web-context-get-website-data-manager" since="2.10"/>
     <keyword type="function" name="webkit_web_context_get_cache_model ()" link="WebKitWebContext.html#webkit-web-context-get-cache-model"/>
     <keyword type="function" name="webkit_web_context_set_cache_model ()" link="WebKitWebContext.html#webkit-web-context-set-cache-model"/>
@@ -115,6 +122,7 @@
     <keyword type="enum" name="enum WebKitNetworkProxyMode" link="WebKitWebContext.html#WebKitNetworkProxyMode" since="2.16"/>
     <keyword type="property" name="The “local-storage-directory” property" link="WebKitWebContext.html#WebKitWebContext--local-storage-directory"/>
     <keyword type="property" name="The “website-data-manager” property" link="WebKitWebContext.html#WebKitWebContext--website-data-manager"/>
+    <keyword type="signal" name="The “automation-started” signal" link="WebKitWebContext.html#WebKitWebContext-automation-started"/>
     <keyword type="signal" name="The “download-started” signal" link="WebKitWebContext.html#WebKitWebContext-download-started"/>
     <keyword type="signal" name="The “initialize-notification-permissions” signal" link="WebKitWebContext.html#WebKitWebContext-initialize-notification-permissions"/>
     <keyword type="signal" name="The “initialize-web-extensions” signal" link="WebKitWebContext.html#WebKitWebContext-initialize-web-extensions"/>
@@ -124,6 +132,7 @@
     <keyword type="function" name="webkit_web_view_new_with_settings ()" link="WebKitWebView.html#webkit-web-view-new-with-settings" since="2.6"/>
     <keyword type="function" name="webkit_web_view_new_with_user_content_manager ()" link="WebKitWebView.html#webkit-web-view-new-with-user-content-manager" since="2.6"/>
     <keyword type="function" name="webkit_web_view_is_ephemeral ()" link="WebKitWebView.html#webkit-web-view-is-ephemeral" since="2.16"/>
+    <keyword type="function" name="webkit_web_view_is_controlled_by_automation ()" link="WebKitWebView.html#webkit-web-view-is-controlled-by-automation" since="2.18"/>
     <keyword type="function" name="webkit_web_view_get_context ()" link="WebKitWebView.html#webkit-web-view-get-context"/>
     <keyword type="function" name="webkit_web_view_get_user_content_manager ()" link="WebKitWebView.html#webkit-web-view-get-user-content-manager" since="2.6"/>
     <keyword type="function" name="webkit_web_view_get_website_data_manager ()" link="WebKitWebView.html#webkit-web-view-get-website-data-manager" since="2.16"/>
@@ -220,6 +229,7 @@
     <keyword type="property" name="The “editable” property" link="WebKitWebView.html#WebKitWebView--editable"/>
     <keyword type="property" name="The “estimated-load-progress” property" link="WebKitWebView.html#WebKitWebView--estimated-load-progress"/>
     <keyword type="property" name="The “favicon” property" link="WebKitWebView.html#WebKitWebView--favicon"/>
+    <keyword type="property" name="The “is-controlled-by-automation” property" link="WebKitWebView.html#WebKitWebView--is-controlled-by-automation"/>
     <keyword type="property" name="The “is-ephemeral” property" link="WebKitWebView.html#WebKitWebView--is-ephemeral"/>
     <keyword type="property" name="The “is-loading” property" link="WebKitWebView.html#WebKitWebView--is-loading"/>
     <keyword type="property" name="The “is-playing-audio” property" link="WebKitWebView.html#WebKitWebView--is-playing-audio"/>
@@ -252,6 +262,7 @@
     <keyword type="signal" name="The “run-file-chooser” signal" link="WebKitWebView.html#WebKitWebView-run-file-chooser"/>
     <keyword type="signal" name="The “script-dialog” signal" link="WebKitWebView.html#WebKitWebView-script-dialog"/>
     <keyword type="signal" name="The “show-notification” signal" link="WebKitWebView.html#WebKitWebView-show-notification"/>
+    <keyword type="signal" name="The “show-option-menu” signal" link="WebKitWebView.html#WebKitWebView-show-option-menu"/>
     <keyword type="signal" name="The “submit-form” signal" link="WebKitWebView.html#WebKitWebView-submit-form"/>
     <keyword type="signal" name="The “web-process-crashed” signal" link="WebKitWebView.html#WebKitWebView-web-process-crashed"/>
     <keyword type="function" name="webkit_authentication_request_authenticate ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-authenticate" since="2.2"/>
@@ -556,12 +567,12 @@
     <keyword type="function" name="webkit_hit_test_result_context_is_media ()" link="WebKitHitTestResult.html#webkit-hit-test-result-context-is-media"/>
     <keyword type="function" name="webkit_hit_test_result_context_is_editable ()" link="WebKitHitTestResult.html#webkit-hit-test-result-context-is-editable"/>
     <keyword type="function" name="webkit_hit_test_result_context_is_selection ()" link="WebKitHitTestResult.html#webkit-hit-test-result-context-is-selection" since="2.8"/>
+    <keyword type="function" name="webkit_hit_test_result_context_is_scrollbar ()" link="WebKitHitTestResult.html#webkit-hit-test-result-context-is-scrollbar"/>
     <keyword type="function" name="webkit_hit_test_result_get_link_uri ()" link="WebKitHitTestResult.html#webkit-hit-test-result-get-link-uri"/>
     <keyword type="function" name="webkit_hit_test_result_get_link_title ()" link="WebKitHitTestResult.html#webkit-hit-test-result-get-link-title"/>
     <keyword type="function" name="webkit_hit_test_result_get_link_label ()" link="WebKitHitTestResult.html#webkit-hit-test-result-get-link-label"/>
     <keyword type="function" name="webkit_hit_test_result_get_image_uri ()" link="WebKitHitTestResult.html#webkit-hit-test-result-get-image-uri"/>
     <keyword type="function" name="webkit_hit_test_result_get_media_uri ()" link="WebKitHitTestResult.html#webkit-hit-test-result-get-media-uri"/>
-    <keyword type="function" name="webkit_hit_test_result_context_is_scrollbar ()" link="WebKitHitTestResult.html#webkit-hit-test-result-context-is-scrollbar"/>
     <keyword type="struct" name="struct WebKitHitTestResult" link="WebKitHitTestResult.html#WebKitHitTestResult-struct"/>
     <keyword type="enum" name="enum WebKitHitTestResultContext" link="WebKitHitTestResult.html#WebKitHitTestResultContext"/>
     <keyword type="property" name="The “context” property" link="WebKitHitTestResult.html#WebKitHitTestResult--context"/>
@@ -746,18 +757,36 @@
     <keyword type="function" name="webkit_context_menu_set_user_data ()" link="WebKitContextMenu.html#webkit-context-menu-set-user-data" since="2.8"/>
     <keyword type="function" name="webkit_context_menu_get_user_data ()" link="WebKitContextMenu.html#webkit-context-menu-get-user-data" since="2.8"/>
     <keyword type="struct" name="WebKitContextMenu" link="WebKitContextMenu.html#WebKitContextMenu-struct"/>
-    <keyword type="function" name="webkit_context_menu_item_new ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-new"/>
+    <keyword type="function" name="webkit_context_menu_item_new ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-new" deprecated="2.18: Use webkit_context_menu_item_new_from_gaction() instead."/>
+    <keyword type="function" name="webkit_context_menu_item_new_from_gaction ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-new-from-gaction" since="2.18"/>
     <keyword type="function" name="webkit_context_menu_item_new_from_stock_action ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-new-from-stock-action"/>
     <keyword type="function" name="webkit_context_menu_item_new_from_stock_action_with_label ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-new-from-stock-action-with-label"/>
     <keyword type="function" name="webkit_context_menu_item_new_with_submenu ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-new-with-submenu"/>
     <keyword type="function" name="webkit_context_menu_item_new_separator ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-new-separator"/>
-    <keyword type="function" name="webkit_context_menu_item_get_action ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-get-action"/>
+    <keyword type="function" name="webkit_context_menu_item_get_action ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-get-action" deprecated="2.18: Use webkit_context_menu_item_get_gaction() instead."/>
+    <keyword type="function" name="webkit_context_menu_item_get_gaction ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-get-gaction" since="2.18"/>
     <keyword type="function" name="webkit_context_menu_item_get_stock_action ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-get-stock-action"/>
     <keyword type="function" name="webkit_context_menu_item_is_separator ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-is-separator"/>
     <keyword type="function" name="webkit_context_menu_item_set_submenu ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-set-submenu"/>
     <keyword type="function" name="webkit_context_menu_item_get_submenu ()" link="WebKitContextMenuItem.html#webkit-context-menu-item-get-submenu"/>
     <keyword type="struct" name="WebKitContextMenuItem" link="WebKitContextMenuItem.html#WebKitContextMenuItem-struct"/>
     <keyword type="enum" name="enum WebKitContextMenuAction" link="WebKitContextMenuItem.html#WebKitContextMenuAction"/>
+    <keyword type="function" name="webkit_option_menu_get_n_items ()" link="WebKitOptionMenu.html#webkit-option-menu-get-n-items" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_get_item ()" link="WebKitOptionMenu.html#webkit-option-menu-get-item" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_select_item ()" link="WebKitOptionMenu.html#webkit-option-menu-select-item" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_activate_item ()" link="WebKitOptionMenu.html#webkit-option-menu-activate-item" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_close ()" link="WebKitOptionMenu.html#webkit-option-menu-close" since="2.18"/>
+    <keyword type="struct" name="struct WebKitOptionMenu" link="WebKitOptionMenu.html#WebKitOptionMenu-struct"/>
+    <keyword type="signal" name="The “close” signal" link="WebKitOptionMenu.html#WebKitOptionMenu-close"/>
+    <keyword type="function" name="webkit_option_menu_item_copy ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-copy" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_free ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-free" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_get_label ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-get-label" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_get_tooltip ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-get-tooltip" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_is_group_label ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-is-group-label" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_is_group_child ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-is-group-child" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_is_enabled ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-is-enabled" since="2.18"/>
+    <keyword type="function" name="webkit_option_menu_item_is_selected ()" link="WebKitOptionMenuItem.html#webkit-option-menu-item-is-selected" since="2.18"/>
+    <keyword type="struct" name="WebKitOptionMenuItem" link="WebKitOptionMenuItem.html#WebKitOptionMenuItem-struct"/>
     <keyword type="function" name="webkit_form_submission_request_get_text_fields ()" link="WebKitFormSubmissionRequest.html#webkit-form-submission-request-get-text-fields"/>
     <keyword type="function" name="webkit_form_submission_request_submit ()" link="WebKitFormSubmissionRequest.html#webkit-form-submission-request-submit"/>
     <keyword type="struct" name="struct WebKitFormSubmissionRequest" link="WebKitFormSubmissionRequest.html#WebKitFormSubmissionRequest-struct"/>
@@ -856,6 +885,20 @@
     <keyword type="function" name="webkit_network_proxy_settings_free ()" link="WebKitNetworkProxySettings.html#webkit-network-proxy-settings-free" since="2.16"/>
     <keyword type="function" name="webkit_network_proxy_settings_add_proxy_for_scheme ()" link="WebKitNetworkProxySettings.html#webkit-network-proxy-settings-add-proxy-for-scheme" since="2.16"/>
     <keyword type="struct" name="WebKitNetworkProxySettings" link="WebKitNetworkProxySettings.html#WebKitNetworkProxySettings-struct"/>
+    <keyword type="function" name="webkit_automation_session_get_id ()" link="WebKitAutomationSession.html#webkit-automation-session-get-id" since="2.18"/>
+    <keyword type="function" name="webkit_automation_session_set_application_info ()" link="WebKitAutomationSession.html#webkit-automation-session-set-application-info" since="2.18"/>
+    <keyword type="function" name="webkit_automation_session_get_application_info ()" link="WebKitAutomationSession.html#webkit-automation-session-get-application-info" since="2.18"/>
+    <keyword type="struct" name="struct WebKitAutomationSession" link="WebKitAutomationSession.html#WebKitAutomationSession-struct"/>
+    <keyword type="property" name="The “id” property" link="WebKitAutomationSession.html#WebKitAutomationSession--id"/>
+    <keyword type="signal" name="The “create-web-view” signal" link="WebKitAutomationSession.html#WebKitAutomationSession-create-web-view"/>
+    <keyword type="function" name="webkit_application_info_new ()" link="WebKitApplicationInfo.html#webkit-application-info-new" since="2.18"/>
+    <keyword type="function" name="webkit_application_info_ref ()" link="WebKitApplicationInfo.html#webkit-application-info-ref" since="2.18"/>
+    <keyword type="function" name="webkit_application_info_unref ()" link="WebKitApplicationInfo.html#webkit-application-info-unref" since="2.18"/>
+    <keyword type="function" name="webkit_application_info_set_name ()" link="WebKitApplicationInfo.html#webkit-application-info-set-name" since="2.18"/>
+    <keyword type="function" name="webkit_application_info_get_name ()" link="WebKitApplicationInfo.html#webkit-application-info-get-name" since="2.18"/>
+    <keyword type="function" name="webkit_application_info_set_version ()" link="WebKitApplicationInfo.html#webkit-application-info-set-version" since="2.18"/>
+    <keyword type="function" name="webkit_application_info_get_version ()" link="WebKitApplicationInfo.html#webkit-application-info-get-version" since="2.18"/>
+    <keyword type="struct" name="WebKitApplicationInfo" link="WebKitApplicationInfo.html#WebKitApplicationInfo-struct"/>
     <keyword type="function" name="WebKitWebExtensionInitializeFunction ()" link="WebKitWebExtension.html#WebKitWebExtensionInitializeFunction"/>
     <keyword type="function" name="WebKitWebExtensionInitializeWithUserDataFunction ()" link="WebKitWebExtension.html#WebKitWebExtensionInitializeWithUserDataFunction" since="2.4"/>
     <keyword type="function" name="webkit_web_extension_get_page ()" link="WebKitWebExtension.html#webkit-web-extension-get-page"/>

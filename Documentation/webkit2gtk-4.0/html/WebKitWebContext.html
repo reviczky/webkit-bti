@@ -8,7 +8,7 @@
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="ch01.html" title="Class Overview">
 <link rel="next" href="WebKitWebView.html" title="WebKitWebView">
-<meta name="generator" content="GTK-Doc V1.25.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.26.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -80,6 +80,22 @@
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebContext.html#webkit-web-context-is-ephemeral" title="webkit_web_context_is_ephemeral ()">webkit_web_context_is_ephemeral</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebContext.html#webkit-web-context-is-automation-allowed" title="webkit_web_context_is_automation_allowed ()">webkit_web_context_is_automation_allowed</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebContext.html#webkit-web-context-set-automation-allowed" title="webkit_web_context_set_automation_allowed ()">webkit_web_context_set_automation_allowed</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
 <tr>
@@ -382,6 +398,11 @@
 <tbody>
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
+<td class="signal_name"><a class="link" href="WebKitWebContext.html#WebKitWebContext-automation-started" title="The “automation-started” signal">automation-started</a></td>
+<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+</tr>
+<tr>
+<td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitWebContext.html#WebKitWebContext-download-started" title="The “download-started” signal">download-started</a></td>
 <td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
 </tr>
@@ -467,7 +488,7 @@ webkit_web_context_get_default (<em class="parameter"><code><span class="type">v
 <p>Gets the default web context</p>
 <div class="refsect3">
 <a name="webkit-web-context-get-default.returns"></a><h4>Returns</h4>
-<p> a <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>. </p>
+<p>a <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 </div>
@@ -479,7 +500,7 @@ webkit_web_context_new (<em class="parameter"><code><span class="type">void</spa
 <p>Create a new <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a></p>
 <div class="refsect3">
 <a name="webkit-web-context-new.returns"></a><h4>Returns</h4>
-<p> a newly created <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>. </p>
+<p>a newly created <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-8.html#api-index-2.8">2.8</a></p>
@@ -497,7 +518,7 @@ not store any data in the client storage.
 This is normally used to implement private instances.</p>
 <div class="refsect3">
 <a name="webkit-web-context-new-ephemeral.returns"></a><h4>Returns</h4>
-<p> a new ephemeral <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>. </p>
+<p>a new ephemeral <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
@@ -526,7 +547,7 @@ webkit_web_context_new_with_website_data_manager
 </div>
 <div class="refsect3">
 <a name="webkit-web-context-new-with-website-data-manager.returns"></a><h4>Returns</h4>
-<p> a newly created <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>. </p>
+<p>a newly created <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-10.html#api-index-2.10">2.10</a></p>
@@ -561,6 +582,75 @@ is ephemeral or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code cla
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-web-context-is-automation-allowed"></a><h3>webkit_web_context_is_automation_allowed ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_web_context_is_automation_allowed
+                               (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>);</pre>
+<p>Get whether automation is allowed in <em class="parameter"><code>context</code></em>
+.
+See also <a class="link" href="WebKitWebContext.html#webkit-web-context-set-automation-allowed" title="webkit_web_context_set_automation_allowed ()"><code class="function">webkit_web_context_set_automation_allowed()</code></a>.</p>
+<div class="refsect3">
+<a name="webkit-web-context-is-automation-allowed.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>context</p></td>
+<td class="parameter_description"><p>the <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-web-context-is-automation-allowed.returns"></a><h4>Returns</h4>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if automation is allowed or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-context-set-automation-allowed"></a><h3>webkit_web_context_set_automation_allowed ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_web_context_set_automation_allowed
+                               (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>,
+                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> allowed</code></em>);</pre>
+<p>Set whether automation is allowed in <em class="parameter"><code>context</code></em>
+. When automation is enabled the browser could
+be controlled by another process by requesting an automation session. When a new automation
+session is requested the signal <a class="link" href="WebKitWebContext.html#WebKitWebContext-automation-started" title="The “automation-started” signal"><span class="type">“automation-started”</span></a> is emitted.
+Automation is disabled by default, so you need to explicitly call this method passing <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a>
+to enable it.</p>
+<p>Note that only one <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> can have automation enabled, so this will do nothing
+if there's another <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> with automation already enabled.</p>
+<div class="refsect3">
+<a name="webkit-web-context-set-automation-allowed.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>context</p></td>
+<td class="parameter_description"><p>the <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>allowed</p></td>
+<td class="parameter_description"><p>value to set</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="webkit-web-context-get-website-data-manager"></a><h3>webkit_web_context_get_website_data_manager ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="returnvalue">WebKitWebsiteDataManager</span></a> *
 webkit_web_context_get_website_data_manager
@@ -584,7 +674,7 @@ webkit_web_context_get_website_data_manager
 </div>
 <div class="refsect3">
 <a name="webkit-web-context-get-website-data-manager.returns"></a><h4>Returns</h4>
-<p> a <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a>. </p>
+<p>a <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a>. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-10.html#api-index-2.10">2.10</a></p>
@@ -792,7 +882,7 @@ a valid <a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetw
 </tr>
 <tr>
 <td class="parameter_name"><p>proxy_settings</p></td>
-<td class="parameter_description"><p> a <a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetworkProxySettings"><span class="type">WebKitNetworkProxySettings</span></a>, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitNetworkProxySettings.html" title="WebKitNetworkProxySettings"><span class="type">WebKitNetworkProxySettings</span></a>, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -834,7 +924,7 @@ starting a download from a particular <a class="link" href="WebKitWebView.html" 
 </div>
 <div class="refsect3">
 <a name="webkit-web-context-download-uri.returns"></a><h4>Returns</h4>
-<p> a new <a class="link" href="WebKitDownload.html" title="WebKitDownload"><span class="type">WebKitDownload</span></a> representing the
+<p>a new <a class="link" href="WebKitDownload.html" title="WebKitDownload"><span class="type">WebKitDownload</span></a> representing
 the download operation. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
@@ -863,7 +953,7 @@ webkit_web_context_get_cookie_manager (<em class="parameter"><code><a class="lin
 </div>
 <div class="refsect3">
 <a name="webkit-web-context-get-cookie-manager.returns"></a><h4>Returns</h4>
-<p> the <a class="link" href="WebKitCookieManager.html" title="WebKitCookieManager"><span class="type">WebKitCookieManager</span></a> of <em class="parameter"><code>context</code></em>
+<p>the <a class="link" href="WebKitCookieManager.html" title="WebKitCookieManager"><span class="type">WebKitCookieManager</span></a> of <em class="parameter"><code>context</code></em>
 . </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
@@ -895,7 +985,7 @@ webkit_web_context_get_favicon_database
 </div>
 <div class="refsect3">
 <a name="webkit-web-context-get-favicon-database.returns"></a><h4>Returns</h4>
-<p> the <a class="link" href="WebKitFaviconDatabase.html" title="WebKitFaviconDatabase"><span class="type">WebKitFaviconDatabase</span></a> of <em class="parameter"><code>context</code></em>
+<p>the <a class="link" href="WebKitFaviconDatabase.html" title="WebKitFaviconDatabase"><span class="type">WebKitFaviconDatabase</span></a> of <em class="parameter"><code>context</code></em>
 . </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
@@ -911,7 +1001,7 @@ webkit_web_context_set_favicon_database_directory
 for <em class="parameter"><code>context</code></em>
  on disk. Passing <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> as <em class="parameter"><code>path</code></em>
  means using the
-default directory for the platform (see <a href="../glib/glib-Miscellaneous-Utility-Functions.html#g-get-user-data-dir"><code class="function">g_get_user_data_dir()</code></a>).</p>
+default directory for the platform (see <a href="../glib/glib-Miscellaneous-Utility-Functions.html#g-get-user-cache-dir"><code class="function">g_get_user_cache_dir()</code></a>).</p>
 <p>Calling this method also means enabling the favicons database for
 its use from the applications, so that's why it's expected to be
 called only once. Further calls for the same instance of
@@ -932,7 +1022,7 @@ called only once. Further calls for the same instance of
 </tr>
 <tr>
 <td class="parameter_name"><p>path</p></td>
-<td class="parameter_description"><p> an absolute path to the icon database
+<td class="parameter_description"><p>an absolute path to the icon database
 directory or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to use the defaults. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
@@ -971,7 +1061,7 @@ time.</p>
 </div>
 <div class="refsect3">
 <a name="webkit-web-context-get-favicon-database-directory.returns"></a><h4>Returns</h4>
-<p> the path of the directory of the favicons
+<p>the path of the directory of the favicons
 database associated with <em class="parameter"><code>context</code></em>
 , or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
@@ -1002,7 +1092,7 @@ webkit_web_context_get_security_manager
 </div>
 <div class="refsect3">
 <a name="webkit-web-context-get-security-manager.returns"></a><h4>Returns</h4>
-<p> the <a class="link" href="WebKitSecurityManager.html" title="WebKitSecurityManager"><span class="type">WebKitSecurityManager</span></a> of <em class="parameter"><code>context</code></em>
+<p>the <a class="link" href="WebKitSecurityManager.html" title="WebKitSecurityManager"><span class="type">WebKitSecurityManager</span></a> of <em class="parameter"><code>context</code></em>
 . </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
@@ -1066,17 +1156,17 @@ webkit_web_context_get_plugins (<em class="parameter"><code><a class="link" href
 </tr>
 <tr>
 <td class="parameter_name"><p>cancellable</p></td>
-<td class="parameter_description"><p> a <a href="../gio/GCancellable.html#GCancellable-struct"><span class="type">GCancellable</span></a> or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to ignore. </p></td>
+<td class="parameter_description"><p>a <a href="../gio/GCancellable.html#GCancellable-struct"><span class="type">GCancellable</span></a> or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to ignore. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>callback</p></td>
-<td class="parameter_description"><p> a <a href="../gio/GAsyncResult.html#GAsyncReadyCallback"><span class="type">GAsyncReadyCallback</span></a> to call when the request is satisfied. </p></td>
+<td class="parameter_description"><p>a <a href="../gio/GAsyncResult.html#GAsyncReadyCallback"><span class="type">GAsyncReadyCallback</span></a> to call when the request is satisfied. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="The callback is valid until first called."><span class="acronym">scope async</span></acronym>]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>user_data</p></td>
-<td class="parameter_description"><p> the data to pass to callback function. </p></td>
+<td class="parameter_description"><p>the data to pass to callback function. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="This parameter is a 'user_data', for callbacks; many bindings can pass NULL here."><span class="acronym">closure</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -1120,7 +1210,7 @@ webkit_web_context_get_plugins_finish (<em class="parameter"><code><a class="lin
 </div>
 <div class="refsect3">
 <a name="webkit-web-context-get-plugins-finish.returns"></a><h4>Returns</h4>
-<p> a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of <a class="link" href="WebKitPlugin.html" title="WebKitPlugin"><span class="type">WebKitPlugin</span></a>. You must free the <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> with
+<p>a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of <a class="link" href="WebKitPlugin.html" title="WebKitPlugin"><span class="type">WebKitPlugin</span></a>. You must free the <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> with
 <a href="../glib/glib-Doubly-Linked-Lists.html#g-list-free"><code class="function">g_list_free()</code></a> and unref the <a class="link" href="WebKitPlugin.html" title="WebKitPlugin"><span class="type">WebKitPlugin</span></a>s with <a href="../gobject/gobject-The-Base-Object-Type.html#g-object-unref"><code class="function">g_object_unref()</code></a> when you're done with them. </p>
 <p><span class="annotation">[<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> WebKitPlugin][<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
@@ -1211,7 +1301,7 @@ details on the format of the languages in the list.</p>
 </div>
 <div class="refsect3">
 <a name="webkit-web-context-get-spell-checking-languages.returns"></a><h4>Returns</h4>
-<p> A <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>-terminated
+<p>A <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>-terminated
 array of languages if available, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> otherwise. </p>
 <p><span class="annotation">[<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> utf8][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
@@ -1248,7 +1338,7 @@ in WebKit.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>languages</p></td>
-<td class="parameter_description"><p> a <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>-terminated list of spell checking languages. </p></td>
+<td class="parameter_description"><p>a <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>-terminated list of spell checking languages. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -1282,7 +1372,7 @@ the <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span 
 </tr>
 <tr>
 <td class="parameter_name"><p>languages</p></td>
-<td class="parameter_description"><p> a <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>-terminated list of language identifiers. </p></td>
+<td class="parameter_description"><p>a <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>-terminated list of language identifiers. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL is OK, both for passing and for returning."><span class="acronym">allow-none</span></acronym>][<acronym title="Parameter points to an array of items."><span class="acronym">array</span></acronym> zero-terminated=1][<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> utf8][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -1654,12 +1744,12 @@ permissions.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>allowed_origins</p></td>
-<td class="parameter_description"><p> a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of security origins. </p></td>
+<td class="parameter_description"><p>a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of security origins. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> WebKitSecurityOrigin]</span></td>
 </tr>
 <tr>
 <td class="parameter_name"><p>disallowed_origins</p></td>
-<td class="parameter_description"><p> a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of security origins. </p></td>
+<td class="parameter_description"><p>a <a href="../glib/glib-Doubly-Linked-Lists.html#GList"><span class="type">GList</span></a> of security origins. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> WebKitSecurityOrigin]</span></td>
 </tr>
 </tbody>
@@ -1754,38 +1844,38 @@ when the data of the request is available or
 30
 31
 32</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="type">static</span> <span class="type">void</span>
-about_uri_scheme_request_cb (WebKitURISchemeRequest *request,
-                             gpointer                user_data)
-{
-    GInputStream *stream;
-    gsize         stream_length;
-    <span class="type">const</span> gchar  *path;
+        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
+<span class="function">about_uri_scheme_request_cb</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitURISchemeRequest</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">request</span><span class="symbol">,</span>
+<span class="normal">                             </span><span class="usertype">gpointer</span><span class="normal">                user_data</span><span class="symbol">)</span>
+<span class="cbracket">{</span>
+<span class="normal">    </span><span class="usertype">GInputStream</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">stream</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="usertype">gsize</span><span class="normal">         stream_length</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="keyword">const</span><span class="normal"> </span><span class="usertype">gchar</span><span class="normal">  </span><span class="symbol">*</span><span class="normal">path</span><span class="symbol">;</span>
 
-    path = webkit_uri_scheme_request_get_path (request);
-    <span class="keyword">if</span> (!g_strcmp0 (path, <span class="number">&quot;plugins&quot;</span>)) {
-        <span class="comment">/*</span><span class="comment"> Create a GInputStream with the contents of plugins about page, and set its length to stream_length </span><span class="comment">*/</span>
-    } <span class="keyword">else</span> <span class="keyword">if</span> (!g_strcmp0 (path, <span class="number">&quot;memory&quot;</span>)) {
-        <span class="comment">/*</span><span class="comment"> Create a GInputStream with the contents of memory about page, and set its length to stream_length </span><span class="comment">*/</span>
-    } <span class="keyword">else</span> <span class="keyword">if</span> (!g_strcmp0 (path, <span class="number">&quot;applications&quot;</span>)) {
-        <span class="comment">/*</span><span class="comment"> Create a GInputStream with the contents of applications about page, and set its length to stream_length </span><span class="comment">*/</span>
-    } <span class="keyword">else</span> <span class="keyword">if</span> (!g_strcmp0 (path, <span class="number">&quot;example&quot;</span>)) {
-        gchar *contents;
+<span class="normal">    path </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitURISchemeRequest.html#webkit-uri-scheme-request-get-path">webkit_uri_scheme_request_get_path</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">path</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"plugins"</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="comment">/* Create a GInputStream with the contents of plugins about page, and set its length to stream_length */</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">path</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"memory"</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="comment">/* Create a GInputStream with the contents of memory about page, and set its length to stream_length */</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">path</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"applications"</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="comment">/* Create a GInputStream with the contents of applications about page, and set its length to stream_length */</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">path</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"example"</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="usertype">gchar</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">contents</span><span class="symbol">;</span>
 
-        contents = g_strdup_printf (<span class="number">&quot;&lt;html&gt;&lt;body&gt;&lt;p&gt;Example about page&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;&quot;</span>);
-        stream_length = strlen (contents);
-        stream = g_memory_input_stream_new_from_data (contents, stream_length, g_free);
-    } <span class="keyword">else</span> {
-        GError *error;
+<span class="normal">        contents </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strdup-printf">g_strdup_printf</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"&lt;html&gt;&lt;body&gt;&lt;p&gt;Example about page&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;"</span><span class="symbol">);</span>
+<span class="normal">        stream_length </span><span class="symbol">=</span><span class="normal"> </span><span class="function">strlen</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">contents</span><span class="symbol">);</span>
+<span class="normal">        stream </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../gio/GMemoryInputStream.html#g-memory-input-stream-new-from-data">g_memory_input_stream_new_from_data</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">contents</span><span class="symbol">,</span><span class="normal"> stream_length</span><span class="symbol">,</span><span class="normal"> <a href="../glib/glib-Memory-Allocation.html#g-free">g_free</a></span><span class="symbol">);</span>
+<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="cbracket">{</span>
+<span class="normal">        </span><span class="usertype">GError</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">error</span><span class="symbol">;</span>
 
-        error = g_error_new (ABOUT_HANDLER_ERROR, ABOUT_HANDLER_ERROR_INVALID, <span class="number">&quot;Invalid about:</span><span class="symbol">%s</span><span class="number"> page.&quot;</span>, path);
-        webkit_uri_scheme_request_finish_error (request, error);
-        g_error_free (error);
-        <span class="keyword">return</span>;
-    }
-    webkit_uri_scheme_request_finish (request, stream, stream_length, <span class="number">&quot;text/html&quot;</span>);
-    g_object_unref (stream);
-}</pre></td>
+<span class="normal">        error </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../glib/glib-Error-Reporting.html#g-error-new">g_error_new</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">ABOUT_HANDLER_ERROR</span><span class="symbol">,</span><span class="normal"> ABOUT_HANDLER_ERROR_INVALID</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"Invalid about:%s page."</span><span class="symbol">,</span><span class="normal"> path</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="function"><a href="WebKitURISchemeRequest.html#webkit-uri-scheme-request-finish-error">webkit_uri_scheme_request_finish_error</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">,</span><span class="normal"> error</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="function"><a href="../glib/glib-Error-Reporting.html#g-error-free">g_error_free</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">error</span><span class="symbol">);</span>
+<span class="normal">        </span><span class="keyword">return</span><span class="symbol">;</span>
+<span class="normal">    </span><span class="cbracket">}</span>
+<span class="normal">    </span><span class="function"><a href="WebKitURISchemeRequest.html#webkit-uri-scheme-request-finish">webkit_uri_scheme_request_finish</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">,</span><span class="normal"> stream</span><span class="symbol">,</span><span class="normal"> stream_length</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"text/html"</span><span class="symbol">);</span>
+<span class="normal">    </span><span class="function"><a href="../gobject/gobject-The-Base-Object-Type.html#g-object-unref">g_object_unref</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">stream</span><span class="symbol">);</span>
+<span class="cbracket">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -1812,7 +1902,7 @@ about_uri_scheme_request_cb (WebKitURISchemeRequest *request,
 </tr>
 <tr>
 <td class="parameter_name"><p>callback</p></td>
-<td class="parameter_description"><p> a <a class="link" href="WebKitWebContext.html#WebKitURISchemeRequestCallback" title="WebKitURISchemeRequestCallback ()"><span class="type">WebKitURISchemeRequestCallback</span></a>. </p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebContext.html#WebKitURISchemeRequestCallback" title="WebKitURISchemeRequestCallback ()"><span class="type">WebKitURISchemeRequestCallback</span></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="The callback is valid until first called."><span class="acronym">scope async</span></acronym>]</span></td>
 </tr>
 <tr>
@@ -2025,6 +2115,47 @@ about_uri_scheme_request_cb (WebKitURISchemeRequest *request,
 <div class="refsect1">
 <a name="WebKitWebContext.signal-details"></a><h2>Signal Details</h2>
 <div class="refsect2">
+<a name="WebKitWebContext-automation-started"></a><h3>The <code class="literal">“automation-started”</code> signal</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+user_function (<a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>        *context,
+               <a class="link" href="WebKitAutomationSession.html" title="WebKitAutomationSession"><span class="type">WebKitAutomationSession</span></a> *session,
+               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                 user_data)</pre>
+<p>This signal is emitted when a new automation request is made.
+Note that it will never be emitted if automation is not enabled in <em class="parameter"><code>context</code></em>
+,
+see <a class="link" href="WebKitWebContext.html#webkit-web-context-set-automation-allowed" title="webkit_web_context_set_automation_allowed ()"><code class="function">webkit_web_context_set_automation_allowed()</code></a> for more details.</p>
+<div class="refsect3">
+<a name="WebKitWebContext-automation-started.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>context</p></td>
+<td class="parameter_description"><p>the <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>session</p></td>
+<td class="parameter_description"><p>the <a class="link" href="WebKitAutomationSession.html" title="WebKitAutomationSession"><span class="type">WebKitAutomationSession</span></a> associated with this event</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>user_data</p></td>
+<td class="parameter_description"><p>user data set when the signal handler was connected.</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p class="since">Since: <a class="link" href="api-index-2-18.html#api-index-2.18">2.18</a></p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="WebKitWebContext-download-started"></a><h3>The <code class="literal">“download-started”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context,
@@ -2137,6 +2268,6 @@ and <a class="link" href="WebKitWebContext.html#webkit-web-context-set-web-exten
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.25.1</div>
+<hr>Generated by GTK-Doc V1.26.1</div>
 </body>
 </html>
