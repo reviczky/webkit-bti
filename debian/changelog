@@ -1,3 +1,10 @@
+webkit2gtk (2.18.6-1~deb9u1) stretch; urgency=medium
+
+  * Team upload.
+  * New security and bugfix release backported from Buster.
+
+ -- Jeremy Bicha <jbicha@debian.org>  Mon, 29 Jan 2018 20:54:00 -0500
+
 webkit2gtk (2.18.6-1) unstable; urgency=high
 
   * New upstream release.

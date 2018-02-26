@@ -52,7 +52,7 @@ Build-Conflicts: gir-repository-dev
 Standards-Version: 3.9.8
 Homepage: https://webkitgtk.org/
 Vcs-Browser: https://anonscm.debian.org/git/pkg-webkit/webkit.git
-Vcs-Git: https://anonscm.debian.org/git/pkg-webkit/webkit.git -b wk2/unstable
+Vcs-Git: https://anonscm.debian.org/git/pkg-webkit/webkit.git -b wk2/stretch
 
 Package: libjavascriptcoregtk-4.0-18
 Section: libs
