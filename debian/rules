@@ -46,7 +46,8 @@ else
 endif
 
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_GSTREAMER_GL=OFF -DUSE_WOFF2=OFF -DUSER_AGENT_GTK_DISTRIBUTOR_NAME=\'\\"Ubuntu\\"\'
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_GSTREAMER_GL=OFF -DUSE_WOFF2=OFF
+	USERAGENT = -DUSER_AGENT_GTK_DISTRIBUTOR_NAME='"Ubuntu"'
 	DEB_DH_GENCONTROL_ARGS += -- -Vgst:Recommends=""
 else
 	DEB_DH_GENCONTROL_ARGS += -- -Vgst:Recommends="gstreamer1.0-plugins-bad, gstreamer1.0-libav,"
@@ -56,7 +57,7 @@ endif
 	dh $@ --parallel --with gir
 
 override_dh_auto_configure:
-	CFLAGS="$(CFLAGS) $(CPPFLAGS)" \
+	CFLAGS="$(CFLAGS) $(CPPFLAGS) $(USERAGENT)" \
 	CXXFLAGS="$(CFLAGS) $(CPPFLAGS)" \
 	LDFLAGS="$(LDFLAGS)" \
 	dh_auto_configure -- \
