@@ -1,9 +1,16 @@
 webkit2gtk (2.19.91-2) UNRELEASED; urgency=medium
 
+  [ Alberto Garcia ]
   * debian/rules:
     + Don't redefine CFLAGS or LDFLAGS when calling cmake, and don't add
       CPPFLAGS to CFLAGS/CXXFLAGS. Cmake already reads all those
       environment variables.
+
+  [ Jeremy Bicha ]
+  * gstreamergl has moved to gstreamer base in 1.13 so update dependencies
+    and build the feature on Ubuntu too
+  * Fix Ubuntu useragent (LP: #1751484)
+  * Temporarily disable WOFF2 on Ubuntu, see bug 1742743
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 05 Mar 2018 17:14:00 +0200
 
