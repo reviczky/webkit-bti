@@ -45,6 +45,7 @@ namespace JSC { namespace FTL {
 
 #define FOR_EACH_ABSTRACT_FIELD(macro) \
     macro(ArrayBuffer_data, ArrayBuffer::offsetOfData()) \
+    macro(ArrayStorage_numValuesInVector, ArrayStorage::numValuesInVectorOffset()) \
     macro(Butterfly_arrayBuffer, Butterfly::offsetOfArrayBuffer()) \
     macro(Butterfly_publicLength, Butterfly::offsetOfPublicLength()) \
     macro(Butterfly_vectorLength, Butterfly::offsetOfVectorLength()) \
@@ -174,6 +175,8 @@ public:
 #undef ABSTRACT_FIELD_DECLARATION
     
     AbstractHeap& JSCell_freeListNext;
+    AbstractHeap& ArrayStorage_publicLength;
+    AbstractHeap& ArrayStorage_vectorLength;
     
 #define INDEXED_ABSTRACT_HEAP_DECLARATION(name, offset, size) IndexedAbstractHeap name;
     FOR_EACH_INDEXED_ABSTRACT_HEAP(INDEXED_ABSTRACT_HEAP_DECLARATION)

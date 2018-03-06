@@ -142,6 +142,7 @@
 #include "PlugInsResources.h"
 #include "PluginDocument.h"
 #include "PointerLockController.h"
+#include "PolicyChecker.h"
 #include "PopStateEvent.h"
 #include "ProcessingInstruction.h"
 #include "PublicSuffix.h"
@@ -2317,6 +2318,9 @@ void Document::destroyRenderTree()
     // FIXME: RenderObject::view() uses m_renderView and we can't null it before destruction is completed
     {
         RenderTreeBuilder builder(*m_renderView);
+        // FIXME: This is a workaround for leftover content (see webkit.org/b/182547).
+        while (m_renderView->firstChild())
+            builder.destroy(*m_renderView->firstChild());
         m_renderView->destroy();
     }
     m_renderView.release();
@@ -2619,6 +2623,8 @@ void Document::open(Document* responsibleDocument)
             }
         }
 
+        if (m_frame->loader().policyChecker().delegateIsDecidingNavigationPolicy())
+            m_frame->loader().policyChecker().stopCheck();
         if (m_frame->loader().state() == FrameStateProvisional)
             m_frame->loader().stopAllLoaders();
     }
@@ -5763,6 +5769,9 @@ void Document::initDNSPrefetch()
 
 void Document::parseDNSPrefetchControlHeader(const String& dnsPrefetchControl)
 {
+    if (!settings().dnsPrefetchingEnabled())
+        return;
+
     if (equalLettersIgnoringASCIICase(dnsPrefetchControl, "on") && !m_haveExplicitlyDisabledDNSPrefetch) {
         m_isDNSPrefetchEnabled = true;
         return;
@@ -6304,22 +6313,20 @@ void Document::webkitDidExitFullScreenForElement(Element*)
     exitingDocument.m_fullScreenChangeDelayTimer.startOneShot(0_s);
 }
 
-void Document::setFullScreenRenderer(RenderTreeBuilder& builder, RenderFullScreen* renderer)
+void Document::setFullScreenRenderer(RenderTreeBuilder& builder, RenderFullScreen& renderer)
 {
-    if (renderer == m_fullScreenRenderer)
+    if (&renderer == m_fullScreenRenderer)
         return;
 
-    if (renderer) {
-        if (m_savedPlaceholderRenderStyle)
-            renderer->createPlaceholder(WTFMove(m_savedPlaceholderRenderStyle), m_savedPlaceholderFrameRect);
-        else if (m_fullScreenRenderer && m_fullScreenRenderer->placeholder()) {
-            auto* placeholder = m_fullScreenRenderer->placeholder();
-            renderer->createPlaceholder(RenderStyle::clonePtr(placeholder->style()), placeholder->frameRect());
-        }
+    if (m_savedPlaceholderRenderStyle)
+        builder.createPlaceholderForFullScreen(renderer, WTFMove(m_savedPlaceholderRenderStyle), m_savedPlaceholderFrameRect);
+    else if (m_fullScreenRenderer && m_fullScreenRenderer->placeholder()) {
+        auto* placeholder = m_fullScreenRenderer->placeholder();
+        builder.createPlaceholderForFullScreen(renderer, RenderStyle::clonePtr(placeholder->style()), placeholder->frameRect());
     }
 
     if (m_fullScreenRenderer)
-        builder.removeAndDestroy(*m_fullScreenRenderer);
+        builder.destroy(*m_fullScreenRenderer);
     ASSERT(!m_fullScreenRenderer);
 
     m_fullScreenRenderer = makeWeakPtr(renderer);

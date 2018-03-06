@@ -111,7 +111,7 @@ void SpeculativeJIT::emitAllocateRawObject(GPRReg resultGPR, RegisteredStructure
         size += vectorLength * sizeof(JSValue) + sizeof(IndexingHeader);
     size += outOfLineCapacity * sizeof(JSValue);
 
-    m_jit.move(TrustedImmPtr(0), storageGPR);
+    m_jit.move(TrustedImmPtr(nullptr), storageGPR);
 
     if (size) {
         if (Allocator allocator = m_jit.vm()->jsValueGigacageAuxiliarySpace.allocatorForNonVirtual(size, AllocatorForMode::AllocatorIfExists)) {
@@ -723,37 +723,6 @@ void SpeculativeJIT::silentFill(const SilentRegisterSavePlan& plan)
         RELEASE_ASSERT_NOT_REACHED();
     }
 }
-    
-JITCompiler::Jump SpeculativeJIT::jumpSlowForUnwantedArrayMode(GPRReg tempGPR, ArrayMode arrayMode, IndexingType shape)
-{
-    switch (arrayMode.arrayClass()) {
-    case Array::OriginalArray: {
-        CRASH();
-#if COMPILER_QUIRK(CONSIDERS_UNREACHABLE_CODE)
-        JITCompiler::Jump result; // I already know that VC++ takes unkindly to the expression "return Jump()", so I'm doing it this way in anticipation of someone eventually using VC++ to compile the DFG.
-        return result;
-#endif
-    }
-        
-    case Array::Array:
-        m_jit.and32(TrustedImm32(IsArray | IndexingShapeMask), tempGPR);
-        return m_jit.branch32(
-            MacroAssembler::NotEqual, tempGPR, TrustedImm32(IsArray | shape));
-        
-    case Array::NonArray:
-    case Array::OriginalNonArray:
-        m_jit.and32(TrustedImm32(IsArray | IndexingShapeMask), tempGPR);
-        return m_jit.branch32(
-            MacroAssembler::NotEqual, tempGPR, TrustedImm32(shape));
-        
-    case Array::PossiblyArray:
-        m_jit.and32(TrustedImm32(IndexingShapeMask), tempGPR);
-        return m_jit.branch32(MacroAssembler::NotEqual, tempGPR, TrustedImm32(shape));
-    }
-    
-    RELEASE_ASSERT_NOT_REACHED();
-    return JITCompiler::Jump();
-}
 
 JITCompiler::JumpList SpeculativeJIT::jumpSlowForUnwantedArrayMode(GPRReg tempGPR, ArrayMode arrayMode)
 {
@@ -764,42 +733,68 @@ JITCompiler::JumpList SpeculativeJIT::jumpSlowForUnwantedArrayMode(GPRReg tempGP
     case Array::Double:
     case Array::Contiguous:
     case Array::Undecided:
-        return jumpSlowForUnwantedArrayMode(tempGPR, arrayMode, arrayMode.shapeMask());
+    case Array::ArrayStorage: {
+        IndexingType shape = arrayMode.shapeMask();
+        switch (arrayMode.arrayClass()) {
+        case Array::OriginalArray:
+            RELEASE_ASSERT_NOT_REACHED();
+            return result;
 
-    case Array::ArrayStorage:
+        case Array::Array:
+            m_jit.and32(TrustedImm32(IsArray | IndexingShapeMask), tempGPR);
+            result.append(m_jit.branch32(
+                MacroAssembler::NotEqual, tempGPR, TrustedImm32(IsArray | shape)));
+            return result;
+
+        case Array::NonArray:
+        case Array::OriginalNonArray:
+            m_jit.and32(TrustedImm32(IsArray | IndexingShapeMask), tempGPR);
+            result.append(m_jit.branch32(
+                MacroAssembler::NotEqual, tempGPR, TrustedImm32(shape)));
+            return result;
+
+        case Array::PossiblyArray:
+            m_jit.and32(TrustedImm32(IndexingShapeMask), tempGPR);
+            result.append(m_jit.branch32(MacroAssembler::NotEqual, tempGPR, TrustedImm32(shape)));
+            return result;
+        }
+
+        RELEASE_ASSERT_NOT_REACHED();
+        return result;
+    }
+
     case Array::SlowPutArrayStorage: {
         ASSERT(!arrayMode.isJSArrayWithOriginalStructure());
-        
-        if (arrayMode.isJSArray()) {
-            if (arrayMode.isSlowPut()) {
-                result.append(
-                    m_jit.branchTest32(
-                        MacroAssembler::Zero, tempGPR, MacroAssembler::TrustedImm32(IsArray)));
-                m_jit.and32(TrustedImm32(IndexingShapeMask), tempGPR);
-                m_jit.sub32(TrustedImm32(ArrayStorageShape), tempGPR);
-                result.append(
-                    m_jit.branch32(
-                        MacroAssembler::Above, tempGPR,
-                        TrustedImm32(SlowPutArrayStorageShape - ArrayStorageShape)));
-                break;
-            }
-            m_jit.and32(TrustedImm32(IsArray | IndexingShapeMask), tempGPR);
+
+        switch (arrayMode.arrayClass()) {
+        case Array::OriginalArray:
+            RELEASE_ASSERT_NOT_REACHED();
+            return result;
+
+        case Array::Array:
             result.append(
-                m_jit.branch32(MacroAssembler::NotEqual, tempGPR, TrustedImm32(IsArray | ArrayStorageShape)));
+                m_jit.branchTest32(
+                    MacroAssembler::Zero, tempGPR, MacroAssembler::TrustedImm32(IsArray)));
+            break;
+
+        case Array::NonArray:
+        case Array::OriginalNonArray:
+            result.append(
+                m_jit.branchTest32(
+                    MacroAssembler::NonZero, tempGPR, MacroAssembler::TrustedImm32(IsArray)));
+            break;
+
+        case Array::PossiblyArray:
             break;
         }
+
         m_jit.and32(TrustedImm32(IndexingShapeMask), tempGPR);
-        if (arrayMode.isSlowPut()) {
-            m_jit.sub32(TrustedImm32(ArrayStorageShape), tempGPR);
-            result.append(
-                m_jit.branch32(
-                    MacroAssembler::Above, tempGPR,
-                    TrustedImm32(SlowPutArrayStorageShape - ArrayStorageShape)));
-            break;
-        }
+        m_jit.sub32(TrustedImm32(ArrayStorageShape), tempGPR);
         result.append(
-            m_jit.branch32(MacroAssembler::NotEqual, tempGPR, TrustedImm32(ArrayStorageShape)));
-        break;
+            m_jit.branch32(
+                MacroAssembler::Above, tempGPR,
+                TrustedImm32(SlowPutArrayStorageShape - ArrayStorageShape)));
+        return result;
     }
     default:
         CRASH();
@@ -1594,7 +1589,7 @@ void SpeculativeJIT::compileToLowerCase(Node* node)
 
     CCallHelpers::JumpList slowPath;
 
-    m_jit.move(TrustedImmPtr(0), indexGPR);
+    m_jit.move(TrustedImmPtr(nullptr), indexGPR);
 
     m_jit.loadPtr(MacroAssembler::Address(stringGPR, JSString::offsetOfValue()), tempGPR);
     slowPath.append(m_jit.branchTestPtr(MacroAssembler::Zero, tempGPR));
@@ -2084,7 +2079,9 @@ void SpeculativeJIT::compileDoublePutByVal(Node* node, SpeculateCellOperand& bas
         addSlowPathGenerator(
             slowPathCall(
                 slowCase, this,
-                m_jit.codeBlock()->isStrictMode() ? operationPutDoubleByValBeyondArrayBoundsStrict : operationPutDoubleByValBeyondArrayBoundsNonStrict,
+                m_jit.codeBlock()->isStrictMode()
+                    ? (node->op() == PutByValDirect ? operationPutDoubleByValDirectBeyondArrayBoundsStrict : operationPutDoubleByValBeyondArrayBoundsStrict)
+                    : (node->op() == PutByValDirect ? operationPutDoubleByValDirectBeyondArrayBoundsNonStrict : operationPutDoubleByValBeyondArrayBoundsNonStrict),
                 NoResult, baseReg, propertyReg, valueReg));
     }
 
@@ -4194,11 +4191,11 @@ void SpeculativeJIT::compileMakeRope(Node* node)
     Allocator allocatorValue = subspaceFor<JSRopeString>(*m_jit.vm())->allocatorForNonVirtual(sizeof(JSRopeString), AllocatorForMode::AllocatorIfExists);
     emitAllocateJSCell(resultGPR, JITAllocator::constant(allocatorValue), allocatorGPR, TrustedImmPtr(m_jit.graph().registerStructure(m_jit.vm()->stringStructure.get())), scratchGPR, slowPath);
         
-    m_jit.storePtr(TrustedImmPtr(0), JITCompiler::Address(resultGPR, JSString::offsetOfValue()));
+    m_jit.storePtr(TrustedImmPtr(nullptr), JITCompiler::Address(resultGPR, JSString::offsetOfValue()));
     for (unsigned i = 0; i < numOpGPRs; ++i)
         m_jit.storePtr(opGPRs[i], JITCompiler::Address(resultGPR, JSRopeString::offsetOfFibers() + sizeof(WriteBarrier<JSString>) * i));
     for (unsigned i = numOpGPRs; i < JSRopeString::s_maxInternalRopeLength; ++i)
-        m_jit.storePtr(TrustedImmPtr(0), JITCompiler::Address(resultGPR, JSRopeString::offsetOfFibers() + sizeof(WriteBarrier<JSString>) * i));
+        m_jit.storePtr(TrustedImmPtr(nullptr), JITCompiler::Address(resultGPR, JSRopeString::offsetOfFibers() + sizeof(WriteBarrier<JSString>) * i));
     m_jit.load32(JITCompiler::Address(opGPRs[0], JSString::offsetOfFlags()), scratchGPR);
     m_jit.load32(JITCompiler::Address(opGPRs[0], JSString::offsetOfLength()), allocatorGPR);
     if (!ASSERT_DISABLED) {
@@ -6406,7 +6403,7 @@ void SpeculativeJIT::compileGetTypedArrayByteOffset(Node* node)
     JITCompiler::Jump done = m_jit.jump();
     
     emptyByteOffset.link(&m_jit);
-    m_jit.move(TrustedImmPtr(0), vectorGPR);
+    m_jit.move(TrustedImmPtr(nullptr), vectorGPR);
     
     done.link(&m_jit);
     nullVector.link(&m_jit);
@@ -6710,7 +6707,7 @@ void SpeculativeJIT::compileNewFunctionCommon(GPRReg resultGPR, RegisteredStruct
     
     m_jit.storePtr(scopeGPR, JITCompiler::Address(resultGPR, JSFunction::offsetOfScopeChain()));
     m_jit.storePtr(TrustedImmPtr::weakPoisonedPointer<JSFunctionPoison>(m_jit.graph(), executable), JITCompiler::Address(resultGPR, JSFunction::offsetOfExecutable()));
-    m_jit.storePtr(TrustedImmPtr(0), JITCompiler::Address(resultGPR, JSFunction::offsetOfRareData()));
+    m_jit.storePtr(TrustedImmPtr(nullptr), JITCompiler::Address(resultGPR, JSFunction::offsetOfRareData()));
     
     m_jit.mutatorFence(*m_jit.vm());
 }
@@ -7032,10 +7029,10 @@ void SpeculativeJIT::compileCreateDirectArguments(Node* node)
         JITCompiler::Address(resultGPR, DirectArguments::offsetOfMinCapacity()));
         
     m_jit.storePtr(
-        TrustedImmPtr(0), JITCompiler::Address(resultGPR, DirectArguments::offsetOfMappedArguments()));
+        TrustedImmPtr(nullptr), JITCompiler::Address(resultGPR, DirectArguments::offsetOfMappedArguments()));
 
     m_jit.storePtr(
-        TrustedImmPtr(0), JITCompiler::Address(resultGPR, DirectArguments::offsetOfModifiedArgumentsDescriptor()));
+        TrustedImmPtr(nullptr), JITCompiler::Address(resultGPR, DirectArguments::offsetOfModifiedArgumentsDescriptor()));
     
     if (lengthIsKnown) {
         addSlowPathGenerator(
@@ -7519,7 +7516,7 @@ void SpeculativeJIT::compileNewArrayWithSpread(Node* node)
     {
         GPRTemporary scratch(this);
         m_jit.move(TrustedImmPtr(scratchBuffer->addressOfActiveLength()), scratch.gpr());
-        m_jit.storePtr(TrustedImmPtr(0), MacroAssembler::Address(scratch.gpr()));
+        m_jit.storePtr(TrustedImmPtr(nullptr), MacroAssembler::Address(scratch.gpr()));
     }
 
     cellResult(resultGPR, node);
@@ -7656,7 +7653,7 @@ void SpeculativeJIT::compileArraySlice(Node* node)
         done.link(&m_jit);
 
         MacroAssembler::JumpList slowCases;
-        m_jit.move(TrustedImmPtr(0), storageResultGPR);
+        m_jit.move(TrustedImmPtr(nullptr), storageResultGPR);
         // Enable the fast case on 64-bit platforms, where a sufficient amount of GP registers should be available.
         // Other platforms could support the same approach with custom code, but that is not currently worth the extra code maintenance.
         if (is64Bit()) {
@@ -7692,7 +7689,7 @@ void SpeculativeJIT::compileArraySlice(Node* node)
 
     GPRTemporary temp5(this);
     GPRReg storeIndex = temp5.gpr();
-    m_jit.move(TrustedImmPtr(0), storeIndex);
+    m_jit.move(TrustedImmPtr(nullptr), storeIndex);
 
     GPRTemporary temp2(this);
     GPRReg resultButterfly = temp2.gpr();
@@ -8431,7 +8428,7 @@ void SpeculativeJIT::compileAllocatePropertyStorage(Node* node)
     m_jit.addPtr(JITCompiler::TrustedImm32(size + sizeof(IndexingHeader)), scratchGPR1);
     
     for (ptrdiff_t offset = 0; offset < static_cast<ptrdiff_t>(size); offset += sizeof(void*))
-        m_jit.storePtr(TrustedImmPtr(0), JITCompiler::Address(scratchGPR1, -(offset + sizeof(JSValue) + sizeof(void*))));
+        m_jit.storePtr(TrustedImmPtr(nullptr), JITCompiler::Address(scratchGPR1, -(offset + sizeof(JSValue) + sizeof(void*))));
         
     addSlowPathGenerator(
         slowPathCall(slowPath, this, operationAllocateSimplePropertyStorageWithInitialCapacity, scratchGPR1));
@@ -8478,7 +8475,7 @@ void SpeculativeJIT::compileReallocatePropertyStorage(Node* node)
     m_jit.addPtr(JITCompiler::TrustedImm32(newSize + sizeof(IndexingHeader)), scratchGPR1);
         
     for (ptrdiff_t offset = oldSize; offset < static_cast<ptrdiff_t>(newSize); offset += sizeof(void*))
-        m_jit.storePtr(TrustedImmPtr(0), JITCompiler::Address(scratchGPR1, -(offset + sizeof(JSValue) + sizeof(void*))));
+        m_jit.storePtr(TrustedImmPtr(nullptr), JITCompiler::Address(scratchGPR1, -(offset + sizeof(JSValue) + sizeof(void*))));
 
     addSlowPathGenerator(
         slowPathCall(slowPath, this, operationAllocateSimplePropertyStorage, scratchGPR1, newSize / sizeof(JSValue)));
@@ -9022,7 +9019,7 @@ void SpeculativeJIT::compileNewTypedArrayWithSize(Node* node)
     
     JITCompiler::JumpList slowCases;
     
-    m_jit.move(TrustedImmPtr(0), storageGPR);
+    m_jit.move(TrustedImmPtr(nullptr), storageGPR);
 
     slowCases.append(m_jit.branch32(
         MacroAssembler::Above, sizeGPR, TrustedImm32(JSArrayBufferView::fastSizeLimit)));
@@ -11342,7 +11339,12 @@ void SpeculativeJIT::compileGetCallee(Node* node)
 void SpeculativeJIT::compileGetArgumentCountIncludingThis(Node* node)
 {
     GPRTemporary result(this);
-    m_jit.load32(JITCompiler::payloadFor(CallFrameSlot::argumentCount), result.gpr());
+    VirtualRegister argumentCountRegister;
+    if (InlineCallFrame* inlineCallFrame = node->argumentsInlineCallFrame())
+        argumentCountRegister = inlineCallFrame->argumentCountRegister;
+    else
+        argumentCountRegister = VirtualRegister(CallFrameSlot::argumentCount);
+    m_jit.load32(JITCompiler::payloadFor(argumentCountRegister), result.gpr());
     int32Result(result.gpr(), node);
 }
 

@@ -87,7 +87,7 @@ public:
     bool isRenderInline() const;
 
     virtual bool isChildAllowed(const RenderObject&, const RenderStyle&) const { return true; }
-    void didInsertChild(RenderObject& child, RenderObject* beforeChild);
+    void didAttachChild(RenderObject& child, RenderObject* beforeChild);
 
     // The following functions are used when the render tree hierarchy changes to make sure layers get
     // properly added and removed. Since containership can be implemented by any subclass, and since a hierarchy
@@ -254,7 +254,7 @@ protected:
 
     void insertedIntoTree() override;
     void willBeRemovedFromTree() override;
-    void willBeDestroyed(RenderTreeBuilder&) override;
+    void willBeDestroyed() override;
 
     void setRenderInlineAlwaysCreatesLineBoxes(bool b) { m_renderInlineAlwaysCreatesLineBoxes = b; }
     bool renderInlineAlwaysCreatesLineBoxes() const { return m_renderInlineAlwaysCreatesLineBoxes; }
@@ -280,8 +280,9 @@ protected:
     void removeFromRenderFragmentedFlowIncludingDescendants(bool shouldUpdateState);
     void adjustFragmentedFlowStateOnContainingBlockChangeIfNeeded();
     
-    bool noLongerAffectsParentBlock() const { return s_noLongerAffectsParentBlock; }
     bool isVisibleInViewport() const;
+
+    bool noLongerAffectsParentBlock(const RenderStyle& oldStyle) const;
 
 private:
     RenderElement(ContainerNode&, RenderStyle&&, BaseTypeFlags);
@@ -348,11 +349,6 @@ private:
     RenderObject* m_lastChild;
 
     RenderStyle m_style;
-
-    // FIXME: Get rid of this hack.
-    // Store state between styleWillChange and styleDidChange
-    static bool s_affectsParentBlock;
-    static bool s_noLongerAffectsParentBlock;
 };
 
 inline void RenderElement::setAncestorLineBoxDirty(bool f)
