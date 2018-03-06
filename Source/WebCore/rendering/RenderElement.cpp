@@ -94,9 +94,6 @@ struct SameSizeAsRenderElement : public RenderObject {
 
 static_assert(sizeof(RenderElement) == sizeof(SameSizeAsRenderElement), "RenderElement should stay small");
 
-bool RenderElement::s_affectsParentBlock = false;
-bool RenderElement::s_noLongerAffectsParentBlock = false;
-    
 inline RenderElement::RenderElement(ContainerNode& elementOrDocument, RenderStyle&& style, BaseTypeFlags baseTypeFlags)
     : RenderObject(elementOrDocument)
     , m_baseTypeFlags(baseTypeFlags)
@@ -456,7 +453,7 @@ void RenderElement::setStyle(RenderStyle&& style, StyleDifference minimalStyleDi
     }
 }
 
-void RenderElement::didInsertChild(RenderObject& child, RenderObject*)
+void RenderElement::didAttachChild(RenderObject& child, RenderObject*)
 {
     if (is<RenderText>(child))
         downcast<RenderText>(child).styleDidChange(StyleDifferenceEqual, nullptr);
@@ -749,13 +746,6 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
             downcast<RenderBox>(*this).removeFloatingOrPositionedChildFromBlockLists();
         }
 
-        s_affectsParentBlock = isFloatingOrOutOfFlowPositioned()
-            && (!newStyle.isFloating() && !newStyle.hasOutOfFlowPosition())
-            && parent() && (parent()->isRenderBlockFlow() || parent()->isRenderInline());
-
-        s_noLongerAffectsParentBlock = ((!isFloating() && newStyle.isFloating()) || (!isOutOfFlowPositioned() && newStyle.hasOutOfFlowPosition()))
-            && parent() && parent()->isRenderBlock();
-
         // reset style flags
         if (diff == StyleDifferenceLayout || diff == StyleDifferenceLayoutPositionedMovementOnly) {
             setFloating(false);
@@ -769,9 +759,6 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
         setHasOverflowClip(false);
         setHasTransformRelatedProperty(false);
         setHasReflection(false);
-    } else {
-        s_affectsParentBlock = false;
-        s_noLongerAffectsParentBlock = false;
     }
 
     bool newStyleSlowScroll = false;
@@ -805,6 +792,12 @@ static inline bool areCursorsEqual(const RenderStyle* a, const RenderStyle* b)
 }
 #endif
 
+bool RenderElement::noLongerAffectsParentBlock(const RenderStyle& oldStyle) const
+{
+    return parent() && parent()->isRenderBlock()
+        && ((!oldStyle.isFloating() && style().isFloating()) || (!oldStyle.hasOutOfFlowPosition() && style().hasOutOfFlowPosition()));
+}
+
 void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
 {
     updateFillImages(oldStyle ? &oldStyle->backgroundLayers() : nullptr, m_style.backgroundLayers());
@@ -813,7 +806,10 @@ void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldS
     updateImage(oldStyle ? oldStyle->maskBoxImage().image() : nullptr, m_style.maskBoxImage().image());
     updateShapeImage(oldStyle ? oldStyle->shapeOutside() : nullptr, m_style.shapeOutside());
 
-    if (s_affectsParentBlock) {
+    bool affectsParentBlock = oldStyle && (oldStyle->isFloating() || oldStyle->hasOutOfFlowPosition())
+        && !style().isFloating() && !style().hasOutOfFlowPosition()
+        && parent() && (parent()->isRenderBlockFlow() || parent()->isRenderInline());
+    if (affectsParentBlock) {
         // We have gone from not affecting the inline status of the parent flow to suddenly
         // having an impact. See if there is a mismatch between the parent flow's
         // childrenInline() state and our state.
@@ -822,7 +818,7 @@ void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldS
             RenderTreeBuilder::current()->childFlowStateChangesAndAffectsParentBlock(*this);
     }
 
-    if (s_noLongerAffectsParentBlock)
+    if (oldStyle && noLongerAffectsParentBlock(*oldStyle))
         RenderTreeBuilder::current()->childFlowStateChangesAndNoLongerAffectsParentBlock(*this);
 
     SVGRenderSupport::styleChanged(*this, oldStyle);
@@ -927,7 +923,7 @@ inline void RenderElement::clearSubtreeLayoutRootIfNeeded() const
     view().frameView().layoutContext().clearSubtreeLayoutRoot();
 }
 
-void RenderElement::willBeDestroyed(RenderTreeBuilder& builder)
+void RenderElement::willBeDestroyed()
 {
     if (m_style.hasFixedBackgroundImage() && !settings().fixedBackgroundsPaintRelativeToDocument())
         view().frameView().removeSlowRepaintObject(*this);
@@ -937,7 +933,7 @@ void RenderElement::willBeDestroyed(RenderTreeBuilder& builder)
     if (hasCounterNodeMap())
         RenderCounter::destroyCounterNodes(*this);
 
-    RenderObject::willBeDestroyed(builder);
+    RenderObject::willBeDestroyed();
 
     clearSubtreeLayoutRootIfNeeded();
 

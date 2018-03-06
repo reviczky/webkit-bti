@@ -1352,13 +1352,10 @@ void ByteCodeParser::emitFunctionChecks(CallVariant callee, Node* callTarget, Vi
 Node* ByteCodeParser::getArgumentCount()
 {
     Node* argumentCount;
-    if (m_inlineStackTop->m_inlineCallFrame) {
-        if (m_inlineStackTop->m_inlineCallFrame->isVarargs())
-            argumentCount = get(VirtualRegister(CallFrameSlot::argumentCount));
-        else
-            argumentCount = jsConstant(m_graph.freeze(jsNumber(m_inlineStackTop->m_inlineCallFrame->argumentCountIncludingThis))->value());
-    } else
-        argumentCount = addToGraph(GetArgumentCountIncludingThis, OpInfo(0), OpInfo(SpecInt32Only));
+    if (m_inlineStackTop->m_inlineCallFrame && !m_inlineStackTop->m_inlineCallFrame->isVarargs())
+        argumentCount = jsConstant(m_graph.freeze(jsNumber(m_inlineStackTop->m_inlineCallFrame->argumentCountIncludingThis))->value());
+    else
+        argumentCount = addToGraph(GetArgumentCountIncludingThis, OpInfo(m_inlineStackTop->m_inlineCallFrame), OpInfo(SpecInt32Only));
     return argumentCount;
 }
 
@@ -2782,6 +2779,12 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, int resultOperand, Intrin
         set(VirtualRegister(resultOperand), jsConstant(jsBoolean(true)));
         return true;
     }
+
+    case FTLTrueIntrinsic: {
+        insertChecks();
+        set(VirtualRegister(resultOperand), jsConstant(jsBoolean(isFTL(m_graph.m_plan.mode))));
+        return true;
+    }
         
     case OSRExitIntrinsic: {
         insertChecks();
@@ -3120,6 +3123,17 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, int resultOperand, Intrin
             Node* result = addToGraph(NumberToStringWithRadix, thisNumber, radix);
             set(VirtualRegister(resultOperand), result);
         }
+        return true;
+    }
+
+    case NumberIsIntegerIntrinsic: {
+        if (argumentCountIncludingThis < 2)
+            return false;
+
+        insertChecks();
+        Node* input = get(virtualRegisterForArgument(1, registerOffset));
+        Node* result = addToGraph(NumberIsInteger, input);
+        set(VirtualRegister(resultOperand), result);
         return true;
     }
 
