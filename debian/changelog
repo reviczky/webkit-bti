@@ -6,6 +6,18 @@ webkit2gtk (2.19.92-1) UNRELEASED; urgency=medium
     + Don't redefine CFLAGS or LDFLAGS when calling cmake, and don't add
       CPPFLAGS to CFLAGS/CXXFLAGS. Cmake already reads all those
       environment variables.
+  * Build the documentation:
+    + debian/rules:
+      - Support the DEB_BUILD_OPTIONS "nodoc" tag and pass -DENABLE_GTKDOC
+        to CMake depending on whether it's set or not.
+      - Override the dh_install rule to make sure that a dummy doc
+        directory is present if "nodoc" is set.
+    + debian/control:
+      - Add build dependencies on libglib2.0-doc, libgtk-3-doc and
+        libsoup2.4-doc.
+    + debian/libwebkit2gtk-4.0-doc.install:
+      - Install the generated documentation instead of the one provided by
+        upstream.
 
   [ Jeremy Bicha ]
   * gstreamergl has moved to gstreamer base in 1.13 so update dependencies

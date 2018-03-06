@@ -38,6 +38,12 @@ ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEM_MALLOC=ON
 endif
 
+ifneq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_GTKDOC=OFF
+else
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_GTKDOC=ON
+endif
+
 ifneq (,$(filter debug,$(DEB_BUILD_OPTIONS)))
 	EXTRA_CMAKE_ARGUMENTS += -DCMAKE_BUILD_TYPE=Debug
 else
@@ -69,6 +75,12 @@ override_dh_auto_configure:
 	   -DCMAKE_CXX_FLAGS_DEBUG="" \
 	   -DENABLE_MINIBROWSER=ON \
 	   $(EXTRA_CMAKE_ARGUMENTS)
+
+# Create a dummy doc directory in case the "nodoc" build option is set
+override_dh_install:
+	mkdir -p $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0
+	touch $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0/index.html
+	dh_install
 
 override_dh_strip:
 	if dpkg --compare-versions $(DEBHELPER_VERSION) ge 9.20151219; then \
