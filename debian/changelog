@@ -9,7 +9,6 @@ webkit2gtk (2.19.92-1) UNRELEASED; urgency=medium
 
   [ Jeremy Bicha ]
   * gstreamergl has moved to gstreamer base in 1.13 so update dependencies
-    and build the feature on Ubuntu too
   * Fix Ubuntu useragent (LP: #1751484)
   * Temporarily disable WOFF2 on Ubuntu, see bug 1742743
 
