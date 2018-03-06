@@ -1,6 +1,7 @@
-webkit2gtk (2.19.91-2) UNRELEASED; urgency=medium
+webkit2gtk (2.19.92-1) UNRELEASED; urgency=medium
 
   [ Alberto Garcia ]
+  * New upstream development release.
   * debian/rules:
     + Don't redefine CFLAGS or LDFLAGS when calling cmake, and don't add
       CPPFLAGS to CFLAGS/CXXFLAGS. Cmake already reads all those
