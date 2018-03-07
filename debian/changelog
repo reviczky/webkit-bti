@@ -1,4 +1,4 @@
-webkit2gtk (2.19.92-1) UNRELEASED; urgency=medium
+webkit2gtk (2.19.92-1) experimental; urgency=medium
 
   [ Alberto Garcia ]
   * New upstream development release.
@@ -27,7 +27,7 @@ webkit2gtk (2.19.92-1) UNRELEASED; urgency=medium
   * Fix Ubuntu useragent (LP: #1751484)
   * Temporarily disable WOFF2 on Ubuntu, see bug 1742743
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 05 Mar 2018 17:14:00 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 07 Mar 2018 11:18:52 +0200
 
 webkit2gtk (2.19.91-1) experimental; urgency=medium
 
