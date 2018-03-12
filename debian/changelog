@@ -8,6 +8,8 @@ webkit2gtk (2.20.0-1) UNRELEASED; urgency=medium
     + Update symbols.
   * debian/copyright:
     + Remove nonexistent files.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 11 Mar 2018 15:52:34 +0200
 
