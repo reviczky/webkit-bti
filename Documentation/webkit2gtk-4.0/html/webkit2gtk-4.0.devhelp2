@@ -878,10 +878,7 @@
     <keyword type="function" name="webkit_website_data_manager_get_offline_application_cache_directory ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-offline-application-cache-directory" since="2.10"/>
     <keyword type="function" name="webkit_website_data_manager_get_indexeddb_directory ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-indexeddb-directory" since="2.10"/>
     <keyword type="function" name="webkit_website_data_manager_get_websql_directory ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-websql-directory" since="2.10"/>
-    <keyword type="function" name="webkit_website_data_manager_get_resource_load_statistics_directory ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-resource-load-statistics-directory" since="2.20"/>
     <keyword type="function" name="webkit_website_data_manager_get_cookie_manager ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-cookie-manager" since="2.16"/>
-    <keyword type="function" name="webkit_website_data_manager_set_resource_load_statistics_enabled ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-set-resource-load-statistics-enabled" since="2.20"/>
-    <keyword type="function" name="webkit_website_data_manager_get_resource_load_statistics_enabled ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-get-resource-load-statistics-enabled" since="2.20"/>
     <keyword type="function" name="webkit_website_data_manager_fetch ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-fetch" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_fetch_finish ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-fetch-finish" since="2.16"/>
     <keyword type="function" name="webkit_website_data_manager_remove ()" link="WebKitWebsiteDataManager.html#webkit-website-data-manager-remove" since="2.16"/>
@@ -896,7 +893,6 @@
     <keyword type="property" name="The “is-ephemeral” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--is-ephemeral"/>
     <keyword type="property" name="The “local-storage-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--local-storage-directory"/>
     <keyword type="property" name="The “offline-application-cache-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--offline-application-cache-directory"/>
-    <keyword type="property" name="The “resource-load-statistics-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--resource-load-statistics-directory"/>
     <keyword type="property" name="The “websql-directory” property" link="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--websql-directory"/>
     <keyword type="function" name="webkit_website_data_ref ()" link="WebKitWebsiteData.html#webkit-website-data-ref" since="2.16"/>
     <keyword type="function" name="webkit_website_data_unref ()" link="WebKitWebsiteData.html#webkit-website-data-unref" since="2.16"/>
@@ -1132,7 +1128,6 @@
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_INDEXEDDB_DATABASES" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-INDEXEDDB-DATABASES:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_PLUGIN_DATA" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-PLUGIN-DATA:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_COOKIES" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-COOKIES:CAPS"/>
-    <keyword type="constant" name="WEBKIT_WEBSITE_DATA_RESOURCE_LOAD_STATISTICS" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-RESOURCE-LOAD-STATISTICS:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_ALL" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-ALL:CAPS"/>
     <keyword type="constant" name="WEBKIT_FORM_SUBMISSION_WILL_SEND_DOM_EVENT" link="WebKitWebPage.html#WEBKIT-FORM-SUBMISSION-WILL-SEND-DOM-EVENT:CAPS"/>
     <keyword type="constant" name="WEBKIT_FORM_SUBMISSION_WILL_COMPLETE" link="WebKitWebPage.html#WEBKIT-FORM-SUBMISSION-WILL-COMPLETE:CAPS"/>
