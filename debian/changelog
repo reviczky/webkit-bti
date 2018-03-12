@@ -1,4 +1,4 @@
-webkit2gtk (2.20.0-1) UNRELEASED; urgency=medium
+webkit2gtk (2.20.0-1) experimental; urgency=medium
 
   * New upstream release.
   * debian/patches/fix-ftbfs-armel.patch:
@@ -11,7 +11,7 @@ webkit2gtk (2.20.0-1) UNRELEASED; urgency=medium
   * debian/source/lintian-overrides:
     + Update source-is-missing overrides.
 
- -- Alberto Garcia <berto@igalia.com>  Sun, 11 Mar 2018 15:52:34 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 12 Mar 2018 16:49:26 +0200
 
 webkit2gtk (2.19.92-1) experimental; urgency=medium
 
