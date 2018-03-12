@@ -4,6 +4,8 @@ webkit2gtk (2.20.0-1) UNRELEASED; urgency=medium
   * debian/patches/fix-ftbfs-armel.patch:
     + Detect missing __atomic_fetch_add_8() and rename patch to
       fix-atomics-build.patch.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 11 Mar 2018 15:52:34 +0200
 

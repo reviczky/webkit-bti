@@ -1966,8 +1966,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_get_indexeddb_directory@Base 2.10.0
  webkit_website_data_manager_get_local_storage_directory@Base 2.10.0
  webkit_website_data_manager_get_offline_application_cache_directory@Base 2.10.0
- webkit_website_data_manager_get_resource_load_statistics_directory@Base 2.19.1
- webkit_website_data_manager_get_resource_load_statistics_enabled@Base 2.19.1
  webkit_website_data_manager_get_type@Base 2.10.0
  webkit_website_data_manager_get_websql_directory@Base 2.10.0
  webkit_website_data_manager_is_ephemeral@Base 2.15.4
@@ -1975,7 +1973,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_new_ephemeral@Base 2.15.4
  webkit_website_data_manager_remove@Base 2.15.4
  webkit_website_data_manager_remove_finish@Base 2.15.4
- webkit_website_data_manager_set_resource_load_statistics_enabled@Base 2.19.1
  webkit_website_data_ref@Base 2.15.4
  webkit_website_data_types_get_type@Base 2.15.4
  webkit_website_data_unref@Base 2.15.4
