@@ -1,3 +1,18 @@
+webkit2gtk (2.20.0-2) unstable; urgency=medium
+
+  webkit2gtk 2.20.0 contains a security feature named Gigacage that
+  requires a virtual memory region of several gigabytes and is used for
+  variable-length random-access allocations.
+
+  One consequence of this is that webkit-based applications may not run if
+  their maximum virtual memory size is restricted (e.g. using ulimit -v).
+
+  If it's not possible to remove the VM size limits the Gigacage can be
+  disabled by setting the environment variable GIGACAGE_ENABLED=no. Keep
+  in mind that you will be making your system less secure by doing this.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 21 Mar 2018 14:14:44 +0200
+
 webkit2gtk (2.10.4+dfsg1-1) unstable; urgency=medium
 
   Since webkit2gtk 2.10.4, support for GTK+2-based plugins (Adobe
