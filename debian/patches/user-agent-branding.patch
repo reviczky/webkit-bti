@@ -5,7 +5,7 @@ Subject: user-agent-branding
 Add optional distributor string to user agent
 
 https://bugs.webkit.org/show_bug.cgi?id=162611
-https://src.fedoraproject.org/rpms/webkitgtk4/blob/master/f/user-agent-branding.patch
+https://src.fedoraproject.org/rpms/webkit2gtk3/blob/master/f/user-agent-branding.patch
 ---
  Source/WebCore/platform/glib/UserAgentGLib.cpp | 3 +++
  1 file changed, 3 insertions(+)

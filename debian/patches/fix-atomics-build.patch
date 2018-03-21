@@ -1,0 +1,60 @@
+From: Alberto Garcia <berto@igalia.com>
+Subject: Detect __sync_add_and_fetch_8() and __atomic_fetch_add_8()
+Bug: https://bugs.webkit.org/show_bug.cgi?id=182622
+Index: webkitgtk/Source/WTF/wtf/CMakeLists.txt
+===================================================================
+--- webkitgtk.orig/Source/WTF/wtf/CMakeLists.txt
++++ webkitgtk/Source/WTF/wtf/CMakeLists.txt
+@@ -315,7 +315,6 @@ set(WTF_HEADERS
+ 
+ set(WTF_SOURCES
+     Assertions.cpp
+-    Atomics.cpp
+     AutomaticThread.cpp
+     BitVector.cpp
+     CPUTime.cpp
+@@ -458,6 +457,16 @@ if (NOT USE_SYSTEM_MALLOC)
+     list(APPEND WTF_LIBRARIES bmalloc)
+ endif ()
+ 
++file(WRITE ${CMAKE_BINARY_DIR}/test_atomics.cpp
++     "int main(void)\n"
++     "{ long long x = 1; return (int) __sync_add_and_fetch_8(&x, 1); }\n")
++try_compile(ATOMICS_BUILD_SUCCEEDED ${CMAKE_BINARY_DIR} ${CMAKE_BINARY_DIR}/test_atomics.cpp)
++message(STATUS "Found __sync_add_and_fetch_8(): ${ATOMICS_BUILD_SUCCEEDED}")
++if (NOT ATOMICS_BUILD_SUCCEEDED)
++    list(APPEND WTF_SOURCES Atomics.cpp)
++endif ()
++file(REMOVE ${CMAKE_BINARY_DIR}/test_atomics.cpp)
++
+ list(APPEND WTF_SOURCES
+     unicode/CollatorDefault.cpp
+ 
+Index: webkitgtk/Source/JavaScriptCore/CMakeLists.txt
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/CMakeLists.txt
++++ webkitgtk/Source/JavaScriptCore/CMakeLists.txt
+@@ -116,15 +116,15 @@ set(JavaScriptCore_LIBRARIES
+     ${LLVM_LIBRARIES}
+ )
+ 
+-# Since r228149, on MIPS we need to link with -latomic, because
+-# __atomic_fetch_add_8 is not available as a compiler intrinsic. It is
+-# available on other platforms (including 32-bit Arm), so the link with
+-# libatomic is only neede on MIPS.
+-if (WTF_CPU_MIPS)
+-    list(APPEND JavaScriptCore_LIBRARIES
+-        -latomic
+-    )
++file(WRITE ${CMAKE_BINARY_DIR}/test_atomics.cpp
++     "int main(void)\n"
++     "{ long long x = 1; return (int) __atomic_fetch_add_8(&x, 1, 1); }\n")
++try_compile(ATOMICS_BUILD_SUCCEEDED ${CMAKE_BINARY_DIR} ${CMAKE_BINARY_DIR}/test_atomics.cpp)
++message(STATUS "Found __atomic_fetch_add_8(): ${ATOMICS_BUILD_SUCCEEDED}")
++if (NOT ATOMICS_BUILD_SUCCEEDED)
++    list(APPEND JavaScriptCore_LIBRARIES -latomic)
+ endif ()
++file(REMOVE ${CMAKE_BINARY_DIR}/test_atomics.cpp)
+ 
+ set(JavaScriptCore_SCRIPTS_SOURCES_DIR "${JAVASCRIPTCORE_DIR}/Scripts")
+ 

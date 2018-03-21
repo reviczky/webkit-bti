@@ -1,5 +1,5 @@
 fix-ftbfs-sparc64.patch
-fix-ftbfs-armel.patch
+fix-atomics-build.patch
 fix-ftbfs-hurd.patch
 fix-ftbfs-x86.patch
 fix-ftbfs-m68k.patch

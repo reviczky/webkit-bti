@@ -2,70 +2,22 @@ From: John Paul Adrian Glaubitz <glaubitz@physik.fu-berlin.de>
 Subject: Fix FTBFS on m68k
 Bug-Debian: https://bugs.debian.org/868126
 Last-Update: 2017-07-11
-Index: webkitgtk/CMakeLists.txt
-===================================================================
---- webkitgtk.orig/CMakeLists.txt
-+++ webkitgtk/CMakeLists.txt
-@@ -89,6 +89,8 @@ elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR
-     set(WTF_CPU_ARM64 1)
- elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "alpha*")
-     set(WTF_CPU_ALPHA 1)
-+elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "m68k")
-+    set(WTF_CPU_M68K 1)
- elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "^mips")
-     set(WTF_CPU_MIPS 1)
- elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "sh4")
-Index: webkitgtk/Source/JavaScriptCore/CMakeLists.txt
-===================================================================
---- webkitgtk.orig/Source/JavaScriptCore/CMakeLists.txt
-+++ webkitgtk/Source/JavaScriptCore/CMakeLists.txt
-@@ -1531,6 +1531,7 @@ elseif (WTF_CPU_PPC64)
- elseif (WTF_CPU_PPC64LE)
- elseif (WTF_CPU_S390)
- elseif (WTF_CPU_S390X)
-+elseif (WTF_CPU_M68K)
- elseif (WTF_CPU_MIPS)
- elseif (WTF_CPU_SH4)
- elseif (WTF_CPU_SPARC64)
 Index: webkitgtk/Source/WTF/wtf/Platform.h
 ===================================================================
 --- webkitgtk.orig/Source/WTF/wtf/Platform.h
 +++ webkitgtk/Source/WTF/wtf/Platform.h
-@@ -80,6 +80,12 @@
- #endif
- #endif
+@@ -59,6 +59,11 @@
+ /* ==== CPU() - the target CPU architecture ==== */
+ /* CPU(KNOWN) becomes true if we explicitly support a target CPU. */
  
 +/* CPU(M68K) - m68k */
 +#if defined(__m68k__)
-+#define WTF_CPU_M68K 1
 +#define WTF_CPU_BIG_ENDIAN 1
 +#endif
 +
  /* CPU(MIPS) - MIPS 32-bit and 64-bit */
  #if (defined(mips) || defined(__mips__) || defined(MIPS) || defined(_MIPS_) || defined(__mips64))
  #if defined(_ABI64) && (_MIPS_SIM == _ABI64)
-@@ -927,7 +933,7 @@
- #define ENABLE_REGEXP_TRACING 0
- 
- /* Yet Another Regex Runtime - turned on by default for JIT enabled ports. */
--#if !defined(ENABLE_YARR_JIT) && ENABLE(JIT)
-+#if !defined(ENABLE_YARR_JIT) && ENABLE(JIT) && !CPU(M68K)
- #define ENABLE_YARR_JIT 1
- 
- /* Setting this flag compares JIT results with interpreter results. */
-Index: webkitgtk/Source/WTF/wtf/dtoa/utils.h
-===================================================================
---- webkitgtk.orig/Source/WTF/wtf/dtoa/utils.h
-+++ webkitgtk/Source/WTF/wtf/dtoa/utils.h
-@@ -58,6 +58,8 @@ defined(_MIPS_ARCH_MIPS32R2)
- #else
- #undef DOUBLE_CONVERSION_CORRECT_DOUBLE_OPERATIONS
- #endif  // _WIN32
-+#elif defined(__mc68000__)
-+#undef DOUBLE_CONVERSION_CORRECT_DOUBLE_OPERATIONS
- #else
- #error Target architecture was not detected as supported by Double-Conversion.
- #endif
 Index: webkitgtk/Source/WebCore/css/CSSProperty.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/CSSProperty.cpp
@@ -74,7 +26,7 @@ Index: webkitgtk/Source/WebCore/css/CSSProperty.cpp
      void* value;
  };
  
-+#if CPU(M68K)
++#if defined(__m68k__)
 +COMPILE_ASSERT(sizeof(CSSProperty) <= sizeof(SameSizeAsCSSProperty), CSSProperty_should_stay_small);
 +#else
  COMPILE_ASSERT(sizeof(CSSProperty) == sizeof(SameSizeAsCSSProperty), CSSProperty_should_stay_small);
@@ -86,11 +38,11 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ElementRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/ElementRareData.cpp
-@@ -47,6 +47,10 @@ struct SameSizeAsElementRareData : NodeR
+@@ -46,6 +46,10 @@ struct SameSizeAsElementRareData : NodeR
      void* pointers[8];
  };
  
-+#if CPU(M68K)
++#if defined(__m68k__)
 +static_assert(sizeof(ElementRareData) <= sizeof(SameSizeAsElementRareData), "ElementRareData should stay small");
 +#else
  static_assert(sizeof(ElementRareData) == sizeof(SameSizeAsElementRareData), "ElementRareData should stay small");
@@ -105,7 +57,7 @@ Index: webkitgtk/Source/WebCore/dom/NodeRareData.cpp
      void* m_pointer[3];
  };
  
-+#if CPU(M68K)
++#if defined(__m68k__)
 +COMPILE_ASSERT(sizeof(NodeRareData) <= sizeof(SameSizeAsNodeRareData), NodeRareDataShouldStaySmall);
 +#else
  COMPILE_ASSERT(sizeof(NodeRareData) == sizeof(SameSizeAsNodeRareData), NodeRareDataShouldStaySmall);
@@ -120,7 +72,7 @@ Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
      void* slotAssignment;
  };
  
-+#if CPU(M68K)
++#if defined(__m68k__)
 +COMPILE_ASSERT(sizeof(ShadowRoot) <= sizeof(SameSizeAsShadowRoot), shadowroot_should_stay_small);
 +#else
  COMPILE_ASSERT(sizeof(ShadowRoot) == sizeof(SameSizeAsShadowRoot), shadowroot_should_stay_small);
@@ -136,7 +88,7 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
      int m_restBits;
  };
  
-+#if CPU(M68K)
++#if defined(__m68k__)
 +COMPILE_ASSERT(sizeof(BorderValue) <= sizeof(SameSizeAsBorderValue), BorderValue_should_not_grow);
 +#else
  COMPILE_ASSERT(sizeof(BorderValue) == sizeof(SameSizeAsBorderValue), BorderValue_should_not_grow);
@@ -152,7 +104,7 @@ Index: webkitgtk/Source/WebCore/rendering/style/StyleBoxData.cpp
      uint32_t bitfields;
  };
  
-+#if CPU(M68K)
++#if defined(__m68k__)
 +COMPILE_ASSERT(sizeof(StyleBoxData) <= sizeof(SameSizeAsStyleBoxData), StyleBoxData_should_not_grow);
 +#else
  COMPILE_ASSERT(sizeof(StyleBoxData) == sizeof(SameSizeAsStyleBoxData), StyleBoxData_should_not_grow);
@@ -164,11 +116,11 @@ Index: webkitgtk/Source/WebCore/css/RuleSet.h
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/css/RuleSet.h
 +++ webkitgtk/Source/WebCore/css/RuleSet.h
-@@ -142,7 +142,11 @@ struct SameSizeAsRuleData {
+@@ -98,7 +98,11 @@ struct SameSizeAsRuleData {
      unsigned d[4];
  };
  
-+#if CPU(M68K)
++#if defined(__m68k__)
 +COMPILE_ASSERT(sizeof(RuleData) <= sizeof(SameSizeAsRuleData), RuleData_should_stay_small);
 +#else
  COMPILE_ASSERT(sizeof(RuleData) == sizeof(SameSizeAsRuleData), RuleData_should_stay_small);
@@ -184,11 +136,11 @@ Index: webkitgtk/Source/WebCore/platform/graphics/FontDescription.cpp
      unsigned bitfields3 : 10;
  };
  
-+#if CPU(M68K)
++#if defined(__m68k__)
 +COMPILE_ASSERT(sizeof(FontCascadeDescription) <= sizeof(SameSizeAsFontCascadeDescription), FontCascadeDescription_should_stay_small);
 +#else
  COMPILE_ASSERT(sizeof(FontCascadeDescription) == sizeof(SameSizeAsFontCascadeDescription), FontCascadeDescription_should_stay_small);
 +#endif
  
  FontDescription::FontDescription()
-     : m_fontSelectionRequest(FontCascadeDescription::initialWeight(), FontCascadeDescription::initialStretch(), FontCascadeDescription::initialItalic())
+     : m_fontSelectionRequest { FontCascadeDescription::initialWeight(), FontCascadeDescription::initialStretch(), FontCascadeDescription::initialItalic() }

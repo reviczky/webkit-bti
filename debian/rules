@@ -25,12 +25,23 @@ ifeq (,$(filter $(DEB_HOST_ARCH),amd64 ppc64 ppc64el))
 	CFLAGS := $(CFLAGS:-g=-g1)
 endif
 
+# See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=81426
+ifneq (,$(filter $(DEB_HOST_ARCH),sh3 sh4 powerpc))
+	CFLAGS := $(CFLAGS:-O2=-O1)
+endif
+
 ifeq (,$(filter $(DEB_HOST_ARCH),i386 amd64 hurd-i386 kfreebsd-i386 kfreebsd-amd64 armhf arm64))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF
 endif
 
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEM_MALLOC=ON
+endif
+
+ifneq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_GTKDOC=OFF
+else
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_GTKDOC=ON
 endif
 
 ifneq (,$(filter debug,$(DEB_BUILD_OPTIONS)))
@@ -40,20 +51,21 @@ else
 	CPPFLAGS += -DNDEBUG -DG_DISABLE_CAST_CHECKS
 endif
 
+# https://launchpad.net/bugs/1753581 gstreamergl
+# https://launchpad.net/bugs/1742743 woff2
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_GSTREAMER_GL=OFF -DUSER_AGENT_GTK_DISTRIBUTOR_NAME=\'\\"Ubuntu\\"\'
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_GSTREAMER_GL=OFF -DUSE_WOFF2=OFF
+	CPPFLAGS += -DUSER_AGENT_GTK_DISTRIBUTOR_NAME='"Ubuntu"'
 	DEB_DH_GENCONTROL_ARGS += -- -Vgst:Recommends=""
 else
-	DEB_DH_GENCONTROL_ARGS += -- -Vgst:Recommends="gstreamer1.0-plugins-bad, gstreamer1.0-libav,"
+	DEB_DH_GENCONTROL_ARGS += -- -Vgst:Recommends="gstreamer1.0-gl, gstreamer1.0-libav,"
 endif
 
 %:
 	dh $@ --parallel --with gir
 
 override_dh_auto_configure:
-	CFLAGS="$(CFLAGS) $(CPPFLAGS)" \
-	CXXFLAGS="$(CFLAGS) $(CPPFLAGS)" \
-	LDFLAGS="$(LDFLAGS)" \
+	CXXFLAGS="$(CFLAGS)" \
 	dh_auto_configure -- \
 	   -DPORT=GTK \
 	   -DCMAKE_INSTALL_LIBEXECDIR=lib/$(DEB_HOST_MULTIARCH) \
@@ -63,6 +75,12 @@ override_dh_auto_configure:
 	   -DCMAKE_CXX_FLAGS_DEBUG="" \
 	   -DENABLE_MINIBROWSER=ON \
 	   $(EXTRA_CMAKE_ARGUMENTS)
+
+# Create a dummy doc directory in case the "nodoc" build option is set
+override_dh_install:
+	mkdir -p $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0
+	touch $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0/index.html
+	dh_install
 
 override_dh_strip:
 	if dpkg --compare-versions $(DEBHELPER_VERSION) ge 9.20151219; then \
