@@ -7,7 +7,7 @@ Uploaders: Gustavo Noronha Silva <kov@debian.org>,
            Alberto Garcia <berto@igalia.com>
 Build-Depends: gawk,
                cmake (>= 3.3),
-               debhelper (>= 9),
+               debhelper (>= 10),
                libfile-copy-recursive-perl,
                libglib2.0-dev (>= 2.36.0),
                libgtk2.0-dev (>= 2.24.10),

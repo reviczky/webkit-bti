@@ -2,6 +2,7 @@ webkit2gtk (2.20.0-3) UNRELEASED; urgency=medium
 
   * Update Vcs fields for migration to https://salsa.debian.org/
   * Enable gstreamer-gl on Ubuntu too (LP: #1752197)
+  * Bump debhelper compat to 10
 
  -- Jeremy Bicha <jbicha@debian.org>  Sat, 07 Apr 2018 20:04:36 -0400
 

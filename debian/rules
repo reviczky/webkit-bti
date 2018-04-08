@@ -60,7 +60,7 @@ else
 endif
 
 %:
-	dh $@ --parallel --with gir
+	dh $@ --with gir
 
 override_dh_auto_configure:
 	CXXFLAGS="$(CFLAGS)" \
