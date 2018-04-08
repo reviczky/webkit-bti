@@ -1,3 +1,10 @@
+webkit2gtk (2.20.0-3) UNRELEASED; urgency=medium
+
+  * Update Vcs fields for migration to https://salsa.debian.org/
+  * Enable gstreamer-gl on Ubuntu too (LP: #1752197)
+
+ -- Jeremy Bicha <jbicha@debian.org>  Sat, 07 Apr 2018 20:04:36 -0400
+
 webkit2gtk (2.20.0-2) unstable; urgency=medium
 
   * Upload to unstable (Closes: #889659, #888543).
