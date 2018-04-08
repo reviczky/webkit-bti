@@ -1,5 +1,12 @@
 webkit2gtk (2.20.0-3) UNRELEASED; urgency=medium
 
+  * The WebKitGTK+ security advisory WSA-2018-0003 lists the following
+    security fixes in the latest versions of WebKitGTK+:
+    + CVE-2018-4101, CVE-2018-4113, CVE-2018-4114, CVE-2018-4117,
+      CVE-2018-4118, CVE-2018-4119, CVE-2018-4120, CVE-2018-4122,
+      CVE-2018-4125, CVE-2018-4127, CVE-2018-4128, CVE-2018-4129,
+      CVE-2018-4133, CVE-2018-4146, CVE-2018-4161, CVE-2018-4162,
+      CVE-2018-4163, CVE-2018-4165 (fixed in 2.20.0).
   * Update Vcs fields for migration to https://salsa.debian.org/
   * Enable gstreamer-gl on Ubuntu too (LP: #1752197)
   * Bump debhelper compat to 10
