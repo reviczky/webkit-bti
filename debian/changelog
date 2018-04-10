@@ -6,6 +6,8 @@ webkit2gtk (2.20.1-1) UNRELEASED; urgency=medium
     + Ubuntu doesn't install changelogs with dh_installchangelogs, so
       let's use dh_installdocs instead (but keep dh_installchangelogs for
       Debian).
+  * debian/control:
+    + Update Standards-Version to 4.1.4 (no changes needed).
 
   [ Jeremy Bicha ]
   * The WebKitGTK+ security advisory WSA-2018-0003 lists the following
