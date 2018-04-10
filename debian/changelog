@@ -1,4 +1,4 @@
-webkit2gtk (2.20.1-1) UNRELEASED; urgency=medium
+webkit2gtk (2.20.1-1) unstable; urgency=medium
 
   [ Alberto Garcia ]
   * New upstream release.
@@ -21,7 +21,7 @@ webkit2gtk (2.20.1-1) UNRELEASED; urgency=medium
   * Enable gstreamer-gl on Ubuntu too (LP: #1752197)
   * Bump debhelper compat to 10
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 10 Apr 2018 16:50:41 +0200
+ -- Alberto Garcia <berto@igalia.com>  Tue, 10 Apr 2018 20:34:42 +0200
 
 webkit2gtk (2.20.0-2) unstable; urgency=medium
 
