@@ -554,8 +554,10 @@ bool JSArray::appendMemcpy(ExecState* exec, VM& vm, unsigned startIndex, JSC::JS
         }
     } else if (type == ArrayWithDouble)
         memcpy(butterfly()->contiguousDouble().data() + startIndex, otherArray->butterfly()->contiguousDouble().data(), sizeof(JSValue) * otherLength);
-    else
+    else {
         memcpy(butterfly()->contiguous().data() + startIndex, otherArray->butterfly()->contiguous().data(), sizeof(JSValue) * otherLength);
+        vm.heap.writeBarrier(this);
+    }
 
     return true;
 }
@@ -1060,10 +1062,13 @@ bool JSArray::unshiftCountWithAnyIndexingType(ExecState* exec, unsigned startInd
             scope.release();
             return unshiftCountWithArrayStorage(exec, startIndex, count, ensureArrayStorage(vm));
         }
-        
+
+        if (oldLength + count > MAX_STORAGE_VECTOR_LENGTH)
+            return false;
+
         if (!ensureLength(vm, oldLength + count)) {
             throwOutOfMemoryError(exec, scope);
-            return false;
+            return true;
         }
         butterfly = this->butterfly();
 
@@ -1104,10 +1109,13 @@ bool JSArray::unshiftCountWithAnyIndexingType(ExecState* exec, unsigned startInd
             scope.release();
             return unshiftCountWithArrayStorage(exec, startIndex, count, ensureArrayStorage(vm));
         }
-        
+
+        if (oldLength + count > MAX_STORAGE_VECTOR_LENGTH)
+            return false;
+
         if (!ensureLength(vm, oldLength + count)) {
             throwOutOfMemoryError(exec, scope);
-            return false;
+            return true;
         }
         butterfly = this->butterfly();
         

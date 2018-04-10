@@ -271,7 +271,10 @@ void WebAutomationSessionProxy::evaluateJavaScriptFunction(uint64_t pageID, uint
         JSValueMakeNumber(context, callbackTimeout)
     };
 
-    callPropertyFunction(context, scriptObject, ASCIILiteral("evaluateJavaScriptFunction"), WTF_ARRAY_LENGTH(functionArguments), functionArguments, &exception);
+    {
+        WebCore::UserGestureIndicator gestureIndicator(WebCore::ProcessingUserGesture, frame->coreFrame()->document());
+        callPropertyFunction(context, scriptObject, ASCIILiteral("evaluateJavaScriptFunction"), WTF_ARRAY_LENGTH(functionArguments), functionArguments, &exception);
+    }
 
     if (!exception)
         return;
@@ -660,12 +663,20 @@ void WebAutomationSessionProxy::selectOptionElement(uint64_t pageID, uint64_t fr
 
 static WebCore::IntRect snapshotRectForScreenshot(WebPage& page, WebCore::Element* element, bool clipToViewport)
 {
+    auto* frameView = page.mainFrameView();
+    if (!frameView)
+        return { };
+
     if (element) {
         if (!element->renderer())
             return { };
 
         WebCore::LayoutRect topLevelRect;
-        return WebCore::snappedIntRect(element->renderer()->paintingRootRect(topLevelRect));
+        WebCore::IntRect elementRect = WebCore::snappedIntRect(element->renderer()->paintingRootRect(topLevelRect));
+        if (clipToViewport)
+            elementRect.intersect(frameView->visibleContentRect());
+
+        return elementRect;
     }
 
     if (auto* frameView = page.mainFrameView())
@@ -702,15 +713,15 @@ void WebAutomationSessionProxy::takeScreenshot(uint64_t pageID, uint64_t frameID
         }
     }
 
+    if (coreElement && scrollIntoViewIfNeeded)
+        coreElement->scrollIntoViewIfNeeded(false);
+
     String screenshotErrorType = Inspector::Protocol::AutomationHelpers::getEnumConstantValue(Inspector::Protocol::Automation::ErrorMessage::ScreenshotError);
     WebCore::IntRect snapshotRect = snapshotRectForScreenshot(*page, coreElement, clipToViewport);
     if (snapshotRect.isEmpty()) {
         WebProcess::singleton().parentProcessConnection()->send(Messages::WebAutomationSession::DidTakeScreenshot(callbackID, handle, screenshotErrorType), 0);
         return;
     }
-
-    if (coreElement && scrollIntoViewIfNeeded)
-        coreElement->scrollIntoViewIfNeeded(false);
 
     RefPtr<WebImage> image = page->scaledSnapshotWithOptions(snapshotRect, 1, SnapshotOptionsShareable);
     if (!image) {
