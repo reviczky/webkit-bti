@@ -2,6 +2,10 @@ webkit2gtk (2.20.1-1) UNRELEASED; urgency=medium
 
   [ Alberto Garcia ]
   * New upstream release.
+  * debian/rules:
+    + Ubuntu doesn't install changelogs with dh_installchangelogs, so
+      let's use dh_installdocs instead (but keep dh_installchangelogs for
+      Debian).
 
   [ Jeremy Bicha ]
   * The WebKitGTK+ security advisory WSA-2018-0003 lists the following
@@ -14,7 +18,6 @@ webkit2gtk (2.20.1-1) UNRELEASED; urgency=medium
   * Update Vcs fields for migration to https://salsa.debian.org/
   * Enable gstreamer-gl on Ubuntu too (LP: #1752197)
   * Bump debhelper compat to 10
-  * Use debian/docs to install NEWS
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 10 Apr 2018 16:50:41 +0200
 
