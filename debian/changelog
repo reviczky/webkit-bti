@@ -1,5 +1,9 @@
-webkit2gtk (2.20.0-3) UNRELEASED; urgency=medium
+webkit2gtk (2.20.1-1) UNRELEASED; urgency=medium
 
+  [ Alberto Garcia ]
+  * New upstream release.
+
+  [ Jeremy Bicha ]
   * The WebKitGTK+ security advisory WSA-2018-0003 lists the following
     security fixes in the latest versions of WebKitGTK+:
     + CVE-2018-4101, CVE-2018-4113, CVE-2018-4114, CVE-2018-4117,
@@ -12,7 +16,7 @@ webkit2gtk (2.20.0-3) UNRELEASED; urgency=medium
   * Bump debhelper compat to 10
   * Use debian/docs to install NEWS
 
- -- Jeremy Bicha <jbicha@debian.org>  Sat, 07 Apr 2018 20:04:36 -0400
+ -- Alberto Garcia <berto@igalia.com>  Tue, 10 Apr 2018 16:50:41 +0200
 
 webkit2gtk (2.20.0-2) unstable; urgency=medium
 
