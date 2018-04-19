@@ -34,6 +34,7 @@
 #include "Logging.h"
 #include "PluginInfoStore.h"
 #include "PluginProcessManager.h"
+#include "SuspendedPageProxy.h"
 #include "TextChecker.h"
 #include "TextCheckerState.h"
 #include "UIMessagePortChannelProvider.h"
@@ -146,6 +147,9 @@ WebProcessProxy::~WebProcessProxy()
 
     while (m_numberOfTimesSuddenTerminationWasDisabled-- > 0)
         WebCore::enableSuddenTermination();
+
+    for (auto& callback : m_localPortActivityCompletionHandlers.values())
+        callback(MessagePortChannelProvider::HasActivity::No);
 }
 
 void WebProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions)
@@ -392,6 +396,27 @@ void WebProcessProxy::addExistingWebPage(WebPageProxy& webPage, uint64_t pageID)
     updateBackgroundResponsivenessTimer();
 }
 
+void WebProcessProxy::suspendWebPageProxy(WebPageProxy& webPage)
+{
+    if (auto* suspendedPage = webPage.maybeCreateSuspendedPage(*this)) {
+        LOG(ProcessSwapping, "WebProcessProxy pid %i added suspended page %s", processIdentifier(), suspendedPage->loggingString());
+        m_suspendedPageMap.set(webPage.pageID(), suspendedPage);
+    }
+
+    removeWebPage(webPage, webPage.pageID());
+    removeMessageReceiver(Messages::WebPageProxy::messageReceiverName(), webPage.pageID());
+}
+
+void WebProcessProxy::suspendedPageWasDestroyed(SuspendedPageProxy& suspendedPage)
+{
+    LOG(ProcessSwapping, "WebProcessProxy pid %i suspended page %s was destroyed", processIdentifier(), suspendedPage.loggingString());
+
+    ASSERT(m_suspendedPageMap.contains(suspendedPage.page().pageID()));
+    m_suspendedPageMap.remove(suspendedPage.page().pageID());
+
+    maybeShutDown();
+}
+
 void WebProcessProxy::removeWebPage(WebPageProxy& webPage, uint64_t pageID)
 {
     auto* removedPage = m_pageMap.take(pageID);
@@ -411,12 +436,7 @@ void WebProcessProxy::removeWebPage(WebPageProxy& webPage, uint64_t pageID)
     for (auto itemID : itemIDsToRemove)
         m_backForwardListItemMap.remove(itemID);
 
-    // If this was the last WebPage open in that web process, and we have no other reason to keep it alive, let it go.
-    // We only allow this when using a network process, as otherwise the WebProcess needs to preserve its session state.
-    if (state() == State::Terminated || !canTerminateChildProcess())
-        return;
-
-    shutDown();
+    maybeShutDown();
 }
 
 void WebProcessProxy::addVisitedLinkStore(VisitedLinkStore& store)
@@ -548,7 +568,7 @@ bool WebProcessProxy::fullKeyboardAccessEnabled()
 }
 #endif
 
-void WebProcessProxy::addBackForwardItem(uint64_t itemID, uint64_t pageID, const PageState& pageState)
+void WebProcessProxy::addOrUpdateBackForwardItem(uint64_t itemID, uint64_t pageID, const PageState& pageState)
 {
     MESSAGE_CHECK_URL(pageState.mainFrameState.originalURLString);
     MESSAGE_CHECK_URL(pageState.mainFrameState.urlString);
@@ -567,10 +587,12 @@ void WebProcessProxy::addBackForwardItem(uint64_t itemID, uint64_t pageID, const
 }
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
-void WebProcessProxy::getPlugins(bool refresh, Vector<PluginInfo>& plugins, Vector<PluginInfo>& applicationPlugins)
+void WebProcessProxy::getPlugins(bool refresh, Vector<PluginInfo>& plugins, Vector<PluginInfo>& applicationPlugins, std::optional<Vector<WebCore::SupportedPluginName>>& supportedPluginNames)
 {
     if (refresh)
         m_processPool->pluginInfoStore().refresh();
+
+    supportedPluginNames = m_processPool->pluginInfoStore().supportedPluginNames();
 
     Vector<PluginModuleInfo> pluginModules = m_processPool->pluginInfoStore().plugins();
     for (size_t i = 0; i < pluginModules.size(); ++i)
@@ -602,7 +624,7 @@ void WebProcessProxy::getNetworkProcessConnection(Ref<Messages::WebProcessProxy:
 
 void WebProcessProxy::getStorageProcessConnection(PAL::SessionID initialSessionID, Ref<Messages::WebProcessProxy::GetStorageProcessConnection::DelayedReply>&& reply)
 {
-    m_processPool->getStorageProcessConnection(isServiceWorkerProcess(), initialSessionID, WTFMove(reply));
+    m_processPool->getStorageProcessConnection(*this, initialSessionID, WTFMove(reply));
 }
 
 #if !PLATFORM(COCOA)
@@ -630,6 +652,15 @@ void WebProcessProxy::didReceiveMessage(IPC::Connection& connection, IPC::Decode
     if (decoder.messageReceiverName() == Messages::WebProcessProxy::messageReceiverName()) {
         didReceiveWebProcessProxyMessage(connection, decoder);
         return;
+    }
+
+    // WebPageProxy messages are normally handled by the normal "dispatchMessage" up above.
+    // If they were not handled there, then they may potentially be handled by SuspendedPageProxy objects.
+    if (decoder.messageReceiverName() == Messages::WebPageProxy::messageReceiverName()) {
+        if (auto* suspendedPage = m_suspendedPageMap.get(decoder.destinationID())) {
+            suspendedPage->didReceiveMessage(connection, decoder);
+            return;
+        }
     }
 
     // FIXME: Add unhandled message logging.
@@ -675,6 +706,10 @@ void WebProcessProxy::didClose(IPC::Connection&)
     for (auto& page : pages)
         page->processDidTerminate(ProcessTerminationReason::Crash);
 
+    for (auto* suspendedPage : copyToVectorOf<SuspendedPageProxy*>(m_suspendedPageMap.values()))
+        suspendedPage->webProcessDidClose(*this);
+
+    m_suspendedPageMap.clear();
 }
 
 void WebProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::StringReference messageReceiverName, IPC::StringReference messageName)
@@ -822,9 +857,17 @@ void WebProcessProxy::didDestroyUserGestureToken(uint64_t identifier)
     m_userInitiatedActionMap.remove(identifier);
 }
 
+void WebProcessProxy::maybeShutDown()
+{
+    if (state() == State::Terminated || !canTerminateChildProcess())
+        return;
+
+    shutDown();
+}
+
 bool WebProcessProxy::canTerminateChildProcess()
 {
-    if (!m_pageMap.isEmpty())
+    if (!m_pageMap.isEmpty() || !m_suspendedPageMap.isEmpty())
         return false;
 
     if (!m_processPool->shouldTerminate(this))
@@ -882,6 +925,10 @@ void WebProcessProxy::fetchWebsiteData(PAL::SessionID sessionID, OptionSet<Websi
     RELEASE_LOG_IF(sessionID.isAlwaysOnLoggingAllowed(), ProcessSuspension, "%p - WebProcessProxy is taking a background assertion because the Web process is fetching Website data", this);
 
     connection()->sendWithReply(Messages::WebProcess::FetchWebsiteData(sessionID, dataTypes), 0, RunLoop::main(), [this, token, completionHandler = WTFMove(completionHandler), sessionID](auto reply) {
+#if RELEASE_LOG_DISABLED
+        UNUSED_PARAM(sessionID);
+        UNUSED_PARAM(this);
+#endif
         if (!reply) {
             completionHandler(WebsiteData { });
             return;
@@ -900,6 +947,10 @@ void WebProcessProxy::deleteWebsiteData(PAL::SessionID sessionID, OptionSet<Webs
     RELEASE_LOG_IF(sessionID.isAlwaysOnLoggingAllowed(), ProcessSuspension, "%p - WebProcessProxy is taking a background assertion because the Web process is deleting Website data", this);
 
     connection()->sendWithReply(Messages::WebProcess::DeleteWebsiteData(sessionID, dataTypes, modifiedSince), 0, RunLoop::main(), [this, token, completionHandler = WTFMove(completionHandler), sessionID](auto reply) {
+#if RELEASE_LOG_DISABLED
+        UNUSED_PARAM(this);
+        UNUSED_PARAM(sessionID);
+#endif
         completionHandler();
         RELEASE_LOG_IF(sessionID.isAlwaysOnLoggingAllowed(), ProcessSuspension, "%p - WebProcessProxy is releasing a background assertion because the Web process is done deleting Website data", this);
     });
@@ -913,6 +964,10 @@ void WebProcessProxy::deleteWebsiteDataForOrigins(PAL::SessionID sessionID, Opti
     RELEASE_LOG_IF(sessionID.isAlwaysOnLoggingAllowed(), ProcessSuspension, "%p - WebProcessProxy is taking a background assertion because the Web process is deleting Website data for several origins", this);
 
     connection()->sendWithReply(Messages::WebProcess::DeleteWebsiteDataForOrigins(sessionID, dataTypes, origins), 0, RunLoop::main(), [this, token, completionHandler = WTFMove(completionHandler), sessionID](auto reply) {
+#if RELEASE_LOG_DISABLED
+        UNUSED_PARAM(this);
+        UNUSED_PARAM(sessionID);
+#endif
         completionHandler();
         RELEASE_LOG_IF(sessionID.isAlwaysOnLoggingAllowed(), ProcessSuspension, "%p - WebProcessProxy is releasing a background assertion because the Web process is done deleting Website data for several origins", this);
     });
@@ -1351,5 +1406,27 @@ void WebProcessProxy::didCheckProcessLocalPortForActivity(uint64_t callbackIdent
 
     callback(isLocallyReachable ? MessagePortChannelProvider::HasActivity::Yes : MessagePortChannelProvider::HasActivity::No);
 }
+
+#if ENABLE(EXTRA_ZOOM_MODE)
+
+void WebProcessProxy::takeBackgroundActivityTokenForFullscreenInput()
+{
+    if (m_backgroundActivityTokenForFullscreenFormControls)
+        return;
+
+    m_backgroundActivityTokenForFullscreenFormControls = m_throttler.backgroundActivityToken();
+    RELEASE_LOG(ProcessSuspension, "UIProcess is taking a background assertion because it is presenting fullscreen UI for form controls.");
+}
+
+void WebProcessProxy::releaseBackgroundActivityTokenForFullscreenInput()
+{
+    if (!m_backgroundActivityTokenForFullscreenFormControls)
+        return;
+
+    m_backgroundActivityTokenForFullscreenFormControls = nullptr;
+    RELEASE_LOG(ProcessSuspension, "UIProcess is releasing a background assertion because it has dismissed fullscreen UI for form controls.");
+}
+
+#endif
 
 } // namespace WebKit

@@ -66,14 +66,21 @@ private:
     void didFail();
     void didNotHandle();
 
+    void continueLoadingAfterCheckingResponse();
+
     WebServiceWorkerProvider& m_serviceWorkerProvider;
-    Ref<WebCore::ResourceLoader> m_loader;
+    RefPtr<WebCore::ResourceLoader> m_loader;
     uint64_t m_identifier { 0 };
     Ref<WebSWClientConnection> m_connection;
     Callback m_callback;
     enum class RedirectionStatus { None, Receiving, Following, Received };
     RedirectionStatus m_redirectionStatus { RedirectionStatus::None };
     bool m_shouldClearReferrerOnHTTPSToHTTPRedirect { true };
+    RefPtr<WebCore::SharedBuffer> m_buffer;
+    int64_t m_encodedDataLength { 0 };
+    bool m_isCheckingResponse { false };
+    bool m_didFinish { false };
+    bool m_didFail { false };
 };
 
 } // namespace WebKit

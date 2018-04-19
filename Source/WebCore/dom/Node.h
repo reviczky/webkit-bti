@@ -33,6 +33,7 @@
 #include "TreeScope.h"
 #include "URLHash.h"
 #include <wtf/Forward.h>
+#include <wtf/IsoMalloc.h>
 #include <wtf/ListHashSet.h>
 #include <wtf/MainThread.h>
 
@@ -78,7 +79,7 @@ private:
 };
 
 class Node : public EventTarget {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_ISO_ALLOCATED(Node);
 
     friend class Document;
     friend class TreeScope;
@@ -508,7 +509,7 @@ public:
 
     bool dispatchBeforeLoadEvent(const String& sourceURL);
 
-    void dispatchInputEvent();
+    WEBCORE_EXPORT void dispatchInputEvent();
 
     // Perform the default action for an event.
     virtual void defaultEventHandler(Event&);
@@ -569,7 +570,7 @@ protected:
         IsStyledElementFlag = 1 << 3,
         IsHTMLFlag = 1 << 4,
         IsSVGFlag = 1 << 5,
-        // One free bit left.
+        DescendantsAffectedByPreviousSiblingFlag = 1 << 6,
         ChildNeedsStyleRecalcFlag = 1 << 7,
         IsConnectedFlag = 1 << 8,
         IsLinkFlag = 1 << 9,

@@ -84,6 +84,7 @@ void ResourceLoadStatistics::encode(KeyedEncoder& encoder) const
 
     // Prevalent Resource
     encoder.encodeBool("isPrevalentResource", isPrevalentResource);
+    encoder.encodeBool("isVeryPrevalentResource", isVeryPrevalentResource);
     encoder.encodeUInt32("dataRecordsRemoved", dataRecordsRemoved);
 
     encoder.encodeUInt32("timesAccessedAsFirstPartyDueToUserInteraction", timesAccessedAsFirstPartyDueToUserInteraction);
@@ -118,7 +119,7 @@ static void decodeHashSet(KeyedDecoder& decoder, const String& label, HashSet<St
     });
 }
 
-bool ResourceLoadStatistics::decode(KeyedDecoder& decoder)
+bool ResourceLoadStatistics::decode(KeyedDecoder& decoder, unsigned modelVersion)
 {
     if (!decoder.decodeString("PrevalentResourceOrigin", highLevelDomain))
         return false;
@@ -131,8 +132,10 @@ bool ResourceLoadStatistics::decode(KeyedDecoder& decoder)
     decodeHashSet(decoder, "storageAccessUnderTopFrameOrigins", storageAccessUnderTopFrameOrigins);
 
     // Top frame stats
-    decodeHashCountedSet(decoder, "topFrameUniqueRedirectsTo", topFrameUniqueRedirectsTo);
-    decodeHashCountedSet(decoder, "topFrameUniqueRedirectsFrom", topFrameUniqueRedirectsFrom);
+    if (modelVersion >= 11) {
+        decodeHashCountedSet(decoder, "topFrameUniqueRedirectsTo", topFrameUniqueRedirectsTo);
+        decodeHashCountedSet(decoder, "topFrameUniqueRedirectsFrom", topFrameUniqueRedirectsFrom);
+    }
 
     // Subframe stats
     decodeHashCountedSet(decoder, "subframeUnderTopFrameOrigins", subframeUnderTopFrameOrigins);
@@ -140,11 +143,17 @@ bool ResourceLoadStatistics::decode(KeyedDecoder& decoder)
     // Subresource stats
     decodeHashCountedSet(decoder, "subresourceUnderTopFrameOrigins", subresourceUnderTopFrameOrigins);
     decodeHashCountedSet(decoder, "subresourceUniqueRedirectsTo", subresourceUniqueRedirectsTo);
-    decodeHashCountedSet(decoder, "subresourceUniqueRedirectsFrom", subresourceUniqueRedirectsFrom);
+    if (modelVersion >= 11)
+        decodeHashCountedSet(decoder, "subresourceUniqueRedirectsFrom", subresourceUniqueRedirectsFrom);
 
     // Prevalent Resource
     if (!decoder.decodeBool("isPrevalentResource", isPrevalentResource))
         return false;
+
+    if (modelVersion >= 12) {
+        if (!decoder.decodeBool("isVeryPrevalentResource", isVeryPrevalentResource))
+            return false;
+    }
 
     if (!decoder.decodeUInt32("dataRecordsRemoved", dataRecordsRemoved))
         return false;
@@ -162,11 +171,12 @@ bool ResourceLoadStatistics::decode(KeyedDecoder& decoder)
         return false;
     lastSeen = WallTime::fromRawSeconds(lastSeenTimeAsDouble);
 
-    if (!decoder.decodeUInt32("timesAccessedAsFirstPartyDueToUserInteraction", timesAccessedAsFirstPartyDueToUserInteraction))
-        timesAccessedAsFirstPartyDueToUserInteraction = 0;
-    if (!decoder.decodeUInt32("timesAccessedAsFirstPartyDueToStorageAccessAPI", timesAccessedAsFirstPartyDueToStorageAccessAPI))
-        timesAccessedAsFirstPartyDueToStorageAccessAPI = 0;
-
+    if (modelVersion >= 11) {
+        if (!decoder.decodeUInt32("timesAccessedAsFirstPartyDueToUserInteraction", timesAccessedAsFirstPartyDueToUserInteraction))
+            timesAccessedAsFirstPartyDueToUserInteraction = 0;
+        if (!decoder.decodeUInt32("timesAccessedAsFirstPartyDueToStorageAccessAPI", timesAccessedAsFirstPartyDueToStorageAccessAPI))
+            timesAccessedAsFirstPartyDueToStorageAccessAPI = 0;
+    }
     return true;
 }
 
@@ -246,6 +256,7 @@ String ResourceLoadStatistics::toString() const
 
     // Prevalent Resource
     appendBoolean(builder, "isPrevalentResource", isPrevalentResource);
+    appendBoolean(builder, "    isVeryPrevalentResource", isVeryPrevalentResource);
     builder.appendLiteral("    dataRecordsRemoved: ");
     builder.appendNumber(dataRecordsRemoved);
     builder.append('\n');
@@ -312,6 +323,7 @@ void ResourceLoadStatistics::merge(const ResourceLoadStatistics& other)
 
     // Prevalent resource stats
     isPrevalentResource |= other.isPrevalentResource;
+    isVeryPrevalentResource |= other.isVeryPrevalentResource;
     dataRecordsRemoved = std::max(dataRecordsRemoved, other.dataRecordsRemoved);
     
     // In-memory only

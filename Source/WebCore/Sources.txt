@@ -45,6 +45,7 @@ Modules/cache/WorkerGlobalScopeCaches.cpp
 
 Modules/credentialmanagement/BasicCredential.cpp
 Modules/credentialmanagement/CredentialsContainer.cpp
+Modules/credentialmanagement/CredentialsMessenger.cpp
 Modules/credentialmanagement/NavigatorCredentials.cpp
 
 Modules/entriesapi/ErrorCallback.cpp
@@ -186,6 +187,8 @@ Modules/navigatorcontentutils/NavigatorContentUtils.cpp
 Modules/notifications/Notification.cpp
 Modules/notifications/NotificationController.cpp
 
+Modules/paymentrequest/MerchantValidationEvent.cpp
+Modules/paymentrequest/PaymentAddress.cpp
 Modules/paymentrequest/PaymentHandler.cpp
 Modules/paymentrequest/PaymentRequest.cpp
 Modules/paymentrequest/PaymentRequestUpdateEvent.cpp
@@ -244,9 +247,9 @@ Modules/webaudio/WaveShaperDSPKernel.cpp
 Modules/webaudio/WaveShaperNode.cpp
 Modules/webaudio/WaveShaperProcessor.cpp
 
-Modules/webauthn/Authenticator.cpp
 Modules/webauthn/AuthenticatorAssertionResponse.cpp
 Modules/webauthn/AuthenticatorAttestationResponse.cpp
+Modules/webauthn/AuthenticatorManager.cpp
 Modules/webauthn/AuthenticatorResponse.cpp
 Modules/webauthn/PublicKeyCredential.cpp
 Modules/webauthn/cbor/CBORReader.cpp
@@ -287,10 +290,8 @@ Modules/websockets/WorkerThreadableWebSocketChannel.cpp
 
 Modules/webvr/NavigatorWebVR.cpp
 Modules/webvr/VRDisplay.cpp
-Modules/webvr/VRDisplayCapabilities.cpp
 Modules/webvr/VRDisplayEvent.cpp
 Modules/webvr/VREyeParameters.cpp
-Modules/webvr/VRFieldOfView.cpp
 Modules/webvr/VRFrameData.cpp
 Modules/webvr/VRPose.cpp
 Modules/webvr/VRStageParameters.cpp
@@ -328,13 +329,19 @@ accessibility/AccessibilityTableHeaderContainer.cpp
 accessibility/AccessibilityTableRow.cpp
 accessibility/AccessibilityTree.cpp
 accessibility/AccessibilityTreeItem.cpp
+accessibility/AccessibleSetValueEvent.cpp
 
-animation/AnimationEffect.cpp
+animation/AnimationEffectReadOnly.cpp
 animation/AnimationEffectTiming.cpp
+animation/AnimationEffectTimingReadOnly.cpp
 animation/AnimationPlaybackEvent.cpp
 animation/AnimationTimeline.cpp
+animation/CSSAnimation.cpp
+animation/CSSTransition.cpp
+animation/DeclarativeAnimation.cpp
 animation/DocumentTimeline.cpp
 animation/KeyframeEffect.cpp
+animation/KeyframeEffectReadOnly.cpp
 animation/WebAnimation.cpp
 
 bindings/js/CachedModuleScriptLoader.cpp
@@ -346,7 +353,8 @@ bindings/js/DOMWrapperWorld.cpp
 bindings/js/GCController.cpp
 bindings/js/IDBBindingUtilities.cpp
 bindings/js/JSAuthenticatorResponseCustom.cpp
-bindings/js/JSAnimationEffectCustom.cpp
+bindings/js/JSAnimationEffectReadOnlyCustom.cpp
+bindings/js/JSAnimationEffectTimingReadOnlyCustom.cpp
 bindings/js/JSAnimationTimelineCustom.cpp
 bindings/js/JSAttrCustom.cpp
 bindings/js/JSAudioTrackCustom.cpp
@@ -425,6 +433,8 @@ bindings/js/JSPluginElementFunctions.cpp
 bindings/js/JSPopStateEventCustom.cpp
 bindings/js/JSReadableStreamPrivateConstructors.cpp
 bindings/js/JSReadableStreamSourceCustom.cpp
+bindings/js/JSRemoteDOMWindowBase.cpp
+bindings/js/JSRemoteDOMWindowCustom.cpp
 bindings/js/JSSVGPathSegCustom.cpp
 bindings/js/JSStyleSheetCustom.cpp
 bindings/js/JSServiceWorkerClientCustom.cpp
@@ -460,6 +470,7 @@ bindings/js/StructuredClone.cpp
 bindings/js/SerializedScriptValue.cpp
 bindings/js/WebCoreJSClientData.cpp
 bindings/js/WebCoreTypedArrayController.cpp
+bindings/js/WindowProxyController.cpp
 bindings/js/WorkerScriptController.cpp
 
 bridge/IdentifierRep.cpp
@@ -531,6 +542,7 @@ crypto/keys/CryptoKeyRSAComponents.cpp
 crypto/keys/CryptoKeyRaw.cpp
 
 css/BasicShapeFunctions.cpp
+css/CSSAnimationTriggerScrollValue.cpp
 css/CSSAspectRatioValue.cpp
 css/CSSBasicShapes.cpp
 css/CSSBorderImage.cpp
@@ -622,6 +634,7 @@ css/MediaQueryEvaluator.cpp
 css/MediaQueryExpression.cpp
 css/MediaQueryList.cpp
 css/MediaQueryMatcher.cpp
+css/MediaQueryParserContext.cpp
 css/PageRuleCollector.cpp
 css/PropertySetCSSStyleDeclaration.cpp
 css/RGBColor.cpp
@@ -800,6 +813,7 @@ dom/StaticRange.cpp
 dom/StringCallback.cpp
 dom/StyledElement.cpp
 dom/TagCollection.cpp
+dom/TemplateContentDocumentFragment.cpp
 dom/Text.cpp
 dom/TextDecoder.cpp
 dom/TextEncoder.cpp
@@ -823,6 +837,7 @@ dom/VisitedLinkState.cpp
 dom/WebKitAnimationEvent.cpp
 dom/WebKitTransitionEvent.cpp
 dom/WheelEvent.cpp
+dom/XMLDocument.cpp
 
 dom/messageports/MessagePortChannel.cpp
 dom/messageports/MessagePortChannelProvider.cpp
@@ -944,6 +959,7 @@ html/HTMLAppletElement.cpp
 html/HTMLAreaElement.cpp
 html/HTMLAttachmentElement.cpp
 html/HTMLAudioElement.cpp
+html/HTMLBDIElement.cpp
 html/HTMLBRElement.cpp
 html/HTMLBaseElement.cpp
 html/HTMLBodyElement.cpp
@@ -1027,6 +1043,7 @@ html/HTMLTimeElement.cpp
 html/HTMLTitleElement.cpp
 html/HTMLTrackElement.cpp
 html/HTMLUListElement.cpp
+html/HTMLUnknownElement.cpp
 html/HTMLVideoElement.cpp
 html/HTMLWBRElement.cpp
 html/HiddenInputType.cpp
@@ -1211,6 +1228,7 @@ loader/FormSubmission.cpp
 loader/FrameLoadRequest.cpp
 loader/FrameLoader.cpp
 loader/FrameLoaderStateMachine.cpp
+loader/FetchIdioms.cpp
 loader/HTTPHeaderField.cpp
 loader/HistoryController.cpp
 loader/ImageLoader.cpp
@@ -1247,6 +1265,7 @@ loader/appcache/ApplicationCache.cpp
 loader/appcache/ApplicationCacheGroup.cpp
 loader/appcache/ApplicationCacheHost.cpp
 loader/appcache/ApplicationCacheResource.cpp
+loader/appcache/ApplicationCacheResourceLoader.cpp
 loader/appcache/ApplicationCacheStorage.cpp
 loader/appcache/DOMApplicationCache.cpp
 loader/appcache/ManifestParser.cpp
@@ -1294,7 +1313,10 @@ mathml/MathMLSelectElement.cpp
 mathml/MathMLSpaceElement.cpp
 mathml/MathMLTokenElement.cpp
 mathml/MathMLUnderOverElement.cpp
+mathml/MathMLUnknownElement.cpp
 
+page/AbstractDOMWindow.cpp
+page/AbstractFrame.cpp
 page/AutoscrollController.cpp
 page/BarProp.cpp
 page/Base64Utilities.cpp
@@ -1327,13 +1349,11 @@ page/IntersectionObserver.cpp
 page/IntersectionObserverEntry.cpp
 page/LayoutContext.cpp
 page/Location.cpp
-page/MainFrame.cpp
 page/MemoryRelease.cpp
 page/MouseEventWithHitTestResults.cpp
 page/Navigator.cpp
 page/NavigatorBase.cpp
 page/OriginAccessEntry.cpp
-page/OriginThreadLocalCache.cpp
 page/Page.cpp
 page/PageConfiguration.cpp
 page/PageConsoleClient.cpp
@@ -1356,6 +1376,8 @@ page/PerformanceTiming.cpp
 page/PerformanceUserTiming.cpp
 page/PointerLockController.cpp
 page/PrintContext.cpp
+page/RemoteDOMWindow.cpp
+page/RemoteFrame.cpp
 page/ResourceUsageData.cpp
 page/ResourceUsageOverlay.cpp
 page/ResourceUsageThread.cpp
@@ -1450,6 +1472,7 @@ platform/PlatformSpeechSynthesisVoice.cpp
 platform/PlatformSpeechSynthesizer.cpp
 platform/PlatformStrategies.cpp
 platform/Process.cpp
+platform/ReferrerPolicy.cpp
 platform/RemoteCommandListener.cpp
 platform/RuntimeApplicationChecks.cpp
 platform/SchemeRegistry.cpp
@@ -1701,6 +1724,7 @@ platform/network/CacheValidation.cpp
 platform/network/Cookie.cpp
 platform/network/CredentialBase.cpp
 platform/network/CredentialStorage.cpp
+platform/network/DNS.cpp
 platform/network/DNSResolveQueue.cpp
 platform/network/DataURLDecoder.cpp
 platform/network/FormData.cpp
@@ -1748,6 +1772,10 @@ platform/text/TextCodecUserDefined.cpp
 platform/text/TextEncoding.cpp
 platform/text/TextEncodingDetectorICU.cpp
 platform/text/TextEncodingRegistry.cpp
+
+platform/vr/VRManager.cpp
+platform/vr/openvr/VRPlatformDisplayOpenVR.cpp
+platform/vr/openvr/VRPlatformManagerOpenVR.cpp
 
 plugins/DOMMimeType.cpp
 plugins/DOMMimeTypeArray.cpp
@@ -2069,7 +2097,6 @@ svg/SVGAnimatedPreserveAspectRatio.cpp
 svg/SVGAnimatedRect.cpp
 svg/SVGAnimatedString.cpp
 svg/SVGAnimatedTransformList.cpp
-svg/SVGAnimatedType.cpp
 svg/SVGAnimatedTypeAnimator.cpp
 svg/SVGAnimationElement.cpp
 svg/SVGCircleElement.cpp
@@ -2186,6 +2213,7 @@ svg/SVGTransformListValues.cpp
 svg/SVGTransformValue.cpp
 svg/SVGTransformable.cpp
 svg/SVGURIReference.cpp
+svg/SVGUnknownElement.cpp
 svg/SVGUseElement.cpp
 svg/SVGVKernElement.cpp
 svg/SVGViewElement.cpp
@@ -2318,15 +2346,17 @@ JSHTMLElementWrapperFactory.cpp
 JSAbortController.cpp
 JSAbortSignal.cpp
 JSAbstractWorker.cpp
+JSAccessibleSetValueEvent.cpp
 JSAesCbcCfbParams.cpp
 JSAesCtrParams.cpp
 JSAesGcmParams.cpp
 JSAesKeyParams.cpp
 JSAnalyserNode.cpp
 JSAnimationEvent.cpp
-JSAnimationEffect.cpp
+JSAnimationEffectReadOnly.cpp
 JSAnimationEffectTiming.cpp
 JSAnimationEffectTimingProperties.cpp
+JSAnimationEffectTimingReadOnly.cpp
 JSAnimationPlaybackEvent.cpp
 JSAnimationPlaybackEventInit.cpp
 JSAnimationTimeline.cpp
@@ -2424,6 +2454,8 @@ JSCryptoKeyPair.cpp
 JSCryptoKeyUsage.cpp
 JSCryptoRsaHashedKeyAlgorithm.cpp
 JSCryptoRsaKeyAlgorithm.cpp
+JSCSSAnimation.cpp
+JSCSSTransition.cpp
 JSCustomElementRegistry.cpp
 JSCustomEvent.cpp
 JSDocumentTimeline.cpp
@@ -2652,6 +2684,7 @@ JSKeyboardEvent.cpp
 JSKeyframeAnimationOptions.cpp
 JSKeyframeEffect.cpp
 JSKeyframeEffectOptions.cpp
+JSKeyframeEffectReadOnly.cpp
 JSLocation.cpp
 JSLongRange.cpp
 JSMediaCapabilities.cpp
@@ -2680,6 +2713,7 @@ JSMediaStreamTrack.cpp
 JSMediaStreamTrackEvent.cpp
 JSMediaTrackConstraints.cpp
 JSMediaTrackSupportedConstraints.cpp
+JSMerchantValidationEvent.cpp
 JSMessageChannel.cpp
 JSMessageEvent.cpp
 JSMessagePort.cpp
@@ -2803,6 +2837,7 @@ JSReadableStreamDefaultController.cpp
 JSReadableStreamDefaultReader.cpp
 JSReadableStreamSink.cpp
 JSReadableStreamSource.cpp
+JSRemoteDOMWindow.cpp
 JSRequestAnimationFrameCallback.cpp
 JSRsaHashedImportParams.cpp
 JSRsaHashedKeyGenParams.cpp

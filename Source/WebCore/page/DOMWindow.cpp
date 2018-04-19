@@ -57,6 +57,7 @@
 #include "EventNames.h"
 #include "FloatRect.h"
 #include "FocusController.h"
+#include "Frame.h"
 #include "FrameLoadRequest.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
@@ -67,7 +68,6 @@
 #include "JSDOMWindowBase.h"
 #include "JSMainThreadExecState.h"
 #include "Location.h"
-#include "MainFrame.h"
 #include "MediaQueryList.h"
 #include "MediaQueryMatcher.h"
 #include "MessageEvent.h"
@@ -80,6 +80,7 @@
 #include "Performance.h"
 #include "RequestAnimationFrameCallback.h"
 #include "ResourceLoadInfo.h"
+#include "ResourceLoadObserver.h"
 #include "RuntimeApplicationChecks.h"
 #include "RuntimeEnabledFeatures.h"
 #include "ScheduledAction.h"
@@ -109,7 +110,6 @@
 #include <JavaScriptCore/ScriptCallStackFactory.h>
 #include <algorithm>
 #include <memory>
-#include <wtf/CurrentTime.h>
 #include <wtf/Language.h>
 #include <wtf/MainThread.h>
 #include <wtf/MathExtras.h>
@@ -160,7 +160,7 @@ public:
 
     Ref<MessageEvent> event(ScriptExecutionContext& context)
     {
-        return MessageEvent::create(MessagePort::entanglePorts(context, WTFMove(m_message.transferredPorts)), WTFMove(m_message.message), m_origin, { }, MessageEventSource(RefPtr<DOMWindow>(WTFMove(m_source))));
+        return MessageEvent::create(MessagePort::entanglePorts(context, WTFMove(m_message.transferredPorts)), m_message.message.releaseNonNull(), m_origin, { }, MessageEventSource(RefPtr<DOMWindow>(WTFMove(m_source))));
     }
 
     SecurityOrigin* targetOrigin() const { return m_targetOrigin.get(); }
@@ -401,7 +401,8 @@ void DOMWindow::setCanShowModalDialogOverride(bool allow)
 }
 
 DOMWindow::DOMWindow(Document& document)
-    : ContextDestructionObserver(&document)
+    : AbstractDOMWindow(GlobalWindowIdentifier { Process::identifier(), generateObjectIdentifier<WindowIdentifierType>() })
+    , ContextDestructionObserver(&document)
     , FrameDestructionObserver(document.frame())
 {
     ASSERT(frame());
@@ -874,7 +875,7 @@ ExceptionOr<Storage*> DOMWindow::sessionStorage() const
     if (!page)
         return nullptr;
 
-    auto storageArea = page->sessionStorage()->storageArea(SecurityOriginData::fromSecurityOrigin(document->securityOrigin()));
+    auto storageArea = page->sessionStorage()->storageArea(document->securityOrigin().data());
     m_sessionStorage = Storage::create(m_frame, WTFMove(storageArea));
     return m_sessionStorage.get();
 }
@@ -2059,6 +2060,7 @@ void DOMWindow::dispatchEvent(Event& event, EventTarget* target)
     event.setTarget(target ? target : this);
     event.setCurrentTarget(this);
     event.setEventPhase(Event::AT_TARGET);
+    event.resetBeforeDispatch();
     auto cookie = InspectorInstrumentation::willDispatchEventOnWindow(frame(), event, *this);
     fireEventListeners(event);
     InspectorInstrumentation::didDispatchEventOnWindow(cookie);
@@ -2278,7 +2280,16 @@ RefPtr<Frame> DOMWindow::createWindow(const String& urlString, const AtomicStrin
     if (created) {
         ResourceRequest resourceRequest { completedURL, referrer, UseProtocolCachePolicy };
         FrameLoadRequest frameLoadRequest { *activeWindow.document(), activeWindow.document()->securityOrigin(), resourceRequest, ASCIILiteral("_self"), LockHistory::No, LockBackForwardList::No, MaybeSendReferrer, AllowNavigationToInvalidURL::Yes, NewFrameOpenerPolicy::Allow, activeDocument->shouldOpenExternalURLsPolicyToPropagate(), initiatedByMainFrame };
+        if (openerFrame.document() && !protocolHostAndPortAreEqual(openerFrame.document()->url(), frameLoadRequest.resourceRequest().url()))
+            frameLoadRequest.setIsCrossOriginWindowOpenNavigation(true);
         newFrame->loader().changeLocation(WTFMove(frameLoadRequest));
+
+#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+        if (auto openerDocument = openerFrame.document()) {
+            if (auto openerPageID = openerFrame.loader().client().pageID())
+                ResourceLoadObserver::shared().logWindowCreation(completedURL, openerPageID.value(), *openerDocument);
+        }
+#endif
     } else if (!urlString.isEmpty()) {
         LockHistory lockHistory = UserGestureIndicator::processingUserGesture() ? LockHistory::No : LockHistory::Yes;
         newFrame->navigationScheduler().scheduleLocationChange(*activeDocument, activeDocument->securityOrigin(), completedURL, referrer, lockHistory, LockBackForwardList::No);

@@ -46,10 +46,13 @@
 #include "TextControlInnerElements.h"
 #include "TextIterator.h"
 #include "TextNodeTraversal.h"
+#include <wtf/IsoMallocInlines.h>
 #include <wtf/Ref.h>
 #include <wtf/StdLibExtras.h>
 
 namespace WebCore {
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(HTMLTextAreaElement);
 
 using namespace HTMLNames;
 
@@ -243,7 +246,7 @@ bool HTMLTextAreaElement::hasCustomFocusLogic() const
     return true;
 }
 
-bool HTMLTextAreaElement::isKeyboardFocusable(KeyboardEvent&) const
+bool HTMLTextAreaElement::isKeyboardFocusable(KeyboardEvent*) const
 {
     // If a given text area can be focused at all, then it will always be keyboard focusable.
     return isFocusable();

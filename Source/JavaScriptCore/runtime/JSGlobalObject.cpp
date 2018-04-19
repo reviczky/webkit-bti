@@ -185,6 +185,11 @@
 #include "JSGlobalObjectInspectorController.h"
 #endif
 
+#ifdef JSC_GLIB_API_ENABLED
+#include "JSCCallbackFunction.h"
+#include "JSCWrapperMap.h"
+#endif
+
 namespace JSC {
 
     static JSValue createProxyProperty(VM& vm, JSObject* object)
@@ -327,14 +332,14 @@ static EncodedJSValue JSC_HOST_CALL enqueueJob(ExecState* exec)
 
     JSValue job = exec->argument(0);
     JSValue arguments = exec->argument(1);
-    ASSERT(arguments.inherits(vm, JSArray::info()));
+    ASSERT(arguments.inherits<JSArray>(vm));
 
     globalObject->queueMicrotask(createJSJob(vm, job, jsCast<JSArray*>(arguments)));
 
     return JSValue::encode(jsUndefined());
 }
 
-JSGlobalObject::JSGlobalObject(VM& vm, Structure* structure, const GlobalObjectMethodTable* globalObjectMethodTable, RefPtr<ThreadLocalCache> threadLocalCache)
+JSGlobalObject::JSGlobalObject(VM& vm, Structure* structure, const GlobalObjectMethodTable* globalObjectMethodTable)
     : Base(vm, structure, 0)
     , m_vm(vm)
     , m_masqueradesAsUndefinedWatchpoint(adoptRef(new WatchpointSet(IsWatched)))
@@ -351,7 +356,6 @@ JSGlobalObject::JSGlobalObject(VM& vm, Structure* structure, const GlobalObjectM
     , m_numberToStringWatchpoint(IsWatched)
     , m_runtimeFlags()
     , m_globalObjectMethodTable(globalObjectMethodTable ? globalObjectMethodTable : &s_globalObjectMethodTable)
-    , m_threadLocalCache(threadLocalCache ? WTFMove(threadLocalCache) : vm.defaultThreadLocalCache)
 {
 }
 
@@ -567,7 +571,16 @@ void JSGlobalObject::init(VM& vm)
             init.set(JSCallbackObject<JSAPIWrapperObject>::createStructure(init.vm, init.owner, init.owner->m_objectPrototype.get()));
         });
 #endif
-    
+#ifdef JSC_GLIB_API_ENABLED
+    m_glibCallbackFunctionStructure.initLater(
+        [] (const Initializer<Structure>& init) {
+            init.set(JSCCallbackFunction::createStructure(init.vm, init.owner, init.owner->m_functionPrototype.get()));
+        });
+    m_glibWrapperObjectStructure.initLater(
+        [] (const Initializer<Structure>& init) {
+            init.set(JSCallbackObject<JSAPIWrapperObject>::createStructure(init.vm, init.owner, init.owner->m_objectPrototype.get()));
+        });
+#endif
     m_arrayPrototype.set(vm, this, ArrayPrototype::create(vm, this, ArrayPrototype::createStructure(vm, this, m_objectPrototype.get())));
     
     m_originalArrayStructureForIndexingShape[UndecidedShape >> IndexingShapeShift].set(vm, this, JSArray::createStructure(vm, this, m_arrayPrototype.get(), ArrayWithUndecided));
@@ -772,6 +785,7 @@ putDirectWithoutTransition(vm, vm.propertyNames-> jsName, lowerName ## Construct
         putDirectWithoutTransition(vm, vm.propertyNames->Loader, m_moduleLoader.get(), static_cast<unsigned>(PropertyAttribute::DontEnum));
 
     JSFunction* builtinLog = JSFunction::create(vm, this, 1, vm.propertyNames->emptyIdentifier.string(), globalFuncBuiltinLog);
+    JSFunction* builtinDescribe = JSFunction::create(vm, this, 1, vm.propertyNames->emptyIdentifier.string(), globalFuncBuiltinDescribe);
 
     JSFunction* privateFuncAbs = JSFunction::create(vm, this, 0, String(), mathProtoFuncAbs, AbsIntrinsic);
     JSFunction* privateFuncFloor = JSFunction::create(vm, this, 0, String(), mathProtoFuncFloor, FloorIntrinsic);
@@ -862,6 +876,7 @@ putDirectWithoutTransition(vm, vm.propertyNames-> jsName, lowerName ## Construct
         GlobalPropertyInfo(vm.propertyNames->builtinNames().hasInstanceBoundFunctionPrivateName(), privateFuncHasInstanceBoundFunction, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         GlobalPropertyInfo(vm.propertyNames->builtinNames().instanceOfPrivateName(), privateFuncInstanceOf, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         GlobalPropertyInfo(vm.propertyNames->builtinNames().BuiltinLogPrivateName(), builtinLog, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
+        GlobalPropertyInfo(vm.propertyNames->builtinNames().BuiltinDescribePrivateName(), builtinDescribe, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         GlobalPropertyInfo(vm.propertyNames->builtinNames().NumberPrivateName(), numberConstructor, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         GlobalPropertyInfo(vm.propertyNames->builtinNames().RegExpPrivateName(), m_regExpConstructor.get(), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         GlobalPropertyInfo(vm.propertyNames->builtinNames().StringPrivateName(), stringConstructor, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
@@ -1381,6 +1396,10 @@ void JSGlobalObject::visitChildren(JSCell* cell, SlotVisitor& visitor)
     thisObject->m_objcCallbackFunctionStructure.visit(visitor);
     thisObject->m_objcWrapperObjectStructure.visit(visitor);
 #endif
+#ifdef JSC_GLIB_API_ENABLED
+    thisObject->m_glibCallbackFunctionStructure.visit(visitor);
+    thisObject->m_glibWrapperObjectStructure.visit(visitor);
+#endif
     thisObject->m_nullPrototypeObjectStructure.visit(visitor);
     visitor.append(thisObject->m_errorStructure);
     visitor.append(thisObject->m_calleeStructure);
@@ -1599,6 +1618,7 @@ void JSGlobalObject::finishCreation(VM& vm)
     m_runtimeFlags = m_globalObjectMethodTable->javaScriptRuntimeFlags(this);
     init(vm);
     setGlobalThis(vm, JSProxy::create(vm, JSProxy::createStructure(vm, this, getPrototypeDirect(vm), PureForwardingProxyType), this));
+    ASSERT(type() == GlobalObjectType);
 }
 
 void JSGlobalObject::finishCreation(VM& vm, JSObject* thisValue)
@@ -1608,6 +1628,14 @@ void JSGlobalObject::finishCreation(VM& vm, JSObject* thisValue)
     m_runtimeFlags = m_globalObjectMethodTable->javaScriptRuntimeFlags(this);
     init(vm);
     setGlobalThis(vm, thisValue);
+    ASSERT(type() == GlobalObjectType);
 }
+
+#ifdef JSC_GLIB_API_ENABLED
+void JSGlobalObject::setWrapperMap(std::unique_ptr<WrapperMap>&& map)
+{
+    m_wrapperMap = WTFMove(map);
+}
+#endif
 
 } // namespace JSC

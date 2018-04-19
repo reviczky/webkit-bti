@@ -116,6 +116,10 @@ class VariableEnvironment;
 struct ActivationStackNode;
 struct HashTable;
 
+#ifdef JSC_GLIB_API_ENABLED
+class WrapperMap;
+#endif
+
 template<typename Watchpoint> class ObjectPropertyChangeAdaptiveWatchpoint;
 
 #define DEFINE_STANDARD_BUILTIN(macro, upperName, lowerName) macro(upperName, lowerName, lowerName, JS ## upperName, upperName, object)
@@ -325,6 +329,10 @@ public:
     LazyProperty<JSGlobalObject, Structure> m_objcCallbackFunctionStructure;
     LazyProperty<JSGlobalObject, Structure> m_objcWrapperObjectStructure;
 #endif
+#ifdef JSC_GLIB_API_ENABLED
+    LazyProperty<JSGlobalObject, Structure> m_glibCallbackFunctionStructure;
+    LazyProperty<JSGlobalObject, Structure> m_glibWrapperObjectStructure;
+#endif
     LazyProperty<JSGlobalObject, Structure> m_nullPrototypeObjectStructure;
     WriteBarrier<Structure> m_calleeStructure;
     WriteBarrier<Structure> m_strictFunctionStructure;
@@ -465,7 +473,7 @@ public:
     RuntimeFlags m_runtimeFlags;
     ConsoleClient* m_consoleClient { nullptr };
 
-    static JS_EXPORTDATA const GlobalObjectMethodTable s_globalObjectMethodTable;
+    static JS_EXPORT_PRIVATE const GlobalObjectMethodTable s_globalObjectMethodTable;
     const GlobalObjectMethodTable* m_globalObjectMethodTable;
 
     void createRareDataIfNeeded()
@@ -488,7 +496,7 @@ public:
     const RuntimeFlags& runtimeFlags() const { return m_runtimeFlags; }
 
 protected:
-    JS_EXPORT_PRIVATE explicit JSGlobalObject(VM&, Structure*, const GlobalObjectMethodTable* = nullptr, RefPtr<ThreadLocalCache> = nullptr);
+    JS_EXPORT_PRIVATE explicit JSGlobalObject(VM&, Structure*, const GlobalObjectMethodTable* = nullptr);
 
     JS_EXPORT_PRIVATE void finishCreation(VM&);
 
@@ -511,7 +519,7 @@ public:
 
     void addVar(ExecState* exec, const Identifier& propertyName)
     {
-        if (!hasProperty(exec, propertyName))
+        if (!hasOwnProperty(exec, propertyName))
             addGlobalVar(propertyName);
     }
     void addFunction(ExecState*, const Identifier&);
@@ -635,6 +643,10 @@ public:
 #if JSC_OBJC_API_ENABLED
     Structure* objcCallbackFunctionStructure() const { return m_objcCallbackFunctionStructure.get(this); }
     Structure* objcWrapperObjectStructure() const { return m_objcWrapperObjectStructure.get(this); }
+#endif
+#ifdef JSC_GLIB_API_ENABLED
+    Structure* glibCallbackFunctionStructure() const { return m_glibCallbackFunctionStructure.get(this); }
+    Structure* glibWrapperObjectStructure() const { return m_glibWrapperObjectStructure.get(this); }
 #endif
     Structure* dateStructure() const { return m_dateStructure.get(this); }
     Structure* nullPrototypeObjectStructure() const { return m_nullPrototypeObjectStructure.get(this); }
@@ -888,8 +900,10 @@ public:
     JSWrapperMap* wrapperMap() const { return m_wrapperMap.get(); }
     void setWrapperMap(JSWrapperMap* map) { m_wrapperMap = map; }
 #endif
-    
-    ThreadLocalCache& threadLocalCache() const { return *m_threadLocalCache.get(); }
+#ifdef JSC_GLIB_API_ENABLED
+    WrapperMap* wrapperMap() const { return m_wrapperMap.get(); }
+    void setWrapperMap(std::unique_ptr<WrapperMap>&&);
+#endif
 
 protected:
     struct GlobalPropertyInfo {
@@ -921,17 +935,10 @@ private:
 #if JSC_OBJC_API_ENABLED
     RetainPtr<JSWrapperMap> m_wrapperMap;
 #endif
-    
-    RefPtr<ThreadLocalCache> m_threadLocalCache;
+#ifdef JSC_GLIB_API_ENABLED
+    std::unique_ptr<WrapperMap> m_wrapperMap;
+#endif
 };
-
-JSGlobalObject* asGlobalObject(JSValue);
-
-inline JSGlobalObject* asGlobalObject(JSValue value)
-{
-    ASSERT(asObject(value)->isGlobalObject());
-    return jsCast<JSGlobalObject*>(asObject(value));
-}
 
 inline JSArray* constructEmptyArray(ExecState* exec, ArrayAllocationProfile* profile, JSGlobalObject* globalObject, unsigned initialLength = 0, JSValue newTarget = JSValue())
 {

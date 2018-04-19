@@ -18,14 +18,14 @@ list(APPEND WebCore_SOURCES
     platform/network/curl/CurlMultipartHandle.cpp
     platform/network/curl/CurlRequest.cpp
     platform/network/curl/CurlRequestScheduler.cpp
+    platform/network/curl/CurlResourceHandleDelegate.cpp
     platform/network/curl/CurlSSLHandle.cpp
     platform/network/curl/CurlSSLVerifier.cpp
-    platform/network/curl/DNSCurl.cpp
+    platform/network/curl/DNSResolveQueueCurl.cpp
     platform/network/curl/NetworkStorageSessionCurl.cpp
     platform/network/curl/ProxyServerCurl.cpp
     platform/network/curl/ResourceErrorCurl.cpp
     platform/network/curl/ResourceHandleCurl.cpp
-    platform/network/curl/ResourceHandleCurlDelegate.cpp
     platform/network/curl/ResourceResponseCurl.cpp
     platform/network/curl/SocketStreamHandleImplCurl.cpp
     platform/network/curl/SynchronousLoaderClientCurl.cpp

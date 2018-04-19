@@ -29,23 +29,40 @@
 
 #include "AudioTrackPrivateGStreamer.h"
 
+#include "MediaPlayerPrivateGStreamer.h"
 #include <glib-object.h>
 
 namespace WebCore {
 
-AudioTrackPrivateGStreamer::AudioTrackPrivateGStreamer(GRefPtr<GstElement> playbin, gint index, GRefPtr<GstPad> pad)
+AudioTrackPrivateGStreamer::AudioTrackPrivateGStreamer(WeakPtr<MediaPlayerPrivateGStreamer> player, gint index, GRefPtr<GstPad> pad)
     : TrackPrivateBaseGStreamer(this, index, pad)
-    , m_playbin(playbin)
+    , m_player(player)
 {
     // FIXME: Get a real ID from the tkhd atom.
     m_id = "A" + String::number(index);
     notifyTrackOfActiveChanged();
 }
 
+#if GST_CHECK_VERSION(1, 10, 0)
+AudioTrackPrivateGStreamer::AudioTrackPrivateGStreamer(WeakPtr<MediaPlayerPrivateGStreamer> player, gint index, GRefPtr<GstStream> stream)
+    : TrackPrivateBaseGStreamer(this, index, stream)
+    , m_player(player)
+{
+    m_id = gst_stream_get_stream_id(stream.get());
+    setActive(gst_stream_get_stream_flags(stream.get()) & GST_STREAM_FLAG_SELECT);
+    notifyTrackOfActiveChanged();
+}
+#endif
+
 void AudioTrackPrivateGStreamer::disconnect()
 {
-    m_playbin.clear();
+    m_player = nullptr;
     TrackPrivateBaseGStreamer::disconnect();
+}
+
+void AudioTrackPrivateGStreamer::markAsActive()
+{
+    AudioTrackPrivate::setEnabled(true);
 }
 
 void AudioTrackPrivateGStreamer::setEnabled(bool enabled)
@@ -54,8 +71,8 @@ void AudioTrackPrivateGStreamer::setEnabled(bool enabled)
         return;
     AudioTrackPrivate::setEnabled(enabled);
 
-    if (enabled && m_playbin)
-        g_object_set(m_playbin.get(), "current-audio", m_index, nullptr);
+    if (enabled && m_player)
+        m_player->enableTrack(TrackPrivateBaseGStreamer::TrackType::Audio, m_index);
 }
 
 } // namespace WebCore

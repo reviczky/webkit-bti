@@ -28,8 +28,8 @@
 #include "cmakeconfig.h"
 
 #include "BrowserWindow.h"
-#include <JavaScriptCore/JavaScript.h>
 #include <errno.h>
+#include <gst/gst.h>
 #include <gtk/gtk.h>
 #include <string.h>
 #include <webkit2/webkit2.h>
@@ -45,6 +45,7 @@ static char *geometry;
 static gboolean privateMode;
 static gboolean automationMode;
 static gboolean fullScreen;
+static gboolean enableIntelligentTrackingPrevention;
 static const char *proxy;
 
 typedef enum {
@@ -102,6 +103,7 @@ static const GOptionEntry commandLineOptions[] =
     { "full-screen", 'f', 0, G_OPTION_ARG_NONE, &fullScreen, "Set the window to full-screen mode", NULL },
     { "private", 'p', 0, G_OPTION_ARG_NONE, &privateMode, "Run in private browsing mode", NULL },
     { "automation", 0, 0, G_OPTION_ARG_NONE, &automationMode, "Run in automation mode", NULL },
+    { "enable-itp", 0, 0, G_OPTION_ARG_NONE, &enableIntelligentTrackingPrevention, "Enable intelligent tracking prevention", NULL },
     { "proxy", 0, 0, G_OPTION_ARG_STRING, &proxy, "Set proxy", "PROXY" },
     { "ignore-host", 0, 0, G_OPTION_ARG_STRING_ARRAY, &ignoreHosts, "Set proxy ignore hosts", "HOSTS" },
     { G_OPTION_REMAINING, 0, 0, G_OPTION_ARG_FILENAME_ARRAY, &uriArguments, 0, "[URL…]" },
@@ -294,17 +296,7 @@ static void websiteDataClearedCallback(WebKitWebsiteDataManager *manager, GAsync
 
 static void aboutDataScriptMessageReceivedCallback(WebKitUserContentManager *userContentManager, WebKitJavascriptResult *message, WebKitWebContext *webContext)
 {
-    JSValueRef jsValue = webkit_javascript_result_get_value(message);
-    JSStringRef jsString = JSValueToStringCopy(webkit_javascript_result_get_global_context(message), jsValue, NULL);
-    size_t maxSize = JSStringGetMaximumUTF8CStringSize(jsString);
-    if (!maxSize) {
-        JSStringRelease(jsString);
-        return;
-    }
-    char *messageString = g_malloc(maxSize);
-    JSStringGetUTF8CString(jsString, messageString, maxSize);
-    JSStringRelease(jsString);
-
+    char *messageString = jsc_value_to_string(webkit_javascript_result_get_js_value(message));
     char **tokens = g_strsplit(messageString, ":", 3);
     g_free(messageString);
 
@@ -483,6 +475,7 @@ int main(int argc, char *argv[])
     GOptionContext *context = g_option_context_new(NULL);
     g_option_context_add_main_entries(context, commandLineOptions, 0);
     g_option_context_add_group(context, gtk_get_option_group(TRUE));
+    g_option_context_add_group(context, gst_init_get_option_group());
 
     WebKitSettings *webkitSettings = webkit_settings_new();
     webkit_settings_set_enable_developer_extras(webkitSettings, TRUE);
@@ -515,6 +508,9 @@ int main(int argc, char *argv[])
 
     // Enable the favicon database, by specifying the default directory.
     webkit_web_context_set_favicon_database_directory(webContext, NULL);
+
+    WebKitWebsiteDataManager *manager = webkit_web_context_get_website_data_manager(webContext);
+    webkit_website_data_manager_set_resource_load_statistics_enabled(manager, enableIntelligentTrackingPrevention);
 
     webkit_web_context_register_uri_scheme(webContext, BROWSER_ABOUT_SCHEME, (WebKitURISchemeRequestCallback)aboutURISchemeRequestCallback, webContext, NULL);
 

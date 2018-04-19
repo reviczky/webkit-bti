@@ -69,6 +69,7 @@
 #include <wtf/Stopwatch.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/ThreadSpecific.h>
+#include <wtf/UniqueArray.h>
 #include <wtf/text/SymbolRegistry.h>
 #include <wtf/text/WTFString.h>
 #if ENABLE(REGEXP_TRACING)
@@ -232,7 +233,7 @@ struct ScratchBuffer {
         double pad; // Make sure m_buffer is double aligned.
     } u;
 #if CPU(MIPS) && (defined WTF_MIPS_ARCH_REV && WTF_MIPS_ARCH_REV == 2)
-    void* m_buffer[0] __attribute__((aligned(8)));
+    alignas(8) void* m_buffer[0];
 #else
     void* m_buffer[0];
 #endif
@@ -244,7 +245,7 @@ struct ScratchBuffer {
 class VM : public ThreadSafeRefCounted<VM>, public DoublyLinkedListNode<VM> {
 public:
     // WebCore has a one-to-one mapping of threads to VMs;
-    // either create() or createLeaked() should only be called once
+    // create() should only be called once
     // on a thread, this is the 'default' VM (it uses the
     // thread's default string uniquing table from Thread::current()).
     // API contexts created using the new context group aware interface
@@ -263,7 +264,6 @@ public:
     JS_EXPORT_PRIVATE static VM& sharedInstance();
 
     JS_EXPORT_PRIVATE static Ref<VM> create(HeapType = SmallHeap);
-    JS_EXPORT_PRIVATE static Ref<VM> createLeaked(HeapType = SmallHeap);
     static Ref<VM> createContextGroup(HeapType = SmallHeap);
     JS_EXPORT_PRIVATE ~VM();
 
@@ -293,8 +293,7 @@ public:
     std::unique_ptr<GigacageAlignedMemoryAllocator> primitiveGigacageAllocator;
     std::unique_ptr<GigacageAlignedMemoryAllocator> jsValueGigacageAllocator;
 
-    std::unique_ptr<HeapCellType> auxiliaryJSValueStrictHeapCellType;
-    std::unique_ptr<HeapCellType> auxiliaryDangerousBitsHeapCellType;
+    std::unique_ptr<HeapCellType> auxiliaryHeapCellType;
     std::unique_ptr<HeapCellType> cellJSValueOOBHeapCellType;
     std::unique_ptr<HeapCellType> cellDangerousBitsHeapCellType;
     std::unique_ptr<HeapCellType> destructibleCellHeapCellType;
@@ -337,9 +336,6 @@ public:
     CompleteSubspace destructibleObjectSpace;
     CompleteSubspace eagerlySweptDestructibleObjectSpace;
     CompleteSubspace segmentedVariableObjectSpace;
-#if ENABLE(WEBASSEMBLY)
-    CompleteSubspace webAssemblyCodeBlockSpace;
-#endif
     
     IsoSubspace asyncFunctionSpace;
     IsoSubspace asyncGeneratorFunctionSpace;
@@ -363,6 +359,7 @@ public:
     IsoSubspace weakSetSpace;
     IsoSubspace weakMapSpace;
 #if ENABLE(WEBASSEMBLY)
+    IsoSubspace webAssemblyCodeBlockSpace;
     IsoSubspace webAssemblyFunctionSpace;
     IsoSubspace webAssemblyWrapperFunctionSpace;
 #endif
@@ -545,7 +542,7 @@ public:
     Interpreter* interpreter;
 #if ENABLE(JIT)
     std::unique_ptr<JITThunks> jitStubs;
-    MacroAssemblerCodeRef getCTIStub(ThunkGenerator generator)
+    MacroAssemblerCodeRef<JITThunkPtrTag> getCTIStub(ThunkGenerator generator)
     {
         return jitStubs->ctiStub(this, generator);
     }
@@ -557,7 +554,7 @@ public:
     NativeExecutable* getHostFunction(NativeFunction, NativeFunction constructor, const String& name);
     NativeExecutable* getHostFunction(NativeFunction, Intrinsic, NativeFunction constructor, const DOMJIT::Signature*, const String& name);
 
-    MacroAssemblerCodePtr getCTIInternalFunctionTrampolineFor(CodeSpecializationKind);
+    MacroAssemblerCodePtr<JSEntryPtrTag> getCTIInternalFunctionTrampolineFor(CodeSpecializationKind);
 
     static ptrdiff_t exceptionOffset()
     {
@@ -567,11 +564,6 @@ public:
     static ptrdiff_t callFrameForCatchOffset()
     {
         return OBJECT_OFFSETOF(VM, callFrameForCatch);
-    }
-
-    static ptrdiff_t targetMachinePCForThrowOffset()
-    {
-        return OBJECT_OFFSETOF(VM, targetMachinePCForThrow);
     }
 
     static ptrdiff_t topEntryFrameOffset()
@@ -686,7 +678,7 @@ public:
 
 #if ENABLE(YARR_JIT_ALL_PARENS_EXPRESSIONS)
     static constexpr size_t patternContextBufferSize = 8192; // Space allocated to save nested parenthesis context
-    char* m_regExpPatternContexBuffer { nullptr };
+    UniqueArray<char> m_regExpPatternContexBuffer;
     Lock m_regExpPatternContextLock;
     char* acquireRegExpPatternContexBuffer();
     void releaseRegExpPatternContexBuffer();

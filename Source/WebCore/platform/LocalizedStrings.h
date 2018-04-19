@@ -223,6 +223,7 @@ namespace WebCore {
     String crashedPluginText();
     String blockedPluginByContentSecurityPolicyText();
     String insecurePluginVersionText();
+    String unsupportedPluginText();
 
     String multipleFileUploadText(unsigned numberOfFiles);
     String unknownFileSizeText();
@@ -316,13 +317,16 @@ namespace WebCore {
 #endif
 
 #if ENABLE(EXTRA_ZOOM_MODE)
+    WEBCORE_EXPORT String numberPadOKButtonTitle();
     WEBCORE_EXPORT String formControlCancelButtonTitle();
-    WEBCORE_EXPORT String formControlSubmitButtonTitle();
+    WEBCORE_EXPORT String formControlDoneButtonTitle();
     WEBCORE_EXPORT String formControlHideButtonTitle();
     WEBCORE_EXPORT String formControlGoButtonTitle();
     WEBCORE_EXPORT String formControlSearchButtonTitle();
-    WEBCORE_EXPORT String textInputModeWriteButton();
-    WEBCORE_EXPORT String textInputModeSpeechButton();
+    WEBCORE_EXPORT String datePickerSetButtonTitle();
+    WEBCORE_EXPORT String datePickerDayLabelTitle();
+    WEBCORE_EXPORT String datePickerMonthLabelTitle();
+    WEBCORE_EXPORT String datePickerYearLabelTitle();
 #endif
 
 #if USE(GLIB) && defined(GETTEXT_PACKAGE)

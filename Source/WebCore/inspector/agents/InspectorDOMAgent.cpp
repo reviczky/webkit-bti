@@ -56,6 +56,7 @@
 #include "Element.h"
 #include "Event.h"
 #include "EventListener.h"
+#include "Frame.h"
 #include "FrameTree.h"
 #include "HTMLElement.h"
 #include "HTMLFrameOwnerElement.h"
@@ -76,7 +77,6 @@
 #include "JSDOMBindingSecurity.h"
 #include "JSEventListener.h"
 #include "JSNode.h"
-#include "MainFrame.h"
 #include "MutationEvent.h"
 #include "Node.h"
 #include "NodeList.h"
@@ -1604,13 +1604,14 @@ Ref<Inspector::Protocol::DOM::EventListener> InspectorDOMAgent::buildObjectForEv
     int columnNumber = 0;
     String scriptID;
     String sourceName;
-    if (auto scriptListener = JSEventListener::cast(eventListener.ptr())) {
-        JSC::JSLockHolder lock(scriptListener->isolatedWorld().vm());
-        state = execStateFromNode(scriptListener->isolatedWorld(), &node->document());
-        handler = scriptListener->jsFunction(node->document());
+    if (is<JSEventListener>(eventListener.get())) {
+        auto& scriptListener = downcast<JSEventListener>(eventListener.get());
+        JSC::JSLockHolder lock(scriptListener.isolatedWorld().vm());
+        state = execStateFromNode(scriptListener.isolatedWorld(), &node->document());
+        handler = scriptListener.jsFunction(node->document());
         if (handler && state) {
             body = handler->toString(state)->value(state);
-            if (auto function = jsDynamicDowncast<JSC::JSFunction*>(state->vm(), handler)) {
+            if (auto function = JSC::jsDynamicCast<JSC::JSFunction*>(state->vm(), handler)) {
                 if (!function->isHostOrBuiltinFunction()) {
                     if (auto executable = function->jsExecutable()) {
                         lineNumber = executable->firstLine() - 1;
@@ -2020,14 +2021,6 @@ Node* InspectorDOMAgent::innerParentNode(Node* node)
     if (is<ShadowRoot>(*node))
         return downcast<ShadowRoot>(*node).host();
     return node->parentNode();
-}
-
-void InspectorDOMAgent::mainFrameDOMContentLoaded()
-{
-    // Re-push document once it is loaded.
-    discardBindings();
-    if (m_documentRequested)
-        m_frontendDispatcher->documentUpdated();
 }
 
 void InspectorDOMAgent::didCommitLoad(Document* document)

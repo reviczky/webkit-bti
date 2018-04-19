@@ -162,11 +162,11 @@ public:
     bool upgradeInsecureRequests() const { return m_upgradeInsecureRequests; }
     enum class InsecureRequestType { Load, FormSubmission, Navigation };
     void upgradeInsecureRequestIfNeeded(ResourceRequest&, InsecureRequestType) const;
-    void upgradeInsecureRequestIfNeeded(URL&, InsecureRequestType) const;
+    WEBCORE_EXPORT void upgradeInsecureRequestIfNeeded(URL&, InsecureRequestType) const;
 
-    HashSet<RefPtr<SecurityOrigin>>&& takeNavigationRequestsToUpgrade();
+    HashSet<SecurityOriginData> takeNavigationRequestsToUpgrade();
     void inheritInsecureNavigationRequestsToUpgradeFromOpener(const ContentSecurityPolicy&);
-    void setInsecureNavigationRequestsToUpgrade(HashSet<RefPtr<SecurityOrigin>>&&);
+    void setInsecureNavigationRequestsToUpgrade(HashSet<SecurityOriginData>&&);
 
 private:
     void logToConsole(const String& message, const String& contextURL = String(), const WTF::OrdinalNumber& contextLine = WTF::OrdinalNumber::beforeFirst(), JSC::ExecState* = nullptr) const;
@@ -218,7 +218,7 @@ private:
     bool m_hasAPIPolicy { false };
     OptionSet<ContentSecurityPolicyHashAlgorithm> m_hashAlgorithmsForInlineScripts;
     OptionSet<ContentSecurityPolicyHashAlgorithm> m_hashAlgorithmsForInlineStylesheets;
-    HashSet<RefPtr<SecurityOrigin>> m_insecureNavigationRequestsToUpgrade;
+    HashSet<SecurityOriginData> m_insecureNavigationRequestsToUpgrade;
     mutable std::optional<ContentSecurityPolicyResponseHeaders> m_cachedResponseHeaders;
 };
 

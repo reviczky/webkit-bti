@@ -320,6 +320,11 @@ void DOMCache::put(RequestInfo&& info, Ref<FetchResponse>&& response, DOMPromise
     }
     auto request = requestOrException.releaseReturnValue();
 
+    if (response->loadingError()) {
+        promise.reject(Exception { TypeError, response->loadingError()->localizedDescription() });
+        return;
+    }
+
     if (hasResponseVaryStarHeaderValue(response.get())) {
         promise.reject(Exception { TypeError, ASCIILiteral("Response has a '*' Vary header value") });
         return;
@@ -334,6 +339,15 @@ void DOMCache::put(RequestInfo&& info, Ref<FetchResponse>&& response, DOMPromise
         promise.reject(Exception { TypeError, ASCIILiteral("Response is disturbed or locked") });
         return;
     }
+
+    if (response->isBlobFormData()) {
+        promise.reject(Exception { NotSupportedError, ASCIILiteral("Not implemented") });
+        return;
+    }
+
+    // FIXME: for efficiency, we should load blobs directly instead of going through the readableStream path.
+    if (response->isBlobBody())
+        response->readableStream(*scriptExecutionContext()->execState());
 
     if (response->isBodyReceivedByChunk()) {
         response->consumeBodyReceivedByChunk([promise = WTFMove(promise), request = WTFMove(request), response = WTFMove(response), data = SharedBuffer::create(), pendingActivity = makePendingActivity(*this), this](auto&& result) mutable {

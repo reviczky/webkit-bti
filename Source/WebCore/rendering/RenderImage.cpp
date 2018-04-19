@@ -543,7 +543,7 @@ void RenderImage::paintAreaElementFocusRing(PaintInfo& paintInfo, const LayoutPo
 
 #if PLATFORM(MAC)
     bool needsRepaint;
-    paintInfo.context().drawFocusRing(path, page().focusController().timeSinceFocusWasSet(), needsRepaint);
+    paintInfo.context().drawFocusRing(path, page().focusController().timeSinceFocusWasSet().seconds(), needsRepaint);
     if (needsRepaint)
         page().focusController().setFocusedElementNeedsRepaint();
 #else
@@ -699,6 +699,12 @@ bool RenderImage::canHaveChildren() const
 
 void RenderImage::layout()
 {
+    // Recomputing overflow is required only when child content is present. 
+    if (needsSimplifiedNormalFlowLayout() && !m_hasShadowControls) {
+        clearNeedsLayout();
+        return;
+    }
+
     StackStats::LayoutCheckPoint layoutCheckPoint;
 
     LayoutSize oldSize = contentBoxRect().size();

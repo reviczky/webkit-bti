@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2012-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2018 Sony Interactive Entertainment Inc.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -38,6 +39,7 @@
 #include "Logging.h"
 #include "NetworkBlobRegistry.h"
 #include "NetworkConnectionToWebProcess.h"
+#include "NetworkContentRuleListManagerMessages.h"
 #include "NetworkProcessCreationParameters.h"
 #include "NetworkProcessPlatformStrategies.h"
 #include "NetworkProcessProxyMessages.h"
@@ -61,10 +63,12 @@
 #include <WebCore/DiagnosticLoggingClient.h>
 #include <WebCore/LogInitialization.h>
 #include <WebCore/MIMETypeRegistry.h>
+#include <WebCore/NetworkStateNotifier.h>
 #include <WebCore/NetworkStorageSession.h>
 #include <WebCore/PlatformCookieJar.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/RuntimeApplicationChecks.h>
+#include <WebCore/SchemeRegistry.h>
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/SecurityOriginHash.h>
 #include <WebCore/Settings.h>
@@ -72,6 +76,7 @@
 #include <pal/SessionID.h>
 #include <wtf/CallbackAggregator.h>
 #include <wtf/OptionSet.h>
+#include <wtf/ProcessPrivilege.h>
 #include <wtf/RunLoop.h>
 #include <wtf/text/AtomicString.h>
 #include <wtf/text/CString.h>
@@ -120,6 +125,12 @@ NetworkProcess::NetworkProcess()
 #if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
     addSupplement<LegacyCustomProtocolManager>();
 #endif
+
+    NetworkStateNotifier::singleton().addListener([this](bool isOnLine) {
+        auto webProcessConnections = m_webProcessConnections;
+        for (auto& webProcessConnection : webProcessConnections)
+            webProcessConnection->setOnLineState(isOnLine);
+    });
 }
 
 NetworkProcess::~NetworkProcess()
@@ -160,6 +171,13 @@ void NetworkProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder
         ChildProcess::didReceiveMessage(connection, decoder);
         return;
     }
+
+#if ENABLE(CONTENT_EXTENSIONS)
+    if (decoder.messageReceiverName() == Messages::NetworkContentRuleListManager::messageReceiverName()) {
+        m_NetworkContentRuleListManager.didReceiveMessage(connection, decoder);
+        return;
+    }
+#endif
 
     didReceiveNetworkProcessMessage(connection, decoder);
 }
@@ -208,6 +226,8 @@ void NetworkProcess::lowMemoryHandler(Critical critical)
 
 void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&& parameters)
 {
+    WTF::setProcessPrivileges({ ProcessPrivilege::CanAccessRawCookies, ProcessPrivilege::CanAccessCredentials });
+    WebCore::NetworkStorageSession::permitProcessToUseCookieAPI(true);
     WebCore::setPresentingApplicationPID(parameters.presentingApplicationPID);
     platformInitializeNetworkProcess(parameters);
 
@@ -252,13 +272,31 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
     m_logCookieInformation = parameters.logCookieInformation;
 #endif
 
-#if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
-    parameters.defaultSessionParameters.legacyCustomProtocolManager = supplement<LegacyCustomProtocolManager>();
-#endif
     SessionTracker::setSession(PAL::SessionID::defaultSessionID(), NetworkSession::create(WTFMove(parameters.defaultSessionParameters)));
 
     for (auto& supplement : m_supplements.values())
         supplement->initialize(parameters);
+
+    for (auto& scheme : parameters.urlSchemesRegisteredAsSecure)
+        registerURLSchemeAsSecure(scheme);
+
+    for (auto& scheme : parameters.urlSchemesRegisteredAsBypassingContentSecurityPolicy)
+        registerURLSchemeAsBypassingContentSecurityPolicy(scheme);
+
+    for (auto& scheme : parameters.urlSchemesRegisteredAsLocal)
+        registerURLSchemeAsLocal(scheme);
+
+    for (auto& scheme : parameters.urlSchemesRegisteredAsNoAccess)
+        registerURLSchemeAsNoAccess(scheme);
+
+    for (auto& scheme : parameters.urlSchemesRegisteredAsDisplayIsolated)
+        registerURLSchemeAsDisplayIsolated(scheme);
+
+    for (auto& scheme : parameters.urlSchemesRegisteredAsCORSEnabled)
+        registerURLSchemeAsCORSEnabled(scheme);
+
+    for (auto& scheme : parameters.urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest)
+        registerURLSchemeAsCanDisplayOnlyIfCanRequest(scheme);
 
     RELEASE_LOG(Process, "%p - NetworkProcess::initializeNetworkProcess: Presenting process = %d", this, WebCore::presentingApplicationPID());
 }
@@ -283,8 +321,12 @@ void NetworkProcess::createNetworkConnectionToWebProcess()
     parentProcessConnection()->send(Messages::NetworkProcessProxy::DidCreateNetworkConnectionToWebProcess(clientSocket), 0);
 #elif OS(DARWIN)
     // Create the listening port.
-    mach_port_t listeningPort;
-    mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &listeningPort);
+    mach_port_t listeningPort = MACH_PORT_NULL;
+    auto kr = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &listeningPort);
+    if (kr != KERN_SUCCESS) {
+        LOG_ERROR("Could not allocate mach port, error %x", kr);
+        CRASH();
+    }
 
     // Create a listening connection.
     auto connection = NetworkConnectionToWebProcess::create(IPC::Connection::Identifier(listeningPort));
@@ -292,9 +334,22 @@ void NetworkProcess::createNetworkConnectionToWebProcess()
 
     IPC::Attachment clientPort(listeningPort, MACH_MSG_TYPE_MAKE_SEND);
     parentProcessConnection()->send(Messages::NetworkProcessProxy::DidCreateNetworkConnectionToWebProcess(clientPort), 0);
+#elif OS(WINDOWS)
+    IPC::Connection::Identifier serverIdentifier, clientIdentifier;
+    if (!IPC::Connection::createServerAndClientIdentifiers(serverIdentifier, clientIdentifier))
+        return;
+
+    auto connection = NetworkConnectionToWebProcess::create(serverIdentifier);
+    m_webProcessConnections.append(WTFMove(connection));
+
+    IPC::Attachment clientSocket(clientIdentifier);
+    parentProcessConnection()->send(Messages::NetworkProcessProxy::DidCreateNetworkConnectionToWebProcess(clientSocket), 0);
 #else
     notImplemented();
 #endif
+
+    if (!m_webProcessConnections.isEmpty())
+        m_webProcessConnections.last()->setOnLineState(NetworkStateNotifier::singleton().onLine());
 }
 
 void NetworkProcess::clearCachedCredentials()
@@ -357,7 +412,7 @@ void NetworkProcess::updatePrevalentDomainsToPartitionOrBlockCookies(PAL::Sessio
 void NetworkProcess::hasStorageAccessForFrame(PAL::SessionID sessionID, const String& resourceDomain, const String& firstPartyDomain, uint64_t frameID, uint64_t pageID, uint64_t contextId)
 {
     if (auto* networkStorageSession = NetworkStorageSession::storageSession(sessionID))
-        parentProcessConnection()->send(Messages::NetworkProcessProxy::StorageAccessRequestResult(networkStorageSession->hasStorageAccessForFrame(resourceDomain, firstPartyDomain, frameID, pageID), contextId), 0);
+        parentProcessConnection()->send(Messages::NetworkProcessProxy::StorageAccessRequestResult(networkStorageSession->hasStorageAccess(resourceDomain, firstPartyDomain, frameID, pageID), contextId), 0);
     else
         ASSERT_NOT_REACHED();
 }
@@ -370,17 +425,25 @@ void NetworkProcess::getAllStorageAccessEntries(PAL::SessionID sessionID, uint64
         ASSERT_NOT_REACHED();
 }
 
-void NetworkProcess::grantStorageAccessForFrame(PAL::SessionID sessionID, const String& resourceDomain, const String& firstPartyDomain, uint64_t frameID, uint64_t pageID, uint64_t contextId)
+void NetworkProcess::grantStorageAccess(PAL::SessionID sessionID, const String& resourceDomain, const String& firstPartyDomain, std::optional<uint64_t> frameID, uint64_t pageID, uint64_t contextId)
 {
     bool isStorageGranted = false;
     if (auto* networkStorageSession = NetworkStorageSession::storageSession(sessionID)) {
-        networkStorageSession->grantStorageAccessForFrame(resourceDomain, firstPartyDomain, frameID, pageID);
-        ASSERT(networkStorageSession->hasStorageAccessForFrame(resourceDomain, firstPartyDomain, frameID, pageID));
+        networkStorageSession->grantStorageAccess(resourceDomain, firstPartyDomain, frameID, pageID);
+        ASSERT(networkStorageSession->hasStorageAccess(resourceDomain, firstPartyDomain, frameID, pageID));
         isStorageGranted = true;
     } else
         ASSERT_NOT_REACHED();
 
     parentProcessConnection()->send(Messages::NetworkProcessProxy::StorageAccessRequestResult(isStorageGranted, contextId), 0);
+}
+
+void NetworkProcess::removeAllStorageAccess(PAL::SessionID sessionID)
+{
+    if (auto* networkStorageSession = NetworkStorageSession::storageSession(sessionID))
+        networkStorageSession->removeAllStorageAccess();
+    else
+        ASSERT_NOT_REACHED();
 }
 
 void NetworkProcess::removePrevalentDomains(PAL::SessionID sessionID, const Vector<String>& domains)
@@ -828,6 +891,41 @@ void NetworkProcess::preconnectTo(const WebCore::URL& url, WebCore::StoredCreden
 uint64_t NetworkProcess::cacheStoragePerOriginQuota() const
 {
     return m_cacheStoragePerOriginQuota;
+}
+
+void NetworkProcess::registerURLSchemeAsSecure(const String& scheme) const
+{
+    SchemeRegistry::registerURLSchemeAsSecure(scheme);
+}
+
+void NetworkProcess::registerURLSchemeAsBypassingContentSecurityPolicy(const String& scheme) const
+{
+    SchemeRegistry::registerURLSchemeAsBypassingContentSecurityPolicy(scheme);
+}
+
+void NetworkProcess::registerURLSchemeAsLocal(const String& scheme) const
+{
+    SchemeRegistry::registerURLSchemeAsLocal(scheme);
+}
+
+void NetworkProcess::registerURLSchemeAsNoAccess(const String& scheme) const
+{
+    SchemeRegistry::registerURLSchemeAsNoAccess(scheme);
+}
+
+void NetworkProcess::registerURLSchemeAsDisplayIsolated(const String& scheme) const
+{
+    SchemeRegistry::registerURLSchemeAsDisplayIsolated(scheme);
+}
+
+void NetworkProcess::registerURLSchemeAsCORSEnabled(const String& scheme) const
+{
+    SchemeRegistry::registerURLSchemeAsCORSEnabled(scheme);
+}
+
+void NetworkProcess::registerURLSchemeAsCanDisplayOnlyIfCanRequest(const String& scheme) const
+{
+    SchemeRegistry::registerAsCanDisplayOnlyIfCanRequest(scheme);
 }
 
 #if !PLATFORM(COCOA)

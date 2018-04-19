@@ -70,6 +70,7 @@ public:
         case StringUse:
         case StringOrOtherUse:
         case SymbolUse:
+        case BigIntUse:
         case StringObjectUse:
         case StringOrStringObjectUse:
         case NotStringVarUse:
@@ -225,6 +226,8 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node)
     case GetByIdWithThis:
     case GetByValWithThis:
     case GetByIdFlush:
+    case GetByIdDirect:
+    case GetByIdDirectFlush:
     case PutById:
     case PutByIdFlush:
     case PutByIdWithThis:
@@ -265,6 +268,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node)
     case RegExpExecNonGlobalOrSticky:
     case RegExpTest:
     case RegExpMatchFast:
+    case RegExpMatchFastGlobal:
     case CompareLess:
     case CompareLessEq:
     case CompareGreater:
@@ -479,9 +483,6 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node)
     case StringCharAt:
     case StringCharCodeAt:
         return node->arrayMode().alreadyChecked(graph, node, state.forNode(graph.child(node, 0)));
-
-    case GetArrayMask:
-        return state.forNode(node->child1()).isType(SpecObject);
 
     case ArrayPush:
         return node->arrayMode().alreadyChecked(graph, node, state.forNode(graph.varArgChild(node, 1)));

@@ -26,20 +26,32 @@
 #pragma once
 
 #include "APIObject.h"
+#include <WebCore/Process.h>
 #include <WebCore/ResourceRequest.h>
 #include <wtf/Ref.h>
 
+namespace WebCore {
+enum class FrameLoadType;
+}
+
 namespace WebKit {
+class WebBackForwardListItem;
 class WebNavigationState;
 }
 
 namespace API {
 
 class Navigation : public ObjectImpl<Object::Type::Navigation> {
+    WTF_MAKE_NONCOPYABLE(Navigation);
 public:
     static Ref<Navigation> create(WebKit::WebNavigationState& state)
     {
         return adoptRef(*new Navigation(state));
+    }
+
+    static Ref<Navigation> create(WebKit::WebNavigationState& state, WebKit::WebBackForwardListItem& item, WebCore::FrameLoadType backForwardFrameLoadType)
+    {
+        return adoptRef(*new Navigation(state, item, backForwardFrameLoadType));
     }
 
     static Ref<Navigation> create(WebKit::WebNavigationState& state, WebCore::ResourceRequest&& request)
@@ -51,7 +63,16 @@ public:
 
     uint64_t navigationID() const { return m_navigationID; }
 
-    const WebCore::ResourceRequest& request() const { return m_request; }
+    const WebCore::ResourceRequest& originalRequest() const { return m_originalRequest; }
+    void setCurrentRequest(WebCore::ResourceRequest&&, WebCore::ProcessIdentifier);
+    const WebCore::ResourceRequest& currentRequest() const { return m_currentRequest; }
+    std::optional<WebCore::ProcessIdentifier> currentRequestProcessIdentifier() const { return m_currentRequestProcessIdentifier; }
+
+    void setCurrentRequestIsRedirect(bool isRedirect) { m_isRedirect = isRedirect; }
+    bool currentRequestIsRedirect() const { return m_isRedirect; }
+
+    WebKit::WebBackForwardListItem* backForwardListItem() { return m_backForwardListItem.get(); }
+    std::optional<WebCore::FrameLoadType> backForwardFrameLoadType() const { return m_backForwardFrameLoadType; }
 
     void appendRedirectionURL(const WebCore::URL&);
     Vector<WebCore::URL> takeRedirectChain() { return WTFMove(m_redirectChain); }
@@ -62,15 +83,34 @@ public:
     void setShouldForceDownload(bool value) { m_shouldForceDownload = value; }
     bool shouldForceDownload() const { return m_shouldForceDownload; }
 
+    void setIsCrossOriginWindowOpenNavigation(bool value) { m_isCrossOriginWindowOpenNavigation = value; }
+    bool isCrossOriginWindowOpenNavigation() const { return m_isCrossOriginWindowOpenNavigation; }
+
+    void setOpener(const std::optional<std::pair<uint64_t, uint64_t>>& opener) { m_opener = opener; }
+    const std::optional<std::pair<uint64_t, uint64_t>>& opener() const { return m_opener; }
+
+#if !LOG_DISABLED
+    WTF::String loggingString() const;
+#endif
+
 private:
     explicit Navigation(WebKit::WebNavigationState&);
-    explicit Navigation(WebKit::WebNavigationState&, WebCore::ResourceRequest&&);
+    Navigation(WebKit::WebNavigationState&, WebCore::ResourceRequest&&);
+    Navigation(WebKit::WebNavigationState&, WebKit::WebBackForwardListItem&, WebCore::FrameLoadType);
 
     uint64_t m_navigationID;
-    WebCore::ResourceRequest m_request;
+    WebCore::ResourceRequest m_originalRequest;
+    WebCore::ResourceRequest m_currentRequest;
+    std::optional<WebCore::ProcessIdentifier> m_currentRequestProcessIdentifier;
     Vector<WebCore::URL> m_redirectChain;
     bool m_wasUserInitiated { true };
     bool m_shouldForceDownload { false };
+    bool m_isRedirect { false };
+
+    RefPtr<WebKit::WebBackForwardListItem> m_backForwardListItem;
+    std::optional<WebCore::FrameLoadType> m_backForwardFrameLoadType;
+    bool m_isCrossOriginWindowOpenNavigation { false };
+    std::optional<std::pair<uint64_t, uint64_t>> m_opener;
 };
 
 } // namespace API

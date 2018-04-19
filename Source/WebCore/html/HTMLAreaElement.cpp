@@ -31,8 +31,11 @@
 #include "Path.h"
 #include "RenderImage.h"
 #include "RenderView.h"
+#include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(HTMLAreaElement);
 
 using namespace HTMLNames;
 
@@ -194,7 +197,7 @@ HTMLImageElement* HTMLAreaElement::imageElement() const
     return downcast<HTMLMapElement>(*mapElement).imageElement();
 }
 
-bool HTMLAreaElement::isKeyboardFocusable(KeyboardEvent&) const
+bool HTMLAreaElement::isKeyboardFocusable(KeyboardEvent*) const
 {
     return isFocusable();
 }

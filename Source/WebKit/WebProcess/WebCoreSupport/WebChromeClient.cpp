@@ -61,6 +61,7 @@
 #include <WebCore/DocumentLoader.h>
 #include <WebCore/FileChooser.h>
 #include <WebCore/FileIconLoader.h>
+#include <WebCore/Frame.h>
 #include <WebCore/FrameLoadRequest.h>
 #include <WebCore/FrameLoader.h>
 #include <WebCore/FrameView.h>
@@ -69,7 +70,6 @@
 #include <WebCore/HTMLParserIdioms.h>
 #include <WebCore/HTMLPlugInImageElement.h>
 #include <WebCore/Icon.h>
-#include <WebCore/MainFrame.h>
 #include <WebCore/NotImplemented.h>
 #include <WebCore/Page.h>
 #include <WebCore/ScriptController.h>
@@ -210,6 +210,11 @@ void WebChromeClient::elementDidBlur(Element& element)
 void WebChromeClient::makeFirstResponder()
 {
     m_page.send(Messages::WebPageProxy::MakeFirstResponder());
+}
+
+void WebChromeClient::assistiveTechnologyMakeFirstResponder()
+{
+    m_page.send(Messages::WebPageProxy::AssistiveTechnologyMakeFirstResponder());
 }
 
 #endif    
@@ -549,11 +554,6 @@ void WebChromeClient::delegatedScrollRequested(const IntPoint& scrollOffset)
 {
     m_page.pageDidRequestScroll(scrollOffset);
 }
-
-void WebChromeClient::resetUpdateAtlasForTesting()
-{
-    m_page.drawingArea()->resetUpdateAtlasForTesting();
-}
 #endif
 
 IntPoint WebChromeClient::screenToRootView(const IntPoint& point) const
@@ -633,6 +633,7 @@ bool WebChromeClient::shouldUnavailablePluginMessageBeButton(RenderEmbeddedObjec
 
     case RenderEmbeddedObject::PluginCrashed:
     case RenderEmbeddedObject::PluginBlockedByContentSecurityPolicy:
+    case RenderEmbeddedObject::UnsupportedPlugin:
         return false;
     }
 
@@ -725,17 +726,17 @@ void WebChromeClient::exceededDatabaseQuota(Frame& frame, const String& database
     ASSERT(webFrame);
     
     auto& origin = frame.document()->securityOrigin();
-    auto originData = SecurityOriginData::fromSecurityOrigin(origin);
+    auto& originData = origin.data();
     auto& tracker = DatabaseTracker::singleton();
     auto currentQuota = tracker.quota(originData);
     auto currentOriginUsage = tracker.usage(originData);
     uint64_t newQuota = 0;
-    RefPtr<API::SecurityOrigin> securityOrigin = API::SecurityOrigin::create(SecurityOriginData::fromDatabaseIdentifier(SecurityOriginData::fromSecurityOrigin(origin).databaseIdentifier())->securityOrigin());
+    RefPtr<API::SecurityOrigin> securityOrigin = API::SecurityOrigin::create(SecurityOriginData::fromDatabaseIdentifier(originData.databaseIdentifier())->securityOrigin());
     newQuota = m_page.injectedBundleUIClient().didExceedDatabaseQuota(&m_page, securityOrigin.get(), databaseName, details.displayName(), currentQuota, currentOriginUsage, details.currentUsage(), details.expectedUsage());
 
     if (!newQuota) {
         WebProcess::singleton().parentProcessConnection()->sendSync(
-            Messages::WebPageProxy::ExceededDatabaseQuota(webFrame->frameID(), SecurityOriginData::fromSecurityOrigin(origin).databaseIdentifier(), databaseName, details.displayName(), currentQuota, currentOriginUsage, details.currentUsage(), details.expectedUsage()),
+            Messages::WebPageProxy::ExceededDatabaseQuota(webFrame->frameID(), originData.databaseIdentifier(), databaseName, details.displayName(), currentQuota, currentOriginUsage, details.currentUsage(), details.expectedUsage()),
             Messages::WebPageProxy::ExceededDatabaseQuota::Reply(newQuota), m_page.pageID(), Seconds::infinity(), IPC::SendSyncOption::InformPlatformProcessWillSuspend);
     }
 
@@ -760,7 +761,7 @@ void WebChromeClient::reachedApplicationCacheOriginQuota(SecurityOrigin& origin,
 
     uint64_t newQuota = 0;
     WebProcess::singleton().parentProcessConnection()->sendSync(
-        Messages::WebPageProxy::ReachedApplicationCacheOriginQuota(SecurityOriginData::fromSecurityOrigin(origin).databaseIdentifier(), currentQuota, totalBytesNeeded),
+        Messages::WebPageProxy::ReachedApplicationCacheOriginQuota(origin.data().databaseIdentifier(), currentQuota, totalBytesNeeded),
         Messages::WebPageProxy::ReachedApplicationCacheOriginQuota::Reply(newQuota), m_page.pageID(), Seconds::infinity(), IPC::SendSyncOption::InformPlatformProcessWillSuspend);
 
     cacheStorage.storeUpdatedQuotaForOrigin(&origin, newQuota);
@@ -1018,6 +1019,11 @@ FloatSize WebChromeClient::screenSize() const
 FloatSize WebChromeClient::availableScreenSize() const
 {
     return m_page.availableScreenSize();
+}
+
+FloatSize WebChromeClient::overrideScreenSize() const
+{
+    return m_page.overrideScreenSize();
 }
 
 #endif

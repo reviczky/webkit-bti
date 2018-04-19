@@ -32,6 +32,7 @@ class RenderWidget;
 class SVGDocument;
 
 class HTMLFrameOwnerElement : public HTMLElement {
+    WTF_MAKE_ISO_ALLOCATED(HTMLFrameOwnerElement);
 public:
     virtual ~HTMLFrameOwnerElement();
 
@@ -64,7 +65,7 @@ protected:
     void setSandboxFlags(SandboxFlags);
 
 private:
-    bool isKeyboardFocusable(KeyboardEvent&) const override;
+    bool isKeyboardFocusable(KeyboardEvent*) const override;
     bool isFrameOwnerElement() const final { return true; }
 
     Frame* m_contentFrame;

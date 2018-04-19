@@ -56,6 +56,7 @@
 #include "CSSPropertyNames.h"
 #include "CommonVM.h"
 #include "CookieJar.h"
+#include "DOMWindow.h"
 #include "DocumentLoader.h"
 #include "DocumentType.h"
 #include "ElementChildIterator.h"
@@ -76,9 +77,12 @@
 #include "HashTools.h"
 #include "ScriptController.h"
 #include "StyleResolver.h"
+#include <wtf/IsoMallocInlines.h>
 #include <wtf/text/CString.h>
 
 namespace WebCore {
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(HTMLDocument);
 
 using namespace HTMLNames;
 

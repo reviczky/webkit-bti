@@ -236,7 +236,7 @@ void Pasteboard::read(PasteboardPlainText& text)
     text.text = m_selectionData->text();
 }
 
-void Pasteboard::read(PasteboardWebContentReader&)
+void Pasteboard::read(PasteboardWebContentReader&, WebContentReadingPolicy)
 {
 }
 
@@ -318,10 +318,10 @@ String Pasteboard::readStringInCustomData(const String&)
     return { };
 }
 
-bool Pasteboard::containsFiles()
+Pasteboard::FileContentState Pasteboard::fileContentState()
 {
     readFromClipboard();
-    return !m_selectionData->filenames().isEmpty();
+    return m_selectionData->filenames().isEmpty() ? FileContentState::NoFileOrImageData : FileContentState::MayContainFilePaths;
 }
 
 void Pasteboard::writeMarkup(const String&)

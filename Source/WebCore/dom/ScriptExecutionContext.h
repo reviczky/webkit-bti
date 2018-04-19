@@ -36,6 +36,7 @@
 #include <wtf/CrossThreadTask.h>
 #include <wtf/Function.h>
 #include <wtf/HashSet.h>
+#include <wtf/ObjectIdentifier.h>
 #include <wtf/text/WTFString.h>
 
 namespace JSC {
@@ -78,6 +79,9 @@ namespace IDBClient {
 class IDBConnectionProxy;
 }
 
+enum ScriptExecutionContextIdentifierType { };
+using ScriptExecutionContextIdentifier = ObjectIdentifier<ScriptExecutionContextIdentifierType>;
+
 class ScriptExecutionContext : public SecurityContext {
 public:
     ScriptExecutionContext();
@@ -105,7 +109,7 @@ public:
 
     virtual String resourceRequestIdentifier() const { return String(); };
 
-    bool sanitizeScriptError(String& errorMessage, int& lineNumber, int& columnNumber, String& sourceURL, JSC::Strong<JSC::Unknown>& error, CachedScript* = nullptr);
+    bool canIncludeErrorDetails(CachedScript*, const String& sourceURL);
     void reportException(const String& errorMessage, int lineNumber, int columnNumber, const String& sourceURL, JSC::Exception*, RefPtr<Inspector::ScriptCallStack>&&, CachedScript* = nullptr);
     void reportUnhandledPromiseRejection(JSC::ExecState&, JSC::JSPromise&, RefPtr<Inspector::ScriptCallStack>&&);
 
@@ -253,6 +257,9 @@ public:
 
     WEBCORE_EXPORT static bool postTaskTo(const DocumentOrWorkerIdentifier&, WTF::Function<void(ScriptExecutionContext&)>&&);
 #endif
+    WEBCORE_EXPORT static bool postTaskTo(ScriptExecutionContextIdentifier, Task&&);
+
+    ScriptExecutionContextIdentifier contextIdentifier() const;
 
 protected:
     class AddConsoleMessageTask : public Task {
@@ -275,6 +282,7 @@ protected:
     ActiveDOMObject::ReasonForSuspension reasonForSuspendingActiveDOMObjects() const { return m_reasonForSuspendingActiveDOMObjects; }
 
     bool hasPendingActivity() const;
+    void removeFromContextsMap();
 
 private:
     // The following addMessage function is deprecated.
@@ -328,6 +336,7 @@ private:
 #endif
 
     String m_domainForCachePartition;
+    mutable ScriptExecutionContextIdentifier m_contextIdentifier;
 };
 
 } // namespace WebCore

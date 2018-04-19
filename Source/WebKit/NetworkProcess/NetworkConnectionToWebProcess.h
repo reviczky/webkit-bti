@@ -30,8 +30,8 @@
 #include "Connection.h"
 #include "DownloadID.h"
 #include "NetworkConnectionToWebProcessMessages.h"
+#include "NetworkMDNSRegister.h"
 #include "NetworkRTCProvider.h"
-
 #include <WebCore/ResourceLoadPriority.h>
 #include <wtf/RefCounted.h>
 
@@ -66,6 +66,7 @@ public:
 
     void didCleanupResourceLoader(NetworkResourceLoader&);
     void didFinishPingLoad(uint64_t pingLoadIdentifier, const WebCore::ResourceError&, const WebCore::ResourceResponse&);
+    void setOnLineState(bool);
 
     bool captureExtraNetworkLoadMetricsEnabled() const { return m_captureExtraNetworkLoadMetricsEnabled; }
 
@@ -89,9 +90,9 @@ private:
     void didReceiveNetworkConnectionToWebProcessMessage(IPC::Connection&, IPC::Decoder&);
     void didReceiveSyncNetworkConnectionToWebProcessMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
 
-    void scheduleResourceLoad(const NetworkResourceLoadParameters&);
-    void performSynchronousLoad(const NetworkResourceLoadParameters&, Ref<Messages::NetworkConnectionToWebProcess::PerformSynchronousLoad::DelayedReply>&&);
-    void loadPing(NetworkResourceLoadParameters&&, WebCore::HTTPHeaderMap&& originalRequestHeaders);
+    void scheduleResourceLoad(NetworkResourceLoadParameters&&);
+    void performSynchronousLoad(NetworkResourceLoadParameters&&, Ref<Messages::NetworkConnectionToWebProcess::PerformSynchronousLoad::DelayedReply>&&);
+    void loadPing(NetworkResourceLoadParameters&&);
     void prefetchDNS(const String&);
     void preconnectTo(uint64_t preconnectionIdentifier, NetworkLoadParameters&&);
 
@@ -130,11 +131,18 @@ private:
 #if USE(LIBWEBRTC)
     NetworkRTCProvider& rtcProvider();
 #endif
+#if ENABLE(WEB_RTC)
+    NetworkMDNSRegister& mdnsRegister() { return m_mdnsRegister; }
+#endif
 
     CacheStorageEngineConnection& cacheStorageConnection();
 
     void removeStorageAccessForFrame(PAL::SessionID, uint64_t frameID, uint64_t pageID);
     void removeStorageAccessForAllFramesOnPage(PAL::SessionID, uint64_t pageID);
+
+    void addOriginAccessWhitelistEntry(const String& sourceOrigin, const String& destinationProtocol, const String& destinationHost, bool allowDestinationSubdomains);
+    void removeOriginAccessWhitelistEntry(const String& sourceOrigin, const String& destinationProtocol, const String& destinationHost, bool allowDestinationSubdomains);
+    void resetOriginAccessWhitelists();
 
     Ref<IPC::Connection> m_connection;
 
@@ -144,6 +152,9 @@ private:
 
 #if USE(LIBWEBRTC)
     RefPtr<NetworkRTCProvider> m_rtcProvider;
+#endif
+#if ENABLE(WEB_RTC)
+    NetworkMDNSRegister m_mdnsRegister;
 #endif
 
     bool m_captureExtraNetworkLoadMetricsEnabled { false };

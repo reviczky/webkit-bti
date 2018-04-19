@@ -31,9 +31,9 @@
 #include "DeprecatedGlobalSettings.h"
 #include "Document.h"
 #include "FontCache.h"
+#include "Frame.h"
 #include "FrameView.h"
 #include "LocaleToScriptMapping.h"
-#include "MainFrame.h"
 #include "Page.h"
 #include "PageGroup.h"
 #include "RenderTheme.h"
@@ -104,7 +104,6 @@ InternalSettings::Backup::Backup(Settings& settings)
 #if ENABLE(INDEXED_DATABASE_IN_WORKERS)
     , m_indexedDBWorkersEnabled(RuntimeEnabledFeatures::sharedFeatures().indexedDBWorkersEnabled())
 #endif
-    , m_cssGridLayoutEnabled(RuntimeEnabledFeatures::sharedFeatures().isCSSGridLayoutEnabled())
 #if ENABLE(WEBGL2)
     , m_webGL2Enabled(RuntimeEnabledFeatures::sharedFeatures().webGL2Enabled())
 #endif
@@ -205,7 +204,6 @@ void InternalSettings::Backup::restoreTo(Settings& settings)
 #if ENABLE(INDEXED_DATABASE_IN_WORKERS)
     RuntimeEnabledFeatures::sharedFeatures().setIndexedDBWorkersEnabled(m_indexedDBWorkersEnabled);
 #endif
-    RuntimeEnabledFeatures::sharedFeatures().setCSSGridLayoutEnabled(m_cssGridLayoutEnabled);
 #if ENABLE(WEBGL2)
     RuntimeEnabledFeatures::sharedFeatures().setWebGL2Enabled(m_webGL2Enabled);
 #endif
@@ -740,11 +738,6 @@ void InternalSettings::setIndexedDBWorkersEnabled(bool enabled)
 #endif
 }
 
-void InternalSettings::setCSSGridLayoutEnabled(bool enabled)
-{
-    RuntimeEnabledFeatures::sharedFeatures().setCSSGridLayoutEnabled(enabled);
-}
-
 void InternalSettings::setWebGL2Enabled(bool enabled)
 {
 #if ENABLE(WEBGL2)
@@ -941,6 +934,11 @@ InternalSettings::ForcedAccessibilityValue InternalSettings::forcedPrefersReduce
 void InternalSettings::setForcedPrefersReducedMotionAccessibilityValue(InternalSettings::ForcedAccessibilityValue value)
 {
     settings().setForcedPrefersReducedMotionAccessibilityValue(internalSettingsToSettingsValue(value));
+}
+
+bool InternalSettings::cssAnimationsAndCSSTransitionsBackedByWebAnimationsEnabled()
+{
+    return RuntimeEnabledFeatures::sharedFeatures().cssAnimationsAndCSSTransitionsBackedByWebAnimationsEnabled();
 }
 
 // If you add to this class, make sure that you update the Backup class for test reproducability!
