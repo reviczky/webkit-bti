@@ -68,7 +68,7 @@ Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ShadowRoot.cpp
 +++ webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
-@@ -47,7 +47,11 @@ struct SameSizeAsShadowRoot : public Doc
+@@ -50,7 +50,11 @@ struct SameSizeAsShadowRoot : public Doc
      void* slotAssignment;
  };
  
