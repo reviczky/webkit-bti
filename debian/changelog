@@ -4,6 +4,8 @@ webkit2gtk (2.21.1-1) UNRELEASED; urgency=medium
   * Refresh all patches.
   * debian/patches/fix-format-security.patch:
     + Fix build with GCC due to bogus format-security error.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 19 Apr 2018 11:02:28 +0300
 

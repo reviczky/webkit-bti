@@ -5,12 +5,14 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  StorageProcessMainUnix@Base 2.17.90
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
- (optional)_ZGVN7bmalloc10PerProcessINS_11PerHeapKindINS_4HeapEEEE7s_mutexE@Base 2.19.6
- (optional)_ZGVN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE7s_mutexE@Base 2.19.6
  (optional)_ZGVN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_objectE@Base 2.19.6
- (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE7s_mutexE@Base 2.19.6
- (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_memoryE@Base 2.19.6
+ (optional)_ZGVN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.21.1
+ (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE6s_dataE@Base 2.21.1
  (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_objectE@Base 2.19.6
+ (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE6s_dataE@Base 2.21.1
+ (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.21.1
+ (optional)_ZN7bmalloc16PerThreadStorageINS_11PerHeapKindINS_5CacheEEEE15s_didInitializeE@Base 2.21.1
+ (optional)_ZN7bmalloc16PerThreadStorageINS_11PerHeapKindINS_5CacheEEEE5s_keyE@Base 2.21.1
  (optional)_ZZN7bmalloc10vmPageSizeEvE6cached@Base 2.19.6
  webkit_application_info_get_name@Base 2.17.90
  webkit_application_info_get_type@Base 2.17.90
@@ -454,6 +456,10 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_dom_element_has_attribute@Base 2.5.3
  webkit_dom_element_has_attribute_ns@Base 2.5.3
  webkit_dom_element_has_attributes@Base 2.5.3
+ webkit_dom_element_html_input_element_get_auto_filled@Base 2.21.1
+ webkit_dom_element_html_input_element_is_user_edited@Base 2.21.1
+ webkit_dom_element_html_input_element_set_auto_filled@Base 2.21.1
+ webkit_dom_element_html_input_element_set_editing_value@Base 2.21.1
  (optional)webkit_dom_element_insert_adjacent_element@Base 2.13.91
  (optional)webkit_dom_element_insert_adjacent_html@Base 2.13.91
  (optional)webkit_dom_element_insert_adjacent_text@Base 2.13.91
@@ -1292,6 +1298,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_dom_node_contains@Base 2.5.3
  webkit_dom_node_filter_accept_node@Base 2.5.3
  webkit_dom_node_filter_get_type@Base 2.5.3
+ webkit_dom_node_for_js_value@Base 2.21.1
  webkit_dom_node_get_base_uri@Base 2.5.3
  webkit_dom_node_get_child_nodes@Base 2.5.3
  webkit_dom_node_get_first_child@Base 2.5.3
@@ -1485,6 +1492,10 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_form_submission_step_get_type@Base 2.19.4
  webkit_frame_get_javascript_context_for_script_world@Base 2.5.3
  webkit_frame_get_javascript_global_context@Base 2.5.3
+ webkit_frame_get_js_context@Base 2.21.1
+ webkit_frame_get_js_context_for_script_world@Base 2.21.1
+ webkit_frame_get_js_value_for_dom_object@Base 2.21.1
+ webkit_frame_get_js_value_for_dom_object_in_script_world@Base 2.21.1
  webkit_frame_get_type@Base 2.5.3
  webkit_frame_get_uri@Base 2.5.3
  webkit_frame_is_main_frame@Base 2.5.3
@@ -1514,6 +1525,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_javascript_error_get_type@Base 2.5.3
  webkit_javascript_error_quark@Base 2.5.3
  webkit_javascript_result_get_global_context@Base 2.5.3
+ webkit_javascript_result_get_js_value@Base 2.21.1
  webkit_javascript_result_get_type@Base 2.5.3
  webkit_javascript_result_get_value@Base 2.5.3
  webkit_javascript_result_ref@Base 2.5.3
@@ -1966,6 +1978,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_get_indexeddb_directory@Base 2.10.0
  webkit_website_data_manager_get_local_storage_directory@Base 2.10.0
  webkit_website_data_manager_get_offline_application_cache_directory@Base 2.10.0
+ webkit_website_data_manager_get_resource_load_statistics_directory@Base 2.21.1
+ webkit_website_data_manager_get_resource_load_statistics_enabled@Base 2.21.1
  webkit_website_data_manager_get_type@Base 2.10.0
  webkit_website_data_manager_get_websql_directory@Base 2.10.0
  webkit_website_data_manager_is_ephemeral@Base 2.15.4
@@ -1973,6 +1987,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_new_ephemeral@Base 2.15.4
  webkit_website_data_manager_remove@Base 2.15.4
  webkit_website_data_manager_remove_finish@Base 2.15.4
+ webkit_website_data_manager_set_resource_load_statistics_enabled@Base 2.21.1
  webkit_website_data_ref@Base 2.15.4
  webkit_website_data_types_get_type@Base 2.15.4
  webkit_website_data_unref@Base 2.15.4
