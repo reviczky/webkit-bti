@@ -46,6 +46,7 @@
 #include "SharedMemory.h"
 #include "UserData.h"
 #include "WebURLSchemeHandler.h"
+#include "WebUserContentController.h"
 #include <WebCore/ActivityState.h>
 #include <WebCore/DictionaryPopupInfo.h>
 #include <WebCore/FrameLoaderTypes.h>
@@ -149,6 +150,10 @@ class TextCheckingRequest;
 class URL;
 class VisiblePosition;
 
+enum SyntheticClickType : int8_t;
+enum class NavigationPolicyCheck;
+enum class TextIndicatorPresentationTransition : uint8_t;
+
 struct CompositionUnderline;
 struct DictationAlternative;
 struct Highlight;
@@ -157,9 +162,7 @@ struct PromisedBlobInfo;
 struct TextCheckingResult;
 struct ViewportArguments;
 
-enum SyntheticClickType : int8_t;
 
-enum class TextIndicatorPresentationTransition : uint8_t;
 
 #if ENABLE(ATTACHMENT_ELEMENT)
 class HTMLAttachmentElement;
@@ -211,7 +214,11 @@ class WebUserContentController;
 class VideoFullscreenManager;
 class WebWheelEvent;
 class WebTouchEvent;
+class WebCredentialsMessenger;
 class RemoteLayerTreeTransaction;
+
+enum FindOptions : uint16_t;
+enum class DragControllerAction;
 
 struct AssistedNodeInformation;
 struct AttributedString;
@@ -225,9 +232,6 @@ struct WebPageCreationParameters;
 struct WebPreferencesStore;
 struct WebSelectionData;
 struct WebsitePoliciesData;
-
-enum class DragControllerAction;
-enum FindOptions : uint16_t;
 
 using SnapshotOptions = uint32_t;
 using WKEventModifiers = uint32_t;
@@ -303,6 +307,8 @@ public:
     // -- Called from WebCore clients.
     bool handleEditingKeyboardEvent(WebCore::KeyboardEvent*);
 
+    void didStartNavigationPolicyCheck();
+    void didCompleteNavigationPolicyCheck();
     void didStartPageTransition();
     void didCompletePageTransition();
     void didCommitLoad(WebFrame*);
@@ -379,7 +385,7 @@ public:
 
     WebFrame* mainWebFrame() const { return m_mainFrame.get(); }
 
-    WebCore::MainFrame* mainFrame() const; // May return nullptr.
+    WebCore::Frame* mainFrame() const; // May return nullptr.
     WebCore::FrameView* mainFrameView() const; // May return nullptr.
 
     RefPtr<WebCore::Range> currentSelectionAsRange();
@@ -487,6 +493,9 @@ public:
 #if PLATFORM(MAC)
     void setTopOverhangImage(WebImage*);
     void setBottomOverhangImage(WebImage*);
+    
+    void setUseSystemAppearance(bool);
+    void setDefaultAppearance(bool);
 #endif
 
     bool windowIsFocused() const;
@@ -543,6 +552,7 @@ public:
 #if PLATFORM(IOS)
     WebCore::FloatSize screenSize() const;
     WebCore::FloatSize availableScreenSize() const;
+    WebCore::FloatSize overrideScreenSize() const;
     int32_t deviceOrientation() const { return m_deviceOrientation; }
     void didReceiveMobileDocType(bool);
 
@@ -567,11 +577,9 @@ public:
     void inspectorNodeSearchEndedAtPosition(const WebCore::FloatPoint&);
 
     void blurAssistedNode();
+    void requestAssistedNodeInformation(CallbackID);
     void selectWithGesture(const WebCore::IntPoint&, uint32_t granularity, uint32_t gestureType, uint32_t gestureState, bool isInteractingWithAssistedNode, CallbackID);
     void updateSelectionWithTouches(const WebCore::IntPoint&, uint32_t touches, bool baseIsStart, CallbackID);
-#if __IPHONE_OS_VERSION_MAX_ALLOWED < 120000
-    void updateBlockSelectionWithTouch(const WebCore::IntPoint&, uint32_t touch, uint32_t handlePosition);
-#endif
     void selectWithTwoTouches(const WebCore::IntPoint& from, const WebCore::IntPoint& to, uint32_t gestureType, uint32_t gestureState, CallbackID);
     void extendSelection(uint32_t granularity);
     void selectWordBackward();
@@ -865,10 +873,10 @@ public:
     void updateVisibilityState(bool isInitialState = false);
 
 #if PLATFORM(IOS)
-    void setViewportConfigurationMinimumLayoutSize(const WebCore::FloatSize&);
+    void setViewportConfigurationMinimumLayoutSize(const WebCore::FloatSize&, const WebCore::FloatSize& viewSize);
     void setMaximumUnobscuredSize(const WebCore::FloatSize&);
     void setDeviceOrientation(int32_t);
-    void dynamicViewportSizeUpdate(const WebCore::FloatSize& minimumLayoutSize, const WebCore::FloatSize& maximumUnobscuredSize, const WebCore::FloatRect& targetExposedContentRect, const WebCore::FloatRect& targetUnobscuredRect, const WebCore::FloatRect& targetUnobscuredRectInScrollViewCoordinates, const WebCore::FloatBoxExtent& targetUnobscuredSafeAreaInsets, double scale, int32_t deviceOrientation, uint64_t dynamicViewportSizeUpdateID);
+    void dynamicViewportSizeUpdate(const WebCore::FloatSize& minimumLayoutSize, const WebCore::FloatSize& viewSize, const WebCore::FloatSize& maximumUnobscuredSize, const WebCore::FloatRect& targetExposedContentRect, const WebCore::FloatRect& targetUnobscuredRect, const WebCore::FloatRect& targetUnobscuredRectInScrollViewCoordinates, const WebCore::FloatBoxExtent& targetUnobscuredSafeAreaInsets, double scale, int32_t deviceOrientation, uint64_t dynamicViewportSizeUpdateID);
     void synchronizeDynamicViewportUpdate(double& newTargetScale, WebCore::FloatPoint& newScrollPosition, uint64_t& nextValidLayerTreeTransactionID);
     std::optional<float> scaleFromUIProcess(const VisibleContentRectUpdateInfo&) const;
     void updateVisibleContentRects(const VisibleContentRectUpdateInfo&, MonotonicTime oldestTimestamp);
@@ -880,6 +888,9 @@ public:
     void applicationWillEnterForeground(bool isSuspendedUnderLock);
     void applicationDidBecomeActive();
     void completePendingSyntheticClickForContentChangeObserver();
+
+    bool platformPrefersTextLegibilityBasedZoomScaling() const;
+    const WebCore::ViewportConfiguration& viewportConfiguration() const { return m_viewportConfiguration; }
 #endif
 
 #if ENABLE(IOS_TOUCH_EVENTS)
@@ -1055,6 +1066,14 @@ public:
     void didFinishLoadingApplicationManifest(uint64_t, const std::optional<WebCore::ApplicationManifest>&);
 #endif
 
+#if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
+    void openGLDisplayMaskChanged(uint32_t displayMask);
+#endif
+
+    UserContentControllerIdentifier userContentControllerIdentifier() const { return m_userContentController->identifier(); }
+
+    bool isSuspended() const { return m_isSuspended; }
+
 private:
     WebPage(uint64_t pageID, WebPageCreationParameters&&);
 
@@ -1087,12 +1106,6 @@ private:
 
     static void convertSelectionRectsToRootView(WebCore::FrameView*, Vector<WebCore::SelectionRect>&);
     RefPtr<WebCore::Range> rangeForWebSelectionAtPosition(const WebCore::IntPoint&, const WebCore::VisiblePosition&, SelectionFlags&);
-#if __IPHONE_OS_VERSION_MAX_ALLOWED < 120000
-    RefPtr<WebCore::Range> rangeForBlockAtPoint(const WebCore::IntPoint&);
-    void computeExpandAndShrinkThresholdsForHandle(const WebCore::IntPoint&, SelectionHandlePosition, float& growThreshold, float& shrinkThreshold);
-    Ref<WebCore::Range> expandedRangeFromHandle(WebCore::Range&, SelectionHandlePosition);
-    Ref<WebCore::Range> contractedRangeFromHandle(WebCore::Range& currentRange, SelectionHandlePosition, SelectionFlags&);
-#endif
     void getAssistedNodeInformation(AssistedNodeInformation&);
     void platformInitializeAccessibility();
     void handleSyntheticClick(WebCore::Node* nodeRespondingToClick, const WebCore::FloatPoint& location);
@@ -1101,9 +1114,6 @@ private:
     void resetTextAutosizing();
     WebCore::VisiblePosition visiblePositionInFocusedNodeForPoint(const WebCore::Frame&, const WebCore::IntPoint&, bool isInteractingWithAssistedNode);
     RefPtr<WebCore::Range> rangeForGranularityAtPoint(WebCore::Frame&, const WebCore::IntPoint&, uint32_t granularity, bool isInteractingWithAssistedNode);
-#if __IPHONE_OS_VERSION_MAX_ALLOWED < 120000
-    RefPtr<WebCore::Range> changeBlockSelection(const WebCore::IntPoint&, SelectionHandlePosition, float& growThreshold, float& shrinkThreshold, SelectionFlags&);
-#endif
 #endif
 
 #if PLATFORM(IOS) && ENABLE(DATA_INTERACTION)
@@ -1141,9 +1151,7 @@ private:
     void loadAlternateHTMLString(const LoadParameters&);
     void navigateToPDFLinkWithSimulatedClick(const String& url, WebCore::IntPoint documentPoint, WebCore::IntPoint screenPoint);
     void reload(uint64_t navigationID, uint32_t reloadOptions, SandboxExtension::Handle&&);
-    void goForward(uint64_t navigationID, uint64_t);
-    void goBack(uint64_t navigationID, uint64_t);
-    void goToBackForwardItem(uint64_t navigationID, uint64_t);
+    void goToBackForwardItem(uint64_t navigationID, uint64_t, WebCore::FrameLoadType, WebCore::NavigationPolicyCheck);
     void tryRestoreScrollPosition();
     void setInitialFocus(bool forward, bool isKeyboardEventValid, const WebKeyboardEvent&, CallbackID);
     void updateIsInWindow(bool isInitialState = false);
@@ -1211,6 +1219,12 @@ private:
     void preferencesDidChange(const WebPreferencesStore&);
     void updatePreferences(const WebPreferencesStore&);
     void updatePreferencesGenerated(const WebPreferencesStore&);
+
+#if PLATFORM(IOS)
+    bool parentProcessHasServiceWorkerEntitlement() const;
+#else
+    bool parentProcessHasServiceWorkerEntitlement() const { return true; }
+#endif
 
     void didReceivePolicyDecision(uint64_t frameID, uint64_t listenerID, WebCore::PolicyAction, uint64_t navigationID, const DownloadID&, std::optional<WebsitePoliciesData>&&);
     void continueWillSubmitForm(uint64_t frameID, uint64_t listenerID);
@@ -1375,6 +1389,8 @@ private:
     void urlSchemeTaskDidReceiveResponse(uint64_t handlerIdentifier, uint64_t taskIdentifier, const WebCore::ResourceResponse&);
     void urlSchemeTaskDidReceiveData(uint64_t handlerIdentifier, uint64_t taskIdentifier, const IPC::DataReference&);
     void urlSchemeTaskDidComplete(uint64_t handlerIdentifier, uint64_t taskIdentifier, const WebCore::ResourceError&);
+
+    void setIsSuspended(bool);
 
     RefPtr<WebImage> snapshotAtSize(const WebCore::IntRect&, const WebCore::IntSize& bitmapSize, SnapshotOptions);
     RefPtr<WebImage> snapshotNode(WebCore::Node&, SnapshotOptions, unsigned maximumPixelCount = std::numeric_limits<unsigned>::max());
@@ -1611,6 +1627,7 @@ private:
     Seconds m_estimatedLatency { 0 };
     WebCore::FloatSize m_screenSize;
     WebCore::FloatSize m_availableScreenSize;
+    WebCore::FloatSize m_overrideScreenSize;
     RefPtr<WebCore::Range> m_currentBlockSelection;
     WebCore::IntRect m_blockRectForTextSelection;
 
@@ -1624,6 +1641,7 @@ private:
     RefPtr<WebCore::Node> m_pendingSyntheticClickNode;
     WebCore::FloatPoint m_pendingSyntheticClickLocation;
     WebCore::FloatRect m_previousExposedContentRect;
+    uint64_t m_currentAssistedNodeIdentifier { 0 };
 #endif
 
     WebCore::Timer m_layerVolatilityTimer;
@@ -1686,6 +1704,12 @@ private:
 #if ENABLE(APPLICATION_MANIFEST)
     HashMap<uint64_t, uint64_t> m_applicationManifestFetchCallbackMap;
 #endif
+
+#if ENABLE(WEB_AUTHN)
+    std::unique_ptr<WebCredentialsMessenger> m_credentialsMessenger;
+#endif
+
+    bool m_isSuspended { false };
 };
 
 } // namespace WebKit

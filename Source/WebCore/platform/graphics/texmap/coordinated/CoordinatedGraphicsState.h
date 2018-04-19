@@ -103,7 +103,6 @@ struct CoordinatedGraphicsLayerState {
             bool platformLayerUpdated: 1;
             bool platformLayerShouldSwapBuffers: 1;
             bool isScrollableChanged: 1;
-            bool committedScrollOffsetChanged: 1;
             bool contentsTilingChanged: 1;
         };
         unsigned changeMask;
@@ -170,8 +169,6 @@ struct CoordinatedGraphicsLayerState {
     RefPtr<TextureMapperPlatformLayerProxy> platformLayerProxy;
 #endif
 
-    IntSize committedScrollOffset;
-
     bool hasPendingChanges() const
     {
         return changeMask || tilesToUpdate.size() || tilesToRemove.size() || tilesToCreate.size();
@@ -192,8 +189,6 @@ struct CoordinatedGraphicsState {
     Vector<CoordinatedImageBackingID> imagesToRemove;
     Vector<std::pair<CoordinatedImageBackingID, RefPtr<Nicosia::Buffer>>> imagesToUpdate;
     Vector<CoordinatedImageBackingID> imagesToClear;
-
-    Vector<std::pair<uint32_t /* atlasID */, RefPtr<Nicosia::Buffer>>> updateAtlasesToCreate;
 };
 
 } // namespace WebCore

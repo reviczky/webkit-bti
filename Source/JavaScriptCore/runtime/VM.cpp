@@ -94,6 +94,7 @@
 #include "JSWeakMap.h"
 #include "JSWeakSet.h"
 #include "JSWebAssembly.h"
+#include "JSWebAssemblyCodeBlock.h"
 #include "JSWebAssemblyCodeBlockHeapCellType.h"
 #include "JSWithScope.h"
 #include "LLIntData.h"
@@ -136,7 +137,6 @@
 #include "WeakGCMapInlines.h"
 #include "WebAssemblyFunction.h"
 #include "WebAssemblyWrapperFunction.h"
-#include <wtf/CurrentTime.h>
 #include <wtf/ProcessID.h>
 #include <wtf/ReadWriteLock.h>
 #include <wtf/SimpleStats.h>
@@ -234,19 +234,18 @@ VM::VM(VMType vmType, HeapType heapType)
     , fastMallocAllocator(std::make_unique<FastMallocAlignedMemoryAllocator>())
     , primitiveGigacageAllocator(std::make_unique<GigacageAlignedMemoryAllocator>(Gigacage::Primitive))
     , jsValueGigacageAllocator(std::make_unique<GigacageAlignedMemoryAllocator>(Gigacage::JSValue))
-    , auxiliaryJSValueStrictHeapCellType(std::make_unique<HeapCellType>(CellAttributes(DoesNotNeedDestruction, HeapCell::Auxiliary, SecurityKind::JSValueStrict)))
-    , auxiliaryDangerousBitsHeapCellType(std::make_unique<HeapCellType>(CellAttributes(DoesNotNeedDestruction, HeapCell::Auxiliary, SecurityKind::DangerousBits)))
-    , cellJSValueOOBHeapCellType(std::make_unique<HeapCellType>(CellAttributes(DoesNotNeedDestruction, HeapCell::JSCell, SecurityKind::JSValueOOB)))
-    , cellDangerousBitsHeapCellType(std::make_unique<HeapCellType>(CellAttributes(DoesNotNeedDestruction, HeapCell::JSCell, SecurityKind::JSValueOOB)))
-    , destructibleCellHeapCellType(std::make_unique<HeapCellType>(CellAttributes(NeedsDestruction, HeapCell::JSCell, SecurityKind::DangerousBits)))
+    , auxiliaryHeapCellType(std::make_unique<HeapCellType>(CellAttributes(DoesNotNeedDestruction, HeapCell::Auxiliary)))
+    , cellJSValueOOBHeapCellType(std::make_unique<HeapCellType>(CellAttributes(DoesNotNeedDestruction, HeapCell::JSCell)))
+    , cellDangerousBitsHeapCellType(std::make_unique<HeapCellType>(CellAttributes(DoesNotNeedDestruction, HeapCell::JSCell)))
+    , destructibleCellHeapCellType(std::make_unique<HeapCellType>(CellAttributes(NeedsDestruction, HeapCell::JSCell)))
     , stringHeapCellType(std::make_unique<JSStringHeapCellType>())
     , destructibleObjectHeapCellType(std::make_unique<JSDestructibleObjectHeapCellType>())
     , segmentedVariableObjectHeapCellType(std::make_unique<JSSegmentedVariableObjectHeapCellType>())
 #if ENABLE(WEBASSEMBLY)
     , webAssemblyCodeBlockHeapCellType(std::make_unique<JSWebAssemblyCodeBlockHeapCellType>())
 #endif
-    , primitiveGigacageAuxiliarySpace("Primitive Gigacage Auxiliary", heap, auxiliaryDangerousBitsHeapCellType.get(), primitiveGigacageAllocator.get())
-    , jsValueGigacageAuxiliarySpace("JSValue Gigacage Auxiliary", heap, auxiliaryJSValueStrictHeapCellType.get(), jsValueGigacageAllocator.get())
+    , primitiveGigacageAuxiliarySpace("Primitive Gigacage Auxiliary", heap, auxiliaryHeapCellType.get(), primitiveGigacageAllocator.get())
+    , jsValueGigacageAuxiliarySpace("JSValue Gigacage Auxiliary", heap, auxiliaryHeapCellType.get(), jsValueGigacageAllocator.get())
     , cellJSValueOOBSpace("JSCell JSValueOOB", heap, cellJSValueOOBHeapCellType.get(), fastMallocAllocator.get())
     , cellDangerousBitsSpace("JSCell DangerousBits", heap, cellDangerousBitsHeapCellType.get(), fastMallocAllocator.get())
     , jsValueGigacageCellSpace("JSValue Gigacage JSCell", heap, cellJSValueOOBHeapCellType.get(), jsValueGigacageAllocator.get())
@@ -255,9 +254,6 @@ VM::VM(VMType vmType, HeapType heapType)
     , destructibleObjectSpace("JSDestructibleObject", heap, destructibleObjectHeapCellType.get(), fastMallocAllocator.get())
     , eagerlySweptDestructibleObjectSpace("Eagerly Swept JSDestructibleObject", heap, destructibleObjectHeapCellType.get(), fastMallocAllocator.get())
     , segmentedVariableObjectSpace("JSSegmentedVariableObjectSpace", heap, segmentedVariableObjectHeapCellType.get(), fastMallocAllocator.get())
-#if ENABLE(WEBASSEMBLY)
-    , webAssemblyCodeBlockSpace("JSWebAssemblyCodeBlockSpace", heap, webAssemblyCodeBlockHeapCellType.get(), fastMallocAllocator.get())
-#endif
     , asyncFunctionSpace ISO_SUBSPACE_INIT(heap, cellJSValueOOBHeapCellType.get(), JSAsyncFunction)
     , asyncGeneratorFunctionSpace ISO_SUBSPACE_INIT(heap, cellJSValueOOBHeapCellType.get(), JSAsyncGeneratorFunction)
     , boundFunctionSpace ISO_SUBSPACE_INIT(heap, cellJSValueOOBHeapCellType.get(), JSBoundFunction)
@@ -280,6 +276,7 @@ VM::VM(VMType vmType, HeapType heapType)
     , weakSetSpace ISO_SUBSPACE_INIT(heap, destructibleObjectHeapCellType.get(), JSWeakSet)
     , weakMapSpace ISO_SUBSPACE_INIT(heap, destructibleObjectHeapCellType.get(), JSWeakMap)
 #if ENABLE(WEBASSEMBLY)
+    , webAssemblyCodeBlockSpace ISO_SUBSPACE_INIT(heap, webAssemblyCodeBlockHeapCellType.get(), JSWebAssemblyCodeBlock)
     , webAssemblyFunctionSpace ISO_SUBSPACE_INIT(heap, cellJSValueOOBHeapCellType.get(), WebAssemblyFunction)
     , webAssemblyWrapperFunctionSpace ISO_SUBSPACE_INIT(heap, cellJSValueOOBHeapCellType.get(), WebAssemblyWrapperFunction)
 #endif
@@ -465,7 +462,7 @@ VM::VM(VMType vmType, HeapType heapType)
     VMInspector::instance().add(this);
 }
 
-static StaticReadWriteLock s_destructionLock;
+static ReadWriteLock s_destructionLock;
 
 void waitForVMDestruction()
 {
@@ -540,11 +537,6 @@ VM::~VM()
     delete clientData;
     delete m_regExpCache;
 
-#if ENABLE(YARR_JIT_ALL_PARENS_EXPRESSIONS)
-    if (m_regExpPatternContexBuffer)
-        delete[] m_regExpPatternContexBuffer;
-#endif
-
 #if ENABLE(REGEXP_TRACING)
     delete m_rtTraceList;
 #endif
@@ -585,11 +577,6 @@ Ref<VM> VM::createContextGroup(HeapType heapType)
 Ref<VM> VM::create(HeapType heapType)
 {
     return adoptRef(*new VM(Default, heapType));
-}
-
-Ref<VM> VM::createLeaked(HeapType heapType)
-{
-    return create(heapType);
 }
 
 bool VM::sharedInstanceExists()
@@ -694,23 +681,23 @@ NativeExecutable* VM::getHostFunction(NativeFunction function, Intrinsic intrins
     UNUSED_PARAM(intrinsic);
 #endif // ENABLE(JIT)
     return NativeExecutable::create(*this,
-        adoptRef(*new NativeJITCode(MacroAssemblerCodeRef::createLLIntCodeRef(llint_native_call_trampoline), JITCode::HostCallThunk)), function,
-        adoptRef(*new NativeJITCode(MacroAssemblerCodeRef::createLLIntCodeRef(llint_native_construct_trampoline), JITCode::HostCallThunk)), constructor,
+        adoptRef(*new NativeJITCode(LLInt::getCodeRef<JSEntryPtrTag>(llint_native_call_trampoline), JITCode::HostCallThunk)), function,
+        adoptRef(*new NativeJITCode(LLInt::getCodeRef<JSEntryPtrTag>(llint_native_construct_trampoline), JITCode::HostCallThunk)), constructor,
         NoIntrinsic, signature, name);
 }
 
-MacroAssemblerCodePtr VM::getCTIInternalFunctionTrampolineFor(CodeSpecializationKind kind)
+MacroAssemblerCodePtr<JSEntryPtrTag> VM::getCTIInternalFunctionTrampolineFor(CodeSpecializationKind kind)
 {
 #if ENABLE(JIT)
     if (canUseJIT()) {
         if (kind == CodeForCall)
-            return jitStubs->ctiInternalFunctionCall(this);
-        return jitStubs->ctiInternalFunctionConstruct(this);
+            return jitStubs->ctiInternalFunctionCall(this).retagged<JSEntryPtrTag>();
+        return jitStubs->ctiInternalFunctionConstruct(this).retagged<JSEntryPtrTag>();
     }
 #endif
     if (kind == CodeForCall)
-        return MacroAssemblerCodePtr::createLLIntCodePtr(llint_internal_function_call_trampoline);
-    return MacroAssemblerCodePtr::createLLIntCodePtr(llint_internal_function_construct_trampoline);
+        return LLInt::getCodePtr<JSEntryPtrTag>(llint_internal_function_call_trampoline);
+    return LLInt::getCodePtr<JSEntryPtrTag>(llint_internal_function_construct_trampoline);
 }
 
 VM::ClientData::~ClientData()
@@ -913,12 +900,11 @@ void logSanitizeStack(VM* vm)
 #if ENABLE(YARR_JIT_ALL_PARENS_EXPRESSIONS)
 char* VM::acquireRegExpPatternContexBuffer()
 {
-    ASSERT(!m_regExpPatternContextLock.isLocked());
-
     m_regExpPatternContextLock.lock();
+    ASSERT(m_regExpPatternContextLock.isLocked());
     if (!m_regExpPatternContexBuffer)
-        m_regExpPatternContexBuffer = new char[VM::patternContextBufferSize];
-    return m_regExpPatternContexBuffer;
+        m_regExpPatternContexBuffer = makeUniqueArray<char>(VM::patternContextBufferSize);
+    return m_regExpPatternContexBuffer.get();
 }
 
 void VM::releaseRegExpPatternContexBuffer()

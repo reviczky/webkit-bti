@@ -119,11 +119,12 @@ public:
 
     // RuntimeEnabledFeatures.
     static void setIndexedDBWorkersEnabled(bool);
-    static void setCSSGridLayoutEnabled(bool);
     static void setWebGL2Enabled(bool);
     static void setWebGPUEnabled(bool);
     static void setWebVREnabled(bool);
     static void setScreenCaptureEnabled(bool);
+
+    static bool cssAnimationsAndCSSTransitionsBackedByWebAnimationsEnabled();
 
 private:
     explicit InternalSettings(Page*);
@@ -200,7 +201,6 @@ private:
 
         // Runtime enabled settings.
         bool m_indexedDBWorkersEnabled;
-        bool m_cssGridLayoutEnabled;
         bool m_webGL2Enabled;
         bool m_webGPUEnabled;
         bool m_webVREnabled;

@@ -56,9 +56,8 @@ EncodedJSValue JSC_HOST_CALL isReadableByteStreamAPIEnabled(ExecState*);
 
 const ClassInfo JSDOMGlobalObject::s_info = { "DOMGlobalObject", &JSGlobalObject::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(JSDOMGlobalObject) };
 
-JSDOMGlobalObject::JSDOMGlobalObject(VM& vm, Structure* structure, Ref<DOMWrapperWorld>&& world, const GlobalObjectMethodTable* globalObjectMethodTable, RefPtr<JSC::ThreadLocalCache>&& threadLocalCache)
-    : JSGlobalObject(vm, structure, globalObjectMethodTable, WTFMove(threadLocalCache))
-    , m_currentEvent(0)
+JSDOMGlobalObject::JSDOMGlobalObject(VM& vm, Structure* structure, Ref<DOMWrapperWorld>&& world, const GlobalObjectMethodTable* globalObjectMethodTable)
+    : JSGlobalObject(vm, structure, globalObjectMethodTable)
     , m_world(WTFMove(world))
     , m_worldIsNormal(m_world->isNormal())
     , m_builtinInternalFunctions(vm)
@@ -196,9 +195,9 @@ void JSDOMGlobalObject::finishCreation(VM& vm, JSObject* thisValue)
 
 ScriptExecutionContext* JSDOMGlobalObject::scriptExecutionContext() const
 {
-    if (inherits(vm(), JSDOMWindowBase::info()))
+    if (inherits<JSDOMWindowBase>(vm()))
         return jsCast<const JSDOMWindowBase*>(this)->scriptExecutionContext();
-    if (inherits(vm(), JSWorkerGlobalScopeBase::info()))
+    if (inherits<JSWorkerGlobalScopeBase>(vm()))
         return jsCast<const JSWorkerGlobalScopeBase*>(this)->scriptExecutionContext();
     dataLog("Unexpected global object: ", JSValue(this), "\n");
     RELEASE_ASSERT_NOT_REACHED();
@@ -237,40 +236,6 @@ Event* JSDOMGlobalObject::currentEvent() const
     return m_currentEvent;
 }
 
-JSDOMGlobalObject* toJSDOMGlobalObject(Document* document, JSC::ExecState* exec)
-{
-    return toJSDOMWindow(document->frame(), currentWorld(exec));
-}
-
-JSDOMGlobalObject* toJSDOMGlobalObject(ScriptExecutionContext* scriptExecutionContext, JSC::ExecState* exec)
-{
-    if (is<Document>(*scriptExecutionContext))
-        return toJSDOMGlobalObject(downcast<Document>(scriptExecutionContext), exec);
-
-    if (is<WorkerGlobalScope>(*scriptExecutionContext))
-        return downcast<WorkerGlobalScope>(*scriptExecutionContext).script()->workerGlobalScopeWrapper();
-
-    ASSERT_NOT_REACHED();
-    return nullptr;
-}
-
-JSDOMGlobalObject* toJSDOMGlobalObject(Document* document, DOMWrapperWorld& world)
-{
-    return toJSDOMWindow(document->frame(), world);
-}
-
-JSDOMGlobalObject* toJSDOMGlobalObject(ScriptExecutionContext* scriptExecutionContext, DOMWrapperWorld& world)
-{
-    if (is<Document>(*scriptExecutionContext))
-        return toJSDOMGlobalObject(downcast<Document>(scriptExecutionContext), world);
-
-    if (is<WorkerGlobalScope>(*scriptExecutionContext))
-        return downcast<WorkerGlobalScope>(*scriptExecutionContext).script()->workerGlobalScopeWrapper();
-
-    ASSERT_NOT_REACHED();
-    return nullptr;
-}
-
 JSDOMGlobalObject& callerGlobalObject(ExecState& state)
 {
     class GetCallerGlobalObjectFunctor {
@@ -307,6 +272,18 @@ JSDOMGlobalObject& callerGlobalObject(ExecState& state)
     GetCallerGlobalObjectFunctor iter;
     state.iterate(iter);
     return *jsCast<JSDOMGlobalObject*>(iter.globalObject() ? iter.globalObject() : state.vmEntryGlobalObject());
+}
+
+JSDOMGlobalObject* toJSDOMGlobalObject(ScriptExecutionContext& context, DOMWrapperWorld& world)
+{
+    if (is<Document>(context))
+        return toJSDOMWindow(downcast<Document>(context).frame(), world);
+
+    if (is<WorkerGlobalScope>(context))
+        return downcast<WorkerGlobalScope>(context).script()->workerGlobalScopeWrapper();
+
+    ASSERT_NOT_REACHED();
+    return nullptr;
 }
 
 } // namespace WebCore

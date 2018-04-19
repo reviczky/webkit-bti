@@ -26,30 +26,57 @@
 #include "config.h"
 #include "APINavigation.h"
 
+#include "WebBackForwardListItem.h"
 #include "WebNavigationState.h"
+
+using namespace WebCore;
+using namespace WebKit;
 
 namespace API {
 
-Navigation::Navigation(WebKit::WebNavigationState& state)
+Navigation::Navigation(WebNavigationState& state)
     : m_navigationID(state.generateNavigationID())
 {
 }
 
-Navigation::Navigation(WebKit::WebNavigationState& state, WebCore::ResourceRequest&& request)
+Navigation::Navigation(WebNavigationState& state, WebCore::ResourceRequest&& request)
     : m_navigationID(state.generateNavigationID())
-    , m_request(WTFMove(request))
+    , m_originalRequest(WTFMove(request))
+    , m_currentRequest(m_originalRequest)
 {
-    m_redirectChain.append(m_request.url());
+    m_redirectChain.append(m_originalRequest.url());
+}
+
+Navigation::Navigation(WebNavigationState& state, WebBackForwardListItem& item, FrameLoadType backForwardFrameLoadType)
+    : m_navigationID(state.generateNavigationID())
+    , m_originalRequest(item.url())
+    , m_currentRequest(m_originalRequest)
+    , m_backForwardListItem(&item)
+    , m_backForwardFrameLoadType(backForwardFrameLoadType)
+{
 }
 
 Navigation::~Navigation()
 {
 }
 
-void Navigation::appendRedirectionURL(const WebCore::URL& url)
+void Navigation::setCurrentRequest(ResourceRequest&& request, ProcessIdentifier processIdentifier)
+{
+    m_currentRequest = WTFMove(request);
+    m_currentRequestProcessIdentifier = processIdentifier;
+}
+
+void Navigation::appendRedirectionURL(const URL& url)
 {
     if (m_redirectChain.isEmpty() || m_redirectChain.last() != url)
         m_redirectChain.append(url);
 }
+
+#if !LOG_DISABLED
+WTF::String Navigation::loggingString() const
+{
+    return makeString("Most recent URL: ", m_currentRequest.url().string(), " Back/forward list item URL: '", m_backForwardListItem ? m_backForwardListItem->url() : String { }, String::format("' (%p)", m_backForwardListItem.get()));
+}
+#endif
 
 } // namespace WebKit

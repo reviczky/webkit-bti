@@ -98,7 +98,7 @@ struct WebPageCreationParameters {
     PAL::SessionID sessionID;
     uint64_t highestUsedBackForwardItemID;
 
-    uint64_t userContentControllerID;
+    UserContentControllerIdentifier userContentControllerID;
     uint64_t visitedLinkTableID;
     uint64_t websiteDataStoreID;
     bool canRunBeforeUnloadConfirmPanel;
@@ -138,13 +138,17 @@ struct WebPageCreationParameters {
 
 #if PLATFORM(MAC)
     ColorSpaceData colorSpace;
+    bool useSystemAppearance;
+    bool defaultAppearance;
 #endif
 #if PLATFORM(IOS)
     WebCore::FloatSize screenSize;
     WebCore::FloatSize availableScreenSize;
+    WebCore::FloatSize overrideScreenSize;
     float textAutosizingWidth;
     bool ignoresViewportScaleLimits;
     WebCore::FloatSize viewportConfigurationMinimumLayoutSize;
+    WebCore::FloatSize viewportConfigurationViewSize;
     WebCore::FloatSize maximumUnobscuredSize;
 #endif
 #if PLATFORM(COCOA)
@@ -164,6 +168,10 @@ struct WebPageCreationParameters {
 
 #if ENABLE(APPLICATION_MANIFEST)
     std::optional<WebCore::ApplicationManifest> applicationManifest;
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    bool hasRegisteredServiceWorkers { true };
 #endif
 
     // WebRTC members.

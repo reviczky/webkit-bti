@@ -43,6 +43,7 @@ class ValidationMessage;
 // and form-associated element implementations should use HTMLFormControlElement
 // unless there is a special reason.
 class HTMLFormControlElement : public LabelableElement, public FormAssociatedElement {
+    WTF_MAKE_ISO_ALLOCATED(HTMLFormControlElement);
 public:
     virtual ~HTMLFormControlElement();
 
@@ -141,7 +142,7 @@ protected:
     void didMoveToNewDocument(Document& oldDocument, Document& newDocument) override;
 
     bool supportsFocus() const override;
-    bool isKeyboardFocusable(KeyboardEvent&) const override;
+    bool isKeyboardFocusable(KeyboardEvent*) const override;
     bool isMouseFocusable() const override;
 
     void didRecalcStyle(Style::Change) override;

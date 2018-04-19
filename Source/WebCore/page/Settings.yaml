@@ -101,7 +101,11 @@ allowFileAccessFromFileURLs:
   initial: true
 allowSettingAnyXHRHeaderFromFileURLs:
   initial: false
+allowCrossOriginSubresourcesToAskForCredentials:
+  initial: false
 needsStorageAccessFromFileURLsQuirk:
+  initial: true
+useAnonymousModeWhenFetchingMaskImages:
   initial: true
 javaScriptCanOpenWindowsAutomatically:
   initial: false
@@ -202,7 +206,7 @@ javaScriptRuntimeFlags:
 # FIXME: This should really be disabled by default as it makes platforms that don't support the feature download files
 # they can't use by. Leaving enabled for now to not change existing behavior.
 downloadableBinaryFontsEnabled:
-  initial: true
+  initial: defaultDownloadableBinaryFontsEnabled()
 
 xssAuditorEnabled:
   initial: false
@@ -326,7 +330,7 @@ requestAnimationFrameEnabled:
 cookieEnabled:
   initial: true
 mediaEnabled:
-  initial: true
+  initial: defaultMediaEnabled
 DOMPasteAllowed:
   initial: false
 
@@ -354,8 +358,10 @@ maximumPlugInSnapshotAttempts:
 frameFlattening:
   type: FrameFlattening
   initial: FrameFlattening::Disabled
+  onChange: setNeedsRelayoutAllFrames
 asyncFrameScrollingEnabled:
   initial: false
+  onChange: setNeedsRelayoutAllFrames
 
 webSecurityEnabled:
   initial: true
@@ -708,6 +714,12 @@ touchEventEmulationEnabled:
   initial: false
   getter: isTouchEventEmulationEnabled
   conditional: TOUCH_EVENTS
+
+shouldEnableTextAutosizingBoost:
+  type: bool
+  initial: false
+  conditional: TEXT_AUTOSIZING
+  onChange: shouldEnableTextAutosizingBoostChanged
 
 mediaCapabilitiesEnabled:
   initial: false

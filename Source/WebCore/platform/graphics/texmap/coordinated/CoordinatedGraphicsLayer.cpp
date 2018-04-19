@@ -33,7 +33,6 @@
 #include "NicosiaPaintingEngine.h"
 #include "ScrollableArea.h"
 #include "TextureMapperPlatformLayerProxyProvider.h"
-#include <wtf/CurrentTime.h>
 #ifndef NDEBUG
 #include <wtf/SetForScope.h>
 #endif
@@ -142,7 +141,6 @@ CoordinatedGraphicsLayer::CoordinatedGraphicsLayer(Type layerType, GraphicsLayer
     , m_compositedNativeImagePtr(0)
     , m_platformLayer(0)
     , m_animationStartedTimer(*this, &CoordinatedGraphicsLayer::animationStartedTimerFired)
-    , m_scrollableArea(0)
 {
     static CoordinatedLayerID nextLayerID = 1;
     m_id = nextLayerID++;
@@ -536,40 +534,41 @@ void CoordinatedGraphicsLayer::setReplicatedByLayer(GraphicsLayer* layer)
 
 void CoordinatedGraphicsLayer::setNeedsDisplay()
 {
-    setNeedsDisplayInRect(FloatRect(FloatPoint(), size()));
-}
+    if (!drawsContent() || !contentsAreVisible() || m_size.isEmpty() || m_needsDisplay.completeLayer)
+        return;
 
-void CoordinatedGraphicsLayer::setNeedsDisplayInRect(const FloatRect& rect, ShouldClipToLayer)
-{
-    if (m_mainBackingStore)
-        m_mainBackingStore->invalidate(enclosingIntRect(rect));
+    m_needsDisplay.completeLayer = true;
+    m_needsDisplay.rects.clear();
 
     didChangeLayerState();
+    addRepaintRect({ { }, m_size });
+}
 
+void CoordinatedGraphicsLayer::setNeedsDisplayInRect(const FloatRect& initialRect, ShouldClipToLayer shouldClip)
+{
+    if (!drawsContent() || !contentsAreVisible() || m_size.isEmpty() || m_needsDisplay.completeLayer)
+        return;
+
+    auto rect = initialRect;
+    if (shouldClip == ClipToLayer)
+        rect.intersect({ { }, m_size });
+
+    if (rect.isEmpty())
+        return;
+
+    auto& rects = m_needsDisplay.rects;
+    bool alreadyRecorded = std::any_of(rects.begin(), rects.end(),
+        [&](auto& dirtyRect) { return dirtyRect.contains(rect); });
+    if (alreadyRecorded)
+        return;
+
+    if (rects.size() < 32)
+        rects.append(rect);
+    else
+        rects[0].unite(rect);
+
+    didChangeLayerState();
     addRepaintRect(rect);
-}
-
-void CoordinatedGraphicsLayer::setScrollableArea(ScrollableArea* scrollableArea)
-{
-    bool oldScrollable = isScrollable();
-    m_scrollableArea = scrollableArea;
-    if (oldScrollable == isScrollable())
-        return;
-
-    m_layerState.isScrollable = isScrollable();
-    m_layerState.flagsChanged = true;
-    didChangeLayerState();
-}
-
-void CoordinatedGraphicsLayer::commitScrollOffset(const IntSize& offset)
-{
-    if (!isScrollable() || offset.isZero())
-        return;
-
-    m_scrollableArea->notifyScrollPositionChanged(m_scrollableArea->scrollPosition() + offset);
-    m_layerState.committedScrollOffset += offset;
-    m_layerState.committedScrollOffsetChanged = true;
-    didChangeLayerState();
 }
 
 void CoordinatedGraphicsLayer::setFixedToViewport(bool isFixed)
@@ -629,13 +628,13 @@ void CoordinatedGraphicsLayer::syncImageBacking()
         ASSERT(!shouldHaveBackingStore());
         ASSERT(m_compositedImage);
 
-        bool imageInstanceReplaced = m_coordinatedImageBacking && (m_coordinatedImageBacking->id() != CoordinatedImageBacking::getCoordinatedImageBackingID(m_compositedImage.get()));
+        bool imageInstanceReplaced = m_coordinatedImageBacking && (m_coordinatedImageBacking->id() != CoordinatedImageBacking::getCoordinatedImageBackingID(*m_compositedImage));
         if (imageInstanceReplaced)
             releaseImageBackingIfNeeded();
 
         if (!m_coordinatedImageBacking) {
             m_coordinatedImageBacking = m_coordinator->createImageBackingIfNeeded(*m_compositedImage);
-            m_coordinatedImageBacking->addHost(this);
+            m_coordinatedImageBacking->addHost(*this);
             m_layerState.imageID = m_coordinatedImageBacking->id();
         }
 
@@ -670,7 +669,6 @@ void CoordinatedGraphicsLayer::syncLayerState()
         m_layerState.masksToBounds = masksToBounds();
         m_layerState.preserves3D = preserves3D();
         m_layerState.fixedToViewport = fixedToViewport();
-        m_layerState.isScrollable = isScrollable();
     }
 
     if (m_layerState.debugVisualsChanged) {
@@ -776,7 +774,6 @@ void CoordinatedGraphicsLayer::resetLayerState()
     m_layerState.tilesToCreate.clear();
     m_layerState.tilesToRemove.clear();
     m_layerState.tilesToUpdate.clear();
-    m_layerState.committedScrollOffset = IntSize();
 }
 
 bool CoordinatedGraphicsLayer::imageBackingVisible()
@@ -791,7 +788,7 @@ void CoordinatedGraphicsLayer::releaseImageBackingIfNeeded()
         return;
 
     ASSERT(m_coordinator);
-    m_coordinatedImageBacking->removeHost(this);
+    m_coordinatedImageBacking->removeHost(*this);
     m_coordinatedImageBacking = nullptr;
     m_layerState.imageID = InvalidCoordinatedImageBackingID;
     m_layerState.imageChanged = true;
@@ -950,6 +947,18 @@ void CoordinatedGraphicsLayer::updateContentBuffers()
         m_pendingVisibleRectAdjustment = true;
     }
 
+    if (!m_pendingVisibleRectAdjustment && !m_needsDisplay.completeLayer && m_needsDisplay.rects.isEmpty())
+        return;
+
+    if (!m_needsDisplay.completeLayer) {
+        for (auto& rect : m_needsDisplay.rects)
+            m_mainBackingStore->invalidate(IntRect { rect });
+    } else
+        m_mainBackingStore->invalidate({ { }, IntSize { m_size } });
+
+    m_needsDisplay.completeLayer = false;
+    m_needsDisplay.rects.clear();
+
     if (m_pendingVisibleRectAdjustment) {
         m_pendingVisibleRectAdjustment = false;
         m_mainBackingStore->createTilesIfNeeded(transformedVisibleRect(), IntRect(0, 0, size().width(), size().height()));
@@ -968,20 +977,17 @@ void CoordinatedGraphicsLayer::updateContentBuffers()
             auto& tileRect = tile.rect();
             auto& dirtyRect = tile.dirtyRect();
 
+            auto coordinatedBuffer = Nicosia::Buffer::create(dirtyRect.size(), contentsOpaque() ? Nicosia::Buffer::NoFlags : Nicosia::Buffer::SupportsAlpha);
             SurfaceUpdateInfo updateInfo;
-            IntRect targetRect;
-            auto coordinatedBuffer = m_coordinator->getCoordinatedBuffer(dirtyRect.size(),
-                contentsOpaque() ? Nicosia::Buffer::NoFlags : Nicosia::Buffer::SupportsAlpha,
-                updateInfo.atlasID, targetRect);
+            updateInfo.updateRect = dirtyRect;
+            updateInfo.updateRect.move(-tileRect.x(), -tileRect.y());
+            updateInfo.buffer = coordinatedBuffer.copyRef();
 
             if (!m_coordinator->paintingEngine().paint(*this, WTFMove(coordinatedBuffer),
                 dirtyRect, m_mainBackingStore->mapToContents(dirtyRect),
-                targetRect, m_mainBackingStore->contentsScale()))
+                IntRect { { 0, 0 }, dirtyRect.size() }, m_mainBackingStore->contentsScale()))
                 continue;
 
-            updateInfo.surfaceOffset = targetRect.location();
-            updateInfo.updateRect = dirtyRect;
-            updateInfo.updateRect.move(-tileRect.x(), -tileRect.y());
             updateTile(tile.tileID(), updateInfo, tileRect);
 
             tile.markClean();
@@ -995,7 +1001,7 @@ void CoordinatedGraphicsLayer::updateContentBuffers()
     // The previous backing store is kept around to avoid flickering between
     // removing the existing tiles and painting the new ones. The first time
     // the visibleRect is full painted we remove the previous backing store.
-    if (m_mainBackingStore->visibleAreaIsCovered())
+    if (m_previousBackingStore && m_mainBackingStore->visibleAreaIsCovered())
         m_previousBackingStore = nullptr;
 }
 
@@ -1156,8 +1162,8 @@ bool CoordinatedGraphicsLayer::addAnimation(const KeyframeValueList& valueList, 
     if (valueList.property() == AnimatedPropertyTransform)
         listsMatch = validateTransformOperations(valueList, ignoredHasBigRotation) >= 0;
 
-    m_lastAnimationStartTime = monotonicallyIncreasingTime() - delayAsNegativeTimeOffset;
-    m_animations.add(TextureMapperAnimation(keyframesName, valueList, boxSize, *anim, listsMatch, m_lastAnimationStartTime, 0, TextureMapperAnimation::AnimationState::Playing));
+    m_lastAnimationStartTime = MonotonicTime::now() - Seconds(delayAsNegativeTimeOffset);
+    m_animations.add(TextureMapperAnimation(keyframesName, valueList, boxSize, *anim, listsMatch, m_lastAnimationStartTime, 0_s, TextureMapperAnimation::AnimationState::Playing));
     m_animationStartedTimer.startOneShot(0_s);
     didChangeAnimations();
     return true;
@@ -1165,7 +1171,7 @@ bool CoordinatedGraphicsLayer::addAnimation(const KeyframeValueList& valueList, 
 
 void CoordinatedGraphicsLayer::pauseAnimation(const String& animationName, double time)
 {
-    m_animations.pause(animationName, time);
+    m_animations.pause(animationName, Seconds(time));
     didChangeAnimations();
 }
 
@@ -1175,7 +1181,7 @@ void CoordinatedGraphicsLayer::removeAnimation(const String& animationName)
     didChangeAnimations();
 }
 
-void CoordinatedGraphicsLayer::suspendAnimations(double time)
+void CoordinatedGraphicsLayer::suspendAnimations(MonotonicTime time)
 {
     m_animations.suspend(time);
     didChangeAnimations();

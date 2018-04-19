@@ -33,9 +33,9 @@
 #include "WebPageProxyMessages.h"
 #include "WebProcess.h"
 #include "WebProcessProxyMessages.h"
+#include <WebCore/Frame.h>
 #include <WebCore/HistoryController.h>
 #include <WebCore/HistoryItem.h>
-#include <WebCore/MainFrame.h>
 #include <WebCore/PageCache.h>
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
@@ -91,7 +91,7 @@ void WebBackForwardListProxy::setHighestItemIDFromUIProcess(uint64_t itemID)
 
 static void updateBackForwardItem(uint64_t itemID, uint64_t pageID, HistoryItem* item)
 {
-    WebProcess::singleton().parentProcessConnection()->send(Messages::WebProcessProxy::AddBackForwardItem(itemID, pageID, toPageState(*item)), 0);
+    WebProcess::singleton().parentProcessConnection()->send(Messages::WebProcessProxy::AddOrUpdateBackForwardItem(itemID, pageID, toPageState(*item)), 0);
 }
 
 void WebBackForwardListProxy::addItemFromUIProcess(uint64_t itemID, Ref<HistoryItem>&& item, uint64_t pageID)

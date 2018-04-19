@@ -199,8 +199,8 @@ public:
     WEBCORE_EXPORT bool scrollRecursively(ScrollDirection, ScrollGranularity, Node* startingNode = nullptr);
     WEBCORE_EXPORT bool logicalScrollRecursively(ScrollLogicalDirection, ScrollGranularity, Node* startingNode = nullptr);
 
-    bool tabsToLinks(KeyboardEvent&) const;
-    bool tabsToAllFormControls(KeyboardEvent&) const;
+    bool tabsToLinks(KeyboardEvent*) const;
+    bool tabsToAllFormControls(KeyboardEvent*) const;
 
     WEBCORE_EXPORT bool mouseMoved(const PlatformMouseEvent&);
     WEBCORE_EXPORT bool passMouseMovedEventToScrollbars(const PlatformMouseEvent&);
@@ -338,8 +338,8 @@ public:
 #endif
     
 #if PLATFORM(IOS)
-    WEBCORE_EXPORT void startTextAutoscroll(RenderObject* renderer, const FloatPoint& positionInWindow);
-    WEBCORE_EXPORT void cancelTextAutoscroll();
+    WEBCORE_EXPORT void startSelectionAutoscroll(RenderObject* renderer, const FloatPoint& positionInWindow);
+    WEBCORE_EXPORT void cancelSelectionAutoscroll();
     IntPoint m_targetAutoscrollPositionInWindow;
     bool m_isAutoscrolling { false };
 #endif

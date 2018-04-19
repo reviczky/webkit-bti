@@ -88,9 +88,9 @@ public:
     WEBCORE_EXPORT String httpHeaderField(HTTPHeaderName) const;
     WEBCORE_EXPORT void setHTTPHeaderField(const String& name, const String& value);
     WEBCORE_EXPORT void setHTTPHeaderField(HTTPHeaderName, const String& value);
-    void addHTTPHeaderField(HTTPHeaderName, const String& value);
-    void addHTTPHeaderField(const String& name, const String& value);
-    void addHTTPHeaderFieldIfNotPresent(HTTPHeaderName, const String&);
+    WEBCORE_EXPORT void addHTTPHeaderField(HTTPHeaderName, const String& value);
+    WEBCORE_EXPORT void addHTTPHeaderField(const String& name, const String& value);
+    WEBCORE_EXPORT void addHTTPHeaderFieldIfNotPresent(HTTPHeaderName, const String&);
 
     bool hasHTTPHeaderField(HTTPHeaderName) const;
 
@@ -110,9 +110,10 @@ public:
     WEBCORE_EXPORT String httpReferrer() const;
     bool hasHTTPReferrer() const;
     WEBCORE_EXPORT void setHTTPReferrer(const String&);
+    WEBCORE_EXPORT void setExistingHTTPReferrerToOriginString();
     WEBCORE_EXPORT void clearHTTPReferrer();
 
-    String httpOrigin() const;
+    WEBCORE_EXPORT String httpOrigin() const;
     bool hasHTTPOrigin() const;
     void setHTTPOrigin(const String&);
     WEBCORE_EXPORT void clearHTTPOrigin();

@@ -79,7 +79,7 @@ const GlobalObjectMethodTable JSDOMWindowBase::s_globalObjectMethodTable = {
 };
 
 JSDOMWindowBase::JSDOMWindowBase(VM& vm, Structure* structure, RefPtr<DOMWindow>&& window, JSDOMWindowProxy* proxy)
-    : JSDOMGlobalObject(vm, structure, proxy->world(), &s_globalObjectMethodTable, window ? &window->document()->threadLocalCache() : nullptr)
+    : JSDOMGlobalObject(vm, structure, proxy->world(), &s_globalObjectMethodTable)
     , m_windowCloseWatchpoints((window && window->frame()) ? IsWatched : IsInvalidated)
     , m_wrapped(WTFMove(window))
     , m_proxy(proxy)
@@ -267,7 +267,7 @@ JSValue toJS(ExecState* state, DOMWindow& domWindow)
 
 JSDOMWindow* toJSDOMWindow(Frame& frame, DOMWrapperWorld& world)
 {
-    return frame.script().windowProxy(world)->window();
+    return frame.script().globalObject(world);
 }
 
 JSDOMWindow* toJSDOMWindow(JSC::VM& vm, JSValue value)
@@ -281,7 +281,7 @@ JSDOMWindow* toJSDOMWindow(JSC::VM& vm, JSValue value)
         if (classInfo == JSDOMWindow::info())
             return jsCast<JSDOMWindow*>(object);
         if (classInfo == JSDOMWindowProxy::info())
-            return jsCast<JSDOMWindowProxy*>(object)->window();
+            return jsDynamicCast<JSDOMWindow*>(vm, jsCast<JSDOMWindowProxy*>(object)->window());
         value = object->getPrototypeDirect(vm);
     }
     return nullptr;

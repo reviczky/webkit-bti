@@ -275,7 +275,7 @@ static void assertProtocolIsGood(StringView protocol)
 
 #endif
 
-static StaticLock defaultPortForProtocolMapForTestingLock;
+static Lock defaultPortForProtocolMapForTestingLock;
 
 using DefaultPortForProtocolMapForTesting = HashMap<String, uint16_t>;
 static DefaultPortForProtocolMapForTesting*& defaultPortForProtocolMapForTesting()
@@ -786,6 +786,24 @@ bool hostsAreEqual(const URL& a, const URL& b)
     }
 
     return true;
+}
+
+bool URL::isMatchingDomain(const String& domain) const
+{
+    if (isNull())
+        return false;
+
+    if (domain.isEmpty())
+        return true;
+
+    if (!protocolIsInHTTPFamily())
+        return false;
+
+    auto host = this->host();
+    if (!host.endsWith(domain))
+        return false;
+
+    return host.length() == domain.length() || host.characterAt(host.length() - domain.length() - 1) == '.';
 }
 
 String encodeWithURLEscapeSequences(const String& input)

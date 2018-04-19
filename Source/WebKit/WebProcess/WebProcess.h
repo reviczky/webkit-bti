@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,6 +34,9 @@
 #include "ViewUpdateDispatcher.h"
 #include "WebInspectorInterruptDispatcher.h"
 #include <WebCore/ActivityState.h>
+#if PLATFORM(MAC)
+#include <WebCore/ScreenProperties.h>
+#endif
 #include <WebCore/Timer.h>
 #include <pal/HysteresisActivity.h>
 #include <pal/SessionID.h>
@@ -46,7 +49,7 @@
 
 #if PLATFORM(COCOA)
 #include <dispatch/dispatch.h>
-#include <WebCore/MachSendRight.h>
+#include <wtf/MachSendRight.h>
 #endif
 
 #if PLATFORM(IOS)
@@ -132,7 +135,7 @@ public:
     InjectedBundle* injectedBundle() const { return m_injectedBundle.get(); }
 
 #if PLATFORM(COCOA)
-    const WebCore::MachSendRight& compositingRenderServerPort() const { return m_compositingRenderServerPort; }
+    const WTF::MachSendRight& compositingRenderServerPort() const { return m_compositingRenderServerPort; }
 #endif
 
     bool shouldPlugInAutoStartFromOrigin(WebPage&, const String& pageOrigin, const String& pluginOrigin, const String& mimeType);
@@ -171,9 +174,7 @@ public:
     void networkProcessConnectionClosed(NetworkProcessConnection*);
     WebLoaderStrategy& webLoaderStrategy();
 
-#if USE(LIBWEBRTC)
     LibWebRTCNetwork& libWebRTCNetwork();
-#endif
 
     void webToStorageProcessConnectionClosed(WebToStorageProcessConnection*);
     WebToStorageProcessConnection* existingWebToStorageProcessConnection() { return m_webToStorageProcessConnection.get(); }
@@ -258,6 +259,7 @@ private:
     void clearCachedCredentials();
 
     void platformTerminate();
+
     void registerURLSchemeAsEmptyDocument(const String&);
     void registerURLSchemeAsSecure(const String&) const;
     void registerURLSchemeAsBypassingContentSecurityPolicy(const String&) const;
@@ -268,6 +270,8 @@ private:
     void registerURLSchemeAsCORSEnabled(const String&) const;
     void registerURLSchemeAsAlwaysRevalidated(const String&) const;
     void registerURLSchemeAsCachePartitioned(const String&) const;
+    void registerURLSchemeAsCanDisplayOnlyIfCanRequest(const String&) const;
+
     void setDefaultRequestTimeoutInterval(double);
     void setAlwaysUsesComplexTextCodePath(bool);
     void setShouldUseFontSmoothing(bool);
@@ -312,7 +316,7 @@ private:
 #endif
 #if ENABLE(SERVICE_WORKER)
     void establishWorkerContextConnectionToStorageProcess(uint64_t pageGroupID, uint64_t pageID, const WebPreferencesStore&, PAL::SessionID);
-    void registerServiceWorkerClients(PAL::SessionID);
+    void registerServiceWorkerClients();
 #endif
 
     void releasePageCache();
@@ -367,6 +371,13 @@ private:
     void didReceiveWebProcessMessage(IPC::Connection&, IPC::Decoder&);
     void didReceiveSyncWebProcessMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
 
+#if PLATFORM(MAC)
+    void setScreenProperties(uint32_t primaryScreenID, const HashMap<uint32_t, WebCore::ScreenProperties>&);
+#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+    void scrollerStylePreferenceChanged(bool useOverlayScrollbars);
+#endif
+#endif
+
     RefPtr<WebConnectionToUIProcess> m_webConnection;
 
     HashMap<uint64_t, RefPtr<WebPage>> m_pageMap;
@@ -386,7 +397,7 @@ private:
     CacheModel m_cacheModel { CacheModelDocumentViewer };
 
 #if PLATFORM(COCOA)
-    WebCore::MachSendRight m_compositingRenderServerPort;
+    WTF::MachSendRight m_compositingRenderServerPort;
 #endif
 
     bool m_fullKeyboardAccessEnabled { false };
@@ -403,9 +414,7 @@ private:
 
     Ref<WebCacheStorageProvider> m_cacheStorageProvider;
 
-#if USE(LIBWEBRTC)
     std::unique_ptr<LibWebRTCNetwork> m_libWebRTCNetwork;
-#endif
 
     HashSet<String> m_dnsPrefetchedHosts;
     PAL::HysteresisActivity m_dnsPrefetchHystereris;

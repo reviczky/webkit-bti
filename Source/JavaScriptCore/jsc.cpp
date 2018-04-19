@@ -54,7 +54,6 @@
 #include "JSTypedArrays.h"
 #include "JSWebAssemblyInstance.h"
 #include "JSWebAssemblyMemory.h"
-#include "LLIntData.h"
 #include "LLIntThunks.h"
 #include "ObjectConstructor.h"
 #include "ParserError.h"
@@ -472,7 +471,7 @@ protected:
     void finishCreation(VM& vm, const Vector<String>& arguments)
     {
         Base::finishCreation(vm);
-        
+
         addFunction(vm, "debug", functionDebug, 1);
         addFunction(vm, "describe", functionDescribe, 1);
         addFunction(vm, "describeArray", functionDescribeArray, 1);
@@ -718,17 +717,17 @@ static std::optional<DirectoryName> currentWorkingDirectory()
     // In Windows, wchar_t is the UTF-16LE.
     // https://msdn.microsoft.com/en-us/library/dd374081.aspx
     // https://msdn.microsoft.com/en-us/library/windows/desktop/ff381407.aspx
-    auto buffer = std::make_unique<wchar_t[]>(bufferLength);
-    DWORD lengthNotIncludingNull = ::GetCurrentDirectoryW(bufferLength, buffer.get());
-    String directoryString = wcharToString(buffer.get(), lengthNotIncludingNull);
+    Vector<wchar_t> buffer(bufferLength);
+    DWORD lengthNotIncludingNull = ::GetCurrentDirectoryW(bufferLength, buffer.data());
+    String directoryString = wcharToString(buffer.data(), lengthNotIncludingNull);
     // We don't support network path like \\host\share\<path name>.
     if (directoryString.startsWith("\\\\"))
         return std::nullopt;
 #else
-    auto buffer = std::make_unique<char[]>(PATH_MAX);
-    if (!getcwd(buffer.get(), PATH_MAX))
+    Vector<char> buffer(PATH_MAX);
+    if (!getcwd(buffer.data(), PATH_MAX))
         return std::nullopt;
-    String directoryString = String::fromUTF8(buffer.get());
+    String directoryString = String::fromUTF8(buffer.data());
 #endif
     if (directoryString.isEmpty())
         return std::nullopt;
@@ -2249,7 +2248,7 @@ static void checkException(GlobalObject* globalObject, bool isLastFile, bool has
 {
     VM& vm = globalObject->vm();
 
-    if (options.m_treatWatchdogExceptionAsSuccess && value.inherits(vm, TerminatedExecutionError::info())) {
+    if (options.m_treatWatchdogExceptionAsSuccess && value.inherits<TerminatedExecutionError>(vm)) {
         ASSERT(hasException);
         return;
     }

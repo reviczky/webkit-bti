@@ -26,6 +26,8 @@ accessibility/wpe/AccessibilityObjectWPE.cpp
 
 editing/wpe/EditorWPE.cpp
 
+loader/soup/ResourceLoaderSoup.cpp
+
 page/linux/ResourceUsageOverlayLinux.cpp
 page/linux/ResourceUsageThreadLinux.cpp
 
@@ -55,6 +57,8 @@ platform/graphics/opentype/OpenTypeVerticalData.cpp
 platform/graphics/wpe/IconWPE.cpp
 platform/graphics/wpe/ImageWPE.cpp
 platform/graphics/wpe/PlatformDisplayWPE.cpp
+
+platform/mediastream/libwebrtc/LibWebRTCProviderGlib.cpp
 
 platform/text/Hyphenation.cpp
 platform/text/LocaleICU.cpp

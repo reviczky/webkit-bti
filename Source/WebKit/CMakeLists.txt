@@ -5,6 +5,7 @@ set_property(DIRECTORY . PROPERTY FOLDER "WebKit")
 set(WebKit_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}"
     "${WEBKIT_DIR}/NetworkProcess"
+    "${WEBKIT_DIR}/NetworkProcess/Cookies"
     "${WEBKIT_DIR}/NetworkProcess/CustomProtocols"
     "${WEBKIT_DIR}/NetworkProcess/Downloads"
     "${WEBKIT_DIR}/NetworkProcess/FileAPI"
@@ -56,7 +57,6 @@ set(WebKit_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/WebProcess/ApplicationCache"
     "${WEBKIT_DIR}/WebProcess/Automation"
     "${WEBKIT_DIR}/WebProcess/Cache"
-    "${WEBKIT_DIR}/WebProcess/Cookies"
     "${WEBKIT_DIR}/WebProcess/Databases"
     "${WEBKIT_DIR}/WebProcess/Databases/IndexedDB"
     "${WEBKIT_DIR}/WebProcess/FileAPI"
@@ -97,6 +97,8 @@ set(WebKit_SYSTEM_INCLUDE_DIRECTORIES
 )
 
 set(WebKit_SOURCES
+    NetworkProcess/Cookies/WebCookieManager.cpp
+
     NetworkProcess/Downloads/Download.cpp
     NetworkProcess/Downloads/DownloadManager.cpp
     NetworkProcess/Downloads/PendingDownload.cpp
@@ -105,9 +107,11 @@ set(WebKit_SOURCES
 
     NetworkProcess/NetworkCORSPreflightChecker.cpp
     NetworkProcess/NetworkConnectionToWebProcess.cpp
+    NetworkProcess/NetworkContentRuleListManager.cpp
     NetworkProcess/NetworkDataTask.cpp
     NetworkProcess/NetworkDataTaskBlob.cpp
     NetworkProcess/NetworkLoad.cpp
+    NetworkProcess/NetworkLoadChecker.cpp
     NetworkProcess/NetworkProcess.cpp
     NetworkProcess/NetworkProcessCreationParameters.cpp
     NetworkProcess/NetworkProcessPlatformStrategies.cpp
@@ -142,6 +146,8 @@ set(WebKit_SOURCES
     NetworkProcess/capture/NetworkCaptureResource.cpp
     NetworkProcess/capture/NetworkDataTaskReplay.cpp
 
+    NetworkProcess/webrtc/NetworkMDNSRegister.cpp
+
     Platform/Logging.cpp
     Platform/Module.cpp
 
@@ -174,6 +180,8 @@ set(WebKit_SOURCES
     Shared/NavigationActionData.cpp
     Shared/PlatformPopupMenuData.cpp
     Shared/PrintInfo.cpp
+    Shared/RTCNetwork.cpp
+    Shared/RTCPacketOptions.cpp
     Shared/SessionState.cpp
     Shared/SessionTracker.cpp
     Shared/ShareableBitmap.cpp
@@ -287,6 +295,7 @@ set(WebKit_SOURCES
 
     StorageProcess/ServiceWorker/WebSWOriginStore.cpp
     StorageProcess/ServiceWorker/WebSWServerConnection.cpp
+    StorageProcess/ServiceWorker/WebSWServerToContextConnection.cpp
 
     UIProcess/BackgroundProcessResponsivenessTimer.cpp
     UIProcess/ChildProcessProxy.cpp
@@ -300,7 +309,10 @@ set(WebKit_SOURCES
     UIProcess/RemoteWebInspectorProxy.cpp
     UIProcess/ResourceLoadStatisticsPersistentStorage.cpp
     UIProcess/ResponsivenessTimer.cpp
+    UIProcess/ServiceWorkerProcessProxy.cpp
     UIProcess/StatisticsRequest.cpp
+    UIProcess/SuspendedPageProxy.cpp
+    UIProcess/SystemPreviewController.cpp
     UIProcess/TextCheckerCompletion.cpp
     UIProcess/UIMessagePortChannelProvider.cpp
     UIProcess/UserMediaPermissionCheckProxy.cpp
@@ -460,8 +472,6 @@ set(WebKit_SOURCES
     WebProcess/Cache/WebCacheStorageConnection.cpp
     WebProcess/Cache/WebCacheStorageProvider.cpp
 
-    WebProcess/Cookies/WebCookieManager.cpp
-
     WebProcess/Databases/WebDatabaseProvider.cpp
 
     WebProcess/Databases/IndexedDB/WebIDBConnectionToServer.cpp
@@ -521,6 +531,15 @@ set(WebKit_SOURCES
     WebProcess/Network/WebResourceLoader.cpp
     WebProcess/Network/WebSocketProvider.cpp
     WebProcess/Network/WebSocketStream.cpp
+
+    WebProcess/Network/webrtc/LibWebRTCProvider.cpp
+    WebProcess/Network/webrtc/LibWebRTCResolver.cpp
+    WebProcess/Network/webrtc/LibWebRTCSocket.cpp
+    WebProcess/Network/webrtc/LibWebRTCSocketFactory.cpp
+    WebProcess/Network/webrtc/WebMDNSRegister.cpp
+    WebProcess/Network/webrtc/WebRTCMonitor.cpp
+    WebProcess/Network/webrtc/WebRTCResolver.cpp
+    WebProcess/Network/webrtc/WebRTCSocket.cpp
 
     WebProcess/Notifications/NotificationPermissionRequestManager.cpp
     WebProcess/Notifications/WebNotificationManager.cpp
@@ -602,13 +621,17 @@ set(WebKit_SOURCES
 )
 
 set(WebKit_MESSAGES_IN_FILES
+    NetworkProcess/Cookies/WebCookieManager.messages.in
+
     NetworkProcess/NetworkConnectionToWebProcess.messages.in
+    NetworkProcess/NetworkContentRuleListManager.messages.in
     NetworkProcess/NetworkProcess.messages.in
     NetworkProcess/NetworkResourceLoader.messages.in
     NetworkProcess/NetworkSocketStream.messages.in
 
     NetworkProcess/cache/CacheStorageEngineConnection.messages.in
 
+    NetworkProcess/webrtc/NetworkMDNSRegister.messages.in
     NetworkProcess/webrtc/NetworkRTCMonitor.messages.in
     NetworkProcess/webrtc/NetworkRTCProvider.messages.in
     NetworkProcess/webrtc/NetworkRTCSocket.messages.in
@@ -630,6 +653,7 @@ set(WebKit_MESSAGES_IN_FILES
     StorageProcess/IndexedDB/WebIDBConnectionToClient.messages.in
 
     StorageProcess/ServiceWorker/WebSWServerConnection.messages.in
+    StorageProcess/ServiceWorker/WebSWServerToContextConnection.messages.in
 
     UIProcess/DrawingAreaProxy.messages.in
     UIProcess/RemoteWebInspectorProxy.messages.in
@@ -664,14 +688,13 @@ set(WebKit_MESSAGES_IN_FILES
 
     WebProcess/Cache/WebCacheStorageConnection.messages.in
 
-    WebProcess/Cookies/WebCookieManager.messages.in
-
     WebProcess/Databases/IndexedDB/WebIDBConnectionToServer.messages.in
 
     WebProcess/FullScreen/WebFullScreenManager.messages.in
 
     WebProcess/Geolocation/WebGeolocationManager.messages.in
 
+    WebProcess/Network/webrtc/WebMDNSRegister.messages.in
     WebProcess/Network/webrtc/WebRTCMonitor.messages.in
     WebProcess/Network/webrtc/WebRTCResolver.messages.in
     WebProcess/Network/webrtc/WebRTCSocket.messages.in
@@ -704,9 +727,16 @@ set(WebKit_MESSAGES_IN_FILES
     WebProcess/WebStorage/StorageAreaMap.messages.in
 )
 
-set(WebKit_LIBRARIES
-    WebCore
-)
+if (${WebCore_LIBRARY_TYPE} STREQUAL STATIC)
+    # Link with WebCore as PRIVATE not to propagate WebCore to all users of WebKit.
+    set(WebKit_LIBRARIES
+        PRIVATE WebCore
+        PUBLIC WebCoreHeaderInterface
+    )
+else ()
+    # All users of WebKit need to link WebCore if WebCore is a shared library.
+    set(WebKit_LIBRARIES PUBLIC WebCore)
+endif ()
 
 set(WebProcess_LIBRARIES
     WebKit
@@ -733,7 +763,7 @@ if (ENABLE_GRAPHICS_CONTEXT_3D)
             ${LIBEPOXY_INCLUDE_DIRS}
         )
         list(APPEND WebKit_LIBRARIES
-            ${LIBEPOXY_LIBRARIES}
+            PRIVATE ${LIBEPOXY_LIBRARIES}
         )
         add_definitions(${LIBEPOXY_DEFINITIONS})
     else ()
@@ -742,15 +772,15 @@ if (ENABLE_GRAPHICS_CONTEXT_3D)
                 ${OPENGL_INCLUDE_DIRS}
             )
             list(APPEND WebKit_LIBRARIES
-                ${OPENGL_LIBRARIES}
+                PRIVATE ${OPENGL_LIBRARIES}
             )
             add_definitions(${OPENGL_DEFINITIONS})
-        elseif (USE_OPENGL_ES_2)
+        elseif (USE_OPENGL_ES)
             list(APPEND WebKit_SYSTEM_INCLUDE_DIRECTORIES
                 ${OPENGLES2_INCLUDE_DIRS}
             )
             list(APPEND WebKit_LIBRARIES
-                ${OPENGLES2_LIBRARIES}
+                PRIVATE ${OPENGLES2_LIBRARIES}
             )
             add_definitions(${OPENGLES2_DEFINITIONS})
         endif ()
@@ -760,7 +790,7 @@ if (ENABLE_GRAPHICS_CONTEXT_3D)
                 ${EGL_INCLUDE_DIRS}
             )
             list(APPEND WebKit_LIBRARIES
-                ${EGL_LIBRARIES}
+                PRIVATE ${EGL_LIBRARIES}
             )
             add_definitions(${EGL_DEFINITIONS})
         endif ()
@@ -790,7 +820,7 @@ if (COMPILER_IS_GCC_OR_CLANG)
         set(CMAKE_REQUIRED_LIBRARIES atomic)
         check_cxx_source_compiles("${ATOMIC_TEST_SOURCE}" ATOMIC_INT64_REQUIRES_LIBATOMIC)
         if (ATOMIC_INT64_REQUIRES_LIBATOMIC)
-            list(APPEND WebKit_LIBRARIES atomic)
+            list(APPEND WebKit_LIBRARIES PRIVATE atomic)
         endif ()
         unset(CMAKE_REQUIRED_LIBRARIES)
     endif ()
@@ -802,7 +832,7 @@ if (UNIX)
         set(CMAKE_REQUIRED_LIBRARIES rt)
         check_function_exists(shm_open SHM_OPEN_REQUIRES_LIBRT)
         if (SHM_OPEN_REQUIRES_LIBRT)
-            list(APPEND WebKit_LIBRARIES rt)
+            list(APPEND WebKit_LIBRARIES PRIVATE rt)
         endif ()
         unset(CMAKE_REQUIRED_LIBRARIES)
     endif ()

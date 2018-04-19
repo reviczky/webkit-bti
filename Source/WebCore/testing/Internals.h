@@ -71,6 +71,7 @@ class MediaStreamTrack;
 class MemoryInfo;
 class MockCDMFactory;
 class MockContentFilterSettings;
+class MockCredentialsMessenger;
 class MockPageOverlay;
 class MockPaymentCoordinator;
 class NodeList;
@@ -382,6 +383,9 @@ public:
     void webkitDidExitFullScreenForElement(Element&);
 #endif
 
+    void setFullscreenInsetTop(double);
+    void setFullscreenAutoHideDelay(double);
+
     WEBCORE_TESTSUPPORT_EXPORT void setApplicationCacheOriginQuota(unsigned long long);
 
     void registerURLSchemeAsBypassingContentSecurityPolicy(const String& scheme);
@@ -462,6 +466,8 @@ public:
     Vector<String> mediaResponseContentRanges(HTMLMediaElement&);
     void simulateAudioInterruption(HTMLMediaElement&);
     ExceptionOr<bool> mediaElementHasCharacteristic(HTMLMediaElement&, const String&);
+    void beginSimulatedHDCPError(HTMLMediaElement&);
+    void endSimulatedHDCPError(HTMLMediaElement&);
 #endif
 
     bool isSelectPopupVisible(HTMLSelectElement&);
@@ -479,6 +485,7 @@ public:
     ExceptionOr<Ref<DOMRect>> selectionBounds();
 
     ExceptionOr<bool> isPluginUnavailabilityIndicatorObscured(Element&);
+    ExceptionOr<String> unavailablePluginReplacementText(Element&);
     bool isPluginSnapshotted(Element&);
 
 #if ENABLE(MEDIA_SOURCE)
@@ -615,6 +622,7 @@ public:
     void setMediaStreamTrackMuted(MediaStreamTrack&, bool);
     void removeMediaStreamTrack(MediaStream&, MediaStreamTrack&);
     void simulateMediaStreamTrackCaptureSourceFailure(MediaStreamTrack&);
+    void setMediaStreamTrackIdentifier(MediaStreamTrack&, String&& id);
 #endif
 
     String audioSessionCategory() const;
@@ -643,6 +651,10 @@ public:
 
     void testIncomingSyncIPCMessageWhileWaitingForSyncReply();
 
+#if ENABLE(WEB_AUTHN)
+    MockCredentialsMessenger& mockCredentialsMessenger() const;
+#endif
+
 private:
     explicit Internals(Document&);
     Document* contextDocument() const;
@@ -667,6 +679,10 @@ private:
 
 #if ENABLE(APPLE_PAY)
     MockPaymentCoordinator* m_mockPaymentCoordinator { nullptr };
+#endif
+
+#if ENABLE(WEB_AUTHN)
+    std::unique_ptr<MockCredentialsMessenger> m_mockCredentialsMessenger;
 #endif
 };
 

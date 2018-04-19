@@ -89,22 +89,26 @@ public:
 
     unsigned long identifier() const { return m_identifier; }
 
+    bool wasAuthenticationChallengeBlocked() const { return m_wasAuthenticationChallengeBlocked; }
+
     virtual void releaseResources();
     const ResourceResponse& response() const { return m_response; }
 
     SharedBuffer* resourceData() const { return m_resourceData.get(); }
     void clearResourceData();
     
-    virtual bool isSubresourceLoader();
+    virtual bool isSubresourceLoader() const;
 
     virtual void willSendRequest(ResourceRequest&&, const ResourceResponse& redirectResponse, CompletionHandler<void(ResourceRequest&&)>&& callback);
     virtual void didSendData(unsigned long long bytesSent, unsigned long long totalBytesToBeSent);
-    virtual void didReceiveResponse(const ResourceResponse&);
+    virtual void didReceiveResponse(const ResourceResponse&, CompletionHandler<void()>&& policyCompletionHandler);
     virtual void didReceiveData(const char*, unsigned, long long encodedDataLength, DataPayloadType);
     virtual void didReceiveBuffer(Ref<SharedBuffer>&&, long long encodedDataLength, DataPayloadType);
     virtual void didFinishLoading(const NetworkLoadMetrics&);
     virtual void didFail(const ResourceError&);
     virtual void didRetrieveDerivedDataFromCache(const String& type, SharedBuffer&);
+
+    WEBCORE_EXPORT void didBlockAuthenticationChallenge();
 
     virtual bool shouldUseCredentialStorage();
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
@@ -155,9 +159,12 @@ protected:
     bool wasCancelled() const { return m_cancellationStatus >= Cancelled; }
 
     void didReceiveDataOrBuffer(const char*, unsigned, RefPtr<SharedBuffer>&&, long long encodedDataLength, DataPayloadType);
+    
+    void setReferrerPolicy(ReferrerPolicy referrerPolicy) { m_options.referrerPolicy = referrerPolicy; }
+    ReferrerPolicy referrerPolicy() const { return m_options.referrerPolicy; }
 
 #if PLATFORM(COCOA)
-    NSCachedURLResponse* willCacheResponse(ResourceHandle*, NSCachedURLResponse*) override;
+    void willCacheResponseAsync(ResourceHandle*, NSCachedURLResponse*, CompletionHandler<void(NSCachedURLResponse *)>&&) override;
 #endif
 
     virtual void willSendRequestInternal(ResourceRequest&&, const ResourceResponse& redirectResponse, CompletionHandler<void(ResourceRequest&&)>&&);
@@ -170,6 +177,7 @@ protected:
 #if USE(QUICK_LOOK)
     std::unique_ptr<PreviewLoader> m_previewLoader;
 #endif
+    bool m_canCrossOriginRequestsAskUserForCredentials { true };
 
 private:
     virtual void willCancel(const ResourceError&) = 0;
@@ -178,6 +186,8 @@ private:
     void addDataOrBuffer(const char*, unsigned, SharedBuffer*, DataPayloadType);
     void loadDataURL();
     void finishNetworkLoad();
+
+    bool shouldAllowResourceToAskForCredentials() const;
 
     // ResourceHandleClient
     void didSendData(ResourceHandle*, unsigned long long bytesSent, unsigned long long totalBytesToBeSent) override;
@@ -192,7 +202,7 @@ private:
     bool shouldUseCredentialStorage(ResourceHandle*) override { return shouldUseCredentialStorage(); }
     void didReceiveAuthenticationChallenge(ResourceHandle*, const AuthenticationChallenge&) override;
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
-    void canAuthenticateAgainstProtectionSpaceAsync(ResourceHandle*, const ProtectionSpace&) override;
+    void canAuthenticateAgainstProtectionSpaceAsync(ResourceHandle*, const ProtectionSpace&, CompletionHandler<void(bool)>&&) override;
 #endif
     void receivedCancellation(ResourceHandle*, const AuthenticationChallenge& challenge) override { receivedCancellation(challenge); }
 #if PLATFORM(IOS)
@@ -203,7 +213,9 @@ private:
     bool shouldCacheResponse(ResourceHandle*, CFCachedURLResponseRef) override;
 #endif
 
-    bool isMixedContent(const URL&) const;
+#if USE(SOUP)
+    void loadGResource();
+#endif
 
     ResourceRequest m_request;
     ResourceRequest m_originalRequest; // Before redirects.
@@ -223,7 +235,7 @@ private:
     CancellationStatus m_cancellationStatus { NotCancelled };
 
     bool m_defersLoading;
-    bool m_canAskClientForCredentials;
+    bool m_wasAuthenticationChallengeBlocked { false };
     ResourceRequest m_deferredRequest;
     ResourceLoaderOptions m_options;
 

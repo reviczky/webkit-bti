@@ -194,10 +194,10 @@ static Ref<JSON::Object> buildObjectForHeaders(const HTTPHeaderMap& headers)
 Ref<Inspector::Protocol::Network::ResourceTiming> InspectorNetworkAgent::buildObjectForTiming(const NetworkLoadMetrics& timing, ResourceLoader& resourceLoader)
 {
     MonotonicTime startTime = resourceLoader.loadTiming().startTime();
-    double startTimeInInspector = m_environment.executionStopwatch()->elapsedTimeSince(startTime);
+    Seconds startTimeInInspector = m_environment.executionStopwatch()->elapsedTimeSince(startTime);
 
     return Inspector::Protocol::Network::ResourceTiming::create()
-        .setStartTime(startTimeInInspector)
+        .setStartTime(startTimeInInspector.seconds())
         .setDomainLookupStart(timing.domainLookupStart.milliseconds())
         .setDomainLookupEnd(timing.domainLookupEnd.milliseconds())
         .setConnectStart(timing.connectStart.milliseconds())
@@ -269,6 +269,8 @@ static Ref<Inspector::Protocol::Network::Request> buildObjectForResourceRequest(
 static Inspector::Protocol::Network::Response::Source responseSource(ResourceResponse::Source source)
 {
     switch (source) {
+    case ResourceResponse::Source::ApplicationCache:
+        // FIXME: Add support for ApplicationCache in inspector.
     case ResourceResponse::Source::Unknown:
         return Inspector::Protocol::Network::Response::Source::Unknown;
     case ResourceResponse::Source::Network:
@@ -338,7 +340,7 @@ InspectorNetworkAgent::~InspectorNetworkAgent()
 
 double InspectorNetworkAgent::timestamp()
 {
-    return m_environment.executionStopwatch()->elapsedTime();
+    return m_environment.executionStopwatch()->elapsedTime().seconds();
 }
 
 void InspectorNetworkAgent::willSendRequest(unsigned long identifier, DocumentLoader* loader, ResourceRequest& request, const ResourceResponse& redirectResponse, InspectorPageAgent::ResourceType type)
@@ -484,8 +486,8 @@ void InspectorNetworkAgent::didFinishLoading(unsigned long identifier, DocumentL
     double elapsedFinishTime;
     if (resourceLoader && networkLoadMetrics.isComplete()) {
         MonotonicTime startTime = resourceLoader->loadTiming().startTime();
-        double startTimeInInspector = m_environment.executionStopwatch()->elapsedTimeSince(startTime);
-        elapsedFinishTime = startTimeInInspector + networkLoadMetrics.responseEnd.seconds();
+        Seconds startTimeInInspector = m_environment.executionStopwatch()->elapsedTimeSince(startTime);
+        elapsedFinishTime = (startTimeInInspector + networkLoadMetrics.responseEnd).seconds();
     } else
         elapsedFinishTime = timestamp();
 
@@ -785,11 +787,14 @@ void InspectorNetworkAgent::setResourceCachingDisabled(ErrorString&, bool disabl
     setResourceCachingDisabled(disabled);
 }
 
-void InspectorNetworkAgent::loadResource(ErrorString& errorString, const String& frameId, const String& urlString, Ref<LoadResourceCallback>&& callback)
+void InspectorNetworkAgent::loadResource(const String& frameId, const String& urlString, Ref<LoadResourceCallback>&& callback)
 {
-    auto* context = scriptExecutionContext(errorString, frameId);
-    if (!context)
+    ErrorString error;
+    auto* context = scriptExecutionContext(error, frameId);
+    if (!context) {
+        callback->sendFailure(error);
         return;
+    }
 
     URL url = context->completeURL(urlString);
     ResourceRequest request(url);
@@ -806,8 +811,10 @@ void InspectorNetworkAgent::loadResource(ErrorString& errorString, const String&
     // InspectorThreadableLoaderClient deletes itself when the load completes or fails.
     InspectorThreadableLoaderClient* inspectorThreadableLoaderClient = new InspectorThreadableLoaderClient(callback.copyRef());
     auto loader = ThreadableLoader::create(*context, *inspectorThreadableLoaderClient, WTFMove(request), options);
-    if (!loader)
+    if (!loader) {
+        callback->sendFailure(ASCIILiteral("Could not load requested resource."));
         return;
+    }
 
     // If the load already completed, inspectorThreadableLoaderClient will have been deleted and we will have already called the callback.
     if (!callback->isActive())
@@ -836,7 +843,7 @@ static JSC::JSValue webSocketAsScriptValue(JSC::ExecState& state, WebSocket* web
     return toJS(&state, deprecatedGlobalObjectForPrototype(&state), webSocket);
 }
 
-void InspectorNetworkAgent::resolveWebSocket(ErrorString& errorString, const String& requestId, const String* const objectGroup, RefPtr<Inspector::Protocol::Runtime::RemoteObject>& result)
+void InspectorNetworkAgent::resolveWebSocket(ErrorString& errorString, const String& requestId, const String* objectGroup, RefPtr<Inspector::Protocol::Runtime::RemoteObject>& result)
 {
     WebSocket* webSocket = webSocketForRequestId(requestId);
     if (!webSocket) {
