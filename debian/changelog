@@ -2,6 +2,9 @@ webkit2gtk (2.20.2-1) UNRELEASED; urgency=high
 
   * New upstream release.
     + This fixes CVE-2018-4200.
+  * debian/patches/fix-atomics-build.patch:
+    + Set THREADS_PREFER_PTHREAD_FLAG to ON. This fixes the build in
+      riscv64 (thanks, Aurelien Jarno).
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 07 May 2018 14:41:30 +0300
 

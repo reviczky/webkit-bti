@@ -58,3 +58,15 @@ Index: webkitgtk/Source/JavaScriptCore/CMakeLists.txt
  
  set(JavaScriptCore_SCRIPTS_SOURCES_DIR "${JAVASCRIPTCORE_DIR}/Scripts")
  
+Index: webkitgtk/Source/cmake/OptionsGTK.cmake
+===================================================================
+--- webkitgtk.orig/Source/cmake/OptionsGTK.cmake
++++ webkitgtk/Source/cmake/OptionsGTK.cmake
+@@ -32,6 +32,7 @@ find_package(LibSoup 2.42.0 REQUIRED)
+ find_package(LibXml2 2.8.0 REQUIRED)
+ find_package(PNG REQUIRED)
+ find_package(Sqlite REQUIRED)
++set(THREADS_PREFER_PTHREAD_FLAG ON)
+ find_package(Threads REQUIRED)
+ find_package(ZLIB REQUIRED)
+ find_package(ATK REQUIRED)
