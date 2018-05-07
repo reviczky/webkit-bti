@@ -703,6 +703,10 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         read(AbstractHeap(Stack, CallFrameSlot::callee));
         def(HeapLocation(StackLoc, AbstractHeap(Stack, CallFrameSlot::callee)), LazyNode(node));
         return;
+
+    case SetCallee:
+        write(AbstractHeap(Stack, CallFrameSlot::callee));
+        return;
         
     case GetArgumentCountIncludingThis: {
         auto heap = AbstractHeap(Stack, remapOperand(node->argumentsInlineCallFrame(), VirtualRegister(CallFrameSlot::argumentCount)));
@@ -1557,13 +1561,8 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
             write(HeapObjectCount);
             return;
         }
-
-        if (node->op() == CompareEq && node->isBinaryUseKind(ObjectUse)) {
-            def(PureValue(node));
-            return;
-        }
-        if (node->child1().useKind() == UntypedUse || node->child1().useKind() == ObjectUse
-            || node->child2().useKind() == UntypedUse || node->child2().useKind() == ObjectUse) {
+        
+        if (node->isBinaryUseKind(UntypedUse)) {
             read(World);
             write(Heap);
             return;
