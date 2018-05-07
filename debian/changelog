@@ -1,3 +1,10 @@
+webkit2gtk (2.20.2-1) UNRELEASED; urgency=high
+
+  * New upstream release.
+    + This fixes CVE-2018-4200.
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 07 May 2018 14:41:30 +0300
+
 webkit2gtk (2.20.1-1) unstable; urgency=medium
 
   [ Alberto Garcia ]
