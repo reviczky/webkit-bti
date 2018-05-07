@@ -76,8 +76,8 @@ override_dh_auto_configure:
 
 # Create a dummy doc directory in case the "nodoc" build option is set
 override_dh_install:
-	mkdir -p $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0
-	touch $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0/index.html
+	mkdir -p $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0/webkit2gtk-4.0
+	touch $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0/webkit2gtk-4.0/index.html
 	dh_install
 
 override_dh_strip:

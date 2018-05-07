@@ -5,6 +5,8 @@ webkit2gtk (2.20.2-1) UNRELEASED; urgency=high
   * debian/patches/fix-atomics-build.patch:
     + Set THREADS_PREFER_PTHREAD_FLAG to ON. This fixes the build in
       riscv64 (thanks, Aurelien Jarno).
+  * debian/libwebkit2gtk-4.0-doc.install, debian/rules:
+    + Update path of installed documentation (see WebKit #184771).
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 07 May 2018 14:41:30 +0300
 
