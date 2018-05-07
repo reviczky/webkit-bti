@@ -190,7 +190,7 @@ protected:
 
     void triggerRepaint(GstSample*);
     void repaint();
-    void cancelRepaint();
+    void cancelRepaint(bool destroying = false);
 
     static void repaintCallback(MediaPlayerPrivateGStreamerBase*, GstSample*);
     static void repaintCancelledCallback(MediaPlayerPrivateGStreamerBase*);
@@ -232,7 +232,7 @@ protected:
 
     Condition m_drawCondition;
     Lock m_drawMutex;
-    bool m_drawCancelled { false };
+    bool m_destroying { false };
     RunLoop::Timer<MediaPlayerPrivateGStreamerBase> m_drawTimer;
 
 #if USE(TEXTURE_MAPPER_GL)

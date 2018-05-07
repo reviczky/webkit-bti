@@ -1636,7 +1636,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             }
         }
 
-        if (node->child1().useKind() == UntypedUse || node->child2().useKind() == UntypedUse)
+        if (node->isBinaryUseKind(UntypedUse))
             clobberWorld(node->origin.semantic, clobberLimit);
         forNode(node).setType(SpecBoolean);
         break;
@@ -2371,6 +2371,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         forNode(node).setType(SpecInt32Only);
         break;
 
+    case SetCallee:
     case SetArgumentCountIncludingThis:
         break;
         
