@@ -3,6 +3,10 @@ webkit2gtk (2.20.2-2) UNRELEASED; urgency=medium
   * debian/control:
     + Remove compatibility with versions of debhelper < 9.20151219 in
       override_dh_strip, we require version 10 since 2.20.1-1.
+  * debian/patches/fix-atomics-build.patch:
+    + Don't check for __sync_add_and_fetch_8() when deciding whether
+      linking against libatomic is necessary. We can simply check for
+      __atomic_fetch_add_8() since that covers all cases.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 09 May 2018 15:05:52 +0300
 
