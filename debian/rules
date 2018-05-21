@@ -8,8 +8,6 @@ CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS) -Wall
 CFLAGS = $(shell dpkg-buildflags --get CFLAGS)
 LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS) -Wl,--as-needed
 
-DEBHELPER_VERSION = $(shell dpkg-query -W -f='$${source:Version}' debhelper)
-
 EXTRA_CMAKE_ARGUMENTS =
 
 # Sacrifice speed in order to make it more likely resource limits
@@ -81,10 +79,8 @@ override_dh_install:
 	dh_install
 
 override_dh_strip:
-	if dpkg --compare-versions $(DEBHELPER_VERSION) ge 9.20151219; then \
-		dh_strip -plibwebkit2gtk-4.0-37 --ddeb-migration='libwebkit2gtk-4.0-37-dbg (<< 2.10.5-1~)' ; \
-		dh_strip -plibjavascriptcoregtk-4.0-18 --ddeb-migration='libjavascriptcoregtk-4.0-18-dbg (<< 2.10.5-1~)' ; \
-	fi
+	dh_strip -plibwebkit2gtk-4.0-37 --ddeb-migration='libwebkit2gtk-4.0-37-dbg (<< 2.10.5-1~)' ; \
+	dh_strip -plibjavascriptcoregtk-4.0-18 --ddeb-migration='libjavascriptcoregtk-4.0-18-dbg (<< 2.10.5-1~)' ; \
 	dh_strip
 
 override_dh_makeshlibs:

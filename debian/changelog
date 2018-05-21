@@ -4,6 +4,9 @@ webkit2gtk (2.21.2-1) UNRELEASED; urgency=medium
   * debian/patches/fix-atomics-build.patch,
     debian/patches/fix-format-security.patch:
     + Remove these patches, they are now upstream.
+  * debian/rules:
+    + Remove compatibility with versions of debhelper < 9.20151219 in
+      override_dh_strip, we require version 10 since 2.20.1-1.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 21 May 2018 11:16:26 +0300
 
