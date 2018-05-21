@@ -13,6 +13,9 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.21.1
  (optional)_ZN7bmalloc16PerThreadStorageINS_11PerHeapKindINS_5CacheEEEE15s_didInitializeE@Base 2.21.1
  (optional)_ZN7bmalloc16PerThreadStorageINS_11PerHeapKindINS_5CacheEEEE5s_keyE@Base 2.21.1
+ (regex|optional)^_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE10_M_replace.*@Base 2.21.2
+ (regex|optional)^_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE14_M_replace_aux.*@Base 2.21.2
+ (regex|optional)^_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_append.*@Base 2.21.2
  (optional)_ZZN7bmalloc10vmPageSizeEvE6cached@Base 2.19.6
  webkit_application_info_get_name@Base 2.17.90
  webkit_application_info_get_type@Base 2.17.90
@@ -1978,8 +1981,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_get_indexeddb_directory@Base 2.10.0
  webkit_website_data_manager_get_local_storage_directory@Base 2.10.0
  webkit_website_data_manager_get_offline_application_cache_directory@Base 2.10.0
- webkit_website_data_manager_get_resource_load_statistics_directory@Base 2.21.1
- webkit_website_data_manager_get_resource_load_statistics_enabled@Base 2.21.1
  webkit_website_data_manager_get_type@Base 2.10.0
  webkit_website_data_manager_get_websql_directory@Base 2.10.0
  webkit_website_data_manager_is_ephemeral@Base 2.15.4
@@ -1987,7 +1988,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_new_ephemeral@Base 2.15.4
  webkit_website_data_manager_remove@Base 2.15.4
  webkit_website_data_manager_remove_finish@Base 2.15.4
- webkit_website_data_manager_set_resource_load_statistics_enabled@Base 2.21.1
  webkit_website_data_ref@Base 2.15.4
  webkit_website_data_types_get_type@Base 2.15.4
  webkit_website_data_unref@Base 2.15.4

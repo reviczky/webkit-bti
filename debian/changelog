@@ -9,6 +9,8 @@ webkit2gtk (2.21.2-1) UNRELEASED; urgency=medium
   * debian/rules:
     + Remove compatibility with versions of debhelper < 9.20151219 in
       override_dh_strip, we require version 10 since 2.20.1-1.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 21 May 2018 11:16:26 +0300
 
