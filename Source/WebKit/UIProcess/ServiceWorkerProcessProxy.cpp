@@ -50,7 +50,7 @@ Ref<ServiceWorkerProcessProxy> ServiceWorkerProcessProxy::create(WebProcessPool&
 }
 
 ServiceWorkerProcessProxy::ServiceWorkerProcessProxy(WebProcessPool& pool, const SecurityOriginData& securityOrigin, WebsiteDataStore& store)
-    : WebProcessProxy { pool, store }
+    : WebProcessProxy { pool, store, IsInPrewarmedPool::No }
     , m_securityOrigin(securityOrigin)
     , m_serviceWorkerPageID(generatePageID())
 {
@@ -103,6 +103,15 @@ void ServiceWorkerProcessProxy::didReceiveAuthenticationChallenge(uint64_t pageI
     }
     notImplemented();
     challenge->performDefaultHandling();
+}
+
+void ServiceWorkerProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connection::Identifier connectionIdentifier)
+{
+    WebProcessProxy::didFinishLaunching(launcher, connectionIdentifier);
+
+    // Prevent App Nap for Service Worker processes.
+    // FIXME: Ideally, the Service Worker process would app nap when all its clients app nap (http://webkit.org/b/185626).
+    setProcessSuppressionEnabled(false);
 }
 
 } // namespace WebKit

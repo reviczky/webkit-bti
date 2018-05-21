@@ -250,11 +250,12 @@ static gboolean webKitMediaClearKeyDecryptorDecrypt(WebKitMediaCommonEncryptionD
     bool returnValue = true;
     GstByteReader* reader;
     unsigned position = 0;
+    unsigned sampleIndex = 0;
     GstMapInfo subSamplesMap;
 
     if (!subSampleCount) {
         // Full sample encryption.
-        GST_TRACE_OBJECT(self, "full sample encryption: %d encrypted bytes", map.size);
+        GST_TRACE_OBJECT(self, "full sample encryption: %zu encrypted bytes", map.size);
 
         // Check if the buffer is empty.
         if (map.size) {
@@ -287,7 +288,6 @@ static gboolean webKitMediaClearKeyDecryptorDecrypt(WebKitMediaCommonEncryptionD
     while (position < map.size) {
         guint16 nBytesClear = 0;
         guint32 nBytesEncrypted = 0;
-        unsigned sampleIndex = 0;
 
         if (sampleIndex < subSampleCount) {
             if (!gst_byte_reader_get_uint16_be(reader, &nBytesClear)

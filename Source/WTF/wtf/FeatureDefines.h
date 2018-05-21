@@ -496,8 +496,20 @@ the public iOS SDK. See <https://webkit.org/b/179167>. */
 #define ENABLE_INTL 0
 #endif
 
+#if !defined(ENABLE_INTL_NUMBER_FORMAT_TO_PARTS)
+#define ENABLE_INTL_NUMBER_FORMAT_TO_PARTS 0
+#endif
+
+#if !defined(ENABLE_INTL_PLURAL_RULES)
+#define ENABLE_INTL_PLURAL_RULES 0
+#endif
+
 #if !defined(ENABLE_JAVASCRIPT_I18N_API)
 #define ENABLE_JAVASCRIPT_I18N_API 0
+#endif
+
+#if !defined(ENABLE_LAYOUT_FORMATTING_CONTEXT)
+#define ENABLE_LAYOUT_FORMATTING_CONTEXT 0
 #endif
 
 #if !defined(ENABLE_LEGACY_CSS_VENDOR_PREFIXES)

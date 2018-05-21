@@ -32,6 +32,7 @@
 #include "Document.h"
 #include "Event.h"
 #include "FrameLoader.h"
+#include "HistoryItem.h"
 
 namespace WebCore {
 
@@ -44,6 +45,13 @@ NavigationAction::NavigationAction(NavigationAction&&) = default;
 NavigationAction& NavigationAction::operator=(const NavigationAction&) = default;
 NavigationAction& NavigationAction::operator=(NavigationAction&&) = default;
 
+static bool shouldTreatAsSameOriginNavigation(Document& source, const URL& url)
+{
+    return url.isBlankURL()
+        || url.protocolIsData()
+        || (url.protocolIsBlob() && source.securityOrigin().canRequest(url));
+}
+
 NavigationAction::NavigationAction(Document& source, const ResourceRequest& resourceRequest, InitiatedByMainFrame initiatedByMainFrame, NavigationType type, ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy, Event* event, const AtomicString& downloadAttribute)
     : m_sourceDocument { makeRefPtr(source) }
     , m_resourceRequest { resourceRequest }
@@ -52,6 +60,7 @@ NavigationAction::NavigationAction(Document& source, const ResourceRequest& reso
     , m_initiatedByMainFrame { initiatedByMainFrame }
     , m_event { event }
     , m_downloadAttribute { downloadAttribute }
+    , m_treatAsSameOriginNavigation { shouldTreatAsSameOriginNavigation(source, resourceRequest.url()) }
 {
 }
 
@@ -76,6 +85,7 @@ NavigationAction::NavigationAction(Document& source, const ResourceRequest& reso
     , m_initiatedByMainFrame { initiatedByMainFrame }
     , m_event { event }
     , m_downloadAttribute { downloadAttribute }
+    , m_treatAsSameOriginNavigation { shouldTreatAsSameOriginNavigation(source, resourceRequest.url()) }
 {
 }
 
@@ -84,6 +94,11 @@ NavigationAction NavigationAction::copyWithShouldOpenExternalURLsPolicy(ShouldOp
     NavigationAction result(*this);
     result.m_shouldOpenExternalURLsPolicy = shouldOpenExternalURLsPolicy;
     return result;
+}
+
+void NavigationAction::setTargetBackForwardItem(HistoryItem& item)
+{
+    m_targetBackForwardItemIdentifier = item.identifier();
 }
 
 }

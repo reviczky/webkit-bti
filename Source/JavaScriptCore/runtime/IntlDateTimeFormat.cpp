@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Andy VanWagoner (thetalecrafter@gmail.com)
+ * Copyright (C) 2015 Andy VanWagoner (andy@vanwagoner.family)
  * Copyright (C) 2016-2017 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -964,7 +964,7 @@ const char* IntlDateTimeFormat::partTypeString(UDateFormatField field)
     case UDAT_STANDALONE_QUARTER_FIELD:
     case UDAT_RELATED_YEAR_FIELD:
     case UDAT_TIME_SEPARATOR_FIELD:
-#if U_ICU_VERSION_MAJOR_NUM < 58
+#if U_ICU_VERSION_MAJOR_NUM < 58 || !defined(U_HIDE_DEPRECATED_API)
     case UDAT_FIELD_COUNT:
 #endif
         return "literal";

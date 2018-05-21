@@ -53,6 +53,7 @@
 #include "Settings.h"
 #include "SimpleLineLayoutFunctions.h"
 #include "SimpleLineLayoutPagination.h"
+#include "SimpleLineLayoutResolver.h"
 #include "TextAutoSizing.h"
 #include "VerticalPositionCache.h"
 #include "VisiblePosition.h"
@@ -2952,7 +2953,7 @@ void RenderBlockFlow::adjustForBorderFit(LayoutUnit x, LayoutUnit& left, LayoutU
 
 void RenderBlockFlow::fitBorderToLinesIfNeeded()
 {
-    if (style().borderFit() == BorderFitBorder || hasOverrideLogicalContentWidth())
+    if (style().borderFit() == BorderFitBorder || hasOverrideContentLogicalWidth())
         return;
 
     // Walk any normal flow lines to snugly fit.
@@ -2971,9 +2972,9 @@ void RenderBlockFlow::fitBorderToLinesIfNeeded()
     if (newContentWidth == oldWidth)
         return;
     
-    setOverrideLogicalContentWidth(newContentWidth);
+    setOverrideContentLogicalWidth(newContentWidth);
     layoutBlock(false);
-    clearOverrideLogicalContentWidth();
+    clearOverrideContentLogicalWidth();
 }
 
 void RenderBlockFlow::markLinesDirtyInBlockRange(LayoutUnit logicalTop, LayoutUnit logicalBottom, RootInlineBox* highest)
@@ -3620,6 +3621,12 @@ void RenderBlockFlow::ensureLineBoxes()
     setLineLayoutPath(ForceLineBoxesPath);
     if (!m_simpleLineLayout)
         return;
+
+    if (SimpleLineLayout::canUseForLineBoxTree(*this, *m_simpleLineLayout)) {
+        SimpleLineLayout::generateLineBoxTree(*this, *m_simpleLineLayout);
+        m_simpleLineLayout = nullptr;
+        return;
+    }
     bool isPaginated = m_simpleLineLayout->isPaginated();
     m_simpleLineLayout = nullptr;
 

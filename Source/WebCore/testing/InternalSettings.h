@@ -100,6 +100,7 @@ public:
     ExceptionOr<void> setShouldMockBoldSystemFontForAccessibility(bool);
     ExceptionOr<void> setShouldManageAudioSessionCategory(bool);
     ExceptionOr<void> setCustomPasteboardDataEnabled(bool);
+    ExceptionOr<void> setAccessibilityEventsEnabled(bool);
 
     using FrameFlatteningValue = FrameFlattening;
     ExceptionOr<void> setFrameFlattening(FrameFlatteningValue);
@@ -124,7 +125,9 @@ public:
     static void setWebVREnabled(bool);
     static void setScreenCaptureEnabled(bool);
 
-    static bool cssAnimationsAndCSSTransitionsBackedByWebAnimationsEnabled();
+    static bool webAnimationsCSSIntegrationEnabled();
+
+    static void setStorageAccessPromptsEnabled(bool);
 
 private:
     explicit InternalSettings(Page*);
@@ -189,7 +192,9 @@ private:
         bool m_inlineMediaPlaybackRequiresPlaysInlineAttribute;
         bool m_deferredCSSParserEnabled;
         bool m_inputEventsEnabled;
-
+#if ENABLE(ACCESSIBILITY_EVENTS)
+        bool m_accessibilityEventsEnabled;
+#endif
         UserInterfaceDirectionPolicy m_userInterfaceDirectionPolicy;
         TextDirection m_systemLayoutDirection;
         PDFImageCachingPolicy m_pdfImageCachingPolicy;
@@ -211,6 +216,7 @@ private:
         bool m_shouldManageAudioSessionCategory;
 #endif
         bool m_customPasteboardDataEnabled;
+        bool m_promptForStorageAccessAPIEnabled { false };
     };
 
     Page* m_page;

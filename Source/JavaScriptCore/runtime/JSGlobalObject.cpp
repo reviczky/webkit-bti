@@ -131,7 +131,6 @@
 #include "MarkedSpaceInlines.h"
 #include "MathObject.h"
 #include "Microtask.h"
-#include "ModuleLoaderPrototype.h"
 #include "NativeErrorConstructor.h"
 #include "NativeErrorPrototype.h"
 #include "NullGetterFunction.h"
@@ -170,6 +169,7 @@
 #include "WeakMapPrototype.h"
 #include "WeakSetConstructor.h"
 #include "WeakSetPrototype.h"
+#include "WebAssemblyPrototype.h"
 #include "WebAssemblyToJSCallee.h"
 #include <wtf/RandomNumber.h>
 
@@ -287,6 +287,8 @@ const GlobalObjectMethodTable JSGlobalObject::s_globalObjectMethodTable = {
     nullptr, // moduleLoaderEvaluate
     nullptr, // promiseRejectionTracker
     nullptr, // defaultLanguage
+    nullptr, // compileStreaming
+    nullptr, // instantiateStreaming
 };
 
 /* Source for JSGlobalObject.lut.h
@@ -625,9 +627,10 @@ void JSGlobalObject::init(VM& vm)
     m_generatorPrototype.set(vm, this, GeneratorPrototype::create(vm, this, GeneratorPrototype::createStructure(vm, this, m_iteratorPrototype.get())));
     m_asyncGeneratorPrototype.set(vm, this, AsyncGeneratorPrototype::create(vm, this, AsyncGeneratorPrototype::createStructure(vm, this, m_asyncIteratorPrototype.get())));
 
-#define CREATE_PROTOTYPE_FOR_SIMPLE_TYPE(capitalName, lowerName, properName, instanceType, jsName, prototypeBase) \
-m_ ## lowerName ## Prototype.set(vm, this, capitalName##Prototype::create(vm, this, capitalName##Prototype::createStructure(vm, this, m_ ## prototypeBase ## Prototype.get()))); \
-m_ ## properName ## Structure.set(vm, this, instanceType::createStructure(vm, this, m_ ## lowerName ## Prototype.get()));
+#define CREATE_PROTOTYPE_FOR_SIMPLE_TYPE(capitalName, lowerName, properName, instanceType, jsName, prototypeBase) do { \
+        m_ ## lowerName ## Prototype.set(vm, this, capitalName##Prototype::create(vm, this, capitalName##Prototype::createStructure(vm, this, m_ ## prototypeBase ## Prototype.get()))); \
+        m_ ## properName ## Structure.set(vm, this, instanceType::createStructure(vm, this, m_ ## lowerName ## Prototype.get())); \
+    } while (0);
     
     FOR_EACH_SIMPLE_BUILTIN_TYPE(CREATE_PROTOTYPE_FOR_SIMPLE_TYPE)
 
@@ -649,8 +652,6 @@ m_ ## properName ## Structure.set(vm, this, instanceType::createStructure(vm, th
     FOR_EACH_LAZY_BUILTIN_TYPE(CREATE_PROTOTYPE_FOR_LAZY_TYPE)
     
 #undef CREATE_PROTOTYPE_FOR_LAZY_TYPE
-    
-    m_moduleLoaderPrototype.set(vm, this, ModuleLoaderPrototype::create(vm, this, ModuleLoaderPrototype::createStructure(vm, this, m_objectPrototype.get())));
     
     // Constructors
 
@@ -779,8 +780,7 @@ putDirectWithoutTransition(vm, vm.propertyNames-> jsName, lowerName ## Construct
     ReflectObject* reflectObject = ReflectObject::create(vm, this, ReflectObject::createStructure(vm, this, m_objectPrototype.get()));
     putDirectWithoutTransition(vm, vm.propertyNames->Reflect, reflectObject, static_cast<unsigned>(PropertyAttribute::DontEnum));
 
-    m_moduleLoaderStructure.set(vm, this, JSModuleLoader::createStructure(vm, this, m_moduleLoaderPrototype.get()));
-    m_moduleLoader.set(vm, this, JSModuleLoader::create(globalExec(), vm, this, m_moduleLoaderStructure.get()));
+    m_moduleLoader.set(vm, this, JSModuleLoader::create(globalExec(), vm, this, JSModuleLoader::createStructure(vm, this, jsNull())));
     if (Options::exposeInternalModuleLoader())
         putDirectWithoutTransition(vm, vm.propertyNames->Loader, m_moduleLoader.get(), static_cast<unsigned>(PropertyAttribute::DontEnum));
 
@@ -904,6 +904,7 @@ putDirectWithoutTransition(vm, vm.propertyNames-> jsName, lowerName ## Construct
         GlobalPropertyInfo(vm.propertyNames->builtinNames().CollatorPrivateName(), intl->getDirect(vm, vm.propertyNames->Collator), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         GlobalPropertyInfo(vm.propertyNames->builtinNames().DateTimeFormatPrivateName(), intl->getDirect(vm, vm.propertyNames->DateTimeFormat), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         GlobalPropertyInfo(vm.propertyNames->builtinNames().NumberFormatPrivateName(), intl->getDirect(vm, vm.propertyNames->NumberFormat), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
+        GlobalPropertyInfo(vm.propertyNames->builtinNames().PluralRulesPrivateName(), intl->getDirect(vm, vm.propertyNames->PluralRules), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
 #endif // ENABLE(INTL)
 
         GlobalPropertyInfo(vm.propertyNames->builtinNames().isConstructorPrivateName(), JSFunction::create(vm, this, 1, String(), esSpecIsConstructor, NoIntrinsic), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
@@ -942,6 +943,11 @@ putDirectWithoutTransition(vm, vm.propertyNames-> jsName, lowerName ## Construct
         GlobalPropertyInfo(vm.propertyNames->builtinNames().setBucketHeadPrivateName(), privateFuncSetBucketHead, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         GlobalPropertyInfo(vm.propertyNames->builtinNames().setBucketNextPrivateName(), privateFuncSetBucketNext, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         GlobalPropertyInfo(vm.propertyNames->builtinNames().setBucketKeyPrivateName(), privateFuncSetBucketKey, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
+#if ENABLE(WEBASSEMBLY) && ENABLE(WEBASSEMBLY_STREAMING_API)
+        // WebAssembly Streaming API
+        GlobalPropertyInfo(vm.propertyNames->builtinNames().webAssemblyCompileStreamingInternalPrivateName(), JSFunction::create(vm, this, 1, String(), webAssemblyCompileStreamingInternal), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
+        GlobalPropertyInfo(vm.propertyNames->builtinNames().webAssemblyInstantiateStreamingInternalPrivateName(), JSFunction::create(vm, this, 1, String(), webAssemblyInstantiateStreamingInternal), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
+#endif
 #if !ASSERT_DISABLED
         GlobalPropertyInfo(vm.propertyNames->builtinNames().assertPrivateName(), JSFunction::create(vm, this, 1, String(), assertCall), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
 #endif
@@ -1374,7 +1380,6 @@ void JSGlobalObject::visitChildren(JSCell* cell, SlotVisitor& visitor)
     visitor.append(thisObject->m_asyncGeneratorPrototype);
     visitor.append(thisObject->m_asyncIteratorPrototype);
     visitor.append(thisObject->m_asyncGeneratorFunctionPrototype);
-    visitor.append(thisObject->m_moduleLoaderPrototype);
 
     thisObject->m_debuggerScopeStructure.visit(visitor);
     thisObject->m_withScopeStructure.visit(visitor);
@@ -1425,7 +1430,6 @@ void JSGlobalObject::visitChildren(JSCell* cell, SlotVisitor& visitor)
     visitor.append(thisObject->m_proxyObjectStructure);
     visitor.append(thisObject->m_callableProxyObjectStructure);
     visitor.append(thisObject->m_proxyRevokeStructure);
-    visitor.append(thisObject->m_moduleLoaderStructure);
     
     visitor.append(thisObject->m_arrayBufferPrototype);
     visitor.append(thisObject->m_arrayBufferStructure);
@@ -1434,9 +1438,10 @@ void JSGlobalObject::visitChildren(JSCell* cell, SlotVisitor& visitor)
     visitor.append(thisObject->m_sharedArrayBufferStructure);
 #endif
 
-#define VISIT_SIMPLE_TYPE(CapitalName, lowerName, properName, instanceType, jsName, prototypeBase) \
-    visitor.append(thisObject->m_ ## lowerName ## Prototype); \
-    visitor.append(thisObject->m_ ## properName ## Structure); \
+#define VISIT_SIMPLE_TYPE(CapitalName, lowerName, properName, instanceType, jsName, prototypeBase) do { \
+        visitor.append(thisObject->m_ ## lowerName ## Prototype); \
+        visitor.append(thisObject->m_ ## properName ## Structure); \
+    } while (0);
 
     FOR_EACH_SIMPLE_BUILTIN_TYPE(VISIT_SIMPLE_TYPE)
     if (UNLIKELY(Options::useBigInt()))
@@ -1581,6 +1586,19 @@ const HashSet<String>& JSGlobalObject::intlNumberFormatAvailableLocales()
         }
     }
     return m_intlNumberFormatAvailableLocales;
+}
+
+const HashSet<String>& JSGlobalObject::intlPluralRulesAvailableLocales()
+{
+    if (m_intlPluralRulesAvailableLocales.isEmpty()) {
+        int32_t count = uloc_countAvailable();
+        for (int32_t i = 0; i < count; ++i) {
+            String locale(uloc_getAvailable(i));
+            convertICULocaleToBCP47LanguageTag(locale);
+            m_intlPluralRulesAvailableLocales.add(locale);
+        }
+    }
+    return m_intlPluralRulesAvailableLocales;
 }
 #endif // ENABLE(INTL)
 

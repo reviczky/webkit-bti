@@ -96,6 +96,15 @@ struct MultiPutByOffsetData {
     bool reallocatesStorage() const;
 };
 
+struct MatchStructureVariant {
+    RegisteredStructure structure;
+    bool result;
+};
+
+struct MatchStructureData {
+    Vector<MatchStructureVariant, 2> variants;
+};
+
 struct NewArrayBufferData {
     union {
         struct {
@@ -431,6 +440,7 @@ public:
     }
 
     void remove(Graph&);
+    void removeWithoutChecks();
 
     void convertToCheckStructure(RegisteredStructureSet* set)
     {
@@ -451,11 +461,8 @@ public:
         children.setChild1(Edge(structure, CellUse));
     }
     
-    void replaceWith(Graph& graph, Node* other)
-    {
-        remove(graph);
-        setReplacement(other);
-    }
+    void replaceWith(Graph&, Node* other);
+    void replaceWithWithoutChecks(Node* other);
 
     void convertToIdentity();
     void convertToIdentityOn(Node*);
@@ -562,11 +569,11 @@ public:
     
     void convertToMultiGetByOffset(MultiGetByOffsetData* data)
     {
-        ASSERT(m_op == GetById || m_op == GetByIdFlush || m_op == GetByIdDirect || m_op == GetByIdDirectFlush);
+        RELEASE_ASSERT(m_op == GetById || m_op == GetByIdFlush || m_op == GetByIdDirect || m_op == GetByIdDirectFlush);
         m_opInfo = data;
         child1().setUseKind(CellUse);
         m_op = MultiGetByOffset;
-        ASSERT(m_flags & NodeMustGenerate);
+        RELEASE_ASSERT(m_flags & NodeMustGenerate);
     }
     
     void convertToPutByOffset(StorageAccessData& data, Edge storage, Edge base)
@@ -744,6 +751,15 @@ public:
     {
         setOp(SetRegExpObjectLastIndex);
         m_opInfo = false;
+    }
+
+    void convertToInById(unsigned identifierNumber)
+    {
+        ASSERT(m_op == InByVal);
+        setOpAndDefaultFlags(InById);
+        children.setChild2(Edge());
+        m_opInfo = identifierNumber;
+        m_opInfo2 = OpInfoWrapper();
     }
     
     JSValue asJSValue()
@@ -1012,6 +1028,7 @@ public:
         case PutSetterById:
         case PutGetterSetterById:
         case DeleteById:
+        case InById:
         case GetDynamicVar:
         case PutDynamicVar:
         case ResolveScopeForHoistingFuncDeclInEval:
@@ -1855,6 +1872,17 @@ public:
         return *m_opInfo.as<MultiPutByOffsetData*>();
     }
     
+    bool hasMatchStructureData()
+    {
+        return op() == MatchStructure;
+    }
+    
+    MatchStructureData& matchStructureData()
+    {
+        ASSERT(hasMatchStructureData());
+        return *m_opInfo.as<MatchStructureData*>();
+    }
+    
     bool hasObjectMaterializationData()
     {
         switch (op()) {
@@ -1969,7 +1997,7 @@ public:
         case GetIndexedPropertyStorage:
         case GetArrayLength:
         case GetVectorLength:
-        case In:
+        case InByVal:
         case PutByValDirect:
         case PutByVal:
         case PutByValAlias:

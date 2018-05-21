@@ -105,6 +105,18 @@ static void testWebViewWebContextLifetime(WebViewTest* test, gconstpointer)
     g_object_unref(webContext2);
 }
 
+static void testWebViewCloseQuickly(WebViewTest* test, gconstpointer)
+{
+    auto webView = Test::adoptView(Test::createWebView());
+    test->assertObjectIsDeletedWhenTestFinishes(G_OBJECT(webView.get()));
+    g_idle_add([](gpointer userData) -> gboolean {
+        static_cast<WebViewTest*>(userData)->quitMainLoop();
+        return G_SOURCE_REMOVE;
+    }, test);
+    g_main_loop_run(test->m_mainLoop);
+    webView = nullptr;
+}
+
 #if PLATFORM(WPE)
 static void testWebViewWebBackend(Test* test, gconstpointer)
 {
@@ -116,7 +128,12 @@ static void testWebViewWebBackend(Test* test, gconstpointer)
         // initialize
         [](void*) { },
         // get_renderer_host_fd
-        [](void*) -> int { return -1; }
+        [](void*) -> int { return -1; },
+        // padding
+        nullptr,
+        nullptr,
+        nullptr,
+        nullptr
     };
 
     // User provided backend with default deleter (we don't have a way to check the backend will be actually freed).
@@ -424,7 +441,9 @@ public:
 #if ENABLE(FULLSCREEN_API)
 static void testWebViewFullScreen(FullScreenClientTest* test, gconstpointer)
 {
+#if PLATFORM(GTK)
     test->showInWindowAndWaitUntilMapped();
+#endif
     test->loadHtml("<html><body>FullScreen test</body></html>", 0);
     test->waitUntilLoadFinished();
     test->requestFullScreenAndWaitUntilEnteredFullScreen();
@@ -1198,6 +1217,7 @@ void beforeAll()
 
     WebViewTest::add("WebKitWebView", "web-context", testWebViewWebContext);
     WebViewTest::add("WebKitWebView", "web-context-lifetime", testWebViewWebContextLifetime);
+    WebViewTest::add("WebKitWebView", "close-quickly", testWebViewCloseQuickly);
 #if PLATFORM(WPE)
     Test::add("WebKitWebView", "backend", testWebViewWebBackend);
 #endif

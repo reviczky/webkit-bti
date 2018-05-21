@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2018 Apple Inc. All rights reserved.
  *           (C) 2006 Alexey Proskuryakov (ap@nypop.com)
  * Copyright (C) 2007 Samuel Weinig (sam@webkit.org)
  * Copyright (C) 2010 Google Inc. All rights reserved.
@@ -34,6 +34,8 @@
 #include "CSSGradientValue.h"
 #include "CSSPropertyNames.h"
 #include "CSSValuePool.h"
+#include "Chrome.h"
+#include "ChromeClient.h"
 #include "DateTimeChooser.h"
 #include "Document.h"
 #include "Editor.h"
@@ -53,6 +55,7 @@
 #include "KeyboardEvent.h"
 #include "LocalizedStrings.h"
 #include "MouseEvent.h"
+#include "Page.h"
 #include "PlatformMouseEvent.h"
 #include "RenderTextControlSingleLine.h"
 #include "RenderTheme.h"
@@ -100,7 +103,6 @@ const int maxSavedResults = 256;
 HTMLInputElement::HTMLInputElement(const QualifiedName& tagName, Document& document, HTMLFormElement* form, bool createdByParser)
     : HTMLTextFormControlElement(tagName, document, form)
     , m_size(defaultSize)
-    , m_maxResults(-1)
     , m_isChecked(false)
     , m_reflectsCheckedAttribute(true)
     , m_isIndeterminate(false)
@@ -123,10 +125,12 @@ HTMLInputElement::HTMLInputElement(const QualifiedName& tagName, Document& docum
     , m_hasTouchEventHandler(false)
 #endif
     , m_isSpellcheckDisabledExceptTextReplacement(false)
+{
     // m_inputType is lazily created when constructed by the parser to avoid constructing unnecessarily a text inputType and
     // its shadow subtree, just to destroy them when the |type| attribute gets set by the parser to something else than 'text'.
-    , m_inputType(createdByParser ? nullptr : InputType::createText(*this))
-{
+    if (!createdByParser)
+        m_inputType = InputType::createText(*this);
+
     ASSERT(hasTagName(inputTag));
     setHasCustomStyleResolveCallbacks();
 }
@@ -149,7 +153,8 @@ HTMLImageLoader& HTMLInputElement::ensureImageLoader()
 
 void HTMLInputElement::didAddUserAgentShadowRoot(ShadowRoot&)
 {
-    m_inputType->createShadowSubtree();
+    Ref<InputType> protectedInputType(*m_inputType);
+    protectedInputType->createShadowSubtree();
     updateInnerTextElementEditability();
 }
 
@@ -483,6 +488,16 @@ void HTMLInputElement::setType(const AtomicString& type)
     setAttributeWithoutSynchronization(typeAttr, type);
 }
 
+void HTMLInputElement::resignStrongPasswordAppearance()
+{
+    if (!hasAutoFillStrongPasswordButton())
+        return;
+    setAutoFilled(false);
+    setShowAutoFillButton(AutoFillButtonType::None);
+    if (auto* page = document().page())
+        page->chrome().client().inputElementDidResignStrongPasswordAppearance(*this);
+}
+
 void HTMLInputElement::updateType()
 {
     ASSERT(m_inputType);
@@ -492,6 +507,7 @@ void HTMLInputElement::updateType()
         return;
 
     removeFromRadioButtonGroup();
+    resignStrongPasswordAppearance();
 
     bool didStoreValue = m_inputType->storesValueSeparateFromAttribute();
     bool willStoreValue = newType->storesValueSeparateFromAttribute();
@@ -615,7 +631,8 @@ bool HTMLInputElement::canHaveSelection() const
 
 void HTMLInputElement::accessKeyAction(bool sendMouseEvents)
 {
-    m_inputType->accessKeyAction(sendMouseEvents);
+    Ref<InputType> protectedInputType(*m_inputType);
+    protectedInputType->accessKeyAction(sendMouseEvents);
 }
 
 bool HTMLInputElement::isPresentationAttribute(const QualifiedName& name) const
@@ -672,6 +689,7 @@ inline void HTMLInputElement::initializeInputType()
 void HTMLInputElement::parseAttribute(const QualifiedName& name, const AtomicString& value)
 {
     ASSERT(m_inputType);
+    Ref<InputType> protectedInputType(*m_inputType);
 
     if (name == nameAttr) {
         removeFromRadioButtonGroup();
@@ -879,6 +897,7 @@ void HTMLInputElement::setActivatedSubmit(bool flag)
 
 bool HTMLInputElement::appendFormData(DOMFormData& formData, bool multipart)
 {
+    Ref<InputType> protectedInputType(*m_inputType);
     return m_inputType->isFormDataAppendable() && m_inputType->appendFormData(formData, multipart);
 }
 
@@ -1049,6 +1068,10 @@ ExceptionOr<void> HTMLInputElement::setValue(const String& value, TextFieldEvent
     setLastChangeWasNotUserEdit();
     setFormControlValueMatchesRenderer(false);
     m_inputType->setValue(sanitizedValue, valueChanged, eventBehavior);
+
+    bool wasModifiedProgrammatically = eventBehavior == DispatchNoEvent;
+    if (wasModifiedProgrammatically)
+        resignStrongPasswordAppearance();
     return { };
 }
 

@@ -549,13 +549,6 @@ void WebChromeClient::scroll(const IntSize& scrollDelta, const IntRect& scrollRe
     m_page.drawingArea()->scroll(intersection(scrollRect, clipRect), scrollDelta);
 }
 
-#if USE(COORDINATED_GRAPHICS)
-void WebChromeClient::delegatedScrollRequested(const IntPoint& scrollOffset)
-{
-    m_page.pageDidRequestScroll(scrollOffset);
-}
-#endif
-
 IntPoint WebChromeClient::screenToRootView(const IntPoint& point) const
 {
     return m_page.screenToRootView(point);
@@ -935,9 +928,13 @@ bool WebChromeClient::layerTreeStateIsFrozen() const
 RefPtr<ScrollingCoordinator> WebChromeClient::createScrollingCoordinator(Page& page) const
 {
     ASSERT_UNUSED(page, m_page.corePage() == &page);
+#if PLATFORM(COCOA)
     if (m_page.drawingArea()->type() != DrawingAreaTypeRemoteLayerTree)
         return nullptr;
     return RemoteScrollingCoordinator::create(&m_page);
+#else
+    return nullptr;
+#endif
 }
 
 #endif
@@ -1027,6 +1024,11 @@ FloatSize WebChromeClient::overrideScreenSize() const
 }
 
 #endif
+
+void WebChromeClient::dispatchDisabledAdaptationsDidChange(const OptionSet<DisabledAdaptations>& disabledAdaptations) const
+{
+    m_page.disabledAdaptationsDidChange(disabledAdaptations);
+}
 
 void WebChromeClient::dispatchViewportPropertiesDidChange(const ViewportArguments& viewportArguments) const
 {
@@ -1171,6 +1173,14 @@ bool WebChromeClient::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Vector<
 
 #endif
 
+String WebChromeClient::signedPublicKeyAndChallengeString(unsigned keySizeIndex, const String& challengeString, const WebCore::URL& url) const
+{
+    String result;
+    if (!WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::SignedPublicKeyAndChallengeString(keySizeIndex, challengeString, url), Messages::WebPageProxy::SignedPublicKeyAndChallengeString::Reply(result), m_page.pageID()))
+        return emptyString();
+    return result;
+}
+
 #if ENABLE(TELEPHONE_NUMBER_DETECTION) && PLATFORM(MAC)
 
 void WebChromeClient::handleTelephoneNumberClick(const String& number, const IntPoint& point)
@@ -1209,6 +1219,18 @@ void WebChromeClient::handleAutoFillButtonClick(HTMLInputElement& inputElement)
 
     // Notify the UIProcess.
     m_page.send(Messages::WebPageProxy::HandleAutoFillButtonClick(UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
+}
+
+void WebChromeClient::inputElementDidResignStrongPasswordAppearance(HTMLInputElement& inputElement)
+{
+    RefPtr<API::Object> userData;
+
+    // Notify the bundle client.
+    auto nodeHandle = InjectedBundleNodeHandle::getOrCreate(inputElement);
+    m_page.injectedBundleUIClient().didResignInputElementStrongPasswordAppearance(m_page, nodeHandle.get(), userData);
+
+    // Notify the UIProcess.
+    m_page.send(Messages::WebPageProxy::DidResignInputElementStrongPasswordAppearance { UserData { WebProcess::singleton().transformObjectsToHandles(userData.get()).get() } });
 }
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS)
@@ -1267,14 +1289,14 @@ void WebChromeClient::didInvalidateDocumentMarkerRects()
 }
 
 #if HAVE(CFNETWORK_STORAGE_PARTITIONING)
-void WebChromeClient::hasStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t pageID, WTF::CompletionHandler<void (bool)>&& callback)
+void WebChromeClient::hasStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t, CompletionHandler<void(bool)>&& callback)
 {
-    m_page.hasStorageAccess(WTFMove(subFrameHost), WTFMove(topFrameHost), frameID, pageID, WTFMove(callback));
+    m_page.hasStorageAccess(WTFMove(subFrameHost), WTFMove(topFrameHost), frameID, WTFMove(callback));
 }
 
-void WebChromeClient::requestStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t pageID, WTF::CompletionHandler<void (bool)>&& callback)
+void WebChromeClient::requestStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t, CompletionHandler<void(bool)>&& callback)
 {
-    m_page.requestStorageAccess(WTFMove(subFrameHost), WTFMove(topFrameHost), frameID, pageID, WTFMove(callback));
+    m_page.requestStorageAccess(WTFMove(subFrameHost), WTFMove(topFrameHost), frameID, WTFMove(callback));
 }
 #endif
 

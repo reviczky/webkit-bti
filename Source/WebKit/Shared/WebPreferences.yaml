@@ -99,11 +99,6 @@ CSSAnimationTriggersEnabled:
   webcoreName: animationTriggersEnabled
   condition: ENABLE(CSS_ANIMATIONS_LEVEL_2)
 
-CSSAnimationsAndCSSTransitionsBackedByWebAnimationsEnabled:
-  type: bool
-  defaultValue: false
-  webcoreBinding: RuntimeEnabledFeatures
-
 ForceFTPDirectoryListings:
   type: bool
   defaultValue: false
@@ -638,6 +633,10 @@ VisualViewportEnabled:
   type: bool
   defaultValue: true
 
+LayoutViewportHeightExpansionFactor:
+  type: double
+  defaultValue: DEFAULT_VISUAL_VIEWPORT_HEIGHT_EXPANSION_FACTOR
+
 NeedsStorageAccessFromFileURLsQuirk:
   type: bool
   defaultValue: true
@@ -662,7 +661,9 @@ MenuItemElementEnabled:
 
 EncryptedMediaAPIEnabled:
   type: bool
-  defaultValue: false
+  defaultValue: true
+  humanReadableName: "Modern Encrypted Media API"
+  humanReadableDescription: "Modern Encrypted Media API"
   webcoreBinding: RuntimeEnabledFeatures
   condition: ENABLE(ENCRYPTED_MEDIA)
 
@@ -777,7 +778,7 @@ DataTransferItemsEnabled:
 CustomPasteboardDataEnabled:
   type: bool
   defaultValue: defaultCustomPasteboardDataEnabled()
-  humanReadableName: "Custom pateboard data"
+  humanReadableName: "Custom pasteboard data"
   humanReadableDescription: "Enable custom clipboard types and better security model for clipboard API."
   webcoreBinding: RuntimeEnabledFeatures
 
@@ -1076,11 +1077,25 @@ CacheAPIEnabled:
   category: experimental
   webcoreBinding: RuntimeEnabledFeatures
 
+ColorFilterEnabled:
+  type: bool
+  defaultValue: DEFAULT_EXPERIMENTAL_FEATURES_ENABLED
+  humanReadableName: "Color Filter"
+  humanReadableDescription: "Enable CSS Color Filter property"
+  category: experimental
+
 ConstantPropertiesEnabled:
   type: bool
   defaultValue: DEFAULT_EXPERIMENTAL_FEATURES_ENABLED
   humanReadableName: "Constant Properties"
-  humanReadableDescription: "Enable CSS constant() properties"
+  humanReadableDescription: "Enable CSS constant() values"
+  category: experimental
+
+CrossOriginOptionsSupportEnabled:
+  type: bool
+  defaultValue: true
+  humanReadableName: "Cross-Origin-Options HTTP Header"
+  humanReadableDescription: "Enable support for Cross-Origin-Options HTTP Header"
   category: experimental
 
 SpringTimingFunctionEnabled:
@@ -1179,6 +1194,14 @@ WebAnimationsEnabled:
   category: experimental
   webcoreBinding: RuntimeEnabledFeatures
 
+WebAnimationsCSSIntegrationEnabled:
+  type: bool
+  defaultValue: false
+  humanReadableName: "Web Animations and CSS Integration"
+  humanReadableDescription: "Expose CSS Animations and CSS Transitions through getAnimations()"
+  category: experimental
+  webcoreBinding: RuntimeEnabledFeatures
+
 WebGL2Enabled:
   type: bool
   defaultValue: false
@@ -1227,5 +1250,46 @@ RestrictedHTTPResponseAccess:
     defaultValue: true
     humanReadableName: "Restricted HTTP Response Access to Web Process"
     humanReadableDescription: "Restricted HTTP Response Access to Web Process"
+    category: experimental
+    webcoreBinding: RuntimeEnabledFeatures
+
+FromOriginResponseHeaderEnabled:
+    type: bool
+    defaultValue: false
+    humanReadableName: "From-Origin Response Header"
+    humanReadableDescription: "Support for the From-Origin Response Header"
+    category: experimental
+    webcoreBinding: RuntimeEnabledFeatures
+
+WebGLCompressedTextureASTCSupportEnabled:
+  type: bool
+  defaultValue: false
+  humanReadableName: "ASTC Texture Support"
+  humanReadableDescription: "Support for ASTC compressed texture formats in WebGL"
+  category: experimental
+  webcoreBinding: RuntimeEnabledFeatures
+
+StorageAccessPromptsEnabled:
+    type: bool
+    defaultValue: true
+    humanReadableName: "Prompt for Storage Access API Requests"
+    humanReadableDescription: "Prompt the user when Storage Access API calls are made"
+    category: experimental
+    webcoreBinding: RuntimeEnabledFeatures
+
+ServerTimingEnabled:
+    type: bool
+    defaultValue: false
+    humanReadableName: "Server Timing"
+    humanReadableDescription: "Enable Server Timing API"
+    category: experimental
+    webcoreBinding: RuntimeEnabledFeatures
+    webcoreName: serverTimingEnabled
+
+DisabledAdaptationsMetaTagEnabled:
+    type: bool
+    defaultValue: DISABLED_ADAPTATIONS_META_TAG_ENABLED
+    humanReadableName: "disabled-adaptations"
+    humanReadableDescription: "Enable the 'disabled-adaptations' meta tag"
     category: experimental
     webcoreBinding: RuntimeEnabledFeatures

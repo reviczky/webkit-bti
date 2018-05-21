@@ -262,56 +262,37 @@ void JITCompiler::link(LinkBuffer& linkBuffer)
     for (unsigned i = 0; i < m_calls.size(); ++i)
         linkBuffer.link(m_calls[i].m_call, m_calls[i].m_function);
 
-    for (unsigned i = m_getByIds.size(); i--;)
-        m_getByIds[i].finalize(linkBuffer);
-    for (unsigned i = m_getByIdsWithThis.size(); i--;)
-        m_getByIdsWithThis[i].finalize(linkBuffer);
-    for (unsigned i = m_putByIds.size(); i--;)
-        m_putByIds[i].finalize(linkBuffer);
+    finalizeInlineCaches(m_getByIds, linkBuffer);
+    finalizeInlineCaches(m_getByIdsWithThis, linkBuffer);
+    finalizeInlineCaches(m_putByIds, linkBuffer);
+    finalizeInlineCaches(m_inByIds, linkBuffer);
+    finalizeInlineCaches(m_instanceOfs, linkBuffer);
 
-    for (unsigned i = 0; i < m_ins.size(); ++i) {
-        StructureStubInfo& info = *m_ins[i].m_stubInfo;
-
-        CodeLocationLabel<JITStubRoutinePtrTag> start = linkBuffer.locationOf<JITStubRoutinePtrTag>(m_ins[i].m_jump);
-        info.patch.start = start;
-
-        ptrdiff_t inlineSize = MacroAssembler::differenceBetweenCodePtr(
-            start, linkBuffer.locationOf<JSInternalPtrTag>(m_ins[i].m_done));
-        RELEASE_ASSERT(inlineSize >= 0);
-        info.patch.inlineSize = inlineSize;
-
-        info.patch.deltaFromStartToSlowPathCallLocation = MacroAssembler::differenceBetweenCodePtr(
-            start, linkBuffer.locationOf<JSInternalPtrTag>(m_ins[i].m_slowPathGenerator->call()));
-
-        info.patch.deltaFromStartToSlowPathStart = MacroAssembler::differenceBetweenCodePtr(
-            start, linkBuffer.locationOf<JSInternalPtrTag>(m_ins[i].m_slowPathGenerator->label()));
-    }
-    
     auto linkCallThunk = FunctionPtr<NoPtrTag>(vm()->getCTIStub(linkCallThunkGenerator).retaggedCode<NoPtrTag>());
     for (auto& record : m_jsCalls) {
         CallLinkInfo& info = *record.info;
         linkBuffer.link(record.slowCall, linkCallThunk);
         info.setCallLocations(
-            CodeLocationLabel<JSEntryPtrTag>(linkBuffer.locationOfNearCall<JSEntryPtrTag>(record.slowCall)),
-            CodeLocationLabel<JSEntryPtrTag>(linkBuffer.locationOf<JSEntryPtrTag>(record.targetToCheck)),
-            linkBuffer.locationOfNearCall<JSEntryPtrTag>(record.fastCall));
+            CodeLocationLabel<JSInternalPtrTag>(linkBuffer.locationOfNearCall<JSInternalPtrTag>(record.slowCall)),
+            CodeLocationLabel<JSInternalPtrTag>(linkBuffer.locationOf<JSInternalPtrTag>(record.targetToCheck)),
+            linkBuffer.locationOfNearCall<JSInternalPtrTag>(record.fastCall));
     }
     
     for (JSDirectCallRecord& record : m_jsDirectCalls) {
         CallLinkInfo& info = *record.info;
         linkBuffer.link(record.call, linkBuffer.locationOf<NoPtrTag>(record.slowPath));
         info.setCallLocations(
-            CodeLocationLabel<JSEntryPtrTag>(),
-            linkBuffer.locationOf<JSEntryPtrTag>(record.slowPath),
-            linkBuffer.locationOfNearCall<JSEntryPtrTag>(record.call));
+            CodeLocationLabel<JSInternalPtrTag>(),
+            linkBuffer.locationOf<JSInternalPtrTag>(record.slowPath),
+            linkBuffer.locationOfNearCall<JSInternalPtrTag>(record.call));
     }
     
     for (JSDirectTailCallRecord& record : m_jsDirectTailCalls) {
         CallLinkInfo& info = *record.info;
         info.setCallLocations(
-            linkBuffer.locationOf<JSEntryPtrTag>(record.patchableJump),
-            linkBuffer.locationOf<JSEntryPtrTag>(record.slowPath),
-            linkBuffer.locationOfNearCall<JSEntryPtrTag>(record.call));
+            linkBuffer.locationOf<JSInternalPtrTag>(record.patchableJump),
+            linkBuffer.locationOf<JSInternalPtrTag>(record.slowPath),
+            linkBuffer.locationOfNearCall<JSInternalPtrTag>(record.call));
     }
     
     MacroAssemblerCodeRef<JITThunkPtrTag> osrExitThunk = vm()->getCTIStub(osrExitGenerationThunkGenerator);
@@ -446,6 +427,7 @@ void JITCompiler::compileFunction()
     makeCatchOSREntryBuffer();
 
     setStartOfCode();
+    Label entryLabel(this);
     compileEntry();
 
     // === Function header code generation ===
@@ -492,22 +474,28 @@ void JITCompiler::compileFunction()
     // determine the correct number of arguments have been passed, or have already checked).
     // In cases where an arity check is necessary, we enter here.
     // FIXME: change this from a cti call to a DFG style operation (normal C calling conventions).
-    m_arityCheck = label();
-    compileEntry();
+    Call callArityFixup;
+    Label arityCheck;
+    bool requiresArityFixup = m_codeBlock->numParameters() != 1;
+    if (requiresArityFixup) {
+        arityCheck = label();
+        compileEntry();
 
-    load32(AssemblyHelpers::payloadFor((VirtualRegister)CallFrameSlot::argumentCount), GPRInfo::regT1);
-    branch32(AboveOrEqual, GPRInfo::regT1, TrustedImm32(m_codeBlock->numParameters())).linkTo(fromArityCheck, this);
-    emitStoreCodeOrigin(CodeOrigin(0));
-    if (maxFrameExtentForSlowPathCall)
-        addPtr(TrustedImm32(-maxFrameExtentForSlowPathCall), stackPointerRegister);
-    m_speculative->callOperationWithCallFrameRollbackOnException(m_codeBlock->m_isConstructor ? operationConstructArityCheck : operationCallArityCheck, GPRInfo::regT0);
-    if (maxFrameExtentForSlowPathCall)
-        addPtr(TrustedImm32(maxFrameExtentForSlowPathCall), stackPointerRegister);
-    branchTest32(Zero, GPRInfo::returnValueGPR).linkTo(fromArityCheck, this);
-    emitStoreCodeOrigin(CodeOrigin(0));
-    move(GPRInfo::returnValueGPR, GPRInfo::argumentGPR0);
-    Call callArityFixup = nearCall();
-    jump(fromArityCheck);
+        load32(AssemblyHelpers::payloadFor((VirtualRegister)CallFrameSlot::argumentCount), GPRInfo::regT1);
+        branch32(AboveOrEqual, GPRInfo::regT1, TrustedImm32(m_codeBlock->numParameters())).linkTo(fromArityCheck, this);
+        emitStoreCodeOrigin(CodeOrigin(0));
+        if (maxFrameExtentForSlowPathCall)
+            addPtr(TrustedImm32(-maxFrameExtentForSlowPathCall), stackPointerRegister);
+        m_speculative->callOperationWithCallFrameRollbackOnException(m_codeBlock->m_isConstructor ? operationConstructArityCheck : operationCallArityCheck, GPRInfo::regT0);
+        if (maxFrameExtentForSlowPathCall)
+            addPtr(TrustedImm32(maxFrameExtentForSlowPathCall), stackPointerRegister);
+        branchTest32(Zero, GPRInfo::returnValueGPR).linkTo(fromArityCheck, this);
+        emitStoreCodeOrigin(CodeOrigin(0));
+        move(GPRInfo::returnValueGPR, GPRInfo::argumentGPR0);
+        callArityFixup = nearCall();
+        jump(fromArityCheck);
+    } else
+        arityCheck = entryLabel;
 
     // Generate slow path code.
     m_speculative->runSlowPathGenerators(m_pcToCodeOriginMapBuilder);
@@ -532,11 +520,12 @@ void JITCompiler::compileFunction()
     m_jitCode->shrinkToFit();
     codeBlock()->shrinkToFit(CodeBlock::LateShrink);
 
-    linkBuffer->link(callArityFixup, FunctionPtr<JITThunkPtrTag>(vm()->getCTIStub(arityFixupGenerator).code()));
+    if (requiresArityFixup)
+        linkBuffer->link(callArityFixup, FunctionPtr<JITThunkPtrTag>(vm()->getCTIStub(arityFixupGenerator).code()));
 
     disassemble(*linkBuffer);
 
-    MacroAssemblerCodePtr<JSEntryPtrTag> withArityCheck = linkBuffer->locationOf<JSEntryPtrTag>(m_arityCheck);
+    MacroAssemblerCodePtr<JSEntryPtrTag> withArityCheck = linkBuffer->locationOf<JSEntryPtrTag>(arityCheck);
 
     m_graph.m_plan.finalizer = std::make_unique<JITFinalizer>(
         m_graph.m_plan, m_jitCode.releaseNonNull(), WTFMove(linkBuffer), withArityCheck);

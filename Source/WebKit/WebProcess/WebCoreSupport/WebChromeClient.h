@@ -109,10 +109,6 @@ private:
     void invalidateContentsForSlowScroll(const WebCore::IntRect&) final;
     void scroll(const WebCore::IntSize& scrollDelta, const WebCore::IntRect& scrollRect, const WebCore::IntRect& clipRect) final;
 
-#if USE(COORDINATED_GRAPHICS)
-    void delegatedScrollRequested(const WebCore::IntPoint& scrollOffset) final;
-#endif
-
     WebCore::IntPoint screenToRootView(const WebCore::IntPoint&) const final;
     WebCore::IntRect rootViewToScreen(const WebCore::IntRect&) const final;
 
@@ -177,7 +173,7 @@ private:
     void removeScrollingLayer(WebCore::Node*, PlatformLayer* scrollingLayer, PlatformLayer* contentsLayer) final;
 
     void webAppOrientationsUpdated() final;
-    void showPlaybackTargetPicker(bool hasVideo) final;
+    void showPlaybackTargetPicker(bool hasVideo, WebCore::RouteSharingPolicy, const String&) final;
 
     Seconds eventThrottlingDelay() final;
 #endif
@@ -215,7 +211,13 @@ private:
     bool adjustLayerFlushThrottling(WebCore::LayerFlushThrottleState::Flags) final;
 
     void contentRuleListNotification(const WebCore::URL&, const HashSet<std::pair<String, String>>&) final;
-    
+
+#if PLATFORM(WIN)
+    void setLastSetCursorToCurrentCursor() final { }
+    void AXStartFrameLoad() final { }
+    void AXFinishFrameLoad() final { }
+#endif
+
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
     RefPtr<WebCore::DisplayRefreshMonitor> createDisplayRefreshMonitor(WebCore::PlatformDisplayID) const final;
 #endif
@@ -282,6 +284,7 @@ private:
     WebCore::FloatSize overrideScreenSize() const final;
 #endif
 
+    void dispatchDisabledAdaptationsDidChange(const OptionSet<WebCore::DisabledAdaptations>&) const final;
     void dispatchViewportPropertiesDidChange(const WebCore::ViewportArguments&) const final;
 
     void notifyScrollerThumbIsVisibleInRect(const WebCore::IntRect&) final;
@@ -319,6 +322,8 @@ private:
     bool unwrapCryptoKey(const Vector<uint8_t>&, Vector<uint8_t>&) const final;
 #endif
 
+    String signedPublicKeyAndChallengeString(unsigned keySizeIndex, const String& challengeString, const WebCore::URL&) const final;
+
 #if ENABLE(TELEPHONE_NUMBER_DETECTION) && PLATFORM(MAC)
     void handleTelephoneNumberClick(const String& number, const WebCore::IntPoint&) final;
 #endif
@@ -331,6 +336,8 @@ private:
     bool shouldDispatchFakeMouseMoveEvents() const final;
 
     void handleAutoFillButtonClick(WebCore::HTMLInputElement&) final;
+
+    void inputElementDidResignStrongPasswordAppearance(WebCore::HTMLInputElement&) final;
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS)
     void addPlaybackTargetPickerClient(uint64_t /*contextId*/) final;

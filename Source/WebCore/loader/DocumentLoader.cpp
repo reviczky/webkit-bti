@@ -60,10 +60,13 @@
 #include "InspectorInstrumentation.h"
 #include "LinkIconCollector.h"
 #include "LinkIconType.h"
+#include "LoaderStrategy.h"
 #include "Logging.h"
 #include "MemoryCache.h"
 #include "NetworkLoadMetrics.h"
 #include "Page.h"
+#include "PingLoader.h"
+#include "PlatformStrategies.h"
 #include "PolicyChecker.h"
 #include "ProgressTracker.h"
 #include "ResourceHandle.h"
@@ -72,6 +75,7 @@
 #include "SchemeRegistry.h"
 #include "ScriptableDocumentParser.h"
 #include "SecurityPolicy.h"
+#include "SecurityPolicyViolationEvent.h"
 #include "ServiceWorker.h"
 #include "ServiceWorkerProvider.h"
 #include "Settings.h"
@@ -604,6 +608,8 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
     if (m_frame->isMainFrame())
         newRequest.setFirstPartyForCookies(newRequest.url());
 
+    FrameLoader::addSameSiteInfoToRequestIfNeeded(newRequest, m_frame->document());
+
     if (!didReceiveRedirectResponse)
         frameLoader()->client().dispatchWillChangeDocument();
 
@@ -660,7 +666,7 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
         return;
     }
 
-    frameLoader()->policyChecker().checkNavigationPolicy(ResourceRequest(newRequest), didReceiveRedirectResponse, WTFMove(navigationPolicyCompletionHandler));
+    frameLoader()->policyChecker().checkNavigationPolicy(WTFMove(newRequest), didReceiveRedirectResponse, WTFMove(navigationPolicyCompletionHandler));
 }
 
 bool DocumentLoader::tryLoadingRequestFromApplicationCache()
@@ -723,6 +729,7 @@ void DocumentLoader::restartLoadingDueToServiceWorkerRegistrationChange(Resource
 
 void DocumentLoader::stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(unsigned long identifier, const ResourceResponse& response)
 {
+    Ref<DocumentLoader> protectedThis { *this };
     InspectorInstrumentation::continueAfterXFrameOptionsDenied(*m_frame, identifier, *this, response);
     m_frame->document()->enforceSandboxFlags(SandboxOrigin);
     if (HTMLFrameOwnerElement* ownerElement = m_frame->ownerElement())
@@ -762,25 +769,26 @@ void DocumentLoader::responseReceived(const ResourceResponse& response, Completi
     ASSERT(m_identifierForLoadWithoutResourceLoader || m_mainResource);
     unsigned long identifier = m_identifierForLoadWithoutResourceLoader ? m_identifierForLoadWithoutResourceLoader : m_mainResource->identifier();
     ASSERT(identifier);
-    
-    auto url = response.url();
 
-    ContentSecurityPolicy contentSecurityPolicy(SecurityOrigin::create(url), m_frame);
-    contentSecurityPolicy.didReceiveHeaders(ContentSecurityPolicyResponseHeaders(response));
-    if (!contentSecurityPolicy.allowFrameAncestors(*m_frame, url)) {
-        stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(identifier, response);
-        return;
-    }
-
-    const auto& commonHeaders = response.httpHeaderFields().commonHeaders();
-    auto it = commonHeaders.find(HTTPHeaderName::XFrameOptions);
-    if (it != commonHeaders.end()) {
-        String content = it->value;
-        if (frameLoader()->shouldInterruptLoadForXFrameOptions(content, url, identifier)) {
-            String message = "Refused to display '" + url.stringCenterEllipsizedToLength() + "' in a frame because it set 'X-Frame-Options' to '" + content + "'.";
-            m_frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, message, identifier);
+    if (m_substituteData.isValid() || !platformStrategies()->loaderStrategy()->havePerformedSecurityChecks(response)) {
+        auto url = response.url();
+        ContentSecurityPolicy contentSecurityPolicy(URL { url }, this);
+        contentSecurityPolicy.didReceiveHeaders(ContentSecurityPolicyResponseHeaders { response }, m_request.httpReferrer());
+        if (!contentSecurityPolicy.allowFrameAncestors(*m_frame, url)) {
             stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(identifier, response);
             return;
+        }
+
+        const auto& commonHeaders = response.httpHeaderFields().commonHeaders();
+        auto it = commonHeaders.find(HTTPHeaderName::XFrameOptions);
+        if (it != commonHeaders.end()) {
+            String content = it->value;
+            if (frameLoader()->shouldInterruptLoadForXFrameOptions(content, url, identifier)) {
+                String message = "Refused to display '" + url.stringCenterEllipsizedToLength() + "' in a frame because it set 'X-Frame-Options' to '" + content + "'.";
+                m_frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, message, identifier);
+                stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(identifier, response);
+                return;
+            }
         }
     }
 
@@ -1672,6 +1680,8 @@ void DocumentLoader::startLoadingMainResource(ShouldContinue shouldContinue)
     ASSERT(!m_loadingMainResource);
     m_loadingMainResource = true;
 
+    Ref<DocumentLoader> protectedThis(*this);
+
     if (maybeLoadEmpty()) {
         RELEASE_LOG_IF_ALLOWED("startLoadingMainResource: Returning empty document (frame = %p, main = %d)", m_frame, m_frame ? m_frame->isMainFrame() : false);
         return;
@@ -1685,12 +1695,14 @@ void DocumentLoader::startLoadingMainResource(ShouldContinue shouldContinue)
     // If not, it would be great to remove this line of code.
     // Note that currently, some requests may have incorrect extra fields even if this function has been called,
     // because we pass a wrong loadType (see FIXME in addExtraFieldsToMainResourceRequest()).
+    // If we remove this line of code then ResourceRequestBase does not need to track whether isSameSite
+    // is unspecified.
     frameLoader()->addExtraFieldsToMainResourceRequest(m_request);
 
     ASSERT(timing().startTime());
     ASSERT(timing().fetchStart());
 
-    willSendRequest(ResourceRequest(m_request), ResourceResponse(), shouldContinue, [this, protectedThis = makeRef(*this)] (ResourceRequest&& request) mutable {
+    willSendRequest(ResourceRequest(m_request), ResourceResponse(), shouldContinue, [this, protectedThis = WTFMove(protectedThis)] (ResourceRequest&& request) mutable {
         m_request = request;
 
         // willSendRequest() may lead to our Frame being detached or cancelling the load via nulling the ResourceRequest.
@@ -1728,12 +1740,12 @@ void DocumentLoader::startLoadingMainResource(ShouldContinue shouldContinue)
 void DocumentLoader::loadMainResource(ResourceRequest&& request)
 {
     static NeverDestroyed<ResourceLoaderOptions> mainResourceLoadOptions(SendCallbacks, SniffContent, BufferData, StoredCredentialsPolicy::Use, ClientCredentialPolicy::MayAskClientForCredentials, FetchOptions::Credentials::Include, SkipSecurityCheck, FetchOptions::Mode::Navigate, IncludeCertificateInfo, ContentSecurityPolicyImposition::SkipPolicyCheck, DefersLoadingPolicy::AllowDefersLoading, CachingPolicy::AllowCaching);
-    CachedResourceRequest mainResourceRequest(ResourceRequest(request), mainResourceLoadOptions);
+    CachedResourceRequest mainResourceRequest(WTFMove(request), mainResourceLoadOptions);
     if (!m_frame->isMainFrame() && m_frame->document()) {
         // If we are loading the main resource of a subframe, use the cache partition of the main document.
         mainResourceRequest.setDomainForCachePartition(*m_frame->document());
     } else {
-        auto origin = SecurityOrigin::create(request.url());
+        auto origin = SecurityOrigin::create(mainResourceRequest.resourceRequest().url());
         origin->setStorageBlockingPolicy(frameLoader()->frame().settings().storageBlockingPolicy());
         mainResourceRequest.setDomainForCachePartition(origin->domainForCachePartition());
     }
@@ -1779,20 +1791,19 @@ void DocumentLoader::loadMainResource(ResourceRequest&& request)
 
     if (!mainResourceLoader()) {
         m_identifierForLoadWithoutResourceLoader = m_frame->page()->progress().createUniqueIdentifier();
-        frameLoader()->notifier().assignIdentifierToInitialRequest(m_identifierForLoadWithoutResourceLoader, this, request);
-        frameLoader()->notifier().dispatchWillSendRequest(this, m_identifierForLoadWithoutResourceLoader, request, ResourceResponse());
+        frameLoader()->notifier().assignIdentifierToInitialRequest(m_identifierForLoadWithoutResourceLoader, this, mainResourceRequest.resourceRequest());
+        frameLoader()->notifier().dispatchWillSendRequest(this, m_identifierForLoadWithoutResourceLoader, mainResourceRequest.resourceRequest(), ResourceResponse());
     }
 
     becomeMainResourceClient();
 
     // A bunch of headers are set when the underlying ResourceLoader is created, and m_request needs to include those.
-    if (mainResourceLoader())
-        request = mainResourceLoader()->originalRequest();
+    ResourceRequest updatedRequest = mainResourceLoader() ? mainResourceLoader()->originalRequest() : mainResourceRequest.resourceRequest();
     // If there was a fragment identifier on m_request, the cache will have stripped it. m_request should include
     // the fragment identifier, so add that back in.
-    if (equalIgnoringFragmentIdentifier(m_request.url(), request.url()))
-        request.setURL(m_request.url());
-    setRequest(request);
+    if (equalIgnoringFragmentIdentifier(m_request.url(), updatedRequest.url()))
+        updatedRequest.setURL(m_request.url());
+    setRequest(updatedRequest);
 }
 
 void DocumentLoader::cancelPolicyCheckIfNeeded()
@@ -2003,5 +2014,20 @@ PreviewConverter* DocumentLoader::previewConverter() const
 }
 
 #endif
+
+void DocumentLoader::addConsoleMessage(MessageSource messageSource, MessageLevel messageLevel, const String& message, unsigned long requestIdentifier)
+{
+    static_cast<ScriptExecutionContext*>(m_frame->document())->addConsoleMessage(messageSource, messageLevel, message, requestIdentifier);
+}
+
+void DocumentLoader::sendCSPViolationReport(URL&& reportURL, Ref<FormData>&& report)
+{
+    PingLoader::sendViolationReport(*m_frame, WTFMove(reportURL), WTFMove(report), ViolationReportType::ContentSecurityPolicy);
+}
+
+void DocumentLoader::dispatchSecurityPolicyViolationEvent(Ref<SecurityPolicyViolationEvent>&& violationEvent)
+{
+    m_frame->document()->enqueueDocumentEvent(WTFMove(violationEvent));
+}
 
 } // namespace WebCore

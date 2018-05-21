@@ -51,6 +51,7 @@ bool doesGC(Graph& graph, Node* node)
     case Identity:
     case IdentityWithProfile:
     case GetCallee:
+    case SetCallee:
     case GetArgumentCountIncludingThis:
     case SetArgumentCountIncludingThis:
     case GetRestLength:
@@ -153,6 +154,7 @@ bool doesGC(Graph& graph, Node* node)
     case CompareEq:
     case CompareStrictEq:
     case CompareEqPtr:
+    case SameValue:
     case Call:
     case DirectCall:
     case TailCallInlinedCaller:
@@ -191,7 +193,8 @@ bool doesGC(Graph& graph, Node* node)
     case CallStringConstructor:
     case NumberToStringWithRadix:
     case NumberToStringWithValidRadixConstant:
-    case In:
+    case InByVal:
+    case InById:
     case HasOwnProperty:
     case Jump:
     case Branch:
@@ -308,6 +311,7 @@ bool doesGC(Graph& graph, Node* node)
     case AtomicsSub:
     case AtomicsXor:
     case AtomicsIsLockFree:
+    case MatchStructure:
         return false;
 
     case PushWithScope:

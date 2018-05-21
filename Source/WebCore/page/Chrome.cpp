@@ -92,13 +92,6 @@ void Chrome::scroll(const IntSize& scrollDelta, const IntRect& rectToScroll, con
     InspectorInstrumentation::didScroll(m_page);
 }
 
-#if USE(COORDINATED_GRAPHICS)
-void Chrome::delegatedScrollRequested(const IntPoint& scrollPoint)
-{
-    m_client.delegatedScrollRequested(scrollPoint);
-}
-#endif
-
 IntPoint Chrome::screenToRootView(const IntPoint& point) const
 {
     return m_client.screenToRootView(point);
@@ -453,6 +446,11 @@ FloatSize Chrome::availableScreenSize() const
 FloatSize Chrome::overrideScreenSize() const
 {
     return m_client.overrideScreenSize();
+}
+
+void Chrome::dispatchDisabledAdaptationsDidChange(const OptionSet<DisabledAdaptations>& disabledAdaptations) const
+{
+    m_client.dispatchDisabledAdaptationsDidChange(disabledAdaptations);
 }
 
 void Chrome::dispatchViewportPropertiesDidChange(const ViewportArguments& arguments) const

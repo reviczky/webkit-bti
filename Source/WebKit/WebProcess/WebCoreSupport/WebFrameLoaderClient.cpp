@@ -738,8 +738,6 @@ void WebFrameLoaderClient::dispatchDecidePolicyForResponse(const ResourceRespons
         return;
     }
 
-    ASSERT(!m_isDecidingNavigationPolicyDecision);
-
     RefPtr<API::Object> userData;
 
     // Notify the bundle client.
@@ -749,7 +747,7 @@ void WebFrameLoaderClient::dispatchDecidePolicyForResponse(const ResourceRespons
         return;
     }
 
-    bool canShowMIMEType = webPage->canShowMIMEType(response.mimeType());
+    bool canShowResponse = webPage->canShowResponse(response);
 
     WebCore::Frame* coreFrame = m_frame->coreFrame();
     auto* policyDocumentLoader = coreFrame ? coreFrame->loader().provisionalDocumentLoader() : nullptr;
@@ -757,7 +755,7 @@ void WebFrameLoaderClient::dispatchDecidePolicyForResponse(const ResourceRespons
     
     Ref<WebFrame> protector(*m_frame);
     uint64_t listenerID = m_frame->setUpPolicyListener(WTFMove(function), WebFrame::ForNavigationAction::No);
-    if (!webPage->send(Messages::WebPageProxy::DecidePolicyForResponse(m_frame->frameID(), SecurityOriginData::fromFrame(coreFrame), navigationID, response, request, canShowMIMEType, listenerID, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get()))))
+    if (!webPage->send(Messages::WebPageProxy::DecidePolicyForResponse(m_frame->frameID(), SecurityOriginData::fromFrame(coreFrame), navigationID, response, request, canShowResponse, listenerID, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get()))))
         m_frame->didReceivePolicyDecision(listenerID, PolicyAction::Ignore, 0, { }, { });
 }
 
@@ -825,10 +823,6 @@ void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const Navigat
 
     LOG(Loading, "WebProcess %i - dispatchDecidePolicyForNavigationAction to request url %s", getCurrentProcessID(), request.url().string().utf8().data());
 
-    m_isDecidingNavigationPolicyDecision = true;
-    if (m_frame->isMainFrame())
-        webPage->didStartNavigationPolicyCheck();
-
     // Always ignore requests with empty URLs. 
     if (request.isEmpty()) {
         function(PolicyAction::Ignore);
@@ -870,8 +864,10 @@ void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const Navigat
     navigationActionData.shouldOpenExternalURLsPolicy = navigationAction.shouldOpenExternalURLsPolicy();
     navigationActionData.downloadAttribute = navigationAction.downloadAttribute();
     navigationActionData.isRedirect = didReceiveRedirectResponse;
+    navigationActionData.treatAsSameOriginNavigation = navigationAction.treatAsSameOriginNavigation();
     navigationActionData.isCrossOriginWindowOpenNavigation = navigationAction.isCrossOriginWindowOpenNavigation();
     navigationActionData.opener = navigationAction.opener();
+    navigationActionData.targetBackForwardItemIdentifier = navigationAction.targetBackForwardItemIdentifier();
 
     WebCore::Frame* coreFrame = m_frame->coreFrame();
     if (!coreFrame)
@@ -908,25 +904,8 @@ void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const Navigat
         m_frame->didReceivePolicyDecision(listenerID, PolicyAction::Ignore, 0, { }, { });
 }
 
-void WebFrameLoaderClient::didDecidePolicyForNavigationAction()
-{
-    if (!m_isDecidingNavigationPolicyDecision)
-        return;
-
-    m_isDecidingNavigationPolicyDecision = false;
-
-    if (!m_frame || !m_frame->isMainFrame())
-        return;
-
-    if (auto* webPage = m_frame->page())
-        webPage->didCompleteNavigationPolicyCheck();
-}
-
 void WebFrameLoaderClient::cancelPolicyCheck()
 {
-    if (m_isDecidingNavigationPolicyDecision)
-        didDecidePolicyForNavigationAction();
-
     m_frame->invalidatePolicyListener();
 }
 
@@ -1136,13 +1115,6 @@ bool WebFrameLoaderClient::shouldGoToHistoryItem(HistoryItem* item) const
     WebPage* webPage = m_frame->page();
     if (!webPage)
         return false;
-    
-    uint64_t itemID = WebBackForwardListProxy::idForItem(item);
-    if (!itemID) {
-        // We should never be considering navigating to an item that is not actually in the back/forward list.
-        ASSERT_NOT_REACHED();
-        return false;
-    }
 
     RefPtr<InjectedBundleBackForwardListItem> bundleItem = InjectedBundleBackForwardListItem::create(item);
     RefPtr<API::Object> userData;
@@ -1152,7 +1124,7 @@ bool WebFrameLoaderClient::shouldGoToHistoryItem(HistoryItem* item) const
     if (!shouldGoToBackForwardListItem)
         return false;
 
-    webPage->send(Messages::WebPageProxy::WillGoToBackForwardListItem(itemID, bundleItem->isInPageCache(), UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
+    webPage->send(Messages::WebPageProxy::WillGoToBackForwardListItem(item->identifier(), bundleItem->isInPageCache(), UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
     return true;
 }
 
@@ -1340,8 +1312,6 @@ void WebFrameLoaderClient::provisionalLoadStarted()
     if (!webPage)
         return;
 
-    ASSERT(!m_isDecidingNavigationPolicyDecision);
-
     if (m_frame->isMainFrame()) {
         webPage->didStartPageTransition();
         m_didCompletePageTransition = false;
@@ -1451,10 +1421,10 @@ void WebFrameLoaderClient::transitionToCommittedForNewPage()
         webPage->fixedLayoutSize(), fixedVisibleContentRect, shouldUseFixedLayout,
         horizontalScrollbarMode, horizontalLock, verticalScrollbarMode, verticalLock);
 
-    if (int minimumLayoutWidth = webPage->minimumLayoutSize().width()) {
-        int minimumLayoutHeight = std::max(webPage->minimumLayoutSize().height(), 1);
+    if (int viewLayoutWidth = webPage->viewLayoutSize().width()) {
+        int viewLayoutHeight = std::max(webPage->viewLayoutSize().height(), 1);
         int maximumSize = std::numeric_limits<int>::max();
-        m_frame->coreFrame()->view()->enableAutoSizeMode(true, IntSize(minimumLayoutWidth, minimumLayoutHeight), IntSize(maximumSize, maximumSize));
+        m_frame->coreFrame()->view()->enableAutoSizeMode(true, IntSize(viewLayoutWidth, viewLayoutHeight), IntSize(maximumSize, maximumSize));
 
         if (webPage->autoSizingShouldExpandToViewHeight())
             m_frame->coreFrame()->view()->setAutoSizeFixedMinimumHeight(webPage->size().height());
@@ -1874,6 +1844,15 @@ void WebFrameLoaderClient::finishedLoadingIcon(uint64_t callbackIdentifier, Shar
         else
             webPage->send(Messages::WebPageProxy::FinishedLoadingIcon(callbackID, { nullptr, 0 }));
     }
+}
+
+void WebFrameLoaderClient::didCreateWindow(DOMWindow& window)
+{
+    auto* webPage = m_frame->page();
+    if (!webPage)
+        return;
+
+    webPage->send(Messages::WebPageProxy::DidCreateWindow(m_frame->frameID(), window.identifier()));
 }
 
 #if ENABLE(APPLICATION_MANIFEST)

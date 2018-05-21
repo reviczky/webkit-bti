@@ -146,39 +146,35 @@ void JIT::emit_op_instanceof(Instruction* currentInstruction)
     // We use regT0 for baseVal since we will be done with this first, and we can then use it for the result.
     emitGetVirtualRegister(value, regT2);
     emitGetVirtualRegister(proto, regT1);
-
+    
     // Check that proto are cells. baseVal must be a cell - this is checked by the get_by_id for Symbol.hasInstance.
     emitJumpSlowCaseIfNotJSCell(regT2, value);
     emitJumpSlowCaseIfNotJSCell(regT1, proto);
 
-    // Check that prototype is an object
-    addSlowCase(emitJumpIfCellNotObject(regT1));
+    JITInstanceOfGenerator gen(
+        m_codeBlock, CodeOrigin(m_bytecodeOffset), CallSiteIndex(m_bytecodeOffset),
+        RegisterSet::stubUnavailableRegisters(),
+        regT0, // result
+        regT2, // value
+        regT1, // proto
+        regT3, regT4); // scratch
+    gen.generateFastPath(*this);
+    m_instanceOfs.append(gen);
     
-    // Optimistically load the result true, and start looping.
-    // Initially, regT1 still contains proto and regT2 still contains value.
-    // As we loop regT2 will be updated with its prototype, recursively walking the prototype chain.
-    move(TrustedImm64(JSValue::encode(jsBoolean(true))), regT0);
-    Label loop(this);
-
-    addSlowCase(branch8(Equal, Address(regT2, JSCell::typeInfoTypeOffset()), TrustedImm32(ProxyObjectType)));
-
-    // Load the prototype of the object in regT2.  If this is equal to regT1 - WIN!
-    // Otherwise, check if we've hit null - if we have then drop out of the loop, if not go again.
-    emitLoadStructure(*vm(), regT2, regT4, regT3);
-    load64(Address(regT4, Structure::prototypeOffset()), regT4);
-    auto hasMonoProto = branchTest64(NonZero, regT4);
-    load64(Address(regT2, offsetRelativeToBase(knownPolyProtoOffset)), regT4);
-    hasMonoProto.link(this);
-    move(regT4, regT2);
-    Jump isInstance = branchPtr(Equal, regT2, regT1);
-    emitJumpIfJSCell(regT2).linkTo(loop, this);
-
-    // We get here either by dropping out of the loop, or if value was not an Object.  Result is false.
-    move(TrustedImm64(JSValue::encode(jsBoolean(false))), regT0);
-
-    // isInstance jumps right down to here, to skip setting the result to false (it has already set true).
-    isInstance.link(this);
     emitPutVirtualRegister(dst);
+}
+
+void JIT::emitSlow_op_instanceof(Instruction* currentInstruction, Vector<SlowCaseEntry>::iterator& iter)
+{
+    linkAllSlowCases(iter);
+    
+    int resultVReg = currentInstruction[1].u.operand;
+    
+    JITInstanceOfGenerator& gen = m_instanceOfs[m_instanceOfIndex++];
+    
+    Label coldPathBegin = label();
+    Call call = callOperation(operationInstanceOfOptimize, resultVReg, gen.stubInfo(), regT2, regT1);
+    gen.reportSlowPathCall(coldPathBegin, call);
 }
 
 void JIT::emit_op_instanceof_custom(Instruction*)
@@ -205,7 +201,7 @@ void JIT::emit_op_is_undefined(Instruction* currentInstruction)
     int value = currentInstruction[2].u.operand;
     
     emitGetVirtualRegister(value, regT0);
-    Jump isCell = emitJumpIfJSCell(regT0);
+    Jump isCell = branchIfCell(regT0);
 
     compare64(Equal, regT0, TrustedImm32(ValueUndefined), regT0);
     Jump done = jump();
@@ -257,7 +253,7 @@ void JIT::emit_op_is_cell_with_type(Instruction* currentInstruction)
     int type = currentInstruction[3].u.operand;
 
     emitGetVirtualRegister(value, regT0);
-    Jump isNotCell = emitJumpIfNotJSCell(regT0);
+    Jump isNotCell = branchIfNotCell(regT0);
 
     compare8(Equal, Address(regT0, JSCell::typeInfoTypeOffset()), TrustedImm32(type), regT0);
     emitTagBool(regT0);
@@ -276,7 +272,7 @@ void JIT::emit_op_is_object(Instruction* currentInstruction)
     int value = currentInstruction[2].u.operand;
 
     emitGetVirtualRegister(value, regT0);
-    Jump isNotCell = emitJumpIfNotJSCell(regT0);
+    Jump isNotCell = branchIfNotCell(regT0);
 
     compare8(AboveOrEqual, Address(regT0, JSCell::typeInfoTypeOffset()), TrustedImm32(ObjectType), regT0);
     emitTagBool(regT0);
@@ -311,8 +307,8 @@ void JIT::emit_op_to_primitive(Instruction* currentInstruction)
 
     emitGetVirtualRegister(src, regT0);
     
-    Jump isImm = emitJumpIfNotJSCell(regT0);
-    addSlowCase(emitJumpIfCellObject(regT0));
+    Jump isImm = branchIfNotCell(regT0);
+    addSlowCase(branchIfObject(regT0));
     isImm.link(this);
 
     if (dst != src)
@@ -362,7 +358,7 @@ void JIT::emit_op_jeq_null(Instruction* currentInstruction)
     unsigned target = currentInstruction[2].u.operand;
 
     emitGetVirtualRegister(src, regT0);
-    Jump isImmediate = emitJumpIfNotJSCell(regT0);
+    Jump isImmediate = branchIfNotCell(regT0);
 
     // First, handle JSCell cases - check MasqueradesAsUndefined bit on the structure.
     Jump isNotMasqueradesAsUndefined = branchTest8(Zero, Address(regT0, JSCell::typeInfoFlagsOffset()), TrustedImm32(MasqueradesAsUndefined));
@@ -385,7 +381,7 @@ void JIT::emit_op_jneq_null(Instruction* currentInstruction)
     unsigned target = currentInstruction[2].u.operand;
 
     emitGetVirtualRegister(src, regT0);
-    Jump isImmediate = emitJumpIfNotJSCell(regT0);
+    Jump isImmediate = branchIfNotCell(regT0);
 
     // First, handle JSCell cases - check MasqueradesAsUndefined bit on the structure.
     addJump(branchTest8(Zero, Address(regT0, JSCell::typeInfoFlagsOffset()), TrustedImm32(MasqueradesAsUndefined)), target);
@@ -483,15 +479,15 @@ void JIT::compileOpStrictEq(Instruction* currentInstruction, CompileOpStrictEqTy
     // Jump slow if both are cells (to cover strings).
     move(regT0, regT2);
     or64(regT1, regT2);
-    addSlowCase(emitJumpIfJSCell(regT2));
+    addSlowCase(branchIfCell(regT2));
     
     // Jump slow if either is a double. First test if it's an integer, which is fine, and then test
     // if it's a double.
-    Jump leftOK = emitJumpIfInt(regT0);
-    addSlowCase(emitJumpIfNumber(regT0));
+    Jump leftOK = branchIfInt32(regT0);
+    addSlowCase(branchIfNumber(regT0));
     leftOK.link(this);
-    Jump rightOK = emitJumpIfInt(regT1);
-    addSlowCase(emitJumpIfNumber(regT1));
+    Jump rightOK = branchIfInt32(regT1);
+    addSlowCase(branchIfNumber(regT1));
     rightOK.link(this);
 
     if (type == CompileOpStrictEqType::StrictEq)
@@ -524,15 +520,15 @@ void JIT::compileOpStrictEqJump(Instruction* currentInstruction, CompileOpStrict
     // Jump slow if both are cells (to cover strings).
     move(regT0, regT2);
     or64(regT1, regT2);
-    addSlowCase(emitJumpIfJSCell(regT2));
+    addSlowCase(branchIfCell(regT2));
 
     // Jump slow if either is a double. First test if it's an integer, which is fine, and then test
     // if it's a double.
-    Jump leftOK = emitJumpIfInt(regT0);
-    addSlowCase(emitJumpIfNumber(regT0));
+    Jump leftOK = branchIfInt32(regT0);
+    addSlowCase(branchIfNumber(regT0));
     leftOK.link(this);
-    Jump rightOK = emitJumpIfInt(regT1);
-    addSlowCase(emitJumpIfNumber(regT1));
+    Jump rightOK = branchIfInt32(regT1);
+    addSlowCase(branchIfNumber(regT1));
     rightOK.link(this);
 
     if (type == CompileOpStrictEqType::StrictEq)
@@ -575,7 +571,7 @@ void JIT::emit_op_to_number(Instruction* currentInstruction)
     int srcVReg = currentInstruction[2].u.operand;
     emitGetVirtualRegister(srcVReg, regT0);
     
-    addSlowCase(emitJumpIfNotNumber(regT0));
+    addSlowCase(branchIfNotNumber(regT0));
 
     emitValueProfilingSite();
     if (srcVReg != dstVReg)
@@ -587,8 +583,8 @@ void JIT::emit_op_to_string(Instruction* currentInstruction)
     int srcVReg = currentInstruction[2].u.operand;
     emitGetVirtualRegister(srcVReg, regT0);
 
-    addSlowCase(emitJumpIfNotJSCell(regT0));
-    addSlowCase(branch8(NotEqual, Address(regT0, JSCell::typeInfoTypeOffset()), TrustedImm32(StringType)));
+    addSlowCase(branchIfNotCell(regT0));
+    addSlowCase(branchIfNotString(regT0));
 
     emitPutVirtualRegister(currentInstruction[1].u.operand);
 }
@@ -599,8 +595,8 @@ void JIT::emit_op_to_object(Instruction* currentInstruction)
     int srcVReg = currentInstruction[2].u.operand;
     emitGetVirtualRegister(srcVReg, regT0);
 
-    addSlowCase(emitJumpIfNotJSCell(regT0));
-    addSlowCase(branch8(Below, Address(regT0, JSCell::typeInfoTypeOffset()), TrustedImm32(ObjectType)));
+    addSlowCase(branchIfNotCell(regT0));
+    addSlowCase(branchIfNotObject(regT0));
 
     emitValueProfilingSite();
     if (srcVReg != dstVReg)
@@ -728,7 +724,7 @@ void JIT::emit_op_eq_null(Instruction* currentInstruction)
     int src1 = currentInstruction[2].u.operand;
 
     emitGetVirtualRegister(src1, regT0);
-    Jump isImmediate = emitJumpIfNotJSCell(regT0);
+    Jump isImmediate = branchIfNotCell(regT0);
 
     Jump isMasqueradesAsUndefined = branchTest8(NonZero, Address(regT0, JSCell::typeInfoFlagsOffset()), TrustedImm32(MasqueradesAsUndefined));
     move(TrustedImm32(0), regT0);
@@ -760,7 +756,7 @@ void JIT::emit_op_neq_null(Instruction* currentInstruction)
     int src1 = currentInstruction[2].u.operand;
 
     emitGetVirtualRegister(src1, regT0);
-    Jump isImmediate = emitJumpIfNotJSCell(regT0);
+    Jump isImmediate = branchIfNotCell(regT0);
 
     Jump isMasqueradesAsUndefined = branchTest8(NonZero, Address(regT0, JSCell::typeInfoFlagsOffset()), TrustedImm32(MasqueradesAsUndefined));
     move(TrustedImm32(1), regT0);
@@ -814,7 +810,7 @@ void JIT::emit_op_to_this(Instruction* currentInstruction)
 
     emitJumpSlowCaseIfNotJSCell(regT1);
 
-    addSlowCase(branch8(NotEqual, Address(regT1, JSCell::typeInfoTypeOffset()), TrustedImm32(FinalObjectType)));
+    addSlowCase(branchIfNotType(regT1, FinalObjectType));
     loadPtr(cachedStructure, regT2);
     addSlowCase(branchTestPtr(Zero, regT2));
     load32(Address(regT2, Structure::structureIDOffset()), regT2);
@@ -834,7 +830,7 @@ void JIT::emit_op_create_this(Instruction* currentInstruction)
     RegisterID scratchReg = regT3;
 
     emitGetVirtualRegister(callee, calleeReg);
-    addSlowCase(branch8(NotEqual, Address(calleeReg, JSCell::typeInfoTypeOffset()), TrustedImm32(JSFunctionType)));
+    addSlowCase(branchIfNotFunction(calleeReg));
     loadPtr(Address(calleeReg, JSFunction::offsetOfRareData()), rareDataReg);
     addSlowCase(branchTestPtr(Zero, rareDataReg));
     xorPtr(TrustedImmPtr(JSFunctionPoison::key()), rareDataReg);
@@ -862,7 +858,7 @@ void JIT::emit_op_create_this(Instruction* currentInstruction)
 void JIT::emit_op_check_tdz(Instruction* currentInstruction)
 {
     emitGetVirtualRegister(currentInstruction[1].u.operand, regT0);
-    addSlowCase(branchTest64(Zero, regT0));
+    addSlowCase(branchIfEmpty(regT0));
 }
 
 
@@ -903,20 +899,6 @@ void JIT::emitSlow_op_jneq(Instruction* currentInstruction, Vector<SlowCaseEntry
     unsigned target = currentInstruction[3].u.operand;
     callOperation(operationCompareEq, regT0, regT1);
     emitJumpSlowToHot(branchTest32(Zero, returnValueGPR), target);
-}
-
-void JIT::emitSlow_op_instanceof(Instruction* currentInstruction, Vector<SlowCaseEntry>::iterator& iter)
-{
-    linkAllSlowCases(iter);
-
-    auto& bytecode = *reinterpret_cast<OpInstanceof*>(currentInstruction);
-    int dst = bytecode.dst();
-    int value = bytecode.value();
-    int proto = bytecode.prototype();
-
-    emitGetVirtualRegister(value, regT0);
-    emitGetVirtualRegister(proto, regT1);
-    callOperation(operationInstanceOf, dst, regT0, regT1);
 }
 
 void JIT::emitSlow_op_instanceof_custom(Instruction* currentInstruction, Vector<SlowCaseEntry>::iterator& iter)
@@ -1058,7 +1040,7 @@ void JIT::emitNewFuncExprCommon(Instruction* currentInstruction)
     int dst = currentInstruction[1].u.operand;
 #if USE(JSVALUE64)
     emitGetVirtualRegister(currentInstruction[2].u.operand, regT0);
-    notUndefinedScope = branch64(NotEqual, regT0, TrustedImm64(JSValue::encode(jsUndefined())));
+    notUndefinedScope = branchIfNotUndefined(regT0);
     store64(TrustedImm64(JSValue::encode(jsUndefined())), Address(callFrameRegister, sizeof(Register) * dst));
 #else
     emitLoadPayload(currentInstruction[2].u.operand, regT0);
@@ -1333,25 +1315,23 @@ void JIT::emit_op_profile_type(Instruction* currentInstruction)
 
     JumpList jumpToEnd;
 
-    jumpToEnd.append(branchTest64(Zero, regT0));
+    jumpToEnd.append(branchIfEmpty(regT0));
 
     // Compile in a predictive type check, if possible, to see if we can skip writing to the log.
     // These typechecks are inlined to match those of the 64-bit JSValue type checks.
     if (cachedTypeLocation->m_lastSeenType == TypeUndefined)
-        jumpToEnd.append(branch64(Equal, regT0, TrustedImm64(JSValue::encode(jsUndefined()))));
+        jumpToEnd.append(branchIfUndefined(regT0));
     else if (cachedTypeLocation->m_lastSeenType == TypeNull)
-        jumpToEnd.append(branch64(Equal, regT0, TrustedImm64(JSValue::encode(jsNull()))));
-    else if (cachedTypeLocation->m_lastSeenType == TypeBoolean) {
-        move(regT0, regT1);
-        and64(TrustedImm32(~1), regT1);
-        jumpToEnd.append(branch64(Equal, regT1, TrustedImm64(ValueFalse)));
-    } else if (cachedTypeLocation->m_lastSeenType == TypeAnyInt)
-        jumpToEnd.append(emitJumpIfInt(regT0));
+        jumpToEnd.append(branchIfNull(regT0));
+    else if (cachedTypeLocation->m_lastSeenType == TypeBoolean)
+        jumpToEnd.append(branchIfBoolean(regT0, regT1));
+    else if (cachedTypeLocation->m_lastSeenType == TypeAnyInt)
+        jumpToEnd.append(branchIfInt32(regT0));
     else if (cachedTypeLocation->m_lastSeenType == TypeNumber)
-        jumpToEnd.append(emitJumpIfNumber(regT0));
+        jumpToEnd.append(branchIfNumber(regT0));
     else if (cachedTypeLocation->m_lastSeenType == TypeString) {
-        Jump isNotCell = emitJumpIfNotJSCell(regT0);
-        jumpToEnd.append(branch8(Equal, Address(regT0, JSCell::typeInfoTypeOffset()), TrustedImm32(StringType)));
+        Jump isNotCell = branchIfNotCell(regT0);
+        jumpToEnd.append(branchIfString(regT0));
         isNotCell.link(this);
     }
 
@@ -1365,7 +1345,7 @@ void JIT::emit_op_profile_type(Instruction* currentInstruction)
     store64(regT0, Address(regT1, TypeProfilerLog::LogEntry::valueOffset()));
 
     // Store the structureID of the cell if T0 is a cell, otherwise, store 0 on the log entry.
-    Jump notCell = emitJumpIfNotJSCell(regT0);
+    Jump notCell = branchIfNotCell(regT0);
     load32(Address(regT0, JSCell::structureIDOffset()), regT0);
     store32(regT0, Address(regT1, TypeProfilerLog::LogEntry::structureIDOffset()));
     Jump skipIsCell = jump();

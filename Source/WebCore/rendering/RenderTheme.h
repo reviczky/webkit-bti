@@ -141,7 +141,7 @@ public:
     // List box selection colors
     Color activeListBoxSelectionBackgroundColor() const;
     Color activeListBoxSelectionForegroundColor() const;
-    Color inactiveListBoxSelectionBackgroundColor(bool) const;
+    Color inactiveListBoxSelectionBackgroundColor(OptionSet<StyleColor::Options>) const;
     Color inactiveListBoxSelectionForegroundColor() const;
 
     // Highlighting colors for TextMatches.
@@ -246,6 +246,10 @@ public:
     virtual bool shouldMockBoldSystemFontForAccessibility() const { return false; }
     virtual void setShouldMockBoldSystemFontForAccessibility(bool) { }
 
+#if USE(SYSTEM_PREVIEW)
+    virtual void paintSystemPreviewBadge(Image&, const PaintInfo&, const FloatRect&);
+#endif
+
 protected:
     virtual FontCascadeDescription& cachedSystemFontDescription(CSSValueID systemFontID) const;
     virtual void updateCachedSystemFontDescription(CSSValueID systemFontID, FontCascadeDescription&) const = 0;
@@ -257,7 +261,7 @@ protected:
     virtual Color platformInactiveSelectionForegroundColor() const;
 
     virtual Color platformActiveListBoxSelectionBackgroundColor() const;
-    virtual Color platformInactiveListBoxSelectionBackgroundColor(bool) const;
+    virtual Color platformInactiveListBoxSelectionBackgroundColor(OptionSet<StyleColor::Options>) const;
     virtual Color platformActiveListBoxSelectionForegroundColor() const;
     virtual Color platformInactiveListBoxSelectionForegroundColor() const;
 

@@ -165,6 +165,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case GetGlobalObject:
     case StringCharCodeAt:
     case CompareStrictEq:
+    case SameValue:
     case IsEmpty:
     case IsUndefined:
     case IsBoolean:
@@ -544,13 +545,16 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         read(MiscFields);
         def(HeapLocation(IsFunctionLoc, MiscFields, node->child1()), LazyNode(node));
         return;
+        
+    case MatchStructure:
+        read(JSCell_structureID);
+        return;
 
     case ArraySlice:
         read(MiscFields);
         read(JSCell_indexingType);
         read(JSCell_structureID);
         read(JSObject_butterfly);
-        read(JSObject_butterflyMask);
         read(Butterfly_publicLength);
         read(IndexedDoubleProperties);
         read(IndexedInt32Properties);
@@ -566,7 +570,6 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         read(JSCell_indexingType);
         read(JSCell_structureID);
         read(JSObject_butterfly);
-        read(JSObject_butterflyMask);
         read(Butterfly_publicLength);
         switch (node->arrayMode().type()) {
         case Array::Double:
@@ -620,7 +623,8 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case ConstructVarargs:
     case ConstructForwardVarargs:
     case ToPrimitive:
-    case In:
+    case InByVal:
+    case InById:
     case HasOwnProperty:
     case ValueAdd:
     case SetFunctionName:
@@ -637,6 +641,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case ToNumber:
     case NumberToStringWithRadix:
     case CreateThis:
+    case InstanceOf:
         read(World);
         write(Heap);
         return;
@@ -694,6 +699,10 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case GetCallee:
         read(AbstractHeap(Stack, CallFrameSlot::callee));
         def(HeapLocation(StackLoc, AbstractHeap(Stack, CallFrameSlot::callee)), LazyNode(node));
+        return;
+
+    case SetCallee:
+        write(AbstractHeap(Stack, CallFrameSlot::callee));
         return;
         
     case GetArgumentCountIncludingThis: {
@@ -1039,11 +1048,6 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         def(HeapLocation(OverridesHasInstanceLoc, JSCell_typeInfoFlags, node->child1()), LazyNode(node));
         return;
 
-    case InstanceOf:
-        read(JSCell_structureID);
-        def(HeapLocation(InstanceOfLoc, JSCell_structureID, node->child1(), node->child2()), LazyNode(node));
-        return;
-
     case PutStructure:
         read(JSObject_butterfly);
         write(JSCell_structureID);
@@ -1133,7 +1137,6 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         write(JSCell_structureID);
         write(JSCell_indexingType);
         write(JSObject_butterfly);
-        write(JSObject_butterflyMask);
         write(Watchpoint_fire);
         return;
         
@@ -1185,12 +1188,9 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case MultiGetByOffset: {
         read(JSCell_structureID);
         read(JSObject_butterfly);
-        read(JSObject_butterflyMask);
         AbstractHeap heap(NamedProperties, node->multiGetByOffsetData().identifierNumber);
         read(heap);
-        // FIXME: We cannot def() for MultiGetByOffset because CSE is not smart enough to decay it
-        // to a CheckStructure.
-        // https://bugs.webkit.org/show_bug.cgi?id=159859
+        def(HeapLocation(NamedPropertyLoc, heap, node->child1()), LazyNode(node));
         return;
     }
         
@@ -1515,17 +1515,17 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
 
     case RegExpExec:
     case RegExpTest:
-    case RegExpMatchFast:
-        if (node->child2().useKind() == RegExpObjectUse
-            && node->child3().useKind() == StringUse) {
-            read(RegExpState);
-            read(RegExpObject_lastIndex);
-            write(RegExpState);
-            write(RegExpObject_lastIndex);
-            return;
-        }
+        // Even if we've proven known input types as RegExpObject and String,
+        // accessing lastIndex is effectful if it's a global regexp.
         read(World);
         write(Heap);
+        return;
+
+    case RegExpMatchFast:
+        read(RegExpState);
+        read(RegExpObject_lastIndex);
+        write(RegExpState);
+        write(RegExpObject_lastIndex);
         return;
 
     case RegExpExecNonGlobalOrSticky:

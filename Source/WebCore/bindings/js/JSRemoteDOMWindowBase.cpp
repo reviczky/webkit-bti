@@ -26,8 +26,8 @@
 #include "config.h"
 #include "JSRemoteDOMWindowBase.h"
 
-#include "JSDOMWindowProxy.h"
 #include "JSRemoteDOMWindow.h"
+#include "JSWindowProxy.h"
 
 using namespace JSC;
 
@@ -48,9 +48,11 @@ const GlobalObjectMethodTable JSRemoteDOMWindowBase::s_globalObjectMethodTable =
     nullptr, // moduleLoaderEvaluate
     nullptr, // promiseRejectionTracker
     nullptr, // defaultLanguage
+    nullptr, // compileStreaming
+    nullptr, // instantiateStreaming
 };
 
-JSRemoteDOMWindowBase::JSRemoteDOMWindowBase(VM& vm, Structure* structure, RefPtr<RemoteDOMWindow>&& window, JSDOMWindowProxy* proxy)
+JSRemoteDOMWindowBase::JSRemoteDOMWindowBase(VM& vm, Structure* structure, RefPtr<RemoteDOMWindow>&& window, JSWindowProxy* proxy)
     : JSDOMGlobalObject(vm, structure, proxy->world(), &s_globalObjectMethodTable)
     , m_wrapped(WTFMove(window))
 {
@@ -66,16 +68,6 @@ RuntimeFlags JSRemoteDOMWindowBase::javaScriptRuntimeFlags(const JSGlobalObject*
     return RuntimeFlags { };
 }
 
-JSValue toJS(ExecState* state, JSDOMGlobalObject*, RemoteDOMWindow& domWindow)
-{
-    return toJS(state, domWindow);
-}
-
-JSValue toJS(ExecState* state, RemoteDOMWindow& domWindow)
-{
-    return toJS(state, domWindow.frame());
-}
-
 JSRemoteDOMWindow* toJSRemoteDOMWindow(JSC::VM& vm, JSValue value)
 {
     if (!value.isObject())
@@ -86,8 +78,8 @@ JSRemoteDOMWindow* toJSRemoteDOMWindow(JSC::VM& vm, JSValue value)
         const ClassInfo* classInfo = object->classInfo(vm);
         if (classInfo == JSRemoteDOMWindow::info())
             return jsCast<JSRemoteDOMWindow*>(object);
-        if (classInfo == JSDOMWindowProxy::info())
-            return jsDynamicCast<JSRemoteDOMWindow*>(vm, jsCast<JSDOMWindowProxy*>(object)->window());
+        if (classInfo == JSWindowProxy::info())
+            return jsDynamicCast<JSRemoteDOMWindow*>(vm, jsCast<JSWindowProxy*>(object)->window());
         value = object->getPrototypeDirect(vm);
     }
     return nullptr;

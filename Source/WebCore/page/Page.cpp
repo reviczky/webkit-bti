@@ -358,6 +358,14 @@ uint64_t Page::renderTreeSize() const
     return total;
 }
 
+OptionSet<DisabledAdaptations> Page::disabledAdaptations() const
+{
+    if (mainFrame().document())
+        return mainFrame().document()->disabledAdaptations();
+
+    return { };
+}
+
 ViewportArguments Page::viewportArguments() const
 {
     return mainFrame().document() ? mainFrame().document()->viewportArguments() : ViewportArguments();
@@ -1140,7 +1148,7 @@ void Page::setIsVisuallyIdleInternal(bool isVisuallyIdle)
 void Page::handleLowModePowerChange(bool isLowPowerModeEnabled)
 {
     updateScriptedAnimationsThrottlingReason(*this, isLowPowerModeEnabled ? ThrottlingReasonOperation::Add : ThrottlingReasonOperation::Remove, ScriptedAnimationController::ThrottlingReason::LowPowerMode);
-    if (RuntimeEnabledFeatures::sharedFeatures().cssAnimationsAndCSSTransitionsBackedByWebAnimationsEnabled()) {
+    if (RuntimeEnabledFeatures::sharedFeatures().webAnimationsCSSIntegrationEnabled()) {
         forEachDocument([&] (Document& document) {
             if (auto timeline = document.existingTimeline())
                 timeline->updateThrottlingState();
@@ -1257,7 +1265,7 @@ void Page::setDebugger(JSC::Debugger* debugger)
     m_debugger = debugger;
 
     for (Frame* frame = &m_mainFrame.get(); frame; frame = frame->tree().traverseNext())
-        frame->windowProxyController().attachDebugger(m_debugger);
+        frame->windowProxy().attachDebugger(m_debugger);
 }
 
 StorageNamespace* Page::sessionStorage(bool optionalCreate)
@@ -1638,7 +1646,7 @@ void Page::setIsVisibleInternal(bool isVisible)
             view->show();
 
         if (m_settings->hiddenPageCSSAnimationSuspensionEnabled()) {
-            if (RuntimeEnabledFeatures::sharedFeatures().cssAnimationsAndCSSTransitionsBackedByWebAnimationsEnabled()) {
+            if (RuntimeEnabledFeatures::sharedFeatures().webAnimationsCSSIntegrationEnabled()) {
                 forEachDocument([&] (Document& document) {
                     document.timeline().resumeAnimations();
                 });
@@ -1658,7 +1666,7 @@ void Page::setIsVisibleInternal(bool isVisible)
 
     if (!isVisible) {
         if (m_settings->hiddenPageCSSAnimationSuspensionEnabled()) {
-            if (RuntimeEnabledFeatures::sharedFeatures().cssAnimationsAndCSSTransitionsBackedByWebAnimationsEnabled()) {
+            if (RuntimeEnabledFeatures::sharedFeatures().webAnimationsCSSIntegrationEnabled()) {
                 forEachDocument([&] (Document& document) {
                     document.timeline().suspendAnimations();
                 });
@@ -2010,7 +2018,7 @@ void Page::resetSeenMediaEngines()
 void Page::hiddenPageCSSAnimationSuspensionStateChanged()
 {
     if (!isVisible()) {
-        if (RuntimeEnabledFeatures::sharedFeatures().cssAnimationsAndCSSTransitionsBackedByWebAnimationsEnabled()) {
+        if (RuntimeEnabledFeatures::sharedFeatures().webAnimationsCSSIntegrationEnabled()) {
             forEachDocument([&] (Document& document) {
                 if (m_settings->hiddenPageCSSAnimationSuspensionEnabled())
                     document.timeline().suspendAnimations();
@@ -2200,14 +2208,16 @@ void Page::removePlaybackTargetPickerClient(uint64_t contextId)
     chrome().client().removePlaybackTargetPickerClient(contextId);
 }
 
-void Page::showPlaybackTargetPicker(uint64_t contextId, const WebCore::IntPoint& location, bool isVideo)
+void Page::showPlaybackTargetPicker(uint64_t contextId, const WebCore::IntPoint& location, bool isVideo, RouteSharingPolicy routeSharingPolicy, const String& routingContextUID)
 {
 #if PLATFORM(IOS)
     // FIXME: refactor iOS implementation.
     UNUSED_PARAM(contextId);
     UNUSED_PARAM(location);
-    chrome().client().showPlaybackTargetPicker(isVideo);
+    chrome().client().showPlaybackTargetPicker(isVideo, routeSharingPolicy, routingContextUID);
 #else
+    UNUSED_PARAM(routeSharingPolicy);
+    UNUSED_PARAM(routingContextUID);
     chrome().client().showPlaybackTargetPicker(contextId, location, isVideo);
 #endif
 }

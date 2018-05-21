@@ -30,6 +30,7 @@
 #include "JIT.h"
 
 #include "BytecodeGraph.h"
+#include "BytecodeLivenessAnalysis.h"
 #include "CodeBlock.h"
 #include "CodeBlockWithJITType.h"
 #include "DFGCapabilities.h"
@@ -54,8 +55,6 @@
 #include <wtf/GraphNodeWorklist.h>
 #include <wtf/SimpleStats.h>
 
-using namespace std;
-
 namespace JSC {
 namespace JITInternal {
 static constexpr const bool verbose = false;
@@ -79,11 +78,6 @@ JIT::JIT(VM* vm, CodeBlock* codeBlock, unsigned loopOSREntryBytecodeOffset)
     , m_interpreter(vm->interpreter)
     , m_labels(codeBlock ? codeBlock->numberOfInstructions() : 0)
     , m_bytecodeOffset(std::numeric_limits<unsigned>::max())
-    , m_getByIdIndex(UINT_MAX)
-    , m_getByIdWithThisIndex(UINT_MAX)
-    , m_putByIdIndex(UINT_MAX)
-    , m_byValInstructionIndex(UINT_MAX)
-    , m_callLinkInfoIndex(UINT_MAX)
     , m_pcToCodeOriginMapBuilder(*vm)
     , m_canBeOptimized(false)
     , m_shouldEmitProfiling(false)
@@ -219,9 +213,22 @@ void JIT::privateCompileMainPass()
             GraphNodeWorklist<BytecodeBasicBlock*> worklist;
             startBytecodeOffset = UINT_MAX;
             worklist.push(block);
+
             while (BytecodeBasicBlock* block = worklist.pop()) {
                 startBytecodeOffset = std::min(startBytecodeOffset, block->leaderOffset());
                 worklist.pushAll(block->successors());
+
+                // Also add catch blocks for bytecodes that throw.
+                if (m_codeBlock->numberOfExceptionHandlers()) {
+                    for (unsigned bytecodeOffset = block->leaderOffset(); bytecodeOffset < block->leaderOffset() + block->totalLength();) {
+                        OpcodeID opcodeID = Interpreter::getOpcodeID(instructionsBegin[bytecodeOffset].u.opcode);
+                        if (auto* handler = m_codeBlock->handlerForBytecodeOffset(bytecodeOffset))
+                            worklist.push(graph.findBasicBlockWithLeaderOffset(handler->target));
+
+                        unsigned opcodeLength = opcodeLengths[opcodeID];
+                        bytecodeOffset += opcodeLength;
+                    }
+                }
             }
         }
     }
@@ -265,7 +272,7 @@ void JIT::privateCompileMainPass()
         unsigned bytecodeOffset = m_bytecodeOffset;
 
         switch (opcodeID) {
-        DEFINE_SLOW_OP(in)
+        DEFINE_SLOW_OP(in_by_val)
         DEFINE_SLOW_OP(less)
         DEFINE_SLOW_OP(lesseq)
         DEFINE_SLOW_OP(greater)
@@ -329,6 +336,7 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_below)
         DEFINE_OP(op_beloweq)
         DEFINE_OP(op_try_get_by_id)
+        DEFINE_OP(op_in_by_id)
         case op_get_array_length:
         case op_get_by_id_proto_load:
         case op_get_by_id_unset:
@@ -466,6 +474,8 @@ void JIT::privateCompileSlowCases()
     m_getByIdIndex = 0;
     m_getByIdWithThisIndex = 0;
     m_putByIdIndex = 0;
+    m_inByIdIndex = 0;
+    m_instanceOfIndex = 0;
     m_byValInstructionIndex = 0;
     m_callLinkInfoIndex = 0;
     
@@ -508,6 +518,7 @@ void JIT::privateCompileSlowCases()
         DEFINE_SLOWCASE_OP(op_construct)
         DEFINE_SLOWCASE_OP(op_eq)
         DEFINE_SLOWCASE_OP(op_try_get_by_id)
+        DEFINE_SLOWCASE_OP(op_in_by_id)
         case op_get_array_length:
         case op_get_by_id_proto_load:
         case op_get_by_id_unset:
@@ -587,6 +598,8 @@ void JIT::privateCompileSlowCases()
     RELEASE_ASSERT(m_getByIdIndex == m_getByIds.size());
     RELEASE_ASSERT(m_getByIdWithThisIndex == m_getByIdsWithThis.size());
     RELEASE_ASSERT(m_putByIdIndex == m_putByIds.size());
+    RELEASE_ASSERT(m_inByIdIndex == m_inByIds.size());
+    RELEASE_ASSERT(m_instanceOfIndex == m_instanceOfs.size());
     RELEASE_ASSERT(m_callLinkInfoIndex == m_callCompilationInfo.size());
     RELEASE_ASSERT(numberOfValueProfiles == m_codeBlock->numberOfValueProfiles());
 
@@ -720,7 +733,9 @@ void JIT::compileWithoutLinking(JITCompilationEffort effort)
         addPtr(TrustedImm32(-maxFrameExtentForSlowPathCall), stackPointerRegister);
     callOperationWithCallFrameRollbackOnException(operationThrowStackOverflowError, m_codeBlock);
 
-    if (m_codeBlock->codeType() == FunctionCode) {
+    // If the number of parameters is 1, we never require arity fixup.
+    bool requiresArityFixup = m_codeBlock->m_numParameters != 1;
+    if (m_codeBlock->codeType() == FunctionCode && requiresArityFixup) {
         m_arityCheck = label();
         store8(TrustedImm32(0), &m_codeBlock->m_shouldAlwaysBeInlined);
         emitFunctionPrologue();
@@ -746,7 +761,7 @@ void JIT::compileWithoutLinking(JITCompilationEffort effort)
 
         jump(beginLabel);
     } else
-        m_arityCheck = entryLabel; // Not a function.
+        m_arityCheck = entryLabel; // Never require arity fixup.
 
     ASSERT(m_jmpTable.isEmpty());
     
@@ -822,23 +837,22 @@ CompilationResult JIT::link()
         if (record.callee)
             patchBuffer.link(record.from, record.callee);
     }
-
-    for (unsigned i = m_getByIds.size(); i--;)
-        m_getByIds[i].finalize(patchBuffer);
-    for (unsigned i = m_getByIdsWithThis.size(); i--;)
-        m_getByIdsWithThis[i].finalize(patchBuffer);
-    for (unsigned i = m_putByIds.size(); i--;)
-        m_putByIds[i].finalize(patchBuffer);
+    
+    finalizeInlineCaches(m_getByIds, patchBuffer);
+    finalizeInlineCaches(m_getByIdsWithThis, patchBuffer);
+    finalizeInlineCaches(m_putByIds, patchBuffer);
+    finalizeInlineCaches(m_inByIds, patchBuffer);
+    finalizeInlineCaches(m_instanceOfs, patchBuffer);
 
     if (m_byValCompilationInfo.size()) {
         CodeLocationLabel<ExceptionHandlerPtrTag> exceptionHandler = patchBuffer.locationOf<ExceptionHandlerPtrTag>(m_exceptionHandler);
 
         for (const auto& byValCompilationInfo : m_byValCompilationInfo) {
             PatchableJump patchableNotIndexJump = byValCompilationInfo.notIndexJump;
-            auto notIndexJump = CodeLocationJump<JSEntryPtrTag>();
+            auto notIndexJump = CodeLocationJump<JSInternalPtrTag>();
             if (Jump(patchableNotIndexJump).isSet())
-                notIndexJump = CodeLocationJump<JSEntryPtrTag>(patchBuffer.locationOf<JSEntryPtrTag>(patchableNotIndexJump));
-            auto badTypeJump = CodeLocationJump<JSEntryPtrTag>(patchBuffer.locationOf<JSEntryPtrTag>(byValCompilationInfo.badTypeJump));
+                notIndexJump = CodeLocationJump<JSInternalPtrTag>(patchBuffer.locationOf<JSInternalPtrTag>(patchableNotIndexJump));
+            auto badTypeJump = CodeLocationJump<JSInternalPtrTag>(patchBuffer.locationOf<JSInternalPtrTag>(byValCompilationInfo.badTypeJump));
             CodeLocationLabel<NoPtrTag> doneTarget = patchBuffer.locationOf<NoPtrTag>(byValCompilationInfo.doneTarget);
             CodeLocationLabel<NoPtrTag> nextHotPathTarget = patchBuffer.locationOf<NoPtrTag>(byValCompilationInfo.nextHotPathTarget);
             CodeLocationLabel<NoPtrTag> slowPathTarget = patchBuffer.locationOf<NoPtrTag>(byValCompilationInfo.slowPathTarget);
@@ -860,9 +874,9 @@ CompilationResult JIT::link()
     for (auto& compilationInfo : m_callCompilationInfo) {
         CallLinkInfo& info = *compilationInfo.callLinkInfo;
         info.setCallLocations(
-            CodeLocationLabel<JSEntryPtrTag>(patchBuffer.locationOfNearCall<JSEntryPtrTag>(compilationInfo.callReturnLocation)),
-            CodeLocationLabel<JSEntryPtrTag>(patchBuffer.locationOf<JSEntryPtrTag>(compilationInfo.hotPathBegin)),
-            patchBuffer.locationOfNearCall<JSEntryPtrTag>(compilationInfo.hotPathOther));
+            CodeLocationLabel<JSInternalPtrTag>(patchBuffer.locationOfNearCall<JSInternalPtrTag>(compilationInfo.callReturnLocation)),
+            CodeLocationLabel<JSInternalPtrTag>(patchBuffer.locationOf<JSInternalPtrTag>(compilationInfo.hotPathBegin)),
+            patchBuffer.locationOfNearCall<JSInternalPtrTag>(compilationInfo.hotPathOther));
     }
 
     JITCodeMap jitCodeMap;
@@ -901,7 +915,7 @@ CompilationResult JIT::link()
         adoptRef(*new DirectJITCode(result, withArityCheck, JITCode::BaselineJIT)));
 
     if (JITInternal::verbose)
-        dataLogF("JIT generated code for %p at [%p, %p).\n", m_codeBlock, result.executableMemory()->start(), result.executableMemory()->end());
+        dataLogF("JIT generated code for %p at [%p, %p).\n", m_codeBlock, result.executableMemory()->start().untaggedPtr(), result.executableMemory()->end().untaggedPtr());
 
     return CompilationSuccessful;
 }
@@ -999,6 +1013,11 @@ HashMap<CString, Seconds> JIT::compileTimeStats()
 #endif // ENABLE(DFG_JIT)
     }
     return result;
+}
+
+Seconds JIT::totalCompileTime()
+{
+    return totalBaselineCompileTime + totalDFGCompileTime + totalFTLCompileTime;
 }
 
 } // namespace JSC

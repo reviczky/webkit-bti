@@ -27,6 +27,7 @@
 
 #include "ChildProcess.h"
 #include "SandboxExtension.h"
+#include <WebCore/FetchIdentifier.h>
 #include <WebCore/IDBBackingStore.h>
 #include <WebCore/IDBServer.h>
 #include <WebCore/SecurityOriginData.h>
@@ -122,7 +123,6 @@ private:
 
     // IPC::Connection::Client
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
-    void didClose(IPC::Connection&) override;
 
     // Message Handlers
     void initializeWebsiteDataStore(const StorageProcessCreationParameters&);
@@ -136,12 +136,12 @@ private:
     void didGetSandboxExtensionsForBlobFiles(uint64_t requestID, SandboxExtension::HandleArray&&);
 #endif
 #if ENABLE(SERVICE_WORKER)
-    void didReceiveFetchResponse(WebCore::SWServerConnectionIdentifier, uint64_t fetchIdentifier, const WebCore::ResourceResponse&);
-    void didReceiveFetchData(WebCore::SWServerConnectionIdentifier, uint64_t fetchIdentifier, const IPC::DataReference&, int64_t encodedDataLength);
-    void didReceiveFetchFormData(WebCore::SWServerConnectionIdentifier, uint64_t fetchIdentifier, const IPC::FormDataReference&);
-    void didFinishFetch(WebCore::SWServerConnectionIdentifier, uint64_t fetchIdentifier);
-    void didFailFetch(WebCore::SWServerConnectionIdentifier, uint64_t fetchIdentifier);
-    void didNotHandleFetch(WebCore::SWServerConnectionIdentifier, uint64_t fetchIdentifier);
+    void didReceiveFetchResponse(WebCore::SWServerConnectionIdentifier, WebCore::FetchIdentifier, const WebCore::ResourceResponse&);
+    void didReceiveFetchData(WebCore::SWServerConnectionIdentifier, WebCore::FetchIdentifier, const IPC::DataReference&, int64_t encodedDataLength);
+    void didReceiveFetchFormData(WebCore::SWServerConnectionIdentifier, WebCore::FetchIdentifier, const IPC::FormDataReference&);
+    void didFinishFetch(WebCore::SWServerConnectionIdentifier, WebCore::FetchIdentifier);
+    void didFailFetch(WebCore::SWServerConnectionIdentifier, WebCore::FetchIdentifier);
+    void didNotHandleFetch(WebCore::SWServerConnectionIdentifier, WebCore::FetchIdentifier);
 
     void postMessageToServiceWorkerClient(const WebCore::ServiceWorkerClientIdentifier& destinationIdentifier, WebCore::MessageWithMessagePorts&&, WebCore::ServiceWorkerIdentifier sourceIdentifier, const String& sourceOrigin);
     void postMessageToServiceWorker(WebCore::ServiceWorkerIdentifier destination, WebCore::MessageWithMessagePorts&&, const WebCore::ServiceWorkerOrClientIdentifier& source, WebCore::SWServerConnectionIdentifier);

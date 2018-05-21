@@ -53,7 +53,6 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << userAgent;
     encoder << itemStates;
     encoder << sessionID;
-    encoder << highestUsedBackForwardItemID;
     encoder << userContentControllerID.toUInt64();
     encoder << visitedLinkTableID;
     encoder << websiteDataStoreID;
@@ -65,7 +64,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << mediaVolume;
     encoder << muted;
     encoder << mayStartMediaWhenInWindow;
-    encoder << minimumLayoutSize;
+    encoder << viewLayoutSize;
     encoder << autoSizingShouldExpandToViewHeight;
     encoder << viewportSizeForCSSViewportUnits;
     encoder.encodeEnum(scrollPinningBehavior);
@@ -90,7 +89,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << overrideScreenSize;
     encoder << textAutosizingWidth;
     encoder << ignoresViewportScaleLimits;
-    encoder << viewportConfigurationMinimumLayoutSize;
+    encoder << viewportConfigurationViewLayoutSize;
     encoder << viewportConfigurationViewSize;
     encoder << maximumUnobscuredSize;
 #endif
@@ -177,8 +176,6 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
 
     if (!decoder.decode(parameters.sessionID))
         return std::nullopt;
-    if (!decoder.decode(parameters.highestUsedBackForwardItemID))
-        return std::nullopt;
 
     std::optional<uint64_t> userContentControllerIdentifier;
     decoder >> userContentControllerIdentifier;
@@ -206,7 +203,7 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
         return std::nullopt;
     if (!decoder.decode(parameters.mayStartMediaWhenInWindow))
         return std::nullopt;
-    if (!decoder.decode(parameters.minimumLayoutSize))
+    if (!decoder.decode(parameters.viewLayoutSize))
         return std::nullopt;
     if (!decoder.decode(parameters.autoSizingShouldExpandToViewHeight))
         return std::nullopt;
@@ -257,7 +254,7 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
         return std::nullopt;
     if (!decoder.decode(parameters.ignoresViewportScaleLimits))
         return std::nullopt;
-    if (!decoder.decode(parameters.viewportConfigurationMinimumLayoutSize))
+    if (!decoder.decode(parameters.viewportConfigurationViewLayoutSize))
         return std::nullopt;
     if (!decoder.decode(parameters.viewportConfigurationViewSize))
         return std::nullopt;

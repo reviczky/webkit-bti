@@ -776,6 +776,7 @@ private:
             break;
         }
 
+        case SetCallee:
         case SetArgumentCountIncludingThis:
             break;
 
@@ -850,6 +851,7 @@ private:
         case CompareEq:
         case CompareStrictEq:
         case CompareEqPtr:
+        case SameValue:
         case OverridesHasInstance:
         case InstanceOf:
         case InstanceOfCustom:
@@ -862,7 +864,8 @@ private:
         case IsObjectOrNull:
         case IsFunction:
         case IsCellWithType:
-        case IsTypedArrayView: {
+        case IsTypedArrayView:
+        case MatchStructure: {
             setPrediction(SpecBoolean);
             break;
         }
@@ -978,7 +981,8 @@ private:
             setPrediction(SpecObjectOther);
             break;
 
-        case In:
+        case InByVal:
+        case InById:
             setPrediction(SpecBoolean);
             break;
 

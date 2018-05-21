@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Andy VanWagoner (thetalecrafter@gmail.com)
+ * Copyright (C) 2015 Andy VanWagoner (andy@vanwagoner.family)
  * Copyright (C) 2015 Sukolsak Sakshuwong (sukolsak@gmail.com)
  * Copyright (C) 2016 Apple Inc. All rights reserved.
  *
@@ -41,10 +41,14 @@
 #include "IntlNumberFormat.h"
 #include "IntlNumberFormatConstructor.h"
 #include "IntlNumberFormatPrototype.h"
+#include "IntlPluralRules.h"
+#include "IntlPluralRulesConstructor.h"
+#include "IntlPluralRulesPrototype.h"
 #include "JSCInlines.h"
 #include "JSCJSValueInlines.h"
 #include "Lookup.h"
 #include "ObjectPrototype.h"
+#include "Options.h"
 #include <unicode/uloc.h>
 #include <unicode/unumsys.h>
 #include <wtf/Assertions.h>
@@ -102,11 +106,18 @@ void IntlObject::finishCreation(VM& vm, JSGlobalObject* globalObject)
     Structure* dateTimeFormatStructure = IntlDateTimeFormat::createStructure(vm, globalObject, dateTimeFormatPrototype);
     IntlDateTimeFormatConstructor* dateTimeFormatConstructor = IntlDateTimeFormatConstructor::create(vm, IntlDateTimeFormatConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), dateTimeFormatPrototype, dateTimeFormatStructure);
 
+    // Set up PluralRules.
+    IntlPluralRulesPrototype* pluralRulesPrototype = IntlPluralRulesPrototype::create(vm, globalObject, IntlPluralRulesPrototype::createStructure(vm, globalObject, globalObject->objectPrototype()));
+    Structure* pluralRulesStructure = IntlPluralRules::createStructure(vm, globalObject, pluralRulesPrototype);
+    IntlPluralRulesConstructor* pluralRulesConstructor = IntlPluralRulesConstructor::create(vm, IntlPluralRulesConstructor::createStructure(vm, globalObject, globalObject->functionPrototype()), pluralRulesPrototype, pluralRulesStructure);
+
     // Constructor Properties of the Intl Object
     // https://tc39.github.io/ecma402/#sec-constructor-properties-of-the-intl-object
     putDirectWithoutTransition(vm, vm.propertyNames->Collator, collatorConstructor, static_cast<unsigned>(PropertyAttribute::DontEnum));
     putDirectWithoutTransition(vm, vm.propertyNames->NumberFormat, numberFormatConstructor, static_cast<unsigned>(PropertyAttribute::DontEnum));
     putDirectWithoutTransition(vm, vm.propertyNames->DateTimeFormat, dateTimeFormatConstructor, static_cast<unsigned>(PropertyAttribute::DontEnum));
+    if (Options::useIntlPluralRules())
+        putDirectWithoutTransition(vm, vm.propertyNames->PluralRules, pluralRulesConstructor, static_cast<unsigned>(PropertyAttribute::DontEnum));
 
     // Function Properties of the Intl Object
     // https://tc39.github.io/ecma402/#sec-function-properties-of-the-intl-object
@@ -603,7 +614,7 @@ String removeUnicodeLocaleExtension(const String& locale)
     if (partsSize > 0)
         builder.append(parts[0]);
     for (size_t p = 1; p < partsSize; ++p) {
-        if (parts[p] == "u") {
+        if (parts[p] == "u" && p + 1 < partsSize) {
             // Skip the u- and anything that follows until another singleton.
             // While the next part is part of the unicode extension, skip it.
             while (p + 1 < partsSize && parts[p + 1].length() > 1)
@@ -788,12 +799,13 @@ static JSArray* lookupSupportedLocales(ExecState& state, const HashSet<String>& 
         return nullptr;
     }
 
+    unsigned index = 0;
     for (size_t k = 0; k < len; ++k) {
         const String& locale = requestedLocales[k];
         String noExtensionsLocale = removeUnicodeLocaleExtension(locale);
         String availableLocale = bestAvailableLocale(availableLocales, noExtensionsLocale);
         if (!availableLocale.isNull()) {
-            subset->push(&state, jsString(&state, locale));
+            subset->putDirectIndex(&state, index++, jsString(&state, locale));
             RETURN_IF_EXCEPTION(scope, nullptr);
         }
     }
@@ -843,6 +855,8 @@ JSValue supportedLocales(ExecState& state, const HashSet<String>& availableLocal
         supportedLocales->defineOwnProperty(supportedLocales, &state, keys[i], desc, true);
         RETURN_IF_EXCEPTION(scope, JSValue());
     }
+    supportedLocales->defineOwnProperty(supportedLocales, &state, vm.propertyNames->length, desc, true);
+    RETURN_IF_EXCEPTION(scope, JSValue());
 
     return supportedLocales;
 }
@@ -891,17 +905,17 @@ EncodedJSValue JSC_HOST_CALL intlObjectFuncGetCanonicalLocales(ExecState* state)
 
     Vector<String> localeList = canonicalizeLocaleList(*state, state->argument(0));
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
+    auto length = localeList.size();
 
     JSGlobalObject* globalObject = state->jsCallee()->globalObject();
-    JSArray* localeArray = JSArray::tryCreate(vm, globalObject->arrayStructureForIndexingTypeDuringAllocation(ArrayWithContiguous));
+    JSArray* localeArray = JSArray::tryCreate(vm, globalObject->arrayStructureForIndexingTypeDuringAllocation(ArrayWithContiguous), length);
     if (!localeArray) {
         throwOutOfMemoryError(state, scope);
         return encodedJSValue();
     }
 
-    auto length = localeList.size();
     for (size_t i = 0; i < length; ++i) {
-        localeArray->push(state, jsString(state, localeList[i]));
+        localeArray->putDirectIndex(state, i, jsString(state, localeList[i]));
         RETURN_IF_EXCEPTION(scope, encodedJSValue());
     }
     return JSValue::encode(localeArray);

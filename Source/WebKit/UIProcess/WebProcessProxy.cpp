@@ -105,14 +105,14 @@ static WebProcessProxy::WebPageProxyMap& globalPageMap()
     return pageMap;
 }
 
-Ref<WebProcessProxy> WebProcessProxy::create(WebProcessPool& processPool, WebsiteDataStore& websiteDataStore)
+Ref<WebProcessProxy> WebProcessProxy::create(WebProcessPool& processPool, WebsiteDataStore& websiteDataStore, IsInPrewarmedPool isInPrewarmedPool)
 {
-    auto proxy = adoptRef(*new WebProcessProxy(processPool, websiteDataStore));
+    auto proxy = adoptRef(*new WebProcessProxy(processPool, websiteDataStore, isInPrewarmedPool));
     proxy->connect();
     return proxy;
 }
 
-WebProcessProxy::WebProcessProxy(WebProcessPool& processPool, WebsiteDataStore& websiteDataStore)
+WebProcessProxy::WebProcessProxy(WebProcessPool& processPool, WebsiteDataStore& websiteDataStore, IsInPrewarmedPool isInPrewarmedPool)
     : ChildProcessProxy(processPool.alwaysRunsAtBackgroundPriority())
     , m_responsivenessTimer(*this)
     , m_backgroundResponsivenessTimer(*this)
@@ -126,6 +126,7 @@ WebProcessProxy::WebProcessProxy(WebProcessPool& processPool, WebsiteDataStore& 
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     , m_userMediaCaptureManagerProxy(std::make_unique<UserMediaCaptureManagerProxy>(*this))
 #endif
+    , m_isInPrewarmedPool(isInPrewarmedPool == IsInPrewarmedPool::Yes)
 {
     auto result = allProcesses().add(coreProcessIdentifier(), this);
     ASSERT_UNUSED(result, result.isNewEntry);
@@ -173,6 +174,11 @@ void WebProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOpt
     }
 
     launchOptions.nonValidInjectedCodeAllowed = shouldAllowNonValidInjectedCode();
+
+    if (processPool().shouldMakeNextWebProcessLaunchFailForTesting()) {
+        processPool().setShouldMakeNextWebProcessLaunchFailForTesting(false);
+        launchOptions.shouldMakeProcessLaunchFailForTesting = true;
+    }
 }
 
 void WebProcessProxy::connectionWillOpen(IPC::Connection& connection)
@@ -396,9 +402,9 @@ void WebProcessProxy::addExistingWebPage(WebPageProxy& webPage, uint64_t pageID)
     updateBackgroundResponsivenessTimer();
 }
 
-void WebProcessProxy::suspendWebPageProxy(WebPageProxy& webPage)
+void WebProcessProxy::suspendWebPageProxy(WebPageProxy& webPage, API::Navigation& navigation)
 {
-    if (auto* suspendedPage = webPage.maybeCreateSuspendedPage(*this)) {
+    if (auto* suspendedPage = webPage.maybeCreateSuspendedPage(*this, navigation)) {
         LOG(ProcessSwapping, "WebProcessProxy pid %i added suspended page %s", processIdentifier(), suspendedPage->loggingString());
         m_suspendedPageMap.set(webPage.pageID(), suspendedPage);
     }
@@ -427,14 +433,6 @@ void WebProcessProxy::removeWebPage(WebPageProxy& webPage, uint64_t pageID)
     m_processPool->pageEndUsingWebsiteDataStore(webPage);
 
     updateBackgroundResponsivenessTimer();
-    
-    Vector<uint64_t> itemIDsToRemove;
-    for (auto& idAndItem : m_backForwardListItemMap) {
-        if (idAndItem.value->pageID() == pageID)
-            itemIDsToRemove.append(idAndItem.key);
-    }
-    for (auto itemID : itemIDsToRemove)
-        m_backForwardListItemMap.remove(itemID);
 
     maybeShutDown();
 }
@@ -461,25 +459,6 @@ void WebProcessProxy::didDestroyWebUserContentControllerProxy(WebUserContentCont
 {
     ASSERT(m_webUserContentControllerProxies.contains(&proxy));
     m_webUserContentControllerProxies.remove(&proxy);
-}
-
-WebBackForwardListItem* WebProcessProxy::webBackForwardItem(uint64_t itemID) const
-{
-    return m_backForwardListItemMap.get(itemID);
-}
-
-void WebProcessProxy::registerNewWebBackForwardListItem(WebBackForwardListItem& item)
-{
-    // This item was just created by the UIProcess and is being added to the map for the first time
-    // so we should not already have an item for this ID.
-    ASSERT(!m_backForwardListItemMap.contains(item.itemID()));
-
-    m_backForwardListItemMap.set(item.itemID(), &item);
-}
-
-void WebProcessProxy::removeBackForwardItem(uint64_t itemID)
-{
-    m_backForwardListItemMap.remove(itemID);
 }
 
 void WebProcessProxy::assumeReadAccessToBaseURL(const String& urlString)
@@ -547,11 +526,11 @@ bool WebProcessProxy::checkURLReceivedFromWebProcess(const URL& url)
     // Items in back/forward list have been already checked.
     // One case where we don't have sandbox extensions for file URLs in b/f list is if the list has been reinstated after a crash or a browser restart.
     String path = url.fileSystemPath();
-    for (WebBackForwardListItemMap::iterator iter = m_backForwardListItemMap.begin(), end = m_backForwardListItemMap.end(); iter != end; ++iter) {
-        URL itemURL(URL(), iter->value->url());
+    for (auto& item : WebBackForwardListItem::allItems().values()) {
+        URL itemURL(URL(), item->url());
         if (itemURL.isLocalFile() && itemURL.fileSystemPath() == path)
             return true;
-        URL itemOriginalURL(URL(), iter->value->originalURL());
+        URL itemOriginalURL(URL(), item->originalURL());
         if (itemOriginalURL.isLocalFile() && itemOriginalURL.fileSystemPath() == path)
             return true;
     }
@@ -568,22 +547,16 @@ bool WebProcessProxy::fullKeyboardAccessEnabled()
 }
 #endif
 
-void WebProcessProxy::addOrUpdateBackForwardItem(uint64_t itemID, uint64_t pageID, const PageState& pageState)
+void WebProcessProxy::updateBackForwardItem(const BackForwardListItemState& itemState)
 {
-    MESSAGE_CHECK_URL(pageState.mainFrameState.originalURLString);
-    MESSAGE_CHECK_URL(pageState.mainFrameState.urlString);
-
-    auto& backForwardListItem = m_backForwardListItemMap.add(itemID, nullptr).iterator->value;
-    if (!backForwardListItem) {
-        BackForwardListItemState backForwardListItemState;
-        backForwardListItemState.identifier = itemID;
-        backForwardListItemState.pageState = pageState;
-        backForwardListItem = WebBackForwardListItem::create(WTFMove(backForwardListItemState), pageID);
-        return;
+    if (auto* item = WebBackForwardListItem::itemForID(itemState.identifier)) {
+        // This update could be coming from a web process that is not the active process for
+        // the back/forward items page.
+        // e.g. The old web process is navigating to about:blank for suspension.
+        // We ignore these updates.
+        if (m_pageMap.contains(item->pageID()))
+            item->setPageState(itemState.pageState);
     }
-
-    // Update existing item.
-    backForwardListItem->setPageState(pageState);
 }
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
@@ -611,18 +584,18 @@ void WebProcessProxy::getPlugins(bool refresh, Vector<PluginInfo>& plugins, Vect
 #endif // ENABLE(NETSCAPE_PLUGIN_API)
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
-void WebProcessProxy::getPluginProcessConnection(uint64_t pluginProcessToken, Ref<Messages::WebProcessProxy::GetPluginProcessConnection::DelayedReply>&& reply)
+void WebProcessProxy::getPluginProcessConnection(uint64_t pluginProcessToken, Messages::WebProcessProxy::GetPluginProcessConnection::DelayedReply&& reply)
 {
     PluginProcessManager::singleton().getPluginProcessConnection(pluginProcessToken, WTFMove(reply));
 }
 #endif
 
-void WebProcessProxy::getNetworkProcessConnection(Ref<Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply>&& reply)
+void WebProcessProxy::getNetworkProcessConnection(Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply&& reply)
 {
     m_processPool->getNetworkProcessConnection(WTFMove(reply));
 }
 
-void WebProcessProxy::getStorageProcessConnection(PAL::SessionID initialSessionID, Ref<Messages::WebProcessProxy::GetStorageProcessConnection::DelayedReply>&& reply)
+void WebProcessProxy::getStorageProcessConnection(PAL::SessionID initialSessionID, Messages::WebProcessProxy::GetStorageProcessConnection::DelayedReply&& reply)
 {
     m_processPool->getStorageProcessConnection(*this, initialSessionID, WTFMove(reply));
 }
@@ -684,11 +657,17 @@ void WebProcessProxy::didReceiveSyncMessage(IPC::Connection& connection, IPC::De
 
 void WebProcessProxy::didClose(IPC::Connection&)
 {
+    processDidTerminateOrFailedToLaunch();
+}
+
+void WebProcessProxy::processDidTerminateOrFailedToLaunch()
+{
     // Protect ourselves, as the call to disconnect() below may otherwise cause us
     // to be deleted before we can finish our work.
     Ref<WebProcessProxy> protect(*this);
 
-    webConnection()->didClose();
+    if (auto* webConnection = this->webConnection())
+        webConnection->didClose();
 
     auto pages = copyToVectorOf<RefPtr<WebPageProxy>>(m_pageMap.values());
 
@@ -703,13 +682,13 @@ void WebProcessProxy::didClose(IPC::Connection&)
     }
 #endif
 
-    for (auto& page : pages)
-        page->processDidTerminate(ProcessTerminationReason::Crash);
-
     for (auto* suspendedPage : copyToVectorOf<SuspendedPageProxy*>(m_suspendedPageMap.values()))
         suspendedPage->webProcessDidClose(*this);
 
     m_suspendedPageMap.clear();
+
+    for (auto& page : pages)
+        page->processDidTerminate(ProcessTerminationReason::Crash);
 }
 
 void WebProcessProxy::didReceiveInvalidMessage(IPC::Connection& connection, IPC::StringReference messageReceiverName, IPC::StringReference messageName)
@@ -769,6 +748,11 @@ void WebProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
 {
     ChildProcessProxy::didFinishLaunching(launcher, connectionIdentifier);
 
+    if (!IPC::Connection::identifierIsValid(connectionIdentifier)) {
+        processDidTerminateOrFailedToLaunch();
+        return;
+    }
+
     for (WebPageProxy* page : m_pageMap.values()) {
         ASSERT(this == &page->process());
         page->processDidFinishLaunching();
@@ -799,10 +783,9 @@ bool WebProcessProxy::canCreateFrame(uint64_t frameID) const
     return WebFrameProxyMap::isValidKey(frameID) && !m_frameMap.contains(frameID);
 }
 
-void WebProcessProxy::frameCreated(uint64_t frameID, WebFrameProxy* frameProxy)
+void WebProcessProxy::frameCreated(uint64_t frameID, WebFrameProxy& frameProxy)
 {
-    ASSERT(canCreateFrame(frameID));
-    m_frameMap.set(frameID, frameProxy);
+    m_frameMap.set(frameID, &frameProxy);
 }
 
 void WebProcessProxy::didDestroyFrame(uint64_t frameID)

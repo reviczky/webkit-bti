@@ -25,10 +25,12 @@
 
 #pragma once
 
+#include "DisabledAdaptations.h"
 #include "FloatSize.h"
 #include "IntSize.h"
 #include "ViewportArguments.h"
 #include <wtf/Noncopyable.h>
+#include <wtf/OptionSet.h>
 
 namespace WTF {
 class TextStream;
@@ -74,15 +76,16 @@ public:
     const IntSize& contentsSize() const { return m_contentSize; }
     WEBCORE_EXPORT bool setContentsSize(const IntSize&);
 
-    FloatSize viewSize() const { return m_viewSize; }
+    const FloatSize& viewLayoutSize() const { return m_viewLayoutSize; }
 
     const FloatSize& minimumLayoutSize() const { return m_minimumLayoutSize; }
-    WEBCORE_EXPORT bool setMinimumLayoutSize(const FloatSize&, const FloatSize& viewSize);
+    WEBCORE_EXPORT bool setViewLayoutSize(const FloatSize&);
+
+    const OptionSet<DisabledAdaptations>& disabledAdaptations() const { return m_disabledAdaptations; }
+    WEBCORE_EXPORT bool setDisabledAdaptations(const OptionSet<DisabledAdaptations>&);
 
     const ViewportArguments& viewportArguments() const { return m_viewportArguments; }
     WEBCORE_EXPORT bool setViewportArguments(const ViewportArguments&);
-
-    WEBCORE_EXPORT bool setForceHorizontalShrinkToFit(bool);
 
     WEBCORE_EXPORT bool setCanIgnoreScalingConstraints(bool);
     void setForceAlwaysUserScalable(bool forceAlwaysUserScalable) { m_forceAlwaysUserScalable = forceAlwaysUserScalable; }
@@ -116,20 +119,24 @@ private:
     int layoutWidth() const;
     int layoutHeight() const;
 
+    bool shouldOverrideDeviceWidthAndShrinkToFit() const;
+    bool shouldIgnoreScalingConstraintsRegardlessOfContentSize() const;
     bool shouldIgnoreScalingConstraints() const;
     bool shouldIgnoreVerticalScalingConstraints() const;
     bool shouldIgnoreHorizontalScalingConstraints() const;
+
+    void updateMinimumLayoutSize();
 
     Parameters m_configuration;
     Parameters m_defaultConfiguration;
     IntSize m_contentSize;
     FloatSize m_minimumLayoutSize;
-    FloatSize m_viewSize;
+    FloatSize m_viewLayoutSize;
     ViewportArguments m_viewportArguments;
+    OptionSet<DisabledAdaptations> m_disabledAdaptations;
 
     bool m_canIgnoreScalingConstraints;
     bool m_forceAlwaysUserScalable;
-    bool m_forceHorizontalShrinkToFit;
 };
 
 WTF::TextStream& operator<<(WTF::TextStream&, const ViewportConfiguration::Parameters&);

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
 
 #if ENABLE(DFG_JIT)
 
+#include "BuiltinNames.h"
 #include "DFGAbstractInterpreterInlines.h"
 #include "DFGArgumentsUtilities.h"
 #include "DFGBasicBlockInlines.h"
@@ -140,20 +141,21 @@ private:
                 break;
             }
 
-            case CompareStrictEq: {
+            case CompareStrictEq:
+            case SameValue: {
                 if (node->isBinaryUseKind(UntypedUse)) {
                     JSValue child1Constant = m_state.forNode(node->child1().node()).value();
                     JSValue child2Constant = m_state.forNode(node->child2().node()).value();
 
                     // FIXME: Revisit this condition when introducing BigInt to JSC.
-                    auto isNonStringCellConstant = [] (JSValue value) {
-                        return value && value.isCell() && !value.isString();
+                    auto isNonStringOrBigIntCellConstant = [] (JSValue value) {
+                        return value && value.isCell() && !value.isString() && !value.isBigInt();
                     };
 
-                    if (isNonStringCellConstant(child1Constant)) {
+                    if (isNonStringOrBigIntCellConstant(child1Constant)) {
                         node->convertToCompareEqPtr(m_graph.freezeStrong(child1Constant.asCell()), node->child2());
                         changed = true;
-                    } else if (isNonStringCellConstant(child2Constant)) {
+                    } else if (isNonStringOrBigIntCellConstant(child2Constant)) {
                         node->convertToCompareEqPtr(m_graph.freezeStrong(child2Constant.asCell()), node->child1());
                         changed = true;
                     }
@@ -377,7 +379,7 @@ private:
                     if (index >= inlineCallFrame->argumentCountIncludingThis - 1)
                         break;
                 } else {
-                    if (index >= m_state.variables().numberOfArguments() - 1)
+                    if (index >= m_state.numberOfArguments() - 1)
                         break;
                 }
                 
@@ -485,6 +487,41 @@ private:
                 emitPutByOffset(
                     indexInBlock, node, baseValue, data.variants[0], data.identifierNumber);
                 changed = true;
+                break;
+            }
+                
+            case MatchStructure: {
+                Edge baseEdge = node->child1();
+                Node* base = baseEdge.node();
+                MatchStructureData& data = node->matchStructureData();
+                
+                AbstractValue baseValue = m_state.forNode(base);
+
+                m_interpreter.execute(indexInBlock); // Push CFA over this node after we get the state before.
+                alreadyHandled = true; // Don't allow the default constant folder to do things to this.
+                
+                BooleanLattice result = BooleanLattice::Bottom;
+                for (unsigned i = 0; i < data.variants.size(); ++i) {
+                    if (!baseValue.contains(data.variants[i].structure)) {
+                        data.variants[i--] = data.variants.last();
+                        data.variants.removeLast();
+                        changed = true;
+                        continue;
+                    }
+                    result = leastUpperBoundOfBooleanLattices(
+                        result,
+                        data.variants[i].result ? BooleanLattice::True : BooleanLattice::False);
+                }
+                
+                if (result == BooleanLattice::False || result == BooleanLattice::True) {
+                    RegisteredStructureSet structureSet;
+                    for (MatchStructureVariant& variant : data.variants)
+                        structureSet.add(variant.structure);
+                    addBaseCheck(indexInBlock, node, baseValue, structureSet);
+                    m_graph.convertToConstant(
+                        node, m_graph.freeze(jsBoolean(result == BooleanLattice::True)));
+                    changed = true;
+                }
                 break;
             }
         
@@ -614,6 +651,23 @@ private:
                 break;
             }
 
+            case InByVal: {
+                AbstractValue& property = m_state.forNode(node->child2());
+                if (JSValue constant = property.value()) {
+                    if (constant.isString()) {
+                        JSString* string = asString(constant);
+                        const StringImpl* impl = string->tryGetValueImpl();
+                        if (impl && impl->isAtomic()) {
+                            unsigned identifierNumber = m_graph.identifiers().ensure(const_cast<UniquedStringImpl*>(static_cast<const UniquedStringImpl*>(impl)));
+                            node->convertToInById(identifierNumber);
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+                break;
+            }
+
             case ToPrimitive: {
                 if (m_state.forNode(node->child1()).m_type & ~(SpecFullNumber | SpecBoolean | SpecString | SpecSymbol | SpecBigInt))
                     break;
@@ -642,15 +696,37 @@ private:
                 if (JSValue base = m_state.forNode(node->child1()).m_value) {
                     if (auto* function = jsDynamicCast<JSFunction*>(m_graph.m_vm, base)) {
                         if (FunctionRareData* rareData = function->rareData()) {
-                            if (Structure* structure = rareData->objectAllocationStructure()) {
-                                // FIXME: we should be able to allocate a poly proto object here:
-                                // https://bugs.webkit.org/show_bug.cgi?id=177517
-                                if (structure->hasMonoProto()) {
+                            if (rareData->allocationProfileWatchpointSet().isStillValid()) {
+                                Structure* structure = rareData->objectAllocationStructure();
+                                JSObject* prototype = rareData->objectAllocationPrototype();
+                                if (structure
+                                    && (structure->hasMonoProto() || prototype)
+                                    && rareData->allocationProfileWatchpointSet().isStillValid()) {
+
                                     m_graph.freeze(rareData);
                                     m_graph.watchpoints().addLazily(rareData->allocationProfileWatchpointSet());
                                     node->convertToNewObject(m_graph.registerStructure(structure));
+
+                                    if (structure->hasPolyProto()) {
+                                        StorageAccessData* data = m_graph.m_storageAccessData.add();
+                                        data->offset = knownPolyProtoOffset;
+                                        data->identifierNumber = m_graph.identifiers().ensure(m_graph.m_vm.propertyNames->builtinNames().polyProtoName().impl());
+                                        InferredType::Descriptor inferredType = InferredType::Top;
+                                        data->inferredType = inferredType;
+                                        m_graph.registerInferredType(inferredType);
+
+                                        NodeOrigin origin = node->origin.withInvalidExit();
+                                        Node* prototypeNode = m_insertionSet.insertConstant(
+                                            indexInBlock + 1, origin, m_graph.freeze(prototype));
+
+                                        ASSERT(isInlineOffset(knownPolyProtoOffset));
+                                        m_insertionSet.insertNode(
+                                            indexInBlock + 1, SpecNone, PutByOffset, origin, OpInfo(data),
+                                            Edge(node, KnownCellUse), Edge(node, KnownCellUse), Edge(prototypeNode, UntypedUse));
+                                    }
                                     changed = true;
                                     break;
+
                                 }
                             }
                         }
@@ -782,6 +858,46 @@ private:
                 }
                 break;
             }
+
+            case CheckTypeInfoFlags: {
+                const AbstractValue& abstractValue = m_state.forNode(node->child1());
+                unsigned bits = node->typeInfoOperand();
+                ASSERT(bits);
+                if (bits == ImplementsDefaultHasInstance) {
+                    if (abstractValue.m_type == SpecFunctionWithDefaultHasInstance) {
+                        eliminated = true;
+                        node->remove(m_graph);
+                        break;
+                    }
+                }
+
+                if (JSValue value = abstractValue.value()) {
+                    if (value.isCell()) {
+                        // This works because if we see a cell here, we know it's fully constructed
+                        // and we can read its inline type info flags. These flags don't change over the
+                        // object's lifetime.
+                        if ((value.asCell()->inlineTypeFlags() & bits) == bits) {
+                            eliminated = true;
+                            node->remove(m_graph);
+                            break;
+                        }
+                    }
+                }
+
+                if (abstractValue.m_structure.isFinite()) {
+                    bool ok = true;
+                    abstractValue.m_structure.forEach([&] (RegisteredStructure structure) {
+                        ok &= (structure->typeInfo().inlineTypeFlags() & bits) == bits;
+                    });
+                    if (ok) {
+                        eliminated = true;
+                        node->remove(m_graph);
+                        break;
+                    }
+                }
+
+                break;
+            }
                 
             case PhantomNewObject:
             case PhantomNewFunction:
@@ -828,7 +944,7 @@ private:
                 // about such things.
                 break;
             }
-            if (!node->shouldGenerate() || m_state.didClobber() || node->hasConstant())
+            if (!node->shouldGenerate() || m_state.didClobber() || node->hasConstant() || !node->result())
                 continue;
             
             // Interesting fact: this freezing that we do right here may turn an fragile value into

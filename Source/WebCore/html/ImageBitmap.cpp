@@ -98,14 +98,14 @@ void ImageBitmap::createPromise(ScriptExecutionContext& scriptExecutionContext, 
         return;
     }
 
-    if (sw < 0 || sh < 0) {
-        promise.reject(RangeError, "Cannot create ImageBitmap with a negative width or height");
-        return;
-    }
+    auto left = sw >= 0 ? sx : sx + sw;
+    auto top = sh >= 0 ? sy : sy + sh;
+    auto width = std::abs(sw);
+    auto height = std::abs(sh);
 
     WTF::switchOn(source,
         [&] (auto& specificSource) {
-            createPromise(scriptExecutionContext, specificSource, WTFMove(options), IntRect { sx, sy, sw, sh }, WTFMove(promise));
+            createPromise(scriptExecutionContext, specificSource, WTFMove(options), IntRect { left, top, width, height }, WTFMove(promise));
         }
     );
 }
@@ -162,9 +162,7 @@ static ExceptionOr<IntRect> croppedSourceRectangleWithFormatting(IntSize inputSi
     auto sourceRectangle = rect.value_or(IntRect { 0, 0, inputSize.width(), inputSize.height() });
 
     // 4. Clip sourceRectangle to the dimensions of input.
-
-    sourceRectangle.setWidth(std::min(sourceRectangle.width(), inputSize.width()));
-    sourceRectangle.setHeight(std::min(sourceRectangle.height(), inputSize.height()));
+    sourceRectangle.intersect(IntRect { 0, 0, inputSize.width(), inputSize.height() });
 
     return { WTFMove(sourceRectangle) };
 }

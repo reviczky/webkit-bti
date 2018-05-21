@@ -403,7 +403,7 @@ struct InlineTextBox::MarkedTextStyle {
     }
     static bool areDecorationMarkedTextStylesEqual(const MarkedTextStyle& a, const MarkedTextStyle& b)
     {
-        return a.textDecorationStyles == b.textDecorationStyles && a.textShadow == b.textShadow;
+        return a.textDecorationStyles == b.textDecorationStyles && a.textShadow == b.textShadow && a.alpha == b.alpha;
     }
 
     Color backgroundColor;
@@ -1011,8 +1011,11 @@ void InlineTextBox::paintMarkedTextForeground(PaintInfo& paintInfo, const FloatR
     textPainter.setFont(font);
     textPainter.setStyle(markedText.style.textStyles);
     textPainter.setIsHorizontal(isHorizontal());
-    if (markedText.style.textShadow)
+    if (markedText.style.textShadow) {
         textPainter.setShadow(&markedText.style.textShadow.value());
+        if (lineStyle.hasColorFilter())
+            textPainter.setShadowColorFilter(&lineStyle.colorFilter());
+    }
     textPainter.setEmphasisMark(emphasisMark, emphasisMarkOffset, combinedText());
 
     TextRun textRun = createTextRun();
@@ -1064,14 +1067,21 @@ void InlineTextBox::paintMarkedTextDecoration(PaintInfo& paintInfo, const FloatR
     decorationPainter.setWidth(snappedSelectionRect.width());
     decorationPainter.setBaseline(lineStyle().fontMetrics().ascent());
     decorationPainter.setIsHorizontal(isHorizontal());
-    if (markedText.style.textShadow)
-        decorationPainter.addTextShadow(&markedText.style.textShadow.value());
+    if (markedText.style.textShadow) {
+        decorationPainter.setTextShadow(&markedText.style.textShadow.value());
+        if (lineStyle().hasColorFilter())
+            decorationPainter.setShadowColorFilter(&lineStyle().colorFilter());
+    }
 
     {
         GraphicsContextStateSaver stateSaver { context, false };
-        if (!clipOutRect.isEmpty()) {
+        bool isDraggedContent = markedText.type == MarkedText::DraggedContent;
+        if (isDraggedContent || !clipOutRect.isEmpty()) {
             stateSaver.save();
-            context.clipOut(clipOutRect);
+            if (isDraggedContent)
+                context.setAlpha(markedText.style.alpha);
+            if (!clipOutRect.isEmpty())
+                context.clipOut(clipOutRect);
         }
         decorationPainter.paintTextDecoration(textRun.subRun(startOffset, endOffset - startOffset), textOriginFromBoxRect(snappedSelectionRect), snappedSelectionRect.location());
     }
@@ -1158,7 +1168,7 @@ void InlineTextBox::paintCompositionUnderline(PaintInfo& paintInfo, const FloatP
     width -= 2;
 
     GraphicsContext& context = paintInfo.context();
-    context.setStrokeColor(underline.compositionUnderlineColor == CompositionUnderlineColor::TextColor ? renderer().style().visitedDependentColor(CSSPropertyWebkitTextFillColor) : underline.color);
+    context.setStrokeColor(underline.compositionUnderlineColor == CompositionUnderlineColor::TextColor ? renderer().style().visitedDependentColorWithColorFilter(CSSPropertyWebkitTextFillColor) : underline.color);
     context.setStrokeThickness(lineThickness);
     context.drawLineForText(FloatPoint(boxOrigin.x() + start, boxOrigin.y() + logicalHeight() - lineThickness), width, renderer().document().printing());
 }

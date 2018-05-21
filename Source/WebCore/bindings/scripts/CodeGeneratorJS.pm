@@ -2508,7 +2508,7 @@ sub GenerateHeader
         }
     }
 
-    push(@headerContent, "class JSDOMWindowProxy;\n\n") if $interfaceName eq "DOMWindow" or $interfaceName eq "RemoteDOMWindow";
+    push(@headerContent, "class JSWindowProxy;\n\n") if $interfaceName eq "DOMWindow" or $interfaceName eq "RemoteDOMWindow";
 
     my $exportMacro = GetExportMacroForJSClass($interface);
 
@@ -2521,7 +2521,7 @@ sub GenerateHeader
     push(@headerContent, "    using DOMWrapped = $implType;\n") if $hasParent;
 
     if ($interfaceName eq "DOMWindow" || $interfaceName eq "RemoteDOMWindow") {
-        push(@headerContent, "    static $className* create(JSC::VM& vm, JSC::Structure* structure, Ref<$implType>&& impl, JSDOMWindowProxy* proxy)\n");
+        push(@headerContent, "    static $className* create(JSC::VM& vm, JSC::Structure* structure, Ref<$implType>&& impl, JSWindowProxy* proxy)\n");
         push(@headerContent, "    {\n");
         push(@headerContent, "        $className* ptr = new (NotNull, JSC::allocateCell<$className>(vm.heap)) ${className}(vm, structure, WTFMove(impl), proxy);\n");
         push(@headerContent, "        ptr->finishCreation(vm, proxy);\n");
@@ -2634,7 +2634,7 @@ sub GenerateHeader
     if (InstanceOverridesGetCallData($interface)) {
         push(@headerContent, "    static JSC::CallType getCallData(JSC::JSCell*, JSC::CallData&);\n\n");
         $headerIncludes{"<JavaScriptCore/CallData.h>"} = 1;
-        $structureFlags{"JSC::TypeOfShouldCallGetCallData"} = 1;
+        $structureFlags{"JSC::OverridesGetCallData"} = 1;
     }
     
     if ($interface->extendedAttributes->{CustomGetPrototype}) {
@@ -2830,7 +2830,7 @@ sub GenerateHeader
 
     # Constructor
     if ($interfaceName eq "DOMWindow" || $interfaceName eq "RemoteDOMWindow") {
-        push(@headerContent, "    $className(JSC::VM&, JSC::Structure*, Ref<$implType>&&, JSDOMWindowProxy*);\n");
+        push(@headerContent, "    $className(JSC::VM&, JSC::Structure*, Ref<$implType>&&, JSWindowProxy*);\n");
     } elsif ($codeGenerator->InheritsInterface($interface, "WorkerGlobalScope")) {
         push(@headerContent, "    $className(JSC::VM&, JSC::Structure*, Ref<$implType>&&);\n");
     } elsif (!NeedsImplementationClass($interface)) {
@@ -2840,7 +2840,7 @@ sub GenerateHeader
     }
 
     if ($interfaceName eq "DOMWindow" || $interfaceName eq "RemoteDOMWindow") {
-        push(@headerContent, "    void finishCreation(JSC::VM&, JSDOMWindowProxy*);\n");
+        push(@headerContent, "    void finishCreation(JSC::VM&, JSWindowProxy*);\n");
     } elsif ($codeGenerator->InheritsInterface($interface, "WorkerGlobalScope")) {
         push(@headerContent, "    void finishCreation(JSC::VM&, JSC::JSProxy*);\n");
     } else {
@@ -2970,7 +2970,8 @@ sub GenerateHeader
 
     if (NeedsImplementationClass($interface)) {
         my $toWrappedType = $interface->type->name eq "XPathNSResolver" ? "RefPtr<${implType}>" : "${implType}*";
-    
+        $headerIncludes{"JSDOMWrapper.h"} = 1;
+
         push(@headerContent, "template<> struct JSDOMWrapperConverterTraits<${implType}> {\n");
         push(@headerContent, "    using WrapperClass = ${className};\n");
         push(@headerContent, "    using ToWrappedReturnType = ${toWrappedType};\n");
@@ -3399,11 +3400,11 @@ sub GenerateOverloadDispatcher
                 for my $subtype (@subtypes) {
                     if ($codeGenerator->IsWrapperType($subtype) || $codeGenerator->IsBufferSourceType($subtype)) {
                         if ($subtype->name eq "DOMWindow") {
-                            AddToImplIncludes("JSDOMWindowProxy.h");
-                            &$generateOverloadCallIfNecessary($overload, "distinguishingArg.isObject() && (asObject(distinguishingArg)->inherits<JSDOMWindowProxy>(vm) || asObject(distinguishingArg)->inherits<JSDOMWindow>(vm))");
+                            AddToImplIncludes("JSWindowProxy.h");
+                            &$generateOverloadCallIfNecessary($overload, "distinguishingArg.isObject() && (asObject(distinguishingArg)->inherits<JSWindowProxy>(vm) || asObject(distinguishingArg)->inherits<JSDOMWindow>(vm))");
                         } elsif ($subtype->name eq "RemoteDOMWindow") {
-                            AddToImplIncludes("JSDOMWindowProxy.h");
-                            &$generateOverloadCallIfNecessary($overload, "distinguishingArg.isObject() && (asObject(distinguishingArg)->inherits<JSDOMWindowProxy>(vm) || asObject(distinguishingArg)->inherits<JSRemoteDOMWindow>(vm))");
+                            AddToImplIncludes("JSWindowProxy.h");
+                            &$generateOverloadCallIfNecessary($overload, "distinguishingArg.isObject() && (asObject(distinguishingArg)->inherits<JSWindowProxy>(vm) || asObject(distinguishingArg)->inherits<JSRemoteDOMWindow>(vm))");
                         } else {
                             &$generateOverloadCallIfNecessary($overload, "distinguishingArg.isObject() && asObject(distinguishingArg)->inherits<JS" . $subtype->name . ">(vm)");
                         }
@@ -3418,7 +3419,7 @@ sub GenerateOverloadDispatcher
             &$generateOverloadCallIfNecessary($overload, "distinguishingArg.isObject() && asObject(distinguishingArg)->type() == ErrorInstanceType");
 
             $overload = GetOverloadThatMatches($S, $d, \&$isObjectOrCallbackFunctionParameter);
-            &$generateOverloadCallIfNecessary($overload, "distinguishingArg.isFunction()");
+            &$generateOverloadCallIfNecessary($overload, "distinguishingArg.isFunction(vm)");
 
             # FIXME: Avoid invoking GetMethod(object, Symbol.iterator) again in convert<IDLSequence<T>>(...).
             $overload = GetOverloadThatMatches($S, $d, \&$isSequenceOrFrozenArrayParameter);
@@ -3554,6 +3555,7 @@ sub GetGnuVTableOffsetForType
         || $typename eq "SVGPolylineElement"
         || $typename eq "SVGRectElement"
         || $typename eq "SVGSVGElement"
+        || $typename eq "SVGGeometryElement"
         || $typename eq "SVGGraphicsElement"
         || $typename eq "SVGSwitchElement"
         || $typename eq "SVGTextElement"
@@ -4213,8 +4215,8 @@ sub GenerateImplementation
 
     # Constructor
     if ($interfaceName eq "DOMWindow" || $interfaceName eq "RemoteDOMWindow") {
-        AddIncludesForImplementationTypeInImpl("JSDOMWindowProxy");
-        push(@implContent, "${className}::$className(VM& vm, Structure* structure, Ref<$implType>&& impl, JSDOMWindowProxy* proxy)\n");
+        AddIncludesForImplementationTypeInImpl("JSWindowProxy");
+        push(@implContent, "${className}::$className(VM& vm, Structure* structure, Ref<$implType>&& impl, JSWindowProxy* proxy)\n");
         push(@implContent, "    : $parentClassName(vm, structure, WTFMove(impl), proxy)\n");
         push(@implContent, "{\n");
         push(@implContent, "}\n\n");
@@ -4236,7 +4238,7 @@ sub GenerateImplementation
 
     # Finish Creation
     if ($interfaceName eq "DOMWindow" || $interfaceName eq "RemoteDOMWindow") {
-        push(@implContent, "void ${className}::finishCreation(VM& vm, JSDOMWindowProxy* proxy)\n");
+        push(@implContent, "void ${className}::finishCreation(VM& vm, JSWindowProxy* proxy)\n");
         push(@implContent, "{\n");
         push(@implContent, "    Base::finishCreation(vm, proxy);\n\n");
     } elsif ($codeGenerator->InheritsInterface($interface, "WorkerGlobalScope")) {
@@ -4704,7 +4706,13 @@ sub GenerateAttributeGetterBodyDefinition
         !$attribute->extendedAttributes->{DoNotCheckSecurityOnGetter}) {
         AddToImplIncludes("JSDOMBindingSecurity.h", $conditional);
         if ($interface->type->name eq "DOMWindow") {
-            push(@$outputArray, "    if (!BindingSecurity::shouldAllowAccessToDOMWindow(&state, thisObject.wrapped(), ThrowSecurityError))\n");
+            if ($attribute->extendedAttributes->{DoNotCheckSecurityIf}) {
+                my $crossOriginOptions = GetCrossOriginsOptionsFromExtendedAttributeValue($attribute->extendedAttributes->{DoNotCheckSecurityIf});
+                AddToImplIncludes("HTTPParsers.h", $conditional);
+                push(@$outputArray, "    if (!BindingSecurity::shouldAllowAccessToDOMWindowGivenMinimumCrossOriginOptions(&state, thisObject.wrapped(), $crossOriginOptions, ThrowSecurityError))\n");
+            } else {
+                push(@$outputArray, "    if (!BindingSecurity::shouldAllowAccessToDOMWindow(&state, thisObject.wrapped(), ThrowSecurityError))\n");
+            }
         } else {
             push(@$outputArray, "    if (!BindingSecurity::shouldAllowAccessToFrame(&state, thisObject.wrapped().frame(), ThrowSecurityError))\n");
         }
@@ -4812,6 +4820,15 @@ sub GenerateAttributeGetterDefinition
     push(@$outputArray, "#endif\n\n") if $conditional;
 }
 
+sub GetCrossOriginsOptionsFromExtendedAttributeValue
+{
+    my $extendedAttributeValue = shift;
+
+    return "CrossOriginOptions::Allow" if $extendedAttributeValue eq "CrossOriginOptionsAllow";
+    return "CrossOriginOptions::AllowPostMessage" if $extendedAttributeValue eq "CrossOriginOptionsAllowPostMessage";
+    die "Unsupported CrossOriginOptions: " + $extendedAttributeValue;
+}
+
 sub GenerateAttributeSetterBodyDefinition
 {
     my ($outputArray, $interface, $className, $attribute, $attributeSetterBodyName, $conditional) = @_;
@@ -4834,7 +4851,13 @@ sub GenerateAttributeSetterBodyDefinition
     if ($interface->extendedAttributes->{CheckSecurity} && !$attribute->extendedAttributes->{DoNotCheckSecurity} && !$attribute->extendedAttributes->{DoNotCheckSecurityOnSetter}) {
         AddToImplIncludes("JSDOMBindingSecurity.h", $conditional);
         if ($interface->type->name eq "DOMWindow") {
-            push(@$outputArray, "    if (!BindingSecurity::shouldAllowAccessToDOMWindow(&state, thisObject.wrapped(), ThrowSecurityError))\n");
+            if ($attribute->extendedAttributes->{DoNotCheckSecurityIf}) {
+                my $crossOriginOptions = GetCrossOriginsOptionsFromExtendedAttributeValue($attribute->extendedAttributes->{DoNotCheckSecurityIf});
+                AddToImplIncludes("HTTPParsers.h", $conditional);
+                push(@$outputArray, "    if (!BindingSecurity::shouldAllowAccessToDOMWindowGivenMinimumCrossOriginOptions(&state, thisObject.wrapped(), $crossOriginOptions, ThrowSecurityError))\n");
+            } else {
+                push(@$outputArray, "    if (!BindingSecurity::shouldAllowAccessToDOMWindow(&state, thisObject.wrapped(), ThrowSecurityError))\n");
+            }
         } else {
             push(@$outputArray, "    if (!BindingSecurity::shouldAllowAccessToFrame(&state, thisObject.wrapped().frame(), ThrowSecurityError))\n");
         }
@@ -5055,7 +5078,13 @@ sub GenerateOperationBodyDefinition
             
             AddToImplIncludes("JSDOMBindingSecurity.h", $conditional);
             if ($interface->type->name eq "DOMWindow") {
-                push(@$outputArray, "    if (!BindingSecurity::shouldAllowAccessToDOMWindow(state, castedThis->wrapped(), ThrowSecurityError))\n");
+                if ($operation->extendedAttributes->{DoNotCheckSecurityIf}) {
+                    my $crossOriginOptions = GetCrossOriginsOptionsFromExtendedAttributeValue($operation->extendedAttributes->{DoNotCheckSecurityIf});
+                    AddToImplIncludes("HTTPParsers.h", $conditional);
+                    push(@$outputArray, "    if (!BindingSecurity::shouldAllowAccessToDOMWindowGivenMinimumCrossOriginOptions(state, castedThis->wrapped(), $crossOriginOptions, ThrowSecurityError))\n");
+                } else {
+                    push(@$outputArray, "    if (!BindingSecurity::shouldAllowAccessToDOMWindow(state, castedThis->wrapped(), ThrowSecurityError))\n");
+                }
                 push(@$outputArray, "        return JSValue::encode(jsUndefined());\n");
             } else {
                 push(@$outputArray, "    if (!BindingSecurity::shouldAllowAccessToFrame(state, castedThis->wrapped().frame(), ThrowSecurityError))\n");

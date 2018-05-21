@@ -31,6 +31,8 @@
 #include "config.h"
 #include "PolicyChecker.h"
 
+#include "BlobRegistry.h"
+#include "BlobURL.h"
 #include "ContentFilter.h"
 #include "ContentSecurityPolicy.h"
 #include "DOMWindow.h"
@@ -44,6 +46,7 @@
 #include "HTMLFormElement.h"
 #include "HTMLFrameOwnerElement.h"
 #include "HTMLPlugInElement.h"
+#include "Logging.h"
 #include <wtf/CompletionHandler.h>
 
 #if USE(QUICK_LOOK)
@@ -79,6 +82,20 @@ PolicyChecker::PolicyChecker(Frame& frame)
 void PolicyChecker::checkNavigationPolicy(ResourceRequest&& newRequest, bool didReceiveRedirectResponse, NavigationPolicyDecisionFunction&& function)
 {
     checkNavigationPolicy(WTFMove(newRequest), didReceiveRedirectResponse, m_frame.loader().activeDocumentLoader(), nullptr, WTFMove(function));
+}
+
+CompletionHandlerCallingScope PolicyChecker::extendBlobURLLifetimeIfNecessary(ResourceRequest& request) const
+{
+    if (!request.url().protocolIsBlob())
+        return { };
+
+    // Create a new temporary blobURL in case this one gets revoked during the asynchronous navigation policy decision.
+    URL temporaryBlobURL = BlobURL::createPublicURL(&m_frame.document()->securityOrigin());
+    blobRegistry().registerBlobURL(temporaryBlobURL, request.url());
+    request.setURL(temporaryBlobURL);
+    return CompletionHandler<void()>([temporaryBlobURL = WTFMove(temporaryBlobURL)] {
+        blobRegistry().unregisterBlobURL(temporaryBlobURL);
+    });
 }
 
 void PolicyChecker::checkNavigationPolicy(ResourceRequest&& request, bool didReceiveRedirectResponse, DocumentLoader* loader, FormState* formState, NavigationPolicyDecisionFunction&& function, PolicyDecisionMode policyDecisionMode)
@@ -123,8 +140,9 @@ void PolicyChecker::checkNavigationPolicy(ResourceRequest&& request, bool didRec
 
     loader->setLastCheckedRequest(ResourceRequest(request));
 
-    if (request.url() == blankURL())
-        return function(WTFMove(request), formState, ShouldContinue::Yes);
+    // Initial 'about:blank' load needs to happen synchronously so the policy check needs to be synchronous in this case.
+    if (!m_frame.loader().stateMachine().committedFirstRealDocumentLoad() && request.url().isBlankURL() && !substituteData.isValid())
+        policyDecisionMode = PolicyDecisionMode::Synchronous;
 
 #if USE(QUICK_LOOK)
     // Always allow QuickLook-generated URLs based on the protocol scheme.
@@ -146,12 +164,11 @@ void PolicyChecker::checkNavigationPolicy(ResourceRequest&& request, bool didRec
 
     m_frame.loader().clearProvisionalLoadForPolicyCheck();
 
+    auto blobURLLifetimeExtension = policyDecisionMode == PolicyDecisionMode::Asynchronous ? extendBlobURLLifetimeIfNecessary(request) : CompletionHandlerCallingScope { };
+
     m_delegateIsDecidingNavigationPolicy = true;
     String suggestedFilename = action.downloadAttribute().isEmpty() ? nullAtom() : action.downloadAttribute();
-    ResourceRequest requestCopy = request;
-    m_frame.loader().client().dispatchDecidePolicyForNavigationAction(action, request, didReceiveRedirectResponse, formState, policyDecisionMode, [this, function = WTFMove(function), request = WTFMove(requestCopy), formState = makeRefPtr(formState), suggestedFilename = WTFMove(suggestedFilename)](PolicyAction policyAction) mutable {
-        m_frame.loader().client().didDecidePolicyForNavigationAction();
-
+    m_frame.loader().client().dispatchDecidePolicyForNavigationAction(action, request, didReceiveRedirectResponse, formState, policyDecisionMode, [this, function = WTFMove(function), request = ResourceRequest(request), formState = makeRefPtr(formState), suggestedFilename = WTFMove(suggestedFilename), blobURLLifetimeExtension = WTFMove(blobURLLifetimeExtension)](PolicyAction policyAction) mutable {
         m_delegateIsDecidingNavigationPolicy = false;
 
         switch (policyAction) {
@@ -174,7 +191,7 @@ void PolicyChecker::checkNavigationPolicy(ResourceRequest&& request, bool didRec
     });
 }
 
-void PolicyChecker::checkNewWindowPolicy(NavigationAction&& navigationAction, const ResourceRequest& request, FormState* formState, const String& frameName, NewWindowPolicyDecisionFunction&& function)
+void PolicyChecker::checkNewWindowPolicy(NavigationAction&& navigationAction, ResourceRequest&& request, FormState* formState, const String& frameName, NewWindowPolicyDecisionFunction&& function)
 {
     if (m_frame.document() && m_frame.document()->isSandboxed(SandboxPopups))
         return function({ }, nullptr, { }, { }, ShouldContinue::No);
@@ -182,7 +199,9 @@ void PolicyChecker::checkNewWindowPolicy(NavigationAction&& navigationAction, co
     if (!DOMWindow::allowPopUp(m_frame))
         return function({ }, nullptr, { }, { }, ShouldContinue::No);
 
-    m_frame.loader().client().dispatchDecidePolicyForNewWindowAction(navigationAction, request, formState, frameName, [frame = makeRef(m_frame), request, formState = makeRefPtr(formState), frameName, navigationAction, function = WTFMove(function)](PolicyAction policyAction) mutable {
+    auto blobURLLifetimeExtension = extendBlobURLLifetimeIfNecessary(request);
+
+    m_frame.loader().client().dispatchDecidePolicyForNewWindowAction(navigationAction, request, formState, frameName, [frame = makeRef(m_frame), request, formState = makeRefPtr(formState), frameName, navigationAction, function = WTFMove(function), blobURLLifetimeExtension = WTFMove(blobURLLifetimeExtension)](PolicyAction policyAction) mutable {
         switch (policyAction) {
         case PolicyAction::Download:
             frame->loader().client().startDownload(request);

@@ -106,8 +106,7 @@ int webProcessLatencyQOS();
 int webProcessThroughputQOS();
 #endif
 
-class WebProcessPool final : public API::ObjectImpl<API::Object::Type::ProcessPool>, private IPC::MessageReceiver
-    {
+class WebProcessPool final : public API::ObjectImpl<API::Object::Type::ProcessPool>, private IPC::MessageReceiver {
 public:
     static Ref<WebProcessPool> create(API::ProcessPoolConfiguration&);
 
@@ -277,6 +276,9 @@ public:
 
     void syncNetworkProcessCookies();
 
+    void setShouldMakeNextWebProcessLaunchFailForTesting(bool value) { m_shouldMakeNextWebProcessLaunchFailForTesting = value; }
+    bool shouldMakeNextWebProcessLaunchFailForTesting() const { return m_shouldMakeNextWebProcessLaunchFailForTesting; }
+
     void reportWebContentCPUTime(Seconds cpuTime, uint64_t activityState);
 
     void allowSpecificHTTPSCertificateForHost(const WebCertificateInfo*, const String& host);
@@ -324,14 +326,14 @@ public:
     // Network Process Management
     NetworkProcessProxy& ensureNetworkProcess(WebsiteDataStore* withWebsiteDataStore = nullptr);
     NetworkProcessProxy* networkProcess() { return m_networkProcess.get(); }
-    void networkProcessCrashed(NetworkProcessProxy&, Vector<Ref<Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply>>&&);
+    void networkProcessCrashed(NetworkProcessProxy&, Vector<Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply>&&);
     void networkProcessFailedToLaunch(NetworkProcessProxy&);
 
-    void getNetworkProcessConnection(Ref<Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply>&&);
+    void getNetworkProcessConnection(Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply&&);
 
     void ensureStorageProcessAndWebsiteDataStore(WebsiteDataStore* relevantDataStore);
     StorageProcessProxy* storageProcess() { return m_storageProcess.get(); }
-    void getStorageProcessConnection(WebProcessProxy&, PAL::SessionID initialSessionID, Ref<Messages::WebProcessProxy::GetStorageProcessConnection::DelayedReply>&&);
+    void getStorageProcessConnection(WebProcessProxy&, PAL::SessionID initialSessionID, Messages::WebProcessProxy::GetStorageProcessConnection::DelayedReply&&);
     void storageProcessCrashed(StorageProcessProxy*);
 #if ENABLE(SERVICE_WORKER)
     void establishWorkerContextConnectionToStorageProcess(StorageProcessProxy&, WebCore::SecurityOriginData&&, std::optional<PAL::SessionID>);
@@ -447,6 +449,11 @@ public:
 #endif
 
     Ref<WebProcessProxy> processForNavigation(WebPageProxy&, const API::Navigation&, WebCore::PolicyAction&);
+    void registerSuspendedPageProxy(SuspendedPageProxy&);
+    void unregisterSuspendedPageProxy(SuspendedPageProxy&);
+    void didReachGoodTimeToPrewarm();
+
+    void screenPropertiesStateChanged();
 
 private:
     void platformInitialize();
@@ -454,7 +461,11 @@ private:
     void platformInitializeWebProcess(WebProcessCreationParameters&);
     void platformInvalidateContext();
 
-    WebProcessProxy& createNewWebProcess(WebsiteDataStore&);
+    Ref<WebProcessProxy> processForNavigationInternal(WebPageProxy&, const API::Navigation&, WebCore::PolicyAction&);
+
+    RefPtr<WebProcessProxy> tryTakePrewarmedProcess(WebsiteDataStore&);
+
+    WebProcessProxy& createNewWebProcess(WebsiteDataStore&, WebProcessProxy::IsInPrewarmedPool = WebProcessProxy::IsInPrewarmedPool::No);
     void initializeNewWebProcess(WebProcessProxy&, WebsiteDataStore&);
 
     void requestWebContentStatistics(StatisticsRequest*);
@@ -509,12 +520,15 @@ private:
     void resolvePathsForSandboxExtensions();
     void platformResolvePathsForSandboxExtensions();
 
+    void addProcessToOriginCacheSet(WebPageProxy&);
+    void removeProcessFromOriginCacheSet(WebProcessProxy&);
+
     Ref<API::ProcessPoolConfiguration> m_configuration;
 
     IPC::MessageReceiverMap m_messageReceiverMap;
 
     Vector<RefPtr<WebProcessProxy>> m_processes;
-    bool m_haveInitialEmptyProcess { false };
+    unsigned m_prewarmedProcessCount { 0 };
 
     WebProcessProxy* m_processWithPageCache { nullptr };
 #if ENABLE(SERVICE_WORKER)
@@ -591,6 +605,7 @@ private:
     RetainPtr<NSObject> m_automaticSpellingCorrectionNotificationObserver;
     RetainPtr<NSObject> m_automaticQuoteSubstitutionNotificationObserver;
     RetainPtr<NSObject> m_automaticDashSubstitutionNotificationObserver;
+    RetainPtr<NSObject> m_accessibilityDisplayOptionsNotificationObserver;
 #if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
     RetainPtr<NSObject> m_scrollerStyleNotificationObserver;
 #endif
@@ -622,6 +637,7 @@ private:
     bool m_javaScriptConfigurationFileEnabled { false };
     bool m_alwaysRunsAtBackgroundPriority;
     bool m_shouldTakeUIBackgroundAssertion;
+    bool m_shouldMakeNextWebProcessLaunchFailForTesting { false };
 
     UserObservablePageCounter m_userObservablePageCounter;
     ProcessSuppressionDisabledCounter m_processSuppressionDisabledForPageCounter;
@@ -682,6 +698,9 @@ private:
     HashMap<WebCore::SecurityOriginData, ProcessThrottler::BackgroundActivityToken> m_backgroundTokensForServiceWorkerProcesses;
 #endif
 #endif
+
+    HashMap<WebCore::SecurityOriginData, Vector<SuspendedPageProxy*>> m_suspendedPages;
+    HashMap<WebCore::SecurityOriginData, RefPtr<WebProcessProxy>> m_swappedProcesses;
 };
 
 template<typename T>

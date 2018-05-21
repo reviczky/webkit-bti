@@ -24,7 +24,6 @@ set(JavaScriptCore_PRIVATE_INCLUDE_DIRECTORIES
     "${JAVASCRIPTCORE_DIR}/dfg"
     "${JAVASCRIPTCORE_DIR}/disassembler"
     "${JAVASCRIPTCORE_DIR}/disassembler/ARM64"
-    "${JAVASCRIPTCORE_DIR}/disassembler/ARMv7"
     "${JAVASCRIPTCORE_DIR}/disassembler/udis86"
     "${JAVASCRIPTCORE_DIR}/domjit"
     "${JAVASCRIPTCORE_DIR}/ftl"
@@ -50,6 +49,10 @@ set(JavaScriptCore_PRIVATE_INCLUDE_DIRECTORIES
     "${DERIVED_SOURCES_JAVASCRIPTCORE_DIR}/yarr"
 )
 
+if (USE_CAPSTONE)
+    list(APPEND JavaScriptCore_PRIVATE_INCLUDE_DIRECTORIES "${THIRDPARTY_DIR}/capstone/Source/include")
+endif ()
+
 set(JavaScriptCore_SYSTEM_INCLUDE_DIRECTORIES
     "${ICU_INCLUDE_DIRS}"
 )
@@ -72,14 +75,16 @@ set(JavaScriptCore_OBJECT_LUT_SOURCES
     runtime/IntlDateTimeFormatPrototype.cpp
     runtime/IntlNumberFormatConstructor.cpp
     runtime/IntlNumberFormatPrototype.cpp
+    runtime/IntlPluralRulesConstructor.cpp
+    runtime/IntlPluralRulesPrototype.cpp
     runtime/JSDataViewPrototype.cpp
     runtime/JSGlobalObject.cpp
     runtime/JSInternalPromiseConstructor.cpp
+    runtime/JSModuleLoader.cpp
     runtime/JSONObject.cpp
     runtime/JSPromiseConstructor.cpp
     runtime/JSPromisePrototype.cpp
     runtime/MapPrototype.cpp
-    runtime/ModuleLoaderPrototype.cpp
     runtime/NumberConstructor.cpp
     runtime/NumberPrototype.cpp
     runtime/ObjectConstructor.cpp
@@ -113,17 +118,14 @@ set(JavaScriptCore_OBJECT_LUT_SOURCES
 set(JavaScriptCore_LIBRARIES
     WTF${DEBUG_SUFFIX}
     ${ICU_I18N_LIBRARIES}
-    ${LLVM_LIBRARIES}
 )
 
-# Since r228149, on MIPS we need to link with -latomic, because
-# __atomic_fetch_add_8 is not available as a compiler intrinsic. It is
-# available on other platforms (including 32-bit Arm), so the link with
-# libatomic is only neede on MIPS.
-if (WTF_CPU_MIPS)
-    list(APPEND JavaScriptCore_LIBRARIES
-        -latomic
-    )
+if (USE_CAPSTONE)
+    list(APPEND JavaScriptCore_LIBRARIES capstone)
+endif ()
+
+if (ATOMIC_INT64_REQUIRES_LIBATOMIC)
+    list(APPEND JavaScriptCore_LIBRARIES atomic)
 endif ()
 
 set(JavaScriptCore_SCRIPTS_SOURCES_DIR "${JAVASCRIPTCORE_DIR}/Scripts")
@@ -531,6 +533,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     heap/IncrementalSweeper.h
     heap/IsoCellSet.h
     heap/IsoSubspace.h
+    heap/IsoSubspacePerVM.h
     heap/LargeAllocation.h
     heap/ListableHandler.h
     heap/LocalAllocator.h
@@ -769,6 +772,7 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/JSCJSValue.h
     runtime/JSCJSValueInlines.h
     runtime/JSCPoison.h
+    runtime/JSCPtrTag.h
     runtime/JSCallee.h
     runtime/JSCast.h
     runtime/JSCell.h
@@ -837,7 +841,6 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     runtime/Operations.h
     runtime/Options.h
     runtime/ParseInt.h
-    runtime/PtrTag.h
     runtime/PrivateName.h
     runtime/ProgramExecutable.h
     runtime/PromiseDeferredTimer.h
@@ -926,6 +929,8 @@ set(JavaScriptCore_PRIVATE_FRAMEWORK_HEADERS
     wasm/WasmTierUpCount.h
 
     wasm/js/JSWebAssemblyModule.h
+    wasm/js/WebAssemblyPrototype.h
+
 
     yarr/RegularExpression.h
     yarr/Yarr.h
@@ -1102,7 +1107,7 @@ set(JavaScriptCore_BUILTINS_SOURCES
     ${JAVASCRIPTCORE_DIR}/builtins/IteratorPrototype.js
     ${JAVASCRIPTCORE_DIR}/builtins/MapIteratorPrototype.js
     ${JAVASCRIPTCORE_DIR}/builtins/MapPrototype.js
-    ${JAVASCRIPTCORE_DIR}/builtins/ModuleLoaderPrototype.js
+    ${JAVASCRIPTCORE_DIR}/builtins/ModuleLoader.js
     ${JAVASCRIPTCORE_DIR}/builtins/NumberConstructor.js
     ${JAVASCRIPTCORE_DIR}/builtins/NumberPrototype.js
     ${JAVASCRIPTCORE_DIR}/builtins/ObjectConstructor.js
@@ -1118,6 +1123,7 @@ set(JavaScriptCore_BUILTINS_SOURCES
     ${JAVASCRIPTCORE_DIR}/builtins/StringPrototype.js
     ${JAVASCRIPTCORE_DIR}/builtins/TypedArrayConstructor.js
     ${JAVASCRIPTCORE_DIR}/builtins/TypedArrayPrototype.js
+    ${JAVASCRIPTCORE_DIR}/builtins/WebAssemblyPrototype.js
 )
 
 add_custom_command(
@@ -1172,6 +1178,15 @@ endif ()
 
 WEBKIT_FRAMEWORK_DECLARE(JavaScriptCore)
 WEBKIT_INCLUDE_CONFIG_FILES_IF_EXISTS()
+
+if (COMPILER_IS_GCC_OR_CLANG)
+    # Avoid using fused multiply-add instructions since this could give different results
+    # for e.g. parseInt depending on the platform and compilation flags.
+    WEBKIT_ADD_TARGET_CXX_FLAGS(JavaScriptCore -ffp-contract=off)
+
+    # Avoid "variable tracking size limit exceeded"
+    set_source_files_properties(builtins/BuiltinNames.cpp PROPERTIES COMPILE_FLAGS -fno-var-tracking-assignments)
+endif ()
 
 WEBKIT_MAKE_FORWARDING_HEADERS(JavaScriptCore
     FILES ${JavaScriptCore_PUBLIC_FRAMEWORK_HEADERS}

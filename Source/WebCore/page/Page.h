@@ -21,6 +21,7 @@
 #pragma once
 
 #include "ActivityState.h"
+#include "DisabledAdaptations.h"
 #include "FindOptions.h"
 #include "FrameLoaderTypes.h"
 #include "LayoutMilestones.h"
@@ -156,6 +157,7 @@ enum class EventThrottlingBehavior {
 enum class CanWrap : bool;
 enum class DidWrap : bool;
 enum class NavigationPolicyCheck;
+enum class RouteSharingPolicy;
 
 class Page : public Supplementable<Page> {
     WTF_MAKE_NONCOPYABLE(Page);
@@ -173,6 +175,7 @@ public:
 
     WEBCORE_EXPORT void setNeedsRecalcStyleInAllFrames();
 
+    WEBCORE_EXPORT OptionSet<DisabledAdaptations> disabledAdaptations() const;
     WEBCORE_EXPORT ViewportArguments viewportArguments() const;
 
     static void refreshPlugins(bool reload);
@@ -573,7 +576,7 @@ public:
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     void addPlaybackTargetPickerClient(uint64_t);
     void removePlaybackTargetPickerClient(uint64_t);
-    void showPlaybackTargetPicker(uint64_t, const IntPoint&, bool);
+    void showPlaybackTargetPicker(uint64_t, const IntPoint&, bool, RouteSharingPolicy, const String&);
     void playbackTargetPickerClientStateDidChange(uint64_t, MediaProducer::MediaStateFlags);
     WEBCORE_EXPORT void setMockMediaPlaybackTargetPickerEnabled(bool);
     WEBCORE_EXPORT void setMockMediaPlaybackTargetPickerState(const String&, MediaPlaybackTargetContext::State);

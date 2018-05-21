@@ -64,8 +64,6 @@
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/WTFString.h>
 
-using namespace std;
-
 namespace JSC {
 
 template<typename T>
@@ -1196,7 +1194,7 @@ UniquedStringImpl* BytecodeGenerator::visibleNameForParameter(DestructuringPatte
 RegisterID* BytecodeGenerator::newRegister()
 {
     m_calleeLocals.append(virtualRegisterForLocal(m_calleeLocals.size()));
-    int numCalleeLocals = max<int>(m_codeBlock->m_numCalleeLocals, m_calleeLocals.size());
+    int numCalleeLocals = std::max<int>(m_codeBlock->m_numCalleeLocals, m_calleeLocals.size());
     numCalleeLocals = WTF::roundUpToMultipleOf(stackAlignmentRegisters(), numCalleeLocals);
     m_codeBlock->m_numCalleeLocals = numCalleeLocals;
     return &m_calleeLocals.last();
@@ -1296,8 +1294,10 @@ UnlinkedObjectAllocationProfile BytecodeGenerator::newObjectAllocationProfile()
 
 UnlinkedValueProfile BytecodeGenerator::emitProfiledOpcode(OpcodeID opcodeID)
 {
-    UnlinkedValueProfile result = m_codeBlock->addValueProfile();
     emitOpcode(opcodeID);
+    if (!m_vm->canUseJIT())
+        return static_cast<UnlinkedValueProfile>(-1);
+    UnlinkedValueProfile result = m_codeBlock->addValueProfile();
     return result;
 }
 
@@ -2667,14 +2667,23 @@ RegisterID* BytecodeGenerator::emitInstanceOfCustom(RegisterID* dst, RegisterID*
     return dst;
 }
 
-RegisterID* BytecodeGenerator::emitIn(RegisterID* dst, RegisterID* property, RegisterID* base)
+RegisterID* BytecodeGenerator::emitInByVal(RegisterID* dst, RegisterID* property, RegisterID* base)
 {
     UnlinkedArrayProfile arrayProfile = newArrayProfile();
-    emitOpcode(op_in);
+    emitOpcode(op_in_by_val);
     instructions().append(dst->index());
     instructions().append(base->index());
     instructions().append(property->index());
     instructions().append(arrayProfile);
+    return dst;
+}
+
+RegisterID* BytecodeGenerator::emitInById(RegisterID* dst, RegisterID* base, const Identifier& property)
+{
+    emitOpcode(op_in_by_id);
+    instructions().append(dst->index());
+    instructions().append(base->index());
+    instructions().append(addConstant(property));
     return dst;
 }
 

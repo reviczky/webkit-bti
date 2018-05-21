@@ -167,3 +167,33 @@ void WKContextConfigurationSetProcessSwapsOnNavigation(WKContextConfigurationRef
 {
     toImpl(configuration)->setProcessSwapsOnNavigation(swaps);
 }
+
+bool WKContextConfigurationAlwaysKeepAndReuseSwappedProcesses(WKContextConfigurationRef configuration)
+{
+    return toImpl(configuration)->alwaysKeepAndReuseSwappedProcesses();
+}
+
+void WKContextConfigurationSetAlwaysKeepAndReuseSwappedProcesses(WKContextConfigurationRef configuration, bool keepAndReuse)
+{
+    toImpl(configuration)->setAlwaysKeepAndReuseSwappedProcesses(keepAndReuse);
+}
+
+bool WKContextConfigurationProcessSwapsOnWindowOpenWithOpener(WKContextConfigurationRef configuration)
+{
+    return toImpl(configuration)->processSwapsOnWindowOpenWithOpener();
+}
+
+void WKContextConfigurationSetProcessSwapsOnWindowOpenWithOpener(WKContextConfigurationRef configuration, bool swaps)
+{
+    toImpl(configuration)->setProcessSwapsOnWindowOpenWithOpener(swaps);
+}
+
+bool WKContextConfigurationTracksResourceLoadMilestones(WKContextConfigurationRef configuration)
+{
+    return toImpl(configuration)->tracksResourceLoadMilestones();
+}
+
+void WKContextConfigurationSetTracksResourceLoadMilestones(WKContextConfigurationRef configuration, bool track)
+{
+    toImpl(configuration)->setTracksResourceLoadMilestones(track);
+}
