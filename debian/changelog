@@ -1,3 +1,17 @@
+webkit2gtk (2.20.2-1~bpo9+1) stretch-backports; urgency=medium
+
+  * Rebuild for stretch-backports.
+  * debian/control:
+    + Versions of GStreamer < 1.13 had GStreamerGL in the "bad" set, so
+      depend on libgstreamer-plugins-bad1.0-dev and don't require
+      GStreamer 1.13.
+    + Remove build dependency on libwoff-dev, this is not available in
+      this Debian release.
+  * debian/rules:
+    + Build with -DUSE_WOFF2=OFF.
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 21 May 2018 09:53:17 +0300
+
 webkit2gtk (2.20.2-1) unstable; urgency=high
 
   * New upstream release.
