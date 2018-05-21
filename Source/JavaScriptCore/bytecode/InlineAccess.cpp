@@ -132,7 +132,7 @@ ALWAYS_INLINE static bool linkCodeInline(const char* name, CCallHelpers& jit, St
 {
     if (jit.m_assembler.buffer().codeSize() <= stubInfo.patch.inlineSize) {
         bool needsBranchCompaction = false;
-        LinkBuffer linkBuffer(jit, stubInfo.patch.start.dataLocation(), stubInfo.patch.inlineSize, JITCompilationMustSucceed, needsBranchCompaction);
+        LinkBuffer linkBuffer(jit, stubInfo.patch.start, stubInfo.patch.inlineSize, JITCompilationMustSucceed, needsBranchCompaction);
         ASSERT(linkBuffer.isValid());
         function(linkBuffer);
         FINALIZE_CODE(linkBuffer, NoPtrTag, "InlineAccessType: '%s'", name);
@@ -249,9 +249,7 @@ bool InlineAccess::isCacheableArrayLength(StructureStubInfo& stubInfo, JSArray* 
     if (!hasFreeRegister(stubInfo))
         return false;
 
-    return array->indexingType() == ArrayWithInt32
-        || array->indexingType() == ArrayWithDouble
-        || array->indexingType() == ArrayWithContiguous;
+    return !hasAnyArrayStorage(array->indexingType()) && array->indexingType() != ArrayClass;
 }
 
 bool InlineAccess::generateArrayLength(StructureStubInfo& stubInfo, JSArray* array)
@@ -278,6 +276,25 @@ bool InlineAccess::generateArrayLength(StructureStubInfo& stubInfo, JSArray* arr
     return linkedCodeInline;
 }
 
+bool InlineAccess::generateSelfInAccess(StructureStubInfo& stubInfo, Structure* structure)
+{
+    CCallHelpers jit;
+
+    GPRReg base = static_cast<GPRReg>(stubInfo.patch.baseGPR);
+    JSValueRegs value = stubInfo.valueRegs();
+
+    auto branchToSlowPath = jit.patchableBranch32(
+        MacroAssembler::NotEqual,
+        MacroAssembler::Address(base, JSCell::structureIDOffset()),
+        MacroAssembler::TrustedImm32(bitwise_cast<uint32_t>(structure->id())));
+    jit.boxBooleanPayload(true, value.payloadGPR());
+
+    bool linkedCodeInline = linkCodeInline("in access", jit, stubInfo, [&] (LinkBuffer& linkBuffer) {
+        linkBuffer.link(branchToSlowPath, stubInfo.slowPathStartLocation());
+    });
+    return linkedCodeInline;
+}
+
 void InlineAccess::rewireStubAsJump(StructureStubInfo& stubInfo, CodeLocationLabel<JITStubRoutinePtrTag> target)
 {
     CCallHelpers jit;
@@ -286,7 +303,7 @@ void InlineAccess::rewireStubAsJump(StructureStubInfo& stubInfo, CodeLocationLab
 
     // We don't need a nop sled here because nobody should be jumping into the middle of an IC.
     bool needsBranchCompaction = false;
-    LinkBuffer linkBuffer(jit, stubInfo.patch.start.dataLocation(), jit.m_assembler.buffer().codeSize(), JITCompilationMustSucceed, needsBranchCompaction);
+    LinkBuffer linkBuffer(jit, stubInfo.patch.start, jit.m_assembler.buffer().codeSize(), JITCompilationMustSucceed, needsBranchCompaction);
     RELEASE_ASSERT(linkBuffer.isValid());
     linkBuffer.link(jump, target);
 

@@ -80,6 +80,16 @@
 #include <wtf/StackTrace.h>
 #endif
 
+// Enable the Objective-C API for platforms with a modern runtime. This has to match exactly what we
+// have in JSBase.h.
+#if !defined(JSC_OBJC_API_ENABLED)
+#if (defined(__clang__) && defined(__APPLE__) && ((defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && !defined(__i386__)) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)))
+#define JSC_OBJC_API_ENABLED 1
+#else
+#define JSC_OBJC_API_ENABLED 0
+#endif
+#endif
+
 namespace WTF {
 class SimpleStats;
 } // namespace WTF
@@ -92,6 +102,7 @@ class BytecodeIntrinsicRegistry;
 class CodeBlock;
 class CodeCache;
 class CommonIdentifiers;
+class CompactVariableMap;
 class CustomGetterSetter;
 class DOMAttributeGetterSetter;
 class ExecState;
@@ -160,6 +171,7 @@ class Signature;
 
 struct HashTable;
 struct Instruction;
+struct ValueProfile;
 
 struct LocalTimeOffsetCache {
     LocalTimeOffsetCache()
@@ -320,8 +332,6 @@ public:
             return primitiveGigacageAuxiliarySpace;
         case Gigacage::JSValue:
             return jsValueGigacageAuxiliarySpace;
-        case Gigacage::String:
-            break;
         }
         RELEASE_ASSERT_NOT_REACHED();
         return primitiveGigacageAuxiliarySpace;
@@ -337,11 +347,14 @@ public:
     CompleteSubspace eagerlySweptDestructibleObjectSpace;
     CompleteSubspace segmentedVariableObjectSpace;
     
+    IsoSubspace arrayBufferConstructorSpace;
     IsoSubspace asyncFunctionSpace;
     IsoSubspace asyncGeneratorFunctionSpace;
     IsoSubspace boundFunctionSpace;
+    IsoSubspace callbackFunctionSpace;
     IsoSubspace customGetterSetterFunctionSpace;
     IsoSubspace directEvalExecutableSpace;
+    IsoSubspace errorConstructorSpace;
     IsoSubspace executableToCodeBlockEdgeSpace;
     IsoSubspace functionExecutableSpace;
     IsoSubspace functionSpace;
@@ -349,11 +362,25 @@ public:
     IsoSubspace indirectEvalExecutableSpace;
     IsoSubspace inferredTypeSpace;
     IsoSubspace inferredValueSpace;
+    IsoSubspace internalFunctionSpace;
+#if ENABLE(INTL)
+    IsoSubspace intlCollatorConstructorSpace;
+    IsoSubspace intlDateTimeFormatConstructorSpace;
+    IsoSubspace intlNumberFormatConstructorSpace;
+    IsoSubspace intlPluralRulesConstructorSpace;
+#endif
     IsoSubspace moduleProgramExecutableSpace;
+    IsoSubspace nativeErrorConstructorSpace;
     IsoSubspace nativeExecutableSpace;
     IsoSubspace nativeStdFunctionSpace;
+#if JSC_OBJC_API_ENABLED
+    IsoSubspace objCCallbackFunctionSpace;
+#endif
     IsoSubspace programExecutableSpace;
     IsoSubspace propertyTableSpace;
+    IsoSubspace proxyRevokeSpace;
+    IsoSubspace regExpConstructorSpace;
+    IsoSubspace strictModeTypeErrorFunctionSpace;
     IsoSubspace structureRareDataSpace;
     IsoSubspace structureSpace;
     IsoSubspace weakSetSpace;
@@ -684,6 +711,7 @@ public:
     void releaseRegExpPatternContexBuffer();
 #endif
 
+    Ref<CompactVariableMap> m_compactVariableMap;
 
     std::unique_ptr<HasOwnPropertyCache> m_hasOwnPropertyCache;
     ALWAYS_INLINE HasOwnPropertyCache* hasOwnPropertyCache() { return m_hasOwnPropertyCache.get(); }
@@ -693,6 +721,8 @@ public:
     typedef ListHashSet<RegExp*> RTTraceList;
     RTTraceList* m_rtTraceList;
 #endif
+
+    std::unique_ptr<ValueProfile> noJITValueProfileSingleton;
 
     JS_EXPORT_PRIVATE void resetDateCache();
 
@@ -718,6 +748,8 @@ public:
 
     JS_EXPORT_PRIVATE void deleteAllCode(DeleteAllCodeEffort);
     JS_EXPORT_PRIVATE void deleteAllLinkedCode(DeleteAllCodeEffort);
+
+    void shrinkFootprint();
 
     WatchpointSet* ensureWatchpointSetForImpureProperty(const Identifier&);
     void registerWatchpointForImpureProperty(const Identifier&, Watchpoint*);

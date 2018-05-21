@@ -26,6 +26,7 @@
 #pragma once
 
 #include "WebEvent.h"
+#include <WebCore/BackForwardItemIdentifier.h>
 #include <WebCore/FloatPoint.h>
 #include <WebCore/FrameLoaderTypes.h>
 
@@ -50,8 +51,10 @@ struct NavigationActionData {
     WTF::String downloadAttribute;
     WebCore::FloatPoint clickLocationInRootViewCoordinates;
     bool isRedirect { false };
+    bool treatAsSameOriginNavigation { false };
     bool isCrossOriginWindowOpenNavigation { false };
     std::optional<std::pair<uint64_t, uint64_t>> opener;
+    std::optional<WebCore::BackForwardItemIdentifier> targetBackForwardItemIdentifier;
 };
 
 }

@@ -93,6 +93,9 @@ InternalSettings::Backup::Backup(Settings& settings)
     , m_inlineMediaPlaybackRequiresPlaysInlineAttribute(settings.inlineMediaPlaybackRequiresPlaysInlineAttribute())
     , m_deferredCSSParserEnabled(settings.deferredCSSParserEnabled())
     , m_inputEventsEnabled(settings.inputEventsEnabled())
+#if ENABLE(ACCESSIBILITY_EVENTS)
+    , m_accessibilityEventsEnabled(settings.accessibilityEventsEnabled())
+#endif
     , m_userInterfaceDirectionPolicy(settings.userInterfaceDirectionPolicy())
     , m_systemLayoutDirection(settings.systemLayoutDirection())
     , m_pdfImageCachingPolicy(settings.pdfImageCachingPolicy())
@@ -119,6 +122,7 @@ InternalSettings::Backup::Backup(Settings& settings)
     , m_shouldManageAudioSessionCategory(DeprecatedGlobalSettings::shouldManageAudioSessionCategory())
 #endif
     , m_customPasteboardDataEnabled(RuntimeEnabledFeatures::sharedFeatures().customPasteboardDataEnabled())
+    , m_promptForStorageAccessAPIEnabled(RuntimeEnabledFeatures::sharedFeatures().storageAccessPromptsEnabled())
 {
 }
 
@@ -200,6 +204,9 @@ void InternalSettings::Backup::restoreTo(Settings& settings)
     RenderTheme::singleton().setShouldMockBoldSystemFontForAccessibility(m_shouldMockBoldSystemFontForAccessibility);
     FontCache::singleton().setShouldMockBoldSystemFontForAccessibility(m_shouldMockBoldSystemFontForAccessibility);
     settings.setFrameFlattening(m_frameFlattening);
+#if ENABLE(ACCESSIBILITY_EVENTS)
+    settings.setAccessibilityEventsEnabled(m_accessibilityEventsEnabled);
+#endif
 
 #if ENABLE(INDEXED_DATABASE_IN_WORKERS)
     RuntimeEnabledFeatures::sharedFeatures().setIndexedDBWorkersEnabled(m_indexedDBWorkersEnabled);
@@ -219,6 +226,8 @@ void InternalSettings::Backup::restoreTo(Settings& settings)
 #if USE(AUDIO_SESSION)
     DeprecatedGlobalSettings::setShouldManageAudioSessionCategory(m_shouldManageAudioSessionCategory);
 #endif
+
+    RuntimeEnabledFeatures::sharedFeatures().setStorageAccessPromptsEnabled(m_promptForStorageAccessAPIEnabled);
 }
 
 class InternalSettingsWrapper : public Supplement<Page> {
@@ -770,6 +779,11 @@ void InternalSettings::setScreenCaptureEnabled(bool enabled)
 #endif
 }
 
+void InternalSettings::setStorageAccessPromptsEnabled(bool enabled)
+{
+    RuntimeEnabledFeatures::sharedFeatures().setStorageAccessPromptsEnabled(enabled);
+}
+    
 ExceptionOr<String> InternalSettings::userInterfaceDirectionPolicy()
 {
     if (!m_page)
@@ -876,6 +890,18 @@ ExceptionOr<void> InternalSettings::setCustomPasteboardDataEnabled(bool enabled)
     return { };
 }
 
+ExceptionOr<void> InternalSettings::setAccessibilityEventsEnabled(bool enabled)
+{
+    if (!m_page)
+        return Exception { InvalidAccessError };
+#if ENABLE(ACCESSIBILITY_EVENTS)
+    settings().setAccessibilityEventsEnabled(enabled);
+#else
+    UNUSED_PARAM(enabled);
+#endif
+    return { };
+}
+
 static InternalSettings::ForcedAccessibilityValue settingsToInternalSettingsValue(Settings::ForcedAccessibilityValue value)
 {
     switch (value) {
@@ -936,9 +962,9 @@ void InternalSettings::setForcedPrefersReducedMotionAccessibilityValue(InternalS
     settings().setForcedPrefersReducedMotionAccessibilityValue(internalSettingsToSettingsValue(value));
 }
 
-bool InternalSettings::cssAnimationsAndCSSTransitionsBackedByWebAnimationsEnabled()
+bool InternalSettings::webAnimationsCSSIntegrationEnabled()
 {
-    return RuntimeEnabledFeatures::sharedFeatures().cssAnimationsAndCSSTransitionsBackedByWebAnimationsEnabled();
+    return RuntimeEnabledFeatures::sharedFeatures().webAnimationsCSSIntegrationEnabled();
 }
 
 // If you add to this class, make sure that you update the Backup class for test reproducability!

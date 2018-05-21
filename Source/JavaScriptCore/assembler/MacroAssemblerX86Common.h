@@ -290,6 +290,16 @@ public:
         m_assembler.andl_mr(src.offset, src.base, src.index, src.scale, dest);
     }
 
+    void and16(Address src, RegisterID dest)
+    {
+        m_assembler.andw_mr(src.offset, src.base, dest);
+    }
+
+    void and16(BaseIndex src, RegisterID dest)
+    {
+        m_assembler.andw_mr(src.offset, src.base, src.index, src.scale, dest);
+    }
+
     void and32(TrustedImm32 imm, Address address)
     {
         m_assembler.andl_im(imm.m_value, address.offset, address.base);
@@ -1445,6 +1455,17 @@ public:
         m_assembler.movsd_mr(address.offset, address.base, address.index, address.scale, dest);
     }
 
+    void loadFloat(TrustedImmPtr address, FPRegisterID dest)
+    {
+#if CPU(X86)
+        ASSERT(isSSE2Present());
+        m_assembler.movss_mr(address.asPtr(), dest);
+#else
+        move(address, scratchRegister());
+        loadFloat(scratchRegister(), dest);
+#endif
+    }
+
     void loadFloat(ImplicitAddress address, FPRegisterID dest)
     {
         ASSERT(isSSE2Present());
@@ -2002,6 +2023,22 @@ public:
         else
             m_assembler.ucomiss_rr(right, left);
         return jumpAfterFloatingPointCompare(cond, left, right);
+    }
+
+    void compareDouble(DoubleCondition cond, FPRegisterID left, FPRegisterID right, RegisterID dest)
+    {
+        ASSERT(isSSE2Present());
+        floatingPointCompare(cond, left, right, dest, [this] (FPRegisterID arg1, FPRegisterID arg2) {
+            m_assembler.ucomisd_rr(arg1, arg2);
+        });
+    }
+
+    void compareFloat(DoubleCondition cond, FPRegisterID left, FPRegisterID right, RegisterID dest)
+    {
+        ASSERT(isSSE2Present());
+        floatingPointCompare(cond, left, right, dest, [this] (FPRegisterID arg1, FPRegisterID arg2) {
+            m_assembler.ucomiss_rr(arg1, arg2);
+        });
     }
 
     // Truncates 'src' to an integer, and places the resulting 'dest'.
@@ -4089,6 +4126,51 @@ private:
         skipNonZeroCase.link(this);
     }
 
+    template<typename Function>
+    void floatingPointCompare(DoubleCondition cond, FPRegisterID left, FPRegisterID right, RegisterID dest, Function compare)
+    {
+        if (cond & DoubleConditionBitSpecial) {
+            ASSERT(!(cond & DoubleConditionBitInvert));
+            if (cond == DoubleEqual) {
+                if (left == right) {
+                    compare(right, left);
+                    set32(X86Assembler::ConditionNP, dest);
+                    return;
+                }
+
+                move(TrustedImm32(0), dest);
+                compare(right, left);
+                Jump isUnordered = m_assembler.jp();
+                set32(X86Assembler::ConditionE, dest);
+                isUnordered.link(this);
+                return;
+            }
+            if (cond == DoubleNotEqualOrUnordered) {
+                if (left == right) {
+                    compare(right, left);
+                    set32(X86Assembler::ConditionP, dest);
+                    return;
+                }
+
+                move(TrustedImm32(1), dest);
+                compare(right, left);
+                Jump isUnordered = m_assembler.jp();
+                set32(X86Assembler::ConditionNE, dest);
+                isUnordered.link(this);
+                return;
+            }
+
+            RELEASE_ASSERT_NOT_REACHED();
+            return;
+        }
+
+        if (cond & DoubleConditionBitInvert)
+            compare(left, right);
+        else
+            compare(right, left);
+        set32(static_cast<X86Assembler::Condition>(cond & ~DoubleConditionBits), dest);
+    }
+
     Jump jumpAfterFloatingPointCompare(DoubleCondition cond, FPRegisterID left, FPRegisterID right)
     {
         if (cond == DoubleEqual) {
@@ -4188,11 +4270,6 @@ private:
     static CPUID getCPUIDEx(unsigned level, unsigned count);
     JS_EXPORT_PRIVATE static void collectCPUFeatures();
 
-    enum class CPUIDCheckState {
-        NotChecked,
-        Clear,
-        Set
-    };
     JS_EXPORT_PRIVATE static CPUIDCheckState s_sse2CheckState;
     JS_EXPORT_PRIVATE static CPUIDCheckState s_sse4_1CheckState;
     JS_EXPORT_PRIVATE static CPUIDCheckState s_sse4_2CheckState;

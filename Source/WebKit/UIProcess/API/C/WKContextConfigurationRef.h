@@ -71,6 +71,15 @@ WK_EXPORT void WKContextConfigurationSetShouldCaptureAudioInUIProcess(WKContextC
 WK_EXPORT bool WKContextConfigurationProcessSwapsOnNavigation(WKContextConfigurationRef configuration);
 WK_EXPORT void WKContextConfigurationSetProcessSwapsOnNavigation(WKContextConfigurationRef configuration, bool swaps);
 
+WK_EXPORT bool WKContextConfigurationAlwaysKeepAndReuseSwappedProcesses(WKContextConfigurationRef configuration);
+WK_EXPORT void WKContextConfigurationSetAlwaysKeepAndReuseSwappedProcesses(WKContextConfigurationRef configuration, bool keepAndReuse);
+
+WK_EXPORT bool WKContextConfigurationProcessSwapsOnWindowOpenWithOpener(WKContextConfigurationRef configuration);
+WK_EXPORT void WKContextConfigurationSetProcessSwapsOnWindowOpenWithOpener(WKContextConfigurationRef configuration, bool swaps);
+
+WK_EXPORT bool WKContextConfigurationTracksResourceLoadMilestones(WKContextConfigurationRef configuration);
+WK_EXPORT void WKContextConfigurationSetTracksResourceLoadMilestones(WKContextConfigurationRef configuration, bool track);
+
 #ifdef __cplusplus
 }
 #endif

@@ -75,6 +75,7 @@
 #include "TypedArrayInlines.h"
 #include "VMInlines.h"
 #include <wtf/InlineASM.h>
+#include <wtf/Variant.h>
 
 #if ENABLE(JIT)
 #if ENABLE(DFG_JIT)
@@ -138,12 +139,14 @@ ALWAYS_INLINE static void putByValInternal(ExecState* exec, VM& vm, EncodedJSVal
     PutPropertySlot slot(baseValue, strict);
     if (direct) {
         RELEASE_ASSERT(baseValue.isObject());
+        JSObject* baseObject = asObject(baseValue);
         if (std::optional<uint32_t> index = parseIndex(propertyName)) {
             scope.release();
-            asObject(baseValue)->putDirectIndex(exec, index.value(), value, 0, strict ? PutDirectIndexShouldThrow : PutDirectIndexShouldNotThrow);
+            baseObject->putDirectIndex(exec, index.value(), value, 0, strict ? PutDirectIndexShouldThrow : PutDirectIndexShouldNotThrow);
             return;
         }
-        asObject(baseValue)->putDirect(vm, propertyName, value, slot);
+        scope.release();
+        CommonSlowPaths::putDirectWithReify(vm, exec, baseObject, propertyName, value, slot);
         return;
     }
     scope.release();
@@ -156,10 +159,12 @@ ALWAYS_INLINE static void putByValCellInternal(ExecState* exec, VM& vm, JSCell* 
     PutPropertySlot slot(base, strict);
     if (direct) {
         RELEASE_ASSERT(base->isObject());
-        if (std::optional<uint32_t> index = parseIndex(propertyName))
-            asObject(base)->putDirectIndex(exec, index.value(), value, 0, strict ? PutDirectIndexShouldThrow : PutDirectIndexShouldNotThrow);
-        else
-            asObject(base)->putDirect(vm, propertyName, value, slot);
+        JSObject* baseObject = asObject(base);
+        if (std::optional<uint32_t> index = parseIndex(propertyName)) {
+            baseObject->putDirectIndex(exec, index.value(), value, 0, strict ? PutDirectIndexShouldThrow : PutDirectIndexShouldNotThrow);
+            return;
+        }
+        CommonSlowPaths::putDirectWithReify(vm, exec, baseObject, propertyName, value, slot);
         return;
     }
     base->putInline(exec, propertyName, value, slot);
@@ -250,10 +255,12 @@ JSCell* JIT_OPERATION operationCreateThis(ExecState* exec, JSObject* constructor
     if (constructor->type() == JSFunctionType && jsCast<JSFunction*>(constructor)->canUseAllocationProfile()) {
         auto rareData = jsCast<JSFunction*>(constructor)->ensureRareDataAndAllocationProfile(exec, inlineCapacity);
         RETURN_IF_EXCEPTION(scope, nullptr);
-        Structure* structure = rareData->objectAllocationProfile()->structure();
+        ObjectAllocationProfile* allocationProfile = rareData->objectAllocationProfile();
+        Structure* structure = allocationProfile->structure();
         JSObject* result = constructEmptyObject(exec, structure);
         if (structure->hasPolyProto()) {
-            JSObject* prototype = jsCast<JSFunction*>(constructor)->prototypeForConstruction(vm, exec);
+            JSObject* prototype = allocationProfile->prototype();
+            ASSERT(prototype == jsCast<JSFunction*>(constructor)->prototypeForConstruction(vm, exec));
             result->putDirect(vm, knownPolyProtoOffset, prototype);
             prototype->didBecomePrototype();
             ASSERT_WITH_MESSAGE(!hasIndexedProperties(result->indexingType()), "We rely on JSFinalObject not starting out with an indexing type otherwise we would potentially need to convert to slow put storage");
@@ -422,10 +429,25 @@ EncodedJSValue JIT_OPERATION operationValueDiv(ExecState* exec, EncodedJSValue e
     JSValue op1 = JSValue::decode(encodedOp1);
     JSValue op2 = JSValue::decode(encodedOp2);
 
-    double a = op1.toNumber(exec);
+    auto leftNumeric = op1.toNumeric(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
+    auto rightNumeric = op2.toNumeric(exec);
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
+
+    if (WTF::holds_alternative<JSBigInt*>(leftNumeric) || WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+        if (WTF::holds_alternative<JSBigInt*>(leftNumeric) && WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+            JSBigInt* result = JSBigInt::divide(exec, WTF::get<JSBigInt*>(leftNumeric), WTF::get<JSBigInt*>(rightNumeric));
+            RETURN_IF_EXCEPTION(scope, encodedJSValue());
+            return JSValue::encode(result);
+        }
+
+        return throwVMTypeError(exec, scope, "Invalid operand in BigInt operation.");
+    }
+
     scope.release();
-    double b = op2.toNumber(exec);
+
+    double a = WTF::get<double>(leftNumeric);
+    double b = WTF::get<double>(rightNumeric);
     return JSValue::encode(jsNumber(a / b));
 }
 
@@ -820,7 +842,7 @@ void JIT_OPERATION operationPutDoubleByValDirectBeyondArrayBoundsStrict(ExecStat
     }
 
     PutPropertySlot slot(object, true);
-    object->putDirect(vm, Identifier::from(exec, index), jsValue, slot);
+    CommonSlowPaths::putDirectWithReify(vm, exec, object, Identifier::from(exec, index), jsValue, slot);
 }
 
 void JIT_OPERATION operationPutDoubleByValDirectBeyondArrayBoundsNonStrict(ExecState* exec, JSObject* object, int32_t index, double value)
@@ -836,7 +858,7 @@ void JIT_OPERATION operationPutDoubleByValDirectBeyondArrayBoundsNonStrict(ExecS
     }
 
     PutPropertySlot slot(object, false);
-    object->putDirect(vm, Identifier::from(exec, index), jsValue, slot);
+    CommonSlowPaths::putDirectWithReify(vm, exec, object, Identifier::from(exec, index), jsValue, slot);
 }
 
 void JIT_OPERATION operationPutByValDirectStrict(ExecState* exec, EncodedJSValue encodedBase, EncodedJSValue encodedProperty, EncodedJSValue encodedValue)
@@ -913,7 +935,7 @@ void JIT_OPERATION operationPutByValDirectBeyondArrayBoundsStrict(ExecState* exe
     }
     
     PutPropertySlot slot(object, true);
-    object->putDirect(vm, Identifier::from(exec, index), JSValue::decode(encodedValue), slot);
+    CommonSlowPaths::putDirectWithReify(vm, exec, object, Identifier::from(exec, index), JSValue::decode(encodedValue), slot);
 }
 
 void JIT_OPERATION operationPutByValDirectBeyondArrayBoundsNonStrict(ExecState* exec, JSObject* object, int32_t index, EncodedJSValue encodedValue)
@@ -927,7 +949,7 @@ void JIT_OPERATION operationPutByValDirectBeyondArrayBoundsNonStrict(ExecState* 
     }
     
     PutPropertySlot slot(object, false);
-    object->putDirect(vm, Identifier::from(exec, index), JSValue::decode(encodedValue), slot);
+    CommonSlowPaths::putDirectWithReify(vm, exec, object, Identifier::from(exec, index), JSValue::decode(encodedValue), slot);
 }
 
 EncodedJSValue JIT_OPERATION operationArrayPush(ExecState* exec, EncodedJSValue encodedValue, JSArray* array)
@@ -1235,6 +1257,14 @@ size_t JIT_OPERATION operationCompareStrictEqCell(ExecState* exec, JSCell* op1, 
     NativeCallFrameTracer tracer(vm, exec);
     
     return JSValue::strictEqualSlowCaseInline(exec, op1, op2);
+}
+
+size_t JIT_OPERATION operationSameValue(ExecState* exec, EncodedJSValue arg1, EncodedJSValue arg2)
+{
+    VM& vm = exec->vm();
+    NativeCallFrameTracer tracer(&vm, exec);
+
+    return sameValue(exec, JSValue::decode(arg1), JSValue::decode(arg2));
 }
 
 EncodedJSValue JIT_OPERATION operationToPrimitive(ExecState* exec, EncodedJSValue value)
@@ -1731,14 +1761,8 @@ size_t JIT_OPERATION operationObjectIsObject(ExecState* exec, JSGlobalObject* gl
     
     if (object->structure(vm)->masqueradesAsUndefined(globalObject))
         return false;
-    if (object->type() == JSFunctionType)
+    if (object->isFunction(vm))
         return false;
-    if (object->inlineTypeFlags() & TypeOfShouldCallGetCallData) {
-        CallData callData;
-        if (object->methodTable(vm)->getCallData(object, callData) != CallType::None)
-            return false;
-    }
-    
     return true;
 }
 
@@ -1751,14 +1775,8 @@ size_t JIT_OPERATION operationObjectIsFunction(ExecState* exec, JSGlobalObject* 
     
     if (object->structure(vm)->masqueradesAsUndefined(globalObject))
         return false;
-    if (object->type() == JSFunctionType)
+    if (object->isFunction(vm))
         return true;
-    if (object->inlineTypeFlags() & TypeOfShouldCallGetCallData) {
-        CallData callData;
-        if (object->methodTable(vm)->getCallData(object, callData) != CallType::None)
-            return true;
-    }
-    
     return false;
 }
 
@@ -1771,14 +1789,8 @@ JSCell* JIT_OPERATION operationTypeOfObject(ExecState* exec, JSGlobalObject* glo
     
     if (object->structure(vm)->masqueradesAsUndefined(globalObject))
         return vm.smallStrings.undefinedString();
-    if (object->type() == JSFunctionType)
+    if (object->isFunction(vm))
         return vm.smallStrings.functionString();
-    if (object->inlineTypeFlags() & TypeOfShouldCallGetCallData) {
-        CallData callData;
-        if (object->methodTable(vm)->getCallData(object, callData) != CallType::None)
-            return vm.smallStrings.functionString();
-    }
-    
     return vm.smallStrings.objectString();
 }
 
@@ -1791,14 +1803,8 @@ int32_t JIT_OPERATION operationTypeOfObjectAsTypeofType(ExecState* exec, JSGloba
     
     if (object->structure(vm)->masqueradesAsUndefined(globalObject))
         return static_cast<int32_t>(TypeofType::Undefined);
-    if (object->type() == JSFunctionType)
+    if (object->isFunction(vm))
         return static_cast<int32_t>(TypeofType::Function);
-    if (object->inlineTypeFlags() & TypeOfShouldCallGetCallData) {
-        CallData callData;
-        if (object->methodTable(vm)->getCallData(object, callData) != CallType::None)
-            return static_cast<int32_t>(TypeofType::Function);
-    }
-    
     return static_cast<int32_t>(TypeofType::Object);
 }
 
@@ -2418,15 +2424,6 @@ int64_t JIT_OPERATION operationConvertDoubleToInt52(double value)
     return tryConvertToInt52(value);
 }
 
-size_t JIT_OPERATION operationDefaultHasInstance(ExecState* exec, JSCell* value, JSCell* proto) // Returns jsBoolean(True|False) on 64-bit.
-{
-    VM* vm = &exec->vm();
-    NativeCallFrameTracer tracer(vm, exec);
-    if (JSObject::defaultHasInstance(exec, value, proto))
-        return 1;
-    return 0;
-}
-
 char* JIT_OPERATION operationNewRawObject(ExecState* exec, Structure* structure, int32_t length, Butterfly* butterfly)
 {
     VM& vm = exec->vm();
@@ -2805,7 +2802,7 @@ void JIT_OPERATION operationThrowStaticError(ExecState* exec, JSString* message,
     scope.throwException(exec, createError(exec, static_cast<ErrorType>(errorType), errorMessage));
 }
 
-extern "C" void JIT_OPERATION triggerReoptimizationNow(CodeBlock* codeBlock, OSRExitBase* exit)
+extern "C" void JIT_OPERATION triggerReoptimizationNow(CodeBlock* codeBlock, CodeBlock* optimizedCodeBlock, OSRExitBase* exit)
 {
     // It's sort of preferable that we don't GC while in here. Anyways, doing so wouldn't
     // really be profitable.
@@ -2820,6 +2817,9 @@ extern "C" void JIT_OPERATION triggerReoptimizationNow(CodeBlock* codeBlock, OSR
 
     // If I am my own replacement, then reoptimization has already been triggered.
     // This can happen in recursive functions.
+    //
+    // Note that even if optimizedCodeBlock is an FTLForOSREntry style CodeBlock, this condition is a
+    // sure bet that we don't have anything else left to do.
     if (codeBlock->replacement() == codeBlock) {
         if (Options::verboseOSR())
             dataLog(*codeBlock, ": Not reoptimizing because we've already been jettisoned.\n");
@@ -2829,7 +2829,6 @@ extern "C" void JIT_OPERATION triggerReoptimizationNow(CodeBlock* codeBlock, OSR
     // Otherwise, the replacement must be optimized code. Use this as an opportunity
     // to check our logic.
     ASSERT(codeBlock->hasOptimizedReplacement());
-    CodeBlock* optimizedCodeBlock = codeBlock->replacement();
     ASSERT(JITCode::isOptimizingJIT(optimizedCodeBlock->jitType()));
     
     bool didTryToEnterIntoInlinedLoops = false;
@@ -2854,7 +2853,7 @@ extern "C" void JIT_OPERATION triggerReoptimizationNow(CodeBlock* codeBlock, OSR
         codeBlock->optimizeAfterLongWarmUp();
         return;
     }
-
+    
     optimizedCodeBlock->jettison(Profiler::JettisonDueToOSRExit, CountReoptimization);
 }
 

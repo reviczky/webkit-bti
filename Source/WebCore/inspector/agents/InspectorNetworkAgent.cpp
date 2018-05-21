@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2011 Google Inc. All rights reserved.
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -49,15 +49,18 @@
 #include "InstrumentingAgents.h"
 #include "JSMainThreadExecState.h"
 #include "JSWebSocket.h"
+#include "LoaderStrategy.h"
 #include "MIMETypeRegistry.h"
 #include "MemoryCache.h"
 #include "NetworkResourcesData.h"
 #include "Page.h"
+#include "PlatformStrategies.h"
 #include "ProgressTracker.h"
 #include "ResourceError.h"
 #include "ResourceLoader.h"
 #include "ResourceRequest.h"
 #include "ResourceResponse.h"
+#include "RuntimeEnabledFeatures.h"
 #include "ScriptState.h"
 #include "ScriptableDocumentParser.h"
 #include "SubresourceLoader.h"
@@ -424,7 +427,18 @@ void InspectorNetworkAgent::didReceiveResponse(unsigned long identifier, Documen
         return;
 
     String requestId = IdentifiersFactory::requestId(identifier);
-    RefPtr<Inspector::Protocol::Network::Response> resourceResponse = buildObjectForResourceResponse(response, resourceLoader);
+
+    std::optional<ResourceResponse> realResponse;
+    if (platformStrategies()->loaderStrategy()->havePerformedSecurityChecks(response)) {
+        callOnMainThreadAndWait([&] {
+            // We do not need to isolate response since it comes straight from IPC, but we might want to isolate it for extra safety.
+            auto response = platformStrategies()->loaderStrategy()->responseFromResourceLoadIdentifier(identifier);
+            if (!response.isNull())
+                realResponse = WTFMove(response);
+        });
+    }
+
+    RefPtr<Inspector::Protocol::Network::Response> resourceResponse = buildObjectForResourceResponse(realResponse ? *realResponse : response, resourceLoader);
 
     bool isNotModified = response.httpStatusCode() == 304;
 
@@ -502,7 +516,13 @@ void InspectorNetworkAgent::didFinishLoading(unsigned long identifier, DocumentL
     if (resourceData && resourceData->cachedResource())
         sourceMappingURL = InspectorPageAgent::sourceMapURLForResource(resourceData->cachedResource());
 
-    RefPtr<Inspector::Protocol::Network::Metrics> metrics = buildObjectForMetrics(networkLoadMetrics);
+    std::optional<NetworkLoadMetrics> realMetrics;
+    if (platformStrategies()->loaderStrategy()->shouldPerformSecurityChecks() && !networkLoadMetrics.isComplete()) {
+        callOnMainThreadAndWait([&] {
+            realMetrics = platformStrategies()->loaderStrategy()->networkMetricsFromResourceLoadIdentifier(identifier).isolatedCopy();
+        });
+    }
+    RefPtr<Inspector::Protocol::Network::Metrics> metrics = buildObjectForMetrics(realMetrics ? *realMetrics : networkLoadMetrics);
 
     m_frontendDispatcher->loadingFinished(requestId, elapsedFinishTime, !sourceMappingURL.isEmpty() ? &sourceMappingURL : nullptr, metrics);
 }

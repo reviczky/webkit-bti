@@ -97,14 +97,7 @@ set(WebKit_SYSTEM_INCLUDE_DIRECTORIES
 )
 
 set(WebKit_SOURCES
-    NetworkProcess/Cookies/WebCookieManager.cpp
-
-    NetworkProcess/Downloads/Download.cpp
-    NetworkProcess/Downloads/DownloadManager.cpp
-    NetworkProcess/Downloads/PendingDownload.cpp
-
-    NetworkProcess/FileAPI/NetworkBlobRegistry.cpp
-
+    NetworkProcess/NetworkActivityTracker.cpp
     NetworkProcess/NetworkCORSPreflightChecker.cpp
     NetworkProcess/NetworkConnectionToWebProcess.cpp
     NetworkProcess/NetworkContentRuleListManager.cpp
@@ -121,6 +114,14 @@ set(WebKit_SOURCES
     NetworkProcess/NetworkSocketStream.cpp
     NetworkProcess/PingLoad.cpp
     NetworkProcess/PreconnectTask.cpp
+
+    NetworkProcess/Cookies/WebCookieManager.cpp
+
+    NetworkProcess/Downloads/Download.cpp
+    NetworkProcess/Downloads/DownloadManager.cpp
+    NetworkProcess/Downloads/PendingDownload.cpp
+
+    NetworkProcess/FileAPI/NetworkBlobRegistry.cpp
 
     NetworkProcess/cache/CacheStorageEngine.cpp
     NetworkProcess/cache/CacheStorageEngineCache.cpp
@@ -431,6 +432,7 @@ set(WebKit_SOURCES
     UIProcess/Authentication/WebCredential.cpp
     UIProcess/Authentication/WebProtectionSpace.cpp
 
+    UIProcess/Automation/SimulatedInputDispatcher.cpp
     UIProcess/Automation/WebAutomationSession.cpp
 
     UIProcess/Downloads/DownloadProxy.cpp
@@ -808,22 +810,8 @@ else ()
     set(JavaScriptCore_SCRIPTS_DIR "${FORWARDING_HEADERS_DIR}/JavaScriptCore/Scripts")
 endif ()
 
-if (COMPILER_IS_GCC_OR_CLANG)
-    set(ATOMIC_TEST_SOURCE
-    "
-        #include <atomic>
-        int main() { std::atomic<int64_t> i(0); i++; return 0; }
-    "
-    )
-    check_cxx_source_compiles("${ATOMIC_TEST_SOURCE}" ATOMIC_INT64_IS_BUILTIN)
-    if (NOT ATOMIC_INT64_IS_BUILTIN)
-        set(CMAKE_REQUIRED_LIBRARIES atomic)
-        check_cxx_source_compiles("${ATOMIC_TEST_SOURCE}" ATOMIC_INT64_REQUIRES_LIBATOMIC)
-        if (ATOMIC_INT64_REQUIRES_LIBATOMIC)
-            list(APPEND WebKit_LIBRARIES PRIVATE atomic)
-        endif ()
-        unset(CMAKE_REQUIRED_LIBRARIES)
-    endif ()
+if (ATOMIC_INT64_REQUIRES_LIBATOMIC)
+    list(APPEND WebKit_LIBRARIES PRIVATE atomic)
 endif ()
 
 if (UNIX)

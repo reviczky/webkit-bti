@@ -32,6 +32,7 @@
 #include "JSCPoison.h"
 #include "JSClassRef.h"
 #include "JSGlobalLexicalEnvironment.h"
+#include "JSPromiseDeferred.h"
 #include "JSSegmentedVariableObject.h"
 #include "JSWeakObjectMapRefInternal.h"
 #include "LazyProperty.h"
@@ -98,7 +99,7 @@ class DirectEvalExecutable;
 class LLIntOffsetsExtractor;
 class MapPrototype;
 class Microtask;
-class ModuleLoaderPrototype;
+class ModuleLoader;
 class ModuleProgramExecutable;
 class NativeErrorConstructor;
 class NullGetterFunction;
@@ -217,6 +218,12 @@ struct GlobalObjectMethodTable {
 
     typedef String (*DefaultLanguageFunctionPtr)();
     DefaultLanguageFunctionPtr defaultLanguage;
+
+    typedef void (*CompileStreamingPtr)(JSGlobalObject*, ExecState*, JSPromiseDeferred*, JSValue);
+    CompileStreamingPtr compileStreaming;
+
+    typedef void (*InstantiateStreamingPtr)(JSGlobalObject*, ExecState*, JSPromiseDeferred*, JSValue, JSObject*);
+    InstantiateStreamingPtr instantiateStreaming;
 };
 
 class JSGlobalObject : public JSSegmentedVariableObject {
@@ -302,7 +309,6 @@ public:
     WriteBarrier<GeneratorFunctionPrototype> m_generatorFunctionPrototype;
     WriteBarrier<GeneratorPrototype> m_generatorPrototype;
     WriteBarrier<AsyncGeneratorPrototype> m_asyncGeneratorPrototype;
-    WriteBarrier<ModuleLoaderPrototype> m_moduleLoaderPrototype;
 
     LazyProperty<JSGlobalObject, Structure> m_debuggerScopeStructure;
     LazyProperty<JSGlobalObject, Structure> m_withScopeStructure;
@@ -358,7 +364,6 @@ public:
     WriteBarrier<Structure> m_proxyObjectStructure;
     WriteBarrier<Structure> m_callableProxyObjectStructure;
     WriteBarrier<Structure> m_proxyRevokeStructure;
-    WriteBarrier<Structure> m_moduleLoaderStructure;
     WriteBarrier<JSArrayBufferPrototype> m_arrayBufferPrototype;
     WriteBarrier<Structure> m_arrayBufferStructure;
 #if ENABLE(SHARED_ARRAY_BUFFER)
@@ -419,6 +424,7 @@ public:
     HashSet<String> m_intlCollatorAvailableLocales;
     HashSet<String> m_intlDateTimeFormatAvailableLocales;
     HashSet<String> m_intlNumberFormatAvailableLocales;
+    HashSet<String> m_intlPluralRulesAvailableLocales;
 #endif // ENABLE(INTL)
 
     RefPtr<WatchpointSet> m_masqueradesAsUndefinedWatchpoint;
@@ -677,8 +683,8 @@ public:
     Structure* proxyObjectStructure() const { return m_proxyObjectStructure.get(); }
     Structure* callableProxyObjectStructure() const { return m_callableProxyObjectStructure.get(); }
     Structure* proxyRevokeStructure() const { return m_proxyRevokeStructure.get(); }
-    Structure* moduleLoaderStructure() const { return m_moduleLoaderStructure.get(); }
     Structure* restParameterStructure() const { return arrayStructureForIndexingTypeDuringAllocation(ArrayWithContiguous); }
+    Structure* originalRestParameterStructure() const { return originalArrayStructureForIndexingType(ArrayWithContiguous); }
 #if ENABLE(WEBASSEMBLY)
     Structure* webAssemblyModuleRecordStructure() const { return m_webAssemblyModuleRecordStructure.get(); }
     Structure* webAssemblyFunctionStructure() const { return m_webAssemblyFunctionStructure.get(); }
@@ -698,6 +704,7 @@ public:
     const HashSet<String>& intlCollatorAvailableLocales();
     const HashSet<String>& intlDateTimeFormatAvailableLocales();
     const HashSet<String>& intlNumberFormatAvailableLocales();
+    const HashSet<String>& intlPluralRulesAvailableLocales();
 #endif // ENABLE(INTL)
 
     void setConsoleClient(ConsoleClient* consoleClient) { m_consoleClient = consoleClient; }

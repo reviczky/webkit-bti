@@ -67,6 +67,7 @@
 #include <WebCore/ScrollingConstraints.h>
 #include <WebCore/ScrollingCoordinator.h>
 #include <WebCore/SearchPopupMenu.h>
+#include <WebCore/SecurityOrigin.h>
 #include <WebCore/ServiceWorkerClientData.h>
 #include <WebCore/ServiceWorkerClientIdentifier.h>
 #include <WebCore/ServiceWorkerData.h>
@@ -1236,6 +1237,7 @@ void ArgumentCoder<ResourceRequest>::encode(Encoder& encoder, const ResourceRequ
 {
     encoder << resourceRequest.cachePartition();
     encoder << resourceRequest.hiddenFromInspector();
+    encoder << resourceRequest.isSystemPreview();
 
     if (resourceRequest.encodingRequiresPlatformData()) {
         encoder << true;
@@ -1258,6 +1260,11 @@ bool ArgumentCoder<ResourceRequest>::decode(Decoder& decoder, ResourceRequest& r
         return false;
     resourceRequest.setHiddenFromInspector(isHiddenFromInspector);
 
+    bool isSystemPreview;
+    if (!decoder.decode(isSystemPreview))
+        return false;
+    resourceRequest.setSystemPreview(isSystemPreview);
+
     bool hasPlatformData;
     if (!decoder.decode(hasPlatformData))
         return false;
@@ -1269,12 +1276,28 @@ bool ArgumentCoder<ResourceRequest>::decode(Decoder& decoder, ResourceRequest& r
 
 void ArgumentCoder<ResourceError>::encode(Encoder& encoder, const ResourceError& resourceError)
 {
+    encoder.encodeEnum(resourceError.type());
+    if (resourceError.type() == ResourceError::Type::Null)
+        return;
     encodePlatformData(encoder, resourceError);
 }
 
 bool ArgumentCoder<ResourceError>::decode(Decoder& decoder, ResourceError& resourceError)
 {
-    return decodePlatformData(decoder, resourceError);
+    ResourceError::Type type;
+    if (!decoder.decodeEnum(type))
+        return false;
+
+    if (type == ResourceError::Type::Null) {
+        resourceError = { };
+        return true;
+    }
+
+    if (!decodePlatformData(decoder, resourceError))
+        return false;
+
+    resourceError.setType(type);
+    return true;
 }
 
 #if PLATFORM(IOS)
@@ -2816,5 +2839,28 @@ bool ArgumentCoder<AttachmentInfo>::decode(Decoder& decoder, AttachmentInfo& inf
 }
 
 #endif // ENABLE(ATTACHMENT_ELEMENT)
+
+void ArgumentCoder<Vector<RefPtr<SecurityOrigin>>>::encode(Encoder& encoder, const Vector<RefPtr<SecurityOrigin>>& origins)
+{
+    encoder << static_cast<uint64_t>(origins.size());
+    for (auto& origin : origins)
+        encoder << *origin;
+}
+    
+bool ArgumentCoder<Vector<RefPtr<SecurityOrigin>>>::decode(Decoder& decoder, Vector<RefPtr<SecurityOrigin>>& origins)
+{
+    uint64_t dataSize;
+    if (!decoder.decode(dataSize))
+        return false;
+
+    origins.reserveInitialCapacity(dataSize);
+    for (uint64_t i = 0; i < dataSize; ++i) {
+        auto decodedOriginRefPtr = SecurityOrigin::decode(decoder);
+        if (!decodedOriginRefPtr)
+            return false;
+        origins.uncheckedAppend(decodedOriginRefPtr.releaseNonNull());
+    }
+    return true;
+}
 
 } // namespace IPC

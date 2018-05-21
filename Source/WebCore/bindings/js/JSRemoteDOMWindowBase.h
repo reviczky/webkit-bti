@@ -31,12 +31,12 @@
 
 namespace WebCore {
 
-class JSDOMWindowProxy;
+class JSWindowProxy;
 class JSRemoteDOMWindow;
 
 class WEBCORE_EXPORT JSRemoteDOMWindowBase : public JSDOMGlobalObject {
 protected:
-    JSRemoteDOMWindowBase(JSC::VM&, JSC::Structure*, RefPtr<RemoteDOMWindow>&&, JSDOMWindowProxy*);
+    JSRemoteDOMWindowBase(JSC::VM&, JSC::Structure*, RefPtr<RemoteDOMWindow>&&, JSWindowProxy*);
 
     static void destroy(JSCell*);
 
@@ -52,12 +52,6 @@ public:
 private:
     RefPtr<RemoteDOMWindow> m_wrapped;
 };
-
-WEBCORE_EXPORT JSC::JSValue toJS(JSC::ExecState*, JSDOMGlobalObject*, RemoteDOMWindow&);
-inline JSC::JSValue toJS(JSC::ExecState* state, JSDOMGlobalObject* globalObject, RemoteDOMWindow* window) { return window ? toJS(state, globalObject, *window) : JSC::jsNull(); }
-
-JSC::JSValue toJS(JSC::ExecState*, RemoteDOMWindow&);
-inline JSC::JSValue toJS(JSC::ExecState* state, RemoteDOMWindow* window) { return window ? toJS(state, *window) : JSC::jsNull(); }
 
 WEBCORE_EXPORT JSRemoteDOMWindow* toJSRemoteDOMWindow(JSC::VM&, JSC::JSValue);
 

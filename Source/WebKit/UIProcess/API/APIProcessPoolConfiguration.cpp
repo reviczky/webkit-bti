@@ -128,6 +128,12 @@ Ref<ProcessPoolConfiguration> ProcessPoolConfiguration::copy()
 #endif
     copy->m_presentingApplicationPID = this->m_presentingApplicationPID;
     copy->m_processSwapsOnNavigation = this->m_processSwapsOnNavigation;
+    copy->m_alwaysKeepAndReuseSwappedProcesses = this->m_alwaysKeepAndReuseSwappedProcesses;
+    copy->m_processSwapsOnWindowOpenWithOpener = this->m_processSwapsOnWindowOpenWithOpener;
+    copy->m_tracksResourceLoadMilestones = this->m_tracksResourceLoadMilestones;
+#if ENABLE(WIFI_ASSERTIONS)
+    copy->m_wirelessContextIdentifier = this->m_wirelessContextIdentifier;
+#endif
 
     return copy;
 }

@@ -35,9 +35,6 @@
 #include "TypeError.h"
 #include <wtf/Assertions.h>
 
-using namespace std;
-using namespace WTF;
-
 namespace JSC {
 
 const char* const LengthExceededTheMaximumArrayLengthError = "Length exceeded the maximum array length";
@@ -1063,10 +1060,16 @@ bool JSArray::unshiftCountWithAnyIndexingType(ExecState* exec, unsigned startInd
             return unshiftCountWithArrayStorage(exec, startIndex, count, ensureArrayStorage(vm));
         }
 
-        if (oldLength + count > MAX_STORAGE_VECTOR_LENGTH)
+        Checked<unsigned, RecordOverflow> checkedLength(oldLength);
+        checkedLength += count;
+        unsigned newLength;
+        if (CheckedState::DidOverflow == checkedLength.safeGet(newLength)) {
+            throwOutOfMemoryError(exec, scope);
+            return true;
+        }
+        if (newLength > MAX_STORAGE_VECTOR_LENGTH)
             return false;
-
-        if (!ensureLength(vm, oldLength + count)) {
+        if (!ensureLength(vm, newLength)) {
             throwOutOfMemoryError(exec, scope);
             return true;
         }
@@ -1110,10 +1113,16 @@ bool JSArray::unshiftCountWithAnyIndexingType(ExecState* exec, unsigned startInd
             return unshiftCountWithArrayStorage(exec, startIndex, count, ensureArrayStorage(vm));
         }
 
-        if (oldLength + count > MAX_STORAGE_VECTOR_LENGTH)
+        Checked<unsigned, RecordOverflow> checkedLength(oldLength);
+        checkedLength += count;
+        unsigned newLength;
+        if (CheckedState::DidOverflow == checkedLength.safeGet(newLength)) {
+            throwOutOfMemoryError(exec, scope);
+            return true;
+        }
+        if (newLength > MAX_STORAGE_VECTOR_LENGTH)
             return false;
-
-        if (!ensureLength(vm, oldLength + count)) {
+        if (!ensureLength(vm, newLength)) {
             throwOutOfMemoryError(exec, scope);
             return true;
         }

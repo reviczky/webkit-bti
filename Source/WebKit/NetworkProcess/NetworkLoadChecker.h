@@ -31,6 +31,7 @@
 #include <WebCore/ResourceResponse.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Expected.h>
+#include <wtf/WeakPtr.h>
 
 namespace WebCore {
 class ContentSecurityPolicy;
@@ -40,18 +41,16 @@ namespace WebKit {
 
 class NetworkCORSPreflightChecker;
 
-class NetworkLoadChecker : public RefCounted<NetworkLoadChecker> {
+class NetworkLoadChecker {
 public:
-    static Ref<NetworkLoadChecker> create(WebCore::FetchOptions&& options, PAL::SessionID sessionID, WebCore::HTTPHeaderMap&& originalHeaders, WebCore::URL&& url, RefPtr<WebCore::SecurityOrigin>&& sourceOrigin)
-    {
-        return adoptRef(*new NetworkLoadChecker { WTFMove(options), sessionID, WTFMove(originalHeaders), WTFMove(url), WTFMove(sourceOrigin) });
-    }
+    NetworkLoadChecker(WebCore::FetchOptions&&, PAL::SessionID, WebCore::HTTPHeaderMap&&, WebCore::URL&&, RefPtr<WebCore::SecurityOrigin>&&, WebCore::PreflightPolicy, String&& referrer);
     ~NetworkLoadChecker();
 
     using RequestOrError = Expected<WebCore::ResourceRequest, WebCore::ResourceError>;
     using ValidationHandler = CompletionHandler<void(RequestOrError&&)>;
     void check(WebCore::ResourceRequest&&, ValidationHandler&&);
     void checkRedirection(WebCore::ResourceResponse&, WebCore::ResourceRequest&&, ValidationHandler&&);
+    void prepareRedirectedRequest(WebCore::ResourceRequest&);
 
     WebCore::ResourceError validateResponse(WebCore::ResourceResponse&);
 
@@ -67,10 +66,10 @@ public:
     const WebCore::URL& url() const { return m_url; }
     WebCore::StoredCredentialsPolicy storedCredentialsPolicy() const { return m_storedCredentialsPolicy; }
 
-private:
-    NetworkLoadChecker(WebCore::FetchOptions&&, PAL::SessionID, WebCore::HTTPHeaderMap&&, WebCore::URL&&, RefPtr<WebCore::SecurityOrigin>&&);
+    WeakPtrFactory<NetworkLoadChecker>& weakPtrFactory() { return m_weakFactory; }
 
-    WebCore::ContentSecurityPolicy* contentSecurityPolicy() const;
+private:
+    WebCore::ContentSecurityPolicy* contentSecurityPolicy();
     bool isChecking() const { return !!m_corsPreflightChecker; }
     bool isRedirected() const { return m_redirectCount; }
 
@@ -83,10 +82,16 @@ private:
     void checkCORSRedirectedRequest(WebCore::ResourceRequest&&, ValidationHandler&&);
     void checkCORSRequestWithPreflight(WebCore::ResourceRequest&&, ValidationHandler&&);
 
-    RequestOrError returnError(String&& error);
+    RequestOrError accessControlErrorForValidationHandler(String&&);
 
 #if ENABLE(CONTENT_EXTENSIONS)
-    void processContentExtensionRulesForLoad(WebCore::ResourceRequest&&, CompletionHandler<void(WebCore::ResourceRequest&&, const WebCore::ContentExtensions::BlockedStatus&)>&&);
+    struct ContentExtensionResult {
+        WebCore::ResourceRequest request;
+        const WebCore::ContentExtensions::BlockedStatus& status;
+    };
+    using ContentExtensionResultOrError = Expected<ContentExtensionResult, WebCore::ResourceError>;
+    using ContentExtensionCallback = CompletionHandler<void(ContentExtensionResultOrError)>;
+    void processContentExtensionRulesForLoad(WebCore::ResourceRequest&&, ContentExtensionCallback&&);
 #endif
 
     WebCore::FetchOptions m_options;
@@ -105,9 +110,13 @@ private:
     std::unique_ptr<NetworkCORSPreflightChecker> m_corsPreflightChecker;
     bool m_isSameOriginRequest { true };
     bool m_isSimpleRequest { true };
-    mutable std::unique_ptr<WebCore::ContentSecurityPolicy> m_contentSecurityPolicy;
+    std::unique_ptr<WebCore::ContentSecurityPolicy> m_contentSecurityPolicy;
     size_t m_redirectCount { 0 };
     WebCore::URL m_previousURL;
+    WebCore::PreflightPolicy m_preflightPolicy;
+    String m_dntHeaderValue;
+    String m_referrer;
+    WeakPtrFactory<NetworkLoadChecker> m_weakFactory;
 };
 
 }

@@ -716,7 +716,7 @@ void OSRExit::executeOSRExit(Context& context)
     // counterValueForOptimizeAfterWarmUp().
 
     if (UNLIKELY(codeBlock->updateOSRExitCounterAndCheckIfNeedToReoptimize(exitState) == CodeBlock::OptimizeAction::ReoptimizeNow))
-        triggerReoptimizationNow(baselineCodeBlock, &exit);
+        triggerReoptimizationNow(baselineCodeBlock, codeBlock, &exit);
 
     reifyInlinedCallFrames(context, baselineCodeBlock, exit);
     adjustAndJumpToTarget(context, vm, codeBlock, baselineCodeBlock, exit);
@@ -754,7 +754,7 @@ static void reifyInlinedCallFrames(Context& context, CodeBlock* outermostBaselin
         } else {
             CodeBlock* baselineCodeBlockForCaller = baselineCodeBlockForOriginAndBaselineCodeBlock(*trueCaller, outermostBaselineCodeBlock);
             unsigned callBytecodeIndex = trueCaller->bytecodeIndex;
-            void* jumpTarget = nullptr;
+            MacroAssemblerCodePtr<JSInternalPtrTag> jumpTarget;
 
             switch (trueCallerCallKind) {
             case InlineCallFrame::Call:
@@ -767,7 +767,7 @@ static void reifyInlinedCallFrames(Context& context, CodeBlock* outermostBaselin
                     baselineCodeBlockForCaller->getCallLinkInfoForBytecodeIndex(callBytecodeIndex);
                 RELEASE_ASSERT(callLinkInfo);
 
-                jumpTarget = callLinkInfo->callReturnLocation().executableAddress();
+                jumpTarget = callLinkInfo->callReturnLocation();
                 break;
             }
 
@@ -777,7 +777,7 @@ static void reifyInlinedCallFrames(Context& context, CodeBlock* outermostBaselin
                     baselineCodeBlockForCaller->findStubInfo(CodeOrigin(callBytecodeIndex));
                 RELEASE_ASSERT(stubInfo);
 
-                jumpTarget = stubInfo->doneLocation().executableAddress();
+                jumpTarget = stubInfo->doneLocation();
                 break;
             }
 
@@ -788,11 +788,12 @@ static void reifyInlinedCallFrames(Context& context, CodeBlock* outermostBaselin
             if (trueCaller->inlineCallFrame)
                 callerFrame = cpu.fp<uint8_t*>() + trueCaller->inlineCallFrame->stackOffset * sizeof(EncodedJSValue);
 
+            void* targetAddress = jumpTarget.executableAddress();
 #if USE(POINTER_PROFILING)
             void* newEntrySP = cpu.fp<uint8_t*>() + inlineCallFrame->returnPCOffset() + sizeof(void*);
-            jumpTarget = retagCodePtr(jumpTarget, JSEntryPtrTag, bitwise_cast<PtrTag>(newEntrySP));
+            targetAddress = retagCodePtr(targetAddress, JSInternalPtrTag, bitwise_cast<PtrTag>(newEntrySP));
 #endif
-            frame.set<void*>(inlineCallFrame->returnPCOffset(), jumpTarget);
+            frame.set<void*>(inlineCallFrame->returnPCOffset(), targetAddress);
         }
 
         frame.setOperand<void*>(inlineCallFrame->stackOffset + CallFrameSlot::codeBlock, baselineCodeBlock);

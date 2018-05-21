@@ -22,6 +22,7 @@
 #pragma once
 
 #include "Cursor.h"
+#include "DisabledAdaptations.h"
 #include "FocusDirection.h"
 #include "HostWindow.h"
 #include <wtf/Forward.h>
@@ -71,9 +72,6 @@ public:
     void invalidateContentsAndRootView(const IntRect&) override;
     void invalidateContentsForSlowScroll(const IntRect&) override;
     void scroll(const IntSize&, const IntRect&, const IntRect&) override;
-#if USE(COORDINATED_GRAPHICS)
-    void delegatedScrollRequested(const IntPoint& scrollPoint) override;
-#endif
     IntPoint screenToRootView(const IntPoint&) const override;
     IntRect rootViewToScreen(const IntRect&) const override;
 #if PLATFORM(IOS)
@@ -157,6 +155,7 @@ public:
     void runOpenPanel(Frame&, FileChooser&);
     void loadIconForFiles(const Vector<String>&, FileIconLoader&);
 
+    void dispatchDisabledAdaptationsDidChange(const OptionSet<DisabledAdaptations>&) const;
     void dispatchViewportPropertiesDidChange(const ViewportArguments&) const;
 
     bool requiresFullscreenForVideoPlayback();

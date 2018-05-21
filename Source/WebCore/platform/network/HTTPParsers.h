@@ -64,6 +64,20 @@ enum XFrameOptionsDisposition {
     XFrameOptionsConflict
 };
 
+enum class FromOriginDisposition {
+    None,
+    Same,
+    SameSite,
+    Invalid
+};
+
+// Should be sorted from most restrictive to most permissive.
+enum class CrossOriginOptions {
+    Deny,
+    AllowPostMessage,
+    Allow,
+};
+
 bool isValidReasonPhrase(const String&);
 bool isValidHTTPHeaderValue(const String&);
 bool isValidAcceptHeaderValue(const String&);
@@ -77,7 +91,7 @@ String extractCharsetFromMediaType(const String&);
 void findCharsetInMediaType(const String& mediaType, unsigned int& charsetPos, unsigned int& charsetLen, unsigned int start = 0);
 XSSProtectionDisposition parseXSSProtectionHeader(const String& header, String& failureReason, unsigned& failurePosition, String& reportURL);
 AtomicString extractReasonPhraseFromHTTPStatusLine(const String&);
-XFrameOptionsDisposition parseXFrameOptionsHeader(const String&);
+WEBCORE_EXPORT XFrameOptionsDisposition parseXFrameOptionsHeader(const String&);
 
 // -1 could be set to one of the return parameters to indicate the value is not specified.
 WEBCORE_EXPORT bool parseRange(const String&, long long& rangeOffset, long long& rangeEnd, long long& rangeSuffixLength);
@@ -102,6 +116,9 @@ bool isCrossOriginSafeHeader(const String&, const HTTPHeaderSet&);
 bool isCrossOriginSafeRequestHeader(HTTPHeaderName, const String&);
 
 String normalizeHTTPMethod(const String&);
+
+WEBCORE_EXPORT FromOriginDisposition parseFromOriginHeader(const String&);
+CrossOriginOptions parseCrossOriginOptionsHeader(StringView);
 
 inline bool isHTTPSpace(UChar character)
 {

@@ -25,13 +25,13 @@
 
 #pragma once
 
+#include <wtf/Ref.h>
 #include <wtf/ThreadSafeRefCounted.h>
-#include <wtf/UniqueRef.h>
 
 namespace WebCore {
 
 class AbstractDOMWindow;
-class WindowProxyController;
+class WindowProxy;
 
 // FIXME: Rename Frame to LocalFrame and AbstractFrame to Frame.
 class AbstractFrame : public ThreadSafeRefCounted<AbstractFrame> {
@@ -41,8 +41,8 @@ public:
     virtual bool isLocalFrame() const = 0;
     virtual bool isRemoteFrame() const = 0;
 
-    WindowProxyController& windowProxyController() { return m_windowProxyController; }
-    const WindowProxyController& windowProxyController() const { return m_windowProxyController; }
+    WindowProxy& windowProxy() { return m_windowProxy; }
+    const WindowProxy& windowProxy() const { return m_windowProxy; }
 
     AbstractDOMWindow* window() const { return virtualWindow(); }
 
@@ -52,7 +52,7 @@ protected:
 private:
     virtual AbstractDOMWindow* virtualWindow() const = 0;
 
-    UniqueRef<WindowProxyController> m_windowProxyController;
+    Ref<WindowProxy> m_windowProxy;
 };
 
 } // namespace WebCore

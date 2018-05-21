@@ -116,13 +116,8 @@ public:
     FloatPoint computePositionRelativeToBase();
     void computePixelAlignment(FloatPoint& position, FloatSize&, FloatPoint3D& anchorPoint, FloatSize& alignmentOffset);
 
-    void setVisibleContentRectTrajectoryVector(const FloatPoint&);
-
     CoordinatedLayerID id() const { return m_id; }
 
-    void setFixedToViewport(bool isFixed);
-
-    IntRect coverRect() const { return m_mainBackingStore ? m_mainBackingStore->mapToContents(m_mainBackingStore->coverRect()) : IntRect(); }
     IntRect transformedVisibleRect();
 
     // TiledBackingStoreClient
@@ -136,8 +131,6 @@ public:
     void setNeedsVisibleRectAdjustment();
     void purgeBackingStores();
 
-    CoordinatedGraphicsLayer* findFirstDescendantWithContentsRecursively();
-
 private:
     bool isCoordinatedGraphicsLayer() const override { return true; }
 
@@ -145,8 +138,6 @@ private:
     void updatePlatformLayer();
 
     void setDebugBorder(const Color&, float width) override;
-
-    bool fixedToViewport() const { return m_fixedToViewport; }
 
     void didChangeLayerState();
     void didChangeAnimations();
@@ -202,7 +193,6 @@ private:
     bool m_shouldSyncFilters: 1;
     bool m_shouldSyncImageBacking: 1;
     bool m_shouldSyncAnimations: 1;
-    bool m_fixedToViewport : 1;
     bool m_movingVisibleRect : 1;
     bool m_pendingContentsScaleAdjustment : 1;
     bool m_pendingVisibleRectAdjustment : 1;

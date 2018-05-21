@@ -115,6 +115,12 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << urlSchemesRegisteredAsDisplayIsolated;
     encoder << urlSchemesRegisteredAsCORSEnabled;
     encoder << urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
+
+    encoder << tracksResourceLoadMilestones;
+    
+#if ENABLE(WIFI_ASSERTIONS)
+    encoder << wirelessContextIdentifier;
+#endif
 }
 
 bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProcessCreationParameters& result)
@@ -274,6 +280,14 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
         return false;
     if (!decoder.decode(result.urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest))
         return false;
+
+    if (!decoder.decode(result.tracksResourceLoadMilestones))
+        return false;
+
+#if ENABLE(WIFI_ASSERTIONS)
+    if (!decoder.decode(result.wirelessContextIdentifier))
+        return false;
+#endif
 
     return true;
 }

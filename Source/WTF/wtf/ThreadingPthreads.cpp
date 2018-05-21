@@ -256,7 +256,7 @@ void Thread::initializeCurrentThreadInternal(const char* threadName)
 
 void Thread::changePriority(int delta)
 {
-    std::lock_guard<std::mutex> locker(m_mutex);
+    auto locker = holdLock(m_mutex);
 
     int policy;
     struct sched_param param;
@@ -273,7 +273,7 @@ int Thread::waitForCompletion()
 {
     pthread_t handle;
     {
-        std::lock_guard<std::mutex> locker(m_mutex);
+        auto locker = holdLock(m_mutex);
         handle = m_handle;
     }
 
@@ -284,7 +284,7 @@ int Thread::waitForCompletion()
     else if (joinResult)
         LOG_ERROR("Thread %p was unable to be joined.\n", this);
 
-    std::lock_guard<std::mutex> locker(m_mutex);
+    auto locker = holdLock(m_mutex);
     ASSERT(joinableState() == Joinable);
 
     // If the thread has already exited, then do nothing. If the thread hasn't exited yet, then just signal that we've already joined on it.
@@ -297,7 +297,7 @@ int Thread::waitForCompletion()
 
 void Thread::detach()
 {
-    std::lock_guard<std::mutex> locker(m_mutex);
+    auto locker = holdLock(m_mutex);
     int detachResult = pthread_detach(m_handle);
     if (detachResult)
         LOG_ERROR("Thread %p was unable to be detached\n", this);
@@ -319,7 +319,7 @@ Thread& Thread::initializeCurrentTLS()
 
 bool Thread::signal(int signalNumber)
 {
-    std::lock_guard<std::mutex> locker(m_mutex);
+    auto locker = holdLock(m_mutex);
     if (hasExited())
         return false;
     int errNo = pthread_kill(m_handle, signalNumber);
@@ -440,7 +440,7 @@ size_t Thread::getRegisters(PlatformRegisters& registers)
 
 void Thread::establishPlatformSpecificHandle(pthread_t handle)
 {
-    std::lock_guard<std::mutex> locker(m_mutex);
+    auto locker = holdLock(m_mutex);
     m_handle = handle;
 #if OS(DARWIN)
     m_platformThread = pthread_mach_thread_np(handle);
@@ -490,18 +490,6 @@ void Thread::destructTLS(void* data)
 #endif
 }
 
-Mutex::Mutex()
-{
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_NORMAL);
-
-    int result = pthread_mutex_init(&m_mutex, &attr);
-    ASSERT_UNUSED(result, !result);
-
-    pthread_mutexattr_destroy(&attr);
-}
-
 Mutex::~Mutex()
 {
     int result = pthread_mutex_destroy(&m_mutex);
@@ -531,11 +519,6 @@ void Mutex::unlock()
 {
     int result = pthread_mutex_unlock(&m_mutex);
     ASSERT_UNUSED(result, !result);
-}
-
-ThreadCondition::ThreadCondition()
-{ 
-    pthread_cond_init(&m_condition, NULL);
 }
 
 ThreadCondition::~ThreadCondition()

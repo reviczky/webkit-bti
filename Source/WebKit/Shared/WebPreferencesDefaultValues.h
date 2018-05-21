@@ -139,7 +139,12 @@
 
 #if PLATFORM(COCOA)
 
+#if ENABLE(EXTRA_ZOOM_MODE)
+#define DEFAULT_STANDARD_FONT_FAMILY "system-ui"
+#else
 #define DEFAULT_STANDARD_FONT_FAMILY "Times"
+#endif
+
 #define DEFAULT_FANTASY_FONT_FAMILY "Papyrus"
 #define DEFAULT_FIXED_FONT_FAMILY "Courier"
 #define DEFAULT_SANS_SERIF_FONT_FAMILY "Helvetica"
@@ -169,6 +174,18 @@
 #define DEFAULT_AVFOUNDATION_ENABLED true
 #else
 #define DEFAULT_AVFOUNDATION_ENABLED false
+#endif
+
+#if ENABLE(EXTRA_ZOOM_MODE)
+#define DEFAULT_VISUAL_VIEWPORT_HEIGHT_EXPANSION_FACTOR 1
+#else
+#define DEFAULT_VISUAL_VIEWPORT_HEIGHT_EXPANSION_FACTOR 0
+#endif
+
+#if ENABLE(EXTRA_ZOOM_MODE)
+#define DISABLED_ADAPTATIONS_META_TAG_ENABLED true
+#else
+#define DISABLED_ADAPTATIONS_META_TAG_ENABLED false
 #endif
 
 // Cocoa ports must disable experimental features on release branches for now.

@@ -467,10 +467,7 @@ public:
         Ref<Snippet> snippet = Snippet::create();
         snippet->setGenerator([=](CCallHelpers& jit, SnippetParams& params) {
             CCallHelpers::JumpList failureCases;
-            failureCases.append(jit.branch8(
-                CCallHelpers::NotEqual,
-                CCallHelpers::Address(params[0].gpr(), JSCell::typeInfoTypeOffset()),
-                CCallHelpers::TrustedImm32(JSC::JSType(LastJSCObjectType + 1))));
+            failureCases.append(jit.branchIfNotType(params[0].gpr(), JSC::JSType(LastJSCObjectType + 1)));
             return failureCases;
         });
         return snippet;
@@ -741,10 +738,7 @@ public:
             CCallHelpers::JumpList failureCases;
             // May use scratch registers.
             jit.loadDouble(CCallHelpers::TrustedImmPtr(&value), params.fpScratch(0));
-            failureCases.append(jit.branch8(
-                CCallHelpers::NotEqual,
-                CCallHelpers::Address(params[0].gpr(), JSCell::typeInfoTypeOffset()),
-                CCallHelpers::TrustedImm32(JSC::JSType(LastJSCObjectType + 1))));
+            failureCases.append(jit.branchIfNotType(params[0].gpr(), JSC::JSType(LastJSCObjectType + 1)));
             return failureCases;
         });
         return snippet;
@@ -1614,7 +1608,7 @@ static EncodedJSValue JSC_HOST_CALL functionFindTypeForExpression(ExecState* exe
     vm.typeProfilerLog()->processLogEntries(ASCIILiteral("jsc Testing API: functionFindTypeForExpression"));
 
     JSValue functionValue = exec->argument(0);
-    RELEASE_ASSERT(functionValue.isFunction());
+    RELEASE_ASSERT(functionValue.isFunction(vm));
     FunctionExecutable* executable = (jsDynamicCast<JSFunction*>(vm, functionValue.asCell()->getObject()))->jsExecutable();
 
     RELEASE_ASSERT(exec->argument(1).isString());
@@ -1633,7 +1627,7 @@ static EncodedJSValue JSC_HOST_CALL functionReturnTypeFor(ExecState* exec)
     vm.typeProfilerLog()->processLogEntries(ASCIILiteral("jsc Testing API: functionReturnTypeFor"));
 
     JSValue functionValue = exec->argument(0);
-    RELEASE_ASSERT(functionValue.isFunction());
+    RELEASE_ASSERT(functionValue.isFunction(vm));
     FunctionExecutable* executable = (jsDynamicCast<JSFunction*>(vm, functionValue.asCell()->getObject()))->jsExecutable();
 
     unsigned offset = executable->typeProfilingStartOffset();
@@ -1655,7 +1649,7 @@ static EncodedJSValue JSC_HOST_CALL functionHasBasicBlockExecuted(ExecState* exe
     RELEASE_ASSERT(vm.controlFlowProfiler());
 
     JSValue functionValue = exec->argument(0);
-    RELEASE_ASSERT(functionValue.isFunction());
+    RELEASE_ASSERT(functionValue.isFunction(vm));
     FunctionExecutable* executable = (jsDynamicCast<JSFunction*>(vm, functionValue.asCell()->getObject()))->jsExecutable();
 
     RELEASE_ASSERT(exec->argument(1).isString());
@@ -1674,7 +1668,7 @@ static EncodedJSValue JSC_HOST_CALL functionBasicBlockExecutionCount(ExecState* 
     RELEASE_ASSERT(vm.controlFlowProfiler());
 
     JSValue functionValue = exec->argument(0);
-    RELEASE_ASSERT(functionValue.isFunction());
+    RELEASE_ASSERT(functionValue.isFunction(vm));
     FunctionExecutable* executable = (jsDynamicCast<JSFunction*>(vm, functionValue.asCell()->getObject()))->jsExecutable();
 
     RELEASE_ASSERT(exec->argument(1).isString());
@@ -1761,6 +1755,12 @@ static EncodedJSValue JSC_HOST_CALL functionDeltaBetweenButterflies(ExecState* e
     if (delta > std::numeric_limits<int32_t>::max())
         return JSValue::encode(jsNumber(PNaN));
     return JSValue::encode(jsNumber(static_cast<int32_t>(delta)));
+}
+
+static EncodedJSValue JSC_HOST_CALL functionTotalGCTime(ExecState* exec)
+{
+    VM& vm = exec->vm();
+    return JSValue::encode(jsNumber(vm.heap.totalGCTime().seconds()));
 }
 
 void JSDollarVM::finishCreation(VM& vm)
@@ -1850,6 +1850,8 @@ void JSDollarVM::finishCreation(VM& vm)
     addFunction(vm, "createCustomTestGetterSetter", functionCreateCustomTestGetterSetter, 1);
 
     addFunction(vm, "deltaBetweenButterflies", functionDeltaBetweenButterflies, 2);
+    
+    addFunction(vm, "totalGCTime", functionTotalGCTime, 0);
 }
 
 void JSDollarVM::addFunction(VM& vm, JSGlobalObject* globalObject, const char* name, NativeFunction function, unsigned arguments)

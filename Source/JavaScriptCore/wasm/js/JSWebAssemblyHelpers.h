@@ -29,6 +29,7 @@
 
 #include "JSArrayBuffer.h"
 #include "JSCJSValue.h"
+#include "JSSourceCode.h"
 #include "WebAssemblyFunction.h"
 #include "WebAssemblyWrapperFunction.h"
 
@@ -49,22 +50,28 @@ ALWAYS_INLINE uint32_t toNonWrappingUint32(ExecState* exec, JSValue value)
     return static_cast<uint32_t>(doubleValue);
 }
 
-ALWAYS_INLINE std::pair<uint8_t*, size_t> getWasmBufferFromValue(ExecState* exec, JSValue value)
+ALWAYS_INLINE std::pair<const uint8_t*, size_t> getWasmBufferFromValue(ExecState* exec, JSValue value)
 {
     VM& vm = exec->vm();
     auto throwScope = DECLARE_THROW_SCOPE(vm);
+
+    if (auto* source = jsDynamicCast<JSSourceCode*>(vm, value)) {
+        auto* provider = static_cast<WebAssemblySourceProvider*>(source->sourceCode().provider());
+        return { provider->data().data(), provider->data().size() };
+    }
+
     // If the given bytes argument is not a BufferSource, a TypeError exception is thrown.
     JSArrayBuffer* arrayBuffer = value.getObject() ? jsDynamicCast<JSArrayBuffer*>(vm, value.getObject()) : nullptr;
     JSArrayBufferView* arrayBufferView = value.getObject() ? jsDynamicCast<JSArrayBufferView*>(vm, value.getObject()) : nullptr;
     if (!(arrayBuffer || arrayBufferView)) {
         throwException(exec, throwScope, createTypeError(exec,
-            ASCIILiteral("first argument must be an ArrayBufferView or an ArrayBuffer"), defaultSourceAppender, runtimeTypeForValue(value)));
+            ASCIILiteral("first argument must be an ArrayBufferView or an ArrayBuffer"), defaultSourceAppender, runtimeTypeForValue(vm, value)));
         return { nullptr, 0 };
     }
 
     if (arrayBufferView ? arrayBufferView->isNeutered() : arrayBuffer->impl()->isNeutered()) {
         throwException(exec, throwScope, createTypeError(exec,
-            ASCIILiteral("underlying TypedArray has been detatched from the ArrayBuffer"), defaultSourceAppender, runtimeTypeForValue(value)));
+            ASCIILiteral("underlying TypedArray has been detatched from the ArrayBuffer"), defaultSourceAppender, runtimeTypeForValue(vm, value)));
         return { nullptr, 0 };
     }
 
@@ -76,7 +83,7 @@ ALWAYS_INLINE std::pair<uint8_t*, size_t> getWasmBufferFromValue(ExecState* exec
 ALWAYS_INLINE Vector<uint8_t> createSourceBufferFromValue(VM& vm, ExecState* exec, JSValue value)
 {
     auto throwScope = DECLARE_THROW_SCOPE(vm);
-    uint8_t* data;
+    const uint8_t* data;
     size_t byteSize;
     std::tie(data, byteSize) = getWasmBufferFromValue(exec, value);
     RETURN_IF_EXCEPTION(throwScope, Vector<uint8_t>());

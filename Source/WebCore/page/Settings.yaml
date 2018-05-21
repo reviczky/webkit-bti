@@ -520,7 +520,11 @@ shouldConvertInvalidURLsToBlank:
 
 springTimingFunctionEnabled:
   initial: false
+
 conicGradientsEnabled:
+  initial: false
+
+colorFilterEnabled:
   initial: false
 
 treatIPAddressAsDomain:
@@ -528,6 +532,11 @@ treatIPAddressAsDomain:
 
 mediaPreloadingEnabled:
   initial: false
+
+layoutViewportHeightExpansionFactor:
+  type: double
+  initial: 0
+  onChange: setNeedsRecalcStyleInAllFrames
 
 # Runtime-enabled features
 visualViewportEnabled:
@@ -730,3 +739,10 @@ resourceLoadStatisticsDebugMode:
 clientCoordinatesRelativeToLayoutViewport:
   initial: false
   onChange: setNeedsRecalcStyleInAllFrames
+
+crossOriginOptionsSupportEnabled:
+  initial: true
+
+accessibilityEventsEnabled:
+  initial: true
+  conditional: ACCESSIBILITY_EVENTS

@@ -464,6 +464,13 @@ static void UnixTimeToFileTime(time_t t, LPFILETIME pft)
  */
 static double calculateDSTOffset(time_t localTime, double utcOffset)
 {
+    // input is UTC so we have to shift back to local time to determine DST thus the + getUTCOffset()
+    double offsetTime = (localTime * msPerSecond) + utcOffset;
+
+    // Offset from UTC but doesn't include DST obviously
+    int offsetHour =  msToHours(offsetTime);
+    int offsetMinute =  msToMinutes(offsetTime);
+
 #if OS(WINDOWS)
     FILETIME utcFileTime;
     UnixTimeToFileTime(localTime, &utcFileTime);
@@ -473,33 +480,18 @@ static double calculateDSTOffset(time_t localTime, double utcOffset)
     if (!::SystemTimeToTzSpecificLocalTime(nullptr, &utcSystemTime, &localSystemTime))
         return 0;
 
-    double offsetTime = (localTime * msPerSecond) + utcOffset;
-
-    // Offset from UTC but doesn't include DST obviously
-    int offsetHour =  msToHours(offsetTime);
-    int offsetMinute =  msToMinutes(offsetTime);
-
     double diff = ((localSystemTime.wHour - offsetHour) * secondsPerHour) + ((localSystemTime.wMinute - offsetMinute) * 60);
-
-    return diff * msPerSecond;
 #else
-    //input is UTC so we have to shift back to local time to determine DST thus the + getUTCOffset()
-    double offsetTime = (localTime * msPerSecond) + utcOffset;
-
-    // Offset from UTC but doesn't include DST obviously
-    int offsetHour =  msToHours(offsetTime);
-    int offsetMinute =  msToMinutes(offsetTime);
-
     tm localTM;
     getLocalTime(&localTime, &localTM);
 
     double diff = ((localTM.tm_hour - offsetHour) * secondsPerHour) + ((localTM.tm_min - offsetMinute) * 60);
+#endif
 
     if (diff < 0)
         diff += secondsPerDay;
 
     return (diff * msPerSecond);
-#endif
 }
 
 #endif
@@ -1163,11 +1155,9 @@ double parseDateFromNullTerminatedCharacters(const char* dateString)
 
 double timeClip(double t)
 {
-    if (!std::isfinite(t))
+    if (std::abs(t) > maxECMAScriptTime)
         return std::numeric_limits<double>::quiet_NaN();
-    if (fabs(t) > maxECMAScriptTime)
-        return std::numeric_limits<double>::quiet_NaN();
-    return trunc(t);
+    return std::trunc(t) + 0.0;
 }
 
 // See http://tools.ietf.org/html/rfc2822#section-3.3 for more information.

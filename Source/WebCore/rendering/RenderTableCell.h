@@ -102,7 +102,7 @@ public:
     LayoutUnit paddingBefore() const override;
     LayoutUnit paddingAfter() const override;
 
-    void setOverrideLogicalContentHeightFromRowHeight(LayoutUnit);
+    void setOverrideContentLogicalHeightFromRowHeight(LayoutUnit);
 
     void scrollbarsChanged(bool horizontalScrollbarChanged, bool verticalScrollbarChanged) override;
 
@@ -198,6 +198,8 @@ private:
 
     void nextSibling() const = delete;
     void previousSibling() const = delete;
+
+    bool hasLineIfEmpty() const final;
 
     // Note MSVC will only pack members if they have identical types, hence we use unsigned instead of bool here.
     unsigned m_column : 25;

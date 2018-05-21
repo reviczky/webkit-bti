@@ -132,6 +132,12 @@ struct NetworkProcessCreationParameters {
     Vector<String> urlSchemesRegisteredAsDisplayIsolated;
     Vector<String> urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
     Vector<String> urlSchemesRegisteredAsCORSEnabled;
+
+    bool tracksResourceLoadMilestones { false };
+    
+#if ENABLE(WIFI_ASSERTIONS)
+    unsigned wirelessContextIdentifier { 0 };
+#endif
 };
 
 } // namespace WebKit

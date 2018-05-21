@@ -117,7 +117,7 @@ JSValue ScriptController::evaluateInWorld(const ScriptSourceCode& sourceCode, DO
     // and false for <script>doSomething()</script>. Check if it has the
     // expected value in all cases.
     // See smart window.open policy for where this is used.
-    auto& proxy = windowProxyController().windowProxy(world);
+    auto& proxy = jsWindowProxy(world);
     auto& exec = *proxy.window()->globalExec();
     const String* savedSourceURL = m_sourceURL;
     m_sourceURL = &sourceURL;
@@ -150,7 +150,7 @@ void ScriptController::loadModuleScriptInWorld(LoadableModuleScript& moduleScrip
 {
     JSLockHolder lock(world.vm());
 
-    auto& proxy = windowProxyController().windowProxy(world);
+    auto& proxy = jsWindowProxy(world);
     auto& state = *proxy.window()->globalExec();
 
     auto& promise = JSMainThreadExecState::loadModule(state, moduleName, JSC::JSScriptFetchParameters::create(state.vm(), WTFMove(topLevelFetchParameters)), JSC::JSScriptFetcher::create(state.vm(), { &moduleScript }));
@@ -166,7 +166,7 @@ void ScriptController::loadModuleScriptInWorld(LoadableModuleScript& moduleScrip
 {
     JSLockHolder lock(world.vm());
 
-    auto& proxy = windowProxyController().windowProxy(world);
+    auto& proxy = jsWindowProxy(world);
     auto& state = *proxy.window()->globalExec();
 
     auto& promise = JSMainThreadExecState::loadModule(state, sourceCode.jsSourceCode(), JSC::JSScriptFetcher::create(state.vm(), { &moduleScript }));
@@ -182,7 +182,7 @@ JSC::JSValue ScriptController::linkAndEvaluateModuleScriptInWorld(LoadableModule
 {
     JSLockHolder lock(world.vm());
 
-    auto& proxy = windowProxyController().windowProxy(world);
+    auto& proxy = jsWindowProxy(world);
     auto& state = *proxy.window()->globalExec();
 
     // FIXME: Preventing Frame from being destroyed is essentially unnecessary.
@@ -211,7 +211,7 @@ JSC::JSValue ScriptController::evaluateModule(const URL& sourceURL, JSModuleReco
 
     const auto& jsSourceCode = moduleRecord.sourceCode();
 
-    auto& proxy = windowProxyController().windowProxy(world);
+    auto& proxy = jsWindowProxy(world);
     auto& state = *proxy.window()->globalExec();
     SetForScope<const String*> sourceURLScope(m_sourceURL, &sourceURL.string());
 
@@ -240,7 +240,7 @@ void ScriptController::getAllWorlds(Vector<Ref<DOMWrapperWorld>>& worlds)
     static_cast<JSVMClientData*>(commonVM().clientData)->getAllWorlds(worlds);
 }
 
-void ScriptController::initScriptForWindowProxy(JSDOMWindowProxy& windowProxy)
+void ScriptController::initScriptForWindowProxy(JSWindowProxy& windowProxy)
 {
     auto& world = windowProxy.world();
 
@@ -268,7 +268,7 @@ static Identifier jsValueToModuleKey(ExecState* exec, JSValue value)
 
 void ScriptController::setupModuleScriptHandlers(LoadableModuleScript& moduleScriptRef, JSInternalPromise& promise, DOMWrapperWorld& world)
 {
-    auto& proxy = windowProxyController().windowProxy(world);
+    auto& proxy = jsWindowProxy(world);
     auto& state = *proxy.window()->globalExec();
 
     // It is not guaranteed that either fulfillHandler or rejectHandler is eventually called.
@@ -320,9 +320,16 @@ void ScriptController::setupModuleScriptHandlers(LoadableModuleScript& moduleScr
     promise.then(&state, &fulfillHandler, &rejectHandler);
 }
 
-WindowProxyController& ScriptController::windowProxyController()
+WindowProxy& ScriptController::windowProxy()
 {
-    return m_frame.windowProxyController();
+    return m_frame.windowProxy();
+}
+
+JSWindowProxy& ScriptController::jsWindowProxy(DOMWrapperWorld& world)
+{
+    auto* jsWindowProxy = m_frame.windowProxy().jsWindowProxy(world);
+    ASSERT_WITH_MESSAGE(jsWindowProxy, "The JSWindowProxy can only be null if the frame has been destroyed");
+    return *jsWindowProxy;
 }
 
 TextPosition ScriptController::eventHandlerPosition() const
@@ -340,34 +347,34 @@ TextPosition ScriptController::eventHandlerPosition() const
 
 void ScriptController::enableEval()
 {
-    auto* windowProxy = windowProxyController().existingWindowProxy(mainThreadNormalWorld());
-    if (!windowProxy)
+    auto* jsWindowProxy = windowProxy().existingJSWindowProxy(mainThreadNormalWorld());
+    if (!jsWindowProxy)
         return;
-    windowProxy->window()->setEvalEnabled(true);
+    jsWindowProxy->window()->setEvalEnabled(true);
 }
 
 void ScriptController::enableWebAssembly()
 {
-    auto* windowProxy = windowProxyController().existingWindowProxy(mainThreadNormalWorld());
-    if (!windowProxy)
+    auto* jsWindowProxy = windowProxy().existingJSWindowProxy(mainThreadNormalWorld());
+    if (!jsWindowProxy)
         return;
-    windowProxy->window()->setWebAssemblyEnabled(true);
+    jsWindowProxy->window()->setWebAssemblyEnabled(true);
 }
 
 void ScriptController::disableEval(const String& errorMessage)
 {
-    auto* windowProxy = windowProxyController().existingWindowProxy(mainThreadNormalWorld());
-    if (!windowProxy)
+    auto* jsWindowProxy = windowProxy().existingJSWindowProxy(mainThreadNormalWorld());
+    if (!jsWindowProxy)
         return;
-    windowProxy->window()->setEvalEnabled(false, errorMessage);
+    jsWindowProxy->window()->setEvalEnabled(false, errorMessage);
 }
 
 void ScriptController::disableWebAssembly(const String& errorMessage)
 {
-    auto* windowProxy = windowProxyController().existingWindowProxy(mainThreadNormalWorld());
-    if (!windowProxy)
+    auto* jsWindowProxy = windowProxy().existingJSWindowProxy(mainThreadNormalWorld());
+    if (!jsWindowProxy)
         return;
-    windowProxy->window()->setWebAssemblyEnabled(false, errorMessage);
+    jsWindowProxy->window()->setWebAssemblyEnabled(false, errorMessage);
 }
 
 bool ScriptController::canAccessFromCurrentOrigin(Frame* frame)
@@ -383,9 +390,9 @@ bool ScriptController::canAccessFromCurrentOrigin(Frame* frame)
 
 void ScriptController::updateDocument()
 {
-    for (auto& windowProxy : windowProxyController().windowProxiesAsVector()) {
-        JSLockHolder lock(windowProxy->world().vm());
-        jsCast<JSDOMWindow*>(windowProxy->window())->updateDocument();
+    for (auto& jsWindowProxy : windowProxy().jsWindowProxiesAsVector()) {
+        JSLockHolder lock(jsWindowProxy->world().vm());
+        jsCast<JSDOMWindow*>(jsWindowProxy->window())->updateDocument();
     }
 }
 
@@ -427,9 +434,9 @@ Ref<Bindings::RootObject> ScriptController::createRootObject(void* nativeHandle)
 
 void ScriptController::collectIsolatedContexts(Vector<std::pair<JSC::ExecState*, SecurityOrigin*>>& result)
 {
-    for (auto& windowProxy : windowProxyController().windowProxiesAsVector()) {
-        auto* exec = windowProxy->window()->globalExec();
-        auto* origin = &downcast<DOMWindow>(windowProxy->wrapped()).document()->securityOrigin();
+    for (auto& jsWindowProxy : windowProxy().jsWindowProxiesAsVector()) {
+        auto* exec = jsWindowProxy->window()->globalExec();
+        auto* origin = &downcast<DOMWindow>(jsWindowProxy->wrapped()).document()->securityOrigin();
         result.append(std::make_pair(exec, origin));
     }
 }
@@ -442,7 +449,7 @@ NPObject* ScriptController::windowScriptNPObject()
         if (canExecuteScripts(NotAboutToExecuteScript)) {
             // JavaScript is enabled, so there is a JavaScript window object.
             // Return an NPObject bound to the window object.
-            auto* window = windowProxyController().windowProxy(pluginWorld()).window();
+            auto* window = jsWindowProxy(pluginWorld()).window();
             ASSERT(window);
             Bindings::RootObject* root = bindingRootObject();
             m_windowScriptNPObject = _NPN_CreateScriptObject(0, window, root);
@@ -603,7 +610,7 @@ bool ScriptController::executeIfJavaScriptURL(const URL& url, ShouldReplaceDocum
         return true;
 
     String scriptResult;
-    if (!result || !result.getString(windowProxyController().windowProxy(mainThreadNormalWorld()).window()->globalExec(), scriptResult))
+    if (!result || !result.getString(jsWindowProxy(mainThreadNormalWorld()).window()->globalExec(), scriptResult))
         return true;
 
     // FIXME: We should always replace the document, but doing so

@@ -42,7 +42,6 @@ GraphicsLayerTextureMapper::GraphicsLayerTextureMapper(Type layerType, GraphicsL
     , m_compositedNativeImagePtr(0)
     , m_changeMask(NoChanges)
     , m_needsDisplay(false)
-    , m_fixedToViewport(false)
     , m_debugBorderWidth(0)
     , m_contentsLayer(0)
 {
@@ -447,7 +446,7 @@ void GraphicsLayerTextureMapper::commitLayerChanges()
         m_layer.setFilters(filters());
 
     if (m_changeMask & BackingStoreChange)
-        m_layer.setBackingStore(m_backingStore.copyRef());
+        m_layer.setBackingStore(m_backingStore.get());
 
     if (m_changeMask & DebugVisualsChange)
         m_layer.setDebugVisuals(isShowingDebugBorder(), debugBorderColor(), debugBorderWidth(), isShowingRepaintCounter());
@@ -463,9 +462,6 @@ void GraphicsLayerTextureMapper::commitLayerChanges()
 
     if (m_changeMask & AnimationStarted)
         client().notifyAnimationStarted(this, "", m_animationStartTime);
-
-    if (m_changeMask & FixedToViewporChange)
-        m_layer.setFixedToViewport(fixedToViewport());
 
     m_changeMask = NoChanges;
 }
@@ -518,11 +514,10 @@ void GraphicsLayerTextureMapper::updateBackingStoreIfNeeded()
     if (dirtyRect.isEmpty())
         return;
 
-    TextureMapperTiledBackingStore* backingStore = static_cast<TextureMapperTiledBackingStore*>(m_backingStore.get());
-    backingStore->updateContentsScale(pageScaleFactor() * deviceScaleFactor());
+    m_backingStore->updateContentsScale(pageScaleFactor() * deviceScaleFactor());
 
     dirtyRect.scale(pageScaleFactor() * deviceScaleFactor());
-    backingStore->updateContents(*textureMapper, this, m_size, dirtyRect);
+    m_backingStore->updateContents(*textureMapper, this, m_size, dirtyRect);
 
     m_needsDisplay = false;
     m_needsDisplayRect = IntRect();
@@ -610,15 +605,6 @@ bool GraphicsLayerTextureMapper::setFilters(const FilterOperations& filters)
     }
 
     return canCompositeFilters;
-}
-
-void GraphicsLayerTextureMapper::setFixedToViewport(bool fixed)
-{
-    if (m_fixedToViewport == fixed)
-        return;
-
-    m_fixedToViewport = fixed;
-    notifyChange(FixedToViewporChange);
 }
 
 void GraphicsLayerTextureMapper::setRepaintCount(int repaintCount)

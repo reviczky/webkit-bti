@@ -59,7 +59,6 @@
 #include <JavaScriptCore/ArrayBufferView.h>
 #include <JavaScriptCore/JSCInlines.h>
 #include <JavaScriptCore/JSLock.h>
-#include <mutex>
 #include <wtf/RefCountedLeakCounter.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/CString.h>
@@ -280,11 +279,11 @@ String XMLHttpRequest::responseURL() const
     return responseURL.string();
 }
 
-XMLHttpRequestUpload* XMLHttpRequest::upload()
+XMLHttpRequestUpload& XMLHttpRequest::upload()
 {
     if (!m_upload)
-        m_upload = std::make_unique<XMLHttpRequestUpload>(this);
-    return m_upload.get();
+        m_upload = std::make_unique<XMLHttpRequestUpload>(*this);
+    return *m_upload;
 }
 
 void XMLHttpRequest::changeState(State newState)
@@ -583,7 +582,7 @@ ExceptionOr<void> XMLHttpRequest::createRequest()
     options.sendLoadCallbacks = SendCallbacks;
     // The presence of upload event listeners forces us to use preflighting because POSTing to an URL that does not
     // permit cross origin requests should look exactly like POSTing to an URL that does not respond at all.
-    options.preflightPolicy = m_uploadListenerFlag ? ForcePreflight : ConsiderPreflight;
+    options.preflightPolicy = m_uploadListenerFlag ? PreflightPolicy::Force : PreflightPolicy::Consider;
     options.credentials = m_includeCredentials ? FetchOptions::Credentials::Include : FetchOptions::Credentials::SameOrigin;
     options.mode = FetchOptions::Mode::Cors;
     options.contentSecurityPolicyEnforcement = scriptExecutionContext()->shouldBypassMainWorldContentSecurityPolicy() ? ContentSecurityPolicyEnforcement::DoNotEnforce : ContentSecurityPolicyEnforcement::EnforceConnectSrcDirective;
@@ -890,15 +889,6 @@ void XMLHttpRequest::didFail(const ResourceError& error)
     if (error.isTimeout()) {
         didReachTimeout();
         return;
-    }
-
-    // Network failures are already reported to Web Inspector by ResourceLoader.
-    if (error.domain() == errorDomainWebKitInternal) {
-        String message = makeString("XMLHttpRequest cannot load ", error.failingURL().string(), ". ", error.localizedDescription());
-        logConsoleError(scriptExecutionContext(), message);
-    } else if (error.isAccessControl()) {
-        String message = makeString("XMLHttpRequest cannot load ", error.failingURL().string(), " due to access control checks.");
-        logConsoleError(scriptExecutionContext(), message);
     }
 
     // In case didFail is called synchronously on an asynchronous XHR call, let's dispatch network error asynchronously

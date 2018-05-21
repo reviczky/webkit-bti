@@ -26,17 +26,18 @@
 #include "config.h"
 #include "AbstractFrame.h"
 
-#include "WindowProxyController.h"
+#include "WindowProxy.h"
 
 namespace WebCore {
 
 AbstractFrame::AbstractFrame()
-    : m_windowProxyController(makeUniqueRef<WindowProxyController>(*this))
+    : m_windowProxy(WindowProxy::create(*this))
 {
 }
 
 AbstractFrame::~AbstractFrame()
 {
+    m_windowProxy->detachFromFrame();
 }
 
 } // namespace WebCore

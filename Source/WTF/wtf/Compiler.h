@@ -74,6 +74,8 @@
 #define WTF_CPP_STD_VER 11
 #elif __cplusplus <= 201402L
 #define WTF_CPP_STD_VER 14
+#elif __cplusplus <= 201703L
+#define WTF_CPP_STD_VER 17
 #endif
 #endif
 
@@ -91,10 +93,6 @@
 
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #define GCC_VERSION_AT_LEAST(major, minor, patch) (GCC_VERSION >= (major * 10000 + minor * 100 + patch))
-
-#if !GCC_VERSION_AT_LEAST(5, 0, 0)
-#error "Please use a newer version of GCC. WebKit requires GCC 5.0.0 or newer to compile."
-#endif
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 #define WTF_COMPILER_SUPPORTS_C_STATIC_ASSERT 1
@@ -145,11 +143,7 @@
 #define WTF_COMPILER_SUPPORTS_EABI 1
 #endif
 
-/* Non-static data member initializer (NSDMI) for aggregates */
-
-#if defined(__cpp_aggregate_nsdmi) && __cpp_aggregate_nsdmi >= 201304
-#define WTF_COMPILER_SUPPORTS_NSDMI_FOR_AGGREGATES 1
-#endif
+/* ASAN_ENABLED and SUPPRESS_ASAN */
 
 #define ASAN_ENABLED COMPILER_HAS_CLANG_FEATURE(address_sanitizer)
 

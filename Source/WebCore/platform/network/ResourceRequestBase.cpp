@@ -66,6 +66,11 @@ void ResourceRequestBase::setAsIsolatedCopy(const ResourceRequest& other)
     setInitiatorIdentifier(other.initiatorIdentifier().isolatedCopy());
     setCachePartition(other.cachePartition().isolatedCopy());
 
+    if (!other.isSameSiteUnspecified()) {
+        setIsSameSite(other.isSameSite());
+        setIsTopSite(other.isTopSite());
+    }
+
     updateResourceRequest();
     m_httpHeaderFields = other.httpHeaderFields().isolatedCopy();
 
@@ -220,6 +225,45 @@ void ResourceRequestBase::setFirstPartyForCookies(const URL& firstPartyForCookie
 
     m_firstPartyForCookies = firstPartyForCookies;
     
+    m_platformRequestUpdated = false;
+}
+
+bool ResourceRequestBase::isSameSite() const
+{
+    updateResourceRequest();
+
+    return m_sameSiteDisposition == SameSiteDisposition::SameSite;
+}
+
+void ResourceRequestBase::setIsSameSite(bool isSameSite)
+{
+    updateResourceRequest();
+
+    SameSiteDisposition newDisposition = isSameSite ? SameSiteDisposition::SameSite : SameSiteDisposition::CrossSite;
+    if (m_sameSiteDisposition == newDisposition)
+        return;
+
+    m_sameSiteDisposition = newDisposition;
+
+    m_platformRequestUpdated = false;
+}
+
+bool ResourceRequestBase::isTopSite() const
+{
+    updateResourceRequest();
+
+    return m_isTopSite;
+}
+
+void ResourceRequestBase::setIsTopSite(bool isTopSite)
+{
+    updateResourceRequest();
+
+    if (m_isTopSite == isTopSite)
+        return;
+
+    m_isTopSite = isTopSite;
+
     m_platformRequestUpdated = false;
 }
 
@@ -532,6 +576,16 @@ void ResourceRequestBase::setHTTPHeaderFields(HTTPHeaderMap headerFields)
     m_platformRequestUpdated = false;
 }
 
+bool ResourceRequestBase::isSystemPreview() const
+{
+    return m_isSystemPreview;
+}
+
+void ResourceRequestBase::setSystemPreview(bool s)
+{
+    m_isSystemPreview = s;
+}
+
 bool equalIgnoringHeaderFields(const ResourceRequestBase& a, const ResourceRequestBase& b)
 {
     if (a.url() != b.url())
@@ -544,6 +598,12 @@ bool equalIgnoringHeaderFields(const ResourceRequestBase& a, const ResourceReque
         return false;
     
     if (a.firstPartyForCookies() != b.firstPartyForCookies())
+        return false;
+
+    if (a.isSameSite() != b.isSameSite())
+        return false;
+
+    if (a.isTopSite() != b.isTopSite())
         return false;
     
     if (a.httpMethod() != b.httpMethod())

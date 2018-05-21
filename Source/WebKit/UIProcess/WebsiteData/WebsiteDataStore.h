@@ -60,6 +60,11 @@ struct StorageProcessCreationParameters;
 struct WebsiteDataRecord;
 struct WebsiteDataStoreParameters;
 
+#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+enum class StorageAccessStatus;
+enum class StorageAccessPromptStatus;
+#endif
+
 #if ENABLE(NETSCAPE_PLUGIN_API)
 struct PluginModuleInfo;
 #endif
@@ -130,7 +135,8 @@ public:
     void removeAllStorageAccessHandler();
     void removePrevalentDomains(const Vector<String>& domains);
     void hasStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t pageID, WTF::CompletionHandler<void (bool)>&& callback);
-    void requestStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t pageID, WTF::CompletionHandler<void (bool)>&& callback);
+    void requestStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t pageID, bool promptEnabled, CompletionHandler<void(StorageAccessStatus)>&&);
+    void grantStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t pageID, bool userWasPrompted, CompletionHandler<void(bool)>&&);
 #endif
     void networkProcessDidCrash();
     void resolveDirectoriesIfNecessary();
@@ -154,6 +160,7 @@ public:
     Vector<WebCore::Cookie> pendingCookies() const;
     void addPendingCookie(const WebCore::Cookie&);
     void removePendingCookie(const WebCore::Cookie&);
+    void clearPendingCookies();
 
     void enableResourceLoadStatisticsAndSetTestingCallback(Function<void (const String&)>&& callback);
 
@@ -163,6 +170,11 @@ public:
     void setAllowsCellularAccess(AllowsCellularAccess allows) { m_allowsCellularAccess = allows; }
     AllowsCellularAccess allowsCellularAccess() { return m_allowsCellularAccess; }
 
+#if PLATFORM(COCOA)
+    void setProxyConfiguration(CFDictionaryRef configuration) { m_proxyConfiguration = configuration; }
+    CFDictionaryRef proxyConfiguration() { return m_proxyConfiguration.get(); }
+#endif
+    
     static void allowWebsiteDataRecordsForAllOrigins();
 
 private:
@@ -210,6 +222,7 @@ private:
 #if PLATFORM(COCOA)
     Vector<uint8_t> m_uiProcessCookieStorageIdentifier;
     RetainPtr<CFHTTPCookieStorageRef> m_cfCookieStorage;
+    RetainPtr<CFDictionaryRef> m_proxyConfiguration;
 #endif
     HashSet<WebCore::Cookie> m_pendingCookies;
     

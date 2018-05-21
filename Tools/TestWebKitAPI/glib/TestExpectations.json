@@ -231,5 +231,12 @@
                 "expected": {"wpe": {"status": ["FAIL"]}}
             }
         }
+    },
+    "TestJSC": {
+        "subtests": {
+            "/jsc/vm": {
+                "expected": {"all@Debug": {"slow": true}}
+            }
+        }
     }
 }
