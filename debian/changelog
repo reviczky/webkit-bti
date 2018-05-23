@@ -1,3 +1,12 @@
+webkit2gtk (2.20.2-1~bpo9+2) stretch-backports; urgency=medium
+
+  * debian/control:
+    - Don't install libgstreamer-plugins-bad1.0-dev (providing
+      GStreamerGL) in armel or armhf. The usage of two different GL
+      implementations causes a build failure (see WebKit bug #175127).
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 23 May 2018 08:18:49 +0200
+
 webkit2gtk (2.20.2-1~bpo9+1) stretch-backports; urgency=medium
 
   * Rebuild for stretch-backports.
