@@ -34,6 +34,7 @@ endif
 
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEM_MALLOC=ON
+	CPPFLAGS += -DRELEASE_WITHOUT_OPTIMIZATIONS
 endif
 
 ifneq (,$(filter nodoc,$(DEB_BUILD_OPTIONS)))

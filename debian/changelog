@@ -1,6 +1,8 @@
 webkit2gtk (2.21.3-1) UNRELEASED; urgency=medium
 
   * New upstream development release (Closes: #899338).
+  * debian/rules:
+    + Build with -DRELEASE_WITHOUT_OPTIMIZATIONS if "noopt" is set.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 28 May 2018 15:48:50 +0200
 
