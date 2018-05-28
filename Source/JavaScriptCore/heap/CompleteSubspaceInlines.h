@@ -25,43 +25,14 @@
 
 #pragma once
 
-#include <wtf/FastMalloc.h>
-#include <wtf/Lock.h>
-#include <wtf/Noncopyable.h>
-#include <wtf/Vector.h>
-
 namespace JSC {
 
-class BlockDirectory;
-
-// Each Heap has a ThreadLocalCacheLayout that helps us figure out how to allocate a ThreadLocalCache
-// for that Heap.
-
-class ThreadLocalCacheLayout {
-    WTF_MAKE_NONCOPYABLE(ThreadLocalCacheLayout);
-    WTF_MAKE_FAST_ALLOCATED;
-    
-public:
-    ThreadLocalCacheLayout();
-    ~ThreadLocalCacheLayout();
-
-    // BlockDirectory calls this during creation and this fills in BlockDirectory::offset.
-    void allocateOffset(BlockDirectory*);
-    
-    struct Snapshot {
-        size_t size;
-        Vector<BlockDirectory*> directories;
-    };
-    
-    Snapshot snapshot();
-    
-    BlockDirectory* directory(unsigned offset);
-    
-private:
-    Lock m_lock;
-    size_t m_size { 0 };
-    Vector<BlockDirectory*> m_directories;
-};
+ALWAYS_INLINE void* CompleteSubspace::allocateNonVirtual(VM& vm, size_t size, GCDeferralContext* deferralContext, AllocationFailureMode failureMode)
+{
+    if (Allocator allocator = allocatorForNonVirtual(size, AllocatorForMode::AllocatorIfExists))
+        return allocator.allocate(deferralContext, failureMode);
+    return allocateSlow(vm, size, deferralContext, failureMode);
+}
 
 } // namespace JSC
 

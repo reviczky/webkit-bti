@@ -35,6 +35,7 @@
 #include <JavaScriptCore/ConsoleTypes.h>
 #include <WebCore/ContentSecurityPolicyClient.h>
 #include <WebCore/ResourceResponse.h>
+#include <WebCore/SecurityPolicyViolationEvent.h>
 #include <WebCore/Timer.h>
 
 namespace WebCore {
@@ -42,7 +43,6 @@ class BlobDataFileReference;
 class FormData;
 class NetworkStorageSession;
 class ResourceRequest;
-class SecurityPolicyViolationEvent;
 }
 
 namespace WebKit {
@@ -137,7 +137,7 @@ private:
     void didRetrieveCacheEntry(std::unique_ptr<NetworkCache::Entry>);
     void sendResultForCacheEntry(std::unique_ptr<NetworkCache::Entry>);
     void validateCacheEntry(std::unique_ptr<NetworkCache::Entry>);
-    void dispatchWillSendRequestForCacheEntry(std::unique_ptr<NetworkCache::Entry>);
+    void dispatchWillSendRequestForCacheEntry(WebCore::ResourceRequest&&, std::unique_ptr<NetworkCache::Entry>&&);
     void continueProcessingCachedEntryAfterDidReceiveResponse(std::unique_ptr<NetworkCache::Entry>);
 
     bool shouldInterruptLoadForXFrameOptions(const String&, const WebCore::URL&);
@@ -169,13 +169,13 @@ private:
 #endif
 
     void continueWillSendRedirectedRequest(WebCore::ResourceRequest&& request, WebCore::ResourceRequest&& redirectRequest, WebCore::ResourceResponse&&);
-
+    void didFinishWithRedirectResponse(WebCore::ResourceResponse&&);
     WebCore::ResourceResponse sanitizeResponseIfPossible(WebCore::ResourceResponse&&, WebCore::ResourceResponse::SanitizationType);
 
     // ContentSecurityPolicyClient
     void addConsoleMessage(MessageSource, MessageLevel, const String&, unsigned long) final;
     void sendCSPViolationReport(WebCore::URL&&, Ref<WebCore::FormData>&&) final;
-    void dispatchSecurityPolicyViolationEvent(Ref<WebCore::SecurityPolicyViolationEvent>&&) final { }; // No observable effect for frame-ancestors violation.
+    void enqueueSecurityPolicyViolationEvent(WebCore::SecurityPolicyViolationEvent::Init&&) final;
 
     const NetworkResourceLoadParameters m_parameters;
 

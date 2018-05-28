@@ -449,8 +449,6 @@ namespace JSC {
         void emitJumpSlowCaseIfNotNumber(RegisterID);
         void emitJumpSlowCaseIfNotInt(RegisterID, RegisterID, RegisterID scratch);
 
-        void emitTagBool(RegisterID);
-
         void compileGetByIdHotPath(int baseVReg, const Identifier*);
 
 #endif // USE(JSVALUE32_64)
@@ -799,8 +797,6 @@ namespace JSC {
 
         void emitRightShiftFastPath(Instruction* currentInstruction, OpcodeID);
 
-        Jump checkStructure(RegisterID reg, Structure* structure);
-
         void updateTopCallFrame();
 
         Call emitNakedCall(CodePtr<NoPtrTag> function = CodePtr<NoPtrTag>());
@@ -894,7 +890,6 @@ namespace JSC {
 
         std::unique_ptr<JITDisassembler> m_disassembler;
         RefPtr<Profiler::Compilation> m_compilation;
-        static CodeRef<JITThunkPtrTag> stringGetByValStubGenerator(VM*);
 
         PCToCodeOriginMapBuilder m_pcToCodeOriginMapBuilder;
 

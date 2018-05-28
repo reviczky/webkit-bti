@@ -524,8 +524,6 @@ heap/StopIfNecessaryTimer.cpp
 heap/Subspace.cpp
 heap/SynchronousStopTheWorldMutatorScheduler.cpp
 heap/Synchronousness.cpp
-heap/ThreadLocalCache.cpp
-heap/ThreadLocalCacheLayout.cpp
 heap/VisitRaceKey.cpp
 heap/Weak.cpp
 heap/WeakBlock.cpp
@@ -806,6 +804,7 @@ runtime/JSGlobalLexicalEnvironment.cpp
 runtime/JSGlobalObject.cpp
 runtime/JSGlobalObjectDebuggable.cpp
 runtime/JSGlobalObjectFunctions.cpp
+runtime/JSImmutableButterfly.cpp
 runtime/JSInternalPromise.cpp
 runtime/JSInternalPromiseConstructor.cpp
 runtime/JSInternalPromiseDeferred.cpp

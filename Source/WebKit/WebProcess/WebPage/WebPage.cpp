@@ -461,6 +461,8 @@ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
     m_mainFrame = WebFrame::createWithCoreMainFrame(this, &m_page->mainFrame());
     m_drawingArea->updatePreferences(parameters.store);
 
+    setBackgroundExtendsBeyondPage(parameters.backgroundExtendsBeyondPage);
+
 #if ENABLE(GEOLOCATION)
     WebCore::provideGeolocationTo(m_page.get(), *new WebGeolocationClient(*this));
 #endif
@@ -521,8 +523,6 @@ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
         m_scrollbarOverlayStyle = static_cast<ScrollbarOverlayStyle>(parameters.scrollbarOverlayStyle.value());
     else
         m_scrollbarOverlayStyle = std::optional<ScrollbarOverlayStyle>();
-
-    setBackgroundExtendsBeyondPage(parameters.backgroundExtendsBeyondPage);
 
     setTopContentInset(parameters.topContentInset);
 
@@ -2651,9 +2651,10 @@ void WebPage::setDrawsBackground(bool drawsBackground)
 
     m_drawsBackground = drawsBackground;
 
-    for (Frame* coreFrame = m_mainFrame->coreFrame(); coreFrame; coreFrame = coreFrame->tree().traverseNext()) {
-        if (FrameView* view = coreFrame->view())
-            view->setTransparent(!drawsBackground);
+    if (FrameView* frameView = mainFrameView()) {
+        Color backgroundColor = drawsBackground ? Color::white : Color::transparent;
+        bool isTransparent = !drawsBackground;
+        frameView->updateBackgroundRecursively(backgroundColor, isTransparent);
     }
 
     m_drawingArea->pageBackgroundTransparencyChanged();
@@ -3056,13 +3057,9 @@ static RefPtr<SharedBuffer> resourceDataForFrame(Frame* frame, const URL& resour
 void WebPage::getResourceDataFromFrame(uint64_t frameID, const String& resourceURLString, CallbackID callbackID)
 {
     RefPtr<SharedBuffer> buffer;
-    if (WebFrame* frame = WebProcess::singleton().webFrame(frameID)) {
+    if (auto* frame = WebProcess::singleton().webFrame(frameID)) {
         URL resourceURL(URL(), resourceURLString);
         buffer = resourceDataForFrame(frame->coreFrame(), resourceURL);
-        if (!buffer) {
-            // Try to get the resource data from the cache.
-            buffer = cachedResponseDataForURL(resourceURL);
-        }
     }
 
     // FIXME: Use SharedBufferDataReference.
@@ -3327,6 +3324,18 @@ void WebPage::sendCSPViolationReport(uint64_t frameID, const WebCore::URL& repor
         return;
     if (auto* frame = WebProcess::singleton().webFrame(frameID))
         PingLoader::sendViolationReport(*frame->coreFrame(), reportURL, report.releaseNonNull(), ViolationReportType::ContentSecurityPolicy);
+}
+
+void WebPage::enqueueSecurityPolicyViolationEvent(uint64_t frameID, SecurityPolicyViolationEvent::Init&& eventInit)
+{
+    auto* frame = WebProcess::singleton().webFrame(frameID);
+    if (!frame)
+        return;
+    auto* coreFrame = frame->coreFrame();
+    if (!coreFrame)
+        return;
+    if (auto* document = coreFrame->document())
+        document->enqueueSecurityPolicyViolationEvent(WTFMove(eventInit));
 }
 
 NotificationPermissionRequestManager* WebPage::notificationPermissionRequestManager()
@@ -4089,7 +4098,7 @@ bool WebPage::hasLocalDataForURL(const URL& url)
     if (documentLoader && documentLoader->subresource(url))
         return true;
 
-    return platformHasLocalDataForURL(url);
+    return false;
 }
 
 void WebPage::setCustomTextEncodingName(const String& encoding)
@@ -4836,9 +4845,7 @@ static bool needsHiddenContentEditableQuirk(bool needsQuirks, const URL& url)
     if (!needsQuirks)
         return false;
 
-    String host = url.host();
-    String path = url.path();
-    return equalLettersIgnoringASCIICase(host, "docs.google.com");
+    return equalLettersIgnoringASCIICase(url.host(), "docs.google.com");
 }
 
 static bool needsPlainTextQuirk(bool needsQuirks, const URL& url)
@@ -4846,7 +4853,7 @@ static bool needsPlainTextQuirk(bool needsQuirks, const URL& url)
     if (!needsQuirks)
         return false;
 
-    String host = url.host();
+    auto host = url.host();
 
     if (equalLettersIgnoringASCIICase(host, "twitter.com"))
         return true;
@@ -5419,8 +5426,8 @@ void WebPage::determinePrimarySnapshottedPlugIn()
 
     LOG(Plugins, "Primary Plug-In Detection: success - found a candidate plug-in - inform it.");
     m_didFindPrimarySnapshottedPlugin = true;
-    m_primaryPlugInPageOrigin = m_page->mainFrame().document()->baseURL().host();
-    m_primaryPlugInOrigin = candidatePlugIn->loadedUrl().host();
+    m_primaryPlugInPageOrigin = m_page->mainFrame().document()->baseURL().host().toString();
+    m_primaryPlugInOrigin = candidatePlugIn->loadedUrl().host().toString();
     m_primaryPlugInMimeType = candidatePlugIn->serviceType();
 
     candidatePlugIn->setIsPrimarySnapshottedPlugIn(true);

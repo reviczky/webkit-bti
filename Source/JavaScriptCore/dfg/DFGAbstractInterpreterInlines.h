@@ -761,6 +761,12 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         break;
     }
         
+    case ValueNegate: {
+        clobberWorld();
+        setTypeForNode(node, SpecBytecodeNumber | SpecBigInt);
+        break;
+    }
+
     case ArithNegate: {
         JSValue child = forNode(node->child1()).value();
         switch (node->child1().useKind()) {
@@ -808,9 +814,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
                     forNode(node->child1()).m_type));
             break;
         default:
-            DFG_ASSERT(m_graph, node, node->child1().useKind() == UntypedUse, node->child1().useKind());
-            clobberWorld();
-            setNonCellTypeForNode(node, SpecBytecodeNumber);
+            RELEASE_ASSERT_NOT_REACHED();
             break;
         }
         break;
@@ -2236,7 +2240,8 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     }
             
     case NewArray:
-        setForNode(node, 
+        ASSERT(node->indexingMode() == node->indexingType()); // Copy on write arrays should only be created by NewArrayBuffer.
+        setForNode(node,
             m_graph.globalObjectFor(node->origin.semantic)->arrayStructureForIndexingTypeDuringAllocation(node->indexingType()));
         break;
 
@@ -2272,8 +2277,8 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         break;
         
     case NewArrayBuffer:
-        setForNode(node, 
-            m_graph.globalObjectFor(node->origin.semantic)->arrayStructureForIndexingTypeDuringAllocation(node->indexingType()));
+        setForNode(node,
+            m_graph.globalObjectFor(node->origin.semantic)->arrayStructureForIndexingTypeDuringAllocation(node->indexingMode()));
         break;
 
     case NewArrayWithSize:

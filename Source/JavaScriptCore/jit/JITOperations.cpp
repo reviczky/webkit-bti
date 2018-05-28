@@ -398,6 +398,7 @@ EncodedJSValue JIT_OPERATION operationInById(ExecState* exec, StructureStubInfo*
 
     LOG_IC((ICEvent::OperationInById, baseObject->classInfo(vm), ident));
 
+    scope.release();
     PropertySlot slot(baseObject, PropertySlot::InternalMethodType::HasProperty);
     return JSValue::encode(jsBoolean(baseObject->getPropertySlot(exec, ident, slot)));
 }
@@ -421,6 +422,7 @@ EncodedJSValue JIT_OPERATION operationInByIdGeneric(ExecState* exec, EncodedJSVa
 
     LOG_IC((ICEvent::OperationInByIdGeneric, baseObject->classInfo(vm), ident));
 
+    scope.release();
     PropertySlot slot(baseObject, PropertySlot::InternalMethodType::HasProperty);
     return JSValue::encode(jsBoolean(baseObject->getPropertySlot(exec, ident, slot)));
 }
@@ -444,6 +446,7 @@ EncodedJSValue JIT_OPERATION operationInByIdOptimize(ExecState* exec, StructureS
 
     LOG_IC((ICEvent::OperationInByIdOptimize, baseObject->classInfo(vm), ident));
 
+    scope.release();
     PropertySlot slot(baseObject, PropertySlot::InternalMethodType::HasProperty);
     bool found = baseObject->getPropertySlot(exec, ident, slot);
     if (stubInfo->considerCaching(exec->codeBlock(), baseObject->structure(vm)))
@@ -686,6 +689,7 @@ static void directPutByVal(CallFrame* callFrame, JSObject* baseObject, JSValue s
     VM& vm = callFrame->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
     bool isStrictMode = callFrame->codeBlock()->isStrictMode();
+
     if (LIKELY(subscript.isUInt32())) {
         // Despite its name, JSValue::isUInt32 will return true only for positive boxed int32_t; all those values are valid array indices.
         byValInfo->tookSlowPath = true;
@@ -753,6 +757,9 @@ static OptimizationResult tryPutByValOptimize(ExecState* exec, JSValue baseValue
     OptimizationResult optimizationResult = OptimizationResult::NotOptimized;
 
     VM& vm = exec->vm();
+
+    if (baseValue.isObject() && isCopyOnWrite(baseValue.getObject()->indexingMode()))
+        return OptimizationResult::GiveUp;
 
     if (baseValue.isObject() && subscript.isInt32()) {
         JSObject* object = asObject(baseValue);
@@ -1774,23 +1781,15 @@ void JIT_OPERATION operationPutGetterSetter(ExecState* exec, JSCell* object, Uni
     ASSERT(object && object->isObject());
     JSObject* baseObject = asObject(object);
 
-    GetterSetter* accessor = GetterSetter::create(vm, exec->lexicalGlobalObject());
-
     JSValue getter = JSValue::decode(encodedGetterValue);
     JSValue setter = JSValue::decode(encodedSetterValue);
-    ASSERT(getter.isObject() || getter.isUndefined());
-    ASSERT(setter.isObject() || setter.isUndefined());
     ASSERT(getter.isObject() || setter.isObject());
-
-    if (!getter.isUndefined())
-        accessor->setGetter(vm, exec->lexicalGlobalObject(), asObject(getter));
-    if (!setter.isUndefined())
-        accessor->setSetter(vm, exec->lexicalGlobalObject(), asObject(setter));
+    GetterSetter* accessor = GetterSetter::create(vm, exec->lexicalGlobalObject(), getter, setter);
     CommonSlowPaths::putDirectAccessorWithReify(vm, exec, baseObject, uid, accessor, attribute);
 }
 
 #else
-void JIT_OPERATION operationPutGetterSetter(ExecState* exec, JSCell* object, UniquedStringImpl* uid, int32_t attribute, JSCell* getter, JSCell* setter)
+void JIT_OPERATION operationPutGetterSetter(ExecState* exec, JSCell* object, UniquedStringImpl* uid, int32_t attribute, JSCell* getterCell, JSCell* setterCell)
 {
     VM& vm = exec->vm();
     NativeCallFrameTracer tracer(&vm, exec);
@@ -1798,16 +1797,10 @@ void JIT_OPERATION operationPutGetterSetter(ExecState* exec, JSCell* object, Uni
     ASSERT(object && object->isObject());
     JSObject* baseObject = asObject(object);
 
-    GetterSetter* accessor = GetterSetter::create(vm, exec->lexicalGlobalObject());
-
-    ASSERT(!getter || getter->isObject());
-    ASSERT(!setter || setter->isObject());
-    ASSERT(getter || setter);
-
-    if (getter)
-        accessor->setGetter(vm, exec->lexicalGlobalObject(), getter->getObject());
-    if (setter)
-        accessor->setSetter(vm, exec->lexicalGlobalObject(), setter->getObject());
+    ASSERT(getterCell || setterCell);
+    JSObject* getter = getterCell ? getterCell->getObject() : nullptr;
+    JSObject* setter = setterCell ? setterCell->getObject() : nullptr;
+    GetterSetter* accessor = GetterSetter::create(vm, exec->lexicalGlobalObject(), getter, setter);
     CommonSlowPaths::putDirectAccessorWithReify(vm, exec, baseObject, uid, accessor, attribute);
 }
 #endif
@@ -2712,7 +2705,14 @@ ALWAYS_INLINE static EncodedJSValue unprofiledNegate(ExecState* exec, EncodedJSV
     NativeCallFrameTracer tracer(&vm, exec);
     
     JSValue operand = JSValue::decode(encodedOperand);
-    double number = operand.toNumber(exec);
+    
+    JSValue primValue = operand.toPrimitive(exec, PreferNumber);
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
+    
+    if (primValue.isBigInt())
+        return JSValue::encode(JSBigInt::unaryMinus(vm, asBigInt(primValue)));
+    
+    double number = primValue.toNumber(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
     return JSValue::encode(jsNumber(-number));
 }
@@ -2725,9 +2725,19 @@ ALWAYS_INLINE static EncodedJSValue profiledNegate(ExecState* exec, EncodedJSVal
 
     JSValue operand = JSValue::decode(encodedOperand);
     arithProfile.observeLHS(operand);
-    double number = operand.toNumber(exec);
+    
+    JSValue primValue = operand.toPrimitive(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
+    
+    if (primValue.isBigInt()) {
+        JSBigInt* result = JSBigInt::unaryMinus(vm, asBigInt(primValue));
+        arithProfile.observeResult(result);
 
+        return JSValue::encode(result);
+    }
+
+    double number = primValue.toNumber(exec);
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
     JSValue result = jsNumber(-number);
     arithProfile.observeResult(result);
     return JSValue::encode(result);
@@ -2761,7 +2771,16 @@ EncodedJSValue JIT_OPERATION operationArithNegateProfiledOptimize(ExecState* exe
     exec->codeBlock()->dumpMathICStats();
 #endif
     
-    double number = operand.toNumber(exec);
+    JSValue primValue = operand.toPrimitive(exec);
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
+    
+    if (primValue.isBigInt()) {
+        JSBigInt* result = JSBigInt::unaryMinus(vm, asBigInt(primValue));
+        arithProfile->observeResult(result);
+        return JSValue::encode(result);
+    }
+
+    double number = primValue.toNumber(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
     JSValue result = jsNumber(-number);
     arithProfile->observeResult(result);
@@ -2784,7 +2803,15 @@ EncodedJSValue JIT_OPERATION operationArithNegateOptimize(ExecState* exec, Encod
     exec->codeBlock()->dumpMathICStats();
 #endif
 
-    double number = operand.toNumber(exec);
+    JSValue primValue = operand.toPrimitive(exec);
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
+    
+    if (primValue.isBigInt()) {
+        JSBigInt* result = JSBigInt::unaryMinus(vm, asBigInt(primValue));
+        return JSValue::encode(result);
+    }
+
+    double number = primValue.toNumber(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
     return JSValue::encode(jsNumber(-number));
 }

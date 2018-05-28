@@ -20,46 +20,20 @@
  * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
  * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "config.h"
-#include "ThreadLocalCacheLayout.h"
+#pragma once
 
-#include "BlockDirectory.h"
+namespace WTF {
 
-namespace JSC {
+enum class UTF8ConversionError {
+    None,
+    OutOfMemory,
+    IllegalSource,
+    SourceExhausted
+};
 
-ThreadLocalCacheLayout::ThreadLocalCacheLayout()
-{
-}
+} // namespace WTF
 
-ThreadLocalCacheLayout::~ThreadLocalCacheLayout()
-{
-}
-
-void ThreadLocalCacheLayout::allocateOffset(BlockDirectory* directory)
-{
-    auto locker = holdLock(m_lock);
-    directory->m_tlcOffset = m_size;
-    m_size += sizeof(LocalAllocator);
-    m_directories.append(directory);
-}
-
-ThreadLocalCacheLayout::Snapshot ThreadLocalCacheLayout::snapshot()
-{
-    auto locker = holdLock(m_lock);
-    Snapshot result;
-    result.size = m_size;
-    result.directories = m_directories;
-    return result;
-}
-
-BlockDirectory* ThreadLocalCacheLayout::directory(unsigned offset)
-{
-    auto locker = holdLock(m_lock);
-    return m_directories[offset / sizeof(LocalAllocator)];
-}
-
-} // namespace JSC
-
+using WTF::UTF8ConversionError;

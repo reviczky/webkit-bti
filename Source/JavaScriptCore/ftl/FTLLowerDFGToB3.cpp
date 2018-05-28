@@ -76,6 +76,7 @@
 #include "JSAsyncGeneratorFunction.h"
 #include "JSCInlines.h"
 #include "JSGeneratorFunction.h"
+#include "JSImmutableButterfly.h"
 #include "JSLexicalEnvironment.h"
 #include "JSMap.h"
 #include "OperandsInlines.h"
@@ -582,6 +583,9 @@ private:
             break;
         case ToThis:
             compileToThis();
+            break;
+        case ValueNegate:
+            compileValueNegate();
             break;
         case ValueAdd:
             compileValueAdd();
@@ -2708,7 +2712,18 @@ private:
         LValue result = vmCall(Double, m_out.operation(operationArithFRound), m_callFrame, argument);
         setDouble(result);
     }
-    
+
+    void compileValueNegate()
+    {
+        DFG_ASSERT(m_graph, m_node, m_node->child1().useKind() == UntypedUse);
+        CodeBlock* baselineCodeBlock = m_ftlState.graph.baselineCodeBlockFor(m_node->origin.semantic);
+        ArithProfile* arithProfile = baselineCodeBlock->arithProfileForBytecodeOffset(m_node->origin.semantic.bytecodeIndex);
+        Instruction* instruction = &baselineCodeBlock->instructions()[m_node->origin.semantic.bytecodeIndex];
+        auto repatchingFunction = operationArithNegateOptimize;
+        auto nonRepatchingFunction = operationArithNegate;
+        compileUnaryMathIC<JITNegGenerator>(arithProfile, instruction, repatchingFunction, nonRepatchingFunction);
+    }
+
     void compileArithNegate()
     {
         switch (m_node->child1().useKind()) {
@@ -2757,13 +2772,7 @@ private:
         }
             
         default:
-            DFG_ASSERT(m_graph, m_node, m_node->child1().useKind() == UntypedUse, m_node->child1().useKind());
-            CodeBlock* baselineCodeBlock = m_ftlState.graph.baselineCodeBlockFor(m_node->origin.semantic);
-            ArithProfile* arithProfile = baselineCodeBlock->arithProfileForBytecodeOffset(m_node->origin.semantic.bytecodeIndex);
-            Instruction* instruction = &baselineCodeBlock->instructions()[m_node->origin.semantic.bytecodeIndex];
-            auto repatchingFunction = operationArithNegateOptimize;
-            auto nonRepatchingFunction = operationArithNegate;
-            compileUnaryMathIC<JITNegGenerator>(arithProfile, instruction, repatchingFunction, nonRepatchingFunction);
+            DFG_CRASH(m_graph, m_node, "Bad use kind");
             break;
         }
     }
@@ -3047,7 +3056,7 @@ private:
         
         RegisteredStructure oldStructure = m_node->transition()->previous;
         RegisteredStructure newStructure = m_node->transition()->next;
-        ASSERT_UNUSED(oldStructure, oldStructure->indexingType() == newStructure->indexingType());
+        ASSERT_UNUSED(oldStructure, oldStructure->indexingMode() == newStructure->indexingMode());
         ASSERT(oldStructure->typeInfo().inlineTypeFlags() == newStructure->typeInfo().inlineTypeFlags());
         ASSERT(oldStructure->typeInfo().type() == newStructure->typeInfo().type());
 
@@ -4719,7 +4728,8 @@ private:
         ArrayValues arrayResult;
         {
             LValue indexingType = m_out.load8ZeroExt32(lowCell(m_graph.varArgChild(m_node, 0)), m_heaps.JSCell_indexingTypeAndMisc);
-            indexingType = m_out.bitAnd(indexingType, m_out.constInt32(AllArrayTypesAndHistory));
+            // We can ignore the writability of the cell since we won't write to the source.
+            indexingType = m_out.bitAnd(indexingType, m_out.constInt32(AllWritableArrayTypesAndHistory));
             // When we emit an ArraySlice, we dominate the use of the array by a CheckStructure
             // to ensure the incoming array is one to be one of the original array structures
             // with one of the following indexing shapes: Int32, Contiguous, Double.
@@ -5491,7 +5501,7 @@ private:
                 else {
                     Edge& child = m_graph.varArgChild(m_node, i);
                     if (child->op() == PhantomSpread && child->child1()->op() == PhantomNewArrayBuffer)
-                        startLength += child->child1()->castOperand<JSFixedArray*>()->length();
+                        startLength += child->child1()->castOperand<JSImmutableButterfly*>()->length();
                 }
             }
 
@@ -5539,7 +5549,7 @@ private:
                     if (use->op() == PhantomSpread) {
                         if (use->child1()->op() == PhantomNewArrayBuffer) {
                             IndexedAbstractHeap& heap = m_heaps.indexedContiguousProperties;
-                            auto* array = use->child1()->castOperand<JSFixedArray*>();
+                            auto* array = use->child1()->castOperand<JSImmutableButterfly*>();
                             for (unsigned i = 0; i < array->length(); ++i) {
                                 // Because resulted array from NewArrayWithSpread is always contiguous, we should not generate value
                                 // in Double form even if PhantomNewArrayBuffer's indexingType is ArrayWithDouble.
@@ -5813,39 +5823,32 @@ private:
     {
         JSGlobalObject* globalObject = m_graph.globalObjectFor(m_node->origin.semantic);
         RegisteredStructure structure = m_graph.registerStructure(globalObject->arrayStructureForIndexingTypeDuringAllocation(
-            m_node->indexingType()));
-        JSFixedArray* array = m_node->castOperand<JSFixedArray*>();
-        unsigned numElements = array->length();
-        
-        if (!globalObject->isHavingABadTime() && !hasAnyArrayStorage(m_node->indexingType())) {
-            unsigned vectorLengthHint = m_node->vectorLengthHint();
-           
-            ASSERT(vectorLengthHint >= numElements);
-            ArrayValues arrayValues =
-                allocateUninitializedContiguousJSArray(numElements, vectorLengthHint, structure);
-            
-            for (unsigned index = 0; index < numElements; ++index) {
-                int64_t value;
-                if (hasDouble(m_node->indexingType()))
-                    value = bitwise_cast<int64_t>(array->get(index).asNumber());
-                else
-                    value = JSValue::encode(array->get(index));
-                
-                m_out.store64(
-                    m_out.constInt64(value),
-                    arrayValues.butterfly,
-                    m_heaps.forIndexingType(m_node->indexingType())->at(index));
-            }
-            
+            m_node->indexingMode()));
+        auto* immutableButterfly = m_node->castOperand<JSImmutableButterfly*>();
+
+        if (!globalObject->isHavingABadTime() && !hasAnyArrayStorage(m_node->indexingMode())) {
+            LBasicBlock slowPath = m_out.newBlock();
+            LBasicBlock continuation = m_out.newBlock();
+
+            LValue fastArray = allocateObject<JSArray>(structure, m_out.constIntPtr(immutableButterfly->toButterfly()), slowPath);
+            ValueFromBlock fastResult = m_out.anchor(fastArray);
+            m_out.jump(continuation);
+
+            m_out.appendTo(slowPath, continuation);
+            LValue slowArray = vmCall(Int64, m_out.operation(operationNewArrayBuffer), m_callFrame, weakStructure(structure), m_out.weakPointer(m_node->cellOperand()));
+            ValueFromBlock slowResult = m_out.anchor(slowArray);
+            m_out.jump(continuation);
+
+            m_out.appendTo(continuation);
+
             mutatorFence();
-            setJSValue(arrayValues.array);
+            setJSValue(m_out.phi(pointerType(), slowResult, fastResult));
             return;
         }
         
         setJSValue(vmCall(
             Int64, m_out.operation(operationNewArrayBuffer), m_callFrame,
-            weakStructure(structure), m_out.weakPointer(m_node->cellOperand()),
-            m_out.constIntPtr(numElements)));
+            weakStructure(structure), m_out.weakPointer(m_node->cellOperand())));
     }
 
     void compileNewArrayWithSize()
@@ -6170,7 +6173,7 @@ private:
         Allocator allocator = subspaceFor<JSRopeString>(vm())->allocatorForNonVirtual(sizeof(JSRopeString), AllocatorForMode::AllocatorIfExists);
         
         LValue result = allocateCell(
-            m_out.constInt32(allocator.offset()), vm().stringStructure.get(), slowPath);
+            m_out.constIntPtr(allocator.localAllocator()), vm().stringStructure.get(), slowPath);
         
         m_out.storePtr(m_out.intPtrZero, result, m_heaps.JSString_value);
         for (unsigned i = 0; i < numKids; ++i)
@@ -7624,7 +7627,7 @@ private:
             }
 
             if (target->op() == PhantomNewArrayBuffer) {
-                staticArgumentCount += target->castOperand<JSFixedArray*>()->length();
+                staticArgumentCount += target->castOperand<JSImmutableButterfly*>()->length();
                 return;
             }
 
@@ -7775,7 +7778,7 @@ private:
                         }
 
                         if (target->op() == PhantomNewArrayBuffer) {
-                            auto* array = target->castOperand<JSFixedArray*>();
+                            auto* array = target->castOperand<JSImmutableButterfly*>();
                             Checked<int32_t> offsetCount { 1 };
                             for (unsigned i = array->length(); i--; ++offsetCount) {
                                 // Because varargs values are drained as JSValue, we should not generate value
@@ -8462,7 +8465,7 @@ private:
             }
 
             if (target->op() == PhantomNewArrayBuffer) {
-                numberOfStaticArguments += target->castOperand<JSFixedArray*>()->length();
+                numberOfStaticArguments += target->castOperand<JSImmutableButterfly*>()->length();
                 return;
             }
 
@@ -8507,7 +8510,7 @@ private:
             }
 
             if (target->op() == PhantomNewArrayBuffer) {
-                auto* array = target->castOperand<JSFixedArray*>();
+                auto* array = target->castOperand<JSImmutableButterfly*>();
                 for (unsigned i = 0; i < array->length(); i++) {
                     // Because forwarded values are drained as JSValue, we should not generate value
                     // in Double form even if PhantomNewArrayBuffer's indexingType is ArrayWithDouble.
@@ -10472,7 +10475,8 @@ private:
                 m_out.store32(vectorLength, fastButterflyValue, m_heaps.Butterfly_vectorLength);
 
                 LValue fastObjectValue = allocateObject(
-                    m_out.constInt32(cellAllocator.offset()), structure, fastButterflyValue, slowPath);
+                    m_out.constIntPtr(cellAllocator.localAllocator()), structure, fastButterflyValue,
+                    slowPath);
 
                 ValueFromBlock fastObject = m_out.anchor(fastObjectValue);
                 ValueFromBlock fastButterfly = m_out.anchor(fastButterflyValue);
@@ -11474,7 +11478,8 @@ private:
 
         size_t sizeInBytes = sizeInValues * sizeof(JSValue);
         Allocator allocator = vm().jsValueGigacageAuxiliarySpace.allocatorForNonVirtual(sizeInBytes, AllocatorForMode::AllocatorIfExists);
-        LValue startOfStorage = allocateHeapCell(m_out.constInt32(allocator.offset()), slowPath);
+        LValue startOfStorage = allocateHeapCell(
+            m_out.constIntPtr(allocator.localAllocator()), slowPath);
         ValueFromBlock fastButterfly = m_out.anchor(
             m_out.add(m_out.constIntPtr(sizeInBytes + sizeof(IndexingHeader)), startOfStorage));
         m_out.jump(continuation);
@@ -12518,7 +12523,7 @@ private:
     {
         JITAllocator actualAllocator;
         if (allocator->hasInt32())
-            actualAllocator = JITAllocator::constant(Allocator(allocator->asInt32()));
+            actualAllocator = JITAllocator::constant(Allocator(bitwise_cast<LocalAllocator*>(allocator->asIntPtr())));
         else
             actualAllocator = JITAllocator::variable();
         
@@ -12536,7 +12541,7 @@ private:
             LBasicBlock haveAllocator = m_out.newBlock();
             LBasicBlock lastNext = m_out.insertNewBlocksBefore(haveAllocator);
             m_out.branch(
-                m_out.notEqual(allocator, m_out.constInt32(Allocator().offset())),
+                m_out.notEqual(allocator, m_out.intPtrZero),
                 usually(haveAllocator), rarely(slowPath));
             m_out.appendTo(haveAllocator, lastNext);
         }
@@ -12618,7 +12623,7 @@ private:
         LValue id = m_out.load32(structure, m_heaps.Structure_structureID);
         m_out.store32(id, object, m_heaps.JSCell_structureID);
 
-        LValue blob = m_out.load32(structure, m_heaps.Structure_indexingTypeIncludingHistory);
+        LValue blob = m_out.load32(structure, m_heaps.Structure_indexingModeIncludingHistory);
         m_out.store32(blob, object, m_heaps.JSCell_usefulBytes);
     }
 
@@ -12666,7 +12671,8 @@ private:
         size_t size, StructureType structure, LValue butterfly, LBasicBlock slowPath)
     {
         Allocator allocator = subspaceFor<ClassType>(vm())->allocatorForNonVirtual(size, AllocatorForMode::AllocatorIfExists);
-        return allocateObject(m_out.constInt32(allocator.offset()), structure, butterfly, slowPath);
+        return allocateObject(
+            m_out.constIntPtr(allocator.localAllocator()), structure, butterfly, slowPath);
     }
     
     template<typename ClassType, typename StructureType>
@@ -12691,10 +12697,10 @@ private:
                 LBasicBlock lastNext = m_out.insertNewBlocksBefore(continuation);
                 m_out.jump(slowPath);
                 m_out.appendTo(continuation, lastNext);
-                return m_out.int32Zero;
+                return m_out.intPtrZero;
             }
             
-            return m_out.constInt32(actualAllocator.offset());
+            return m_out.constIntPtr(actualAllocator.localAllocator());
         }
         
         unsigned stepShift = getLSBSet(MarkedSpace::sizeStep);
@@ -12713,7 +12719,7 @@ private:
         
         m_out.appendTo(continuation, lastNext);
         
-        return m_out.load32(
+        return m_out.loadPtr(
             m_out.baseIndex(
                 m_heaps.CompleteSubspace_allocatorForSizeStep,
                 subspace, m_out.sub(sizeClassIndex, m_out.intPtrOne)));
@@ -12755,7 +12761,7 @@ private:
         LBasicBlock lastNext = m_out.insertNewBlocksBefore(slowPath);
         
         ValueFromBlock fastResult = m_out.anchor(allocateObject(
-            m_out.constInt32(allocator.offset()), structure, m_out.intPtrZero, slowPath));
+            m_out.constIntPtr(allocator.localAllocator()), structure, m_out.intPtrZero, slowPath));
         
         m_out.jump(continuation);
         
@@ -15030,6 +15036,10 @@ private:
         case Array::Contiguous:
         case Array::Undecided:
         case Array::ArrayStorage: {
+            IndexingType indexingModeMask = IsArray | IndexingShapeMask;
+            if (arrayMode.action() == Array::Write)
+                indexingModeMask |= CopyOnWrite;
+
             IndexingType shape = arrayMode.shapeMask();
             LValue indexingType = m_out.load8ZeroExt32(cell, m_heaps.JSCell_indexingTypeAndMisc);
 
@@ -15040,18 +15050,18 @@ private:
 
             case Array::Array:
                 return m_out.equal(
-                    m_out.bitAnd(indexingType, m_out.constInt32(IsArray | IndexingShapeMask)),
+                    m_out.bitAnd(indexingType, m_out.constInt32(indexingModeMask)),
                     m_out.constInt32(IsArray | shape));
 
             case Array::NonArray:
             case Array::OriginalNonArray:
                 return m_out.equal(
-                    m_out.bitAnd(indexingType, m_out.constInt32(IsArray | IndexingShapeMask)),
+                    m_out.bitAnd(indexingType, m_out.constInt32(indexingModeMask)),
                     m_out.constInt32(shape));
 
             case Array::PossiblyArray:
                 return m_out.equal(
-                    m_out.bitAnd(indexingType, m_out.constInt32(IndexingShapeMask)),
+                    m_out.bitAnd(indexingType, m_out.constInt32(indexingModeMask & ~IsArray)),
                     m_out.constInt32(shape));
             }
             break;

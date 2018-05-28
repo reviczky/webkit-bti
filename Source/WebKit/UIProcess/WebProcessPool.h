@@ -165,6 +165,7 @@ public:
     template<typename T> void sendToNetworkingProcessRelaunchingIfNecessary(T&& message);
 
     // Sends the message to WebProcess or StorageProcess as approporiate for current process model.
+    template<typename T> void sendToStorageProcess(T&& message);
     template<typename T> void sendToStorageProcessRelaunchingIfNecessary(T&& message);
 
     void processDidFinishLaunching(WebProcessProxy*);
@@ -261,8 +262,6 @@ public:
     };
     static Statistics& statistics();    
 
-    void setCookieStorageDirectory(const String& dir) { m_overrideCookieStorageDirectory = dir; }
-
     void useTestingNetworkSession();
     bool isUsingTestingNetworkSession() const { return m_shouldUseTestingNetworkSession; }
 
@@ -315,7 +314,9 @@ public:
 #endif
 
     void fullKeyboardAccessModeChanged(bool fullKeyboardAccessEnabled);
-
+#if OS(LINUX)
+    void sendMemoryPressureEvent(bool isCritical);
+#endif
     void textCheckerStateChanged();
 
     Ref<API::Dictionary> plugInAutoStartOriginHashes() const;
@@ -412,9 +413,7 @@ public:
     static String legacyPlatformDefaultApplicationCacheDirectory();
     static String legacyPlatformDefaultNetworkCacheDirectory();
     static String legacyPlatformDefaultJavaScriptConfigurationDirectory();
-    static bool isNetworkCacheEnabled();
 
-    bool resourceLoadStatisticsEnabled() { return m_resourceLoadStatisticsEnabled; }
     void setResourceLoadStatisticsEnabled(bool);
     void clearResourceLoadStatistics();
 
@@ -614,8 +613,6 @@ private:
     std::unique_ptr<PerActivityStateCPUUsageSampler> m_perActivityStateCPUUsageSampler;
 #endif
 
-    String m_overrideCookieStorageDirectory;
-
     bool m_shouldUseTestingNetworkSession { false };
 
     bool m_processTerminationEnabled { true };
@@ -633,7 +630,6 @@ private:
 #endif
 
     bool m_memoryCacheDisabled { false };
-    bool m_resourceLoadStatisticsEnabled { false };
     bool m_javaScriptConfigurationFileEnabled { false };
     bool m_alwaysRunsAtBackgroundPriority;
     bool m_shouldTakeUIBackgroundAssertion;
@@ -715,6 +711,13 @@ void WebProcessPool::sendToNetworkingProcessRelaunchingIfNecessary(T&& message)
 {
     ensureNetworkProcess();
     m_networkProcess->send(std::forward<T>(message), 0);
+}
+
+template<typename T>
+void WebProcessPool::sendToStorageProcess(T&& message)
+{
+    if (m_storageProcess && m_storageProcess->canSendMessage())
+        m_storageProcess->send(std::forward<T>(message), 0);
 }
 
 template<typename T>

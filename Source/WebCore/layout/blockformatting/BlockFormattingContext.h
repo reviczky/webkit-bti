@@ -28,10 +28,11 @@
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
 #include "FormattingContext.h"
-#include "LayoutUnit.h"
 #include <wtf/IsoMalloc.h>
 
 namespace WebCore {
+
+class LayoutUnit;
 
 namespace Layout {
 
@@ -51,18 +52,38 @@ public:
 
 private:
     void computeStaticPosition(LayoutContext&, const Box&, Display::Box&) const override;
-
+    void computeInFlowPositionedPosition(LayoutContext&, const Box&, Display::Box&) const override;
     void computeInFlowWidth(LayoutContext&, const Box&, Display::Box&) const override;
-    void computeInFlowNonReplacedWidth(LayoutContext&, const Box&, Display::Box&) const;
-
     void computeInFlowHeight(LayoutContext&, const Box&, Display::Box&) const override;
-    void computeInFlowNonReplacedHeight(LayoutContext&, const Box&, Display::Box&) const;
+    void computeMargin(LayoutContext&, const Box&, Display::Box&) const override;
 
-    LayoutUnit marginTop(const Box&) const override;
-    LayoutUnit marginBottom(const Box&) const override;
+    // This class implements positioning and sizing for boxes participating in a block formatting context.
+    class Geometry {
+    public:
+        static LayoutUnit inFlowNonReplacedHeight(LayoutContext&, const Box&);
+        static LayoutUnit inFlowNonReplacedWidth(LayoutContext&, const Box&);
+
+        static LayoutPoint staticPosition(LayoutContext&, const Box&);
+        static LayoutPoint inFlowPositionedPosition(LayoutContext&, const Box&);
+
+        static Display::Box::Edges computedMargin(LayoutContext&, const Box&);
+    };
+    
+    // This class implements margin collapsing for block formatting context.
+    class MarginCollapse {
+    public:
+        static LayoutUnit marginTop(const Box&);
+        static LayoutUnit marginBottom(const Box&);
+
+        static bool isMarginBottomCollapsedWithParent(const Box&);
+        static bool isMarginTopCollapsedWithParentMarginBottom(const Box&);
+    
+    private:
+        static LayoutUnit collapsedMarginBottomFromLastChild(const Box&);
+        static LayoutUnit nonCollapsedMarginBottom(const Box&);
+    };
 };
 
 }
 }
 #endif
-

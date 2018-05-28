@@ -731,6 +731,12 @@
 #define ENABLE_JIT 0
 #endif
 
+/* Disable the JIT for 32-bit Windows builds. */
+#if USE(JSVALUE32_64) && OS(WINDOWS)
+#undef ENABLE_JIT
+#define ENABLE_JIT 0
+#endif
+
 /* The FTL *does not* work on 32-bit platforms. Disable it even if someone asked us to enable it. */
 #if USE(JSVALUE32_64)
 #undef ENABLE_FTL_JIT
@@ -792,11 +798,6 @@
 #if (CPU(X86_64) || CPU(ARM64)) && HAVE(FAST_TLS)
 #define ENABLE_FAST_TLS_JIT 1
 #endif
-
-/* This feature is currently disabled because WebCore will context switch VMs without telling JSC.
-   FIXME: Re-enable this feature.
-   https://bugs.webkit.org/show_bug.cgi?id=182173 */
-#define USE_FAST_TLS_FOR_TLC 0
 
 #if CPU(X86) || CPU(X86_64) || CPU(ARM_THUMB2) || CPU(ARM64) || CPU(ARM_TRADITIONAL) || CPU(MIPS)
 #define ENABLE_MASM_PROBE 1
@@ -1319,6 +1320,7 @@
 
 #if (PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 120000) || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400)
 #define ENABLE_ACCESSIBILITY_EVENTS 1
+#define HAVE_SEC_KEY_PROXY 1
 #endif
 
 #endif /* WTF_Platform_h */
