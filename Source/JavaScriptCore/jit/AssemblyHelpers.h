@@ -1091,6 +1091,11 @@ public:
         return addressFor(static_cast<VirtualRegister>(operand));
     }
 
+    static Address tagFor(VirtualRegister virtualRegister, GPRReg baseGPR)
+    {
+        ASSERT(virtualRegister.isValid());
+        return Address(baseGPR, virtualRegister.offset() * sizeof(Register) + TagOffset);
+    }
     static Address tagFor(VirtualRegister virtualRegister)
     {
         ASSERT(virtualRegister.isValid());
@@ -1101,6 +1106,11 @@ public:
         return tagFor(static_cast<VirtualRegister>(operand));
     }
 
+    static Address payloadFor(VirtualRegister virtualRegister, GPRReg baseGPR)
+    {
+        ASSERT(virtualRegister.isValid());
+        return Address(baseGPR, virtualRegister.offset() * sizeof(Register) + PayloadOffset);
+    }
     static Address payloadFor(VirtualRegister virtualRegister)
     {
         ASSERT(virtualRegister.isValid());
@@ -1336,6 +1346,14 @@ public:
 #endif
     }
 
+    void boxBoolean(bool value, JSValueRegs boxedRegs)
+    {
+        boxBooleanPayload(value, boxedRegs.payloadGPR());
+#if USE(JSVALUE32_64)
+        move(TrustedImm32(JSValue::BooleanTag), boxedRegs.tagGPR());
+#endif
+    }
+
     void boxInt32(GPRReg intGPR, JSValueRegs boxedRegs, TagRegistersMode mode = HaveTagRegisters)
     {
 #if USE(JSVALUE64)
@@ -1465,7 +1483,7 @@ public:
         store64(scratch, MacroAssembler::Address(dest, JSCell::structureIDOffset()));
 #else
         // Store all the info flags using a single 32-bit wide load and store.
-        load32(MacroAssembler::Address(structure, Structure::indexingTypeIncludingHistoryOffset()), scratch);
+        load32(MacroAssembler::Address(structure, Structure::indexingModeIncludingHistoryOffset()), scratch);
         store32(scratch, MacroAssembler::Address(dest, JSCell::indexingTypeAndMiscOffset()));
 
         // Store the StructureID

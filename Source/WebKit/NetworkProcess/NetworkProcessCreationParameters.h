@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include "Attachment.h"
 #include "CacheModel.h"
 #include "NetworkSessionCreationParameters.h"
 #include "SandboxExtension.h"
@@ -62,12 +61,11 @@ struct NetworkProcessCreationParameters {
     SandboxExtension::Handle cacheStorageDirectoryExtensionHandle;
     String diskCacheDirectory;
     SandboxExtension::Handle diskCacheDirectoryExtensionHandle;
-    bool shouldEnableNetworkCache { false };
     bool shouldEnableNetworkCacheEfficacyLogging { false };
 #if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
     bool shouldEnableNetworkCacheSpeculativeRevalidation { false };
 #endif
-#if PLATFORM(MAC)
+#if PLATFORM(COCOA)
     Vector<uint8_t> uiProcessCookieStorageIdentifier;
 #endif
 #if PLATFORM(IOS)
@@ -85,8 +83,6 @@ struct NetworkProcessCreationParameters {
 #if PLATFORM(COCOA)
     String parentProcessName;
     String uiProcessBundleIdentifier;
-    uint64_t nsURLCacheMemoryCapacity;
-    uint64_t nsURLCacheDiskCapacity;
     String sourceApplicationBundleIdentifier;
     String sourceApplicationSecondaryIdentifier;
 #if PLATFORM(IOS)
@@ -114,10 +110,6 @@ struct NetworkProcessCreationParameters {
 
 #if HAVE(CFNETWORK_STORAGE_PARTITIONING) && !RELEASE_LOG_DISABLED
     bool logCookieInformation { false };
-#endif
-
-#if OS(LINUX)
-    IPC::Attachment memoryPressureMonitorHandle;
 #endif
 
 #if ENABLE(NETWORK_CAPTURE)

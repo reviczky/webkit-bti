@@ -177,6 +177,8 @@ private:
 
     enum class ShouldAcknowledgeWhenReadyToSuspend { No, Yes };
     void actualPrepareToSuspend(ShouldAcknowledgeWhenReadyToSuspend);
+    void platformPrepareToSuspend();
+    void platformProcessDidResume();
 
     // ChildProcess
     void initializeProcess(const ChildProcessInitializationParameters&) override;
@@ -241,10 +243,7 @@ private:
     void setNetworkProxySettings(const WebCore::SoupNetworkProxySettings&);
 #endif
 
-    // Platform Helpers
-    void platformSetURLCacheSize(unsigned urlCacheMemoryCapacity, uint64_t urlCacheDiskCapacity);
-
-#if PLATFORM(MAC)
+#if PLATFORM(COCOA)
     static void setSharedHTTPCookieStorage(const Vector<uint8_t>& identifier);
 #endif
 

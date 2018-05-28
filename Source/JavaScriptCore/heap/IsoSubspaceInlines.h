@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,21 +25,15 @@
 
 #pragma once
 
-#include "ListableHandler.h"
-
 namespace JSC {
 
-// An unconditional finalizer is useful for caches that you would like to
-// destroy on each GC. This is currently used for the bytecode stream
-// associated with each CodeBlock.
-
-class UnconditionalFinalizer : public ListableHandler<UnconditionalFinalizer> {
-    WTF_MAKE_FAST_ALLOCATED;
-public:
-    virtual void finalizeUnconditionally() = 0;
-
-protected:
-    virtual ~UnconditionalFinalizer() { }
-};
+ALWAYS_INLINE void* IsoSubspace::allocateNonVirtual(VM&, size_t size, GCDeferralContext* deferralContext, AllocationFailureMode failureMode)
+{
+    RELEASE_ASSERT(size == this->size());
+    Allocator allocator = allocatorForNonVirtual(size, AllocatorForMode::MustAlreadyHaveAllocator);
+    void* result = allocator.allocate(deferralContext, failureMode);
+    return result;
+}
 
 } // namespace JSC
+

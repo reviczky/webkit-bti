@@ -156,8 +156,8 @@ void WebLoaderStrategy::scheduleLoad(ResourceLoader& resourceLoader, CachedResou
     auto& frameLoaderClient = resourceLoader.frameLoader()->client();
 
     WebResourceLoader::TrackingParameters trackingParameters;
-    trackingParameters.pageID = frameLoaderClient.pageID().value();
-    trackingParameters.frameID = frameLoaderClient.frameID().value();
+    trackingParameters.pageID = frameLoaderClient.pageID().value_or(0);
+    trackingParameters.frameID = frameLoaderClient.frameID().value_or(0);
     trackingParameters.resourceID = identifier;
     auto sessionID = frameLoaderClient.sessionID();
 
@@ -329,10 +329,12 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
 
     loadParameters.shouldEnableFromOriginResponseHeader = RuntimeEnabledFeatures::sharedFeatures().fromOriginResponseHeaderEnabled() && !loadParameters.isMainFrameNavigation;
 
-    Vector<RefPtr<SecurityOrigin>> frameAncestorOrigins;
-    for (auto* frame = resourceLoader.frame(); frame; frame = frame->tree().parent())
-        frameAncestorOrigins.append(makeRefPtr(frame->document()->securityOrigin()));
-    loadParameters.frameAncestorOrigins = WTFMove(frameAncestorOrigins);
+    if (resourceLoader.options().mode == FetchOptions::Mode::Navigate) {
+        Vector<RefPtr<SecurityOrigin>> frameAncestorOrigins;
+        for (auto* frame = resourceLoader.frame(); frame; frame = frame->tree().parent())
+            frameAncestorOrigins.append(makeRefPtr(frame->document()->securityOrigin()));
+        loadParameters.frameAncestorOrigins = WTFMove(frameAncestorOrigins);
+    }
 
     ASSERT((loadParameters.webPageID && loadParameters.webFrameID) || loadParameters.clientCredentialPolicy == ClientCredentialPolicy::CannotAskClientForCredentials);
 

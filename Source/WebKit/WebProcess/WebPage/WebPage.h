@@ -59,6 +59,7 @@
 #include <WebCore/Page.h>
 #include <WebCore/PageOverlay.h>
 #include <WebCore/PluginData.h>
+#include <WebCore/SecurityPolicyViolationEvent.h>
 #include <WebCore/UserActivity.h>
 #include <WebCore/UserContentTypes.h>
 #include <WebCore/UserInterfaceLayoutDirection.h>
@@ -310,6 +311,7 @@ public:
 
     void addConsoleMessage(uint64_t frameID, MessageSource, MessageLevel, const String&, uint64_t requestID = 0);
     void sendCSPViolationReport(uint64_t frameID, const WebCore::URL& reportURL, IPC::FormDataReference&&);
+    void enqueueSecurityPolicyViolationEvent(uint64_t frameID, WebCore::SecurityPolicyViolationEvent::Init&&);
 
     // -- Called by the DrawingArea.
     // FIXME: We could genericize these into a DrawingArea client interface. Would that be beneficial?
@@ -670,9 +672,6 @@ public:
 #endif
 
     bool hasLocalDataForURL(const WebCore::URL&);
-    String cachedResponseMIMETypeForURL(const WebCore::URL&);
-    String cachedSuggestedFilenameForURL(const WebCore::URL&);
-    RefPtr<WebCore::SharedBuffer> cachedResponseDataForURL(const WebCore::URL&);
 
     static bool canHandleRequest(const WebCore::ResourceRequest&);
 
@@ -1152,8 +1151,6 @@ private:
     void loadDataImpl(uint64_t navigationID, Ref<WebCore::SharedBuffer>&&, const String& MIMEType, const String& encodingName, const WebCore::URL& baseURL, const WebCore::URL& failingURL, const UserData&);
     void loadStringImpl(uint64_t navigationID, const String&, const String& MIMEType, const WebCore::URL& baseURL, const WebCore::URL& failingURL, const UserData&);
 
-    bool platformHasLocalDataForURL(const WebCore::URL&);
-
     // Actions
     void tryClose();
     void platformDidReceiveLoadParameters(const LoadParameters&);
@@ -1540,6 +1537,7 @@ private:
 
 #if PLATFORM(IOS)
     bool m_allowsMediaDocumentInlinePlayback { false };
+    RefPtr<WebCore::Range> m_startingGestureRange;
 #endif
 
 #if ENABLE(FULLSCREEN_API)
