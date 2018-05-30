@@ -16,7 +16,7 @@ DEBHELPER_VERSION = $(shell dpkg-query -W -f='$${source:Version}' debhelper)
 
 GTK_VERSIONS = 2.0 3.0
 
-CFLAGS += -Wall -fno-delete-null-pointer-checks
+CFLAGS += -Wall -fno-delete-null-pointer-checks -Wno-expansion-to-defined
 LDFLAGS += -Wl,--as-needed
 
 COMMON_CONFIGURE_ARGUMENTS = \
