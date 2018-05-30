@@ -178,20 +178,16 @@ binary-arch: build install
 ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
 	dh_install -plibjavascriptcoregtk-1.0-0 --sourcedir=debian/tmp-2.0
 	dh_install -plibjavascriptcoregtk-1.0-dev --sourcedir=debian/tmp-2.0
-	dh_install -plibjavascriptcoregtk-1.0-0-dbg --sourcedir=debian/tmp-2.0
 	dh_install -plibwebkitgtk-1.0-0 --sourcedir=debian/tmp-2.0
 	dh_install -plibwebkitgtk-dev --sourcedir=debian/tmp-2.0
-	dh_install -plibwebkitgtk-1.0-0-dbg --sourcedir=debian/tmp-2.0
 endif
 ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_install -plibjavascriptcoregtk-3.0-0 --sourcedir=debian/tmp-3.0
 	dh_install -plibjavascriptcoregtk-3.0-dev --sourcedir=debian/tmp-3.0
-	dh_install -plibjavascriptcoregtk-3.0-0-dbg --sourcedir=debian/tmp-3.0
 	dh_install -plibjavascriptcoregtk-3.0-bin --sourcedir=debian/tmp-3.0
 	dh_install -pgir1.2-javascriptcoregtk-3.0 --sourcedir=debian/tmp-3.0
 	dh_install -plibwebkitgtk-3.0-0 --sourcedir=debian/tmp-3.0
 	dh_install -plibwebkitgtk-3.0-dev --sourcedir=debian/tmp-3.0
-	dh_install -plibwebkitgtk-3.0-0-dbg --sourcedir=debian/tmp-3.0
 	dh_install -pgir1.2-webkit-3.0 --sourcedir=debian/tmp-3.0
 	dh_installman -plibjavascriptcoregtk-3.0-bin
 endif
