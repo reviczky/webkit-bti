@@ -7,3 +7,4 @@ x32_support.patch
 disable-jit-nonsse2.patch
 fix-ftbfs-m68k.patch
 fix-ftbfs-gcc6.patch
+fix-build-icu.patch
