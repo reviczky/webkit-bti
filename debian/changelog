@@ -10,6 +10,8 @@ webkitgtk (2.4.11-4) UNRELEASED; urgency=medium
       amount of warnings with GCC 7.
     + Don't call dh_install for the -dbg packages, they have all been
       replaced with their -dbgsym equivalents.
+  * debian/control:
+    + Replace 'Priority: extra' with optional.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 30 May 2018 23:53:16 +0200
 

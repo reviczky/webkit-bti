@@ -71,7 +71,7 @@ Description: JavaScript engine library from WebKitGTK+
 
 Package: libjavascriptcoregtk-1.0-dev
 Section: libdevel
-Priority: extra
+Priority: optional
 Architecture: any
 Multi-Arch: same
 Conflicts: libwebkitgtk-dev (<< 1.5.0), libwebkit-dev (<< 1.5.0)
@@ -116,7 +116,7 @@ Description: Web content engine library for GTK+
 
 Package: libwebkitgtk-dev
 Section: libdevel
-Priority: extra
+Priority: optional
 Architecture: any
 Multi-Arch: same
 Depends: libwebkitgtk-1.0-0 (= ${binary:Version}),
@@ -157,7 +157,7 @@ Description: JavaScript engine library from WebKitGTK+
 
 Package: libjavascriptcoregtk-3.0-dev
 Section: libdevel
-Priority: extra
+Priority: optional
 Architecture: any
 Multi-Arch: same
 Conflicts: libwebkitgtk-3.0-dev (<< 1.5.0)
@@ -238,7 +238,7 @@ Description: Web content engine library for GTK+
 
 Package: libwebkitgtk-3.0-dev
 Section: libdevel
-Priority: extra
+Priority: optional
 Architecture: any
 Multi-Arch: same
 Depends: libwebkitgtk-3.0-0 (= ${binary:Version}),
@@ -263,7 +263,7 @@ Description: Web content engine library for GTK+ - development files
 
 Package: libwebkitgtk-doc
 Section: doc
-Priority: extra
+Priority: optional
 Architecture: all
 Depends: ${misc:Depends}
 Suggests: devhelp
