@@ -1,0 +1,29 @@
+From: Michael Catanzaro <mcatanzaro@igalia.com>
+Subject: Fix gtk-doc generation with gtk-doc master
+Bug: https://bugs.webkit.org/show_bug.cgi?id=179252
+Origin: http://trac.webkit.org/changeset/224458
+Index: webkitgtk/Tools/gtk/gtkdoc.py
+===================================================================
+--- webkitgtk.orig/Tools/gtk/gtkdoc.py
++++ webkitgtk/Tools/gtk/gtkdoc.py
+@@ -309,9 +309,9 @@ class GTKDoc(object):
+             ldflags = ' "-L%s" ' % self.library_path + ldflags
+             current_ld_library_path = env.get('LD_LIBRARY_PATH')
+             if current_ld_library_path:
+-                env['RUN'] = 'LD_LIBRARY_PATH="%s:%s" ' % (self.library_path, current_ld_library_path)
++                env['LD_LIBRARY_PATH'] = '%s:%s' % (self.library_path, current_ld_library_path)
+             else:
+-                env['RUN'] = 'LD_LIBRARY_PATH="%s" ' % self.library_path
++                env['LD_LIBRARY_PATH'] = self.library_path
+ 
+         if ldflags:
+             env['LDFLAGS'] = '%s %s' % (ldflags, env.get('LDFLAGS', ''))
+@@ -322,8 +322,6 @@ class GTKDoc(object):
+             self.logger.debug('CFLAGS=%s', env['CFLAGS'])
+         if 'LDFLAGS' in env:
+             self.logger.debug('LDFLAGS %s', env['LDFLAGS'])
+-        if 'RUN' in env:
+-            self.logger.debug('RUN=%s', env['RUN'])
+         self._run_command(['gtkdoc-scangobj', '--module=%s' % self.module_name],
+                           env=env, cwd=self.output_dir)
+ 

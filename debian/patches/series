@@ -8,3 +8,6 @@ disable-jit-nonsse2.patch
 fix-ftbfs-m68k.patch
 fix-ftbfs-gcc6.patch
 fix-build-icu.patch
+gtk-doc-fix1.patch
+gtk-doc-fix2.patch
+gtk-doc-fix3.patch

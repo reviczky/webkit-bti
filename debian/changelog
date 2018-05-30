@@ -2,6 +2,9 @@ webkitgtk (2.4.11-4) UNRELEASED; urgency=medium
 
   * debian/patches/fix-build-icu.patch:
     + Fix build with ICU 5.91 (Closes: #900282).
+  * debian/patches/gtk-doc-fix[123].patch:
+    + Cherry pick some upstream patches to be able to build with recent
+      versions of gtk-doc.
   * debian/rules:
     + Build with -Wno-expansion-to-defined in order to reduce the large
       amount of warnings with GCC 7.

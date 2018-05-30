@@ -1,0 +1,27 @@
+From: Michael Catanzaro <mcatanzaro@igalia.com>
+Subject: Build gtk-doc without gtkdoc-mktmpl
+Bug: https://bugs.webkit.org/show_bug.cgi?id=140225
+Origin: http://trac.webkit.org/changeset/178103
+Index: webkitgtk/Tools/gtk/gtkdoc.py
+===================================================================
+--- webkitgtk.orig/Tools/gtk/gtkdoc.py
++++ webkitgtk/Tools/gtk/gtkdoc.py
+@@ -141,7 +141,6 @@ class GTKDoc(object):
+         self._write_version_xml()
+         self._run_gtkdoc_scan()
+         self._run_gtkdoc_scangobj()
+-        self._run_gtkdoc_mktmpl()
+         self._run_gtkdoc_mkdb()
+ 
+         if not html:
+@@ -328,10 +327,6 @@ class GTKDoc(object):
+         self._run_command(['gtkdoc-scangobj', '--module=%s' % self.module_name],
+                           env=env, cwd=self.output_dir)
+ 
+-    def _run_gtkdoc_mktmpl(self):
+-        args = ['gtkdoc-mktmpl', '--module=%s' % self.module_name]
+-        self._run_command(args, cwd=self.output_dir)
+-
+     def _run_gtkdoc_mkdb(self):
+         sgml_file = os.path.join(self.output_dir, self.main_sgml_file)
+         self._raise_exception_if_file_inaccessible(sgml_file)
