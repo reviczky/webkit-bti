@@ -1,0 +1,1 @@
+libwebkitgtk-dev: gir-missing-typelib-dependency usr/share/gir-1.0/WebKit-1.0.gir gir1.2-webkit-1.0

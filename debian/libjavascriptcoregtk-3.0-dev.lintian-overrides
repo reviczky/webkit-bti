@@ -1,0 +1,2 @@
+libjavascriptcoregtk-3.0-dev: gir-missing-typelib-dependency usr/share/gir-1.0/JSCore-3.0.gir gir1.2-jscore-3.0
+libjavascriptcoregtk-3.0-dev: gir-missing-typelib-dependency usr/share/gir-1.0/JavaScriptCore-3.0.gir gir1.2-javascriptcore-3.0

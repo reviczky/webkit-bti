@@ -25,6 +25,10 @@ webkitgtk (2.4.11-4) UNRELEASED; urgency=medium
       - Remove build dependencies on dh-autoreconf and autotools-dev.
     + debian/rules:
       - Remove DEBHELPER_VERSION check.
+  * Override typelib-package-name-does-not-match and
+    gir-missing-typelib-dependency lintian warnings in
+    gir1.2-javascriptcoregtk-3.0, libjavascriptcoregtk-1.0-dev,
+    libjavascriptcoregtk-3.0-dev and libwebkitgtk-dev.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 30 May 2018 23:53:16 +0200
 

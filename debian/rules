@@ -154,6 +154,7 @@ binary-indep: build
 	dh_installdocs -i
 	dh_installchangelogs -i
 	dh_install -plibwebkitgtk-doc
+	dh_lintian -i
 	dh_link -i
 	dh_compress -i
 	dh_fixperms -i
@@ -185,6 +186,7 @@ ifeq (3.0,$(filter 3.0,$(GTK_VERSIONS)))
 	dh_installman -plibjavascriptcoregtk-3.0-bin
 endif
 	dh_link -a
+	dh_lintian -a
 ifeq (2.0,$(filter 2.0,$(GTK_VERSIONS)))
 	dh_strip -plibjavascriptcoregtk-1.0-0 --ddeb-migration='libjavascriptcoregtk-1.0-0-dbg (<< 2.4.10)'
 	dh_strip -plibwebkitgtk-1.0-0 --ddeb-migration='libwebkitgtk-1.0-0-dbg (<< 2.4.10)'
