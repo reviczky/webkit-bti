@@ -13,6 +13,14 @@ webkitgtk (2.4.11-4) UNRELEASED; urgency=medium
   * debian/control:
     + Remove all 'Priority' fields from the binary packages. The 'extra'
       priority is deprecated and all packages are 'optional' now.
+  * Bump debhelper compat to 10:
+    + debian/compat:
+      - Update version number:
+    + debian/control:
+      - Bump build dependency on debhelper.
+      - Remove build dependencies on dh-autoreconf and autotools-dev.
+    + debian/rules:
+      - Remove DEBHELPER_VERSION check.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 30 May 2018 23:53:16 +0200
 
