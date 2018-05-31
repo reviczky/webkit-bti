@@ -16,6 +16,7 @@ webkitgtk (2.4.11-4) UNRELEASED; urgency=medium
     + Remove all 'Priority' fields from the binary packages. The 'extra'
       priority is deprecated and all packages are 'optional' now.
     + Update Vcs fields to point at https://salsa.debian.org/
+    + Use https version of the upstream home page.
   * Bump debhelper compat to 10:
     + debian/compat:
       - Update version number:
