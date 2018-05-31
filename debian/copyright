@@ -1,9 +1,9 @@
-Original source may be found at http://webkitgtk.org/
+Original source may be found at https://webkitgtk.org/
 
 Files: debian/*
 Copyright: © 2007-2009 Mike Hommey <glandium@debian.org>
            © 2009 Gustavo Noronha Silva <kov@debian.org>
-           © 2014-2016 Alberto Garcia <berto@igalia.com>
+           © 2014-2016, 2018 Alberto Garcia <berto@igalia.com>
 License: LGPL-2+ (/usr/share/common-licenses/LGPL-2)
 
 Files: JavaScriptCore/API/*,
