@@ -1,4 +1,4 @@
-webkitgtk (2.4.11-4) UNRELEASED; urgency=medium
+webkitgtk (2.4.11-4) unstable; urgency=medium
 
   * debian/patches/fix-build-icu.patch:
     + Fix build with ICU 5.91 (Closes: #900282).
@@ -32,7 +32,7 @@ webkitgtk (2.4.11-4) UNRELEASED; urgency=medium
   * debian/copyright:
     + Update copyright years and upstream URL.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 30 May 2018 23:53:16 +0200
+ -- Alberto Garcia <berto@igalia.com>  Thu, 31 May 2018 19:38:40 +0200
 
 webkitgtk (2.4.11-3) unstable; urgency=medium
 
