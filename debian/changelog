@@ -10,6 +10,8 @@ webkitgtk (2.4.11-4) UNRELEASED; urgency=medium
       amount of warnings with GCC 7.
     + Don't call dh_install for the -dbg packages, they have all been
       replaced with their -dbgsym equivalents.
+    + Include /usr/share/dpkg/architecture.mk instead of defining all
+      DEB_* variables.
   * debian/control:
     + Remove all 'Priority' fields from the binary packages. The 'extra'
       priority is deprecated and all packages are 'optional' now.
