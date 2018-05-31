@@ -11,7 +11,8 @@ webkitgtk (2.4.11-4) UNRELEASED; urgency=medium
     + Don't call dh_install for the -dbg packages, they have all been
       replaced with their -dbgsym equivalents.
   * debian/control:
-    + Replace 'Priority: extra' with optional.
+    + Remove all 'Priority' fields from the binary packages. The 'extra'
+      priority is deprecated and all packages are 'optional' now.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 30 May 2018 23:53:16 +0200
 
