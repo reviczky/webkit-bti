@@ -478,14 +478,6 @@ void DocumentLoader::startDataLoadTimer()
 #endif
 }
 
-void DocumentLoader::handleSubstituteDataLoadSoon()
-{
-    if (!m_deferMainResourceDataLoad || frameLoader()->loadsSynchronously())
-        handleSubstituteDataLoadNow();
-    else
-        startDataLoadTimer();
-}
-
 #if ENABLE(SERVICE_WORKER)
 void DocumentLoader::matchRegistration(const URL& url, SWClientConnection::RegistrationCallback&& callback)
 {
@@ -671,15 +663,24 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
 bool DocumentLoader::tryLoadingRequestFromApplicationCache()
 {
     m_applicationCacheHost->maybeLoadMainResource(m_request, m_substituteData);
+    return tryLoadingSubstituteData();
+}
 
+bool DocumentLoader::tryLoadingSubstituteData()
+{
     if (!m_substituteData.isValid() || !m_frame->page())
         return false;
 
-    RELEASE_LOG_IF_ALLOWED("startLoadingMainResource: Returning cached main resource (frame = %p, main = %d)", m_frame, m_frame->isMainFrame());
+    RELEASE_LOG_IF_ALLOWED("startLoadingMainResource: Returning substitute data (frame = %p, main = %d)", m_frame, m_frame->isMainFrame());
     m_identifierForLoadWithoutResourceLoader = m_frame->page()->progress().createUniqueIdentifier();
     frameLoader()->notifier().assignIdentifierToInitialRequest(m_identifierForLoadWithoutResourceLoader, this, m_request);
     frameLoader()->notifier().dispatchWillSendRequest(this, m_identifierForLoadWithoutResourceLoader, m_request, ResourceResponse());
-    handleSubstituteDataLoadSoon();
+
+    if (!m_deferMainResourceDataLoad || frameLoader()->loadsSynchronously())
+        handleSubstituteDataLoadNow();
+    else
+        startDataLoadTimer();
+
     return true;
 }
 
@@ -1185,6 +1186,13 @@ void DocumentLoader::detachFromFrame()
 
     cancelPolicyCheckIfNeeded();
 
+    // cancelPolicyCheckIfNeeded can clear m_frame if the policy check
+    // is stopped, resulting in a recursive call into this detachFromFrame.
+    // If m_frame is nullptr after cancelPolicyCheckIfNeeded, our work is
+    // already done so just return.
+    if (!m_frame)
+        return;
+
     InspectorInstrumentation::loaderDetachedFromFrame(*m_frame, *this);
 
     observeFrame(nullptr);
@@ -1618,7 +1626,7 @@ void DocumentLoader::addSubresourceLoader(ResourceLoader* loader)
     m_subresourceLoaders.add(loader->identifier(), loader);
 }
 
-void DocumentLoader::removeSubresourceLoader(ResourceLoader* loader)
+void DocumentLoader::removeSubresourceLoader(LoadCompletionType type, ResourceLoader* loader)
 {
     ASSERT(loader->identifier());
 
@@ -1626,7 +1634,7 @@ void DocumentLoader::removeSubresourceLoader(ResourceLoader* loader)
         return;
     checkLoadComplete();
     if (Frame* frame = m_frame)
-        frame->loader().checkLoadComplete();
+        frame->loader().subresourceLoadDone(type);
 }
 
 void DocumentLoader::addPlugInStreamLoader(ResourceLoader& loader)
@@ -1690,12 +1698,9 @@ void DocumentLoader::startLoadingMainResource(ShouldContinue shouldContinue)
     m_contentFilter = !m_substituteData.isValid() ? ContentFilter::create(*this) : nullptr;
 #endif
 
-    // FIXME: Is there any way the extra fields could have not been added by now?
-    // If not, it would be great to remove this line of code.
-    // Note that currently, some requests may have incorrect extra fields even if this function has been called,
-    // because we pass a wrong loadType (see FIXME in addExtraFieldsToMainResourceRequest()).
-    // If we remove this line of code then ResourceRequestBase does not need to track whether isSameSite
-    // is unspecified.
+    // Make sure we re-apply the user agent to the Document's ResourceRequest upon reload in case the embedding
+    // application has changed it.
+    m_request.clearHTTPUserAgent();
     frameLoader()->addExtraFieldsToMainResourceRequest(m_request);
 
     ASSERT(timing().startTime());
@@ -1724,6 +1729,11 @@ void DocumentLoader::startLoadingMainResource(ShouldContinue shouldContinue)
                 return;
 
             m_serviceWorkerRegistrationData = WTFMove(registrationData);
+
+            // Prefer existing substitute data (from WKWebView.loadData etc) over service worker fetch.
+            if (this->tryLoadingSubstituteData())
+                return;
+            // Try app cache only if there is no service worker.
             if (!m_serviceWorkerRegistrationData && this->tryLoadingRequestFromApplicationCache())
                 return;
             this->loadMainResource(WTFMove(request));

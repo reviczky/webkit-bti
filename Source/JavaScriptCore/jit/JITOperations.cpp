@@ -976,7 +976,7 @@ static SlowPathReturnType handleHostCall(ExecState* execCallee, JSValue callee, 
 
     if (callLinkInfo->specializationKind() == CodeForCall) {
         CallData callData;
-        CallType callType = getCallData(callee, callData);
+        CallType callType = getCallData(*vm, callee, callData);
     
         ASSERT(callType != CallType::JS);
     
@@ -1005,7 +1005,7 @@ static SlowPathReturnType handleHostCall(ExecState* execCallee, JSValue callee, 
     ASSERT(callLinkInfo->specializationKind() == CodeForConstruct);
     
     ConstructData constructData;
-    ConstructType constructType = getConstructData(callee, constructData);
+    ConstructType constructType = getConstructData(*vm, callee, constructData);
     
     ASSERT(constructType != ConstructType::JS);
     
@@ -1822,7 +1822,7 @@ int32_t JIT_OPERATION operationInstanceOfCustom(ExecState* exec, EncodedJSValue 
     JSValue value = JSValue::decode(encodedValue);
     JSValue hasInstanceValue = JSValue::decode(encodedHasInstance);
 
-    ASSERT(hasInstanceValue != exec->lexicalGlobalObject()->functionProtoHasInstanceSymbolFunction() || !constructor->structure()->typeInfo().implementsDefaultHasInstance());
+    ASSERT(hasInstanceValue != exec->lexicalGlobalObject()->functionProtoHasInstanceSymbolFunction() || !constructor->structure(vm)->typeInfo().implementsDefaultHasInstance());
 
     if (constructor->hasInstance(exec, value, hasInstanceValue))
         return 1;
@@ -1872,8 +1872,8 @@ static JSValue getByVal(ExecState* exec, JSValue baseValue, JSValue subscript, B
             if (object->indexingType() == ArrayWithContiguous && i < object->butterfly()->publicLength()) {
                 // FIXME: expand this to ArrayStorage, Int32, and maybe Double:
                 // https://bugs.webkit.org/show_bug.cgi?id=182940
-                auto* globalObject = object->globalObject();
-                skipMarkingOutOfBounds = globalObject->isOriginalArrayStructure(object->structure()) && globalObject->arrayPrototypeChainIsSane();
+                auto* globalObject = object->globalObject(vm);
+                skipMarkingOutOfBounds = globalObject->isOriginalArrayStructure(object->structure(vm)) && globalObject->arrayPrototypeChainIsSane();
             }
 
             if (!skipMarkingOutOfBounds && !CommonSlowPaths::canAccessArgumentIndexQuickly(*object, i)) {
@@ -2432,7 +2432,7 @@ char* JIT_OPERATION operationReallocateButterflyToHavePropertyStorageWithInitial
     VM& vm = exec->vm();
     NativeCallFrameTracer tracer(&vm, exec);
 
-    ASSERT(!object->structure()->outOfLineCapacity());
+    ASSERT(!object->structure(vm)->outOfLineCapacity());
     Butterfly* result = object->allocateMoreOutOfLineStorage(vm, 0, initialOutOfLineCapacity);
     object->nukeStructureAndSetButterfly(vm, object->structureID(), result);
     return reinterpret_cast<char*>(result);
@@ -2443,7 +2443,7 @@ char* JIT_OPERATION operationReallocateButterflyToGrowPropertyStorage(ExecState*
     VM& vm = exec->vm();
     NativeCallFrameTracer tracer(&vm, exec);
 
-    Butterfly* result = object->allocateMoreOutOfLineStorage(vm, object->structure()->outOfLineCapacity(), newSize);
+    Butterfly* result = object->allocateMoreOutOfLineStorage(vm, object->structure(vm)->outOfLineCapacity(), newSize);
     object->nukeStructureAndSetButterfly(vm, object->structureID(), result);
     return reinterpret_cast<char*>(result);
 }
@@ -2816,34 +2816,26 @@ EncodedJSValue JIT_OPERATION operationArithNegateOptimize(ExecState* exec, Encod
     return JSValue::encode(jsNumber(-number));
 }
 
-ALWAYS_INLINE static EncodedJSValue unprofiledSub(VM& vm, ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2)
+ALWAYS_INLINE static EncodedJSValue unprofiledSub(ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2)
 {
-    auto scope = DECLARE_THROW_SCOPE(vm);
     JSValue op1 = JSValue::decode(encodedOp1);
     JSValue op2 = JSValue::decode(encodedOp2);
-
-    double a = op1.toNumber(exec);
-    RETURN_IF_EXCEPTION(scope, encodedJSValue());
-    scope.release();
-    double b = op2.toNumber(exec);
-    return JSValue::encode(jsNumber(a - b));
+    
+    return JSValue::encode(jsSub(exec, op1, op2));
 }
 
 ALWAYS_INLINE static EncodedJSValue profiledSub(VM& vm, ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2, ArithProfile& arithProfile, bool shouldObserveLHSAndRHSTypes = true)
 {
     auto scope = DECLARE_THROW_SCOPE(vm);
+
     JSValue op1 = JSValue::decode(encodedOp1);
     JSValue op2 = JSValue::decode(encodedOp2);
 
     if (shouldObserveLHSAndRHSTypes)
         arithProfile.observeLHSAndRHS(op1, op2);
 
-    double a = op1.toNumber(exec);
+    JSValue result = jsSub(exec, op1, op2);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
-    double b = op2.toNumber(exec);
-    RETURN_IF_EXCEPTION(scope, encodedJSValue());
-    
-    JSValue result = jsNumber(a - b);
     arithProfile.observeResult(result);
     return JSValue::encode(result);
 }
@@ -2852,7 +2844,7 @@ EncodedJSValue JIT_OPERATION operationValueSub(ExecState* exec, EncodedJSValue e
 {
     VM* vm = &exec->vm();
     NativeCallFrameTracer tracer(vm, exec);
-    return unprofiledSub(*vm, exec, encodedOp1, encodedOp2);
+    return unprofiledSub(exec, encodedOp1, encodedOp2);
 }
 
 EncodedJSValue JIT_OPERATION operationValueSubProfiled(ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2, ArithProfile* arithProfile)
@@ -2879,7 +2871,7 @@ EncodedJSValue JIT_OPERATION operationValueSubOptimize(ExecState* exec, EncodedJ
     exec->codeBlock()->dumpMathICStats();
 #endif
 
-    return unprofiledSub(*vm, exec, encodedOp1, encodedOp2);
+    return unprofiledSub(exec, encodedOp1, encodedOp2);
 }
 
 EncodedJSValue JIT_OPERATION operationValueSubNoOptimize(ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2, JITSubIC*)
@@ -2887,7 +2879,7 @@ EncodedJSValue JIT_OPERATION operationValueSubNoOptimize(ExecState* exec, Encode
     VM* vm = &exec->vm();
     NativeCallFrameTracer tracer(vm, exec);
 
-    return unprofiledSub(*vm, exec, encodedOp1, encodedOp2);
+    return unprofiledSub(exec, encodedOp1, encodedOp2);
 }
 
 EncodedJSValue JIT_OPERATION operationValueSubProfiledOptimize(ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2, JITSubIC* subIC)

@@ -40,6 +40,10 @@
 #include "MediaSessionInterruptionProvider.h"
 #endif
 
+#if ENABLE(VIDEO)
+#include "MediaElementSession.h"
+#endif
+
 namespace WebCore {
 
 class AnimationTimeline;
@@ -282,6 +286,14 @@ public:
 
     void updateEditorUINowIfScheduled();
 
+    bool sentenceRetroCorrectionEnabled() const
+    {
+#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+        return true;
+#else
+        return false;
+#endif
+    }
     bool hasSpellingMarker(int from, int length);
     bool hasGrammarMarker(int from, int length);
     bool hasAutocorrectedMarker(int from, int length);
@@ -386,6 +398,7 @@ public:
     void webkitDidEnterFullScreenForElement(Element&);
     void webkitWillExitFullScreenForElement(Element&);
     void webkitDidExitFullScreenForElement(Element&);
+    bool isAnimatingFullScreen() const;
 #endif
 
     void setFullscreenInsetTop(double);
@@ -679,6 +692,9 @@ public:
         bool registeredAsNowPlayingApplication;
     };
     ExceptionOr<NowPlayingState> nowPlayingState() const;
+
+    using PlaybackControlsPurpose = MediaElementSession::PlaybackControlsPurpose;
+    HTMLMediaElement* bestMediaElementForShowingPlaybackControlsManager(PlaybackControlsPurpose);
 
 private:
     explicit Internals(Document&);

@@ -749,42 +749,12 @@ void HTMLInputElement::parseAttribute(const QualifiedName& name, const AtomicStr
         m_size = limitToOnlyHTMLNonNegativeNumbersGreaterThanZero(value, defaultSize);
         if (m_size != oldSize && renderer())
             renderer()->setNeedsLayoutAndPrefWidthsRecalc();
-    } else if (name == altAttr)
-        m_inputType->altAttributeChanged();
-    else if (name == srcAttr)
-        m_inputType->srcAttributeChanged();
-    else if (name == usemapAttr || name == accesskeyAttr) {
-        // FIXME: ignore for the moment
-    } else if (name == resultsAttr) {
+    } else if (name == resultsAttr)
         m_maxResults = !value.isNull() ? std::min(value.toInt(), maxSavedResults) : -1;
-        m_inputType->maxResultsAttributeChanged();
-    } else if (name == autosaveAttr) {
+    else if (name == autosaveAttr || name == incrementalAttr)
         invalidateStyleForSubtree();
-    } else if (name == incrementalAttr) {
-        invalidateStyleForSubtree();
-    } else if (name == minAttr) {
-        m_inputType->minOrMaxAttributeChanged();
+    else if (name == maxAttr || name == minAttr || name == multipleAttr || name == patternAttr || name == precisionAttr || name == stepAttr)
         updateValidity();
-    } else if (name == maxAttr) {
-        m_inputType->minOrMaxAttributeChanged();
-        updateValidity();
-    } else if (name == multipleAttr) {
-        m_inputType->multipleAttributeChanged();
-        updateValidity();
-    } else if (name == stepAttr) {
-        m_inputType->stepAttributeChanged();
-        updateValidity();
-    } else if (name == patternAttr) {
-        updateValidity();
-    } else if (name == precisionAttr) {
-        updateValidity();
-    } else if (name == disabledAttr) {
-        HTMLTextFormControlElement::parseAttribute(name, value);
-        m_inputType->disabledAttributeChanged();
-    } else if (name == readonlyAttr) {
-        HTMLTextFormControlElement::parseAttribute(name, value);
-        m_inputType->readonlyAttributeChanged();
-    }
 #if ENABLE(DATALIST_ELEMENT)
     else if (name == listAttr) {
         m_hasNonEmptyList = !value.isEmpty();
@@ -798,6 +768,18 @@ void HTMLInputElement::parseAttribute(const QualifiedName& name, const AtomicStr
         HTMLTextFormControlElement::parseAttribute(name, value);
 
     m_inputType->attributeChanged(name);
+}
+
+void HTMLInputElement::disabledStateChanged()
+{
+    HTMLTextFormControlElement::disabledStateChanged();
+    m_inputType->disabledStateChanged();
+}
+
+void HTMLInputElement::readOnlyStateChanged()
+{
+    HTMLTextFormControlElement::readOnlyStateChanged();
+    m_inputType->readOnlyStateChanged();
 }
 
 void HTMLInputElement::parserDidSetAttributes()
@@ -1595,12 +1577,12 @@ bool HTMLInputElement::computeWillValidate() const
     return m_inputType->supportsValidation() && HTMLTextFormControlElement::computeWillValidate();
 }
 
-void HTMLInputElement::requiredAttributeChanged()
+void HTMLInputElement::requiredStateChanged()
 {
-    HTMLTextFormControlElement::requiredAttributeChanged();
-    if (RadioButtonGroups* buttons = radioButtonGroups())
-        buttons->requiredAttributeChanged(this);
-    m_inputType->requiredAttributeChanged();
+    HTMLTextFormControlElement::requiredStateChanged();
+    if (auto* buttons = radioButtonGroups())
+        buttons->requiredStateChanged(*this);
+    m_inputType->requiredStateChanged();
 }
 
 Color HTMLInputElement::valueAsColor() const
@@ -2041,11 +2023,11 @@ static Ref<CSSLinearGradientValue> autoFillStrongPasswordMaskImage()
 {
     CSSGradientColorStop firstStop;
     firstStop.m_color = CSSValuePool::singleton().createColorValue(Color::black);
-    firstStop.m_position = CSSValuePool::singleton().createValue(3, CSSPrimitiveValue::UnitType::CSS_EMS);
+    firstStop.m_position = CSSValuePool::singleton().createValue(50, CSSPrimitiveValue::UnitType::CSS_PERCENTAGE);
 
     CSSGradientColorStop secondStop;
     secondStop.m_color = CSSValuePool::singleton().createColorValue(Color::transparent);
-    secondStop.m_position = CSSValuePool::singleton().createValue(7, CSSPrimitiveValue::UnitType::CSS_EMS);
+    secondStop.m_position = CSSValuePool::singleton().createValue(100, CSSPrimitiveValue::UnitType::CSS_PERCENTAGE);
 
     auto gradient = CSSLinearGradientValue::create(CSSGradientRepeat::NonRepeating, CSSGradientType::CSSLinearGradient);
     gradient->setAngle(CSSValuePool::singleton().createValue(90, CSSPrimitiveValue::UnitType::CSS_DEG));
@@ -2068,7 +2050,9 @@ RenderStyle HTMLInputElement::createInnerTextStyle(const RenderStyle& style)
 
     textBlockStyle.setDisplay(DisplayType::Block);
 
-    if (hasAutoFillStrongPasswordButton()) {
+    if (hasAutoFillStrongPasswordButton() && !isDisabledOrReadOnly()) {
+        textBlockStyle.setDisplay(DisplayType::InlineBlock);
+        textBlockStyle.setMaxWidth(Length { 100, Percent });
         textBlockStyle.setColor({ 0.0f, 0.0f, 0.0f, 0.6f });
         textBlockStyle.setTextOverflow(TextOverflow::Clip);
         textBlockStyle.setMaskImage(styleResolver().styleImage(autoFillStrongPasswordMaskImage()));

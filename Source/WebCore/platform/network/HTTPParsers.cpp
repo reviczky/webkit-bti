@@ -85,7 +85,7 @@ static inline bool skipEquals(const String& str, unsigned &pos)
     return skipWhiteSpace(str, pos) && str[pos++] == '=' && skipWhiteSpace(str, pos);
 }
 
-// True if a value present, incrementing pos to next space or semicolon, if any.  
+// True if a value present, incrementing pos to next space or semicolon, if any.
 // Note: might return pos == str.length().
 static inline bool skipValue(const String& str, unsigned& pos)
 {
@@ -110,7 +110,7 @@ bool isValidReasonPhrase(const String& value)
     return true;
 }
 
-// See RFC 7230, Section 3.2.3.
+// See https://fetch.spec.whatwg.org/#concept-header
 bool isValidHTTPHeaderValue(const String& value)
 {
     UChar c = value[0];
@@ -121,7 +121,8 @@ bool isValidHTTPHeaderValue(const String& value)
         return false;
     for (unsigned i = 0; i < value.length(); ++i) {
         c = value[i];
-        if (c == 0x7F || c > 0xFF || (c < 0x20 && c != '\t'))
+        ASSERT(c <= 0xFF);
+        if (c == 0x00 || c == 0x0A || c == 0x0D)
             return false;
     }
     return true;
@@ -141,9 +142,15 @@ bool isValidAcceptHeaderValue(const String& value)
 {
     for (unsigned i = 0; i < value.length(); ++i) {
         UChar c = value[i];
+
         // First check for alphanumeric for performance reasons then whitelist four delimiter characters.
         if (isASCIIAlphanumeric(c) || c == ',' || c == '/' || c == ';' || c == '=')
             continue;
+
+        ASSERT(c <= 0xFF);
+        if (c == 0x7F || (c < 0x20 && c != '\t'))
+            return false;
+
         if (isDelimiterCharacter(c))
             return false;
     }
@@ -904,8 +911,8 @@ CrossOriginResourcePolicy parseCrossOriginResourcePolicyHeader(StringView header
     if (strippedHeader.isEmpty())
         return CrossOriginResourcePolicy::None;
 
-    if (equalLettersIgnoringASCIICase(strippedHeader, "same"))
-        return CrossOriginResourcePolicy::Same;
+    if (equalLettersIgnoringASCIICase(strippedHeader, "same-origin"))
+        return CrossOriginResourcePolicy::SameOrigin;
 
     if (equalLettersIgnoringASCIICase(strippedHeader, "same-site"))
         return CrossOriginResourcePolicy::SameSite;
@@ -913,19 +920,19 @@ CrossOriginResourcePolicy parseCrossOriginResourcePolicyHeader(StringView header
     return CrossOriginResourcePolicy::Invalid;
 }
 
-CrossOriginOptions parseCrossOriginOptionsHeader(StringView header)
+CrossOriginWindowPolicy parseCrossOriginWindowPolicyHeader(StringView header)
 {
     header = stripLeadingAndTrailingHTTPSpaces(header);
     if (header.isEmpty())
-        return CrossOriginOptions::Allow;
+        return CrossOriginWindowPolicy::Allow;
 
     if (equalLettersIgnoringASCIICase(header, "deny"))
-        return CrossOriginOptions::Deny;
+        return CrossOriginWindowPolicy::Deny;
 
     if (equalLettersIgnoringASCIICase(header, "allow-postmessage"))
-        return CrossOriginOptions::AllowPostMessage;
+        return CrossOriginWindowPolicy::AllowPostMessage;
 
-    return CrossOriginOptions::Allow;
+    return CrossOriginWindowPolicy::Allow;
 }
 
 }

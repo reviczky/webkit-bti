@@ -123,6 +123,7 @@ class HTMLMediaElement
     : public HTMLElement
     , public ActiveDOMObject
     , public MediaControllerInterface
+    , public CanMakeWeakPtr<HTMLMediaElement>
     , public PlatformMediaSessionClient
     , private MediaCanStartListener
     , private MediaPlayerClient
@@ -146,7 +147,6 @@ class HTMLMediaElement
 {
     WTF_MAKE_ISO_ALLOCATED(HTMLMediaElement);
 public:
-    WeakPtr<HTMLMediaElement> createWeakPtr() { return m_weakFactory.createWeakPtr(*this); }
     RefPtr<MediaPlayer> player() const { return m_player; }
 
     virtual bool isVideo() const { return false; }
@@ -155,7 +155,7 @@ public:
 
     static HashSet<HTMLMediaElement*>& allMediaElements();
 
-    static HTMLMediaElement* bestMediaElementForShowingPlaybackControlsManager(MediaElementSession::PlaybackControlsPurpose);
+    WEBCORE_EXPORT static HTMLMediaElement* bestMediaElementForShowingPlaybackControlsManager(MediaElementSession::PlaybackControlsPurpose);
 
     static bool isRunningDestructor();
 
@@ -171,7 +171,6 @@ public:
 
     bool doesHaveAttribute(const AtomicString&, AtomicString* value = nullptr) const override;
 
-    WEBCORE_EXPORT PlatformMedia platformMedia() const;
     PlatformLayer* platformLayer() const;
     bool isVideoLayerInline();
     void setPreparedToReturnVideoLayerToInline(bool);
@@ -923,7 +922,6 @@ private:
     const Logger& mediaPlayerLogger() final { return logger(); }
 #endif
 
-    WeakPtrFactory<HTMLMediaElement> m_weakFactory;
     Timer m_pendingActionTimer;
     Timer m_progressEventTimer;
     Timer m_playbackProgressTimer;

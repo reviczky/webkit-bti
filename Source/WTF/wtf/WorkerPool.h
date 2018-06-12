@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2003, 2006, 2013, 2015, 2016, 2017 Apple Inc.  All rights reserved.
+ * Copyright (C) 2017 Yusuke Suzuki <utatane.tea@gmail.com>.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,20 +25,44 @@
 
 #pragma once
 
-#include <wtf/Assertions.h>
-#include <wtf/Forward.h>
-#include <wtf/Optional.h>
-#include <wtf/text/WTFString.h>
+#include <wtf/AutomaticThread.h>
+#include <wtf/Deque.h>
+#include <wtf/Function.h>
+#include <wtf/NumberOfCores.h>
+#include <wtf/Vector.h>
 
-namespace PAL {
+namespace WTF {
 
-#if !LOG_DISABLED || !RELEASE_LOG_DISABLED
+class WorkerPool : public ThreadSafeRefCounted<WorkerPool> {
+public:
+    WTF_EXPORT_PRIVATE void postTask(Function<void()>&&);
 
-String logLevelString();
-bool isLogChannelEnabled(const String& name);
-PAL_EXPORT void setLogChannelToAccumulate(const String& name);
-PAL_EXPORT void initializeLogChannelsIfNecessary(std::optional<String> = std::nullopt);
+    WTF_EXPORT_PRIVATE ~WorkerPool();
 
-#endif // !LOG_DISABLED || !RELEASE_LOG_DISABLED
+    // If timeout is infinity, it means AutomaticThread will be never automatically destroyed.
+    static Ref<WorkerPool> create(unsigned numberOfWorkers  = WTF::numberOfProcessorCores(), Seconds timeout = Seconds::infinity())
+    {
+        ASSERT(numberOfWorkers >= 1);
+        return adoptRef(*new WorkerPool(numberOfWorkers, timeout));
+    }
 
-} // namespace WebCore
+private:
+    class Worker;
+    friend class Worker;
+
+    WTF_EXPORT_PRIVATE WorkerPool(unsigned numberOfWorkers, Seconds timeout);
+
+    bool shouldSleep(const AbstractLocker&);
+
+    Box<Lock> m_lock;
+    RefPtr<AutomaticThreadCondition> m_condition;
+    Seconds m_timeout;
+    MonotonicTime m_lastTimeoutTime { MonotonicTime::nan() };
+    unsigned m_numberOfActiveWorkers { 0 };
+    Vector<Ref<Worker>> m_workers;
+    Deque<Function<void()>> m_tasks;
+};
+
+}
+
+using WTF::WorkerPool;

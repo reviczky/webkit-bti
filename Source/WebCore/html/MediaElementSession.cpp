@@ -167,6 +167,8 @@ void MediaElementSession::visibilityChanged()
 
     if (m_element.elementIsHidden() && !m_element.isFullscreen())
         m_elementIsHiddenUntilVisibleInViewport = true;
+    else if (m_element.isVisibleInViewport())
+        m_elementIsHiddenUntilVisibleInViewport = false;
 }
 
 void MediaElementSession::isVisibleInViewportChanged()
@@ -472,6 +474,15 @@ bool MediaElementSession::canShowControlsManager(PlaybackControlsPurpose purpose
         INFO_LOG(LOGIDENTIFIER, "returning FALSE: hasn't fired playing notification");
         return false;
     }
+
+#if ENABLE(FULLSCREEN_API)
+    // Elements which are not descendents of the current fullscreen element cannot be main content.
+    auto* fullscreenElement = m_element.document().webkitCurrentFullScreenElement();
+    if (fullscreenElement && !m_element.isDescendantOf(*fullscreenElement)) {
+        INFO_LOG(LOGIDENTIFIER, "returning FALSE: outside of full screen");
+        return false;
+    }
+#endif
 
     // Only allow the main content heuristic to forbid videos from showing up if our purpose is the controls manager.
     if (purpose == PlaybackControlsPurpose::ControlsManager && m_element.isVideo()) {

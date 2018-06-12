@@ -405,7 +405,7 @@ SLOW_PATH_DECL(slow_path_negate)
     CHECK_EXCEPTION();
 
     if (primValue.isBigInt()) {
-        JSBigInt* result = JSBigInt::unaryMinus(exec->vm(), asBigInt(primValue));
+        JSBigInt* result = JSBigInt::unaryMinus(vm, asBigInt(primValue));
         RETURN_WITH_PROFILING(result, {
             updateArithProfileForUnaryArithOp(pc, result, operand);
         });
@@ -517,11 +517,23 @@ SLOW_PATH_DECL(slow_path_sub)
     BEGIN();
     JSValue left = OP_C(2).jsValue();
     JSValue right = OP_C(3).jsValue();
-    double a = left.toNumber(exec);
-    if (UNLIKELY(throwScope.exception()))
-        RETURN(JSValue());
-    double b = right.toNumber(exec);
-    JSValue result = jsNumber(a - b);
+    auto leftNumeric = left.toNumeric(exec);
+    CHECK_EXCEPTION();
+    auto rightNumeric = right.toNumeric(exec);
+    CHECK_EXCEPTION();
+
+    if (WTF::holds_alternative<JSBigInt*>(leftNumeric) || WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+        if (WTF::holds_alternative<JSBigInt*>(leftNumeric) && WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+            JSBigInt* result = JSBigInt::sub(vm, WTF::get<JSBigInt*>(leftNumeric), WTF::get<JSBigInt*>(rightNumeric));
+            RETURN_WITH_PROFILING(result, {
+                updateArithProfileForBinaryArithOp(exec, pc, result, left, right);
+            });
+        }
+
+        THROW(createTypeError(exec, "Invalid mix of BigInt and other type in subtraction."));
+    }
+
+    JSValue result = jsNumber(WTF::get<double>(leftNumeric) - WTF::get<double>(rightNumeric));
     RETURN_WITH_PROFILING(result, {
         updateArithProfileForBinaryArithOp(exec, pc, result, left, right);
     });
@@ -539,7 +551,7 @@ SLOW_PATH_DECL(slow_path_div)
 
     if (WTF::holds_alternative<JSBigInt*>(leftNumeric) || WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
         if (WTF::holds_alternative<JSBigInt*>(leftNumeric) && WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
-            JSValue result(JSBigInt::divide(exec, WTF::get<JSBigInt*>(leftNumeric), WTF::get<JSBigInt*>(rightNumeric)));
+            JSBigInt* result = JSBigInt::divide(exec, WTF::get<JSBigInt*>(leftNumeric), WTF::get<JSBigInt*>(rightNumeric));
             CHECK_EXCEPTION();
             RETURN_WITH_PROFILING(result, {
                 updateArithProfileForBinaryArithOp(exec, pc, result, left, right);
@@ -560,10 +572,25 @@ SLOW_PATH_DECL(slow_path_div)
 SLOW_PATH_DECL(slow_path_mod)
 {
     BEGIN();
-    double a = OP_C(2).jsValue().toNumber(exec);
-    if (UNLIKELY(throwScope.exception()))
-        RETURN(JSValue());
-    double b = OP_C(3).jsValue().toNumber(exec);
+    JSValue left = OP_C(2).jsValue();
+    JSValue right = OP_C(3).jsValue();
+    auto leftNumeric = left.toNumeric(exec);
+    CHECK_EXCEPTION();
+    auto rightNumeric = right.toNumeric(exec);
+    CHECK_EXCEPTION();
+    
+    if (WTF::holds_alternative<JSBigInt*>(leftNumeric) || WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+        if (WTF::holds_alternative<JSBigInt*>(leftNumeric) && WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+            JSBigInt* result = JSBigInt::remainder(exec, WTF::get<JSBigInt*>(leftNumeric), WTF::get<JSBigInt*>(rightNumeric));
+            CHECK_EXCEPTION();
+            RETURN(result);
+        }
+
+        THROW(createTypeError(exec, "Invalid mix of BigInt and other type in remainder operation."));
+    }
+    
+    double a = WTF::get<double>(leftNumeric);
+    double b = WTF::get<double>(rightNumeric);
     RETURN(jsNumber(jsMod(a, b)));
 }
 
@@ -661,7 +688,7 @@ SLOW_PATH_DECL(slow_path_is_object_or_null)
 SLOW_PATH_DECL(slow_path_is_function)
 {
     BEGIN();
-    RETURN(jsBoolean(jsIsFunctionType(OP_C(2).jsValue())));
+    RETURN(jsBoolean(OP_C(2).jsValue().isFunction(vm)));
 }
 
 SLOW_PATH_DECL(slow_path_in_by_val)
@@ -1161,7 +1188,7 @@ SLOW_PATH_DECL(slow_path_spread)
     {
         JSFunction* iterationFunction = globalObject->iteratorProtocolFunction();
         CallData callData;
-        CallType callType = JSC::getCallData(iterationFunction, callData);
+        CallType callType = JSC::getCallData(vm, iterationFunction, callData);
         ASSERT(callType != CallType::None);
 
         MarkedArgumentBuffer arguments;

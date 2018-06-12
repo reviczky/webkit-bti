@@ -76,6 +76,7 @@
 #include "WebContextMenu.h"
 #include "WebContextMenuClient.h"
 #include "WebCoreArgumentCoders.h"
+#include "WebDataListSuggestionPicker.h"
 #include "WebDatabaseProvider.h"
 #include "WebDiagnosticLoggingClient.h"
 #include "WebDocumentLoader.h"
@@ -156,6 +157,7 @@
 #include <WebCore/FrameLoadRequest.h>
 #include <WebCore/FrameLoaderTypes.h>
 #include <WebCore/FrameView.h>
+#include <WebCore/GraphicsContext3D.h>
 #include <WebCore/HTMLAttachmentElement.h>
 #include <WebCore/HTMLFormElement.h>
 #include <WebCore/HTMLImageElement.h>
@@ -730,10 +732,6 @@ WebPage::~WebPage()
 #endif
 }
 
-void WebPage::dummy(bool&)
-{
-}
-
 IPC::Connection* WebPage::messageSenderConnection()
 {
     return WebProcess::singleton().parentProcessConnection();
@@ -1270,7 +1268,7 @@ void WebPage::loadRequest(LoadParameters&& loadParameters)
     FrameLoadRequest frameLoadRequest { *m_mainFrame->coreFrame(), loadParameters.request, ShouldOpenExternalURLsPolicy::ShouldNotAllow };
     ShouldOpenExternalURLsPolicy externalURLsPolicy = static_cast<ShouldOpenExternalURLsPolicy>(loadParameters.shouldOpenExternalURLsPolicy);
     frameLoadRequest.setShouldOpenExternalURLsPolicy(externalURLsPolicy);
-    frameLoadRequest.setShouldCheckNavigationPolicy(loadParameters.shouldCheckNavigationPolicy);
+    frameLoadRequest.setShouldTreatAsContinuingLoad(loadParameters.shouldTreatAsContinuingLoad);
 
     corePage()->userInputBridge().loadRequest(WTFMove(frameLoadRequest));
 
@@ -1395,7 +1393,7 @@ void WebPage::reload(uint64_t navigationID, uint32_t reloadOptions, SandboxExten
     }
 }
 
-void WebPage::goToBackForwardItem(uint64_t navigationID, const BackForwardItemIdentifier& backForwardItemID, FrameLoadType backForwardType, NavigationPolicyCheck navigationPolicyCheck)
+void WebPage::goToBackForwardItem(uint64_t navigationID, const BackForwardItemIdentifier& backForwardItemID, FrameLoadType backForwardType, ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad)
 {
     SendStopResponsivenessTimer stopper;
 
@@ -1411,7 +1409,7 @@ void WebPage::goToBackForwardItem(uint64_t navigationID, const BackForwardItemId
     ASSERT(!m_pendingNavigationID);
     m_pendingNavigationID = navigationID;
 
-    m_page->goToItem(*item, backForwardType, navigationPolicyCheck);
+    m_page->goToItem(*item, backForwardType, shouldTreatAsContinuingLoad);
 }
 
 void WebPage::tryRestoreScrollPosition()
@@ -2664,6 +2662,11 @@ void WebPage::setDrawsBackground(bool drawsBackground)
 #if PLATFORM(COCOA)
 void WebPage::setTopContentInsetFenced(float contentInset, IPC::Attachment fencePort)
 {
+    if (fencePort.disposition() != MACH_MSG_TYPE_MOVE_SEND) {
+        LOG(Layers, "WebPage::setTopContentInsetFenced(%g, fencePort) Received an invalid fence port: %d, disposition: %d", contentInset, fencePort.port(), fencePort.disposition());
+        return;
+    }
+
     m_drawingArea->addFence(MachSendRight::create(fencePort.port()));
 
     setTopContentInset(contentInset);
@@ -2933,7 +2936,7 @@ KeyboardUIMode WebPage::keyboardUIMode()
     return static_cast<KeyboardUIMode>((fullKeyboardAccessEnabled ? KeyboardAccessFull : KeyboardAccessDefault) | (m_tabToLinks ? KeyboardAccessTabsToLinks : 0));
 }
 
-void WebPage::runJavaScriptInMainFrame(const String& script, bool forceUserGesture, CallbackID callbackID)
+void WebPage::runJavaScript(const String& script, bool forceUserGesture, std::optional<String> worldName, CallbackID callbackID)
 {
     // NOTE: We need to be careful when running scripts that the objects we depend on don't
     // disappear during script execution.
@@ -2942,16 +2945,29 @@ void WebPage::runJavaScriptInMainFrame(const String& script, bool forceUserGestu
     JSLockHolder lock(commonVM());
     bool hadException = true;
     ExceptionDetails details;
-    if (JSValue resultValue = m_mainFrame->coreFrame()->script().executeScript(script, forceUserGesture, &details)) {
-        hadException = false;
-        serializedResultValue = SerializedScriptValue::create(m_mainFrame->jsContext(),
-            toRef(m_mainFrame->coreFrame()->script().globalObject(mainThreadNormalWorld())->globalExec(), resultValue), nullptr);
+    auto* world = worldName ? InjectedBundleScriptWorld::find(worldName.value()) : &InjectedBundleScriptWorld::normalWorld();
+    if (world) {
+        if (JSValue resultValue = m_mainFrame->coreFrame()->script().executeScriptInWorld(world->coreWorld(), script, forceUserGesture, &details)) {
+            hadException = false;
+            serializedResultValue = SerializedScriptValue::create(m_mainFrame->jsContextForWorld(world),
+                toRef(m_mainFrame->coreFrame()->script().globalObject(world->coreWorld())->globalExec(), resultValue), nullptr);
+        }
     }
 
     IPC::DataReference dataReference;
     if (serializedResultValue)
         dataReference = serializedResultValue->data();
     send(Messages::WebPageProxy::ScriptValueCallback(dataReference, hadException, details, callbackID));
+}
+
+void WebPage::runJavaScriptInMainFrame(const String& script, bool forceUserGesture, CallbackID callbackID)
+{
+    runJavaScript(script, forceUserGesture, std::nullopt, callbackID);
+}
+
+void WebPage::runJavaScriptInMainFrameScriptWorld(const String& script, bool forceUserGesture, const String& worldName, CallbackID callbackID)
+{
+    runJavaScript(script, forceUserGesture, worldName, callbackID);
 }
 
 void WebPage::getContentsAsString(CallbackID callbackID)
@@ -3220,11 +3236,13 @@ void WebPage::willCommitLayerTree(RemoteLayerTreeTransaction& layerTransaction)
     layerTransaction.setAvoidsUnsafeArea(m_viewportConfiguration.avoidsUnsafeArea());
     layerTransaction.setIsInStableState(m_isInStableState);
     layerTransaction.setAllowsUserScaling(allowsUserScaling());
+    if (m_pendingDynamicViewportSizeUpdateID) {
+        layerTransaction.setDynamicViewportSizeUpdateID(*m_pendingDynamicViewportSizeUpdateID);
+        m_pendingDynamicViewportSizeUpdateID = std::nullopt;
+    }
 #endif
 
-#if PLATFORM(MAC)
     layerTransaction.setScrollPosition(frameView->scrollPosition());
-#endif
 
     if (m_hasPendingEditorStateUpdate) {
         layerTransaction.setEditorState(editorState());
@@ -3293,6 +3311,15 @@ VideoFullscreenManager& WebPage::videoFullscreenManager()
         m_videoFullscreenManager = VideoFullscreenManager::create(*this, playbackSessionManager());
     return *m_videoFullscreenManager;
 }
+
+void WebPage::videoControlsManagerDidChange()
+{
+#if ENABLE(FULLSCREEN_API)
+    if (auto* manager = fullScreenManager())
+        manager->videoControlsManagerDidChange();
+#endif
+}
+
 #endif
 
 #if PLATFORM(IOS)
@@ -3539,6 +3566,26 @@ void WebPage::didEndColorPicker()
 void WebPage::didChooseColor(const WebCore::Color& color)
 {
     m_activeColorChooser->didChooseColor(color);
+}
+
+#endif
+
+#if ENABLE(DATALIST_ELEMENT)
+
+void WebPage::setActiveDataListSuggestionPicker(WebDataListSuggestionPicker* dataListSuggestionPicker)
+{
+    m_activeDataListSuggestionPicker = dataListSuggestionPicker;
+}
+
+void WebPage::didSelectDataListOption(const String& selectedOption)
+{
+    m_activeDataListSuggestionPicker->didSelectOption(selectedOption);
+}
+
+void WebPage::didCloseSuggestions()
+{
+    m_activeDataListSuggestionPicker->didCloseSuggestions();
+    m_activeDataListSuggestionPicker = nullptr;
 }
 
 #endif
@@ -4952,6 +4999,12 @@ void WebPage::elementDidFocus(WebCore::Node* node)
         m_isAssistingNodeDueToUserInteraction |= m_userIsInteracting;
 
 #if PLATFORM(IOS)
+
+#if ENABLE(FULLSCREEN_API)
+        if (node->document().webkitIsFullScreen())
+            node->document().webkitCancelFullScreen();
+#endif
+
         ++m_currentAssistedNodeIdentifier;
         AssistedNodeInformation information;
         getAssistedNodeInformation(information);
@@ -5352,44 +5405,49 @@ void WebPage::determinePrimarySnapshottedPlugIn()
 
     layoutIfNeeded();
 
-    auto& mainFrame = corePage()->mainFrame();
-    if (!mainFrame.view())
+    RefPtr<FrameView> mainFrameView = corePage()->mainFrame().view();
+    if (!mainFrameView)
         return;
-    if (!mainFrame.view()->renderView())
-        return;
-    RenderView& mainRenderView = *mainFrame.view()->renderView();
 
     IntRect searchRect = IntRect(IntPoint(), corePage()->mainFrame().view()->contentsSize());
     searchRect.intersect(IntRect(IntPoint(), IntSize(primarySnapshottedPlugInSearchLimit, primarySnapshottedPlugInSearchLimit)));
 
     HitTestRequest request(HitTestRequest::ReadOnly | HitTestRequest::Active | HitTestRequest::AllowChildFrameContent | HitTestRequest::IgnoreClipping | HitTestRequest::DisallowUserAgentShadowContent);
 
-    HTMLPlugInImageElement* candidatePlugIn = nullptr;
+    RefPtr<HTMLPlugInImageElement> candidatePlugIn;
     unsigned candidatePlugInArea = 0;
 
-    for (Frame* frame = &mainFrame; frame; frame = frame->tree().traverseNextRendered()) {
+    for (RefPtr<Frame> frame = &corePage()->mainFrame(); frame; frame = frame->tree().traverseNextRendered()) {
         if (!frame->loader().subframeLoader().containsPlugins())
             continue;
         if (!frame->document() || !frame->view())
             continue;
+
+        Vector<Ref<HTMLPlugInImageElement>> nonPlayingPlugInImageElements;
         for (auto& plugInImageElement : descendantsOfType<HTMLPlugInImageElement>(*frame->document())) {
             if (plugInImageElement.displayState() == HTMLPlugInElement::Playing)
                 continue;
+            nonPlayingPlugInImageElements.append(plugInImageElement);
+        }
 
-            auto pluginRenderer = plugInImageElement.renderer();
+        for (auto& plugInImageElement : nonPlayingPlugInImageElements) {
+            auto pluginRenderer = plugInImageElement->renderer();
             if (!pluginRenderer || !pluginRenderer->isBox())
                 continue;
             auto& pluginRenderBox = downcast<RenderBox>(*pluginRenderer);
-            if (!plugInIntersectsSearchRect(plugInImageElement))
+            if (!plugInIntersectsSearchRect(plugInImageElement.get()))
                 continue;
 
-            IntRect plugInRectRelativeToView = plugInImageElement.clientRect();
-            ScrollPosition scrollPosition = mainFrame.view()->documentScrollPositionRelativeToViewOrigin();
+            IntRect plugInRectRelativeToView = plugInImageElement->clientRect();
+            ScrollPosition scrollPosition = mainFrameView->documentScrollPositionRelativeToViewOrigin();
             IntRect plugInRectRelativeToTopDocument(plugInRectRelativeToView.location() + scrollPosition, plugInRectRelativeToView.size());
             HitTestResult hitTestResult(plugInRectRelativeToTopDocument.center());
-            mainRenderView.hitTest(request, hitTestResult);
 
-            Element* element = hitTestResult.targetElement();
+            if (!mainFrameView->renderView())
+                return;
+            mainFrameView->renderView()->hitTest(request, hitTestResult);
+
+            RefPtr<Element> element = hitTestResult.targetElement();
             if (!element)
                 continue;
 
@@ -5401,18 +5459,18 @@ void WebPage::determinePrimarySnapshottedPlugIn()
             inflatedPluginRect.inflateX(xOffset);
             inflatedPluginRect.inflateY(yOffset);
 
-            if (element != &plugInImageElement) {
+            if (element != plugInImageElement.ptr()) {
                 if (!(is<HTMLImageElement>(*element)
                     && inflatedPluginRect.contains(elementRectRelativeToTopDocument)
                     && elementRectRelativeToTopDocument.width() > pluginRenderBox.width() * minimumOverlappingImageToPluginDimensionScale
                     && elementRectRelativeToTopDocument.height() > pluginRenderBox.height() * minimumOverlappingImageToPluginDimensionScale))
                     continue;
                 LOG(Plugins, "Primary Plug-In Detection: Plug-in is hidden by an image that is roughly aligned with it, autoplaying regardless of whether or not it's actually the primary plug-in.");
-                plugInImageElement.restartSnapshottedPlugIn();
+                plugInImageElement->restartSnapshottedPlugIn();
             }
 
             if (plugInIsPrimarySize(plugInImageElement, candidatePlugInArea))
-                candidatePlugIn = &plugInImageElement;
+                candidatePlugIn = WTFMove(plugInImageElement);
         }
     }
     if (!candidatePlugIn) {
@@ -5930,7 +5988,7 @@ void WebPage::frameBecameRemote(uint64_t frameID, GlobalFrameIdentifier&& remote
 
     auto remoteFrame = RemoteFrame::create(WTFMove(remoteFrameIdentifier));
     auto remoteWindow = RemoteDOMWindow::create(remoteFrame.copyRef(), WTFMove(remoteWindowIdentifier));
-    remoteWindow->setCrossOriginOptions(previousWindow->crossOriginOptions());
+    remoteWindow->setCrossOriginWindowPolicy(previousWindow->crossOriginWindowPolicy());
 
     remoteFrame->setOpener(frame->coreFrame()->loader().opener());
 

@@ -36,6 +36,7 @@
 #include "JSArrayInlines.h"
 #include "JSCBuiltins.h"
 #include "JSCInlines.h"
+#include "JSImmutableButterfly.h"
 #include "JSStringJoiner.h"
 #include "Lookup.h"
 #include "ObjectConstructor.h"
@@ -194,7 +195,8 @@ static ALWAYS_INLINE void setLength(ExecState* exec, VM& vm, JSObject* obj, unsi
 
 ALWAYS_INLINE bool speciesWatchpointIsValid(ExecState* exec, JSObject* thisObject)
 {
-    JSGlobalObject* globalObject = thisObject->globalObject();
+    VM& vm = exec->vm();
+    JSGlobalObject* globalObject = thisObject->globalObject(vm);
     ArrayPrototype* arrayPrototype = globalObject->arrayPrototype();
 
     if (globalObject->arraySpeciesWatchpoint().stateOnJSThread() == ClearWatchpoint) {
@@ -202,8 +204,8 @@ ALWAYS_INLINE bool speciesWatchpointIsValid(ExecState* exec, JSObject* thisObjec
         ASSERT(globalObject->arraySpeciesWatchpoint().stateOnJSThread() != ClearWatchpoint);
     }
 
-    return !thisObject->hasCustomProperties()
-        && arrayPrototype == thisObject->getPrototypeDirect(globalObject->vm())
+    return !thisObject->hasCustomProperties(vm)
+        && arrayPrototype == thisObject->getPrototypeDirect(vm)
         && globalObject->arraySpeciesWatchpoint().stateOnJSThread() == IsWatched;
 }
 
@@ -238,7 +240,7 @@ static ALWAYS_INLINE std::pair<SpeciesConstructResult, JSObject*> speciesConstru
         RETURN_IF_EXCEPTION(scope, exceptionResult());
         if (constructor.isConstructor()) {
             JSObject* constructorObject = jsCast<JSObject*>(constructor);
-            if (exec->lexicalGlobalObject() != constructorObject->globalObject())
+            if (exec->lexicalGlobalObject() != constructorObject->globalObject(vm))
                 return std::make_pair(SpeciesConstructResult::FastPath, nullptr);;
         }
         if (constructor.isObject()) {
@@ -384,8 +386,142 @@ void unshift(ExecState* exec, JSObject* thisObj, unsigned header, unsigned curre
     }
 }
 
-static bool canUseFastJoin(const JSObject*);
-static JSValue fastJoin(ExecState&, JSObject*, StringView, unsigned);
+inline bool canUseFastJoin(const JSObject* thisObject)
+{
+    switch (thisObject->indexingType()) {
+    case ALL_CONTIGUOUS_INDEXING_TYPES:
+    case ALL_INT32_INDEXING_TYPES:
+    case ALL_DOUBLE_INDEXING_TYPES:
+        return true;
+    default:
+        break;
+    }
+    return false;
+}
+
+inline bool holesMustForwardToPrototype(VM& vm, JSObject* object)
+{
+    return object->structure(vm)->holesMustForwardToPrototype(vm, object);
+}
+
+inline bool isHole(double value)
+{
+    return std::isnan(value);
+}
+
+inline bool isHole(const WriteBarrier<Unknown>& value)
+{
+    return !value;
+}
+
+template<typename T>
+inline bool containsHole(T* data, unsigned length)
+{
+    for (unsigned i = 0; i < length; ++i) {
+        if (isHole(data[i]))
+            return true;
+    }
+    return false;
+}
+
+inline JSValue fastJoin(ExecState& state, JSObject* thisObject, StringView separator, unsigned length, bool* sawHoles = nullptr)
+{
+    VM& vm = state.vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    switch (thisObject->indexingType()) {
+    case ALL_INT32_INDEXING_TYPES: {
+        auto& butterfly = *thisObject->butterfly();
+        if (UNLIKELY(length > butterfly.publicLength()))
+            break;
+        JSStringJoiner joiner(state, separator, length);
+        RETURN_IF_EXCEPTION(scope, { });
+        auto data = butterfly.contiguous().data();
+        bool holesKnownToBeOK = false;
+        for (unsigned i = 0; i < length; ++i) {
+            JSValue value = data[i].get();
+            if (LIKELY(value))
+                joiner.appendNumber(vm, value.asInt32());
+            else {
+                if (sawHoles)
+                    *sawHoles = true;
+                if (!holesKnownToBeOK) {
+                    if (holesMustForwardToPrototype(vm, thisObject))
+                        goto generalCase;
+                    holesKnownToBeOK = true;
+                }
+                joiner.appendEmptyString();
+            }
+        }
+        scope.release();
+        return joiner.join(state);
+    }
+    case ALL_CONTIGUOUS_INDEXING_TYPES: {
+        auto& butterfly = *thisObject->butterfly();
+        if (UNLIKELY(length > butterfly.publicLength()))
+            break;
+        JSStringJoiner joiner(state, separator, length);
+        RETURN_IF_EXCEPTION(scope, { });
+        auto data = butterfly.contiguous().data();
+        bool holesKnownToBeOK = false;
+        for (unsigned i = 0; i < length; ++i) {
+            if (JSValue value = data[i].get()) {
+                if (!joiner.appendWithoutSideEffects(state, value))
+                    goto generalCase;
+            } else {
+                if (sawHoles)
+                    *sawHoles = true;
+                if (!holesKnownToBeOK) {
+                    if (holesMustForwardToPrototype(vm, thisObject))
+                        goto generalCase;
+                    holesKnownToBeOK = true;
+                }
+                joiner.appendEmptyString();
+            }
+        }
+        scope.release();
+        return joiner.join(state);
+    }
+    case ALL_DOUBLE_INDEXING_TYPES: {
+        auto& butterfly = *thisObject->butterfly();
+        if (UNLIKELY(length > butterfly.publicLength()))
+            break;
+        JSStringJoiner joiner(state, separator, length);
+        RETURN_IF_EXCEPTION(scope, { });
+        auto data = butterfly.contiguousDouble().data();
+        bool holesKnownToBeOK = false;
+        for (unsigned i = 0; i < length; ++i) {
+            double value = data[i];
+            if (LIKELY(!isHole(value)))
+                joiner.appendNumber(vm, value);
+            else {
+                if (sawHoles)
+                    *sawHoles = true;
+                if (!holesKnownToBeOK) {
+                    if (holesMustForwardToPrototype(vm, thisObject))
+                        goto generalCase;
+                    holesKnownToBeOK = true;
+                }
+                joiner.appendEmptyString();
+            }
+        }
+        scope.release();
+        return joiner.join(state);
+    }
+    }
+
+generalCase:
+    JSStringJoiner joiner(state, separator, length);
+    RETURN_IF_EXCEPTION(scope, { });
+    for (unsigned i = 0; i < length; ++i) {
+        JSValue element = thisObject->getIndex(&state, i);
+        RETURN_IF_EXCEPTION(scope, { });
+        joiner.append(state, element);
+        RETURN_IF_EXCEPTION(scope, { });
+    }
+    scope.release();
+    return joiner.join(state);
+}
 
 EncodedJSValue JSC_HOST_CALL arrayProtoFuncToString(ExecState* exec)
 {
@@ -406,7 +542,7 @@ EncodedJSValue JSC_HOST_CALL arrayProtoFuncToString(ExecState* exec)
     if (!function.isCell())
         customJoinCase = true;
     CallData callData;
-    CallType callType = getCallData(function, callData);
+    CallType callType = getCallData(vm, function, callData);
     if (callType == CallType::None)
         customJoinCase = true;
 
@@ -434,7 +570,25 @@ EncodedJSValue JSC_HOST_CALL arrayProtoFuncToString(ExecState* exec)
     if (LIKELY(canUseFastJoin(thisArray))) {
         const LChar comma = ',';
         scope.release();
-        return JSValue::encode(fastJoin(*exec, thisArray, { &comma, 1 }, length));
+
+        bool isCoW = isCopyOnWrite(thisArray->indexingMode());
+        JSImmutableButterfly* immutableButterfly = nullptr;
+        if (isCoW) {
+            immutableButterfly = JSImmutableButterfly::fromButterfly(thisArray->butterfly());
+            auto iter = vm.heap.immutableButterflyToStringCache.find(immutableButterfly);
+            if (iter != vm.heap.immutableButterflyToStringCache.end())
+                return JSValue::encode(iter->value);
+        }
+
+        bool sawHoles = false;
+        JSValue result = fastJoin(*exec, thisArray, { &comma, 1 }, length, &sawHoles);
+
+        if (!sawHoles && result && isJSString(result) && isCoW) {
+            ASSERT(JSImmutableButterfly::fromButterfly(thisArray->butterfly()) == immutableButterfly);
+            vm.heap.immutableButterflyToStringCache.add(immutableButterfly, jsCast<JSString*>(result));
+        }
+
+        return JSValue::encode(result);
     }
 
     JSStringJoiner joiner(*exec, ',', length);
@@ -485,7 +639,7 @@ EncodedJSValue JSC_HOST_CALL arrayProtoFuncToLocaleString(ExecState* exec)
             JSValue conversionFunction = element.get(exec, vm.propertyNames->toLocaleString);
             RETURN_IF_EXCEPTION(scope, encodedJSValue());
             CallData callData;
-            CallType callType = getCallData(conversionFunction, callData);
+            CallType callType = getCallData(vm, conversionFunction, callData);
             if (callType != CallType::None) {
 #if ENABLE(INTL)
                 element = call(exec, conversionFunction, callType, callData, element, arguments);
@@ -501,30 +655,6 @@ EncodedJSValue JSC_HOST_CALL arrayProtoFuncToLocaleString(ExecState* exec)
 
     scope.release();
     return JSValue::encode(stringJoiner.join(*exec));
-}
-
-static inline bool isHole(double value)
-{
-    return std::isnan(value);
-}
-
-static inline bool isHole(const WriteBarrier<Unknown>& value)
-{
-    return !value;
-}
-
-template<typename T> static inline bool containsHole(T* data, unsigned length)
-{
-    for (unsigned i = 0; i < length; ++i) {
-        if (isHole(data[i]))
-            return true;
-    }
-    return false;
-}
-
-static inline bool holesMustForwardToPrototype(VM& vm, JSObject* object)
-{
-    return object->structure(vm)->holesMustForwardToPrototype(vm, object);
 }
 
 static JSValue slowJoin(ExecState& exec, JSObject* thisObject, JSString* separator, uint64_t length)
@@ -573,112 +703,6 @@ static JSValue slowJoin(ExecState& exec, JSObject* thisObject, JSString* separat
     }
     // 10. Return R.
     return r;
-}
-
-static inline bool canUseFastJoin(const JSObject* thisObject)
-{
-    switch (thisObject->indexingType()) {
-    case ALL_CONTIGUOUS_INDEXING_TYPES:
-    case ALL_INT32_INDEXING_TYPES:
-    case ALL_DOUBLE_INDEXING_TYPES:
-        return true;
-    default:
-        break;
-    }
-    return false;
-}
-
-static inline JSValue fastJoin(ExecState& state, JSObject* thisObject, StringView separator, unsigned length)
-{
-    VM& vm = state.vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
-    switch (thisObject->indexingType()) {
-    case ALL_INT32_INDEXING_TYPES: {
-        auto& butterfly = *thisObject->butterfly();
-        if (UNLIKELY(length > butterfly.publicLength()))
-            break;
-        JSStringJoiner joiner(state, separator, length);
-        RETURN_IF_EXCEPTION(scope, { });
-        auto data = butterfly.contiguous().data();
-        bool holesKnownToBeOK = false;
-        for (unsigned i = 0; i < length; ++i) {
-            JSValue value = data[i].get();
-            if (LIKELY(value))
-                joiner.appendNumber(vm, value.asInt32());
-            else {
-                if (!holesKnownToBeOK) {
-                    if (holesMustForwardToPrototype(vm, thisObject))
-                        goto generalCase;
-                    holesKnownToBeOK = true;
-                }
-                joiner.appendEmptyString();
-            }
-        }
-        scope.release();
-        return joiner.join(state);
-    }
-    case ALL_CONTIGUOUS_INDEXING_TYPES: {
-        auto& butterfly = *thisObject->butterfly();
-        if (UNLIKELY(length > butterfly.publicLength()))
-            break;
-        JSStringJoiner joiner(state, separator, length);
-        RETURN_IF_EXCEPTION(scope, { });
-        auto data = butterfly.contiguous().data();
-        bool holesKnownToBeOK = false;
-        for (unsigned i = 0; i < length; ++i) {
-            if (JSValue value = data[i].get()) {
-                if (!joiner.appendWithoutSideEffects(state, value))
-                    goto generalCase;
-            } else {
-                if (!holesKnownToBeOK) {
-                    if (holesMustForwardToPrototype(vm, thisObject))
-                        goto generalCase;
-                    holesKnownToBeOK = true;
-                }
-                joiner.appendEmptyString();
-            }
-        }
-        scope.release();
-        return joiner.join(state);
-    }
-    case ALL_DOUBLE_INDEXING_TYPES: {
-        auto& butterfly = *thisObject->butterfly();
-        if (UNLIKELY(length > butterfly.publicLength()))
-            break;
-        JSStringJoiner joiner(state, separator, length);
-        RETURN_IF_EXCEPTION(scope, { });
-        auto data = butterfly.contiguousDouble().data();
-        bool holesKnownToBeOK = false;
-        for (unsigned i = 0; i < length; ++i) {
-            double value = data[i];
-            if (LIKELY(!isHole(value)))
-                joiner.appendNumber(vm, value);
-            else {
-                if (!holesKnownToBeOK) {
-                    if (holesMustForwardToPrototype(vm, thisObject))
-                        goto generalCase;
-                    holesKnownToBeOK = true;
-                }
-                joiner.appendEmptyString();
-            }
-        }
-        scope.release();
-        return joiner.join(state);
-    }
-    }
-
-generalCase:
-    JSStringJoiner joiner(state, separator, length);
-    RETURN_IF_EXCEPTION(scope, { });
-    for (unsigned i = 0; i < length; ++i) {
-        JSValue element = thisObject->getIndex(&state, i);
-        RETURN_IF_EXCEPTION(scope, { });
-        joiner.append(state, element);
-        RETURN_IF_EXCEPTION(scope, { });
-    }
-    scope.release();
-    return joiner.join(state);
 }
 
 EncodedJSValue JSC_HOST_CALL arrayProtoFuncJoin(ExecState* exec)
@@ -1418,7 +1442,7 @@ void ArrayPrototype::tryInitializeSpeciesWatchpoint(ExecState* exec)
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     if (ArrayPrototypeInternal::verbose)
-        dataLog("Initializing Array species watchpoints for Array.prototype: ", pointerDump(this), " with structure: ", pointerDump(this->structure()), "\nand Array: ", pointerDump(this->globalObject()->arrayConstructor()), " with structure: ", pointerDump(this->globalObject()->arrayConstructor()->structure()), "\n");
+        dataLog("Initializing Array species watchpoints for Array.prototype: ", pointerDump(this), " with structure: ", pointerDump(this->structure(vm)), "\nand Array: ", pointerDump(this->globalObject(vm)->arrayConstructor()), " with structure: ", pointerDump(this->globalObject(vm)->arrayConstructor()->structure(vm)), "\n");
     // First we need to make sure that the Array.prototype.constructor property points to Array
     // and that Array[Symbol.species] is the primordial GetterSetter.
 
@@ -1428,7 +1452,7 @@ void ArrayPrototype::tryInitializeSpeciesWatchpoint(ExecState* exec)
         prototypeStructure = prototypeStructure->flattenDictionaryStructure(vm, this);
     RELEASE_ASSERT(!prototypeStructure->isDictionary());
 
-    JSGlobalObject* globalObject = this->globalObject();
+    JSGlobalObject* globalObject = this->globalObject(vm);
     ArrayConstructor* arrayConstructor = globalObject->arrayConstructor();
 
     auto invalidateWatchpoint = [&] {
@@ -1490,16 +1514,13 @@ ArrayPrototypeAdaptiveInferredPropertyWatchpoint::ArrayPrototypeAdaptiveInferred
 
 void ArrayPrototypeAdaptiveInferredPropertyWatchpoint::handleFire(const FireDetail& detail)
 {
-    StringPrintStream out;
-    out.print("ArrayPrototype adaption of ", key(), " failed: ", detail);
-
-    StringFireDetail stringDetail(out.toCString().data());
+    auto lazyDetail = createLazyFireDetail("ArrayPrototype adaption of ", key(), " failed: ", detail);
 
     if (ArrayPrototypeInternal::verbose)
-        WTF::dataLog(stringDetail, "\n");
+        WTF::dataLog(lazyDetail, "\n");
 
     JSGlobalObject* globalObject = m_arrayPrototype->globalObject();
-    globalObject->arraySpeciesWatchpoint().fireAll(globalObject->vm(), stringDetail);
+    globalObject->arraySpeciesWatchpoint().fireAll(globalObject->vm(), lazyDetail);
 }
 
 } // namespace JSC

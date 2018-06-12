@@ -51,36 +51,47 @@ public:
     Ref<FloatingState> createOrFindFloatingState(LayoutContext&) const override;
 
 private:
+    void computeWidthAndMargin(LayoutContext&, const Box&, Display::Box&) const;
+    void computeHeightAndMargin(LayoutContext&, const Box&, Display::Box&) const;
+
     void computeStaticPosition(LayoutContext&, const Box&, Display::Box&) const override;
     void computeInFlowPositionedPosition(LayoutContext&, const Box&, Display::Box&) const override;
-    void computeInFlowWidth(LayoutContext&, const Box&, Display::Box&) const override;
-    void computeInFlowHeight(LayoutContext&, const Box&, Display::Box&) const override;
-    void computeMargin(LayoutContext&, const Box&, Display::Box&) const override;
+    void computeInFlowWidthAndMargin(LayoutContext&, const Box&, Display::Box&) const;
+    void computeInFlowHeightAndMargin(LayoutContext&, const Box&, Display::Box&) const;
 
     // This class implements positioning and sizing for boxes participating in a block formatting context.
     class Geometry {
     public:
-        static LayoutUnit inFlowNonReplacedHeight(LayoutContext&, const Box&);
-        static LayoutUnit inFlowNonReplacedWidth(LayoutContext&, const Box&);
+        static FormattingContext::Geometry::HeightAndMargin inFlowHeightAndMargin(LayoutContext&, const Box&);
+        static FormattingContext::Geometry::WidthAndMargin inFlowWidthAndMargin(LayoutContext&, const Box&);
 
         static LayoutPoint staticPosition(LayoutContext&, const Box&);
         static LayoutPoint inFlowPositionedPosition(LayoutContext&, const Box&);
 
-        static Display::Box::Edges computedMargin(LayoutContext&, const Box&);
+    private:
+        static FormattingContext::Geometry::HeightAndMargin inFlowNonReplacedHeightAndMargin(LayoutContext&, const Box&);
+        static FormattingContext::Geometry::WidthAndMargin inFlowNonReplacedWidthAndMargin(LayoutContext&, const Box&, std::optional<LayoutUnit> precomputedWidth = std::nullopt);
+        static FormattingContext::Geometry::WidthAndMargin inFlowReplacedWidthAndMargin(LayoutContext&, const Box&);
     };
     
     // This class implements margin collapsing for block formatting context.
     class MarginCollapse {
     public:
-        static LayoutUnit marginTop(const Box&);
-        static LayoutUnit marginBottom(const Box&);
+        static LayoutUnit marginTop(const LayoutContext&, const Box&);
+        static LayoutUnit marginBottom(const LayoutContext&, const Box&);
 
         static bool isMarginBottomCollapsedWithParent(const Box&);
         static bool isMarginTopCollapsedWithParentMarginBottom(const Box&);
     
     private:
-        static LayoutUnit collapsedMarginBottomFromLastChild(const Box&);
-        static LayoutUnit nonCollapsedMarginBottom(const Box&);
+        static LayoutUnit collapsedMarginBottomFromLastChild(const LayoutContext&, const Box&);
+        static LayoutUnit nonCollapsedMarginBottom(const LayoutContext&, const Box&);
+
+        static LayoutUnit computedNonCollapsedMarginTop(const LayoutContext&, const Box&);
+        static LayoutUnit computedNonCollapsedMarginBottom(const LayoutContext&, const Box&);
+
+        static LayoutUnit collapsedMarginTopFromFirstChild(const LayoutContext&, const Box&);
+        static LayoutUnit nonCollapsedMarginTop(const LayoutContext&, const Box&);
     };
 };
 

@@ -110,6 +110,7 @@
 #include "WebPopupItem.h"
 #include "WebPopupMenuProxy.h"
 #include "WebPreferences.h"
+#include "WebPreferencesKeys.h"
 #include "WebProcessMessages.h"
 #include "WebProcessPool.h"
 #include "WebProcessProxy.h"
@@ -119,6 +120,7 @@
 #include "WebsiteDataStore.h"
 #include <WebCore/AttachmentTypes.h>
 #include <WebCore/BitmapImage.h>
+#include <WebCore/DeprecatedGlobalSettings.h>
 #include <WebCore/DiagnosticLoggingClient.h>
 #include <WebCore/DiagnosticLoggingKeys.h>
 #include <WebCore/DragController.h>
@@ -134,13 +136,13 @@
 #include <WebCore/LengthBox.h>
 #include <WebCore/MIMETypeRegistry.h>
 #include <WebCore/MediaStreamRequest.h>
-#include <WebCore/NavigationPolicyCheck.h>
 #include <WebCore/PerformanceLoggingClient.h>
 #include <WebCore/PublicSuffix.h>
 #include <WebCore/RenderEmbeddedObject.h>
 #include <WebCore/SSLKeyGenerator.h>
 #include <WebCore/SerializedCryptoKeyWrap.h>
 #include <WebCore/SharedBuffer.h>
+#include <WebCore/ShouldTreatAsContinuingLoad.h>
 #include <WebCore/TextCheckerClient.h>
 #include <WebCore/TextIndicator.h>
 #include <WebCore/URL.h>
@@ -224,6 +226,9 @@ using namespace WebCore;
 
 // Represents the number of wheel events we can hold in the queue before we start pushing them preemptively.
 static const unsigned wheelEventQueueSizeThreshold = 10;
+
+static const Seconds resetRecentCrashCountDelay = 30_s;
+static unsigned maximumWebProcessRelaunchAttempts = 1;
 
 namespace WebKit {
 
@@ -406,6 +411,7 @@ WebPageProxy::WebPageProxy(PageClient& pageClient, WebProcessProxy& process, uin
 #endif
     , m_pageLoadState(*this)
     , m_configurationPreferenceValues(m_configuration->preferenceValues())
+    , m_resetRecentCrashCountTimer(RunLoop::main(), this, &WebPageProxy::resetRecentCrashCount)
 {
     m_webProcessLifetimeTracker.addObserver(m_visitedLinkStore);
     m_webProcessLifetimeTracker.addObserver(m_websiteDataStore);
@@ -451,6 +457,10 @@ WebPageProxy::WebPageProxy(PageClient& pageClient, WebProcessProxy& process, uin
 #endif
 
     m_process->addMessageReceiver(Messages::WebPageProxy::messageReceiverName(), m_pageID, *this);
+
+#if PLATFORM(IOS)
+    DeprecatedGlobalSettings::setDisableScreenSizeOverride(preferencesStore().getBoolValueForKey(WebPreferencesKey::disableScreenSizeOverrideKey()));
+#endif
 
 #if PLATFORM(COCOA)
     m_activityStateChangeDispatcher = std::make_unique<RunLoopObserver>(static_cast<CFIndex>(RunLoopObserver::WellKnownRunLoopOrders::ActivityStateChange), [this] {
@@ -784,7 +794,7 @@ RefPtr<API::Navigation> WebPageProxy::reattachToWebProcessForReload()
     auto navigation = m_navigationState->createReloadNavigation();
 
     // We allow stale content when reloading a WebProcess that's been killed or crashed.
-    m_process->send(Messages::WebPage::GoToBackForwardItem(navigation->navigationID(), m_backForwardList->currentItem()->itemID(), FrameLoadType::IndexedBackForward, NavigationPolicyCheck::Require), m_pageID);
+    m_process->send(Messages::WebPage::GoToBackForwardItem(navigation->navigationID(), m_backForwardList->currentItem()->itemID(), FrameLoadType::IndexedBackForward, ShouldTreatAsContinuingLoad::No), m_pageID);
     m_process->responsivenessTimer().start();
 
     return WTFMove(navigation);
@@ -803,7 +813,7 @@ RefPtr<API::Navigation> WebPageProxy::reattachToWebProcessWithItem(WebBackForwar
 
     auto navigation = m_navigationState->createBackForwardNavigation(item, m_backForwardList->currentItem(), FrameLoadType::IndexedBackForward);
 
-    m_process->send(Messages::WebPage::GoToBackForwardItem(navigation->navigationID(), item.itemID(), FrameLoadType::IndexedBackForward, NavigationPolicyCheck::Require), m_pageID);
+    m_process->send(Messages::WebPage::GoToBackForwardItem(navigation->navigationID(), item.itemID(), FrameLoadType::IndexedBackForward, ShouldTreatAsContinuingLoad::No), m_pageID);
     m_process->responsivenessTimer().start();
 
     return WTFMove(navigation);
@@ -954,11 +964,11 @@ RefPtr<API::Navigation> WebPageProxy::loadRequest(ResourceRequest&& request, Sho
         return nullptr;
 
     auto navigation = m_navigationState->createLoadRequestNavigation(ResourceRequest(request), m_backForwardList->currentItem());
-    loadRequestWithNavigation(navigation.get(), WTFMove(request), shouldOpenExternalURLsPolicy, userData, NavigationPolicyCheck::Require);
+    loadRequestWithNavigation(navigation.get(), WTFMove(request), shouldOpenExternalURLsPolicy, userData, ShouldTreatAsContinuingLoad::No);
     return WTFMove(navigation);
 }
 
-void WebPageProxy::loadRequestWithNavigation(API::Navigation& navigation, ResourceRequest&& request, ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy, API::Object* userData, NavigationPolicyCheck navigationPolicyCheck)
+void WebPageProxy::loadRequestWithNavigation(API::Navigation& navigation, ResourceRequest&& request, ShouldOpenExternalURLsPolicy shouldOpenExternalURLsPolicy, API::Object* userData, ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad)
 {
     ASSERT(!m_isClosed);
 
@@ -975,7 +985,7 @@ void WebPageProxy::loadRequestWithNavigation(API::Navigation& navigation, Resour
     loadParameters.request = WTFMove(request);
     loadParameters.shouldOpenExternalURLsPolicy = (uint64_t)shouldOpenExternalURLsPolicy;
     loadParameters.userData = UserData(process().transformObjectsToHandles(userData).get());
-    loadParameters.shouldCheckNavigationPolicy = navigationPolicyCheck == NavigationPolicyCheck::Require;
+    loadParameters.shouldTreatAsContinuingLoad = shouldTreatAsContinuingLoad == ShouldTreatAsContinuingLoad::Yes;
     bool createdExtension = maybeInitializeSandboxExtensionHandle(url, loadParameters.sandboxExtensionHandle);
     if (createdExtension)
         m_process->willAcquireUniversalFileReadSandboxExtension();
@@ -1280,7 +1290,7 @@ RefPtr<API::Navigation> WebPageProxy::goToBackForwardItem(WebBackForwardListItem
     if (!m_backForwardList->currentItem()->itemIsInSameDocument(item))
         navigation = m_navigationState->createBackForwardNavigation(item, m_backForwardList->currentItem(), frameLoadType);
 
-    m_process->send(Messages::WebPage::GoToBackForwardItem(navigation ? navigation->navigationID() : 0, item.itemID(), frameLoadType, NavigationPolicyCheck::Require), m_pageID);
+    m_process->send(Messages::WebPage::GoToBackForwardItem(navigation ? navigation->navigationID() : 0, item.itemID(), frameLoadType, ShouldTreatAsContinuingLoad::No), m_pageID);
     m_process->responsivenessTimer().start();
 
     return navigation;
@@ -1592,7 +1602,7 @@ void WebPageProxy::dispatchActivityStateChange()
     if (changed & ActivityState::IsVisible) {
         if (isViewVisible()) {
             m_visiblePageToken = m_process->visiblePageToken();
-#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+#if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
             if (m_displayLink)
                 m_displayLink->resume();
 #endif
@@ -1604,7 +1614,7 @@ void WebPageProxy::dispatchActivityStateChange()
             // state, it might not send back a reply (since it won't paint anything if the web page is hidden) so we
             // stop the unresponsiveness timer here.
             m_process->responsivenessTimer().stop();
-#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+#if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
             if (m_displayLink)
                 m_displayLink->pause();
 #endif
@@ -2486,7 +2496,7 @@ void WebPageProxy::continueNavigationInNewProcess(API::Navigation& navigation, R
             return &item != targetItem;
         });
         m_process->send(Messages::WebPage::UpdateBackForwardListForReattach(WTFMove(itemStates)), m_pageID);
-        m_process->send(Messages::WebPage::GoToBackForwardItem(navigation.navigationID(), item->itemID(), *navigation.backForwardFrameLoadType(), NavigationPolicyCheck::Bypass), m_pageID);
+        m_process->send(Messages::WebPage::GoToBackForwardItem(navigation.navigationID(), item->itemID(), *navigation.backForwardFrameLoadType(), ShouldTreatAsContinuingLoad::Yes), m_pageID);
         m_process->responsivenessTimer().start();
 
         return;
@@ -2494,7 +2504,7 @@ void WebPageProxy::continueNavigationInNewProcess(API::Navigation& navigation, R
 
     // FIXME: Work out timing of responding with the last policy delegate, etc
     ASSERT(!navigation.currentRequest().isEmpty());
-    loadRequestWithNavigation(navigation, ResourceRequest { navigation.currentRequest() }, WebCore::ShouldOpenExternalURLsPolicy::ShouldAllowExternalSchemes, nullptr, NavigationPolicyCheck::Bypass);
+    loadRequestWithNavigation(navigation, ResourceRequest { navigation.currentRequest() }, WebCore::ShouldOpenExternalURLsPolicy::ShouldAllowExternalSchemes, nullptr, ShouldTreatAsContinuingLoad::Yes);
 
     // Normally, notification of a server redirect comes from the WebContent process.
     // If we are process swapping in response to a server redirect then that notification will not come from the new WebContent process.
@@ -2772,11 +2782,6 @@ void WebPageProxy::windowScreenDidChange(PlatformDisplayID displayID)
         return;
 
     m_process->send(Messages::WebPage::WindowScreenDidChange(displayID), m_pageID);
-
-#if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
-    auto currentDisplaymask = CGDisplayIDToOpenGLDisplayMask(displayID);
-    m_process->send(Messages::WebPage::OpenGLDisplayMaskChanged(currentDisplaymask), m_pageID);
-#endif
 }
 
 float WebPageProxy::deviceScaleFactor() const
@@ -3117,6 +3122,17 @@ void WebPageProxy::runJavaScriptInMainFrame(const String& script, bool forceUser
 
     auto callbackID = m_callbacks.put(WTFMove(callbackFunction), m_process->throttler().backgroundActivityToken());
     m_process->send(Messages::WebPage::RunJavaScriptInMainFrame(script, forceUserGesture, callbackID), m_pageID);
+}
+
+void WebPageProxy::runJavaScriptInMainFrameScriptWorld(const String& script, bool forceUserGesture, const String& worldName, WTF::Function<void(API::SerializedScriptValue*, bool hadException, const ExceptionDetails&, CallbackBase::Error)>&& callbackFunction)
+{
+    if (!isValid()) {
+        callbackFunction(nullptr, false, { }, CallbackBase::Error::Unknown);
+        return;
+    }
+
+    auto callbackID = m_callbacks.put(WTFMove(callbackFunction), m_process->throttler().backgroundActivityToken());
+    m_process->send(Messages::WebPage::RunJavaScriptInMainFrameScriptWorld(script, forceUserGesture, worldName, callbackID), m_pageID);
 }
 
 void WebPageProxy::getRenderTreeExternalRepresentation(WTF::Function<void (const String&, CallbackBase::Error)>&& callbackFunction)
@@ -3742,6 +3758,8 @@ void WebPageProxy::didFinishLoadForFrame(uint64_t frameID, uint64_t navigationID
     if (isMainFrame) {
         reportPageLoadResult();
         m_pageClient.didFinishLoadForMainFrame();
+
+        resetRecentCrashCountSoon();
     }
 
     m_isLoadingAlternateHTMLStringForFailingProvisionalLoad = false;
@@ -4007,6 +4025,7 @@ void WebPageProxy::decidePolicyForNavigationAction(uint64_t frameID, const Secur
     navigation->setCurrentRequestIsRedirect(navigationActionData.isRedirect);
     navigation->setTreatAsSameOriginNavigation(navigationActionData.treatAsSameOriginNavigation);
     navigation->setIsCrossOriginWindowOpenNavigation(navigationActionData.isCrossOriginWindowOpenNavigation);
+    navigation->setHasOpenedFrames(navigationActionData.hasOpenedFrames);
     navigation->setOpener(navigationActionData.opener);
 
     auto listener = makeRef(frame->setUpPolicyListenerProxy(listenerID, PolicyListenerType::NavigationAction));
@@ -4238,6 +4257,19 @@ void WebPageProxy::showPage()
     m_uiClient->showPage(this);
 }
 
+void WebPageProxy::exitFullscreenImmediately()
+{
+#if ENABLE(FULLSCREEN_API)
+    if (fullScreenManager())
+        fullScreenManager()->close();
+#endif
+
+#if (PLATFORM(IOS) && HAVE(AVKIT)) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
+    if (videoFullscreenManager())
+        videoFullscreenManager()->requestHideAndExitFullscreen();
+#endif
+}
+
 void WebPageProxy::fullscreenMayReturnToInline()
 {
     m_uiClient->fullscreenMayReturnToInline(this);
@@ -4267,6 +4299,10 @@ void WebPageProxy::runJavaScriptAlert(uint64_t frameID, const SecurityOriginData
     WebFrameProxy* frame = m_process->webFrame(frameID);
     MESSAGE_CHECK(frame);
 
+#if PLATFORM(IOS)
+    exitFullscreenImmediately();
+#endif
+
     // Since runJavaScriptAlert() can spin a nested run loop we need to turn off the responsiveness timer.
     m_process->responsivenessTimer().stop();
 
@@ -4281,6 +4317,10 @@ void WebPageProxy::runJavaScriptConfirm(uint64_t frameID, const SecurityOriginDa
 {
     WebFrameProxy* frame = m_process->webFrame(frameID);
     MESSAGE_CHECK(frame);
+
+#if PLATFORM(IOS)
+    exitFullscreenImmediately();
+#endif
 
     // Since runJavaScriptConfirm() can spin a nested run loop we need to turn off the responsiveness timer.
     m_process->responsivenessTimer().stop();
@@ -4298,6 +4338,9 @@ void WebPageProxy::runJavaScriptPrompt(uint64_t frameID, const SecurityOriginDat
     WebFrameProxy* frame = m_process->webFrame(frameID);
     MESSAGE_CHECK(frame);
 
+#if PLATFORM(IOS)
+    exitFullscreenImmediately();
+#endif
     // Since runJavaScriptPrompt() can spin a nested run loop we need to turn off the responsiveness timer.
     m_process->responsivenessTimer().stop();
 
@@ -5817,11 +5860,7 @@ void WebPageProxy::processDidTerminate(ProcessTerminationReason reason)
         m_webProcessLifetimeTracker.webPageLeavingWebProcess();
     else {
         navigationState().clearAllNavigations();
-
-        if (m_navigationClient)
-            m_navigationClient->processDidTerminate(*this, reason);
-        else if (reason != ProcessTerminationReason::RequestedByClient)
-            m_loaderClient->processDidCrash(*this);
+        dispatchProcessDidTerminate(reason);
     }
 
     if (m_controlledByAutomation) {
@@ -5830,6 +5869,55 @@ void WebPageProxy::processDidTerminate(ProcessTerminationReason reason)
     }
 
     stopAllURLSchemeTasks();
+}
+
+static bool shouldReloadAfterProcessTermination(ProcessTerminationReason reason)
+{
+    switch (reason) {
+    case ProcessTerminationReason::ExceededMemoryLimit:
+    case ProcessTerminationReason::ExceededCPULimit:
+    case ProcessTerminationReason::Crash:
+        return true;
+    case ProcessTerminationReason::NavigationSwap:
+    case ProcessTerminationReason::RequestedByClient:
+        break;
+    }
+    return false;
+}
+
+void WebPageProxy::dispatchProcessDidTerminate(ProcessTerminationReason reason)
+{
+    bool handledByClient = false;
+    if (m_navigationClient)
+        handledByClient = m_navigationClient->processDidTerminate(*this, reason);
+    else if (reason != ProcessTerminationReason::RequestedByClient)
+        handledByClient = m_loaderClient->processDidCrash(*this);
+
+    if (!handledByClient && shouldReloadAfterProcessTermination(reason))
+        tryReloadAfterProcessTermination();
+}
+
+void WebPageProxy::tryReloadAfterProcessTermination()
+{
+    m_resetRecentCrashCountTimer.stop();
+
+    if (++m_recentCrashCount > maximumWebProcessRelaunchAttempts) {
+        RELEASE_LOG_IF_ALLOWED(Process, "%p - WebPageProxy's process crashed and the client did not handle it, not reloading the page because we reached the maximum number of attempts", this);
+        m_recentCrashCount = 0;
+        return;
+    }
+    RELEASE_LOG_IF_ALLOWED(Process, "%p - WebPageProxy's process crashed and the client did not handle it, reloading the page", this);
+    reload(ReloadOption::ExpiredOnly);
+}
+
+void WebPageProxy::resetRecentCrashCountSoon()
+{
+    m_resetRecentCrashCountTimer.startOneShot(resetRecentCrashCountDelay);
+}
+
+void WebPageProxy::resetRecentCrashCount()
+{
+    m_recentCrashCount = 0;
 }
 
 void WebPageProxy::stopAllURLSchemeTasks()
@@ -5938,9 +6026,6 @@ void WebPageProxy::resetState(ResetStateReason resetStateReason)
 #if PLATFORM(IOS)
     m_firstLayerTreeTransactionIdAfterDidCommitLoad = 0;
     m_lastVisibleContentRectUpdate = VisibleContentRectUpdateInfo();
-    m_dynamicViewportSizeUpdateWaitingForTarget = false;
-    m_dynamicViewportSizeUpdateWaitingForLayerTreeCommit = false;
-    m_dynamicViewportSizeUpdateLayerTreeTransactionID = 0;
     m_hasNetworkRequestsOnSuspended = false;
     m_isKeyboardAnimatingIn = false;
     m_isScrollingOrZooming = false;

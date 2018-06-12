@@ -588,18 +588,10 @@ bool SubresourceLoader::checkRedirectionCrossOriginAccessControl(const ResourceR
 
 void SubresourceLoader::updateReferrerPolicy(const String& referrerPolicyValue)
 {
-    if (referrerPolicyValue.isEmpty())
-        return;
-    
-    // Implementing https://www.w3.org/TR/2017/CR-referrer-policy-20170126/#parse-referrer-policy-from-header.
-    ReferrerPolicy referrerPolicy = ReferrerPolicy::EmptyString;
-    for (auto tokenView : StringView { referrerPolicyValue }.split(',')) {
-        auto token = parseReferrerPolicy(stripLeadingAndTrailingHTTPSpaces(tokenView), ShouldParseLegacyKeywords::No);
-        if (token && token.value() != ReferrerPolicy::EmptyString)
-            referrerPolicy = token.value();
+    if (auto referrerPolicy = parseReferrerPolicy(referrerPolicyValue, ReferrerPolicySource::HTTPHeader)) {
+        ASSERT(*referrerPolicy != ReferrerPolicy::EmptyString);
+        setReferrerPolicy(*referrerPolicy);
     }
-    if (referrerPolicy != ReferrerPolicy::EmptyString)
-        setReferrerPolicy(referrerPolicy);
 }
 
 void SubresourceLoader::didFinishLoading(const NetworkLoadMetrics& networkLoadMetrics)
@@ -647,7 +639,7 @@ void SubresourceLoader::didFinishLoading(const NetworkLoadMetrics& networkLoadMe
     m_resource->finish();
     ASSERT(!reachedTerminalState());
     didFinishLoadingOnePart(networkLoadMetrics);
-    notifyDone();
+    notifyDone(LoadCompletionType::Finish);
 
     if (reachedTerminalState())
         return;
@@ -683,7 +675,7 @@ void SubresourceLoader::didFail(const ResourceError& error)
         MemoryCache::singleton().remove(*m_resource);
     m_resource->error(CachedResource::LoadError);
     cleanupForError(error);
-    notifyDone();
+    notifyDone(LoadCompletionType::Cancel);
     if (reachedTerminalState())
         return;
     releaseResources();
@@ -725,7 +717,7 @@ void SubresourceLoader::didCancel(const ResourceError&)
         tracePoint(SubresourceLoadDidEnd);
 
     m_resource->cancelLoad();
-    notifyDone();
+    notifyDone(LoadCompletionType::Cancel);
 }
 
 void SubresourceLoader::didRetrieveDerivedDataFromCache(const String& type, SharedBuffer& buffer)
@@ -735,20 +727,21 @@ void SubresourceLoader::didRetrieveDerivedDataFromCache(const String& type, Shar
     m_resource->didRetrieveDerivedDataFromCache(type, buffer);
 }
 
-void SubresourceLoader::notifyDone()
+void SubresourceLoader::notifyDone(LoadCompletionType type)
 {
     if (reachedTerminalState())
         return;
 
     m_requestCountTracker = std::nullopt;
+    bool shouldPerformPostLoadActions = true;
 #if PLATFORM(IOS)
-    m_documentLoader->cachedResourceLoader().loadDone(m_state != CancelledWhileInitializing);
-#else
-    m_documentLoader->cachedResourceLoader().loadDone();
+    if (m_state == CancelledWhileInitializing)
+        shouldPerformPostLoadActions = false;
 #endif
+    m_documentLoader->cachedResourceLoader().loadDone(type, shouldPerformPostLoadActions);
     if (reachedTerminalState())
         return;
-    m_documentLoader->removeSubresourceLoader(this);
+    m_documentLoader->removeSubresourceLoader(type, this);
 }
 
 void SubresourceLoader::releaseResources()

@@ -668,8 +668,7 @@ private:
             switch (arrayMode.type()) {
             case Array::Contiguous:
             case Array::Double:
-                if (arrayMode.arrayClass() == Array::OriginalArray
-                    && arrayMode.speculation() == Array::InBounds) {
+                if (arrayMode.isJSArrayWithOriginalStructure() && arrayMode.speculation() == Array::InBounds) {
                     // Check if SaneChain will work on a per-type basis. Note that:
                     //
                     // 1) We don't want double arrays to sometimes return undefined, since
@@ -714,8 +713,8 @@ private:
                     
                     if (canDoSaneChain) {
                         JSGlobalObject* globalObject = m_graph.globalObjectFor(node->origin.semantic);
-                        Structure* arrayPrototypeStructure = globalObject->arrayPrototype()->structure();
-                        Structure* objectPrototypeStructure = globalObject->objectPrototype()->structure();
+                        Structure* arrayPrototypeStructure = globalObject->arrayPrototype()->structure(vm());
+                        Structure* objectPrototypeStructure = globalObject->objectPrototype()->structure(vm());
                         if (arrayPrototypeStructure->transitionWatchpointSetIsStillValid()
                             && objectPrototypeStructure->transitionWatchpointSetIsStillValid()
                             && globalObject->arrayPrototypeChainIsSane()) {
@@ -1184,8 +1183,8 @@ private:
             // When we go down the fast path, we don't consult the prototype chain, so we must prove
             // that it doesn't contain any indexed properties, and that any holes will result in
             // jsUndefined().
-            Structure* arrayPrototypeStructure = globalObject->arrayPrototype()->structure();
-            Structure* objectPrototypeStructure = globalObject->objectPrototype()->structure();
+            Structure* arrayPrototypeStructure = globalObject->arrayPrototype()->structure(vm());
+            Structure* objectPrototypeStructure = globalObject->objectPrototype()->structure(vm());
             if (node->child1()->shouldSpeculateArray()
                 && arrayPrototypeStructure->transitionWatchpointSetIsStillValid()
                 && objectPrototypeStructure->transitionWatchpointSetIsStillValid()
@@ -1444,6 +1443,15 @@ private:
         case CreateThis:
         case GetButterfly: {
             fixEdge<CellUse>(node->child1());
+            break;
+        }
+
+        case ObjectCreate: {
+            if (node->child1()->shouldSpeculateObject()) {
+                fixEdge<ObjectUse>(node->child1());
+                node->clearFlags(NodeMustGenerate);
+                break;
+            }
             break;
         }
 
@@ -2159,6 +2167,7 @@ private:
         case Unreachable:
         case ExtractOSREntryLocal:
         case ExtractCatchLocal:
+        case ClearCatchLocals:
         case LoopHint:
         case MovHint:
         case InitializeEntrypointArguments:

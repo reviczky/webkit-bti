@@ -1366,6 +1366,18 @@ static EncodedJSValue JSC_HOST_CALL functionPrintStack(ExecState* exec)
     return JSValue::encode(jsUndefined());
 }
 
+// Gets the dataLog dump of the indexingMode of the passed value.
+// Usage: print("indexingMode = " + $vm.indexingMode(jsValue))
+static EncodedJSValue JSC_HOST_CALL functionIndexingMode(ExecState* exec)
+{
+    if (!exec->argument(0).isObject())
+        return encodedJSUndefined();
+
+    WTF::StringPrintStream stream;
+    stream.print(IndexingTypeDump(exec->uncheckedArgument(0).getObject()->indexingMode()));
+    return JSValue::encode(jsString(exec, stream.toString()));
+}
+
 // Gets the dataLog dump of a given JS value as a string.
 // Usage: print("value = " + $vm.value(jsValue))
 static EncodedJSValue JSC_HOST_CALL functionValue(ExecState* exec)
@@ -1687,11 +1699,16 @@ static EncodedJSValue JSC_HOST_CALL functionEnableExceptionFuzz(ExecState*)
     return JSValue::encode(jsUndefined());
 }
 
+static EncodedJSValue JSC_HOST_CALL functionGlobalObjectCount(ExecState* exec)
+{
+    return JSValue::encode(jsNumber(exec->vm().heap.globalObjectCount()));
+}
+
 static EncodedJSValue JSC_HOST_CALL functionGlobalObjectForObject(ExecState* exec)
 {
     JSValue value = exec->argument(0);
     RELEASE_ASSERT(value.isObject());
-    JSGlobalObject* globalObject = jsCast<JSObject*>(value)->globalObject();
+    JSGlobalObject* globalObject = jsCast<JSObject*>(value)->globalObject(exec->vm());
     RELEASE_ASSERT(globalObject);
     return JSValue::encode(globalObject);
 }
@@ -1767,7 +1784,7 @@ void JSDollarVM::finishCreation(VM& vm)
 {
     Base::finishCreation(vm);
 
-    JSGlobalObject* globalObject = structure(vm)->globalObject();
+    JSGlobalObject* globalObject = this->globalObject(vm);
 
     auto addFunction = [&] (VM& vm, const char* name, NativeFunction function, unsigned arguments) {
         JSDollarVM::addFunction(vm, globalObject, name, function, arguments);
@@ -1806,6 +1823,7 @@ void JSDollarVM::finishCreation(VM& vm)
     addFunction(vm, "printCallFrame", functionPrintCallFrame, 0);
     addFunction(vm, "printStack", functionPrintStack, 0);
 
+    addFunction(vm, "indexingMode", functionIndexingMode, 1);
     addFunction(vm, "value", functionValue, 1);
     addFunction(vm, "getpid", functionGetPID, 0);
 
@@ -1843,6 +1861,7 @@ void JSDollarVM::finishCreation(VM& vm)
 
     addFunction(vm, "enableExceptionFuzz", functionEnableExceptionFuzz, 0);
 
+    addFunction(vm, "globalObjectCount", functionGlobalObjectCount, 0);
     addFunction(vm, "globalObjectForObject", functionGlobalObjectForObject, 1);
 
     addFunction(vm, "getGetterSetter", functionGetGetterSetter, 2);

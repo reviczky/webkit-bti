@@ -602,7 +602,7 @@ function sort(comparator)
 
     if (typeof comparator == "function")
         comparatorSort(array, length, comparator);
-    else if (comparator === null || comparator === @undefined)
+    else if (comparator === @undefined)
         stringSort(array, length);
     else
         @throwTypeError("Array.prototype.sort requires the comparsion function be a function or undefined");
@@ -678,7 +678,7 @@ function concat(first)
     if (@argumentCount() === 1
         && @isJSArray(this)
         && this.@isConcatSpreadableSymbol === @undefined
-        && (!@isObject(first) || first.@isConcatSpreadableSymbol === @undefined)) {
+        && (!@isObject(first) || (!@isProxyObject(first) && first.@isConcatSpreadableSymbol === @undefined))) {
 
         let result = @concatMemcpy(this, first);
         if (result !== null)

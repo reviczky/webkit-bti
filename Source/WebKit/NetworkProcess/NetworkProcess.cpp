@@ -114,9 +114,6 @@ NetworkProcess::NetworkProcess()
 #if PLATFORM(COCOA)
     , m_clearCacheDispatchGroup(0)
 #endif
-#if PLATFORM(IOS)
-    , m_webSQLiteDatabaseTracker(*this)
-#endif
 {
     NetworkProcessPlatformStrategies::initialize();
 
@@ -220,7 +217,11 @@ void NetworkProcess::lowMemoryHandler(Critical critical)
 
 void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&& parameters)
 {
+#if HAVE(SEC_KEY_PROXY)
+    WTF::setProcessPrivileges({ ProcessPrivilege::CanAccessRawCookies });
+#else
     WTF::setProcessPrivileges({ ProcessPrivilege::CanAccessRawCookies, ProcessPrivilege::CanAccessCredentials });
+#endif
     WebCore::NetworkStorageSession::permitProcessToUseCookieAPI(true);
     WebCore::setPresentingApplicationPID(parameters.presentingApplicationPID);
     platformInitializeNetworkProcess(parameters);
@@ -287,8 +288,6 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
 
     for (auto& scheme : parameters.urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest)
         registerURLSchemeAsCanDisplayOnlyIfCanRequest(scheme);
-
-    m_tracksResourceLoadMilestones = parameters.tracksResourceLoadMilestones;
 
     RELEASE_LOG(Process, "%p - NetworkProcess::initializeNetworkProcess: Presenting process = %d", this, WebCore::presentingApplicationPID());
 }
@@ -362,6 +361,7 @@ void NetworkProcess::destroySession(PAL::SessionID sessionID)
 {
     SessionTracker::destroySession(sessionID);
     m_sessionsControlledByAutomation.remove(sessionID);
+    CacheStorage::Engine::destroyEngine(sessionID);
 }
 
 void NetworkProcess::grantSandboxExtensionsToStorageProcessForBlobs(const Vector<String>& filenames, Function<void ()>&& completionHandler)
@@ -647,7 +647,7 @@ void NetworkProcess::canAuthenticateAgainstProtectionSpace(NetworkResourceLoader
 void NetworkProcess::canAuthenticateAgainstProtectionSpace(PreconnectTask& preconnectTask, const WebCore::ProtectionSpace& protectionSpace)
 {
     uint64_t loaderID = generateCanAuthenticateIdentifier();
-    m_waitingPreconnectTasks.set(loaderID, preconnectTask.createWeakPtr());
+    m_waitingPreconnectTasks.set(loaderID, makeWeakPtr(preconnectTask));
     parentProcessConnection()->send(Messages::NetworkProcessProxy::CanAuthenticateAgainstProtectionSpace(loaderID, preconnectTask.pageID(), preconnectTask.frameID(), protectionSpace), 0);
 }
 #endif
@@ -830,6 +830,7 @@ void NetworkProcess::cancelPrepareToSuspend()
     // message. And NetworkProcessProxy expects to receive either a NetworkProcessProxy::ProcessReadyToSuspend-
     // or NetworkProcessProxy::DidCancelProcessSuspension- message, but not both.
     RELEASE_LOG(ProcessSuspension, "%p - NetworkProcess::cancelPrepareToSuspend()", this);
+    platformProcessDidResume();
     for (auto& connection : m_webProcessConnections)
         connection->endSuspension();
 }

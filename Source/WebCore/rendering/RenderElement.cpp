@@ -1372,8 +1372,8 @@ Color RenderElement::selectionColor(CSSPropertyID colorProperty) const
     }
 
     if (frame().selection().isFocusedAndActive())
-        return theme().activeSelectionForegroundColor();
-    return theme().inactiveSelectionForegroundColor();
+        return theme().activeSelectionForegroundColor(document().styleColorOptions());
+    return theme().inactiveSelectionForegroundColor(document().styleColorOptions());
 }
 
 std::unique_ptr<RenderStyle> RenderElement::selectionPseudoStyle() const
@@ -1414,8 +1414,8 @@ Color RenderElement::selectionBackgroundColor() const
         return pseudoStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor).blendWithWhite();
 
     if (frame().selection().isFocusedAndActive())
-        return theme().activeSelectionBackgroundColor();
-    return theme().inactiveSelectionBackgroundColor();
+        return theme().activeSelectionBackgroundColor(document().styleColorOptions());
+    return theme().inactiveSelectionBackgroundColor(document().styleColorOptions());
 }
 
 bool RenderElement::getLeadingCorner(FloatPoint& point, bool& insideFixed) const
@@ -1890,7 +1890,7 @@ void RenderElement::paintOutline(PaintInfo& paintInfo, const LayoutRect& paintRe
             Path path;
             path.addRect(outer);
             path.addRect(inner);
-            graphicsContext.setFillRule(RULE_EVENODD);
+            graphicsContext.setFillRule(WindRule::EvenOdd);
             graphicsContext.setFillColor(outlineColor);
             graphicsContext.fillPath(path);
             return;

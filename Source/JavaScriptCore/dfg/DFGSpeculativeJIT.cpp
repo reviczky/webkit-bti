@@ -745,6 +745,7 @@ JITCompiler::JumpList SpeculativeJIT::jumpSlowForUnwantedArrayMode(GPRReg tempGP
         IndexingType shape = arrayMode.shapeMask();
         switch (arrayMode.arrayClass()) {
         case Array::OriginalArray:
+        case Array::OriginalCopyOnWriteArray:
             RELEASE_ASSERT_NOT_REACHED();
             return result;
 
@@ -776,6 +777,7 @@ JITCompiler::JumpList SpeculativeJIT::jumpSlowForUnwantedArrayMode(GPRReg tempGP
 
         switch (arrayMode.arrayClass()) {
         case Array::OriginalArray:
+        case Array::OriginalCopyOnWriteArray:
             RELEASE_ASSERT_NOT_REACHED();
             return result;
 
@@ -2221,8 +2223,8 @@ void SpeculativeJIT::compileGetByValOnString(Node* node)
             // on a stringPrototypeChainIsSane() guaranteeing that the prototypes have no negative
             // indexed properties either.
             // https://bugs.webkit.org/show_bug.cgi?id=144668
-            m_jit.graph().registerAndWatchStructureTransition(globalObject->stringPrototype()->structure());
-            m_jit.graph().registerAndWatchStructureTransition(globalObject->objectPrototype()->structure());
+            m_jit.graph().registerAndWatchStructureTransition(globalObject->stringPrototype()->structure(*m_jit.vm()));
+            m_jit.graph().registerAndWatchStructureTransition(globalObject->objectPrototype()->structure(*m_jit.vm()));
             prototypeChainIsSane = globalObject->stringPrototypeChainIsSane();
         }
         if (prototypeChainIsSane) {
@@ -12170,6 +12172,47 @@ void SpeculativeJIT::compileToThis(Node* node)
     jsValueResult(tempRegs, node);
 }
 
+void SpeculativeJIT::compileObjectCreate(Node* node)
+{
+    switch (node->child1().useKind()) {
+    case ObjectUse: {
+        SpeculateCellOperand prototype(this, node->child1());
+
+        GPRReg prototypeGPR = prototype.gpr();
+
+        speculateObject(node->child1(), prototypeGPR);
+
+        flushRegisters();
+        GPRFlushedCallResult result(this);
+        GPRReg resultGPR = result.gpr();
+        callOperation(operationObjectCreateObject, resultGPR, prototypeGPR);
+        m_jit.exceptionCheck();
+
+        cellResult(resultGPR, node);
+        break;
+    }
+
+    case UntypedUse: {
+        JSValueOperand prototype(this, node->child1());
+
+        JSValueRegs prototypeRegs = prototype.jsValueRegs();
+
+        flushRegisters();
+        GPRFlushedCallResult result(this);
+        GPRReg resultGPR = result.gpr();
+        callOperation(operationObjectCreate, resultGPR, prototypeRegs);
+        m_jit.exceptionCheck();
+
+        cellResult(resultGPR, node);
+        break;
+    }
+
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+        break;
+    }
+}
+
 void SpeculativeJIT::compileCreateThis(Node* node)
 {
     // Note that there is not so much profit to speculate here. The only things we
@@ -12894,6 +12937,17 @@ void SpeculativeJIT::compileExtractCatchLocal(Node* node)
     JSValue* ptr = &reinterpret_cast<JSValue*>(m_jit.jitCode()->common.catchOSREntryBuffer->dataBuffer())[node->catchOSREntryIndex()];
     m_jit.loadValue(ptr, resultRegs);
     jsValueResult(resultRegs, node);
+}
+
+void SpeculativeJIT::compileClearCatchLocals(Node* node)
+{
+    ScratchBuffer* scratchBuffer = m_jit.jitCode()->common.catchOSREntryBuffer;
+    ASSERT(scratchBuffer);
+    GPRTemporary scratch(this);
+    GPRReg scratchGPR = scratch.gpr();
+    m_jit.move(TrustedImmPtr(scratchBuffer->addressOfActiveLength()), scratchGPR);
+    m_jit.storePtr(TrustedImmPtr(nullptr), scratchGPR);
+    noResult(node);
 }
 
 void SpeculativeJIT::compileProfileType(Node* node)

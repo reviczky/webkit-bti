@@ -2290,7 +2290,9 @@ static void initializeRoleMap()
         { "application", AccessibilityRole::WebApplication },
         { "article", AccessibilityRole::DocumentArticle },
         { "banner", AccessibilityRole::LandmarkBanner },
+        { "blockquote", AccessibilityRole::Blockquote },
         { "button", AccessibilityRole::Button },
+        { "caption", AccessibilityRole::Caption },
         { "checkbox", AccessibilityRole::CheckBox },
         { "complementary", AccessibilityRole::LandmarkComplementary },
         { "contentinfo", AccessibilityRole::LandmarkContentInfo },
@@ -2373,6 +2375,7 @@ static void initializeRoleMap()
         { "note", AccessibilityRole::DocumentNote },
         { "navigation", AccessibilityRole::LandmarkNavigation },
         { "option", AccessibilityRole::ListBoxOption },
+        { "paragraph", AccessibilityRole::Paragraph },
         { "presentation", AccessibilityRole::Presentational },
         { "progressbar", AccessibilityRole::ProgressIndicator },
         { "radio", AccessibilityRole::RadioButton },
@@ -2525,6 +2528,11 @@ bool AccessibilityObject::supportsDatetimeAttribute() const
 const AtomicString& AccessibilityObject::datetimeAttributeValue() const
 {
     return getAttribute(datetimeAttr);
+}
+    
+const AtomicString& AccessibilityObject::linkRelValue() const
+{
+    return getAttribute(relAttr);
 }
     
 const String AccessibilityObject::keyShortcutsValue() const
@@ -2797,7 +2805,7 @@ bool AccessibilityObject::isExpanded() const
     // Summary element should use its details parent's expanded status.
     if (isSummary()) {
         if (const AccessibilityObject* parent = AccessibilityObject::matchedParent(*this, false, [] (const AccessibilityObject& object) {
-            return object.roleValue() == AccessibilityRole::Details;
+            return is<HTMLDetailsElement>(object.node());
         }))
             return parent->isExpanded();
     }

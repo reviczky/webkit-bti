@@ -389,7 +389,6 @@ messages -> WebPageProxy {
 #endif
 
 #if PLATFORM(IOS)
-    DynamicViewportUpdateChangedTarget(double newTargetScale, WebCore::FloatPoint newScrollPosition, uint64_t dynamicViewportSizeUpdateID)
     CouldNotRestorePageState()
     RestorePageState(std::optional<WebCore::FloatPoint> scrollPosition, WebCore::FloatPoint scrollOrigin, WebCore::RectEdges<float> obscuredInsetsOnSave, double scale)
     RestorePageCenterAndScale(std::optional<WebCore::FloatPoint> unobscuredCenter, double scale)
@@ -525,7 +524,7 @@ messages -> WebPageProxy {
     DidRemoveAttachment(String identifier)
 #endif
 
-#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+#if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
     StartDisplayLink(unsigned observerID)
     StopDisplayLink(unsigned observerID)
 #endif

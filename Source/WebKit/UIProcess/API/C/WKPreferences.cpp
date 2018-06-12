@@ -1974,14 +1974,14 @@ bool WKPreferencesGetAllowCrossOriginSubresourcesToAskForCredentials(WKPreferenc
     return toImpl(preferencesRef)->allowCrossOriginSubresourcesToAskForCredentials();
 }
 
-void WKPreferencesSetFromOriginResponseHeaderEnabled(WKPreferencesRef preferencesRef, bool flag)
+void WKPreferencesSetCrossOriginResourcePolicyEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
-    toImpl(preferencesRef)->setFromOriginResponseHeaderEnabled(flag);
+    toImpl(preferencesRef)->setCrossOriginResourcePolicyEnabled(flag);
 }
 
-bool WKPreferencesGetFromOriginResponseHeaderEnabled(WKPreferencesRef preferencesRef)
+bool WKPreferencesGetCrossOriginResourcePolicyEnabled(WKPreferencesRef preferencesRef)
 {
-    return toImpl(preferencesRef)->fromOriginResponseHeaderEnabled();
+    return toImpl(preferencesRef)->crossOriginResourcePolicyEnabled();
 }
 
 void WKPreferencesSetRestrictedHTTPResponseAccess(WKPreferencesRef preferencesRef, bool flag)
@@ -2002,4 +2002,14 @@ void WKPreferencesSetServerTimingEnabled(WKPreferencesRef preferencesRef, bool f
 bool WKPreferencesGetServerTimingEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->serverTimingEnabled();
+}
+
+void WKPreferencesSetColorFilterEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setColorFilterEnabled(flag);
+}
+
+bool WKPreferencesGetColorFilterEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->colorFilterEnabled();
 }

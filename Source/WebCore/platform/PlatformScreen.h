@@ -81,7 +81,9 @@ WEBCORE_EXPORT CGColorSpaceRef screenColorSpace(Widget* = nullptr);
 #if PLATFORM(MAC)
 struct ScreenProperties;
 
-NSScreen *screen(NSWindow *);
+WEBCORE_EXPORT PlatformDisplayID displayID(NSScreen *);
+
+WEBCORE_EXPORT NSScreen *screen(NSWindow *);
 NSScreen *screen(PlatformDisplayID);
 
 FloatRect screenRectForDisplay(PlatformDisplayID);
@@ -93,10 +95,11 @@ WEBCORE_EXPORT NSRect toDeviceSpace(const FloatRect&, NSWindow *source);
 
 NSPoint flipScreenPoint(const NSPoint&, NSScreen *);
 
-WEBCORE_EXPORT std::pair<PlatformDisplayID, HashMap<PlatformDisplayID, ScreenProperties>> getScreenProperties();
-WEBCORE_EXPORT void setScreenProperties(PlatformDisplayID primaryScreenID, const HashMap<PlatformDisplayID, ScreenProperties>&);
-ScreenProperties screenProperties(PlatformDisplayID);
+WEBCORE_EXPORT ScreenProperties collectScreenProperties();
+WEBCORE_EXPORT void setScreenProperties(const ScreenProperties&);
 
+uint32_t primaryOpenGLDisplayMask();
+uint32_t displayMaskForDisplay(PlatformDisplayID);
 #endif
 
 #if PLATFORM(IOS)

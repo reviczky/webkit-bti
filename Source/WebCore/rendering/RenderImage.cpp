@@ -594,7 +594,7 @@ ImageDrawResult RenderImage::paintIntoRect(PaintInfo& paintInfo, const FloatRect
         imageResource().cachedImage()->addPendingImageDrawingClient(*this);
 
 #if USE(SYSTEM_PREVIEW)
-    if (imageElement && imageElement->isSystemPreviewImage())
+    if (imageElement && imageElement->isSystemPreviewImage() && drawResult == ImageDrawResult::DidDraw)
         theme().paintSystemPreviewBadge(*img, paintInfo, rect);
 #endif
 
@@ -709,7 +709,7 @@ bool RenderImage::canHaveChildren() const
 void RenderImage::layout()
 {
     // Recomputing overflow is required only when child content is present. 
-    if (needsSimplifiedNormalFlowLayout() && !m_hasShadowControls) {
+    if (needsSimplifiedNormalFlowLayoutOnly() && !m_hasShadowControls) {
         clearNeedsLayout();
         return;
     }

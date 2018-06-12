@@ -107,6 +107,7 @@
 #endif
 
 #if PLATFORM(COCOA)
+#include "DynamicViewportSizeUpdate.h"
 #include <WebCore/VisibleSelection.h>
 #include <wtf/RetainPtr.h>
 OBJC_CLASS CALayer;
@@ -156,7 +157,7 @@ class URL;
 class VisiblePosition;
 
 enum SyntheticClickType : int8_t;
-enum class NavigationPolicyCheck;
+enum class ShouldTreatAsContinuingLoad;
 enum class TextIndicatorPresentationTransition : uint8_t;
 
 struct BackForwardItemIdentifier;
@@ -199,6 +200,7 @@ class VisibleContentRectUpdateInfo;
 class WebColorChooser;
 class WebContextMenu;
 class WebContextMenuItemData;
+class WebDataListSuggestionPicker;
 class WebDocumentLoader;
 class WebEvent;
 class WebFrame;
@@ -298,6 +300,7 @@ public:
 #if PLATFORM(IOS) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
     PlaybackSessionManager& playbackSessionManager();
     VideoFullscreenManager& videoFullscreenManager();
+    void videoControlsManagerDidChange();
 #endif
 
 #if PLATFORM(IOS)
@@ -358,6 +361,12 @@ public:
     void setActiveColorChooser(WebColorChooser*);
     void didChooseColor(const WebCore::Color&);
     void didEndColorPicker();
+#endif
+
+#if ENABLE(DATALIST_ELEMENT)
+    void setActiveDataListSuggestionPicker(WebDataListSuggestionPicker*);
+    void didSelectDataListOption(const String&);
+    void didCloseSuggestions();
 #endif
 
     WebOpenPanelResultListener* activeOpenPanelResultListener() const { return m_activeOpenPanelResultListener.get(); }
@@ -760,10 +769,6 @@ public:
     bool hasCompositionForTesting();
     void confirmCompositionForTesting(const String& compositionString);
 
-    // FIXME: This a dummy message, to avoid breaking the build for platforms that don't require
-    // any synchronous messages, and should be removed when <rdar://problem/8775115> is fixed.
-    void dummy(bool&);
-
 #if PLATFORM(COCOA)
     bool isSpeaking();
     void speak(const String&);
@@ -885,8 +890,7 @@ public:
     void setViewportConfigurationViewLayoutSize(const WebCore::FloatSize&);
     void setMaximumUnobscuredSize(const WebCore::FloatSize&);
     void setDeviceOrientation(int32_t);
-    void dynamicViewportSizeUpdate(const WebCore::FloatSize& viewLayoutSize, const WebCore::FloatSize& maximumUnobscuredSize, const WebCore::FloatRect& targetExposedContentRect, const WebCore::FloatRect& targetUnobscuredRect, const WebCore::FloatRect& targetUnobscuredRectInScrollViewCoordinates, const WebCore::FloatBoxExtent& targetUnobscuredSafeAreaInsets, double scale, int32_t deviceOrientation, uint64_t dynamicViewportSizeUpdateID);
-    void synchronizeDynamicViewportUpdate(double& newTargetScale, WebCore::FloatPoint& newScrollPosition, uint64_t& nextValidLayerTreeTransactionID);
+    void dynamicViewportSizeUpdate(const WebCore::FloatSize& viewLayoutSize, const WebCore::FloatSize& maximumUnobscuredSize, const WebCore::FloatRect& targetExposedContentRect, const WebCore::FloatRect& targetUnobscuredRect, const WebCore::FloatRect& targetUnobscuredRectInScrollViewCoordinates, const WebCore::FloatBoxExtent& targetUnobscuredSafeAreaInsets, double scale, int32_t deviceOrientation, DynamicViewportSizeUpdateID);
     std::optional<float> scaleFromUIProcess(const VisibleContentRectUpdateInfo&) const;
     void updateVisibleContentRects(const VisibleContentRectUpdateInfo&, MonotonicTime oldestTimestamp);
     bool scaleWasSetByUIProcess() const { return m_scaleWasSetByUIProcess; }
@@ -1076,10 +1080,6 @@ public:
     void didFinishLoadingApplicationManifest(uint64_t, const std::optional<WebCore::ApplicationManifest>&);
 #endif
 
-#if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
-    void openGLDisplayMaskChanged(uint32_t displayMask);
-#endif
-
     UserContentControllerIdentifier userContentControllerIdentifier() const { return m_userContentController->identifier(); }
 
     bool isSuspended() const { return m_isSuspended; }
@@ -1160,7 +1160,7 @@ private:
     void loadAlternateHTMLString(const LoadParameters&);
     void navigateToPDFLinkWithSimulatedClick(const String& url, WebCore::IntPoint documentPoint, WebCore::IntPoint screenPoint);
     void reload(uint64_t navigationID, uint32_t reloadOptions, SandboxExtension::Handle&&);
-    void goToBackForwardItem(uint64_t navigationID, const WebCore::BackForwardItemIdentifier&, WebCore::FrameLoadType, WebCore::NavigationPolicyCheck);
+    void goToBackForwardItem(uint64_t navigationID, const WebCore::BackForwardItemIdentifier&, WebCore::FrameLoadType, WebCore::ShouldTreatAsContinuingLoad);
     void tryRestoreScrollPosition();
     void setInitialFocus(bool forward, bool isKeyboardEventValid, const WebKeyboardEvent&, CallbackID);
     void updateIsInWindow(bool isInitialState = false);
@@ -1222,7 +1222,9 @@ private:
     void getSelectionAsWebArchiveData(CallbackID);
     void getSourceForFrame(uint64_t frameID, CallbackID);
     void getWebArchiveOfFrame(uint64_t frameID, CallbackID);
+    void runJavaScript(const String&, bool forceUserGesture, std::optional<String> worldName, CallbackID);
     void runJavaScriptInMainFrame(const String&, bool forceUserGesture, CallbackID);
+    void runJavaScriptInMainFrameScriptWorld(const String&, bool forceUserGesture, const String& worldName, CallbackID);
     void forceRepaint(CallbackID);
     void takeSnapshot(WebCore::IntRect snapshotRect, WebCore::IntSize bitmapSize, uint32_t options, CallbackID);
 
@@ -1554,6 +1556,10 @@ private:
     WebColorChooser* m_activeColorChooser { nullptr };
 #endif
 
+#if ENABLE(DATALIST_ELEMENT)
+    WebDataListSuggestionPicker* m_activeDataListSuggestionPicker { nullptr };
+#endif
+
     RefPtr<WebOpenPanelResultListener> m_activeOpenPanelResultListener;
     RefPtr<NotificationPermissionRequestManager> m_notificationPermissionRequestManager;
 
@@ -1657,6 +1663,7 @@ private:
     WebCore::FloatPoint m_pendingSyntheticClickLocation;
     WebCore::FloatRect m_previousExposedContentRect;
     uint64_t m_currentAssistedNodeIdentifier { 0 };
+    std::optional<DynamicViewportSizeUpdateID> m_pendingDynamicViewportSizeUpdateID;
 #endif
 
     WebCore::Timer m_layerVolatilityTimer;

@@ -758,6 +758,16 @@ void Document::clearSelectorQueryCache()
     m_selectorQueryCache = nullptr;
 }
 
+void Document::setReferrerPolicy(ReferrerPolicy referrerPolicy)
+{
+    // Do not override existing referrer policy with the "empty string" one as the "empty string" means we should use
+    // the policy defined elsewhere.
+    if (m_referrerPolicy && referrerPolicy == ReferrerPolicy::EmptyString)
+        return;
+
+    m_referrerPolicy = referrerPolicy;
+}
+
 MediaQueryMatcher& Document::mediaQueryMatcher()
 {
     if (!m_mediaQueryMatcher)
@@ -3175,11 +3185,11 @@ bool Document::canNavigate(Frame* targetFrame)
         return true;
 
     if (m_frame != targetFrame) {
-        auto sourceCrossOriginOptions = m_frame->window() ? m_frame->window()->crossOriginOptions() : CrossOriginOptions::Allow;
-        auto destinationCrossOriginOptions = targetFrame->window() ? targetFrame->window()->crossOriginOptions() : CrossOriginOptions::Allow;
-        if (sourceCrossOriginOptions != CrossOriginOptions::Allow || destinationCrossOriginOptions != CrossOriginOptions::Allow) {
+        auto sourceCrossOriginWindowPolicy = m_frame->window() ? m_frame->window()->crossOriginWindowPolicy() : CrossOriginWindowPolicy::Allow;
+        auto destinationCrossOriginWindowPolicy = targetFrame->window() ? targetFrame->window()->crossOriginWindowPolicy() : CrossOriginWindowPolicy::Allow;
+        if (sourceCrossOriginWindowPolicy != CrossOriginWindowPolicy::Allow || destinationCrossOriginWindowPolicy != CrossOriginWindowPolicy::Allow) {
             if (m_frame->document() && targetFrame->document() && !m_frame->document()->securityOrigin().canAccess(targetFrame->document()->securityOrigin())) {
-                printNavigationErrorMessage(targetFrame, url(), ASCIILiteral("Navigation was not allowed due to Cross-Origin-Options header."));
+                printNavigationErrorMessage(targetFrame, url(), ASCIILiteral("Navigation was not allowed due to Cross-Origin-Window-Policy header."));
                 return false;
             }
         }
@@ -3465,7 +3475,7 @@ void Document::processWebAppOrientations()
 
 #endif
 
-void Document::processReferrerPolicy(const String& policy)
+void Document::processReferrerPolicy(const String& policy, ReferrerPolicySource source)
 {
     ASSERT(!policy.isNull());
 
@@ -3479,10 +3489,10 @@ void Document::processReferrerPolicy(const String& policy)
         return;
 #endif
     
-    auto referrerPolicy = parseReferrerPolicy(policy, ShouldParseLegacyKeywords::Yes);
+    auto referrerPolicy = parseReferrerPolicy(policy, source);
     if (!referrerPolicy) {
-        addConsoleMessage(MessageSource::Rendering, MessageLevel::Error, "Failed to set referrer policy: The value '" + policy + "' is not one of 'no-referrer', 'no-referrer-when-downgrade', 'same-origin', 'origin', 'strict-origin', 'origin-when-cross-origin', 'strict-origin-when-cross-origin' or 'unsafe-url'. Defaulting to 'no-referrer'.");
-        setReferrerPolicy(ReferrerPolicy::NoReferrer);
+        // Unknown policy values are ignored (https://w3c.github.io/webappsec-referrer-policy/#unknown-policy-values).
+        addConsoleMessage(MessageSource::Rendering, MessageLevel::Error, "Failed to set referrer policy: The value '" + policy + "' is not one of 'no-referrer', 'no-referrer-when-downgrade', 'same-origin', 'origin', 'strict-origin', 'origin-when-cross-origin', 'strict-origin-when-cross-origin' or 'unsafe-url'.");
         return;
     }
     setReferrerPolicy(referrerPolicy.value());
@@ -5811,7 +5821,7 @@ void Document::addMessage(MessageSource source, MessageLevel level, const String
 
 void Document::postTask(Task&& task)
 {
-    callOnMainThread([documentReference = m_weakFactory.createWeakPtr(*this), task = WTFMove(task)]() mutable {
+    callOnMainThread([documentReference = makeWeakPtr(*this), task = WTFMove(task)]() mutable {
         ASSERT(isMainThread());
 
         Document* document = documentReference.get();
@@ -7517,7 +7527,7 @@ void Document::hasStorageAccess(Ref<DeferredPromise>&& promise)
     ASSERT(settings().storageAccessAPIEnabled());
 
 #if HAVE(CFNETWORK_STORAGE_PARTITIONING)
-    if (hasFrameSpecificStorageAccess()) {
+    if (m_frame && hasFrameSpecificStorageAccess()) {
         promise->resolve<IDLBoolean>(true);
         return;
     }
@@ -7549,7 +7559,7 @@ void Document::hasStorageAccess(Ref<DeferredPromise>&& promise)
     if (Page* page = this->page()) {
         auto iframeHost = securityOrigin.host();
         auto topHost = topSecurityOrigin.host();
-        page->chrome().client().hasStorageAccess(WTFMove(iframeHost), WTFMove(topHost), frameID.value(), pageID.value(), [documentReference = m_weakFactory.createWeakPtr(*this), promise = WTFMove(promise)] (bool hasAccess) {
+        page->chrome().client().hasStorageAccess(WTFMove(iframeHost), WTFMove(topHost), frameID.value(), pageID.value(), [documentReference = makeWeakPtr(*this), promise = WTFMove(promise)] (bool hasAccess) {
             Document* document = documentReference.get();
             if (!document)
                 return;
@@ -7568,7 +7578,7 @@ void Document::requestStorageAccess(Ref<DeferredPromise>&& promise)
     ASSERT(settings().storageAccessAPIEnabled());
     
 #if HAVE(CFNETWORK_STORAGE_PARTITIONING)
-    if (hasFrameSpecificStorageAccess()) {
+    if (m_frame && hasFrameSpecificStorageAccess()) {
         promise->resolve();
         return;
     }
@@ -7619,14 +7629,14 @@ void Document::requestStorageAccess(Ref<DeferredPromise>&& promise)
         return;
     }
 
-    page->chrome().client().requestStorageAccess(WTFMove(iframeHost), WTFMove(topHost), frameID.value(), pageID.value(), [documentReference = m_weakFactory.createWeakPtr(*this), promise = WTFMove(promise)] (bool wasGranted) mutable {
+    page->chrome().client().requestStorageAccess(WTFMove(iframeHost), WTFMove(topHost), frameID.value(), pageID.value(), [documentReference = makeWeakPtr(*this), promise = WTFMove(promise)] (bool wasGranted) mutable {
         Document* document = documentReference.get();
         if (!document)
             return;
         
         if (wasGranted) {
             document->setHasFrameSpecificStorageAccess(true);
-            MicrotaskQueue::mainThreadQueue().append(std::make_unique<VoidMicrotask>([documentReference = document->m_weakFactory.createWeakPtr(*document)] () {
+            MicrotaskQueue::mainThreadQueue().append(std::make_unique<VoidMicrotask>([documentReference = makeWeakPtr(*document)] () {
                 if (auto* document = documentReference.get())
                     document->enableTemporaryTimeUserGesture();
             }));

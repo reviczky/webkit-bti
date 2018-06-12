@@ -78,11 +78,10 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
 #endif
     encoder << httpProxy;
     encoder << httpsProxy;
-#if PLATFORM(COCOA)
     IPC::encode(encoder, networkATSContext.get());
-#endif
     encoder << cookieStoragePartitioningEnabled;
     encoder << storageAccessAPIEnabled;
+    encoder << suppressesConnectionTerminationOnSystemChange;
 #endif
 #if USE(SOUP)
     encoder << cookiePersistentStoragePath;
@@ -110,8 +109,6 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << urlSchemesRegisteredAsCORSEnabled;
     encoder << urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
 
-    encoder << tracksResourceLoadMilestones;
-    
 #if ENABLE(WIFI_ASSERTIONS)
     encoder << wirelessContextIdentifier;
 #endif
@@ -209,13 +206,13 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
         return false;
     if (!decoder.decode(result.httpsProxy))
         return false;
-#if PLATFORM(COCOA)
     if (!IPC::decode(decoder, result.networkATSContext))
         return false;
-#endif
     if (!decoder.decode(result.cookieStoragePartitioningEnabled))
         return false;
     if (!decoder.decode(result.storageAccessAPIEnabled))
+        return false;
+    if (!decoder.decode(result.suppressesConnectionTerminationOnSystemChange))
         return false;
 #endif
 
@@ -262,9 +259,6 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
     if (!decoder.decode(result.urlSchemesRegisteredAsCORSEnabled))
         return false;
     if (!decoder.decode(result.urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest))
-        return false;
-
-    if (!decoder.decode(result.tracksResourceLoadMilestones))
         return false;
 
 #if ENABLE(WIFI_ASSERTIONS)

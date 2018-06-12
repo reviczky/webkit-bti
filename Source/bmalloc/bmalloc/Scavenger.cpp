@@ -179,6 +179,13 @@ std::chrono::milliseconds Scavenger::timeSinceLastPartialScavenge()
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - m_lastPartialScavengeTime);
 }
 
+void Scavenger::enableMiniMode()
+{
+    m_isInMiniMode = true; // We just store to this racily. The scavenger thread will eventually pick up the right value.
+    if (m_state == State::RunSoon)
+        run();
+}
+
 void Scavenger::scavenge()
 {
     std::unique_lock<Mutex> lock(m_scavengingMutex);
@@ -367,9 +374,7 @@ void Scavenger::threadRunLoop()
     // We require any state change while we are sleeping to signal to our
     // condition variable and wake us up.
     
-    auto truth = [] { return true; };
-    
-    while (truth()) {
+    while (true) {
         if (m_state == State::Sleep) {
             std::unique_lock<Mutex> lock(m_mutex);
             m_condition.wait(lock, [&]() { return m_state != State::Sleep; });
@@ -377,7 +382,7 @@ void Scavenger::threadRunLoop()
         
         if (m_state == State::RunSoon) {
             std::unique_lock<Mutex> lock(m_mutex);
-            m_condition.wait_for(lock, asyncTaskSleepDuration, [&]() { return m_state != State::RunSoon; });
+            m_condition.wait_for(lock, std::chrono::milliseconds(m_isInMiniMode ? 200 : 2000), [&]() { return m_state != State::RunSoon; });
         }
         
         m_state = State::Sleep;
@@ -403,11 +408,18 @@ void Scavenger::threadRunLoop()
             auto timeSinceLastFullScavenge = this->timeSinceLastFullScavenge();
             auto timeSinceLastPartialScavenge = this->timeSinceLastPartialScavenge();
             auto timeSinceLastScavenge = std::min(timeSinceLastPartialScavenge, timeSinceLastFullScavenge);
-            if (isUnderMemoryPressure() && freeableMemory > 4 * MB && timeSinceLastScavenge > std::chrono::milliseconds(5))
+
+            if (isUnderMemoryPressure() && freeableMemory > 1 * MB && timeSinceLastScavenge > std::chrono::milliseconds(5))
                 return ScavengeMode::Full;
 
             if (!m_isProbablyGrowing) {
-                if (timeSinceLastFullScavenge < std::chrono::milliseconds(1000))
+                if (timeSinceLastFullScavenge < std::chrono::milliseconds(1000) && !m_isInMiniMode)
+                    return ScavengeMode::Partial;
+                return ScavengeMode::Full;
+            }
+
+            if (m_isInMiniMode) {
+                if (timeSinceLastFullScavenge < std::chrono::milliseconds(200))
                     return ScavengeMode::Partial;
                 return ScavengeMode::Full;
             }
@@ -421,7 +433,7 @@ void Scavenger::threadRunLoop()
                 // Rate limit partial scavenges.
                 return ScavengeMode::None;
             }
-            if (freeableMemory < 50 * MB)
+            if (freeableMemory < 25 * MB)
                 return ScavengeMode::None;
             if (5 * freeableMemory < footprint())
                 return ScavengeMode::None;

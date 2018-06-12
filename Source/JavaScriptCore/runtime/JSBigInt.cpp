@@ -61,13 +61,6 @@ namespace JSC {
 const ClassInfo JSBigInt::s_info =
     { "JSBigInt", nullptr, nullptr, nullptr, CREATE_METHOD_TABLE(JSBigInt) };
 
-void JSBigInt::visitChildren(JSCell* cell, SlotVisitor& visitor)
-{
-    JSBigInt* thisObject = jsCast<JSBigInt*>(cell);
-    ASSERT_GC_OBJECT_INHERITS(thisObject, info());
-    Base::visitChildren(thisObject, visitor);
-}
-
 JSBigInt::JSBigInt(VM& vm, Structure* structure, unsigned length)
     : Base(vm, structure)
     , m_length(length)
@@ -92,7 +85,7 @@ JSBigInt* JSBigInt::createZero(VM& vm)
     return zeroBigInt;
 }
 
-size_t JSBigInt::allocationSize(unsigned length)
+inline size_t JSBigInt::allocationSize(unsigned length)
 {
     size_t sizeWithPadding = WTF::roundUpToMultipleOf<sizeof(size_t)>(sizeof(JSBigInt));
     return sizeWithPadding + length * sizeof(Digit);
@@ -104,12 +97,6 @@ JSBigInt* JSBigInt::createWithLength(VM& vm, unsigned length)
     bigInt->finishCreation(vm);
     return bigInt;
 }
-
-void JSBigInt::finishCreation(VM& vm)
-{
-    Base::finishCreation(vm);
-}
-
 
 JSBigInt* JSBigInt::createFrom(VM& vm, int32_t value)
 {
@@ -208,31 +195,31 @@ std::optional<uint8_t> JSBigInt::singleDigitValueForString()
     return { };
 }
 
-JSBigInt* JSBigInt::parseInt(ExecState* state, StringView s, ErrorParseMode parserMode)
+JSBigInt* JSBigInt::parseInt(ExecState* exec, StringView s, ErrorParseMode parserMode)
 {
     if (s.is8Bit())
-        return parseInt(state, s.characters8(), s.length(), parserMode);
-    return parseInt(state, s.characters16(), s.length(), parserMode);
+        return parseInt(exec, s.characters8(), s.length(), parserMode);
+    return parseInt(exec, s.characters16(), s.length(), parserMode);
 }
 
-JSBigInt* JSBigInt::parseInt(ExecState* state, VM& vm, StringView s, uint8_t radix, ErrorParseMode parserMode, ParseIntSign sign)
+JSBigInt* JSBigInt::parseInt(ExecState* exec, VM& vm, StringView s, uint8_t radix, ErrorParseMode parserMode, ParseIntSign sign)
 {
     if (s.is8Bit())
-        return parseInt(state, vm, s.characters8(), s.length(), 0, radix, parserMode, sign, ParseIntMode::DisallowEmptyString);
-    return parseInt(state, vm, s.characters16(), s.length(), 0, radix, parserMode, sign, ParseIntMode::DisallowEmptyString);
+        return parseInt(exec, vm, s.characters8(), s.length(), 0, radix, parserMode, sign, ParseIntMode::DisallowEmptyString);
+    return parseInt(exec, vm, s.characters16(), s.length(), 0, radix, parserMode, sign, ParseIntMode::DisallowEmptyString);
 }
 
-JSBigInt* JSBigInt::stringToBigInt(ExecState* state, StringView s)
+JSBigInt* JSBigInt::stringToBigInt(ExecState* exec, StringView s)
 {
-    return parseInt(state, s, ErrorParseMode::IgnoreExceptions);
+    return parseInt(exec, s, ErrorParseMode::IgnoreExceptions);
 }
 
-String JSBigInt::toString(ExecState* state, unsigned radix)
+String JSBigInt::toString(ExecState* exec, unsigned radix)
 {
     if (this->isZero())
-        return state->vm().smallStrings.singleCharacterStringRep('0');
+        return exec->vm().smallStrings.singleCharacterStringRep('0');
 
-    return toStringGeneric(state, this, radix);
+    return toStringGeneric(exec, this, radix);
 }
 
 inline bool JSBigInt::isZero()
@@ -250,9 +237,9 @@ inline void JSBigInt::inplaceMultiplyAdd(uintptr_t factor, uintptr_t summand)
     internalMultiplyAdd(this, factor, summand, length(), this);
 }
 
-JSBigInt* JSBigInt::multiply(ExecState* state, JSBigInt* x, JSBigInt* y)
+JSBigInt* JSBigInt::multiply(ExecState* exec, JSBigInt* x, JSBigInt* y)
 {
-    VM& vm = state->vm();
+    VM& vm = exec->vm();
 
     if (x->isZero())
         return x;
@@ -270,14 +257,14 @@ JSBigInt* JSBigInt::multiply(ExecState* state, JSBigInt* x, JSBigInt* y)
     return result->rightTrim(vm);
 }
 
-JSBigInt* JSBigInt::divide(ExecState* state, JSBigInt* x, JSBigInt* y)
+JSBigInt* JSBigInt::divide(ExecState* exec, JSBigInt* x, JSBigInt* y)
 {
     // 1. If y is 0n, throw a RangeError exception.
-    VM& vm = state->vm();
+    VM& vm = exec->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     if (y->isZero()) {
-        throwRangeError(state, scope, ASCIILiteral("0 is an invalid divisor value."));
+        throwRangeError(exec, scope, ASCIILiteral("0 is an invalid divisor value."));
         return nullptr;
     }
 
@@ -323,6 +310,77 @@ JSBigInt* JSBigInt::unaryMinus(VM& vm, JSBigInt* x)
     return result;
 }
 
+JSBigInt* JSBigInt::remainder(ExecState* exec, JSBigInt* x, JSBigInt* y)
+{
+    // 1. If y is 0n, throw a RangeError exception.
+    VM& vm = exec->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    
+    if (y->isZero()) {
+        throwRangeError(exec, scope, ASCIILiteral("0 is an invalid divisor value."));
+        return nullptr;
+    }
+
+    // 2. Return the JSBigInt representing x modulo y.
+    // See https://github.com/tc39/proposal-bigint/issues/84 though.
+    if (absoluteCompare(x, y) == ComparisonResult::LessThan)
+        return x;
+
+    JSBigInt* remainder;
+    if (y->length() == 1) {
+        Digit divisor = y->digit(0);
+        if (divisor == 1)
+            return createZero(vm);
+
+        Digit remainderDigit;
+        absoluteDivWithDigitDivisor(vm, x, divisor, nullptr, remainderDigit);
+        if (!remainderDigit)
+            return createZero(vm);
+
+        remainder = createWithLength(vm, 1);
+        remainder->setDigit(0, remainderDigit);
+    } else
+        absoluteDivWithBigIntDivisor(vm, x, y, nullptr, &remainder);
+
+    remainder->setSign(x->sign());
+    return remainder->rightTrim(vm);
+}
+
+JSBigInt* JSBigInt::add(VM& vm, JSBigInt* x, JSBigInt* y)
+{
+    bool xSign = x->sign();
+
+    // x + y == x + y
+    // -x + -y == -(x + y)
+    if (xSign == y->sign())
+        return absoluteAdd(vm, x, y, xSign);
+
+    // x + -y == x - y == -(y - x)
+    // -x + y == y - x == -(x - y)
+    ComparisonResult comparisonResult = absoluteCompare(x, y);
+    if (comparisonResult == ComparisonResult::GreaterThan || comparisonResult == ComparisonResult::Equal)
+        return absoluteSub(vm, x, y, xSign);
+
+    return absoluteSub(vm, y, x, !xSign);
+}
+
+JSBigInt* JSBigInt::sub(VM& vm, JSBigInt* x, JSBigInt* y)
+{
+    bool xSign = x->sign();
+    if (xSign != y->sign()) {
+        // x - (-y) == x + y
+        // (-x) - y == -(x + y)
+        return absoluteAdd(vm, x, y, xSign);
+    }
+    // x - y == -(y - x)
+    // (-x) - (-y) == y - x == -(x - y)
+    ComparisonResult comparisonResult = absoluteCompare(x, y);
+    if (comparisonResult == ComparisonResult::GreaterThan || comparisonResult == ComparisonResult::Equal)
+        return absoluteSub(vm, x, y, xSign);
+
+    return absoluteSub(vm, y, x, !xSign);
+}
+
 #if USE(JSVALUE32_64)
 #define HAVE_TWO_DIGIT 1
 typedef uint64_t TwoDigit;
@@ -354,7 +412,7 @@ inline JSBigInt::Digit JSBigInt::digitSub(Digit a, Digit b, Digit& borrow)
 // Returns the low half of the result. High half is in {high}.
 inline JSBigInt::Digit JSBigInt::digitMul(Digit a, Digit b, Digit& high)
 {
-#if HAVE_TWO_DIGIT
+#if HAVE(TWO_DIGIT)
     TwoDigit result = static_cast<TwoDigit>(a) * static_cast<TwoDigit>(b);
     high = result >> digitBits;
 
@@ -433,49 +491,59 @@ inline JSBigInt::Digit JSBigInt::digitDiv(Digit high, Digit low, Digit divisor, 
     remainder = rem;
     return quotient;
 #else
-    static const Digit kHalfDigitBase = 1ull << halfDigitBits;
+    static constexpr Digit halfDigitBase = 1ull << halfDigitBits;
     // Adapted from Warren, Hacker's Delight, p. 152.
 #if USE(JSVALUE64)
     unsigned s = clz64(divisor);
 #else
     unsigned s = clz32(divisor);
 #endif
+    // If {s} is digitBits here, it causes an undefined behavior.
+    // But {s} is never digitBits since {divisor} is never zero here.
+    ASSERT(s != digitBits);
     divisor <<= s;
-    
+
     Digit vn1 = divisor >> halfDigitBits;
     Digit vn0 = divisor & halfDigitMask;
 
-    // {s} can be 0. "low >> digitBits == low" on x86, so we "&" it with
-    // {s_zero_mask} which is 0 if s == 0 and all 1-bits otherwise.
+    // {sZeroMask} which is 0 if s == 0 and all 1-bits otherwise.
+    // {s} can be 0. If {s} is 0, performing "low >> (digitBits - s)" must not be done since it causes an undefined behavior
+    // since `>> digitBits` is undefied in C++. Quoted from C++ spec, "The type of the result is that of the promoted left operand.
+    // The behavior is undefined if the right operand is negative, or greater than or equal to the length in bits of the promoted
+    // left operand". We mask the right operand of the shift by {shiftMask} (`digitBits - 1`), which makes `digitBits - 0` zero.
+    // This shifting produces a value which covers 0 < {s} <= (digitBits - 1) cases. {s} == digitBits never happen as we asserted.
+    // Since {sZeroMask} clears the value in the case of {s} == 0, {s} == 0 case is also covered.
     STATIC_ASSERT(sizeof(intptr_t) == sizeof(Digit));
-    Digit sZeroMask = static_cast<Digit>(static_cast<intptr_t>(-s) >> (digitBits - 1));
-    Digit un32 = (high << s) | ((low >> (digitBits - s)) & sZeroMask);
+    Digit sZeroMask = static_cast<Digit>((-static_cast<intptr_t>(s)) >> (digitBits - 1));
+    static constexpr unsigned shiftMask = digitBits - 1;
+    Digit un32 = (high << s) | ((low >> ((digitBits - s) & shiftMask)) & sZeroMask);
+
     Digit un10 = low << s;
     Digit un1 = un10 >> halfDigitBits;
     Digit un0 = un10 & halfDigitMask;
     Digit q1 = un32 / vn1;
     Digit rhat = un32 - q1 * vn1;
 
-    while (q1 >= kHalfDigitBase || q1 * vn0 > rhat * kHalfDigitBase + un1) {
+    while (q1 >= halfDigitBase || q1 * vn0 > rhat * halfDigitBase + un1) {
         q1--;
         rhat += vn1;
-        if (rhat >= kHalfDigitBase)
+        if (rhat >= halfDigitBase)
             break;
     }
 
-    Digit un21 = un32 * kHalfDigitBase + un1 - q1 * divisor;
+    Digit un21 = un32 * halfDigitBase + un1 - q1 * divisor;
     Digit q0 = un21 / vn1;
     rhat = un21 - q0 * vn1;
 
-    while (q0 >= kHalfDigitBase || q0 * vn0 > rhat * kHalfDigitBase + un0) {
+    while (q0 >= halfDigitBase || q0 * vn0 > rhat * halfDigitBase + un0) {
         q0--;
         rhat += vn1;
-        if (rhat >= kHalfDigitBase)
+        if (rhat >= halfDigitBase)
             break;
     }
 
-    remainder = (un21 * kHalfDigitBase + un0 - q0 * divisor) >> s;
-    return q1 * kHalfDigitBase + q0;
+    remainder = (un21 * halfDigitBase + un0 - q0 * divisor) >> s;
+    return q1 * halfDigitBase + q0;
 #endif
 }
 
@@ -575,10 +643,26 @@ bool JSBigInt::equals(JSBigInt* x, JSBigInt* y)
     return true;
 }
 
+JSBigInt::ComparisonResult JSBigInt::compare(JSBigInt* x, JSBigInt* y)
+{
+    bool xSign = x->sign();
+
+    if (xSign != y->sign())
+        return xSign ? ComparisonResult::LessThan : ComparisonResult::GreaterThan;
+
+    ComparisonResult result = absoluteCompare(x, y);
+    if (result == ComparisonResult::GreaterThan)
+        return xSign ? ComparisonResult::LessThan : ComparisonResult::GreaterThan;
+    if (result == ComparisonResult::LessThan)
+        return xSign ? ComparisonResult::GreaterThan : ComparisonResult::LessThan;
+
+    return ComparisonResult::Equal; 
+}
+
 inline JSBigInt::ComparisonResult JSBigInt::absoluteCompare(JSBigInt* x, JSBigInt* y)
 {
-    ASSERT(!x->length() || x->digit(0));
-    ASSERT(!y->length() || y->digit(0));
+    ASSERT(!x->length() || x->digit(x->length() - 1));
+    ASSERT(!y->length() || y->digit(y->length() - 1));
 
     int diff = x->length() - y->length();
     if (diff)
@@ -592,6 +676,84 @@ inline JSBigInt::ComparisonResult JSBigInt::absoluteCompare(JSBigInt* x, JSBigIn
         return ComparisonResult::Equal;
 
     return x->digit(i) > y->digit(i) ? ComparisonResult::GreaterThan : ComparisonResult::LessThan;
+}
+
+JSBigInt* JSBigInt::absoluteAdd(VM& vm, JSBigInt* x, JSBigInt* y, bool resultSign)
+{
+    if (x->length() < y->length())
+        return absoluteAdd(vm, y, x, resultSign);
+
+    if (x->isZero()) {
+        ASSERT(y->isZero());
+        return x;
+    }
+
+    if (y->isZero())
+        return resultSign == x->sign() ? x : unaryMinus(vm, x);
+
+    JSBigInt* result = JSBigInt::createWithLength(vm, x->length() + 1);
+    ASSERT(result);
+    Digit carry = 0;
+    unsigned i = 0;
+    for (; i < y->length(); i++) {
+        Digit newCarry = 0;
+        Digit sum = digitAdd(x->digit(i), y->digit(i), newCarry);
+        sum = digitAdd(sum, carry, newCarry);
+        result->setDigit(i, sum);
+        carry = newCarry;
+    }
+
+    for (; i < x->length(); i++) {
+        Digit newCarry = 0;
+        Digit sum = digitAdd(x->digit(i), carry, newCarry);
+        result->setDigit(i, sum);
+        carry = newCarry;
+    }
+
+    result->setDigit(i, carry);
+    result->setSign(resultSign);
+
+    return result->rightTrim(vm);
+}
+
+JSBigInt* JSBigInt::absoluteSub(VM& vm, JSBigInt* x, JSBigInt* y, bool resultSign)
+{
+    ComparisonResult comparisonResult = absoluteCompare(x, y);
+    ASSERT(x->length() >= y->length());
+    ASSERT(comparisonResult == ComparisonResult::GreaterThan || comparisonResult == ComparisonResult::Equal);
+
+    if (x->isZero()) {
+        ASSERT(y->isZero());
+        return x;
+    }
+
+    if (y->isZero())
+        return resultSign == x->sign() ? x : unaryMinus(vm, x);
+
+    if (comparisonResult == ComparisonResult::Equal)
+        return JSBigInt::createZero(vm);
+
+    JSBigInt* result = JSBigInt::createWithLength(vm, x->length());
+    Digit borrow = 0;
+    unsigned i = 0;
+    for (; i < y->length(); i++) {
+        Digit newBorrow = 0;
+        Digit difference = digitSub(x->digit(i), y->digit(i), newBorrow);
+        difference = digitSub(difference, borrow, newBorrow);
+        result->setDigit(i, difference);
+        borrow = newBorrow;
+    }
+
+    for (; i < x->length(); i++) {
+        Digit newBorrow = 0;
+        Digit difference = digitSub(x->digit(i), borrow, newBorrow);
+        result->setDigit(i, difference);
+        borrow = newBorrow;
+    }
+
+    ASSERT(!borrow);
+    result->setSign(resultSign);
+    return result->rightTrim(vm);
 }
 
 // Divides {x} by {divisor}, returning the result in {quotient} and {remainder}.
@@ -843,8 +1005,8 @@ constexpr uint8_t maxBitsPerCharTable[] = {
     162, 163, 165, 166,                         // 33..36
 };
 
-static const unsigned bitsPerCharTableShift = 5;
-static const size_t bitsPerCharTableMultiplier = 1u << bitsPerCharTableShift;
+static constexpr unsigned bitsPerCharTableShift = 5;
+static constexpr size_t bitsPerCharTableMultiplier = 1u << bitsPerCharTableShift;
 
 // Compute (an overapproximation of) the length of the resulting string:
 // Divide bit length of the BigInt by bits representable per character.
@@ -878,13 +1040,13 @@ uint64_t JSBigInt::calculateMaximumCharactersRequired(unsigned length, unsigned 
     return maximumCharactersRequired;
 }
 
-String JSBigInt::toStringGeneric(ExecState* state, JSBigInt* x, unsigned radix)
+String JSBigInt::toStringGeneric(ExecState* exec, JSBigInt* x, unsigned radix)
 {
     // FIXME: [JSC] Revisit usage of Vector into JSBigInt::toString
     // https://bugs.webkit.org/show_bug.cgi?id=18067
     Vector<LChar> resultString;
 
-    VM& vm = state->vm();
+    VM& vm = exec->vm();
 
     ASSERT(radix >= 2 && radix <= 36);
     ASSERT(!x->isZero());
@@ -897,7 +1059,7 @@ String JSBigInt::toStringGeneric(ExecState* state, JSBigInt* x, unsigned radix)
 
     if (maximumCharactersRequired > JSString::MaxLength) {
         auto scope = DECLARE_THROW_SCOPE(vm);
-        throwOutOfMemoryError(state, scope);
+        throwOutOfMemoryError(exec, scope);
         return String();
     }
 
@@ -967,14 +1129,19 @@ String JSBigInt::toStringGeneric(ExecState* state, JSBigInt* x, unsigned radix)
 
 JSBigInt* JSBigInt::rightTrim(VM& vm)
 {
-    if (isZero())
+    if (isZero()) {
+        ASSERT(!sign());
         return this;
+    }
 
-    unsigned nonZeroIndex = m_length - 1;
-    while (!digit(nonZeroIndex))
+    int nonZeroIndex = m_length - 1;
+    while (nonZeroIndex >= 0 && !digit(nonZeroIndex))
         nonZeroIndex--;
 
-    if (nonZeroIndex == m_length - 1)
+    if (nonZeroIndex < 0)
+        return createZero(vm);
+
+    if (nonZeroIndex == static_cast<int>(m_length - 1))
         return this;
 
     unsigned newLength = nonZeroIndex + 1;
@@ -987,10 +1154,9 @@ JSBigInt* JSBigInt::rightTrim(VM& vm)
     return trimmedBigInt;
 }
 
-JSBigInt* JSBigInt::allocateFor(ExecState* state, VM& vm, unsigned radix, unsigned charcount)
+JSBigInt* JSBigInt::allocateFor(ExecState* exec, VM& vm, unsigned radix, unsigned charcount)
 {
     ASSERT(2 <= radix && radix <= 36);
-    ASSERT(charcount >= 0);
 
     size_t bitsPerChar = maxBitsPerCharTable[radix];
     size_t chars = charcount;
@@ -1010,9 +1176,9 @@ JSBigInt* JSBigInt::allocateFor(ExecState* state, VM& vm, unsigned radix, unsign
         }
     }
 
-    if (state) {
+    if (exec) {
         auto scope = DECLARE_THROW_SCOPE(vm);
-        throwOutOfMemoryError(state, scope);
+        throwOutOfMemoryError(exec, scope);
     }
     return nullptr;
 }
@@ -1022,18 +1188,18 @@ size_t JSBigInt::estimatedSize(JSCell* cell)
     return Base::estimatedSize(cell) + jsCast<JSBigInt*>(cell)->m_length * sizeof(Digit);
 }
 
-double JSBigInt::toNumber(ExecState* state) const
+double JSBigInt::toNumber(ExecState* exec) const
 {
-    VM& vm = state->vm();
+    VM& vm = exec->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
-    throwTypeError(state, scope, ASCIILiteral("Conversion from 'BigInt' to 'number' is not allowed."));
+    throwTypeError(exec, scope, ASCIILiteral("Conversion from 'BigInt' to 'number' is not allowed."));
     return 0.0;
 }
 
-bool JSBigInt::getPrimitiveNumber(ExecState* state, double& number, JSValue& result) const
+bool JSBigInt::getPrimitiveNumber(ExecState* exec, double& number, JSValue& result) const
 {
     result = this;
-    number = toNumber(state);
+    number = toNumber(exec);
     return true;
 }
 
@@ -1043,9 +1209,9 @@ inline size_t JSBigInt::offsetOfData()
 }
 
 template <typename CharType>
-JSBigInt* JSBigInt::parseInt(ExecState* state, CharType*  data, unsigned length, ErrorParseMode errorParseMode)
+JSBigInt* JSBigInt::parseInt(ExecState* exec, CharType*  data, unsigned length, ErrorParseMode errorParseMode)
 {
-    VM& vm = state->vm();
+    VM& vm = exec->vm();
 
     unsigned p = 0;
     while (p < length && isStrWhiteSpace(data[p]))
@@ -1054,13 +1220,13 @@ JSBigInt* JSBigInt::parseInt(ExecState* state, CharType*  data, unsigned length,
     // Check Radix from frist characters
     if (static_cast<unsigned>(p) + 1 < static_cast<unsigned>(length) && data[p] == '0') {
         if (isASCIIAlphaCaselessEqual(data[p + 1], 'b'))
-            return parseInt(state, vm, data, length, p + 2, 2, errorParseMode, ParseIntSign::Unsigned, ParseIntMode::DisallowEmptyString);
+            return parseInt(exec, vm, data, length, p + 2, 2, errorParseMode, ParseIntSign::Unsigned, ParseIntMode::DisallowEmptyString);
         
         if (isASCIIAlphaCaselessEqual(data[p + 1], 'x'))
-            return parseInt(state, vm, data, length, p + 2, 16, errorParseMode, ParseIntSign::Unsigned, ParseIntMode::DisallowEmptyString);
+            return parseInt(exec, vm, data, length, p + 2, 16, errorParseMode, ParseIntSign::Unsigned, ParseIntMode::DisallowEmptyString);
         
         if (isASCIIAlphaCaselessEqual(data[p + 1], 'o'))
-            return parseInt(state, vm, data, length, p + 2, 8, errorParseMode, ParseIntSign::Unsigned, ParseIntMode::DisallowEmptyString);
+            return parseInt(exec, vm, data, length, p + 2, 8, errorParseMode, ParseIntSign::Unsigned, ParseIntMode::DisallowEmptyString);
     }
 
     ParseIntSign sign = ParseIntSign::Unsigned;
@@ -1073,7 +1239,7 @@ JSBigInt* JSBigInt::parseInt(ExecState* state, CharType*  data, unsigned length,
         }
     }
 
-    JSBigInt* result = parseInt(state, vm, data, length, p, 10, errorParseMode, sign);
+    JSBigInt* result = parseInt(exec, vm, data, length, p, 10, errorParseMode, sign);
 
     if (result && !result->isZero())
         result->setSign(sign == ParseIntSign::Signed);
@@ -1082,7 +1248,7 @@ JSBigInt* JSBigInt::parseInt(ExecState* state, CharType*  data, unsigned length,
 }
 
 template <typename CharType>
-JSBigInt* JSBigInt::parseInt(ExecState* state, VM& vm, CharType* data, unsigned length, unsigned startIndex, unsigned radix, ErrorParseMode errorParseMode, ParseIntSign sign, ParseIntMode parseMode)
+JSBigInt* JSBigInt::parseInt(ExecState* exec, VM& vm, CharType* data, unsigned length, unsigned startIndex, unsigned radix, ErrorParseMode errorParseMode, ParseIntSign sign, ParseIntMode parseMode)
 {
     ASSERT(length >= 0);
     unsigned p = startIndex;
@@ -1090,9 +1256,9 @@ JSBigInt* JSBigInt::parseInt(ExecState* state, VM& vm, CharType* data, unsigned 
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     if (parseMode != ParseIntMode::AllowEmptyString && startIndex == length) {
-        ASSERT(state);
+        ASSERT(exec);
         if (errorParseMode == ErrorParseMode::ThrowExceptions)
-            throwVMError(state, scope, createSyntaxError(state, "Failed to parse String to BigInt"));
+            throwVMError(exec, scope, createSyntaxError(exec, "Failed to parse String to BigInt"));
         return nullptr;
     }
 
@@ -1114,7 +1280,7 @@ JSBigInt* JSBigInt::parseInt(ExecState* state, VM& vm, CharType* data, unsigned 
     unsigned limita = 'a' + (radix - 10);
     unsigned limitA = 'A' + (radix - 10);
 
-    JSBigInt* result = allocateFor(state, vm, radix, length - p);
+    JSBigInt* result = allocateFor(exec, vm, radix, length - p);
     RETURN_IF_EXCEPTION(scope, nullptr);
 
     result->initialize(InitializationType::WithZero);
@@ -1137,9 +1303,9 @@ JSBigInt* JSBigInt::parseInt(ExecState* state, VM& vm, CharType* data, unsigned 
     if (p == length)
         return result->rightTrim(vm);
 
-    ASSERT(state);
+    ASSERT(exec);
     if (errorParseMode == ErrorParseMode::ThrowExceptions)
-        throwVMError(state, scope, createSyntaxError(state, "Failed to parse String to BigInt"));
+        throwVMError(exec, scope, createSyntaxError(exec, "Failed to parse String to BigInt"));
 
     return nullptr;
 }
@@ -1252,7 +1418,7 @@ JSBigInt::ComparisonResult JSBigInt::compareToDouble(JSBigInt* x, double y)
 
     // 0-indexed position of {x}'s most significant bit within the {msd}.
     int msdTopBit = digitBits - 1 - msdLeadingZeros;
-    ASSERT(msdTopBit == (xBitLength - 1) % digitBits);
+    ASSERT(msdTopBit == static_cast<int>((xBitLength - 1) % digitBits));
     
     // Shifted chunk of {mantissa} for comparing with {digit}.
     Digit compareMantissa;
