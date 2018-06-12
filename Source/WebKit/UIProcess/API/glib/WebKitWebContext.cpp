@@ -109,7 +109,9 @@ using namespace WebKit;
 enum {
     PROP_0,
 
+#if PLATFORM(GTK)
     PROP_LOCAL_STORAGE_DIRECTORY,
+#endif
     PROP_WEBSITE_DATA_MANAGER
 };
 
@@ -240,6 +242,12 @@ private:
 
     WebKitWebContext* m_webContext;
 };
+
+void webkitWebContextWillCloseAutomationSession(WebKitWebContext* webContext)
+{
+    webContext->priv->processPool->setAutomationSession(nullptr);
+    webContext->priv->automationSession = nullptr;
+}
 #endif // ENABLE(REMOTE_INSPECTOR)
 
 WEBKIT_DEFINE_TYPE(WebKitWebContext, webkit_web_context, G_TYPE_OBJECT)
@@ -263,8 +271,8 @@ static const char* injectedBundleDirectory()
         G_DIR_SEPARATOR_S "injected-bundle" G_DIR_SEPARATOR_S;
     return injectedBundlePath;
 #elif PLATFORM(WPE)
-    // FIXME: Make it possible to use installed injected bundle in WPE.
-    return nullptr;
+    static const char* injectedBundlePath = PKGLIBDIR G_DIR_SEPARATOR_S "injected-bundle" G_DIR_SEPARATOR_S;
+    return injectedBundlePath;
 #endif
 }
 
@@ -273,9 +281,11 @@ static void webkitWebContextGetProperty(GObject* object, guint propID, GValue* v
     WebKitWebContext* context = WEBKIT_WEB_CONTEXT(object);
 
     switch (propID) {
+#if PLATFORM(GTK)
     case PROP_LOCAL_STORAGE_DIRECTORY:
         g_value_set_string(value, context->priv->localStorageDirectory.data());
         break;
+#endif
     case PROP_WEBSITE_DATA_MANAGER:
         g_value_set_object(value, webkit_web_context_get_website_data_manager(context));
         break;
@@ -289,9 +299,11 @@ static void webkitWebContextSetProperty(GObject* object, guint propID, const GVa
     WebKitWebContext* context = WEBKIT_WEB_CONTEXT(object);
 
     switch (propID) {
+#if PLATFORM(GTK)
     case PROP_LOCAL_STORAGE_DIRECTORY:
         context->priv->localStorageDirectory = g_value_get_string(value);
         break;
+#endif
     case PROP_WEBSITE_DATA_MANAGER: {
         gpointer manager = g_value_get_object(value);
         context->priv->websiteDataManager = manager ? WEBKIT_WEBSITE_DATA_MANAGER(manager) : nullptr;
@@ -394,6 +406,7 @@ static void webkit_web_context_class_init(WebKitWebContextClass* webContextClass
     gObjectClass->constructed = webkitWebContextConstructed;
     gObjectClass->dispose = webkitWebContextDispose;
 
+#if PLATFORM(GTK)
     /**
      * WebKitWebContext:local-storage-directory:
      *
@@ -412,6 +425,7 @@ static void webkit_web_context_class_init(WebKitWebContextClass* webContextClass
             _("The directory where local storage data will be saved"),
             nullptr,
             static_cast<GParamFlags>(WEBKIT_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY)));
+#endif
 
     /**
      * WebKitWebContext:website-data-manager:
@@ -1337,6 +1351,7 @@ void webkit_web_context_set_web_extensions_initialization_user_data(WebKitWebCon
     context->priv->webExtensionsInitializationUserData = userData;
 }
 
+#if PLATFORM(GTK)
 /**
  * webkit_web_context_set_disk_cache_directory:
  * @context: a #WebKitWebContext
@@ -1359,6 +1374,7 @@ void webkit_web_context_set_disk_cache_directory(WebKitWebContext* context, cons
 
     context->priv->processPool->configuration().setDiskCacheDirectory(WebCore::FileSystem::pathByAppendingComponent(WebCore::FileSystem::stringFromFileSystemRepresentation(directory), networkCacheSubdirectory));
 }
+#endif
 
 /**
  * webkit_web_context_prefetch_dns:

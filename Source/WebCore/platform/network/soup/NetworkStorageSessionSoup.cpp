@@ -251,6 +251,7 @@ void NetworkStorageSession::getCredentialFromPersistentStorage(const ProtectionS
             data->completionHandler(Credential(user, String::fromUTF8(passwordData, length), CredentialPersistencePermanent));
         }, data.release());
 #else
+    UNUSED_PARAM(cancellable);
     UNUSED_PARAM(protectionSpace);
     completionHandler({ });
 #endif
@@ -317,6 +318,9 @@ Vector<Cookie> NetworkStorageSession::getCookies(const URL& url)
 {
     Vector<Cookie> cookies;
     GUniquePtr<SoupURI> uri = url.createSoupURI();
+    if (!uri)
+        return cookies;
+
     GUniquePtr<GSList> cookiesList(soup_cookie_jar_get_cookie_list(cookieStorage(), uri.get(), TRUE));
     for (GSList* item = cookiesList.get(); item; item = g_slist_next(item)) {
         GUniquePtr<SoupCookie> soupCookie(static_cast<SoupCookie*>(item->data));
