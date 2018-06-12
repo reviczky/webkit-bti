@@ -90,11 +90,10 @@ struct NetworkProcessCreationParameters {
 #endif
     String httpProxy;
     String httpsProxy;
-#if PLATFORM(COCOA)
     RetainPtr<CFDataRef> networkATSContext;
-#endif
     bool cookieStoragePartitioningEnabled;
     bool storageAccessAPIEnabled;
+    bool suppressesConnectionTerminationOnSystemChange;
 #endif
 
 #if USE(SOUP)
@@ -125,8 +124,6 @@ struct NetworkProcessCreationParameters {
     Vector<String> urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
     Vector<String> urlSchemesRegisteredAsCORSEnabled;
 
-    bool tracksResourceLoadMilestones { false };
-    
 #if ENABLE(WIFI_ASSERTIONS)
     unsigned wirelessContextIdentifier { 0 };
 #endif

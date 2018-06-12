@@ -2453,7 +2453,7 @@ static RefPtr<CSSBasicShapePolygon> consumeBasicShapePolygon(CSSParserTokenRange
 {
     RefPtr<CSSBasicShapePolygon> shape = CSSBasicShapePolygon::create();
     if (identMatches<CSSValueEvenodd, CSSValueNonzero>(args.peek().id())) {
-        shape->setWindRule(args.consumeIncludingWhitespace().id() == CSSValueEvenodd ? RULE_EVENODD : RULE_NONZERO);
+        shape->setWindRule(args.consumeIncludingWhitespace().id() == CSSValueEvenodd ? WindRule::EvenOdd : WindRule::NonZero);
         if (!consumeCommaIncludingWhitespace(args))
             return nullptr;
     }
@@ -2472,9 +2472,9 @@ static RefPtr<CSSBasicShapePolygon> consumeBasicShapePolygon(CSSParserTokenRange
 
 static RefPtr<CSSBasicShapePath> consumeBasicShapePath(CSSParserTokenRange& args)
 {
-    WindRule windRule = RULE_NONZERO;
+    WindRule windRule = WindRule::NonZero;
     if (identMatches<CSSValueEvenodd, CSSValueNonzero>(args.peek().id())) {
-        windRule = args.consumeIncludingWhitespace().id() == CSSValueEvenodd ? RULE_EVENODD : RULE_NONZERO;
+        windRule = args.consumeIncludingWhitespace().id() == CSSValueEvenodd ? WindRule::EvenOdd : WindRule::NonZero;
         if (!consumeCommaIncludingWhitespace(args))
             return nullptr;
     }
@@ -4134,7 +4134,7 @@ RefPtr<CSSValue> CSSPropertyParser::parseSingleValue(CSSPropertyID property, CSS
     case CSSPropertyWebkitBackdropFilter:
 #endif
         return consumeFilter(m_range, m_context, AllowedFilterFunctions::All);
-    case CSSPropertyColorFilter:
+    case CSSPropertyAppleColorFilter:
         if (!m_context.colorFilterEnabled)
             return nullptr;
         return consumeFilter(m_range, m_context, AllowedFilterFunctions::Color);

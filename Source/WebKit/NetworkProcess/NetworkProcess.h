@@ -41,10 +41,6 @@
 #include <wtf/RetainPtr.h>
 #include <wtf/WeakPtr.h>
 
-#if PLATFORM(IOS)
-#include "WebSQLiteDatabaseTracker.h"
-#endif
-
 namespace PAL {
 class SessionID;
 }
@@ -119,6 +115,7 @@ public:
 #if PLATFORM(COCOA)
     RetainPtr<CFDataRef> sourceApplicationAuditData() const;
     void clearHSTSCache(WebCore::NetworkStorageSession&, WallTime modifiedSince);
+    bool suppressesConnectionTerminationOnSystemChange() const { return m_suppressesConnectionTerminationOnSystemChange; }
 #endif
 
     void findPendingDownloadLocation(NetworkDataTask&, ResponseCompletionHandler&&, const WebCore::ResourceResponse&);
@@ -161,8 +158,6 @@ public:
 #if ENABLE(CONTENT_EXTENSIONS)
     NetworkContentRuleListManager& networkContentRuleListManager() { return m_NetworkContentRuleListManager; }
 #endif
-
-    bool tracksResourceLoadMilestones() const { return m_tracksResourceLoadMilestones; }
 
 private:
     NetworkProcess();
@@ -293,17 +288,13 @@ private:
     // multiple requests to clear the cache can come in before previous requests complete, and we need to wait for all of them.
     // In the future using WorkQueue and a counting semaphore would work, as would WorkQueue supporting the libdispatch concept of "work groups".
     dispatch_group_t m_clearCacheDispatchGroup;
-#endif
 
-#if PLATFORM(IOS)
-    WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
+    bool m_suppressesConnectionTerminationOnSystemChange { false };
 #endif
 
 #if ENABLE(CONTENT_EXTENSIONS)
     NetworkContentRuleListManager m_NetworkContentRuleListManager;
 #endif
-
-    bool m_tracksResourceLoadMilestones { false };
 };
 
 } // namespace WebKit

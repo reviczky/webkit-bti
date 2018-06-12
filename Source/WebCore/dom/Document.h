@@ -321,6 +321,7 @@ class Document
     , public TreeScope
     , public ScriptExecutionContext
     , public FontSelectorClient
+    , public CanMakeWeakPtr<Document>
     , public FrameDestructionObserver
     , public Supplementable<Document>
     , public Logger::Observer {
@@ -395,8 +396,8 @@ public:
     bool didDispatchViewportPropertiesChanged() const { return m_didDispatchViewportPropertiesChanged; }
 #endif
 
-    void setReferrerPolicy(ReferrerPolicy referrerPolicy) { m_referrerPolicy = referrerPolicy; }
-    ReferrerPolicy referrerPolicy() const { return m_referrerPolicy; }
+    void setReferrerPolicy(ReferrerPolicy);
+    ReferrerPolicy referrerPolicy() const { return m_referrerPolicy.value_or(ReferrerPolicy::NoReferrerWhenDowngrade); }
 
     WEBCORE_EXPORT DocumentType* doctype() const;
 
@@ -799,7 +800,7 @@ public:
     WEBCORE_EXPORT WindowProxy* windowProxy() const;
 
     Document& contextDocument() const;
-    void setContextDocument(Document& document) { m_contextDocument = document.createWeakPtr(); }
+    void setContextDocument(Document& document) { m_contextDocument = makeWeakPtr(document); }
 
     // Helper functions for forwarding DOMWindow event related tasks to the DOMWindow if it exists.
     void setWindowAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& value, DOMWrapperWorld&);
@@ -862,7 +863,7 @@ public:
     void processViewport(const String& features, ViewportArguments::Type origin);
     void processDisabledAdaptations(const String& adaptations);
     void updateViewportArguments();
-    void processReferrerPolicy(const String& policy);
+    void processReferrerPolicy(const String& policy, ReferrerPolicySource);
 
     // Returns the owning element in the parent document.
     // Returns 0 if this is the top level document.
@@ -1149,7 +1150,7 @@ public:
     bool fullScreenIsAllowedForElement(Element*) const;
     void fullScreenElementRemoved();
     void removeFullScreenElementOfSubtree(Node&, bool amongChildrenOnly = false);
-    bool isAnimatingFullScreen() const;
+    WEBCORE_EXPORT bool isAnimatingFullScreen() const;
     WEBCORE_EXPORT void setAnimatingFullScreen(bool);
 
     WEBCORE_EXPORT bool webkitFullscreenEnabled() const;
@@ -1311,7 +1312,6 @@ public:
     bool isCapturing() const { return MediaProducer::isCapturing(m_mediaState); }
     WEBCORE_EXPORT void updateIsPlayingMedia(uint64_t = HTMLMediaElementInvalidID);
     void pageMutedStateDidChange();
-    WeakPtr<Document> createWeakPtr() { return m_weakFactory.createWeakPtr(*this); }
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     void addPlaybackTargetPickerClient(MediaPlaybackTargetClient&);
@@ -1694,8 +1694,6 @@ private:
     RenderPtr<RenderView> m_renderView;
     mutable DocumentEventQueue m_eventQueue;
 
-    WeakPtrFactory<Document> m_weakFactory;
-
     HashSet<MediaCanStartListener*> m_mediaCanStartListeners;
 
 #if ENABLE(FULLSCREEN_API)
@@ -1826,7 +1824,7 @@ private:
     MediaProducer::MediaStateFlags m_mediaState { MediaProducer::IsNotPlaying };
     bool m_userHasInteractedWithMediaElement { false };
     PageCacheState m_pageCacheState { NotInPageCache };
-    ReferrerPolicy m_referrerPolicy { ReferrerPolicy::NoReferrerWhenDowngrade };
+    std::optional<ReferrerPolicy> m_referrerPolicy;
     ReadyState m_readyState { Complete };
 
     MutationObserverOptions m_mutationObserverTypes { 0 };

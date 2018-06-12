@@ -176,9 +176,6 @@ WebProcess::WebProcess()
     , m_pluginProcessConnectionManager(PluginProcessConnectionManager::create())
 #endif
     , m_nonVisibleProcessCleanupTimer(*this, &WebProcess::nonVisibleProcessCleanupTimerFired)
-#if PLATFORM(IOS)
-    , m_webSQLiteDatabaseTracker(*this)
-#endif
 {
     // Initialize our platform strategies.
     WebPlatformStrategies::initialize();
@@ -1183,6 +1180,13 @@ void WebProcess::webToStorageProcessConnectionClosed(WebToStorageProcessConnecti
     ASSERT(m_webToStorageProcessConnection == connection);
 
     m_webToStorageProcessConnection = nullptr;
+
+#if ENABLE(SERVICE_WORKER)
+    if (SWContextManager::singleton().connection()) {
+        RELEASE_LOG(ServiceWorker, "Service worker process is exiting because its storage process is gone");
+        _exit(EXIT_SUCCESS);
+    }
+#endif
 }
 
 WebToStorageProcessConnection& WebProcess::ensureWebToStorageProcessConnection(PAL::SessionID initialSessionID)
@@ -1408,16 +1412,16 @@ void WebProcess::cancelPrepareToSuspend()
     RELEASE_LOG(ProcessSuspension, "%p - WebProcess::cancelPrepareToSuspend()", this);
     setAllLayerTreeStatesFrozen(false);
 
+#if PLATFORM(IOS)
+    accessibilityProcessSuspendedNotification(false);
+#endif
+    
     // If we've already finished cleaning up and sent ProcessReadyToSuspend, we
     // shouldn't send DidCancelProcessSuspension; the UI process strictly expects one or the other.
     if (!m_pageMarkingLayersAsVolatileCounter)
         return;
 
     cancelMarkAllLayersVolatile();
-    
-#if PLATFORM(IOS)
-    accessibilityProcessSuspendedNotification(false);
-#endif
 
     RELEASE_LOG(ProcessSuspension, "%p - WebProcess::cancelPrepareToSuspend() Sending DidCancelProcessSuspension IPC message", this);
     parentProcessConnection()->send(Messages::WebProcessProxy::DidCancelProcessSuspension(), 0);
@@ -1681,9 +1685,9 @@ void WebProcess::registerServiceWorkerClients()
 #endif
 
 #if PLATFORM(MAC)
-void WebProcess::setScreenProperties(uint32_t primaryScreenID, const HashMap<uint32_t, WebCore::ScreenProperties>& properties)
+void WebProcess::setScreenProperties(const WebCore::ScreenProperties& properties)
 {
-    WebCore::setScreenProperties(primaryScreenID, properties);
+    WebCore::setScreenProperties(properties);
 }
 #endif
 

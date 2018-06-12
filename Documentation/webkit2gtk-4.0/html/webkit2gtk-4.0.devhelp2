@@ -177,6 +177,8 @@
     <keyword type="function" name="webkit_web_view_get_javascript_global_context ()" link="WebKitWebView.html#webkit-web-view-get-javascript-global-context" deprecated="2.22: Use jsc_value_get_context() instead."/>
     <keyword type="function" name="webkit_web_view_run_javascript ()" link="WebKitWebView.html#webkit-web-view-run-javascript"/>
     <keyword type="function" name="webkit_web_view_run_javascript_finish ()" link="WebKitWebView.html#webkit-web-view-run-javascript-finish"/>
+    <keyword type="function" name="webkit_web_view_run_javascript_in_world ()" link="WebKitWebView.html#webkit-web-view-run-javascript-in-world" since="2.22"/>
+    <keyword type="function" name="webkit_web_view_run_javascript_in_world_finish ()" link="WebKitWebView.html#webkit-web-view-run-javascript-in-world-finish" since="2.22"/>
     <keyword type="function" name="webkit_web_view_run_javascript_from_gresource ()" link="WebKitWebView.html#webkit-web-view-run-javascript-from-gresource"/>
     <keyword type="function" name="webkit_web_view_run_javascript_from_gresource_finish ()" link="WebKitWebView.html#webkit-web-view-run-javascript-from-gresource-finish"/>
     <keyword type="function" name="webkit_web_view_can_show_mime_type ()" link="WebKitWebView.html#webkit-web-view-can-show-mime-type"/>
@@ -952,6 +954,8 @@
     <keyword type="struct" name="struct WebKitFrame" link="WebKitFrame.html#WebKitFrame-struct"/>
     <keyword type="function" name="webkit_script_world_get_default ()" link="WebKitScriptWorld.html#webkit-script-world-get-default" since="2.2"/>
     <keyword type="function" name="webkit_script_world_new ()" link="WebKitScriptWorld.html#webkit-script-world-new" since="2.2"/>
+    <keyword type="function" name="webkit_script_world_new_with_name ()" link="WebKitScriptWorld.html#webkit-script-world-new-with-name" since="2.22"/>
+    <keyword type="function" name="webkit_script_world_get_name ()" link="WebKitScriptWorld.html#webkit-script-world-get-name" since="2.22"/>
     <keyword type="struct" name="struct WebKitScriptWorld" link="WebKitScriptWorld.html#WebKitScriptWorld-struct"/>
     <keyword type="signal" name="The “window-object-cleared” signal" link="WebKitScriptWorld.html#WebKitScriptWorld-window-object-cleared"/>
     <keyword type="function" name="webkit_web_hit_test_result_get_node ()" link="WebKitWebHitTestResult.html#webkit-web-hit-test-result-get-node" since="2.8"/>

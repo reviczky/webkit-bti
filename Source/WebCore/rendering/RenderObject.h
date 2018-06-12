@@ -102,7 +102,7 @@ struct AnnotatedRegionValue {
 #endif
 
 // Base class for all rendering tree objects.
-class RenderObject : public CachedImageClient {
+class RenderObject : public CachedImageClient, public CanMakeWeakPtr<RenderObject> {
     WTF_MAKE_ISO_ALLOCATED(RenderObject);
     friend class RenderBlock;
     friend class RenderBlockFlow;
@@ -113,8 +113,6 @@ public:
     // marked as anonymous in the constructor.
     explicit RenderObject(Node&);
     virtual ~RenderObject();
-
-    auto& weakPtrFactory() const { return m_weakFactory; }
 
     RenderTheme& theme() const;
 
@@ -477,6 +475,7 @@ public:
 
     bool posChildNeedsLayout() const { return m_bitfields.posChildNeedsLayout(); }
     bool needsSimplifiedNormalFlowLayout() const { return m_bitfields.needsSimplifiedNormalFlowLayout(); }
+    bool needsSimplifiedNormalFlowLayoutOnly() const;
     bool normalChildNeedsLayout() const { return m_bitfields.normalChildNeedsLayout(); }
     
     bool preferredLogicalWidthsDirty() const { return m_bitfields.preferredLogicalWidthsDirty(); }
@@ -838,8 +837,6 @@ private:
     RenderObject* m_previous;
     RenderObject* m_next;
 
-    WeakPtrFactory<RenderObject> m_weakFactory;
-
 #ifndef NDEBUG
     bool m_hasAXObject             : 1;
     bool m_setNeedsLayoutForbidden : 1;
@@ -1096,6 +1093,12 @@ inline bool RenderObject::backgroundIsKnownToBeObscured(const LayoutPoint& paint
         m_bitfields.setBoxDecorationState(boxDecorationState);
     }
     return m_bitfields.boxDecorationState() == HasBoxDecorationsAndBackgroundIsKnownToBeObscured;
+}
+
+inline bool RenderObject::needsSimplifiedNormalFlowLayoutOnly() const
+{
+    return m_bitfields.needsSimplifiedNormalFlowLayout() && !m_bitfields.needsLayout() && !m_bitfields.normalChildNeedsLayout()
+        && !m_bitfields.posChildNeedsLayout() && !m_bitfields.needsPositionedMovementLayout();
 }
 
 #if ENABLE(TREE_DEBUGGING)

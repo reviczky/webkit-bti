@@ -92,6 +92,7 @@
 #include <wtf/ProcessID.h>
 #include <wtf/Ref.h>
 #include <wtf/RefPtr.h>
+#include <wtf/RunLoop.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
 
@@ -107,6 +108,7 @@ OBJC_CLASS _WKRemoteObjectRegistry;
 #endif
 
 #if PLATFORM(COCOA)
+#include "DynamicViewportSizeUpdate.h"
 #include "LayerRepresentation.h"
 #include "TouchBarMenuData.h"
 #include "TouchBarMenuItemData.h"
@@ -121,7 +123,7 @@ OBJC_CLASS _WKRemoteObjectRegistry;
 #include <WebCore/WebMediaSessionManagerClient.h>
 #endif
 
-#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+#if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
 #include "DisplayLink.h"
 #endif
 
@@ -169,9 +171,9 @@ enum SelectionDirection : uint8_t;
 
 enum class AutoplayEvent;
 enum class HasInsecureContent;
-enum class NavigationPolicyCheck;
 enum class NotificationDirection;
 enum class ShouldSample;
+enum class ShouldTreatAsContinuingLoad;
 
 struct ApplicationManifest;
 struct BackForwardItemIdentifier;
@@ -321,7 +323,8 @@ class WebPageProxy : public API::ObjectImpl<API::Object::Type::Page>
 #endif
     , public WebPopupMenuProxy::Client
     , public IPC::MessageReceiver
-    , public IPC::MessageSender {
+    , public IPC::MessageSender
+    , public CanMakeWeakPtr<WebPageProxy> {
 public:
     static Ref<WebPageProxy> create(PageClient&, WebProcessProxy&, uint64_t pageID, Ref<API::PageConfiguration>&&);
     virtual ~WebPageProxy();
@@ -356,6 +359,7 @@ public:
     bool addsVisitedLinks() const { return m_addsVisitedLinks; }
     void setAddsVisitedLinks(bool addsVisitedLinks) { m_addsVisitedLinks = addsVisitedLinks; }
 
+    void exitFullscreenImmediately();
     void fullscreenMayReturnToInline();
     void didEnterFullscreen();
     void didExitFullscreen();
@@ -550,8 +554,7 @@ public:
     void overflowScrollWillStartScroll();
     void overflowScrollDidEndScroll();
 
-    void dynamicViewportSizeUpdate(const WebCore::FloatSize& viewLayoutSize, const WebCore::FloatSize& maximumUnobscuredSize, const WebCore::FloatRect& targetExposedContentRect, const WebCore::FloatRect& targetUnobscuredRect, const WebCore::FloatRect& targetUnobscuredRectInScrollViewCoordinates, const WebCore::FloatBoxExtent& unobscuredSafeAreaInsets, double targetScale, int32_t deviceOrientation);
-    void synchronizeDynamicViewportUpdate();
+    void dynamicViewportSizeUpdate(const WebCore::FloatSize& viewLayoutSize, const WebCore::FloatSize& maximumUnobscuredSize, const WebCore::FloatRect& targetExposedContentRect, const WebCore::FloatRect& targetUnobscuredRect, const WebCore::FloatRect& targetUnobscuredRectInScrollViewCoordinates, const WebCore::FloatBoxExtent& unobscuredSafeAreaInsets, double targetScale, int32_t deviceOrientation, DynamicViewportSizeUpdateID);
 
     void setViewportConfigurationViewLayoutSize(const WebCore::FloatSize&);
     void setMaximumUnobscuredSize(const WebCore::FloatSize&);
@@ -874,6 +877,7 @@ public:
     void getSourceForFrame(WebFrameProxy*, WTF::Function<void (const String&, CallbackBase::Error)>&&);
     void getWebArchiveOfFrame(WebFrameProxy*, Function<void (API::Data*, CallbackBase::Error)>&&);
     void runJavaScriptInMainFrame(const String&, bool, WTF::Function<void (API::SerializedScriptValue*, bool hadException, const WebCore::ExceptionDetails&, CallbackBase::Error)>&& callbackFunction);
+    void runJavaScriptInMainFrameScriptWorld(const String&, bool, const String& worldName, WTF::Function<void(API::SerializedScriptValue*, bool hadException, const WebCore::ExceptionDetails&, CallbackBase::Error)>&& callbackFunction);
     void forceRepaint(RefPtr<VoidCallback>&&);
 
     float headerHeight(WebFrameProxy&);
@@ -916,6 +920,7 @@ public:
     void processDidBecomeUnresponsive();
     void processDidBecomeResponsive();
     void processDidTerminate(ProcessTerminationReason);
+    void dispatchProcessDidTerminate(ProcessTerminationReason);
     void willChangeProcessIsResponsive();
     void didChangeProcessIsResponsive();
 
@@ -1260,8 +1265,6 @@ public:
 #if ENABLE(GAMEPAD)
     void gamepadActivity(const Vector<GamepadData>&, bool shouldMakeGamepadsVisible);
 #endif
-        
-    WeakPtr<WebPageProxy> createWeakPtr() const { return m_weakPtrFactory.createWeakPtr(*const_cast<WebPageProxy*>(this)); }
 
     void isLoadingChanged() { activityStateDidChange(WebCore::ActivityState::IsLoading); }
 
@@ -1480,7 +1483,7 @@ private:
     RefPtr<API::Navigation> reattachToWebProcessForReload();
     RefPtr<API::Navigation> reattachToWebProcessWithItem(WebBackForwardListItem&);
 
-    void loadRequestWithNavigation(API::Navigation&, WebCore::ResourceRequest&&, WebCore::ShouldOpenExternalURLsPolicy, API::Object* userData, WebCore::NavigationPolicyCheck);
+    void loadRequestWithNavigation(API::Navigation&, WebCore::ResourceRequest&&, WebCore::ShouldOpenExternalURLsPolicy, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad);
 
     void requestNotificationPermission(uint64_t notificationID, const String& originString);
     void showNotification(const String& title, const String& body, const String& iconURL, const String& tag, const String& lang, WebCore::NotificationDirection, const String& originString, uint64_t notificationID);
@@ -1662,7 +1665,6 @@ private:
     WebCore::FloatSize overrideScreenSize();
     float textAutosizingWidth();
 
-    void dynamicViewportUpdateChangedTarget(double newTargetScale, const WebCore::FloatPoint& newScrollPosition, uint64_t dynamicViewportSizeUpdateID);
     void couldNotRestorePageState();
     void restorePageState(std::optional<WebCore::FloatPoint> scrollPosition, const WebCore::FloatPoint& scrollOrigin, const WebCore::FloatBoxExtent& obscuredInsetsOnSave, double scale);
     void restorePageCenterAndScale(std::optional<WebCore::FloatPoint>, double scale);
@@ -1724,6 +1726,10 @@ private:
     void contentFilterDidBlockLoadForFrame(const WebCore::ContentFilterUnblockHandler&, uint64_t frameID);
 #endif
 
+    void tryReloadAfterProcessTermination();
+    void resetRecentCrashCountSoon();
+    void resetRecentCrashCount();
+
     API::DiagnosticLoggingClient* effectiveDiagnosticLoggingClient(WebCore::ShouldSample);
 
     void dispatchActivityStateChange();
@@ -1765,7 +1771,7 @@ private:
     void didRemoveAttachment(const String& identifier);
 #endif
 
-#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+#if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
     void startDisplayLink(unsigned observerID);
     void stopDisplayLink(unsigned observerID);
 #endif
@@ -1843,11 +1849,7 @@ private:
     VisibleContentRectUpdateInfo m_lastVisibleContentRectUpdate;
     uint64_t m_firstLayerTreeTransactionIdAfterDidCommitLoad { 0 };
     int32_t m_deviceOrientation { 0 };
-    uint64_t m_dynamicViewportSizeUpdateLayerTreeTransactionID { 0 };
-    uint64_t m_currentDynamicViewportSizeUpdateID { 0 };
     bool m_hasReceivedLayerTreeTransactionAfterDidCommitLoad { true };
-    bool m_dynamicViewportSizeUpdateWaitingForTarget { false };
-    bool m_dynamicViewportSizeUpdateWaitingForLayerTreeCommit { false };
     bool m_hasNetworkRequestsOnSuspended { false };
     bool m_isKeyboardAnimatingIn { false };
     bool m_isScrollingOrZooming { false };
@@ -2164,12 +2166,10 @@ private:
 
     bool m_isUsingHighPerformanceWebGL { false };
 
-    WeakPtrFactory<WebPageProxy> m_weakPtrFactory;
-
     HashMap<String, Ref<WebURLSchemeHandler>> m_urlSchemeHandlersByScheme;
     HashMap<uint64_t, Ref<WebURLSchemeHandler>> m_urlSchemeHandlersByIdentifier;
         
-#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+#if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
     std::unique_ptr<DisplayLink> m_displayLink;
 #endif
 
@@ -2179,6 +2179,10 @@ private:
     // and have a global collection of them per process pool
     // (e.g. for that process pool's page cache)
     RefPtr<SuspendedPageProxy> m_suspendedPage;
+
+    RunLoop::Timer<WebPageProxy> m_resetRecentCrashCountTimer;
+    unsigned m_recentCrashCount { 0 };
+
 };
 
 } // namespace WebKit

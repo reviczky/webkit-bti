@@ -216,7 +216,7 @@ static inline FilterOperations blendFunc(const CSSPropertyBlendingClient* anim, 
         listsMatch = anim->backdropFilterFunctionListsMatch();
         break;
 #endif
-    case CSSPropertyColorFilter:
+    case CSSPropertyAppleColorFilter:
         listsMatch = anim->colorFilterFunctionListsMatch();
         break;
     default:
@@ -1344,7 +1344,7 @@ public:
 class PropertyWrapperSVGPaint : public AnimationPropertyWrapperBase {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    PropertyWrapperSVGPaint(CSSPropertyID prop, const SVGPaintType& (RenderStyle::*paintTypeGetter)() const, Color (RenderStyle::*getter)() const, void (RenderStyle::*setter)(const Color&))
+    PropertyWrapperSVGPaint(CSSPropertyID prop, SVGPaintType (RenderStyle::*paintTypeGetter)() const, Color (RenderStyle::*getter)() const, void (RenderStyle::*setter)(const Color&))
         : AnimationPropertyWrapperBase(prop)
         , m_paintTypeGetter(paintTypeGetter)
         , m_getter(getter)
@@ -1365,7 +1365,7 @@ public:
         // We only support animations between SVGPaints that are pure Color values.
         // For everything else we must return true for this method, otherwise
         // we will try to animate between values forever.
-        if ((a->*m_paintTypeGetter)() == SVG_PAINTTYPE_RGBCOLOR) {
+        if ((a->*m_paintTypeGetter)() == SVGPaintType::RGBColor) {
             Color fromColor = (a->*m_getter)();
             Color toColor = (b->*m_getter)();
 
@@ -1384,8 +1384,8 @@ public:
 
     void blend(const CSSPropertyBlendingClient* anim, RenderStyle* dst, const RenderStyle* a, const RenderStyle* b, double progress) const override
     {
-        if ((a->*m_paintTypeGetter)() != SVG_PAINTTYPE_RGBCOLOR
-            || (b->*m_paintTypeGetter)() != SVG_PAINTTYPE_RGBCOLOR)
+        if ((a->*m_paintTypeGetter)() != SVGPaintType::RGBColor
+            || (b->*m_paintTypeGetter)() != SVGPaintType::RGBColor)
             return;
 
         Color fromColor = (a->*m_getter)();
@@ -1410,7 +1410,7 @@ public:
 #endif
 
 private:
-    const SVGPaintType& (RenderStyle::*m_paintTypeGetter)() const;
+    SVGPaintType (RenderStyle::*m_paintTypeGetter)() const;
     Color (RenderStyle::*m_getter)() const;
     void (RenderStyle::*m_setter)(const Color&);
 };
@@ -1564,7 +1564,7 @@ CSSPropertyAnimationWrapperMap::CSSPropertyAnimationWrapperMap()
 #if ENABLE(FILTERS_LEVEL_2)
         new PropertyWrapperFilter(CSSPropertyWebkitBackdropFilter, &RenderStyle::backdropFilter, &RenderStyle::setBackdropFilter),
 #endif
-        new PropertyWrapperFilter(CSSPropertyColorFilter, &RenderStyle::colorFilter, &RenderStyle::setColorFilter),
+        new PropertyWrapperFilter(CSSPropertyAppleColorFilter, &RenderStyle::appleColorFilter, &RenderStyle::setAppleColorFilter),
 
         new PropertyWrapperClipPath(CSSPropertyWebkitClipPath, &RenderStyle::clipPath, &RenderStyle::setClipPath),
 

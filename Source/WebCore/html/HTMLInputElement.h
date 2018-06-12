@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2000 Dirk Mueller (mueller@kde.org)
- * Copyright (C) 2004-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2018 Apple Inc. All rights reserved.
  * Copyright (C) 2012 Samsung Electronics. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
@@ -28,6 +28,7 @@
 #include "HTMLTextFormControlElement.h"
 #include "StepRange.h"
 #include <memory>
+#include <wtf/WeakPtr.h>
 
 #if PLATFORM(IOS)
 #include "DateComponents.h"
@@ -54,7 +55,7 @@ struct InputElementClickState {
     RefPtr<HTMLInputElement> checkedRadioButton;
 };
 
-class HTMLInputElement : public HTMLTextFormControlElement {
+class HTMLInputElement : public HTMLTextFormControlElement, public CanMakeWeakPtr<HTMLInputElement> {
     WTF_MAKE_ISO_ALLOCATED(HTMLInputElement);
 public:
     static Ref<HTMLInputElement> create(const QualifiedName&, Document&, HTMLFormElement*, bool createdByParser);
@@ -268,7 +269,7 @@ public:
     bool willRespondToMouseClickEvents() override;
 
 #if ENABLE(DATALIST_ELEMENT)
-    RefPtr<HTMLElement> list() const;
+    WEBCORE_EXPORT RefPtr<HTMLElement> list() const;
     RefPtr<HTMLDataListElement> dataList() const;
     void listAttributeTargetChanged();
 #endif
@@ -428,13 +429,15 @@ private:
     bool isOptionalFormControl() const final { return !isRequiredFormControl(); }
     bool isRequiredFormControl() const final;
     bool computeWillValidate() const final;
-    void requiredAttributeChanged() final;
+    void requiredStateChanged() final;
 
     void initializeInputType();
     void updateType();
     void runPostTypeUpdateTasks();
-    
+
     void subtreeHasChanged() final;
+    void disabledStateChanged() final;
+    void readOnlyStateChanged() final;
 
 #if ENABLE(DATALIST_ELEMENT)
     void resetListAttributeTargetObserver();

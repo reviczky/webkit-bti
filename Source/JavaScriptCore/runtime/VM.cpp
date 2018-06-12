@@ -310,6 +310,7 @@ VM::VM(VMType vmType, HeapType heapType)
     , structureSpace ISO_SUBSPACE_INIT(heap, destructibleCellHeapCellType.get(), Structure)
     , weakSetSpace ISO_SUBSPACE_INIT(heap, destructibleObjectHeapCellType.get(), JSWeakSet)
     , weakMapSpace ISO_SUBSPACE_INIT(heap, destructibleObjectHeapCellType.get(), JSWeakMap)
+    , errorInstanceSpace ISO_SUBSPACE_INIT(heap, destructibleObjectHeapCellType.get(), ErrorInstance)
 #if ENABLE(WEBASSEMBLY)
     , webAssemblyCodeBlockSpace ISO_SUBSPACE_INIT(heap, webAssemblyCodeBlockHeapCellType.get(), JSWebAssemblyCodeBlock)
     , webAssemblyFunctionSpace ISO_SUBSPACE_INIT(heap, cellJSValueOOBHeapCellType.get(), WebAssemblyFunction)
@@ -777,14 +778,16 @@ void VM::deleteAllCode(DeleteAllCodeEffort effort)
     });
 }
 
-void VM::shrinkFootprint()
+void VM::shrinkFootprintWhenIdle()
 {
-    sanitizeStackForVM(this);
-    deleteAllCode(DeleteAllCodeIfNotCollecting);
-    heap.collectNow(Synchronousness::Sync);
-    WTF::releaseFastMallocFreeMemory();
-    // FIXME: Consider stopping various automatic threads here.
-    // https://bugs.webkit.org/show_bug.cgi?id=185447
+    whenIdle([=] () {
+        sanitizeStackForVM(this);
+        deleteAllCode(DeleteAllCodeIfNotCollecting);
+        heap.collectNow(Synchronousness::Sync, CollectionScope::Full);
+        // FIXME: Consider stopping various automatic threads here.
+        // https://bugs.webkit.org/show_bug.cgi?id=185447
+        WTF::releaseFastMallocFreeMemory();
+    });
 }
 
 SourceProviderCache* VM::addSourceProviderCache(SourceProvider* sourceProvider)
@@ -1228,6 +1231,13 @@ ScratchBuffer* VM::scratchBufferForSize(size_t size)
 
     ScratchBuffer* result = m_scratchBuffers.last();
     return result;
+}
+
+void VM::clearScratchBuffers()
+{
+    auto lock = holdLock(m_scratchBufferLock);
+    for (auto* scratchBuffer : m_scratchBuffers)
+        scratchBuffer->setActiveLength(0);
 }
 
 } // namespace JSC

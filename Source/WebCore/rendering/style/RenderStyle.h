@@ -754,9 +754,9 @@ public:
     bool hasFilter() const { return !m_rareNonInheritedData->filter->operations.operations().isEmpty(); }
     bool hasReferenceFilterOnly() const;
 
-    FilterOperations& mutableColorFilter() { return m_rareInheritedData.access().colorFilter.access().operations; }
-    const FilterOperations& colorFilter() const { return m_rareInheritedData->colorFilter->operations; }
-    bool hasColorFilter() const { return !m_rareInheritedData->colorFilter->operations.operations().isEmpty(); }
+    FilterOperations& mutableAppleColorFilter() { return m_rareInheritedData.access().appleColorFilter.access().operations; }
+    const FilterOperations& appleColorFilter() const { return m_rareInheritedData->appleColorFilter->operations; }
+    bool hasAppleColorFilter() const { return !m_rareInheritedData->appleColorFilter->operations.operations().isEmpty(); }
 
 #if ENABLE(FILTERS_LEVEL_2)
     FilterOperations& mutableBackdropFilter() { return m_rareNonInheritedData.access().backdropFilter.access().operations; }
@@ -1162,7 +1162,7 @@ public:
     void setRubyPosition(RubyPosition position) { SET_VAR(m_rareInheritedData, rubyPosition, static_cast<unsigned>(position)); }
 
     void setFilter(const FilterOperations& ops) { SET_NESTED_VAR(m_rareNonInheritedData, filter, operations, ops); }
-    void setColorFilter(const FilterOperations& ops) { SET_NESTED_VAR(m_rareInheritedData, colorFilter, operations, ops); }
+    void setAppleColorFilter(const FilterOperations& ops) { SET_NESTED_VAR(m_rareInheritedData, appleColorFilter, operations, ops); }
 
 #if ENABLE(FILTERS_LEVEL_2)
     void setBackdropFilter(const FilterOperations& ops) { SET_NESTED_VAR(m_rareNonInheritedData, backdropFilter, operations, ops); }
@@ -1291,15 +1291,15 @@ public:
     const SVGRenderStyle& svgStyle() const { return m_svgStyle; }
     SVGRenderStyle& accessSVGStyle() { return m_svgStyle.access(); }
 
-    const SVGPaintType& fillPaintType() const { return svgStyle().fillPaintType(); }
+    SVGPaintType fillPaintType() const { return svgStyle().fillPaintType(); }
     Color fillPaintColor() const { return svgStyle().fillPaintColor(); }
-    void setFillPaintColor(const Color& color) { accessSVGStyle().setFillPaint(SVG_PAINTTYPE_RGBCOLOR, color, emptyString()); }
+    void setFillPaintColor(const Color& color) { accessSVGStyle().setFillPaint(SVGPaintType::RGBColor, color, emptyString()); }
     float fillOpacity() const { return svgStyle().fillOpacity(); }
     void setFillOpacity(float f) { accessSVGStyle().setFillOpacity(f); }
 
-    const SVGPaintType& strokePaintType() const { return svgStyle().strokePaintType(); }
+    SVGPaintType strokePaintType() const { return svgStyle().strokePaintType(); }
     Color strokePaintColor() const { return svgStyle().strokePaintColor(); }
-    void setStrokePaintColor(const Color& color) { accessSVGStyle().setStrokePaint(SVG_PAINTTYPE_RGBCOLOR, color, emptyString()); }
+    void setStrokePaintColor(const Color& color) { accessSVGStyle().setStrokePaint(SVGPaintType::RGBColor, color, emptyString()); }
     float strokeOpacity() const { return svgStyle().strokeOpacity(); }
     void setStrokeOpacity(float f) { accessSVGStyle().setStrokeOpacity(f); }
     Vector<SVGLengthValue> strokeDashArray() const { return svgStyle().strokeDashArray(); }
@@ -1668,7 +1668,7 @@ public:
 #endif
 
     static const FilterOperations& initialFilter() { static NeverDestroyed<FilterOperations> ops; return ops; }
-    static const FilterOperations& initialColorFilter() { static NeverDestroyed<FilterOperations> ops; return ops; }
+    static const FilterOperations& initialAppleColorFilter() { static NeverDestroyed<FilterOperations> ops; return ops; }
 
 #if ENABLE(FILTERS_LEVEL_2)
     static const FilterOperations& initialBackdropFilter() { static NeverDestroyed<FilterOperations> ops; return ops; }

@@ -439,8 +439,8 @@ void WebProcessPool::textCheckerStateChanged()
 void WebProcessPool::screenPropertiesStateChanged()
 {
 #if PLATFORM(MAC)
-    auto screenProperties = WebCore::getScreenProperties();
-    sendToAllProcesses(Messages::WebProcess::SetScreenProperties(screenProperties.first, screenProperties.second));
+    auto screenProperties = WebCore::collectScreenProperties();
+    sendToAllProcesses(Messages::WebProcess::SetScreenProperties(screenProperties));
 #endif
 }
 
@@ -518,8 +518,6 @@ NetworkProcessProxy& WebProcessPool::ensureNetworkProcess(WebsiteDataStore* with
     parameters.urlSchemesRegisteredAsDisplayIsolated = copyToVector(m_schemesToRegisterAsDisplayIsolated);
     parameters.urlSchemesRegisteredAsCORSEnabled = copyToVector(m_schemesToRegisterAsCORSEnabled);
     parameters.urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest = copyToVector(m_schemesToRegisterAsCanDisplayOnlyIfCanRequest);
-
-    parameters.tracksResourceLoadMilestones = m_configuration->tracksResourceLoadMilestones();
 
     // Add any platform specific parameters
     platformInitializeNetworkProcess(parameters);
@@ -721,17 +719,14 @@ void WebProcessPool::windowServerConnectionStateChanged()
 
 void WebProcessPool::setAnyPageGroupMightHavePrivateBrowsingEnabled(bool privateBrowsingEnabled)
 {
-    if (networkProcess()) {
-        if (privateBrowsingEnabled)
-            networkProcess()->send(Messages::NetworkProcess::AddWebsiteDataStore(WebsiteDataStoreParameters::legacyPrivateSessionParameters()), 0);
-        else
-            networkProcess()->send(Messages::NetworkProcess::DestroySession(PAL::SessionID::legacyPrivateSessionID()), 0);
-    }
-
-    if (privateBrowsingEnabled)
+    if (privateBrowsingEnabled) {
+        sendToNetworkingProcess(Messages::NetworkProcess::AddWebsiteDataStore(WebsiteDataStoreParameters::legacyPrivateSessionParameters()));
         sendToAllProcesses(Messages::WebProcess::AddWebsiteDataStore(WebsiteDataStoreParameters::legacyPrivateSessionParameters()));
-    else
+    } else {
+        sendToNetworkingProcess(Messages::NetworkProcess::DestroySession(PAL::SessionID::legacyPrivateSessionID()));
+        sendToStorageProcess(Messages::StorageProcess::DestroySession(PAL::SessionID::legacyPrivateSessionID()));
         sendToAllProcesses(Messages::WebProcess::DestroySession(PAL::SessionID::legacyPrivateSessionID()));
+    }
 }
 
 void (*s_invalidMessageCallback)(WKStringRef messageName);
@@ -815,9 +810,9 @@ RefPtr<WebProcessProxy> WebProcessPool::tryTakePrewarmedProcess(WebsiteDataStore
 #if PLATFORM(MAC)
 static void displayReconfigurationCallBack(CGDirectDisplayID display, CGDisplayChangeSummaryFlags flags, void *userInfo)
 {
-    auto screenProperties = WebCore::getScreenProperties();
+    auto screenProperties = WebCore::collectScreenProperties();
     for (auto& processPool : WebProcessPool::allProcessPools())
-        processPool->sendToAllProcesses(Messages::WebProcess::SetScreenProperties(screenProperties.first, screenProperties.second));
+        processPool->sendToAllProcesses(Messages::WebProcess::SetScreenProperties(screenProperties));
 }
 
 static void registerDisplayConfigurationCallback()
@@ -991,9 +986,6 @@ void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDa
 
 #if PLATFORM(MAC)
     registerDisplayConfigurationCallback();
-
-    auto screenProperties = WebCore::getScreenProperties();
-    process.send(Messages::WebProcess::SetScreenProperties(screenProperties.first, screenProperties.second), 0);
 #endif
 }
 
@@ -2143,6 +2135,10 @@ Ref<WebProcessProxy> WebProcessPool::processForNavigationInternal(WebPageProxy& 
 
     // FIXME: We should support process swap when a window has an opener.
     if (navigation.opener())
+        return page.process();
+
+    // FIXME: We should support process swap when a window has opened other windows via window.open.
+    if (navigation.hasOpenedFrames())
         return page.process();
 
     if (auto* backForwardListItem = navigation.targetItem()) {

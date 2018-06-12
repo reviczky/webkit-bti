@@ -144,12 +144,14 @@ public:
     bool processSwapsOnWindowOpenWithOpener() const { return m_processSwapsOnWindowOpenWithOpener; }
     void setProcessSwapsOnWindowOpenWithOpener(bool swaps) { m_processSwapsOnWindowOpenWithOpener = swaps; }
 
-    bool tracksResourceLoadMilestones() const { return m_tracksResourceLoadMilestones; }
-    void setTracksResourceLoadMilestones(bool track) { m_tracksResourceLoadMilestones = track; }
-
 #if ENABLE(WIFI_ASSERTIONS)
     unsigned wirelessContextIdentifier() const { return m_wirelessContextIdentifier; }
     void setWirelessContextIdentifier(unsigned wirelessContextIdentifier) { m_wirelessContextIdentifier = wirelessContextIdentifier; }
+#endif
+
+#if PLATFORM(COCOA)
+    bool suppressesConnectionTerminationOnSystemChange() const { return m_suppressesConnectionTerminationOnSystemChange; }
+    void setSuppressesConnectionTerminationOnSystemChange(bool suppressesConnectionTerminationOnSystemChange) { m_suppressesConnectionTerminationOnSystemChange = suppressesConnectionTerminationOnSystemChange; }
 #endif
 
 private:
@@ -186,7 +188,6 @@ private:
     bool m_processSwapsOnNavigation { false };
     bool m_alwaysKeepAndReuseSwappedProcesses { false };
     bool m_processSwapsOnWindowOpenWithOpener { false };
-    bool m_tracksResourceLoadMilestones { false };
 
 #if PLATFORM(IOS)
     WTF::String m_ctDataConnectionServiceType;
@@ -194,6 +195,10 @@ private:
 
 #if ENABLE(WIFI_ASSERTIONS)
     unsigned m_wirelessContextIdentifier { 0 };
+#endif
+
+#if PLATFORM(COCOA)
+    bool m_suppressesConnectionTerminationOnSystemChange { false };
 #endif
 };
 

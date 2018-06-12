@@ -52,10 +52,6 @@
 #include <wtf/MachSendRight.h>
 #endif
 
-#if PLATFORM(IOS)
-#include "WebSQLiteDatabaseTracker.h"
-#endif
-
 namespace API {
 class Object;
 }
@@ -375,7 +371,7 @@ private:
     void didReceiveSyncWebProcessMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
 
 #if PLATFORM(MAC)
-    void setScreenProperties(uint32_t primaryScreenID, const HashMap<uint32_t, WebCore::ScreenProperties>&);
+    void setScreenProperties(const WebCore::ScreenProperties&);
 #if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
     void scrollerStylePreferenceChanged(bool useOverlayScrollbars);
 #endif
@@ -440,10 +436,6 @@ private:
     WebCore::Timer m_nonVisibleProcessCleanupTimer;
 
     RefPtr<WebCore::ApplicationCacheStorage> m_applicationCacheStorage;
-
-#if PLATFORM(IOS)
-    WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
-#endif
 
     enum PageMarkingLayersAsVolatileCounterType { };
     using PageMarkingLayersAsVolatileCounter = RefCounter<PageMarkingLayersAsVolatileCounterType>;

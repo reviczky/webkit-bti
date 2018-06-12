@@ -1244,7 +1244,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             case IsUndefined:
                 setConstant(node, jsBoolean(
                     child.value().isCell()
-                    ? child.value().asCell()->structure()->masqueradesAsUndefined(m_codeBlock->globalObjectFor(node->origin.semantic))
+                    ? child.value().asCell()->structure(m_vm)->masqueradesAsUndefined(m_codeBlock->globalObjectFor(node->origin.semantic))
                     : child.value().isUndefined()));
                 break;
             case IsBoolean:
@@ -1265,7 +1265,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
                     if (object->type() == JSFunctionType)
                         setConstant(node, jsBoolean(false));
                     else if (!(object->inlineTypeFlags() & OverridesGetCallData))
-                        setConstant(node, jsBoolean(!child.value().asCell()->structure()->masqueradesAsUndefined(m_codeBlock->globalObjectFor(node->origin.semantic))));
+                        setConstant(node, jsBoolean(!child.value().asCell()->structure(m_vm)->masqueradesAsUndefined(m_codeBlock->globalObjectFor(node->origin.semantic))));
                     else {
                         // FIXME: This could just call getCallData.
                         // https://bugs.webkit.org/show_bug.cgi?id=144457
@@ -1815,8 +1815,12 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case AtomicsStore:
     case AtomicsSub:
     case AtomicsXor: {
-        if (node->op() != GetByVal)
-            clobberWorld();
+        if (node->op() != GetByVal) {
+            unsigned numExtraArgs = numExtraAtomicsArgs(node->op());
+            Edge storageEdge = m_graph.child(node, 2 + numExtraArgs);
+            if (!storageEdge)
+                clobberWorld();
+        }
         switch (node->arrayMode().type()) {
         case Array::SelectUsingPredictions:
         case Array::Unprofiled:
@@ -2364,6 +2368,26 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         setForNode(node, node->structure());
         break;
 
+    case ObjectCreate: {
+        if (JSValue base = forNode(node->child1()).m_value) {
+            if (base.isNull()) {
+                JSGlobalObject* globalObject = m_graph.globalObjectFor(node->origin.semantic);
+                m_state.setFoundConstants(true);
+                if (node->child1().useKind() == UntypedUse)
+                    didFoldClobberWorld();
+                setForNode(node, globalObject->nullPrototypeObjectStructure());
+                break;
+            }
+            // FIXME: We should get a structure for a constant prototype. We need to allow concurrent
+            // access to StructureCache from compiler threads.
+            // https://bugs.webkit.org/show_bug.cgi?id=186199
+        }
+        if (node->child1().useKind() == UntypedUse)
+            clobberWorld();
+        setTypeForNode(node, SpecFinalObject);
+        break;
+    }
+
     case ToObject:
     case CallObjectConstructor: {
         AbstractValue& source = forNode(node->child1());
@@ -2533,7 +2557,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case GetGlobalObject: {
         JSValue child = forNode(node->child1()).value();
         if (child) {
-            setConstant(node, *m_graph.freeze(JSValue(asObject(child)->globalObject())));
+            setConstant(node, *m_graph.freeze(JSValue(asObject(child)->globalObject(m_vm))));
             break;
         }
 
@@ -2759,6 +2783,9 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
                     clobberLimit, node->transition()->previous, node->transition()->next);
                 forNode(node->child1()).changeStructure(m_graph, node->transition()->next);
             }
+        } else {
+            // We're going to exit before we get here, but for the sake of validation, we've folded our write to StructureID.
+            didFoldClobberStructures();
         }
         break;
     case GetButterfly:
@@ -3502,6 +3529,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case LoopHint:
     case ZombieHint:
     case ExitOK:
+    case ClearCatchLocals:
         break;
 
     case CheckTypeInfoFlags: {

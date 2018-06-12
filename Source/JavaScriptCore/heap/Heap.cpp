@@ -62,10 +62,10 @@
 #include "SamplingProfiler.h"
 #include "ShadowChicken.h"
 #include "SpaceTimeMutatorScheduler.h"
-#include "SubspaceInlines.h"
-#include "SuperSampler.h"
 #include "StochasticSpaceTimeMutatorScheduler.h"
 #include "StopIfNecessaryTimer.h"
+#include "SubspaceInlines.h"
+#include "SuperSampler.h"
 #include "SweepingScope.h"
 #include "SynchronousStopTheWorldMutatorScheduler.h"
 #include "TypeProfiler.h"
@@ -77,9 +77,6 @@
 #include "WeakMapImplInlines.h"
 #include "WeakSetInlines.h"
 #include <algorithm>
-#if PLATFORM(IOS)
-#include <bmalloc/bmalloc.h>
-#endif
 #include <wtf/ListDump.h>
 #include <wtf/MainThread.h>
 #include <wtf/ParallelVectorIterator.h>
@@ -88,14 +85,13 @@
 #include <wtf/SimpleStats.h>
 #include <wtf/Threading.h>
 
-#if USE(FOUNDATION)
-#if __has_include(<objc/objc-internal.h>)
-#include <objc/objc-internal.h>
-#else
-extern "C" void* objc_autoreleasePoolPush(void);
-extern "C" void objc_autoreleasePoolPop(void *context);
+#if PLATFORM(IOS)
+#include <bmalloc/bmalloc.h>
 #endif
-#endif // USE(FOUNDATION)
+
+#if USE(FOUNDATION)
+#include <wtf/spi/cocoa/FoundationSPI.h>
+#endif
 
 #if USE(GLIB)
 #include "JSCGLibWrapperObject.h"
@@ -594,6 +590,7 @@ void Heap::finalizeUnconditionalFinalizers()
     finalizeMarkedUnconditionalFinalizers<ExecutableToCodeBlockEdge>(vm()->executableToCodeBlockEdgesWithFinalizers);
     finalizeMarkedUnconditionalFinalizers<JSWeakSet>(vm()->weakSetSpace);
     finalizeMarkedUnconditionalFinalizers<JSWeakMap>(vm()->weakMapSpace);
+    finalizeMarkedUnconditionalFinalizers<ErrorInstance>(vm()->errorInstanceSpace);
 
 #if ENABLE(WEBASSEMBLY)
     finalizeMarkedUnconditionalFinalizers<JSWebAssemblyCodeBlock>(vm()->webAssemblyCodeBlockSpace);
@@ -781,7 +778,6 @@ void Heap::endMarking()
         });
 
     assertMarkStacksEmpty();
-    m_weakReferenceHarvesters.removeAll();
 
     RELEASE_ASSERT(m_raceMarkStack->isEmpty());
     
@@ -2042,6 +2038,8 @@ void Heap::finalize()
     
     if (HasOwnPropertyCache* cache = vm()->hasOwnPropertyCache())
         cache->clear();
+
+    immutableButterflyToStringCache.clear();
     
     for (const HeapFinalizerCallback& callback : m_heapFinalizerCallbacks)
         callback.run(*vm());
@@ -2714,14 +2712,6 @@ void Heap::addCoreConstraints()
         ConstraintVolatility::GreyedByMarking);
     
     m_constraintSet->add(
-        "Wrh", "Weak Reference Harvesters",
-        [this] (SlotVisitor& slotVisitor) {
-            for (WeakReferenceHarvester* current = m_weakReferenceHarvesters.head(); current; current = current->next())
-                current->visitWeakReferences(slotVisitor);
-        },
-        ConstraintVolatility::GreyedByMarking);
-    
-    m_constraintSet->add(
         "O", "Output",
         [] (SlotVisitor& slotVisitor) {
             VM& vm = slotVisitor.vm();
@@ -2737,6 +2727,7 @@ void Heap::addCoreConstraints()
             };
             
             add(vm.executableToCodeBlockEdgesWithConstraints);
+            add(vm.weakMapSpace);
         },
         ConstraintVolatility::GreyedByMarking,
         ConstraintParallelism::Parallel);
