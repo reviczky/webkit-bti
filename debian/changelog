@@ -1,4 +1,4 @@
-webkit2gtk (2.20.3-1) UNRELEASED; urgency=medium
+webkit2gtk (2.20.3-1) unstable; urgency=high
 
   * New upstream release.
     + This fixes CVE-2018-4190, CVE-2018-4199, CVE-2018-4218,
@@ -17,7 +17,7 @@ webkit2gtk (2.20.3-1) UNRELEASED; urgency=medium
     + Update path of installed documentation. This changed upstream in
       2.20.2 but it was reverted in this release.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 09 May 2018 15:05:52 +0300
+ -- Alberto Garcia <berto@igalia.com>  Tue, 12 Jun 2018 12:58:42 +0300
 
 webkit2gtk (2.20.2-1) unstable; urgency=high
 
