@@ -1637,8 +1637,10 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_script_dialog_prompt_set_text@Base 2.5.3
  webkit_script_dialog_type_get_type@Base 2.5.3
  webkit_script_world_get_default@Base 2.5.3
+ webkit_script_world_get_name@Base 2.21.4
  webkit_script_world_get_type@Base 2.5.3
  webkit_script_world_new@Base 2.5.3
+ webkit_script_world_new_with_name@Base 2.21.4
  webkit_security_manager_get_type@Base 2.5.3
  webkit_security_manager_register_uri_scheme_as_cors_enabled@Base 2.5.3
  webkit_security_manager_register_uri_scheme_as_display_isolated@Base 2.5.3
@@ -1950,6 +1952,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_run_javascript_finish@Base 2.5.3
  webkit_web_view_run_javascript_from_gresource@Base 2.5.3
  webkit_web_view_run_javascript_from_gresource_finish@Base 2.5.3
+ webkit_web_view_run_javascript_in_world@Base 2.21.4
+ webkit_web_view_run_javascript_in_world_finish@Base 2.21.4
  webkit_web_view_save@Base 2.5.3
  webkit_web_view_save_finish@Base 2.5.3
  webkit_web_view_save_to_file@Base 2.5.3

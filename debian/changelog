@@ -3,6 +3,8 @@ webkit2gtk (2.21.4-1) UNRELEASED; urgency=medium
   * New upstream development release.
   * debian/patches/fix-ftbfs-sparc64.patch:
     + Refresh.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 12 Jun 2018 14:24:02 +0300
 
