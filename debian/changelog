@@ -8,9 +8,9 @@ webkit2gtk (2.20.3-1) UNRELEASED; urgency=medium
     + Remove compatibility with versions of debhelper < 9.20151219 in
       override_dh_strip, we require version 10 since 2.20.1-1.
   * debian/patches/fix-atomics-build.patch:
-    + Don't check for __sync_add_and_fetch_8() when deciding whether
-      linking against libatomic is necessary. We can simply check for
-      __atomic_fetch_add_8() since that covers all cases.
+    + The __atomic_fetch_add_8() check is now in this release. Update the
+      patch to enable THREADS_PREFER_PTHREAD_FLAG. This fixes the riscv64
+      build.
   * debian/rules:
     + Build with -DRELEASE_WITHOUT_OPTIMIZATIONS if "noopt" is set.
 
