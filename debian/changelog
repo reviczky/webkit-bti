@@ -1,6 +1,8 @@
 webkit2gtk (2.21.5-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * debian/control:
+    + Update Standards-Version to 4.1.5 (no changes needed).
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 30 Jul 2018 11:59:05 +0300
 
