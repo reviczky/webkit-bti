@@ -197,7 +197,7 @@ static inline size_t maxActivePixelMemory()
     static std::once_flag onceFlag;
     std::call_once(onceFlag, [] {
 #if PLATFORM(IOS)
-        maxPixelMemory = ramSize() / 2;
+        maxPixelMemory = ramSize() / 4;
 #else
         maxPixelMemory = std::max(ramSize() / 4, 2151 * MB);
 #endif
@@ -373,7 +373,7 @@ CanvasRenderingContext2D* HTMLCanvasElement::getContext2d(const String& type)
 
 static bool requiresAcceleratedCompositingForWebGL()
 {
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) || PLATFORM(WIN_CAIRO)
     return false;
 #else
     return true;
@@ -667,7 +667,7 @@ void HTMLCanvasElement::setSurfaceSize(const IntSize& size)
 static String toEncodingMimeType(const String& mimeType)
 {
     if (!MIMETypeRegistry::isSupportedImageMIMETypeForEncoding(mimeType))
-        return ASCIILiteral("image/png");
+        return "image/png"_s;
     return mimeType.convertToASCIILowercase();
 }
 
@@ -690,7 +690,7 @@ ExceptionOr<UncachedString> HTMLCanvasElement::toDataURL(const String& mimeType,
         return Exception { SecurityError };
 
     if (m_size.isEmpty() || !buffer())
-        return UncachedString { ASCIILiteral { "data:," } };
+        return UncachedString { "data:,"_s };
 
     auto encodingMIMEType = toEncodingMimeType(mimeType);
     auto quality = qualityFromJSValue(qualityValue);
@@ -773,10 +773,10 @@ RefPtr<MediaSample> HTMLCanvasElement::toMediaSample()
 ExceptionOr<Ref<MediaStream>> HTMLCanvasElement::captureStream(ScriptExecutionContext& context, std::optional<double>&& frameRequestRate)
 {
     if (!originClean())
-        return Exception(SecurityError, ASCIILiteral("Canvas is tainted"));
+        return Exception(SecurityError, "Canvas is tainted"_s);
 
     if (frameRequestRate && frameRequestRate.value() < 0)
-        return Exception(NotSupportedError, ASCIILiteral("frameRequestRate is negative"));
+        return Exception(NotSupportedError, "frameRequestRate is negative"_s);
 
     auto track = CanvasCaptureMediaStreamTrack::create(context, *this, WTFMove(frameRequestRate));
     auto stream =  MediaStream::create(context);

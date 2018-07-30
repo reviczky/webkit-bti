@@ -119,7 +119,7 @@ NetworkResourceLoader::NetworkResourceLoader(NetworkResourceLoadParameters&& par
     }
 
     if (synchronousReply || parameters.shouldRestrictHTTPResponseAccess) {
-        m_networkLoadChecker = std::make_unique<NetworkLoadChecker>(m_connection, m_parameters.webPageID, m_parameters.webFrameID, identifier(), FetchOptions { m_parameters.options }, m_parameters.sessionID, HTTPHeaderMap { m_parameters.originalRequestHeaders }, URL { m_parameters.request.url() }, m_parameters.sourceOrigin.copyRef(), m_parameters.preflightPolicy, originalRequest().httpReferrer());
+        m_networkLoadChecker = std::make_unique<NetworkLoadChecker>(FetchOptions { m_parameters.options }, m_parameters.sessionID, HTTPHeaderMap { m_parameters.originalRequestHeaders }, URL { m_parameters.request.url() }, m_parameters.sourceOrigin.copyRef(), m_parameters.preflightPolicy, originalRequest().httpReferrer(), shouldCaptureExtraNetworkLoadMetrics());
         if (m_parameters.cspResponseHeaders)
             m_networkLoadChecker->setCSPResponseHeaders(ContentSecurityPolicyResponseHeaders { m_parameters.cspResponseHeaders.value() });
 #if ENABLE(CONTENT_EXTENSIONS)
@@ -145,7 +145,7 @@ bool NetworkResourceLoader::canUseCache(const ResourceRequest& request) const
 
     if (!request.url().protocolIsInHTTPFamily())
         return false;
-    if (originalRequest().cachePolicy() == WebCore::DoNotUseAnyCache)
+    if (originalRequest().cachePolicy() == WebCore::ResourceRequestCachePolicy::DoNotUseAnyCache)
         return false;
 
     return true;
@@ -184,7 +184,7 @@ void NetworkResourceLoader::start()
     m_wasStarted = true;
 
     if (m_networkLoadChecker) {
-        m_networkLoadChecker->check(ResourceRequest { originalRequest() }, [this] (auto&& result) {
+        m_networkLoadChecker->check(ResourceRequest { originalRequest() }, this, [this] (auto&& result) {
             if (!result.has_value()) {
                 if (!result.error().isCancellation())
                     this->didFailLoading(result.error());
@@ -215,14 +215,14 @@ void NetworkResourceLoader::retrieveCacheEntry(const ResourceRequest& request)
     ASSERT(canUseCache(request));
 
     RefPtr<NetworkResourceLoader> loader(this);
-    m_cache->retrieve(request, { m_parameters.webPageID, m_parameters.webFrameID }, [this, loader = WTFMove(loader), request = ResourceRequest { request }](auto entry) mutable {
-#if RELEASE_LOG_DISABLED
-        UNUSED_PARAM(this);
-#endif
+    m_cache->retrieve(request, { m_parameters.webPageID, m_parameters.webFrameID }, [this, loader = WTFMove(loader), request = ResourceRequest { request }](auto entry, auto info) mutable {
         if (loader->hasOneRef()) {
             // The loader has been aborted and is only held alive by this lambda.
             return;
         }
+
+        loader->logSlowCacheRetrieveIfNeeded(info);
+
         if (!entry) {
             RELEASE_LOG_IF_ALLOWED("retrieveCacheEntry: Resource not in cache (pageID = %" PRIu64 ", frameID = %" PRIu64 ", resourceID = %" PRIu64 ", isMainResource = %d, isSynchronous = %d)", m_parameters.webPageID, m_parameters.webFrameID, m_parameters.identifier, isMainResource(), isSynchronous());
             loader->startNetworkLoad(WTFMove(request), FirstLoad::Yes);
@@ -238,7 +238,7 @@ void NetworkResourceLoader::retrieveCacheEntry(const ResourceRequest& request)
             loader->startNetworkLoad(WTFMove(request), FirstLoad::Yes);
             return;
         }
-        if (entry->needsValidation() || request.cachePolicy() == WebCore::RefreshAnyCacheData) {
+        if (entry->needsValidation() || request.cachePolicy() == WebCore::ResourceRequestCachePolicy::RefreshAnyCacheData) {
             RELEASE_LOG_IF_ALLOWED("retrieveCacheEntry: Validating cache entry (pageID = %" PRIu64 ", frameID = %" PRIu64 ", resourceID = %" PRIu64 ", isMainResource = %d, isSynchronous = %d)", m_parameters.webPageID, m_parameters.webFrameID, m_parameters.identifier, isMainResource(), isSynchronous());
             loader->validateCacheEntry(WTFMove(entry));
             return;
@@ -374,7 +374,8 @@ bool NetworkResourceLoader::shouldInterruptLoadForXFrameOptions(const String& xF
         return true;
     case XFrameOptionsSameOrigin: {
         auto origin = SecurityOrigin::create(url);
-        if (!origin->isSameSchemeHostPort(*m_parameters.sourceOrigin))
+        auto topFrameOrigin = m_parameters.frameAncestorOrigins.last();
+        if (!origin->isSameSchemeHostPort(*topFrameOrigin))
             return true;
         for (auto& ancestorOrigin : m_parameters.frameAncestorOrigins) {
             if (!origin->isSameSchemeHostPort(*ancestorOrigin))
@@ -426,8 +427,11 @@ auto NetworkResourceLoader::didReceiveResponse(ResourceResponse&& receivedRespon
 
     m_response = WTFMove(receivedResponse);
 
-    if (shouldCaptureExtraNetworkLoadMetrics())
-        m_connection->addNetworkLoadInformationResponse(identifier(), m_response);
+    if (shouldCaptureExtraNetworkLoadMetrics() && m_networkLoadChecker) {
+        auto information = m_networkLoadChecker->takeNetworkLoadInformation();
+        information.response = m_response;
+        m_connection->addNetworkLoadInformation(identifier(), WTFMove(information));
+    }
 
     // For multipart/x-mixed-replace didReceiveResponseAsync gets called multiple times and buffering would require special handling.
     if (!isSynchronous() && m_response.isMultipart())
@@ -568,7 +572,7 @@ void NetworkResourceLoader::didBlockAuthenticationChallenge()
     send(Messages::WebResourceLoader::DidBlockAuthenticationChallenge());
 }
 
-void NetworkResourceLoader::willSendRedirectedRequest(ResourceRequest&& request, WebCore::ResourceRequest&& redirectRequest, ResourceResponse&& redirectResponse)
+void NetworkResourceLoader::willSendRedirectedRequest(ResourceRequest&& request, ResourceRequest&& redirectRequest, ResourceResponse&& redirectResponse)
 {
     ++m_redirectCount;
 
@@ -576,39 +580,36 @@ void NetworkResourceLoader::willSendRedirectedRequest(ResourceRequest&& request,
         m_cache->storeRedirect(request, redirectResponse, redirectRequest);
 
     if (m_networkLoadChecker) {
-        m_networkLoadChecker->checkRedirection(redirectResponse, WTFMove(redirectRequest), [protectedThis = makeRef(*this), this, storedCredentialsPolicy = m_networkLoadChecker->storedCredentialsPolicy(), request = WTFMove(request), redirectResponse](auto&& result) mutable {
+        m_networkLoadChecker->storeRedirectionIfNeeded(request, redirectResponse);
+        m_networkLoadChecker->checkRedirection(WTFMove(request), WTFMove(redirectRequest), WTFMove(redirectResponse), this, [protectedThis = makeRef(*this), this, storedCredentialsPolicy = m_networkLoadChecker->storedCredentialsPolicy()](auto&& result) mutable {
             if (!result.has_value()) {
                 if (result.error().isCancellation())
                     return;
-
-                if (m_parameters.options.redirect == FetchOptions::Redirect::Manual) {
-                    this->didFinishWithRedirectResponse(WTFMove(redirectResponse));
-                    return;
-                }
 
                 this->didFailLoading(result.error());
                 return;
             }
 
-            if (storedCredentialsPolicy != m_networkLoadChecker->storedCredentialsPolicy()) {
-                // We need to restart the load to update the session according the new credential policy.
-                if (m_networkLoad)
-                    m_networkLoad->cancel();
-                auto request = WTFMove(result.value());
-                m_networkLoadChecker->prepareRedirectedRequest(request);
-
-                this->startNetworkLoad(WTFMove(request), FirstLoad::No);
+            if (m_parameters.options.redirect == FetchOptions::Redirect::Manual) {
+                this->didFinishWithRedirectResponse(WTFMove(result->redirectResponse));
                 return;
             }
 
             if (this->isSynchronous()) {
+                if (storedCredentialsPolicy != m_networkLoadChecker->storedCredentialsPolicy()) {
+                    // We need to restart the load to update the session according the new credential policy.
+                    this->restartNetworkLoad(WTFMove(result->redirectRequest));
+                    return;
+                }
+
                 // We do not support prompting for credentials for synchronous loads. If we ever change this policy then
                 // we need to take care to prompt if and only if request and redirectRequest are not mixed content.
-                this->continueWillSendRequest(WTFMove(result.value()), false);
+                this->continueWillSendRequest(WTFMove(result->redirectRequest), false);
                 return;
             }
 
-            this->continueWillSendRedirectedRequest(WTFMove(request), WTFMove(result.value()), WTFMove(redirectResponse));
+            m_shouldRestartLoad = storedCredentialsPolicy != m_networkLoadChecker->storedCredentialsPolicy();
+            this->continueWillSendRedirectedRequest(WTFMove(result->request), WTFMove(result->redirectRequest), WTFMove(result->redirectResponse));
         });
         return;
     }
@@ -644,12 +645,28 @@ ResourceResponse NetworkResourceLoader::sanitizeResponseIfPossible(ResourceRespo
     return WTFMove(response);
 }
 
+void NetworkResourceLoader::restartNetworkLoad(WebCore::ResourceRequest&& newRequest)
+{
+    if (m_networkLoad)
+        m_networkLoad->cancel();
+    if (m_networkLoadChecker)
+        m_networkLoadChecker->prepareRedirectedRequest(newRequest);
+
+    startNetworkLoad(WTFMove(newRequest), FirstLoad::No);
+}
+
 void NetworkResourceLoader::continueWillSendRequest(ResourceRequest&& newRequest, bool isAllowedToAskUserForCredentials)
 {
+    if (m_shouldRestartLoad) {
+        m_shouldRestartLoad = false;
+        restartNetworkLoad(WTFMove(newRequest));
+        return;
+    }
+
     if (m_networkLoadChecker) {
         // FIXME: We should be doing this check when receiving the redirection and not allow about protocol as per fetch spec.
         if (!newRequest.url().protocolIsInHTTPFamily() && !newRequest.url().isBlankURL() && m_redirectCount) {
-            didFailLoading(ResourceError { String { }, 0, newRequest.url(), ASCIILiteral("Redirection to URL with a scheme that is not HTTP(S)"), ResourceError::Type::AccessControl });
+            didFailLoading(ResourceError { String { }, 0, newRequest.url(), "Redirection to URL with a scheme that is not HTTP(S)"_s, ResourceError::Type::AccessControl });
             return;
         }
     }
@@ -987,7 +1004,7 @@ static void logBlockedCookieInformation(const String& label, const void* loggedO
     LOCAL_LOG(R"(  "isSameSite": "%{public}s",)", sameSiteInfo.isSameSite ? "true" : "false");
     LOCAL_LOG(R"(  "isTopSite": "%{public}s",)", sameSiteInfo.isTopSite ? "true" : "false");
     LOCAL_LOG(R"(  "cookies": [])");
-    LOCAL_LOG(R"(  "})");
+    LOCAL_LOG(R"(  })");
 #undef LOCAL_LOG
 #undef LOCAL_LOG_IF_ALLOWED
 }
@@ -1079,6 +1096,40 @@ void NetworkResourceLoader::sendCSPViolationReport(URL&& reportURL, Ref<FormData
 void NetworkResourceLoader::enqueueSecurityPolicyViolationEvent(WebCore::SecurityPolicyViolationEvent::Init&& eventInit)
 {
     send(Messages::WebPage::EnqueueSecurityPolicyViolationEvent { m_parameters.webFrameID, WTFMove(eventInit) }, m_parameters.webPageID);
+}
+
+void NetworkResourceLoader::logSlowCacheRetrieveIfNeeded(const NetworkCache::Cache::RetrieveInfo& info)
+{
+#if RELEASE_LOG_DISABLED
+    UNUSED_PARAM(info);
+#else
+    if (!isAlwaysOnLoggingAllowed())
+        return;
+    auto duration = info.completionTime - info.startTime;
+    if (duration < 1_s)
+        return;
+    RELEASE_LOG_IF_ALLOWED("logSlowCacheRetrieveIfNeeded: Took %.0fms, priority %d", duration.milliseconds(), info.priority);
+    if (info.wasSpeculativeLoad)
+        RELEASE_LOG_IF_ALLOWED("logSlowCacheRetrieveIfNeeded: Was speculative load");
+    if (!info.storageTimings.startTime)
+        return;
+    RELEASE_LOG_IF_ALLOWED("logSlowCacheRetrieveIfNeeded: Storage retrieve time %.0fms", (info.storageTimings.completionTime - info.storageTimings.startTime).milliseconds());
+    if (info.storageTimings.dispatchTime) {
+        auto time = (info.storageTimings.dispatchTime - info.storageTimings.startTime).milliseconds();
+        auto count = info.storageTimings.dispatchCountAtDispatch - info.storageTimings.dispatchCountAtStart;
+        RELEASE_LOG_IF_ALLOWED("logSlowCacheRetrieveIfNeeded: Dispatch delay %.0fms, dispatched %lu resources first", time, count);
+    }
+    if (info.storageTimings.recordIOStartTime)
+        RELEASE_LOG_IF_ALLOWED("logSlowCacheRetrieveIfNeeded: Record I/O time %.0fms", (info.storageTimings.recordIOEndTime - info.storageTimings.recordIOStartTime).milliseconds());
+    if (info.storageTimings.blobIOStartTime)
+        RELEASE_LOG_IF_ALLOWED("logSlowCacheRetrieveIfNeeded: Blob I/O time %.0fms", (info.storageTimings.blobIOEndTime - info.storageTimings.blobIOStartTime).milliseconds());
+    if (info.storageTimings.synchronizationInProgressAtDispatch)
+        RELEASE_LOG_IF_ALLOWED("logSlowCacheRetrieveIfNeeded: Synchronization was in progress");
+    if (info.storageTimings.shrinkInProgressAtDispatch)
+        RELEASE_LOG_IF_ALLOWED("logSlowCacheRetrieveIfNeeded: Shrink was in progress");
+    if (info.storageTimings.wasCanceled)
+        RELEASE_LOG_IF_ALLOWED("logSlowCacheRetrieveIfNeeded: Retrieve was canceled");
+#endif
 }
 
 } // namespace WebKit

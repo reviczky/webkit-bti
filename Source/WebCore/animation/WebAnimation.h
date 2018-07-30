@@ -63,17 +63,12 @@ public:
 
     AnimationEffectReadOnly* effect() const { return m_effect.get(); }
     void setEffect(RefPtr<AnimationEffectReadOnly>&&);
-    void setEffectInternal(RefPtr<AnimationEffectReadOnly>&&, bool = false);
     AnimationTimeline* timeline() const { return m_timeline.get(); }
     virtual void setTimeline(RefPtr<AnimationTimeline>&&);
 
-    std::optional<double> bindingsStartTime() const;
-    void setBindingsStartTime(std::optional<double>);
     std::optional<Seconds> startTime() const;
     void setStartTime(std::optional<Seconds>);
 
-    virtual std::optional<double> bindingsCurrentTime() const;
-    ExceptionOr<void> setBindingsCurrentTime(std::optional<double>);
     std::optional<Seconds> currentTime() const;
     ExceptionOr<void> setCurrentTime(std::optional<Seconds>);
 
@@ -98,18 +93,32 @@ public:
     ExceptionOr<void> pause();
     ExceptionOr<void> reverse();
 
+    virtual std::optional<double> bindingsStartTime() const;
+    virtual void setBindingsStartTime(std::optional<double>);
+    virtual std::optional<double> bindingsCurrentTime() const;
+    virtual ExceptionOr<void> setBindingsCurrentTime(std::optional<double>);
+    virtual PlayState bindingsPlayState() const { return playState(); }
+    virtual bool bindingsPending() const { return pending(); }
+    virtual ReadyPromise& bindingsReady() { return ready(); }
+    virtual FinishedPromise& bindingsFinished() { return finished(); }
+    virtual ExceptionOr<void> bindingsPlay() { return play(); }
+    virtual ExceptionOr<void> bindingsPause() { return pause(); }
+
     Seconds timeToNextRequiredTick() const;
-    void resolve(RenderStyle&);
+    void resolve();
+    virtual void resolve(RenderStyle&);
+    void runPendingTasks();
     void effectTargetDidChange(Element* previousTarget, Element* newTarget);
     void acceleratedStateDidChange();
     void applyPendingAcceleratedActions();
 
     void timingModelDidChange();
+    void effectTimingPropertiesDidChange();
     void suspendEffectInvalidation();
     void unsuspendEffectInvalidation();
     void setSuspended(bool);
     bool isSuspended() const { return m_isSuspended; }
-    virtual void prepareAnimationForRemoval();
+    virtual void remove();
 
     String description();
 
@@ -148,7 +157,9 @@ private:
     void runPendingPauseTask();
     void runPendingPlayTask();
     void resetPendingTasks();
-    
+    void setEffectInternal(RefPtr<AnimationEffectReadOnly>&&, bool = false);
+    void setTimelineInternal(RefPtr<AnimationTimeline>&&);
+
     String m_id;
     RefPtr<AnimationEffectReadOnly> m_effect;
     RefPtr<AnimationTimeline> m_timeline;

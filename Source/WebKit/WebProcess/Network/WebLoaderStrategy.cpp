@@ -56,10 +56,10 @@
 #include <WebCore/Frame.h>
 #include <WebCore/FrameLoader.h>
 #include <WebCore/NetscapePlugInStreamLoader.h>
+#include <WebCore/NetworkLoadInformation.h>
 #include <WebCore/PlatformStrategies.h>
 #include <WebCore/ReferrerPolicy.h>
 #include <WebCore/ResourceLoader.h>
-#include <WebCore/ResourceResponse.h>
 #include <WebCore/RuntimeEnabledFeatures.h>
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/Settings.h>
@@ -115,31 +115,31 @@ static Seconds maximumBufferingTime(CachedResource* resource)
         return 0_s;
 
     switch (resource->type()) {
-    case CachedResource::Beacon:
-    case CachedResource::CSSStyleSheet:
-    case CachedResource::Script:
+    case CachedResource::Type::Beacon:
+    case CachedResource::Type::CSSStyleSheet:
+    case CachedResource::Type::Script:
 #if ENABLE(SVG_FONTS)
-    case CachedResource::SVGFontResource:
+    case CachedResource::Type::SVGFontResource:
 #endif
-    case CachedResource::FontResource:
+    case CachedResource::Type::FontResource:
 #if ENABLE(APPLICATION_MANIFEST)
-    case CachedResource::ApplicationManifest:
+    case CachedResource::Type::ApplicationManifest:
 #endif
         return Seconds::infinity();
-    case CachedResource::ImageResource:
+    case CachedResource::Type::ImageResource:
         return 500_ms;
-    case CachedResource::MediaResource:
+    case CachedResource::Type::MediaResource:
         return 50_ms;
-    case CachedResource::MainResource:
-    case CachedResource::Icon:
-    case CachedResource::RawResource:
-    case CachedResource::SVGDocumentResource:
-    case CachedResource::LinkPrefetch:
+    case CachedResource::Type::MainResource:
+    case CachedResource::Type::Icon:
+    case CachedResource::Type::RawResource:
+    case CachedResource::Type::SVGDocumentResource:
+    case CachedResource::Type::LinkPrefetch:
 #if ENABLE(VIDEO_TRACK)
-    case CachedResource::TextTrackResource:
+    case CachedResource::Type::TextTrackResource:
 #endif
 #if ENABLE(XSLT)
-    case CachedResource::XSLStyleSheet:
+    case CachedResource::Type::XSLStyleSheet:
 #endif
         return 0_s;
     }
@@ -254,7 +254,7 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
 
     LOG(NetworkScheduling, "(WebProcess) WebLoaderStrategy::scheduleLoad, url '%s' will be scheduled with the NetworkProcess with priority %d", resourceLoader.url().string().latin1().data(), static_cast<int>(resourceLoader.request().priority()));
 
-    ContentSniffingPolicy contentSniffingPolicy = resourceLoader.shouldSniffContent() ? SniffContent : DoNotSniffContent;
+    ContentSniffingPolicy contentSniffingPolicy = resourceLoader.shouldSniffContent() ? ContentSniffingPolicy::SniffContent : ContentSniffingPolicy::DoNotSniffContent;
     ContentEncodingSniffingPolicy contentEncodingSniffingPolicy = resourceLoader.shouldSniffContentEncoding() ? ContentEncodingSniffingPolicy::Sniff : ContentEncodingSniffingPolicy::DoNotSniff;
     StoredCredentialsPolicy storedCredentialsPolicy = resourceLoader.shouldUseCredentialStorage() ? StoredCredentialsPolicy::Use : StoredCredentialsPolicy::DoNotUse;
 
@@ -331,7 +331,7 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
 
     if (resourceLoader.options().mode == FetchOptions::Mode::Navigate) {
         Vector<RefPtr<SecurityOrigin>> frameAncestorOrigins;
-        for (auto* frame = resourceLoader.frame(); frame; frame = frame->tree().parent())
+        for (auto* frame = resourceLoader.frame()->tree().parent(); frame; frame = frame->tree().parent())
             frameAncestorOrigins.append(makeRefPtr(frame->document()->securityOrigin()));
         loadParameters.frameAncestorOrigins = WTFMove(frameAncestorOrigins);
     }
@@ -450,8 +450,10 @@ void WebLoaderStrategy::networkProcessCrashed()
 {
     RELEASE_LOG_ERROR(Network, "WebLoaderStrategy::networkProcessCrashed: failing all pending resource loaders");
 
-    for (auto& loader : m_webResourceLoaders)
-        scheduleInternallyFailedLoad(*loader.value->resourceLoader());
+    for (auto& loader : m_webResourceLoaders.values()) {
+        scheduleInternallyFailedLoad(*loader->resourceLoader());
+        loader->detachFromCoreLoader();
+    }
 
     m_webResourceLoaders.clear();
 
@@ -473,11 +475,38 @@ static bool shouldClearReferrerOnHTTPSToHTTPRedirect(Frame* frame)
     return true;
 }
 
+std::optional<WebLoaderStrategy::SyncLoadResult> WebLoaderStrategy::tryLoadingSynchronouslyUsingURLSchemeHandler(FrameLoader& frameLoader, ResourceLoadIdentifier identifier, const ResourceRequest& request)
+{
+    auto* webFrameLoaderClient = toWebFrameLoaderClient(frameLoader.client());
+    auto* webFrame = webFrameLoaderClient ? webFrameLoaderClient->webFrame() : nullptr;
+    auto* webPage = webFrame ? webFrame->page() : nullptr;
+    if (!webPage)
+        return std::nullopt;
+
+    auto* handler = webPage->urlSchemeHandlerForScheme(request.url().protocol().toStringWithoutCopying());
+    if (!handler)
+        return std::nullopt;
+
+    LOG(NetworkScheduling, "(WebProcess) WebLoaderStrategy::scheduleLoad, sync load to URL '%s' will be handled by a UIProcess URL scheme handler.", request.url().string().utf8().data());
+
+    SyncLoadResult result;
+    handler->loadSynchronously(identifier, request, result.response, result.error, result.data);
+
+    return WTFMove(result);
+}
+
 void WebLoaderStrategy::loadResourceSynchronously(FrameLoader& frameLoader, unsigned long resourceLoadIdentifier, const ResourceRequest& request, ClientCredentialPolicy clientCredentialPolicy,  const FetchOptions& options, const HTTPHeaderMap& originalRequestHeaders, ResourceError& error, ResourceResponse& response, Vector<char>& data)
 {
     auto* document = frameLoader.frame().document();
     if (!document) {
         error = internalError(request.url());
+        return;
+    }
+
+    if (auto syncLoadResult = tryLoadingSynchronouslyUsingURLSchemeHandler(frameLoader, resourceLoadIdentifier, request)) {
+        error = WTFMove(syncLoadResult->error);
+        response = WTFMove(syncLoadResult->response);
+        data = WTFMove(syncLoadResult->data);
         return;
     }
 
@@ -491,7 +520,7 @@ void WebLoaderStrategy::loadResourceSynchronously(FrameLoader& frameLoader, unsi
     loadParameters.webFrameID = webFrame ? webFrame->frameID() : 0;
     loadParameters.sessionID = webPage ? webPage->sessionID() : PAL::SessionID::defaultSessionID();
     loadParameters.request = request;
-    loadParameters.contentSniffingPolicy = SniffContent;
+    loadParameters.contentSniffingPolicy = ContentSniffingPolicy::SniffContent;
     loadParameters.contentEncodingSniffingPolicy = ContentEncodingSniffingPolicy::Sniff;
     loadParameters.storedCredentialsPolicy = options.credentials == FetchOptions::Credentials::Omit ? StoredCredentialsPolicy::DoNotUse : StoredCredentialsPolicy::Use;
     loadParameters.clientCredentialPolicy = clientCredentialPolicy;
@@ -654,8 +683,15 @@ void WebLoaderStrategy::setCaptureExtraNetworkLoadMetricsEnabled(bool enabled)
 ResourceResponse WebLoaderStrategy::responseFromResourceLoadIdentifier(uint64_t resourceLoadIdentifier)
 {
     ResourceResponse response;
-    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::TakeNetworkLoadInformationResponse { resourceLoadIdentifier }, Messages::NetworkConnectionToWebProcess::TakeNetworkLoadInformationResponse::Reply { response }, 0, Seconds::infinity(), IPC::SendSyncOption::DoNotProcessIncomingMessagesWhenWaitingForSyncReply);
+    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::GetNetworkLoadInformationResponse { resourceLoadIdentifier }, Messages::NetworkConnectionToWebProcess::GetNetworkLoadInformationResponse::Reply { response }, 0, Seconds::infinity(), IPC::SendSyncOption::DoNotProcessIncomingMessagesWhenWaitingForSyncReply);
     return response;
+}
+
+Vector<NetworkTransactionInformation> WebLoaderStrategy::intermediateLoadInformationFromResourceLoadIdentifier(uint64_t resourceLoadIdentifier)
+{
+    Vector<NetworkTransactionInformation> information;
+    WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::GetNetworkLoadIntermediateInformation { resourceLoadIdentifier }, Messages::NetworkConnectionToWebProcess::GetNetworkLoadIntermediateInformation::Reply { information }, 0, Seconds::infinity(), IPC::SendSyncOption::DoNotProcessIncomingMessagesWhenWaitingForSyncReply);
+    return information;
 }
 
 NetworkLoadMetrics WebLoaderStrategy::networkMetricsFromResourceLoadIdentifier(uint64_t resourceLoadIdentifier)

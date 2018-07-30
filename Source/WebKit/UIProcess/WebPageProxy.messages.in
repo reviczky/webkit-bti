@@ -61,6 +61,7 @@ messages -> WebPageProxy {
     GetWindowFrame() -> (WebCore::FloatRect windowFrame) Delayed
     ScreenToRootView(WebCore::IntPoint screenPoint) -> (WebCore::IntPoint windowPoint) Delayed
     RootViewToScreen(WebCore::IntRect rect) -> (WebCore::IntRect screenFrame) Delayed
+    GetIsViewVisible() -> (bool result)
 
 #if PLATFORM(COCOA)
     ShowValidationMessage(WebCore::IntRect anchorRect, String message)
@@ -97,10 +98,16 @@ messages -> WebPageProxy {
     EndColorPicker();
 #endif
 
+#if ENABLE(DATALIST_ELEMENT)
+    ShowDataListSuggestions(struct WebCore::DataListSuggestionInformation suggestionInformation);
+    HandleKeydownInDataList(String key);
+    EndDataListSuggestions();
+#endif
+
     # Policy messages
     DecidePolicyForResponse(uint64_t frameID, struct WebCore::SecurityOriginData frameSecurityOrigin, uint64_t navigationID, WebCore::ResourceResponse response, WebCore::ResourceRequest request, bool canShowMIMEType, uint64_t listenerID, WebKit::UserData userData)
-    DecidePolicyForNavigationAction(uint64_t frameID, struct WebCore::SecurityOriginData frameSecurityOrigin, uint64_t navigationID, struct WebKit::NavigationActionData navigationActionData, struct WebKit::FrameInfoData originatingFrameInfoData, uint64_t originatingPageID, WebCore::ResourceRequest originalRequest, WebCore::ResourceRequest request, uint64_t listenerID, WebKit::UserData userData)
-    DecidePolicyForNavigationActionSync(uint64_t frameID, struct WebCore::SecurityOriginData frameSecurityOrigin, uint64_t navigationID, struct WebKit::NavigationActionData navigationActionData, struct WebKit::FrameInfoData originatingFrameInfoData, uint64_t originatingPageID, WebCore::ResourceRequest originalRequest, WebCore::ResourceRequest request, uint64_t listenerID, WebKit::UserData userData) -> (uint64_t newNavigationID, enum WebCore::PolicyAction policyAction, WebKit::DownloadID downloadID, std::optional<WebKit::WebsitePoliciesData> websitePolicies) Delayed
+    DecidePolicyForNavigationAction(uint64_t frameID, struct WebCore::SecurityOriginData frameSecurityOrigin, uint64_t navigationID, struct WebKit::NavigationActionData navigationActionData, struct WebKit::FrameInfoData originatingFrameInfoData, uint64_t originatingPageID, WebCore::ResourceRequest originalRequest, WebCore::ResourceRequest request, WebCore::ResourceResponse redirectResponse, uint64_t listenerID, WebKit::UserData userData)
+    DecidePolicyForNavigationActionSync(uint64_t frameID, struct WebCore::SecurityOriginData frameSecurityOrigin, uint64_t navigationID, struct WebKit::NavigationActionData navigationActionData, struct WebKit::FrameInfoData originatingFrameInfoData, uint64_t originatingPageID, WebCore::ResourceRequest originalRequest, WebCore::ResourceRequest request, WebCore::ResourceResponse redirectResponse, uint64_t listenerID, WebKit::UserData userData) -> (uint64_t newNavigationID, enum WebCore::PolicyAction policyAction, WebKit::DownloadID downloadID, std::optional<WebKit::WebsitePoliciesData> websitePolicies) Delayed
     DecidePolicyForNewWindowAction(uint64_t frameID, struct WebCore::SecurityOriginData frameSecurityOrigin, struct WebKit::NavigationActionData navigationActionData, WebCore::ResourceRequest request, String frameName, uint64_t listenerID, WebKit::UserData userData)
     UnableToImplementPolicy(uint64_t frameID, WebCore::ResourceError error, WebKit::UserData userData)
 
@@ -423,7 +430,7 @@ messages -> WebPageProxy {
 #endif
 
 #if ENABLE(PDFKIT_PLUGIN)
-    ShowPDFContextMenu(struct WebKit::PDFContextMenu contextMenu) -> (int32_t selectedItem)
+    ShowPDFContextMenu(struct WebKit::PDFContextMenu contextMenu) -> (std::optional<int32_t> selectedItem)
 #endif
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
@@ -513,6 +520,7 @@ messages -> WebPageProxy {
 
     StartURLSchemeTask(struct WebKit::URLSchemeTaskParameters parameters)
     StopURLSchemeTask(uint64_t handlerIdentifier, uint64_t taskIdentifier)
+    LoadSynchronousURLSchemeTask(struct WebKit::URLSchemeTaskParameters parameters) -> (WebCore::ResourceResponse response, WebCore::ResourceError error, IPC::DataReference data) Delayed
 
 #if HAVE(CFNETWORK_STORAGE_PARTITIONING)
     HasStorageAccess(String subFrameHost, String topFrameHost, uint64_t frameID, uint64_t contextID)

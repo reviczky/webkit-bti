@@ -26,6 +26,7 @@
 #ifndef NetworkProcessProxy_h
 #define NetworkProcessProxy_h
 
+#include "APIWebsiteDataStore.h"
 #include "ChildProcessProxy.h"
 #if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
 #include "LegacyCustomProtocolManagerProxy.h"
@@ -77,6 +78,7 @@ public:
     void deleteWebsiteDataForOrigins(PAL::SessionID, OptionSet<WebKit::WebsiteDataType>, const Vector<WebCore::SecurityOriginData>& origins, const Vector<String>& cookieHostNames, WTF::Function<void()>&& completionHandler);
 
 #if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+    void updatePrevalentDomainsToPartitionOrBlockCookies(PAL::SessionID, const Vector<String>& domainsToPartition, const Vector<String>& domainsToBlock, const Vector<String>& domainsToNeitherPartitionNorBlock, ShouldClearFirst, CompletionHandler<void()>&&);
     void hasStorageAccessForFrame(PAL::SessionID, const String& resourceDomain, const String& firstPartyDomain, uint64_t frameID, uint64_t pageID, CompletionHandler<void(bool)>&& callback);
     void getAllStorageAccessEntries(PAL::SessionID, CompletionHandler<void(Vector<String>&& domains)>&&);
     void grantStorageAccess(PAL::SessionID, const String& resourceDomain, const String& firstPartyDomain, std::optional<uint64_t> frameID, uint64_t pageID, CompletionHandler<void(bool)>&& callback);
@@ -86,6 +88,9 @@ public:
     void writeBlobToFilePath(const WebCore::URL&, const String& path, CompletionHandler<void(bool)>&& callback);
 
     void processReadyToSuspend();
+    
+    void sendProcessDidTransitionToForeground();
+    void sendProcessDidTransitionToBackground();
 
     void setIsHoldingLockedFiles(bool);
     
@@ -99,6 +104,9 @@ public:
     void didDestroyWebUserContentControllerProxy(WebUserContentControllerProxy&);
 #endif
 
+    void addSession(Ref<WebsiteDataStore>&&);
+    void removeSession(PAL::SessionID);
+
 private:
     NetworkProcessProxy(WebProcessPool&);
 
@@ -107,7 +115,6 @@ private:
     void connectionWillOpen(IPC::Connection&) override;
     void processWillShutDown(IPC::Connection&) override;
 
-    void networkProcessFailedToLaunch();
     void networkProcessCrashed();
     void clearCallbackStates();
 
@@ -140,9 +147,11 @@ private:
     void canAuthenticateAgainstProtectionSpace(uint64_t loaderID, uint64_t pageID, uint64_t frameID, const WebCore::ProtectionSpace&);
 #endif
 #if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+    void didUpdatePartitionOrBlockCookies(uint64_t callbackId);
     void storageAccessRequestResult(bool wasGranted, uint64_t contextId);
     void allStorageAccessEntriesResult(Vector<String>&& domains, uint64_t contextId);
 #endif
+    void retrieveCacheStorageParameters(PAL::SessionID);
 
 #if ENABLE(CONTENT_EXTENSIONS)
     void contentExtensionRules(UserContentControllerIdentifier);
@@ -171,12 +180,15 @@ private:
     unsigned m_syncAllCookiesCounter { 0 };
 
     HashMap<uint64_t, CompletionHandler<void(bool success)>> m_writeBlobToFilePathCallbackMap;
-    HashMap<uint64_t, WTF::CompletionHandler<void(bool wasGranted)>> m_storageAccessResponseCallbackMap;
+    HashMap<uint64_t, CompletionHandler<void()>> m_updatePartitionOrBlockCookiesCallbackMap;
+    HashMap<uint64_t, CompletionHandler<void(bool wasGranted)>> m_storageAccessResponseCallbackMap;
     HashMap<uint64_t, CompletionHandler<void(Vector<String>&& domains)>> m_allStorageAccessEntriesCallbackMap;
 
 #if ENABLE(CONTENT_EXTENSIONS)
     HashSet<WebUserContentControllerProxy*> m_webUserContentControllerProxies;
 #endif
+
+    HashMap<PAL::SessionID, RefPtr<WebsiteDataStore>> m_websiteDataStores;
 };
 
 } // namespace WebKit

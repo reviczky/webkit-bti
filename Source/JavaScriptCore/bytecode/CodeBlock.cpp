@@ -297,8 +297,6 @@ private:
 CodeBlock::CodeBlock(VM* vm, Structure* structure, CopyParsedBlockTag, CodeBlock& other)
     : JSCell(*vm, structure)
     , m_globalObject(other.m_globalObject)
-    , m_numCalleeLocals(other.m_numCalleeLocals)
-    , m_numVars(other.m_numVars)
     , m_shouldAlwaysBeInlined(true)
 #if ENABLE(JIT)
     , m_capabilityLevelState(DFG::CapabilityLevelNotSet)
@@ -309,11 +307,13 @@ CodeBlock::CodeBlock(VM* vm, Structure* structure, CopyParsedBlockTag, CodeBlock
     , m_isConstructor(other.m_isConstructor)
     , m_isStrictMode(other.m_isStrictMode)
     , m_codeType(other.m_codeType)
-    , m_unlinkedCode(*other.vm(), this, other.m_unlinkedCode.get())
+    , m_numCalleeLocals(other.m_numCalleeLocals)
+    , m_numVars(other.m_numVars)
     , m_numberOfArgumentsToSkip(other.m_numberOfArgumentsToSkip)
     , m_hasDebuggerStatement(false)
     , m_steppingMode(SteppingModeDisabled)
     , m_numBreakpoints(0)
+    , m_unlinkedCode(*other.vm(), this, other.m_unlinkedCode.get())
     , m_ownerExecutable(*other.vm(), this, other.m_ownerExecutable.get())
     , m_poisonedVM(other.m_poisonedVM)
     , m_instructions(other.m_instructions)
@@ -361,8 +361,6 @@ CodeBlock::CodeBlock(VM* vm, Structure* structure, ScriptExecutable* ownerExecut
     JSScope* scope, RefPtr<SourceProvider>&& sourceProvider, unsigned sourceOffset, unsigned firstLineColumnOffset)
     : JSCell(*vm, structure)
     , m_globalObject(*vm, this, scope->globalObject(*vm))
-    , m_numCalleeLocals(unlinkedCodeBlock->m_numCalleeLocals)
-    , m_numVars(unlinkedCodeBlock->m_numVars)
     , m_shouldAlwaysBeInlined(true)
 #if ENABLE(JIT)
     , m_capabilityLevelState(DFG::CapabilityLevelNotSet)
@@ -373,10 +371,12 @@ CodeBlock::CodeBlock(VM* vm, Structure* structure, ScriptExecutable* ownerExecut
     , m_isConstructor(unlinkedCodeBlock->isConstructor())
     , m_isStrictMode(unlinkedCodeBlock->isStrictMode())
     , m_codeType(unlinkedCodeBlock->codeType())
-    , m_unlinkedCode(*vm, this, unlinkedCodeBlock)
+    , m_numCalleeLocals(unlinkedCodeBlock->numCalleeLocals())
+    , m_numVars(unlinkedCodeBlock->numVars())
     , m_hasDebuggerStatement(false)
     , m_steppingMode(SteppingModeDisabled)
     , m_numBreakpoints(0)
+    , m_unlinkedCode(*vm, this, unlinkedCodeBlock)
     , m_ownerExecutable(*vm, this, ownerExecutable)
     , m_poisonedVM(vm)
     , m_thisRegister(unlinkedCodeBlock->thisRegister())
@@ -999,20 +999,20 @@ CodeBlock* CodeBlock::specialOSREntryBlockOrNull()
 #endif // ENABLE(FTL_JIT)
 }
 
-size_t CodeBlock::estimatedSize(JSCell* cell)
+size_t CodeBlock::estimatedSize(JSCell* cell, VM& vm)
 {
     CodeBlock* thisObject = jsCast<CodeBlock*>(cell);
     size_t extraMemoryAllocated = thisObject->m_instructions.size() * sizeof(Instruction);
     if (thisObject->m_jitCode)
         extraMemoryAllocated += thisObject->m_jitCode->size();
-    return Base::estimatedSize(cell) + extraMemoryAllocated;
+    return Base::estimatedSize(cell, vm) + extraMemoryAllocated;
 }
 
 void CodeBlock::visitChildren(JSCell* cell, SlotVisitor& visitor)
 {
     CodeBlock* thisObject = jsCast<CodeBlock*>(cell);
     ASSERT_GC_OBJECT_INHERITS(thisObject, info());
-    JSCell::visitChildren(thisObject, visitor);
+    Base::visitChildren(cell, visitor);
     visitor.append(thisObject->m_ownerEdge);
     thisObject->visitChildren(visitor);
 }
@@ -1637,16 +1637,26 @@ CodeBlock* CodeBlock::baselineAlternative()
 CodeBlock* CodeBlock::baselineVersion()
 {
 #if ENABLE(JIT)
-    if (JITCode::isBaselineCode(jitType()))
+    JITCode::JITType selfJITType = jitType();
+    if (JITCode::isBaselineCode(selfJITType))
         return this;
     CodeBlock* result = replacement();
     if (!result) {
-        // This can happen if we're creating the original CodeBlock for an executable.
-        // Assume that we're the baseline CodeBlock.
-        RELEASE_ASSERT(jitType() == JITCode::None);
-        return this;
+        if (JITCode::isOptimizingJIT(selfJITType)) {
+            // The replacement can be null if we've had a memory clean up and the executable
+            // has been purged of its codeBlocks (see ExecutableBase::clearCode()). Regardless,
+            // the current codeBlock is still live on the stack, and as an optimizing JIT
+            // codeBlock, it will keep its baselineAlternative() alive for us to fetch below.
+            result = this;
+        } else {
+            // This can happen if we're creating the original CodeBlock for an executable.
+            // Assume that we're the baseline CodeBlock.
+            RELEASE_ASSERT(selfJITType == JITCode::None);
+            return this;
+        }
     }
     result = result->baselineAlternative();
+    ASSERT(result);
     return result;
 #else
     return this;
@@ -1656,7 +1666,8 @@ CodeBlock* CodeBlock::baselineVersion()
 #if ENABLE(JIT)
 bool CodeBlock::hasOptimizedReplacement(JITCode::JITType typeToReplace)
 {
-    return JITCode::isHigherTier(replacement()->jitType(), typeToReplace);
+    CodeBlock* replacement = this->replacement();
+    return replacement && JITCode::isHigherTier(replacement->jitType(), typeToReplace);
 }
 
 bool CodeBlock::hasOptimizedReplacement()
@@ -2186,7 +2197,8 @@ unsigned CodeBlock::numberOfDFGCompiles()
             return 1000000;
         return (m_hasBeenCompiledWithFTL ? 1 : 0) + m_reoptimizationRetryCounter;
     }
-    return (JITCode::isOptimizingJIT(replacement()->jitType()) ? 1 : 0) + m_reoptimizationRetryCounter;
+    CodeBlock* replacement = this->replacement();
+    return ((replacement && JITCode::isOptimizingJIT(replacement->jitType())) ? 1 : 0) + m_reoptimizationRetryCounter;
 }
 
 int32_t CodeBlock::codeTypeThresholdMultiplier() const
@@ -2421,19 +2433,20 @@ void CodeBlock::setOptimizationThresholdBasedOnCompilationResult(CompilationResu
         RELEASE_ASSERT_NOT_REACHED();
     }
     
-    CodeBlock* theReplacement = replacement();
-    if ((result == CompilationSuccessful) != (theReplacement != this)) {
+    CodeBlock* replacement = this->replacement();
+    bool hasReplacement = (replacement && replacement != this);
+    if ((result == CompilationSuccessful) != hasReplacement) {
         dataLog(*this, ": we have result = ", result, " but ");
-        if (theReplacement == this)
+        if (replacement == this)
             dataLog("we are our own replacement.\n");
         else
-            dataLog("our replacement is ", pointerDump(theReplacement), "\n");
+            dataLog("our replacement is ", pointerDump(replacement), "\n");
         RELEASE_ASSERT_NOT_REACHED();
     }
     
     switch (result) {
     case CompilationSuccessful:
-        RELEASE_ASSERT(JITCode::isOptimizingJIT(replacement()->jitType()));
+        RELEASE_ASSERT(replacement && JITCode::isOptimizingJIT(replacement->jitType()));
         optimizeNextInvocation();
         return;
     case CompilationFailed:
@@ -2794,7 +2807,7 @@ String CodeBlock::nameForRegister(VirtualRegister virtualRegister)
         }
     }
     if (virtualRegister == thisRegister())
-        return ASCIILiteral("this");
+        return "this"_s;
     if (virtualRegister.isArgument())
         return String::format("arguments[%3d]", virtualRegister.toArgument());
 

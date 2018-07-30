@@ -49,10 +49,10 @@ DeclarativeAnimation::~DeclarativeAnimation()
 {
 }
 
-void DeclarativeAnimation::prepareAnimationForRemoval()
+void DeclarativeAnimation::remove()
 {
-    WebAnimation::prepareAnimationForRemoval();
     m_eventQueue.close();
+    WebAnimation::remove();
 }
 
 void DeclarativeAnimation::setBackingAnimation(const Animation& backingAnimation)
@@ -82,13 +82,6 @@ void DeclarativeAnimation::initialize(const Element& target, const RenderStyle* 
 
 void DeclarativeAnimation::syncPropertiesWithBackingAnimation()
 {
-    suspendEffectInvalidation();
-
-    auto* timing = effect()->timing();
-    timing->setDelay(Seconds(m_backingAnimation->delay()));
-    timing->setIterationDuration(Seconds(m_backingAnimation->duration()));
-
-    unsuspendEffectInvalidation();
 }
 
 void DeclarativeAnimation::setTimeline(RefPtr<AnimationTimeline>&& newTimeline)
@@ -128,6 +121,9 @@ void DeclarativeAnimation::invalidateDOMEvents(Seconds elapsedTime)
     auto* animationEffect = effect();
 
     auto isPending = pending();
+    if (isPending && m_wasPending)
+        return;
+
     auto iteration = animationEffect ? animationEffect->currentIteration().value_or(0) : 0;
     auto currentPhase = animationEffect ? animationEffect->phase() : phaseWithoutEffect();
 

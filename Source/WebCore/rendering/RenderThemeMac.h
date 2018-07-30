@@ -23,8 +23,6 @@
 #if PLATFORM(MAC)
 
 #import "RenderThemeCocoa.h"
-#import <wtf/RetainPtr.h>
-#import <wtf/HashMap.h>
 
 #if ENABLE(SERVICE_CONTROLS)
 OBJC_CLASS NSServicesRolloverButtonCell;
@@ -53,6 +51,8 @@ public:
 
     bool isControlStyled(const RenderStyle&, const BorderData&, const FillLayer&, const Color& backgroundColor) const final;
 
+    bool supportsSelectionForegroundColors(OptionSet<StyleColor::Options>) const final;
+
     Color platformActiveSelectionBackgroundColor(OptionSet<StyleColor::Options>) const final;
     Color platformActiveSelectionForegroundColor(OptionSet<StyleColor::Options>) const final;
     Color platformInactiveSelectionBackgroundColor(OptionSet<StyleColor::Options>) const final;
@@ -62,6 +62,8 @@ public:
     Color platformInactiveListBoxSelectionBackgroundColor(OptionSet<StyleColor::Options>) const final;
     Color platformInactiveListBoxSelectionForegroundColor(OptionSet<StyleColor::Options>) const final;
     Color platformFocusRingColor(OptionSet<StyleColor::Options>) const final;
+    Color platformActiveTextSearchHighlightColor(OptionSet<StyleColor::Options>) const final;
+    Color platformInactiveTextSearchHighlightColor(OptionSet<StyleColor::Options>) const final;
 
     ScrollbarControlSize scrollbarControlSizeForPart(ControlPart) final { return SmallScrollbar; }
 
@@ -166,10 +168,16 @@ private:
     bool paintAttachment(const RenderObject&, const PaintInfo&, const IntRect&) final;
 #endif
 
+    void drawLineForDocumentMarker(const RenderText&, GraphicsContext&, const FloatPoint& origin, float width, DocumentMarkerLineStyle) final;
+
+    bool usingDarkAppearance(const RenderObject&) const final;
+
 private:
     String fileListNameForWidth(const FileList*, const FontCascade&, int width, bool multipleFilesAllowed) const final;
 
     Color systemColor(CSSValueID, OptionSet<StyleColor::Options>) const final;
+
+    ColorCache& colorCache(OptionSet<StyleColor::Options>) const final;
 
     void purgeCaches() final;
 
@@ -242,8 +250,7 @@ private:
     bool m_isSliderThumbHorizontalPressed { false };
     bool m_isSliderThumbVerticalPressed { false };
 
-    mutable HashMap<int, Color> m_systemColorCache;
-    mutable Color m_systemVisitedLinkColor;
+    mutable ColorCache m_darkColorCache;
 
     RetainPtr<WebCoreRenderThemeNotificationObserver> m_notificationObserver;
 

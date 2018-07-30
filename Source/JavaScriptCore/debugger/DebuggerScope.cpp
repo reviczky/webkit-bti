@@ -60,12 +60,13 @@ void DebuggerScope::visitChildren(JSCell* cell, SlotVisitor& visitor)
 {
     DebuggerScope* thisObject = jsCast<DebuggerScope*>(cell);
     ASSERT_GC_OBJECT_INHERITS(thisObject, info());
-    JSObject::visitChildren(thisObject, visitor);
+    Base::visitChildren(cell, visitor);
+
     visitor.append(thisObject->m_scope);
     visitor.append(thisObject->m_next);
 }
 
-String DebuggerScope::className(const JSObject* object)
+String DebuggerScope::className(const JSObject* object, VM& vm)
 {
     const DebuggerScope* scope = jsCast<const DebuggerScope*>(object);
     // We cannot assert that scope->isValid() because the TypeProfiler may encounter an invalidated
@@ -73,7 +74,7 @@ String DebuggerScope::className(const JSObject* object)
     if (!scope->isValid())
         return String();
     JSObject* thisObject = JSScope::objectAtScope(scope->jsScope());
-    return thisObject->methodTable()->className(thisObject);
+    return thisObject->methodTable(vm)->className(thisObject, vm);
 }
 
 bool DebuggerScope::getOwnPropertySlot(JSObject* object, ExecState* exec, PropertyName propertyName, PropertySlot& slot)

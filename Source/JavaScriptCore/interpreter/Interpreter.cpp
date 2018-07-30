@@ -154,11 +154,9 @@ JSValue eval(CallFrame* callFrame)
                     return parsedObject;
                 }
             }
+            RETURN_IF_EXCEPTION(scope, JSValue());
         }
         
-        // If the literal parser bailed, it should not have thrown exceptions.
-        scope.assertNoException();
-
         VariableEnvironment variablesUnderTDZ;
         JSScope::collectClosureVariablesUnderTDZ(callerScopeChain, variablesUnderTDZ);
         eval = DirectEvalExecutable::create(callFrame, makeSource(programSource, callerCodeBlock->source()->sourceOrigin()), callerCodeBlock->isStrictMode(), derivedContextType, isArrowFunctionContext, evalContextType, &variablesUnderTDZ);
@@ -461,7 +459,7 @@ void Interpreter::dumpRegisters(CallFrame* callFrame)
     size_t numberOfCalleeSaveSlots = codeBlock->calleeSaveSpaceAsVirtualRegisters();
     const Register* endOfCalleeSaves = it - numberOfCalleeSaveSlots;
 
-    end = it - codeBlock->m_numVars;
+    end = it - codeBlock->numVars();
     if (it != end) {
         do {
             JSValue v = it->jsValue();
@@ -476,7 +474,7 @@ void Interpreter::dumpRegisters(CallFrame* callFrame)
     }
     dataLogF("-----------------------------------------------------------------------------\n");
 
-    end = it - codeBlock->m_numCalleeLocals + codeBlock->m_numVars;
+    end = it - codeBlock->numCalleeLocals() + codeBlock->numVars();
     if (it != end) {
         do {
             JSValue v = (*it).jsValue();
@@ -556,13 +554,15 @@ void Interpreter::getStackTrace(JSCell* owner, Vector<StackFrame>& results, size
     DisallowGC disallowGC;
     VM& vm = m_vm;
     CallFrame* callFrame = vm.topCallFrame;
-    if (!callFrame)
+    if (!callFrame || !maxStackSize)
         return;
 
     size_t framesCount = 0;
+    size_t maxFramesCountNeeded = maxStackSize + framesToSkip;
     StackVisitor::visit(callFrame, &vm, [&] (StackVisitor&) -> StackVisitor::Status {
-        framesCount++;
-        return StackVisitor::Continue;
+        if (++framesCount < maxFramesCountNeeded)
+            return StackVisitor::Continue;
+        return StackVisitor::Done;
     });
     if (framesCount <= framesToSkip)
         return;
@@ -1211,7 +1211,7 @@ JSValue Interpreter::execute(EvalExecutable* eval, CallFrame* callFrame, JSValue
             if (!hasProperty) {
                 PutPropertySlot slot(variableObject);
                 if (!variableObject->isExtensible(callFrame))
-                    return checkedReturn(throwTypeError(callFrame, throwScope, ASCIILiteral(NonExtensibleObjectPropertyDefineError)));
+                    return checkedReturn(throwTypeError(callFrame, throwScope, NonExtensibleObjectPropertyDefineError));
                 variableObject->methodTable(vm)->put(variableObject, callFrame, ident, jsUndefined(), slot);
                 RETURN_IF_EXCEPTION(throwScope, checkedReturn(throwScope.exception()));
             }

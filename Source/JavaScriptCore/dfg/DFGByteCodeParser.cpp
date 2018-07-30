@@ -103,7 +103,7 @@ public:
         , m_constantNaN(graph.freeze(jsNumber(PNaN)))
         , m_constantOne(graph.freeze(jsNumber(1)))
         , m_numArguments(m_codeBlock->numParameters())
-        , m_numLocals(m_codeBlock->m_numCalleeLocals)
+        , m_numLocals(m_codeBlock->numCalleeLocals())
         , m_parameterSlots(0)
         , m_numPassedVarArgs(0)
         , m_inlineStackTop(0)
@@ -554,7 +554,7 @@ private:
                 FullBytecodeLiveness& fullLiveness = m_graph.livenessFor(codeBlock);
                 const FastBitVector& livenessAtBytecode = fullLiveness.getLiveness(bytecodeIndex);
 
-                for (unsigned local = codeBlock->m_numCalleeLocals; local--;) {
+                for (unsigned local = codeBlock->numCalleeLocals(); local--;) {
                     if (livenessAtBytecode[local])
                         addPhantomLocalDirect(inlineCallFrame, remapOperand(inlineCallFrame, virtualRegisterForLocal(local)));
                 }
@@ -1418,7 +1418,7 @@ bool ByteCodeParser::handleRecursiveTailCall(Node* callTargetNode, CallVariant c
 
         // We must repeat the work of op_enter here as we will jump right after it.
         // We jump right after it and not before it, because of some invariant saying that a CFG root cannot have predecessors in the IR.
-        for (int i = 0; i < stackEntry->m_codeBlock->m_numVars; ++i)
+        for (int i = 0; i < stackEntry->m_codeBlock->numVars(); ++i)
             setDirect(stackEntry->remapOperand(virtualRegisterForLocal(i)), undefined, NormalSet);
 
         // We want to emit the SetLocals with an exit origin that points to the place we are jumping to.
@@ -1571,7 +1571,7 @@ void ByteCodeParser::inlineCall(Node* callTargetNode, int resultOperand, CallVar
     
     ensureLocals(
         VirtualRegister(inlineCallFrameStart).toLocal() + 1 +
-        CallFrame::headerSizeInRegisters + codeBlock->m_numCalleeLocals);
+        CallFrame::headerSizeInRegisters + codeBlock->numCalleeLocals());
     
     size_t argumentPositionStart = m_graph.m_argumentPositions.size();
 
@@ -2303,6 +2303,9 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, int resultOperand, Intrin
                 structureSet.add(globalObject->originalArrayStructureForIndexingType(ArrayWithInt32));
                 structureSet.add(globalObject->originalArrayStructureForIndexingType(ArrayWithContiguous));
                 structureSet.add(globalObject->originalArrayStructureForIndexingType(ArrayWithDouble));
+                structureSet.add(globalObject->originalArrayStructureForIndexingType(CopyOnWriteArrayWithInt32));
+                structureSet.add(globalObject->originalArrayStructureForIndexingType(CopyOnWriteArrayWithContiguous));
+                structureSet.add(globalObject->originalArrayStructureForIndexingType(CopyOnWriteArrayWithDouble));
                 addToGraph(CheckStructure, OpInfo(m_graph.addStructureSet(structureSet)), array);
 
                 addVarArgChild(array);
@@ -4108,7 +4111,7 @@ void ByteCodeParser::handleGetById(
     
     // Start with a register offset that corresponds to the last in-use register.
     int registerOffset = virtualRegisterForLocal(
-        m_inlineStackTop->m_profiledBlock->m_numCalleeLocals - 1).offset();
+        m_inlineStackTop->m_profiledBlock->numCalleeLocals() - 1).offset();
     registerOffset -= numberOfParameters;
     registerOffset -= CallFrame::headerSizeInRegisters;
     
@@ -4292,7 +4295,7 @@ void ByteCodeParser::handlePutById(
     
         // Start with a register offset that corresponds to the last in-use register.
         int registerOffset = virtualRegisterForLocal(
-            m_inlineStackTop->m_profiledBlock->m_numCalleeLocals - 1).offset();
+            m_inlineStackTop->m_profiledBlock->numCalleeLocals() - 1).offset();
         registerOffset -= numberOfParameters;
         registerOffset -= CallFrame::headerSizeInRegisters;
     
@@ -4452,7 +4455,7 @@ void ByteCodeParser::parseBlock(unsigned limit)
         case op_enter: {
             Node* undefined = addToGraph(JSConstant, OpInfo(m_constantUndefined));
             // Initialize all locals to undefined.
-            for (int i = 0; i < m_inlineStackTop->m_codeBlock->m_numVars; ++i)
+            for (int i = 0; i < m_inlineStackTop->m_codeBlock->numVars(); ++i)
                 set(virtualRegisterForLocal(i), undefined, ImmediateNakedSet);
 
             NEXT_OPCODE(op_enter);
@@ -4592,7 +4595,6 @@ void ByteCodeParser::parseBlock(unsigned limit)
             JSImmutableButterfly* immutableButterfly = frozen->cast<JSImmutableButterfly*>();
             NewArrayBufferData data { };
             data.indexingMode = immutableButterfly->indexingMode();
-            // TODO: Do I need this?
             data.vectorLengthHint = immutableButterfly->toButterfly()->vectorLength();
 
             set(VirtualRegister(bytecode.dst()), addToGraph(NewArrayBuffer, OpInfo(frozen), OpInfo(data.asQuadWord)));
@@ -4600,9 +4602,10 @@ void ByteCodeParser::parseBlock(unsigned limit)
         }
             
         case op_new_regexp: {
-            RegExp* regexp = m_inlineStackTop->m_codeBlock->regexp(currentInstruction[2].u.operand);
-            FrozenValue* frozen = m_graph.freezeStrong(regexp);
-            set(VirtualRegister(currentInstruction[1].u.operand), addToGraph(NewRegexp, OpInfo(frozen), jsConstant(jsNumber(0))));
+            VirtualRegister regExpRegister(currentInstruction[2].u.operand);
+            ASSERT(regExpRegister.isConstant());
+            FrozenValue* frozenRegExp = m_graph.freezeStrong(m_inlineStackTop->m_codeBlock->getConstant(regExpRegister.offset()));
+            set(VirtualRegister(currentInstruction[1].u.operand), addToGraph(NewRegexp, OpInfo(frozenRegExp), jsConstant(jsNumber(0))));
             NEXT_OPCODE(op_new_regexp);
         }
 
@@ -6839,8 +6842,10 @@ void ByteCodeParser::parse()
     if (m_hasAnyForceOSRExits) {
         BlockSet blocksToIgnore;
         for (BasicBlock* block : m_graph.blocksInNaturalOrder()) {
-            if (block->isOSRTarget)
+            if (block->isOSRTarget && block->bytecodeBegin == m_graph.m_plan.osrEntryBytecodeIndex) {
                 blocksToIgnore.add(block);
+                break;
+            }
         }
 
         {

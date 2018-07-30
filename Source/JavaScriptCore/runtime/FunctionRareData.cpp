@@ -54,6 +54,7 @@ Structure* FunctionRareData::createStructure(VM& vm, JSGlobalObject* globalObjec
 void FunctionRareData::visitChildren(JSCell* cell, SlotVisitor& visitor)
 {
     FunctionRareData* rareData = jsCast<FunctionRareData*>(cell);
+    Base::visitChildren(cell, visitor);
 
     rareData->m_objectAllocationProfile.visitAggregate(visitor);
     rareData->m_internalFunctionAllocationProfile.visitAggregate(visitor);
@@ -89,7 +90,7 @@ void FunctionRareData::clear(const char* reason)
     m_objectAllocationProfileWatchpoint.fireAll(*vm(), reason);
 }
 
-void FunctionRareData::AllocationProfileClearingWatchpoint::fireInternal(const FireDetail&)
+void FunctionRareData::AllocationProfileClearingWatchpoint::fireInternal(VM&, const FireDetail&)
 {
     m_rareData->clear("AllocationProfileClearingWatchpoint fired.");
 }

@@ -40,6 +40,7 @@
 #include "FindController.h"
 #include "FormDataReference.h"
 #include "GeolocationPermissionRequestManager.h"
+#include "InjectUserScriptImmediately.h"
 #include "InjectedBundle.h"
 #include "InjectedBundleBackForwardList.h"
 #include "InjectedBundleScriptWorld.h"
@@ -256,6 +257,11 @@
 #include <CoreGraphics/CoreGraphics.h>
 #include <WebCore/Icon.h>
 #include <pal/spi/cocoa/CoreTextSPI.h>
+#endif
+
+#if PLATFORM(MAC)
+#include <WebCore/LocalDefaultSystemAppearance.h>
+#include <pal/spi/cf/CFUtilitiesSPI.h>
 #endif
 
 #ifndef NDEBUG
@@ -507,7 +513,7 @@ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
     setPaginationLineGridEnabled(parameters.paginationLineGridEnabled);
 #if PLATFORM(MAC)
     setUseSystemAppearance(parameters.useSystemAppearance);
-    setDefaultAppearance(parameters.defaultAppearance);
+    setUseDarkAppearance(parameters.useDarkAppearance);
 #endif
     // If the page is created off-screen, its visibilityState should be prerender.
     m_page->setActivityState(m_activityState);
@@ -608,7 +614,7 @@ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
         registerURLSchemeHandler(iterator.value, iterator.key);
 
     m_userContentController->addUserContentWorlds(parameters.userContentWorlds);
-    m_userContentController->addUserScripts(parameters.userScripts);
+    m_userContentController->addUserScripts(WTFMove(parameters.userScripts), InjectUserScriptImmediately::No);
     m_userContentController->addUserStyleSheets(parameters.userStyleSheets);
     m_userContentController->addUserScriptMessageHandlers(parameters.messageHandlers);
 #if ENABLE(CONTENT_EXTENSIONS)
@@ -651,7 +657,7 @@ void WebPage::reinitializeWebPage(WebPageCreationParameters&& parameters)
     m_drawingArea->attachDrawingArea();
 
     if (m_activityState != parameters.activityState)
-        setActivityState(parameters.activityState, false, Vector<CallbackID>());
+        setActivityState(parameters.activityState, ActivityStateChangeAsynchronous, Vector<CallbackID>());
     if (m_layerHostingMode != parameters.layerHostingMode)
         setLayerHostingMode(parameters.layerHostingMode);
 }
@@ -666,6 +672,15 @@ void WebPage::updateThrottleState()
     bool windowIsActive = m_activityState & ActivityState::WindowIsActive;
     bool pageSuppressed = !windowIsActive && !isLoading && !isPlayingAudio && !isCapturingMedia && m_processSuppressionEnabled && isVisuallyIdle;
 
+#if PLATFORM(MAC) && ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
+    if (!pageSuppressed) {
+        // App nap must be manually enabled when not running the NSApplication run loop.
+        static std::once_flag onceKey;
+        std::call_once(onceKey, [] {
+            __CFRunLoopSetOptionsReason(__CFRunLoopOptionsEnableAppNap, CFSTR("Finished checkin as application - enable app nap"));
+        });
+    }
+#endif
     // The UserActivity keeps the processes runnable. So if the page should be suppressed, stop the activity.
     // If the page should not be supressed, start it.
     if (pageSuppressed)
@@ -1297,10 +1312,10 @@ void WebPage::loadStringImpl(uint64_t navigationID, const String& htmlString, co
 {
     if (!htmlString.isNull() && htmlString.is8Bit()) {
         auto sharedBuffer = SharedBuffer::create(reinterpret_cast<const char*>(htmlString.characters8()), htmlString.length() * sizeof(LChar));
-        loadDataImpl(navigationID, WTFMove(sharedBuffer), MIMEType, ASCIILiteral("latin1"), baseURL, unreachableURL, userData);
+        loadDataImpl(navigationID, WTFMove(sharedBuffer), MIMEType, "latin1"_s, baseURL, unreachableURL, userData);
     } else {
         auto sharedBuffer = SharedBuffer::create(reinterpret_cast<const char*>(htmlString.characters16()), htmlString.length() * sizeof(UChar));
-        loadDataImpl(navigationID, WTFMove(sharedBuffer), MIMEType, ASCIILiteral("utf-16"), baseURL, unreachableURL, userData);
+        loadDataImpl(navigationID, WTFMove(sharedBuffer), MIMEType, "utf-16"_s, baseURL, unreachableURL, userData);
     }
 }
 
@@ -1329,7 +1344,7 @@ void WebPage::loadAlternateHTMLString(const LoadParameters& loadParameters)
     URL unreachableURL = loadParameters.unreachableURLString.isEmpty() ? URL() : URL(URL(), loadParameters.unreachableURLString);
     URL provisionalLoadErrorURL = loadParameters.provisionalLoadErrorURLString.isEmpty() ? URL() : URL(URL(), loadParameters.provisionalLoadErrorURLString);
     m_mainFrame->coreFrame()->loader().setProvisionalLoadErrorBeingHandledURL(provisionalLoadErrorURL);
-    loadStringImpl(0, loadParameters.string, ASCIILiteral("text/html"), baseURL, unreachableURL, loadParameters.userData);
+    loadStringImpl(0, loadParameters.string, "text/html"_s, baseURL, unreachableURL, loadParameters.userData);
     m_mainFrame->coreFrame()->loader().setProvisionalLoadErrorBeingHandledURL({ });
 }
 
@@ -1517,6 +1532,10 @@ void WebPage::scrollMainFrameIfNotAtMaxScrollPosition(const IntSize& scrollOffse
 
 void WebPage::drawRect(GraphicsContext& graphicsContext, const IntRect& rect)
 {
+#if PLATFORM(MAC)
+    LocalDefaultSystemAppearance localAppearance(m_page->useSystemAppearance(), m_page->useDarkAppearance());
+#endif
+
     GraphicsContextStateSaver stateSaver(graphicsContext);
     graphicsContext.clip(rect);
 
@@ -2211,11 +2230,11 @@ void WebPage::setLayerTreeStateIsFrozen(bool frozen)
     drawingArea->setLayerTreeStateIsFrozen(frozen);
 }
 
-void WebPage::callVolatilityCompletionHandlers()
+void WebPage::callVolatilityCompletionHandlers(bool succeeded)
 {
     auto completionHandlers = WTFMove(m_markLayersAsVolatileCompletionHandlers);
     for (auto& completionHandler : completionHandlers)
-        completionHandler();
+        completionHandler(succeeded);
 }
 
 void WebPage::layerVolatilityTimerFired()
@@ -2224,12 +2243,15 @@ void WebPage::layerVolatilityTimerFired()
     bool didSucceed = markLayersVolatileImmediatelyIfPossible();
     if (didSucceed || newInterval > maximumLayerVolatilityTimerInterval) {
         m_layerVolatilityTimer.stop();
-        RELEASE_LOG_IF_ALLOWED("%p - WebPage - Attempted to mark layers as volatile, success? %d", this, didSucceed);
-        callVolatilityCompletionHandlers();
+        if (didSucceed)
+            RELEASE_LOG_IF_ALLOWED("%p - WebPage - Succeeded in marking layers as volatile", this);
+        else
+            RELEASE_LOG_IF_ALLOWED("%p - WebPage - Failed to mark layers as volatile within %gms", this, maximumLayerVolatilityTimerInterval.milliseconds());
+        callVolatilityCompletionHandlers(didSucceed);
         return;
     }
 
-    RELEASE_LOG_ERROR_IF_ALLOWED("%p - WebPage - Failed to mark all layers as volatile, will retry in %g ms", this, newInterval.value() * 1000);
+    RELEASE_LOG_ERROR_IF_ALLOWED("%p - WebPage - Failed to mark all layers as volatile, will retry in %g ms", this, newInterval.milliseconds());
     m_layerVolatilityTimer.startRepeating(newInterval);
 }
 
@@ -2238,7 +2260,7 @@ bool WebPage::markLayersVolatileImmediatelyIfPossible()
     return !drawingArea() || drawingArea()->markLayersVolatileImmediatelyIfPossible();
 }
 
-void WebPage::markLayersVolatile(WTF::Function<void ()>&& completionHandler)
+void WebPage::markLayersVolatile(WTF::Function<void (bool)>&& completionHandler)
 {
     RELEASE_LOG_IF_ALLOWED("%p - WebPage::markLayersVolatile()", this);
 
@@ -2256,11 +2278,11 @@ void WebPage::markLayersVolatile(WTF::Function<void ()>&& completionHandler)
             // If we get suspended when locking the screen, it is expected that some IOSurfaces cannot be marked as purgeable so we do not keep retrying.
             RELEASE_LOG_IF_ALLOWED("%p - WebPage - Did what we could to mark IOSurfaces as purgeable after locking the screen", this);
         }
-        callVolatilityCompletionHandlers();
+        callVolatilityCompletionHandlers(didSucceed);
         return;
     }
 
-    RELEASE_LOG_IF_ALLOWED("%p - Failed to mark all layers as volatile, will retry in %g ms", this, initialLayerVolatilityTimerInterval.value() * 1000);
+    RELEASE_LOG_IF_ALLOWED("%p - Failed to mark all layers as volatile, will retry in %g ms", this, initialLayerVolatilityTimerInterval.milliseconds());
     m_layerVolatilityTimer.startRepeating(initialLayerVolatilityTimerInterval);
 }
 
@@ -2773,7 +2795,7 @@ void WebPage::visibilityDidChange()
     }
 }
 
-void WebPage::setActivityState(ActivityState::Flags activityState, bool wantsDidUpdateActivityState, const Vector<CallbackID>& callbackIDs)
+void WebPage::setActivityState(ActivityState::Flags activityState, ActivityStateChangeID activityStateChangeID, const Vector<CallbackID>& callbackIDs)
 {
     ActivityState::Flags changed = m_activityState ^ activityState;
     m_activityState = activityState;
@@ -2789,7 +2811,7 @@ void WebPage::setActivityState(ActivityState::Flags activityState, bool wantsDid
     for (auto* pluginView : m_pluginViews)
         pluginView->activityStateDidChange(changed);
 
-    m_drawingArea->activityStateDidChange(changed, wantsDidUpdateActivityState, callbackIDs);
+    m_drawingArea->activityStateDidChange(changed, activityStateChangeID, callbackIDs);
     WebProcess::singleton().pageActivityStateDidChange(m_pageID, changed);
 
     if (changed & ActivityState::IsInWindow)
@@ -3239,6 +3261,10 @@ void WebPage::willCommitLayerTree(RemoteLayerTreeTransaction& layerTransaction)
     if (m_pendingDynamicViewportSizeUpdateID) {
         layerTransaction.setDynamicViewportSizeUpdateID(*m_pendingDynamicViewportSizeUpdateID);
         m_pendingDynamicViewportSizeUpdateID = std::nullopt;
+    }
+    if (m_lastTransactionPageScaleFactor != layerTransaction.pageScaleFactor()) {
+        m_lastTransactionPageScaleFactor = layerTransaction.pageScaleFactor();
+        m_lastTransactionIDWithScaleChange = layerTransaction.transactionID();
     }
 #endif
 
@@ -4194,11 +4220,9 @@ void WebPage::setUseSystemAppearance(bool useSystemAppearance)
     corePage()->setUseSystemAppearance(useSystemAppearance);
 }
     
-void WebPage::setDefaultAppearance(bool defaultAppearance)
+void WebPage::setUseDarkAppearance(bool useDarkAppearance)
 {
-    corePage()->setDefaultAppearance(defaultAppearance);
-    RenderTheme::singleton().platformColorsDidChange();
-    corePage()->setNeedsRecalcStyleInAllFrames();
+    corePage()->setUseDarkAppearance(useDarkAppearance);
 }
 #endif
 

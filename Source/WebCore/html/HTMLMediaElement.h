@@ -155,7 +155,7 @@ public:
 
     static HashSet<HTMLMediaElement*>& allMediaElements();
 
-    WEBCORE_EXPORT static HTMLMediaElement* bestMediaElementForShowingPlaybackControlsManager(MediaElementSession::PlaybackControlsPurpose);
+    WEBCORE_EXPORT static RefPtr<HTMLMediaElement> bestMediaElementForShowingPlaybackControlsManager(MediaElementSession::PlaybackControlsPurpose);
 
     static bool isRunningDestructor();
 
@@ -339,9 +339,9 @@ public:
     void addAudioTrack(Ref<AudioTrack>&&);
     void addTextTrack(Ref<TextTrack>&&);
     void addVideoTrack(Ref<VideoTrack>&&);
-    void removeAudioTrack(AudioTrack&);
-    void removeTextTrack(TextTrack&, bool scheduleEvent = true);
-    void removeVideoTrack(VideoTrack&);
+    void removeAudioTrack(Ref<AudioTrack>&&);
+    void removeTextTrack(Ref<TextTrack>&&, bool scheduleEvent = true);
+    void removeVideoTrack(Ref<VideoTrack>&&);
     void forgetResourceSpecificTracks();
     void closeCaptionTracksChanged();
     void notifyMediaPlayerOfTextTrackChanges();
@@ -558,6 +558,8 @@ public:
 
     WEBCORE_EXPORT void didBecomeFullscreenElement() override;
     WEBCORE_EXPORT void willExitFullscreen();
+
+    enum class PlaybackWithoutUserGesture { None, Started, Prevented };
 
 protected:
     HTMLMediaElement(const QualifiedName&, Document&, bool createdByParser);
@@ -802,7 +804,6 @@ private:
     void dispatchPlayPauseEventsIfNeedsQuirks();
     SuccessOr<MediaPlaybackDenialReason> canTransitionFromAutoplayToPlay() const;
 
-    enum class PlaybackWithoutUserGesture { None, Started, Prevented };
     void setPlaybackWithoutUserGesture(PlaybackWithoutUserGesture);
     void userDidInterfereWithAutoplay();
     void handleAutoplayEvent(AutoplayEvent);
@@ -897,7 +898,7 @@ private:
 
     void pauseAfterDetachedTask();
     void updatePlaybackControlsManager();
-    void scheduleUpdatePlaybackControlsManager();
+    void schedulePlaybackControlsManagerUpdate();
     void playbackControlsManagerBehaviorRestrictionsTimerFired();
 
     void updateRenderer();
@@ -928,11 +929,11 @@ private:
     Timer m_scanTimer;
     Timer m_playbackControlsManagerBehaviorRestrictionsTimer;
     Timer m_seekToPlaybackPositionEndedTimer;
+    GenericTaskQueue<Timer> m_resumeTaskQueue;
     GenericTaskQueue<Timer> m_seekTaskQueue;
     GenericTaskQueue<Timer> m_shadowDOMTaskQueue;
     GenericTaskQueue<Timer> m_promiseTaskQueue;
     GenericTaskQueue<Timer> m_pauseAfterDetachedTaskQueue;
-    GenericTaskQueue<Timer> m_updatePlaybackControlsManagerQueue;
     GenericTaskQueue<Timer> m_playbackControlsManagerBehaviorRestrictionsQueue;
     GenericTaskQueue<Timer> m_resourceSelectionTaskQueue;
     GenericTaskQueue<Timer> m_visibilityChangeTaskQueue;
@@ -1083,6 +1084,7 @@ private:
 
     bool m_isScrubbingRemotely : 1;
     bool m_waitingToEnterFullscreen : 1;
+    bool m_shouldUnpauseInternalOnResume : 1;
 
 #if ENABLE(VIDEO_TRACK)
     bool m_tracksAreReady : 1;
@@ -1166,7 +1168,21 @@ private:
 #endif
 };
 
+String convertEnumerationToString(HTMLMediaElement::PlaybackWithoutUserGesture);
+
 } // namespace WebCore
+
+namespace WTF {
+
+template <>
+struct LogArgument<WebCore::HTMLMediaElement::PlaybackWithoutUserGesture> {
+    static String toString(const WebCore::HTMLMediaElement::PlaybackWithoutUserGesture reason)
+    {
+        return convertEnumerationToString(reason);
+    }
+};
+    
+} // namespace WTF
 
 #if ENABLE(VIDEO_TRACK) && !defined(NDEBUG)
 namespace WTF {

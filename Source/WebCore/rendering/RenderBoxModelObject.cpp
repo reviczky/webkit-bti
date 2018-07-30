@@ -757,6 +757,12 @@ void RenderBoxModelObject::paintFillLayerExtended(const PaintInfo& paintInfo, co
     StyleImage* bgImage = bgLayer.image();
     bool shouldPaintBackgroundImage = bgImage && bgImage->canRender(this, style().effectiveZoom());
     
+    if (context.invalidatingImagesWithAsyncDecodes()) {
+        if (shouldPaintBackgroundImage && bgImage->cachedImage()->isClientWaitingForAsyncDecoding(*this))
+            bgImage->cachedImage()->removeAllClientsWaitingForAsyncDecoding();
+        return;
+    }
+    
     bool forceBackgroundToWhite = false;
     if (document().printing()) {
         if (style().printColorAdjust() == PrintColorAdjust::Economy)
@@ -802,16 +808,24 @@ void RenderBoxModelObject::paintFillLayerExtended(const PaintInfo& paintInfo, co
         if (hasRoundedBorder && bleedAvoidance != BackgroundBleedUseTransparencyLayer) {
             FloatRoundedRect pixelSnappedBorder = backgroundRoundedRectAdjustedForBleedAvoidance(context, rect, bleedAvoidance, box, boxSize,
                 includeLeftEdge, includeRightEdge).pixelSnappedRoundedRectForPainting(deviceScaleFactor);
-            if (pixelSnappedBorder.isRenderable())
+            if (pixelSnappedBorder.isRenderable()) {
+                CompositeOperator previousOperator = context.compositeOperation();
+                bool saveRestoreCompositeOp = op != previousOperator;
+                if (saveRestoreCompositeOp)
+                    context.setCompositeOperation(op);
+
                 context.fillRoundedRect(pixelSnappedBorder, bgColor);
-            else {
+
+                if (saveRestoreCompositeOp)
+                    context.setCompositeOperation(previousOperator);
+            } else {
                 context.save();
                 clipRoundedInnerRect(context, pixelSnappedRect, pixelSnappedBorder);
-                context.fillRect(pixelSnappedBorder.rect(), bgColor);
+                context.fillRect(pixelSnappedBorder.rect(), bgColor, op);
                 context.restore();
             }
         } else
-            context.fillRect(pixelSnappedRect, bgColor);
+            context.fillRect(pixelSnappedRect, bgColor, op);
 
         return;
     }
@@ -940,7 +954,13 @@ void RenderBoxModelObject::paintFillLayerExtended(const PaintInfo& paintInfo, co
                     baseColor = baseColor.blend(bgColor);
                 context.fillRect(backgroundRectForPainting, baseColor, CompositeCopy);
             } else if (!baseBgColorOnly && bgColor.isVisible()) {
-                auto operation = shouldClearBackground ? CompositeCopy : context.compositeOperation();
+                auto operation = context.compositeOperation();
+                if (shouldClearBackground) {
+                    if (op == CompositeDestinationOut) // We're punching out the background.
+                        operation = op;
+                    else
+                        operation = CompositeCopy;
+                }
                 context.fillRect(backgroundRectForPainting, bgColor, operation);
             } else if (shouldClearBackground)
                 context.clearRect(backgroundRectForPainting);
@@ -964,7 +984,7 @@ void RenderBoxModelObject::paintFillLayerExtended(const PaintInfo& paintInfo, co
             auto drawResult = context.drawTiledImage(*image, geometry.destRect(), toLayoutPoint(geometry.relativePhase()), geometry.tileSize(), geometry.spaceSize(), ImagePaintingOptions(compositeOp, bgLayer.blendMode(), decodingMode, ImageOrientationDescription(), interpolation));
             if (drawResult == ImageDrawResult::DidRequestDecoding) {
                 ASSERT(bgImage->isCachedImage());
-                bgImage->cachedImage()->addPendingImageDrawingClient(*this);
+                bgImage->cachedImage()->addClientWaitingForAsyncDecoding(*this);
             }
         }
     }

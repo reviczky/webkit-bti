@@ -125,7 +125,7 @@ void JIT_OPERATION operationThrowDivideError(ExecState* exec)
 
     NativeCallFrameTracerWithRestore tracer(vm, entryFrame, callerFrame);
     ErrorHandlingScope errorScope(*vm);
-    throwException(callerFrame, scope, createError(callerFrame, ASCIILiteral("Division by zero or division overflow.")));
+    throwException(callerFrame, scope, createError(callerFrame, "Division by zero or division overflow."_s));
 }
 
 void JIT_OPERATION operationThrowOutOfBoundsAccessError(ExecState* exec)
@@ -138,7 +138,7 @@ void JIT_OPERATION operationThrowOutOfBoundsAccessError(ExecState* exec)
 
     NativeCallFrameTracerWithRestore tracer(vm, entryFrame, callerFrame);
     ErrorHandlingScope errorScope(*vm);
-    throwException(callerFrame, scope, createError(callerFrame, ASCIILiteral("Out-of-bounds access.")));
+    throwException(callerFrame, scope, createError(callerFrame, "Out-of-bounds access."_s));
 }
 #endif
 
@@ -1537,8 +1537,9 @@ SlowPathReturnType JIT_OPERATION operationOptimize(ExecState* exec, uint32_t byt
             return encodeResult(0, 0);
         }
     } else if (codeBlock->hasOptimizedReplacement()) {
+        CodeBlock* replacement = codeBlock->replacement();
         if (UNLIKELY(Options::verboseOSR()))
-            dataLog("Considering OSR ", *codeBlock, " -> ", *codeBlock->replacement(), ".\n");
+            dataLog("Considering OSR ", codeBlock, " -> ", replacement, ".\n");
         // If we have an optimized replacement, then it must be the case that we entered
         // cti_optimize from a loop. That's because if there's an optimized replacement,
         // then all calls to this function will be relinked to the replacement and so
@@ -1552,14 +1553,14 @@ SlowPathReturnType JIT_OPERATION operationOptimize(ExecState* exec, uint32_t byt
         // attempt OSR entry. Hence it might even be correct for
         // shouldReoptimizeFromLoopNow() to always return true. But we make it do some
         // additional checking anyway, to reduce the amount of recompilation thrashing.
-        if (codeBlock->replacement()->shouldReoptimizeFromLoopNow()) {
+        if (replacement->shouldReoptimizeFromLoopNow()) {
             CODEBLOCK_LOG_EVENT(codeBlock, "delayOptimizeToDFG", ("should reoptimize from loop now"));
             if (UNLIKELY(Options::verboseOSR())) {
                 dataLog(
-                    "Triggering reoptimization of ", *codeBlock,
-                    "(", *codeBlock->replacement(), ") (in loop).\n");
+                    "Triggering reoptimization of ", codeBlock,
+                    "(", replacement, ") (in loop).\n");
             }
-            codeBlock->replacement()->jettison(Profiler::JettisonDueToBaselineLoopReoptimizationTrigger, CountReoptimization);
+            replacement->jettison(Profiler::JettisonDueToBaselineLoopReoptimizationTrigger, CountReoptimization);
             return encodeResult(0, 0);
         }
     } else {
@@ -1578,7 +1579,7 @@ SlowPathReturnType JIT_OPERATION operationOptimize(ExecState* exec, uint32_t byt
 
         unsigned numVarsWithValues;
         if (bytecodeIndex)
-            numVarsWithValues = codeBlock->m_numCalleeLocals;
+            numVarsWithValues = codeBlock->numCalleeLocals();
         else
             numVarsWithValues = 0;
         Operands<JSValue> mustHandleValues(codeBlock->numParameters(), numVarsWithValues);
@@ -1602,13 +1603,13 @@ SlowPathReturnType JIT_OPERATION operationOptimize(ExecState* exec, uint32_t byt
     }
     
     CodeBlock* optimizedCodeBlock = codeBlock->replacement();
-    ASSERT(JITCode::isOptimizingJIT(optimizedCodeBlock->jitType()));
+    ASSERT(optimizedCodeBlock && JITCode::isOptimizingJIT(optimizedCodeBlock->jitType()));
     
     if (void* dataBuffer = DFG::prepareOSREntry(exec, optimizedCodeBlock, bytecodeIndex)) {
         CODEBLOCK_LOG_EVENT(optimizedCodeBlock, "osrEntry", ("at bc#", bytecodeIndex));
         if (UNLIKELY(Options::verboseOSR())) {
             dataLog(
-                "Performing OSR ", *codeBlock, " -> ", *optimizedCodeBlock, ".\n");
+                "Performing OSR ", codeBlock, " -> ", optimizedCodeBlock, ".\n");
         }
 
         codeBlock->optimizeSoon();
@@ -1620,7 +1621,7 @@ SlowPathReturnType JIT_OPERATION operationOptimize(ExecState* exec, uint32_t byt
 
     if (UNLIKELY(Options::verboseOSR())) {
         dataLog(
-            "Optimizing ", *codeBlock, " -> ", *codeBlock->replacement(),
+            "Optimizing ", codeBlock, " -> ", codeBlock->replacement(),
             " succeeded, OSR failed, after a delay of ",
             codeBlock->optimizationDelayCounter(), ".\n");
     }
@@ -1641,8 +1642,8 @@ SlowPathReturnType JIT_OPERATION operationOptimize(ExecState* exec, uint32_t byt
         CODEBLOCK_LOG_EVENT(codeBlock, "delayOptimizeToDFG", ("should reoptimize now"));
         if (UNLIKELY(Options::verboseOSR())) {
             dataLog(
-                "Triggering reoptimization of ", *codeBlock, " -> ",
-                *codeBlock->replacement(), " (after OSR fail).\n");
+                "Triggering reoptimization of ", codeBlock, " -> ",
+                codeBlock->replacement(), " (after OSR fail).\n");
         }
         optimizedCodeBlock->jettison(Profiler::JettisonDueToBaselineLoopReoptimizationTriggerOnOSREntryFail, CountReoptimization);
         return encodeResult(0, 0);
@@ -1662,6 +1663,9 @@ char* JIT_OPERATION operationTryOSREnterAtCatch(ExecState* exec, uint32_t byteco
     NativeCallFrameTracer tracer(&vm, exec);
 
     CodeBlock* optimizedReplacement = exec->codeBlock()->replacement();
+    if (UNLIKELY(!optimizedReplacement))
+        return nullptr;
+
     switch (optimizedReplacement->jitType()) {
     case JITCode::DFGJIT:
     case JITCode::FTLJIT: {
@@ -1681,6 +1685,8 @@ char* JIT_OPERATION operationTryOSREnterAtCatchAndValueProfile(ExecState* exec, 
 
     CodeBlock* codeBlock = exec->codeBlock();
     CodeBlock* optimizedReplacement = codeBlock->replacement();
+    if (UNLIKELY(!optimizedReplacement))
+        return nullptr;
 
     switch (optimizedReplacement->jitType()) {
     case JITCode::DFGJIT:
@@ -2130,7 +2136,7 @@ size_t JIT_OPERATION operationDeleteById(ExecState* exec, EncodedJSValue encoded
     bool couldDelete = baseObj->methodTable(vm)->deleteProperty(baseObj, exec, Identifier::fromUid(&vm, uid));
     RETURN_IF_EXCEPTION(scope, false);
     if (!couldDelete && exec->codeBlock()->isStrictMode())
-        throwTypeError(exec, scope, ASCIILiteral(UnableToDeletePropertyError));
+        throwTypeError(exec, scope, UnableToDeletePropertyError);
     return couldDelete;
 }
 
@@ -2162,7 +2168,7 @@ size_t JIT_OPERATION operationDeleteByVal(ExecState* exec, EncodedJSValue encode
     }
     RETURN_IF_EXCEPTION(scope, false);
     if (!couldDelete && exec->codeBlock()->isStrictMode())
-        throwTypeError(exec, scope, ASCIILiteral(UnableToDeletePropertyError));
+        throwTypeError(exec, scope, UnableToDeletePropertyError);
     return couldDelete;
 }
 
@@ -2914,7 +2920,7 @@ void JIT_OPERATION operationProcessTypeProfilerLog(ExecState* exec)
 {
     VM& vm = exec->vm();
     NativeCallFrameTracer tracer(&vm, exec);
-    vm.typeProfilerLog()->processLogEntries(ASCIILiteral("Log Full, called from inside baseline JIT"));
+    vm.typeProfilerLog()->processLogEntries("Log Full, called from inside baseline JIT"_s);
 }
 
 void JIT_OPERATION operationProcessShadowChickenLog(ExecState* exec)

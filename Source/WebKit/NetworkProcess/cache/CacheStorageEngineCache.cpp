@@ -31,6 +31,7 @@
 #include "NetworkCacheIOChannel.h"
 #include "NetworkCacheKey.h"
 #include "NetworkProcess.h"
+#include "WebCoreArgumentCoders.h"
 #include <WebCore/CacheQueryOptions.h>
 #include <WebCore/HTTPParsers.h>
 #include <pal/SessionID.h>
@@ -97,7 +98,7 @@ static inline void updateVaryInformation(RecordInformation& recordInformation, c
 
 RecordInformation Cache::toRecordInformation(const Record& record)
 {
-    Key key { ASCIILiteral("record"), m_uniqueName, { }, createCanonicalUUIDString(), m_caches.salt() };
+    Key key { "record"_s, m_uniqueName, { }, createCanonicalUUIDString(), m_caches.salt() };
     RecordInformation recordInformation { WTFMove(key), MonotonicTime::now().secondsSinceEpoch().milliseconds(), record.identifier, 0 , record.responseBodySize, record.request.url(), false, { } };
 
     updateVaryInformation(recordInformation, record.request, record.response);

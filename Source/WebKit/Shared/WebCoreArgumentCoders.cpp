@@ -36,6 +36,7 @@
 #include <WebCore/CompositionUnderline.h>
 #include <WebCore/Credential.h>
 #include <WebCore/Cursor.h>
+#include <WebCore/DataListSuggestionPicker.h>
 #include <WebCore/DatabaseDetails.h>
 #include <WebCore/DictationAlternative.h>
 #include <WebCore/DictionaryPopupInfo.h>
@@ -659,6 +660,14 @@ bool ArgumentCoder<ViewportArguments>::decode(Decoder& decoder, ViewportArgument
 {
     return SimpleArgumentCoder<ViewportArguments>::decode(decoder, viewportArguments);
 }
+
+std::optional<ViewportArguments> ArgumentCoder<ViewportArguments>::decode(Decoder& decoder)
+{
+    ViewportArguments viewportArguments;
+    if (!SimpleArgumentCoder<ViewportArguments>::decode(decoder, viewportArguments))
+        return std::nullopt;
+    return WTFMove(viewportArguments);
+}
 #endif // PLATFORM(IOS)
 
 
@@ -963,8 +972,8 @@ void ArgumentCoder<PluginInfo>::encode(Encoder& encoder, const PluginInfo& plugi
     encoder << pluginInfo.mimes;
     encoder << pluginInfo.isApplicationPlugin;
     encoder.encodeEnum(pluginInfo.clientLoadPolicy);
-#if PLATFORM(MAC)
     encoder << pluginInfo.bundleIdentifier;
+#if PLATFORM(MAC)
     encoder << pluginInfo.versionString;
 #endif
 }
@@ -984,9 +993,9 @@ std::optional<WebCore::PluginInfo> ArgumentCoder<PluginInfo>::decode(Decoder& de
         return std::nullopt;
     if (!decoder.decodeEnum(pluginInfo.clientLoadPolicy))
         return std::nullopt;
-#if PLATFORM(MAC)
     if (!decoder.decode(pluginInfo.bundleIdentifier))
         return std::nullopt;
+#if PLATFORM(MAC)
     if (!decoder.decode(pluginInfo.versionString))
         return std::nullopt;
 #endif
@@ -1623,6 +1632,29 @@ bool ArgumentCoder<DatabaseDetails>::decode(Decoder& decoder, DatabaseDetails& d
     return true;
 }
 
+#if ENABLE(DATALIST_ELEMENT)
+void ArgumentCoder<DataListSuggestionInformation>::encode(Encoder& encoder, const WebCore::DataListSuggestionInformation& info)
+{
+    encoder.encodeEnum(info.activationType);
+    encoder << info.suggestions;
+    encoder << info.elementRect;
+}
+
+bool ArgumentCoder<DataListSuggestionInformation>::decode(Decoder& decoder, WebCore::DataListSuggestionInformation& info)
+{
+    if (!decoder.decodeEnum(info.activationType))
+        return false;
+
+    if (!decoder.decode(info.suggestions))
+        return false;
+
+    if (!decoder.decode(info.elementRect))
+        return false;
+
+    return true;
+}
+#endif
+
 void ArgumentCoder<PasteboardCustomData>::encode(Encoder& encoder, const PasteboardCustomData& data)
 {
     encoder << data.origin;
@@ -1644,6 +1676,38 @@ bool ArgumentCoder<PasteboardCustomData>::decode(Decoder& decoder, PasteboardCus
 
     if (!decoder.decode(data.sameOriginCustomData))
         return false;
+
+    return true;
+}
+
+void ArgumentCoder<PasteboardURL>::encode(Encoder& encoder, const PasteboardURL& content)
+{
+    encoder << content.url;
+    encoder << content.title;
+#if PLATFORM(MAC)
+    encoder << content.userVisibleForm;
+#endif
+#if PLATFORM(GTK)
+    encoder << content.markup;
+#endif
+}
+
+bool ArgumentCoder<PasteboardURL>::decode(Decoder& decoder, PasteboardURL& content)
+{
+    if (!decoder.decode(content.url))
+        return false;
+
+    if (!decoder.decode(content.title))
+        return false;
+
+#if PLATFORM(MAC)
+    if (!decoder.decode(content.userVisibleForm))
+        return false;
+#endif
+#if PLATFORM(GTK)
+    if (!decoder.decode(content.markup))
+        return false;
+#endif
 
     return true;
 }
@@ -1683,23 +1747,6 @@ bool ArgumentCoder<Highlight>::decode(Decoder& decoder, Highlight& highlight)
         return false;
     if (!decoder.decode(highlight.quads))
         return false;
-    return true;
-}
-
-void ArgumentCoder<PasteboardURL>::encode(Encoder& encoder, const PasteboardURL& content)
-{
-    encoder << content.url;
-    encoder << content.title;
-}
-
-bool ArgumentCoder<PasteboardURL>::decode(Decoder& decoder, PasteboardURL& content)
-{
-    if (!decoder.decode(content.url))
-        return false;
-
-    if (!decoder.decode(content.title))
-        return false;
-
     return true;
 }
 
@@ -2195,6 +2242,9 @@ void ArgumentCoder<FilterOperation>::encode(Encoder& encoder, const FilterOperat
     case FilterOperation::CONTRAST:
         encoder << downcast<BasicComponentTransferFilterOperation>(filter).amount();
         break;
+    case FilterOperation::APPLE_INVERT_LIGHTNESS:
+        ASSERT_NOT_REACHED(); // APPLE_INVERT_LIGHTNESS is only used in -apple-color-filter.
+        break;
     case FilterOperation::BLUR:
         encoder << downcast<BlurFilterOperation>(filter).stdDeviation();
         break;
@@ -2245,6 +2295,9 @@ bool decodeFilterOperation(Decoder& decoder, RefPtr<FilterOperation>& filter)
         filter = BasicComponentTransferFilterOperation::create(amount, type);
         break;
     }
+    case FilterOperation::APPLE_INVERT_LIGHTNESS:
+        ASSERT_NOT_REACHED(); // APPLE_INVERT_LIGHTNESS is only used in -apple-color-filter.
+        break;
     case FilterOperation::BLUR: {
         Length stdDeviation;
         if (!decoder.decode(stdDeviation))

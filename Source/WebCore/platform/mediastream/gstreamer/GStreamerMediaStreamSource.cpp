@@ -328,10 +328,10 @@ typedef struct {
     GstStaticPadTemplate* pad_template;
 } ProbeData;
 
-static GstFlowReturn webkitMediaStreamSrcChain(GstPad* pad, GstObject* object, GstBuffer* buffer)
+static GstFlowReturn webkitMediaStreamSrcChain(GstPad* pad, GstObject* parent, GstBuffer* buffer)
 {
     GstFlowReturn result;
-    GRefPtr<WebKitMediaStreamSrc> self = adoptGRef(WEBKIT_MEDIA_STREAM_SRC(gst_object_get_parent(object)));
+    GRefPtr<WebKitMediaStreamSrc> self = adoptGRef(WEBKIT_MEDIA_STREAM_SRC(gst_object_get_parent(parent)));
 
     result = gst_flow_combiner_update_pad_flow(self.get()->flowCombiner, pad,
         gst_proxy_pad_chain_default(pad, GST_OBJECT(self.get()), buffer));
@@ -350,10 +350,17 @@ static void webkitMediaStreamSrcAddPad(WebKitMediaStreamSrc* self, GstPad* targe
         target);
 
     auto proxypad = adoptGRef(GST_PAD(gst_proxy_pad_get_internal(GST_PROXY_PAD(ghostpad))));
+    gst_pad_set_active(ghostpad, TRUE);
+    if (!gst_element_add_pad(GST_ELEMENT(self), GST_PAD(ghostpad))) {
+        GST_ERROR_OBJECT(self, "Could not add pad %s:%s", GST_DEBUG_PAD_NAME(ghostpad));
+        ASSERT_NOT_REACHED();
+
+        return;
+    }
+
+    gst_flow_combiner_add_pad(self->flowCombiner, proxypad.get());
     gst_pad_set_chain_function(proxypad.get(),
         static_cast<GstPadChainFunction>(webkitMediaStreamSrcChain));
-    gst_pad_set_active(ghostpad, TRUE);
-    ASSERT(gst_element_add_pad(GST_ELEMENT(self), GST_PAD(ghostpad)));
 }
 
 static GstPadProbeReturn webkitMediaStreamSrcPadProbeCb(GstPad* pad, GstPadProbeInfo* info, ProbeData* data)
@@ -377,7 +384,6 @@ static GstPadProbeReturn webkitMediaStreamSrcPadProbeCb(GstPad* pad, GstPadProbe
         gst_event_unref(event);
 
         gst_pad_push_event(pad, stream_start);
-        gst_pad_push_event(pad, gst_event_new_stream_collection(self->streamCollection.get()));
         gst_pad_push_event(pad, gst_event_new_tag(mediaStreamTrackPrivateGetTags(data->track.get())));
 
         webkitMediaStreamSrcAddPad(self, pad, data->pad_template);
@@ -398,7 +404,6 @@ static gboolean webkitMediaStreamSrcSetupSrc(WebKitMediaStreamSrc* self,
     auto pad = adoptGRef(gst_element_get_static_pad(element, "src"));
 
     gst_bin_add(GST_BIN(self), element);
-
 
     ProbeData* data = new ProbeData;
     data->self = WEBKIT_MEDIA_STREAM_SRC(self);

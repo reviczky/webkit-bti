@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -24,52 +24,27 @@
  */
 
 #include "config.h"
-#include "WebFrameListenerProxy.h"
+#include "WebDataListSuggestionsDropdown.h"
 
-#include "WebFrameProxy.h"
-#include "WebsiteDataStore.h"
-#include "WebsitePoliciesData.h"
+#if ENABLE(DATALIST_ELEMENT)
 
 namespace WebKit {
 
-WebFrameListenerProxy::WebFrameListenerProxy(WebFrameProxy* frame, uint64_t listenerID)
-    : m_frame(frame)
-    , m_listenerID(listenerID)
+WebDataListSuggestionsDropdown::WebDataListSuggestionsDropdown(Client& client)
+    : m_client(&client)
 {
 }
 
-WebFrameListenerProxy::~WebFrameListenerProxy()
+WebDataListSuggestionsDropdown::~WebDataListSuggestionsDropdown()
 {
 }
 
-void WebFrameListenerProxy::invalidate()
+void WebDataListSuggestionsDropdown::close()
 {
-    m_frame = nullptr;
-}
-
-void WebFrameListenerProxy::receivedPolicyDecision(WebCore::PolicyAction action, std::optional<WebsitePoliciesData>&& data)
-{
-    if (!m_frame)
-        return;
-
-    m_frame->receivedPolicyDecision(action, m_listenerID, m_navigation.get(), WTFMove(data));
-    m_frame = nullptr;
-}
-
-void WebFrameListenerProxy::changeWebsiteDataStore(WebsiteDataStore& websiteDataStore)
-{
-    if (!m_frame)
-        return;
-
-    m_frame->changeWebsiteDataStore(websiteDataStore);
-}
-
-bool WebFrameListenerProxy::isMainFrame() const
-{
-    if (!m_frame)
-        return false;
-
-    return m_frame->isMainFrame();
+    m_client->didCloseSuggestions();
+    m_client = nullptr;
 }
 
 } // namespace WebKit
+
+#endif // ENABLE(DATALIST_ELEMENT)

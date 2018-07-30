@@ -82,7 +82,7 @@ namespace WebKit {
 
 static HashMap<ProcessIdentifier, WebProcessProxy*>& allProcesses()
 {
-    ASSERT(isMainThread());
+    ASSERT(RunLoop::isMain());
     static NeverDestroyed<HashMap<ProcessIdentifier, WebProcessProxy*>> map;
     return map;
 }
@@ -116,7 +116,7 @@ WebProcessProxy::WebProcessProxy(WebProcessPool& processPool, WebsiteDataStore& 
     : ChildProcessProxy(processPool.alwaysRunsAtBackgroundPriority())
     , m_responsivenessTimer(*this)
     , m_backgroundResponsivenessTimer(*this)
-    , m_processPool(processPool)
+    , m_processPool(processPool, isInPrewarmedPool == IsInPrewarmedPool::Yes ? IsWeak::Yes : IsWeak::No)
     , m_mayHaveUniversalFileReadSandboxExtension(false)
     , m_numberOfTimesSuddenTerminationWasDisabled(0)
     , m_throttler(*this, processPool.shouldTakeUIBackgroundAssertion())
@@ -128,6 +128,8 @@ WebProcessProxy::WebProcessProxy(WebProcessPool& processPool, WebsiteDataStore& 
 #endif
     , m_isInPrewarmedPool(isInPrewarmedPool == IsInPrewarmedPool::Yes)
 {
+    RELEASE_ASSERT(RunLoop::isMain());
+
     auto result = allProcesses().add(coreProcessIdentifier(), this);
     ASSERT_UNUSED(result, result.isNewEntry);
 
@@ -136,6 +138,7 @@ WebProcessProxy::WebProcessProxy(WebProcessPool& processPool, WebsiteDataStore& 
 
 WebProcessProxy::~WebProcessProxy()
 {
+    RELEASE_ASSERT(RunLoop::isMain());
     ASSERT(m_pageURLRetainCountMap.isEmpty());
 
     auto result = allProcesses().remove(coreProcessIdentifier());
@@ -159,8 +162,8 @@ void WebProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOpt
 
     ChildProcessProxy::getLaunchOptions(launchOptions);
 
-    if (WebKit::isInspectorProcessPool(m_processPool))
-        launchOptions.extraInitializationData.add(ASCIILiteral("inspector-process"), ASCIILiteral("1"));
+    if (WebKit::isInspectorProcessPool(processPool()))
+        launchOptions.extraInitializationData.add("inspector-process"_s, "1"_s);
 
     auto overrideLanguages = m_processPool->configuration().overrideLanguages();
     if (overrideLanguages.size()) {
@@ -170,7 +173,7 @@ void WebProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOpt
                 languageString.append(',');
             languageString.append(overrideLanguages[i]);
         }
-        launchOptions.extraInitializationData.add(ASCIILiteral("OverrideLanguages"), languageString.toString());
+        launchOptions.extraInitializationData.add("OverrideLanguages"_s, languageString.toString());
     }
 
     launchOptions.nonValidInjectedCodeAllowed = shouldAllowNonValidInjectedCode();
@@ -184,6 +187,10 @@ void WebProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOpt
 void WebProcessProxy::connectionWillOpen(IPC::Connection& connection)
 {
     ASSERT(this->connection() == &connection);
+
+    // Throttling IPC messages coming from the WebProcesses so that the UIProcess stays responsive, even
+    // if one of the WebProcesses misbehaves.
+    connection.enableIncomingMessagesThrottling();
 
 #if ENABLE(SEC_ITEM_SHIM)
     SecItemShimProxy::singleton().initializeConnection(connection);
@@ -203,6 +210,8 @@ void WebProcessProxy::processWillShutDown(IPC::Connection& connection)
 
 void WebProcessProxy::shutDown()
 {
+    RELEASE_ASSERT(RunLoop::isMain());
+
     shutDownProcess();
 
     if (m_webConnection) {
@@ -344,18 +353,18 @@ void WebProcessProxy::topPrivatelyControlledDomainsWithWebsiteData(OptionSet<Web
     RefPtr<CallbackAggregator> callbackAggregator = adoptRef(new CallbackAggregator(WTFMove(completionHandler)));
     
     HashSet<PAL::SessionID> visitedSessionIDs;
-    for (auto& page : globalPageMap()) {
-        auto& dataStore = page.value->websiteDataStore();
+    for (auto& page : globalPageMap().values()) {
+        auto& dataStore = page->websiteDataStore();
         if (!dataStore.isPersistent() || visitedSessionIDs.contains(dataStore.sessionID()))
             continue;
         visitedSessionIDs.add(dataStore.sessionID());
         callbackAggregator->addPendingCallback();
-        dataStore.topPrivatelyControlledDomainsWithWebsiteData(dataTypes, { }, [callbackAggregator, shouldNotifyPage, page](HashSet<String>&& domainsWithDataRecords) {
+        dataStore.topPrivatelyControlledDomainsWithWebsiteData(dataTypes, { }, [callbackAggregator, shouldNotifyPage, page = makeRef(*page)](HashSet<String>&& domainsWithDataRecords) {
             // When completing the task, we should be getting called on the main thread.
             ASSERT(RunLoop::isMain());
             
             if (shouldNotifyPage)
-                page.value->postMessageToInjectedBundle("WebsiteDataScanForTopPrivatelyControlledDomainsFinished", nullptr);
+                page->postMessageToInjectedBundle("WebsiteDataScanForTopPrivatelyControlledDomainsFinished", nullptr);
             
             callbackAggregator->addDomainsWithDeletedWebsiteData(WTFMove(domainsWithDataRecords));
             callbackAggregator->removePendingCallback();
@@ -421,6 +430,15 @@ void WebProcessProxy::suspendedPageWasDestroyed(SuspendedPageProxy& suspendedPag
     m_suspendedPageMap.remove(suspendedPage.page().pageID());
 
     maybeShutDown();
+}
+
+void WebProcessProxy::markIsNoLongerInPrewarmedPool()
+{
+    ASSERT(m_isInPrewarmedPool);
+
+    m_isInPrewarmedPool = false;
+    RELEASE_ASSERT(m_processPool);
+    m_processPool.setIsWeak(IsWeak::No);
 }
 
 void WebProcessProxy::removeWebPage(WebPageProxy& webPage, uint64_t pageID)
@@ -560,12 +578,12 @@ void WebProcessProxy::updateBackForwardItem(const BackForwardListItemState& item
 }
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
-void WebProcessProxy::getPlugins(bool refresh, Vector<PluginInfo>& plugins, Vector<PluginInfo>& applicationPlugins, std::optional<Vector<WebCore::SupportedPluginName>>& supportedPluginNames)
+void WebProcessProxy::getPlugins(bool refresh, Vector<PluginInfo>& plugins, Vector<PluginInfo>& applicationPlugins, std::optional<Vector<WebCore::SupportedPluginIdentifier>>& supportedPluginIdentifiers)
 {
     if (refresh)
         m_processPool->pluginInfoStore().refresh();
 
-    supportedPluginNames = m_processPool->pluginInfoStore().supportedPluginNames();
+    supportedPluginIdentifiers = m_processPool->pluginInfoStore().supportedPluginIdentifiers();
 
     Vector<PluginModuleInfo> pluginModules = m_processPool->pluginInfoStore().plugins();
     for (size_t i = 0; i < pluginModules.size(); ++i)
@@ -657,6 +675,7 @@ void WebProcessProxy::didReceiveSyncMessage(IPC::Connection& connection, IPC::De
 
 void WebProcessProxy::didClose(IPC::Connection&)
 {
+    RELEASE_LOG_IF(m_websiteDataStore->sessionID().isAlwaysOnLoggingAllowed(), Process, "%p - WebProcessProxy didClose (web process crash)", this);
     processDidTerminateOrFailedToLaunch();
 }
 
@@ -746,9 +765,12 @@ bool WebProcessProxy::mayBecomeUnresponsive()
 
 void WebProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connection::Identifier connectionIdentifier)
 {
+    RELEASE_ASSERT(RunLoop::isMain());
+
     ChildProcessProxy::didFinishLaunching(launcher, connectionIdentifier);
 
     if (!IPC::Connection::identifierIsValid(connectionIdentifier)) {
+        RELEASE_LOG_IF(m_websiteDataStore->sessionID().isAlwaysOnLoggingAllowed(), Process, "%p - WebProcessProxy didFinishLaunching - invalid connection identifier (web process failed to launch)", this);
         processDidTerminateOrFailedToLaunch();
         return;
     }
@@ -758,6 +780,7 @@ void WebProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
         page->processDidFinishLaunching();
     }
 
+    RELEASE_ASSERT(!m_webConnection);
     m_webConnection = WebConnectionToWebProcess::create(this);
 
     m_processPool->processDidFinishLaunching(this);
@@ -960,6 +983,8 @@ void WebProcessProxy::requestTermination(ProcessTerminationReason reason)
 {
     if (state() == State::Terminated)
         return;
+
+    RELEASE_LOG_IF(m_websiteDataStore->sessionID().isAlwaysOnLoggingAllowed(), Process, "%p - WebProcessProxy::requestTermination - reason %d", this, reason);
 
     ChildProcessProxy::terminate();
 

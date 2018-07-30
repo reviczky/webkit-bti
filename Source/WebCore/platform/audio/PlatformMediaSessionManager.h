@@ -29,6 +29,7 @@
 #include "AudioHardwareListener.h"
 #include "PlatformMediaSession.h"
 #include "RemoteCommandListener.h"
+#include "Timer.h"
 #include <pal/system/SystemSleepListener.h>
 #include <wtf/Vector.h>
 
@@ -55,12 +56,12 @@ public:
     bool activeAudioSessionRequired() const;
     bool canProduceAudio() const;
 
-    WEBCORE_EXPORT virtual bool hasActiveNowPlayingSession() const { return false; }
-    WEBCORE_EXPORT virtual String lastUpdatedNowPlayingTitle() const { return emptyString(); }
-    WEBCORE_EXPORT virtual double lastUpdatedNowPlayingDuration() const { return NAN; }
-    WEBCORE_EXPORT virtual double lastUpdatedNowPlayingElapsedTime() const { return NAN; }
-    WEBCORE_EXPORT virtual uint64_t lastUpdatedNowPlayingInfoUniqueIdentifier() const { return 0; }
-    WEBCORE_EXPORT virtual bool registeredAsNowPlayingApplication() const { return false; }
+    virtual bool hasActiveNowPlayingSession() const { return false; }
+    virtual String lastUpdatedNowPlayingTitle() const { return emptyString(); }
+    virtual double lastUpdatedNowPlayingDuration() const { return NAN; }
+    virtual double lastUpdatedNowPlayingElapsedTime() const { return NAN; }
+    virtual uint64_t lastUpdatedNowPlayingInfoUniqueIdentifier() const { return 0; }
+    virtual bool registeredAsNowPlayingApplication() const { return false; }
 
     bool willIgnoreSystemInterruptions() const { return m_willIgnoreSystemInterruptions; }
     void setWillIgnoreSystemInterruptions(bool ignore) { m_willIgnoreSystemInterruptions = ignore; }
@@ -125,7 +126,7 @@ protected:
 private:
     friend class Internals;
 
-    void updateSessionState();
+    void scheduleUpdateSessionState();
 
     // RemoteCommandListenerClient
     WEBCORE_EXPORT void didReceiveRemoteControlCommand(PlatformMediaSession::RemoteControlCommandType, const PlatformMediaSession::RemoteCommandArgument*) override;
@@ -150,6 +151,8 @@ private:
     RefPtr<MediaPlaybackTarget> m_playbackTarget;
     bool m_canPlayToTarget { false };
 #endif
+
+    std::unique_ptr<DeferrableOneShotTimer> m_updateStateTimer;
 
     bool m_interrupted { false };
     mutable bool m_isApplicationInBackground { false };

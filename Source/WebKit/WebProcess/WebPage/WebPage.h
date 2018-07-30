@@ -33,6 +33,7 @@
 #include "APIInjectedBundlePageUIClient.h"
 #include "APIObject.h"
 #include "CallbackID.h"
+#include "DrawingAreaInfo.h"
 #include "EditingRange.h"
 #include "InjectedBundlePageContextMenuClient.h"
 #include "InjectedBundlePageFullScreenClient.h"
@@ -519,7 +520,7 @@ public:
     void setBottomOverhangImage(WebImage*);
     
     void setUseSystemAppearance(bool);
-    void setDefaultAppearance(bool);
+    void setUseDarkAppearance(bool);
 #endif
 
     bool windowIsFocused() const;
@@ -657,7 +658,8 @@ public:
 
     void enableInspectorNodeSearch();
     void disableInspectorNodeSearch();
-    
+
+    bool forceAlwaysUserScalable() const { return m_forceAlwaysUserScalable; }
     void setForceAlwaysUserScalable(bool);
 #endif
 
@@ -668,7 +670,7 @@ public:
     bool hasRichlyEditableSelection() const;
 
     void setLayerTreeStateIsFrozen(bool);
-    void markLayersVolatile(WTF::Function<void ()>&& completionHandler = { });
+    void markLayersVolatile(WTF::Function<void (bool)>&& completionHandler = { });
     void cancelMarkLayersVolatile();
 
     NotificationPermissionRequestManager* notificationPermissionRequestManager();
@@ -890,6 +892,7 @@ public:
     void setViewportConfigurationViewLayoutSize(const WebCore::FloatSize&);
     void setMaximumUnobscuredSize(const WebCore::FloatSize&);
     void setDeviceOrientation(int32_t);
+    void setOverrideViewportArguments(const std::optional<WebCore::ViewportArguments>&);
     void dynamicViewportSizeUpdate(const WebCore::FloatSize& viewLayoutSize, const WebCore::FloatSize& maximumUnobscuredSize, const WebCore::FloatRect& targetExposedContentRect, const WebCore::FloatRect& targetUnobscuredRect, const WebCore::FloatRect& targetUnobscuredRectInScrollViewCoordinates, const WebCore::FloatBoxExtent& targetUnobscuredSafeAreaInsets, double scale, int32_t deviceOrientation, DynamicViewportSizeUpdateID);
     std::optional<float> scaleFromUIProcess(const VisibleContentRectUpdateInfo&) const;
     void updateVisibleContentRects(const VisibleContentRectUpdateInfo&, MonotonicTime oldestTimestamp);
@@ -1144,7 +1147,7 @@ private:
 
     bool markLayersVolatileImmediatelyIfPossible();
     void layerVolatilityTimerFired();
-    void callVolatilityCompletionHandlers();
+    void callVolatilityCompletionHandlers(bool succeeded);
 
     String sourceForFrame(WebFrame*);
 
@@ -1165,7 +1168,7 @@ private:
     void setInitialFocus(bool forward, bool isKeyboardEventValid, const WebKeyboardEvent&, CallbackID);
     void updateIsInWindow(bool isInitialState = false);
     void visibilityDidChange();
-    void setActivityState(WebCore::ActivityState::Flags, bool wantsDidUpdateActivityState, const Vector<CallbackID>& callbackIDs);
+    void setActivityState(WebCore::ActivityState::Flags, ActivityStateChangeID, const Vector<CallbackID>& callbackIDs);
     void validateCommand(const String&, CallbackID);
     void executeEditCommand(const String&, const String&);
     void setEditable(bool);
@@ -1664,10 +1667,12 @@ private:
     WebCore::FloatRect m_previousExposedContentRect;
     uint64_t m_currentAssistedNodeIdentifier { 0 };
     std::optional<DynamicViewportSizeUpdateID> m_pendingDynamicViewportSizeUpdateID;
+    double m_lastTransactionPageScaleFactor { 0 };
+    uint64_t m_lastTransactionIDWithScaleChange { 0 };
 #endif
 
     WebCore::Timer m_layerVolatilityTimer;
-    Vector<WTF::Function<void ()>> m_markLayersAsVolatileCompletionHandlers;
+    Vector<WTF::Function<void (bool)>> m_markLayersAsVolatileCompletionHandlers;
     bool m_isSuspendedUnderLock { false };
 
     HashSet<String, ASCIICaseInsensitiveHash> m_mimeTypesWithCustomContentProviders;

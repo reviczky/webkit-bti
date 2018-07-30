@@ -35,7 +35,9 @@
 #include "LayoutBox.h"
 #include "LayoutContainer.h"
 #include "LayoutContext.h"
+#include "Logging.h"
 #include <wtf/IsoMallocInlines.h>
+#include <wtf/text/TextStream.h>
 
 namespace WebCore {
 namespace Layout {
@@ -55,6 +57,9 @@ void BlockFormattingContext::layout(LayoutContext& layoutContext, FormattingStat
     // Vertical margins between adjacent block-level boxes in a block formatting context collapse.
     if (!is<Container>(root()))
         return;
+
+    LOG_WITH_STREAM(FormattingContextLayout, stream << "[Start] -> block formatting context -> layout context(" << &layoutContext << ") formatting root(" << &root() << ")");
+
     auto& formattingRoot = downcast<Container>(root());
     LayoutQueue layoutQueue;
     FloatingContext floatingContext(formattingState.floatingState());
@@ -72,15 +77,23 @@ void BlockFormattingContext::layout(LayoutContext& layoutContext, FormattingStat
             auto& layoutPair = *layoutQueue.last();
             auto& layoutBox = layoutPair.layoutBox;
             auto& displayBox = layoutPair.displayBox;
-            
+
+            if (layoutBox.establishesFormattingContext()) {
+                layoutFormattingContextRoot(layoutContext, formattingState, layoutBox, displayBox);
+                layoutQueue.removeLast();
+                // Since this box is a formatting context root, it takes care of its entire subtree.
+                // Continue with next sibling if exists.
+                if (!layoutBox.nextInFlowOrFloatingSibling())
+                    break;
+                auto* nextSibling = layoutBox.nextInFlowOrFloatingSibling();
+                layoutQueue.append(std::make_unique<LayoutPair>(LayoutPair {*nextSibling, layoutContext.createDisplayBox(*nextSibling)}));
+                continue;
+            }
+
+            LOG_WITH_STREAM(FormattingContextLayout, stream << "[Compute] -> [Position][Border][Padding][Width][Margin] -> for layoutBox(" << &layoutBox << ")");
+            computeStaticPosition(layoutContext, layoutBox, displayBox);
             computeBorderAndPadding(layoutContext, layoutBox, displayBox);
             computeWidthAndMargin(layoutContext, layoutBox, displayBox);
-            computeStaticPosition(layoutContext, layoutBox, displayBox);
-            if (layoutBox.establishesFormattingContext()) {
-                auto formattingContext = layoutContext.formattingContext(layoutBox);
-                formattingContext->layout(layoutContext, layoutContext.establishedFormattingState(layoutBox, *formattingContext));
-                break;
-            }
             if (!is<Container>(layoutBox) || !downcast<Container>(layoutBox).hasInFlowOrFloatingChild())
                 break;
             auto& firstChild = *downcast<Container>(layoutBox).firstInFlowOrFloatingChild();
@@ -94,6 +107,10 @@ void BlockFormattingContext::layout(LayoutContext& layoutContext, FormattingStat
             auto& layoutBox = layoutPair->layoutBox;
             auto& displayBox = layoutPair->displayBox;
 
+            LOG_WITH_STREAM(FormattingContextLayout, stream << "[Compute] -> [Height][Margin] -> for layoutBox(" << &layoutBox << ")");
+            // Formatting root boxes are special-cased and they don't come here.
+            ASSERT(!layoutBox.establishesFormattingContext());
+
             computeHeightAndMargin(layoutContext, layoutBox, displayBox);
             // Adjust position now that we have all the previous floats placed in this context -if needed.
             floatingContext.computePosition(layoutBox, displayBox);
@@ -102,6 +119,7 @@ void BlockFormattingContext::layout(LayoutContext& layoutContext, FormattingStat
             auto& container = downcast<Container>(layoutBox);
             // Move in-flow positioned children to their final position.
             placeInFlowPositionedChildren(layoutContext, container);
+            layoutOutOfFlowDescendants(layoutContext, container);
             if (auto* nextSibling = container.nextInFlowOrFloatingSibling()) {
                 layoutQueue.append(std::make_unique<LayoutPair>(LayoutPair {*nextSibling, layoutContext.createDisplayBox(*nextSibling)}));
                 break;
@@ -110,16 +128,33 @@ void BlockFormattingContext::layout(LayoutContext& layoutContext, FormattingStat
     }
     // Place the inflow positioned children.
     placeInFlowPositionedChildren(layoutContext, formattingRoot);
-    // And take care of out-of-flow boxes as the final step.
-    layoutOutOfFlowDescendants(layoutContext);
-#ifndef NDEBUG
-    validateGeometryConstraintsAfterLayout(layoutContext);
-#endif
+    LOG_WITH_STREAM(FormattingContextLayout, stream << "[End] -> block formatting context -> layout context(" << &layoutContext << ") formatting root(" << &root() << ")");
 }
 
-std::unique_ptr<FormattingState> BlockFormattingContext::createFormattingState(Ref<FloatingState>&& floatingState) const
+void BlockFormattingContext::layoutFormattingContextRoot(LayoutContext& layoutContext, FormattingState& formattingState, const Box& layoutBox, Display::Box& displayBox) const
 {
-    return std::make_unique<BlockFormattingState>(WTFMove(floatingState));
+    // Start laying out this formatting root in the formatting contenxt it lives in.
+    LOG_WITH_STREAM(FormattingContextLayout, stream << "[Compute] -> [Position][Border][Padding][Width][Margin] -> for layoutBox(" << &layoutBox << ")");
+    computeStaticPosition(layoutContext, layoutBox, displayBox);
+    computeBorderAndPadding(layoutContext, layoutBox, displayBox);
+    computeWidthAndMargin(layoutContext, layoutBox, displayBox);
+
+    // Swich over to the new formatting context (the one that the root creates).
+    auto formattingContext = layoutContext.formattingContext(layoutBox);
+    auto& establishedFormattingState = layoutContext.establishedFormattingState(layoutBox, *formattingContext);
+    formattingContext->layout(layoutContext, establishedFormattingState);
+
+    // Come back and finalize the root's geometry.
+    FloatingContext(formattingState.floatingState()).computePosition(layoutBox, displayBox);
+    LOG_WITH_STREAM(FormattingContextLayout, stream << "[Compute] -> [Height][Margin] -> for layoutBox(" << &layoutBox << ")");
+    computeHeightAndMargin(layoutContext, layoutBox, displayBox);
+    // Now that we computed the root's height, we can go back and layout the out-of-flow descedants (if any).
+    formattingContext->layoutOutOfFlowDescendants(layoutContext, layoutBox);
+}
+
+std::unique_ptr<FormattingState> BlockFormattingContext::createFormattingState(Ref<FloatingState>&& floatingState, const LayoutContext& layoutContext) const
+{
+    return std::make_unique<BlockFormattingState>(WTFMove(floatingState), layoutContext);
 }
 
 Ref<FloatingState> BlockFormattingContext::createOrFindFloatingState(LayoutContext&) const
@@ -163,15 +198,87 @@ void BlockFormattingContext::computeHeightAndMargin(LayoutContext& layoutContext
 void BlockFormattingContext::computeInFlowHeightAndMargin(LayoutContext& layoutContext, const Box& layoutBox, Display::Box& displayBox) const
 {
     auto heightAndMargin = Geometry::inFlowHeightAndMargin(layoutContext, layoutBox);
-    displayBox.setHeight(heightAndMargin.height);
-    displayBox.setVerticalMargin(heightAndMargin.margin);
+    displayBox.setContentBoxHeight(heightAndMargin.height);
+    displayBox.moveVertically(heightAndMargin.collapsedMargin.value_or(heightAndMargin.margin).top);
+    displayBox.setVerticalMargin(heightAndMargin.collapsedMargin.value_or(heightAndMargin.margin));
+    displayBox.setVerticalNonCollapsedMargin(heightAndMargin.margin);
 }
 
 void BlockFormattingContext::computeInFlowWidthAndMargin(LayoutContext& layoutContext, const Box& layoutBox, Display::Box& displayBox) const
 {
     auto widthAndMargin = Geometry::inFlowWidthAndMargin(layoutContext, layoutBox);
-    displayBox.setWidth(widthAndMargin.width);
+    displayBox.setContentBoxWidth(widthAndMargin.width);
+    displayBox.moveHorizontally(widthAndMargin.margin.left);
     displayBox.setHorizontalMargin(widthAndMargin.margin);
+}
+
+FormattingContext::InstrinsicWidthConstraints BlockFormattingContext::instrinsicWidthConstraints(LayoutContext& layoutContext, const Box& layoutBox) const
+{
+    auto& formattingState = layoutContext.formattingStateForBox(layoutBox);
+    ASSERT(formattingState.isBlockFormattingState());
+    if (auto instrinsicWidthConstraints = formattingState.instrinsicWidthConstraints(layoutBox))
+        return *instrinsicWidthConstraints;
+
+    // Can we just compute them without checking the children?
+    if (!Geometry::instrinsicWidthConstraintsNeedChildrenWidth(layoutBox)) {
+        auto instrinsicWidthConstraints = Geometry::instrinsicWidthConstraints(layoutContext, layoutBox);
+        formattingState.setInstrinsicWidthConstraints(layoutBox, instrinsicWidthConstraints);
+        return instrinsicWidthConstraints;
+    }
+
+    // Visit the in-flow descendants and compute their min/max intrinsic width if needed.
+    // 1. Go all the way down to the leaf node
+    // 2. Check if actually need to visit all the boxes as we traverse down (already computed, container's min/max does not depend on descendants etc)
+    // 3. As we climb back on the tree, compute min/max intrinsic width
+    // (Any subtrees with new formatting contexts need to layout synchronously)
+    Vector<const Box*> queue;
+    // Non-containers early return.
+    ASSERT(is<Container>(layoutBox));
+    if (auto* firstChild = downcast<Container>(layoutBox).firstInFlowOrFloatingChild())
+        queue.append(firstChild);
+
+    auto& formattingStateForChildren = layoutBox.establishesFormattingContext() ? layoutContext.establishedFormattingState(layoutBox, *this) : formattingState;
+    while (!queue.isEmpty()) {
+        while (true) {
+            auto& childBox = *queue.last(); 
+            // Already computed?
+            auto instrinsicWidthConstraints = formattingStateForChildren.instrinsicWidthConstraints(childBox);
+            // Can we just compute them without checking the children?
+            if (!instrinsicWidthConstraints && !Geometry::instrinsicWidthConstraintsNeedChildrenWidth(childBox))
+                instrinsicWidthConstraints = Geometry::instrinsicWidthConstraints(layoutContext, childBox);
+            // Is it a formatting context root?
+            if (!instrinsicWidthConstraints && childBox.establishesFormattingContext())
+                instrinsicWidthConstraints = layoutContext.formattingContext(childBox)->instrinsicWidthConstraints(layoutContext, childBox);
+            // Go to the next sibling (and skip the descendants) if this box's min/max width is computed.
+            if (instrinsicWidthConstraints) {
+                formattingStateForChildren.setInstrinsicWidthConstraints(childBox, *instrinsicWidthConstraints); 
+                queue.removeLast();
+                if (!childBox.nextInFlowOrFloatingSibling())
+                    break;
+                queue.append(childBox.nextInFlowOrFloatingSibling());
+                continue;
+            }
+
+            if (!is<Container>(childBox) || !downcast<Container>(childBox).hasInFlowOrFloatingChild())
+                break;
+
+            queue.append(downcast<Container>(childBox).firstInFlowOrFloatingChild());
+        }
+
+        // Compute min/max intrinsic width bottom up.
+        while (!queue.isEmpty()) {
+            auto& childBox = *queue.takeLast();
+            formattingStateForChildren.setInstrinsicWidthConstraints(childBox, Geometry::instrinsicWidthConstraints(layoutContext, childBox)); 
+            // Move over to the next sibling or take the next box in the queue.
+            if (!is<Container>(childBox) || !downcast<Container>(childBox).nextInFlowOrFloatingSibling())
+                continue;
+            queue.append(downcast<Container>(childBox).nextInFlowOrFloatingSibling());
+        }
+    }
+
+    auto instrinsicWidthConstraints = Geometry::instrinsicWidthConstraints(layoutContext, layoutBox);
+    formattingState.setInstrinsicWidthConstraints(layoutBox, instrinsicWidthConstraints); 
+    return instrinsicWidthConstraints;
 }
 
 }

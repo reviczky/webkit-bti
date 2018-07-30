@@ -46,6 +46,7 @@ class RealtimeOutgoingAudioSource;
 class RealtimeOutgoingVideoSource;
 
 class LibWebRTCPeerConnectionBackend final : public PeerConnectionBackend {
+    WTF_MAKE_FAST_ALLOCATED;
 public:
     LibWebRTCPeerConnectionBackend(RTCPeerConnection&, LibWebRTCProvider&);
     ~LibWebRTCPeerConnectionBackend();
@@ -73,7 +74,7 @@ private:
     RefPtr<RTCSessionDescription> currentRemoteDescription() const final;
     RefPtr<RTCSessionDescription> pendingRemoteDescription() const final;
 
-    void replaceTrack(RTCRtpSender&, Ref<MediaStreamTrack>&&, DOMPromiseDeferred<void>&&) final;
+    void replaceTrack(RTCRtpSender&, RefPtr<MediaStreamTrack>&&, DOMPromiseDeferred<void>&&) final;
     RTCRtpParameters getParameters(RTCRtpSender&) const final;
 
     void emulatePlatformEvent(const String&) final { }

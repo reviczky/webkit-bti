@@ -151,10 +151,11 @@ private:
     void disableServiceWorkerProcessTerminationDelay();
 
     WebSWOriginStore& swOriginStoreForSession(PAL::SessionID);
+    WebSWOriginStore* existingSWOriginStoreForSession(PAL::SessionID) const;
     bool needsServerToContextConnectionForOrigin(const WebCore::SecurityOriginData&) const;
 #endif
 #if ENABLE(INDEXED_DATABASE)
-    Vector<WebCore::SecurityOriginData> indexedDatabaseOrigins(const String& path);
+    HashSet<WebCore::SecurityOriginData> indexedDatabaseOrigins(const String& path);
 #endif
 
     // For execution on work queue thread only

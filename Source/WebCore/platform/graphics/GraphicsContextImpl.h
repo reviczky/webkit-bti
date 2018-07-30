@@ -79,7 +79,7 @@ public:
     virtual void drawRect(const FloatRect&, float borderThickness) = 0;
     virtual void drawLine(const FloatPoint&, const FloatPoint&) = 0;
     virtual void drawLinesForText(const FloatPoint&, const DashArray& widths, bool printing, bool doubleLines, float strokeThickness) = 0;
-    virtual void drawLineForDocumentMarker(const FloatPoint&, float width, GraphicsContext::DocumentMarkerLineStyle) = 0;
+    virtual void drawLineForDocumentMarker(const FloatPoint&, float width, DocumentMarkerLineStyle) = 0;
     virtual void drawEllipse(const FloatRect&) = 0;
     virtual void drawPath(const Path&) = 0;
 
@@ -104,6 +104,7 @@ public:
     virtual void clipOut(const Path&) = 0;
     virtual void clipPath(const Path&, WindRule) = 0;
     virtual IntRect clipBounds() = 0;
+    virtual void clipToImageBuffer(ImageBuffer&, const FloatRect&) = 0;
     
     virtual void applyDeviceScaleFactor(float) = 0;
 

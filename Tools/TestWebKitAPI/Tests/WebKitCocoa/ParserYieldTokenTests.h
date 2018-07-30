@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,39 +25,12 @@
 
 #pragma once
 
-#include "APINavigation.h"
-#include "APIObject.h"
-#include <WebCore/FrameLoaderTypes.h>
-#include <wtf/Ref.h>
-#include <wtf/RefPtr.h>
+@protocol ParserYieldTokenTestRunner <NSObject>
+- (void)didFinishDocumentLoad;
+- (void)didFinishLoad;
+@end
 
-namespace WebKit {
-
-class WebFrameProxy;
-class WebsiteDataStore;
-struct WebsitePoliciesData;
-
-class WebFrameListenerProxy : public API::Object {
-public:
-    virtual ~WebFrameListenerProxy();
-
-    void invalidate();
-    uint64_t listenerID() const { return m_listenerID; }
-
-    void setNavigation(Ref<API::Navigation>&& navigation) { m_navigation = WTFMove(navigation); }
-
-    void changeWebsiteDataStore(WebsiteDataStore&);
-    bool isMainFrame() const;
-
-protected:
-    WebFrameListenerProxy(WebFrameProxy*, uint64_t listenerID);
-
-    void receivedPolicyDecision(WebCore::PolicyAction, std::optional<WebsitePoliciesData>&&);
-
-private:
-    RefPtr<WebFrameProxy> m_frame;
-    uint64_t m_listenerID;
-    RefPtr<API::Navigation> m_navigation;
-};
-
-} // namespace WebKit
+@protocol ParserYieldTokenTestBundle <NSObject>
+- (void)takeDocumentParserTokenAfterCommittingLoad;
+- (void)releaseDocumentParserToken;
+@end

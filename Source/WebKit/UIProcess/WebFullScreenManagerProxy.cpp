@@ -120,14 +120,19 @@ void WebFullScreenManagerProxy::restoreScrollPosition()
     m_page->process().send(Messages::WebFullScreenManager::RestoreScrollPosition(), m_page->pageID());
 }
 
-void WebFullScreenManagerProxy::setFullscreenInsetTop(double inset)
+void WebFullScreenManagerProxy::setFullscreenInsets(const WebCore::FloatBoxExtent& insets)
 {
-    m_page->process().send(Messages::WebFullScreenManager::SetFullscreenInsetTop(inset), m_page->pageID());
+    m_page->process().send(Messages::WebFullScreenManager::SetFullscreenInsets(insets), m_page->pageID());
 }
 
-void WebFullScreenManagerProxy::setFullscreenAutoHideDelay(double delay)
+void WebFullScreenManagerProxy::setFullscreenAutoHideDuration(Seconds duration)
 {
-    m_page->process().send(Messages::WebFullScreenManager::SetFullscreenAutoHideDelay(delay), m_page->pageID());
+    m_page->process().send(Messages::WebFullScreenManager::SetFullscreenAutoHideDuration(duration), m_page->pageID());
+}
+
+void WebFullScreenManagerProxy::setFullscreenControlsHidden(bool hidden)
+{
+    m_page->process().send(Messages::WebFullScreenManager::SetFullscreenControlsHidden(hidden), m_page->pageID());
 }
 
 void WebFullScreenManagerProxy::invalidate()

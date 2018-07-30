@@ -308,6 +308,7 @@ set(WebKit_SOURCES
     UIProcess/ProcessAssertion.cpp
     UIProcess/ProcessThrottler.cpp
     UIProcess/RemoteWebInspectorProxy.cpp
+    UIProcess/ResourceLoadStatisticsMemoryStore.cpp
     UIProcess/ResourceLoadStatisticsPersistentStorage.cpp
     UIProcess/ResponsivenessTimer.cpp
     UIProcess/ServiceWorkerProcessProxy.cpp
@@ -334,7 +335,6 @@ set(WebKit_SOURCES
     UIProcess/WebEditCommandProxy.cpp
     UIProcess/WebFormClient.cpp
     UIProcess/WebFormSubmissionListenerProxy.cpp
-    UIProcess/WebFrameListenerProxy.cpp
     UIProcess/WebFramePolicyListenerProxy.cpp
     UIProcess/WebFrameProxy.cpp
     UIProcess/WebFullScreenManagerProxy.cpp
@@ -402,6 +402,7 @@ set(WebKit_SOURCES
     UIProcess/API/C/WKInspector.cpp
     UIProcess/API/C/WKKeyValueStorageManager.cpp
     UIProcess/API/C/WKMediaSessionMetadata.cpp
+    UIProcess/API/C/WKMockMediaDevice.cpp
     UIProcess/API/C/WKNavigationActionRef.cpp
     UIProcess/API/C/WKNavigationDataRef.cpp
     UIProcess/API/C/WKNavigationRef.cpp

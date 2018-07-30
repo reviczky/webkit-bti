@@ -132,6 +132,10 @@ NetworkProcess::NetworkProcess()
 
 NetworkProcess::~NetworkProcess()
 {
+    for (auto& callbacks : m_cacheStorageParametersCallbacks.values()) {
+        for (auto& callback : callbacks)
+            callback(String { }, 0);
+    }
 }
 
 AuthenticationManager& NetworkProcess::authenticationManager()
@@ -265,6 +269,10 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
 
     SessionTracker::setSession(PAL::SessionID::defaultSessionID(), NetworkSession::create(WTFMove(parameters.defaultSessionParameters)));
 
+    auto* defaultSession = SessionTracker::networkSession(PAL::SessionID::defaultSessionID());
+    for (const auto& cookie : parameters.defaultSessionPendingCookies)
+        defaultSession->networkStorageSession().setCookie(cookie);
+
     for (auto& supplement : m_supplements.values())
         supplement->initialize(parameters);
 
@@ -315,7 +323,11 @@ void NetworkProcess::createNetworkConnectionToWebProcess()
     mach_port_t listeningPort = MACH_PORT_NULL;
     auto kr = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &listeningPort);
     if (kr != KERN_SUCCESS) {
-        LOG_ERROR("Could not allocate mach port, error %x", kr);
+        RELEASE_LOG_ERROR(Process, "NetworkProcess::createNetworkConnectionToWebProcess: Could not allocate mach port, error %x", kr);
+        CRASH();
+    }
+    if (!MACH_PORT_VALID(listeningPort)) {
+        RELEASE_LOG_ERROR(Process, "NetworkProcess::createNetworkConnectionToWebProcess: Could not allocate mach port, returned port was invalid");
         CRASH();
     }
 
@@ -327,8 +339,10 @@ void NetworkProcess::createNetworkConnectionToWebProcess()
     parentProcessConnection()->send(Messages::NetworkProcessProxy::DidCreateNetworkConnectionToWebProcess(clientPort), 0);
 #elif OS(WINDOWS)
     IPC::Connection::Identifier serverIdentifier, clientIdentifier;
-    if (!IPC::Connection::createServerAndClientIdentifiers(serverIdentifier, clientIdentifier))
-        return;
+    if (!IPC::Connection::createServerAndClientIdentifiers(serverIdentifier, clientIdentifier)) {
+        LOG_ERROR("Failed to create server and client identifiers");
+        CRASH();
+    }
 
     auto connection = NetworkConnectionToWebProcess::create(serverIdentifier);
     m_webProcessConnections.append(WTFMove(connection));
@@ -395,10 +409,11 @@ void NetworkProcess::writeBlobToFilePath(const WebCore::URL& url, const String& 
 }
 
 #if HAVE(CFNETWORK_STORAGE_PARTITIONING)
-void NetworkProcess::updatePrevalentDomainsToPartitionOrBlockCookies(PAL::SessionID sessionID, const Vector<String>& domainsToPartition, const Vector<String>& domainsToBlock, const Vector<String>& domainsToNeitherPartitionNorBlock, bool shouldClearFirst)
+void NetworkProcess::updatePrevalentDomainsToPartitionOrBlockCookies(PAL::SessionID sessionID, const Vector<String>& domainsToPartition, const Vector<String>& domainsToBlock, const Vector<String>& domainsToNeitherPartitionNorBlock, bool shouldClearFirst, uint64_t callbackId)
 {
     if (auto* networkStorageSession = NetworkStorageSession::storageSession(sessionID))
         networkStorageSession->setPrevalentDomainsToPartitionOrBlockCookies(domainsToPartition, domainsToBlock, domainsToNeitherPartitionNorBlock, shouldClearFirst);
+    parentProcessConnection()->send(Messages::NetworkProcessProxy::DidUpdatePartitionOrBlockCookies(callbackId), 0);
 }
 
 void NetworkProcess::hasStorageAccessForFrame(PAL::SessionID sessionID, const String& resourceDomain, const String& firstPartyDomain, uint64_t frameID, uint64_t pageID, uint64_t contextId)
@@ -563,7 +578,7 @@ void NetworkProcess::deleteWebsiteData(PAL::SessionID sessionID, OptionSet<Websi
     });
 
     if (websiteDataTypes.contains(WebsiteDataType::DOMCache))
-        CacheStorage::Engine::from(sessionID).clearAllCaches(clearTasksHandler);
+        CacheStorage::Engine::clearAllCaches(sessionID, clearTasksHandler.copyRef());
 
     if (websiteDataTypes.contains(WebsiteDataType::DiskCache) && !sessionID.isEphemeral())
         clearDiskCache(modifiedSince, [clearTasksHandler = WTFMove(clearTasksHandler)] { });
@@ -607,7 +622,7 @@ void NetworkProcess::deleteWebsiteDataForOrigins(PAL::SessionID sessionID, Optio
 
     if (websiteDataTypes.contains(WebsiteDataType::DOMCache)) {
         for (auto& originData : originDatas)
-            CacheStorage::Engine::from(sessionID).clearCachesForOrigin(originData, clearTasksHandler);
+            CacheStorage::Engine::clearCachesForOrigin(sessionID, SecurityOriginData { originData }, clearTasksHandler.copyRef());
     }
 
     if (websiteDataTypes.contains(WebsiteDataType::DiskCache) && !sessionID.isEphemeral())
@@ -783,6 +798,16 @@ void NetworkProcess::terminate()
     ChildProcess::terminate();
 }
 
+void NetworkProcess::processDidTransitionToForeground()
+{
+    platformProcessDidTransitionToForeground();
+}
+
+void NetworkProcess::processDidTransitionToBackground()
+{
+    platformProcessDidTransitionToBackground();
+}
+
 // FIXME: We can remove this one by adapting RefCounter.
 class TaskCounter : public RefCounted<TaskCounter> {
 public:
@@ -848,19 +873,25 @@ void NetworkProcess::prefetchDNS(const String& hostname)
     WebCore::prefetchDNS(hostname);
 }
 
-String NetworkProcess::cacheStorageDirectory(PAL::SessionID sessionID) const
+void NetworkProcess::cacheStorageParameters(PAL::SessionID sessionID, CacheStorageParametersCallback&& callback)
 {
-    if (sessionID.isEphemeral())
-        return { };
+    m_cacheStorageParametersCallbacks.ensure(sessionID, [&] {
+        parentProcessConnection()->send(Messages::NetworkProcessProxy::RetrieveCacheStorageParameters { sessionID }, 0);
+        return Vector<CacheStorageParametersCallback> { };
+    }).iterator->value.append(WTFMove(callback));
+}
 
-    if (sessionID == PAL::SessionID::defaultSessionID())
-        return m_cacheStorageDirectory;
+void NetworkProcess::setCacheStorageParameters(PAL::SessionID sessionID, uint64_t quota, String&& cacheStorageDirectory, SandboxExtension::Handle&& handle)
+{
+    auto iterator = m_cacheStorageParametersCallbacks.find(sessionID);
+    if (iterator == m_cacheStorageParametersCallbacks.end())
+        return;
 
-    auto* session = NetworkStorageSession::storageSession(sessionID);
-    if (!session)
-        return { };
-
-    return session->cacheStorageDirectory();
+    SandboxExtension::consumePermanently(handle);
+    auto callbacks = WTFMove(iterator->value);
+    m_cacheStorageParametersCallbacks.remove(iterator);
+    for (auto& callback : callbacks)
+        callback(String { cacheStorageDirectory }, quota);
 }
 
 void NetworkProcess::preconnectTo(const WebCore::URL& url, WebCore::StoredCredentialsPolicy storedCredentialsPolicy)
@@ -877,11 +908,6 @@ void NetworkProcess::preconnectTo(const WebCore::URL& url, WebCore::StoredCreden
     UNUSED_PARAM(url);
     UNUSED_PARAM(storedCredentialsPolicy);
 #endif
-}
-
-uint64_t NetworkProcess::cacheStoragePerOriginQuota() const
-{
-    return m_cacheStoragePerOriginQuota;
 }
 
 void NetworkProcess::registerURLSchemeAsSecure(const String& scheme) const

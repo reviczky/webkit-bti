@@ -247,6 +247,19 @@ inline bool JSCell::isCallable(VM& vm, CallType& callType, CallData& callData)
     return callType != CallType::None;
 }
 
+inline bool JSCell::isConstructor(VM& vm)
+{
+    ConstructType constructType;
+    ConstructData constructData;
+    return isConstructor(vm, constructType, constructData);
+}
+
+inline bool JSCell::isConstructor(VM& vm, ConstructType& constructType, ConstructData& constructData)
+{
+    constructType = methodTable(vm)->getConstructData(this, constructData);
+    return constructType != ConstructType::None;
+}
+
 inline bool JSCell::isAPIValueWrapper() const
 {
     return m_type == APIValueWrapperType;
@@ -274,17 +287,13 @@ ALWAYS_INLINE void JSCell::setStructure(VM& vm, Structure* structure)
     vm.heap.writeBarrier(this, structure);
 }
 
-inline const MethodTable* JSCell::methodTable() const
-{
-    return methodTable(*vm());
-}
-
 inline const MethodTable* JSCell::methodTable(VM& vm) const
 {
     Structure* structure = this->structure(vm);
+#if !ASSERT_DISABLED
     if (Structure* rootStructure = structure->structure(vm))
-        ASSERT_UNUSED(rootStructure, rootStructure == rootStructure->structure(vm));
-
+        ASSERT(rootStructure == rootStructure->structure(vm));
+#endif
     return &structure->classInfo()->methodTable;
 }
 
