@@ -416,9 +416,16 @@ void JSGlobalObject::init(VM& vm)
     ExecState::initGlobalExec(JSGlobalObject::globalExec(), globalCallee);
     ExecState* exec = JSGlobalObject::globalExec();
 
-    m_strictFunctionStructure.set(vm, this, JSFunction::createStructure(vm, this, m_functionPrototype.get()));
-    m_sloppyFunctionStructure.set(vm, this, JSFunction::createStructure(vm, this, m_functionPrototype.get()));
-    m_arrowFunctionStructure.set(vm, this, JSFunction::createStructure(vm, this, m_functionPrototype.get()));
+    m_hostFunctionStructure.set(vm, this, JSFunction::createStructure(vm, this, m_functionPrototype.get()));
+
+    auto initFunctionStructures = [&] (FunctionStructures& structures) {
+        structures.strictFunctionStructure.set(vm, this, JSFunction::createStructure(vm, this, m_functionPrototype.get()));
+        structures.sloppyFunctionStructure.set(vm, this, JSFunction::createStructure(vm, this, m_functionPrototype.get()));
+        structures.arrowFunctionStructure.set(vm, this, JSFunction::createStructure(vm, this, m_functionPrototype.get()));
+    };
+    initFunctionStructures(m_builtinFunctions);
+    initFunctionStructures(m_ordinaryFunctions);
+
     m_customGetterSetterFunctionStructure.initLater(
         [] (const Initializer<Structure>& init) {
             init.set(JSCustomGetterSetterFunction::createStructure(init.vm, init.owner, init.owner->m_functionPrototype.get()));
@@ -509,7 +516,7 @@ void JSGlobalObject::init(VM& vm)
         [] (LazyClassStructure::Initializer& init) { \
             init.setPrototype(JS ## type ## ArrayPrototype::create(init.vm, init.global, JS ## type ## ArrayPrototype::createStructure(init.vm, init.global, init.global->m_typedArrayProto.get(init.global)))); \
             init.setStructure(JS ## type ## Array::createStructure(init.vm, init.global, init.prototype)); \
-            init.setConstructor(JS ## type ## ArrayConstructor::create(init.vm, init.global, JS ## type ## ArrayConstructor::createStructure(init.vm, init.global, init.global->m_typedArraySuperConstructor.get(init.global)), init.prototype, ASCIILiteral(#type "Array"), typedArrayConstructorAllocate ## type ## ArrayCodeGenerator(init.vm))); \
+            init.setConstructor(JS ## type ## ArrayConstructor::create(init.vm, init.global, JS ## type ## ArrayConstructor::createStructure(init.vm, init.global, init.global->m_typedArraySuperConstructor.get(init.global)), init.prototype, #type "Array"_s, typedArrayConstructorAllocate ## type ## ArrayCodeGenerator(init.vm))); \
             init.global->putDirectWithoutTransition(init.vm, init.vm.propertyNames->builtinNames().type ## ArrayPrivateName(), init.constructor, static_cast<unsigned>(PropertyAttribute::DontEnum)); \
         });
     FOR_EACH_TYPED_ARRAY_TYPE_EXCLUDING_DATA_VIEW(INIT_TYPED_ARRAY_LATER)
@@ -519,7 +526,7 @@ void JSGlobalObject::init(VM& vm)
         [] (LazyClassStructure::Initializer& init) {
             init.setPrototype(JSDataViewPrototype::create(init.vm, JSDataViewPrototype::createStructure(init.vm, init.global, init.global->m_objectPrototype.get())));
             init.setStructure(JSDataView::createStructure(init.vm, init.global, init.prototype));
-            init.setConstructor(JSDataViewConstructor::create(init.vm, init.global, JSDataViewConstructor::createStructure(init.vm, init.global, init.global->m_functionPrototype.get()), init.prototype, ASCIILiteral("DataView"), nullptr));
+            init.setConstructor(JSDataViewConstructor::create(init.vm, init.global, JSDataViewConstructor::createStructure(init.vm, init.global, init.global->m_functionPrototype.get()), init.prototype, "DataView"_s, nullptr));
         });
     
     m_lexicalEnvironmentStructure.set(vm, this, JSLexicalEnvironment::createStructure(vm, this));
@@ -695,21 +702,21 @@ m_ ## lowerName ## Prototype->putDirectWithoutTransition(vm, vm.propertyNames->c
     m_nativeErrorStructure.set(vm, this, NativeErrorConstructor::createStructure(vm, this, errorConstructor));
     m_evalErrorConstructor.initLater(
         [] (const Initializer<NativeErrorConstructor>& init) {
-            init.set(NativeErrorConstructor::create(init.vm, init.owner, init.owner->m_nativeErrorStructure.get(), init.owner->m_nativeErrorPrototypeStructure.get(), ASCIILiteral("EvalError")));
+            init.set(NativeErrorConstructor::create(init.vm, init.owner, init.owner->m_nativeErrorStructure.get(), init.owner->m_nativeErrorPrototypeStructure.get(), "EvalError"_s));
         });
-    m_rangeErrorConstructor.set(vm, this, NativeErrorConstructor::create(vm, this, m_nativeErrorStructure.get(), m_nativeErrorPrototypeStructure.get(), ASCIILiteral("RangeError")));
+    m_rangeErrorConstructor.set(vm, this, NativeErrorConstructor::create(vm, this, m_nativeErrorStructure.get(), m_nativeErrorPrototypeStructure.get(), "RangeError"_s));
     m_referenceErrorConstructor.initLater(
         [] (const Initializer<NativeErrorConstructor>& init) {
-            init.set(NativeErrorConstructor::create(init.vm, init.owner, init.owner->m_nativeErrorStructure.get(), init.owner->m_nativeErrorPrototypeStructure.get(), ASCIILiteral("ReferenceError")));
+            init.set(NativeErrorConstructor::create(init.vm, init.owner, init.owner->m_nativeErrorStructure.get(), init.owner->m_nativeErrorPrototypeStructure.get(), "ReferenceError"_s));
         });
     m_syntaxErrorConstructor.initLater(
         [] (const Initializer<NativeErrorConstructor>& init) {
-            init.set(NativeErrorConstructor::create(init.vm, init.owner, init.owner->m_nativeErrorStructure.get(), init.owner->m_nativeErrorPrototypeStructure.get(), ASCIILiteral("SyntaxError")));
+            init.set(NativeErrorConstructor::create(init.vm, init.owner, init.owner->m_nativeErrorStructure.get(), init.owner->m_nativeErrorPrototypeStructure.get(), "SyntaxError"_s));
         });
-    m_typeErrorConstructor.set(vm, this, NativeErrorConstructor::create(vm, this, m_nativeErrorStructure.get(), m_nativeErrorPrototypeStructure.get(), ASCIILiteral("TypeError")));
+    m_typeErrorConstructor.set(vm, this, NativeErrorConstructor::create(vm, this, m_nativeErrorStructure.get(), m_nativeErrorPrototypeStructure.get(), "TypeError"_s));
     m_URIErrorConstructor.initLater(
         [] (const Initializer<NativeErrorConstructor>& init) {
-            init.set(NativeErrorConstructor::create(init.vm, init.owner, init.owner->m_nativeErrorStructure.get(), init.owner->m_nativeErrorPrototypeStructure.get(), ASCIILiteral("URIError")));
+            init.set(NativeErrorConstructor::create(init.vm, init.owner, init.owner->m_nativeErrorStructure.get(), init.owner->m_nativeErrorPrototypeStructure.get(), "URIError"_s));
         });
 
     m_generatorFunctionPrototype.set(vm, this, GeneratorFunctionPrototype::create(vm, GeneratorFunctionPrototype::createStructure(vm, this, m_functionPrototype.get())));
@@ -1015,64 +1022,64 @@ putDirectWithoutTransition(vm, vm.propertyNames-> jsName, lowerName ## Construct
 
         {
             ObjectPropertyCondition condition = setupAdaptiveWatchpoint(arrayIteratorPrototype, m_vm.propertyNames->next);
-            m_arrayIteratorPrototypeNext = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(vm, condition, m_arrayIteratorProtocolWatchpoint);
-            m_arrayIteratorPrototypeNext->install();
+            m_arrayIteratorPrototypeNext = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(condition, m_arrayIteratorProtocolWatchpoint);
+            m_arrayIteratorPrototypeNext->install(vm);
         }
         {
             ObjectPropertyCondition condition = setupAdaptiveWatchpoint(this->arrayPrototype(), m_vm.propertyNames->iteratorSymbol);
-            m_arrayPrototypeSymbolIteratorWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(vm, condition, m_arrayIteratorProtocolWatchpoint);
-            m_arrayPrototypeSymbolIteratorWatchpoint->install();
+            m_arrayPrototypeSymbolIteratorWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(condition, m_arrayIteratorProtocolWatchpoint);
+            m_arrayPrototypeSymbolIteratorWatchpoint->install(vm);
         }
 
         {
             ObjectPropertyCondition condition = setupAdaptiveWatchpoint(mapIteratorPrototype, m_vm.propertyNames->next);
-            m_mapIteratorPrototypeNextWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(vm, condition, m_mapIteratorProtocolWatchpoint);
-            m_mapIteratorPrototypeNextWatchpoint->install();
+            m_mapIteratorPrototypeNextWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(condition, m_mapIteratorProtocolWatchpoint);
+            m_mapIteratorPrototypeNextWatchpoint->install(vm);
         }
         {
             ObjectPropertyCondition condition = setupAdaptiveWatchpoint(m_mapPrototype.get(), m_vm.propertyNames->iteratorSymbol);
-            m_mapPrototypeSymbolIteratorWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(vm, condition, m_mapIteratorProtocolWatchpoint);
-            m_mapPrototypeSymbolIteratorWatchpoint->install();
+            m_mapPrototypeSymbolIteratorWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(condition, m_mapIteratorProtocolWatchpoint);
+            m_mapPrototypeSymbolIteratorWatchpoint->install(vm);
         }
 
         {
             ObjectPropertyCondition condition = setupAdaptiveWatchpoint(setIteratorPrototype, m_vm.propertyNames->next);
-            m_setIteratorPrototypeNextWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(vm, condition, m_setIteratorProtocolWatchpoint);
-            m_setIteratorPrototypeNextWatchpoint->install();
+            m_setIteratorPrototypeNextWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(condition, m_setIteratorProtocolWatchpoint);
+            m_setIteratorPrototypeNextWatchpoint->install(vm);
         }
         {
             ObjectPropertyCondition condition = setupAdaptiveWatchpoint(m_setPrototype.get(), m_vm.propertyNames->iteratorSymbol);
-            m_setPrototypeSymbolIteratorWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(vm, condition, m_setIteratorProtocolWatchpoint);
-            m_setPrototypeSymbolIteratorWatchpoint->install();
+            m_setPrototypeSymbolIteratorWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(condition, m_setIteratorProtocolWatchpoint);
+            m_setPrototypeSymbolIteratorWatchpoint->install(vm);
         }
 
         {
             ObjectPropertyCondition condition = setupAdaptiveWatchpoint(m_stringIteratorPrototype.get(), m_vm.propertyNames->next);
-            m_stringIteratorPrototypeNextWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(vm, condition, m_stringIteratorProtocolWatchpoint);
-            m_stringIteratorPrototypeNextWatchpoint->install();
+            m_stringIteratorPrototypeNextWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(condition, m_stringIteratorProtocolWatchpoint);
+            m_stringIteratorPrototypeNextWatchpoint->install(vm);
         }
         {
             ObjectPropertyCondition condition = setupAdaptiveWatchpoint(m_stringPrototype.get(), m_vm.propertyNames->iteratorSymbol);
-            m_stringPrototypeSymbolIteratorWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(vm, condition, m_stringIteratorProtocolWatchpoint);
-            m_stringPrototypeSymbolIteratorWatchpoint->install();
+            m_stringPrototypeSymbolIteratorWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(condition, m_stringIteratorProtocolWatchpoint);
+            m_stringPrototypeSymbolIteratorWatchpoint->install(vm);
         }
 
         {
             ObjectPropertyCondition condition = setupAdaptiveWatchpoint(m_mapPrototype.get(), m_vm.propertyNames->set);
-            m_mapPrototypeSetWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(vm, condition, m_mapSetWatchpoint);
-            m_mapPrototypeSetWatchpoint->install();
+            m_mapPrototypeSetWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(condition, m_mapSetWatchpoint);
+            m_mapPrototypeSetWatchpoint->install(vm);
         }
 
         {
             ObjectPropertyCondition condition = setupAdaptiveWatchpoint(m_setPrototype.get(), m_vm.propertyNames->add);
-            m_setPrototypeAddWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(vm, condition, m_setAddWatchpoint);
-            m_setPrototypeAddWatchpoint->install();
+            m_setPrototypeAddWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(condition, m_setAddWatchpoint);
+            m_setPrototypeAddWatchpoint->install(vm);
         }
 
         {
             ObjectPropertyCondition condition = setupAdaptiveWatchpoint(numberPrototype(), m_vm.propertyNames->toString);
-            m_numberPrototypeToStringWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(vm, condition, m_numberToStringWatchpoint);
-            m_numberPrototypeToStringWatchpoint->install();
+            m_numberPrototypeToStringWatchpoint = std::make_unique<ObjectPropertyChangeAdaptiveWatchpoint<InlineWatchpointSet>>(condition, m_numberToStringWatchpoint);
+            m_numberPrototypeToStringWatchpoint->install(vm);
             m_numberProtoToStringFunction.set(vm, this, jsCast<JSFunction*>(numberPrototype()->getDirect(vm, vm.propertyNames->toString)));
         }
     }
@@ -1239,7 +1246,7 @@ inline void ObjectsWithBrokenIndexingFinder::visit(JSCell* cell)
 
 IterationStatus ObjectsWithBrokenIndexingFinder::operator()(HeapCell* cell, HeapCell::Kind kind) const
 {
-    if (kind == HeapCell::JSCell) {
+    if (isJSCellKind(kind)) {
         // FIXME: This const_cast exists because this isn't a C++ lambda.
         // https://bugs.webkit.org/show_bug.cgi?id=159644
         const_cast<ObjectsWithBrokenIndexingFinder*>(this)->visit(static_cast<JSCell*>(cell));
@@ -1394,9 +1401,16 @@ void JSGlobalObject::visitChildren(JSCell* cell, SlotVisitor& visitor)
     visitor.append(thisObject->m_nullPrototypeObjectStructure);
     visitor.append(thisObject->m_errorStructure);
     visitor.append(thisObject->m_calleeStructure);
-    visitor.append(thisObject->m_strictFunctionStructure);
-    visitor.append(thisObject->m_sloppyFunctionStructure);
-    visitor.append(thisObject->m_arrowFunctionStructure);
+
+    visitor.append(thisObject->m_hostFunctionStructure);
+    auto visitFunctionStructures = [&] (FunctionStructures& structures) {
+        visitor.append(structures.arrowFunctionStructure);
+        visitor.append(structures.sloppyFunctionStructure);
+        visitor.append(structures.strictFunctionStructure);
+    };
+    visitFunctionStructures(thisObject->m_builtinFunctions);
+    visitFunctionStructures(thisObject->m_ordinaryFunctions);
+
     thisObject->m_customGetterSetterFunctionStructure.visit(visitor);
     thisObject->m_boundFunctionStructure.visit(visitor);
     visitor.append(thisObject->m_getterSetterStructure);

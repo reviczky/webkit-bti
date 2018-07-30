@@ -26,14 +26,10 @@
 #pragma once
 
 #include "AnimationTimeline.h"
+#include "DocumentTimelineOptions.h"
 #include "GenericTaskQueue.h"
-#include "PlatformScreen.h"
 #include "Timer.h"
 #include <wtf/Ref.h>
-
-#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-#include "DisplayRefreshMonitorClient.h"
-#endif
 
 namespace WebCore {
 
@@ -41,12 +37,10 @@ class AnimationPlaybackEvent;
 class RenderElement;
 
 class DocumentTimeline final : public AnimationTimeline
-#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-    , public DisplayRefreshMonitorClient
-#endif
 {
 public:
-    static Ref<DocumentTimeline> create(Document&, PlatformDisplayID);
+    static Ref<DocumentTimeline> create(Document&);
+    static Ref<DocumentTimeline> create(Document&, DocumentTimelineOptions&&);
     ~DocumentTimeline();
 
     Document* document() const { return m_document.get(); }
@@ -55,7 +49,6 @@ public:
     void pause() override;
 
     void timingModelDidChange() override;
-    void windowScreenDidChange(PlatformDisplayID);
 
     // If possible, compute the visual extent of any transform animation on the given renderer
     // using the given rect, returning the result in the rect. Return false if there is some
@@ -71,6 +64,10 @@ public:
 
     void enqueueAnimationPlaybackEvent(AnimationPlaybackEvent&);
 
+#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+    void documentAnimationSchedulerDidFire();
+#endif
+
     void updateThrottlingState();
     WEBCORE_EXPORT Seconds animationInterval() const;
     WEBCORE_EXPORT void suspendAnimations();
@@ -79,7 +76,7 @@ public:
     WEBCORE_EXPORT unsigned numberOfActiveAnimationsForTesting() const;
 
 private:
-    DocumentTimeline(Document&, PlatformDisplayID);
+    DocumentTimeline(Document&, Seconds);
 
     void scheduleInvalidationTaskIfNeeded();
     void performInvalidationTask();
@@ -88,10 +85,13 @@ private:
     void scheduleAnimationResolution();
     void updateAnimations();
     void performEventDispatchTask();
+    void maybeClearCachedCurrentTime();
 
     RefPtr<Document> m_document;
+    Seconds m_originTime;
     bool m_paused { false };
     bool m_isSuspended { false };
+    bool m_waitingOnVMIdle { false };
     std::optional<Seconds> m_cachedCurrentTime;
     GenericTaskQueue<Timer> m_invalidationTaskQueue;
     GenericTaskQueue<Timer> m_eventDispatchTaskQueue;
@@ -100,11 +100,7 @@ private:
     HashSet<RefPtr<WebAnimation>> m_acceleratedAnimationsPendingRunningStateChange;
     Vector<Ref<AnimationPlaybackEvent>> m_pendingAnimationEvents;
 
-#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-    // Override for DisplayRefreshMonitorClient
-    void displayRefreshFired() override;
-    RefPtr<DisplayRefreshMonitor> createDisplayRefreshMonitor(PlatformDisplayID) const override;
-#else
+#if !USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
     void animationResolutionTimerFired();
     Timer m_animationResolutionTimer;
 #endif

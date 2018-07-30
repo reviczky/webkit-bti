@@ -55,23 +55,16 @@ void LayoutContext::initializeRoot(const Container& root, const LayoutSize& cont
 
     m_root = makeWeakPtr(const_cast<Container&>(root));
     auto& displayBox = createDisplayBox(root);
-    // Root is always at 0 0 with no margin 
-    displayBox.setTopLeft({ });
-    displayBox.setSize(containerSize);
+
+    // FIXME: m_root could very well be a formatting context root with ancestors and resolvable border and padding (as opposed to the topmost root)
     displayBox.setHorizontalMargin({ });
     displayBox.setVerticalMargin({ });
-
-    auto& style = root.style();
-    // FIXME: m_root could very well be a formatting context root with ancestors and resolvable border and padding (as opposed to the topmost root)
-    displayBox.setBorder({
-        { style.borderLeft().boxModelWidth(), style.borderRight().boxModelWidth() },
-        { style.borderTop().boxModelWidth(), style.borderBottom().boxModelWidth() }
-    });
-
-    displayBox.setPadding({
-        { valueForLength(style.paddingLeft(), containerSize.width()), valueForLength(style.paddingRight(), containerSize.width()) },
-        { valueForLength(style.paddingTop(), containerSize.width()), valueForLength(style.paddingBottom(), containerSize.width()) }
-    });
+    displayBox.setVerticalNonCollapsedMargin({ });
+    displayBox.setBorder({ });
+    displayBox.setPadding({ });
+    displayBox.setContentBoxHeight(containerSize.height());
+    displayBox.setContentBoxWidth(containerSize.width());
+    displayBox.setTopLeft({ });
 
     m_formattingContextRootListForLayout.add(&root);
 }
@@ -79,13 +72,18 @@ void LayoutContext::initializeRoot(const Container& root, const LayoutSize& cont
 void LayoutContext::updateLayout()
 {
     ASSERT(!m_formattingContextRootListForLayout.isEmpty());
-    for (auto* layoutRoot : m_formattingContextRootListForLayout) {
-        RELEASE_ASSERT(layoutRoot->establishesFormattingContext());
-        auto context = formattingContext(*layoutRoot);
-        auto& state = establishedFormattingState(*layoutRoot, *context);
-        context->layout(*this, state);
-    }
+    for (auto* layoutRoot : m_formattingContextRootListForLayout)
+        layoutFormattingContextSubtree(*layoutRoot);
     m_formattingContextRootListForLayout.clear();
+}
+
+void LayoutContext::layoutFormattingContextSubtree(const Box& layoutRoot)
+{
+    RELEASE_ASSERT(layoutRoot.establishesFormattingContext());
+    auto formattingContext = this->formattingContext(layoutRoot);
+    auto& formattingState = establishedFormattingState(layoutRoot, *formattingContext);
+    formattingContext->layout(*this, formattingState);
+    formattingContext->layoutOutOfFlowDescendants(*this, layoutRoot);
 }
 
 Display::Box& LayoutContext::createDisplayBox(const Box& layoutBox)
@@ -124,7 +122,7 @@ FormattingState& LayoutContext::formattingStateForBox(const Box& layoutBox) cons
 FormattingState& LayoutContext::establishedFormattingState(const Box& formattingContextRoot, const FormattingContext& context)
 {
     return *m_formattingStates.ensure(&formattingContextRoot, [this, &context] {
-        return context.createFormattingState(context.createOrFindFloatingState(*this));
+        return context.createFormattingState(context.createOrFindFloatingState(*this), *this);
     }).iterator->value;
 }
 

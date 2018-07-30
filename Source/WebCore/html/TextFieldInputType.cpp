@@ -184,8 +184,10 @@ void TextFieldInputType::handleKeydownEvent(KeyboardEvent& event)
         return;
 #if ENABLE(DATALIST_ELEMENT)
     const String& key = event.keyIdentifier();
-    if (m_suggestionPicker && (key == "Enter" || key == "Up" || key == "Down"))
+    if (m_suggestionPicker && (key == "Enter" || key == "Up" || key == "Down")) {
         m_suggestionPicker->handleKeydownWithIdentifier(key);
+        event.setDefaultHandled();
+    }
 #endif
     RefPtr<Frame> frame = element()->document().frame();
     if (!frame || !frame->editor().doTextFieldCommandFromEvent(element(), &event))
@@ -198,6 +200,10 @@ void TextFieldInputType::handleKeydownEventForSpinButton(KeyboardEvent& event)
     ASSERT(element());
     if (element()->isDisabledOrReadOnly())
         return;
+#if ENABLE(DATALIST_ELEMENT)
+    if (m_suggestionPicker)
+        return;
+#endif
     const String& key = event.keyIdentifier();
     if (key == "Up")
         spinButtonStepUp();
@@ -450,8 +456,6 @@ static String autoFillButtonTypeToAccessibilityLabel(AutoFillButtonType autoFill
         return AXAutoFillContactsLabel();
     case AutoFillButtonType::Credentials:
         return AXAutoFillCredentialsLabel();
-    case AutoFillButtonType::StrongConfirmationPassword:
-        return AXAutoFillStrongConfirmationPasswordLabel();
     case AutoFillButtonType::StrongPassword:
         return AXAutoFillStrongPasswordLabel();
     case AutoFillButtonType::None:
@@ -467,7 +471,6 @@ static String autoFillButtonTypeToAutoFillButtonText(AutoFillButtonType autoFill
     switch (autoFillButtonType) {
     case AutoFillButtonType::Contacts:
     case AutoFillButtonType::Credentials:
-    case AutoFillButtonType::StrongConfirmationPassword:
         return emptyString();
     case AutoFillButtonType::StrongPassword:
         return autoFillStrongPasswordLabel();
@@ -486,8 +489,6 @@ static AtomicString autoFillButtonTypeToAutoFillButtonPseudoClassName(AutoFillBu
         return { "-webkit-contacts-auto-fill-button", AtomicString::ConstructFromLiteral };
     case AutoFillButtonType::Credentials:
         return { "-webkit-credentials-auto-fill-button", AtomicString::ConstructFromLiteral };
-    case AutoFillButtonType::StrongConfirmationPassword:
-        return { "-webkit-strong-confirmation-password-auto-fill-button", AtomicString::ConstructFromLiteral };
     case AutoFillButtonType::StrongPassword:
         return { "-webkit-strong-password-auto-fill-button", AtomicString::ConstructFromLiteral };
     case AutoFillButtonType::None:
@@ -503,8 +504,6 @@ static bool isAutoFillButtonTypeChanged(const AtomicString& attribute, AutoFillB
     if (attribute == "-webkit-contacts-auto-fill-button" && autoFillButtonType != AutoFillButtonType::Contacts)
         return true;
     if (attribute == "-webkit-credentials-auto-fill-button" && autoFillButtonType != AutoFillButtonType::Credentials)
-        return true;
-    if (attribute == "-webkit-strong-confirmation-password-auto-fill-button" && autoFillButtonType != AutoFillButtonType::StrongConfirmationPassword)
         return true;
     if (attribute == "-webkit-strong-password-auto-fill-button" && autoFillButtonType != AutoFillButtonType::StrongPassword)
         return true;

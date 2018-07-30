@@ -920,7 +920,7 @@ void JIT::emit_op_enter(Instruction* currentInstruction)
     // Even though JIT code doesn't use them, we initialize our constant
     // registers to zap stale pointers, to avoid unnecessarily prolonging
     // object lifetime and increasing GC pressure.
-    for (int i = 0; i < m_codeBlock->m_numVars; ++i)
+    for (int i = 0; i < m_codeBlock->numVars(); ++i)
         emitStore(virtualRegisterForLocal(i).offset(), jsUndefined());
 
     JITSlowPathCall slowPathCall(this, currentInstruction, slow_path_enter);
@@ -962,6 +962,10 @@ void JIT::emit_op_create_this(Instruction* currentInstruction)
     JumpList slowCases;
     auto butterfly = TrustedImmPtr(nullptr);
     emitAllocateJSObject(resultReg, JITAllocator::variable(), allocatorReg, structureReg, butterfly, scratchReg, slowCases);
+    emitLoadPayload(callee, scratchReg);
+    loadPtr(Address(scratchReg, JSFunction::offsetOfRareData()), scratchReg);
+    load32(Address(scratchReg, FunctionRareData::offsetOfObjectAllocationProfile() + ObjectAllocationProfile::offsetOfInlineCapacity()), scratchReg);
+    emitInitializeInlineStorage(resultReg, scratchReg);
     addSlowCase(slowCases);
     emitStoreCell(currentInstruction[1].u.operand, resultReg);
 }

@@ -180,7 +180,7 @@ class VMTraps::SignalSender final : public AutomaticThread {
 public:
     using Base = AutomaticThread;
     SignalSender(const AbstractLocker& locker, VM& vm)
-        : Base(locker, vm.traps().m_lock, vm.traps().m_trapSet)
+        : Base(locker, vm.traps().m_lock, vm.traps().m_trapSet.copyRef())
         , m_vm(vm)
     {
         static std::once_flag once;
@@ -218,6 +218,11 @@ public:
                 return SignalAction::Handled; // We've successfully jettisoned the codeBlocks.
             });
         });
+    }
+
+    const char* name() const override
+    {
+        return "JSC VMTraps Signal Sender Thread";
     }
 
     VMTraps& traps() { return m_vm.traps(); }

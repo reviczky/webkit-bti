@@ -73,11 +73,14 @@ IPC::Connection* WebResourceLoader::messageSenderConnection()
 
 uint64_t WebResourceLoader::messageSenderDestinationID()
 {
+    RELEASE_ASSERT(RunLoop::isMain());
+    RELEASE_ASSERT(m_coreLoader->identifier());
     return m_coreLoader->identifier();
 }
 
 void WebResourceLoader::detachFromCoreLoader()
 {
+    RELEASE_ASSERT(RunLoop::isMain());
     m_coreLoader = nullptr;
 }
 
@@ -89,11 +92,11 @@ void WebResourceLoader::willSendRequest(ResourceRequest&& proposedRequest, Resou
     if (m_coreLoader->documentLoader()->applicationCacheHost().maybeLoadFallbackForRedirect(m_coreLoader.get(), proposedRequest, redirectResponse))
         return;
 
-    m_coreLoader->willSendRequest(WTFMove(proposedRequest), redirectResponse, [protectedThis = makeRef(*this)](ResourceRequest&& request) {
-        if (!protectedThis->m_coreLoader)
+    m_coreLoader->willSendRequest(WTFMove(proposedRequest), redirectResponse, [this, protectedThis = makeRef(*this)](ResourceRequest&& request) {
+        if (!m_coreLoader || !m_coreLoader->identifier())
             return;
 
-        protectedThis->send(Messages::NetworkResourceLoader::ContinueWillSendRequest(request, protectedThis->m_coreLoader->isAllowedToAskUserForCredentials()));
+        send(Messages::NetworkResourceLoader::ContinueWillSendRequest(request, m_coreLoader->isAllowedToAskUserForCredentials()));
     });
 }
 
@@ -122,7 +125,7 @@ void WebResourceLoader::didReceiveResponse(const ResourceResponse& response, boo
             m_isProcessingNetworkResponse = false;
 #endif
             // If m_coreLoader becomes null as a result of the didReceiveResponse callback, we can't use the send function().
-            if (m_coreLoader)
+            if (m_coreLoader && m_coreLoader->identifier())
                 send(Messages::NetworkResourceLoader::ContinueDidReceiveResponse());
         };
     }

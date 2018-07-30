@@ -25,6 +25,7 @@
 
 #include "config.h"
 
+#include "PluginProcessManager.h"
 #include "WKPreferencesRef.h"
 #include "WKPreferencesRefPrivate.h"
 #include "WKAPICast.h"
@@ -1153,6 +1154,19 @@ bool WKPreferencesGetPlugInSnapshottingEnabled(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->plugInSnapshottingEnabled();
 }
 
+void WKPreferencesSetPluginSandboxProfilesEnabledForAllPlugins(WKPreferencesRef preferencesRef, bool enabled)
+{
+#if ENABLE(NETSCAPE_PLUGIN_API) && PLATFORM(MAC)
+    WebKit::PluginProcessManager::singleton().setExperimentalPlugInSandboxProfilesEnabled(enabled);
+#endif
+    toImpl(preferencesRef)->setExperimentalPlugInSandboxProfilesEnabled(enabled);
+}
+
+bool WKPreferencesGetPluginSandboxProfilesEnabledForAllPlugins(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->experimentalPlugInSandboxProfilesEnabled();
+}
+
 void WKPreferencesSetSnapshotAllPlugIns(WKPreferencesRef preferencesRef, bool enabled)
 {
     toImpl(preferencesRef)->setSnapshotAllPlugIns(enabled);
@@ -1984,6 +1998,16 @@ bool WKPreferencesGetCrossOriginResourcePolicyEnabled(WKPreferencesRef preferenc
     return toImpl(preferencesRef)->crossOriginResourcePolicyEnabled();
 }
 
+void WKPreferencesSetCrossOriginWindowPolicyEnabled(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setCrossOriginWindowPolicySupportEnabled(enabled);
+}
+
+bool WKPreferencesGetCrossOriginWindowPolicyEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->crossOriginWindowPolicySupportEnabled();
+}
+
 void WKPreferencesSetRestrictedHTTPResponseAccess(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setRestrictedHTTPResponseAccess(flag);
@@ -2012,4 +2036,24 @@ void WKPreferencesSetColorFilterEnabled(WKPreferencesRef preferencesRef, bool fl
 bool WKPreferencesGetColorFilterEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->colorFilterEnabled();
+}
+
+void WKPreferencesSetProcessSwapOnNavigationEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setProcessSwapOnNavigationEnabled(flag);
+}
+
+bool WKPreferencesGetProcessSwapOnNavigationEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->processSwapOnNavigationEnabled();
+}
+
+void WKPreferencesSetPunchOutWhiteBackgroundsInDarkMode(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setPunchOutWhiteBackgroundsInDarkMode(flag);
+}
+
+bool WKPreferencesGetPunchOutWhiteBackgroundsInDarkMode(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->punchOutWhiteBackgroundsInDarkMode();
 }

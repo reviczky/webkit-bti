@@ -20,12 +20,15 @@
 
 #pragma once
 
+#include "ColorHash.h"
 #include "ControlStates.h"
+#include "GraphicsContext.h"
 #include "PaintInfo.h"
 #include "PopupMenuStyle.h"
 #include "ScrollTypes.h"
 #include "StyleColor.h"
 #include "ThemeTypes.h"
+#include <wtf/HashMap.h>
 
 namespace WebCore {
 
@@ -35,6 +38,7 @@ class FileList;
 class FillLayer;
 class HTMLInputElement;
 class Icon;
+class Page;
 class RenderAttachment;
 class RenderBox;
 class RenderMeter;
@@ -54,7 +58,7 @@ public:
     // appropriate platform theme.
     WEBCORE_EXPORT static RenderTheme& singleton();
 
-    virtual void purgeCaches() { }
+    virtual void purgeCaches();
 
     // This method is called whenever style has been computed for an element and the appearance
     // property has been set to a value other than "none".  The theme should map in all of the appropriate
@@ -144,9 +148,9 @@ public:
     Color inactiveListBoxSelectionBackgroundColor(OptionSet<StyleColor::Options>) const;
     Color inactiveListBoxSelectionForegroundColor(OptionSet<StyleColor::Options>) const;
 
-    // Highlighting colors for TextMatches.
-    virtual Color platformActiveTextSearchHighlightColor() const;
-    virtual Color platformInactiveTextSearchHighlightColor() const;
+    // Highlighting colors for search matches.
+    Color activeTextSearchHighlightColor(OptionSet<StyleColor::Options>) const;
+    Color inactiveTextSearchHighlightColor(OptionSet<StyleColor::Options>) const;
 
     virtual Color disabledTextColor(const Color& textColor, const Color& backgroundColor) const;
 
@@ -250,6 +254,10 @@ public:
     virtual void paintSystemPreviewBadge(Image&, const PaintInfo&, const FloatRect&);
 #endif
 
+    virtual void drawLineForDocumentMarker(const RenderText&, GraphicsContext&, const FloatPoint& origin, float width, DocumentMarkerLineStyle);
+
+    virtual bool usingDarkAppearance(const RenderObject&) const { return false; }
+
 protected:
     virtual FontCascadeDescription& cachedSystemFontDescription(CSSValueID systemFontID) const;
     virtual void updateCachedSystemFontDescription(CSSValueID systemFontID, FontCascadeDescription&) const = 0;
@@ -265,8 +273,12 @@ protected:
     virtual Color platformActiveListBoxSelectionForegroundColor(OptionSet<StyleColor::Options>) const;
     virtual Color platformInactiveListBoxSelectionForegroundColor(OptionSet<StyleColor::Options>) const;
 
-    virtual bool supportsSelectionForegroundColors() const { return true; }
-    virtual bool supportsListBoxSelectionForegroundColors() const { return true; }
+    // The platform highlighting colors for search matches.
+    virtual Color platformActiveTextSearchHighlightColor(OptionSet<StyleColor::Options>) const;
+    virtual Color platformInactiveTextSearchHighlightColor(OptionSet<StyleColor::Options>) const;
+
+    virtual bool supportsSelectionForegroundColors(OptionSet<StyleColor::Options>) const { return true; }
+    virtual bool supportsListBoxSelectionForegroundColors(OptionSet<StyleColor::Options>) const { return true; }
 
 #if !USE(NEW_THEME)
     // Methods for each appearance value.
@@ -394,16 +406,32 @@ public:
     bool isReadOnlyControl(const RenderObject&) const;
     bool isDefault(const RenderObject&) const;
 
-private:
-    mutable Color m_activeSelectionBackgroundColor;
-    mutable Color m_inactiveSelectionBackgroundColor;
-    mutable Color m_activeSelectionForegroundColor;
-    mutable Color m_inactiveSelectionForegroundColor;
+protected:
+    struct ColorCache {
+        HashMap<int, Color> systemStyleColors;
 
-    mutable Color m_activeListBoxSelectionBackgroundColor;
-    mutable Color m_inactiveListBoxSelectionBackgroundColor;
-    mutable Color m_activeListBoxSelectionForegroundColor;
-    mutable Color m_inactiveListBoxSelectionForegroundColor;
+        Color systemLinkColor;
+        Color systemActiveLinkColor;
+        Color systemVisitedLinkColor;
+
+        Color activeSelectionBackgroundColor;
+        Color inactiveSelectionBackgroundColor;
+        Color activeSelectionForegroundColor;
+        Color inactiveSelectionForegroundColor;
+
+        Color activeListBoxSelectionBackgroundColor;
+        Color inactiveListBoxSelectionBackgroundColor;
+        Color activeListBoxSelectionForegroundColor;
+        Color inactiveListBoxSelectionForegroundColor;
+
+        Color activeTextSearchHighlightColor;
+        Color inactiveTextSearchHighlightColor;
+    };
+
+    virtual ColorCache& colorCache(OptionSet<StyleColor::Options>) const { return m_colorCache; }
+
+private:
+    mutable ColorCache m_colorCache;
 };
 
 } // namespace WebCore

@@ -62,8 +62,7 @@ enum AutoFillButtonType {
     "None",
     "Contacts",
     "Credentials",
-    "StrongPassword",
-    "StrongConfirmationPassword"
+    "StrongPassword"
 };
 
 enum UserInterfaceLayoutDirection {
@@ -87,6 +86,14 @@ enum EventThrottlingBehavior {
     "NowPlaying"
 };
 
+[Conditional=VIDEO] enum MediaSessionState {
+    "Idle",
+    "Autoplaying",
+    "Playing",
+    "Paused",
+    "Interrupted"
+};
+
 [
     ExportMacro=WEBCORE_TESTSUPPORT_EXPORT,
     Conditional=VIDEO,
@@ -98,6 +105,16 @@ enum EventThrottlingBehavior {
     unrestricted double duration;
     unrestricted double elapsedTime;
     unsigned long long uniqueIdentifier;
+};
+
+[
+    ExportMacro=WEBCORE_TESTSUPPORT_EXPORT,
+    JSGenerateToJSObject,
+] dictionary FullscreenInsets {
+    double top;
+    double left;
+    double bottom;
+    double right;
 };
 
 [
@@ -220,7 +237,7 @@ enum EventThrottlingBehavior {
 
     [MayThrowException] DOMString autofillFieldName(Element formControlElement);
 
-    [MayThrowException] void paintControlTints();
+    [MayThrowException] void invalidateControlTints();
 
     [MayThrowException] void scrollElementToRect(Element element, long x, long y, long w, long h);
 
@@ -371,8 +388,9 @@ enum EventThrottlingBehavior {
     [Conditional=FULLSCREEN_API] void webkitDidExitFullScreenForElement(Element element);
     [Conditional=FULLSCREEN_API] readonly attribute boolean isAnimatingFullScreen;
 
-    void setFullscreenInsetTop(double inset);
-    void setFullscreenAutoHideDelay(double delay);
+    void setFullscreenInsets(FullscreenInsets insets);
+    void setFullscreenAutoHideDuration(double duration);
+    void setFullscreenControlsHidden(boolean hidden);
 
     void setApplicationCacheOriginQuota(unsigned long long quota);
 
@@ -593,6 +611,9 @@ enum EventThrottlingBehavior {
     [Conditional=MEDIA_STREAM] void simulateMediaStreamTrackCaptureSourceFailure(MediaStreamTrack track);
     [Conditional=MEDIA_STREAM] void setMediaStreamTrackIdentifier(MediaStreamTrack track, DOMString identifier);
 
+    unsigned long long documentIdentifier(Document document);
+    boolean isDocumentAlive(unsigned long long documentIdentifier);
+
     Promise<void> clearCacheStorageMemoryRepresentation();
     Promise<DOMString> cacheStorageEngineRepresentation();
     void setResponseSizeWithPadding(FetchResponse response, unsigned long long size);
@@ -618,11 +639,19 @@ enum EventThrottlingBehavior {
     boolean isSystemPreviewLink(Element element);
     boolean isSystemPreviewImage(Element element);
 
-    DOMString extraZoomModeAdaptationName();
-
     boolean usingAppleInternalSDK();
 
     [Conditional=VIDEO, MayThrowException] readonly attribute NowPlayingState nowPlayingState;
 
     [Conditional=VIDEO] HTMLMediaElement bestMediaElementForShowingPlaybackControlsManager(PlaybackControlsPurpose purpose);
+    [Conditional=VIDEO] MediaSessionState mediaSessionState(HTMLMediaElement element);
+
+    DOMString ongoingLoadsDescriptions();
+    void setCaptureExtraNetworkLoadMetricsEnabled(boolean value);
+
+    void reloadWithoutContentExtensions();
+
+    void setUseSystemAppearance(boolean value);
+
+    unsigned long pluginCount();
 };

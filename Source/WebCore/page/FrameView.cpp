@@ -129,6 +129,11 @@ MonotonicTime FrameView::sCurrentPaintTimeStamp { };
 // The maximum number of updateEmbeddedObjects iterations that should be done before returning.
 static const unsigned maxUpdateEmbeddedObjectsIterations = 2;
 
+static constexpr unsigned defaultSignificantRenderedTextCharacterThreshold = 3000;
+static constexpr float defaultSignificantRenderedTextMeanLength = 50;
+static constexpr unsigned mainArticleSignificantRenderedTextCharacterThreshold = 1500;
+static constexpr float mainArticleSignificantRenderedTextMeanLength = 25;
+
 static RenderLayer::UpdateLayerPositionsFlags updateLayerPositionFlags(RenderLayer* layer, bool isRelayoutingSubtree, bool didFullRepaint)
 {
     RenderLayer::UpdateLayerPositionsFlags flags = RenderLayer::defaultFlags;
@@ -190,7 +195,6 @@ FrameView::FrameView(Frame& frame)
     , m_useCustomFixedPositionLayoutRect(false)
     , m_useCustomSizeForResizeEvent(false)
 #endif
-    , m_hasOverrideViewportSize(false)
     , m_shouldAutoSize(false)
     , m_inAutoSize(false)
     , m_didRunAutosize(false)
@@ -277,6 +281,9 @@ void FrameView::reset()
     m_visuallyNonEmptyPixelCount = 0;
     m_isVisuallyNonEmpty = false;
     m_firstVisuallyNonEmptyLayoutCallbackPending = true;
+    m_renderTextCountForVisuallyNonEmptyCharacters = 0;
+    m_renderedSignificantAmountOfText = false;
+    m_significantRenderedTextMilestonePending = true;
     m_needsDeferredScrollbarsUpdate = false;
     m_maintainScrollPositionAnchor = nullptr;
     layoutContext().reset();
@@ -2295,6 +2302,7 @@ void FrameView::scrollToFocusedElementImmediatelyIfNeeded()
 
 void FrameView::scrollToFocusedElementTimerFired()
 {
+    auto protectedThis = makeRef(*this);
     scrollToFocusedElementInternal();
 }
 
@@ -2895,7 +2903,7 @@ void FrameView::setTransparent(bool isTransparent)
     if (!isViewForDocumentInFrame())
         return;
 
-    renderView()->compositor().rootBackgroundTransparencyChanged();
+    renderView()->compositor().rootBackgroundColorOrTransparencyChanged();
     setNeedsLayout();
 }
 
@@ -2911,12 +2919,7 @@ Color FrameView::baseBackgroundColor() const
 
 void FrameView::setBaseBackgroundColor(const Color& backgroundColor)
 {
-    bool wasOpaque = m_baseBackgroundColor.isOpaque();
-
-    if (!backgroundColor.isValid())
-        m_baseBackgroundColor = Color::white;
-    else
-        m_baseBackgroundColor = backgroundColor;
+    m_baseBackgroundColor = backgroundColor.isValid() ? backgroundColor : Color::white;
 
     if (!isViewForDocumentInFrame())
         return;
@@ -2924,8 +2927,7 @@ void FrameView::setBaseBackgroundColor(const Color& backgroundColor)
     recalculateScrollbarOverlayStyle();
     setNeedsLayout();
 
-    if (m_baseBackgroundColor.isOpaque() != wasOpaque)
-        renderView()->compositor().rootBackgroundTransparencyChanged();
+    renderView()->compositor().rootBackgroundColorOrTransparencyChanged();
 }
 
 void FrameView::updateBackgroundRecursively(const Color& backgroundColor, bool transparent)
@@ -2969,7 +2971,7 @@ FrameView::ExtendedBackgroundMode FrameView::calculateExtendedBackgroundMode() c
 
     // Just because Settings::backgroundShouldExtendBeyondPage() is true does not necessarily mean
     // that the background rect needs to be extended for painting. Simple backgrounds can be extended
-    // just with RenderLayerCompositor::setRootExtendedBackgroundColor(). More complicated backgrounds,
+    // just with RenderLayerCompositor's rootExtendedBackgroundColor. More complicated backgrounds,
     // such as images, require extending the background rect to continue painting into the extended
     // region. This function finds out if it is necessary to extend the background rect for painting.
 
@@ -3023,7 +3025,6 @@ void FrameView::updateTilesForExtendedBackgroundMode(ExtendedBackgroundMode mode
     if (existingMode == mode)
         return;
 
-    renderView->compositor().setRootExtendedBackgroundColor(mode == ExtendedBackgroundModeAll ? Color() : documentBackgroundColor());
     backing->setTiledBackingHasMargins(mode & ExtendedBackgroundModeHorizontal, mode & ExtendedBackgroundModeVertical);
 }
 
@@ -3220,6 +3221,7 @@ void FrameView::performPostLayoutTasks()
     // FIXME: We should not run any JavaScript code in this function.
     LOG(Layout, "FrameView %p performPostLayoutTasks", this);
 
+    frame().document()->updateMainArticleElementAfterLayout();
     frame().selection().updateAppearanceAfterLayout();
 
     flushPostLayoutTasksQueue();
@@ -3867,7 +3869,7 @@ void FrameView::updateScrollCorner()
 
 void FrameView::paintScrollCorner(GraphicsContext& context, const IntRect& cornerRect)
 {
-    if (context.updatingControlTints()) {
+    if (context.invalidatingControlTints()) {
         updateScrollCorner();
         return;
     }
@@ -4004,18 +4006,18 @@ void FrameView::updateControlTints()
 
     RenderView* renderView = this->renderView();
     if ((renderView && renderView->theme().supportsControlTints()) || hasCustomScrollbars())
-        paintControlTints();
+        invalidateControlTints();
 
     if (page)
         page->setIsCountingRelevantRepaintedObjects(isCurrentlyCountingRelevantRepaintedObject);
 }
 
-void FrameView::paintControlTints()
+void FrameView::traverseForPaintInvalidation(GraphicsContext::PaintInvalidationReasons paintInvalidationReasons)
 {
     if (needsLayout())
         layoutContext().layout();
 
-    GraphicsContext context(GraphicsContext::NonPaintingReasons::UpdatingControlTints);
+    GraphicsContext context(paintInvalidationReasons);
     if (platformWidget()) {
         // FIXME: consult paintsEntireContents().
         paintContents(context, visibleContentRect(LegacyIOSDocumentVisibleRect));
@@ -4308,6 +4310,17 @@ void FrameView::updateLayoutAndStyleIfNeededRecursive()
     ASSERT(!needsLayout());
 }
 
+static bool elementOverflowRectIsLargerThanThreshold(const Element& element)
+{
+    // Require the document to grow a bit.
+    // Using a value of 48 allows the header on Google's search page to render immediately before search results populate later.
+    static const int documentHeightThreshold = 48;
+    if (auto* elementRenderBox = element.renderBox())
+        return snappedIntRect(elementRenderBox->layoutOverflowRect()).height() >= documentHeightThreshold;
+
+    return false;
+}
+
 bool FrameView::qualifiesAsVisuallyNonEmpty() const
 {
     // No content yet.
@@ -4323,11 +4336,7 @@ bool FrameView::qualifiesAsVisuallyNonEmpty() const
     if (frame().document()->styleScope().hasPendingSheetsBeforeBody())
         return false;
 
-    // Require the document to grow a bit.
-    // Using a value of 48 allows the header on Google's search page to render immediately before search results populate later.
-    static const int documentHeightThreshold = 48;
-    LayoutRect overflowRect = documentElement->renderBox()->layoutOverflowRect();
-    if (snappedIntRect(overflowRect).height() < documentHeightThreshold)
+    if (!elementOverflowRectIsLargerThanThreshold(*documentElement))
         return false;
 
     // The first few hundred characters rarely contain the interesting content of the page.
@@ -4337,6 +4346,31 @@ bool FrameView::qualifiesAsVisuallyNonEmpty() const
     if (m_visuallyNonEmptyPixelCount > visualPixelThreshold)
         return true;
     return false;
+}
+
+void FrameView::updateSignificantRenderedTextMilestoneIfNeeded()
+{
+    if (m_renderedSignificantAmountOfText)
+        return;
+
+    auto* document = frame().document();
+    if (!document || document->styleScope().hasPendingSheetsBeforeBody())
+        return;
+
+    auto* documentElement = document->documentElement();
+    if (!documentElement || !elementOverflowRectIsLargerThanThreshold(*documentElement))
+        return;
+
+    auto characterThreshold = document->hasMainArticleElement() ? mainArticleSignificantRenderedTextCharacterThreshold : defaultSignificantRenderedTextCharacterThreshold;
+    auto meanLength = document->hasMainArticleElement() ? mainArticleSignificantRenderedTextMeanLength : defaultSignificantRenderedTextMeanLength;
+
+    if (m_visuallyNonEmptyCharacterCount < characterThreshold)
+        return;
+
+    if (!m_renderTextCountForVisuallyNonEmptyCharacters || m_visuallyNonEmptyCharacterCount / static_cast<float>(m_renderTextCountForVisuallyNonEmptyCharacters) < meanLength)
+        return;
+
+    m_renderedSignificantAmountOfText = true;
 }
 
 void FrameView::updateIsVisuallyNonEmpty()
@@ -4374,9 +4408,12 @@ void FrameView::enableAutoSizeMode(bool enable, const IntSize& minSize, const In
 
     setNeedsLayout();
     layoutContext().scheduleLayout();
-    if (m_shouldAutoSize)
+    if (m_shouldAutoSize) {
+        overrideViewportSizeForCSSViewportUnits({ minSize.width(), m_overrideViewportSize ? m_overrideViewportSize->height : std::nullopt });
         return;
+    }
 
+    clearViewportSizeOverrideForCSSViewportUnits();
     // Since autosize mode forces the scrollbar mode, change them to being auto.
     setVerticalScrollbarLock(false);
     setHorizontalScrollbarLock(false);
@@ -4449,7 +4486,7 @@ void FrameView::adjustPageHeightDeprecated(float *newBottom, float oldTop, float
 
     }
     // Use a context with painting disabled.
-    GraphicsContext context(GraphicsContext::NonPaintingReasons::NoReasons);
+    GraphicsContext context(GraphicsContext::PaintInvalidationReasons::None);
     renderView->setTruncatedAt(static_cast<int>(floorf(oldBottom)));
     IntRect dirtyRect(0, static_cast<int>(floorf(oldTop)), renderView->layoutOverflowRect().maxX(), static_cast<int>(ceilf(oldBottom - oldTop)));
     renderView->setPrintRect(dirtyRect);
@@ -4933,12 +4970,19 @@ void FrameView::fireLayoutRelatedMilestonesIfNeeded()
             page->startCountingRelevantRepaintedObjects();
     }
     updateIsVisuallyNonEmpty();
+    updateSignificantRenderedTextMilestoneIfNeeded();
 
     // If the layout was done with pending sheets, we are not in fact visually non-empty yet.
-    if (m_isVisuallyNonEmpty &&m_firstVisuallyNonEmptyLayoutCallbackPending) {
+    if (m_isVisuallyNonEmpty && m_firstVisuallyNonEmptyLayoutCallbackPending) {
         m_firstVisuallyNonEmptyLayoutCallbackPending = false;
         if (requestedMilestones & DidFirstVisuallyNonEmptyLayout)
             milestonesAchieved |= DidFirstVisuallyNonEmptyLayout;
+    }
+
+    if (m_renderedSignificantAmountOfText && m_significantRenderedTextMilestonePending) {
+        m_significantRenderedTextMilestonePending = false;
+        if (requestedMilestones & DidRenderSignificantAmountOfText)
+            milestonesAchieved |= DidRenderSignificantAmountOfText;
     }
 
     if (milestonesAchieved && frame().isMainFrame())
@@ -5087,30 +5131,57 @@ void FrameView::setViewExposedRect(std::optional<FloatRect> viewExposedRect)
     if (auto* page = frame().page())
         page->pageOverlayController().didChangeViewExposedRect();
 }
-    
-void FrameView::setViewportSizeForCSSViewportUnits(IntSize size)
+
+void FrameView::clearViewportSizeOverrideForCSSViewportUnits()
 {
-    if (m_hasOverrideViewportSize && m_overrideViewportSize == size)
+    if (!m_overrideViewportSize)
         return;
-    
-    m_overrideViewportSize = size;
-    m_hasOverrideViewportSize = true;
-    
-    if (Document* document = frame().document())
+
+    m_overrideViewportSize = std::nullopt;
+    if (auto* document = frame().document())
         document->styleScope().didChangeStyleSheetEnvironment();
 }
-    
+
+void FrameView::setViewportSizeForCSSViewportUnits(IntSize size)
+{
+    overrideViewportSizeForCSSViewportUnits({ size.width(), size.height() });
+}
+
+void FrameView::overrideViewportSizeForCSSViewportUnits(OverrideViewportSize size)
+{
+    if (m_overrideViewportSize && *m_overrideViewportSize == size)
+        return;
+
+    m_overrideViewportSize = size;
+
+    if (auto* document = frame().document())
+        document->styleScope().didChangeStyleSheetEnvironment();
+}
+
 IntSize FrameView::viewportSizeForCSSViewportUnits() const
 {
-    if (m_hasOverrideViewportSize)
-        return m_overrideViewportSize;
+    OverrideViewportSize viewportSize;
 
-    if (useFixedLayout())
-        return fixedLayoutSize();
+    if (m_overrideViewportSize) {
+        viewportSize = *m_overrideViewportSize;
+        // auto-size overrides the width only, so we can't always bail out early here.
+        if (viewportSize.width && viewportSize.height)
+            return { *viewportSize.width, *viewportSize.height };
+    }
+
+    if (useFixedLayout()) {
+        auto fixedLayoutSize = this->fixedLayoutSize();
+        viewportSize.width = viewportSize.width.value_or(fixedLayoutSize.width());
+        viewportSize.height = viewportSize.height.value_or(fixedLayoutSize.height());
+        return { *viewportSize.width, *viewportSize.height };
+    }
     
     // FIXME: the value returned should take into account the value of the overflow
     // property on the root element.
-    return visibleContentRectIncludingScrollbars().size();
+    auto visibleContentSizeIncludingScrollbars = visibleContentRectIncludingScrollbars().size();
+    viewportSize.width = viewportSize.width.value_or(visibleContentSizeIncludingScrollbars.width());
+    viewportSize.height = viewportSize.height.value_or(visibleContentSizeIncludingScrollbars.height());
+    return { *viewportSize.width, *viewportSize.height };
 }
 
 bool FrameView::shouldPlaceBlockDirectionScrollbarOnLeft() const

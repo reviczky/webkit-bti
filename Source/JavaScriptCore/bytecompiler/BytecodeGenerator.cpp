@@ -1651,11 +1651,6 @@ RegisterID* BytecodeGenerator::moveLinkTimeConstant(RegisterID* dst, LinkTimeCon
     return dst;
 }
 
-unsigned BytecodeGenerator::addRegExp(RegExp* r)
-{
-    return m_codeBlock->addRegExp(r);
-}
-
 RegisterID* BytecodeGenerator::moveEmptyValue(RegisterID* dst)
 {
     RefPtr<RegisterID> emptyValue = addConstantEmptyValue();
@@ -2883,7 +2878,7 @@ void BytecodeGenerator::emitPutGeneratorFields(RegisterID* nextFunction)
 
 void BytecodeGenerator::emitPutAsyncGeneratorFields(RegisterID* nextFunction)
 {
-    ASSERT(isAsyncGeneratorFunctionParseMode(parseMode()));
+    ASSERT(isAsyncGeneratorWrapperParseMode(parseMode()));
 
     emitDirectPutById(m_generatorRegister, propertyNames().builtinNames().generatorNextPrivateName(), nextFunction, PropertyNode::KnownDirect);
         
@@ -3286,7 +3281,7 @@ RegisterID* BytecodeGenerator::emitNewRegExp(RegisterID* dst, RegExp* regExp)
 {
     emitOpcode(op_new_regexp);
     instructions().append(dst->index());
-    instructions().append(addRegExp(regExp));
+    instructions().append(addConstantValue(regExp)->index());
     return dst;
 }
 
@@ -3364,7 +3359,7 @@ RegisterID* BytecodeGenerator::emitNewFunction(RegisterID* dst, FunctionMetadata
         emitOpcode(op_new_generator_func);
     else if (function->parseMode() == SourceParseMode::AsyncFunctionMode)
         emitOpcode(op_new_async_func);
-    else if (function->parseMode() == SourceParseMode::AsyncGeneratorWrapperFunctionMode) {
+    else if (isAsyncGeneratorWrapperParseMode(function->parseMode())) {
         ASSERT(Options::useAsyncIterator());
         emitOpcode(op_new_async_generator_func);
     } else
@@ -4370,7 +4365,7 @@ void BytecodeGenerator::emitEnumeration(ThrowableExpressionData* node, Expressio
                 emitAwait(value.get());
 
             emitJumpIfTrue(emitIsObject(newTemporary(), value.get()), finallyDone.get());
-            emitThrowTypeError(ASCIILiteral("Iterator result interface is not an object."));
+            emitThrowTypeError("Iterator result interface is not an object."_s);
 
             emitLabel(finallyDone.get());
             emitFinallyCompletion(*finallyContext, completionTypeRegister(), endCatchLabel.get());
@@ -4588,7 +4583,7 @@ RegisterID* BytecodeGenerator::emitIteratorNext(RegisterID* dst, RegisterID* nex
     {
         Ref<Label> typeIsObject = newLabel();
         emitJumpIfTrue(emitIsObject(newTemporary(), dst), typeIsObject.get());
-        emitThrowTypeError(ASCIILiteral("Iterator result interface is not an object."));
+        emitThrowTypeError("Iterator result interface is not an object."_s);
         emitLabel(typeIsObject.get());
     }
     return dst;
@@ -4621,7 +4616,7 @@ void BytecodeGenerator::emitIteratorClose(RegisterID* iterator, const ThrowableE
         emitAwait(value.get());
 
     emitJumpIfTrue(emitIsObject(newTemporary(), value.get()), done.get());
-    emitThrowTypeError(ASCIILiteral("Iterator result interface is not an object."));
+    emitThrowTypeError("Iterator result interface is not an object."_s);
     emitLabel(done.get());
 }
 
@@ -4973,7 +4968,7 @@ RegisterID* BytecodeGenerator::emitDelegateYield(RegisterID* argument, Throwable
                     EmitAwait emitAwaitInIteratorClose = parseMode() == SourceParseMode::AsyncGeneratorBodyMode ? EmitAwait::Yes : EmitAwait::No;
                     emitIteratorClose(iterator.get(), node, emitAwaitInIteratorClose);
 
-                    emitThrowTypeError(ASCIILiteral("Delegated generator does not have a 'throw' method."));
+                    emitThrowTypeError("Delegated generator does not have a 'throw' method."_s);
 
                     emitLabel(throwMethodFound.get());
                     CallArguments throwArguments(*this, nullptr, 1);
@@ -5007,7 +5002,7 @@ RegisterID* BytecodeGenerator::emitDelegateYield(RegisterID* argument, Throwable
 
                     Ref<Label> returnIteratorResultIsObject = newLabel();
                     emitJumpIfTrue(emitIsObject(newTemporary(), value.get()), returnIteratorResultIsObject.get());
-                    emitThrowTypeError(ASCIILiteral("Iterator result interface is not an object."));
+                    emitThrowTypeError("Iterator result interface is not an object."_s);
 
                     emitLabel(returnIteratorResultIsObject.get());
 
@@ -5041,7 +5036,7 @@ RegisterID* BytecodeGenerator::emitDelegateYield(RegisterID* argument, Throwable
 
             Ref<Label> iteratorValueIsObject = newLabel();
             emitJumpIfTrue(emitIsObject(newTemporary(), value.get()), iteratorValueIsObject.get());
-            emitThrowTypeError(ASCIILiteral("Iterator result interface is not an object."));
+            emitThrowTypeError("Iterator result interface is not an object."_s);
             emitLabel(iteratorValueIsObject.get());
 
             emitJumpIfTrue(emitGetById(newTemporary(), value.get(), propertyNames().done), loopDone.get());

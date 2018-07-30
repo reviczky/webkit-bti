@@ -94,7 +94,7 @@ SubresourceLoader::SubresourceLoader(Frame& frame, CachedResource& resource, con
 #if ENABLE(CONTENT_EXTENSIONS)
     m_resourceType = toResourceType(resource.type());
 #endif
-    m_canCrossOriginRequestsAskUserForCredentials = resource.type() == CachedResource::MainResource || frame.settings().allowCrossOriginSubresourcesToAskForCredentials();
+    m_canCrossOriginRequestsAskUserForCredentials = resource.type() == CachedResource::Type::MainResource || frame.settings().allowCrossOriginSubresourcesToAskForCredentials();
 }
 
 SubresourceLoader::~SubresourceLoader()
@@ -199,7 +199,7 @@ void SubresourceLoader::willSendRequestInternal(ResourceRequest&& newRequest, co
                 return completionHandler(WTFMove(request));
             }
 
-            if (m_resource->type() == CachedResource::MainResource && !redirectResponse.isNull())
+            if (m_resource->type() == CachedResource::Type::MainResource && !redirectResponse.isNull())
                 m_documentLoader->willContinueMainResourceLoadAfterRedirect(request);
             completionHandler(WTFMove(request));
         });
@@ -229,7 +229,7 @@ void SubresourceLoader::willSendRequestInternal(ResourceRequest&& newRequest, co
             didFinishLoading(emptyMetrics);
             return completionHandler(WTFMove(newRequest));
         } else if (m_redirectCount++ >= options().maxRedirectCount) {
-            cancel(ResourceError(String(), 0, request().url(), ASCIILiteral("Too many redirections"), ResourceError::Type::General));
+            cancel(ResourceError(String(), 0, request().url(), "Too many redirections"_s, ResourceError::Type::General));
             return completionHandler(WTFMove(newRequest));
         }
 
@@ -283,7 +283,7 @@ void SubresourceLoader::didSendData(unsigned long long bytesSent, unsigned long 
 
 bool SubresourceLoader::shouldCreatePreviewLoaderForResponse(const ResourceResponse& response) const
 {
-    if (m_resource->type() != CachedResource::MainResource)
+    if (m_resource->type() != CachedResource::Type::MainResource)
         return false;
 
     if (m_previewLoader)
@@ -373,7 +373,7 @@ void SubresourceLoader::didReceiveResponse(const ResourceResponse& response, Com
 
         // FIXME: Main resources have a different set of rules for multipart than images do.
         // Hopefully we can merge those 2 paths.
-        if (isResponseMultipart && m_resource->type() != CachedResource::MainResource) {
+        if (isResponseMultipart && m_resource->type() != CachedResource::Type::MainResource) {
             m_loadingMultipartContent = true;
 
             // We don't count multiParts in a CachedResourceLoader's request count
@@ -476,46 +476,46 @@ static void logResourceLoaded(Frame* frame, CachedResource::Type type)
 
     String resourceType;
     switch (type) {
-    case CachedResource::MainResource:
+    case CachedResource::Type::MainResource:
         resourceType = DiagnosticLoggingKeys::mainResourceKey();
         break;
-    case CachedResource::ImageResource:
+    case CachedResource::Type::ImageResource:
         resourceType = DiagnosticLoggingKeys::imageKey();
         break;
 #if ENABLE(XSLT)
-    case CachedResource::XSLStyleSheet:
+    case CachedResource::Type::XSLStyleSheet:
 #endif
-    case CachedResource::CSSStyleSheet:
+    case CachedResource::Type::CSSStyleSheet:
         resourceType = DiagnosticLoggingKeys::styleSheetKey();
         break;
-    case CachedResource::Script:
+    case CachedResource::Type::Script:
         resourceType = DiagnosticLoggingKeys::scriptKey();
         break;
-    case CachedResource::FontResource:
+    case CachedResource::Type::FontResource:
 #if ENABLE(SVG_FONTS)
-    case CachedResource::SVGFontResource:
+    case CachedResource::Type::SVGFontResource:
 #endif
         resourceType = DiagnosticLoggingKeys::fontKey();
         break;
-    case CachedResource::Beacon:
+    case CachedResource::Type::Beacon:
         ASSERT_NOT_REACHED();
         break;
-    case CachedResource::MediaResource:
-    case CachedResource::Icon:
-    case CachedResource::RawResource:
+    case CachedResource::Type::MediaResource:
+    case CachedResource::Type::Icon:
+    case CachedResource::Type::RawResource:
         resourceType = DiagnosticLoggingKeys::rawKey();
         break;
-    case CachedResource::SVGDocumentResource:
+    case CachedResource::Type::SVGDocumentResource:
         resourceType = DiagnosticLoggingKeys::svgDocumentKey();
         break;
 #if ENABLE(APPLICATION_MANIFEST)
-    case CachedResource::ApplicationManifest:
+    case CachedResource::Type::ApplicationManifest:
         resourceType = DiagnosticLoggingKeys::applicationManifestKey();
         break;
 #endif
-    case CachedResource::LinkPrefetch:
+    case CachedResource::Type::LinkPrefetch:
 #if ENABLE(VIDEO_TRACK)
-    case CachedResource::TextTrackResource:
+    case CachedResource::Type::TextTrackResource:
 #endif
         resourceType = DiagnosticLoggingKeys::otherKey();
         break;
@@ -554,7 +554,7 @@ bool SubresourceLoader::checkRedirectionCrossOriginAccessControl(const ResourceR
 
     // Implementing https://fetch.spec.whatwg.org/#concept-http-redirect-fetch step 8 & 9.
     if (m_resource->isCrossOrigin() && !isValidCrossOriginRedirectionURL(newRequest.url())) {
-        errorMessage = ASCIILiteral("URL is either a non-HTTP URL or contains credentials.");
+        errorMessage = "URL is either a non-HTTP URL or contains credentials."_s;
         return false;
     }
 
@@ -627,7 +627,7 @@ void SubresourceLoader::didFinishLoading(const NetworkLoadMetrics& networkLoadMe
         reportResourceTiming(m_resource->response().deprecatedNetworkLoadMetrics());
     }
 
-    if (m_resource->type() != CachedResource::MainResource)
+    if (m_resource->type() != CachedResource::Type::MainResource)
         tracePoint(SubresourceLoadDidEnd);
 
     m_state = Finishing;
@@ -648,8 +648,6 @@ void SubresourceLoader::didFinishLoading(const NetworkLoadMetrics& networkLoadMe
 
 void SubresourceLoader::didFail(const ResourceError& error)
 {
-    if (m_frame && m_frame->document() && error.isAccessControl())
-        m_frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, error.localizedDescription());
 
 #if USE(QUICK_LOOK)
     if (auto previewLoader = m_previewLoader.get())
@@ -660,12 +658,15 @@ void SubresourceLoader::didFail(const ResourceError& error)
         return;
     ASSERT(!reachedTerminalState());
     LOG(ResourceLoading, "Failed to load '%s'.\n", m_resource->url().string().latin1().data());
+    if (m_frame->document() && error.isAccessControl())
+        m_frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, error.localizedDescription());
+
 
     Ref<SubresourceLoader> protectedThis(*this);
     CachedResourceHandle<CachedResource> protectResource(m_resource);
     m_state = Finishing;
 
-    if (m_resource->type() != CachedResource::MainResource)
+    if (m_resource->type() != CachedResource::Type::MainResource)
         tracePoint(SubresourceLoadDidEnd);
 
     if (m_resource->resourceToRevalidate())
@@ -713,7 +714,7 @@ void SubresourceLoader::didCancel(const ResourceError&)
     if (m_state == Uninitialized)
         return;
 
-    if (m_resource->type() != CachedResource::MainResource)
+    if (m_resource->type() != CachedResource::Type::MainResource)
         tracePoint(SubresourceLoadDidEnd);
 
     m_resource->cancelLoad();

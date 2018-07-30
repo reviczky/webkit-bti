@@ -45,8 +45,8 @@ bool isScriptAllowedByNosniff(const ResourceResponse&);
 class ResourceResponseBase {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    enum class Type { Basic, Cors, Default, Error, Opaque, Opaqueredirect };
-    enum class Tainting { Basic, Cors, Opaque, Opaqueredirect };
+    enum class Type : uint8_t { Basic, Cors, Default, Error, Opaque, Opaqueredirect };
+    enum class Tainting : uint8_t { Basic, Cors, Opaque, Opaqueredirect };
 
     static bool isRedirectionStatusCode(int code) { return code == 301 || code == 302 || code == 303 || code == 307 || code == 308; }
 
@@ -75,7 +75,7 @@ public:
 
     bool isNull() const { return m_isNull; }
     WEBCORE_EXPORT bool isHTTP() const;
-    bool isSuccessful() const;
+    WEBCORE_EXPORT bool isSuccessful() const;
 
     WEBCORE_EXPORT const URL& url() const;
     WEBCORE_EXPORT void setURL(const URL&);
@@ -142,7 +142,7 @@ public:
     WEBCORE_EXPORT std::optional<WallTime> lastModified() const;
     ParsedContentRange& contentRange() const;
 
-    enum class Source { Unknown, Network, DiskCache, DiskCacheAfterValidation, MemoryCache, MemoryCacheAfterValidation, ServiceWorker, ApplicationCache };
+    enum class Source : uint8_t { Unknown, Network, DiskCache, DiskCacheAfterValidation, MemoryCache, MemoryCacheAfterValidation, ServiceWorker, ApplicationCache };
     WEBCORE_EXPORT Source source() const;
     void setSource(Source source)
     {
@@ -206,10 +206,9 @@ private:
     void sanitizeHTTPHeaderFieldsAccordingToTainting();
 
 protected:
-    bool m_isNull;
     URL m_url;
     AtomicString m_mimeType;
-    long long m_expectedContentLength;
+    long long m_expectedContentLength { 0 };
     AtomicString m_textEncodingName;
     AtomicString m_httpStatusText;
     AtomicString m_httpVersion;
@@ -218,8 +217,6 @@ protected:
 
     mutable std::optional<CertificateInfo> m_certificateInfo;
 
-    int m_httpStatusCode;
-
 private:
     mutable std::optional<Seconds> m_age;
     mutable std::optional<WallTime> m_date;
@@ -227,6 +224,7 @@ private:
     mutable std::optional<WallTime> m_lastModified;
     mutable ParsedContentRange m_contentRange;
     mutable CacheControlDirectives m_cacheControlDirectives;
+    std::optional<SHA1::Digest> m_cacheBodyKey;
 
     mutable bool m_haveParsedCacheControlHeader { false };
     mutable bool m_haveParsedAgeHeader { false };
@@ -234,14 +232,15 @@ private:
     mutable bool m_haveParsedExpiresHeader { false };
     mutable bool m_haveParsedLastModifiedHeader { false };
     mutable bool m_haveParsedContentRangeHeader { false };
+    bool m_isRedirected { false };
 
     Source m_source { Source::Unknown };
-
-    std::optional<SHA1::Digest> m_cacheBodyKey;
-
     Type m_type { Type::Default };
-    bool m_isRedirected { false };
     Tainting m_tainting { Tainting::Basic };
+
+protected:
+    bool m_isNull { true };
+    int m_httpStatusCode { 0 };
 };
 
 inline bool operator==(const ResourceResponse& a, const ResourceResponse& b) { return ResourceResponseBase::compare(a, b); }

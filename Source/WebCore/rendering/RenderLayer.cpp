@@ -3700,7 +3700,7 @@ void RenderLayer::paintScrollCorner(GraphicsContext& context, const IntPoint& pa
     if (!absRect.intersects(damageRect))
         return;
 
-    if (context.updatingControlTints()) {
+    if (context.invalidatingControlTints()) {
         updateScrollCornerStyle();
         return;
     }
@@ -3710,10 +3710,10 @@ void RenderLayer::paintScrollCorner(GraphicsContext& context, const IntPoint& pa
         return;
     }
 
-    // We don't want to paint white if we have overlay scrollbars, since we need
+    // We don't want to paint a corner if we have overlay scrollbars, since we need
     // to see what is behind it.
     if (!hasOverlayScrollbars())
-        context.fillRect(absRect, Color::white);
+        ScrollbarTheme::theme().paintScrollCorner(context, absRect);
 }
 
 void RenderLayer::drawPlatformResizerImage(GraphicsContext& context, const LayoutRect& resizerCornerRect)
@@ -3760,7 +3760,7 @@ void RenderLayer::paintResizer(GraphicsContext& context, const LayoutPoint& pain
     if (!absRect.intersects(damageRect))
         return;
 
-    if (context.updatingControlTints()) {
+    if (context.invalidatingControlTints()) {
         updateResizerStyle();
         return;
     }
@@ -3965,9 +3965,9 @@ static inline bool paintForFixedRootBackground(const RenderLayer* layer, RenderL
 void RenderLayer::paintLayer(GraphicsContext& context, const LayerPaintingInfo& paintingInfo, PaintLayerFlags paintFlags)
 {
     if (isComposited()) {
-        // The updatingControlTints() painting pass goes through compositing layers,
+        // The performingPaintInvalidation() painting pass goes through compositing layers,
         // but we need to ensure that we don't cache clip rects computed with the wrong root in this case.
-        if (context.updatingControlTints() || (paintingInfo.paintBehavior & PaintBehaviorFlattenCompositingLayers))
+        if (context.performingPaintInvalidation() || (paintingInfo.paintBehavior & PaintBehaviorFlattenCompositingLayers))
             paintFlags |= PaintLayerTemporaryClipRects;
         else if (!backing()->paintsIntoWindow()
             && !backing()->paintsIntoCompositedAncestor()
@@ -4083,8 +4083,7 @@ bool RenderLayer::setupFontSubpixelQuantization(GraphicsContext& context, bool& 
     return false;
 }
 
-template <class ReferenceBoxClipPathOperation>
-static inline LayoutRect computeReferenceBox(const RenderObject& renderer, const ReferenceBoxClipPathOperation& clippingPath, const LayoutSize& offsetFromRoot, const LayoutRect& rootRelativeBounds)
+static inline LayoutRect computeReferenceBox(const RenderObject& renderer, const CSSBoxType& boxType, const LayoutSize& offsetFromRoot, const LayoutRect& rootRelativeBounds)
 {
     // FIXME: Support different reference boxes for inline content.
     // https://bugs.webkit.org/show_bug.cgi?id=129047
@@ -4093,8 +4092,9 @@ static inline LayoutRect computeReferenceBox(const RenderObject& renderer, const
 
     LayoutRect referenceBox;
     const auto& box = downcast<RenderBox>(renderer);
-    switch (clippingPath.referenceBox()) {
+    switch (boxType) {
     case CSSBoxType::ContentBox:
+    case CSSBoxType::FillBox:
         referenceBox = box.contentBoxRect();
         referenceBox.move(offsetFromRoot);
         break;
@@ -4102,12 +4102,12 @@ static inline LayoutRect computeReferenceBox(const RenderObject& renderer, const
         referenceBox = box.paddingBoxRect();
         referenceBox.move(offsetFromRoot);
         break;
-    // FIXME: Support margin-box. Use bounding client rect for now.
-    // https://bugs.webkit.org/show_bug.cgi?id=127984
     case CSSBoxType::MarginBox:
-    // fill, stroke, view-box compute to border-box for HTML elements.
-    case CSSBoxType::Fill:
-    case CSSBoxType::Stroke:
+        referenceBox = box.marginBoxRect();
+        referenceBox.move(offsetFromRoot);
+        break;
+    // stroke-box, view-box compute to border-box for HTML elements.
+    case CSSBoxType::StrokeBox:
     case CSSBoxType::ViewBox:
     case CSSBoxType::BorderBox:
     case CSSBoxType::BoxMissing:
@@ -4126,7 +4126,7 @@ Path RenderLayer::computeClipPath(const LayoutSize& offsetFromRoot, LayoutRect& 
 
     if (is<ShapeClipPathOperation>(*style.clipPath())) {
         auto& clipPath = downcast<ShapeClipPathOperation>(*style.clipPath());
-        FloatRect referenceBox = snapRectToDevicePixels(computeReferenceBox(renderer(), clipPath, offsetFromRoot, rootRelativeBounds), deviceSaleFactor);
+        FloatRect referenceBox = snapRectToDevicePixels(computeReferenceBox(renderer(), clipPath.referenceBox(), offsetFromRoot, rootRelativeBounds), deviceSaleFactor);
 
         windRule = clipPath.windRule();
         return clipPath.pathForReferenceRect(referenceBox);
@@ -4157,10 +4157,10 @@ bool RenderLayer::setupClipPath(GraphicsContext& context, const LayerPaintingInf
     }
 
     auto& style = renderer().style();
+    LayoutSize paintingOffsetFromRoot = LayoutSize(snapSizeToDevicePixel(offsetFromRoot + paintingInfo.subpixelOffset, LayoutPoint(), renderer().document().deviceScaleFactor()));
     ASSERT(style.clipPath());
     if (is<ShapeClipPathOperation>(*style.clipPath()) || (is<BoxClipPathOperation>(*style.clipPath()) && is<RenderBox>(renderer()))) {
         WindRule windRule;
-        LayoutSize paintingOffsetFromRoot = LayoutSize(snapSizeToDevicePixel(offsetFromRoot + paintingInfo.subpixelOffset, LayoutPoint(), renderer().document().deviceScaleFactor()));
         Path path = computeClipPath(paintingOffsetFromRoot, rootRelativeBounds, windRule);
         context.save();
         context.clipPath(path, windRule);
@@ -4170,9 +4170,15 @@ bool RenderLayer::setupClipPath(GraphicsContext& context, const LayerPaintingInf
     if (style.clipPath()->type() == ClipPathOperation::Reference) {
         ReferenceClipPathOperation* referenceClipPathOperation = static_cast<ReferenceClipPathOperation*>(style.clipPath());
         Element* element = renderer().document().getElementById(referenceClipPathOperation->fragment());
-        if (element && element->hasTagName(SVGNames::clipPathTag) && element->renderer()) {
+        if (element && element->renderer() && is<RenderSVGResourceClipper>(element->renderer())) {
             context.save();
-            downcast<RenderSVGResourceClipper>(*element->renderer()).applyClippingToContext(renderer(), rootRelativeBounds, paintingInfo.paintDirtyRect, context);
+            float deviceSaleFactor = renderer().document().deviceScaleFactor();
+            FloatRect referenceBox = snapRectToDevicePixels(computeReferenceBox(renderer(), CSSBoxType::ContentBox, paintingOffsetFromRoot, rootRelativeBounds), deviceSaleFactor);
+            FloatPoint offset {referenceBox.location()};
+            context.translate(offset);
+            FloatRect svgReferenceBox {FloatPoint(), referenceBox.size()};
+            downcast<RenderSVGResourceClipper>(*element->renderer()).applyClippingToContext(renderer(), svgReferenceBox, paintingInfo.paintDirtyRect, context);
+            context.translate(FloatPoint(-offset.x(), -offset.y()));
             return true;
         }
     }
@@ -4350,7 +4356,7 @@ void RenderLayer::paintLayerContents(GraphicsContext& context, const LayerPainti
         if (paintingInfo.paintBehavior & PaintBehaviorSnapshotting)
             paintBehavior |= PaintBehaviorSnapshotting;
         
-        if (paintingInfo.paintBehavior & PaintBehaviorTileFirstPaint)
+        if ((paintingInfo.paintBehavior & PaintBehaviorTileFirstPaint) && isRenderViewLayer())
             paintBehavior |= PaintBehaviorTileFirstPaint;
 
         if (paintingInfo.paintBehavior & PaintBehaviorExcludeSelection)
@@ -6400,7 +6406,7 @@ static bool hasVisibleBoxDecorationsOrBackground(const RenderElement& renderer)
 static bool styleHasSmoothingTextMode(const RenderStyle& style)
 {
     FontSmoothingMode smoothingMode = style.fontDescription().fontSmoothing();
-    return smoothingMode == AutoSmoothing || smoothingMode == SubpixelAntialiased;
+    return smoothingMode == FontSmoothingMode::AutoSmoothing || smoothingMode == FontSmoothingMode::SubpixelAntialiased;
 }
 
 // Constrain the depth and breadth of the search for performance.

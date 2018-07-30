@@ -384,7 +384,7 @@ void DocumentLoader::notifyFinished(CachedResource& resource)
         return;
     }
 
-    if (m_request.cachePolicy() == ReturnCacheDataDontLoad && !m_mainResource->wasCanceled()) {
+    if (m_request.cachePolicy() == ResourceRequestCachePolicy::ReturnCacheDataDontLoad && !m_mainResource->wasCanceled()) {
         frameLoader()->retryAfterFailedCacheOnlyMainResourceLoad();
         return;
     }
@@ -591,8 +591,6 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
 
     ASSERT(m_frame->document());
     ASSERT(topFrame.document());
-
-    ResourceLoadObserver::shared().logFrameNavigation(*m_frame, topFrame, newRequest, redirectResponse.url());
     
     // Update cookie policy base URL as URL changes, except for subframes, which use the
     // URL of the main frame which doesn't change when we redirect.
@@ -608,8 +606,8 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
     // this is a common site technique to return to a page viewing some data that the POST
     // just modified.
     // Also, POST requests always load from origin, but this does not affect subresources.
-    if (newRequest.cachePolicy() == UseProtocolCachePolicy && isPostOrRedirectAfterPost(newRequest, redirectResponse))
-        newRequest.setCachePolicy(ReloadIgnoringCacheData);
+    if (newRequest.cachePolicy() == ResourceRequestCachePolicy::UseProtocolCachePolicy && isPostOrRedirectAfterPost(newRequest, redirectResponse))
+        newRequest.setCachePolicy(ResourceRequestCachePolicy::ReloadIgnoringCacheData);
 
     if (&topFrame != m_frame) {
         if (!m_frame->loader().mixedContentChecker().canDisplayInsecureContent(m_frame->document()->securityOrigin(), MixedContentChecker::ContentType::Active, newRequest.url(), MixedContentChecker::AlwaysDisplayInNonStrictMode::Yes)) {
@@ -657,7 +655,7 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
         return;
     }
 
-    frameLoader()->policyChecker().checkNavigationPolicy(WTFMove(newRequest), didReceiveRedirectResponse, WTFMove(navigationPolicyCompletionHandler));
+    frameLoader()->policyChecker().checkNavigationPolicy(WTFMove(newRequest), redirectResponse, WTFMove(navigationPolicyCompletionHandler));
 }
 
 bool DocumentLoader::tryLoadingRequestFromApplicationCache()
@@ -701,13 +699,13 @@ bool DocumentLoader::tryLoadingRedirectRequestFromApplicationCache(const Resourc
     auto resourceLoader = makeRefPtr(mainResourceLoader());
     if (resourceLoader) {
         ASSERT(resourceLoader->shouldSendResourceLoadCallbacks());
-        resourceLoader->setSendCallbackPolicy(DoNotSendCallbacks);
+        resourceLoader->setSendCallbackPolicy(SendCallbackPolicy::DoNotSendCallbacks);
     }
 
     clearMainResource();
 
     if (resourceLoader)
-        resourceLoader->setSendCallbackPolicy(SendCallbacks);
+        resourceLoader->setSendCallbackPolicy(SendCallbackPolicy::SendCallbacks);
 
     handleSubstituteDataLoadNow();
     return true;
@@ -779,12 +777,10 @@ void DocumentLoader::responseReceived(const ResourceResponse& response, Completi
             return;
         }
 
-        const auto& commonHeaders = response.httpHeaderFields().commonHeaders();
-        auto it = commonHeaders.find(HTTPHeaderName::XFrameOptions);
-        if (it != commonHeaders.end()) {
-            String content = it->value;
-            if (frameLoader()->shouldInterruptLoadForXFrameOptions(content, url, identifier)) {
-                String message = "Refused to display '" + url.stringCenterEllipsizedToLength() + "' in a frame because it set 'X-Frame-Options' to '" + content + "'.";
+        String frameOptions = response.httpHeaderFields().get(HTTPHeaderName::XFrameOptions);
+        if (!frameOptions.isNull()) {
+            if (frameLoader()->shouldInterruptLoadForXFrameOptions(frameOptions, url, identifier)) {
+                String message = "Refused to display '" + url.stringCenterEllipsizedToLength() + "' in a frame because it set 'X-Frame-Options' to '" + frameOptions + "'.";
                 m_frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, message, identifier);
                 stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(identifier, response);
                 return;
@@ -850,11 +846,11 @@ static bool isRemoteWebArchive(const DocumentLoader& documentLoader)
     using MIMETypeHashSet = HashSet<String, ASCIICaseInsensitiveHash>;
     static NeverDestroyed<MIMETypeHashSet> webArchiveMIMETypes {
         MIMETypeHashSet {
-            ASCIILiteral("application/x-webarchive"),
-            ASCIILiteral("application/x-mimearchive"),
-            ASCIILiteral("multipart/related"),
+            "application/x-webarchive"_s,
+            "application/x-mimearchive"_s,
+            "multipart/related"_s,
 #if PLATFORM(GTK)
-            ASCIILiteral("message/rfc822"),
+            "message/rfc822"_s,
 #endif
         }
     };
@@ -950,6 +946,11 @@ void DocumentLoader::continueAfterContentPolicy(PolicyAction policy)
             dataReceived(content->data(), content->size());
         if (isLoadingMainResource())
             finishedLoading();
+
+        // Remove ourselves as a client of this CachedResource as we've decided to commit substitute data but the
+        // load may keep going and be useful to other clients of the CachedResource. If we did not do this, we
+        // may receive data later on even though this DocumentLoader has finished loading.
+        clearMainResource();
     }
 }
 
@@ -1393,7 +1394,7 @@ RefPtr<ArchiveResource> DocumentLoader::subresource(const URL& url) const
     if (!resource || !resource->isLoaded())
         return archiveResourceForURL(url);
 
-    if (resource->type() == CachedResource::MainResource)
+    if (resource->type() == CachedResource::Type::MainResource)
         return nullptr;
 
     auto* data = resource->resourceBuffer();
@@ -1748,7 +1749,19 @@ void DocumentLoader::startLoadingMainResource(ShouldContinue shouldContinue)
 
 void DocumentLoader::loadMainResource(ResourceRequest&& request)
 {
-    static NeverDestroyed<ResourceLoaderOptions> mainResourceLoadOptions(SendCallbacks, SniffContent, BufferData, StoredCredentialsPolicy::Use, ClientCredentialPolicy::MayAskClientForCredentials, FetchOptions::Credentials::Include, SkipSecurityCheck, FetchOptions::Mode::Navigate, IncludeCertificateInfo, ContentSecurityPolicyImposition::SkipPolicyCheck, DefersLoadingPolicy::AllowDefersLoading, CachingPolicy::AllowCaching);
+    static NeverDestroyed<ResourceLoaderOptions> mainResourceLoadOptions(
+        SendCallbackPolicy::SendCallbacks,
+        ContentSniffingPolicy::SniffContent,
+        DataBufferingPolicy::BufferData,
+        StoredCredentialsPolicy::Use,
+        ClientCredentialPolicy::MayAskClientForCredentials,
+        FetchOptions::Credentials::Include,
+        SecurityCheckPolicy::SkipSecurityCheck,
+        FetchOptions::Mode::Navigate,
+        CertificateInfoPolicy::IncludeCertificateInfo,
+        ContentSecurityPolicyImposition::SkipPolicyCheck,
+        DefersLoadingPolicy::AllowDefersLoading,
+        CachingPolicy::AllowCaching);
     CachedResourceRequest mainResourceRequest(WTFMove(request), mainResourceLoadOptions);
     if (!m_frame->isMainFrame() && m_frame->document()) {
         // If we are loading the main resource of a subframe, use the cache partition of the main document.
@@ -1817,9 +1830,8 @@ void DocumentLoader::loadMainResource(ResourceRequest&& request)
 
 void DocumentLoader::cancelPolicyCheckIfNeeded()
 {
-    RELEASE_ASSERT(frameLoader());
-
     if (m_waitingForContentPolicy || m_waitingForNavigationPolicy) {
+        RELEASE_ASSERT(frameLoader());
         frameLoader()->policyChecker().stopCheck();
         m_waitingForContentPolicy = false;
         m_waitingForNavigationPolicy = false;
@@ -1908,7 +1920,7 @@ void DocumentLoader::startIconLoading()
 
     auto findResult = m_linkIcons.findMatching([](auto& icon) { return icon.type == LinkIconType::Favicon; });
     if (findResult == notFound)
-        m_linkIcons.append({ document->completeURL(ASCIILiteral("/favicon.ico")), LinkIconType::Favicon, String(), std::nullopt, { } });
+        m_linkIcons.append({ document->completeURL("/favicon.ico"_s), LinkIconType::Favicon, String(), std::nullopt, { } });
 
     if (!m_linkIcons.size())
         return;

@@ -190,7 +190,7 @@ static ALWAYS_INLINE void setLength(ExecState* exec, VM& vm, JSObject* obj, unsi
     bool success = putLength(exec, vm, obj, jsNumber(value));
     RETURN_IF_EXCEPTION(scope, void());
     if (UNLIKELY(!success))
-        throwTypeError(exec, scope, ASCIILiteral(ReadonlyPropertyWriteError));
+        throwTypeError(exec, scope, ReadonlyPropertyWriteError);
 }
 
 ALWAYS_INLINE bool speciesWatchpointIsValid(ExecState* exec, JSObject* thisObject)
@@ -238,7 +238,7 @@ static ALWAYS_INLINE std::pair<SpeciesConstructResult, JSObject*> speciesConstru
 
         constructor = thisObject->get(exec, vm.propertyNames->constructor);
         RETURN_IF_EXCEPTION(scope, exceptionResult());
-        if (constructor.isConstructor()) {
+        if (constructor.isConstructor(vm)) {
             JSObject* constructorObject = jsCast<JSObject*>(constructor);
             if (exec->lexicalGlobalObject() != constructorObject->globalObject(vm))
                 return std::make_pair(SpeciesConstructResult::FastPath, nullptr);;
@@ -324,7 +324,7 @@ void shift(ExecState* exec, JSObject* thisObj, unsigned header, unsigned current
             bool success = thisObj->methodTable(vm)->deletePropertyByIndex(thisObj, exec, to);
             RETURN_IF_EXCEPTION(scope, void());
             if (!success) {
-                throwTypeError(exec, scope, ASCIILiteral(UnableToDeletePropertyError));
+                throwTypeError(exec, scope, UnableToDeletePropertyError);
                 return;
             }
         }
@@ -333,7 +333,7 @@ void shift(ExecState* exec, JSObject* thisObj, unsigned header, unsigned current
         bool success = thisObj->methodTable(vm)->deletePropertyByIndex(thisObj, exec, k - 1);
         RETURN_IF_EXCEPTION(scope, void());
         if (!success) {
-            throwTypeError(exec, scope, ASCIILiteral(UnableToDeletePropertyError));
+            throwTypeError(exec, scope, UnableToDeletePropertyError);
             return;
         }
     }
@@ -379,7 +379,7 @@ void unshift(ExecState* exec, JSObject* thisObj, unsigned header, unsigned curre
             bool success = thisObj->methodTable(vm)->deletePropertyByIndex(thisObj, exec, to);
             RETURN_IF_EXCEPTION(scope, void());
             if (UNLIKELY(!success)) {
-                throwTypeError(exec, scope, ASCIILiteral(UnableToDeletePropertyError));
+                throwTypeError(exec, scope, UnableToDeletePropertyError);
                 return;
             }
         }
@@ -548,7 +548,7 @@ EncodedJSValue JSC_HOST_CALL arrayProtoFuncToString(ExecState* exec)
 
     if (UNLIKELY(customJoinCase)) {
         scope.release();
-        return JSValue::encode(jsMakeNontrivialString(exec, "[object ", thisObject->methodTable(vm)->className(thisObject), "]"));
+        return JSValue::encode(jsMakeNontrivialString(exec, "[object ", thisObject->methodTable(vm)->className(thisObject, vm), "]"));
     }
 
     // 4. Return the result of calling the [[Call]] internal method of func providing array as the this value and an empty arguments list.
@@ -796,7 +796,7 @@ EncodedJSValue JSC_HOST_CALL arrayProtoFuncPop(ExecState* exec)
     bool success = thisObj->methodTable(vm)->deletePropertyByIndex(thisObj, exec, length - 1);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
     if (UNLIKELY(!success)) {
-        throwTypeError(exec, scope, ASCIILiteral(UnableToDeletePropertyError));
+        throwTypeError(exec, scope, UnableToDeletePropertyError);
         return encodedJSValue();
     }
     scope.release();
@@ -918,7 +918,7 @@ EncodedJSValue JSC_HOST_CALL arrayProtoFuncReverse(ExecState* exec)
             bool success = thisObject->methodTable(vm)->deletePropertyByIndex(thisObject, exec, lower);
             RETURN_IF_EXCEPTION(scope, encodedJSValue());
             if (UNLIKELY(!success)) {
-                throwTypeError(exec, scope, ASCIILiteral(UnableToDeletePropertyError));
+                throwTypeError(exec, scope, UnableToDeletePropertyError);
                 return encodedJSValue();
             }
         }
@@ -930,7 +930,7 @@ EncodedJSValue JSC_HOST_CALL arrayProtoFuncReverse(ExecState* exec)
             bool success = thisObject->methodTable(vm)->deletePropertyByIndex(thisObject, exec, upper);
             RETURN_IF_EXCEPTION(scope, encodedJSValue());
             if (UNLIKELY(!success)) {
-                throwTypeError(exec, scope, ASCIILiteral(UnableToDeletePropertyError));
+                throwTypeError(exec, scope, UnableToDeletePropertyError);
                 return encodedJSValue();
             }
         }
@@ -1134,7 +1134,7 @@ EncodedJSValue JSC_HOST_CALL arrayProtoFuncUnShift(ExecState* exec)
     unsigned nrArgs = exec->argumentCount();
     if (nrArgs) {
         if (UNLIKELY(doubleLength + static_cast<double>(nrArgs) > maxSafeInteger()))
-            return throwVMTypeError(exec, scope, ASCIILiteral("Cannot shift to offset greater than (2 ** 53) - 1"));
+            return throwVMTypeError(exec, scope, "Cannot shift to offset greater than (2 ** 53) - 1"_s);
         unshift<JSArray::ShiftCountForShift>(exec, thisObj, 0, 0, nrArgs, length);
         RETURN_IF_EXCEPTION(scope, encodedJSValue());
     }
@@ -1269,7 +1269,7 @@ static EncodedJSValue concatAppendOne(ExecState* exec, VM& vm, JSArray* first, J
         type = first->indexingType();
 
     Structure* resultStructure = exec->lexicalGlobalObject()->arrayStructureForIndexingTypeDuringAllocation(type);
-    JSArray* result = JSArray::create(vm, resultStructure, resultSize);
+    JSArray* result = JSArray::tryCreate(vm, resultStructure, resultSize);
     if (UNLIKELY(!result)) {
         throwOutOfMemoryError(exec, scope);
         return encodedJSValue();
@@ -1427,7 +1427,7 @@ public:
     ArrayPrototypeAdaptiveInferredPropertyWatchpoint(const ObjectPropertyCondition&, ArrayPrototype*);
 
 private:
-    void handleFire(const FireDetail&) override;
+    void handleFire(VM&, const FireDetail&) override;
 
     ArrayPrototype* m_arrayPrototype;
 };
@@ -1496,10 +1496,10 @@ void ArrayPrototype::tryInitializeSpeciesWatchpoint(ExecState* exec)
     }
 
     m_constructorWatchpoint = std::make_unique<ArrayPrototypeAdaptiveInferredPropertyWatchpoint>(constructorCondition, this);
-    m_constructorWatchpoint->install();
+    m_constructorWatchpoint->install(vm);
 
     m_constructorSpeciesWatchpoint = std::make_unique<ArrayPrototypeAdaptiveInferredPropertyWatchpoint>(speciesCondition, this);
-    m_constructorSpeciesWatchpoint->install();
+    m_constructorSpeciesWatchpoint->install(vm);
 
     // We only watch this from the DFG, and the DFG makes sure to only start watching if the watchpoint is in the IsWatched state.
     RELEASE_ASSERT(!globalObject->arraySpeciesWatchpoint().isBeingWatched()); 
@@ -1512,15 +1512,15 @@ ArrayPrototypeAdaptiveInferredPropertyWatchpoint::ArrayPrototypeAdaptiveInferred
 {
 }
 
-void ArrayPrototypeAdaptiveInferredPropertyWatchpoint::handleFire(const FireDetail& detail)
+void ArrayPrototypeAdaptiveInferredPropertyWatchpoint::handleFire(VM& vm, const FireDetail& detail)
 {
     auto lazyDetail = createLazyFireDetail("ArrayPrototype adaption of ", key(), " failed: ", detail);
 
     if (ArrayPrototypeInternal::verbose)
         WTF::dataLog(lazyDetail, "\n");
 
-    JSGlobalObject* globalObject = m_arrayPrototype->globalObject();
-    globalObject->arraySpeciesWatchpoint().fireAll(globalObject->vm(), lazyDetail);
+    JSGlobalObject* globalObject = m_arrayPrototype->globalObject(vm);
+    globalObject->arraySpeciesWatchpoint().fireAll(vm, lazyDetail);
 }
 
 } // namespace JSC

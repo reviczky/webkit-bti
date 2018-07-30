@@ -73,6 +73,10 @@
 #include "RuntimeApplicationChecks.h"
 #endif
 
+#if PLATFORM(MAC)
+#include "LocalDefaultSystemAppearance.h"
+#endif
+
 namespace WebCore {
 
 using namespace HTMLNames;
@@ -748,6 +752,7 @@ bool RenderLayerBacking::updateConfiguration()
     else if (is<RenderVideo>(renderer()) && downcast<RenderVideo>(renderer()).shouldDisplayVideo()) {
         auto* mediaElement = downcast<HTMLMediaElement>(renderer().element());
         m_graphicsLayer->setContentsToPlatformLayer(mediaElement->platformLayer(), GraphicsLayer::ContentsLayerForMedia);
+        resetContentsRect();
     }
 #endif
 #if ENABLE(WEBGL) || ENABLE(ACCELERATED_2D_CANVAS)
@@ -2578,6 +2583,10 @@ void RenderLayerBacking::paintContents(const GraphicsLayer* graphicsLayer, Graph
 {
 #ifndef NDEBUG
     renderer().page().setIsPainting(true);
+#endif
+
+#if PLATFORM(MAC)
+    LocalDefaultSystemAppearance localAppearance(renderer().page().useSystemAppearance(), renderer().page().useDarkAppearance());
 #endif
 
     // The dirtyRect is in the coords of the painting root.

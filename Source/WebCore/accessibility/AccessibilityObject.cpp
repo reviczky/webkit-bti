@@ -1940,13 +1940,13 @@ const String AccessibilityObject::defaultLiveRegionStatusForRole(AccessibilityRo
     switch (role) {
     case AccessibilityRole::ApplicationAlertDialog:
     case AccessibilityRole::ApplicationAlert:
-        return ASCIILiteral("assertive");
+        return "assertive"_s;
     case AccessibilityRole::ApplicationLog:
     case AccessibilityRole::ApplicationStatus:
-        return ASCIILiteral("polite");
+        return "polite"_s;
     case AccessibilityRole::ApplicationTimer:
     case AccessibilityRole::ApplicationMarquee:
-        return ASCIILiteral("off");
+        return "off"_s;
     default:
         return nullAtom();
     }
@@ -2004,11 +2004,11 @@ bool AccessibilityObject::ariaIsMultiline() const
 
 String AccessibilityObject::invalidStatus() const
 {
-    String grammarValue = ASCIILiteral("grammar");
-    String falseValue = ASCIILiteral("false");
-    String spellingValue = ASCIILiteral("spelling");
-    String trueValue = ASCIILiteral("true");
-    String undefinedValue = ASCIILiteral("undefined");
+    String grammarValue = "grammar"_s;
+    String falseValue = "false"_s;
+    String spellingValue = "spelling"_s;
+    String trueValue = "true"_s;
+    String undefinedValue = "undefined"_s;
 
     // aria-invalid can return false (default), grammar, spelling, or true.
     String ariaInvalid = stripLeadingAndTrailingHTMLSpaces(getAttribute(aria_invalidAttr));
@@ -2992,7 +2992,7 @@ void AccessibilityObject::scrollToMakeVisible() const
         parentObject()->scrollToMakeVisible();
 
     if (auto* renderer = this->renderer())
-        renderer->scrollRectToVisible(SelectionRevealMode::Reveal, boundingBoxRect(), false, ScrollAlignment::alignCenterIfNotVisible, ScrollAlignment::alignCenterIfNotVisible, ShouldAllowCrossOriginScrolling::Yes);
+        renderer->scrollRectToVisible(SelectionRevealMode::Reveal, boundingBoxRect(), false, ScrollAlignment::alignCenterIfNeeded, ScrollAlignment::alignCenterIfNeeded, ShouldAllowCrossOriginScrolling::Yes);
 }
 
 void AccessibilityObject::scrollToMakeVisibleWithSubFocus(const IntRect& subfocus) const

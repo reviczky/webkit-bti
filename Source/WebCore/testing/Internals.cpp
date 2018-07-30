@@ -98,6 +98,7 @@
 #include "InternalSettings.h"
 #include "JSImageData.h"
 #include "LibWebRTCProvider.h"
+#include "LoaderStrategy.h"
 #include "MallocStatistics.h"
 #include "MediaPlayer.h"
 #include "MediaProducer.h"
@@ -108,6 +109,7 @@
 #include "MockLibWebRTCPeerConnection.h"
 #include "MockPageOverlay.h"
 #include "MockPageOverlayClient.h"
+#include "NetworkLoadInformation.h"
 #if USE(CG)
 #include "PDFDocumentImage.h"
 #endif
@@ -116,6 +118,8 @@
 #include "PageOverlay.h"
 #include "PathUtilities.h"
 #include "PlatformMediaSessionManager.h"
+#include "PlatformStrategies.h"
+#include "PluginData.h"
 #include "PrintContext.h"
 #include "PseudoElement.h"
 #include "Range.h"
@@ -175,6 +179,7 @@
 #include <wtf/MonotonicTime.h>
 #include <wtf/text/StringBuffer.h>
 #include <wtf/text/StringBuilder.h>
+#include <wtf/text/StringConcatenateNumbers.h>
 #include <wtf/text/StringView.h>
 
 #if ENABLE(INPUT_TYPE_COLOR)
@@ -499,8 +504,9 @@ void Internals::resetToConsistentState(Page& page)
 #endif
 
     page.settings().setStorageAccessAPIEnabled(false);
-    page.setFullscreenAutoHideDelay(0);
-    page.setFullscreenInsetTop(0);
+    page.setFullscreenAutoHideDuration(0_s);
+    page.setFullscreenInsets({ });
+    page.setFullscreenControlsHidden(false);
 }
 
 Internals::Internals(Document& document)
@@ -580,10 +586,10 @@ ExceptionOr<bool> Internals::areSVGAnimationsPaused() const
 {
     auto* document = contextDocument();
     if (!document)
-        return Exception { InvalidAccessError, ASCIILiteral("No context document") };
+        return Exception { InvalidAccessError, "No context document"_s };
 
     if (!document->svgExtensions())
-        return Exception { NotFoundError, ASCIILiteral("No SVG animations") };
+        return Exception { NotFoundError, "No SVG animations"_s };
 
     return document->accessSVGExtensions().areAnimationsPaused();
 }
@@ -711,16 +717,16 @@ static ResourceRequestCachePolicy toResourceRequestCachePolicy(Internals::CacheP
 {
     switch (policy) {
     case Internals::CachePolicy::UseProtocolCachePolicy:
-        return UseProtocolCachePolicy;
+        return ResourceRequestCachePolicy::UseProtocolCachePolicy;
     case Internals::CachePolicy::ReloadIgnoringCacheData:
-        return ReloadIgnoringCacheData;
+        return ResourceRequestCachePolicy::ReloadIgnoringCacheData;
     case Internals::CachePolicy::ReturnCacheDataElseLoad:
-        return ReturnCacheDataElseLoad;
+        return ResourceRequestCachePolicy::ReturnCacheDataElseLoad;
     case Internals::CachePolicy::ReturnCacheDataDontLoad:
-        return ReturnCacheDataDontLoad;
+        return ResourceRequestCachePolicy::ReturnCacheDataDontLoad;
     }
     ASSERT_NOT_REACHED();
-    return UseProtocolCachePolicy;
+    return ResourceRequestCachePolicy::UseProtocolCachePolicy;
 }
 
 void Internals::setOverrideCachePolicy(CachePolicy policy)
@@ -1749,8 +1755,6 @@ static AutoFillButtonType toAutoFillButtonType(Internals::AutoFillButtonType typ
         return AutoFillButtonType::Credentials;
     case Internals::AutoFillButtonType::Contacts:
         return AutoFillButtonType::Contacts;
-    case Internals::AutoFillButtonType::StrongConfirmationPassword:
-        return AutoFillButtonType::StrongConfirmationPassword;
     case Internals::AutoFillButtonType::StrongPassword:
         return AutoFillButtonType::StrongPassword;
     }
@@ -1767,9 +1771,7 @@ static Internals::AutoFillButtonType toInternalsAutoFillButtonType(AutoFillButto
         return Internals::AutoFillButtonType::Credentials;
     case AutoFillButtonType::Contacts:
         return Internals::AutoFillButtonType::Contacts;
-    case AutoFillButtonType::StrongConfirmationPassword:
-        return Internals::AutoFillButtonType::StrongConfirmationPassword;
-   case AutoFillButtonType::StrongPassword:
+    case AutoFillButtonType::StrongPassword:
         return Internals::AutoFillButtonType::StrongPassword;
     }
     ASSERT_NOT_REACHED();
@@ -1808,13 +1810,13 @@ ExceptionOr<String> Internals::autofillFieldName(Element& element)
     return String { downcast<HTMLFormControlElement>(element).autofillData().fieldName };
 }
 
-ExceptionOr<void> Internals::paintControlTints()
+ExceptionOr<void> Internals::invalidateControlTints()
 {
     Document* document = contextDocument();
     if (!document || !document->view())
         return Exception { InvalidAccessError };
 
-    document->view()->paintControlTints();
+    document->view()->invalidateControlTints();
     return { };
 }
 
@@ -2316,6 +2318,16 @@ unsigned Internals::numberOfLiveDocuments() const
 unsigned Internals::referencingNodeCount(const Document& document) const
 {
     return document.referencingNodeCount();
+}
+
+uint64_t Internals::documentIdentifier(const Document& document) const
+{
+    return document.identifier().toUInt64();
+}
+
+bool Internals::isDocumentAlive(uint64_t documentIdentifier) const
+{
+    return Document::allDocumentsMap().contains(makeObjectIdentifier<DocumentIdentifierType>(documentIdentifier));
 }
 
 RefPtr<WindowProxy> Internals::openDummyInspectorFrontend(const String& url)
@@ -2836,20 +2848,28 @@ bool Internals::isAnimatingFullScreen() const
 
 #endif
 
-void Internals::setFullscreenInsetTop(double inset)
+void Internals::setFullscreenInsets(FullscreenInsets insets)
 {
     Page* page = contextDocument()->frame()->page();
     ASSERT(page);
 
-    page->setFullscreenInsetTop(inset);
+    page->setFullscreenInsets(FloatBoxExtent(insets.top, insets.right, insets.bottom, insets.left));
 }
 
-void Internals::setFullscreenAutoHideDelay(double delay)
+void Internals::setFullscreenAutoHideDuration(double duration)
 {
     Page* page = contextDocument()->frame()->page();
     ASSERT(page);
 
-    page->setFullscreenAutoHideDelay(delay);
+    page->setFullscreenAutoHideDuration(Seconds(duration));
+}
+
+void Internals::setFullscreenControlsHidden(bool hidden)
+{
+    Page* page = contextDocument()->frame()->page();
+    ASSERT(page);
+
+    page->setFullscreenControlsHidden(hidden);
 }
 
 void Internals::setApplicationCacheOriginQuota(unsigned long long quota)
@@ -3718,9 +3738,14 @@ ExceptionOr<Internals::NowPlayingState> Internals::nowPlayingState() const
 }
 
 #if ENABLE(VIDEO)
-HTMLMediaElement* Internals::bestMediaElementForShowingPlaybackControlsManager(Internals::PlaybackControlsPurpose purpose)
+RefPtr<HTMLMediaElement> Internals::bestMediaElementForShowingPlaybackControlsManager(Internals::PlaybackControlsPurpose purpose)
 {
     return HTMLMediaElement::bestMediaElementForShowingPlaybackControlsManager(purpose);
+}
+
+Internals::MediaSessionState Internals::mediaSessionState(HTMLMediaElement& element)
+{
+    return element.mediaSession().state();
 }
 #endif
 
@@ -4210,19 +4235,19 @@ Vector<String> Internals::accessKeyModifiers() const
     for (auto modifier : EventHandler::accessKeyModifiers()) {
         switch (modifier) {
         case PlatformEvent::Modifier::AltKey:
-            accessKeyModifierStrings.append(ASCIILiteral("altKey"));
+            accessKeyModifierStrings.append("altKey"_s);
             break;
         case PlatformEvent::Modifier::CtrlKey:
-            accessKeyModifierStrings.append(ASCIILiteral("ctrlKey"));
+            accessKeyModifierStrings.append("ctrlKey"_s);
             break;
         case PlatformEvent::Modifier::MetaKey:
-            accessKeyModifierStrings.append(ASCIILiteral("metaKey"));
+            accessKeyModifierStrings.append("metaKey"_s);
             break;
         case PlatformEvent::Modifier::ShiftKey:
-            accessKeyModifierStrings.append(ASCIILiteral("shiftKey"));
+            accessKeyModifierStrings.append("shiftKey"_s);
             break;
         case PlatformEvent::Modifier::CapsLockKey:
-            accessKeyModifierStrings.append(ASCIILiteral("capsLockKey"));
+            accessKeyModifierStrings.append("capsLockKey"_s);
             break;
         }
     }
@@ -4333,7 +4358,7 @@ ExceptionOr<void> Internals::setMediaDeviceState(const String& id, const String&
 {
     auto* document = contextDocument();
     if (!document)
-        return Exception { InvalidAccessError, ASCIILiteral("No context document") };
+        return Exception { InvalidAccessError, "No context document"_s };
 
     if (!equalLettersIgnoringASCIICase(property, "enabled"))
         return Exception { InvalidAccessError, makeString("\"" + property, "\" is not a valid property for this method.") };
@@ -4381,19 +4406,19 @@ String Internals::audioSessionCategory() const
 #if USE(AUDIO_SESSION)
     switch (AudioSession::sharedSession().category()) {
     case AudioSession::AmbientSound:
-        return ASCIILiteral("AmbientSound");
+        return "AmbientSound"_s;
     case AudioSession::SoloAmbientSound:
-        return ASCIILiteral("SoloAmbientSound");
+        return "SoloAmbientSound"_s;
     case AudioSession::MediaPlayback:
-        return ASCIILiteral("MediaPlayback");
+        return "MediaPlayback"_s;
     case AudioSession::RecordAudio:
-        return ASCIILiteral("RecordAudio");
+        return "RecordAudio"_s;
     case AudioSession::PlayAndRecord:
-        return ASCIILiteral("PlayAndRecord");
+        return "PlayAndRecord"_s;
     case AudioSession::AudioProcessing:
-        return ASCIILiteral("AudioProcessing");
+        return "AudioProcessing"_s;
     case AudioSession::None:
-        return ASCIILiteral("None");
+        return "None"_s;
     }
 #endif
     return emptyString();
@@ -4523,7 +4548,7 @@ String Internals::systemPreviewRelType()
 #if USE(SYSTEM_PREVIEW) && USE(APPLE_INTERNAL_SDK)
     return getSystemPreviewRelValue();
 #else
-    return ASCIILiteral("system-preview");
+    return "system-preview"_s;
 #endif
 }
 
@@ -4551,11 +4576,6 @@ bool Internals::isSystemPreviewImage(Element& element) const
 #endif
 }
 
-String Internals::extraZoomModeAdaptationName() const
-{
-    return WebCore::extraZoomModeAdaptationName();
-}
-
 bool Internals::usingAppleInternalSDK() const
 {
 #if USE(APPLE_INTERNAL_SDK)
@@ -4563,6 +4583,54 @@ bool Internals::usingAppleInternalSDK() const
 #else
     return false;
 #endif
+}
+
+void Internals::setCaptureExtraNetworkLoadMetricsEnabled(bool value)
+{
+    platformStrategies()->loaderStrategy()->setCaptureExtraNetworkLoadMetricsEnabled(value);
+}
+
+String Internals::ongoingLoadsDescriptions() const
+{
+    StringBuilder builder;
+    builder.append('[');
+    bool isStarting = true;
+    for (auto& identifier : platformStrategies()->loaderStrategy()->ongoingLoads()) {
+        if (isStarting)
+            isStarting = false;
+        else
+            builder.append(',');
+
+        builder.append('[');
+
+        for (auto& info : platformStrategies()->loaderStrategy()->intermediateLoadInformationFromResourceLoadIdentifier(identifier))
+            builder.append(makeString("[", (int)info.type, ",\"", info.request.url().string(), "\",\"", info.request.httpMethod(), "\",", info.response.httpStatusCode(), "]"));
+
+        builder.append(']');
+    }
+    builder.append(']');
+    return builder.toString();
+}
+
+void Internals::reloadWithoutContentExtensions()
+{
+    if (auto* frame = this->frame())
+        frame->loader().reload(ReloadOption::DisableContentBlockers);
+}
+
+void Internals::setUseSystemAppearance(bool value)
+{
+    if (!contextDocument() || !contextDocument()->page())
+        return;
+    contextDocument()->page()->setUseSystemAppearance(value);
+}
+
+size_t Internals::pluginCount()
+{
+    if (!contextDocument() || !contextDocument()->page())
+        return 0;
+
+    return contextDocument()->page()->pluginData().webVisiblePlugins().size();
 }
 
 } // namespace WebCore

@@ -80,7 +80,7 @@ public:
     void drawRect(const FloatRect&, float) override;
     void drawLine(const FloatPoint&, const FloatPoint&) override;
     void drawLinesForText(const FloatPoint&, const DashArray&, bool, bool, float) override;
-    void drawLineForDocumentMarker(const FloatPoint&, float, GraphicsContext::DocumentMarkerLineStyle) override;
+    void drawLineForDocumentMarker(const FloatPoint&, float, DocumentMarkerLineStyle) override;
     void drawEllipse(const FloatRect&) override;
     void drawPath(const Path&) override;
 
@@ -105,6 +105,7 @@ public:
     void clipOut(const Path&) override;
     void clipPath(const Path&, WindRule) override;
     IntRect clipBounds() override;
+    void clipToImageBuffer(ImageBuffer&, const FloatRect&) override;
     
     void applyDeviceScaleFactor(float) override;
 

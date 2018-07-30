@@ -213,6 +213,69 @@ double BasicComponentTransferFilterOperation::passthroughAmount() const
     }
 }
     
+bool InvertLightnessFilterOperation::operator==(const FilterOperation& operation) const
+{
+    if (!isSameType(operation))
+        return false;
+
+    return true;
+}
+    
+RefPtr<FilterOperation> InvertLightnessFilterOperation::blend(const FilterOperation* from, double, bool)
+{
+    if (from && !from->isSameType(*this))
+        return this;
+
+    // This filter is not currently blendable.
+    return InvertLightnessFilterOperation::create();
+}
+
+bool InvertLightnessFilterOperation::transformColor(FloatComponents& sRGBColorComponents) const
+{
+    FloatComponents hslComponents = sRGBToHSL(sRGBColorComponents);
+    
+    // Rotate the hue 180deg.
+    hslComponents.components[0] = fmod(hslComponents.components[0] + 0.5f, 1.0f);
+    
+    // Convert back to RGB.
+    sRGBColorComponents = HSLToSRGB(hslComponents);
+    
+    // Apply the matrix. See rdar://problem/41146650 for how this matrix was derived.
+    float matrixValues[20] = {
+       -0.770,  0.059, -0.089, 0, 1,
+        0.030, -0.741, -0.089, 0, 1,
+        0.030,  0.059, -0.890, 0, 1,
+        0,      0,      0,     1, 0
+    };
+
+    ColorMatrix toDarkModeMatrix(matrixValues);
+    toDarkModeMatrix.transformColorComponents(sRGBColorComponents);
+    return true;
+}
+
+bool InvertLightnessFilterOperation::inverseTransformColor(FloatComponents& sRGBColorComponents) const
+{
+    FloatComponents rgbComponents = sRGBColorComponents;
+    // Apply the matrix.
+    float matrixValues[20] = {
+        -1.124858, -0.244747, 0.119605, 0, 1.25,
+        -0.124506, -1.244758, 0.119264, 0, 1.25,
+        -0.12445, -0.244568, -0.880982, 0, 1.25,
+        0, 0, 0, 1, 0
+
+    };
+    ColorMatrix toLightModeMatrix(matrixValues);
+    toLightModeMatrix.transformColorComponents(rgbComponents);
+
+    // Convert to HSL.
+    FloatComponents hslComponents = sRGBToHSL(rgbComponents);
+    // Hue rotate by 180deg.
+    hslComponents.components[0] = fmod(hslComponents.components[0] + 0.5f, 1.0f);
+    // And return RGB.
+    sRGBColorComponents = HSLToSRGB(hslComponents);
+    return true;
+}
+
 bool BlurFilterOperation::operator==(const FilterOperation& operation) const
 {
     if (!isSameType(operation))
@@ -295,6 +358,10 @@ TextStream& operator<<(TextStream& ts, const FilterOperation& filter)
     case FilterOperation::INVERT: {
         const auto& componentTransferFilter = downcast<BasicComponentTransferFilterOperation>(filter);
         ts << "invert(" << componentTransferFilter.amount() << ")";
+        break;
+    }
+    case FilterOperation::APPLE_INVERT_LIGHTNESS: {
+        ts << "apple-invert-lightness()";
         break;
     }
     case FilterOperation::OPACITY: {

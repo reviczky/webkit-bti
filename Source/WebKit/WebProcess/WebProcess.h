@@ -69,6 +69,7 @@ class ResourceRequest;
 class UserGestureToken;
 struct MessagePortIdentifier;
 struct MessageWithMessagePorts;
+struct MockMediaDevice;
 struct PluginInfo;
 struct SecurityOriginData;
 struct SoupNetworkProxySettings;
@@ -251,7 +252,7 @@ private:
     void registerWithStateDumper();
 #endif
 
-    void markAllLayersVolatile(WTF::Function<void()>&& completionHandler);
+    void markAllLayersVolatile(WTF::Function<void(bool)>&& completionHandler);
     void cancelMarkAllLayersVolatile();
     void setAllLayerTreeStatesFrozen(bool);
     void processSuspensionCleanupTimerFired();
@@ -359,6 +360,13 @@ private:
     void stopRunLoop() override;
 #endif
 
+#if ENABLE(MEDIA_STREAM)
+    void addMockMediaDevice(const WebCore::MockMediaDevice&);
+    void clearMockMediaDevices();
+    void removeMockMediaDevice(const String& persistentId);
+    void resetMockMediaDevices();
+#endif
+
     void platformInitializeProcess(const ChildProcessInitializationParameters&);
 
     // IPC::Connection::Client
@@ -372,7 +380,7 @@ private:
 
 #if PLATFORM(MAC)
     void setScreenProperties(const WebCore::ScreenProperties&);
-#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+#if ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
     void scrollerStylePreferenceChanged(bool useOverlayScrollbars);
 #endif
 #endif
@@ -440,6 +448,7 @@ private:
     enum PageMarkingLayersAsVolatileCounterType { };
     using PageMarkingLayersAsVolatileCounter = RefCounter<PageMarkingLayersAsVolatileCounterType>;
     std::unique_ptr<PageMarkingLayersAsVolatileCounter> m_pageMarkingLayersAsVolatileCounter;
+    unsigned m_countOfPagesFailingToMarkVolatile { 0 };
 
     bool m_suppressMemoryPressureHandler { false };
 #if PLATFORM(MAC)

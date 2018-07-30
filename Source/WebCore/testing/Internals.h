@@ -245,7 +245,7 @@ public:
     bool elementShouldAutoComplete(HTMLInputElement&);
     void setEditingValue(HTMLInputElement&, const String&);
     void setAutofilled(HTMLInputElement&, bool enabled);
-    enum class AutoFillButtonType { None, Contacts, Credentials, StrongPassword, StrongConfirmationPassword };
+    enum class AutoFillButtonType { None, Contacts, Credentials, StrongPassword };
     void setShowAutoFillButton(HTMLInputElement&, AutoFillButtonType);
     AutoFillButtonType autoFillButtonType(const HTMLInputElement&);
     AutoFillButtonType lastAutoFillButtonType(const HTMLInputElement&);
@@ -253,7 +253,7 @@ public:
 
     ExceptionOr<String> autofillFieldName(Element&);
 
-    ExceptionOr<void> paintControlTints();
+    ExceptionOr<void> invalidateControlTints();
 
     RefPtr<Range> rangeFromLocationAndLength(Element& scope, int rangeLocation, int rangeLength);
     unsigned locationFromRange(Element& scope, const Range&);
@@ -364,6 +364,9 @@ public:
     unsigned numberOfLiveDocuments() const;
     unsigned referencingNodeCount(const Document&) const;
 
+    uint64_t documentIdentifier(const Document&) const;
+    bool isDocumentAlive(uint64_t documentIdentifier) const;
+
     RefPtr<WindowProxy> openDummyInspectorFrontend(const String& url);
     void closeDummyInspectorFrontend();
     ExceptionOr<void> setInspectorIsUnderTest(bool);
@@ -401,8 +404,15 @@ public:
     bool isAnimatingFullScreen() const;
 #endif
 
-    void setFullscreenInsetTop(double);
-    void setFullscreenAutoHideDelay(double);
+    struct FullscreenInsets {
+        float top { 0 };
+        float left { 0 };
+        float bottom { 0 };
+        float right { 0 };
+    };
+    void setFullscreenInsets(FullscreenInsets);
+    void setFullscreenAutoHideDuration(double);
+    void setFullscreenControlsHidden(bool);
 
     WEBCORE_TESTSUPPORT_EXPORT void setApplicationCacheOriginQuota(unsigned long long);
 
@@ -679,8 +689,6 @@ public:
     bool isSystemPreviewLink(Element&) const;
     bool isSystemPreviewImage(Element&) const;
 
-    String extraZoomModeAdaptationName() const;
-
     bool usingAppleInternalSDK() const;
 
     struct NowPlayingState {
@@ -693,8 +701,22 @@ public:
     };
     ExceptionOr<NowPlayingState> nowPlayingState() const;
 
+#if ENABLE(VIDEO)
     using PlaybackControlsPurpose = MediaElementSession::PlaybackControlsPurpose;
-    HTMLMediaElement* bestMediaElementForShowingPlaybackControlsManager(PlaybackControlsPurpose);
+    RefPtr<HTMLMediaElement> bestMediaElementForShowingPlaybackControlsManager(PlaybackControlsPurpose);
+
+    using MediaSessionState = PlatformMediaSession::State;
+    MediaSessionState mediaSessionState(HTMLMediaElement&);
+#endif
+
+    void setCaptureExtraNetworkLoadMetricsEnabled(bool);
+    String ongoingLoadsDescriptions() const;
+
+    void reloadWithoutContentExtensions();
+
+    void setUseSystemAppearance(bool);
+
+    size_t pluginCount();
 
 private:
     explicit Internals(Document&);

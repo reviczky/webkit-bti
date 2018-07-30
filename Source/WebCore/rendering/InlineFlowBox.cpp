@@ -36,8 +36,10 @@
 #include "RenderRubyRun.h"
 #include "RenderRubyText.h"
 #include "RenderTableCell.h"
+#include "RenderTheme.h"
 #include "RenderView.h"
 #include "RootInlineBox.h"
+#include "Settings.h"
 #include "Text.h"
 #include <math.h>
 #include <wtf/IsoMallocInlines.h>
@@ -47,8 +49,8 @@ namespace WebCore {
 WTF_MAKE_ISO_ALLOCATED_IMPL(InlineFlowBox);
 
 struct SameSizeAsInlineFlowBox : public InlineBox {
-    void* pointers[5];
     uint32_t bitfields : 23;
+    void* pointers[5];
 };
 
 COMPILE_ASSERT(sizeof(InlineFlowBox) == sizeof(SameSizeAsInlineFlowBox), InlineFlowBox_should_stay_small);
@@ -698,9 +700,8 @@ void InlineFlowBox::placeBoxesInBlockDirection(LayoutUnit top, LayoutUnit maxHei
                 }
             }
             if (is<InlineTextBox>(*child)) {
-                bool emphasisMarkIsOver;
-                if (downcast<InlineTextBox>(*child).emphasisMarkExistsAndIsAbove(childLineStyle, emphasisMarkIsOver)) {
-                    if (emphasisMarkIsOver != childLineStyle.isFlippedLinesWritingMode())
+                if (std::optional<bool> markExistsAndIsAbove = downcast<InlineTextBox>(*child).emphasisMarkExistsAndIsAbove(childLineStyle)) {
+                    if (*markExistsAndIsAbove != childLineStyle.isFlippedLinesWritingMode())
                         hasAnnotationsBefore = true;
                     else
                         hasAnnotationsAfter = true;
@@ -894,10 +895,9 @@ inline void InlineFlowBox::addTextBoxVisualOverflow(InlineTextBox& textBox, Glyp
     int leftGlyphOverflow = -strokeOverflow - leftGlyphEdge;
     int rightGlyphOverflow = strokeOverflow + rightGlyphEdge;
 
-    bool emphasisMarkIsAbove;
-    if (lineStyle.textEmphasisMark() != TextEmphasisMark::None && textBox.emphasisMarkExistsAndIsAbove(lineStyle, emphasisMarkIsAbove)) {
+    if (std::optional<bool> markExistsAndIsAbove = textBox.emphasisMarkExistsAndIsAbove(lineStyle)) {
         int emphasisMarkHeight = lineStyle.fontCascade().emphasisMarkHeight(lineStyle.textEmphasisMarkString());
-        if (emphasisMarkIsAbove == !lineStyle.isFlippedLinesWritingMode())
+        if (*markExistsAndIsAbove == !lineStyle.isFlippedLinesWritingMode())
             topGlyphOverflow = std::min(topGlyphOverflow, -emphasisMarkHeight);
         else
             bottomGlyphOverflow = std::max(bottomGlyphOverflow, emphasisMarkHeight);
@@ -1360,8 +1360,15 @@ void InlineFlowBox::paintBoxDecorations(PaintInfo& paintInfo, const LayoutPoint&
     if (!renderer().boxShadowShouldBeAppliedToBackground(adjustedPaintoffset, BackgroundBleedNone, this))
         paintBoxShadow(paintInfo, lineStyle, Normal, paintRect);
 
-    const Color& color = lineStyle.visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor);
-    paintFillLayers(paintInfo, color, lineStyle.backgroundLayers(), paintRect);
+    Color color = lineStyle.visitedDependentColor(CSSPropertyBackgroundColor);
+
+    CompositeOperator compositeOp = CompositeSourceOver;
+    if (renderer().document().settings().punchOutWhiteBackgroundsInDarkMode() && Color::isWhiteColor(color) && renderer().theme().usingDarkAppearance(renderer()))
+        compositeOp = CompositeDestinationOut;
+
+    color = lineStyle.colorByApplyingColorFilter(color);
+
+    paintFillLayers(paintInfo, color, lineStyle.backgroundLayers(), paintRect, compositeOp);
     paintBoxShadow(paintInfo, lineStyle, Inset, paintRect);
 
     // :first-line cannot be used to put borders on a line. Always paint borders with our
@@ -1575,8 +1582,8 @@ LayoutUnit InlineFlowBox::computeOverAnnotationAdjustment(LayoutUnit allowedPosi
 
         if (is<InlineTextBox>(*child)) {
             const RenderStyle& childLineStyle = child->lineStyle();
-            bool emphasisMarkIsAbove;
-            if (childLineStyle.textEmphasisMark() != TextEmphasisMark::None && downcast<InlineTextBox>(*child).emphasisMarkExistsAndIsAbove(childLineStyle, emphasisMarkIsAbove) && emphasisMarkIsAbove) {
+            std::optional<bool> markExistsAndIsAbove = downcast<InlineTextBox>(*child).emphasisMarkExistsAndIsAbove(childLineStyle);
+            if (markExistsAndIsAbove && *markExistsAndIsAbove) {
                 if (!childLineStyle.isFlippedLinesWritingMode()) {
                     int topOfEmphasisMark = child->logicalTop() - childLineStyle.fontCascade().emphasisMarkHeight(childLineStyle.textEmphasisMarkString());
                     result = std::max(result, allowedPosition - topOfEmphasisMark);
@@ -1623,9 +1630,8 @@ LayoutUnit InlineFlowBox::computeUnderAnnotationAdjustment(LayoutUnit allowedPos
 
         if (is<InlineTextBox>(*child)) {
             const RenderStyle& childLineStyle = child->lineStyle();
-            bool emphasisMarkIsAbove;
-            downcast<InlineTextBox>(*child).emphasisMarkExistsAndIsAbove(childLineStyle, emphasisMarkIsAbove);
-            if (childLineStyle.textEmphasisMark() != TextEmphasisMark::None && !emphasisMarkIsAbove) {
+            std::optional<bool> markExistsAndIsAbove = downcast<InlineTextBox>(*child).emphasisMarkExistsAndIsAbove(childLineStyle);
+            if (markExistsAndIsAbove && !*markExistsAndIsAbove) {
                 if (!childLineStyle.isFlippedLinesWritingMode()) {
                     LayoutUnit bottomOfEmphasisMark = child->logicalBottom() + childLineStyle.fontCascade().emphasisMarkHeight(childLineStyle.textEmphasisMarkString());
                     result = std::max(result, bottomOfEmphasisMark - allowedPosition);

@@ -100,7 +100,7 @@ protected:
     static void stopNSAppRunLoop();
 #endif
     
-#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+#if PLATFORM(MAC) && ENABLE(WEBPROCESS_NSRUNLOOP)
     static void stopNSRunLoop();
 #endif
 
@@ -112,6 +112,8 @@ protected:
 #endif
 
 private:
+    virtual bool shouldOverrideQuarantine() { return true; }
+
     // IPC::MessageSender
     IPC::Connection* messageSenderConnection() override;
     uint64_t messageSenderDestinationID() override;

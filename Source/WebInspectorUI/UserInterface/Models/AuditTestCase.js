@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Intel Corporation. All rights reserved.
+ * Copyright (C) 2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,18 +23,40 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef DownloadSoupErrors_h
-#define DownloadSoupErrors_h
+ WI.AuditTestCase = class AuditTestCase extends WI.Object
+{
+    constructor(suite, name, test, setup, tearDown, errorDetails = {})
+    {
+        console.assert(suite instanceof WI.AuditTestSuite);
+        console.assert(typeof(name) === "string");
+        
+        if (setup)
+            console.assert(setup instanceof Function);
 
-#include <WebCore/ResourceHandle.h>
-#include <WebCore/URL.h>
-#include <wtf/text/WTFString.h>
+        if (tearDown)
+            console.assert(tearDown instanceof Function);
 
-namespace WebKit {
+        if (test[Symbol.toStringTag] !== "AsyncFunction")
+            throw new Error("Test functions must be async functions.");
 
-WebCore::ResourceError platformDownloadNetworkError(int errorCode, const WebCore::URL& failingURL, const String& localizedDescription);
-WebCore::ResourceError platformDownloadDestinationError(const WebCore::ResourceResponse&, const String& message);
+        super();
+        this._id = Symbol(name);
+        
+        this._suite = suite;
+        this._name = name;
+        this._test = test;
+        this._setup = setup;
+        this._tearDown = tearDown;
+        this._errorDetails = errorDetails;
+    }
 
-} // namespace WebKit
+    // Public
 
-#endif // DownloadSoupErrors_h
+    get id() { return this._id; }
+    get name() { return this._name; }
+    get suite() { return this._suite; }
+    get test() { return this._test; }
+    get setup() { return this._setup; }
+    get tearDown() { return this._tearDown; }
+    get errorDetails() { return this._errorDetails; }
+}

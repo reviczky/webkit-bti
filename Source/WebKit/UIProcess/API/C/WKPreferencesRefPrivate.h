@@ -260,6 +260,10 @@ WK_EXPORT void WKPreferencesSetAsynchronousPluginInitializationEnabledForAllPlug
 WK_EXPORT bool WKPreferencesGetAsynchronousPluginInitializationEnabledForAllPlugins(WKPreferencesRef preferencesRef);
 
 // Defaults to false
+WK_EXPORT void WKPreferencesSetPluginSandboxProfilesEnabledForAllPlugins(WKPreferencesRef preferencesRef, bool enabled);
+WK_EXPORT bool WKPreferencesGetPluginSandboxProfilesEnabledForAllPlugins(WKPreferencesRef preferencesRef);
+
+// Defaults to false
 WK_EXPORT void WKPreferencesSetArtificialPluginInitializationDelayEnabled(WKPreferencesRef preferencesRef, bool enabled);
 WK_EXPORT bool WKPreferencesGetArtificialPluginInitializationDelayEnabled(WKPreferencesRef preferencesRef);
 
@@ -568,6 +572,10 @@ WK_EXPORT bool WKPreferencesGetServerTimingEnabled(WKPreferencesRef);
 // Defaults to false.
 WK_EXPORT void WKPreferencesSetColorFilterEnabled(WKPreferencesRef, bool flag);
 WK_EXPORT bool WKPreferencesGetColorFilterEnabled(WKPreferencesRef);
+
+// Defaults to false.
+WK_EXPORT void WKPreferencesSetPunchOutWhiteBackgroundsInDarkMode(WKPreferencesRef, bool flag);
+WK_EXPORT bool WKPreferencesGetPunchOutWhiteBackgroundsInDarkMode(WKPreferencesRef);
 
 #ifdef __cplusplus
 }

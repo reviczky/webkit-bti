@@ -55,6 +55,12 @@ public:
         Variant<std::nullptr_t, Vector<std::optional<CompositeOperation>>, CompositeOperation> composite = Vector<std::optional<CompositeOperation>>();
     };
 
+    struct BaseKeyframe {
+        std::optional<double> offset;
+        String easing { "linear" };
+        std::optional<CompositeOperation> composite;
+    };
+
     struct PropertyAndValues {
         CSSPropertyID property;
         Vector<String> values;
@@ -114,7 +120,6 @@ public:
     bool colorFilterFunctionListsMatch() const override { return m_colorFilterFunctionListsMatch; }
 
     void computeDeclarativeAnimationBlendingKeyframes(const RenderStyle* oldStyle, const RenderStyle& newStyle);
-    bool stylesWouldYieldNewCSSTransitionsBlendingKeyframes(const RenderStyle& oldStyle, const RenderStyle& newStyle) const;
     bool hasBlendingKeyframes() const { return m_blendingKeyframes.size(); }
     const HashSet<CSSPropertyID>& animatedProperties() const { return m_blendingKeyframes.properties(); }
 

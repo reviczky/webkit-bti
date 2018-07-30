@@ -873,7 +873,7 @@ inline void HTMLTreeBuilder::insertGenericHTMLElement(AtomicHTMLToken&& token)
     m_customElementToConstruct = m_tree.insertHTMLElementOrFindCustomElementInterface(WTFMove(token));
 }
 
-void HTMLTreeBuilder::didCreateCustomOrCallbackElement(Ref<Element>&& element, CustomElementConstructionData& data)
+void HTMLTreeBuilder::didCreateCustomOrFallbackElement(Ref<Element>&& element, CustomElementConstructionData& data)
 {
     m_tree.insertCustomElement(WTFMove(element), data.name, WTFMove(data.attributes));
 }
@@ -2197,7 +2197,7 @@ void HTMLTreeBuilder::processCharacter(AtomicHTMLToken&& token)
 void HTMLTreeBuilder::insertPhoneNumberLink(const String& string)
 {
     Vector<Attribute> attributes;
-    attributes.append(Attribute(HTMLNames::hrefAttr, ASCIILiteral("tel:") + string));
+    attributes.append(Attribute(HTMLNames::hrefAttr, makeString("tel:"_s, string)));
 
     const AtomicString& aTagLocalName = aTag->localName();
     AtomicHTMLToken aStartToken(HTMLToken::StartTag, aTagLocalName, WTFMove(attributes));

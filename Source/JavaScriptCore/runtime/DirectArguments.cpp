@@ -61,7 +61,7 @@ DirectArguments* DirectArguments::create(VM& vm, Structure* structure, unsigned 
     DirectArguments* result = createUninitialized(vm, structure, length, capacity);
     
     for (unsigned i = capacity; i--;)
-        result->storage()[i].clear();
+        result->storage()[i].setUndefined();
     
     return result;
 }
@@ -83,12 +83,12 @@ DirectArguments* DirectArguments::createByCopying(ExecState* exec)
     return result;
 }
 
-size_t DirectArguments::estimatedSize(JSCell* cell)
+size_t DirectArguments::estimatedSize(JSCell* cell, VM& vm)
 {
     DirectArguments* thisObject = jsCast<DirectArguments*>(cell);
     size_t mappedArgumentsSize = thisObject->m_mappedArguments ? thisObject->mappedArgumentsSize() * sizeof(bool) : 0;
     size_t modifiedArgumentsSize = thisObject->m_modifiedArgumentsDescriptor ? thisObject->m_length * sizeof(bool) : 0;
-    return Base::estimatedSize(cell) + mappedArgumentsSize + modifiedArgumentsSize;
+    return Base::estimatedSize(cell, vm) + mappedArgumentsSize + modifiedArgumentsSize;
 }
 
 void DirectArguments::visitChildren(JSCell* thisCell, SlotVisitor& visitor)

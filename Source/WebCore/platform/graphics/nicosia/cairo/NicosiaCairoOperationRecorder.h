@@ -73,7 +73,7 @@ private:
     void drawRect(const WebCore::FloatRect&, float) override;
     void drawLine(const WebCore::FloatPoint&, const WebCore::FloatPoint&) override;
     void drawLinesForText(const WebCore::FloatPoint&, const DashArray&, bool, bool, float) override;
-    void drawLineForDocumentMarker(const WebCore::FloatPoint&, float, WebCore::GraphicsContext::DocumentMarkerLineStyle) override;
+    void drawLineForDocumentMarker(const WebCore::FloatPoint&, float, WebCore::DocumentMarkerLineStyle) override;
     void drawEllipse(const WebCore::FloatRect&) override;
     void drawPath(const WebCore::Path&) override;
 
@@ -98,6 +98,7 @@ private:
     void clipOut(const WebCore::Path&) override;
     void clipPath(const WebCore::Path&, WebCore::WindRule) override;
     WebCore::IntRect clipBounds() override;
+    void clipToImageBuffer(WebCore::ImageBuffer&, const WebCore::FloatRect&) override;
 
     void applyDeviceScaleFactor(float) override;
 

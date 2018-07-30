@@ -2619,7 +2619,7 @@ static RefPtr<CSSValue> consumeBasicShapeOrBox(CSSParserTokenRange& range, const
             componentValue = consumeBasicShape(range, context);
             shapeFound = true;
         } else if (range.peek().type() == IdentToken && !boxFound) {
-            componentValue = consumeIdent<CSSValueContentBox, CSSValuePaddingBox, CSSValueBorderBox, CSSValueMarginBox, CSSValueFill, CSSValueStroke, CSSValueViewBox>(range);
+            componentValue = consumeIdent<CSSValueContentBox, CSSValuePaddingBox, CSSValueBorderBox, CSSValueMarginBox, CSSValueFillBox, CSSValueStrokeBox, CSSValueViewBox>(range);
             boxFound = true;
         }
         if (!componentValue)
@@ -4133,11 +4133,11 @@ RefPtr<CSSValue> CSSPropertyParser::parseSingleValue(CSSPropertyID property, CSS
 #if ENABLE(FILTERS_LEVEL_2)
     case CSSPropertyWebkitBackdropFilter:
 #endif
-        return consumeFilter(m_range, m_context, AllowedFilterFunctions::All);
+        return consumeFilter(m_range, m_context, AllowedFilterFunctions::PixelFilters);
     case CSSPropertyAppleColorFilter:
         if (!m_context.colorFilterEnabled)
             return nullptr;
-        return consumeFilter(m_range, m_context, AllowedFilterFunctions::Color);
+        return consumeFilter(m_range, m_context, AllowedFilterFunctions::ColorFilters);
     case CSSPropertyTextDecoration:
     case CSSPropertyWebkitTextDecorationsInEffect:
     case CSSPropertyWebkitTextDecorationLine:

@@ -339,6 +339,7 @@ animation/AnimationTimeline.cpp
 animation/CSSAnimation.cpp
 animation/CSSTransition.cpp
 animation/DeclarativeAnimation.cpp
+animation/DocumentAnimationScheduler.cpp
 animation/DocumentTimeline.cpp
 animation/KeyframeEffect.cpp
 animation/KeyframeEffectReadOnly.cpp
@@ -428,6 +429,7 @@ bindings/js/JSNodeIteratorCustom.cpp
 bindings/js/JSNodeListCustom.cpp
 bindings/js/JSOffscreenCanvasRenderingContext2DCustom.cpp
 bindings/js/JSPerformanceEntryCustom.cpp
+bindings/js/JSPerformanceObserverCustom.cpp
 bindings/js/JSPluginElementFunctions.cpp
 bindings/js/JSPopStateEventCustom.cpp
 bindings/js/JSReadableStreamPrivateConstructors.cpp
@@ -661,6 +663,7 @@ css/WebKitCSSViewportRule.cpp
 css/parser/CSSAtRuleID.cpp
 css/parser/CSSDeferredParser.cpp
 css/parser/CSSParser.cpp
+css/parser/CSSParserContext.cpp
 css/parser/CSSParserFastPaths.cpp
 css/parser/CSSParserIdioms.cpp
 css/parser/CSSParserImpl.cpp
@@ -1229,6 +1232,9 @@ layout/displaytree/DisplayBox.cpp
 layout/inlineformatting/InlineFormattingContext.cpp
 layout/inlineformatting/InlineFormattingState.cpp
 layout/inlineformatting/InlineInvalidation.cpp
+layout/inlineformatting/textlayout/TextContentProvider.cpp
+layout/inlineformatting/textlayout/simple/SimpleTextRunGenerator.cpp
+layout/inlineformatting/textlayout/simple/SimpleLineBreaker.cpp
 layout/layouttree/LayoutBlockContainer.cpp
 layout/layouttree/LayoutBox.cpp
 layout/layouttree/LayoutContainer.cpp
@@ -1407,7 +1413,6 @@ page/PointerLockController.cpp
 page/PrintContext.cpp
 page/RemoteDOMWindow.cpp
 page/RemoteFrame.cpp
-page/ResourceUsageData.cpp
 page/ResourceUsageOverlay.cpp
 page/ResourceUsageThread.cpp
 page/RuntimeEnabledFeatures.cpp
@@ -1806,6 +1811,7 @@ platform/text/TextEncodingDetectorICU.cpp
 platform/text/TextEncodingRegistry.cpp
 
 platform/vr/VRManager.cpp
+platform/vr/VRPlatformDisplay.cpp
 platform/vr/openvr/VRPlatformDisplayOpenVR.cpp
 platform/vr/openvr/VRPlatformManagerOpenVR.cpp
 
@@ -2360,6 +2366,8 @@ xml/parser/XMLDocumentParserScope.cpp
 
 CSSValueKeywords.cpp
 ColorData.cpp
+EventFactory.cpp
+EventTargetFactory.cpp
 HTMLElementFactory.cpp
 HTMLEntityTable.cpp
 MathMLElementFactory.cpp
@@ -2492,6 +2500,7 @@ JSCSSTransition.cpp
 JSCustomElementRegistry.cpp
 JSCustomEvent.cpp
 JSDocumentTimeline.cpp
+JSDocumentTimelineOptions.cpp
 JSDOMApplicationCache.cpp
 JSDOMCSSNamespace.cpp
 JSDOMCache.cpp

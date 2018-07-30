@@ -275,7 +275,7 @@ bool RenderTheme::paint(const RenderBox& box, ControlStates& controlStates, cons
     // If painting is disabled, but we aren't updating control tints, then just bail.
     // If we are updating control tints, just schedule a repaint if the theme supports tinting
     // for that control.
-    if (paintInfo.context().updatingControlTints()) {
+    if (paintInfo.context().invalidatingControlTints()) {
         if (controlSupportsTints(box))
             box.repaint();
         return false;
@@ -303,7 +303,7 @@ bool RenderTheme::paint(const RenderBox& box, ControlStates& controlStates, cons
     case ButtonPart:
     case InnerSpinButtonPart:
         updateControlStatesForRenderer(box, controlStates);
-        Theme::singleton().paint(part, controlStates, paintInfo.context(), devicePixelSnappedRect, box.style().effectiveZoom(), &box.view().frameView(), deviceScaleFactor, pageScaleFactor, box.page().useSystemAppearance(), box.page().defaultAppearance());
+        Theme::singleton().paint(part, controlStates, paintInfo.context(), devicePixelSnappedRect, box.style().effectiveZoom(), &box.view().frameView(), deviceScaleFactor, pageScaleFactor, box.page().useSystemAppearance(), box.page().useDarkAppearance());
         return false;
     default:
         break;
@@ -581,58 +581,66 @@ LayoutPoint RenderTheme::volumeSliderOffsetFromMuteButton(const RenderBox& muteB
 
 Color RenderTheme::activeSelectionBackgroundColor(OptionSet<StyleColor::Options> options) const
 {
-    if (!m_activeSelectionBackgroundColor.isValid())
-        m_activeSelectionBackgroundColor = platformActiveSelectionBackgroundColor(options).blendWithWhite();
-    return m_activeSelectionBackgroundColor;
+    auto& cache = colorCache(options);
+    if (!cache.activeSelectionBackgroundColor.isValid())
+        cache.activeSelectionBackgroundColor = platformActiveSelectionBackgroundColor(options).blendWithWhite();
+    return cache.activeSelectionBackgroundColor;
 }
 
 Color RenderTheme::inactiveSelectionBackgroundColor(OptionSet<StyleColor::Options> options) const
 {
-    if (!m_inactiveSelectionBackgroundColor.isValid())
-        m_inactiveSelectionBackgroundColor = platformInactiveSelectionBackgroundColor(options).blendWithWhite();
-    return m_inactiveSelectionBackgroundColor;
+    auto& cache = colorCache(options);
+    if (!cache.inactiveSelectionBackgroundColor.isValid())
+        cache.inactiveSelectionBackgroundColor = platformInactiveSelectionBackgroundColor(options).blendWithWhite();
+    return cache.inactiveSelectionBackgroundColor;
 }
 
 Color RenderTheme::activeSelectionForegroundColor(OptionSet<StyleColor::Options> options) const
 {
-    if (!m_activeSelectionForegroundColor.isValid() && supportsSelectionForegroundColors())
-        m_activeSelectionForegroundColor = platformActiveSelectionForegroundColor(options);
-    return m_activeSelectionForegroundColor;
+    auto& cache = colorCache(options);
+    if (!cache.activeSelectionForegroundColor.isValid() && supportsSelectionForegroundColors(options))
+        cache.activeSelectionForegroundColor = platformActiveSelectionForegroundColor(options);
+    return cache.activeSelectionForegroundColor;
 }
 
 Color RenderTheme::inactiveSelectionForegroundColor(OptionSet<StyleColor::Options> options) const
 {
-    if (!m_inactiveSelectionForegroundColor.isValid() && supportsSelectionForegroundColors())
-        m_inactiveSelectionForegroundColor = platformInactiveSelectionForegroundColor(options);
-    return m_inactiveSelectionForegroundColor;
+    auto& cache = colorCache(options);
+    if (!cache.inactiveSelectionForegroundColor.isValid() && supportsSelectionForegroundColors(options))
+        cache.inactiveSelectionForegroundColor = platformInactiveSelectionForegroundColor(options);
+    return cache.inactiveSelectionForegroundColor;
 }
 
 Color RenderTheme::activeListBoxSelectionBackgroundColor(OptionSet<StyleColor::Options> options) const
 {
-    if (!m_activeListBoxSelectionBackgroundColor.isValid())
-        m_activeListBoxSelectionBackgroundColor = platformActiveListBoxSelectionBackgroundColor(options);
-    return m_activeListBoxSelectionBackgroundColor;
+    auto& cache = colorCache(options);
+    if (!cache.activeListBoxSelectionBackgroundColor.isValid())
+        cache.activeListBoxSelectionBackgroundColor = platformActiveListBoxSelectionBackgroundColor(options);
+    return cache.activeListBoxSelectionBackgroundColor;
 }
 
 Color RenderTheme::inactiveListBoxSelectionBackgroundColor(OptionSet<StyleColor::Options> options) const
 {
-    if (!m_inactiveListBoxSelectionBackgroundColor.isValid())
-        m_inactiveListBoxSelectionBackgroundColor = platformInactiveListBoxSelectionBackgroundColor(options);
-    return m_inactiveListBoxSelectionBackgroundColor;
+    auto& cache = colorCache(options);
+    if (!cache.inactiveListBoxSelectionBackgroundColor.isValid())
+        cache.inactiveListBoxSelectionBackgroundColor = platformInactiveListBoxSelectionBackgroundColor(options);
+    return cache.inactiveListBoxSelectionBackgroundColor;
 }
 
 Color RenderTheme::activeListBoxSelectionForegroundColor(OptionSet<StyleColor::Options> options) const
 {
-    if (!m_activeListBoxSelectionForegroundColor.isValid() && supportsListBoxSelectionForegroundColors())
-        m_activeListBoxSelectionForegroundColor = platformActiveListBoxSelectionForegroundColor(options);
-    return m_activeListBoxSelectionForegroundColor;
+    auto& cache = colorCache(options);
+    if (!cache.activeListBoxSelectionForegroundColor.isValid() && supportsListBoxSelectionForegroundColors(options))
+        cache.activeListBoxSelectionForegroundColor = platformActiveListBoxSelectionForegroundColor(options);
+    return cache.activeListBoxSelectionForegroundColor;
 }
 
 Color RenderTheme::inactiveListBoxSelectionForegroundColor(OptionSet<StyleColor::Options> options) const
 {
-    if (!m_inactiveListBoxSelectionForegroundColor.isValid() && supportsListBoxSelectionForegroundColors())
-        m_inactiveListBoxSelectionForegroundColor = platformInactiveListBoxSelectionForegroundColor(options);
-    return m_inactiveListBoxSelectionForegroundColor;
+    auto& cache = colorCache(options);
+    if (!cache.inactiveListBoxSelectionForegroundColor.isValid() && supportsListBoxSelectionForegroundColors(options))
+        cache.inactiveListBoxSelectionForegroundColor = platformInactiveListBoxSelectionForegroundColor(options);
+    return cache.inactiveListBoxSelectionForegroundColor;
 }
 
 Color RenderTheme::platformActiveSelectionBackgroundColor(OptionSet<StyleColor::Options>) const
@@ -1146,17 +1154,14 @@ void RenderTheme::adjustSearchFieldResultsButtonStyle(StyleResolver&, RenderStyl
 {
 }
 
+void RenderTheme::purgeCaches()
+{
+    m_colorCache = ColorCache();
+}
+
 void RenderTheme::platformColorsDidChange()
 {
-    m_activeSelectionForegroundColor = Color();
-    m_inactiveSelectionForegroundColor = Color();
-    m_activeSelectionBackgroundColor = Color();
-    m_inactiveSelectionBackgroundColor = Color();
-
-    m_activeListBoxSelectionForegroundColor = Color();
-    m_inactiveListBoxSelectionForegroundColor = Color();
-    m_activeListBoxSelectionBackgroundColor = Color();
-    m_inactiveListBoxSelectionForegroundColor = Color();
+    m_colorCache = ColorCache();
 
     Page::updateStyleForAllPagesAfterGlobalChangeInEnvironment();
 }
@@ -1283,12 +1288,28 @@ Color RenderTheme::systemColor(CSSValueID cssValueId, OptionSet<StyleColor::Opti
     return Color();
 }
 
-Color RenderTheme::platformActiveTextSearchHighlightColor() const
+Color RenderTheme::activeTextSearchHighlightColor(OptionSet<StyleColor::Options> options) const
+{
+    auto& cache = colorCache(options);
+    if (!cache.activeTextSearchHighlightColor.isValid())
+        cache.activeTextSearchHighlightColor = platformActiveTextSearchHighlightColor(options);
+    return cache.activeTextSearchHighlightColor;
+}
+
+Color RenderTheme::inactiveTextSearchHighlightColor(OptionSet<StyleColor::Options> options) const
+{
+    auto& cache = colorCache(options);
+    if (!cache.inactiveTextSearchHighlightColor.isValid())
+        cache.inactiveTextSearchHighlightColor = platformInactiveTextSearchHighlightColor(options);
+    return cache.inactiveTextSearchHighlightColor;
+}
+
+Color RenderTheme::platformActiveTextSearchHighlightColor(OptionSet<StyleColor::Options>) const
 {
     return Color(255, 150, 50); // Orange.
 }
 
-Color RenderTheme::platformInactiveTextSearchHighlightColor() const
+Color RenderTheme::platformInactiveTextSearchHighlightColor(OptionSet<StyleColor::Options>) const
 {
     return Color(255, 255, 0); // Yellow.
 }
@@ -1390,5 +1411,9 @@ Color RenderTheme::platformTapHighlightColor() const
 }
 
 #endif
+
+void RenderTheme::drawLineForDocumentMarker(const RenderText&, GraphicsContext&, const FloatPoint&, float, DocumentMarkerLineStyle)
+{
+}
 
 } // namespace WebCore

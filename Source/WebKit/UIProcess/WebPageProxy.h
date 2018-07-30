@@ -54,6 +54,7 @@
 #include "WebColorPicker.h"
 #include "WebContextMenuItemData.h"
 #include "WebCoreArgumentCoders.h"
+#include "WebDataListSuggestionsDropdown.h"
 #include "WebFrameProxy.h"
 #include "WebPageCreationParameters.h"
 #include "WebPageDiagnosticLoggingClient.h"
@@ -177,6 +178,7 @@ enum class ShouldTreatAsContinuingLoad;
 
 struct ApplicationManifest;
 struct BackForwardItemIdentifier;
+struct DataListSuggestionInformation;
 struct DictionaryPopupInfo;
 struct ExceptionDetails;
 struct FileChooserSettings;
@@ -205,6 +207,10 @@ typedef GtkWidget* PlatformWidget;
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
 typedef struct OpaqueJSContext* JSGlobalContextRef;
+#endif
+
+#if PLATFORM(WIN)
+typedef HWND PlatformWidget;
 #endif
 
 namespace WebKit {
@@ -317,6 +323,9 @@ typedef GenericCallback<bool, bool, String, double, double, uint64_t> NowPlaying
 class WebPageProxy : public API::ObjectImpl<API::Object::Type::Page>
 #if ENABLE(INPUT_TYPE_COLOR)
     , public WebColorPicker::Client
+#endif
+#if ENABLE(DATALIST_ELEMENT)
+    , public WebDataListSuggestionsDropdown::Client
 #endif
 #if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS)
     , public WebCore::WebMediaSessionManagerClient
@@ -501,7 +510,7 @@ public:
     enum class ActivityStateChangeDispatchMode { Deferrable, Immediate };
     void activityStateDidChange(WebCore::ActivityState::Flags mayHaveChanged, bool wantsSynchronousReply = false, ActivityStateChangeDispatchMode = ActivityStateChangeDispatchMode::Deferrable);
     bool isInWindow() const { return m_activityState & WebCore::ActivityState::IsInWindow; }
-    void waitForDidUpdateActivityState();
+    void waitForDidUpdateActivityState(ActivityStateChangeID);
     void didUpdateActivityState() { m_waitingForDidUpdateActivityState = false; }
 
     void layerHostingModeDidChange();
@@ -560,6 +569,7 @@ public:
     void setMaximumUnobscuredSize(const WebCore::FloatSize&);
     void setDeviceOrientation(int32_t);
     int32_t deviceOrientation() const { return m_deviceOrientation; }
+    void setOverrideViewportArguments(const std::optional<WebCore::ViewportArguments>&);
     void willCommitLayerTree(uint64_t transactionID);
 
     void selectWithGesture(const WebCore::IntPoint, WebCore::TextGranularity, uint32_t gestureType, uint32_t gestureState, bool isInteractingWithAssistedNode, WTF::Function<void (const WebCore::IntPoint&, uint32_t, uint32_t, uint32_t, CallbackBase::Error)>&&);
@@ -606,6 +616,7 @@ public:
     void getSelectionContext(WTF::Function<void(const String&, const String&, const String&, CallbackBase::Error)>&&);
     void handleTwoFingerTapAtPoint(const WebCore::IntPoint&, uint64_t requestID);
     void setForceAlwaysUserScalable(bool);
+    bool forceAlwaysUserScalable() const { return m_forceAlwaysUserScalable; }
     void setIsScrollingOrZooming(bool);
     void requestRectsForGranularityWithSelectionOffset(WebCore::TextGranularity, uint32_t offset, WTF::Function<void(const Vector<WebCore::SelectionRect>&, CallbackBase::Error)>&&);
     void requestRectsAtSelectionOffsetWithText(int32_t offset, const String&, WTF::Function<void(const Vector<WebCore::SelectionRect>&, CallbackBase::Error)>&&);
@@ -692,6 +703,10 @@ public:
     PlatformWidget viewWidget();
     const WebCore::Color& backgroundColor() const { return m_backgroundColor; }
     void setBackgroundColor(const WebCore::Color& color) { m_backgroundColor = color; }
+#endif
+
+#if PLATFORM(WIN)
+    PlatformWidget viewWidget();
 #endif
 
     bool isProcessingMouseEvents() const;
@@ -819,8 +834,8 @@ public:
 #if PLATFORM(MAC)
     void setUseSystemAppearance(bool);
     bool useSystemAppearance() const { return m_useSystemAppearance; }
-    void setDefaultAppearance(bool);
-    bool defaultAppearance() const { return m_defaultAppearance; }
+    void setUseDarkAppearance(bool);
+    bool useDarkAppearance() const { return m_useDarkAppearance; }
 #endif
 
 #if PLATFORM(COCOA)
@@ -1034,7 +1049,7 @@ public:
 #endif
 
 #if ENABLE(PDFKIT_PLUGIN)
-    void showPDFContextMenu(const WebKit::PDFContextMenu&, int32_t& selectedIndex);
+    void showPDFContextMenu(const WebKit::PDFContextMenu&, std::optional<int32_t>& selectedIndex);
 #endif
     WebCore::IntRect visibleScrollerThumbRect() const { return m_visibleScrollerThumbRect; }
 
@@ -1116,6 +1131,11 @@ public:
 
     void setOverlayScrollbarStyle(std::optional<WebCore::ScrollbarOverlayStyle>);
     std::optional<WebCore::ScrollbarOverlayStyle> overlayScrollbarStyle() const { return m_scrollbarOverlayStyle; }
+
+    // When the state of the window changes such that the WebPage needs immediate update, the UIProcess sends a new
+    // ActivityStateChangeID to the WebProcess through the SetActivityState message. The UIProcess will wait till it
+    // receives a CommitLayerTree which has an ActivityStateChangeID equal to or greater than the one it sent.
+    ActivityStateChangeID takeNextActivityStateChangeID() { return ++m_currentActivityStateChangeID; }
 
     bool shouldRecordNavigationSnapshots() const { return m_shouldRecordNavigationSnapshots; }
     void setShouldRecordNavigationSnapshots(bool shouldRecordSnapshots) { m_shouldRecordNavigationSnapshots = shouldRecordSnapshots; }
@@ -1399,8 +1419,8 @@ private:
 
     void didDestroyNavigation(uint64_t navigationID);
 
-    void decidePolicyForNavigationAction(uint64_t frameID, const WebCore::SecurityOriginData& frameSecurityOrigin, uint64_t navigationID, NavigationActionData&&, const FrameInfoData&, uint64_t originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, uint64_t listenerID, const UserData&);
-    void decidePolicyForNavigationActionSync(uint64_t frameID, const WebCore::SecurityOriginData& frameSecurityOrigin, uint64_t navigationID, NavigationActionData&&, const FrameInfoData&, uint64_t originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, uint64_t listenerID, const UserData&, Messages::WebPageProxy::DecidePolicyForNavigationActionSync::DelayedReply&&);
+    void decidePolicyForNavigationAction(uint64_t frameID, const WebCore::SecurityOriginData& frameSecurityOrigin, uint64_t navigationID, NavigationActionData&&, const FrameInfoData&, uint64_t originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, WebCore::ResourceResponse&& redirectResponse, uint64_t listenerID, const UserData&);
+    void decidePolicyForNavigationActionSync(uint64_t frameID, const WebCore::SecurityOriginData& frameSecurityOrigin, uint64_t navigationID, NavigationActionData&&, const FrameInfoData&, uint64_t originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, WebCore::ResourceResponse&& redirectResponse, uint64_t listenerID, const UserData&, Messages::WebPageProxy::DecidePolicyForNavigationActionSync::DelayedReply&&);
     void decidePolicyForNewWindowAction(uint64_t frameID, const WebCore::SecurityOriginData& frameSecurityOrigin, NavigationActionData&&, WebCore::ResourceRequest&&, const String& frameName, uint64_t listenerID, const UserData&);
     void decidePolicyForResponse(uint64_t frameID, const WebCore::SecurityOriginData& frameSecurityOrigin, uint64_t navigationID, const WebCore::ResourceResponse&, const WebCore::ResourceRequest&, bool canShowMIMEType, uint64_t listenerID, const UserData&);
     void unableToImplementPolicy(uint64_t frameID, const WebCore::ResourceError&, const UserData&);
@@ -1437,6 +1457,7 @@ private:
     void getMenuBarIsVisible(Messages::WebPageProxy::GetMenuBarIsVisible::DelayedReply&&);
     void setStatusBarIsVisible(bool statusBarIsVisible);
     void getStatusBarIsVisible(Messages::WebPageProxy::GetStatusBarIsVisible::DelayedReply&&);
+    void getIsViewVisible(bool&);
     void setIsResizable(bool isResizable);
     void screenToRootView(const WebCore::IntPoint& screenPoint, Messages::WebPageProxy::ScreenToRootView::DelayedReply&&);
     void rootViewToScreen(const WebCore::IntRect& viewRect, Messages::WebPageProxy::RootViewToScreen::DelayedReply&&);
@@ -1498,6 +1519,16 @@ private:
     void didChooseColor(const WebCore::Color&) override;
     void didEndColorPicker() override;
 #endif
+
+#if ENABLE(DATALIST_ELEMENT)
+    void showDataListSuggestions(WebCore::DataListSuggestionInformation&&);
+    void handleKeydownInDataList(const String&);
+    void endDataListSuggestions();
+    void didSelectOption(String&) final;
+    void didCloseSuggestions() final;
+#endif
+
+    void closeOverlayedViews();
 
     void compositionWasCanceled();
     void setHasHadSelectionChangesFromUserInteraction(bool);
@@ -1752,6 +1783,7 @@ private:
 
     void startURLSchemeTask(URLSchemeTaskParameters&&);
     void stopURLSchemeTask(uint64_t handlerIdentifier, uint64_t taskIdentifier);
+    void loadSynchronousURLSchemeTask(URLSchemeTaskParameters&&, Messages::WebPageProxy::LoadSynchronousURLSchemeTask::DelayedReply&&);
 
     void handleAutoFillButtonClick(const UserData&);
 
@@ -1857,7 +1889,7 @@ private:
         
 #if PLATFORM(MAC)
     bool m_useSystemAppearance { false };
-    bool m_defaultAppearance { true };
+    bool m_useDarkAppearance { false };
 #endif
 
 #if ENABLE(APPLE_PAY)
@@ -2014,6 +2046,9 @@ private:
 #if ENABLE(INPUT_TYPE_COLOR)
     RefPtr<WebColorPicker> m_colorPicker;
 #endif
+#if ENABLE(DATALIST_ELEMENT)
+    RefPtr<WebDataListSuggestionsDropdown> m_dataListSuggestionsDropdown;
+#endif
 #if PLATFORM(COCOA)
     RefPtr<WebCore::ValidationBubble> m_validationBubble;
 #endif
@@ -2130,6 +2165,7 @@ private:
     std::optional<WebCore::ScrollbarOverlayStyle> m_scrollbarOverlayStyle;
 
     uint64_t m_navigationID { 0 };
+    ActivityStateChangeID m_currentActivityStateChangeID { ActivityStateChangeAsynchronous };
 
     WebPreferencesStore::ValueMap m_configurationPreferenceValues;
     WebCore::ActivityState::Flags m_potentiallyChangedActivityStateFlags { WebCore::ActivityState::NoFlags };
@@ -2182,7 +2218,6 @@ private:
 
     RunLoop::Timer<WebPageProxy> m_resetRecentCrashCountTimer;
     unsigned m_recentCrashCount { 0 };
-
 };
 
 } // namespace WebKit

@@ -359,6 +359,11 @@
 #define WTF_OS_FREEBSD 1
 #endif
 
+/* OS(FUCHSIA) - Fuchsia */
+#ifdef __Fuchsia__
+#define WTF_OS_FUCHSIA 1
+#endif
+
 /* OS(HURD) - GNU/Hurd */
 #ifdef __GNU__
 #define WTF_OS_HURD 1
@@ -391,6 +396,7 @@
 #if    OS(AIX)              \
     || OS(DARWIN)           \
     || OS(FREEBSD)          \
+    || OS(FUCHSIA)          \
     || OS(HURD)             \
     || OS(LINUX)            \
     || OS(NETBSD)           \
@@ -493,6 +499,9 @@
 #if TARGET_OS_SIMULATOR
 #define WTF_PLATFORM_IOS_SIMULATOR 1
 #endif
+#if defined(TARGET_OS_IOSMAC) && TARGET_OS_IOSMAC
+#define WTF_PLATFORM_IOSMAC 1
+#endif
 #elif OS(WINDOWS)
 #define WTF_PLATFORM_WIN 1
 #endif
@@ -554,12 +563,11 @@
 
 #if PLATFORM(COCOA)
 
+#define HAVE_OUT_OF_PROCESS_LAYER_HOSTING 1
 #define USE_CF 1
+#define USE_FILE_LOCK 1
 #define USE_FOUNDATION 1
 #define USE_NETWORK_CFDATA_ARRAY_CALLBACK 1
-#define HAVE_OUT_OF_PROCESS_LAYER_HOSTING 1
-#define HAVE_DTRACE 0
-#define USE_FILE_LOCK 1
 
 /* Cocoa defines a series of platform macros for debugging. */
 /* Some of them are really annoying because they use common names (e.g. check()). */
@@ -631,6 +639,11 @@
 #define USE_PTHREADS 1
 #endif /* OS(UNIX) */
 
+#if OS(UNIX) && !OS(FUCHSIA)
+#define HAVE_RESOURCE_H 1
+#define HAVE_PTHREAD_SETSCHEDPARAM 1
+#endif
+
 #if OS(DARWIN)
 #define HAVE_DISPATCH_H 1
 #define HAVE_MADV_FREE 1
@@ -658,7 +671,7 @@
 #define HAVE_CFNETWORK_STORAGE_PARTITIONING 1
 #endif
 
-#if OS(DARWIN) || ((OS(FREEBSD) || defined(__GLIBC__) || defined(__BIONIC__)) && (CPU(X86) || CPU(X86_64) || CPU(ARM) || CPU(ARM64) || CPU(MIPS)))
+#if OS(DARWIN) || OS(FUCHSIA) || ((OS(FREEBSD) || defined(__GLIBC__) || defined(__BIONIC__)) && (CPU(X86) || CPU(X86_64) || CPU(ARM) || CPU(ARM64) || CPU(MIPS)))
 #define HAVE_MACHINE_CONTEXT 1
 #endif
 
@@ -1009,11 +1022,11 @@
 #endif
 
 #if PLATFORM(IOS)
-#if !PLATFORM(WATCHOS) && !PLATFORM(APPLETV) && !ENABLE(MINIMAL_SIMULATOR)
+#if !PLATFORM(WATCHOS) && !PLATFORM(APPLETV) && !PLATFORM(IOSMAC)
 #define USE_QUICK_LOOK 1
 #define HAVE_APP_LINKS 1
 #endif
-#if !ENABLE(MINIMAL_SIMULATOR)
+#if !PLATFORM(IOSMAC)
 #define HAVE_AUDIO_TOOLBOX_AUDIO_SESSION 1
 #define HAVE_CELESTIAL 1
 #define HAVE_CORE_ANIMATION_RENDER_SERVER 1
@@ -1029,12 +1042,12 @@
 #define USE_AVFOUNDATION 1
 #define USE_PROTECTION_SPACE_AUTH_CALLBACK 1
 
-#if !PLATFORM(WATCHOS) && !PLATFORM(APPLETV) && !ENABLE(MINIMAL_SIMULATOR)
+#if !PLATFORM(WATCHOS) && !PLATFORM(APPLETV) && !PLATFORM(IOSMAC)
 #define ENABLE_DATA_DETECTION 1
 #define HAVE_PARENTAL_CONTROLS 1
 #endif
 
-#if !PLATFORM(APPLETV) && (!ENABLE(MINIMAL_SIMULATOR) || __IPHONE_OS_VERSION_MIN_REQUIRED < 130000)
+#if !PLATFORM(APPLETV) && (!PLATFORM(IOSMAC) || __IPHONE_OS_VERSION_MIN_REQUIRED < 130000)
 #define HAVE_AVKIT 1
 #endif
 
@@ -1042,7 +1055,7 @@
 #if PLATFORM(MAC)
 #define USE_OPENGL 1
 #define USE_OPENGL_ES 0
-#elif ENABLE(MINIMAL_SIMULATOR) && __has_include(<OpenGL/OpenGL.h>)
+#elif PLATFORM(IOSMAC) && __has_include(<OpenGL/OpenGL.h>)
 #define USE_OPENGL 1
 #define USE_OPENGL_ES 0
 #else
@@ -1115,7 +1128,7 @@
 #define USE_COREMEDIA 1
 #define USE_VIDEOTOOLBOX 1
 
-#if !ENABLE(MINIMAL_SIMULATOR)
+#if !PLATFORM(IOSMAC)
 #define HAVE_AVFOUNDATION_VIDEO_OUTPUT 1
 #define HAVE_CORE_VIDEO 1
 #define HAVE_MEDIA_PLAYER 1
@@ -1199,7 +1212,7 @@
 #define HAVE_IOSURFACE 1
 #endif
 
-#if PLATFORM(IOS) && !PLATFORM(IOS_SIMULATOR) && !ENABLE(MINIMAL_SIMULATOR)
+#if PLATFORM(IOS) && !PLATFORM(IOS_SIMULATOR) && !PLATFORM(IOSMAC)
 #define HAVE_IOSURFACE_ACCELERATOR 1
 #endif
 

@@ -735,18 +735,24 @@ void Frame::injectUserScripts(UserScriptInjectionTime injectionTime)
         return;
 
     m_page->userContentProvider().forEachUserScript([this, protectedThis = makeRef(*this), injectionTime](DOMWrapperWorld& world, const UserScript& script) {
-        auto* document = this->document();
-        if (!document)
-            return;
-        if (script.injectedFrames() == InjectInTopFrameOnly && ownerElement())
-            return;
-
-        if (script.injectionTime() == injectionTime && UserContentURLPattern::matchesPatterns(document->url(), script.whitelist(), script.blacklist())) {
-            if (m_page)
-                m_page->setAsRunningUserScripts();
-            m_script->evaluateInWorld(ScriptSourceCode(script.source(), script.url()), world);
-        }
+        if (script.injectionTime() == injectionTime)
+            injectUserScriptImmediately(world, script);
     });
+}
+
+void Frame::injectUserScriptImmediately(DOMWrapperWorld& world, const UserScript& script)
+{
+    auto* document = this->document();
+    if (!document)
+        return;
+    if (script.injectedFrames() == InjectInTopFrameOnly && !isMainFrame())
+        return;
+    if (!UserContentURLPattern::matchesPatterns(document->url(), script.whitelist(), script.blacklist()))
+        return;
+    if (m_page)
+        m_page->setAsRunningUserScripts();
+    loader().client().willInjectUserScript(world);
+    m_script->evaluateInWorld(ScriptSourceCode(script.source(), script.url()), world);
 }
 
 RenderView* Frame::contentRenderer() const
@@ -1050,7 +1056,7 @@ void Frame::suspendActiveDOMObjectsAndAnimations()
     // FIXME: Suspend/resume calls will not match if the frame is navigated, and gets a new document.
     clearTimers(); // Suspends animations and pending relayouts.
     if (m_doc)
-        m_doc->suspendScheduledTasks(ActiveDOMObject::PageWillBeSuspended);
+        m_doc->suspendScheduledTasks(ReasonForSuspension::PageWillBeSuspended);
 }
 
 void Frame::resumeActiveDOMObjectsAndAnimations()
@@ -1067,7 +1073,7 @@ void Frame::resumeActiveDOMObjectsAndAnimations()
         return;
 
     // FIXME: Suspend/resume calls will not match if the frame is navigated, and gets a new document.
-    m_doc->resumeScheduledTasks(ActiveDOMObject::PageWillBeSuspended);
+    m_doc->resumeScheduledTasks(ReasonForSuspension::PageWillBeSuspended);
 
     // Frame::clearTimers() suspended animations and pending relayouts.
     animation().resumeAnimationsForDocument(m_doc.get());

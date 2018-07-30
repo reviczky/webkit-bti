@@ -56,6 +56,7 @@
 #include "DOMWindow.h"
 #include "DateComponents.h"
 #include "DebugPageOverlays.h"
+#include "DocumentAnimationScheduler.h"
 #include "DocumentLoader.h"
 #include "DocumentMarkerController.h"
 #include "DocumentSharedObjectPool.h"
@@ -498,7 +499,7 @@ Document::Document(Frame* frame, const URL& url, unsigned documentClasses, unsig
 #if ENABLE(XSLT)
     , m_applyPendingXSLTransformsTimer(*this, &Document::applyPendingXSLTransformsTimerFired)
 #endif
-    , m_xmlVersion(ASCIILiteral("1.0"))
+    , m_xmlVersion("1.0"_s)
     , m_constantPropertyMap(std::make_unique<ConstantPropertyMap>(*this))
     , m_documentClasses(documentClasses)
     , m_eventQueue(*this)
@@ -1373,13 +1374,13 @@ void Document::setContent(const String& content)
 String Document::suggestedMIMEType() const
 {
     if (isXHTMLDocument())
-        return ASCIILiteral("application/xhtml+xml");
+        return "application/xhtml+xml"_s;
     if (isSVGDocument())
-        return ASCIILiteral("image/svg+xml");
+        return "image/svg+xml"_s;
     if (xmlStandalone())
-        return ASCIILiteral("text/xml");
+        return "text/xml"_s;
     if (isHTMLDocument())
-        return ASCIILiteral("text/html");
+        return "text/html"_s;
     if (DocumentLoader* loader = this->loader())
         return loader->responseMIMEType();
     return String();
@@ -1402,7 +1403,7 @@ String Document::contentType() const
     if (!mimeType.isNull())
         return mimeType;
 
-    return ASCIILiteral("application/xml");
+    return "application/xml"_s;
 }
 
 RefPtr<Range> Document::caretRangeFromPoint(int x, int y)
@@ -1674,7 +1675,7 @@ void Document::allowsMediaDocumentInlinePlaybackChanged()
 
 String Document::nodeName() const
 {
-    return ASCIILiteral("#document");
+    return "#document"_s;
 }
 
 Node::NodeType Document::nodeType() const
@@ -2020,7 +2021,7 @@ std::unique_ptr<RenderStyle> Document::styleForElementIgnoringPendingStylesheets
     ASSERT(pseudoElementSpecifier == PseudoId::None || parentStyle);
 
     // On iOS request delegates called during styleForElement may result in re-entering WebKit and killing the style resolver.
-    Style::PostResolutionCallbackDisabler disabler(*this);
+    Style::PostResolutionCallbackDisabler disabler(*this, Style::PostResolutionCallbackDisabler::DrainCallbacks::No);
 
     SetForScope<bool> change(m_ignorePendingStylesheets, true);
     auto& resolver = element.styleResolver();
@@ -2260,9 +2261,9 @@ void Document::didBecomeCurrentDocumentInFrame()
             timeline().suspendAnimations();
         else
             m_frame->animation().suspendAnimationsForDocument(this);
-        suspendScheduledTasks(ActiveDOMObject::PageWillBeSuspended);
+        suspendScheduledTasks(ReasonForSuspension::PageWillBeSuspended);
     } else {
-        resumeScheduledTasks(ActiveDOMObject::PageWillBeSuspended);
+        resumeScheduledTasks(ReasonForSuspension::PageWillBeSuspended);
         if (RuntimeEnabledFeatures::sharedFeatures().webAnimationsCSSIntegrationEnabled())
             timeline().resumeAnimations();
         else
@@ -2443,6 +2444,13 @@ void Document::prepareForDestruction()
         m_timeline = nullptr;
     }
 
+#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+    if (m_animationScheduler) {
+        m_animationScheduler->detachFromDocument();
+        m_animationScheduler = nullptr;
+    }
+#endif
+
     m_hasPreparedForDestruction = true;
 
     // Note that m_pageCacheState can be Document::AboutToEnterPageCache if our frame
@@ -2515,14 +2523,14 @@ void Document::platformSuspendOrStopActiveDOMObjects()
 #endif
 }
 
-void Document::suspendActiveDOMObjects(ActiveDOMObject::ReasonForSuspension why)
+void Document::suspendActiveDOMObjects(ReasonForSuspension why)
 {
     ScriptExecutionContext::suspendActiveDOMObjects(why);
     suspendDeviceMotionAndOrientationUpdates();
     platformSuspendOrStopActiveDOMObjects();
 }
 
-void Document::resumeActiveDOMObjects(ActiveDOMObject::ReasonForSuspension why)
+void Document::resumeActiveDOMObjects(ReasonForSuspension why)
 {
     ScriptExecutionContext::resumeActiveDOMObjects(why);
     resumeDeviceMotionAndOrientationUpdates();
@@ -2605,6 +2613,7 @@ ExceptionOr<Document&> Document::openForBindings(Document* responsibleDocument, 
         return Exception { InvalidStateError };
 
     // FIXME: This should also throw if "document's throw-on-dynamic-markup-insertion counter is greater than 0".
+    // https://bugs.webkit.org/show_bug.cgi?id=187319
 
     open(responsibleDocument);
     return *this;
@@ -2677,6 +2686,10 @@ void Document::implicitOpen()
 
     cancelParsing();
     m_parser = createParser();
+
+    if (hasActiveParserYieldToken())
+        m_parser->didBeginYieldingParser();
+
     setParsing(true);
     setReadyState(Loading);
 }
@@ -2744,6 +2757,7 @@ ExceptionOr<void> Document::closeForBindings()
         return Exception { InvalidStateError };
 
     // FIXME: This should also throw if "document's throw-on-dynamic-markup-insertion counter is greater than 0".
+    // https://bugs.webkit.org/show_bug.cgi?id=187319
 
     close();
     return { };
@@ -2974,6 +2988,7 @@ ExceptionOr<void> Document::write(Document* responsibleDocument, Vector<String>&
         return Exception { InvalidStateError };
 
     // FIXME: This should also throw if "document's throw-on-dynamic-markup-insertion counter is greater than 0".
+    // https://bugs.webkit.org/show_bug.cgi?id=187319
 
     SegmentedString text;
     for (auto& string : strings)
@@ -2990,12 +3005,13 @@ ExceptionOr<void> Document::writeln(Document* responsibleDocument, Vector<String
         return Exception { InvalidStateError };
 
     // FIXME: This should also throw if "document's throw-on-dynamic-markup-insertion counter is greater than 0".
+    // https://bugs.webkit.org/show_bug.cgi?id=187319
 
     SegmentedString text;
     for (auto& string : strings)
         text.append(WTFMove(string));
 
-    text.append(ASCIILiteral { "\n" });
+    text.append("\n"_s);
     write(responsibleDocument, WTFMove(text));
 
     return { };
@@ -3189,7 +3205,7 @@ bool Document::canNavigate(Frame* targetFrame)
         auto destinationCrossOriginWindowPolicy = targetFrame->window() ? targetFrame->window()->crossOriginWindowPolicy() : CrossOriginWindowPolicy::Allow;
         if (sourceCrossOriginWindowPolicy != CrossOriginWindowPolicy::Allow || destinationCrossOriginWindowPolicy != CrossOriginWindowPolicy::Allow) {
             if (m_frame->document() && targetFrame->document() && !m_frame->document()->securityOrigin().canAccess(targetFrame->document()->securityOrigin())) {
-                printNavigationErrorMessage(targetFrame, url(), ASCIILiteral("Navigation was not allowed due to Cross-Origin-Window-Policy header."));
+                printNavigationErrorMessage(targetFrame, url(), "Navigation was not allowed due to Cross-Origin-Window-Policy header."_s);
                 return false;
             }
         }
@@ -3213,7 +3229,7 @@ bool Document::canNavigate(Frame* targetFrame)
     // 1. If A is not the same browsing context as B, and A is not one of the ancestor browsing contexts of B, and B is not a top-level browsing context, and A's active document's active sandboxing
     // flag set has its sandboxed navigation browsing context flag set, then abort these steps negatively.
     if (m_frame != targetFrame && isSandboxed(SandboxNavigation) && targetFrame->tree().parent() && !targetFrame->tree().isDescendantOf(m_frame)) {
-        printNavigationErrorMessage(targetFrame, url(), ASCIILiteral("The frame attempting navigation is sandboxed, and is therefore disallowed from navigating its ancestors."));
+        printNavigationErrorMessage(targetFrame, url(), "The frame attempting navigation is sandboxed, and is therefore disallowed from navigating its ancestors."_s);
         return false;
     }
 
@@ -3222,12 +3238,12 @@ bool Document::canNavigate(Frame* targetFrame)
         bool triggeredByUserActivation = UserGestureIndicator::processingUserGesture();
         // 1. If this algorithm is triggered by user activation and A's active document's active sandboxing flag set has its sandboxed top-level navigation with user activation browsing context flag set, then abort these steps negatively.
         if (triggeredByUserActivation && isSandboxed(SandboxTopNavigationByUserActivation)) {
-            printNavigationErrorMessage(targetFrame, url(), ASCIILiteral("The frame attempting navigation of the top-level window is sandboxed, but the 'allow-top-navigation-by-user-activation' flag is not set and navigation is not triggered by user activation."));
+            printNavigationErrorMessage(targetFrame, url(), "The frame attempting navigation of the top-level window is sandboxed, but the 'allow-top-navigation-by-user-activation' flag is not set and navigation is not triggered by user activation."_s);
             return false;
         }
         // 2. Otherwise, If this algorithm is not triggered by user activation and A's active document's active sandboxing flag set has its sandboxed top-level navigation without user activation browsing context flag set, then abort these steps negatively.
         if (!triggeredByUserActivation && isSandboxed(SandboxTopNavigation)) {
-            printNavigationErrorMessage(targetFrame, url(), ASCIILiteral("The frame attempting navigation of the top-level window is sandboxed, but the 'allow-top-navigation' flag is not set."));
+            printNavigationErrorMessage(targetFrame, url(), "The frame attempting navigation of the top-level window is sandboxed, but the 'allow-top-navigation' flag is not set."_s);
             return false;
         }
     }
@@ -3235,7 +3251,7 @@ bool Document::canNavigate(Frame* targetFrame)
     // 3. Otherwise, if B is a top-level browsing context, and is neither A nor one of the ancestor browsing contexts of A, and A's Document's active sandboxing flag set has its
     // sandboxed navigation browsing context flag set, and A is not the one permitted sandboxed navigator of B, then abort these steps negatively.
     if (!targetFrame->tree().parent() && m_frame != targetFrame && targetFrame != &m_frame->tree().top() && isSandboxed(SandboxNavigation) && targetFrame->loader().opener() != m_frame) {
-        printNavigationErrorMessage(targetFrame, url(), ASCIILiteral("The frame attempting navigation is sandboxed, and is not allowed to navigate this popup."));
+        printNavigationErrorMessage(targetFrame, url(), "The frame attempting navigation is sandboxed, and is not allowed to navigate this popup."_s);
         return false;
     }
 
@@ -3425,6 +3441,15 @@ void Document::dispatchDisabledAdaptationsDidChangeForMainFrame()
     page()->chrome().dispatchDisabledAdaptationsDidChange(m_disabledAdaptations);
 }
 
+void Document::setOverrideViewportArguments(const std::optional<ViewportArguments>& viewportArguments)
+{
+    if (viewportArguments == m_overrideViewportArguments)
+        return;
+
+    m_overrideViewportArguments = viewportArguments;
+    updateViewportArguments();
+}
+
 void Document::processViewport(const String& features, ViewportArguments::Type origin)
 {
     ASSERT(!features.isNull());
@@ -3451,7 +3476,7 @@ void Document::updateViewportArguments()
 #ifndef NDEBUG
         m_didDispatchViewportPropertiesChanged = true;
 #endif
-        page()->chrome().dispatchViewportPropertiesDidChange(m_viewportArguments);
+        page()->chrome().dispatchViewportPropertiesDidChange(m_overrideViewportArguments ? m_overrideViewportArguments.value() : m_viewportArguments);
         page()->chrome().didReceiveDocType(*frame());
     }
 }
@@ -4876,7 +4901,7 @@ void Document::documentWillBecomeInactive()
         renderView()->setIsInWindow(false);
 }
 
-void Document::suspend(ActiveDOMObject::ReasonForSuspension reason)
+void Document::suspend(ReasonForSuspension reason)
 {
     if (m_isSuspended)
         return;
@@ -4909,7 +4934,7 @@ void Document::suspend(ActiveDOMObject::ReasonForSuspension reason)
 #endif
 
 #if ENABLE(SERVICE_WORKER)
-    if (RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled() && reason == ActiveDOMObject::ReasonForSuspension::PageCache) {
+    if (RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled() && reason == ReasonForSuspension::PageCache) {
         ASSERT_WITH_MESSAGE(!activeServiceWorker(), "Documents with an active service worker should not go into PageCache in the first place");
         setServiceWorkerConnection(nullptr);
     }
@@ -4926,7 +4951,7 @@ void Document::suspend(ActiveDOMObject::ReasonForSuspension reason)
     m_isSuspended = true;
 }
 
-void Document::resume(ActiveDOMObject::ReasonForSuspension reason)
+void Document::resume(ReasonForSuspension reason)
 {
     if (!m_isSuspended)
         return;
@@ -4955,7 +4980,7 @@ void Document::resume(ActiveDOMObject::ReasonForSuspension reason)
     m_isSuspended = false;
 
 #if ENABLE(SERVICE_WORKER)
-    if (RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled() && reason == ActiveDOMObject::ReasonForSuspension::PageCache) {
+    if (RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled() && reason == ReasonForSuspension::PageCache) {
         ASSERT_WITH_MESSAGE(!activeServiceWorker(), "Documents with an active service worker should not go into PageCache in the first place");
         setServiceWorkerConnection(ServiceWorkerProvider::singleton().existingServiceWorkerConnectionForSession(sessionID()));
     }
@@ -5168,6 +5193,11 @@ void Document::popCurrentScript()
     m_currentScriptStack.removeLast();
 }
 
+bool Document::shouldDeferAsynchronousScriptsUntilParsingFinishes() const
+{
+    return parsing() && settings().shouldDeferAsynchronousScriptsUntilAfterDocumentLoad();
+}
+
 #if ENABLE(XSLT)
 
 void Document::scheduleToApplyXSLTransforms()
@@ -5227,7 +5257,7 @@ void Document::setDesignMode(InheritedBool value)
 
 String Document::designMode() const
 {
-    return inDesignMode() ? ASCIILiteral("on") : ASCIILiteral("off");
+    return inDesignMode() ? "on"_s : "off"_s;
 }
 
 void Document::setDesignMode(const String& value)
@@ -5403,6 +5433,8 @@ void Document::finishedParsing()
     setParsing(false);
 
     Ref<Document> protectedThis(*this);
+
+    scriptRunner()->documentFinishedParsing();
 
     if (!m_documentTiming.domContentLoadedEventStart)
         m_documentTiming.domContentLoadedEventStart = MonotonicTime::now();
@@ -5843,13 +5875,13 @@ void Document::pendingTasksTimerFired()
         task.performTask(*this);
 }
 
-void Document::suspendScheduledTasks(ActiveDOMObject::ReasonForSuspension reason)
+void Document::suspendScheduledTasks(ReasonForSuspension reason)
 {
     if (m_scheduledTasksAreSuspended) {
         // A page may subsequently suspend DOM objects, say as part of handling a scroll or zoom gesture, after the
         // embedding client requested the page be suspended. We ignore such requests so long as the embedding client
         // requested the suspension first. See <rdar://problem/13754896> for more details.
-        ASSERT(reasonForSuspendingActiveDOMObjects() == ActiveDOMObject::PageWillBeSuspended);
+        ASSERT(reasonForSuspendingActiveDOMObjects() == ReasonForSuspension::PageWillBeSuspended);
         return;
     }
 
@@ -5866,20 +5898,20 @@ void Document::suspendScheduledTasks(ActiveDOMObject::ReasonForSuspension reason
     // (e.g. while displaying an alert).
     // It is not currently possible to suspend parser unless loading is deferred, because new data arriving from network
     // will trigger parsing, and leave the scheduler in an inconsistent state where it doesn't know whether it's suspended or not.
-    if (reason == ActiveDOMObject::WillDeferLoading && m_parser)
+    if (reason == ReasonForSuspension::WillDeferLoading && m_parser)
         m_parser->suspendScheduledTasks();
 
     m_scheduledTasksAreSuspended = true;
 }
 
-void Document::resumeScheduledTasks(ActiveDOMObject::ReasonForSuspension reason)
+void Document::resumeScheduledTasks(ReasonForSuspension reason)
 {
     if (reasonForSuspendingActiveDOMObjects() != reason)
         return;
 
     ASSERT(m_scheduledTasksAreSuspended);
 
-    if (reason == ActiveDOMObject::WillDeferLoading && m_parser)
+    if (reason == ReasonForSuspension::WillDeferLoading && m_parser)
         m_parser->resumeScheduledTasks();
 
 #if ENABLE(XSLT)
@@ -5910,11 +5942,10 @@ void Document::resumeScriptedAnimationControllerCallbacks()
 
 void Document::windowScreenDidChange(PlatformDisplayID displayID)
 {
-    if (m_scriptedAnimationController)
-        m_scriptedAnimationController->windowScreenDidChange(displayID);
-
-    if (m_timeline)
-        m_timeline->windowScreenDidChange(displayID);
+#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+    if (m_animationScheduler)
+        m_animationScheduler->windowScreenDidChange(displayID);
+#endif
 
     if (RenderView* view = renderView()) {
         if (view->usesCompositing())
@@ -5999,6 +6030,10 @@ void Document::requestFullScreenForElement(Element* element, FullScreenCheckType
         // an event named fullscreenerror with its bubbles attribute set to true on the context object's 
         // node document:
 
+        // Don't allow fullscreen if document is hidden.
+        if (!page() || !page()->chrome().client().isViewVisible())
+            break;
+
         // The context object is not in a document.
         if (!element->isConnected())
             break;
@@ -6034,7 +6069,7 @@ void Document::requestFullScreenForElement(Element* element, FullScreenCheckType
         // We do not allow pressing the Escape key as a user gesture to enter fullscreen since this is the key
         // to exit fullscreen.
         if (UserGestureIndicator::currentUserGesture()->gestureType() == UserGestureType::EscapeKey) {
-            addConsoleMessage(MessageSource::Security, MessageLevel::Error, ASCIILiteral("The Escape key may not be used as a user gesture to enter fullscreen"));
+            addConsoleMessage(MessageSource::Security, MessageLevel::Error, "The Escape key may not be used as a user gesture to enter fullscreen"_s);
             break;
         }
 
@@ -6415,6 +6450,23 @@ void Document::setAnimatingFullScreen(bool flag)
     }
 }
 
+bool Document::areFullscreenControlsHidden() const
+{
+    return m_areFullscreenControlsHidden;
+}
+
+void Document::setFullscreenControlsHidden(bool flag)
+{
+    if (m_areFullscreenControlsHidden == flag)
+        return;
+    m_areFullscreenControlsHidden = flag;
+
+    if (m_fullScreenElement && m_fullScreenElement->isDescendantOf(*this)) {
+        m_fullScreenElement->invalidateStyleForSubtree();
+        scheduleForcedStyleRecalc();
+    }
+}
+
 void Document::clearFullscreenElementStack()
 {
     m_fullScreenElementStack.clear();
@@ -6500,11 +6552,8 @@ double Document::monotonicTimestamp() const
 int Document::requestAnimationFrame(Ref<RequestAnimationFrameCallback>&& callback)
 {
     if (!m_scriptedAnimationController) {
-#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-        m_scriptedAnimationController = ScriptedAnimationController::create(*this, page() ? page()->chrome().displayID() : 0);
-#else
-        m_scriptedAnimationController = ScriptedAnimationController::create(*this, 0);
-#endif
+        m_scriptedAnimationController = ScriptedAnimationController::create(*this);
+
         // It's possible that the Page may have suspended scripted animations before
         // we were created. We need to make sure that we don't start up the animation
         // controller on a background tab, for example.
@@ -6863,6 +6912,31 @@ void Document::decrementActiveParserCount()
     frame()->loader().checkLoadComplete();
 }
 
+DocumentParserYieldToken::DocumentParserYieldToken(Document& document)
+    : m_document(makeWeakPtr(document))
+{
+    if (++document.m_parserYieldTokenCount != 1)
+        return;
+
+    document.scriptRunner()->didBeginYieldingParser();
+    if (auto* parser = document.parser())
+        parser->didBeginYieldingParser();
+}
+
+DocumentParserYieldToken::~DocumentParserYieldToken()
+{
+    if (!m_document)
+        return;
+
+    ASSERT(m_document->m_parserYieldTokenCount);
+    if (--m_document->m_parserYieldTokenCount)
+        return;
+
+    m_document->scriptRunner()->didEndYieldingParser();
+    if (auto* parser = m_document->parser())
+        parser->didEndYieldingParser();
+}
+
 static RenderElement* nearestCommonHoverAncestor(RenderElement* obj1, RenderElement* obj2)
 {
     if (!obj1 || !obj2)
@@ -7050,12 +7124,12 @@ bool Document::useSystemAppearance() const
     return useSystemAppearance;
 }
 
-bool Document::useDefaultAppearance() const
+bool Document::useDarkAppearance() const
 {
-    bool useDefaultAppearance = true;
+    bool useDarkAppearance = false;
     if (Page* documentPage = page())
-        useDefaultAppearance = documentPage->defaultAppearance();
-    return useDefaultAppearance;
+        useDarkAppearance = documentPage->useDarkAppearance();
+    return useDarkAppearance;
 }
 
 OptionSet<StyleColor::Options> Document::styleColorOptions() const
@@ -7063,8 +7137,8 @@ OptionSet<StyleColor::Options> Document::styleColorOptions() const
     OptionSet<StyleColor::Options> options;
     if (useSystemAppearance())
         options |= StyleColor::Options::UseSystemAppearance;
-    if (useDefaultAppearance())
-        options |= StyleColor::Options::UseDefaultAppearance;
+    if (useDarkAppearance())
+        options |= StyleColor::Options::UseDarkAppearance;
     return options;
 }
 
@@ -7663,6 +7737,70 @@ void Document::consumeTemporaryTimeUserGesture()
     m_temporaryUserGesture = nullptr;
 }
 
+void Document::registerArticleElement(Element& article)
+{
+    m_articleElements.add(&article);
+}
+
+void Document::unregisterArticleElement(Element& article)
+{
+    m_articleElements.remove(&article);
+    if (m_mainArticleElement == &article)
+        m_mainArticleElement = nullptr;
+}
+
+void Document::updateMainArticleElementAfterLayout()
+{
+    // If there are too many article elements on the page, don't consider any one of them to be "main content".
+    const unsigned maxNumberOfArticlesBeforeIgnoringMainContentArticle = 10;
+
+    // We consider an article to be main content if it is either:
+    // 1. The only article element in the document.
+    // 2. Much taller than the next tallest article, and also much larger than the viewport.
+    const float minimumSecondTallestArticleHeightFactor = 4;
+    const float minimumViewportAreaFactor = 5;
+
+    m_mainArticleElement = nullptr;
+
+    auto numberOfArticles = m_articleElements.size();
+    if (!numberOfArticles || numberOfArticles > maxNumberOfArticlesBeforeIgnoringMainContentArticle)
+        return;
+
+    Element* tallestArticle = nullptr;
+    float tallestArticleHeight = 0;
+    float tallestArticleWidth = 0;
+    float secondTallestArticleHeight = 0;
+
+    for (auto* article : m_articleElements) {
+        auto* box = article->renderBox();
+        float height = box ? box->height().toFloat() : 0;
+        if (height >= tallestArticleHeight) {
+            secondTallestArticleHeight = tallestArticleHeight;
+            tallestArticleHeight = height;
+            tallestArticleWidth = box ? box->width().toFloat() : 0;
+            tallestArticle = article;
+        } else if (height >= secondTallestArticleHeight)
+            secondTallestArticleHeight = height;
+    }
+
+    if (numberOfArticles == 1) {
+        m_mainArticleElement = tallestArticle;
+        return;
+    }
+
+    if (tallestArticleHeight < minimumSecondTallestArticleHeightFactor * secondTallestArticleHeight)
+        return;
+
+    if (!view())
+        return;
+
+    auto viewportSize = view()->layoutViewportRect().size();
+    if (tallestArticleWidth * tallestArticleHeight < minimumViewportAreaFactor * (viewportSize.width() * viewportSize.height()).toFloat())
+        return;
+
+    m_mainArticleElement = tallestArticle;
+}
+
 #if HAVE(CFNETWORK_STORAGE_PARTITIONING)
 bool Document::hasFrameSpecificStorageAccess() const
 {
@@ -7691,10 +7829,20 @@ void Document::setConsoleMessageListener(RefPtr<StringCallback>&& listener)
     m_consoleMessageListener = listener;
 }
 
+#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+DocumentAnimationScheduler& Document::animationScheduler()
+{
+    if (!m_animationScheduler)
+        m_animationScheduler = DocumentAnimationScheduler::create(*this, page() ? page()->chrome().displayID() : 0);
+
+    return *m_animationScheduler;
+}
+#endif
+
 DocumentTimeline& Document::timeline()
 {
     if (!m_timeline)
-        m_timeline = DocumentTimeline::create(*this, page() ? page()->chrome().displayID() : 0);
+        m_timeline = DocumentTimeline::create(*this);
 
     return *m_timeline;
 }

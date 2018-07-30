@@ -168,6 +168,8 @@ public:
     WEBCORE_EXPORT static void updateStyleForAllPagesAfterGlobalChangeInEnvironment();
     WEBCORE_EXPORT static void clearPreviousItemFromAllPages(HistoryItem*);
 
+    void updateStyleAfterChangeInEnvironment();
+
     WEBCORE_EXPORT explicit Page(PageConfiguration&&);
     WEBCORE_EXPORT ~Page();
 
@@ -201,7 +203,7 @@ public:
 
     PageGroup& group();
 
-    static void forEachPage(const WTF::Function<void(Page&)>&);
+    WEBCORE_EXPORT static void forEachPage(const WTF::Function<void(Page&)>&);
 
     void incrementSubframeCount() { ++m_subframeCount; }
     void decrementSubframeCount() { ASSERT(m_subframeCount); --m_subframeCount; }
@@ -340,19 +342,22 @@ public:
 #endif
     
     bool useSystemAppearance() const { return m_useSystemAppearance; }
-    void setUseSystemAppearance(bool a) { m_useSystemAppearance = a; }
+    WEBCORE_EXPORT void setUseSystemAppearance(bool);
     
-    bool defaultAppearance() const;
-    void setDefaultAppearance(bool a) { m_defaultAppearance = a; }
+    WEBCORE_EXPORT bool useDarkAppearance() const;
+    WEBCORE_EXPORT void setUseDarkAppearance(bool);
 
 #if ENABLE(TEXT_AUTOSIZING)
     float textAutosizingWidth() const { return m_textAutosizingWidth; }
     void setTextAutosizingWidth(float textAutosizingWidth) { m_textAutosizingWidth = textAutosizingWidth; }
 #endif
 
-    WEBCORE_EXPORT void setFullscreenInsetTop(double);
-    WEBCORE_EXPORT void setFullscreenAutoHideDelay(double);
-    
+    WEBCORE_EXPORT void setFullscreenInsets(const FloatBoxExtent&);
+    const FloatBoxExtent& fullscreenInsets() const { return m_fullscreenInsets; }
+
+    WEBCORE_EXPORT void setFullscreenAutoHideDuration(Seconds);
+    WEBCORE_EXPORT void setFullscreenControlsHidden(bool);
+
     bool shouldSuppressScrollbarAnimations() const { return m_suppressScrollbarAnimations; }
     WEBCORE_EXPORT void setShouldSuppressScrollbarAnimations(bool suppressAnimations);
     void lockAllOverlayScrollbarsToHidden(bool lockOverlayScrollbars);
@@ -565,6 +570,7 @@ public:
     MediaProducer::MutedStateFlags mutedState() const { return m_mutedState; }
     bool isAudioMuted() const { return m_mutedState & MediaProducer::AudioIsMuted; }
     bool isMediaCaptureMuted() const { return m_mutedState & MediaProducer::CaptureDevicesAreMuted; };
+    void schedulePlaybackControlsManagerUpdate();
     WEBCORE_EXPORT void setMuted(MediaProducer::MutedStateFlags);
     WEBCORE_EXPORT void stopMediaCapture();
 
@@ -601,6 +607,8 @@ public:
 
 #if ENABLE(INDEXED_DATABASE)
     IDBClient::IDBConnectionToServer& idbConnection();
+    WEBCORE_EXPORT IDBClient::IDBConnectionToServer* optionalIDBConnection();
+    WEBCORE_EXPORT void clearIDBConnection();
 #endif
 
     void setShowAllPlugins(bool showAll) { m_showAllPlugins = showAll; }
@@ -669,6 +677,8 @@ private:
     unsigned findMatchesForText(const String&, FindOptions, unsigned maxMatchCount, ShouldHighlightMatches, ShouldMarkMatches);
 
     std::optional<std::pair<MediaCanStartListener&, Document&>> takeAnyMediaCanStartListener();
+
+    void playbackControlsManagerUpdateTimerFired();
 
     Vector<Ref<PluginViewBase>> pluginViews();
 
@@ -743,13 +753,14 @@ private:
     float m_topContentInset { 0 };
     FloatBoxExtent m_obscuredInsets;
     FloatBoxExtent m_unobscuredSafeAreaInsets;
+    FloatBoxExtent m_fullscreenInsets;
 
 #if PLATFORM(IOS)
     bool m_enclosedInScrollableAncestorView { false };
 #endif
     
     bool m_useSystemAppearance { false };
-    bool m_defaultAppearance { true };
+    bool m_useDarkAppearance { false };
 
 #if ENABLE(TEXT_AUTOSIZING)
     float m_textAutosizingWidth { 0 };
@@ -813,7 +824,7 @@ private:
 #endif
 
 #if ENABLE(INDEXED_DATABASE)
-    RefPtr<IDBClient::IDBConnectionToServer> m_idbIDBConnectionToServer;
+    RefPtr<IDBClient::IDBConnectionToServer> m_idbConnectionToServer;
 #endif
 
     HashSet<String> m_seenPlugins;
@@ -844,7 +855,9 @@ private:
     bool m_isRestoringCachedPage { false };
 
     MediaProducer::MediaStateFlags m_mediaState { MediaProducer::IsNotPlaying };
-    
+
+    Timer m_playbackControlsManagerUpdateTimer;
+
     bool m_allowsMediaDocumentInlinePlayback { false };
     bool m_allowsPlaybackControlsForAutoplayingAudio { false };
     bool m_showAllPlugins { false };

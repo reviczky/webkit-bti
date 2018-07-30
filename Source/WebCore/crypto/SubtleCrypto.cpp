@@ -410,25 +410,25 @@ static void rejectWithException(Ref<DeferredPromise>&& passedPromise, ExceptionC
 {
     switch (ec) {
     case NotSupportedError:
-        passedPromise->reject(ec, ASCIILiteral("The algorithm is not supported"));
+        passedPromise->reject(ec, "The algorithm is not supported"_s);
         return;
     case SyntaxError:
-        passedPromise->reject(ec, ASCIILiteral("A required parameter was missing or out-of-range"));
+        passedPromise->reject(ec, "A required parameter was missing or out-of-range"_s);
         return;
     case InvalidStateError:
-        passedPromise->reject(ec, ASCIILiteral("The requested operation is not valid for the current state of the provided key"));
+        passedPromise->reject(ec, "The requested operation is not valid for the current state of the provided key"_s);
         return;
     case InvalidAccessError:
-        passedPromise->reject(ec, ASCIILiteral("The requested operation is not valid for the provided key"));
+        passedPromise->reject(ec, "The requested operation is not valid for the provided key"_s);
         return;
     case UnknownError:
-        passedPromise->reject(ec, ASCIILiteral("The operation failed for an unknown transient reason (e.g. out of memory)"));
+        passedPromise->reject(ec, "The operation failed for an unknown transient reason (e.g. out of memory)"_s);
         return;
     case DataError:
-        passedPromise->reject(ec, ASCIILiteral("Data provided to an operation does not meet requirements"));
+        passedPromise->reject(ec, "Data provided to an operation does not meet requirements"_s);
         return;
     case OperationError:
-        passedPromise->reject(ec, ASCIILiteral("The operation failed for an operation-specific reason"));
+        passedPromise->reject(ec, "The operation failed for an operation-specific reason"_s);
         return;
     default:
         break;
@@ -516,6 +516,26 @@ RefPtr<DeferredPromise> getPromise(DeferredPromise* index, WeakPtr<SubtleCrypto>
     return nullptr;
 }
 
+static std::unique_ptr<CryptoAlgorithmParameters> crossThreadCopyImportParams(const CryptoAlgorithmParameters& importParams)
+{
+    switch (importParams.parametersClass()) {
+    case CryptoAlgorithmParameters::Class::None: {
+        auto result = std::make_unique<CryptoAlgorithmParameters>();
+        result->identifier = importParams.identifier;
+        return result;
+    }
+    case CryptoAlgorithmParameters::Class::EcKeyParams:
+        return std::make_unique<CryptoAlgorithmEcKeyParams>(crossThreadCopy(downcast<CryptoAlgorithmEcKeyParams>(importParams)));
+    case CryptoAlgorithmParameters::Class::HmacKeyParams:
+        return std::make_unique<CryptoAlgorithmHmacKeyParams>(crossThreadCopy(downcast<CryptoAlgorithmHmacKeyParams>(importParams)));
+    case CryptoAlgorithmParameters::Class::RsaHashedImportParams:
+        return std::make_unique<CryptoAlgorithmRsaHashedImportParams>(crossThreadCopy(downcast<CryptoAlgorithmRsaHashedImportParams>(importParams)));
+    default:
+        ASSERT_NOT_REACHED();
+        return nullptr;
+    }
+}
+
 // MARK: - Exposed functions.
 
 void SubtleCrypto::encrypt(JSC::ExecState& state, AlgorithmIdentifier&& algorithmIdentifier, CryptoKey& key, BufferSource&& dataBufferSource, Ref<DeferredPromise>&& promise)
@@ -530,12 +550,12 @@ void SubtleCrypto::encrypt(JSC::ExecState& state, AlgorithmIdentifier&& algorith
     auto data = copyToVector(WTFMove(dataBufferSource));
 
     if (params->identifier != key.algorithmIdentifier()) {
-        promise->reject(InvalidAccessError, ASCIILiteral("CryptoKey doesn't match AlgorithmIdentifier"));
+        promise->reject(InvalidAccessError, "CryptoKey doesn't match AlgorithmIdentifier"_s);
         return;
     }
 
     if (!key.allows(CryptoKeyUsageEncrypt)) {
-        promise->reject(InvalidAccessError, ASCIILiteral("CryptoKey doesn't support encryption"));
+        promise->reject(InvalidAccessError, "CryptoKey doesn't support encryption"_s);
         return;
     }
 
@@ -553,7 +573,7 @@ void SubtleCrypto::encrypt(JSC::ExecState& state, AlgorithmIdentifier&& algorith
             rejectWithException(promise.releaseNonNull(), ec);
     };
 
-    algorithm->encrypt(WTFMove(params), key, WTFMove(data), WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
+    algorithm->encrypt(*params, key, WTFMove(data), WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
 }
 
 void SubtleCrypto::decrypt(JSC::ExecState& state, AlgorithmIdentifier&& algorithmIdentifier, CryptoKey& key, BufferSource&& dataBufferSource, Ref<DeferredPromise>&& promise)
@@ -568,12 +588,12 @@ void SubtleCrypto::decrypt(JSC::ExecState& state, AlgorithmIdentifier&& algorith
     auto data = copyToVector(WTFMove(dataBufferSource));
 
     if (params->identifier != key.algorithmIdentifier()) {
-        promise->reject(InvalidAccessError, ASCIILiteral("CryptoKey doesn't match AlgorithmIdentifier"));
+        promise->reject(InvalidAccessError, "CryptoKey doesn't match AlgorithmIdentifier"_s);
         return;
     }
 
     if (!key.allows(CryptoKeyUsageDecrypt)) {
-        promise->reject(InvalidAccessError, ASCIILiteral("CryptoKey doesn't support decryption"));
+        promise->reject(InvalidAccessError, "CryptoKey doesn't support decryption"_s);
         return;
     }
 
@@ -591,7 +611,7 @@ void SubtleCrypto::decrypt(JSC::ExecState& state, AlgorithmIdentifier&& algorith
             rejectWithException(promise.releaseNonNull(), ec);
     };
 
-    algorithm->decrypt(WTFMove(params), key, WTFMove(data), WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
+    algorithm->decrypt(*params, key, WTFMove(data), WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
 }
 
 void SubtleCrypto::sign(JSC::ExecState& state, AlgorithmIdentifier&& algorithmIdentifier, CryptoKey& key, BufferSource&& dataBufferSource, Ref<DeferredPromise>&& promise)
@@ -606,12 +626,12 @@ void SubtleCrypto::sign(JSC::ExecState& state, AlgorithmIdentifier&& algorithmId
     auto data = copyToVector(WTFMove(dataBufferSource));
 
     if (params->identifier != key.algorithmIdentifier()) {
-        promise->reject(InvalidAccessError, ASCIILiteral("CryptoKey doesn't match AlgorithmIdentifier"));
+        promise->reject(InvalidAccessError, "CryptoKey doesn't match AlgorithmIdentifier"_s);
         return;
     }
 
     if (!key.allows(CryptoKeyUsageSign)) {
-        promise->reject(InvalidAccessError, ASCIILiteral("CryptoKey doesn't support signing"));
+        promise->reject(InvalidAccessError, "CryptoKey doesn't support signing"_s);
         return;
     }
 
@@ -629,7 +649,7 @@ void SubtleCrypto::sign(JSC::ExecState& state, AlgorithmIdentifier&& algorithmId
             rejectWithException(promise.releaseNonNull(), ec);
     };
 
-    algorithm->sign(WTFMove(params), key, WTFMove(data), WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
+    algorithm->sign(*params, key, WTFMove(data), WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
 }
 
 void SubtleCrypto::verify(JSC::ExecState& state, AlgorithmIdentifier&& algorithmIdentifier, CryptoKey& key, BufferSource&& signatureBufferSource, BufferSource&& dataBufferSource, Ref<DeferredPromise>&& promise)
@@ -645,12 +665,12 @@ void SubtleCrypto::verify(JSC::ExecState& state, AlgorithmIdentifier&& algorithm
     auto data = copyToVector(WTFMove(dataBufferSource));
 
     if (params->identifier != key.algorithmIdentifier()) {
-        promise->reject(InvalidAccessError, ASCIILiteral("CryptoKey doesn't match AlgorithmIdentifier"));
+        promise->reject(InvalidAccessError, "CryptoKey doesn't match AlgorithmIdentifier"_s);
         return;
     }
 
     if (!key.allows(CryptoKeyUsageVerify)) {
-        promise->reject(InvalidAccessError, ASCIILiteral("CryptoKey doesn't support verification"));
+        promise->reject(InvalidAccessError, "CryptoKey doesn't support verification"_s);
         return;
     }
 
@@ -668,7 +688,7 @@ void SubtleCrypto::verify(JSC::ExecState& state, AlgorithmIdentifier&& algorithm
             rejectWithException(promise.releaseNonNull(), ec);
     };
 
-    algorithm->verify(WTFMove(params), key, WTFMove(signature), WTFMove(data), WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
+    algorithm->verify(*params, key, WTFMove(signature), WTFMove(data), WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
 }
 
 void SubtleCrypto::digest(JSC::ExecState& state, AlgorithmIdentifier&& algorithmIdentifier, BufferSource&& dataBufferSource, Ref<DeferredPromise>&& promise)
@@ -772,12 +792,12 @@ void SubtleCrypto::deriveKey(JSC::ExecState& state, AlgorithmIdentifier&& algori
     auto keyUsagesBitmap = toCryptoKeyUsageBitmap(keyUsages);
 
     if (params->identifier != baseKey.algorithmIdentifier()) {
-        promise->reject(InvalidAccessError, ASCIILiteral("CryptoKey doesn't match AlgorithmIdentifier"));
+        promise->reject(InvalidAccessError, "CryptoKey doesn't match AlgorithmIdentifier"_s);
         return;
     }
 
     if (!baseKey.allows(CryptoKeyUsageDeriveKey)) {
-        promise->reject(InvalidAccessError, ASCIILiteral("CryptoKey doesn't support CryptoKey derivation"));
+        promise->reject(InvalidAccessError, "CryptoKey doesn't support CryptoKey derivation"_s);
         return;
     }
 
@@ -785,7 +805,7 @@ void SubtleCrypto::deriveKey(JSC::ExecState& state, AlgorithmIdentifier&& algori
 
     auto result = getLengthAlgorithm->getKeyLength(*getLengthParams);
     if (result.hasException()) {
-        promise->reject(result.releaseException().code(), ASCIILiteral("Cannot get key length from derivedKeyType"));
+        promise->reject(result.releaseException().code(), "Cannot get key length from derivedKeyType"_s);
         return;
     }
     size_t length = result.releaseReturnValue();
@@ -796,7 +816,7 @@ void SubtleCrypto::deriveKey(JSC::ExecState& state, AlgorithmIdentifier&& algori
     auto index = promise.ptr();
     m_pendingPromises.add(index, WTFMove(promise));
     auto subtleCryptoWeakPointer = makeWeakPtr(*this);
-    auto callback = [index, subtleCryptoWeakPointer, importAlgorithm, importParams = WTFMove(importParams), extractable, keyUsagesBitmap](const Vector<uint8_t>& derivedKey) mutable {
+    auto callback = [index, subtleCryptoWeakPointer, importAlgorithm = WTFMove(importAlgorithm), importParams = crossThreadCopyImportParams(*importParams), extractable, keyUsagesBitmap](const Vector<uint8_t>& derivedKey) mutable {
         // FIXME: https://bugs.webkit.org/show_bug.cgi?id=169395
         KeyData data = derivedKey;
         auto callback = [index, subtleCryptoWeakPointer](CryptoKey& key) mutable {
@@ -813,14 +833,14 @@ void SubtleCrypto::deriveKey(JSC::ExecState& state, AlgorithmIdentifier&& algori
                 rejectWithException(promise.releaseNonNull(), ec);
         };
 
-        importAlgorithm->importKey(SubtleCrypto::KeyFormat::Raw, WTFMove(data), WTFMove(importParams), extractable, keyUsagesBitmap, WTFMove(callback), WTFMove(exceptionCallback));
+        importAlgorithm->importKey(SubtleCrypto::KeyFormat::Raw, WTFMove(data), *importParams, extractable, keyUsagesBitmap, WTFMove(callback), WTFMove(exceptionCallback));
     };
     auto exceptionCallback = [index, subtleCryptoWeakPointer](ExceptionCode ec) mutable {
         if (auto promise = getPromise(index, subtleCryptoWeakPointer))
             rejectWithException(promise.releaseNonNull(), ec);
     };
 
-    algorithm->deriveBits(WTFMove(params), baseKey, length, WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
+    algorithm->deriveBits(*params, baseKey, length, WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
 }
 
 void SubtleCrypto::deriveBits(JSC::ExecState& state, AlgorithmIdentifier&& algorithmIdentifier, CryptoKey& baseKey, unsigned length, Ref<DeferredPromise>&& promise)
@@ -833,12 +853,12 @@ void SubtleCrypto::deriveBits(JSC::ExecState& state, AlgorithmIdentifier&& algor
     auto params = paramsOrException.releaseReturnValue();
 
     if (params->identifier != baseKey.algorithmIdentifier()) {
-        promise->reject(InvalidAccessError, ASCIILiteral("CryptoKey doesn't match AlgorithmIdentifier"));
+        promise->reject(InvalidAccessError, "CryptoKey doesn't match AlgorithmIdentifier"_s);
         return;
     }
 
     if (!baseKey.allows(CryptoKeyUsageDeriveBits)) {
-        promise->reject(InvalidAccessError, ASCIILiteral("CryptoKey doesn't support bits derivation"));
+        promise->reject(InvalidAccessError, "CryptoKey doesn't support bits derivation"_s);
         return;
     }
 
@@ -856,7 +876,7 @@ void SubtleCrypto::deriveBits(JSC::ExecState& state, AlgorithmIdentifier&& algor
             rejectWithException(promise.releaseNonNull(), ec);
     };
 
-    algorithm->deriveBits(WTFMove(params), baseKey, length, WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
+    algorithm->deriveBits(*params, baseKey, length, WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
 }
 
 void SubtleCrypto::importKey(JSC::ExecState& state, KeyFormat format, KeyDataVariant&& keyDataVariant, AlgorithmIdentifier&& algorithmIdentifier, bool extractable, Vector<CryptoKeyUsage>&& keyUsages, Ref<DeferredPromise>&& promise)
@@ -899,7 +919,7 @@ void SubtleCrypto::importKey(JSC::ExecState& state, KeyFormat format, KeyDataVar
     // The 11 December 2014 version of the specification suggests we should perform the following task asynchronously:
     // https://www.w3.org/TR/WebCryptoAPI/#SubtleCrypto-method-importKey
     // It is not beneficial for less time consuming operations. Therefore, we perform it synchronously.
-    algorithm->importKey(format, WTFMove(keyData), WTFMove(params), extractable, keyUsagesBitmap, WTFMove(callback), WTFMove(exceptionCallback));
+    algorithm->importKey(format, WTFMove(keyData), *params, extractable, keyUsagesBitmap, WTFMove(callback), WTFMove(exceptionCallback));
 }
 
 void SubtleCrypto::exportKey(KeyFormat format, CryptoKey& key, Ref<DeferredPromise>&& promise)
@@ -910,7 +930,7 @@ void SubtleCrypto::exportKey(KeyFormat format, CryptoKey& key, Ref<DeferredPromi
     }
 
     if (!key.extractable()) {
-        promise->reject(InvalidAccessError, ASCIILiteral("The CryptoKey is nonextractable"));
+        promise->reject(InvalidAccessError, "The CryptoKey is nonextractable"_s);
         return;
     }
 
@@ -966,12 +986,12 @@ void SubtleCrypto::wrapKey(JSC::ExecState& state, KeyFormat format, CryptoKey& k
     auto wrapParams = wrapParamsOrException.releaseReturnValue();
 
     if (wrapParams->identifier != wrappingKey.algorithmIdentifier()) {
-        promise->reject(InvalidAccessError, ASCIILiteral("Wrapping CryptoKey doesn't match AlgorithmIdentifier"));
+        promise->reject(InvalidAccessError, "Wrapping CryptoKey doesn't match AlgorithmIdentifier"_s);
         return;
     }
 
     if (!wrappingKey.allows(CryptoKeyUsageWrapKey)) {
-        promise->reject(InvalidAccessError, ASCIILiteral("Wrapping CryptoKey doesn't support wrapKey operation"));
+        promise->reject(InvalidAccessError, "Wrapping CryptoKey doesn't support wrapKey operation"_s);
         return;
     }
 
@@ -981,7 +1001,7 @@ void SubtleCrypto::wrapKey(JSC::ExecState& state, KeyFormat format, CryptoKey& k
     }
 
     if (!key.extractable()) {
-        promise->reject(InvalidAccessError, ASCIILiteral("The CryptoKey is nonextractable"));
+        promise->reject(InvalidAccessError, "The CryptoKey is nonextractable"_s);
         return;
     }
 
@@ -1029,7 +1049,7 @@ void SubtleCrypto::wrapKey(JSC::ExecState& state, KeyFormat format, CryptoKey& k
                     return;
                 }
                 // The following operation should be performed asynchronously.
-                wrapAlgorithm->encrypt(WTFMove(wrapParams), WTFMove(wrappingKey), WTFMove(bytes), WTFMove(callback), WTFMove(exceptionCallback), *context, workQueue);
+                wrapAlgorithm->encrypt(*wrapParams, WTFMove(wrappingKey), WTFMove(bytes), WTFMove(callback), WTFMove(exceptionCallback), *context, workQueue);
             }
         }
     };
@@ -1072,12 +1092,12 @@ void SubtleCrypto::unwrapKey(JSC::ExecState& state, KeyFormat format, BufferSour
     auto keyUsagesBitmap = toCryptoKeyUsageBitmap(keyUsages);
 
     if (unwrapParams->identifier != unwrappingKey.algorithmIdentifier()) {
-        promise->reject(InvalidAccessError, ASCIILiteral("Unwrapping CryptoKey doesn't match unwrap AlgorithmIdentifier"));
+        promise->reject(InvalidAccessError, "Unwrapping CryptoKey doesn't match unwrap AlgorithmIdentifier"_s);
         return;
     }
 
     if (!unwrappingKey.allows(CryptoKeyUsageUnwrapKey)) {
-        promise->reject(InvalidAccessError, ASCIILiteral("Unwrapping CryptoKey doesn't support unwrapKey operation"));
+        promise->reject(InvalidAccessError, "Unwrapping CryptoKey doesn't support unwrapKey operation"_s);
         return;
     }
 
@@ -1096,7 +1116,7 @@ void SubtleCrypto::unwrapKey(JSC::ExecState& state, KeyFormat format, BufferSour
     auto index = promise.ptr();
     m_pendingPromises.add(index, WTFMove(promise));
     auto subtleCryptoWeakPointer = makeWeakPtr(*this);
-    auto callback = [index, subtleCryptoWeakPointer, format, importAlgorithm, unwrappedKeyAlgorithm = WTFMove(unwrappedKeyAlgorithm), extractable, keyUsagesBitmap](const Vector<uint8_t>& bytes) mutable {
+    auto callback = [index, subtleCryptoWeakPointer, format, importAlgorithm, unwrappedKeyAlgorithm = crossThreadCopyImportParams(*unwrappedKeyAlgorithm), extractable, keyUsagesBitmap](const Vector<uint8_t>& bytes) mutable {
         if (subtleCryptoWeakPointer) {
             if (auto promise = subtleCryptoWeakPointer->m_pendingPromises.get(index)) {
                 KeyData keyData;
@@ -1115,7 +1135,7 @@ void SubtleCrypto::unwrapKey(JSC::ExecState& state, KeyFormat format, BufferSour
                     JSLockHolder locker(vm);
                     auto jwkObject = JSONParse(&state, jwkString);
                     if (!jwkObject) {
-                        promise->reject(DataError, ASCIILiteral("WrappedKey cannot be converted to a JSON object"));
+                        promise->reject(DataError, "WrappedKey cannot be converted to a JSON object"_s);
                         return;
                     }
                     auto jwk = convert<IDLDictionary<JsonWebKey>>(state, jwkObject);
@@ -1142,7 +1162,7 @@ void SubtleCrypto::unwrapKey(JSC::ExecState& state, KeyFormat format, BufferSour
                 };
 
                 // The following operation should be performed synchronously.
-                importAlgorithm->importKey(format, WTFMove(keyData), WTFMove(unwrappedKeyAlgorithm), extractable, keyUsagesBitmap, WTFMove(callback), WTFMove(exceptionCallback));
+                importAlgorithm->importKey(format, WTFMove(keyData), *unwrappedKeyAlgorithm, extractable, keyUsagesBitmap, WTFMove(callback), WTFMove(exceptionCallback));
             }
         }
     };
@@ -1159,7 +1179,7 @@ void SubtleCrypto::unwrapKey(JSC::ExecState& state, KeyFormat format, BufferSour
         return;
     }
 
-    unwrapAlgorithm->decrypt(WTFMove(unwrapParams), unwrappingKey, WTFMove(wrappedKey), WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
+    unwrapAlgorithm->decrypt(*unwrapParams, unwrappingKey, WTFMove(wrappedKey), WTFMove(callback), WTFMove(exceptionCallback), *scriptExecutionContext(), m_workQueue);
 }
 
 }

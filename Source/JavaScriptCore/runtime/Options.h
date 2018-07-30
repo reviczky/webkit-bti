@@ -512,7 +512,10 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(bool, useIntlPluralRules, enableIntlPluralRules, Normal, "If true, we will enable Intl.PluralRules.") \
     v(bool, useArrayAllocationProfiling, true, Normal, "If true, we will use our normal array allocation profiling. If false, the allocation profile will always claim to be undecided.") \
     v(bool, forcePolyProto, false, Normal, "If true, create_this will always create an object with a poly proto structure.") \
-    v(bool, forceMiniVMMode, false, Normal, "If true, it will force mini VM mode on.")
+    v(bool, forceMiniVMMode, false, Normal, "If true, it will force mini VM mode on.") \
+    v(bool, useTracePoints, false, Normal, nullptr) \
+    v(bool, traceLLIntExecution, false, Configurable, nullptr) \
+    v(bool, traceLLIntSlowPath, false, Configurable, nullptr) \
 
 
 enum OptionEquivalence {

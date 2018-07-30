@@ -262,6 +262,18 @@ void StorageProcess::createStorageToWebProcessConnection(bool isServiceWorkerPro
 
     IPC::Attachment clientPort(listeningPort, MACH_MSG_TYPE_MAKE_SEND);
     parentProcessConnection()->send(Messages::StorageProcessProxy::DidCreateStorageToWebProcessConnection(clientPort), 0);
+#elif OS(WINDOWS)
+    IPC::Connection::Identifier serverIdentifier, clientIdentifier;
+    if (!IPC::Connection::createServerAndClientIdentifiers(serverIdentifier, clientIdentifier)) {
+        LOG_ERROR("Failed to create server and client identifiers");
+        CRASH();
+    }
+
+    auto connection = StorageToWebProcessConnection::create(serverIdentifier);
+    m_storageToWebProcessConnections.append(WTFMove(connection));
+
+    IPC::Attachment clientSocket(clientIdentifier);
+    parentProcessConnection()->send(Messages::StorageProcessProxy::DidCreateStorageToWebProcessConnection(clientSocket), 0);
 #else
     notImplemented();
 #endif
@@ -394,17 +406,22 @@ void StorageProcess::accessToTemporaryFileComplete(const String& path)
         extension->revoke();
 }
 
-Vector<WebCore::SecurityOriginData> StorageProcess::indexedDatabaseOrigins(const String& path)
+HashSet<WebCore::SecurityOriginData> StorageProcess::indexedDatabaseOrigins(const String& path)
 {
     if (path.isEmpty())
         return { };
 
-    Vector<WebCore::SecurityOriginData> securityOrigins;
-    for (auto& originPath : FileSystem::listDirectory(path, "*")) {
-        String databaseIdentifier = FileSystem::pathGetFileName(originPath);
-
+    HashSet<WebCore::SecurityOriginData> securityOrigins;
+    for (auto& topOriginPath : FileSystem::listDirectory(path, "*")) {
+        auto databaseIdentifier = FileSystem::pathGetFileName(topOriginPath);
         if (auto securityOrigin = SecurityOriginData::fromDatabaseIdentifier(databaseIdentifier))
-            securityOrigins.append(WTFMove(*securityOrigin));
+            securityOrigins.add(WTFMove(*securityOrigin));
+        
+        for (auto& originPath : FileSystem::listDirectory(topOriginPath, "*")) {
+            databaseIdentifier = FileSystem::pathGetFileName(originPath);
+            if (auto securityOrigin = SecurityOriginData::fromDatabaseIdentifier(databaseIdentifier))
+                securityOrigins.add(WTFMove(*securityOrigin));
+        }
     }
 
     return securityOrigins;
@@ -454,6 +471,14 @@ SWServer& StorageProcess::swServerForSession(PAL::SessionID sessionID)
 WebSWOriginStore& StorageProcess::swOriginStoreForSession(PAL::SessionID sessionID)
 {
     return static_cast<WebSWOriginStore&>(swServerForSession(sessionID).originStore());
+}
+
+WebSWOriginStore* StorageProcess::existingSWOriginStoreForSession(PAL::SessionID sessionID) const
+{
+    auto* swServer = m_swServers.get(sessionID);
+    if (!swServer)
+        return nullptr;
+    return &static_cast<WebSWOriginStore&>(swServer->originStore());
 }
 
 WebSWServerToContextConnection* StorageProcess::serverToContextConnectionForOrigin(const SecurityOriginData& securityOrigin)
@@ -533,7 +558,8 @@ void StorageProcess::unregisterSWServerConnection(WebSWServerConnection& connect
 {
     ASSERT(m_swServerConnections.get(connection.identifier()) == &connection);
     m_swServerConnections.remove(connection.identifier());
-    swOriginStoreForSession(connection.sessionID()).unregisterSWServerConnection(connection);
+    if (auto* store = existingSWOriginStoreForSession(connection.sessionID()))
+        store->unregisterSWServerConnection(connection);
 }
 
 void StorageProcess::swContextConnectionMayNoLongerBeNeeded(WebSWServerToContextConnection& serverToContextConnection)
@@ -544,6 +570,9 @@ void StorageProcess::swContextConnectionMayNoLongerBeNeeded(WebSWServerToContext
 
     RELEASE_LOG(ServiceWorker, "Service worker process is no longer needed, terminating it");
     serverToContextConnection.terminate();
+
+    for (auto& swServer : m_swServers.values())
+        swServer->markAllWorkersForOriginAsTerminated(securityOrigin);
 
     serverToContextConnection.connectionClosed();
     m_serverToContextConnections.remove(securityOrigin);

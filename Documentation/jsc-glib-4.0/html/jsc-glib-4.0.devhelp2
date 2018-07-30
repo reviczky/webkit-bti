@@ -29,10 +29,15 @@
     <keyword type="function" name="jsc_context_get_current ()" link="JSCContext.html#jsc-context-get-current"/>
     <keyword type="function" name="jsc_context_evaluate ()" link="JSCContext.html#jsc-context-evaluate"/>
     <keyword type="function" name="jsc_context_evaluate_with_source_uri ()" link="JSCContext.html#jsc-context-evaluate-with-source-uri"/>
+    <keyword type="function" name="jsc_context_evaluate_in_object ()" link="JSCContext.html#jsc-context-evaluate-in-object"/>
+    <keyword type="function" name="jsc_context_check_syntax ()" link="JSCContext.html#jsc-context-check-syntax"/>
+    <keyword type="function" name="jsc_context_get_global_object ()" link="JSCContext.html#jsc-context-get-global-object"/>
     <keyword type="function" name="jsc_context_set_value ()" link="JSCContext.html#jsc-context-set-value"/>
     <keyword type="function" name="jsc_context_get_value ()" link="JSCContext.html#jsc-context-get-value"/>
     <keyword type="function" name="jsc_context_register_class ()" link="JSCContext.html#jsc-context-register-class"/>
     <keyword type="struct" name="JSCContext" link="JSCContext.html#JSCContext-struct"/>
+    <keyword type="enum" name="enum JSCCheckSyntaxMode" link="JSCContext.html#JSCCheckSyntaxMode"/>
+    <keyword type="enum" name="enum JSCCheckSyntaxResult" link="JSCContext.html#JSCCheckSyntaxResult"/>
     <keyword type="property" name="The “virtual-machine” property" link="JSCContext.html#JSCContext--virtual-machine"/>
     <keyword type="function" name="jsc_value_get_context ()" link="JSCValue.html#jsc-value-get-context"/>
     <keyword type="function" name="jsc_value_new_undefined ()" link="JSCValue.html#jsc-value-new-undefined"/>
@@ -53,6 +58,7 @@
     <keyword type="function" name="jsc_value_to_string_as_bytes ()" link="JSCValue.html#jsc-value-to-string-as-bytes"/>
     <keyword type="function" name="jsc_value_new_array ()" link="JSCValue.html#jsc-value-new-array"/>
     <keyword type="function" name="jsc_value_new_array_from_garray ()" link="JSCValue.html#jsc-value-new-array-from-garray"/>
+    <keyword type="function" name="jsc_value_new_array_from_strv ()" link="JSCValue.html#jsc-value-new-array-from-strv"/>
     <keyword type="function" name="jsc_value_is_array ()" link="JSCValue.html#jsc-value-is-array"/>
     <keyword type="function" name="jsc_value_new_object ()" link="JSCValue.html#jsc-value-new-object"/>
     <keyword type="function" name="jsc_value_is_object ()" link="JSCValue.html#jsc-value-is-object"/>
@@ -70,6 +76,7 @@
     <keyword type="function" name="jsc_value_object_define_property_accessor ()" link="JSCValue.html#jsc-value-object-define-property-accessor"/>
     <keyword type="function" name="jsc_value_new_function ()" link="JSCValue.html#jsc-value-new-function"/>
     <keyword type="function" name="jsc_value_new_functionv ()" link="JSCValue.html#jsc-value-new-functionv"/>
+    <keyword type="function" name="jsc_value_new_function_variadic ()" link="JSCValue.html#jsc-value-new-function-variadic"/>
     <keyword type="function" name="jsc_value_is_function ()" link="JSCValue.html#jsc-value-is-function"/>
     <keyword type="function" name="jsc_value_function_call ()" link="JSCValue.html#jsc-value-function-call"/>
     <keyword type="function" name="jsc_value_function_callv ()" link="JSCValue.html#jsc-value-function-callv"/>
@@ -98,8 +105,10 @@
     <keyword type="function" name="jsc_class_get_parent ()" link="JSCClass.html#jsc-class-get-parent"/>
     <keyword type="function" name="jsc_class_add_constructor ()" link="JSCClass.html#jsc-class-add-constructor"/>
     <keyword type="function" name="jsc_class_add_constructorv ()" link="JSCClass.html#jsc-class-add-constructorv"/>
+    <keyword type="function" name="jsc_class_add_constructor_variadic ()" link="JSCClass.html#jsc-class-add-constructor-variadic"/>
     <keyword type="function" name="jsc_class_add_method ()" link="JSCClass.html#jsc-class-add-method"/>
     <keyword type="function" name="jsc_class_add_methodv ()" link="JSCClass.html#jsc-class-add-methodv"/>
+    <keyword type="function" name="jsc_class_add_method_variadic ()" link="JSCClass.html#jsc-class-add-method-variadic"/>
     <keyword type="function" name="jsc_class_add_property ()" link="JSCClass.html#jsc-class-add-property"/>
     <keyword type="struct" name="JSCClass" link="JSCClass.html#JSCClass-struct"/>
     <keyword type="struct" name="JSCClassVTable" link="JSCClass.html#JSCClassVTable"/>
@@ -113,6 +122,14 @@
     <keyword type="macro" name="JSC_MAJOR_VERSION" link="jsc-glib-4.0-JSCVersion.html#JSC-MAJOR-VERSION:CAPS"/>
     <keyword type="macro" name="JSC_MINOR_VERSION" link="jsc-glib-4.0-JSCVersion.html#JSC-MINOR-VERSION:CAPS"/>
     <keyword type="macro" name="JSC_MICRO_VERSION" link="jsc-glib-4.0-JSCVersion.html#JSC-MICRO-VERSION:CAPS"/>
+    <keyword type="constant" name="JSC_CHECK_SYNTAX_MODE_SCRIPT" link="JSCContext.html#JSC-CHECK-SYNTAX-MODE-SCRIPT:CAPS"/>
+    <keyword type="constant" name="JSC_CHECK_SYNTAX_MODE_MODULE" link="JSCContext.html#JSC-CHECK-SYNTAX-MODE-MODULE:CAPS"/>
+    <keyword type="constant" name="JSC_CHECK_SYNTAX_RESULT_SUCCESS" link="JSCContext.html#JSC-CHECK-SYNTAX-RESULT-SUCCESS:CAPS"/>
+    <keyword type="constant" name="JSC_CHECK_SYNTAX_RESULT_RECOVERABLE_ERROR" link="JSCContext.html#JSC-CHECK-SYNTAX-RESULT-RECOVERABLE-ERROR:CAPS"/>
+    <keyword type="constant" name="JSC_CHECK_SYNTAX_RESULT_IRRECOVERABLE_ERROR" link="JSCContext.html#JSC-CHECK-SYNTAX-RESULT-IRRECOVERABLE-ERROR:CAPS"/>
+    <keyword type="constant" name="JSC_CHECK_SYNTAX_RESULT_UNTERMINATED_LITERAL_ERROR" link="JSCContext.html#JSC-CHECK-SYNTAX-RESULT-UNTERMINATED-LITERAL-ERROR:CAPS"/>
+    <keyword type="constant" name="JSC_CHECK_SYNTAX_RESULT_OUT_OF_MEMORY_ERROR" link="JSCContext.html#JSC-CHECK-SYNTAX-RESULT-OUT-OF-MEMORY-ERROR:CAPS"/>
+    <keyword type="constant" name="JSC_CHECK_SYNTAX_RESULT_STACK_OVERFLOW_ERROR" link="JSCContext.html#JSC-CHECK-SYNTAX-RESULT-STACK-OVERFLOW-ERROR:CAPS"/>
     <keyword type="constant" name="JSC_VALUE_PROPERTY_CONFIGURABLE" link="JSCValue.html#JSC-VALUE-PROPERTY-CONFIGURABLE:CAPS"/>
     <keyword type="constant" name="JSC_VALUE_PROPERTY_ENUMERABLE" link="JSCValue.html#JSC-VALUE-PROPERTY-ENUMERABLE:CAPS"/>
     <keyword type="constant" name="JSC_VALUE_PROPERTY_WRITABLE" link="JSCValue.html#JSC-VALUE-PROPERTY-WRITABLE:CAPS"/>

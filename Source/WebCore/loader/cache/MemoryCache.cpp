@@ -562,7 +562,7 @@ void MemoryCache::getOriginsWithCache(SecurityOriginSet& origins)
             auto& resource = *keyValue.value;
             auto& partitionName = keyValue.key.second;
             if (!partitionName.isEmpty())
-                origins.add(SecurityOrigin::create(ASCIILiteral("http"), partitionName, 0));
+                origins.add(SecurityOrigin::create("http"_s, partitionName, 0));
             else
                 origins.add(SecurityOrigin::create(resource.url()));
         }
@@ -654,24 +654,24 @@ MemoryCache::Statistics MemoryCache::getStatistics()
     for (auto& resources : m_sessionResources.values()) {
         for (auto* resource : resources->values()) {
             switch (resource->type()) {
-            case CachedResource::ImageResource:
+            case CachedResource::Type::ImageResource:
                 stats.images.addResource(*resource);
                 break;
-            case CachedResource::CSSStyleSheet:
+            case CachedResource::Type::CSSStyleSheet:
                 stats.cssStyleSheets.addResource(*resource);
                 break;
-            case CachedResource::Script:
+            case CachedResource::Type::Script:
                 stats.scripts.addResource(*resource);
                 break;
 #if ENABLE(XSLT)
-            case CachedResource::XSLStyleSheet:
+            case CachedResource::Type::XSLStyleSheet:
                 stats.xslStyleSheets.addResource(*resource);
                 break;
 #endif
 #if ENABLE(SVG_FONTS)
-            case CachedResource::SVGFontResource:
+            case CachedResource::Type::SVGFontResource:
 #endif
-            case CachedResource::FontResource:
+            case CachedResource::Type::FontResource:
                 stats.fonts.addResource(*resource);
                 break;
             default:

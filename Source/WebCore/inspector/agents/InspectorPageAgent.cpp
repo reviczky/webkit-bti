@@ -137,7 +137,7 @@ void InspectorPageAgent::resourceContent(ErrorString& errorString, Frame* frame,
     }
 
     if (!success)
-        errorString = ASCIILiteral("No resource with given URL found");
+        errorString = "No resource with given URL found"_s;
 }
 
 String InspectorPageAgent::sourceMapURLForResource(CachedResource* cachedResource)
@@ -146,7 +146,7 @@ String InspectorPageAgent::sourceMapURLForResource(CachedResource* cachedResourc
         return String();
 
     // Scripts are handled in a separate path.
-    if (cachedResource->type() != CachedResource::CSSStyleSheet)
+    if (cachedResource->type() != CachedResource::Type::CSSStyleSheet)
         return String();
 
     String sourceMapHeader = cachedResource->response().httpHeaderField(HTTPHeaderName::SourceMap);
@@ -216,31 +216,31 @@ Inspector::Protocol::Page::ResourceType InspectorPageAgent::resourceTypeJSON(Ins
 InspectorPageAgent::ResourceType InspectorPageAgent::inspectorResourceType(CachedResource::Type type)
 {
     switch (type) {
-    case CachedResource::ImageResource:
+    case CachedResource::Type::ImageResource:
         return InspectorPageAgent::ImageResource;
 #if ENABLE(SVG_FONTS)
-    case CachedResource::SVGFontResource:
+    case CachedResource::Type::SVGFontResource:
 #endif
-    case CachedResource::FontResource:
+    case CachedResource::Type::FontResource:
         return InspectorPageAgent::FontResource;
 #if ENABLE(XSLT)
-    case CachedResource::XSLStyleSheet:
+    case CachedResource::Type::XSLStyleSheet:
 #endif
-    case CachedResource::CSSStyleSheet:
+    case CachedResource::Type::CSSStyleSheet:
         return InspectorPageAgent::StylesheetResource;
-    case CachedResource::Script:
+    case CachedResource::Type::Script:
         return InspectorPageAgent::ScriptResource;
-    case CachedResource::MainResource:
+    case CachedResource::Type::MainResource:
         return InspectorPageAgent::DocumentResource;
-    case CachedResource::Beacon:
+    case CachedResource::Type::Beacon:
         return InspectorPageAgent::BeaconResource;
 #if ENABLE(APPLICATION_MANIFEST)
-    case CachedResource::ApplicationManifest:
+    case CachedResource::Type::ApplicationManifest:
         return InspectorPageAgent::ApplicationManifestResource;
 #endif
-    case CachedResource::MediaResource:
-    case CachedResource::Icon:
-    case CachedResource::RawResource:
+    case CachedResource::Type::MediaResource:
+    case CachedResource::Type::Icon:
+    case CachedResource::Type::RawResource:
     default:
         return InspectorPageAgent::OtherResource;
     }
@@ -248,7 +248,7 @@ InspectorPageAgent::ResourceType InspectorPageAgent::inspectorResourceType(Cache
 
 InspectorPageAgent::ResourceType InspectorPageAgent::inspectorResourceType(const CachedResource& cachedResource)
 {
-    if (cachedResource.type() == CachedResource::RawResource) {
+    if (cachedResource.type() == CachedResource::Type::RawResource) {
         switch (cachedResource.resourceRequest().requester()) {
         case ResourceRequest::Requester::Fetch:
             return InspectorPageAgent::FetchResource;
@@ -268,7 +268,7 @@ Inspector::Protocol::Page::ResourceType InspectorPageAgent::cachedResourceTypeJS
 }
 
 InspectorPageAgent::InspectorPageAgent(PageAgentContext& context, InspectorClient* client, InspectorOverlay* overlay)
-    : InspectorAgentBase(ASCIILiteral("Page"), context)
+    : InspectorAgentBase("Page"_s, context)
     , m_frontendDispatcher(std::make_unique<Inspector::PageFrontendDispatcher>(context.frontendRouter))
     , m_backendDispatcher(Inspector::PageBackendDispatcher::create(context.backendDispatcher, this))
     , m_page(context.inspectedPage)
@@ -332,7 +332,7 @@ void InspectorPageAgent::navigate(ErrorString&, const String& url)
     Frame& frame = m_page.mainFrame();
 
     ResourceRequest resourceRequest { frame.document()->completeURL(url) };
-    FrameLoadRequest frameLoadRequest { *frame.document(), frame.document()->securityOrigin(), resourceRequest, ASCIILiteral("_self"), LockHistory::No, LockBackForwardList::No, MaybeSendReferrer, AllowNavigationToInvalidURL::No, NewFrameOpenerPolicy::Allow, ShouldOpenExternalURLsPolicy::ShouldNotAllow, InitiatedByMainFrame::Unknown };
+    FrameLoadRequest frameLoadRequest { *frame.document(), frame.document()->securityOrigin(), resourceRequest, "_self"_s, LockHistory::No, LockBackForwardList::No, MaybeSendReferrer, AllowNavigationToInvalidURL::No, NewFrameOpenerPolicy::Allow, ShouldOpenExternalURLsPolicy::ShouldNotAllow, InitiatedByMainFrame::Unknown };
     frame.loader().changeLocation(WTFMove(frameLoadRequest));
 }
 
@@ -386,12 +386,12 @@ static Vector<CachedResource*> cachedResourcesForFrame(Frame* frame)
             continue;
 
         switch (cachedResource->type()) {
-        case CachedResource::ImageResource:
+        case CachedResource::Type::ImageResource:
             // Skip images that were not auto loaded (images disabled in the user agent).
 #if ENABLE(SVG_FONTS)
-        case CachedResource::SVGFontResource:
+        case CachedResource::Type::SVGFontResource:
 #endif
-        case CachedResource::FontResource:
+        case CachedResource::Type::FontResource:
             // Skip fonts that were referenced in CSS but never used/downloaded.
             if (cachedResource->stillNeedsLoad())
                 continue;
@@ -647,7 +647,7 @@ Frame* InspectorPageAgent::assertFrame(ErrorString& errorString, const String& f
 {
     Frame* frame = frameForId(frameId);
     if (!frame)
-        errorString = ASCIILiteral("No frame for given id found");
+        errorString = "No frame for given id found"_s;
     return frame;
 }
 
@@ -656,7 +656,7 @@ DocumentLoader* InspectorPageAgent::assertDocumentLoader(ErrorString& errorStrin
     FrameLoader& frameLoader = frame->loader();
     DocumentLoader* documentLoader = frameLoader.documentLoader();
     if (!documentLoader)
-        errorString = ASCIILiteral("No documentLoader for given frame found");
+        errorString = "No documentLoader for given frame found"_s;
     return documentLoader;
 }
 
@@ -839,11 +839,11 @@ void InspectorPageAgent::snapshotNode(ErrorString& errorString, int nodeId, Stri
 
     std::unique_ptr<ImageBuffer> snapshot = WebCore::snapshotNode(frame, *node);
     if (!snapshot) {
-        errorString = ASCIILiteral("Could not capture snapshot");
+        errorString = "Could not capture snapshot"_s;
         return;
     }
 
-    *outDataURL = snapshot->toDataURL(ASCIILiteral("image/png"), std::nullopt, PreserveResolution::Yes);
+    *outDataURL = snapshot->toDataURL("image/png"_s, std::nullopt, PreserveResolution::Yes);
 }
 
 void InspectorPageAgent::snapshotRect(ErrorString& errorString, int x, int y, int width, int height, const String& coordinateSystem, String* outDataURL)
@@ -858,11 +858,11 @@ void InspectorPageAgent::snapshotRect(ErrorString& errorString, int x, int y, in
     std::unique_ptr<ImageBuffer> snapshot = snapshotFrameRect(frame, rectangle, options);
 
     if (!snapshot) {
-        errorString = ASCIILiteral("Could not capture snapshot");
+        errorString = "Could not capture snapshot"_s;
         return;
     }
 
-    *outDataURL = snapshot->toDataURL(ASCIILiteral("image/png"), std::nullopt, PreserveResolution::Yes);
+    *outDataURL = snapshot->toDataURL("image/png"_s, std::nullopt, PreserveResolution::Yes);
 }
 
 void InspectorPageAgent::archive(ErrorString& errorString, String* data)
@@ -871,7 +871,7 @@ void InspectorPageAgent::archive(ErrorString& errorString, String* data)
     Frame& frame = mainFrame();
     RefPtr<LegacyWebArchive> archive = LegacyWebArchive::create(frame);
     if (!archive) {
-        errorString = ASCIILiteral("Could not create web archive for main frame");
+        errorString = "Could not create web archive for main frame"_s;
         return;
     }
 
@@ -879,7 +879,7 @@ void InspectorPageAgent::archive(ErrorString& errorString, String* data)
     *data = base64Encode(CFDataGetBytePtr(buffer.get()), CFDataGetLength(buffer.get()));
 #else
     UNUSED_PARAM(data);
-    errorString = ASCIILiteral("No support for creating archives");
+    errorString = "No support for creating archives"_s;
 #endif
 }
 

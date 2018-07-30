@@ -135,6 +135,10 @@ struct PasteboardWebContent;
 struct ViewportArguments;
 #endif
 
+#if ENABLE(DATALIST_ELEMENT)
+struct DataListSuggestionInformation;
+#endif
+
 #if USE(SOUP)
 struct SoupNetworkProxySettings;
 #endif
@@ -267,6 +271,7 @@ template<> struct ArgumentCoder<WebCore::FloatQuad> {
 template<> struct ArgumentCoder<WebCore::ViewportArguments> {
     static void encode(Encoder&, const WebCore::ViewportArguments&);
     static bool decode(Decoder&, WebCore::ViewportArguments&);
+    static std::optional<WebCore::ViewportArguments> decode(Decoder&);
 };
 #endif // PLATFORM(IOS)
 
@@ -412,11 +417,6 @@ template<> struct ArgumentCoder<WebCore::PasteboardWebContent> {
     static bool decode(Decoder&, WebCore::PasteboardWebContent&);
 };
 
-template<> struct ArgumentCoder<WebCore::PasteboardURL> {
-    static void encode(Encoder&, const WebCore::PasteboardURL&);
-    static bool decode(Decoder&, WebCore::PasteboardURL&);
-};
-
 template<> struct ArgumentCoder<WebCore::PasteboardImage> {
     static void encode(Encoder&, const WebCore::PasteboardImage&);
     static bool decode(Decoder&, WebCore::PasteboardImage&);
@@ -426,6 +426,11 @@ template<> struct ArgumentCoder<WebCore::PasteboardImage> {
 template<> struct ArgumentCoder<WebCore::PasteboardCustomData> {
     static void encode(Encoder&, const WebCore::PasteboardCustomData&);
     static bool decode(Decoder&, WebCore::PasteboardCustomData&);
+};
+
+template<> struct ArgumentCoder<WebCore::PasteboardURL> {
+    static void encode(Encoder&, const WebCore::PasteboardURL&);
+    static bool decode(Decoder&, WebCore::PasteboardURL&);
 };
 
 #if USE(SOUP)
@@ -451,6 +456,13 @@ template<> struct ArgumentCoder<WebCore::DatabaseDetails> {
     static void encode(Encoder&, const WebCore::DatabaseDetails&);
     static bool decode(Decoder&, WebCore::DatabaseDetails&);
 };
+
+#if ENABLE(DATALIST_ELEMENT)
+template<> struct ArgumentCoder<WebCore::DataListSuggestionInformation> {
+    static void encode(Encoder&, const WebCore::DataListSuggestionInformation&);
+    static bool decode(Decoder&, WebCore::DataListSuggestionInformation&);
+};
+#endif
 
 template<> struct ArgumentCoder<WebCore::DictationAlternative> {
     static void encode(Encoder&, const WebCore::DictationAlternative&);
@@ -748,7 +760,8 @@ template<> struct EnumTraits<WebCore::NetworkLoadPriority> {
         WebCore::NetworkLoadPriority,
         WebCore::NetworkLoadPriority::Low,
         WebCore::NetworkLoadPriority::Medium,
-        WebCore::NetworkLoadPriority::High
+        WebCore::NetworkLoadPriority::High,
+        WebCore::NetworkLoadPriority::Unknown
     >;
 };
 

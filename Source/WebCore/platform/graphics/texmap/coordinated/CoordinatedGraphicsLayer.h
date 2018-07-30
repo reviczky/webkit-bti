@@ -31,6 +31,7 @@
 #include "Image.h"
 #include "IntSize.h"
 #include "NicosiaBuffer.h"
+#include "NicosiaPlatformLayer.h"
 #include "TextureMapperAnimation.h"
 #include "TiledBackingStore.h"
 #include "TiledBackingStoreClient.h"
@@ -51,6 +52,7 @@ public:
     virtual FloatRect visibleContentsRect() const = 0;
     virtual Ref<CoordinatedImageBacking> createImageBackingIfNeeded(Image&) = 0;
     virtual void detachLayer(CoordinatedGraphicsLayer*) = 0;
+    virtual void attachLayer(CoordinatedGraphicsLayer*) = 0;
     virtual Nicosia::PaintingEngine& paintingEngine() = 0;
 
     virtual void syncLayerState(CoordinatedLayerID, CoordinatedGraphicsLayerState&) = 0;
@@ -127,9 +129,12 @@ public:
     void removeTile(uint32_t tileID) override;
 
     void setCoordinator(CoordinatedGraphicsLayerClient*);
+    void setCoordinatorIncludingSubLayersIfNeeded(CoordinatedGraphicsLayerClient*);
 
     void setNeedsVisibleRectAdjustment();
     void purgeBackingStores();
+
+    const RefPtr<Nicosia::CompositionLayer>& compositionLayer() const;
 
 private:
     bool isCoordinatedGraphicsLayer() const override { return true; }
@@ -184,6 +189,8 @@ private:
     FloatPoint m_adjustedPosition;
     FloatPoint3D m_adjustedAnchorPoint;
 
+    Color m_solidColor;
+
 #ifndef NDEBUG
     bool m_isPurging;
 #endif
@@ -218,6 +225,13 @@ private:
     Timer m_animationStartedTimer;
     TextureMapperAnimations m_animations;
     MonotonicTime m_lastAnimationStartTime;
+
+    struct {
+        RefPtr<Nicosia::CompositionLayer> layer;
+        Nicosia::CompositionLayer::LayerState::Delta delta;
+        Nicosia::CompositionLayer::LayerState::RepaintCounter repaintCounter;
+        Nicosia::CompositionLayer::LayerState::DebugBorder debugBorder;
+    } m_nicosia;
 };
 
 } // namespace WebCore

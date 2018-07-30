@@ -103,6 +103,7 @@ class DOMWrapperWorld;
 class Database;
 class DatabaseThread;
 class DeferredPromise;
+class DocumentAnimationScheduler;
 class DocumentFragment;
 class DocumentLoader;
 class DocumentMarkerController;
@@ -316,6 +317,15 @@ using RenderingContext = Variant<
     RefPtr<CanvasRenderingContext2D>
 >;
 
+class DocumentParserYieldToken {
+public:
+    WEBCORE_EXPORT DocumentParserYieldToken(Document&);
+    WEBCORE_EXPORT ~DocumentParserYieldToken();
+
+private:
+    WeakPtr<Document> m_document;
+};
+
 class Document
     : public ContainerNode
     , public TreeScope
@@ -391,6 +401,9 @@ public:
 
     void setViewportArguments(const ViewportArguments& viewportArguments) { m_viewportArguments = viewportArguments; }
     ViewportArguments viewportArguments() const { return m_viewportArguments; }
+
+    WEBCORE_EXPORT void setOverrideViewportArguments(const std::optional<ViewportArguments>&);
+
     OptionSet<DisabledAdaptations> disabledAdaptations() const { return m_disabledAdaptations; }
 #ifndef NDEBUG
     bool didDispatchViewportPropertiesChanged() const { return m_didDispatchViewportPropertiesChanged; }
@@ -549,7 +562,8 @@ public:
     float deviceScaleFactor() const;
 
     bool useSystemAppearance() const;
-    bool useDefaultAppearance() const;
+    bool useDarkAppearance() const;
+
     OptionSet<StyleColor::Options> styleColorOptions() const;
 
     WEBCORE_EXPORT Ref<Range> createRange();
@@ -599,8 +613,8 @@ public:
 
     // Override ScriptExecutionContext methods to do additional work
     WEBCORE_EXPORT bool shouldBypassMainWorldContentSecurityPolicy() const final;
-    void suspendActiveDOMObjects(ActiveDOMObject::ReasonForSuspension) final;
-    void resumeActiveDOMObjects(ActiveDOMObject::ReasonForSuspension) final;
+    void suspendActiveDOMObjects(ReasonForSuspension) final;
+    void resumeActiveDOMObjects(ReasonForSuspension) final;
     void stopActiveDOMObjects() final;
 
     void suspendDeviceMotionAndOrientationUpdates();
@@ -799,6 +813,8 @@ public:
     // In DOM Level 2, the Document's DOMWindow is called the defaultView.
     WEBCORE_EXPORT WindowProxy* windowProxy() const;
 
+    bool hasBrowsingContext() const { return !!frame(); }
+
     Document& contextDocument() const;
     void setContextDocument(Document& document) { m_contextDocument = makeWeakPtr(document); }
 
@@ -975,6 +991,8 @@ public:
     void pushCurrentScript(HTMLScriptElement*);
     void popCurrentScript();
 
+    bool shouldDeferAsynchronousScriptsUntilParsingFinishes() const;
+
 #if ENABLE(XSLT)
     void scheduleToApplyXSLTransforms();
     void applyPendingXSLTransformsNowIfScheduled();
@@ -1029,8 +1047,8 @@ public:
     void unregisterForDocumentSuspensionCallbacks(Element*);
 
     void documentWillBecomeInactive();
-    void suspend(ActiveDOMObject::ReasonForSuspension);
-    void resume(ActiveDOMObject::ReasonForSuspension);
+    void suspend(ReasonForSuspension);
+    void resume(ReasonForSuspension);
 
     void registerForMediaVolumeCallbacks(Element*);
     void unregisterForMediaVolumeCallbacks(Element*);
@@ -1153,6 +1171,9 @@ public:
     WEBCORE_EXPORT bool isAnimatingFullScreen() const;
     WEBCORE_EXPORT void setAnimatingFullScreen(bool);
 
+    WEBCORE_EXPORT bool areFullscreenControlsHidden() const;
+    WEBCORE_EXPORT void setFullscreenControlsHidden(bool);
+
     WEBCORE_EXPORT bool webkitFullscreenEnabled() const;
     Element* webkitFullscreenElement() const { return !m_fullScreenElementStack.isEmpty() ? m_fullScreenElementStack.last().get() : nullptr; }
     Element* webkitFullscreenElementForBindings() const { return ancestorElementInThisScope(webkitFullscreenElement()); }
@@ -1241,8 +1262,8 @@ public:
 
     bool isInDocumentWrite() { return m_writeRecursionDepth > 0; }
 
-    void suspendScheduledTasks(ActiveDOMObject::ReasonForSuspension);
-    void resumeScheduledTasks(ActiveDOMObject::ReasonForSuspension);
+    void suspendScheduledTasks(ReasonForSuspension);
+    void resumeScheduledTasks(ReasonForSuspension);
 
 #if ENABLE(CSS_DEVICE_ADAPTATION)
     IntSize initialViewportSize() const;
@@ -1255,6 +1276,13 @@ public:
     bool hasActiveParser();
     void incrementActiveParserCount() { ++m_activeParserCount; }
     void decrementActiveParserCount();
+
+    std::unique_ptr<DocumentParserYieldToken> createParserYieldToken()
+    {
+        return std::make_unique<DocumentParserYieldToken>(*this);
+    }
+
+    bool hasActiveParserYieldToken() const { return m_parserYieldTokenCount; }
 
     DocumentSharedObjectPool* sharedObjectPool() { return m_sharedObjectPool.get(); }
 
@@ -1332,8 +1360,8 @@ public:
     void removeViewportDependentPicture(HTMLPictureElement&);
 
 #if ENABLE(MEDIA_STREAM)
-    void setHasActiveMediaStreamTrack() { m_hasHadActiveMediaStreamTrack = true; }
-    bool hasHadActiveMediaStreamTrack() const { return m_hasHadActiveMediaStreamTrack; }
+    void setHasCaptureMediaStreamTrack() { m_hasHadCaptureMediaStreamTrack = true; }
+    bool hasHadCaptureMediaStreamTrack() const { return m_hasHadCaptureMediaStreamTrack; }
     void setDeviceIDHashSalt(const String& salt) { m_idHashSalt = salt; }
     String deviceIDHashSalt() const { return m_idHashSalt; }
     void stopMediaCapture();
@@ -1400,6 +1428,10 @@ public:
 
     WEBCORE_EXPORT void setConsoleMessageListener(RefPtr<StringCallback>&&); // For testing.
 
+#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+    DocumentAnimationScheduler& animationScheduler();
+#endif
+
     WEBCORE_EXPORT DocumentTimeline& timeline();
     DocumentTimeline* existingTimeline() const { return m_timeline.get(); }
     Vector<RefPtr<WebAnimation>> getAnimations();
@@ -1432,6 +1464,11 @@ public:
 
     void consumeTemporaryTimeUserGesture();
 
+    void registerArticleElement(Element&);
+    void unregisterArticleElement(Element&);
+    void updateMainArticleElementAfterLayout();
+    bool hasMainArticleElement() const { return !!m_mainArticleElement; }
+
 protected:
     enum ConstructionFlags { Synthesized = 1, NonRenderedPlaceholder = 1 << 1 };
     Document(Frame*, const URL&, unsigned = DefaultDocumentClass, unsigned constructionFlags = 0);
@@ -1441,6 +1478,7 @@ protected:
     virtual Ref<Document> cloneDocumentWithoutChildren() const;
 
 private:
+    friend class DocumentParserYieldToken;
     friend class Node;
     friend class IgnoreDestructiveWriteCountIncrementer;
     friend class IgnoreOpensDuringUnloadCountIncrementer;
@@ -1559,6 +1597,8 @@ private:
     Ref<CachedResourceLoader> m_cachedResourceLoader;
     RefPtr<DocumentParser> m_parser;
 
+    unsigned m_parserYieldTokenCount { 0 };
+
     // Document URLs.
     URL m_url; // Document.URL: The URL from which this document was retrieved.
     URL m_baseURL; // Node.baseURI: The URL to use when resolving relative URLs.
@@ -1673,6 +1713,9 @@ private:
     HashSet<Element*> m_captionPreferencesChangedElements;
 #endif
 
+    Element* m_mainArticleElement { nullptr };
+    HashSet<Element*> m_articleElements;
+
 #if ENABLE(MEDIA_CONTROLS_SCRIPT)
     HashSet<HTMLMediaElement*> m_pageScaleFactorChangedElements;
     HashSet<HTMLMediaElement*> m_userInterfaceLayoutDirectionChangedElements;
@@ -1708,6 +1751,7 @@ private:
 
     bool m_areKeysEnabledInFullScreen { false };
     bool m_isAnimatingFullScreen { false };
+    bool m_areFullscreenControlsHidden { false };
 #endif
 
     HashSet<HTMLPictureElement*> m_viewportDependentPictures;
@@ -1715,6 +1759,7 @@ private:
     Timer m_loadEventDelayTimer;
 
     ViewportArguments m_viewportArguments;
+    std::optional<ViewportArguments> m_overrideViewportArguments;
     OptionSet<DisabledAdaptations> m_disabledAdaptations;
 
     DocumentTiming m_documentTiming;
@@ -1895,7 +1940,7 @@ private:
 #if ENABLE(MEDIA_STREAM)
     HashSet<HTMLMediaElement*> m_mediaStreamStateChangeElements;
     String m_idHashSalt;
-    bool m_hasHadActiveMediaStreamTrack { false };
+    bool m_hasHadCaptureMediaStreamTrack { false };
 #endif
 
 #ifndef NDEBUG
@@ -1912,6 +1957,9 @@ private:
     bool m_hasFrameSpecificStorageAccess { false };
     bool m_grantStorageAccessOverride { false };
 
+#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
+    RefPtr<DocumentAnimationScheduler> m_animationScheduler;
+#endif
     RefPtr<DocumentTimeline> m_timeline;
     DocumentIdentifier m_identifier;
 

@@ -1257,12 +1257,12 @@ IntRect Element::screenRect() const
     return IntRect();
 }
 
-const AtomicString& Element::getAttribute(const AtomicString& localName) const
+const AtomicString& Element::getAttribute(const AtomicString& qualifiedName) const
 {
     if (!elementData())
         return nullAtom();
-    synchronizeAttribute(localName);
-    if (const Attribute* attribute = elementData()->findAttributeByName(localName, shouldIgnoreAttributeCase(*this)))
+    synchronizeAttribute(qualifiedName);
+    if (const Attribute* attribute = elementData()->findAttributeByName(qualifiedName, shouldIgnoreAttributeCase(*this)))
         return attribute->value();
     return nullAtom();
 }
@@ -1272,15 +1272,40 @@ const AtomicString& Element::getAttributeNS(const AtomicString& namespaceURI, co
     return getAttribute(QualifiedName(nullAtom(), localName, namespaceURI));
 }
 
-ExceptionOr<void> Element::setAttribute(const AtomicString& localName, const AtomicString& value)
+// https://dom.spec.whatwg.org/#dom-element-toggleattribute
+ExceptionOr<bool> Element::toggleAttribute(const AtomicString& qualifiedName, std::optional<bool> force)
 {
-    if (!Document::isValidName(localName))
+    if (!Document::isValidName(qualifiedName))
         return Exception { InvalidCharacterError };
 
-    synchronizeAttribute(localName);
-    auto caseAdjustedLocalName = shouldIgnoreAttributeCase(*this) ? localName.convertToASCIILowercase() : localName;
-    unsigned index = elementData() ? elementData()->findAttributeIndexByName(caseAdjustedLocalName, false) : ElementData::attributeNotFound;
-    auto name = index != ElementData::attributeNotFound ? attributeAt(index).name() : QualifiedName { nullAtom(), caseAdjustedLocalName, nullAtom() };
+    synchronizeAttribute(qualifiedName);
+
+    auto caseAdjustedQualifiedName = shouldIgnoreAttributeCase(*this) ? qualifiedName.convertToASCIILowercase() : qualifiedName;
+    unsigned index = elementData() ? elementData()->findAttributeIndexByName(caseAdjustedQualifiedName, false) : ElementData::attributeNotFound;
+    if (index == ElementData::attributeNotFound) {
+        if (!force || *force) {
+            setAttributeInternal(index, QualifiedName { nullAtom(), caseAdjustedQualifiedName, nullAtom() }, emptyString(), NotInSynchronizationOfLazyAttribute);
+            return true;
+        }
+        return false;
+    }
+
+    if (!force || !*force) {
+        removeAttributeInternal(index, NotInSynchronizationOfLazyAttribute);
+        return false;
+    }
+    return true;
+}
+
+ExceptionOr<void> Element::setAttribute(const AtomicString& qualifiedName, const AtomicString& value)
+{
+    if (!Document::isValidName(qualifiedName))
+        return Exception { InvalidCharacterError };
+
+    synchronizeAttribute(qualifiedName);
+    auto caseAdjustedQualifiedName = shouldIgnoreAttributeCase(*this) ? qualifiedName.convertToASCIILowercase() : qualifiedName;
+    unsigned index = elementData() ? elementData()->findAttributeIndexByName(caseAdjustedQualifiedName, false) : ElementData::attributeNotFound;
+    auto name = index != ElementData::attributeNotFound ? attributeAt(index).name() : QualifiedName { nullAtom(), caseAdjustedQualifiedName, nullAtom() };
     setAttributeInternal(index, name, value, NotInSynchronizationOfLazyAttribute);
 
     return { };
@@ -1728,6 +1753,9 @@ Node::InsertedIntoAncestorResult Element::insertedIntoAncestor(InsertionType ins
             CustomElementReactionQueue::enqueueConnectedCallbackIfNeeded(*this);
     }
 
+    if (UNLIKELY(hasTagName(articleTag) && newDocument))
+        newDocument->registerArticleElement(*this);
+
     return InsertedIntoAncestorResult::Done;
 }
 
@@ -1775,6 +1803,8 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
         if (oldDocument) {
             if (oldDocument->cssTarget() == this)
                 oldDocument->setCSSTarget(nullptr);
+            if (UNLIKELY(hasTagName(articleTag)))
+                oldDocument->unregisterArticleElement(*this);
         }
 
         if (removalType.disconnectedFromDocument && UNLIKELY(isDefinedCustomElement()))
@@ -2388,15 +2418,15 @@ void Element::addAttributeInternal(const QualifiedName& name, const AtomicString
     didAddAttribute(name, value);
 }
 
-bool Element::removeAttribute(const AtomicString& name)
+bool Element::removeAttribute(const AtomicString& qualifiedName)
 {
     if (!elementData())
         return false;
 
-    AtomicString localName = shouldIgnoreAttributeCase(*this) ? name.convertToASCIILowercase() : name;
-    unsigned index = elementData()->findAttributeIndexByName(localName, false);
+    AtomicString caseAdjustedQualifiedName = shouldIgnoreAttributeCase(*this) ? qualifiedName.convertToASCIILowercase() : qualifiedName;
+    unsigned index = elementData()->findAttributeIndexByName(caseAdjustedQualifiedName, false);
     if (index == ElementData::attributeNotFound) {
-        if (UNLIKELY(localName == styleAttr) && elementData()->styleAttributeIsDirty() && is<StyledElement>(*this))
+        if (UNLIKELY(caseAdjustedQualifiedName == styleAttr) && elementData()->styleAttributeIsDirty() && is<StyledElement>(*this))
             downcast<StyledElement>(*this).removeAllInlineStyleProperties();
         return false;
     }
@@ -2410,12 +2440,12 @@ bool Element::removeAttributeNS(const AtomicString& namespaceURI, const AtomicSt
     return removeAttribute(QualifiedName(nullAtom(), localName, namespaceURI));
 }
 
-RefPtr<Attr> Element::getAttributeNode(const AtomicString& localName)
+RefPtr<Attr> Element::getAttributeNode(const AtomicString& qualifiedName)
 {
     if (!elementData())
         return nullptr;
-    synchronizeAttribute(localName);
-    const Attribute* attribute = elementData()->findAttributeByName(localName, shouldIgnoreAttributeCase(*this));
+    synchronizeAttribute(qualifiedName);
+    const Attribute* attribute = elementData()->findAttributeByName(qualifiedName, shouldIgnoreAttributeCase(*this));
     if (!attribute)
         return nullptr;
     return ensureAttr(attribute->name());
@@ -2433,12 +2463,12 @@ RefPtr<Attr> Element::getAttributeNodeNS(const AtomicString& namespaceURI, const
     return ensureAttr(attribute->name());
 }
 
-bool Element::hasAttribute(const AtomicString& localName) const
+bool Element::hasAttribute(const AtomicString& qualifiedName) const
 {
     if (!elementData())
         return false;
-    synchronizeAttribute(localName);
-    return elementData()->findAttributeByName(localName, shouldIgnoreAttributeCase(*this));
+    synchronizeAttribute(qualifiedName);
+    return elementData()->findAttributeByName(qualifiedName, shouldIgnoreAttributeCase(*this));
 }
 
 bool Element::hasAttributeNS(const AtomicString& namespaceURI, const AtomicString& localName) const
@@ -2746,7 +2776,7 @@ const RenderStyle& Element::resolveComputedStyle()
     ASSERT(isConnected());
     ASSERT(!existingComputedStyle());
 
-    Deque<Element*, 32> elementsRequiringComputedStyle({ this });
+    Deque<RefPtr<Element>, 32> elementsRequiringComputedStyle({ this });
     const RenderStyle* computedStyle = nullptr;
 
     // Collect ancestors until we find one that has style.
@@ -2760,7 +2790,7 @@ const RenderStyle& Element::resolveComputedStyle()
     }
 
     // Resolve and cache styles starting from the most distant ancestor.
-    for (auto* element : elementsRequiringComputedStyle) {
+    for (auto& element : elementsRequiringComputedStyle) {
         auto style = document().styleForElementIgnoringPendingStylesheets(*element, computedStyle);
         computedStyle = style.get();
         ElementRareData& rareData = element->ensureElementRareData();
@@ -3833,7 +3863,7 @@ Vector<RefPtr<WebAnimation>> Element::getAnimations()
 
     Vector<RefPtr<WebAnimation>> animations;
     if (auto timeline = document().existingTimeline()) {
-        for (auto& animation : timeline->animationsForElement(*this)) {
+        for (auto& animation : timeline->animationsForElement(*this, AnimationTimeline::Ordering::Sorted)) {
             if (animation->canBeListed())
                 animations.append(animation);
         }

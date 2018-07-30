@@ -74,11 +74,14 @@ NetworkConnectionToWebProcess::NetworkConnectionToWebProcess(IPC::Connection::Id
     , m_mdnsRegister(*this)
 #endif
 {
+    RELEASE_ASSERT(RunLoop::isMain());
     m_connection->open();
 }
 
 NetworkConnectionToWebProcess::~NetworkConnectionToWebProcess()
 {
+    RELEASE_ASSERT(RunLoop::isMain());
+
     m_connection->invalidate();
 #if USE(LIBWEBRTC)
     if (m_rtcProvider)
@@ -88,6 +91,8 @@ NetworkConnectionToWebProcess::~NetworkConnectionToWebProcess()
 
 void NetworkConnectionToWebProcess::didCleanupResourceLoader(NetworkResourceLoader& loader)
 {
+    RELEASE_ASSERT(loader.identifier());
+    RELEASE_ASSERT(RunLoop::isMain());
     ASSERT(m_networkResourceLoaders.get(loader.identifier()) == &loader);
 
     m_networkResourceLoaders.remove(loader.identifier());
@@ -101,18 +106,18 @@ void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connectio
     }
 
     if (decoder.messageReceiverName() == Messages::NetworkResourceLoader::messageReceiverName()) {
-        auto loaderIterator = m_networkResourceLoaders.find(decoder.destinationID());
-        if (loaderIterator != m_networkResourceLoaders.end())
-            loaderIterator->value->didReceiveNetworkResourceLoaderMessage(connection, decoder);
+        RELEASE_ASSERT(RunLoop::isMain());
+        RELEASE_ASSERT(decoder.destinationID());
+        if (auto* loader = m_networkResourceLoaders.get(decoder.destinationID()))
+            loader->didReceiveNetworkResourceLoaderMessage(connection, decoder);
         return;
     }
 
     if (decoder.messageReceiverName() == Messages::NetworkSocketStream::messageReceiverName()) {
-        auto socketIterator = m_networkSocketStreams.find(decoder.destinationID());
-        if (socketIterator != m_networkSocketStreams.end()) {
-            socketIterator->value->didReceiveMessage(connection, decoder);
+        if (auto* socketStream = m_networkSocketStreams.get(decoder.destinationID())) {
+            socketStream->didReceiveMessage(connection, decoder);
             if (decoder.messageName() == Messages::NetworkSocketStream::Close::name())
-                m_networkSocketStreams.remove(socketIterator);
+                m_networkSocketStreams.remove(decoder.destinationID());
         }
         return;
     }
@@ -176,9 +181,8 @@ void NetworkConnectionToWebProcess::didClose(IPC::Connection&)
     // Protect ourself as we might be otherwise be deleted during this function.
     Ref<NetworkConnectionToWebProcess> protector(*this);
 
-    for (auto& loader : copyToVector(m_networkResourceLoaders.values()))
-        loader->abort();
-    ASSERT(m_networkResourceLoaders.isEmpty());
+    while (!m_networkResourceLoaders.isEmpty())
+        m_networkResourceLoaders.begin()->value->abort();
 
     // All trackers of resources that were in the middle of being loaded were
     // stopped with the abort() calls above, but we still need to sweep up the
@@ -238,39 +242,35 @@ void NetworkConnectionToWebProcess::endSuspension()
 void NetworkConnectionToWebProcess::scheduleResourceLoad(NetworkResourceLoadParameters&& loadParameters)
 {
     auto identifier = loadParameters.identifier;
+    RELEASE_ASSERT(identifier);
+    RELEASE_ASSERT(RunLoop::isMain());
     ASSERT(!m_networkResourceLoaders.contains(identifier));
 
     auto loader = NetworkResourceLoader::create(WTFMove(loadParameters), *this);
-    m_networkResourceLoaders.add(identifier, loader.ptr());
+    m_networkResourceLoaders.add(identifier, loader.copyRef());
     loader->start();
 }
 
 void NetworkConnectionToWebProcess::performSynchronousLoad(NetworkResourceLoadParameters&& loadParameters, Messages::NetworkConnectionToWebProcess::PerformSynchronousLoad::DelayedReply&& reply)
 {
     auto identifier = loadParameters.identifier;
+    RELEASE_ASSERT(identifier);
+    RELEASE_ASSERT(RunLoop::isMain());
     ASSERT(!m_networkResourceLoaders.contains(identifier));
 
     auto loader = NetworkResourceLoader::create(WTFMove(loadParameters), *this, WTFMove(reply));
-    m_networkResourceLoaders.add(identifier, loader.ptr());
+    m_networkResourceLoaders.add(identifier, loader.copyRef());
     loader->start();
 }
 
 void NetworkConnectionToWebProcess::loadPing(NetworkResourceLoadParameters&& loadParameters)
 {
-    auto completionHandler = [this, protectedThis = makeRef(*this), identifier = loadParameters.identifier] (const ResourceError& error, const ResourceResponse& response) {
-        didFinishPingLoad(identifier, error, response);
+    auto completionHandler = [connection = m_connection.copyRef(), identifier = loadParameters.identifier] (const ResourceError& error, const ResourceResponse& response) {
+        connection->send(Messages::NetworkProcessConnection::DidFinishPingLoad(identifier, error, response), 0);
     };
 
     // PingLoad manages its own lifetime, deleting itself when its purpose has been fulfilled.
-    new PingLoad(WTFMove(loadParameters), *this, WTFMove(completionHandler));
-}
-
-void NetworkConnectionToWebProcess::didFinishPingLoad(uint64_t pingLoadIdentifier, const ResourceError& error, const ResourceResponse& response)
-{
-    if (!m_connection->isValid())
-        return;
-
-    m_connection->send(Messages::NetworkProcessConnection::DidFinishPingLoad(pingLoadIdentifier, error, response), 0);
+    new PingLoad(WTFMove(loadParameters), WTFMove(completionHandler));
 }
 
 void NetworkConnectionToWebProcess::setOnLineState(bool isOnLine)
@@ -280,6 +280,9 @@ void NetworkConnectionToWebProcess::setOnLineState(bool isOnLine)
 
 void NetworkConnectionToWebProcess::removeLoadIdentifier(ResourceLoadIdentifier identifier)
 {
+    RELEASE_ASSERT(identifier);
+    RELEASE_ASSERT(RunLoop::isMain());
+
     RefPtr<NetworkResourceLoader> loader = m_networkResourceLoaders.get(identifier);
 
     // It's possible we have no loader for this identifier if the NetworkProcess crashed and this was a respawned NetworkProcess.
@@ -299,6 +302,9 @@ void NetworkConnectionToWebProcess::pageLoadCompleted(uint64_t webPageID)
 
 void NetworkConnectionToWebProcess::setDefersLoading(ResourceLoadIdentifier identifier, bool defers)
 {
+    RELEASE_ASSERT(identifier);
+    RELEASE_ASSERT(RunLoop::isMain());
+
     RefPtr<NetworkResourceLoader> loader = m_networkResourceLoaders.get(identifier);
     if (!loader)
         return;
@@ -352,6 +358,8 @@ void NetworkConnectionToWebProcess::startDownload(PAL::SessionID sessionID, Down
 
 void NetworkConnectionToWebProcess::convertMainResourceLoadToDownload(PAL::SessionID sessionID, uint64_t mainResourceLoadIdentifier, DownloadID downloadID, const ResourceRequest& request, const ResourceResponse& response)
 {
+    RELEASE_ASSERT(RunLoop::isMain());
+
     auto& networkProcess = NetworkProcess::singleton();
     // In case a response is served from service worker, we do not have yet the ability to convert the load.
     if (!mainResourceLoadIdentifier || response.source() == ResourceResponse::Source::ServiceWorker) {

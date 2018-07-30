@@ -447,11 +447,11 @@ ExceptionOr<void> XMLHttpRequest::send(Document& document)
         if (!m_requestHeaders.contains(HTTPHeaderName::ContentType)) {
 #if ENABLE(DASHBOARD_SUPPORT)
             if (usesDashboardBackwardCompatibilityMode())
-                m_requestHeaders.set(HTTPHeaderName::ContentType, ASCIILiteral("application/x-www-form-urlencoded"));
+                m_requestHeaders.set(HTTPHeaderName::ContentType, "application/x-www-form-urlencoded"_s);
             else
 #endif
                 // FIXME: this should include the charset used for encoding.
-                m_requestHeaders.set(HTTPHeaderName::ContentType, document.isHTMLDocument() ? ASCIILiteral("text/html;charset=UTF-8") : ASCIILiteral("application/xml;charset=UTF-8"));
+                m_requestHeaders.set(HTTPHeaderName::ContentType, document.isHTMLDocument() ? "text/html;charset=UTF-8"_s : "application/xml;charset=UTF-8"_s);
         }
 
         // FIXME: According to XMLHttpRequest Level 2, this should use the Document.innerHTML algorithm
@@ -474,7 +474,7 @@ ExceptionOr<void> XMLHttpRequest::send(const String& body)
         if (contentType.isNull()) {
 #if ENABLE(DASHBOARD_SUPPORT)
             if (usesDashboardBackwardCompatibilityMode())
-                m_requestHeaders.set(HTTPHeaderName::ContentType, ASCIILiteral("application/x-www-form-urlencoded"));
+                m_requestHeaders.set(HTTPHeaderName::ContentType, "application/x-www-form-urlencoded"_s);
             else
 #endif
                 m_requestHeaders.set(HTTPHeaderName::ContentType, HTTPHeaderValues::textPlainContentType());
@@ -531,7 +531,7 @@ ExceptionOr<void> XMLHttpRequest::send(DOMFormData& body)
 
 ExceptionOr<void> XMLHttpRequest::send(ArrayBuffer& body)
 {
-    ASCIILiteral consoleMessage("ArrayBuffer is deprecated in XMLHttpRequest.send(). Use ArrayBufferView instead.");
+    ASCIILiteral consoleMessage { "ArrayBuffer is deprecated in XMLHttpRequest.send(). Use ArrayBufferView instead."_s };
     scriptExecutionContext()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, consoleMessage);
     return sendBytesData(body.data(), body.byteLength());
 }
@@ -579,7 +579,7 @@ ExceptionOr<void> XMLHttpRequest::createRequest()
         request.setHTTPHeaderFields(m_requestHeaders);
 
     ThreadableLoaderOptions options;
-    options.sendLoadCallbacks = SendCallbacks;
+    options.sendLoadCallbacks = SendCallbackPolicy::SendCallbacks;
     // The presence of upload event listeners forces us to use preflighting because POSTing to an URL that does not
     // permit cross origin requests should look exactly like POSTing to an URL that does not respond at all.
     options.preflightPolicy = m_uploadListenerFlag ? PreflightPolicy::Force : PreflightPolicy::Consider;
@@ -846,7 +846,7 @@ String XMLHttpRequest::responseMIMEType() const
         else
             mimeType = m_response.mimeType();
         if (mimeType.isEmpty())
-            mimeType = ASCIILiteral("text/xml");
+            mimeType = "text/xml"_s;
     }
     return mimeType;
 }
@@ -1115,7 +1115,7 @@ void XMLHttpRequest::suspend(ReasonForSuspension reason)
         m_dispatchErrorOnResuming = true;
     }
 
-    if (reason == ActiveDOMObject::PageCache && m_loader) {
+    if (reason == ReasonForSuspension::PageCache && m_loader) {
         // Going into PageCache, abort the request and dispatch a network error on resuming.
         genericError();
         m_dispatchErrorOnResuming = true;

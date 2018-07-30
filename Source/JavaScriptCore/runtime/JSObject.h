@@ -71,14 +71,14 @@ struct HashTable;
 struct HashTableValue;
 
 JS_EXPORT_PRIVATE JSObject* throwTypeError(ExecState*, ThrowScope&, const String&);
-extern JS_EXPORT_PRIVATE const char* const NonExtensibleObjectPropertyDefineError;
-extern JS_EXPORT_PRIVATE const char* const ReadonlyPropertyWriteError;
-extern JS_EXPORT_PRIVATE const char* const ReadonlyPropertyChangeError;
-extern JS_EXPORT_PRIVATE const char* const UnableToDeletePropertyError;
-extern JS_EXPORT_PRIVATE const char* const UnconfigurablePropertyChangeAccessMechanismError;
-extern JS_EXPORT_PRIVATE const char* const UnconfigurablePropertyChangeConfigurabilityError;
-extern JS_EXPORT_PRIVATE const char* const UnconfigurablePropertyChangeEnumerabilityError;
-extern JS_EXPORT_PRIVATE const char* const UnconfigurablePropertyChangeWritabilityError;
+extern JS_EXPORT_PRIVATE const ASCIILiteral NonExtensibleObjectPropertyDefineError;
+extern JS_EXPORT_PRIVATE const ASCIILiteral ReadonlyPropertyWriteError;
+extern JS_EXPORT_PRIVATE const ASCIILiteral ReadonlyPropertyChangeError;
+extern JS_EXPORT_PRIVATE const ASCIILiteral UnableToDeletePropertyError;
+extern JS_EXPORT_PRIVATE const ASCIILiteral UnconfigurablePropertyChangeAccessMechanismError;
+extern JS_EXPORT_PRIVATE const ASCIILiteral UnconfigurablePropertyChangeConfigurabilityError;
+extern JS_EXPORT_PRIVATE const ASCIILiteral UnconfigurablePropertyChangeEnumerabilityError;
+extern JS_EXPORT_PRIVATE const ASCIILiteral UnconfigurablePropertyChangeWritabilityError;
 
 COMPILE_ASSERT(PropertyAttribute::None < FirstInternalAttribute, None_is_below_FirstInternalAttribute);
 COMPILE_ASSERT(PropertyAttribute::ReadOnly < FirstInternalAttribute, ReadOnly_is_below_FirstInternalAttribute);
@@ -114,11 +114,11 @@ public:
     // JSFinalObject or a JSArray. This is the method that will do that.
     static JSObject* createRawObject(ExecState* exec, Structure* structure, Butterfly* = nullptr);
 
-    JS_EXPORT_PRIVATE static size_t estimatedSize(JSCell*);
+    JS_EXPORT_PRIVATE static size_t estimatedSize(JSCell*, VM&);
     JS_EXPORT_PRIVATE static void visitChildren(JSCell*, SlotVisitor&);
     JS_EXPORT_PRIVATE static void heapSnapshot(JSCell*, HeapSnapshotBuilder&);
 
-    JS_EXPORT_PRIVATE static String className(const JSObject*);
+    JS_EXPORT_PRIVATE static String className(const JSObject*, VM&);
     JS_EXPORT_PRIVATE static String calculatedClassName(JSObject*);
 
     // This function is what Object.prototype.toString() will use to get the name of
@@ -167,6 +167,7 @@ public:
     JSValue get(ExecState*, PropertyName) const;
     JSValue get(ExecState*, unsigned propertyName) const;
 
+    template<bool checkNullStructure = false>
     bool getPropertySlot(ExecState*, PropertyName, PropertySlot&);
     bool getPropertySlot(ExecState*, unsigned propertyName, PropertySlot&);
     template<typename CallbackWhenNoException> typename std::result_of<CallbackWhenNoException(bool, PropertySlot&)>::type getPropertySlot(ExecState*, PropertyName, CallbackWhenNoException) const;
@@ -717,6 +718,7 @@ public:
 
     // Fast access to known property offsets.
     ALWAYS_INLINE JSValue getDirect(PropertyOffset offset) const { return locationForOffset(offset)->get(); }
+    JSValue getDirectConcurrently(Structure* expectedStructure, PropertyOffset) const;
     void putDirect(VM& vm, PropertyOffset offset, JSValue value) { locationForOffset(offset)->set(vm, this, value); }
     void putDirectWithoutBarrier(PropertyOffset offset, JSValue value) { locationForOffset(offset)->setWithoutWriteBarrier(value); }
     void putDirectUndefined(PropertyOffset offset) { locationForOffset(offset)->setUndefined(); }
@@ -758,7 +760,7 @@ public:
     // You should only call isStructureExtensible() when:
     // - Performing this check in a way that isn't described in the specification 
     //   as calling the virtual [[IsExtensible]] trap.
-    // - When you're guaranteed that object->methodTable()->isExtensible isn't
+    // - When you're guaranteed that object->methodTable(vm)->isExtensible isn't
     //   overridden.
     ALWAYS_INLINE bool isStructureExtensible(VM& vm) { return structure(vm)->isStructureExtensible(); }
     // You should call this when performing [[IsExtensible]] trap in a place
@@ -822,34 +824,34 @@ public:
     // indexing should be sparse, we're having a bad time, or because
     // we already have a more general form of storage (double,
     // contiguous, array storage).
-    ContiguousJSValues ensureWritableInt32(VM& vm)
+    ContiguousJSValues tryMakeWritableInt32(VM& vm)
     {
         if (LIKELY(hasInt32(indexingType()) && !isCopyOnWrite(indexingMode())))
             return m_butterfly->contiguousInt32();
             
-        return ensureWritableInt32Slow(vm);
+        return tryMakeWritableInt32Slow(vm);
     }
         
     // Returns 0 if double storage cannot be created - either because
     // indexing should be sparse, we're having a bad time, or because
     // we already have a more general form of storage (contiguous,
     // or array storage).
-    ContiguousDoubles ensureWritableDouble(VM& vm)
+    ContiguousDoubles tryMakeWritableDouble(VM& vm)
     {
         if (LIKELY(hasDouble(indexingType()) && !isCopyOnWrite(indexingMode())))
             return m_butterfly->contiguousDouble();
             
-        return ensureWritableDoubleSlow(vm);
+        return tryMakeWritableDoubleSlow(vm);
     }
         
     // Returns 0 if contiguous storage cannot be created - either because
     // indexing should be sparse or because we're having a bad time.
-    ContiguousJSValues ensureWritableContiguous(VM& vm)
+    ContiguousJSValues tryMakeWritableContiguous(VM& vm)
     {
         if (LIKELY(hasContiguous(indexingType()) && !isCopyOnWrite(indexingMode())))
             return m_butterfly->contiguous();
             
-        return ensureWritableContiguousSlow(vm);
+        return tryMakeWritableContiguousSlow(vm);
     }
 
     // Ensure that the object is in a mode where it has array storage. Use
@@ -943,7 +945,7 @@ protected:
     void convertDoubleForValue(VM&, JSValue);
     void convertFromCopyOnWrite(VM&);
 
-    static Butterfly* createArrayStorageButterfly(VM&, JSCell* intendedOwner, Structure*, unsigned length, unsigned vectorLength, Butterfly* oldButterfly = nullptr);
+    static Butterfly* createArrayStorageButterfly(VM&, JSObject* intendedOwner, Structure*, unsigned length, unsigned vectorLength, Butterfly* oldButterfly = nullptr);
     ArrayStorage* createArrayStorage(VM&, unsigned length, unsigned vectorLength);
     ArrayStorage* createInitialArrayStorage(VM&);
         
@@ -1059,9 +1061,9 @@ private:
         
     bool ensureLengthSlow(VM&, unsigned length);
         
-    ContiguousJSValues ensureWritableInt32Slow(VM&);
-    ContiguousDoubles ensureWritableDoubleSlow(VM&);
-    ContiguousJSValues ensureWritableContiguousSlow(VM&);
+    ContiguousJSValues tryMakeWritableInt32Slow(VM&);
+    ContiguousDoubles tryMakeWritableDoubleSlow(VM&);
+    ContiguousJSValues tryMakeWritableContiguousSlow(VM&);
     JS_EXPORT_PRIVATE ArrayStorage* ensureArrayStorageSlow(VM&);
 
     PropertyOffset prepareToPutDirectWithoutTransition(VM&, PropertyName, unsigned attributes, StructureID, Structure*);
@@ -1320,6 +1322,18 @@ inline JSValue JSObject::getPrototype(VM& vm, ExecState* exec)
     return getPrototypeMethod(this, exec);
 }
 
+// Normally, we never shrink the butterfly so if we know an offset is valid for some
+// past structure then it should be valid for any new structure. However, we may sometimes
+// shrink the butterfly when we are holding the Structure's ConcurrentJSLock, such as when we
+// flatten an object.
+inline JSValue JSObject::getDirectConcurrently(Structure* structure, PropertyOffset offset) const
+{
+    ConcurrentJSLocker locker(structure->lock());
+    if (!structure->isValidOffset(offset))
+        return { };
+    return getDirect(offset);
+}
+
 // It is safe to call this method with a PropertyName that is actually an index,
 // but if so will always return false (doesn't search index storage).
 ALWAYS_INLINE bool JSObject::getOwnNonIndexPropertySlot(VM& vm, Structure* structure, PropertyName propertyName, PropertySlot& slot)
@@ -1389,6 +1403,7 @@ ALWAYS_INLINE bool JSObject::getOwnPropertySlot(JSObject* object, ExecState* exe
 
 // It may seem crazy to inline a function this large but it makes a big difference
 // since this is function very hot in variable lookup
+template<bool checkNullStructure>
 ALWAYS_INLINE bool JSObject::getPropertySlot(ExecState* exec, PropertyName propertyName, PropertySlot& slot)
 {
     VM& vm = exec->vm();
@@ -1408,6 +1423,10 @@ ALWAYS_INLINE bool JSObject::getPropertySlot(ExecState* exec, PropertyName prope
         }
         ASSERT(object->type() != ProxyObjectType);
         Structure* structure = structureIDTable.get(object->structureID());
+#if USE(JSVALUE64)
+        if (checkNullStructure && UNLIKELY(!structure))
+            CRASH_WITH_INFO(object->type(), object->structureID(), structureIDTable.size());
+#endif
         if (object->getOwnNonIndexPropertySlot(vm, structure, propertyName, slot))
             return true;
         // FIXME: This doesn't look like it's following the specification:

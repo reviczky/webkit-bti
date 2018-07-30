@@ -28,6 +28,7 @@
 #include "Color.h"
 #include "ContainerNode.h"
 #include "FrameViewLayoutContext.h"
+#include "GraphicsContext.h"
 #include "LayoutMilestones.h"
 #include "LayoutRect.h"
 #include "Pagination.h"
@@ -211,8 +212,9 @@ public:
     WEBCORE_EXPORT void adjustViewSize();
 
     WEBCORE_EXPORT void setViewportSizeForCSSViewportUnits(IntSize);
+    void clearViewportSizeOverrideForCSSViewportUnits();
     IntSize viewportSizeForCSSViewportUnits() const;
-    
+
     IntRect windowClipRect() const final;
     WEBCORE_EXPORT IntRect windowClipRectForFrameOwner(const HTMLFrameOwnerElement*, bool clipToLayerContents) const;
 
@@ -392,6 +394,7 @@ public:
     void incrementVisuallyNonEmptyCharacterCount(unsigned);
     void incrementVisuallyNonEmptyPixelCount(const IntSize&);
     void updateIsVisuallyNonEmpty();
+    void updateSignificantRenderedTextMilestoneIfNeeded();
     bool isVisuallyNonEmpty() const { return m_isVisuallyNonEmpty; }
     WEBCORE_EXPORT void enableAutoSizeMode(bool enable, const IntSize& minSize, const IntSize& maxSize);
     WEBCORE_EXPORT void setAutoSizeFixedMinimumHeight(int);
@@ -637,6 +640,10 @@ public:
 
     WEBCORE_EXPORT FrameFlattening effectiveFrameFlattening() const;
 
+    WEBCORE_EXPORT void traverseForPaintInvalidation(GraphicsContext::PaintInvalidationReasons);
+    void invalidateControlTints() { traverseForPaintInvalidation(GraphicsContext::PaintInvalidationReasons::InvalidatingControlTints); }
+    void invalidateImagesWithAsyncDecodes() { traverseForPaintInvalidation(GraphicsContext::PaintInvalidationReasons::InvalidatingImagesWithAsyncDecodes); }
+
 protected:
     bool scrollContentsFastPath(const IntSize& scrollDelta, const IntRect& rectToScroll, const IntRect& clipRect) final;
     void scrollContentsSlowPath(const IntRect& updateRect) final;
@@ -679,8 +686,6 @@ private:
     void applyPaginationToViewport();
 
     void updateOverflowStatus(bool horizontalOverflow, bool verticalOverflow);
-
-    WEBCORE_EXPORT void paintControlTints();
 
     void forceLayoutParentViewIfNeeded();
     void flushPostLayoutTasksQueue();
@@ -782,6 +787,14 @@ private:
     void willDoLayout(WeakPtr<RenderElement> layoutRoot);
     void didLayout(WeakPtr<RenderElement> layoutRoot);
 
+    struct OverrideViewportSize {
+        std::optional<int> width;
+        std::optional<int> height;
+
+        bool operator==(const OverrideViewportSize& rhs) const { return rhs.width == width && rhs.height == height; }
+    };
+    void overrideViewportSizeForCSSViewportUnits(OverrideViewportSize);
+
     HashSet<Widget*> m_widgetsInRenderTree;
 
     static MonotonicTime sCurrentPaintTimeStamp; // used for detecting decoded resource thrash in the cache
@@ -849,6 +862,10 @@ private:
     bool m_isVisuallyNonEmpty;
     bool m_firstVisuallyNonEmptyLayoutCallbackPending;
 
+    unsigned m_renderTextCountForVisuallyNonEmptyCharacters;
+    bool m_renderedSignificantAmountOfText;
+    bool m_significantRenderedTextMilestonePending;
+
     bool m_needsDeferredScrollbarsUpdate { false };
 
     RefPtr<ContainerNode> m_maintainScrollPositionAnchor;
@@ -867,8 +884,7 @@ private:
     IntSize m_customSizeForResizeEvent;
 #endif
 
-    IntSize m_overrideViewportSize;
-    bool m_hasOverrideViewportSize;
+    std::optional<OverrideViewportSize> m_overrideViewportSize;
 
     // If true, automatically resize the frame view around its content.
     bool m_shouldAutoSize;
@@ -915,12 +931,14 @@ private:
 
 inline void FrameView::incrementVisuallyNonEmptyCharacterCount(unsigned count)
 {
-    if (m_isVisuallyNonEmpty)
+    if (m_isVisuallyNonEmpty && m_renderedSignificantAmountOfText)
         return;
     m_visuallyNonEmptyCharacterCount += count;
-    if (m_visuallyNonEmptyCharacterCount <= visualCharacterThreshold)
-        return;
-    updateIsVisuallyNonEmpty();
+    ++m_renderTextCountForVisuallyNonEmptyCharacters;
+    if (!m_isVisuallyNonEmpty && m_visuallyNonEmptyCharacterCount > visualCharacterThreshold)
+        updateIsVisuallyNonEmpty();
+    if (!m_renderedSignificantAmountOfText)
+        updateSignificantRenderedTextMilestoneIfNeeded();
 }
 
 inline void FrameView::incrementVisuallyNonEmptyPixelCount(const IntSize& size)
