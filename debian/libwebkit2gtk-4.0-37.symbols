@@ -5,17 +5,10 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  StorageProcessMainUnix@Base 2.17.90
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
- (optional)_ZGVN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_objectE@Base 2.19.6
- (optional)_ZGVN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.21.1
  (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE6s_dataE@Base 2.21.1
  (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_objectE@Base 2.19.6
  (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE6s_dataE@Base 2.21.1
  (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.21.1
- (optional)_ZN7bmalloc16PerThreadStorageINS_11PerHeapKindINS_5CacheEEEE15s_didInitializeE@Base 2.21.1
- (optional)_ZN7bmalloc16PerThreadStorageINS_11PerHeapKindINS_5CacheEEEE5s_keyE@Base 2.21.1
- (regex|optional)^_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE10_M_replace.*@Base 2.21.2
- (regex|optional)^_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE14_M_replace_aux.*@Base 2.21.2
- (regex|optional)^_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_append.*@Base 2.21.2
  (optional)_ZZN7bmalloc10vmPageSizeEvE6cached@Base 2.19.6
  webkit_application_info_get_name@Base 2.17.90
  webkit_application_info_get_type@Base 2.17.90
