@@ -5,3 +5,4 @@ fix-ftbfs-m68k.patch
 detect-gstreamer-gl.patch
 user-agent-branding.patch
 prefer-pthread.patch
+gtk-doc-build-fix.patch
