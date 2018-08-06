@@ -7,6 +7,8 @@ webkit2gtk (2.20.4-1) UNRELEASED; urgency=high
       CVE-2018-4284.
   * Don't use NEWS as an upstream changelog anymore (as required by Debian
     policy 4.2.0).
+  * debian/control:
+    + Update Standards-Version to 4.2.0.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 06 Aug 2018 11:39:07 +0300
 
