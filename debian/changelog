@@ -1,3 +1,13 @@
+webkit2gtk (2.20.4-1) UNRELEASED; urgency=high
+
+  * New upstream release.
+    + This fixes CVE-2018-4261, CVE-2018-4262, CVE-2018-4263,
+      CVE-2018-4264, CVE-2018-4265, CVE-2018-4266, CVE-2018-4267,
+      CVE-2018-4270, CVE-2018-4272, CVE-2018-4273, CVE-2018-4278,
+      CVE-2018-4284.
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 06 Aug 2018 11:39:07 +0300
+
 webkit2gtk (2.20.3-1) unstable; urgency=high
 
   * New upstream release.
