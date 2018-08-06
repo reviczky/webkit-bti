@@ -1,4 +1,4 @@
-webkit2gtk (2.20.4-1) UNRELEASED; urgency=high
+webkit2gtk (2.20.4-1) unstable; urgency=high
 
   * New upstream release.
     + This fixes CVE-2018-4261, CVE-2018-4262, CVE-2018-4263,
@@ -10,7 +10,7 @@ webkit2gtk (2.20.4-1) UNRELEASED; urgency=high
   * debian/control:
     + Update Standards-Version to 4.2.0.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 06 Aug 2018 11:39:07 +0300
+ -- Alberto Garcia <berto@igalia.com>  Mon, 06 Aug 2018 16:39:27 +0300
 
 webkit2gtk (2.20.3-1) unstable; urgency=high
 
