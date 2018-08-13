@@ -96,6 +96,18 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
  
  struct SameSizeAsRenderStyle {
      void* dataRefs[7];
+@@ -81,7 +85,11 @@ struct SameSizeAsRenderStyle {
+ #endif
+ };
+ 
++#if defined(__m68k__)
++static_assert(sizeof(RenderStyle) <= sizeof(SameSizeAsRenderStyle), "RenderStyle should stay small");
++#else
+ static_assert(sizeof(RenderStyle) == sizeof(SameSizeAsRenderStyle), "RenderStyle should stay small");
++#endif
+ 
+ RenderStyle& RenderStyle::defaultStyle()
+ {
 Index: webkitgtk/Source/WebCore/rendering/style/StyleBoxData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/style/StyleBoxData.cpp

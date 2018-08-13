@@ -1,6 +1,8 @@
 webkit2gtk (2.20.5-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/patches/fix-ftbfs-m68k.patch:
+    + Update patch (Closes: #902100).
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 13 Aug 2018 10:52:34 +0300
 
