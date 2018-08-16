@@ -9,6 +9,8 @@ webkit2gtk (2.21.91-1) UNRELEASED; urgency=medium
     policy 4.2.0).
   * debian/control:
     + Update Standards-Version to 4.2.0.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 16 Aug 2018 15:51:37 +0300
 
