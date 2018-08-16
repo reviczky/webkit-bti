@@ -16,6 +16,8 @@ webkit2gtk (2.21.91-1) UNRELEASED; urgency=medium
   * debian/rules:
     + Don't pass -DENABLE_JIT=OFF manually anymore, since r232918 WebKit
       only enables JIT in the targets where it's known to work.
+    + Stop passing --ddeb-migration to dh_strip, the automatic debug
+      symbol migration is complete.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 16 Aug 2018 15:51:37 +0300
 

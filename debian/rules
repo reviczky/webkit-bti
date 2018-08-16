@@ -75,11 +75,6 @@ override_dh_install:
 	touch $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0/index.html
 	dh_install
 
-override_dh_strip:
-	dh_strip -plibwebkit2gtk-4.0-37 --ddeb-migration='libwebkit2gtk-4.0-37-dbg (<< 2.10.5-1~)' ; \
-	dh_strip -plibjavascriptcoregtk-4.0-18 --ddeb-migration='libjavascriptcoregtk-4.0-18-dbg (<< 2.10.5-1~)' ; \
-	dh_strip
-
 override_dh_makeshlibs:
 	dh_makeshlibs -plibwebkit2gtk-4.0-37 -Xinjected-bundle
 	dh_makeshlibs -plibjavascriptcoregtk-4.0-18
