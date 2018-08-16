@@ -28,10 +28,6 @@ ifneq (,$(filter $(DEB_HOST_ARCH),sh3 sh4 powerpc))
 	CFLAGS := $(CFLAGS:-O2=-O1)
 endif
 
-ifeq (,$(filter $(DEB_HOST_ARCH),i386 amd64 hurd-i386 kfreebsd-i386 kfreebsd-amd64 armhf arm64))
-	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF
-endif
-
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEM_MALLOC=ON
 	CPPFLAGS += -DRELEASE_WITHOUT_OPTIMIZATIONS

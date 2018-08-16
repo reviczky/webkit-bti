@@ -13,6 +13,9 @@ webkit2gtk (2.21.91-1) UNRELEASED; urgency=medium
     + Update source-is-missing overrides.
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update symbols.
+  * debian/rules:
+    + Don't pass -DENABLE_JIT=OFF manually anymore, since r232918 WebKit
+      only enables JIT in the targets where it's known to work.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 16 Aug 2018 15:51:37 +0300
 
