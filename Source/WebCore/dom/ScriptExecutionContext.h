@@ -283,6 +283,7 @@ protected:
 
     bool hasPendingActivity() const;
     void removeFromContextsMap();
+    void removeRejectedPromiseTracker();
 
 private:
     // The following addMessage function is deprecated.
@@ -293,6 +294,9 @@ private:
 
     virtual void refScriptExecutionContext() = 0;
     virtual void derefScriptExecutionContext() = 0;
+
+    enum class ShouldContinue { No, Yes };
+    void forEachActiveDOMObject(const Function<ShouldContinue(ActiveDOMObject&)>&) const;
 
     RejectedPromiseTracker& ensureRejectedPromiseTrackerSlow();
 
@@ -320,14 +324,11 @@ private:
     bool m_activeDOMObjectsAreSuspended { false };
     bool m_activeDOMObjectsAreStopped { false };
     bool m_inDispatchErrorEvent { false };
-    bool m_activeDOMObjectAdditionForbidden { false };
+    mutable bool m_activeDOMObjectAdditionForbidden { false };
     bool m_willprocessMessageWithMessagePortsSoon { false };
 
 #if !ASSERT_DISABLED
     bool m_inScriptExecutionContextDestructor { false };
-#endif
-#if !ASSERT_DISABLED || ENABLE(SECURITY_ASSERTIONS)
-    bool m_activeDOMObjectRemovalForbidden { false };
 #endif
 
 #if ENABLE(SERVICE_WORKER)

@@ -81,6 +81,11 @@ enum EventThrottlingBehavior {
     "unresponsive"
 };
 
+enum CompositingPolicy {
+    "normal",
+    "conservative"
+};
+
 [Conditional=VIDEO] enum PlaybackControlsPurpose {
     "ControlsManager",
     "NowPlaying"
@@ -433,6 +438,8 @@ enum EventThrottlingBehavior {
     [MayThrowException] void startTrackingCompositingUpdates();
     [MayThrowException] unsigned long compositingUpdateCount();
 
+    attribute CompositingPolicy? compositingPolicyOverride;
+
     // |node| should be Document, HTMLIFrameElement, or unspecified.
     // If |node| is an HTMLIFrameElement, it assumes node.contentDocument is
     // specified without security checks. Unspecified or null means this document.
@@ -471,6 +478,7 @@ enum EventThrottlingBehavior {
 
     [Conditional=LEGACY_ENCRYPTED_MEDIA] void initializeMockCDM();
     [Conditional=ENCRYPTED_MEDIA] MockCDMFactory registerMockCDM();
+    void enableMockMediaCapabilities();
 
     [Conditional=SPEECH_SYNTHESIS] void enableMockSpeechSynthesizer();
 
@@ -622,6 +630,7 @@ enum EventThrottlingBehavior {
     void setConsoleMessageListener(StringCallback callback);
 
     DOMString audioSessionCategory();
+    double preferredAudioBufferSize();
 
     [Conditional=SERVICE_WORKER] Promise<boolean> hasServiceWorkerRegistration(DOMString scopeURL);
     [Conditional=SERVICE_WORKER] void terminateServiceWorker(ServiceWorker worker);
@@ -654,4 +663,6 @@ enum EventThrottlingBehavior {
     void setUseSystemAppearance(boolean value);
 
     unsigned long pluginCount();
+
+    void notifyResourceLoadObserver();
 };

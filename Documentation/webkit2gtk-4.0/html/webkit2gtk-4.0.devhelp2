@@ -410,6 +410,8 @@
     <keyword type="function" name="webkit_settings_set_enable_mediasource ()" link="WebKitSettings.html#webkit-settings-set-enable-mediasource" since="2.4"/>
     <keyword type="function" name="webkit_settings_get_enable_encrypted_media ()" link="WebKitSettings.html#webkit-settings-get-enable-encrypted-media" since="2.20"/>
     <keyword type="function" name="webkit_settings_set_enable_encrypted_media ()" link="WebKitSettings.html#webkit-settings-set-enable-encrypted-media" since="2.20"/>
+    <keyword type="function" name="webkit_settings_get_enable_media_capabilities ()" link="WebKitSettings.html#webkit-settings-get-enable-media-capabilities" since="2.22"/>
+    <keyword type="function" name="webkit_settings_set_enable_media_capabilities ()" link="WebKitSettings.html#webkit-settings-set-enable-media-capabilities" since="2.22"/>
     <keyword type="function" name="webkit_settings_get_allow_file_access_from_file_urls ()" link="WebKitSettings.html#webkit-settings-get-allow-file-access-from-file-urls" since="2.10"/>
     <keyword type="function" name="webkit_settings_set_allow_file_access_from_file_urls ()" link="WebKitSettings.html#webkit-settings-set-allow-file-access-from-file-urls" since="2.10"/>
     <keyword type="function" name="webkit_settings_get_allow_universal_access_from_file_urls ()" link="WebKitSettings.html#webkit-settings-get-allow-universal-access-from-file-urls" since="2.14"/>
@@ -442,6 +444,7 @@
     <keyword type="property" name="The “enable-hyperlink-auditing” property" link="WebKitSettings.html#WebKitSettings--enable-hyperlink-auditing"/>
     <keyword type="property" name="The “enable-java” property" link="WebKitSettings.html#WebKitSettings--enable-java"/>
     <keyword type="property" name="The “enable-javascript” property" link="WebKitSettings.html#WebKitSettings--enable-javascript"/>
+    <keyword type="property" name="The “enable-media-capabilities” property" link="WebKitSettings.html#WebKitSettings--enable-media-capabilities"/>
     <keyword type="property" name="The “enable-media-stream” property" link="WebKitSettings.html#WebKitSettings--enable-media-stream"/>
     <keyword type="property" name="The “enable-mediasource” property" link="WebKitSettings.html#WebKitSettings--enable-mediasource"/>
     <keyword type="property" name="The “enable-offline-web-application-cache” property" link="WebKitSettings.html#WebKitSettings--enable-offline-web-application-cache"/>

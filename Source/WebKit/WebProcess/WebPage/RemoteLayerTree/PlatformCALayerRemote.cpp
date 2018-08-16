@@ -154,7 +154,7 @@ void PlatformCALayerRemote::recursiveBuildTransaction(RemoteLayerTreeContext& co
     if (m_properties.backingStore && m_properties.backingStoreAttached && m_properties.backingStore->display())
         m_properties.notePropertiesChanged(RemoteLayerTreeTransaction::BackingStoreChanged);
 
-    if (m_properties.changedProperties != RemoteLayerTreeTransaction::NoChange) {
+    if (m_properties.changedProperties) {
         if (m_properties.changedProperties & RemoteLayerTreeTransaction::ChildrenChanged) {
             m_properties.children.resize(m_children.size());
             for (size_t i = 0; i < m_children.size(); ++i)
@@ -832,7 +832,7 @@ void PlatformCALayerRemote::setShapeWindRule(WindRule windRule)
 
 bool PlatformCALayerRemote::requiresCustomAppearanceUpdateOnBoundsChange() const
 {
-    return m_properties.customAppearance == GraphicsLayer::ScrollingShadow;
+    return m_properties.customAppearance == GraphicsLayer::CustomAppearance::ScrollingShadow;
 }
 
 GraphicsLayer::CustomAppearance PlatformCALayerRemote::customAppearance() const

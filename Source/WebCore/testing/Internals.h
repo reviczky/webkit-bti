@@ -440,6 +440,10 @@ public:
     ExceptionOr<void> startTrackingCompositingUpdates();
     ExceptionOr<unsigned> compositingUpdateCount();
 
+    enum CompositingPolicy { Normal, Conservative };
+    ExceptionOr<void> setCompositingPolicyOverride(std::optional<CompositingPolicy>);
+    ExceptionOr<std::optional<CompositingPolicy>> compositingPolicyOverride() const;
+
     ExceptionOr<void> updateLayoutIgnorePendingStylesheetsAndRunPostLayoutTasks(Node*);
     unsigned layoutCount() const;
 
@@ -469,6 +473,8 @@ public:
 #if ENABLE(ENCRYPTED_MEDIA)
     Ref<MockCDMFactory> registerMockCDM();
 #endif
+
+    void enableMockMediaCapabilities();
 
 #if ENABLE(SPEECH_SYNTHESIS)
     void enableMockSpeechSynthesizer();
@@ -608,7 +614,7 @@ public:
 
     RefPtr<GCObservation> observeGC(JSC::JSValue);
 
-    enum class UserInterfaceLayoutDirection { LTR, RTL };
+    enum class UserInterfaceLayoutDirection : uint8_t { LTR, RTL };
     void setUserInterfaceLayoutDirection(UserInterfaceLayoutDirection);
 
     bool userPrefersReducedMotion() const;
@@ -656,6 +662,7 @@ public:
 #endif
 
     String audioSessionCategory() const;
+    double preferredAudioBufferSize() const;
 
     void clearCacheStorageMemoryRepresentation(DOMPromiseDeferred<void>&&);
     void cacheStorageEngineRepresentation(DOMPromiseDeferred<IDLDOMString>&&);
@@ -717,6 +724,8 @@ public:
     void setUseSystemAppearance(bool);
 
     size_t pluginCount();
+
+    void notifyResourceLoadObserver();
 
 private:
     explicit Internals(Document&);

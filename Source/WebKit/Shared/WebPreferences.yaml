@@ -655,14 +655,6 @@ MediaPreloadingEnabled:
   defaultValue: false
   webcoreBinding: RuntimeEnabledFeatures
 
-IntersectionObserverEnabled:
-  type: bool
-  defaultValue: false
-  humanReadableName: "Intersection Observer"
-  humanReadableDescription: "Enable Intersection Observer support"
-  webcoreBinding: RuntimeEnabledFeatures
-  condition: ENABLE(INTERSECTION_OBSERVER)
-
 InteractiveFormValidationEnabled:
   type: bool
   defaultValue: true
@@ -1146,6 +1138,15 @@ ImageBitmapOffscreenCanvasEnabled:
   category: experimental
   webcoreBinding: RuntimeEnabledFeatures
 
+IntersectionObserverEnabled:
+  type: bool
+  defaultValue: false
+  humanReadableName: "Intersection Observer"
+  humanReadableDescription: "Enable Intersection Observer support"
+  webcoreBinding: RuntimeEnabledFeatures
+  category: experimental
+  condition: ENABLE(INTERSECTION_OBSERVER)
+
 WebRTCLegacyAPIEnabled:
   type: bool
   defaultValue: false
@@ -1228,6 +1229,14 @@ AccessibilityObjectModelEnabled:
   defaultValue: false
   humanReadableName: "Accessibility Object Model"
   humanReadableDescription: "Accessibility Object Model support"
+  category: experimental
+  webcoreBinding: RuntimeEnabledFeatures
+
+AriaReflectionEnabled:
+  type: bool
+  defaultValue: true
+  humanReadableName: "ARIA Reflection"
+  humanReadableDescription: "ARIA Reflection support"
   category: experimental
   webcoreBinding: RuntimeEnabledFeatures
 

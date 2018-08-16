@@ -1488,6 +1488,18 @@ static EncodedJSValue JSC_HOST_CALL functionDumpStack(ExecState* exec)
     return JSValue::encode(jsUndefined());
 }
 
+// Dumps the internal memory layout of a JSCell.
+// Usage: $vm.dumpCell(cell)
+static EncodedJSValue JSC_HOST_CALL functionDumpCell(ExecState* exec)
+{
+    JSValue value = exec->argument(0);
+    if (!value.isCell())
+        return encodedJSUndefined();
+    
+    VMInspector::dumpCellMemory(value.asCell());
+    return encodedJSUndefined();
+}
+
 // Gets the dataLog dump of the indexingMode of the passed value.
 // Usage: $vm.print("indexingMode = " + $vm.indexingMode(jsValue))
 static EncodedJSValue JSC_HOST_CALL functionIndexingMode(ExecState* exec)
@@ -1662,6 +1674,24 @@ static EncodedJSValue JSC_HOST_CALL functionCreateBuiltin(ExecState* exec)
     JSFunction* func = JSFunction::create(vm, createBuiltinExecutable(vm, source, Identifier::fromString(&vm, "foo"), ConstructorKind::None, ConstructAbility::CannotConstruct)->link(vm, source), exec->lexicalGlobalObject());
 
     return JSValue::encode(func);
+}
+
+static EncodedJSValue JSC_HOST_CALL functionGetPrivateProperty(ExecState* exec)
+{
+    VM& vm = exec->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    if (exec->argumentCount() < 2 || !exec->argument(1).isString())
+        return encodedJSUndefined();
+
+    String str = asString(exec->argument(1))->value(exec);
+
+    const Identifier* ident = vm.propertyNames->lookUpPrivateName(Identifier::fromString(exec, str));
+    if (!ident)
+        return throwVMError(exec, scope, "Unknown private name.");
+
+    scope.release();
+    return JSValue::encode(exec->argument(0).get(exec, *ident));
 }
 
 static EncodedJSValue JSC_HOST_CALL functionCreateRoot(ExecState* exec)
@@ -1989,6 +2019,8 @@ void JSDollarVM::finishCreation(VM& vm)
     addFunction(vm, "dumpCallFrame", functionDumpCallFrame, 0);
     addFunction(vm, "dumpStack", functionDumpStack, 0);
 
+    addFunction(vm, "dumpCell", functionDumpCell, 1);
+
     addFunction(vm, "indexingMode", functionIndexingMode, 1);
     addFunction(vm, "inlineCapacity", functionInlineCapacity, 1);
     addFunction(vm, "value", functionValue, 1);
@@ -2006,6 +2038,7 @@ void JSDollarVM::finishCreation(VM& vm)
     addFunction(vm, "createDOMJITCheckSubClassObject", functionCreateDOMJITCheckSubClassObject, 0);
     addFunction(vm, "createDOMJITGetterBaseJSObject", functionCreateDOMJITGetterBaseJSObject, 0);
     addFunction(vm, "createBuiltin", functionCreateBuiltin, 2);
+    addFunction(vm, "getPrivateProperty", functionGetPrivateProperty, 2);
     addFunction(vm, "setImpureGetterDelegate", functionSetImpureGetterDelegate, 2);
 
     addConstructibleFunction(vm, "Root", functionCreateRoot, 0);

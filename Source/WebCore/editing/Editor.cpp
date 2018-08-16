@@ -190,7 +190,7 @@ using namespace HTMLNames;
 using namespace WTF;
 using namespace Unicode;
 
-TemporarySelectionChange::TemporarySelectionChange(Frame& frame, std::optional<VisibleSelection> temporarySelection, TemporarySelectionOptions options)
+TemporarySelectionChange::TemporarySelectionChange(Frame& frame, std::optional<VisibleSelection> temporarySelection, OptionSet<TemporarySelectionOption> options)
     : m_frame(frame)
     , m_options(options)
     , m_wasIgnoringSelectionChanges(frame.editor().ignoreSelectionChanges())
@@ -635,7 +635,7 @@ void Editor::replaceSelectionWithFragment(DocumentFragment& fragment, bool selec
     if (AXObjectCache::accessibilityEnabled() && editingAction == EditActionPaste)
         replacedText = AccessibilityReplacedText(selection);
 
-    ReplaceSelectionCommand::CommandOptions options = ReplaceSelectionCommand::PreventNesting | ReplaceSelectionCommand::SanitizeFragment;
+    OptionSet<ReplaceSelectionCommand::CommandOption> options { ReplaceSelectionCommand::PreventNesting, ReplaceSelectionCommand::SanitizeFragment };
     if (selectReplacement)
         options |= ReplaceSelectionCommand::SelectReplacement;
     if (smartReplace)
@@ -892,10 +892,10 @@ Element* Editor::findEventTargetFromSelection() const
 void Editor::applyStyle(StyleProperties* style, EditAction editingAction)
 {
     if (style)
-        applyStyle(EditingStyle::create(style), editingAction);
+        applyStyle(EditingStyle::create(style), editingAction, ColorFilterMode::UseOriginalColor);
 }
 
-void Editor::applyStyle(RefPtr<EditingStyle>&& style, EditAction editingAction)
+void Editor::applyStyle(RefPtr<EditingStyle>&& style, EditAction editingAction, ColorFilterMode colorFilterMode)
 {
     if (!style)
         return;
@@ -910,12 +910,14 @@ void Editor::applyStyle(RefPtr<EditingStyle>&& style, EditAction editingAction)
     if (element && !dispatchBeforeInputEvent(*element, inputTypeName, inputEventData))
         return;
 
+    Ref<EditingStyle> styleToApply = colorFilterMode == ColorFilterMode::InvertColor ? style->inverseTransformColorIfNeeded(*element) : style.releaseNonNull();
+
     switch (selectionType) {
     case VisibleSelection::CaretSelection:
-        computeAndSetTypingStyle(*style, editingAction);
+        computeAndSetTypingStyle(styleToApply.get(), editingAction);
         break;
     case VisibleSelection::RangeSelection:
-        ApplyStyleCommand::create(document(), style.get(), editingAction)->apply();
+        ApplyStyleCommand::create(document(), styleToApply.ptr(), editingAction)->apply();
         break;
     default:
         break;
@@ -962,7 +964,7 @@ void Editor::applyStyleToSelection(StyleProperties* style, EditAction editingAct
     applyStyle(style, editingAction);
 }
 
-void Editor::applyStyleToSelection(Ref<EditingStyle>&& style, EditAction editingAction)
+void Editor::applyStyleToSelection(Ref<EditingStyle>&& style, EditAction editingAction, ColorFilterMode colorFilterMode)
 {
     if (style->isEmpty() || !canEditRichly())
         return;
@@ -971,7 +973,7 @@ void Editor::applyStyleToSelection(Ref<EditingStyle>&& style, EditAction editing
     if (!client() || !client()->shouldApplyStyle(style->styleWithResolvedTextDecorations().ptr(), m_frame.selection().toNormalizedRange().get()))
         return;
 
-    applyStyle(WTFMove(style), editingAction);
+    applyStyle(WTFMove(style), editingAction, colorFilterMode);
 }
 
 void Editor::applyParagraphStyleToSelection(StyleProperties* style, EditAction editingAction)
@@ -1003,7 +1005,7 @@ String Editor::selectionStartCSSPropertyValue(CSSPropertyID propertyID)
         return String();
 
     if (propertyID == CSSPropertyFontSize)
-        return String::number(selectionStyle->legacyFontSize(&document()));
+        return String::number(selectionStyle->legacyFontSize(document()));
     return selectionStyle->style()->getPropertyValue(propertyID);
 }
 
@@ -1071,7 +1073,9 @@ void Editor::appliedEditing(CompositeEditCommand& command)
 
     if (command.isTopLevelCommand()) {
         // Don't clear the typing style with this selection change. We do those things elsewhere if necessary.
-        FrameSelection::SetSelectionOptions options = command.isDictationCommand() ? FrameSelection::DictationTriggered : 0;
+        OptionSet<FrameSelection::SetSelectionOption> options;
+        if (command.isDictationCommand())
+            options |= FrameSelection::DictationTriggered;
 
         changeSelectionAfterCommand(newSelection, options);
     }
@@ -1760,9 +1764,9 @@ WritingDirection Editor::baseWritingDirectionForSelectionStart() const
     }
 
     switch (renderer->style().direction()) {
-    case LTR:
+    case TextDirection::LTR:
         return LeftToRightWritingDirection;
-    case RTL:
+    case TextDirection::RTL:
         return RightToLeftWritingDirection;
     }
     
@@ -1779,7 +1783,7 @@ void Editor::selectComposition()
     // See <http://bugs.webkit.org/show_bug.cgi?id=15781>
     VisibleSelection selection;
     selection.setWithoutValidation(range->startPosition(), range->endPosition());
-    m_frame.selection().setSelection(selection, 0);
+    m_frame.selection().setSelection(selection, { });
 }
 
 void Editor::confirmComposition()
@@ -2982,7 +2986,7 @@ void Editor::setIgnoreSelectionChanges(bool ignore, RevealSelection shouldReveal
 #if PLATFORM(IOS)
     // FIXME: Should suppress selection change notifications during a composition change <https://webkit.org/b/38830> 
     if (!ignore)
-        respondToChangedSelection(m_frame.selection().selection(), 0);
+        respondToChangedSelection(m_frame.selection().selection(), { });
 #endif
     if (!ignore && shouldRevealExistingSelection == RevealSelection::Yes)
         revealSelectionAfterEditingOperation(ScrollAlignment::alignToEdgeIfNeeded, RevealExtent);
@@ -3105,7 +3109,7 @@ void Editor::dismissCorrectionPanelAsIgnored()
     m_alternativeTextController->dismiss(ReasonForDismissingAlternativeTextIgnored);
 }
 
-void Editor::changeSelectionAfterCommand(const VisibleSelection& newSelection, FrameSelection::SetSelectionOptions options)
+void Editor::changeSelectionAfterCommand(const VisibleSelection& newSelection, OptionSet<FrameSelection::SetSelectionOption> options)
 {
     Ref<Frame> protection(m_frame);
 
@@ -3468,7 +3472,7 @@ void Editor::selectionWillChange()
 }
 #endif
 
-void Editor::respondToChangedSelection(const VisibleSelection&, FrameSelection::SetSelectionOptions options)
+void Editor::respondToChangedSelection(const VisibleSelection&, OptionSet<FrameSelection::SetSelectionOption> options)
 {
 #if PLATFORM(IOS)
     // FIXME: Should suppress selection change notifications during a composition change <https://webkit.org/b/38830> 
@@ -3490,9 +3494,8 @@ void Editor::respondToChangedSelection(const VisibleSelection&, FrameSelection::
         return;
 
     // Don't check spelling and grammar if the change of selection is triggered by spelling correction itself.
-    m_editorUIUpdateTimerShouldCheckSpellingAndGrammar = options & FrameSelection::CloseTyping
-        && !(options & FrameSelection::SpellCorrectionTriggered);
-    m_editorUIUpdateTimerWasTriggeredByDictation = options & FrameSelection::DictationTriggered;
+    m_editorUIUpdateTimerShouldCheckSpellingAndGrammar = options.contains(FrameSelection::CloseTyping) && !options.contains(FrameSelection::SpellCorrectionTriggered);
+    m_editorUIUpdateTimerWasTriggeredByDictation = options.contains(FrameSelection::DictationTriggered);
     scheduleEditorUIUpdate();
 }
 
@@ -3870,7 +3873,7 @@ void Editor::insertAttachment(const String& identifier, const AttachmentDisplayO
     insertAttachmentFromFile(identifier, options, filename, *contentType, File::create(Blob::create(WTFMove(data), *contentType), filename));
 }
 
-void Editor::insertAttachmentFromFile(const String& identifier, const AttachmentDisplayOptions& options, const String& filename, const String& contentType, Ref<File>&& file)
+void Editor::insertAttachmentFromFile(const String& identifier, const AttachmentDisplayOptions&, const String& filename, const String& contentType, Ref<File>&& file)
 {
     auto attachment = HTMLAttachmentElement::create(HTMLNames::attachmentTag, document());
     attachment->setAttribute(HTMLNames::titleAttr, filename);
@@ -3878,7 +3881,6 @@ void Editor::insertAttachmentFromFile(const String& identifier, const Attachment
     attachment->setAttribute(HTMLNames::typeAttr, contentType);
     attachment->setUniqueIdentifier(identifier);
     attachment->setFile(WTFMove(file));
-    attachment->updateDisplayMode(options.mode);
 
     auto fragmentToInsert = document().createDocumentFragment();
     fragmentToInsert->appendChild(attachment.get());

@@ -47,7 +47,7 @@
 #include "HTTPHeaderNames.h"
 #include "InspectorTimelineAgent.h"
 #include "InstrumentingAgents.h"
-#include "JSMainThreadExecState.h"
+#include "JSExecState.h"
 #include "JSWebSocket.h"
 #include "LoaderStrategy.h"
 #include "MIMETypeRegistry.h"
@@ -486,9 +486,13 @@ void InspectorNetworkAgent::didReceiveData(unsigned long identifier, const char*
     String requestId = IdentifiersFactory::requestId(identifier);
 
     if (data) {
-        NetworkResourcesData::ResourceData const* resourceData = m_resourcesData->data(requestId);
-        if (resourceData && !m_loadingXHRSynchronously)
-            m_resourcesData->maybeAddResourceData(requestId, data, dataLength);
+        NetworkResourcesData::ResourceData const* resourceData = m_resourcesData->maybeAddResourceData(requestId, data, dataLength);
+
+        // For a synchronous XHR, if we didn't add data then we can apply it here as base64 encoded content.
+        // Often the data is text and we would have a decoder, but for non-text we won't have a decoder.
+        // Sync XHRs may not have a cached resource, while non-sync XHRs usually transfer data over on completion.
+        if (m_loadingXHRSynchronously && resourceData && !resourceData->hasBufferedData() && !resourceData->cachedResource())
+            m_resourcesData->setResourceContent(requestId, base64Encode(data, dataLength), true);
     }
 
     m_frontendDispatcher->dataReceived(requestId, timestamp(), dataLength, encodedDataLength);
@@ -641,7 +645,7 @@ RefPtr<Inspector::Protocol::Network::Initiator> InspectorNetworkAgent::buildInit
             .release();
     }
 
-    Ref<ScriptCallStack> stackTrace = createScriptCallStack(JSMainThreadExecState::currentState());
+    Ref<ScriptCallStack> stackTrace = createScriptCallStack(JSExecState::currentState());
     if (stackTrace->size() > 0) {
         auto initiatorObject = Inspector::Protocol::Network::Initiator::create()
             .setType(Inspector::Protocol::Network::Initiator::Type::Script)

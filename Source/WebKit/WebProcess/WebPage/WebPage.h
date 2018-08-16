@@ -247,7 +247,7 @@ struct WebsitePoliciesData;
 using SnapshotOptions = uint32_t;
 using WKEventModifiers = uint32_t;
 
-class WebPage : public API::ObjectImpl<API::Object::Type::BundlePage>, public IPC::MessageReceiver, public IPC::MessageSender {
+class WebPage : public API::ObjectImpl<API::Object::Type::BundlePage>, public IPC::MessageReceiver, public IPC::MessageSender, public CanMakeWeakPtr<WebPage> {
 public:
     static Ref<WebPage> create(uint64_t pageID, WebPageCreationParameters&&);
     virtual ~WebPage();
@@ -693,6 +693,7 @@ public:
         void invalidate();
 
         void beginLoad(WebFrame*, SandboxExtension::Handle&&);
+        void beginReload(WebFrame*, SandboxExtension::Handle&&);
         void willPerformLoadDragDestinationAction(RefPtr<SandboxExtension>&& pendingDropSandboxExtension);
         void didStartProvisionalLoad(WebFrame*);
         void didCommitProvisionalLoad(WebFrame*);
@@ -1084,6 +1085,8 @@ public:
 #endif
 
     UserContentControllerIdentifier userContentControllerIdentifier() const { return m_userContentController->identifier(); }
+
+    WebCore::UserInterfaceLayoutDirection userInterfaceLayoutDirection() const { return m_userInterfaceLayoutDirection; }
 
     bool isSuspended() const { return m_isSuspended; }
 

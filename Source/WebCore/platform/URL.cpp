@@ -441,7 +441,7 @@ void URL::setHost(const String& s)
     if (!appendEncodedHostname(encodedHostName, s))
         return;
     
-    bool slashSlashNeeded = m_userStart == m_schemeEnd + 1;
+    bool slashSlashNeeded = m_userStart == static_cast<unsigned>(m_schemeEnd + 1);
     
     StringBuilder builder;
     builder.append(m_string.left(hostStart()));
@@ -499,7 +499,7 @@ void URL::setHostAndPort(const String& hostAndPort)
     if (!appendEncodedHostname(encodedHostName, hostName))
         return;
 
-    bool slashSlashNeeded = m_userStart == m_schemeEnd + 1;
+    bool slashSlashNeeded = m_userStart == static_cast<unsigned>(m_schemeEnd + 1);
 
     StringBuilder builder;
     builder.append(m_string.left(hostStart()));
@@ -553,7 +553,7 @@ void URL::setUser(const String& user)
     unsigned end = m_userEnd;
     if (!user.isEmpty()) {
         String u = percentEncodeCharacters(user, URLParser::isInUserInfoEncodeSet);
-        if (m_userStart == m_schemeEnd + 1)
+        if (m_userStart == static_cast<unsigned>(m_schemeEnd + 1))
             u = "//" + u;
         // Add '@' if we didn't have one before.
         if (end == m_hostEnd || (end == m_passwordEnd && m_string[end] != '@'))
@@ -580,7 +580,7 @@ void URL::setPass(const String& password)
     unsigned end = m_passwordEnd;
     if (!password.isEmpty()) {
         String p = ":" + percentEncodeCharacters(password, URLParser::isInUserInfoEncodeSet) + "@";
-        if (m_userEnd == m_schemeEnd + 1)
+        if (m_userEnd == static_cast<unsigned>(m_schemeEnd + 1))
             p = "//" + p;
         // Eat the existing '@' since we are going to add our own.
         if (end != m_hostEnd && m_string[end] == '@')
@@ -1062,10 +1062,96 @@ TextStream& operator<<(TextStream& ts, const URL& url)
 }
 
 #if !PLATFORM(COCOA) && !USE(SOUP)
+static bool isIPv4Address(StringView string)
+{
+    auto count = 0;
+
+    for (const auto octet : string.splitAllowingEmptyEntries('.')) {
+        if (count >= 4)
+            return false;
+
+        const auto length = octet.length();
+        if (!length || length > 3)
+            return false;
+
+        auto value = 0;
+        for (auto i = 0u; i < length; ++i) {
+            const auto digit = octet[i];
+
+            // Prohibit leading zeroes.
+            if (digit > '9' || digit < (!i && length > 1 ? '1' : '0'))
+                return false;
+
+            value = 10 * value + (digit - '0');
+        }
+
+        if (value > 255)
+            return false;
+
+        count++;
+    }
+
+    return (count == 4);
+}
+
+static bool isIPv6Address(StringView string)
+{
+    enum SkipState { None, WillSkip, Skipping, Skipped, Final };
+    auto skipState = None;
+    auto count = 0;
+
+    for (const auto hextet : string.splitAllowingEmptyEntries(':')) {
+        if (count >= 8 || skipState == Final)
+            return false;
+
+        const auto length = hextet.length();
+        if (!length) {
+            // :: may be used anywhere to skip 1 to 8 hextets, but only once.
+            if (skipState == Skipped)
+                return false;
+
+            if (skipState == None)
+                skipState = !count ? WillSkip : Skipping;
+            else if (skipState == WillSkip)
+                skipState = Skipping;
+            else
+                skipState = Final;
+            continue;
+        }
+
+        if (skipState == WillSkip)
+            return false;
+
+        if (skipState == Skipping)
+            skipState = Skipped;
+
+        if (length > 4) {
+            // An IPv4 address may be used in place of the final two hextets.
+            if ((skipState == None && count != 6) || (skipState == Skipped && count >= 6) || !isIPv4Address(hextet))
+                return false;
+
+            skipState = Final;
+            continue;
+        }
+
+        for (const auto codeUnit : hextet.codeUnits()) {
+            // IPv6 allows leading zeroes.
+            if (!isASCIIHexDigit(codeUnit))
+                return false;
+        }
+
+        count++;
+    }
+
+    return (count == 8 && skipState == None) || skipState == Skipped || skipState == Final;
+}
+
 bool URL::hostIsIPAddress(StringView host)
 {
-    // Assume that any host that ends with a digit is trying to be an IP address.
-    return !host.isEmpty() && isASCIIDigit(host[host.length() - 1]);
+    if (host.find(':') == notFound)
+        return isIPv4Address(host);
+
+    return isIPv6Address(host);
 }
 #endif
 

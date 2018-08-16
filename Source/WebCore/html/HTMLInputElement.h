@@ -93,6 +93,8 @@ public:
     WEBCORE_EXPORT ExceptionOr<void> stepUp(int = 1);
     WEBCORE_EXPORT ExceptionOr<void> stepDown(int = 1);
 
+    bool isPresentingAttachedView() const;
+
     // stepUp()/stepDown() for user-interaction.
     bool isSteppable() const;
 
@@ -107,7 +109,7 @@ public:
     bool isRangeControl() const;
 
 #if ENABLE(INPUT_TYPE_COLOR)
-    bool isColorControl() const;
+    WEBCORE_EXPORT bool isColorControl() const;
 #endif
 
     // FIXME: It's highly likely that any call site calling this function should instead
@@ -148,6 +150,9 @@ public:
     HTMLElement* sliderTrackElement() const;
     HTMLElement* placeholderElement() const final;
     WEBCORE_EXPORT HTMLElement* autoFillButtonElement() const;
+#if ENABLE(DATALIST_ELEMENT)
+    HTMLElement* dataListButtonElement() const;
+#endif
 
     bool checked() const { return m_isChecked; }
     WEBCORE_EXPORT void setChecked(bool, TextFieldEventBehavior = DispatchNoEvent);

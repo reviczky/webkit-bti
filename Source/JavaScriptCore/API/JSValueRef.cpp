@@ -54,17 +54,6 @@
 
 using namespace JSC;
 
-#if PLATFORM(MAC)
-static bool evernoteHackNeeded()
-{
-    static const int32_t webkitLastVersionWithEvernoteHack = 35133959;
-    static bool hackNeeded = CFEqual(CFBundleGetIdentifier(CFBundleGetMainBundle()), CFSTR("com.evernote.Evernote"))
-        && NSVersionOfLinkTimeLibrary("JavaScriptCore") <= webkitLastVersionWithEvernoteHack;
-
-    return hackNeeded;
-}
-#endif
-
 ::JSType JSValueGetType(JSContextRef ctx, JSValueRef value)
 {
     if (!ctx) {
@@ -86,6 +75,8 @@ static bool evernoteHackNeeded()
         return kJSTypeNumber;
     if (jsValue.isString())
         return kJSTypeString;
+    if (jsValue.isSymbol())
+        return kJSTypeSymbol;
     ASSERT(jsValue.isObject());
     return kJSTypeObject;
 }
@@ -160,6 +151,18 @@ bool JSValueIsObject(JSContextRef ctx, JSValueRef value)
     JSLockHolder locker(exec);
 
     return toJS(exec, value).isObject();
+}
+
+bool JSValueIsSymbol(JSContextRef ctx, JSValueRef value)
+{
+    if (!ctx) {
+        ASSERT_NOT_REACHED();
+        return false;
+    }
+    ExecState* exec = toJS(ctx);
+    JSLockHolder locker(exec);
+
+    return toJS(exec, value).isSymbol();
 }
 
 bool JSValueIsArray(JSContextRef ctx, JSValueRef value)
@@ -320,6 +323,22 @@ JSValueRef JSValueMakeNumber(JSContextRef ctx, double value)
     return toRef(exec, jsNumber(purifyNaN(value)));
 }
 
+JSValueRef JSValueMakeSymbol(JSContextRef ctx, JSStringRef description)
+{
+    if (!ctx) {
+        ASSERT_NOT_REACHED();
+        return nullptr;
+    }
+    ExecState* exec = toJS(ctx);
+    JSLockHolder locker(exec);
+    auto scope = DECLARE_CATCH_SCOPE(exec->vm());
+
+    JSString* jsDescription = jsString(exec, description ? description->string() : String());
+    RETURN_IF_EXCEPTION(scope, nullptr);
+
+    return toRef(exec, Symbol::create(exec, jsDescription));
+}
+
 JSValueRef JSValueMakeString(JSContextRef ctx, JSStringRef string)
 {
     if (!ctx) {
@@ -455,11 +474,6 @@ void JSValueProtect(JSContextRef ctx, JSValueRef value)
 
 void JSValueUnprotect(JSContextRef ctx, JSValueRef value)
 {
-#if PLATFORM(MAC)
-    if ((!value || !ctx) && evernoteHackNeeded())
-        return;
-#endif
-
     ExecState* exec = toJS(ctx);
     JSLockHolder locker(exec);
 

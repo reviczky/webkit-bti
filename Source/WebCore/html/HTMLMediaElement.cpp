@@ -4024,7 +4024,7 @@ void HTMLMediaElement::closeCaptionTracksChanged()
 
 void HTMLMediaElement::addAudioTrack(Ref<AudioTrack>&& track)
 {
-    audioTracks().append(WTFMove(track));
+    ensureAudioTracks().append(WTFMove(track));
 }
 
 void HTMLMediaElement::addTextTrack(Ref<TextTrack>&& track)
@@ -4037,14 +4037,14 @@ void HTMLMediaElement::addTextTrack(Ref<TextTrack>&& track)
             m_captionDisplayMode = page->group().captionPreferences().captionDisplayMode();
     }
 
-    textTracks().append(WTFMove(track));
+    ensureTextTracks().append(WTFMove(track));
 
     closeCaptionTracksChanged();
 }
 
 void HTMLMediaElement::addVideoTrack(Ref<VideoTrack>&& track)
 {
-    videoTracks().append(WTFMove(track));
+    ensureVideoTracks().append(WTFMove(track));
 }
 
 void HTMLMediaElement::removeAudioTrack(Ref<AudioTrack>&& track)
@@ -4122,7 +4122,7 @@ ExceptionOr<TextTrack&> HTMLMediaElement::addTextTrack(const String& kind, const
     return trackReference;
 }
 
-AudioTrackList& HTMLMediaElement::audioTracks()
+AudioTrackList& HTMLMediaElement::ensureAudioTracks()
 {
     if (!m_audioTracks)
         m_audioTracks = AudioTrackList::create(this, ActiveDOMObject::scriptExecutionContext());
@@ -4130,7 +4130,7 @@ AudioTrackList& HTMLMediaElement::audioTracks()
     return *m_audioTracks;
 }
 
-TextTrackList& HTMLMediaElement::textTracks()
+TextTrackList& HTMLMediaElement::ensureTextTracks()
 {
     if (!m_textTracks)
         m_textTracks = TextTrackList::create(this, ActiveDOMObject::scriptExecutionContext());
@@ -4138,7 +4138,7 @@ TextTrackList& HTMLMediaElement::textTracks()
     return *m_textTracks;
 }
 
-VideoTrackList& HTMLMediaElement::videoTracks()
+VideoTrackList& HTMLMediaElement::ensureVideoTracks()
 {
     if (!m_videoTracks)
         m_videoTracks = VideoTrackList::create(this, ActiveDOMObject::scriptExecutionContext());
@@ -4419,25 +4419,25 @@ void HTMLMediaElement::visibilityDidChange()
 
 void HTMLMediaElement::setSelectedTextTrack(TextTrack* trackToSelect)
 {
-    TextTrackList& trackList = textTracks();
-    if (!trackList.length())
+    auto* trackList = textTracks();
+    if (!trackList || !trackList->length())
         return;
 
     if (trackToSelect == TextTrack::captionMenuAutomaticItem()) {
         if (captionDisplayMode() != CaptionUserPreferences::Automatic)
             m_textTracks->scheduleChangeEvent();
     } else if (trackToSelect == TextTrack::captionMenuOffItem()) {
-        for (int i = 0, length = trackList.length(); i < length; ++i)
-            trackList.item(i)->setMode(TextTrack::Mode::Disabled);
+        for (int i = 0, length = trackList->length(); i < length; ++i)
+            trackList->item(i)->setMode(TextTrack::Mode::Disabled);
 
-        if (captionDisplayMode() != CaptionUserPreferences::ForcedOnly && !trackList.isChangeEventScheduled())
+        if (captionDisplayMode() != CaptionUserPreferences::ForcedOnly && !trackList->isChangeEventScheduled())
             m_textTracks->scheduleChangeEvent();
     } else {
-        if (!trackToSelect || !trackList.contains(*trackToSelect))
+        if (!trackToSelect || !trackList->contains(*trackToSelect))
             return;
 
-        for (int i = 0, length = trackList.length(); i < length; ++i) {
-            auto& track = *trackList.item(i);
+        for (int i = 0, length = trackList->length(); i < length; ++i) {
+            auto& track = *trackList->item(i);
             if (&track != trackToSelect)
                 track.setMode(TextTrack::Mode::Disabled);
             else
@@ -7521,7 +7521,7 @@ uint64_t HTMLMediaElement::mediaSessionUniqueIdentifier() const
 
 void HTMLMediaElement::didReceiveRemoteControlCommand(PlatformMediaSession::RemoteControlCommandType command, const PlatformMediaSession::RemoteCommandArgument* argument)
 {
-    INFO_LOG(LOGIDENTIFIER, static_cast<int>(command));
+    INFO_LOG(LOGIDENTIFIER, command);
 
     UserGestureIndicator remoteControlUserGesture(ProcessingUserGesture, &document());
     switch (command) {

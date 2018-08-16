@@ -130,17 +130,59 @@ void FormattingContext::layoutOutOfFlowDescendants(LayoutContext& layoutContext,
 
         ASSERT(layoutBox.establishesFormattingContext());
         auto formattingContext = layoutContext.formattingContext(layoutBox);
-        auto& establishedFormattingState = layoutContext.establishedFormattingState(layoutBox, *formattingContext);
 
         computeBorderAndPadding(layoutContext, layoutBox, displayBox);
         computeOutOfFlowHorizontalGeometry(layoutContext, layoutBox, displayBox);
 
-        formattingContext->layout(layoutContext, establishedFormattingState);
+        formattingContext->layout(layoutContext, layoutContext.establishedFormattingState(layoutBox));
 
         computeOutOfFlowVerticalGeometry(layoutContext, layoutBox, displayBox);
         layoutOutOfFlowDescendants(layoutContext, layoutBox);
     }
     LOG_WITH_STREAM(FormattingContextLayout, stream << "End: layout out-of-flow descendants -> context: " << &layoutContext << " root: " << &root());
+}
+
+Display::Box FormattingContext::mapBoxToAncestor(const LayoutContext& layoutContext, const Box& layoutBox, const Container& ancestor)
+{
+    ASSERT(layoutBox.isDescendantOf(ancestor));
+
+    auto* displayBox = layoutContext.displayBoxForLayoutBox(layoutBox);
+    ASSERT(displayBox);
+    auto topLeft = displayBox->topLeft();
+
+    auto* containingBlock = layoutBox.containingBlock();
+    for (; containingBlock && containingBlock != &ancestor; containingBlock = containingBlock->containingBlock())
+        topLeft.moveBy(layoutContext.displayBoxForLayoutBox(*containingBlock)->topLeft());
+
+    if (!containingBlock) {
+        ASSERT_NOT_REACHED();
+        return Display::Box(*displayBox);
+    }
+
+    auto mappedDisplayBox = Display::Box(*displayBox);
+    mappedDisplayBox.setTopLeft(topLeft);
+    return mappedDisplayBox;
+}
+
+Position FormattingContext::mapTopLeftToAncestor(const LayoutContext& layoutContext, const Box& layoutBox, const Container& ancestor)
+{
+    ASSERT(layoutBox.isDescendantOf(ancestor));
+    return mapCoordinateToAncestor(layoutContext, layoutContext.displayBoxForLayoutBox(layoutBox)->topLeft(), *layoutBox.containingBlock(), ancestor);
+}
+
+Position FormattingContext::mapCoordinateToAncestor(const LayoutContext& layoutContext, Position position, const Container& containingBlock, const Container& ancestor)
+{
+    auto mappedPosition = position;
+    auto* container = &containingBlock;
+    for (; container && container != &ancestor; container = container->containingBlock())
+        mappedPosition.moveBy(layoutContext.displayBoxForLayoutBox(*container)->topLeft());
+
+    if (!container) {
+        ASSERT_NOT_REACHED();
+        return position;
+    }
+
+    return mappedPosition;
 }
 
 #ifndef NDEBUG

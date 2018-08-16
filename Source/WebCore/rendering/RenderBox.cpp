@@ -1500,7 +1500,7 @@ bool RenderBox::backgroundHasOpaqueTopLayer() const
 
 void RenderBox::paintMask(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
-    if (!paintInfo.shouldPaintWithinRoot(*this) || style().visibility() != Visibility::Visible || paintInfo.phase != PaintPhaseMask || paintInfo.context().paintingDisabled())
+    if (!paintInfo.shouldPaintWithinRoot(*this) || style().visibility() != Visibility::Visible || paintInfo.phase != PaintPhase::Mask || paintInfo.context().paintingDisabled())
         return;
 
     LayoutRect paintRect = LayoutRect(paintOffset, size());
@@ -1510,7 +1510,7 @@ void RenderBox::paintMask(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 
 void RenderBox::paintClippingMask(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
-    if (!paintInfo.shouldPaintWithinRoot(*this) || style().visibility() != Visibility::Visible || paintInfo.phase != PaintPhaseClippingMask || paintInfo.context().paintingDisabled())
+    if (!paintInfo.shouldPaintWithinRoot(*this) || style().visibility() != Visibility::Visible || paintInfo.phase != PaintPhase::ClippingMask || paintInfo.context().paintingDisabled())
         return;
 
     LayoutRect paintRect = LayoutRect(paintOffset, size());
@@ -1522,7 +1522,7 @@ void RenderBox::paintMaskImages(const PaintInfo& paintInfo, const LayoutRect& pa
     // Figure out if we need to push a transparency layer to render our mask.
     bool pushTransparencyLayer = false;
     bool compositedMask = hasLayer() && layer()->hasCompositedMask();
-    bool flattenCompositingLayers = paintInfo.paintBehavior & PaintBehaviorFlattenCompositingLayers;
+    bool flattenCompositingLayers = paintInfo.paintBehavior.contains(PaintBehavior::FlattenCompositingLayers);
     CompositeOperator compositeOp = CompositeSourceOver;
 
     bool allMaskImagesLoaded = true;
@@ -1581,7 +1581,7 @@ void RenderBox::paintFillLayers(const PaintInfo& paintInfo, const Color& color, 
     for (auto* layer = &fillLayer; layer; layer = layer->next()) {
         layers.append(layer);
 
-        if (layer->blendMode() != BlendModeNormal)
+        if (layer->blendMode() != BlendMode::Normal)
             shouldDrawBackgroundInSeparateBuffer = true;
 
         // Stop traversal when an opaque layer is encountered.
@@ -1593,7 +1593,7 @@ void RenderBox::paintFillLayers(const PaintInfo& paintInfo, const Color& color, 
         // and pass it down.
 
         // The clipOccludesNextLayers condition must be evaluated first to avoid short-circuiting.
-        if (layer->clipOccludesNextLayers(layer == &fillLayer) && layer->hasOpaqueImage(*this) && layer->image()->canRender(this, style().effectiveZoom()) && layer->hasRepeatXY() && layer->blendMode() == BlendModeNormal)
+        if (layer->clipOccludesNextLayers(layer == &fillLayer) && layer->hasOpaqueImage(*this) && layer->image()->canRender(this, style().effectiveZoom()) && layer->hasRepeatXY() && layer->blendMode() == BlendMode::Normal)
             break;
     }
 
@@ -1722,21 +1722,21 @@ bool RenderBox::repaintLayerRectsForImage(WrappedImagePtr image, const FillLayer
 
 bool RenderBox::pushContentsClip(PaintInfo& paintInfo, const LayoutPoint& accumulatedOffset)
 {
-    if (paintInfo.phase == PaintPhaseBlockBackground || paintInfo.phase == PaintPhaseSelfOutline || paintInfo.phase == PaintPhaseMask)
+    if (paintInfo.phase == PaintPhase::BlockBackground || paintInfo.phase == PaintPhase::SelfOutline || paintInfo.phase == PaintPhase::Mask)
         return false;
-        
+
     bool isControlClip = hasControlClip();
     bool isOverflowClip = hasOverflowClip() && !layer()->isSelfPaintingLayer();
     
     if (!isControlClip && !isOverflowClip)
         return false;
     
-    if (paintInfo.phase == PaintPhaseOutline)
-        paintInfo.phase = PaintPhaseChildOutlines;
-    else if (paintInfo.phase == PaintPhaseChildBlockBackground) {
-        paintInfo.phase = PaintPhaseBlockBackground;
+    if (paintInfo.phase == PaintPhase::Outline)
+        paintInfo.phase = PaintPhase::ChildOutlines;
+    else if (paintInfo.phase == PaintPhase::ChildBlockBackground) {
+        paintInfo.phase = PaintPhase::BlockBackground;
         paintObject(paintInfo, accumulatedOffset);
-        paintInfo.phase = PaintPhaseChildBlockBackgrounds;
+        paintInfo.phase = PaintPhase::ChildBlockBackgrounds;
     }
     float deviceScaleFactor = document().deviceScaleFactor();
     FloatRect clipRect = snapRectToDevicePixels((isControlClip ? controlClipRect(accumulatedOffset) : overflowClipRect(accumulatedOffset, nullptr, IgnoreOverlayScrollbarSize, paintInfo.phase)), deviceScaleFactor);
@@ -1752,11 +1752,11 @@ void RenderBox::popContentsClip(PaintInfo& paintInfo, PaintPhase originalPhase, 
     ASSERT(hasControlClip() || (hasOverflowClip() && !layer()->isSelfPaintingLayer()));
 
     paintInfo.context().restore();
-    if (originalPhase == PaintPhaseOutline) {
-        paintInfo.phase = PaintPhaseSelfOutline;
+    if (originalPhase == PaintPhase::Outline) {
+        paintInfo.phase = PaintPhase::SelfOutline;
         paintObject(paintInfo, accumulatedOffset);
         paintInfo.phase = originalPhase;
-    } else if (originalPhase == PaintPhaseChildBlockBackground)
+    } else if (originalPhase == PaintPhase::ChildBlockBackground)
         paintInfo.phase = originalPhase;
 }
 
@@ -3330,7 +3330,7 @@ static void computeInlineStaticDistance(Length& logicalLeft, Length& logicalRigh
     // both "left" and "right" properties are "auto", we can consider that one of
     // them (depending on the direction) is simply "0".
     if (parent->isRenderGrid() && parent == child->containingBlock()) {
-        if (parentDirection == LTR)
+        if (parentDirection == TextDirection::LTR)
             logicalLeft.setValue(Fixed, 0);
         else
             logicalRight.setValue(Fixed, 0);
@@ -3338,7 +3338,7 @@ static void computeInlineStaticDistance(Length& logicalLeft, Length& logicalRigh
     }
 
     // FIXME: The static distance computation has not been patched for mixed writing modes yet.
-    if (parentDirection == LTR) {
+    if (parentDirection == TextDirection::LTR) {
         LayoutUnit staticPosition = child->layer()->staticInlinePosition() - containerBlock.borderLogicalLeft();
         for (auto* current = parent; current && current != &containerBlock; current = current->container()) {
             if (!is<RenderBox>(*current))
@@ -3597,7 +3597,7 @@ void RenderBox::computePositionedLogicalWidthUsing(SizeType widthType, Length lo
             } else {
                 // Use the containing block's direction rather than the parent block's
                 // per CSS 2.1 reference test abspos-non-replaced-width-margin-000.
-                if (containerDirection == LTR) {
+                if (containerDirection == TextDirection::LTR) {
                     marginLogicalLeftValue = 0;
                     marginLogicalRightValue = availableSpace; // will be negative
                 } else {
@@ -3620,7 +3620,7 @@ void RenderBox::computePositionedLogicalWidthUsing(SizeType widthType, Length lo
 
             // Use the containing block's direction rather than the parent block's
             // per CSS 2.1 reference test abspos-non-replaced-width-margin-000.
-            if (containerDirection == RTL)
+            if (containerDirection == TextDirection::RTL)
                 logicalLeftValue = (availableSpace + logicalLeftValue) - marginLogicalLeftValue - marginLogicalRightValue;
         }
     } else {
@@ -4095,7 +4095,7 @@ void RenderBox::computePositionedLogicalWidthReplaced(LogicalExtentComputedValue
         } else {
             // Use the containing block's direction rather than the parent block's
             // per CSS 2.1 reference test abspos-replaced-width-margin-000.
-            if (containerDirection == LTR) {
+            if (containerDirection == TextDirection::LTR) {
                 marginLogicalLeftAlias = 0;
                 marginLogicalRightAlias = difference; // will be negative
             } else {
@@ -4143,7 +4143,7 @@ void RenderBox::computePositionedLogicalWidthReplaced(LogicalExtentComputedValue
         logicalRightValue = valueForLength(logicalRight, containerLogicalWidth);
         logicalLeftValue = valueForLength(logicalLeft, containerLogicalWidth);
         // If the containing block is right-to-left, then push the left position as far to the right as possible
-        if (containerDirection == RTL) {
+        if (containerDirection == TextDirection::RTL) {
             int totalLogicalWidth = computedValues.m_extent + logicalLeftValue + logicalRightValue +  marginLogicalLeftAlias + marginLogicalRightAlias;
             logicalLeftValue = containerLogicalWidth - (totalLogicalWidth - logicalLeftValue);
         }

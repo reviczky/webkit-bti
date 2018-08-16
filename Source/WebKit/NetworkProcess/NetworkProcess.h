@@ -80,6 +80,7 @@ class NetworkProcess : public ChildProcess, private DownloadManager::Client {
     friend NeverDestroyed<DownloadManager>;
 public:
     static NetworkProcess& singleton();
+    static constexpr ProcessType processType = ProcessType::Network;
 
     template <typename T>
     T* supplement()
@@ -114,6 +115,8 @@ public:
 
 #if PLATFORM(COCOA)
     RetainPtr<CFDataRef> sourceApplicationAuditData() const;
+    void getHostNamesWithHSTSCache(WebCore::NetworkStorageSession&, HashSet<String>&);
+    void deleteHSTSCacheForHostNames(WebCore::NetworkStorageSession&, const Vector<String>&);
     void clearHSTSCache(WebCore::NetworkStorageSession&, WallTime modifiedSince);
     bool suppressesConnectionTerminationOnSystemChange() const { return m_suppressesConnectionTerminationOnSystemChange; }
 #endif
@@ -121,10 +124,7 @@ public:
     void findPendingDownloadLocation(NetworkDataTask&, ResponseCompletionHandler&&, const WebCore::ResourceResponse&);
 
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
-    void canAuthenticateAgainstProtectionSpace(NetworkResourceLoader&, const WebCore::ProtectionSpace&);
-#if ENABLE(SERVER_PRECONNECT)
-    void canAuthenticateAgainstProtectionSpace(PreconnectTask&, const WebCore::ProtectionSpace&);
-#endif
+    void canAuthenticateAgainstProtectionSpace(const WebCore::ProtectionSpace&, uint64_t pageID, uint64_t frameID, CompletionHandler<void(bool)>&&);
 #endif
 
     void prefetchDNS(const String&);
@@ -134,11 +134,11 @@ public:
     void grantSandboxExtensionsToStorageProcessForBlobs(const Vector<String>& filenames, Function<void ()>&& completionHandler);
 
 #if HAVE(CFNETWORK_STORAGE_PARTITIONING)
-    void updatePrevalentDomainsToPartitionOrBlockCookies(PAL::SessionID, const Vector<String>& domainsToPartition, const Vector<String>& domainsToBlock, const Vector<String>& domainsToNeitherPartitionNorBlock, bool shouldClearFirst, uint64_t callbackId);
+    void updatePrevalentDomainsToBlockCookiesFor(PAL::SessionID, const Vector<String>& domainsToBlock, bool shouldClearFirst, uint64_t contextId);
     void hasStorageAccessForFrame(PAL::SessionID, const String& resourceDomain, const String& firstPartyDomain, uint64_t frameID, uint64_t pageID, uint64_t contextId);
     void getAllStorageAccessEntries(PAL::SessionID, uint64_t contextId);
     void grantStorageAccess(PAL::SessionID, const String& resourceDomain, const String& firstPartyDomain, std::optional<uint64_t> frameID, uint64_t pageID, uint64_t contextId);
-    void removeAllStorageAccess(PAL::SessionID);
+    void removeAllStorageAccess(PAL::SessionID, uint64_t contextId);
     void removePrevalentDomains(PAL::SessionID, const Vector<String>& domains);
 #endif
 
@@ -178,7 +178,7 @@ private:
 
     enum class ShouldAcknowledgeWhenReadyToSuspend { No, Yes };
     void actualPrepareToSuspend(ShouldAcknowledgeWhenReadyToSuspend);
-    void platformPrepareToSuspend();
+    void platformPrepareToSuspend(CompletionHandler<void()>&&);
     void platformProcessDidResume();
 
     // ChildProcess
@@ -187,10 +187,12 @@ private:
     void initializeSandbox(const ChildProcessInitializationParameters&, SandboxInitializationParameters&) override;
     void initializeConnection(IPC::Connection*) override;
     bool shouldTerminate() override;
+    bool shouldCallExitWhenConnectionIsClosed() const final { return false; } // We override didClose() and want it to be called.
 
     // IPC::Connection::Client
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
     void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) override;
+    void didClose(IPC::Connection&) override;
 
     // DownloadManager::Client
     void didCreateDownload() override;
@@ -208,7 +210,7 @@ private:
 
     void fetchWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, OptionSet<WebsiteDataFetchOption>, uint64_t callbackID);
     void deleteWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, WallTime modifiedSince, uint64_t callbackID);
-    void deleteWebsiteDataForOrigins(PAL::SessionID, OptionSet<WebsiteDataType>, const Vector<WebCore::SecurityOriginData>& origins, const Vector<String>& cookieHostNames, uint64_t callbackID);
+    void deleteWebsiteDataForOrigins(PAL::SessionID, OptionSet<WebsiteDataType>, const Vector<WebCore::SecurityOriginData>& origins, const Vector<String>& cookieHostNames, const Vector<String>& HSTSCacheHostnames, uint64_t callbackID);
 
     void clearCachedCredentials();
 
@@ -221,7 +223,7 @@ private:
     void resumeDownload(PAL::SessionID, DownloadID, const IPC::DataReference& resumeData, const String& path, SandboxExtension::Handle&&);
     void cancelDownload(DownloadID);
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
-    void continueCanAuthenticateAgainstProtectionSpace(uint64_t resourceLoadIdentifier, bool canAuthenticate);
+    void continueCanAuthenticateAgainstProtectionSpace(uint64_t completionHandlerID, bool canAuthenticate);
 #endif
     void continueWillSendRequest(DownloadID, WebCore::ResourceRequest&&);
     void continueDecidePendingDownloadDestination(DownloadID, String destination, SandboxExtension::Handle&&, bool allowOverwrite);
@@ -246,9 +248,11 @@ private:
     void setNetworkProxySettings(const WebCore::SoupNetworkProxySettings&);
 #endif
 
-#if PLATFORM(COCOA)
+#if PLATFORM(MAC)
     static void setSharedHTTPCookieStorage(const Vector<uint8_t>& identifier);
 #endif
+
+    void platformSyncAllCookies(CompletionHandler<void()>&&);
 
     void registerURLSchemeAsSecure(const String&) const;
     void registerURLSchemeAsBypassingContentSecurityPolicy(const String&) const;
@@ -278,10 +282,9 @@ private:
     typedef HashMap<const char*, std::unique_ptr<NetworkProcessSupplement>, PtrHash<const char*>> NetworkProcessSupplementMap;
     NetworkProcessSupplementMap m_supplements;
 
-    HashMap<uint64_t, Function<void ()>> m_sandboxExtensionForBlobsCompletionHandlers;
-    HashMap<uint64_t, Ref<NetworkResourceLoader>> m_waitingNetworkResourceLoaders;
-#if ENABLE(SERVER_PRECONNECT)
-    HashMap<uint64_t, WeakPtr<PreconnectTask>> m_waitingPreconnectTasks;
+    HashMap<uint64_t, Function<void()>> m_sandboxExtensionForBlobsCompletionHandlers;
+#if USE(PROTECTION_SPACE_AUTH_CALLBACK)
+    HashMap<uint64_t, CompletionHandler<void(bool)>> m_canAuthenticateAgainstProtectionSpaceCompletionHandlers;
 #endif
     HashSet<PAL::SessionID> m_sessionsControlledByAutomation;
 
@@ -289,7 +292,6 @@ private:
 
 #if PLATFORM(COCOA)
     void platformInitializeNetworkProcessCocoa(const NetworkProcessCreationParameters&);
-    void setCookieStoragePartitioningEnabled(bool);
     void setStorageAccessAPIEnabled(bool);
 
     // FIXME: We'd like to be able to do this without the #ifdef, but WorkQueue + BinarySemaphore isn't good enough since

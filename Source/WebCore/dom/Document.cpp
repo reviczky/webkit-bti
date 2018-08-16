@@ -1350,7 +1350,7 @@ ExceptionOr<void> Document::setXMLVersion(const String& version)
 
 void Document::setXMLStandalone(bool standalone)
 {
-    m_xmlStandalone = standalone ? Standalone : NotStandalone;
+    m_xmlStandalone = standalone ? StandaloneStatus::Standalone : StandaloneStatus::NotStandalone;
 }
 
 void Document::setDocumentURI(const String& uri)
@@ -1514,7 +1514,7 @@ void Document::updateTitleFromTitleElement()
         updateTitle(downcast<HTMLTitleElement>(*m_titleElement).textWithDirection());
     else if (is<SVGTitleElement>(*m_titleElement)) {
         // FIXME: Does the SVG title element have a text direction?
-        updateTitle({ downcast<SVGTitleElement>(*m_titleElement).textContent(), LTR });
+        updateTitle({ downcast<SVGTitleElement>(*m_titleElement).textContent(), TextDirection::LTR });
     }
 }
 
@@ -1546,7 +1546,7 @@ void Document::setTitle(const String& title)
     else if (is<SVGTitleElement>(m_titleElement.get()))
         downcast<SVGTitleElement>(*m_titleElement).setTextContent(title);
     else
-        updateTitle({ title, LTR });
+        updateTitle({ title, TextDirection::LTR });
 }
 
 template<typename> struct TitleTraits;
@@ -2609,11 +2609,8 @@ ExceptionOr<RefPtr<WindowProxy>> Document::openForBindings(DOMWindow& activeWind
 // FIXME: Add support for the 'type' and 'replace' parameters.
 ExceptionOr<Document&> Document::openForBindings(Document* responsibleDocument, const String&, const String&)
 {
-    if (!isHTMLDocument())
+    if (!isHTMLDocument() || m_throwOnDynamicMarkupInsertionCount)
         return Exception { InvalidStateError };
-
-    // FIXME: This should also throw if "document's throw-on-dynamic-markup-insertion counter is greater than 0".
-    // https://bugs.webkit.org/show_bug.cgi?id=187319
 
     open(responsibleDocument);
     return *this;
@@ -2753,11 +2750,8 @@ ExceptionOr<void> Document::closeForBindings()
     // FIXME: We should follow the specification more closely:
     //        http://www.whatwg.org/specs/web-apps/current-work/#dom-document-close
 
-    if (!isHTMLDocument())
+    if (!isHTMLDocument() || m_throwOnDynamicMarkupInsertionCount)
         return Exception { InvalidStateError };
-
-    // FIXME: This should also throw if "document's throw-on-dynamic-markup-insertion counter is greater than 0".
-    // https://bugs.webkit.org/show_bug.cgi?id=187319
 
     close();
     return { };
@@ -2984,11 +2978,8 @@ void Document::write(Document* responsibleDocument, SegmentedString&& text)
 
 ExceptionOr<void> Document::write(Document* responsibleDocument, Vector<String>&& strings)
 {
-    if (!isHTMLDocument())
+    if (!isHTMLDocument() || m_throwOnDynamicMarkupInsertionCount)
         return Exception { InvalidStateError };
-
-    // FIXME: This should also throw if "document's throw-on-dynamic-markup-insertion counter is greater than 0".
-    // https://bugs.webkit.org/show_bug.cgi?id=187319
 
     SegmentedString text;
     for (auto& string : strings)
@@ -3001,11 +2992,8 @@ ExceptionOr<void> Document::write(Document* responsibleDocument, Vector<String>&
 
 ExceptionOr<void> Document::writeln(Document* responsibleDocument, Vector<String>&& strings)
 {
-    if (!isHTMLDocument())
+    if (!isHTMLDocument() || m_throwOnDynamicMarkupInsertionCount)
         return Exception { InvalidStateError };
-
-    // FIXME: This should also throw if "document's throw-on-dynamic-markup-insertion counter is greater than 0".
-    // https://bugs.webkit.org/show_bug.cgi?id=187319
 
     SegmentedString text;
     for (auto& string : strings)
@@ -5669,7 +5657,7 @@ void Document::initContentSecurityPolicy()
     if (parentFrame)
         contentSecurityPolicy()->copyUpgradeInsecureRequestStateFrom(*parentFrame->document()->contentSecurityPolicy());
 
-    // 2. Inherit Content Security Policy
+    // 2. Inherit Content Security Policy (without copying Upgrade Insecure Requests state).
     if (!shouldInheritContentSecurityPolicyFromOwner())
         return;
     Frame* ownerFrame = parentFrame;
@@ -5677,7 +5665,12 @@ void Document::initContentSecurityPolicy()
         ownerFrame = m_frame->loader().opener();
     if (!ownerFrame)
         return;
-    contentSecurityPolicy()->copyStateFrom(ownerFrame->document()->contentSecurityPolicy()); // Does not copy Upgrade Insecure Requests state.
+    // FIXME: The CSP 3 spec. implies that only plugin documents delivered with a local scheme (e.g. blob, file, data)
+    // should inherit a policy.
+    if (isPluginDocument() && m_frame->loader().opener())
+        contentSecurityPolicy()->createPolicyForPluginDocumentFrom(*ownerFrame->document()->contentSecurityPolicy());
+    else
+        contentSecurityPolicy()->copyStateFrom(ownerFrame->document()->contentSecurityPolicy());
 }
 
 bool Document::isContextThread() const

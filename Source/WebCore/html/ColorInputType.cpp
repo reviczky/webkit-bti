@@ -81,9 +81,32 @@ ColorInputType::~ColorInputType()
     endColorChooser();
 }
 
+bool ColorInputType::isMouseFocusable() const
+{
+    ASSERT(element());
+    return element()->isTextFormControlFocusable();
+}
+
+bool ColorInputType::isKeyboardFocusable(KeyboardEvent*) const
+{
+    ASSERT(element());
+#if PLATFORM(IOS)
+    if (element()->isReadOnly())
+        return false;
+
+    return element()->isTextFormControlFocusable();
+#endif
+    return false;
+}
+
 bool ColorInputType::isColorControl() const
 {
     return true;
+}
+
+bool ColorInputType::isPresentingAttachedView() const
+{
+    return !!m_chooser;
 }
 
 const AtomicString& ColorInputType::formControlType() const
@@ -167,9 +190,14 @@ void ColorInputType::detach()
     endColorChooser();
 }
 
+void ColorInputType::elementDidBlur()
+{
+    endColorChooser();
+}
+
 bool ColorInputType::shouldRespectListAttribute()
 {
-    return InputType::themeSupportsDataListUI(this);
+    return true;
 }
 
 bool ColorInputType::typeMismatchFor(const String& value) const
@@ -196,6 +224,8 @@ void ColorInputType::didChooseColor(const Color& color)
 void ColorInputType::didEndChooser()
 {
     m_chooser = nullptr;
+    if (element()->renderer())
+        element()->renderer()->repaint();
 }
 
 void ColorInputType::endColorChooser()

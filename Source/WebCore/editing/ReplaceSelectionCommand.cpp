@@ -377,7 +377,7 @@ inline void ReplaceSelectionCommand::InsertedNodes::didReplaceNode(Node* node, N
         m_lastNodeInserted = newNode;
 }
 
-ReplaceSelectionCommand::ReplaceSelectionCommand(Document& document, RefPtr<DocumentFragment>&& fragment, CommandOptions options, EditAction editAction)
+ReplaceSelectionCommand::ReplaceSelectionCommand(Document& document, RefPtr<DocumentFragment>&& fragment, OptionSet<CommandOption> options, EditAction editAction)
     : CompositeEditCommand(document, editAction)
     , m_selectReplacement(options & SelectReplacement)
     , m_smartReplace(options & SmartReplace)
@@ -502,13 +502,12 @@ void ReplaceSelectionCommand::removeRedundantStylesAndKeepStyleSpanInline(Insert
                 Vector<QualifiedName> attributes;
                 HTMLElement& htmlElement = downcast<HTMLElement>(*element);
 
-                if (newInlineStyle->conflictsWithImplicitStyleOfElement(&htmlElement)) {
+                if (newInlineStyle->conflictsWithImplicitStyleOfElement(htmlElement)) {
                     // e.g. <b style="font-weight: normal;"> is converted to <span style="font-weight: normal;">
                     node = replaceElementWithSpanPreservingChildrenAndAttributes(htmlElement);
                     element = downcast<StyledElement>(node.get());
                     insertedNodes.didReplaceNode(&htmlElement, node.get());
-                } else if (newInlineStyle->extractConflictingImplicitStyleOfAttributes(&htmlElement, EditingStyle::PreserveWritingDirection, 0, attributes,
-                    EditingStyle::DoNotExtractMatchingStyle)) {
+                } else if (newInlineStyle->extractConflictingImplicitStyleOfAttributes(htmlElement, EditingStyle::PreserveWritingDirection, nullptr, attributes, EditingStyle::DoNotExtractMatchingStyle)) {
                     // e.g. <font size="3" style="font-size: 20px;"> is converted to <font style="font-size: 20px;">
                     for (auto& attribute : attributes)
                         removeNodeAttribute(*element, attribute);
@@ -909,7 +908,7 @@ static bool isInlineNodeWithStyle(const Node* node)
         || classAttributeValue == ApplePasteAsQuotation)
         return true;
 
-    return EditingStyle::elementIsStyledSpanOrHTMLEquivalent(element);
+    return EditingStyle::elementIsStyledSpanOrHTMLEquivalent(*element);
 }
 
 inline Node* nodeToSplitToAvoidPastingIntoInlineNodesWithStyle(const Position& insertionPos)

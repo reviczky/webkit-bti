@@ -36,7 +36,7 @@
 #include "JSDOMGlobalObjectTask.h"
 #include "JSDOMWindowCustom.h"
 #include "JSFetchResponse.h"
-#include "JSMainThreadExecState.h"
+#include "JSMicrotaskCallback.h"
 #include "JSNode.h"
 #include "Logging.h"
 #include "Page.h"
@@ -205,43 +205,11 @@ RuntimeFlags JSDOMWindowBase::javaScriptRuntimeFlags(const JSGlobalObject* objec
     return frame->settings().javaScriptRuntimeFlags();
 }
 
-class JSDOMWindowMicrotaskCallback : public RefCounted<JSDOMWindowMicrotaskCallback> {
-public:
-    static Ref<JSDOMWindowMicrotaskCallback> create(JSDOMWindowBase& globalObject, Ref<JSC::Microtask>&& task)
-    {
-        return adoptRef(*new JSDOMWindowMicrotaskCallback(globalObject, WTFMove(task)));
-    }
-
-    void call()
-    {
-        Ref<JSDOMWindowMicrotaskCallback> protectedThis(*this);
-        VM& vm = m_globalObject->vm();
-        JSLockHolder lock(vm);
-        auto scope = DECLARE_THROW_SCOPE(vm);
-
-        ExecState* exec = m_globalObject->globalExec();
-
-        JSMainThreadExecState::runTask(exec, m_task);
-
-        scope.assertNoException();
-    }
-
-private:
-    JSDOMWindowMicrotaskCallback(JSDOMWindowBase& globalObject, Ref<JSC::Microtask>&& task)
-        : m_globalObject { globalObject.vm(), &globalObject }
-        , m_task { WTFMove(task) }
-    {
-    }
-
-    Strong<JSDOMWindowBase> m_globalObject;
-    Ref<JSC::Microtask> m_task;
-};
-
 void JSDOMWindowBase::queueTaskToEventLoop(JSGlobalObject& object, Ref<JSC::Microtask>&& task)
 {
     JSDOMWindowBase& thisObject = static_cast<JSDOMWindowBase&>(object);
 
-    RefPtr<JSDOMWindowMicrotaskCallback> callback = JSDOMWindowMicrotaskCallback::create(thisObject, WTFMove(task));
+    RefPtr<JSMicrotaskCallback> callback = JSMicrotaskCallback::create(thisObject, WTFMove(task));
     auto microtask = std::make_unique<ActiveDOMCallbackMicrotask>(MicrotaskQueue::mainThreadQueue(), *thisObject.scriptExecutionContext(), [callback]() mutable {
         callback->call();
     });
@@ -496,32 +464,5 @@ void JSDOMWindowBase::instantiateStreaming(JSC::JSGlobalObject* globalObject, JS
         promise->reject(exec, createTypeError(exec, "first argument must be an Response or Promise for Response"_s));
 }
 #endif
-
-void JSDOMWindowBase::promiseRejectionTracker(JSGlobalObject* jsGlobalObject, ExecState* exec, JSPromise* promise, JSPromiseRejectionOperation operation)
-{
-    // https://html.spec.whatwg.org/multipage/webappapis.html#the-hostpromiserejectiontracker-implementation
-
-    VM& vm = exec->vm();
-    auto& globalObject = *JSC::jsCast<JSDOMWindowBase*>(jsGlobalObject);
-    auto* context = globalObject.scriptExecutionContext();
-    if (!context)
-        return;
-
-    // InternalPromises should not be exposed to user scripts.
-    if (JSC::jsDynamicCast<JSC::JSInternalPromise*>(vm, promise))
-        return;
-
-    // FIXME: If script has muted errors (cross origin), terminate these steps.
-    // <https://webkit.org/b/171415> Implement the `muted-errors` property of Scripts to avoid onerror/onunhandledrejection for cross-origin scripts
-
-    switch (operation) {
-    case JSPromiseRejectionOperation::Reject:
-        context->ensureRejectedPromiseTracker().promiseRejected(*exec, globalObject, *promise);
-        break;
-    case JSPromiseRejectionOperation::Handle:
-        context->ensureRejectedPromiseTracker().promiseHandled(*exec, globalObject, *promise);
-        break;
-    }
-}
 
 } // namespace WebCore
