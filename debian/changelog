@@ -1,6 +1,10 @@
 webkit2gtk (2.21.91-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * debian/patches/fix-ftbfs-m68k.patch:
+    + Refresh.
+  * debian/patches/gtk-doc-build-fix.patch:
+    + Remove.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 16 Aug 2018 15:51:37 +0300
 
