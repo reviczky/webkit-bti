@@ -88,14 +88,8 @@ override_dh_makeshlibs:
 	dh_makeshlibs -plibwebkit2gtk-4.0-37 -Xinjected-bundle
 	dh_makeshlibs -plibjavascriptcoregtk-4.0-18
 
-# http://bugs.debian.org/459427
-ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
 override_dh_installdocs:
 	dh_installdocs -A NEWS
-else
-override_dh_installchangelogs:
-	dh_installchangelogs NEWS
-endif
 
 override_dh_builddeb:
 	DEB_BUILD_OPTIONS="$(filter-out parallel=%,$(DEB_BUILD_OPTIONS))" \
