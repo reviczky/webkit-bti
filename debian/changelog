@@ -11,6 +11,8 @@ webkit2gtk (2.21.91-1) UNRELEASED; urgency=medium
     + Update Standards-Version to 4.2.0.
   * debian/source/lintian-overrides:
     + Update source-is-missing overrides.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 16 Aug 2018 15:51:37 +0300
 

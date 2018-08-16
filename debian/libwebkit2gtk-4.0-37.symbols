@@ -1681,6 +1681,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_enable_hyperlink_auditing@Base 2.5.3
  webkit_settings_get_enable_java@Base 2.5.3
  webkit_settings_get_enable_javascript@Base 2.5.3
+ webkit_settings_get_enable_media_capabilities@Base 2.21.91
  webkit_settings_get_enable_media_stream@Base 2.5.3
  webkit_settings_get_enable_mediasource@Base 2.5.3
  webkit_settings_get_enable_offline_web_application_cache@Base 2.5.3
@@ -1736,6 +1737,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_set_enable_hyperlink_auditing@Base 2.5.3
  webkit_settings_set_enable_java@Base 2.5.3
  webkit_settings_set_enable_javascript@Base 2.5.3
+ webkit_settings_set_enable_media_capabilities@Base 2.21.91
  webkit_settings_set_enable_media_stream@Base 2.5.3
  webkit_settings_set_enable_mediasource@Base 2.5.3
  webkit_settings_set_enable_offline_web_application_cache@Base 2.5.3
