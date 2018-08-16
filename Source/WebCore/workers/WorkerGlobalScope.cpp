@@ -33,6 +33,7 @@
 #include "IDBConnectionProxy.h"
 #include "ImageBitmapOptions.h"
 #include "InspectorInstrumentation.h"
+#include "Microtasks.h"
 #include "Performance.h"
 #include "ScheduledAction.h"
 #include "ScriptSourceCode.h"
@@ -60,6 +61,7 @@ WorkerGlobalScope::WorkerGlobalScope(const URL& url, Ref<SecurityOrigin>&& origi
     , m_thread(thread)
     , m_script(std::make_unique<WorkerScriptController>(this))
     , m_inspectorController(std::make_unique<WorkerInspectorController>(*this))
+    , m_microtaskQueue(std::make_unique<MicrotaskQueue>())
     , m_isOnline(isOnline)
     , m_shouldBypassMainWorldContentSecurityPolicy(shouldBypassMainWorldContentSecurityPolicy)
     , m_eventQueue(*this)
@@ -101,6 +103,25 @@ String WorkerGlobalScope::origin() const
 {
     auto* securityOrigin = this->securityOrigin();
     return securityOrigin ? securityOrigin->toString() : emptyString();
+}
+
+void WorkerGlobalScope::prepareForTermination()
+{
+#if ENABLE(INDEXED_DATABASE)
+    stopIndexedDatabase();
+#endif
+
+    stopActiveDOMObjects();
+
+    m_inspectorController->workerTerminating();
+
+    // Event listeners would keep DOMWrapperWorld objects alive for too long. Also, they have references to JS objects,
+    // which become dangling once Heap is destroyed.
+    removeAllEventListeners();
+
+    // MicrotaskQueue and RejectedPromiseTracker reference Heap.
+    m_microtaskQueue = nullptr;
+    removeRejectedPromiseTracker();
 }
 
 void WorkerGlobalScope::removeAllEventListeners()

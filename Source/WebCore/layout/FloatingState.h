@@ -27,24 +27,84 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
+#include "DisplayBox.h"
 #include <wtf/IsoMalloc.h>
 #include <wtf/Ref.h>
+#include <wtf/WeakPtr.h>
 
 namespace WebCore {
 
 namespace Layout {
 
+class Box;
+class Container;
 class FormattingState;
+class LayoutContext;
 
 // FloatingState holds the floating boxes per formatting context.
 class FloatingState : public RefCounted<FloatingState> {
     WTF_MAKE_ISO_ALLOCATED(FloatingState);
 public:
-    static Ref<FloatingState> create() { return adoptRef(*new FloatingState()); }
+    static Ref<FloatingState> create(LayoutContext& layoutContext, const Box& formattingContextRoot) { return adoptRef(*new FloatingState(layoutContext, formattingContextRoot)); }
+
+    void append(const Box& layoutBox);
+    void remove(const Box& layoutBox);
+
+    bool isEmpty() const { return m_floats.isEmpty(); }
+
+    std::optional<LayoutUnit> leftBottom(const Box& formattingContextRoot) const;
+    std::optional<LayoutUnit> rightBottom(const Box& formattingContextRoot) const;
+    std::optional<LayoutUnit> bottom(const Box& formattingContextRoot) const;
+
+    class FloatItem {
+    public:
+        FloatItem(const Box&, const FloatingState&);
+
+        const Box& layoutBox() const { return *m_layoutBox; }
+        const Container& containingBlock() const { return *m_containingBlock; }
+
+        const Display::Box& displayBox() const { return m_absoluteDisplayBox; }
+        const Display::Box& containingBlockDisplayBox() const { return m_containingBlockAbsoluteDisplayBox; }
+
+    private:
+        WeakPtr<Box> m_layoutBox;
+        WeakPtr<Container> m_containingBlock;
+
+        Display::Box m_absoluteDisplayBox;
+        Display::Box m_containingBlockAbsoluteDisplayBox;
+    };
+    using FloatList = Vector<FloatItem>;
+    const FloatList& floats() const { return m_floats; }
+    const FloatItem* last() const { return isEmpty() ? nullptr : &m_floats.last(); }
 
 private:
-    FloatingState();
+    friend class FloatingContext;
+    FloatingState(LayoutContext&, const Box& formattingContextRoot);
+
+    LayoutContext& layoutContext() const { return m_layoutContext; }
+    const Box& root() const { return *m_formattingContextRoot; }
+
+    std::optional<LayoutUnit> bottom(const Box& formattingContextRoot, Clear) const;
+
+    LayoutContext& m_layoutContext;
+    WeakPtr<Box> m_formattingContextRoot;
+    FloatList m_floats;
 };
+
+inline std::optional<LayoutUnit> FloatingState::leftBottom(const Box& formattingContextRoot) const
+{ 
+    return bottom(formattingContextRoot, Clear::Left);
+}
+
+inline std::optional<LayoutUnit> FloatingState::rightBottom(const Box& formattingContextRoot) const
+{
+    return bottom(formattingContextRoot, Clear::Right);
+}
+
+inline std::optional<LayoutUnit> FloatingState::bottom(const Box& formattingContextRoot) const
+{
+    return bottom(formattingContextRoot, Clear::Both);
+}
 
 }
 }

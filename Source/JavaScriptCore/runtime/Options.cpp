@@ -49,7 +49,7 @@
 #include <crt_externs.h>
 #endif
 
-#if OS(WINDOWS) && ENABLE(JIT)
+#if ENABLE(JIT)
 #include "MacroAssembler.h"
 #endif
 
@@ -91,7 +91,7 @@ static bool parse(const char* string, unsigned& value)
     return sscanf(string, "%u", &value) == 1;
 }
 
-static bool parse(const char* string, unsigned long& value)
+static bool UNUSED_FUNCTION parse(const char* string, unsigned long& value)
 {
     return sscanf(string, "%lu", &value);
 }
@@ -397,8 +397,8 @@ static void recomputeDependentOptions()
     Options::useConcurrentGC() = false;
 #endif
     
-#if OS(WINDOWS) && ENABLE(JIT) && CPU(X86) 
-    // Disable JIT on Windows if SSE2 is not present 
+#if ENABLE(JIT) && CPU(X86)
+    // Disable JIT on IA-32 if SSE2 is not present
     if (!MacroAssemblerX86::supportsFloatingPoint())
         Options::useJIT() = false;
 #endif

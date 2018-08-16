@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,13 +26,11 @@
 #pragma once
 
 #include "APIObject.h"
-
-#if PLATFORM(COCOA)
-#include "WKFoundation.h"
-#endif
+#include <wtf/CompletionHandler.h>
+#include <wtf/Vector.h>
 
 namespace API {
-class Navigation;
+class WebsitePolicies;
 }
 
 namespace WebCore {
@@ -41,51 +39,33 @@ enum class PolicyAction;
 
 namespace WebKit {
 
-class WebsiteDataStore;
-class WebFrameProxy;
-struct WebsitePoliciesData;
+class SafeBrowsingResult;
 
-enum class PolicyListenerType {
-    NavigationAction,
-    NewWindowAction,
-    Response,
-};
+enum class ShouldProcessSwapIfPossible { No, Yes };
+enum class ShouldExpectSafeBrowsingResult { No, Yes };
 
 class WebFramePolicyListenerProxy : public API::ObjectImpl<API::Object::Type::FramePolicyListener> {
 public:
 
-    static Ref<WebFramePolicyListenerProxy> create(WebFrameProxy* frame, uint64_t listenerID, PolicyListenerType policyType)
+    using Reply = CompletionHandler<void(WebCore::PolicyAction, API::WebsitePolicies*, ShouldProcessSwapIfPossible, Vector<SafeBrowsingResult>&&)>;
+    static Ref<WebFramePolicyListenerProxy> create(Reply&& reply, ShouldExpectSafeBrowsingResult expect)
     {
-        return adoptRef(*new WebFramePolicyListenerProxy(frame, listenerID, policyType));
+        return adoptRef(*new WebFramePolicyListenerProxy(WTFMove(reply), expect));
     }
+    ~WebFramePolicyListenerProxy();
 
-    void use(std::optional<WebsitePoliciesData>&&);
+    void use(API::WebsitePolicies* = nullptr, ShouldProcessSwapIfPossible = ShouldProcessSwapIfPossible::No);
     void download();
     void ignore();
-
-    PolicyListenerType policyListenerType() const { return m_policyType; }
-
-    uint64_t listenerID() const { return m_listenerID; }
     
-    void setNavigation(Ref<API::Navigation>&&);
-    void invalidate();
-    
-    void changeWebsiteDataStore(WebsiteDataStore&);
-    bool isMainFrame() const;
-
-    void setApplyPolicyInNewProcessIfPossible(bool applyPolicyInNewProcessIfPossible) { m_applyPolicyInNewProcessIfPossible = applyPolicyInNewProcessIfPossible; }
-    bool applyPolicyInNewProcessIfPossible() const { return m_applyPolicyInNewProcessIfPossible; }
+    void didReceiveSafeBrowsingResults(Vector<SafeBrowsingResult>&&);
 
 private:
-    WebFramePolicyListenerProxy(WebFrameProxy*, uint64_t listenerID, PolicyListenerType);
+    WebFramePolicyListenerProxy(Reply&&, ShouldExpectSafeBrowsingResult);
 
-    void receivedPolicyDecision(WebCore::PolicyAction, std::optional<WebsitePoliciesData>&&);
-
-    PolicyListenerType m_policyType;
-    RefPtr<WebFrameProxy> m_frame;
-    uint64_t m_listenerID { 0 };
-    RefPtr<API::Navigation> m_navigation;
-    bool m_applyPolicyInNewProcessIfPossible { false };
+    std::optional<std::pair<RefPtr<API::WebsitePolicies>, ShouldProcessSwapIfPossible>> m_policyResult;
+    std::optional<Vector<SafeBrowsingResult>> m_safeBrowsingResults;
+    Reply m_reply;
 };
 
 } // namespace WebKit

@@ -27,12 +27,13 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
+#include "RenderStyleConstants.h"
 #include "Runs.h"
 #include <wtf/IsoMalloc.h>
 
 namespace WebCore {
 
-class LayoutUnit;
+class FontCascade;
 class RenderStyle;
 
 namespace Layout {
@@ -62,13 +63,20 @@ private:
     struct Style {
         explicit Style(const RenderStyle&);
 
+        const FontCascade& font;
         bool wrapLines { false };
         bool breakAnyWordOnOverflow { false };
         bool breakFirstWordOnOverflow { false };
         bool collapseWhitespace { false };
         bool preWrap { false };
         bool preserveNewline { false };
-        bool textAlignIsRight { false };
+        TextAlignMode textAlign { TextAlignMode::Left };
+        bool shouldHyphenate;
+        float hyphenStringWidth;
+        ItemPosition hyphenLimitBefore;
+        ItemPosition hyphenLimitAfter;
+        AtomicString locale;
+        std::optional<unsigned> hyphenLimitLines;
     };
 
     class TextRunList {
@@ -96,21 +104,45 @@ private:
         bool hasContent() const { return m_runsWidth; }
 
         void reset();
-        void setAvailableWidth(float availableWidth) { m_availableWidth = availableWidth; }
         bool hasTrailingWhitespace() const { return m_trailingWhitespaceWidth; }
         bool isWhitespaceOnly() const { return m_runsWidth == m_trailingWhitespaceWidth; }
         void collapseTrailingWhitespace();
 
+        void setAvailableWidth(float availableWidth) { m_availableWidth = availableWidth; }
         void setLeft(float left) { m_left = left; }
+        void setTextAlign(TextAlignMode);
+        void setCollapseWhitespace(bool collapseWhitespace) { m_style.collapseWhitespace = collapseWhitespace; }
+
+        void closeLastRun();
+        void adjustRunsForTextAlign(bool lastLine);
 
     private:
+        struct Style {
+            bool collapseWhitespace { false };
+            TextAlignMode textAlign { TextAlignMode::Left };
+        };
+
+        float adjustedLeftForTextAlign(TextAlignMode) const;
+        void justifyRuns();
+        void collectExpansionOpportunities(const TextRun&, bool textRunCreatesNewLayoutRun);
+
         Vector<LayoutRun>& m_layoutRuns;
+        Style m_style;
+
         float m_runsWidth { 0 };
         float m_availableWidth { 0 };
         float m_left { 0 };
         float m_trailingWhitespaceWidth { 0 };
+        unsigned m_firstRunIndex { 0 };
         std::optional<TextRun> m_lastTextRun;
         std::optional<TextRun> m_lastNonWhitespaceTextRun;
+        bool m_collectExpansionOpportunities { false };
+        struct ExpansionOpportunity {
+            unsigned count { 0 };
+            ExpansionBehavior behavior { DefaultExpansion };
+        };
+        Vector<ExpansionOpportunity> m_expansionOpportunityList;
+        std::optional<ExpansionOpportunity> m_lastNonWhitespaceExpansionOppportunity;
     };
 
     void handleLineStart();
@@ -123,6 +155,8 @@ private:
     void collapseTrailingWhitespace();
     bool splitTextRun(const TextRun&);
     TextRunSplitPair split(const TextRun&, float leftSideMaximumWidth) const;
+    std::optional<ContentPosition> hyphenPositionBefore(const TextRun&, ContentPosition before) const;
+    std::optional<ContentPosition> adjustSplitPositionWithHyphenation(const TextRun&, ContentPosition splitPosition, float leftSideWidth) const;
     LineConstraint lineConstraint(float verticalPosition);
     float verticalPosition() const { return m_numberOfLines * m_lineHeight; }
 
@@ -131,8 +165,8 @@ private:
 
     TextRunList m_textRunList;
 
-    Line m_currentLine;
     Vector<LayoutRun> m_layoutRuns;
+    Line m_currentLine;
 
     LineConstraintList m_lineConstraintList;
     ConstVectorIterator<LineConstraint> m_lineConstraintIterator;
@@ -140,6 +174,8 @@ private:
     unsigned m_numberOfLines { 0 };
     bool m_previousLineHasNonForcedContent { false };
     float m_lineHeight { 0 };
+    bool m_hyphenationIsDisabled { false };
+    unsigned m_numberOfPrecedingLinesWithHyphen { 0 };
 };
 
 inline std::optional<TextRun> SimpleLineBreaker::TextRunList::current() const

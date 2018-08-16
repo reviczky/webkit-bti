@@ -30,6 +30,7 @@
 #include "GraphicsContext.h"
 #include "GraphicsLayer.h"
 #include "GraphicsLayerFactory.h"
+#include "NicosiaCompositionLayerTextureMapperImpl.h"
 #include "NicosiaPaintingEngine.h"
 #include "ScrollableArea.h"
 #include "TextureMapperPlatformLayerProxyProvider.h"
@@ -100,7 +101,7 @@ void CoordinatedGraphicsLayer::didUpdateTileBuffers()
         return;
 
     auto repaintCount = incrementRepaintCount();
-    m_layerState.repaintCount = repaintCount;
+    m_layerState.repaintCount.count = repaintCount;
     m_layerState.repaintCountChanged = true;
     m_nicosia.repaintCounter.count = repaintCount;
     m_nicosia.delta.repaintCounterChanged = true;
@@ -147,7 +148,8 @@ CoordinatedGraphicsLayer::CoordinatedGraphicsLayer(Type layerType, GraphicsLayer
     static CoordinatedLayerID nextLayerID = 1;
     m_id = nextLayerID++;
 
-    m_nicosia.layer = Nicosia::CompositionLayer::create(m_id);
+    m_nicosia.layer = Nicosia::CompositionLayer::create(m_id,
+        Nicosia::CompositionLayerTextureMapperImpl::createFactory());
 }
 
 CoordinatedGraphicsLayer::~CoordinatedGraphicsLayer()
@@ -430,10 +432,13 @@ void CoordinatedGraphicsLayer::setContentsNeedsDisplay()
 void CoordinatedGraphicsLayer::setContentsToPlatformLayer(PlatformLayer* platformLayer, ContentsLayerPurpose)
 {
 #if USE(COORDINATED_GRAPHICS_THREADED)
+#if USE(NICOSIA)
+#else
     if (m_platformLayer != platformLayer)
         m_shouldSyncPlatformLayer = true;
 
     m_platformLayer = platformLayer;
+#endif
     notifyFlushRequired();
 #else
     UNUSED_PARAM(platformLayer);
@@ -504,8 +509,8 @@ void CoordinatedGraphicsLayer::setShowRepaintCounter(bool show)
         return;
 
     GraphicsLayer::setShowRepaintCounter(show);
-    m_layerState.debugVisuals.showRepaintCounter = show;
-    m_layerState.debugVisualsChanged = true;
+    m_layerState.repaintCount.showRepaintCounter = show;
+    m_layerState.repaintCountChanged = true;
     m_nicosia.repaintCounter.visible = show;
     m_nicosia.delta.repaintCounterChanged = true;
 
@@ -645,6 +650,7 @@ void CoordinatedGraphicsLayer::syncFilters()
 
     m_layerState.filters = GraphicsLayer::filters();
     m_layerState.filtersChanged = true;
+    m_nicosia.delta.filtersChanged = true;
 }
 
 void CoordinatedGraphicsLayer::syncImageBacking()
@@ -701,11 +707,11 @@ void CoordinatedGraphicsLayer::syncLayerState()
 
     if (m_layerState.debugVisualsChanged) {
         m_layerState.debugVisuals.showDebugBorders = isShowingDebugBorder();
-        m_layerState.debugVisuals.showRepaintCounter = isShowingRepaintCounter();
+        if (m_layerState.debugVisuals.showDebugBorders)
+            updateDebugIndicators();
     }
-
-    if (m_layerState.debugVisuals.showDebugBorders)
-        updateDebugIndicators();
+    if (m_layerState.repaintCountChanged)
+        m_layerState.repaintCount.showRepaintCounter = isShowingRepaintCounter();
 }
 
 void CoordinatedGraphicsLayer::setDebugBorder(const Color& color, float width)
@@ -734,31 +740,38 @@ void CoordinatedGraphicsLayer::syncAnimations()
     m_shouldSyncAnimations = false;
     m_layerState.animations = m_animations.getActiveAnimations();
     m_layerState.animationsChanged = true;
+    m_nicosia.delta.animationsChanged = true;
 }
 
 void CoordinatedGraphicsLayer::syncPlatformLayer()
 {
-#if USE(COORDINATED_GRAPHICS_THREADED)
     if (!m_shouldSyncPlatformLayer)
         return;
 
     m_shouldSyncPlatformLayer = false;
+#if USE(COORDINATED_GRAPHICS_THREADED)
+#if USE(NICOSIA)
+#else
     m_layerState.platformLayerChanged = true;
     if (m_platformLayer)
         m_layerState.platformLayerProxy = m_platformLayer->proxy();
+#endif
 #endif
 }
 
 void CoordinatedGraphicsLayer::updatePlatformLayer()
 {
-#if USE(COORDINATED_GRAPHICS_THREADED)
     if (!m_shouldUpdatePlatformLayer)
         return;
 
     m_shouldUpdatePlatformLayer = false;
+#if USE(COORDINATED_GRAPHICS_THREADED)
+#if USE(NICOSIA)
+#else
     m_layerState.platformLayerUpdated = true;
     if (m_platformLayer)
         m_platformLayer->swapBuffersIfNeeded();
+#endif
 #endif
 }
 
@@ -795,11 +808,11 @@ void CoordinatedGraphicsLayer::flushCompositingStateForThisLayerOnly()
                 state.delta.value |= localDelta.value;
 
                 if (localDelta.positionChanged)
-                    state.position = position();
+                    state.position = m_adjustedPosition;
                 if (localDelta.anchorPointChanged)
-                    state.anchorPoint = anchorPoint();
+                    state.anchorPoint = m_adjustedAnchorPoint;
                 if (localDelta.sizeChanged)
-                    state.size = size();
+                    state.size = m_adjustedSize;
 
                 if (localDelta.transformChanged)
                     state.transform = transform();
@@ -817,6 +830,11 @@ void CoordinatedGraphicsLayer::flushCompositingStateForThisLayerOnly()
                     state.opacity = opacity();
                 if (localDelta.solidColorChanged)
                     state.solidColor = m_solidColor;
+
+                if (localDelta.filtersChanged)
+                    state.filters = filters();
+                if (localDelta.animationsChanged)
+                    state.animations = m_animations.getActiveAnimations();
 
                 if (localDelta.childrenChanged) {
                     state.children = WTF::map(children(),

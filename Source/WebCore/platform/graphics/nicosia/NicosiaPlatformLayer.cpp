@@ -38,11 +38,42 @@ PlatformLayer::PlatformLayer(uint64_t id)
 
 PlatformLayer::~PlatformLayer() = default;
 
-CompositionLayer::CompositionLayer(uint64_t id)
+
+CompositionLayer::CompositionLayer(uint64_t id, const Impl::Factory& factory)
     : PlatformLayer(id)
+    , m_impl(factory(id, *this))
 {
 }
 
 CompositionLayer::~CompositionLayer() = default;
+CompositionLayer::Impl::~Impl() = default;
+
+
+ContentLayer::ContentLayer(const Impl::Factory& factory)
+    : PlatformLayer(0)
+    , m_impl(factory(*this))
+{
+}
+
+ContentLayer::~ContentLayer() = default;
+ContentLayer::Impl::~Impl() = default;
+
+
+BackingStore::BackingStore(const Impl::Factory& factory)
+    : m_impl(factory(*this))
+{
+}
+
+BackingStore::~BackingStore() = default;
+BackingStore::Impl::~Impl() = default;
+
+
+ImageBacking::ImageBacking(const Impl::Factory& factory)
+    : m_impl(factory(*this))
+{
+}
+
+ImageBacking::~ImageBacking() = default;
+ImageBacking::Impl::~Impl() = default;
 
 } // namespace Nicosia

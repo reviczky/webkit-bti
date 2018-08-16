@@ -403,10 +403,28 @@ void WebProcessPool::setLegacyCustomProtocolManagerClient(std::unique_ptr<API::C
 void WebProcessPool::setMaximumNumberOfProcesses(unsigned maximumNumberOfProcesses)
 {
     // Guard against API misuse.
-    if (!m_processes.isEmpty())
+    if (m_processes.size() != m_prewarmedProcessCount)
         CRASH();
 
     m_configuration->setMaximumProcessCount(maximumNumberOfProcesses);
+}
+
+void WebProcessPool::setMaximumNumberOfPrewarmedProcesses(unsigned maximumNumberOfProcesses)
+{
+    // Guard against API misuse.
+    if (m_processes.size())
+        CRASH();
+
+    m_configuration->setMaximumPrewarmedProcessCount(maximumNumberOfProcesses);
+}
+
+void WebProcessPool::setCustomWebContentServiceBundleIdentifier(const String& customWebContentServiceBundleIdentifier)
+{
+    // Guard against API misuse.
+    if (!customWebContentServiceBundleIdentifier.isAllASCII())
+        CRASH();
+
+    m_configuration->setCustomWebContentServiceBundleIdentifier(customWebContentServiceBundleIdentifier);
 }
 
 IPC::Connection* WebProcessPool::networkingProcessConnection()
@@ -926,6 +944,7 @@ void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDa
     parameters.plugInAutoStartOrigins = copyToVector(m_plugInAutoStartProvider.autoStartOrigins());
 
     parameters.memoryCacheDisabled = m_memoryCacheDisabled;
+    parameters.attrStyleEnabled = m_configuration->attrStyleEnabled();
 
 #if ENABLE(SERVICE_CONTROLS)
     auto& serviceController = ServicesController::singleton();
@@ -993,10 +1012,15 @@ void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDa
 
 void WebProcessPool::warmInitialProcess()
 {
-    if (m_prewarmedProcessCount) {
+    unsigned maxPrewarmed = maximumNumberOfPrewarmedProcesses();
+    if (maxPrewarmed && m_prewarmedProcessCount >= maxPrewarmed) {
         ASSERT(!m_processes.isEmpty());
         return;
     }
+
+    // FIXME: This should be removed after Safari has been patched to use setMaximumNumberOfPrewarmedProcesses
+    if (!maxPrewarmed)
+        m_configuration->setMaximumPrewarmedProcessCount(1);
 
     if (m_processes.size() >= maximumNumberOfProcesses())
         return;
@@ -1309,12 +1333,14 @@ void WebProcessPool::postMessageToInjectedBundle(const String& messageName, API:
 
 void WebProcessPool::didReachGoodTimeToPrewarm()
 {
-    if (!m_configuration->processSwapsOnNavigation())
+    unsigned maxPrewarmed = maximumNumberOfPrewarmedProcesses();
+    if (!maxPrewarmed)
         return;
+
     if (!m_websiteDataStore)
         m_websiteDataStore = API::WebsiteDataStore::defaultDataStore().ptr();
-    static constexpr size_t maxPrewarmCount = 1;
-    while (m_prewarmedProcessCount < maxPrewarmCount)
+
+    while (m_prewarmedProcessCount < maxPrewarmed)
         createNewWebProcess(m_websiteDataStore->websiteDataStore(), WebProcessProxy::IsInPrewarmedPool::Yes);
 }
 
@@ -2107,7 +2133,7 @@ void WebProcessPool::removeProcessFromOriginCacheSet(WebProcessProxy& process)
         m_swappedProcesses.remove(origin);
 }
 
-Ref<WebProcessProxy> WebProcessPool::processForNavigation(WebPageProxy& page, const API::Navigation& navigation, bool shouldProcessSwapIfPossible, PolicyAction& action)
+Ref<WebProcessProxy> WebProcessPool::processForNavigation(WebPageProxy& page, const API::Navigation& navigation, ShouldProcessSwapIfPossible shouldProcessSwapIfPossible, PolicyAction& action)
 {
     auto process = processForNavigationInternal(page, navigation, shouldProcessSwapIfPossible, action);
 
@@ -2125,9 +2151,9 @@ Ref<WebProcessProxy> WebProcessPool::processForNavigation(WebPageProxy& page, co
     return process;
 }
 
-Ref<WebProcessProxy> WebProcessPool::processForNavigationInternal(WebPageProxy& page, const API::Navigation& navigation, bool shouldProcessSwapIfPossible, PolicyAction& action)
+Ref<WebProcessProxy> WebProcessPool::processForNavigationInternal(WebPageProxy& page, const API::Navigation& navigation, ShouldProcessSwapIfPossible shouldProcessSwapIfPossible, PolicyAction& action)
 {
-    if (!m_configuration->processSwapsOnNavigation() && !shouldProcessSwapIfPossible)
+    if (!m_configuration->processSwapsOnNavigation() && shouldProcessSwapIfPossible == ShouldProcessSwapIfPossible::No)
         return page.process();
 
     if (page.inspectorFrontendCount() > 0)
@@ -2171,7 +2197,7 @@ Ref<WebProcessProxy> WebProcessPool::processForNavigationInternal(WebPageProxy& 
     }
 
     auto targetURL = navigation.currentRequest().url();
-    if (!shouldProcessSwapIfPossible) {
+    if (shouldProcessSwapIfPossible == ShouldProcessSwapIfPossible::No) {
         if (navigation.treatAsSameOriginNavigation())
             return page.process();
 

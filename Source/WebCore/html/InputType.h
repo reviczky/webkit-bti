@@ -77,6 +77,8 @@ public:
     static Ref<InputType> createText(HTMLInputElement&);
     virtual ~InputType();
 
+    void detachFromElement() { m_element = nullptr; }
+
     static bool themeSupportsDataListUI(InputType*);
 
     virtual const AtomicString& formControlType() const = 0;
@@ -226,6 +228,9 @@ public:
     virtual HTMLElement* sliderThumbElement() const { return nullptr; }
     virtual HTMLElement* sliderTrackElement() const { return nullptr; }
     virtual HTMLElement* placeholderElement() const;
+#if ENABLE(DATALIST_ELEMENT)
+    virtual HTMLElement* dataListButtonElement() const { return nullptr; }
+#endif
 
     // Miscellaneous functions.
 
@@ -261,6 +266,7 @@ public:
     virtual String defaultToolTip() const;
     virtual bool matchesIndeterminatePseudoClass() const;
     virtual bool shouldAppearIndeterminate() const;
+    virtual bool isPresentingAttachedView() const;
     virtual bool supportsSelectionAPI() const;
     virtual Color valueAsColor() const;
     virtual void selectColor(StringView);
@@ -314,7 +320,7 @@ private:
     // Helper for stepUp()/stepDown(). Adds step value * count to the current value.
     ExceptionOr<void> applyStep(int count, AnyStepHandling, TextFieldEventBehavior);
 
-    // Raw pointer because the HTMLInputElement object owns this InputType object.
+    // m_element is null if this InputType is no longer associated with an element (either the element died or changed input type).
     WeakPtr<HTMLInputElement> m_element;
 };
 

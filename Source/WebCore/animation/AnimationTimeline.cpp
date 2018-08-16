@@ -182,6 +182,15 @@ Vector<RefPtr<WebAnimation>> AnimationTimeline::animationsForElement(Element& el
     return animations;
 }
 
+void AnimationTimeline::elementWasRemoved(Element& element)
+{
+    for (auto& animation : animationsForElement(element)) {
+        animationWasRemovedFromElement(*animation, element);
+        removeAnimation(*animation);
+        animation->cancel(WebAnimation::Silently::Yes);
+    }
+}
+
 void AnimationTimeline::removeAnimationsForElement(Element& element)
 {
     for (auto& animation : animationsForElement(element))
@@ -263,8 +272,10 @@ void AnimationTimeline::updateCSSAnimationsForElement(Element& element, const Re
 
     // The animations names left in namesOfPreviousAnimations are now known to no longer apply so we need to
     // remove the CSSAnimation object created for them.
-    for (const auto& nameOfAnimationToRemove : namesOfPreviousAnimations)
-        cancelOrRemoveDeclarativeAnimation(cssAnimationsByName.take(nameOfAnimationToRemove));
+    for (const auto& nameOfAnimationToRemove : namesOfPreviousAnimations) {
+        if (auto animation = cssAnimationsByName.take(nameOfAnimationToRemove))
+            cancelOrRemoveDeclarativeAnimation(animation);
+    }
 
     // Remove the map of CSSAnimations by animation name for this element if it's now empty.
     if (cssAnimationsByName.isEmpty())
@@ -465,11 +476,16 @@ void AnimationTimeline::updateCSSTransitionsForElement(Element& element, const R
 
 void AnimationTimeline::cancelOrRemoveDeclarativeAnimation(RefPtr<DeclarativeAnimation> animation)
 {
-    auto phase = animation->effect()->phase();
-    if (phase != AnimationEffectReadOnly::Phase::Idle && phase != AnimationEffectReadOnly::Phase::After)
-        animation->cancel();
-    else
-        removeAnimation(animation.releaseNonNull());
+    ASSERT(animation);
+    if (auto* effect = animation->effect()) {
+        auto phase = effect->phase();
+        if (phase != AnimationEffectReadOnly::Phase::Idle && phase != AnimationEffectReadOnly::Phase::After) {
+            animation->cancel();
+            return;
+        }
+    }
+
+    removeAnimation(animation.releaseNonNull());
 }
 
 String AnimationTimeline::description()

@@ -56,6 +56,10 @@ class RenderTreePosition;
 class WebAnimation;
 struct ElementStyle;
 
+#if ENABLE(INTERSECTION_OBSERVER)
+struct IntersectionObserverData;
+#endif
+
 enum SpellcheckAttributeState {
     SpellcheckAttributeTrue,
     SpellcheckAttributeFalse,
@@ -76,6 +80,8 @@ public:
 
     WEBCORE_EXPORT bool hasAttribute(const QualifiedName&) const;
     WEBCORE_EXPORT const AtomicString& getAttribute(const QualifiedName&) const;
+    template<typename... QualifiedNames>
+    const AtomicString& getAttribute(const QualifiedName&, const QualifiedNames&...) const;
     WEBCORE_EXPORT void setAttribute(const QualifiedName&, const AtomicString& value);
     WEBCORE_EXPORT void setAttributeWithoutSynchronization(const QualifiedName&, const AtomicString& value);
     void setSynchronizedLazyAttribute(const QualifiedName&, const AtomicString& value);
@@ -565,6 +571,11 @@ public:
     using ContainerNode::setAttributeEventListener;
     void setAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& value);
 
+#if ENABLE(INTERSECTION_OBSERVER)
+    IntersectionObserverData& ensureIntersectionObserverData();
+    IntersectionObserverData* intersectionObserverData();
+#endif
+
     Element* findAnchorElementForLink(String& outAnchorName);
 
     ExceptionOr<Ref<WebAnimation>> animate(JSC::ExecState&, JSC::Strong<JSC::JSObject>&&, std::optional<Variant<double, KeyframeAnimationOptions>>&&);
@@ -642,6 +653,10 @@ private:
     
 #if ENABLE(TREE_DEBUGGING)
     void formatForDebugger(char* buffer, unsigned length) const override;
+#endif
+
+#if ENABLE(INTERSECTION_OBSERVER)
+    void disconnectFromIntersectionObservers();
 #endif
 
     // The cloneNode function is private so that non-virtual cloneElementWith/WithoutChildren are used instead.
@@ -815,6 +830,15 @@ inline void Element::setHasFocusWithin(bool flag)
     setFlag(flag, HasFocusWithin);
     if (styleAffectedByFocusWithin())
         invalidateStyleForSubtree();
+}
+
+template<typename... QualifiedNames>
+inline const AtomicString& Element::getAttribute(const QualifiedName& name, const QualifiedNames&... names) const
+{
+    const AtomicString& value = getAttribute(name);
+    if (!value.isNull())
+        return value;
+    return getAttribute(names...);
 }
 
 } // namespace WebCore

@@ -241,6 +241,13 @@ HTMLElement* HTMLInputElement::placeholderElement() const
     return m_inputType->placeholderElement();
 }
 
+#if ENABLE(DATALIST_ELEMENT)
+HTMLElement* HTMLInputElement::dataListButtonElement() const
+{
+    return m_inputType->dataListButtonElement();
+}
+#endif
+
 bool HTMLInputElement::shouldAutocomplete() const
 {
     if (m_autocomplete != Uninitialized)
@@ -521,6 +528,7 @@ void HTMLInputElement::updateType()
     }
 
     m_inputType->destroyShadowSubtree();
+    m_inputType->detachFromElement();
 
     m_inputType = WTFMove(newType);
     m_inputType->createShadowSubtree();
@@ -1278,9 +1286,7 @@ static Vector<String> parseAcceptAttribute(const String& acceptString, bool (*pr
     if (acceptString.isEmpty())
         return types;
 
-    Vector<String> splitTypes;
-    acceptString.split(',', false, splitTypes);
-    for (auto& splitType : splitTypes) {
+    for (auto& splitType : acceptString.split(',')) {
         String trimmedType = stripLeadingAndTrailingHTMLSpaces(splitType);
         if (trimmedType.isEmpty())
             continue;
@@ -1631,6 +1637,11 @@ void HTMLInputElement::listAttributeTargetChanged()
 }
 
 #endif // ENABLE(DATALIST_ELEMENT)
+
+bool HTMLInputElement::isPresentingAttachedView() const
+{
+    return m_inputType->isPresentingAttachedView();
+}
 
 bool HTMLInputElement::isSteppable() const
 {
@@ -2100,7 +2111,7 @@ bool HTMLInputElement::setupDateTimeChooserParameters(DateTimeChooserParameters&
     else
         parameters.anchorRectInRootView = IntRect();
     parameters.currentValue = value();
-    parameters.isAnchorElementRTL = computedStyle()->direction() == RTL;
+    parameters.isAnchorElementRTL = computedStyle()->direction() == TextDirection::RTL;
 #if ENABLE(DATALIST_ELEMENT)
     if (auto dataList = this->dataList()) {
         Ref<HTMLCollection> options = dataList->options();

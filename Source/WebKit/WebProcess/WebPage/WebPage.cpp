@@ -580,7 +580,6 @@ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
         m_page->settings().setMediaKeysStorageDirectory(manager->mediaKeyStorageDirectory());
 #endif
     m_page->settings().setAppleMailPaginationQuirkEnabled(parameters.appleMailPaginationQuirkEnabled);
-    m_page->settings().setAppleMailLinesClampEnabled(parameters.appleMailLinesClampEnabled);
     
     if (parameters.viewScaleFactor != 1)
         scaleView(parameters.viewScaleFactor);
@@ -1398,7 +1397,7 @@ void WebPage::reload(uint64_t navigationID, uint32_t reloadOptions, SandboxExten
     ASSERT(!m_mainFrame->coreFrame()->loader().frameHasLoaded() || !m_pendingNavigationID);
     m_pendingNavigationID = navigationID;
 
-    m_sandboxExtensionTracker.beginLoad(m_mainFrame.get(), WTFMove(sandboxExtensionHandle));
+    m_sandboxExtensionTracker.beginReload(m_mainFrame.get(), WTFMove(sandboxExtensionHandle));
     corePage()->userInputBridge().reloadFrame(m_mainFrame->coreFrame(), OptionSet<ReloadOption>::fromRaw(reloadOptions));
 
     if (m_pendingNavigationID) {
@@ -2797,6 +2796,8 @@ void WebPage::visibilityDidChange()
 
 void WebPage::setActivityState(ActivityState::Flags activityState, ActivityStateChangeID activityStateChangeID, const Vector<CallbackID>& callbackIDs)
 {
+    LOG_WITH_STREAM(ActivityState, stream << "WebPage " << pageID() << " setActivityState to " << activityStateFlagsToString(activityState));
+
     ActivityState::Flags changed = m_activityState ^ activityState;
     m_activityState = activityState;
 
@@ -2909,7 +2910,13 @@ String WebPage::userAgent(WebFrame* frame, const URL& webcoreURL) const
     
 void WebPage::setUserAgent(const String& userAgent)
 {
+    if (m_userAgent == userAgent)
+        return;
+
     m_userAgent = userAgent;
+
+    if (m_page)
+        m_page->userAgentChanged();
 }
 
 void WebPage::suspendActiveDOMObjectsAndAnimations()
@@ -4082,6 +4089,16 @@ void WebPage::SandboxExtensionTracker::beginLoad(WebFrame* frame, SandboxExtensi
     ASSERT_UNUSED(frame, frame->isMainFrame());
 
     setPendingProvisionalSandboxExtension(SandboxExtension::create(WTFMove(handle)));
+}
+
+void WebPage::SandboxExtensionTracker::beginReload(WebFrame* frame, SandboxExtension::Handle&& handle)
+{
+    ASSERT_UNUSED(frame, frame->isMainFrame());
+
+    // Maintain existing provisional SandboxExtension in case of a reload, if the new handle is null. This is needed
+    // because the UIProcess sends us a null handle if it already sent us a handle for this path in the past.
+    if (auto sandboxExtension = SandboxExtension::create(WTFMove(handle)))
+        setPendingProvisionalSandboxExtension(WTFMove(sandboxExtension));
 }
 
 void WebPage::SandboxExtensionTracker::setPendingProvisionalSandboxExtension(RefPtr<SandboxExtension>&& pendingProvisionalSandboxExtension)
@@ -6088,12 +6105,8 @@ void WebPage::requestAttachmentInfo(const String& identifier, CallbackID callbac
     });
 }
 
-void WebPage::setAttachmentDisplayOptions(const String& identifier, const AttachmentDisplayOptions& options, CallbackID callbackID)
+void WebPage::setAttachmentDisplayOptions(const String&, const AttachmentDisplayOptions&, CallbackID callbackID)
 {
-    if (auto attachment = attachmentElementWithIdentifier(identifier)) {
-        attachment->document().updateLayout();
-        attachment->updateDisplayMode(options.mode);
-    }
     send(Messages::WebPageProxy::VoidCallback(callbackID));
 }
 

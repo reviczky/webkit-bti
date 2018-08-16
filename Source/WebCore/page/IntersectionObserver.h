@@ -29,6 +29,7 @@
 
 #include "IntersectionObserverCallback.h"
 #include "IntersectionObserverEntry.h"
+#include "LengthBox.h"
 #include <wtf/RefCounted.h>
 #include <wtf/Variant.h>
 #include <wtf/text/WTFString.h>
@@ -37,21 +38,29 @@ namespace WebCore {
 
 class Element;
 
+struct IntersectionObserverData {
+    // IntersectionObservers for which the element that owns this IntersectionObserverData is the root.
+    // The IntersectionObservers are owned by JavaScript wrappers and by IntersectionObserverRegistrations
+    // for each target currently being observed.
+    Vector<IntersectionObserver*> observers;
+
+    // FIXME: Create and track IntersectionObserverRegistrations.
+};
+
 class IntersectionObserver : public RefCounted<IntersectionObserver> {
 public:
     struct Init {
-        RefPtr<Element> root;
+        Element* root { nullptr };
         String rootMargin;
         Variant<double, Vector<double>> threshold;
     };
 
-    static Ref<IntersectionObserver> create(Ref<IntersectionObserverCallback>&& callback, Init&& init)
-    {
-        return adoptRef(*new IntersectionObserver(WTFMove(callback), WTFMove(init)));
-    }
-    
-    Element* root() const { return m_root.get(); }
-    String rootMargin() const { return m_rootMargin; }
+    static ExceptionOr<Ref<IntersectionObserver>> create(Ref<IntersectionObserverCallback>&&, Init&&);
+
+    ~IntersectionObserver();
+
+    Element* root() const { return m_root; }
+    String rootMargin() const;
     const Vector<double>& thresholds() const { return m_thresholds; }
 
     void observe(Element&);
@@ -60,11 +69,13 @@ public:
 
     Vector<RefPtr<IntersectionObserverEntry>> takeRecords();
 
+    void rootDestroyed();
+
 private:
-    IntersectionObserver(Ref<IntersectionObserverCallback>&&, Init&&);
+    IntersectionObserver(Ref<IntersectionObserverCallback>&&, Element* root, LengthBox&& parsedRootMargin, Vector<double>&& thresholds);
     
-    RefPtr<Element> m_root;
-    String m_rootMargin;
+    Element* m_root;
+    LengthBox m_rootMargin;
     Vector<double> m_thresholds;
     Ref<IntersectionObserverCallback> m_callback;
 };

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,67 +27,53 @@
 #include "WebFramePolicyListenerProxy.h"
 
 #include "APINavigation.h"
+#include "APIWebsiteDataStore.h"
+#include "APIWebsitePolicies.h"
+#include "SafeBrowsingResult.h"
 #include "WebFrameProxy.h"
 #include "WebsiteDataStore.h"
 #include "WebsitePoliciesData.h"
 
 namespace WebKit {
 
-WebFramePolicyListenerProxy::WebFramePolicyListenerProxy(WebFrameProxy* frame, uint64_t listenerID, PolicyListenerType policyType)
-    : m_policyType(policyType)
-    , m_frame(frame)
-    , m_listenerID(listenerID)
+WebFramePolicyListenerProxy::WebFramePolicyListenerProxy(Reply&& reply, ShouldExpectSafeBrowsingResult expect)
+    : m_reply(WTFMove(reply))
 {
+    if (expect == ShouldExpectSafeBrowsingResult::No)
+        didReceiveSafeBrowsingResults({ });
 }
 
-void WebFramePolicyListenerProxy::receivedPolicyDecision(WebCore::PolicyAction action, std::optional<WebsitePoliciesData>&& data)
+WebFramePolicyListenerProxy::~WebFramePolicyListenerProxy() = default;
+
+void WebFramePolicyListenerProxy::didReceiveSafeBrowsingResults(Vector<SafeBrowsingResult>&& safeBrowsingResults)
 {
-    if (!m_frame)
-        return;
-    
-    m_frame->receivedPolicyDecision(action, m_listenerID, m_navigation.get(), WTFMove(data));
-    m_frame = nullptr;
+    ASSERT(!m_safeBrowsingResults);
+    if (m_policyResult) {
+        if (m_reply)
+            m_reply(WebCore::PolicyAction::Use, m_policyResult->first.get(), m_policyResult->second, WTFMove(safeBrowsingResults));
+    } else
+        m_safeBrowsingResults = WTFMove(safeBrowsingResults);
 }
 
-void WebFramePolicyListenerProxy::changeWebsiteDataStore(WebsiteDataStore& websiteDataStore)
+void WebFramePolicyListenerProxy::use(API::WebsitePolicies* policies, ShouldProcessSwapIfPossible swap)
 {
-    if (!m_frame)
-        return;
-    
-    m_frame->changeWebsiteDataStore(websiteDataStore);
-}
-
-void WebFramePolicyListenerProxy::invalidate()
-{
-    m_frame = nullptr;
-}
-
-bool WebFramePolicyListenerProxy::isMainFrame() const
-{
-    if (!m_frame)
-        return false;
-    
-    return m_frame->isMainFrame();
-}
-
-void WebFramePolicyListenerProxy::setNavigation(Ref<API::Navigation>&& navigation)
-{
-    m_navigation = WTFMove(navigation);
-}
-    
-void WebFramePolicyListenerProxy::use(std::optional<WebsitePoliciesData>&& data)
-{
-    receivedPolicyDecision(WebCore::PolicyAction::Use, WTFMove(data));
+    if (m_safeBrowsingResults) {
+        if (m_reply)
+            m_reply(WebCore::PolicyAction::Use, policies, swap, WTFMove(*m_safeBrowsingResults));
+    } else if (!m_policyResult)
+        m_policyResult = {{ policies, swap }};
 }
 
 void WebFramePolicyListenerProxy::download()
 {
-    receivedPolicyDecision(WebCore::PolicyAction::Download, std::nullopt);
+    if (m_reply)
+        m_reply(WebCore::PolicyAction::Download, nullptr, ShouldProcessSwapIfPossible::No, { });
 }
 
 void WebFramePolicyListenerProxy::ignore()
 {
-    receivedPolicyDecision(WebCore::PolicyAction::Ignore, std::nullopt);
+    if (m_reply)
+        m_reply(WebCore::PolicyAction::Ignore, nullptr, ShouldProcessSwapIfPossible::No, { });
 }
 
 } // namespace WebKit
