@@ -5,6 +5,8 @@ webkit2gtk (2.21.91-2) UNRELEASED; urgency=medium
   * debian/libjavascriptcoregtk-4.0-dev.install:
     + Install headers in usr/include/webkitgtk-4.0/jsc/ (Closes: #906519).
   * Install the jsc-glib and webkitdomgtk documentation.
+  * debian/patches/detect-jit.patch:
+    + Fix detection of when to enable the JIT and USE_SYSTEM_MALLOC.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 20 Aug 2018 00:54:30 +0300
 
