@@ -1,4 +1,4 @@
-webkit2gtk (2.21.91-2) UNRELEASED; urgency=medium
+webkit2gtk (2.21.91-2) experimental; urgency=medium
 
   * debian/rules:
     + Pass --fail-missing to dh_missing.
@@ -8,7 +8,7 @@ webkit2gtk (2.21.91-2) UNRELEASED; urgency=medium
   * debian/patches/detect-jit.patch:
     + Fix detection of when to enable the JIT and USE_SYSTEM_MALLOC.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 20 Aug 2018 00:54:30 +0300
+ -- Alberto Garcia <berto@igalia.com>  Tue, 21 Aug 2018 10:47:19 +0300
 
 webkit2gtk (2.21.91-1) experimental; urgency=medium
 
