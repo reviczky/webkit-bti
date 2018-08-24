@@ -1802,20 +1802,24 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_user_content_manager_get_type@Base 2.5.3
  webkit_user_content_manager_new@Base 2.5.3
  webkit_user_content_manager_register_script_message_handler@Base 2.8.1
+ webkit_user_content_manager_register_script_message_handler_in_world@Base 2.21.92
  webkit_user_content_manager_remove_all_scripts@Base 2.5.3
  webkit_user_content_manager_remove_all_style_sheets@Base 2.5.3
  webkit_user_content_manager_unregister_script_message_handler@Base 2.8.1
+ webkit_user_content_manager_unregister_script_message_handler_in_world@Base 2.21.92
  webkit_user_media_permission_is_for_audio_device@Base 2.8.1
  webkit_user_media_permission_is_for_video_device@Base 2.8.1
  webkit_user_media_permission_request_get_type@Base 2.8.1
  webkit_user_script_get_type@Base 2.5.3
  webkit_user_script_injection_time_get_type@Base 2.5.3
  webkit_user_script_new@Base 2.5.3
+ webkit_user_script_new_for_world@Base 2.21.92
  webkit_user_script_ref@Base 2.5.3
  webkit_user_script_unref@Base 2.5.3
  webkit_user_style_level_get_type@Base 2.5.3
  webkit_user_style_sheet_get_type@Base 2.5.3
  webkit_user_style_sheet_new@Base 2.5.3
+ webkit_user_style_sheet_new_for_world@Base 2.21.92
  webkit_user_style_sheet_ref@Base 2.5.3
  webkit_user_style_sheet_unref@Base 2.5.3
  webkit_web_context_allow_tls_certificate_for_host@Base 2.5.3
