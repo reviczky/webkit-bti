@@ -838,14 +838,18 @@
     <keyword type="function" name="webkit_user_content_manager_remove_all_scripts ()" link="WebKitUserContentManager.html#webkit-user-content-manager-remove-all-scripts" since="2.6"/>
     <keyword type="function" name="webkit_user_content_manager_register_script_message_handler ()" link="WebKitUserContentManager.html#webkit-user-content-manager-register-script-message-handler" since="2.8"/>
     <keyword type="function" name="webkit_user_content_manager_unregister_script_message_handler ()" link="WebKitUserContentManager.html#webkit-user-content-manager-unregister-script-message-handler" since="2.8"/>
+    <keyword type="function" name="webkit_user_content_manager_register_script_message_handler_in_world ()" link="WebKitUserContentManager.html#webkit-user-content-manager-register-script-message-handler-in-world" since="2.22"/>
+    <keyword type="function" name="webkit_user_content_manager_unregister_script_message_handler_in_world ()" link="WebKitUserContentManager.html#webkit-user-content-manager-unregister-script-message-handler-in-world" since="2.22"/>
     <keyword type="struct" name="struct WebKitUserContentManager" link="WebKitUserContentManager.html#WebKitUserContentManager-struct"/>
     <keyword type="signal" name="The “script-message-received” signal" link="WebKitUserContentManager.html#WebKitUserContentManager-script-message-received"/>
     <keyword type="function" name="webkit_user_style_sheet_ref ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-style-sheet-ref" since="2.6"/>
     <keyword type="function" name="webkit_user_style_sheet_unref ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-style-sheet-unref" since="2.6"/>
     <keyword type="function" name="webkit_user_style_sheet_new ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-style-sheet-new" since="2.6"/>
+    <keyword type="function" name="webkit_user_style_sheet_new_for_world ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-style-sheet-new-for-world" since="2.22"/>
     <keyword type="function" name="webkit_user_script_ref ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-script-ref" since="2.6"/>
     <keyword type="function" name="webkit_user_script_unref ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-script-unref" since="2.6"/>
     <keyword type="function" name="webkit_user_script_new ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-script-new" since="2.6"/>
+    <keyword type="function" name="webkit_user_script_new_for_world ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-script-new-for-world" since="2.22"/>
     <keyword type="struct" name="WebKitUserStyleSheet" link="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserStyleSheet-struct"/>
     <keyword type="struct" name="WebKitUserScript" link="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserScript-struct"/>
     <keyword type="enum" name="enum WebKitUserContentInjectedFrames" link="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserContentInjectedFrames" since="2.6"/>
