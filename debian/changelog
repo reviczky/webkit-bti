@@ -1,4 +1,4 @@
-webkit2gtk (2.21.92-1) UNRELEASED; urgency=medium
+webkit2gtk (2.21.92-1) experimental; urgency=medium
 
   * New upstream development release.
   * debian/patches/use-wtf-cpu-mips64.patch:
@@ -7,7 +7,7 @@ webkit2gtk (2.21.92-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 24 Aug 2018 12:51:56 +0300
+ -- Alberto Garcia <berto@igalia.com>  Fri, 24 Aug 2018 18:37:29 +0300
 
 webkit2gtk (2.21.91-2) experimental; urgency=medium
 
