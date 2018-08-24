@@ -498,8 +498,8 @@ public:
     void addPluginView(PluginView*);
     void removePluginView(PluginView*);
 
-    bool isVisible() const { return m_activityState & WebCore::ActivityState::IsVisible; }
-    bool isVisibleOrOccluded() const { return m_activityState & WebCore::ActivityState::IsVisibleOrOccluded; }
+    bool isVisible() const { return m_activityState.contains(WebCore::ActivityState::IsVisible); }
+    bool isVisibleOrOccluded() const { return m_activityState.contains(WebCore::ActivityState::IsVisibleOrOccluded); }
 
     LayerHostingMode layerHostingMode() const { return m_layerHostingMode; }
     void setLayerHostingMode(LayerHostingMode);
@@ -1155,15 +1155,13 @@ private:
     String sourceForFrame(WebFrame*);
 
     void loadDataImpl(uint64_t navigationID, Ref<WebCore::SharedBuffer>&&, const String& MIMEType, const String& encodingName, const WebCore::URL& baseURL, const WebCore::URL& failingURL, const UserData&);
-    void loadStringImpl(uint64_t navigationID, const String&, const String& MIMEType, const WebCore::URL& baseURL, const WebCore::URL& failingURL, const UserData&);
 
     // Actions
     void tryClose();
     void platformDidReceiveLoadParameters(const LoadParameters&);
     void loadRequest(LoadParameters&&);
-    void loadData(const LoadParameters&);
-    void loadString(const LoadParameters&);
-    void loadAlternateHTMLString(const LoadParameters&);
+    void loadData(LoadParameters&&);
+    void loadAlternateHTML(const LoadParameters&);
     void navigateToPDFLinkWithSimulatedClick(const String& url, WebCore::IntPoint documentPoint, WebCore::IntPoint screenPoint);
     void reload(uint64_t navigationID, uint32_t reloadOptions, SandboxExtension::Handle&&);
     void goToBackForwardItem(uint64_t navigationID, const WebCore::BackForwardItemIdentifier&, WebCore::FrameLoadType, WebCore::ShouldTreatAsContinuingLoad);
@@ -1171,7 +1169,7 @@ private:
     void setInitialFocus(bool forward, bool isKeyboardEventValid, const WebKeyboardEvent&, CallbackID);
     void updateIsInWindow(bool isInitialState = false);
     void visibilityDidChange();
-    void setActivityState(WebCore::ActivityState::Flags, ActivityStateChangeID, const Vector<CallbackID>& callbackIDs);
+    void setActivityState(OptionSet<WebCore::ActivityState::Flag>, ActivityStateChangeID, const Vector<CallbackID>& callbackIDs);
     void validateCommand(const String&, CallbackID);
     void executeEditCommand(const String&, const String&);
     void setEditable(bool);
@@ -1689,7 +1687,7 @@ private:
 
     bool m_useAsyncScrolling { false };
 
-    WebCore::ActivityState::Flags m_activityState;
+    OptionSet<WebCore::ActivityState::Flag> m_activityState;
 
     bool m_processSuppressionEnabled;
     UserActivity m_userActivity;

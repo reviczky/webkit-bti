@@ -22,6 +22,9 @@
     <keyword type="function" name="jsc_context_get_virtual_machine ()" link="JSCContext.html#jsc-context-get-virtual-machine"/>
     <keyword type="function" name="jsc_context_get_exception ()" link="JSCContext.html#jsc-context-get-exception"/>
     <keyword type="function" name="jsc_context_throw ()" link="JSCContext.html#jsc-context-throw"/>
+    <keyword type="function" name="jsc_context_throw_printf ()" link="JSCContext.html#jsc-context-throw-printf"/>
+    <keyword type="function" name="jsc_context_throw_with_name ()" link="JSCContext.html#jsc-context-throw-with-name"/>
+    <keyword type="function" name="jsc_context_throw_with_name_printf ()" link="JSCContext.html#jsc-context-throw-with-name-printf"/>
     <keyword type="function" name="jsc_context_throw_exception ()" link="JSCContext.html#jsc-context-throw-exception"/>
     <keyword type="function" name="jsc_context_clear_exception ()" link="JSCContext.html#jsc-context-clear-exception"/>
     <keyword type="function" name="jsc_context_push_exception_handler ()" link="JSCContext.html#jsc-context-push-exception-handler"/>
@@ -92,9 +95,19 @@
     <keyword type="property" name="The “value” property" link="JSCWeakValue.html#JSCWeakValue--value"/>
     <keyword type="signal" name="The “cleared” signal" link="JSCWeakValue.html#JSCWeakValue-cleared"/>
     <keyword type="function" name="jsc_exception_new ()" link="JSCException.html#jsc-exception-new"/>
+    <keyword type="function" name="jsc_exception_new_printf ()" link="JSCException.html#jsc-exception-new-printf"/>
+    <keyword type="function" name="jsc_exception_new_vprintf ()" link="JSCException.html#jsc-exception-new-vprintf"/>
+    <keyword type="function" name="jsc_exception_new_with_name ()" link="JSCException.html#jsc-exception-new-with-name"/>
+    <keyword type="function" name="jsc_exception_new_with_name_printf ()" link="JSCException.html#jsc-exception-new-with-name-printf"/>
+    <keyword type="function" name="jsc_exception_new_with_name_vprintf ()" link="JSCException.html#jsc-exception-new-with-name-vprintf"/>
+    <keyword type="function" name="jsc_exception_get_name ()" link="JSCException.html#jsc-exception-get-name"/>
     <keyword type="function" name="jsc_exception_get_message ()" link="JSCException.html#jsc-exception-get-message"/>
     <keyword type="function" name="jsc_exception_get_line_number ()" link="JSCException.html#jsc-exception-get-line-number"/>
+    <keyword type="function" name="jsc_exception_get_column_number ()" link="JSCException.html#jsc-exception-get-column-number"/>
     <keyword type="function" name="jsc_exception_get_source_uri ()" link="JSCException.html#jsc-exception-get-source-uri"/>
+    <keyword type="function" name="jsc_exception_get_backtrace_string ()" link="JSCException.html#jsc-exception-get-backtrace-string"/>
+    <keyword type="function" name="jsc_exception_to_string ()" link="JSCException.html#jsc-exception-to-string"/>
+    <keyword type="function" name="jsc_exception_report ()" link="JSCException.html#jsc-exception-report"/>
     <keyword type="struct" name="struct JSCException" link="JSCException.html#JSCException-struct"/>
     <keyword type="function" name="JSCClassGetPropertyFunction ()" link="JSCClass.html#JSCClassGetPropertyFunction"/>
     <keyword type="function" name="JSCClassSetPropertyFunction ()" link="JSCClass.html#JSCClassSetPropertyFunction"/>

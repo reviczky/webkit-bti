@@ -1293,9 +1293,9 @@ public:
 
     uint8_t generateRotationSeed(size_t widthInBits)
     {
-        // Generate the seed in [0, widthInBits). We should not generate widthInBits
-        // since it leads to `<< widthInBits`, which is an undefined behavior.
-        return random() % (widthInBits - 1);
+        // Generate the seed in [1, widthInBits - 1]. We should not generate widthInBits or 0
+        // since it leads to `<< widthInBits` or `>> widthInBits`, which cause undefined behaviors.
+        return (random() % (widthInBits - 1)) + 1;
     }
     
     struct RotatedImmPtr {
@@ -1997,8 +1997,8 @@ private:
     
 public:
     
-    enum RegisterID { NoRegister };
-    enum FPRegisterID { NoFPRegister };
+    enum RegisterID : int8_t { NoRegister, InvalidGPRReg = -1 };
+    enum FPRegisterID : int8_t { NoFPRegister, InvalidFPRReg = -1 };
 };
 
 } // namespace JSC
