@@ -1,6 +1,9 @@
 webkit2gtk (2.21.92-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * debian/patches/use-wtf-cpu-mips64.patch:
+    + Don't use WTF_CPU_MIPS on mips64. This makes WebKit enable JIT,
+      which breaks the build.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 24 Aug 2018 12:51:56 +0300
 
