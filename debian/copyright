@@ -60,7 +60,6 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/JavaScriptCore/interpreter/Interpreter.cpp
        Source/JavaScriptCore/interpreter/Interpreter.h
        Source/JavaScriptCore/interpreter/Register.h
-       Source/JavaScriptCore/jit/CompactJITCodeMap.h
        Source/JavaScriptCore/parser/SourceCode.h
        Source/JavaScriptCore/parser/SourceProvider.h
        Source/JavaScriptCore/runtime/CallData.h
@@ -99,7 +98,6 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WTF/wtf/AutodrainedPool.h
        Source/WTF/wtf/ByteOrder.h
        Source/WTF/wtf/CurrentTime.cpp
-       Source/WTF/wtf/CurrentTime.h
        Source/WTF/wtf/Deque.h
        Source/WTF/wtf/DisallowCType.h
        Source/WTF/wtf/FastMalloc.cpp
@@ -213,8 +211,6 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/dom/DataTransferItem.cpp
        Source/WebCore/dom/DataTransferItem.h
        Source/WebCore/dom/DataTransferItemList.h
-       Source/WebCore/dom/DocumentOrderedMap.cpp
-       Source/WebCore/dom/DocumentOrderedMap.h
        Source/WebCore/dom/ElementRareData.cpp
        Source/WebCore/dom/ErrorEvent.cpp
        Source/WebCore/dom/ErrorEvent.h
@@ -287,7 +283,6 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/html/FileInputType.h
        Source/WebCore/html/HTMLDataListElement.cpp
        Source/WebCore/html/HTMLDataListElement.h
-       Source/WebCore/html/HTMLElementsAllInOne.cpp
        Source/WebCore/html/HTMLOutputElement.cpp
        Source/WebCore/html/HTMLOutputElement.h
        Source/WebCore/html/HTMLTableRowsCollection.cpp
@@ -450,7 +445,6 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/platform/image-decoders/bmp/*
        Source/WebCore/platform/image-decoders/ico/*
        Source/WebCore/platform/image-decoders/webp/*
-       Source/WebCore/platform/image-encoders/PNGImageEncoder.cpp
        Source/WebCore/platform/mediastream/*
        Source/WebCore/platform/mock/GeolocationClientMock.cpp
        Source/WebCore/platform/mock/GeolocationClientMock.h
@@ -553,13 +547,11 @@ Files: Documentation/*
        Source/JavaScriptCore/debugger/Debugger.h
        Source/JavaScriptCore/heap/Heap.cpp
        Source/JavaScriptCore/heap/Heap.h
-       Source/JavaScriptCore/heap/ListableHandler.h
        Source/JavaScriptCore/heap/MachineStackMarker.cpp
        Source/JavaScriptCore/heap/MachineStackMarker.h
        Source/JavaScriptCore/heap/MarkedBlock.h
        Source/JavaScriptCore/heap/MarkedSpace.cpp
        Source/JavaScriptCore/heap/MarkedSpace.h
-       Source/JavaScriptCore/heap/WeakReferenceHarvester.h
        Source/JavaScriptCore/interpreter/CallFrame.h
        Source/JavaScriptCore/parser/Lexer.cpp
        Source/JavaScriptCore/parser/Lexer.h
@@ -933,14 +925,12 @@ Files: Documentation/*
        Source/WebCore/platform/graphics/texmap/coordinated/SurfaceUpdateInfo.h
        Source/WebCore/platform/graphics/transforms/*
        Source/WebCore/platform/gtk/*
-       Source/WebCore/platform/image-encoders/*
        Source/WebCore/platform/network/FormData.cpp
        Source/WebCore/platform/network/FormData.h
        Source/WebCore/platform/network/FormDataBuilder.cpp
        Source/WebCore/platform/network/FormDataBuilder.h
        Source/WebCore/platform/network/HTTPStatusCodes.h
        Source/WebCore/platform/network/NetworkingContext.h
-       Source/WebCore/platform/network/soup/CookieJarSoup.cpp
        Source/WebCore/platform/network/soup/CookieStorageSoup.cpp
        Source/WebCore/platform/network/soup/GUniquePtrSoup.h
        Source/WebCore/platform/network/soup/ResourceHandleSoup.cpp
@@ -1041,8 +1031,7 @@ Files: Source/ThirdParty/gtest/scripts/upload.py
 Copyright: © 2007 Google Inc.
 License: Apache-2.0
 
-Files: Source/WTF/wtf/Atomics.cpp
-       Source/WTF/wtf/Atomics.h
+Files: Source/WTF/wtf/Atomics.h
        Source/WTF/wtf/ThreadSafeRefCounted.h
        Source/WTF/wtf/Threading.h
 Copyright: © 2002-2014 Apple Inc. and others
