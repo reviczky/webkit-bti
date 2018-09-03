@@ -1,4 +1,4 @@
-webkit2gtk (2.22.0-1) UNRELEASED; urgency=medium
+webkit2gtk (2.22.0-1) experimental; urgency=medium
 
   * New upstream release.
   * Drop use-wtf-cpu-mips64.patch and refresh fix-ftbfs-x86.patch.
@@ -10,7 +10,7 @@ webkit2gtk (2.22.0-1) UNRELEASED; urgency=medium
     + Don't use std::max in RegisterState.h, this causes build failures
       with some versions of libstdc++.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 03 Sep 2018 12:40:00 +0300
+ -- Alberto Garcia <berto@igalia.com>  Mon, 03 Sep 2018 15:51:37 +0300
 
 webkit2gtk (2.21.92-1) experimental; urgency=medium
 
