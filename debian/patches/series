@@ -6,3 +6,4 @@ detect-gstreamer-gl.patch
 user-agent-branding.patch
 prefer-pthread.patch
 detect-jit.patch
+replace-stdmax.patch

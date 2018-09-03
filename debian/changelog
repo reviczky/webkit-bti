@@ -6,6 +6,9 @@ webkit2gtk (2.22.0-1) UNRELEASED; urgency=medium
     + Update Standards-Version to 4.2.1 (no changes).
   * debian/copyright:
     + Remove nonexistent files.
+  * debian/patches/replace-stdmax.patch:
+    + Don't use std::max in RegisterState.h, this causes build failures
+      with some versions of libstdc++.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 03 Sep 2018 12:40:00 +0300
 
