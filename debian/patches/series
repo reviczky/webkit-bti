@@ -6,4 +6,3 @@ detect-gstreamer-gl.patch
 user-agent-branding.patch
 prefer-pthread.patch
 detect-jit.patch
-use-wtf-cpu-mips64.patch
