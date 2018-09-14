@@ -38,8 +38,8 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ElementRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/ElementRareData.cpp
-@@ -46,6 +46,10 @@ struct SameSizeAsElementRareData : NodeR
-     void* pointers[8];
+@@ -50,6 +50,10 @@ struct SameSizeAsElementRareData : NodeR
+ 
  };
  
 +#if defined(__m68k__)
@@ -68,7 +68,7 @@ Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ShadowRoot.cpp
 +++ webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
-@@ -47,7 +47,11 @@ struct SameSizeAsShadowRoot : public Doc
+@@ -50,7 +50,11 @@ struct SameSizeAsShadowRoot : public Doc
      void* slotAssignment;
  };
  

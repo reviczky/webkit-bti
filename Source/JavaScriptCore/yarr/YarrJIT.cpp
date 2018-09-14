@@ -32,6 +32,7 @@
 #include "VM.h"
 #include "Yarr.h"
 #include "YarrCanonicalize.h"
+#include "YarrDisassembler.h"
 
 #if ENABLE(YARR_JIT)
 
@@ -40,8 +41,7 @@ using namespace WTF;
 namespace JSC { namespace Yarr {
 
 template<YarrJITCompileMode compileMode>
-class YarrGenerator : private MacroAssembler {
-    friend void jitCompile(VM*, YarrCodeBlock& jitObject, const String& pattern, unsigned& numSubpatterns, const char*& error, bool ignoreCase, bool multiline);
+class YarrGenerator : public YarrJITInfo, private MacroAssembler {
 
 #if CPU(ARM)
     static const RegisterID input = ARMRegisters::r0;
@@ -321,7 +321,7 @@ class YarrGenerator : private MacroAssembler {
             // We can move BMP only character classes after fixed character terms.
             if ((term.type == PatternTerm::TypeCharacterClass)
                 && (term.quantityType == QuantifierFixedCount)
-                && (!m_decodeSurrogatePairs || !term.characterClass->m_hasNonBMPCharacters)
+                && (!m_decodeSurrogatePairs || (!term.characterClass->m_hasNonBMPCharacters && !term.m_invert))
                 && (nextTerm.type == PatternTerm::TypePatternCharacter)
                 && (nextTerm.quantityType == QuantifierFixedCount)) {
                 PatternTerm termCopy = term;
@@ -604,30 +604,54 @@ class YarrGenerator : private MacroAssembler {
 
     void loadFromFrameAndJump(unsigned frameLocation)
     {
-        jump(Address(stackPointerRegister, frameLocation * sizeof(void*)));
+        jump(Address(stackPointerRegister, frameLocation * sizeof(void*)), YarrBacktrackPtrTag);
     }
 
     unsigned alignCallFrameSizeInBytes(unsigned callFrameSize)
     {
+        if (!callFrameSize)
+            return 0;
+
         callFrameSize *= sizeof(void*);
         if (callFrameSize / sizeof(void*) != m_pattern.m_body->m_callFrameSize)
             CRASH();
         callFrameSize = (callFrameSize + 0x3f) & ~0x3f;
-        if (!callFrameSize)
-            CRASH();
         return callFrameSize;
     }
     void initCallFrame()
     {
-        unsigned callFrameSize = m_pattern.m_body->m_callFrameSize;
-        if (callFrameSize)
-            subPtr(Imm32(alignCallFrameSizeInBytes(callFrameSize)), stackPointerRegister);
+        unsigned callFrameSizeInBytes = alignCallFrameSizeInBytes(m_pattern.m_body->m_callFrameSize);
+        if (callFrameSizeInBytes) {
+#if CPU(X86_64) || CPU(ARM64)
+            if (Options::zeroStackFrame()) {
+                // We need to start from the stack pointer, because we could have spilled callee saves
+                move(stackPointerRegister, regT0);
+                subPtr(Imm32(callFrameSizeInBytes), stackPointerRegister);
+                if (callFrameSizeInBytes <= 128) {
+                    for (unsigned offset = 0; offset < callFrameSizeInBytes; offset += sizeof(intptr_t))
+                        storePtr(TrustedImm32(0), Address(regT0, -8 - offset));
+                } else {
+                    Label zeroLoop = label();
+                    subPtr(TrustedImm32(sizeof(intptr_t) * 2), regT0);
+#if CPU(ARM64)
+                    storePair64(ARM64Registers::zr, ARM64Registers::zr, regT0);
+#else
+                    storePtr(TrustedImm32(0), Address(regT0));
+                    storePtr(TrustedImm32(0), Address(regT0, sizeof(intptr_t)));
+#endif
+                    branchPtr(NotEqual, regT0, stackPointerRegister).linkTo(zeroLoop, this);
+                }
+            } else
+#endif
+                subPtr(Imm32(callFrameSizeInBytes), stackPointerRegister);
+
+        }
     }
     void removeCallFrame()
     {
-        unsigned callFrameSize = m_pattern.m_body->m_callFrameSize;
-        if (callFrameSize)
-            addPtr(Imm32(alignCallFrameSizeInBytes(callFrameSize)), stackPointerRegister);
+        unsigned callFrameSizeInBytes = alignCallFrameSizeInBytes(m_pattern.m_body->m_callFrameSize);
+        if (callFrameSizeInBytes)
+            addPtr(Imm32(callFrameSizeInBytes), stackPointerRegister);
     }
 
     void generateFailReturn()
@@ -907,7 +931,7 @@ class YarrGenerator : private MacroAssembler {
         {
             ASSERT(isEmpty());
             for (unsigned i = 0; i < m_backtrackRecords.size(); ++i)
-                linkBuffer.patch(m_backtrackRecords[i].m_dataLabel, linkBuffer.locationOf(m_backtrackRecords[i].m_backtrackLocation));
+                linkBuffer.patch(m_backtrackRecords[i].m_dataLabel, linkBuffer.locationOf<YarrBacktrackPtrTag>(m_backtrackRecords[i].m_backtrackLocation));
         }
 
     private:
@@ -1104,12 +1128,16 @@ class YarrGenerator : private MacroAssembler {
         }
 
         const RegisterID character = regT0;
-        unsigned maxCharactersAtOnce = m_charSize == Char8 ? 4 : 2;
-        unsigned ignoreCaseMask = 0;
-#if CPU(BIG_ENDIAN)
-        int allCharacters = ch << (m_charSize == Char8 ? 24 : 16);
+#if CPU(X86_64) || CPU(ARM64)
+        unsigned maxCharactersAtOnce = m_charSize == Char8 ? 8 : 4;
 #else
-        int allCharacters = ch;
+        unsigned maxCharactersAtOnce = m_charSize == Char8 ? 4 : 2;
+#endif
+        uint64_t ignoreCaseMask = 0;
+#if CPU(BIG_ENDIAN)
+        uint64_t allCharacters = ch << (m_charSize == Char8 ? 24 : 16);
+#else
+        uint64_t allCharacters = ch;
 #endif
         unsigned numberCharacters;
         unsigned startTermPosition = term->inputPosition;
@@ -1118,16 +1146,19 @@ class YarrGenerator : private MacroAssembler {
         // upper & lower case representations are converted to a character class.
         ASSERT(!m_pattern.ignoreCase() || isASCIIAlpha(ch) || isCanonicallyUnique(ch, m_canonicalMode));
 
-        if (m_pattern.ignoreCase() && isASCIIAlpha(ch))
+        if (m_pattern.ignoreCase() && isASCIIAlpha(ch)) {
 #if CPU(BIG_ENDIAN)
             ignoreCaseMask |= 32 << (m_charSize == Char8 ? 24 : 16);
 #else
             ignoreCaseMask |= 32;
 #endif
+        }
 
         for (numberCharacters = 1; numberCharacters < maxCharactersAtOnce && nextOp->m_op == OpTerm; ++numberCharacters, nextOp = &m_ops[opIndex + numberCharacters]) {
             PatternTerm* nextTerm = nextOp->m_term;
-            
+
+            // YarrJIT handles decoded surrogate pair as one character if unicode flag is enabled.
+            // Note that the numberCharacters become 1 while the width of the pattern character becomes 32bit in this case.
             if (nextTerm->type != PatternTerm::TypePatternCharacter
                 || nextTerm->quantityType != QuantifierFixedCount
                 || nextTerm->quantityMaxCount != 1
@@ -1155,49 +1186,129 @@ class YarrGenerator : private MacroAssembler {
             // upper & lower case representations are converted to a character class.
             ASSERT(!m_pattern.ignoreCase() || isASCIIAlpha(currentCharacter) || isCanonicallyUnique(currentCharacter, m_canonicalMode));
 
-            allCharacters |= (currentCharacter << shiftAmount);
+            allCharacters |= (static_cast<uint64_t>(currentCharacter) << shiftAmount);
 
             if ((m_pattern.ignoreCase()) && (isASCIIAlpha(currentCharacter)))
-                ignoreCaseMask |= 32 << shiftAmount;                    
+                ignoreCaseMask |= 32ULL << shiftAmount;
         }
 
         if (m_charSize == Char8) {
+            auto check1 = [&] (Checked<unsigned> offset, UChar32 characters) {
+                op.m_jumps.append(jumpIfCharNotEquals(characters, offset, character));
+            };
+
+            auto check2 = [&] (Checked<unsigned> offset, uint16_t characters, uint16_t mask) {
+                load16Unaligned(negativeOffsetIndexedAddress(offset, character), character);
+                if (mask)
+                    or32(Imm32(mask), character);
+                op.m_jumps.append(branch32(NotEqual, character, Imm32(characters | mask)));
+            };
+
+            auto check4 = [&] (Checked<unsigned> offset, unsigned characters, unsigned mask) {
+                if (mask) {
+                    load32WithUnalignedHalfWords(negativeOffsetIndexedAddress(offset, character), character);
+                    if (mask)
+                        or32(Imm32(mask), character);
+                    op.m_jumps.append(branch32(NotEqual, character, Imm32(characters | mask)));
+                    return;
+                }
+                op.m_jumps.append(branch32WithUnalignedHalfWords(NotEqual, negativeOffsetIndexedAddress(offset, character), TrustedImm32(characters)));
+            };
+
+#if CPU(X86_64) || CPU(ARM64)
+            auto check8 = [&] (Checked<unsigned> offset, uint64_t characters, uint64_t mask) {
+                load64(negativeOffsetIndexedAddress(offset, character), character);
+                if (mask)
+                    or64(TrustedImm64(mask), character);
+                op.m_jumps.append(branch64(NotEqual, character, TrustedImm64(characters | mask)));
+            };
+#endif
+
             switch (numberCharacters) {
             case 1:
-                op.m_jumps.append(jumpIfCharNotEquals(ch, m_checkedOffset - startTermPosition, character));
+                // Use 32bit width of allCharacters since Yarr counts surrogate pairs as one character with unicode flag.
+                check1(m_checkedOffset - startTermPosition, allCharacters & 0xffffffff);
                 return;
             case 2: {
-                load16Unaligned(negativeOffsetIndexedAddress(m_checkedOffset - startTermPosition, character), character);
-                break;
+                check2(m_checkedOffset - startTermPosition, allCharacters & 0xffff, ignoreCaseMask & 0xffff);
+                return;
             }
             case 3: {
-                load16Unaligned(negativeOffsetIndexedAddress(m_checkedOffset - startTermPosition, character), character);
-                if (ignoreCaseMask)
-                    or32(Imm32(ignoreCaseMask), character);
-                op.m_jumps.append(branch32(NotEqual, character, Imm32((allCharacters & 0xffff) | ignoreCaseMask)));
-                op.m_jumps.append(jumpIfCharNotEquals(allCharacters >> 16, m_checkedOffset - startTermPosition - 2, character));
+                check2(m_checkedOffset - startTermPosition, allCharacters & 0xffff, ignoreCaseMask & 0xffff);
+                check1(m_checkedOffset - startTermPosition - 2, (allCharacters >> 16) & 0xff);
                 return;
             }
             case 4: {
-                load32WithUnalignedHalfWords(negativeOffsetIndexedAddress(m_checkedOffset- startTermPosition, character), character);
-                break;
+                check4(m_checkedOffset - startTermPosition, allCharacters & 0xffffffff, ignoreCaseMask & 0xffffffff);
+                return;
             }
+#if CPU(X86_64) || CPU(ARM64)
+            case 5: {
+                check4(m_checkedOffset - startTermPosition, allCharacters & 0xffffffff, ignoreCaseMask & 0xffffffff);
+                check1(m_checkedOffset - startTermPosition - 4, (allCharacters >> 32) & 0xff);
+                return;
+            }
+            case 6: {
+                check4(m_checkedOffset - startTermPosition, allCharacters & 0xffffffff, ignoreCaseMask & 0xffffffff);
+                check2(m_checkedOffset - startTermPosition - 4, (allCharacters >> 32) & 0xffff, (ignoreCaseMask >> 32) & 0xffff);
+                return;
+            }
+            case 7: {
+                check4(m_checkedOffset - startTermPosition, allCharacters & 0xffffffff, ignoreCaseMask & 0xffffffff);
+                check2(m_checkedOffset - startTermPosition - 4, (allCharacters >> 32) & 0xffff, (ignoreCaseMask >> 32) & 0xffff);
+                check1(m_checkedOffset - startTermPosition - 6, (allCharacters >> 48) & 0xff);
+                return;
+            }
+            case 8: {
+                check8(m_checkedOffset - startTermPosition, allCharacters, ignoreCaseMask);
+                return;
+            }
+#endif
             }
         } else {
+            auto check1 = [&] (Checked<unsigned> offset, UChar32 characters) {
+                op.m_jumps.append(jumpIfCharNotEquals(characters, offset, character));
+            };
+
+            auto check2 = [&] (Checked<unsigned> offset, unsigned characters, unsigned mask) {
+                if (mask) {
+                    load32WithUnalignedHalfWords(negativeOffsetIndexedAddress(offset, character), character);
+                    if (mask)
+                        or32(Imm32(mask), character);
+                    op.m_jumps.append(branch32(NotEqual, character, Imm32(characters | mask)));
+                    return;
+                }
+                op.m_jumps.append(branch32WithUnalignedHalfWords(NotEqual, negativeOffsetIndexedAddress(offset, character), TrustedImm32(characters)));
+            };
+
+#if CPU(X86_64) || CPU(ARM64)
+            auto check4 = [&] (Checked<unsigned> offset, uint64_t characters, uint64_t mask) {
+                load64(negativeOffsetIndexedAddress(offset, character), character);
+                if (mask)
+                    or64(TrustedImm64(mask), character);
+                op.m_jumps.append(branch64(NotEqual, character, TrustedImm64(characters | mask)));
+            };
+#endif
+
             switch (numberCharacters) {
             case 1:
-                op.m_jumps.append(jumpIfCharNotEquals(ch, m_checkedOffset - term->inputPosition, character));
+                // Use 32bit width of allCharacters since Yarr counts surrogate pairs as one character with unicode flag.
+                check1(m_checkedOffset - startTermPosition, allCharacters & 0xffffffff);
                 return;
             case 2:
-                load32WithUnalignedHalfWords(negativeOffsetIndexedAddress(m_checkedOffset- term->inputPosition, character), character);
-                break;
+                check2(m_checkedOffset - startTermPosition, allCharacters & 0xffffffff, ignoreCaseMask & 0xffffffff);
+                return;
+#if CPU(X86_64) || CPU(ARM64)
+            case 3:
+                check2(m_checkedOffset - startTermPosition, allCharacters & 0xffffffff, ignoreCaseMask & 0xffffffff);
+                check1(m_checkedOffset - startTermPosition - 2, (allCharacters >> 32) & 0xffff);
+                return;
+            case 4:
+                check4(m_checkedOffset - startTermPosition, allCharacters, ignoreCaseMask);
+                return;
+#endif
             }
         }
-
-        if (ignoreCaseMask)
-            or32(Imm32(ignoreCaseMask), character);
-        op.m_jumps.append(branch32(NotEqual, character, Imm32(allCharacters | ignoreCaseMask)));
-        return;
     }
     void backtrackPatternCharacterOnce(size_t opIndex)
     {
@@ -1832,6 +1943,9 @@ class YarrGenerator : private MacroAssembler {
         size_t opIndex = 0;
 
         do {
+            if (m_disassembler)
+                m_disassembler->setForGenerate(opIndex, label());
+
             YarrOp& op = m_ops[opIndex];
             switch (op.m_op) {
 
@@ -2348,6 +2462,10 @@ class YarrGenerator : private MacroAssembler {
 
         do {
             --opIndex;
+
+            if (m_disassembler)
+                m_disassembler->setForBacktrack(opIndex, label());
+
             YarrOp& op = m_ops[opIndex];
             switch (op.m_op) {
 
@@ -3258,6 +3376,8 @@ class YarrGenerator : private MacroAssembler {
 
         m_tryReadUnicodeCharacterEntry = label();
 
+        tagReturnAddress();
+
         tryReadUnicodeCharImpl(regT0);
 
         ret();
@@ -3273,10 +3393,12 @@ class YarrGenerator : private MacroAssembler {
         if (m_pattern.m_saveInitialStartValue)
             push(X86Registers::ebx);
 
+#if OS(WINDOWS)
+        push(X86Registers::edi);
+#endif
 #if ENABLE(YARR_JIT_ALL_PARENS_EXPRESSIONS)
         if (m_containsNestedSubpatterns) {
 #if OS(WINDOWS)
-            push(X86Registers::edi);
             push(X86Registers::esi);
 #endif
             push(X86Registers::r12);
@@ -3319,6 +3441,7 @@ class YarrGenerator : private MacroAssembler {
             loadPtr(Address(X86Registers::ebp, 2 * sizeof(void*)), output);
     #endif
 #elif CPU(ARM64)
+        tagReturnAddress();
         if (m_decodeSurrogatePairs) {
             pushPair(framePointerRegister, linkRegister);
             move(TrustedImm32(0x10000), supplementaryPlanesBase);
@@ -3365,9 +3488,11 @@ class YarrGenerator : private MacroAssembler {
             pop(X86Registers::r12);
 #if OS(WINDOWS)
             pop(X86Registers::esi);
-            pop(X86Registers::edi);
 #endif
         }
+#endif
+#if OS(WINDOWS)
+        pop(X86Registers::edi);
 #endif
 
         if (m_pattern.m_saveInitialStartValue)
@@ -3393,9 +3518,11 @@ class YarrGenerator : private MacroAssembler {
     }
 
 public:
-    YarrGenerator(VM* vm, YarrPattern& pattern, YarrCharSize charSize)
+    YarrGenerator(VM* vm, YarrPattern& pattern, String& patternString, YarrCodeBlock& codeBlock, YarrCharSize charSize)
         : m_vm(vm)
         , m_pattern(pattern)
+        , m_patternString(patternString)
+        , m_codeBlock(codeBlock)
         , m_charSize(charSize)
         , m_decodeSurrogatePairs(m_charSize == Char16 && m_pattern.unicode())
         , m_unicodeIgnoreCase(m_pattern.unicode() && m_pattern.ignoreCase())
@@ -3407,18 +3534,20 @@ public:
     {
     }
 
-    void compile(YarrCodeBlock& jitObject)
+    void compile()
     {
+        YarrCodeBlock& codeBlock = m_codeBlock;
+
 #ifndef JIT_UNICODE_EXPRESSIONS
         if (m_decodeSurrogatePairs) {
-            jitObject.setFallBackWithFailureReason(JITFailureReason::DecodeSurrogatePair);
+            codeBlock.setFallBackWithFailureReason(JITFailureReason::DecodeSurrogatePair);
             return;
         }
 #endif
 
 #if ENABLE(YARR_JIT_ALL_PARENS_EXPRESSIONS)
         if (m_containsNestedSubpatterns)
-            jitObject.setUsesPaternContextBuffer();
+            codeBlock.setUsesPaternContextBuffer();
 #endif
 
         // We need to compile before generating code since we set flags based on compilation that
@@ -3426,10 +3555,16 @@ public:
         opCompileBody(m_pattern.m_body);
         
         if (m_failureReason) {
-            jitObject.setFallBackWithFailureReason(*m_failureReason);
+            codeBlock.setFallBackWithFailureReason(*m_failureReason);
             return;
         }
-        
+
+        if (UNLIKELY(Options::dumpDisassembly() || Options::dumpRegExpDisassembly()))
+            m_disassembler = std::make_unique<YarrDisassembler>(this);
+
+        if (m_disassembler)
+            m_disassembler->setStartOfCode(label());
+
         generateEnter();
 
         Jump hasInput = checkInput();
@@ -3465,20 +3600,27 @@ public:
         }
 
         generate();
+        if (m_disassembler)
+            m_disassembler->setEndOfGenerate(label());
         backtrack();
+        if (m_disassembler)
+            m_disassembler->setEndOfBacktrack(label());
 
         generateTryReadUnicodeCharacterHelper();
 
         generateJITFailReturn();
 
+        if (m_disassembler)
+            m_disassembler->setEndOfCode(label());
+
         LinkBuffer linkBuffer(*this, REGEXP_CODE_ID, JITCompilationCanFail);
         if (linkBuffer.didFailToAllocate()) {
-            jitObject.setFallBackWithFailureReason(JITFailureReason::ExecutableMemoryAllocationFailure);
+            codeBlock.setFallBackWithFailureReason(JITFailureReason::ExecutableMemoryAllocationFailure);
             return;
         }
 
         if (!m_tryReadUnicodeCharacterCalls.isEmpty()) {
-            CodeLocationLabel tryReadUnicodeCharacterHelper = linkBuffer.locationOf(m_tryReadUnicodeCharacterEntry);
+            CodeLocationLabel<NoPtrTag> tryReadUnicodeCharacterHelper = linkBuffer.locationOf<NoPtrTag>(m_tryReadUnicodeCharacterEntry);
 
             for (auto call : m_tryReadUnicodeCharacterCalls)
                 linkBuffer.link(call, tryReadUnicodeCharacterHelper);
@@ -3486,26 +3628,216 @@ public:
 
         m_backtrackingState.linkDataLabels(linkBuffer);
 
+        if (m_disassembler)
+            m_disassembler->dump(linkBuffer);
+
         if (compileMode == MatchOnly) {
             if (m_charSize == Char8)
-                jitObject.set8BitCodeMatchOnly(FINALIZE_CODE(linkBuffer, "Match-only 8-bit regular expression"));
+                codeBlock.set8BitCodeMatchOnly(FINALIZE_REGEXP_CODE(linkBuffer, YarrMatchOnly8BitPtrTag, "Match-only 8-bit regular expression"));
             else
-                jitObject.set16BitCodeMatchOnly(FINALIZE_CODE(linkBuffer, "Match-only 16-bit regular expression"));
+                codeBlock.set16BitCodeMatchOnly(FINALIZE_REGEXP_CODE(linkBuffer, YarrMatchOnly16BitPtrTag, "Match-only 16-bit regular expression"));
         } else {
             if (m_charSize == Char8)
-                jitObject.set8BitCode(FINALIZE_CODE(linkBuffer, "8-bit regular expression"));
+                codeBlock.set8BitCode(FINALIZE_REGEXP_CODE(linkBuffer, Yarr8BitPtrTag, "8-bit regular expression"));
             else
-                jitObject.set16BitCode(FINALIZE_CODE(linkBuffer, "16-bit regular expression"));
+                codeBlock.set16BitCode(FINALIZE_REGEXP_CODE(linkBuffer, Yarr16BitPtrTag, "16-bit regular expression"));
         }
         if (m_failureReason)
-            jitObject.setFallBackWithFailureReason(*m_failureReason);
+            codeBlock.setFallBackWithFailureReason(*m_failureReason);
+    }
+
+    const char* variant() override
+    {
+        if (compileMode == MatchOnly) {
+            if (m_charSize == Char8)
+                return "Match-only 8-bit regular expression";
+
+            return "Match-only 16-bit regular expression";
+        }
+
+        if (m_charSize == Char8)
+            return "8-bit regular expression";
+
+        return "16-bit regular expression";
+    }
+
+    unsigned opCount() override
+    {
+        return m_ops.size();
+    }
+
+    void dumpPatternString(PrintStream& out) override
+    {
+        m_pattern.dumpPatternString(out, m_patternString);
+    }
+
+    int dumpFor(PrintStream& out, unsigned opIndex) override
+    {
+        if (opIndex >= opCount())
+            return 0;
+
+        out.printf("%4d:", opIndex);
+
+        YarrOp& op = m_ops[opIndex];
+        PatternTerm* term = op.m_term;
+        switch (op.m_op) {
+        case OpTerm: {
+            out.print("OpTerm ");
+            switch (term->type) {
+            case PatternTerm::TypeAssertionBOL:
+                out.print("Assert BOL");
+                break;
+
+            case PatternTerm::TypeAssertionEOL:
+                out.print("Assert EOL");
+                break;
+
+            case PatternTerm::TypePatternCharacter:
+                out.print("TypePatternCharacter ");
+                dumpUChar32(out, term->patternCharacter);
+                if (m_pattern.ignoreCase())
+                    out.print(" ignore case");
+
+                term->dumpQuantifier(out);
+                break;
+
+            case PatternTerm::TypeCharacterClass:
+                out.print("TypePatternCharacterClass ");
+                if (term->invert())
+                    out.print("not ");
+                dumpCharacterClass(out, &m_pattern, term->characterClass);
+                term->dumpQuantifier(out);
+                break;
+
+            case PatternTerm::TypeAssertionWordBoundary:
+                out.printf("%sword boundary", term->invert() ? "non-" : "");
+                break;
+
+            case PatternTerm::TypeDotStarEnclosure:
+                out.print(".* enclosure");
+                break;
+
+            case PatternTerm::TypeForwardReference:
+            case PatternTerm::TypeBackReference:
+            case PatternTerm::TypeParenthesesSubpattern:
+            case PatternTerm::TypeParentheticalAssertion:
+                RELEASE_ASSERT_NOT_REACHED();
+                break;
+            }
+
+            if (op.m_isDeadCode)
+                out.print(" already handled");
+            out.print("\n");
+            return(0);
+        }
+
+        case OpBodyAlternativeBegin:
+            out.printf("OpBodyAlternativeBegin minimum size %u\n", op.m_alternative->m_minimumSize);
+            return(0);
+
+        case OpBodyAlternativeNext:
+            out.printf("OpBodyAlternativeNext minimum size %u\n", op.m_alternative->m_minimumSize);
+            return(0);
+
+        case OpBodyAlternativeEnd:
+            out.print("OpBodyAlternativeEnd\n");
+            return(0);
+
+        case OpSimpleNestedAlternativeBegin:
+            out.printf("OpSimpleNestedAlternativeBegin minimum size %u\n", op.m_alternative->m_minimumSize);
+            return(1);
+
+        case OpNestedAlternativeBegin:
+            out.printf("OpNestedAlternativeBegin minimum size %u\n", op.m_alternative->m_minimumSize);
+            return(1);
+
+        case OpSimpleNestedAlternativeNext:
+            out.printf("OpSimpleNestedAlternativeNext minimum size %u\n", op.m_alternative->m_minimumSize);
+            return(0);
+
+        case OpNestedAlternativeNext:
+            out.printf("OpNestedAlternativeNext minimum size %u\n", op.m_alternative->m_minimumSize);
+            return(0);
+
+        case OpSimpleNestedAlternativeEnd:
+            out.print("OpSimpleNestedAlternativeEnd");
+            term->dumpQuantifier(out);
+            out.print("\n");
+            return(-1);
+
+        case OpNestedAlternativeEnd:
+            out.print("OpNestedAlternativeEnd");
+            term->dumpQuantifier(out);
+            out.print("\n");
+            return(-1);
+
+        case OpParenthesesSubpatternOnceBegin:
+            out.print("OpParenthesesSubpatternOnceBegin ");
+            if (term->capture())
+                out.printf("capturing pattern #%u\n", op.m_term->parentheses.subpatternId);
+            else
+                out.print("non-capturing\n");
+            return(0);
+
+        case OpParenthesesSubpatternOnceEnd:
+            out.print("OpParenthesesSubpatternOnceEnd\n");
+            return(0);
+
+        case OpParenthesesSubpatternTerminalBegin:
+            out.print("OpParenthesesSubpatternTerminalBegin ");
+            if (term->capture())
+                out.printf("capturing pattern #%u\n", op.m_term->parentheses.subpatternId);
+            else
+                out.print("non-capturing\n");
+            return(0);
+
+        case OpParenthesesSubpatternTerminalEnd:
+            out.print("OpParenthesesSubpatternTerminalEnd ");
+            if (term->capture())
+                out.printf("capturing pattern #%u\n", op.m_term->parentheses.subpatternId);
+            else
+                out.print("non-capturing\n");
+            return(0);
+
+        case OpParenthesesSubpatternBegin:
+            out.print("OpParenthesesSubpatternBegin ");
+            if (term->capture())
+                out.printf("capturing pattern #%u\n", op.m_term->parentheses.subpatternId);
+            else
+                out.print("non-capturing\n");
+            return(0);
+
+        case OpParenthesesSubpatternEnd:
+            out.print("OpParenthesesSubpatternEnd ");
+            if (term->capture())
+                out.printf("capturing pattern #%u\n", op.m_term->parentheses.subpatternId);
+            else
+                out.print("non-capturing\n");
+            return(0);
+
+        case OpParentheticalAssertionBegin:
+            out.printf("OpParentheticalAssertionBegin%s\n", op.m_term->invert() ? " inverted" : "");
+            return(0);
+
+        case OpParentheticalAssertionEnd:
+            out.print("OpParentheticalAssertionEnd%s\n", op.m_term->invert() ? " inverted" : "");
+            return(0);
+
+        case OpMatchFailed:
+            out.print("OpMatchFailed\n");
+            return(0);
+        }
+
+        return(0);
     }
 
 private:
     VM* m_vm;
 
     YarrPattern& m_pattern;
+    String& m_patternString;
 
+    YarrCodeBlock& m_codeBlock;
     YarrCharSize m_charSize;
 
     // Used to detect regular expression constructs that are not currently
@@ -3541,6 +3873,8 @@ private:
 
     // This class records state whilst generating the backtracking path of code.
     BacktrackingState m_backtrackingState;
+    
+    std::unique_ptr<YarrDisassembler> m_disassembler;
 };
 
 static void dumpCompileFailure(JITFailureReason failure)
@@ -3567,14 +3901,14 @@ static void dumpCompileFailure(JITFailureReason failure)
     }
 }
 
-void jitCompile(YarrPattern& pattern, YarrCharSize charSize, VM* vm, YarrCodeBlock& jitObject, YarrJITCompileMode mode)
+void jitCompile(YarrPattern& pattern, String& patternString, YarrCharSize charSize, VM* vm, YarrCodeBlock& codeBlock, YarrJITCompileMode mode)
 {
     if (mode == MatchOnly)
-        YarrGenerator<MatchOnly>(vm, pattern, charSize).compile(jitObject);
+        YarrGenerator<MatchOnly>(vm, pattern, patternString, codeBlock, charSize).compile();
     else
-        YarrGenerator<IncludeSubpatterns>(vm, pattern, charSize).compile(jitObject);
+        YarrGenerator<IncludeSubpatterns>(vm, pattern, patternString, codeBlock, charSize).compile();
 
-    if (auto failureReason = jitObject.failureReason()) {
+    if (auto failureReason = codeBlock.failureReason()) {
         if (Options::dumpCompiledRegExpPatterns())
             dumpCompileFailure(*failureReason);
     }

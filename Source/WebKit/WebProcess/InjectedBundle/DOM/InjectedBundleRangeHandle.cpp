@@ -45,6 +45,10 @@
 #include <wtf/HashMap.h>
 #include <wtf/NeverDestroyed.h>
 
+#if PLATFORM(MAC)
+#include <WebCore/LocalDefaultSystemAppearance.h>
+#endif
+
 using namespace WebCore;
 
 namespace WebKit {
@@ -120,6 +124,10 @@ RefPtr<WebImage> InjectedBundleRangeHandle::renderedImage(SnapshotOptions option
     if (!frameView)
         return nullptr;
 
+#if PLATFORM(MAC)
+    LocalDefaultSystemAppearance localAppearance(frame->page()->useSystemAppearance(), frame->page()->useDarkAppearance());
+#endif
+
     Ref<Frame> protector(*frame);
 
     VisibleSelection oldSelection = frame->selection().selection();
@@ -142,12 +150,12 @@ RefPtr<WebImage> InjectedBundleRangeHandle::renderedImage(SnapshotOptions option
 
     graphicsContext->translate(-paintRect.location());
 
-    PaintBehavior oldPaintBehavior = frameView->paintBehavior();
-    PaintBehavior paintBehavior = oldPaintBehavior | PaintBehaviorSelectionOnly | PaintBehaviorFlattenCompositingLayers | PaintBehaviorSnapshotting;
+    OptionSet<PaintBehavior> oldPaintBehavior = frameView->paintBehavior();
+    OptionSet<PaintBehavior> paintBehavior = oldPaintBehavior | PaintBehavior::SelectionOnly | PaintBehavior::FlattenCompositingLayers | PaintBehavior::Snapshotting;
     if (options & SnapshotOptionsForceBlackText)
-        paintBehavior |= PaintBehaviorForceBlackText;
+        paintBehavior |= PaintBehavior::ForceBlackText;
     if (options & SnapshotOptionsForceWhiteText)
-        paintBehavior |= PaintBehaviorForceWhiteText;
+        paintBehavior |= PaintBehavior::ForceWhiteText;
 
     frameView->setPaintBehavior(paintBehavior);
     ownerDocument.updateLayout();

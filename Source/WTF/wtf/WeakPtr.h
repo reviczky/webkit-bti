@@ -90,6 +90,7 @@ private:
     RefPtr<WeakReference<T>> m_ref;
 };
 
+// Note: you probably want to inherit from CanMakeWeakPtr rather than use this directly.
 template<typename T>
 class WeakPtrFactory {
     WTF_MAKE_NONCOPYABLE(WeakPtrFactory<T>);
@@ -121,6 +122,15 @@ public:
 
 private:
     mutable RefPtr<WeakReference<T>> m_ref;
+};
+
+template<typename T> class CanMakeWeakPtr {
+public:
+    const WeakPtrFactory<T>& weakPtrFactory() const { return m_weakFactory; }
+    WeakPtrFactory<T>& weakPtrFactory() { return m_weakFactory; }
+
+private:
+    WeakPtrFactory<T> m_weakFactory;
 };
 
 template<typename T, typename U> inline WeakReference<T>* weak_reference_upcast(WeakReference<U>* weakReference)
@@ -201,6 +211,7 @@ template<typename T, typename U> inline bool operator!=(T* a, const WeakPtr<U>& 
 
 } // namespace WTF
 
+using WTF::CanMakeWeakPtr;
 using WTF::WeakPtr;
 using WTF::WeakPtrFactory;
 using WTF::WeakReference;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
 
+#include "ChildProcessMessages.h"
 #include "PluginProcessConnectionManagerMessages.h"
 #include "PluginProcessCreationParameters.h"
 #include "PluginProcessManager.h"
@@ -37,10 +38,6 @@
 #include "WebProcessProxy.h"
 #include <WebCore/NotImplemented.h>
 #include <wtf/RunLoop.h>
-
-#if OS(LINUX)
-#include "MemoryPressureMonitor.h"
-#endif
 
 using namespace WebCore;
 
@@ -91,8 +88,8 @@ PluginProcessProxy::~PluginProcessProxy()
 
 void PluginProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions)
 {
-    ChildProcessProxy::getLaunchOptions(launchOptions);
     platformGetLaunchOptions(launchOptions, m_pluginProcessAttributes);
+    ChildProcessProxy::getLaunchOptions(launchOptions);
 }
 
 void PluginProcessProxy::processWillShutDown(IPC::Connection& connection)
@@ -102,7 +99,7 @@ void PluginProcessProxy::processWillShutDown(IPC::Connection& connection)
 
 // Asks the plug-in process to create a new connection to a web process. The connection identifier will be 
 // encoded in the given argument encoder and sent back to the connection of the given web process.
-void PluginProcessProxy::getPluginProcessConnection(Ref<Messages::WebProcessProxy::GetPluginProcessConnection::DelayedReply>&& reply)
+void PluginProcessProxy::getPluginProcessConnection(Messages::WebProcessProxy::GetPluginProcessConnection::DelayedReply&& reply)
 {
     m_pendingConnectionReplies.append(WTFMove(reply));
 
@@ -116,7 +113,7 @@ void PluginProcessProxy::getPluginProcessConnection(Ref<Messages::WebProcessProx
     m_connection->send(Messages::PluginProcess::CreateWebProcessConnection(), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 }
 
-void PluginProcessProxy::fetchWebsiteData(WTF::Function<void (Vector<String>)>&& completionHandler)
+void PluginProcessProxy::fetchWebsiteData(CompletionHandler<void (Vector<String>)>&& completionHandler)
 {
     uint64_t callbackID = generateCallbackID();
     m_pendingFetchWebsiteDataCallbacks.set(callbackID, WTFMove(completionHandler));
@@ -129,7 +126,7 @@ void PluginProcessProxy::fetchWebsiteData(WTF::Function<void (Vector<String>)>&&
     m_connection->send(Messages::PluginProcess::GetSitesWithData(callbackID), 0);
 }
 
-void PluginProcessProxy::deleteWebsiteData(WallTime modifiedSince, WTF::Function<void ()>&& completionHandler)
+void PluginProcessProxy::deleteWebsiteData(WallTime modifiedSince, CompletionHandler<void ()>&& completionHandler)
 {
     uint64_t callbackID = generateCallbackID();
     m_pendingDeleteWebsiteDataCallbacks.set(callbackID, WTFMove(completionHandler));
@@ -142,7 +139,7 @@ void PluginProcessProxy::deleteWebsiteData(WallTime modifiedSince, WTF::Function
     m_connection->send(Messages::PluginProcess::DeleteWebsiteData(modifiedSince, callbackID), 0);
 }
 
-void PluginProcessProxy::deleteWebsiteDataForHostNames(const Vector<String>& hostNames, WTF::Function<void ()>&& completionHandler)
+void PluginProcessProxy::deleteWebsiteDataForHostNames(const Vector<String>& hostNames, CompletionHandler<void ()>&& completionHandler)
 {
     uint64_t callbackID = generateCallbackID();
     m_pendingDeleteWebsiteDataForHostNamesCallbacks.set(callbackID, WTFMove(completionHandler));
@@ -155,33 +152,43 @@ void PluginProcessProxy::deleteWebsiteDataForHostNames(const Vector<String>& hos
     m_connection->send(Messages::PluginProcess::DeleteWebsiteDataForHostNames(hostNames, callbackID), 0);
 }
 
+#if OS(LINUX)
+void PluginProcessProxy::sendMemoryPressureEvent(bool isCritical)
+{
+    if (state() == State::Launching)
+        return;
+
+    m_connection->send(Messages::ChildProcess::DidReceiveMemoryPressureEvent(isCritical), 0);
+}
+#endif
+
 void PluginProcessProxy::pluginProcessCrashedOrFailedToLaunch()
 {
     // The plug-in process must have crashed or exited, send any pending sync replies we might have.
     while (!m_pendingConnectionReplies.isEmpty()) {
-        RefPtr<Messages::WebProcessProxy::GetPluginProcessConnection::DelayedReply> reply = m_pendingConnectionReplies.takeFirst();
+        auto reply = m_pendingConnectionReplies.takeFirst();
 
 #if USE(UNIX_DOMAIN_SOCKETS)
-        reply->send(IPC::Attachment(), false);
+        reply(IPC::Attachment(), false);
 #elif OS(DARWIN)
-        reply->send(IPC::Attachment(0, MACH_MSG_TYPE_MOVE_SEND), false);
+        reply(IPC::Attachment(0, MACH_MSG_TYPE_MOVE_SEND), false);
 #else
         notImplemented();
 #endif
     }
 
     m_pendingFetchWebsiteDataRequests.clear();
-    for (const auto& callback : m_pendingFetchWebsiteDataCallbacks.values())
+    for (auto&& callback : m_pendingFetchWebsiteDataCallbacks.values())
         callback({ });
     m_pendingFetchWebsiteDataCallbacks.clear();
 
     m_pendingDeleteWebsiteDataRequests.clear();
-    for (const auto& callback : m_pendingDeleteWebsiteDataCallbacks.values())
+    for (auto&& callback : m_pendingDeleteWebsiteDataCallbacks.values())
         callback();
     m_pendingDeleteWebsiteDataRequests.clear();
 
     m_pendingDeleteWebsiteDataForHostNamesRequests.clear();
-    for (const auto& callback : m_pendingDeleteWebsiteDataForHostNamesCallbacks.values())
+    for (auto&& callback : m_pendingDeleteWebsiteDataForHostNamesCallbacks.values())
         callback();
     m_pendingDeleteWebsiteDataForHostNamesCallbacks.clear();
 
@@ -215,7 +222,7 @@ void PluginProcessProxy::didFinishLaunching(ProcessLauncher*, IPC::Connection::I
 {
     ASSERT(!m_connection);
 
-    if (IPC::Connection::identifierIsNull(connectionIdentifier)) {
+    if (!IPC::Connection::identifierIsValid(connectionIdentifier)) {
         pluginProcessCrashedOrFailedToLaunch();
         return;
     }
@@ -233,11 +240,6 @@ void PluginProcessProxy::didFinishLaunching(ProcessLauncher*, IPC::Connection::I
         parameters.minimumLifetime = minimumLifetime;
         parameters.terminationTimeout = shutdownTimeout;
     }
-
-#if OS(LINUX)
-    if (MemoryPressureMonitor::isEnabled())
-        parameters.memoryPressureMonitorHandle = MemoryPressureMonitor::singleton().createHandle();
-#endif
 
     platformInitializePluginProcess(parameters);
 
@@ -276,12 +278,12 @@ void PluginProcessProxy::didCreateWebProcessConnection(const IPC::Attachment& co
     ASSERT(!m_pendingConnectionReplies.isEmpty());
 
     // Grab the first pending connection reply.
-    RefPtr<Messages::WebProcessProxy::GetPluginProcessConnection::DelayedReply> reply = m_pendingConnectionReplies.takeFirst();
+    auto reply = m_pendingConnectionReplies.takeFirst();
 
 #if USE(UNIX_DOMAIN_SOCKETS)
-    reply->send(connectionIdentifier, supportsAsynchronousPluginInitialization);
+    reply(connectionIdentifier, supportsAsynchronousPluginInitialization);
 #elif OS(DARWIN)
-    reply->send(IPC::Attachment(connectionIdentifier.port(), MACH_MSG_TYPE_MOVE_SEND), supportsAsynchronousPluginInitialization);
+    reply(IPC::Attachment(connectionIdentifier.port(), MACH_MSG_TYPE_MOVE_SEND), supportsAsynchronousPluginInitialization);
 #else
     notImplemented();
 #endif

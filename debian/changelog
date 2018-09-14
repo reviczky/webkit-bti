@@ -1,57 +1,124 @@
-webkit2gtk (2.20.5-1) unstable; urgency=medium
+webkit2gtk (2.22.0-1) experimental; urgency=medium
 
   * New upstream release.
+  * Drop use-wtf-cpu-mips64.patch and refresh fix-ftbfs-x86.patch.
+  * debian/control:
+    + Update Standards-Version to 4.2.1 (no changes).
+  * debian/copyright:
+    + Remove nonexistent files.
+  * debian/patches/replace-stdmax.patch:
+    + Don't use std::max in RegisterState.h, this causes build failures
+      with some versions of libstdc++.
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 03 Sep 2018 15:51:37 +0300
+
+webkit2gtk (2.21.92-1) experimental; urgency=medium
+
+  * New upstream development release.
+  * debian/patches/use-wtf-cpu-mips64.patch:
+    + Don't use WTF_CPU_MIPS on mips64. This makes WebKit enable JIT,
+      which breaks the build.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 24 Aug 2018 18:37:29 +0300
+
+webkit2gtk (2.21.91-2) experimental; urgency=medium
+
+  * debian/rules:
+    + Pass --fail-missing to dh_missing.
+  * debian/libjavascriptcoregtk-4.0-dev.install:
+    + Install headers in usr/include/webkitgtk-4.0/jsc/ (Closes: #906519).
+  * Install the jsc-glib and webkitdomgtk documentation.
+  * debian/patches/detect-jit.patch:
+    + Fix detection of when to enable the JIT and USE_SYSTEM_MALLOC.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 21 Aug 2018 10:47:19 +0300
+
+webkit2gtk (2.21.91-1) experimental; urgency=medium
+
+  * New upstream development release.
   * debian/patches/fix-ftbfs-m68k.patch:
-    + Update patch (Closes: #902100).
-
- -- Alberto Garcia <berto@igalia.com>  Mon, 13 Aug 2018 10:52:34 +0300
-
-webkit2gtk (2.20.4-1) unstable; urgency=high
-
-  * New upstream release.
-    + This fixes CVE-2018-4261, CVE-2018-4262, CVE-2018-4263,
-      CVE-2018-4264, CVE-2018-4265, CVE-2018-4266, CVE-2018-4267,
-      CVE-2018-4270, CVE-2018-4272, CVE-2018-4273, CVE-2018-4278,
-      CVE-2018-4284.
+    + Refresh.
+  * debian/patches/gtk-doc-build-fix.patch:
+    + Remove.
   * Don't use NEWS as an upstream changelog anymore (as required by Debian
     policy 4.2.0).
   * debian/control:
     + Update Standards-Version to 4.2.0.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+  * debian/rules:
+    + Don't pass -DENABLE_JIT=OFF manually anymore, since r232918 WebKit
+      only enables JIT in the targets where it's known to work.
+    + Stop passing --ddeb-migration to dh_strip, the automatic debug
+      symbol migration is complete.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 06 Aug 2018 16:39:27 +0300
+ -- Alberto Garcia <berto@igalia.com>  Thu, 16 Aug 2018 18:06:58 +0300
 
-webkit2gtk (2.20.3-1) unstable; urgency=high
+webkit2gtk (2.21.5-1) experimental; urgency=medium
 
-  * New upstream release.
-    + This fixes CVE-2018-4190, CVE-2018-4199, CVE-2018-4218,
-      CVE-2018-4222, CVE-2018-4232, CVE-2018-4233, CVE-2018-4246 and
-      CVE-2018-11646.
+  * New upstream development release.
   * debian/control:
-    + Remove compatibility with versions of debhelper < 9.20151219 in
-      override_dh_strip, we require version 10 since 2.20.1-1.
-  * debian/patches/fix-atomics-build.patch:
-    + The __atomic_fetch_add_8() check is now in this release. Update the
-      patch to enable THREADS_PREFER_PTHREAD_FLAG. This fixes the riscv64
-      build.
+    + Update Standards-Version to 4.1.5 (no changes needed).
+  * debian/patches/detect-gstreamer-gl.patch:
+    + Refresh.
+  * debian/patches/gtk-doc-build-fix.patch:
+    + Fix build failure when generating documentation.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 30 Jul 2018 13:58:42 +0300
+
+webkit2gtk (2.21.4-1) experimental; urgency=medium
+
+  * New upstream development release.
+  * debian/patches/fix-ftbfs-sparc64.patch:
+    + Refresh.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 12 Jun 2018 15:34:54 +0300
+
+webkit2gtk (2.21.3-1) experimental; urgency=medium
+
+  * New upstream development release (Closes: #899338).
   * debian/rules:
     + Build with -DRELEASE_WITHOUT_OPTIMIZATIONS if "noopt" is set.
-  * debian/libwebkit2gtk-4.0-doc.install, debian/rules:
-    + Update path of installed documentation. This changed upstream in
-      2.20.2 but it was reverted in this release.
+  * debian/patches/prefer-pthread.patch:
+    + Enable THREADS_PREFER_PTHREAD_FLAG. This fixes a FTBFS in riscv64
+      (see Debian #895969 and WebKit #182622).
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 12 Jun 2018 12:58:42 +0300
+ -- Alberto Garcia <berto@igalia.com>  Mon, 28 May 2018 15:48:50 +0200
 
-webkit2gtk (2.20.2-1) unstable; urgency=high
+webkit2gtk (2.21.2-1) experimental; urgency=medium
 
-  * New upstream release.
-    + This fixes CVE-2018-4200.
-  * debian/patches/fix-atomics-build.patch:
-    + Set THREADS_PREFER_PTHREAD_FLAG to ON. This fixes the build in
-      riscv64 (thanks, Aurelien Jarno).
-  * debian/libwebkit2gtk-4.0-doc.install, debian/rules:
-    + Update path of installed documentation (see WebKit #184771).
+  * New upstream development release.
+  * debian/patches/fix-atomics-build.patch,
+    debian/patches/fix-format-security.patch:
+    + Remove these patches, they are now upstream.
+  * debian/patches/fix-ftbfs-m68k.patch:
+    + Update.
+  * debian/rules:
+    + Remove compatibility with versions of debhelper < 9.20151219 in
+      override_dh_strip, we require version 10 since 2.20.1-1.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 07 May 2018 14:41:30 +0300
+ -- Alberto Garcia <berto@igalia.com>  Mon, 21 May 2018 11:16:26 +0300
+
+webkit2gtk (2.21.1-1) experimental; urgency=medium
+
+  * New upstream development release.
+  * Refresh all patches.
+  * debian/patches/fix-format-security.patch:
+    + Fix build with GCC due to bogus format-security error.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 20 Apr 2018 11:23:59 +0300
 
 webkit2gtk (2.20.1-1) unstable; urgency=medium
 

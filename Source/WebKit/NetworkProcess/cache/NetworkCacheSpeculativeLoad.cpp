@@ -34,7 +34,6 @@
 #include "NetworkSession.h"
 #include "SessionTracker.h"
 #include <pal/SessionID.h>
-#include <wtf/CurrentTime.h>
 #include <wtf/RunLoop.h>
 
 namespace WebKit {
@@ -55,7 +54,7 @@ SpeculativeLoad::SpeculativeLoad(Cache& cache, const GlobalFrameID& frameID, con
     NetworkLoadParameters parameters;
     parameters.sessionID = PAL::SessionID::defaultSessionID();
     parameters.storedCredentialsPolicy = StoredCredentialsPolicy::Use;
-    parameters.contentSniffingPolicy = DoNotSniffContent;
+    parameters.contentSniffingPolicy = ContentSniffingPolicy::DoNotSniffContent;
     parameters.contentEncodingSniffingPolicy = ContentEncodingSniffingPolicy::Sniff;
     parameters.request = m_originalRequest;
     m_networkLoad = std::make_unique<NetworkLoad>(*this, WTFMove(parameters), *SessionTracker::networkSession(PAL::SessionID::defaultSessionID()));
@@ -122,13 +121,6 @@ void SpeculativeLoad::didFinishLoading(const WebCore::NetworkLoadMetrics&)
 
     didComplete();
 }
-
-#if USE(PROTECTION_SPACE_AUTH_CALLBACK)
-void SpeculativeLoad::canAuthenticateAgainstProtectionSpaceAsync(const WebCore::ProtectionSpace&)
-{
-    m_networkLoad->continueCanAuthenticateAgainstProtectionSpace(false);
-}
-#endif
 
 void SpeculativeLoad::didFailLoading(const ResourceError&)
 {

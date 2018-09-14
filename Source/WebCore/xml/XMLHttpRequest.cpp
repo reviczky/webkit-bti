@@ -59,7 +59,6 @@
 #include <JavaScriptCore/ArrayBufferView.h>
 #include <JavaScriptCore/JSCInlines.h>
 #include <JavaScriptCore/JSLock.h>
-#include <mutex>
 #include <wtf/RefCountedLeakCounter.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/CString.h>
@@ -280,11 +279,11 @@ String XMLHttpRequest::responseURL() const
     return responseURL.string();
 }
 
-XMLHttpRequestUpload* XMLHttpRequest::upload()
+XMLHttpRequestUpload& XMLHttpRequest::upload()
 {
     if (!m_upload)
-        m_upload = std::make_unique<XMLHttpRequestUpload>(this);
-    return m_upload.get();
+        m_upload = std::make_unique<XMLHttpRequestUpload>(*this);
+    return *m_upload;
 }
 
 void XMLHttpRequest::changeState(State newState)
@@ -303,8 +302,10 @@ void XMLHttpRequest::callReadyStateChangeListener()
     // Check whether sending load and loadend events before sending readystatechange event, as it may change m_error/m_state values.
     bool shouldSendLoadEvent = (m_state == DONE && !m_error);
 
-    if (m_async || (m_state <= OPENED || m_state == DONE))
-        m_progressEventThrottle.dispatchReadyStateChangeEvent(Event::create(eventNames().readystatechangeEvent, false, false), m_state == DONE ? FlushProgressEvent : DoNotFlushProgressEvent);
+    if (m_async || (m_state <= OPENED || m_state == DONE)) {
+        m_progressEventThrottle.dispatchReadyStateChangeEvent(Event::create(eventNames().readystatechangeEvent, Event::CanBubble::No, Event::IsCancelable::No),
+            m_state == DONE ? FlushProgressEvent : DoNotFlushProgressEvent);
+    }
 
     if (shouldSendLoadEvent) {
         m_progressEventThrottle.dispatchProgressEvent(eventNames().loadEvent);
@@ -329,22 +330,6 @@ ExceptionOr<void> XMLHttpRequest::open(const String& method, const String& url)
 
 ExceptionOr<void> XMLHttpRequest::open(const String& method, const URL& url, bool async)
 {
-    if (!internalAbort())
-        return { };
-
-    State previousState = m_state;
-    m_state = UNSENT;
-    m_error = false;
-    m_sendFlag = false;
-    m_uploadComplete = false;
-    m_wasAbortedByClient = false;
-
-    // clear stuff from possible previous load
-    clearResponse();
-    clearRequest();
-
-    ASSERT(m_state == UNSENT);
-
     if (!isValidHTTPToken(method))
         return Exception { SyntaxError };
 
@@ -368,7 +353,19 @@ ExceptionOr<void> XMLHttpRequest::open(const String& method, const URL& url, boo
         }
     }
 
+    if (!internalAbort())
+        return { };
+
+    m_sendFlag = false;
+    m_uploadListenerFlag = false;
     m_method = normalizeHTTPMethod(method);
+    m_error = false;
+    m_uploadComplete = false;
+    m_wasAbortedByClient = false;
+
+    // clear stuff from possible previous load
+    clearResponse();
+    clearRequest();
 
     m_url = url;
     scriptExecutionContext()->contentSecurityPolicy()->upgradeInsecureRequestIfNeeded(m_url, ContentSecurityPolicy::InsecureRequestType::Load);
@@ -377,12 +374,7 @@ ExceptionOr<void> XMLHttpRequest::open(const String& method, const URL& url, boo
 
     ASSERT(!m_loader);
 
-    // Check previous state to avoid dispatching readyState event
-    // when calling open several times in a row.
-    if (previousState != OPENED)
-        changeState(OPENED);
-    else
-        m_state = OPENED;
+    changeState(OPENED);
 
     return { };
 }
@@ -457,11 +449,11 @@ ExceptionOr<void> XMLHttpRequest::send(Document& document)
         if (!m_requestHeaders.contains(HTTPHeaderName::ContentType)) {
 #if ENABLE(DASHBOARD_SUPPORT)
             if (usesDashboardBackwardCompatibilityMode())
-                m_requestHeaders.set(HTTPHeaderName::ContentType, ASCIILiteral("application/x-www-form-urlencoded"));
+                m_requestHeaders.set(HTTPHeaderName::ContentType, "application/x-www-form-urlencoded"_s);
             else
 #endif
                 // FIXME: this should include the charset used for encoding.
-                m_requestHeaders.set(HTTPHeaderName::ContentType, document.isHTMLDocument() ? ASCIILiteral("text/html;charset=UTF-8") : ASCIILiteral("application/xml;charset=UTF-8"));
+                m_requestHeaders.set(HTTPHeaderName::ContentType, document.isHTMLDocument() ? "text/html;charset=UTF-8"_s : "application/xml;charset=UTF-8"_s);
         }
 
         // FIXME: According to XMLHttpRequest Level 2, this should use the Document.innerHTML algorithm
@@ -484,7 +476,7 @@ ExceptionOr<void> XMLHttpRequest::send(const String& body)
         if (contentType.isNull()) {
 #if ENABLE(DASHBOARD_SUPPORT)
             if (usesDashboardBackwardCompatibilityMode())
-                m_requestHeaders.set(HTTPHeaderName::ContentType, ASCIILiteral("application/x-www-form-urlencoded"));
+                m_requestHeaders.set(HTTPHeaderName::ContentType, "application/x-www-form-urlencoded"_s);
             else
 #endif
                 m_requestHeaders.set(HTTPHeaderName::ContentType, HTTPHeaderValues::textPlainContentType());
@@ -541,7 +533,7 @@ ExceptionOr<void> XMLHttpRequest::send(DOMFormData& body)
 
 ExceptionOr<void> XMLHttpRequest::send(ArrayBuffer& body)
 {
-    ASCIILiteral consoleMessage("ArrayBuffer is deprecated in XMLHttpRequest.send(). Use ArrayBufferView instead.");
+    ASCIILiteral consoleMessage { "ArrayBuffer is deprecated in XMLHttpRequest.send(). Use ArrayBufferView instead."_s };
     scriptExecutionContext()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, consoleMessage);
     return sendBytesData(body.data(), body.byteLength());
 }
@@ -571,25 +563,8 @@ ExceptionOr<void> XMLHttpRequest::createRequest()
     if (!m_async && m_url.protocolIsBlob() && m_method != "GET")
         return Exception { NetworkError };
 
-    m_sendFlag = true;
-
-    // The presence of upload event listeners forces us to use preflighting because POSTing to an URL that does not
-    // permit cross origin requests should look exactly like POSTing to an URL that does not respond at all.
-    // Also, only async requests support upload progress events.
-    bool uploadEvents = false;
-    if (m_async) {
-        m_progressEventThrottle.dispatchProgressEvent(eventNames().loadstartEvent);
-        if (m_requestEntityBody && m_upload) {
-            uploadEvents = m_upload->hasEventListeners();
-            m_upload->dispatchProgressEvent(eventNames().loadstartEvent);
-        }
-    }
-
-    m_sameOriginRequest = securityOrigin()->canRequest(m_url);
-
-    // We also remember whether upload events should be allowed for this request in case the upload listeners are
-    // added after the request is started.
-    m_uploadEventsAllowed = m_sameOriginRequest || uploadEvents || !isSimpleCrossOriginAccessRequest(m_method, m_requestHeaders);
+    if (m_async && m_upload && m_upload->hasEventListeners())
+        m_uploadListenerFlag = true;
 
     ResourceRequest request(m_url);
     request.setRequester(ResourceRequest::Requester::XHR);
@@ -606,8 +581,10 @@ ExceptionOr<void> XMLHttpRequest::createRequest()
         request.setHTTPHeaderFields(m_requestHeaders);
 
     ThreadableLoaderOptions options;
-    options.sendLoadCallbacks = SendCallbacks;
-    options.preflightPolicy = uploadEvents ? ForcePreflight : ConsiderPreflight;
+    options.sendLoadCallbacks = SendCallbackPolicy::SendCallbacks;
+    // The presence of upload event listeners forces us to use preflighting because POSTing to an URL that does not
+    // permit cross origin requests should look exactly like POSTing to an URL that does not respond at all.
+    options.preflightPolicy = m_uploadListenerFlag ? PreflightPolicy::Force : PreflightPolicy::Consider;
     options.credentials = m_includeCredentials ? FetchOptions::Credentials::Include : FetchOptions::Credentials::SameOrigin;
     options.mode = FetchOptions::Mode::Cors;
     options.contentSecurityPolicyEnforcement = scriptExecutionContext()->shouldBypassMainWorldContentSecurityPolicy() ? ContentSecurityPolicyEnforcement::DoNotEnforce : ContentSecurityPolicyEnforcement::EnforceConnectSrcDirective;
@@ -628,8 +605,17 @@ ExceptionOr<void> XMLHttpRequest::createRequest()
 
     m_exceptionCode = std::nullopt;
     m_error = false;
+    m_uploadComplete = !request.httpBody();
+    m_sendFlag = true;
 
     if (m_async) {
+        m_progressEventThrottle.dispatchProgressEvent(eventNames().loadstartEvent);
+        if (!m_uploadComplete && m_uploadListenerFlag)
+            m_upload->dispatchProgressEvent(eventNames().loadstartEvent);
+
+        if (m_state != OPENED || !m_sendFlag || m_loader)
+            return { };
+
         // ThreadableLoader::create can return null here, for example if we're no longer attached to a page or if a content blocker blocks the load.
         // This is true while running onunload handlers.
         // FIXME: Maybe we need to be able to send XMLHttpRequests from onunload, <http://bugs.webkit.org/show_bug.cgi?id=10904>.
@@ -668,7 +654,6 @@ void XMLHttpRequest::abort()
 
     clearResponseBuffers();
 
-    // Clear headers as required by the spec
     m_requestHeaders.clear();
     if ((m_state == OPENED && m_sendFlag) || m_state == HEADERS_RECEIVED || m_state == LOADING) {
         ASSERT(!m_loader);
@@ -676,7 +661,8 @@ void XMLHttpRequest::abort()
         changeState(DONE);
         dispatchErrorEvents(eventNames().abortEvent);
     }
-    m_state = UNSENT;
+    if (m_state == DONE)
+        m_state = UNSENT;
 }
 
 bool XMLHttpRequest::internalAbort()
@@ -862,7 +848,7 @@ String XMLHttpRequest::responseMIMEType() const
         else
             mimeType = m_response.mimeType();
         if (mimeType.isEmpty())
-            mimeType = ASCIILiteral("text/xml");
+            mimeType = "text/xml"_s;
     }
     return mimeType;
 }
@@ -905,15 +891,6 @@ void XMLHttpRequest::didFail(const ResourceError& error)
     if (error.isTimeout()) {
         didReachTimeout();
         return;
-    }
-
-    // Network failures are already reported to Web Inspector by ResourceLoader.
-    if (error.domain() == errorDomainWebKitInternal) {
-        String message = makeString("XMLHttpRequest cannot load ", error.failingURL().string(), ". ", error.localizedDescription());
-        logConsoleError(scriptExecutionContext(), message);
-    } else if (error.isAccessControl()) {
-        String message = makeString("XMLHttpRequest cannot load ", error.failingURL().string(), " due to access control checks.");
-        logConsoleError(scriptExecutionContext(), message);
     }
 
     // In case didFail is called synchronously on an asynchronous XHR call, let's dispatch network error asynchronously
@@ -960,11 +937,12 @@ void XMLHttpRequest::didSendData(unsigned long long bytesSent, unsigned long lon
     if (!m_upload)
         return;
 
-    if (m_uploadEventsAllowed)
+    if (m_uploadListenerFlag)
         m_upload->dispatchThrottledProgressEvent(true, bytesSent, totalBytesToBeSent);
+
     if (bytesSent == totalBytesToBeSent && !m_uploadComplete) {
         m_uploadComplete = true;
-        if (m_uploadEventsAllowed) {
+        if (m_uploadListenerFlag) {
             m_upload->dispatchProgressEvent(eventNames().loadEvent);
             m_upload->dispatchProgressEvent(eventNames().loadendEvent);
         }
@@ -1083,13 +1061,11 @@ void XMLHttpRequest::dispatchErrorEvents(const AtomicString& type)
 {
     if (!m_uploadComplete) {
         m_uploadComplete = true;
-        if (m_upload && m_uploadEventsAllowed) {
-            m_upload->dispatchProgressEvent(eventNames().progressEvent);
+        if (m_upload && m_uploadListenerFlag) {
             m_upload->dispatchProgressEvent(type);
             m_upload->dispatchProgressEvent(eventNames().loadendEvent);
         }
     }
-    m_progressEventThrottle.dispatchProgressEvent(eventNames().progressEvent);
     m_progressEventThrottle.dispatchProgressEvent(type);
     m_progressEventThrottle.dispatchProgressEvent(eventNames().loadendEvent);
 }
@@ -1141,7 +1117,7 @@ void XMLHttpRequest::suspend(ReasonForSuspension reason)
         m_dispatchErrorOnResuming = true;
     }
 
-    if (reason == ActiveDOMObject::PageCache && m_loader) {
+    if (reason == ReasonForSuspension::PageCache && m_loader) {
         // Going into PageCache, abort the request and dispatch a network error on resuming.
         genericError();
         m_dispatchErrorOnResuming = true;
