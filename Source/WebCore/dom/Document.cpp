@@ -681,6 +681,9 @@ void Document::removedLastRef()
 #endif
         m_associatedFormControls.clear();
 
+        m_fontSelector->clearDocument();
+        m_fontSelector->unregisterForInvalidationCallbacks(*this);
+
         detachParser();
 
         // removeDetachedChildren() doesn't always unregister IDs,
@@ -4023,6 +4026,7 @@ void Document::setFocusNavigationStartingNode(Node* node)
         return;
     }
 
+    ASSERT(!node || node != this);
     m_focusNavigationStartingNode = node;
 }
 
@@ -4220,7 +4224,8 @@ void Document::removeFocusNavigationNodeOfSubtree(Node& node, bool amongChildren
         return;
 
     if (isNodeInSubtree(*m_focusNavigationStartingNode, node, amongChildrenOnly)) {
-        m_focusNavigationStartingNode = amongChildrenOnly ? &node : fallbackFocusNavigationStartingNodeAfterRemoval(node);
+        auto* newNode = amongChildrenOnly ? &node : fallbackFocusNavigationStartingNodeAfterRemoval(node);
+        m_focusNavigationStartingNode = (newNode != this) ? newNode : nullptr;
         m_focusNavigationStartingNodeIsRemoved = true;
     }
 }

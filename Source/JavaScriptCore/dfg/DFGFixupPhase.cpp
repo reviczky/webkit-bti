@@ -1612,7 +1612,6 @@ private:
         case CheckTierUpInLoop:
         case CheckTierUpAtReturn:
         case CheckTierUpAndOSREnter:
-        case InvalidationPoint:
         case CheckArray:
         case CheckInBounds:
         case ConstantStoragePointer:
@@ -1784,7 +1783,7 @@ private:
                 }
                 if (!set.isEmpty()) {
                     fixEdge<CellUse>(node->child1());
-                    node->convertToCheckStructure(m_graph.addStructureSet(set));
+                    node->convertToCheckStructureOrEmpty(m_graph.addStructureSet(set));
                 }
             }
 
@@ -1995,6 +1994,11 @@ private:
             break;
         }
 
+        case StringValueOf: {
+            fixupStringValueOf(node);
+            break;
+        }
+
         case StringSlice: {
             fixEdge<StringUse>(node->child1());
             fixEdge<Int32Use>(node->child2());
@@ -2119,7 +2123,7 @@ private:
                     node->setResult(NodeResultInt32);
                     break;
                 case 4:
-                    if (data.isSigned) 
+                    if (data.isSigned)
                         node->setResult(NodeResultInt32);
                     else
                         node->setResult(NodeResultInt52);
@@ -2241,6 +2245,7 @@ private:
         case FilterGetByIdStatus:
         case FilterPutByIdStatus:
         case FilterInByIdStatus:
+        case InvalidationPoint:
             break;
 #else
         default:
@@ -2748,6 +2753,31 @@ private:
         // we can say that ToString never throws an error!
         if (node->child1()->shouldSpeculateNotCell()) {
             fixEdge<NotCellUse>(node->child1());
+            node->clearFlags(NodeMustGenerate);
+            return;
+        }
+    }
+
+    void fixupStringValueOf(Node* node)
+    {
+        if (node->child1()->shouldSpeculateString()) {
+            fixEdge<StringUse>(node->child1());
+            node->convertToIdentity();
+            return;
+        }
+
+        if (node->child1()->shouldSpeculateStringObject()) {
+            fixEdge<StringObjectUse>(node->child1());
+            node->convertToToString();
+            // It does not need to look up a toString property for the StringObject case. So we can clear NodeMustGenerate.
+            node->clearFlags(NodeMustGenerate);
+            return;
+        }
+
+        if (node->child1()->shouldSpeculateStringOrStringObject()) {
+            fixEdge<StringOrStringObjectUse>(node->child1());
+            node->convertToToString();
+            // It does not need to look up a toString property for the StringObject case. So we can clear NodeMustGenerate.
             node->clearFlags(NodeMustGenerate);
             return;
         }

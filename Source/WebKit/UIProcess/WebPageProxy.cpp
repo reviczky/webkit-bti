@@ -227,8 +227,6 @@
 
 #define RELEASE_LOG_IF_ALLOWED(channel, ...) RELEASE_LOG_IF(isAlwaysOnLoggingAllowed(), channel, __VA_ARGS__)
 
-using namespace WebCore;
-
 // Represents the number of wheel events we can hold in the queue before we start pushing them preemptively.
 static const unsigned wheelEventQueueSizeThreshold = 10;
 
@@ -236,6 +234,7 @@ static const Seconds resetRecentCrashCountDelay = 30_s;
 static unsigned maximumWebProcessRelaunchAttempts = 1;
 
 namespace WebKit {
+using namespace WebCore;
 
 DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, webPageProxyCounter, ("WebPageProxy"));
 
@@ -872,8 +871,7 @@ void WebPageProxy::close()
 
     m_isClosed = true;
 
-    if (m_pageLoadStart)
-        reportPageLoadResult(ResourceError { ResourceError::Type::Cancellation });
+    reportPageLoadResult(ResourceError { ResourceError::Type::Cancellation });
 
     if (m_activePopupMenu)
         m_activePopupMenu->cancelTracking();
@@ -3440,8 +3438,7 @@ void WebPageProxy::didStartProvisionalLoadForFrame(uint64_t frameID, uint64_t na
     m_pageLoadState.clearPendingAPIRequestURL(transaction);
 
     if (frame->isMainFrame()) {
-        if (m_pageLoadStart)
-            reportPageLoadResult(ResourceError { ResourceError::Type::Cancellation });
+        reportPageLoadResult(ResourceError { ResourceError::Type::Cancellation });
         m_pageLoadStart = MonotonicTime::now();
         m_pageLoadState.didStartProvisionalLoad(transaction, url, unreachableURL);
         m_pageClient.didStartProvisionalLoadForMainFrame();
@@ -7853,7 +7850,8 @@ void WebPageProxy::reportPageLoadResult(const ResourceError& error)
         { CompletionCondition::Timeout, Seconds::infinity(), DiagnosticLoggingKeys::timedOutKey() }
         });
 
-    ASSERT(m_pageLoadStart);
+    if (!m_pageLoadStart)
+        return;
 
     auto pageLoadTime = MonotonicTime::now() - *m_pageLoadStart;
     m_pageLoadStart = std::nullopt;
@@ -7886,3 +7884,8 @@ void WebPageProxy::getIsViewVisible(bool& result)
 }
 
 } // namespace WebKit
+
+#undef MERGE_WHEEL_EVENTS
+#undef MESSAGE_CHECK
+#undef MESSAGE_CHECK_URL
+#undef RELEASE_LOG_IF_ALLOWED
