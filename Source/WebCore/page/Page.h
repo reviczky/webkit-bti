@@ -453,9 +453,6 @@ public:
     void setResourceUsageOverlayVisible(bool);
 #endif
 
-    void setAsRunningUserScripts() { m_isRunningUserScripts = true; }
-    bool isRunningUserScripts() const { return m_isRunningUserScripts; }
-
     void setDebugger(JSC::Debugger*);
     JSC::Debugger* debugger() const { return m_debugger; }
 
@@ -689,7 +686,9 @@ private:
 
     std::optional<std::pair<MediaCanStartListener&, Document&>> takeAnyMediaCanStartListener();
 
+#if ENABLE(VIDEO)
     void playbackControlsManagerUpdateTimerFired();
+#endif
 
     Vector<Ref<PluginViewBase>> pluginViews();
 
@@ -868,7 +867,9 @@ private:
 
     MediaProducer::MediaStateFlags m_mediaState { MediaProducer::IsNotPlaying };
 
+#if ENABLE(VIDEO)
     Timer m_playbackControlsManagerUpdateTimer;
+#endif
 
     bool m_allowsMediaDocumentInlinePlayback { false };
     bool m_allowsPlaybackControlsForAutoplayingAudio { false };
@@ -908,7 +909,6 @@ private:
     std::optional<ApplicationManifest> m_applicationManifest;
 #endif
 
-    bool m_isRunningUserScripts { false };
     bool m_shouldEnableICECandidateFilteringByDefault { true };
 };
 

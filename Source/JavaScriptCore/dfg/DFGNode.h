@@ -461,6 +461,15 @@ public:
         m_opInfo = set;
     }
 
+    void convertToCheckStructureOrEmpty(RegisteredStructureSet* set)
+    {
+        if (SpecCellCheck & SpecEmpty)
+            setOpAndDefaultFlags(CheckStructureOrEmpty);
+        else
+            setOpAndDefaultFlags(CheckStructure);
+        m_opInfo = set;
+    }
+
     void convertCheckStructureOrEmptyToCheckStructure()
     {
         ASSERT(op() == CheckStructureOrEmpty);
@@ -694,7 +703,7 @@ public:
     
     void convertToToString()
     {
-        ASSERT(m_op == ToPrimitive);
+        ASSERT(m_op == ToPrimitive || m_op == StringValueOf);
         m_op = ToString;
     }
 
@@ -757,8 +766,8 @@ public:
 
     void convertToCallDOM(Graph&);
 
-    void convertToRegExpExecNonGlobalOrSticky(FrozenValue* regExp);
-    void convertToRegExpMatchFastGlobal(FrozenValue* regExp);
+    void convertToRegExpExecNonGlobalOrStickyWithoutChecks(FrozenValue* regExp);
+    void convertToRegExpMatchFastGlobalWithoutChecks(FrozenValue* regExp);
 
     void convertToSetRegExpObjectLastIndex()
     {
