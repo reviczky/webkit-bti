@@ -1,6 +1,8 @@
 webkit2gtk (2.22.1-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/patches/replace-stdmax.patch:
+    + Drop patch, this has been merged upstream.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 20 Sep 2018 11:55:58 +0300
 
