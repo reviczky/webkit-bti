@@ -6,6 +6,10 @@ webkit2gtk (2.22.2-1) UNRELEASED; urgency=medium
       of making upstream releases.
   * debian/patches/fix-ftbfs-x32.patch:
     + Fix the X32 build.
+  * debian/patches/fix-ftbfs-armel.patch:
+    + Fix the armel build.
+    + debian/rules:
+      - Stop passing -DENABLE_JIT=OFF manually.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 22 Sep 2018 00:31:55 +0300
 
