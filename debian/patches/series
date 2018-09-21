@@ -2,6 +2,7 @@ fix-ftbfs-sparc64.patch
 fix-ftbfs-hurd.patch
 fix-ftbfs-x86.patch
 fix-ftbfs-m68k.patch
+fix-ftbfs-x32.patch
 detect-gstreamer-gl.patch
 user-agent-branding.patch
 prefer-pthread.patch

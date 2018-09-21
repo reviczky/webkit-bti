@@ -2,8 +2,10 @@ webkit2gtk (2.22.2-1) UNRELEASED; urgency=medium
 
   * New upstream release.
   * debian/upstream/signing-key.asc:
-    - Add Adrian Perez's GPG key to the keyring. He'll also be in charge
+    + Add Adrian Perez's GPG key to the keyring. He'll also be in charge
       of making upstream releases.
+  * debian/patches/fix-ftbfs-x32.patch:
+    + Fix the X32 build.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 22 Sep 2018 00:31:55 +0300
 

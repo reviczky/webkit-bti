@@ -1,0 +1,39 @@
+From: Alberto Garcia <berto@igalia.com>
+Description: Use WTF_CPU_UNKNOWN when building for X32
+ WebKitGTK+ doesn't build on X32 even with the JIT disabled.
+ Treating the CPU as unknown is perhaps a bit severe, but it allows us
+ to get the build done until someone steps up to maintain this
+ properly.
+Forwarded: no
+Index: webkitgtk/Source/WTF/wtf/Platform.h
+===================================================================
+--- webkitgtk.orig/Source/WTF/wtf/Platform.h
++++ webkitgtk/Source/WTF/wtf/Platform.h
+@@ -143,10 +143,12 @@
+ /* CPU(X86_64) - AMD64 / Intel64 / x86_64 64-bit */
+ #if   defined(__x86_64__) \
+     || defined(_M_X64)
++#if !defined(__ILP32__)
+ #define WTF_CPU_X86_64 1
+ #define WTF_CPU_X86_SSE2 1
+ #define WTF_CPU_KNOWN 1
+ #endif
++#endif
+ 
+ /* CPU(ARM64) - Apple */
+ #if (defined(__arm64__) && defined(__APPLE__)) || defined(__aarch64__)
+Index: webkitgtk/Source/cmake/WebKitFeatures.cmake
+===================================================================
+--- webkitgtk.orig/Source/cmake/WebKitFeatures.cmake
++++ webkitgtk/Source/cmake/WebKitFeatures.cmake
+@@ -80,6 +80,10 @@ macro(WEBKIT_OPTION_BEGIN)
+         set(USE_SYSTEM_MALLOC_DEFAULT ON)
+     endif ()
+ 
++    if (CMAKE_CXX_LIBRARY_ARCHITECTURE STREQUAL "x86_64-linux-gnux32")
++        set(ENABLE_JIT_DEFAULT OFF)
++    endif ()
++
+     WEBKIT_OPTION_DEFINE(ENABLE_3D_TRANSFORMS "Toggle 3D transforms support" PRIVATE ON)
+     WEBKIT_OPTION_DEFINE(ENABLE_ACCELERATED_2D_CANVAS "Toggle accelerated 2D canvas support" PRIVATE OFF)
+     WEBKIT_OPTION_DEFINE(ENABLE_ACCELERATED_OVERFLOW_SCROLLING "Toggle accelerated scrolling support" PRIVATE OFF)
