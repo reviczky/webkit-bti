@@ -1,3 +1,11 @@
+webkit2gtk (2.22.1-2) UNRELEASED; urgency=medium
+
+  * debian/upstream/signing-key.asc:
+    - Add Adrian Perez's GPG key to the keyring. He'll also be in charge
+      of making upstream releases.
+
+ -- Alberto Garcia <berto@igalia.com>  Sat, 22 Sep 2018 00:31:55 +0300
+
 webkit2gtk (2.22.1-1) unstable; urgency=medium
 
   * New upstream release.
