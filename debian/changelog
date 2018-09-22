@@ -3,6 +3,12 @@ webkit2gtk (2.22.2-2) UNRELEASED; urgency=medium
   [ Jeremy Bicha ]
   * Enable woff2 support in Ubuntu too.
 
+  [ Alberto Garcia ]
+  * debian/patches/detect-woff.patch:
+    + WOFF2 is not available on all platforms, so don't abort the build if
+      it's not installed. This way it's enough if we simply remove
+      libwoff-dev from the Build-Depends when necessary.
+
  -- Alberto Garcia <berto@igalia.com>  Thu, 27 Sep 2018 11:21:18 +0300
 
 webkit2gtk (2.22.2-1) unstable; urgency=medium
