@@ -8,6 +8,8 @@ webkit2gtk (2.22.2-2) UNRELEASED; urgency=medium
     + WOFF2 is not available on all platforms, so don't abort the build if
       it's not installed. This way it's enough if we simply remove
       libwoff-dev from the Build-Depends when necessary.
+  * debian/control:
+    + Don't depend on libwoff-dev on kfreebsd, it's not available.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 27 Sep 2018 11:21:18 +0300
 
