@@ -46,11 +46,10 @@ else
 	CPPFLAGS += -DNDEBUG -DG_DISABLE_CAST_CHECKS
 endif
 
-# https://launchpad.net/bugs/1742743 woff2
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_WOFF2=OFF
 	CPPFLAGS += -DUSER_AGENT_GTK_DISTRIBUTOR_NAME='"Ubuntu"'
 else
+	# gstreamer1.0-libav is not in Ubuntu "main"
 	DEB_DH_GENCONTROL_ARGS += -- -Vgst:Recommends="gstreamer1.0-libav"
 endif
 
