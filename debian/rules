@@ -48,7 +48,6 @@ endif
 
 # https://launchpad.net/bugs/1742743 woff2
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_WOFF2=OFF
 	CPPFLAGS += -DUSER_AGENT_GTK_DISTRIBUTOR_NAME='"Ubuntu"'
 else
 	DEB_DH_GENCONTROL_ARGS += -- -Vgst:Recommends="gstreamer1.0-libav"
@@ -67,6 +66,7 @@ override_dh_auto_configure:
 	   -DCMAKE_CXX_FLAGS_RELEASE="" \
 	   -DCMAKE_CXX_FLAGS_DEBUG="" \
 	   -DENABLE_MINIBROWSER=ON \
+	   -DUSE_WOFF2=OFF \
 	   $(EXTRA_CMAKE_ARGUMENTS)
 
 # Create a dummy doc directory in case the "nodoc" build option is set
