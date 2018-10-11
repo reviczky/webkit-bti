@@ -5,6 +5,7 @@ Maintainer: Debian WebKit Maintainers <pkg-webkit-maintainers@lists.alioth.debia
 Uploaders: Gustavo Noronha Silva <kov@debian.org>,
            Emilio Pozuelo Monfort <pochu@debian.org>,
            Alberto Garcia <berto@igalia.com>
+X-Ubuntu-Use-Langpack: no
 Build-Depends: gawk,
                cmake (>= 3.3),
                debhelper (>= 10),

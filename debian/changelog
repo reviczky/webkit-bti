@@ -2,6 +2,7 @@ webkit2gtk (2.22.2-2) UNRELEASED; urgency=medium
 
   [ Jeremy Bicha ]
   * Enable woff2 support in Ubuntu too.
+  * Opt out of Ubuntu language packs. This package is updated too often.
 
   [ Alberto Garcia ]
   * debian/patches/detect-woff.patch:
