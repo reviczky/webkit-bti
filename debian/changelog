@@ -1,4 +1,4 @@
-webkit2gtk (2.22.3-1) UNRELEASED; urgency=medium
+webkit2gtk (2.22.3-1) unstable; urgency=medium
 
   * New upstream release.
 
@@ -14,7 +14,7 @@ webkit2gtk (2.22.3-1) UNRELEASED; urgency=medium
   * debian/control:
     + Don't depend on libwoff-dev on kfreebsd, it's not available.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 27 Sep 2018 11:21:18 +0300
+ -- Alberto Garcia <berto@igalia.com>  Mon, 29 Oct 2018 13:36:11 +0200
 
 webkit2gtk (2.22.2-1) unstable; urgency=medium
 
