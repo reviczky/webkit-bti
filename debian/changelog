@@ -1,3 +1,20 @@
+webkit2gtk (2.22.3-1~bpo9+1) stretch-backports; urgency=medium
+
+  * Rebuild for stretch-backports.
+  * debian/control:
+    + Versions of GStreamer < 1.13 had GStreamerGL in the "bad" set, so
+      depend on libgstreamer-plugins-bad1.0-dev and don't require
+      GStreamer 1.13. Don't install libgstreamer-plugins-bad1.0-dev in
+      armel or armhf: the usage of two different GL implementations causes
+      a build failure (see WebKit bug #175127).
+    + Remove build dependency on libwoff-dev, this is not available in
+      this Debian release.
+  * debian/rules:
+    + Build with -DENABLE_MEDIA_SOURCE=OFF. This feature requires a more
+      recent version of GStreamer.
+
+ -- Alberto Garcia <berto@igalia.com>  Sat, 03 Nov 2018 11:26:09 +0200
+
 webkit2gtk (2.22.3-1) unstable; urgency=medium
 
   * New upstream release.
