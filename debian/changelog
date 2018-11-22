@@ -1,6 +1,13 @@
 webkit2gtk (2.22.4-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * The WebKitGTK+ security advisory WSA-2018-0008 lists the following
+    security fixes in the latest versions of WebKitGTK+:
+    + CVE-2018-4373 (fixed in 2.22.0).
+    + CVE-2018-4375, CVE-2018-4376, CVE-2018-4378, CVE-2018-4382,
+      CVE-2018-4392 and CVE-2018-4416 (fixed in 2.22.1).
+    + CVE-2018-4345 and CVE-2018-4386 (fixed in 2.22.3).
+    + CVE-2018-4372 (fixed in 2.22.4).
   * debian/control:
     + libwoff-dev is now available on kfreebsd, so we can use it.
 
