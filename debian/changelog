@@ -1,6 +1,8 @@
 webkit2gtk (2.22.4-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/control:
+    + libwoff-dev is now available on kfreebsd, so we can use it.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 22 Nov 2018 11:28:18 +0200
 
