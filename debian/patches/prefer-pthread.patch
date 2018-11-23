@@ -16,7 +16,7 @@ Index: webkitgtk/Source/cmake/OptionsGTK.cmake
 +
  find_package(Cairo 1.10.2 REQUIRED)
  find_package(Fontconfig 2.8.0 REQUIRED)
- find_package(Freetype2 2.4.2 REQUIRED)
+ find_package(Freetype 2.4.2 REQUIRED)
 Index: webkitgtk/Source/cmake/OptionsJSCOnly.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/OptionsJSCOnly.cmake
