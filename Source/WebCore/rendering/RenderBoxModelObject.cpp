@@ -29,6 +29,8 @@
 #include "BitmapImage.h"
 #include "BorderEdge.h"
 #include "CachedImage.h"
+#include "Document.h"
+#include "DocumentTimeline.h"
 #include "FloatRoundedRect.h"
 #include "Frame.h"
 #include "FrameView.h"
@@ -64,7 +66,7 @@
 #include <wtf/SetForScope.h>
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 #include "RuntimeApplicationChecks.h"
 #endif
 
@@ -361,7 +363,7 @@ DecodingMode RenderBoxModelObject::decodingModeForImageDraw(const Image& image, 
     }
 
     // Large image case.
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (IOSApplication::isIBooksStorytime())
         return DecodingMode::Synchronous;
 #endif
@@ -623,7 +625,7 @@ LayoutUnit RenderBoxModelObject::offsetTop() const
 
 LayoutUnit RenderBoxModelObject::computedCSSPadding(const Length& padding) const
 {
-    LayoutUnit w = 0;
+    LayoutUnit w;
     if (padding.isPercentOrCalculated())
         w = containingBlockLogicalWidthForContent();
     return minimumValueForLength(padding, w);
@@ -1149,14 +1151,17 @@ LayoutSize RenderBoxModelObject::calculateFillTileSize(const FillLayer& fillLaye
         float horizontalScaleFactor = localImageIntrinsicSize.width() ? (localPositioningAreaSize.width() / localImageIntrinsicSize.width()) : 1;
         float verticalScaleFactor = localImageIntrinsicSize.height() ? (localPositioningAreaSize.height() / localImageIntrinsicSize.height()) : 1;
         float scaleFactor = type == FillSizeType::Contain ? std::min(horizontalScaleFactor, verticalScaleFactor) : std::max(horizontalScaleFactor, verticalScaleFactor);
-        float deviceScaleFactor = document().deviceScaleFactor();
-        return LayoutSize(std::max<LayoutUnit>(1 / deviceScaleFactor, localImageIntrinsicSize.width() * scaleFactor),
-            std::max<LayoutUnit>(1 / deviceScaleFactor, localImageIntrinsicSize.height() * scaleFactor));
+        float singleScaledPixel = 1.0 / document().deviceScaleFactor();
+        
+        if (localImageIntrinsicSize.isEmpty())
+            return { };
+        
+        return LayoutSize(localImageIntrinsicSize.scaled(scaleFactor).expandedTo({ singleScaledPixel, singleScaledPixel }));
     }
     }
 
     ASSERT_NOT_REACHED();
-    return LayoutSize();
+    return { };
 }
 
 static void pixelSnapBackgroundImageGeometryForPainting(LayoutRect& destinationRect, LayoutSize& tileSize, LayoutSize& phase, LayoutSize& space, float scaleFactor)
@@ -1209,8 +1214,8 @@ static LayoutUnit resolveEdgeRelativeLength(const Length& length, Edge edge, Lay
 BackgroundImageGeometry RenderBoxModelObject::calculateBackgroundImageGeometry(const RenderLayerModelObject* paintContainer, const FillLayer& fillLayer, const LayoutPoint& paintOffset,
     const LayoutRect& borderBoxRect, RenderElement* backgroundObject) const
 {
-    LayoutUnit left = 0;
-    LayoutUnit top = 0;
+    LayoutUnit left;
+    LayoutUnit top;
     LayoutSize positioningAreaSize;
     // Determine the background positioning area and set destination rect to the background painting area.
     // Destination rect will be adjusted later if the background is non-repeating.
@@ -1219,8 +1224,8 @@ BackgroundImageGeometry RenderBoxModelObject::calculateBackgroundImageGeometry(c
     bool fixedAttachment = fillLayer.attachment() == FillAttachment::FixedBackground;
     float deviceScaleFactor = document().deviceScaleFactor();
     if (!fixedAttachment) {
-        LayoutUnit right = 0;
-        LayoutUnit bottom = 0;
+        LayoutUnit right;
+        LayoutUnit bottom;
         // Scroll and Local.
         if (fillLayer.origin() != FillBox::Border) {
             left = borderLeft();
@@ -2686,6 +2691,15 @@ void RenderBoxModelObject::mapAbsoluteToLocalPoint(MapCoordinatesFlags mode, Tra
         transformState.applyTransform(t, preserve3D ? TransformState::AccumulateTransform : TransformState::FlattenTransform);
     } else
         transformState.move(containerOffset.width(), containerOffset.height(), preserve3D ? TransformState::AccumulateTransform : TransformState::FlattenTransform);
+}
+
+bool RenderBoxModelObject::hasRunningAcceleratedAnimations() const
+{
+    if (auto* node = element()) {
+        if (auto* timeline = node->document().existingTimeline())
+            return timeline->runningAnimationsForElementAreAllAccelerated(*node);
+    }
+    return false;
 }
 
 } // namespace WebCore

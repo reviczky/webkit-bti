@@ -40,7 +40,12 @@ WI.SpreadsheetTextField = class SpreadsheetTextField
 
         this._element.classList.add("spreadsheet-text-field");
 
-        this._element.addEventListener("focus", this._handleFocus.bind(this));
+        if (WI.settings.experimentalEnableMultiplePropertiesSelection.value) {
+            this._element.addEventListener("mousedown", this._handleMouseDown.bind(this), true);
+            this._element.addEventListener("click", this._handleClick.bind(this));
+        } else
+            this._element.addEventListener("focus", this._handleFocus.bind(this));
+
         this._element.addEventListener("blur", this._handleBlur.bind(this));
         this._element.addEventListener("keydown", this._handleKeyDown.bind(this));
         this._element.addEventListener("input", this._handleInput.bind(this));
@@ -195,6 +200,17 @@ WI.SpreadsheetTextField = class SpreadsheetTextField
             if (this._delegate && typeof this._delegate.spreadsheetTextFieldDidChange === "function")
                 this._delegate.spreadsheetTextFieldDidChange(this);
         }
+    }
+
+    _handleClick(event)
+    {
+        this.startEditing();
+    }
+
+    _handleMouseDown(event)
+    {
+        if (this._editing)
+            event.stopPropagation();
     }
 
     _handleFocus(event)
@@ -396,7 +412,7 @@ WI.SpreadsheetTextField = class SpreadsheetTextField
         let selection = window.getSelection();
 
         let isHidden = (clientRect) => {
-            return clientRect.x === 0 && clientRect.y === 0
+            return clientRect.x === 0 && clientRect.y === 0;
         };
 
         if (selection.rangeCount) {

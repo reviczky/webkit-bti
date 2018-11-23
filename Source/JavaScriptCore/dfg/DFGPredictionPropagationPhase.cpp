@@ -195,11 +195,15 @@ private:
                 } else if (isStringOrStringObjectSpeculation(left) || isStringOrStringObjectSpeculation(right)) {
                     // left or right is definitely something other than a number.
                     changed |= mergePrediction(SpecString);
-                } else {
+                } else if (isBigIntSpeculation(left) && isBigIntSpeculation(right))
+                    changed |= mergePrediction(SpecBigInt);
+                else {
                     changed |= mergePrediction(SpecInt32Only);
                     if (node->mayHaveDoubleResult())
                         changed |= mergePrediction(SpecBytecodeDouble);
-                    if (node->mayHaveNonNumberResult())
+                    if (node->mayHaveBigIntResult())
+                        changed |= mergePrediction(SpecBigInt);
+                    if (node->mayHaveNonNumericResult())
                         changed |= mergePrediction(SpecString);
                 }
             }
@@ -246,6 +250,40 @@ private:
             break;
         }
 
+        case ValueSub: {
+            SpeculatedType left = node->child1()->prediction();
+            SpeculatedType right = node->child2()->prediction();
+
+            if (left && right) {
+                if (isFullNumberOrBooleanSpeculationExpectingDefined(left)
+                    && isFullNumberOrBooleanSpeculationExpectingDefined(right)) {
+                    if (m_graph.addSpeculationMode(node, m_pass) != DontSpeculateInt32)
+                        changed |= mergePrediction(SpecInt32Only);
+                    else if (m_graph.addShouldSpeculateAnyInt(node))
+                        changed |= mergePrediction(SpecInt52Only);
+                    else
+                        changed |= mergePrediction(speculatedDoubleTypeForPredictions(left, right));
+                } else if (isBigIntSpeculation(left) && isBigIntSpeculation(right))
+                    changed |= mergePrediction(SpecBigInt);
+                else {
+                    changed |= mergePrediction(SpecInt32Only);
+                    if (node->mayHaveDoubleResult())
+                        changed |= mergePrediction(SpecBytecodeDouble);
+                    if (node->mayHaveBigIntResult())
+                        changed |= mergePrediction(SpecBigInt);
+                }
+            }
+
+            break;
+        }
+
+        case ValueBitOr:
+        case ValueBitAnd: {
+            if (node->child1()->shouldSpeculateBigInt() && node->child2()->shouldSpeculateBigInt())
+                changed |= mergePrediction(SpecBigInt);
+            break;
+        }
+
         case ValueNegate:
         case ArithNegate: {
             SpeculatedType prediction = node->child1()->prediction();
@@ -258,11 +296,8 @@ private:
                     changed |= mergePrediction(speculatedDoubleTypeForPrediction(node->child1()->prediction()));
                 else {
                     changed |= mergePrediction(SpecInt32Only);
-                    if (node->op() == ValueNegate && node->mayHaveNonNumberResult()) {
-                        // FIXME: We should add support to BigInt into speculatio
-                        // https://bugs.webkit.org/show_bug.cgi?id=182470
+                    if (node->op() == ValueNegate && node->mayHaveBigIntResult())
                         changed |= mergePrediction(SpecBigInt);
-                    }
                     if (node->mayHaveDoubleResult())
                         changed |= mergePrediction(SpecBytecodeDouble);
                 }
@@ -514,6 +549,7 @@ private:
         
         switch (node->op()) {
         case ValueAdd:
+        case ValueSub:
         case ArithAdd:
         case ArithSub: {
             SpeculatedType left = node->child1()->prediction();
@@ -700,8 +736,9 @@ private:
             setPrediction(type);
             break;
         }
-        case BitAnd:
-        case BitOr:
+
+        case ArithBitAnd:
+        case ArithBitOr:
         case BitXor:
         case BitRShift:
         case BitLShift:
@@ -1056,8 +1093,11 @@ private:
         case GetLocal:
         case SetLocal:
         case UInt32ToNumber:
+        case ValueBitOr:
+        case ValueBitAnd:
         case ValueNegate:
         case ValueAdd:
+        case ValueSub:
         case ArithAdd:
         case ArithSub:
         case ArithNegate:

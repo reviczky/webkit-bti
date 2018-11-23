@@ -26,6 +26,9 @@
 #include "config.h"
 #include "WebBackForwardListItem.h"
 
+#include "SuspendedPageProxy.h"
+#include "WebProcessPool.h"
+#include "WebProcessProxy.h"
 #include <WebCore/URL.h>
 #include <wtf/DebugUtilities.h>
 
@@ -50,6 +53,8 @@ WebBackForwardListItem::~WebBackForwardListItem()
 {
     ASSERT(allItems().get(m_itemState.identifier) == this);
     allItems().remove(m_itemState.identifier);
+
+    removeSuspendedPageFromProcessPool();
 }
 
 HashMap<BackForwardItemIdentifier, WebBackForwardListItem*>& WebBackForwardListItem::allItems()
@@ -103,8 +108,8 @@ bool WebBackForwardListItem::itemIsInSameDocument(const WebBackForwardListItem& 
     if (mainFrameState.stateObjectData || otherMainFrameState.stateObjectData)
         return mainFrameState.documentSequenceNumber == otherMainFrameState.documentSequenceNumber;
 
-    WebCore::URL url = WebCore::URL(WebCore::ParsedURLString, mainFrameState.urlString);
-    WebCore::URL otherURL = WebCore::URL(WebCore::ParsedURLString, otherMainFrameState.urlString);
+    WebCore::URL url = WebCore::URL({ }, mainFrameState.urlString);
+    WebCore::URL otherURL = WebCore::URL({ }, otherMainFrameState.urlString);
 
     if ((url.hasFragmentIdentifier() || otherURL.hasFragmentIdentifier()) && equalIgnoringFragmentIdentifier(url, otherURL))
         return mainFrameState.documentSequenceNumber == otherMainFrameState.documentSequenceNumber;
@@ -114,8 +119,20 @@ bool WebBackForwardListItem::itemIsInSameDocument(const WebBackForwardListItem& 
 
 void WebBackForwardListItem::setSuspendedPage(SuspendedPageProxy* page)
 {
-    ASSERT(!m_suspendedPage || page == nullptr);
-    m_suspendedPage = page;
+    if (m_suspendedPage == page)
+        return;
+
+    removeSuspendedPageFromProcessPool();
+    m_suspendedPage = makeWeakPtr(page);
+}
+
+void WebBackForwardListItem::removeSuspendedPageFromProcessPool()
+{
+    if (!m_suspendedPage)
+        return;
+
+    m_suspendedPage->process().processPool().removeSuspendedPage(*m_suspendedPage);
+    ASSERT(!m_suspendedPage);
 }
 
 #if !LOG_DISABLED

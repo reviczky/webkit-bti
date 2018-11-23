@@ -37,9 +37,12 @@ class RenderStyle;
 
 namespace Layout {
 class BlockFormattingContext;
+class FloatAvoider;
+class FloatBox;
 class FormattingContext;
 class FloatingContext;
-class LayoutContext;
+class InlineFormattingContext;
+class LayoutState;
 }
 
 namespace Display {
@@ -48,10 +51,14 @@ class Box {
     WTF_MAKE_ISO_ALLOCATED(Box);
 public:
     friend class Layout::BlockFormattingContext;
+    friend class Layout::FloatAvoider;
+    friend class Layout::FloatBox;
     friend class Layout::FormattingContext;
     friend class Layout::FloatingContext;
-    friend class Layout::LayoutContext;
+    friend class Layout::InlineFormattingContext;
+    friend class Layout::LayoutState;
 
+    Box(const RenderStyle&);
     Box(const Box&);
 
     class Rect {
@@ -138,6 +145,9 @@ public:
 
     LayoutUnit nonCollapsedMarginTop() const;
     LayoutUnit nonCollapsedMarginBottom() const;
+    LayoutUnit nonComputedMarginLeft() const;
+    LayoutUnit nonComputedMarginRight() const;
+
     std::optional<LayoutUnit> estimatedMarginTop() const { return m_estimatedMarginTop; }
 
     LayoutUnit borderTop() const;
@@ -165,8 +175,6 @@ public:
     Rect contentBox() const;
 
 private:
-    Box(const RenderStyle&);
-
     struct Style {
         Style(const RenderStyle&);
 
@@ -185,6 +193,7 @@ private:
     void setHorizontalMargin(Layout::HorizontalEdges);
     void setVerticalMargin(Layout::VerticalEdges);
     void setVerticalNonCollapsedMargin(Layout::VerticalEdges);
+    void setHorizontalNonComputedMargin(Layout::HorizontalEdges);
     void setEstimatedMarginTop(LayoutUnit marginTop) { m_estimatedMarginTop = marginTop; }
 
     void setBorder(Layout::Edges);
@@ -199,6 +208,7 @@ private:
     void setHasValidLeft() { m_hasValidLeft = true; }
     void setHasValidVerticalMargin() { m_hasValidVerticalMargin = true; }
     void setHasValidVerticalNonCollapsedMargin() { m_hasValidVerticalNonCollapsedMargin = true; }
+    void setHasValidHorizontalNonComputedMargin() { m_hasValidHorizontalNonComputedMargin = true; }
     void setHasValidHorizontalMargin() { m_hasValidHorizontalMargin = true; }
 
     void setHasValidBorder() { m_hasValidBorder = true; }
@@ -216,6 +226,7 @@ private:
 
     Layout::Edges m_margin;
     Layout::VerticalEdges m_verticalNonCollapsedMargin;
+    Layout::HorizontalEdges m_horizontalNonComputedMargin;
     std::optional<LayoutUnit> m_estimatedMarginTop;
 
     Layout::Edges m_border;
@@ -227,6 +238,7 @@ private:
     bool m_hasValidHorizontalMargin { false };
     bool m_hasValidVerticalMargin { false };
     bool m_hasValidVerticalNonCollapsedMargin { false };
+    bool m_hasValidHorizontalNonComputedMargin { false };
     bool m_hasValidBorder { false };
     bool m_hasValidPadding { false };
     bool m_hasValidContentHeight { false };
@@ -520,6 +532,14 @@ inline void Box::setVerticalNonCollapsedMargin(Layout::VerticalEdges margin)
     m_verticalNonCollapsedMargin = margin;
 }
 
+inline void Box::setHorizontalNonComputedMargin(Layout::HorizontalEdges margin)
+{
+#if !ASSERT_DISABLED
+    setHasValidHorizontalNonComputedMargin();
+#endif
+    m_horizontalNonComputedMargin = margin;
+}
+
 inline void Box::setBorder(Layout::Edges border)
 {
 #if !ASSERT_DISABLED
@@ -570,6 +590,18 @@ inline LayoutUnit Box::nonCollapsedMarginBottom() const
 {
     ASSERT(m_hasValidVerticalNonCollapsedMargin);
     return m_verticalNonCollapsedMargin.bottom;
+}
+
+inline LayoutUnit Box::nonComputedMarginLeft() const
+{
+    ASSERT(m_hasValidHorizontalNonComputedMargin);
+    return m_horizontalNonComputedMargin.left;
+}
+
+inline LayoutUnit Box::nonComputedMarginRight() const
+{
+    ASSERT(m_hasValidHorizontalNonComputedMargin);
+    return m_horizontalNonComputedMargin.right;
 }
 
 inline std::optional<LayoutUnit> Box::paddingTop() const

@@ -60,6 +60,7 @@ typedef struct _SoupCookieJar SoupCookieJar;
 
 namespace WebCore {
 
+class CurlProxySettings;
 class NetworkingContext;
 class ResourceRequest;
 class SoupNetworkSession;
@@ -68,7 +69,7 @@ struct Cookie;
 struct CookieRequestHeaderFieldProxy;
 struct SameSiteInfo;
 
-enum class IncludeSecureCookies;
+enum class IncludeSecureCookies : bool;
 
 class NetworkStorageSession {
     WTF_MAKE_NONCOPYABLE(NetworkStorageSession); WTF_MAKE_FAST_ALLOCATED;
@@ -99,10 +100,11 @@ public:
     CFURLStorageSessionRef platformSession() { return m_platformSession.get(); }
     WEBCORE_EXPORT RetainPtr<CFHTTPCookieStorageRef> cookieStorage() const;
     WEBCORE_EXPORT static void setStorageAccessAPIEnabled(bool);
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     WEBCORE_EXPORT bool shouldBlockCookies(const ResourceRequest&, std::optional<uint64_t> frameID, std::optional<uint64_t> pageID) const;
     WEBCORE_EXPORT bool shouldBlockCookies(const URL& firstPartyForCookies, const URL& resource, std::optional<uint64_t> frameID, std::optional<uint64_t> pageID) const;
-    WEBCORE_EXPORT void setPrevalentDomainsToBlockCookiesFor(const Vector<String>& domainsToBlock, bool clearFirst);
+    WEBCORE_EXPORT void setPrevalentDomainsToBlockCookiesFor(const Vector<String>&);
+    WEBCORE_EXPORT void setAgeCapForClientSideCookies(std::optional<Seconds>);
     WEBCORE_EXPORT void removePrevalentDomains(const Vector<String>& domains);
     WEBCORE_EXPORT bool hasStorageAccess(const String& resourceDomain, const String& firstPartyDomain, std::optional<uint64_t> frameID, uint64_t pageID) const;
     WEBCORE_EXPORT Vector<String> getAllStorageAccessEntries() const;
@@ -110,6 +112,9 @@ public:
     WEBCORE_EXPORT void removeStorageAccessForFrame(uint64_t frameID, uint64_t pageID);
     WEBCORE_EXPORT void removeStorageAccessForAllFramesOnPage(uint64_t pageID);
     WEBCORE_EXPORT void removeAllStorageAccess();
+    WEBCORE_EXPORT void setCacheMaxAgeCapForPrevalentResources(Seconds);
+    WEBCORE_EXPORT void resetCacheMaxAgeCapForPrevalentResources();
+    WEBCORE_EXPORT std::optional<Seconds> maxAgeCacheCap(const ResourceRequest&);
 #endif
 #elif USE(SOUP)
     NetworkStorageSession(PAL::SessionID, std::unique_ptr<SoupNetworkSession>&&);
@@ -129,7 +134,9 @@ public:
 
     const CookieJarCurl& cookieStorage() const { return m_cookieStorage; };
     CookieJarDB& cookieDatabase() const;
-    WEBCORE_EXPORT void setCookieDatabase(UniqueRef<CookieJarDB>&&) const;
+    WEBCORE_EXPORT void setCookieDatabase(UniqueRef<CookieJarDB>&&);
+
+    WEBCORE_EXPORT void setProxySettings(CurlProxySettings&&);
 
     NetworkingContext* context() const;
 #else
@@ -182,11 +189,13 @@ private:
 
     CredentialStorage m_credentialStorage;
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     bool shouldBlockThirdPartyCookies(const String& topPrivatelyControlledDomain) const;
     HashSet<String> m_topPrivatelyControlledDomainsToBlock;
     HashMap<uint64_t, HashMap<uint64_t, String, DefaultHash<uint64_t>::Hash, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>>, DefaultHash<uint64_t>::Hash, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>> m_framesGrantedStorageAccess;
     HashMap<uint64_t, HashMap<String, String>, DefaultHash<uint64_t>::Hash, WTF::UnsignedWithZeroKeyHashTraits<uint64_t>> m_pagesGrantedStorageAccess;
+    std::optional<Seconds> m_cacheMaxAgeCapForPrevalentResources { };
+    std::optional<Seconds> m_ageCapForClientSideCookies { };
 #endif
 
 #if PLATFORM(COCOA)

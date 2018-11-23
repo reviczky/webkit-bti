@@ -406,12 +406,7 @@ ExceptionOr<Ref<ApplePaySession>> ApplePaySession::create(Document& document, un
     if (!document.page())
         return Exception { InvalidAccessError, "Frame is detached" };
 
-    auto& paymentCoordinator = document.page()->paymentCoordinator();
-
-    if (!version || !paymentCoordinator.supportsVersion(version))
-        return Exception { InvalidAccessError, makeString("\"" + String::number(version), "\" is not a supported version.") };
-
-    auto convertedPaymentRequest = convertAndValidate(version, WTFMove(paymentRequest), paymentCoordinator);
+    auto convertedPaymentRequest = convertAndValidate(version, WTFMove(paymentRequest), document.page()->paymentCoordinator());
     if (convertedPaymentRequest.hasException())
         return convertedPaymentRequest.releaseException();
 
@@ -760,7 +755,7 @@ unsigned ApplePaySession::version() const
     return m_version;
 }
 
-void ApplePaySession::validateMerchant(const URL& validationURL)
+void ApplePaySession::validateMerchant(URL&& validationURL)
 {
     if (m_state == State::Aborted) {
         // ApplePaySession::abort has been called.
@@ -778,7 +773,7 @@ void ApplePaySession::validateMerchant(const URL& validationURL)
 
     m_merchantValidationState = MerchantValidationState::ValidatingMerchant;
 
-    auto event = ApplePayValidateMerchantEvent::create(eventNames().validatemerchantEvent, validationURL);
+    auto event = ApplePayValidateMerchantEvent::create(eventNames().validatemerchantEvent, WTFMove(validationURL));
     dispatchEvent(event.get());
 }
 

@@ -970,7 +970,7 @@ LayoutUnit RenderBlock::marginIntrinsicLogicalWidthForChild(RenderBox& child) co
     // Fixed margins can be added in as is.
     Length marginLeft = child.style().marginStartUsing(&style());
     Length marginRight = child.style().marginEndUsing(&style());
-    LayoutUnit margin = 0;
+    LayoutUnit margin;
     if (marginLeft.isFixed())
         margin += marginLeft.value();
     if (marginRight.isFixed())
@@ -1011,7 +1011,7 @@ void RenderBlock::layoutPositionedObject(RenderBox& r, bool relayoutChildren, bo
         
     // If we are paginated or in a line grid, compute a vertical position for our object now.
     // If it's wrong we'll lay out again.
-    LayoutUnit oldLogicalTop = 0;
+    LayoutUnit oldLogicalTop;
     bool needsBlockDirectionLocationSetBeforeLayout = r.needsLayout() && view().frameView().layoutContext().layoutState()->needsBlockDirectionLocationSetBeforeLayout();
     if (needsBlockDirectionLocationSetBeforeLayout) {
         if (isHorizontalWritingMode() == r.isHorizontalWritingMode())
@@ -1092,7 +1092,7 @@ void RenderBlock::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
         flipForWritingMode(overflowBox);
         overflowBox.moveBy(adjustedPaintOffset);
         if (!overflowBox.intersects(paintInfo.rect)
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
             // FIXME: This may be applicable to non-iOS ports.
             && (!hasLayer() || !layer()->isComposited())
 #endif
@@ -1413,7 +1413,7 @@ GapRects RenderBlock::selectionGapRectsForRepaint(const RenderLayerModelObject* 
     LayoutPoint offsetFromRepaintContainer(containerPoint - toFloatSize(scrollPosition()));
 
     LogicalSelectionOffsetCaches cache(*this);
-    LayoutUnit lastTop = 0;
+    LayoutUnit lastTop;
     LayoutUnit lastLeft = logicalLeftSelectionOffset(*this, lastTop, cache);
     LayoutUnit lastRight = logicalRightSelectionOffset(*this, lastTop, cache);
     
@@ -1425,7 +1425,7 @@ void RenderBlock::paintSelection(PaintInfo& paintInfo, const LayoutPoint& paintO
 #if ENABLE(TEXT_SELECTION)
     if (shouldPaintSelectionGaps() && paintInfo.phase == PaintPhase::Foreground) {
         LogicalSelectionOffsetCaches cache(*this);
-        LayoutUnit lastTop = 0;
+        LayoutUnit lastTop;
         LayoutUnit lastLeft = logicalLeftSelectionOffset(*this, lastTop, cache);
         LayoutUnit lastRight = logicalRightSelectionOffset(*this, lastTop, cache);
         GraphicsContextStateSaver stateSaver(paintInfo.context());
@@ -1828,9 +1828,18 @@ void RenderBlock::clearPercentHeightDescendantsFrom(RenderBox& parent)
     }
 }
 
+bool RenderBlock::isContainingBlockAncestorFor(RenderObject& renderer) const
+{
+    for (const auto* ancestor = renderer.containingBlock(); ancestor; ancestor = ancestor->containingBlock()) {
+        if (ancestor == this)
+            return true;
+    }
+    return false;
+}
+
 LayoutUnit RenderBlock::textIndentOffset() const
 {
-    LayoutUnit cw = 0;
+    LayoutUnit cw;
     if (style().textIndent().isPercentOrCalculated())
         cw = containingBlock()->availableLogicalWidth();
     return minimumValueForLength(style().textIndent(), cw);
@@ -2299,9 +2308,9 @@ void RenderBlock::computeBlockPreferredLogicalWidths(LayoutUnit& minLogicalWidth
         // Fixed margins can be added in as is.
         Length startMarginLength = childStyle.marginStartUsing(&styleToUse);
         Length endMarginLength = childStyle.marginEndUsing(&styleToUse);
-        LayoutUnit margin = 0;
-        LayoutUnit marginStart = 0;
-        LayoutUnit marginEnd = 0;
+        LayoutUnit margin;
+        LayoutUnit marginStart;
+        LayoutUnit marginEnd;
         if (startMarginLength.isFixed())
             marginStart += startMarginLength.value();
         if (endMarginLength.isFixed())
@@ -2770,13 +2779,6 @@ LayoutRect RenderBlock::rectWithOutlineForRepaint(const RenderLayerModelObject* 
     if (isContinuation())
         r.inflateY(collapsedMarginBefore()); // FIXME: This is wrong for block-flows that are horizontal.
     return r;
-}
-
-RenderElement* RenderBlock::hoverAncestor() const
-{
-    if (auto* continuation = this->continuation())
-        return continuation;
-    return RenderBox::hoverAncestor();
 }
 
 void RenderBlock::updateDragState(bool dragOn)

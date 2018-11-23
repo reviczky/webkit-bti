@@ -40,7 +40,7 @@ WI.CSSProperty = class CSSProperty extends WI.Object
     static isInheritedPropertyName(name)
     {
         console.assert(typeof name === "string");
-        if (name in WI.CSSKeywordCompletions.InheritedProperties)
+        if (WI.CSSKeywordCompletions.InheritedProperties.has(name))
             return true;
         // Check if the name is a CSS variable.
         return name.startsWith("--");
@@ -150,19 +150,9 @@ WI.CSSProperty = class CSSProperty extends WI.Object
             this.text = this._text.slice(2, -2).trim();
     }
 
-    get synthesizedText()
-    {
-        var name = this.name;
-        if (!name)
-            return "";
-
-        var priority = this.priority;
-        return name + ": " + this.value.trim() + (priority ? " !" + priority : "") + ";";
-    }
-
     get text()
     {
-        return this._text || this.synthesizedText;
+        return this._text;
     }
 
     set text(newText)
@@ -172,6 +162,14 @@ WI.CSSProperty = class CSSProperty extends WI.Object
 
         this._updateOwnerStyleText(this._text, newText);
         this._text = newText;
+    }
+
+    get formattedText()
+    {
+        if (!this._name)
+            return "";
+
+        return `${this._name}: ${this._rawValue};`;
     }
 
     get name()
@@ -193,7 +191,7 @@ WI.CSSProperty = class CSSProperty extends WI.Object
         if (this._canonicalName)
             return this._canonicalName;
 
-        this._canonicalName = WI.cssStyleManager.canonicalNameForPropertyName(this.name);
+        this._canonicalName = WI.cssManager.canonicalNameForPropertyName(this.name);
 
         return this._canonicalName;
     }
@@ -330,7 +328,7 @@ WI.CSSProperty = class CSSProperty extends WI.Object
         if ("_hasOtherVendorNameOrKeyword" in this)
             return this._hasOtherVendorNameOrKeyword;
 
-        this._hasOtherVendorNameOrKeyword = WI.cssStyleManager.propertyNameHasOtherVendorPrefix(this.name) || WI.cssStyleManager.propertyValueHasOtherVendorKeyword(this.value);
+        this._hasOtherVendorNameOrKeyword = WI.cssManager.propertyNameHasOtherVendorPrefix(this.name) || WI.cssManager.propertyValueHasOtherVendorKeyword(this.value);
 
         return this._hasOtherVendorNameOrKeyword;
     }

@@ -2169,9 +2169,6 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(Overflow e)
     case Overflow::Auto:
         m_value.valueID = CSSValueAuto;
         break;
-    case Overflow::Overlay:
-        m_value.valueID = CSSValueOverlay;
-        break;
     case Overflow::PagedX:
         m_value.valueID = CSSValueWebkitPagedX;
         break;
@@ -2192,10 +2189,9 @@ template<> inline CSSPrimitiveValue::operator Overflow() const
         return Overflow::Hidden;
     case CSSValueScroll:
         return Overflow::Scroll;
+    case CSSValueOverlay:
     case CSSValueAuto:
         return Overflow::Auto;
-    case CSSValueOverlay:
-        return Overflow::Overlay;
     case CSSValueWebkitPagedX:
         return Overflow::PagedX;
     case CSSValueWebkitPagedY:
@@ -2640,42 +2636,41 @@ template<> inline CSSPrimitiveValue::operator TextDecorationStyle() const
     return TextDecorationStyle::Solid;
 }
 
-template<> inline CSSPrimitiveValue::CSSPrimitiveValue(OptionSet<TextUnderlinePosition> e)
+template<> inline CSSPrimitiveValue::CSSPrimitiveValue(TextUnderlinePosition position)
     : CSSValue(PrimitiveClass)
 {
     m_primitiveUnitType = CSS_VALUE_ID;
-    switch (static_cast<TextUnderlinePosition>(e.toRaw())) {
+    switch (position) {
     case TextUnderlinePosition::Auto:
         m_value.valueID = CSSValueAuto;
         break;
-    case TextUnderlinePosition::Alphabetic:
-        m_value.valueID = CSSValueAlphabetic;
-        break;
     case TextUnderlinePosition::Under:
         m_value.valueID = CSSValueUnder;
+        break;
+    case TextUnderlinePosition::FromFont:
+        m_value.valueID = CSSValueFromFont;
         break;
     }
 
     // FIXME: Implement support for 'under left' and 'under right' values.
 }
 
-template<> inline CSSPrimitiveValue::operator OptionSet<TextUnderlinePosition>() const
+template<> inline CSSPrimitiveValue::operator TextUnderlinePosition() const
 {
     ASSERT(isValueID());
 
     switch (m_value.valueID) {
     case CSSValueAuto:
         return TextUnderlinePosition::Auto;
-    case CSSValueAlphabetic:
-        return TextUnderlinePosition::Alphabetic;
     case CSSValueUnder:
         return TextUnderlinePosition::Under;
+    case CSSValueFromFont:
+        return TextUnderlinePosition::FromFont;
     default:
         break;
     }
 
     // FIXME: Implement support for 'under left' and 'under right' values.
-
     ASSERT_NOT_REACHED();
     return TextUnderlinePosition::Auto;
 }
@@ -5478,6 +5473,17 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(ApplePayButtonType e)
     case ApplePayButtonType::Donate:
         m_value.valueID = CSSValueDonate;
         break;
+#if ENABLE(APPLE_PAY_SESSION_V4)
+    case ApplePayButtonType::CheckOut:
+        m_value.valueID = CSSValueCheckOut;
+        break;
+    case ApplePayButtonType::Book:
+        m_value.valueID = CSSValueBook;
+        break;
+    case ApplePayButtonType::Subscribe:
+        m_value.valueID = CSSValueSubscribe;
+        break;
+#endif
 
     default:
         ASSERT_NOT_REACHED();
@@ -5497,6 +5503,14 @@ template<> inline CSSPrimitiveValue::operator ApplePayButtonType() const
         return ApplePayButtonType::SetUp;
     case CSSValueDonate:
         return ApplePayButtonType::Donate;
+#if ENABLE(APPLE_PAY_SESSION_V4)
+    case CSSValueCheckOut:
+        return ApplePayButtonType::CheckOut;
+    case CSSValueBook:
+        return ApplePayButtonType::Book;
+    case CSSValueSubscribe:
+        return ApplePayButtonType::Subscribe;
+#endif
     default:
         break;
     }

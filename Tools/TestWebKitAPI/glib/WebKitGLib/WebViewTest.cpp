@@ -48,6 +48,7 @@ WebViewTest::~WebViewTest()
 void WebViewTest::initializeWebView()
 {
     g_assert(!m_webView);
+
     m_webView = WEBKIT_WEB_VIEW(g_object_new(WEBKIT_TYPE_WEB_VIEW,
 #if PLATFORM(WPE)
         "backend", Test::createWebViewBackend(),

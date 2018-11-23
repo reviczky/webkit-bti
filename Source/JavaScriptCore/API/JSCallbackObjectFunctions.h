@@ -34,7 +34,6 @@
 #include "JSLock.h"
 #include "JSObjectRef.h"
 #include "JSString.h"
-#include "JSStringRef.h"
 #include "OpaqueJSString.h"
 #include "PropertyNameArray.h"
 #include <wtf/Vector.h>
@@ -156,7 +155,7 @@ bool JSCallbackObject<Parent>::getOwnPropertySlot(JSObject* object, ExecState* e
             // optional optimization to bypass getProperty in cases when we only need to know if the property exists
             if (JSObjectHasPropertyCallback hasProperty = jsClass->hasProperty) {
                 if (!propertyNameRef)
-                    propertyNameRef = OpaqueJSString::create(name);
+                    propertyNameRef = OpaqueJSString::tryCreate(name);
                 JSLock::DropAllLocks dropAllLocks(exec);
                 if (hasProperty(ctx, thisRef, propertyNameRef.get())) {
                     slot.setCustom(thisObject, PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum, callbackGetter);
@@ -164,7 +163,7 @@ bool JSCallbackObject<Parent>::getOwnPropertySlot(JSObject* object, ExecState* e
                 }
             } else if (JSObjectGetPropertyCallback getProperty = jsClass->getProperty) {
                 if (!propertyNameRef)
-                    propertyNameRef = OpaqueJSString::create(name);
+                    propertyNameRef = OpaqueJSString::tryCreate(name);
                 JSValueRef exception = 0;
                 JSValueRef value;
                 {
@@ -253,7 +252,7 @@ bool JSCallbackObject<Parent>::put(JSCell* cell, ExecState* exec, PropertyName p
         for (JSClassRef jsClass = thisObject->classRef(); jsClass; jsClass = jsClass->parentClass) {
             if (JSObjectSetPropertyCallback setProperty = jsClass->setProperty) {
                 if (!propertyNameRef)
-                    propertyNameRef = OpaqueJSString::create(name);
+                    propertyNameRef = OpaqueJSString::tryCreate(name);
                 JSValueRef exception = 0;
                 bool result;
                 {
@@ -317,7 +316,7 @@ bool JSCallbackObject<Parent>::putByIndex(JSCell* cell, ExecState* exec, unsigne
     for (JSClassRef jsClass = thisObject->classRef(); jsClass; jsClass = jsClass->parentClass) {
         if (JSObjectSetPropertyCallback setProperty = jsClass->setProperty) {
             if (!propertyNameRef)
-                propertyNameRef = OpaqueJSString::create(propertyName.impl());
+                propertyNameRef = OpaqueJSString::tryCreate(propertyName.impl());
             JSValueRef exception = 0;
             bool result;
             {
@@ -376,7 +375,7 @@ bool JSCallbackObject<Parent>::deleteProperty(JSCell* cell, ExecState* exec, Pro
         for (JSClassRef jsClass = thisObject->classRef(); jsClass; jsClass = jsClass->parentClass) {
             if (JSObjectDeletePropertyCallback deleteProperty = jsClass->deleteProperty) {
                 if (!propertyNameRef)
-                    propertyNameRef = OpaqueJSString::create(name);
+                    propertyNameRef = OpaqueJSString::tryCreate(name);
                 JSValueRef exception = 0;
                 bool result;
                 {
@@ -680,7 +679,7 @@ EncodedJSValue JSCallbackObject<Parent>::callbackGetter(ExecState* exec, Encoded
         for (JSClassRef jsClass = thisObj->classRef(); jsClass; jsClass = jsClass->parentClass) {
             if (JSObjectGetPropertyCallback getProperty = jsClass->getProperty) {
                 if (!propertyNameRef)
-                    propertyNameRef = OpaqueJSString::create(name);
+                    propertyNameRef = OpaqueJSString::tryCreate(name);
                 JSValueRef exception = 0;
                 JSValueRef value;
                 {

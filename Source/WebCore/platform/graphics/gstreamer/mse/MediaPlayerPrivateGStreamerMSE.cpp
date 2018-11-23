@@ -79,31 +79,12 @@ namespace WebCore {
 
 void MediaPlayerPrivateGStreamerMSE::registerMediaEngine(MediaEngineRegistrar registrar)
 {
+    initializeGStreamerAndRegisterWebKitElements();
+    GST_DEBUG_CATEGORY_INIT(webkit_mse_debug, "webkitmse", 0, "WebKit MSE media player");
     if (isAvailable()) {
         registrar([](MediaPlayer* player) { return std::make_unique<MediaPlayerPrivateGStreamerMSE>(player); },
             getSupportedTypes, supportsType, nullptr, nullptr, nullptr, supportsKeySystem);
     }
-}
-
-bool initializeGStreamerAndRegisterWebKitMSEElement()
-{
-    registerWebKitGStreamerElements();
-
-    GST_DEBUG_CATEGORY_INIT(webkit_mse_debug, "webkitmse", 0, "WebKit MSE media player");
-
-    GRefPtr<GstElementFactory> WebKitMediaSrcFactory = adoptGRef(gst_element_factory_find("webkitmediasrc"));
-    if (UNLIKELY(!WebKitMediaSrcFactory))
-        gst_element_register(nullptr, "webkitmediasrc", GST_RANK_PRIMARY + 100, WEBKIT_TYPE_MEDIA_SRC);
-    return true;
-}
-
-bool MediaPlayerPrivateGStreamerMSE::isAvailable()
-{
-    if (UNLIKELY(!initializeGStreamerAndRegisterWebKitMSEElement()))
-        return false;
-
-    GRefPtr<GstElementFactory> factory = adoptGRef(gst_element_factory_find("playbin"));
-    return factory;
 }
 
 MediaPlayerPrivateGStreamerMSE::MediaPlayerPrivateGStreamerMSE(MediaPlayer* player)
@@ -116,8 +97,13 @@ MediaPlayerPrivateGStreamerMSE::~MediaPlayerPrivateGStreamerMSE()
 {
     GST_TRACE("destroying the player (%p)", this);
 
+    // Clear the AppendPipeline map. This should cause the destruction of all the AppendPipeline's since there should
+    // be no alive references at this point.
+#ifndef NDEBUG
     for (auto iterator : m_appendPipelinesMap)
-        iterator.value->clearPlayerPrivate();
+        ASSERT(iterator.value->hasOneRef());
+#endif
+    m_appendPipelinesMap.clear();
 
     if (m_source) {
         webKitMediaSrcSetMediaPlayerPrivate(WEBKIT_MEDIA_SRC(m_source.get()), nullptr);
@@ -136,9 +122,6 @@ void MediaPlayerPrivateGStreamerMSE::load(const String& urlString)
         m_player->networkStateChanged();
         return;
     }
-
-    if (UNLIKELY(!initializeGStreamerAndRegisterWebKitMSEElement()))
-        return;
 
     if (!m_playbackPipeline)
         m_playbackPipeline = PlaybackPipeline::create();
@@ -708,7 +691,7 @@ static HashSet<String, ASCIICaseInsensitiveHash>& mimeTypeCache()
 {
     static NeverDestroyed<HashSet<String, ASCIICaseInsensitiveHash>> cache = []()
     {
-        initializeGStreamerAndRegisterWebKitMSEElement();
+        initializeGStreamerAndRegisterWebKitElements();
         HashSet<String, ASCIICaseInsensitiveHash> set;
         const char* mimeTypes[] = {
             "video/mp4",
@@ -752,7 +735,7 @@ const static HashSet<AtomicString>& codecSet()
 {
     static NeverDestroyed<HashSet<AtomicString>> codecTypes = []()
     {
-        MediaPlayerPrivateGStreamerBase::initializeGStreamerAndRegisterWebKitElements();
+        initializeGStreamerAndRegisterWebKitElements();
         HashSet<AtomicString> set;
 
         GList* audioDecoderFactories = gst_element_factory_list_get_elements(GST_ELEMENT_FACTORY_TYPE_DECODER | GST_ELEMENT_FACTORY_TYPE_MEDIA_AUDIO, GST_RANK_MARGINAL);
@@ -955,6 +938,7 @@ void MediaPlayerPrivateGStreamerMSE::attemptToDecryptWithInstance(CDMInstance& i
         GUniquePtr<GstStructure> structure(gst_structure_new_empty("drm-cipher-clearkey"));
         gst_structure_set_value(structure.get(), "key-ids", &keyIDList);
         gst_structure_set_value(structure.get(), "key-values", &keyValueList);
+        gst_structure_set(structure.get(), "cdm-instance", G_TYPE_POINTER, &instance, nullptr);
 
         gst_element_send_event(m_playbackPipeline->pipeline(), gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM_OOB, structure.release()));
     }

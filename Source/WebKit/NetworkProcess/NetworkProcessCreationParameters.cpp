@@ -41,7 +41,6 @@ NetworkProcessCreationParameters::NetworkProcessCreationParameters()
 
 void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
 {
-    encoder << defaultSessionParameters;
     encoder << privateBrowsingEnabled;
     encoder.encodeEnum(cacheModel);
     encoder << diskCacheSizeOverride;
@@ -56,10 +55,13 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << uiProcessCookieStorageIdentifier;
 #endif
     encoder << defaultSessionPendingCookies;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     encoder << cookieStorageDirectoryExtensionHandle;
     encoder << containerCachesDirectoryExtensionHandle;
     encoder << parentBundleDirectoryExtensionHandle;
+#if ENABLE(INDEXED_DATABASE)
+    encoder << indexedDatabaseTempBlobDirectoryExtensionHandle;
+#endif
 #endif
     encoder << shouldSuppressMemoryPressureHandler;
     encoder << shouldUseTestingNetworkSession;
@@ -71,7 +73,7 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << uiProcessSDKVersion;
     encoder << sourceApplicationBundleIdentifier;
     encoder << sourceApplicationSecondaryIdentifier;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     encoder << ctDataConnectionServiceType;
 #endif
     encoder << httpProxy;
@@ -90,7 +92,7 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
 #elif USE(CURL)
     encoder << cookiePersistentStorageFile;
 #endif
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING) && !RELEASE_LOG_DISABLED
+#if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
     encoder << logCookieInformation;
 #endif
 #if ENABLE(NETWORK_CAPTURE)
@@ -106,19 +108,21 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << urlSchemesRegisteredAsCORSEnabled;
     encoder << urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
 
-#if ENABLE(WIFI_ASSERTIONS)
+#if ENABLE(PROXIMITY_NETWORKING)
     encoder << wirelessContextIdentifier;
+#endif
+
+#if ENABLE(INDEXED_DATABASE)
+    encoder << indexedDatabaseDirectory << indexedDatabaseDirectoryExtensionHandle;
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    encoder << serviceWorkerRegistrationDirectory << serviceWorkerRegistrationDirectoryExtensionHandle << urlSchemesServiceWorkersCanHandle << shouldDisableServiceWorkerProcessTerminationDelay;
 #endif
 }
 
 bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProcessCreationParameters& result)
 {
-    std::optional<NetworkSessionCreationParameters> defaultSessionParameters;
-    decoder >> defaultSessionParameters;
-    if (!defaultSessionParameters)
-        return false;
-    result.defaultSessionParameters = WTFMove(*defaultSessionParameters);
-
     if (!decoder.decode(result.privateBrowsingEnabled))
         return false;
     if (!decoder.decodeEnum(result.cacheModel))
@@ -149,7 +153,7 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
 #endif
     if (!decoder.decode(result.defaultSessionPendingCookies))
         return false;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     std::optional<SandboxExtension::Handle> cookieStorageDirectoryExtensionHandle;
     decoder >> cookieStorageDirectoryExtensionHandle;
     if (!cookieStorageDirectoryExtensionHandle)
@@ -167,6 +171,14 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
     if (!parentBundleDirectoryExtensionHandle)
         return false;
     result.parentBundleDirectoryExtensionHandle = WTFMove(*parentBundleDirectoryExtensionHandle);
+
+#if ENABLE(INDEXED_DATABASE)
+    std::optional<SandboxExtension::Handle> indexedDatabaseTempBlobDirectoryExtensionHandle;
+    decoder >> indexedDatabaseTempBlobDirectoryExtensionHandle;
+    if (!indexedDatabaseTempBlobDirectoryExtensionHandle)
+        return false;
+    result.indexedDatabaseTempBlobDirectoryExtensionHandle = WTFMove(*indexedDatabaseTempBlobDirectoryExtensionHandle);
+#endif
 #endif
     if (!decoder.decode(result.shouldSuppressMemoryPressureHandler))
         return false;
@@ -187,7 +199,7 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
         return false;
     if (!decoder.decode(result.sourceApplicationSecondaryIdentifier))
         return false;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (!decoder.decode(result.ctDataConnectionServiceType))
         return false;
 #endif
@@ -221,7 +233,7 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
         return false;
 #endif
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING) && !RELEASE_LOG_DISABLED
+#if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
     if (!decoder.decode(result.logCookieInformation))
         return false;
 #endif
@@ -248,8 +260,36 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
     if (!decoder.decode(result.urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest))
         return false;
 
-#if ENABLE(WIFI_ASSERTIONS)
+#if ENABLE(PROXIMITY_NETWORKING)
     if (!decoder.decode(result.wirelessContextIdentifier))
+        return false;
+#endif
+
+#if ENABLE(INDEXED_DATABASE)
+    if (!decoder.decode(result.indexedDatabaseDirectory))
+        return false;
+    
+    std::optional<SandboxExtension::Handle> indexedDatabaseDirectoryExtensionHandle;
+    decoder >> indexedDatabaseDirectoryExtensionHandle;
+    if (!indexedDatabaseDirectoryExtensionHandle)
+        return false;
+    result.indexedDatabaseDirectoryExtensionHandle = WTFMove(*indexedDatabaseDirectoryExtensionHandle);
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    if (!decoder.decode(result.serviceWorkerRegistrationDirectory))
+        return false;
+    
+    std::optional<SandboxExtension::Handle> serviceWorkerRegistrationDirectoryExtensionHandle;
+    decoder >> serviceWorkerRegistrationDirectoryExtensionHandle;
+    if (!serviceWorkerRegistrationDirectoryExtensionHandle)
+        return false;
+    result.serviceWorkerRegistrationDirectoryExtensionHandle = WTFMove(*serviceWorkerRegistrationDirectoryExtensionHandle);
+    
+    if (!decoder.decode(result.urlSchemesServiceWorkersCanHandle))
+        return false;
+    
+    if (!decoder.decode(result.shouldDisableServiceWorkerProcessTerminationDelay))
         return false;
 #endif
 

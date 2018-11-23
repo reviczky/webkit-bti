@@ -41,8 +41,8 @@ namespace WebCore {
 
 using namespace Inspector;
 
-static const size_t maximumResourcesContentSize = 100 * 1000 * 1000; // 100MB
-static const size_t maximumSingleResourceContentSize = 10 * 1000 * 1000; // 10MB
+static const size_t maximumResourcesContentSize = 200 * 1000 * 1000; // 200MB
+static const size_t maximumSingleResourceContentSize = 50 * 1000 * 1000; // 50MB
 
 NetworkResourcesData::ResourceData::ResourceData(const String& requestId, const String& loaderId)
     : m_requestId(requestId)
@@ -164,6 +164,9 @@ void NetworkResourcesData::responseReceived(const String& requestId, const Strin
 
     if (InspectorNetworkAgent::shouldTreatAsText(response.mimeType()))
         resourceData->setDecoder(InspectorNetworkAgent::createTextDecoder(response.mimeType(), response.textEncodingName()));
+
+    if (auto& certificateInfo = response.certificateInfo())
+        resourceData->setCertificateInfo(certificateInfo);
 }
 
 void NetworkResourcesData::setResourceType(const String& requestId, InspectorPageAgent::ResourceType type)

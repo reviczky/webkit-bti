@@ -41,6 +41,7 @@
 #include "WebPageGroup.h"
 #include "WebProcessPool.h"
 #include "WebProcessProxy.h"
+#include <WebCore/CertificateInfo.h>
 #include <WebCore/FileSystem.h>
 #include <WebCore/GtkUtilities.h>
 #include <WebCore/NotImplemented.h>
@@ -145,7 +146,7 @@ WebPageProxy* WebInspectorProxy::platformCreateFrontendPage()
 #endif
     preferences->setJavaScriptRuntimeFlags({
     });
-    RefPtr<WebPageGroup> pageGroup = WebPageGroup::create(inspectorPageGroupIdentifierForPage(inspectedPage()), false, false);
+    RefPtr<WebPageGroup> pageGroup = WebPageGroup::create(inspectorPageGroupIdentifierForPage(inspectedPage()));
 
     auto pageConfiguration = API::PageConfiguration::create();
     pageConfiguration->setProcessPool(&inspectorProcessPool(inspectionLevel()));
@@ -335,6 +336,11 @@ void WebInspectorProxy::platformInspectedURLChanged(const String& url)
 
     if (m_inspectorWindow)
         updateInspectorWindowTitle();
+}
+
+void WebInspectorProxy::platformShowCertificate(const CertificateInfo&)
+{
+    notImplemented();
 }
 
 String WebInspectorProxy::inspectorPageURL()

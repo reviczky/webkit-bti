@@ -123,7 +123,7 @@ WI.ContentView = class ContentView extends WI.View
             return new WI.FrameDOMTreeContentView(representedObject, extraArguments);
 
         if (representedObject instanceof WI.DOMSearchMatchObject) {
-            var resultView = new WI.FrameDOMTreeContentView(WI.frameResourceManager.mainFrame.domTree, extraArguments);
+            var resultView = new WI.FrameDOMTreeContentView(WI.networkManager.mainFrame.domTree, extraArguments);
             resultView.restoreFromCookie({nodeToSelect: representedObject.domNode});
             return resultView;
         }
@@ -166,6 +166,12 @@ WI.ContentView = class ContentView extends WI.View
 
         if (representedObject instanceof WI.ResourceCollection)
             return new WI.ResourceCollectionContentView(representedObject, extraArguments);
+
+        if (representedObject instanceof WI.AuditTestCase || representedObject instanceof WI.AuditTestCaseResult)
+            return new WI.AuditTestCaseContentView(representedObject, extraArguments);
+
+        if (representedObject instanceof WI.AuditTestGroup || representedObject instanceof WI.AuditTestGroupResult)
+            return new WI.AuditTestGroupContentView(representedObject, extraArguments);
 
         if (representedObject instanceof WI.Collection)
             return new WI.CollectionContentView(representedObject, extraArguments);
@@ -235,7 +241,7 @@ WI.ContentView = class ContentView extends WI.View
         }
 
         if (representedObject instanceof WI.DOMSearchMatchObject)
-            return WI.frameResourceManager.mainFrame.domTree;
+            return WI.networkManager.mainFrame.domTree;
 
         if (representedObject instanceof WI.SourceCodeSearchMatchObject)
             return representedObject.sourceCode;
@@ -294,6 +300,9 @@ WI.ContentView = class ContentView extends WI.View
         if (representedObject instanceof WI.HeapSnapshotProxy || representedObject instanceof WI.HeapSnapshotDiffProxy)
             return true;
         if (representedObject instanceof WI.Recording)
+            return true;
+        if (representedObject instanceof WI.AuditTestCase || representedObject instanceof WI.AuditTestGroup
+            || representedObject instanceof WI.AuditTestCaseResult || representedObject instanceof WI.AuditTestGroupResult)
             return true;
         if (representedObject instanceof WI.Collection)
             return true;

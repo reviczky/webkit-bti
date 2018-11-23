@@ -375,8 +375,17 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         break;
     }
             
-    case BitAnd:
-    case BitOr:
+    case ValueBitOr:
+    case ValueBitAnd:
+        clobberWorld();
+        if (node->binaryUseKind() == BigIntUse)
+            setTypeForNode(node, SpecBigInt);
+        else
+            setTypeForNode(node, SpecBoolInt32 | SpecBigInt);
+        break;
+            
+    case ArithBitAnd:
+    case ArithBitOr:
     case BitXor:
     case BitRShift:
     case BitLShift:
@@ -393,10 +402,10 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             int32_t a = left.asInt32();
             int32_t b = right.asInt32();
             switch (node->op()) {
-            case BitAnd:
+            case ArithBitAnd:
                 setConstant(node, JSValue(a & b));
                 break;
-            case BitOr:
+            case ArithBitOr:
                 setConstant(node, JSValue(a | b));
                 break;
             case BitXor:
@@ -418,7 +427,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             break;
         }
         
-        if (node->op() == BitAnd
+        if (node->op() == ArithBitAnd
             && (isBoolInt32Speculation(forNode(node->child1()).m_type) ||
                 isBoolInt32Speculation(forNode(node->child2()).m_type))) {
             setNonCellTypeForNode(node, SpecBoolInt32);
@@ -580,11 +589,15 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         forNode(node).fixTypeForRepresentation(m_graph, node);
         break;
     }
-        
+
+    case ValueSub:
     case ValueAdd: {
-        ASSERT(node->binaryUseKind() == UntypedUse);
+        DFG_ASSERT(m_graph, node, node->binaryUseKind() == UntypedUse || node->binaryUseKind() == BigIntUse);
         clobberWorld();
-        setTypeForNode(node, SpecString | SpecBytecodeNumber);
+        if (node->binaryUseKind() == BigIntUse)
+            setTypeForNode(node, SpecBigInt);
+        else
+            setTypeForNode(node, SpecString | SpecBytecodeNumber | SpecBigInt);
         break;
     }
 
@@ -2565,10 +2578,11 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
     case PhantomNewArrayWithSpread:
     case PhantomNewArrayBuffer:
     case PhantomNewRegexp:
-    case BottomValue:
-        // This claims to return bottom.
+    case BottomValue: {
+        clearForNode(node);
         break;
-        
+    }
+
     case PutHint:
         break;
         

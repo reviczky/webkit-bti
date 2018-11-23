@@ -47,7 +47,17 @@ bool isScriptAllowedByNosniff(const ResourceResponse& response)
     return MIMETypeRegistry::isSupportedJavaScriptMIMEType(mimeType);
 }
 
-ResourceResponseBase::ResourceResponseBase() = default;
+ResourceResponseBase::ResourceResponseBase()
+    : m_haveParsedCacheControlHeader(false)
+    , m_haveParsedAgeHeader(false)
+    , m_haveParsedDateHeader(false)
+    , m_haveParsedExpiresHeader(false)
+    , m_haveParsedLastModifiedHeader(false)
+    , m_haveParsedContentRangeHeader(false)
+    , m_isRedirected(false)
+    , m_isNull(true)
+{
+}
 
 ResourceResponseBase::ResourceResponseBase(const URL& url, const String& mimeType, long long expectedLength, const String& textEncodingName)
     : m_url(url)
@@ -55,6 +65,13 @@ ResourceResponseBase::ResourceResponseBase(const URL& url, const String& mimeTyp
     , m_expectedContentLength(expectedLength)
     , m_textEncodingName(textEncodingName)
     , m_certificateInfo(CertificateInfo()) // Empty but valid for synthetic responses.
+    , m_haveParsedCacheControlHeader(false)
+    , m_haveParsedAgeHeader(false)
+    , m_haveParsedDateHeader(false)
+    , m_haveParsedExpiresHeader(false)
+    , m_haveParsedLastModifiedHeader(false)
+    , m_haveParsedContentRangeHeader(false)
+    , m_isRedirected(false)
     , m_isNull(false)
 {
 }
@@ -248,7 +265,7 @@ String ResourceResponseBase::sanitizeSuggestedFilename(const String& suggestedFi
     if (suggestedFilename.isEmpty())
         return suggestedFilename;
 
-    ResourceResponse response(URL(ParsedURLString, "http://example.com/"), String(), -1, String());
+    ResourceResponse response(URL({ }, "http://example.com/"), String(), -1, String());
     response.setHTTPStatusCode(200);
     String escapedSuggestedFilename = String(suggestedFilename).replace('\\', "\\\\").replace('"', "\\\"");
     String value = makeString("attachment; filename=\"", escapedSuggestedFilename, '"');
@@ -277,6 +294,11 @@ void ResourceResponseBase::setHTTPStatusCode(int statusCode)
     m_isNull = false;
 
     // FIXME: Should invalidate or update platform response if present.
+}
+
+bool ResourceResponseBase::isRedirection() const
+{
+    return isRedirectionStatusCode(m_httpStatusCode);
 }
 
 const String& ResourceResponseBase::httpStatusText() const 
@@ -702,7 +724,7 @@ static ParsedContentRange parseContentRangeInHeader(const HTTPHeaderMap& headers
     return ParsedContentRange(contentRangeValue);
 }
 
-ParsedContentRange& ResourceResponseBase::contentRange() const
+const ParsedContentRange& ResourceResponseBase::contentRange() const
 {
     lazyInit(CommonFieldsOnly);
 

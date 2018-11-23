@@ -81,7 +81,7 @@ enum PDFImageCachingPolicy {
     PDFImageCachingBelowMemoryLimit,
     PDFImageCachingDisabled,
     PDFImageCachingClipBoundsOnly,
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     PDFImageCachingDefault = PDFImageCachingBelowMemoryLimit
 #else
     PDFImageCachingDefault = PDFImageCachingEnabled
@@ -178,7 +178,6 @@ protected:
     void setNeedsRelayoutAllFrames();
     void mediaTypeOverrideChanged();
     void imagesEnabledChanged();
-    void scriptEnabledChanged();
     void pluginsEnabledChanged();
     void userStyleSheetLocationChanged();
     void usesPageCacheChanged();

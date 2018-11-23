@@ -19,8 +19,7 @@
  *
  */
 
-#ifndef WTFString_h
-#define WTFString_h
+#pragma once
 
 // This file would be called String.h, but that conflicts with <string.h>
 // on systems without case-sensitive file systems.
@@ -365,6 +364,8 @@ public:
     // This is useful for clearing String-based caches.
     void clearImplIfNotShared();
 
+    static constexpr unsigned MaxLength = StringImpl::MaxLength;
+
 private:
     template<typename CharacterType> void removeInternal(const CharacterType*, unsigned, unsigned);
 
@@ -630,6 +631,15 @@ template<unsigned length> inline bool startsWithLettersIgnoringASCIICase(const S
     return startsWithLettersIgnoringASCIICase(string.impl(), lowercaseLetters);
 }
 
+inline namespace StringLiterals {
+
+inline String operator"" _str(const char* characters, size_t)
+{
+    return ASCIILiteral::fromLiteralUnsafe(characters);
+}
+
+} // inline StringLiterals
+
 } // namespace WTF
 
 using WTF::KeepTrailingZeros;
@@ -655,5 +665,3 @@ using WTF::isSpaceOrNewline;
 using WTF::reverseFind;
 
 #include <wtf/text/AtomicString.h>
-
-#endif

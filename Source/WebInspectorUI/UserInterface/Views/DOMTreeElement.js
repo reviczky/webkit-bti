@@ -47,6 +47,7 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
         this._boundHighlightAnimationEnd = this._highlightAnimationEnd.bind(this);
         this._subtreeBreakpointCount = 0;
 
+        this._highlightedAttributes = new Set;
         this._recentlyModifiedAttributes = [];
         this._boundNodeChangedAnimationEnd = this._nodeChangedAnimationEnd.bind(this);
 
@@ -266,6 +267,11 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
     attributeDidChange(name)
     {
         this._recentlyModifiedAttributes.push({name});
+    }
+
+    highlightAttribute(name)
+    {
+        this._highlightedAttributes.add(name);
     }
 
     showChildNode(node)
@@ -624,7 +630,7 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
         this.treeOutline.suppressRevealAndSelect = true;
         this.treeOutline.selectDOMNode(this.representedObject, selectedByUser);
         if (selectedByUser)
-            WI.domTreeManager.highlightDOMNode(this.representedObject.id);
+            WI.domManager.highlightDOMNode(this.representedObject.id);
         this.treeOutline.updateSelection();
         this.treeOutline.suppressRevealAndSelect = false;
     }
@@ -739,7 +745,7 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
 
         if (event.target && event.target.tagName === "A") {
             let url = event.target.href;
-            let frame = WI.frameResourceManager.frameForIdentifier(node.frameIdentifier);
+            let frame = WI.networkManager.frameForIdentifier(node.frameIdentifier);
             WI.appendContextMenuItemsForURL(contextMenu, url, {frame});
         }
 
@@ -779,11 +785,11 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
 
         contextMenu.appendSeparator();
 
-        if (WI.cssStyleManager.canForcePseudoClasses()) {
+        if (WI.cssManager.canForcePseudoClasses()) {
             let pseudoSubMenu = contextMenu.appendSubMenuItem(WI.UIString("Forced Pseudo-Classes"));
 
             let enabledPseudoClasses = this.representedObject.enabledPseudoClasses;
-            WI.CSSStyleManager.ForceablePseudoClasses.forEach((pseudoClass) => {
+            WI.CSSManager.ForceablePseudoClasses.forEach((pseudoClass) => {
                 let enabled = enabledPseudoClasses.includes(pseudoClass);
                 pseudoSubMenu.appendCheckboxItem(pseudoClass.capitalize(), () => {
                     this.representedObject.setPseudoClassEnabled(pseudoClass, !enabled);
@@ -1175,7 +1181,7 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
                 return;
             }
 
-            var node = WI.domTreeManager.nodeForId(nodeId);
+            var node = WI.domManager.nodeForId(nodeId);
 
             // Select it and expand if necessary. We force tree update so that it processes dom events and is up to date.
             treeOutline._updateModifiedNodes();
@@ -1327,6 +1333,9 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
             if (attribute.name === name)
                 attribute.element = hasText ? attrValueElement : attrNameElement;
         }
+
+        if (this._highlightedAttributes.has(name))
+            attrSpanElement.classList.add("highlight");
     }
 
     _buildTagDOM(parentElement, tagName, isClosingTag, isDistinctTreeElement)
@@ -1840,8 +1849,9 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
 
         let contextMenu = WI.ContextMenu.createFromEvent(event);
         if (hasBreakpoint) {
-            const allowEditing = true;
-            WI.DOMBreakpointTreeController.appendBreakpointContextMenuItems(contextMenu, this.representedObject, allowEditing);
+            WI.appendContextMenuItemsForDOMNodeBreakpoints(contextMenu, this.representedObject, {
+                allowEditing: true,
+            });
             return;
         }
 

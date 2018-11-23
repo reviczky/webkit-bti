@@ -29,15 +29,17 @@
 
 #include "BufferSource.h"
 #include "PublicKeyCredentialDescriptor.h"
+#include "UserVerificationRequirement.h"
 #include <wtf/Forward.h>
 
 namespace WebCore {
 
 struct PublicKeyCredentialRequestOptions {
     BufferSource challenge;
-    std::optional<unsigned long> timeout;
+    std::optional<unsigned> timeout;
     mutable String rpId;
     Vector<PublicKeyCredentialDescriptor> allowCredentials;
+    UserVerificationRequirement userVerification { UserVerificationRequirement::Preferred };
 
     template<class Encoder> void encode(Encoder&) const;
     template<class Decoder> static std::optional<PublicKeyCredentialRequestOptions> decode(Decoder&);
@@ -47,17 +49,31 @@ struct PublicKeyCredentialRequestOptions {
 template<class Encoder>
 void PublicKeyCredentialRequestOptions::encode(Encoder& encoder) const
 {
-    encoder << rpId << allowCredentials;
+    encoder << timeout << rpId << allowCredentials << userVerification;
 }
 
 template<class Decoder>
 std::optional<PublicKeyCredentialRequestOptions> PublicKeyCredentialRequestOptions::decode(Decoder& decoder)
 {
     PublicKeyCredentialRequestOptions result;
+
+    std::optional<std::optional<unsigned>> timeout;
+    decoder >> timeout;
+    if (!timeout)
+        return std::nullopt;
+    result.timeout = WTFMove(*timeout);
+
     if (!decoder.decode(result.rpId))
         return std::nullopt;
     if (!decoder.decode(result.allowCredentials))
         return std::nullopt;
+
+    std::optional<UserVerificationRequirement> userVerification;
+    decoder >> userVerification;
+    if (!userVerification)
+        return std::nullopt;
+    result.userVerification = WTFMove(*userVerification);
+
     return result;
 }
 

@@ -284,7 +284,7 @@ public:
     static const RGBA32 cyan = 0xFF00FFFF;
     static const RGBA32 yellow = 0xFFFFFF00;
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     static const RGBA32 compositionFill = 0x3CAFC0E3;
 #else
     static const RGBA32 compositionFill = 0xFFE1DD55;
@@ -300,6 +300,7 @@ public:
     WEBCORE_EXPORT Color& operator=(Color&&);
 
     friend bool operator==(const Color& a, const Color& b);
+    friend bool equalIgnoringSemanticColor(const Color& a, const Color& b);
 
     static bool isBlackColor(const Color&);
     static bool isWhiteColor(const Color&);
@@ -403,6 +404,11 @@ inline bool operator!=(const Color& a, const Color& b)
     return !(a == b);
 }
 
+inline bool equalIgnoringSemanticColor(const Color& a, const Color& b)
+{
+    return (a.m_colorData.rgbaAndFlags & ~Color::isSemanticRBGAColorBit) == (b.m_colorData.rgbaAndFlags & ~Color::isSemanticRBGAColorBit);
+}
+
 inline uint8_t roundAndClampColorChannel(int value)
 {
     return std::max(0, std::min(255, value));
@@ -470,3 +476,8 @@ WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const Color&);
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, ColorSpace);
 
 } // namespace WebCore
+
+namespace WTF {
+template<> struct DefaultHash<WebCore::Color>;
+template<> struct HashTraits<WebCore::Color>;
+}

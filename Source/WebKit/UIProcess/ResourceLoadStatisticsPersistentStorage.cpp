@@ -307,11 +307,11 @@ void ResourceLoadStatisticsPersistentStorage::clear()
 
     stopMonitoringDisk();
 
-    if (!FileSystem::deleteFile(filePath))
+    if (!FileSystem::deleteFile(filePath) && FileSystem::fileExists(filePath))
         RELEASE_LOG_ERROR(ResourceLoadStatistics, "ResourceLoadStatisticsPersistentStorage: Unable to delete statistics file: %s", filePath.utf8().data());
 }
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
 void ResourceLoadStatisticsPersistentStorage::excludeFromBackup() const
 {
 }

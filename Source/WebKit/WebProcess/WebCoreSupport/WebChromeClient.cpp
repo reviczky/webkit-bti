@@ -79,7 +79,7 @@
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/Settings.h>
 
-#if PLATFORM(IOS) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
+#if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
 #include "PlaybackSessionManager.h"
 #include "VideoFullscreenManager.h"
 #endif
@@ -164,7 +164,7 @@ void WebChromeClient::setWindowRect(const FloatRect& windowFrame)
 
 FloatRect WebChromeClient::windowRect()
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     return FloatRect();
 #else
 #if PLATFORM(MAC)
@@ -560,7 +560,7 @@ IntRect WebChromeClient::rootViewToScreen(const IntRect& rect) const
     return m_page.rootViewToScreen(rect);
 }
     
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 IntPoint WebChromeClient::accessibilityScreenToRootView(const IntPoint& point) const
 {
     return m_page.accessibilityScreenToRootView(point);
@@ -707,13 +707,6 @@ void WebChromeClient::print(Frame& frame)
     m_page.sendSync(Messages::WebPageProxy::PrintFrame(webFrame->frameID()), Messages::WebPageProxy::PrintFrame::Reply(), Seconds::infinity(), IPC::SendSyncOption::InformPlatformProcessWillSuspend);
 }
 
-void WebChromeClient::testIncomingSyncIPCMessageWhileWaitingForSyncReply()
-{
-    bool wasHandled = false;
-    WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebProcessProxy::TestIncomingSyncIPCMessageWhileWaitingForSyncReply(), Messages::WebProcessProxy::TestIncomingSyncIPCMessageWhileWaitingForSyncReply::Reply(wasHandled), 0, Seconds::infinity(), IPC::SendSyncOption::DoNotProcessIncomingMessagesWhenWaitingForSyncReply);
-    RELEASE_ASSERT(wasHandled);
-}
-
 void WebChromeClient::exceededDatabaseQuota(Frame& frame, const String& databaseName, DatabaseDetails details)
 {
     WebFrame* webFrame = WebFrame::fromCoreFrame(frame);
@@ -810,13 +803,18 @@ void WebChromeClient::runOpenPanel(Frame& frame, FileChooser& fileChooser)
     ASSERT(webFrame);
     m_page.send(Messages::WebPageProxy::RunOpenPanel(webFrame->frameID(), SecurityOriginData::fromFrame(&frame), fileChooser.settings()));
 }
+    
+void WebChromeClient::showShareSheet(ShareDataWithParsedURL& shareData, CompletionHandler<void(bool)>&& callback)
+{
+    m_page.showShareSheet(shareData, WTFMove(callback));
+}
 
 void WebChromeClient::loadIconForFiles(const Vector<String>& filenames, FileIconLoader& loader)
 {
     loader.iconLoaded(createIconForFiles(filenames));
 }
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
 
 void WebChromeClient::setCursor(const Cursor& cursor)
 {
@@ -933,6 +931,14 @@ bool WebChromeClient::layerTreeStateIsFrozen() const
     return false;
 }
 
+bool WebChromeClient::layerFlushThrottlingIsActive() const
+{
+    if (m_page.drawingArea())
+        return m_page.drawingArea()->layerFlushThrottlingIsActive();
+
+    return false;
+}
+
 #if ENABLE(ASYNC_SCROLLING)
 
 RefPtr<ScrollingCoordinator> WebChromeClient::createScrollingCoordinator(Page& page) const
@@ -949,7 +955,7 @@ RefPtr<ScrollingCoordinator> WebChromeClient::createScrollingCoordinator(Page& p
 
 #endif
 
-#if (PLATFORM(IOS) && HAVE(AVKIT)) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
+#if (PLATFORM(IOS_FAMILY) && HAVE(AVKIT)) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
 
 bool WebChromeClient::supportsVideoFullscreen(HTMLMediaElementEnums::VideoFullscreenMode mode)
 {
@@ -973,7 +979,7 @@ void WebChromeClient::clearPlaybackControlsManager()
 
 void WebChromeClient::enterVideoFullscreenForVideoElement(HTMLVideoElement& videoElement, HTMLMediaElementEnums::VideoFullscreenMode mode, bool standby)
 {
-#if ENABLE(FULLSCREEN_API) && PLATFORM(IOS)
+#if ENABLE(FULLSCREEN_API) && PLATFORM(IOS_FAMILY)
     ASSERT(standby || mode != HTMLMediaElementEnums::VideoFullscreenModeNone);
 #else
     ASSERT(mode != HTMLMediaElementEnums::VideoFullscreenModeNone);
@@ -1016,7 +1022,7 @@ void WebChromeClient::exitFullScreenForElement(Element* element)
 
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 
 FloatSize WebChromeClient::screenSize() const
 {
@@ -1243,7 +1249,7 @@ void WebChromeClient::inputElementDidResignStrongPasswordAppearance(HTMLInputEle
     m_page.send(Messages::WebPageProxy::DidResignInputElementStrongPasswordAppearance { UserData { WebProcess::singleton().transformObjectsToHandles(userData.get()).get() } });
 }
 
-#if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS)
+#if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS_FAMILY)
 
 void WebChromeClient::addPlaybackTargetPickerClient(uint64_t contextId)
 {
@@ -1298,7 +1304,7 @@ void WebChromeClient::didInvalidateDocumentMarkerRects()
     m_page.findController().didInvalidateDocumentMarkerRects();
 }
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
 void WebChromeClient::hasStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t, CompletionHandler<void(bool)>&& callback)
 {
     m_page.hasStorageAccess(WTFMove(subFrameHost), WTFMove(topFrameHost), frameID, WTFMove(callback));
@@ -1309,12 +1315,5 @@ void WebChromeClient::requestStorageAccess(String&& subFrameHost, String&& topFr
     m_page.requestStorageAccess(WTFMove(subFrameHost), WTFMove(topFrameHost), frameID, WTFMove(callback));
 }
 #endif
-
-bool WebChromeClient::isViewVisible()
-{
-    bool isVisible = false;
-    WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebPageProxy::GetIsViewVisible(), Messages::WebPageProxy::GetIsViewVisible::Reply(isVisible), m_page.pageID());
-    return isVisible;
-}
 
 } // namespace WebKit

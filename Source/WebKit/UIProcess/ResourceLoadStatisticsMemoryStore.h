@@ -64,24 +64,25 @@ public:
     void mergeStatistics(Vector<WebCore::ResourceLoadStatistics>&&);
     void processStatistics(const Function<void(const WebCore::ResourceLoadStatistics&)>&) const;
 
-    void resetCookieBlockingState();
     void updateCookieBlocking(CompletionHandler<void()>&&);
-    void updateCookieBlockingForDomains(const Vector<String>& domainsToBlock, ShouldClearFirst, CompletionHandler<void()>&&);
+    void updateCookieBlockingForDomains(const Vector<String>& domainsToBlock, CompletionHandler<void()>&&);
     void clearBlockingStateForDomains(const Vector<String>& domains, CompletionHandler<void()>&&);
 
     void includeTodayAsOperatingDateIfNecessary();
     void processStatisticsAndDataRecords();
 
-    void requestStorageAccessUnderOpener(String&& primaryDomainInNeedOfStorageAccess, uint64_t openerPageID, String&& openerPrimaryDomain, bool isTriggeredByUserGesture);
+    void requestStorageAccessUnderOpener(String&& primaryDomainInNeedOfStorageAccess, uint64_t openerPageID, String&& openerPrimaryDomain);
     void removeAllStorageAccess(CompletionHandler<void()>&&);
 
     void grandfatherExistingWebsiteData(CompletionHandler<void()>&&);
     void cancelPendingStatisticsProcessingRequest();
 
+    bool isRegisteredAsSubresourceUnder(const String& subresourcePrimaryDomain, const String& topFramePrimaryDomain) const;
     bool isRegisteredAsSubFrameUnder(const String& subFramePrimaryDomain, const String& topFramePrimaryDomain) const;
     bool isRegisteredAsRedirectingTo(const String& hostRedirectedFromPrimaryDomain, const String& hostRedirectedToPrimaryDomain) const;
 
     void clearPrevalentResource(const String& primaryDomain);
+    String dumpResourceLoadStatistics() const;
     bool isPrevalentResource(const String& primaryDomain) const;
     bool isVeryPrevalentResource(const String& primaryDomain) const;
     void setPrevalentResource(const String& primaryDomain);
@@ -119,13 +120,15 @@ public:
     void requestStorageAccess(String&& subFramePrimaryDomain, String&& topFramePrimaryDomain, uint64_t frameID, uint64_t pageID, bool promptEnabled, CompletionHandler<void(StorageAccessStatus)>&&);
     void grantStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t pageID, bool userWasPromptedNow, CompletionHandler<void(bool)>&&);
 
-    void logFrameNavigation(const String& targetPrimaryDomain, const String& mainFramePrimaryDomain, const String& sourcePrimaryDomain, const String& targetHost, const String& mainFrameHost, bool areTargetAndMainFrameDomainsAssociated, bool areTargetAndSourceDomainsAssociated, bool isRedirect, bool isMainFrame);
+    void logFrameNavigation(const String& targetPrimaryDomain, const String& mainFramePrimaryDomain, const String& sourcePrimaryDomain, const String& targetHost, const String& mainFrameHost, bool isRedirect, bool isMainFrame);
     void logUserInteraction(const String& primaryDomain);
 
     void clearUserInteraction(const String& primaryDomain);
     bool hasHadUserInteraction(const String& primaryDomain);
 
     void setLastSeen(const String& primaryDomain, Seconds);
+
+    void didCreateNetworkProcess();
 
 private:
     static bool shouldBlockAndKeepCookies(const WebCore::ResourceLoadStatistics&);
@@ -149,6 +152,10 @@ private:
     void pruneStatisticsIfNeeded();
     WebCore::ResourceLoadStatistics& ensureResourceStatisticsForPrimaryDomain(const String&);
     Vector<String> topPrivatelyControlledDomainsToRemoveWebsiteDataFor();
+    void setCacheMaxAgeCap(Seconds);
+    void updateCacheMaxAgeCap();
+    void setAgeCapForClientSideCookies(Seconds);
+    void updateClientSideCookiesAgeCap();
 
 #if PLATFORM(COCOA)
     void registerUserDefaultsIfNeeded();
@@ -160,6 +167,8 @@ private:
         std::optional<Seconds> timeToLiveUserInteraction;
         Seconds minimumTimeBetweenDataRecordsRemoval { 1_h };
         Seconds grandfatheringTime { 24_h * 7 };
+        Seconds cacheMaxAgeCapTime { 24_h * 7 };
+        Seconds clientSideCookiesAgeCapTime { 24_h * 7 };
         bool shouldNotifyPagesWhenDataRecordsWereScanned { false };
         bool shouldClassifyResourcesBeforeDataRecordsRemoval { true };
         bool shouldSubmitTelemetry { true };

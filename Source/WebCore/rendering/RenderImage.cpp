@@ -45,6 +45,7 @@
 #include "HTMLNames.h"
 #include "HitTestResult.h"
 #include "InlineElementBox.h"
+#include "LayoutState.h"
 #include "Page.h"
 #include "PaintInfo.h"
 #include "RenderFragmentedFlow.h"
@@ -53,10 +54,11 @@
 #include "RenderView.h"
 #include "RuntimeEnabledFeatures.h"
 #include "SVGImage.h"
+#include "Settings.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/StackStats.h>
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 #include "LogicalSelectionOffsetCaches.h"
 #include "SelectionRect.h"
 #endif
@@ -70,7 +72,7 @@ namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(RenderImage);
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 // FIXME: This doesn't behave correctly for floating or positioned images, but WebCore doesn't handle those well
 // during selection creation yet anyway.
 // FIXME: We can't tell whether or not we contain the start or end of the selected Range using only the offsets
@@ -208,6 +210,28 @@ ImageSizeChangeType RenderImage::setImageSizeForAltText(CachedImage* newImage /*
 
     setIntrinsicSize(imageSize);
     return ImageSizeChangeForAltText;
+}
+
+bool RenderImage::isEditableImage() const
+{
+    if (!settings().editableImagesEnabled())
+        return false;
+
+    if (!element())
+        return false;
+
+    return element()->hasAttributeWithoutSynchronization(x_apple_editable_imageAttr);
+}
+    
+bool RenderImage::requiresLayer() const
+{
+    if (RenderReplaced::requiresLayer())
+        return true;
+    
+    if (isEditableImage())
+        return true;
+    
+    return false;
 }
 
 void RenderImage::styleWillChange(StyleDifference diff, const RenderStyle& newStyle)
@@ -530,7 +554,7 @@ void RenderImage::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
     
 void RenderImage::paintAreaElementFocusRing(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     UNUSED_PARAM(paintInfo);
     UNUSED_PARAM(paintOffset);
 #else
@@ -572,7 +596,7 @@ void RenderImage::paintAreaElementFocusRing(PaintInfo& paintInfo, const LayoutPo
 
 #if PLATFORM(MAC)
     bool needsRepaint;
-    paintInfo.context().drawFocusRing(path, page().focusController().timeSinceFocusWasSet().seconds(), needsRepaint, RenderTheme::focusRingColor(document().styleColorOptions()));
+    paintInfo.context().drawFocusRing(path, page().focusController().timeSinceFocusWasSet().seconds(), needsRepaint, RenderTheme::focusRingColor(styleColorOptions()));
     if (needsRepaint)
         page().focusController().setFocusedElementNeedsRepaint();
 #else

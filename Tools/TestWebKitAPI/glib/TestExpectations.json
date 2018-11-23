@@ -4,6 +4,9 @@
             "/webkit/WebKitWebView/mouse-target": {
                 "expected": {"gtk": {"status": ["TIMEOUT", "FAIL"], "bug": "webkit.org/b/117689"}}
             },
+            "/webkit/WebKitWebView/usermedia-enumeratedevices-permission-check" : {
+                "expected": {"gtk": {"status": ["TIMEOUT"], "bug": "webkit.org/b/158257"}}
+            },
             "/webkit/WebKitWebView/usermedia-permission-requests": {
                 "expected": {"gtk": {"status": ["TIMEOUT"], "bug": "webkit.org/b/158257"}}
             },
@@ -186,19 +189,6 @@
             },
             "/webkit/WebKitWebView/active-uri": {
                 "expected": {"wpe": {"status": ["FAIL"]}}
-            }
-        }
-    },
-    "TestSSL": {
-        "subtests": {
-            "/webkit/WebKitWebView/tls-errors-policy": {
-                "expected": {"all": {"status": ["FAIL", "PASS"], "bug": "webkit.org/b/186913"}}
-            },
-            "/webkit/WebKitWebView/load-failed-with-tls-errors": {
-                "expected": {"all": {"status": ["FAIL"], "bug": "webkit.org/b/186913"}}
-            },
-            "/webkit/WebKitWebView/tls-subresource": {
-                "expected": {"all": {"status": ["FAIL", "PASS"], "bug": "webkit.org/b/186913"}}
             }
         }
     },

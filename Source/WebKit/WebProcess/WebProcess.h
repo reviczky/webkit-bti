@@ -71,6 +71,7 @@ struct MessagePortIdentifier;
 struct MessageWithMessagePorts;
 struct MockMediaDevice;
 struct PluginInfo;
+struct PrewarmInformation;
 struct SecurityOriginData;
 struct SoupNetworkProxySettings;
 
@@ -97,7 +98,6 @@ class WebLoaderStrategy;
 class WebPage;
 class WebPageGroupProxy;
 class WebProcessSupplement;
-class WebToStorageProcessConnection;
 enum class WebsiteDataType;
 struct WebPageCreationParameters;
 struct WebPageGroupData;
@@ -170,13 +170,10 @@ public:
 
     NetworkProcessConnection& ensureNetworkProcessConnection();
     void networkProcessConnectionClosed(NetworkProcessConnection*);
+    NetworkProcessConnection* existingNetworkProcessConnection() { return m_networkProcessConnection.get(); }
     WebLoaderStrategy& webLoaderStrategy();
 
     LibWebRTCNetwork& libWebRTCNetwork();
-
-    void webToStorageProcessConnectionClosed(WebToStorageProcessConnection*);
-    WebToStorageProcessConnection* existingWebToStorageProcessConnection() { return m_webToStorageProcessConnection.get(); }
-    WebToStorageProcessConnection& ensureWebToStorageProcessConnection(PAL::SessionID initialSessionID);
 
     void setCacheModel(uint32_t);
 
@@ -195,6 +192,7 @@ public:
 #endif
 
     void updateActivePages();
+    void getActivePagesOriginsForTesting(Vector<String>&);
     void pageActivityStateDidChange(uint64_t pageID, OptionSet<WebCore::ActivityState::Flag> changed);
 
     void setHiddenPageDOMTimerThrottlingIncreaseLimit(int milliseconds);
@@ -204,7 +202,11 @@ public:
     void cancelPrepareToSuspend();
     void processDidResume();
 
-#if PLATFORM(IOS)
+    void sendPrewarmInformation(const WebCore::URL&);
+
+    void isJITEnabled(CompletionHandler<void(bool)>&&);
+
+#if PLATFORM(IOS_FAMILY)
     void resetAllGeolocationPermissions();
 #endif
 
@@ -234,7 +236,7 @@ public:
 
     WebCacheStorageProvider& cacheStorageProvider() { return m_cacheStorageProvider.get(); }
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     void accessibilityProcessSuspendedNotification(bool);
 #endif
 
@@ -249,6 +251,9 @@ private:
     void initializeWebProcess(WebProcessCreationParameters&&);
     void platformInitializeWebProcess(WebProcessCreationParameters&&);
 
+    void prewarmGlobally();
+    void prewarmWithDomainInformation(const WebCore::PrewarmInformation&);
+
 #if USE(OS_STATE)
     void registerWithStateDumper();
 #endif
@@ -261,6 +266,8 @@ private:
     void clearCachedCredentials();
 
     void platformTerminate();
+
+    void markIsNoLongerPrewarmed();
 
     void registerURLSchemeAsEmptyDocument(const String&);
     void registerURLSchemeAsSecure(const String&) const;
@@ -301,8 +308,6 @@ private:
     void mainThreadPing();
     void backgroundResponsivenessPing();
 
-    void syncIPCMessageWhileWaitingForSyncReplyForTesting();
-
     void didTakeAllMessagesForPort(Vector<WebCore::MessageWithMessagePorts>&& messages, uint64_t messageCallbackIdentifier, uint64_t messageBatchIdentifier);
     void checkProcessLocalPortForActivity(const WebCore::MessagePortIdentifier&, uint64_t callbackIdentifier);
     void didCheckRemotePortForActivity(uint64_t callbackIdentifier, bool hasActivity);
@@ -317,7 +322,7 @@ private:
     void setNetworkProxySettings(const WebCore::SoupNetworkProxySettings&);
 #endif
 #if ENABLE(SERVICE_WORKER)
-    void establishWorkerContextConnectionToStorageProcess(uint64_t pageGroupID, uint64_t pageID, const WebPreferencesStore&, PAL::SessionID);
+    void establishWorkerContextConnectionToNetworkProcess(uint64_t pageGroupID, uint64_t pageID, const WebPreferencesStore&, PAL::SessionID);
     void registerServiceWorkerClients();
 #endif
 
@@ -380,9 +385,12 @@ private:
     void didReceiveSyncWebProcessMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
 
 #if PLATFORM(MAC)
+    void updateProcessName();
     void setScreenProperties(const WebCore::ScreenProperties&);
 #if ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
     void scrollerStylePreferenceChanged(bool useOverlayScrollbars);
+    void displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags);
+    void displayWasRefreshed(CGDirectDisplayID);
 #endif
 #endif
 
@@ -393,7 +401,7 @@ private:
     RefPtr<InjectedBundle> m_injectedBundle;
 
     RefPtr<EventDispatcher> m_eventDispatcher;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     RefPtr<ViewUpdateDispatcher> m_viewUpdateDispatcher;
 #endif
     RefPtr<WebInspectorInterruptDispatcher> m_webInspectorInterruptDispatcher;
@@ -429,8 +437,6 @@ private:
 
     std::unique_ptr<WebAutomationSessionProxy> m_automationSessionProxy;
 
-    RefPtr<WebToStorageProcessConnection> m_webToStorageProcessConnection;
-
 #if ENABLE(NETSCAPE_PLUGIN_API)
     RefPtr<PluginProcessConnectionManager> m_pluginProcessConnectionManager;
 #endif
@@ -455,6 +461,11 @@ private:
 #if PLATFORM(MAC)
     std::unique_ptr<WebCore::CPUMonitor> m_cpuMonitor;
     std::optional<double> m_cpuLimit;
+
+    enum class ProcessType { Inspector, ServiceWorker, PrewarmedWebContent, WebContent };
+    ProcessType m_processType { ProcessType::WebContent };
+    String m_uiProcessName;
+    String m_securityOrigin;
 #endif
 
     HashMap<WebCore::UserGestureToken *, uint64_t> m_userGestureTokens;

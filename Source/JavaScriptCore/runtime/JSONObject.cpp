@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2009-2018 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -273,15 +273,14 @@ JSValue Stringifier::stringify(JSValue value)
         object->putDirect(vm, vm.propertyNames->emptyIdentifier, value);
     }
 
-    StringBuilder result;
+    StringBuilder result(StringBuilder::OverflowHandler::RecordOverflow);
     Holder root(Holder::RootHolder, object);
     auto stringifyResult = appendStringifiedValue(result, value, root, emptyPropertyName);
     EXCEPTION_ASSERT(!scope.exception() || (stringifyResult != StringifySucceeded));
     if (UNLIKELY(stringifyResult != StringifySucceeded))
         return jsUndefined();
 
-    scope.release();
-    return jsString(m_exec, result.toString());
+    RELEASE_AND_RETURN(scope, jsString(m_exec, result.toString()));
 }
 
 ALWAYS_INLINE JSValue Stringifier::toJSON(JSObject* object, const PropertyNameForFunctionCall& propertyName)
@@ -298,8 +297,7 @@ ALWAYS_INLINE JSValue Stringifier::toJSON(JSObject* object, const PropertyNameFo
 
     JSValue toJSONFunction = slot.getValue(m_exec, vm.propertyNames->toJSON);
     RETURN_IF_EXCEPTION(scope, { });
-    scope.release();
-    return toJSONImpl(vm, object, toJSONFunction, propertyName);
+    RELEASE_AND_RETURN(scope, toJSONImpl(vm, object, toJSONFunction, propertyName));
 }
 
 JSValue Stringifier::toJSONImpl(VM& vm, JSObject* object, JSValue toJSONFunction, const PropertyNameForFunctionCall& propertyName)
@@ -360,10 +358,12 @@ Stringifier::StringifyResult Stringifier::appendStringifiedValue(StringBuilder& 
     if (value.isString()) {
         const String& string = asString(value)->value(m_exec);
         RETURN_IF_EXCEPTION(scope, StringifyFailed);
-        if (builder.appendQuotedJSONString(string))
-            return StringifySucceeded;
-        throwOutOfMemoryError(m_exec, scope);
-        return StringifyFailed;
+        builder.appendQuotedJSONString(string);
+        if (UNLIKELY(builder.hasOverflowed())) {
+            throwOutOfMemoryError(m_exec, scope);
+            return StringifyFailed;
+        }
+        return StringifySucceeded;
     }
 
     if (value.isNumber()) {
@@ -778,8 +778,7 @@ NEVER_INLINE JSValue Walker::walk(JSValue unfiltered)
     PutPropertySlot slot(finalHolder);
     finalHolder->methodTable(vm)->put(finalHolder, m_exec, vm.propertyNames->emptyIdentifier, outValue, slot);
     RETURN_IF_EXCEPTION(scope, { });
-    scope.release();
-    return callReviver(finalHolder, jsEmptyString(m_exec), outValue);
+    RELEASE_AND_RETURN(scope, callReviver(finalHolder, jsEmptyString(m_exec), outValue));
 }
 
 // ECMA-262 v5 15.12.2
@@ -832,12 +831,9 @@ EncodedJSValue JSC_HOST_CALL JSONProtoFuncStringify(ExecState* exec)
     VM& vm = exec->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    if (!exec->argumentCount())
-        return throwVMError(exec, scope, createError(exec, "No input to stringify"_s));
     Stringifier stringifier(exec, exec->argument(1), exec->argument(2));
     RETURN_IF_EXCEPTION(scope, { });
-    scope.release();
-    return JSValue::encode(stringifier.stringify(exec->uncheckedArgument(0)));
+    RELEASE_AND_RETURN(scope, JSValue::encode(stringifier.stringify(exec->argument(0))));
 }
 
 JSValue JSONParse(ExecState* exec, const String& json)
@@ -854,16 +850,21 @@ JSValue JSONParse(ExecState* exec, const String& json)
     return jsonParser.tryLiteralParse();
 }
 
-String JSONStringify(ExecState* exec, JSValue value, unsigned indent)
+String JSONStringify(ExecState* exec, JSValue value, JSValue space)
 {
     VM& vm = exec->vm();
     auto throwScope = DECLARE_THROW_SCOPE(vm);
-    Stringifier stringifier(exec, jsNull(), jsNumber(indent));
+    Stringifier stringifier(exec, jsNull(), space);
     RETURN_IF_EXCEPTION(throwScope, { });
     JSValue result = stringifier.stringify(value);
     if (UNLIKELY(throwScope.exception()) || result.isUndefinedOrNull())
         return String();
     return result.getString(exec);
+}
+
+String JSONStringify(ExecState* exec, JSValue value, unsigned indent)
+{
+    return JSONStringify(exec, value, jsNumber(indent));
 }
 
 } // namespace JSC

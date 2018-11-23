@@ -28,8 +28,13 @@
 
 #include "APIArray.h"
 #include "APIWebsiteDataStore.h"
+#include "MockWebAuthenticationConfiguration.h"
 #include "WKAPICast.h"
+#include "WKDictionary.h"
+#include "WKNumber.h"
+#include "WKRetainPtr.h"
 #include "WKSecurityOriginRef.h"
+#include "WKString.h"
 #include "WebResourceLoadStatisticsStore.h"
 #include "WebResourceLoadStatisticsTelemetry.h"
 #include "WebsiteData.h"
@@ -143,6 +148,19 @@ void WKWebsiteDataStoreSetStatisticsVeryPrevalentResource(WKWebsiteDataStoreRef 
         });
 }
 
+void WKWebsiteDataStoreDumpResourceLoadStatistics(WKWebsiteDataStoreRef dataStoreRef, void* context, WKWebsiteDataStoreDumpResourceLoadStatisticsFunction callback)
+{
+    auto* store = WebKit::toImpl(dataStoreRef)->websiteDataStore().resourceLoadStatistics();
+    if (!store) {
+        callback(WebKit::toAPI(emptyString().impl()), context);
+        return;
+    }
+
+    store->dumpResourceLoadStatistics([context, callback] (const String& resourceLoadStatistics) {
+        callback(WebKit::toAPI(resourceLoadStatistics.impl()), context);
+    });
+}
+
 void WKWebsiteDataStoreIsStatisticsPrevalentResource(WKWebsiteDataStoreRef dataStoreRef, WKStringRef host, void* context, WKWebsiteDataStoreIsStatisticsPrevalentResourceFunction callback)
 {
     auto* store = WebKit::toImpl(dataStoreRef)->websiteDataStore().resourceLoadStatistics();
@@ -166,6 +184,19 @@ void WKWebsiteDataStoreIsStatisticsVeryPrevalentResource(WKWebsiteDataStoreRef d
     
     store->isVeryPrevalentResource(WebCore::URL(WebCore::URL(), WebKit::toImpl(host)->string()), [context, callback](bool isVeryPrevalentResource) {
         callback(isVeryPrevalentResource, context);
+    });
+}
+
+void WKWebsiteDataStoreIsStatisticsRegisteredAsSubresourceUnder(WKWebsiteDataStoreRef dataStoreRef, WKStringRef subresourceHost, WKStringRef topFrameHost, void* context, WKWebsiteDataStoreIsStatisticsRegisteredAsSubresourceUnderFunction callback)
+{
+    auto* store = WebKit::toImpl(dataStoreRef)->websiteDataStore().resourceLoadStatistics();
+    if (!store) {
+        callback(false, context);
+        return;
+    }
+    
+    store->isRegisteredAsSubresourceUnder(WebCore::URL(WebCore::URL(), WebKit::toImpl(subresourceHost)->string()), WebCore::URL(WebCore::URL(), WebKit::toImpl(topFrameHost)->string()), [context, callback](bool isRegisteredAsSubresourceUnder) {
+        callback(isRegisteredAsSubresourceUnder, context);
     });
 }
 
@@ -435,18 +466,29 @@ void WKWebsiteDataStoreStatisticsClearThroughWebsiteDataRemoval(WKWebsiteDataSto
     });
 }
 
+void WKWebsiteDataStoreSetStatisticsCacheMaxAgeCap(WKWebsiteDataStoreRef dataStoreRef, double seconds, void* context, WKWebsiteDataStoreSetStatisticsCacheMaxAgeCapFunction callback)
+{
+    WebKit::toImpl(dataStoreRef)->websiteDataStore().setCacheMaxAgeCapForPrevalentResources(Seconds { seconds }, [context, callback] {
+        callback(context);
+    });
+}
+
 void WKWebsiteDataStoreStatisticsResetToConsistentState(WKWebsiteDataStoreRef dataStoreRef, void* context, WKWebsiteDataStoreStatisticsResetToConsistentStateFunction completionHandler)
 {
-    auto* store = WebKit::toImpl(dataStoreRef)->websiteDataStore().resourceLoadStatistics();
-    if (!store)
-        return;
-
     auto callbackAggregator = CallbackAggregator::create([context, completionHandler]() {
         completionHandler(context);
     });
-    
-    store->resetParametersToDefaultValues([callbackAggregator = callbackAggregator.copyRef()] { });
-    store->scheduleClearInMemory([callbackAggregator = callbackAggregator.copyRef()] { });
+
+    auto& store = WebKit::toImpl(dataStoreRef)->websiteDataStore();
+    store.clearResourceLoadStatisticsInWebProcesses([callbackAggregator = callbackAggregator.copyRef()] { });
+    store.resetCacheMaxAgeCapForPrevalentResources([callbackAggregator = callbackAggregator.copyRef()] { });
+
+    auto* statisticsStore = store.resourceLoadStatistics();
+    if (!statisticsStore)
+        return;
+
+    statisticsStore->resetParametersToDefaultValues([callbackAggregator = callbackAggregator.copyRef()] { });
+    statisticsStore->scheduleClearInMemoryAndPersistent(WebKit::WebResourceLoadStatisticsStore::ShouldGrandfather::No, [callbackAggregator = callbackAggregator.copyRef()] { });
 }
 
 void WKWebsiteDataStoreRemoveAllFetchCaches(WKWebsiteDataStoreRef dataStoreRef, void* context, WKWebsiteDataStoreRemoveFetchCacheRemovalFunction callback)
@@ -527,4 +569,79 @@ WKStringRef WKWebsiteDataStoreCopyServiceWorkerRegistrationDirectory(WKWebsiteDa
 void WKWebsiteDataStoreSetServiceWorkerRegistrationDirectory(WKWebsiteDataStoreRef dataStoreRef, WKStringRef serviceWorkerRegistrationDirectory)
 {
     WebKit::toImpl(dataStoreRef)->websiteDataStore().setServiceWorkerRegistrationDirectory(WebKit::toImpl(serviceWorkerRegistrationDirectory)->string());
+}
+
+void WKWebsiteDataStoreSetCacheStoragePerOriginQuota(WKWebsiteDataStoreRef dataStoreRef, uint64_t quota)
+{
+    WebKit::toImpl(dataStoreRef)->websiteDataStore().setCacheStoragePerOriginQuota(quota); 
+}
+
+void WKWebsiteDataStoreSetWebAuthenticationMockConfiguration(WKWebsiteDataStoreRef dataStoreRef, WKDictionaryRef configurationRef)
+{
+#if ENABLE(WEB_AUTHN)
+    MockWebAuthenticationConfiguration configuration;
+
+    if (auto silentFailureRef = static_cast<WKBooleanRef>(WKDictionaryGetItemForKey(configurationRef, adoptWK(WKStringCreateWithUTF8CString("SilentFailure")).get())))
+        configuration.silentFailure = WKBooleanGetValue(silentFailureRef);
+
+    if (auto localRef = static_cast<WKDictionaryRef>(WKDictionaryGetItemForKey(configurationRef, adoptWK(WKStringCreateWithUTF8CString("Local")).get()))) {
+        MockWebAuthenticationConfiguration::Local local;
+        local.acceptAuthentication = WKBooleanGetValue(static_cast<WKBooleanRef>(WKDictionaryGetItemForKey(localRef, adoptWK(WKStringCreateWithUTF8CString("AcceptAuthentication")).get())));
+        local.acceptAttestation = WKBooleanGetValue(static_cast<WKBooleanRef>(WKDictionaryGetItemForKey(localRef, adoptWK(WKStringCreateWithUTF8CString("AcceptAttestation")).get())));
+        if (local.acceptAttestation) {
+            local.privateKeyBase64 = WebKit::toImpl(static_cast<WKStringRef>(WKDictionaryGetItemForKey(localRef, adoptWK(WKStringCreateWithUTF8CString("PrivateKeyBase64")).get())))->string();
+            local.userCertificateBase64 = WebKit::toImpl(static_cast<WKStringRef>(WKDictionaryGetItemForKey(localRef, adoptWK(WKStringCreateWithUTF8CString("UserCertificateBase64")).get())))->string();
+            local.intermediateCACertificateBase64 = WebKit::toImpl(static_cast<WKStringRef>(WKDictionaryGetItemForKey(localRef, adoptWK(WKStringCreateWithUTF8CString("IntermediateCACertificateBase64")).get())))->string();
+        }
+        configuration.local = WTFMove(local);
+    }
+
+    if (auto hidRef = static_cast<WKDictionaryRef>(WKDictionaryGetItemForKey(configurationRef, adoptWK(WKStringCreateWithUTF8CString("Hid")).get()))) {
+        MockWebAuthenticationConfiguration::Hid hid;
+
+        auto stage = WebKit::toImpl(static_cast<WKStringRef>(WKDictionaryGetItemForKey(hidRef, adoptWK(WKStringCreateWithUTF8CString("Stage")).get())))->string();
+        if (stage == "info")
+            hid.stage = MockWebAuthenticationConfiguration::Hid::Stage::Info;
+        if (stage == "request")
+            hid.stage = MockWebAuthenticationConfiguration::Hid::Stage::Request;
+
+        auto subStage = WebKit::toImpl(static_cast<WKStringRef>(WKDictionaryGetItemForKey(hidRef, adoptWK(WKStringCreateWithUTF8CString("SubStage")).get())))->string();
+        if (subStage == "init")
+            hid.subStage = MockWebAuthenticationConfiguration::Hid::SubStage::Init;
+        if (subStage == "msg")
+            hid.subStage = MockWebAuthenticationConfiguration::Hid::SubStage::Msg;
+
+        auto error = WebKit::toImpl(static_cast<WKStringRef>(WKDictionaryGetItemForKey(hidRef, adoptWK(WKStringCreateWithUTF8CString("Error")).get())))->string();
+        if (error == "success")
+            hid.error = MockWebAuthenticationConfiguration::Hid::Error::Success;
+        if (error == "data-not-sent")
+            hid.error = MockWebAuthenticationConfiguration::Hid::Error::DataNotSent;
+        if (error == "empty-report")
+            hid.error = MockWebAuthenticationConfiguration::Hid::Error::EmptyReport;
+        if (error == "wrong-channel-id")
+            hid.error = MockWebAuthenticationConfiguration::Hid::Error::WrongChannelId;
+        if (error == "malicious-payload")
+            hid.error = MockWebAuthenticationConfiguration::Hid::Error::MaliciousPayload;
+        if (error == "unsupported-options")
+            hid.error = MockWebAuthenticationConfiguration::Hid::Error::UnsupportedOptions;
+        if (error == "wrong-nonce")
+            hid.error = MockWebAuthenticationConfiguration::Hid::Error::WrongNonce;
+
+        if (auto payloadBase64 = static_cast<WKStringRef>(WKDictionaryGetItemForKey(hidRef, adoptWK(WKStringCreateWithUTF8CString("PayloadBase64")).get())))
+            hid.payloadBase64 = WebKit::toImpl(payloadBase64)->string();
+
+        if (auto keepAlive = static_cast<WKBooleanRef>(WKDictionaryGetItemForKey(hidRef, adoptWK(WKStringCreateWithUTF8CString("KeepAlive")).get())))
+            hid.keepAlive = WKBooleanGetValue(keepAlive);
+
+        if (auto fastDataArrival = static_cast<WKBooleanRef>(WKDictionaryGetItemForKey(hidRef, adoptWK(WKStringCreateWithUTF8CString("FastDataArrival")).get())))
+            hid.fastDataArrival = WKBooleanGetValue(fastDataArrival);
+
+        if (auto continueAfterErrorData = static_cast<WKBooleanRef>(WKDictionaryGetItemForKey(hidRef, adoptWK(WKStringCreateWithUTF8CString("ContinueAfterErrorData")).get())))
+            hid.continueAfterErrorData = WKBooleanGetValue(continueAfterErrorData);
+
+        configuration.hid = WTFMove(hid);
+    }
+
+    WebKit::toImpl(dataStoreRef)->websiteDataStore().setMockWebAuthenticationConfiguration(WTFMove(configuration));
+#endif
 }

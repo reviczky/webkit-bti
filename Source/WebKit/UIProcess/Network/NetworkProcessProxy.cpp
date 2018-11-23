@@ -37,7 +37,6 @@
 #include "NetworkProcessCreationParameters.h"
 #include "NetworkProcessMessages.h"
 #include "SandboxExtension.h"
-#include "StorageProcessMessages.h"
 #include "WebCompiledContentRuleList.h"
 #include "WebPageProxy.h"
 #include "WebProcessMessages.h"
@@ -50,7 +49,7 @@
 #include "SecItemShimProxy.h"
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 #include <wtf/spi/darwin/XPCSPI.h>
 #endif
 
@@ -64,11 +63,6 @@ static uint64_t generateCallbackID()
     static uint64_t callbackID;
 
     return ++callbackID;
-}
-
-Ref<NetworkProcessProxy> NetworkProcessProxy::create(WebProcessPool& processPool)
-{
-    return adoptRef(*new NetworkProcessProxy(processPool));
 }
 
 NetworkProcessProxy::NetworkProcessProxy(WebProcessPool& processPool)
@@ -95,6 +89,9 @@ NetworkProcessProxy::~NetworkProcessProxy()
     for (auto* proxy : m_webUserContentControllerProxies)
         proxy->removeNetworkProcess(*this);
 #endif
+
+    for (auto& reply : m_pendingConnectionReplies)
+        reply.second({ });
 }
 
 void NetworkProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions)
@@ -122,16 +119,25 @@ void NetworkProcessProxy::processWillShutDown(IPC::Connection& connection)
     ASSERT_UNUSED(connection, this->connection() == &connection);
 }
 
-void NetworkProcessProxy::getNetworkProcessConnection(Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply&& reply)
+void NetworkProcessProxy::getNetworkProcessConnection(WebProcessProxy& webProcessProxy, Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply&& reply)
 {
-    m_pendingConnectionReplies.append(WTFMove(reply));
+    m_pendingConnectionReplies.append(std::make_pair(makeWeakPtr(webProcessProxy), WTFMove(reply)));
 
     if (state() == State::Launching) {
         m_numPendingConnectionRequests++;
         return;
     }
 
-    connection()->send(Messages::NetworkProcess::CreateNetworkConnectionToWebProcess(), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
+    bool isServiceWorkerProcess = false;
+    SecurityOriginData securityOrigin;
+#if ENABLE(SERVICE_WORKER)
+    if (is<ServiceWorkerProcessProxy>(webProcessProxy)) {
+        isServiceWorkerProcess = true;
+        securityOrigin = downcast<ServiceWorkerProcessProxy>(webProcessProxy).securityOrigin();
+    }
+#endif
+
+    connection()->send(Messages::NetworkProcess::CreateNetworkConnectionToWebProcess(isServiceWorkerProcess, securityOrigin), 0, IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 }
 
 DownloadProxy* NetworkProcessProxy::createDownloadProxy(const ResourceRequest& resourceRequest)
@@ -200,12 +206,17 @@ void NetworkProcessProxy::networkProcessCrashed()
 {
     clearCallbackStates();
 
-    Vector<Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply> pendingReplies;
+    Vector<std::pair<RefPtr<WebProcessProxy>, Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply>> pendingReplies;
     pendingReplies.reserveInitialCapacity(m_pendingConnectionReplies.size());
-    for (auto& reply : m_pendingConnectionReplies)
-        pendingReplies.append(WTFMove(reply));
+    for (auto& reply : m_pendingConnectionReplies) {
+        if (reply.first)
+            pendingReplies.append(std::make_pair(makeRefPtr(reply.first.get()), WTFMove(reply.second)));
+        else
+            reply.second({ });
+    }
+    m_pendingConnectionReplies.clear();
 
-    // Tell the network process manager to forget about this network process proxy. This may cause us to be deleted.
+    // Tell the network process manager to forget about this network process proxy. This will cause us to be deleted.
     m_processPool.networkProcessCrashed(*this, WTFMove(pendingReplies));
 }
 
@@ -265,7 +276,15 @@ void NetworkProcessProxy::didClose(IPC::Connection&)
         callback(false);
     m_writeBlobToFilePathCallbackMap.clear();
 
-    // This may cause us to be deleted.
+    for (auto& callback : m_removeAllStorageAccessCallbackMap.values())
+        callback();
+    m_removeAllStorageAccessCallbackMap.clear();
+
+    for (auto& callback : m_updateBlockCookiesCallbackMap.values())
+        callback();
+    m_updateBlockCookiesCallbackMap.clear();
+    
+    // This will cause us to be deleted.
     networkProcessCrashed();
 }
 
@@ -278,7 +297,7 @@ void NetworkProcessProxy::didCreateNetworkConnectionToWebProcess(const IPC::Atta
     ASSERT(!m_pendingConnectionReplies.isEmpty());
 
     // Grab the first pending connection reply.
-    auto reply = m_pendingConnectionReplies.takeFirst();
+    auto reply = m_pendingConnectionReplies.takeFirst().second;
 
 #if USE(UNIX_DOMAIN_SOCKETS) || OS(WINDOWS)
     reply(connectionIdentifier);
@@ -294,7 +313,7 @@ void NetworkProcessProxy::didReceiveAuthenticationChallenge(uint64_t pageID, uin
 {
 #if ENABLE(SERVICE_WORKER)
     if (auto* serviceWorkerProcessProxy = m_processPool.serviceWorkerProcessProxyFromPageID(pageID)) {
-        auto authenticationChallenge = AuthenticationChallengeProxy::create(WTFMove(coreChallenge), challengeID, connection());
+        auto authenticationChallenge = AuthenticationChallengeProxy::create(WTFMove(coreChallenge), challengeID, makeRef(*connection()), nullptr);
         serviceWorkerProcessProxy->didReceiveAuthenticationChallenge(pageID, frameID, WTFMove(authenticationChallenge));
         return;
     }
@@ -303,7 +322,7 @@ void NetworkProcessProxy::didReceiveAuthenticationChallenge(uint64_t pageID, uin
     WebPageProxy* page = WebProcessProxy::webPage(pageID);
     MESSAGE_CHECK(page);
 
-    auto authenticationChallenge = AuthenticationChallengeProxy::create(WTFMove(coreChallenge), challengeID, connection());
+    auto authenticationChallenge = AuthenticationChallengeProxy::create(WTFMove(coreChallenge), challengeID, makeRef(*connection()), page->secKeyProxyStore(coreChallenge));
     page->didReceiveAuthenticationChallengeProxy(frameID, WTFMove(authenticationChallenge));
 }
 
@@ -325,21 +344,6 @@ void NetworkProcessProxy::didDeleteWebsiteDataForOrigins(uint64_t callbackID)
     callback();
 }
 
-void NetworkProcessProxy::grantSandboxExtensionsToStorageProcessForBlobs(uint64_t requestID, const Vector<String>& paths)
-{
-#if ENABLE(SANDBOX_EXTENSIONS)
-    SandboxExtension::HandleArray extensions;
-    extensions.allocate(paths.size());
-    for (size_t i = 0; i < paths.size(); ++i) {
-        // ReadWrite is required for creating hard links as well as deleting the temporary file, which the StorageProcess will do.
-        SandboxExtension::createHandle(paths[i], SandboxExtension::Type::ReadWrite, extensions[i]);
-    }
-
-    m_processPool.sendToStorageProcessRelaunchingIfNecessary(Messages::StorageProcess::GrantSandboxExtensionsForBlobs(paths, extensions));
-#endif
-    connection()->send(Messages::NetworkProcess::DidGrantSandboxExtensionsToStorageProcessForBlobs(requestID), 0);
-}
-
 void NetworkProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connection::Identifier connectionIdentifier)
 {
     ChildProcessProxy::didFinishLaunching(launcher, connectionIdentifier);
@@ -350,7 +354,7 @@ void NetworkProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Con
     }
 
     for (unsigned i = 0; i < m_numPendingConnectionRequests; ++i)
-        connection()->send(Messages::NetworkProcess::CreateNetworkConnectionToWebProcess(), 0);
+        connection()->send(Messages::NetworkProcess::CreateNetworkConnectionToWebProcess(false, { }), 0);
     
     m_numPendingConnectionRequests = 0;
 
@@ -359,7 +363,7 @@ void NetworkProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Con
         setProcessSuppressionEnabled(true);
 #endif
     
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (xpc_connection_t connection = this->connection()->xpcConnection())
         m_throttler.didConnectToProcess(xpc_connection_get_pid(connection));
 #endif
@@ -398,8 +402,8 @@ void NetworkProcessProxy::logDiagnosticMessageWithValue(uint64_t pageID, const S
     page->logDiagnosticMessageWithValue(message, description, value, significantFigures, shouldSample);
 }
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
-void NetworkProcessProxy::updatePrevalentDomainsToBlockCookiesFor(PAL::SessionID sessionID, const Vector<String>& domainsToBlock, ShouldClearFirst shouldClearFirst, CompletionHandler<void()>&& completionHandler)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+void NetworkProcessProxy::updatePrevalentDomainsToBlockCookiesFor(PAL::SessionID sessionID, const Vector<String>& domainsToBlock, CompletionHandler<void()>&& completionHandler)
 {
     if (!canSendMessage()) {
         completionHandler();
@@ -407,11 +411,11 @@ void NetworkProcessProxy::updatePrevalentDomainsToBlockCookiesFor(PAL::SessionID
     }
     
     auto callbackId = generateCallbackID();
-    auto addResult = m_updateBlockCookiesCallbackMap.add(callbackId, [protectedThis = makeRef(*this), token = throttler().backgroundActivityToken(), completionHandler = WTFMove(completionHandler)]() mutable {
+    auto addResult = m_updateBlockCookiesCallbackMap.add(callbackId, [protectedProcessPool = makeRef(m_processPool), token = throttler().backgroundActivityToken(), completionHandler = WTFMove(completionHandler)]() mutable {
         completionHandler();
     });
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
-    send(Messages::NetworkProcess::UpdatePrevalentDomainsToBlockCookiesFor(sessionID, domainsToBlock, shouldClearFirst == ShouldClearFirst::Yes, callbackId), 0);
+    send(Messages::NetworkProcess::UpdatePrevalentDomainsToBlockCookiesFor(sessionID, domainsToBlock, callbackId), 0);
 }
 
 void NetworkProcessProxy::didUpdateBlockCookies(uint64_t callbackId)
@@ -419,15 +423,29 @@ void NetworkProcessProxy::didUpdateBlockCookies(uint64_t callbackId)
     m_updateBlockCookiesCallbackMap.take(callbackId)();
 }
 
-static uint64_t nextRequestStorageAccessContextId()
+void NetworkProcessProxy::setAgeCapForClientSideCookies(PAL::SessionID sessionID, std::optional<Seconds> seconds, CompletionHandler<void()>&& completionHandler)
 {
-    static uint64_t nextContextId = 0;
-    return ++nextContextId;
+    if (!canSendMessage()) {
+        completionHandler();
+        return;
+    }
+    
+    auto callbackId = generateCallbackID();
+    auto addResult = m_updateBlockCookiesCallbackMap.add(callbackId, [protectedProcessPool = makeRef(m_processPool), token = throttler().backgroundActivityToken(), completionHandler = WTFMove(completionHandler)]() mutable {
+        completionHandler();
+    });
+    ASSERT_UNUSED(addResult, addResult.isNewEntry);
+    send(Messages::NetworkProcess::SetAgeCapForClientSideCookies(sessionID, seconds, callbackId), 0);
+}
+
+void NetworkProcessProxy::didSetAgeCapForClientSideCookies(uint64_t callbackId)
+{
+    m_updateBlockCookiesCallbackMap.take(callbackId)();
 }
 
 void NetworkProcessProxy::hasStorageAccessForFrame(PAL::SessionID sessionID, const String& resourceDomain, const String& firstPartyDomain, uint64_t frameID, uint64_t pageID, WTF::CompletionHandler<void(bool)>&& callback)
 {
-    auto contextId = nextRequestStorageAccessContextId();
+    auto contextId = generateCallbackID();
     auto addResult = m_storageAccessResponseCallbackMap.add(contextId, WTFMove(callback));
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
     send(Messages::NetworkProcess::HasStorageAccessForFrame(sessionID, resourceDomain, firstPartyDomain, frameID, pageID, contextId), 0);
@@ -435,7 +453,7 @@ void NetworkProcessProxy::hasStorageAccessForFrame(PAL::SessionID sessionID, con
 
 void NetworkProcessProxy::grantStorageAccess(PAL::SessionID sessionID, const String& resourceDomain, const String& firstPartyDomain, std::optional<uint64_t> frameID, uint64_t pageID, WTF::CompletionHandler<void(bool)>&& callback)
 {
-    auto contextId = nextRequestStorageAccessContextId();
+    auto contextId = generateCallbackID();
     auto addResult = m_storageAccessResponseCallbackMap.add(contextId, WTFMove(callback));
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
     send(Messages::NetworkProcess::GrantStorageAccess(sessionID, resourceDomain, firstPartyDomain, frameID, pageID, contextId), 0);
@@ -454,7 +472,7 @@ void NetworkProcessProxy::removeAllStorageAccess(PAL::SessionID sessionID, Compl
         return;
     }
 
-    auto contextId = nextRequestStorageAccessContextId();
+    auto contextId = generateCallbackID();
     auto addResult = m_removeAllStorageAccessCallbackMap.add(contextId, WTFMove(completionHandler));
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
     send(Messages::NetworkProcess::RemoveAllStorageAccess(sessionID, contextId), 0);
@@ -468,7 +486,7 @@ void NetworkProcessProxy::didRemoveAllStorageAccess(uint64_t contextId)
 
 void NetworkProcessProxy::getAllStorageAccessEntries(PAL::SessionID sessionID, CompletionHandler<void(Vector<String>&& domains)>&& callback)
 {
-    auto contextId = nextRequestStorageAccessContextId();
+    auto contextId = generateCallbackID();
     auto addResult = m_allStorageAccessEntriesCallbackMap.add(contextId, WTFMove(callback));
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
     send(Messages::NetworkProcess::GetAllStorageAccessEntries(sessionID, contextId), 0);
@@ -479,7 +497,45 @@ void NetworkProcessProxy::allStorageAccessEntriesResult(Vector<String>&& domains
     auto callback = m_allStorageAccessEntriesCallbackMap.take(contextId);
     callback(WTFMove(domains));
 }
-#endif
+
+void NetworkProcessProxy::setCacheMaxAgeCapForPrevalentResources(PAL::SessionID sessionID, Seconds seconds, CompletionHandler<void()>&& completionHandler)
+{
+    if (!canSendMessage()) {
+        completionHandler();
+        return;
+    }
+    
+    auto contextId = generateCallbackID();
+    auto addResult = m_updateRuntimeSettingsCallbackMap.add(contextId, WTFMove(completionHandler));
+    ASSERT_UNUSED(addResult, addResult.isNewEntry);
+    send(Messages::NetworkProcess::SetCacheMaxAgeCapForPrevalentResources(sessionID, seconds, contextId), 0);
+}
+
+void NetworkProcessProxy::didSetCacheMaxAgeCapForPrevalentResources(uint64_t contextId)
+{
+    auto completionHandler = m_updateRuntimeSettingsCallbackMap.take(contextId);
+    completionHandler();
+}
+
+void NetworkProcessProxy::resetCacheMaxAgeCapForPrevalentResources(PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
+{
+    if (!canSendMessage()) {
+        completionHandler();
+        return;
+    }
+    
+    auto contextId = generateCallbackID();
+    auto addResult = m_updateRuntimeSettingsCallbackMap.add(contextId, WTFMove(completionHandler));
+    ASSERT_UNUSED(addResult, addResult.isNewEntry);
+    send(Messages::NetworkProcess::ResetCacheMaxAgeCapForPrevalentResources(sessionID, contextId), 0);
+}
+
+void NetworkProcessProxy::didResetCacheMaxAgeCapForPrevalentResources(uint64_t contextId)
+{
+    auto completionHandler = m_updateRuntimeSettingsCallbackMap.take(contextId);
+    completionHandler();
+}
+#endif // ENABLE(RESOURCE_LOAD_STATISTICS)
 
 void NetworkProcessProxy::sendProcessWillSuspendImminently()
 {
@@ -594,22 +650,40 @@ void NetworkProcessProxy::removeSession(PAL::SessionID sessionID)
         m_websiteDataStores.remove(sessionID);
 }
 
-void NetworkProcessProxy::retrieveCacheStorageParameters(PAL::SessionID sessionID)
+WebsiteDataStore* NetworkProcessProxy::websiteDataStoreFromSessionID(PAL::SessionID sessionID)
 {
     auto iterator = m_websiteDataStores.find(sessionID);
-    if (iterator == m_websiteDataStores.end()) {
+    if (iterator != m_websiteDataStores.end())
+        return iterator->value.get();
+
+    if (auto* websiteDataStore = m_processPool.websiteDataStore()) {
+        if (sessionID == websiteDataStore->websiteDataStore().sessionID())
+            return &websiteDataStore->websiteDataStore();
+    }
+
+    if (sessionID != PAL::SessionID::defaultSessionID())
+        return nullptr;
+
+    return &API::WebsiteDataStore::defaultDataStore()->websiteDataStore();
+}
+
+void NetworkProcessProxy::retrieveCacheStorageParameters(PAL::SessionID sessionID)
+{
+    auto* store = websiteDataStoreFromSessionID(sessionID);
+
+    if (!store) {
+        RELEASE_LOG_ERROR(CacheStorage, "%p - NetworkProcessProxy is unable to retrieve CacheStorage parameters from the given session ID %" PRIu64, this, sessionID.sessionID());
         auto quota = m_processPool.websiteDataStore() ? m_processPool.websiteDataStore()->websiteDataStore().cacheStoragePerOriginQuota() : WebsiteDataStore::defaultCacheStoragePerOriginQuota;
         send(Messages::NetworkProcess::SetCacheStorageParameters { sessionID, quota, { }, { } }, 0);
         return;
     }
 
-    auto& store = *iterator->value;
-    auto& cacheStorageDirectory = store.cacheStorageDirectory();
+    auto& cacheStorageDirectory = store->cacheStorageDirectory();
     SandboxExtension::Handle cacheStorageDirectoryExtensionHandle;
     if (!cacheStorageDirectory.isEmpty())
         SandboxExtension::createHandleForReadWriteDirectory(cacheStorageDirectory, cacheStorageDirectoryExtensionHandle);
 
-    send(Messages::NetworkProcess::SetCacheStorageParameters { sessionID, store.cacheStoragePerOriginQuota(), cacheStorageDirectory, cacheStorageDirectoryExtensionHandle }, 0);
+    send(Messages::NetworkProcess::SetCacheStorageParameters { sessionID, store->cacheStoragePerOriginQuota(), cacheStorageDirectory, cacheStorageDirectoryExtensionHandle }, 0);
 }
 
 #if ENABLE(CONTENT_EXTENSIONS)
@@ -644,6 +718,31 @@ void NetworkProcessProxy::sendProcessDidTransitionToBackground()
 {
     send(Messages::NetworkProcess::ProcessDidTransitionToBackground(), 0);
 }
+
+#if ENABLE(SANDBOX_EXTENSIONS)
+void NetworkProcessProxy::getSandboxExtensionsForBlobFiles(const Vector<String>& paths, Messages::NetworkProcessProxy::GetSandboxExtensionsForBlobFiles::AsyncReply&& reply)
+{
+    SandboxExtension::HandleArray extensions;
+    extensions.allocate(paths.size());
+    for (size_t i = 0; i < paths.size(); ++i) {
+        // ReadWrite is required for creating hard links, which is something that might be done with these extensions.
+        SandboxExtension::createHandle(paths[i], SandboxExtension::Type::ReadWrite, extensions[i]);
+    }
+    reply(WTFMove(extensions));
+}
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+void NetworkProcessProxy::establishWorkerContextConnectionToNetworkProcess(SecurityOriginData&& origin)
+{
+    m_processPool.establishWorkerContextConnectionToNetworkProcess(*this, WTFMove(origin), std::nullopt);
+}
+
+void NetworkProcessProxy::establishWorkerContextConnectionToNetworkProcessForExplicitSession(SecurityOriginData&& origin, PAL::SessionID sessionID)
+{
+    m_processPool.establishWorkerContextConnectionToNetworkProcess(*this, WTFMove(origin), sessionID);
+}
+#endif
 
 } // namespace WebKit
 

@@ -1219,7 +1219,7 @@ uint64_t DocumentLoader::loadApplicationManifest()
     if (!m_frame->isMainFrame())
         return 0;
 
-    if (document->url().isEmpty() || document->url().isBlankURL())
+    if (document->url().isEmpty() || document->url().protocolIsAbout())
         return 0;
 
     auto head = document->head();
@@ -1411,7 +1411,7 @@ Vector<Ref<ArchiveResource>> DocumentLoader::subresources() const
 
     Vector<Ref<ArchiveResource>> subresources;
     for (auto& handle : m_cachedResourceLoader->allCachedResources().values()) {
-        if (auto subresource = this->subresource({ ParsedURLString, handle->url() }))
+        if (auto subresource = this->subresource({ { }, handle->url() }))
             subresources.append(subresource.releaseNonNull());
     }
     return subresources;
@@ -1563,7 +1563,7 @@ URL DocumentLoader::documentURL() const
     return url;
 }
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 
 // FIXME: This method seems to violate the encapsulation of this class.
 void DocumentLoader::setResponseMIMEType(const String& responseMimeType)
@@ -1913,7 +1913,7 @@ void DocumentLoader::startIconLoading()
     if (!m_frame->isMainFrame())
         return;
 
-    if (document->url().isEmpty() || document->url().isBlankURL())
+    if (document->url().isEmpty() || document->url().protocolIsAbout())
         return;
 
     m_linkIcons = LinkIconCollector { *document }.iconsOfTypes({ LinkIconType::Favicon, LinkIconType::TouchIcon, LinkIconType::TouchPrecomposedIcon });
@@ -1980,9 +1980,10 @@ void DocumentLoader::dispatchOnloadEvents()
     m_applicationCacheHost->stopDeferringEvents();
 }
 
-void DocumentLoader::setTriggeringAction(const NavigationAction& action)
+void DocumentLoader::setTriggeringAction(NavigationAction&& action)
 {
-    m_triggeringAction = action.copyWithShouldOpenExternalURLsPolicy(m_frame ? shouldOpenExternalURLsPolicyToPropagate() : m_shouldOpenExternalURLsPolicy);
+    m_triggeringAction = WTFMove(action);
+    m_triggeringAction.setShouldOpenExternalURLsPolicy(m_frame ? shouldOpenExternalURLsPolicyToPropagate() : m_shouldOpenExternalURLsPolicy);
 }
 
 ShouldOpenExternalURLsPolicy DocumentLoader::shouldOpenExternalURLsPolicyToPropagate() const

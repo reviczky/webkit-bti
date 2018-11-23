@@ -65,7 +65,7 @@ WI.LayerTreeDetailsSidebarPanel = class LayerTreeDetailsSidebarPanel extends WI.
     {
         super.initialLayout();
 
-        WI.showShadowDOMSetting.addEventListener(WI.Setting.Event.Changed, this._showShadowDOMSettingChanged, this);
+        WI.settings.showShadowDOM.addEventListener(WI.Setting.Event.Changed, this._showShadowDOMSettingChanged, this);
 
         this._buildLayerInfoSection();
         this._buildDataGridSection();
@@ -200,7 +200,7 @@ WI.LayerTreeDetailsSidebarPanel = class LayerTreeDetailsSidebarPanel extends WI.
             this._highlightSelectedNode();
             this._showPopoverForSelectedNode();
         } else {
-            WI.domTreeManager.hideDOMNodeHighlight();
+            WI.domManager.hideDOMNodeHighlight();
             this._hidePopover();
         }
     }
@@ -213,7 +213,7 @@ WI.LayerTreeDetailsSidebarPanel = class LayerTreeDetailsSidebarPanel extends WI.
 
     _dataGridLostFocus(event)
     {
-        WI.domTreeManager.hideDOMNodeHighlight();
+        WI.domManager.hideDOMNodeHighlight();
         this._hidePopover();
     }
 
@@ -231,14 +231,14 @@ WI.LayerTreeDetailsSidebarPanel = class LayerTreeDetailsSidebarPanel extends WI.
 
         var layer = dataGridNode.layer;
         if (layer.isGeneratedContent || layer.isReflection || layer.isAnonymous)
-            WI.domTreeManager.highlightRect(layer.bounds, true);
+            WI.domManager.highlightRect(layer.bounds, true);
         else
-            WI.domTreeManager.highlightDOMNode(layer.nodeId);
+            WI.domManager.highlightDOMNode(layer.nodeId);
     }
 
     _updateDisplayWithLayers(layerForNode, childLayers)
     {
-        if (!WI.showShadowDOMSetting.value) {
+        if (!WI.settings.showShadowDOM.value) {
             childLayers = childLayers.filter(function(layer) {
                 return !layer.isInShadowTree;
             });
@@ -425,7 +425,7 @@ WI.LayerTreeDetailsSidebarPanel = class LayerTreeDetailsSidebarPanel extends WI.
         if (compositingReasons.opacityWithCompositedDescendants)
             addReason(WI.UIString("Element has opacity applied and composited descendants"));
         if (compositingReasons.maskWithCompositedDescendants)
-            addReason(WI.UIString("Element is masked and composited descendants"));
+            addReason(WI.UIString("Element is masked and has composited descendants"));
         if (compositingReasons.reflectionWithCompositedDescendants)
             addReason(WI.UIString("Element has a reflection and composited descendants"));
         if (compositingReasons.filterWithCompositedDescendants)
@@ -439,7 +439,7 @@ WI.LayerTreeDetailsSidebarPanel = class LayerTreeDetailsSidebarPanel extends WI.
         if (compositingReasons.preserve3D)
             addReason(WI.UIString("Element has “transform-style: preserve-3d” style"));
         if (compositingReasons.willChange)
-            addReason(WI.UIString("Element has “will-change” style with includes opacity, transform, transform-style, perspective, filter or backdrop-filter"));
+            addReason(WI.UIString("Element has “will-change” style which includes opacity, transform, transform-style, perspective, filter or backdrop-filter"));
         if (compositingReasons.root)
             addReason(WI.UIString("Element is the root element"));
         if (compositingReasons.blending)

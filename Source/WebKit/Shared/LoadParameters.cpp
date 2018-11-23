@@ -26,6 +26,7 @@
 #include "config.h"
 #include "LoadParameters.h"
 
+#include "FormDataReference.h"
 #include "WebCoreArgumentCoders.h"
 
 namespace WebKit {
@@ -36,8 +37,10 @@ void LoadParameters::encode(IPC::Encoder& encoder) const
     encoder << request;
 
     encoder << static_cast<bool>(request.httpBody());
-    if (request.httpBody())
-        request.httpBody()->encode(encoder);
+    if (request.httpBody()) {
+        // FormDataReference encoder / decoder takes care of passing and consuming the needed sandbox extensions.
+        encoder << IPC::FormDataReference { request.httpBody() };
+    }
 
     encoder << sandboxExtensionHandle;
     encoder << data;
@@ -49,6 +52,10 @@ void LoadParameters::encode(IPC::Encoder& encoder) const
     encoder << shouldOpenExternalURLsPolicy;
     encoder << shouldTreatAsContinuingLoad;
     encoder << userData;
+    encoder << forSafeBrowsing;
+    encoder.encodeEnum(lockHistory);
+    encoder.encodeEnum(lockBackForwardList);
+    encoder << clientRedirectSourceForHistory;
 
     platformEncode(encoder);
 }
@@ -66,10 +73,13 @@ bool LoadParameters::decode(IPC::Decoder& decoder, LoadParameters& data)
         return false;
 
     if (hasHTTPBody) {
-        RefPtr<WebCore::FormData> formData = WebCore::FormData::decode(decoder);
-        if (!formData)
+        // FormDataReference encoder / decoder takes care of passing and consuming the needed sandbox extensions.
+        std::optional<IPC::FormDataReference> formDataReference;
+        decoder >> formDataReference;
+        if (!formDataReference)
             return false;
-        data.request.setHTTPBody(WTFMove(formData));
+
+        data.request.setHTTPBody(formDataReference->takeData());
     }
 
     std::optional<SandboxExtension::Handle> sandboxExtensionHandle;
@@ -104,6 +114,21 @@ bool LoadParameters::decode(IPC::Decoder& decoder, LoadParameters& data)
 
     if (!decoder.decode(data.userData))
         return false;
+
+    if (!decoder.decode(data.forSafeBrowsing))
+        return false;
+
+    if (!decoder.decodeEnum(data.lockHistory))
+        return false;
+
+    if (!decoder.decodeEnum(data.lockBackForwardList))
+        return false;
+
+    std::optional<String> clientRedirectSourceForHistory;
+    decoder >> clientRedirectSourceForHistory;
+    if (!clientRedirectSourceForHistory)
+        return false;
+    data.clientRedirectSourceForHistory = WTFMove(*clientRedirectSourceForHistory);
 
     if (!platformDecode(decoder, data))
         return false;

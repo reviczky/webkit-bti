@@ -163,8 +163,7 @@ private:
     String getShorthandValue(const StylePropertyShorthand&) const;
     String getCommonValue(const StylePropertyShorthand&) const;
     String getAlignmentShorthandValue(const StylePropertyShorthand&) const;
-    enum CommonValueMode { OmitUncommonValues, ReturnNullOnUncommonValues };
-    String borderPropertyValue(CommonValueMode) const;
+    String borderPropertyValue() const;
     String getLayeredShorthandValue(const StylePropertyShorthand&) const;
     String get4Values(const StylePropertyShorthand&) const;
     String borderSpacingValue(const StylePropertyShorthand&) const;
@@ -250,7 +249,7 @@ public:
     Vector<CSSProperty, 4> m_propertyVector;
 
     // Methods for querying and altering CSS custom properties.
-    bool setCustomProperty(const String& propertyName, const String& value, bool important, CSSParserContext);
+    bool setCustomProperty(const Document*, const String& propertyName, const String& value, bool important, CSSParserContext);
     bool removeCustomProperty(const String& propertyName, String* returnText = nullptr);
 
 private:

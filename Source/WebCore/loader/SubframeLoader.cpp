@@ -308,17 +308,6 @@ Frame* SubframeLoader::loadOrRedirectSubframe(HTMLFrameOwnerElement& ownerElemen
 Frame* SubframeLoader::loadSubframe(HTMLFrameOwnerElement& ownerElement, const URL& url, const String& name, const String& referrer)
 {
     Ref<Frame> protect(m_frame);
-
-    bool allowsScrolling = true;
-    int marginWidth = -1;
-    int marginHeight = -1;
-    if (is<HTMLFrameElementBase>(ownerElement)) {
-        auto& frameElementBase = downcast<HTMLFrameElementBase>(ownerElement);
-        allowsScrolling = frameElementBase.scrollingMode() != ScrollbarAlwaysOff;
-        marginWidth = frameElementBase.marginWidth();
-        marginHeight = frameElementBase.marginHeight();
-    }
-
     auto document = makeRef(ownerElement.document());
 
     if (!document->securityOrigin().canDisplay(url)) {
@@ -334,7 +323,7 @@ Frame* SubframeLoader::loadSubframe(HTMLFrameOwnerElement& ownerElement, const U
     // Prevent initial empty document load from triggering load events.
     document->incrementLoadEventDelayCount();
 
-    auto frame = m_frame.loader().client().createFrame(url, name, ownerElement, referrerToUse, allowsScrolling, marginWidth, marginHeight);
+    auto frame = m_frame.loader().client().createFrame(url, name, ownerElement, referrerToUse);
 
     document->decrementLoadEventDelayCount();
 
@@ -410,7 +399,7 @@ bool SubframeLoader::loadPlugin(HTMLPlugInImageElement& pluginElement, const URL
     IntSize contentSize = roundedIntSize(LayoutSize(renderer->contentWidth(), renderer->contentHeight()));
     bool loadManually = is<PluginDocument>(document) && !m_containsPlugins && downcast<PluginDocument>(document).shouldLoadPluginManually();
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     // On iOS, we only tell the plugin to be in full page mode if the containing plugin document is the top level document.
     if (document.ownerElement())
         loadManually = false;

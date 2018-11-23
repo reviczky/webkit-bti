@@ -30,6 +30,7 @@
 #include "ContentSecurityPolicy.h"
 #include "ContentSecurityPolicyDirectiveNames.h"
 #include "ParsingUtilities.h"
+#include "TextEncoding.h"
 #include "URL.h"
 #include <wtf/ASCIICType.h>
 #include <wtf/NeverDestroyed.h>
@@ -473,7 +474,7 @@ bool ContentSecurityPolicySourceList::parseHashSource(const UChar* begin, const 
     if (digest->value.size() > ContentSecurityPolicyHash::maximumDigestLength)
         return false;
 
-    m_hashAlgorithmsUsed |= digest->algorithm;
+    m_hashAlgorithmsUsed.add(digest->algorithm);
     m_hashes.add(WTFMove(*digest));
     return true;
 }

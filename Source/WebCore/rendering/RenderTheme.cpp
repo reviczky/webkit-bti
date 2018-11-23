@@ -41,6 +41,7 @@
 #include "PaintInfo.h"
 #include "RenderStyle.h"
 #include "RenderView.h"
+#include "RuntimeEnabledFeatures.h"
 #include "SpinButtonElement.h"
 #include "StringTruncator.h"
 #include "TextControlInnerElements.h"
@@ -317,7 +318,7 @@ bool RenderTheme::paint(const RenderBox& box, ControlStates& controlStates, cons
     case ButtonPart:
     case InnerSpinButtonPart:
         updateControlStatesForRenderer(box, controlStates);
-        Theme::singleton().paint(part, controlStates, paintInfo.context(), devicePixelSnappedRect, box.style().effectiveZoom(), &box.view().frameView(), deviceScaleFactor, pageScaleFactor, box.page().useSystemAppearance(), box.page().useDarkAppearance());
+        Theme::singleton().paint(part, controlStates, paintInfo.context(), devicePixelSnappedRect, box.style().effectiveZoom(), &box.view().frameView(), deviceScaleFactor, pageScaleFactor, box.document().useSystemAppearance(), box.useDarkAppearance());
         return false;
     default:
         break;
@@ -447,7 +448,7 @@ bool RenderTheme::paintBorderOnly(const RenderBox& box, const PaintInfo& paintIn
     if (paintInfo.context().paintingDisabled())
         return false;
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     UNUSED_PARAM(rect);
     return box.style().appearance() != NoControlPart;
 #else
@@ -522,10 +523,10 @@ bool RenderTheme::paintDecorations(const RenderBox& box, const PaintInfo& paintI
     case PushButtonPart:
         return paintPushButtonDecorations(box, paintInfo, integralSnappedRect);
     case SquareButtonPart:
+        return paintSquareButtonDecorations(box, paintInfo, integralSnappedRect);
 #if ENABLE(INPUT_TYPE_COLOR)
     case ColorWellPart:
 #endif
-        return paintSquareButtonDecorations(box, paintInfo, integralSnappedRect);
     case ButtonPart:
         return paintButtonDecorations(box, paintInfo, integralSnappedRect);
     case MenulistPart:
@@ -1033,7 +1034,23 @@ bool RenderTheme::paintAttachment(const RenderObject&, const PaintInfo&, const I
 
 #endif
 
+#if ENABLE(INPUT_TYPE_COLOR)
+
+String RenderTheme::colorInputStyleSheet() const
+{
+    ASSERT(RuntimeEnabledFeatures::sharedFeatures().inputTypeColorEnabled());
+    return "input[type=\"color\"] { -webkit-appearance: color-well; width: 44px; height: 23px; outline: none; } "_s;
+}
+
+#endif // ENABLE(INPUT_TYPE_COLOR)
+
 #if ENABLE(DATALIST_ELEMENT)
+
+String RenderTheme::dataListStyleSheet() const
+{
+    ASSERT(RuntimeEnabledFeatures::sharedFeatures().dataListElementEnabled());
+    return "datalist { display: none; }"_s;
+}
 
 void RenderTheme::adjustListButtonStyle(StyleResolver&, RenderStyle&, const Element*) const
 {
@@ -1453,9 +1470,5 @@ Color RenderTheme::platformTapHighlightColor() const
 }
 
 #endif
-
-void RenderTheme::drawLineForDocumentMarker(const RenderText&, GraphicsContext&, const FloatPoint&, float, DocumentMarkerLineStyle)
-{
-}
 
 } // namespace WebCore

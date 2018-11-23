@@ -48,6 +48,7 @@ public:
         virtual ~Client() { }
         
         virtual void didFinishLaunching(ProcessLauncher*, IPC::Connection::Identifier) = 0;
+        virtual bool isJITEnabled() const { return true; }
     };
     
     enum class ProcessType {
@@ -57,7 +58,6 @@ public:
         Plugin64,
 #endif
         Network,
-        Storage,
     };
 
     struct LaunchOptions {

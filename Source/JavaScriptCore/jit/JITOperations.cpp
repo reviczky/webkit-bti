@@ -198,8 +198,7 @@ EncodedJSValue JIT_OPERATION operationGetByIdDirect(ExecState* exec, StructureSt
     bool found = baseValue.getOwnPropertySlot(exec, ident, slot);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
 
-    scope.release();
-    return JSValue::encode(found ? slot.getValue(exec, ident) : jsUndefined());
+    RELEASE_AND_RETURN(scope, JSValue::encode(found ? slot.getValue(exec, ident) : jsUndefined()));
 }
 
 EncodedJSValue JIT_OPERATION operationGetByIdDirectGeneric(ExecState* exec, EncodedJSValue base, UniquedStringImpl* uid)
@@ -215,8 +214,7 @@ EncodedJSValue JIT_OPERATION operationGetByIdDirectGeneric(ExecState* exec, Enco
     bool found = baseValue.getOwnPropertySlot(exec, ident, slot);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
 
-    scope.release();
-    return JSValue::encode(found ? slot.getValue(exec, ident) : jsUndefined());
+    RELEASE_AND_RETURN(scope, JSValue::encode(found ? slot.getValue(exec, ident) : jsUndefined()));
 }
 
 EncodedJSValue JIT_OPERATION operationGetByIdDirectOptimize(ExecState* exec, StructureStubInfo* stubInfo, EncodedJSValue base, UniquedStringImpl* uid)
@@ -235,8 +233,7 @@ EncodedJSValue JIT_OPERATION operationGetByIdDirectOptimize(ExecState* exec, Str
     if (stubInfo->considerCaching(exec->codeBlock(), baseValue.structureOrNull()))
         repatchGetByID(exec, baseValue, ident, slot, *stubInfo, GetByIDKind::Direct);
 
-    scope.release();
-    return JSValue::encode(found ? slot.getValue(exec, ident) : jsUndefined());
+    RELEASE_AND_RETURN(scope, JSValue::encode(found ? slot.getValue(exec, ident) : jsUndefined()));
 }
 
 EncodedJSValue JIT_OPERATION operationGetById(ExecState* exec, StructureStubInfo* stubInfo, EncodedJSValue base, UniquedStringImpl* uid)
@@ -756,7 +753,7 @@ static OptimizationResult tryPutByValOptimize(ExecState* exec, JSValue baseValue
             ASSERT(!byValInfo->stubRoutine);
             if (byValInfo->seen) {
                 if (byValInfo->cachedId == propertyName) {
-                    JIT::compilePutByValWithCachedId(&vm, exec->codeBlock(), byValInfo, returnAddress, NotDirect, propertyName);
+                    JIT::compilePutByValWithCachedId<OpPutByVal>(&vm, exec->codeBlock(), byValInfo, returnAddress, NotDirect, propertyName);
                     optimizationResult = OptimizationResult::Optimized;
                 } else {
                     // Seem like a generic property access site.
@@ -838,7 +835,7 @@ static OptimizationResult tryDirectPutByValOptimize(ExecState* exec, JSObject* o
             ASSERT(!byValInfo->stubRoutine);
             if (byValInfo->seen) {
                 if (byValInfo->cachedId == propertyName) {
-                    JIT::compilePutByValWithCachedId(&vm, exec->codeBlock(), byValInfo, returnAddress, Direct, propertyName);
+                    JIT::compilePutByValWithCachedId<OpPutByValDirect>(&vm, exec->codeBlock(), byValInfo, returnAddress, Direct, propertyName);
                     optimizationResult = OptimizationResult::Optimized;
                 } else {
                     // Seem like a generic property access site.
@@ -1018,8 +1015,7 @@ SlowPathReturnType JIT_OPERATION operationLinkCall(ExecState* execCallee, CallLi
             void* linkedTarget = codePtr.executableAddress();
             return encodeResult(linkedTarget, reinterpret_cast<void*>(callLinkInfo->callMode() == CallMode::Tail ? ReuseTheFrame : KeepTheFrame));
         }
-        throwScope.release();
-        return handleHostCall(execCallee, calleeAsValue, callLinkInfo);
+        RELEASE_AND_RETURN(throwScope, handleHostCall(execCallee, calleeAsValue, callLinkInfo));
     }
 
     JSFunction* callee = jsCast<JSFunction*>(calleeAsFunctionCell);
@@ -1132,8 +1128,7 @@ inline SlowPathReturnType virtualForWithFunction(
             ASSERT(!!codePtr);
             return encodeResult(codePtr.executableAddress(), reinterpret_cast<void*>(callLinkInfo->callMode() == CallMode::Tail ? ReuseTheFrame : KeepTheFrame));
         }
-        throwScope.release();
-        return handleHostCall(execCallee, calleeAsValue, callLinkInfo);
+        RELEASE_AND_RETURN(throwScope, handleHostCall(execCallee, calleeAsValue, callLinkInfo));
     }
     
     JSFunction* function = jsCast<JSFunction*>(calleeAsFunctionCell);
@@ -1662,8 +1657,9 @@ char* JIT_OPERATION operationTryOSREnterAtCatchAndValueProfile(ExecState* exec, 
     }
 
     codeBlock->ensureCatchLivenessIsComputedForBytecodeOffset(bytecodeIndex);
-    ValueProfileAndOperandBuffer* buffer = static_cast<ValueProfileAndOperandBuffer*>(codeBlock->instructions()[bytecodeIndex + 3].u.pointer);
-    buffer->forEach([&] (ValueProfileAndOperand& profile) {
+    auto bytecode = codeBlock->instructions().at(bytecodeIndex)->as<OpCatch>();
+    auto& metadata = bytecode.metadata(codeBlock);
+    metadata.buffer->forEach([&] (ValueProfileAndOperand& profile) {
         profile.m_profile.m_buckets[0] = JSValue::encode(exec->uncheckedR(profile.m_operand).jsValue());
     });
 
@@ -1827,8 +1823,7 @@ static JSValue getByVal(ExecState* exec, JSValue baseValue, JSValue subscript, B
         if (isJSString(baseValue)) {
             if (asString(baseValue)->canGetIndex(i)) {
                 ctiPatchCallByReturnAddress(returnAddress, operationGetByValString);
-                scope.release();
-                return asString(baseValue)->getIndex(exec, i);
+                RELEASE_AND_RETURN(scope, asString(baseValue)->getIndex(exec, i));
             }
             byValInfo->arrayProfile->setOutOfBounds();
         } else if (baseValue.isObject()) {
@@ -1853,8 +1848,7 @@ static JSValue getByVal(ExecState* exec, JSValue baseValue, JSValue subscript, B
             }
         }
 
-        scope.release();
-        return baseValue.get(exec, i);
+        RELEASE_AND_RETURN(scope, baseValue.get(exec, i));
     }
 
     baseValue.requireObjectCoercible(exec);
@@ -1866,8 +1860,7 @@ static JSValue getByVal(ExecState* exec, JSValue baseValue, JSValue subscript, B
     if (byValInfo->stubInfo && (!isStringOrSymbol(subscript) || byValInfo->cachedId != property))
         byValInfo->tookSlowPath = true;
 
-    scope.release();
-    return baseValue.get(exec, property);
+    RELEASE_AND_RETURN(scope, baseValue.get(exec, property));
 }
 
 static OptimizationResult tryGetByValOptimize(ExecState* exec, JSValue baseValue, JSValue subscript, ByValInfo* byValInfo, ReturnAddressPtr returnAddress)
@@ -2058,10 +2051,9 @@ EncodedJSValue JIT_OPERATION operationGetByValString(ExecState* exec, EncodedJSV
     JSValue result;
     if (LIKELY(subscript.isUInt32())) {
         uint32_t i = subscript.asUInt32();
-        if (isJSString(baseValue) && asString(baseValue)->canGetIndex(i)) {
-            scope.release();
-            return JSValue::encode(asString(baseValue)->getIndex(exec, i));
-        }
+        if (isJSString(baseValue) && asString(baseValue)->canGetIndex(i))
+            RELEASE_AND_RETURN(scope, JSValue::encode(asString(baseValue)->getIndex(exec, i)));
+
         result = baseValue.get(exec, i);
         RETURN_IF_EXCEPTION(scope, encodedJSValue());
         if (!isJSString(baseValue)) {
@@ -2289,24 +2281,23 @@ char* JIT_OPERATION operationSwitchStringWithUnknownKeyType(ExecState* exec, Enc
     return reinterpret_cast<char*>(result);
 }
 
-EncodedJSValue JIT_OPERATION operationGetFromScope(ExecState* exec, Instruction* bytecodePC)
+EncodedJSValue JIT_OPERATION operationGetFromScope(ExecState* exec, const Instruction* pc)
 {
     VM& vm = exec->vm();
     NativeCallFrameTracer tracer(&vm, exec);
     auto throwScope = DECLARE_THROW_SCOPE(vm);
 
     CodeBlock* codeBlock = exec->codeBlock();
-    Instruction* pc = bytecodePC;
 
-    const Identifier& ident = codeBlock->identifier(pc[3].u.operand);
-    JSObject* scope = jsCast<JSObject*>(exec->uncheckedR(pc[2].u.operand).jsValue());
-    GetPutInfo getPutInfo(pc[4].u.operand);
+    auto bytecode = pc->as<OpGetFromScope>();
+    const Identifier& ident = codeBlock->identifier(bytecode.var);
+    JSObject* scope = jsCast<JSObject*>(exec->uncheckedR(bytecode.scope.offset()).jsValue());
+    GetPutInfo& getPutInfo = bytecode.metadata(codeBlock).getPutInfo;
 
     // ModuleVar is always converted to ClosureVar for get_from_scope.
     ASSERT(getPutInfo.resolveType() != ModuleVar);
 
-    throwScope.release();
-    return JSValue::encode(scope->getPropertySlot(exec, ident, [&] (bool found, PropertySlot& slot) -> JSValue {
+    RELEASE_AND_RETURN(throwScope, JSValue::encode(scope->getPropertySlot(exec, ident, [&] (bool found, PropertySlot& slot) -> JSValue {
         if (!found) {
             if (getPutInfo.resolveMode() == ThrowIfNotFound)
                 throwException(exec, throwScope, createUndefinedVariableError(exec, ident));
@@ -2323,35 +2314,36 @@ EncodedJSValue JIT_OPERATION operationGetFromScope(ExecState* exec, Instruction*
             }
         }
 
-        CommonSlowPaths::tryCacheGetFromScopeGlobal(exec, vm, pc, scope, slot, ident);
+        CommonSlowPaths::tryCacheGetFromScopeGlobal(exec, vm, bytecode, scope, slot, ident);
 
         if (!result)
             return slot.getValue(exec, ident);
         return result;
-    }));
+    })));
 }
 
-void JIT_OPERATION operationPutToScope(ExecState* exec, Instruction* bytecodePC)
+void JIT_OPERATION operationPutToScope(ExecState* exec, const Instruction* pc)
 {
     VM& vm = exec->vm();
     NativeCallFrameTracer tracer(&vm, exec);
     auto throwScope = DECLARE_THROW_SCOPE(vm);
 
-    Instruction* pc = bytecodePC;
-
     CodeBlock* codeBlock = exec->codeBlock();
-    const Identifier& ident = codeBlock->identifier(pc[2].u.operand);
-    JSObject* scope = jsCast<JSObject*>(exec->uncheckedR(pc[1].u.operand).jsValue());
-    JSValue value = exec->r(pc[3].u.operand).jsValue();
-    GetPutInfo getPutInfo = GetPutInfo(pc[4].u.operand);
+    auto bytecode = pc->as<OpPutToScope>();
+    auto& metadata = bytecode.metadata(codeBlock);
+
+    const Identifier& ident = codeBlock->identifier(bytecode.var);
+    JSObject* scope = jsCast<JSObject*>(exec->uncheckedR(bytecode.scope.offset()).jsValue());
+    JSValue value = exec->r(bytecode.value.offset()).jsValue();
+    GetPutInfo& getPutInfo = metadata.getPutInfo;
 
     // ModuleVar does not keep the scope register value alive in DFG.
     ASSERT(getPutInfo.resolveType() != ModuleVar);
 
     if (getPutInfo.resolveType() == LocalClosureVar) {
         JSLexicalEnvironment* environment = jsCast<JSLexicalEnvironment*>(scope);
-        environment->variableAt(ScopeOffset(pc[6].u.operand)).set(vm, environment, value);
-        if (WatchpointSet* set = pc[5].u.watchpointSet)
+        environment->variableAt(ScopeOffset(metadata.operand)).set(vm, environment, value);
+        if (WatchpointSet* set = metadata.watchpointSet)
             set->touch(vm, "Executed op_put_scope<LocalClosureVar>");
         return;
     }
@@ -2380,7 +2372,7 @@ void JIT_OPERATION operationPutToScope(ExecState* exec, Instruction* bytecodePC)
     
     RETURN_IF_EXCEPTION(throwScope, void());
 
-    CommonSlowPaths::tryCachePutToScopeGlobal(exec, codeBlock, pc, scope, getPutInfo, slot, ident);
+    CommonSlowPaths::tryCachePutToScopeGlobal(exec, codeBlock, bytecode, scope, slot, ident);
 }
 
 void JIT_OPERATION operationThrow(ExecState* exec, EncodedJSValue encodedExceptionValue)
@@ -2462,10 +2454,10 @@ void JIT_OPERATION operationExceptionFuzz(ExecState* exec)
     NativeCallFrameTracer tracer(vm, exec);
     auto scope = DECLARE_THROW_SCOPE(*vm);
     UNUSED_PARAM(scope);
-#if COMPILER(GCC_OR_CLANG)
+#if COMPILER(GCC_COMPATIBLE)
     void* returnPC = __builtin_return_address(0);
     doExceptionFuzzing(exec, scope, "JITOperations", returnPC);
-#endif // COMPILER(GCC_OR_CLANG)
+#endif // COMPILER(GCC_COMPATIBLE)
 }
 
 ALWAYS_INLINE static EncodedJSValue unprofiledAdd(ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2)
@@ -2774,10 +2766,8 @@ EncodedJSValue JIT_OPERATION operationArithNegateOptimize(ExecState* exec, Encod
     JSValue primValue = operand.toPrimitive(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
     
-    if (primValue.isBigInt()) {
-        JSBigInt* result = JSBigInt::unaryMinus(vm, asBigInt(primValue));
-        return JSValue::encode(result);
-    }
+    if (primValue.isBigInt())
+        return JSValue::encode(JSBigInt::unaryMinus(vm, asBigInt(primValue)));
 
     double number = primValue.toNumber(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
@@ -2882,7 +2872,7 @@ void JIT_OPERATION operationProcessTypeProfilerLog(ExecState* exec)
 {
     VM& vm = exec->vm();
     NativeCallFrameTracer tracer(&vm, exec);
-    vm.typeProfilerLog()->processLogEntries("Log Full, called from inside baseline JIT"_s);
+    vm.typeProfilerLog()->processLogEntries(vm, "Log Full, called from inside baseline JIT"_s);
 }
 
 void JIT_OPERATION operationProcessShadowChickenLog(ExecState* exec)
@@ -2907,109 +2897,6 @@ int32_t JIT_OPERATION operationCheckIfExceptionIsUncatchableAndNotifyProfiler(Ex
 }
 
 } // extern "C"
-
-// Note: getHostCallReturnValueWithExecState() needs to be placed before the
-// definition of getHostCallReturnValue() below because the Windows build
-// requires it.
-extern "C" EncodedJSValue HOST_CALL_RETURN_VALUE_OPTION getHostCallReturnValueWithExecState(ExecState* exec)
-{
-    if (!exec)
-        return JSValue::encode(JSValue());
-    return JSValue::encode(exec->vm().hostCallReturnValue);
-}
-
-#if COMPILER(GCC_OR_CLANG) && CPU(X86_64)
-asm (
-".globl " SYMBOL_STRING(getHostCallReturnValue) "\n"
-HIDE_SYMBOL(getHostCallReturnValue) "\n"
-SYMBOL_STRING(getHostCallReturnValue) ":" "\n"
-    "lea -8(%rsp), %rdi\n"
-    "jmp " LOCAL_REFERENCE(getHostCallReturnValueWithExecState) "\n"
-);
-
-#elif COMPILER(GCC_OR_CLANG) && CPU(X86)
-asm (
-".text" "\n" \
-".globl " SYMBOL_STRING(getHostCallReturnValue) "\n"
-HIDE_SYMBOL(getHostCallReturnValue) "\n"
-SYMBOL_STRING(getHostCallReturnValue) ":" "\n"
-    "push %ebp\n"
-    "mov %esp, %eax\n"
-    "leal -4(%esp), %esp\n"
-    "push %eax\n"
-    "call " LOCAL_REFERENCE(getHostCallReturnValueWithExecState) "\n"
-    "leal 8(%esp), %esp\n"
-    "pop %ebp\n"
-    "ret\n"
-);
-
-#elif COMPILER(GCC_OR_CLANG) && CPU(ARM_THUMB2)
-asm (
-".text" "\n"
-".align 2" "\n"
-".globl " SYMBOL_STRING(getHostCallReturnValue) "\n"
-HIDE_SYMBOL(getHostCallReturnValue) "\n"
-".thumb" "\n"
-".thumb_func " THUMB_FUNC_PARAM(getHostCallReturnValue) "\n"
-SYMBOL_STRING(getHostCallReturnValue) ":" "\n"
-    "sub r0, sp, #8" "\n"
-    "b " LOCAL_REFERENCE(getHostCallReturnValueWithExecState) "\n"
-);
-
-#elif COMPILER(GCC_OR_CLANG) && CPU(ARM_TRADITIONAL)
-asm (
-".text" "\n"
-".globl " SYMBOL_STRING(getHostCallReturnValue) "\n"
-HIDE_SYMBOL(getHostCallReturnValue) "\n"
-INLINE_ARM_FUNCTION(getHostCallReturnValue)
-SYMBOL_STRING(getHostCallReturnValue) ":" "\n"
-    "sub r0, sp, #8" "\n"
-    "b " LOCAL_REFERENCE(getHostCallReturnValueWithExecState) "\n"
-);
-
-#elif CPU(ARM64)
-asm (
-".text" "\n"
-".align 2" "\n"
-".globl " SYMBOL_STRING(getHostCallReturnValue) "\n"
-HIDE_SYMBOL(getHostCallReturnValue) "\n"
-SYMBOL_STRING(getHostCallReturnValue) ":" "\n"
-     "sub x0, sp, #16" "\n"
-     "b " LOCAL_REFERENCE(getHostCallReturnValueWithExecState) "\n"
-);
-
-#elif COMPILER(GCC_OR_CLANG) && CPU(MIPS)
-
-#if WTF_MIPS_PIC
-#define LOAD_FUNCTION_TO_T9(function) \
-        ".set noreorder" "\n" \
-        ".cpload $25" "\n" \
-        ".set reorder" "\n" \
-        "la $t9, " LOCAL_REFERENCE(function) "\n"
-#else
-#define LOAD_FUNCTION_TO_T9(function) "" "\n"
-#endif
-
-asm (
-".text" "\n"
-".globl " SYMBOL_STRING(getHostCallReturnValue) "\n"
-HIDE_SYMBOL(getHostCallReturnValue) "\n"
-SYMBOL_STRING(getHostCallReturnValue) ":" "\n"
-    LOAD_FUNCTION_TO_T9(getHostCallReturnValueWithExecState)
-    "addi $a0, $sp, -8" "\n"
-    "b " LOCAL_REFERENCE(getHostCallReturnValueWithExecState) "\n"
-);
-
-#elif COMPILER(MSVC) && CPU(X86)
-extern "C" {
-    __declspec(naked) EncodedJSValue HOST_CALL_RETURN_VALUE_OPTION getHostCallReturnValue()
-    {
-        __asm lea eax, [esp - 4]
-        __asm mov [esp + 4], eax;
-        __asm jmp getHostCallReturnValueWithExecState
-    }
-}
-#endif
 
 } // namespace JSC
 

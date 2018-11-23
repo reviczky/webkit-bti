@@ -38,6 +38,7 @@
 #include "CSSImageSetValue.h"
 #include "CSSImageValue.h"
 #include "CSSNamedImageValue.h"
+#include "CSSPaintImageValue.h"
 #include "CSSParserIdioms.h"
 #include "CSSValuePool.h"
 #include "Pair.h"
@@ -963,7 +964,9 @@ static RefPtr<CSSValue> consumeDeprecatedGradient(CSSParserTokenRange& args, CSS
 
 static bool consumeGradientColorStops(CSSParserTokenRange& range, CSSParserMode cssParserMode, CSSGradientValue& gradient)
 {
-    bool supportsColorHints = gradient.gradientType() == CSSLinearGradient || gradient.gradientType() == CSSRadialGradient;
+    bool supportsColorHints = gradient.gradientType() == CSSLinearGradient || gradient.gradientType() == CSSRadialGradient || gradient.gradientType() == CSSConicGradient;
+    
+    bool isAngularGradient = gradient.gradientType() == CSSConicGradient;
 
     // The first color stop cannot be a color hint.
     bool previousStopWasColorHint = true;
@@ -979,45 +982,27 @@ static bool consumeGradientColorStops(CSSParserTokenRange& range, CSSParserMode 
         // FIXME-NEWPARSER: This boolean could be removed. Null checking color would be sufficient.
         stop.isMidpoint = !stop.m_color;
 
-        stop.m_position = consumeLengthOrPercent(range, cssParserMode, ValueRangeAll);
+        if (isAngularGradient)
+            stop.m_position = consumeAngleOrPercent(range, cssParserMode, ValueRangeAll, UnitlessQuirk::Forbid);
+        else
+            stop.m_position = consumeLengthOrPercent(range, cssParserMode, ValueRangeAll);
+        
         if (!stop.m_color && !stop.m_position)
             return false;
         gradient.addStop(stop);
-    } while (consumeCommaIncludingWhitespace(range));
-
-    gradient.doneAddingStops();
-
-    // The last color stop cannot be a color hint.
-    if (previousStopWasColorHint)
-        return false;
-
-    // Must have 2 or more stops to be valid.
-    return gradient.stopCount() >= 2;
-}
-
-// https://www.w3.org/TR/css-images-4/#typedef-angular-color-stop-list
-// FIXME: This should support up to two position hints per color stop.
-static bool consumeAngularGradientColorStops(CSSParserTokenRange& range, CSSParserMode cssParserMode, CSSGradientValue& gradient)
-{
-    // The first color stop cannot be a color hint.
-    bool previousStopWasColorHint = true;
-    do {
-        CSSGradientColorStop stop;
-        stop.m_color = consumeColor(range, cssParserMode);
-
-        // Two hints in a row are not allowed.
-        if (!stop.m_color && previousStopWasColorHint)
-            return false;
         
-        previousStopWasColorHint = !stop.m_color;
+        // See if there is a second color hint, which is optional.
+        CSSGradientColorStop secondStop;
+        if (isAngularGradient)
+            secondStop.m_position = consumeAngleOrPercent(range, cssParserMode, ValueRangeAll, UnitlessQuirk::Forbid);
+        else
+            secondStop.m_position = consumeLengthOrPercent(range, cssParserMode, ValueRangeAll);
         
-        // FIXME-NEWPARSER: This boolean could be removed. Null checking color would be sufficient.
-        stop.isMidpoint = !stop.m_color;
-
-        stop.m_position = consumeAngleOrPercent(range, cssParserMode, ValueRangeAll, UnitlessQuirk::Forbid);
-        if (!stop.m_color && !stop.m_position)
-            return false;
-        gradient.addStop(stop);
+        if (secondStop.m_position) {
+            secondStop.m_color = stop.m_color;
+            gradient.addStop(secondStop);
+        }
+        
     } while (consumeCommaIncludingWhitespace(range));
 
     gradient.doneAddingStops();
@@ -1193,9 +1178,7 @@ static RefPtr<CSSValue> consumeLinearGradient(CSSParserTokenRange& args, CSSPars
 
 static RefPtr<CSSValue> consumeConicGradient(CSSParserTokenRange& args, CSSParserContext context, CSSGradientRepeat repeating)
 {
-    if (!context.conicGradientsEnabled)
-        return nullptr;
-
+#if ENABLE(CSS_CONIC_GRADIENTS)
     RefPtr<CSSConicGradientValue> result = CSSConicGradientValue::create(repeating);
 
     bool expectComma = false;
@@ -1228,9 +1211,15 @@ static RefPtr<CSSValue> consumeConicGradient(CSSParserTokenRange& args, CSSParse
 
     if (expectComma && !consumeCommaIncludingWhitespace(args))
         return nullptr;
-    if (!consumeAngularGradientColorStops(args, context.mode, *result))
+    if (!consumeGradientColorStops(args, context.mode, *result))
         return nullptr;
     return result;
+#else
+    UNUSED_PARAM(args);
+    UNUSED_PARAM(context);
+    UNUSED_PARAM(repeating);
+    return nullptr;
+#endif
 }
 
 RefPtr<CSSValue> consumeImageOrNone(CSSParserTokenRange& range, CSSParserContext context)
@@ -1297,6 +1286,29 @@ static RefPtr<CSSValue> consumeFilterImage(CSSParserTokenRange& args, const CSSP
     return CSSFilterImageValue::create(imageValue.releaseNonNull(), filterValue.releaseNonNull());
 }
 
+#if ENABLE(CSS_PAINTING_API)
+static RefPtr<CSSValue> consumeCustomPaint(CSSParserTokenRange& args)
+{
+    if (!RuntimeEnabledFeatures::sharedFeatures().cssPaintingAPIEnabled())
+        return nullptr;
+    if (args.peek().type() != IdentToken)
+        return nullptr;
+    auto name = args.consumeIncludingWhitespace().value().toString();
+
+    if (!args.atEnd() && args.peek() != CommaToken)
+        return nullptr;
+    if (!args.atEnd())
+        args.consume();
+
+    auto argumentList = CSSVariableData::create(args);
+
+    while (!args.atEnd())
+        args.consume();
+
+    return CSSPaintImageValue::create(name, WTFMove(argumentList));
+}
+#endif
+
 static RefPtr<CSSValue> consumeGeneratedImage(CSSParserTokenRange& range, CSSParserContext context)
 {
     CSSValueID id = range.peek().functionId();
@@ -1333,6 +1345,10 @@ static RefPtr<CSSValue> consumeGeneratedImage(CSSParserTokenRange& range, CSSPar
         result = consumeWebkitNamedImage(args);
     else if (id == CSSValueWebkitFilter || id == CSSValueFilter)
         result = consumeFilterImage(args, context);
+#if ENABLE(CSS_PAINTING_API)
+    else if (id == CSSValuePaint)
+        result = consumeCustomPaint(args);
+#endif
     if (!result || !args.atEnd())
         return nullptr;
     range = rangeCopy;
@@ -1387,6 +1403,9 @@ static bool isGeneratedImage(CSSValueID id)
         || id == CSSValueCrossFade
         || id == CSSValueWebkitNamedImage
         || id == CSSValueWebkitFilter
+#if ENABLE(CSS_PAINTING_API)
+        || id == CSSValuePaint
+#endif
         || id == CSSValueFilter;
 }
     

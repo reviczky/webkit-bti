@@ -43,7 +43,6 @@
 #include "PluginProcessConnectionManager.h"
 #include "SessionTracker.h"
 #include "StatisticsData.h"
-#include "StorageProcessMessages.h"
 #include "UserData.h"
 #include "WebAutomationSessionProxy.h"
 #include "WebCacheStorageProvider.h"
@@ -70,7 +69,6 @@
 #include "WebSWContextManagerConnectionMessages.h"
 #include "WebServiceWorkerProvider.h"
 #include "WebSocketStream.h"
-#include "WebToStorageProcessConnection.h"
 #include "WebsiteData.h"
 #include "WebsiteDataStoreParameters.h"
 #include "WebsiteDataType.h"
@@ -107,6 +105,7 @@
 #include <WebCore/PageCache.h>
 #include <WebCore/PageGroup.h>
 #include <WebCore/PlatformMediaSessionManager.h>
+#include <WebCore/ProcessWarming.h>
 #include <WebCore/ResourceLoadObserver.h>
 #include <WebCore/ResourceLoadStatistics.h>
 #include <WebCore/RuntimeApplicationChecks.h>
@@ -158,6 +157,11 @@ namespace WebKit {
 using namespace JSC;
 using namespace WebCore;
 
+NO_RETURN static void callExit(IPC::Connection*)
+{
+    _exit(EXIT_SUCCESS);
+}
+
 WebProcess& WebProcess::singleton()
 {
     static WebProcess& process = *new WebProcess;
@@ -166,7 +170,7 @@ WebProcess& WebProcess::singleton()
 
 WebProcess::WebProcess()
     : m_eventDispatcher(EventDispatcher::create())
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     , m_viewUpdateDispatcher(ViewUpdateDispatcher::create())
 #endif
     , m_webInspectorInterruptDispatcher(WebInspectorInterruptDispatcher::create())
@@ -204,8 +208,8 @@ WebProcess::WebProcess()
         parentProcessConnection()->send(Messages::WebResourceLoadStatisticsStore::ResourceLoadStatisticsUpdated(WTFMove(statistics)), 0);
     });
 
-    ResourceLoadObserver::shared().setRequestStorageAccessUnderOpenerCallback([this] (const String& domainInNeedOfStorageAccess, uint64_t openerPageID, const String& openerDomain, bool isTriggeredByUserGesture) {
-        parentProcessConnection()->send(Messages::WebResourceLoadStatisticsStore::RequestStorageAccessUnderOpener(domainInNeedOfStorageAccess, openerPageID, openerDomain, isTriggeredByUserGesture), 0);
+    ResourceLoadObserver::shared().setRequestStorageAccessUnderOpenerCallback([this] (const String& domainInNeedOfStorageAccess, uint64_t openerPageID, const String& openerDomain) {
+        parentProcessConnection()->send(Messages::WebResourceLoadStatisticsStore::RequestStorageAccessUnderOpener(domainInNeedOfStorageAccess, openerPageID, openerDomain), 0);
     });
     
     Gigacage::disableDisablingPrimitiveGigacageIfShouldBeEnabled();
@@ -228,6 +232,10 @@ void WebProcess::initializeConnection(IPC::Connection* connection)
 {
     ChildProcess::initializeConnection(connection);
 
+    // We call _exit() directly from the background queue in case the main thread is unresponsive
+    // and ChildProcess::didClose() does not get called.
+    connection->setDidCloseOnConnectionWorkQueueCallback(callExit);
+
 #if !PLATFORM(GTK) && !PLATFORM(WPE)
     connection->setShouldExitOnSyncMessageSendFailure(true);
 #endif
@@ -237,9 +245,9 @@ void WebProcess::initializeConnection(IPC::Connection* connection)
 #endif
 
     m_eventDispatcher->initializeConnection(connection);
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     m_viewUpdateDispatcher->initializeConnection(connection);
-#endif // PLATFORM(IOS)
+#endif // PLATFORM(IOS_FAMILY)
     m_webInspectorInterruptDispatcher->initializeConnection(connection);
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
@@ -250,12 +258,6 @@ void WebProcess::initializeConnection(IPC::Connection* connection)
         supplement->initializeConnection(connection);
 
     m_webConnection = WebConnectionToUIProcess::create(this);
-
-    // In order to ensure that the asynchronous messages that are used for notifying the UI process
-    // about when WebFrame objects come and go are always delivered before the synchronous policy messages,
-    // use this flag to force synchronous messages to be treated as asynchronous messages in the UI process
-    // unless when doing so would lead to a deadlock.
-    connection->setOnlySendMessagesAsDispatchWhenWaitingForSyncReplyWhenProcessingSuchAMessage(true);
 }
 
 void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
@@ -315,7 +317,7 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
 
     // FIXME: This should be constructed per data store, not per process.
     m_applicationCacheStorage = ApplicationCacheStorage::create(parameters.applicationCacheDirectory, parameters.applicationCacheFlatFileSubdirectoryName);
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     m_applicationCacheStorage->setDefaultOriginQuota(25ULL * 1024 * 1024);
 #endif
 
@@ -420,11 +422,31 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
     JSC::Wasm::enableFastMemory();
 #endif
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING) && !RELEASE_LOG_DISABLED
+#if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
     ResourceLoadObserver::shared().setShouldLogUserInteraction(parameters.shouldLogUserInteraction);
 #endif
 
     RELEASE_LOG(Process, "%p - WebProcess::initializeWebProcess: Presenting process = %d", this, WebCore::presentingApplicationPID());
+}
+
+void WebProcess::markIsNoLongerPrewarmed()
+{
+#if PLATFORM(MAC)
+    ASSERT(m_processType == ProcessType::PrewarmedWebContent);
+    m_processType = ProcessType::WebContent;
+
+    updateProcessName();
+#endif
+}
+
+void WebProcess::prewarmGlobally()
+{
+    WebCore::ProcessWarming::prewarmGlobally();
+}
+
+void WebProcess::prewarmWithDomainInformation(const WebCore::PrewarmInformation& prewarmInformation)
+{
+    WebCore::ProcessWarming::prewarmWithInformation(prewarmInformation);
 }
 
 void WebProcess::registerURLSchemeAsEmptyDocument(const String& urlScheme)
@@ -908,6 +930,11 @@ void WebProcess::resetPluginLoadClientPolicies(const HashMap<WTF::String, HashMa
 #endif
 }
 
+void WebProcess::isJITEnabled(CompletionHandler<void(bool)>&& completionHandler)
+{
+    completionHandler(JSC::VM::canUseJIT());
+}
+
 void WebProcess::clearPluginClientPolicies()
 {
 #if ENABLE(NETSCAPE_PLUGIN_API) && PLATFORM(MAC)
@@ -1024,10 +1051,6 @@ void WebProcess::backgroundResponsivenessPing()
     parentProcessConnection()->send(Messages::WebProcessProxy::DidReceiveBackgroundResponsivenessPing(), 0);
 }
 
-void WebProcess::syncIPCMessageWhileWaitingForSyncReplyForTesting()
-{
-}
-
 void WebProcess::didTakeAllMessagesForPort(Vector<MessageWithMessagePorts>&& messages, uint64_t messageCallbackIdentifier, uint64_t messageBatchIdentifier)
 {
     WebMessagePortChannelProvider::singleton().didTakeAllMessagesForPort(WTFMove(messages), messageCallbackIdentifier, messageBatchIdentifier);
@@ -1102,7 +1125,7 @@ void WebProcess::setInjectedBundleParameters(const IPC::DataReference& value)
 static IPC::Connection::Identifier getNetworkProcessConnection(IPC::Connection& connection)
 {
     IPC::Attachment encodedConnectionIdentifier;
-    if (!connection.sendSync(Messages::WebProcessProxy::GetNetworkProcessConnection(), Messages::WebProcessProxy::GetNetworkProcessConnection::Reply(encodedConnectionIdentifier), 0, Seconds::infinity(), IPC::SendSyncOption::DoNotProcessIncomingMessagesWhenWaitingForSyncReply)) {
+    if (!connection.sendSync(Messages::WebProcessProxy::GetNetworkProcessConnection(), Messages::WebProcessProxy::GetNetworkProcessConnection::Reply(encodedConnectionIdentifier), 0)) {
 #if PLATFORM(GTK) || PLATFORM(WPE)
         // GTK+ and WPE ports don't exit on send sync message failure.
         // In this particular case, the network process can be terminated by the UI process while the
@@ -1174,6 +1197,26 @@ void WebProcess::networkProcessConnectionClosed(NetworkProcessConnection* connec
     ASSERT(m_networkProcessConnection);
     ASSERT_UNUSED(connection, m_networkProcessConnection == connection);
 
+#if ENABLE(INDEXED_DATABASE)
+    for (auto& page : m_pageMap.values()) {
+        auto idbConnection = page->corePage()->optionalIDBConnection();
+        if (!idbConnection)
+            continue;
+        
+        if (connection->existingIDBConnectionToServerForIdentifier(idbConnection->identifier())) {
+            ASSERT(idbConnection == &connection->existingIDBConnectionToServerForIdentifier(idbConnection->identifier())->coreConnectionToServer());
+            page->corePage()->clearIDBConnection();
+        }
+    }
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    if (SWContextManager::singleton().connection()) {
+        RELEASE_LOG(ServiceWorker, "Service worker process is exiting because network process is gone");
+        _exit(EXIT_SUCCESS);
+    }
+#endif
+
     m_networkProcessConnection = nullptr;
 
     logDiagnosticMessageForNetworkProcessCrash();
@@ -1188,68 +1231,6 @@ void WebProcess::networkProcessConnectionClosed(NetworkProcessConnection* connec
 WebLoaderStrategy& WebProcess::webLoaderStrategy()
 {
     return m_webLoaderStrategy;
-}
-
-void WebProcess::webToStorageProcessConnectionClosed(WebToStorageProcessConnection* connection)
-{
-    ASSERT(m_webToStorageProcessConnection);
-    ASSERT(m_webToStorageProcessConnection == connection);
-
-#if ENABLE(INDEXED_DATABASE)
-    for (auto& page : m_pageMap.values()) {
-        auto idbConnection = page->corePage()->optionalIDBConnection();
-        if (!idbConnection)
-            continue;
-
-        if (connection->existingIDBConnectionToServerForIdentifier(idbConnection->identifier())) {
-            ASSERT(idbConnection == &connection->existingIDBConnectionToServerForIdentifier(idbConnection->identifier())->coreConnectionToServer());
-            page->corePage()->clearIDBConnection();
-        }
-    }
-#endif
-#if ENABLE(SERVICE_WORKER)
-    if (SWContextManager::singleton().connection()) {
-        RELEASE_LOG(ServiceWorker, "Service worker process is exiting because its storage process is gone");
-        _exit(EXIT_SUCCESS);
-    }
-#endif
-
-    m_webToStorageProcessConnection = nullptr;
-}
-
-WebToStorageProcessConnection& WebProcess::ensureWebToStorageProcessConnection(PAL::SessionID initialSessionID)
-{
-    if (!m_webToStorageProcessConnection) {
-        IPC::Attachment encodedConnectionIdentifier;
-
-        if (!parentProcessConnection()->sendSync(Messages::WebProcessProxy::GetStorageProcessConnection(initialSessionID), Messages::WebProcessProxy::GetStorageProcessConnection::Reply(encodedConnectionIdentifier), 0)) {
-#if PLATFORM(GTK) || PLATFORM(WPE)
-            // GTK+ and WPE ports don't exit on send sync message failure.
-            // In this particular case, the storage process can be terminated by the UI process while the
-            // connection is being done, so we always want to exit instead of crashing.
-            // See https://bugs.webkit.org/show_bug.cgi?id=183348.
-            exit(0);
-#else
-            CRASH();
-#endif
-        }
-
-#if USE(UNIX_DOMAIN_SOCKETS)
-        IPC::Connection::Identifier connectionIdentifier = encodedConnectionIdentifier.releaseFileDescriptor();
-#elif OS(DARWIN)
-        IPC::Connection::Identifier connectionIdentifier(encodedConnectionIdentifier.port());
-#elif OS(WINDOWS)
-        IPC::Connection::Identifier connectionIdentifier(encodedConnectionIdentifier.handle());
-#else
-        ASSERT_NOT_REACHED();
-#endif
-        if (!IPC::Connection::identifierIsValid(connectionIdentifier))
-            CRASH();
-
-        m_webToStorageProcessConnection = WebToStorageProcessConnection::create(connectionIdentifier);
-
-    }
-    return *m_webToStorageProcessConnection;
 }
 
 void WebProcess::setEnhancedAccessibility(bool flag)
@@ -1362,6 +1343,10 @@ void WebProcess::updateActivePages()
 {
 }
 
+void WebProcess::getActivePagesOriginsForTesting(Vector<String>&)
+{
+}
+
 void WebProcess::updateCPULimit()
 {
 }
@@ -1378,7 +1363,7 @@ void WebProcess::pageActivityStateDidChange(uint64_t, OptionSet<WebCore::Activit
         updateCPUMonitorState(CPUMonitorUpdateReason::VisibilityHasChanged);
 }
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 void WebProcess::resetAllGeolocationPermissions()
 {
     for (auto& page : m_pageMap.values()) {
@@ -1399,7 +1384,7 @@ void WebProcess::actualPrepareToSuspend(ShouldAcknowledgeWhenReadyToSuspend shou
     destroyRenderingResources();
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     accessibilityProcessSuspendedNotification(true);
 #endif
 
@@ -1443,7 +1428,7 @@ void WebProcess::cancelPrepareToSuspend()
     RELEASE_LOG(ProcessSuspension, "%p - WebProcess::cancelPrepareToSuspend()", this);
     setAllLayerTreeStatesFrozen(false);
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     accessibilityProcessSuspendedNotification(false);
 #endif
     
@@ -1502,9 +1487,17 @@ void WebProcess::processDidResume()
     cancelMarkAllLayersVolatile();
     setAllLayerTreeStatesFrozen(false);
     
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     accessibilityProcessSuspendedNotification(false);
 #endif
+}
+
+void WebProcess::sendPrewarmInformation(const WebCore::URL& url)
+{
+    auto registrableDomain = toRegistrableDomain(url);
+    if (registrableDomain.isEmpty())
+        return;
+    parentProcessConnection()->send(Messages::WebProcessProxy::DidCollectPrewarmInformation(registrableDomain, WebCore::ProcessWarming::collectPrewarmInformation()), 0);
 }
 
 void WebProcess::pageDidEnterWindow(uint64_t pageID)
@@ -1702,12 +1695,12 @@ LibWebRTCNetwork& WebProcess::libWebRTCNetwork()
 }
 
 #if ENABLE(SERVICE_WORKER)
-void WebProcess::establishWorkerContextConnectionToStorageProcess(uint64_t pageGroupID, uint64_t pageID, const WebPreferencesStore& store, PAL::SessionID initialSessionID)
+void WebProcess::establishWorkerContextConnectionToNetworkProcess(uint64_t pageGroupID, uint64_t pageID, const WebPreferencesStore& store, PAL::SessionID initialSessionID)
 {
-    // We are in the Service Worker context process and the call below establishes our connection to the Storage Process
-    // by calling webToStorageProcessConnection. SWContextManager needs to use the same underlying IPC::Connection as the
-    // WebToStorageProcessConnection for synchronization purposes.
-    auto& ipcConnection = ensureWebToStorageProcessConnection(initialSessionID).connection();
+    // We are in the Service Worker context process and the call below establishes our connection to the Network Process
+    // by calling ensureNetworkProcessConnection. SWContextManager needs to use the same underlying IPC::Connection as the
+    // NetworkProcessConnection for synchronization purposes.
+    auto& ipcConnection = ensureNetworkProcessConnection().connection();
     SWContextManager::singleton().setConnection(std::make_unique<WebSWContextManagerConnection>(ipcConnection, pageGroupID, pageID, store));
 }
 
@@ -1745,7 +1738,7 @@ void WebProcess::removeMockMediaDevice(const String& persistentId)
 
 void WebProcess::resetMockMediaDevices()
 {
-    MockRealtimeMediaSource::resetDevices();
+    MockRealtimeMediaSourceCenter::resetDevices();
 }
 #endif
 

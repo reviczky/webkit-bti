@@ -33,6 +33,7 @@
 #include "YarrParser.h"
 #include <wtf/DataLog.h>
 #include <wtf/Optional.h>
+#include <wtf/StackPointer.h>
 #include <wtf/Threading.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
@@ -446,9 +447,9 @@ public:
     {
     }
 
-    void reset()
+    void resetForReparsing()
     {
-        m_pattern.reset();
+        m_pattern.resetForReparsing();
         m_characterClassConstructor.reset();
 
         auto body = std::make_unique<PatternDisjunction>();
@@ -456,7 +457,17 @@ public:
         m_alternative = body->addNewAlternative();
         m_pattern.m_disjunctions.append(WTFMove(body));
     }
-    
+
+    void saveUnmatchedNamedForwardReferences()
+    {
+        m_unmatchedNamedForwardReferences.shrink(0);
+        
+        for (auto& entry : m_pattern.m_namedForwardReferences) {
+            if (!m_pattern.m_captureGroupNames.contains(entry))
+                m_unmatchedNamedForwardReferences.append(entry);
+        }
+    }
+
     void assertionBOL()
     {
         if (!m_alternative->m_terms.size() && !m_invertParentheticalAssertion) {
@@ -666,12 +677,23 @@ public:
         m_alternative->m_terms.append(PatternTerm(subpatternId));
     }
 
-    void atomNamedBackReference(String subpatternName)
+    void atomNamedBackReference(const String& subpatternName)
     {
         ASSERT(m_pattern.m_namedGroupToParenIndex.find(subpatternName) != m_pattern.m_namedGroupToParenIndex.end());
         atomBackReference(m_pattern.m_namedGroupToParenIndex.get(subpatternName));
     }
 
+    bool isValidNamedForwardReference(const String& subpatternName)
+    {
+        return !m_unmatchedNamedForwardReferences.contains(subpatternName);
+    }
+
+    void atomNamedForwardReference(const String& subpatternName)
+    {
+        m_pattern.m_namedForwardReferences.appendIfNotContains(subpatternName);
+        m_alternative->m_terms.append(PatternTerm::ForwardReference());
+    }
+    
     // deep copy the argument disjunction.  If filterStartsWithBOL is true,
     // skip alternatives with m_startsWithBOL set true.
     PatternDisjunction* copyDisjunction(PatternDisjunction* disjunction, bool filterStartsWithBOL = false)
@@ -1072,7 +1094,7 @@ private:
         if (!m_stackLimit)
             return true;
         ASSERT(Thread::current().stack().isGrowingDownward());
-        int8_t* curr = reinterpret_cast<int8_t*>(&curr);
+        int8_t* curr = reinterpret_cast<int8_t*>(currentStackPointer());
         int8_t* limit = reinterpret_cast<int8_t*>(m_stackLimit);
         return curr >= limit;
     }
@@ -1080,6 +1102,7 @@ private:
     YarrPattern& m_pattern;
     PatternAlternative* m_alternative;
     CharacterClassConstructor m_characterClassConstructor;
+    Vector<String> m_unmatchedNamedForwardReferences;
     void* m_stackLimit;
     bool m_invertCharacterClass;
     bool m_invertParentheticalAssertion { false };
@@ -1102,13 +1125,14 @@ ErrorCode YarrPattern::compile(const String& patternString, void* stackLimit)
     // Quoting Netscape's "What's new in JavaScript 1.2",
     //      "Note: if the number of left parentheses is less than the number specified
     //       in \#, the \# is taken as an octal escape as described in the next row."
-    if (containsIllegalBackReference()) {
+    if (containsIllegalBackReference() || containsIllegalNamedForwardReferences()) {
         if (unicode())
             return ErrorCode::InvalidBackreference;
 
         unsigned numSubpatterns = m_numSubpatterns;
 
-        constructor.reset();
+        constructor.saveUnmatchedNamedForwardReferences();
+        constructor.resetForReparsing();
         ErrorCode error = parse(constructor, patternString, unicode(), numSubpatterns);
         ASSERT_UNUSED(error, !hasError(error));
         ASSERT(numSubpatterns == m_numSubpatterns);

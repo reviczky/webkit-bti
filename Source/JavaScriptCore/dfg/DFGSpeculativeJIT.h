@@ -633,10 +633,10 @@ public:
     void bitOp(NodeType op, int32_t imm, GPRReg op1, GPRReg result)
     {
         switch (op) {
-        case BitAnd:
+        case ArithBitAnd:
             m_jit.and32(Imm32(imm), op1, result);
             break;
-        case BitOr:
+        case ArithBitOr:
             m_jit.or32(Imm32(imm), op1, result);
             break;
         case BitXor:
@@ -649,10 +649,10 @@ public:
     void bitOp(NodeType op, GPRReg op1, GPRReg op2, GPRReg result)
     {
         switch (op) {
-        case BitAnd:
+        case ArithBitAnd:
             m_jit.and32(op1, op2, result);
             break;
-        case BitOr:
+        case ArithBitOr:
             m_jit.or32(op1, op2, result);
             break;
         case BitXor:
@@ -983,7 +983,7 @@ public:
         return appendCallWithCallFrameRollbackOnExceptionSetResult(operation, result);
     }
     
-#if !defined(NDEBUG) && !CPU(ARM) && !CPU(MIPS)
+#if !defined(NDEBUG) && !CPU(ARM_THUMB2) && !CPU(MIPS)
     void prepareForExternalCall()
     {
         // We're about to call out to a "native" helper function. The helper
@@ -1059,7 +1059,7 @@ public:
         }
         return call;
     }
-#elif CPU(ARM) && !CPU(ARM_HARDFP)
+#elif CPU(ARM_THUMB2) && !CPU(ARM_HARDFP)
     JITCompiler::Call appendCallSetResult(const FunctionPtr<CFunctionPtrTag> function, FPRReg result)
     {
         JITCompiler::Call call = appendCall(function);
@@ -1067,7 +1067,7 @@ public:
             m_jit.assembler().vmov(result, GPRInfo::returnValueGPR, GPRInfo::returnValueGPR2);
         return call;
     }
-#else // CPU(X86_64) || (CPU(ARM) && CPU(ARM_HARDFP)) || CPU(ARM64) || CPU(MIPS)
+#else // CPU(X86_64) || (CPU(ARM_THUMB2) && CPU(ARM_HARDFP)) || CPU(ARM64) || CPU(MIPS)
     JITCompiler::Call appendCallSetResult(const FunctionPtr<CFunctionPtrTag> function, FPRReg result)
     {
         JITCompiler::Call call = appendCall(function);
@@ -1332,6 +1332,7 @@ public:
     template<typename SnippetGenerator, J_JITOperation_EJJ slowPathFunction>
     void emitUntypedBitOp(Node*);
     void compileBitwiseOp(Node*);
+    void compileValueBitwiseOp(Node*);
 
     void emitUntypedRightShiftBitOp(Node*);
     void compileShiftOp(Node*);
@@ -1343,6 +1344,7 @@ public:
 
     void compileArithDoubleUnaryOp(Node*, double (*doubleFunction)(double), double (*operation)(ExecState*, EncodedJSValue));
     void compileValueAdd(Node*);
+    void compileValueSub(Node*);
     void compileArithAdd(Node*);
     void compileMakeRope(Node*);
     void compileArithAbs(Node*);

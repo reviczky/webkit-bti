@@ -32,6 +32,7 @@
 #pragma once
 
 #include "ExceptionOr.h"
+#include "GCReachableRef.h"
 #include <wtf/Forward.h>
 #include <wtf/HashSet.h>
 #include <wtf/IsoMalloc.h>
@@ -85,7 +86,12 @@ public:
     };
 
     ExceptionOr<void> observe(Node&, const Init&);
-    Vector<Ref<MutationRecord>> takeRecords();
+    
+    struct TakenRecords {
+        Vector<Ref<MutationRecord>> records;
+        HashSet<GCReachableRef<Node>> pendingTargets;
+    };
+    TakenRecords takeRecords();
     void disconnect();
 
     void observationStarted(MutationObserverRegistration&);
@@ -109,6 +115,7 @@ private:
 
     Ref<MutationCallback> m_callback;
     Vector<Ref<MutationRecord>> m_records;
+    HashSet<GCReachableRef<Node>> m_pendingTargets;
     HashSet<MutationObserverRegistration*> m_registrations;
     unsigned m_priority;
 };

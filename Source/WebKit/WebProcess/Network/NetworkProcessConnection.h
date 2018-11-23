@@ -28,6 +28,7 @@
 
 #include "Connection.h"
 #include "ShareableResource.h"
+#include "WebIDBConnectionToServer.h"
 #include <wtf/RefCounted.h>
 #include <wtf/text/WTFString.h>
 
@@ -47,6 +48,8 @@ class ResourceResponse;
 
 namespace WebKit {
 
+class WebSWClientConnection;
+
 typedef uint64_t ResourceLoadIdentifier;
 
 class NetworkProcessConnection : public RefCounted<NetworkProcessConnection>, IPC::Connection::Client {
@@ -62,6 +65,16 @@ public:
     void didReceiveNetworkProcessConnectionMessage(IPC::Connection&, IPC::Decoder&);
 
     void writeBlobsToTemporaryFiles(const Vector<String>& blobURLs, Function<void (const Vector<String>& filePaths)>&& completionHandler);
+
+#if ENABLE(INDEXED_DATABASE)
+    WebIDBConnectionToServer* existingIDBConnectionToServerForIdentifier(uint64_t identifier) const { return m_webIDBConnectionsByIdentifier.get(identifier); };
+    WebIDBConnectionToServer& idbConnectionToServerForSession(PAL::SessionID);
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    WebSWClientConnection* existingServiceWorkerConnectionForSession(PAL::SessionID sessionID) { return m_swConnectionsBySession.get(sessionID); }
+    WebSWClientConnection& serviceWorkerConnectionForSession(PAL::SessionID);
+#endif
 
 private:
     NetworkProcessConnection(IPC::Connection::Identifier);
@@ -86,6 +99,16 @@ private:
     Ref<IPC::Connection> m_connection;
 
     HashMap<uint64_t, Function<void (const Vector<String>&)>> m_writeBlobToFileCompletionHandlers;
+
+#if ENABLE(INDEXED_DATABASE)
+    HashMap<PAL::SessionID, RefPtr<WebIDBConnectionToServer>> m_webIDBConnectionsBySession;
+    HashMap<uint64_t, RefPtr<WebIDBConnectionToServer>> m_webIDBConnectionsByIdentifier;
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    HashMap<PAL::SessionID, RefPtr<WebSWClientConnection>> m_swConnectionsBySession;
+    HashMap<WebCore::SWServerConnectionIdentifier, WebSWClientConnection*> m_swConnectionsByIdentifier;
+#endif
 };
 
 } // namespace WebKit

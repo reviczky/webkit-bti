@@ -23,8 +23,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#ifndef RefCountedArray_h
-#define RefCountedArray_h
+#pragma once
 
 #include <wtf/DumbPtrTraits.h>
 #include <wtf/FastMalloc.h>
@@ -236,6 +235,7 @@ private:
             Header::fromPayload(data())->refCount++;
     }
 
+    friend class JSC::LLIntOffsetsExtractor;
     typename PtrTraits::StorageType m_data { nullptr };
 };
 
@@ -248,6 +248,3 @@ using PoisonedRefCountedArray = RefCountedArray<T, PoisonedPtrTraits<Poison, T>>
 
 using WTF::PoisonedRefCountedArray;
 using WTF::RefCountedArray;
-
-#endif // RefCountedArray_h
-

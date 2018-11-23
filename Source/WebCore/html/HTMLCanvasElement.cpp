@@ -42,12 +42,14 @@
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
 #include "ImageBitmapRenderingContext.h"
+#include "ImageBuffer.h"
 #include "ImageData.h"
 #include "InspectorInstrumentation.h"
 #include "JSDOMConvertDictionary.h"
 #include "MIMETypeRegistry.h"
 #include "RenderElement.h"
 #include "RenderHTMLCanvas.h"
+#include "ResourceLoadObserver.h"
 #include "RuntimeEnabledFeatures.h"
 #include "ScriptController.h"
 #include "Settings.h"
@@ -77,6 +79,10 @@
 #include "WebGPURenderingContext.h"
 #endif
 
+#if ENABLE(WEBMETAL)
+#include "WebMetalRenderingContext.h"
+#endif
+
 #if PLATFORM(COCOA)
 #include "MediaSampleAVFObjC.h"
 #include <pal/cf/CoreMediaSoftLink.h>
@@ -96,7 +102,7 @@ const int defaultHeight = 150;
 // Firefox limits width/height to 32767 pixels, but slows down dramatically before it
 // reaches that limit. We limit by area instead, giving us larger maximum dimensions,
 // in exchange for a smaller maximum canvas size. The maximum canvas size is in device pixels.
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 const unsigned maxCanvasArea = 4096 * 4096;
 #else
 const unsigned maxCanvasArea = 16384 * 16384;
@@ -196,7 +202,7 @@ static inline size_t maxActivePixelMemory()
     static size_t maxPixelMemory;
     static std::once_flag onceFlag;
     std::call_once(onceFlag, [] {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
         maxPixelMemory = ramSize() / 4;
 #else
         maxPixelMemory = std::max(ramSize() / 4, 2151 * MB);
@@ -241,6 +247,14 @@ ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::
             if (!isWebGPUType(contextId))
                 return std::optional<RenderingContext> { std::nullopt };
             return std::optional<RenderingContext> { RefPtr<WebGPURenderingContext> { &downcast<WebGPURenderingContext>(*m_context) } };
+        }
+#endif
+
+#if ENABLE(WEBMETAL)
+        if (m_context->isWebMetal()) {
+            if (!isWebMetalType(contextId))
+                return std::optional<RenderingContext> { std::nullopt };
+            return std::optional<RenderingContext> { RefPtr<WebMetalRenderingContext> { &downcast<WebMetalRenderingContext>(*m_context) } };
         }
 #endif
 
@@ -294,6 +308,15 @@ ExceptionOr<std::optional<RenderingContext>> HTMLCanvasElement::getContext(JSC::
     }
 #endif
 
+#if ENABLE(WEBMETAL)
+    if (isWebMetalType(contextId)) {
+        auto context = createContextWebMetal(contextId);
+        if (!context)
+            return std::optional<RenderingContext> { std::nullopt };
+        return std::optional<RenderingContext> { RefPtr<WebMetalRenderingContext> { context } };
+    }
+#endif
+
     return std::optional<RenderingContext> { std::nullopt };
 }
 
@@ -305,14 +328,19 @@ CanvasRenderingContext* HTMLCanvasElement::getContext(const String& type)
     if (HTMLCanvasElement::isBitmapRendererType(type))
         return getContextBitmapRenderer(type);
 
-#if ENABLE(WEBGPU)
-    if (HTMLCanvasElement::isWebGPUType(type) && RuntimeEnabledFeatures::sharedFeatures().webGPUEnabled())
-        return getContextWebGPU(type);
+#if ENABLE(WEBMETAL)
+    if (HTMLCanvasElement::isWebMetalType(type) && RuntimeEnabledFeatures::sharedFeatures().webMetalEnabled())
+        return getContextWebMetal(type);
 #endif
 
 #if ENABLE(WEBGL)
     if (HTMLCanvasElement::isWebGLType(type))
         return getContextWebGL(type);
+#endif
+
+#if ENABLE(WEBGPU)
+    if (HTMLCanvasElement::isWebGPUType(type))
+        return getContextWebGPU(type);
 #endif
 
     return nullptr;
@@ -472,6 +500,47 @@ WebGPURenderingContext* HTMLCanvasElement::getContextWebGPU(const String& type)
     if (!m_context)
         return createContextWebGPU(type);
     return static_cast<WebGPURenderingContext*>(m_context.get());
+}
+
+#endif // ENABLE(WEBGPU)
+
+#if ENABLE(WEBMETAL)
+
+bool HTMLCanvasElement::isWebMetalType(const String& type)
+{
+    return type == "webmetal";
+}
+
+WebMetalRenderingContext* HTMLCanvasElement::createContextWebMetal(const String& type)
+{
+    ASSERT_UNUSED(type, HTMLCanvasElement::isWebMetalType(type));
+    ASSERT(!m_context);
+
+    if (!RuntimeEnabledFeatures::sharedFeatures().webMetalEnabled())
+        return nullptr;
+
+    m_context = WebMetalRenderingContext::create(*this);
+    if (m_context) {
+        // Need to make sure a RenderLayer and compositing layer get created for the Canvas.
+        invalidateStyleAndLayerComposition();
+    }
+
+    return static_cast<WebMetalRenderingContext*>(m_context.get());
+}
+
+WebMetalRenderingContext* HTMLCanvasElement::getContextWebMetal(const String& type)
+{
+    ASSERT_UNUSED(type, HTMLCanvasElement::isWebMetalType(type));
+
+    if (!RuntimeEnabledFeatures::sharedFeatures().webMetalEnabled())
+        return nullptr;
+
+    if (m_context && !m_context->isWebMetal())
+        return nullptr;
+
+    if (!m_context)
+        return createContextWebMetal(type);
+    return static_cast<WebMetalRenderingContext*>(m_context.get());
 }
 #endif
 
@@ -698,6 +767,8 @@ ExceptionOr<UncachedString> HTMLCanvasElement::toDataURL(const String& mimeType,
 
     if (m_size.isEmpty() || !buffer())
         return UncachedString { "data:,"_s };
+    if (RuntimeEnabledFeatures::sharedFeatures().webAPIStatisticsEnabled())
+        ResourceLoadObserver::shared().logCanvasRead(document());
 
     auto encodingMIMEType = toEncodingMimeType(mimeType);
     auto quality = qualityFromJSValue(qualityValue);
@@ -727,6 +798,8 @@ ExceptionOr<void> HTMLCanvasElement::toBlob(ScriptExecutionContext& context, Ref
         callback->scheduleCallback(context, nullptr);
         return { };
     }
+    if (RuntimeEnabledFeatures::sharedFeatures().webAPIStatisticsEnabled())
+        ResourceLoadObserver::shared().logCanvasRead(document());
 
     auto encodingMIMEType = toEncodingMimeType(mimeType);
     auto quality = qualityFromJSValue(qualityValue);
@@ -755,8 +828,11 @@ ExceptionOr<void> HTMLCanvasElement::toBlob(ScriptExecutionContext& context, Ref
 RefPtr<ImageData> HTMLCanvasElement::getImageData()
 {
 #if ENABLE(WEBGL)
-    if (is<WebGLRenderingContextBase>(m_context.get()))
+    if (is<WebGLRenderingContextBase>(m_context.get())) {
+        if (RuntimeEnabledFeatures::sharedFeatures().webAPIStatisticsEnabled())
+            ResourceLoadObserver::shared().logCanvasRead(document());
         return downcast<WebGLRenderingContextBase>(*m_context).paintRenderingResultsToImageData();
+    }
 #endif
     return nullptr;
 }
@@ -768,6 +844,8 @@ RefPtr<MediaSample> HTMLCanvasElement::toMediaSample()
     auto* imageBuffer = buffer();
     if (!imageBuffer)
         return nullptr;
+    if (RuntimeEnabledFeatures::sharedFeatures().webAPIStatisticsEnabled())
+        ResourceLoadObserver::shared().logCanvasRead(document());
 
 #if PLATFORM(COCOA)
     makeRenderingResultsAvailable();
@@ -781,6 +859,8 @@ ExceptionOr<Ref<MediaStream>> HTMLCanvasElement::captureStream(ScriptExecutionCo
 {
     if (!originClean())
         return Exception(SecurityError, "Canvas is tainted"_s);
+    if (RuntimeEnabledFeatures::sharedFeatures().webAPIStatisticsEnabled())
+        ResourceLoadObserver::shared().logCanvasRead(document());
 
     if (frameRequestRate && frameRequestRate.value() < 0)
         return Exception(NotSupportedError, "frameRequestRate is negative"_s);

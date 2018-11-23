@@ -45,6 +45,7 @@
 #include "DFGCapabilities.h"
 #include "DFGDominators.h"
 #include "DFGInPlaceAbstractState.h"
+#include "DFGMayExit.h"
 #include "DFGOSRAvailabilityAnalysisPhase.h"
 #include "DFGOSRExitFuzz.h"
 #include "DirectArguments.h"
@@ -593,6 +594,9 @@ private:
         case ValueAdd:
             compileValueAdd();
             break;
+        case ValueSub:
+            compileValueSub();
+            break;
         case StrCat:
             compileStrCat();
             break;
@@ -649,11 +653,17 @@ private:
         case ArithUnary:
             compileArithUnary();
             break;
-        case DFG::BitAnd:
-            compileBitAnd();
+        case ValueBitAnd:
+            compileValueBitAnd();
             break;
-        case DFG::BitOr:
-            compileBitOr();
+        case ArithBitAnd:
+            compileArithBitAnd();
+            break;
+        case ValueBitOr:
+            compileValueBitOr();
+            break;
+        case ArithBitOr:
+            compileArithBitOr();
             break;
         case DFG::BitXor:
             compileBitXor();
@@ -1413,7 +1423,7 @@ private:
             setJSValue(phi);
             break;
         default:
-            DFG_CRASH(m_graph, m_node, "Bad use kind");
+            DFG_CRASH(m_graph, m_node, "Bad result type");
             break;
         }
     }
@@ -1727,9 +1737,10 @@ private:
         AbstractValue& value = m_state.operand(data->local);
         
         DFG_ASSERT(m_graph, m_node, isConcrete(data->format), data->format);
-        DFG_ASSERT(m_graph, m_node, data->format != FlushedDouble, data->format); // This just happens to not arise for GetStacks, right now. It would be trivial to support.
         
-        if (isInt32Speculation(value.m_type))
+        if (data->format == FlushedDouble)
+            setDouble(m_out.loadDouble(addressFor(data->machineLocal)));
+        else if (isInt32Speculation(value.m_type))
             setInt32(m_out.load32(payloadFor(data->machineLocal)));
         else
             setJSValue(m_out.load64(addressFor(data->machineLocal)));
@@ -1851,17 +1862,45 @@ private:
 
     void compileValueAdd()
     {
+        if (m_node->isBinaryUseKind(BigIntUse)) {
+            LValue left = lowBigInt(m_node->child1());
+            LValue right = lowBigInt(m_node->child2());
+
+            LValue result = vmCall(pointerType(), m_out.operation(operationAddBigInt), m_callFrame, left, right);
+            setJSValue(result);
+            return;
+        }
+
         CodeBlock* baselineCodeBlock = m_ftlState.graph.baselineCodeBlockFor(m_node->origin.semantic);
         ArithProfile* arithProfile = baselineCodeBlock->arithProfileForBytecodeOffset(m_node->origin.semantic.bytecodeIndex);
-        Instruction* instruction = &baselineCodeBlock->instructions()[m_node->origin.semantic.bytecodeIndex];
+        const Instruction* instruction = baselineCodeBlock->instructions().at(m_node->origin.semantic.bytecodeIndex).ptr();
         auto repatchingFunction = operationValueAddOptimize;
         auto nonRepatchingFunction = operationValueAdd;
         compileBinaryMathIC<JITAddGenerator>(arithProfile, instruction, repatchingFunction, nonRepatchingFunction);
     }
 
+    void compileValueSub()
+    {
+        if (m_node->isBinaryUseKind(BigIntUse)) {
+            LValue left = lowBigInt(m_node->child1());
+            LValue right = lowBigInt(m_node->child2());
+            
+            LValue result = vmCall(pointerType(), m_out.operation(operationSubBigInt), m_callFrame, left, right);
+            setJSValue(result);
+            return;
+        }
+
+        CodeBlock* baselineCodeBlock = m_ftlState.graph.baselineCodeBlockFor(m_node->origin.semantic);
+        ArithProfile* arithProfile = baselineCodeBlock->arithProfileForBytecodeOffset(m_node->origin.semantic.bytecodeIndex);
+        const Instruction* instruction = baselineCodeBlock->instructions().at(m_node->origin.semantic.bytecodeIndex).ptr();
+        auto repatchingFunction = operationValueSubOptimize;
+        auto nonRepatchingFunction = operationValueSub;
+        compileBinaryMathIC<JITSubGenerator>(arithProfile, instruction, repatchingFunction, nonRepatchingFunction);
+    }
+
     template <typename Generator, typename Func1, typename Func2,
         typename = std::enable_if_t<std::is_function<typename std::remove_pointer<Func1>::type>::value && std::is_function<typename std::remove_pointer<Func2>::type>::value>>
-    void compileUnaryMathIC(ArithProfile* arithProfile, Instruction* instruction, Func1 repatchingFunction, Func2 nonRepatchingFunction)
+    void compileUnaryMathIC(ArithProfile* arithProfile, const Instruction* instruction, Func1 repatchingFunction, Func2 nonRepatchingFunction)
     {
         Node* node = m_node;
 
@@ -1947,7 +1986,7 @@ private:
 
     template <typename Generator, typename Func1, typename Func2,
         typename = std::enable_if_t<std::is_function<typename std::remove_pointer<Func1>::type>::value && std::is_function<typename std::remove_pointer<Func2>::type>::value>>
-    void compileBinaryMathIC(ArithProfile* arithProfile, Instruction* instruction, Func1 repatchingFunction, Func2 nonRepatchingFunction)
+    void compileBinaryMathIC(ArithProfile* arithProfile, const Instruction* instruction, Func1 repatchingFunction, Func2 nonRepatchingFunction)
     {
         Node* node = m_node;
         
@@ -2114,7 +2153,7 @@ private:
 
             CodeBlock* baselineCodeBlock = m_ftlState.graph.baselineCodeBlockFor(m_node->origin.semantic);
             ArithProfile* arithProfile = baselineCodeBlock->arithProfileForBytecodeOffset(m_node->origin.semantic.bytecodeIndex);
-            Instruction* instruction = &baselineCodeBlock->instructions()[m_node->origin.semantic.bytecodeIndex];
+            const Instruction* instruction = baselineCodeBlock->instructions().at(m_node->origin.semantic.bytecodeIndex).ptr();
             auto repatchingFunction = operationValueSubOptimize;
             auto nonRepatchingFunction = operationValueSub;
             compileBinaryMathIC<JITSubGenerator>(arithProfile, instruction, repatchingFunction, nonRepatchingFunction);
@@ -2210,7 +2249,7 @@ private:
         case UntypedUse: {
             CodeBlock* baselineCodeBlock = m_ftlState.graph.baselineCodeBlockFor(m_node->origin.semantic);
             ArithProfile* arithProfile = baselineCodeBlock->arithProfileForBytecodeOffset(m_node->origin.semantic.bytecodeIndex);
-            Instruction* instruction = &baselineCodeBlock->instructions()[m_node->origin.semantic.bytecodeIndex];
+            const Instruction* instruction = baselineCodeBlock->instructions().at(m_node->origin.semantic.bytecodeIndex).ptr();
             auto repatchingFunction = operationValueMulOptimize;
             auto nonRepatchingFunction = operationValueMul;
             compileBinaryMathIC<JITMulGenerator>(arithProfile, instruction, repatchingFunction, nonRepatchingFunction);
@@ -2747,7 +2786,7 @@ private:
         DFG_ASSERT(m_graph, m_node, m_node->child1().useKind() == UntypedUse);
         CodeBlock* baselineCodeBlock = m_ftlState.graph.baselineCodeBlockFor(m_node->origin.semantic);
         ArithProfile* arithProfile = baselineCodeBlock->arithProfileForBytecodeOffset(m_node->origin.semantic.bytecodeIndex);
-        Instruction* instruction = &baselineCodeBlock->instructions()[m_node->origin.semantic.bytecodeIndex];
+        const Instruction* instruction = baselineCodeBlock->instructions().at(m_node->origin.semantic.bytecodeIndex).ptr();
         auto repatchingFunction = operationArithNegateOptimize;
         auto nonRepatchingFunction = operationArithNegate;
         compileUnaryMathIC<JITNegGenerator>(arithProfile, instruction, repatchingFunction, nonRepatchingFunction);
@@ -2806,21 +2845,41 @@ private:
         }
     }
     
-    void compileBitAnd()
+    void compileValueBitAnd()
     {
-        if (m_node->isBinaryUseKind(UntypedUse)) {
-            emitBinaryBitOpSnippet<JITBitAndGenerator>(operationValueBitAnd);
+        if (m_node->isBinaryUseKind(BigIntUse)) {
+            LValue left = lowBigInt(m_node->child1());
+            LValue right = lowBigInt(m_node->child2());
+            
+            LValue result = vmCall(pointerType(), m_out.operation(operationBitAndBigInt), m_callFrame, left, right);
+            setJSValue(result);
             return;
         }
+        
+        emitBinaryBitOpSnippet<JITBitAndGenerator>(operationValueBitAnd);
+    }
+    
+    void compileArithBitAnd()
+    {
         setInt32(m_out.bitAnd(lowInt32(m_node->child1()), lowInt32(m_node->child2())));
     }
     
-    void compileBitOr()
+    void compileValueBitOr()
     {
-        if (m_node->isBinaryUseKind(UntypedUse)) {
-            emitBinaryBitOpSnippet<JITBitOrGenerator>(operationValueBitOr);
+        if (m_node->isBinaryUseKind(BigIntUse)) {
+            LValue left = lowBigInt(m_node->child1());
+            LValue right = lowBigInt(m_node->child2());
+
+            LValue result = vmCall(pointerType(), m_out.operation(operationBitOrBigInt), m_callFrame, left, right);
+            setJSValue(result);
             return;
         }
+
+        emitBinaryBitOpSnippet<JITBitOrGenerator>(operationValueBitOr);
+    }
+
+    void compileArithBitOr()
+    {
         setInt32(m_out.bitOr(lowInt32(m_node->child1()), lowInt32(m_node->child2())));
     }
     
@@ -9637,12 +9696,13 @@ private:
         LValue index = m_out.bitAnd(mask, unmaskedIndex);
 
         LValue bucket;
+
         if (m_node->child1().useKind() == WeakMapObjectUse) {
-            static_assert(sizeof(WeakMapBucket<WeakMapBucketDataKeyValue>) == 16, "");
-            bucket = m_out.add(buffer, m_out.shl(m_out.zeroExt(index, Int64), m_out.constInt32(4)));
+            static_assert(hasOneBitSet(sizeof(WeakMapBucket<WeakMapBucketDataKeyValue>)), "Should be a power of 2");
+            bucket = m_out.add(buffer, m_out.shl(m_out.zeroExt(index, Int64), m_out.constInt32(getLSBSet(sizeof(WeakMapBucket<WeakMapBucketDataKeyValue>)))));
         } else {
-            static_assert(sizeof(WeakMapBucket<WeakMapBucketDataKey>) == 8, "");
-            bucket = m_out.add(buffer, m_out.shl(m_out.zeroExt(index, Int64), m_out.constInt32(3)));
+            static_assert(hasOneBitSet(sizeof(WeakMapBucket<WeakMapBucketDataKey>)), "Should be a power of 2");
+            bucket = m_out.add(buffer, m_out.shl(m_out.zeroExt(index, Int64), m_out.constInt32(getLSBSet(sizeof(WeakMapBucket<WeakMapBucketDataKey>)))));
         }
 
         LValue bucketKey = m_out.load64(bucket, m_heaps.WeakMapBucket_key);
@@ -14401,6 +14461,18 @@ private:
     
     LValue doubleToInt32(LValue doubleValue)
     {
+#if CPU(ARM64)
+        if (MacroAssemblerARM64::supportsDoubleToInt32ConversionUsingJavaScriptSemantics()) {
+            PatchpointValue* patchpoint = m_out.patchpoint(Int32);
+            patchpoint->append(ConstrainedValue(doubleValue, B3::ValueRep::SomeRegister));
+            patchpoint->setGenerator([=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
+                jit.convertDoubleToInt32UsingJavaScriptSemantics(params[1].fpr(), params[0].gpr());
+            });
+            patchpoint->effects = Effects::none();
+            return patchpoint;
+        }
+#endif
+
         if (hasSensibleDoubleToInt())
             return sensibleDoubleToInt32(doubleValue);
         
@@ -14614,6 +14686,11 @@ private:
     {
         m_state.setIsValid(false);
     }
+
+    void simulatedTypeCheck(Edge highValue, SpeculatedType typesPassedThrough)
+    {
+        m_interpreter.filter(highValue, typesPassedThrough);
+    }
     
     void typeCheck(
         FormattedValue lowValue, Edge highValue, SpeculatedType typesPassedThrough,
@@ -14639,6 +14716,7 @@ private:
         
         if (edge->hasConstant()) {
             JSValue value = edge->asJSValue();
+            simulatedTypeCheck(edge, SpecInt32Only);
             if (!value.isInt32()) {
                 if (mayHaveTypeCheck(edge.useKind()))
                     terminate(Uncountable);
@@ -14650,8 +14728,10 @@ private:
         }
         
         LoweredNodeValue value = m_int32Values.get(edge.node());
-        if (isValid(value))
+        if (isValid(value)) {
+            simulatedTypeCheck(edge, SpecInt32Only);
             return value.value();
+        }
         
         value = m_strictInt52Values.get(edge.node());
         if (isValid(value))
@@ -14759,6 +14839,7 @@ private:
         
         if (edge->op() == JSConstant) {
             FrozenValue* value = edge->constant();
+            simulatedTypeCheck(edge, SpecCellCheck);
             if (!value->value().isCell()) {
                 if (mayHaveTypeCheck(edge.useKind()))
                     terminate(Uncountable);
@@ -14886,6 +14967,7 @@ private:
         
         if (edge->hasConstant()) {
             JSValue value = edge->asJSValue();
+            simulatedTypeCheck(edge, SpecBoolean);
             if (!value.isBoolean()) {
                 if (mayHaveTypeCheck(edge.useKind()))
                     terminate(Uncountable);
@@ -14897,8 +14979,10 @@ private:
         }
         
         LoweredNodeValue value = m_booleanValues.get(edge.node());
-        if (isValid(value))
+        if (isValid(value)) {
+            simulatedTypeCheck(edge, SpecBoolean);
             return value.value();
+        }
         
         value = m_jsValueValues.get(edge.node());
         if (isValid(value)) {
@@ -15255,6 +15339,8 @@ private:
         case KnownOtherUse:
         case DoubleRepUse:
         case Int52RepUse:
+        case KnownCellUse:
+        case KnownBooleanUse:
             ASSERT(!m_interpreter.needsTypeCheck(edge));
             break;
         case Int32Use:
@@ -15265,9 +15351,6 @@ private:
             break;
         case CellOrOtherUse:
             speculateCellOrOther(edge);
-            break;
-        case KnownCellUse:
-            ASSERT(!m_interpreter.needsTypeCheck(edge));
             break;
         case AnyIntUse:
             speculateAnyInt(edge);
@@ -16260,7 +16343,26 @@ private:
     {
         callPreflight();
         LValue result = m_out.call(type, function, std::forward<Args>(args)...);
-        callCheck();
+        if (mayExit(m_graph, m_node))
+            callCheck();
+        else {
+            // We can't exit due to an exception, so we also can't throw an exception.
+#ifndef NDEBUG
+            LBasicBlock crash = m_out.newBlock();
+            LBasicBlock continuation = m_out.newBlock();
+
+            LValue exception = m_out.load64(m_out.absolute(vm().addressOfException()));
+            LValue hadException = m_out.notZero64(exception);
+
+            m_out.branch(
+                hadException, rarely(crash), usually(continuation));
+
+            LBasicBlock lastNext = m_out.appendTo(crash, continuation);
+            m_out.unreachable();
+
+            m_out.appendTo(continuation, lastNext);
+#endif
+        }
         return result;
     }
     

@@ -215,18 +215,18 @@ template <class T> class optional<T&>;
 namespace detail_ {
 
 // workaround: std utility functions aren't constexpr yet
-template <class T> inline constexpr T&& constexpr_forward(typename std::remove_reference<T>::type& t) __NOEXCEPT
+template <class T> constexpr T&& constexpr_forward(typename std::remove_reference<T>::type& t) __NOEXCEPT
 {
   return static_cast<T&&>(t);
 }
 
-template <class T> inline constexpr T&& constexpr_forward(typename std::remove_reference<T>::type&& t) __NOEXCEPT
+template <class T> constexpr T&& constexpr_forward(typename std::remove_reference<T>::type&& t) __NOEXCEPT
 {
     static_assert(!std::is_lvalue_reference<T>::value, "!!");
     return static_cast<T&&>(t);
 }
 
-template <class T> inline constexpr typename std::remove_reference<T>::type&& constexpr_move(T&& t) __NOEXCEPT
+template <class T> constexpr typename std::remove_reference<T>::type&& constexpr_move(T&& t) __NOEXCEPT
 {
     return static_cast<typename std::remove_reference<T>::type&&>(t);
 }
@@ -275,14 +275,6 @@ struct nullopt_t
   constexpr explicit nullopt_t(init){}
 };
 constexpr nullopt_t nullopt{nullopt_t::init()};
-
-
-// 20.5.8, class bad_optional_access
-class bad_optional_access : public std::logic_error {
-public:
-  explicit bad_optional_access(const std::string& what_arg) : std::logic_error{what_arg} {}
-  explicit bad_optional_access(const char* what_arg) : std::logic_error{what_arg} {}
-};
 
 
 template <class T>

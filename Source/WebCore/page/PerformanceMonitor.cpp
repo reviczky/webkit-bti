@@ -51,7 +51,7 @@ static const Seconds memoryUsageMeasurementDelay { 10_s };
 static const Seconds delayBeforeProcessMayBecomeInactive { 8_min };
 
 static const double postPageLoadCPUUsageDomainReportingThreshold { 20.0 }; // Reporting pages using over 20% CPU is roughly equivalent to reporting the 10% worst pages.
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
 static const uint64_t postPageLoadMemoryUsageDomainReportingThreshold { 2048 * MB };
 #endif
 
@@ -131,7 +131,7 @@ void PerformanceMonitor::activityStateChanged(OptionSet<ActivityState::Flag> old
             m_postBackgroundingMemoryUsageTimer.startOneShot(memoryUsageMeasurementDelay);
     }
 
-    if (newState & ActivityState::IsVisible && newState & ActivityState::WindowIsActive) {
+    if (newState.containsAll({ ActivityState::IsVisible, ActivityState::WindowIsActive })) {
         m_processMayBecomeInactive = false;
         m_processMayBecomeInactiveTimer.stop();
     } else if (!m_processMayBecomeInactive && !m_processMayBecomeInactiveTimer.isActive())
@@ -204,7 +204,7 @@ void PerformanceMonitor::measurePostLoadMemoryUsage()
     m_page.diagnosticLoggingClient().logDiagnosticMessage(DiagnosticLoggingKeys::postPageLoadMemoryUsageKey(), DiagnosticLoggingKeys::memoryUsageToDiagnosticLoggingKey(memoryUsage.value()), ShouldSample::No);
 
     // On iOS, we report actual Jetsams instead.
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     if (memoryUsage.value() > postPageLoadMemoryUsageDomainReportingThreshold)
         reportPageOverPostLoadResourceThreshold(m_page, ReportingReason::HighMemoryUsage);
 #endif

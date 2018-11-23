@@ -29,7 +29,6 @@
 
 #include "WKAPICast.h"
 #include <JavaScriptCore/InitializeThreading.h>
-#include <JavaScriptCore/JSStringRef.h>
 #include <JavaScriptCore/OpaqueJSString.h>
 
 using namespace WebKit;
@@ -137,5 +136,5 @@ WKStringRef WKStringCreateWithJSString(JSStringRef jsStringRef)
 JSStringRef WKStringCopyJSString(WKStringRef stringRef)
 {
     JSC::initializeThreading();
-    return OpaqueJSString::create(toImpl(stringRef)->string()).leakRef();
+    return OpaqueJSString::tryCreate(toImpl(stringRef)->string()).leakRef();
 }

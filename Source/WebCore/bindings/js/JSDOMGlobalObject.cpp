@@ -40,6 +40,7 @@
 #include "JSReadableStreamPrivateConstructors.h"
 #include "JSRemoteDOMWindow.h"
 #include "JSWorkerGlobalScope.h"
+#include "JSWorkletGlobalScope.h"
 #include "RejectedPromiseTracker.h"
 #include "RuntimeEnabledFeatures.h"
 #include "StructuredClone.h"
@@ -49,13 +50,13 @@
 #include <JavaScriptCore/CodeBlock.h>
 #include <JavaScriptCore/JSInternalPromise.h>
 #include <JavaScriptCore/JSInternalPromiseDeferred.h>
+#include <JavaScriptCore/StructureInlines.h>
 
 namespace WebCore {
 using namespace JSC;
 
 EncodedJSValue JSC_HOST_CALL makeThisTypeErrorForBuiltins(ExecState*);
 EncodedJSValue JSC_HOST_CALL makeGetterTypeErrorForBuiltins(ExecState*);
-EncodedJSValue JSC_HOST_CALL isWebRTCLegacyAPIEnabled(ExecState*);
 EncodedJSValue JSC_HOST_CALL isReadableByteStreamAPIEnabled(ExecState*);
 
 const ClassInfo JSDOMGlobalObject::s_info = { "DOMGlobalObject", &JSGlobalObject::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(JSDOMGlobalObject) };
@@ -102,13 +103,6 @@ EncodedJSValue JSC_HOST_CALL makeGetterTypeErrorForBuiltins(ExecState* execState
     scope.assertNoException();
     return JSValue::encode(createTypeError(execState, makeGetterTypeErrorMessage(interfaceName.utf8().data(), attributeName.utf8().data())));
 }
-
-#if ENABLE(WEB_RTC)
-EncodedJSValue JSC_HOST_CALL isWebRTCLegacyAPIEnabled(ExecState*)
-{
-    return JSValue::encode(jsBoolean(RuntimeEnabledFeatures::sharedFeatures().webRTCLegacyAPIEnabled()));
-}
-#endif
 
 #if ENABLE(STREAMS_API)
 EncodedJSValue JSC_HOST_CALL isReadableByteStreamAPIEnabled(ExecState*)
@@ -170,9 +164,6 @@ void JSDOMGlobalObject::addBuiltinGlobals(VM& vm)
         JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().ReadableStreamBYOBReaderPrivateName(), privateReadableStreamBYOBReaderConstructor, PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().readableByteStreamAPIEnabledPrivateName(), JSFunction::create(vm, this, 0, String(), isReadableByteStreamAPIEnabled), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
 #endif
-#if ENABLE(WEB_RTC)
-        JSDOMGlobalObject::GlobalPropertyInfo(clientData.builtinNames().webRTCLegacyAPIEnabledPrivateName(), JSFunction::create(vm, this, 0, String(), isWebRTCLegacyAPIEnabled), PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
-#endif
     };
     addStaticGlobals(staticGlobals, WTF_ARRAY_LENGTH(staticGlobals));
 }
@@ -205,6 +196,10 @@ ScriptExecutionContext* JSDOMGlobalObject::scriptExecutionContext() const
         return nullptr;
     if (inherits<JSWorkerGlobalScopeBase>(vm()))
         return jsCast<const JSWorkerGlobalScopeBase*>(this)->scriptExecutionContext();
+#if ENABLE(CSS_PAINTING_API)
+    if (inherits<JSWorkletGlobalScopeBase>(vm()))
+        return jsCast<const JSWorkletGlobalScopeBase*>(this)->scriptExecutionContext();
+#endif
     dataLog("Unexpected global object: ", JSValue(this), "\n");
     RELEASE_ASSERT_NOT_REACHED();
     return nullptr;

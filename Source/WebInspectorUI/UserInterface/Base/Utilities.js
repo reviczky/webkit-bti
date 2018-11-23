@@ -118,6 +118,35 @@ Object.defineProperty(Map.prototype, "take",
     }
 });
 
+Object.defineProperty(Set.prototype, "intersects",
+{
+    value(other)
+    {
+        if (!this.size || !other.size)
+            return false;
+
+        for (let item of this) {
+            if (other.has(item))
+                return true;
+        }
+
+        return false;
+    }
+});
+
+Object.defineProperty(Set.prototype, "isSubsetOf",
+{
+    value(other)
+    {
+        for (let item of this) {
+            if (!other.has(item))
+                return false;
+        }
+
+        return true;
+    }
+});
+
 Object.defineProperty(Node.prototype, "enclosingNodeOrSelfWithClass",
 {
     value(className)
@@ -350,16 +379,6 @@ Object.defineProperty(Element.prototype, "isInsertionCaretInside",
     }
 });
 
-Object.defineProperty(Element.prototype, "removeMatchingStyleClasses",
-{
-    value(classNameRegex)
-    {
-        var regex = new RegExp("(^|\\s+)" + classNameRegex + "($|\\s+)");
-        if (regex.test(this.className))
-            this.className = this.className.replace(regex, " ");
-    }
-});
-
 Object.defineProperty(Element.prototype, "createChild",
 {
     value(elementName, className)
@@ -403,11 +422,43 @@ Object.defineProperty(Event.prototype, "stop",
     }
 });
 
+Object.defineProperty(KeyboardEvent.prototype, "commandOrControlKey",
+{
+    get()
+    {
+        return WI.Platform.name === "mac" ? this.metaKey : this.ctrlKey;
+    }
+});
+
+Object.defineProperty(Array, "isTypedArray",
+{
+    value(array)
+    {
+        if (!array)
+            return false;
+
+        let constructor = array.constructor;
+        return constructor === Int8Array
+            || constructor === Int16Array
+            || constructor === Int32Array
+            || constructor === Uint8Array
+            || constructor === Uint8ClampedArray
+            || constructor === Uint16Array
+            || constructor === Uint32Array
+            || constructor === Float32Array
+            || constructor === Float64Array;
+    }
+});
+
 Object.defineProperty(Array, "shallowEqual",
 {
     value(a, b)
     {
-        if (!Array.isArray(a) || !Array.isArray(b))
+        function isArrayLike(x) {
+            return Array.isArray(x) || Array.isTypedArray(x);
+        }
+
+        if (!isArrayLike(a) || !isArrayLike(b))
             return false;
 
         if (a === b)
@@ -437,6 +488,14 @@ Object.defineProperty(Array.prototype, "lastValue",
         if (!this.length)
             return undefined;
         return this[this.length - 1];
+    }
+});
+
+Object.defineProperty(Array.prototype, "adjacencies",
+{
+    value: function*() {
+        for (let i = 1; i < this.length; ++i)
+            yield [this[i - 1], this[i]];
     }
 });
 
@@ -528,6 +587,18 @@ Object.defineProperty(String.prototype, "isUpperCase",
     value()
     {
         return String(this) === this.toUpperCase();
+    }
+});
+
+Object.defineProperty(String.prototype, "truncateStart",
+{
+    value(maxLength)
+    {
+        "use strict";
+
+        if (this.length <= maxLength)
+            return this;
+        return ellipsis + this.substr(this.length - maxLength + 1);
     }
 });
 
@@ -917,22 +988,6 @@ Object.defineProperty(String.prototype, "removeWordBreakCharacters",
     {
         // Undoes what insertWordBreakCharacters did.
         return this.replace(/\u200b/g, "");
-    }
-});
-
-Object.defineProperty(String.prototype, "getMatchingIndexes",
-{
-    value(needle)
-    {
-        var indexesOfNeedle = [];
-        var index = this.indexOf(needle);
-
-        while (index >= 0) {
-            indexesOfNeedle.push(index);
-            index = this.indexOf(needle, index + 1);
-        }
-
-        return indexesOfNeedle;
     }
 });
 
@@ -1334,6 +1389,25 @@ Object.defineProperty(Array.prototype, "binaryIndexOf",
     {
         var index = this.lowerBound(value, comparator);
         return index < this.length && comparator(value, this[index]) === 0 ? index : -1;
+    }
+});
+
+Object.defineProperty(Promise, "chain",
+{
+    async value(callbacks, initialValue)
+    {
+        let results = [];
+        for (let i = 0; i < callbacks.length; ++i)
+            results.push(await callbacks[i](results.lastValue || initialValue || null, i));
+        return results;
+    }
+});
+
+Object.defineProperty(Promise, "delay",
+{
+    value(delay)
+    {
+        return new Promise((resolve) => setTimeout(resolve, delay || 0));
     }
 });
 

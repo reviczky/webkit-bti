@@ -775,8 +775,8 @@ void webkit_web_context_clear_cache(WebKitWebContext* context)
     g_return_if_fail(WEBKIT_IS_WEB_CONTEXT(context));
 
     OptionSet<WebsiteDataType> websiteDataTypes;
-    websiteDataTypes |= WebsiteDataType::MemoryCache;
-    websiteDataTypes |= WebsiteDataType::DiskCache;
+    websiteDataTypes.add(WebsiteDataType::MemoryCache);
+    websiteDataTypes.add(WebsiteDataType::DiskCache);
     auto& websiteDataStore = webkitWebsiteDataManagerGetDataStore(context->priv->websiteDataManager.get()).websiteDataStore();
     websiteDataStore.removeData(websiteDataTypes, -WallTime::infinity(), [] { });
 }
@@ -1148,6 +1148,51 @@ void webkit_web_context_register_uri_scheme(WebKitWebContext* context, const cha
 }
 
 /**
+ * webkit_web_context_set_sandbox_enabled:
+ * @context: a #WebKitWebContext
+ * @enabled: if %TRUE enable sandboxing
+ *
+ * Set whether WebKit subprocesses will be sandboxed, limiting access to the system.
+ *
+ * This method **must be called before any web process has been created**,
+ * as early as possible in your application. Calling it later is a fatal error.
+ *
+ * This is only implemented on Linux and is a no-op otherwise.
+ *
+ * If you read from `$XDG_CONFIG_HOME/g_get_prgname()` or `$XDG_CACHE_HOME/g_get_prgname()`
+ * in your WebProcess you must ensure it exists before subprocesses are created.
+ * This behavior may change in the future.
+ *
+ * Since: 2.24
+ */
+void webkit_web_context_set_sandbox_enabled(WebKitWebContext* context, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_CONTEXT(context));
+
+    if (context->priv->processPool->processes().size())
+        g_error("Sandboxing cannot be changed after subprocesses were spawned.");
+
+    context->priv->processPool->setSandboxEnabled(enabled);
+}
+
+/**
+ * webkit_web_context_get_sandbox_enabled:
+ * @context: a #WebKitWebContext
+ *
+ * Get whether sandboxing is currently enabled.
+ *
+ * Returns: %TRUE if sandboxing is enabled, or %FALSE otherwise.
+ *
+ * Since: 2.24
+ */
+gboolean webkit_web_context_get_sandbox_enabled(WebKitWebContext* context)
+{
+    g_return_val_if_fail(WEBKIT_IS_WEB_CONTEXT(context), FALSE);
+
+    return context->priv->processPool->sandboxEnabled();
+}
+
+/**
  * webkit_web_context_get_spell_checking_enabled:
  * @context: a #WebKitWebContext
  *
@@ -1267,9 +1312,9 @@ void webkit_web_context_set_preferred_languages(WebKitWebContext* context, const
     for (size_t i = 0; languageList[i]; ++i) {
         // Do not propagate the C locale to WebCore.
         if (!g_ascii_strcasecmp(languageList[i], "C") || !g_ascii_strcasecmp(languageList[i], "POSIX"))
-            languages.append("en-us"_s);
+            languages.append("en-US"_s);
         else
-            languages.append(String::fromUTF8(languageList[i]).convertToASCIILowercase().replace("_", "-"));
+            languages.append(String::fromUTF8(languageList[i]).replace("_", "-"));
     }
     overrideUserPreferredLanguages(languages);
 }

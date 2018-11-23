@@ -58,7 +58,6 @@ class URL;
 
 namespace WebKit {
 
-class InjectedBundleFileHandle;
 class InjectedBundleHitTestResult;
 class InjectedBundleNodeHandle;
 class InjectedBundleRangeHandle;
@@ -133,7 +132,6 @@ public:
 
     JSValueRef jsWrapperForWorld(InjectedBundleNodeHandle*, InjectedBundleScriptWorld*);
     JSValueRef jsWrapperForWorld(InjectedBundleRangeHandle*, InjectedBundleScriptWorld*);
-    JSValueRef jsWrapperForWorld(InjectedBundleFileHandle*, InjectedBundleScriptWorld*);
 
     static String counterValue(JSObjectRef element);
 
@@ -169,7 +167,7 @@ public:
 
     RefPtr<ShareableBitmap> createSelectionSnapshot() const;
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     uint64_t firstLayerTreeTransactionIDAfterDidCommitLoad() const { return m_firstLayerTreeTransactionIDAfterDidCommitLoad; }
     void setFirstLayerTreeTransactionIDAfterDidCommitLoad(uint64_t transactionID) { m_firstLayerTreeTransactionIDAfterDidCommitLoad = transactionID; }
 #endif
@@ -191,7 +189,7 @@ private:
     
     uint64_t m_frameID { 0 };
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     uint64_t m_firstLayerTreeTransactionIDAfterDidCommitLoad { 0 };
 #endif
 };

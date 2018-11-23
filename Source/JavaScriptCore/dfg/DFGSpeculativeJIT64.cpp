@@ -876,12 +876,7 @@ void SpeculativeJIT::emitCall(Node* node)
 
 // Clang should allow unreachable [[clang::fallthrough]] in template functions if any template expansion uses it
 // http://llvm.org/bugs/show_bug.cgi?id=18619
-#if COMPILER(CLANG) && defined(__has_warning)
-#pragma clang diagnostic push
-#if __has_warning("-Wimplicit-fallthrough")
-#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
-#endif
-#endif
+IGNORE_CLANG_WARNINGS_BEGIN("implicit-fallthrough")
 template<bool strict>
 GPRReg SpeculativeJIT::fillSpeculateInt32Internal(Edge edge, DataFormat& returnFormat)
 {
@@ -1012,9 +1007,7 @@ GPRReg SpeculativeJIT::fillSpeculateInt32Internal(Edge edge, DataFormat& returnF
         return InvalidGPRReg;
     }
 }
-#if COMPILER(CLANG) && defined(__has_warning)
-#pragma clang diagnostic pop
-#endif
+IGNORE_CLANG_WARNINGS_END
 
 GPRReg SpeculativeJIT::fillSpeculateInt32(Edge edge, DataFormat& returnFormat)
 {
@@ -2081,8 +2074,13 @@ void SpeculativeJIT::compile(Node* node)
         recordSetLocal(dataFormatFor(node->variableAccessData()->flushFormat()));
         break;
 
-    case BitAnd:
-    case BitOr:
+    case ValueBitAnd:
+    case ValueBitOr:
+        compileValueBitwiseOp(node);
+        break;
+
+    case ArithBitAnd:
+    case ArithBitOr:
     case BitXor:
         compileBitwiseOp(node);
         break;
@@ -2171,6 +2169,10 @@ void SpeculativeJIT::compile(Node* node)
 
     case ValueAdd:
         compileValueAdd(node);
+        break;
+
+    case ValueSub:
+        compileValueSub(node);
         break;
 
     case StrCat: {
@@ -2452,7 +2454,7 @@ void SpeculativeJIT::compile(Node* node)
 
                 m_jit.loadDouble(MacroAssembler::BaseIndex(storageReg, propertyReg, MacroAssembler::TimesEight), resultReg);
                 if (!node->arrayMode().isSaneChain())
-                    speculationCheck(LoadFromHole, JSValueRegs(), 0, m_jit.branchDouble(MacroAssembler::DoubleNotEqualOrUnordered, resultReg, resultReg));
+                    speculationCheck(LoadFromHole, JSValueRegs(), 0, m_jit.branchIfNaN(resultReg));
                 doubleResult(resultReg, node);
                 break;
             }
@@ -2478,7 +2480,7 @@ void SpeculativeJIT::compile(Node* node)
             slowCases.append(m_jit.branch32(MacroAssembler::AboveOrEqual, propertyReg, MacroAssembler::Address(storageReg, Butterfly::offsetOfPublicLength())));
 
             m_jit.loadDouble(MacroAssembler::BaseIndex(storageReg, propertyReg, MacroAssembler::TimesEight), tempReg);
-            slowCases.append(m_jit.branchDouble(MacroAssembler::DoubleNotEqualOrUnordered, tempReg, tempReg));
+            slowCases.append(m_jit.branchIfNaN(tempReg));
             boxDouble(tempReg, resultReg);
             
             addSlowPathGenerator(
@@ -3132,7 +3134,7 @@ void SpeculativeJIT::compile(Node* node)
                 // length and the new length.
                 m_jit.store64(
                     MacroAssembler::TrustedImm64(bitwise_cast<int64_t>(PNaN)), MacroAssembler::BaseIndex(storageGPR, storageLengthGPR, MacroAssembler::TimesEight));
-                slowCase = m_jit.branchDouble(MacroAssembler::DoubleNotEqualOrUnordered, tempFPR, tempFPR);
+                slowCase = m_jit.branchIfNaN(tempFPR);
                 boxDouble(tempFPR, valueGPR);
             } else {
                 m_jit.load64(
@@ -4409,8 +4411,10 @@ void SpeculativeJIT::compile(Node* node)
         m_jit.load32(MacroAssembler::Address(objectGPR, JSCell::structureIDOffset()), structureIDGPR);
         m_jit.add32(structureIDGPR, hashGPR);
         m_jit.and32(TrustedImm32(HasOwnPropertyCache::mask), hashGPR);
-        static_assert(sizeof(HasOwnPropertyCache::Entry) == 16, "Strong assumption of that here.");
-        m_jit.lshift32(TrustedImm32(4), hashGPR);
+        if (hasOneBitSet(sizeof(HasOwnPropertyCache::Entry))) // is a power of 2
+            m_jit.lshift32(TrustedImm32(getLSBSet(sizeof(HasOwnPropertyCache::Entry))), hashGPR);
+        else
+            m_jit.mul32(TrustedImm32(sizeof(HasOwnPropertyCache::Entry)), hashGPR, hashGPR);
         ASSERT(m_jit.vm()->hasOwnPropertyCache());
         m_jit.move(TrustedImmPtr(m_jit.vm()->hasOwnPropertyCache()), tempGPR);
         slowPath.append(m_jit.branchPtr(MacroAssembler::NotEqual, 

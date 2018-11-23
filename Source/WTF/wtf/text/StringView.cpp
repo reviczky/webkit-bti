@@ -25,7 +25,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "config.h"
-#include "StringView.h"
+#include <wtf/text/StringView.h>
 
 #include <mutex>
 #include <unicode/ubrk.h>
@@ -35,7 +35,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <wtf/Optional.h>
 #include <wtf/text/StringBuffer.h>
 #include <wtf/text/TextBreakIterator.h>
-#include <wtf/unicode/UTF8.h>
+#include <wtf/unicode/UTF8Conversion.h>
 
 namespace WTF {
 

@@ -41,6 +41,7 @@
 #include <WebCore/HTMLIFrameElement.h>
 #include <WebCore/HTMLInputElement.h>
 #include <WebCore/HTMLNames.h>
+#include <WebCore/HTMLSelectElement.h>
 #include <WebCore/HTMLTableCellElement.h>
 #include <WebCore/HTMLTextAreaElement.h>
 #include <WebCore/IntRect.h>
@@ -170,9 +171,9 @@ static RefPtr<WebImage> imageForRect(FrameView* frameView, const IntRect& painti
 
     auto paintBehavior = frameView->paintBehavior() | PaintBehavior::FlattenCompositingLayers | PaintBehavior::Snapshotting;
     if (options & SnapshotOptionsForceBlackText)
-        paintBehavior |= PaintBehavior::ForceBlackText;
+        paintBehavior.add(PaintBehavior::ForceBlackText);
     if (options & SnapshotOptionsForceWhiteText)
-        paintBehavior |= PaintBehavior::ForceWhiteText;
+        paintBehavior.add(PaintBehavior::ForceWhiteText);
 
     auto oldPaintBehavior = frameView->paintBehavior();
     frameView->setPaintBehavior(paintBehavior);
@@ -334,6 +335,11 @@ bool InjectedBundleNodeHandle::isTextField() const
         return false;
 
     return downcast<HTMLInputElement>(m_node.get()).isTextField();
+}
+
+bool InjectedBundleNodeHandle::isSelectElement() const
+{
+    return is<HTMLSelectElement>(m_node);
 }
 
 RefPtr<InjectedBundleNodeHandle> InjectedBundleNodeHandle::htmlTableCellElementCellAbove()

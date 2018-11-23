@@ -56,15 +56,18 @@
 #include "Element.h"
 #include "Event.h"
 #include "EventListener.h"
+#include "EventNames.h"
 #include "Frame.h"
 #include "FrameTree.h"
 #include "HTMLElement.h"
 #include "HTMLFrameOwnerElement.h"
+#include "HTMLMediaElement.h"
 #include "HTMLNames.h"
 #include "HTMLParserIdioms.h"
 #include "HTMLScriptElement.h"
 #include "HTMLStyleElement.h"
 #include "HTMLTemplateElement.h"
+#include "HTMLVideoElement.h"
 #include "HitTestResult.h"
 #include "InspectorClient.h"
 #include "InspectorController.h"
@@ -94,6 +97,7 @@
 #include "Text.h"
 #include "TextNodeTraversal.h"
 #include "Timer.h"
+#include "VideoPlaybackQuality.h"
 #include "WebInjectedScriptManager.h"
 #include "XPathResult.h"
 #include "markup.h"
@@ -218,6 +222,51 @@ private:
     RefPtr<Node> m_node;
 };
 
+class EventFiredCallback final : public EventListener {
+public:
+    static Ref<EventFiredCallback> create(InspectorDOMAgent& domAgent)
+    {
+        return adoptRef(*new EventFiredCallback(domAgent));
+    }
+
+    bool operator==(const EventListener& other) const final
+    {
+        return this == &other;
+    }
+
+    void handleEvent(ScriptExecutionContext&, Event& event) final
+    {
+        if (!is<Node>(event.target()) || m_domAgent.m_dispatchedEvents.contains(&event))
+            return;
+
+        auto* node = downcast<Node>(event.target());
+        int nodeId = m_domAgent.pushNodePathToFrontend(node);
+        if (!nodeId)
+            return;
+
+        m_domAgent.m_dispatchedEvents.add(&event);
+
+        RefPtr<JSON::Object> data = JSON::Object::create();
+
+#if ENABLE(FULLSCREEN_API)
+        if (event.type() == eventNames().webkitfullscreenchangeEvent)
+            data->setBoolean("enabled"_s, !!node->document().webkitFullscreenElement());
+#endif // ENABLE(FULLSCREEN_API)
+
+        auto timestamp = m_domAgent.m_environment.executionStopwatch()->elapsedTime().seconds();
+        m_domAgent.m_frontendDispatcher->didFireEvent(nodeId, event.type(), timestamp, data->size() ? WTFMove(data) : nullptr);
+    }
+
+private:
+    EventFiredCallback(InspectorDOMAgent& domAgent)
+        : EventListener(EventListener::CPPEventListenerType)
+        , m_domAgent(domAgent)
+    {
+    }
+
+    InspectorDOMAgent& m_domAgent;
+};
+
 String InspectorDOMAgent::toErrorString(ExceptionCode ec)
 {
     return ec ? String(DOMException::name(ec)) : emptyString();
@@ -235,6 +284,9 @@ InspectorDOMAgent::InspectorDOMAgent(WebAgentContext& context, InspectorPageAgen
     , m_backendDispatcher(Inspector::DOMBackendDispatcher::create(context.backendDispatcher, this))
     , m_pageAgent(pageAgent)
     , m_overlay(overlay)
+#if ENABLE(VIDEO)
+    , m_mediaMetricsTimer(*this, &InspectorDOMAgent::mediaMetricsTimerFired)
+#endif
 {
 }
 
@@ -251,6 +303,14 @@ void InspectorDOMAgent::didCreateFrontendAndBackend(Inspector::FrontendRouter*, 
 
     m_instrumentingAgents.setInspectorDOMAgent(this);
     m_document = m_pageAgent->mainFrame().document();
+
+#if ENABLE(VIDEO)
+    if (m_document)
+        addEventListenersToNode(*m_document);
+
+    for (auto* mediaElement : HTMLMediaElement::allMediaElements())
+        addEventListenersToNode(*mediaElement);
+#endif
 
     if (m_nodeToFocus)
         focusNode();
@@ -482,6 +542,7 @@ void InspectorDOMAgent::discardBindings()
 {
     m_documentNodeToIdMap.clear();
     m_idToNode.clear();
+    m_dispatchedEvents.clear();
     m_eventListenerEntries.clear();
     releaseDanglingNodes();
     m_childrenRequested.clear();
@@ -765,7 +826,7 @@ void InspectorDOMAgent::getOuterHTML(ErrorString& errorString, int nodeId, WTF::
     if (!node)
         return;
 
-    *outerHTML = createMarkup(*node);
+    *outerHTML = serializeFragment(*node, SerializedNodes::SubtreeIncludingNode);
 }
 
 void InspectorDOMAgent::setOuterHTML(ErrorString& errorString, int nodeId, const String& outerHTML)
@@ -827,6 +888,15 @@ void InspectorDOMAgent::setNodeValue(ErrorString& errorString, int nodeId, const
     }
 
     m_domEditor->replaceWholeText(downcast<Text>(*node), value, errorString);
+}
+
+void InspectorDOMAgent::getSupportedEventNames(ErrorString&, RefPtr<JSON::ArrayOf<String>>& eventNames)
+{
+    eventNames = JSON::ArrayOf<String>::create();
+
+#define DOM_EVENT_NAMES_ADD(name) eventNames->addItem(#name);
+    DOM_EVENT_NAMES_FOR_EACH(DOM_EVENT_NAMES_ADD)
+#undef DOM_EVENT_NAMES_ADD
 }
 
 void InspectorDOMAgent::getEventListenersForNode(ErrorString& errorString, int nodeId, const String* objectGroup, RefPtr<JSON::ArrayOf<Inspector::Protocol::DOM::EventListener>>& listenersArray)
@@ -2075,6 +2145,51 @@ void InspectorDOMAgent::didCommitLoad(Document* document)
     m_frontendDispatcher->childNodeInserted(parentId, prevId, WTFMove(value));
 }
 
+int InspectorDOMAgent::identifierForNode(Node& node)
+{
+    return pushNodePathToFrontend(&node);
+}
+
+void InspectorDOMAgent::addEventListenersToNode(Node& node)
+{
+#if ENABLE(VIDEO)
+    auto callback = EventFiredCallback::create(*this);
+
+    auto createEventListener = [&] (const AtomicString& eventName) {
+        node.addEventListener(eventName, callback.copyRef(), false);
+    };
+
+#if ENABLE(FULLSCREEN_API)
+    if (is<Document>(node) || is<HTMLMediaElement>(node))
+        createEventListener(eventNames().webkitfullscreenchangeEvent);
+#endif // ENABLE(FULLSCREEN_API)
+
+    if (is<HTMLMediaElement>(node)) {
+        createEventListener(eventNames().abortEvent);
+        createEventListener(eventNames().canplayEvent);
+        createEventListener(eventNames().canplaythroughEvent);
+        createEventListener(eventNames().emptiedEvent);
+        createEventListener(eventNames().endedEvent);
+        createEventListener(eventNames().loadeddataEvent);
+        createEventListener(eventNames().loadedmetadataEvent);
+        createEventListener(eventNames().loadstartEvent);
+        createEventListener(eventNames().pauseEvent);
+        createEventListener(eventNames().playEvent);
+        createEventListener(eventNames().playingEvent);
+        createEventListener(eventNames().seekedEvent);
+        createEventListener(eventNames().seekingEvent);
+        createEventListener(eventNames().stalledEvent);
+        createEventListener(eventNames().suspendEvent);
+        createEventListener(eventNames().waitingEvent);
+
+        if (!m_mediaMetricsTimer.isActive())
+            m_mediaMetricsTimer.start(0_s, 1_s / 15.);
+    }
+#else
+    UNUSED_PARAM(node);
+#endif // ENABLE(VIDEO)
+}
+
 void InspectorDOMAgent::didInsertDOMNode(Node& node)
 {
     if (containsOnlyHTMLWhitespace(&node))
@@ -2318,6 +2433,11 @@ bool InspectorDOMAgent::isEventListenerDisabled(EventTarget& target, const Atomi
     return false;
 }
 
+void InspectorDOMAgent::eventDidResetAfterDispatch(const Event& event)
+{
+    m_dispatchedEvents.remove(&event);
+}
+
 bool InspectorDOMAgent::hasBreakpointForEventListener(EventTarget& target, const AtomicString& eventType, EventListener& listener, bool capture)
 {
     for (auto& inspectorEventListener : m_eventListenerEntries.values()) {
@@ -2335,6 +2455,51 @@ int InspectorDOMAgent::idForEventListener(EventTarget& target, const AtomicStrin
     }
     return 0;
 }
+
+#if ENABLE(VIDEO)
+void InspectorDOMAgent::mediaMetricsTimerFired()
+{
+    // FIXME: remove metrics information for any media element when it's destroyed
+
+    if (HTMLMediaElement::allMediaElements().isEmpty()) {
+        if (m_mediaMetricsTimer.isActive())
+            m_mediaMetricsTimer.stop();
+        m_mediaMetrics.clear();
+        return;
+    }
+
+    for (auto* mediaElement : HTMLMediaElement::allMediaElements()) {
+        if (!is<HTMLVideoElement>(mediaElement) || !mediaElement->isPlaying())
+            continue;
+
+        auto videoPlaybackQuality = mediaElement->getVideoPlaybackQuality();
+        unsigned displayCompositedVideoFrames = videoPlaybackQuality->displayCompositedVideoFrames();
+
+        auto iterator = m_mediaMetrics.find(mediaElement);
+        if (iterator == m_mediaMetrics.end()) {
+            m_mediaMetrics.set(mediaElement, MediaMetrics(displayCompositedVideoFrames));
+            continue;
+        }
+
+        bool isLowPower = (displayCompositedVideoFrames - iterator->value.displayCompositedFrames) > 0;
+        if (iterator->value.isLowPower != isLowPower) {
+            iterator->value.isLowPower = isLowPower;
+
+            int nodeId = pushNodePathToFrontend(mediaElement);
+            if (nodeId) {
+                auto timestamp = m_environment.executionStopwatch()->elapsedTime().seconds();
+                m_frontendDispatcher->videoLowPowerChanged(nodeId, timestamp, iterator->value.isLowPower);
+            }
+        }
+
+        iterator->value.displayCompositedFrames = displayCompositedVideoFrames;
+    }
+
+    m_mediaMetrics.removeIf([&] (auto& entry) {
+        return !HTMLMediaElement::allMediaElements().contains(entry.key);
+    });
+}
+#endif
 
 Node* InspectorDOMAgent::nodeForPath(const String& path)
 {

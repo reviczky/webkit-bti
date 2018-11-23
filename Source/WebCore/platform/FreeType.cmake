@@ -7,6 +7,7 @@ list(APPEND WebCore_SOURCES
     platform/graphics/freetype/FontCustomPlatformDataFreeType.cpp
     platform/graphics/freetype/FontPlatformDataFreeType.cpp
     platform/graphics/freetype/GlyphPageTreeNodeFreeType.cpp
+    platform/graphics/freetype/RefPtrFontconfig.cpp
     platform/graphics/freetype/SimpleFontDataFreeType.cpp
 
     platform/graphics/harfbuzz/ComplexTextControllerHarfBuzz.cpp
@@ -33,12 +34,12 @@ endif ()
 
 list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
     ${FONTCONFIG_INCLUDE_DIRS}
-    ${FREETYPE2_INCLUDE_DIRS}
+    ${FREETYPE_INCLUDE_DIRS}
     ${HARFBUZZ_INCLUDE_DIRS}
 )
 
 list(APPEND WebCore_LIBRARIES
     ${FONTCONFIG_LIBRARIES}
-    ${FREETYPE2_LIBRARIES}
+    ${FREETYPE_LIBRARIES}
     ${HARFBUZZ_LIBRARIES}
 )

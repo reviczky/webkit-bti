@@ -54,14 +54,9 @@ String formatLocalizedString(String format, ...)
     va_list arguments;
     va_start(arguments, format);
 
-#if COMPILER(CLANG)
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat-nonliteral"
-#endif
+    ALLOW_NONLITERAL_FORMAT_BEGIN
     auto result = adoptCF(CFStringCreateWithFormatAndArguments(0, 0, format.createCFString().get(), arguments));
-#if COMPILER(CLANG)
-#pragma clang diagnostic pop
-#endif
+    ALLOW_NONLITERAL_FORMAT_END
 
     va_end(arguments);
     return result.get();
@@ -76,6 +71,13 @@ String formatLocalizedString(String format, ...)
     return format;
 #endif
 }
+
+#if !USE(CF)
+String localizedString(const char* key)
+{
+    return String::fromUTF8(key, strlen(key));
+}
+#endif
 
 #if ENABLE(CONTEXT_MENUS)
 
@@ -411,9 +413,16 @@ String contextMenuItemTagInspectElement()
     return WEB_UI_STRING_WITH_MNEMONIC("Inspect Element", "Inspect _Element", "Inspect Element context menu item");
 }
 
+#if !PLATFORM(COCOA)
+String contextMenuItemTagSearchWeb()
+{
+    return WEB_UI_STRING_WITH_MNEMONIC("Search the Web", "_Search the Web", "Search the Web context menu item");
+}
+#endif
+
 #endif // ENABLE(CONTEXT_MENUS)
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
 
 String searchMenuNoRecentSearchesText()
 {
@@ -430,7 +439,7 @@ String searchMenuClearRecentSearchesText()
     return WEB_UI_STRING("Clear Recent Searches", "menu item in Recent Searches menu that empties menu's contents");
 }
 
-#endif // !PLATFORM(IOS)
+#endif // !PLATFORM(IOS_FAMILY)
 
 String AXWebAreaText()
 {
@@ -628,6 +637,11 @@ String AXAutoFillContactsLabel()
 String AXAutoFillStrongPasswordLabel()
 {
     return WEB_UI_STRING("strong password auto fill", "Label for the strong password auto fill button inside a text field.");
+}
+
+String AXAutoFillCreditCardLabel()
+{
+    return WEB_UI_STRING("credit card auto fill", "Label for the credit card auto fill button inside a text field.");
 }
 
 String autoFillStrongPasswordLabel()
@@ -1043,7 +1057,7 @@ String formControlDoneButtonTitle()
 
 String formControlCancelButtonTitle()
 {
-    return WEB_UI_STRING("Cancel", "Title of the Cancel button for zoomed form controls.");
+    return WEB_UI_STRING("Cancel", "Cancel");
 }
 
 String formControlHideButtonTitle()
@@ -1081,6 +1095,13 @@ String datePickerYearLabelTitle()
     return WEB_UI_STRING_KEY("YEAR", "YEAR (Date picker for extra zoom mode)", "Year label in date picker");
 }
 
+#endif
+
+#if USE(SOUP)
+String unacceptableTLSCertificate()
+{
+    return WEB_UI_STRING("Unacceptable TLS certificate", "Unacceptable TLS certificate error");
+}
 #endif
 
 } // namespace WebCore

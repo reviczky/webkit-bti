@@ -86,7 +86,7 @@ static void restoreCalleeSavesFor(Context& context, CodeBlock* codeBlock)
     RegisterSet dontRestoreRegisters = RegisterSet(RegisterSet::stackRegisters(), RegisterSet::allFPRs());
     unsigned registerCount = calleeSaves->size();
 
-    uintptr_t* physicalStackFrame = context.fp<uintptr_t*>();
+    UCPURegister* physicalStackFrame = context.fp<UCPURegister*>();
     for (unsigned i = 0; i < registerCount; i++) {
         RegisterAtOffset entry = calleeSaves->at(i);
         if (dontRestoreRegisters.get(entry.reg()))
@@ -94,8 +94,8 @@ static void restoreCalleeSavesFor(Context& context, CodeBlock* codeBlock)
         // The callee saved values come from the original stack, not the recovered stack.
         // Hence, we read the values directly from the physical stack memory instead of
         // going through context.stack().
-        ASSERT(!(entry.offset() % sizeof(uintptr_t)));
-        context.gpr(entry.reg().gpr()) = physicalStackFrame[entry.offset() / sizeof(uintptr_t)];
+        ASSERT(!(entry.offset() % sizeof(UCPURegister)));
+        context.gpr(entry.reg().gpr()) = physicalStackFrame[entry.offset() / sizeof(UCPURegister)];
     }
 }
 
@@ -113,7 +113,7 @@ static void saveCalleeSavesFor(Context& context, CodeBlock* codeBlock)
         RegisterAtOffset entry = calleeSaves->at(i);
         if (dontSaveRegisters.get(entry.reg()))
             continue;
-        stack.set(context.fp(), entry.offset(), context.gpr<uintptr_t>(entry.reg().gpr()));
+        stack.set(context.fp(), entry.offset(), context.gpr<UCPURegister>(entry.reg().gpr()));
     }
 }
 
@@ -127,14 +127,14 @@ static void restoreCalleeSavesFromVMEntryFrameCalleeSavesBuffer(Context& context
     unsigned registerCount = allCalleeSaves->size();
 
     VMEntryRecord* entryRecord = vmEntryRecord(vm.topEntryFrame);
-    uintptr_t* calleeSaveBuffer = reinterpret_cast<uintptr_t*>(entryRecord->calleeSaveRegistersBuffer);
+    UCPURegister* calleeSaveBuffer = reinterpret_cast<UCPURegister*>(entryRecord->calleeSaveRegistersBuffer);
 
     // Restore all callee saves.
     for (unsigned i = 0; i < registerCount; i++) {
         RegisterAtOffset entry = allCalleeSaves->at(i);
         if (dontRestoreRegisters.get(entry.reg()))
             continue;
-        size_t uintptrOffset = entry.offset() / sizeof(uintptr_t);
+        size_t uintptrOffset = entry.offset() / sizeof(UCPURegister);
         if (entry.reg().isGPR())
             context.gpr(entry.reg().gpr()) = calleeSaveBuffer[uintptrOffset];
         else
@@ -160,9 +160,9 @@ static void copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(Context& context)
         if (dontCopyRegisters.get(entry.reg()))
             continue;
         if (entry.reg().isGPR())
-            stack.set(calleeSaveBuffer, entry.offset(), context.gpr<uintptr_t>(entry.reg().gpr()));
+            stack.set(calleeSaveBuffer, entry.offset(), context.gpr<UCPURegister>(entry.reg().gpr()));
         else
-            stack.set(calleeSaveBuffer, entry.offset(), context.fpr<uintptr_t>(entry.reg().fpr()));
+            stack.set(calleeSaveBuffer, entry.offset(), context.fpr<UCPURegister>(entry.reg().fpr()));
     }
 }
 
@@ -398,8 +398,8 @@ void OSRExit::executeOSRExit(Context& context)
         // Compute the value recoveries.
         Operands<ValueRecovery> operands;
         Vector<UndefinedOperandSpan> undefinedOperandSpans;
-        unsigned numVariables = dfgJITCode->variableEventStream.reconstruct(codeBlock, exit.m_codeOrigin, dfgJITCode->minifiedDFG, exit.m_streamIndex, operands, &undefinedOperandSpans);
-        ptrdiff_t stackPointerOffset = -static_cast<ptrdiff_t>(numVariables) * sizeof(Register);
+        dfgJITCode->variableEventStream.reconstruct(codeBlock, exit.m_codeOrigin, dfgJITCode->minifiedDFG, exit.m_streamIndex, operands, &undefinedOperandSpans);
+        ptrdiff_t stackPointerOffset = -static_cast<ptrdiff_t>(codeBlock->jitCode()->dfgCommon()->requiredRegisterCountForExit) * sizeof(Register);
 
         exit.exitState = adoptRef(new OSRExitState(exit, codeBlock, baselineCodeBlock, operands, WTFMove(undefinedOperandSpans), recovery, stackPointerOffset, activeThreshold, adjustedThreshold, jumpTarget, arrayProfile));
 
@@ -440,10 +440,8 @@ void OSRExit::executeOSRExit(Context& context)
     do {
         auto extraInitializationLevel = static_cast<ExtraInitializationLevel>(exitState.extraInitializationLevel);
 
-        if (extraInitializationLevel == ExtraInitializationLevel::None) {
-            context.sp() = context.fp<uint8_t*>() + exitState.stackPointerOffset;
+        if (extraInitializationLevel == ExtraInitializationLevel::None)
             break;
-        }
 
         // Begin extra initilization level: SpeculationRecovery
 
@@ -813,7 +811,7 @@ static void reifyInlinedCallFrames(Context& context, CodeBlock* outermostBaselin
         if (!inlineCallFrame->isClosureCall)
             frame.setOperand(inlineCallFrame->stackOffset + CallFrameSlot::callee, JSValue(inlineCallFrame->calleeConstant()));
 #else // USE(JSVALUE64) // so this is the 32-bit part
-        Instruction* instruction = &baselineCodeBlock->instructions()[codeOrigin->bytecodeIndex];
+        const Instruction* instruction = baselineCodeBlock->instructions().at(codeOrigin->bytecodeIndex).ptr();
         uint32_t locationBits = CallSiteIndex(instruction).bits();
         frame.setOperand<uint32_t>(inlineCallFrame->stackOffset + CallFrameSlot::argumentCount, TagOffset, locationBits);
         frame.setOperand<uint32_t>(inlineCallFrame->stackOffset + CallFrameSlot::callee, TagOffset, static_cast<uint32_t>(JSValue::CellTag));
@@ -827,7 +825,7 @@ static void reifyInlinedCallFrames(Context& context, CodeBlock* outermostBaselin
 #if USE(JSVALUE64)
         uint32_t locationBits = CallSiteIndex(codeOrigin->bytecodeIndex).bits();
 #else
-        Instruction* instruction = &outermostBaselineCodeBlock->instructions()[codeOrigin->bytecodeIndex];
+        const Instruction* instruction = outermostBaselineCodeBlock->instructions().at(codeOrigin->bytecodeIndex).ptr();
         uint32_t locationBits = CallSiteIndex(instruction).bits();
 #endif
         frame.setOperand<uint32_t>(CallFrameSlot::argumentCount, TagOffset, locationBits);
@@ -921,26 +919,9 @@ OSRExit::OSRExit(ExitKind kind, JSValueSource jsValueSource, MethodOfGettingAVal
     DFG_ASSERT(jit->m_jit.graph(), jit->m_currentNode, canExit);
 }
 
-void OSRExit::setPatchableCodeOffset(MacroAssembler::PatchableJump check)
+CodeLocationJump<JSInternalPtrTag> OSRExit::codeLocationForRepatch() const
 {
-    m_patchableCodeOffset = check.m_jump.m_label.m_offset;
-}
-
-MacroAssembler::Jump OSRExit::getPatchableCodeOffsetAsJump() const
-{
-    return MacroAssembler::Jump(AssemblerLabel(m_patchableCodeOffset));
-}
-
-CodeLocationJump<JSInternalPtrTag> OSRExit::codeLocationForRepatch(CodeBlock* dfgCodeBlock) const
-{
-    return CodeLocationJump<JSInternalPtrTag>(tagCodePtr<JSInternalPtrTag>(dfgCodeBlock->jitCode()->dataAddressAtOffset(m_patchableCodeOffset)));
-}
-
-void OSRExit::correctJump(LinkBuffer& linkBuffer)
-{
-    MacroAssembler::Label label;
-    label.m_label.m_offset = m_patchableCodeOffset;
-    m_patchableCodeOffset = linkBuffer.offsetOf(label);
+    return CodeLocationJump<JSInternalPtrTag>(m_patchableJumpLocation);
 }
 
 void OSRExit::emitRestoreArguments(CCallHelpers& jit, const Operands<ValueRecovery>& operands)
@@ -1082,7 +1063,7 @@ void JIT_OPERATION OSRExit::compileOSRExit(ExecState* exec)
                 toCString(ignoringContext<DumpContext>(operands)).data());
     }
 
-    MacroAssembler::repatchJump(exit.codeLocationForRepatch(codeBlock), CodeLocationLabel<OSRExitPtrTag>(exit.m_code.code()));
+    MacroAssembler::repatchJump(exit.codeLocationForRepatch(), CodeLocationLabel<OSRExitPtrTag>(exit.m_code.code()));
 
     vm->osrExitJumpDestination = exit.m_code.code().executableAddress();
 }

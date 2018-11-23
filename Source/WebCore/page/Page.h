@@ -22,9 +22,10 @@
 
 #include "ActivityState.h"
 #include "DisabledAdaptations.h"
+#include "Document.h"
 #include "FindOptions.h"
 #include "FrameLoaderTypes.h"
-#include "LayoutMilestones.h"
+#include "LayoutMilestone.h"
 #include "LayoutRect.h"
 #include "LengthBox.h"
 #include "MediaProducer.h"
@@ -76,6 +77,7 @@ class IDBConnectionToServer;
 
 class AlternativeTextClient;
 class ApplicationCacheStorage;
+class AuthenticatorCoordinator;
 class BackForwardController;
 class BackForwardClient;
 class CacheStorageProvider;
@@ -161,8 +163,8 @@ enum class CompositingPolicy : uint8_t {
 
 enum class CanWrap : bool;
 enum class DidWrap : bool;
-enum class RouteSharingPolicy;
-enum class ShouldTreatAsContinuingLoad;
+enum class RouteSharingPolicy : uint8_t;
+enum class ShouldTreatAsContinuingLoad : bool;
 
 class Page : public Supplementable<Page> {
     WTF_MAKE_NONCOPYABLE(Page);
@@ -200,6 +202,9 @@ public:
 
     bool openedByDOM() const;
     void setOpenedByDOM();
+
+    bool openedViaWindowOpenWithOpener() const { return m_openedViaWindowOpenWithOpener; }
+    void setOpenedViaWindowOpenWithOpener() { m_openedViaWindowOpenWithOpener = true; }
 
     WEBCORE_EXPORT void goToItem(HistoryItem&, FrameLoadType, ShouldTreatAsContinuingLoad);
 
@@ -273,6 +278,8 @@ public:
     bool tabKeyCyclesThroughElements() const { return m_tabKeyCyclesThroughElements; }
 
     WEBCORE_EXPORT bool findString(const String&, FindOptions, DidWrap* = nullptr);
+    WEBCORE_EXPORT uint32_t replaceRangesWithText(Vector<Ref<Range>>&& rangesToReplace, const String& replacementText, bool selectionOnly);
+    WEBCORE_EXPORT uint32_t replaceSelectionWithText(const String& replacementText);
 
     WEBCORE_EXPORT RefPtr<Range> rangeOfString(const String&, Range*, FindOptions);
 
@@ -321,6 +328,8 @@ public:
     void didStartProvisionalLoad();
     void didFinishLoad(); // Called when the load has been committed in the main frame.
 
+    WEBCORE_EXPORT void willDisplayPage();
+
     // The view scale factor is multiplied into the page scale factor by all
     // callers of setPageScaleFactor.
     WEBCORE_EXPORT void setViewScaleFactor(float);
@@ -341,7 +350,7 @@ public:
     const FloatBoxExtent& unobscuredSafeAreaInsets() const { return m_unobscuredSafeAreaInsets; }
     WEBCORE_EXPORT void setUnobscuredSafeAreaInsets(const FloatBoxExtent&);
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     bool enclosedInScrollableAncestorView() const { return m_enclosedInScrollableAncestorView; }
     void setEnclosedInScrollableAncestorView(bool f) { m_enclosedInScrollableAncestorView = f; }
 #endif
@@ -375,6 +384,7 @@ public:
     ScrollElasticity horizontalScrollElasticity() const { return static_cast<ScrollElasticity>(m_horizontalScrollElasticity); }
 
     WEBCORE_EXPORT void accessibilitySettingsDidChange();
+    WEBCORE_EXPORT void appearanceDidChange();
 
     // Page and FrameView both store a Pagination value. Page::pagination() is set only by API,
     // and FrameView::pagination() is set only by CSS. Page::pagination() will affect all
@@ -410,6 +420,10 @@ public:
     WEBCORE_EXPORT void setPaymentCoordinator(std::unique_ptr<PaymentCoordinator>&&);
 #endif
 
+#if ENABLE(WEB_AUTHN)
+    AuthenticatorCoordinator& authenticatorCoordinator() { return m_authenticatorCoordinator.get(); }
+#endif
+
 #if ENABLE(APPLICATION_MANIFEST)
     const std::optional<ApplicationManifest>& applicationManifest() const { return m_applicationManifest; }
 #endif
@@ -434,8 +448,14 @@ public:
     void setIsRestoringCachedPage(bool value) { m_isRestoringCachedPage = value; }
     bool isRestoringCachedPage() const { return m_isRestoringCachedPage; }
 
-    void addActivityStateChangeObserver(ActivityStateChangeObserver&);
-    void removeActivityStateChangeObserver(ActivityStateChangeObserver&);
+    WEBCORE_EXPORT void addActivityStateChangeObserver(ActivityStateChangeObserver&);
+    WEBCORE_EXPORT void removeActivityStateChangeObserver(ActivityStateChangeObserver&);
+
+#if ENABLE(INTERSECTION_OBSERVER)
+    void addDocumentNeedingIntersectionObservationUpdate(Document&);
+    void scheduleForcedIntersectionObservationUpdate(Document&);
+    void updateIntersectionObservations();
+#endif
 
     WEBCORE_EXPORT void suspendScriptedAnimations();
     WEBCORE_EXPORT void resumeScriptedAnimations();
@@ -485,9 +505,9 @@ public:
     WEBCORE_EXPORT VisibilityState visibilityState() const;
     WEBCORE_EXPORT void resumeAnimatingImages();
 
-    WEBCORE_EXPORT void addLayoutMilestones(LayoutMilestones);
-    WEBCORE_EXPORT void removeLayoutMilestones(LayoutMilestones);
-    LayoutMilestones requestedLayoutMilestones() const { return m_requestedLayoutMilestones; }
+    WEBCORE_EXPORT void addLayoutMilestones(OptionSet<LayoutMilestone>);
+    WEBCORE_EXPORT void removeLayoutMilestones(OptionSet<LayoutMilestone>);
+    OptionSet<LayoutMilestone> requestedLayoutMilestones() const { return m_requestedLayoutMilestones; }
 
 #if ENABLE(RUBBER_BANDING)
     WEBCORE_EXPORT void addHeaderWithHeight(int);
@@ -745,6 +765,7 @@ private:
     int m_subframeCount { 0 };
     String m_groupName;
     bool m_openedByDOM { false };
+    bool m_openedViaWindowOpenWithOpener { false };
 
     bool m_tabKeyCyclesThroughElements { true };
     bool m_defersLoading { false };
@@ -766,7 +787,7 @@ private:
     FloatBoxExtent m_fullscreenInsets;
     Seconds m_fullscreenAutoHideDuration { 0_s };
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     bool m_enclosedInScrollableAncestorView { false };
 #endif
     
@@ -812,7 +833,7 @@ private:
     bool m_isPrerender { false };
     OptionSet<ActivityState::Flag> m_activityState;
 
-    LayoutMilestones m_requestedLayoutMilestones { 0 };
+    OptionSet<LayoutMilestone> m_requestedLayoutMilestones;
 
     int m_headerHeight { 0 };
     int m_footerHeight { 0 };
@@ -855,6 +876,14 @@ private:
     RefPtr<WheelEventTestTrigger> m_testTrigger;
 
     HashSet<ActivityStateChangeObserver*> m_activityStateChangeObservers;
+
+#if ENABLE(INTERSECTION_OBSERVER)
+    Vector<WeakPtr<Document>> m_documentsNeedingIntersectionObservationUpdate;
+
+    // FIXME: Schedule intersection observation updates in a way that fits into the HTML
+    // EventLoop. See https://bugs.webkit.org/show_bug.cgi?id=160711.
+    Timer m_intersectionObservationUpdateTimer;
+#endif
 
 #if ENABLE(RESOURCE_USAGE)
     std::unique_ptr<ResourceUsageOverlay> m_resourceUsageOverlay;
@@ -903,6 +932,10 @@ private:
 
 #if ENABLE(APPLE_PAY)
     std::unique_ptr<PaymentCoordinator> m_paymentCoordinator;
+#endif
+
+#if ENABLE(WEB_AUTHN)
+    UniqueRef<AuthenticatorCoordinator> m_authenticatorCoordinator;
 #endif
 
 #if ENABLE(APPLICATION_MANIFEST)

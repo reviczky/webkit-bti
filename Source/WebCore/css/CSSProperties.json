@@ -3032,8 +3032,7 @@
                 "visible",
                 "hidden",
                 "scroll",
-                "auto",
-                "overlay"
+                "auto"
             ],
             "specification": {
                 "category": "css-overflow",
@@ -3046,7 +3045,6 @@
                 "hidden",
                 "scroll",
                 "auto",
-                "overlay",
                 "-webkit-paged-x",
                 "-webkit-paged-y"
             ],
@@ -4142,16 +4140,6 @@
                 "custom": "Value"
             },
             "status": "non-standard"
-        },
-        "-webkit-animation-trigger": {
-            "animatable": true,
-            "codegen-properties": {
-                "name-for-methods": "Trigger",
-                "enable-if": "ENABLE_CSS_ANIMATIONS_LEVEL_2"
-            },
-            "status": {
-                "status": "experimental"
-            }
         },
         "-webkit-appearance": {
             "values": [
@@ -5724,6 +5712,25 @@
             },
             "status": "non-standard"
         },
+        "supported-color-schemes": {
+            "inherited": true,
+            "values": [
+                "auto",
+                "light",
+                "dark",
+                "only"
+            ],
+            "codegen-properties": {
+                "converter": "SupportedColorSchemes",
+                "comment": "This is the second highest priority property, to ensure that its value can be checked when resolving colors.",
+                "custom": "Value",
+                "enable-if": "ENABLE_DARK_MODE_CSS",
+                "high-priority": true
+            },
+            "status": {
+                "status": "non-standard"
+            }
+        },
         "order": {
             "codegen-properties": {
                 "aliases": [
@@ -5808,10 +5815,9 @@
         },
         "-webkit-svg-shadow": {
             "codegen-properties": {
-                "custom": "All",
-                "svg": true
+                "skip-codegen": true
             },
-            "status": "non-standard"
+            "status": "removed"
         },
         "-webkit-text-combine": {
             "inherited": true,
@@ -5870,9 +5876,9 @@
         "-webkit-text-decoration": {
             "codegen-properties": {
                 "longhands": [
-                    "-webkit-text-decoration-line",
-                    "-webkit-text-decoration-style",
-                    "-webkit-text-decoration-color"
+                    "text-decoration-line",
+                    "text-decoration-style",
+                    "text-decoration-color"
                 ]
             },
             "status": {
@@ -5883,10 +5889,13 @@
                 "url": "https://www.w3.org/TR/css-text-decor-3/#text-decoration"
             }
         },
-        "-webkit-text-decoration-line": {
+        "text-decoration-line": {
             "codegen-properties": {
                 "name-for-methods": "TextDecoration",
-                "converter": "TextDecoration"
+                "converter": "TextDecoration",
+                "aliases": [
+                    "-webkit-text-decoration-line"
+                ]
             },
             "status": {
                 "status": "experimental"
@@ -5896,7 +5905,12 @@
                 "url": "https://www.w3.org/TR/css-text-decor-3/#text-decoration-line"
             }
         },
-        "-webkit-text-decoration-style": {
+        "text-decoration-style": {
+            "codegen-properties": {
+                "aliases": [
+                    "-webkit-text-decoration-style"
+                ]
+            },
             "values": [
                 "solid",
                 "double",
@@ -5912,10 +5926,13 @@
                 "url": "https://www.w3.org/TR/css-text-decor-3/#text-decoration-style"
             }
         },
-        "-webkit-text-decoration-color": {
+        "text-decoration-color": {
             "codegen-properties": {
                 "initial": "invalidColor",
-                "visited-link-color-support": true
+                "visited-link-color-support": true,
+                "aliases": [
+                    "-webkit-text-decoration-color"
+                ]
             },
             "status": {
                 "status": "experimental"
@@ -5925,10 +5942,13 @@
                 "url": "https://www.w3.org/TR/css-text-decor-3/#text-decoration-color"
             }
         },
-        "-webkit-text-decoration-skip": {
+        "text-decoration-skip": {
             "inherited": true,
             "codegen-properties": {
-                "converter": "TextDecorationSkip"
+                "converter": "TextDecorationSkip",
+                "aliases": [
+                    "-webkit-text-decoration-skip"
+                ]
             },
             "status": {
                 "status": "experimental"
@@ -5938,17 +5958,45 @@
                 "url": "https://www.w3.org/TR/css-text-decor-3/#text-decoration-skip"
             }
         },
-        "-webkit-text-underline-position": {
+        "text-underline-position": {
+            "codegen-properties": {
+                "aliases": [
+                    "-webkit-text-underline-position"
+                ]
+            },
+            "inherited": true,
+            "status": {
+                "status": "experimental"
+            },
+            "specification": {
+                "category": "css-text-decor",
+                "url": "https://www.w3.org/TR/css-text-decor-3/#text-underline-position-property"
+            }
+        },
+        "text-underline-offset": {
             "inherited": true,
             "codegen-properties": {
-                "converter": "TextUnderlinePosition"
+                "converter": "TextUnderlineOffset"
             },
             "status": {
                 "status": "experimental"
             },
             "specification": {
                 "category": "css-text-decor",
-                "url": "https://www.w3.org/TR/css-text-decor-3/#text-underline-position"
+                "url": "https://www.w3.org/TR/css-text-decor-4/#underline-offset"
+            }
+        },
+        "text-decoration-thickness": {
+            "inherited": true,
+            "codegen-properties": {
+                "converter": "TextDecorationThickness"
+            },
+            "status": {
+                "status": "experimental"
+            },
+            "specification": {
+                "category": "css-text-decor",
+                "url": "https://www.w3.org/TR/css-text-decor-4/#text-decoration-thickness"
             }
         },
         "-webkit-text-decorations-in-effect": {
@@ -6647,7 +6695,7 @@
             "codegen-properties": {
                 "name-for-methods": "TouchCalloutEnabled",
                 "converter": "TouchCallout",
-                "enable-if": "WTF_PLATFORM_IOS"
+                "enable-if": "WTF_PLATFORM_IOS_FAMILY"
             },
             "status": "non-standard"
         },

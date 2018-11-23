@@ -210,7 +210,7 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
         zoomEditor.addEventListener(WI.SettingEditor.Event.ValueDidChange, () => { WI.setZoomFactor(zoomEditor.value); });
         WI.settings.zoomFactor.addEventListener(WI.Setting.Event.Changed, () => { zoomEditor.value = WI.getZoomFactor().maxDecimals(2); });
 
-        if (WI.LogManager.supportsLogChannels()) {
+        if (WI.ConsoleManager.supportsLogChannels()) {
             const logLevels = [
                 [WI.LoggingChannel.Level.Off, WI.UIString("Off")],
                 [WI.LoggingChannel.Level.Basic, WI.UIString("Basic")],
@@ -221,11 +221,14 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
                 webrtc: WI.UIString("WebRTC Logging:"),
             };
 
-            let channels = WI.logManager.customLoggingChannels;
+            let channels = WI.consoleManager.customLoggingChannels;
             for (let channel of channels) {
                 let logEditor = generalSettingsView.addGroupWithCustomSetting(editorLabels[channel.source], WI.SettingEditor.Type.Select, {values: logLevels});
                 logEditor.value = channel.level;
-                logEditor.addEventListener(WI.SettingEditor.Event.ValueDidChange, () => { ConsoleAgent.setLoggingChannelLevel(channel.source, logEditor.value); });
+                logEditor.addEventListener(WI.SettingEditor.Event.ValueDidChange, () => {
+                    for (let target of WI.targets)
+                        target.ConsoleAgent.setLoggingChannelLevel(channel.source, logEditor.value);
+                });
             }
         }
 
@@ -234,15 +237,14 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
 
     _createExperimentalSettingsView()
     {
-        if (!(window.CanvasAgent || window.CSSAgent || window.NetworkAgent || window.LayerTreeAgent))
+        if (!(window.CanvasAgent || window.NetworkAgent || window.LayerTreeAgent))
             return;
 
         let experimentalSettingsView = new WI.SettingsView("experimental", WI.UIString("Experimental"));
 
         if (window.CSSAgent) {
-            let stylesGroup = experimentalSettingsView.addGroup(WI.UIString("Styles Sidebar:"));
-            stylesGroup.addSetting(WI.settings.experimentalLegacyStyleEditor, WI.UIString("Legacy Style Editor"));
-            stylesGroup.addSetting(WI.settings.experimentalLegacyVisualSidebar, WI.UIString("Legacy Visual Styles Panel"));
+            experimentalSettingsView.addSetting(WI.UIString("Styles Sidebar:"), WI.settings.experimentalEnableMultiplePropertiesSelection, WI.UIString("Enable Selection of Multiple Properties"));
+            experimentalSettingsView.addSeparator();
         }
 
         if (window.LayerTreeAgent) {
@@ -250,21 +252,15 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
             experimentalSettingsView.addSeparator();
         }
 
-        experimentalSettingsView.addSetting(WI.UIString("Sources:"), WI.settings.experimentalEnableSourcesTab, WI.UIString("Enable Sources Tab"));
+        experimentalSettingsView.addSetting(WI.UIString("Audit:"), WI.settings.experimentalEnableAuditTab, WI.UIString("Enable Audit Tab"));
         experimentalSettingsView.addSeparator();
 
         experimentalSettingsView.addSetting(WI.UIString("User Interface:"), WI.settings.experimentalEnableNewTabBar, WI.UIString("Enable New Tab Bar"));
         experimentalSettingsView.addSeparator();
 
-        experimentalSettingsView.addSetting(WI.UIString("Accessibility Audit:"), WI.settings.experimentalEnableAccessibilityAuditTab, WI.UIString("Enable Accessibility Audit Tab"));
-        experimentalSettingsView.addSeparator();
-
-        experimentalSettingsView.addSetting(WI.UIString("Canvas:"), WI.settings.experimentalRecordingHasVisualEffect, WI.UIString("Enable Visual Change Detection"));
-        experimentalSettingsView.addSeparator();
-
         let reloadInspectorButton = document.createElement("button");
         reloadInspectorButton.textContent = WI.UIString("Reload Web Inspector");
-        reloadInspectorButton.addEventListener("click", () => { window.location.reload(); });
+        reloadInspectorButton.addEventListener("click", () => { InspectorFrontendHost.reopen(); });
 
         let reloadInspectorContainerElement = experimentalSettingsView.addCenteredContainer(reloadInspectorButton, WI.UIString("for changes to take effect"));
         reloadInspectorContainerElement.classList.add("hidden");
@@ -276,12 +272,10 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
             });
         }
 
-        listenForChange(WI.settings.experimentalLegacyStyleEditor);
-        listenForChange(WI.settings.experimentalLegacyVisualSidebar);
+        listenForChange(WI.settings.experimentalEnableMultiplePropertiesSelection);
         listenForChange(WI.settings.experimentalEnableLayersTab);
-        listenForChange(WI.settings.experimentalEnableSourcesTab);
+        listenForChange(WI.settings.experimentalEnableAuditTab);
         listenForChange(WI.settings.experimentalEnableNewTabBar);
-        listenForChange(WI.settings.experimentalEnableAccessibilityAuditTab);
 
         this.addSettingsView(experimentalSettingsView);
     }

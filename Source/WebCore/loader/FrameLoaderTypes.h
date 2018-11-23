@@ -40,20 +40,20 @@ enum FrameState {
     FrameStateComplete
 };
 
-enum class PolicyAction {
+enum class PolicyAction : uint8_t {
     Use,
     Download,
     Ignore,
     Suspend,
 };
 
-enum class ReloadOption {
+enum class ReloadOption : uint8_t {
     ExpiredOnly = 1 << 0,
     FromOrigin  = 1 << 1,
     DisableContentBlockers = 1 << 2,
 };
 
-enum class FrameLoadType {
+enum class FrameLoadType : uint8_t {
     Standard,
     Back,
     Forward,
@@ -66,12 +66,12 @@ enum class FrameLoadType {
     ReloadExpiredOnly
 };
 
-enum class NewFrameOpenerPolicy {
+enum class NewFrameOpenerPolicy : uint8_t {
     Suppress,
     Allow
 };
 
-enum class NavigationType {
+enum class NavigationType : uint8_t {
     LinkClicked,
     FormSubmitted,
     BackForward,
@@ -80,13 +80,13 @@ enum class NavigationType {
     Other
 };
 
-enum class ShouldOpenExternalURLsPolicy {
+enum class ShouldOpenExternalURLsPolicy : uint8_t {
     ShouldNotAllow,
     ShouldAllowExternalSchemes,
     ShouldAllow,
 };
 
-enum class InitiatedByMainFrame {
+enum class InitiatedByMainFrame : uint8_t {
     Yes,
     Unknown,
 };
@@ -96,7 +96,7 @@ enum ClearProvisionalItemPolicy {
     ShouldNotClearProvisionalItem
 };
 
-enum class ObjectContentType {
+enum class ObjectContentType : uint8_t {
     None,
     Image,
     Frame,
@@ -129,33 +129,17 @@ enum WebGLLoadPolicy {
     WebGLPendingCreation
 };
 
-enum class LockHistory {
-    Yes,
-    No
-};
-
-enum class LockBackForwardList {
-    Yes,
-    No
-};
-
-enum class AllowNavigationToInvalidURL {
-    Yes,
-    No
-};
-
-enum class HasInsecureContent {
-    Yes,
-    No,
-};
-
+enum class LockHistory : bool { No, Yes };
+enum class LockBackForwardList : bool { No, Yes };
+enum class AllowNavigationToInvalidURL : bool { No, Yes };
+enum class HasInsecureContent : bool { No, Yes };
 
 struct SystemPreviewInfo {
     IntRect systemPreviewRect;
     bool isSystemPreview { false };
 };
 
-enum class LoadCompletionType {
+enum class LoadCompletionType : uint8_t {
     Finish,
     Cancel
 };
@@ -163,9 +147,6 @@ enum class LoadCompletionType {
 } // namespace WebCore
 
 namespace WTF {
-
-template<typename> struct EnumTraits;
-template<typename E, E...> struct EnumValues;
 
 template<> struct EnumTraits<WebCore::PolicyAction> {
     using values = EnumValues<

@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2000 Harri Porten (porten@kde.org)
- *  Copyright (C) 2004-2017 Apple Inc. All rights reserved.
+ *  Copyright (C) 2004-2018 Apple Inc. All rights reserved.
  *  Copyright (C) 2006 Bjoern Graf (bjoern.graf@gmail.com)
  *
  *  This library is free software; you can redistribute it and/or
@@ -90,6 +90,8 @@
 
 #if OS(WINDOWS)
 #include <direct.h>
+#include <fcntl.h>
+#include <io.h>
 #include <wtf/text/win/WCharStringExtras.h>
 #else
 #include <unistd.h>
@@ -122,9 +124,27 @@
 #include <windows.h>
 #endif
 
-#if PLATFORM(IOS) && CPU(ARM_THUMB2)
+#if PLATFORM(IOS_FAMILY) && CPU(ARM_THUMB2)
 #include <fenv.h>
 #include <arm/arch.h>
+#endif
+
+#if __has_include(<WebKitAdditions/MemoryFootprint.h>)
+#include <WebKitAdditions/MemoryFootprint.h>
+#else
+struct MemoryFootprint {
+    uint64_t current;
+    uint64_t peak;
+    
+    static MemoryFootprint now()
+    {
+        return { 0L, 0L };
+    }
+    
+    static void resetPeak()
+    {
+    }
+};
 #endif
 
 #if !defined(PATH_MAX)
@@ -267,10 +287,9 @@ static EncodedJSValue JSC_HOST_CALL functionFullGC(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionEdenGC(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionForceGCSlowPaths(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionHeapSize(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionCreateMemoryFootprint(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionResetMemoryPeak(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionAddressOf(ExecState*);
-#ifndef NDEBUG
-static EncodedJSValue JSC_HOST_CALL functionDumpCallFrame(ExecState*);
-#endif
 static EncodedJSValue JSC_HOST_CALL functionVersion(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionRun(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionRunString(ExecState*);
@@ -303,7 +322,6 @@ static EncodedJSValue JSC_HOST_CALL functionHasCustomProperties(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionDumpTypesForAllVariables(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionDrainMicrotasks(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionIs32BitPlatform(ExecState*);
-static EncodedJSValue JSC_HOST_CALL functionLoadModule(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionCheckModuleSyntax(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionPlatformSupportsSamplingProfiler(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionGenerateHeapSnapshot(ExecState*);
@@ -488,10 +506,9 @@ protected:
         addFunction(vm, "edenGC", functionEdenGC, 0);
         addFunction(vm, "forceGCSlowPaths", functionForceGCSlowPaths, 0);
         addFunction(vm, "gcHeapSize", functionHeapSize, 0);
+        addFunction(vm, "MemoryFootprint", functionCreateMemoryFootprint, 0);
+        addFunction(vm, "resetMemoryPeak", functionResetMemoryPeak, 0);
         addFunction(vm, "addressOf", functionAddressOf, 1);
-#ifndef NDEBUG
-        addFunction(vm, "dumpCallFrame", functionDumpCallFrame, 0);
-#endif
         addFunction(vm, "version", functionVersion, 1);
         addFunction(vm, "run", functionRun, 1);
         addFunction(vm, "runString", functionRunString, 1);
@@ -544,7 +561,6 @@ protected:
 
         addFunction(vm, "is32BitPlatform", functionIs32BitPlatform, 0);
 
-        addFunction(vm, "loadModule", functionLoadModule, 1);
         addFunction(vm, "checkModuleSyntax", functionCheckModuleSyntax, 1);
 
         addFunction(vm, "platformSupportsSamplingProfiler", functionPlatformSupportsSamplingProfiler, 0);
@@ -785,29 +801,34 @@ static String absolutePath(const String& fileName)
 JSInternalPromise* GlobalObject::moduleLoaderImportModule(JSGlobalObject* globalObject, ExecState* exec, JSModuleLoader*, JSString* moduleNameValue, JSValue parameters, const SourceOrigin& sourceOrigin)
 {
     VM& vm = globalObject->vm();
-    auto scope = DECLARE_CATCH_SCOPE(vm);
+    auto throwScope = DECLARE_THROW_SCOPE(vm);
 
-    auto rejectPromise = [&] (JSValue error) {
-        return JSInternalPromiseDeferred::create(exec, globalObject)->reject(exec, error);
+    auto* deferred = JSInternalPromiseDeferred::create(exec, globalObject);
+    RETURN_IF_EXCEPTION(throwScope, nullptr);
+
+    auto catchScope = DECLARE_CATCH_SCOPE(vm);
+    auto reject = [&] (JSValue rejectionReason) {
+        catchScope.clearException();
+        auto result = deferred->reject(exec, rejectionReason);
+        catchScope.clearException();
+        return result;
     };
 
     if (sourceOrigin.isNull())
-        return rejectPromise(createError(exec, "Could not resolve the module specifier."_s));
+        return reject(createError(exec, "Could not resolve the module specifier."_s));
 
     auto referrer = sourceOrigin.string();
     auto moduleName = moduleNameValue->value(exec);
-    if (UNLIKELY(scope.exception())) {
-        JSValue exception = scope.exception();
-        scope.clearException();
-        return rejectPromise(exception);
-    }
+    if (UNLIKELY(catchScope.exception()))
+        return reject(catchScope.exception());
 
     auto directoryName = extractDirectoryName(referrer.impl());
     if (!directoryName)
-        return rejectPromise(createError(exec, makeString("Could not resolve the referrer name '", String(referrer.impl()), "'.")));
+        return reject(createError(exec, makeString("Could not resolve the referrer name '", String(referrer.impl()), "'.")));
 
     auto result = JSC::importModule(exec, Identifier::fromString(&vm, resolvePath(directoryName.value(), ModuleName(moduleName))), parameters, jsUndefined());
-    scope.releaseAssertNoException();
+    if (UNLIKELY(catchScope.exception()))
+        return reject(catchScope.exception());
     return result;
 }
 
@@ -871,7 +892,9 @@ static RefPtr<Uint8Array> fillBufferWithContentsOfFile(FILE* file)
         return nullptr;
     if (fseek(file, 0, SEEK_SET) == -1)
         return nullptr;
-    RefPtr<Uint8Array> result = Uint8Array::create(bufferCapacity);
+    auto result = Uint8Array::tryCreate(bufferCapacity);
+    if (!result)
+        return nullptr;
     size_t readSize = fread(result->data(), 1, bufferCapacity, file);
     if (readSize != static_cast<size_t>(bufferCapacity))
         return nullptr;
@@ -973,36 +996,46 @@ static bool fetchModuleFromLocalFileSystem(const String& fileName, Vector& buffe
 JSInternalPromise* GlobalObject::moduleLoaderFetch(JSGlobalObject* globalObject, ExecState* exec, JSModuleLoader*, JSValue key, JSValue, JSValue)
 {
     VM& vm = globalObject->vm();
-    auto scope = DECLARE_CATCH_SCOPE(vm);
+    auto throwScope = DECLARE_THROW_SCOPE(vm);
     JSInternalPromiseDeferred* deferred = JSInternalPromiseDeferred::create(exec, globalObject);
+    RETURN_IF_EXCEPTION(throwScope, nullptr);
+
+    auto catchScope = DECLARE_CATCH_SCOPE(vm);
+    auto reject = [&] (JSValue rejectionReason) {
+        catchScope.clearException();
+        auto result = deferred->reject(exec, rejectionReason);
+        catchScope.clearException();
+        return result;
+    };
+
     String moduleKey = key.toWTFString(exec);
-    if (UNLIKELY(scope.exception())) {
-        JSValue exception = scope.exception();
-        scope.clearException();
-        return deferred->reject(exec, exception);
-    }
+    if (UNLIKELY(catchScope.exception()))
+        return reject(catchScope.exception());
 
     // Here, now we consider moduleKey as the fileName.
     Vector<uint8_t> buffer;
-    if (!fetchModuleFromLocalFileSystem(moduleKey, buffer)) {
-        auto result = deferred->reject(exec, createError(exec, makeString("Could not open file '", moduleKey, "'.")));
-        scope.releaseAssertNoException();
-        return result;
-    }
+    if (!fetchModuleFromLocalFileSystem(moduleKey, buffer))
+        return reject(createError(exec, makeString("Could not open file '", moduleKey, "'.")));
 
 #if ENABLE(WEBASSEMBLY)
     // FileSystem does not have mime-type header. The JSC shell recognizes WebAssembly's magic header.
     if (buffer.size() >= 4) {
         if (buffer[0] == '\0' && buffer[1] == 'a' && buffer[2] == 's' && buffer[3] == 'm') {
-            auto result = deferred->resolve(exec, JSSourceCode::create(vm, SourceCode(WebAssemblySourceProvider::create(WTFMove(buffer), SourceOrigin { moduleKey }, moduleKey))));
-            scope.releaseAssertNoException();
+            auto source = SourceCode(WebAssemblySourceProvider::create(WTFMove(buffer), SourceOrigin { moduleKey }, moduleKey));
+            catchScope.releaseAssertNoException();
+            auto sourceCode = JSSourceCode::create(vm, WTFMove(source));
+            catchScope.releaseAssertNoException();
+            auto result = deferred->resolve(exec, sourceCode);
+            catchScope.clearException();
             return result;
         }
     }
 #endif
 
-    auto result = deferred->resolve(exec, JSSourceCode::create(vm, makeSource(stringFromUTF(buffer), SourceOrigin { moduleKey }, moduleKey, TextPosition(), SourceProviderSourceType::Module)));
-    scope.releaseAssertNoException();
+    auto sourceCode = JSSourceCode::create(vm, makeSource(stringFromUTF(buffer), SourceOrigin { moduleKey }, moduleKey, TextPosition(), SourceProviderSourceType::Module));
+    catchScope.releaseAssertNoException();
+    auto result = deferred->resolve(exec, sourceCode);
+    catchScope.clearException();
     return result;
 }
 
@@ -1018,6 +1051,27 @@ JSObject* GlobalObject::moduleLoaderCreateImportMetaProperties(JSGlobalObject* g
     RETURN_IF_EXCEPTION(scope, nullptr);
 
     return metaProperties;
+}
+
+static CString cStringFromViewWithString(ExecState* exec, ThrowScope& scope, StringViewWithUnderlyingString& viewWithString)
+{
+    Expected<CString, UTF8ConversionError> expectedString = viewWithString.view.tryGetUtf8();
+    if (expectedString)
+        return expectedString.value();
+    switch (expectedString.error()) {
+    case UTF8ConversionError::OutOfMemory:
+        throwOutOfMemoryError(exec, scope);
+        break;
+    case UTF8ConversionError::IllegalSource:
+        scope.throwException(exec, createError(exec, "Illegal source encountered during UTF8 conversion"));
+        break;
+    case UTF8ConversionError::SourceExhausted:
+        scope.throwException(exec, createError(exec, "Source exhausted during UTF8 conversion"));
+        break;
+    default:
+        RELEASE_ASSERT_NOT_REACHED();
+    }
+    return { };
 }
 
 static EncodedJSValue printInternal(ExecState* exec, FILE* out)
@@ -1040,7 +1094,9 @@ static EncodedJSValue printInternal(ExecState* exec, FILE* out)
 
         auto viewWithString = exec->uncheckedArgument(i).toString(exec)->viewWithUnderlyingString(exec);
         RETURN_IF_EXCEPTION(scope, encodedJSValue());
-        if (fprintf(out, "%s", viewWithString.view.utf8().data()) < 0)
+        auto string = cStringFromViewWithString(exec, scope, viewWithString);
+        RETURN_IF_EXCEPTION(scope, encodedJSValue());
+        if (fprintf(out, "%s", string.data()) < 0)
             goto fail;
     }
 
@@ -1053,25 +1109,15 @@ fail:
 EncodedJSValue JSC_HOST_CALL functionPrintStdOut(ExecState* exec) { return printInternal(exec, stdout); }
 EncodedJSValue JSC_HOST_CALL functionPrintStdErr(ExecState* exec) { return printInternal(exec, stderr); }
 
-#ifndef NDEBUG
-EncodedJSValue JSC_HOST_CALL functionDumpCallFrame(ExecState* exec)
-{
-    VM& vm = exec->vm();
-    EntryFrame* topEntryFrame = vm.topEntryFrame;
-    ExecState* callerFrame = exec->callerFrame(topEntryFrame);
-    if (callerFrame)
-        vm.interpreter->dumpCallFrame(callerFrame);
-    return JSValue::encode(jsUndefined());
-}
-#endif
-
 EncodedJSValue JSC_HOST_CALL functionDebug(ExecState* exec)
 {
     VM& vm = exec->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
     auto viewWithString = exec->argument(0).toString(exec)->viewWithUnderlyingString(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
-    fprintf(stderr, "--> %s\n", viewWithString.view.utf8().data());
+    auto string = cStringFromViewWithString(exec, scope, viewWithString);
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
+    fprintf(stderr, "--> %s\n", string.data());
     return JSValue::encode(jsUndefined());
 }
 
@@ -1172,6 +1218,65 @@ EncodedJSValue JSC_HOST_CALL functionHeapSize(ExecState* exec)
     VM& vm = exec->vm();
     JSLockHolder lock(vm);
     return JSValue::encode(jsNumber(vm.heap.size()));
+}
+
+class JSCMemoryFootprint : public JSDestructibleObject {
+    using Base = JSDestructibleObject;
+public:
+    JSCMemoryFootprint(VM& vm, Structure* structure)
+        : Base(vm, structure)
+    { }
+
+    static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
+    {
+        return Structure::create(vm, globalObject, prototype, TypeInfo(ObjectType, StructureFlags), info());
+    }
+
+    static JSCMemoryFootprint* create(VM& vm, JSGlobalObject* globalObject)
+    {
+        Structure* structure = createStructure(vm, globalObject, jsNull());
+        JSCMemoryFootprint* footprint = new (NotNull, allocateCell<JSCMemoryFootprint>(vm.heap, sizeof(JSCMemoryFootprint))) JSCMemoryFootprint(vm, structure);
+        footprint->finishCreation(vm);
+        return footprint;
+    }
+
+    void finishCreation(VM& vm)
+    {
+        Base::finishCreation(vm);
+
+        auto addProperty = [&] (VM& vm, const char* name, JSValue value) {
+            JSCMemoryFootprint::addProperty(vm, name, value);
+        };
+
+        MemoryFootprint footprint = MemoryFootprint::now();
+
+        addProperty(vm, "current", jsNumber(footprint.current));
+        addProperty(vm, "peak", jsNumber(footprint.peak));
+    }
+
+    DECLARE_INFO;
+
+private:
+    void addProperty(VM& vm, const char* name, JSValue value)
+    {
+        Identifier identifier = Identifier::fromString(&vm, name);
+        putDirect(vm, identifier, value);
+    }
+};
+
+const ClassInfo JSCMemoryFootprint::s_info = { "MemoryFootprint", &Base::s_info, nullptr, nullptr, CREATE_METHOD_TABLE(JSCMemoryFootprint) };
+
+EncodedJSValue JSC_HOST_CALL functionCreateMemoryFootprint(ExecState* exec)
+{
+    VM& vm = exec->vm();
+    JSLockHolder lock(vm);
+    return JSValue::encode(JSCMemoryFootprint::create(vm, exec->lexicalGlobalObject()));
+}
+
+EncodedJSValue JSC_HOST_CALL functionResetMemoryPeak(ExecState*)
+{
+    MemoryFootprint::resetPeak();
+    return JSValue::encode(jsUndefined());
 }
 
 // This function is not generally very helpful in 64-bit code as the tag and payload
@@ -1679,8 +1784,7 @@ EncodedJSValue JSC_HOST_CALL functionDollarAgentReceiveBroadcast(ExecState* exec
     args.append(jsNumber(message->index()));
     if (UNLIKELY(args.hasOverflowed()))
         return JSValue::encode(throwOutOfMemoryError(exec, scope));
-    scope.release();
-    return JSValue::encode(call(exec, callback, callType, callData, jsNull(), args));
+    RELEASE_AND_RETURN(scope, JSValue::encode(call(exec, callback, callType, callData, jsNull(), args)));
 }
 
 EncodedJSValue JSC_HOST_CALL functionDollarAgentReport(ExecState* exec)
@@ -1957,34 +2061,6 @@ EncodedJSValue JSC_HOST_CALL functionIs32BitPlatform(ExecState*)
 #endif
 }
 
-EncodedJSValue JSC_HOST_CALL functionLoadModule(ExecState* exec)
-{
-    VM& vm = exec->vm();
-    auto scope = DECLARE_THROW_SCOPE(vm);
-
-    String fileName = exec->argument(0).toWTFString(exec);
-    RETURN_IF_EXCEPTION(scope, encodedJSValue());
-    Vector<char> script;
-    if (!fetchScriptFromLocalFileSystem(fileName, script))
-        return JSValue::encode(throwException(exec, scope, createError(exec, "Could not open file."_s)));
-
-    JSInternalPromise* promise = loadAndEvaluateModule(exec, fileName, jsUndefined(), jsUndefined());
-    RETURN_IF_EXCEPTION(scope, encodedJSValue());
-
-    JSValue error;
-    JSFunction* errorHandler = JSNativeStdFunction::create(vm, exec->lexicalGlobalObject(), 1, String(), [&](ExecState* exec) {
-        error = exec->argument(0);
-        return JSValue::encode(jsUndefined());
-    });
-
-    promise->then(exec, nullptr, errorHandler);
-    RETURN_IF_EXCEPTION(scope, encodedJSValue());
-    vm.drainMicrotasks();
-    if (error)
-        return JSValue::encode(throwException(exec, scope, error));
-    return JSValue::encode(jsUndefined());
-}
-
 EncodedJSValue JSC_HOST_CALL functionCreateGlobalObject(ExecState* exec)
 {
     VM& vm = exec->vm();
@@ -2121,7 +2197,7 @@ static EncodedJSValue JSC_HOST_CALL functionWebAssemblyMemoryMode(ExecState* exe
     return throwVMTypeError(exec, scope, "WebAssemblyMemoryMode expects either a WebAssembly.Memory or WebAssembly.Instance"_s);
 }
 
-#endif // ENABLE(WEBASSEBLY)
+#endif // ENABLE(WEBASSEMBLY)
 
 // Use SEH for Release builds only to get rid of the crash report dialog
 // (luckily the same tests fail in Release and Debug builds so far). Need to
@@ -2160,7 +2236,7 @@ static void startTimeoutThreadIfNeeded()
 
 int main(int argc, char** argv)
 {
-#if PLATFORM(IOS) && CPU(ARM_THUMB2)
+#if PLATFORM(IOS_FAMILY) && CPU(ARM_THUMB2)
     // Enabled IEEE754 denormal support.
     fenv_t env;
     fegetenv( &env );
@@ -2173,6 +2249,9 @@ int main(int argc, char** argv)
     // testing/debugging, as it causes the post-mortem debugger not to be invoked. We reset the
     // error mode here to work around Cygwin's behavior. See <http://webkit.org/b/55222>.
     ::SetErrorMode(0);
+
+    _setmode(_fileno(stdout), _O_BINARY);
+    _setmode(_fileno(stderr), _O_BINARY);
 
 #if defined(_DEBUG)
     _CrtSetReportFile(_CRT_WARN, _CRTDBG_FILE_STDERR);
@@ -2196,7 +2275,7 @@ int main(int argc, char** argv)
     // have a chance to parse options.
     WTF::initializeThreading();
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     Options::crashIfCantAllocateJITMemory() = true;
 #endif
 

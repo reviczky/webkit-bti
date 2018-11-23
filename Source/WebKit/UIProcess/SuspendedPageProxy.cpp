@@ -54,6 +54,7 @@ static const HashSet<IPC::StringReference>& messageNamesToIgnoreWhileSuspended()
         messageNames.get().add("DidDestroyNavigation");
         messageNames.get().add("DidFinishDocumentLoadForFrame");
         messageNames.get().add("DidFinishProgress");
+        messageNames.get().add("DidCompletePageTransition");
         messageNames.get().add("DidFirstLayoutForFrame");
         messageNames.get().add("DidFirstVisuallyNonEmptyLayoutForFrame");
         messageNames.get().add("DidNavigateWithNavigationData");
@@ -73,53 +74,63 @@ static const HashSet<IPC::StringReference>& messageNamesToIgnoreWhileSuspended()
 }
 #endif
 
-SuspendedPageProxy::SuspendedPageProxy(WebPageProxy& page, WebProcessProxy& process, WebBackForwardListItem& item)
+SuspendedPageProxy::SuspendedPageProxy(WebPageProxy& page, Ref<WebProcessProxy>&& process, WebBackForwardListItem& item, uint64_t mainFrameID)
     : m_page(page)
-    , m_process(&process)
-    , m_backForwardListItem(item)
-    , m_origin(SecurityOriginData::fromURL({ ParsedURLString, item.url() }))
+    , m_process(WTFMove(process))
+    , m_mainFrameID(mainFrameID)
+    , m_registrableDomain(toRegistrableDomain(URL(URL(), item.url())))
 {
-    m_backForwardListItem->setSuspendedPage(this);
-    m_process->processPool().registerSuspendedPageProxy(*this);
+    item.setSuspendedPage(this);
+    m_process->addMessageReceiver(Messages::WebPageProxy::messageReceiverName(), m_page.pageID(), *this);
+
     m_process->send(Messages::WebPage::SetIsSuspended(true), m_page.pageID());
 }
 
 SuspendedPageProxy::~SuspendedPageProxy()
 {
-    if (auto process = makeRefPtr(m_process)) {
-        process->suspendedPageWasDestroyed(*this);
-        process->processPool().unregisterSuspendedPageProxy(*this);
-    }
+    if (!m_isSuspended)
+        return;
 
-    m_backForwardListItem->setSuspendedPage(nullptr);
-}
-
-void SuspendedPageProxy::webProcessDidClose(WebProcessProxy& process)
-{
-    ASSERT_UNUSED(process, &process == m_process);
-
-    auto protectedThis = makeRef(*this);
-    m_process->processPool().unregisterSuspendedPageProxy(*this);
-    m_process = nullptr;
-
-    m_page.suspendedPageClosed(*this);
-    m_backForwardListItem->setSuspendedPage(nullptr);
-}
-
-void SuspendedPageProxy::destroyWebPageInWebProcess()
-{
+    // If the suspended page was not consumed before getting destroyed, then close the corresponding page
+    // on the WebProcess side.
     m_process->send(Messages::WebPage::Close(), m_page.pageID());
-    m_page.suspendedPageClosed(*this);
+    m_process->removeMessageReceiver(Messages::WebPageProxy::messageReceiverName(), m_page.pageID());
+
+    // We call maybeShutDown() asynchronously since the SuspendedPage is currently being removed from the WebProcessPool
+    // and we want to avoid re-entering WebProcessPool methods.
+    RunLoop::main().dispatch([process = m_process.copyRef()] {
+        process->maybeShutDown();
+    });
+}
+
+void SuspendedPageProxy::unsuspend(CompletionHandler<void()>&& completionHandler)
+{
+    ASSERT(m_isSuspended);
+
+    auto doUnsuspend = [this, completionHandler = WTFMove(completionHandler)]() mutable {
+        m_isSuspended = false;
+        m_process->removeMessageReceiver(Messages::WebPageProxy::messageReceiverName(), m_page.pageID());
+        m_process->send(Messages::WebPage::SetIsSuspended(false), m_page.pageID());
+        completionHandler();
+    };
+
+    if (!m_finishedSuspending) {
+        ASSERT(!m_finishedSuspendingHandler);
+        m_finishedSuspendingHandler = WTFMove(doUnsuspend);
+    } else
+        doUnsuspend();
 }
 
 void SuspendedPageProxy::didFinishLoad()
 {
-    ASSERT(m_process);
     LOG(ProcessSwapping, "SuspendedPageProxy %s from process %i finished transition to suspended", loggingString(), m_process->processIdentifier());
 
     m_finishedSuspending = true;
 
     m_process->send(Messages::WebProcess::UpdateActivePages(), 0);
+
+    if (auto finishedSuspendingHandler = WTFMove(m_finishedSuspendingHandler))
+        finishedSuspendingHandler();
 }
 
 void SuspendedPageProxy::didReceiveMessage(IPC::Connection&, IPC::Decoder& decoder)
@@ -134,6 +145,10 @@ void SuspendedPageProxy::didReceiveMessage(IPC::Connection&, IPC::Decoder& decod
     if (!messageNamesToIgnoreWhileSuspended().contains(decoder.messageName()))
         LOG(ProcessSwapping, "SuspendedPageProxy received unexpected WebPageProxy message '%s'", decoder.messageName().toString().data());
 #endif
+}
+
+void SuspendedPageProxy::didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&)
+{
 }
 
 #if !LOG_DISABLED

@@ -48,11 +48,13 @@ void EditorState::encode(IPC::Encoder& encoder) const
     if (!isMissingPostLayoutData)
         m_postLayoutData.encode(encoder);
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     encoder << firstMarkedRect;
     encoder << lastMarkedRect;
     encoder << markedText;
 #endif
+
+    encoder << originIdentifierForPasteboard;
 }
 
 bool EditorState::decode(IPC::Decoder& decoder, EditorState& result)
@@ -89,7 +91,7 @@ bool EditorState::decode(IPC::Decoder& decoder, EditorState& result)
             return false;
     }
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (!decoder.decode(result.firstMarkedRect))
         return false;
     if (!decoder.decode(result.lastMarkedRect))
@@ -98,23 +100,26 @@ bool EditorState::decode(IPC::Decoder& decoder, EditorState& result)
         return false;
 #endif
 
+    if (!decoder.decode(result.originIdentifierForPasteboard))
+        return false;
+
     return true;
 }
 
 void EditorState::PostLayoutData::encode(IPC::Encoder& encoder) const
 {
     encoder << typingAttributes;
-#if PLATFORM(IOS) || PLATFORM(GTK)
+#if PLATFORM(IOS_FAMILY) || PLATFORM(GTK)
     encoder << caretRectAtStart;
 #endif
-#if PLATFORM(IOS) || PLATFORM(MAC)
+#if PLATFORM(IOS_FAMILY) || PLATFORM(MAC)
     encoder << selectionClipRect;
     encoder << selectedTextLength;
     encoder << textAlignment;
     encoder << textColor;
     encoder << enclosingListType;
 #endif
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     encoder << caretRectAtEnd;
     encoder << selectionRects;
     encoder << wordAtSelection;
@@ -126,6 +131,7 @@ void EditorState::PostLayoutData::encode(IPC::Encoder& encoder) const
     encoder << isStableStateUpdate;
     encoder << insideFixedPosition;
     encoder << hasPlainText;
+    encoder << elementIsTransparent;
     encoder << caretColor;
 #endif
 #if PLATFORM(MAC)
@@ -133,6 +139,7 @@ void EditorState::PostLayoutData::encode(IPC::Encoder& encoder) const
     encoder << paragraphContextForCandidateRequest;
     encoder << stringForCandidateRequest;
 #endif
+    encoder << fontAttributes;
     encoder << canCut;
     encoder << canCopy;
     encoder << canPaste;
@@ -142,11 +149,11 @@ bool EditorState::PostLayoutData::decode(IPC::Decoder& decoder, PostLayoutData& 
 {
     if (!decoder.decode(result.typingAttributes))
         return false;
-#if PLATFORM(IOS) || PLATFORM(GTK)
+#if PLATFORM(IOS_FAMILY) || PLATFORM(GTK)
     if (!decoder.decode(result.caretRectAtStart))
         return false;
 #endif
-#if PLATFORM(IOS) || PLATFORM(MAC)
+#if PLATFORM(IOS_FAMILY) || PLATFORM(MAC)
     if (!decoder.decode(result.selectionClipRect))
         return false;
     if (!decoder.decode(result.selectedTextLength))
@@ -158,7 +165,7 @@ bool EditorState::PostLayoutData::decode(IPC::Decoder& decoder, PostLayoutData& 
     if (!decoder.decode(result.enclosingListType))
         return false;
 #endif
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (!decoder.decode(result.caretRectAtEnd))
         return false;
     if (!decoder.decode(result.selectionRects))
@@ -181,6 +188,8 @@ bool EditorState::PostLayoutData::decode(IPC::Decoder& decoder, PostLayoutData& 
         return false;
     if (!decoder.decode(result.hasPlainText))
         return false;
+    if (!decoder.decode(result.elementIsTransparent))
+        return false;
     if (!decoder.decode(result.caretColor))
         return false;
 #endif
@@ -195,6 +204,13 @@ bool EditorState::PostLayoutData::decode(IPC::Decoder& decoder, PostLayoutData& 
         return false;
 #endif
 
+    std::optional<std::optional<FontAttributes>> optionalFontAttributes;
+    decoder >> optionalFontAttributes;
+    if (!optionalFontAttributes)
+        return false;
+
+    result.fontAttributes = optionalFontAttributes.value();
+
     if (!decoder.decode(result.canCut))
         return false;
     if (!decoder.decode(result.canCopy))
@@ -207,7 +223,7 @@ bool EditorState::PostLayoutData::decode(IPC::Decoder& decoder, PostLayoutData& 
 
 TextStream& operator<<(TextStream& ts, const EditorState& editorState)
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (editorState.firstMarkedRect != IntRect())
         ts.dumpProperty("firstMarkedRect", editorState.firstMarkedRect);
     if (editorState.lastMarkedRect != IntRect())
@@ -242,11 +258,11 @@ TextStream& operator<<(TextStream& ts, const EditorState& editorState)
     ts << "postLayoutData";
     if (editorState.postLayoutData().typingAttributes != AttributeNone)
         ts.dumpProperty("typingAttributes", editorState.postLayoutData().typingAttributes);
-#if PLATFORM(IOS) || PLATFORM(GTK)
+#if PLATFORM(IOS_FAMILY) || PLATFORM(GTK)
     if (editorState.postLayoutData().caretRectAtStart != IntRect())
         ts.dumpProperty("caretRectAtStart", editorState.postLayoutData().caretRectAtStart);
 #endif
-#if PLATFORM(IOS) || PLATFORM(MAC)
+#if PLATFORM(IOS_FAMILY) || PLATFORM(MAC)
     if (editorState.postLayoutData().selectionClipRect != IntRect())
         ts.dumpProperty("selectionClipRect", editorState.postLayoutData().selectionClipRect);
     if (editorState.postLayoutData().selectedTextLength)
@@ -258,7 +274,7 @@ TextStream& operator<<(TextStream& ts, const EditorState& editorState)
     if (editorState.postLayoutData().enclosingListType != NoList)
         ts.dumpProperty("enclosingListType", editorState.postLayoutData().enclosingListType);
 #endif
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (editorState.postLayoutData().caretRectAtEnd != IntRect())
         ts.dumpProperty("caretRectAtEnd", editorState.postLayoutData().caretRectAtEnd);
     if (editorState.postLayoutData().selectionRects.size())

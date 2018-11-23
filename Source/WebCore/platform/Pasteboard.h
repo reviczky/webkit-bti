@@ -34,7 +34,7 @@
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 OBJC_CLASS NSString;
 #endif
 
@@ -89,7 +89,7 @@ struct PasteboardWebContent {
     String text;
     String markup;
 #endif
-#if PLATFORM(WPE)
+#if USE(LIBWPE)
     String text;
     String markup;
 #endif
@@ -170,7 +170,7 @@ struct PasteboardCustomData {
     WEBCORE_EXPORT static PasteboardCustomData fromSharedBuffer(const SharedBuffer&);
 
 #if PLATFORM(COCOA)
-    static const char* cocoaType();
+    WEBCORE_EXPORT static const char* cocoaType();
 #endif
 };
 
@@ -204,6 +204,7 @@ public:
     virtual WEBCORE_EXPORT String readOrigin();
     virtual WEBCORE_EXPORT String readString(const String& type);
     virtual WEBCORE_EXPORT String readStringInCustomData(const String& type);
+    virtual WEBCORE_EXPORT Vector<String> readAllStrings(const String& type);
 
     virtual WEBCORE_EXPORT void writeString(const String& type, const String& data);
     virtual WEBCORE_EXPORT void clear();
@@ -213,6 +214,7 @@ public:
     virtual WEBCORE_EXPORT void read(PasteboardWebContentReader&, WebContentReadingPolicy = WebContentReadingPolicy::AnyType);
     virtual WEBCORE_EXPORT void read(PasteboardFileReader&);
 
+    virtual WEBCORE_EXPORT void write(const Color&);
     virtual WEBCORE_EXPORT void write(const PasteboardURL&);
     virtual WEBCORE_EXPORT void writeTrustworthyWebURLsPboardType(const PasteboardURL&);
     virtual WEBCORE_EXPORT void write(const PasteboardImage&);
@@ -246,7 +248,7 @@ public:
     static std::unique_ptr<Pasteboard> createForGlobalSelection();
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     explicit Pasteboard(long changeCount);
     explicit Pasteboard(const String& pasteboardName);
 
@@ -276,7 +278,7 @@ public:
 #endif
 
 private:
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     bool respectsUTIFidelities() const;
     void readRespectingUTIFidelities(PasteboardWebContentReader&, WebContentReadingPolicy);
 
@@ -297,7 +299,7 @@ private:
 
 #if PLATFORM(COCOA)
     Vector<String> readFilePaths();
-    String readPlatformValueAsString(const String& domType, long changeCount, const String& pasteboardName);
+    Vector<String> readPlatformValuesAsStrings(const String& domType, long changeCount, const String& pasteboardName);
     static void addHTMLClipboardTypesForCocoaType(ListHashSet<String>& resultTypes, const String& cocoaType);
     String readStringForPlatformType(const String&);
     Vector<String> readTypesWithSecurityCheck();
@@ -329,8 +331,9 @@ private:
 #endif
 };
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 extern NSString *WebArchivePboardType;
+extern NSString *UIColorPboardType;
 #endif
 
 #if PLATFORM(MAC)

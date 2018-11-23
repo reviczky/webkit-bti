@@ -98,12 +98,12 @@ CompletionHandlerCallingScope PolicyChecker::extendBlobURLLifetimeIfNecessary(Re
     });
 }
 
-void PolicyChecker::checkNavigationPolicy(ResourceRequest&& request, const ResourceResponse& redirectResponse, DocumentLoader* loader, RefPtr<FormState>&& formState, NavigationPolicyDecisionFunction&& function, PolicyDecisionMode policyDecisionMode)
+void PolicyChecker::checkNavigationPolicy(ResourceRequest&& request, const ResourceResponse& redirectResponse, DocumentLoader* loader, RefPtr<FormState>&& formState, NavigationPolicyDecisionFunction&& function, PolicyDecisionMode policyDecisionMode, ShouldSkipSafeBrowsingCheck shouldSkipSafeBrowsingCheck)
 {
     NavigationAction action = loader->triggeringAction();
     if (action.isEmpty()) {
         action = NavigationAction { *m_frame.document(), request, InitiatedByMainFrame::Unknown, NavigationType::Other, loader->shouldOpenExternalURLsPolicyToPropagate() };
-        loader->setTriggeringAction(action);
+        loader->setTriggeringAction(NavigationAction { action });
     }
 
     // Don't ask more than once for the same request or if we are loading an empty URL.
@@ -141,7 +141,7 @@ void PolicyChecker::checkNavigationPolicy(ResourceRequest&& request, const Resou
     loader->setLastCheckedRequest(ResourceRequest(request));
 
     // Initial 'about:blank' load needs to happen synchronously so the policy check needs to be synchronous in this case.
-    if (!m_frame.loader().stateMachine().committedFirstRealDocumentLoad() && request.url().isBlankURL() && !substituteData.isValid())
+    if (!m_frame.loader().stateMachine().committedFirstRealDocumentLoad() && request.url().protocolIsAbout() && !substituteData.isValid())
         policyDecisionMode = PolicyDecisionMode::Synchronous;
 
 #if USE(QUICK_LOOK)
@@ -168,7 +168,7 @@ void PolicyChecker::checkNavigationPolicy(ResourceRequest&& request, const Resou
 
     m_delegateIsDecidingNavigationPolicy = true;
     String suggestedFilename = action.downloadAttribute().isEmpty() ? nullAtom() : action.downloadAttribute();
-    m_frame.loader().client().dispatchDecidePolicyForNavigationAction(action, request, redirectResponse, formState.get(), policyDecisionMode, [this, function = WTFMove(function), request = ResourceRequest(request), formState = WTFMove(formState), suggestedFilename = WTFMove(suggestedFilename), blobURLLifetimeExtension = WTFMove(blobURLLifetimeExtension)](PolicyAction policyAction) mutable {
+    m_frame.loader().client().dispatchDecidePolicyForNavigationAction(action, request, redirectResponse, formState.get(), policyDecisionMode, shouldSkipSafeBrowsingCheck, [this, function = WTFMove(function), request = ResourceRequest(request), formState = WTFMove(formState), suggestedFilename = WTFMove(suggestedFilename), blobURLLifetimeExtension = WTFMove(blobURLLifetimeExtension)](PolicyAction policyAction) mutable {
         m_delegateIsDecidingNavigationPolicy = false;
 
         switch (policyAction) {
@@ -179,7 +179,7 @@ void PolicyChecker::checkNavigationPolicy(ResourceRequest&& request, const Resou
         case PolicyAction::Ignore:
             return function({ }, nullptr, ShouldContinue::No);
         case PolicyAction::Suspend:
-            return function({ }, nullptr, ShouldContinue::ForSuspension);
+            return function({ blankURL() }, nullptr, ShouldContinue::ForSuspension);
         case PolicyAction::Use:
             if (!m_frame.loader().client().canHandleRequest(request)) {
                 handleUnimplementablePolicy(m_frame.loader().client().cannotShowURLError(request));

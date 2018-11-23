@@ -2,7 +2,7 @@
  * Copyright (C) 1999 Lars Knoll (knoll@kde.org)
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Dirk Mueller ( mueller@kde.org )
- * Copyright (C) 2003-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2003-2018 Apple Inc. All rights reserved.
  * Copyright (C) 2006 Andrew Wellington (proton@wiretapped.net)
  *
  * This library is free software; you can redistribute it and/or
@@ -23,19 +23,20 @@
  */
 
 #include "config.h"
-#include "StringImpl.h"
+#include <wtf/text/StringImpl.h>
 
-#include "AtomicString.h"
-#include "StringBuffer.h"
-#include "StringHash.h"
 #include <wtf/ProcessID.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/text/AtomicString.h>
 #include <wtf/text/CString.h>
+#include <wtf/text/ExternalStringImpl.h>
+#include <wtf/text/StringBuffer.h>
+#include <wtf/text/StringHash.h>
 #include <wtf/text/StringView.h>
 #include <wtf/text/SymbolImpl.h>
 #include <wtf/text/SymbolRegistry.h>
 #include <wtf/unicode/CharacterNames.h>
-#include <wtf/unicode/UTF8.h>
+#include <wtf/unicode/UTF8Conversion.h>
 
 #if STRING_STATS
 #include <unistd.h>
@@ -132,6 +133,12 @@ StringImpl::~StringImpl()
         fastFree(const_cast<LChar*>(m_data8));
         return;
     }
+    if (ownership == BufferExternal) {
+        auto* external = static_cast<ExternalStringImpl*>(this);
+        external->freeExternalBuffer(const_cast<LChar*>(m_data8), sizeInBytes());
+        external->m_free.~ExternalStringImplFreeFunction();
+        return;
+    }
 
     ASSERT(ownership == BufferSubstring);
     ASSERT(substringBuffer());
@@ -204,22 +211,24 @@ Ref<StringImpl> StringImpl::createUninitialized(unsigned length, UChar*& data)
     return createUninitializedInternal(length, data);
 }
 
-template<typename CharacterType> inline Ref<StringImpl> StringImpl::reallocateInternal(Ref<StringImpl>&& originalString, unsigned length, CharacterType*& data)
+template<typename CharacterType> inline Expected<Ref<StringImpl>, UTF8ConversionError> StringImpl::reallocateInternal(Ref<StringImpl>&& originalString, unsigned length, CharacterType*& data)
 {
     ASSERT(originalString->hasOneRef());
     ASSERT(originalString->bufferOwnership() == BufferInternal);
 
     if (!length) {
         data = 0;
-        return *empty();
+        return Ref<StringImpl>(*empty());
     }
 
     // Same as createUninitialized() except here we use fastRealloc.
     if (length > ((std::numeric_limits<unsigned>::max() - sizeof(StringImpl)) / sizeof(CharacterType)))
-        CRASH();
+        return makeUnexpected(UTF8ConversionError::OutOfMemory);
 
     originalString->~StringImpl();
-    auto* string = static_cast<StringImpl*>(fastRealloc(&originalString.leakRef(), allocationSize<CharacterType>(length)));
+    StringImpl* string;
+    if (!tryFastRealloc(&originalString.leakRef(), allocationSize<CharacterType>(length)).getValue(string))
+        return makeUnexpected(UTF8ConversionError::OutOfMemory);
 
     data = string->tailPointer<CharacterType>();
     return constructInternal<CharacterType>(*string, length);
@@ -227,11 +236,25 @@ template<typename CharacterType> inline Ref<StringImpl> StringImpl::reallocateIn
 
 Ref<StringImpl> StringImpl::reallocate(Ref<StringImpl>&& originalString, unsigned length, LChar*& data)
 {
+    auto expectedStringImpl = tryReallocate(WTFMove(originalString), length, data);
+    RELEASE_ASSERT(expectedStringImpl);
+    return WTFMove(expectedStringImpl.value());
+}
+
+Ref<StringImpl> StringImpl::reallocate(Ref<StringImpl>&& originalString, unsigned length, UChar*& data)
+{
+    auto expectedStringImpl = tryReallocate(WTFMove(originalString), length, data);
+    RELEASE_ASSERT(expectedStringImpl);
+    return WTFMove(expectedStringImpl.value());
+}
+
+Expected<Ref<StringImpl>, UTF8ConversionError> StringImpl::tryReallocate(Ref<StringImpl>&& originalString, unsigned length, LChar*& data)
+{
     ASSERT(originalString->is8Bit());
     return reallocateInternal(WTFMove(originalString), length, data);
 }
 
-Ref<StringImpl> StringImpl::reallocate(Ref<StringImpl>&& originalString, unsigned length, UChar*& data)
+Expected<Ref<StringImpl>, UTF8ConversionError> StringImpl::tryReallocate(Ref<StringImpl>&& originalString, unsigned length, UChar*& data)
 {
     ASSERT(!originalString->is8Bit());
     return reallocateInternal(WTFMove(originalString), length, data);

@@ -180,12 +180,13 @@ void InspectorOverlay::paint(GraphicsContext& context)
     if (!shouldShowOverlay())
         return;
 
-#if PLATFORM(MAC)
-    LocalDefaultSystemAppearance localAppearance(m_page.useSystemAppearance(), m_page.useDarkAppearance());
-#endif
-
     GraphicsContextStateSaver stateSaver(context);
     FrameView* view = overlayPage()->mainFrame().view();
+
+#if PLATFORM(MAC)
+    LocalDefaultSystemAppearance localAppearance(view->useDarkAppearance());
+#endif
+
     view->updateLayoutAndStyleIfNeededRecursive();
     view->paint(context, IntRect(0, 0, view->width(), view->height()));
 }
@@ -704,13 +705,7 @@ Page* InspectorOverlay::overlayPage()
     if (m_overlayPage)
         return m_overlayPage.get();
 
-    PageConfiguration pageConfiguration(
-        createEmptyEditorClient(),
-        SocketProvider::create(),
-        LibWebRTCProvider::create(),
-        CacheStorageProvider::create()
-    );
-    fillWithEmptyClients(pageConfiguration);
+    auto pageConfiguration = pageConfigurationWithEmptyClients();
     m_overlayPage = std::make_unique<Page>(WTFMove(pageConfiguration));
     m_overlayPage->setDeviceScaleFactor(m_page.deviceScaleFactor());
 

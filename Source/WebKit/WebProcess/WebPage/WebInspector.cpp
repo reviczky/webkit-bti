@@ -70,38 +70,36 @@ WebInspector::~WebInspector()
         m_frontendConnection->invalidate();
 }
 
-// Called from WebInspectorClient
-void WebInspector::openFrontendConnection(bool underTest)
+void WebInspector::openLocalInspectorFrontend(bool underTest)
 {
+    WebProcess::singleton().parentProcessConnection()->send(Messages::WebInspectorProxy::OpenLocalInspectorFrontend(canAttachWindow(), underTest), m_page->pageID());
+}
+
+void WebInspector::setFrontendConnection(IPC::Attachment encodedConnectionIdentifier)
+{
+    // We might receive multiple updates if this web process got swapped into a WebPageProxy
+    // shortly after another process established the connection.
+    if (m_frontendConnection) {
+        m_frontendConnection->invalidate();
+        m_frontendConnection = nullptr;
+    }
+
 #if USE(UNIX_DOMAIN_SOCKETS)
-    IPC::Connection::SocketPair socketPair = IPC::Connection::createPlatformConnection();
-    IPC::Connection::Identifier connectionIdentifier(socketPair.server);
-    IPC::Attachment connectionClientPort(socketPair.client);
+    IPC::Connection::Identifier connectionIdentifier(encodedConnectionIdentifier.releaseFileDescriptor());
 #elif OS(DARWIN)
-    mach_port_t listeningPort = MACH_PORT_NULL;
-    if (mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &listeningPort) != KERN_SUCCESS)
-        CRASH();
-
-    if (mach_port_insert_right(mach_task_self(), listeningPort, listeningPort, MACH_MSG_TYPE_MAKE_SEND) != KERN_SUCCESS)
-        CRASH();
-
-    IPC::Connection::Identifier connectionIdentifier(listeningPort);
-    IPC::Attachment connectionClientPort(listeningPort, MACH_MSG_TYPE_MOVE_SEND);
-#elif PLATFORM(WIN)
-    IPC::Connection::Identifier connectionIdentifier, connClient;
-    IPC::Connection::createServerAndClientIdentifiers(connectionIdentifier, connClient);
-    IPC::Attachment connectionClientPort(connClient);
+    IPC::Connection::Identifier connectionIdentifier(encodedConnectionIdentifier.port());
+#elif OS(WINDOWS)
+    IPC::Connection::Identifier connectionIdentifier(encodedConnectionIdentifier.handle());
 #else
     notImplemented();
     return;
 #endif
 
-#if USE(UNIX_DOMAIN_SOCKETS) || OS(DARWIN) || PLATFORM(WIN)
-    m_frontendConnection = IPC::Connection::createServerConnection(connectionIdentifier, *this);
-    m_frontendConnection->open();
+    if (!IPC::Connection::identifierIsValid(connectionIdentifier))
+        return;
 
-    WebProcess::singleton().parentProcessConnection()->send(Messages::WebInspectorProxy::CreateInspectorPage(connectionClientPort, canAttachWindow(), underTest), m_page->pageID());
-#endif
+    m_frontendConnection = IPC::Connection::createClientConnection(connectionIdentifier, *this);
+    m_frontendConnection->open();
 }
 
 void WebInspector::closeFrontendConnection()
@@ -141,8 +139,13 @@ void WebInspector::close()
     if (!m_frontendConnection)
         return;
 
-    m_page->corePage()->inspectorController().disconnectFrontend(this);
     closeFrontendConnection();
+}
+
+void WebInspector::reopen()
+{
+    close();
+    show();
 }
 
 void WebInspector::openInNewTab(const String& urlString)
@@ -283,19 +286,6 @@ void WebInspector::updateDockingAvailability()
     m_previousCanAttach = canAttachWindow;
 
     WebProcess::singleton().parentProcessConnection()->send(Messages::WebInspectorProxy::AttachAvailabilityChanged(canAttachWindow), m_page->pageID());
-}
-
-void WebInspector::sendMessageToBackend(const String& message)
-{
-    if (!m_page->corePage())
-        return;
-
-    m_page->corePage()->inspectorController().dispatchMessageFromFrontend(message);
-}
-
-void WebInspector::sendMessageToFrontend(const String& message)
-{
-    m_frontendConnection->send(Messages::WebInspectorUI::SendMessageToFrontend(message), 0);
 }
 
 } // namespace WebKit

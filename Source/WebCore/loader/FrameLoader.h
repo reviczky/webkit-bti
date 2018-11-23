@@ -34,15 +34,17 @@
 #include "CachePolicy.h"
 #include "FrameLoaderStateMachine.h"
 #include "FrameLoaderTypes.h"
-#include "LayoutMilestones.h"
+#include "LayoutMilestone.h"
 #include "MixedContentChecker.h"
 #include "ReferrerPolicy.h"
 #include "ResourceLoadNotifier.h"
 #include "ResourceLoaderOptions.h"
 #include "ResourceRequestBase.h"
 #include "SecurityContext.h"
+#include "ShouldSkipSafeBrowsingCheck.h"
 #include "StoredCredentialsPolicy.h"
 #include "Timer.h"
+#include <wtf/CompletionHandler.h>
 #include <wtf/Forward.h>
 #include <wtf/HashSet.h>
 #include <wtf/OptionSet.h>
@@ -70,6 +72,7 @@ class HistoryController;
 class HistoryItem;
 class NavigationAction;
 class NetworkingContext;
+class Node;
 class Page;
 class PolicyChecker;
 class ResourceError;
@@ -80,8 +83,9 @@ class SharedBuffer;
 class SubframeLoader;
 class SubstituteData;
 
+enum class NewLoadInProgress : bool;
 enum class ShouldContinue;
-enum class ShouldTreatAsContinuingLoad;
+enum class ShouldTreatAsContinuingLoad : bool;
 
 struct WindowFeatures;
 
@@ -167,14 +171,14 @@ public:
 
     bool shouldReportResourceTimingToParentFrame() const { return m_shouldReportResourceTimingToParentFrame; };
     
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     RetainPtr<CFDictionaryRef> connectionProperties(ResourceLoader*);
 #endif
     const ResourceRequest& originalRequest() const;
     const ResourceRequest& initialRequest() const;
     void receivedMainResourceError(const ResourceError&);
 
-    bool willLoadMediaElementURL(URL&);
+    bool willLoadMediaElementURL(URL&, Node&);
 
     void handleFallbackContent();
 
@@ -199,7 +203,7 @@ public:
 
     CachePolicy subresourceCachePolicy(const URL&) const;
 
-    void didReachLayoutMilestone(LayoutMilestones);
+    void didReachLayoutMilestone(OptionSet<LayoutMilestone>);
     void didFirstLayout();
 
     void loadedResourceFromMemoryCache(CachedResource&, ResourceRequest& newRequest, ResourceError&);
@@ -276,7 +280,7 @@ public:
     void completed();
     bool allAncestorsAreComplete() const; // including this
     void clientRedirected(const URL&, double delay, WallTime fireDate, LockBackForwardList);
-    void clientRedirectCancelledOrFinished(bool cancelWithLoadInProgress);
+    void clientRedirectCancelledOrFinished(NewLoadInProgress);
 
     WEBCORE_EXPORT void setOriginalURLForDownloadRequest(ResourceRequest&);
 
@@ -360,16 +364,16 @@ private:
     void closeOldDataSources();
     void willRestoreFromCachedPage();
 
-    bool shouldReloadToHandleUnreachableURL(DocumentLoader*);
+    bool shouldReloadToHandleUnreachableURL(DocumentLoader&);
 
     void dispatchDidCommitLoad(std::optional<HasInsecureContent> initialHasInsecureContent);
 
     void urlSelected(FrameLoadRequest&&, Event*);
 
-    void loadWithDocumentLoader(DocumentLoader*, FrameLoadType, RefPtr<FormState>&&, AllowNavigationToInvalidURL, ShouldTreatAsContinuingLoad, CompletionHandler<void()>&&); // Calls continueLoadAfterNavigationPolicy
-    void load(DocumentLoader*); // Calls loadWithDocumentLoader
+    void loadWithDocumentLoader(DocumentLoader*, FrameLoadType, RefPtr<FormState>&&, AllowNavigationToInvalidURL, ShouldTreatAsContinuingLoad, ShouldSkipSafeBrowsingCheck = ShouldSkipSafeBrowsingCheck::No, CompletionHandler<void()>&& = [] { }); // Calls continueLoadAfterNavigationPolicy
+    void load(DocumentLoader&, ShouldSkipSafeBrowsingCheck); // Calls loadWithDocumentLoader
 
-    void loadWithNavigationAction(const ResourceRequest&, const NavigationAction&, LockHistory, FrameLoadType, RefPtr<FormState>&&, AllowNavigationToInvalidURL, CompletionHandler<void()>&&); // Calls loadWithDocumentLoader
+    void loadWithNavigationAction(const ResourceRequest&, NavigationAction&&, LockHistory, FrameLoadType, RefPtr<FormState>&&, AllowNavigationToInvalidURL, ShouldSkipSafeBrowsingCheck = ShouldSkipSafeBrowsingCheck::No, CompletionHandler<void()>&& = [] { }); // Calls loadWithDocumentLoader
 
     void loadPostRequest(FrameLoadRequest&&, const String& referrer, FrameLoadType, Event*, RefPtr<FormState>&&, CompletionHandler<void()>&&);
     void loadURL(FrameLoadRequest&&, const String& referrer, FrameLoadType, Event*, RefPtr<FormState>&&, CompletionHandler<void()>&&);

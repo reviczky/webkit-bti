@@ -1071,7 +1071,7 @@ private:
     PropertyOffset prepareToPutDirectWithoutTransition(VM&, PropertyName, unsigned attributes, StructureID, Structure*);
 
     AuxiliaryBarrier<Butterfly*> m_butterfly;
-#if USE(JSVALUE32_64)
+#if CPU(ADDRESS32)
     unsigned m_32BitPadding;
 #endif
 };
@@ -1451,10 +1451,9 @@ inline JSValue JSObject::get(ExecState* exec, PropertyName propertyName) const
     PropertySlot slot(this, PropertySlot::InternalMethodType::Get);
     bool hasProperty = const_cast<JSObject*>(this)->getPropertySlot(exec, propertyName, slot);
     EXCEPTION_ASSERT(!scope.exception() || !hasProperty);
-    if (hasProperty) {
-        scope.release();
-        return slot.getValue(exec, propertyName);
-    }
+    if (hasProperty)
+        RELEASE_AND_RETURN(scope, slot.getValue(exec, propertyName));
+
     return jsUndefined();
 }
 
@@ -1465,10 +1464,9 @@ inline JSValue JSObject::get(ExecState* exec, unsigned propertyName) const
     PropertySlot slot(this, PropertySlot::InternalMethodType::Get);
     bool hasProperty = const_cast<JSObject*>(this)->getPropertySlot(exec, propertyName, slot);
     EXCEPTION_ASSERT(!scope.exception() || !hasProperty);
-    if (hasProperty) {
-        scope.release();
-        return slot.getValue(exec, propertyName);
-    }
+    if (hasProperty)
+        RELEASE_AND_RETURN(scope, slot.getValue(exec, propertyName));
+
     return jsUndefined();
 }
 

@@ -27,8 +27,6 @@
 #include "config.h"
 #include "URL.h"
 
-#include "DecodeEscapeSequences.h"
-#include "TextEncoding.h"
 #include "URLParser.h"
 #include <stdio.h>
 #include <unicode/uidna.h>
@@ -90,32 +88,9 @@ void URL::invalidate()
     m_queryEnd = 0;
 }
 
-URL::URL(ParsedURLStringTag, const String& url)
+URL::URL(const URL& base, const String& relative, const URLTextEncoding* encoding)
 {
-    URLParser parser(url);
-    *this = parser.result();
-
-#if OS(WINDOWS)
-    // FIXME(148598): Work around Windows local file handling bug in CFNetwork
-    ASSERT(isLocalFile() || url == m_string);
-#else
-    ASSERT(url == m_string);
-#endif
-}
-
-URL::URL(const URL& base, const String& relative)
-{
-    URLParser parser(relative, base);
-    *this = parser.result();
-}
-
-URL::URL(const URL& base, const String& relative, const TextEncoding& encoding)
-{
-    // For UTF-{7,16,32}, we want to use UTF-8 for the query part as
-    // we do when submitting a form. A form with GET method
-    // has its contents added to a URL as query params and it makes sense
-    // to be consistent.
-    URLParser parser(relative, base, encoding.encodingForFormSubmission());
+    URLParser parser(relative, base, encoding);
     *this = parser.result();
 }
 
@@ -197,9 +172,30 @@ String URL::protocolHostAndPort() const
     return result;
 }
 
+static String decodeEscapeSequencesFromParsedURL(StringView input)
+{
+    auto inputLength = input.length();
+    if (!inputLength)
+        return emptyString();
+    Vector<LChar> percentDecoded;
+    percentDecoded.reserveInitialCapacity(inputLength);
+    for (unsigned i = 0; i < inputLength; ++i) {
+        if (input[i] == '%'
+            && inputLength > 2
+            && i < inputLength - 2
+            && isASCIIHexDigit(input[i + 1])
+            && isASCIIHexDigit(input[i + 2])) {
+            percentDecoded.uncheckedAppend(toASCIIHexValue(input[i + 1], input[i + 2]));
+            i += 2;
+        } else
+            percentDecoded.uncheckedAppend(input[i]);
+    }
+    return String::fromUTF8(percentDecoded.data(), percentDecoded.size());
+}
+
 String URL::user() const
 {
-    return decodeURLEscapeSequences(m_string.substring(m_userStart, m_userEnd - m_userStart));
+    return decodeEscapeSequencesFromParsedURL(StringView(m_string).substring(m_userStart, m_userEnd - m_userStart));
 }
 
 String URL::pass() const
@@ -207,7 +203,7 @@ String URL::pass() const
     if (m_passwordEnd == m_userEnd)
         return String();
 
-    return decodeURLEscapeSequences(m_string.substring(m_userEnd + 1, m_passwordEnd - m_userEnd - 1));
+    return decodeEscapeSequencesFromParsedURL(StringView(m_string).substring(m_userEnd + 1, m_passwordEnd - m_userEnd - 1));
 }
 
 String URL::encodedUser() const
@@ -248,7 +244,7 @@ String URL::fileSystemPath() const
     if (!isValid() || !isLocalFile())
         return String();
 
-    return decodeURLEscapeSequences(path());
+    return decodeEscapeSequencesFromParsedURL(StringView(path()));
 }
 
 #endif
@@ -427,7 +423,12 @@ static bool appendEncodedHostname(UCharBuffer& buffer, StringView string)
     }
     return false;
 }
-    
+
+unsigned URL::hostStart() const
+{
+    return (m_passwordEnd == m_userStart) ? m_passwordEnd : m_passwordEnd + 1;
+}
+
 void URL::setHost(const String& s)
 {
     if (!m_isValid)
@@ -663,56 +664,6 @@ void URL::setPath(const String& s)
     *this = parser.result();
 }
 
-String decodeURLEscapeSequences(const String& string)
-{
-    if (string.isEmpty())
-        return string;
-    return decodeEscapeSequences<URLEscapeSequence>(string, UTF8Encoding());
-}
-
-String decodeURLEscapeSequences(const String& string, const TextEncoding& encoding)
-{
-    if (string.isEmpty())
-        return string;
-    return decodeEscapeSequences<URLEscapeSequence>(string, encoding);
-}
-
-#if PLATFORM(IOS)
-
-static bool shouldCanonicalizeScheme = true;
-
-void enableURLSchemeCanonicalization(bool enableSchemeCanonicalization)
-{
-    shouldCanonicalizeScheme = enableSchemeCanonicalization;
-}
-
-#endif
-
-template<size_t length>
-static inline bool equal(const char* a, const char (&b)[length])
-{
-#if PLATFORM(IOS)
-    if (!shouldCanonicalizeScheme) {
-        for (size_t i = 0; i < length; ++i) {
-            if (toASCIILower(a[i]) != b[i])
-                return false;
-        }
-        return true;
-    }
-#endif
-    for (size_t i = 0; i < length; ++i) {
-        if (a[i] != b[i])
-            return false;
-    }
-    return true;
-}
-
-template<size_t lengthB>
-static inline bool equal(const char* stringA, size_t lengthA, const char (&stringB)[lengthB])
-{
-    return lengthA == lengthB && equal(stringA, stringB);
-}
-
 bool equalIgnoringFragmentIdentifier(const URL& a, const URL& b)
 {
     if (a.m_queryEnd != b.m_queryEnd)
@@ -742,9 +693,9 @@ bool protocolHostAndPortAreEqual(const URL& a, const URL& b)
         return false;
 
     unsigned hostStartA = a.hostStart();
-    unsigned hostLengthA = a.hostEnd() - hostStartA;
+    unsigned hostLengthA = a.m_hostEnd - hostStartA;
     unsigned hostStartB = b.hostStart();
-    unsigned hostLengthB = b.hostEnd() - b.hostStart();
+    unsigned hostLengthB = b.m_hostEnd - b.hostStart();
     if (hostLengthA != hostLengthB)
         return false;
 
@@ -769,9 +720,9 @@ bool protocolHostAndPortAreEqual(const URL& a, const URL& b)
 bool hostsAreEqual(const URL& a, const URL& b)
 {
     unsigned hostStartA = a.hostStart();
-    unsigned hostLengthA = a.hostEnd() - hostStartA;
+    unsigned hostLengthA = a.m_hostEnd - hostStartA;
     unsigned hostStartB = b.hostStart();
-    unsigned hostLengthB = b.hostEnd() - hostStartB;
+    unsigned hostLengthB = b.m_hostEnd - hostStartB;
     if (hostLengthA != hostLengthB)
         return false;
 
@@ -910,11 +861,11 @@ bool protocolIsInHTTPFamily(const String& url)
 
 const URL& blankURL()
 {
-    static NeverDestroyed<URL> staticBlankURL(ParsedURLString, "about:blank");
+    static NeverDestroyed<URL> staticBlankURL(URL(), "about:blank");
     return staticBlankURL;
 }
 
-bool URL::isBlankURL() const
+bool URL::protocolIsAbout() const
 {
     return protocolIs("about");
 }

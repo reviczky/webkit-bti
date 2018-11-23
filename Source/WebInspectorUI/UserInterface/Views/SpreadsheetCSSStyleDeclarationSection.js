@@ -31,7 +31,14 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
 
         let element = document.createElement("section");
         element.classList.add("spreadsheet-css-declaration");
+
+        if (WI.settings.experimentalEnableMultiplePropertiesSelection.value)
+            element.classList.add("multiple-properties-selection");
+
         super(element);
+
+        if (WI.settings.experimentalEnableMultiplePropertiesSelection.value)
+            element.classList.add("multiple-properties-selection");
 
         this._delegate = delegate || null;
         this._style = style;
@@ -41,6 +48,9 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
         this._filterText = null;
         this._shouldFocusSelectorElement = false;
         this._wasEditing = false;
+
+        this._isMousePressed = false;
+        this._mouseDownIndex = NaN;
     }
 
     // Public
@@ -154,11 +164,6 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
         return false;
     }
 
-    cssStyleDeclarationTextEditorStartEditingRuleSelector()
-    {
-        this.startEditingRuleSelector();
-    }
-
     // SpreadsheetSelectorField delegate
 
     spreadsheetSelectorFieldDidChange(direction)
@@ -195,6 +200,11 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
 
     // SpreadsheetCSSStyleDeclarationEditor delegate
 
+    spreadsheetCSSStyleDeclarationEditorStartEditingRuleSelector()
+    {
+        this.startEditingRuleSelector();
+    }
+
     spreadsheetCSSStyleDeclarationEditorStartEditingAdjacentRule(propertiesEditor, delta)
     {
         if (!this._delegate)
@@ -202,6 +212,20 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
 
         if (this._delegate.spreadsheetCSSStyleDeclarationSectionStartEditingAdjacentRule)
             this._delegate.spreadsheetCSSStyleDeclarationSectionStartEditingAdjacentRule(this, delta);
+    }
+
+    spreadsheetCSSStyleDeclarationEditorPropertyBlur(event, property)
+    {
+        if (!this._isMousePressed)
+            this._propertiesEditor.deselectProperties();
+    }
+
+    spreadsheetCSSStyleDeclarationEditorPropertyMouseEnter(event, property)
+    {
+        if (this._isMousePressed) {
+            let index = parseInt(property.element.dataset.propertyIndex);
+            this._propertiesEditor.selectProperties(this._mouseDownIndex, index);
+        }
     }
 
     applyFilter(filterText)
@@ -414,7 +438,7 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
 
         let url;
         if (sourceCode.urlComponents.scheme === "data") {
-            let mainResource = WI.frameResourceManager.mainFrame.mainResource;
+            let mainResource = WI.networkManager.mainFrame.mainResource;
             if (mainResource.urlComponents.lastPathComponent.endsWith(".html"))
                 url = mainResource.url.replace(/\.html$/, "-data.css");
             else {
@@ -425,17 +449,58 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
             url = sourceCode.url;
 
         const saveAs = event.shiftKey;
-        WI.saveDataToFile({url: url, content: sourceCode.content}, saveAs);
+        WI.FileUtilities.save({url: url, content: sourceCode.content}, saveAs);
     }
 
     _handleMouseDown(event)
     {
         this._wasEditing = this._propertiesEditor.editing || document.activeElement === this._selectorElement;
+
+        if (!WI.settings.experimentalEnableMultiplePropertiesSelection.value)
+            return;
+
+        let propertyElement = event.target.closest(".property");
+        if (!propertyElement)
+            return;
+
+        this._isMousePressed = true;
+
+        // Disable text selection on mousemove.
+        event.preventDefault();
+
+        // Canceling mousedown event prevents blur event from firing on the previously focused element.
+        if (this._wasEditing && document.activeElement)
+            document.activeElement.blur();
+
+        // Prevent name/value fields from editing when properties selected.
+        window.addEventListener("click", this._handleWindowClick.bind(this), {capture: true, once: true});
+
+        let propertyIndex = parseInt(propertyElement.dataset.propertyIndex);
+        if (event.shiftKey && this._propertiesEditor.hasSelectedProperties())
+            this._propertiesEditor.extendSelectedProperties(propertyIndex);
+        else
+            this._propertiesEditor.deselectProperties();
+
+        this._mouseDownIndex = propertyIndex;
+        this._element.classList.add("selecting");
+    }
+
+    _handleWindowClick(event)
+    {
+        if (this._propertiesEditor.hasSelectedProperties()) {
+            // Don't start editing name/value if there's selection.
+            event.stop();
+        }
+
+        this._isMousePressed = false;
+        this._mouseDownIndex = NaN;
+
+        this._element.classList.remove("selecting");
     }
 
     _handleClick(event)
     {
-        if (this._wasEditing)
+        if (this._wasEditing || this._propertiesEditor.hasSelectedProperties())
             return;
 
         if (window.getSelection().type === "Range")
@@ -463,17 +528,17 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
     _highlightNodesWithSelector()
     {
         if (!this._style.ownerRule) {
-            WI.domTreeManager.highlightDOMNode(this._style.node.id);
+            WI.domManager.highlightDOMNode(this._style.node.id);
             return;
         }
 
         let selectorText = this._selectorElement.textContent.trim();
-        WI.domTreeManager.highlightSelector(selectorText, this._style.node.ownerDocument.frameIdentifier);
+        WI.domManager.highlightSelector(selectorText, this._style.node.ownerDocument.frameIdentifier);
     }
 
     _hideDOMNodeHighlight()
     {
-        WI.domTreeManager.hideDOMNodeHighlight();
+        WI.domManager.hideDOMNodeHighlight();
     }
 
     _handleEditorFilterApplied(event)

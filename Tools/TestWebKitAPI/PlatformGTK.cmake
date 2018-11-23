@@ -10,7 +10,7 @@ add_custom_target(TestWebKitAPI-forwarding-headers
     DEPENDS WebKit-forwarding-headers
 )
 
-set(ForwardingHeadersForTestWebKitAPI_NAME TestWebKitAPI-forwarding-headers PALForwardingHeaders)
+list(APPEND TestWebKitAPI_DEPENDENCIES TestWebKitAPI-forwarding-headers)
 
 include_directories(
     ${FORWARDING_HEADERS_DIR}
@@ -104,10 +104,11 @@ add_executable(TestWebCore
     ${TESTWEBKITAPI_DIR}/Tests/WebCore/URLParser.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WebCore/UserAgentQuirks.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WebCore/SampleMap.cpp
+    ${TESTWEBKITAPI_DIR}/Tests/WebCore/AbortableTaskQueue.cpp
 )
 
 target_link_libraries(TestWebCore ${test_webcore_LIBRARIES})
-add_dependencies(TestWebCore ${ForwardingHeadersForTestWebKitAPI_NAME})
+add_dependencies(TestWebCore ${TestWebKitAPI_DEPENDENCIES})
 
 add_test(TestWebCore ${TESTWEBKITAPI_RUNTIME_OUTPUT_DIRECTORY}/WebCore/TestWebCore)
 set_tests_properties(TestWebCore PROPERTIES TIMEOUT 60)
@@ -125,10 +126,14 @@ target_link_libraries(TestJSC
     ${GLIB_LIBRARIES}
     JavaScriptCore
 )
-add_dependencies(TestJSC ${ForwardingHeadersForTestWebKitAPI_NAME})
+add_dependencies(TestJSC ${TestWebKitAPI_DEPENDENCIES})
 add_test(TestJSC ${TESTWEBKITAPI_RUNTIME_OUTPUT_DIRECTORY}/JavaScriptCore/TestJSC)
 set_tests_properties(TestJSC PROPERTIES TIMEOUT 60)
 set_target_properties(TestJSC PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${TESTWEBKITAPI_RUNTIME_OUTPUT_DIRECTORY}/JavaScriptCore)
+
+# Add an intermediate target between TestJSC and JavaScriptCore to ensure derived headers are copied into the forwarding header directory.
+add_custom_target(pre-TestJSC DEPENDS JavaScriptCore)
+add_dependencies(TestJSC pre-TestJSC)
 
 if (COMPILER_IS_GCC_OR_CLANG)
     WEBKIT_ADD_TARGET_CXX_FLAGS(TestWebKit -Wno-sign-compare

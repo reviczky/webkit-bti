@@ -187,7 +187,7 @@ void HTMLElement::collectStyleForPresentationAttribute(const QualifiedName& name
             addPropertyToPresentationAttributeStyle(style, CSSPropertyWordWrap, CSSValueBreakWord);
             addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitNbspMode, CSSValueSpace);
             addPropertyToPresentationAttributeStyle(style, CSSPropertyLineBreak, CSSValueAfterWhiteSpace);
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
             addPropertyToPresentationAttributeStyle(style, CSSPropertyWebkitTextSizeAdjust, CSSValueNone);
 #endif
             break;
@@ -1085,6 +1085,21 @@ void HTMLElement::setAutocorrect(bool autocorrect)
 }
 
 #endif
+
+InputMode HTMLElement::canonicalInputMode() const
+{
+    return inputModeForAttributeValue(attributeWithoutSynchronization(inputmodeAttr));
+}
+
+const AtomicString& HTMLElement::inputMode() const
+{
+    return stringForInputMode(canonicalInputMode());
+}
+
+void HTMLElement::setInputMode(const AtomicString& value)
+{
+    setAttributeWithoutSynchronization(inputmodeAttr, value);
+}
 
 } // namespace WebCore
 

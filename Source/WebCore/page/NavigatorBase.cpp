@@ -39,12 +39,12 @@
 #include <wtf/StdLibExtras.h>
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 #include "Device.h"
 #endif
 
 #ifndef WEBCORE_NAVIGATOR_PLATFORM
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 #define WEBCORE_NAVIGATOR_PLATFORM deviceName()
 #elif OS(MAC_OS_X) && (CPU(PPC) || CPU(PPC64))
 #define WEBCORE_NAVIGATOR_PLATFORM "MacPPC"_s
@@ -75,7 +75,7 @@
 
 namespace WebCore {
 
-NavigatorBase::NavigatorBase(ScriptExecutionContext& context)
+NavigatorBase::NavigatorBase(ScriptExecutionContext* context)
 #if ENABLE(SERVICE_WORKER)
     : m_serviceWorkerContainer(makeUniqueRef<ServiceWorkerContainer>(context, *this))
 #endif
@@ -105,7 +105,7 @@ String NavigatorBase::platform()
     if (!String(WEBCORE_NAVIGATOR_PLATFORM).isEmpty())
         return WEBCORE_NAVIGATOR_PLATFORM;
     struct utsname osname;
-    static NeverDestroyed<String> platformName(uname(&osname) >= 0 ? String(osname.sysname) + String(" ") + String(osname.machine) : emptyString());
+    static NeverDestroyed<String> platformName(uname(&osname) >= 0 ? String(osname.sysname) + " "_str + String(osname.machine) : emptyString());
     return platformName;
 #else
     return WEBCORE_NAVIGATOR_PLATFORM;

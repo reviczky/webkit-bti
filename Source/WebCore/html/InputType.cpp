@@ -104,7 +104,7 @@ static InputTypeFactoryMap createInputTypeFactoryMap()
         { nullptr, &InputTypeNames::button, &createInputType<ButtonInputType> },
         { nullptr, &InputTypeNames::checkbox, &createInputType<CheckboxInputType> },
 #if ENABLE(INPUT_TYPE_COLOR)
-        { nullptr, &InputTypeNames::color, &createInputType<ColorInputType> },
+        { &RuntimeEnabledFeatures::inputTypeColorEnabled, &InputTypeNames::color, &createInputType<ColorInputType> },
 #endif
 #if ENABLE(INPUT_TYPE_DATE)
         { &RuntimeEnabledFeatures::inputTypeDateEnabled, &InputTypeNames::date, &createInputType<DateInputType> },
@@ -533,7 +533,7 @@ String InputType::serialize(const Decimal&) const
     return String();
 }
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 DateComponents::Type InputType::dateType() const
 {
     return DateComponents::Invalid;
@@ -1129,6 +1129,11 @@ Color InputType::valueAsColor() const
 
 void InputType::selectColor(StringView)
 {
+}
+
+Vector<Color> InputType::suggestedColors() const
+{
+    return { };
 }
 
 RefPtr<TextControlInnerTextElement> InputType::innerTextElement() const

@@ -34,8 +34,10 @@ if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
         platform/graphics/gstreamer/mse/WebKitMediaSourceGStreamer.cpp
 
         platform/mediastream/libwebrtc/GStreamerVideoDecoderFactory.cpp
+        platform/mediastream/libwebrtc/GStreamerVideoEncoder.cpp
         platform/mediastream/libwebrtc/GStreamerVideoEncoderFactory.cpp
         platform/mediastream/libwebrtc/LibWebRTCAudioModule.cpp
+        platform/mediastream/libwebrtc/LibWebRTCProviderGStreamer.cpp
 
         platform/mediastream/gstreamer/GStreamerAudioCaptureSource.cpp
         platform/mediastream/gstreamer/GStreamerAudioCapturer.cpp
