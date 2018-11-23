@@ -2,6 +2,8 @@ webkit2gtk (2.23.1-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
   * debian/watch, debian/gbp.conf:
     + Update for 2.23.x packages in experimental.
 
