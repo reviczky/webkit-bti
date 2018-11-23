@@ -1,4 +1,4 @@
-webkit2gtk (2.23.1-1) UNRELEASED; urgency=medium
+webkit2gtk (2.23.1-1) experimental; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
@@ -14,7 +14,7 @@ webkit2gtk (2.23.1-1) UNRELEASED; urgency=medium
   * debian/patches/build-minibrowser.patch:
     + Add missing cmake code to build the minibrowser.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 23 Nov 2018 09:49:34 +0200
+ -- Alberto Garcia <berto@igalia.com>  Fri, 23 Nov 2018 16:16:56 +0200
 
 webkit2gtk (2.22.4-1) unstable; urgency=high
 
