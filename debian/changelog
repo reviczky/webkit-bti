@@ -11,6 +11,8 @@ webkit2gtk (2.23.1-1) UNRELEASED; urgency=medium
       xdg-dbus-proxy which is not available in Debian.
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update symbols.
+  * debian/patches/build-minibrowser.patch:
+    + Add missing cmake code to build the minibrowser.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 23 Nov 2018 09:49:34 +0200
 

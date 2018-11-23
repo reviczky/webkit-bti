@@ -1,0 +1,11 @@
+From: Alberto Garcia <berto@igalia.com>
+Subject: Add missing cmake code to build the minibrowser
+Bug: https://bugs.webkit.org/show_bug.cgi?id=191923
+Index: webkitgtk/Tools/PlatformGTK.cmake
+===================================================================
+--- /dev/null
++++ webkitgtk/Tools/PlatformGTK.cmake
+@@ -0,0 +1,3 @@
++if (ENABLE_MINIBROWSER)
++  add_subdirectory(MiniBrowser/gtk)
++endif ()
