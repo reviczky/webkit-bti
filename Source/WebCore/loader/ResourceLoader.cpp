@@ -120,7 +120,7 @@ void ResourceLoader::init(ResourceRequest&& clientRequest, CompletionHandler<voi
     
     m_loadTiming.markStartTimeAndFetchStart();
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     // If the documentLoader was detached while this ResourceLoader was waiting its turn
     // in ResourceLoadScheduler queue, don't continue.
     if (!m_documentLoader->frame()) {
@@ -150,7 +150,7 @@ void ResourceLoader::init(ResourceRequest&& clientRequest, CompletionHandler<voi
 
     willSendRequestInternal(WTFMove(clientRequest), ResourceResponse(), [this, protectedThis = makeRef(*this), completionHandler = WTFMove(completionHandler)](ResourceRequest&& request) mutable {
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
         // If this ResourceLoader was stopped as a result of willSendRequest, bail out.
         if (m_reachedTerminalState)
             return completionHandler(false);
@@ -371,7 +371,7 @@ void ResourceLoader::willSendRequestInternal(ResourceRequest&& request, const Re
         if (createdResourceIdentifier)
             frameLoader()->notifier().assignIdentifierToInitialRequest(m_identifier, documentLoader(), request);
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
         // If this ResourceLoader was stopped as a result of assignIdentifierToInitialRequest, bail out
         if (m_reachedTerminalState) {
             completionHandler(WTFMove(request));
@@ -717,6 +717,15 @@ bool ResourceLoader::isAllowedToAskUserForCredentials() const
     return m_options.credentials == FetchOptions::Credentials::Include || (m_options.credentials == FetchOptions::Credentials::SameOrigin && m_frame->document()->securityOrigin().canRequest(originalRequest().url()));
 }
 
+bool ResourceLoader::shouldIncludeCertificateInfo() const
+{
+    if (m_options.certificateInfoPolicy == CertificateInfoPolicy::IncludeCertificateInfo)
+        return true;
+    if (UNLIKELY(InspectorInstrumentation::hasFrontends()))
+        return true;
+    return false;
+}
+
 void ResourceLoader::didReceiveAuthenticationChallenge(ResourceHandle* handle, const AuthenticationChallenge& challenge)
 {
     ASSERT_UNUSED(handle, handle == m_handle);
@@ -751,7 +760,7 @@ bool ResourceLoader::canAuthenticateAgainstProtectionSpace(const ProtectionSpace
 
 #endif
     
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 
 RetainPtr<CFDictionaryRef> ResourceLoader::connectionProperties(ResourceHandle*)
 {

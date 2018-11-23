@@ -26,6 +26,7 @@
 #if ENABLE(VIDEO) && USE(GSTREAMER)
 
 #include "GStreamerCommon.h"
+#include "GStreamerEMEUtilities.h"
 #include "MainThreadNotifier.h"
 #include "MediaPlayerPrivate.h"
 #include "PlatformLayer.h"
@@ -76,6 +77,8 @@ class MediaPlayerPrivateGStreamerBase : public MediaPlayerPrivateInterface, publ
 {
 
 public:
+    static void initializeDebugCategory();
+
     virtual ~MediaPlayerPrivateGStreamerBase();
 
     FloatSize naturalSize() const override;
@@ -87,7 +90,6 @@ public:
     bool ensureGstGLContext();
     GstContext* requestGLContext(const char* contextType);
 #endif
-    static bool initializeGStreamerAndRegisterWebKitElements();
     bool supportsMuting() const override { return true; }
     void setMuted(bool) override;
     bool muted() const;
@@ -151,7 +153,9 @@ public:
     void attemptToDecryptWithLocalInstance();
     void attemptToDecryptWithInstance(CDMInstance&) override;
     void dispatchCDMInstance();
-    void initializationDataEncountered(GstEvent*);
+    void initializationDataEncountered(InitData&&);
+    void setWaitingForKey(bool);
+    bool waitingForKey() const override;
 #endif
 
     static bool supportsKeySystem(const String& keySystem, const String& mimeType);
@@ -272,7 +276,7 @@ protected:
     Condition m_protectionCondition;
     RefPtr<const CDMInstance> m_cdmInstance;
     HashSet<uint32_t> m_handledProtectionEvents;
-    bool m_needToResendCredentials { false };
+    bool m_waitingForKey { false };
 #endif
 };
 

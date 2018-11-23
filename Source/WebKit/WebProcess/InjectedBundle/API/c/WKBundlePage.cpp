@@ -32,7 +32,6 @@
 #include "APIString.h"
 #include "APIURL.h"
 #include "APIURLRequest.h"
-#include "InjectedBundleBackForwardList.h"
 #include "InjectedBundleNodeHandle.h"
 #include "InjectedBundlePageEditorClient.h"
 #include "InjectedBundlePageFormClient.h"
@@ -64,6 +63,7 @@
 #include <WebCore/PageOverlay.h>
 #include <WebCore/PageOverlayController.h>
 #include <WebCore/RenderLayerCompositor.h>
+#include <WebCore/ScriptExecutionContext.h>
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/URL.h>
 #include <WebCore/WheelEventTestTrigger.h>
@@ -365,9 +365,19 @@ void WKBundlePageSetScaleAtOrigin(WKBundlePageRef pageRef, double scale, WKPoint
     toImpl(pageRef)->scalePage(scale, toIntPoint(origin));
 }
 
+WKStringRef WKBundlePageDumpHistoryForTesting(WKBundlePageRef page, WKStringRef directory)
+{
+    return toCopiedAPI(toImpl(page)->dumpHistoryForTesting(toWTFString(directory)));
+}
+
+void WKBundleClearHistoryForTesting(WKBundlePageRef page)
+{
+    toImpl(page)->clearHistory();
+}
+
 WKBundleBackForwardListRef WKBundlePageGetBackForwardList(WKBundlePageRef pageRef)
 {
-    return toAPI(toImpl(pageRef)->backForwardList());
+    return nullptr;
 }
 
 void WKBundlePageInstallPageOverlay(WKBundlePageRef pageRef, WKBundlePageOverlayRef pageOverlayRef)
@@ -410,7 +420,7 @@ void WKBundlePageSetBottomOverhangImage(WKBundlePageRef pageRef, WKImageRef imag
 #endif
 }
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
 void WKBundlePageSetHeaderBanner(WKBundlePageRef pageRef, WKBundlePageBannerRef bannerRef)
 {
     toImpl(pageRef)->setHeaderPageBanner(toImpl(bannerRef));
@@ -420,7 +430,7 @@ void WKBundlePageSetFooterBanner(WKBundlePageRef pageRef, WKBundlePageBannerRef 
 {
     toImpl(pageRef)->setFooterPageBanner(toImpl(bannerRef));
 }
-#endif // !PLATFORM(IOS)
+#endif // !PLATFORM(IOS_FAMILY)
 
 bool WKBundlePageHasLocalDataForURL(WKBundlePageRef pageRef, WKURLRef urlRef)
 {
@@ -437,6 +447,25 @@ bool WKBundlePageCanHandleRequest(WKURLRequestRef requestRef)
 bool WKBundlePageFindString(WKBundlePageRef pageRef, WKStringRef target, WKFindOptions findOptions)
 {
     return toImpl(pageRef)->findStringFromInjectedBundle(toWTFString(target), toFindOptions(findOptions));
+}
+
+void WKBundlePageFindStringMatches(WKBundlePageRef pageRef, WKStringRef target, WKFindOptions findOptions)
+{
+    toImpl(pageRef)->findStringMatchesFromInjectedBundle(toWTFString(target), toFindOptions(findOptions));
+}
+
+void WKBundlePageReplaceStringMatches(WKBundlePageRef pageRef, WKArrayRef matchIndicesRef, WKStringRef replacementText, bool selectionOnly)
+{
+    auto* matchIndices = toImpl(matchIndicesRef);
+
+    Vector<uint32_t> indices;
+    indices.reserveInitialCapacity(matchIndices->size());
+
+    for (size_t arrayIndex = 0; arrayIndex < matchIndices->size(); ++arrayIndex) {
+        if (auto* indexAsObject = matchIndices->at<API::UInt64>(arrayIndex))
+            indices.uncheckedAppend(indexAsObject->value());
+    }
+    toImpl(pageRef)->replaceStringMatchesFromInjectedBundle(WTFMove(indices), toWTFString(replacementText), selectionOnly);
 }
 
 WKImageRef WKBundlePageCreateSnapshotWithOptions(WKBundlePageRef pageRef, WKRect rect, WKSnapshotOptions options)
@@ -619,9 +648,54 @@ void WKBundlePageRegisterScrollOperationCompletionCallback(WKBundlePageRef pageR
     });
 }
 
+void WKBundlePageCallAfterTasksAndTimers(WKBundlePageRef pageRef, WKBundlePageTestNotificationCallback callback, void* context)
+{
+    if (!callback)
+        return;
+    
+    WebKit::WebPage* webPage = toImpl(pageRef);
+    WebCore::Page* page = webPage ? webPage->corePage() : nullptr;
+    if (!page)
+        return;
+
+    WebCore::Document* document = page->mainFrame().document();
+    if (!document)
+        return;
+
+    class TimerOwner {
+    public:
+        TimerOwner(WTF::Function<void (void*)>&& callback, void* context)
+            : m_timer(*this, &TimerOwner::timerFired)
+            , m_callback(WTFMove(callback))
+            , m_context(context)
+        {
+            m_timer.startOneShot(0_s);
+        }
+        
+        void timerFired()
+        {
+            m_callback(m_context);
+            delete this;
+        }
+        
+        WebCore::Timer m_timer;
+        WTF::Function<void (void*)> m_callback;
+        void* m_context;
+    };
+    
+    document->postTask([=] (WebCore::ScriptExecutionContext&) {
+        new TimerOwner(callback, context); // deletes itself when done.
+    });
+}
+
 void WKBundlePagePostMessage(WKBundlePageRef pageRef, WKStringRef messageNameRef, WKTypeRef messageBodyRef)
 {
     toImpl(pageRef)->postMessage(toWTFString(messageNameRef), toImpl(messageBodyRef));
+}
+
+void WKBundlePagePostMessageIgnoringFullySynchronousMode(WKBundlePageRef pageRef, WKStringRef messageNameRef, WKTypeRef messageBodyRef)
+{
+    toImpl(pageRef)->postMessageIgnoringFullySynchronousMode(toWTFString(messageNameRef), toImpl(messageBodyRef));
 }
 
 void WKBundlePagePostSynchronousMessageForTesting(WKBundlePageRef pageRef, WKStringRef messageNameRef, WKTypeRef messageBodyRef, WKTypeRef* returnDataRef)

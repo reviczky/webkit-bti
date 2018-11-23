@@ -295,6 +295,19 @@ void XMLHttpRequest::changeState(State newState)
 {
     if (readyState() != newState) {
         m_readyState = static_cast<State>(newState);
+        if (readyState() == DONE) {
+            // The XHR object itself holds on to the responseText, and
+            // thus has extra cost even independent of any
+            // responseText or responseXML objects it has handed
+            // out. But it is protected from GC while loading, so this
+            // can't be recouped until the load is done, so only
+            // report the extra cost at that point.
+            if (auto* context = scriptExecutionContext()) {
+                JSC::VM& vm = context->vm();
+                JSC::JSLockHolder lock(vm);
+                vm.heap.reportExtraMemoryAllocated(memoryCost());
+            }
+        }
         callReadyStateChangeListener();
     }
 }
@@ -390,11 +403,10 @@ ExceptionOr<void> XMLHttpRequest::open(const String& method, const URL& url, boo
 ExceptionOr<void> XMLHttpRequest::open(const String& method, const String& url, bool async, const String& user, const String& password)
 {
     URL urlWithCredentials = scriptExecutionContext()->completeURL(url);
-    if (!user.isNull()) {
+    if (!user.isNull())
         urlWithCredentials.setUser(user);
-        if (!password.isNull())
-            urlWithCredentials.setPass(password);
-    }
+    if (!password.isNull())
+        urlWithCredentials.setPass(password);
 
     return open(method, urlWithCredentials, async);
 }
@@ -470,7 +482,7 @@ ExceptionOr<void> XMLHttpRequest::send(Document& document)
 
         // FIXME: According to XMLHttpRequest Level 2, this should use the Document.innerHTML algorithm
         // from the HTML5 specification to serialize the document.
-        m_requestEntityBody = FormData::create(UTF8Encoding().encode(createMarkup(document), UnencodableHandling::Entities));
+        m_requestEntityBody = FormData::create(UTF8Encoding().encode(serializeFragment(document, SerializedNodes::SubtreeIncludingNode), UnencodableHandling::Entities));
         if (m_upload)
             m_requestEntityBody->setAlwaysStream(true);
     }
@@ -657,7 +669,7 @@ ExceptionOr<void> XMLHttpRequest::createRequest()
 
 void XMLHttpRequest::abort()
 {
-    // internalAbort() calls dropProtection(), which may release the last reference.
+    // internalAbort() calls unsetPendingActivity(this), which may release the last reference.
     Ref<XMLHttpRequest> protectedThis(*this);
 
     m_wasAbortedByClient = true;
@@ -703,7 +715,7 @@ bool XMLHttpRequest::internalAbort()
     // Save this information to a local variable since we are going to drop protection.
     bool newLoadStarted = m_loader;
 
-    dropProtection();
+    unsetPendingActivity(this);
 
     return !newLoadStarted;
 }
@@ -750,7 +762,7 @@ void XMLHttpRequest::networkError()
 void XMLHttpRequest::networkErrorTimerFired()
 {
     networkError();
-    dropProtection();
+    unsetPendingActivity(this);
 }
     
 void XMLHttpRequest::abortError()
@@ -760,29 +772,22 @@ void XMLHttpRequest::abortError()
     dispatchErrorEvents(eventNames().abortEvent);
 }
 
-void XMLHttpRequest::dropProtection()
+size_t XMLHttpRequest::memoryCost() const
 {
-    // The XHR object itself holds on to the responseText, and
-    // thus has extra cost even independent of any
-    // responseText or responseXML objects it has handed
-    // out. But it is protected from GC while loading, so this
-    // can't be recouped until the load is done, so only
-    // report the extra cost at that point.
-    JSC::VM& vm = scriptExecutionContext()->vm();
-    JSC::JSLockHolder lock(vm);
-    // FIXME: Adopt reportExtraMemoryVisited, and switch to reportExtraMemoryAllocated.
-    // https://bugs.webkit.org/show_bug.cgi?id=142595
-    vm.heap.deprecatedReportExtraMemory(m_responseBuilder.length() * 2);
-
-    unsetPendingActivity(this);
+    if (readyState() == DONE)
+        return m_responseBuilder.length() * 2;
+    return 0;
 }
 
-ExceptionOr<void> XMLHttpRequest::overrideMimeType(const String& override)
+ExceptionOr<void> XMLHttpRequest::overrideMimeType(const String& mimeType)
 {
     if (readyState() == LOADING || readyState() == DONE)
         return Exception { InvalidStateError };
 
-    m_mimeTypeOverride = override;
+    m_mimeTypeOverride = "application/octet-stream"_s;
+    if (isValidContentType(mimeType))
+        m_mimeTypeOverride = mimeType;
+
     return { };
 }
 
@@ -941,7 +946,7 @@ void XMLHttpRequest::didFinishLoading(unsigned long)
     m_timeoutTimer.stop();
 
     if (hadLoader)
-        dropProtection();
+        unsetPendingActivity(this);
 }
 
 void XMLHttpRequest::didSendData(unsigned long long bytesSent, unsigned long long totalBytesToBeSent)
@@ -1081,7 +1086,7 @@ void XMLHttpRequest::dispatchErrorEvents(const AtomicString& type)
 
 void XMLHttpRequest::didReachTimeout()
 {
-    // internalAbort() calls dropProtection(), which may release the last reference.
+    // internalAbort() calls unsetPendingActivity(this), which may release the last reference.
     Ref<XMLHttpRequest> protectedThis(*this);
     if (!internalAbort())
         return;

@@ -26,8 +26,10 @@
 #include "CSSPropertyNames.h"
 #include "CSSValueKeywords.h"
 #include "CachedImage.h"
+#include "ElementIterator.h"
 #include "FrameView.h"
 #include "HTMLAnchorElement.h"
+#include "HTMLAttachmentElement.h"
 #include "HTMLDocument.h"
 #include "HTMLFormElement.h"
 #include "HTMLParserIdioms.h"
@@ -153,8 +155,13 @@ ImageCandidate HTMLImageElement::bestFitSourceFromPictureElement()
     auto picture = makeRefPtr(pictureElement());
     if (!picture)
         return { };
+
     picture->clearViewportDependentResults();
     document().removeViewportDependentPicture(*picture);
+
+    picture->clearAppearanceDependentResults();
+    document().removeAppearanceDependentPicture(*picture);
+
     for (RefPtr<Node> child = picture->firstChild(); child && child != this; child = child->nextSibling()) {
         if (!is<HTMLSourceElement>(*child))
             continue;
@@ -177,9 +184,11 @@ ImageCandidate HTMLImageElement::bestFitSourceFromPictureElement()
         MediaQueryEvaluator evaluator { document().printing() ? "print" : "screen", document(), documentElement ? documentElement->computedStyle() : nullptr };
         auto* queries = source.parsedMediaAttribute(document());
         LOG(MediaQueries, "HTMLImageElement %p bestFitSourceFromPictureElement evaluating media queries", this);
-        auto evaluation = !queries || evaluator.evaluate(*queries, picture->viewportDependentResults());
+        auto evaluation = !queries || evaluator.evaluate(*queries, picture->viewportDependentResults(), picture->appearanceDependentResults());
         if (picture->hasViewportDependentResults())
             document().addViewportDependentPicture(*picture);
+        if (picture->hasAppearanceDependentResults())
+            document().addAppearanceDependentPicture(*picture);
         if (!evaluation)
             continue;
 
@@ -603,6 +612,35 @@ String HTMLImageElement::crossOrigin() const
     return parseCORSSettingsAttribute(attributeWithoutSynchronization(crossoriginAttr));
 }
 
+#if ENABLE(ATTACHMENT_ELEMENT)
+
+void HTMLImageElement::setAttachmentElement(Ref<HTMLAttachmentElement>&& attachment)
+{
+    if (auto existingAttachment = attachmentElement())
+        existingAttachment->remove();
+
+    attachment->setInlineStyleProperty(CSSPropertyDisplay, CSSValueNone, true);
+    ensureUserAgentShadowRoot().appendChild(WTFMove(attachment));
+}
+
+RefPtr<HTMLAttachmentElement> HTMLImageElement::attachmentElement() const
+{
+    if (auto shadowRoot = userAgentShadowRoot())
+        return childrenOfType<HTMLAttachmentElement>(*shadowRoot).first();
+
+    return nullptr;
+}
+
+const String& HTMLImageElement::attachmentIdentifier() const
+{
+    if (auto attachment = attachmentElement())
+        return attachment->uniqueIdentifier();
+
+    return nullAtom();
+}
+
+#endif // ENABLE(ATTACHMENT_ELEMENT)
+
 #if ENABLE(SERVICE_CONTROLS)
 void HTMLImageElement::updateImageControls()
 {
@@ -673,7 +711,7 @@ bool HTMLImageElement::childShouldCreateRenderer(const Node& child) const
 }
 #endif // ENABLE(SERVICE_CONTROLS)
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 // FIXME: This is a workaround for <rdar://problem/7725158>. We should find a better place for the touchCalloutEnabled() logic.
 bool HTMLImageElement::willRespondToMouseClickEvents()
 {
@@ -698,5 +736,12 @@ bool HTMLImageElement::isSystemPreviewImage() const
     return false;
 }
 #endif
+
+GraphicsLayer::EmbeddedViewID HTMLImageElement::editableImageViewID() const
+{
+    if (!m_editableImageViewID)
+        m_editableImageViewID = GraphicsLayer::nextEmbeddedViewID();
+    return m_editableImageViewID;
+}
 
 }

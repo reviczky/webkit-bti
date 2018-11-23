@@ -27,8 +27,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef MainThread_h
-#define MainThread_h
+#pragma once
 
 #include <stdint.h>
 #include <wtf/Forward.h>
@@ -54,6 +53,7 @@ WTF_EXPORT_PRIVATE void callOnWebThreadOrDispatchAsyncOnMainThread(void (^block)
 WTF_EXPORT_PRIVATE void setMainThreadCallbacksPaused(bool paused);
 
 WTF_EXPORT_PRIVATE bool isMainThread();
+WTF_EXPORT_PRIVATE bool isMainThreadIfInitialized();
 
 WTF_EXPORT_PRIVATE bool canAccessThreadLocalDataForThread(Thread&);
 
@@ -115,5 +115,3 @@ using WTF::callOnWebThreadOrDispatchAsyncOnMainThread;
 using WTF::initializeWebThread;
 using WTF::initializeApplicationUIThread;
 #endif
-
-#endif // MainThread_h

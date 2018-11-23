@@ -34,7 +34,6 @@
 #include "Logging.h"
 #include "PluginInfoStore.h"
 #include "PluginProcessManager.h"
-#include "SuspendedPageProxy.h"
 #include "TextChecker.h"
 #include "TextCheckerState.h"
 #include "UIMessagePortChannelProvider.h"
@@ -53,6 +52,7 @@
 #include "WebsiteData.h"
 #include "WebsiteDataFetchOption.h"
 #include <WebCore/DiagnosticLoggingKeys.h>
+#include <WebCore/PrewarmInformation.h>
 #include <WebCore/PublicSuffix.h>
 #include <WebCore/SuddenTermination.h>
 #include <WebCore/URL.h>
@@ -70,6 +70,10 @@
 #include "VersionChecks.h"
 #endif
 
+#if PLATFORM(MAC)
+#include "HighPerformanceGPUManager.h"
+#endif
+
 #if ENABLE(SEC_ITEM_SHIM)
 #include "SecItemShimProxy.h"
 #endif
@@ -82,7 +86,7 @@ using namespace WebCore;
 
 static bool isMainThreadOrCheckDisabled()
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     return LIKELY(RunLoop::isMain()) || !linkedOnOrAfter(SDKVersion::FirstWithMainThreadReleaseAssertionInWebPageProxy);
 #elif PLATFORM(MAC)
     return LIKELY(RunLoop::isMain()) || !linkedOnOrAfter(SDKVersion::FirstWithMainThreadReleaseAssertionInWebPageProxy);
@@ -116,18 +120,18 @@ static WebProcessProxy::WebPageProxyMap& globalPageMap()
     return pageMap;
 }
 
-Ref<WebProcessProxy> WebProcessProxy::create(WebProcessPool& processPool, WebsiteDataStore& websiteDataStore, IsInPrewarmedPool isInPrewarmedPool)
+Ref<WebProcessProxy> WebProcessProxy::create(WebProcessPool& processPool, WebsiteDataStore& websiteDataStore, IsPrewarmed isPrewarmed)
 {
-    auto proxy = adoptRef(*new WebProcessProxy(processPool, websiteDataStore, isInPrewarmedPool));
+    auto proxy = adoptRef(*new WebProcessProxy(processPool, websiteDataStore, isPrewarmed));
     proxy->connect();
     return proxy;
 }
 
-WebProcessProxy::WebProcessProxy(WebProcessPool& processPool, WebsiteDataStore& websiteDataStore, IsInPrewarmedPool isInPrewarmedPool)
+WebProcessProxy::WebProcessProxy(WebProcessPool& processPool, WebsiteDataStore& websiteDataStore, IsPrewarmed isPrewarmed)
     : ChildProcessProxy(processPool.alwaysRunsAtBackgroundPriority())
     , m_responsivenessTimer(*this)
     , m_backgroundResponsivenessTimer(*this)
-    , m_processPool(processPool, isInPrewarmedPool == IsInPrewarmedPool::Yes ? IsWeak::Yes : IsWeak::No)
+    , m_processPool(processPool, isPrewarmed == IsPrewarmed::Yes ? IsWeak::Yes : IsWeak::No)
     , m_mayHaveUniversalFileReadSandboxExtension(false)
     , m_numberOfTimesSuddenTerminationWasDisabled(0)
     , m_throttler(*this, processPool.shouldTakeUIBackgroundAssertion())
@@ -137,7 +141,7 @@ WebProcessProxy::WebProcessProxy(WebProcessPool& processPool, WebsiteDataStore& 
 #if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
     , m_userMediaCaptureManagerProxy(std::make_unique<UserMediaCaptureManagerProxy>(*this))
 #endif
-    , m_isInPrewarmedPool(isInPrewarmedPool == IsInPrewarmedPool::Yes)
+    , m_isPrewarmed(isPrewarmed == IsPrewarmed::Yes)
 {
     RELEASE_ASSERT(isMainThreadOrCheckDisabled());
 
@@ -165,6 +169,10 @@ WebProcessProxy::~WebProcessProxy()
 
     for (auto& callback : m_localPortActivityCompletionHandlers.values())
         callback(MessagePortChannelProvider::HasActivity::No);
+
+#if PLATFORM(MAC)
+    HighPerformanceGPUManager::singleton().removeProcessRequiringHighPerformance(this);
+#endif
 }
 
 void WebProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions)
@@ -191,11 +199,20 @@ void WebProcessProxy::getLaunchOptions(ProcessLauncher::LaunchOptions& launchOpt
 
     launchOptions.nonValidInjectedCodeAllowed = shouldAllowNonValidInjectedCode();
 
+    if (isPrewarmed())
+        launchOptions.extraInitializationData.add("is-prewarmed"_s, "1"_s);
+
     if (processPool().shouldMakeNextWebProcessLaunchFailForTesting()) {
         processPool().setShouldMakeNextWebProcessLaunchFailForTesting(false);
         launchOptions.shouldMakeProcessLaunchFailForTesting = true;
     }
 }
+
+#if !PLATFORM(GTK) && !PLATFORM(WPE)
+void WebProcessProxy::platformGetLaunchOptions(ProcessLauncher::LaunchOptions& launchOptions)
+{
+}
+#endif
 
 void WebProcessProxy::connectionWillOpen(IPC::Connection& connection)
 {
@@ -204,6 +221,11 @@ void WebProcessProxy::connectionWillOpen(IPC::Connection& connection)
     // Throttling IPC messages coming from the WebProcesses so that the UIProcess stays responsive, even
     // if one of the WebProcesses misbehaves.
     connection.enableIncomingMessagesThrottling();
+
+    // Use this flag to force synchronous messages to be treated as asynchronous messages in the WebProcess.
+    // Otherwise, the WebProcess would process incoming synchronous IPC while waiting for a synchronous IPC
+    // reply from the UIProcess, which would be unsafe.
+    connection.setOnlySendMessagesAsDispatchWhenWaitingForSyncReplyWhenProcessingSuchAMessage(true);
 
 #if ENABLE(SEC_ITEM_SHIM)
     SecItemShimProxy::singleton().initializeConnection(connection);
@@ -424,34 +446,15 @@ void WebProcessProxy::addExistingWebPage(WebPageProxy& webPage, uint64_t pageID)
     updateBackgroundResponsivenessTimer();
 }
 
-void WebProcessProxy::suspendWebPageProxy(WebPageProxy& webPage, API::Navigation& navigation)
-{
-    if (auto* suspendedPage = webPage.maybeCreateSuspendedPage(*this, navigation)) {
-        LOG(ProcessSwapping, "WebProcessProxy pid %i added suspended page %s", processIdentifier(), suspendedPage->loggingString());
-        m_suspendedPageMap.set(webPage.pageID(), suspendedPage);
-    }
-
-    removeWebPage(webPage, webPage.pageID());
-    removeMessageReceiver(Messages::WebPageProxy::messageReceiverName(), webPage.pageID());
-}
-
-void WebProcessProxy::suspendedPageWasDestroyed(SuspendedPageProxy& suspendedPage)
-{
-    LOG(ProcessSwapping, "WebProcessProxy pid %i suspended page %s was destroyed", processIdentifier(), suspendedPage.loggingString());
-
-    ASSERT(m_suspendedPageMap.contains(suspendedPage.page().pageID()));
-    m_suspendedPageMap.remove(suspendedPage.page().pageID());
-
-    maybeShutDown();
-}
-
 void WebProcessProxy::markIsNoLongerInPrewarmedPool()
 {
-    ASSERT(m_isInPrewarmedPool);
+    ASSERT(m_isPrewarmed);
 
-    m_isInPrewarmedPool = false;
+    m_isPrewarmed = false;
     RELEASE_ASSERT(m_processPool);
     m_processPool.setIsWeak(IsWeak::No);
+
+    send(Messages::WebProcess::MarkIsNoLongerPrewarmed(), 0);
 }
 
 void WebProcessProxy::removeWebPage(WebPageProxy& webPage, uint64_t pageID)
@@ -623,12 +626,7 @@ void WebProcessProxy::getPluginProcessConnection(uint64_t pluginProcessToken, Me
 
 void WebProcessProxy::getNetworkProcessConnection(Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply&& reply)
 {
-    m_processPool->getNetworkProcessConnection(WTFMove(reply));
-}
-
-void WebProcessProxy::getStorageProcessConnection(PAL::SessionID initialSessionID, Messages::WebProcessProxy::GetStorageProcessConnection::DelayedReply&& reply)
-{
-    m_processPool->getStorageProcessConnection(*this, initialSessionID, WTFMove(reply));
+    m_processPool->getNetworkProcessConnection(*this, WTFMove(reply));
 }
 
 #if !PLATFORM(COCOA)
@@ -656,15 +654,6 @@ void WebProcessProxy::didReceiveMessage(IPC::Connection& connection, IPC::Decode
     if (decoder.messageReceiverName() == Messages::WebProcessProxy::messageReceiverName()) {
         didReceiveWebProcessProxyMessage(connection, decoder);
         return;
-    }
-
-    // WebPageProxy messages are normally handled by the normal "dispatchMessage" up above.
-    // If they were not handled there, then they may potentially be handled by SuspendedPageProxy objects.
-    if (decoder.messageReceiverName() == Messages::WebPageProxy::messageReceiverName()) {
-        if (auto* suspendedPage = m_suspendedPageMap.get(decoder.destinationID())) {
-            suspendedPage->didReceiveMessage(connection, decoder);
-            return;
-        }
     }
 
     // FIXME: Add unhandled message logging.
@@ -708,16 +697,11 @@ void WebProcessProxy::processDidTerminateOrFailedToLaunch()
 #if ENABLE(PUBLIC_SUFFIX_LIST)
     if (pages.size() == 1) {
         auto& page = *pages[0];
-        String domain = topPrivatelyControlledDomain(WebCore::URL(WebCore::ParsedURLString, page.currentURL()).host().toString());
+        String domain = topPrivatelyControlledDomain(WebCore::URL({ }, page.currentURL()).host().toString());
         if (!domain.isEmpty())
             page.logDiagnosticMessageWithEnhancedPrivacy(WebCore::DiagnosticLoggingKeys::domainCausingCrashKey(), domain, WebCore::ShouldSample::No);
     }
 #endif
-
-    for (auto* suspendedPage : copyToVectorOf<SuspendedPageProxy*>(m_suspendedPageMap.values()))
-        suspendedPage->webProcessDidClose(*this);
-
-    m_suspendedPageMap.clear();
 
     for (auto& page : pages)
         page->processDidTerminate(ProcessTerminationReason::Crash);
@@ -798,7 +782,7 @@ void WebProcessProxy::didFinishLaunching(ProcessLauncher* launcher, IPC::Connect
 
     m_processPool->processDidFinishLaunching(this);
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (connection()) {
         if (xpc_connection_t xpcConnection = connection()->xpcConnection())
             m_throttler.didConnectToProcess(xpc_connection_get_pid(xpcConnection));
@@ -886,7 +870,7 @@ void WebProcessProxy::maybeShutDown()
 
 bool WebProcessProxy::canTerminateChildProcess()
 {
-    if (!m_pageMap.isEmpty() || !m_suspendedPageMap.isEmpty())
+    if (!m_pageMap.isEmpty() || m_processPool->hasSuspendedPageFor(*this))
         return false;
 
     if (!m_processPool->shouldTerminate(this))
@@ -902,15 +886,6 @@ void WebProcessProxy::shouldTerminate(bool& shouldTerminate)
         // We know that the web process is going to terminate so start shutting it down in the UI process.
         shutDown();
     }
-}
-
-void WebProcessProxy::testIncomingSyncIPCMessageWhileWaitingForSyncReply(bool& handled)
-{
-    // Send Synchronous IPC back to the WebProcess while it is waiting for a sync reply from us.
-    // This should time out.
-    bool didSyncIPCsucceed = sendSync(Messages::WebProcess::SyncIPCMessageWhileWaitingForSyncReplyForTesting(), Messages::WebProcess::SyncIPCMessageWhileWaitingForSyncReplyForTesting::Reply(), 0, 100_ms);
-    RELEASE_ASSERT(!didSyncIPCsucceed);
-    handled = true;
 }
 
 void WebProcessProxy::updateTextCheckerState()
@@ -997,6 +972,7 @@ void WebProcessProxy::requestTermination(ProcessTerminationReason reason)
     if (state() == State::Terminated)
         return;
 
+    auto protectedThis = makeRef(*this);
     RELEASE_LOG_IF(m_websiteDataStore->sessionID().isAlwaysOnLoggingAllowed(), Process, "%p - WebProcessProxy::requestTermination - reason %d", this, reason);
 
     ChildProcessProxy::terminate();
@@ -1177,7 +1153,7 @@ void WebProcessProxy::didCancelProcessSuspension()
 
 void WebProcessProxy::didSetAssertionState(AssertionState state)
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (isServiceWorkerProcess())
         return;
 
@@ -1243,6 +1219,11 @@ void WebProcessProxy::isResponsive(WTF::Function<void(bool isWebProcessResponsiv
 
     responsivenessTimer().start();
     send(Messages::WebProcess::MainThreadPing(), 0);
+}
+
+bool WebProcessProxy::isJITEnabled() const
+{
+    return processPool().configuration().isJITEnabled();
 }
 
 void WebProcessProxy::didReceiveMainThreadPing()
@@ -1426,6 +1407,18 @@ void WebProcessProxy::didCheckProcessLocalPortForActivity(uint64_t callbackIdent
         return;
 
     callback(isLocallyReachable ? MessagePortChannelProvider::HasActivity::Yes : MessagePortChannelProvider::HasActivity::No);
+}
+
+void WebProcessProxy::didCollectPrewarmInformation(const String& domain, const WebCore::PrewarmInformation& prewarmInformation)
+{
+    processPool().didCollectPrewarmInformation(domain, prewarmInformation);
+}
+
+Vector<String> WebProcessProxy::activePagesDomainsForTesting()
+{
+    Vector<String> activeDomains;
+    sendSync(Messages::WebProcess::GetActivePagesOriginsForTesting(), Messages::WebProcess::GetActivePagesOriginsForTesting::Reply(activeDomains), 0);
+    return activeDomains;
 }
 
 #if PLATFORM(WATCHOS)

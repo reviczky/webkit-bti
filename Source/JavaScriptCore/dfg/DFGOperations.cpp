@@ -49,6 +49,7 @@
 #include "JIT.h"
 #include "JITExceptions.h"
 #include "JSArrayInlines.h"
+#include "JSBigInt.h"
 #include "JSCInlines.h"
 #include "JSFixedArray.h"
 #include "JSGenericTypedArrayViewConstructorInlines.h"
@@ -198,8 +199,7 @@ char* newTypedArrayWithSize(ExecState* exec, Structure* structure, int32_t size,
     if (vector)
         return bitwise_cast<char*>(ViewClass::createWithFastVector(exec, structure, size, vector));
 
-    scope.release();
-    return bitwise_cast<char*>(ViewClass::create(exec, structure, size));
+    RELEASE_AND_RETURN(scope, bitwise_cast<char*>(ViewClass::create(exec, structure, size)));
 }
 
 template <bool strict>
@@ -261,12 +261,9 @@ JSCell* JIT_OPERATION operationObjectCreate(ExecState* exec, EncodedJSValue enco
         return nullptr;
     }
 
-    if (prototype.isObject()) {
-        scope.release();
-        return constructEmptyObject(exec, asObject(prototype));
-    }
-    scope.release();
-    return constructEmptyObject(exec, exec->lexicalGlobalObject()->nullPrototypeObjectStructure());
+    if (prototype.isObject())
+        RELEASE_AND_RETURN(scope, constructEmptyObject(exec, asObject(prototype)));
+    RELEASE_AND_RETURN(scope, constructEmptyObject(exec, exec->lexicalGlobalObject()->nullPrototypeObjectStructure()));
 }
 
 JSCell* JIT_OPERATION operationObjectCreateObject(ExecState* exec, JSObject* prototype)
@@ -333,8 +330,7 @@ JSCell* JIT_OPERATION operationToObject(ExecState* exec, JSGlobalObject* globalO
         }
     }
 
-    scope.release();
-    return value.toObject(exec, globalObject);
+    RELEASE_AND_RETURN(scope, value.toObject(exec, globalObject));
 }
 
 EncodedJSValue JIT_OPERATION operationValueBitAnd(ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2)
@@ -346,11 +342,22 @@ EncodedJSValue JIT_OPERATION operationValueBitAnd(ExecState* exec, EncodedJSValu
     JSValue op1 = JSValue::decode(encodedOp1);
     JSValue op2 = JSValue::decode(encodedOp2);
 
-    int32_t a = op1.toInt32(exec);
+    auto leftNumeric = op1.toBigIntOrInt32(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
-    scope.release();
-    int32_t b = op2.toInt32(exec);
-    return JSValue::encode(jsNumber(a & b));
+    auto rightNumeric = op2.toBigIntOrInt32(exec);
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
+
+    if (WTF::holds_alternative<JSBigInt*>(leftNumeric) || WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+        if (WTF::holds_alternative<JSBigInt*>(leftNumeric) && WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+            JSBigInt* result = JSBigInt::bitwiseAnd(exec, WTF::get<JSBigInt*>(leftNumeric), WTF::get<JSBigInt*>(rightNumeric));
+            RETURN_IF_EXCEPTION(scope, encodedJSValue());
+            return JSValue::encode(result);
+        }
+
+        return throwVMTypeError(exec, scope, "Invalid mix of BigInt and other type in bitwise 'and' operation.");
+    }
+
+    return JSValue::encode(jsNumber(WTF::get<int32_t>(leftNumeric) & WTF::get<int32_t>(rightNumeric)));
 }
 
 EncodedJSValue JIT_OPERATION operationValueBitOr(ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2)
@@ -362,11 +369,22 @@ EncodedJSValue JIT_OPERATION operationValueBitOr(ExecState* exec, EncodedJSValue
     JSValue op1 = JSValue::decode(encodedOp1);
     JSValue op2 = JSValue::decode(encodedOp2);
 
-    int32_t a = op1.toInt32(exec);
+    auto leftNumeric = op1.toBigIntOrInt32(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
-    scope.release();
-    int32_t b = op2.toInt32(exec);
-    return JSValue::encode(jsNumber(a | b));
+    auto rightNumeric = op2.toBigIntOrInt32(exec);
+    RETURN_IF_EXCEPTION(scope, encodedJSValue());
+
+    if (WTF::holds_alternative<JSBigInt*>(leftNumeric) || WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+        if (WTF::holds_alternative<JSBigInt*>(leftNumeric) && WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+            JSBigInt* result = JSBigInt::bitwiseOr(exec, WTF::get<JSBigInt*>(leftNumeric), WTF::get<JSBigInt*>(rightNumeric));
+            RETURN_IF_EXCEPTION(scope, encodedJSValue());
+            return JSValue::encode(result);
+        }
+
+        return throwVMTypeError(exec, scope, "Invalid mix of BigInt and other type in bitwise 'or' operation.");
+    }
+
+    return JSValue::encode(jsNumber(WTF::get<int32_t>(leftNumeric) | WTF::get<int32_t>(rightNumeric)));
 }
 
 EncodedJSValue JIT_OPERATION operationValueBitXor(ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2)
@@ -470,7 +488,7 @@ EncodedJSValue JIT_OPERATION operationValueDiv(ExecState* exec, EncodedJSValue e
             return JSValue::encode(result);
         }
 
-        return throwVMTypeError(exec, scope, "Invalid operand in BigInt operation.");
+        return throwVMTypeError(exec, scope, "Invalid mix of BigInt and other type in division operation.");
     }
 
     scope.release();
@@ -619,17 +637,15 @@ EncodedJSValue JIT_OPERATION operationGetByVal(ExecState* exec, EncodedJSValue e
     if (LIKELY(baseValue.isCell())) {
         JSCell* base = baseValue.asCell();
 
-        if (property.isUInt32()) {
-            scope.release();
-            return getByVal(exec, base, property.asUInt32());
-        }
+        if (property.isUInt32())
+            RELEASE_AND_RETURN(scope, getByVal(exec, base, property.asUInt32()));
+
         if (property.isDouble()) {
             double propertyAsDouble = property.asDouble();
             uint32_t propertyAsUInt32 = static_cast<uint32_t>(propertyAsDouble);
-            if (propertyAsUInt32 == propertyAsDouble && isIndex(propertyAsUInt32)) {
-                scope.release();
-                return getByVal(exec, base, propertyAsUInt32);
-            }
+            if (propertyAsUInt32 == propertyAsDouble && isIndex(propertyAsUInt32))
+                RELEASE_AND_RETURN(scope, getByVal(exec, base, propertyAsUInt32));
+
         } else if (property.isString()) {
             Structure& structure = *base->structure(vm);
             if (JSCell::canUseFastGetOwnProperty(structure)) {
@@ -645,8 +661,7 @@ EncodedJSValue JIT_OPERATION operationGetByVal(ExecState* exec, EncodedJSValue e
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
     auto propertyName = property.toPropertyKey(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
-    scope.release();
-    return JSValue::encode(baseValue.get(exec, propertyName));
+    RELEASE_AND_RETURN(scope, JSValue::encode(baseValue.get(exec, propertyName)));
 }
 
 EncodedJSValue JIT_OPERATION operationGetByValCell(ExecState* exec, JSCell* base, EncodedJSValue encodedProperty)
@@ -657,17 +672,15 @@ EncodedJSValue JIT_OPERATION operationGetByValCell(ExecState* exec, JSCell* base
 
     JSValue property = JSValue::decode(encodedProperty);
 
-    if (property.isUInt32()) {
-        scope.release();
-        return getByVal(exec, base, property.asUInt32());
-    }
+    if (property.isUInt32())
+        RELEASE_AND_RETURN(scope, getByVal(exec, base, property.asUInt32()));
+
     if (property.isDouble()) {
         double propertyAsDouble = property.asDouble();
         uint32_t propertyAsUInt32 = static_cast<uint32_t>(propertyAsDouble);
-        if (propertyAsUInt32 == propertyAsDouble) {
-            scope.release();
-            return getByVal(exec, base, propertyAsUInt32);
-        }
+        if (propertyAsUInt32 == propertyAsDouble)
+            RELEASE_AND_RETURN(scope, getByVal(exec, base, propertyAsUInt32));
+
     } else if (property.isString()) {
         Structure& structure = *base->structure(vm);
         if (JSCell::canUseFastGetOwnProperty(structure)) {
@@ -680,8 +693,7 @@ EncodedJSValue JIT_OPERATION operationGetByValCell(ExecState* exec, JSCell* base
 
     auto propertyName = property.toPropertyKey(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
-    scope.release();
-    return JSValue::encode(JSValue(base).get(exec, propertyName));
+    RELEASE_AND_RETURN(scope, JSValue::encode(JSValue(base).get(exec, propertyName)));
 }
 
 ALWAYS_INLINE EncodedJSValue getByValCellInt(ExecState* exec, JSCell* base, int32_t index)
@@ -718,8 +730,7 @@ EncodedJSValue JIT_OPERATION operationGetByValObjectString(ExecState* exec, JSCe
     auto propertyName = asString(string)->toIdentifier(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
 
-    scope.release();
-    return JSValue::encode(getByValObject(exec, vm, asObject(base), propertyName));
+    RELEASE_AND_RETURN(scope, JSValue::encode(getByValObject(exec, vm, asObject(base), propertyName)));
 }
 
 EncodedJSValue JIT_OPERATION operationGetByValObjectSymbol(ExecState* exec, JSCell* base, JSCell* symbol)
@@ -1085,8 +1096,7 @@ EncodedJSValue JIT_OPERATION operationRegExpExec(ExecState* exec, JSGlobalObject
     EXCEPTION_ASSERT(!!scope.exception() == !input);
     if (!input)
         return encodedJSValue();
-    scope.release();
-    return JSValue::encode(regExpObject->execInline(exec, globalObject, input));
+    RELEASE_AND_RETURN(scope, JSValue::encode(regExpObject->execInline(exec, globalObject, input)));
 }
         
 EncodedJSValue JIT_OPERATION operationRegExpExecGeneric(ExecState* exec, JSGlobalObject* globalObject, EncodedJSValue encodedBase, EncodedJSValue encodedArgument)
@@ -1108,8 +1118,7 @@ EncodedJSValue JIT_OPERATION operationRegExpExecGeneric(ExecState* exec, JSGloba
     EXCEPTION_ASSERT(!!scope.exception() == !input);
     if (!input)
         return JSValue::encode(jsUndefined());
-    scope.release();
-    return JSValue::encode(regexp->exec(exec, globalObject, input));
+    RELEASE_AND_RETURN(scope, JSValue::encode(regexp->exec(exec, globalObject, input)));
 }
 
 EncodedJSValue JIT_OPERATION operationRegExpExecNonGlobalOrSticky(ExecState* exec, JSGlobalObject* globalObject, RegExp* regExp, JSString* string)
@@ -1168,20 +1177,18 @@ EncodedJSValue JIT_OPERATION operationRegExpMatchFastGlobalString(ExecState* exe
 
     if (regExp->unicode()) {
         unsigned stringLength = s.length();
-        scope.release();
-        return JSValue::encode(collectMatches(
+        RELEASE_AND_RETURN(scope, JSValue::encode(collectMatches(
             vm, exec, string, s, regExpConstructor, regExp,
             [&] (size_t end) -> size_t {
                 return advanceStringUnicode(s, stringLength, end);
-            }));
+            })));
     }
 
-    scope.release();
-    return JSValue::encode(collectMatches(
+    RELEASE_AND_RETURN(scope, JSValue::encode(collectMatches(
         vm, exec, string, s, regExpConstructor, regExp,
         [&] (size_t end) -> size_t {
             return end + 1;
-        }));
+        })));
 }
 
 EncodedJSValue JIT_OPERATION operationParseIntNoRadixGeneric(ExecState* exec, EncodedJSValue value)
@@ -1276,8 +1283,51 @@ size_t JIT_OPERATION operationRegExpTestGeneric(ExecState* exec, JSGlobalObject*
     EXCEPTION_ASSERT(!!scope.exception() == !input);
     if (!input)
         return false;
-    scope.release();
-    return regexp->test(exec, globalObject, input);
+    RELEASE_AND_RETURN(scope, regexp->test(exec, globalObject, input));
+}
+
+JSCell* JIT_OPERATION operationSubBigInt(ExecState* exec, JSCell* op1, JSCell* op2)
+{
+    VM* vm = &exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+    
+    JSBigInt* leftOperand = jsCast<JSBigInt*>(op1);
+    JSBigInt* rightOperand = jsCast<JSBigInt*>(op2);
+    
+    return JSBigInt::sub(exec, leftOperand, rightOperand);
+}
+
+JSCell* JIT_OPERATION operationBitAndBigInt(ExecState* exec, JSCell* op1, JSCell* op2)
+{
+    VM* vm = &exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+
+    JSBigInt* leftOperand = jsCast<JSBigInt*>(op1);
+    JSBigInt* rightOperand = jsCast<JSBigInt*>(op2);
+
+    return JSBigInt::bitwiseAnd(exec, leftOperand, rightOperand);
+}
+
+JSCell* JIT_OPERATION operationAddBigInt(ExecState* exec, JSCell* op1, JSCell* op2)
+{
+    VM* vm = &exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+    
+    JSBigInt* leftOperand = jsCast<JSBigInt*>(op1);
+    JSBigInt* rightOperand = jsCast<JSBigInt*>(op2);
+    
+    return JSBigInt::add(exec, leftOperand, rightOperand);
+}
+
+JSCell* JIT_OPERATION operationBitOrBigInt(ExecState* exec, JSCell* op1, JSCell* op2)
+{
+    VM* vm = &exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+    
+    JSBigInt* leftOperand = jsCast<JSBigInt*>(op1);
+    JSBigInt* rightOperand = jsCast<JSBigInt*>(op2);
+    
+    return JSBigInt::bitwiseOr(exec, leftOperand, rightOperand);
 }
 
 size_t JIT_OPERATION operationCompareStrictEqCell(ExecState* exec, JSCell* op1, JSCell* op2)
@@ -1338,8 +1388,7 @@ EncodedJSValue JIT_OPERATION operationGetByValWithThis(ExecState* exec, EncodedJ
         if (isJSString(baseValue) && asString(baseValue)->canGetIndex(i))
             return JSValue::encode(asString(baseValue)->getIndex(exec, i));
         
-        scope.release();
-        return JSValue::encode(baseValue.get(exec, i, slot));
+        RELEASE_AND_RETURN(scope, JSValue::encode(baseValue.get(exec, i, slot)));
     }
 
     baseValue.requireObjectCoercible(exec);
@@ -1347,8 +1396,7 @@ EncodedJSValue JIT_OPERATION operationGetByValWithThis(ExecState* exec, EncodedJ
 
     auto property = subscript.toPropertyKey(exec);
     RETURN_IF_EXCEPTION(scope, encodedJSValue());
-    scope.release();
-    return JSValue::encode(baseValue.get(exec, property, slot));
+    RELEASE_AND_RETURN(scope, JSValue::encode(baseValue.get(exec, property, slot)));
 }
 
 void JIT_OPERATION operationPutByIdWithThisStrict(ExecState* exec, EncodedJSValue encodedBase, EncodedJSValue encodedThis, EncodedJSValue encodedValue, UniquedStringImpl* impl)
@@ -1971,8 +2019,7 @@ JSCell* JIT_OPERATION operationGetPropertyEnumerator(ExecState* exec, EncodedJSV
     JSObject* baseObject = base.toObject(exec);
     RETURN_IF_EXCEPTION(scope, { });
 
-    scope.release();
-    return propertyNameEnumerator(exec, baseObject);
+    RELEASE_AND_RETURN(scope, propertyNameEnumerator(exec, baseObject));
 }
 
 JSCell* JIT_OPERATION operationGetPropertyEnumeratorCell(ExecState* exec, JSCell* cell)
@@ -1984,8 +2031,7 @@ JSCell* JIT_OPERATION operationGetPropertyEnumeratorCell(ExecState* exec, JSCell
     JSObject* base = cell->toObject(exec, exec->lexicalGlobalObject());
     RETURN_IF_EXCEPTION(scope, { });
 
-    scope.release();
-    return propertyNameEnumerator(exec, base);
+    RELEASE_AND_RETURN(scope, propertyNameEnumerator(exec, base));
 }
 
 JSCell* JIT_OPERATION operationToIndexString(ExecState* exec, int32_t index)
@@ -2057,8 +2103,7 @@ JSString* JIT_OPERATION operationToLowerCase(ExecState* exec, JSString* string, 
     String lowercasedString = inputString.is8Bit() ? inputString.convertToLowercaseWithoutLocaleStartingAtFailingIndex8Bit(failingIndex) : inputString.convertToLowercaseWithoutLocale();
     if (lowercasedString.impl() == inputString.impl())
         return string;
-    scope.release();
-    return jsString(exec, lowercasedString);
+    RELEASE_AND_RETURN(scope, jsString(exec, lowercasedString));
 }
 
 char* JIT_OPERATION operationInt32ToString(ExecState* exec, int32_t value, int32_t radix)
@@ -2207,8 +2252,7 @@ JSString* JIT_OPERATION operationStrCat2(ExecState* exec, EncodedJSValue a, Enco
     JSString* str2 = JSValue::decode(b).toString(exec);
     scope.assertNoException();
 
-    scope.release();
-    return jsString(exec, str1, str2);
+    RELEASE_AND_RETURN(scope, jsString(exec, str1, str2));
 }
     
 JSString* JIT_OPERATION operationStrCat3(ExecState* exec, EncodedJSValue a, EncodedJSValue b, EncodedJSValue c)
@@ -2227,8 +2271,7 @@ JSString* JIT_OPERATION operationStrCat3(ExecState* exec, EncodedJSValue a, Enco
     JSString* str3 = JSValue::decode(c).toString(exec);
     scope.assertNoException();
 
-    scope.release();
-    return jsString(exec, str1, str2, str3);
+    RELEASE_AND_RETURN(scope, jsString(exec, str1, str2, str3));
 }
 
 char* JIT_OPERATION operationFindSwitchImmTargetForDouble(
@@ -2619,10 +2662,8 @@ JSCell* JIT_OPERATION operationSpreadGeneric(ExecState* exec, JSCell* iterable)
 
     if (isJSArray(iterable)) {
         JSArray* array = jsCast<JSArray*>(iterable);
-        if (array->isIteratorProtocolFastAndNonObservable()) {
-            throwScope.release();
-            return JSFixedArray::createFromArray(exec, vm, array);
-        }
+        if (array->isIteratorProtocolFastAndNonObservable())
+            RELEASE_AND_RETURN(throwScope, JSFixedArray::createFromArray(exec, vm, array));
     }
 
     // FIXME: we can probably make this path faster by having our caller JS code call directly into
@@ -2644,8 +2685,7 @@ JSCell* JIT_OPERATION operationSpreadGeneric(ExecState* exec, JSCell* iterable)
         array = jsCast<JSArray*>(arrayResult);
     }
 
-    throwScope.release();
-    return JSFixedArray::createFromArray(exec, vm, array);
+    RELEASE_AND_RETURN(throwScope, JSFixedArray::createFromArray(exec, vm, array));
 }
 
 JSCell* JIT_OPERATION operationSpreadFastArray(ExecState* exec, JSCell* cell)
@@ -2665,7 +2705,7 @@ void JIT_OPERATION operationProcessTypeProfilerLogDFG(ExecState* exec)
     VM& vm = exec->vm();
     NativeCallFrameTracer tracer(&vm, exec);
 
-    vm.typeProfilerLog()->processLogEntries("Log Full, called from inside DFG."_s);
+    vm.typeProfilerLog()->processLogEntries(vm, "Log Full, called from inside DFG."_s);
 }
 
 EncodedJSValue JIT_OPERATION operationResolveScopeForHoistingFuncDeclInEval(ExecState* exec, JSScope* scope, UniquedStringImpl* impl)
@@ -2693,8 +2733,7 @@ EncodedJSValue JIT_OPERATION operationGetDynamicVar(ExecState* exec, JSObject* s
     auto throwScope = DECLARE_THROW_SCOPE(vm);
 
     Identifier ident = Identifier::fromUid(exec, impl);
-    throwScope.release();
-    return JSValue::encode(scope->getPropertySlot(exec, ident, [&] (bool found, PropertySlot& slot) -> JSValue {
+    RELEASE_AND_RETURN(throwScope, JSValue::encode(scope->getPropertySlot(exec, ident, [&] (bool found, PropertySlot& slot) -> JSValue {
         if (!found) {
             GetPutInfo getPutInfo(getPutInfoBits);
             if (getPutInfo.resolveMode() == ThrowIfNotFound)
@@ -2713,7 +2752,7 @@ EncodedJSValue JIT_OPERATION operationGetDynamicVar(ExecState* exec, JSObject* s
         }
 
         return slot.getValue(exec, ident);
-    }));
+    })));
 }
 
 void JIT_OPERATION operationPutDynamicVar(ExecState* exec, JSObject* scope, EncodedJSValue value, UniquedStringImpl* impl, unsigned getPutInfoBits)
@@ -2842,8 +2881,7 @@ EncodedJSValue JIT_OPERATION operationGetPrototypeOf(ExecState* exec, EncodedJSV
         return JSValue::encode(prototype);
     }
 
-    scope.release();
-    return JSValue::encode(thisObject->getPrototype(vm, exec));
+    RELEASE_AND_RETURN(scope, JSValue::encode(thisObject->getPrototype(vm, exec)));
 }
 
 void JIT_OPERATION operationThrowDFG(ExecState* exec, EncodedJSValue valueToThrow)

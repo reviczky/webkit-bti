@@ -32,7 +32,7 @@
 #include <WebCore/FloatRect.h>
 #include <wtf/CompletionHandler.h>
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 OBJC_CLASS NSArray;
 OBJC_CLASS _WKActivatedElementInfo;
 OBJC_CLASS UIViewController;
@@ -40,6 +40,7 @@ OBJC_CLASS UIViewController;
 
 namespace WebCore {
 class ResourceRequest;
+struct FontAttributes;
 struct SecurityOriginData;
 struct WindowFeatures;
 }
@@ -123,6 +124,9 @@ public:
         completionHandler(currentQuota);
     }
 
+    virtual bool needsFontAttributes() const { return false; }
+    virtual void didChangeFontAttributes(const WebCore::FontAttributes&) { }
+
     virtual bool runOpenPanel(WebKit::WebPageProxy*, WebKit::WebFrameProxy*, const WebCore::SecurityOriginData&, OpenPanelParameters*, WebKit::WebOpenPanelResultListenerProxy*) { return false; }
     virtual void decidePolicyForGeolocationPermissionRequest(WebKit::WebPageProxy&, WebKit::WebFrameProxy&, SecurityOrigin&, Function<void(bool)>&) { }
     virtual bool decidePolicyForUserMediaPermissionRequest(WebKit::WebPageProxy&, WebKit::WebFrameProxy&, SecurityOrigin&, SecurityOrigin&, WebKit::UserMediaPermissionRequestProxy&) { return false; }
@@ -152,7 +156,7 @@ public:
     virtual void mediaSessionMetadataDidChange(WebKit::WebPageProxy&, WebKit::WebMediaSessionMetadata*) { }
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 #if HAVE(APP_LINKS)
     virtual bool shouldIncludeAppLinkActionsForElement(_WKActivatedElementInfo *) { return true; }
 #endif

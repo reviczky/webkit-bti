@@ -214,8 +214,6 @@ xssAuditorEnabled:
   initial: false
 acceleratedCompositingForFixedPositionEnabled:
   initial: defaultAcceleratedCompositingForFixedPositionEnabled
-acceleratedCompositingForOverflowScrollEnabled:
-  initial: false
 rubberBandingForSubScrollableRegionsEnabled:
   initial: true
   conditional: RUBBER_BANDING
@@ -391,6 +389,8 @@ smartInsertDeleteEnabled:
   initial: defaultSmartInsertDeleteEnabled
 selectTrailingWhitespaceEnabled:
   initial: defaultSelectTrailingWhitespaceEnabled
+selectionAcrossShadowBoundariesEnabled:
+  initial: true
 
 useLegacyBackgroundSizeShorthandBehavior:
   initial: false
@@ -427,6 +427,10 @@ useGiantTiles:
   initial: false
 
 mediaSourceEnabled:
+  initial: true
+  conditional: MEDIA_SOURCE
+
+sourceBufferChangeTypeEnabled:
   initial: true
   conditional: MEDIA_SOURCE
 
@@ -520,9 +524,6 @@ shouldConvertInvalidURLsToBlank:
 springTimingFunctionEnabled:
   initial: false
 
-conicGradientsEnabled:
-  initial: false
-
 colorFilterEnabled:
   initial: false
   onChange: setNeedsRecalcStyleInAllFrames
@@ -548,6 +549,9 @@ visualViewportEnabled:
   onChange: setNeedsRecalcStyleInAllFrames
 
 visualViewportAPIEnabled:
+  initial: false
+
+CSSOMViewScrollingAPIEnabled:
   initial: false
 
 inputEventsEnabled:
@@ -648,7 +652,6 @@ imagesEnabled:
 scriptEnabled:
   initial: false
   getter: isScriptEnabled
-  onChange: scriptEnabledChanged
 pluginsEnabled:
   initial: false
   getter: arePluginsEnabled
@@ -744,9 +747,6 @@ clientCoordinatesRelativeToLayoutViewport:
   initial: false
   onChange: setNeedsRecalcStyleInAllFrames
 
-crossOriginWindowPolicySupportEnabled:
-  initial: false
-
 accessibilityEventsEnabled:
   initial: true
   conditional: ACCESSIBILITY_EVENTS
@@ -755,4 +755,14 @@ incompleteImageBorderEnabled:
   initial: false
 
 shouldDeferAsynchronousScriptsUntilAfterDocumentLoad:
+  initial: false
+
+shouldIgnoreMetaViewport:
+  initial: false
+
+videoQualityIncludesDisplayCompositingEnabled:
+  initial: false
+  conditional: VIDEO
+
+editableImagesEnabled:
   initial: false

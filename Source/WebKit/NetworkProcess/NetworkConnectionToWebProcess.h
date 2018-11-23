@@ -37,6 +37,10 @@
 #include <WebCore/ResourceLoadPriority.h>
 #include <wtf/RefCounted.h>
 
+namespace PAL {
+class SessionID;
+}
+
 namespace WebCore {
 class BlobDataFileReference;
 class HTTPHeaderMap;
@@ -44,7 +48,7 @@ class ResourceError;
 class ResourceRequest;
 struct SameSiteInfo;
 
-enum class IncludeSecureCookies;
+enum class IncludeSecureCookies : bool;
 }
 
 namespace WebKit {
@@ -54,6 +58,9 @@ class NetworkLoadParameters;
 class NetworkResourceLoader;
 class NetworkSocketStream;
 class SyncNetworkResourceLoader;
+class WebIDBConnectionToClient;
+class WebSWServerConnection;
+class WebSWServerToContextConnection;
 typedef uint64_t ResourceLoadIdentifier;
 
 namespace NetworkCache {
@@ -157,7 +164,6 @@ private:
     void registerFileBlobURL(const WebCore::URL&, const String& path, SandboxExtension::Handle&&, const String& contentType);
     void registerBlobURL(const WebCore::URL&, Vector<WebCore::BlobPart>&&, const String& contentType);
     void registerBlobURLFromURL(const WebCore::URL&, const WebCore::URL& srcURL, bool shouldBypassConnectionCheck);
-    void preregisterSandboxExtensionsForOptionallyFileBackedBlob(const Vector<String>& fileBackedPath, SandboxExtension::HandleArray&&);
     void registerBlobURLOptionallyFileBacked(const WebCore::URL&, const WebCore::URL& srcURL, const String& fileBackedPath, const String& contentType);
     void registerBlobURLForSlice(const WebCore::URL&, const WebCore::URL& srcURL, int64_t start, int64_t end);
     void blobSize(const WebCore::URL&, uint64_t& resultSize);
@@ -172,6 +178,17 @@ private:
     void destroySocketStream(uint64_t);
     
     void ensureLegacyPrivateBrowsingSession();
+
+#if ENABLE(INDEXED_DATABASE)
+    // Messages handlers (Modern IDB).
+    void establishIDBConnectionToServer(PAL::SessionID, uint64_t& serverConnectionIdentifier);
+    void removeIDBConnectionToServer(uint64_t serverConnectionIdentifier);
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    void establishSWServerConnection(PAL::SessionID, WebCore::SWServerConnectionIdentifier&);
+    void unregisterSWConnections();
+#endif
 
 #if USE(LIBWEBRTC)
     NetworkRTCProvider& rtcProvider();
@@ -238,6 +255,14 @@ private:
     bool m_captureExtraNetworkLoadMetricsEnabled { false };
 
     RefPtr<CacheStorageEngineConnection> m_cacheStorageConnection;
+
+#if ENABLE(INDEXED_DATABASE)
+    HashMap<uint64_t, RefPtr<WebIDBConnectionToClient>> m_webIDBConnections;
+#endif
+    
+#if ENABLE(SERVICE_WORKER)
+    HashMap<WebCore::SWServerConnectionIdentifier, WeakPtr<WebSWServerConnection>> m_swConnections;
+#endif
 };
 
 } // namespace WebKit

@@ -26,6 +26,7 @@
 #include "config.h"
 #include "PutByIdStatus.h"
 
+#include "BytecodeStructs.h"
 #include "CodeBlock.h"
 #include "ComplexGetStatus.h"
 #include "GetterSetterAccessCase.h"
@@ -46,30 +47,20 @@ bool PutByIdStatus::appendVariant(const PutByIdVariant& variant)
     return appendICStatusVariant(m_variants, variant);
 }
 
-#if ENABLE(DFG_JIT)
-ExitFlag PutByIdStatus::hasExitSite(CodeBlock* profiledBlock, unsigned bytecodeIndex)
-{
-    return hasBadCacheExitSite(profiledBlock, bytecodeIndex);
-}
-#endif
-
 PutByIdStatus PutByIdStatus::computeFromLLInt(CodeBlock* profiledBlock, unsigned bytecodeIndex, UniquedStringImpl* uid)
 {
-    UNUSED_PARAM(profiledBlock);
-    UNUSED_PARAM(bytecodeIndex);
-    UNUSED_PARAM(uid);
-
     VM& vm = *profiledBlock->vm();
     
-    Instruction* instruction = &profiledBlock->instructions()[bytecodeIndex];
+    auto instruction = profiledBlock->instructions().at(bytecodeIndex);
+    auto& metadata = instruction->as<OpPutById>().metadata(profiledBlock);
 
-    StructureID structureID = instruction[4].u.structureID;
+    StructureID structureID = metadata.oldStructure;
     if (!structureID)
         return PutByIdStatus(NoInformation);
     
     Structure* structure = vm.heap.structureIDTable().get(structureID);
 
-    StructureID newStructureID = instruction[6].u.structureID;
+    StructureID newStructureID = metadata.newStructure;
     if (!newStructureID) {
         PropertyOffset offset = structure->getConcurrently(uid);
         if (!isValidOffset(offset))
@@ -87,7 +78,7 @@ PutByIdStatus PutByIdStatus::computeFromLLInt(CodeBlock* profiledBlock, unsigned
         return PutByIdStatus(NoInformation);
     
     ObjectPropertyConditionSet conditionSet;
-    if (!(instruction[8].u.putByIdFlags & PutByIdIsDirect)) {
+    if (!(metadata.flags & PutByIdIsDirect)) {
         conditionSet =
             generateConditionsForPropertySetterMissConcurrently(
                 vm, profiledBlock->globalObject(), structure, uid);
@@ -120,6 +111,8 @@ PutByIdStatus PutByIdStatus::computeFor(CodeBlock* profiledBlock, ICStatusMap& m
     return result;
 #else // ENABLE(JIT)
     UNUSED_PARAM(map);
+    UNUSED_PARAM(didExit);
+    UNUSED_PARAM(callExitSiteData);
     return PutByIdStatus(NoInformation);
 #endif // ENABLE(JIT)
 }
@@ -246,7 +239,7 @@ PutByIdStatus PutByIdStatus::computeFor(CodeBlock* baselineBlock, ICStatusMap& b
 {
     CallLinkStatus::ExitSiteData callExitSiteData =
         CallLinkStatus::computeExitSiteData(baselineBlock, codeOrigin.bytecodeIndex);
-    ExitFlag didExit = hasExitSite(baselineBlock, codeOrigin.bytecodeIndex);
+    ExitFlag didExit = hasBadCacheExitSite(baselineBlock, codeOrigin.bytecodeIndex);
 
     for (ICStatusContext* context : contextStack) {
         ICStatus status = context->get(codeOrigin);

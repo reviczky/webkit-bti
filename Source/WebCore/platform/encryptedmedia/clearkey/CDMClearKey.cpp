@@ -40,7 +40,6 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/Base64.h>
 
-
 namespace WebCore {
 
 // ClearKey CENC SystemID.
@@ -120,7 +119,7 @@ static std::optional<Vector<CDMInstanceClearKey::Key>> parseLicenseFormat(const 
             if (!WTF::base64URLDecode(keyID, { keyIDData }) || !WTF::base64URLDecode(keyValue, { keyValueData }))
                 return false;
 
-            decodedKeys.append({ CDMInstanceClearKey::KeyStatus::Usable, SharedBuffer::create(WTFMove(keyIDData)), SharedBuffer::create(WTFMove(keyValueData)) });
+            decodedKeys.append({ CDMInstanceSession::KeyStatus::Usable, SharedBuffer::create(WTFMove(keyIDData)), SharedBuffer::create(WTFMove(keyValueData)) });
             return true;
         });
     if (!validFormat)
@@ -263,6 +262,32 @@ static Ref<SharedBuffer> extractKeyidsFromCencInitData(const SharedBuffer& initD
     return keyIds;
 }
 
+static Ref<SharedBuffer> extractKeyIdFromWebMInitData(const SharedBuffer& initData)
+{
+    Ref<SharedBuffer> keyIds = SharedBuffer::create();
+
+    // Check if initData is a valid WebM initData.
+    if (initData.isEmpty() || initData.size() > std::numeric_limits<unsigned>::max())
+        return keyIds;
+
+    auto object = JSON::Object::create();
+    auto keyIdsArray = JSON::Array::create();
+
+    // Read the KeyId
+    // 9.1.3 License Request Format
+    // This section describes the format of the license request provided to the application via the message attribute of the message event.
+    // The format is a JSON object containing the following members:
+    // "kids"
+    // An array of key IDs. Each element of the array is the base64url encoding of the octet sequence containing the key ID value.
+    String keyId = WTF::base64URLEncode(initData.data(), initData.size());
+    keyIdsArray->pushString(keyId);
+
+    object->setArray("kids", WTFMove(keyIdsArray));
+    CString jsonData = object->toJSONString().utf8();
+    keyIds->append(jsonData.data(), jsonData.length());
+    return keyIds;
+}
+
 CDMFactoryClearKey& CDMFactoryClearKey::singleton()
 {
     static NeverDestroyed<CDMFactoryClearKey> s_factory;
@@ -294,7 +319,7 @@ CDMPrivateClearKey::~CDMPrivateClearKey() = default;
 bool CDMPrivateClearKey::supportsInitDataType(const AtomicString& initDataType) const
 {
     // `keyids` and 'cenc' are the only supported init data type.
-    return (equalLettersIgnoringASCIICase(initDataType, "keyids") || equalLettersIgnoringASCIICase(initDataType, "cenc"));
+    return (equalLettersIgnoringASCIICase(initDataType, "keyids") || equalLettersIgnoringASCIICase(initDataType, "cenc") || equalLettersIgnoringASCIICase(initDataType, "webm"));
 }
 
 static bool containsPersistentLicenseType(const Vector<CDMSessionType>& types)
@@ -405,6 +430,10 @@ bool CDMPrivateClearKey::supportsInitData(const AtomicString& initDataType, cons
     if (equalLettersIgnoringASCIICase(initDataType, "cenc") && isCencInitData(initData))
         return true;
 
+    // Validate the initData buffer as WebM initData.
+    if (equalLettersIgnoringASCIICase(initDataType, "webm") && !initData.isEmpty())
+        return true;
+
     return false;
 }
 
@@ -463,13 +492,43 @@ CDMInstance::SuccessValue CDMInstanceClearKey::setStorageDirectory(const String&
     return storageDirectory.isEmpty() ? Succeeded : Failed;
 }
 
-void CDMInstanceClearKey::requestLicense(LicenseType, const AtomicString& initDataType, Ref<SharedBuffer>&& initData, LicenseCallback callback)
+const String& CDMInstanceClearKey::keySystem() const
+{
+    static const NeverDestroyed<String> s_keySystem { MAKE_STATIC_STRING_IMPL("org.w3.clearkey") };
+
+    return s_keySystem;
+}
+
+RefPtr<CDMInstanceSession> CDMInstanceClearKey::createSession()
+{
+    return adoptRef(new CDMInstanceSessionClearKey());
+}
+
+const Vector<CDMInstanceClearKey::Key> CDMInstanceClearKey::keys() const
+{
+    // Return the keys of all sessions.
+    Vector<CDMInstanceClearKey::Key> allKeys { };
+    size_t initialCapacity = 0;
+    for (auto& key : ClearKeyState::singleton().keys().values())
+        initialCapacity += key.size();
+    allKeys.reserveInitialCapacity(initialCapacity);
+
+    for (auto& key : ClearKeyState::singleton().keys().values())
+        allKeys.appendVector(key);
+
+    return allKeys;
+}
+
+void CDMInstanceSessionClearKey::requestLicense(LicenseType, const AtomicString& initDataType, Ref<SharedBuffer>&& initData, LicenseCallback&& callback)
 {
     static uint32_t s_sessionIdValue = 0;
     ++s_sessionIdValue;
 
     if (equalLettersIgnoringASCIICase(initDataType, "cenc"))
         initData = extractKeyidsFromCencInitData(initData.get());
+
+    if (equalLettersIgnoringASCIICase(initDataType, "webm"))
+        initData = extractKeyIdFromWebMInitData(initData.get());
 
     callOnMainThread(
         [weakThis = makeWeakPtr(*this), callback = WTFMove(callback), initData = WTFMove(initData), sessionIdValue = s_sessionIdValue]() mutable {
@@ -480,17 +539,7 @@ void CDMInstanceClearKey::requestLicense(LicenseType, const AtomicString& initDa
         });
 }
 
-const Vector<CDMInstanceClearKey::Key> CDMInstanceClearKey::keys() const
-{
-    // Return the keys of all sessions.
-    Vector<CDMInstanceClearKey::Key> allKeys { };
-    for (auto& key : ClearKeyState::singleton().keys().values())
-        allKeys.appendVector(key);
-
-    return allKeys;
-}
-
-void CDMInstanceClearKey::updateLicense(const String& sessionId, LicenseType, const SharedBuffer& response, LicenseUpdateCallback callback)
+void CDMInstanceSessionClearKey::updateLicense(const String& sessionId, LicenseType, const SharedBuffer& response, LicenseUpdateCallback&& callback)
 {
     // Use a helper functor that schedules the callback dispatch, avoiding
     // duplicated callOnMainThread() calls.
@@ -515,7 +564,7 @@ void CDMInstanceClearKey::updateLicense(const String& sessionId, LicenseType, co
     // Parse the response using 'license' formatting, if possible.
     if (auto decodedKeys = parseLicenseFormat(*root)) {
         // Retrieve the target Vector of Key objects for this session.
-        auto& keyVector = ClearKeyState::singleton().keys().ensure(sessionId, [] { return Vector<Key> { }; }).iterator->value;
+        auto& keyVector = ClearKeyState::singleton().keys().ensure(sessionId, [] { return Vector<CDMInstanceClearKey::Key> { }; }).iterator->value;
 
         // For each decoded key, find an existing item for the decoded key's ID. If none exist,
         // the key is decoded. Otherwise, the key is updated in case there's a mismatch between
@@ -523,7 +572,7 @@ void CDMInstanceClearKey::updateLicense(const String& sessionId, LicenseType, co
         bool keysChanged = false;
         for (auto& key : *decodedKeys) {
             auto it = std::find_if(keyVector.begin(), keyVector.end(),
-                [&key] (const Key& containedKey) {
+                [&key] (const CDMInstanceClearKey::Key& containedKey) {
                     return containedKey.keyIDData->size() == key.keyIDData->size()
                         && !std::memcmp(containedKey.keyIDData->data(), key.keyIDData->data(), containedKey.keyIDData->size());
                 });
@@ -591,7 +640,7 @@ void CDMInstanceClearKey::updateLicense(const String& sessionId, LicenseType, co
     dispatchCallback(false, std::nullopt, SuccessValue::Failed);
 }
 
-void CDMInstanceClearKey::loadSession(LicenseType, const String& sessionId, const String&, LoadSessionCallback callback)
+void CDMInstanceSessionClearKey::loadSession(LicenseType, const String& sessionId, const String&, LoadSessionCallback&& callback)
 {
     // Use a helper functor that schedules the callback dispatch, avoiding duplicated callOnMainThread() calls.
     auto dispatchCallback =
@@ -624,7 +673,7 @@ void CDMInstanceClearKey::loadSession(LicenseType, const String& sessionId, cons
     dispatchCallback(WTFMove(keyStatusVector), Succeeded, SessionLoadFailure::None);
 }
 
-void CDMInstanceClearKey::closeSession(const String&, CloseSessionCallback callback)
+void CDMInstanceSessionClearKey::closeSession(const String&, CloseSessionCallback&& callback)
 {
     callOnMainThread(
         [weakThis = makeWeakPtr(*this), callback = WTFMove(callback)] {
@@ -635,7 +684,7 @@ void CDMInstanceClearKey::closeSession(const String&, CloseSessionCallback callb
         });
 }
 
-void CDMInstanceClearKey::removeSessionData(const String& sessionId, LicenseType, RemoveSessionDataCallback callback)
+void CDMInstanceSessionClearKey::removeSessionData(const String& sessionId, LicenseType, RemoveSessionDataCallback&& callback)
 {
     // Use a helper functor that schedules the callback dispatch, avoiding duplicated callOnMainThread() calls.
     auto dispatchCallback =
@@ -693,15 +742,8 @@ void CDMInstanceClearKey::removeSessionData(const String& sessionId, LicenseType
     dispatchCallback(WTFMove(keyStatusVector), Ref<SharedBuffer>(*message), SuccessValue::Succeeded);
 }
 
-void CDMInstanceClearKey::storeRecordOfKeyUsage(const String&)
+void CDMInstanceSessionClearKey::storeRecordOfKeyUsage(const String&)
 {
-}
-
-const String& CDMInstanceClearKey::keySystem() const
-{
-    static const NeverDestroyed<String> s_keySystem = MAKE_STATIC_STRING_IMPL("org.w3.clearkey");
-
-    return s_keySystem;
 }
 
 } // namespace WebCore

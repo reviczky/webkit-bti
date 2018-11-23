@@ -40,7 +40,7 @@ struct CSSParserContext {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     CSSParserContext(CSSParserMode, const URL& baseURL = URL());
-    WEBCORE_EXPORT CSSParserContext(Document&, const URL& baseURL = URL(), const String& charset = emptyString());
+    WEBCORE_EXPORT CSSParserContext(const Document&, const URL& baseURL = URL(), const String& charset = emptyString());
 
     URL baseURL;
     String charset;
@@ -54,8 +54,10 @@ public:
     bool useLegacyBackgroundSizeShorthandBehavior { false };
     bool springTimingFunctionEnabled { false };
     bool constantPropertiesEnabled { false };
-    bool conicGradientsEnabled { false };
     bool colorFilterEnabled { false };
+#if ENABLE(ATTACHMENT_ELEMENT)
+    bool attachmentEnabled { false };
+#endif
     bool deferredCSSParserEnabled { false };
     
     // This is only needed to support getMatchedCSSRules.
@@ -69,7 +71,9 @@ public:
             return URL();
         if (charset.isEmpty())
             return URL(baseURL, url);
-        return URL(baseURL, url, TextEncoding(charset));
+        TextEncoding encoding(charset);
+        auto& encodingForURLParsing = encoding.encodingForFormSubmissionOrURLParsing();
+        return URL(baseURL, url, encodingForURLParsing == UTF8Encoding() ? nullptr : &encodingForURLParsing);
     }
 };
 
@@ -93,11 +97,13 @@ struct CSSParserContextHash {
             & key.useLegacyBackgroundSizeShorthandBehavior  << 4
             & key.springTimingFunctionEnabled               << 5
             & key.constantPropertiesEnabled                 << 6
-            & key.conicGradientsEnabled                     << 7
-            & key.colorFilterEnabled                        << 8
-            & key.deferredCSSParserEnabled                  << 9
-            & key.hasDocumentSecurityOrigin                 << 10
-            & key.useSystemAppearance                       << 11
+            & key.colorFilterEnabled                        << 7
+            & key.deferredCSSParserEnabled                  << 8
+            & key.hasDocumentSecurityOrigin                 << 9
+            & key.useSystemAppearance                       << 10
+#if ENABLE(ATTACHMENT_ELEMENT)
+            & key.attachmentEnabled                         << 11
+#endif
             & key.mode                                      << 12; // Keep this last.
         hash ^= WTF::intHash(bits);
         return hash;

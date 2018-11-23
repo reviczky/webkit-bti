@@ -28,6 +28,7 @@
 #include "DataReference.h"
 #include "SandboxExtension.h"
 #include "UserData.h"
+#include <WebCore/FrameLoaderTypes.h>
 #include <WebCore/ResourceRequest.h>
 
 OBJC_CLASS NSDictionary;
@@ -62,6 +63,10 @@ struct LoadParameters {
     uint64_t shouldOpenExternalURLsPolicy;
     bool shouldTreatAsContinuingLoad { false };
     UserData userData;
+    bool forSafeBrowsing { false };
+    WebCore::LockHistory lockHistory { WebCore::LockHistory::No };
+    WebCore::LockBackForwardList lockBackForwardList { WebCore::LockBackForwardList::No };
+    String clientRedirectSourceForHistory;
 
 #if PLATFORM(COCOA)
     RetainPtr<NSDictionary> dataDetectionContext;

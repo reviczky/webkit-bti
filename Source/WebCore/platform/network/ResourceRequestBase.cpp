@@ -35,7 +35,7 @@
 
 namespace WebCore {
 
-#if PLATFORM(IOS) || USE(CFURLCONNECTION)
+#if PLATFORM(IOS_FAMILY) || USE(CFURLCONNECTION)
 double ResourceRequestBase::s_defaultTimeoutInterval = INT_MAX;
 #else
 // Will use NSURLRequest default timeout unless set to a non-zero value with setDefaultTimeoutInterval().
@@ -66,6 +66,9 @@ void ResourceRequestBase::setAsIsolatedCopy(const ResourceRequest& other)
     setRequester(other.requester());
     setInitiatorIdentifier(other.initiatorIdentifier().isolatedCopy());
     setCachePartition(other.cachePartition().isolatedCopy());
+
+    if (auto inspectorInitiatorNodeIdentifier = other.inspectorInitiatorNodeIdentifier())
+        setInspectorInitiatorNodeIdentifier(*inspectorInitiatorNodeIdentifier);
 
     if (!other.isSameSiteUnspecified()) {
         setIsSameSite(other.isSameSite());

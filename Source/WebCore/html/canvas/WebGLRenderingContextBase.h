@@ -43,6 +43,7 @@
 #include "WebGLTexture.h"
 #include "WebGLVertexArrayObjectOES.h"
 #include <JavaScriptCore/ConsoleTypes.h>
+#include <limits>
 #include <memory>
 
 #if ENABLE(WEBGL2)
@@ -232,9 +233,9 @@ public:
     void texImage2D(GC3Denum target, GC3Dint level, GC3Denum internalformat, GC3Dsizei width, GC3Dsizei height, GC3Dint border, GC3Denum format, GC3Denum type, RefPtr<ArrayBufferView>&&);
 
 #if ENABLE(VIDEO)
-    using TexImageSource = WTF::Variant<RefPtr<ImageData>, RefPtr<HTMLImageElement>, RefPtr<HTMLCanvasElement>, RefPtr<HTMLVideoElement>>;
+    using TexImageSource = WTF::Variant<RefPtr<ImageBitmap>, RefPtr<ImageData>, RefPtr<HTMLImageElement>, RefPtr<HTMLCanvasElement>, RefPtr<HTMLVideoElement>>;
 #else
-    using TexImageSource = WTF::Variant<RefPtr<ImageData>, RefPtr<HTMLImageElement>, RefPtr<HTMLCanvasElement>>;
+    using TexImageSource = WTF::Variant<RefPtr<ImageBitmap>, RefPtr<ImageData>, RefPtr<HTMLImageElement>, RefPtr<HTMLCanvasElement>>;
 #endif
 
     ExceptionOr<void> texImage2D(GC3Denum target, GC3Dint level, GC3Denum internalformat, GC3Denum format, GC3Denum type, std::optional<TexImageSource>);
@@ -497,6 +498,7 @@ protected:
 
     RefPtr<WebGLProgram> m_currentProgram;
     RefPtr<WebGLFramebuffer> m_framebufferBinding;
+    RefPtr<WebGLFramebuffer> m_readFramebufferBinding;
     RefPtr<WebGLRenderbuffer> m_renderbufferBinding;
     struct TextureUnitState {
         RefPtr<WebGLTexture> texture2DBinding;
@@ -675,6 +677,7 @@ protected:
 
     enum TexFuncValidationSourceType {
         SourceArrayBufferView,
+        SourceImageBitmap,
         SourceImageData,
         SourceHTMLImageElement,
         SourceHTMLCanvasElement,
@@ -832,6 +835,7 @@ protected:
     OffscreenCanvas* offscreenCanvas();
 
     template <typename T> inline std::optional<T> checkedAddAndMultiply(T value, T add, T multiply);
+    template <typename T> unsigned getMaxIndex(const RefPtr<JSC::ArrayBuffer> elementArrayBuffer, GC3Dintptr uoffset, GC3Dsizei n);
 
 private:
     bool validateArrayBufferType(const char* functionName, GC3Denum type, std::optional<JSC::TypedArrayType>);
@@ -854,6 +858,30 @@ inline std::optional<T> WebGLRenderingContextBase::checkedAddAndMultiply(T value
         return std::nullopt;
 
     return checkedResult.unsafeGet();
+}
+
+template<typename T>
+inline unsigned WebGLRenderingContextBase::getMaxIndex(const RefPtr<JSC::ArrayBuffer> elementArrayBuffer, GC3Dintptr uoffset, GC3Dsizei n)
+{
+    unsigned maxIndex = 0;
+    T restartIndex = 0;
+
+#if ENABLE(WEBGL2)
+    // WebGL 2 spec enforces that GL_PRIMITIVE_RESTART_FIXED_INDEX is always enabled, so ignore the restart index.
+    if (isWebGL2())
+        restartIndex = std::numeric_limits<T>::max();
+#endif
+
+    // Make uoffset an element offset.
+    uoffset /= sizeof(T);
+    const T* p = static_cast<const T*>(elementArrayBuffer->data()) + uoffset;
+    while (n-- > 0) {
+        if (*p != restartIndex && *p > maxIndex)
+            maxIndex = *p;
+        ++p;
+    }
+
+    return maxIndex;
 }
 
 } // namespace WebCore

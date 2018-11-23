@@ -36,6 +36,7 @@ class WebsiteDataStore final : public ObjectImpl<Object::Type::WebsiteDataStore>
 public:
     static Ref<WebsiteDataStore> defaultDataStore();
     static bool defaultDataStoreExists();
+    static void deleteDefaultDataStoreForTesting();
 
     static Ref<WebsiteDataStore> createNonPersistentDataStore();
     static Ref<WebsiteDataStore> createLegacy(WebKit::WebsiteDataStore::Configuration);
@@ -57,17 +58,26 @@ public:
     static WTF::String defaultCacheStorageDirectory();
     static WTF::String defaultNetworkCacheDirectory();
     static WTF::String defaultMediaCacheDirectory();
-
     static WTF::String defaultIndexedDBDatabaseDirectory();
     static WTF::String defaultServiceWorkerRegistrationDirectory();
     static WTF::String defaultLocalStorageDirectory();
     static WTF::String defaultMediaKeysStorageDirectory();
     static WTF::String defaultWebSQLDatabaseDirectory();
     static WTF::String defaultResourceLoadStatisticsDirectory();
-
     static WTF::String defaultJavaScriptConfigurationDirectory();
 
     static WebKit::WebsiteDataStore::Configuration defaultDataStoreConfiguration();
+
+    static WTF::String legacyDefaultApplicationCacheDirectory();
+    static WTF::String legacyDefaultNetworkCacheDirectory();
+    static WTF::String legacyDefaultLocalStorageDirectory();
+    static WTF::String legacyDefaultIndexedDBDatabaseDirectory();
+    static WTF::String legacyDefaultWebSQLDatabaseDirectory();
+    static WTF::String legacyDefaultMediaKeysStorageDirectory();
+    static WTF::String legacyDefaultMediaCacheDirectory();
+    static WTF::String legacyDefaultJavaScriptConfigurationDirectory();
+
+    static WebKit::WebsiteDataStore::Configuration legacyDefaultDataStoreConfiguration();
 
 private:
     enum ShouldCreateDirectory { CreateDirectory, DontCreateDirectory };

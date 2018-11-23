@@ -90,7 +90,7 @@ bool ColorInputType::isMouseFocusable() const
 bool ColorInputType::isKeyboardFocusable(KeyboardEvent*) const
 {
     ASSERT(element());
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (element()->isReadOnly())
         return false;
 
@@ -281,7 +281,7 @@ bool ColorInputType::shouldShowSuggestions() const
 #endif
 }
 
-Vector<Color> ColorInputType::suggestions() const
+Vector<Color> ColorInputType::suggestedColors() const
 {
     Vector<Color> suggestions;
 #if ENABLE(DATALIST_ELEMENT)

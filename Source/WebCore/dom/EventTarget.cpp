@@ -58,6 +58,11 @@ bool EventTarget::isNode() const
     return false;
 }
 
+bool EventTarget::isPaymentRequest() const
+{
+    return false;
+}
+
 bool EventTarget::addEventListener(const AtomicString& eventType, Ref<EventListener>&& listener, const AddEventListenerOptions& options)
 {
     auto passive = options.passive;
@@ -183,6 +188,7 @@ ExceptionOr<bool> EventTarget::dispatchEventForBindings(Event& event)
 
 void EventTarget::dispatchEvent(Event& event)
 {
+    // FIXME: We should always use EventDispatcher.
     ASSERT(event.isInitialized());
     ASSERT(!event.isBeingDispatched());
 
@@ -190,7 +196,8 @@ void EventTarget::dispatchEvent(Event& event)
     event.setCurrentTarget(this);
     event.setEventPhase(Event::AT_TARGET);
     event.resetBeforeDispatch();
-    fireEventListeners(event);
+    fireEventListeners(event, EventInvokePhase::Capturing);
+    fireEventListeners(event, EventInvokePhase::Bubbling);
     event.resetAfterDispatch();
 }
 
@@ -219,7 +226,8 @@ static const AtomicString& legacyType(const Event& event)
     return nullAtom();
 }
 
-void EventTarget::fireEventListeners(Event& event)
+// https://dom.spec.whatwg.org/#concept-event-listener-invoke
+void EventTarget::fireEventListeners(Event& event, EventInvokePhase phase)
 {
     ASSERT_WITH_SECURITY_IMPLICATION(ScriptDisallowedScope::isEventAllowedInMainThread());
     ASSERT(event.isInitialized());
@@ -231,7 +239,7 @@ void EventTarget::fireEventListeners(Event& event)
     SetForScope<bool> firingEventListenersScope(data->isFiringEventListeners, true);
 
     if (auto* listenersVector = data->eventListenerMap.find(event.type())) {
-        fireEventListeners(event, *listenersVector);
+        innerInvokeEventListeners(event, *listenersVector, phase);
         return;
     }
 
@@ -244,7 +252,7 @@ void EventTarget::fireEventListeners(Event& event)
         if (auto* legacyListenersVector = data->eventListenerMap.find(legacyTypeName)) {
             AtomicString typeName = event.type();
             event.setType(legacyTypeName);
-            fireEventListeners(event, *legacyListenersVector);
+            innerInvokeEventListeners(event, *legacyListenersVector, phase);
             event.setType(typeName);
         }
     }
@@ -252,7 +260,8 @@ void EventTarget::fireEventListeners(Event& event)
 
 // Intentionally creates a copy of the listeners vector to avoid event listeners added after this point from being run.
 // Note that removal still has an effect due to the removed field in RegisteredEventListener.
-void EventTarget::fireEventListeners(Event& event, EventListenerVector listeners)
+// https://dom.spec.whatwg.org/#concept-event-listener-inner-invoke
+void EventTarget::innerInvokeEventListeners(Event& event, EventListenerVector listeners, EventInvokePhase phase)
 {
     Ref<EventTarget> protectedThis(*this);
     ASSERT(!listeners.isEmpty());
@@ -268,9 +277,9 @@ void EventTarget::fireEventListeners(Event& event, EventListenerVector listeners
         if (UNLIKELY(registeredListener->wasRemoved()))
             continue;
 
-        if (event.eventPhase() == Event::CAPTURING_PHASE && !registeredListener->useCapture())
+        if (phase == EventInvokePhase::Capturing && !registeredListener->useCapture())
             continue;
-        if (event.eventPhase() == Event::BUBBLING_PHASE && registeredListener->useCapture())
+        if (phase == EventInvokePhase::Bubbling && registeredListener->useCapture())
             continue;
 
         if (InspectorInstrumentation::isEventListenerDisabled(*this, event.type(), registeredListener->callback(), registeredListener->useCapture()))

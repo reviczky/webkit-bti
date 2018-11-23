@@ -31,7 +31,7 @@
 #if ENABLE(GRAPHICS_CONTEXT_3D)
 
 #include "GraphicsContext3D.h"
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 #include "GraphicsContext3DIOS.h"
 #endif
 
@@ -551,7 +551,7 @@ void GraphicsContext3D::bufferSubData(GC3Denum target, GC3Dintptr offset, GC3Dsi
     ::glBufferSubData(target, offset, size, data);
 }
 
-#if PLATFORM(MAC) || PLATFORM(IOS) || PLATFORM(WPE)
+#if PLATFORM(MAC) || PLATFORM(IOS_FAMILY) || PLATFORM(WPE)
 void* GraphicsContext3D::mapBufferRange(GC3Denum target, GC3Dintptr offset, GC3Dsizeiptr length, GC3Dbitfield access)
 {
     makeContextCurrent();
@@ -568,6 +568,26 @@ void GraphicsContext3D::copyBufferSubData(GC3Denum readTarget, GC3Denum writeTar
 {
     makeContextCurrent();
     ::glCopyBufferSubData(readTarget, writeTarget, readOffset, writeOffset, size);
+}
+
+void GraphicsContext3D::getInternalformativ(GC3Denum target, GC3Denum internalformat, GC3Denum pname, GC3Dsizei bufSize, GC3Dint* params)
+{
+#if USE(OPENGL_ES)
+    makeContextCurrent();
+    ::glGetInternalformativ(target, internalformat, pname, bufSize, params);
+#else
+    UNUSED_PARAM(target);
+    UNUSED_PARAM(internalformat);
+    UNUSED_PARAM(pname);
+    UNUSED_PARAM(bufSize);
+    UNUSED_PARAM(params);
+#endif
+}
+
+void GraphicsContext3D::renderbufferStorageMultisample(GC3Denum target, GC3Dsizei samples, GC3Denum internalformat, GC3Dsizei width, GC3Dsizei height)
+{
+    makeContextCurrent();
+    ::glRenderbufferStorageMultisample(target, samples, internalformat, width, height);
 }
 
 void GraphicsContext3D::texStorage2D(GC3Denum target, GC3Dsizei levels, GC3Denum internalformat, GC3Dsizei width, GC3Dsizei height)
@@ -2049,6 +2069,14 @@ void GraphicsContext3D::vertexAttribDivisor(GC3Duint index, GC3Duint divisor)
 {
     getExtensions().vertexAttribDivisor(index, divisor);
 }
+
+#if USE(OPENGL) && ENABLE(WEBGL2)
+void GraphicsContext3D::primitiveRestartIndex(GC3Duint index)
+{
+    makeContextCurrent();
+    ::glPrimitiveRestartIndex(index);
+}
+#endif
 
 }
 

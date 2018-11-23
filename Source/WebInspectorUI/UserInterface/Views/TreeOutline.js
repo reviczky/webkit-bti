@@ -55,6 +55,8 @@ WI.TreeOutline = class TreeOutline extends WI.Object
         this._customIndent = false;
         this._selectable = selectable;
 
+        this._virtualizedVisibleTreeElements = null;
+        this._virtualizedAttachedTreeElements = null;
         this._virtualizedScrollContainer = null;
         this._virtualizedTreeItemHeight = NaN;
         this._virtualizedTopSpacer = null;
@@ -561,12 +563,7 @@ WI.TreeOutline = class TreeOutline extends WI.Object
                 handled = true;
             } else if (this.selectedTreeElement.hasChildren) {
                 handled = true;
-                if (this.selectedTreeElement.expanded) {
-                    nextSelectedElement = this.selectedTreeElement.children[0];
-                    while (nextSelectedElement && !nextSelectedElement.selectable)
-                        nextSelectedElement = nextSelectedElement.nextSibling;
-                    handled = nextSelectedElement ? true : false;
-                } else {
+                if (!this.selectedTreeElement.expanded) {
                     if (event.altKey)
                         this.selectedTreeElement.expandRecursively();
                     else
@@ -653,13 +650,16 @@ WI.TreeOutline = class TreeOutline extends WI.Object
     {
         console.assert(!isNaN(treeItemHeight));
 
+        this._virtualizedVisibleTreeElements = new Set;
+        this._virtualizedAttachedTreeElements = new Set;
         this._virtualizedScrollContainer = scrollContainer;
         this._virtualizedTreeItemHeight = treeItemHeight;
         this._virtualizedTopSpacer = document.createElement("div");
         this._virtualizedBottomSpacer = document.createElement("div");
 
+        let throttler = this.throttle(1000 / 16);
         this._virtualizedScrollContainer.addEventListener("scroll", (event) => {
-            this.updateVirtualizedElements();
+            throttler.updateVirtualizedElements();
         });
     }
 
@@ -674,11 +674,7 @@ WI.TreeOutline = class TreeOutline extends WI.Object
                 if (!child.revealed(false))
                     continue;
 
-                shouldReturn = callback({
-                    parent,
-                    treeElement: child,
-                    count,
-                });
+                shouldReturn = callback(child, count);
                 if (shouldReturn)
                     break;
 
@@ -693,14 +689,11 @@ WI.TreeOutline = class TreeOutline extends WI.Object
             return {count, shouldReturn};
         }
 
-        let numberVisible = Math.ceil(this._virtualizedScrollContainer.offsetHeight / this._virtualizedTreeItemHeight);
-        let extraRows = Math.max(numberVisible * 5, 50);
-        let firstItem = Math.floor(this._virtualizedScrollContainer.scrollTop / this._virtualizedTreeItemHeight) - extraRows;
-        let lastItem = firstItem + numberVisible + (extraRows * 2);
+        let {numberVisible, extraRows, firstItem, lastItem} = this._calculateVirtualizedValues();
 
         let shouldScroll = false;
         if (focusedTreeElement && focusedTreeElement.revealed(false)) {
-            let index = walk(this, ({treeElement}) => treeElement === focusedTreeElement).count;
+            let index = walk(this, (treeElement) => treeElement === focusedTreeElement).count;
             if (index < firstItem) {
                 firstItem = index - extraRows;
                 lastItem = index + numberVisible + extraRows;
@@ -709,25 +702,56 @@ WI.TreeOutline = class TreeOutline extends WI.Object
                 lastItem = index + extraRows;
             }
 
-            shouldScroll = index < firstItem || index > lastItem;
+            // Only scroll if the `focusedTreeElement` is outside the visible items, not including
+            // the added buffer `extraRows`.
+            shouldScroll = (index < firstItem + extraRows) || (index > lastItem - extraRows);
         }
 
-        let totalItems = walk(this, ({parent, treeElement, count}) => {
+        console.assert(firstItem < lastItem);
+
+        let visibleTreeElements = new Set;
+        let treeElementsToAttach = new Set;
+        let treeElementsToDetach = new Set;
+        let totalItems = walk(this, (treeElement, count) => {
             if (count >= firstItem && count <= lastItem) {
-                parent._childrenListNode.appendChild(treeElement.element);
-                if (treeElement._childrenListNode)
-                    parent._childrenListNode.appendChild(treeElement._childrenListNode);
-            } else
-                treeElement.element.remove();
+                treeElementsToAttach.add(treeElement);
+                if (count >= firstItem + extraRows && count <= lastItem - extraRows)
+                    visibleTreeElements.add(treeElement);
+            } else if (treeElement.element.parentNode)
+                treeElementsToDetach.add(treeElement);
 
             return false;
         }).count;
 
+        // Redraw if we are about to scroll.
+        if (!shouldScroll) {
+            // Redraw if all of the previously centered `WI.TreeElement` are no longer centered.
+            if (visibleTreeElements.intersects(this._virtualizedVisibleTreeElements)) {
+                // Redraw if there is a `WI.TreeElement` that should be shown that isn't attached.
+                if (visibleTreeElements.isSubsetOf(this._virtualizedAttachedTreeElements))
+                    return;
+            }
+        }
+
+        this._virtualizedVisibleTreeElements = visibleTreeElements;
+        this._virtualizedAttachedTreeElements = treeElementsToAttach;
+
+        for (let treeElement of treeElementsToDetach)
+            treeElement.element.remove();
+
+        for (let treeElement of treeElementsToAttach) {
+            treeElement.parent._childrenListNode.appendChild(treeElement.element);
+            if (treeElement._childrenListNode)
+                treeElement.parent._childrenListNode.appendChild(treeElement._childrenListNode);
+        }
+
         this._virtualizedTopSpacer.style.height = (Math.max(firstItem, 0) * this._virtualizedTreeItemHeight) + "px";
-        this.element.parentNode.insertBefore(this._virtualizedTopSpacer, this.element);
+        if (this.element.previousElementSibling !== this._virtualizedTopSpacer)
+            this.element.parentNode.insertBefore(this._virtualizedTopSpacer, this.element);
 
         this._virtualizedBottomSpacer.style.height = (Math.max(totalItems - lastItem, 0) * this._virtualizedTreeItemHeight) + "px";
-        this.element.parentNode.insertBefore(this._virtualizedBottomSpacer, this.element.nextElementSibling);
+        if (this.element.nextElementSibling !== this._virtualizedBottomSpacer)
+            this.element.parentNode.insertBefore(this._virtualizedBottomSpacer, this.element.nextElementSibling);
 
         if (shouldScroll)
             this._virtualizedScrollContainer.scrollTop = (firstItem + extraRows) * this._virtualizedTreeItemHeight;
@@ -806,6 +830,20 @@ WI.TreeOutline = class TreeOutline extends WI.Object
         WI.TreeOutline._styleElement.textContent = styleText;
 
         document.head.appendChild(WI.TreeOutline._styleElement);
+    }
+
+    _calculateVirtualizedValues()
+    {
+        let numberVisible = Math.ceil(this._virtualizedScrollContainer.offsetHeight / this._virtualizedTreeItemHeight);
+        let extraRows = Math.max(numberVisible * 5, 50);
+        let firstItem = Math.floor(this._virtualizedScrollContainer.scrollTop / this._virtualizedTreeItemHeight) - extraRows;
+        let lastItem = firstItem + numberVisible + (extraRows * 2);
+        return {
+            numberVisible,
+            extraRows,
+            firstItem,
+            lastItem,
+        };
     }
 
     _handleContextmenu(event)

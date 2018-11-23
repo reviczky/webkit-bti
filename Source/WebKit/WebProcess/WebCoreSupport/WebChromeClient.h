@@ -112,7 +112,7 @@ private:
     WebCore::IntPoint screenToRootView(const WebCore::IntPoint&) const final;
     WebCore::IntRect rootViewToScreen(const WebCore::IntRect&) const final;
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     WebCore::IntPoint accessibilityScreenToRootView(const WebCore::IntPoint&) const final;
     WebCore::IntRect rootViewToAccessibilityScreen(const WebCore::IntRect&) const final;
 #endif
@@ -129,8 +129,6 @@ private:
     void setToolTip(const String&, WebCore::TextDirection) final;
     
     void print(WebCore::Frame&) final;
-
-    void testIncomingSyncIPCMessageWhileWaitingForSyncReply() final;
 
     void exceededDatabaseQuota(WebCore::Frame&, const String& databaseName, WebCore::DatabaseDetails) final;
 
@@ -156,7 +154,7 @@ private:
     void didPreventDefaultForEvent() final;
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     void didReceiveMobileDocType(bool) final;
     void setNeedsScrollNotifications(WebCore::Frame&, bool) final;
     void observedContentChange(WebCore::Frame&) final;
@@ -187,9 +185,10 @@ private:
 #endif
 
     void runOpenPanel(WebCore::Frame&, WebCore::FileChooser&) final;
+    void showShareSheet(WebCore::ShareDataWithParsedURL&, WTF::CompletionHandler<void(bool)>&&) final;
     void loadIconForFiles(const Vector<String>&, WebCore::FileIconLoader&) final;
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     void setCursor(const WebCore::Cursor&) final;
     void setCursorHiddenUntilMouseMoves(bool) final;
 #endif
@@ -233,26 +232,27 @@ private:
             VideoTrigger |
             PluginTrigger|
             CanvasTrigger |
-#if PLATFORM(MAC) || PLATFORM(IOS)
+#if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
             ScrollableNonMainFrameTrigger |
 #endif
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
             AnimatedOpacityTrigger | // Allow opacity animations to trigger compositing mode for iPhone: <rdar://problem/7830677>
 #endif
             AnimationTrigger);
     }
 
     bool layerTreeStateIsFrozen() const final;
+    bool layerFlushThrottlingIsActive() const final;
 
 #if ENABLE(ASYNC_SCROLLING)
     RefPtr<WebCore::ScrollingCoordinator> createScrollingCoordinator(WebCore::Page&) const final;
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     void elementDidRefocus(WebCore::Element&) final;
 #endif
 
-#if (PLATFORM(IOS) && HAVE(AVKIT)) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
+#if (PLATFORM(IOS_FAMILY) && HAVE(AVKIT)) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
     bool supportsVideoFullscreen(WebCore::HTMLMediaElementEnums::VideoFullscreenMode) final;
     bool supportsVideoFullscreenStandby() final;
     void setUpPlaybackControlsManager(WebCore::HTMLMediaElement&) final;
@@ -282,7 +282,7 @@ private:
     void enableSuddenTermination() final;
     void disableSuddenTermination() final;
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     WebCore::FloatSize screenSize() const final;
     WebCore::FloatSize availableScreenSize() const final;
     WebCore::FloatSize overrideScreenSize() const final;
@@ -343,7 +343,7 @@ private:
 
     void inputElementDidResignStrongPasswordAppearance(WebCore::HTMLInputElement&) final;
 
-#if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS)
+#if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS_FAMILY)
     void addPlaybackTargetPickerClient(uint64_t /*contextId*/) final;
     void removePlaybackTargetPickerClient(uint64_t /*contextId*/) final;
     void showPlaybackTargetPicker(uint64_t contextId, const WebCore::IntPoint&, bool) final;
@@ -362,12 +362,10 @@ private:
 
     void didInvalidateDocumentMarkerRects() final;
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     void hasStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t pageID, WTF::CompletionHandler<void (bool)>&&) final;
     void requestStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t pageID, WTF::CompletionHandler<void (bool)>&&) final;
 #endif
-
-    bool isViewVisible() final;
 
     String m_cachedToolTip;
     mutable RefPtr<WebFrame> m_cachedFrameSetLargestFrame;

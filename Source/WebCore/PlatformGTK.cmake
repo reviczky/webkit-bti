@@ -91,7 +91,7 @@ list(APPEND WebCore_USER_AGENT_STYLE_SHEETS
 )
 
 set(WebCore_USER_AGENT_SCRIPTS
-    ${WEBCORE_DIR}/English.lproj/mediaControlsLocalizedStrings.js
+    ${WEBCORE_DIR}/en.lproj/mediaControlsLocalizedStrings.js
     ${WEBCORE_DIR}/Modules/mediacontrols/mediaControlsBase.js
     ${WEBCORE_DIR}/Modules/mediacontrols/mediaControlsGtk.js
 )
@@ -106,6 +106,7 @@ list(APPEND WebCore_LIBRARIES
     ${GLIB_GMODULE_LIBRARIES}
     ${GLIB_GOBJECT_LIBRARIES}
     ${GLIB_LIBRARIES}
+    ${LIBSECCOMP_LIBRARIES}
     ${LIBSECRET_LIBRARIES}
     ${LIBSOUP_LIBRARIES}
     ${LIBTASN1_LIBRARIES}
@@ -125,6 +126,7 @@ list(APPEND WebCore_SYSTEM_INCLUDE_DIRECTORIES
     ${ENCHANT_INCLUDE_DIRS}
     ${GIO_UNIX_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}
+    ${LIBSECCOMP_INCLUDE_DIRS}
     ${LIBSECRET_INCLUDE_DIRS}
     ${LIBSOUP_INCLUDE_DIRS}
     ${LIBTASN1_INCLUDE_DIRS}

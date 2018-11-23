@@ -31,6 +31,7 @@
 
 #include "EventTarget.h"
 #include "InspectorWebAgentBase.h"
+#include "Timer.h"
 #include <JavaScriptCore/InspectorBackendDispatchers.h>
 #include <JavaScriptCore/InspectorFrontendDispatchers.h>
 #include <wtf/HashMap.h>
@@ -63,6 +64,9 @@ class Frame;
 class InspectorHistory;
 class InspectorOverlay;
 class InspectorPageAgent;
+#if ENABLE(VIDEO)
+class HTMLMediaElement;
+#endif
 class HitTestResult;
 class Node;
 class PseudoElement;
@@ -123,6 +127,7 @@ public:
     void setOuterHTML(ErrorString&, int nodeId, const String& outerHTML) override;
     void insertAdjacentHTML(ErrorString&, int nodeId, const String& position, const String& html) override;
     void setNodeValue(ErrorString&, int nodeId, const String& value) override;
+    void getSupportedEventNames(ErrorString&, RefPtr<JSON::ArrayOf<String>>& eventNames) override;
     void getEventListenersForNode(ErrorString&, int nodeId, const WTF::String* objectGroup, RefPtr<JSON::ArrayOf<Inspector::Protocol::DOM::EventListener>>& listenersArray) override;
     void setEventListenerDisabled(ErrorString&, int eventListenerId, bool disabled) override;
     void setBreakpointForEventListener(ErrorString&, int eventListenerId) override;
@@ -156,6 +161,8 @@ public:
 
 
     // InspectorInstrumentation
+    int identifierForNode(Node&);
+    void addEventListenersToNode(Node&);
     void didInsertDOMNode(Node&);
     void didRemoveDOMNode(Node&);
     void willModifyDOMAttr(Element&, const AtomicString& oldValue, const AtomicString& newValue);
@@ -174,6 +181,7 @@ public:
     void didAddEventListener(EventTarget&);
     void willRemoveEventListener(EventTarget&, const AtomicString& eventType, EventListener&, bool capture);
     bool isEventListenerDisabled(EventTarget&, const AtomicString& eventType, EventListener&, bool capture);
+    void eventDidResetAfterDispatch(const Event&);
 
     // Callbacks that don't directly correspond to an instrumentation entry point.
     void setDocument(Document*);
@@ -219,6 +227,10 @@ public:
     int idForEventListener(EventTarget&, const AtomicString& eventType, EventListener&, bool capture);
 
 private:
+#if ENABLE(VIDEO)
+    void mediaMetricsTimerFired();
+#endif
+
     void highlightMousedOverNode();
     void setSearchingForNode(ErrorString&, bool enabled, const JSON::Object* highlightConfig);
     std::unique_ptr<HighlightConfig> highlightConfigFromInspectorObject(ErrorString&, const JSON::Object* highlightInspectorObject);
@@ -280,6 +292,24 @@ private:
     bool m_suppressAttributeModifiedEvent { false };
     bool m_documentRequested { false };
 
+#if ENABLE(VIDEO)
+    Timer m_mediaMetricsTimer;
+    struct MediaMetrics {
+        unsigned displayCompositedFrames { 0 };
+        bool isLowPower { false };
+
+        MediaMetrics() { }
+
+        MediaMetrics(unsigned displayCompositedFrames)
+            : displayCompositedFrames(displayCompositedFrames)
+        {
+        }
+    };
+
+    // The pointer key for this map should not be used for anything other than matching.
+    HashMap<HTMLMediaElement*, MediaMetrics> m_mediaMetrics;
+#endif
+
     struct InspectorEventListener {
         int identifier { 1 };
         RefPtr<EventTarget> eventTarget;
@@ -314,6 +344,9 @@ private:
         }
     };
 
+    friend class EventFiredCallback;
+
+    HashSet<const Event*> m_dispatchedEvents;
     HashMap<int, InspectorEventListener> m_eventListenerEntries;
     int m_lastEventListenerId { 1 };
 };

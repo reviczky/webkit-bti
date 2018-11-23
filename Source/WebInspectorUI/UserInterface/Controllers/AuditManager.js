@@ -23,117 +23,239 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
- WI.AuditManager = class AuditManager extends WI.Object
+WI.AuditManager = class AuditManager extends WI.Object
 {
     constructor()
     {
         super();
 
-        this._testSuiteConstructors = [];
-        this._reports = new Map;
-        
-        // Transforming all the constructors into AuditTestSuite instances.
-        this._testSuites = this._testSuiteConstructors.map(suite =>  {
-            let newTestSuite = new suite;
+        this._tests = [];
+        this._results = [];
 
-            if (!newTestSuite instanceof WI.AuditTestSuite)
-                throw new Error("Audit test suites must be of instance WI.AuditTestSuite.");
+        this._runningState = WI.AuditManager.RunningState.Inactive;
+        this._runningTests = [];
 
-            return newTestSuite;
-        });
+        WI.Frame.addEventListener(WI.Frame.Event.MainResourceDidChange, this._handleFrameMainResourceDidChange, this);
+    }
+
+    static synthesizeError(message)
+    {
+        let consoleMessage = new WI.ConsoleMessage(WI.mainTarget, WI.ConsoleMessage.MessageSource.Other, WI.ConsoleMessage.MessageLevel.Error, WI.UIString("Audit test error: %s").format(message));
+        consoleMessage.shouldRevealConsole = true;
+
+        WI.consoleLogViewController.appendConsoleMessage(consoleMessage);
     }
 
     // Public
 
-    get testSuites() { return this._testSuites.slice(); }
-    get reports() { return [...this._reports.values()]; }
+    get tests() { return this._tests; }
+    get results() { return this._results; }
+    get runningState() { return this._runningState; }
 
-    async runAuditTestByRepresentedObject(representedObject)
+    async start(tests)
     {
-        let auditReport = new WI.AuditReport(representedObject);
+        console.assert(this._runningState === WI.AuditManager.RunningState.Inactive);
+        if (this._runningState !== WI.AuditManager.RunningState.Inactive)
+            return;
 
-        if (representedObject instanceof WI.AuditTestCase) {
-            let auditResult = await this._runTestCase(representedObject);
-            auditReport.addResult(auditResult);
-        } else if (representedObject instanceof WI.AuditTestSuite) {
-            let testCases = representedObject.testCases;            
-            // Start reducing from testCases[0].
-            let result = testCases.slice(1).reduce((chain, testCase, index) => {
-                if (testCase.setup) {
-                    let setup = testCase.setup.call(testCase, testCase.suite)
-                    if (testCase.setup[Symbol.toStringTag] === "AsyncFunction")
-                        return setup;
-                    else
-                        return new Promise(setup);
-                }
+        if (tests && tests.length)
+            tests = tests.filter((test) => typeof test === "object" && test instanceof WI.AuditTestBase);
+        else
+            tests = this._tests;
 
-                chain = chain.then((auditResult) => {
-                    auditReport.addResult(auditResult);
-                    return this._runTestCase(testCase);
-                });
+        if (!tests.length)
+            return;
 
-                if (testCase.tearDown) {
-                    let tearDown = testCase.tearDown.call(testCase, testCase.suite)
-                    if (testCase.tearDown[Symbol.toStringTag] === "AsyncFunction")
-                        return tearDown;
-                    else
-                        return new Promise(tearDown);
-                }
-                return chain;
-            }, this._runTestCase(testCases[0]));
+        this._runningState = WI.AuditManager.RunningState.Active;
+        this._runningTests = tests;
+        for (let test of this._runningTests)
+            test.clearResult();
 
-            let lastAuditResult = await result;
-            auditReport.addResult(lastAuditResult);
+        this.dispatchEventToListeners(WI.AuditManager.Event.TestScheduled);
 
-            // Make AuditReport read-only after all the AuditResults have been received.
-            auditReport.close();
+        await Promise.chain(this._runningTests.map((test) => () => this._runningState === WI.AuditManager.RunningState.Active ? test.start() : null));
+
+        let result = this._runningTests.map((test) => test.result).filter((result) => !!result);
+
+        this._runningState = WI.AuditManager.RunningState.Inactive;
+        this._runningTests = [];
+
+        this._addResult(result);
+    }
+
+    stop()
+    {
+        console.assert(this._runningState === WI.AuditManager.RunningState.Active);
+        if (this._runningState !== WI.AuditManager.RunningState.Active)
+            return;
+
+        for (let test of this._runningTests)
+            test.stop();
+
+        this._runningState = WI.AuditManager.RunningState.Stopping;
+    }
+
+    async processJSON({json, error})
+    {
+        if (error) {
+            WI.AuditManager.synthesizeError(error);
+            return;
         }
 
-        this._reports.set(representedObject.id, auditReport);
-        this.dispatchEventToListeners(WI.AuditManager.Event.NewReportAdded, {auditReport});
+        let object = await WI.AuditTestGroup.fromPayload(json) || await WI.AuditTestCase.fromPayload(json);
+        if (!object) {
+            object = await WI.AuditTestGroupResult.fromPayload(json) || await WI.AuditTestCaseResult.fromPayload(json);
+            if (!object) {
+                WI.AuditManager.synthesizeError(WI.UIString("invalid JSON."));
+                return;
+            }
+        }
 
-        return auditReport;
+        if (object instanceof WI.AuditTestBase) {
+            this._addTest(object);
+            WI.objectStores.audits.addObject(object);
+        } else if (object instanceof WI.AuditTestResultBase)
+            this._addResult(object);
+
+        WI.showRepresentedObject(object);
     }
 
-    addTestSuite(auditTestSuiteConstructor)
+    export(object)
     {
-        if (this._testSuiteConstructors.indexOf(auditTestSuiteConstructor) >= 0)
-            throw new Error(`class ${auditTestSuiteConstructor.name} already exists.`);
+        console.assert(object instanceof WI.AuditTestCase || object instanceof WI.AuditTestGroup || object instanceof WI.AuditTestCaseResult || object instanceof WI.AuditTestGroupResult, object);
 
-        let auditTestSuite = new auditTestSuiteConstructor;
-        this._testSuiteConstructors.push(auditTestSuiteConstructor);
-        this._testSuites.push(auditTestSuite);
+        let filename = object.name;
+        if (object instanceof WI.AuditTestResultBase)
+            filename = WI.UIString("%s Result").format(filename);
+
+        let url = "web-inspector:///" + encodeURI(filename) + ".json";
+
+        WI.FileUtilities.save({
+            url,
+            content: JSON.stringify(object),
+            forceSaveAs: true,
+        });
     }
 
-    reportForId(reportId)
+    loadStoredTests()
     {
-        return this._reports.get(reportId);
+        if (this._tests.length)
+            return;
+
+        WI.objectStores.audits.getAll().then(async (tests) => {
+            for (let payload of tests) {
+                let test = await WI.AuditTestGroup.fromPayload(payload) || await WI.AuditTestCase.fromPayload(payload);
+                if (!test)
+                    continue;
+
+                const key = null;
+                WI.objectStores.audits.associateObject(test, key, payload);
+
+                this._addTest(test);
+            }
+
+            this.addDefaultTestsIfNeeded();
+        });
     }
 
-    removeAllReports()
+    removeTest(test)
     {
-        this._reports.clear();
+        this._tests.remove(test);
+
+        this.dispatchEventToListeners(WI.AuditManager.Event.TestRemoved, {test});
+
+        WI.objectStores.audits.deleteObject(test);
     }
 
     // Private
 
-    async _runTestCase(testCase)
+    _addTest(test)
     {
-        let didRaiseException = false;
-        let result;
-        this.dispatchEventToListeners(WI.AuditManager.Event.TestStarted, {test: testCase});
-        try {
-            result = await testCase.test.call(testCase, testCase.suite);
-        } catch (resultData) {
-            result = resultData;
-            didRaiseException = true;
-        }
-        this.dispatchEventToListeners(WI.AuditManager.Event.TestEnded, {test: testCase});
-        return new WI.AuditResult(testCase, {result}, didRaiseException);
+        this._tests.push(test);
+
+        this.dispatchEventToListeners(WI.AuditManager.Event.TestAdded, {test});
     }
-}
+
+    _addResult(result)
+    {
+        if (!result || (Array.isArray(result) && !result.length))
+            return;
+
+        this._results.push(result);
+
+        this.dispatchEventToListeners(WI.AuditManager.Event.TestCompleted, {
+            result,
+            index: this._results.length - 1,
+        });
+    }
+
+    _handleFrameMainResourceDidChange(event)
+    {
+        if (!event.target.isMainFrame())
+            return;
+
+        for (let test of this._tests)
+            test.clearResult();
+    }
+
+    addDefaultTestsIfNeeded()
+    {
+        if (this._tests.length)
+            return;
+
+        const defaultTests = [
+            new WI.AuditTestGroup(WI.UIString("Demo Audit"), [
+                new WI.AuditTestGroup(WI.UIString("Result Levels"), [
+                    new WI.AuditTestCase(`level-pass`, `function() { return {level: "pass"}; }`, {description: WI.UIString("This is what the result of a passing test with no data looks like.")}),
+                    new WI.AuditTestCase(`level-warn`, `function() { return {level: "warn"}; }`, {description: WI.UIString("This is what the result of a warning test with no data looks like.")}),
+                    new WI.AuditTestCase(`level-fail`, `function() { return {level: "fail"}; }`, {description: WI.UIString("This is what the result of a failing test with no data looks like.")}),
+                    new WI.AuditTestCase(`level-error`, `function() { return {level: "error"}; }`, {description: WI.UIString("This is what the result of a test that threw an error with no data looks like.")}),
+                    new WI.AuditTestCase(`level-unsupported`, `function() { return {level: "unsupported"}; }`, {description: WI.UIString("This is what the result of a unsupported test with no data looks like.")}),
+                ], {description: WI.UIString("These are all of the different test result levels.")}),
+                new WI.AuditTestGroup(WI.UIString("Result Data"), [
+                    new WI.AuditTestCase(`data-domNodes`, `function() { return {domNodes: [document.body], level: "pass"}; }`, {description: WI.UIString("This is an example of how result DOM nodes are shown. It will pass with the <body> element.")}),
+                    new WI.AuditTestCase(`data-domAttributes`, `function() { return {domNodes: Array.from(document.querySelectorAll("[id]")), domAttributes: ["id"], level: "pass"}; }`, {description: WI.UIString("This is an example of how result DOM nodes are shown. It will pass with all elements with an id attribute.")}),
+                    new WI.AuditTestCase(`data-errors`, `function() { throw Error("this error was thrown from inside the audit test code."); }`, {description: WI.UIString("This is an example of how errors are shown. The error was thrown manually, but execution errors will appear in the same way.")}),
+                ], {description: WI.UIString("These are all of the different types of data that can be returned with the test result.")}),
+            ], {description: WI.UIString("These tests serve as a demonstration of the functionality and structure of audits.")}),
+            new WI.AuditTestGroup(WI.UIString("Accessibility"), [
+                new WI.AuditTestGroup(WI.UIString("Attributes"), [
+                    new WI.AuditTestCase(`img-alt`, `function() { let domNodes = Array.from(document.getElementsByTagName("img")).filter((img) => !img.alt || !img.alt.length); return { level: domNodes.length ? "fail" : "pass", domNodes, domAttributes: ["alt"] }; }`, {description: WI.UIString("Ensure <img> elements have alternate text.")}),
+                    new WI.AuditTestCase(`area-alt`, `function() { let domNodes = Array.from(document.getElementsByTagName("area")).filter((area) => !area.alt || !area.alt.length); return { level: domNodes.length ? "fail" : "pass", domNodes, domAttributes: ["alt"] }; }`, {description: WI.UIString("Ensure <area> elements of image maps have alternate text.")}),
+                    new WI.AuditTestCase(`valid-tabindex`, `function() { let domNodes = Array.from(document.querySelectorAll("*[tabindex]")) .filter((node) => { let tabindex = node.getAttribute("tabindex"); if (!tabindex) return false; tabindex = parseInt(tabindex); return isNaN(tabindex) || (tabindex !== 0 && tabindex !== -1); }); return { level: domNodes.length ? "fail" : "pass", domNodes, domAttributes: ["tabindex"] }; }`, {description: WI.UIString("Ensure tabindex is a number.")}),
+                    new WI.AuditTestCase(`frame-title`, `function() { let domNodes = Array.from(document.querySelectorAll("iframe, frame")) .filter((node) => { let title = node.getAttribute("title"); return !title || !title.trim().length; }); return { level: domNodes.length ? "fail" : "pass", domNodes, domAttributes: ["title"] }; }`, {description: WI.UIString("Ensure <area> elements of image maps have alternate text.")}),
+                    new WI.AuditTestCase(`hidden-body`, `function() { let domNodes = Array.from(document.querySelectorAll("body[hidden]")).filter((body) => body.hidden); return { level: domNodes.length ? "fail" : "pass", domNodes, domAttributes: ["hidden"] }; }`, {description: WI.UIString("Ensure hidden=true is not present on the document body.")}),
+                    new WI.AuditTestCase(`meta-refresh`, `function() { let domNodes = Array.from(document.querySelectorAll("meta[http-equiv=refresh]")); return { level: domNodes.length ? "warn" : "pass", domNodes, domAttributes: ["http-equiv"] }; }`, {description: WI.UIString("Ensure <meta http-equiv=refresh> is not used.")}),
+                ], {description: WI.UIString("Tests for element attribute accessibility issues.")}),
+                new WI.AuditTestGroup(WI.UIString("Elements"), [
+                    new WI.AuditTestCase(`blink`, `function() { let domNodes = Array.from(document.getElementsByTagName("blink")); return { level: domNodes.length ? "warn" : "pass", domNodes }; }`, {description: WI.UIString("Ensure hidden=true is not present on the document body.")}),
+                    new WI.AuditTestCase(`marquee`, `function() { let domNodes = Array.from(document.getElementsByTagName("marquee")); return { level: domNodes.length ? "warn" : "pass", domNodes }; }`, {description: WI.UIString("Ensure hidden=true is not present on the document body.")}),
+                    new WI.AuditTestCase(`dlitem`, `function() { function check(node) { if (!node) { return false; } if (node.nodeName === "DD") { return true; } return check(node.parentNode); } let domNodes = Array.from(document.querySelectorAll("dt, dd")).filter(check); return { level: domNodes.length ? "warn" : "pass", domNodes }; }`, {description: WI.UIString("Ensure <dt> and <dd> elements are contained by a <dl>.")}),
+                ], {description: WI.UIString("Tests for element accessibility issues.")}),
+                new WI.AuditTestGroup(WI.UIString("Forms"), [
+                    new WI.AuditTestCase(`one-legend`, `function() { let formLegendsMap = Array.from(document.querySelectorAll("form legend")).reduce((accumulator, node) => { let existing = accumulator.get(node.form); if (!existing) { existing = []; accumulator.set(node.form, existing); } existing.push(node); return accumulator; }, new Map); let domNodes = Array.from(formLegendsMap.values()).reduce((accumulator, legends) => accumulator.concat(legends), []); return { level: domNodes.length ? "warn" : "pass", domNodes }; }`, {description: WI.UIString("Ensure exactly one <legend> exists per form.")}),
+                    new WI.AuditTestCase(`legend-first-child`, `function() { let domNodes = Array.from(document.querySelectorAll("form > legend:not(:first-child)")); return { level: domNodes.length ? "warn" : "pass", domNodes }; }`, {description: WI.UIString("Ensure legend is first child in form.")}),
+                    new WI.AuditTestCase(`form-input`, `function() { let domNodes = Array.from(document.getElementsByTagName("form")) .filter(node => !node.elements.length); return { level: domNodes.length ? "warn" : "pass", domNodes }; }`, {description: WI.UIString("Ensure forms have at least one input.")}),
+                ], {description: WI.UIString("Tests the accessibility of form elements.")}),
+            ], {description: WI.UIString("Tests for ways to improve accessibility.")}),
+        ];
+
+        for (let test of defaultTests) {
+            this._addTest(test);
+            WI.objectStores.audits.addObject(test);
+        }
+    }
+};
+
+WI.AuditManager.RunningState = {
+    Inactive: "inactive",
+    Active: "active",
+    Stopping: "stopping",
+};
 
 WI.AuditManager.Event = {
-    TestStarted: Symbol("test-started"),
-    TestEnded: Symbol("test-ended")
-}
+    TestAdded: "audit-manager-test-added",
+    TestCompleted: "audit-manager-test-completed",
+    TestRemoved: "audit-manager-test-removed",
+    TestScheduled: "audit-manager-test-scheduled",
+};

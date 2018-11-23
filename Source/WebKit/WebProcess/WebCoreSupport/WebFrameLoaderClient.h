@@ -55,7 +55,7 @@ public:
     std::optional<uint64_t> frameID() const final;
     PAL::SessionID sessionID() const final;
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     bool hasFrameSpecificStorageAccess() { return m_hasFrameSpecificStorageAccess; }
     void setHasFrameSpecificStorageAccess(bool value) { m_hasFrameSpecificStorageAccess = value; };
 #endif
@@ -67,7 +67,7 @@ private:
     bool hasWebView() const final;
     
     void makeRepresentation(WebCore::DocumentLoader*) final;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     bool forceLayoutOnRestoreFromPageCache() final;
 #endif
     void forceLayoutForNonHTML() final;
@@ -85,7 +85,7 @@ private:
 #if USE(PROTECTION_SPACE_AUTH_CALLBACK)
     bool canAuthenticateAgainstProtectionSpace(WebCore::DocumentLoader*, unsigned long identifier, const WebCore::ProtectionSpace&) final;
 #endif
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     RetainPtr<CFDictionaryRef> connectionProperties(WebCore::DocumentLoader*, unsigned long identifier) final;
 #endif
     void dispatchDidReceiveResponse(WebCore::DocumentLoader*, unsigned long identifier, const WebCore::ResourceResponse&) final;
@@ -103,7 +103,7 @@ private:
     void dispatchDidReceiveServerRedirectForProvisionalLoad() final;
     void dispatchDidChangeProvisionalURL() final;
     void dispatchDidCancelClientRedirect() final;
-    void dispatchWillPerformClientRedirect(const WebCore::URL&, double interval, WallTime fireDate) final;
+    void dispatchWillPerformClientRedirect(const WebCore::URL&, double interval, WallTime fireDate, WebCore::LockBackForwardList) final;
     void dispatchDidChangeLocationWithinPage() final;
     void dispatchDidPushStateWithinPage() final;
     void dispatchDidReplaceStateWithinPage() final;
@@ -117,7 +117,7 @@ private:
     void dispatchDidFinishDocumentLoad() final;
     void dispatchDidFinishLoad() final;
 
-    void dispatchDidReachLayoutMilestone(WebCore::LayoutMilestones) final;
+    void dispatchDidReachLayoutMilestone(OptionSet<WebCore::LayoutMilestone>) final;
     void dispatchDidLayout() final;
 
     WebCore::Frame* dispatchCreatePage(const WebCore::NavigationAction&) final;
@@ -125,7 +125,7 @@ private:
     
     void dispatchDecidePolicyForResponse(const WebCore::ResourceResponse&, const WebCore::ResourceRequest&, WebCore::FramePolicyFunction&&) final;
     void dispatchDecidePolicyForNewWindowAction(const WebCore::NavigationAction&, const WebCore::ResourceRequest&, WebCore::FormState*, const String& frameName, WebCore::FramePolicyFunction&&) final;
-    void dispatchDecidePolicyForNavigationAction(const WebCore::NavigationAction&, const WebCore::ResourceRequest&, const WebCore::ResourceResponse& redirectResponse, WebCore::FormState*, WebCore::PolicyDecisionMode, WebCore::FramePolicyFunction&&) final;
+    void dispatchDecidePolicyForNavigationAction(const WebCore::NavigationAction&, const WebCore::ResourceRequest&, const WebCore::ResourceResponse& redirectResponse, WebCore::FormState*, WebCore::PolicyDecisionMode, WebCore::ShouldSkipSafeBrowsingCheck, WebCore::FramePolicyFunction&&) final;
     void cancelPolicyCheck() final;
     
     void dispatchUnableToImplementPolicy(const WebCore::ResourceError&) final;
@@ -152,7 +152,7 @@ private:
     void updateGlobalHistory() final;
     void updateGlobalHistoryRedirectLinks() final;
     
-    bool shouldGoToHistoryItem(WebCore::HistoryItem*) const final;
+    bool shouldGoToHistoryItem(WebCore::HistoryItem&) const final;
 
     void didDisplayInsecureContent() final;
     void didRunInsecureContent(WebCore::SecurityOrigin&, const WebCore::URL&) final;
@@ -197,7 +197,7 @@ private:
 
     void savePlatformDataToCachedFrame(WebCore::CachedFrame*) final;
     void transitionToCommittedFromCachedFrame(WebCore::CachedFrame*) final;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     void didRestoreFrameHierarchyForCachedFrame() final;
 #endif
     void transitionToCommittedForNewPage() final;
@@ -210,7 +210,7 @@ private:
     bool canCachePage() const final;
     void convertMainResourceLoadToDownload(WebCore::DocumentLoader*, PAL::SessionID, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&) final;
 
-    RefPtr<WebCore::Frame> createFrame(const WebCore::URL&, const String& name, WebCore::HTMLFrameOwnerElement&, const String& referrer, bool allowsScrolling, int marginWidth, int marginHeight) final;
+    RefPtr<WebCore::Frame> createFrame(const WebCore::URL&, const String& name, WebCore::HTMLFrameOwnerElement&, const String& referrer) final;
 
     RefPtr<WebCore::Widget> createPlugin(const WebCore::IntSize&, WebCore::HTMLPlugInElement&, const WebCore::URL&, const Vector<String>&, const Vector<String>&, const String&, bool loadManually) final;
     void recreatePlugin(WebCore::Widget*) final;
@@ -283,7 +283,7 @@ private:
     bool m_frameHasCustomContentProvider;
     bool m_frameCameFromPageCache;
     bool m_useIconLoadingClient { false };
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     bool m_hasFrameSpecificStorageAccess { false };
 #endif
 };

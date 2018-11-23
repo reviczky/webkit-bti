@@ -98,8 +98,9 @@ public:
     virtual void sessionStateChanged(PlatformMediaSession&);
     virtual void sessionDidEndRemoteScrubbing(const PlatformMediaSession&) { };
     virtual void clientCharacteristicsChanged(PlatformMediaSession&) { }
+    virtual void sessionCanProduceAudioChanged(PlatformMediaSession&);
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     virtual void configureWireLessTargetMonitoring() { }
     virtual bool hasWirelessTargetsAvailable() { return false; }
 #endif
@@ -110,7 +111,6 @@ public:
     Vector<PlatformMediaSession*> currentSessionsMatching(const WTF::Function<bool(const PlatformMediaSession&)>&);
 
     void sessionIsPlayingToWirelessPlaybackTargetChanged(PlatformMediaSession&);
-    void sessionCanProduceAudioChanged(PlatformMediaSession&);
 
 protected:
     friend class PlatformMediaSession;
@@ -149,7 +149,7 @@ private:
     std::unique_ptr<PAL::SystemSleepListener> m_systemSleepListener;
     RefPtr<AudioHardwareListener> m_audioHardwareListener;
 
-#if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS)
+#if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS_FAMILY)
     RefPtr<MediaPlaybackTarget> m_playbackTarget;
     bool m_canPlayToTarget { false };
 #endif

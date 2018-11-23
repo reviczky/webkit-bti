@@ -38,6 +38,7 @@
 #include "WebsiteDataFetchOption.h"
 #include "WebsiteDataStore.h"
 #include <WebCore/ResourceLoadStatistics.h>
+#include <wtf/CallbackAggregator.h>
 #include <wtf/CrossThreadCopier.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/threads/BinarySemaphore.h>
@@ -48,12 +49,6 @@ using namespace WebCore;
 template<typename T> static inline String isolatedPrimaryDomain(const T& value)
 {
     return ResourceLoadStatistics::primaryDomain(value).isolatedCopy();
-}
-
-static bool areDomainsAssociated(WebPageProxy* page, const String& firstDomain, const String& secondDomain)
-{
-    bool needsSiteSpecificQuirks = page && page->preferences().needsSiteSpecificQuirks();
-    return ResourceLoadStatistics::areDomainsAssociated(needsSiteSpecificQuirks, firstDomain, secondDomain);
 }
 
 const OptionSet<WebsiteDataType>& WebResourceLoadStatisticsStore::monitoredDataTypes()
@@ -164,7 +159,7 @@ void WebResourceLoadStatisticsStore::flushAndDestroyPersistentStore()
         m_memoryStore = nullptr;
         semaphore.signal();
     });
-    semaphore.wait(WallTime::infinity());
+    semaphore.wait();
 }
 
 void WebResourceLoadStatisticsStore::setResourceLoadStatisticsDebugMode(bool value, CompletionHandler<void()>&& completionHandler)
@@ -245,7 +240,7 @@ void WebResourceLoadStatisticsStore::callHasStorageAccessForFrameHandler(const S
 {
     ASSERT(RunLoop::isMain());
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     if (m_websiteDataStore) {
         m_websiteDataStore->hasStorageAccessForFrameHandler(resourceDomain, firstPartyDomain, frameID, pageID, WTFMove(callback));
         return;
@@ -282,16 +277,16 @@ void WebResourceLoadStatisticsStore::requestStorageAccess(String&& subFrameHost,
     });
 }
 
-void WebResourceLoadStatisticsStore::requestStorageAccessUnderOpener(String&& primaryDomainInNeedOfStorageAccess, uint64_t openerPageID, String&& openerPrimaryDomain, bool isTriggeredByUserGesture)
+void WebResourceLoadStatisticsStore::requestStorageAccessUnderOpener(String&& primaryDomainInNeedOfStorageAccess, uint64_t openerPageID, String&& openerPrimaryDomain)
 {
     ASSERT(RunLoop::isMain());
 
     // It is safe to move the strings to the background queue without isolated copy here because they are r-value references
     // coming from IPC. Strings which are safe to move to other threads as long as nobody on this thread holds a reference
     // to those strings.
-    postTask([this, primaryDomainInNeedOfStorageAccess = WTFMove(primaryDomainInNeedOfStorageAccess), openerPageID, openerPrimaryDomain = WTFMove(openerPrimaryDomain), isTriggeredByUserGesture]() mutable {
+    postTask([this, primaryDomainInNeedOfStorageAccess = WTFMove(primaryDomainInNeedOfStorageAccess), openerPageID, openerPrimaryDomain = WTFMove(openerPrimaryDomain)]() mutable {
         if (m_memoryStore)
-            m_memoryStore->requestStorageAccessUnderOpener(WTFMove(primaryDomainInNeedOfStorageAccess), openerPageID, WTFMove(openerPrimaryDomain), isTriggeredByUserGesture);
+            m_memoryStore->requestStorageAccessUnderOpener(WTFMove(primaryDomainInNeedOfStorageAccess), openerPageID, WTFMove(openerPrimaryDomain));
     });
 }
 
@@ -318,7 +313,7 @@ void WebResourceLoadStatisticsStore::callGrantStorageAccessHandler(const String&
 {
     ASSERT(RunLoop::isMain());
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     if (m_websiteDataStore) {
         m_websiteDataStore->grantStorageAccessHandler(subFramePrimaryDomain, topFramePrimaryDomain, frameID, pageID, WTFMove(callback));
         return;
@@ -327,11 +322,22 @@ void WebResourceLoadStatisticsStore::callGrantStorageAccessHandler(const String&
     callback(false);
 }
 
+void WebResourceLoadStatisticsStore::didCreateNetworkProcess()
+{
+    ASSERT(RunLoop::isMain());
+
+    postTask([this] {
+        if (!m_memoryStore)
+            return;
+        m_memoryStore->didCreateNetworkProcess();
+    });
+}
+
 void WebResourceLoadStatisticsStore::removeAllStorageAccess(CompletionHandler<void()>&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     if (m_websiteDataStore)
         m_websiteDataStore->removeAllStorageAccessHandler(WTFMove(completionHandler));
     else
@@ -392,17 +398,14 @@ void WebResourceLoadStatisticsStore::logFrameNavigation(const WebFrameProxy& fra
     if (targetHost.isEmpty() || mainFrameHost.isEmpty() || targetHost == sourceURL.host())
         return;
 
-    auto* page = frame.page();
     auto targetPrimaryDomain = ResourceLoadStatistics::primaryDomain(targetURL);
     auto mainFramePrimaryDomain = ResourceLoadStatistics::primaryDomain(pageURL);
     auto sourcePrimaryDomain = ResourceLoadStatistics::primaryDomain(sourceURL);
 
-    bool areTargetAndMainFrameDomainsAssociated = areDomainsAssociated(page, targetPrimaryDomain, mainFramePrimaryDomain);
-    bool areTargetAndSourceDomainsAssociated = areDomainsAssociated(page, targetPrimaryDomain, sourcePrimaryDomain);
-
-    postTask([this, targetPrimaryDomain = targetPrimaryDomain.isolatedCopy(), mainFramePrimaryDomain = mainFramePrimaryDomain.isolatedCopy(), sourcePrimaryDomain = sourcePrimaryDomain.isolatedCopy(), targetHost = targetHost.toString().isolatedCopy(), mainFrameHost = mainFrameHost.toString().isolatedCopy(), areTargetAndMainFrameDomainsAssociated, areTargetAndSourceDomainsAssociated, isRedirect, isMainFrame = frame.isMainFrame()] {
+    postTask([this, targetPrimaryDomain = targetPrimaryDomain.isolatedCopy(), mainFramePrimaryDomain = mainFramePrimaryDomain.isolatedCopy(), sourcePrimaryDomain = sourcePrimaryDomain.isolatedCopy(), targetHost = targetHost.toString().isolatedCopy(), mainFrameHost = mainFrameHost.toString().isolatedCopy(), isRedirect, isMainFrame = frame.isMainFrame()] {
+        
         if (m_memoryStore)
-            m_memoryStore->logFrameNavigation(targetPrimaryDomain, mainFramePrimaryDomain, sourcePrimaryDomain, targetHost, mainFrameHost, areTargetAndMainFrameDomainsAssociated, areTargetAndSourceDomainsAssociated, isRedirect, isMainFrame);
+            m_memoryStore->logFrameNavigation(targetPrimaryDomain, mainFramePrimaryDomain, sourcePrimaryDomain, targetHost, mainFrameHost, isRedirect, isMainFrame);
     });
 }
 
@@ -410,7 +413,7 @@ void WebResourceLoadStatisticsStore::logUserInteraction(const URL& url, Completi
 {
     ASSERT(RunLoop::isMain());
 
-    if (url.isBlankURL() || url.isEmpty()) {
+    if (url.protocolIsAbout() || url.isEmpty()) {
         completionHandler();
         return;
     }
@@ -426,7 +429,7 @@ void WebResourceLoadStatisticsStore::clearUserInteraction(const URL& url, Comple
 {
     ASSERT(RunLoop::isMain());
 
-    if (url.isBlankURL() || url.isEmpty()) {
+    if (url.protocolIsAbout() || url.isEmpty()) {
         completionHandler();
         return;
     }
@@ -442,7 +445,7 @@ void WebResourceLoadStatisticsStore::hasHadUserInteraction(const URL& url, Compl
 {
     ASSERT(RunLoop::isMain());
 
-    if (url.isBlankURL() || url.isEmpty()) {
+    if (url.protocolIsAbout() || url.isEmpty()) {
         completionHandler(false);
         return;
     }
@@ -459,7 +462,7 @@ void WebResourceLoadStatisticsStore::setLastSeen(const URL& url, Seconds seconds
 {
     ASSERT(RunLoop::isMain());
 
-    if (url.isBlankURL() || url.isEmpty()) {
+    if (url.protocolIsAbout() || url.isEmpty()) {
         completionHandler();
         return;
     }
@@ -475,7 +478,7 @@ void WebResourceLoadStatisticsStore::setPrevalentResource(const URL& url, Comple
 {
     ASSERT(RunLoop::isMain());
 
-    if (url.isBlankURL() || url.isEmpty()) {
+    if (url.protocolIsAbout() || url.isEmpty()) {
         completionHandler();
         return;
     }
@@ -491,7 +494,7 @@ void WebResourceLoadStatisticsStore::setVeryPrevalentResource(const URL& url, Co
 {
     ASSERT(RunLoop::isMain());
 
-    if (url.isBlankURL() || url.isEmpty()) {
+    if (url.protocolIsAbout() || url.isEmpty()) {
         completionHandler();
         return;
     }
@@ -502,12 +505,24 @@ void WebResourceLoadStatisticsStore::setVeryPrevalentResource(const URL& url, Co
         postTaskReply(WTFMove(completionHandler));
     });
 }
+    
+void WebResourceLoadStatisticsStore::dumpResourceLoadStatistics(CompletionHandler<void(const String&)>&& completionHandler)
+{
+    ASSERT(RunLoop::isMain());
+
+    postTask([this, completionHandler = WTFMove(completionHandler)] () mutable {
+        String result = m_memoryStore ? m_memoryStore->dumpResourceLoadStatistics() : emptyString();
+        postTaskReply([result = result.isolatedCopy(), completionHandler = WTFMove(completionHandler)] () mutable {
+            completionHandler(result);
+        });
+    });
+}
 
 void WebResourceLoadStatisticsStore::isPrevalentResource(const URL& url, CompletionHandler<void (bool)>&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
 
-    if (url.isBlankURL() || url.isEmpty()) {
+    if (url.protocolIsAbout() || url.isEmpty()) {
         completionHandler(false);
         return;
     }
@@ -524,7 +539,7 @@ void WebResourceLoadStatisticsStore::isVeryPrevalentResource(const URL& url, Com
 {
     ASSERT(RunLoop::isMain());
 
-    if (url.isBlankURL() || url.isEmpty()) {
+    if (url.protocolIsAbout() || url.isEmpty()) {
         completionHandler(false);
         return;
     }
@@ -533,6 +548,18 @@ void WebResourceLoadStatisticsStore::isVeryPrevalentResource(const URL& url, Com
         bool isVeryPrevalentResource = m_memoryStore ? m_memoryStore->isVeryPrevalentResource(primaryDomain) : false;
         postTaskReply([isVeryPrevalentResource, completionHandler = WTFMove(completionHandler)] () mutable {
             completionHandler(isVeryPrevalentResource);
+        });
+    });
+}
+
+void WebResourceLoadStatisticsStore::isRegisteredAsSubresourceUnder(const URL& subresource, const URL& topFrame, CompletionHandler<void(bool)>&& completionHandler)
+{
+    ASSERT(RunLoop::isMain());
+    
+    postTask([this, subresourcePrimaryDomain = isolatedPrimaryDomain(subresource), topFramePrimaryDomain = isolatedPrimaryDomain(topFrame), completionHandler = WTFMove(completionHandler)] () mutable {
+        bool isRegisteredAsSubresourceUnder = m_memoryStore ? m_memoryStore->isRegisteredAsSubresourceUnder(subresourcePrimaryDomain, topFramePrimaryDomain) : false;
+        postTaskReply([isRegisteredAsSubresourceUnder, completionHandler = WTFMove(completionHandler)] () mutable {
+            completionHandler(isRegisteredAsSubresourceUnder);
         });
     });
 }
@@ -565,7 +592,7 @@ void WebResourceLoadStatisticsStore::clearPrevalentResource(const URL& url, Comp
 {
     ASSERT(RunLoop::isMain());
 
-    if (url.isBlankURL() || url.isEmpty()) {
+    if (url.protocolIsAbout() || url.isEmpty()) {
         completionHandler();
         return;
     }
@@ -581,7 +608,7 @@ void WebResourceLoadStatisticsStore::setGrandfathered(const URL& url, bool value
 {
     ASSERT(RunLoop::isMain());
 
-    if (url.isBlankURL() || url.isEmpty())
+    if (url.protocolIsAbout() || url.isEmpty())
         return;
 
     postTask([this, primaryDomain = isolatedPrimaryDomain(url), value] {
@@ -594,7 +621,7 @@ void WebResourceLoadStatisticsStore::isGrandfathered(const URL& url, CompletionH
 {
     ASSERT(RunLoop::isMain());
 
-    if (url.isBlankURL() || url.isEmpty()) {
+    if (url.protocolIsAbout() || url.isEmpty()) {
         completionHandler(false);
         return;
     }
@@ -611,7 +638,7 @@ void WebResourceLoadStatisticsStore::setSubframeUnderTopFrameOrigin(const URL& s
 {
     ASSERT(RunLoop::isMain());
 
-    if (subframe.isBlankURL() || subframe.isEmpty() || topFrame.isBlankURL() || topFrame.isEmpty())
+    if (subframe.protocolIsAbout() || subframe.isEmpty() || topFrame.protocolIsAbout() || topFrame.isEmpty())
         return;
 
     postTask([this, primaryTopFrameDomain = isolatedPrimaryDomain(topFrame), primarySubFrameDomain = isolatedPrimaryDomain(subframe)] {
@@ -624,7 +651,7 @@ void WebResourceLoadStatisticsStore::setSubresourceUnderTopFrameOrigin(const URL
 {
     ASSERT(RunLoop::isMain());
 
-    if (subresource.isBlankURL() || subresource.isEmpty() || topFrame.isBlankURL() || topFrame.isEmpty())
+    if (subresource.protocolIsAbout() || subresource.isEmpty() || topFrame.protocolIsAbout() || topFrame.isEmpty())
         return;
 
     postTask([this, primaryTopFrameDomain = isolatedPrimaryDomain(topFrame), primarySubresourceDomain = isolatedPrimaryDomain(subresource)] {
@@ -637,7 +664,7 @@ void WebResourceLoadStatisticsStore::setSubresourceUniqueRedirectTo(const URL& s
 {
     ASSERT(RunLoop::isMain());
 
-    if (subresource.isBlankURL() || subresource.isEmpty() || hostNameRedirectedTo.isBlankURL() || hostNameRedirectedTo.isEmpty())
+    if (subresource.protocolIsAbout() || subresource.isEmpty() || hostNameRedirectedTo.protocolIsAbout() || hostNameRedirectedTo.isEmpty())
         return;
 
     postTask([this, primaryRedirectDomain = isolatedPrimaryDomain(hostNameRedirectedTo), primarySubresourceDomain = isolatedPrimaryDomain(subresource)] {
@@ -650,7 +677,7 @@ void WebResourceLoadStatisticsStore::setSubresourceUniqueRedirectFrom(const URL&
 {
     ASSERT(RunLoop::isMain());
 
-    if (subresource.isBlankURL() || subresource.isEmpty() || hostNameRedirectedFrom.isBlankURL() || hostNameRedirectedFrom.isEmpty())
+    if (subresource.protocolIsAbout() || subresource.isEmpty() || hostNameRedirectedFrom.protocolIsAbout() || hostNameRedirectedFrom.isEmpty())
         return;
     
     postTask([this, primaryRedirectDomain = isolatedPrimaryDomain(hostNameRedirectedFrom), primarySubresourceDomain = isolatedPrimaryDomain(subresource)] {
@@ -663,7 +690,7 @@ void WebResourceLoadStatisticsStore::setTopFrameUniqueRedirectTo(const URL& topF
 {
     ASSERT(RunLoop::isMain());
 
-    if (topFrameHostName.isBlankURL() || topFrameHostName.isEmpty() || hostNameRedirectedTo.isBlankURL() || hostNameRedirectedTo.isEmpty())
+    if (topFrameHostName.protocolIsAbout() || topFrameHostName.isEmpty() || hostNameRedirectedTo.protocolIsAbout() || hostNameRedirectedTo.isEmpty())
         return;
     
     postTask([this, primaryRedirectDomain = isolatedPrimaryDomain(hostNameRedirectedTo), topFramePrimaryDomain = isolatedPrimaryDomain(topFrameHostName)] {
@@ -676,7 +703,7 @@ void WebResourceLoadStatisticsStore::setTopFrameUniqueRedirectFrom(const URL& to
 {
     ASSERT(RunLoop::isMain());
 
-    if (topFrameHostName.isBlankURL() || topFrameHostName.isEmpty() || hostNameRedirectedFrom.isBlankURL() || hostNameRedirectedFrom.isEmpty())
+    if (topFrameHostName.protocolIsAbout() || topFrameHostName.isEmpty() || hostNameRedirectedFrom.protocolIsAbout() || hostNameRedirectedFrom.isEmpty())
         return;
     
     postTask([this, primaryRedirectDomain = isolatedPrimaryDomain(hostNameRedirectedFrom), topFramePrimaryDomain = isolatedPrimaryDomain(topFrameHostName)] {
@@ -701,17 +728,17 @@ void WebResourceLoadStatisticsStore::scheduleCookieBlockingUpdate(CompletionHand
     });
 }
 
-void WebResourceLoadStatisticsStore::scheduleCookieBlockingUpdateForDomains(const Vector<String>& domainsToBlock, ShouldClearFirst shouldClearFirst, CompletionHandler<void()>&& completionHandler)
+void WebResourceLoadStatisticsStore::scheduleCookieBlockingUpdateForDomains(const Vector<String>& domainsToBlock, CompletionHandler<void()>&& completionHandler)
 {
     // Helper function used by testing system. Should only be called from the main thread.
     ASSERT(RunLoop::isMain());
-    postTask([this, domainsToBlock = crossThreadCopy(domainsToBlock), shouldClearFirst, completionHandler = WTFMove(completionHandler)] () mutable {
+    postTask([this, domainsToBlock = crossThreadCopy(domainsToBlock), completionHandler = WTFMove(completionHandler)] () mutable {
         if (!m_memoryStore) {
             postTaskReply(WTFMove(completionHandler));
             return;
         }
 
-        m_memoryStore->updateCookieBlockingForDomains(domainsToBlock, shouldClearFirst, [completionHandler = WTFMove(completionHandler)]() mutable {
+        m_memoryStore->updateCookieBlockingForDomains(domainsToBlock, [completionHandler = WTFMove(completionHandler)]() mutable {
             postTaskReply(WTFMove(completionHandler));
         });
     });
@@ -733,52 +760,30 @@ void WebResourceLoadStatisticsStore::scheduleClearBlockingStateForDomains(const 
     });
 }
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
-void WebResourceLoadStatisticsStore::scheduleCookieBlockingStateReset()
-{
-    ASSERT(RunLoop::isMain());
-    postTask([this] {
-        if (m_memoryStore)
-            m_memoryStore->resetCookieBlockingState();
-    });
-}
-#endif
-
-void WebResourceLoadStatisticsStore::scheduleClearInMemory(CompletionHandler<void()>&& completionHandler)
-{
-    ASSERT(RunLoop::isMain());
-    postTask([this, completionHandler = WTFMove(completionHandler)]() mutable {
-
-        CompletionHandler<void()> callCompletionHandlerOnMainThread = [completionHandler = WTFMove(completionHandler)]() mutable {
-            postTaskReply(WTFMove(completionHandler));
-        };
-
-        if (!m_memoryStore) {
-            callCompletionHandlerOnMainThread();
-            return;
-        }
-
-        m_memoryStore->clear(WTFMove(callCompletionHandlerOnMainThread));
-    });
-}
-
 void WebResourceLoadStatisticsStore::scheduleClearInMemoryAndPersistent(ShouldGrandfather shouldGrandfather, CompletionHandler<void()>&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
-    postTask([this, shouldGrandfather, completionHandler = WTFMove(completionHandler)] () mutable {
-        if (m_memoryStore)
-            m_memoryStore->clear([] { });
+    postTask([this, protectedThis = makeRef(*this), shouldGrandfather, completionHandler = WTFMove(completionHandler)] () mutable {
         if (m_persistentStorage)
             m_persistentStorage->clear();
-        
-        CompletionHandler<void()> callCompletionHandlerOnMainThread = [completionHandler = WTFMove(completionHandler)]() mutable {
-            postTaskReply(WTFMove(completionHandler));
-        };
 
-        if (shouldGrandfather == ShouldGrandfather::Yes && m_memoryStore)
-            m_memoryStore->grandfatherExistingWebsiteData(WTFMove(callCompletionHandlerOnMainThread));
-        else
-            callCompletionHandlerOnMainThread();
+        CompletionHandlerCallingScope completionHandlerCaller([completionHandler = WTFMove(completionHandler)]() mutable {
+            postTaskReply(WTFMove(completionHandler));
+        });
+
+        if (m_memoryStore) {
+            m_memoryStore->clear([this, protectedThis = protectedThis.copyRef(), shouldGrandfather, completionHandlerCaller = WTFMove(completionHandlerCaller)] () mutable {
+                if (shouldGrandfather == ShouldGrandfather::Yes) {
+                    if (m_memoryStore)
+                        m_memoryStore->grandfatherExistingWebsiteData(completionHandlerCaller.release());
+                    else
+                        RELEASE_LOG(ResourceLoadStatistics, "WebResourceLoadStatisticsStore::scheduleClearInMemoryAndPersistent After being cleared, m_memoryStore is null when trying to grandfather data.");
+                }
+            });
+        } else {
+            if (shouldGrandfather == ShouldGrandfather::Yes)
+                RELEASE_LOG(ResourceLoadStatistics, "WebResourceLoadStatisticsStore::scheduleClearInMemoryAndPersistent Before being cleared, m_memoryStore is null when trying to grandfather data.");
+        }
     });
 }
 
@@ -818,13 +823,27 @@ void WebResourceLoadStatisticsStore::setGrandfatheringTime(Seconds seconds)
     });
 }
 
-void WebResourceLoadStatisticsStore::callUpdatePrevalentDomainsToBlockCookiesForHandler(const Vector<String>& domainsToBlock, ShouldClearFirst shouldClearFirst, CompletionHandler<void()>&& completionHandler)
+void WebResourceLoadStatisticsStore::setCacheMaxAgeCap(Seconds seconds, CompletionHandler<void()>&& completionHandler)
+{
+    ASSERT(RunLoop::isMain());
+    ASSERT(seconds >= 0_s);
+    
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+    if (m_websiteDataStore) {
+        m_websiteDataStore->setCacheMaxAgeCapForPrevalentResources(seconds, WTFMove(completionHandler));
+        return;
+    }
+#endif
+    completionHandler();
+}
+
+void WebResourceLoadStatisticsStore::callUpdatePrevalentDomainsToBlockCookiesForHandler(const Vector<String>& domainsToBlock, CompletionHandler<void()>&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     if (m_websiteDataStore) {
-        m_websiteDataStore->updatePrevalentDomainsToBlockCookiesFor(domainsToBlock, shouldClearFirst, WTFMove(completionHandler));
+        m_websiteDataStore->updatePrevalentDomainsToBlockCookiesFor(domainsToBlock, WTFMove(completionHandler));
         return;
     }
 #endif
@@ -835,7 +854,7 @@ void WebResourceLoadStatisticsStore::callRemoveDomainsHandler(const Vector<Strin
 {
     ASSERT(RunLoop::isMain());
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     if (m_websiteDataStore)
         m_websiteDataStore->removePrevalentDomains(domains);
 #endif

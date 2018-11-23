@@ -157,14 +157,12 @@ private:
 
 #if ENABLE(DATALIST_ELEMENT)
     void paintListButtonForInput(const RenderObject&, GraphicsContext&, const FloatRect&);
-    void adjustListButtonStyle(StyleResolver&, RenderStyle&, const Element*) const;
+    void adjustListButtonStyle(StyleResolver&, RenderStyle&, const Element*) const final;
 #endif
 
 #if ENABLE(VIDEO)
     bool supportsClosedCaptioning() const final { return true; }
 #endif
-
-    bool shouldHaveCapsLockIndicator(const HTMLInputElement&) const final;
 
     bool paintSnapshottedPluginOverlay(const RenderObject&, const PaintInfo&, const IntRect&) final;
 
@@ -173,10 +171,6 @@ private:
     int attachmentBaseline(const RenderAttachment&) const final;
     bool paintAttachment(const RenderObject&, const PaintInfo&, const IntRect&) final;
 #endif
-
-    void drawLineForDocumentMarker(const RenderText&, GraphicsContext&, const FloatPoint& origin, float width, DocumentMarkerLineStyle) final;
-
-    bool usingDarkAppearance(const RenderObject&) const final;
 
 private:
     String fileListNameForWidth(const FileList*, const FontCascade&, int width, bool multipleFilesAllowed) const final;

@@ -149,7 +149,7 @@ public:
     const URL& originalURL() const;
     const URL& responseURL() const;
     const String& responseMIMEType() const;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     // FIXME: This method seems to violate the encapsulation of this class.
     WEBCORE_EXPORT void setResponseMIMEType(const String&);
 #endif
@@ -214,7 +214,7 @@ public:
     const Vector<ResourceResponse>& responses() const { return m_responses; }
 
     const NavigationAction& triggeringAction() const { return m_triggeringAction; }
-    void setTriggeringAction(const NavigationAction&);
+    void setTriggeringAction(NavigationAction&&);
     void setOverrideEncoding(const String& encoding) { m_overrideEncoding = encoding; }
     void setLastCheckedRequest(ResourceRequest&& request) { m_lastCheckedRequest = WTFMove(request); }
     const ResourceRequest& lastCheckedRequest()  { return m_lastCheckedRequest; }

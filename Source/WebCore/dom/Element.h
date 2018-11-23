@@ -43,6 +43,7 @@ class DOMRect;
 class DOMRectList;
 class DOMTokenList;
 class ElementRareData;
+class Frame;
 class HTMLDocument;
 class IntSize;
 class JSCustomElementInterface;
@@ -55,6 +56,7 @@ class PseudoElement;
 class RenderTreePosition;
 class WebAnimation;
 struct ElementStyle;
+struct ScrollIntoViewOptions;
 
 #if ENABLE(INTERSECTION_OBSERVER)
 struct IntersectionObserverData;
@@ -102,7 +104,7 @@ public:
     WEBCORE_EXPORT bool fastAttributeLookupAllowed(const QualifiedName&) const;
 #endif
 
-#ifdef DUMP_NODE_STATISTICS
+#if DUMP_NODE_STATISTICS
     bool hasNamedNodeMap() const;
 #endif
     WEBCORE_EXPORT bool hasAttributes() const;
@@ -141,6 +143,7 @@ public:
     unsigned findAttributeIndexByName(const QualifiedName& name) const { return elementData()->findAttributeIndexByName(name); }
     unsigned findAttributeIndexByName(const AtomicString& name, bool shouldIgnoreAttributeCase) const { return elementData()->findAttributeIndexByName(name, shouldIgnoreAttributeCase); }
 
+    WEBCORE_EXPORT void scrollIntoView(std::optional<Variant<bool, ScrollIntoViewOptions>>&& arg);
     WEBCORE_EXPORT void scrollIntoView(bool alignToTop = true);
     WEBCORE_EXPORT void scrollIntoViewIfNeeded(bool centerIfNeeded = true);
     WEBCORE_EXPORT void scrollIntoViewIfNotVisible(bool centerIfNotVisible = true);
@@ -524,6 +527,7 @@ public:
     LayoutRect absoluteEventHandlerBounds(bool& includesFixedPositionElements) override;
 
     const RenderStyle* existingComputedStyle() const;
+    const RenderStyle* renderOrDisplayContentsStyle() const;
 
     void setBeforePseudoElement(Ref<PseudoElement>&&);
     void setAfterPseudoElement(Ref<PseudoElement>&&);
@@ -603,6 +607,8 @@ protected:
     static ExceptionOr<void> mergeWithNextTextNode(Text&);
 
 private:
+    Frame* documentFrameWithNonNullView() const;
+
     bool isTextNode() const;
 
     bool isUserActionElementInActiveChain() const;

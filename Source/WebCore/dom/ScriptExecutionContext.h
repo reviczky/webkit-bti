@@ -89,6 +89,7 @@ public:
 
     virtual bool isDocument() const { return false; }
     virtual bool isWorkerGlobalScope() const { return false; }
+    virtual bool isWorkletGlobalScope() const { return false; }
 
     virtual bool isContextThread() const { return true; }
     virtual bool isJSExecutionForbidden() const = 0;
@@ -244,8 +245,8 @@ public:
     WEBCORE_EXPORT String domainForCachePartition() const;
     void setDomainForCachePartition(String&& domain) { m_domainForCachePartition = WTFMove(domain); }
 
-#if ENABLE(SERVICE_WORKER)
     bool hasServiceWorkerScheme();
+#if ENABLE(SERVICE_WORKER)
     ServiceWorker* activeServiceWorker() const;
     void setActiveServiceWorker(RefPtr<ServiceWorker>&&);
 

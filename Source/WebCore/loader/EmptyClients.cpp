@@ -30,6 +30,7 @@
 
 #include "ApplicationCacheStorage.h"
 #include "BackForwardClient.h"
+#include "CacheStorageProvider.h"
 #include "ColorChooser.h"
 #include "ContextMenuClient.h"
 #include "DataListSuggestionPicker.h"
@@ -46,8 +47,10 @@
 #include "FrameLoaderClient.h"
 #include "FrameNetworkingContext.h"
 #include "HTMLFormElement.h"
+#include "HistoryItem.h"
 #include "InProcessIDBServer.h"
 #include "InspectorClient.h"
+#include "LibWebRTCProvider.h"
 #include "NetworkStorageSession.h"
 #include "Page.h"
 #include "PageConfiguration.h"
@@ -55,6 +58,7 @@
 #include "PluginInfoProvider.h"
 #include "ProgressTrackerClient.h"
 #include "SecurityOriginData.h"
+#include "SocketProvider.h"
 #include "StorageArea.h"
 #include "StorageNamespace.h"
 #include "StorageNamespaceProvider.h"
@@ -80,10 +84,10 @@ class UserMessageHandlerDescriptor;
 
 class EmptyBackForwardClient final : public BackForwardClient {
     void addItem(Ref<HistoryItem>&&) final { }
-    void goToItem(HistoryItem*) final { }
-    HistoryItem* itemAtIndex(int) final { return nullptr; }
-    int backListCount() final { return 0; }
-    int forwardListCount() final { return 0; }
+    void goToItem(HistoryItem&) final { }
+    RefPtr<HistoryItem> itemAtIndex(int) final { return nullptr; }
+    unsigned backListCount() const final { return 0; }
+    unsigned forwardListCount() const final { return 0; }
     void close() final { }
 };
 
@@ -204,7 +208,7 @@ private:
     void textDidChangeInTextArea(Element*) final { }
     void overflowScrollPositionChanged() final { }
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     void startDelayingAndCoalescingContentChangeNotifications() final { }
     void stopDelayingAndCoalescingContentChangeNotifications() final { }
     bool hasRichlyEditableSelection() final { return false; }
@@ -436,6 +440,10 @@ std::unique_ptr<DataListSuggestionPicker> EmptyChromeClient::createDataListSugge
 void EmptyChromeClient::runOpenPanel(Frame&, FileChooser&)
 {
 }
+    
+void EmptyChromeClient::showShareSheet(ShareDataWithParsedURL&, CompletionHandler<void(bool)>&&)
+{
+}
 
 PAL::SessionID EmptyFrameLoaderClient::sessionID() const
 {
@@ -446,7 +454,7 @@ void EmptyFrameLoaderClient::dispatchDecidePolicyForNewWindowAction(const Naviga
 {
 }
 
-void EmptyFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const NavigationAction&, const ResourceRequest&, const ResourceResponse&, FormState*, PolicyDecisionMode, FramePolicyFunction&&)
+void EmptyFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const NavigationAction&, const ResourceRequest&, const ResourceResponse&, FormState*, PolicyDecisionMode, ShouldSkipSafeBrowsingCheck, FramePolicyFunction&&)
 {
 }
 
@@ -464,7 +472,7 @@ Ref<DocumentLoader> EmptyFrameLoaderClient::createDocumentLoader(const ResourceR
     return DocumentLoader::create(request, substituteData);
 }
 
-RefPtr<Frame> EmptyFrameLoaderClient::createFrame(const URL&, const String&, HTMLFrameOwnerElement&, const String&, bool, int, int)
+RefPtr<Frame> EmptyFrameLoaderClient::createFrame(const URL&, const String&, HTMLFrameOwnerElement&, const String&)
 {
     return nullptr;
 }
@@ -489,11 +497,6 @@ inline EmptyFrameNetworkingContext::EmptyFrameNetworkingContext()
 }
 
 Ref<FrameNetworkingContext> EmptyFrameLoaderClient::createNetworkingContext()
-{
-    return EmptyFrameNetworkingContext::create();
-}
-
-Ref<FrameNetworkingContext> createEmptyFrameNetworkingContext()
 {
     return EmptyFrameNetworkingContext::create();
 }
@@ -530,8 +533,16 @@ RefPtr<StorageNamespace> EmptyStorageNamespaceProvider::createTransientLocalStor
     return adoptRef(*new EmptyStorageNamespace);
 }
 
-void fillWithEmptyClients(PageConfiguration& pageConfiguration)
+PageConfiguration pageConfigurationWithEmptyClients()
 {
+    PageConfiguration pageConfiguration {
+        makeUniqueRef<EmptyEditorClient>(),
+        SocketProvider::create(),
+        LibWebRTCProvider::create(),
+        CacheStorageProvider::create(),
+        adoptRef(*new EmptyBackForwardClient)
+    };
+
     static NeverDestroyed<EmptyChromeClient> dummyChromeClient;
     pageConfiguration.chromeClient = &dummyChromeClient.get();
 
@@ -559,7 +570,6 @@ void fillWithEmptyClients(PageConfiguration& pageConfiguration)
     static NeverDestroyed<EmptyProgressTrackerClient> dummyProgressTrackerClient;
     pageConfiguration.progressTrackerClient = &dummyProgressTrackerClient.get();
 
-    pageConfiguration.backForwardClient = adoptRef(*new EmptyBackForwardClient);
     pageConfiguration.diagnosticLoggingClient = std::make_unique<EmptyDiagnosticLoggingClient>();
 
     pageConfiguration.applicationCacheStorage = ApplicationCacheStorage::create({ }, { });
@@ -568,11 +578,8 @@ void fillWithEmptyClients(PageConfiguration& pageConfiguration)
     pageConfiguration.storageNamespaceProvider = adoptRef(*new EmptyStorageNamespaceProvider);
     pageConfiguration.userContentProvider = adoptRef(*new EmptyUserContentProvider);
     pageConfiguration.visitedLinkStore = adoptRef(*new EmptyVisitedLinkStore);
-}
-
-UniqueRef<EditorClient> createEmptyEditorClient()
-{
-    return makeUniqueRef<EmptyEditorClient>();
+    
+    return pageConfiguration;
 }
 
 DiagnosticLoggingClient& emptyDiagnosticLoggingClient()

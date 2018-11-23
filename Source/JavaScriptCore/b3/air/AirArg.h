@@ -35,10 +35,9 @@
 #include "B3Width.h"
 #include <wtf/Optional.h>
 
-#if COMPILER(GCC) && ASSERT_DISABLED
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wreturn-type"
-#endif // COMPILER(GCC) && ASSERT_DISABLED
+#if ASSERT_DISABLED
+IGNORE_RETURN_TYPE_WARNINGS_BEGIN
+#endif
 
 namespace JSC { namespace B3 {
 
@@ -974,7 +973,7 @@ public:
     StackSlot* stackSlot() const
     {
         ASSERT(kind() == Stack);
-        return bitwise_cast<StackSlot*>(m_offset);
+        return bitwise_cast<StackSlot*>(static_cast<uintptr_t>(m_offset));
     }
 
     Air::Tmp index() const
@@ -997,7 +996,7 @@ public:
     Air::Special* special() const
     {
         ASSERT(kind() == Special);
-        return bitwise_cast<Air::Special*>(m_offset);
+        return bitwise_cast<Air::Special*>(static_cast<uintptr_t>(m_offset));
     }
 
     Width width() const
@@ -1494,8 +1493,8 @@ template<> struct HashTraits<JSC::B3::Air::Arg> : SimpleClassHashTraits<JSC::B3:
 
 } // namespace WTF
 
-#if COMPILER(GCC) && ASSERT_DISABLED
-#pragma GCC diagnostic pop
-#endif // COMPILER(GCC) && ASSERT_DISABLED
+#if ASSERT_DISABLED
+IGNORE_RETURN_TYPE_WARNINGS_END
+#endif
 
 #endif // ENABLE(B3_JIT)

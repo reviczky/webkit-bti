@@ -35,11 +35,11 @@ WI.Layers3DContentView = class Layers3DContentView extends WI.ContentView
         this._compositingBordersButtonNavigationItem.addEventListener(WI.ButtonNavigationItem.Event.Clicked, this._toggleCompositingBorders, this);
         this._compositingBordersButtonNavigationItem.visibilityPriority = WI.NavigationItem.VisibilityPriority.Low;
 
-        WI.showPaintRectsSetting.addEventListener(WI.Setting.Event.Changed, this._showPaintRectsSettingChanged, this);
+        WI.settings.showPaintRects.addEventListener(WI.Setting.Event.Changed, this._showPaintRectsSettingChanged, this);
         this._paintFlashingButtonNavigationItem = new WI.ActivateButtonNavigationItem("paint-flashing", WI.UIString("Enable paint flashing"), WI.UIString("Disable paint flashing"), "Images/Paint.svg", 16, 16);
         this._paintFlashingButtonNavigationItem.addEventListener(WI.ButtonNavigationItem.Event.Clicked, this._togglePaintFlashing, this);
         this._paintFlashingButtonNavigationItem.enabled = !!PageAgent.setShowPaintRects;
-        this._paintFlashingButtonNavigationItem.activated = PageAgent.setShowPaintRects && WI.showPaintRectsSetting.value;
+        this._paintFlashingButtonNavigationItem.activated = PageAgent.setShowPaintRects && WI.settings.showPaintRects.value;
         this._paintFlashingButtonNavigationItem.visibilityPriority = WI.NavigationItem.VisibilityPriority.Low;
 
         this._layers = [];
@@ -98,7 +98,7 @@ WI.Layers3DContentView = class Layers3DContentView extends WI.ContentView
 
     closed()
     {
-        WI.showPaintRectsSetting.removeEventListener(WI.Setting.Event.Changed, this._showPaintRectsSettingChanged, this);
+        WI.settings.showPaintRects.removeEventListener(WI.Setting.Event.Changed, this._showPaintRectsSettingChanged, this);
 
         super.closed();
     }
@@ -178,7 +178,7 @@ WI.Layers3DContentView = class Layers3DContentView extends WI.ContentView
         if (this.layoutReason === WI.View.LayoutReason.Resize)
             return;
 
-        WI.domTreeManager.requestDocument((node) => {
+        WI.domManager.requestDocument((node) => {
             let documentWasUpdated = this._updateDocument(node);
 
             WI.layerTreeManager.layersForNode(node, (layers) => {
@@ -394,13 +394,13 @@ WI.Layers3DContentView = class Layers3DContentView extends WI.ContentView
     {
         console.assert(PageAgent.setShowPaintRects);
 
-        this._paintFlashingButtonNavigationItem.activated = WI.showPaintRectsSetting.value;
+        this._paintFlashingButtonNavigationItem.activated = WI.settings.showPaintRects.value;
         PageAgent.setShowPaintRects(this._paintFlashingButtonNavigationItem.activated);
     }
 
     _togglePaintFlashing(event)
     {
-        WI.showPaintRectsSetting.value = !WI.showPaintRectsSetting.value;
+        WI.settings.showPaintRects.value = !WI.settings.showPaintRects.value;
     }
 
     _updateCompositingBordersButtonState()
@@ -510,7 +510,7 @@ WI.Layers3DContentView = class Layers3DContentView extends WI.ContentView
         if (compositingReasons.opacityWithCompositedDescendants)
             addReason(WI.UIString("Element has opacity applied and composited descendants"));
         if (compositingReasons.maskWithCompositedDescendants)
-            addReason(WI.UIString("Element is masked and composited descendants"));
+            addReason(WI.UIString("Element is masked and has composited descendants"));
         if (compositingReasons.reflectionWithCompositedDescendants)
             addReason(WI.UIString("Element has a reflection and composited descendants"));
         if (compositingReasons.filterWithCompositedDescendants)
@@ -524,7 +524,7 @@ WI.Layers3DContentView = class Layers3DContentView extends WI.ContentView
         if (compositingReasons.preserve3D)
             addReason(WI.UIString("Element has “transform-style: preserve-3d” style"));
         if (compositingReasons.willChange)
-            addReason(WI.UIString("Element has “will-change” style with includes opacity, transform, transform-style, perspective, filter or backdrop-filter"));
+            addReason(WI.UIString("Element has “will-change” style which includes opacity, transform, transform-style, perspective, filter or backdrop-filter"));
         if (compositingReasons.root)
             addReason(WI.UIString("Element is the root element"));
         if (compositingReasons.blending)

@@ -47,32 +47,30 @@ class TextStream;
 
 namespace WebCore {
 
-class TextEncoding;
-struct URLHash;
+class URLTextEncoding {
+public:
+    virtual Vector<uint8_t> encodeForURLParsing(StringView) const = 0;
+    virtual ~URLTextEncoding() { };
+};
 
-enum ParsedURLStringTag { ParsedURLString };
+struct URLHash;
 
 class URL {
 public:
     // Generates a URL which contains a null string.
     URL() { invalidate(); }
 
-    // The argument is an absolute URL string. The string is assumed to be output of URL::string() called on a valid
-    // URL object, or indiscernible from such.
-    // It is usually best to avoid repeatedly parsing a string, unless memory saving outweigh the possible slow-downs.
-    WEBCORE_EXPORT URL(ParsedURLStringTag, const String&);
     explicit URL(WTF::HashTableDeletedValueType) : m_string(WTF::HashTableDeletedValue) { }
     bool isHashTableDeletedValue() const { return string().isHashTableDeletedValue(); }
 
     // Resolves the relative URL with the given base URL. If provided, the
-    // TextEncoding is used to encode non-ASCII characers. The base URL can be
+    // URLTextEncoding is used to encode non-ASCII characers. The base URL can be
     // null or empty, in which case the relative URL will be interpreted as
     // absolute.
     // FIXME: If the base URL is invalid, this always creates an invalid
     // URL. Instead I think it would be better to treat all invalid base URLs
     // the same way we treate null and empty base URLs.
-    WEBCORE_EXPORT URL(const URL& base, const String& relative);
-    URL(const URL& base, const String& relative, const TextEncoding&);
+    WEBCORE_EXPORT URL(const URL& base, const String& relative, const URLTextEncoding* = nullptr);
 
     WEBCORE_EXPORT static URL fakeURLWithRelativePart(const String&);
     WEBCORE_EXPORT static URL fileURLWithFileSystemPath(const String&);
@@ -124,8 +122,8 @@ public:
 
     // Unlike user() and pass(), these functions don't decode escape sequences.
     // This is necessary for accurate round-tripping, because encoding doesn't encode '%' characters.
-    String encodedUser() const;
-    String encodedPass() const;
+    WEBCORE_EXPORT String encodedUser() const;
+    WEBCORE_EXPORT String encodedPass() const;
 
     WEBCORE_EXPORT String baseAsString() const;
 
@@ -137,9 +135,9 @@ public:
     bool protocolIs(StringView) const;
     bool protocolIsBlob() const { return protocolIs("blob"); }
     bool protocolIsData() const { return protocolIs("data"); }
+    WEBCORE_EXPORT bool protocolIsAbout() const;
     bool protocolIsInHTTPFamily() const;
     WEBCORE_EXPORT bool isLocalFile() const;
-    WEBCORE_EXPORT bool isBlankURL() const;
     bool cannotBeABaseURL() const { return m_cannotBeABaseURL; }
 
     WEBCORE_EXPORT bool isMatchingDomain(const String&) const;
@@ -169,13 +167,6 @@ public:
     WEBCORE_EXPORT void removeFragmentIdentifier();
 
     WEBCORE_EXPORT void removeQueryAndFragmentIdentifier();
-
-    WEBCORE_EXPORT friend bool equalIgnoringFragmentIdentifier(const URL&, const URL&);
-
-    WEBCORE_EXPORT friend bool protocolHostAndPortAreEqual(const URL&, const URL&);
-
-    unsigned hostStart() const;
-    unsigned hostEnd() const;
 
     WEBCORE_EXPORT static bool hostIsIPAddress(StringView);
 
@@ -215,8 +206,12 @@ private:
     friend class URLParser;
     WEBCORE_EXPORT void invalidate();
     static bool protocolIs(const String&, const char*);
-    void init(const URL&, const String&, const TextEncoding&);
     void copyToBuffer(Vector<char, 512>& buffer) const;
+    unsigned hostStart() const;
+
+    WEBCORE_EXPORT friend bool equalIgnoringFragmentIdentifier(const URL&, const URL&);
+    WEBCORE_EXPORT friend bool protocolHostAndPortAreEqual(const URL&, const URL&);
+    WEBCORE_EXPORT friend bool hostsAreEqual(const URL&, const URL&);
 
     String m_string;
 
@@ -266,13 +261,6 @@ std::optional<URL> URL::decode(Decoder& decoder)
     return URL(URL(), string);
 }
 
-bool operator==(const URL&, const URL&);
-bool operator==(const URL&, const String&);
-bool operator==(const String&, const URL&);
-bool operator!=(const URL&, const URL&);
-bool operator!=(const URL&, const String&);
-bool operator!=(const String&, const URL&);
-
 WEBCORE_EXPORT bool equalIgnoringFragmentIdentifier(const URL&, const URL&);
 WEBCORE_EXPORT bool equalIgnoringQueryAndFragment(const URL&, const URL&);
 WEBCORE_EXPORT bool protocolHostAndPortAreEqual(const URL&, const URL&);
@@ -301,18 +289,8 @@ bool isValidProtocol(const String&);
 
 String mimeTypeFromDataURL(const String& url);
 
-// Unescapes the given string using URL escaping rules, given an optional
-// encoding (defaulting to UTF-8 otherwise). DANGER: If the URL has "%00"
-// in it, the resulting string will have embedded null characters!
-WEBCORE_EXPORT String decodeURLEscapeSequences(const String&);
-String decodeURLEscapeSequences(const String&, const TextEncoding&);
-
 // FIXME: This is a wrong concept to expose, different parts of a URL need different escaping per the URL Standard.
 WEBCORE_EXPORT String encodeWithURLEscapeSequences(const String&);
-
-#if PLATFORM(IOS)
-WEBCORE_EXPORT void enableURLSchemeCanonicalization(bool);
-#endif
 
 // Inlines.
 
@@ -394,16 +372,6 @@ inline bool URL::protocolIsInHTTPFamily() const
     return m_protocolIsInHTTPFamily;
 }
 
-inline unsigned URL::hostStart() const
-{
-    return (m_passwordEnd == m_userStart) ? m_passwordEnd : m_passwordEnd + 1;
-}
-
-inline unsigned URL::hostEnd() const
-{
-    return m_hostEnd;
-}
-
 inline unsigned URL::pathStart() const
 {
     return m_hostEnd + m_portLength;
@@ -424,11 +392,6 @@ WTF::TextStream& operator<<(WTF::TextStream&, const URL&);
 } // namespace WebCore
 
 namespace WTF {
-
-// URLHash is the default hash for String
-template<typename T> struct DefaultHash;
-template<> struct DefaultHash<WebCore::URL> {
-    typedef WebCore::URLHash Hash;
-};
-
+template<> struct DefaultHash<WebCore::URL>;
+template<> struct HashTraits<WebCore::URL>;
 } // namespace WTF

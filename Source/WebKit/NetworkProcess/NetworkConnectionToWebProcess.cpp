@@ -36,6 +36,7 @@
 #include "NetworkMDNSRegisterMessages.h"
 #include "NetworkProcess.h"
 #include "NetworkProcessConnectionMessages.h"
+#include "NetworkProcessMessages.h"
 #include "NetworkRTCMonitorMessages.h"
 #include "NetworkRTCProviderMessages.h"
 #include "NetworkRTCSocketMessages.h"
@@ -49,6 +50,12 @@
 #include "SessionTracker.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
+#include "WebIDBConnectionToClient.h"
+#include "WebIDBConnectionToClientMessages.h"
+#include "WebSWServerConnection.h"
+#include "WebSWServerConnectionMessages.h"
+#include "WebSWServerToContextConnection.h"
+#include "WebSWServerToContextConnectionMessages.h"
 #include "WebsiteDataStore.h"
 #include "WebsiteDataStoreParameters.h"
 #include <WebCore/NetworkStorageSession.h>
@@ -56,7 +63,6 @@
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/SameSiteInfo.h>
 #include <WebCore/SecurityPolicy.h>
-#include <pal/SessionID.h>
 
 namespace WebKit {
 using namespace WebCore;
@@ -73,6 +79,11 @@ NetworkConnectionToWebProcess::NetworkConnectionToWebProcess(IPC::Connection::Id
 #endif
 {
     RELEASE_ASSERT(RunLoop::isMain());
+
+    // Use this flag to force synchronous messages to be treated as asynchronous messages in the WebProcess.
+    // Otherwise, the WebProcess would process incoming synchronous IPC while waiting for a synchronous IPC
+    // reply from the Network process, which would be unsafe.
+    m_connection->setOnlySendMessagesAsDispatchWhenWaitingForSyncReplyWhenProcessingSuchAMessage(true);
     m_connection->open();
 }
 
@@ -84,6 +95,10 @@ NetworkConnectionToWebProcess::~NetworkConnectionToWebProcess()
 #if USE(LIBWEBRTC)
     if (m_rtcProvider)
         m_rtcProvider->close();
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    unregisterSWConnections();
 #endif
 }
 
@@ -120,6 +135,12 @@ void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connectio
         return;
     }
 
+    if (decoder.messageReceiverName() == Messages::NetworkProcess::messageReceiverName()) {
+        NetworkProcess::singleton().didReceiveNetworkProcessMessage(connection, decoder);
+        return;
+    }
+
+
 #if USE(LIBWEBRTC)
     if (decoder.messageReceiverName() == Messages::NetworkRTCSocket::messageReceiverName()) {
         rtcProvider().didReceiveNetworkRTCSocketMessage(connection, decoder);
@@ -146,6 +167,30 @@ void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connectio
         return;
     }
 
+#if ENABLE(INDEXED_DATABASE)
+    if (decoder.messageReceiverName() == Messages::WebIDBConnectionToClient::messageReceiverName()) {
+        auto iterator = m_webIDBConnections.find(decoder.destinationID());
+        if (iterator != m_webIDBConnections.end())
+            iterator->value->didReceiveMessage(connection, decoder);
+        return;
+    }
+#endif
+    
+#if ENABLE(SERVICE_WORKER)
+    if (decoder.messageReceiverName() == Messages::WebSWServerConnection::messageReceiverName()) {
+        if (auto swConnection = m_swConnections.get(makeObjectIdentifier<SWServerConnectionIdentifierType>(decoder.destinationID())))
+            swConnection->didReceiveMessage(connection, decoder);
+        return;
+    }
+    
+    if (decoder.messageReceiverName() == Messages::WebSWServerToContextConnection::messageReceiverName()) {
+        if (auto* contextConnection = NetworkProcess::singleton().connectionToContextProcessFromIPCConnection(connection)) {
+            contextConnection->didReceiveMessage(connection, decoder);
+            return;
+        }
+    }
+#endif
+
     ASSERT_NOT_REACHED();
 }
 
@@ -171,11 +216,30 @@ void NetworkConnectionToWebProcess::didReceiveSyncMessage(IPC::Connection& conne
         didReceiveSyncNetworkConnectionToWebProcessMessage(connection, decoder, reply);
         return;
     }
+
+#if ENABLE(SERVICE_WORKER)
+    if (decoder.messageReceiverName() == Messages::WebSWServerConnection::messageReceiverName()) {
+        if (auto swConnection = m_swConnections.get(makeObjectIdentifier<SWServerConnectionIdentifierType>(decoder.destinationID())))
+            swConnection->didReceiveSyncMessage(connection, decoder, reply);
+        return;
+    }
+#endif
+
     ASSERT_NOT_REACHED();
 }
 
-void NetworkConnectionToWebProcess::didClose(IPC::Connection&)
+void NetworkConnectionToWebProcess::didClose(IPC::Connection& connection)
 {
+#if ENABLE(SERVICE_WORKER)
+    if (RefPtr<WebSWServerToContextConnection> serverToContextConnection = NetworkProcess::singleton().connectionToContextProcessFromIPCConnection(connection)) {
+        // Service Worker process exited.
+        NetworkProcess::singleton().connectionToContextProcessWasClosed(serverToContextConnection.releaseNonNull());
+        return;
+    }
+#else
+    UNUSED_PARAM(connection);
+#endif
+
     // Protect ourself as we might be otherwise be deleted during this function.
     Ref<NetworkConnectionToWebProcess> protector(*this);
 
@@ -195,6 +259,18 @@ void NetworkConnectionToWebProcess::didClose(IPC::Connection&)
         m_rtcProvider->close();
         m_rtcProvider = nullptr;
     }
+#endif
+
+#if ENABLE(INDEXED_DATABASE)
+    auto idbConnections = m_webIDBConnections;
+    for (auto& connection : idbConnections.values())
+        connection->disconnectedFromWebProcess();
+    
+    m_webIDBConnections.clear();
+#endif
+    
+#if ENABLE(SERVICE_WORKER)
+    unregisterSWConnections();
 #endif
 }
 
@@ -378,7 +454,7 @@ void NetworkConnectionToWebProcess::cookiesForDOM(PAL::SessionID sessionID, cons
 {
     auto& networkStorageSession = storageSession(sessionID);
     std::tie(cookieString, secureCookiesAccessed) = networkStorageSession.cookiesForDOM(firstParty, sameSiteInfo, url, frameID, pageID, includeSecureCookies);
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING) && !RELEASE_LOG_DISABLED
+#if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
     if (NetworkProcess::singleton().shouldLogCookieInformation())
         NetworkResourceLoader::logCookieInformation("NetworkConnectionToWebProcess::cookiesForDOM", reinterpret_cast<const void*>(this), networkStorageSession, firstParty, sameSiteInfo, url, emptyString(), frameID, pageID, std::nullopt);
 #endif
@@ -388,7 +464,7 @@ void NetworkConnectionToWebProcess::setCookiesFromDOM(PAL::SessionID sessionID, 
 {
     auto& networkStorageSession = storageSession(sessionID);
     networkStorageSession.setCookiesFromDOM(firstParty, sameSiteInfo, url, frameID, pageID, cookieString);
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING) && !RELEASE_LOG_DISABLED
+#if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
     if (NetworkProcess::singleton().shouldLogCookieInformation())
         NetworkResourceLoader::logCookieInformation("NetworkConnectionToWebProcess::setCookiesFromDOM", reinterpret_cast<const void*>(this), networkStorageSession, firstParty, sameSiteInfo, url, emptyString(), frameID, pageID, std::nullopt);
 #endif
@@ -431,25 +507,6 @@ void NetworkConnectionToWebProcess::registerBlobURLFromURL(const URL& url, const
     NetworkBlobRegistry::singleton().registerBlobURL(this, url, srcURL, shouldBypassConnectionCheck);
 }
 
-void NetworkConnectionToWebProcess::preregisterSandboxExtensionsForOptionallyFileBackedBlob(const Vector<String>& filePaths, SandboxExtension::HandleArray&& handles)
-{
-#if ENABLE(SANDBOX_EXTENSIONS)
-    ASSERT(filePaths.size() == handles.size());
-
-    for (size_t i = 0; i < filePaths.size(); ++i)
-        m_blobDataFileReferences.add(filePaths[i], BlobDataFileReferenceWithSandboxExtension::create(filePaths[i], SandboxExtension::create(WTFMove(handles[i]))));
-#else
-    for (size_t i = 0; i < filePaths.size(); ++i)
-        m_blobDataFileReferences.add(filePaths[i], BlobDataFileReferenceWithSandboxExtension::create(filePaths[i], nullptr));
-#endif
-}
-
-RefPtr<WebCore::BlobDataFileReference> NetworkConnectionToWebProcess::getBlobDataFileReferenceForPath(const String& path)
-{
-    ASSERT(m_blobDataFileReferences.contains(path));
-    return m_blobDataFileReferences.get(path);
-}
-
 void NetworkConnectionToWebProcess::registerBlobURLOptionallyFileBacked(const URL& url, const URL& srcURL, const String& fileBackedPath, const String& contentType)
 {
     NetworkBlobRegistry::singleton().registerBlobURLOptionallyFileBacked(this, url, srcURL, fileBackedPath, contentType);
@@ -474,7 +531,7 @@ void NetworkConnectionToWebProcess::writeBlobsToTemporaryFiles(const Vector<Stri
 {
     Vector<RefPtr<BlobDataFileReference>> fileReferences;
     for (auto& url : blobURLs)
-        fileReferences.appendVector(NetworkBlobRegistry::singleton().filesInBlob(*this, { ParsedURLString, url }));
+        fileReferences.appendVector(NetworkBlobRegistry::singleton().filesInBlob(*this, { { }, url }));
 
     for (auto& file : fileReferences)
         file->prepareForFileAccess();
@@ -483,12 +540,7 @@ void NetworkConnectionToWebProcess::writeBlobsToTemporaryFiles(const Vector<Stri
         for (auto& file : fileReferences)
             file->revokeFileAccess();
 
-        NetworkProcess::singleton().grantSandboxExtensionsToStorageProcessForBlobs(fileNames, [this, protectedThis = WTFMove(protectedThis), requestIdentifier, fileNames]() {
-            if (!m_connection->isValid())
-                return;
-
-            m_connection->send(Messages::NetworkProcessConnection::DidWriteBlobsToTemporaryFiles(requestIdentifier, fileNames), 0);
-        });
+        m_connection->send(Messages::NetworkProcessConnection::DidWriteBlobsToTemporaryFiles(requestIdentifier, fileNames), 0);
     });
 }
 
@@ -512,7 +564,7 @@ void NetworkConnectionToWebProcess::ensureLegacyPrivateBrowsingSession()
 
 void NetworkConnectionToWebProcess::removeStorageAccessForFrame(PAL::SessionID sessionID, uint64_t frameID, uint64_t pageID)
 {
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     if (auto* storageSession = NetworkStorageSession::storageSession(sessionID))
         storageSession->removeStorageAccessForFrame(frameID, pageID);
 #else
@@ -524,7 +576,7 @@ void NetworkConnectionToWebProcess::removeStorageAccessForFrame(PAL::SessionID s
 
 void NetworkConnectionToWebProcess::removeStorageAccessForAllFramesOnPage(PAL::SessionID sessionID, uint64_t pageID)
 {
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     if (auto* storageSession = NetworkStorageSession::storageSession(sessionID))
         storageSession->removeStorageAccessForAllFramesOnPage(pageID);
 #else
@@ -642,5 +694,55 @@ size_t NetworkConnectionToWebProcess::findNetworkActivityTracker(ResourceLoadIde
         return item.resourceID == resourceID;
     });
 }
+
+#if ENABLE(INDEXED_DATABASE)
+static uint64_t generateIDBConnectionToServerIdentifier()
+{
+    ASSERT(RunLoop::isMain());
+    static uint64_t identifier = 0;
+    return ++identifier;
+}
+
+void NetworkConnectionToWebProcess::establishIDBConnectionToServer(PAL::SessionID sessionID, uint64_t& serverConnectionIdentifier)
+{
+    serverConnectionIdentifier = generateIDBConnectionToServerIdentifier();
+    LOG(IndexedDB, "NetworkConnectionToWebProcess::establishIDBConnectionToServer - %" PRIu64, serverConnectionIdentifier);
+    ASSERT(!m_webIDBConnections.contains(serverConnectionIdentifier));
+    
+    m_webIDBConnections.set(serverConnectionIdentifier, WebIDBConnectionToClient::create(*this, serverConnectionIdentifier, sessionID));
+}
+
+void NetworkConnectionToWebProcess::removeIDBConnectionToServer(uint64_t serverConnectionIdentifier)
+{
+    ASSERT(m_webIDBConnections.contains(serverConnectionIdentifier));
+    
+    auto connection = m_webIDBConnections.take(serverConnectionIdentifier);
+    connection->disconnectedFromWebProcess();
+}
+#endif
+    
+#if ENABLE(SERVICE_WORKER)
+void NetworkConnectionToWebProcess::unregisterSWConnections()
+{
+    auto swConnections = WTFMove(m_swConnections);
+    for (auto& swConnection : swConnections.values()) {
+        if (swConnection)
+            swConnection->server().removeConnection(swConnection->identifier());
+    }
+}
+
+void NetworkConnectionToWebProcess::establishSWServerConnection(PAL::SessionID sessionID, SWServerConnectionIdentifier& serverConnectionIdentifier)
+{
+    auto& server = NetworkProcess::singleton().swServerForSession(sessionID);
+    auto connection = std::make_unique<WebSWServerConnection>(server, m_connection.get(), sessionID);
+    
+    serverConnectionIdentifier = connection->identifier();
+    LOG(ServiceWorker, "NetworkConnectionToWebProcess::establishSWServerConnection - %s", serverConnectionIdentifier.loggingString().utf8().data());
+
+    ASSERT(!m_swConnections.contains(serverConnectionIdentifier));
+    m_swConnections.add(serverConnectionIdentifier, makeWeakPtr(*connection));
+    server.addConnection(WTFMove(connection));
+}
+#endif
 
 } // namespace WebKit

@@ -1533,8 +1533,8 @@ bool UniqueIDBDatabase::hasUnfinishedTransactions() const
 void UniqueIDBDatabase::invokeOperationAndTransactionTimer()
 {
     LOG(IndexedDB, "UniqueIDBDatabase::invokeOperationAndTransactionTimer()");
-    ASSERT(!m_hardClosedForUserDelete);
-    ASSERT(!m_owningPointerForClose);
+    RELEASE_ASSERT(!m_hardClosedForUserDelete);
+    RELEASE_ASSERT(!m_owningPointerForClose);
 
     if (!m_operationAndTransactionTimer.isActive())
         m_operationAndTransactionTimer.startOneShot(0_s);
@@ -1613,6 +1613,9 @@ void UniqueIDBDatabase::performActivateTransactionInBackingStore(uint64_t callba
 void UniqueIDBDatabase::didPerformActivateTransactionInBackingStore(uint64_t callbackIdentifier, const IDBError& error)
 {
     LOG(IndexedDB, "(main) UniqueIDBDatabase::didPerformActivateTransactionInBackingStore");
+
+    if (m_hardClosedForUserDelete)
+        return;
 
     invokeOperationAndTransactionTimer();
 
@@ -1805,6 +1808,8 @@ void UniqueIDBDatabase::immediateCloseForUserDelete()
 
     ASSERT(m_inProgressTransactions.isEmpty());
 
+    for (auto& transaction : m_pendingTransactions)
+        transaction->databaseConnection().deleteTransaction(*transaction);
     m_pendingTransactions.clear();
     m_objectStoreTransactionCounts.clear();
     m_objectStoreWriteTransactions.clear();
@@ -1905,6 +1910,12 @@ void UniqueIDBDatabase::forgetErrorCallback(uint64_t callbackIdentifier)
 {
     ASSERT(m_errorCallbacks.contains(callbackIdentifier));
     m_errorCallbacks.remove(callbackIdentifier);
+}
+
+void UniqueIDBDatabase::setQuota(uint64_t quota)
+{
+    if (m_backingStore)
+        m_backingStore->setQuota(quota);
 }
 
 } // namespace IDBServer

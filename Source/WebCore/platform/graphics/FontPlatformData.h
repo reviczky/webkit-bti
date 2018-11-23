@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2018 Apple Inc. All rights reserved.
  * Copyright (C) 2006 Michael Emmel mike.emmel@gmail.com
  * Copyright (C) 2007 Holger Hans Peter Freyther
  * Copyright (C) 2007 Pioneer Research Center USA, Inc.
@@ -41,6 +41,7 @@
 #if USE(FREETYPE)
 #include "FcUniquePtr.h"
 #include "HarfBuzzFace.h"
+#include "RefPtrFontconfig.h"
 #include <memory>
 #endif
 
@@ -61,6 +62,10 @@ typedef const struct __CTFont* CTFontRef;
 typedef struct HFONT__* HFONT;
 interface IDWriteFont;
 interface IDWriteFontFace;
+#endif
+
+#if USE(DIRECT2D)
+#include <dwrite.h>
 #endif
 
 namespace WebCore {
@@ -145,6 +150,8 @@ public:
 #if USE(DIRECT2D)
     IDWriteFont* dwFont() const { return m_dwFont.get(); }
     IDWriteFontFace* dwFontFace() const { return m_dwFontFace.get(); }
+
+    static HRESULT createFallbackFont(const LOGFONT&, IDWriteFont**);
 #endif
 
     bool isFixedPitch() const;
@@ -188,7 +195,7 @@ public:
 
     bool isEmoji() const
     {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
         return m_isEmoji;
 #else
         return false;
@@ -260,7 +267,7 @@ private:
     bool m_hasVariations { false };
     // The values above are common to all ports
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     bool m_isEmoji { false };
 #endif
 

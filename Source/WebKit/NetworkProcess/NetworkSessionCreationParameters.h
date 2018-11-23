@@ -27,11 +27,15 @@
 
 #include "ArgumentCoders.h"
 #include <pal/SessionID.h>
-#include <wtf/EnumTraits.h>
 #include <wtf/text/WTFString.h>
 
 #if PLATFORM(COCOA)
 #include "ArgumentCodersCF.h"
+#endif
+
+#if USE(CURL)
+#include "WebCoreArgumentCoders.h"
+#include <WebCore/CurlProxySettings.h>
 #endif
 
 namespace WebKit {
@@ -49,6 +53,11 @@ struct NetworkSessionCreationParameters {
     AllowsCellularAccess allowsCellularAccess { AllowsCellularAccess::Yes };
 #if PLATFORM(COCOA)
     RetainPtr<CFDictionaryRef> proxyConfiguration;
+    String sourceApplicationBundleIdentifier;
+    String sourceApplicationSecondaryIdentifier;
+#endif
+#if USE(CURL)
+    WebCore::CurlProxySettings proxySettings;
 #endif
 };
 
@@ -59,6 +68,11 @@ inline void NetworkSessionCreationParameters::encode(IPC::Encoder& encoder) cons
     encoder << allowsCellularAccess;
 #if PLATFORM(COCOA)
     IPC::encode(encoder, proxyConfiguration.get());
+    encoder << sourceApplicationBundleIdentifier;
+    encoder << sourceApplicationSecondaryIdentifier;
+#endif
+#if USE(CURL)
+    encoder << proxySettings;
 #endif
 }
 
@@ -82,14 +96,36 @@ inline std::optional<NetworkSessionCreationParameters> NetworkSessionCreationPar
     RetainPtr<CFDictionaryRef> proxyConfiguration;
     if (!IPC::decode(decoder, proxyConfiguration))
         return std::nullopt;
-#endif
     
+    std::optional<String> sourceApplicationBundleIdentifier;
+    decoder >> sourceApplicationBundleIdentifier;
+    if (!sourceApplicationBundleIdentifier)
+        return std::nullopt;
+    
+    std::optional<String> sourceApplicationSecondaryIdentifier;
+    decoder >> sourceApplicationSecondaryIdentifier;
+    if (!sourceApplicationSecondaryIdentifier)
+        return std::nullopt;
+#endif
+
+#if USE(CURL)
+    std::optional<WebCore::CurlProxySettings> proxySettings;
+    decoder >> proxySettings;
+    if (!proxySettings)
+        return std::nullopt;
+#endif
+
     return {{
         sessionID
         , WTFMove(*boundInterfaceIdentifier)
         , WTFMove(*allowsCellularAccess)
 #if PLATFORM(COCOA)
         , WTFMove(proxyConfiguration)
+        , WTFMove(*sourceApplicationBundleIdentifier)
+        , WTFMove(*sourceApplicationSecondaryIdentifier)
+#endif
+#if USE(CURL)
+        , WTFMove(*proxySettings)
 #endif
     }};
 }

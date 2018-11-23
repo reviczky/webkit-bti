@@ -30,12 +30,13 @@
 
 namespace API {
 class Navigation;
+struct SubstituteData;
 }
 
 namespace WebCore {
 class ResourceRequest;
 
-enum class FrameLoadType;
+enum class FrameLoadType : uint8_t;
 }
 
 namespace WebKit {
@@ -51,10 +52,10 @@ public:
     Ref<API::Navigation> createBackForwardNavigation(WebBackForwardListItem& targetItem, WebBackForwardListItem* currentItem, WebCore::FrameLoadType);
     Ref<API::Navigation> createLoadRequestNavigation(WebCore::ResourceRequest&&, WebBackForwardListItem* currentItem);
     Ref<API::Navigation> createReloadNavigation();
-    Ref<API::Navigation> createLoadDataNavigation();
+    Ref<API::Navigation> createLoadDataNavigation(std::unique_ptr<API::SubstituteData>&&);
 
-    API::Navigation& navigation(uint64_t navigationID);
-    Ref<API::Navigation> takeNavigation(uint64_t navigationID);
+    API::Navigation* navigation(uint64_t navigationID);
+    RefPtr<API::Navigation> takeNavigation(uint64_t navigationID);
     void didDestroyNavigation(uint64_t navigationID);
     void clearAllNavigations();
 

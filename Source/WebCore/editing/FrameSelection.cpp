@@ -53,6 +53,7 @@
 #include "HitTestResult.h"
 #include "InlineTextBox.h"
 #include "Page.h"
+#include "RenderLayer.h"
 #include "RenderText.h"
 #include "RenderTextControl.h"
 #include "RenderTheme.h"
@@ -67,11 +68,10 @@
 #include <stdio.h>
 #include <wtf/text/CString.h>
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "Color.h"
-#include "RenderLayer.h"
 #include "RenderObject.h"
 #include "RenderStyle.h"
 #endif
@@ -135,7 +135,7 @@ FrameSelection::FrameSelection(Frame* frame)
     , m_shouldShowBlockCursor(false)
     , m_pendingSelectionUpdate(false)
     , m_alwaysAlignCursorOnScrollWhenRevealingSelection(false)
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     , m_updateAppearanceEnabled(false)
     , m_caretBlinks(true)
 #endif
@@ -187,15 +187,15 @@ void FrameSelection::moveWithoutValidationTo(const Position& base, const Positio
     AXTextStateChangeIntent newIntent = intent.type == AXTextStateChangeTypeUnknown ? AXTextStateChangeIntent(AXTextStateChangeTypeSelectionMove, AXTextSelection { AXTextSelectionDirectionDiscontiguous, AXTextSelectionGranularityUnknown, false }) : intent;
     auto options = defaultSetSelectionOptions();
     if (!shouldSetFocus)
-        options |= DoNotSetFocus;
+        options.add(DoNotSetFocus);
     switch (revealMode) {
     case SelectionRevealMode::DoNotReveal:
         break;
     case SelectionRevealMode::Reveal:
-        options |= RevealSelection;
+        options.add(RevealSelection);
         break;
     case SelectionRevealMode::RevealUpToMainFrame:
-        options |= RevealSelectionUpToMainFrame;
+        options.add(RevealSelectionUpToMainFrame);
         break;
     }
     setSelection(newSelection, options, newIntent);
@@ -436,7 +436,7 @@ void FrameSelection::updateAndRevealSelection(const AXTextStateChangeIntent& int
 
 void FrameSelection::updateDataDetectorsForSelection()
 {
-#if ENABLE(TELEPHONE_NUMBER_DETECTION) && !PLATFORM(IOS)
+#if ENABLE(TELEPHONE_NUMBER_DETECTION) && !PLATFORM(IOS_FAMILY)
     m_frame->editor().scanSelectionForTelephoneNumbers();
 #endif
 }
@@ -1422,7 +1422,7 @@ bool FrameSelection::modify(EAlteration alter, unsigned verticalDistance, Vertic
     willBeModified(alter, direction == DirectionUp ? DirectionBackward : DirectionForward);
 
     VisiblePosition pos;
-    LayoutUnit xPos = 0;
+    LayoutUnit xPos;
     switch (alter) {
     case AlterationMove:
         pos = VisiblePosition(direction == DirectionUp ? m_selection.start() : m_selection.end(), m_selection.affinity());
@@ -1488,7 +1488,7 @@ bool FrameSelection::modify(EAlteration alter, unsigned verticalDistance, Vertic
 
 LayoutUnit FrameSelection::lineDirectionPointForBlockDirectionNavigation(EPositionType type)
 {
-    LayoutUnit x = 0;
+    LayoutUnit x;
 
     if (isNone())
         return x;
@@ -1987,7 +1987,7 @@ bool FrameSelection::setSelectedRange(Range* range, EAffinity affinity, bool clo
 
     VisibleSelection newSelection(*range, affinity);
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     // FIXME: Why do we need this check only in iOS?
     if (newSelection.isNone())
         return false;
@@ -1995,7 +1995,7 @@ bool FrameSelection::setSelectedRange(Range* range, EAffinity affinity, bool clo
 
     OptionSet<SetSelectionOption> selectionOptions {  ClearTypingStyle };
     if (closeTyping)
-        selectionOptions |= CloseTyping;
+        selectionOptions.add(CloseTyping);
 
     if (userTriggered == UserTriggered) {
         FrameSelection trialFrameSelection;
@@ -2005,7 +2005,7 @@ bool FrameSelection::setSelectedRange(Range* range, EAffinity affinity, bool clo
         if (!shouldChangeSelection(trialFrameSelection.selection()))
             return false;
 
-        selectionOptions |= IsUserTriggered;
+        selectionOptions.add(IsUserTriggered);
     }
 
     setSelection(newSelection, selectionOptions);
@@ -2076,7 +2076,7 @@ inline static bool shouldStopBlinkingDueToTypingCommand(Frame* frame)
 
 void FrameSelection::updateAppearance()
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (!m_updateAppearanceEnabled)
         return;
 #endif
@@ -2253,7 +2253,7 @@ RefPtr<MutableStyleProperties> FrameSelection::copyTypingStyle() const
 
 bool FrameSelection::shouldDeleteSelection(const VisibleSelection& selection) const
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (m_frame->selectionChangeCallbacksDisabled())
         return true;
 #endif
@@ -2370,11 +2370,11 @@ void FrameSelection::revealSelection(SelectionRevealMode revealMode, const Scrol
     Position start = m_selection.start();
     ASSERT(start.deprecatedNode());
     if (start.deprecatedNode() && start.deprecatedNode()->renderer()) {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
         if (RenderLayer* layer = start.deprecatedNode()->renderer()->enclosingLayer()) {
             if (!m_scrollingSuppressCount) {
                 layer->setAdjustForIOSCaretWhenScrolling(true);
-                layer->scrollRectToVisible(revealMode, rect, insideFixed, alignment, alignment, ShouldAllowCrossOriginScrolling::Yes);
+                layer->scrollRectToVisible(rect, insideFixed, { revealMode, alignment, alignment, ShouldAllowCrossOriginScrolling::Yes });
                 layer->setAdjustForIOSCaretWhenScrolling(false);
                 updateAppearance();
                 if (m_frame->page())
@@ -2385,7 +2385,7 @@ void FrameSelection::revealSelection(SelectionRevealMode revealMode, const Scrol
         // FIXME: This code only handles scrolling the startContainer's layer, but
         // the selection rect could intersect more than just that.
         // See <rdar://problem/4799899>.
-        if (start.deprecatedNode()->renderer()->scrollRectToVisible(revealMode, rect, insideFixed, alignment, alignment, ShouldAllowCrossOriginScrolling::Yes))
+        if (start.deprecatedNode()->renderer()->scrollRectToVisible(rect, insideFixed, { revealMode, alignment, alignment, ShouldAllowCrossOriginScrolling::Yes }))
             updateAppearance();
 #endif
     }
@@ -2397,7 +2397,7 @@ void FrameSelection::setSelectionFromNone()
     // entire WebView is editable or designMode is on for this document).
 
     Document* document = m_frame->document();
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     bool caretBrowsing = m_frame->settings().caretBrowsingEnabled();
     if (!isNone() || !(document->hasEditableStyle() || caretBrowsing))
         return;
@@ -2412,7 +2412,7 @@ void FrameSelection::setSelectionFromNone()
 
 bool FrameSelection::shouldChangeSelection(const VisibleSelection& newSelection) const
 {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (m_frame->selectionChangeCallbacksDisabled())
         return true;
 #endif
@@ -2480,7 +2480,7 @@ void FrameSelection::showTreeForThis() const
 
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 void FrameSelection::expandSelectionToElementContainingCaretSelection()
 {
     RefPtr<Range> range = elementRangeContainingCaretSelection();
@@ -2894,7 +2894,7 @@ void FrameSelection::setCaretColor(const Color& caretColor)
             invalidateCaretRect();
     }
 }
-#endif // PLATFORM(IOS)
+#endif // PLATFORM(IOS_FAMILY)
 
 }
 

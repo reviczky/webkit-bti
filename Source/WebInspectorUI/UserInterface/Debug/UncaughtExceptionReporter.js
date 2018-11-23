@@ -196,7 +196,7 @@ function createErrorSheet() {
 
     let inspectedPageURL = null;
     try {
-        inspectedPageURL = WI.frameResourceManager.mainFrame.url;
+        inspectedPageURL = WI.networkManager.mainFrame.url;
     } catch { }
 
     let topLevelItems = [
@@ -272,7 +272,7 @@ Document any additional information that might be useful in resolving the proble
         <a href="${prefilledBugReportLink}" target="_blank">click to file a pre-populated
         bug with this information</a>. It is possible that someone else broke it by accident.</dd>
         <dt>Oops, can I try again?</dt>
-        <dd><a href="javascript:window.location.reload()">Click to reload the Inspector</a>
+        <dd><a href="javascript:InspectorFrontendHost.reopen()">Click to reload the Inspector</a>
         again after making local changes.</dd>
         ${dismissOptionHTML}
     </dl>

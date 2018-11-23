@@ -50,6 +50,7 @@
 #include "JSImageData.h"
 #include "JSMessagePort.h"
 #include "JSNavigator.h"
+#include "JSRTCCertificate.h"
 #include "ScriptExecutionContext.h"
 #include "ScriptState.h"
 #include "SharedBuffer.h"
@@ -81,7 +82,6 @@
 #include <JavaScriptCore/TypedArrays.h>
 #include <JavaScriptCore/WasmModule.h>
 #include <limits>
-#include <wtf/HashTraits.h>
 #include <wtf/MainThread.h>
 #include <wtf/RunLoop.h>
 #include <wtf/Vector.h>
@@ -162,6 +162,9 @@ enum SerializationTag {
     DOMMatrixTag = 41,
     DOMQuadTag = 42,
     ImageBitmapTransferTag = 43,
+#if ENABLE(WEB_RTC)
+    RTCCertificateTag = 44,
+#endif
     ErrorTag = 255
 };
 
@@ -343,6 +346,12 @@ static const unsigned StringDataIs8BitFlag = 0x80000000;
  *    | DOMMatrix
  *    | DOMQuad
  *    | ImageBitmapTransferTag <value:uint32_t>
+ *    | RTCCertificateTag
+ *
+ * Inside certificate, data is serialized in this format as per spec:
+ *
+ * <expires:double> <certificate:StringData> <origin:StringData> <keyingMaterial:StringData>
+ * We also add fingerprints to make sure we expose to JavaScript the same information.
  *
  * Inside wrapped crypto key, data is serialized in this format:
  *
@@ -1053,7 +1062,21 @@ private:
                 return true;
             }
 #endif
-
+#if ENABLE(WEB_RTC)
+            if (auto* rtcCertificate = JSRTCCertificate::toWrapped(vm, obj)) {
+                write(RTCCertificateTag);
+                write(rtcCertificate->expires());
+                write(rtcCertificate->pemCertificate());
+                write(rtcCertificate->origin().toString());
+                write(rtcCertificate->pemPrivateKey());
+                write(static_cast<unsigned>(rtcCertificate->getFingerprints().size()));
+                for (const auto& fingerprint : rtcCertificate->getFingerprints()) {
+                    write(fingerprint.algorithm);
+                    write(fingerprint.value);
+                }
+                return true;
+            }
+#endif
 #if ENABLE(WEBASSEMBLY)
             if (JSWebAssemblyModule* module = jsDynamicCast<JSWebAssemblyModule*>(vm, obj)) {
                 if (m_context != SerializationContext::WorkerPostMessage && m_context != SerializationContext::WindowPostMessage)
@@ -1744,6 +1767,7 @@ private:
             return m_jsString;
         }
         const String& string() { return m_string; }
+        String takeString() { return WTFMove(m_string); }
 
     private:
         String m_string;
@@ -2097,31 +2121,31 @@ private:
             arrayBufferView = getJSValue(DataView::create(WTFMove(arrayBuffer), byteOffset, length).get());
             return true;
         case Int8ArrayTag:
-            arrayBufferView = toJS(m_exec, m_globalObject, Int8Array::create(WTFMove(arrayBuffer), byteOffset, length).get());
+            arrayBufferView = toJS(m_exec, m_globalObject, Int8Array::tryCreate(WTFMove(arrayBuffer), byteOffset, length).get());
             return true;
         case Uint8ArrayTag:
-            arrayBufferView = toJS(m_exec, m_globalObject, Uint8Array::create(WTFMove(arrayBuffer), byteOffset, length).get());
+            arrayBufferView = toJS(m_exec, m_globalObject, Uint8Array::tryCreate(WTFMove(arrayBuffer), byteOffset, length).get());
             return true;
         case Uint8ClampedArrayTag:
-            arrayBufferView = toJS(m_exec, m_globalObject, Uint8ClampedArray::create(WTFMove(arrayBuffer), byteOffset, length).get());
+            arrayBufferView = toJS(m_exec, m_globalObject, Uint8ClampedArray::tryCreate(WTFMove(arrayBuffer), byteOffset, length).get());
             return true;
         case Int16ArrayTag:
-            arrayBufferView = toJS(m_exec, m_globalObject, Int16Array::create(WTFMove(arrayBuffer), byteOffset, length).get());
+            arrayBufferView = toJS(m_exec, m_globalObject, Int16Array::tryCreate(WTFMove(arrayBuffer), byteOffset, length).get());
             return true;
         case Uint16ArrayTag:
-            arrayBufferView = toJS(m_exec, m_globalObject, Uint16Array::create(WTFMove(arrayBuffer), byteOffset, length).get());
+            arrayBufferView = toJS(m_exec, m_globalObject, Uint16Array::tryCreate(WTFMove(arrayBuffer), byteOffset, length).get());
             return true;
         case Int32ArrayTag:
-            arrayBufferView = toJS(m_exec, m_globalObject, Int32Array::create(WTFMove(arrayBuffer), byteOffset, length).get());
+            arrayBufferView = toJS(m_exec, m_globalObject, Int32Array::tryCreate(WTFMove(arrayBuffer), byteOffset, length).get());
             return true;
         case Uint32ArrayTag:
-            arrayBufferView = toJS(m_exec, m_globalObject, Uint32Array::create(WTFMove(arrayBuffer), byteOffset, length).get());
+            arrayBufferView = toJS(m_exec, m_globalObject, Uint32Array::tryCreate(WTFMove(arrayBuffer), byteOffset, length).get());
             return true;
         case Float32ArrayTag:
-            arrayBufferView = toJS(m_exec, m_globalObject, Float32Array::create(WTFMove(arrayBuffer), byteOffset, length).get());
+            arrayBufferView = toJS(m_exec, m_globalObject, Float32Array::tryCreate(WTFMove(arrayBuffer), byteOffset, length).get());
             return true;
         case Float64ArrayTag:
-            arrayBufferView = toJS(m_exec, m_globalObject, Float64Array::create(WTFMove(arrayBuffer), byteOffset, length).get());
+            arrayBufferView = toJS(m_exec, m_globalObject, Float64Array::tryCreate(WTFMove(arrayBuffer), byteOffset, length).get());
             return true;
         default:
             return false;
@@ -2650,6 +2674,50 @@ private:
         return getJSValue(bitmap);
     }
 
+#if ENABLE(WEB_RTC)
+    JSValue readRTCCertificate()
+    {
+        double expires;
+        if (!read(expires)) {
+            fail();
+            return JSValue();
+        }
+        CachedStringRef certificate;
+        if (!readStringData(certificate)) {
+            fail();
+            return JSValue();
+        }
+        CachedStringRef origin;
+        if (!readStringData(origin)) {
+            fail();
+            return JSValue();
+        }
+        CachedStringRef keyedMaterial;
+        if (!readStringData(keyedMaterial)) {
+            fail();
+            return JSValue();
+        }
+        unsigned size = 0;
+        if (!read(size))
+            return JSValue();
+
+        Vector<RTCCertificate::DtlsFingerprint> fingerprints;
+        fingerprints.reserveInitialCapacity(size);
+        for (unsigned i = 0; i < size; i++) {
+            CachedStringRef algorithm;
+            if (!readStringData(algorithm))
+                return JSValue();
+            CachedStringRef value;
+            if (!readStringData(value))
+                return JSValue();
+            fingerprints.uncheckedAppend(RTCCertificate::DtlsFingerprint { algorithm->string(), value->string() });
+        }
+
+        auto rtcCertificate = RTCCertificate::create(SecurityOrigin::createFromString(origin->string()), expires, WTFMove(fingerprints), certificate->takeString(), keyedMaterial->takeString());
+        return toJSNewlyCreated(m_exec, jsCast<JSDOMGlobalObject*>(m_globalObject), WTFMove(rtcCertificate));
+    }
+#endif
+
     JSValue readTerminal()
     {
         SerializationTag tag = readTag();
@@ -2940,6 +3008,11 @@ private:
             return readDOMQuad();
         case ImageBitmapTransferTag:
             return readImageBitmap();
+#if ENABLE(WEB_RTC)
+        case RTCCertificateTag:
+            return readRTCCertificate();
+
+#endif
         default:
             m_ptr--; // Push the tag back
             return JSValue();

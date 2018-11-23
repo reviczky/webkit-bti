@@ -27,7 +27,6 @@
 
 #include "BasicShapeFunctions.h"
 #include "CSSAnimationController.h"
-#include "CSSAnimationTriggerScrollValue.h"
 #include "CSSAspectRatioValue.h"
 #include "CSSBasicShapes.h"
 #include "CSSBorderImage.h"
@@ -85,10 +84,6 @@
 
 #if ENABLE(DASHBOARD_SUPPORT)
 #include "DashboardRegion.h"
-#endif
-
-#if ENABLE(CSS_ANIMATIONS_LEVEL_2)
-#include "AnimationTrigger.h"
 #endif
 
 namespace WebCore {
@@ -216,11 +211,11 @@ static const CSSPropertyID computedProperties[] = {
     CSSPropertyWebkitTextAlignLast,
     CSSPropertyWebkitTextJustify,
 #endif // CSS3_TEXT
-    CSSPropertyWebkitTextDecorationLine,
-    CSSPropertyWebkitTextDecorationStyle,
-    CSSPropertyWebkitTextDecorationColor,
-    CSSPropertyWebkitTextDecorationSkip,
-    CSSPropertyWebkitTextUnderlinePosition,
+    CSSPropertyTextDecorationLine,
+    CSSPropertyTextDecorationStyle,
+    CSSPropertyTextDecorationColor,
+    CSSPropertyTextDecorationSkip,
+    CSSPropertyTextUnderlinePosition,
     CSSPropertyTextIndent,
     CSSPropertyTextRendering,
     CSSPropertyTextShadow,
@@ -261,9 +256,6 @@ static const CSSPropertyID computedProperties[] = {
 #endif
     CSSPropertyZIndex,
     CSSPropertyZoom,
-#if ENABLE(CSS_ANIMATIONS_LEVEL_2)
-    CSSPropertyWebkitAnimationTrigger,
-#endif
     CSSPropertyWebkitAppearance,
     CSSPropertyWebkitBackfaceVisibility,
     CSSPropertyWebkitBackgroundClip,
@@ -394,7 +386,7 @@ static const CSSPropertyID computedProperties[] = {
     CSSPropertyPerspectiveOrigin,
     CSSPropertyWebkitPrintColorAdjust,
     CSSPropertyWebkitRtlOrdering,
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     CSSPropertyWebkitTouchCallout,
 #endif
 #if ENABLE(TOUCH_EVENTS)
@@ -456,6 +448,9 @@ static const CSSPropertyID computedProperties[] = {
     CSSPropertyStrokeMiterlimit,
     CSSPropertyStrokeOpacity,
     CSSPropertyStrokeWidth,
+#if ENABLE(DARK_MODE_CSS)
+    CSSPropertySupportedColorSchemes,
+#endif
     CSSPropertyAlignmentBaseline,
     CSSPropertyBaselineShift,
     CSSPropertyDominantBaseline,
@@ -464,7 +459,6 @@ static const CSSPropertyID computedProperties[] = {
     CSSPropertyWritingMode,
     CSSPropertyGlyphOrientationHorizontal,
     CSSPropertyGlyphOrientationVertical,
-    CSSPropertyWebkitSvgShadow,
     CSSPropertyVectorEffect,
     CSSPropertyX,
     CSSPropertyY
@@ -772,22 +766,50 @@ static LayoutUnit getOffsetUsedStyleOutOfFlowPositioned(RenderBlock& container, 
 
 static RefPtr<CSSValue> positionOffsetValue(const RenderStyle& style, CSSPropertyID propertyID, RenderObject* renderer)
 {
+    auto offset = getOffsetComputedLength(style, propertyID);
+
     // If the element is not displayed; return the "computed value".
     if (!renderer || !renderer->isBox())
-        return zoomAdjustedPixelValueForLength(getOffsetComputedLength(style, propertyID), style);
+        return zoomAdjustedPixelValueForLength(offset, style);
 
-    // We should return the "used value".
     auto& box = downcast<RenderBox>(*renderer);
     auto* containingBlock = box.containingBlock();
-    if (box.isRelativelyPositioned() || !containingBlock)
+
+    // Resolve a "computed value" percentage if the element is positioned.
+    // TODO: percentages for sticky positioning should be handled here (bug 189549).
+    if (containingBlock && offset.isPercentOrCalculated() && box.isPositioned() && !box.isStickilyPositioned()) {
+        bool isVerticalProperty;
+        if (propertyID == CSSPropertyTop || propertyID == CSSPropertyBottom)
+            isVerticalProperty = true;
+        else {
+            ASSERT(propertyID == CSSPropertyLeft || propertyID == CSSPropertyRight);
+            isVerticalProperty = false;
+        }
+        LayoutUnit containingBlockSize;
+        if (isVerticalProperty == containingBlock->isHorizontalWritingMode()) {
+            containingBlockSize = box.isOutOfFlowPositioned()
+                ? box.containingBlockLogicalHeightForPositioned(*containingBlock, false)
+                : box.containingBlockLogicalHeightForContent(ExcludeMarginBorderPadding);
+        } else {
+            containingBlockSize = box.isOutOfFlowPositioned()
+                ? box.containingBlockLogicalWidthForPositioned(*containingBlock, nullptr, false)
+                : box.containingBlockLogicalWidthForContent();
+        }
+        return zoomAdjustedPixelValue(floatValueForLength(offset, containingBlockSize), style);
+    }
+
+    // Return a "computed value" length.
+    if (!offset.isAuto())
+        return zoomAdjustedPixelValueForLength(offset, style);
+
+    // The property won't be overconstrained if its computed value is "auto", so the "used value" can be returned.
+    if (box.isRelativelyPositioned())
         return zoomAdjustedPixelValue(getOffsetUsedStyleRelative(box, propertyID), style);
-    if (renderer->isOutOfFlowPositioned())
+
+    if (containingBlock && box.isOutOfFlowPositioned())
         return zoomAdjustedPixelValue(getOffsetUsedStyleOutOfFlowPositioned(*containingBlock, box, propertyID), style);
-    // In-flow element.
-    auto offset = getOffsetComputedLength(style, propertyID);
-    if (offset.isAuto())
-        return CSSValuePool::singleton().createIdentifierValue(CSSValueAuto);
-    return zoomAdjustedPixelValueForLength(offset, style);
+
+    return CSSValuePool::singleton().createIdentifierValue(CSSValueAuto);
 }
 
 RefPtr<CSSPrimitiveValue> ComputedStyleExtractor::currentColorOrValidColor(const RenderStyle* style, const Color& color) const
@@ -1572,10 +1594,6 @@ static Ref<CSSValue> createTimingFunctionValue(const TimingFunction& timingFunct
         auto& function = downcast<StepsTimingFunction>(timingFunction);
         return CSSStepsTimingFunctionValue::create(function.numberOfSteps(), function.stepAtStart());
     }
-    case TimingFunction::FramesFunction: {
-        auto& function = downcast<FramesTimingFunction>(timingFunction);
-        return CSSFramesTimingFunctionValue::create(function.numberOfFrames());
-    }
     case TimingFunction::SpringFunction: {
         auto& function = downcast<SpringTimingFunction>(timingFunction);
         return CSSSpringTimingFunctionValue::create(function.mass(), function.stiffness(), function.damping(), function.initialVelocity());
@@ -1597,37 +1615,6 @@ static Ref<CSSValueList> timingFunctionValue(const AnimationList* animationList)
         list->append(createTimingFunctionValue(Animation::initialTimingFunction()));
     return list;
 }
-
-#if ENABLE(CSS_ANIMATIONS_LEVEL_2)
-
-static Ref<CSSValue> createAnimationTriggerValue(const AnimationTrigger& trigger, const RenderStyle& style)
-{
-    switch (trigger.type()) {
-    case AnimationTrigger::AnimationTriggerType::ScrollAnimationTriggerType: {
-        auto& scrollAnimationTrigger = downcast<ScrollAnimationTrigger>(trigger);
-        if (scrollAnimationTrigger.endValue().isAuto())
-            return CSSAnimationTriggerScrollValue::create(zoomAdjustedPixelValueForLength(scrollAnimationTrigger.startValue(), style));
-        return CSSAnimationTriggerScrollValue::create(zoomAdjustedPixelValueForLength(scrollAnimationTrigger.startValue(), style),
-                                                      zoomAdjustedPixelValueForLength(scrollAnimationTrigger.endValue(), style));
-    }
-    default:
-        ASSERT(trigger.type() == AnimationTrigger::AnimationTriggerType::AutoAnimationTriggerType);
-        return CSSValuePool::singleton().createIdentifierValue(CSSValueAuto);
-    }
-}
-
-static Ref<CSSValueList> animationTriggerValue(const AnimationList* animationList, const RenderStyle& style)
-{
-    auto list = CSSValueList::createCommaSeparated();
-    if (animationList) {
-        for (size_t i = 0; i < animationList->size(); ++i)
-            list->append(createAnimationTriggerValue(*animationList->animation(i).trigger(), style));
-    } else
-        list->append(createAnimationTriggerValue(Animation::initialTrigger().get(), style));
-    return list;
-}
-
-#endif
 
 static Ref<CSSValue> createLineBoxContainValue(unsigned lineBoxContain)
 {
@@ -1815,6 +1802,24 @@ static Ref<CSSValue> renderTextDecorationSkipFlagsToCSSValue(OptionSet<TextDecor
 
     ASSERT_NOT_REACHED();
     return CSSValuePool::singleton().createExplicitInitialValue();
+}
+
+static Ref<CSSValue> textUnderlineOffsetToCSSValue(const TextUnderlineOffset& textUnderlineOffset)
+{
+    if (textUnderlineOffset.isAuto())
+        return CSSValuePool::singleton().createIdentifierValue(CSSValueAuto);
+    ASSERT(textUnderlineOffset.isLength());
+    return CSSValuePool::singleton().createValue(textUnderlineOffset.lengthValue(), CSSPrimitiveValue::CSS_PX);
+}
+
+static Ref<CSSValue> textDecorationThicknessToCSSValue(const TextDecorationThickness& textDecorationThickness)
+{
+    if (textDecorationThickness.isAuto())
+        return CSSValuePool::singleton().createIdentifierValue(CSSValueAuto);
+    if (textDecorationThickness.isFromFont())
+        return CSSValuePool::singleton().createIdentifierValue(CSSValueFromFont);
+    ASSERT(textDecorationThickness.isLength());
+    return CSSValuePool::singleton().createValue(textDecorationThickness.lengthValue(), CSSPrimitiveValue::CSS_PX);
 }
 
 static Ref<CSSValue> renderEmphasisPositionFlagsToCSSValue(OptionSet<TextEmphasisPosition> textEmphasisPosition)
@@ -2624,7 +2629,26 @@ RefPtr<CSSValue> ComputedStyleExtractor::customPropertyValue(const String& prope
     if (!style)
         return nullptr;
 
-    return style->customProperties().get(propertyName);
+    auto* registered = styledElement->document().getCSSRegisteredCustomPropertySet().get(propertyName);
+    auto* value = style->getCustomProperty(propertyName);
+
+    if (registered && !value)
+        return registered->initialValueCopy();
+
+    if (!value)
+        return nullptr;
+
+    auto visitor = WTF::makeVisitor([&](const Ref<CSSVariableReferenceValue>&) {
+        ASSERT_NOT_REACHED();
+        return RefPtr<CSSValue>();
+    }, [&](const CSSValueID&) {
+        return CSSCustomPropertyValue::create(*value);
+    }, [&](const Ref<CSSVariableData>&) {
+        return CSSCustomPropertyValue::create(*value);
+    }, [&](const Length& value) {
+        return zoomAdjustedPixelValueForLength(value, *style);
+    });
+    return WTF::visit(visitor, value->value());
 }
 
 String ComputedStyleExtractor::customPropertyText(const String& propertyName)
@@ -3319,16 +3343,20 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyinStyle(const RenderSty
 #endif // CSS3_TEXT
         case CSSPropertyWebkitTextDecoration:
             return getCSSPropertyValuesForShorthandProperties(webkitTextDecorationShorthand());
-        case CSSPropertyWebkitTextDecorationLine:
+        case CSSPropertyTextDecorationLine:
             return renderTextDecorationFlagsToCSSValue(style.textDecoration());
-        case CSSPropertyWebkitTextDecorationStyle:
+        case CSSPropertyTextDecorationStyle:
             return renderTextDecorationStyleFlagsToCSSValue(style.textDecorationStyle());
-        case CSSPropertyWebkitTextDecorationColor:
+        case CSSPropertyTextDecorationColor:
             return currentColorOrValidColor(&style, style.textDecorationColor());
-        case CSSPropertyWebkitTextDecorationSkip:
+        case CSSPropertyTextDecorationSkip:
             return renderTextDecorationSkipFlagsToCSSValue(style.textDecorationSkip());
-        case CSSPropertyWebkitTextUnderlinePosition:
+        case CSSPropertyTextUnderlinePosition:
             return cssValuePool.createValue(style.textUnderlinePosition());
+        case CSSPropertyTextUnderlineOffset:
+            return textUnderlineOffsetToCSSValue(style.textUnderlineOffset());
+        case CSSPropertyTextDecorationThickness:
+            return textDecorationThicknessToCSSValue(style.textDecorationThickness());
         case CSSPropertyWebkitTextDecorationsInEffect:
             return renderTextDecorationFlagsToCSSValue(style.textDecorationsInEffect());
         case CSSPropertyWebkitTextFillColor:
@@ -3617,10 +3645,6 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyinStyle(const RenderSty
         }
         case CSSPropertyAnimationTimingFunction:
             return timingFunctionValue(style.animations());
-#if ENABLE(CSS_ANIMATIONS_LEVEL_2)
-        case CSSPropertyWebkitAnimationTrigger:
-            return animationTriggerValue(style.animations(), style);
-#endif
         case CSSPropertyWebkitAppearance:
             return cssValuePool.createValue(style.appearance());
         case CSSPropertyWebkitAspectRatio:
@@ -3709,7 +3733,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyinStyle(const RenderSty
         case CSSPropertyTouchAction:
             return cssValuePool.createValue(style.touchAction());
 #endif
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
         case CSSPropertyWebkitTouchCallout:
             return cssValuePool.createIdentifierValue(style.touchCalloutEnabled() ? CSSValueDefault : CSSValueNone);
 #endif
@@ -3947,6 +3971,27 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyinStyle(const RenderSty
             return cssValuePool.createValue(style.applePayButtonType());
 #endif
 
+#if ENABLE(DARK_MODE_CSS)
+        case CSSPropertySupportedColorSchemes: {
+            if (!RuntimeEnabledFeatures::sharedFeatures().darkModeCSSEnabled())
+                return nullptr;
+
+            auto supportedColorSchemes = style.supportedColorSchemes();
+            if (supportedColorSchemes.isAuto())
+                return cssValuePool.createIdentifierValue(CSSValueAuto);
+
+            auto list = CSSValueList::createSpaceSeparated();
+            if (supportedColorSchemes.contains(ColorSchemes::Light))
+                list->append(cssValuePool.createIdentifierValue(CSSValueLight));
+            if (supportedColorSchemes.contains(ColorSchemes::Dark))
+                list->append(cssValuePool.createIdentifierValue(CSSValueDark));
+            if (!supportedColorSchemes.allowsTransformations())
+                list->append(cssValuePool.createIdentifierValue(CSSValueOnly));
+            ASSERT(list->length());
+            return WTFMove(list);
+        }
+#endif
+
         /* Individual properties not part of the spec */
         case CSSPropertyBackgroundRepeatX:
         case CSSPropertyBackgroundRepeatY:
@@ -4095,7 +4140,6 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyinStyle(const RenderSty
         case CSSPropertyKerning:
         case CSSPropertyTextAnchor:
         case CSSPropertyVectorEffect:
-        case CSSPropertyWebkitSvgShadow:
             return svgPropertyValue(propertyID, DoNotUpdateLayout);
         case CSSPropertyCustom:
             ASSERT_NOT_REACHED();
@@ -4122,7 +4166,7 @@ unsigned CSSComputedStyleDeclaration::length() const
     if (!style)
         return 0;
 
-    return numComputedProperties + style->customProperties().size();
+    return numComputedProperties + style->inheritedCustomProperties().size() + style->nonInheritedCustomProperties().size();
 }
 
 String CSSComputedStyleDeclaration::item(unsigned i) const
@@ -4136,15 +4180,17 @@ String CSSComputedStyleDeclaration::item(unsigned i) const
     auto* style = m_element->computedStyle(m_pseudoElementSpecifier);
     if (!style)
         return String();
-    
-    unsigned index = i - numComputedProperties;
-    
-    const auto& customProperties = style->customProperties();
-    if (index >= customProperties.size())
-        return String();
 
-    auto results = copyToVector(customProperties.keys());
-    return results.at(index);
+    const auto& inheritedCustomProperties = style->inheritedCustomProperties();
+
+    if (i < numComputedProperties + inheritedCustomProperties.size()) {
+        auto results = copyToVector(inheritedCustomProperties.keys());
+        return results.at(i - numComputedProperties);
+    }
+
+    const auto& nonInheritedCustomProperties = style->nonInheritedCustomProperties();
+    auto results = copyToVector(nonInheritedCustomProperties.keys());
+    return results.at(i - inheritedCustomProperties.size() - numComputedProperties);
 }
 
 bool ComputedStyleExtractor::propertyMatches(CSSPropertyID propertyID, const CSSValue* value)

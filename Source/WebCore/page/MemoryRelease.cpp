@@ -28,6 +28,7 @@
 
 #include "CSSFontSelector.h"
 #include "CSSValuePool.h"
+#include "CachedResourceLoader.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "CommonVM.h"
@@ -62,7 +63,6 @@ static void releaseNoncriticalMemory()
     RenderTheme::singleton().purgeCaches();
 
     FontCache::singleton().purgeInactiveFontData();
-    FontDescription::invalidateCaches();
 
     clearWidthCaches();
     TextPainter::clearGlyphDisplayLists();
@@ -88,6 +88,7 @@ static void releaseCriticalMemory(Synchronous synchronous)
     for (auto& document : copyToVectorOf<RefPtr<Document>>(Document::allDocuments())) {
         document->styleScope().releaseMemory();
         document->fontSelector().emptyCaches();
+        document->cachedResourceLoader().garbageCollectDocumentResources();
     }
 
     GCController::singleton().deleteAllCode(JSC::DeleteAllCodeIfNotCollecting);
@@ -102,7 +103,7 @@ static void releaseCriticalMemory(Synchronous synchronous)
     if (synchronous == Synchronous::Yes) {
         GCController::singleton().garbageCollectNow();
     } else {
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
         GCController::singleton().garbageCollectNowIfNotDoneRecently();
 #else
         GCController::singleton().garbageCollectSoon();
@@ -127,7 +128,7 @@ void releaseMemory(Critical critical, Synchronous synchronous)
     if (synchronous == Synchronous::Yes) {
         // FastMalloc has lock-free thread specific caches that can only be cleared from the thread itself.
         WorkerThread::releaseFastMallocFreeMemoryInAllThreads();
-#if ENABLE(ASYNC_SCROLLING) && !PLATFORM(IOS)
+#if ENABLE(ASYNC_SCROLLING) && !PLATFORM(IOS_FAMILY)
         ScrollingThread::dispatch(WTF::releaseFastMallocFreeMemory);
 #endif
         WTF::releaseFastMallocFreeMemory();

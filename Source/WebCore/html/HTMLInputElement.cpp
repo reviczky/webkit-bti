@@ -104,7 +104,7 @@ HTMLInputElement::HTMLInputElement(const QualifiedName& tagName, Document& docum
     : HTMLTextFormControlElement(tagName, document, form)
     , m_size(defaultSize)
     , m_isChecked(false)
-    , m_reflectsCheckedAttribute(true)
+    , m_dirtyCheckednessFlag(false)
     , m_isIndeterminate(false)
     , m_hasType(false)
     , m_isActivatedSubmit(false)
@@ -744,9 +744,10 @@ void HTMLInputElement::parseAttribute(const QualifiedName& name, const AtomicStr
         // restore. We shouldn't call setChecked() even if this has the checked
         // attribute. So, delay the setChecked() call until
         // finishParsingChildren() is called if parsing is in progress.
-        if (!m_parsingInProgress && m_reflectsCheckedAttribute) {
+        if ((!m_parsingInProgress || !document().formController().hasFormStateToRestore()) && !m_dirtyCheckednessFlag) {
             setChecked(!value.isNull());
-            m_reflectsCheckedAttribute = true;
+            // setChecked() above sets the dirty checkedness flag so we need to reset it.
+            m_dirtyCheckednessFlag = false;
         }
     } else if (name == maxlengthAttr)
         maxLengthAttributeChanged(value);
@@ -805,7 +806,7 @@ void HTMLInputElement::finishParsingChildren()
         bool checked = hasAttributeWithoutSynchronization(checkedAttr);
         if (checked)
             setChecked(checked);
-        m_reflectsCheckedAttribute = true;
+        m_dirtyCheckednessFlag = false;
     }
 }
 
@@ -899,7 +900,7 @@ void HTMLInputElement::reset()
     setAutoFilled(false);
     setShowAutoFillButton(AutoFillButtonType::None);
     setChecked(hasAttributeWithoutSynchronization(checkedAttr));
-    m_reflectsCheckedAttribute = true;
+    m_dirtyCheckednessFlag = false;
 }
 
 bool HTMLInputElement::isTextField() const
@@ -912,12 +913,12 @@ bool HTMLInputElement::isTextType() const
     return m_inputType->isTextType();
 }
 
-void HTMLInputElement::setChecked(bool nowChecked, TextFieldEventBehavior eventBehavior)
+void HTMLInputElement::setChecked(bool nowChecked)
 {
     if (checked() == nowChecked)
         return;
 
-    m_reflectsCheckedAttribute = false;
+    m_dirtyCheckednessFlag = true;
     m_isChecked = nowChecked;
     invalidateStyleForSubtree();
 
@@ -933,16 +934,6 @@ void HTMLInputElement::setChecked(bool nowChecked, TextFieldEventBehavior eventB
     if (renderer()) {
         if (AXObjectCache* cache = renderer()->document().existingAXObjectCache())
             cache->checkedStateChanged(this);
-    }
-
-    // Only send a change event for items in the document (avoid firing during
-    // parsing) and don't send a change event for a radio button that's getting
-    // unchecked to match other browsers. DOM is not a useful standard for this
-    // because it says only to fire change events at "lose focus" time, which is
-    // definitely wrong in practice for these types of elements.
-    if (eventBehavior != DispatchNoEvent && isConnected() && m_inputType->shouldSendChangeEventAfterCheckedChanged()) {
-        setTextAsOfLastFormControlChangeEvent(String());
-        dispatchFormControlChangeEvent();
     }
 
     invalidateStyleForSubtree();
@@ -983,7 +974,7 @@ void HTMLInputElement::copyNonAttributePropertiesFromElement(const Element& sour
     m_valueIfDirty = sourceElement.m_valueIfDirty;
     m_wasModifiedByUser = false;
     setChecked(sourceElement.m_isChecked);
-    m_reflectsCheckedAttribute = sourceElement.m_reflectsCheckedAttribute;
+    m_dirtyCheckednessFlag = sourceElement.m_dirtyCheckednessFlag;
     m_isIndeterminate = sourceElement.m_isIndeterminate;
 
     HTMLTextFormControlElement::copyNonAttributePropertiesFromElement(source);
@@ -1601,6 +1592,11 @@ void HTMLInputElement::selectColor(StringView color)
     m_inputType->selectColor(color);
 }
 
+Vector<Color> HTMLInputElement::suggestedColors() const
+{
+    return m_inputType->suggestedColors();
+}
+
 #if ENABLE(DATALIST_ELEMENT)
 
 RefPtr<HTMLElement> HTMLInputElement::list() const
@@ -1648,7 +1644,7 @@ bool HTMLInputElement::isSteppable() const
     return m_inputType->isSteppable();
 }
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 DateComponents::Type HTMLInputElement::dateType() const
 {
     return m_inputType->dateType();

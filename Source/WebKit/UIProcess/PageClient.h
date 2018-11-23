@@ -33,9 +33,12 @@
 #include "WebPopupMenuProxy.h"
 #include <WebCore/AlternativeTextClient.h>
 #include <WebCore/EditorClient.h>
+#include <WebCore/URL.h>
 #include <WebCore/UserInterfaceLayoutDirection.h>
 #include <WebCore/ValidationBubble.h>
+#include <wtf/CompletionHandler.h>
 #include <wtf/Forward.h>
+#include <wtf/Variant.h>
 #include <wtf/WeakPtr.h>
 
 #if PLATFORM(COCOA)
@@ -44,6 +47,8 @@
 #include "WKFoundation.h"
 
 OBJC_CLASS CALayer;
+OBJC_CLASS NSFileWrapper;
+OBJC_CLASS NSSet;
 OBJC_CLASS _WKRemoteObjectRegistry;
 
 #if USE(APPKIT)
@@ -53,6 +58,7 @@ OBJC_CLASS NSTextAlternatives;
 #endif
 
 namespace API {
+class Attachment;
 class HitTestResult;
 class Object;
 class OpenPanelParameters;
@@ -71,7 +77,7 @@ class Region;
 class TextIndicator;
 class WebMediaSessionManager;
 
-enum class RouteSharingPolicy;
+enum class RouteSharingPolicy : uint8_t;
 enum class ScrollbarStyle;
 enum class TextIndicatorWindowLifetime : uint8_t;
 enum class TextIndicatorWindowDismissalAnimation : uint8_t;
@@ -80,6 +86,7 @@ struct DictionaryPopupInfo;
 struct Highlight;
 struct TextIndicatorData;
 struct ViewportAttributes;
+struct ShareDataWithParsedURL;
 
 template <typename> class RectEdges;
 using FloatBoxExtent = RectEdges<float>;
@@ -93,7 +100,7 @@ struct DragItem;
 
 namespace WebKit {
 
-enum class UndoOrRedo;
+enum class UndoOrRedo : bool;
 
 class ContextMenuContextData;
 class DownloadProxy;
@@ -103,6 +110,7 @@ class NativeWebKeyboardEvent;
 class NativeWebMouseEvent;
 class NativeWebWheelEvent;
 class RemoteLayerTreeTransaction;
+class SafeBrowsingWarning;
 class UserData;
 class ViewSnapshot;
 class WebBackForwardListItem;
@@ -112,6 +120,8 @@ class WebFrameProxy;
 class WebOpenPanelResultListenerProxy;
 class WebPageProxy;
 class WebPopupMenuProxy;
+
+enum class ContinueUnsafeLoad : bool { No, Yes };
 
 struct AssistedNodeInformation;
 struct InteractionInformationAtPosition;
@@ -182,6 +192,7 @@ public:
     virtual LayerHostingMode viewLayerHostingMode() { return LayerHostingMode::InProcess; }
 
     virtual void processDidExit() = 0;
+    virtual void processWillSwap() { processDidExit(); }
     virtual void didRelaunchProcess() = 0;
     virtual void pageClosed() = 0;
 
@@ -189,7 +200,7 @@ public:
 
     virtual void toolTipChanged(const String&, const String&) = 0;
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     // FIXME: Adopt the WKUIDelegatePrivate callback on iOS and remove this.
     virtual void decidePolicyForGeolocationPermissionRequest(WebFrameProxy&, API::SecurityOrigin&, Function<void(bool)>&) = 0;
 #endif
@@ -201,15 +212,20 @@ public:
     virtual void handleDownloadRequest(DownloadProxy*) = 0;
 
     virtual bool handleRunOpenPanel(WebPageProxy*, WebFrameProxy*, API::OpenPanelParameters*, WebOpenPanelResultListenerProxy*) { return false; }
+    virtual bool showShareSheet(const WebCore::ShareDataWithParsedURL&, WTF::CompletionHandler<void (bool)>&&) { return false; }
 
     virtual void didChangeContentSize(const WebCore::IntSize&) = 0;
 
+    virtual void showSafeBrowsingWarning(const SafeBrowsingWarning&, CompletionHandler<void(Variant<ContinueUnsafeLoad, WebCore::URL>&&)>&& completionHandler) { completionHandler(ContinueUnsafeLoad::Yes); }
+    virtual void clearSafeBrowsingWarning() { }
+    
 #if ENABLE(DRAG_SUPPORT)
 #if PLATFORM(GTK)
     virtual void startDrag(Ref<WebCore::SelectionData>&&, WebCore::DragOperation, RefPtr<ShareableBitmap>&& dragImage) = 0;
 #else
     virtual void startDrag(const WebCore::DragItem&, const ShareableBitmap::Handle&) { }
 #endif
+    virtual void didPerformDragOperation(bool) { }
 #endif // ENABLE(DRAG_SUPPORT)
 
     virtual void setCursor(const WebCore::Cursor&) = 0;
@@ -252,7 +268,7 @@ public:
 #if PLATFORM(MAC)
     virtual WebCore::IntRect rootViewToWindow(const WebCore::IntRect&) = 0;
 #endif
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     virtual WebCore::IntPoint accessibilityScreenToRootView(const WebCore::IntPoint&) = 0;
     virtual WebCore::IntRect rootViewToAccessibilityScreen(const WebCore::IntRect&) = 0;
     virtual void didNotHandleTapAsClick(const WebCore::IntPoint&) = 0;
@@ -334,7 +350,7 @@ public:
     virtual void setEditableElementIsFocused(bool) = 0;
 #endif // PLATFORM(MAC)
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     virtual void commitPotentialTapFailed() = 0;
     virtual void didGetTapHighlightGeometries(uint64_t requestID, const WebCore::Color&, const Vector<WebCore::FloatQuad>& highlightedQuads, const WebCore::IntSize& topLeftRadius, const WebCore::IntSize& topRightRadius, const WebCore::IntSize& bottomLeftRadius, const WebCore::IntSize& bottomRightRadius) = 0;
 
@@ -355,10 +371,10 @@ public:
     virtual void disableDoubleTapGesturesDuringTapIfNecessary(uint64_t requestID) = 0;
     virtual double minimumZoomScale() const = 0;
     virtual WebCore::FloatRect documentRect() const = 0;
-    virtual void overflowScrollViewWillStartPanGesture() = 0;
-    virtual void overflowScrollViewDidScroll() = 0;
-    virtual void overflowScrollWillStartScroll() = 0;
-    virtual void overflowScrollDidEndScroll() = 0;
+    virtual void scrollingNodeScrollViewWillStartPanGesture() = 0;
+    virtual void scrollingNodeScrollViewDidScroll() = 0;
+    virtual void scrollingNodeScrollWillStartScroll() = 0;
+    virtual void scrollingNodeScrollDidEndScroll() = 0;
     virtual Vector<String> mimeTypesWithCustomContentProviders() = 0;
 
     virtual void showInspectorHighlight(const WebCore::Highlight&) = 0;
@@ -399,16 +415,15 @@ public:
 
 #if PLATFORM(MAC)
     virtual void didPerformImmediateActionHitTest(const WebHitTestResultData&, bool contentPreventsDefault, API::Object*) = 0;
-
-    virtual void* immediateActionAnimationControllerForHitTestResult(RefPtr<API::HitTestResult>, uint64_t, RefPtr<API::Object>) = 0;
-
+    virtual NSObject *immediateActionAnimationControllerForHitTestResult(RefPtr<API::HitTestResult>, uint64_t, RefPtr<API::Object>) = 0;
     virtual void didHandleAcceptedCandidate() = 0;
 #endif
+
     virtual void didFinishProcessingAllPendingMouseEvents() = 0;
 
     virtual void videoControlsManagerDidChange() { }
 
-#if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS)
+#if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS_FAMILY)
     virtual WebCore::WebMediaSessionManager& mediaSessionManager() = 0;
 #endif
 
@@ -430,7 +445,6 @@ public:
 #endif
 
 #if ENABLE(DATA_INTERACTION)
-    virtual void didPerformDataInteractionControllerOperation(bool handled) = 0;
     virtual void didHandleStartDataInteractionRequest(bool started) = 0;
     virtual void didHandleAdditionalDragItemsRequest(bool added) = 0;
     virtual void didConcludeEditDataInteraction(std::optional<WebCore::TextIndicatorData>) = 0;
@@ -438,8 +452,12 @@ public:
 #endif
 
 #if ENABLE(ATTACHMENT_ELEMENT)
-    virtual void didInsertAttachment(const String& identifier, const String& source) { }
-    virtual void didRemoveAttachment(const String& identifier) { }
+    virtual void didInsertAttachment(API::Attachment&, const String& source) { }
+    virtual void didRemoveAttachment(API::Attachment&) { }
+#if PLATFORM(COCOA)
+    virtual NSFileWrapper *allocFileWrapperInstance() const { return nullptr; }
+    virtual NSSet *serializableFileWrapperClasses() const { return nullptr; }
+#endif
 #endif
 };
 

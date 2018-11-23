@@ -28,7 +28,9 @@
 
 #include "CSSComputedStyleDeclaration.h"
 #include "ContextDestructionObserver.h"
+#include "Cookie.h"
 #include "ExceptionOr.h"
+#include "HEVCUtilities.h"
 #include "JSDOMPromiseDeferred.h"
 #include "OrientationNotifier.h"
 #include "PageConsoleClient.h"
@@ -77,7 +79,6 @@ class MediaStreamTrack;
 class MemoryInfo;
 class MockCDMFactory;
 class MockContentFilterSettings;
-class MockCredentialsMessenger;
 class MockPageOverlay;
 class MockPaymentCoordinator;
 class NodeList;
@@ -199,6 +200,14 @@ public:
     ExceptionOr<bool> pauseTransitionAtTimeOnElement(const String& propertyName, double pauseTime, Element&);
     ExceptionOr<bool> pauseTransitionAtTimeOnPseudoElement(const String& property, double pauseTime, Element&, const String& pseudoId);
 
+    // Web Animations testing.
+    struct AcceleratedAnimation {
+        String property;
+        double speed;
+    };
+    Vector<AcceleratedAnimation> acceleratedAnimationsForElement(Element&);
+    unsigned numberOfAnimationTimelineInvalidations() const;
+
     // For animations testing, we need a way to get at pseudo elements.
     ExceptionOr<RefPtr<Element>> pseudoElement(Element&, const String&);
 
@@ -211,6 +220,7 @@ public:
     ExceptionOr<void> setFormControlStateOfPreviousHistoryItem(const Vector<String>&);
 
     ExceptionOr<Ref<DOMRect>> absoluteCaretBounds();
+    ExceptionOr<bool> isCaretBlinkingSuspended();
 
     Ref<DOMRect> boundingBox(Element&);
 
@@ -235,6 +245,9 @@ public:
     ExceptionOr<Ref<DOMRect>> layoutViewportRect();
     ExceptionOr<Ref<DOMRect>> visualViewportRect();
 
+    ExceptionOr<void> setViewIsTransparent(bool);
+
+    ExceptionOr<String> viewBaseBackgroundColor();
     ExceptionOr<void> setViewBaseBackgroundColor(const String& colorValue);
 
     ExceptionOr<void> setPagination(const String& mode, int gap, int pageLength);
@@ -245,7 +258,7 @@ public:
     bool elementShouldAutoComplete(HTMLInputElement&);
     void setEditingValue(HTMLInputElement&, const String&);
     void setAutofilled(HTMLInputElement&, bool enabled);
-    enum class AutoFillButtonType { None, Contacts, Credentials, StrongPassword };
+    enum class AutoFillButtonType { None, Contacts, Credentials, StrongPassword, CreditCard };
     void setShowAutoFillButton(HTMLInputElement&, AutoFillButtonType);
     AutoFillButtonType autoFillButtonType(const HTMLInputElement&);
     AutoFillButtonType lastAutoFillButtonType(const HTMLInputElement&);
@@ -305,6 +318,7 @@ public:
     void setAutomaticSpellingCorrectionEnabled(bool);
 
     void handleAcceptedCandidate(const String& candidate, unsigned location, unsigned length);
+    void changeSelectionListType();
 
     bool isOverwriteModeEnabled();
     void toggleOverwriteModeEnabled();
@@ -337,6 +351,9 @@ public:
     ExceptionOr<String> layerTreeAsText(Document&, unsigned short flags) const;
     ExceptionOr<uint64_t> layerIDForElement(Element&);
     ExceptionOr<String> repaintRectsAsText() const;
+
+    ExceptionOr<String> scrollbarOverlayStyle() const;
+
     ExceptionOr<String> scrollingStateTreeAsText() const;
     ExceptionOr<String> mainThreadScrollingReasons() const;
     ExceptionOr<Ref<DOMRectList>> nonFastScrollableRects() const;
@@ -370,6 +387,8 @@ public:
 
     uint64_t documentIdentifier(const Document&) const;
     bool isDocumentAlive(uint64_t documentIdentifier) const;
+
+    String serviceWorkerClientIdentifier(const Document&) const;
 
     RefPtr<WindowProxy> openDummyInspectorFrontend(const String& url);
     void closeDummyInspectorFrontend();
@@ -523,6 +542,7 @@ public:
 #endif
 
     ExceptionOr<Ref<DOMRect>> selectionBounds();
+    void setSelectionWithoutValidation(Ref<Node> baseNode, unsigned baseOffset, RefPtr<Node> extentNode, unsigned extentOffset);
 
     ExceptionOr<bool> isPluginUnavailabilityIndicatorObscured(Element&);
     ExceptionOr<String> unavailablePluginReplacementText(Element&);
@@ -642,9 +662,12 @@ public:
 #if ENABLE(WEBGL)
     void simulateWebGLContextChanged(WebGLRenderingContext&);
     void failNextGPUStatusCheck(WebGLRenderingContext&);
+    bool hasLowAndHighPowerGPUs();
 #endif
 
     void setPageVisibility(bool isVisible);
+    void setPageIsFocusedAndActive(bool);
+
 
 #if ENABLE(WEB_RTC)
     void setH264HardwareEncoderAllowed(bool allowed);
@@ -663,6 +686,7 @@ public:
     void removeMediaStreamTrack(MediaStream&, MediaStreamTrack&);
     void simulateMediaStreamTrackCaptureSourceFailure(MediaStreamTrack&);
     void setMediaStreamTrackIdentifier(MediaStreamTrack&, String&& id);
+    void setMediaStreamSourceInterrupted(MediaStreamTrack&, bool);
 #endif
 
     String audioSessionCategory() const;
@@ -683,20 +707,9 @@ public:
 #endif
 
 #if ENABLE(APPLE_PAY)
-    MockPaymentCoordinator& mockPaymentCoordinator() const;
+    MockPaymentCoordinator& mockPaymentCoordinator(Document&);
 #endif
 
-    String timelineDescription(AnimationTimeline&);
-    void pauseTimeline(AnimationTimeline&);
-    void setTimelineCurrentTime(AnimationTimeline&, double);
-
-    void testIncomingSyncIPCMessageWhileWaitingForSyncReply();
-
-#if ENABLE(WEB_AUTHN)
-    MockCredentialsMessenger& mockCredentialsMessenger() const;
-#endif
-
-    String systemPreviewRelType();
     bool isSystemPreviewLink(Element&) const;
     bool isSystemPreviewImage(Element&) const;
 
@@ -731,6 +744,47 @@ public:
 
     void notifyResourceLoadObserver();
 
+    unsigned primaryScreenDisplayID();
+
+    bool capsLockIsOn();
+        
+    bool supportsVCPEncoder();
+        
+    using HEVCParameterSet = WebCore::HEVCParameterSet;
+    std::optional<HEVCParameterSet> parseHEVCCodecParameters(const String& codecString);
+
+    struct CookieData {
+        String name;
+        String value;
+        String domain;
+        // Expiration dates are expressed as milliseconds since the UNIX epoch.
+        double expires { 0 };
+        bool isHttpOnly { false };
+        bool isSecure { false };
+        bool isSession { false };
+        bool isSameSiteLax { false };
+        bool isSameSiteStrict { false };
+
+        CookieData(Cookie cookie)
+            : name(cookie.name)
+            , value(cookie.value)
+            , domain(cookie.domain)
+            , expires(cookie.expires)
+            , isHttpOnly(cookie.httpOnly)
+            , isSecure(cookie.secure)
+            , isSession(cookie.session)
+            , isSameSiteLax(cookie.sameSite == Cookie::SameSitePolicy::Lax)
+            , isSameSiteStrict(cookie.sameSite == Cookie::SameSitePolicy::Strict)
+        {
+            ASSERT(!(isSameSiteLax && isSameSiteStrict));
+        }
+
+        CookieData()
+        {
+        }
+    };
+    Vector<CookieData> getCookies() const;
+
 private:
     explicit Internals(Document&);
     Document* contextDocument() const;
@@ -752,14 +806,6 @@ private:
 
     std::unique_ptr<InspectorStubFrontend> m_inspectorFrontend;
     RefPtr<CacheStorageConnection> m_cacheStorageConnection;
-
-#if ENABLE(APPLE_PAY)
-    MockPaymentCoordinator* m_mockPaymentCoordinator { nullptr };
-#endif
-
-#if ENABLE(WEB_AUTHN)
-    std::unique_ptr<MockCredentialsMessenger> m_mockCredentialsMessenger;
-#endif
 };
 
 } // namespace WebCore

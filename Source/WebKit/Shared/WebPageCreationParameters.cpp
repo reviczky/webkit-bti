@@ -74,33 +74,32 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << mimeTypesWithCustomContentProviders;
     encoder << controlledByAutomation;
 
-#if ENABLE(REMOTE_INSPECTOR)
-    encoder << allowsRemoteInspection;
-    encoder << remoteInspectionNameOverride;
-#endif
 #if PLATFORM(MAC)
     encoder << colorSpace;
     encoder << useSystemAppearance;
     encoder << useDarkAppearance;
+    encoder << shouldDelayAttachingDrawingArea;
 #endif
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     encoder << screenSize;
     encoder << availableScreenSize;
     encoder << overrideScreenSize;
     encoder << textAutosizingWidth;
     encoder << ignoresViewportScaleLimits;
     encoder << viewportConfigurationViewLayoutSize;
+    encoder << viewportConfigurationLayoutSizeScaleFactor;
     encoder << viewportConfigurationViewSize;
     encoder << maximumUnobscuredSize;
 #endif
 #if PLATFORM(COCOA)
     encoder << smartInsertDeleteEnabled;
+    encoder << additionalSupportedImageTypes;
 #endif
     encoder << appleMailPaginationQuirkEnabled;
     encoder << appleMailLinesClampEnabled;
     encoder << shouldScaleViewToFitDocument;
     encoder.encodeEnum(userInterfaceLayoutDirection);
-    encoder.encodeEnum(observedLayoutMilestones);
+    encoder << observedLayoutMilestones;
     encoder << overrideContentSecurityPolicy;
     encoder << cpuLimit;
     encoder << urlSchemeHandlers;
@@ -110,6 +109,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
 #if ENABLE(SERVICE_WORKER)
     encoder << hasRegisteredServiceWorkers;
 #endif
+    encoder << needsFontAttributes;
     encoder << iceCandidateFilteringEnabled;
     encoder << enumeratingAllNetworkInterfacesEnabled;
     encoder << userContentWorlds;
@@ -227,13 +227,6 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
     if (!decoder.decode(parameters.controlledByAutomation))
         return std::nullopt;
 
-#if ENABLE(REMOTE_INSPECTOR)
-    if (!decoder.decode(parameters.allowsRemoteInspection))
-        return std::nullopt;
-    if (!decoder.decode(parameters.remoteInspectionNameOverride))
-        return std::nullopt;
-#endif
-
 #if PLATFORM(MAC)
     if (!decoder.decode(parameters.colorSpace))
         return std::nullopt;
@@ -241,9 +234,11 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
         return std::nullopt;
     if (!decoder.decode(parameters.useDarkAppearance))
         return std::nullopt;
+    if (!decoder.decode(parameters.shouldDelayAttachingDrawingArea))
+        return std::nullopt;
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     if (!decoder.decode(parameters.screenSize))
         return std::nullopt;
     if (!decoder.decode(parameters.availableScreenSize))
@@ -256,6 +251,8 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
         return std::nullopt;
     if (!decoder.decode(parameters.viewportConfigurationViewLayoutSize))
         return std::nullopt;
+    if (!decoder.decode(parameters.viewportConfigurationLayoutSizeScaleFactor))
+        return std::nullopt;
     if (!decoder.decode(parameters.viewportConfigurationViewSize))
         return std::nullopt;
     if (!decoder.decode(parameters.maximumUnobscuredSize))
@@ -264,6 +261,8 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
 
 #if PLATFORM(COCOA)
     if (!decoder.decode(parameters.smartInsertDeleteEnabled))
+        return std::nullopt;
+    if (!decoder.decode(parameters.additionalSupportedImageTypes))
         return std::nullopt;
 #endif
 
@@ -278,7 +277,7 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
 
     if (!decoder.decodeEnum(parameters.userInterfaceLayoutDirection))
         return std::nullopt;
-    if (!decoder.decodeEnum(parameters.observedLayoutMilestones))
+    if (!decoder.decode(parameters.observedLayoutMilestones))
         return std::nullopt;
 
     if (!decoder.decode(parameters.overrideContentSecurityPolicy))
@@ -304,6 +303,9 @@ std::optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::
     if (!decoder.decode(parameters.hasRegisteredServiceWorkers))
         return std::nullopt;
 #endif
+
+    if (!decoder.decode(parameters.needsFontAttributes))
+        return std::nullopt;
 
     if (!decoder.decode(parameters.iceCandidateFilteringEnabled))
         return std::nullopt;

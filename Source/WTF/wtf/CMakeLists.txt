@@ -12,7 +12,6 @@ set(WTF_PUBLIC_HEADERS
     Bitmap.h
     BlockObjCExceptions.h
     BlockPtr.h
-    BlockStack.h
     BloomFilter.h
     BooleanLattice.h
     Box.h
@@ -123,6 +122,7 @@ set(WTF_PUBLIC_HEADERS
     MachSendRight.h
     MainThread.h
     MallocPtr.h
+    Markable.h
     MathExtras.h
     MediaTime.h
     MemoryFootprint.h
@@ -143,7 +143,7 @@ set(WTF_PUBLIC_HEADERS
     OSAllocator.h
     OSObjectPtr.h
     OSRandomSource.h
-    ObjcRuntimeExtras.h
+    ObjCRuntimeExtras.h
     ObjectIdentifier.h
     OptionSet.h
     Optional.h
@@ -209,6 +209,7 @@ set(WTF_PUBLIC_HEADERS
     SoftLinking.h
     Spectrum.h
     StackBounds.h
+    StackPointer.h
     StackShot.h
     StackShotProfiler.h
     StackStats.h
@@ -252,6 +253,7 @@ set(WTF_PUBLIC_HEADERS
     Variant.h
     Vector.h
     VectorTraits.h
+    WTFSemaphore.h
     WallTime.h
     WeakPtr.h
     WeakRandom.h
@@ -286,6 +288,7 @@ set(WTF_PUBLIC_HEADERS
     text/Base64.h
     text/CString.h
     text/ConversionMode.h
+    text/ExternalStringImpl.h
     text/IntegerToStringConversion.h
     text/LChar.h
     text/LineBreakIteratorPoolICU.h
@@ -301,6 +304,7 @@ set(WTF_PUBLIC_HEADERS
     text/StringHasher.h
     text/StringImpl.h
     text/StringOperators.h
+    text/StringToIntegerConversion.h
     text/StringView.h
     text/SymbolImpl.h
     text/SymbolRegistry.h
@@ -323,7 +327,7 @@ set(WTF_PUBLIC_HEADERS
 
     unicode/CharacterNames.h
     unicode/Collator.h
-    unicode/UTF8.h
+    unicode/UTF8Conversion.h
 )
 
 set(WTF_SOURCES
@@ -381,6 +385,7 @@ set(WTF_SOURCES
     Seconds.cpp
     SixCharacterHash.cpp
     StackBounds.cpp
+    StackPointer.cpp
     StackStats.cpp
     StackTrace.cpp
     StringPrintStream.cpp
@@ -416,6 +421,7 @@ set(WTF_SOURCES
     text/AtomicStringTable.cpp
     text/Base64.cpp
     text/CString.cpp
+    text/ExternalStringImpl.cpp
     text/LineEnding.cpp
     text/StringBuilder.cpp
     text/StringBuilderJSON.cpp
@@ -434,7 +440,7 @@ set(WTF_SOURCES
     threads/BinarySemaphore.cpp
     threads/Signals.cpp
 
-    unicode/UTF8.cpp
+    unicode/UTF8Conversion.cpp
 )
 
 set(WTF_INCLUDE_DIRECTORIES
@@ -458,15 +464,6 @@ set(WTF_PRIVATE_INCLUDE_DIRECTORIES
 set(WTF_LIBRARIES
     ${CMAKE_DL_LIBS}
 )
-
-if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    list(APPEND WTF_PUBLIC_HEADERS
-        spi/darwin/CommonCryptoSPI.h
-    )
-list(APPEND WTF_PRIVATE_INCLUDE_DIRECTORIES
-        "${WTF_DIR}/wtf/spi/darwin"
-    )
-endif ()
 
 if (NOT USE_SYSTEM_MALLOC)
     list(APPEND WTF_LIBRARIES bmalloc)
@@ -493,6 +490,7 @@ if (WIN32)
         ThreadingWin.cpp
     )
     list(APPEND WTF_LIBRARIES
+        DbgHelp
         winmm
     )
 else ()

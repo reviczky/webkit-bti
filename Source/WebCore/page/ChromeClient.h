@@ -51,7 +51,7 @@
 #include "MediaPlaybackTargetContext.h"
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 #include "PlatformLayer.h"
 #define NSResponder WAKResponder
 #ifndef __OBJC__
@@ -101,10 +101,11 @@ class MediaPlayerRequestInstallMissingPluginsCallback;
 
 struct DateTimeChooserParameters;
 struct GraphicsDeviceAdapter;
+struct ShareDataWithParsedURL;
 struct ViewportArguments;
 struct WindowFeatures;
 
-enum class RouteSharingPolicy;
+enum class RouteSharingPolicy : uint8_t;
 
 class WEBCORE_EXPORT ChromeClient {
 public:
@@ -172,7 +173,7 @@ public:
     virtual IntPoint screenToRootView(const IntPoint&) const = 0;
     virtual IntRect rootViewToScreen(const IntRect&) const = 0;
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     virtual IntPoint accessibilityScreenToRootView(const IntPoint&) const = 0;
     virtual IntRect rootViewToAccessibilityScreen(const IntRect&) const = 0;
 #endif    
@@ -238,7 +239,7 @@ public:
 
     virtual Seconds eventThrottlingDelay() { return 0_s; };
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     virtual void didReceiveMobileDocType(bool) = 0;
     virtual void setNeedsScrollNotifications(Frame&, bool) = 0;
     virtual void observedContentChange(Frame&) = 0;
@@ -282,6 +283,8 @@ public:
 #endif
 
     virtual void runOpenPanel(Frame&, FileChooser&) = 0;
+    virtual void showShareSheet(ShareDataWithParsedURL&, WTF::CompletionHandler<void(bool)>&& callback) { callback(false); }
+    
     // Asynchronous request to load an icon for specified filenames.
     virtual void loadIconForFiles(const Vector<String>&, FileIconLoader&) = 0;
         
@@ -330,6 +333,7 @@ public:
     
     // Returns true if layer tree updates are disabled.
     virtual bool layerTreeStateIsFrozen() const { return false; }
+    virtual bool layerFlushThrottlingIsActive() const { return false; }
 
     virtual bool adjustLayerFlushThrottling(LayerFlushThrottleState::Flags) { return false; }
 
@@ -371,7 +375,7 @@ public:
     virtual void assistiveTechnologyMakeFirstResponder() { }
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     // FIXME: Come up with a more descriptive name for this function and make it platform independent (if possible).
     virtual bool isStopping() = 0;
 #endif
@@ -483,11 +487,7 @@ public:
     virtual void didInsertMenuItemElement(HTMLMenuItemElement&) { }
     virtual void didRemoveMenuItemElement(HTMLMenuItemElement&) { }
 
-    virtual void testIncomingSyncIPCMessageWhileWaitingForSyncReply() { }
-
     virtual String signedPublicKeyAndChallengeString(unsigned, const String&, const URL&) const { return emptyString(); }
-
-    virtual bool isViewVisible() { return true; }
 
 protected:
     virtual ~ChromeClient() = default;

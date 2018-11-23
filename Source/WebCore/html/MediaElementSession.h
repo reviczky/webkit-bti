@@ -87,7 +87,6 @@ public:
 
     void setHasPlaybackTargetAvailabilityListeners(bool);
 
-    bool canPlayToWirelessPlaybackTarget() const override;
     bool isPlayingToWirelessPlaybackTarget() const override;
 
     void mediaStateDidChange(MediaProducer::MediaStateFlags);
@@ -169,7 +168,7 @@ private:
     void externalOutputDeviceAvailableDidChange(bool) override;
     void setShouldPlayToPlaybackTarget(bool) override;
 #endif
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     bool requiresPlaybackTargetRouteMonitoring() const override;
 #endif
     bool updateIsMainContent() const;
@@ -191,7 +190,7 @@ private:
     bool m_shouldPlayToPlaybackTarget { false };
     mutable bool m_hasPlaybackTargets { false };
 #endif
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     bool m_hasPlaybackTargetAvailabilityListeners { false };
 #endif
 

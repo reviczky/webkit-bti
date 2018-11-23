@@ -53,7 +53,7 @@ public:
     {
         return isDocumentElementRenderer() || isPositioned() || createsGroup() || hasClipPath() || hasOverflowClip()
             || hasTransformRelatedProperty() || hasHiddenBackface() || hasReflection() || style().specifiesColumns()
-            || !style().hasAutoZIndex();
+            || !style().hasAutoZIndex() || hasRunningAcceleratedAnimations();
     }
 
     bool backgroundIsKnownToBeOpaqueInRect(const LayoutRect& localRect) const final;
@@ -371,13 +371,15 @@ public:
     void deleteLineBoxWrapper();
 
     LayoutRect clippedOverflowRectForRepaint(const RenderLayerModelObject* repaintContainer) const override;
-    LayoutRect computeRectForRepaint(const LayoutRect&, const RenderLayerModelObject* repaintContainer, RepaintContext context = { false, false }) const override;
+    std::optional<LayoutRect> computeVisibleRectInContainer(const LayoutRect&, const RenderLayerModelObject* container, VisibleRectContext) const
+override;
     void repaintDuringLayoutIfMoved(const LayoutRect&);
     virtual void repaintOverhangingFloats(bool paintAllDescendants);
 
     LayoutUnit containingBlockLogicalWidthForContent() const override;
     LayoutUnit containingBlockLogicalHeightForContent(AvailableLogicalHeightType) const;
-
+    LayoutUnit containingBlockLogicalWidthForPositioned(const RenderBoxModelObject& containingBlock, RenderFragmentContainer* = nullptr, bool checkForPerpendicularWritingMode = true) const;
+    LayoutUnit containingBlockLogicalHeightForPositioned(const RenderBoxModelObject& containingBlock, bool checkForPerpendicularWritingMode = true) const;
     LayoutUnit containingBlockLogicalWidthForContentInFragment(RenderFragmentContainer*) const;
     LayoutUnit containingBlockAvailableLineWidthInFragment(RenderFragmentContainer*) const;
     LayoutUnit perpendicularContainingBlockLogicalHeight() const;
@@ -459,10 +461,12 @@ public:
 
     bool hasVerticalScrollbarWithAutoBehavior() const;
     bool hasHorizontalScrollbarWithAutoBehavior() const;
+    
+    bool canUseOverlayScrollbars() const;
 
     bool scrollsOverflow() const { return scrollsOverflowX() || scrollsOverflowY(); }
-    bool scrollsOverflowX() const { return hasOverflowClip() && (style().overflowX() == Overflow::Scroll || hasHorizontalScrollbarWithAutoBehavior()); }
-    bool scrollsOverflowY() const { return hasOverflowClip() && (style().overflowY() == Overflow::Scroll || hasVerticalScrollbarWithAutoBehavior()); }
+    bool scrollsOverflowX() const { return hasOverflowClip() && (style().overflowX() == Overflow::Scroll || style().overflowX() == Overflow::Auto); }
+    bool scrollsOverflowY() const { return hasOverflowClip() && (style().overflowY() == Overflow::Scroll || style().overflowY() == Overflow::Auto); }
 
     bool hasHorizontalOverflow() const { return scrollWidth() != roundToInt(clientWidth()); }
     bool hasVerticalOverflow() const { return scrollHeight() != roundToInt(clientHeight()); }
@@ -568,8 +572,9 @@ public:
     ScrollPosition scrollPosition() const;
     LayoutSize cachedSizeForOverflowClip() const;
 
-    bool shouldApplyClipAndScrollPositionForRepaint(const RenderLayerModelObject* repaintContainer) const;
-    void applyCachedClipAndScrollPositionForRepaint(LayoutRect& paintRect) const;
+    // Returns false if the rect has no intersection with the applied clip rect. When the context specifies edge-inclusive
+    // intersection, this return value allows distinguishing between no intersection and zero-area intersection.
+    bool applyCachedClipAndScrollPosition(LayoutRect&, const RenderLayerModelObject* container, VisibleRectContext) const;
 
     virtual bool hasRelativeDimensions() const;
     virtual bool hasRelativeLogicalHeight() const;
@@ -686,9 +691,6 @@ private:
     // Returns true if we did a full repaint.
     bool repaintLayerRectsForImage(WrappedImagePtr, const FillLayer& layers, bool drawingBackground);
 
-    LayoutUnit containingBlockLogicalWidthForPositioned(const RenderBoxModelObject& containingBlock, RenderFragmentContainer* = nullptr, bool checkForPerpendicularWritingMode = true) const;
-    LayoutUnit containingBlockLogicalHeightForPositioned(const RenderBoxModelObject& containingBlock, bool checkForPerpendicularWritingMode = true) const;
-
     void computePositionedLogicalHeight(LogicalExtentComputedValues&) const;
     void computePositionedLogicalWidthUsing(SizeType, Length logicalWidth, const RenderBoxModelObject& containerBlock, TextDirection containerDirection,
                                             LayoutUnit containerLogicalWidth, LayoutUnit bordersPlusPadding,
@@ -713,6 +715,8 @@ private:
     virtual void computePreferredLogicalWidths() { setPreferredLogicalWidthsDirty(false); }
 
     LayoutRect frameRectForStickyPositioning() const final { return frameRect(); }
+
+    LayoutRect computeVisibleRectUsingPaintOffset(const LayoutRect&) const;
     
     void applyTopLeftLocationOffsetWithFlipping(LayoutPoint&) const;
 

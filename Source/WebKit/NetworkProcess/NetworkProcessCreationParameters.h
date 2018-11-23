@@ -51,7 +51,6 @@ struct NetworkProcessCreationParameters {
     void encode(IPC::Encoder&) const;
     static bool decode(IPC::Decoder&, NetworkProcessCreationParameters&);
 
-    NetworkSessionCreationParameters defaultSessionParameters;
     bool privateBrowsingEnabled { false };
     CacheModel cacheModel { CacheModelDocumentViewer };
     int64_t diskCacheSizeOverride { -1 };
@@ -67,10 +66,13 @@ struct NetworkProcessCreationParameters {
     Vector<uint8_t> uiProcessCookieStorageIdentifier;
 #endif
     Vector<WebCore::Cookie> defaultSessionPendingCookies;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     SandboxExtension::Handle cookieStorageDirectoryExtensionHandle;
     SandboxExtension::Handle containerCachesDirectoryExtensionHandle;
     SandboxExtension::Handle parentBundleDirectoryExtensionHandle;
+#if ENABLE(INDEXED_DATABASE)
+    SandboxExtension::Handle indexedDatabaseTempBlobDirectoryExtensionHandle;
+#endif
 #endif
     bool shouldSuppressMemoryPressureHandler { false };
     bool shouldUseTestingNetworkSession { false };
@@ -84,7 +86,7 @@ struct NetworkProcessCreationParameters {
     uint32_t uiProcessSDKVersion { 0 };
     String sourceApplicationBundleIdentifier;
     String sourceApplicationSecondaryIdentifier;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     String ctDataConnectionServiceType;
 #endif
     String httpProxy;
@@ -105,7 +107,7 @@ struct NetworkProcessCreationParameters {
     String cookiePersistentStorageFile;
 #endif
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING) && !RELEASE_LOG_DISABLED
+#if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
     bool logCookieInformation { false };
 #endif
 
@@ -122,8 +124,20 @@ struct NetworkProcessCreationParameters {
     Vector<String> urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest;
     Vector<String> urlSchemesRegisteredAsCORSEnabled;
 
-#if ENABLE(WIFI_ASSERTIONS)
+#if ENABLE(PROXIMITY_NETWORKING)
     unsigned wirelessContextIdentifier { 0 };
+#endif
+
+#if ENABLE(INDEXED_DATABASE)
+    String indexedDatabaseDirectory;
+    SandboxExtension::Handle indexedDatabaseDirectoryExtensionHandle;
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    String serviceWorkerRegistrationDirectory;
+    SandboxExtension::Handle serviceWorkerRegistrationDirectoryExtensionHandle;
+    Vector<String> urlSchemesServiceWorkersCanHandle;
+    bool shouldDisableServiceWorkerProcessTerminationDelay { false };
 #endif
 };
 

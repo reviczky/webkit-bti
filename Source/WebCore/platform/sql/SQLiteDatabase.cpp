@@ -122,6 +122,13 @@ bool SQLiteDatabase::open(const String& filename, bool forWebSQLDatabase)
     } else
         LOG_ERROR("SQLite database failed to set journal_mode to WAL, error: %s", lastErrorMsg());
 
+    SQLiteStatement checkpointStatement(*this, "PRAGMA wal_checkpoint(TRUNCATE)"_s);
+    if (checkpointStatement.prepareAndStep() == SQLITE_ROW) {
+        if (checkpointStatement.getColumnInt(0))
+            LOG(SQLDatabase, "SQLite database checkpoint is blocked");
+    } else
+        LOG_ERROR("SQLite database failed to checkpoint: %s", lastErrorMsg());
+
     return isOpen();
 }
 
@@ -488,6 +495,7 @@ bool SQLiteDatabase::turnOnIncrementalAutoVacuum()
     SQLiteStatement statement(*this, "PRAGMA auto_vacuum"_s);
     int autoVacuumMode = statement.getColumnInt(0);
     int error = lastError();
+    statement.finalize();
 
     // Check if we got an error while trying to get the value of the auto_vacuum flag.
     // If we got a SQLITE_BUSY error, then there's probably another transaction in

@@ -28,6 +28,7 @@
 
 #if ENABLE(APPLE_PAY)
 
+#include "ApplePaySessionPaymentRequest.h"
 #include "MockPayment.h"
 #include "MockPaymentContact.h"
 #include "MockPaymentMethod.h"
@@ -58,8 +59,10 @@ bool MockPaymentCoordinator::supportsVersion(unsigned version)
 
 #if !ENABLE(APPLE_PAY_SESSION_V3)
     static const unsigned currentVersion = 2;
-#else
+#elif !ENABLE(APPLE_PAY_SESSION_V4)
     static const unsigned currentVersion = 3;
+#else
+    static const unsigned currentVersion = 5;
 #endif
 
     return version <= currentVersion;
@@ -75,13 +78,13 @@ std::optional<String> MockPaymentCoordinator::validatedPaymentNetwork(const Stri
 
 bool MockPaymentCoordinator::canMakePayments()
 {
-    return true;
+    return m_canMakePayments;
 }
 
 void MockPaymentCoordinator::canMakePaymentsWithActiveCard(const String&, const String&, Function<void(bool)>&& completionHandler)
 {
-    RunLoop::main().dispatch([completionHandler = WTFMove(completionHandler)] {
-        completionHandler(true);
+    RunLoop::main().dispatch([completionHandler = WTFMove(completionHandler), canMakePaymentsWithActiveCard = m_canMakePaymentsWithActiveCard] {
+        completionHandler(canMakePaymentsWithActiveCard);
     });
 }
 
@@ -104,10 +107,18 @@ static void dispatchIfShowing(Function<void()>&& function)
     });
 }
 
+static Vector<ApplePayShippingMethod> convert(const Vector<ApplePaySessionPaymentRequest::ShippingMethod>& shippingMethods)
+{
+    return WTF::map(shippingMethods, [] (auto& shippingMethod) {
+        return ApplePayShippingMethod { shippingMethod.label, shippingMethod.detail, shippingMethod.amount, shippingMethod.identifier };
+    });
+}
+
 bool MockPaymentCoordinator::showPaymentUI(const URL&, const Vector<URL>&, const ApplePaySessionPaymentRequest& request)
 {
     if (request.shippingContact().pkContact())
         m_shippingAddress = request.shippingContact().toApplePayPaymentContact(request.version());
+    m_shippingMethods = convert(request.shippingMethods());
 
     ASSERT(showCount == hideCount);
     ++showCount;
@@ -149,10 +160,14 @@ void MockPaymentCoordinator::completeShippingMethodSelection(std::optional<Shipp
 
 void MockPaymentCoordinator::completeShippingContactSelection(std::optional<ShippingContactUpdate>&& shippingContactUpdate)
 {
-    if (shippingContactUpdate)
-        updateTotalAndLineItems(shippingContactUpdate->newTotalAndLineItems);
+    if (!shippingContactUpdate)
+        return;
+
+    m_shippingMethods = convert(shippingContactUpdate->newShippingMethods);
+    updateTotalAndLineItems(shippingContactUpdate->newTotalAndLineItems);
+    m_errors = WTFMove(shippingContactUpdate->errors);
 }
-    
+
 void MockPaymentCoordinator::completePaymentMethodSelection(std::optional<PaymentMethodUpdate>&& paymentMethodUpdate)
 {
     if (paymentMethodUpdate)
@@ -193,8 +208,14 @@ void MockPaymentCoordinator::cancelPayment()
     });
 }
 
-void MockPaymentCoordinator::completePaymentSession(std::optional<PaymentAuthorizationResult>&&)
+void MockPaymentCoordinator::completePaymentSession(std::optional<PaymentAuthorizationResult>&& result)
 {
+    auto isFinalState = isFinalStateResult(result);
+    m_errors = WTFMove(result->errors);
+
+    if (!isFinalState)
+        return;
+
     ++hideCount;
     ASSERT(showCount == hideCount);
 }

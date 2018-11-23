@@ -139,9 +139,9 @@ void RenderFrameSet::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
     size_t cols = m_cols.m_sizes.size();
     LayoutUnit borderThickness = frameSetElement().border();
     
-    LayoutUnit yPos = 0;
+    LayoutUnit yPos;
     for (size_t r = 0; r < rows; r++) {
-        LayoutUnit xPos = 0;
+        LayoutUnit xPos;
         for (size_t c = 0; c < cols; c++) {
             downcast<RenderElement>(*child).paint(paintInfo, adjustedPaintOffset);
             xPos += m_cols.m_sizes[c];
@@ -516,7 +516,7 @@ void RenderFrameSet::positionFrames()
             if (width != child->width() || height != child->height()) {
                 child->setWidth(width);
                 child->setHeight(height);
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
                 // FIXME: Is this iOS-specific?
                 child->setNeedsLayout(MarkOnlyThis);
 #else

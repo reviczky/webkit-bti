@@ -46,6 +46,7 @@
 #include "LoadTiming.h"
 #include "LoaderStrategy.h"
 #include "Performance.h"
+#include "PlatformStrategies.h"
 #include "ProgressTracker.h"
 #include "ResourceError.h"
 #include "ResourceRequest.h"
@@ -61,7 +62,7 @@
 #include <wtf/Assertions.h>
 #include <wtf/Ref.h>
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
 #include <wtf/spi/darwin/dyldSPI.h>
 #endif
 
@@ -184,7 +185,7 @@ void DocumentThreadableLoader::makeCrossOriginAccessRequest(ResourceRequest&& re
 {
     ASSERT(m_options.mode == FetchOptions::Mode::Cors);
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     bool needsPreflightQuirk = IOSApplication::isMoviStarPlus() && applicationSDKVersion() < DYLD_IOS_VERSION_12_0 && (m_options.preflightPolicy == PreflightPolicy::Consider || m_options.preflightPolicy == PreflightPolicy::Force);
 #else
     bool needsPreflightQuirk = false;
@@ -622,8 +623,8 @@ void DocumentThreadableLoader::loadRequest(ResourceRequest&& request, SecurityCh
         if (options().initiatorContext == InitiatorContext::Worker)
             finishedTimingForWorkerLoad(resourceTiming);
         else {
-            if (document().domWindow() && document().domWindow()->performance())
-                document().domWindow()->performance()->addResourceTiming(WTFMove(resourceTiming));
+            if (auto* window = document().domWindow())
+                window->performance().addResourceTiming(WTFMove(resourceTiming));
         }
     }
 

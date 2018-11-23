@@ -1,11 +1,11 @@
 include(GNUInstallDirs)
 include(VersioningUtils)
 
-SET_PROJECT_VERSION(2 22 4)
+SET_PROJECT_VERSION(2 23 1)
 set(WEBKITGTK_API_VERSION 4.0)
 
-CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(WEBKIT 70 5 33)
-CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(JAVASCRIPTCORE 29 5 11)
+CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(WEBKIT 71 0 34)
+CALCULATE_LIBRARY_VERSIONS_FROM_LIBTOOL_TRIPLE(JAVASCRIPTCORE 30 0 12)
 
 # These are shared variables, but we special case their definition so that we can use the
 # CMAKE_INSTALL_* variables that are populated by the GNUInstallDirs macro.
@@ -19,7 +19,7 @@ set(INTROSPECTION_INSTALL_TYPELIBDIR "${LIB_INSTALL_DIR}/girepository-1.0")
 
 find_package(Cairo 1.10.2 REQUIRED)
 find_package(Fontconfig 2.8.0 REQUIRED)
-find_package(Freetype2 2.4.2 REQUIRED)
+find_package(Freetype 2.4.2 REQUIRED)
 find_package(LibGcrypt 1.6.0 REQUIRED)
 find_package(GTK3 3.6.0 REQUIRED)
 find_package(GDK3 3.6.0 REQUIRED)
@@ -118,6 +118,12 @@ else ()
     WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_RESOURCE_USAGE PRIVATE OFF)
 endif ()
 
+if (CMAKE_SYSTEM_NAME MATCHES "Linux" AND NOT EXISTS "/.flatpak-info")
+    WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_BUBBLEWRAP_SANDBOX PUBLIC ON)
+else ()
+    WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_BUBBLEWRAP_SANDBOX PRIVATE OFF)
+endif ()
+
 # Public options shared with other WebKit ports. Do not add any options here
 # without approval from a GTK+ reviewer. There must be strong reason to support
 # changing the value of the option.
@@ -139,6 +145,7 @@ WEBKIT_OPTION_DEFAULT_PORT_VALUE(USE_SYSTEM_MALLOC PUBLIC OFF)
 # Changing these options is completely unsupported.
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_ACCESSIBILITY PRIVATE ON)
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_DOWNLOAD_ATTRIBUTE PRIVATE ON)
+WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_ENCRYPTED_MEDIA PRIVATE ${ENABLE_EXPERIMENTAL_FEATURES})
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_FTPDIR PRIVATE OFF)
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_INPUT_TYPE_COLOR PRIVATE ON)
 WEBKIT_OPTION_DEFAULT_PORT_VALUE(ENABLE_MHTML PRIVATE ON)
@@ -199,6 +206,38 @@ if (ENABLE_ACCELERATED_2D_CANVAS)
     if (NOT CAIROGL_FOUND)
         message(FATAL_ERROR "CairoGL is needed for ENABLE_ACCELERATED_2D_CANVAS")
     endif ()
+endif ()
+
+if (ENABLE_BUBBLEWRAP_SANDBOX)
+    find_program(BWRAP_EXECUTABLE bwrap)
+    if (NOT BWRAP_EXECUTABLE)
+        message(FATAL_ERROR "bwrap executable is needed for ENABLE_BUBBLEWRAP_SANDBOX")
+    endif ()
+    add_definitions(-DBWRAP_EXECUTABLE="${BWRAP_EXECUTABLE}")
+
+    execute_process(
+        COMMAND "${BWRAP_EXECUTABLE}" --version
+        RESULT_VARIABLE BWRAP_RET
+        OUTPUT_VARIABLE BWRAP_OUTPUT
+    )
+    if (BWRAP_RET)
+        message(FATAL_ERROR "Failed to run ${BWRAP_EXECUTABLE}")
+    endif ()
+    string(REGEX MATCH "([0-9]+.[0-9]+.[0-9]+)" BWRAP_VERSION "${BWRAP_OUTPUT}")
+    if (NOT "${BWRAP_VERSION}" VERSION_GREATER_EQUAL "0.3.1")
+        message(FATAL_ERROR "bwrap must be >= 0.3.1 but ${BWRAP_VERSION} found")
+    endif ()
+
+    find_package(Libseccomp)
+    if (NOT LIBSECCOMP_FOUND)
+        message(FATAL_ERROR "libseccomp is needed for ENABLE_BUBBLEWRAP_SANDBOX")
+    endif ()
+
+    find_program(DBUS_PROXY_EXECUTABLE xdg-dbus-proxy)
+    if (NOT DBUS_PROXY_EXECUTABLE)
+        message(FATAL_ERROR "xdg-dbus-proxy not found and is needed for ENABLE_BUBBLEWRAP_SANDBOX")
+    endif ()
+    add_definitions(-DDBUS_PROXY_EXECUTABLE="${DBUS_PROXY_EXECUTABLE}")
 endif ()
 
 if (USE_LIBSECRET)
@@ -277,6 +316,7 @@ if (ENABLE_OPENGL)
 
     SET_AND_EXPOSE_TO_BUILD(USE_COORDINATED_GRAPHICS TRUE)
     SET_AND_EXPOSE_TO_BUILD(USE_COORDINATED_GRAPHICS_THREADED TRUE)
+    SET_AND_EXPOSE_TO_BUILD(USE_NICOSIA TRUE)
 endif ()
 
 if (ENABLE_PLUGIN_PROCESS_GTK2)

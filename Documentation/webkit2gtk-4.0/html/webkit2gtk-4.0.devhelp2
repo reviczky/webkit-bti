@@ -17,6 +17,7 @@
       <sub name="WebKitInstallMissingMediaPluginsPermissionRequest" link="WebKitInstallMissingMediaPluginsPermissionRequest.html"/>
       <sub name="WebKitNavigationAction" link="WebKitNavigationAction.html"/>
       <sub name="WebKitUserMediaPermissionRequest" link="WebKitUserMediaPermissionRequest.html"/>
+      <sub name="WebKitDeviceInfoPermissionRequest" link="WebKitDeviceInfoPermissionRequest.html"/>
       <sub name="WebKitPolicyDecision" link="WebKitPolicyDecision.html"/>
       <sub name="WebKitNavigationPolicyDecision" link="WebKitNavigationPolicyDecision.html"/>
       <sub name="WebKitResponsePolicyDecision" link="WebKitResponsePolicyDecision.html"/>
@@ -74,6 +75,7 @@
     <sub name="Index of new symbols in 2.18" link="api-index-2-18.html"/>
     <sub name="Index of new symbols in 2.20" link="api-index-2-20.html"/>
     <sub name="Index of new symbols in 2.22" link="api-index-2-22.html"/>
+    <sub name="Index of new symbols in 2.24" link="api-index-2-24.html"/>
     <sub name="Annotation Glossary" link="annotation-glossary.html"/>
   </chapters>
   <functions>
@@ -100,6 +102,8 @@
     <keyword type="function" name="webkit_web_context_set_additional_plugins_directory ()" link="WebKitWebContext.html#webkit-web-context-set-additional-plugins-directory"/>
     <keyword type="function" name="webkit_web_context_get_plugins ()" link="WebKitWebContext.html#webkit-web-context-get-plugins"/>
     <keyword type="function" name="webkit_web_context_get_plugins_finish ()" link="WebKitWebContext.html#webkit-web-context-get-plugins-finish"/>
+    <keyword type="function" name="webkit_web_context_get_sandbox_enabled ()" link="WebKitWebContext.html#webkit-web-context-get-sandbox-enabled" since="2.24"/>
+    <keyword type="function" name="webkit_web_context_set_sandbox_enabled ()" link="WebKitWebContext.html#webkit-web-context-set-sandbox-enabled" since="2.24"/>
     <keyword type="function" name="webkit_web_context_get_spell_checking_enabled ()" link="WebKitWebContext.html#webkit-web-context-get-spell-checking-enabled"/>
     <keyword type="function" name="webkit_web_context_set_spell_checking_enabled ()" link="WebKitWebContext.html#webkit-web-context-set-spell-checking-enabled"/>
     <keyword type="function" name="webkit_web_context_get_spell_checking_languages ()" link="WebKitWebContext.html#webkit-web-context-get-spell-checking-languages"/>
@@ -197,17 +201,20 @@
     <keyword type="function" name="webkit_web_view_get_editor_state ()" link="WebKitWebView.html#webkit-web-view-get-editor-state" since="2.10"/>
     <keyword type="function" name="webkit_web_view_get_session_state ()" link="WebKitWebView.html#webkit-web-view-get-session-state" since="2.12"/>
     <keyword type="function" name="webkit_web_view_restore_session_state ()" link="WebKitWebView.html#webkit-web-view-restore-session-state" since="2.12"/>
+    <keyword type="function" name="webkit_web_view_get_main_resource ()" link="WebKitWebView.html#webkit-web-view-get-main-resource"/>
     <keyword type="function" name="webkit_javascript_result_ref ()" link="WebKitWebView.html#webkit-javascript-result-ref"/>
     <keyword type="function" name="webkit_javascript_result_unref ()" link="WebKitWebView.html#webkit-javascript-result-unref"/>
     <keyword type="function" name="webkit_javascript_result_get_global_context ()" link="WebKitWebView.html#webkit-javascript-result-get-global-context" deprecated="2.22: Use jsc_value_get_context() instead."/>
     <keyword type="function" name="webkit_javascript_result_get_value ()" link="WebKitWebView.html#webkit-javascript-result-get-value" deprecated="2.22: Use webkit_javascript_result_get_js_value() instead."/>
     <keyword type="function" name="webkit_javascript_result_get_js_value ()" link="WebKitWebView.html#webkit-javascript-result-get-js-value" since="2.22"/>
+    <keyword type="function" name="webkit_script_dialog_ref ()" link="WebKitWebView.html#webkit-script-dialog-ref" since="2.24"/>
+    <keyword type="function" name="webkit_script_dialog_unref ()" link="WebKitWebView.html#webkit-script-dialog-unref" since="2.24"/>
     <keyword type="function" name="webkit_script_dialog_get_dialog_type ()" link="WebKitWebView.html#webkit-script-dialog-get-dialog-type"/>
     <keyword type="function" name="webkit_script_dialog_get_message ()" link="WebKitWebView.html#webkit-script-dialog-get-message"/>
     <keyword type="function" name="webkit_script_dialog_confirm_set_confirmed ()" link="WebKitWebView.html#webkit-script-dialog-confirm-set-confirmed"/>
     <keyword type="function" name="webkit_script_dialog_prompt_get_default_text ()" link="WebKitWebView.html#webkit-script-dialog-prompt-get-default-text"/>
     <keyword type="function" name="webkit_script_dialog_prompt_set_text ()" link="WebKitWebView.html#webkit-script-dialog-prompt-set-text"/>
-    <keyword type="function" name="webkit_web_view_get_main_resource ()" link="WebKitWebView.html#webkit-web-view-get-main-resource"/>
+    <keyword type="function" name="webkit_script_dialog_close ()" link="WebKitWebView.html#webkit-script-dialog-close" since="2.24"/>
     <keyword type="function" name="webkit_web_view_session_state_new ()" link="WebKitWebView.html#webkit-web-view-session-state-new" since="2.12"/>
     <keyword type="function" name="webkit_web_view_session_state_ref ()" link="WebKitWebView.html#webkit-web-view-session-state-ref" since="2.12"/>
     <keyword type="function" name="webkit_web_view_session_state_unref ()" link="WebKitWebView.html#webkit-web-view-session-state-unref" since="2.12"/>
@@ -404,6 +411,8 @@
     <keyword type="function" name="webkit_settings_set_enable_write_console_messages_to_stdout ()" link="WebKitSettings.html#webkit-settings-set-enable-write-console-messages-to-stdout" since="2.2"/>
     <keyword type="function" name="webkit_settings_get_enable_media_stream ()" link="WebKitSettings.html#webkit-settings-get-enable-media-stream" since="2.4"/>
     <keyword type="function" name="webkit_settings_set_enable_media_stream ()" link="WebKitSettings.html#webkit-settings-set-enable-media-stream" since="2.4"/>
+    <keyword type="function" name="webkit_settings_get_enable_mock_capture_devices ()" link="WebKitSettings.html#webkit-settings-get-enable-mock-capture-devices" since="2.24"/>
+    <keyword type="function" name="webkit_settings_set_enable_mock_capture_devices ()" link="WebKitSettings.html#webkit-settings-set-enable-mock-capture-devices" since="2.4"/>
     <keyword type="function" name="webkit_settings_get_enable_spatial_navigation ()" link="WebKitSettings.html#webkit-settings-get-enable-spatial-navigation" since="2.2"/>
     <keyword type="function" name="webkit_settings_set_enable_spatial_navigation ()" link="WebKitSettings.html#webkit-settings-set-enable-spatial-navigation" since="2.2"/>
     <keyword type="function" name="webkit_settings_get_enable_mediasource ()" link="WebKitSettings.html#webkit-settings-get-enable-mediasource" since="2.4"/>
@@ -447,6 +456,7 @@
     <keyword type="property" name="The “enable-media-capabilities” property" link="WebKitSettings.html#WebKitSettings--enable-media-capabilities"/>
     <keyword type="property" name="The “enable-media-stream” property" link="WebKitSettings.html#WebKitSettings--enable-media-stream"/>
     <keyword type="property" name="The “enable-mediasource” property" link="WebKitSettings.html#WebKitSettings--enable-mediasource"/>
+    <keyword type="property" name="The “enable-mock-capture-devices” property" link="WebKitSettings.html#WebKitSettings--enable-mock-capture-devices"/>
     <keyword type="property" name="The “enable-offline-web-application-cache” property" link="WebKitSettings.html#WebKitSettings--enable-offline-web-application-cache"/>
     <keyword type="property" name="The “enable-page-cache” property" link="WebKitSettings.html#WebKitSettings--enable-page-cache"/>
     <keyword type="property" name="The “enable-plugins” property" link="WebKitSettings.html#WebKitSettings--enable-plugins"/>
@@ -553,6 +563,7 @@
     <keyword type="struct" name="struct WebKitUserMediaPermissionRequest" link="WebKitUserMediaPermissionRequest.html#WebKitUserMediaPermissionRequest-struct"/>
     <keyword type="property" name="The “is-for-audio-device” property" link="WebKitUserMediaPermissionRequest.html#WebKitUserMediaPermissionRequest--is-for-audio-device"/>
     <keyword type="property" name="The “is-for-video-device” property" link="WebKitUserMediaPermissionRequest.html#WebKitUserMediaPermissionRequest--is-for-video-device"/>
+    <keyword type="struct" name="struct WebKitDeviceInfoPermissionRequest" link="WebKitDeviceInfoPermissionRequest.html#WebKitDeviceInfoPermissionRequest-struct"/>
     <keyword type="function" name="webkit_policy_decision_download ()" link="WebKitPolicyDecision.html#webkit-policy-decision-download"/>
     <keyword type="function" name="webkit_policy_decision_ignore ()" link="WebKitPolicyDecision.html#webkit-policy-decision-ignore"/>
     <keyword type="function" name="webkit_policy_decision_use ()" link="WebKitPolicyDecision.html#webkit-policy-decision-use"/>
@@ -1145,6 +1156,7 @@
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_INDEXEDDB_DATABASES" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-INDEXEDDB-DATABASES:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_PLUGIN_DATA" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-PLUGIN-DATA:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_COOKIES" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-COOKIES:CAPS"/>
+    <keyword type="constant" name="WEBKIT_WEBSITE_DATA_DEVICE_ID_HASH_SALT" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-DEVICE-ID-HASH-SALT:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_ALL" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-ALL:CAPS"/>
     <keyword type="constant" name="WEBKIT_FORM_SUBMISSION_WILL_SEND_DOM_EVENT" link="WebKitWebPage.html#WEBKIT-FORM-SUBMISSION-WILL-SEND-DOM-EVENT:CAPS"/>
     <keyword type="constant" name="WEBKIT_FORM_SUBMISSION_WILL_COMPLETE" link="WebKitWebPage.html#WEBKIT-FORM-SUBMISSION-WILL-COMPLETE:CAPS"/>

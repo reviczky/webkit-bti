@@ -41,6 +41,7 @@
 #include "DOMRect.h"
 #include "DOMRectList.h"
 #include "DOMTokenList.h"
+#include "DOMWindow.h"
 #include "DocumentSharedObjectPool.h"
 #include "DocumentTimeline.h"
 #include "Editing.h"
@@ -91,6 +92,7 @@
 #include "SVGNames.h"
 #include "SVGSVGElement.h"
 #include "ScriptDisallowedScope.h"
+#include "ScrollIntoViewOptions.h"
 #include "ScrollLatchingState.h"
 #include "SelectorQuery.h"
 #include "Settings.h"
@@ -292,7 +294,9 @@ bool Element::dispatchMouseEvent(const PlatformMouseEvent& platformEvent, const 
         // as a separate event in other DOM-compliant browsers like Firefox, and so we do the same.
         // FIXME: Is it okay that mouseEvent may have been mutated by scripts via initMouseEvent in dispatchEvent above?
         Ref<MouseEvent> doubleClickEvent = MouseEvent::create(eventNames().dblclickEvent,
-            mouseEvent->bubbles() ? Event::CanBubble::Yes : Event::CanBubble::No, mouseEvent->cancelable() ? Event::IsCancelable::Yes : Event::IsCancelable::No,
+            mouseEvent->bubbles() ? Event::CanBubble::Yes : Event::CanBubble::No,
+            mouseEvent->cancelable() ? Event::IsCancelable::Yes : Event::IsCancelable::No,
+            Event::IsComposed::Yes,
             mouseEvent->view(), mouseEvent->detail(),
             mouseEvent->screenX(), mouseEvent->screenY(), mouseEvent->clientX(), mouseEvent->clientY(),
             mouseEvent->modifierKeys(), mouseEvent->button(), mouseEvent->buttons(), mouseEvent->syntheticClickType(), relatedTarget);
@@ -569,7 +573,7 @@ void Element::setActive(bool flag, bool pause)
 
     document().userActionElements().setActive(*this, flag);
 
-    const RenderStyle* renderStyle = this->renderStyle();
+    auto* renderStyle = renderOrDisplayContentsStyle();
     bool reactsToPress = (renderStyle && renderStyle->affectedByActive()) || styleAffectedByActive();
     if (reactsToPress)
         invalidateStyleForSubtree();
@@ -630,23 +634,67 @@ void Element::setHovered(bool flag)
 
     document().userActionElements().setHovered(*this, flag);
 
+    auto* style = renderOrDisplayContentsStyle();
+    if (style && (style->affectedByHover() || childrenAffectedByHover()))
+        invalidateStyleForSubtree();
+
     if (!renderer()) {
         // When setting hover to false, the style needs to be recalc'd even when
         // there's no renderer (imagine setting display:none in the :hover class,
         // if a nil renderer would prevent this element from recalculating its
         // style, it would never go back to its normal style and remain
         // stuck in its hovered style).
-        if (!flag)
+        if (!flag && !style)
             invalidateStyleForSubtree();
 
         return;
     }
 
-    if (renderer()->style().affectedByHover() || childrenAffectedByHover())
-        invalidateStyleForSubtree();
-
-    if (renderer()->style().hasAppearance())
+    if (style->hasAppearance())
         renderer()->theme().stateChanged(*renderer(), ControlStates::HoverState);
+}
+
+// FIXME(webkit.org/b/161611): Take into account orientation/direction.
+inline ScrollAlignment toScrollAlignment(std::optional<ScrollLogicalPosition> position, bool isVertical)
+{
+    switch (position.value_or(isVertical ? ScrollLogicalPosition::Start : ScrollLogicalPosition::Nearest)) {
+    case ScrollLogicalPosition::Start:
+        return isVertical ? ScrollAlignment::alignTopAlways : ScrollAlignment::alignLeftAlways;
+    case ScrollLogicalPosition::Center:
+        return ScrollAlignment::alignCenterAlways;
+    case ScrollLogicalPosition::End:
+        return isVertical ? ScrollAlignment::alignBottomAlways : ScrollAlignment::alignRightAlways;
+    case ScrollLogicalPosition::Nearest:
+        return ScrollAlignment::alignToEdgeIfNeeded;
+    default:
+        ASSERT_NOT_REACHED();
+        return ScrollAlignment::alignToEdgeIfNeeded;
+    }
+}
+
+void Element::scrollIntoView(std::optional<Variant<bool, ScrollIntoViewOptions>>&& arg)
+{
+    document().updateLayoutIgnorePendingStylesheets();
+
+    if (!renderer())
+        return;
+
+    bool insideFixed;
+    LayoutRect absoluteBounds = renderer()->absoluteAnchorRect(&insideFixed);
+
+    // FIXME(webkit.org/b/188043): Support ScrollBehavior.
+    ScrollIntoViewOptions options;
+    if (arg) {
+        auto value = arg.value();
+        if (WTF::holds_alternative<ScrollIntoViewOptions>(value))
+            options = WTF::get<ScrollIntoViewOptions>(value);
+        else if (!WTF::get<bool>(value))
+            options.blockPosition = ScrollLogicalPosition::End;
+    }
+
+    ScrollAlignment alignX = toScrollAlignment(options.inlinePosition, false);
+    ScrollAlignment alignY = toScrollAlignment(options.blockPosition, true);
+    renderer()->scrollRectToVisible(absoluteBounds, insideFixed, { SelectionRevealMode::Reveal, alignX, alignY, ShouldAllowCrossOriginScrolling::No });
 }
 
 void Element::scrollIntoView(bool alignToTop) 
@@ -660,9 +708,9 @@ void Element::scrollIntoView(bool alignToTop)
     LayoutRect absoluteBounds = renderer()->absoluteAnchorRect(&insideFixed);
     // Align to the top / bottom and to the closest edge.
     if (alignToTop)
-        renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, absoluteBounds, insideFixed, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignTopAlways, ShouldAllowCrossOriginScrolling::No);
+        renderer()->scrollRectToVisible(absoluteBounds, insideFixed, { SelectionRevealMode::Reveal, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignTopAlways, ShouldAllowCrossOriginScrolling::No });
     else
-        renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, absoluteBounds, insideFixed, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignBottomAlways, ShouldAllowCrossOriginScrolling::No);
+        renderer()->scrollRectToVisible(absoluteBounds, insideFixed, { SelectionRevealMode::Reveal, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignBottomAlways, ShouldAllowCrossOriginScrolling::No });
 }
 
 void Element::scrollIntoViewIfNeeded(bool centerIfNeeded)
@@ -675,9 +723,9 @@ void Element::scrollIntoViewIfNeeded(bool centerIfNeeded)
     bool insideFixed;
     LayoutRect absoluteBounds = renderer()->absoluteAnchorRect(&insideFixed);
     if (centerIfNeeded)
-        renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, absoluteBounds, insideFixed, ScrollAlignment::alignCenterIfNeeded, ScrollAlignment::alignCenterIfNeeded, ShouldAllowCrossOriginScrolling::No);
+        renderer()->scrollRectToVisible(absoluteBounds, insideFixed, { SelectionRevealMode::Reveal, ScrollAlignment::alignCenterIfNeeded, ScrollAlignment::alignCenterIfNeeded, ShouldAllowCrossOriginScrolling::No });
     else
-        renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, absoluteBounds, insideFixed, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignToEdgeIfNeeded, ShouldAllowCrossOriginScrolling::No);
+        renderer()->scrollRectToVisible(absoluteBounds, insideFixed, { SelectionRevealMode::Reveal, ScrollAlignment::alignToEdgeIfNeeded, ScrollAlignment::alignToEdgeIfNeeded, ShouldAllowCrossOriginScrolling::No });
 }
 
 void Element::scrollIntoViewIfNotVisible(bool centerIfNotVisible)
@@ -690,9 +738,9 @@ void Element::scrollIntoViewIfNotVisible(bool centerIfNotVisible)
     bool insideFixed;
     LayoutRect absoluteBounds = renderer()->absoluteAnchorRect(&insideFixed);
     if (centerIfNotVisible)
-        renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, absoluteBounds, insideFixed, ScrollAlignment::alignCenterIfNotVisible, ScrollAlignment::alignCenterIfNotVisible, ShouldAllowCrossOriginScrolling::No);
+        renderer()->scrollRectToVisible(absoluteBounds, insideFixed, { SelectionRevealMode::Reveal, ScrollAlignment::alignCenterIfNotVisible, ScrollAlignment::alignCenterIfNotVisible, ShouldAllowCrossOriginScrolling::No });
     else
-        renderer()->scrollRectToVisible(SelectionRevealMode::Reveal, absoluteBounds, insideFixed, ScrollAlignment::alignToEdgeIfNotVisible, ScrollAlignment::alignToEdgeIfNotVisible, ShouldAllowCrossOriginScrolling::No);
+        renderer()->scrollRectToVisible(absoluteBounds, insideFixed, { SelectionRevealMode::Reveal, ScrollAlignment::alignToEdgeIfNotVisible, ScrollAlignment::alignToEdgeIfNotVisible, ShouldAllowCrossOriginScrolling::No });
 }
 
 void Element::scrollBy(const ScrollToOptions& options)
@@ -710,12 +758,26 @@ void Element::scrollBy(double x, double y)
 
 void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping)
 {
-    // If the element is the root element and document is in quirks mode, terminate these steps.
-    // Note that WebKit always uses quirks mode document scrolling behavior. See Document::scrollingElement().
-    if (this == document().documentElement())
-        return;
+    if (!document().settings().CSSOMViewScrollingAPIEnabled()) {
+        // If the element is the root element and document is in quirks mode, terminate these steps.
+        // Note that WebKit always uses quirks mode document scrolling behavior. See Document::scrollingElement().
+        if (this == document().documentElement())
+            return;
+    }
 
     document().updateLayoutIgnorePendingStylesheets();
+
+    if (document().scrollingElement() == this) {
+        // If the element is the scrolling element and is not potentially scrollable,
+        // invoke scroll() on window with options as the only argument, and terminate these steps.
+        // FIXME: Scrolling an independently scrollable body is broken: webkit.org/b/161612.
+        auto window = makeRefPtr(document().domWindow());
+        if (!window)
+            return;
+
+        window->scrollTo(options);
+        return;
+    }
 
     // If the element does not have any associated CSS layout box, the element has no associated scrolling box,
     // or the element has no overflow, terminate these steps.
@@ -795,6 +857,18 @@ static double adjustForLocalZoom(LayoutUnit value, const RenderElement& renderer
     if (zoomFactor == 1)
         return value.toDouble();
     return value.toDouble() / zoomFactor;
+}
+
+static int adjustContentsScrollPositionOrSizeForZoom(int value, const Frame& frame)
+{
+    double zoomFactor = frame.pageZoomFactor() * frame.frameScaleFactor();
+    if (zoomFactor == 1)
+        return value;
+    // FIXME (webkit.org/b/189397): Why can't we just ceil/floor?
+    // Needed because of truncation (rather than rounding) when scaling up.
+    if (zoomFactor > 1)
+        value++;
+    return static_cast<int>(value / zoomFactor);
 }
 
 enum LegacyCSSOMElementMetricsRoundingStrategy { Round, Floor };
@@ -938,9 +1012,21 @@ double Element::clientHeight()
     return 0;
 }
 
+ALWAYS_INLINE Frame* Element::documentFrameWithNonNullView() const
+{
+    auto* frame = document().frame();
+    return frame && frame->view() ? frame : nullptr;
+}
+
 int Element::scrollLeft()
 {
     document().updateLayoutIgnorePendingStylesheets();
+
+    if (document().scrollingElement() == this) {
+        if (auto* frame = documentFrameWithNonNullView())
+            return adjustContentsScrollPositionOrSizeForZoom(frame->view()->contentsScrollPosition().x(), *frame);
+        return 0;
+    }
 
     if (auto* renderer = renderBox())
         return adjustForAbsoluteZoom(renderer->scrollLeft(), *renderer);
@@ -951,6 +1037,12 @@ int Element::scrollTop()
 {
     document().updateLayoutIgnorePendingStylesheets();
 
+    if (document().scrollingElement() == this) {
+        if (auto* frame = documentFrameWithNonNullView())
+            return adjustContentsScrollPositionOrSizeForZoom(frame->view()->contentsScrollPosition().y(), *frame);
+        return 0;
+    }
+
     if (RenderBox* renderer = renderBox())
         return adjustForAbsoluteZoom(renderer->scrollTop(), *renderer);
     return 0;
@@ -959,6 +1051,12 @@ int Element::scrollTop()
 void Element::setScrollLeft(int newLeft)
 {
     document().updateLayoutIgnorePendingStylesheets();
+
+    if (document().scrollingElement() == this) {
+        if (auto* frame = documentFrameWithNonNullView())
+            frame->view()->setScrollPosition(IntPoint(static_cast<int>(newLeft * frame->pageZoomFactor() * frame->frameScaleFactor()), frame->view()->scrollY()));
+        return;
+    }
 
     if (auto* renderer = renderBox()) {
         renderer->setScrollLeft(static_cast<int>(newLeft * renderer->style().effectiveZoom()));
@@ -971,6 +1069,12 @@ void Element::setScrollTop(int newTop)
 {
     document().updateLayoutIgnorePendingStylesheets();
 
+    if (document().scrollingElement() == this) {
+        if (auto* frame = documentFrameWithNonNullView())
+            frame->view()->setScrollPosition(IntPoint(frame->view()->scrollX(), static_cast<int>(newTop * frame->pageZoomFactor() * frame->frameScaleFactor())));
+        return;
+    }
+
     if (auto* renderer = renderBox()) {
         renderer->setScrollTop(static_cast<int>(newTop * renderer->style().effectiveZoom()));
         if (auto* scrollableArea = renderer->layer())
@@ -981,6 +1085,15 @@ void Element::setScrollTop(int newTop)
 int Element::scrollWidth()
 {
     document().updateLayoutIfDimensionsOutOfDate(*this, WidthDimensionsCheck);
+
+    if (document().scrollingElement() == this) {
+        // FIXME (webkit.org/b/182289): updateLayoutIfDimensionsOutOfDate seems to ignore zoom level change.
+        document().updateLayoutIgnorePendingStylesheets();
+        if (auto* frame = documentFrameWithNonNullView())
+            return adjustContentsScrollPositionOrSizeForZoom(frame->view()->contentsWidth(), *frame);
+        return 0;
+    }
+
     if (auto* renderer = renderBox())
         return adjustForAbsoluteZoom(renderer->scrollWidth(), *renderer);
     return 0;
@@ -989,6 +1102,15 @@ int Element::scrollWidth()
 int Element::scrollHeight()
 {
     document().updateLayoutIfDimensionsOutOfDate(*this, HeightDimensionsCheck);
+
+    if (document().scrollingElement() == this) {
+        // FIXME (webkit.org/b/182289): updateLayoutIfDimensionsOutOfDate seems to ignore zoom level change.
+        document().updateLayoutIgnorePendingStylesheets();
+        if (auto* frame = documentFrameWithNonNullView())
+            return adjustContentsScrollPositionOrSizeForZoom(frame->view()->contentsHeight(), *frame);
+        return 0;
+    }
+
     if (auto* renderer = renderBox())
         return adjustForAbsoluteZoom(renderer->scrollHeight(), *renderer);
     return 0;
@@ -1653,8 +1775,10 @@ void Element::didMoveToNewDocument(Document& oldDocument, Document& newDocument)
 #if ENABLE(INTERSECTION_OBSERVER)
     if (auto* observerData = intersectionObserverData()) {
         for (auto observer : observerData->observers) {
-            if (observer->hasObservationTargets())
-                newDocument.addIntersectionObserver(oldDocument.removeIntersectionObserver(*observer));
+            if (observer->hasObservationTargets()) {
+                oldDocument.removeIntersectionObserver(*observer);
+                newDocument.addIntersectionObserver(*observer);
+            }
         }
     }
 #endif
@@ -1839,10 +1963,9 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
         document().accessSVGExtensions().removeElementFromPendingResources(this);
 
     RefPtr<Frame> frame = document().frame();
-    if (RuntimeEnabledFeatures::sharedFeatures().webAnimationsCSSIntegrationEnabled()) {
-        if (auto* timeline = document().existingTimeline())
-            timeline->elementWasRemoved(*this);
-    } else if (frame)
+    if (auto* timeline = document().existingTimeline())
+        timeline->elementWasRemoved(*this);
+    if (frame)
         frame->animation().cancelAnimations(*this);
 
 #if PLATFORM(MAC)
@@ -1894,7 +2017,7 @@ void Element::removeShadowRoot()
         return;
 
     InspectorInstrumentation::willPopShadowRoot(*this, *oldRoot);
-    document().removeFocusedNodeOfSubtree(*oldRoot);
+    document().adjustFocusedNodeOnNodeRemoval(*oldRoot);
 
     ASSERT(!oldRoot->renderer());
 
@@ -2176,7 +2299,7 @@ void Element::childrenChanged(const ChildChange& change)
         switch (change.type) {
         case ElementInserted:
         case ElementRemoved:
-            // For elements, we notify shadowRoot in Element::insertedInto and Element::removedFrom.
+            // For elements, we notify shadowRoot in Element::insertedIntoAncestor and Element::removedFromAncestor.
             break;
         case AllChildrenRemoved:
         case AllChildrenReplaced:
@@ -2530,7 +2653,7 @@ void Element::focus(bool restorePreviousSelection, FocusDirection direction)
     }
 
     SelectionRevealMode revealMode = SelectionRevealMode::Reveal;
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     // Focusing a form element triggers animation in UIKit to scroll to the right position.
     // Calling updateFocusAppearance() would generate an unnecessary call to ScrollView::setScrollPosition(),
     // which would jump us around during this animation. See <rdar://problem/6699741>.
@@ -2654,12 +2777,12 @@ ExceptionOr<void> Element::mergeWithNextTextNode(Text& node)
 
 String Element::innerHTML() const
 {
-    return createMarkup(*this, ChildrenOnly);
+    return serializeFragment(*this, SerializedNodes::SubtreesOfChildren);
 }
 
 String Element::outerHTML() const
 {
-    return createMarkup(*this);
+    return serializeFragment(*this, SerializedNodes::SubtreeIncludingNode);
 }
 
 ExceptionOr<void> Element::setOuterHTML(const String& html)
@@ -2784,6 +2907,20 @@ const RenderStyle* Element::existingComputedStyle() const
     }
 
     return renderStyle();
+}
+
+const RenderStyle* Element::renderOrDisplayContentsStyle() const
+{
+    if (auto* style = renderStyle())
+        return style;
+
+    if (!hasRareData())
+        return nullptr;
+    auto* style = elementRareData()->computedStyle();
+    if (style && style->display() == DisplayType::Contents)
+        return style;
+
+    return nullptr;
 }
 
 const RenderStyle& Element::resolveComputedStyle()
@@ -3319,7 +3456,7 @@ bool Element::fastAttributeLookupAllowed(const QualifiedName& name) const
 }
 #endif
 
-#ifdef DUMP_NODE_STATISTICS
+#if DUMP_NODE_STATISTICS
 bool Element::hasNamedNodeMap() const
 {
     return hasRareData() && elementRareData()->attributeMap();
@@ -3909,7 +4046,7 @@ Vector<RefPtr<WebAnimation>> Element::getAnimations()
     Vector<RefPtr<WebAnimation>> animations;
     if (auto timeline = document().existingTimeline()) {
         for (auto& animation : timeline->animationsForElement(*this, AnimationTimeline::Ordering::Sorted)) {
-            if (animation->canBeListed())
+            if (animation->isRelevant())
                 animations.append(animation);
         }
     }

@@ -26,7 +26,7 @@
 #pragma once
 
 #include "SameDocumentNavigationType.h"
-#include <WebCore/LayoutMilestones.h>
+#include <WebCore/LayoutMilestone.h>
 #include <wtf/Forward.h>
 #include <wtf/WallTime.h>
 #include <wtf/text/WTFString.h>
@@ -58,7 +58,6 @@ public:
     virtual void willLoadURLRequest(WebKit::WebPage&, const WebCore::ResourceRequest&, API::Object*) { }
     virtual void willLoadDataRequest(WebKit::WebPage&, const WebCore::ResourceRequest&, WebCore::SharedBuffer*, const WTF::String&, const WTF::String&, const WebCore::URL&, API::Object*) { }
 
-    virtual bool shouldGoToBackForwardListItem(WebKit::WebPage&, WebKit::InjectedBundleBackForwardListItem&, RefPtr<API::Object>&) { return true; }
     virtual void didStartProvisionalLoadForFrame(WebKit::WebPage&, WebKit::WebFrame&, RefPtr<API::Object>&) { }
     virtual void didReceiveServerRedirectForProvisionalLoadForFrame(WebKit::WebPage&, WebKit::WebFrame&, RefPtr<API::Object>&) { }
     virtual void didFailProvisionalLoadWithErrorForFrame(WebKit::WebPage&, WebKit::WebFrame&, const WebCore::ResourceError&, RefPtr<API::Object>&) { }
@@ -77,7 +76,7 @@ public:
     virtual void didFirstLayoutForFrame(WebKit::WebPage&, WebKit::WebFrame&, RefPtr<API::Object>&) { }
     virtual void didFirstVisuallyNonEmptyLayoutForFrame(WebKit::WebPage&, WebKit::WebFrame&, RefPtr<API::Object>&) { }
     virtual void didLayoutForFrame(WebKit::WebPage&, WebKit::WebFrame&) { }
-    virtual void didReachLayoutMilestone(WebKit::WebPage&, WebCore::LayoutMilestones, RefPtr<API::Object>&) { }
+    virtual void didReachLayoutMilestone(WebKit::WebPage&, OptionSet<WebCore::LayoutMilestone>, RefPtr<API::Object>&) { }
 
     virtual void didClearWindowObjectForFrame(WebKit::WebPage&, WebKit::WebFrame&, WebCore::DOMWrapperWorld&) { }
     virtual void didCancelClientRedirectForFrame(WebKit::WebPage&, WebKit::WebFrame&) { }
@@ -98,7 +97,7 @@ public:
     virtual void willDestroyFrame(WebKit::WebPage&, WebKit::WebFrame&) { }
     virtual WTF::String userAgentForURL(WebKit::WebFrame&, const WebCore::URL&) const { return WTF::String(); }
 
-    virtual WebCore::LayoutMilestones layoutMilestones() const { return 0; }
+    virtual OptionSet<WebCore::LayoutMilestone> layoutMilestones() const { return { }; }
 };
 
 } // namespace InjectedBundle

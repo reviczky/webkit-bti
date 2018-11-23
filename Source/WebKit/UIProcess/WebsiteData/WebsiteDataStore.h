@@ -37,6 +37,7 @@
 #include <wtf/OptionSet.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
+#include <wtf/UniqueRef.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/WorkQueue.h>
 #include <wtf/text/WTFString.h>
@@ -45,24 +46,30 @@
 #include <pal/spi/cf/CFNetworkSPI.h>
 #endif
 
+#if USE(CURL)
+#include <WebCore/CurlProxySettings.h>
+#endif
+
 namespace WebCore {
 class SecurityOrigin;
 }
 
 namespace WebKit {
 
+class AuthenticatorManager;
 class SecKeyProxyStore;
 class StorageManager;
+class DeviceIdHashSaltStorage;
 class WebPageProxy;
 class WebProcessPool;
 class WebResourceLoadStatisticsStore;
 enum class WebsiteDataFetchOption;
 enum class WebsiteDataType;
-struct StorageProcessCreationParameters;
+struct MockWebAuthenticationConfiguration;
 struct WebsiteDataRecord;
 struct WebsiteDataStoreParameters;
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
 enum class StorageAccessStatus;
 enum class StorageAccessPromptStatus;
 #endif
@@ -70,8 +77,6 @@ enum class StorageAccessPromptStatus;
 #if ENABLE(NETSCAPE_PLUGIN_API)
 struct PluginModuleInfo;
 #endif
-
-enum class ShouldClearFirst { No, Yes };
 
 class WebsiteDataStore : public RefCounted<WebsiteDataStore>, public WebProcessLifetimeObserver, public Identified<WebsiteDataStore>, public CanMakeWeakPtr<WebsiteDataStore>  {
 public:
@@ -90,9 +95,12 @@ public:
         String webSQLDatabaseDirectory;
         String localStorageDirectory;
         String mediaKeysStorageDirectory;
+        String deviceIdHashSaltsStorageDirectory;
         String resourceLoadStatisticsDirectory;
         String javaScriptConfigurationDirectory;
         String cookieStorageFile;
+        String sourceApplicationBundleIdentifier;
+        String sourceApplicationSecondaryIdentifier;
 
         explicit Configuration();
     };
@@ -130,8 +138,9 @@ public:
     void removeData(OptionSet<WebsiteDataType>, const Vector<WebsiteDataRecord>&, Function<void()>&& completionHandler);
     void removeDataForTopPrivatelyControlledDomains(OptionSet<WebsiteDataType>, OptionSet<WebsiteDataFetchOption>, const Vector<String>& topPrivatelyControlledDomains, Function<void(HashSet<String>&&)>&& completionHandler);
 
-#if HAVE(CFNETWORK_STORAGE_PARTITIONING)
-    void updatePrevalentDomainsToBlockCookiesFor(const Vector<String>& domainsToBlock, ShouldClearFirst, CompletionHandler<void()>&&);
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+    void updatePrevalentDomainsToBlockCookiesFor(const Vector<String>& domainsToBlock, CompletionHandler<void()>&&);
+    void setAgeCapForClientSideCookies(std::optional<Seconds>, CompletionHandler<void()>&&);
     void hasStorageAccessForFrameHandler(const String& resourceDomain, const String& firstPartyDomain, uint64_t frameID, uint64_t pageID, CompletionHandler<void(bool hasAccess)>&&);
     void getAllStorageAccessEntries(uint64_t pageID, CompletionHandler<void(Vector<String>&& domains)>&&);
     void grantStorageAccessHandler(const String& resourceDomain, const String& firstPartyDomain, std::optional<uint64_t> frameID, uint64_t pageID, CompletionHandler<void(bool wasGranted)>&&);
@@ -141,7 +150,8 @@ public:
     void requestStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t pageID, bool promptEnabled, CompletionHandler<void(StorageAccessStatus)>&&);
     void grantStorageAccess(String&& subFrameHost, String&& topFrameHost, uint64_t frameID, uint64_t pageID, bool userWasPrompted, CompletionHandler<void(bool)>&&);
 #endif
-    void networkProcessDidCrash();
+    void setCacheMaxAgeCapForPrevalentResources(Seconds, CompletionHandler<void()>&&);
+    void resetCacheMaxAgeCapForPrevalentResources(CompletionHandler<void()>&&);
     void resolveDirectoriesIfNecessary();
     const String& resolvedApplicationCacheDirectory() const { return m_resolvedConfiguration.applicationCacheDirectory; }
     const String& resolvedMediaCacheDirectory() const { return m_resolvedConfiguration.mediaCacheDirectory; }
@@ -155,11 +165,12 @@ public:
 
     StorageManager* storageManager() { return m_storageManager.get(); }
 
+    DeviceIdHashSaltStorage* deviceIdHashSaltStorage() { return m_deviceIdHashSaltStorage.get(); }
+
     WebProcessPool* processPoolForCookieStorageOperations();
     bool isAssociatedProcessPool(WebProcessPool&) const;
 
     WebsiteDataStoreParameters parameters();
-    StorageProcessCreationParameters storageProcessParameters();
 
     Vector<WebCore::Cookie> pendingCookies() const;
     void addPendingCookie(const WebCore::Cookie&);
@@ -178,12 +189,25 @@ public:
     void setProxyConfiguration(CFDictionaryRef configuration) { m_proxyConfiguration = configuration; }
     CFDictionaryRef proxyConfiguration() { return m_proxyConfiguration.get(); }
 #endif
-    
+
+#if USE(CURL)
+    void platformSetParameters(WebsiteDataStoreParameters&);
+    void setNetworkProxySettings(WebCore::CurlProxySettings&&);
+    const WebCore::CurlProxySettings& networkProxySettings() const { return m_proxySettings; }
+#endif
+
     static void allowWebsiteDataRecordsForAllOrigins();
 
 #if HAVE(SEC_KEY_PROXY)
     void addSecKeyProxyStore(Ref<SecKeyProxyStore>&&);
 #endif
+
+#if ENABLE(WEB_AUTHN)
+    AuthenticatorManager& authenticatorManager() { return m_authenticatorManager.get(); }
+    void setMockWebAuthenticationConfiguration(MockWebAuthenticationConfiguration&&);
+#endif
+
+    void didCreateNetworkProcess();
 
 private:
     explicit WebsiteDataStore(PAL::SessionID);
@@ -225,6 +249,7 @@ private:
     bool m_hasResolvedDirectories { false };
 
     const RefPtr<StorageManager> m_storageManager;
+    const RefPtr<DeviceIdHashSaltStorage> m_deviceIdHashSaltStorage;
     RefPtr<WebResourceLoadStatisticsStore> m_resourceLoadStatistics;
     bool m_resourceLoadStatisticsDebugMode { false };
 
@@ -235,13 +260,22 @@ private:
     RetainPtr<CFHTTPCookieStorageRef> m_cfCookieStorage;
     RetainPtr<CFDictionaryRef> m_proxyConfiguration;
 #endif
+
+#if USE(CURL)
+    WebCore::CurlProxySettings m_proxySettings;
+#endif
+
     HashSet<WebCore::Cookie> m_pendingCookies;
-    
+
     String m_boundInterfaceIdentifier;
     AllowsCellularAccess m_allowsCellularAccess { AllowsCellularAccess::Yes };
 
 #if HAVE(SEC_KEY_PROXY)
     Vector<Ref<SecKeyProxyStore>> m_secKeyProxyStores;
+#endif
+
+#if ENABLE(WEB_AUTHN)
+    UniqueRef<AuthenticatorManager> m_authenticatorManager;
 #endif
 };
 

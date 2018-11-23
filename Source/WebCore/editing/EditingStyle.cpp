@@ -401,6 +401,12 @@ static inline Color textColorFromStyle(T& style)
 }
 
 template<typename T>
+static inline Color caretColorFromStyle(T& style)
+{
+    return cssValueToColor(extractPropertyValue(style, CSSPropertyCaretColor).get());
+}
+
+template<typename T>
 static inline Color backgroundColorFromStyle(T& style)
 {
     return cssValueToColor(extractPropertyValue(style, CSSPropertyBackgroundColor).get());
@@ -1080,8 +1086,11 @@ void EditingStyle::prepareToApplyAt(const Position& position, ShouldPreserveWrit
     if (textAlignResolvingStartAndEnd(*m_mutableStyle) == textAlignResolvingStartAndEnd(*styleAtPosition))
         m_mutableStyle->removeProperty(CSSPropertyTextAlign);
 
-    if (textColorFromStyle(*m_mutableStyle) == textColorFromStyle(*styleAtPosition))
+    if (equalIgnoringSemanticColor(textColorFromStyle(*m_mutableStyle), textColorFromStyle(*styleAtPosition)))
         m_mutableStyle->removeProperty(CSSPropertyColor);
+
+    if (equalIgnoringSemanticColor(caretColorFromStyle(*m_mutableStyle), caretColorFromStyle(*styleAtPosition)))
+        m_mutableStyle->removeProperty(CSSPropertyCaretColor);
 
     if (hasTransparentBackgroundColor(m_mutableStyle.get())
         || cssValueToColor(m_mutableStyle->getPropertyCSSValue(CSSPropertyBackgroundColor).get()) == rgbaBackgroundColorInEffect(position.containerNode()))
@@ -1367,6 +1376,13 @@ void EditingStyle::forceInline()
         m_mutableStyle = MutableStyleProperties::create();
     const bool propertyIsImportant = true;
     m_mutableStyle->setProperty(CSSPropertyDisplay, CSSValueInline, propertyIsImportant);
+}
+
+void EditingStyle::addDisplayContents()
+{
+    if (!m_mutableStyle)
+        m_mutableStyle = MutableStyleProperties::create();
+    m_mutableStyle->setProperty(CSSPropertyDisplay, CSSValueContents);
 }
 
 bool EditingStyle::convertPositionStyle()
@@ -1720,8 +1736,11 @@ void StyleChange::extractTextStyles(Document& document, MutableStyleProperties& 
     }
 
     if (style.getPropertyCSSValue(CSSPropertyColor)) {
-        m_applyFontColor = Color(textColorFromStyle(style)).serialized();
-        style.removeProperty(CSSPropertyColor);
+        auto color = textColorFromStyle(style);
+        if (color.isOpaque()) {
+            m_applyFontColor = color.serialized();
+            style.removeProperty(CSSPropertyColor);
+        }
     }
 
     m_applyFontFace = style.getPropertyValue(CSSPropertyFontFamily);
@@ -1795,14 +1814,17 @@ static Ref<MutableStyleProperties> extractPropertiesNotIn(StyleProperties& style
     if (extractPropertyValue(baseStyle, CSSPropertyFontWeight) && fontWeightIsBold(mutableStyle) == fontWeightIsBold(baseStyle))
         mutableStyle->removeProperty(CSSPropertyFontWeight);
 
-    if (extractPropertyValue(baseStyle, CSSPropertyColor) && textColorFromStyle(mutableStyle) == textColorFromStyle(baseStyle))
+    if (extractPropertyValue(baseStyle, CSSPropertyColor) && equalIgnoringSemanticColor(textColorFromStyle(mutableStyle), textColorFromStyle(baseStyle)))
         mutableStyle->removeProperty(CSSPropertyColor);
+
+    if (extractPropertyValue(baseStyle, CSSPropertyCaretColor) && equalIgnoringSemanticColor(caretColorFromStyle(mutableStyle), caretColorFromStyle(baseStyle)))
+        mutableStyle->removeProperty(CSSPropertyCaretColor);
 
     if (extractPropertyValue(baseStyle, CSSPropertyTextAlign)
         && textAlignResolvingStartAndEnd(mutableStyle) == textAlignResolvingStartAndEnd(baseStyle))
         mutableStyle->removeProperty(CSSPropertyTextAlign);
 
-    if (extractPropertyValue(baseStyle, CSSPropertyBackgroundColor) && backgroundColorFromStyle(mutableStyle) == backgroundColorFromStyle(baseStyle))
+    if (extractPropertyValue(baseStyle, CSSPropertyBackgroundColor) && equalIgnoringSemanticColor(backgroundColorFromStyle(mutableStyle), backgroundColorFromStyle(baseStyle)))
         mutableStyle->removeProperty(CSSPropertyBackgroundColor);
 
     return mutableStyle;

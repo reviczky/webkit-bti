@@ -110,7 +110,7 @@ private:
             return isWithinPowerOfTwoForConstant<power>(node);
         }
             
-        case BitAnd: {
+        case ArithBitAnd: {
             if (power > 31)
                 return true;
             
@@ -118,7 +118,7 @@ private:
                 || isWithinPowerOfTwoNonRecursive<power>(node->child2().node());
         }
             
-        case BitOr:
+        case ArithBitOr:
         case BitXor:
         case BitLShift: {
             return power > 31;
@@ -207,8 +207,8 @@ private:
         case CheckVarargs:
             break;
             
-        case BitAnd:
-        case BitOr:
+        case ArithBitAnd:
+        case ArithBitOr:
         case BitXor:
         case BitRShift:
         case BitLShift:

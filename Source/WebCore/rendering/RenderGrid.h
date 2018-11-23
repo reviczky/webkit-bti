@@ -35,7 +35,15 @@ namespace WebCore {
 class GridArea;
 class GridSpan;
 
-struct ContentAlignmentData;
+struct ContentAlignmentData {
+    WTF_MAKE_NONCOPYABLE(ContentAlignmentData); WTF_MAKE_FAST_ALLOCATED;
+public:
+    ContentAlignmentData() = default;
+    bool isValid() const { return positionOffset >= 0 && distributionOffset >= 0; }
+
+    LayoutUnit positionOffset;
+    LayoutUnit distributionOffset;
+};
 
 enum GridAxisPosition {GridAxisStart, GridAxisEnd, GridAxisCenter};
 enum GridAxis { GridRowAxis, GridColumnAxis };
@@ -64,6 +72,9 @@ public:
 
     // Required by GridTrackSizingAlgorithm. Keep them under control.
     LayoutUnit guttersSize(const Grid&, GridTrackSizingDirection, unsigned startLine, unsigned span, std::optional<LayoutUnit> availableSize) const;
+    LayoutUnit gridItemOffset(GridTrackSizingDirection) const;
+
+    void updateGridAreaLogicalSize(RenderBox&, LayoutSize) const;
 
     StyleContentAlignmentData contentAlignment(GridTrackSizingDirection) const;
 
@@ -96,7 +107,9 @@ private:
 
     std::unique_ptr<OrderedTrackIndexSet> computeEmptyTracksForAutoRepeat(Grid&, GridTrackSizingDirection) const;
 
-    void placeItemsOnGrid(Grid&, std::optional<LayoutUnit> availableSpaceForColumns) const;
+    void performGridItemsPreLayout(const GridTrackSizingAlgorithm&) const;
+
+    void placeItemsOnGrid(GridTrackSizingAlgorithm&, std::optional<LayoutUnit> availableLogicalWidth) const;
     void populateExplicitGridAndOrderIterator(Grid&) const;
     std::unique_ptr<GridArea> createEmptyGridAreaAtSpecifiedPositionsOutsideGrid(Grid&, const RenderBox&, GridTrackSizingDirection, const GridSpan&) const;
     void placeSpecifiedMajorAxisItemsOnGrid(Grid&, const Vector<RenderBox*>&) const;
@@ -112,7 +125,7 @@ private:
     void layoutPositionedObject(RenderBox&, bool relayoutChildren, bool fixedPositionObjectsOnly) override;
 
     void computeTrackSizesForDefiniteSize(GridTrackSizingDirection, LayoutUnit availableSpace);
-    void computeTrackSizesForIndefiniteSize(GridTrackSizingAlgorithm&, GridTrackSizingDirection, Grid&, LayoutUnit& minIntrinsicSize, LayoutUnit& maxIntrinsicSize) const;
+    void computeTrackSizesForIndefiniteSize(GridTrackSizingAlgorithm&, GridTrackSizingDirection, LayoutUnit& minIntrinsicSize, LayoutUnit& maxIntrinsicSize) const;
     LayoutUnit computeTrackBasedLogicalHeight() const;
 
     void repeatTracksSizingIfNeeded(LayoutUnit availableSpaceForColumns, LayoutUnit availableSpaceForRows);
@@ -133,7 +146,7 @@ private:
     GridAxisPosition rowAxisPositionForChild(const RenderBox&) const;
     LayoutUnit columnAxisOffsetForChild(const RenderBox&) const;
     LayoutUnit rowAxisOffsetForChild(const RenderBox&) const;
-    ContentAlignmentData computeContentPositionAndDistributionOffset(GridTrackSizingDirection, const LayoutUnit& availableFreeSpace, unsigned numberOfGridTracks) const;
+    void computeContentPositionAndDistributionOffset(GridTrackSizingDirection, const LayoutUnit& availableFreeSpace, unsigned numberOfGridTracks);
     LayoutPoint findChildLogicalPosition(const RenderBox&) const;
     GridArea cachedGridArea(const RenderBox&) const;
     GridSpan cachedGridSpan(const RenderBox&, GridTrackSizingDirection) const;
@@ -162,8 +175,8 @@ private:
 
     LayoutUnit gridGap(GridTrackSizingDirection) const;
     LayoutUnit gridGap(GridTrackSizingDirection, std::optional<LayoutUnit> availableSize) const;
-    LayoutUnit gridItemOffset(GridTrackSizingDirection) const;
 
+    unsigned nonCollapsedTracks(GridTrackSizingDirection) const;
     unsigned numTracks(GridTrackSizingDirection, const Grid&) const;
 
     LayoutUnit translateOutOfFlowRTLCoordinate(const RenderBox&, LayoutUnit) const;
@@ -175,8 +188,8 @@ private:
 
     Vector<LayoutUnit> m_columnPositions;
     Vector<LayoutUnit> m_rowPositions;
-    LayoutUnit m_offsetBetweenColumns;
-    LayoutUnit m_offsetBetweenRows;
+    ContentAlignmentData m_offsetBetweenColumns;
+    ContentAlignmentData m_offsetBetweenRows;
 
     typedef HashMap<const RenderBox*, std::optional<size_t>> OutOfFlowPositionsMap;
     OutOfFlowPositionsMap m_outOfFlowItemColumn;
@@ -184,6 +197,8 @@ private:
 
     std::optional<LayoutUnit> m_minContentHeight;
     std::optional<LayoutUnit> m_maxContentHeight;
+
+    bool m_hasAnyOrthogonalItem {false};
 };
 
 } // namespace WebCore

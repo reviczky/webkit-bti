@@ -46,6 +46,12 @@ struct Position {
     operator LayoutPoint() const { return { x, y }; }
 };
 
+// FIXME: Wrap these into structs.
+using PointInContextRoot = Position;
+using PointInContainingBlock = Position;
+using PositionInContextRoot = LayoutUnit;
+using PositionInContainingBlock = LayoutUnit;
+
 inline Position::Position(LayoutPoint point)
     : x(point.x())
     , y(point.y())
@@ -83,6 +89,7 @@ struct Edges {
 struct WidthAndMargin {
     LayoutUnit width;
     HorizontalEdges margin;
+    HorizontalEdges nonComputedMargin;
 };
 
 struct HeightAndMargin {

@@ -74,14 +74,14 @@ void ResourceTimingInformation::addResourceTiming(CachedResource& resource, Docu
         initiatorDocument = document.parentDocument();
     if (!initiatorDocument)
         return;
-    if (!initiatorDocument->domWindow())
-        return;
-    if (!initiatorDocument->domWindow()->performance())
+
+    auto* initiatorWindow = initiatorDocument->domWindow();
+    if (!initiatorWindow)
         return;
 
     resourceTiming.overrideInitiatorName(info.name);
 
-    initiatorDocument->domWindow()->performance()->addResourceTiming(WTFMove(resourceTiming));
+    initiatorWindow->performance().addResourceTiming(WTFMove(resourceTiming));
 
     info.added = Added;
 }

@@ -78,7 +78,7 @@ private:
     void handleNode()
     {
         switch (m_node->op()) {
-        case BitOr:
+        case ArithBitOr:
             handleCommutativity();
 
             if (m_node->child1().useKind() != UntypedUse && m_node->child2()->isInt32Constant() && !m_node->child2()->asInt32()) {
@@ -88,7 +88,7 @@ private:
             break;
             
         case BitXor:
-        case BitAnd:
+        case ArithBitAnd:
             handleCommutativity();
             break;
             
@@ -842,8 +842,11 @@ private:
                 unsigned replLen = replace.length();
                 if (lastIndex < result.start || replLen) {
                     builder.append(string, lastIndex, result.start - lastIndex);
-                    if (replLen)
-                        builder.append(substituteBackreferences(replace, string, ovector.data(), regExp));
+                    if (replLen) {
+                        StringBuilder replacement;
+                        substituteBackreferences(replacement, replace, string, ovector.data(), regExp);
+                        builder.append(replacement);
+                    }
                 }
 
                 lastIndex = result.end;

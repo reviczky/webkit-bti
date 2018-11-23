@@ -27,7 +27,6 @@ NetworkProcess/CustomProtocols/LegacyCustomProtocolManager.cpp
 
 NetworkProcess/CustomProtocols/soup/LegacyCustomProtocolManagerSoup.cpp
 
-NetworkProcess/cache/NetworkCacheCodersSoup.cpp
 NetworkProcess/cache/NetworkCacheDataSoup.cpp
 NetworkProcess/cache/NetworkCacheIOChannelSoup.cpp
 
@@ -82,6 +81,12 @@ Shared/cairo/ShareableBitmapCairo.cpp
 Shared/glib/ProcessExecutablePathGLib.cpp
 Shared/glib/WebContextMenuItemGlib.cpp
 
+Shared/libwpe/NativeWebKeyboardEventLibWPE.cpp
+Shared/libwpe/NativeWebMouseEventLibWPE.cpp
+Shared/libwpe/NativeWebTouchEventLibWPE.cpp
+Shared/libwpe/NativeWebWheelEventLibWPE.cpp
+Shared/libwpe/WebEventFactory.cpp
+
 Shared/linux/WebMemorySamplerLinux.cpp
 
 Shared/soup/WebCoreArgumentCodersSoup.cpp
@@ -89,16 +94,7 @@ Shared/soup/WebErrorsSoup.cpp
 
 Shared/unix/ChildProcessMain.cpp
 
-Shared/wpe/NativeWebKeyboardEventWPE.cpp
-Shared/wpe/NativeWebMouseEventWPE.cpp
-Shared/wpe/NativeWebTouchEventWPE.cpp
-Shared/wpe/NativeWebWheelEventWPE.cpp
-Shared/wpe/WebEventFactory.cpp
-
-StorageProcess/glib/StorageProcessMainGLib.cpp
-
 UIProcess/AcceleratedDrawingAreaProxy.cpp
-UIProcess/BackingStore.cpp
 UIProcess/DefaultUndoController.cpp
 UIProcess/LegacySessionStateCodingNone.cpp
 UIProcess/WebGrammarDetail.cpp
@@ -122,6 +118,7 @@ UIProcess/API/glib/WebKitContextMenuClient.cpp @no-unify
 UIProcess/API/glib/WebKitCookieManager.cpp @no-unify
 UIProcess/API/glib/WebKitCredential.cpp @no-unify
 UIProcess/API/glib/WebKitCustomProtocolManagerClient.cpp @no-unify
+UIProcess/API/glib/WebKitDeviceInfoPermissionRequest.cpp @no-unify
 UIProcess/API/glib/WebKitDownload.cpp @no-unify
 UIProcess/API/glib/WebKitDownloadClient.cpp @no-unify
 UIProcess/API/glib/WebKitEditorState.cpp @no-unify
@@ -158,6 +155,7 @@ UIProcess/API/glib/WebKitURISchemeRequest.cpp @no-unify
 UIProcess/API/glib/WebKitUserContent.cpp @no-unify
 UIProcess/API/glib/WebKitUserContentManager.cpp @no-unify
 UIProcess/API/glib/WebKitUserMediaPermissionRequest.cpp @no-unify
+UIProcess/API/glib/WebKitVersion.cpp @no-unify
 UIProcess/API/glib/WebKitWebContext.cpp @no-unify
 UIProcess/API/glib/WebKitWebResource.cpp @no-unify
 UIProcess/API/glib/WebKitWebView.cpp @no-unify
@@ -178,7 +176,11 @@ UIProcess/Automation/cairo/WebAutomationSessionCairo.cpp
 
 UIProcess/Automation/wpe/WebAutomationSessionWPE.cpp
 
+UIProcess/glib/WebProcessProxyGLib.cpp
+
 UIProcess/Launcher/glib/ProcessLauncherGLib.cpp
+UIProcess/Launcher/glib/BubblewrapLauncher.cpp
+UIProcess/Launcher/glib/FlatpakLauncher.cpp
 
 UIProcess/Network/CustomProtocols/LegacyCustomProtocolManagerProxy.cpp
 
@@ -188,8 +190,6 @@ UIProcess/Plugins/unix/PluginProcessProxyUnix.cpp
 UIProcess/WebStorage/StorageManager.cpp
 
 UIProcess/WebsiteData/unix/WebsiteDataStoreUnix.cpp
-
-UIProcess/cairo/BackingStoreCairo.cpp
 
 UIProcess/gstreamer/InstallMissingMediaPluginsPermissionRequest.cpp
 UIProcess/gstreamer/WebPageProxyGStreamer.cpp

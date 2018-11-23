@@ -33,6 +33,7 @@
 
 OBJC_CLASS CAAnimation;
 OBJC_CLASS WKAnimationDelegate;
+OBJC_CLASS WKEmbeddedView;
 
 namespace WebKit {
 
@@ -61,6 +62,7 @@ public:
     void animationDidStart(WebCore::GraphicsLayer::PlatformLayerID, CAAnimation *, MonotonicTime startTime);
     void animationDidEnd(WebCore::GraphicsLayer::PlatformLayerID, CAAnimation *);
 
+    void detachFromDrawingArea();
     void clearLayers();
 
     // Detach the root layer; it will be reattached upon the next incoming commit.
@@ -74,15 +76,18 @@ public:
 
 private:
     LayerOrView *createLayer(const RemoteLayerTreeTransaction::LayerCreationProperties&, const RemoteLayerTreeTransaction::LayerProperties*);
+    RetainPtr<WKEmbeddedView> createEmbeddedView(const RemoteLayerTreeTransaction::LayerCreationProperties&, const RemoteLayerTreeTransaction::LayerProperties*);
     static void setLayerID(CALayer *, WebCore::GraphicsLayer::PlatformLayerID);
 
     void layerWillBeRemoved(WebCore::GraphicsLayer::PlatformLayerID);
 
-    RemoteLayerTreeDrawingAreaProxy& m_drawingArea;
-    LayerOrView *m_rootLayer;
+    RemoteLayerTreeDrawingAreaProxy* m_drawingArea { nullptr };
+    LayerOrView *m_rootLayer { nullptr };
     HashMap<WebCore::GraphicsLayer::PlatformLayerID, RetainPtr<LayerOrView>> m_layers;
     HashMap<WebCore::GraphicsLayer::PlatformLayerID, RetainPtr<WKAnimationDelegate>> m_animationDelegates;
-    bool m_isDebugLayerTreeHost;
+    HashMap<WebCore::GraphicsLayer::EmbeddedViewID, RetainPtr<WKEmbeddedView>> m_embeddedViews;
+    HashMap<WebCore::GraphicsLayer::PlatformLayerID, WebCore::GraphicsLayer::EmbeddedViewID> m_layerToEmbeddedViewMap;
+    bool m_isDebugLayerTreeHost { false };
 };
 
 } // namespace WebKit

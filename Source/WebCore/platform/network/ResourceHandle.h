@@ -244,7 +244,7 @@ private:
     void createNSURLConnection(id delegate, bool shouldUseCredentialStorage, bool shouldContentSniff, bool shouldContentEncodingSniff, SchedulingBehavior);
 #endif
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     void createNSURLConnection(id delegate, bool shouldUseCredentialStorage, bool shouldContentSniff, bool shouldContentEncodingSniff, SchedulingBehavior, NSDictionary *connectionProperties);
 #endif
 
@@ -259,12 +259,12 @@ private:
     };
 
     void addCacheValidationHeaders(ResourceRequest&);
-    Ref<CurlRequest> createCurlRequest(ResourceRequest&, RequestStatus = RequestStatus::NewRequest);
+    Ref<CurlRequest> createCurlRequest(ResourceRequest&&, RequestStatus = RequestStatus::NewRequest);
 
     bool shouldRedirectAsGET(const ResourceRequest&, bool crossOrigin);
 
-    std::optional<std::pair<String, String>> getCredential(ResourceRequest&, bool);
-    void restartRequestWithCredential(const String& user, const String& password);
+    std::optional<Credential> getCredential(const ResourceRequest&, bool);
+    void restartRequestWithCredential(const ProtectionSpace&, const Credential&);
 
     void handleDataURL();
 #endif

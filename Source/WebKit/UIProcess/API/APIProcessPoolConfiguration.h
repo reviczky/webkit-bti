@@ -36,6 +36,12 @@
 
 namespace API {
 
+#if PLATFORM(COCOA) && !PLATFORM(IOS_FAMILY_SIMULATOR)
+#define DEFAULT_CAPTURE_DISPLAY_IN_UI_PROCESS true
+#else
+#define DEFAULT_CAPTURE_DISPLAY_IN_UI_PROCESS false
+#endif
+
 class ProcessPoolConfiguration final : public ObjectImpl<Object::Type::ProcessPoolConfiguration> {
 public:
     static Ref<ProcessPoolConfiguration> create();
@@ -53,8 +59,13 @@ public:
     unsigned maximumProcessCount() const { return m_maximumProcessCount; }
     void setMaximumProcessCount(unsigned maximumProcessCount) { m_maximumProcessCount = maximumProcessCount; }
 
-    unsigned maximumPrewarmedProcessCount() const { return m_maximumPrewarmedProcessCount; }
-    void setMaximumPrewarmedProcessCount(unsigned maximumPrewarmedProcessCount) { m_maximumPrewarmedProcessCount = maximumPrewarmedProcessCount; }
+    bool isAutomaticProcessWarmingEnabled() const
+    {
+        // FIXME: For now, turning on PSON from the experimental features menu also turns on
+        // automatic process warming until clients can be updated.
+        return m_isAutomaticProcessWarmingEnabledByClient.value_or(m_processSwapsOnNavigationFromExperimentalFeatures);
+    }
+    void setIsAutomaticProcessWarmingEnabled(bool value) { m_isAutomaticProcessWarmingEnabledByClient = value; }
 
     bool diskCacheSpeculativeValidationEnabled() const { return m_diskCacheSpeculativeValidationEnabled; }
     void setDiskCacheSpeculativeValidationEnabled(bool enabled) { m_diskCacheSpeculativeValidationEnabled = enabled; }
@@ -133,7 +144,13 @@ public:
     bool shouldCaptureAudioInUIProcess() const { return m_shouldCaptureAudioInUIProcess; }
     void setShouldCaptureAudioInUIProcess(bool shouldCaptureAudioInUIProcess) { m_shouldCaptureAudioInUIProcess = shouldCaptureAudioInUIProcess; }
 
-#if PLATFORM(IOS)
+    bool shouldCaptureDisplayInUIProcess() const { return m_shouldCaptureDisplayInUIProcess; }
+    void setShouldCaptureDisplayInUIProcess(bool shouldCaptureDisplayInUIProcess) { m_shouldCaptureDisplayInUIProcess = shouldCaptureDisplayInUIProcess; }
+
+    bool isJITEnabled() const { return m_isJITEnabled; }
+    void setJITEnabled(bool enabled) { m_isJITEnabled = enabled; }
+    
+#if PLATFORM(IOS_FAMILY)
     const WTF::String& ctDataConnectionServiceType() const { return m_ctDataConnectionServiceType; }
     void setCTDataConnectionServiceType(const WTF::String& ctDataConnectionServiceType) { m_ctDataConnectionServiceType = ctDataConnectionServiceType; }
 #endif
@@ -141,8 +158,12 @@ public:
     ProcessID presentingApplicationPID() const { return m_presentingApplicationPID; }
     void setPresentingApplicationPID(ProcessID pid) { m_presentingApplicationPID = pid; }
 
-    bool processSwapsOnNavigation() const { return m_processSwapsOnNavigation; }
-    void setProcessSwapsOnNavigation(bool swaps) { m_processSwapsOnNavigation = swaps; }
+    bool processSwapsOnNavigation() const
+    {
+        return m_processSwapsOnNavigationFromClient.value_or(m_processSwapsOnNavigationFromExperimentalFeatures);
+    }
+    void setProcessSwapsOnNavigation(bool swaps) { m_processSwapsOnNavigationFromClient = swaps; }
+    void setProcessSwapsOnNavigationFromExperimentalFeatures(bool swaps) { m_processSwapsOnNavigationFromExperimentalFeatures = swaps; }
 
     bool alwaysKeepAndReuseSwappedProcesses() const { return m_alwaysKeepAndReuseSwappedProcesses; }
     void setAlwaysKeepAndReuseSwappedProcesses(bool keepAndReuse) { m_alwaysKeepAndReuseSwappedProcesses = keepAndReuse; }
@@ -153,7 +174,7 @@ public:
     const WTF::String& customWebContentServiceBundleIdentifier() const { return m_customWebContentServiceBundleIdentifier; }
     void setCustomWebContentServiceBundleIdentifier(const WTF::String& customWebContentServiceBundleIdentifier) { m_customWebContentServiceBundleIdentifier = customWebContentServiceBundleIdentifier; }
 
-#if ENABLE(WIFI_ASSERTIONS)
+#if ENABLE(PROXIMITY_NETWORKING)
     unsigned wirelessContextIdentifier() const { return m_wirelessContextIdentifier; }
     void setWirelessContextIdentifier(unsigned wirelessContextIdentifier) { m_wirelessContextIdentifier = wirelessContextIdentifier; }
 #endif
@@ -167,7 +188,6 @@ private:
     bool m_shouldHaveLegacyDataStore { false };
 
     unsigned m_maximumProcessCount { 0 };
-    unsigned m_maximumPrewarmedProcessCount { 0 };
     bool m_diskCacheSpeculativeValidationEnabled { false };
     WebKit::CacheModel m_cacheModel { WebKit::CacheModelPrimaryWebBrowser };
     int64_t m_diskCacheSizeOverride { -1 };
@@ -195,17 +215,21 @@ private:
     bool m_alwaysRunsAtBackgroundPriority { false };
     bool m_shouldTakeUIBackgroundAssertion { true };
     bool m_shouldCaptureAudioInUIProcess { false };
+    bool m_shouldCaptureDisplayInUIProcess { DEFAULT_CAPTURE_DISPLAY_IN_UI_PROCESS };
     ProcessID m_presentingApplicationPID { getCurrentProcessID() };
-    bool m_processSwapsOnNavigation { false };
+    std::optional<bool> m_processSwapsOnNavigationFromClient;
+    bool m_processSwapsOnNavigationFromExperimentalFeatures { false };
     bool m_alwaysKeepAndReuseSwappedProcesses { false };
     bool m_processSwapsOnWindowOpenWithOpener { false };
+    std::optional<bool> m_isAutomaticProcessWarmingEnabledByClient;
     WTF::String m_customWebContentServiceBundleIdentifier;
+    bool m_isJITEnabled { true };
 
-#if PLATFORM(IOS)
+#if PLATFORM(IOS_FAMILY)
     WTF::String m_ctDataConnectionServiceType;
 #endif
 
-#if ENABLE(WIFI_ASSERTIONS)
+#if ENABLE(PROXIMITY_NETWORKING)
     unsigned m_wirelessContextIdentifier { 0 };
 #endif
 

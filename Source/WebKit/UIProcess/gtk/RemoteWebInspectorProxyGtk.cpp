@@ -32,8 +32,10 @@
 #include "WebKitInspectorWindow.h"
 #include "WebKitWebViewBasePrivate.h"
 #include "WebPageGroup.h"
+#include <WebCore/CertificateInfo.h>
 
 namespace WebKit {
+using namespace WebCore;
 
 void RemoteWebInspectorProxy::updateWindowTitle(const CString& targetName)
 {
@@ -57,7 +59,7 @@ WebPageProxy* RemoteWebInspectorProxy::platformCreateFrontendPageAndWindow()
     preferences->setDeveloperExtrasEnabled(true);
     preferences->setLogsPageMessagesToSystemConsoleEnabled(true);
 #endif
-    RefPtr<WebPageGroup> pageGroup = WebPageGroup::create(inspectorPageGroupIdentifierForPage(nullptr), false, false);
+    RefPtr<WebPageGroup> pageGroup = WebPageGroup::create(inspectorPageGroupIdentifierForPage(nullptr));
 
     auto pageConfiguration = API::PageConfiguration::create();
     pageConfiguration->setProcessPool(&inspectorProcessPool(inspectorLevelForPage(nullptr)));
@@ -106,6 +108,10 @@ void RemoteWebInspectorProxy::platformStartWindowDrag()
 }
 
 void RemoteWebInspectorProxy::platformOpenInNewTab(const String&)
+{
+}
+
+void RemoteWebInspectorProxy::platformShowCertificate(const CertificateInfo&)
 {
 }
 

@@ -36,7 +36,7 @@
 #include "ThunkGenerators.h"
 
 #if ENABLE(WEBASSEMBLY)
-#include "WasmContext.h"
+#include "WasmContextInlines.h"
 #include "WasmMemoryInformation.h"
 #endif
 
@@ -160,7 +160,7 @@ void AssemblyHelpers::decrementSuperSamplerCount()
     
 void AssemblyHelpers::purifyNaN(FPRReg fpr)
 {
-    MacroAssembler::Jump notNaN = branchDouble(DoubleEqual, fpr, fpr);
+    MacroAssembler::Jump notNaN = branchIfNotNaN(fpr);
     static const double NaN = PNaN;
     loadDouble(TrustedImmPtr(&NaN), fpr);
     notNaN.link(this);
@@ -982,7 +982,7 @@ void AssemblyHelpers::debugCall(VM& vm, V_DebugOperation_EPP function, void* arg
     move(TrustedImmPtr(scratchBuffer->addressOfActiveLength()), GPRInfo::regT0);
     storePtr(TrustedImmPtr(scratchSize), GPRInfo::regT0);
 
-#if CPU(X86_64) || CPU(ARM) || CPU(ARM64) || CPU(MIPS)
+#if CPU(X86_64) || CPU(ARM_THUMB2) || CPU(ARM64) || CPU(MIPS)
     move(TrustedImmPtr(buffer), GPRInfo::argumentGPR2);
     move(TrustedImmPtr(argument), GPRInfo::argumentGPR1);
     move(GPRInfo::callFrameRegister, GPRInfo::argumentGPR0);

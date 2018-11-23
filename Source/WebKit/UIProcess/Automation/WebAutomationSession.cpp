@@ -118,20 +118,20 @@ void WebAutomationSession::dispatchMessageFromRemote(const String& message)
     m_backendDispatcher->dispatch(message);
 }
 
-void WebAutomationSession::connect(Inspector::FrontendChannel* channel, bool isAutomaticConnection, bool immediatelyPause)
+void WebAutomationSession::connect(Inspector::FrontendChannel& channel, bool isAutomaticConnection, bool immediatelyPause)
 {
     UNUSED_PARAM(isAutomaticConnection);
     UNUSED_PARAM(immediatelyPause);
 
-    m_remoteChannel = channel;
+    m_remoteChannel = &channel;
     m_frontendRouter->connectFrontend(channel);
 
     setIsPaired(true);
 }
 
-void WebAutomationSession::disconnect(Inspector::FrontendChannel* channel)
+void WebAutomationSession::disconnect(Inspector::FrontendChannel& channel)
 {
-    ASSERT(channel == m_remoteChannel);
+    ASSERT(&channel == m_remoteChannel);
     terminate();
 }
 
@@ -139,10 +139,20 @@ void WebAutomationSession::disconnect(Inspector::FrontendChannel* channel)
 
 void WebAutomationSession::terminate()
 {
+    for (auto& identifier : copyToVector(m_pendingKeyboardEventsFlushedCallbacksPerPage.keys())) {
+        auto callback = m_pendingKeyboardEventsFlushedCallbacksPerPage.take(identifier);
+        callback(AUTOMATION_COMMAND_ERROR_WITH_NAME(InternalError));
+    }
+
+    for (auto& identifier : copyToVector(m_pendingMouseEventsFlushedCallbacksPerPage.keys())) {
+        auto callback = m_pendingMouseEventsFlushedCallbacksPerPage.take(identifier);
+        callback(AUTOMATION_COMMAND_ERROR_WITH_NAME(InternalError));
+    }
+
 #if ENABLE(REMOTE_INSPECTOR)
     if (Inspector::FrontendChannel* channel = m_remoteChannel) {
         m_remoteChannel = nullptr;
-        m_frontendRouter->disconnectFrontend(channel);
+        m_frontendRouter->disconnectFrontend(*channel);
     }
 
     setIsPaired(false);
@@ -1493,7 +1503,14 @@ void WebAutomationSession::simulateKeyboardInteraction(WebPageProxy& page, Keybo
 
     platformSimulateKeyboardInteraction(page, interaction, WTFMove(key));
 
-    // Wait for keyboardEventsFlushedCallback to run when all events are handled.
+    // If the interaction does not generate any events, then do not wait for events to be flushed.
+    // This happens in some corner cases on macOS, such as releasing a key while Command is pressed.
+    if (callbackInMap && !page.isProcessingKeyboardEvents()) {
+        auto callbackToCancel = m_pendingKeyboardEventsFlushedCallbacksPerPage.take(page.pageID());
+        callbackToCancel(std::nullopt);
+    }
+
+    // Otherwise, wait for keyboardEventsFlushedCallback to run when all events are handled.
 }
 
 #if USE(APPKIT) || PLATFORM(GTK) || PLATFORM(WPE)

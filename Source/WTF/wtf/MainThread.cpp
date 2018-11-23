@@ -27,25 +27,21 @@
  */
 
 #include "config.h"
-#include "MainThread.h"
+#include <wtf/MainThread.h>
 
-#include "Deque.h"
-#include "MonotonicTime.h"
-#include "StdLibExtras.h"
-#include "Threading.h"
 #include <mutex>
 #include <wtf/Condition.h>
+#include <wtf/Deque.h>
 #include <wtf/Lock.h>
+#include <wtf/MonotonicTime.h>
 #include <wtf/NeverDestroyed.h>
+#include <wtf/StdLibExtras.h>
 #include <wtf/ThreadSpecific.h>
+#include <wtf/Threading.h>
 
 namespace WTF {
 
 static bool callbacksPaused; // This global variable is only accessed from main thread.
-#if !PLATFORM(COCOA)
-static Thread* mainThread { nullptr };
-#endif
-
 static Lock mainThreadFunctionQueueMutex;
 
 static Deque<Function<void ()>>& functionQueue()
@@ -60,20 +56,10 @@ void initializeMainThread()
 {
     std::call_once(initializeKey, [] {
         initializeThreading();
-#if !PLATFORM(COCOA)
-        mainThread = &Thread::current();
-#endif
         initializeMainThreadPlatform();
         initializeGCThreads();
     });
 }
-
-#if !PLATFORM(COCOA)
-bool isMainThread()
-{
-    return mainThread == &Thread::current();
-}
-#endif
 
 #if PLATFORM(COCOA)
 #if !USE(WEB_THREAD)

@@ -50,6 +50,8 @@ public:
     WEBCORE_EXPORT explicit PaymentCoordinator(PaymentCoordinatorClient&);
     WEBCORE_EXPORT ~PaymentCoordinator();
 
+    PaymentCoordinatorClient& client() { return m_client; }
+
     bool supportsVersion(unsigned version) const;
     bool canMakePayments();
     void canMakePaymentsWithActiveCard(const String& merchantIdentifier, const String& domainName, WTF::Function<void (bool)>&& completionHandler);
@@ -66,7 +68,7 @@ public:
     void abortPaymentSession();
     void cancelPaymentSession();
 
-    WEBCORE_EXPORT void validateMerchant(const URL& validationURL);
+    WEBCORE_EXPORT void validateMerchant(URL&& validationURL);
     WEBCORE_EXPORT void didAuthorizePayment(const Payment&);
     WEBCORE_EXPORT void didSelectPaymentMethod(const PaymentMethod&);
     WEBCORE_EXPORT void didSelectShippingMethod(const ApplePaySessionPaymentRequest::ShippingMethod&);

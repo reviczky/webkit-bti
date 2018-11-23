@@ -32,11 +32,6 @@
 
 namespace WebCore {
 
-RealtimeMediaSource::AudioCaptureFactory& RealtimeMediaSourceCenterLibWebRTC::audioCaptureSourceFactory()
-{
-    return RealtimeMediaSourceCenterLibWebRTC::singleton().audioFactory();
-}
-
 RealtimeMediaSourceCenterLibWebRTC& RealtimeMediaSourceCenterLibWebRTC::singleton()
 {
     ASSERT(isMainThread());
@@ -57,17 +52,19 @@ RealtimeMediaSourceCenterLibWebRTC::~RealtimeMediaSourceCenterLibWebRTC()
 {
 }
 
-RealtimeMediaSource::AudioCaptureFactory& RealtimeMediaSourceCenterLibWebRTC::audioFactory()
+AudioCaptureFactory& RealtimeMediaSourceCenterLibWebRTC::audioFactoryPrivate()
 {
-    if (m_audioFactoryOverride)
-        return *m_audioFactoryOverride;
-
     return GStreamerAudioCaptureSource::factory();
 }
 
-RealtimeMediaSource::VideoCaptureFactory& RealtimeMediaSourceCenterLibWebRTC::videoFactory()
+VideoCaptureFactory& RealtimeMediaSourceCenterLibWebRTC::videoFactoryPrivate()
 {
     return GStreamerVideoCaptureSource::factory();
+}
+
+DisplayCaptureFactory& RealtimeMediaSourceCenterLibWebRTC::displayCaptureFactoryPrivate()
+{
+    return GStreamerVideoCaptureSource::displayFactory();
 }
 
 CaptureDeviceManager& RealtimeMediaSourceCenterLibWebRTC::audioCaptureDeviceManager()

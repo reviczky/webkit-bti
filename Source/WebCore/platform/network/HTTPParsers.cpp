@@ -474,9 +474,10 @@ XSSProtectionDisposition parseXSSProtectionHeader(const String& header, String& 
     }
 }
 
-ContentTypeOptionsDisposition parseContentTypeOptionsHeader(const String& header)
+ContentTypeOptionsDisposition parseContentTypeOptionsHeader(StringView header)
 {
-    if (equalLettersIgnoringASCIICase(header.stripWhiteSpace(), "nosniff"))
+    StringView leftToken = header.left(header.find(','));
+    if (equalLettersIgnoringASCIICase(stripLeadingAndTrailingHTTPSpaces(leftToken), "nosniff"))
         return ContentTypeOptionsNosniff;
     return ContentTypeOptionsNone;
 }
@@ -910,21 +911,6 @@ CrossOriginResourcePolicy parseCrossOriginResourcePolicyHeader(StringView header
         return CrossOriginResourcePolicy::SameSite;
 
     return CrossOriginResourcePolicy::Invalid;
-}
-
-CrossOriginWindowPolicy parseCrossOriginWindowPolicyHeader(StringView header)
-{
-    header = stripLeadingAndTrailingHTTPSpaces(header);
-    if (header.isEmpty())
-        return CrossOriginWindowPolicy::Allow;
-
-    if (equalLettersIgnoringASCIICase(header, "deny"))
-        return CrossOriginWindowPolicy::Deny;
-
-    if (equalLettersIgnoringASCIICase(header, "allow-postmessage"))
-        return CrossOriginWindowPolicy::AllowPostMessage;
-
-    return CrossOriginWindowPolicy::Allow;
 }
 
 }

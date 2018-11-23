@@ -467,7 +467,6 @@ void RenderElement::didAttachChild(RenderObject& child, RenderObject*)
     // and stop creating layers at all for these cases - they're not used anyways.
     if (child.hasLayer() && !layerCreationAllowedForSubtree())
         downcast<RenderLayerModelObject>(child).layer()->removeOnlyThisLayer();
-    SVGRenderSupport::childAdded(*this, child);
 }
 
 RenderObject* RenderElement::attachRendererInternal(RenderPtr<RenderObject> child, RenderObject* beforeChild)
@@ -548,7 +547,7 @@ static void addLayers(RenderElement& renderer, RenderLayer* parentLayer, RenderE
             beforeChild = newObject->parent()->findNextLayer(parentLayer, newObject);
             newObject = nullptr;
         }
-        parentLayer->addChild(downcast<RenderLayerModelObject>(renderer).layer(), beforeChild);
+        parentLayer->addChild(*downcast<RenderLayerModelObject>(renderer).layer(), beforeChild);
         return;
     }
 
@@ -572,7 +571,7 @@ void RenderElement::removeLayers(RenderLayer* parentLayer)
         return;
 
     if (hasLayer()) {
-        parentLayer->removeChild(downcast<RenderLayerModelObject>(*this).layer());
+        parentLayer->removeChild(*downcast<RenderLayerModelObject>(*this).layer());
         return;
     }
 
@@ -589,8 +588,8 @@ void RenderElement::moveLayers(RenderLayer* oldParent, RenderLayer* newParent)
         RenderLayer* layer = downcast<RenderLayerModelObject>(*this).layer();
         ASSERT(oldParent == layer->parent());
         if (oldParent)
-            oldParent->removeChild(layer);
-        newParent->addChild(layer);
+            oldParent->removeChild(*layer);
+        newParent->addChild(*layer);
         return;
     }
 
@@ -701,6 +700,8 @@ void RenderElement::invalidateCachedFirstLineStyle()
 
 void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& newStyle)
 {
+    ASSERT(settings().shouldAllowUserInstalledFonts() || newStyle.fontDescription().shouldAllowUserInstalledFonts() == AllowUserInstalledFonts::No);
+
     auto* oldStyle = hasInitializedStyle() ? &style() : nullptr;
     if (oldStyle) {
         // If our z-index changes value or our visibility changes,
@@ -712,7 +713,7 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
         if (visibilityChanged)
             document().setAnnotatedRegionsDirty(true);
 #endif
-#if PLATFORM(IOS) && ENABLE(TOUCH_EVENTS)
+#if PLATFORM(IOS_FAMILY) && ENABLE(TOUCH_EVENTS)
         if (visibilityChanged)
             document().setTouchEventRegionsNeedUpdate();
 #endif
@@ -779,7 +780,7 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
         view().frameView().updateExtendBackgroundIfNecessary();
 }
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
 static bool areNonIdenticalCursorListsEqual(const RenderStyle* a, const RenderStyle* b)
 {
     ASSERT(a->cursors() != b->cursors());
@@ -829,7 +830,7 @@ void RenderElement::styleDidChange(StyleDifference diff, const RenderStyle* oldS
     // Don't check for repaint here; we need to wait until the layer has been
     // updated by subclasses before we know if we have to repaint (in setStyle()).
 
-#if !PLATFORM(IOS)
+#if !PLATFORM(IOS_FAMILY)
     if (oldStyle && !areCursorsEqual(oldStyle, &style()))
         frame().eventHandler().scheduleCursorUpdate();
 #endif
@@ -971,11 +972,6 @@ void RenderElement::setNeedsSimplifiedNormalFlowLayout()
     markContainingBlocksForLayout();
     if (hasLayer())
         setLayerNeedsFullRepaint();
-}
-
-RenderElement* RenderElement::hoverAncestor() const
-{
-    return parent();
 }
 
 static inline void paintPhase(RenderElement& element, PaintPhase phase, PaintInfo& paintInfo, const LayoutPoint& childPoint)
@@ -1372,8 +1368,8 @@ Color RenderElement::selectionColor(CSSPropertyID colorProperty) const
     }
 
     if (frame().selection().isFocusedAndActive())
-        return theme().activeSelectionForegroundColor(document().styleColorOptions());
-    return theme().inactiveSelectionForegroundColor(document().styleColorOptions());
+        return theme().activeSelectionForegroundColor(styleColorOptions());
+    return theme().inactiveSelectionForegroundColor(styleColorOptions());
 }
 
 std::unique_ptr<RenderStyle> RenderElement::selectionPseudoStyle() const
@@ -1407,15 +1403,15 @@ Color RenderElement::selectionBackgroundColor() const
         return Color();
 
     if (frame().selection().shouldShowBlockCursor() && frame().selection().isCaret())
-        return theme().transformSelectionBackgroundColor(style().visitedDependentColorWithColorFilter(CSSPropertyColor), document().styleColorOptions());
+        return theme().transformSelectionBackgroundColor(style().visitedDependentColorWithColorFilter(CSSPropertyColor), styleColorOptions());
 
     std::unique_ptr<RenderStyle> pseudoStyle = selectionPseudoStyle();
     if (pseudoStyle && pseudoStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor).isValid())
-        return theme().transformSelectionBackgroundColor(pseudoStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor), document().styleColorOptions());
+        return theme().transformSelectionBackgroundColor(pseudoStyle->visitedDependentColorWithColorFilter(CSSPropertyBackgroundColor), styleColorOptions());
 
     if (frame().selection().isFocusedAndActive())
-        return theme().activeSelectionBackgroundColor(document().styleColorOptions());
-    return theme().inactiveSelectionBackgroundColor(document().styleColorOptions());
+        return theme().activeSelectionBackgroundColor(styleColorOptions());
+    return theme().inactiveSelectionBackgroundColor(styleColorOptions());
 }
 
 bool RenderElement::getLeadingCorner(FloatPoint& point, bool& insideFixed) const
@@ -1836,9 +1832,9 @@ void RenderElement::paintFocusRing(PaintInfo& paintInfo, const RenderStyle& styl
             for (auto rect : pixelSnappedFocusRingRects)
                 path.addRect(rect);
         }
-        paintInfo.context().drawFocusRing(path, page().focusController().timeSinceFocusWasSet().seconds(), needsRepaint, RenderTheme::focusRingColor(document().styleColorOptions()));
+        paintInfo.context().drawFocusRing(path, page().focusController().timeSinceFocusWasSet().seconds(), needsRepaint, RenderTheme::focusRingColor(styleColorOptions()));
     } else
-        paintInfo.context().drawFocusRing(pixelSnappedFocusRingRects, page().focusController().timeSinceFocusWasSet().seconds(), needsRepaint, RenderTheme::focusRingColor(document().styleColorOptions()));
+        paintInfo.context().drawFocusRing(pixelSnappedFocusRingRects, page().focusController().timeSinceFocusWasSet().seconds(), needsRepaint, RenderTheme::focusRingColor(styleColorOptions()));
     if (needsRepaint)
         page().focusController().setFocusedElementNeedsRepaint();
 #else

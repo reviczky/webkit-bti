@@ -48,7 +48,6 @@ public:
     enum class ProcessType : uint8_t {
         WebContent,
         Network,
-        Storage,
         Plugin
     };
 
@@ -77,6 +76,10 @@ public:
 
     IPC::MessageReceiverMap& messageReceiverMap() { return m_messageReceiverMap; }
 
+#if PLATFORM(MAC)
+    static bool isSystemWebKit();
+#endif
+
 protected:
     explicit ChildProcess();
     virtual ~ChildProcess();
@@ -91,7 +94,6 @@ protected:
     virtual bool shouldTerminate() = 0;
     virtual void terminate();
 
-    virtual bool shouldCallExitWhenConnectionIsClosed() const { return true; }
     virtual void stopRunLoop();
 
 #if USE(APPKIT)

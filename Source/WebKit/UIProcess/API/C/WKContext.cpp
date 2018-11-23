@@ -402,9 +402,9 @@ void WKContextSetCanHandleHTTPSServerTrustEvaluation(WKContextRef contextRef, bo
     toImpl(contextRef)->setCanHandleHTTPSServerTrustEvaluation(value);
 }
 
-void WKContextSetMaximumNumberOfPrewarmedProcesses(WKContextRef contextRef, unsigned value)
+void WKContextSetPrewarmsProcessesAutomatically(WKContextRef contextRef, bool value)
 {
-    toImpl(contextRef)->setMaximumNumberOfPrewarmedProcesses(value);
+    toImpl(contextRef)->configuration().setIsAutomaticProcessWarmingEnabled(value);
 }
 
 void WKContextSetCustomWebContentServiceBundleIdentifier(WKContextRef contextRef, WKStringRef name)
@@ -515,7 +515,7 @@ void WKContextSetHTTPPipeliningEnabled(WKContextRef contextRef, bool enabled)
 
 void WKContextWarmInitialProcess(WKContextRef contextRef)
 {
-    toImpl(contextRef)->warmInitialProcess();
+    toImpl(contextRef)->prewarmProcess(WebProcessPool::MayCreateDefaultDataStore::Yes);
 }
 
 void WKContextGetStatistics(WKContextRef contextRef, void* context, WKContextGetStatisticsFunction callback)
@@ -621,19 +621,9 @@ void WKContextTerminateServiceWorkerProcess(WKContextRef context)
     toImpl(context)->terminateServiceWorkerProcesses();
 }
 
-void WKContextTerminateStorageProcess(WKContextRef context)
-{
-    toImpl(context)->terminateStorageProcessForTesting();
-}
-
 ProcessID WKContextGetNetworkProcessIdentifier(WKContextRef contextRef)
 {
     return toImpl(contextRef)->networkProcessIdentifier();
-}
-
-ProcessID WKContextGetDatabaseProcessIdentifier(WKContextRef contextRef)
-{
-    return toImpl(contextRef)->storageProcessIdentifier();
 }
 
 void WKContextAddSupportedPlugin(WKContextRef contextRef, WKStringRef domainRef, WKStringRef nameRef, WKArrayRef mimeTypesRef, WKArrayRef extensionsRef)
@@ -658,4 +648,9 @@ void WKContextClearSupportedPlugins(WKContextRef contextRef)
 #if ENABLE(NETSCAPE_PLUGIN_API)
     toImpl(contextRef)->clearSupportedPlugins();
 #endif
+}
+
+void WKContextSetIDBPerOriginQuota(WKContextRef contextRef, uint64_t quota)
+{
+    toImpl(contextRef)->setIDBPerOriginQuota(quota);
 }
