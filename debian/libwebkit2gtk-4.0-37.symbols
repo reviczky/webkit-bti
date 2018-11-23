@@ -2,7 +2,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  NetworkProcessMainUnix@Base 2.5.3
  PluginProcessMainUnix@Base 2.5.3
  WebProcessMainUnix@Base 2.5.3
- StorageProcessMainUnix@Base 2.17.90
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
  (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE6s_dataE@Base 2.21.1
@@ -122,6 +121,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_credential_has_password@Base 2.5.3
  webkit_credential_new@Base 2.5.3
  webkit_credential_persistence_get_type@Base 2.5.3
+ webkit_device_info_permission_request_get_type@Base 2.23.1
  (optional)webkit_dom_attr_get_local_name@Base 2.13.91
  webkit_dom_attr_get_name@Base 2.5.3
  (optional)webkit_dom_attr_get_namespace_uri@Base 2.13.91
@@ -1622,13 +1622,17 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_response_policy_decision_get_type@Base 2.5.3
  webkit_response_policy_decision_is_mime_type_supported@Base 2.5.3
  webkit_save_mode_get_type@Base 2.5.3
+ webkit_script_dialog_close@Base 2.23.1
  webkit_script_dialog_confirm_set_confirmed@Base 2.5.3
  webkit_script_dialog_get_dialog_type@Base 2.5.3
  webkit_script_dialog_get_message@Base 2.5.3
  webkit_script_dialog_get_type@Base 2.5.3
+ webkit_script_dialog_impl_get_type@Base 2.23.1
  webkit_script_dialog_prompt_get_default_text@Base 2.5.3
  webkit_script_dialog_prompt_set_text@Base 2.5.3
+ webkit_script_dialog_ref@Base 2.23.1
  webkit_script_dialog_type_get_type@Base 2.5.3
+ webkit_script_dialog_unref@Base 2.23.1
  webkit_script_world_get_default@Base 2.5.3
  webkit_script_world_get_name@Base 2.21.4
  webkit_script_world_get_type@Base 2.5.3
@@ -1684,6 +1688,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_enable_media_capabilities@Base 2.21.91
  webkit_settings_get_enable_media_stream@Base 2.5.3
  webkit_settings_get_enable_mediasource@Base 2.5.3
+ webkit_settings_get_enable_mock_capture_devices@Base 2.23.1
  webkit_settings_get_enable_offline_web_application_cache@Base 2.5.3
  webkit_settings_get_enable_page_cache@Base 2.5.3
  webkit_settings_get_enable_plugins@Base 2.5.3
@@ -1740,6 +1745,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_set_enable_media_capabilities@Base 2.21.91
  webkit_settings_set_enable_media_stream@Base 2.5.3
  webkit_settings_set_enable_mediasource@Base 2.5.3
+ webkit_settings_set_enable_mock_capture_devices@Base 2.23.1
  webkit_settings_set_enable_offline_web_application_cache@Base 2.5.3
  webkit_settings_set_enable_page_cache@Base 2.5.3
  webkit_settings_set_enable_plugins@Base 2.5.3
@@ -1833,6 +1839,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_get_plugins@Base 2.5.3
  webkit_web_context_get_plugins_finish@Base 2.5.3
  webkit_web_context_get_process_model@Base 2.5.3
+ webkit_web_context_get_sandbox_enabled@Base 2.23.1
  webkit_web_context_get_security_manager@Base 2.5.3
  webkit_web_context_get_spell_checking_enabled@Base 2.5.3
  webkit_web_context_get_spell_checking_languages@Base 2.5.3
@@ -1856,6 +1863,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_set_network_proxy_settings@Base 2.15.3
  webkit_web_context_set_preferred_languages@Base 2.5.3
  webkit_web_context_set_process_model@Base 2.5.3
+ webkit_web_context_set_sandbox_enabled@Base 2.23.1
  webkit_web_context_set_spell_checking_enabled@Base 2.5.3
  webkit_web_context_set_spell_checking_languages@Base 2.5.3
  webkit_web_context_set_tls_errors_policy@Base 2.5.3
@@ -1898,6 +1906,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_can_go_back@Base 2.5.3
  webkit_web_view_can_go_forward@Base 2.5.3
  webkit_web_view_can_show_mime_type@Base 2.5.3
+ webkit_web_view_dialog_get_type@Base 2.23.1
  webkit_web_view_download_uri@Base 2.5.3
  webkit_web_view_execute_editing_command@Base 2.5.3
  webkit_web_view_execute_editing_command_with_argument@Base 2.10.0
