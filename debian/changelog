@@ -1,6 +1,10 @@
 webkit2gtk (2.22.5-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/patches/detect-jit.patch:
+    + Drop patch, this has been fixed upstream.
+  * debian/patches/detect-woff.patch:
+    + Refresh.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 13 Dec 2018 18:16:24 +0200
 

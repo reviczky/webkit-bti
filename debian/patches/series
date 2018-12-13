@@ -8,4 +8,3 @@ detect-gstreamer-gl.patch
 detect-woff.patch
 user-agent-branding.patch
 prefer-pthread.patch
-detect-jit.patch
