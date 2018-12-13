@@ -182,15 +182,7 @@ namespace JSC {
         WTF_MAKE_FAST_ALLOCATED;
         WTF_MAKE_NONCOPYABLE(ForInContext);
     public:
-        ForInContext(RegisterID* localRegister)
-            : m_localRegister(localRegister)
-            , m_isValid(true)
-        {
-        }
-
-        virtual ~ForInContext()
-        {
-        }
+        virtual ~ForInContext() = default;
 
         bool isValid() const { return m_isValid; }
         void invalidate() { m_isValid = false; }
@@ -209,7 +201,7 @@ namespace JSC {
             ASSERT(isIndexedForInContext());
             return *reinterpret_cast<IndexedForInContext*>(this);
         }
-    
+
         StructureForInContext& asStructureForInContext()
         {
             ASSERT(isStructureForInContext());
