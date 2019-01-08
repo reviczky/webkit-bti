@@ -262,9 +262,18 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         def(PureValue(node, node->queriedType()));
         return;
 
+    case ArithBitNot:
+        if (node->child1().useKind() == UntypedUse) {
+            read(World);
+            write(Heap);
+            return;
+        }
+        def(PureValue(node));
+        return;
+
     case ArithBitAnd:
     case ArithBitOr:
-    case BitXor:
+    case ArithBitXor:
     case BitLShift:
     case BitRShift:
     case BitURShift:
@@ -635,11 +644,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case InByVal:
     case InById:
     case HasOwnProperty:
-    case ValueBitAnd:
-    case ValueBitOr:
     case ValueNegate:
-    case ValueAdd:
-    case ValueSub:
     case SetFunctionName:
     case GetDynamicVar:
     case PutDynamicVar:
@@ -656,9 +661,39 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case CreateThis:
     case InstanceOf:
     case StringValueOf:
+    case ObjectKeys:
         read(World);
         write(Heap);
         return;
+
+    case ValueBitAnd:
+    case ValueBitXor:
+    case ValueBitOr:
+    case ValueAdd:
+    case ValueSub:
+    case ValueMul:
+    case ValueDiv:
+        if (node->isBinaryUseKind(BigIntUse)) {
+            def(PureValue(node));
+            return;
+        }
+        read(World);
+        write(Heap);
+        return;
+
+    case ObjectToString:
+        switch (node->child1().useKind()) {
+        case OtherUse:
+            def(PureValue(node));
+            return;
+        case UntypedUse:
+            read(World);
+            write(Heap);
+            return;
+        default:
+            RELEASE_ASSERT_NOT_REACHED();
+            return;
+        }
 
     case AtomicsAdd:
     case AtomicsAnd:
@@ -1517,9 +1552,9 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         }
     }
 
-
     case NewObject:
     case NewRegexp:
+    case NewSymbol:
     case NewStringObject:
     case PhantomNewObject:
     case MaterializeNewObject:

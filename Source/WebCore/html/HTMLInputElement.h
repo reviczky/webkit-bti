@@ -44,7 +44,6 @@ class Icon;
 class InputType;
 class ListAttributeTargetObserver;
 class RadioButtonGroups;
-class URL;
 
 struct DateTimeChooserParameters;
 
@@ -87,7 +86,7 @@ public:
     StepRange createStepRange(AnyStepHandling) const;
 
 #if ENABLE(DATALIST_ELEMENT)
-    std::optional<Decimal> findClosestTickMarkValue(const Decimal&);
+    Optional<Decimal> findClosestTickMarkValue(const Decimal&);
 #endif
 
     WEBCORE_EXPORT ExceptionOr<void> stepUp(int = 1);

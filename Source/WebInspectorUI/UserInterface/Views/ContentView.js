@@ -88,6 +88,9 @@ WI.ContentView = class ContentView extends WI.View
 
             if (timelineType === WI.TimelineRecord.Type.HeapAllocations)
                 return new WI.HeapAllocationsTimelineView(representedObject, extraArguments);
+
+            if (timelineType === WI.TimelineRecord.Type.Media)
+                return new WI.MediaTimelineView(representedObject, extraArguments);
         }
 
         if (representedObject instanceof WI.Breakpoint || representedObject instanceof WI.IssueMessage) {
@@ -349,6 +352,11 @@ WI.ContentView = class ContentView extends WI.View
     get shouldKeepElementsScrolledToBottom()
     {
         // Implemented by subclasses.
+        return false;
+    }
+
+    get shouldSaveStateWhenHidden()
+    {
         return false;
     }
 

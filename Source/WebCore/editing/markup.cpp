@@ -74,11 +74,11 @@
 #include "StyleProperties.h"
 #include "TextIterator.h"
 #include "TypedElementDescendantIterator.h"
-#include "URL.h"
-#include "URLParser.h"
 #include "VisibleSelection.h"
 #include "VisibleUnits.h"
 #include <wtf/StdLibExtras.h>
+#include <wtf/URL.h>
+#include <wtf/URLParser.h>
 #include <wtf/text/StringBuilder.h>
 
 namespace WebCore {
@@ -162,7 +162,7 @@ void removeSubresourceURLAttributes(Ref<DocumentFragment>&& fragment, WTF::Funct
         for (const Attribute& attribute : element.attributesIterator()) {
             // FIXME: This won't work for srcset.
             if (element.attributeContainsURL(attribute) && !attribute.value().isEmpty()) {
-                URL url = URLParser { attribute.value() }.result();
+                URL url({ }, attribute.value());
                 if (shouldRemoveURL(url))
                     attributesToRemove.append({ element, attribute.name() });
             }
@@ -199,7 +199,7 @@ std::unique_ptr<Page> createPageForSanitizingWebContent()
     return page;
 }
 
-String sanitizeMarkup(const String& rawHTML, MSOListQuirks msoListQuirks, std::optional<WTF::Function<void(DocumentFragment&)>> fragmentSanitizer)
+String sanitizeMarkup(const String& rawHTML, MSOListQuirks msoListQuirks, Optional<WTF::Function<void(DocumentFragment&)>> fragmentSanitizer)
 {
     auto page = createPageForSanitizingWebContent();
     Document* stagingDocument = page->mainFrame().document();
@@ -273,15 +273,8 @@ private:
     
     Node* nextSkippingChildren(Node& node)
     {
-        if (UNLIKELY(m_useComposedTree)) {
-            if (auto* sibling = nextSiblingInComposedTreeIgnoringUserAgentShadow(node))
-                return sibling;
-            for (auto* ancestor = node.parentInComposedTree(); ancestor; ancestor = ancestor->parentInComposedTree()) {
-                if (auto* sibling = nextSiblingInComposedTreeIgnoringUserAgentShadow(*ancestor))
-                    return sibling;
-            }
-            return nullptr;
-        }
+        if (UNLIKELY(m_useComposedTree))
+            return nextSkippingChildrenInComposedTreeIgnoringUserAgentShadow(node);
         return NodeTraversal::nextSkippingChildren(node);
     }
 
@@ -645,6 +638,7 @@ Node* StyledMarkupAccumulator::traverseNodesForSerialization(Node* startNode, No
                 }
             }
         }
+        ASSERT(next || !pastEnd);
 
         if (isBlock(n) && canHaveChildrenForEditing(*n) && next == pastEnd) {
             // Don't write out empty block containers that aren't fully selected.
@@ -652,10 +646,11 @@ Node* StyledMarkupAccumulator::traverseNodesForSerialization(Node* startNode, No
         }
 
         if (!enterNode(*n)) {
-            next = NodeTraversal::nextSkippingChildren(*n);
+            next = nextSkippingChildren(*n);
             // Don't skip over pastEnd.
             if (pastEnd && isDescendantOf(*pastEnd, *n))
                 next = pastEnd;
+            ASSERT(next || !pastEnd);
         } else {
             if (!hasChildNodes(*n))
                 exitNode(*n);
@@ -769,9 +764,9 @@ static RefPtr<EditingStyle> styleFromMatchedRulesAndInlineDecl(Node& node)
         return nullptr;
 
     auto& element = downcast<HTMLElement>(node);
-    RefPtr<EditingStyle> style = EditingStyle::create(element.inlineStyle());
+    auto style = EditingStyle::create(element.inlineStyle());
     style->mergeStyleFromRules(element);
-    return style;
+    return WTFMove(style);
 }
 
 static bool isElementPresentational(const Node* node)
@@ -821,18 +816,6 @@ static Node* highestAncestorToWrapMarkup(const Position& start, const Position& 
         specialCommonAncestor = enclosingAnchor;
 
     return specialCommonAncestor;
-}
-
-static RefPtr<Node> commonShadowIncludingAncestor(const Position& a, const Position& b)
-{
-    TreeScope* commonScope = commonTreeScope(a.containerNode(), b.containerNode());
-    if (!commonScope)
-        return nullptr;
-    auto* nodeA = commonScope->ancestorNodeInThisScope(a.containerNode());
-    ASSERT(nodeA);
-    auto* nodeB = commonScope->ancestorNodeInThisScope(b.containerNode());
-    ASSERT(nodeB);
-    return Range::commonAncestorContainer(nodeA, nodeB);
 }
 
 static String serializePreservingVisualAppearanceInternal(const Position& start, const Position& end, Vector<Node*>* nodes, ResolveURLs urlsToResolve, SerializeComposedTree serializeComposedTree,
@@ -1034,7 +1017,7 @@ Ref<DocumentFragment> createFragmentFromMarkup(Document& document, const String&
 
     fragment->parseHTML(markup, fakeBody.ptr(), parserContentPolicy);
     restoreAttachmentElementsInFragment(fragment);
-    if (!baseURL.isEmpty() && baseURL != blankURL() && baseURL != document.baseURL())
+    if (!baseURL.isEmpty() && baseURL != WTF::blankURL() && baseURL != document.baseURL())
         completeURLs(fragment.ptr(), baseURL);
 
     return fragment;
@@ -1228,8 +1211,8 @@ RefPtr<DocumentFragment> createFragmentForTransformToFragment(Document& outputDo
         // Based on the documentation I can find, it looks like we want to start parsing the fragment in the InBody insertion mode.
         // Unfortunately, that's an implementation detail of the parser.
         // We achieve that effect here by passing in a fake body element as context for the fragment.
-        RefPtr<HTMLBodyElement> fakeBody = HTMLBodyElement::create(outputDoc);
-        fragment->parseHTML(sourceString, fakeBody.get());
+        auto fakeBody = HTMLBodyElement::create(outputDoc);
+        fragment->parseHTML(sourceString, fakeBody.ptr());
     } else if (sourceMIMEType == "text/plain")
         fragment->parserAppendChild(Text::create(outputDoc, sourceString));
     else {

@@ -35,12 +35,12 @@
 #include "HTMLNames.h"
 #include "HTMLTableElement.h"
 #include "LayoutRepainter.h"
-#include "LayoutState.h"
 #include "RenderBlockFlow.h"
 #include "RenderChildIterator.h"
 #include "RenderDescendantIterator.h"
 #include "RenderIterator.h"
 #include "RenderLayer.h"
+#include "RenderLayoutState.h"
 #include "RenderTableCaption.h"
 #include "RenderTableCell.h"
 #include "RenderTableCol.h"
@@ -303,31 +303,31 @@ LayoutUnit RenderTable::convertStyleLogicalWidthToComputedWidth(const Length& st
     LayoutUnit borders;
     bool isCSSTable = !is<HTMLTableElement>(element());
     if (isCSSTable && styleLogicalWidth.isSpecified() && styleLogicalWidth.isPositive() && style().boxSizing() == BoxSizing::ContentBox)
-        borders = borderStart() + borderEnd() + (collapseBorders() ? LayoutUnit() : paddingStart() + paddingEnd());
+        borders = borderStart() + borderEnd() + (collapseBorders() ? 0_lu : paddingStart() + paddingEnd());
 
     return minimumValueForLength(styleLogicalWidth, availableWidth) + borders;
 }
 
 LayoutUnit RenderTable::convertStyleLogicalHeightToComputedHeight(const Length& styleLogicalHeight)
 {
-    LayoutUnit borderAndPaddingBefore = borderBefore() + (collapseBorders() ? LayoutUnit() : paddingBefore());
-    LayoutUnit borderAndPaddingAfter = borderAfter() + (collapseBorders() ? LayoutUnit() : paddingAfter());
+    LayoutUnit borderAndPaddingBefore = borderBefore() + (collapseBorders() ? 0_lu : paddingBefore());
+    LayoutUnit borderAndPaddingAfter = borderAfter() + (collapseBorders() ? 0_lu : paddingAfter());
     LayoutUnit borderAndPadding = borderAndPaddingBefore + borderAndPaddingAfter;
     if (styleLogicalHeight.isFixed()) {
         // HTML tables size as though CSS height includes border/padding, CSS tables do not.
-        LayoutUnit borders = LayoutUnit();
+        LayoutUnit borders;
         // FIXME: We cannot apply box-sizing: content-box on <table> which other browsers allow.
         if (is<HTMLTableElement>(element()) || style().boxSizing() == BoxSizing::BorderBox) {
             borders = borderAndPadding;
         }
         return styleLogicalHeight.value() - borders;
     } else if (styleLogicalHeight.isPercentOrCalculated())
-        return computePercentageLogicalHeight(styleLogicalHeight).value_or(0);
+        return computePercentageLogicalHeight(styleLogicalHeight).valueOr(0);
     else if (styleLogicalHeight.isIntrinsic())
-        return computeIntrinsicLogicalContentHeightUsing(styleLogicalHeight, logicalHeight() - borderAndPadding, borderAndPadding).value_or(0);
+        return computeIntrinsicLogicalContentHeightUsing(styleLogicalHeight, logicalHeight() - borderAndPadding, borderAndPadding).valueOr(0);
     else
         ASSERT_NOT_REACHED();
-    return LayoutUnit();
+    return 0_lu;
 }
 
 void RenderTable::layoutCaption(RenderTableCaption& caption)
@@ -457,8 +457,8 @@ void RenderTable::layout()
             movedSectionLogicalTop = std::min(logicalHeight(), oldTableLogicalTop);
         }
 
-        LayoutUnit borderAndPaddingBefore = borderBefore() + (collapsing ? LayoutUnit() : paddingBefore());
-        LayoutUnit borderAndPaddingAfter = borderAfter() + (collapsing ? LayoutUnit() : paddingAfter());
+        LayoutUnit borderAndPaddingBefore = borderBefore() + (collapsing ? 0_lu : paddingBefore());
+        LayoutUnit borderAndPaddingAfter = borderAfter() + (collapsing ? 0_lu : paddingAfter());
 
         setLogicalHeight(logicalHeight() + borderAndPaddingBefore);
 
@@ -724,11 +724,11 @@ void RenderTable::adjustBorderBoxRectForPainting(LayoutRect& rect)
         if (style().isHorizontalWritingMode()) {
             rect.setHeight(rect.height() - captionLogicalHeight);
             if (captionIsBefore)
-                rect.move(0, captionLogicalHeight);
+                rect.move(0_lu, captionLogicalHeight);
         } else {
             rect.setWidth(rect.width() - captionLogicalHeight);
             if (captionIsBefore)
-                rect.move(captionLogicalHeight, 0);
+                rect.move(captionLogicalHeight, 0_lu);
         }
     }
     
@@ -915,7 +915,7 @@ LayoutUnit RenderTable::offsetTopForColumn(const RenderTableCol& column) const
         return m_columnOffsetTop;
     }
     RenderTableSection* section = topNonEmptySection();
-    return m_columnOffsetTop = section ? section->offsetTop() : LayoutUnit(0);
+    return m_columnOffsetTop = section ? section->offsetTop() : 0_lu;
 }
 
 LayoutUnit RenderTable::offsetLeftForColumn(const RenderTableCol& column) const
@@ -1440,32 +1440,32 @@ int RenderTable::baselinePosition(FontBaseline baselineType, bool firstLine, Lin
     });
 }
 
-std::optional<int> RenderTable::inlineBlockBaseline(LineDirectionMode) const
+Optional<int> RenderTable::inlineBlockBaseline(LineDirectionMode) const
 {
     // Tables are skipped when computing an inline-block's baseline.
-    return std::optional<int>();
+    return Optional<int>();
 }
 
-std::optional<int> RenderTable::firstLineBaseline() const
+Optional<int> RenderTable::firstLineBaseline() const
 {
     // The baseline of a 'table' is the same as the 'inline-table' baseline per CSS 3 Flexbox (CSS 2.1
     // doesn't define the baseline of a 'table' only an 'inline-table').
     // This is also needed to properly determine the baseline of a cell if it has a table child.
 
     if (isWritingModeRoot())
-        return std::optional<int>();
+        return Optional<int>();
 
     recalcSectionsIfNeeded();
 
     const RenderTableSection* topNonEmptySection = this->topNonEmptySection();
     if (!topNonEmptySection)
-        return std::optional<int>();
+        return Optional<int>();
 
-    if (std::optional<int> baseline = topNonEmptySection->firstLineBaseline())
-        return std::optional<int>(topNonEmptySection->logicalTop() + baseline.value());
+    if (Optional<int> baseline = topNonEmptySection->firstLineBaseline())
+        return Optional<int>(topNonEmptySection->logicalTop() + baseline.value());
 
     // FIXME: A table row always has a baseline per CSS 2.1. Will this return the right value?
-    return std::optional<int>();
+    return Optional<int>();
 }
 
 LayoutRect RenderTable::overflowClipRect(const LayoutPoint& location, RenderFragmentContainer* fragment, OverlayScrollbarSizeRelevancy relevancy, PaintPhase phase)

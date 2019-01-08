@@ -53,7 +53,6 @@ class Frame;
 class HTMLFrameOwnerElement;
 class IntPoint;
 class IntRect;
-class URL;
 }
 
 namespace WebKit {
@@ -65,6 +64,8 @@ class InjectedBundleScriptWorld;
 class WebPage;
 struct FrameInfoData;
 struct WebsitePoliciesData;
+
+enum class WebPolicyAction : uint8_t;
 
 class WebFrame : public API::ObjectImpl<API::Object::Type::BundleFrame> {
 public:
@@ -86,7 +87,7 @@ public:
     enum class ForNavigationAction { No, Yes };
     uint64_t setUpPolicyListener(WebCore::FramePolicyFunction&&, ForNavigationAction);
     void invalidatePolicyListener();
-    void didReceivePolicyDecision(uint64_t listenerID, WebCore::PolicyAction, uint64_t navigationID, DownloadID, std::optional<WebsitePoliciesData>&&);
+    void didReceivePolicyDecision(uint64_t listenerID, WebPolicyAction, uint64_t navigationID, DownloadID, Optional<WebsitePoliciesData>&&);
 
     uint64_t setUpWillSubmitFormListener(CompletionHandler<void()>&&);
     void continueWillSubmitForm(uint64_t);
@@ -105,7 +106,7 @@ public:
     // WKBundleFrame API and SPI functions
     bool isMainFrame() const;
     String name() const;
-    WebCore::URL url() const;
+    URL url() const;
     WebCore::CertificateInfo certificateInfo() const;
     String innerText() const;
     bool isFrameSet() const;
@@ -139,11 +140,11 @@ public:
     
     unsigned pendingUnloadCount() const;
     
-    bool allowsFollowingLink(const WebCore::URL&) const;
+    bool allowsFollowingLink(const URL&) const;
 
     String provisionalURL() const;
-    String suggestedFilenameForResourceWithURL(const WebCore::URL&) const;
-    String mimeTypeForResourceWithURL(const WebCore::URL&) const;
+    String suggestedFilenameForResourceWithURL(const URL&) const;
+    String mimeTypeForResourceWithURL(const URL&) const;
 
     void setTextDirection(const String&);
 

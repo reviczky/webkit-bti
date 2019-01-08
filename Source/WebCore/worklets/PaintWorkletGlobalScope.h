@@ -29,6 +29,7 @@
 
 #include "CSSPaintCallback.h"
 #include "WorkletGlobalScope.h"
+#include <JavaScriptCore/JSObject.h>
 #include <JavaScriptCore/Strong.h>
 
 namespace JSC {
@@ -45,8 +46,12 @@ public:
     ExceptionOr<void> registerPaint(JSC::ExecState&, JSDOMGlobalObject&, const String& name, JSC::Strong<JSC::JSObject> paintConstructor);
     double devicePixelRatio() const;
 
-    struct PaintDefinition {
+    // All paint definitions must be destroyed before the vm is destroyed, because otherwise they will point to freed memory.
+    struct PaintDefinition : public CanMakeWeakPtr<PaintDefinition> {
+        PaintDefinition(const AtomicString& name, JSC::JSObject* paintConstructor, Ref<CSSPaintCallback>&&, Vector<String>&& inputProperties, Vector<String>&& inputArguments);
+
         const AtomicString name;
+        const JSC::JSObject* const paintConstructor;
         const Ref<CSSPaintCallback> paintCallback;
         const Vector<String> inputProperties;
         const Vector<String> inputArguments;
@@ -55,8 +60,25 @@ public:
     HashMap<String, std::unique_ptr<PaintDefinition>>& paintDefinitionMap() { ASSERT(m_paintDefinitionLock.isLocked()); return m_paintDefinitionMap; }
     Lock& paintDefinitionLock() { return m_paintDefinitionLock; }
 
+    void prepareForDestruction() final
+    {
+        {
+            auto locker = holdLock(paintDefinitionLock());
+            paintDefinitionMap().clear();
+        }
+        WorkletGlobalScope::prepareForDestruction();
+    }
+
 private:
     PaintWorkletGlobalScope(Document&, ScriptSourceCode&&);
+
+    ~PaintWorkletGlobalScope()
+    {
+#if !ASSERT_DISABLED
+        auto locker = holdLock(paintDefinitionLock());
+        ASSERT(paintDefinitionMap().isEmpty());
+#endif
+    }
 
     bool isPaintWorkletGlobalScope() const final { return true; }
 

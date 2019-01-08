@@ -46,16 +46,16 @@ InlineLineBreaker::InlineLineBreaker(const LayoutState& layoutState, const Inlin
 {
 }
 
-std::optional<InlineLineBreaker::Run> InlineLineBreaker::nextRun(LayoutUnit contentLogicalLeft, LayoutUnit availableWidth, bool lineIsEmpty)
+Optional<InlineLineBreaker::Run> InlineLineBreaker::nextRun(LayoutUnit contentLogicalLeft, LayoutUnit availableWidth, bool lineIsEmpty)
 {
     if (isAtContentEnd())
-        return std::nullopt;
+        return WTF::nullopt;
 
     InlineRunProvider::Run currentInlineRun = m_inlineRuns[m_currentRunIndex];
     // Adjust the current run if it is split midword.
     if (m_splitPosition) {
         ASSERT(currentInlineRun.isText());
-        m_splitPosition = std::nullopt;
+        m_splitPosition = WTF::nullopt;
     }
 
     if (currentInlineRun.isLineBreak()) {
@@ -161,8 +161,10 @@ LayoutUnit InlineLineBreaker::textWidth(const InlineRunProvider::Run& inlineRun,
 
     // FIXME: It does not do proper kerning/ligature handling.
     LayoutUnit width;
-    auto iterator = m_inlineContent.find<const InlineItem&, InlineItemHashTranslator>(inlineItem);
+    auto iterator = m_inlineContent.find(const_cast<InlineItem*>(&inlineItem));
+#if !ASSERT_DISABLED
     auto inlineItemEnd = m_inlineContent.end();
+#endif
     while (length) {
         ASSERT(iterator != inlineItemEnd);
         auto& currentInlineItem = **iterator;
@@ -170,8 +172,8 @@ LayoutUnit InlineLineBreaker::textWidth(const InlineRunProvider::Run& inlineRun,
         auto endPosition = std::min<ItemPosition>(startPosition + length, inlineItemLength);
         auto textWidth = TextUtil::width(currentInlineItem, startPosition, endPosition, contentLogicalLeft);
 
-        auto nonBreakableStart = !startPosition ? currentInlineItem.nonBreakableStart() : LayoutUnit();
-        auto nonBreakableEnd =  endPosition == inlineItemLength ? currentInlineItem.nonBreakableEnd() : LayoutUnit();
+        auto nonBreakableStart = !startPosition ? currentInlineItem.nonBreakableStart() : 0_lu;
+        auto nonBreakableEnd =  endPosition == inlineItemLength ? currentInlineItem.nonBreakableEnd() : 0_lu;
         auto contentWidth = nonBreakableStart + textWidth + nonBreakableEnd;
         contentLogicalLeft += contentWidth;
         width += contentWidth;
@@ -188,7 +190,7 @@ InlineLineBreaker::Run InlineLineBreaker::splitRun(const InlineRunProvider::Run&
     return { Run::Position::Undetermined, { }, inlineRun };
 }
 
-std::optional<ItemPosition> InlineLineBreaker::adjustSplitPositionWithHyphenation(const InlineRunProvider::Run&, ItemPosition, LayoutUnit, LayoutUnit, bool) const
+Optional<ItemPosition> InlineLineBreaker::adjustSplitPositionWithHyphenation(const InlineRunProvider::Run&, ItemPosition, LayoutUnit, LayoutUnit, bool) const
 {
     return { };
 }

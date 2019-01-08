@@ -34,8 +34,8 @@
 #include <WebCore/FrameLoaderTypes.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/SerializedScriptValue.h>
-#include <WebCore/URL.h>
 #include <wtf/Optional.h>
+#include <wtf/URL.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
 
@@ -51,7 +51,7 @@ bool isValidEnum(WebCore::ShouldOpenExternalURLsPolicy);
 struct HTTPBody {
     struct Element {
         void encode(IPC::Encoder&) const;
-        static std::optional<Element> decode(IPC::Decoder&);
+        static Optional<Element> decode(IPC::Decoder&);
 
         enum class Type {
             Data,
@@ -68,8 +68,8 @@ struct HTTPBody {
         // File.
         String filePath;
         int64_t fileStart;
-        std::optional<int64_t> fileLength;
-        std::optional<double> expectedFileModificationTime;
+        Optional<int64_t> fileLength;
+        Optional<WallTime> expectedFileModificationTime;
 
         // Blob.
         String blobURLString;
@@ -84,7 +84,7 @@ struct HTTPBody {
 
 struct FrameState {
     void encode(IPC::Encoder&) const;
-    static std::optional<FrameState> decode(IPC::Decoder&);
+    static Optional<FrameState> decode(IPC::Decoder&);
 
     String urlString;
     String originalURLString;
@@ -92,7 +92,7 @@ struct FrameState {
     String target;
 
     Vector<String> documentState;
-    std::optional<Vector<uint8_t>> stateObjectData;
+    Optional<Vector<uint8_t>> stateObjectData;
 
     int64_t documentSequenceNumber { 0 };
     int64_t itemSequenceNumber { 0 };
@@ -101,7 +101,7 @@ struct FrameState {
     bool shouldRestoreScrollPosition { true };
     float pageScaleFactor { 0 };
 
-    std::optional<HTTPBody> httpBody;
+    Optional<HTTPBody> httpBody;
 
     // FIXME: These should not be per frame.
 #if PLATFORM(IOS_FAMILY)
@@ -127,7 +127,7 @@ struct PageState {
 
 struct BackForwardListItemState {
     void encode(IPC::Encoder&) const;
-    static std::optional<BackForwardListItemState> decode(IPC::Decoder&);
+    static Optional<BackForwardListItemState> decode(IPC::Decoder&);
 
     WebCore::BackForwardItemIdentifier identifier;
 
@@ -139,16 +139,16 @@ struct BackForwardListItemState {
 
 struct BackForwardListState {
     void encode(IPC::Encoder&) const;
-    static std::optional<BackForwardListState> decode(IPC::Decoder&);
+    static Optional<BackForwardListState> decode(IPC::Decoder&);
 
     Vector<BackForwardListItemState> items;
-    std::optional<uint32_t> currentIndex;
+    Optional<uint32_t> currentIndex;
 };
 
 struct SessionState {
     BackForwardListState backForwardListState;
     uint64_t renderTreeSize;
-    WebCore::URL provisionalURL;
+    URL provisionalURL;
 };
 
 } // namespace WebKit

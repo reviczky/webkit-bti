@@ -272,10 +272,6 @@ void NetworkProcessProxy::didClose(IPC::Connection&)
     m_syncAllCookiesToken = nullptr;
     m_syncAllCookiesCounter = 0;
 
-    for (auto& callback : m_writeBlobToFilePathCallbackMap.values())
-        callback(false);
-    m_writeBlobToFilePathCallbackMap.clear();
-
     for (auto& callback : m_removeAllStorageAccessCallbackMap.values())
         callback();
     m_removeAllStorageAccessCallbackMap.clear();
@@ -423,7 +419,7 @@ void NetworkProcessProxy::didUpdateBlockCookies(uint64_t callbackId)
     m_updateBlockCookiesCallbackMap.take(callbackId)();
 }
 
-void NetworkProcessProxy::setAgeCapForClientSideCookies(PAL::SessionID sessionID, std::optional<Seconds> seconds, CompletionHandler<void()>&& completionHandler)
+void NetworkProcessProxy::setAgeCapForClientSideCookies(PAL::SessionID sessionID, Optional<Seconds> seconds, CompletionHandler<void()>&& completionHandler)
 {
     if (!canSendMessage()) {
         completionHandler();
@@ -451,7 +447,7 @@ void NetworkProcessProxy::hasStorageAccessForFrame(PAL::SessionID sessionID, con
     send(Messages::NetworkProcess::HasStorageAccessForFrame(sessionID, resourceDomain, firstPartyDomain, frameID, pageID, contextId), 0);
 }
 
-void NetworkProcessProxy::grantStorageAccess(PAL::SessionID sessionID, const String& resourceDomain, const String& firstPartyDomain, std::optional<uint64_t> frameID, uint64_t pageID, WTF::CompletionHandler<void(bool)>&& callback)
+void NetworkProcessProxy::grantStorageAccess(PAL::SessionID sessionID, const String& resourceDomain, const String& firstPartyDomain, Optional<uint64_t> frameID, uint64_t pageID, WTF::CompletionHandler<void(bool)>&& callback)
 {
     auto contextId = generateCallbackID();
     auto addResult = m_storageAccessResponseCallbackMap.add(contextId, WTFMove(callback));
@@ -564,28 +560,16 @@ void NetworkProcessProxy::sendProcessDidResume()
         send(Messages::NetworkProcess::ProcessDidResume(), 0);
 }
 
-void NetworkProcessProxy::writeBlobToFilePath(const WebCore::URL& url, const String& path, CompletionHandler<void(bool)>&& callback)
+void NetworkProcessProxy::writeBlobToFilePath(const URL& url, const String& path, CompletionHandler<void(bool)>&& completionHandler)
 {
     if (!canSendMessage()) {
-        callback(false);
+        completionHandler(false);
         return;
     }
 
-    static uint64_t writeBlobToFilePathCallbackIdentifiers = 0;
-    uint64_t callbackID = ++writeBlobToFilePathCallbackIdentifiers;
-    m_writeBlobToFilePathCallbackMap.add(callbackID, WTFMove(callback));
-
     SandboxExtension::Handle handleForWriting;
     SandboxExtension::createHandle(path, SandboxExtension::Type::ReadWrite, handleForWriting);
-    send(Messages::NetworkProcess::WriteBlobToFilePath(url, path, handleForWriting, callbackID), 0);
-}
-
-void NetworkProcessProxy::didWriteBlobToFilePath(bool success, uint64_t callbackID)
-{
-    if (auto handler = m_writeBlobToFilePathCallbackMap.take(callbackID))
-        handler(success);
-    else
-        ASSERT_NOT_REACHED();
+    sendWithAsyncReply(Messages::NetworkProcess::WriteBlobToFilePath(url, path, handleForWriting), WTFMove(completionHandler));
 }
 
 void NetworkProcessProxy::processReadyToSuspend()
@@ -673,7 +657,7 @@ void NetworkProcessProxy::retrieveCacheStorageParameters(PAL::SessionID sessionI
 
     if (!store) {
         RELEASE_LOG_ERROR(CacheStorage, "%p - NetworkProcessProxy is unable to retrieve CacheStorage parameters from the given session ID %" PRIu64, this, sessionID.sessionID());
-        auto quota = m_processPool.websiteDataStore() ? m_processPool.websiteDataStore()->websiteDataStore().cacheStoragePerOriginQuota() : WebsiteDataStore::defaultCacheStoragePerOriginQuota;
+        auto quota = m_processPool.websiteDataStore() ? m_processPool.websiteDataStore()->websiteDataStore().cacheStoragePerOriginQuota() : WebsiteDataStoreConfiguration::defaultCacheStoragePerOriginQuota;
         send(Messages::NetworkProcess::SetCacheStorageParameters { sessionID, quota, { }, { } }, 0);
         return;
     }
@@ -735,7 +719,7 @@ void NetworkProcessProxy::getSandboxExtensionsForBlobFiles(const Vector<String>&
 #if ENABLE(SERVICE_WORKER)
 void NetworkProcessProxy::establishWorkerContextConnectionToNetworkProcess(SecurityOriginData&& origin)
 {
-    m_processPool.establishWorkerContextConnectionToNetworkProcess(*this, WTFMove(origin), std::nullopt);
+    m_processPool.establishWorkerContextConnectionToNetworkProcess(*this, WTFMove(origin), WTF::nullopt);
 }
 
 void NetworkProcessProxy::establishWorkerContextConnectionToNetworkProcessForExplicitSession(SecurityOriginData&& origin, PAL::SessionID sessionID)

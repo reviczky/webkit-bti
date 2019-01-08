@@ -104,6 +104,7 @@
 #include <WebCore/Page.h>
 #include <WebCore/PageCache.h>
 #include <WebCore/PageGroup.h>
+#include <WebCore/PlatformKeyboardEvent.h>
 #include <WebCore/PlatformMediaSessionManager.h>
 #include <WebCore/ProcessWarming.h>
 #include <WebCore/ResourceLoadObserver.h>
@@ -114,12 +115,12 @@
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/ServiceWorkerContextData.h>
 #include <WebCore/Settings.h>
-#include <WebCore/URLParser.h>
 #include <WebCore/UserGestureIndicator.h>
 #include <wtf/Language.h>
 #include <wtf/ProcessPrivilege.h>
 #include <wtf/RunLoop.h>
 #include <wtf/SystemTracing.h>
+#include <wtf/URLParser.h>
 #include <wtf/text/StringHash.h>
 
 #if !OS(WINDOWS)
@@ -280,8 +281,9 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
     m_suppressMemoryPressureHandler = parameters.shouldSuppressMemoryPressureHandler;
     if (!m_suppressMemoryPressureHandler) {
         auto& memoryPressureHandler = MemoryPressureHandler::singleton();
-        memoryPressureHandler.setLowMemoryHandler([] (Critical critical, Synchronous synchronous) {
-            WebCore::releaseMemory(critical, synchronous);
+        memoryPressureHandler.setLowMemoryHandler([this] (Critical critical, Synchronous synchronous) {
+            auto maintainPageCache = m_isSuspending && hasPageRequiringPageCacheWhileSuspended() ? WebCore::MaintainPageCache::Yes : WebCore::MaintainPageCache::No;
+            WebCore::releaseMemory(critical, synchronous, maintainPageCache);
         });
 #if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 101200) || PLATFORM(GTK) || PLATFORM(WPE)
         memoryPressureHandler.setShouldUsePeriodicMemoryMonitor(true);
@@ -326,7 +328,7 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
         WebCore::HTMLMediaElement::setMediaCacheDirectory(parameters.mediaCacheDirectory);
 #endif
 
-    setCacheModel(static_cast<uint32_t>(parameters.cacheModel));
+    setCacheModel(parameters.cacheModel);
 
     if (!parameters.languages.isEmpty())
         overrideUserPreferredLanguages(parameters.languages);
@@ -427,6 +429,15 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
 #endif
 
     RELEASE_LOG(Process, "%p - WebProcess::initializeWebProcess: Presenting process = %d", this, WebCore::presentingApplicationPID());
+}
+
+bool WebProcess::hasPageRequiringPageCacheWhileSuspended() const
+{
+    for (auto& page : m_pageMap.values()) {
+        if (page->isSuspended())
+            return true;
+    }
+    return false;
 }
 
 void WebProcess::markIsNoLongerPrewarmed()
@@ -551,10 +562,8 @@ PluginProcessConnectionManager& WebProcess::pluginProcessConnectionManager()
 }
 #endif
 
-void WebProcess::setCacheModel(uint32_t cm)
+void WebProcess::setCacheModel(CacheModel cacheModel)
 {
-    CacheModel cacheModel = static_cast<CacheModel>(cm);
-
     if (m_hasSetCacheModel && (cacheModel == m_cacheModel))
         return;
 
@@ -770,7 +779,7 @@ void WebProcess::clearResourceCaches(ResourceCachesToClear resourceCachesToClear
     // Toggling the cache model like this forces the cache to evict all its in-memory resources.
     // FIXME: We need a better way to do this.
     CacheModel cacheModel = m_cacheModel;
-    setCacheModel(CacheModelDocumentViewer);
+    setCacheModel(CacheModel::DocumentViewer);
     setCacheModel(cacheModel);
 
     MemoryCache::singleton().evictResources();
@@ -1343,8 +1352,9 @@ void WebProcess::updateActivePages()
 {
 }
 
-void WebProcess::getActivePagesOriginsForTesting(Vector<String>&)
+void WebProcess::getActivePagesOriginsForTesting(CompletionHandler<void(Vector<String>&&)>&& completionHandler)
 {
+    completionHandler({ });
 }
 
 void WebProcess::updateCPULimit()
@@ -1375,10 +1385,12 @@ void WebProcess::resetAllGeolocationPermissions()
 
 void WebProcess::actualPrepareToSuspend(ShouldAcknowledgeWhenReadyToSuspend shouldAcknowledgeWhenReadyToSuspend)
 {
+    SetForScope<bool> suspensionScope(m_isSuspending, true);
+
     if (!m_suppressMemoryPressureHandler)
         MemoryPressureHandler::singleton().releaseMemory(Critical::Yes, Synchronous::Yes);
 
-    setAllLayerTreeStatesFrozen(true);
+    freezeAllLayerTrees();
     
 #if PLATFORM(COCOA)
     destroyRenderingResources();
@@ -1426,7 +1438,7 @@ void WebProcess::prepareToSuspend()
 void WebProcess::cancelPrepareToSuspend()
 {
     RELEASE_LOG(ProcessSuspension, "%p - WebProcess::cancelPrepareToSuspend()", this);
-    setAllLayerTreeStatesFrozen(false);
+    unfreezeAllLayerTrees();
 
 #if PLATFORM(IOS_FAMILY)
     accessibilityProcessSuspendedNotification(false);
@@ -1474,25 +1486,31 @@ void WebProcess::cancelMarkAllLayersVolatile()
         page->cancelMarkLayersVolatile();
 }
 
-void WebProcess::setAllLayerTreeStatesFrozen(bool frozen)
+void WebProcess::freezeAllLayerTrees()
 {
     for (auto& page : m_pageMap.values())
-        page->setLayerTreeStateIsFrozen(frozen);
+        page->freezeLayerTree(WebPage::LayerTreeFreezeReason::ProcessSuspended);
 }
-    
+
+void WebProcess::unfreezeAllLayerTrees()
+{
+    for (auto& page : m_pageMap.values())
+        page->unfreezeLayerTree(WebPage::LayerTreeFreezeReason::ProcessSuspended);
+}
+
 void WebProcess::processDidResume()
 {
     RELEASE_LOG(ProcessSuspension, "%p - WebProcess::processDidResume()", this);
 
     cancelMarkAllLayersVolatile();
-    setAllLayerTreeStatesFrozen(false);
+    unfreezeAllLayerTrees();
     
 #if PLATFORM(IOS_FAMILY)
     accessibilityProcessSuspendedNotification(false);
 #endif
 }
 
-void WebProcess::sendPrewarmInformation(const WebCore::URL& url)
+void WebProcess::sendPrewarmInformation(const URL& url)
 {
     auto registrableDomain = toRegistrableDomain(url);
     if (registrableDomain.isEmpty())
@@ -1741,5 +1759,10 @@ void WebProcess::resetMockMediaDevices()
     MockRealtimeMediaSourceCenter::resetDevices();
 }
 #endif
+
+void WebProcess::clearCurrentModifierStateForTesting()
+{
+    PlatformKeyboardEvent::setCurrentModifierState({ });
+}
 
 } // namespace WebKit

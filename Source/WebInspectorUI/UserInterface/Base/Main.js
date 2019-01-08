@@ -114,12 +114,12 @@ WI.loaded = function()
         WI.memoryManager = new WI.MemoryManager,
         WI.applicationCacheManager = new WI.ApplicationCacheManager,
         WI.timelineManager = new WI.TimelineManager,
+        WI.auditManager = new WI.AuditManager,
         WI.debuggerManager = new WI.DebuggerManager,
         WI.layerTreeManager = new WI.LayerTreeManager,
         WI.workerManager = new WI.WorkerManager,
         WI.domDebuggerManager = new WI.DOMDebuggerManager,
         WI.canvasManager = new WI.CanvasManager,
-        WI.auditManager = new WI.AuditManager,
     ];
 
     // Register for events.
@@ -138,7 +138,16 @@ WI.loaded = function()
 
     // Create settings.
     this._showingSplitConsoleSetting = new WI.Setting("showing-split-console", false);
-    this._openTabsSetting = new WI.Setting("open-tab-types", ["elements", "network", "debugger", "resources", "timeline", "storage", "canvas", "console"]);
+    this._openTabsSetting = new WI.Setting("open-tab-types", [
+        WI.ElementsTabContentView.Type,
+        WI.NetworkTabContentView.Type,
+        WI.DebuggerTabContentView.Type,
+        WI.ResourcesTabContentView.Type,
+        WI.TimelineTabContentView.Type,
+        WI.StorageTabContentView.Type,
+        WI.CanvasTabContentView.Type,
+        WI.ConsoleTabContentView.Type,
+    ]);
     this._selectedTabIndexSetting = new WI.Setting("selected-tab-index", 0);
 
     // State.
@@ -148,6 +157,7 @@ WI.loaded = function()
     this.modifierKeys = {altKey: false, metaKey: false, shiftKey: false};
     this.visible = false;
     this._windowKeydownListeners = [];
+    this._targetsAvailablePromise = new WI.WrappedPromise;
 
     // Targets.
     WI.backendTarget = null;
@@ -172,6 +182,8 @@ WI.initializeBackendTarget = function(target)
     WI.backendTarget = target;
 
     WI.resetMainExecutionContext();
+
+    this._targetsAvailablePromise.resolve();
 };
 
 WI.initializePageTarget = function(target)
@@ -202,6 +214,7 @@ WI.transitionPageTarget = function(target)
     this.notifications.dispatchEventToListeners(WI.Notification.TransitionPageTarget);
     WI.domManager.transitionPageTarget();
     WI.networkManager.transitionPageTarget();
+    WI.timelineManager.transitionPageTarget();
 };
 
 WI.terminatePageTarget = function(target)
@@ -542,7 +555,9 @@ WI.contentLoaded = function()
     this.tabBar.addEventListener(WI.TabBar.Event.TabBarItemsReordered, this._rememberOpenTabs, this);
 
     // Signal that the frontend is now ready to receive messages.
-    InspectorFrontendAPI.loadCompleted();
+    WI.whenTargetsAvailable().then(() => {
+        InspectorFrontendAPI.loadCompleted();
+    });
 
     // Tell the InspectorFrontendHost we loaded, which causes the window to display
     // and pending InspectorFrontendAPI commands to be sent.
@@ -569,6 +584,11 @@ WI.performOneTimeFrontendInitializationsUsingTarget = function(target)
         WI.__didPerformCSSInitialization = true;
         WI.CSSCompletions.initializeCSSCompletions(target);
     }
+};
+
+WI.whenTargetsAvailable = function()
+{
+    return this._targetsAvailablePromise.promise;
 };
 
 WI.isTabTypeAllowed = function(tabType)
@@ -734,8 +754,19 @@ WI.activateExtraDomains = function(domains)
 {
     this.notifications.dispatchEventToListeners(WI.Notification.ExtraDomainsActivated, {domains});
 
-    if (WI.mainTarget && WI.mainTarget.CSSAgent)
-        WI.CSSCompletions.initializeCSSCompletions(WI.assumingMainTarget());
+    if (WI.mainTarget) {
+        if (!WI.pageTarget && WI.mainTarget.DOMAgent)
+            WI.pageTarget = WI.mainTarget;
+
+        if (WI.mainTarget.CSSAgent)
+            WI.CSSCompletions.initializeCSSCompletions(WI.assumingMainTarget());
+
+        if (WI.mainTarget.DOMAgent)
+            WI.domManager.ensureDocument();
+
+        if (WI.mainTarget.PageAgent)
+            WI.networkManager.initializeTarget(WI.mainTarget);
+    }
 
     this._updateReloadToolbarButton();
     this._updateDownloadToolbarButton();

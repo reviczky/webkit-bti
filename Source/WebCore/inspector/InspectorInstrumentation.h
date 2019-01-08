@@ -88,7 +88,6 @@ class ScriptExecutionContext;
 class SecurityOrigin;
 class ShadowRoot;
 class TimerBase;
-class URL;
 #if ENABLE(WEBGL)
 class WebGLProgram;
 #endif
@@ -138,6 +137,7 @@ public:
     static bool forcePseudoState(const Element&, CSSSelector::PseudoClassType);
 
     static void willSendXMLHttpRequest(ScriptExecutionContext*, const String& url);
+    static void willFetch(ScriptExecutionContext&, const String& url);
     static void didInstallTimer(ScriptExecutionContext&, int timerId, Seconds timeout, bool singleShot);
     static void didRemoveTimer(ScriptExecutionContext&, int timerId);
 
@@ -213,6 +213,7 @@ public:
     static void frameStoppedLoading(Frame&);
     static void frameScheduledNavigation(Frame&, Seconds delay);
     static void frameClearedScheduledNavigation(Frame&);
+    static void defaultAppearanceDidChange(Page&, bool useDarkAppearance);
     static void willDestroyCachedResource(CachedResource&);
 
     static void addMessageToConsole(Page&, std::unique_ptr<Inspector::ConsoleMessage>);
@@ -234,6 +235,9 @@ public:
     static void didCancelAnimationFrame(Document&, int callbackId);
     static InspectorInstrumentationCookie willFireAnimationFrame(Document&, int callbackId);
     static void didFireAnimationFrame(const InspectorInstrumentationCookie&);
+
+    static InspectorInstrumentationCookie willFireObserverCallback(ScriptExecutionContext&, const String& callbackType);
+    static void didFireObserverCallback(const InspectorInstrumentationCookie&);
 
     static void didOpenDatabase(ScriptExecutionContext*, RefPtr<Database>&&, const String& domain, const String& name, const String& version);
 
@@ -325,6 +329,7 @@ private:
     static bool forcePseudoStateImpl(InstrumentingAgents&, const Element&, CSSSelector::PseudoClassType);
 
     static void willSendXMLHttpRequestImpl(InstrumentingAgents&, const String& url);
+    static void willFetchImpl(InstrumentingAgents&, const String& url);
     static void didInstallTimerImpl(InstrumentingAgents&, int timerId, Seconds timeout, bool singleShot, ScriptExecutionContext&);
     static void didRemoveTimerImpl(InstrumentingAgents&, int timerId, ScriptExecutionContext&);
 
@@ -386,6 +391,7 @@ private:
     static void frameStoppedLoadingImpl(InstrumentingAgents&, Frame&);
     static void frameScheduledNavigationImpl(InstrumentingAgents&, Frame&, Seconds delay);
     static void frameClearedScheduledNavigationImpl(InstrumentingAgents&, Frame&);
+    static void defaultAppearanceDidChangeImpl(InstrumentingAgents&, bool useDarkAppearance);
     static void willDestroyCachedResourceImpl(CachedResource&);
 
     static void addMessageToConsoleImpl(InstrumentingAgents&, std::unique_ptr<Inspector::ConsoleMessage>);
@@ -405,6 +411,9 @@ private:
     static void didCancelAnimationFrameImpl(InstrumentingAgents&, int callbackId, Document&);
     static InspectorInstrumentationCookie willFireAnimationFrameImpl(InstrumentingAgents&, int callbackId, Document&);
     static void didFireAnimationFrameImpl(const InspectorInstrumentationCookie&);
+
+    static InspectorInstrumentationCookie willFireObserverCallbackImpl(InstrumentingAgents&, const String&, ScriptExecutionContext&);
+    static void didFireObserverCallbackImpl(const InspectorInstrumentationCookie&);
 
     static void didOpenDatabaseImpl(InstrumentingAgents&, RefPtr<Database>&&, const String& domain, const String& name, const String& version);
 
@@ -686,6 +695,13 @@ inline void InspectorInstrumentation::willSendXMLHttpRequest(ScriptExecutionCont
     FAST_RETURN_IF_NO_FRONTENDS(void());
     if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForContext(context))
         willSendXMLHttpRequestImpl(*instrumentingAgents, url);
+}
+
+inline void InspectorInstrumentation::willFetch(ScriptExecutionContext& context, const String& url)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(void());
+    if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForContext(context))
+        willFetchImpl(*instrumentingAgents, url);
 }
 
 inline void InspectorInstrumentation::didInstallTimer(ScriptExecutionContext& context, int timerId, Seconds timeout, bool singleShot)
@@ -1135,6 +1151,12 @@ inline void InspectorInstrumentation::frameClearedScheduledNavigation(Frame& fra
         frameClearedScheduledNavigationImpl(*instrumentingAgents, frame);
 }
 
+inline void InspectorInstrumentation::defaultAppearanceDidChange(Page& page, bool useDarkAppearance)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(void());
+    defaultAppearanceDidChangeImpl(instrumentingAgentsForPage(page), useDarkAppearance);
+}
+
 inline void InspectorInstrumentation::willDestroyCachedResource(CachedResource& cachedResource)
 {
     FAST_RETURN_IF_NO_FRONTENDS(void());
@@ -1403,6 +1425,7 @@ inline void InspectorInstrumentation::didCancelAnimationFrame(Document& document
 
 inline InspectorInstrumentationCookie InspectorInstrumentation::willFireAnimationFrame(Document& document, int callbackId)
 {
+    FAST_RETURN_IF_NO_FRONTENDS(InspectorInstrumentationCookie());
     if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForDocument(document))
         return willFireAnimationFrameImpl(*instrumentingAgents, callbackId, document);
     return InspectorInstrumentationCookie();
@@ -1413,6 +1436,21 @@ inline void InspectorInstrumentation::didFireAnimationFrame(const InspectorInstr
     FAST_RETURN_IF_NO_FRONTENDS(void());
     if (cookie.isValid())
         didFireAnimationFrameImpl(cookie);
+}
+
+inline InspectorInstrumentationCookie InspectorInstrumentation::willFireObserverCallback(ScriptExecutionContext& context, const String& callbackType)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(InspectorInstrumentationCookie());
+    if (InstrumentingAgents* instrumentingAgents = instrumentingAgentsForContext(context))
+        return willFireObserverCallbackImpl(*instrumentingAgents, callbackType, context);
+    return InspectorInstrumentationCookie();
+}
+
+inline void InspectorInstrumentation::didFireObserverCallback(const InspectorInstrumentationCookie& cookie)
+{
+    FAST_RETURN_IF_NO_FRONTENDS(void());
+    if (cookie.isValid())
+        didFireObserverCallbackImpl(cookie);
 }
 
 inline void InspectorInstrumentation::layerTreeDidChange(Page* page)

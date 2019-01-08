@@ -256,9 +256,19 @@ void InjectedBundle::overrideBoolPreferenceForTestRunner(WebPageGroupProxy* page
     if (preference == "CSSCustomPropertiesAndValuesEnabled")
         RuntimeEnabledFeatures::sharedFeatures().setCSSCustomPropertiesAndValuesEnabled(enabled);
 
+#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
+    if (preference == "LayoutFormattingContextEnabled")
+        RuntimeEnabledFeatures::sharedFeatures().setLayoutFormattingContextEnabled(enabled);
+#endif
+
 #if ENABLE(CSS_PAINTING_API)
     if (preference == "CSSPaintingAPIEnabled")
         RuntimeEnabledFeatures::sharedFeatures().setCSSPaintingAPIEnabled(enabled);
+#endif
+
+#if ENABLE(CSS_TYPED_OM)
+    if (preference == "CSSTypedOMEnabled")
+        RuntimeEnabledFeatures::sharedFeatures().setCSSTypedOMEnabled(enabled);
 #endif
 
     // Map the names used in LayoutTests with the names used in WebCore::Settings and WebPreferencesStore.

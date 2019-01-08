@@ -41,11 +41,11 @@ struct InlineRun {
     LayoutUnit logicalTop() const { return m_logicalRect.top(); }
     LayoutUnit logicalBottom() const { return m_logicalRect.bottom(); }
 
-    LayoutUnit width() const { return m_logicalRect.width(); }
-    LayoutUnit height() const { return m_logicalRect.height(); }
+    LayoutUnit logicalWidth() const { return m_logicalRect.width(); }
+    LayoutUnit logicalHeight() const { return m_logicalRect.height(); }
     bool overlapsMultipleInlineItems() const;
 
-    void setWidth(LayoutUnit width) { m_logicalRect.setWidth(width); }
+    void setLogicalWidth(LayoutUnit width) { m_logicalRect.setWidth(width); }
     void setLogicalLeft(LayoutUnit logicalLeft) { m_logicalRect.setLeft(logicalLeft); }
     void setLogicalRight(LayoutUnit logicalRight) { m_logicalRect.shiftRightTo(logicalRight); }
     void moveVertically(LayoutUnit delta) { m_logicalRect.moveVertically(delta); }
@@ -73,8 +73,8 @@ struct InlineRun {
         unsigned m_length;
     };
     void setTextContext(TextContext textContext) { m_textContext.emplace(textContext); }
-    std::optional<TextContext>& textContext() { return m_textContext; }
-    std::optional<TextContext> textContext() const { return m_textContext; }
+    Optional<TextContext>& textContext() { return m_textContext; }
+    Optional<TextContext> textContext() const { return m_textContext; }
 
     const InlineItem& inlineItem() const { return m_inlineItem; }
 
@@ -83,7 +83,7 @@ private:
     ExpansionOpportunity m_expansionOpportunity;
 
     const InlineItem& m_inlineItem;
-    std::optional<TextContext> m_textContext;
+    Optional<TextContext> m_textContext;
 };
 
 using InlineRuns = Vector<InlineRun>;

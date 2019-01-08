@@ -27,20 +27,23 @@
 
 #if ENABLE(WEBGPU)
 
+#include "GPUTexture.h"
 #include <wtf/RefPtr.h>
 #include <wtf/RetainPtr.h>
 
-OBJC_CLASS CAMetalLayer;
+OBJC_CLASS CALayer;
+OBJC_CLASS CAMetalDrawable;
+OBJC_CLASS WebGPULayer;
 
 namespace WebCore {
 
 class GPUDevice;
-class GPUTexture;
 
 enum class GPUTextureFormatEnum;
 
-using PlatformSwapLayer = CAMetalLayer;
-using PlatformSwapLayerSmartPtr = RetainPtr<CAMetalLayer>;
+using PlatformDrawableSmartPtr = RetainPtr<CAMetalDrawable>;
+using PlatformLayer = CALayer;
+using PlatformSwapLayerSmartPtr = RetainPtr<WebGPULayer>;
 
 class GPUSwapChain : public RefCounted<GPUSwapChain> {
 public:
@@ -52,12 +55,13 @@ public:
     RefPtr<GPUTexture> getNextTexture();
     void present();
 
-    PlatformSwapLayer* platformLayer() const { return m_platformSwapLayer.get(); }
+    PlatformLayer* platformLayer() const;
 
 private:
     GPUSwapChain(PlatformSwapLayerSmartPtr&&);
 
     PlatformSwapLayerSmartPtr m_platformSwapLayer;
+    PlatformDrawableSmartPtr m_currentDrawable;
 };
 
 } // namespace WebCore

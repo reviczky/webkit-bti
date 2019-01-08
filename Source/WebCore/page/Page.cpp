@@ -548,7 +548,7 @@ void Page::updateStyleAfterChangeInEnvironment()
 
         if (StyleResolver* styleResolver = document->styleScope().resolverIfExists())
             styleResolver->invalidateMatchedPropertiesCache();
-        document->scheduleForcedStyleRecalc();
+        document->scheduleFullStyleRebuild();
         document->styleScope().didChangeStyleSheetEnvironment();
     }
 }
@@ -602,7 +602,7 @@ bool Page::showAllPlugins() const
     return false;
 }
 
-inline std::optional<std::pair<MediaCanStartListener&, Document&>>  Page::takeAnyMediaCanStartListener()
+inline Optional<std::pair<MediaCanStartListener&, Document&>>  Page::takeAnyMediaCanStartListener()
 {
     for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
         if (!frame->document())
@@ -610,7 +610,7 @@ inline std::optional<std::pair<MediaCanStartListener&, Document&>>  Page::takeAn
         if (MediaCanStartListener* listener = frame->document()->takeAnyMediaCanStartListener())
             return { { *listener, *frame->document() } };
     }
-    return std::nullopt;
+    return WTF::nullopt;
 }
 
 void Page::setCanStartMedia(bool canStartMedia)
@@ -772,7 +772,7 @@ struct FindReplacementRange {
     size_t length { 0 };
 };
 
-static void replaceRanges(Page& page, Vector<FindReplacementRange>&& ranges, const String& replacementText)
+static void replaceRanges(Page& page, const Vector<FindReplacementRange>& ranges, const String& replacementText)
 {
     HashMap<RefPtr<ContainerNode>, Vector<FindReplacementRange>> rangesByContainerNode;
     for (auto& range : ranges) {
@@ -819,7 +819,7 @@ static void replaceRanges(Page& page, Vector<FindReplacementRange>&& ranges, con
         return frameToTraversalIndexMap.get(firstFrame) > frameToTraversalIndexMap.get(secondFrame);
     });
 
-    for (auto container : containerNodesInOrderOfReplacement) {
+    for (auto& container : containerNodesInOrderOfReplacement) {
         auto frame = makeRefPtr(container->document().frame());
         if (!frame)
             continue;
@@ -831,13 +831,13 @@ static void replaceRanges(Page& page, Vector<FindReplacementRange>&& ranges, con
             if (!range || range->collapsed())
                 continue;
 
-            frame->selection().setSelectedRange(range.get(), DOWNSTREAM, true);
-            frame->editor().replaceSelectionWithText(replacementText, true, false, EditAction::InsertReplacement);
+            frame->selection().setSelectedRange(range.get(), DOWNSTREAM, FrameSelection::ShouldCloseTyping::Yes);
+            frame->editor().replaceSelectionWithText(replacementText, Editor::SelectReplacement::Yes, Editor::SmartReplace::No, EditAction::InsertReplacement);
         }
     }
 }
 
-uint32_t Page::replaceRangesWithText(Vector<Ref<Range>>&& rangesToReplace, const String& replacementText, bool selectionOnly)
+uint32_t Page::replaceRangesWithText(const Vector<Ref<Range>>& rangesToReplace, const String& replacementText, bool selectionOnly)
 {
     // FIXME: In the future, we should respect the `selectionOnly` flag by checking whether each range being replaced is
     // contained within its frame's selection.
@@ -866,7 +866,7 @@ uint32_t Page::replaceRangesWithText(Vector<Ref<Range>>&& rangesToReplace, const
         replacementRanges.append({ WTFMove(highestRoot), replacementLocation, replacementLength });
     }
 
-    replaceRanges(*this, WTFMove(replacementRanges), replacementText);
+    replaceRanges(*this, replacementRanges, replacementText);
     return rangesToReplace.size();
 }
 
@@ -878,7 +878,7 @@ uint32_t Page::replaceSelectionWithText(const String& replacementText)
         return 0;
 
     auto editAction = selection.isRange() ? EditAction::InsertReplacement : EditAction::Insert;
-    frame->editor().replaceSelectionWithText(replacementText, true, false, editAction);
+    frame->editor().replaceSelectionWithText(replacementText, Editor::SelectReplacement::Yes, Editor::SmartReplace::No, editAction);
     return 1;
 }
 
@@ -1125,10 +1125,10 @@ bool Page::isLowPowerModeEnabled() const
     return m_lowPowerModeNotifier->isLowPowerModeEnabled();
 }
 
-void Page::setLowPowerModeEnabledOverrideForTesting(std::optional<bool> isEnabled)
+void Page::setLowPowerModeEnabledOverrideForTesting(Optional<bool> isEnabled)
 {
     m_lowPowerModeEnabledOverrideForTesting = isEnabled;
-    handleLowModePowerChange(m_lowPowerModeEnabledOverrideForTesting.value_or(false));
+    handleLowModePowerChange(m_lowPowerModeEnabledOverrideForTesting.valueOr(false));
 }
 
 void Page::setTopContentInset(float contentInset)
@@ -1263,7 +1263,7 @@ void Page::addDocumentNeedingIntersectionObservationUpdate(Document& document)
 void Page::updateIntersectionObservations()
 {
     m_intersectionObservationUpdateTimer.stop();
-    for (auto document : m_documentsNeedingIntersectionObservationUpdate) {
+    for (const auto& document : m_documentsNeedingIntersectionObservationUpdate) {
         if (document)
             document->updateIntersectionObservations();
     }
@@ -1347,7 +1347,7 @@ void Page::userStyleSheetLocationChanged()
 
     m_didLoadUserStyleSheet = false;
     m_userStyleSheet = String();
-    m_userStyleSheetModificationTime = 0;
+    m_userStyleSheetModificationTime = WTF::nullopt;
 
     // Data URLs with base64-encoded UTF-8 style sheets are common. We can process them
     // synchronously and avoid using a loader. 
@@ -1370,8 +1370,8 @@ const String& Page::userStyleSheet() const
     if (m_userStyleSheetPath.isEmpty())
         return m_userStyleSheet;
 
-    time_t modTime;
-    if (!FileSystem::getFileModificationTime(m_userStyleSheetPath, modTime)) {
+    auto modificationTime = FileSystem::getFileModificationTime(m_userStyleSheetPath);
+    if (!modificationTime) {
         // The stylesheet either doesn't exist, was just deleted, or is
         // otherwise unreadable. If we've read the stylesheet before, we should
         // throw away that data now as it no longer represents what's on disk.
@@ -1381,12 +1381,12 @@ const String& Page::userStyleSheet() const
 
     // If the stylesheet hasn't changed since the last time we read it, we can
     // just return the old data.
-    if (m_didLoadUserStyleSheet && modTime <= m_userStyleSheetModificationTime)
+    if (m_didLoadUserStyleSheet && (m_userStyleSheetModificationTime && modificationTime.value() <= m_userStyleSheetModificationTime.value()))
         return m_userStyleSheet;
 
     m_didLoadUserStyleSheet = true;
     m_userStyleSheet = String();
-    m_userStyleSheetModificationTime = modTime;
+    m_userStyleSheetModificationTime = modificationTime;
 
     // FIXME: It would be better to load this asynchronously to avoid blocking
     // the process, but we will first need to create an asynchronous loading
@@ -1395,7 +1395,7 @@ const String& Page::userStyleSheet() const
     // and what should happen when it finishes loading, especially with respect
     // to when the load event fires, when Document::close is called, and when
     // layout/paint are allowed to happen.
-    RefPtr<SharedBuffer> data = SharedBuffer::createWithContentsOfFile(m_userStyleSheetPath);
+    auto data = SharedBuffer::createWithContentsOfFile(m_userStyleSheetPath);
     if (!data)
         return m_userStyleSheet;
 
@@ -1716,6 +1716,47 @@ void Page::stopMediaCapture()
 #endif
 }
 
+void Page::stopAllMediaPlayback()
+{
+#if ENABLE(VIDEO)
+    for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
+        if (auto* document = frame->document())
+            document->stopAllMediaPlayback();
+    }
+#endif
+}
+
+void Page::suspendAllMediaPlayback()
+{
+#if ENABLE(VIDEO)
+    ASSERT(!m_mediaPlaybackIsSuspended);
+    if (m_mediaPlaybackIsSuspended)
+        return;
+
+    for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
+        if (auto* document = frame->document())
+            document->suspendAllMediaPlayback();
+    }
+
+    m_mediaPlaybackIsSuspended = true;
+#endif
+}
+
+void Page::resumeAllMediaPlayback()
+{
+#if ENABLE(VIDEO)
+    ASSERT(m_mediaPlaybackIsSuspended);
+    if (!m_mediaPlaybackIsSuspended)
+        return;
+    m_mediaPlaybackIsSuspended = false;
+
+    for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
+        if (auto* document = frame->document())
+            document->resumeAllMediaPlayback();
+    }
+#endif
+}
+
 #if ENABLE(MEDIA_SESSION)
 void Page::handleMediaEvent(MediaEventType eventType)
 {
@@ -1871,7 +1912,7 @@ void Page::setIsVisibleInternal(bool isVisible)
 
         if (m_navigationToLogWhenVisible) {
             logNavigation(m_navigationToLogWhenVisible.value());
-            m_navigationToLogWhenVisible = std::nullopt;
+            m_navigationToLogWhenVisible = WTF::nullopt;
         }
     }
 
@@ -2115,7 +2156,7 @@ void Page::addRelevantRepaintedObject(RenderObject* object, const LayoutRect& ob
     // both halves helps to prevent cases where we have a fully loaded menu bar or masthead with
     // no content beneath that.
     LayoutRect topRelevantRect = relevantRect;
-    topRelevantRect.contract(LayoutSize(0, relevantRect.height() / 2));
+    topRelevantRect.contract(LayoutSize(0_lu, relevantRect.height() / 2));
     LayoutRect bottomRelevantRect = topRelevantRect;
     bottomRelevantRect.setY(relevantRect.height() / 2);
 
@@ -2337,7 +2378,7 @@ void Page::mainFrameLoadStarted(const URL& destinationURL, FrameLoadType type)
         return;
     }
 
-    m_navigationToLogWhenVisible = std::nullopt;
+    m_navigationToLogWhenVisible = WTF::nullopt;
     logNavigation(navigation);
 }
 
@@ -2564,8 +2605,6 @@ void Page::setCaptionUserPreferencesStyleSheet(const String& styleSheet)
         return;
 
     m_captionUserPreferencesStyleSheet = styleSheet;
-    
-    invalidateInjectedStyleSheetCacheInAllFrames();
 }
 
 void Page::accessibilitySettingsDidChange()
@@ -2632,6 +2671,8 @@ void Page::setUseDarkAppearance(bool value)
 
     m_useDarkAppearance = value;
 
+    InspectorInstrumentation::defaultAppearanceDidChange(*this, value);
+
     appearanceDidChange();
 }
 
@@ -2640,7 +2681,19 @@ bool Page::useDarkAppearance() const
     FrameView* view = mainFrame().view();
     if (!view || !equalLettersIgnoringASCIICase(view->mediaType(), "screen"))
         return false;
+    if (m_useDarkAppearanceOverride)
+        return m_useDarkAppearanceOverride.value();
     return m_useDarkAppearance;
+}
+
+void Page::setUseDarkAppearanceOverride(Optional<bool> valueOverride)
+{
+    if (valueOverride == m_useDarkAppearanceOverride)
+        return;
+
+    m_useDarkAppearanceOverride = valueOverride;
+
+    appearanceDidChange();
 }
 
 void Page::setFullscreenInsets(const FloatBoxExtent& insets)

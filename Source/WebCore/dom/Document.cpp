@@ -264,6 +264,7 @@
 #include "Navigator.h"
 #include "NavigatorGeolocation.h"
 #include "WKContentObservation.h"
+#include "WKContentObservationInternal.h"
 #endif
 
 #if ENABLE(IOS_GESTURE_EVENTS)
@@ -637,7 +638,7 @@ Document::~Document()
     m_decoder = nullptr;
 
     if (m_styleSheetList)
-        m_styleSheetList->detachFromDocument();
+        m_styleSheetList->detach();
 
     extensionStyleSheets().detachFromDocument();
 
@@ -651,8 +652,7 @@ Document::~Document()
         m_cachedResourceLoader->setDocument(nullptr);
 
 #if ENABLE(VIDEO)
-    if (auto* platformMediaSessionManager = PlatformMediaSessionManager::sharedManagerIfExists())
-        platformMediaSessionManager->stopAllMediaPlaybackForDocument(this);
+    stopAllMediaPlayback();
 #endif
 
     // We must call clearRareData() here since a Document class inherits TreeScope
@@ -1721,6 +1721,23 @@ void Document::allowsMediaDocumentInlinePlaybackChanged()
         element->allowsMediaDocumentInlinePlaybackChanged();
 }
 
+void Document::stopAllMediaPlayback()
+{
+    if (auto* platformMediaSessionManager = PlatformMediaSessionManager::sharedManagerIfExists())
+        platformMediaSessionManager->stopAllMediaPlaybackForDocument(this);
+}
+
+void Document::suspendAllMediaPlayback()
+{
+    if (auto* platformMediaSessionManager = PlatformMediaSessionManager::sharedManagerIfExists())
+        platformMediaSessionManager->suspendAllMediaPlaybackForDocument(*this);
+}
+
+void Document::resumeAllMediaPlayback()
+{
+    if (auto* platformMediaSessionManager = PlatformMediaSessionManager::sharedManagerIfExists())
+        platformMediaSessionManager->resumeAllMediaPlaybackForDocument(*this);
+}
 #endif
 
 String Document::nodeName() const
@@ -1779,9 +1796,9 @@ Ref<TreeWalker> Document::createTreeWalker(Node& root, unsigned long whatToShow,
     return TreeWalker::create(root, whatToShow, WTFMove(filter));
 }
 
-void Document::scheduleForcedStyleRecalc()
+void Document::scheduleFullStyleRebuild()
 {
-    m_pendingStyleRecalcShouldForce = true;
+    m_needsFullStyleRebuild = true;
     scheduleStyleRecalc();
 }
 
@@ -1792,14 +1809,19 @@ void Document::scheduleStyleRecalc()
     if (m_styleRecalcTimer.isActive() || pageCacheState() != NotInPageCache)
         return;
 
-    ASSERT(childNeedsStyleRecalc() || m_pendingStyleRecalcShouldForce);
+    ASSERT(childNeedsStyleRecalc() || m_needsFullStyleRebuild);
+
+#if PLATFORM(IOS_FAMILY)
+    if (WKIsObservingStyleRecalcScheduling()) {
+        LOG_WITH_STREAM(ContentObservation, stream << "Document(" << this << ")::scheduleStyleRecalc: register this style recalc schedule and observe when it fires.");
+        WKSetObservedContentChange(WKContentIndeterminateChange);
+    }
+#endif
 
     // FIXME: Why on earth is this here? This is clearly misplaced.
     invalidateAccessKeyMap();
 
     auto shouldThrottleStyleRecalc = [&] {
-        if (m_pendingStyleRecalcShouldForce)
-            return false;
         if (!view() || !view()->isVisuallyNonEmpty())
             return false;
         if (!page() || !page()->chrome().client().layerFlushThrottlingIsActive())
@@ -1820,17 +1842,17 @@ void Document::unscheduleStyleRecalc()
     ASSERT(!childNeedsStyleRecalc());
 
     m_styleRecalcTimer.stop();
-    m_pendingStyleRecalcShouldForce = false;
+    m_needsFullStyleRebuild = false;
 }
 
 bool Document::hasPendingStyleRecalc() const
 {
-    return m_styleRecalcTimer.isActive() && !m_inStyleRecalc;
+    return needsStyleRecalc() && !m_inStyleRecalc;
 }
 
-bool Document::hasPendingForcedStyleRecalc() const
+bool Document::hasPendingFullStyleRebuild() const
 {
-    return m_styleRecalcTimer.isActive() && m_pendingStyleRecalcShouldForce;
+    return hasPendingStyleRecalc() && m_needsFullStyleRebuild;
 }
 
 void Document::resolveStyle(ResolveStyleType type)
@@ -1886,7 +1908,7 @@ void Document::resolveStyle(ResolveStyleType type)
 
         m_inStyleRecalc = true;
 
-        if (m_pendingStyleRecalcShouldForce)
+        if (m_needsFullStyleRebuild)
             type = ResolveStyleType::Rebuild;
 
         if (type == ResolveStyleType::Rebuild) {
@@ -1975,7 +1997,7 @@ void Document::updateTextRenderer(Text& text, unsigned offsetOfReplacedText, uns
     SetForScope<bool> inRenderTreeUpdate(m_inRenderTreeUpdate, true);
 
     auto textUpdate = std::make_unique<Style::Update>(*this);
-    textUpdate->addText(text, { offsetOfReplacedText, lengthOfReplacedText, std::nullopt });
+    textUpdate->addText(text, { offsetOfReplacedText, lengthOfReplacedText, WTF::nullopt });
 
     RenderTreeUpdater renderTreeUpdater(*this);
     renderTreeUpdater.commit(WTFMove(textUpdate));
@@ -1986,7 +2008,7 @@ bool Document::needsStyleRecalc() const
     if (pageCacheState() != NotInPageCache)
         return false;
 
-    if (m_pendingStyleRecalcShouldForce)
+    if (m_needsFullStyleRebuild)
         return true;
 
     if (childNeedsStyleRecalc())
@@ -2028,10 +2050,34 @@ bool Document::updateStyleIfNeeded()
             return false;
     }
 
+#if PLATFORM(IOS_FAMILY)
+    auto observingContentChange = WKShouldObserveNextStyleRecalc();
+    if (observingContentChange) {
+        LOG_WITH_STREAM(ContentObservation, stream << "Document(" << this << ")::scheduleStyleRecalc: start observing content change.");
+        WKSetShouldObserveNextStyleRecalc(false);
+        WKStartObservingContentChanges();
+    }
+#endif
     // The early exit above for !needsStyleRecalc() is needed when updateWidgetPositions() is called in runOrScheduleAsynchronousTasks().
     RELEASE_ASSERT_WITH_SECURITY_IMPLICATION(isSafeToUpdateStyleOrLayout(*this));
 
     resolveStyle();
+
+#if PLATFORM(IOS_FAMILY)
+    if (observingContentChange) {
+        LOG_WITH_STREAM(ContentObservation, stream << "Document(" << this << ")::scheduleStyleRecalc: stop observing content change.");
+        WKStopObservingContentChanges();
+
+        auto inDeterminedState = WKObservedContentChange() == WKContentVisibilityChange || !WebThreadCountOfObservedDOMTimers();  
+        if (inDeterminedState) {
+            LOG_WITH_STREAM(ContentObservation, stream << "Document(" << this << ")::scheduleStyleRecalc: notify the pending synthetic click handler.");
+            if (auto* page = this->page())
+                page->chrome().client().observedContentChange(*frame());
+        } else {
+            LOG_WITH_STREAM(ContentObservation, stream << "Document(" << this << ")::scheduleStyleRecalc: can't decided it yet.");
+        }
+    }
+#endif
     return true;
 }
 
@@ -2069,7 +2115,7 @@ void Document::updateLayoutIgnorePendingStylesheets(Document::RunPostLayoutTasks
         m_ignorePendingStylesheets = true;
         // FIXME: This should just invalidate elements with missing styles.
         if (m_hasNodesWithMissingStyle)
-            scheduleForcedStyleRecalc();
+            scheduleFullStyleRebuild();
     }
 
     updateLayout();
@@ -2270,7 +2316,7 @@ void Document::invalidateMatchedPropertiesCacheAndForceStyleRecalc()
         resolver->invalidateMatchedPropertiesCache();
     if (pageCacheState() != NotInPageCache || !renderView())
         return;
-    scheduleForcedStyleRecalc();
+    scheduleFullStyleRebuild();
 }
 
 void Document::didClearStyleResolver()
@@ -2531,6 +2577,12 @@ void Document::prepareForDestruction()
     }
 #endif
 
+#if ENABLE(CSS_PAINTING_API)
+    for (auto& scope : m_paintWorkletGlobalScopes.values())
+        scope->prepareForDestruction();
+    m_paintWorkletGlobalScopes.clear();
+#endif
+
     m_hasPreparedForDestruction = true;
 
     // Note that m_pageCacheState can be Document::AboutToEnterPageCache if our frame
@@ -2594,7 +2646,8 @@ bool Document::shouldBypassMainWorldContentSecurityPolicy() const
 void Document::platformSuspendOrStopActiveDOMObjects()
 {
 #if PLATFORM(IOS_FAMILY)
-    if (WebThreadCountOfObservedContentModifiers() > 0) {
+    if (WebThreadCountOfObservedDOMTimers() > 0) {
+        LOG_WITH_STREAM(ContentObservation, stream << "Document::platformSuspendOrStopActiveDOMObjects: remove registered timers.");
         if (auto* frame = this->frame()) {
             if (auto* page = frame->page())
                 page->chrome().client().clearContentChangeObservers(*frame);
@@ -3160,7 +3213,7 @@ void Document::logExceptionToConsole(const String& errorMessage, const String& s
 
 void Document::setURL(const URL& url)
 {
-    const URL& newURL = url.isEmpty() ? blankURL() : url;
+    const URL& newURL = url.isEmpty() ? WTF::blankURL() : url;
     if (newURL == m_url)
         return;
 
@@ -3450,7 +3503,7 @@ void Document::processHttpEquiv(const String& equiv, const String& content, bool
                 completedURL = m_url;
             else
                 completedURL = completeURL(urlString);
-            if (!protocolIsJavaScript(completedURL))
+            if (!WTF::protocolIsJavaScript(completedURL))
                 frame->navigationScheduler().scheduleRedirect(*this, delay, completedURL);
             else {
                 String message = "Refused to refresh " + m_url.stringCenterEllipsizedToLength() + " to a javascript: URL";
@@ -3462,11 +3515,8 @@ void Document::processHttpEquiv(const String& equiv, const String& content, bool
     }
 
     case HTTPHeaderName::SetCookie:
-        // FIXME: make setCookie work on XML documents too; e.g. in case of <html:meta .....>
-        if (is<HTMLDocument>(*this)) {
-            // Exception (for sandboxed documents) ignored.
-            downcast<HTMLDocument>(*this).setCookie(content);
-        }
+        if (is<HTMLDocument>(*this))
+            addConsoleMessage(MessageSource::Security, MessageLevel::Error, "The Set-Cookie meta tag is obsolete and was ignored. Use the HTTP header Set-Cookie or document.cookie instead."_s);
         break;
 
     case HTTPHeaderName::ContentLanguage:
@@ -3525,7 +3575,7 @@ void Document::dispatchDisabledAdaptationsDidChangeForMainFrame()
     page()->chrome().dispatchDisabledAdaptationsDidChange(m_disabledAdaptations);
 }
 
-void Document::setOverrideViewportArguments(const std::optional<ViewportArguments>& viewportArguments)
+void Document::setOverrideViewportArguments(const Optional<ViewportArguments>& viewportArguments)
 {
     if (viewportArguments == m_overrideViewportArguments)
         return;
@@ -3823,7 +3873,7 @@ void Document::cloneDataFromDocument(const Document& other)
 StyleSheetList& Document::styleSheets()
 {
     if (!m_styleSheetList)
-        m_styleSheetList = StyleSheetList::create(this);
+        m_styleSheetList = StyleSheetList::create(*this);
     return *m_styleSheetList;
 }
 
@@ -4324,7 +4374,7 @@ void Document::updateRangesAfterChildrenChanged(ContainerNode& container)
 
 void Document::nodeChildrenWillBeRemoved(ContainerNode& container)
 {
-    ASSERT(!ScriptDisallowedScope::InMainThread::isScriptAllowed());
+    ASSERT(ScriptDisallowedScope::InMainThread::hasDisallowedScope());
 
     adjustFocusedNodeOnNodeRemoval(container, NodeRemoval::ChildrenOfNode);
     adjustFocusNavigationNodeOnNodeRemoval(container, NodeRemoval::ChildrenOfNode);
@@ -4357,7 +4407,7 @@ void Document::nodeChildrenWillBeRemoved(ContainerNode& container)
 
 void Document::nodeWillBeRemoved(Node& node)
 {
-    ASSERT(!ScriptDisallowedScope::InMainThread::isScriptAllowed());
+    ASSERT(ScriptDisallowedScope::InMainThread::hasDisallowedScope());
 
     adjustFocusedNodeOnNodeRemoval(node);
     adjustFocusNavigationNodeOnNodeRemoval(node);
@@ -4836,11 +4886,18 @@ ExceptionOr<void> Document::setDomain(const String& newDomain)
     return { };
 }
 
-// http://www.whatwg.org/specs/web-apps/current-work/#dom-document-lastmodified
-String Document::lastModified()
+void Document::overrideLastModified(const Optional<WallTime>& lastModified)
 {
-    std::optional<WallTime> dateTime;
-    if (m_frame && loader())
+    m_overrideLastModified = lastModified;
+}
+
+// http://www.whatwg.org/specs/web-apps/current-work/#dom-document-lastmodified
+String Document::lastModified() const
+{
+    Optional<WallTime> dateTime;
+    if (m_overrideLastModified)
+        dateTime = m_overrideLastModified;
+    else if (loader())
         dateTime = loader()->response().lastModified();
 
     // FIXME: If this document came from the file system, the HTML5
@@ -4992,7 +5049,7 @@ URL Document::completeURL(const String& url, const URL& baseURLOverride) const
     // See also [CSS]StyleSheet::completeURL(const String&)
     if (url.isNull())
         return URL();
-    const URL& baseURL = ((baseURLOverride.isEmpty() || baseURLOverride == blankURL()) && parentDocument()) ? parentDocument()->baseURL() : baseURLOverride;
+    const URL& baseURL = ((baseURLOverride.isEmpty() || baseURLOverride == WTF::blankURL()) && parentDocument()) ? parentDocument()->baseURL() : baseURLOverride;
     if (!m_decoder)
         return URL(baseURL, url);
     return URL(baseURL, url, m_decoder->encodingForURLParsing());
@@ -5419,7 +5476,7 @@ void Document::setDesignMode(InheritedBool value)
 {
     m_designMode = value;
     for (Frame* frame = m_frame; frame && frame->document(); frame = frame->tree().traverseNext(m_frame))
-        frame->document()->scheduleForcedStyleRecalc();
+        frame->document()->scheduleFullStyleRebuild();
 }
 
 String Document::designMode() const
@@ -5912,15 +5969,15 @@ void Document::detachRange(Range* range)
     m_ranges.remove(range);
 }
 
-std::optional<RenderingContext> Document::getCSSCanvasContext(const String& type, const String& name, int width, int height)
+Optional<RenderingContext> Document::getCSSCanvasContext(const String& type, const String& name, int width, int height)
 {
     HTMLCanvasElement* element = getCSSCanvasElement(name);
     if (!element)
-        return std::nullopt;
+        return WTF::nullopt;
     element->setSize({ width, height });
     auto context = element->getContext(type);
     if (!context)
-        return std::nullopt;
+        return WTF::nullopt;
 
 #if ENABLE(WEBGL)
     if (is<WebGLRenderingContext>(*context))
@@ -6187,6 +6244,12 @@ DeviceMotionController* Document::deviceMotionController() const
 DeviceOrientationController* Document::deviceOrientationController() const
 {
     return m_deviceOrientationController.get();
+}
+
+void Document::simulateDeviceOrientationChange(double alpha, double beta, double gamma)
+{
+    auto orientation = DeviceOrientationData::create(alpha, beta, gamma, WTF::nullopt, WTF::nullopt);
+    deviceOrientationController()->didChangeDeviceOrientation(orientation.ptr());
 }
 
 #endif
@@ -6542,7 +6605,7 @@ void Document::webkitDidExitFullScreenForElement(Element*)
     unwrapFullScreenRenderer(m_fullScreenRenderer.get(), m_fullScreenElement.get());
 
     m_fullScreenElement = nullptr;
-    scheduleForcedStyleRecalc();
+    scheduleFullStyleRebuild();
 
     // When webkitCancelFullScreen is called, we call webkitExitFullScreen on the topDocument(). That
     // means that the events will be queued there. So if we have no events here, start the timer on
@@ -6645,7 +6708,7 @@ void Document::setAnimatingFullScreen(bool flag)
 
     if (m_fullScreenElement && m_fullScreenElement->isDescendantOf(*this)) {
         m_fullScreenElement->invalidateStyleForSubtree();
-        scheduleForcedStyleRecalc();
+        scheduleFullStyleRebuild();
     }
 }
 
@@ -6662,7 +6725,7 @@ void Document::setFullscreenControlsHidden(bool flag)
 
     if (m_fullScreenElement && m_fullScreenElement->isDescendantOf(*this)) {
         m_fullScreenElement->invalidateStyleForSubtree();
-        scheduleForcedStyleRecalc();
+        scheduleFullStyleRebuild();
     }
 }
 
@@ -7274,9 +7337,9 @@ Document& Document::ensureTemplateDocument()
         return const_cast<Document&>(*document);
 
     if (isHTMLDocument())
-        m_templateDocument = HTMLDocument::create(nullptr, blankURL());
+        m_templateDocument = HTMLDocument::create(nullptr, WTF::blankURL());
     else
-        m_templateDocument = Document::create(nullptr, blankURL());
+        m_templateDocument = Document::create(nullptr, WTF::blankURL());
 
     m_templateDocument->setContextDocument(contextDocument());
     m_templateDocument->setTemplateDocumentHost(this); // balanced in dtor.
@@ -7404,7 +7467,7 @@ void Document::ensurePlugInsInjectedScript(DOMWrapperWorld& world)
     m_hasInjectedPlugInsScript = true;
 }
 
-#if ENABLE(SUBTLE_CRYPTO)
+#if ENABLE(WEB_CRYPTO)
 
 bool Document::wrapCryptoKey(const Vector<uint8_t>& key, Vector<uint8_t>& wrappedKey)
 {
@@ -7422,7 +7485,7 @@ bool Document::unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Vector<uint8_t
     return page->chrome().client().unwrapCryptoKey(wrappedKey, key);
 }
 
-#endif // ENABLE(SUBTLE_CRYPTO)
+#endif // ENABLE(WEB_CRYPTO)
 
 Element* Document::activeElement()
 {
@@ -7662,21 +7725,21 @@ static void expandRootBoundsWithRootMargin(FloatRect& localRootBounds, const Len
     localRootBounds.expand(rootMarginFloatBox);
 }
 
-static std::optional<LayoutRect> computeClippedRectInRootContentsSpace(const LayoutRect& rect, const RenderElement* renderer)
+static Optional<LayoutRect> computeClippedRectInRootContentsSpace(const LayoutRect& rect, const RenderElement* renderer)
 {
     OptionSet<RenderObject::VisibleRectContextOption> visibleRectOptions = { RenderObject::VisibleRectContextOption::UseEdgeInclusiveIntersection, RenderObject::VisibleRectContextOption::ApplyCompositedClips, RenderObject::VisibleRectContextOption::ApplyCompositedContainerScrolls };
-    std::optional<LayoutRect> rectInFrameAbsoluteSpace = renderer->computeVisibleRectInContainer(rect, &renderer->view(),  {false /* hasPositionFixedDescendant */, false /* dirtyRectIsFlipped */, visibleRectOptions });
+    Optional<LayoutRect> rectInFrameAbsoluteSpace = renderer->computeVisibleRectInContainer(rect, &renderer->view(),  {false /* hasPositionFixedDescendant */, false /* dirtyRectIsFlipped */, visibleRectOptions });
     if (!rectInFrameAbsoluteSpace || renderer->frame().isMainFrame())
         return rectInFrameAbsoluteSpace;
 
     bool intersects = rectInFrameAbsoluteSpace->edgeInclusiveIntersect(renderer->view().frameView().layoutViewportRect());
     if (!intersects)
-        return std::nullopt;
+        return WTF::nullopt;
 
     LayoutRect rectInFrameViewSpace(renderer->view().frameView().contentsToView(snappedIntRect(*rectInFrameAbsoluteSpace)));
     auto* ownerRenderer = renderer->frame().ownerRenderer();
     if (!ownerRenderer)
-        return std::nullopt;
+        return WTF::nullopt;
 
     rectInFrameViewSpace.moveBy(ownerRenderer->contentBoxLocation());
     return computeClippedRectInRootContentsSpace(rectInFrameViewSpace, ownerRenderer);
@@ -7689,24 +7752,24 @@ struct IntersectionObservationState {
     bool isIntersecting { false };
 };
 
-static std::optional<IntersectionObservationState> computeIntersectionState(FrameView& frameView, const IntersectionObserver& observer, Element& target, bool applyRootMargin)
+static Optional<IntersectionObservationState> computeIntersectionState(FrameView& frameView, const IntersectionObserver& observer, Element& target, bool applyRootMargin)
 {
     auto* targetRenderer = target.renderer();
     if (!targetRenderer)
-        return std::nullopt;
+        return WTF::nullopt;
 
     FloatRect localRootBounds;
     RenderBlock* rootRenderer;
     if (observer.root()) {
         if (observer.trackingDocument() != &target.document())
-            return std::nullopt;
+            return WTF::nullopt;
 
         if (!observer.root()->renderer() || !is<RenderBlock>(observer.root()->renderer()))
-            return std::nullopt;
+            return WTF::nullopt;
 
         rootRenderer = downcast<RenderBlock>(observer.root()->renderer());
         if (!rootRenderer->isContainingBlockAncestorFor(*targetRenderer))
-            return std::nullopt;
+            return WTF::nullopt;
 
         if (rootRenderer->hasOverflowClip())
             localRootBounds = rootRenderer->contentBoxRect();
@@ -7716,7 +7779,7 @@ static std::optional<IntersectionObservationState> computeIntersectionState(Fram
         ASSERT(frameView.frame().isMainFrame());
         // FIXME: Handle the case of an implicit-root observer that has a target in a different frame tree.
         if (&targetRenderer->frame().mainFrame() != &frameView.frame())
-            return std::nullopt;
+            return WTF::nullopt;
         rootRenderer = frameView.renderView();
         localRootBounds = frameView.layoutViewportRect();
     }
@@ -7732,7 +7795,7 @@ static std::optional<IntersectionObservationState> computeIntersectionState(Fram
     else if (is<RenderLineBreak>(targetRenderer))
         localTargetBounds = downcast<RenderLineBreak>(targetRenderer)->linesBoundingBox();
 
-    std::optional<LayoutRect> rootLocalTargetRect;
+    Optional<LayoutRect> rootLocalTargetRect;
     if (observer.root()) {
         OptionSet<RenderObject::VisibleRectContextOption> visibleRectOptions = { RenderObject::VisibleRectContextOption::UseEdgeInclusiveIntersection, RenderObject::VisibleRectContextOption::ApplyCompositedClips, RenderObject::VisibleRectContextOption::ApplyCompositedContainerScrolls };
         rootLocalTargetRect = targetRenderer->computeVisibleRectInContainer(localTargetBounds, rootRenderer, { false /* hasPositionFixedDescendant */, false /* dirtyRectIsFlipped */, visibleRectOptions });
@@ -7771,7 +7834,7 @@ void Document::updateIntersectionObservations()
 
     m_needsForcedIntersectionObservationUpdate = false;
 
-    for (auto observer : m_intersectionObservers) {
+    for (const auto& observer : m_intersectionObservers) {
         bool needNotify = false;
         DOMHighResTimeStamp timestamp;
         if (!observer->createTimestamp(timestamp))
@@ -7816,7 +7879,7 @@ void Document::updateIntersectionObservations()
                         clientIntersectionRect = targetFrameView->absoluteToClientRect(intersectionState->absoluteIntersectionRect, target->renderer()->style().effectiveZoom());
                 }
 
-                std::optional<DOMRectInit> reportedRootBounds;
+                Optional<DOMRectInit> reportedRootBounds;
                 if (isSameOriginObservation) {
                     reportedRootBounds = DOMRectInit({
                         clientRootBounds.x(),
@@ -7860,7 +7923,7 @@ void Document::scheduleForcedIntersectionObservationUpdate()
 
 void Document::notifyIntersectionObserversTimerFired()
 {
-    for (auto observer : m_intersectionObserversWithPendingNotifications) {
+    for (const auto& observer : m_intersectionObserversWithPendingNotifications) {
         if (observer)
             observer->notify();
     }
@@ -8430,8 +8493,8 @@ void Document::setServiceWorkerConnection(SWClientConnection* serviceWorkerConne
     if (!m_serviceWorkerConnection)
         return;
 
-    auto controllingServiceWorkerRegistrationIdentifier = activeServiceWorker() ? std::make_optional<ServiceWorkerRegistrationIdentifier>(activeServiceWorker()->registrationIdentifier()) : std::nullopt;
-    m_serviceWorkerConnection->registerServiceWorkerClient(topOrigin(), ServiceWorkerClientData::from(*this, *serviceWorkerConnection), controllingServiceWorkerRegistrationIdentifier);
+    auto controllingServiceWorkerRegistrationIdentifier = activeServiceWorker() ? makeOptional<ServiceWorkerRegistrationIdentifier>(activeServiceWorker()->registrationIdentifier()) : WTF::nullopt;
+    m_serviceWorkerConnection->registerServiceWorkerClient(topOrigin(), ServiceWorkerClientData::from(*this, *serviceWorkerConnection), controllingServiceWorkerRegistrationIdentifier, userAgent(url()));
 }
 #endif
 
@@ -8472,9 +8535,15 @@ Worklet& Document::ensurePaintWorklet()
     return *m_paintWorklet;
 }
 
-void Document::setPaintWorkletGlobalScope(Ref<PaintWorkletGlobalScope>&& scope)
+PaintWorkletGlobalScope* Document::paintWorkletGlobalScopeForName(const String& name)
 {
-    m_paintWorkletGlobalScope = WTFMove(scope);
+    return m_paintWorkletGlobalScopes.get(name);
+}
+
+void Document::setPaintWorkletGlobalScopeForName(const String& name, Ref<PaintWorkletGlobalScope>&& scope)
+{
+    auto addResult = m_paintWorkletGlobalScopes.add(name, WTFMove(scope));
+    ASSERT_UNUSED(addResult, addResult);
 }
 #endif
 

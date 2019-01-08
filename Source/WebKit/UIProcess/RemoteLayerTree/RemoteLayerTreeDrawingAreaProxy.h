@@ -58,7 +58,7 @@ public:
 
     bool isAlwaysOnLoggingAllowed() const;
 
-    LayerOrView* layerWithIDForTesting(uint64_t) const;
+    CALayer *layerWithIDForTesting(uint64_t) const;
 
 private:
     void sizeDidChange() override;
@@ -70,7 +70,7 @@ private:
     void dispatchAfterEnsuringDrawing(WTF::Function<void (CallbackBase::Error)>&&) override;
 
 #if PLATFORM(MAC)
-    void setViewExposedRect(std::optional<WebCore::FloatRect>) override;
+    void setViewExposedRect(Optional<WebCore::FloatRect>) override;
 #endif
 
 #if PLATFORM(IOS_FAMILY)

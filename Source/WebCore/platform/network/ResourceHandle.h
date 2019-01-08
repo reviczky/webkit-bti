@@ -77,7 +77,6 @@ namespace WebCore {
 class AuthenticationChallenge;
 class Credential;
 class Frame;
-class URL;
 class NetworkingContext;
 class ProtectionSpace;
 class ResourceError;
@@ -263,7 +262,7 @@ private:
 
     bool shouldRedirectAsGET(const ResourceRequest&, bool crossOrigin);
 
-    std::optional<Credential> getCredential(const ResourceRequest&, bool);
+    Optional<Credential> getCredential(const ResourceRequest&, bool);
     void restartRequestWithCredential(const ProtectionSpace&, const Credential&);
 
     void handleDataURL();

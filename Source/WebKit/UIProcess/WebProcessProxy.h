@@ -61,7 +61,6 @@ class PageConfiguration;
 
 namespace WebCore {
 class ResourceRequest;
-class URL;
 struct PluginInfo;
 struct SecurityOriginData;
 }
@@ -118,14 +117,18 @@ public:
     static WebProcessProxy* processForIdentifier(WebCore::ProcessIdentifier);
     static WebPageProxy* webPage(uint64_t pageID);
     Ref<WebPageProxy> createWebPage(PageClient&, Ref<API::PageConfiguration>&&);
-    void addExistingWebPage(WebPageProxy&, uint64_t pageID);
-    void removeWebPage(WebPageProxy&, uint64_t pageID);
+
+    enum class BeginsUsingDataStore : bool { No, Yes };
+    void addExistingWebPage(WebPageProxy&, uint64_t pageID, BeginsUsingDataStore);
+
+    enum class EndsUsingDataStore : bool { No, Yes };
+    void removeWebPage(WebPageProxy&, uint64_t pageID, EndsUsingDataStore);
 
     typename WebPageProxyMap::ValuesConstIteratorRange pages() const { return m_pageMap.values(); }
     unsigned pageCount() const { return m_pageMap.size(); }
     unsigned visiblePageCount() const { return m_visiblePageCounter.value(); }
 
-    Vector<String> activePagesDomainsForTesting(); // This is what is reported to ActivityMonitor.
+    void activePagesDomainsForTesting(CompletionHandler<void(Vector<String>&&)>&&); // This is what is reported to ActivityMonitor.
 
     virtual bool isServiceWorkerProcess() const { return false; }
 
@@ -150,11 +153,11 @@ public:
     void updateTextCheckerState();
 
     void willAcquireUniversalFileReadSandboxExtension() { m_mayHaveUniversalFileReadSandboxExtension = true; }
-    void assumeReadAccessToBaseURL(const String&);
-    bool hasAssumedReadAccessToURL(const WebCore::URL&) const;
+    void assumeReadAccessToBaseURL(WebPageProxy&, const String&);
+    bool hasAssumedReadAccessToURL(const URL&) const;
 
     bool checkURLReceivedFromWebProcess(const String&);
-    bool checkURLReceivedFromWebProcess(const WebCore::URL&);
+    bool checkURLReceivedFromWebProcess(const URL&);
 
     static bool fullKeyboardAccessEnabled();
 
@@ -280,7 +283,7 @@ private:
 
     // Plugins
 #if ENABLE(NETSCAPE_PLUGIN_API)
-    void getPlugins(bool refresh, Vector<WebCore::PluginInfo>& plugins, Vector<WebCore::PluginInfo>& applicationPlugins, std::optional<Vector<WebCore::SupportedPluginIdentifier>>&);
+    void getPlugins(bool refresh, Vector<WebCore::PluginInfo>& plugins, Vector<WebCore::PluginInfo>& applicationPlugins, Optional<Vector<WebCore::SupportedPluginIdentifier>>&);
 #endif // ENABLE(NETSCAPE_PLUGIN_API)
 #if ENABLE(NETSCAPE_PLUGIN_API)
     void getPluginProcessConnection(uint64_t pluginProcessToken, Messages::WebProcessProxy::GetPluginProcessConnection::DelayedReply&&);

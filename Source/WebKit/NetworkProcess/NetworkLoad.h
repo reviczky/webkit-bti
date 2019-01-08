@@ -31,18 +31,13 @@
 #include "NetworkLoadParameters.h"
 #include <WebCore/AuthenticationChallenge.h>
 #include <wtf/CompletionHandler.h>
-#include <wtf/Optional.h>
 #include <wtf/text/WTFString.h>
-
-#if ENABLE(NETWORK_CAPTURE)
-#include "NetworkCaptureRecorder.h"
-#include "NetworkCaptureReplayer.h"
-#endif
 
 namespace WebKit {
 
-class NetworkLoad final : private NetworkDataTaskClient
-{
+class NetworkProcess;
+
+class NetworkLoad final : private NetworkDataTaskClient {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     NetworkLoad(NetworkLoadClient&, NetworkLoadParameters&&, NetworkSession&);
@@ -54,7 +49,6 @@ public:
     bool isAllowedToAskUserForCredentials() const;
 
     const WebCore::ResourceRequest& currentRequest() const { return m_currentRequest; }
-    void clearCurrentRequest() { m_currentRequest = WebCore::ResourceRequest(); }
 
     const NetworkLoadParameters& parameters() const { return m_parameters; }
 
@@ -71,10 +65,6 @@ public:
     String description() const;
 
 private:
-#if ENABLE(NETWORK_CAPTURE)
-    void initializeForRecord(NetworkSession&);
-    void initializeForReplay(NetworkSession&);
-#endif
     void initialize(NetworkSession&);
 
     // NetworkDataTaskClient
@@ -91,19 +81,16 @@ private:
     void throttleDelayCompleted();
 
     std::reference_wrapper<NetworkLoadClient> m_client;
+    Ref<NetworkProcess> m_networkProcess;
     const NetworkLoadParameters m_parameters;
     CompletionHandler<void(WebCore::ResourceRequest&&)> m_redirectCompletionHandler;
     RefPtr<NetworkDataTask> m_task;
     
     struct Throttle;
     std::unique_ptr<Throttle> m_throttle;
+    Seconds m_loadThrottleLatency;
 
     WebCore::ResourceRequest m_currentRequest; // Updated on redirects.
-
-#if ENABLE(NETWORK_CAPTURE)
-    std::unique_ptr<NetworkCapture::Recorder> m_recorder;
-    std::unique_ptr<NetworkCapture::Replayer> m_replayer;
-#endif
 };
 
 } // namespace WebKit

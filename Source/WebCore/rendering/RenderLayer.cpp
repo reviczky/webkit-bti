@@ -544,9 +544,6 @@ static bool canCreateStackingContext(const RenderLayer& layer)
         || renderer.hasReflection()
         || renderer.style().hasIsolation()
         || !renderer.style().hasAutoZIndex()
-#if PLATFORM(IOS_FAMILY)
-        || layer.canUseAcceleratedTouchScrolling()
-#endif
         || (renderer.style().willChange() && renderer.style().willChange()->canCreateStackingContext());
 }
 
@@ -2171,8 +2168,11 @@ LayoutSize RenderLayer::offsetFromAncestor(const RenderLayer* ancestorLayer, Col
     return toLayoutSize(convertToLayerCoords(ancestorLayer, LayoutPoint(), adjustForColumns));
 }
 
-bool RenderLayer::canUseAcceleratedTouchScrolling() const
+bool RenderLayer::canUseCompositedScrolling() const
 {
+    if (renderer().settings().asyncOverflowScrollingEnabled())
+        return scrollsOverflow();
+
 #if PLATFORM(IOS_FAMILY) && ENABLE(ACCELERATED_OVERFLOW_SCROLLING)
     return scrollsOverflow() && (renderer().style().useTouchOverflowScrolling() || renderer().settings().alwaysUseAcceleratedOverflowScroll());
 #else
@@ -2180,16 +2180,16 @@ bool RenderLayer::canUseAcceleratedTouchScrolling() const
 #endif
 }
 
-bool RenderLayer::hasTouchScrollableOverflow() const
+bool RenderLayer::hasCompositedScrollableOverflow() const
 {
-    return canUseAcceleratedTouchScrolling() && (hasScrollableHorizontalOverflow() || hasScrollableVerticalOverflow());
+    return canUseCompositedScrolling() && (hasScrollableHorizontalOverflow() || hasScrollableVerticalOverflow());
 }
 
 #if ENABLE(IOS_TOUCH_EVENTS)
 bool RenderLayer::handleTouchEvent(const PlatformTouchEvent& touchEvent)
 {
     // If we have accelerated scrolling, let the scrolling be handled outside of WebKit.
-    if (hasTouchScrollableOverflow())
+    if (hasCompositedScrollableOverflow())
         return false;
 
     return ScrollableArea::handleTouchEvent(touchEvent);
@@ -2223,7 +2223,7 @@ bool RenderLayer::usesCompositedScrolling() const
 // FIXME: this is only valid after we've made layers.
 bool RenderLayer::usesAsyncScrolling() const
 {
-    return canUseAcceleratedTouchScrolling() && usesCompositedScrolling();
+    return usesCompositedScrolling();
 }
 
 static inline int adjustedScrollDelta(int beginningDelta)
@@ -2303,7 +2303,7 @@ void RenderLayer::scrollByRecursively(const IntSize& delta, ScrollableArea** scr
     }
 }
 
-void RenderLayer::setPostLayoutScrollPosition(std::optional<ScrollPosition> position)
+void RenderLayer::setPostLayoutScrollPosition(Optional<ScrollPosition> position)
 {
     m_postLayoutScrollPosition = position;
 }
@@ -2314,7 +2314,7 @@ void RenderLayer::applyPostLayoutScrollPositionIfNeeded()
         return;
 
     scrollToOffset(scrollOffsetFromPosition(m_postLayoutScrollPosition.value()));
-    m_postLayoutScrollPosition = std::nullopt;
+    m_postLayoutScrollPosition = WTF::nullopt;
 }
 
 void RenderLayer::scrollToXPosition(int x, ScrollClamping clamping)
@@ -2508,7 +2508,7 @@ void RenderLayer::scrollRectToVisible(const LayoutRect& absoluteRect, bool insid
         RenderBox* box = renderBox();
         ASSERT(box);
         LayoutRect localExposeRect(box->absoluteToLocalQuad(FloatQuad(FloatRect(absoluteRect))).boundingBox());
-        LayoutRect layerBounds(0, 0, box->clientWidth(), box->clientHeight());
+        LayoutRect layerBounds(0_lu, 0_lu, box->clientWidth(), box->clientHeight());
         LayoutRect revealRect = getRectToExpose(layerBounds, localExposeRect, insideFixed, options.alignX, options.alignY);
 
         ScrollOffset clampedScrollOffset = clampScrollOffset(scrollOffset() + toIntSize(roundedIntRect(revealRect).location()));
@@ -2755,7 +2755,7 @@ void RenderLayer::resize(const PlatformMouseEvent& evt, const LayoutSize& oldOff
             styledElement->setInlineStyleProperty(CSSPropertyMarginLeft, renderer->marginLeft() / zoomFactor, CSSPrimitiveValue::CSS_PX);
             styledElement->setInlineStyleProperty(CSSPropertyMarginRight, renderer->marginRight() / zoomFactor, CSSPrimitiveValue::CSS_PX);
         }
-        LayoutUnit baseWidth = renderer->width() - (isBoxSizingBorder ? LayoutUnit() : renderer->horizontalBorderAndPaddingExtent());
+        LayoutUnit baseWidth = renderer->width() - (isBoxSizingBorder ? 0_lu : renderer->horizontalBorderAndPaddingExtent());
         baseWidth = baseWidth / zoomFactor;
         styledElement->setInlineStyleProperty(CSSPropertyWidth, roundToInt(baseWidth + difference.width()), CSSPrimitiveValue::CSS_PX);
     }
@@ -2766,7 +2766,7 @@ void RenderLayer::resize(const PlatformMouseEvent& evt, const LayoutSize& oldOff
             styledElement->setInlineStyleProperty(CSSPropertyMarginTop, renderer->marginTop() / zoomFactor, CSSPrimitiveValue::CSS_PX);
             styledElement->setInlineStyleProperty(CSSPropertyMarginBottom, renderer->marginBottom() / zoomFactor, CSSPrimitiveValue::CSS_PX);
         }
-        LayoutUnit baseHeight = renderer->height() - (isBoxSizingBorder ? LayoutUnit() : renderer->verticalBorderAndPaddingExtent());
+        LayoutUnit baseHeight = renderer->height() - (isBoxSizingBorder ? 0_lu : renderer->verticalBorderAndPaddingExtent());
         baseHeight = baseHeight / zoomFactor;
         styledElement->setInlineStyleProperty(CSSPropertyHeight, roundToInt(baseHeight + difference.height()), CSSPrimitiveValue::CSS_PX);
     }
@@ -2804,8 +2804,8 @@ IntRect RenderLayer::visibleContentRectInternal(VisibleContentRectIncludesScroll
     if (showsOverflowControls() && scrollbarInclusion == IncludeScrollbars)
         scrollbarSpace = scrollbarIntrusion();
     
-    // FIXME: This seems wrong: m_layerSize includes borders. Can we just use the ScrollableArea implementation?
-    return IntRect(scrollPosition(), IntSize(std::max(0, m_layerSize.width() - scrollbarSpace.width()), std::max(0, m_layerSize.height() - scrollbarSpace.height())));
+    auto visibleSize = this->visibleSize();
+    return { scrollPosition(), { std::max(0, visibleSize.width() - scrollbarSpace.width()), std::max(0, visibleSize.height() - scrollbarSpace.height()) } };
 }
 
 IntSize RenderLayer::overhangAmount() const
@@ -3585,7 +3585,7 @@ void RenderLayer::updateScrollInfoAfterLayout()
     }
 
 #if PLATFORM(IOS_FAMILY)
-    if (canUseAcceleratedTouchScrolling())
+    if (canUseCompositedScrolling())
         setNeedsPostLayoutCompositingUpdate();
 #endif
 
@@ -3614,9 +3614,8 @@ bool RenderLayer::overflowControlsIntersectRect(const IntRect& localRect) const
 bool RenderLayer::showsOverflowControls() const
 {
 #if PLATFORM(IOS_FAMILY)
-    // Don't render (custom) scrollbars if we have accelerated scrolling.
-    if (canUseAcceleratedTouchScrolling())
-        return false;
+    // On iOS, the scrollbars are made in the UI process.
+    return !canUseCompositedScrolling();
 #endif
 
     return true;
@@ -3771,7 +3770,7 @@ void RenderLayer::paintResizer(GraphicsContext& context, const LayoutPoint& pain
         GraphicsContextStateSaver stateSaver(context);
         context.clip(absRect);
         LayoutRect largerCorner = absRect;
-        largerCorner.setSize(LayoutSize(largerCorner.width() + LayoutUnit::fromPixel(1), largerCorner.height() + LayoutUnit::fromPixel(1)));
+        largerCorner.setSize(LayoutSize(largerCorner.width() + 1_lu, largerCorner.height() + 1_lu));
         context.setStrokeColor(Color(makeRGB(217, 217, 217)));
         context.setStrokeThickness(1.0f);
         context.setFillColor(Color::transparent);
@@ -4458,7 +4457,7 @@ void RenderLayer::paintLayerByApplyingTransform(GraphicsContext& context, const 
     LayoutSize adjustedSubpixelOffset = offsetForThisLayer - LayoutSize(devicePixelSnappedOffsetForThisLayer);
     LayerPaintingInfo transformedPaintingInfo(paintingInfo);
     transformedPaintingInfo.rootLayer = this;
-    transformedPaintingInfo.paintDirtyRect = LayoutRect(encloseRectToDevicePixels(transform.inverse().value_or(AffineTransform()).mapRect(paintingInfo.paintDirtyRect), deviceScaleFactor));
+    transformedPaintingInfo.paintDirtyRect = LayoutRect(encloseRectToDevicePixels(transform.inverse().valueOr(AffineTransform()).mapRect(paintingInfo.paintDirtyRect), deviceScaleFactor));
     transformedPaintingInfo.subpixelOffset = adjustedSubpixelOffset;
     paintLayerContentsAndReflection(context, transformedPaintingInfo, paintFlags);
     context.setCTM(oldTransfrom);
@@ -5038,7 +5037,7 @@ RenderLayer* RenderLayer::hitTestLayer(RenderLayer* rootLayer, RenderLayer* cont
 
     // Check for hit test on backface if backface-visibility is 'hidden'
     if (localTransformState && renderer().style().backfaceVisibility() == BackfaceVisibility::Hidden) {
-        std::optional<TransformationMatrix> invertedMatrix = localTransformState->m_accumulatedTransform.inverse();
+        Optional<TransformationMatrix> invertedMatrix = localTransformState->m_accumulatedTransform.inverse();
         // If the z-vector of the matrix is negative, the back is facing towards the viewer.
         if (invertedMatrix && invertedMatrix.value().m33() < 0)
             return nullptr;
@@ -5479,16 +5478,18 @@ static inline ClipRect backgroundClipRectForPosition(const ClipRects& parentRect
 ClipRect RenderLayer::backgroundClipRect(const ClipRectsContext& clipRectsContext) const
 {
     ASSERT(parent());
-    auto computeParentRects = [this, &clipRectsContext] () {
-        // If we cross into a different pagination context, then we can't rely on the cache.
-        // Just switch over to using TemporaryClipRects.
-        if (clipRectsContext.clipRectsType != TemporaryClipRects
-            && parent()->enclosingPaginationLayer(IncludeCompositedPaginatedLayers) != enclosingPaginationLayer(IncludeCompositedPaginatedLayers)) {
-            ClipRectsContext tempContext(clipRectsContext);
-            tempContext.clipRectsType = TemporaryClipRects;
-            return parentClipRects(tempContext);
-        }
-        return parentClipRects(clipRectsContext);
+    auto computeParentRects = [&] {
+        if (clipRectsContext.clipRectsType == TemporaryClipRects)
+            return parentClipRects(clipRectsContext);
+        // If we cross into a different composition/pagination context, then we can't rely on the cache since the root layer differs.
+        bool crossesPaginationBoundary = parent()->enclosingPaginationLayer(IncludeCompositedPaginatedLayers) != enclosingPaginationLayer(IncludeCompositedPaginatedLayers);
+        bool crossesCompositingBoundary = parent()->enclosingCompositingLayerForRepaint() != enclosingCompositingLayerForRepaint();
+        if (!crossesPaginationBoundary && !crossesCompositingBoundary)
+            return parentClipRects(clipRectsContext);
+
+        ClipRectsContext tempContext(clipRectsContext);
+        tempContext.clipRectsType = TemporaryClipRects;
+        return parentClipRects(tempContext);
     };
     
     auto parentRects = computeParentRects();
@@ -6121,6 +6122,7 @@ bool RenderLayer::shouldBeSelfPaintingLayer() const
         return true;
 
     return hasOverlayScrollbars()
+        || canUseCompositedScrolling()
         || renderer().isTableRow()
         || renderer().isCanvas()
         || renderer().isVideo()
@@ -6408,7 +6410,7 @@ void RenderLayer::updateScrollableAreaSet(bool hasOverflow)
 
 #if ENABLE(IOS_TOUCH_EVENTS)
     if (addedOrRemoved) {
-        if (isScrollable && !canUseAcceleratedTouchScrolling())
+        if (isScrollable && !canUseCompositedScrolling())
             registerAsTouchEventListenerForScrolling();
         else {
             // We only need the touch listener for unaccelerated overflow scrolling, so if we became
@@ -6702,7 +6704,10 @@ static void outputPaintOrderTreeRecursive(TextStream& stream, const WebCore::Ren
 
     auto layerRect = layer.rect();
 
-    stream << &layer << " " << layerRect << " " << layer.name();
+    stream << &layer << " " << layerRect;
+    if (layer.isComposited())
+        stream << " (layerID " << layer.backing()->graphicsLayer()->primaryLayerID() << ")";
+    stream << " " << layer.name();
     stream.nextLine();
 
     const_cast<WebCore::RenderLayer&>(layer).updateLayerListsIfNeeded();

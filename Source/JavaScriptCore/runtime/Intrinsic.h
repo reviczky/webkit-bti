@@ -72,6 +72,8 @@ enum Intrinsic {
     ObjectCreateIntrinsic,
     ObjectGetPrototypeOfIntrinsic,
     ObjectIsIntrinsic,
+    ObjectKeysIntrinsic,
+    ObjectPrototypeToStringIntrinsic,
     ReflectGetPrototypeOfIntrinsic,
     StringPrototypeValueOfIntrinsic,
     StringPrototypeReplaceIntrinsic,

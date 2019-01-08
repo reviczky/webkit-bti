@@ -237,21 +237,15 @@ DragOperation DragController::dragUpdated(const DragData& dragData)
     return dragEnteredOrUpdated(dragData);
 }
 
-inline static bool dragIsHandledByDocument(DragController::DragHandlingMethod dragHandlingMethod)
+inline static bool dragIsHandledByDocument(DragHandlingMethod dragHandlingMethod)
 {
-    if (dragHandlingMethod == DragController::DragHandlingMethod::None)
-        return false;
-
-    if (dragHandlingMethod == DragController::DragHandlingMethod::PageLoad)
-        return false;
-
-    return true;
+    return dragHandlingMethod != DragHandlingMethod::None && dragHandlingMethod != DragHandlingMethod::PageLoad;
 }
 
 bool DragController::performDragOperation(const DragData& dragData)
 {
     SetForScope<bool> isPerformingDrop(m_isPerformingDrop, true);
-    TemporarySelectionChange ignoreSelectionChanges(m_page.focusController().focusedOrMainFrame(), std::nullopt, TemporarySelectionOption::IgnoreSelectionChanges);
+    TemporarySelectionChange ignoreSelectionChanges(m_page.focusController().focusedOrMainFrame(), WTF::nullopt, TemporarySelectionOption::IgnoreSelectionChanges);
 
     m_documentUnderMouse = m_page.mainFrame().documentAtPoint(dragData.clientPosition());
 
@@ -385,7 +379,7 @@ void DragController::updateSupportedTypeIdentifiersForDragHandlingMethod(DragHan
 
 #endif
 
-DragController::DragHandlingMethod DragController::tryDocumentDrag(const DragData& dragData, DragDestinationAction actionMask, DragOperation& dragOperation)
+DragHandlingMethod DragController::tryDocumentDrag(const DragData& dragData, DragDestinationAction actionMask, DragOperation& dragOperation)
 {
     if (!m_documentUnderMouse)
         return DragHandlingMethod::None;
@@ -1069,7 +1063,7 @@ bool DragController::startDrag(Frame& src, const DragState& state, DragOperation
             if (mustUseLegacyDragClient)
                 src.editor().copyURL(linkURL, textContentWithSimplifiedWhiteSpace, dataTransfer.pasteboard());
             else
-                pasteboardWriterData.setURL(src.editor().pasteboardWriterURL(linkURL, textContentWithSimplifiedWhiteSpace));
+                pasteboardWriterData.setURLData(src.editor().pasteboardWriterURL(linkURL, textContentWithSimplifiedWhiteSpace));
         } else {
             // Make sure the pasteboard also contains trustworthy link data
             // but don't overwrite more general pasteboard types.

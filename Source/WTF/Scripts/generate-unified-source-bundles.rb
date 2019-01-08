@@ -38,12 +38,17 @@ def usage(message)
     puts "<sources-list-file> may be separate arguments or one semicolon separated string"
     puts "--help                          (-h) Print this message"
     puts "--verbose                       (-v) Adds extra logging to stderr."
+    puts
     puts "Required arguments:"
     puts "--source-tree-path              (-s) Path to the root of the source directory."
     puts "--derived-sources-path          (-d) Path to the directory where the unified source files should be placed."
     puts
     puts "Optional arguments:"
     puts "--print-bundled-sources              Print bundled sources rather than generating sources"
+    puts "--print-all-sources                  Print all sources rather than generating sources"
+    puts "--generate-xcfilelists               Generate .xcfilelist files"
+    puts "--input-xcfilelist-path              Path of the generated input .xcfilelist file"
+    puts "--output-xcfilelist-path             Path of the generated output .xcfilelist file"
     puts "--feature-flags                 (-f) Space or semicolon separated list of enabled feature flags"
     puts
     puts "Generation options:"
@@ -59,6 +64,8 @@ $sourceTreePath = nil
 $featureFlags = {}
 $verbose = false
 $mode = :GenerateBundles
+$inputXCFilelistPath = nil
+$outputXCFilelistPath = nil
 $maxCppBundleCount = nil
 $maxObjCBundleCount = nil
 
@@ -72,6 +79,10 @@ GetoptLong.new(['--help', '-h', GetoptLong::NO_ARGUMENT],
                ['--source-tree-path', '-s', GetoptLong::REQUIRED_ARGUMENT],
                ['--feature-flags', '-f', GetoptLong::REQUIRED_ARGUMENT],
                ['--print-bundled-sources', GetoptLong::NO_ARGUMENT],
+               ['--print-all-sources', GetoptLong::NO_ARGUMENT],
+               ['--generate-xcfilelists', GetoptLong::NO_ARGUMENT],
+               ['--input-xcfilelist-path', GetoptLong::REQUIRED_ARGUMENT],
+               ['--output-xcfilelist-path', GetoptLong::REQUIRED_ARGUMENT],
                ['--max-cpp-bundle-count', GetoptLong::REQUIRED_ARGUMENT],
                ['--max-obj-c-bundle-count', GetoptLong::REQUIRED_ARGUMENT]).each {
     | opt, arg |
@@ -82,8 +93,6 @@ GetoptLong.new(['--help', '-h', GetoptLong::NO_ARGUMENT],
         $verbose = true
     when '--derived-sources-path'
         $derivedSourcesPath = Pathname.new(arg)
-        $unifiedSourceOutputPath = $derivedSourcesPath + Pathname.new("unified-sources")
-        FileUtils.mkpath($unifiedSourceOutputPath) if !$unifiedSourceOutputPath.exist?
     when '--source-tree-path'
         $sourceTreePath = Pathname.new(arg)
         usage("Source tree #{arg} does not exist.") if !$sourceTreePath.exist?
@@ -91,12 +100,23 @@ GetoptLong.new(['--help', '-h', GetoptLong::NO_ARGUMENT],
         arg.gsub(/\s+/, ";").split(";").map { |x| $featureFlags[x] = true }
     when '--print-bundled-sources'
         $mode = :PrintBundledSources
+    when '--print-all-sources'
+        $mode = :PrintAllSources
+    when '--generate-xcfilelists'
+        $mode = :GenerateXCFilelists
+    when '--input-xcfilelist-path'
+        $inputXCFilelistPath = arg
+    when '--output-xcfilelist-path'
+        $outputXCFilelistPath = arg
     when '--max-cpp-bundle-count'
         $maxCppBundleCount = arg.to_i
     when '--max-obj-c-bundle-count'
         $maxObjCBundleCount = arg.to_i
     end
 }
+
+$unifiedSourceOutputPath = $derivedSourcesPath + Pathname.new("unified-sources")
+FileUtils.mkpath($unifiedSourceOutputPath) if !$unifiedSourceOutputPath.exist? && $mode != :GenerateXCFilelists
 
 usage("--derived-sources-path must be specified.") if !$unifiedSourceOutputPath
 usage("--source-tree-path must be specified.") if !$sourceTreePath
@@ -108,6 +128,8 @@ usage("At least one source list file must be specified.") if ARGV.length == 0
 sourceListFiles = ARGV.to_a.map { | sourceFileList | sourceFileList.split(";") }.flatten
 log("Source files: #{sourceListFiles}")
 $generatedSources = []
+$inputSources = []
+$outputSources = []
 
 class SourceFile
     attr_reader :unifiable, :fileIndex, :path
@@ -146,7 +168,13 @@ class SourceFile
     end
 
     def to_s
-        if $mode == :GenerateBundles || !derived?
+        if $mode == :GenerateXCFilelists
+            if derived?
+                ($derivedSourcesPath + @path).to_s
+            else
+                '$(SRCROOT)/' + @path.to_s
+            end
+        elsif $mode == :GenerateBundles || !derived?
             @path.to_s
         else
             ($derivedSourcesPath + @path).to_s
@@ -167,6 +195,10 @@ class BundleManager
 
     def writeFile(file, text)
         bundleFile = $unifiedSourceOutputPath + file
+        if $mode == :GenerateXCFilelists
+            $outputSources << bundleFile
+            return
+        end
         if (!bundleFile.exist? || IO::read(bundleFile) != @currentBundleText)
             log("Writing bundle #{bundleFile} with: \n#{@currentBundleText}")
             IO::write(bundleFile, @currentBundleText)
@@ -222,6 +254,7 @@ end
 
 def ProcessFileForUnifiedSourceGeneration(sourceFile)
     path = sourceFile.path
+    $inputSources << sourceFile.to_s
     if (TopLevelDirectoryForPath($currentDirectory) != TopLevelDirectoryForPath(path.dirname))
         log("Flushing because new top level directory; old: #{$currentDirectory}, new: #{path.dirname}")
         $bundleManagers.each_value { |x| x.flush }
@@ -273,8 +306,10 @@ sourceListFiles.each_with_index {
             raise "malformed #if" unless line =~ /\A#if\s+(\S+)/
             inDisabledLines = !$featureFlags[$1]
         else
-            raise "malformed preprocessor directive: #{line}" if line =~ /^#/
-            raise "duplicate line: #{line} in #{path}" if seen[line]
+            if seen[line]
+                next if $mode == :GenerateXCFilelists
+                raise "duplicate line: #{line} in #{path}"
+            end
             seen[line] = true
             result << SourceFile.new(line, sourceFileIndex)
         end
@@ -290,8 +325,10 @@ log("Found sources: #{sourceFiles.sort}")
 sourceFiles.sort.each {
     | sourceFile |
     case $mode
-    when :GenerateBundles
+    when :GenerateBundles, :GenerateXCFilelists
         ProcessFileForUnifiedSourceGeneration(sourceFile)
+    when :PrintAllSources
+        $generatedSources << sourceFile
     when :PrintBundledSources
         $generatedSources << sourceFile if $bundleManagers[sourceFile.path.extname] && sourceFile.unifiable
     end
@@ -312,6 +349,11 @@ $bundleManagers.each_value {
         raise "number of bundles for #{extension} sources, #{bundleCount}, exceeded limit, #{maxCount}. Please add #{filesToAdd} to Xcode then update UnifiedSource#{extension.capitalize}FileCount"
     end
 }
+
+if $mode == :GenerateXCFilelists
+    IO::write($inputXCFilelistPath, $inputSources.sort.join("\n") + "\n")
+    IO::write($outputXCFilelistPath, $outputSources.sort.join("\n") + "\n")
+end
 
 # We use stdout to report our unified source list to CMake.
 # Add trailing semicolon and avoid a trailing newline for CMake's sake.

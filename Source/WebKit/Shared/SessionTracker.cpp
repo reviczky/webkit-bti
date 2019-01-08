@@ -31,29 +31,8 @@
 #include <wtf/NeverDestroyed.h>
 #include <wtf/RunLoop.h>
 
-using namespace WebCore;
-
 namespace WebKit {
-
-static String& identifierBase()
-{
-    ASSERT(RunLoop::isMain());
-
-    static NeverDestroyed<String> base;
-    return base;
-}
-
-const String& SessionTracker::getIdentifierBase()
-{
-    return identifierBase();
-}
-
-void SessionTracker::setIdentifierBase(const String& identifier)
-{
-    ASSERT(RunLoop::isMain());
-
-    identifierBase() = identifier;
-}
+using namespace WebCore;
 
 static HashMap<PAL::SessionID, RefPtr<NetworkSession>>& staticSessionMap()
 {

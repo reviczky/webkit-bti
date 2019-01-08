@@ -358,6 +358,8 @@ WI.CSSProperty = class CSSProperty extends WI.Object
             return;
         }
 
+        this._prependSemicolonIfNeeded();
+
         let styleText = this._ownerStyle.text || "";
 
         // _styleSheetTextRange is the position of the property within the stylesheet.
@@ -369,7 +371,13 @@ WI.CSSProperty = class CSSProperty extends WI.Object
 
         console.assert(oldText === styleText.slice(range.startOffset, range.endOffset), "_styleSheetTextRange data is invalid.");
 
-        let newStyleText = this._appendSemicolonIfNeeded(styleText.slice(0, range.startOffset)) + newText + styleText.slice(range.endOffset);
+        if (WI.settings.enableStyleEditingDebugMode.value) {
+            let prefix = styleText.slice(0, range.startOffset);
+            let postfix = styleText.slice(range.endOffset);
+            console.info(`${prefix}%c${oldText}%c${newText}%c${postfix}`, `background: hsl(356, 100%, 90%); color: black`, `background: hsl(100, 100%, 91%); color: black`, `background: transparent`);
+        }
+
+        let newStyleText = styleText.slice(0, range.startOffset) + newText + styleText.slice(range.endOffset);
 
         let lineDelta = newText.lineCount - oldText.lineCount;
         let columnDelta = newText.lastLine.length - oldText.lastLine.length;
@@ -381,12 +389,19 @@ WI.CSSProperty = class CSSProperty extends WI.Object
         this._ownerStyle.shiftPropertiesAfter(this, lineDelta, columnDelta, propertyWasRemoved);
     }
 
-    _appendSemicolonIfNeeded(styleText)
+    _prependSemicolonIfNeeded()
     {
-        if (/[^;\s]\s*$/.test(styleText))
-            return styleText.trimRight() + "; ";
+        for (let i = this.index - 1; i >= 0; --i) {
+            let property = this._ownerStyle.allProperties[i];
+            if (!property.enabled)
+                continue;
 
-        return styleText;
+            let match = property.text.match(/[^;\s](\s*)$/);
+            if (match)
+                property.text = property.text.trimRight() + ";" + match[1];
+
+            break;
+        }
     }
 };
 

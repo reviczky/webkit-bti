@@ -27,28 +27,11 @@
 #include "NetworkLoad.h"
 
 #include "AuthenticationChallengeDisposition.h"
-#include "AuthenticationManager.h"
-#include "DownloadProxyMessages.h"
 #include "NetworkProcess.h"
 #include "NetworkSession.h"
-#include "SessionTracker.h"
-#include "WebCoreArgumentCoders.h"
-#include "WebErrors.h"
-#include <WebCore/NotImplemented.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/SharedBuffer.h>
-#include <pal/SessionID.h>
-#include <wtf/MainThread.h>
 #include <wtf/Seconds.h>
-
-#if PLATFORM(COCOA)
-#include "NetworkDataTaskCocoa.h"
-#include "NetworkSessionCocoa.h"
-#endif
-
-#if ENABLE(NETWORK_CAPTURE)
-#include "NetworkCaptureManager.h"
-#endif
 
 namespace WebKit {
 
@@ -69,45 +52,13 @@ struct NetworkLoad::Throttle {
 
 NetworkLoad::NetworkLoad(NetworkLoadClient& client, NetworkLoadParameters&& parameters, NetworkSession& networkSession)
     : m_client(client)
+    , m_networkProcess(networkSession.networkProcess())
     , m_parameters(WTFMove(parameters))
+    , m_loadThrottleLatency(networkSession.loadThrottleLatency())
     , m_currentRequest(m_parameters.request)
 {
-#if ENABLE(NETWORK_CAPTURE)
-    switch (NetworkCapture::Manager::singleton().mode()) {
-    case NetworkCapture::Manager::RecordReplayMode::Record:
-        initializeForRecord(networkSession);
-        break;
-    case NetworkCapture::Manager::RecordReplayMode::Replay:
-        initializeForReplay(networkSession);
-        break;
-    case NetworkCapture::Manager::RecordReplayMode::Disabled:
-        initialize(networkSession);
-        break;
-    }
-#else
     initialize(networkSession);
-#endif
 }
-
-#if ENABLE(NETWORK_CAPTURE)
-void NetworkLoad::initializeForRecord(NetworkSession& networkSession)
-{
-    m_recorder = std::make_unique<NetworkCapture::Recorder>();
-    m_task = NetworkDataTask::create(networkSession, *this, m_parameters);
-    if (!m_parameters.defersLoading) {
-        m_task->resume();
-        m_recorder->recordRequestSent(m_parameters.request);
-    }
-}
-
-void NetworkLoad::initializeForReplay(NetworkSession& networkSession)
-{
-    m_replayer = std::make_unique<NetworkCapture::Replayer>();
-    m_task = m_replayer->replayResource(networkSession, *this, m_parameters);
-    if (!m_parameters.defersLoading)
-        m_task->resume();
-}
-#endif
 
 void NetworkLoad::initialize(NetworkSession& networkSession)
 {
@@ -130,13 +81,8 @@ void NetworkLoad::setDefersLoading(bool defers)
     if (m_task) {
         if (defers)
             m_task->suspend();
-        else {
+        else
             m_task->resume();
-#if ENABLE(NETWORK_CAPTURE)
-            if (m_recorder)
-                m_recorder->recordRequestSent(m_parameters.request);
-#endif
-        }
     }
 }
 
@@ -153,11 +99,6 @@ void NetworkLoad::continueWillSendRequest(WebCore::ResourceRequest&& newRequest)
 #else
     // FIXME: Implement ResourceRequest::updateFromDelegatePreservingOldProperties. See https://bugs.webkit.org/show_bug.cgi?id=126127.
     m_currentRequest.updateFromDelegatePreservingOldProperties(newRequest);
-#endif
-
-#if ENABLE(NETWORK_CAPTURE)
-    if (m_recorder)
-        m_recorder->recordRedirectSent(newRequest);
 #endif
 
     auto redirectCompletionHandler = std::exchange(m_redirectCompletionHandler, nullptr);
@@ -193,7 +134,7 @@ void NetworkLoad::convertTaskToDownload(PendingDownload& pendingDownload, const 
     m_currentRequest = updatedRequest;
     m_task->setPendingDownload(pendingDownload);
     
-    NetworkProcess::singleton().findPendingDownloadLocation(*m_task.get(), WTFMove(completionHandler), response);
+    m_networkProcess->findPendingDownloadLocation(*m_task.get(), WTFMove(completionHandler), response);
 }
 
 void NetworkLoad::setPendingDownloadID(DownloadID downloadID)
@@ -229,11 +170,6 @@ void NetworkLoad::willPerformHTTPRedirection(ResourceResponse&& redirectResponse
     redirectResponse.setSource(ResourceResponse::Source::Network);
     m_redirectCompletionHandler = WTFMove(completionHandler);
 
-#if ENABLE(NETWORK_CAPTURE)
-    if (m_recorder)
-        m_recorder->recordRedirectReceived(request, redirectResponse);
-#endif
-
     auto oldRequest = WTFMove(m_currentRequest);
     request.setRequester(oldRequest.requester());
 
@@ -253,9 +189,9 @@ void NetworkLoad::didReceiveChallenge(AuthenticationChallenge&& challenge, Chall
     }
     
     if (auto* pendingDownload = m_task->pendingDownload())
-        NetworkProcess::singleton().authenticationManager().didReceiveAuthenticationChallenge(*pendingDownload, challenge, WTFMove(completionHandler));
+        m_networkProcess->authenticationManager().didReceiveAuthenticationChallenge(*pendingDownload, challenge, WTFMove(completionHandler));
     else
-        NetworkProcess::singleton().authenticationManager().didReceiveAuthenticationChallenge(m_parameters.webPageID, m_parameters.webFrameID, challenge, WTFMove(completionHandler));
+        m_networkProcess->authenticationManager().didReceiveAuthenticationChallenge(m_parameters.webPageID, m_parameters.webFrameID, challenge, WTFMove(completionHandler));
 }
 
 void NetworkLoad::didReceiveResponse(ResourceResponse&& response, ResponseCompletionHandler&& completionHandler)
@@ -264,13 +200,12 @@ void NetworkLoad::didReceiveResponse(ResourceResponse&& response, ResponseComple
     ASSERT(!m_throttle);
 
     if (m_task && m_task->isDownload()) {
-        NetworkProcess::singleton().findPendingDownloadLocation(*m_task.get(), WTFMove(completionHandler), response);
+        m_networkProcess->findPendingDownloadLocation(*m_task.get(), WTFMove(completionHandler), response);
         return;
     }
 
-    auto delay = NetworkProcess::singleton().loadThrottleLatency();
-    if (delay > 0_s) {
-        m_throttle = std::make_unique<Throttle>(*this, delay, WTFMove(response), WTFMove(completionHandler));
+    if (m_loadThrottleLatency > 0_s) {
+        m_throttle = std::make_unique<Throttle>(*this, m_loadThrottleLatency, WTFMove(response), WTFMove(completionHandler));
         return;
     }
 
@@ -280,11 +215,6 @@ void NetworkLoad::didReceiveResponse(ResourceResponse&& response, ResponseComple
 void NetworkLoad::notifyDidReceiveResponse(ResourceResponse&& response, ResponseCompletionHandler&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
-
-#if ENABLE(NETWORK_CAPTURE)
-    if (m_recorder)
-        m_recorder->recordResponseReceived(response);
-#endif
 
     response.setSource(ResourceResponse::Source::Network);
     if (m_parameters.needsCertificateInfo)
@@ -297,11 +227,6 @@ void NetworkLoad::didReceiveData(Ref<SharedBuffer>&& buffer)
 {
     ASSERT(!m_throttle);
 
-#if ENABLE(NETWORK_CAPTURE)
-    if (m_recorder)
-        m_recorder->recordDataReceived(buffer.get());
-#endif
-
     // FIXME: This should be the encoded data length, not the decoded data length.
     auto size = buffer->size();
     m_client.get().didReceiveBuffer(WTFMove(buffer), size);
@@ -310,11 +235,6 @@ void NetworkLoad::didReceiveData(Ref<SharedBuffer>&& buffer)
 void NetworkLoad::didCompleteWithError(const ResourceError& error, const WebCore::NetworkLoadMetrics& networkLoadMetrics)
 {
     ASSERT(!m_throttle);
-
-#if ENABLE(NETWORK_CAPTURE)
-    if (m_recorder)
-        m_recorder->recordFinish(error);
-#endif
 
     if (error.isNull())
         m_client.get().didFinishLoading(networkLoadMetrics);

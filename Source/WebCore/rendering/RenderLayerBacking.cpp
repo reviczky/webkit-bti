@@ -244,7 +244,7 @@ RenderLayerBacking::~RenderLayerBacking()
     updateBackgroundLayer(false);
     updateMaskingLayer(false, false);
     updateScrollingLayers(false);
-    detachFromScrollingCoordinator({ Scrolling, ViewportConstrained });
+    detachFromScrollingCoordinator({ ScrollCoordinationRole::Scrolling, ScrollCoordinationRole::ViewportConstrained });
     destroyGraphicsLayers();
 }
 
@@ -560,7 +560,7 @@ void RenderLayerBacking::updateCustomAppearance(const RenderStyle& style)
 static bool layerOrAncestorIsTransformedOrUsingCompositedScrolling(RenderLayer& layer)
 {
     for (auto* curr = &layer; curr; curr = curr->parent()) {
-        if (curr->hasTransform() || curr->hasTouchScrollableOverflow())
+        if (curr->hasTransform() || curr->hasCompositedScrollableOverflow())
             return true;
     }
 
@@ -702,7 +702,7 @@ bool RenderLayerBacking::updateConfiguration()
     
     // This requires descendants to have been updated.
     bool needsDescendantsClippingLayer = compositor().clipsCompositingDescendants(m_owningLayer);
-    bool usesCompositedScrolling = m_owningLayer.hasTouchScrollableOverflow();
+    bool usesCompositedScrolling = m_owningLayer.hasCompositedScrollableOverflow();
 
     // Our scrolling layer will clip.
     if (usesCompositedScrolling)
@@ -905,9 +905,9 @@ private:
         return m_fromAncestorGraphicsLayer.value();
     }
 
-    std::optional<LayoutSize> m_fromAncestorGraphicsLayer;
-    std::optional<LayoutSize> m_fromParentGraphicsLayer;
-    std::optional<LayoutSize> m_fromPrimaryGraphicsLayer;
+    Optional<LayoutSize> m_fromAncestorGraphicsLayer;
+    Optional<LayoutSize> m_fromParentGraphicsLayer;
+    Optional<LayoutSize> m_fromPrimaryGraphicsLayer;
     
     const RenderLayer& m_renderLayer;
     // Location is relative to the renderer.
@@ -947,7 +947,7 @@ LayoutRect RenderLayerBacking::computeParentGraphicsLayerRect(RenderLayer* compo
     }
 
 #if PLATFORM(IOS_FAMILY)
-    if (compositedAncestor->hasTouchScrollableOverflow()) {
+    if (compositedAncestor->hasCompositedScrollableOverflow()) {
         LayoutRect ancestorCompositedBounds = ancestorBackingLayer->compositedBounds();
         auto& renderBox = downcast<RenderBox>(compositedAncestor->renderer());
         LayoutRect paddingBox(renderBox.borderLeft(), renderBox.borderTop(), renderBox.width() - renderBox.borderLeft() - renderBox.borderRight(), renderBox.height() - renderBox.borderTop() - renderBox.borderBottom());
@@ -1026,7 +1026,7 @@ void RenderLayerBacking::updateGeometry()
     m_graphicsLayer->setPosition(primaryGraphicsLayerRect.location());
     m_graphicsLayer->setSize(primaryGraphicsLayerRect.size());
 
-    auto computeAnimationExtent = [&] () -> std::optional<FloatRect> {
+    auto computeAnimationExtent = [&] () -> Optional<FloatRect> {
         LayoutRect animatedBounds;
         if (isRunningAcceleratedTransformAnimation && m_owningLayer.getOverlapBoundsIncludingChildrenAccountingForTransformAnimations(animatedBounds, RenderLayer::IncludeCompositedDescendants))
             return FloatRect(animatedBounds);
@@ -1206,9 +1206,8 @@ void RenderLayerBacking::updateGeometry()
 
         m_scrollingContentsLayer->setSize(scrollSize);
         // Scrolling the content layer does not need to trigger a repaint. The offset will be compensated away during painting.
-        // FIXME: The paint offset and the scroll offset should really be separate concepts.
-        LayoutSize scrollingContentsOffset = toLayoutSize(paddingBox.location() - toLayoutSize(scrollOffset));
-        m_scrollingContentsLayer->setOffsetFromRenderer(scrollingContentsOffset, GraphicsLayer::DontSetNeedsDisplay);
+        m_scrollingContentsLayer->setScrollOffset(scrollOffset, GraphicsLayer::DontSetNeedsDisplay);
+        m_scrollingContentsLayer->setOffsetFromRenderer(toLayoutSize(paddingBox.location()), GraphicsLayer::DontSetNeedsDisplay);
 #else
         m_scrollingContentsLayer->setPosition(-scrollOffset);
 
@@ -1227,18 +1226,17 @@ void RenderLayerBacking::updateGeometry()
         if (scrollSize != m_scrollingContentsLayer->size() || paddingBoxOffsetChanged)
             m_scrollingContentsLayer->setNeedsDisplay();
 
-        LayoutSize scrollingContentsOffset = toLayoutSize(paddingBox.location() - toLayoutSize(scrollOffset));
-        if (scrollingContentsOffset != m_scrollingContentsLayer->offsetFromRenderer() || scrollSize != m_scrollingContentsLayer->size())
+        if (toLayoutSize(paddingBox.location()) != m_scrollingContentsLayer->offsetFromRenderer() || scrollOffset != m_scrollingContentsLayer->scrollOffset() || scrollSize != m_scrollingContentsLayer->size())
             compositor().scrollingLayerDidChange(m_owningLayer);
 
         m_scrollingContentsLayer->setSize(scrollSize);
-        // FIXME: The paint offset and the scroll offset should really be separate concepts.
-        m_scrollingContentsLayer->setOffsetFromRenderer(scrollingContentsOffset, GraphicsLayer::DontSetNeedsDisplay);
+        m_scrollingContentsLayer->setScrollOffset(scrollOffset, GraphicsLayer::DontSetNeedsDisplay);
+        m_scrollingContentsLayer->setOffsetFromRenderer(toLayoutSize(paddingBox.location()), GraphicsLayer::DontSetNeedsDisplay);
 #endif
 
         if (m_foregroundLayer) {
             m_foregroundLayer->setSize(m_scrollingContentsLayer->size());
-            m_foregroundLayer->setOffsetFromRenderer(m_scrollingContentsLayer->offsetFromRenderer());
+            m_foregroundLayer->setOffsetFromRenderer(m_scrollingContentsLayer->offsetFromRenderer() - toLayoutSize(m_scrollingContentsLayer->scrollOffset()));
         }
     }
 
@@ -1261,7 +1259,7 @@ void RenderLayerBacking::updateAfterDescendants()
 {
     // FIXME: this potentially duplicates work we did in updateConfiguration().
     PaintedContentsInfo contentsInfo(*this);
-    contentsInfo.setWantsSubpixelAntialiasedTextState(GraphicsLayer::supportsSubpixelAntialiasedLayerText());
+    contentsInfo.setWantsSubpixelAntialiasedTextState(GraphicsLayer::supportsSubpixelAntialiasedLayerText() && FontCascade::isSubpixelAntialiasingAvailable());
 
     if (!m_owningLayer.isRenderViewLayer()) {
         bool didUpdateContentsRect = false;
@@ -1774,7 +1772,7 @@ bool RenderLayerBacking::updateScrollingLayers(bool needsScrollingLayers)
     return true;
 }
 
-void RenderLayerBacking::detachFromScrollingCoordinator(OptionSet<LayerScrollCoordinationRole> roles)
+void RenderLayerBacking::detachFromScrollingCoordinator(OptionSet<ScrollCoordinationRole> roles)
 {
     if (!m_scrollingNodeID && !m_viewportConstrainedNodeID)
         return;
@@ -1783,13 +1781,13 @@ void RenderLayerBacking::detachFromScrollingCoordinator(OptionSet<LayerScrollCoo
     if (!scrollingCoordinator)
         return;
 
-    if ((roles & Scrolling) && m_scrollingNodeID) {
+    if ((roles.contains(ScrollCoordinationRole::Scrolling)) && m_scrollingNodeID) {
         LOG(Compositing, "Detaching Scrolling node %" PRIu64, m_scrollingNodeID);
         scrollingCoordinator->detachFromStateTree(m_scrollingNodeID);
         m_scrollingNodeID = 0;
     }
     
-    if ((roles & ViewportConstrained) && m_viewportConstrainedNodeID) {
+    if ((roles.contains(ScrollCoordinationRole::ViewportConstrained)) && m_viewportConstrainedNodeID) {
         LOG(Compositing, "Detaching ViewportConstrained node %" PRIu64, m_viewportConstrainedNodeID);
         scrollingCoordinator->detachFromStateTree(m_viewportConstrainedNodeID);
         m_viewportConstrainedNodeID = 0;
@@ -2509,7 +2507,7 @@ void RenderLayerBacking::setContentsNeedDisplayInRect(const LayoutRect& r, Graph
 
     if (m_scrollingContentsLayer && m_scrollingContentsLayer->drawsContent()) {
         FloatRect layerDirtyRect = pixelSnappedRectForPainting;
-        layerDirtyRect.move(-m_scrollingContentsLayer->offsetFromRenderer() - m_subpixelOffsetFromRenderer);
+        layerDirtyRect.move(-m_scrollingContentsLayer->offsetFromRenderer() + toLayoutSize(m_scrollingContentsLayer->scrollOffset()) - m_subpixelOffsetFromRenderer);
 #if PLATFORM(IOS_FAMILY)
         // Account for the fact that RenderLayerBacking::updateGeometry() bakes scrollOffset into offsetFromRenderer on iOS,
         // but the repaint rect is computed without taking the scroll position into account (see shouldApplyClipAndScrollPositionForRepaint()).
@@ -3084,9 +3082,9 @@ TextStream& operator<<(TextStream& ts, const RenderLayerBacking& backing)
         ts << " paintsIntoCompositedAncestor";
 
     ts << " primary layer ID " << backing.graphicsLayer()->primaryLayerID();
-    if (auto nodeID = backing.scrollingNodeIDForRole(ViewportConstrained))
+    if (auto nodeID = backing.scrollingNodeIDForRole(ScrollCoordinationRole::ViewportConstrained))
         ts << " viewport constrained scrolling node " << nodeID;
-    if (auto nodeID = backing.scrollingNodeIDForRole(Scrolling))
+    if (auto nodeID = backing.scrollingNodeIDForRole(ScrollCoordinationRole::Scrolling))
         ts << " scrolling node " << nodeID;
     return ts;
 }

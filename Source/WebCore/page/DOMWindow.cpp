@@ -101,7 +101,7 @@
 #include "StyleResolver.h"
 #include "StyleScope.h"
 #include "SuddenTermination.h"
-#include "URL.h"
+#include <wtf/URL.h>
 #include "UserGestureIndicator.h"
 #include "VisualViewport.h"
 #include "WebKitPoint.h"
@@ -162,7 +162,7 @@ public:
 
     Ref<MessageEvent> event(ScriptExecutionContext& context)
     {
-        return MessageEvent::create(MessagePort::entanglePorts(context, WTFMove(m_message.transferredPorts)), m_message.message.releaseNonNull(), m_origin, { }, m_source ? std::make_optional(MessageEventSource(WTFMove(m_source))) : std::nullopt);
+        return MessageEvent::create(MessagePort::entanglePorts(context, WTFMove(m_message.transferredPorts)), m_message.message.releaseNonNull(), m_origin, { }, m_source ? makeOptional(MessageEventSource(WTFMove(m_source))) : WTF::nullopt);
     }
 
     SecurityOrigin* targetOrigin() const { return m_targetOrigin.get(); }
@@ -1484,7 +1484,7 @@ RefPtr<CSSRuleList> DOMWindow::getMatchedCSSRules(Element* element, const String
 
     bool allowCrossOrigin = frame->settings().crossOriginCheckInGetMatchedCSSRulesDisabled();
 
-    RefPtr<StaticCSSRuleList> ruleList = StaticCSSRuleList::create();
+    auto ruleList = StaticCSSRuleList::create();
     for (auto& rule : matchedRules) {
         if (!allowCrossOrigin && !rule->hasDocumentSecurityOrigin())
             continue;
@@ -1494,7 +1494,7 @@ RefPtr<CSSRuleList> DOMWindow::getMatchedCSSRules(Element* element, const String
     if (ruleList->rules().isEmpty())
         return nullptr;
 
-    return ruleList;
+    return WTFMove(ruleList);
 }
 
 RefPtr<WebKitPoint> DOMWindow::webkitConvertPointFromNodeToPage(Node* node, const WebKitPoint* p) const
@@ -1678,10 +1678,11 @@ void DOMWindow::clearTimeout(int timeoutId)
         Document* document = frame->document();
         if (timeoutId > 0 && document) {
             DOMTimer* timer = document->findTimeout(timeoutId);
-            if (timer && WebThreadContainsObservedContentModifier(timer)) {
-                WebThreadRemoveObservedContentModifier(timer);
+            if (timer && WebThreadContainsObservedDOMTimer(timer)) {
+                LOG_WITH_STREAM(ContentObservation, stream << "DOMWindow::clearTimeout: remove registered timer (" << timer << ")");
+                WebThreadRemoveObservedDOMTimer(timer);
 
-                if (!WebThreadCountOfObservedContentModifiers()) {
+                if (!WebThreadCountOfObservedDOMTimers()) {
                     if (Page* page = frame->page())
                         page->chrome().client().observedContentChange(*frame);
                 }
@@ -1820,33 +1821,6 @@ bool DOMWindow::addEventListener(const AtomicString& eventType, Ref<EventListene
         addUnloadEventListener(this);
     else if (eventType == eventNames().beforeunloadEvent && allowsBeforeUnloadListeners(this))
         addBeforeUnloadEventListener(this);
-#if ENABLE(DEVICE_ORIENTATION)
-#if PLATFORM(IOS_FAMILY)
-    else if ((eventType == eventNames().devicemotionEvent || eventType == eventNames().deviceorientationEvent) && document()) {
-        if (isSameSecurityOriginAsMainFrame()) {
-            if (eventType == eventNames().deviceorientationEvent)
-                document()->deviceOrientationController()->addDeviceEventListener(this);
-            else
-                document()->deviceMotionController()->addDeviceEventListener(this);
-        } else if (document())
-            document()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, "Blocked attempt add device motion or orientation listener from child frame that wasn't the same security origin as the main page."_s);
-    }
-#else
-    else if (eventType == eventNames().devicemotionEvent) {
-        if (isSameSecurityOriginAsMainFrame()) {
-            if (DeviceMotionController* controller = DeviceMotionController::from(page()))
-                controller->addDeviceEventListener(this);
-        } else if (document())
-            document()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, "Blocked attempt add device motion listener from child frame that wasn't the same security origin as the main page."_s);
-    } else if (eventType == eventNames().deviceorientationEvent) {
-        if (isSameSecurityOriginAsMainFrame()) {
-            if (DeviceOrientationController* controller = DeviceOrientationController::from(page()))
-                controller->addDeviceEventListener(this);
-        } else if (document())
-            document()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, "Blocked attempt add device orientation listener from child frame that wasn't the same security origin as the main page."_s);
-    }
-#endif // PLATFORM(IOS_FAMILY)
-#endif // ENABLE(DEVICE_ORIENTATION)
 #if PLATFORM(IOS_FAMILY)
     else if (eventType == eventNames().scrollEvent)
         incrementScrollEventListenersCount();
@@ -1863,6 +1837,44 @@ bool DOMWindow::addEventListener(const AtomicString& eventType, Ref<EventListene
     else if (eventNames().isGamepadEventType(eventType))
         incrementGamepadEventListenerCount();
 #endif
+
+#if ENABLE(DEVICE_ORIENTATION)
+    if (frame() && frame()->settings().deviceOrientationEventEnabled() && document() && document()->loader() && document()->loader()->deviceOrientationEventEnabled()) {
+#if PLATFORM(IOS_FAMILY)
+        if ((eventType == eventNames().devicemotionEvent || eventType == eventNames().deviceorientationEvent)) {
+            if (isSameSecurityOriginAsMainFrame() && isSecureContext()) {
+                if (eventType == eventNames().deviceorientationEvent)
+                    document()->deviceOrientationController()->addDeviceEventListener(this);
+                else
+                    document()->deviceMotionController()->addDeviceEventListener(this);
+            } else if (document()) {
+                if (isSecureContext())
+                    document()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, "Blocked attempt to add a device motion or orientation listener from child frame that wasn't the same security origin as the main page."_s);
+                else
+                    document()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, "Blocked attempt to add a device motion or orientation listener because the browsing context is not secure."_s);
+            }
+        }
+#else
+        if (eventType == eventNames().devicemotionEvent) {
+            if (isSameSecurityOriginAsMainFrame() && isSecureContext()) {
+                if (DeviceMotionController* controller = DeviceMotionController::from(page()))
+                    controller->addDeviceEventListener(this);
+            } else
+                document()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, "Blocked attempt to add a device motion listener from child frame that wasn't the same security origin as the main page."_s);
+        } else if (eventType == eventNames().deviceorientationEvent) {
+            if (isSameSecurityOriginAsMainFrame() && isSecureContext()) {
+                if (DeviceOrientationController* controller = DeviceOrientationController::from(page()))
+                    controller->addDeviceEventListener(this);
+            } else {
+                if (isSecureContext())
+                    document()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, "Blocked attempt to add a device orientation listener from child frame that wasn't the same security origin as the main page."_s);
+                else
+                    document()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, "Blocked attempt to add a device motion or orientation listener because the browsing context is not secure."_s);
+            }
+        }
+#endif // PLATFORM(IOS_FAMILY)
+    }
+#endif // ENABLE(DEVICE_ORIENTATION)
 
     return true;
 }
@@ -2186,7 +2198,7 @@ String DOMWindow::crossDomainAccessErrorMessage(const DOMWindow& activeWindow, I
 
 bool DOMWindow::isInsecureScriptAccess(DOMWindow& activeWindow, const String& urlString)
 {
-    if (!protocolIsJavaScript(urlString))
+    if (!WTF::protocolIsJavaScript(urlString))
         return false;
 
     // If this DOMWindow isn't currently active in the Frame, then there's no
@@ -2233,14 +2245,13 @@ ExceptionOr<RefPtr<Frame>> DOMWindow::createWindow(const String& urlString, cons
     // We pass the opener frame for the lookupFrame in case the active frame is different from
     // the opener frame, and the name references a frame relative to the opener frame.
     bool created;
-    RefPtr<Frame> newFrame = WebCore::createWindow(*activeFrame, openerFrame, WTFMove(frameLoadRequest), windowFeatures, created);
+    auto newFrame = WebCore::createWindow(*activeFrame, openerFrame, WTFMove(frameLoadRequest), windowFeatures, created);
     if (!newFrame)
         return RefPtr<Frame> { nullptr };
 
-    if (!windowFeatures.noopener) {
+    if (!windowFeatures.noopener)
         newFrame->loader().setOpener(&openerFrame);
-        newFrame->page()->setOpenedViaWindowOpenWithOpener();
-    }
+
     if (created)
         newFrame->page()->setOpenedByDOM();
 

@@ -28,6 +28,7 @@
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
 #include "InlineItem.h"
+#include "InlineRunProvider.h"
 
 namespace WebCore {
 namespace Layout {
@@ -35,7 +36,7 @@ namespace Layout {
 class TextUtil {
 public:
     static LayoutUnit width(const InlineItem&, ItemPosition from, ItemPosition to, LayoutUnit contentLogicalLeft);
-    static std::optional<ItemPosition> hyphenPositionBefore(const InlineItem&, ItemPosition from, unsigned length);
+    static Optional<ItemPosition> hyphenPositionBefore(const InlineItem&, ItemPosition from, unsigned length);
 
 private:
     static LayoutUnit fixedPitchWidth(String, const RenderStyle&, ItemPosition from, ItemPosition to, LayoutUnit contentLogicalLeft);

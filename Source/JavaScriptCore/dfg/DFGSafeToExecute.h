@@ -178,6 +178,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case ToThis:
     case CreateThis:
     case ObjectCreate:
+    case ObjectKeys:
     case GetCallee:
     case SetCallee:
     case GetArgumentCountIncludingThis:
@@ -197,9 +198,10 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case Flush:
     case PhantomLocal:
     case SetArgument:
+    case ArithBitNot:
     case ArithBitAnd:
     case ArithBitOr:
-    case BitXor:
+    case ArithBitXor:
     case BitLShift:
     case BitRShift:
     case BitURShift:
@@ -227,10 +229,13 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case ArithTrunc:
     case ArithUnary:
     case ValueBitAnd:
+    case ValueBitXor:
     case ValueBitOr:
     case ValueNegate:
     case ValueAdd:
     case ValueSub:
+    case ValueMul:
+    case ValueDiv:
     case TryGetById:
     case DeleteById:
     case DeleteByVal:
@@ -312,6 +317,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case NewArrayWithSpread:
     case Spread:
     case NewRegexp:
+    case NewSymbol:
     case ProfileType:
     case ProfileControlFlow:
     case CheckTypeInfoFlags:
@@ -446,6 +452,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case StringValueOf:
     case StringSlice:
     case ToLowerCase:
+    case ObjectToString:
     case GetMapBucket:
     case GetMapBucketHead:
     case GetMapBucketNext:

@@ -44,7 +44,7 @@ LibWebRTCStatsCollector::~LibWebRTCStatsCollector()
         return;
 
     callOnMainThread([callback = WTFMove(m_callback)]() mutable {
-        callback({ });
+        callback();
     });
 }
 
@@ -278,7 +278,7 @@ static inline void fillRTCIceCandidatePairStats(RTCStatsReport::IceCandidatePair
         stats.consentResponsesSent = *rtcStats.responses_sent;
 }
 
-static inline std::optional<RTCStatsReport::IceCandidateType> iceCandidateState(const std::string& state)
+static inline Optional<RTCStatsReport::IceCandidateType> iceCandidateState(const std::string& state)
 {
     if (state == "host")
         return RTCStatsReport::IceCandidateType::Host;
@@ -384,8 +384,8 @@ static inline void fillRTCPeerConnectionStats(RTCStatsReport::PeerConnectionStat
 void LibWebRTCStatsCollector::OnStatsDelivered(const rtc::scoped_refptr<const webrtc::RTCStatsReport>& rtcReport)
 {
     callOnMainThread([protectedThis = rtc::scoped_refptr<LibWebRTCStatsCollector>(this), rtcReport] {
-        auto report = RTCStatsReport::create();
-        if (!protectedThis->m_callback(report.copyRef()))
+        auto report = protectedThis->m_callback();
+        if (!report)
             return;
 
         ASSERT(report->backingMap());

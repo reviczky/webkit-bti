@@ -58,9 +58,10 @@ inline CapabilityLevel canCompile(Node* node)
     case PhantomLocal:
     case SetArgument:
     case Return:
+    case ArithBitNot:
     case ArithBitAnd:
     case ArithBitOr:
-    case BitXor:
+    case ArithBitXor:
     case BitRShift:
     case BitLShift:
     case BitURShift:
@@ -73,6 +74,7 @@ inline CapabilityLevel canCompile(Node* node)
     case GetButterfly:
     case NewObject:
     case NewStringObject:
+    case NewSymbol:
     case NewArray:
     case NewArrayWithSpread:
     case Spread:
@@ -87,10 +89,13 @@ inline CapabilityLevel canCompile(Node* node)
     case GetGlobalLexicalVariable:
     case PutGlobalVariable:
     case ValueBitAnd:
+    case ValueBitXor:
     case ValueBitOr:
     case ValueNegate:
     case ValueAdd:
     case ValueSub:
+    case ValueMul:
+    case ValueDiv:
     case StrCat:
     case ArithAdd:
     case ArithClz32:
@@ -196,6 +201,7 @@ inline CapabilityLevel canCompile(Node* node)
     case CallObjectConstructor:
     case CallStringConstructor:
     case ObjectCreate:
+    case ObjectKeys:
     case MakeRope:
     case NewArrayWithSize:
     case TryGetById:
@@ -327,6 +333,7 @@ inline CapabilityLevel canCompile(Node* node)
     case StringValueOf:
     case StringSlice:
     case ToLowerCase:
+    case ObjectToString:
     case NumberToStringWithRadix:
     case NumberToStringWithValidRadixConstant:
     case CheckSubClass:

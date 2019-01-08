@@ -83,6 +83,42 @@ enum class CompositingReason {
     EmbeddedView                           = 1 << 26,
 };
 
+enum class ScrollCoordinationRole {
+    ViewportConstrained = 1 << 0,
+    Scrolling           = 1 << 1
+};
+
+#if PLATFORM(IOS_FAMILY)
+class LegacyWebKitScrollingLayerCoordinator {
+public:
+    LegacyWebKitScrollingLayerCoordinator(ChromeClient& chromeClient, bool coordinateViewportConstainedLayers)
+        : m_chromeClient(chromeClient)
+        , m_coordinateViewportConstainedLayers(coordinateViewportConstainedLayers)
+    {
+    }
+
+    void registerAllViewportConstrainedLayers(RenderLayerCompositor&, const HashSet<RenderLayer*>&);
+    void unregisterAllViewportConstrainedLayers();
+    
+    void registerAllScrollingLayers();
+    void registerScrollingLayersNeedingUpdate();
+    void unregisterAllScrollingLayers();
+    
+    void addScrollingLayer(RenderLayer&);
+    void removeScrollingLayer(RenderLayer&, RenderLayerBacking&);
+
+    void didFlushChangesForLayer(RenderLayer&);
+
+private:
+    void updateScrollingLayer(RenderLayer&);
+
+    ChromeClient& m_chromeClient;
+    HashSet<RenderLayer*> m_scrollingLayers;
+    HashSet<RenderLayer*> m_scrollingLayersNeedingUpdate;
+    const bool m_coordinateViewportConstainedLayers;
+};
+#endif
+
 // RenderLayerCompositor manages the hierarchy of
 // composited RenderLayers. It determines which RenderLayers
 // become compositing, and creates and maintains a hierarchy of
@@ -92,6 +128,7 @@ enum class CompositingReason {
 
 class RenderLayerCompositor final : public GraphicsLayerClient, public GraphicsLayerUpdaterClient {
     WTF_MAKE_FAST_ALLOCATED;
+    friend class LegacyWebKitScrollingLayerCoordinator;
 public:
     explicit RenderLayerCompositor(RenderView&);
     virtual ~RenderLayerCompositor();
@@ -291,14 +328,6 @@ public:
     void willRemoveScrollingLayerWithBacking(RenderLayer&, RenderLayerBacking&);
     void didAddScrollingLayer(RenderLayer&);
 
-#if PLATFORM(IOS_FAMILY)
-    void registerAllViewportConstrainedLayers();
-    void unregisterAllViewportConstrainedLayers();
-
-    void registerAllScrollingLayers();
-    void unregisterAllScrollingLayers();
-#endif
-
     void resetTrackedRepaintRects();
     void setTracksRepaints(bool tracksRepaints) { m_isTrackingRepaints = tracksRepaints; }
 
@@ -446,8 +475,8 @@ private:
 
     void updateScrollCoordinationForThisFrame(ScrollingNodeID);
     ScrollingNodeID attachScrollingNode(RenderLayer&, ScrollingNodeType, ScrollingNodeID parentNodeID);
-    void updateScrollCoordinatedLayer(RenderLayer&, OptionSet<LayerScrollCoordinationRole>, OptionSet<ScrollingNodeChangeFlags>);
-    void detachScrollCoordinatedLayer(RenderLayer&, OptionSet<LayerScrollCoordinationRole>);
+    void updateScrollCoordinatedLayer(RenderLayer&, OptionSet<ScrollCoordinationRole>, OptionSet<ScrollingNodeChangeFlags>);
+    void detachScrollCoordinatedLayer(RenderLayer&, OptionSet<ScrollCoordinationRole>);
     void reattachSubframeScrollLayers();
     
     FixedPositionViewportConstraints computeFixedViewportConstraints(RenderLayer&) const;
@@ -466,6 +495,7 @@ private:
     bool hasCoordinatedScrolling() const;
     bool useCoordinatedScrollingForLayer(const RenderLayer&) const;
 
+    // FIXME: make the coordinated/async terminology consistent.
     bool isAsyncScrollableStickyLayer(const RenderLayer&, const RenderLayer** enclosingAcceleratedOverflowLayer = nullptr) const;
     bool isViewportConstrainedFixedOrStickyLayer(const RenderLayer&) const;
     
@@ -520,10 +550,6 @@ private:
     RefPtr<GraphicsLayer> m_clipLayer;
     RefPtr<GraphicsLayer> m_scrollLayer;
 
-#if PLATFORM(IOS_FAMILY)
-    HashSet<RenderLayer*> m_scrollingLayers;
-    HashSet<RenderLayer*> m_scrollingLayersNeedingUpdate;
-#endif
     HashSet<RenderLayer*> m_scrollCoordinatedLayers;
     HashSet<RenderLayer*> m_scrollCoordinatedLayersNeedingUpdate;
 
@@ -564,6 +590,9 @@ private:
     Color m_rootExtendedBackgroundColor;
 
     HashMap<ScrollingNodeID, RenderLayer*> m_scrollingNodeToLayerMap;
+#if PLATFORM(IOS_FAMILY)
+    std::unique_ptr<LegacyWebKitScrollingLayerCoordinator> m_legacyScrollingLayerCoordinator;
+#endif
 };
 
 void paintScrollbar(Scrollbar*, GraphicsContext&, const IntRect& clip);

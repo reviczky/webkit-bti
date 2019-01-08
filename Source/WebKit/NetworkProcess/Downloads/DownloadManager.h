@@ -69,8 +69,11 @@ public:
         virtual void didCreateDownload() = 0;
         virtual void didDestroyDownload() = 0;
         virtual IPC::Connection* downloadProxyConnection() = 0;
+        virtual IPC::Connection* parentProcessConnectionForDownloads() = 0;
         virtual AuthenticationManager& downloadsAuthenticationManager() = 0;
         virtual void pendingDownloadCanceled(DownloadID) = 0;
+        virtual void ref() const = 0;
+        virtual void deref() const = 0;
     };
 
     explicit DownloadManager(Client&);
@@ -85,6 +88,9 @@ public:
     void resumeDownload(PAL::SessionID, DownloadID, const IPC::DataReference& resumeData, const String& path, SandboxExtension::Handle&&);
 
     void cancelDownload(DownloadID);
+#if PLATFORM(COCOA)
+    void publishDownloadProgress(DownloadID, const URL&, SandboxExtension::Handle&&);
+#endif
     
     Download* download(DownloadID downloadID) { return m_downloads.get(downloadID); }
 
@@ -97,6 +103,8 @@ public:
 
     IPC::Connection* downloadProxyConnection();
     AuthenticationManager& downloadsAuthenticationManager();
+    
+    Client& client() { return m_client; }
 
 private:
     Client& m_client;

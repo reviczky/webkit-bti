@@ -240,7 +240,6 @@ op_group :ProfiledBinaryOp,
         :mul,
         :div,
         :sub,
-        :bitxor,
     ],
     args: {
         dst: VirtualRegister,
@@ -259,11 +258,21 @@ op_group :ValueProfiledBinaryOp,
     [
         :bitand,
         :bitor,
+        :bitxor,
     ],
     args: {
         dst: VirtualRegister,
         lhs: VirtualRegister,
         rhs: VirtualRegister,
+    },
+    metadata: {
+        profile: ValueProfile
+    }
+
+op :bitnot,
+    args: {
+        dst: VirtualRegister,
+        operand: VirtualRegister,
     },
     metadata: {
         profile: ValueProfile
@@ -404,8 +413,8 @@ op :get_by_id,
     },
     metadata: {
         mode: GetByIdMode,
-        modeMetadata: GetByIdModeMetadata,
         hitCountForLLIntCaching: unsigned,
+        modeMetadata: GetByIdModeMetadata,
         profile: ValueProfile,
     }
 
@@ -464,8 +473,8 @@ op :put_by_id,
         oldStructure: StructureID,
         offset: unsigned,
         newStructure: StructureID,
-        structureChain: WriteBarrierBase[StructureChain],
         flags: PutByIdFlags,
+        structureChain: WriteBarrierBase[StructureChain],
     },
     metadata_initializers: {
         flags: :flags

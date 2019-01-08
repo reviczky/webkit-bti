@@ -27,6 +27,7 @@
 #include "APIWebsiteDataStore.h"
 
 #include <WebCore/FileSystem.h>
+#include <wtf/glib/GUniquePtr.h>
 
 #if PLATFORM(GTK)
 #define BASE_DIRECTORY "webkitgtk"
@@ -71,6 +72,11 @@ WTF::String WebsiteDataStore::defaultLocalStorageDirectory()
 WTF::String WebsiteDataStore::defaultMediaKeysStorageDirectory()
 {
     return websiteDataDirectoryFileSystemRepresentation(BASE_DIRECTORY G_DIR_SEPARATOR_S "mediakeys");
+}
+
+String WebsiteDataStore::defaultDeviceIdHashSaltsStorageDirectory()
+{
+    return websiteDataDirectoryFileSystemRepresentation(BASE_DIRECTORY G_DIR_SEPARATOR_S "deviceidhashsalts");
 }
 
 WTF::String WebsiteDataStore::defaultWebSQLDatabaseDirectory()
@@ -156,27 +162,38 @@ WTF::String WebsiteDataStore::legacyDefaultMediaKeysStorageDirectory()
     return defaultMediaKeysStorageDirectory();
 }
 
+String WebsiteDataStore::legacyDefaultDeviceIdHashSaltsStorageDirectory()
+{
+#if PLATFORM(WPE)
+    GUniquePtr<gchar> deviceIdHashSaltsStorageDirectory(g_build_filename(g_get_user_data_dir(), "wpe", "deviceidhashsalts", nullptr));
+    return WebCore::FileSystem::stringFromFileSystemRepresentation(deviceIdHashSaltsStorageDirectory.get());
+#endif
+    return defaultDeviceIdHashSaltsStorageDirectory();
+}
+
 WTF::String WebsiteDataStore::legacyDefaultJavaScriptConfigurationDirectory()
 {
     GUniquePtr<gchar> javaScriptCoreConfigDirectory(g_build_filename(g_get_user_data_dir(), BASE_DIRECTORY, "JavaScriptCoreDebug", nullptr));
     return WebCore::FileSystem::stringFromFileSystemRepresentation(javaScriptCoreConfigDirectory.get());
 }
 
-WebKit::WebsiteDataStore::Configuration WebsiteDataStore::defaultDataStoreConfiguration()
+Ref<WebKit::WebsiteDataStoreConfiguration> WebsiteDataStore::defaultDataStoreConfiguration()
 {
-    WebKit::WebsiteDataStore::Configuration configuration;
+    auto configuration = WebKit::WebsiteDataStoreConfiguration::create();
 
-    configuration.applicationCacheDirectory = defaultApplicationCacheDirectory();
-    configuration.networkCacheDirectory = defaultNetworkCacheDirectory();
+    configuration->setApplicationCacheDirectory(defaultApplicationCacheDirectory());
+    configuration->setNetworkCacheDirectory(defaultNetworkCacheDirectory());
 
-    configuration.indexedDBDatabaseDirectory = defaultIndexedDBDatabaseDirectory();
-    configuration.serviceWorkerRegistrationDirectory = defaultServiceWorkerRegistrationDirectory();
-    configuration.webSQLDatabaseDirectory = defaultWebSQLDatabaseDirectory();
-    configuration.localStorageDirectory = defaultLocalStorageDirectory();
-    configuration.mediaKeysStorageDirectory = defaultMediaKeysStorageDirectory();
-    configuration.resourceLoadStatisticsDirectory = defaultResourceLoadStatisticsDirectory();
+    configuration->setIndexedDBDatabaseDirectory(defaultIndexedDBDatabaseDirectory());
+    configuration->setServiceWorkerRegistrationDirectory(defaultServiceWorkerRegistrationDirectory());
+    configuration->setWebSQLDatabaseDirectory(defaultWebSQLDatabaseDirectory());
+    configuration->setLocalStorageDirectory(defaultLocalStorageDirectory());
+    configuration->setMediaKeysStorageDirectory(defaultMediaKeysStorageDirectory());
+    configuration->setResourceLoadStatisticsDirectory(defaultResourceLoadStatisticsDirectory());
+    configuration->setDeviceIdHashSaltsStorageDirectory(defaultDeviceIdHashSaltsStorageDirectory());
 
     return configuration;
 }
 
 } // namespace API
+

@@ -367,7 +367,7 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
             return;
 
         // If there's no reason to have a selection area, remove the DOM element.
-        let indicatesTreeOutlineState = this.treeOutline && (this.treeOutline.dragOverTreeElement === this || this.treeOutline.selectedTreeElement === this || this._animatingHighlight);
+        let indicatesTreeOutlineState = this.treeOutline && (this.treeOutline.dragOverTreeElement === this || this.selected || this._animatingHighlight);
         if (!this.hovered && !this.pseudoClassesEnabled && !indicatesTreeOutlineState) {
             if (this._selectionElement) {
                 this._selectionElement.remove();
@@ -423,7 +423,7 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
     insertChildElement(child, index, closingTag)
     {
         var newElement = new WI.DOMTreeElement(child, closingTag);
-        newElement.selectable = this.treeOutline._selectEnabled;
+        newElement.selectable = this.treeOutline.selectable;
         this.insertChild(newElement, index);
         return newElement;
     }
@@ -625,34 +625,6 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
         listItemElement.classList.add(WI.DOMTreeElement.HighlightStyleClassName);
     }
 
-    onselect(treeElement, selectedByUser)
-    {
-        this.treeOutline.suppressRevealAndSelect = true;
-        this.treeOutline.selectDOMNode(this.representedObject, selectedByUser);
-        if (selectedByUser)
-            WI.domManager.highlightDOMNode(this.representedObject.id);
-        this.treeOutline.updateSelection();
-        this.treeOutline.suppressRevealAndSelect = false;
-    }
-
-    ondeselect(treeElement)
-    {
-        this.treeOutline.selectDOMNode(null);
-    }
-
-    ondelete()
-    {
-        if (!this.editable)
-            return false;
-
-        var startTagTreeElement = this.treeOutline.findTreeElement(this.representedObject);
-        if (startTagTreeElement)
-            startTagTreeElement.remove();
-        else
-            this.remove();
-        return true;
-    }
-
     onenter()
     {
         if (!this.editable)
@@ -669,16 +641,16 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
         return true;
     }
 
-    selectOnMouseDown(event)
+    canSelectOnMouseDown(event)
     {
-        super.selectOnMouseDown(event);
-
         if (this._editing)
-            return;
+            return false;
 
         // Prevent selecting the nearest word on double click.
         if (event.detail >= 2)
-            event.preventDefault();
+            return false;
+
+        return true;
     }
 
     ondblclick(event)
@@ -823,7 +795,9 @@ WI.DOMTreeElement = class DOMTreeElement extends WI.TreeElement
 
         subMenus.edit.appendItem(WI.UIString("HTML"), this._editAsHTML.bind(this), !this.editable);
         subMenus.copy.appendItem(WI.UIString("HTML"), this._copyHTML.bind(this), node.isPseudoElement());
-        subMenus.delete.appendItem(WI.UIString("Node"), this.remove.bind(this), !this.editable);
+
+        if (!this.selected || this.treeOutline.selectedTreeElements.length === 1)
+            subMenus.delete.appendItem(WI.UIString("Node"), this.remove.bind(this), !this.editable);
 
         for (let subMenu of Object.values(subMenus))
             contextMenu.pushItem(subMenu);

@@ -112,13 +112,9 @@ WI.AuditTestCase = class AuditTestCase extends WI.AuditTestBase
             doNotPauseOnExceptionsAndMuteConsole: true,
         };
 
-        try {
-            metadata.startTimestamp = new Date;
-            let evaluateResponse = await RuntimeAgent.evaluate.invoke(evaluateArguments);
-            metadata.endTimestamp = new Date;
-
-            let remoteObject = WI.RemoteObject.fromPayload(evaluateResponse.result, WI.mainTarget);
-            if (evaluateResponse.wasThrown || (remoteObject.type === "object" && remoteObject.subtype === "error"))
+        async function parseResponse(response) {
+            let remoteObject = WI.RemoteObject.fromPayload(response.result, WI.mainTarget);
+            if (response.wasThrown || (remoteObject.type === "object" && remoteObject.subtype === "error"))
                 addError(remoteObject.description);
             else if (remoteObject.type === "boolean")
                 setLevel(remoteObject.value ? WI.AuditTestCaseResult.Level.Pass : WI.AuditTestCaseResult.Level.Fail);
@@ -142,9 +138,9 @@ WI.AuditTestCase = class AuditTestCase extends WI.AuditTestBase
                     function addErrorForValueType(valueType) {
                         let value = null;
                         if (valueType === "object" || valueType === "array")
-                            value = WI.UIString("“%s“ must be an %s");
+                            value = WI.UIString("\u0022%s\u0022 must be an %s");
                         else
-                            value = WI.UIString("“%s“ must be a %s");
+                            value = WI.UIString("\u0022%s\u0022 must be a %s");
                         addError(value.format(key, valueType));
                     }
 
@@ -195,7 +191,7 @@ WI.AuditTestCase = class AuditTestCase extends WI.AuditTestBase
 
                 await resultArrayForEach("domNodes", async (item) => {
                     if (!item || !item.value || item.value.type !== "object" || item.value.subtype !== "node") {
-                        addError(WI.UIString("All items in “%s“ must be valid DOM nodes").format(WI.unlocalizedString("domNodes")));
+                        addError(WI.UIString("All items in \u0022%s\u0022 must be valid DOM nodes").format(WI.unlocalizedString("domNodes")));
                         return;
                     }
 
@@ -215,7 +211,7 @@ WI.AuditTestCase = class AuditTestCase extends WI.AuditTestBase
 
                 await resultArrayForEach("domAttributes", (item) => {
                     if (!item || !item.value || item.value.type !== "string" || !item.value.value.length) {
-                        addError(WI.UIString("All items in “%s“ must be non-empty strings").format(WI.unlocalizedString("domAttributes")));
+                        addError(WI.UIString("All items in \u0022%s\u0022 must be non-empty strings").format(WI.unlocalizedString("domAttributes")));
                         return;
                     }
 
@@ -226,7 +222,7 @@ WI.AuditTestCase = class AuditTestCase extends WI.AuditTestBase
 
                 await resultArrayForEach("errors", (item) => {
                     if (!item || !item.value || item.value.type !== "object" || item.value.subtype !== "error") {
-                        addError(WI.UIString("All items in “%s“ must be error objects").format(WI.unlocalizedString("errors")));
+                        addError(WI.UIString("All items in \u0022%s\u0022 must be error objects").format(WI.unlocalizedString("errors")));
                         return;
                     }
 
@@ -234,6 +230,27 @@ WI.AuditTestCase = class AuditTestCase extends WI.AuditTestBase
                 });
             } else
                 addError(WI.UIString("Return value is not an object, string, or boolean"));
+        }
+
+        try {
+            metadata.startTimestamp = new Date;
+            let response = await RuntimeAgent.evaluate.invoke(evaluateArguments);
+            metadata.endTimestamp = new Date;
+
+            if (response.result.type === "object" && response.result.className === "Promise") {
+                if (WI.RuntimeManager.supportsAwaitPromise()) {
+                    metadata.asyncTimestamp = metadata.endTimestamp;
+                    response = await RuntimeAgent.awaitPromise(response.result.objectId);
+                    metadata.endTimestamp = new Date;
+                } else {
+                    response = null;
+                    addError(WI.UIString("Async audits are not supported."));
+                    setLevel(WI.AuditTestCaseResult.Level.Unsupported);
+                }
+            }
+
+            if (response)
+                await parseResponse(response);
         } catch (error) {
             metadata.endTimestamp = new Date;
             addError(error.message);

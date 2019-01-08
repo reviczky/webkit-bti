@@ -1045,6 +1045,11 @@ public:
         xor64(dataTempRegister, dest);
     }
 
+    void not32(RegisterID srcDest)
+    {
+        m_assembler.mvn<32>(srcDest, srcDest);
+    }
+
     void not32(RegisterID src, RegisterID dest)
     {
         m_assembler.mvn<32>(dest, src);
@@ -3830,7 +3835,7 @@ public:
         return static_cast<RelationalCondition>(Assembler::invert(static_cast<Assembler::Condition>(cond)));
     }
 
-    static std::optional<ResultCondition> commuteCompareToZeroIntoTest(RelationalCondition cond)
+    static Optional<ResultCondition> commuteCompareToZeroIntoTest(RelationalCondition cond)
     {
         switch (cond) {
         case Equal:
@@ -3843,7 +3848,7 @@ public:
             return PositiveOrZero;
             break;
         default:
-            return std::nullopt;
+            return WTF::nullopt;
         }
     }
 

@@ -40,7 +40,7 @@
 #include "PlatformMediaSession.h"
 #include "SecurityOriginHash.h"
 #include "Timer.h"
-#include "URL.h"
+#include <wtf/URL.h>
 #include "VideoTrackPrivate.h"
 #include <JavaScriptCore/Uint8Array.h>
 #include <wtf/Function.h>
@@ -544,7 +544,7 @@ public:
 
     unsigned long long fileSize() const;
 
-    std::optional<VideoPlaybackQualityMetrics> videoPlaybackQualityMetrics();
+    Optional<VideoPlaybackQualityMetrics> videoPlaybackQualityMetrics();
 
     void handlePlaybackCommand(PlatformMediaSession::RemoteControlCommandType);
     String sourceApplicationIdentifier() const;

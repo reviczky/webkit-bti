@@ -109,6 +109,8 @@ IGNORE_WARNINGS_END
     macro(OpGetFromScope) \
     macro(OpBitand) \
     macro(OpBitor) \
+    macro(OpBitnot) \
+    macro(OpBitxor) \
 
 #define FOR_EACH_OPCODE_WITH_ARRAY_PROFILE(macro) \
     macro(OpHasIndexedProperty) \
@@ -249,9 +251,7 @@ inline bool isThrow(OpcodeID opcodeID)
 }
 
 unsigned metadataSize(OpcodeID);
-#if CPU(NEEDS_ALIGNED_ACCESS)
 unsigned metadataAlignment(OpcodeID);
-#endif
 
 } // namespace JSC
 

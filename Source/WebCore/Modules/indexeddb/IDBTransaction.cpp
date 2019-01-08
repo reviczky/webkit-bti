@@ -54,7 +54,7 @@
 #include "ScriptState.h"
 #include "SerializedScriptValue.h"
 #include "TransactionOperation.h"
-
+#include <wtf/CompletionHandler.h>
 
 namespace WebCore {
 using namespace JSC;
@@ -372,13 +372,13 @@ void IDBTransaction::removeRequest(IDBRequest& request)
     m_openRequests.remove(&request);
 }
 
-void IDBTransaction::scheduleOperation(RefPtr<IDBClient::TransactionOperation>&& operation)
+void IDBTransaction::scheduleOperation(Ref<IDBClient::TransactionOperation>&& operation)
 {
     ASSERT(!m_transactionOperationMap.contains(operation->identifier()));
     ASSERT(&m_database->originThread() == &Thread::current());
 
     auto identifier = operation->identifier();
-    m_pendingTransactionOperationQueue.append(operation);
+    m_pendingTransactionOperationQueue.append(operation.copyRef());
     m_transactionOperationMap.set(identifier, WTFMove(operation));
 
     schedulePendingOperationTimer();
@@ -878,7 +878,7 @@ void IDBTransaction::didIterateCursorOnServer(IDBRequest& request, const IDBResu
     completeCursorRequest(request, resultData);
 }
 
-Ref<IDBRequest> IDBTransaction::requestGetAllObjectStoreRecords(JSC::ExecState& state, IDBObjectStore& objectStore, const IDBKeyRangeData& keyRangeData, IndexedDB::GetAllType getAllType, std::optional<uint32_t> count)
+Ref<IDBRequest> IDBTransaction::requestGetAllObjectStoreRecords(JSC::ExecState& state, IDBObjectStore& objectStore, const IDBKeyRangeData& keyRangeData, IndexedDB::GetAllType getAllType, Optional<uint32_t> count)
 {
     LOG(IndexedDB, "IDBTransaction::requestGetAllObjectStoreRecords");
     ASSERT(isActive());
@@ -897,7 +897,7 @@ Ref<IDBRequest> IDBTransaction::requestGetAllObjectStoreRecords(JSC::ExecState& 
     return request;
 }
 
-Ref<IDBRequest> IDBTransaction::requestGetAllIndexRecords(JSC::ExecState& state, IDBIndex& index, const IDBKeyRangeData& keyRangeData, IndexedDB::GetAllType getAllType, std::optional<uint32_t> count)
+Ref<IDBRequest> IDBTransaction::requestGetAllIndexRecords(JSC::ExecState& state, IDBIndex& index, const IDBKeyRangeData& keyRangeData, IndexedDB::GetAllType getAllType, Optional<uint32_t> count)
 {
     LOG(IndexedDB, "IDBTransaction::requestGetAllIndexRecords");
     ASSERT(isActive());
@@ -1223,7 +1223,7 @@ void IDBTransaction::putOrAddOnServer(IDBClient::TransactionOperation& operation
     // stop future requests from going to the server ahead of it.
     operation.setNextRequestCanGoToServer(false);
 
-    value->writeBlobsToDiskForIndexedDB([protectedThis = makeRef(*this), this, protectedOperation = Ref<IDBClient::TransactionOperation>(operation), keyData = IDBKeyData(key.get()).isolatedCopy(), overwriteMode](const IDBValue& idbValue) mutable {
+    value->writeBlobsToDiskForIndexedDB([protectedThis = makeRef(*this), this, protectedOperation = Ref<IDBClient::TransactionOperation>(operation), keyData = IDBKeyData(key.get()).isolatedCopy(), overwriteMode](IDBValue&& idbValue) mutable {
         ASSERT(&originThread() == &Thread::current());
         ASSERT(isMainThread());
         if (idbValue.data().data()) {

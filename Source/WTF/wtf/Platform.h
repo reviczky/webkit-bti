@@ -706,10 +706,6 @@
 
 #endif /* OS(DARWIN) */
 
-#if PLATFORM(COCOA)
-#define ENABLE_RESOURCE_LOAD_STATISTICS 1
-#endif
-
 #if OS(DARWIN) || OS(FUCHSIA) || ((OS(FREEBSD) || defined(__GLIBC__) || defined(__BIONIC__)) && (CPU(X86) || CPU(X86_64) || CPU(ARM) || CPU(ARM64) || CPU(MIPS)))
 #define HAVE_MACHINE_CONTEXT 1
 #endif
@@ -963,6 +959,14 @@
 #define JIT_OPERATION CDECL
 #else
 #define JIT_OPERATION
+#endif
+
+#ifndef ENABLE_SEPARATED_WX_HEAP
+#if (!ENABLE(FAST_JIT_PERMISSIONS) || !CPU(ARM64E)) && PLATFORM(IOS_FAMILY) && CPU(ARM64)
+#define ENABLE_SEPARATED_WX_HEAP 1
+#else
+#define ENABLE_SEPARATED_WX_HEAP 0
+#endif
 #endif
 
 /* Configure the interpreter */
@@ -1374,4 +1378,91 @@
 
 #if PLATFORM(COCOA) && USE(CA) && !PLATFORM(IOS_FAMILY_SIMULATOR)
 #define USE_IOSURFACE_CANVAS_BACKING_STORE 1
+#endif
+
+/* FIXME: Should this be enabled or IOS_FAMILY, not just IOS? */
+#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400) || PLATFORM(IOS)
+#define HAVE_FOUNDATION_WITH_SAVE_COOKIES_WITH_COMPLETION_HANDLER 1
+#endif
+
+/* FIXME: Should this be enabled for IOS_FAMILY, not just IOS? */
+#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400) || PLATFORM(IOS)
+#define HAVE_FOUNDATION_WITH_SAME_SITE_COOKIE_SUPPORT 1
+#endif
+
+#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED < 101400
+#define HAVE_NSHTTPCOOKIESTORAGE__INITWITHIDENTIFIER_WITH_INACCURATE_NULLABILITY 1
+#endif
+
+#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 101302 && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101300) || PLATFORM(IOS_FAMILY)
+#define HAVE_CFNETWORK_WITH_CONTENT_ENCODING_SNIFFING_OVERRIDE 1
+/* The override isn't needed on iOS family, as the default behavior is to not sniff. */
+/* FIXME: This should probably be enabled on 10.13.2 and newer, not just 10.14 and newer. */
+#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+#define USE_CFNETWORK_CONTENT_ENCODING_SNIFFING_OVERRIDE 1
+#endif
+#endif
+
+#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 101302 && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101300) || PLATFORM(IOS_FAMILY)
+#define HAVE_CFNETWORK_WITH_IGNORE_HSTS 1
+#endif
+
+#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101300 && __MAC_OS_X_VERSION_MAX_ALLOWED >= 101302) || PLATFORM(IOS_FAMILY)
+#define HAVE_CFNETWORK_WITH_AUTO_ADDED_HTTP_HEADER_SUPPRESSION_SUPPORT 1
+/* FIXME: Does this work, and is this needed on other iOS family platforms? */
+#if PLATFORM(MAC) || PLATFORM(IOS)
+#define USE_CFNETWORK_AUTO_ADDED_HTTP_HEADER_SUPPRESSION 1
+#endif
+#endif
+
+#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+#define HAVE_CG_FONT_RENDERING_GET_FONT_SMOOTHING_DISABLED 1
+#endif
+
+#ifdef __APPLE__
+#define HAVE_FUNC_USLEEP 1
+#endif
+
+#if PLATFORM(MAC) || PLATFORM(WPE)
+/* FIXME: This really needs a descriptive name, this "new theme" was added in 2008. */
+#define USE_NEW_THEME 1
+#endif
+
+#if PLATFORM(MAC)
+#define HAVE_WINDOW_SERVER_OCCLUSION_NOTIFICATIONS 1
+#endif
+
+#if PLATFORM(COCOA)
+#define HAVE_SEC_ACCESS_CONTROL 1
+#endif
+
+#if PLATFORM(IOS)
+/* FIXME: SafariServices.framework exists on macOS. It is only used by WebKit on iOS, so the behavior is correct, but the name is misleading. */
+#define HAVE_SAFARI_SERVICES_FRAMEWORK 1
+#endif
+
+#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101300 && !defined(__i386__)) || PLATFORM(IOS) || PLATFORM(WATCHOS)
+#define HAVE_SAFE_BROWSING 1
+#endif
+
+#if PLATFORM(IOS)
+#define HAVE_LINK_PREVIEW 1
+#endif
+
+#if PLATFORM(COCOA)
+/* FIXME: This is a USE style macro, as it triggers the use of CFURLConnection framework stubs. */
+/* FIXME: Is this still necessary? CFURLConnection isn't used on Cocoa platforms any more. */
+#define ENABLE_SEC_ITEM_SHIM 1
+#endif
+
+#if (PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400))
+#define HAVE_ACCESSIBILITY_SUPPORT 1
+#endif
+
+#if PLATFORM(MAC)
+#define ENABLE_FULL_KEYBOARD_ACCESS 1
+#endif
+
+#if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400)
+#define HAVE_AUTHORIZATION_STATUS_FOR_MEDIA_TYPE 1
 #endif

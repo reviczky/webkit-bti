@@ -46,11 +46,11 @@
 #include "HTMLOptGroupElement.h"
 #include "HTMLSelectElement.h"
 #include "HitTestResult.h"
-#include "LayoutState.h"
 #include "NodeRenderStyle.h"
 #include "Page.h"
 #include "PaintInfo.h"
 #include "RenderLayer.h"
+#include "RenderLayoutState.h"
 #include "RenderScrollbar.h"
 #include "RenderText.h"
 #include "RenderTheme.h"
@@ -130,7 +130,7 @@ void RenderListBox::updateFromElement()
     if (m_optionsChanged) {
         float width = 0;
         auto& normalFont = style().fontCascade();
-        std::optional<FontCascade> boldFont;
+        Optional<FontCascade> boldFont;
         for (auto* element : selectElement().listItems()) {
             String text;
             WTF::Function<const FontCascade&()> selectFont = [&normalFont] () -> const FontCascade& {
@@ -302,7 +302,7 @@ LayoutRect RenderListBox::itemBoundingBoxRect(const LayoutPoint& additionalOffse
 void RenderListBox::paintItem(PaintInfo& paintInfo, const LayoutPoint& paintOffset, const PaintFunction& paintFunction)
 {
     int listItemsSize = numItems();
-    int firstVisibleItem = m_indexOfFirstVisibleItemInsidePaddingTopArea.value_or(m_indexOffset);
+    int firstVisibleItem = m_indexOfFirstVisibleItemInsidePaddingTopArea.valueOr(m_indexOffset);
     int endIndex = firstVisibleItem + numVisibleItems(ConsiderPadding::Yes);
     for (int i = firstVisibleItem; i < listItemsSize && i < endIndex; ++i)
         paintFunction(paintInfo, paintOffset, i);
@@ -621,7 +621,7 @@ bool RenderListBox::scrollToRevealElementAtListIndex(int index)
 
 bool RenderListBox::listIndexIsVisible(int index)
 {
-    int firstIndex = m_indexOfFirstVisibleItemInsidePaddingTopArea.value_or(m_indexOffset);
+    int firstIndex = m_indexOfFirstVisibleItemInsidePaddingTopArea.valueOr(m_indexOffset);
     int endIndex = m_indexOfFirstVisibleItemInsidePaddingBottomArea
         ? m_indexOfFirstVisibleItemInsidePaddingBottomArea.value() + numberOfVisibleItemsInPaddingBottom()
         : m_indexOffset + numVisibleItems();
@@ -693,8 +693,8 @@ int RenderListBox::numberOfVisibleItemsInPaddingBottom() const
 
 void RenderListBox::computeFirstIndexesVisibleInPaddingTopBottomAreas()
 {
-    m_indexOfFirstVisibleItemInsidePaddingTopArea = std::nullopt;
-    m_indexOfFirstVisibleItemInsidePaddingBottomArea = std::nullopt;
+    m_indexOfFirstVisibleItemInsidePaddingTopArea = WTF::nullopt;
+    m_indexOfFirstVisibleItemInsidePaddingBottomArea = WTF::nullopt;
 
     int maximumNumberOfItemsThatFitInPaddingTopArea = paddingTop() / itemHeight();
     if (maximumNumberOfItemsThatFitInPaddingTopArea) {

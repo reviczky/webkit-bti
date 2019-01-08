@@ -26,6 +26,7 @@
 #include <wtf/HashMap.h>
 #include <wtf/RunLoop.h>
 #include <wtf/Seconds.h>
+#include <wtf/WeakPtr.h>
 
 namespace WebCore {
 class CaptureDevice;
@@ -38,7 +39,7 @@ namespace WebKit {
 
 class WebPageProxy;
 
-class UserMediaPermissionRequestManagerProxy {
+class UserMediaPermissionRequestManagerProxy : public CanMakeWeakPtr<UserMediaPermissionRequestManagerProxy> {
 public:
     explicit UserMediaPermissionRequestManagerProxy(WebPageProxy&);
     ~UserMediaPermissionRequestManagerProxy();
@@ -75,7 +76,7 @@ private:
     const UserMediaPermissionRequestProxy* searchForGrantedRequest(uint64_t frameID, const WebCore::SecurityOrigin& userMediaDocumentOrigin, const WebCore::SecurityOrigin& topLevelDocumentOrigin, bool needsAudio, bool needsVideo) const;
     bool wasRequestDenied(uint64_t mainFrameID, const WebCore::SecurityOrigin& userMediaDocumentOrigin, const WebCore::SecurityOrigin& topLevelDocumentOrigin, bool needsAudio, bool needsVideo, bool needsScreenCapture);
 
-    void getUserMediaPermissionInfo(uint64_t userMediaID, uint64_t frameID, UserMediaPermissionCheckProxy::CompletionHandler&&, Ref<WebCore::SecurityOrigin>&& userMediaDocumentOrigin, Ref<WebCore::SecurityOrigin>&& topLevelDocumentOrigin);
+    void getUserMediaPermissionInfo(uint64_t requestID, uint64_t frameID, UserMediaPermissionCheckProxy::CompletionHandler&&, Ref<WebCore::SecurityOrigin>&& userMediaDocumentOrigin, Ref<WebCore::SecurityOrigin>&& topLevelDocumentOrigin);
 
     enum class RequestAction {
         Deny,
@@ -83,6 +84,8 @@ private:
         Prompt
     };
     RequestAction getRequestAction(uint64_t frameID, WebCore::SecurityOrigin& userMediaDocumentOrigin, WebCore::SecurityOrigin& topLevelDocumentOrigin, const WebCore::MediaStreamRequest&, Vector<WebCore::CaptureDevice>& audioDevices, Vector<WebCore::CaptureDevice>& videoDevices);
+
+    bool wasGrantedVideoOrAudioAccess(uint64_t, const WebCore::SecurityOrigin& userMediaDocumentOrigin, const WebCore::SecurityOrigin& topLevelDocumentOrigin);
 #endif
 
     void watchdogTimerFired();
@@ -111,6 +114,7 @@ private:
     WebCore::MediaProducer::MediaStateFlags m_captureState { WebCore::MediaProducer::IsNotPlaying };
     RunLoop::Timer<UserMediaPermissionRequestManagerProxy> m_watchdogTimer;
     Seconds m_currentWatchdogInterval;
+    bool m_hasFilteredDeviceList { false };
 };
 
 } // namespace WebKit

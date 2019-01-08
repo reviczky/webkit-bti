@@ -46,6 +46,7 @@
 #include "HTMLImageElement.h"
 #include "HTMLNames.h"
 #include "IndentOutdentCommand.h"
+#include "InsertEditableImageCommand.h"
 #include "InsertListCommand.h"
 #include "InsertNestedListCommand.h"
 #include "Page.h"
@@ -141,16 +142,16 @@ static bool executeToggleStyle(Frame& frame, EditorCommandSource source, EditAct
 
 static bool executeApplyParagraphStyle(Frame& frame, EditorCommandSource source, EditAction action, CSSPropertyID propertyID, const String& propertyValue)
 {
-    RefPtr<MutableStyleProperties> style = MutableStyleProperties::create();
+    auto style = MutableStyleProperties::create();
     style->setProperty(propertyID, propertyValue);
     // FIXME: We don't call shouldApplyStyle when the source is DOM; is there a good reason for that?
     switch (source) {
     case CommandFromMenuOrKeyBinding:
-        frame.editor().applyParagraphStyleToSelection(style.get(), action);
+        frame.editor().applyParagraphStyleToSelection(style.ptr(), action);
         return true;
     case CommandFromDOM:
     case CommandFromDOMWithUserInterface:
-        frame.editor().applyParagraphStyle(style.get());
+        frame.editor().applyParagraphStyle(style.ptr());
         return true;
     }
     ASSERT_NOT_REACHED();
@@ -185,7 +186,7 @@ static bool expandSelectionToGranularity(Frame& frame, TextGranularity granulari
     EAffinity affinity = selection.affinity();
     if (!frame.editor().client()->shouldChangeSelectedRange(oldRange.get(), newRange.get(), affinity, false))
         return false;
-    frame.selection().setSelectedRange(newRange.get(), affinity, true);
+    frame.selection().setSelectedRange(newRange.get(), affinity, FrameSelection::ShouldCloseTyping::Yes);
     return true;
 }
 
@@ -355,7 +356,7 @@ static bool executeDeleteToMark(Frame& frame, Event*, EditorCommandSource, const
     RefPtr<Range> mark = frame.editor().mark().toNormalizedRange();
     FrameSelection& selection = frame.selection();
     if (mark && frame.editor().selectedRange()) {
-        bool selected = selection.setSelectedRange(unionDOMRanges(*mark, *frame.editor().selectedRange()).get(), DOWNSTREAM, true);
+        bool selected = selection.setSelectedRange(unionDOMRanges(*mark, *frame.editor().selectedRange()).get(), DOWNSTREAM, FrameSelection::ShouldCloseTyping::Yes);
         ASSERT(selected);
         if (!selected)
             return false;
@@ -478,6 +479,13 @@ static bool executeInsertImage(Frame& frame, Event*, EditorCommandSource, const 
     return executeInsertNode(frame, WTFMove(image));
 }
 
+static bool executeInsertEditableImage(Frame& frame, Event*, EditorCommandSource, const String&)
+{
+    ASSERT(frame.document());
+    InsertEditableImageCommand::create(*frame.document())->apply();
+    return true;
+}
+
 static bool executeInsertLineBreak(Frame& frame, Event* event, EditorCommandSource source, const String&)
 {
     switch (source) {
@@ -574,27 +582,27 @@ static bool executeJustifyRight(Frame& frame, Event*, EditorCommandSource source
 
 static bool executeMakeTextWritingDirectionLeftToRight(Frame& frame, Event*, EditorCommandSource, const String&)
 {
-    RefPtr<MutableStyleProperties> style = MutableStyleProperties::create();
+    auto style = MutableStyleProperties::create();
     style->setProperty(CSSPropertyUnicodeBidi, CSSValueEmbed);
     style->setProperty(CSSPropertyDirection, CSSValueLtr);
-    frame.editor().applyStyle(style.get(), EditAction::SetWritingDirection);
+    frame.editor().applyStyle(style.ptr(), EditAction::SetWritingDirection);
     return true;
 }
 
 static bool executeMakeTextWritingDirectionNatural(Frame& frame, Event*, EditorCommandSource, const String&)
 {
-    RefPtr<MutableStyleProperties> style = MutableStyleProperties::create();
+    auto style = MutableStyleProperties::create();
     style->setProperty(CSSPropertyUnicodeBidi, CSSValueNormal);
-    frame.editor().applyStyle(style.get(), EditAction::SetWritingDirection);
+    frame.editor().applyStyle(style.ptr(), EditAction::SetWritingDirection);
     return true;
 }
 
 static bool executeMakeTextWritingDirectionRightToLeft(Frame& frame, Event*, EditorCommandSource, const String&)
 {
-    RefPtr<MutableStyleProperties> style = MutableStyleProperties::create();
+    auto style = MutableStyleProperties::create();
     style->setProperty(CSSPropertyUnicodeBidi, CSSValueEmbed);
     style->setProperty(CSSPropertyDirection, CSSValueRtl);
-    frame.editor().applyStyle(style.get(), EditAction::SetWritingDirection);
+    frame.editor().applyStyle(style.ptr(), EditAction::SetWritingDirection);
     return true;
 }
 
@@ -1030,7 +1038,7 @@ static bool executeSelectToMark(Frame& frame, Event*, EditorCommandSource, const
         PAL::systemBeep();
         return false;
     }
-    frame.selection().setSelectedRange(unionDOMRanges(*mark, *selection).get(), DOWNSTREAM, true);
+    frame.selection().setSelectedRange(unionDOMRanges(*mark, *selection).get(), DOWNSTREAM, FrameSelection::ShouldCloseTyping::Yes);
     return true;
 }
 
@@ -1094,13 +1102,15 @@ static bool executeSwapWithMark(Frame& frame, Event*, EditorCommandSource, const
     return true;
 }
 
-#if PLATFORM(MAC)
+#if PLATFORM(COCOA)
+
 static bool executeTakeFindStringFromSelection(Frame& frame, Event*, EditorCommandSource, const String&)
 {
     frame.editor().takeFindStringFromSelection();
     return true;
 }
-#endif
+
+#endif // PLATFORM(COCOA)
 
 static bool executeToggleBold(Frame& frame, Event*, EditorCommandSource source, const String&)
 {
@@ -1359,16 +1369,25 @@ static bool enabledRedo(Frame& frame, Event*, EditorCommandSource)
     return frame.editor().canRedo();
 }
 
-#if PLATFORM(MAC)
+#if PLATFORM(COCOA)
+
 static bool enabledTakeFindStringFromSelection(Frame& frame, Event*, EditorCommandSource)
 {
     return frame.editor().canCopyExcludingStandaloneImages();
 }
-#endif
+
+#endif // PLATFORM(COCOA)
 
 static bool enabledUndo(Frame& frame, Event*, EditorCommandSource)
 {
     return frame.editor().canUndo();
+}
+
+static bool enabledInRichlyEditableTextWithEditableImagesEnabled(Frame& frame, Event* event, EditorCommandSource source)
+{
+    if (!frame.settings().editableImagesEnabled())
+        return false;
+    return enabledInRichlyEditableText(frame, event, source);
 }
 
 // State functions
@@ -1415,17 +1434,17 @@ static TriState stateSuperscript(Frame& frame, Event*)
 
 static TriState stateTextWritingDirectionLeftToRight(Frame& frame, Event*)
 {
-    return stateTextWritingDirection(frame, LeftToRightWritingDirection);
+    return stateTextWritingDirection(frame, WritingDirection::LeftToRight);
 }
 
 static TriState stateTextWritingDirectionNatural(Frame& frame, Event*)
 {
-    return stateTextWritingDirection(frame, NaturalWritingDirection);
+    return stateTextWritingDirection(frame, WritingDirection::Natural);
 }
 
 static TriState stateTextWritingDirectionRightToLeft(Frame& frame, Event*)
 {
-    return stateTextWritingDirection(frame, RightToLeftWritingDirection);
+    return stateTextWritingDirection(frame, WritingDirection::RightToLeft);
 }
 
 static TriState stateUnderline(Frame& frame, Event*)
@@ -1590,6 +1609,7 @@ static const CommandMap& createCommandMap()
         { "IgnoreSpelling", { executeIgnoreSpelling, supportedFromMenuOrKeyBinding, enabledInEditableText, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "Indent", { executeIndent, supported, enabledInRichlyEditableText, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "InsertBacktab", { executeInsertBacktab, supportedFromMenuOrKeyBinding, enabledInEditableText, stateNone, valueNull, isTextInsertion, doNotAllowExecutionWhenDisabled } },
+        { "InsertEditableImage", { executeInsertEditableImage, supported, enabledInRichlyEditableTextWithEditableImagesEnabled, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "InsertHTML", { executeInsertHTML, supported, enabledInEditableText, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "InsertHorizontalRule", { executeInsertHorizontalRule, supported, enabledInRichlyEditableText, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "InsertImage", { executeInsertImage, supported, enabledInRichlyEditableText, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
@@ -1702,7 +1722,7 @@ static const CommandMap& createCommandMap()
         { "PasteGlobalSelection", { executePasteGlobalSelection, supportedFromMenuOrKeyBinding, enabledPaste, stateNone, valueNull, notTextInsertion, allowExecutionWhenDisabled } },
 #endif
 
-#if PLATFORM(MAC)
+#if PLATFORM(COCOA)
         { "TakeFindStringFromSelection", { executeTakeFindStringFromSelection, supportedFromMenuOrKeyBinding, enabledTakeFindStringFromSelection, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
 #endif
     };

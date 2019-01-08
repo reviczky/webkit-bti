@@ -29,9 +29,8 @@
 #include "WebCoreArgumentCoders.h"
 #include <wtf/text/TextStream.h>
 
-using namespace WebCore;
-
 namespace WebKit {
+using namespace WebCore;
 
 void EditorState::encode(IPC::Encoder& encoder) const
 {
@@ -113,7 +112,7 @@ void EditorState::PostLayoutData::encode(IPC::Encoder& encoder) const
     encoder << caretRectAtStart;
 #endif
 #if PLATFORM(IOS_FAMILY) || PLATFORM(MAC)
-    encoder << selectionClipRect;
+    encoder << focusedElementRect;
     encoder << selectedTextLength;
     encoder << textAlignment;
     encoder << textColor;
@@ -131,7 +130,7 @@ void EditorState::PostLayoutData::encode(IPC::Encoder& encoder) const
     encoder << isStableStateUpdate;
     encoder << insideFixedPosition;
     encoder << hasPlainText;
-    encoder << elementIsTransparent;
+    encoder << elementIsTransparentOrFullyClipped;
     encoder << caretColor;
 #endif
 #if PLATFORM(MAC)
@@ -154,7 +153,7 @@ bool EditorState::PostLayoutData::decode(IPC::Decoder& decoder, PostLayoutData& 
         return false;
 #endif
 #if PLATFORM(IOS_FAMILY) || PLATFORM(MAC)
-    if (!decoder.decode(result.selectionClipRect))
+    if (!decoder.decode(result.focusedElementRect))
         return false;
     if (!decoder.decode(result.selectedTextLength))
         return false;
@@ -188,7 +187,7 @@ bool EditorState::PostLayoutData::decode(IPC::Decoder& decoder, PostLayoutData& 
         return false;
     if (!decoder.decode(result.hasPlainText))
         return false;
-    if (!decoder.decode(result.elementIsTransparent))
+    if (!decoder.decode(result.elementIsTransparentOrFullyClipped))
         return false;
     if (!decoder.decode(result.caretColor))
         return false;
@@ -204,7 +203,7 @@ bool EditorState::PostLayoutData::decode(IPC::Decoder& decoder, PostLayoutData& 
         return false;
 #endif
 
-    std::optional<std::optional<FontAttributes>> optionalFontAttributes;
+    Optional<Optional<FontAttributes>> optionalFontAttributes;
     decoder >> optionalFontAttributes;
     if (!optionalFontAttributes)
         return false;
@@ -263,8 +262,8 @@ TextStream& operator<<(TextStream& ts, const EditorState& editorState)
         ts.dumpProperty("caretRectAtStart", editorState.postLayoutData().caretRectAtStart);
 #endif
 #if PLATFORM(IOS_FAMILY) || PLATFORM(MAC)
-    if (editorState.postLayoutData().selectionClipRect != IntRect())
-        ts.dumpProperty("selectionClipRect", editorState.postLayoutData().selectionClipRect);
+    if (editorState.postLayoutData().focusedElementRect != IntRect())
+        ts.dumpProperty("focusedElementRect", editorState.postLayoutData().focusedElementRect);
     if (editorState.postLayoutData().selectedTextLength)
         ts.dumpProperty("selectedTextLength", editorState.postLayoutData().selectedTextLength);
     if (editorState.postLayoutData().textAlignment != NoAlignment)

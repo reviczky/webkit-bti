@@ -71,6 +71,8 @@ public:
     {
         return GStreamerVideoCaptureSource::create(String { device.persistentId() }, WTFMove(hashSalt), constraints);
     }
+private:
+    CaptureDeviceManager& videoCaptureDeviceManager() final { return GStreamerVideoCaptureDeviceManager::singleton(); }
 };
 
 VideoCaptureFactory& libWebRTCVideoCaptureSourceFactory()
@@ -86,6 +88,8 @@ public:
         // FIXME: Implement this.
         return { };
     }
+private:
+    CaptureDeviceManager& displayCaptureDeviceManager() final { return GStreamerDisplayCaptureDeviceManager::singleton(); }
 };
 
 DisplayCaptureFactory& libWebRTCDisplayCaptureSourceFactory()
@@ -185,6 +189,8 @@ const RealtimeMediaSourceCapabilities& GStreamerVideoCaptureSource::capabilities
 
     capabilities.setDeviceId(hashedId());
     updateCapabilities(capabilities);
+
+    capabilities.addFacingMode(RealtimeMediaSourceSettings::Unknown);
 
     m_capabilities = WTFMove(capabilities);
 

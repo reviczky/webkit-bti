@@ -32,6 +32,8 @@
 #include "ApplyStyleCommand.h"
 #include "CSSComputedStyleDeclaration.h"
 #include "CSSPropertyNames.h"
+#include "CSSValueList.h"
+#include "CSSValuePool.h"
 #include "CachedResourceLoader.h"
 #include "ChangeListTypeCommand.h"
 #include "ClipboardEvent.h"
@@ -63,11 +65,14 @@
 #include "HTMLImageElement.h"
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
+#include "HTMLOListElement.h"
 #include "HTMLQuoteElement.h"
 #include "HTMLSpanElement.h"
+#include "HTMLUListElement.h"
 #include "HitTestResult.h"
 #include "IndentOutdentCommand.h"
 #include "InputEvent.h"
+#include "InsertEditableImageCommand.h"
 #include "InsertListCommand.h"
 #include "InsertTextCommand.h"
 #include "KeyboardEvent.h"
@@ -197,7 +202,7 @@ using namespace HTMLNames;
 using namespace WTF;
 using namespace Unicode;
 
-TemporarySelectionChange::TemporarySelectionChange(Frame& frame, std::optional<VisibleSelection> temporarySelection, OptionSet<TemporarySelectionOption> options)
+TemporarySelectionChange::TemporarySelectionChange(Frame& frame, Optional<VisibleSelection> temporarySelection, OptionSet<TemporarySelectionOption> options)
     : m_frame(frame)
     , m_options(options)
     , m_wasIgnoringSelectionChanges(frame.editor().ignoreSelectionChanges())
@@ -310,9 +315,9 @@ bool Editor::handleTextEvent(TextEvent& event)
             if (client()->performsTwoStepPaste(event.pastingFragment()))
                 return true;
 #endif
-            replaceSelectionWithFragment(*event.pastingFragment(), false, event.shouldSmartReplace(), event.shouldMatchStyle(), EditAction::Paste, event.mailBlockquoteHandling());
+            replaceSelectionWithFragment(*event.pastingFragment(), SelectReplacement::No, event.shouldSmartReplace() ? SmartReplace::Yes : SmartReplace::No, event.shouldMatchStyle() ? MatchStyle::Yes : MatchStyle::No, EditAction::Paste, event.mailBlockquoteHandling());
         } else
-            replaceSelectionWithText(event.data(), false, event.shouldSmartReplace(), EditAction::Paste);
+            replaceSelectionWithText(event.data(), SelectReplacement::No, event.shouldSmartReplace() ? SmartReplace::Yes : SmartReplace::No, EditAction::Paste);
         return true;
     }
 
@@ -639,7 +644,7 @@ bool Editor::shouldInsertFragment(DocumentFragment& fragment, Range* replacingDO
     return client()->shouldInsertNode(&fragment, replacingDOMRange, givenAction);
 }
 
-void Editor::replaceSelectionWithFragment(DocumentFragment& fragment, bool selectReplacement, bool smartReplace, bool matchStyle, EditAction editingAction, MailBlockquoteHandling mailBlockquoteHandling)
+void Editor::replaceSelectionWithFragment(DocumentFragment& fragment, SelectReplacement selectReplacement, SmartReplace smartReplace, MatchStyle matchStyle, EditAction editingAction, MailBlockquoteHandling mailBlockquoteHandling)
 {
     VisibleSelection selection = m_frame.selection().selection();
     if (selection.isNone() || !selection.isContentEditable())
@@ -650,11 +655,11 @@ void Editor::replaceSelectionWithFragment(DocumentFragment& fragment, bool selec
         replacedText = AccessibilityReplacedText(selection);
 
     OptionSet<ReplaceSelectionCommand::CommandOption> options { ReplaceSelectionCommand::PreventNesting, ReplaceSelectionCommand::SanitizeFragment };
-    if (selectReplacement)
+    if (selectReplacement == SelectReplacement::Yes)
         options.add(ReplaceSelectionCommand::SelectReplacement);
-    if (smartReplace)
+    if (smartReplace == SmartReplace::Yes)
         options.add(ReplaceSelectionCommand::SmartReplace);
-    if (matchStyle)
+    if (matchStyle == MatchStyle::Yes)
         options.add(ReplaceSelectionCommand::MatchStyle);
     if (mailBlockquoteHandling == MailBlockquoteHandling::IgnoreBlockquote)
         options.add(ReplaceSelectionCommand::IgnoreMailBlockquote);
@@ -685,13 +690,13 @@ void Editor::replaceSelectionWithFragment(DocumentFragment& fragment, bool selec
         m_spellChecker->requestCheckingFor(request.releaseNonNull());
 }
 
-void Editor::replaceSelectionWithText(const String& text, bool selectReplacement, bool smartReplace, EditAction editingAction)
+void Editor::replaceSelectionWithText(const String& text, SelectReplacement selectReplacement, SmartReplace smartReplace, EditAction editingAction)
 {
     RefPtr<Range> range = selectedRange();
     if (!range)
         return;
 
-    replaceSelectionWithFragment(createFragmentFromText(*range, text), selectReplacement, smartReplace, true, editingAction);
+    replaceSelectionWithFragment(createFragmentFromText(*range, text), selectReplacement, smartReplace, MatchStyle::Yes, editingAction);
 }
 
 RefPtr<Range> Editor::selectedRange()
@@ -1527,9 +1532,9 @@ void Editor::copyURL(const URL& url, const String& title, Pasteboard& pasteboard
     pasteboard.write(pasteboardURL);
 }
 
-PasteboardWriterData::URL Editor::pasteboardWriterURL(const URL& url, const String& title)
+PasteboardWriterData::URLData Editor::pasteboardWriterURL(const URL& url, const String& title)
 {
-    PasteboardWriterData::URL result;
+    PasteboardWriterData::URLData result;
 
     result.url = url;
     result.title = title;
@@ -1779,11 +1784,11 @@ void Editor::setBaseWritingDirection(WritingDirection direction)
         
     Element* focusedElement = document().focusedElement();
     if (focusedElement && focusedElement->isTextField()) {
-        if (direction == NaturalWritingDirection)
+        if (direction == WritingDirection::Natural)
             return;
 
         auto& focusedFormElement = downcast<HTMLTextFormControlElement>(*focusedElement);
-        auto directionValue = direction == LeftToRightWritingDirection ? "ltr" : "rtl";
+        auto directionValue = direction == WritingDirection::LeftToRight ? "ltr" : "rtl";
         auto writingDirectionInputTypeName = inputTypeNameForEditingAction(EditAction::SetWritingDirection);
         if (!dispatchBeforeInputEvent(focusedFormElement, writingDirectionInputTypeName, directionValue))
             return;
@@ -1794,14 +1799,14 @@ void Editor::setBaseWritingDirection(WritingDirection direction)
         return;
     }
 
-    RefPtr<MutableStyleProperties> style = MutableStyleProperties::create();
-    style->setProperty(CSSPropertyDirection, direction == LeftToRightWritingDirection ? "ltr" : direction == RightToLeftWritingDirection ? "rtl" : "inherit", false);
-    applyParagraphStyleToSelection(style.get(), EditAction::SetWritingDirection);
+    auto style = MutableStyleProperties::create();
+    style->setProperty(CSSPropertyDirection, direction == WritingDirection::LeftToRight ? "ltr" : direction == WritingDirection::RightToLeft ? "rtl" : "inherit", false);
+    applyParagraphStyleToSelection(style.ptr(), EditAction::SetWritingDirection);
 }
 
 WritingDirection Editor::baseWritingDirectionForSelectionStart() const
 {
-    WritingDirection result = LeftToRightWritingDirection;
+    auto result = WritingDirection::LeftToRight;
 
     Position pos = m_frame.selection().selection().visibleStart().deepEquivalent();
     Node* node = pos.deprecatedNode();
@@ -1820,9 +1825,9 @@ WritingDirection Editor::baseWritingDirectionForSelectionStart() const
 
     switch (renderer->style().direction()) {
     case TextDirection::LTR:
-        return LeftToRightWritingDirection;
+        return WritingDirection::LeftToRight;
     case TextDirection::RTL:
-        return RightToLeftWritingDirection;
+        return WritingDirection::RightToLeft;
     }
     
     return result;
@@ -2022,8 +2027,8 @@ void Editor::setComposition(const String& text, const Vector<CompositionUnderlin
 
             unsigned start = std::min(baseOffset + selectionStart, extentOffset);
             unsigned end = std::min(std::max(start, baseOffset + selectionEnd), extentOffset);
-            RefPtr<Range> selectedRange = Range::create(baseNode->document(), baseNode, start, baseNode, end);
-            m_frame.selection().setSelectedRange(selectedRange.get(), DOWNSTREAM, false);
+            auto selectedRange = Range::create(baseNode->document(), baseNode, start, baseNode, end);
+            m_frame.selection().setSelectedRange(selectedRange.ptr(), DOWNSTREAM, FrameSelection::ShouldCloseTyping::No);
         }
     }
 
@@ -2517,7 +2522,7 @@ void Editor::markMisspellingsAfterTypingToWord(const VisiblePosition &wordStart,
 
         if (!m_frame.editor().shouldInsertText(autocorrectedString, misspellingRange.get(), EditorInsertAction::Typed))
             return;
-        m_frame.editor().replaceSelectionWithText(autocorrectedString, false, false, EditAction::Insert);
+        m_frame.editor().replaceSelectionWithText(autocorrectedString, SelectReplacement::No, SmartReplace::No, EditAction::Insert);
 
         // Reset the charet one character further.
         m_frame.selection().moveTo(m_frame.selection().selection().end());
@@ -2875,7 +2880,7 @@ void Editor::changeBackToReplacedString(const String& replacedString)
     
     m_alternativeTextController->recordAutocorrectionResponse(AutocorrectionResponse::Reverted, replacedString, selection.get());
     TextCheckingParagraph paragraph(*selection);
-    replaceSelectionWithText(replacedString, false, false, EditAction::Insert);
+    replaceSelectionWithText(replacedString, SelectReplacement::No, SmartReplace::No, EditAction::Insert);
     auto changedRange = paragraph.subrange(paragraph.checkingStart(), replacedString.length());
     changedRange->startContainer().document().markers().addMarker(changedRange.ptr(), DocumentMarker::Replacement, String());
     m_alternativeTextController->markReversed(changedRange);
@@ -3121,7 +3126,7 @@ void Editor::transpose()
     // Insert the transposed characters.
     if (!shouldInsertText(transposed, range.get(), EditorInsertAction::Typed))
         return;
-    replaceSelectionWithText(transposed, false, false, EditAction::Insert);
+    replaceSelectionWithText(transposed, SelectReplacement::No, SmartReplace::No, EditAction::Insert);
 }
 
 void Editor::addRangeToKillRing(const Range& range, KillRingInsertionMode mode)
@@ -3767,7 +3772,7 @@ bool Editor::selectionStartHasMarkerFor(DocumentMarker::MarkerType markerType, i
 
     unsigned int startOffset = static_cast<unsigned int>(from);
     unsigned int endOffset = static_cast<unsigned int>(from + length);
-    Vector<RenderedDocumentMarker*> markers = document().markers().markersFor(node);
+    Vector<RenderedDocumentMarker*> markers = document().markers().markersFor(*node);
     for (auto* marker : markers) {
         if (marker->startOffset() <= startOffset && endOffset <= marker->endOffset() && marker->type() == markerType)
             return true;
@@ -4089,7 +4094,7 @@ void Editor::notifyClientOfAttachmentUpdates()
     }
 }
 
-void Editor::insertAttachment(const String& identifier, std::optional<uint64_t>&& fileSize, const String& fileName, const String& contentType)
+void Editor::insertAttachment(const String& identifier, Optional<uint64_t>&& fileSize, const String& fileName, const String& contentType)
 {
     auto attachment = HTMLAttachmentElement::create(HTMLNames::attachmentTag, document());
     attachment->setUniqueIdentifier(identifier);
@@ -4098,7 +4103,7 @@ void Editor::insertAttachment(const String& identifier, std::optional<uint64_t>&
     auto fragmentToInsert = document().createDocumentFragment();
     fragmentToInsert->appendChild(attachment.get());
 
-    replaceSelectionWithFragment(fragmentToInsert.get(), false, false, true);
+    replaceSelectionWithFragment(fragmentToInsert.get(), SelectReplacement::No, SmartReplace::No, MatchStyle::Yes);
 }
 
 #endif // ENABLE(ATTACHMENT_ELEMENT)
@@ -4248,6 +4253,17 @@ String Editor::clientReplacementURLForResource(Ref<SharedBuffer>&& resourceData,
         return editorClient->replacementURLForResource(WTFMove(resourceData), mimeType);
 
     return { };
+}
+
+RefPtr<HTMLImageElement> Editor::insertEditableImage()
+{
+    return InsertEditableImageCommand::insertEditableImage(document());
+}
+
+bool Editor::canCopyExcludingStandaloneImages() const
+{
+    auto& selection = m_frame.selection().selection();
+    return selection.isRange() && !selection.isInPasswordField();
 }
 
 } // namespace WebCore

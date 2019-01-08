@@ -30,7 +30,7 @@ messages -> WebProcess LegacyReceiver {
     PrewarmWithDomainInformation(struct WebCore::PrewarmInformation prewarmInformation)
 
     # Global preferences.
-    SetCacheModel(uint32_t cacheModel)
+    SetCacheModel(enum:uint8_t WebKit::CacheModel cacheModel)
 
     RegisterURLSchemeAsEmptyDocument(String scheme)
     RegisterURLSchemeAsSecure(String scheme)
@@ -130,7 +130,7 @@ messages -> WebProcess LegacyReceiver {
 
     MarkIsNoLongerPrewarmed()
     UpdateActivePages()
-    GetActivePagesOriginsForTesting() -> (Vector<String> activeOrigins) LegacySync
+    GetActivePagesOriginsForTesting() -> (Vector<String> activeOrigins) Async
 
 #if PLATFORM(MAC)
     SetScreenProperties(struct WebCore::ScreenProperties screenProperties)
@@ -153,4 +153,6 @@ messages -> WebProcess LegacyReceiver {
     RemoveMockMediaDevice(String persistentId);
     ResetMockMediaDevices();
 #endif
+
+    ClearCurrentModifierStateForTesting()
 }

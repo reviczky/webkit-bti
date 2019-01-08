@@ -694,7 +694,7 @@ void PropertyListNode::emitPutConstantProperty(BytecodeGenerator& generator, Reg
         return;
     }
     if (const auto* identifier = node.name()) {
-        std::optional<uint32_t> optionalIndex = parseIndex(*identifier);
+        Optional<uint32_t> optionalIndex = parseIndex(*identifier);
         if (!optionalIndex) {
             generator.emitDirectPutById(newObj, *identifier, value.get(), node.putType());
             return;
@@ -1889,15 +1889,6 @@ RegisterID* UnaryPlusNode::emitBytecode(BytecodeGenerator& generator, RegisterID
     generator.emitExpressionInfo(position(), position(), position());
     return generator.emitToNumber(generator.finalDestination(dst), src.get());
 }
-
-// ------------------------------ BitwiseNotNode -----------------------------------
- 
-RegisterID* BitwiseNotNode::emitBytecode(BytecodeGenerator& generator, RegisterID* dst)
-{
-    RefPtr<RegisterID> src2 = generator.emitLoad(nullptr, jsNumber(-1));
-    RefPtr<RegisterID> src1 = generator.emitNode(m_expr);
-    return generator.emitBinaryOp<OpBitxor>(generator.finalDestination(dst, src1.get()), src1.get(), src2.get(), OperandTypes(m_expr->resultDescriptor(), ResultType::numberTypeIsInt32()));
-}
  
 // ------------------------------ LogicalNotNode -----------------------------------
 
@@ -2098,7 +2089,7 @@ RegisterID* BinaryOpNode::emitBytecode(BytecodeGenerator& generator, RegisterID*
     OpcodeID opcodeID = this->opcodeID();
 
     if (opcodeID == op_less || opcodeID == op_lesseq || opcodeID == op_greater || opcodeID == op_greatereq) {
-        auto isUInt32 = [&] (ExpressionNode* node) -> std::optional<UInt32Result> {
+        auto isUInt32 = [&] (ExpressionNode* node) -> Optional<UInt32Result> {
             if (node->isBinaryOpNode() && static_cast<BinaryOpNode*>(node)->opcodeID() == op_urshift)
                 return UInt32Result::UInt32;
             if (node->isNumber() && static_cast<NumberNode*>(node)->isIntegerNode()) {
@@ -2106,7 +2097,7 @@ RegisterID* BinaryOpNode::emitBytecode(BytecodeGenerator& generator, RegisterID*
                 if (value.isInt32() && value.asInt32() >= 0)
                     return UInt32Result::Constant;
             }
-            return std::nullopt;
+            return WTF::nullopt;
         };
         auto leftResult = isUInt32(m_expr1);
         auto rightResult = isUInt32(m_expr2);
@@ -4313,7 +4304,7 @@ void ObjectPatternNode::bindValue(BytecodeGenerator& generator, RegisterID* rhs)
             RefPtr<RegisterID> temp = generator.newTemporary();
             RefPtr<RegisterID> propertyName;
             if (!target.propertyExpression) {
-                std::optional<uint32_t> optionalIndex = parseIndex(target.propertyName);
+                Optional<uint32_t> optionalIndex = parseIndex(target.propertyName);
                 if (!optionalIndex)
                     generator.emitGetById(temp.get(), rhs, target.propertyName);
                 else {

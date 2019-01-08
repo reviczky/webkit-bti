@@ -30,6 +30,7 @@
 #include "FocusDirection.h"
 #include "FrameLoader.h"
 #include "GraphicsContext.h"
+#include "GraphicsLayer.h"
 #include "HTMLMediaElementEnums.h"
 #include "HostWindow.h"
 #include "Icon.h"
@@ -261,7 +262,7 @@ public:
 
     virtual bool fetchCustomFixedPositionLayoutRect(IntRect&) { return false; }
 
-    virtual void updateViewportConstrainedLayers(HashMap<PlatformLayer*, std::unique_ptr<ViewportConstraints>>&, HashMap<PlatformLayer*, PlatformLayer*>&) { }
+    virtual void updateViewportConstrainedLayers(HashMap<PlatformLayer*, std::unique_ptr<ViewportConstraints>>&, const HashMap<PlatformLayer*, PlatformLayer*>&) { }
 
     virtual void addOrUpdateScrollingLayer(Node*, PlatformLayer* scrollingLayer, PlatformLayer* contentsLayer, const IntSize& scrollSize, bool allowHorizontalScrollbar, bool allowVerticalScrollbar) = 0;
     virtual void removeScrollingLayer(Node*, PlatformLayer* scrollingLayer, PlatformLayer* contentsLayer) = 0;
@@ -383,7 +384,7 @@ public:
     virtual void enableSuddenTermination() { }
     virtual void disableSuddenTermination() { }
 
-    virtual void contentRuleListNotification(const WebCore::URL&, const HashSet<std::pair<String, String>>&) { };
+    virtual void contentRuleListNotification(const URL&, const HashSet<std::pair<String, String>>&) { };
 
 #if PLATFORM(WIN)
     virtual void setLastSetCursorToCurrentCursor() = 0;
@@ -402,7 +403,7 @@ public:
     virtual void notifyScrollerThumbIsVisibleInRect(const IntRect&) { }
     virtual void recommendedScrollbarStyleDidChange(ScrollbarStyle) { }
 
-    virtual std::optional<ScrollbarOverlayStyle> preferredScrollbarOverlayStyle() { return ScrollbarOverlayStyleDefault; }
+    virtual Optional<ScrollbarOverlayStyle> preferredScrollbarOverlayStyle() { return ScrollbarOverlayStyleDefault; }
 
     virtual void wheelEventHandlersChanged(bool hasHandlers) = 0;
         
@@ -439,7 +440,7 @@ public:
     virtual void focusedContentMediaElementDidChange(uint64_t) { }
 #endif
 
-#if ENABLE(SUBTLE_CRYPTO)
+#if ENABLE(WEB_CRYPTO)
     virtual bool wrapCryptoKey(const Vector<uint8_t>&, Vector<uint8_t>&) const { return false; }
     virtual bool unwrapCryptoKey(const Vector<uint8_t>&, Vector<uint8_t>&) const { return false; }
 #endif
@@ -488,6 +489,10 @@ public:
     virtual void didRemoveMenuItemElement(HTMLMenuItemElement&) { }
 
     virtual String signedPublicKeyAndChallengeString(unsigned, const String&, const URL&) const { return emptyString(); }
+
+    virtual void associateEditableImageWithAttachment(GraphicsLayer::EmbeddedViewID, const String&) { }
+    virtual void didCreateEditableImage(GraphicsLayer::EmbeddedViewID) { }
+    virtual void didDestroyEditableImage(GraphicsLayer::EmbeddedViewID) { }
 
 protected:
     virtual ~ChromeClient() = default;

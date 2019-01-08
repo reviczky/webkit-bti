@@ -24,7 +24,7 @@
  */
 
 #include "config.h"
-#include "LayoutFormattingState.h"
+#include "LayoutState.h"
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
@@ -46,7 +46,7 @@ static bool areEssentiallyEqual(float a, LayoutUnit b)
     if (a == b.toFloat())
         return true;
 
-    return ::abs(a - b.toFloat()) <= 4 * LayoutUnit::epsilon();
+    return fabs(a - b.toFloat()) <= 4 * LayoutUnit::epsilon();
 }
 
 static bool outputMismatchingSimpleLineInformationIfNeeded(TextStream& stream, const LayoutState& layoutState, const RenderBlockFlow& blockFlow, const Container& inlineFormattingRoot)
@@ -87,12 +87,18 @@ static bool outputMismatchingSimpleLineInformationIfNeeded(TextStream& stream, c
 
 static bool checkForMatchingNonTextRuns(const InlineRun& inlineRun, const WebCore::InlineBox& inlineBox)
 {
-    return areEssentiallyEqual(inlineBox.logicalLeft(), inlineRun.logicalLeft()) && areEssentiallyEqual(inlineBox.logicalRight(), inlineRun.logicalRight());
+    return areEssentiallyEqual(inlineBox.logicalLeft(), inlineRun.logicalLeft())
+        && areEssentiallyEqual(inlineBox.logicalRight(), inlineRun.logicalRight())
+        && areEssentiallyEqual(inlineBox.logicalHeight(), inlineRun.logicalHeight());
 }
 
-static bool checkForMatchingTextRuns(const InlineRun& inlineRun, float logicalLeft, float logicalRight, unsigned start, unsigned end)
+static bool checkForMatchingTextRuns(const InlineRun& inlineRun, float logicalLeft, float logicalRight, unsigned start, unsigned end, float logicalHeight)
 {
-    return areEssentiallyEqual(logicalLeft, inlineRun.logicalLeft()) && areEssentiallyEqual(logicalRight, inlineRun.logicalRight()) && start == inlineRun.textContext()->start() && (end == (inlineRun.textContext()->start() + inlineRun.textContext()->length()));
+    return areEssentiallyEqual(logicalLeft, inlineRun.logicalLeft())
+        && areEssentiallyEqual(logicalRight, inlineRun.logicalRight())
+        && start == inlineRun.textContext()->start()
+        && (end == (inlineRun.textContext()->start() + inlineRun.textContext()->length()))
+        && areEssentiallyEqual(logicalHeight, inlineRun.logicalHeight());
 }
 
 static void collectFlowBoxSubtree(const InlineFlowBox& flowbox, Vector<WebCore::InlineBox*>& inlineBoxes)
@@ -159,7 +165,11 @@ static bool outputMismatchingComplexLineInformationIfNeeded(TextStream& stream, 
         auto matchingRuns = false;
         if (inlineTextBox) {
             auto xOffset = resolveForRelativePositionIfNeeded(*inlineTextBox);
-            matchingRuns = checkForMatchingTextRuns(inlineRun, inlineTextBox->logicalLeft() + xOffset, inlineTextBox->logicalRight() + xOffset, inlineTextBox->start(), inlineTextBox->end() + 1);
+            matchingRuns = checkForMatchingTextRuns(inlineRun, inlineTextBox->logicalLeft() + xOffset,
+                inlineTextBox->logicalRight() + xOffset,
+                inlineTextBox->start(),
+                inlineTextBox->end() + 1,
+                inlineTextBox->logicalHeight());
 
             // <span>foobar</span>foobar generates 2 inline text boxes while we only generate one inline run.
             // also <div>foo<img style="float: left;">bar</div> too.
@@ -182,7 +192,7 @@ static bool outputMismatchingComplexLineInformationIfNeeded(TextStream& stream, 
                     auto xOffset = resolveForRelativePositionIfNeeded(*inlineTextBox);
                     logicalRight = inlineTextBox->logicalRight() + xOffset;
                     end += (inlineTextBox->end() + 1);
-                    if (checkForMatchingTextRuns(inlineRun, logicalLeft, logicalRight, start, end)) {
+                    if (checkForMatchingTextRuns(inlineRun, logicalLeft, logicalRight, start, end, inlineTextBox->logicalHeight())) {
                         matchingRuns = true;
                         inlineBoxIndex = index;
                         break;
@@ -202,12 +212,12 @@ static bool outputMismatchingComplexLineInformationIfNeeded(TextStream& stream, 
 
             if (inlineTextBox)
                 stream << "(" << inlineTextBox->start() << ", " << inlineTextBox->end() + 1 << ")";
-            stream << " (" << inlineBox->logicalLeft() << ", " << inlineBox->logicalRight() << ") ";
+            stream << " (" << inlineBox->logicalLeft() << ", " << inlineBox->logicalRight() << ") (" << inlineBox->logicalWidth() << "x" << inlineBox->logicalHeight() << ")";
 
             stream << "inline run ";
             if (inlineRun.textContext())
                 stream << "(" << inlineRun.textContext()->start() << ", " << inlineRun.textContext()->start() + inlineRun.textContext()->length() << ") ";
-            stream << "(" << inlineRun.logicalLeft() << ", " << inlineRun.logicalRight() << ")";
+            stream << "(" << inlineRun.logicalLeft() << ", " << inlineRun.logicalRight() << ") (" << inlineRun.logicalWidth() << "x" << inlineRun.logicalHeight() << ")";
             stream.nextLine();
             mismatched = true;
         }
@@ -236,10 +246,10 @@ static bool outputMismatchingBlockBoxInformationIfNeeded(TextStream& stream, con
         auto borderBox = displayBox.borderBox();
 
         return Display::Box::Rect {
-            borderBox.top() - displayBox.nonCollapsedMarginTop(),
-            borderBox.left() - displayBox.nonComputedMarginLeft(),
-            displayBox.nonComputedMarginLeft() + borderBox.width() + displayBox.nonComputedMarginRight(),
-            displayBox.nonCollapsedMarginTop() + borderBox.height() + displayBox.nonCollapsedMarginBottom()
+            borderBox.top() - displayBox.nonCollapsedMarginBefore(),
+            borderBox.left() - displayBox.computedMarginStart().valueOr(0),
+            displayBox.computedMarginStart().valueOr(0) + borderBox.width() + displayBox.computedMarginEnd().valueOr(0),
+            displayBox.nonCollapsedMarginBefore() + borderBox.height() + displayBox.nonCollapsedMarginAfter()
         };
     };
 

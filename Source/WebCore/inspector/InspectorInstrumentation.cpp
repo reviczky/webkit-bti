@@ -298,6 +298,12 @@ void InspectorInstrumentation::willSendXMLHttpRequestImpl(InstrumentingAgents& i
         domDebuggerAgent->willSendXMLHttpRequest(url);
 }
 
+void InspectorInstrumentation::willFetchImpl(InstrumentingAgents& instrumentingAgents, const String& url)
+{
+    if (InspectorDOMDebuggerAgent* domDebuggerAgent = instrumentingAgents.inspectorDOMDebuggerAgent())
+        domDebuggerAgent->willFetch(url);
+}
+
 void InspectorInstrumentation::didInstallTimerImpl(InstrumentingAgents& instrumentingAgents, int timerId, Seconds timeout, bool singleShot, ScriptExecutionContext& context)
 {
     if (InspectorDebuggerAgent* debuggerAgent = instrumentingAgents.inspectorDebuggerAgent())
@@ -782,6 +788,12 @@ void InspectorInstrumentation::frameClearedScheduledNavigationImpl(Instrumenting
         inspectorPageAgent->frameClearedScheduledNavigation(frame);
 }
 
+void InspectorInstrumentation::defaultAppearanceDidChangeImpl(InstrumentingAgents& instrumentingAgents, bool useDarkAppearance)
+{
+    if (InspectorPageAgent* inspectorPageAgent = instrumentingAgents.inspectorPageAgent())
+        inspectorPageAgent->defaultAppearanceDidChange(useDarkAppearance);
+}
+
 void InspectorInstrumentation::willDestroyCachedResourceImpl(CachedResource& cachedResource)
 {
     if (!s_instrumentingAgentsSet)
@@ -1091,6 +1103,22 @@ void InspectorInstrumentation::didFireAnimationFrameImpl(const InspectorInstrume
         debuggerAgent->didDispatchAsyncCall();
     if (InspectorTimelineAgent* timelineAgent = retrieveTimelineAgent(cookie))
         timelineAgent->didFireAnimationFrame();
+}
+
+InspectorInstrumentationCookie InspectorInstrumentation::willFireObserverCallbackImpl(InstrumentingAgents& instrumentingAgents, const String& callbackType, ScriptExecutionContext& context)
+{
+    int timelineAgentId = 0;
+    if (InspectorTimelineAgent* timelineAgent = instrumentingAgents.inspectorTimelineAgent()) {
+        timelineAgent->willFireObserverCallback(callbackType, frameForScriptExecutionContext(&context));
+        timelineAgentId = timelineAgent->id();
+    }
+    return InspectorInstrumentationCookie(instrumentingAgents, timelineAgentId);
+}
+
+void InspectorInstrumentation::didFireObserverCallbackImpl(const InspectorInstrumentationCookie& cookie)
+{
+    if (InspectorTimelineAgent* timelineAgent = retrieveTimelineAgent(cookie))
+        timelineAgent->didFireObserverCallback();
 }
 
 void InspectorInstrumentation::registerInstrumentingAgents(InstrumentingAgents& instrumentingAgents)

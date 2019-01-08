@@ -28,7 +28,7 @@ messages -> WebPage LegacyReceiver {
     SetDrawsBackground(bool drawsBackground)
 
     AddConsoleMessage(uint64_t frameID, enum:uint8_t JSC::MessageSource messageSource, enum:uint8_t JSC::MessageLevel messageLevel, String message, uint64_t requestID)
-    SendCSPViolationReport(uint64_t frameID, WebCore::URL reportURL, IPC::FormDataReference reportData)
+    SendCSPViolationReport(uint64_t frameID, URL reportURL, IPC::FormDataReference reportData)
     EnqueueSecurityPolicyViolationEvent(uint64_t frameID, WebCore::SecurityPolicyViolationEvent::Init eventInit)
 
 #if PLATFORM(COCOA)
@@ -45,10 +45,10 @@ messages -> WebPage LegacyReceiver {
     KeyEvent(WebKit::WebKeyboardEvent event)
     MouseEvent(WebKit::WebMouseEvent event)
 #if PLATFORM(IOS_FAMILY)
-    SetViewportConfigurationViewLayoutSize(WebCore::FloatSize size, double scaleFactor)
+    SetViewportConfigurationViewLayoutSize(WebCore::FloatSize size, double scaleFactor, double minimumEffectiveDeviceWidth)
     SetMaximumUnobscuredSize(WebCore::FloatSize size)
     SetDeviceOrientation(int32_t deviceOrientation)
-    SetOverrideViewportArguments(std::optional<WebCore::ViewportArguments> arguments)
+    SetOverrideViewportArguments(Optional<WebCore::ViewportArguments> arguments)
     DynamicViewportSizeUpdate(WebCore::FloatSize viewLayoutSize, WebCore::FloatSize maximumUnobscuredSize, WebCore::FloatRect targetExposedContentRect, WebCore::FloatRect targetUnobscuredRect, WebCore::FloatRect targetUnobscuredRectInScrollViewCoordinates, WebCore::RectEdges<float> targetUnobscuredSafeAreaInsets, double scale, int32_t deviceOrientation, uint64_t dynamicViewportSizeUpdateID)
 
     HandleTap(WebCore::IntPoint point, uint64_t lastLayerTreeTransactionId)
@@ -58,20 +58,20 @@ messages -> WebPage LegacyReceiver {
     TapHighlightAtPosition(uint64_t requestID, WebCore::FloatPoint point)
     InspectorNodeSearchMovedToPosition(WebCore::FloatPoint point)
     InspectorNodeSearchEndedAtPosition(WebCore::FloatPoint point)
-    BlurAssistedNode()
-    SelectWithGesture(WebCore::IntPoint point, uint32_t granularity, uint32_t gestureType, uint32_t gestureState, bool isInteractingWithAssistedNode, WebKit::CallbackID callbackID)
+    BlurFocusedElement()
+    SelectWithGesture(WebCore::IntPoint point, uint32_t granularity, uint32_t gestureType, uint32_t gestureState, bool isInteractingWithFocusedElement, WebKit::CallbackID callbackID)
     UpdateSelectionWithTouches(WebCore::IntPoint point, uint32_t touches, bool baseIsStart, WebKit::CallbackID callbackID)
     SelectWithTwoTouches(WebCore::IntPoint from, WebCore::IntPoint to, uint32_t gestureType, uint32_t gestureState, WebKit::CallbackID callbackID)
     ExtendSelection(uint32_t granularity)
     SelectWordBackward()
     MoveSelectionByOffset(int32_t offset, WebKit::CallbackID callbackID)
-    SelectTextWithGranularityAtPoint(WebCore::IntPoint point, uint32_t granularity, bool isInteractingWithAssistedNode, WebKit::CallbackID callbackID)
-    SelectPositionAtBoundaryWithDirection(WebCore::IntPoint point, uint32_t granularity, uint32_t direction, bool isInteractingWithAssistedNode, WebKit::CallbackID callbackID)
+    SelectTextWithGranularityAtPoint(WebCore::IntPoint point, uint32_t granularity, bool isInteractingWithFocusedElement, WebKit::CallbackID callbackID)
+    SelectPositionAtBoundaryWithDirection(WebCore::IntPoint point, uint32_t granularity, uint32_t direction, bool isInteractingWithFocusedElement, WebKit::CallbackID callbackID)
     MoveSelectionAtBoundaryWithDirection(uint32_t granularity, uint32_t direction, WebKit::CallbackID callbackID)
-    SelectPositionAtPoint(WebCore::IntPoint point, bool isInteractingWithAssistedNode, WebKit::CallbackID callbackID)
+    SelectPositionAtPoint(WebCore::IntPoint point, bool isInteractingWithFocusedElement, WebKit::CallbackID callbackID)
     BeginSelectionInDirection(uint32_t direction, WebKit::CallbackID callbackID)
-    UpdateSelectionWithExtentPoint(WebCore::IntPoint point, bool isInteractingWithAssistedNode, WebKit::CallbackID callbackID)
-    UpdateSelectionWithExtentPointAndBoundary(WebCore::IntPoint point, uint32_t granularity, bool isInteractingWithAssistedNode, WebKit::CallbackID callbackID)
+    UpdateSelectionWithExtentPoint(WebCore::IntPoint point, bool isInteractingWithFocusedElement, WebKit::CallbackID callbackID)
+    UpdateSelectionWithExtentPointAndBoundary(WebCore::IntPoint point, uint32_t granularity, bool isInteractingWithFocusedElement, WebKit::CallbackID callbackID)
     RequestDictationContext(WebKit::CallbackID callbackID)
     ReplaceDictatedText(String oldText, String newText)
     ReplaceSelectedText(String oldText, String newText)
@@ -85,11 +85,11 @@ messages -> WebPage LegacyReceiver {
     StartInteractionWithElementAtPosition(WebCore::IntPoint point)
     StopInteraction()
     PerformActionOnElement(uint32_t action)
-    FocusNextAssistedNode(bool isForward, WebKit::CallbackID callbackID)
-    SetAssistedNodeValue(String value)
+    FocusNextFocusedElement(bool isForward, WebKit::CallbackID callbackID)
+    SetFocusedElementValue(String value)
     AutofillLoginCredentials(String username, String password)
-    SetAssistedNodeValueAsNumber(double value)
-    SetAssistedNodeSelectedIndex(uint32_t index, bool allowMultipleSelection)
+    SetFocusedElementValueAsNumber(double value)
+    SetFocusedElementSelectedIndex(uint32_t index, bool allowMultipleSelection)
     ApplicationWillResignActive()
     ApplicationDidEnterBackground(bool isSuspendedUnderLock)
     ApplicationDidFinishSnapshottingAfterEnteringBackground()
@@ -99,13 +99,14 @@ messages -> WebPage LegacyReceiver {
     GetSelectionContext(WebKit::CallbackID callbackID)
     SetAllowsMediaDocumentInlinePlayback(bool allows)
     HandleTwoFingerTapAtPoint(WebCore::IntPoint point, uint64_t requestID)
+    HandleStylusSingleTapAtPoint(WebCore::IntPoint point, uint64_t requestID)
     SetForceAlwaysUserScalable(bool userScalable)
     GetRectsForGranularityWithSelectionOffset(uint32_t granularity, int32_t offset, WebKit::CallbackID callbackID)
     GetRectsAtSelectionOffsetWithText(int32_t offset, String text, WebKit::CallbackID callbackID)
     StoreSelectionForAccessibility(bool shouldStore)
     StartAutoscrollAtPosition(WebCore::FloatPoint positionInWindow)
     CancelAutoscroll()
-    RequestAssistedNodeInformation(WebKit::CallbackID callbackID)
+    RequestFocusedElementInformation(WebKit::CallbackID callbackID)
     HardwareKeyboardAvailabilityChanged()
 #endif
 
@@ -144,10 +145,10 @@ messages -> WebPage LegacyReceiver {
     ScrollBy(uint32_t scrollDirection, uint32_t scrollGranularity)
     CenterSelectionInVisibleArea()
 
-    GoToBackForwardItem(uint64_t navigationID, struct WebCore::BackForwardItemIdentifier backForwardItemID, enum:uint8_t WebCore::FrameLoadType backForwardType, enum:bool WebCore::ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad)
+    GoToBackForwardItem(uint64_t navigationID, struct WebCore::BackForwardItemIdentifier backForwardItemID, enum:uint8_t WebCore::FrameLoadType backForwardType, enum:bool WebCore::ShouldTreatAsContinuingLoad shouldTreatAsContinuingLoad, Optional<WebKit::WebsitePoliciesData> websitePolicies)
     TryRestoreScrollPosition()
 
-    LoadURLInFrame(WebCore::URL url, uint64_t frameID)
+    LoadURLInFrame(URL url, uint64_t frameID)
     LoadRequest(struct WebKit::LoadParameters loadParameters)
     LoadData(struct WebKit::LoadParameters loadParameters)
     LoadAlternateHTML(struct WebKit::LoadParameters loadParameters)
@@ -166,7 +167,7 @@ messages -> WebPage LegacyReceiver {
     DidRemoveBackForwardItem(struct WebCore::BackForwardItemIdentifier backForwardItemID)
 
     UpdateWebsitePolicies(struct WebKit::WebsitePoliciesData websitePolicies)
-    DidReceivePolicyDecision(uint64_t frameID, uint64_t listenerID, enum:uint8_t WebCore::PolicyAction policyAction, uint64_t navigationID, WebKit::DownloadID downloadID, std::optional<WebKit::WebsitePoliciesData> websitePolicies)
+    DidReceivePolicyDecision(uint64_t frameID, uint64_t listenerID, enum:uint8_t WebKit::WebPolicyAction policyAction, uint64_t navigationID, WebKit::DownloadID downloadID, Optional<WebKit::WebsitePoliciesData> websitePolicies)
     ContinueWillSubmitForm(uint64_t frameID, uint64_t listenerID)
 
     ClearSelection()
@@ -190,11 +191,13 @@ messages -> WebPage LegacyReceiver {
 
 #if PLATFORM(COCOA)
     # Dictionary support.
+    PerformDictionaryLookupOfCurrentSelection()
     PerformDictionaryLookupAtLocation(WebCore::FloatPoint point)
 #endif
 
-#if PLATFORM(MAC)
-    PerformDictionaryLookupOfCurrentSelection()
+#if ENABLE(DATA_DETECTION)
+    DetectDataInAllFrames(uint64_t types) -> (struct WebKit::DataDetectionResult result) Async
+    RemoveDataDetectedLinks() -> (struct WebKit::DataDetectionResult result) Async
 #endif
 
     ChangeFont(WebCore::FontChanges changes)
@@ -218,6 +221,8 @@ messages -> WebPage LegacyReceiver {
     IncreaseListLevel()
     DecreaseListLevel()
     ChangeListType()
+
+    SetBaseWritingDirection(enum:uint8_t WebCore::WritingDirection direction)
 
     SetNeedsFontAttributes(bool needsFontAttributes)
 
@@ -335,7 +340,7 @@ messages -> WebPage LegacyReceiver {
     UserMediaAccessWasGranted(uint64_t userMediaID, WebCore::CaptureDevice audioDevice, WebCore::CaptureDevice videoDevice, String mediaDeviceIdentifierHashSalt)
     UserMediaAccessWasDenied(uint64_t userMediaID, uint64_t reason, String invalidConstraint)
     DidCompleteMediaDeviceEnumeration(uint64_t userMediaID, Vector<WebCore::CaptureDevice> devices, String mediaDeviceIdentifierHashSalt, bool hasPersistentAccess)
-    CaptureDevicesChanged(enum:uint8_t WebKit::DeviceAccessState accessState)
+    CaptureDevicesChanged()
 #if ENABLE(SANDBOX_EXTENSIONS)
     GrantUserMediaDeviceSandboxExtensions(WebKit::MediaDeviceSandboxExtensions sandboxExtensions)
     RevokeUserMediaDeviceSandboxExtensions(Vector<String> sandboxExtensionIDs)
@@ -350,6 +355,10 @@ messages -> WebPage LegacyReceiver {
     EnableEnumeratingAllNetworkInterfaces()
     DisableEnumeratingAllNetworkInterfaces()
 #endif
+
+    StopAllMediaPlayback();
+    SuspendAllMediaPlayback();
+    ResumeAllMediaPlayback();
 
     # Notification
     DidReceiveNotificationPermissionDecision(uint64_t notificationID, bool allowed)
@@ -434,7 +443,7 @@ messages -> WebPage LegacyReceiver {
     SetViewLayoutSize(WebCore::IntSize viewLayoutSize)
     SetAutoSizingShouldExpandToViewHeight(bool shouldExpand)
 
-    SetViewportSizeForCSSViewportUnits(std::optional<WebCore::IntSize> viewportSize)
+    SetViewportSizeForCSSViewportUnits(Optional<WebCore::IntSize> viewportSize)
 
 #if PLATFORM(COCOA)
     HandleAlternativeTextUIResult(String result)
@@ -445,7 +454,7 @@ messages -> WebPage LegacyReceiver {
 #endif
 
     SetScrollPinningBehavior(uint32_t pinning)
-    SetScrollbarOverlayStyle(std::optional<uint32_t> scrollbarStyle)
+    SetScrollbarOverlayStyle(Optional<uint32_t> scrollbarStyle)
 
     GetBytecodeProfile(WebKit::CallbackID callbackID)
 
@@ -527,8 +536,8 @@ messages -> WebPage LegacyReceiver {
 #endif
 
 #if ENABLE(ATTACHMENT_ELEMENT)
-    InsertAttachment(String identifier, std::optional<uint64_t> fileSize, String fileName, String contentType, WebKit::CallbackID callbackID)
-    UpdateAttachmentAttributes(String identifier, std::optional<uint64_t> fileSize, String contentType, String fileName, IPC::SharedBufferDataReference enclosingImageData, WebKit::CallbackID callbackID)
+    InsertAttachment(String identifier, Optional<uint64_t> fileSize, String fileName, String contentType, WebKit::CallbackID callbackID)
+    UpdateAttachmentAttributes(String identifier, Optional<uint64_t> fileSize, String contentType, String fileName, IPC::SharedBufferDataReference enclosingImageData, WebKit::CallbackID callbackID)
 #endif
 
 #if ENABLE(APPLICATION_MANIFEST)
@@ -538,4 +547,5 @@ messages -> WebPage LegacyReceiver {
     SetDefersLoading(bool defersLoading)
 
     UpdateCurrentModifierState(OptionSet<WebCore::PlatformEvent::Modifier> modifiers)
+    SimulateDeviceOrientationChange(double alpha, double beta, double gamma)
 }

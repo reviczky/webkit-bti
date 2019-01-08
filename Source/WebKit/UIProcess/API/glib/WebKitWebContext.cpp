@@ -314,14 +314,15 @@ static void webkitWebContextSetProperty(GObject* object, guint propID, const GVa
     }
 }
 
-static inline WebsiteDataStore::Configuration websiteDataStoreConfigurationForWebProcessPoolConfiguration(const API::ProcessPoolConfiguration& processPoolconfigurarion)
+static inline Ref<WebsiteDataStoreConfiguration> websiteDataStoreConfigurationForWebProcessPoolConfiguration(const API::ProcessPoolConfiguration& processPoolconfigurarion)
 {
-    WebsiteDataStore::Configuration configuration;
-    configuration.applicationCacheDirectory = processPoolconfigurarion.applicationCacheDirectory();
-    configuration.networkCacheDirectory = processPoolconfigurarion.diskCacheDirectory();
-    configuration.webSQLDatabaseDirectory = processPoolconfigurarion.webSQLDatabaseDirectory();
-    configuration.localStorageDirectory = processPoolconfigurarion.localStorageDirectory();
-    configuration.mediaKeysStorageDirectory = processPoolconfigurarion.mediaKeysStorageDirectory();
+    auto configuration = WebsiteDataStoreConfiguration::create();
+    configuration->setApplicationCacheDirectory(String(processPoolconfigurarion.applicationCacheDirectory()));
+    configuration->setNetworkCacheDirectory(String(processPoolconfigurarion.diskCacheDirectory()));
+    configuration->setWebSQLDatabaseDirectory(String(processPoolconfigurarion.webSQLDatabaseDirectory()));
+    configuration->setLocalStorageDirectory(String(processPoolconfigurarion.localStorageDirectory()));
+    configuration->setDeviceIdHashSaltsStorageDirectory(String(processPoolconfigurarion.deviceIdHashSaltsStorageDirectory()));
+    configuration->setMediaKeysStorageDirectory(String(processPoolconfigurarion.mediaKeysStorageDirectory()));
     return configuration;
 }
 
@@ -719,13 +720,13 @@ void webkit_web_context_set_cache_model(WebKitWebContext* context, WebKitCacheMo
 
     switch (model) {
     case WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER:
-        cacheModel = CacheModelDocumentViewer;
+        cacheModel = CacheModel::DocumentViewer;
         break;
     case WEBKIT_CACHE_MODEL_WEB_BROWSER:
-        cacheModel = CacheModelPrimaryWebBrowser;
+        cacheModel = CacheModel::PrimaryWebBrowser;
         break;
     case WEBKIT_CACHE_MODEL_DOCUMENT_BROWSER:
-        cacheModel = CacheModelDocumentBrowser;
+        cacheModel = CacheModel::DocumentBrowser;
         break;
     default:
         g_assert_not_reached();
@@ -750,11 +751,11 @@ WebKitCacheModel webkit_web_context_get_cache_model(WebKitWebContext* context)
     g_return_val_if_fail(WEBKIT_IS_WEB_CONTEXT(context), WEBKIT_CACHE_MODEL_WEB_BROWSER);
 
     switch (context->priv->processPool->cacheModel()) {
-    case CacheModelDocumentViewer:
+    case CacheModel::DocumentViewer:
         return WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER;
-    case CacheModelPrimaryWebBrowser:
+    case CacheModel::PrimaryWebBrowser:
         return WEBKIT_CACHE_MODEL_WEB_BROWSER;
-    case CacheModelDocumentBrowser:
+    case CacheModel::DocumentBrowser:
         return WEBKIT_CACHE_MODEL_DOCUMENT_BROWSER;
     default:
         g_assert_not_reached();
@@ -1159,9 +1160,9 @@ void webkit_web_context_register_uri_scheme(WebKitWebContext* context, const cha
  *
  * This is only implemented on Linux and is a no-op otherwise.
  *
- * If you read from `$XDG_CONFIG_HOME/g_get_prgname()` or `$XDG_CACHE_HOME/g_get_prgname()`
- * in your WebProcess you must ensure it exists before subprocesses are created.
- * This behavior may change in the future.
+ * The web process is granted read-only access to the subdirectory matching g_get_prgname()
+ * in `$XDG_CONFIG_HOME`, `$XDG_CACHE_HOME`, and `$XDG_DATA_HOME` if it exists before the
+ * process is created. This behavior may change in the future.
  *
  * Since: 2.24
  */
@@ -1455,8 +1456,8 @@ void webkit_web_context_allow_tls_certificate_for_host(WebKitWebContext* context
     g_return_if_fail(G_IS_TLS_CERTIFICATE(certificate));
     g_return_if_fail(host);
 
-    RefPtr<WebCertificateInfo> webCertificateInfo = WebCertificateInfo::create(WebCore::CertificateInfo(certificate, static_cast<GTlsCertificateFlags>(0)));
-    context->priv->processPool->allowSpecificHTTPSCertificateForHost(webCertificateInfo.get(), String::fromUTF8(host));
+    auto webCertificateInfo = WebCertificateInfo::create(WebCore::CertificateInfo(certificate, static_cast<GTlsCertificateFlags>(0)));
+    context->priv->processPool->allowSpecificHTTPSCertificateForHost(webCertificateInfo.ptr(), String::fromUTF8(host));
 }
 
 /**

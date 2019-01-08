@@ -33,22 +33,23 @@
 #include "WebPopupMenuProxy.h"
 #include <WebCore/AlternativeTextClient.h>
 #include <WebCore/EditorClient.h>
-#include <WebCore/URL.h>
 #include <WebCore/UserInterfaceLayoutDirection.h>
 #include <WebCore/ValidationBubble.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Forward.h>
+#include <wtf/URL.h>
 #include <wtf/Variant.h>
 #include <wtf/WeakPtr.h>
 
 #if PLATFORM(COCOA)
-#include "LayerRepresentation.h"
 #include "PluginComplexTextInputState.h"
+#include "RemoteLayerTreeNode.h"
 #include "WKFoundation.h"
 
 OBJC_CLASS CALayer;
 OBJC_CLASS NSFileWrapper;
 OBJC_CLASS NSSet;
+OBJC_CLASS WKDrawingView;
 OBJC_CLASS _WKRemoteObjectRegistry;
 
 #if USE(APPKIT)
@@ -123,7 +124,7 @@ class WebPopupMenuProxy;
 
 enum class ContinueUnsafeLoad : bool { No, Yes };
 
-struct AssistedNodeInformation;
+struct FocusedElementInformation;
 struct InteractionInformationAtPosition;
 struct WebHitTestResultData;
 
@@ -216,8 +217,9 @@ public:
 
     virtual void didChangeContentSize(const WebCore::IntSize&) = 0;
 
-    virtual void showSafeBrowsingWarning(const SafeBrowsingWarning&, CompletionHandler<void(Variant<ContinueUnsafeLoad, WebCore::URL>&&)>&& completionHandler) { completionHandler(ContinueUnsafeLoad::Yes); }
+    virtual void showSafeBrowsingWarning(const SafeBrowsingWarning&, CompletionHandler<void(Variant<ContinueUnsafeLoad, URL>&&)>&& completionHandler) { completionHandler(ContinueUnsafeLoad::Yes); }
     virtual void clearSafeBrowsingWarning() { }
+    virtual void clearSafeBrowsingWarningIfForMainFrameNavigation() { }
     
 #if ENABLE(DRAG_SUPPORT)
 #if PLATFORM(GTK)
@@ -245,8 +247,8 @@ public:
     virtual void notifyInputContextAboutDiscardedComposition() = 0;
     virtual void makeFirstResponder() = 0;
     virtual void assistiveTechnologyMakeFirstResponder() = 0;
-    virtual void setAcceleratedCompositingRootLayer(LayerOrView *) = 0;
-    virtual LayerOrView *acceleratedCompositingRootLayer() const = 0;
+    virtual void setRemoteLayerTreeRootNode(RemoteLayerTreeNode*) = 0;
+    virtual CALayer *acceleratedCompositingRootLayer() const = 0;
     virtual RefPtr<ViewSnapshot> takeViewSnapshot() = 0;
 #if ENABLE(MAC_GESTURE_EVENTS)
     virtual void gestureEventWasNotHandledByWebCore(const NativeWebGestureEvent&) = 0;
@@ -358,12 +360,13 @@ public:
     virtual void layerTreeCommitComplete() = 0;
 
     virtual void couldNotRestorePageState() = 0;
-    virtual void restorePageState(std::optional<WebCore::FloatPoint> scrollPosition, const WebCore::FloatPoint& scrollOrigin, const WebCore::FloatBoxExtent& obscuredInsetsOnSave, double scale) = 0;
-    virtual void restorePageCenterAndScale(std::optional<WebCore::FloatPoint> center, double scale) = 0;
+    virtual void restorePageState(Optional<WebCore::FloatPoint> scrollPosition, const WebCore::FloatPoint& scrollOrigin, const WebCore::FloatBoxExtent& obscuredInsetsOnSave, double scale) = 0;
+    virtual void restorePageCenterAndScale(Optional<WebCore::FloatPoint> center, double scale) = 0;
 
-    virtual void startAssistingNode(const AssistedNodeInformation&, bool userIsInteracting, bool blurPreviousNode, bool changingActivityState, API::Object* userData) = 0;
-    virtual void stopAssistingNode() = 0;
-    virtual bool isAssistingNode() = 0;
+    virtual void elementDidFocus(const FocusedElementInformation&, bool userIsInteracting, bool blurPreviousNode, bool changingActivityState, API::Object* userData) = 0;
+    virtual void elementDidBlur() = 0;
+    virtual void didReceiveEditorStateUpdateAfterFocus() = 0;
+    virtual bool isFocusingElement() = 0;
     virtual bool interpretKeyEvent(const NativeWebKeyboardEvent&, bool isCharEvent) = 0;
     virtual void positionInformationDidChange(const InteractionInformationAtPosition&) = 0;
     virtual void saveImageToLibrary(Ref<WebCore::SharedBuffer>&&) = 0;
@@ -447,17 +450,22 @@ public:
 #if ENABLE(DATA_INTERACTION)
     virtual void didHandleStartDataInteractionRequest(bool started) = 0;
     virtual void didHandleAdditionalDragItemsRequest(bool added) = 0;
-    virtual void didConcludeEditDataInteraction(std::optional<WebCore::TextIndicatorData>) = 0;
+    virtual void didConcludeEditDataInteraction(Optional<WebCore::TextIndicatorData>) = 0;
     virtual void didChangeDataInteractionCaretRect(const WebCore::IntRect& previousCaretRect, const WebCore::IntRect& caretRect) = 0;
 #endif
 
 #if ENABLE(ATTACHMENT_ELEMENT)
     virtual void didInsertAttachment(API::Attachment&, const String& source) { }
     virtual void didRemoveAttachment(API::Attachment&) { }
+    virtual void didInvalidateDataForAttachment(API::Attachment&) { }
 #if PLATFORM(COCOA)
     virtual NSFileWrapper *allocFileWrapperInstance() const { return nullptr; }
     virtual NSSet *serializableFileWrapperClasses() const { return nullptr; }
 #endif
+#endif
+
+#if HAVE(PENCILKIT)
+    virtual RetainPtr<WKDrawingView> createDrawingView(WebCore::GraphicsLayer::EmbeddedViewID) { return nullptr; }
 #endif
 };
 

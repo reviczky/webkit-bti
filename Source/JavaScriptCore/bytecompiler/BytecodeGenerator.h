@@ -564,7 +564,7 @@ namespace JSC {
         RegisterID* emitNodeForProperty(RegisterID* dst, ExpressionNode* node)
         {
             if (node->isString()) {
-                if (std::optional<uint32_t> index = parseIndex(static_cast<StringNode*>(node)->value()))
+                if (Optional<uint32_t> index = parseIndex(static_cast<StringNode*>(node)->value()))
                     return emitLoad(dst, jsNumber(index.value()));
             }
             return emitNode(dst, node);
@@ -684,8 +684,9 @@ namespace JSC {
 
         template<typename BinaryOp>
         std::enable_if_t<
-            BinaryOp::opcodeID != op_bitxor && BinaryOp::opcodeID != op_add
-            && BinaryOp::opcodeID != op_mul && BinaryOp::opcodeID != op_sub
+            BinaryOp::opcodeID != op_add
+            && BinaryOp::opcodeID != op_mul
+            && BinaryOp::opcodeID != op_sub
             && BinaryOp::opcodeID != op_div,
             RegisterID*>
         emitBinaryOp(RegisterID* dst, RegisterID* src1, RegisterID* src2, OperandTypes)
@@ -696,8 +697,9 @@ namespace JSC {
 
         template<typename BinaryOp>
         std::enable_if_t<
-            BinaryOp::opcodeID == op_bitxor || BinaryOp::opcodeID == op_add
-            || BinaryOp::opcodeID == op_mul || BinaryOp::opcodeID == op_sub
+            BinaryOp::opcodeID == op_add
+            || BinaryOp::opcodeID == op_mul
+            || BinaryOp::opcodeID == op_sub
             || BinaryOp::opcodeID == op_div,
             RegisterID*>
         emitBinaryOp(RegisterID* dst, RegisterID* src1, RegisterID* src2, OperandTypes types)
@@ -1220,7 +1222,7 @@ namespace JSC {
         Vector<LexicalScopeStackEntry> m_lexicalScopeStack;
 
         Vector<TDZMap> m_TDZStack;
-        std::optional<size_t> m_varScopeLexicalScopeStackIndex;
+        Optional<size_t> m_varScopeLexicalScopeStackIndex;
         void pushTDZVariables(const VariableEnvironment&, TDZCheckOptimization, TDZRequirement);
 
         ScopeNode* const m_scopeNode;

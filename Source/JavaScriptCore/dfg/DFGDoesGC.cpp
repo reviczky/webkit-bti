@@ -67,9 +67,10 @@ bool doesGC(Graph& graph, Node* node)
     case Flush:
     case PhantomLocal:
     case SetArgument:
+    case ArithBitNot:
     case ArithBitAnd:
     case ArithBitOr:
-    case BitXor:
+    case ArithBitXor:
     case BitLShift:
     case BitRShift:
     case BitURShift:
@@ -98,9 +99,12 @@ bool doesGC(Graph& graph, Node* node)
     case ArithUnary:
     case ValueBitAnd:
     case ValueBitOr:
+    case ValueBitXor:
     case ValueAdd:
     case ValueSub:
+    case ValueMul:
     case ValueNegate:
+    case ValueDiv:
     case TryGetById:
     case GetById:
     case GetByIdFlush:
@@ -335,6 +339,7 @@ bool doesGC(Graph& graph, Node* node)
     case ToThis:
     case CreateThis:
     case ObjectCreate:
+    case ObjectKeys:
     case AllocatePropertyStorage:
     case ReallocatePropertyStorage:
     case Arrayify:
@@ -347,6 +352,7 @@ bool doesGC(Graph& graph, Node* node)
     case NewArrayBuffer:
     case NewRegexp:
     case NewStringObject:
+    case NewSymbol:
     case MakeRope:
     case NewFunction:
     case NewGeneratorFunction:
@@ -366,6 +372,7 @@ bool doesGC(Graph& graph, Node* node)
     case StringReplaceRegExp:
     case StringSlice:
     case StringValueOf:
+    case ObjectToString:
     case CreateRest:
     case ToLowerCase:
     case CallDOMGetter:

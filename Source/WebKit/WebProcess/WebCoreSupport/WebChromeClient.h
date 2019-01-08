@@ -178,6 +178,10 @@ private:
     void showPlaybackTargetPicker(bool hasVideo, WebCore::RouteSharingPolicy, const String&) final;
 
     Seconds eventThrottlingDelay() final;
+
+    void associateEditableImageWithAttachment(WebCore::GraphicsLayer::EmbeddedViewID, const String& attachmentID) final;
+    void didCreateEditableImage(WebCore::GraphicsLayer::EmbeddedViewID) final;
+    void didDestroyEditableImage(WebCore::GraphicsLayer::EmbeddedViewID) final;
 #endif
 
 #if ENABLE(ORIENTATION_EVENTS)
@@ -213,7 +217,7 @@ private:
     void scheduleCompositingLayerFlush() final;
     bool adjustLayerFlushThrottling(WebCore::LayerFlushThrottleState::Flags) final;
 
-    void contentRuleListNotification(const WebCore::URL&, const HashSet<std::pair<String, String>>&) final;
+    void contentRuleListNotification(const URL&, const HashSet<std::pair<String, String>>&) final;
 
 #if PLATFORM(WIN)
     void setLastSetCursorToCurrentCursor() final { }
@@ -248,10 +252,6 @@ private:
     RefPtr<WebCore::ScrollingCoordinator> createScrollingCoordinator(WebCore::Page&) const final;
 #endif
 
-#if PLATFORM(IOS_FAMILY)
-    void elementDidRefocus(WebCore::Element&) final;
-#endif
-
 #if (PLATFORM(IOS_FAMILY) && HAVE(AVKIT)) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
     bool supportsVideoFullscreen(WebCore::HTMLMediaElementEnums::VideoFullscreenMode) final;
     bool supportsVideoFullscreenStandby() final;
@@ -274,6 +274,7 @@ private:
 #if PLATFORM(COCOA)
     void elementDidFocus(WebCore::Element&) final;
     void elementDidBlur(WebCore::Element&) final;
+    void elementDidRefocus(WebCore::Element&) final;
 
     void makeFirstResponder() final;
     void assistiveTechnologyMakeFirstResponder() final;
@@ -294,7 +295,7 @@ private:
     void notifyScrollerThumbIsVisibleInRect(const WebCore::IntRect&) final;
     void recommendedScrollbarStyleDidChange(WebCore::ScrollbarStyle newStyle) final;
 
-    std::optional<WebCore::ScrollbarOverlayStyle> preferredScrollbarOverlayStyle() final;
+    Optional<WebCore::ScrollbarOverlayStyle> preferredScrollbarOverlayStyle() final;
 
     WebCore::Color underlayColor() const final;
 
@@ -321,12 +322,12 @@ private:
     void focusedContentMediaElementDidChange(uint64_t) final;
 #endif
 
-#if ENABLE(SUBTLE_CRYPTO)
+#if ENABLE(WEB_CRYPTO)
     bool wrapCryptoKey(const Vector<uint8_t>&, Vector<uint8_t>&) const final;
     bool unwrapCryptoKey(const Vector<uint8_t>&, Vector<uint8_t>&) const final;
 #endif
 
-    String signedPublicKeyAndChallengeString(unsigned keySizeIndex, const String& challengeString, const WebCore::URL&) const final;
+    String signedPublicKeyAndChallengeString(unsigned keySizeIndex, const String& challengeString, const URL&) const final;
 
 #if ENABLE(TELEPHONE_NUMBER_DETECTION) && PLATFORM(MAC)
     void handleTelephoneNumberClick(const String& number, const WebCore::IntPoint&) final;

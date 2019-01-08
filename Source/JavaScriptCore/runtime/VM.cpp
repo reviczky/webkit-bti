@@ -434,6 +434,7 @@ VM::VM(VMType vmType, HeapType heapType)
     exceptionStructure.set(*this, Exception::createStructure(*this, 0, jsNull()));
     promiseDeferredStructure.set(*this, JSPromiseDeferred::createStructure(*this, 0, jsNull()));
     internalPromiseDeferredStructure.set(*this, JSInternalPromiseDeferred::createStructure(*this, 0, jsNull()));
+    nativeStdFunctionCellStructure.set(*this, NativeStdFunctionCell::createStructure(*this, 0, jsNull()));
     programCodeBlockStructure.set(*this, ProgramCodeBlock::createStructure(*this, 0, jsNull()));
     moduleProgramCodeBlockStructure.set(*this, ModuleProgramCodeBlock::createStructure(*this, 0, jsNull()));
     evalCodeBlockStructure.set(*this, EvalCodeBlock::createStructure(*this, 0, jsNull()));
@@ -448,7 +449,6 @@ VM::VM(VMType vmType, HeapType heapType)
     sentinelSetBucket.set(*this, JSSet::BucketType::createSentinel(*this));
     sentinelMapBucket.set(*this, JSMap::BucketType::createSentinel(*this));
 
-    nativeStdFunctionCellStructure.set(*this, NativeStdFunctionCell::createStructure(*this, 0, jsNull()));
     smallStrings.initializeCommonStrings(*this);
 
     Thread::current().setCurrentAtomicStringTable(existingEntryAtomicStringTable);
@@ -1127,8 +1127,11 @@ void VM::queueMicrotask(JSGlobalObject& globalObject, Ref<Microtask>&& task)
 
 void VM::drainMicrotasks()
 {
-    while (!m_microtaskQueue.isEmpty())
+    while (!m_microtaskQueue.isEmpty()) {
         m_microtaskQueue.takeFirst()->run();
+        if (m_onEachMicrotaskTick)
+            m_onEachMicrotaskTick(*this);
+    }
 }
 
 void QueuedTask::run()

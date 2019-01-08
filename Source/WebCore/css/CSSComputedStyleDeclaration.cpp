@@ -812,7 +812,7 @@ static RefPtr<CSSValue> positionOffsetValue(const RenderStyle& style, CSSPropert
     return CSSValuePool::singleton().createIdentifierValue(CSSValueAuto);
 }
 
-RefPtr<CSSPrimitiveValue> ComputedStyleExtractor::currentColorOrValidColor(const RenderStyle* style, const Color& color) const
+Ref<CSSPrimitiveValue> ComputedStyleExtractor::currentColorOrValidColor(const RenderStyle* style, const Color& color) const
 {
     // This function does NOT look at visited information, so that computed style doesn't expose that.
     if (!color.isValid())
@@ -1145,7 +1145,7 @@ void OrderedNamedLinesCollector::appendLines(CSSGridLineNamesValue& lineNamesVal
         return;
 
     auto& cssValuePool = CSSValuePool::singleton();
-    for (auto lineName : iter->value)
+    for (const auto& lineName : iter->value)
         lineNamesValue.append(cssValuePool.createValue(lineName, CSSPrimitiveValue::CSS_STRING));
 }
 
@@ -1951,7 +1951,7 @@ static Ref<CSSValue> counterToCSSValue(const RenderStyle& style, CSSPropertyID p
     auto list = CSSValueList::createSpaceSeparated();
     for (auto& keyValue : *map) {
         list->append(cssValuePool.createValue(keyValue.key, CSSPrimitiveValue::CSS_STRING));
-        double number = (propertyID == CSSPropertyCounterIncrement ? keyValue.value.incrementValue : keyValue.value.resetValue).value_or(0);
+        double number = (propertyID == CSSPropertyCounterIncrement ? keyValue.value.incrementValue : keyValue.value.resetValue).valueOr(0);
         list->append(cssValuePool.createValue(number, CSSPrimitiveValue::CSS_NUMBER));
     }
     return WTFMove(list);
@@ -2040,7 +2040,7 @@ Ref<CSSFontStyleValue> ComputedStyleExtractor::fontNonKeywordStyleFromStyleValue
     return CSSFontStyleValue::create(CSSValuePool::singleton().createIdentifierValue(CSSValueOblique), CSSValuePool::singleton().createValue(static_cast<float>(italic), CSSPrimitiveValue::CSS_DEG));
 }
 
-Ref<CSSFontStyleValue> ComputedStyleExtractor::fontStyleFromStyleValue(std::optional<FontSelectionValue> italic, FontStyleAxis fontStyleAxis)
+Ref<CSSFontStyleValue> ComputedStyleExtractor::fontStyleFromStyleValue(Optional<FontSelectionValue> italic, FontStyleAxis fontStyleAxis)
 {
     if (auto keyword = fontStyleKeyword(italic, fontStyleAxis))
         return CSSFontStyleValue::create(CSSValuePool::singleton().createIdentifierValue(keyword.value()));
@@ -2434,7 +2434,7 @@ static inline bool hasValidStyleForProperty(Element& element, CSSPropertyID prop
 {
     if (element.styleValidity() != Style::Validity::Valid)
         return false;
-    if (element.document().hasPendingForcedStyleRecalc())
+    if (element.document().hasPendingFullStyleRebuild())
         return false;
     if (!element.document().childNeedsStyleRecalc())
         return true;
@@ -2638,7 +2638,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::customPropertyValue(const String& prope
     if (!value)
         return nullptr;
 
-    auto visitor = WTF::makeVisitor([&](const Ref<CSSVariableReferenceValue>&) {
+    return WTF::switchOn(value->value(), [&](const Ref<CSSVariableReferenceValue>&) {
         ASSERT_NOT_REACHED();
         return RefPtr<CSSValue>();
     }, [&](const CSSValueID&) {
@@ -2647,8 +2647,9 @@ RefPtr<CSSValue> ComputedStyleExtractor::customPropertyValue(const String& prope
         return CSSCustomPropertyValue::create(*value);
     }, [&](const Length& value) {
         return zoomAdjustedPixelValueForLength(value, *style);
+    }, [&](const Ref<StyleImage>&) {
+        return CSSCustomPropertyValue::create(*value);
     });
-    return WTF::visit(visitor, value->value());
 }
 
 String ComputedStyleExtractor::customPropertyText(const String& propertyName)
@@ -4216,12 +4217,12 @@ Ref<MutableStyleProperties> ComputedStyleExtractor::copyProperties()
     return copyPropertiesInSet(computedProperties, numComputedProperties);
 }
 
-RefPtr<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesForShorthandProperties(const StylePropertyShorthand& shorthand)
+Ref<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesForShorthandProperties(const StylePropertyShorthand& shorthand)
 {
     auto list = CSSValueList::createSpaceSeparated();
     for (size_t i = 0; i < shorthand.length(); ++i)
         list->append(propertyValue(shorthand.properties()[i], DoNotUpdateLayout).releaseNonNull());
-    return WTFMove(list);
+    return list;
 }
 
 RefPtr<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesForSidesShorthand(const StylePropertyShorthand& shorthand)
@@ -4253,12 +4254,12 @@ RefPtr<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesForSidesShortha
     return WTFMove(list);
 }
 
-RefPtr<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesForGridShorthand(const StylePropertyShorthand& shorthand)
+Ref<CSSValueList> ComputedStyleExtractor::getCSSPropertyValuesForGridShorthand(const StylePropertyShorthand& shorthand)
 {
     auto list = CSSValueList::createSlashSeparated();
     for (size_t i = 0; i < shorthand.length(); ++i)
         list->append(propertyValue(shorthand.properties()[i], DoNotUpdateLayout).releaseNonNull());
-    return WTFMove(list);
+    return list;
 }
 
 Ref<MutableStyleProperties> ComputedStyleExtractor::copyPropertiesInSet(const CSSPropertyID* set, unsigned length)
@@ -4353,8 +4354,8 @@ Ref<CSSValueList> ComputedStyleExtractor::getBackgroundShorthandValue()
     static const CSSPropertyID propertiesAfterSlashSeperator[3] = { CSSPropertyBackgroundSize, CSSPropertyBackgroundOrigin, CSSPropertyBackgroundClip };
 
     auto list = CSSValueList::createSlashSeparated();
-    list->append(*getCSSPropertyValuesForShorthandProperties(StylePropertyShorthand(CSSPropertyBackground, propertiesBeforeSlashSeperator)));
-    list->append(*getCSSPropertyValuesForShorthandProperties(StylePropertyShorthand(CSSPropertyBackground, propertiesAfterSlashSeperator)));
+    list->append(getCSSPropertyValuesForShorthandProperties(StylePropertyShorthand(CSSPropertyBackground, propertiesBeforeSlashSeperator)));
+    list->append(getCSSPropertyValuesForShorthandProperties(StylePropertyShorthand(CSSPropertyBackground, propertiesAfterSlashSeperator)));
     return list;
 }
 

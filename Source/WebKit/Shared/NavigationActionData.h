@@ -40,7 +40,7 @@ namespace WebKit {
 
 struct NavigationActionData {
     void encode(IPC::Encoder&) const;
-    static std::optional<NavigationActionData> decode(IPC::Decoder&);
+    static Optional<NavigationActionData> decode(IPC::Decoder&);
 
     WebCore::NavigationType navigationType { WebCore::NavigationType::Other };
     WebEvent::Modifiers modifiers { };
@@ -54,10 +54,9 @@ struct NavigationActionData {
     bool isRedirect { false };
     bool treatAsSameOriginNavigation { false };
     bool hasOpenedFrames { false };
-    bool openedViaWindowOpenWithOpener { false };
-    std::optional<std::pair<uint64_t, uint64_t>> opener;
+    bool openedByDOMWithOpener { false };
     WebCore::SecurityOriginData requesterOrigin;
-    std::optional<WebCore::BackForwardItemIdentifier> targetBackForwardItemIdentifier;
+    Optional<WebCore::BackForwardItemIdentifier> targetBackForwardItemIdentifier;
     WebCore::LockHistory lockHistory;
     WebCore::LockBackForwardList lockBackForwardList;
     WTF::String clientRedirectSourceForHistory;

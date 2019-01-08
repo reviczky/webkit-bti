@@ -471,7 +471,7 @@ static bool bindPathVar(Vector<CString>& args, const char* varname)
         return false;
 
     GUniquePtr<char*> splitPaths(g_strsplit(pathValue, ":", -1));
-    for (size_t i; splitPaths.get()[i]; ++i)
+    for (size_t i = 0; splitPaths.get()[i]; ++i)
         bindIfExists(args, splitPaths.get()[i]);
 
     return true;
@@ -571,7 +571,7 @@ static int setupSeccomp()
     //  https://git.gnome.org/browse/linux-user-chroot
     //    in src/setup-seccomp.c
     struct scmp_arg_cmp cloneArg = SCMP_A0(SCMP_CMP_MASKED_EQ, CLONE_NEWUSER, CLONE_NEWUSER);
-    struct scmp_arg_cmp ttyArg = SCMP_A1(SCMP_CMP_EQ, (int)TIOCSTI);
+    struct scmp_arg_cmp ttyArg = SCMP_A1(SCMP_CMP_EQ, static_cast<scmp_datum_t>(TIOCSTI), static_cast<scmp_datum_t>(0));
     struct {
         int scall;
         struct scmp_arg_cmp* arg;
@@ -779,6 +779,13 @@ GRefPtr<GSubprocess> bubblewrapSpawn(GSubprocessLauncher* launcher, const Proces
         // ahead of time if they require it.
         GUniquePtr<char> configDir(g_build_filename(g_get_user_config_dir(), g_get_prgname(), nullptr));
         GUniquePtr<char> cacheDir(g_build_filename(g_get_user_cache_dir(), g_get_prgname(), nullptr));
+        GUniquePtr<char> dataDir(g_build_filename(g_get_user_data_dir(), g_get_prgname(), nullptr));
+
+        sandboxArgs.appendVector(Vector<CString>({
+            "--ro-bind-try", cacheDir.get(), cacheDir.get(),
+            "--ro-bind-try", configDir.get(), configDir.get(),
+            "--ro-bind-try", dataDir.get(), dataDir.get(),
+        }));
 
         Vector<String> extraPaths = { "applicationCacheDirectory", "waylandSocket"};
         for (const auto& path : extraPaths) {
@@ -786,11 +793,6 @@ GRefPtr<GSubprocess> bubblewrapSpawn(GSubprocessLauncher* launcher, const Proces
             if (!extraPath.isEmpty())
                 sandboxArgs.appendVector(Vector<CString>({ "--bind-try", extraPath.utf8(), extraPath.utf8() }));
         }
-
-        sandboxArgs.appendVector(Vector<CString>({
-            "--ro-bind-try", cacheDir.get(), cacheDir.get(),
-            "--ro-bind-try", configDir.get(), configDir.get(),
-        }));
 
         bindDBusSession(sandboxArgs, proxy);
         // FIXME: This needs to be restricted, upstream is working on it.

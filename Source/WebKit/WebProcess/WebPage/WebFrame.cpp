@@ -43,6 +43,7 @@
 #include "WebDocumentLoader.h"
 #include "WebPage.h"
 #include "WebPageProxyMessages.h"
+#include "WebPolicyAction.h"
 #include "WebProcess.h"
 #include "WebsitePoliciesData.h"
 #include <JavaScriptCore/APICast.h>
@@ -253,19 +254,29 @@ void WebFrame::invalidatePolicyListener()
         completionHandler();
 }
 
-void WebFrame::didReceivePolicyDecision(uint64_t listenerID, PolicyAction action, uint64_t navigationID, DownloadID downloadID, std::optional<WebsitePoliciesData>&& websitePolicies)
+static WebCore::PolicyAction toPolicyAction(WebPolicyAction policyAction)
 {
-    if (!m_coreFrame)
-        return;
+    switch (policyAction) {
+    case WebPolicyAction::Use:
+        return WebCore::PolicyAction::Use;
+    case WebPolicyAction::Ignore:
+        return WebCore::PolicyAction::Ignore;
+    case WebPolicyAction::Download:
+        return WebCore::PolicyAction::Download;
+    case WebPolicyAction::Suspend:
+        break;
+    }
+    ASSERT_NOT_REACHED();
+    return WebCore::PolicyAction::Ignore;
+}
 
-    if (!m_policyListenerID)
+void WebFrame::didReceivePolicyDecision(uint64_t listenerID, WebPolicyAction action, uint64_t navigationID, DownloadID downloadID, Optional<WebsitePoliciesData>&& websitePolicies)
+{
+    if (!m_coreFrame || !m_policyListenerID || listenerID != m_policyListenerID || !m_policyFunction) {
+        if (action == WebPolicyAction::Suspend)
+            page()->send(Messages::WebPageProxy::DidFailToSuspendAfterProcessSwap());
         return;
-
-    if (listenerID != m_policyListenerID)
-        return;
-
-    if (!m_policyFunction)
-        return;
+    }
 
     FramePolicyFunction function = WTFMove(m_policyFunction);
     bool forNavigationAction = m_policyFunctionForNavigationAction == ForNavigationAction::Yes;
@@ -281,7 +292,16 @@ void WebFrame::didReceivePolicyDecision(uint64_t listenerID, PolicyAction action
             documentLoader->setNavigationID(navigationID);
     }
 
-    function(action);
+    bool shouldSuspend = false;
+    if (action == WebPolicyAction::Suspend) {
+        shouldSuspend = true;
+        action = WebPolicyAction::Ignore;
+    }
+
+    function(toPolicyAction(action));
+
+    if (shouldSuspend)
+        page()->suspendForProcessSwap();
 }
 
 void WebFrame::startDownload(const WebCore::ResourceRequest& request, const String& suggestedName)
@@ -508,7 +528,7 @@ unsigned WebFrame::pendingUnloadCount() const
     return m_coreFrame->document()->domWindow()->pendingUnloadEventListeners();
 }
 
-bool WebFrame::allowsFollowingLink(const WebCore::URL& url) const
+bool WebFrame::allowsFollowingLink(const URL& url) const
 {
     if (!m_coreFrame)
         return true;
@@ -802,11 +822,11 @@ void WebFrame::setTextDirection(const String& direction)
         return;
 
     if (direction == "auto")
-        m_coreFrame->editor().setBaseWritingDirection(NaturalWritingDirection);
+        m_coreFrame->editor().setBaseWritingDirection(WritingDirection::Natural);
     else if (direction == "ltr")
-        m_coreFrame->editor().setBaseWritingDirection(LeftToRightWritingDirection);
+        m_coreFrame->editor().setBaseWritingDirection(WritingDirection::LeftToRight);
     else if (direction == "rtl")
-        m_coreFrame->editor().setBaseWritingDirection(RightToLeftWritingDirection);
+        m_coreFrame->editor().setBaseWritingDirection(WritingDirection::RightToLeft);
 }
 
 void WebFrame::documentLoaderDetached(uint64_t navigationID)
@@ -818,7 +838,7 @@ void WebFrame::documentLoaderDetached(uint64_t navigationID)
 #if PLATFORM(COCOA)
 RetainPtr<CFDataRef> WebFrame::webArchiveData(FrameFilterFunction callback, void* context)
 {
-    RefPtr<LegacyWebArchive> archive = LegacyWebArchive::create(*coreFrame()->document(), [this, callback, context](Frame& frame) -> bool {
+    auto archive = LegacyWebArchive::create(*coreFrame()->document(), [this, callback, context](Frame& frame) -> bool {
         if (!callback)
             return true;
 

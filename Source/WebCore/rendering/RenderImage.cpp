@@ -45,11 +45,11 @@
 #include "HTMLNames.h"
 #include "HitTestResult.h"
 #include "InlineElementBox.h"
-#include "LayoutState.h"
 #include "Page.h"
 #include "PaintInfo.h"
 #include "RenderFragmentedFlow.h"
 #include "RenderImageResourceStyleImage.h"
+#include "RenderLayoutState.h"
 #include "RenderTheme.h"
 #include "RenderView.h"
 #include "RuntimeEnabledFeatures.h"
@@ -214,13 +214,9 @@ ImageSizeChangeType RenderImage::setImageSizeForAltText(CachedImage* newImage /*
 
 bool RenderImage::isEditableImage() const
 {
-    if (!settings().editableImagesEnabled())
+    if (!element() || !is<HTMLImageElement>(element()))
         return false;
-
-    if (!element())
-        return false;
-
-    return element()->hasAttributeWithoutSynchronization(x_apple_editable_imageAttr);
+    return downcast<HTMLImageElement>(element())->hasEditableImageAttribute();
 }
     
 bool RenderImage::requiresLayer() const
@@ -596,7 +592,7 @@ void RenderImage::paintAreaElementFocusRing(PaintInfo& paintInfo, const LayoutPo
 
 #if PLATFORM(MAC)
     bool needsRepaint;
-    paintInfo.context().drawFocusRing(path, page().focusController().timeSinceFocusWasSet().seconds(), needsRepaint, RenderTheme::focusRingColor(styleColorOptions()));
+    paintInfo.context().drawFocusRing(path, page().focusController().timeSinceFocusWasSet().seconds(), needsRepaint, RenderTheme::singleton().focusRingColor(styleColorOptions()));
     if (needsRepaint)
         page().focusController().setFocusedElementNeedsRepaint();
 #else
@@ -703,7 +699,7 @@ bool RenderImage::computeBackgroundIsKnownToBeObscured(const LayoutPoint& paintO
 
 LayoutUnit RenderImage::minimumReplacedHeight() const
 {
-    return imageResource().errorOccurred() ? intrinsicSize().height() : LayoutUnit();
+    return imageResource().errorOccurred() ? intrinsicSize().height() : 0_lu;
 }
 
 HTMLMapElement* RenderImage::imageMap() const

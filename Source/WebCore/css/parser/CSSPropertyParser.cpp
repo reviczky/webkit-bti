@@ -2170,7 +2170,7 @@ static RefPtr<CSSValue> consumeCursor(CSSParserTokenRange& range, const CSSParse
         if (!list)
             list = CSSValueList::createCommaSeparated();
 
-        list->append(CSSCursorImageValue::create(image.releaseNonNull(), hotSpotSpecified, hotSpot));
+        list->append(CSSCursorImageValue::create(image.releaseNonNull(), hotSpotSpecified, hotSpot, context.isContentOpaque ? LoadedFromOpaqueSource::Yes : LoadedFromOpaqueSource::No));
         if (!consumeCommaIncludingWhitespace(range))
             return nullptr;
     }
@@ -4393,8 +4393,11 @@ RefPtr<CSSCustomPropertyValue> CSSPropertyParser::parseTypedCustomPropertyValue(
     if (syntax != "*") {
         m_range.consumeWhitespace();
         auto primitiveVal = consumeWidthOrHeight(m_range, m_context);
-        if (primitiveVal && primitiveVal->isPrimitiveValue())
-            return CSSCustomPropertyValue::createSyntaxLength(name, StyleBuilderConverter::convertLength(styleResolver, *primitiveVal));
+        if (primitiveVal && primitiveVal->isPrimitiveValue() && downcast<CSSPrimitiveValue>(*primitiveVal).isLength()) {
+            auto length = StyleBuilderConverter::convertLength(styleResolver, *primitiveVal);
+            if (!length.isCalculated() && !length.isUndefined())
+                return CSSCustomPropertyValue::createSyntaxLength(name, WTFMove(length));
+        }
     } else {
         auto propertyValue = CSSCustomPropertyValue::createSyntaxAll(name, CSSVariableData::create(m_range));
         while (!m_range.atEnd())
@@ -4434,8 +4437,8 @@ static RefPtr<CSSValue> consumeFontFaceSrcURI(CSSParserTokenRange& range, const 
     String url = consumeUrlAsStringView(range).toString();
     if (url.isNull())
         return nullptr;
-    
-    RefPtr<CSSFontFaceSrcValue> uriValue = CSSFontFaceSrcValue::create(context.completeURL(url));
+
+    RefPtr<CSSFontFaceSrcValue> uriValue = CSSFontFaceSrcValue::create(context.completeURL(url), context.isContentOpaque ? LoadedFromOpaqueSource::Yes : LoadedFromOpaqueSource::No);
 
     if (range.peek().functionId() != CSSValueFormat)
         return uriValue;

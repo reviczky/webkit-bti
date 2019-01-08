@@ -84,8 +84,11 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
         this._typeFilterScopeBar = new WI.ScopeBar("network-type-filter-scope-bar", typeFilterScopeBarItems, typeFilterScopeBarItems[0]);
         this._typeFilterScopeBar.addEventListener(WI.ScopeBar.Event.SelectionChanged, this._typeFilterScopeBarSelectionChanged, this);
 
-        this._groupByDOMNodeNavigationItem = new WI.CheckboxNavigationItem("group-by-node", WI.UIString("Group Media Requests"), WI.settings.groupByDOMNode.value);
-        this._groupByDOMNodeNavigationItem.addEventListener(WI.CheckboxNavigationItem.Event.CheckedDidChange, this._handleGroupByDOMNodeCheckedDidChange, this);
+        if (WI.MediaInstrument.supported()) {
+            this._groupByDOMNodeNavigationItem = new WI.CheckboxNavigationItem("group-by-node", WI.UIString("Group Media Requests"), WI.settings.groupByDOMNode.value);
+            this._groupByDOMNodeNavigationItem.addEventListener(WI.CheckboxNavigationItem.Event.CheckedDidChange, this._handleGroupByDOMNodeCheckedDidChange, this);
+        } else
+            WI.settings.groupByDOMNode.value = false;
 
         this._urlFilterSearchText = null;
         this._urlFilterSearchRegex = null;
@@ -144,7 +147,7 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
         // triggers a MainResource change and then a MainFrame change. Page Transition
         // triggers a MainFrame change then a MainResource change.
         this._transitioningPageTarget = false;
-        
+
         WI.notifications.addEventListener(WI.Notification.TransitionPageTarget, this._transitionPageTarget, this);
     }
 
@@ -213,7 +216,10 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
 
     get filterNavigationItems()
     {
-        return [this._urlFilterNavigationItem, this._typeFilterScopeBar, this._groupByDOMNodeNavigationItem];
+        let navigationItems = [this._urlFilterNavigationItem, this._typeFilterScopeBar];
+        if (WI.MediaInstrument.supported())
+            navigationItems.push(this._groupByDOMNodeNavigationItem);
+        return navigationItems;
     }
 
     get supportsSave()
@@ -357,7 +363,7 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
         WI.appendContextMenuItemsForSourceCode(contextMenu, entry.resource);
 
         contextMenu.appendSeparator();
-        contextMenu.appendItem(WI.UIString("Export HAR"), () => { this._exportHAR(); });
+        contextMenu.appendItem(WI.UIString("Export HAR"), () => { this._exportHAR(); }, !this._canExportHAR());
     }
 
     tableShouldSelectRow(table, cell, column, rowIndex)
@@ -695,9 +701,9 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
 
                     let originator = fullscreenDOMEvents[i].originator || fullscreenDOMEvents[i + 1].originator;
                     if (originator)
-                        fullscreenElement.title = WI.UIString("Fullscreen from “%s“").format(originator.displayName);
+                        fullscreenElement.title = WI.UIString("Full-Screen from \u201C%s\u201D").format(originator.displayName);
                     else
-                        fullscreenElement.title = WI.UIString("Fullscreen");
+                        fullscreenElement.title = WI.UIString("Full-Screen");
                 }
             }
 
@@ -707,7 +713,7 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
 
                 let lowPowerElement = container.appendChild(document.createElement("div"));
                 lowPowerElement.classList.add("area", "low-power");
-                lowPowerElement.title = WI.UIString("Low Power Mode");
+                lowPowerElement.title = WI.UIString("Low-Power Mode");
                 positionByStartOffset(lowPowerElement, startTimestamp);
                 setWidthForDuration(lowPowerElement, startTimestamp, endTimestamp);
             }
@@ -1152,10 +1158,28 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
         }
     }
 
+    _canExportHAR()
+    {
+        let mainFrame = WI.networkManager.mainFrame;
+        if (!mainFrame)
+            return false;
+
+        let mainResource = mainFrame.mainResource;
+        if (!mainResource)
+            return false;
+
+        if (!mainResource.requestSentDate)
+            return false;
+
+        if (!this._HARResources().length)
+            return false;
+
+        return true;
+    }
+
     _updateExportButton()
     {
-        let enabled = this._filteredEntries.length > 0;
-        this._harExportNavigationItem.enabled = enabled;
+        this._harExportNavigationItem.enabled = this._canExportHAR();
     }
 
     _processPendingEntries()
@@ -1313,9 +1337,7 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
             if (object instanceof WI.Resource)
                 this._detailView = new WI.NetworkResourceDetailView(object, this);
             else if (object instanceof WI.DOMNode) {
-                this._detailView = new WI.NetworkDOMNodeDetailView(object, this, {
-                    startTimestamp: this._waterfallStartTime,
-                });
+                this._detailView = new WI.NetworkDOMNodeDetailView(object, this);
             }
 
             this._detailViewMap.set(object, this._detailView);
@@ -1368,7 +1390,7 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
     {
         if (!this._emptyFilterResultsMessageElement) {
             let buttonElement = document.createElement("button");
-            buttonElement.textContent = WI.UIString("Clear filters");
+            buttonElement.textContent = WI.UIString("Clear Filters");
             buttonElement.addEventListener("click", () => { this._resetFilters(); });
 
             this._emptyFilterResultsMessageElement = WI.createMessageTextView(WI.UIString("No Filter Results"));
@@ -1867,7 +1889,15 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
     {
         let resources = this._filteredEntries.map((x) => x.resource);
         const supportedHARSchemes = new Set(["http", "https", "ws", "wss"]);
-        return resources.filter((resource) => resource.finished && supportedHARSchemes.has(resource.urlComponents.scheme));
+        return resources.filter((resource) => {
+            if (!resource.finished)
+                return false;
+            if (!resource.requestSentDate)
+                return false;
+            if (!supportedHARSchemes.has(resource.urlComponents.scheme))
+                return false;
+            return true;
+        });
     }
 
     _exportHAR()
@@ -1918,9 +1948,7 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
     {
         let contentElement = this._waterfallPopoverContent();
 
-        let breakdownView = new WI.DOMEventsBreakdownView(domEvents, {
-            startTimestamp: this._waterfallStartTime,
-        });
+        let breakdownView = new WI.DOMEventsBreakdownView(domEvents);
         contentElement.appendChild(breakdownView.element);
         breakdownView.updateLayout();
 

@@ -300,6 +300,10 @@ void InspectorPageAgent::enable(ErrorString&)
     auto stopwatch = m_environment.executionStopwatch();
     stopwatch->reset();
     stopwatch->start();
+
+#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101400
+    defaultAppearanceDidChange(m_page.defaultUseDarkAppearance());
+#endif
 }
 
 void InspectorPageAgent::disable(ErrorString&)
@@ -310,6 +314,7 @@ void InspectorPageAgent::disable(ErrorString&)
     ErrorString unused;
     setShowPaintRects(unused, false);
     setEmulatedMedia(unused, emptyString());
+    setForcedAppearance(unused, emptyString());
 }
 
 void InspectorPageAgent::reload(ErrorString&, const bool* optionalReloadFromOrigin, const bool* optionalRevalidateAllResources)
@@ -685,6 +690,11 @@ void InspectorPageAgent::frameClearedScheduledNavigation(Frame& frame)
     m_frontendDispatcher->frameClearedScheduledNavigation(frameId(&frame));
 }
 
+void InspectorPageAgent::defaultAppearanceDidChange(bool useDarkAppearance)
+{
+    m_frontendDispatcher->defaultAppearanceDidChange(useDarkAppearance ? Inspector::Protocol::Page::Appearance::Dark : Inspector::Protocol::Page::Appearance::Light);
+}
+
 void InspectorPageAgent::didPaint(RenderObject& renderer, const LayoutRect& rect)
 {
     if (!m_enabled || !m_showPaintRects)
@@ -808,6 +818,21 @@ void InspectorPageAgent::setEmulatedMedia(ErrorString&, const String& media)
         document->updateLayout();
 }
 
+void InspectorPageAgent::setForcedAppearance(ErrorString&, const String& appearance)
+{
+    if (appearance == m_forcedAppearance)
+        return;
+
+    m_forcedAppearance = appearance;
+
+    if (appearance == "Light"_s)
+        m_page.setUseDarkAppearanceOverride(false);
+    else if (appearance == "Dark"_s)
+        m_page.setUseDarkAppearanceOverride(true);
+    else
+        m_page.setUseDarkAppearanceOverride(WTF::nullopt);
+}
+
 void InspectorPageAgent::applyEmulatedMedia(String& media)
 {
     if (!m_emulatedMedia.isEmpty())
@@ -841,7 +866,7 @@ void InspectorPageAgent::snapshotNode(ErrorString& errorString, int nodeId, Stri
         return;
     }
 
-    *outDataURL = snapshot->toDataURL("image/png"_s, std::nullopt, PreserveResolution::Yes);
+    *outDataURL = snapshot->toDataURL("image/png"_s, WTF::nullopt, PreserveResolution::Yes);
 }
 
 void InspectorPageAgent::snapshotRect(ErrorString& errorString, int x, int y, int width, int height, const String& coordinateSystem, String* outDataURL)
@@ -860,14 +885,14 @@ void InspectorPageAgent::snapshotRect(ErrorString& errorString, int x, int y, in
         return;
     }
 
-    *outDataURL = snapshot->toDataURL("image/png"_s, std::nullopt, PreserveResolution::Yes);
+    *outDataURL = snapshot->toDataURL("image/png"_s, WTF::nullopt, PreserveResolution::Yes);
 }
 
 void InspectorPageAgent::archive(ErrorString& errorString, String* data)
 {
 #if ENABLE(WEB_ARCHIVE) && USE(CF)
     Frame& frame = mainFrame();
-    RefPtr<LegacyWebArchive> archive = LegacyWebArchive::create(frame);
+    auto archive = LegacyWebArchive::create(frame);
     if (!archive) {
         errorString = "Could not create web archive for main frame"_s;
         return;

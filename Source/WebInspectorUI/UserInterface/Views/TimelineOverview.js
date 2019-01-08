@@ -685,6 +685,9 @@ WI.TimelineOverview = class TimelineOverview extends WI.View
             return;
 
         for (let overviewGraph of this._overviewGraphsByTypeMap.values()) {
+            if (!overviewGraph.visible)
+                continue;
+
             let graphRect = overviewGraph.element.getBoundingClientRect();
             if (!(event.pageX >= graphRect.left && event.pageX <= graphRect.right && event.pageY >= graphRect.top && event.pageY <= graphRect.bottom))
                 continue;
@@ -730,10 +733,13 @@ WI.TimelineOverview = class TimelineOverview extends WI.View
                 lastRecord = recordBar.records.lastValue;
             }
 
-            if (firstRecord.startTime < this.selectionStartTime || lastRecord.endTime > this.selectionStartTime + this.selectionDuration) {
+            let startTime = firstRecord instanceof WI.RenderingFrameTimelineRecord ? firstRecord.frameIndex : firstRecord.startTime;
+            let endTime = lastRecord instanceof WI.RenderingFrameTimelineRecord ? lastRecord.frameIndex : lastRecord.startTime;
+
+            if (startTime < this.selectionStartTime || endTime > this.selectionStartTime + this.selectionDuration) {
                 let selectionPadding = this.secondsPerPixel * 10;
-                this.selectionStartTime = firstRecord.startTime - selectionPadding;
-                this.selectionDuration = lastRecord.endTime - firstRecord.startTime + (selectionPadding * 2);
+                this.selectionStartTime = startTime - selectionPadding;
+                this.selectionDuration = endTime - startTime + (selectionPadding * 2);
             }
         }
 
@@ -842,26 +848,16 @@ WI.TimelineOverview = class TimelineOverview extends WI.View
 
     _timelinesTreeSelectionDidChange(event)
     {
-        function updateGraphSelectedState(timeline, selected)
-        {
-            let overviewGraph = this._overviewGraphsByTypeMap.get(timeline.type);
-            console.assert(overviewGraph, "Missing overview graph for timeline", timeline);
-            overviewGraph.selected = selected;
-        }
-
-        let selectedTreeElement = event.data.selectedElement;
-        let deselectedTreeElement = event.data.deselectedElement;
         let timeline = null;
+        let selectedTreeElement = this._timelinesTreeOutline.selectedTreeElement;
         if (selectedTreeElement) {
             timeline = selectedTreeElement.representedObject;
             console.assert(timeline instanceof WI.Timeline, timeline);
             console.assert(this._recording.timelines.get(timeline.type) === timeline, timeline);
 
-            updateGraphSelectedState.call(this, timeline, true);
+            for (let [type, overviewGraph] of this._overviewGraphsByTypeMap)
+                overviewGraph.selected = type === timeline.type;
         }
-
-        if (deselectedTreeElement)
-            updateGraphSelectedState.call(this, deselectedTreeElement.representedObject, false);
 
         this._selectedTimeline = timeline;
         this.dispatchEventToListeners(WI.TimelineOverview.Event.TimelineSelected);

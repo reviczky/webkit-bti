@@ -66,7 +66,7 @@ public:
     void updateRegistration(const URL& scopeURL, const URL& scriptURL, WorkerType, RefPtr<DeferredPromise>&&);
 
     void getRegistration(const String& clientURL, Ref<DeferredPromise>&&);
-    void scheduleTaskToUpdateRegistrationState(ServiceWorkerRegistrationIdentifier, ServiceWorkerRegistrationState, const std::optional<ServiceWorkerData>&);
+    void scheduleTaskToUpdateRegistrationState(ServiceWorkerRegistrationIdentifier, ServiceWorkerRegistrationState, const Optional<ServiceWorkerData>&);
     void scheduleTaskToFireUpdateFoundEvent(ServiceWorkerRegistrationIdentifier);
     void scheduleTaskToFireControllerChangeEvent();
 
@@ -95,12 +95,12 @@ private:
     void jobResolvedWithRegistration(ServiceWorkerJob&, ServiceWorkerRegistrationData&&, ShouldNotifyWhenResolved) final;
     void jobResolvedWithUnregistrationResult(ServiceWorkerJob&, bool unregistrationResult) final;
     void startScriptFetchForJob(ServiceWorkerJob&, FetchOptions::Cache) final;
-    void jobFinishedLoadingScript(ServiceWorkerJob&, const String& script, const ContentSecurityPolicyResponseHeaders&) final;
-    void jobFailedLoadingScript(ServiceWorkerJob&, const ResourceError&, std::optional<Exception>&&) final;
+    void jobFinishedLoadingScript(ServiceWorkerJob&, const String& script, const ContentSecurityPolicyResponseHeaders&, const String& referrerPolicy) final;
+    void jobFailedLoadingScript(ServiceWorkerJob&, const ResourceError&, Optional<Exception>&&) final;
 
     void jobDidFinish(ServiceWorkerJob&);
 
-    void didFinishGetRegistrationRequest(uint64_t requestIdentifier, std::optional<ServiceWorkerRegistrationData>&&);
+    void didFinishGetRegistrationRequest(uint64_t requestIdentifier, Optional<ServiceWorkerRegistrationData>&&);
     void didFinishGetRegistrationsRequest(uint64_t requestIdentifier, Vector<ServiceWorkerRegistrationData>&&);
 
     SWServerConnectionIdentifier connectionIdentifier() final;

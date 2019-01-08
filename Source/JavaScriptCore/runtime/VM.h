@@ -693,6 +693,10 @@ public:
     Exception* lastException() const { return m_lastException; }
     JSCell** addressOfLastException() { return reinterpret_cast<JSCell**>(&m_lastException); }
 
+    // This should only be used for test or assertion code that wants to inspect
+    // the pending exception without interfering with Throw/CatchScopes.
+    Exception* exceptionForInspection() const { return m_exception; }
+
     void setFailNextNewCodeBlock() { m_failNextNewCodeBlock = true; }
     bool getAndClearFailNextNewCodeBlock()
     {
@@ -856,6 +860,7 @@ public:
 
     void queueMicrotask(JSGlobalObject&, Ref<Microtask>&&);
     JS_EXPORT_PRIVATE void drainMicrotasks();
+    ALWAYS_INLINE void setOnEachMicrotaskTick(WTF::Function<void(VM&)>&& func) { m_onEachMicrotaskTick = WTFMove(func); }
     void setGlobalConstRedeclarationShouldThrow(bool globalConstRedeclarationThrow) { m_globalConstRedeclarationShouldThrow = globalConstRedeclarationThrow; }
     ALWAYS_INLINE bool globalConstRedeclarationShouldThrow() const { return m_globalConstRedeclarationShouldThrow; }
 
@@ -869,7 +874,7 @@ public:
     template<typename Func>
     void logEvent(CodeBlock*, const char* summary, const Func& func);
 
-    std::optional<RefPtr<Thread>> ownerThread() const { return m_apiLock->ownerThread(); }
+    Optional<RefPtr<Thread>> ownerThread() const { return m_apiLock->ownerThread(); }
 
     VMTraps& traps() { return m_traps; }
 
@@ -1014,6 +1019,8 @@ private:
 #endif
     std::unique_ptr<ShadowChicken> m_shadowChicken;
     std::unique_ptr<BytecodeIntrinsicRegistry> m_bytecodeIntrinsicRegistry;
+
+    WTF::Function<void(VM&)> m_onEachMicrotaskTick;
 
 #if ENABLE(JIT)
 #if !ASSERT_DISABLED

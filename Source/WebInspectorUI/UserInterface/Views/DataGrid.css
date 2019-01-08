@@ -314,7 +314,7 @@ body[dir=rtl] .data-grid tr.parent td.disclosure::before {
 }
 
 .data-grid td .subtitle::before {
-    content: " — ";
+    content: "\00A0\2014\00A0"; /* &nbsp;&mdash;&nbsp; */;
 }
 
 .data-grid:focus tr.selected td .subtitle {
@@ -445,5 +445,14 @@ body:not(.window-inactive, .window-docked-inactive) .data-grid:focus tr.editable
     .data-grid td.spanning {
         color: var(--text-color-secondary);
         background-color: unset;
+    }
+
+    .data-grid th.sortable:active {
+        background-color: hsl(0, 0%, 40%);
+    }
+
+    .data-grid th.sort-ascending > div:first-child::after,
+    .data-grid th.sort-descending > div:first-child::after {
+        filter: invert();
     }
 }

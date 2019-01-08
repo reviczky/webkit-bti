@@ -32,15 +32,15 @@ namespace JSC {
         friend struct OperandTypes;
 
         using Type = uint8_t;
-        static constexpr Type TypeInt32 = 1;
-        static constexpr Type TypeMaybeNumber = 0x02;
-        static constexpr Type TypeMaybeString = 0x04;
-        static constexpr Type TypeMaybeNull   = 0x08;
-        static constexpr Type TypeMaybeBool   = 0x10;
-        static constexpr Type TypeMaybeBigInt = 0x20;
-        static constexpr Type TypeMaybeOther  = 0x40;
+        static constexpr Type TypeInt32       = 0x1 << 0;
+        static constexpr Type TypeMaybeNumber = 0x1 << 1;
+        static constexpr Type TypeMaybeString = 0x1 << 2;
+        static constexpr Type TypeMaybeBigInt = 0x1 << 3;
+        static constexpr Type TypeMaybeNull   = 0x1 << 4;
+        static constexpr Type TypeMaybeBool   = 0x1 << 5;
+        static constexpr Type TypeMaybeOther  = 0x1 << 6;
 
-        static constexpr Type TypeBits = TypeMaybeNumber | TypeMaybeString | TypeMaybeNull | TypeMaybeBool | TypeMaybeBigInt | TypeMaybeOther;
+        static constexpr Type TypeBits = TypeMaybeNumber | TypeMaybeString | TypeMaybeBigInt | TypeMaybeNull | TypeMaybeBool | TypeMaybeOther;
 
     public:
         static constexpr int numBitsNeeded = 7;
@@ -136,6 +136,11 @@ namespace JSC {
             return ResultType(TypeMaybeBigInt);
         }
         
+        static constexpr ResultType bigIntOrInt32Type()
+        {
+            return ResultType(TypeMaybeBigInt | TypeInt32);
+        }
+
         static constexpr ResultType unknownType()
         {
             return ResultType(TypeBits);
@@ -169,7 +174,7 @@ namespace JSC {
 
         static constexpr ResultType forBitOp()
         {
-            return numberTypeIsInt32();
+            return bigIntOrInt32Type();
         }
 
         constexpr Type bits() const { return m_bits; }

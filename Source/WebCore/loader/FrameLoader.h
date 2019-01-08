@@ -41,7 +41,6 @@
 #include "ResourceLoaderOptions.h"
 #include "ResourceRequestBase.h"
 #include "SecurityContext.h"
-#include "ShouldSkipSafeBrowsingCheck.h"
 #include "StoredCredentialsPolicy.h"
 #include "Timer.h"
 #include <wtf/CompletionHandler.h>
@@ -125,7 +124,7 @@ public:
     unsigned long loadResourceSynchronously(const ResourceRequest&, ClientCredentialPolicy, const FetchOptions&, const HTTPHeaderMap&, ResourceError&, ResourceResponse&, RefPtr<SharedBuffer>& data);
 
     void changeLocation(FrameLoadRequest&&);
-    WEBCORE_EXPORT void urlSelected(const URL&, const String& target, Event*, LockHistory, LockBackForwardList, ShouldSendReferrer, ShouldOpenExternalURLsPolicy, std::optional<NewFrameOpenerPolicy> = std::nullopt, const AtomicString& downloadAttribute = nullAtom(), const SystemPreviewInfo& = { });
+    WEBCORE_EXPORT void urlSelected(const URL&, const String& target, Event*, LockHistory, LockBackForwardList, ShouldSendReferrer, ShouldOpenExternalURLsPolicy, Optional<NewFrameOpenerPolicy> = WTF::nullopt, const AtomicString& downloadAttribute = nullAtom(), const SystemPreviewInfo& = { });
     void submitForm(Ref<FormSubmission>&&);
 
     WEBCORE_EXPORT void reload(OptionSet<ReloadOption> = { });
@@ -235,6 +234,7 @@ public:
 
     void dispatchOnloadEvents();
     String userAgent(const URL&) const;
+    String navigatorPlatform() const;
 
     void dispatchDidClearWindowObjectInWorld(DOMWrapperWorld&);
     void dispatchDidClearWindowObjectsInAllWorlds();
@@ -248,6 +248,7 @@ public:
 
     WEBCORE_EXPORT Frame* opener();
     WEBCORE_EXPORT void setOpener(Frame*);
+    bool hasOpenedFrames() const { return !m_openedFrames.isEmpty(); }
 
     void resetMultipleFormSubmissionProtection();
 
@@ -366,14 +367,14 @@ private:
 
     bool shouldReloadToHandleUnreachableURL(DocumentLoader&);
 
-    void dispatchDidCommitLoad(std::optional<HasInsecureContent> initialHasInsecureContent);
+    void dispatchDidCommitLoad(Optional<HasInsecureContent> initialHasInsecureContent);
 
     void urlSelected(FrameLoadRequest&&, Event*);
 
-    void loadWithDocumentLoader(DocumentLoader*, FrameLoadType, RefPtr<FormState>&&, AllowNavigationToInvalidURL, ShouldTreatAsContinuingLoad, ShouldSkipSafeBrowsingCheck = ShouldSkipSafeBrowsingCheck::No, CompletionHandler<void()>&& = [] { }); // Calls continueLoadAfterNavigationPolicy
-    void load(DocumentLoader&, ShouldSkipSafeBrowsingCheck); // Calls loadWithDocumentLoader
+    void loadWithDocumentLoader(DocumentLoader*, FrameLoadType, RefPtr<FormState>&&, AllowNavigationToInvalidURL, ShouldTreatAsContinuingLoad, CompletionHandler<void()>&& = [] { }); // Calls continueLoadAfterNavigationPolicy
+    void load(DocumentLoader&); // Calls loadWithDocumentLoader
 
-    void loadWithNavigationAction(const ResourceRequest&, NavigationAction&&, LockHistory, FrameLoadType, RefPtr<FormState>&&, AllowNavigationToInvalidURL, ShouldSkipSafeBrowsingCheck = ShouldSkipSafeBrowsingCheck::No, CompletionHandler<void()>&& = [] { }); // Calls loadWithDocumentLoader
+    void loadWithNavigationAction(const ResourceRequest&, NavigationAction&&, LockHistory, FrameLoadType, RefPtr<FormState>&&, AllowNavigationToInvalidURL, CompletionHandler<void()>&& = [] { }); // Calls loadWithDocumentLoader
 
     void loadPostRequest(FrameLoadRequest&&, const String& referrer, FrameLoadType, Event*, RefPtr<FormState>&&, CompletionHandler<void()>&&);
     void loadURL(FrameLoadRequest&&, const String& referrer, FrameLoadType, Event*, RefPtr<FormState>&&, CompletionHandler<void()>&&);
@@ -387,7 +388,7 @@ private:
 
     void loadInSameDocument(const URL&, SerializedScriptValue* stateObject, bool isNewNavigation);
 
-    void prepareForLoadStart();
+    void prepareForLoadStart(CompletionHandler<void()>&&);
     void provisionalLoadStarted();
 
     void willTransitionToCommitted();
@@ -469,8 +470,8 @@ private:
 
     RefPtr<FrameNetworkingContext> m_networkingContext;
 
-    std::optional<ResourceRequestCachePolicy> m_overrideCachePolicyForTesting;
-    std::optional<ResourceLoadPriority> m_overrideResourceLoadPriorityForTesting;
+    Optional<ResourceRequestCachePolicy> m_overrideCachePolicyForTesting;
+    Optional<ResourceLoadPriority> m_overrideResourceLoadPriorityForTesting;
     bool m_isStrictRawResourceValidationPolicyDisabledForTesting { false };
     bool m_currentLoadShouldBeTreatedAsContinuingLoad { false };
 
