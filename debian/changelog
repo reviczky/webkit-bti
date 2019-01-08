@@ -9,6 +9,8 @@ webkit2gtk (2.23.2-1) UNRELEASED; urgency=medium
     debian/patches/fix-ftbfs-m68k.patch,
     debian/patches/fix-ftbfs-x32.patch:
     + Refresh these patches.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 08 Jan 2019 11:33:21 +0200
 
