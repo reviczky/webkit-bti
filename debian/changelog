@@ -1,4 +1,4 @@
-webkit2gtk (2.23.2-1) UNRELEASED; urgency=medium
+webkit2gtk (2.23.2-1) experimental; urgency=medium
 
   * New upstream development release (Closes: #914986).
   * debian/patches/build-minibrowser.patch,
@@ -18,7 +18,7 @@ webkit2gtk (2.23.2-1) UNRELEASED; urgency=medium
   * debian/control:
     + Update Standards-Version to 4.3.0 (no changes).
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 08 Jan 2019 11:33:21 +0200
+ -- Alberto Garcia <berto@igalia.com>  Tue, 08 Jan 2019 16:55:02 +0200
 
 webkit2gtk (2.23.1-1) experimental; urgency=medium
 
