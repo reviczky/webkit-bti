@@ -1,6 +1,14 @@
 webkit2gtk (2.23.2-1) UNRELEASED; urgency=medium
 
   * New upstream development release (Closes: #914986).
+  * debian/patches/build-minibrowser.patch,
+    debian/patches/detect-jit.patch,
+    debian/patches/fix-ftbfs-armel.patch:
+    + Remove these patches, they are now upstream.
+  * debian/patches/detect-woff.patch,
+    debian/patches/fix-ftbfs-m68k.patch,
+    debian/patches/fix-ftbfs-x32.patch:
+    + Refresh these patches.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 08 Jan 2019 11:33:21 +0200
 
