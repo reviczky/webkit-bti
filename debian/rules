@@ -57,6 +57,7 @@ endif
 	dh $@ --with gir
 
 override_dh_auto_configure:
+	chmod 755 Tools/gtkdoc/generate-gtkdoc
 	CXXFLAGS="$(CFLAGS)" \
 	dh_auto_configure -- \
 	   -DPORT=GTK \

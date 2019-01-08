@@ -11,6 +11,10 @@ webkit2gtk (2.23.2-1) UNRELEASED; urgency=medium
     + Refresh these patches.
   * debian/source/lintian-overrides:
     + Update source-is-missing overrides.
+  * debian/patches/missing-gtkdoc-files.patch:
+    + Upstream forgot to add Tools/gtkdoc to the tarball.
+  * debian/rules:
+    + Make Tools/gtkdoc/generate-gtkdoc executable.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 08 Jan 2019 11:33:21 +0200
 
