@@ -104,6 +104,9 @@ public:
     void setWebAuthenticationEnabled(bool isEnabled) { m_isWebAuthenticationEnabled = isEnabled; }
     bool webAuthenticationEnabled() const { return m_isWebAuthenticationEnabled; }
 
+    void setWebAuthenticationLocalAuthenticatorEnabled(bool isEnabled) { m_isWebAuthenticationLocalAuthenticatorEnabled = isEnabled; }
+    bool webAuthenticationLocalAuthenticatorEnabled() const { return m_isWebAuthenticationLocalAuthenticatorEnabled; }
+
     void setIsSecureContextAttributeEnabled(bool isEnabled) { m_isSecureContextAttributeEnabled = isEnabled; }
     bool isSecureContextAttributeEnabled() const { return m_isSecureContextAttributeEnabled; }
 
@@ -178,9 +181,19 @@ public:
     void setPointerEventsEnabled(bool isEnabled) { m_pointerEventsEnabled = isEnabled; }
     bool pointerEventsEnabled() const { return m_pointerEventsEnabled; }
 
+#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
+    void setLayoutFormattingContextEnabled(bool isEnabled) { m_layoutFormattingContextEnabled = isEnabled; }
+    bool layoutFormattingContextEnabled() const { return m_layoutFormattingContextEnabled; }
+#endif
+
 #if ENABLE(CSS_PAINTING_API)
     void setCSSPaintingAPIEnabled(bool isEnabled) { m_CSSPaintingAPIEnabled = isEnabled; }
     bool cssPaintingAPIEnabled() const { return m_CSSPaintingAPIEnabled; }
+#endif
+
+#if ENABLE(CSS_TYPED_OM)
+    void setCSSTypedOMEnabled(bool isEnabled) { m_CSSTypedOMEnabled = isEnabled; }
+    bool cssTypedOMEnabled() const { return m_CSSTypedOMEnabled; }
 #endif
 
     void setWebSQLDisabled(bool isDisabled) { m_webSQLEnabled = !isDisabled; }
@@ -337,6 +350,7 @@ private:
     bool m_isUserTimingEnabled { false };
     bool m_isInteractiveFormValidationEnabled { false };
     bool m_isWebAuthenticationEnabled { false };
+    bool m_isWebAuthenticationLocalAuthenticatorEnabled { false };
     bool m_isSecureContextAttributeEnabled { false };
     bool m_isDisplayContentsEnabled { true };
     bool m_isShadowDOMEnabled { true };
@@ -372,8 +386,16 @@ private:
     bool m_pointerEventsEnabled { false };
     bool m_webSQLEnabled { true };
 
+#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
+    bool m_layoutFormattingContextEnabled { false };
+#endif
+
 #if ENABLE(CSS_PAINTING_API)
     bool m_CSSPaintingAPIEnabled { false };
+#endif
+
+#if ENABLE(CSS_TYPED_OM)
+    bool m_CSSTypedOMEnabled { false };
 #endif
 
 #if ENABLE(ATTACHMENT_ELEMENT)

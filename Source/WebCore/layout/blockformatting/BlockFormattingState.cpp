@@ -28,7 +28,7 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
-#include "FormattingContext.h"
+#include "BlockFormattingContext.h"
 #include "LayoutBox.h"
 #include <wtf/IsoMallocInlines.h>
 
@@ -46,7 +46,7 @@ BlockFormattingState::~BlockFormattingState()
 {
 }
 
-std::unique_ptr<FormattingContext> BlockFormattingState::formattingContext(const Box& formattingContextRoot)
+std::unique_ptr<FormattingContext> BlockFormattingState::createFormattingContext(const Box& formattingContextRoot)
 {
     ASSERT(formattingContextRoot.establishesBlockFormattingContext());
     return std::make_unique<BlockFormattingContext>(formattingContextRoot, *this);

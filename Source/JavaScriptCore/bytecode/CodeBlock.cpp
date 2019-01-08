@@ -566,6 +566,8 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
         LINK(OpToThis, profile)
         LINK(OpBitand, profile)
         LINK(OpBitor, profile)
+        LINK(OpBitnot, profile)
+        LINK(OpBitxor, profile)
 
         LINK(OpGetById, profile, hitCountForLLIntCaching)
 
@@ -591,7 +593,6 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
         LINK(OpMul)
         LINK(OpDiv)
         LINK(OpSub)
-        LINK(OpBitxor)
 
         LINK(OpNegate)
 
@@ -2497,16 +2498,11 @@ ArrayProfile* CodeBlock::getArrayProfile(const ConcurrentJSLocker&, unsigned byt
             return &metadata.modeMetadata.arrayLengthMode.arrayProfile;
         break;
     }
-
     default:
         break;
     }
 
-    for (auto& m_arrayProfile : m_arrayProfiles) {
-        if (m_arrayProfile.bytecodeOffset() == bytecodeOffset)
-            return &m_arrayProfile;
-    }
-    return 0;
+    return nullptr;
 }
 
 ArrayProfile* CodeBlock::getArrayProfile(unsigned bytecodeOffset)
@@ -2514,33 +2510,6 @@ ArrayProfile* CodeBlock::getArrayProfile(unsigned bytecodeOffset)
     ConcurrentJSLocker locker(m_lock);
     return getArrayProfile(locker, bytecodeOffset);
 }
-
-ArrayProfile* CodeBlock::addArrayProfile(const ConcurrentJSLocker&, unsigned bytecodeOffset)
-{
-    m_arrayProfiles.append(ArrayProfile(bytecodeOffset));
-    return &m_arrayProfiles.last();
-}
-
-ArrayProfile* CodeBlock::addArrayProfile(unsigned bytecodeOffset)
-{
-    ConcurrentJSLocker locker(m_lock);
-    return addArrayProfile(locker, bytecodeOffset);
-}
-
-ArrayProfile* CodeBlock::getOrAddArrayProfile(const ConcurrentJSLocker& locker, unsigned bytecodeOffset)
-{
-    ArrayProfile* result = getArrayProfile(locker, bytecodeOffset);
-    if (result)
-        return result;
-    return addArrayProfile(locker, bytecodeOffset);
-}
-
-ArrayProfile* CodeBlock::getOrAddArrayProfile(unsigned bytecodeOffset)
-{
-    ConcurrentJSLocker locker(m_lock);
-    return getOrAddArrayProfile(locker, bytecodeOffset);
-}
-
 
 #if ENABLE(DFG_JIT)
 Vector<CodeOrigin, 0, UnsafeVectorOverflow>& CodeBlock::codeOrigins()
@@ -2952,8 +2921,6 @@ ArithProfile* CodeBlock::arithProfileForPC(const Instruction* pc)
     switch (pc->opcodeID()) {
     case op_negate:
         return &pc->as<OpNegate>().metadata(this).arithProfile;
-    case op_bitxor:
-        return &pc->as<OpBitxor>().metadata(this).arithProfile;
     case op_add:
         return &pc->as<OpAdd>().metadata(this).arithProfile;
     case op_mul:
@@ -3067,29 +3034,29 @@ void CodeBlock::setPCToCodeOriginMap(std::unique_ptr<PCToCodeOriginMap>&& map)
     m_pcToCodeOriginMap = WTFMove(map);
 }
 
-std::optional<CodeOrigin> CodeBlock::findPC(void* pc)
+Optional<CodeOrigin> CodeBlock::findPC(void* pc)
 {
     if (m_pcToCodeOriginMap) {
-        if (std::optional<CodeOrigin> codeOrigin = m_pcToCodeOriginMap->findPC(pc))
+        if (Optional<CodeOrigin> codeOrigin = m_pcToCodeOriginMap->findPC(pc))
             return codeOrigin;
     }
 
     for (auto iter = m_stubInfos.begin(); !!iter; ++iter) {
         StructureStubInfo* stub = *iter;
         if (stub->containsPC(pc))
-            return std::optional<CodeOrigin>(stub->codeOrigin);
+            return Optional<CodeOrigin>(stub->codeOrigin);
     }
 
-    if (std::optional<CodeOrigin> codeOrigin = m_jitCode->findPC(this, pc))
+    if (Optional<CodeOrigin> codeOrigin = m_jitCode->findPC(this, pc))
         return codeOrigin;
 
-    return std::nullopt;
+    return WTF::nullopt;
 }
 #endif // ENABLE(JIT)
 
-std::optional<unsigned> CodeBlock::bytecodeOffsetFromCallSiteIndex(CallSiteIndex callSiteIndex)
+Optional<unsigned> CodeBlock::bytecodeOffsetFromCallSiteIndex(CallSiteIndex callSiteIndex)
 {
-    std::optional<unsigned> bytecodeOffset;
+    Optional<unsigned> bytecodeOffset;
     JITCode::JITType jitType = this->jitType();
     if (jitType == JITCode::InterpreterThunk || jitType == JITCode::BaselineJIT) {
 #if USE(JSVALUE64)

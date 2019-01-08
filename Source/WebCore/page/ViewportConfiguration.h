@@ -77,7 +77,7 @@ public:
     const FloatSize& viewLayoutSize() const { return m_viewLayoutSize; }
 
     const FloatSize& minimumLayoutSize() const { return m_minimumLayoutSize; }
-    WEBCORE_EXPORT bool setViewLayoutSize(const FloatSize&, std::optional<double>&& scaleFactor = std::nullopt);
+    WEBCORE_EXPORT bool setViewLayoutSize(const FloatSize&, Optional<double>&& scaleFactor = WTF::nullopt, Optional<double>&& effectiveWidth = WTF::nullopt);
 
     const OptionSet<DisabledAdaptations>& disabledAdaptations() const { return m_disabledAdaptations; }
     WEBCORE_EXPORT bool setDisabledAdaptations(const OptionSet<DisabledAdaptations>&);
@@ -103,6 +103,7 @@ public:
 
     // Matches a width=device-width, initial-scale=1 viewport.
     WEBCORE_EXPORT static Parameters nativeWebpageParameters();
+    static Parameters scalableNativeWebpageParameters();
     WEBCORE_EXPORT static Parameters webpageParameters();
     WEBCORE_EXPORT static Parameters textDocumentParameters();
     WEBCORE_EXPORT static Parameters imageDocumentParameters();
@@ -126,17 +127,47 @@ private:
     bool shouldIgnoreScalingConstraints() const;
     bool shouldIgnoreVerticalScalingConstraints() const;
     bool shouldIgnoreHorizontalScalingConstraints() const;
+    void updateDefaultConfiguration();
+    bool canOverrideConfigurationParameters() const;
+
+    constexpr bool shouldIgnoreMinimumEffectiveDeviceWidth() const
+    {
+        if (m_canIgnoreScalingConstraints)
+            return true;
+
+        if (m_viewportArguments == ViewportArguments())
+            return false;
+
+        if (m_viewportArguments.width == ViewportArguments::ValueDeviceWidth || m_viewportArguments.zoom == 1.)
+            return true;
+
+        return false;
+    }
+
+    constexpr double minimumEffectiveDeviceWidth() const
+    {
+        if (shouldIgnoreMinimumEffectiveDeviceWidth())
+            return 0;
+        return m_minimumEffectiveDeviceWidth;
+    }
 
     constexpr double forceAlwaysUserScalableMaximumScale() const
     {
         const double forceAlwaysUserScalableMaximumScaleIgnoringLayoutScaleFactor = 5;
-        return forceAlwaysUserScalableMaximumScaleIgnoringLayoutScaleFactor * m_layoutSizeScaleFactor;
+        return forceAlwaysUserScalableMaximumScaleIgnoringLayoutScaleFactor * effectiveLayoutSizeScaleFactor();
     }
 
     constexpr double forceAlwaysUserScalableMinimumScale() const
     {
         const double forceAlwaysUserScalableMinimumScaleIgnoringLayoutScaleFactor = 1;
-        return forceAlwaysUserScalableMinimumScaleIgnoringLayoutScaleFactor * m_layoutSizeScaleFactor;
+        return forceAlwaysUserScalableMinimumScaleIgnoringLayoutScaleFactor * effectiveLayoutSizeScaleFactor();
+    }
+
+    constexpr double effectiveLayoutSizeScaleFactor() const
+    {
+        if (!m_viewLayoutSize.width() || !minimumEffectiveDeviceWidth())
+            return m_layoutSizeScaleFactor;
+        return m_layoutSizeScaleFactor * m_viewLayoutSize.width() / std::max<double>(minimumEffectiveDeviceWidth(), m_viewLayoutSize.width());
     }
 
     void updateMinimumLayoutSize();
@@ -150,6 +181,7 @@ private:
     OptionSet<DisabledAdaptations> m_disabledAdaptations;
 
     double m_layoutSizeScaleFactor { 1 };
+    double m_minimumEffectiveDeviceWidth { 0 };
     bool m_canIgnoreScalingConstraints;
     bool m_forceAlwaysUserScalable;
 };

@@ -146,11 +146,11 @@ void ServiceWorkerJob::notifyFinished()
     ASSERT(m_scriptLoader);
     
     if (!m_scriptLoader->failed())
-        m_client->jobFinishedLoadingScript(*this, m_scriptLoader->script(), m_scriptLoader->contentSecurityPolicy());
+        m_client->jobFinishedLoadingScript(*this, m_scriptLoader->script(), m_scriptLoader->contentSecurityPolicy(), m_scriptLoader->referrerPolicy());
     else {
         auto& error =  m_scriptLoader->error();
         ASSERT(!error.isNull());
-        m_client->jobFailedLoadingScript(*this, error, std::nullopt);
+        m_client->jobFailedLoadingScript(*this, error, WTF::nullopt);
     }
 
     m_scriptLoader = nullptr;

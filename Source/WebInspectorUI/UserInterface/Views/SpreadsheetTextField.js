@@ -40,12 +40,8 @@ WI.SpreadsheetTextField = class SpreadsheetTextField
 
         this._element.classList.add("spreadsheet-text-field");
 
-        if (WI.settings.experimentalEnableMultiplePropertiesSelection.value) {
-            this._element.addEventListener("mousedown", this._handleMouseDown.bind(this), true);
-            this._element.addEventListener("click", this._handleClick.bind(this));
-        } else
-            this._element.addEventListener("focus", this._handleFocus.bind(this));
-
+        this._element.addEventListener("mousedown", this._handleMouseDown.bind(this), true);
+        this._element.addEventListener("click", this._handleClick.bind(this));
         this._element.addEventListener("blur", this._handleBlur.bind(this));
         this._element.addEventListener("keydown", this._handleKeyDown.bind(this));
         this._element.addEventListener("input", this._handleInput.bind(this));
@@ -195,7 +191,6 @@ WI.SpreadsheetTextField = class SpreadsheetTextField
     {
         if (this._valueBeforeEditing !== this.value) {
             this.value = this._valueBeforeEditing;
-            this._selectText();
 
             if (this._delegate && typeof this._delegate.spreadsheetTextFieldDidChange === "function")
                 this._delegate.spreadsheetTextFieldDidChange(this);
@@ -213,14 +208,13 @@ WI.SpreadsheetTextField = class SpreadsheetTextField
             event.stopPropagation();
     }
 
-    _handleFocus(event)
-    {
-        this.startEditing();
-    }
-
     _handleBlur(event)
     {
         if (!this._editing)
+            return;
+
+        // Keep editing after tabbing out of Web Inspector window and back.
+        if (document.activeElement === this._element)
             return;
 
         this._applyCompletionHint();
@@ -291,6 +285,10 @@ WI.SpreadsheetTextField = class SpreadsheetTextField
         if (event.key === "Escape") {
             event.stop();
             this._discardChange();
+            window.getSelection().removeAllRanges();
+
+            if (this._delegate && this._delegate.spreadsheetTextFieldDidPressEsc)
+                this._delegate.spreadsheetTextFieldDidPressEsc(this, this._valueBeforeEditing);
         }
     }
 

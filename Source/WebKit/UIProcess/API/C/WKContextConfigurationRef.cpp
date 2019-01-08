@@ -168,6 +168,16 @@ void WKContextConfigurationSetProcessSwapsOnNavigation(WKContextConfigurationRef
     toImpl(configuration)->setProcessSwapsOnNavigation(swaps);
 }
 
+bool WKContextConfigurationPrewarmsProcessesAutomatically(WKContextConfigurationRef configuration)
+{
+    return toImpl(configuration)->isAutomaticProcessWarmingEnabled();
+}
+
+void WKContextConfigurationSetPrewarmsProcessesAutomatically(WKContextConfigurationRef configuration, bool prewarms)
+{
+    toImpl(configuration)->setIsAutomaticProcessWarmingEnabled(prewarms);
+}
+
 bool WKContextConfigurationAlwaysKeepAndReuseSwappedProcesses(WKContextConfigurationRef configuration)
 {
     return toImpl(configuration)->alwaysKeepAndReuseSwappedProcesses();
@@ -190,11 +200,10 @@ void WKContextConfigurationSetProcessSwapsOnWindowOpenWithOpener(WKContextConfig
 
 int64_t WKContextConfigurationDiskCacheSizeOverride(WKContextConfigurationRef configuration)
 {
-    return toImpl(configuration)->diskCacheSizeOverride();
+    return 0;
 }
 
 void WKContextConfigurationSetDiskCacheSizeOverride(WKContextConfigurationRef configuration, int64_t size)
 {
-    toImpl(configuration)->setDiskCacheSizeOverride(size);
 }
 

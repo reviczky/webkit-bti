@@ -177,8 +177,9 @@ SLOW_PATH_DECL(slow_path_call_arityCheck)
 {
     BEGIN();
     int slotsToAdd = CommonSlowPaths::arityCheckFor(exec, vm, CodeForCall);
-    if (slotsToAdd < 0) {
-        exec->convertToStackOverflowFrame(vm);
+    if (UNLIKELY(slotsToAdd < 0)) {
+        CodeBlock* codeBlock = CommonSlowPaths::codeBlockFromCallFrameCallee(exec, CodeForCall);
+        exec->convertToStackOverflowFrame(vm, codeBlock);
         NativeCallFrameTracer tracer(&vm, exec);
         ErrorHandlingScope errorScope(vm);
         throwScope.release();
@@ -192,8 +193,9 @@ SLOW_PATH_DECL(slow_path_construct_arityCheck)
 {
     BEGIN();
     int slotsToAdd = CommonSlowPaths::arityCheckFor(exec, vm, CodeForConstruct);
-    if (slotsToAdd < 0) {
-        exec->convertToStackOverflowFrame(vm);
+    if (UNLIKELY(slotsToAdd < 0)) {
+        CodeBlock* codeBlock = CommonSlowPaths::codeBlockFromCallFrameCallee(exec, CodeForConstruct);
+        exec->convertToStackOverflowFrame(vm, codeBlock);
         NativeCallFrameTracer tracer(&vm, exec);
         ErrorHandlingScope errorScope(vm);
         throwArityCheckStackOverflowError(exec, throwScope);
@@ -653,22 +655,48 @@ SLOW_PATH_DECL(slow_path_lshift)
 {
     BEGIN();
     auto bytecode = pc->as<OpLshift>();
-    int32_t a = GET_C(bytecode.lhs).jsValue().toInt32(exec);
-    if (UNLIKELY(throwScope.exception()))
-        RETURN(JSValue());
-    uint32_t b = GET_C(bytecode.rhs).jsValue().toUInt32(exec);
-    RETURN(jsNumber(a << (b & 31)));
+    JSValue left = GET_C(bytecode.lhs).jsValue();
+    JSValue right = GET_C(bytecode.rhs).jsValue();
+    auto leftNumeric = left.toBigIntOrInt32(exec);
+    CHECK_EXCEPTION();
+    auto rightNumeric = right.toBigIntOrInt32(exec);
+    CHECK_EXCEPTION();
+
+    if (WTF::holds_alternative<JSBigInt*>(leftNumeric) || WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+        if (WTF::holds_alternative<JSBigInt*>(leftNumeric) && WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+            JSBigInt* result = JSBigInt::leftShift(exec, WTF::get<JSBigInt*>(leftNumeric), WTF::get<JSBigInt*>(rightNumeric));
+            CHECK_EXCEPTION();
+            RETURN(result);
+        }
+
+        THROW(createTypeError(exec, "Invalid mix of BigInt and other type in left shift operation."));
+    }
+
+    RETURN(jsNumber(WTF::get<int32_t>(leftNumeric) << (WTF::get<int32_t>(rightNumeric) & 31)));
 }
 
 SLOW_PATH_DECL(slow_path_rshift)
 {
     BEGIN();
     auto bytecode = pc->as<OpRshift>();
-    int32_t a = GET_C(bytecode.lhs).jsValue().toInt32(exec);
-    if (UNLIKELY(throwScope.exception()))
-        RETURN(JSValue());
-    uint32_t b = GET_C(bytecode.rhs).jsValue().toUInt32(exec);
-    RETURN(jsNumber(a >> (b & 31)));
+    JSValue left = GET_C(bytecode.lhs).jsValue();
+    JSValue right = GET_C(bytecode.rhs).jsValue();
+    auto leftNumeric = left.toBigIntOrInt32(exec);
+    CHECK_EXCEPTION();
+    auto rightNumeric = right.toBigIntOrInt32(exec);
+    CHECK_EXCEPTION();
+
+    if (WTF::holds_alternative<JSBigInt*>(leftNumeric) || WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+        if (WTF::holds_alternative<JSBigInt*>(leftNumeric) && WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
+            JSBigInt* result = JSBigInt::signedRightShift(exec, WTF::get<JSBigInt*>(leftNumeric), WTF::get<JSBigInt*>(rightNumeric));
+            CHECK_EXCEPTION();
+            RETURN(result);
+        }
+
+        THROW(createTypeError(exec, "Invalid mix of BigInt and other type in signed right shift operation."));
+    }
+
+    RETURN(jsNumber(WTF::get<int32_t>(leftNumeric) >> (WTF::get<int32_t>(rightNumeric) & 31)));
 }
 
 SLOW_PATH_DECL(slow_path_urshift)
@@ -688,6 +716,15 @@ SLOW_PATH_DECL(slow_path_unsigned)
     auto bytecode = pc->as<OpUnsigned>();
     uint32_t a = GET_C(bytecode.operand).jsValue().toUInt32(exec);
     RETURN(jsNumber(a));
+}
+
+SLOW_PATH_DECL(slow_path_bitnot)
+{
+    BEGIN();
+    auto bytecode = pc->as<OpBitnot>();
+    int32_t operand = GET_C(bytecode.operand).jsValue().toInt32(exec);
+    CHECK_EXCEPTION();
+    RETURN_PROFILED(jsNumber(~operand));
 }
 
 SLOW_PATH_DECL(slow_path_bitand)
@@ -744,13 +781,13 @@ SLOW_PATH_DECL(slow_path_bitxor)
         if (WTF::holds_alternative<JSBigInt*>(leftNumeric) && WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
             JSBigInt* result = JSBigInt::bitwiseXor(exec, WTF::get<JSBigInt*>(leftNumeric), WTF::get<JSBigInt*>(rightNumeric));
             CHECK_EXCEPTION();
-            RETURN(result);
+            RETURN_PROFILED(result);
         }
 
         THROW(createTypeError(exec, "Invalid mix of BigInt and other type in bitwise 'xor' operation."));
     }
 
-    RETURN(jsNumber(WTF::get<int32_t>(leftNumeric) ^ WTF::get<int32_t>(rightNumeric)));
+    RETURN_PROFILED(jsNumber(WTF::get<int32_t>(leftNumeric) ^ WTF::get<int32_t>(rightNumeric)));
 }
 
 SLOW_PATH_DECL(slow_path_typeof)

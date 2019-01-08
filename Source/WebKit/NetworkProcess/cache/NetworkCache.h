@@ -29,7 +29,7 @@
 #include "NetworkCacheStorage.h"
 #include "ShareableResource.h"
 #include <WebCore/ResourceResponse.h>
-#include <wtf/Function.h>
+#include <wtf/CompletionHandler.h>
 #include <wtf/OptionSet.h>
 #include <wtf/Seconds.h>
 #include <wtf/text/WTFString.h>
@@ -38,7 +38,6 @@ namespace WebCore {
 class LowPowerModeNotifier;
 class ResourceRequest;
 class SharedBuffer;
-class URL;
 }
 
 namespace WebKit {
@@ -112,25 +111,25 @@ public:
 
         WTF_MAKE_FAST_ALLOCATED;
     };
-    using RetrieveCompletionHandler = Function<void (std::unique_ptr<Entry>, const RetrieveInfo&)>;
+    using RetrieveCompletionHandler = CompletionHandler<void(std::unique_ptr<Entry>, const RetrieveInfo&)>;
     void retrieve(const WebCore::ResourceRequest&, const GlobalFrameID&, RetrieveCompletionHandler&&);
-    std::unique_ptr<Entry> store(const WebCore::ResourceRequest&, const WebCore::ResourceResponse&, RefPtr<WebCore::SharedBuffer>&&, Function<void (MappedBody&)>&&);
-    std::unique_ptr<Entry> storeRedirect(const WebCore::ResourceRequest&, const WebCore::ResourceResponse&, const WebCore::ResourceRequest& redirectRequest, std::optional<Seconds> maxAgeCap);
+    std::unique_ptr<Entry> store(const WebCore::ResourceRequest&, const WebCore::ResourceResponse&, RefPtr<WebCore::SharedBuffer>&&, CompletionHandler<void(MappedBody&)>&&);
+    std::unique_ptr<Entry> storeRedirect(const WebCore::ResourceRequest&, const WebCore::ResourceResponse&, const WebCore::ResourceRequest& redirectRequest, Optional<Seconds> maxAgeCap);
     std::unique_ptr<Entry> update(const WebCore::ResourceRequest&, const GlobalFrameID&, const Entry&, const WebCore::ResourceResponse& validatingResponse);
 
     struct TraversalEntry {
         const Entry& entry;
         const Storage::RecordInfo& recordInfo;
     };
-    void traverse(Function<void (const TraversalEntry*)>&&);
+    void traverse(CompletionHandler<void(const TraversalEntry*)>&&);
     void remove(const Key&);
     void remove(const WebCore::ResourceRequest&);
-    void remove(const Vector<Key>&, Function<void ()>&&);
+    void remove(const Vector<Key>&, CompletionHandler<void()>&&);
 
     void clear();
-    void clear(WallTime modifiedSince, Function<void ()>&& completionHandler);
+    void clear(WallTime modifiedSince, CompletionHandler<void()>&&);
 
-    void retrieveData(const DataKey&, Function<void (const uint8_t* data, size_t size)>);
+    void retrieveData(const DataKey&, CompletionHandler<void(const uint8_t*, size_t)>);
     void storeData(const DataKey&,  const uint8_t* data, size_t);
     
     std::unique_ptr<Entry> makeEntry(const WebCore::ResourceRequest&, const WebCore::ResourceResponse&, RefPtr<WebCore::SharedBuffer>&&);
@@ -156,7 +155,7 @@ private:
     String dumpFilePath() const;
     void deleteDumpFile();
 
-    std::optional<Seconds> maxAgeCap(Entry&, const WebCore::ResourceRequest&, PAL::SessionID);
+    Optional<Seconds> maxAgeCap(Entry&, const WebCore::ResourceRequest&, PAL::SessionID);
 
     Ref<Storage> m_storage;
 

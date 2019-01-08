@@ -77,6 +77,7 @@ editing/SelectionRectGatherer.cpp
 editing/SmartReplaceCF.cpp
 
 editing/cocoa/DataDetection.mm
+editing/cocoa/DictionaryLookup.mm
 editing/cocoa/EditorCocoa.mm
 editing/cocoa/FontAttributeChangesCocoa.mm
 editing/cocoa/FontAttributesCocoa.mm
@@ -90,7 +91,6 @@ editing/ios/DictationCommandIOS.cpp
 editing/ios/EditorIOS.mm
 
 editing/mac/AlternativeTextUIController.mm
-editing/mac/DictionaryLookup.mm
 editing/mac/DictionaryLookupLegacy.mm
 editing/mac/EditorMac.mm
 editing/mac/FrameSelectionMac.mm
@@ -180,7 +180,6 @@ platform/audio/mac/AudioSessionMac.cpp
 platform/audio/mac/CARingBuffer.cpp
 platform/audio/mac/FFTFrameMac.cpp
 
-platform/cf/CFURLExtras.cpp
 platform/cf/FileSystemCF.cpp
 platform/cf/KeyedDecoderCF.cpp
 platform/cf/KeyedEncoderCF.cpp
@@ -188,7 +187,6 @@ platform/cf/MainThreadSharedTimerCF.cpp
 platform/cf/MediaAccessibilitySoftLink.cpp
 platform/cf/RunLoopObserver.cpp
 platform/cf/SharedBufferCF.cpp
-platform/cf/URLCF.cpp
 
 platform/cocoa/ContentFilterUnblockHandlerCocoa.mm @no-unify
 platform/cocoa/CoreVideoSoftLink.cpp
@@ -213,6 +211,7 @@ platform/cocoa/ThemeCocoa.mm
 platform/cocoa/UserAgentCocoa.mm
 platform/cocoa/VideoFullscreenModelVideoElement.mm
 platform/cocoa/VideoToolboxSoftLink.cpp
+platform/cocoa/WebCoreAdditions.mm @no-unify
 platform/cocoa/WebCoreNSErrorExtras.mm
 
 platform/gamepad/cocoa/GameControllerGamepad.mm
@@ -250,6 +249,7 @@ platform/graphics/avfoundation/objc/MediaPlayerPrivateMediaSourceAVFObjC.mm @no-
 platform/graphics/avfoundation/objc/MediaSampleAVFObjC.mm @no-unify
 platform/graphics/avfoundation/objc/MediaSourcePrivateAVFObjC.mm @no-unify
 platform/graphics/avfoundation/objc/SourceBufferPrivateAVFObjC.mm @no-unify
+platform/graphics/avfoundation/objc/VideoFullscreenLayerManagerObjC.mm @no-unify
 platform/graphics/avfoundation/objc/VideoTrackPrivateAVFObjC.cpp @no-unify
 platform/graphics/avfoundation/objc/VideoTrackPrivateMediaSourceAVFObjC.mm @no-unify
 platform/graphics/avfoundation/objc/WebCoreAVFResourceLoader.mm @no-unify
@@ -279,6 +279,7 @@ platform/graphics/cg/GraphicsContextCG.cpp
 platform/graphics/cg/IOSurfacePool.cpp
 platform/graphics/cg/ImageBufferCG.cpp
 platform/graphics/cg/ImageBufferDataCG.cpp
+platform/graphics/cg/ImageBufferUtilitiesCG.cpp
 platform/graphics/cg/ImageDecoderCG.cpp
 platform/graphics/cg/ImageSourceCGMac.mm
 platform/graphics/cg/IntPointCG.cpp
@@ -310,6 +311,7 @@ platform/graphics/cocoa/WebActionDisablingCALayerDelegate.mm
 platform/graphics/cocoa/WebCoreCALayerExtras.mm
 platform/graphics/cocoa/WebCoreDecompressionSession.mm
 platform/graphics/cocoa/WebGLLayer.mm
+platform/graphics/cocoa/WebGPULayer.mm
 platform/graphics/cocoa/WebMetalLayer.mm
 platform/graphics/cocoa/TextTrackRepresentationCocoa.mm
 
@@ -318,9 +320,13 @@ platform/graphics/cv/PixelBufferConformerCV.cpp
 platform/graphics/cv/TextureCacheCV.mm
 platform/graphics/cv/VideoTextureCopierCV.cpp
 
+platform/graphics/gpu/cocoa/GPUBindGroupLayoutMetal.mm
+platform/graphics/gpu/cocoa/GPUBufferMetal.mm
 platform/graphics/gpu/cocoa/GPUCommandBufferMetal.mm
 platform/graphics/gpu/cocoa/GPUDeviceMetal.mm
+platform/graphics/gpu/cocoa/GPUProgrammablePassEncoderMetal.mm
 platform/graphics/gpu/cocoa/GPUQueueMetal.mm
+platform/graphics/gpu/cocoa/GPURenderPassEncoderMetal.mm
 platform/graphics/gpu/cocoa/GPURenderPipelineMetal.mm
 platform/graphics/gpu/cocoa/GPUShaderModuleMetal.mm
 platform/graphics/gpu/cocoa/GPUSwapChainMetal.mm
@@ -348,6 +354,7 @@ platform/graphics/mac/IntRectMac.mm
 platform/graphics/mac/IntSizeMac.mm
 platform/graphics/mac/PDFDocumentImageMac.mm
 platform/graphics/mac/SimpleFontDataCoreText.cpp
+platform/graphics/mac/SwitchingGPUClient.cpp
 platform/graphics/mac/WebLayer.mm
 platform/graphics/mac/WebKitNSImageExtras.mm
 
@@ -442,6 +449,7 @@ platform/mac/FileSystemMac.mm
 platform/mac/KeyEventMac.mm @no-unify
 platform/mac/PlaybackSessionInterfaceMac.mm @no-unify
 platform/mac/LocalCurrentGraphicsContext.mm
+platform/mac/LocalDefaultSystemAppearance.mm
 platform/mac/LoggingMac.mm
 platform/mac/MediaRemoteSoftLink.cpp
 platform/mac/NSScrollerImpDetails.mm
@@ -464,7 +472,6 @@ platform/mac/StringUtilities.mm
 platform/mac/SuddenTermination.mm
 platform/mac/ThemeMac.mm
 platform/mac/ThreadCheck.mm @no-unify
-platform/mac/URLMac.mm
 platform/mac/UserActivityMac.mm
 platform/mac/UserAgentMac.mm
 platform/mac/ValidationBubbleMac.mm
@@ -480,6 +487,9 @@ platform/mac/WebNSAttributedStringExtras.mm
 platform/mac/WebPlaybackControlsManager.mm
 platform/mac/WidgetMac.mm
 
+platform/mediarecorder/MediaRecorderPrivateAVFImpl.cpp
+platform/mediarecorder/cocoa/MediaRecorderPrivateWriterCocoa.mm
+
 platform/mediasession/mac/MediaSessionInterruptionProviderMac.mm
 
 platform/mediastream/ios/AVAudioSessionCaptureDevice.mm
@@ -488,7 +498,6 @@ platform/mediastream/ios/CoreAudioCaptureSourceIOS.mm @no-unify
 
 platform/mediastream/mac/AudioTrackPrivateMediaStreamCocoa.cpp
 platform/mediastream/mac/AVCaptureDeviceManager.mm @no-unify
-platform/mediastream/mac/AVMediaCaptureSource.mm @no-unify
 platform/mediastream/mac/AVVideoCaptureSource.mm @no-unify
 platform/mediastream/mac/MockRealtimeVideoSourceMac.mm
 

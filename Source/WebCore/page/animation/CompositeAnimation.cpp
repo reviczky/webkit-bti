@@ -109,12 +109,18 @@ void CompositeAnimation::updateTransitions(Element& element, const RenderStyle* 
             for (int propertyIndex = 0; propertyIndex < CSSPropertyAnimation::getNumProperties(); ++propertyIndex) {
                 if (all) {
                     // Get the next property which is not a shorthand.
-                    std::optional<bool> isShorthand;
+                    Optional<bool> isShorthand;
                     prop = CSSPropertyAnimation::getPropertyAtIndex(propertyIndex, isShorthand);
                     if (isShorthand && *isShorthand)
                         continue;
                 }
 
+                if (prop == CSSPropertyInvalid) {
+                    if (!all)
+                        break;
+                    continue;
+                }
+                
                 // ImplicitAnimations are always hashed by actual properties, never animateAll.
                 ASSERT(prop >= firstCSSProperty && prop < (firstCSSProperty + numCSSProperties));
 
@@ -358,15 +364,15 @@ std::unique_ptr<RenderStyle> CompositeAnimation::getAnimatedStyle() const
     return resultStyle;
 }
 
-std::optional<Seconds> CompositeAnimation::timeToNextService() const
+Optional<Seconds> CompositeAnimation::timeToNextService() const
 {
-    // Returns the time at which next service is required. std::nullopt means no service is required. 0 means
+    // Returns the time at which next service is required. WTF::nullopt means no service is required. 0 means
     // service is required now, and > 0 means service is required that many seconds in the future.
-    std::optional<Seconds> minT;
+    Optional<Seconds> minT;
     
     if (!m_transitions.isEmpty()) {
         for (auto& transition : m_transitions.values()) {
-            std::optional<Seconds> t = transition->timeToNextService();
+            Optional<Seconds> t = transition->timeToNextService();
             if (!t)
                 continue;
             if (!minT || t.value() < minT.value())
@@ -378,7 +384,7 @@ std::optional<Seconds> CompositeAnimation::timeToNextService() const
     if (!m_keyframeAnimations.isEmpty()) {
         m_keyframeAnimations.checkConsistency();
         for (auto& animation : m_keyframeAnimations.values()) {
-            std::optional<Seconds> t = animation->timeToNextService();
+            Optional<Seconds> t = animation->timeToNextService();
             if (!t)
                 continue;
             if (!minT || t.value() < minT.value())

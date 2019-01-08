@@ -184,11 +184,11 @@ LayoutUnit RenderMathMLFraction::horizontalOffset(RenderBox& child, MathMLFracti
     case MathMLFractionElement::FractionAlignmentCenter:
         return LayoutUnit((logicalWidth() - child.logicalWidth()) / 2);
     case MathMLFractionElement::FractionAlignmentLeft:
-        return LayoutUnit(0);
+        return 0_lu;
     }
 
     ASSERT_NOT_REACHED();
-    return LayoutUnit(0);
+    return 0_lu;
 }
 
 LayoutUnit RenderMathMLFraction::ascentOverHorizontalAxis() const
@@ -258,7 +258,7 @@ void RenderMathMLFraction::paint(PaintInfo& info, const LayoutPoint& paintOffset
     if (info.context().paintingDisabled() || info.phase != PaintPhase::Foreground || style().visibility() != Visibility::Visible || !isValid() || !thickness)
         return;
 
-    IntPoint adjustedPaintOffset = roundedIntPoint(paintOffset + location() + LayoutPoint(0, ascentOverHorizontalAxis()));
+    IntPoint adjustedPaintOffset = roundedIntPoint(paintOffset + location() + LayoutPoint(0_lu, ascentOverHorizontalAxis()));
 
     GraphicsContextStateSaver stateSaver(info.context());
 
@@ -268,10 +268,10 @@ void RenderMathMLFraction::paint(PaintInfo& info, const LayoutPoint& paintOffset
     info.context().drawLine(adjustedPaintOffset, roundedIntPoint(LayoutPoint(adjustedPaintOffset.x() + logicalWidth(), adjustedPaintOffset.y())));
 }
 
-std::optional<int> RenderMathMLFraction::firstLineBaseline() const
+Optional<int> RenderMathMLFraction::firstLineBaseline() const
 {
     if (isValid())
-        return std::optional<int>(std::lround(static_cast<float>(ascentOverHorizontalAxis() + mathAxisHeight())));
+        return Optional<int>(std::lround(static_cast<float>(ascentOverHorizontalAxis() + mathAxisHeight())));
     return RenderMathMLBlock::firstLineBaseline();
 }
 

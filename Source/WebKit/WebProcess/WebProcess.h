@@ -175,7 +175,7 @@ public:
 
     LibWebRTCNetwork& libWebRTCNetwork();
 
-    void setCacheModel(uint32_t);
+    void setCacheModel(CacheModel);
 
     void ensureLegacyPrivateBrowsingSessionInNetworkProcess();
     void addWebsiteDataStore(WebsiteDataStoreParameters&&);
@@ -191,8 +191,10 @@ public:
     void destroyRenderingResources();
 #endif
 
+    const String& uiProcessBundleIdentifier() const { return m_uiProcessBundleIdentifier; }
+
     void updateActivePages();
-    void getActivePagesOriginsForTesting(Vector<String>&);
+    void getActivePagesOriginsForTesting(CompletionHandler<void(Vector<String>&&)>&&);
     void pageActivityStateDidChange(uint64_t pageID, OptionSet<WebCore::ActivityState::Flag> changed);
 
     void setHiddenPageDOMTimerThrottlingIncreaseLimit(int milliseconds);
@@ -202,7 +204,7 @@ public:
     void cancelPrepareToSuspend();
     void processDidResume();
 
-    void sendPrewarmInformation(const WebCore::URL&);
+    void sendPrewarmInformation(const URL&);
 
     void isJITEnabled(CompletionHandler<void(bool)>&&);
 
@@ -260,7 +262,10 @@ private:
 
     void markAllLayersVolatile(WTF::Function<void(bool)>&& completionHandler);
     void cancelMarkAllLayersVolatile();
-    void setAllLayerTreeStatesFrozen(bool);
+
+    void freezeAllLayerTrees();
+    void unfreezeAllLayerTrees();
+
     void processSuspensionCleanupTimerFired();
 
     void clearCachedCredentials();
@@ -345,6 +350,8 @@ private:
     enum class ShouldAcknowledgeWhenReadyToSuspend { No, Yes };
     void actualPrepareToSuspend(ShouldAcknowledgeWhenReadyToSuspend);
 
+    bool hasPageRequiringPageCacheWhileSuspended() const;
+
     void ensureAutomationSessionProxy(const String& sessionIdentifier);
     void destroyAutomationSessionProxy();
 
@@ -394,6 +401,8 @@ private:
 #endif
 #endif
 
+    void clearCurrentModifierStateForTesting();
+
     RefPtr<WebConnectionToUIProcess> m_webConnection;
 
     HashMap<uint64_t, RefPtr<WebPage>> m_pageMap;
@@ -410,7 +419,7 @@ private:
     HashSet<String> m_plugInAutoStartOrigins;
 
     bool m_hasSetCacheModel { false };
-    CacheModel m_cacheModel { CacheModelDocumentViewer };
+    CacheModel m_cacheModel { CacheModel::DocumentViewer };
 
 #if PLATFORM(COCOA)
     WTF::MachSendRight m_compositingRenderServerPort;
@@ -425,6 +434,7 @@ private:
 
     TextCheckerState m_textCheckerState;
 
+    String m_uiProcessBundleIdentifier;
     RefPtr<NetworkProcessConnection> m_networkProcessConnection;
     WebLoaderStrategy& m_webLoaderStrategy;
 
@@ -460,7 +470,7 @@ private:
     bool m_suppressMemoryPressureHandler { false };
 #if PLATFORM(MAC)
     std::unique_ptr<WebCore::CPUMonitor> m_cpuMonitor;
-    std::optional<double> m_cpuLimit;
+    Optional<double> m_cpuLimit;
 
     enum class ProcessType { Inspector, ServiceWorker, PrewarmedWebContent, WebContent };
     ProcessType m_processType { ProcessType::WebContent };
@@ -473,6 +483,7 @@ private:
 #if PLATFORM(WAYLAND)
     std::unique_ptr<WaylandCompositorDisplay> m_waylandCompositorDisplay;
 #endif
+    bool m_isSuspending { false };
 };
 
 } // namespace WebKit

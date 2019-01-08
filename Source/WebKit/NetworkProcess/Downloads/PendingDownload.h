@@ -28,12 +28,17 @@
 #include "MessageSender.h"
 #include "NetworkLoadClient.h"
 
+namespace IPC {
+class Connection;
+}
+
 namespace WebCore {
 class ResourceResponse;
 }
 
 namespace WebKit {
 
+class Download;
 class DownloadID;
 class NetworkLoad;
 class NetworkLoadParameters;
@@ -42,11 +47,16 @@ class NetworkSession;
 class PendingDownload : public NetworkLoadClient, public IPC::MessageSender {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    PendingDownload(NetworkLoadParameters&&, DownloadID, NetworkSession&, const String& suggestedName);
-    PendingDownload(std::unique_ptr<NetworkLoad>&&, ResponseCompletionHandler&&, DownloadID, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&);
+    PendingDownload(IPC::Connection*, NetworkLoadParameters&&, DownloadID, NetworkSession&, const String& suggestedName);
+    PendingDownload(IPC::Connection*, std::unique_ptr<NetworkLoad>&&, ResponseCompletionHandler&&, DownloadID, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&);
 
     void continueWillSendRequest(WebCore::ResourceRequest&&);
     void cancel();
+
+#if PLATFORM(COCOA)
+    void publishProgress(const URL&, SandboxExtension::Handle&&);
+    void didBecomeDownload(const std::unique_ptr<Download>&);
+#endif
 
 private:    
     // NetworkLoadClient.
@@ -65,7 +75,13 @@ private:
 
 private:
     std::unique_ptr<NetworkLoad> m_networkLoad;
+    RefPtr<IPC::Connection> m_parentProcessConnection;
     bool m_isAllowedToAskUserForCredentials;
+
+#if PLATFORM(COCOA)
+    URL m_progressURL;
+    SandboxExtension::Handle m_progressSandboxExtension;
+#endif
 };
 
 }

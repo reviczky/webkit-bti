@@ -70,7 +70,7 @@ Ref<WebSocketStream> WebSocketStream::create(const URL& url, SocketStreamHandleC
     return adoptRef(*new WebSocketStream(url, client, sessionID, credentialPartition));
 }
 
-WebSocketStream::WebSocketStream(const WebCore::URL& url, WebCore::SocketStreamHandleClient& client, PAL::SessionID sessionID, const String& cachePartition)
+WebSocketStream::WebSocketStream(const URL& url, WebCore::SocketStreamHandleClient& client, PAL::SessionID sessionID, const String& cachePartition)
     : SocketStreamHandle(url, client)
     , m_client(client)
 {
@@ -105,7 +105,7 @@ void WebSocketStream::platformSend(const uint8_t* data, size_t length, Function<
     m_sendDataCallbacks.add(dataIdentifier, WTFMove(completionHandler));
 }
 
-void WebSocketStream::platformSendHandshake(const uint8_t* data, size_t length, const std::optional<CookieRequestHeaderFieldProxy>& headerFieldProxy, Function<void(bool, bool)>&& completionHandler)
+void WebSocketStream::platformSendHandshake(const uint8_t* data, size_t length, const Optional<CookieRequestHeaderFieldProxy>& headerFieldProxy, Function<void(bool, bool)>&& completionHandler)
 {
     static uint64_t nextDataIdentifier = 1;
     uint64_t dataIdentifier = nextDataIdentifier++;

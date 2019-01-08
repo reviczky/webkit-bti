@@ -255,6 +255,7 @@ void LibWebRTCMediaEndpoint::removeTrack(LibWebRTCRtpSenderBackend& sender)
 {
     ASSERT(m_backend);
     m_backend->RemoveTrack(sender.rtcSender());
+    sender.clearSource();
 }
 
 void LibWebRTCMediaEndpoint::doCreateOffer(const RTCOfferOptions& options)
@@ -285,13 +286,19 @@ void LibWebRTCMediaEndpoint::doCreateAnswer()
 
 void LibWebRTCMediaEndpoint::getStats(Ref<DeferredPromise>&& promise, WTF::Function<void(rtc::scoped_refptr<LibWebRTCStatsCollector>&&)>&& getStatsFunction)
 {
-    auto collector = LibWebRTCStatsCollector::create([promise = WTFMove(promise), protectedThis = makeRef(*this)](auto&& report) mutable {
+    auto collector = LibWebRTCStatsCollector::create([promise = WTFMove(promise), protectedThis = makeRef(*this)]() mutable -> RefPtr<RTCStatsReport> {
         ASSERT(isMainThread());
-        if (protectedThis->isStopped() || !report)
-            return false;
+        if (protectedThis->isStopped())
+            return nullptr;
 
-        promise->resolve<IDLInterface<RTCStatsReport>>(report.releaseNonNull());
-        return true;
+        auto report = RTCStatsReport::create();
+
+        promise->resolve<IDLInterface<RTCStatsReport>>(report.copyRef());
+
+        // The promise resolution might fail in which case no backing map will be created.
+        if (!report->backingMap())
+            return nullptr;
+        return WTFMove(report);
     });
     LibWebRTCProvider::callOnWebRTCSignalingThread([getStatsFunction = WTFMove(getStatsFunction), collector = WTFMove(collector)]() mutable {
         getStatsFunction(WTFMove(collector));
@@ -527,17 +534,17 @@ void LibWebRTCMediaEndpoint::removeRemoteTrack(rtc::scoped_refptr<webrtc::RtpRec
 }
 
 template<typename T>
-std::optional<LibWebRTCMediaEndpoint::Backends> LibWebRTCMediaEndpoint::createTransceiverBackends(T&& trackOrKind, const RTCRtpTransceiverInit& init, LibWebRTCRtpSenderBackend::Source&& source)
+Optional<LibWebRTCMediaEndpoint::Backends> LibWebRTCMediaEndpoint::createTransceiverBackends(T&& trackOrKind, const RTCRtpTransceiverInit& init, LibWebRTCRtpSenderBackend::Source&& source)
 {
     auto result = m_backend->AddTransceiver(WTFMove(trackOrKind), fromRtpTransceiverInit(init));
     if (!result.ok())
-        return std::nullopt;
+        return WTF::nullopt;
 
     auto transceiver = std::make_unique<LibWebRTCRtpTransceiverBackend>(result.MoveValue());
     return LibWebRTCMediaEndpoint::Backends { transceiver->createSenderBackend(m_peerConnectionBackend, WTFMove(source)), transceiver->createReceiverBackend(), WTFMove(transceiver) };
 }
 
-std::optional<LibWebRTCMediaEndpoint::Backends> LibWebRTCMediaEndpoint::addTransceiver(const String& trackKind, const RTCRtpTransceiverInit& init)
+Optional<LibWebRTCMediaEndpoint::Backends> LibWebRTCMediaEndpoint::addTransceiver(const String& trackKind, const RTCRtpTransceiverInit& init)
 {
     auto type = trackKind == "audio" ? cricket::MediaType::MEDIA_TYPE_AUDIO : cricket::MediaType::MEDIA_TYPE_VIDEO;
     return createTransceiverBackends(type, init, nullptr);
@@ -567,7 +574,7 @@ std::pair<LibWebRTCRtpSenderBackend::Source, rtc::scoped_refptr<webrtc::MediaStr
     return std::make_pair(WTFMove(source), WTFMove(rtcTrack));
 }
 
-std::optional<LibWebRTCMediaEndpoint::Backends> LibWebRTCMediaEndpoint::addTransceiver(MediaStreamTrack& track, const RTCRtpTransceiverInit& init)
+Optional<LibWebRTCMediaEndpoint::Backends> LibWebRTCMediaEndpoint::addTransceiver(MediaStreamTrack& track, const RTCRtpTransceiverInit& init)
 {
     auto sourceAndTrack = createSourceAndRTCTrack(track);
     return createTransceiverBackends(WTFMove(sourceAndTrack.second), init, WTFMove(sourceAndTrack.first));
@@ -854,8 +861,18 @@ void LibWebRTCMediaEndpoint::OnStatsDelivered(const rtc::scoped_refptr<const web
             m_statsLogTimer.startRepeating(statsLogInterval(timestamp));
         }
 
-        for (auto iterator = report->begin(); iterator != report->end(); ++iterator)
-            ALWAYS_LOG(Logger::LogSiteIdentifier("LibWebRTCMediaEndpoint", "OnStatsDelivered", logIdentifier()), RTCStatsLogger { *iterator });
+        for (auto iterator = report->begin(); iterator != report->end(); ++iterator) {
+            if (logger().willLog(logChannel(), WTFLogLevelDebug)) {
+                // Stats are very verbose, let's only display them in inspector console in verbose mode.
+                logger().debug(LogWebRTC,
+                    Logger::LogSiteIdentifier("LibWebRTCMediaEndpoint", "OnStatsDelivered", logIdentifier()),
+                    RTCStatsLogger { *iterator });
+            } else {
+                logger().logAlways(LogWebRTCStats,
+                    Logger::LogSiteIdentifier("LibWebRTCMediaEndpoint", "OnStatsDelivered", logIdentifier()),
+                    RTCStatsLogger { *iterator });
+            }
+        }
     });
 #else
     UNUSED_PARAM(report);

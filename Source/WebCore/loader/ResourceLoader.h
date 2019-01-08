@@ -52,7 +52,6 @@ class Frame;
 class FrameLoader;
 class NetworkLoadMetrics;
 class PreviewLoader;
-class URL;
 
 class ResourceLoader : public RefCounted<ResourceLoader>, protected ResourceHandleClient {
 public:
@@ -106,7 +105,6 @@ public:
     virtual void didReceiveBuffer(Ref<SharedBuffer>&&, long long encodedDataLength, DataPayloadType);
     virtual void didFinishLoading(const NetworkLoadMetrics&);
     virtual void didFail(const ResourceError&);
-    virtual void didRetrieveDerivedDataFromCache(const String& type, SharedBuffer&);
 
     WEBCORE_EXPORT void didBlockAuthenticationChallenge();
 

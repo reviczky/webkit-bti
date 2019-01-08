@@ -32,7 +32,7 @@
 #include "InlineFormattingState.h"
 #include "LayoutBox.h"
 #include "LayoutContainer.h"
-#include "LayoutFormattingState.h"
+#include "LayoutState.h"
 #include "TextUtil.h"
 
 namespace WebCore {
@@ -60,9 +60,9 @@ WidthAndMargin InlineFormattingContext::Geometry::inlineBlockWidthAndMargin(Layo
         width = shrinkToFitWidth(layoutState, formattingContextRoot);
 
     // #2
-    auto margin = computedNonCollapsedHorizontalMarginValue(layoutState, formattingContextRoot);
+    auto computedHorizontalMargin = Geometry::computedHorizontalMargin(layoutState, formattingContextRoot);
 
-    return WidthAndMargin { *width, margin, margin };
+    return WidthAndMargin { *width, { computedHorizontalMargin.start.valueOr(0_lu), computedHorizontalMargin.end.valueOr(0_lu) }, computedHorizontalMargin };
 }
 
 HeightAndMargin InlineFormattingContext::Geometry::inlineBlockHeightAndMargin(const LayoutState& layoutState, const Box& layoutBox)
@@ -88,10 +88,10 @@ static LayoutUnit adjustedLineLogicalLeft(TextAlignMode align, LayoutUnit lineLo
     case TextAlignMode::Right:
     case TextAlignMode::WebKitRight:
     case TextAlignMode::End:
-        return lineLogicalLeft + std::max(remainingWidth, LayoutUnit());
+        return lineLogicalLeft + std::max(remainingWidth, 0_lu);
     case TextAlignMode::Center:
     case TextAlignMode::WebKitCenter:
-        return lineLogicalLeft + std::max(remainingWidth / 2, LayoutUnit());
+        return lineLogicalLeft + std::max(remainingWidth / 2, 0_lu);
     case TextAlignMode::Justify:
         ASSERT_NOT_REACHED();
         break;
@@ -131,7 +131,7 @@ void InlineFormattingContext::Geometry::justifyRuns(Line& line)
 
         inlineRun.expansionOpportunity().expansion = expansionForRun;
         inlineRun.setLogicalLeft(inlineRun.logicalLeft() + accumulatedExpansion);
-        inlineRun.setWidth(inlineRun.width() + expansionForRun);
+        inlineRun.setLogicalWidth(inlineRun.logicalWidth() + expansionForRun);
         accumulatedExpansion += expansionForRun;
     }
 }
@@ -180,8 +180,10 @@ LayoutUnit InlineFormattingContext::Geometry::runWidth(const InlineContent& inli
 {
     LayoutUnit width;
     auto startPosition = from;
-    auto iterator = inlineContent.find<const InlineItem&, InlineItemHashTranslator>(inlineItem);
+    auto iterator = inlineContent.find(const_cast<InlineItem*>(&inlineItem));
+#if !ASSERT_DISABLED
     auto inlineItemEnd = inlineContent.end();
+#endif
     while (length) {
         ASSERT(iterator != inlineItemEnd);
         auto& currentInlineItem = **iterator;

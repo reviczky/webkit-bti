@@ -100,12 +100,10 @@ class ResourceResponse;
 class SecurityOrigin;
 class SharedBuffer;
 class SubstituteData;
-class URL;
 class Widget;
 
 enum class LockBackForwardList : bool;
 enum class PolicyDecisionMode;
-enum class ShouldSkipSafeBrowsingCheck : bool;
 
 struct StringWithDirection;
 
@@ -127,8 +125,8 @@ public:
 
     virtual void makeRepresentation(DocumentLoader*) = 0;
 
-    virtual std::optional<uint64_t> pageID() const = 0;
-    virtual std::optional<uint64_t> frameID() const = 0;
+    virtual Optional<uint64_t> pageID() const = 0;
+    virtual Optional<uint64_t> frameID() const = 0;
     virtual PAL::SessionID sessionID() const = 0;
 
 #if PLATFORM(IOS_FAMILY)
@@ -175,9 +173,9 @@ public:
     virtual void dispatchDidPopStateWithinPage() = 0;
     virtual void dispatchWillClose() = 0;
     virtual void dispatchDidReceiveIcon() { }
-    virtual void dispatchDidStartProvisionalLoad() = 0;
+    virtual void dispatchDidStartProvisionalLoad(CompletionHandler<void()>&&) = 0;
     virtual void dispatchDidReceiveTitle(const StringWithDirection&) = 0;
-    virtual void dispatchDidCommitLoad(std::optional<HasInsecureContent>) = 0;
+    virtual void dispatchDidCommitLoad(Optional<HasInsecureContent>) = 0;
     virtual void dispatchDidFailProvisionalLoad(const ResourceError&) = 0;
     virtual void dispatchDidFailLoad(const ResourceError&) = 0;
     virtual void dispatchDidFinishDocumentLoad() = 0;
@@ -194,7 +192,7 @@ public:
 
     virtual void dispatchDecidePolicyForResponse(const ResourceResponse&, const ResourceRequest&, FramePolicyFunction&&) = 0;
     virtual void dispatchDecidePolicyForNewWindowAction(const NavigationAction&, const ResourceRequest&, FormState*, const String& frameName, FramePolicyFunction&&) = 0;
-    virtual void dispatchDecidePolicyForNavigationAction(const NavigationAction&, const ResourceRequest&, const ResourceResponse& redirectResponse, FormState*, PolicyDecisionMode, ShouldSkipSafeBrowsingCheck, FramePolicyFunction&&) = 0;
+    virtual void dispatchDecidePolicyForNavigationAction(const NavigationAction&, const ResourceRequest&, const ResourceResponse& redirectResponse, FormState*, PolicyDecisionMode, FramePolicyFunction&&) = 0;
     virtual void cancelPolicyCheck() = 0;
 
     virtual void dispatchUnableToImplementPolicy(const ResourceError&) = 0;
@@ -372,7 +370,7 @@ public:
     virtual void didCreateWindow(DOMWindow&) { }
 
 #if ENABLE(APPLICATION_MANIFEST)
-    virtual void finishedLoadingApplicationManifest(uint64_t, const std::optional<ApplicationManifest>&) { }
+    virtual void finishedLoadingApplicationManifest(uint64_t, const Optional<ApplicationManifest>&) { }
 #endif
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)

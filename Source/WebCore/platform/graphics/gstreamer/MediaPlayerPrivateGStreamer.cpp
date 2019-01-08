@@ -37,7 +37,6 @@
 #include "NotImplemented.h"
 #include "SecurityOrigin.h"
 #include "TimeRanges.h"
-#include "URL.h"
 #include "WebKitWebSourceGStreamer.h"
 #include <glib.h>
 #include <gst/gst.h>
@@ -47,6 +46,7 @@
 #include <wtf/MediaTime.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/StringPrintStream.h>
+#include <wtf/URL.h>
 #include <wtf/WallTime.h>
 #include <wtf/glib/GUniquePtr.h>
 #include <wtf/glib/RunLoopSourcePriority.h>
@@ -309,7 +309,7 @@ void MediaPlayerPrivateGStreamer::loadFull(const String& urlString, const gchar*
     m_player->readyStateChanged();
     m_volumeAndMuteInitialized = false;
     m_durationAtEOS = MediaTime::invalidTime();
-    m_hasTaintedOrigin = std::nullopt;
+    m_hasTaintedOrigin = WTF::nullopt;
 
     if (!m_delayingLoad)
         commitLoad();
@@ -734,9 +734,9 @@ void MediaPlayerPrivateGStreamer::updateTracks()
             CREATE_TRACK(video, Video)
         } else if (type & GST_STREAM_TYPE_TEXT && !useMediaSource) {
 #if ENABLE(VIDEO_TRACK)
-            RefPtr<InbandTextTrackPrivateGStreamer> track = InbandTextTrackPrivateGStreamer::create(textTrackIndex++, stream);
-            m_textTracks.add(streamId, track);
-            m_player->addTextTrack(*track);
+            auto track = InbandTextTrackPrivateGStreamer::create(textTrackIndex++, stream);
+            m_textTracks.add(streamId, track.copyRef());
+            m_player->addTextTrack(track.get());
 #endif
         } else
             GST_WARNING("Unknown track type found for stream %s", streamId.utf8().data());
@@ -894,10 +894,10 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfVideo()
             }
         }
 
-        RefPtr<VideoTrackPrivateGStreamer> track = VideoTrackPrivateGStreamer::create(makeWeakPtr(*this), i, pad);
+        auto track = VideoTrackPrivateGStreamer::create(makeWeakPtr(*this), i, pad);
         ASSERT(streamId == track->id());
-        m_videoTracks.add(streamId, track);
-        m_player->addVideoTrack(*track);
+        m_videoTracks.add(streamId, track.copyRef());
+        m_player->addVideoTrack(track.get());
     }
 
     purgeInvalidVideoTracks(validVideoStreams);
@@ -968,7 +968,7 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfAudio()
             }
         }
 
-        RefPtr<AudioTrackPrivateGStreamer> track = AudioTrackPrivateGStreamer::create(makeWeakPtr(*this), i, pad);
+        auto track = AudioTrackPrivateGStreamer::create(makeWeakPtr(*this), i, pad);
         ASSERT(streamId == track->id());
         m_audioTracks.add(streamId, track);
         m_player->addAudioTrack(*track);
@@ -1029,9 +1029,9 @@ void MediaPlayerPrivateGStreamer::notifyPlayerOfText()
             }
         }
 
-        RefPtr<InbandTextTrackPrivateGStreamer> track = InbandTextTrackPrivateGStreamer::create(i, pad);
-        m_textTracks.add(streamId, track);
-        m_player->addTextTrack(*track);
+        auto track = InbandTextTrackPrivateGStreamer::create(i, pad);
+        m_textTracks.add(streamId, track.copyRef());
+        m_player->addTextTrack(track.get());
     }
 
     purgeInvalidTextTracks(validTextStreams);
@@ -1298,7 +1298,7 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
     case GST_MESSAGE_ELEMENT:
         if (gst_is_missing_plugin_message(message)) {
             if (gst_install_plugins_supported()) {
-                RefPtr<MediaPlayerRequestInstallMissingPluginsCallback> missingPluginCallback = MediaPlayerRequestInstallMissingPluginsCallback::create([weakThis = makeWeakPtr(*this)](uint32_t result, MediaPlayerRequestInstallMissingPluginsCallback& missingPluginCallback) {
+                auto missingPluginCallback = MediaPlayerRequestInstallMissingPluginsCallback::create([weakThis = makeWeakPtr(*this)](uint32_t result, MediaPlayerRequestInstallMissingPluginsCallback& missingPluginCallback) {
                     if (!weakThis) {
                         GST_INFO("got missing pluging installation callback in destroyed player with result %u", result);
                         return;
@@ -1313,10 +1313,10 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
                     weakThis->changePipelineState(GST_STATE_READY);
                     weakThis->changePipelineState(GST_STATE_PAUSED);
                 });
-                m_missingPluginCallbacks.append(missingPluginCallback);
+                m_missingPluginCallbacks.append(missingPluginCallback.copyRef());
                 GUniquePtr<char> detail(gst_missing_plugin_message_get_installer_detail(message));
                 GUniquePtr<char> description(gst_missing_plugin_message_get_description(message));
-                m_player->client().requestInstallMissingPlugins(String::fromUTF8(detail.get()), String::fromUTF8(description.get()), *missingPluginCallback);
+                m_player->client().requestInstallMissingPlugins(String::fromUTF8(detail.get()), String::fromUTF8(description.get()), missingPluginCallback.get());
             }
         }
 #if ENABLE(VIDEO_TRACK) && USE(GSTREAMER_MPEGTS)
@@ -1329,12 +1329,13 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
         else if (gst_structure_has_name(structure, "drm-waiting-for-key")) {
             GST_DEBUG_OBJECT(pipeline(), "drm-waiting-for-key message from %s", GST_MESSAGE_SRC_NAME(message));
             setWaitingForKey(true);
+            // FIXME: The decryptors should be able to attempt to decrypt after being created and linked in a pipeline but currently they are not and current
+            // architecture does not make this very easy. Fortunately, the arch will change soon and it does not pay off to fix this now with something that could be
+            // more convoluted. In the meantime, force attempt to decrypt when they get blocked.
+            attemptToDecryptWithLocalInstance();
         } else if (gst_structure_has_name(structure, "drm-key-received")) {
             GST_DEBUG_OBJECT(pipeline(), "drm-key-received message from %s", GST_MESSAGE_SRC_NAME(message));
             setWaitingForKey(false);
-        } else if (gst_structure_has_name(structure, "drm-cdm-instance-needed")) {
-            GST_DEBUG_OBJECT(pipeline(), "drm-cdm-instance-needed message from %s", GST_MESSAGE_SRC_NAME(message));
-            dispatchCDMInstance();
         }
 #endif
         else if (gst_structure_has_name(structure, "http-headers")) {
@@ -1447,7 +1448,7 @@ void MediaPlayerPrivateGStreamer::processMpegTsSection(GstMpegtsSection* section
             const GstMpegtsPMTStream* stream = static_cast<const GstMpegtsPMTStream*>(g_ptr_array_index(pmt->streams, i));
             if (stream->stream_type == 0x05 || stream->stream_type >= 0x80) {
                 AtomicString pid = String::number(stream->pid);
-                RefPtr<InbandMetadataTextTrackPrivateGStreamer> track = InbandMetadataTextTrackPrivateGStreamer::create(
+                auto track = InbandMetadataTextTrackPrivateGStreamer::create(
                     InbandTextTrackPrivate::Metadata, InbandTextTrackPrivate::Data, pid);
 
                 // 4.7.10.12.2 Sourcing in-band text tracks
@@ -2132,7 +2133,7 @@ bool MediaPlayerPrivateGStreamer::loadNextLocation()
         URL newUrl = URL(baseUrl, newLocation);
         convertToInternalProtocol(newUrl);
 
-        RefPtr<SecurityOrigin> securityOrigin = SecurityOrigin::create(m_url);
+        auto securityOrigin = SecurityOrigin::create(m_url);
         if (securityOrigin->canRequest(newUrl)) {
             GST_INFO_OBJECT(pipeline(), "New media url: %s", newUrl.string().utf8().data());
 
@@ -2670,7 +2671,7 @@ bool MediaPlayerPrivateGStreamer::canSaveMediaData() const
     return false;
 }
 
-std::optional<bool> MediaPlayerPrivateGStreamer::wouldTaintOrigin(const SecurityOrigin&) const
+Optional<bool> MediaPlayerPrivateGStreamer::wouldTaintOrigin(const SecurityOrigin&) const
 {
     // Ideally the given origin should always be verified with
     // webKitSrcWouldTaintOrigin() instead of only checking it for

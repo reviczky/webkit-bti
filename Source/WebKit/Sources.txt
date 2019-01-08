@@ -27,6 +27,7 @@ NetworkProcess/NetworkConnectionToWebProcess.cpp
 NetworkProcess/NetworkContentRuleListManager.cpp
 NetworkProcess/NetworkDataTask.cpp
 NetworkProcess/NetworkDataTaskBlob.cpp
+NetworkProcess/NetworkHTTPSUpgradeChecker.cpp
 NetworkProcess/NetworkLoad.cpp
 NetworkProcess/NetworkLoadChecker.cpp
 NetworkProcess/NetworkProcess.cpp
@@ -35,6 +36,7 @@ NetworkProcess/NetworkProcessPlatformStrategies.cpp
 NetworkProcess/NetworkResourceLoadParameters.cpp
 NetworkProcess/NetworkResourceLoader.cpp
 NetworkProcess/NetworkSession.cpp
+NetworkProcess/NetworkSessionCreationParameters.cpp
 NetworkProcess/NetworkSocketStream.cpp
 NetworkProcess/PingLoad.cpp
 NetworkProcess/PreconnectTask.cpp
@@ -69,13 +71,6 @@ NetworkProcess/cache/NetworkCacheSpeculativeLoadManager.cpp
 NetworkProcess/cache/NetworkCacheStatistics.cpp
 NetworkProcess/cache/NetworkCacheStorage.cpp
 NetworkProcess/cache/NetworkCacheSubresourcesEntry.cpp
-
-NetworkProcess/capture/NetworkCaptureEvent.cpp
-NetworkProcess/capture/NetworkCaptureManager.cpp
-NetworkProcess/capture/NetworkCaptureRecorder.cpp
-NetworkProcess/capture/NetworkCaptureReplayer.cpp
-NetworkProcess/capture/NetworkCaptureResource.cpp
-NetworkProcess/capture/NetworkDataTaskReplay.cpp
 
 NetworkProcess/webrtc/NetworkMDNSRegister.cpp
 
@@ -223,13 +218,14 @@ Shared/WebsiteData/WebsiteData.cpp
 
 UIProcess/BackgroundProcessResponsivenessTimer.cpp
 UIProcess/ChildProcessProxy.cpp
+UIProcess/DeviceIdHashSaltStorage.cpp
 UIProcess/DrawingAreaProxy.cpp
 UIProcess/FrameLoadState.cpp
 UIProcess/GeolocationPermissionRequestManagerProxy.cpp
 UIProcess/GeolocationPermissionRequestProxy.cpp
 UIProcess/InspectorTargetProxy.cpp
 UIProcess/PageLoadState.cpp
-UIProcess/DeviceIdHashSaltStorage.cpp
+UIProcess/PersistencyUtils.cpp
 UIProcess/ProcessAssertion.cpp
 UIProcess/ProcessThrottler.cpp
 UIProcess/RemoteWebInspectorProxy.cpp
@@ -402,6 +398,7 @@ UIProcess/WebStorage/LocalStorageDatabaseTracker.cpp
 
 UIProcess/WebsiteData/WebsiteDataRecord.cpp
 UIProcess/WebsiteData/WebsiteDataStore.cpp
+UIProcess/WebsiteData/WebsiteDataStoreConfiguration.cpp
 
 WebProcess/WebConnectionToUIProcess.cpp
 WebProcess/WebProcess.cpp
@@ -456,8 +453,8 @@ WebProcess/InjectedBundle/API/c/WKBundleRangeHandle.cpp
 WebProcess/InjectedBundle/API/c/WKBundleScriptWorld.cpp
 
 WebProcess/InjectedBundle/DOM/InjectedBundleCSSStyleDeclarationHandle.cpp
-WebProcess/InjectedBundle/DOM/InjectedBundleNodeHandle.cpp
-WebProcess/InjectedBundle/DOM/InjectedBundleRangeHandle.cpp
+WebProcess/InjectedBundle/DOM/InjectedBundleNodeHandle.cpp @no-unify
+WebProcess/InjectedBundle/DOM/InjectedBundleRangeHandle.cpp @no-unify
 
 WebProcess/MediaStream/MediaDeviceSandboxExtensions.cpp
 WebProcess/MediaStream/UserMediaPermissionRequestManager.cpp

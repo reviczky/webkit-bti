@@ -57,6 +57,7 @@
 #include "TextEvent.h"
 #include "TextIterator.h"
 #include "TextNodeTraversal.h"
+#include "UserTypingGestureIndicator.h"
 #include "WheelEvent.h"
 
 #if ENABLE(DATALIST_ELEMENT)
@@ -168,6 +169,9 @@ void TextFieldInputType::setValue(const String& sanitizedValue, bool valueChange
     // FIXME: Why do we do this when eventBehavior == DispatchNoEvent
     if (!input->focused() || eventBehavior == DispatchNoEvent)
         input->setTextAsOfLastFormControlChangeEvent(sanitizedValue);
+
+    if (UserTypingGestureIndicator::processingUserTypingGesture())
+        didSetValueByUserEdit();
 }
 
 #if ENABLE(DATALIST_ELEMENT)
@@ -724,6 +728,9 @@ bool TextFieldInputType::shouldDrawCapsLockIndicator() const
     if (element()->isDisabledOrReadOnly())
         return false;
 
+    if (element()->hasAutoFillStrongPasswordButton())
+        return false;
+
     RefPtr<Frame> frame = element()->document().frame();
     if (!frame)
         return false;
@@ -792,6 +799,8 @@ void TextFieldInputType::createAutoFillButton(AutoFillButtonType autoFillButtonT
 
 void TextFieldInputType::updateAutoFillButton()
 {
+    capsLockStateMayHaveChanged();
+
     if (shouldDrawAutoFillButton()) {
         if (!m_container)
             createContainer();

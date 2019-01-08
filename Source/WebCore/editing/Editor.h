@@ -115,7 +115,7 @@ enum class TemporarySelectionOption : uint8_t {
 
 class TemporarySelectionChange {
 public:
-    TemporarySelectionChange(Frame&, std::optional<VisibleSelection> = std::nullopt, OptionSet<TemporarySelectionOption> = { });
+    TemporarySelectionChange(Frame&, Optional<VisibleSelection> = WTF::nullopt, OptionSet<TemporarySelectionOption> = { });
     ~TemporarySelectionChange();
 
 private:
@@ -127,7 +127,7 @@ private:
 #if PLATFORM(IOS_FAMILY)
     bool m_appearanceUpdatesWereEnabled;
 #endif
-    std::optional<VisibleSelection> m_selectionToRestore;
+    Optional<VisibleSelection> m_selectionToRestore;
 };
 
 class Editor {
@@ -176,7 +176,7 @@ public:
 
     WEBCORE_EXPORT void copyURL(const URL&, const String& title);
     void copyURL(const URL&, const String& title, Pasteboard&);
-    PasteboardWriterData::URL pasteboardWriterURL(const URL&, const String& title);
+    PasteboardWriterData::URLData pasteboardWriterURL(const URL&, const String& title);
 #if !PLATFORM(IOS_FAMILY)
     WEBCORE_EXPORT void copyImage(const HitTestResult&);
 #endif
@@ -438,8 +438,11 @@ public:
     void textDidChangeInTextArea(Element*);
     WEBCORE_EXPORT WritingDirection baseWritingDirectionForSelectionStart() const;
 
-    WEBCORE_EXPORT void replaceSelectionWithFragment(DocumentFragment&, bool selectReplacement, bool smartReplace, bool matchStyle, EditAction = EditAction::Insert, MailBlockquoteHandling = MailBlockquoteHandling::RespectBlockquote);
-    WEBCORE_EXPORT void replaceSelectionWithText(const String&, bool selectReplacement, bool smartReplace, EditAction = EditAction::Insert);
+    enum class SelectReplacement : bool { No, Yes };
+    enum class SmartReplace : bool { No, Yes };
+    enum class MatchStyle : bool { No, Yes };
+    WEBCORE_EXPORT void replaceSelectionWithFragment(DocumentFragment&, SelectReplacement, SmartReplace, MatchStyle, EditAction = EditAction::Insert, MailBlockquoteHandling = MailBlockquoteHandling::RespectBlockquote);
+    WEBCORE_EXPORT void replaceSelectionWithText(const String&, SelectReplacement, SmartReplace, EditAction = EditAction::Insert);
     WEBCORE_EXPORT bool selectionStartHasMarkerFor(DocumentMarker::MarkerType, int from, int length) const;
     void updateMarkersForWordsAffectedByEditing(bool onlyHandleWordsContainingSelection);
     void deletedAutocorrectionAtPosition(const Position&, const String& originalString);
@@ -482,15 +485,16 @@ public:
 #if PLATFORM(COCOA)
     WEBCORE_EXPORT String stringSelectionForPasteboard();
     String stringSelectionForPasteboardWithImageAltText();
-#if !PLATFORM(IOS_FAMILY)
-    bool canCopyExcludingStandaloneImages();
     void takeFindStringFromSelection();
+#if !PLATFORM(IOS_FAMILY)
     WEBCORE_EXPORT void readSelectionFromPasteboard(const String& pasteboardName);
     WEBCORE_EXPORT void replaceNodeFromPasteboard(Node*, const String& pasteboardName);
     WEBCORE_EXPORT RefPtr<SharedBuffer> dataSelectionForPasteboard(const String& pasteboardName);
 #endif // !PLATFORM(IOS_FAMILY)
     WEBCORE_EXPORT void replaceSelectionWithAttributedString(NSAttributedString *, MailBlockquoteHandling = MailBlockquoteHandling::RespectBlockquote);
 #endif
+
+    bool canCopyExcludingStandaloneImages() const;
 
     String clientReplacementURLForResource(Ref<SharedBuffer>&& resourceData, const String& mimeType);
 
@@ -515,7 +519,7 @@ public:
     bool isGettingDictionaryPopupInfo() const { return m_isGettingDictionaryPopupInfo; }
 
 #if ENABLE(ATTACHMENT_ELEMENT)
-    WEBCORE_EXPORT void insertAttachment(const String& identifier, std::optional<uint64_t>&& fileSize, const String& fileName, const String& contentType);
+    WEBCORE_EXPORT void insertAttachment(const String& identifier, Optional<uint64_t>&& fileSize, const String& fileName, const String& contentType);
     void registerAttachmentIdentifier(const String&, const String& contentType, const String& preferredFileName, Ref<SharedBuffer>&& fileData);
     void registerAttachments(Vector<SerializedAttachmentData>&&);
     void registerAttachmentIdentifier(const String&, const String& contentType, const String& filePath);
@@ -528,6 +532,8 @@ public:
     void getPasteboardTypesAndDataForAttachment(Element&, Vector<String>& outTypes, Vector<RefPtr<SharedBuffer>>& outData);
 #endif
 #endif
+
+    WEBCORE_EXPORT RefPtr<HTMLImageElement> insertEditableImage();
 
 private:
     Document& document() const;

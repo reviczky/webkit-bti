@@ -43,10 +43,10 @@
 #include "RuntimeEnabledFeatures.h"
 #include "Settings.h"
 #include "StaticPasteboard.h"
-#include "URLParser.h"
 #include "WebContentReader.h"
 #include "WebCorePasteboardFileReader.h"
 #include "markup.h"
+#include <wtf/URLParser.h>
 #include <wtf/unicode/CharacterNames.h>
 
 namespace WebCore {
@@ -146,7 +146,7 @@ void DataTransfer::clearData(const String& type)
 static String readURLsFromPasteboardAsString(Pasteboard& pasteboard, Function<bool(const String&)>&& shouldIncludeURL)
 {
     StringBuilder urlList;
-    for (auto urlString : pasteboard.readAllStrings("text/uri-list"_s)) {
+    for (const auto& urlString : pasteboard.readAllStrings("text/uri-list"_s)) {
         if (!shouldIncludeURL(urlString))
             continue;
         if (!urlList.isEmpty())
@@ -255,7 +255,7 @@ void DataTransfer::setDataFromItemList(const String& type, const String& data)
     if (type == "text/html")
         sanitizedData = sanitizeMarkup(data);
     else if (type == "text/uri-list") {
-        auto url = URLParser(data).result();
+        auto url = URL({ }, data);
         if (url.isValid())
             sanitizedData = url.string();
     } else if (type == "text/plain")

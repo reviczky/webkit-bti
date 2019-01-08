@@ -32,6 +32,7 @@
 
 namespace WebCore {
 
+class EditableImageReference;
 class HTMLAttachmentElement;
 class HTMLFormElement;
 class HTMLMapElement;
@@ -44,7 +45,7 @@ class HTMLImageElement : public HTMLElement, public FormNamedItem {
 public:
     static Ref<HTMLImageElement> create(Document&);
     static Ref<HTMLImageElement> create(const QualifiedName&, Document&, HTMLFormElement*);
-    static Ref<HTMLImageElement> createForJSConstructor(Document&, std::optional<unsigned> width, std::optional<unsigned> height);
+    static Ref<HTMLImageElement> createForJSConstructor(Document&, Optional<unsigned> width, Optional<unsigned> height);
 
     virtual ~HTMLImageElement();
 
@@ -54,6 +55,9 @@ public:
     WEBCORE_EXPORT int naturalWidth() const;
     WEBCORE_EXPORT int naturalHeight() const;
     const AtomicString& currentSrc() const { return m_currentSrc; }
+
+    bool supportsFocus() const override;
+    bool isFocusable() const override;
 
     bool isServerMap() const;
 
@@ -114,7 +118,8 @@ public:
     WEBCORE_EXPORT bool isSystemPreviewImage() const;
 #endif
 
-    GraphicsLayer::EmbeddedViewID editableImageViewID() const;
+    WEBCORE_EXPORT GraphicsLayer::EmbeddedViewID editableImageViewID() const;
+    WEBCORE_EXPORT bool hasEditableImageAttribute() const;
 
 protected:
     HTMLImageElement(const QualifiedName&, Document&, HTMLFormElement* = 0);
@@ -141,6 +146,7 @@ private:
     void addSubresourceAttributeURLs(ListHashSet<URL>&) const override;
 
     InsertedIntoAncestorResult insertedIntoAncestor(InsertionType, ContainerNode&) override;
+    void didFinishInsertingNode() override;
     void removedFromAncestor(RemovalType, ContainerNode&) override;
 
     bool isFormAssociatedElement() const final { return false; }
@@ -151,6 +157,10 @@ private:
     void selectImageSource();
 
     ImageCandidate bestFitSourceFromPictureElement();
+
+    void updateEditableImage();
+
+    void copyNonAttributePropertiesFromElement(const Element&) final;
 
 #if ENABLE(SERVICE_CONTROLS)
     void updateImageControls();
@@ -172,7 +182,10 @@ private:
     bool m_experimentalImageMenuEnabled;
     bool m_hadNameBeforeAttributeChanged { false }; // FIXME: We only need this because parseAttribute() can't see the old value.
 
-    mutable GraphicsLayer::EmbeddedViewID m_editableImageViewID { 0 };
+    RefPtr<EditableImageReference> m_editableImage;
+#if ENABLE(ATTACHMENT_ELEMENT)
+    String m_pendingClonedAttachmentID;
+#endif
 
     friend class HTMLPictureElement;
 };

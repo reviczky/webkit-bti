@@ -25,7 +25,7 @@
 
 WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
 {
-    constructor(delegate, property)
+    constructor(delegate, property, options = {})
     {
         super();
 
@@ -33,6 +33,7 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
 
         this._delegate = delegate || null;
         this._property = property;
+        this._readOnly = options.readOnly || false;
         this._element = document.createElement("div");
 
         this._contentElement = null;
@@ -42,8 +43,6 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
         this._nameTextField = null;
         this._valueTextField = null;
 
-        this._property.__propertyView = this;
-
         this._selected = false;
         this._hasInvalidVariableValue = false;
 
@@ -51,15 +50,21 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
         property.addEventListener(WI.CSSProperty.Event.OverriddenStatusChanged, this.updateStatus, this);
         property.addEventListener(WI.CSSProperty.Event.Changed, this.updateStatus, this);
 
-        if (WI.settings.experimentalEnableMultiplePropertiesSelection.value && this._property.editable) {
+        if (!this._readOnly) {
             this._element.tabIndex = -1;
 
             this._element.addEventListener("blur", (event) => {
-                this._delegate.spreadsheetStylePropertyBlur(event, this);
+                // Keep selection after tabbing out of Web Inspector window and back.
+                if (document.activeElement === this._element)
+                    return;
+
+                if (this._delegate.spreadsheetStylePropertyBlur)
+                    this._delegate.spreadsheetStylePropertyBlur(event, this);
             });
 
             this._element.addEventListener("mouseenter", (event) => {
-                this._delegate.spreadsheetStylePropertyMouseEnter(event, this);
+                if (this._delegate.spreadsheetStylePropertyMouseEnter)
+                    this._delegate.spreadsheetStylePropertyMouseEnter(event, this);
             });
 
             this._element.copyHandler = this;
@@ -93,10 +98,24 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
         this.updateStatus();
     }
 
+    startEditingName()
+    {
+        if (!this._nameTextField)
+            return;
+
+        this._nameTextField.startEditing();
+    }
+
+    startEditingValue()
+    {
+        if (!this._valueTextField)
+            return;
+
+        this._valueTextField.startEditing();
+    }
+
     detached()
     {
-        this._property.__propertyView = null;
-
         if (this._nameTextField)
             this._nameTextField.detached();
 
@@ -112,13 +131,9 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
             this._valueTextField.element.blur();
     }
 
-    highlight()
-    {
-        this._element.classList.add("highlighted");
-    }
-
     remove(replacement = null)
     {
+        console.assert(this._property.ownerStyle.locked, `Removed property was unlocked (${this._property.name})`);
         this.element.remove();
 
         if (replacement)
@@ -136,13 +151,14 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
     {
         this.element.removeChildren();
 
-        if (this._property.editable) {
+        if (this._isEditable()) {
             this._checkboxElement = this.element.appendChild(document.createElement("input"));
             this._checkboxElement.classList.add("property-toggle");
             this._checkboxElement.type = "checkbox";
             this._checkboxElement.checked = this._property.enabled;
             this._checkboxElement.tabIndex = -1;
             this._checkboxElement.addEventListener("click", (event) => {
+                console.assert(this._property.ownerStyle.locked, `Toggled property was unlocked (${this._property.name})`);
                 event.stopPropagation();
                 let disabled = !this._checkboxElement.checked;
                 this._property.commentOut(disabled);
@@ -161,13 +177,14 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
         this._nameElement.textContent = this._property.name;
 
         let colonElement = this._contentElement.appendChild(document.createElement("span"));
+        colonElement.classList.add("colon");
         colonElement.textContent = ": ";
 
         this._valueElement = this._contentElement.appendChild(document.createElement("span"));
         this._valueElement.classList.add("value");
         this._renderValue(this._property.rawValue);
 
-        if (this._property.editable && this._property.enabled) {
+        if (this._isEditable() && this._property.enabled) {
             this._nameElement.tabIndex = 0;
             this._nameElement.addEventListener("beforeinput", this._handleNameBeforeInput.bind(this));
             this._nameElement.addEventListener("paste", this._handleNamePaste.bind(this));
@@ -180,12 +197,13 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
             this._valueTextField = new WI.SpreadsheetTextField(this, this._valueElement, this._valueCompletionDataProvider.bind(this));
         }
 
-        if (this._property.editable) {
+        if (this._isEditable()) {
             this._setupJumpToSymbol(this._nameElement);
             this._setupJumpToSymbol(this._valueElement);
         }
 
         let semicolonElement = this._contentElement.appendChild(document.createElement("span"));
+        semicolonElement.classList.add("semicolon");
         semicolonElement.textContent = ";";
 
         if (this._property.enabled) {
@@ -377,7 +395,21 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
             this._nameTextField.startEditing();
     }
 
+    spreadsheetTextFieldDidPressEsc(textField, textBeforeEditing)
+    {
+        let isNewProperty = !textBeforeEditing;
+        if (isNewProperty)
+            this.remove();
+        else if (this._delegate.spreadsheetStylePropertyDidPressEsc)
+            this._delegate.spreadsheetStylePropertyDidPressEsc(this);
+    }
+
     // Private
+
+    _isEditable()
+    {
+        return !this._readOnly && this._property.editable;
+    }
 
     _renderValue(value)
     {
@@ -388,8 +420,12 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
 
         if (this._property.enabled) {
             // FIXME: <https://webkit.org/b/178636> Web Inspector: Styles: Make inline widgets work with CSS functions (var(), calc(), etc.)
-            tokens = this._addGradientTokens(tokens);
-            tokens = this._addColorTokens(tokens);
+
+            // CSS variables may contain color - display color picker for them.
+            if (this._property.variable || WI.CSSKeywordCompletions.isColorAwareProperty(this._property.name)) {
+                tokens = this._addGradientTokens(tokens);
+                tokens = this._addColorTokens(tokens);
+            }
             tokens = this._addTimingFunctionTokens(tokens, "cubic-bezier");
             tokens = this._addTimingFunctionTokens(tokens, "spring");
             tokens = this._addVariableTokens(tokens);
@@ -434,7 +470,7 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
         let innerElement = document.createElement("span");
         innerElement.textContent = text;
 
-        let readOnly = !this._property.editable;
+        let readOnly = !this._isEditable();
         let swatch = new WI.InlineSwatch(type, valueObject, readOnly);
 
         swatch.addEventListener(WI.InlineSwatch.Event.ValueChanged, (event) => {
@@ -463,13 +499,10 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
         tokenElement.append(swatch.element, innerElement);
 
         // Prevent the value from editing when clicking on the swatch.
-        if (WI.settings.experimentalEnableMultiplePropertiesSelection.value) {
-            swatch.element.addEventListener("click", (event) => {
-                if (this._swatchActive)
-                    event.stop();
-            });
-        } else
-            swatch.element.addEventListener("mousedown", (event) => { event.stop(); });
+        swatch.element.addEventListener("click", (event) => {
+            if (this._swatchActive || event.shiftKey)
+                event.stop();
+        });
 
         return tokenElement;
     }
@@ -533,7 +566,7 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
             } else if (WI.Color.FunctionNames.has(token.value) && token.type && (token.type.includes("atom") || token.type.includes("keyword"))) {
                 // Color Function start
                 colorFunctionStartIndex = i;
-            } else if (isNaN(colorFunctionStartIndex) && token.type && token.type.includes("keyword")) {
+            } else if (isNaN(colorFunctionStartIndex) && token.type && (token.type.includes("atom") || token.type.includes("keyword"))) {
                 // Color keyword
                 pushPossibleColorToken(token.value, token);
             } else if (!isNaN(colorFunctionStartIndex)) {
@@ -639,11 +672,15 @@ WI.SpreadsheetStyleProperty = class SpreadsheetStyleProperty extends WI.Object
 
     _handleNameChange()
     {
+        console.assert(this._property.ownerStyle.locked, `Modified property was unlocked (${this._property.name})`);
+
         this._property.name = this._nameElement.textContent.trim();
     }
 
     _handleValueChange()
     {
+        console.assert(this._property.ownerStyle.locked, `Modified property was unlocked (${this._property.name})`);
+
         this._property.rawValue = this._valueElement.textContent.trim();
     }
 

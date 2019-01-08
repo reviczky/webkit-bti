@@ -639,7 +639,7 @@ public:
         case ArithBitOr:
             m_jit.or32(Imm32(imm), op1, result);
             break;
-        case BitXor:
+        case ArithBitXor:
             m_jit.xor32(Imm32(imm), op1, result);
             break;
         default:
@@ -655,7 +655,7 @@ public:
         case ArithBitOr:
             m_jit.or32(op1, op2, result);
             break;
-        case BitXor:
+        case ArithBitXor:
             m_jit.xor32(op1, op2, result);
             break;
         default:
@@ -724,10 +724,10 @@ public:
 
 #if USE(JSVALUE64)
     void cachedGetById(CodeOrigin, GPRReg baseGPR, GPRReg resultGPR, unsigned identifierNumber, JITCompiler::Jump slowPathTarget, SpillRegistersMode, AccessType);
-    void cachedGetByIdWithThis(CodeOrigin, GPRReg baseGPR, GPRReg thisGPR, GPRReg resultGPR, unsigned identifierNumber, JITCompiler::JumpList slowPathTarget = JITCompiler::JumpList());
+    void cachedGetByIdWithThis(CodeOrigin, GPRReg baseGPR, GPRReg thisGPR, GPRReg resultGPR, unsigned identifierNumber, const JITCompiler::JumpList& slowPathTarget = JITCompiler::JumpList());
 #elif USE(JSVALUE32_64)
     void cachedGetById(CodeOrigin, GPRReg baseTagGPROrNone, GPRReg basePayloadGPR, GPRReg resultTagGPR, GPRReg resultPayloadGPR, unsigned identifierNumber, JITCompiler::Jump slowPathTarget, SpillRegistersMode, AccessType);
-    void cachedGetByIdWithThis(CodeOrigin, GPRReg baseTagGPROrNone, GPRReg basePayloadGPR, GPRReg thisTagGPROrNone, GPRReg thisPayloadGPR, GPRReg resultTagGPR, GPRReg resultPayloadGPR, unsigned identifierNumber, JITCompiler::JumpList slowPathTarget = JITCompiler::JumpList());
+    void cachedGetByIdWithThis(CodeOrigin, GPRReg baseTagGPROrNone, GPRReg basePayloadGPR, GPRReg thisTagGPROrNone, GPRReg thisPayloadGPR, GPRReg resultTagGPR, GPRReg resultPayloadGPR, unsigned identifierNumber, const JITCompiler::JumpList& slowPathTarget = JITCompiler::JumpList());
 #endif
 
     void compileDeleteById(Node*);
@@ -1199,8 +1199,8 @@ public:
     void compileStringEquality(
         Node*, GPRReg leftGPR, GPRReg rightGPR, GPRReg lengthGPR,
         GPRReg leftTempGPR, GPRReg rightTempGPR, GPRReg leftTemp2GPR,
-        GPRReg rightTemp2GPR, JITCompiler::JumpList fastTrue,
-        JITCompiler::JumpList fastSlow);
+        GPRReg rightTemp2GPR, const JITCompiler::JumpList& fastTrue,
+        const JITCompiler::JumpList& fastSlow);
     void compileStringEquality(Node*);
     void compileStringIdentEquality(Node*);
     void compileStringToUntypedEquality(Node*, Edge stringEdge, Edge untypedEdge);
@@ -1253,6 +1253,7 @@ public:
     void compileNumberToStringWithValidRadixConstant(Node*);
     void compileNumberToStringWithValidRadixConstant(Node*, int32_t radix);
     void compileNewStringObject(Node*);
+    void compileNewSymbol(Node*);
     
     void compileNewTypedArrayWithSize(Node*);
     
@@ -1329,6 +1330,8 @@ public:
     void compileUInt32ToNumber(Node*);
     void compileDoubleAsInt32(Node*);
 
+    void compileBitwiseNot(Node*);
+
     template<typename SnippetGenerator, J_JITOperation_EJJ slowPathFunction>
     void emitUntypedBitOp(Node*);
     void compileBitwiseOp(Node*);
@@ -1352,7 +1355,9 @@ public:
     void compileArithSub(Node*);
     void compileValueNegate(Node*);
     void compileArithNegate(Node*);
+    void compileValueMul(Node*);
     void compileArithMul(Node*);
+    void compileValueDiv(Node*);
     void compileArithDiv(Node*);
     void compileArithFRound(Node*);
     void compileArithMod(Node*);
@@ -1474,6 +1479,8 @@ public:
     void compileNewArrayWithSize(Node*);
     void compileNewTypedArray(Node*);
     void compileToThis(Node*);
+    void compileObjectKeys(Node*);
+    void compileObjectToString(Node*);
     void compileObjectCreate(Node*);
     void compileCreateThis(Node*);
     void compileNewObject(Node*);
@@ -1730,7 +1737,7 @@ public:
     };
     Vector<SlowPathLambda> m_slowPathLambdas;
     Vector<SilentRegisterSavePlan> m_plans;
-    std::optional<unsigned> m_outOfLineStreamIndex;
+    Optional<unsigned> m_outOfLineStreamIndex;
 };
 
 

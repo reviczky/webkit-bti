@@ -33,7 +33,7 @@
 #include "LayoutBox.h"
 #include "LayoutContainer.h"
 #include "LayoutDescendantIterator.h"
-#include "LayoutFormattingState.h"
+#include "LayoutState.h"
 #include "Logging.h"
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/text/TextStream.h>
@@ -67,7 +67,7 @@ void FormattingContext::computeOutOfFlowHorizontalGeometry(const Box& layoutBox)
 {
     auto& layoutState = this->layoutState();
 
-    auto compute = [&](std::optional<LayoutUnit> usedWidth) {
+    auto compute = [&](Optional<LayoutUnit> usedWidth) {
         return Geometry::outOfFlowHorizontalGeometry(layoutState, layoutBox, usedWidth);
     };
 
@@ -87,17 +87,17 @@ void FormattingContext::computeOutOfFlowHorizontalGeometry(const Box& layoutBox)
     }
 
     auto& displayBox = layoutState.displayBoxForLayoutBox(layoutBox);
-    displayBox.setLeft(horizontalGeometry.left + horizontalGeometry.widthAndMargin.margin.left);
+    displayBox.setLeft(horizontalGeometry.left + horizontalGeometry.widthAndMargin.usedMargin.start);
     displayBox.setContentBoxWidth(horizontalGeometry.widthAndMargin.width);
-    displayBox.setHorizontalMargin(horizontalGeometry.widthAndMargin.margin);
-    displayBox.setHorizontalNonComputedMargin(horizontalGeometry.widthAndMargin.nonComputedMargin);
+    displayBox.setHorizontalMargin(horizontalGeometry.widthAndMargin.usedMargin);
+    displayBox.setHorizontalComputedMargin(horizontalGeometry.widthAndMargin.computedMargin);
 }
 
 void FormattingContext::computeOutOfFlowVerticalGeometry(const Box& layoutBox) const
 {
     auto& layoutState = this->layoutState();
 
-    auto compute = [&](std::optional<LayoutUnit> usedHeight) {
+    auto compute = [&](Optional<LayoutUnit> usedHeight) {
         return Geometry::outOfFlowVerticalGeometry(layoutState, layoutBox, usedHeight);
     };
 
@@ -115,11 +115,11 @@ void FormattingContext::computeOutOfFlowVerticalGeometry(const Box& layoutBox) c
     }
 
     auto& displayBox = layoutState.displayBoxForLayoutBox(layoutBox);
-    displayBox.setTop(verticalGeometry.top + verticalGeometry.heightAndMargin.margin.top);
+    auto nonCollapsedVerticalMargin = verticalGeometry.heightAndMargin.nonCollapsedMargin;
+    displayBox.setTop(verticalGeometry.top + nonCollapsedVerticalMargin.before);
     displayBox.setContentBoxHeight(verticalGeometry.heightAndMargin.height);
-    ASSERT(!verticalGeometry.heightAndMargin.collapsedMargin);
-    displayBox.setVerticalMargin(verticalGeometry.heightAndMargin.margin);
-    displayBox.setVerticalNonCollapsedMargin(verticalGeometry.heightAndMargin.margin);
+    // Margins of absolutely positioned boxes do not collapse
+    displayBox.setVerticalMargin({ nonCollapsedVerticalMargin, { } });
 }
 
 void FormattingContext::computeBorderAndPadding(const Box& layoutBox) const
@@ -154,7 +154,7 @@ void FormattingContext::layoutOutOfFlowDescendants(const Box& layoutBox) const
         computeBorderAndPadding(layoutBox);
         computeOutOfFlowHorizontalGeometry(layoutBox);
 
-        layoutState.createFormattingStateForFormattingRootIfNeeded(layoutBox).formattingContext(layoutBox)->layout();
+        layoutState.createFormattingStateForFormattingRootIfNeeded(layoutBox).createFormattingContext(layoutBox)->layout();
 
         computeOutOfFlowVerticalGeometry(layoutBox);
         layoutOutOfFlowDescendants(layoutBox);
@@ -183,13 +183,13 @@ Display::Box FormattingContext::mapBoxToAncestor(const LayoutState& layoutState,
     return mappedDisplayBox;
 }
 
-Position FormattingContext::mapTopLeftToAncestor(const LayoutState& layoutState, const Box& layoutBox, const Container& ancestor)
+Point FormattingContext::mapTopLeftToAncestor(const LayoutState& layoutState, const Box& layoutBox, const Container& ancestor)
 {
     ASSERT(layoutBox.isDescendantOf(ancestor));
     return mapCoordinateToAncestor(layoutState, layoutState.displayBoxForLayoutBox(layoutBox).topLeft(), *layoutBox.containingBlock(), ancestor);
 }
 
-Position FormattingContext::mapCoordinateToAncestor(const LayoutState& layoutState, Position position, const Container& containingBlock, const Container& ancestor)
+Point FormattingContext::mapCoordinateToAncestor(const LayoutState& layoutState, Point position, const Container& containingBlock, const Container& ancestor)
 {
     auto mappedPosition = position;
     auto* container = &containingBlock;
@@ -223,16 +223,16 @@ void FormattingContext::validateGeometryConstraintsAfterLayout() const
         if ((layoutBox.isBlockLevelBox() || layoutBox.isOutOfFlowPositioned()) && !layoutBox.replaced()) {
             // margin-left + border-left-width + padding-left + width + padding-right + border-right-width + margin-right = width of containing block
             auto containingBlockWidth = containingBlockDisplayBox.contentBoxWidth();
-            ASSERT(displayBox.marginLeft() + displayBox.borderLeft() + displayBox.paddingLeft().value_or(0) + displayBox.contentBoxWidth()
-                + displayBox.paddingRight().value_or(0) + displayBox.borderRight() + displayBox.marginRight() == containingBlockWidth);
+            ASSERT(displayBox.marginStart() + displayBox.borderLeft() + displayBox.paddingLeft().valueOr(0) + displayBox.contentBoxWidth()
+                + displayBox.paddingRight().valueOr(0) + displayBox.borderRight() + displayBox.marginEnd() == containingBlockWidth);
         }
 
         // 10.6.4 Absolutely positioned, non-replaced elements
         if (layoutBox.isOutOfFlowPositioned() && !layoutBox.replaced()) {
             // top + margin-top + border-top-width + padding-top + height + padding-bottom + border-bottom-width + margin-bottom + bottom = height of containing block
             auto containingBlockHeight = containingBlockDisplayBox.contentBoxHeight();
-            ASSERT(displayBox.top() + displayBox.marginTop() + displayBox.borderTop() + displayBox.paddingTop().value_or(0) + displayBox.contentBoxHeight()
-                + displayBox.paddingBottom().value_or(0) + displayBox.borderBottom() + displayBox.marginBottom() == containingBlockHeight);
+            ASSERT(displayBox.top() + displayBox.marginBefore() + displayBox.borderTop() + displayBox.paddingTop().valueOr(0) + displayBox.contentBoxHeight()
+                + displayBox.paddingBottom().valueOr(0) + displayBox.borderBottom() + displayBox.marginAfter() == containingBlockHeight);
         }
     }
 }

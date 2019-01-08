@@ -1,5 +1,6 @@
 /*
  *  Copyright (c) 2015, Canon Inc. All rights reserved.
+ *  Copyright (C) 2018 Apple Inc. All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
  *  modification, are permitted provided that the following conditions
@@ -28,7 +29,15 @@
 
 #include <JavaScriptCore/BuiltinUtils.h>
 
+#if USE(APPLE_INTERNAL_SDK)
+#include <WebKitAdditions/WebCoreBuiltinNamesAdditions.h>
+#endif
+
 namespace WebCore {
+
+#if !defined(WEBCORE_ADDITIONAL_PRIVATE_IDENTIFIERS)
+#define WEBCORE_ADDITIONAL_PRIVATE_IDENTIFIERS(macro)
+#endif
 
 #define WEBCORE_COMMON_PRIVATE_IDENTIFIERS_EACH_PROPERTY_NAME(macro) \
     macro(Animation) \
@@ -49,6 +58,7 @@ namespace WebCore {
     macro(Credential) \
     macro(CredentialsContainer) \
     macro(CSSAnimation) \
+    macro(CSSImageValue) \
     macro(CSSNumericValue) \
     macro(CSSPaintSize) \
     macro(CSSStyleValue) \
@@ -167,6 +177,7 @@ namespace WebCore {
     macro(SpectreGadget) \
     macro(StaticRange) \
     macro(StylePropertyMapReadOnly) \
+    macro(StylePropertyMap) \
     macro(VRDisplay) \
     macro(VRDisplayCapabilities) \
     macro(VRDisplayEvent) \
@@ -179,15 +190,25 @@ namespace WebCore {
     macro(WebGLVertexArrayObject) \
     macro(WebGPU) \
     macro(WebGPUAdapter) \
-    macro(WebGPUDevice) \
+    macro(WebGPUBindGroupLayout) \
+    macro(WebGPUBuffer) \
+    macro(WebGPUBufferUsage) \
     macro(WebGPUCommandBuffer) \
+    macro(WebGPUDevice) \
+    macro(WebGPUIndexFormat) \
+    macro(WebGPUInputStepMode) \
+    macro(WebGPUQueue) \
+    macro(WebGPUPipelineLayout) \
+    macro(WebGPUProgrammablePassEncoder) \
     macro(WebGPURenderingContext) \
+    macro(WebGPURenderPassEncoder) \
     macro(WebGPURenderPipeline) \
-    macro(WebGPUShaderStage) \
     macro(WebGPUShaderModule) \
+    macro(WebGPUShaderStageBit) \
     macro(WebGPUSwapChain) \
     macro(WebGPUTexture) \
     macro(WebGPUTextureView) \
+    macro(WebGPUVertexFormat) \
     macro(WebMetalBuffer) \
     macro(WebMetalCommandBuffer) \
     macro(WebMetalCommandQueue) \
@@ -338,7 +359,8 @@ namespace WebCore {
     macro(webkitIndexedDB) \
     macro(webgpu) \
     macro(window) \
-    macro(writing)
+    macro(writing) \
+    WEBCORE_ADDITIONAL_PRIVATE_IDENTIFIERS(macro) \
 
 class WebCoreBuiltinNames {
 public:

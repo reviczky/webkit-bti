@@ -173,7 +173,7 @@ void WebResourceLoadStatisticsStore::setResourceLoadStatisticsDebugMode(bool val
     });
 }
 
-void WebResourceLoadStatisticsStore::setPrevalentResourceForDebugMode(const WebCore::URL& url, CompletionHandler<void()>&& completionHandler)
+void WebResourceLoadStatisticsStore::setPrevalentResourceForDebugMode(const URL& url, CompletionHandler<void()>&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
 
@@ -309,7 +309,7 @@ void WebResourceLoadStatisticsStore::grantStorageAccess(String&& subFrameHost, S
     });
 }
 
-void WebResourceLoadStatisticsStore::callGrantStorageAccessHandler(const String& subFramePrimaryDomain, const String& topFramePrimaryDomain, std::optional<uint64_t> frameID, uint64_t pageID, CompletionHandler<void(bool)>&& callback)
+void WebResourceLoadStatisticsStore::callGrantStorageAccessHandler(const String& subFramePrimaryDomain, const String& topFramePrimaryDomain, Optional<uint64_t> frameID, uint64_t pageID, CompletionHandler<void(bool)>&& callback)
 {
     ASSERT(RunLoop::isMain());
 
@@ -375,7 +375,7 @@ void WebResourceLoadStatisticsStore::submitTelemetry()
     });
 }
 
-void WebResourceLoadStatisticsStore::logFrameNavigation(const WebFrameProxy& frame, const URL& pageURL, const WebCore::ResourceRequest& request, const WebCore::URL& redirectURL)
+void WebResourceLoadStatisticsStore::logFrameNavigation(const WebFrameProxy& frame, const URL& pageURL, const WebCore::ResourceRequest& request, const URL& redirectURL)
 {
     ASSERT(RunLoop::isMain());
 

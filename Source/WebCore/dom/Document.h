@@ -415,7 +415,7 @@ public:
     void setViewportArguments(const ViewportArguments& viewportArguments) { m_viewportArguments = viewportArguments; }
     ViewportArguments viewportArguments() const { return m_viewportArguments; }
 
-    WEBCORE_EXPORT void setOverrideViewportArguments(const std::optional<ViewportArguments>&);
+    WEBCORE_EXPORT void setOverrideViewportArguments(const Optional<ViewportArguments>&);
 
     OptionSet<DisabledAdaptations> disabledAdaptations() const { return m_disabledAdaptations; }
 #ifndef NDEBUG
@@ -423,7 +423,7 @@ public:
 #endif
 
     void setReferrerPolicy(ReferrerPolicy);
-    ReferrerPolicy referrerPolicy() const { return m_referrerPolicy.value_or(ReferrerPolicy::NoReferrerWhenDowngrade); }
+    ReferrerPolicy referrerPolicy() const { return m_referrerPolicy.valueOr(ReferrerPolicy::NoReferrerWhenDowngrade); }
 
     WEBCORE_EXPORT DocumentType* doctype() const;
 
@@ -681,7 +681,7 @@ public:
 
     const URL& url() const final { return m_url; }
     void setURL(const URL&);
-    const URL& urlForBindings() const { return m_url.isEmpty() ? blankURL() : m_url; }
+    const URL& urlForBindings() const { return m_url.isEmpty() ? WTF::blankURL() : m_url; }
 
     // To understand how these concepts relate to one another, please see the
     // comments surrounding their declaration.
@@ -782,11 +782,11 @@ public:
     Element* cssTarget() const { return m_cssTarget; }
     static ptrdiff_t cssTargetMemoryOffset() { return OBJECT_OFFSETOF(Document, m_cssTarget); }
 
-    WEBCORE_EXPORT void scheduleForcedStyleRecalc();
+    WEBCORE_EXPORT void scheduleFullStyleRebuild();
     void scheduleStyleRecalc();
     void unscheduleStyleRecalc();
     bool hasPendingStyleRecalc() const;
-    bool hasPendingForcedStyleRecalc() const;
+    bool hasPendingFullStyleRebuild() const;
 
     void registerNodeListForInvalidation(LiveNodeList&);
     void unregisterNodeListForInvalidation(LiveNodeList&);
@@ -929,7 +929,8 @@ public:
     WEBCORE_EXPORT String domain() const;
     ExceptionOr<void> setDomain(const String& newDomain);
 
-    WEBCORE_EXPORT String lastModified();
+    void overrideLastModified(const Optional<WallTime>&);
+    WEBCORE_EXPORT String lastModified() const;
 
     // The cookieURL is used to query the cookie database for this document's
     // cookies. For example, if the cookie URL is http://example.com, we'll
@@ -1049,7 +1050,7 @@ public:
     void setHasNodesWithMissingStyle() { m_hasNodesWithMissingStyle = true; }
 
     // Extension for manipulating canvas drawing contexts for use in CSS
-    std::optional<RenderingContext> getCSSCanvasContext(const String& type, const String& name, int width, int height);
+    Optional<RenderingContext> getCSSCanvasContext(const String& type, const String& name, int width, int height);
     HTMLCanvasElement* getCSSCanvasElement(const String& name);
     String nameForCSSCanvasElement(const HTMLCanvasElement&) const;
 
@@ -1118,6 +1119,10 @@ public:
     void registerForAllowsMediaDocumentInlinePlaybackChangedCallbacks(HTMLMediaElement&);
     void unregisterForAllowsMediaDocumentInlinePlaybackChangedCallbacks(HTMLMediaElement&);
     void allowsMediaDocumentInlinePlaybackChanged();
+
+    void stopAllMediaPlayback();
+    void suspendAllMediaPlayback();
+    void resumeAllMediaPlayback();
 #endif
 
     WEBCORE_EXPORT void setShouldCreateRenderers(bool);
@@ -1228,6 +1233,7 @@ public:
 #if ENABLE(DEVICE_ORIENTATION) && PLATFORM(IOS_FAMILY)
     DeviceMotionController* deviceMotionController() const;
     DeviceOrientationController* deviceOrientationController() const;
+    WEBCORE_EXPORT void simulateDeviceOrientationChange(double alpha, double beta, double gamma);
 #endif
 
     const DocumentTiming& timing() const { return m_documentTiming; }
@@ -1359,7 +1365,7 @@ public:
 
     void setVisualUpdatesAllowedByClient(bool);
 
-#if ENABLE(SUBTLE_CRYPTO)
+#if ENABLE(WEB_CRYPTO)
     bool wrapCryptoKey(const Vector<uint8_t>& key, Vector<uint8_t>& wrappedKey) final;
     bool unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Vector<uint8_t>& key) final;
 #endif
@@ -1521,14 +1527,18 @@ public:
 
 #if ENABLE(CSS_PAINTING_API)
     Worklet& ensurePaintWorklet();
-    PaintWorkletGlobalScope* paintWorkletGlobalScope() { return m_paintWorkletGlobalScope.get(); }
-    void setPaintWorkletGlobalScope(Ref<PaintWorkletGlobalScope>&&);
+    PaintWorkletGlobalScope* paintWorkletGlobalScopeForName(const String& name);
+    void setPaintWorkletGlobalScopeForName(const String& name, Ref<PaintWorkletGlobalScope>&&);
 #endif
 
     void setAsRunningUserScripts() { m_isRunningUserScripts = true; }
     bool isRunningUserScripts() const { return m_isRunningUserScripts; }
 
     void frameWasDisconnectedFromOwner();
+
+    // Used in webarchive loading tests.
+    void setAlwaysAllowLocalWebarchive() { m_alwaysAllowLocalWebarchive = true; }
+    bool alwaysAllowLocalWebarchive() const { return m_alwaysAllowLocalWebarchive; }
 
 protected:
     enum ConstructionFlags { Synthesized = 1, NonRenderedPlaceholder = 1 << 1 };
@@ -1839,7 +1849,7 @@ private:
     Timer m_loadEventDelayTimer;
 
     ViewportArguments m_viewportArguments;
-    std::optional<ViewportArguments> m_overrideViewportArguments;
+    Optional<ViewportArguments> m_overrideViewportArguments;
     OptionSet<DisabledAdaptations> m_disabledAdaptations;
 
     DocumentTiming m_documentTiming;
@@ -1926,6 +1936,8 @@ private:
 
     String m_cachedDOMCookies;
 
+    Optional<WallTime> m_overrideLastModified;
+
     HashSet<RefPtr<Element>> m_associatedFormControls;
     unsigned m_disabledFieldsetElementsCount { 0 };
 
@@ -1952,7 +1964,7 @@ private:
     MediaProducer::MediaStateFlags m_mediaState { MediaProducer::IsNotPlaying };
     bool m_userHasInteractedWithMediaElement { false };
     PageCacheState m_pageCacheState { NotInPageCache };
-    std::optional<ReferrerPolicy> m_referrerPolicy;
+    Optional<ReferrerPolicy> m_referrerPolicy;
     ReadyState m_readyState { Complete };
 
     MutationObserverOptions m_mutationObserverTypes { 0 };
@@ -1986,7 +1998,7 @@ private:
     bool m_visuallyOrdered { false };
     bool m_bParsing { false }; // FIXME: rename
 
-    bool m_pendingStyleRecalcShouldForce { false };
+    bool m_needsFullStyleRebuild { false };
     bool m_inStyleRecalc { false };
     bool m_closeAfterStyleRecalc { false };
     bool m_inRenderTreeUpdate { false };
@@ -2065,10 +2077,12 @@ private:
 
 #if ENABLE(CSS_PAINTING_API)
     RefPtr<Worklet> m_paintWorklet;
-    RefPtr<PaintWorkletGlobalScope> m_paintWorkletGlobalScope;
+    HashMap<String, Ref<PaintWorkletGlobalScope>> m_paintWorkletGlobalScopes;
 #endif
 
     bool m_isRunningUserScripts { false };
+
+    bool m_alwaysAllowLocalWebarchive { false };
 };
 
 Element* eventTargetElementForDocument(Document*);

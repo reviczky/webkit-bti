@@ -385,9 +385,6 @@ void NetworkDataTaskSoup::dispatchDidReceiveResponse()
                 ASSERT_NOT_REACHED();
 
             break;
-        case PolicyAction::Suspend:
-            LOG_ERROR("PolicyAction::Suspend encountered - Treating as PolicyAction::Ignore for now");
-            FALLTHROUGH;
         case PolicyAction::Ignore:
             clearRequest();
             break;
@@ -423,7 +420,7 @@ gboolean NetworkDataTaskSoup::tlsConnectionAcceptCertificateCallback(GTlsConnect
 bool NetworkDataTaskSoup::tlsConnectionAcceptCertificate(GTlsCertificate* certificate, GTlsCertificateFlags tlsErrors)
 {
     ASSERT(m_soupRequest);
-    URL url(soup_request_get_uri(m_soupRequest.get()));
+    URL url = soupURIToURL(soup_request_get_uri(m_soupRequest.get()));
     auto error = SoupNetworkSession::checkTLSErrors(url, certificate, tlsErrors);
     if (!error)
         return true;

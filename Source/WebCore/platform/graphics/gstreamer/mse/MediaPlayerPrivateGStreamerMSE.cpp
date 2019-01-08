@@ -39,7 +39,6 @@
 #include "PlaybackPipeline.h"
 #include "SourceBufferPrivateGStreamer.h"
 #include "TimeRanges.h"
-#include "URL.h"
 #include "VideoTrackPrivateGStreamer.h"
 
 #include <fnmatch.h>
@@ -52,6 +51,7 @@
 #include <wtf/HashSet.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/StringPrintStream.h>
+#include <wtf/URL.h>
 #include <wtf/text/AtomicString.h>
 #include <wtf/text/AtomicStringHash.h>
 
@@ -720,8 +720,8 @@ void MediaPlayerPrivateGStreamerMSE::trackDetected(RefPtr<AppendPipeline> append
     GST_DEBUG("track ID: %s, caps: %" GST_PTR_FORMAT, newTrack->id().string().latin1().data(), caps);
 
     if (doCapsHaveType(caps, GST_VIDEO_CAPS_TYPE_PREFIX)) {
-        std::optional<FloatSize> size = getVideoResolutionFromCaps(caps);
-        if (size.has_value())
+        Optional<FloatSize> size = getVideoResolutionFromCaps(caps);
+        if (size.hasValue())
             m_videoSize = size.value();
     }
 
@@ -909,11 +909,11 @@ MediaTime MediaPlayerPrivateGStreamerMSE::maxMediaTimeSeekable() const
 }
 
 #if ENABLE(ENCRYPTED_MEDIA)
-void MediaPlayerPrivateGStreamerMSE::attemptToDecryptWithInstance(CDMInstance& instance)
+void MediaPlayerPrivateGStreamerMSE::attemptToDecryptWithLocalInstance()
 {
-    if (is<CDMInstanceClearKey>(instance)) {
-        auto& ckInstance = downcast<CDMInstanceClearKey>(instance);
-        if (ckInstance.keys().isEmpty())
+    if (is<CDMInstanceClearKey>(*m_cdmInstance)) {
+        auto& clearkeyCDMInstance = downcast<CDMInstanceClearKey>(*m_cdmInstance);
+        if (clearkeyCDMInstance.keys().isEmpty())
             return;
 
         GValue keyIDList = G_VALUE_INIT, keyValueList = G_VALUE_INIT;
@@ -930,7 +930,7 @@ void MediaPlayerPrivateGStreamerMSE::attemptToDecryptWithInstance(CDMInstance& i
                 gst_value_list_append_and_take_value(valueList, bufferValue);
             };
 
-        for (auto& key : ckInstance.keys()) {
+        for (auto& key : clearkeyCDMInstance.keys()) {
             appendBuffer(&keyIDList, *key.keyIDData);
             appendBuffer(&keyValueList, *key.keyValueData);
         }
@@ -938,7 +938,6 @@ void MediaPlayerPrivateGStreamerMSE::attemptToDecryptWithInstance(CDMInstance& i
         GUniquePtr<GstStructure> structure(gst_structure_new_empty("drm-cipher-clearkey"));
         gst_structure_set_value(structure.get(), "key-ids", &keyIDList);
         gst_structure_set_value(structure.get(), "key-values", &keyValueList);
-        gst_structure_set(structure.get(), "cdm-instance", G_TYPE_POINTER, &instance, nullptr);
 
         gst_element_send_event(m_playbackPipeline->pipeline(), gst_event_new_custom(GST_EVENT_CUSTOM_DOWNSTREAM_OOB, structure.release()));
     }

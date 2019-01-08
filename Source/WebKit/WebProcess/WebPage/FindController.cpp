@@ -99,7 +99,7 @@ void FindController::countStringMatches(const String& string, FindOptions option
     m_webPage->send(Messages::WebPageProxy::DidCountStringMatches(string, matchCount));
 }
 
-uint32_t FindController::replaceMatches(Vector<uint32_t>&& matchIndices, const String& replacementText, bool selectionOnly)
+uint32_t FindController::replaceMatches(const Vector<uint32_t>& matchIndices, const String& replacementText, bool selectionOnly)
 {
     if (matchIndices.isEmpty())
         return m_webPage->corePage()->replaceSelectionWithText(replacementText);
@@ -117,7 +117,7 @@ uint32_t FindController::replaceMatches(Vector<uint32_t>&& matchIndices, const S
         if (rangesToReplace.size() >= maximumNumberOfMatchesToReplace)
             break;
     }
-    return m_webPage->corePage()->replaceRangesWithText(WTFMove(rangesToReplace), replacementText, selectionOnly);
+    return m_webPage->corePage()->replaceRangesWithText(rangesToReplace, replacementText, selectionOnly);
 }
 
 static Frame* frameWithSelection(Page* page)
@@ -343,7 +343,7 @@ void FindController::hideFindUI()
 
 bool FindController::updateFindIndicator(Frame& selectedFrame, bool isShowingOverlay, bool shouldAnimate)
 {
-    RefPtr<TextIndicator> indicator = TextIndicator::createWithSelectionInFrame(selectedFrame, TextIndicatorOptionIncludeMarginIfRangeMatchesSelection, shouldAnimate ? TextIndicatorPresentationTransition::Bounce : TextIndicatorPresentationTransition::None);
+    auto indicator = TextIndicator::createWithSelectionInFrame(selectedFrame, TextIndicatorOptionIncludeMarginIfRangeMatchesSelection, shouldAnimate ? TextIndicatorPresentationTransition::Bounce : TextIndicatorPresentationTransition::None);
     if (!indicator)
         return false;
 

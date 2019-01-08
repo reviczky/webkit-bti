@@ -33,7 +33,7 @@
 #include "SecurityOrigin.h"
 #include "SocketProvider.h"
 #include "ThreadGlobalData.h"
-#include "URL.h"
+#include <wtf/URL.h>
 #include "WorkerGlobalScope.h"
 #include "WorkerInspectorController.h"
 #include <utility>
@@ -190,7 +190,7 @@ void WorkerThread::workerThread()
     }
 
     String exceptionMessage;
-    scriptController->evaluate(ScriptSourceCode(m_startupData->m_sourceCode, m_startupData->m_scriptURL), &exceptionMessage);
+    scriptController->evaluate(ScriptSourceCode(m_startupData->m_sourceCode, URL(m_startupData->m_scriptURL)), &exceptionMessage);
     
     callOnMainThread([evaluateCallback = WTFMove(m_evaluateCallback), message = exceptionMessage.isolatedCopy()] {
         if (evaluateCallback)

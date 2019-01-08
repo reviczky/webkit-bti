@@ -65,6 +65,7 @@
 #include "StackAlignment.h"
 #include "StringConstructor.h"
 #include "StructureStubInfo.h"
+#include "SymbolConstructor.h"
 #include "Watchdog.h"
 #include <wtf/CommaPrinter.h>
 #include <wtf/HashMap.h>
@@ -947,6 +948,7 @@ private:
                         node->mergeFlags(NodeMayHaveBigIntResult);
                     break;
                 
+                case ValueMul:
                 case ArithMul: {
                     if (arithProfile->didObserveInt52Overflow())
                         node->mergeFlags(NodeMayOverflowInt52);
@@ -958,6 +960,8 @@ private:
                         node->mergeFlags(NodeMayHaveDoubleResult);
                     if (arithProfile->didObserveNonNumeric())
                         node->mergeFlags(NodeMayHaveNonNumericResult);
+                    if (arithProfile->didObserveBigInt())
+                        node->mergeFlags(NodeMayHaveBigIntResult);
                     break;
                 }
                 case ValueNegate:
@@ -1001,7 +1005,7 @@ private:
     
     Node* makeDivSafe(Node* node)
     {
-        ASSERT(node->op() == ArithDiv);
+        ASSERT(node->op() == ArithDiv || node->op() == ValueDiv);
         
         if (m_inlineStackTop->m_exitProfile.hasExitSite(m_currentIndex, Overflow))
             node->mergeFlags(NodeMayOverflowInt32InDFG);
@@ -1020,6 +1024,10 @@ private:
         // FIXME: It might be possible to make this more granular.
         node->mergeFlags(NodeMayOverflowInt32InBaseline | NodeMayNegZeroInBaseline);
         
+        ArithProfile* arithProfile = m_inlineStackTop->m_profiledBlock->arithProfileForBytecodeOffset(m_currentIndex);
+        if (arithProfile->didObserveBigInt())
+            node->mergeFlags(NodeMayHaveBigIntResult);
+
         return node;
     }
     
@@ -2684,6 +2692,22 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, VirtualRegister result, I
         return true;
     }
 
+    case ObjectKeysIntrinsic: {
+        if (argumentCountIncludingThis < 2)
+            return false;
+
+        insertChecks();
+        set(result, addToGraph(ObjectKeys, get(virtualRegisterForArgument(1, registerOffset))));
+        return true;
+    }
+
+    case ObjectPrototypeToStringIntrinsic: {
+        insertChecks();
+        Node* value = get(virtualRegisterForArgument(0, registerOffset));
+        set(result, addToGraph(ObjectToString, value));
+        return true;
+    }
+
     case ReflectGetPrototypeOfIntrinsic: {
         if (argumentCountIncludingThis != 2)
             return false;
@@ -3705,6 +3729,20 @@ bool ByteCodeParser::handleConstantInternalFunction(
         if (kind == CodeForConstruct)
             resultNode = addToGraph(NewStringObject, OpInfo(m_graph.registerStructure(function->globalObject(*m_vm)->stringObjectStructure())), resultNode);
         
+        set(result, resultNode);
+        return true;
+    }
+
+    if (function->classInfo() == SymbolConstructor::info() && kind == CodeForCall) {
+        insertChecks();
+
+        Node* resultNode;
+
+        if (argumentCountIncludingThis <= 1)
+            resultNode = addToGraph(NewSymbol);
+        else
+            resultNode = addToGraph(NewSymbol, addToGraph(ToString, get(virtualRegisterForArgument(1, registerOffset))));
+
         set(result, resultNode);
         return true;
     }
@@ -4892,6 +4930,13 @@ void ByteCodeParser::parseBlock(unsigned limit)
             
         // === Bitwise operations ===
 
+        case op_bitnot: {
+            auto bytecode = currentInstruction->as<OpBitnot>();
+            Node* op1 = get(bytecode.operand);
+            set(bytecode.dst, addToGraph(ArithBitNot, op1));
+            NEXT_OPCODE(op_bitnot);
+        }
+
         case op_bitand: {
             auto bytecode = currentInstruction->as<OpBitand>();
             Node* op1 = get(bytecode.lhs);
@@ -4918,8 +4963,11 @@ void ByteCodeParser::parseBlock(unsigned limit)
             auto bytecode = currentInstruction->as<OpBitxor>();
             Node* op1 = get(bytecode.lhs);
             Node* op2 = get(bytecode.rhs);
-            set(bytecode.dst, addToGraph(BitXor, op1, op2));
-            NEXT_OPCODE(op_bitxor);
+            if (isInt32Speculation(getPrediction()))
+                set(bytecode.dst, addToGraph(ArithBitXor, op1, op2));
+            else
+                set(bytecode.dst, addToGraph(ValueBitXor, op1, op2));
+            NEXT_OPCODE(op_bitor);
         }
 
         case op_rshift: {
@@ -5007,7 +5055,10 @@ void ByteCodeParser::parseBlock(unsigned limit)
             auto bytecode = currentInstruction->as<OpMul>();
             Node* op1 = get(bytecode.lhs);
             Node* op2 = get(bytecode.rhs);
-            set(bytecode.dst, makeSafe(addToGraph(ArithMul, op1, op2)));
+            if (op1->hasNumberResult() && op2->hasNumberResult())
+                set(bytecode.dst, makeSafe(addToGraph(ArithMul, op1, op2)));
+            else
+                set(bytecode.dst, makeSafe(addToGraph(ValueMul, op1, op2)));
             NEXT_OPCODE(op_mul);
         }
 
@@ -5033,7 +5084,10 @@ void ByteCodeParser::parseBlock(unsigned limit)
             auto bytecode = currentInstruction->as<OpDiv>();
             Node* op1 = get(bytecode.lhs);
             Node* op2 = get(bytecode.rhs);
-            set(bytecode.dst, makeDivSafe(addToGraph(ArithDiv, op1, op2)));
+            if (op1->hasNumberResult() && op2->hasNumberResult())
+                set(bytecode.dst, makeDivSafe(addToGraph(ArithDiv, op1, op2)));
+            else
+                set(bytecode.dst, makeDivSafe(addToGraph(ValueDiv, op1, op2)));
             NEXT_OPCODE(op_div);
         }
 

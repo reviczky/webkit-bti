@@ -55,6 +55,11 @@ void Attachment::updateAttributes(Function<void(WebKit::CallbackBase::Error)>&& 
         return;
     }
 
+    if (m_webPage->willUpdateAttachmentAttributes(*this) == WebKit::WebPageProxy::ShouldUpdateAttachmentAttributes::No) {
+        callback(WebKit::CallbackBase::Error::None);
+        return;
+    }
+
     m_webPage->updateAttachmentAttributes(*this, WTFMove(callback));
 }
 
@@ -86,9 +91,9 @@ WTF::String Attachment::fileName() const
     return { };
 }
 
-std::optional<uint64_t> Attachment::fileSizeForDisplay() const
+Optional<uint64_t> Attachment::fileSizeForDisplay() const
 {
-    return std::nullopt;
+    return WTF::nullopt;
 }
 
 RefPtr<WebCore::SharedBuffer> Attachment::enclosingImageData() const

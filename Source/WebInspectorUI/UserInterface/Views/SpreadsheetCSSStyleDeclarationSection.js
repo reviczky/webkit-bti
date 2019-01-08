@@ -32,13 +32,7 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
         let element = document.createElement("section");
         element.classList.add("spreadsheet-css-declaration");
 
-        if (WI.settings.experimentalEnableMultiplePropertiesSelection.value)
-            element.classList.add("multiple-properties-selection");
-
         super(element);
-
-        if (WI.settings.experimentalEnableMultiplePropertiesSelection.value)
-            element.classList.add("multiple-properties-selection");
 
         this._delegate = delegate || null;
         this._style = style;
@@ -69,9 +63,8 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
         this._headerElement = document.createElement("div");
         this._headerElement.classList.add("header");
 
-        this._originElement = document.createElement("span");
-        this._originElement.classList.add("origin");
-        this._headerElement.append(this._originElement);
+        this._styleOriginView = new WI.StyleOriginView();
+        this._headerElement.append(this._styleOriginView.element);
 
         this._selectorElement = document.createElement("span");
         this._selectorElement.classList.add("selector");
@@ -109,9 +102,10 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
         else if (!this._style.ownerRule)
             this._element.classList.add("selector-locked");
 
+        this.element.addEventListener("mousedown", this._handleMouseDown.bind(this));
+
         if (this._style.editable) {
             this.element.addEventListener("click", this._handleClick.bind(this));
-            this.element.addEventListener("mousedown", this._handleMouseDown.bind(this));
 
             new WI.KeyboardShortcut(WI.KeyboardShortcut.Modifier.CommandOrControl, "S", this._save.bind(this), this._element);
             new WI.KeyboardShortcut(WI.KeyboardShortcut.Modifier.CommandOrControl | WI.KeyboardShortcut.Modifier.Shift, "S", this._save.bind(this), this._element);
@@ -122,7 +116,7 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
     {
         super.layout();
 
-        this._renderOrigin();
+        this._styleOriginView.update(this._style);
         this._renderSelector();
 
         if (this._shouldFocusSelectorElement)
@@ -326,71 +320,6 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
             this.applyFilter(this._filterText);
     }
 
-    _renderOrigin()
-    {
-        this._originElement.removeChildren();
-
-        switch (this._style.type) {
-        case WI.CSSStyleDeclaration.Type.Rule:
-            console.assert(this._style.ownerRule);
-
-            if (this._style.ownerRule.sourceCodeLocation) {
-                let options = {
-                    dontFloat: true,
-                    ignoreNetworkTab: true,
-                    ignoreSearchTab: true,
-                };
-
-                if (this._style.ownerStyleSheet.isInspectorStyleSheet()) {
-                    options.nameStyle = WI.SourceCodeLocation.NameStyle.None;
-                    options.prefix = WI.UIString("Inspector Style Sheet") + ":";
-                }
-
-                let sourceCodeLink = WI.createSourceCodeLocationLink(this._style.ownerRule.sourceCodeLocation, options);
-                this._originElement.appendChild(sourceCodeLink);
-            } else {
-                let originString = "";
-
-                switch (this._style.ownerRule.type) {
-                case WI.CSSStyleSheet.Type.Author:
-                    originString = WI.UIString("Author Stylesheet");
-                    break;
-
-                case WI.CSSStyleSheet.Type.User:
-                    originString = WI.UIString("User Stylesheet");
-                    break;
-
-                case WI.CSSStyleSheet.Type.UserAgent:
-                    originString = WI.UIString("User Agent Stylesheet");
-                    break;
-
-                case WI.CSSStyleSheet.Type.Inspector:
-                    originString = WI.UIString("Web Inspector");
-                    break;
-                }
-
-                console.assert(originString);
-                if (originString)
-                    this._originElement.append(originString);
-
-                if (!this._style.editable) {
-                    let styleTitle = "";
-                    if (this._style.ownerRule && this._style.ownerRule.type === WI.CSSStyleSheet.Type.UserAgent)
-                        styleTitle = WI.UIString("User Agent Stylesheet");
-                    else
-                        styleTitle = WI.UIString("Style rule");
-
-                    this._originElement.title = WI.UIString("%s cannot be modified").format(styleTitle);
-                }
-            }
-            break;
-
-        case WI.CSSStyleDeclaration.Type.Attribute:
-            this._originElement.append(WI.UIString("HTML Attributes"));
-            break;
-        }
-    }
-
     _createMediaHeader()
     {
         let mediaList = this._style.mediaList;
@@ -455,9 +384,6 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
     _handleMouseDown(event)
     {
         this._wasEditing = this._propertiesEditor.editing || document.activeElement === this._selectorElement;
-
-        if (!WI.settings.experimentalEnableMultiplePropertiesSelection.value)
-            return;
 
         let propertyElement = event.target.closest(".property");
         if (!propertyElement)

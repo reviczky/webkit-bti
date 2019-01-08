@@ -384,12 +384,12 @@ String contextMenuItemTagToggleMediaLoop()
 
 String contextMenuItemTagEnterVideoFullscreen()
 {
-    return WEB_UI_STRING("Enter Full Screen", "Video Enter Fullscreen context menu item");
+    return WEB_UI_STRING("Enter Full Screen", "Video Enter Full Screen context menu item");
 }
 
 String contextMenuItemTagExitVideoFullscreen()
 {
-    return WEB_UI_STRING_KEY("Exit Full Screen", "Exit Full Screen (context menu)", "Video Exit Fullscreen context menu item");
+    return WEB_UI_STRING_KEY("Exit Full Screen", "Exit Full Screen (context menu)", "Video Exit Full Screen context menu item");
 }
 #endif
 
@@ -626,22 +626,22 @@ String AXListItemActionVerb()
 
 String AXAutoFillCredentialsLabel()
 {
-    return WEB_UI_STRING("password auto fill", "Label for the auto fill credentials button inside a text field.");
+    return WEB_UI_STRING("password AutoFill", "Label for the AutoFill credentials button inside a text field.");
 }
 
 String AXAutoFillContactsLabel()
 {
-    return WEB_UI_STRING("contact info auto fill", "Label for the auto fill contacts button inside a text field.");
+    return WEB_UI_STRING("contact info AutoFill", "Label for the AutoFill contacts button inside a text field.");
 }
 
 String AXAutoFillStrongPasswordLabel()
 {
-    return WEB_UI_STRING("strong password auto fill", "Label for the strong password auto fill button inside a text field.");
+    return WEB_UI_STRING("strong password AutoFill", "Label for the strong password AutoFill button inside a text field.");
 }
 
 String AXAutoFillCreditCardLabel()
 {
-    return WEB_UI_STRING("credit card auto fill", "Label for the credit card auto fill button inside a text field.");
+    return WEB_UI_STRING("credit card AutoFill", "Label for the credit card AutoFill button inside a text field.");
 }
 
 String autoFillStrongPasswordLabel()
@@ -798,7 +798,7 @@ String localizedMediaControlElementHelpText(const String& name)
     if (name == "SeekForwardButton")
         return WEB_UI_STRING("seek quickly forward", "accessibility help text for fast forward button");
     if (name == "FullscreenButton")
-        return WEB_UI_STRING("Play movie in fullscreen mode", "accessibility help text for enter fullscreen button");
+        return WEB_UI_STRING("Play movie in full screen mode", "accessibility help text for enter full screen button");
     if (name == "ShowClosedCaptionsButton")
         return WEB_UI_STRING("start displaying closed captions", "accessibility help text for show closed captions button");
     if (name == "HideClosedCaptionsButton")
@@ -1023,7 +1023,7 @@ String useBlockedPlugInContextMenuTitle()
     return formatLocalizedString(WEB_UI_STRING("Show in blocked plug-in", "Title of the context menu item to show when PDFPlugin was used instead of a blocked plugin"));
 }
 
-#if ENABLE(SUBTLE_CRYPTO)
+#if ENABLE(WEB_CRYPTO)
 
 String webCryptoMasterKeyKeychainLabel(const String& localizedApplicationName)
 {

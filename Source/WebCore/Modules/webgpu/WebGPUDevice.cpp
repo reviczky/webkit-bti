@@ -33,95 +33,102 @@
 #include "GPURenderPipelineDescriptor.h"
 #include "GPUShaderModuleDescriptor.h"
 #include "Logging.h"
+#include "WebGPUBindGroupLayout.h"
+#include "WebGPUBuffer.h"
 #include "WebGPUCommandBuffer.h"
+#include "WebGPUPipelineLayout.h"
+#include "WebGPUPipelineLayoutDescriptor.h"
 #include "WebGPUPipelineStageDescriptor.h"
+#include "WebGPUQueue.h"
 #include "WebGPURenderPipeline.h"
 #include "WebGPURenderPipelineDescriptor.h"
 #include "WebGPUShaderModule.h"
 #include "WebGPUShaderModuleDescriptor.h"
-#include "WebGPUShaderStage.h"
 
 namespace WebCore {
 
 RefPtr<WebGPUDevice> WebGPUDevice::create(Ref<WebGPUAdapter>&& adapter)
 {
-    auto device = GPUDevice::create(); // FIXME: Take adapter into account when creating m_device.
-    if (!device)
-        return nullptr;
-
-    return adoptRef(new WebGPUDevice(WTFMove(adapter), WTFMove(device)));
+    if (auto device = GPUDevice::create()) // FIXME: Take adapter into account when creating m_device.
+        return adoptRef(new WebGPUDevice(WTFMove(adapter), device.releaseNonNull()));
+    return nullptr;
 }
 
-WebGPUDevice::WebGPUDevice(Ref<WebGPUAdapter>&& adapter, RefPtr<GPUDevice>&& device)
+WebGPUDevice::WebGPUDevice(Ref<WebGPUAdapter>&& adapter, Ref<GPUDevice>&& device)
     : m_adapter(WTFMove(adapter))
-    , m_device(device)
+    , m_device(WTFMove(device))
 {
     UNUSED_PARAM(m_adapter);
 }
 
+RefPtr<WebGPUBuffer> WebGPUDevice::createBuffer(WebGPUBufferDescriptor&& descriptor) const
+{
+    // FIXME: Validation on descriptor needed?
+    if (auto buffer = m_device->createBuffer(GPUBufferDescriptor { descriptor.size, descriptor.usage }))
+        return WebGPUBuffer::create(buffer.releaseNonNull());
+    return nullptr;
+}
+
+Ref<WebGPUBindGroupLayout> WebGPUDevice::createBindGroupLayout(WebGPUBindGroupLayoutDescriptor&& descriptor) const
+{
+    auto layout = m_device->tryCreateBindGroupLayout(GPUBindGroupLayoutDescriptor { descriptor.bindings });
+    return WebGPUBindGroupLayout::create(WTFMove(layout));
+}
+
+Ref<WebGPUPipelineLayout> WebGPUDevice::createPipelineLayout(WebGPUPipelineLayoutDescriptor&& descriptor) const
+{
+    // FIXME: Is an empty pipelineLayout an error?
+    auto bindGroupLayouts = descriptor.bindGroupLayouts.map([] (const auto& layout) -> RefPtr<const GPUBindGroupLayout> {
+        return layout->bindGroupLayout();
+    });
+    auto layout = m_device->createPipelineLayout(GPUPipelineLayoutDescriptor { WTFMove(bindGroupLayouts) });
+    return WebGPUPipelineLayout::create(WTFMove(layout));
+}
+
 RefPtr<WebGPUShaderModule> WebGPUDevice::createShaderModule(WebGPUShaderModuleDescriptor&& descriptor) const
 {
-    return WebGPUShaderModule::create(m_device->createShaderModule(GPUShaderModuleDescriptor { descriptor.code }));
+    // FIXME: What can be validated here?
+    if (auto module = m_device->createShaderModule(GPUShaderModuleDescriptor { descriptor.code }))
+        return WebGPUShaderModule::create(module.releaseNonNull());
+    return nullptr;
+}
+
+static Optional<GPUPipelineStageDescriptor> validateAndConvertPipelineStage(const WebGPUPipelineStageDescriptor& descriptor)
+{
+    if (!descriptor.module || !descriptor.module->module() || descriptor.entryPoint.isEmpty())
+        return WTF::nullopt;
+
+    return GPUPipelineStageDescriptor { descriptor.module->module(), descriptor.entryPoint };
 }
 
 RefPtr<WebGPURenderPipeline> WebGPUDevice::createRenderPipeline(WebGPURenderPipelineDescriptor&& descriptor) const
 {
-    const char* const functionName = "WebGPUDevice::createRenderPipeline()";
-#if LOG_DISABLED
-    UNUSED_PARAM(functionName);
-#endif
+    auto vertexStage = validateAndConvertPipelineStage(descriptor.vertexStage);
+    auto fragmentStage = validateAndConvertPipelineStage(descriptor.fragmentStage);
 
-    if (descriptor.stages.isEmpty()) {
-        LOG(WebGPU, "%s: No stages in WebGPURenderPipelineDescriptor!", functionName);
+    if (!vertexStage || !fragmentStage) {
+        LOG(WebGPU, "WebGPUDevice::createRenderPipeline(): Invalid WebGPUPipelineStageDescriptor!");
         return nullptr;
     }
 
-    GPUPipelineStageDescriptor vertexStage;
-    GPUPipelineStageDescriptor fragmentStage;
-
-    for (const auto& stageDescriptor : descriptor.stages) {
-        if (!stageDescriptor.module || !stageDescriptor.module->module() || stageDescriptor.entryPoint.isEmpty()) {
-            LOG(WebGPU, "%s: Invalid WebGPUPipelineStageDescriptor!", functionName);
-            return nullptr;
-        }
-
-        switch (stageDescriptor.stage) {
-        case WebGPUShaderStage::VERTEX:
-            if (vertexStage.module) {
-                LOG(WebGPU, "%s: Multiple vertex stages in WebGPURenderPipelineDescriptor!", functionName);
-                return nullptr;
-            }
-
-            vertexStage.module = stageDescriptor.module->module();
-            vertexStage.entryPoint = stageDescriptor.entryPoint;
-            break;
-        case WebGPUShaderStage::FRAGMENT:
-            if (fragmentStage.module) {
-                LOG(WebGPU, "%s: Multiple fragment stages in WebGPURenderPipelineDescriptor!", functionName);
-                return nullptr;
-            }
-
-            fragmentStage.module = stageDescriptor.module->module();
-            fragmentStage.entryPoint = stageDescriptor.entryPoint;
-            break;
-        default:
-            LOG(WebGPU, "%s: Invalid shader stage in WebGPURenderPipelineDescriptor!", functionName);
-            return nullptr;
-        }
-    }
-
-    // Metal (if not other APIs) requires at least the vertex shader.
-    if (!vertexStage.module || vertexStage.entryPoint.isEmpty()) {
-        LOG(WebGPU, "%s: Invalid vertex stage in WebGPURenderPipelineDescriptor!", functionName);
-        return nullptr;
-    }
-
-    return WebGPURenderPipeline::create(m_device->createRenderPipeline(GPURenderPipelineDescriptor { WTFMove(vertexStage), WTFMove(fragmentStage), descriptor.primitiveTopology }));
+    if (auto pipeline = m_device->createRenderPipeline(GPURenderPipelineDescriptor { WTFMove(*vertexStage), WTFMove(*fragmentStage), descriptor.primitiveTopology, descriptor.inputState }))
+        return WebGPURenderPipeline::create(pipeline.releaseNonNull());
+    return nullptr;
 }
 
 RefPtr<WebGPUCommandBuffer> WebGPUDevice::createCommandBuffer() const
 {
-    return WebGPUCommandBuffer::create(m_device->createCommandBuffer());
+    if (auto commandBuffer = m_device->createCommandBuffer())
+        return WebGPUCommandBuffer::create(commandBuffer.releaseNonNull());
+    return nullptr;
+}
+
+RefPtr<WebGPUQueue> WebGPUDevice::getQueue()
+{
+    if (!m_queue)
+        m_queue = WebGPUQueue::create(m_device->getQueue());
+
+    return m_queue;
 }
 
 } // namespace WebCore

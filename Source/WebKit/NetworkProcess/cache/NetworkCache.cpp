@@ -152,7 +152,7 @@ static bool cachePolicyAllowsExpired(WebCore::ResourceRequestCachePolicy policy)
     return false;
 }
 
-static bool responseHasExpired(const WebCore::ResourceResponse& response, WallTime timestamp, std::optional<Seconds> maxStale)
+static bool responseHasExpired(const WebCore::ResourceResponse& response, WallTime timestamp, Optional<Seconds> maxStale)
 {
     if (response.cacheControlContainsNoCache())
         return true;
@@ -371,7 +371,7 @@ std::unique_ptr<Entry> Cache::makeRedirectEntry(const WebCore::ResourceRequest& 
     return std::make_unique<Entry>(makeCacheKey(request), response, redirectRequest, WebCore::collectVaryingRequestHeaders(request, response));
 }
 
-std::unique_ptr<Entry> Cache::store(const WebCore::ResourceRequest& request, const WebCore::ResourceResponse& response, RefPtr<WebCore::SharedBuffer>&& responseData, Function<void (MappedBody&)>&& completionHandler)
+std::unique_ptr<Entry> Cache::store(const WebCore::ResourceRequest& request, const WebCore::ResourceResponse& response, RefPtr<WebCore::SharedBuffer>&& responseData, CompletionHandler<void(MappedBody&)>&& completionHandler)
 {
     ASSERT(responseData);
 
@@ -397,7 +397,7 @@ std::unique_ptr<Entry> Cache::store(const WebCore::ResourceRequest& request, con
     auto cacheEntry = makeEntry(request, response, WTFMove(responseData));
     auto record = cacheEntry->encodeAsStorageRecord();
 
-    m_storage->store(record, [protectedThis = makeRef(*this), completionHandler = WTFMove(completionHandler)](const Data& bodyData) {
+    m_storage->store(record, [protectedThis = makeRef(*this), completionHandler = WTFMove(completionHandler)](const Data& bodyData) mutable {
         MappedBody mappedBody;
 #if ENABLE(SHAREABLE_RESOURCE)
         if (auto sharedMemory = bodyData.tryCreateSharedMemory()) {
@@ -413,7 +413,7 @@ std::unique_ptr<Entry> Cache::store(const WebCore::ResourceRequest& request, con
     return cacheEntry;
 }
 
-std::unique_ptr<Entry> Cache::storeRedirect(const WebCore::ResourceRequest& request, const WebCore::ResourceResponse& response, const WebCore::ResourceRequest& redirectRequest, std::optional<Seconds> maxAgeCap)
+std::unique_ptr<Entry> Cache::storeRedirect(const WebCore::ResourceRequest& request, const WebCore::ResourceResponse& response, const WebCore::ResourceRequest& redirectRequest, Optional<Seconds> maxAgeCap)
 {
     LOG(NetworkCache, "(NetworkProcess) storing redirect %s -> %s", request.url().string().latin1().data(), redirectRequest.url().string().latin1().data());
 
@@ -473,19 +473,19 @@ void Cache::remove(const WebCore::ResourceRequest& request)
     remove(makeCacheKey(request));
 }
 
-void Cache::remove(const Vector<Key>& keys, Function<void ()>&& completionHandler)
+void Cache::remove(const Vector<Key>& keys, CompletionHandler<void()>&& completionHandler)
 {
     m_storage->remove(keys, WTFMove(completionHandler));
 }
 
-void Cache::traverse(Function<void (const TraversalEntry*)>&& traverseHandler)
+void Cache::traverse(CompletionHandler<void(const TraversalEntry*)>&& traverseHandler)
 {
     // Protect against clients making excessive traversal requests.
     const unsigned maximumTraverseCount = 3;
     if (m_traverseCount >= maximumTraverseCount) {
         WTFLogAlways("Maximum parallel cache traverse count exceeded. Ignoring traversal request.");
 
-        RunLoop::main().dispatch([traverseHandler = WTFMove(traverseHandler)] {
+        RunLoop::main().dispatch([traverseHandler = WTFMove(traverseHandler)] () mutable {
             traverseHandler(nullptr);
         });
         return;
@@ -493,7 +493,7 @@ void Cache::traverse(Function<void (const TraversalEntry*)>&& traverseHandler)
 
     ++m_traverseCount;
 
-    m_storage->traverse(resourceType(), { }, [this, protectedThis = makeRef(*this), traverseHandler = WTFMove(traverseHandler)](const Storage::Record* record, const Storage::RecordInfo& recordInfo) {
+    m_storage->traverse(resourceType(), { }, [this, protectedThis = makeRef(*this), traverseHandler = WTFMove(traverseHandler)] (const Storage::Record* record, const Storage::RecordInfo& recordInfo) mutable {
         if (!record) {
             --m_traverseCount;
             traverseHandler(nullptr);
@@ -501,8 +501,10 @@ void Cache::traverse(Function<void (const TraversalEntry*)>&& traverseHandler)
         }
 
         auto entry = Entry::decodeStorageRecord(*record);
-        if (!entry)
+        if (!entry) {
+            traverseHandler(nullptr);
             return;
+        }
 
         TraversalEntry traversalEntry { *entry, recordInfo };
         traverseHandler(&traversalEntry);
@@ -575,7 +577,7 @@ void Cache::deleteDumpFile()
     });
 }
 
-void Cache::clear(WallTime modifiedSince, Function<void ()>&& completionHandler)
+void Cache::clear(WallTime modifiedSince, CompletionHandler<void()>&& completionHandler)
 {
     LOG(NetworkCache, "(NetworkProcess) clearing cache");
 
@@ -598,10 +600,10 @@ String Cache::recordsPath() const
     return m_storage->recordsPath();
 }
 
-void Cache::retrieveData(const DataKey& dataKey, Function<void (const uint8_t* data, size_t size)> completionHandler)
+void Cache::retrieveData(const DataKey& dataKey, CompletionHandler<void(const uint8_t*, size_t)> completionHandler)
 {
     Key key { dataKey, m_storage->salt() };
-    m_storage->retrieve(key, 4, [completionHandler = WTFMove(completionHandler)] (auto record, auto) {
+    m_storage->retrieve(key, 4, [completionHandler = WTFMove(completionHandler)] (auto record, auto) mutable {
         if (!record || !record->body.size()) {
             completionHandler(nullptr, 0);
             return true;

@@ -43,6 +43,21 @@ WI.Setting = class Setting extends WI.Object
         this._defaultValue = defaultValue;
     }
 
+    // Static
+
+    static migrateValue(key)
+    {
+        let value = undefined;
+        if (!window.InspectorTest && window.localStorage && key in window.localStorage) {
+            try {
+                value = JSON.parse(window.localStorage[key]);
+            } catch { }
+
+            window.localStorage.removeItem(key);
+        }
+        return value;
+    }
+
     // Public
 
     get name()
@@ -114,6 +129,7 @@ WI.settings = {
     indentWithTabs: new WI.Setting("indent-with-tabs", false),
     resourceCachingDisabled: new WI.Setting("disable-resource-caching", false),
     selectedNetworkDetailContentViewIdentifier: new WI.Setting("network-detail-content-view-identifier", "preview"),
+    sourceMapsEnabled: new WI.Setting("source-maps-enabled", true),
     showAllRequestsBreakpoint: new WI.Setting("show-all-requests-breakpoint", true),
     showAssertionFailuresBreakpoint: new WI.Setting("show-assertion-failures-breakpoint", true),
     showCanvasPath: new WI.Setting("show-canvas-path", false),
@@ -129,7 +145,7 @@ WI.settings = {
     zoomFactor: new WI.Setting("zoom-factor", 1),
 
     // Experimental
-    experimentalEnableMultiplePropertiesSelection: new WI.Setting("experimental-enable-multiple-properties-selection", false),
+    experimentalEnableComputedStyleCascades: new WI.Setting("experimental-enable-computed-style-cascades", false),
     experimentalEnableLayersTab: new WI.Setting("experimental-enable-layers-tab", false),
     experimentalEnableNewTabBar: new WI.Setting("experimental-enable-new-tab-bar", false),
     experimentalEnableAuditTab: new WI.Setting("experimental-enable-audit-tab", false),
@@ -138,6 +154,7 @@ WI.settings = {
     autoLogProtocolMessages: new WI.Setting("auto-collect-protocol-messages", false),
     autoLogTimeStats: new WI.Setting("auto-collect-time-stats", false),
     enableLayoutFlashing: new WI.Setting("enable-layout-flashing", false),
+    enableStyleEditingDebugMode: new WI.Setting("enable-style-editing-debug-mode", false),
     enableUncaughtExceptionReporter: new WI.Setting("enable-uncaught-exception-reporter", true),
     filterMultiplexingBackendInspectorProtocolMessages: new WI.Setting("filter-multiplexing-backend-inspector-protocol-messages", true),
     layoutDirection: new WI.Setting("layout-direction-override", "system"),
