@@ -458,8 +458,8 @@ public:
     API::IconLoadingClient& iconLoadingClient() { return *m_iconLoadingClient; }
     void setIconLoadingClient(std::unique_ptr<API::IconLoadingClient>&&);
 
-    enum class ShouldDelayAttachingDrawingArea { No, Yes };
-    void initializeWebPage(ShouldDelayAttachingDrawingArea = ShouldDelayAttachingDrawingArea::No);
+    enum class IsSwapFromSuspended { No, Yes };
+    void initializeWebPage(IsSwapFromSuspended = IsSwapFromSuspended::No);
 
     WeakPtr<SecKeyProxyStore> secKeyProxyStore(const WebCore::AuthenticationChallenge&);
         
@@ -979,7 +979,7 @@ public:
     void performDragOperation(WebCore::DragData&, const String& dragStorageName, SandboxExtension::Handle&&, SandboxExtension::HandleArray&&);
     void didPerformDragOperation(bool handled);
 
-    void didPerformDragControllerAction(uint64_t dragOperation, WebCore::DragHandlingMethod, bool mouseIsOverFileInput, unsigned numberOfItemsToBeAccepted, const WebCore::IntRect& insertionRect);
+    void didPerformDragControllerAction(uint64_t dragOperation, WebCore::DragHandlingMethod, bool mouseIsOverFileInput, unsigned numberOfItemsToBeAccepted, const WebCore::IntRect& insertionRect, const WebCore::IntRect& editableElementRect);
     void dragEnded(const WebCore::IntPoint& clientPosition, const WebCore::IntPoint& globalPosition, uint64_t operation);
     void didStartDrag();
     void dragCancelled();
@@ -1038,6 +1038,7 @@ public:
     bool currentDragIsOverFileInput() const { return m_currentDragIsOverFileInput; }
     unsigned currentDragNumberOfFilesToBeAccepted() const { return m_currentDragNumberOfFilesToBeAccepted; }
     WebCore::IntRect currentDragCaretRect() const { return m_currentDragCaretRect; }
+    WebCore::IntRect currentDragCaretEditableElementRect() const { return m_currentDragCaretEditableElementRect; }
     void resetCurrentDragInformation();
     void didEndDragging();
 #endif
@@ -1574,11 +1575,11 @@ private:
     void setCanShortCircuitHorizontalWheelEvents(bool canShortCircuitHorizontalWheelEvents) { m_canShortCircuitHorizontalWheelEvents = canShortCircuitHorizontalWheelEvents; }
 
     void reattachToWebProcess();
-    void swapToWebProcess(Ref<WebProcessProxy>&&, std::unique_ptr<SuspendedPageProxy>&&, ShouldDelayAttachingDrawingArea);
+    void swapToWebProcess(Ref<WebProcessProxy>&&, std::unique_ptr<SuspendedPageProxy>&&, IsSwapFromSuspended);
     void didFailToSuspendAfterProcessSwap();
     void didSuspendAfterProcessSwap();
 
-    void finishAttachingToWebProcess(ShouldDelayAttachingDrawingArea = ShouldDelayAttachingDrawingArea::No);
+    void finishAttachingToWebProcess(IsSwapFromSuspended = IsSwapFromSuspended::No);
 
     RefPtr<API::Navigation> reattachToWebProcessForReload();
     RefPtr<API::Navigation> reattachToWebProcessWithItem(WebBackForwardListItem&);
@@ -1780,7 +1781,7 @@ private:
     void restorePageState(Optional<WebCore::FloatPoint> scrollPosition, const WebCore::FloatPoint& scrollOrigin, const WebCore::FloatBoxExtent& obscuredInsetsOnSave, double scale);
     void restorePageCenterAndScale(Optional<WebCore::FloatPoint>, double scale);
 
-    void didGetTapHighlightGeometries(uint64_t requestID, const WebCore::Color& color, const Vector<WebCore::FloatQuad>& geometries, const WebCore::IntSize& topLeftRadius, const WebCore::IntSize& topRightRadius, const WebCore::IntSize& bottomLeftRadius, const WebCore::IntSize& bottomRightRadius);
+    void didGetTapHighlightGeometries(uint64_t requestID, const WebCore::Color& color, const Vector<WebCore::FloatQuad>& geometries, const WebCore::IntSize& topLeftRadius, const WebCore::IntSize& topRightRadius, const WebCore::IntSize& bottomLeftRadius, const WebCore::IntSize& bottomRightRadius, bool nodeHasBuiltInClickHandling);
 
     void elementDidFocus(const FocusedElementInformation&, bool userIsInteracting, bool blurPreviousNode, bool changingActivityState, const UserData&);
     void elementDidBlur();
@@ -1906,6 +1907,10 @@ private:
 
     void setNeedsFontAttributes(bool);
     void updateFontAttributesAfterEditorStateChange();
+
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+    void logFrameNavigation(const WebFrameProxy&, const URL& pageURL, const WebCore::ResourceRequest&, const URL& redirectURL);
+#endif
 
     WeakPtr<PageClient> m_pageClient;
     Ref<API::PageConfiguration> m_configuration;
@@ -2175,6 +2180,7 @@ private:
     bool m_currentDragIsOverFileInput { false };
     unsigned m_currentDragNumberOfFilesToBeAccepted { 0 };
     WebCore::IntRect m_currentDragCaretRect;
+    WebCore::IntRect m_currentDragCaretEditableElementRect;
 #endif
 
     PageLoadState m_pageLoadState;
