@@ -62,7 +62,7 @@ Homepage: https://webkitgtk.org/
 
 Package: libjavascriptcoregtk-4.0-18
 Section: libs
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends},
@@ -79,7 +79,7 @@ Description: JavaScript engine library from WebKitGTK+
 
 Package: libjavascriptcoregtk-4.0-dev
 Section: libdevel
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          gir1.2-javascriptcoregtk-4.0 (= ${binary:Version}),
@@ -96,7 +96,7 @@ Description: JavaScript engine library from WebKitGTK+ - development files
 
 Package: libjavascriptcoregtk-4.0-bin
 Section: interpreters
-Architecture: any
+Architecture: linux-any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends},
          ${misc:Depends}
@@ -113,7 +113,7 @@ Description: JavaScript engine library from WebKitGTK+ - command-line interprete
 
 Package: gir1.2-javascriptcoregtk-4.0
 Section: introspection
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Depends: ${gir:Depends},
          ${misc:Depends}
@@ -131,7 +131,7 @@ Description: JavaScript engine library from WebKitGTK+ - GObject introspection d
 
 Package: libwebkit2gtk-4.0-37
 Section: libs
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
@@ -161,7 +161,7 @@ Description: Web content engine library for GTK+
 
 Package: libwebkit2gtk-4.0-dev
 Section: libdevel
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
          gir1.2-webkit2-4.0 (= ${binary:Version}),
@@ -208,7 +208,7 @@ Description: Web content engine library for GTK+ - documentation
 
 Package: gir1.2-webkit2-4.0
 Section: introspection
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Depends: gir1.2-javascriptcoregtk-4.0 (= ${binary:Version}),
          ${gir:Depends},
@@ -232,7 +232,7 @@ Description: Web content engine library for GTK+ - GObject introspection data
 
 Package: libwebkit2gtk-4.0-37-gtk2
 Section: libs
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
@@ -256,7 +256,7 @@ Description: Web content engine library for GTK+ - GTK+2 plugin process
  library, such as the Adobe Flash and Google Talk/Hangouts plugins.
 
 Package: webkit2gtk-driver
-Architecture: any
+Architecture: linux-any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
          ${shlibs:Depends},
