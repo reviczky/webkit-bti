@@ -49,11 +49,11 @@
 #include "NetworkSessionCreationParameters.h"
 #include "PreconnectTask.h"
 #include "RemoteNetworkingContext.h"
-#include "SessionTracker.h"
 #include "StatisticsData.h"
 #include "WebCookieManager.h"
 #include "WebPageProxyMessages.h"
 #include "WebProcessPoolMessages.h"
+#include "WebResourceLoadStatisticsStore.h"
 #include "WebSWOriginStore.h"
 #include "WebSWServerConnection.h"
 #include "WebSWServerToContextConnection.h"
@@ -127,6 +127,9 @@ NetworkProcess::NetworkProcess()
     , m_downloadManager(*this)
 #if PLATFORM(COCOA)
     , m_clearCacheDispatchGroup(0)
+#endif
+#if ENABLE(CONTENT_EXTENSIONS)
+    , m_networkContentRuleListManager(*this)
 #endif
     , m_storageTaskQueue(WorkQueue::create("com.apple.WebKit.StorageTask"))
 #if ENABLE(INDEXED_DATABASE)
@@ -202,7 +205,7 @@ void NetworkProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder
 
 #if ENABLE(CONTENT_EXTENSIONS)
     if (decoder.messageReceiverName() == Messages::NetworkContentRuleListManager::messageReceiverName()) {
-        m_NetworkContentRuleListManager.didReceiveMessage(connection, decoder);
+        m_networkContentRuleListManager.didReceiveMessage(connection, decoder);
         return;
     }
 #endif
@@ -298,8 +301,10 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
     if (parameters.shouldUseTestingNetworkSession)
         NetworkStorageSession::switchToNewTestingSession();
 
+    SandboxExtension::consumePermanently(parameters.defaultDataStoreParameters.networkSessionParameters.resourceLoadStatisticsDirectoryExtensionHandle);
+
     auto sessionID = parameters.defaultDataStoreParameters.networkSessionParameters.sessionID;
-    SessionTracker::setSession(sessionID, NetworkSession::create(*this, WTFMove(parameters.defaultDataStoreParameters.networkSessionParameters)));
+    setSession(sessionID, NetworkSession::create(*this, WTFMove(parameters.defaultDataStoreParameters.networkSessionParameters)));
 
 #if ENABLE(INDEXED_DATABASE)
     addIndexedDatabaseSession(sessionID, parameters.defaultDataStoreParameters.indexedDatabaseDirectory, parameters.defaultDataStoreParameters.indexedDatabaseDirectoryExtensionHandle);
@@ -316,7 +321,7 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
     }
 #endif
 
-    auto* defaultSession = SessionTracker::networkSession(PAL::SessionID::defaultSessionID());
+    auto* defaultSession = networkSession(PAL::SessionID::defaultSessionID());
     for (const auto& cookie : parameters.defaultDataStoreParameters.pendingCookies)
         defaultSession->networkStorageSession().setCookie(cookie);
 
@@ -411,7 +416,7 @@ void NetworkProcess::createNetworkConnectionToWebProcess(bool isServiceWorkerPro
     if (isServiceWorkerProcess && !m_webProcessConnections.isEmpty()) {
         ASSERT(parentProcessHasServiceWorkerEntitlement());
         ASSERT(m_waitingForServerToContextProcessConnection);
-        auto contextConnection = WebSWServerToContextConnection::create(securityOrigin, m_webProcessConnections.last()->connection());
+        auto contextConnection = WebSWServerToContextConnection::create(*this, securityOrigin, m_webProcessConnections.last()->connection());
         auto addResult = m_serverToContextConnections.add(WTFMove(securityOrigin), contextConnection.copyRef());
         ASSERT_UNUSED(addResult, addResult.isNewEntry);
 
@@ -429,7 +434,7 @@ void NetworkProcess::createNetworkConnectionToWebProcess(bool isServiceWorkerPro
 void NetworkProcess::clearCachedCredentials()
 {
     NetworkStorageSession::defaultStorageSession().credentialStorage().clearCredentials();
-    if (auto* networkSession = SessionTracker::networkSession(PAL::SessionID::defaultSessionID()))
+    if (auto* networkSession = this->networkSession(PAL::SessionID::defaultSessionID()))
         networkSession->clearCredentials();
     else
         ASSERT_NOT_REACHED();
@@ -449,9 +454,21 @@ void NetworkProcess::addWebsiteDataStore(WebsiteDataStoreParameters&& parameters
     RemoteNetworkingContext::ensureWebsiteDataStoreSession(*this, WTFMove(parameters));
 }
 
-void NetworkProcess::destroySession(PAL::SessionID sessionID)
+NetworkSession* NetworkProcess::networkSession(const PAL::SessionID& sessionID) const
 {
-    SessionTracker::destroySession(sessionID);
+    return m_networkSessions.get(sessionID);
+}
+
+void NetworkProcess::setSession(const PAL::SessionID& sessionID, Ref<NetworkSession>&& session)
+{
+    m_networkSessions.set(sessionID, WTFMove(session));
+}
+
+void NetworkProcess::destroySession(const PAL::SessionID& sessionID)
+{
+    if (auto session = m_networkSessions.take(sessionID))
+        session->get().invalidateAndCancel();
+    NetworkStorageSession::destroySession(sessionID);
     m_sessionsControlledByAutomation.remove(sessionID);
     CacheStorage::Engine::destroyEngine(*this, sessionID);
 
@@ -518,6 +535,27 @@ void NetworkProcess::grantStorageAccess(PAL::SessionID sessionID, const String& 
         ASSERT_NOT_REACHED();
 
     parentProcessConnection()->send(Messages::NetworkProcessProxy::StorageAccessRequestResult(isStorageGranted, contextId), 0);
+}
+
+void NetworkProcess::logFrameNavigation(PAL::SessionID sessionID, const String& targetPrimaryDomain, const String& mainFramePrimaryDomain, const String& sourcePrimaryDomain, const String& targetHost, const String& mainFrameHost, bool isRedirect, bool isMainFrame)
+{
+    if (auto* networkSession = this->networkSession(sessionID)) {
+        if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
+            resourceLoadStatistics->logFrameNavigation(targetPrimaryDomain, mainFramePrimaryDomain, sourcePrimaryDomain, targetHost, mainFrameHost, isRedirect, isMainFrame);
+    } else
+        ASSERT_NOT_REACHED();
+}
+
+void NetworkProcess::logUserInteraction(PAL::SessionID sessionID, const String& targetPrimaryDomain, uint64_t contextId)
+{
+    if (auto* networkSession = this->networkSession(sessionID)) {
+        if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics()) {
+            resourceLoadStatistics->logUserInteraction(targetPrimaryDomain, [this, contextId] {
+                parentProcessConnection()->send(Messages::NetworkProcessProxy::DidLogUserInteraction(contextId), 0);
+            });        
+        }
+    } else
+        ASSERT_NOT_REACHED();
 }
 
 void NetworkProcess::removeAllStorageAccess(PAL::SessionID sessionID, uint64_t contextId)
@@ -1030,7 +1068,7 @@ void NetworkProcess::preconnectTo(const URL& url, WebCore::StoredCredentialsPoli
     parameters.storedCredentialsPolicy = storedCredentialsPolicy;
     parameters.shouldPreconnectOnly = PreconnectOnly::Yes;
 
-    new PreconnectTask(WTFMove(parameters));
+    new PreconnectTask(*this, WTFMove(parameters));
 #else
     UNUSED_PARAM(url);
     UNUSED_PARAM(storedCredentialsPolicy);

@@ -221,10 +221,6 @@
 #include "WebAuthenticatorCoordinatorProxy.h"
 #endif
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
-#include "WebResourceLoadStatisticsStore.h"
-#endif
-
 #if ENABLE(REMOTE_INSPECTOR)
 #include <JavaScriptCore/RemoteInspector.h>
 #endif
@@ -772,7 +768,7 @@ bool WebPageProxy::suspendCurrentPageIfPossible(API::Navigation& navigation, Opt
     return true;
 }
 
-void WebPageProxy::swapToWebProcess(Ref<WebProcessProxy>&& process, std::unique_ptr<SuspendedPageProxy>&& destinationSuspendedPage, ShouldDelayAttachingDrawingArea shouldDelayAttachingDrawingArea)
+void WebPageProxy::swapToWebProcess(Ref<WebProcessProxy>&& process, std::unique_ptr<SuspendedPageProxy>&& destinationSuspendedPage, IsSwapFromSuspended isSwapFromSuspended)
 {
     ASSERT(!m_isClosed);
     RELEASE_LOG_IF_ALLOWED(Loading, "swapToWebProcess: webPID = %i, pageID = %" PRIu64, m_process->processIdentifier(), m_pageID);
@@ -800,10 +796,10 @@ void WebPageProxy::swapToWebProcess(Ref<WebProcessProxy>&& process, std::unique_
     m_process->addExistingWebPage(*this, m_pageID, WebProcessProxy::BeginsUsingDataStore::No);
     m_process->addMessageReceiver(Messages::WebPageProxy::messageReceiverName(), m_pageID, *this);
 
-    finishAttachingToWebProcess(shouldDelayAttachingDrawingArea);
+    finishAttachingToWebProcess(isSwapFromSuspended);
 }
 
-void WebPageProxy::finishAttachingToWebProcess(ShouldDelayAttachingDrawingArea shouldDelayAttachingDrawingArea)
+void WebPageProxy::finishAttachingToWebProcess(IsSwapFromSuspended isSwapFromSuspended)
 {
     ASSERT(m_process->state() != ChildProcessProxy::State::Terminated);
 
@@ -839,7 +835,7 @@ void WebPageProxy::finishAttachingToWebProcess(ShouldDelayAttachingDrawingArea s
     m_editableImageController = std::make_unique<EditableImageController>(*this);
 #endif
 
-    initializeWebPage(shouldDelayAttachingDrawingArea);
+    initializeWebPage(isSwapFromSuspended);
 
     m_inspector->updateForNewPageProcess(this);
 
@@ -904,7 +900,7 @@ RefPtr<API::Navigation> WebPageProxy::reattachToWebProcessWithItem(WebBackForwar
     return WTFMove(navigation);
 }
 
-void WebPageProxy::initializeWebPage(ShouldDelayAttachingDrawingArea shouldDelayAttachingDrawingArea)
+void WebPageProxy::initializeWebPage(IsSwapFromSuspended isSwapFromSuspended)
 {
     ASSERT(isValid());
 
@@ -922,11 +918,7 @@ void WebPageProxy::initializeWebPage(ShouldDelayAttachingDrawingArea shouldDelay
 #endif
 
     auto parameters = creationParameters();
-#if PLATFORM(MAC)
-    parameters.shouldDelayAttachingDrawingArea = shouldDelayAttachingDrawingArea == ShouldDelayAttachingDrawingArea::Yes;
-#else
-    UNUSED_PARAM(shouldDelayAttachingDrawingArea);
-#endif
+    parameters.isSwapFromSuspended = isSwapFromSuspended == IsSwapFromSuspended::Yes;
 
 #if ENABLE(SERVICE_WORKER)
     parameters.hasRegisteredServiceWorkers = process().processPool().mayHaveRegisteredServiceWorkers(m_websiteDataStore);
@@ -2098,7 +2090,7 @@ void WebPageProxy::performDragControllerAction(DragControllerAction action, Drag
 #endif
 }
 
-void WebPageProxy::didPerformDragControllerAction(uint64_t dragOperation, WebCore::DragHandlingMethod dragHandlingMethod, bool mouseIsOverFileInput, unsigned numberOfItemsToBeAccepted, const IntRect& insertionRect)
+void WebPageProxy::didPerformDragControllerAction(uint64_t dragOperation, WebCore::DragHandlingMethod dragHandlingMethod, bool mouseIsOverFileInput, unsigned numberOfItemsToBeAccepted, const IntRect& insertionRect, const IntRect& editableElementRect)
 {
     MESSAGE_CHECK(dragOperation <= DragOperationDelete);
 
@@ -2106,6 +2098,7 @@ void WebPageProxy::didPerformDragControllerAction(uint64_t dragOperation, WebCor
     m_currentDragHandlingMethod = dragHandlingMethod;
     m_currentDragIsOverFileInput = mouseIsOverFileInput;
     m_currentDragNumberOfFilesToBeAccepted = numberOfItemsToBeAccepted;
+    m_currentDragCaretEditableElementRect = editableElementRect;
     setDragCaretRect(insertionRect);
 }
 
@@ -2768,7 +2761,7 @@ void WebPageProxy::continueNavigationInNewProcess(API::Navigation& navigation, s
     bool didSuspendPreviousPage = suspendCurrentPageIfPossible(navigation, mainFrameIDInPreviousProcess, processSwapRequestedByClient);
     m_process->removeWebPage(*this, m_pageID, WebProcessProxy::EndsUsingDataStore::No);
 
-    swapToWebProcess(WTFMove(process), WTFMove(suspendedPageProxy), didSuspendPreviousPage ? ShouldDelayAttachingDrawingArea::Yes : ShouldDelayAttachingDrawingArea::No);
+    swapToWebProcess(WTFMove(process), WTFMove(suspendedPageProxy), didSuspendPreviousPage ? IsSwapFromSuspended::Yes : IsSwapFromSuspended::No);
 
     if (auto* item = navigation.targetItem()) {
         LOG(Loading, "WebPageProxy %p continueNavigationInNewProcess to back item URL %s", this, item->url().utf8().data());
@@ -4455,8 +4448,11 @@ void WebPageProxy::decidePolicyForNavigationAction(WebFrameProxy& frame, WebCore
     API::Navigation* mainFrameNavigation = frame.isMainFrame() ? navigation.get() : nullptr;
     WebFrameProxy* originatingFrame = m_process->webFrame(originatingFrameInfoData.frameID);
 
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     if (auto* resourceLoadStatisticsStore = websiteDataStore().resourceLoadStatistics())
         resourceLoadStatisticsStore->logFrameNavigation(frame, URL(URL(), m_pageLoadState.url()), request, redirectResponse.url());
+    logFrameNavigation(frame, URL(URL(), m_pageLoadState.url()), request, redirectResponse.url());
+#endif
 
     if (m_policyClient)
         m_policyClient->decidePolicyForNavigationAction(*this, &frame, WTFMove(navigationActionData), originatingFrame, originalRequest, WTFMove(request), WTFMove(listener), m_process->transformHandlesToObjects(userData.object()).get());
@@ -4478,6 +4474,38 @@ void WebPageProxy::decidePolicyForNavigationAction(WebFrameProxy& frame, WebCore
 
     m_shouldSuppressAppLinksInNextNavigationPolicyDecision = false;
 }
+
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+void WebPageProxy::logFrameNavigation(const WebFrameProxy& frame, const URL& pageURL, const WebCore::ResourceRequest& request, const URL& redirectURL)
+{
+    ASSERT(RunLoop::isMain());
+    
+    auto sourceURL = redirectURL;
+    bool isRedirect = !redirectURL.isNull();
+    if (!isRedirect) {
+        sourceURL = frame.url();
+        if (sourceURL.isNull())
+            sourceURL = pageURL;
+    }
+    
+    auto& targetURL = request.url();
+    
+    if (!targetURL.isValid() || !pageURL.isValid())
+        return;
+    
+    auto targetHost = targetURL.host();
+    auto mainFrameHost = pageURL.host();
+    
+    if (targetHost.isEmpty() || mainFrameHost.isEmpty() || targetHost == sourceURL.host())
+        return;
+    
+    auto targetPrimaryDomain = ResourceLoadStatistics::primaryDomain(targetURL);
+    auto mainFramePrimaryDomain = ResourceLoadStatistics::primaryDomain(pageURL);
+    auto sourcePrimaryDomain = ResourceLoadStatistics::primaryDomain(sourceURL);
+
+    m_process->processPool().sendToNetworkingProcess(Messages::NetworkProcess::LogFrameNavigation(m_websiteDataStore->sessionID(), targetPrimaryDomain, mainFramePrimaryDomain, sourcePrimaryDomain, targetHost.toString(), mainFrameHost.toString(), isRedirect, frame.isMainFrame()));
+}
+#endif
 
 void WebPageProxy::decidePolicyForNavigationActionSync(uint64_t frameID, bool isMainFrame, WebCore::SecurityOriginData&& frameSecurityOrigin, uint64_t navigationID, NavigationActionData&& navigationActionData, FrameInfoData&& frameInfoData, uint64_t originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&& request, IPC::FormDataReference&& requestBody, WebCore::ResourceResponse&& redirectResponse, const UserData& userData, Messages::WebPageProxy::DecidePolicyForNavigationActionSync::DelayedReply&& reply)
 {

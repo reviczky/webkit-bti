@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,42 +23,45 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "config.h"
-#include "SessionTracker.h"
+#pragma once
 
-#include "NetworkSession.h"
-#include <WebCore/NetworkStorageSession.h>
-#include <wtf/NeverDestroyed.h>
-#include <wtf/RunLoop.h>
+#include "VoidCallback.h"
+#include <wtf/Function.h>
+#include <wtf/IsoMallocInlines.h>
+#include <wtf/RefCounted.h>
+#include <wtf/text/WTFString.h>
 
-namespace WebKit {
-using namespace WebCore;
+namespace WebCore {
 
-static HashMap<PAL::SessionID, RefPtr<NetworkSession>>& staticSessionMap()
-{
-    ASSERT(RunLoop::isMain());
+class UndoItem : public RefCounted<UndoItem> {
+    WTF_MAKE_ISO_ALLOCATED_INLINE(UndoItem);
+public:
+    struct Init {
+        String label;
+        RefPtr<VoidCallback> undo;
+        RefPtr<VoidCallback> redo;
+    };
 
-    static NeverDestroyed<HashMap<PAL::SessionID, RefPtr<NetworkSession>>> map;
-    return map;
-}
+    static Ref<UndoItem> create(Init&& init)
+    {
+        return adoptRef(*new UndoItem(WTFMove(init)));
+    }
 
-NetworkSession* SessionTracker::networkSession(PAL::SessionID sessionID)
-{
-    return staticSessionMap().get(sessionID);
-}
+    const String& label() const { return m_label; }
+    VoidCallback& undoHandler() const { return m_undoHandler.get(); }
+    VoidCallback& redoHandler() const { return m_redoHandler.get(); }
 
-void SessionTracker::setSession(PAL::SessionID sessionID, Ref<NetworkSession>&& session)
-{
-    staticSessionMap().set(sessionID, WTFMove(session));
-}
+private:
+    UndoItem(Init&& init)
+        : m_label(WTFMove(init.label))
+        , m_undoHandler(init.undo.releaseNonNull())
+        , m_redoHandler(init.redo.releaseNonNull())
+    {
+    }
 
-void SessionTracker::destroySession(PAL::SessionID sessionID)
-{
-    ASSERT(RunLoop::isMain());
-    auto session = staticSessionMap().take(sessionID);
-    if (session)
-        session->invalidateAndCancel();
-    NetworkStorageSession::destroySession(sessionID);
-}
+    String m_label;
+    Ref<VoidCallback> m_undoHandler;
+    Ref<VoidCallback> m_redoHandler;
+};
 
-} // namespace WebKit
+} // namespace WebCore

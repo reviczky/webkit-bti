@@ -27,6 +27,7 @@
 #include "ResourceLoadStatisticsMemoryStore.h"
 
 #include "Logging.h"
+#include "NetworkSession.h"
 #include "PluginProcessManager.h"
 #include "PluginProcessProxy.h"
 #include "ResourceLoadStatisticsPersistentStorage.h"
@@ -34,14 +35,12 @@
 #include "WebResourceLoadStatisticsTelemetry.h"
 #include "WebsiteDataStore.h"
 #include <WebCore/KeyedCoding.h>
+#include <WebCore/NetworkStorageSession.h>
 #include <WebCore/ResourceLoadStatistics.h>
 #include <wtf/CallbackAggregator.h>
 #include <wtf/DateMath.h>
 #include <wtf/MathExtras.h>
-
-#if !RELEASE_LOG_DISABLED
 #include <wtf/text/StringBuilder.h>
-#endif
 
 namespace WebKit {
 using namespace WebCore;
@@ -865,6 +864,8 @@ void ResourceLoadStatisticsMemoryStore::updateClientSideCookiesAgeCap()
     RunLoop::main().dispatch([store = makeRef(m_store), seconds = m_parameters.clientSideCookiesAgeCapTime] () {
         if (auto* websiteDataStore = store->websiteDataStore())
             websiteDataStore->setAgeCapForClientSideCookies(seconds, [] { });
+        if (auto* networkSession = store->networkSession())
+            networkSession->networkStorageSession().setAgeCapForClientSideCookies(seconds);
     });
 #endif
 }
@@ -1074,7 +1075,7 @@ void ResourceLoadStatisticsMemoryStore::updateCookieBlocking(CompletionHandler<v
     }
 
     if (m_debugLoggingEnabled && !domainsToBlock.isEmpty())
-            debugLogDomainsInBatches("block", domainsToBlock);
+        debugLogDomainsInBatches("block", domainsToBlock);
 
     RunLoop::main().dispatch([weakThis = makeWeakPtr(*this), store = makeRef(m_store), domainsToBlock = crossThreadCopy(domainsToBlock), completionHandler = WTFMove(completionHandler)] () mutable {
         store->callUpdatePrevalentDomainsToBlockCookiesForHandler(domainsToBlock, [weakThis = WTFMove(weakThis), store = store.copyRef(), completionHandler = WTFMove(completionHandler)]() mutable {

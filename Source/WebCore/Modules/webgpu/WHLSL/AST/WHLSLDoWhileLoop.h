@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,30 +23,51 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef SessionTracker_h
-#define SessionTracker_h
+#pragma once
+
+#if ENABLE(WEBGPU)
+
+#include "WHLSLExpression.h"
+#include "WHLSLLexer.h"
+#include "WHLSLStatement.h"
+#include <wtf/UniqueRef.h>
 
 namespace WebCore {
-class NetworkStorageSession;
-}
 
-#include <pal/SessionID.h>
-#include <wtf/HashMap.h>
-#include <wtf/Noncopyable.h>
-#include <wtf/text/WTFString.h>
+namespace WHLSL {
 
-namespace WebKit {
+namespace AST {
 
-class NetworkSession;
-
-class SessionTracker {
-    WTF_MAKE_NONCOPYABLE(SessionTracker);
+class DoWhileLoop : public Statement {
 public:
-    static void setSession(PAL::SessionID, Ref<NetworkSession>&&);
-    static NetworkSession* networkSession(PAL::SessionID);
-    static void destroySession(PAL::SessionID);
+    DoWhileLoop(Lexer::Token&& origin, UniqueRef<Statement>&& body, UniqueRef<Expression>&& conditional)
+        : Statement(WTFMove(origin))
+        , m_body(WTFMove(body))
+        , m_conditional(WTFMove(conditional))
+    {
+    }
+
+    virtual ~DoWhileLoop() = default;
+
+    DoWhileLoop(const DoWhileLoop&) = delete;
+    DoWhileLoop(DoWhileLoop&&) = default;
+
+    bool isDoWhileLoop() const override { return true; }
+
+    Statement& body() { return static_cast<Statement&>(m_body); }
+    Expression& conditional() { return static_cast<Expression&>(m_conditional); }
+
+private:
+    UniqueRef<Statement> m_body;
+    UniqueRef<Expression> m_conditional;
 };
 
-} // namespace WebKit
+} // namespace AST
 
-#endif // SessionTracker_h
+}
+
+}
+
+SPECIALIZE_TYPE_TRAITS_WHLSL_STATEMENT(DoWhileLoop, isDoWhileLoop())
+
+#endif
