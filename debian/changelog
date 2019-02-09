@@ -1,4 +1,4 @@
-webkit2gtk (2.22.6-1) UNRELEASED; urgency=high
+webkit2gtk (2.22.6-1) unstable; urgency=high
 
   * New upstream release.
   * The WebKitGTK+ security advisory WSA-2019-0001 lists the following
