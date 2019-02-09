@@ -8,6 +8,8 @@ webkit2gtk (2.22.6-1) UNRELEASED; urgency=high
     + CVE-2019-6216, CVE-2019-6217, CVE-2019-6227 and CVE-2019-6229
       (fixed in 2.22.5).
     + CVE-2019-6212 and CVE-2019-6215 (fixed in 2.22.6).
+  * debian/copyright:
+    + Update copyright years.
 
  -- Alberto Garcia <berto@igalia.com>  Sat, 09 Feb 2019 11:35:18 +0200
 

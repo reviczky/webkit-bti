@@ -3,7 +3,7 @@ Upstream-Contact: https://lists.webkit.org/mailman/listinfo/webkit-gtk
 Source: https://webkitgtk.org/releases/
 
 Files: *
-Copyright: © 2002-2018 Apple Inc. and others
+Copyright: © 2002-2019 Apple Inc. and others
 License: BSD-2-clause
 Comment:
  The default license of WebKit is BSD 2-clause, available in
@@ -1049,7 +1049,7 @@ License: LGPL-2
 Files: debian/*
 Copyright: © 2007-2009 Mike Hommey <glandium@debian.org>
            © 2009 Gustavo Noronha Silva <kov@debian.org>
-           © 2014-2018 Alberto Garcia <berto@igalia.com>
+           © 2014-2019 Alberto Garcia <berto@igalia.com>
 License: LGPL-2+
 
 License: BSD-2-clause
