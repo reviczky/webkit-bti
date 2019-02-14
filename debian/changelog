@@ -1,6 +1,8 @@
 webkit2gtk (2.23.90-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * debian/patches/detect-woff.patch:
+    + Refresh.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 14 Feb 2019 15:38:21 +0200
 
