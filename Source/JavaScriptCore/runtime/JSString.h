@@ -89,7 +89,7 @@ public:
     
     // We specialize the string subspace to get the fastest possible sweep. This wouldn't be
     // necessary if JSString didn't have a destructor.
-    template<typename>
+    template<typename, SubspaceAccess>
     static CompleteSubspace* subspaceFor(VM& vm)
     {
         return &vm.stringSpace;
@@ -196,11 +196,12 @@ public:
         Is8Bit = 1u
     };
 
+    bool isRope() const { return m_value.isNull(); }
+
 protected:
     friend class JSValue;
 
     JS_EXPORT_PRIVATE bool equalSlowCase(ExecState*, JSString* other) const;
-    bool isRope() const { return m_value.isNull(); }
     bool isSubstring() const;
     bool is8Bit() const { return m_flags & Is8Bit; }
     void setIs8Bit(bool flag) const
@@ -486,7 +487,10 @@ private:
 
 
     friend JSString* jsString(ExecState*, JSString*, JSString*);
+    friend JSString* jsString(ExecState*, const String&, JSString*);
+    friend JSString* jsString(ExecState*, JSString*, const String&);
     friend JSString* jsString(ExecState*, JSString*, JSString*, JSString*);
+    friend JSString* jsString(ExecState*, const String&, const String&);
     friend JSString* jsString(ExecState*, const String&, const String&, const String&);
 };
 
@@ -634,7 +638,10 @@ inline JSString* jsSubstring(VM* vm, const String& s, unsigned offset, unsigned 
         if (c <= maxSingleCharacterString)
             return vm->smallStrings.singleCharacterString(c);
     }
-    return JSString::createHasOtherOwner(*vm, StringImpl::createSubstringSharingImpl(*s.impl(), offset, length));
+    auto impl = StringImpl::createSubstringSharingImpl(*s.impl(), offset, length);
+    if (impl->isSubString())
+        return JSString::createHasOtherOwner(*vm, WTFMove(impl));
+    return JSString::create(*vm, WTFMove(impl));
 }
 
 inline JSString* jsOwnedString(VM* vm, const String& s)

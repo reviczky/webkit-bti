@@ -378,10 +378,7 @@ String Color::cssText() const
     builder.appendNumber(static_cast<unsigned char>(blue()));
     if (colorHasAlpha) {
         builder.appendLiteral(", ");
-
-        NumberToStringBuffer buffer;
-        bool shouldTruncateTrailingZeros = true;
-        builder.append(numberToFixedPrecisionString(alpha() / 255.0f, 6, buffer, shouldTruncateTrailingZeros));
+        builder.appendNumber(alpha() / 255.0f);
     }
         
     builder.append(')');
@@ -391,9 +388,17 @@ String Color::cssText() const
 String Color::nameForRenderTreeAsText() const
 {
     // FIXME: Handle ExtendedColors.
-    if (alpha() < 0xFF)
-        return String::format("#%02X%02X%02X%02X", red(), green(), blue(), alpha());
-    return String::format("#%02X%02X%02X", red(), green(), blue());
+    if (alpha() < 0xFF) {
+        return makeString('#',
+            upperNibbleToASCIIHexDigit(red()), lowerNibbleToASCIIHexDigit(red()),
+            upperNibbleToASCIIHexDigit(green()), lowerNibbleToASCIIHexDigit(green()),
+            upperNibbleToASCIIHexDigit(blue()), lowerNibbleToASCIIHexDigit(blue()),
+            upperNibbleToASCIIHexDigit(alpha()), lowerNibbleToASCIIHexDigit(alpha()));
+    }
+    return makeString('#',
+        upperNibbleToASCIIHexDigit(red()), lowerNibbleToASCIIHexDigit(red()),
+        upperNibbleToASCIIHexDigit(green()), lowerNibbleToASCIIHexDigit(green()),
+        upperNibbleToASCIIHexDigit(blue()), lowerNibbleToASCIIHexDigit(blue()));
 }
 
 Color Color::light() const

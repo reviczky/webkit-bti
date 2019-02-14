@@ -78,7 +78,7 @@ bool GraphicsLayer::supportsLayerType(Type type)
     switch (type) {
     case Type::Normal:
     case Type::PageTiledBacking:
-    case Type::Scrolling:
+    case Type::ScrollContainer:
         return true;
     case Type::Shape:
         return false;
@@ -112,6 +112,7 @@ bool GraphicsLayer::supportsContentsTiling()
 
 // Singleton client used for layers on which clearClient has been called.
 class EmptyGraphicsLayerClient : public GraphicsLayerClient {
+    WTF_MAKE_FAST_ALLOCATED;
 public:
     static EmptyGraphicsLayerClient& singleton();
 };

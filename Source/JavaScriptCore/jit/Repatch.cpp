@@ -35,6 +35,7 @@
 #include "DFGSpeculativeJIT.h"
 #include "DOMJITGetterSetter.h"
 #include "DirectArguments.h"
+#include "ExecutableBaseInlines.h"
 #include "FTLThunks.h"
 #include "FullCodeOrigin.h"
 #include "FunctionCodeBlock.h"
@@ -470,8 +471,7 @@ static InlineCacheAction tryCachePutByID(ExecState* exec, JSValue baseValue, Str
             
                 if (stubInfo.cacheType == CacheType::Unset
                     && InlineAccess::canGenerateSelfPropertyReplace(stubInfo, slot.cachedOffset())
-                    && !structure->needImpurePropertyWatchpoint()
-                    && !structure->inferredTypeFor(ident.impl())) {
+                    && !structure->needImpurePropertyWatchpoint()) {
                     
                     bool generatedCodeInline = InlineAccess::generateSelfPropertyReplace(stubInfo, structure, slot.cachedOffset());
                     if (generatedCodeInline) {

@@ -63,16 +63,14 @@
 #include "JSWeakSet.h"
 #include "NumberConstructor.h"
 #include "ObjectConstructor.h"
-#include "ObjectPrototypeInlines.h"
 #include "Operations.h"
 #include "ParseInt.h"
-#include "RegExpConstructor.h"
+#include "RegExpGlobalDataInlines.h"
 #include "RegExpMatchesArray.h"
 #include "RegExpObjectInlines.h"
 #include "Repatch.h"
 #include "ScopedArguments.h"
 #include "StringConstructor.h"
-#include "StructureRareDataInlines.h"
 #include "SuperSampler.h"
 #include "Symbol.h"
 #include "TypeProfilerLog.h"
@@ -301,7 +299,7 @@ JSCell* JIT_OPERATION operationCreateThis(ExecState* exec, JSObject* constructor
     auto scope = DECLARE_THROW_SCOPE(vm);
     if (constructor->type() == JSFunctionType && jsCast<JSFunction*>(constructor)->canUseAllocationProfile()) {
         auto rareData = jsCast<JSFunction*>(constructor)->ensureRareDataAndAllocationProfile(exec, inlineCapacity);
-        RETURN_IF_EXCEPTION(scope, nullptr);
+        scope.releaseAssertNoException();
         ObjectAllocationProfile* allocationProfile = rareData->objectAllocationProfile();
         Structure* structure = allocationProfile->structure();
         JSObject* result = constructEmptyObject(exec, structure);
@@ -505,12 +503,7 @@ EncodedJSValue JIT_OPERATION operationValueAddNotNumber(ExecState* exec, Encoded
     JSValue op1 = JSValue::decode(encodedOp1);
     JSValue op2 = JSValue::decode(encodedOp2);
     
-    ASSERT(!op1.isNumber() || !op2.isNumber());
-    
-    if (op1.isString() && !op2.isObject())
-        return JSValue::encode(jsString(exec, asString(op1), op2.toString(exec)));
-
-    return JSValue::encode(jsAddSlowCase(exec, op1, op2));
+    return JSValue::encode(jsAddNonNumber(exec, op1, op2));
 }
 
 EncodedJSValue JIT_OPERATION operationValueDiv(ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2)
@@ -1176,7 +1169,6 @@ EncodedJSValue JIT_OPERATION operationRegExpExecNonGlobalOrSticky(ExecState* exe
 
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    RegExpConstructor* regExpConstructor = globalObject->regExpConstructor();
     String input = string->value(exec);
     RETURN_IF_EXCEPTION(scope, { });
 
@@ -1189,7 +1181,7 @@ EncodedJSValue JIT_OPERATION operationRegExpExecNonGlobalOrSticky(ExecState* exe
     }
 
     RETURN_IF_EXCEPTION(scope, { });
-    regExpConstructor->recordMatch(vm, regExp, string, result);
+    globalObject->regExpGlobalData().recordMatch(vm, globalObject, regExp, string, result);
     return JSValue::encode(array);
 }
 
@@ -1219,19 +1211,17 @@ EncodedJSValue JIT_OPERATION operationRegExpMatchFastGlobalString(ExecState* exe
     String s = string->value(exec);
     RETURN_IF_EXCEPTION(scope, { });
 
-    RegExpConstructor* regExpConstructor = globalObject->regExpConstructor();
-
     if (regExp->unicode()) {
         unsigned stringLength = s.length();
         RELEASE_AND_RETURN(scope, JSValue::encode(collectMatches(
-            vm, exec, string, s, regExpConstructor, regExp,
+            vm, exec, string, s, globalObject, regExp,
             [&] (size_t end) -> size_t {
                 return advanceStringUnicode(s, stringLength, end);
             })));
     }
 
     RELEASE_AND_RETURN(scope, JSValue::encode(collectMatches(
-        vm, exec, string, s, regExpConstructor, regExp,
+        vm, exec, string, s, globalObject, regExp,
         [&] (size_t end) -> size_t {
             return end + 1;
         })));
@@ -2156,13 +2146,6 @@ JSString* JIT_OPERATION operationStringValueOf(ExecState* exec, EncodedJSValue e
     return nullptr;
 }
 
-JSString* JIT_OPERATION operationObjectToString(ExecState* exec, EncodedJSValue source)
-{
-    VM& vm = exec->vm();
-    NativeCallFrameTracer tracer(&vm, exec);
-    return objectToString(exec, JSValue::decode(source));
-}
-
 JSCell* JIT_OPERATION operationStringSubstr(ExecState* exec, JSCell* cell, int32_t from, int32_t span)
 {
     VM& vm = exec->vm();
@@ -3035,7 +3018,7 @@ extern "C" void JIT_OPERATION triggerReoptimizationNow(CodeBlock* codeBlock, Cod
     
     bool didTryToEnterIntoInlinedLoops = false;
     for (InlineCallFrame* inlineCallFrame = exit->m_codeOrigin.inlineCallFrame; inlineCallFrame; inlineCallFrame = inlineCallFrame->directCaller.inlineCallFrame) {
-        if (inlineCallFrame->baselineCodeBlock->ownerScriptExecutable()->didTryToEnterInLoop()) {
+        if (inlineCallFrame->baselineCodeBlock->ownerExecutable()->didTryToEnterInLoop()) {
             didTryToEnterIntoInlinedLoops = true;
             break;
         }

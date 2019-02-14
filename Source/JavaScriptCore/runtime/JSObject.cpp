@@ -123,7 +123,7 @@ ALWAYS_INLINE void JSObject::markAuxiliaryAndVisitOutOfLineProperties(SlotVisito
 
 ALWAYS_INLINE Structure* JSObject::visitButterfly(SlotVisitor& visitor)
 {
-    static const char* raceReason = "JSObject::visitButterfly";
+    static const char* const raceReason = "JSObject::visitButterfly";
     Structure* result = visitButterflyImpl(visitor);
     if (!result)
         visitor.didRace(this, raceReason);
@@ -1742,7 +1742,7 @@ void JSObject::setPrototypeDirect(VM& vm, JSValue prototype)
 {
     ASSERT(prototype);
     if (prototype.isObject())
-        prototype.asCell()->didBecomePrototype();
+        asObject(prototype)->didBecomePrototype();
     
     if (structure(vm)->hasMonoProto()) {
         DeferredStructureTransitionWatchpointFire deferred(vm, structure(vm));

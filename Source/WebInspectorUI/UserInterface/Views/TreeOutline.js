@@ -323,13 +323,14 @@ WI.TreeOutline = class TreeOutline extends WI.Object
                 parent.select(true, false);
         }
 
+        let removedIndexes = null;
+
         let treeOutline = child.treeOutline;
         if (treeOutline) {
             treeOutline._forgetTreeElement(child);
             treeOutline._forgetChildrenRecursive(child);
+            removedIndexes = treeOutline._indexesForSubtree(child);
         }
-
-        let removedIndexes = this._indexesForSubtree(child);
 
         if (child.previousSibling)
             child.previousSibling.nextSibling = child.nextSibling;
@@ -811,8 +812,7 @@ WI.TreeOutline = class TreeOutline extends WI.Object
             if (treeElement) {
                 if (treeElement.listItemElement)
                     treeElement.listItemElement.classList.remove("selected");
-                if (!this._suppressNextSelectionDidChangeEvent)
-                    treeElement.deselect();
+                treeElement.deselect();
             }
         }
 
@@ -822,8 +822,8 @@ WI.TreeOutline = class TreeOutline extends WI.Object
             if (treeElement) {
                 if (treeElement.listItemElement)
                     treeElement.listItemElement.classList.add("selected");
-                if (!this._suppressNextSelectionDidChangeEvent)
-                    treeElement.select();
+                const omitFocus = true;
+                treeElement.select(omitFocus);
             }
         }
 
@@ -1011,8 +1011,14 @@ WI.TreeOutline = class TreeOutline extends WI.Object
             return;
         }
 
-        if (!treeElement.canSelectOnMouseDown(event)) {
-            event.preventDefault();
+        if (!treeElement.canSelectOnMouseDown(event))
+            return;
+
+        if (this.allowsRepeatSelection && treeElement.selected && this._selectionController.selectedItems.size === 1) {
+            // Special case for dispatching a selection event for an already selected
+            // item in single-selection mode.
+            this._itemWasSelectedByUser = true;
+            this._dispatchSelectionDidChangeEvent();
             return;
         }
 
@@ -1081,32 +1087,27 @@ WI.TreeOutline = class TreeOutline extends WI.Object
     {
         let treeOutline = treeElement.treeOutline;
         if (!treeOutline)
-            return new WI.IndexSet;
+            return null;
 
-        let firstChild = treeElement.children[0];
-        if (!firstChild)
-            return new WI.IndexSet;
+        function numberOfElementsInSubtree(treeElement) {
+            let elements = treeElement.root ? Array.from(treeElement.children) : [treeElement];
+            let count = 0;
+            while (elements.length) {
+                let child = elements.pop();
+                if (child.hidden)
+                    continue;
 
+                count++;
+                elements = elements.concat(child.children);
+            }
+            return count;
+        }
+
+        let firstChild = treeElement.root ? treeElement.children[0] : treeElement;
         let startIndex = treeOutline._indexOfTreeElement(firstChild);
-        let endIndex = startIndex;
-
-        const skipUnrevealed = false;
-        const stayWithin = treeElement;
-        const dontPopulate = true;
-
-        let current = firstChild;
-        while (current = current.traverseNextTreeElement(skipUnrevealed, stayWithin, dontPopulate))
-            endIndex++;
-
-        // Include the index of the subtree's root, unless it's the TreeOutline root.
-        if (!treeElement.root)
-            startIndex--;
-
-        let count = endIndex - startIndex + 1;
-
+        let count = numberOfElementsInSubtree(treeElement);
         let indexes = new WI.IndexSet;
         indexes.addRange(startIndex, count);
-
         return indexes;
     }
 };
