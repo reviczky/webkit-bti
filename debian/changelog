@@ -12,6 +12,8 @@ webkit2gtk (2.23.90-1) UNRELEASED; urgency=medium
   * debian/rules:
     + Stop building with ENABLE_BUBBLEWRAP_SANDBOX=OFF, this option no
       longer exists.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 14 Feb 2019 15:38:21 +0200
 

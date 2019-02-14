@@ -4,8 +4,12 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  WebProcessMainUnix@Base 2.5.3
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
+ (optional)_ZN7bmalloc10PerProcessINS_12IsoTLSLayoutEE6s_dataE@Base 2.23.90
+ (optional)_ZN7bmalloc10PerProcessINS_12IsoTLSLayoutEE8s_objectE@Base 2.23.90
  (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE6s_dataE@Base 2.21.1
  (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_objectE@Base 2.19.6
+ (optional)_ZN7bmalloc10PerProcessINS_6VMHeapEE6s_dataE@Base 2.23.90
+ (optional)_ZN7bmalloc10PerProcessINS_6VMHeapEE8s_objectE@Base 2.23.90
  (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE6s_dataE@Base 2.21.1
  (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.21.1
  (optional)_ZZN7bmalloc10vmPageSizeEvE6cached@Base 2.19.6
@@ -1674,6 +1678,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_default_monospace_font_size@Base 2.5.3
  webkit_settings_get_draw_compositing_indicators@Base 2.5.3
  webkit_settings_get_enable_accelerated_2d_canvas@Base 2.5.3
+ webkit_settings_get_enable_back_forward_navigation_gestures@Base 2.23.90
  webkit_settings_get_enable_caret_browsing@Base 2.5.3
  webkit_settings_get_enable_developer_extras@Base 2.5.3
  webkit_settings_get_enable_dns_prefetching@Base 2.5.3
@@ -1685,6 +1690,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_enable_hyperlink_auditing@Base 2.5.3
  webkit_settings_get_enable_java@Base 2.5.3
  webkit_settings_get_enable_javascript@Base 2.5.3
+ webkit_settings_get_enable_javascript_markup@Base 2.23.90
  webkit_settings_get_enable_media_capabilities@Base 2.21.91
  webkit_settings_get_enable_media_stream@Base 2.5.3
  webkit_settings_get_enable_mediasource@Base 2.5.3
@@ -1731,6 +1737,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_set_default_monospace_font_size@Base 2.5.3
  webkit_settings_set_draw_compositing_indicators@Base 2.5.3
  webkit_settings_set_enable_accelerated_2d_canvas@Base 2.5.3
+ webkit_settings_set_enable_back_forward_navigation_gestures@Base 2.23.90
  webkit_settings_set_enable_caret_browsing@Base 2.5.3
  webkit_settings_set_enable_developer_extras@Base 2.5.3
  webkit_settings_set_enable_dns_prefetching@Base 2.5.3
@@ -1742,6 +1749,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_set_enable_hyperlink_auditing@Base 2.5.3
  webkit_settings_set_enable_java@Base 2.5.3
  webkit_settings_set_enable_javascript@Base 2.5.3
+ webkit_settings_set_enable_javascript_markup@Base 2.23.90
  webkit_settings_set_enable_media_capabilities@Base 2.21.91
  webkit_settings_set_enable_media_stream@Base 2.5.3
  webkit_settings_set_enable_mediasource@Base 2.5.3
@@ -1782,6 +1790,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (optional)webkit_soup_request_generic_get_type@Base 2.19.6
  (optional)webkit_soup_request_input_stream_get_type@Base 2.19.6
  webkit_tls_errors_policy_get_type@Base 2.5.3
+ webkit_uri_for_display@Base 2.23.90
  webkit_uri_request_get_http_headers@Base 2.5.3
  webkit_uri_request_get_http_method@Base 2.12.0
  webkit_uri_request_get_type@Base 2.5.3
@@ -1839,7 +1848,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_get_plugins@Base 2.5.3
  webkit_web_context_get_plugins_finish@Base 2.5.3
  webkit_web_context_get_process_model@Base 2.5.3
- webkit_web_context_get_sandbox_enabled@Base 2.23.1
  webkit_web_context_get_security_manager@Base 2.5.3
  webkit_web_context_get_spell_checking_enabled@Base 2.5.3
  webkit_web_context_get_spell_checking_languages@Base 2.5.3
@@ -1863,7 +1871,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_set_network_proxy_settings@Base 2.15.3
  webkit_web_context_set_preferred_languages@Base 2.5.3
  webkit_web_context_set_process_model@Base 2.5.3
- webkit_web_context_set_sandbox_enabled@Base 2.23.1
  webkit_web_context_set_spell_checking_enabled@Base 2.5.3
  webkit_web_context_set_spell_checking_languages@Base 2.5.3
  webkit_web_context_set_tls_errors_policy@Base 2.5.3
