@@ -67,7 +67,6 @@ override_dh_auto_configure:
 	   -DCMAKE_CXX_FLAGS_RELEASE="" \
 	   -DCMAKE_CXX_FLAGS_DEBUG="" \
 	   -DENABLE_MINIBROWSER=ON \
-	   -DENABLE_BUBBLEWRAP_SANDBOX=OFF \
 	   $(EXTRA_CMAKE_ARGUMENTS)
 
 # Create a dummy doc directory in case the "nodoc" build option is set

@@ -9,6 +9,9 @@ webkit2gtk (2.23.90-1) UNRELEASED; urgency=medium
     + Add build dependency on libopenjp2-7-dev.
   * debian/copyright:
     + Update copyright years.
+  * debian/rules:
+    + Stop building with ENABLE_BUBBLEWRAP_SANDBOX=OFF, this option no
+      longer exists.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 14 Feb 2019 15:38:21 +0200
 
