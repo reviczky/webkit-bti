@@ -5,6 +5,8 @@ webkit2gtk (2.23.90-1) UNRELEASED; urgency=medium
     + Refresh.
   * debian/source/lintian-overrides:
     + Update source-is-missing override.
+  * debian/control:
+    + Add build dependency on libopenjp2-7-dev.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 14 Feb 2019 15:38:21 +0200
 
