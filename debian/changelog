@@ -1,4 +1,4 @@
-webkit2gtk (2.23.90-1) UNRELEASED; urgency=medium
+webkit2gtk (2.23.90-1) experimental; urgency=medium
 
   * New upstream development release.
   * debian/patches/detect-woff.patch:
@@ -15,7 +15,7 @@ webkit2gtk (2.23.90-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 14 Feb 2019 15:38:21 +0200
+ -- Alberto Garcia <berto@igalia.com>  Thu, 14 Feb 2019 17:58:57 +0200
 
 webkit2gtk (2.23.3-1) experimental; urgency=medium
 
