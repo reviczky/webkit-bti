@@ -130,7 +130,7 @@ public:
 
     void setRateDouble(double) override { }
     void setPreservesPitch(bool) override { }
-    bool paused() const override { return false; }
+    bool paused() const override { return true; }
 
     void setVolumeDouble(double) override { }
 
@@ -1550,6 +1550,11 @@ AVPlayer* MediaPlayer::objCAVFoundationAVPlayer() const
 bool MediaPlayer::performTaskAtMediaTime(WTF::Function<void()>&& task, MediaTime time)
 {
     return m_private->performTaskAtMediaTime(WTFMove(task), time);
+}
+
+bool MediaPlayer::shouldIgnoreIntrinsicSize()
+{
+    return m_private->shouldIgnoreIntrinsicSize();
 }
 
 #if !RELEASE_LOG_DISABLED

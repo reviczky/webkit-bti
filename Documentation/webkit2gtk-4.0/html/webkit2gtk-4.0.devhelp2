@@ -62,6 +62,9 @@
       <sub name="WebKitWebEditor" link="WebKitWebEditor.html"/>
       <sub name="WebKitConsoleMessage" link="WebKitConsoleMessage.html"/>
     </sub>
+    <sub name="Utilities" link="ch03.html">
+      <sub name="WebKitURIUtilities" link="webkit2gtk-4.0-WebKitURIUtilities.html"/>
+    </sub>
     <sub name="Index" link="index-all.html"/>
     <sub name="Index of deprecated symbols" link="api-index-deprecated.html"/>
     <sub name="Index of new symbols in 2.2" link="api-index-2-2.html"/>
@@ -102,8 +105,6 @@
     <keyword type="function" name="webkit_web_context_set_additional_plugins_directory ()" link="WebKitWebContext.html#webkit-web-context-set-additional-plugins-directory"/>
     <keyword type="function" name="webkit_web_context_get_plugins ()" link="WebKitWebContext.html#webkit-web-context-get-plugins"/>
     <keyword type="function" name="webkit_web_context_get_plugins_finish ()" link="WebKitWebContext.html#webkit-web-context-get-plugins-finish"/>
-    <keyword type="function" name="webkit_web_context_get_sandbox_enabled ()" link="WebKitWebContext.html#webkit-web-context-get-sandbox-enabled" since="2.24"/>
-    <keyword type="function" name="webkit_web_context_set_sandbox_enabled ()" link="WebKitWebContext.html#webkit-web-context-set-sandbox-enabled" since="2.24"/>
     <keyword type="function" name="webkit_web_context_get_spell_checking_enabled ()" link="WebKitWebContext.html#webkit-web-context-get-spell-checking-enabled"/>
     <keyword type="function" name="webkit_web_context_set_spell_checking_enabled ()" link="WebKitWebContext.html#webkit-web-context-set-spell-checking-enabled"/>
     <keyword type="function" name="webkit_web_context_get_spell_checking_languages ()" link="WebKitWebContext.html#webkit-web-context-get-spell-checking-languages"/>
@@ -332,6 +333,8 @@
     <keyword type="function" name="webkit_settings_set_enable_java ()" link="WebKitSettings.html#webkit-settings-set-enable-java"/>
     <keyword type="function" name="webkit_settings_get_enable_javascript ()" link="WebKitSettings.html#webkit-settings-get-enable-javascript"/>
     <keyword type="function" name="webkit_settings_set_enable_javascript ()" link="WebKitSettings.html#webkit-settings-set-enable-javascript"/>
+    <keyword type="function" name="webkit_settings_get_enable_javascript_markup ()" link="WebKitSettings.html#webkit-settings-get-enable-javascript-markup" since="2.24"/>
+    <keyword type="function" name="webkit_settings_set_enable_javascript_markup ()" link="WebKitSettings.html#webkit-settings-set-enable-javascript-markup" since="2.24"/>
     <keyword type="function" name="webkit_settings_get_enable_offline_web_application_cache ()" link="WebKitSettings.html#webkit-settings-get-enable-offline-web-application-cache"/>
     <keyword type="function" name="webkit_settings_set_enable_offline_web_application_cache ()" link="WebKitSettings.html#webkit-settings-set-enable-offline-web-application-cache"/>
     <keyword type="function" name="webkit_settings_get_enable_plugins ()" link="WebKitSettings.html#webkit-settings-get-enable-plugins"/>
@@ -427,6 +430,8 @@
     <keyword type="function" name="webkit_settings_set_allow_universal_access_from_file_urls ()" link="WebKitSettings.html#webkit-settings-set-allow-universal-access-from-file-urls" since="2.14"/>
     <keyword type="function" name="webkit_settings_get_hardware_acceleration_policy ()" link="WebKitSettings.html#webkit-settings-get-hardware-acceleration-policy" since="2.16"/>
     <keyword type="function" name="webkit_settings_set_hardware_acceleration_policy ()" link="WebKitSettings.html#webkit-settings-set-hardware-acceleration-policy" since="2.16"/>
+    <keyword type="function" name="webkit_settings_get_enable_back_forward_navigation_gestures ()" link="WebKitSettings.html#webkit-settings-get-enable-back-forward-navigation-gestures" since="2.24"/>
+    <keyword type="function" name="webkit_settings_set_enable_back_forward_navigation_gestures ()" link="WebKitSettings.html#webkit-settings-set-enable-back-forward-navigation-gestures" since="2.24"/>
     <keyword type="function" name="webkit_settings_font_size_to_points ()" link="WebKitSettings.html#webkit-settings-font-size-to-points" since="2.20"/>
     <keyword type="function" name="webkit_settings_font_size_to_pixels ()" link="WebKitSettings.html#webkit-settings-font-size-to-pixels" since="2.20"/>
     <keyword type="struct" name="struct WebKitSettings" link="WebKitSettings.html#WebKitSettings-struct"/>
@@ -442,6 +447,7 @@
     <keyword type="property" name="The “default-monospace-font-size” property" link="WebKitSettings.html#WebKitSettings--default-monospace-font-size"/>
     <keyword type="property" name="The “draw-compositing-indicators” property" link="WebKitSettings.html#WebKitSettings--draw-compositing-indicators"/>
     <keyword type="property" name="The “enable-accelerated-2d-canvas” property" link="WebKitSettings.html#WebKitSettings--enable-accelerated-2d-canvas"/>
+    <keyword type="property" name="The “enable-back-forward-navigation-gestures” property" link="WebKitSettings.html#WebKitSettings--enable-back-forward-navigation-gestures"/>
     <keyword type="property" name="The “enable-caret-browsing” property" link="WebKitSettings.html#WebKitSettings--enable-caret-browsing"/>
     <keyword type="property" name="The “enable-developer-extras” property" link="WebKitSettings.html#WebKitSettings--enable-developer-extras"/>
     <keyword type="property" name="The “enable-dns-prefetching” property" link="WebKitSettings.html#WebKitSettings--enable-dns-prefetching"/>
@@ -453,6 +459,7 @@
     <keyword type="property" name="The “enable-hyperlink-auditing” property" link="WebKitSettings.html#WebKitSettings--enable-hyperlink-auditing"/>
     <keyword type="property" name="The “enable-java” property" link="WebKitSettings.html#WebKitSettings--enable-java"/>
     <keyword type="property" name="The “enable-javascript” property" link="WebKitSettings.html#WebKitSettings--enable-javascript"/>
+    <keyword type="property" name="The “enable-javascript-markup” property" link="WebKitSettings.html#WebKitSettings--enable-javascript-markup"/>
     <keyword type="property" name="The “enable-media-capabilities” property" link="WebKitSettings.html#WebKitSettings--enable-media-capabilities"/>
     <keyword type="property" name="The “enable-media-stream” property" link="WebKitSettings.html#WebKitSettings--enable-media-stream"/>
     <keyword type="property" name="The “enable-mediasource” property" link="WebKitSettings.html#WebKitSettings--enable-mediasource"/>
@@ -992,6 +999,7 @@
     <keyword type="struct" name="WebKitConsoleMessage" link="WebKitConsoleMessage.html#WebKitConsoleMessage-struct"/>
     <keyword type="enum" name="enum WebKitConsoleMessageSource" link="WebKitConsoleMessage.html#WebKitConsoleMessageSource" since="2.12"/>
     <keyword type="enum" name="enum WebKitConsoleMessageLevel" link="WebKitConsoleMessage.html#WebKitConsoleMessageLevel" since="2.12"/>
+    <keyword type="function" name="webkit_uri_for_display ()" link="webkit2gtk-4.0-WebKitURIUtilities.html#webkit-uri-for-display" since="2.24"/>
     <keyword type="constant" name="WEBKIT_CACHE_MODEL_DOCUMENT_VIEWER" link="WebKitWebContext.html#WEBKIT-CACHE-MODEL-DOCUMENT-VIEWER:CAPS"/>
     <keyword type="constant" name="WEBKIT_CACHE_MODEL_WEB_BROWSER" link="WebKitWebContext.html#WEBKIT-CACHE-MODEL-WEB-BROWSER:CAPS"/>
     <keyword type="constant" name="WEBKIT_CACHE_MODEL_DOCUMENT_BROWSER" link="WebKitWebContext.html#WEBKIT-CACHE-MODEL-DOCUMENT-BROWSER:CAPS"/>

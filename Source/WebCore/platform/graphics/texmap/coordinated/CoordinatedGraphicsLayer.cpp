@@ -411,6 +411,8 @@ void CoordinatedGraphicsLayer::setContentsToPlatformLayer(PlatformLayer* platfor
     if (m_nicosia.contentLayer != contentLayer) {
         m_nicosia.contentLayer = contentLayer;
         m_nicosia.delta.contentLayerChanged = true;
+        if (m_nicosia.contentLayer)
+            m_shouldUpdatePlatformLayer = true;
     }
     notifyFlushRequired();
 #else
@@ -888,7 +890,7 @@ void CoordinatedGraphicsLayer::updateContentBuffers()
 
     if (!m_needsDisplay.completeLayer) {
         for (auto& rect : m_needsDisplay.rects)
-            layerState.mainBackingStore->invalidate(IntRect { rect });
+            layerState.mainBackingStore->invalidate(enclosingIntRect(rect));
     } else
         layerState.mainBackingStore->invalidate({ { }, IntSize { m_size } });
 

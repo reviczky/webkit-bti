@@ -98,9 +98,10 @@ static String encodeProtocolString(const String& protocol)
 {
     StringBuilder builder;
     for (size_t i = 0; i < protocol.length(); i++) {
-        if (protocol[i] < 0x20 || protocol[i] > 0x7E)
-            builder.append(String::format("\\u%04X", protocol[i]));
-        else if (protocol[i] == 0x5c)
+        if (protocol[i] < 0x20 || protocol[i] > 0x7E) {
+            builder.appendLiteral("\\u");
+            appendUnsignedAsHexFixedSize(protocol[i], builder, 4);
+        } else if (protocol[i] == 0x5c)
             builder.appendLiteral("\\\\");
         else
             builder.append(protocol[i]);
@@ -234,7 +235,7 @@ ExceptionOr<void> WebSocket::connect(const String& url, const Vector<String>& pr
     if (!portAllowed(m_url)) {
         String message;
         if (m_url.port())
-            message = makeString("WebSocket port ", String::number(m_url.port().value()), " blocked");
+            message = makeString("WebSocket port ", static_cast<unsigned>(m_url.port().value()), " blocked");
         else
             message = "WebSocket without port blocked"_s;
         context.addConsoleMessage(MessageSource::JS, MessageLevel::Error, message);
@@ -279,16 +280,16 @@ ExceptionOr<void> WebSocket::connect(const String& url, const Vector<String>& pr
         }
     }
 
-    RunLoop::main().dispatch([targetURL = m_url.isolatedCopy(), mainFrameURL = context.url().isolatedCopy(), usesEphemeralSession = context.sessionID().isEphemeral()]() {
-        ResourceLoadObserver::shared().logWebSocketLoading(targetURL, mainFrameURL, usesEphemeralSession);
+    RunLoop::main().dispatch([targetURL = m_url.isolatedCopy(), mainFrameURL = context.url().isolatedCopy(), sessionID = context.sessionID()]() {
+        ResourceLoadObserver::shared().logWebSocketLoading(targetURL, mainFrameURL, sessionID);
     });
 
     if (is<Document>(context)) {
         Document& document = downcast<Document>(context);
         RefPtr<Frame> frame = document.frame();
         if (!frame || !frame->loader().mixedContentChecker().canRunInsecureContent(document.securityOrigin(), m_url)) {
-            // Balanced by the call to ActiveDOMObject::unsetPendingActivity() in WebSocket::stop().
-            ActiveDOMObject::setPendingActivity(this);
+            // Balanced by the call to unsetPendingActivity() in WebSocket::stop().
+            setPendingActivity(*this);
 
             // We must block this connection. Instead of throwing an exception, we indicate this
             // using the error event. But since this code executes as part of the WebSocket's
@@ -318,7 +319,7 @@ ExceptionOr<void> WebSocket::connect(const String& url, const Vector<String>& pr
         protocolString = joinStrings(protocols, subprotocolSeparator());
 
     m_channel->connect(m_url, protocolString);
-    ActiveDOMObject::setPendingActivity(this);
+    setPendingActivity(*this);
 
     return { };
 }
@@ -547,7 +548,7 @@ void WebSocket::stop()
     m_pendingEvents.clear();
     ActiveDOMObject::stop();
     if (pending)
-        ActiveDOMObject::unsetPendingActivity(this);
+        unsetPendingActivity(*this);
 }
 
 const char* WebSocket::activeDOMObjectName() const
@@ -631,7 +632,7 @@ void WebSocket::didClose(unsigned unhandledBufferedAmount, ClosingHandshakeCompl
         m_channel = nullptr;
     }
     if (hasPendingActivity())
-        ActiveDOMObject::unsetPendingActivity(this);
+        unsetPendingActivity(*this);
 }
 
 void WebSocket::didUpgradeURL()

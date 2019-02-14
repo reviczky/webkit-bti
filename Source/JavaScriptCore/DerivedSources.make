@@ -134,6 +134,7 @@ JSCBuiltins.h: $(BUILTINS_GENERATOR_SCRIPTS) $(JavaScriptCore_BUILTINS_SOURCES) 
 # Perfect hash lookup tables for JavaScript classes.
 
 OBJECT_LUT_HEADERS = \
+    AsyncFromSyncIteratorPrototype.lut.h \
     ArrayConstructor.lut.h \
     ArrayIteratorPrototype.lut.h \
     AsyncGeneratorPrototype.lut.h \
@@ -151,6 +152,7 @@ OBJECT_LUT_HEADERS = \
     IntlDateTimeFormatPrototype.lut.h \
     IntlNumberFormatConstructor.lut.h \
     IntlNumberFormatPrototype.lut.h \
+    IntlObject.lut.h \
     IntlPluralRulesConstructor.lut.h \
     IntlPluralRulesPrototype.lut.h \
     JSDataViewPrototype.lut.h \
@@ -227,6 +229,7 @@ $(BYTECODE_FILES_PATTERNS): $(wildcard $(JavaScriptCore)/generator/*.rb) $(JavaS
 
 INSPECTOR_DOMAINS := \
     $(JavaScriptCore)/inspector/protocol/ApplicationCache.json \
+    $(JavaScriptCore)/inspector/protocol/Audit.json \
     $(JavaScriptCore)/inspector/protocol/CSS.json \
     $(JavaScriptCore)/inspector/protocol/Canvas.json \
     $(JavaScriptCore)/inspector/protocol/Console.json \
@@ -256,6 +259,7 @@ ifeq ($(findstring ENABLE_INDEXED_DATABASE,$(FEATURE_DEFINES)), ENABLE_INDEXED_D
 endif
 
 ifeq ($(findstring ENABLE_RESOURCE_USAGE,$(FEATURE_DEFINES)), ENABLE_RESOURCE_USAGE)
+    INSPECTOR_DOMAINS := $(INSPECTOR_DOMAINS) $(JavaScriptCore)/inspector/protocol/CPUProfiler.json
     INSPECTOR_DOMAINS := $(INSPECTOR_DOMAINS) $(JavaScriptCore)/inspector/protocol/Memory.json
 endif
 

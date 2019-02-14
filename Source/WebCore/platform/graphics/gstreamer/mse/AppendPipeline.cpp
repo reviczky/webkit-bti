@@ -204,8 +204,9 @@ AppendPipeline::AppendPipeline(Ref<MediaSourceClientGStreamerMSE> mediaSourceCli
             appendPipeline->didReceiveInitializationSegment();
         });
     }), this);
-    g_signal_connect(m_appsink.get(), "new-sample", G_CALLBACK(+[](GstElement* appsink, AppendPipeline* appendPipeline) {
+    g_signal_connect(m_appsink.get(), "new-sample", G_CALLBACK(+[](GstElement* appsink, AppendPipeline* appendPipeline) -> GstFlowReturn {
         appendPipeline->handleAppsinkNewSampleFromStreamingThread(appsink);
+        return GST_FLOW_OK;
     }), this);
     g_signal_connect(m_appsink.get(), "eos", G_CALLBACK(+[](GstElement*, AppendPipeline* appendPipeline) {
         // basesrc will emit an EOS after it has received a GST_FLOW_ERROR. That's the only case we are expecting.
@@ -552,13 +553,16 @@ void AppendPipeline::resetParserState()
 #endif
 }
 
-GstFlowReturn AppendPipeline::pushNewBuffer(GRefPtr<GstBuffer>&& buffer)
+void AppendPipeline::pushNewBuffer(GRefPtr<GstBuffer>&& buffer)
 {
     GST_TRACE_OBJECT(m_pipeline.get(), "pushing data buffer %" GST_PTR_FORMAT, buffer.get());
     GstFlowReturn pushDataBufferRet = gst_app_src_push_buffer(GST_APP_SRC(m_appsrc.get()), buffer.leakRef());
     // Pushing buffers to appsrc can only fail if the appsrc is flushing, in EOS or stopped. Neither of these should
     // be true at this point.
-    g_return_val_if_fail(pushDataBufferRet == GST_FLOW_OK, GST_FLOW_ERROR);
+    if (pushDataBufferRet != GST_FLOW_OK) {
+        GST_ERROR_OBJECT(m_pipeline.get(), "Failed to push data buffer into appsrc.");
+        ASSERT_NOT_REACHED();
+    }
 
     // Push an additional empty buffer that marks the end of the append.
     // This buffer is detected and consumed by appsrcEndOfAppendCheckerProbe(), which uses it to signal the successful
@@ -574,12 +578,13 @@ GstFlowReturn AppendPipeline::pushNewBuffer(GRefPtr<GstBuffer>&& buffer)
 
     GST_TRACE_OBJECT(m_pipeline.get(), "pushing end-of-append buffer %" GST_PTR_FORMAT, endOfAppendBuffer);
     GstFlowReturn pushEndOfAppendBufferRet = gst_app_src_push_buffer(GST_APP_SRC(m_appsrc.get()), endOfAppendBuffer);
-    g_return_val_if_fail(pushEndOfAppendBufferRet == GST_FLOW_OK, GST_FLOW_ERROR);
-
-    return GST_FLOW_OK;
+    if (pushEndOfAppendBufferRet != GST_FLOW_OK) {
+        GST_ERROR_OBJECT(m_pipeline.get(), "Failed to push end-of-append buffer into appsrc.");
+        ASSERT_NOT_REACHED();
+    }
 }
 
-GstFlowReturn AppendPipeline::handleAppsinkNewSampleFromStreamingThread(GstElement*)
+void AppendPipeline::handleAppsinkNewSampleFromStreamingThread(GstElement*)
 {
     ASSERT(!isMainThread());
     if (&WTF::Thread::current() != m_streamingThread) {
@@ -600,8 +605,6 @@ GstFlowReturn AppendPipeline::handleAppsinkNewSampleFromStreamingThread(GstEleme
             consumeAppsinkAvailableSamples();
         });
     }
-
-    return GST_FLOW_OK;
 }
 
 static GRefPtr<GstElement>

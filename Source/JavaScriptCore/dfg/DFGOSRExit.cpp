@@ -80,7 +80,7 @@ static void restoreCalleeSavesFor(Context& context, CodeBlock* codeBlock)
 {
     ASSERT(codeBlock);
 
-    RegisterAtOffsetList* calleeSaves = codeBlock->calleeSaveRegisters();
+    const RegisterAtOffsetList* calleeSaves = codeBlock->calleeSaveRegisters();
     RegisterSet dontRestoreRegisters = RegisterSet(RegisterSet::stackRegisters(), RegisterSet::allFPRs());
     unsigned registerCount = calleeSaves->size();
 
@@ -103,7 +103,7 @@ static void saveCalleeSavesFor(Context& context, CodeBlock* codeBlock)
     auto& stack = context.stack();
     ASSERT(codeBlock);
 
-    RegisterAtOffsetList* calleeSaves = codeBlock->calleeSaveRegisters();
+    const RegisterAtOffsetList* calleeSaves = codeBlock->calleeSaveRegisters();
     RegisterSet dontSaveRegisters = RegisterSet(RegisterSet::stackRegisters(), RegisterSet::allFPRs());
     unsigned registerCount = calleeSaves->size();
 
@@ -182,7 +182,7 @@ static void saveOrCopyCalleeSavesFor(Context& context, CodeBlock* codeBlock, Vir
     Frame frame(context.fp(), context.stack());
     ASSERT(codeBlock);
 
-    RegisterAtOffsetList* calleeSaves = codeBlock->calleeSaveRegisters();
+    const RegisterAtOffsetList* calleeSaves = codeBlock->calleeSaveRegisters();
     RegisterSet dontSaveRegisters = RegisterSet(RegisterSet::stackRegisters(), RegisterSet::allFPRs());
     unsigned registerCount = calleeSaves->size();
 
@@ -507,7 +507,7 @@ void OSRExit::executeOSRExit(Context& context)
             ASSERT(exit.m_kind == BadCache || exit.m_kind == BadIndexingType);
             Structure* structure = profiledValue.asCell()->structure(vm);
             arrayProfile->observeStructure(structure);
-            arrayProfile->observeArrayMode(asArrayModes(structure->indexingMode()));
+            arrayProfile->observeArrayMode(arrayModesFromStructure(structure));
         }
         if (extraInitializationLevel <= ExtraInitializationLevel::ArrayProfileUpdate)
             break;
@@ -1185,6 +1185,15 @@ void OSRExit::compileExit(CCallHelpers& jit, VM& vm, const OSRExit& exit, const 
 
                 jit.load32(AssemblyHelpers::Address(value, JSCell::structureIDOffset()), scratch1);
                 jit.store32(scratch1, arrayProfile->addressOfLastSeenStructureID());
+
+                jit.load8(AssemblyHelpers::Address(value, JSCell::typeInfoTypeOffset()), scratch2);
+                jit.sub32(AssemblyHelpers::TrustedImm32(FirstTypedArrayType), scratch2);
+                auto notTypedArray = jit.branch32(MacroAssembler::AboveOrEqual, scratch2, AssemblyHelpers::TrustedImm32(NumberOfTypedArrayTypesExcludingDataView));
+                jit.move(AssemblyHelpers::TrustedImmPtr(typedArrayModes), scratch1);
+                jit.load32(AssemblyHelpers::BaseIndex(scratch1, scratch2, AssemblyHelpers::TimesFour), scratch2);
+                auto storeArrayModes = jit.jump();
+
+                notTypedArray.link(&jit);
 #if USE(JSVALUE64)
                 jit.load8(AssemblyHelpers::Address(value, JSCell::indexingTypeAndMiscOffset()), scratch1);
 #else
@@ -1193,6 +1202,7 @@ void OSRExit::compileExit(CCallHelpers& jit, VM& vm, const OSRExit& exit, const 
                 jit.and32(AssemblyHelpers::TrustedImm32(IndexingModeMask), scratch1);
                 jit.move(AssemblyHelpers::TrustedImm32(1), scratch2);
                 jit.lshift32(scratch1, scratch2);
+                storeArrayModes.link(&jit);
                 jit.or32(scratch2, AssemblyHelpers::AbsoluteAddress(arrayProfile->addressOfArrayModes()));
 
                 if (isARM64()) {

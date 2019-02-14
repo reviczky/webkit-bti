@@ -261,7 +261,7 @@ public:
     {
         ASSERT(codeBlock);
 
-        RegisterAtOffsetList* calleeSaves = codeBlock->calleeSaveRegisters();
+        const RegisterAtOffsetList* calleeSaves = codeBlock->calleeSaveRegisters();
         RegisterSet dontSaveRegisters = RegisterSet(RegisterSet::stackRegisters(), RegisterSet::allFPRs());
         unsigned registerCount = calleeSaves->size();
 
@@ -279,7 +279,7 @@ public:
     {
         ASSERT(codeBlock);
         
-        RegisterAtOffsetList* calleeSaves = codeBlock->calleeSaveRegisters();
+        const RegisterAtOffsetList* calleeSaves = codeBlock->calleeSaveRegisters();
         RegisterSet dontSaveRegisters = RegisterSet(RegisterSet::stackRegisters(), RegisterSet::allFPRs());
         unsigned registerCount = calleeSaves->size();
 
@@ -313,7 +313,7 @@ public:
     {
         ASSERT(codeBlock);
 
-        RegisterAtOffsetList* calleeSaves = codeBlock->calleeSaveRegisters();
+        const RegisterAtOffsetList* calleeSaves = codeBlock->calleeSaveRegisters();
         RegisterSet dontRestoreRegisters = RegisterSet(RegisterSet::stackRegisters(), RegisterSet::allFPRs());
         unsigned registerCount = calleeSaves->size();
         
@@ -409,7 +409,7 @@ public:
         addPtr(TrustedImm32(EntryFrame::calleeSaveRegistersBufferOffset()), temp1);
 
         RegisterAtOffsetList* allCalleeSaves = RegisterSet::vmCalleeSaveRegisterOffsets();
-        RegisterAtOffsetList* currentCalleeSaves = codeBlock()->calleeSaveRegisters();
+        const RegisterAtOffsetList* currentCalleeSaves = codeBlock()->calleeSaveRegisters();
         RegisterSet dontCopyRegisters = RegisterSet::stackRegisters();
         unsigned registerCount = allCalleeSaves->size();
 
@@ -1051,10 +1051,6 @@ public:
         return branchIfNotNull(regs.tagGPR());
 #endif
     }
-
-    JumpList branchIfNotType(
-        JSValueRegs, GPRReg tempGPR, const InferredType::Descriptor&,
-        TagRegistersMode = HaveTagRegisters);
 
     template<typename T>
     Jump branchStructure(RelationalCondition condition, T leftHandSide, Structure* structure)
@@ -1756,7 +1752,7 @@ public:
         VM& vm, GPRReg resultGPR, StructureType structure, StorageType storage, GPRReg scratchGPR1,
         GPRReg scratchGPR2, JumpList& slowPath, size_t size)
     {
-        Allocator allocator = subspaceFor<ClassType>(vm)->allocatorForNonVirtual(size, AllocatorForMode::AllocatorIfExists);
+        Allocator allocator = allocatorForNonVirtualConcurrently<ClassType>(vm, size, AllocatorForMode::AllocatorIfExists);
         emitAllocateJSObject(resultGPR, JITAllocator::constant(allocator), scratchGPR1, structure, storage, scratchGPR2, slowPath);
     }
     
@@ -1773,8 +1769,9 @@ public:
     template<typename ClassType, typename StructureType>
     void emitAllocateVariableSizedCell(VM& vm, GPRReg resultGPR, StructureType structure, GPRReg allocationSize, GPRReg scratchGPR1, GPRReg scratchGPR2, JumpList& slowPath)
     {
-        CompleteSubspace& subspace = *subspaceFor<ClassType>(vm);
-        emitAllocateVariableSized(resultGPR, subspace, allocationSize, scratchGPR1, scratchGPR2, slowPath);
+        CompleteSubspace* subspace = subspaceForConcurrently<ClassType>(vm);
+        RELEASE_ASSERT_WITH_MESSAGE(subspace, "CompleteSubspace is always allocated");
+        emitAllocateVariableSized(resultGPR, *subspace, allocationSize, scratchGPR1, scratchGPR2, slowPath);
         emitStoreStructureWithTypeInfo(structure, resultGPR, scratchGPR2);
     }
 

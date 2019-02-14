@@ -39,11 +39,13 @@
 
 namespace JSC {
 
+class Decoder;
 class FunctionMetadataNode;
 class FunctionExecutable;
 class ParserError;
 class SourceProvider;
 class UnlinkedFunctionCodeBlock;
+class CachedFunctionExecutable;
 
 enum UnlinkedFunctionKind {
     UnlinkedNormalFunction,
@@ -54,11 +56,12 @@ class UnlinkedFunctionExecutable final : public JSCell {
 public:
     friend class CodeCache;
     friend class VM;
+    friend CachedFunctionExecutable;
 
     typedef JSCell Base;
     static const unsigned StructureFlags = Base::StructureFlags | StructureIsImmortal;
 
-    template<typename CellType>
+    template<typename CellType, SubspaceAccess>
     static IsoSubspace* subspaceFor(VM& vm)
     {
         return &vm.unlinkedFunctionExecutableSpace.space;
@@ -101,6 +104,8 @@ public:
     unsigned typeProfilingEndOffset() const { return m_typeProfilingEndOffset; }
     void setInvalidTypeProfilingOffsets();
 
+    UnlinkedFunctionCodeBlock* unlinkedCodeBlockFor(CodeSpecializationKind);
+
     UnlinkedFunctionCodeBlock* unlinkedCodeBlockFor(
         VM&, const SourceCode&, CodeSpecializationKind, DebuggerMode,
         ParserError&, SourceParseMode);
@@ -115,7 +120,7 @@ public:
     {
         m_unlinkedCodeBlockForCall.clear();
         m_unlinkedCodeBlockForConstruct.clear();
-        vm.unlinkedFunctionExecutableSpace.clearableCodeSet.remove(this);
+        vm.unlinkedFunctionExecutableSpace.set.remove(this);
     }
 
     void recordParse(CodeFeatures features, bool hasCapturedVariables)
@@ -147,6 +152,7 @@ public:
 
 private:
     UnlinkedFunctionExecutable(VM*, Structure*, const SourceCode&, FunctionMetadataNode*, UnlinkedFunctionKind, ConstructAbility, JSParserScriptMode, VariableEnvironment&,  JSC::DerivedContextType, bool isBuiltinDefaultClassConstructor);
+    UnlinkedFunctionExecutable(Decoder&, VariableEnvironment&, const CachedFunctionExecutable&);
 
     unsigned m_firstLineOffset;
     unsigned m_lineCount;

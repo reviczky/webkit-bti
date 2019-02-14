@@ -35,7 +35,11 @@ list(APPEND WebKit_UNIFIED_SOURCE_LIST_FILES
 list(APPEND WebKit_MESSAGES_IN_FILES
     NetworkProcess/CustomProtocols/LegacyCustomProtocolManager.messages.in
 
+    UIProcess/ViewGestureController.messages.in
+
     UIProcess/Network/CustomProtocols/LegacyCustomProtocolManagerProxy.messages.in
+
+    WebProcess/WebPage/ViewGestureGeometryCollector.messages.in
 )
 
 list(APPEND WebKit_DERIVED_SOURCES
@@ -103,6 +107,7 @@ set(WebKit2GTK_INSTALLED_HEADERS
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitURIRequest.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitURIResponse.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitURISchemeRequest.h
+    ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitURIUtilities.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitUserContent.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitUserContentManager.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitUserMediaPermissionRequest.h
@@ -583,8 +588,8 @@ if (ENABLE_PLUGIN_PROCESS_GTK2)
         PluginProcess/unix/PluginProcessUnix.cpp
 
         Shared/ActivityAssertion.cpp
+        Shared/AuxiliaryProcess.cpp
         Shared/BlobDataFileReferenceWithSandboxExtension.cpp
-        Shared/ChildProcess.cpp
         Shared/ShareableBitmap.cpp
         Shared/WebCoreArgumentCoders.cpp
         Shared/WebEvent.cpp
@@ -619,12 +624,10 @@ if (ENABLE_PLUGIN_PROCESS_GTK2)
 
         Shared/soup/WebCoreArgumentCodersSoup.cpp
 
-        Shared/unix/ChildProcessMain.cpp
+        Shared/unix/AuxiliaryProcessMain.cpp
 
         UIProcess/Launcher/ProcessLauncher.cpp
 
-        UIProcess/Launcher/glib/BubblewrapLauncher.cpp
-        UIProcess/Launcher/glib/FlatpakLauncher.cpp
         UIProcess/Launcher/glib/ProcessLauncherGLib.cpp
 
         UIProcess/Plugins/unix/PluginProcessProxyUnix.cpp
@@ -640,11 +643,11 @@ if (ENABLE_PLUGIN_PROCESS_GTK2)
         WebProcess/Plugins/Netscape/unix/NetscapePluginUnix.cpp
         WebProcess/Plugins/Netscape/x11/NetscapePluginX11.cpp
 
+        ${DERIVED_SOURCES_WEBKIT_DIR}/AuxiliaryProcessMessageReceiver.cpp
         ${DERIVED_SOURCES_WEBKIT_DIR}/PluginControllerProxyMessageReceiver.cpp
         ${DERIVED_SOURCES_WEBKIT_DIR}/PluginProcessMessageReceiver.cpp
-        ${DERIVED_SOURCES_WEBKIT_DIR}/WebProcessConnectionMessageReceiver.cpp
         ${DERIVED_SOURCES_WEBKIT_DIR}/NPObjectMessageReceiverMessageReceiver.cpp
-        ${DERIVED_SOURCES_WEBKIT_DIR}/ChildProcessMessageReceiver.cpp
+        ${DERIVED_SOURCES_WEBKIT_DIR}/WebProcessConnectionMessageReceiver.cpp
     )
 
     add_executable(WebKitPluginProcess2 ${PluginProcessGTK2_SOURCES})

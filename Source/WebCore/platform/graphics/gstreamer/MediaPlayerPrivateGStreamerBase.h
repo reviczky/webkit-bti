@@ -148,7 +148,6 @@ public:
 #if ENABLE(ENCRYPTED_MEDIA)
     void cdmInstanceAttached(CDMInstance&) override;
     void cdmInstanceDetached(CDMInstance&) override;
-    void dispatchDecryptionKey(GstBuffer*);
     void handleProtectionEvent(GstEvent*);
     virtual void attemptToDecryptWithLocalInstance();
     void attemptToDecryptWithInstance(CDMInstance&) final;
@@ -173,6 +172,12 @@ public:
 protected:
     MediaPlayerPrivateGStreamerBase(MediaPlayer*);
     virtual GstElement* createVideoSink();
+
+#if USE(GSTREAMER_HOLEPUNCH)
+    GstElement* createHolePunchVideoSink();
+    void pushNextHolePunchBuffer();
+    bool shouldIgnoreIntrinsicSize() final { return true; }
+#endif
 
 #if USE(GSTREAMER_GL)
     static GstFlowReturn newSampleCallback(GstElement*, MediaPlayerPrivateGStreamerBase*);

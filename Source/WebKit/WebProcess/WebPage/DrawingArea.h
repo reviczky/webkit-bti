@@ -66,6 +66,7 @@ struct WebPageCreationParameters;
 struct WebPreferencesStore;
 
 class DrawingArea : public IPC::MessageReceiver {
+    WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(DrawingArea);
 
 public:
@@ -128,7 +129,7 @@ public:
 
     virtual bool adjustLayerFlushThrottling(WebCore::LayerFlushThrottleState::Flags) { return false; }
 
-    virtual void attachViewOverlayGraphicsLayer(WebCore::Frame*, WebCore::GraphicsLayer*) { }
+    virtual void attachViewOverlayGraphicsLayer(WebCore::GraphicsLayer*) { }
 
     virtual void setShouldScaleViewToFitDocument(bool) { }
 
@@ -148,8 +149,6 @@ public:
 #if USE(COORDINATED_GRAPHICS) || USE(TEXTURE_MAPPER)
     virtual void deviceOrPageScaleFactorChanged() = 0;
 #endif
-
-    virtual void attach() { };
 
 protected:
     DrawingArea(DrawingAreaType, WebPage&);

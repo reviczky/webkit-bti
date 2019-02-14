@@ -224,7 +224,7 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
 
     get supportsSave()
     {
-        return this._filteredEntries.some((entry) => entry.resource.finished);
+        return this._canExportHAR();
     }
 
     get saveData()
@@ -721,17 +721,17 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
             let playing = false;
 
             function createDOMEventLine(domEvents, startTimestamp, endTimestamp) {
-                if (domEvents.lastValue.eventName === "ended")
+                if (WI.DOMNode.isStopEvent(domEvents.lastValue.eventName))
                     return;
 
                 for (let i = domEvents.length - 1; i >= 0; --i) {
                     let domEvent = domEvents[i];
-                    if (domEvent.eventName === "play" || domEvent.eventName === "playing") {
+                    if (WI.DOMNode.isPlayEvent(domEvent.eventName)) {
                         playing = true;
                         break;
                     }
 
-                    if (domEvent.eventName === "pause" || domEvent.eventName === "stall") {
+                    if (WI.DOMNode.isPauseEvent(domEvent.eventName)) {
                         playing = false;
                         break;
                     }
@@ -1070,6 +1070,7 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
         this._waterfallColumn = new WI.TableColumn("waterfall", WI.UIString("Waterfall"), {
             minWidth: 230,
             headerView: this._waterfallTimelineRuler,
+            needsReloadOnResize: true,
         });
 
         this._nameColumn.addEventListener(WI.TableColumn.Event.WidthDidChange, this._tableNameColumnDidChangeWidth, this);
@@ -1890,6 +1891,11 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
         let resources = this._filteredEntries.map((x) => x.resource);
         const supportedHARSchemes = new Set(["http", "https", "ws", "wss"]);
         return resources.filter((resource) => {
+            if (!resource) {
+                // DOM node entries are also added to `_filteredEntries`.
+                return false;
+            }
+
             if (!resource.finished)
                 return false;
             if (!resource.requestSentDate)
@@ -1917,7 +1923,7 @@ WI.NetworkTableContentView = class NetworkTableContentView extends WI.ContentVie
                 content: JSON.stringify(har, null, 2),
                 forceSaveAs: true,
             });
-        }).catch(handlePromiseException);
+        });
     }
 
     _waterfallPopoverContent()

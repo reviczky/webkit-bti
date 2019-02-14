@@ -106,6 +106,9 @@ struct WebPageCreationParameters {
     float deviceScaleFactor;
     float viewScaleFactor;
 
+    double textZoomFactor { 1 };
+    double pageZoomFactor { 1 };
+
     float topContentInset;
     
     float mediaVolume;
@@ -129,12 +132,13 @@ struct WebPageCreationParameters {
     Vector<String> mimeTypesWithCustomContentProviders;
 
     bool controlledByAutomation;
-    bool isSwapFromSuspended { false };
+    bool isProcessSwap { false };
+
+    bool useDarkAppearance { false };
 
 #if PLATFORM(MAC)
     ColorSpaceData colorSpace;
     bool useSystemAppearance;
-    bool useDarkAppearance;
 #endif
 #if PLATFORM(IOS_FAMILY)
     WebCore::FloatSize screenSize;
@@ -151,6 +155,9 @@ struct WebPageCreationParameters {
 #if PLATFORM(COCOA)
     bool smartInsertDeleteEnabled;
     Vector<String> additionalSupportedImageTypes;
+#endif
+#if PLATFORM(WPE)
+    IPC::Attachment hostFileDescriptor;
 #endif
     bool appleMailPaginationQuirkEnabled;
     bool appleMailLinesClampEnabled;

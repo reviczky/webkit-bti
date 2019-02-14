@@ -42,12 +42,12 @@ using namespace NetworkCache;
 
 static inline String cachesListFilename(const String& cachesRootPath)
 {
-    return WebCore::FileSystem::pathByAppendingComponent(cachesRootPath, "cacheslist"_s);
+    return FileSystem::pathByAppendingComponent(cachesRootPath, "cacheslist"_s);
 }
 
 static inline String cachesOriginFilename(const String& cachesRootPath)
 {
-    return WebCore::FileSystem::pathByAppendingComponent(cachesRootPath, "origin"_s);
+    return FileSystem::pathByAppendingComponent(cachesRootPath, "origin"_s);
 }
 
 Caches::~Caches()
@@ -58,7 +58,7 @@ Caches::~Caches()
 void Caches::retrieveOriginFromDirectory(const String& folderPath, WorkQueue& queue, WTF::CompletionHandler<void(Optional<WebCore::ClientOrigin>&&)>&& completionHandler)
 {
     queue.dispatch([completionHandler = WTFMove(completionHandler), filename = cachesOriginFilename(folderPath)]() mutable {
-        if (!WebCore::FileSystem::fileExists(filename)) {
+        if (!FileSystem::fileExists(filename)) {
             RunLoop::main().dispatch([completionHandler = WTFMove(completionHandler)]() mutable {
                 completionHandler(WTF::nullopt);
             });
@@ -408,7 +408,7 @@ void Caches::readCachesFromDisk(WTF::Function<void(Expected<Vector<Cache>, Error
     }
 
     auto filename = cachesListFilename(m_rootPath);
-    if (!WebCore::FileSystem::fileExists(filename)) {
+    if (!FileSystem::fileExists(filename)) {
         callback(Vector<Cache> { });
         return;
     }
@@ -481,9 +481,35 @@ void Caches::readRecordsList(Cache& cache, NetworkCache::Storage::TraverseHandle
 
 void Caches::requestSpace(uint64_t spaceRequired, WebCore::DOMCacheEngine::CompletionCallback&& callback)
 {
-    // FIXME: Implement quota increase request.
+    ASSERT(!m_isRequestingSpace);
+
     ASSERT(m_quota < m_size + spaceRequired);
-    callback(Error::QuotaExceeded);
+
+    if (!m_engine) {
+        callback(Error::QuotaExceeded);
+        return;
+    }
+
+    m_isRequestingSpace = true;
+    m_engine->requestSpace(m_origin, m_quota, m_size, spaceRequired, [this, protectedThis = makeRef(*this), callback = WTFMove(callback)] (Optional<uint64_t> newQuota) {
+        m_isRequestingSpace = false;
+        if (!newQuota) {
+            callback(Error::QuotaExceeded);
+            notifyCachesOfRequestSpaceEnd();
+            return;
+        }
+        m_quota = *newQuota;
+        callback({ });
+        notifyCachesOfRequestSpaceEnd();
+    });
+}
+
+void Caches::notifyCachesOfRequestSpaceEnd()
+{
+    for (auto& cache : m_caches)
+        cache.retryPuttingPendingRecords();
+    for (auto& cache : m_removedCaches)
+        cache.retryPuttingPendingRecords();
 }
 
 void Caches::writeRecord(const Cache& cache, const RecordInformation& recordInformation, Record&& record, uint64_t previousRecordSize, CompletionCallback&& callback)

@@ -1480,7 +1480,6 @@ public:
     void compileNewTypedArray(Node*);
     void compileToThis(Node*);
     void compileObjectKeys(Node*);
-    void compileObjectToString(Node*);
     void compileObjectCreate(Node*);
     void compileCreateThis(Node*);
     void compileNewObject(Node*);
@@ -1631,8 +1630,6 @@ public:
     void speculateStringOrOther(Edge);
     void speculateNotStringVar(Edge);
     void speculateNotSymbol(Edge);
-    template<typename StructureLocationType>
-    void speculateStringObjectForStructure(Edge, StructureLocationType);
     void speculateStringObject(Edge, GPRReg);
     void speculateStringObject(Edge);
     void speculateStringOrStringObject(Edge);
@@ -2603,20 +2600,6 @@ private:
     Edge m_edge;
     GPRReg m_gprOrInvalid;
 };
-
-template<typename StructureLocationType>
-void SpeculativeJIT::speculateStringObjectForStructure(Edge edge, StructureLocationType structureLocation)
-{
-    RegisteredStructure stringObjectStructure =
-        m_jit.graph().registerStructure(m_jit.globalObjectFor(m_currentNode->origin.semantic)->stringObjectStructure());
-    
-    if (!m_state.forNode(edge).m_structure.isSubsetOf(RegisteredStructureSet(stringObjectStructure))) {
-        speculationCheck(
-            NotStringObject, JSValueRegs(), 0,
-            m_jit.branchWeakStructure(
-                JITCompiler::NotEqual, structureLocation, stringObjectStructure));
-    }
-}
 
 #define DFG_TYPE_CHECK_WITH_EXIT_KIND(exitKind, source, edge, typesPassedThrough, jumpToFail) do { \
         JSValueSource _dtc_source = (source);                           \

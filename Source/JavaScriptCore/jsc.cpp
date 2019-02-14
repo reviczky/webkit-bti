@@ -28,6 +28,7 @@
 #include "ButterflyInlines.h"
 #include "CatchScope.h"
 #include "CodeBlock.h"
+#include "CodeCache.h"
 #include "Completion.h"
 #include "ConfigFile.h"
 #include "Disassembler.h"
@@ -90,6 +91,7 @@
 #include <wtf/URL.h>
 #include <wtf/WallTime.h>
 #include <wtf/text/StringBuilder.h>
+#include <wtf/text/StringConcatenateNumbers.h>
 
 #if OS(WINDOWS)
 #include <direct.h>
@@ -155,7 +157,6 @@ struct MemoryFootprint {
 #endif
 
 using namespace JSC;
-using namespace WTF;
 
 namespace {
 
@@ -328,6 +329,7 @@ static EncodedJSValue JSC_HOST_CALL functionIs32BitPlatform(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionCheckModuleSyntax(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionPlatformSupportsSamplingProfiler(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionGenerateHeapSnapshot(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionGenerateHeapSnapshotForGCDebugging(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionResetSuperSamplerState(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionEnsureArrayStorage(ExecState*);
 #if ENABLE(SAMPLING_PROFILER)
@@ -420,6 +422,7 @@ public:
     String m_uncaughtExceptionName;
     bool m_treatWatchdogExceptionAsSuccess { false };
     bool m_alwaysDumpUncaughtException { false };
+    bool m_dumpMemoryFootprint { false };
     bool m_dumpSamplingProfilerData { false };
     bool m_enableRemoteDebugging { false };
 
@@ -561,6 +564,7 @@ protected:
 
         addFunction(vm, "platformSupportsSamplingProfiler", functionPlatformSupportsSamplingProfiler, 0);
         addFunction(vm, "generateHeapSnapshot", functionGenerateHeapSnapshot, 0);
+        addFunction(vm, "generateHeapSnapshotForGCDebugging", functionGenerateHeapSnapshotForGCDebugging, 0);
         addFunction(vm, "resetSuperSamplerState", functionResetSuperSamplerState, 0);
         addFunction(vm, "ensureArrayStorage", functionEnsureArrayStorage, 0);
 #if ENABLE(SAMPLING_PROFILER)
@@ -1168,7 +1172,7 @@ public:
 
     StackVisitor::Status operator()(StackVisitor& visitor) const
     {
-        m_trace.append(String::format("    %zu   %s\n", visitor->index(), visitor->toString().utf8().data()));
+        m_trace.append(makeString("    ", visitor->index(), "   ", visitor->toString(), '\n'));
         return StackVisitor::Continue;
     }
 
@@ -1985,8 +1989,11 @@ EncodedJSValue JSC_HOST_CALL functionFailNextNewCodeBlock(ExecState* exec)
     return JSValue::encode(jsUndefined());
 }
 
-EncodedJSValue JSC_HOST_CALL functionQuit(ExecState*)
+EncodedJSValue JSC_HOST_CALL functionQuit(ExecState* exec)
 {
+    VM& vm = exec->vm();
+    vm.codeCache()->write(vm);
+
     jscExit(EXIT_SUCCESS);
 
 #if COMPILER(MSVC)
@@ -2116,6 +2123,24 @@ EncodedJSValue JSC_HOST_CALL functionGenerateHeapSnapshot(ExecState* exec)
     EncodedJSValue result = JSValue::encode(JSONParse(exec, jsonString));
     scope.releaseAssertNoException();
     return result;
+}
+
+EncodedJSValue JSC_HOST_CALL functionGenerateHeapSnapshotForGCDebugging(ExecState* exec)
+{
+    VM& vm = exec->vm();
+    JSLockHolder lock(vm);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    String jsonString;
+    {
+        DeferGCForAWhile deferGC(vm.heap); // Prevent concurrent GC from interfering with the full GC that the snapshot does.
+
+        HeapSnapshotBuilder snapshotBuilder(vm.ensureHeapProfiler(), HeapSnapshotBuilder::SnapshotType::GCDebuggingSnapshot);
+        snapshotBuilder.buildSnapshot();
+
+        jsonString = snapshotBuilder.json();
+    }
+    scope.releaseAssertNoException();
+    return JSValue::encode(jsString(&vm, jsonString));
 }
 
 EncodedJSValue JSC_HOST_CALL functionResetSuperSamplerState(ExecState*)
@@ -2572,6 +2597,7 @@ static NO_RETURN void printUsageStatement(bool help = false)
     fprintf(stderr, "  --exception=<name>         Check the last script exits with an uncaught exception with the specified name\n");
     fprintf(stderr, "  --watchdog-exception-ok    Uncaught watchdog exceptions exit with success\n");
     fprintf(stderr, "  --dumpException            Dump uncaught exception text\n");
+    fprintf(stderr, "  --footprint                Dump memory footprint after done executing\n");
     fprintf(stderr, "  --options                  Dumps all JSC VM options and exits\n");
     fprintf(stderr, "  --dumpOptions              Dumps all non-default JSC VM options before continuing\n");
     fprintf(stderr, "  --<jsc VM option>=<value>  Sets the specified JSC VM option\n");
@@ -2720,6 +2746,11 @@ void CommandLine::parseArguments(int argc, char** argv)
             continue;
         }
 
+        if (!strcmp(arg, "--footprint")) {
+            m_dumpMemoryFootprint = true;
+            continue;
+        }
+
         static const unsigned exceptionStrLength = strlen("--exception=");
         if (!strncmp(arg, "--exception=", exceptionStrLength)) {
             m_uncaughtExceptionName = String(arg + exceptionStrLength);
@@ -2849,6 +2880,8 @@ int runJSC(const CommandLine& options, bool isWorker, const Func& func)
 #endif
     }
 
+    vm.codeCache()->write(vm);
+
     if (isWorker) {
         JSLockHolder locker(vm);
         // This is needed because we don't want the worker's main
@@ -2927,6 +2960,12 @@ int jscmain(int argc, char** argv)
         });
 
     printSuperSamplerState();
+
+    if (options.m_dumpMemoryFootprint) {
+        MemoryFootprint footprint = MemoryFootprint::now();
+
+        printf("Memory Footprint:\n    Current Footprint: %" PRIu64 "\n    Peak Footprint: %" PRIu64 "\n", footprint.current, footprint.peak);
+    }
 
     return result;
 }

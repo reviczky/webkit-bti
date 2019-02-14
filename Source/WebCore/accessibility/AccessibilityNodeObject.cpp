@@ -1063,6 +1063,10 @@ void AccessibilityNodeObject::alterSliderValue(bool increase)
 {
     if (roleValue() != AccessibilityRole::Slider)
         return;
+    
+    auto element = this->element();
+    if (!element || element->isDisabledFormControl())
+        return;
 
     if (!getAttribute(stepAttr).isEmpty())
         changeValueByStep(increase);
@@ -2232,7 +2236,6 @@ bool AccessibilityNodeObject::canSetSelectedAttribute() const
     switch (roleValue()) {
     case AccessibilityRole::Cell:
     case AccessibilityRole::GridCell:
-    case AccessibilityRole::RadioButton:
     case AccessibilityRole::RowHeader:
     case AccessibilityRole::Row:
     case AccessibilityRole::TabList:
