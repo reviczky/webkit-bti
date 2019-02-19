@@ -24,7 +24,7 @@ ifeq (,$(filter $(DEB_HOST_ARCH),amd64 ppc64 ppc64el))
 endif
 
 # See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=81426
-ifneq (,$(filter $(DEB_HOST_ARCH),sh3 sh4 powerpc))
+ifneq (,$(filter $(DEB_HOST_ARCH),armhf sh3 sh4 powerpc))
 	CFLAGS := $(CFLAGS:-O2=-O1)
 endif
 
