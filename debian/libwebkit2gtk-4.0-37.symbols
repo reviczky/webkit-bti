@@ -1811,15 +1811,37 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_uri_scheme_request_get_type@Base 2.5.3
  webkit_uri_scheme_request_get_uri@Base 2.5.3
  webkit_uri_scheme_request_get_web_view@Base 2.5.3
+ webkit_user_content_filter_error_get_type@Base 2.23.91
+ webkit_user_content_filter_error_quark@Base 2.23.91
+ webkit_user_content_filter_get_identifier@Base 2.23.91
+ webkit_user_content_filter_get_type@Base 2.23.91
+ webkit_user_content_filter_ref@Base 2.23.91
+ webkit_user_content_filter_store_fetch_identifiers@Base 2.23.91
+ webkit_user_content_filter_store_fetch_identifiers_finish@Base 2.23.91
+ webkit_user_content_filter_store_get_path@Base 2.23.91
+ webkit_user_content_filter_store_get_type@Base 2.23.91
+ webkit_user_content_filter_store_load@Base 2.23.91
+ webkit_user_content_filter_store_load_finish@Base 2.23.91
+ webkit_user_content_filter_store_new@Base 2.23.91
+ webkit_user_content_filter_store_remove@Base 2.23.91
+ webkit_user_content_filter_store_remove_finish@Base 2.23.91
+ webkit_user_content_filter_store_save@Base 2.23.91
+ webkit_user_content_filter_store_save_finish@Base 2.23.91
+ webkit_user_content_filter_store_save_from_file@Base 2.23.91
+ webkit_user_content_filter_store_save_from_file_finish@Base 2.23.91
+ webkit_user_content_filter_unref@Base 2.23.91
  webkit_user_content_injected_frames_get_type@Base 2.5.3
+ webkit_user_content_manager_add_filter@Base 2.23.91
  webkit_user_content_manager_add_script@Base 2.5.3
  webkit_user_content_manager_add_style_sheet@Base 2.5.3
  webkit_user_content_manager_get_type@Base 2.5.3
  webkit_user_content_manager_new@Base 2.5.3
  webkit_user_content_manager_register_script_message_handler@Base 2.8.1
  webkit_user_content_manager_register_script_message_handler_in_world@Base 2.21.92
+ webkit_user_content_manager_remove_all_filters@Base 2.23.91
  webkit_user_content_manager_remove_all_scripts@Base 2.5.3
  webkit_user_content_manager_remove_all_style_sheets@Base 2.5.3
+ webkit_user_content_manager_remove_filter@Base 2.23.91
  webkit_user_content_manager_unregister_script_message_handler@Base 2.8.1
  webkit_user_content_manager_unregister_script_message_handler_in_world@Base 2.21.92
  webkit_user_media_permission_is_for_audio_device@Base 2.8.1

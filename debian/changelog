@@ -2,6 +2,8 @@ webkit2gtk (2.23.91-1) UNRELEASED; urgency=medium
 
   [ Alberto Garcia ]
   * New upstream development release.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
   [ Jeremy Bicha ]
   * Disable openjpeg2 support on Ubuntu since it's not in Ubuntu main yet.
