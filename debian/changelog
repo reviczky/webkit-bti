@@ -1,4 +1,4 @@
-webkit2gtk (2.23.91-1) UNRELEASED; urgency=medium
+webkit2gtk (2.23.91-1) experimental; urgency=medium
 
   [ Alberto Garcia ]
   * New upstream development release.
