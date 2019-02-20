@@ -401,7 +401,6 @@ VM::VM(VMType vmType, HeapType heapType)
     sentinelSetBucket.set(*this, JSSet::BucketType::createSentinel(*this));
     sentinelMapBucket.set(*this, JSMap::BucketType::createSentinel(*this));
 
-    m_regExpCache->initialize(*this);
     smallStrings.initializeCommonStrings(*this);
 
     Thread::current().setCurrentAtomicStringTable(existingEntryAtomicStringTable);
@@ -498,8 +497,8 @@ VM::~VM()
     Gigacage::removePrimitiveDisableCallback(primitiveGigacageDisabledCallback, this);
     promiseDeferredTimer->stopRunningTasks();
 #if ENABLE(WEBASSEMBLY)
-    if (Wasm::existingWorklistOrNull())
-        Wasm::ensureWorklist().stopAllPlansForContext(wasmContext);
+    if (Wasm::Worklist* worklist = Wasm::existingWorklistOrNull())
+        worklist->stopAllPlansForContext(wasmContext);
 #endif
     if (UNLIKELY(m_watchdog))
         m_watchdog->willDestroyVM(this);
@@ -517,7 +516,8 @@ VM::~VM()
 #endif // ENABLE(SAMPLING_PROFILER)
     
 #if ENABLE(JIT)
-    JITWorklist::instance()->completeAllForVM(*this);
+    if (JITWorklist* worklist = JITWorklist::existingGlobalWorklistOrNull())
+        worklist->completeAllForVM(*this);
 #endif // ENABLE(JIT)
 
 #if ENABLE(DFG_JIT)
@@ -688,6 +688,26 @@ NativeExecutable* VM::getHostFunction(NativeFunction function, NativeFunction co
     return getHostFunction(function, NoIntrinsic, constructor, nullptr, name);
 }
 
+static Ref<NativeJITCode> jitCodeForCallTrampoline()
+{
+    static NativeJITCode* result;
+    static std::once_flag onceKey;
+    std::call_once(onceKey, [&] {
+        result = new NativeJITCode(LLInt::getCodeRef<JSEntryPtrTag>(llint_native_call_trampoline), JITCode::HostCallThunk, NoIntrinsic);
+    });
+    return makeRef(*result);
+}
+
+static Ref<NativeJITCode> jitCodeForConstructTrampoline()
+{
+    static NativeJITCode* result;
+    static std::once_flag onceKey;
+    std::call_once(onceKey, [&] {
+        result = new NativeJITCode(LLInt::getCodeRef<JSEntryPtrTag>(llint_native_construct_trampoline), JITCode::HostCallThunk, NoIntrinsic);
+    });
+    return makeRef(*result);
+}
+
 NativeExecutable* VM::getHostFunction(NativeFunction function, Intrinsic intrinsic, NativeFunction constructor, const DOMJIT::Signature* signature, const String& name)
 {
 #if ENABLE(JIT)
@@ -700,11 +720,7 @@ NativeExecutable* VM::getHostFunction(NativeFunction function, Intrinsic intrins
 #endif // ENABLE(JIT)
     UNUSED_PARAM(intrinsic);
     UNUSED_PARAM(signature);
-
-    return NativeExecutable::create(*this,
-        adoptRef(*new NativeJITCode(LLInt::getCodeRef<JSEntryPtrTag>(llint_native_call_trampoline), JITCode::HostCallThunk, NoIntrinsic)), function,
-        adoptRef(*new NativeJITCode(LLInt::getCodeRef<JSEntryPtrTag>(llint_native_construct_trampoline), JITCode::HostCallThunk, NoIntrinsic)), constructor,
-        name);
+    return NativeExecutable::create(*this, jitCodeForCallTrampoline(), function, jitCodeForConstructTrampoline(), constructor, name);
 }
 
 MacroAssemblerCodePtr<JSEntryPtrTag> VM::getCTIInternalFunctionTrampolineFor(CodeSpecializationKind kind)
@@ -906,7 +922,7 @@ inline void VM::updateStackLimits()
 }
 
 #if ENABLE(DFG_JIT)
-void VM::gatherConservativeRoots(ConservativeRoots& conservativeRoots)
+void VM::gatherScratchBufferRoots(ConservativeRoots& conservativeRoots)
 {
     auto lock = holdLock(m_scratchBufferLock);
     for (auto* scratchBuffer : m_scratchBuffers) {

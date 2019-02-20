@@ -463,7 +463,7 @@ void NetworkProcess::switchToNewTestingSession()
 {
 #if PLATFORM(COCOA)
     // Session name should be short enough for shared memory region name to be under the limit, otherwise sandbox rules won't work (see <rdar://problem/13642852>).
-    String sessionName = String::format("WebKit Test-%u", static_cast<uint32_t>(getCurrentProcessID()));
+    String sessionName = makeString("WebKit Test-", getCurrentProcessID());
 
     auto session = adoptCF(WebCore::createPrivateStorageSession(sessionName.createCFString().get()));
 
@@ -2170,10 +2170,16 @@ void NetworkProcess::didNotHandleFetch(SWServerConnectionIdentifier serverConnec
         connection->didNotHandleFetch(fetchIdentifier);
 }
 
-void NetworkProcess::didReceiveFetchResponse(SWServerConnectionIdentifier serverConnectionIdentifier, FetchIdentifier fetchIdentifier, const WebCore::ResourceResponse& response)
+void NetworkProcess::didReceiveFetchRedirectResponse(SWServerConnectionIdentifier serverConnectionIdentifier, FetchIdentifier fetchIdentifier, const WebCore::ResourceResponse& response)
 {
     if (auto* connection = m_swServerConnections.get(serverConnectionIdentifier))
-        connection->didReceiveFetchResponse(fetchIdentifier, response);
+        connection->didReceiveFetchRedirectResponse(fetchIdentifier, response);
+}
+
+void NetworkProcess::didReceiveFetchResponse(SWServerConnectionIdentifier serverConnectionIdentifier, FetchIdentifier fetchIdentifier, const WebCore::ResourceResponse& response, bool needsContinueDidReceiveResponseMessage)
+{
+    if (auto* connection = m_swServerConnections.get(serverConnectionIdentifier))
+        connection->didReceiveFetchResponse(fetchIdentifier, response, needsContinueDidReceiveResponseMessage);
 }
 
 void NetworkProcess::didReceiveFetchData(SWServerConnectionIdentifier serverConnectionIdentifier, FetchIdentifier fetchIdentifier, const IPC::DataReference& data, int64_t encodedDataLength)

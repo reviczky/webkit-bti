@@ -26,6 +26,7 @@
 #include "config.h"
 #include "CachedTypes.h"
 
+#include "BytecodeCacheVersion.h"
 #include "BytecodeLivenessAnalysis.h"
 #include "JSCast.h"
 #include "JSImmutableButterfly.h"
@@ -40,6 +41,7 @@
 #include <wtf/FastMalloc.h>
 #include <wtf/Forward.h>
 #include <wtf/Optional.h>
+#include <wtf/UUID.h>
 #include <wtf/text/AtomicStringImpl.h>
 
 namespace JSC {
@@ -101,10 +103,10 @@ public:
         return malloc(size);
     }
 
-    template<typename T>
-    T* malloc()
+    template<typename T, typename... Args>
+    T* malloc(Args&&... args)
     {
-        return reinterpret_cast<T*>(malloc(sizeof(T)).buffer());
+        return new (malloc(sizeof(T)).buffer()) T(std::forward<Args>(args)...);
     }
 
     ptrdiff_t offsetOf(const void* address)
@@ -754,23 +756,25 @@ class CachedBitVector : public VariableLengthObject<BitVector> {
 public:
     void encode(Encoder& encoder, const BitVector& bitVector)
     {
-        m_size = bitVector.size();
-        if (!m_size)
+        m_numBits = bitVector.size();
+        if (!m_numBits)
             return;
-        uint8_t* buffer = this->allocate(encoder, m_size);
-        memcpy(buffer, bitVector.bits(), m_size);
+        size_t sizeInBytes = BitVector::byteCount(m_numBits);
+        uint8_t* buffer = this->allocate(encoder, sizeInBytes);
+        memcpy(buffer, bitVector.bits(), sizeInBytes);
     }
 
     void decode(Decoder&, BitVector& bitVector) const
     {
-        if (!m_size)
+        if (!m_numBits)
             return;
-        bitVector.ensureSize(m_size);
-        memcpy(bitVector.bits(), this->buffer(), m_size);
+        bitVector.ensureSize(m_numBits);
+        size_t sizeInBytes = BitVector::byteCount(m_numBits);
+        memcpy(bitVector.bits(), this->buffer(), sizeInBytes);
     }
 
 private:
-    unsigned m_size;
+    size_t m_numBits;
 };
 
 template<typename T, typename HashArg = typename DefaultHash<T>::Hash>
@@ -1264,8 +1268,8 @@ public:
     {
         m_sourceOrigin.encode(encoder, sourceProvider.sourceOrigin());
         m_url.encode(encoder, sourceProvider.url());
-        m_sourceURLDirective.encode(encoder, sourceProvider.sourceURL());
-        m_sourceMappingURLDirective.encode(encoder, sourceProvider.sourceMappingURL());
+        m_sourceURLDirective.encode(encoder, sourceProvider.sourceURLDirective());
+        m_sourceMappingURLDirective.encode(encoder, sourceProvider.sourceMappingURLDirective());
         m_startPosition.encode(encoder, sourceProvider.startPosition());
     }
 
@@ -1427,6 +1431,24 @@ private:
     int m_startColumn;
 };
 
+class CachedFunctionExecutableRareData : public CachedObject<UnlinkedFunctionExecutable::RareData> {
+public:
+    void encode(Encoder& encoder, const UnlinkedFunctionExecutable::RareData& rareData)
+    {
+        m_classSource.encode(encoder, rareData.m_classSource);
+    }
+
+    UnlinkedFunctionExecutable::RareData* decode(Decoder& decoder) const
+    {
+        UnlinkedFunctionExecutable::RareData* rareData = new UnlinkedFunctionExecutable::RareData { };
+        m_classSource.decode(decoder, rareData->m_classSource);
+        return rareData;
+    }
+
+private:
+    CachedSourceCode m_classSource;
+};
+
 class CachedFunctionExecutable : public CachedObject<UnlinkedFunctionExecutable> {
 public:
     void encode(Encoder&, const UnlinkedFunctionExecutable&);
@@ -1462,6 +1484,8 @@ public:
     Identifier ecmaName(Decoder& decoder) const { return m_ecmaName.decode(decoder); }
     Identifier inferredName(Decoder& decoder) const { return m_inferredName.decode(decoder); }
 
+    UnlinkedFunctionExecutable::RareData* rareData(Decoder& decoder) const { return m_rareData.decodeAsPtr(decoder); }
+
 private:
     unsigned m_firstLineOffset;
     unsigned m_lineCount;
@@ -1487,7 +1511,7 @@ private:
     unsigned m_superBinding : 1;
     unsigned m_derivedContextType: 2;
 
-    CachedSourceCode m_classSource;
+    CachedOptional<CachedFunctionExecutableRareData> m_rareData;
 
     CachedIdentifier m_name;
     CachedIdentifier m_ecmaName;
@@ -1822,7 +1846,7 @@ ALWAYS_INLINE void CachedFunctionExecutable::encode(Encoder& encoder, const Unli
     m_superBinding = executable.m_superBinding;
     m_derivedContextType = executable.m_derivedContextType;
 
-    m_classSource.encode(encoder, executable.m_classSource);
+    m_rareData.encode(encoder, executable.m_rareData);
 
     m_name.encode(encoder, executable.name());
     m_ecmaName.encode(encoder, executable.ecmaName());
@@ -1842,7 +1866,6 @@ ALWAYS_INLINE UnlinkedFunctionExecutable* CachedFunctionExecutable::decode(Decod
     UnlinkedFunctionExecutable* executable = new (NotNull, allocateCell<UnlinkedFunctionExecutable>(decoder.vm().heap)) UnlinkedFunctionExecutable(decoder, env, *this);
     executable->finishCreation(decoder.vm());
 
-    m_classSource.decode(decoder, executable->m_classSource);
     m_unlinkedCodeBlockForCall.decode(decoder, executable->m_unlinkedCodeBlockForCall, executable);
     m_unlinkedCodeBlockForConstruct.decode(decoder, executable->m_unlinkedCodeBlockForConstruct, executable);
 
@@ -1880,6 +1903,8 @@ ALWAYS_INLINE UnlinkedFunctionExecutable::UnlinkedFunctionExecutable(Decoder& de
     , m_inferredName(cachedExecutable.inferredName(decoder))
 
     , m_parentScopeTDZVariables(decoder.vm().m_compactVariableMap->get(parentScopeTDZVariables))
+
+    , m_rareData(cachedExecutable.rareData(decoder))
 {
 }
 
@@ -1963,18 +1988,33 @@ private:
 
 class GenericCacheEntry {
 public:
-    std::pair<SourceCodeKey, UnlinkedCodeBlock*> decode(Decoder&) const;
+    bool decode(Decoder&, std::pair<SourceCodeKey, UnlinkedCodeBlock*>&) const;
 
 protected:
+    GenericCacheEntry(Encoder& encoder, CachedCodeBlockTag tag)
+        : m_tag(tag)
+    {
+        m_bootSessionUUID.encode(encoder, bootSessionUUIDString());
+    }
+
+    CachedCodeBlockTag tag() const { return m_tag; }
+
+private:
+    uint32_t m_cacheVersion { JSC_BYTECODE_CACHE_VERSION };
+    CachedString m_bootSessionUUID;
     CachedCodeBlockTag m_tag;
 };
 
 template<typename UnlinkedCodeBlockType>
 class CacheEntry : public GenericCacheEntry {
 public:
+    CacheEntry(Encoder& encoder)
+        : GenericCacheEntry(encoder, CachedCodeBlockTypeImpl<UnlinkedCodeBlockType>::tag)
+    {
+    }
+
     void encode(Encoder& encoder, std::pair<SourceCodeKey, const UnlinkedCodeBlockType*> pair)
     {
-        m_tag = CachedCodeBlockTypeImpl<UnlinkedCodeBlockType>::tag;
         m_key.encode(encoder, pair.first);
         m_codeBlock.encode(encoder, pair.second);
     }
@@ -1982,25 +2022,31 @@ public:
 private:
     friend GenericCacheEntry;
 
-    std::pair<SourceCodeKey, UnlinkedCodeBlockType*> decode(Decoder& decoder) const
+    bool decode(Decoder& decoder, std::pair<SourceCodeKey, UnlinkedCodeBlockType*>& result) const
     {
-        ASSERT(m_tag == CachedCodeBlockTypeImpl<UnlinkedCodeBlockType>::tag);
+        ASSERT(tag() == CachedCodeBlockTypeImpl<UnlinkedCodeBlockType>::tag);
         SourceCodeKey decodedKey;
         m_key.decode(decoder, decodedKey);
-        return { WTFMove(decodedKey), m_codeBlock.decode(decoder) };
+        result = { WTFMove(decodedKey), m_codeBlock.decode(decoder) };
+        return true;
     }
 
     CachedSourceCodeKey m_key;
     CachedPtr<CachedCodeBlockType<UnlinkedCodeBlockType>> m_codeBlock;
 };
 
-std::pair<SourceCodeKey, UnlinkedCodeBlock*> GenericCacheEntry::decode(Decoder& decoder) const
+bool GenericCacheEntry::decode(Decoder& decoder, std::pair<SourceCodeKey, UnlinkedCodeBlock*>& result) const
 {
+    if (m_cacheVersion != JSC_BYTECODE_CACHE_VERSION)
+        return false;
+    if (m_bootSessionUUID.decode(decoder) != bootSessionUUIDString())
+        return false;
+
     switch (m_tag) {
     case CachedProgramCodeBlockTag:
-        return reinterpret_cast<const CacheEntry<UnlinkedProgramCodeBlock>*>(this)->decode(decoder);
+        return reinterpret_cast<const CacheEntry<UnlinkedProgramCodeBlock>*>(this)->decode(decoder, reinterpret_cast<std::pair<SourceCodeKey, UnlinkedProgramCodeBlock*>&>(result));
     case CachedModuleCodeBlockTag:
-        return reinterpret_cast<const CacheEntry<UnlinkedModuleProgramCodeBlock>*>(this)->decode(decoder);
+        return reinterpret_cast<const CacheEntry<UnlinkedModuleProgramCodeBlock>*>(this)->decode(decoder, reinterpret_cast<std::pair<SourceCodeKey, UnlinkedModuleProgramCodeBlock*>&>(result));
     case CachedEvalCodeBlockTag:
         // We do not cache eval code blocks
         RELEASE_ASSERT_NOT_REACHED();
@@ -2008,14 +2054,14 @@ std::pair<SourceCodeKey, UnlinkedCodeBlock*> GenericCacheEntry::decode(Decoder& 
     RELEASE_ASSERT_NOT_REACHED();
 #if COMPILER(MSVC)
     // Without this, MSVC will complain that this path does not return a value.
-    return reinterpret_cast<const CacheEntry<UnlinkedEvalCodeBlock>*>(this)->decode(decoder);
+    return false;
 #endif
 }
 
 template<typename UnlinkedCodeBlockType>
 void encodeCodeBlock(Encoder& encoder, const SourceCodeKey& key, const UnlinkedCodeBlock* codeBlock)
 {
-    auto* entry = encoder.template malloc<CacheEntry<UnlinkedCodeBlockType>>();
+    auto* entry = encoder.template malloc<CacheEntry<UnlinkedCodeBlockType>>(encoder);
     entry->encode(encoder,  { key, jsCast<const UnlinkedCodeBlockType*>(codeBlock) });
 }
 
@@ -2041,7 +2087,8 @@ UnlinkedCodeBlock* decodeCodeBlockImpl(VM& vm, const SourceCodeKey& key, const v
     std::pair<SourceCodeKey, UnlinkedCodeBlock*> entry;
     {
         DeferGC deferGC(vm.heap);
-        entry = cachedEntry->decode(decoder);
+        if (!cachedEntry->decode(decoder, entry))
+            return nullptr;
     }
 
     if (entry.first != key)

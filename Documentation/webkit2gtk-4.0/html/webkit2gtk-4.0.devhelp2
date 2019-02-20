@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
-<book xmlns="http://www.devhelp.net/book" title="WebKit2GTK+ Reference Manual" link="index.html" author="" name="webkit2gtk-4.0" version="2" language="c">
+<book xmlns="http://www.devhelp.net/book" title="WebKitGTK Reference Manual" link="index.html" author="" name="webkit2gtk-4.0" version="2" language="c">
   <chapters>
     <sub name="Class Overview" link="ch01.html">
       <sub name="WebKitWebContext" link="WebKitWebContext.html"/>
@@ -666,6 +666,7 @@
     <keyword type="function" name="webkit_print_error_quark ()" link="webkit2gtk-4.0-WebKitError.html#webkit-print-error-quark"/>
     <keyword type="function" name="webkit_javascript_error_quark ()" link="webkit2gtk-4.0-WebKitError.html#webkit-javascript-error-quark"/>
     <keyword type="function" name="webkit_snapshot_error_quark ()" link="webkit2gtk-4.0-WebKitError.html#webkit-snapshot-error-quark"/>
+    <keyword type="function" name="webkit_user_content_filter_error_quark ()" link="webkit2gtk-4.0-WebKitError.html#webkit-user-content-filter-error-quark"/>
     <keyword type="macro" name="WEBKIT_NETWORK_ERROR" link="webkit2gtk-4.0-WebKitError.html#WEBKIT-NETWORK-ERROR:CAPS"/>
     <keyword type="macro" name="WEBKIT_PLUGIN_ERROR" link="webkit2gtk-4.0-WebKitError.html#WEBKIT-PLUGIN-ERROR:CAPS"/>
     <keyword type="macro" name="WEBKIT_POLICY_ERROR" link="webkit2gtk-4.0-WebKitError.html#WEBKIT-POLICY-ERROR:CAPS"/>
@@ -673,6 +674,7 @@
     <keyword type="macro" name="WEBKIT_PRINT_ERROR" link="webkit2gtk-4.0-WebKitError.html#WEBKIT-PRINT-ERROR:CAPS"/>
     <keyword type="macro" name="WEBKIT_JAVASCRIPT_ERROR" link="webkit2gtk-4.0-WebKitError.html#WEBKIT-JAVASCRIPT-ERROR:CAPS"/>
     <keyword type="macro" name="WEBKIT_SNAPSHOT_ERROR" link="webkit2gtk-4.0-WebKitError.html#WEBKIT-SNAPSHOT-ERROR:CAPS"/>
+    <keyword type="macro" name="WEBKIT_USER_CONTENT_FILTER_ERROR" link="webkit2gtk-4.0-WebKitError.html#WEBKIT-USER-CONTENT-FILTER-ERROR:CAPS"/>
     <keyword type="enum" name="enum WebKitNetworkError" link="webkit2gtk-4.0-WebKitError.html#WebKitNetworkError"/>
     <keyword type="enum" name="enum WebKitPluginError" link="webkit2gtk-4.0-WebKitError.html#WebKitPluginError"/>
     <keyword type="enum" name="enum WebKitPolicyError" link="webkit2gtk-4.0-WebKitError.html#WebKitPolicyError"/>
@@ -680,6 +682,7 @@
     <keyword type="enum" name="enum WebKitPrintError" link="webkit2gtk-4.0-WebKitError.html#WebKitPrintError"/>
     <keyword type="enum" name="enum WebKitJavascriptError" link="webkit2gtk-4.0-WebKitError.html#WebKitJavascriptError"/>
     <keyword type="enum" name="enum WebKitSnapshotError" link="webkit2gtk-4.0-WebKitError.html#WebKitSnapshotError"/>
+    <keyword type="enum" name="enum WebKitUserContentFilterError" link="webkit2gtk-4.0-WebKitError.html#WebKitUserContentFilterError" since="2.24"/>
     <keyword type="function" name="webkit_favicon_database_get_favicon ()" link="WebKitFaviconDatabase.html#webkit-favicon-database-get-favicon"/>
     <keyword type="function" name="webkit_favicon_database_get_favicon_finish ()" link="WebKitFaviconDatabase.html#webkit-favicon-database-get-favicon-finish"/>
     <keyword type="function" name="webkit_favicon_database_get_favicon_uri ()" link="WebKitFaviconDatabase.html#webkit-favicon-database-get-favicon-uri"/>
@@ -858,6 +861,9 @@
     <keyword type="function" name="webkit_user_content_manager_unregister_script_message_handler ()" link="WebKitUserContentManager.html#webkit-user-content-manager-unregister-script-message-handler" since="2.8"/>
     <keyword type="function" name="webkit_user_content_manager_register_script_message_handler_in_world ()" link="WebKitUserContentManager.html#webkit-user-content-manager-register-script-message-handler-in-world" since="2.22"/>
     <keyword type="function" name="webkit_user_content_manager_unregister_script_message_handler_in_world ()" link="WebKitUserContentManager.html#webkit-user-content-manager-unregister-script-message-handler-in-world" since="2.22"/>
+    <keyword type="function" name="webkit_user_content_manager_add_filter ()" link="WebKitUserContentManager.html#webkit-user-content-manager-add-filter" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_manager_remove_filter ()" link="WebKitUserContentManager.html#webkit-user-content-manager-remove-filter"/>
+    <keyword type="function" name="webkit_user_content_manager_remove_all_filters ()" link="WebKitUserContentManager.html#webkit-user-content-manager-remove-all-filters" since="2.24"/>
     <keyword type="struct" name="struct WebKitUserContentManager" link="WebKitUserContentManager.html#WebKitUserContentManager-struct"/>
     <keyword type="signal" name="The “script-message-received” signal" link="WebKitUserContentManager.html#WebKitUserContentManager-script-message-received"/>
     <keyword type="function" name="webkit_user_style_sheet_ref ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-style-sheet-ref" since="2.6"/>
@@ -868,11 +874,15 @@
     <keyword type="function" name="webkit_user_script_unref ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-script-unref" since="2.6"/>
     <keyword type="function" name="webkit_user_script_new ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-script-new" since="2.6"/>
     <keyword type="function" name="webkit_user_script_new_for_world ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-script-new-for-world" since="2.22"/>
+    <keyword type="function" name="webkit_user_content_filter_ref ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-content-filter-ref" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_unref ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-content-filter-unref" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_get_identifier ()" link="webkit2gtk-4.0-WebKitUserContent.html#webkit-user-content-filter-get-identifier" since="2.24"/>
     <keyword type="struct" name="WebKitUserStyleSheet" link="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserStyleSheet-struct"/>
     <keyword type="struct" name="WebKitUserScript" link="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserScript-struct"/>
     <keyword type="enum" name="enum WebKitUserContentInjectedFrames" link="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserContentInjectedFrames" since="2.6"/>
     <keyword type="enum" name="enum WebKitUserStyleLevel" link="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserStyleLevel" since="2.6"/>
     <keyword type="enum" name="enum WebKitUserScriptInjectionTime" link="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserScriptInjectionTime" since="2.6"/>
+    <keyword type="struct" name="WebKitUserContentFilter" link="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserContentFilter-struct"/>
     <keyword type="function" name="webkit_notification_get_id ()" link="WebKitNotification.html#webkit-notification-get-id" since="2.8"/>
     <keyword type="function" name="webkit_notification_get_title ()" link="WebKitNotification.html#webkit-notification-get-title" since="2.8"/>
     <keyword type="function" name="webkit_notification_get_body ()" link="WebKitNotification.html#webkit-notification-get-body" since="2.8"/>
@@ -1090,6 +1100,8 @@
     <keyword type="constant" name="WEBKIT_PRINT_ERROR_INVALID_PAGE_RANGE" link="webkit2gtk-4.0-WebKitError.html#WEBKIT-PRINT-ERROR-INVALID-PAGE-RANGE:CAPS"/>
     <keyword type="constant" name="WEBKIT_JAVASCRIPT_ERROR_SCRIPT_FAILED" link="webkit2gtk-4.0-WebKitError.html#WEBKIT-JAVASCRIPT-ERROR-SCRIPT-FAILED:CAPS"/>
     <keyword type="constant" name="WEBKIT_SNAPSHOT_ERROR_FAILED_TO_CREATE" link="webkit2gtk-4.0-WebKitError.html#WEBKIT-SNAPSHOT-ERROR-FAILED-TO-CREATE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_USER_CONTENT_FILTER_ERROR_INVALID_SOURCE" link="webkit2gtk-4.0-WebKitError.html#WEBKIT-USER-CONTENT-FILTER-ERROR-INVALID-SOURCE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_USER_CONTENT_FILTER_ERROR_NOT_FOUND" link="webkit2gtk-4.0-WebKitError.html#WEBKIT-USER-CONTENT-FILTER-ERROR-NOT-FOUND:CAPS"/>
     <keyword type="constant" name="WEBKIT_FAVICON_DATABASE_ERROR_NOT_INITIALIZED" link="WebKitFaviconDatabase.html#WEBKIT-FAVICON-DATABASE-ERROR-NOT-INITIALIZED:CAPS"/>
     <keyword type="constant" name="WEBKIT_FAVICON_DATABASE_ERROR_FAVICON_NOT_FOUND" link="WebKitFaviconDatabase.html#WEBKIT-FAVICON-DATABASE-ERROR-FAVICON-NOT-FOUND:CAPS"/>
     <keyword type="constant" name="WEBKIT_FAVICON_DATABASE_ERROR_FAVICON_UNKNOWN" link="WebKitFaviconDatabase.html#WEBKIT-FAVICON-DATABASE-ERROR-FAVICON-UNKNOWN:CAPS"/>
