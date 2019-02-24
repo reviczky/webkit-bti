@@ -56,7 +56,7 @@ else
 endif
 
 %:
-	dh $@ --with gir
+	dh $@ --with gir --buildsystem=cmake+ninja
 
 override_dh_auto_configure:
 	chmod 755 Tools/gtkdoc/generate-gtkdoc
