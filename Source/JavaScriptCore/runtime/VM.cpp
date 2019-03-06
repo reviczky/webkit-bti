@@ -340,11 +340,14 @@ VM::VM(VMType vmType, HeapType heapType)
     // Need to be careful to keep everything consistent here
     JSLockHolder lock(this);
     AtomicStringTable* existingEntryAtomicStringTable = Thread::current().setCurrentAtomicStringTable(m_atomicStringTable);
-    propertyNames = new CommonIdentifiers(this);
     structureStructure.set(*this, Structure::createStructure(*this));
     structureRareDataStructure.set(*this, StructureRareData::createStructure(*this, 0, jsNull()));
-    terminatedExecutionErrorStructure.set(*this, TerminatedExecutionError::createStructure(*this, 0, jsNull()));
     stringStructure.set(*this, JSString::createStructure(*this, 0, jsNull()));
+
+    smallStrings.initializeCommonStrings(*this);
+
+    propertyNames = new CommonIdentifiers(this);
+    terminatedExecutionErrorStructure.set(*this, TerminatedExecutionError::createStructure(*this, 0, jsNull()));
     propertyNameEnumeratorStructure.set(*this, JSPropertyNameEnumerator::createStructure(*this, 0, jsNull()));
     customGetterSetterStructure.set(*this, CustomGetterSetter::createStructure(*this, 0, jsNull()));
     domAttributeGetterSetterStructure.set(*this, DOMAttributeGetterSetter::createStructure(*this, 0, jsNull()));
@@ -398,10 +401,11 @@ VM::VM(VMType vmType, HeapType heapType)
     bigIntStructure.set(*this, JSBigInt::createStructure(*this, 0, jsNull()));
     executableToCodeBlockEdgeStructure.set(*this, ExecutableToCodeBlockEdge::createStructure(*this, nullptr, jsNull()));
 
-    sentinelSetBucket.set(*this, JSSet::BucketType::createSentinel(*this));
-    sentinelMapBucket.set(*this, JSMap::BucketType::createSentinel(*this));
-
-    smallStrings.initializeCommonStrings(*this);
+    // Eagerly initialize constant cells since the concurrent compiler can access them.
+    if (canUseJIT()) {
+        sentinelMapBucket();
+        sentinelSetBucket();
+    }
 
     Thread::current().setCurrentAtomicStringTable(existingEntryAtomicStringTable);
 
@@ -539,6 +543,7 @@ VM::~VM()
 
     ASSERT(currentThreadIsHoldingAPILock());
     m_apiLock->willDestroyVM(this);
+    smallStrings.setIsInitialized(false);
     heap.lastChanceToFinalize();
 
     JSRunLoopTimer::Manager::shared().unregisterVM(*this);
@@ -1281,6 +1286,23 @@ DYNAMIC_SPACE_AND_SET_DEFINE_MEMBER_SLOW(evalExecutableSpace, destructibleCellHe
 DYNAMIC_SPACE_AND_SET_DEFINE_MEMBER_SLOW(moduleProgramExecutableSpace, destructibleCellHeapCellType.get(), ModuleProgramExecutable)
 
 #undef DYNAMIC_SPACE_AND_SET_DEFINE_MEMBER_SLOW
+
+
+JSCell* VM::sentinelSetBucketSlow()
+{
+    ASSERT(!m_sentinelSetBucket);
+    auto* sentinel = JSSet::BucketType::createSentinel(*this);
+    m_sentinelSetBucket.set(*this, sentinel);
+    return sentinel;
+}
+
+JSCell* VM::sentinelMapBucketSlow()
+{
+    ASSERT(!m_sentinelMapBucket);
+    auto* sentinel = JSMap::BucketType::createSentinel(*this);
+    m_sentinelMapBucket.set(*this, sentinel);
+    return sentinel;
+}
 
 JSGlobalObject* VM::vmEntryGlobalObject(const CallFrame* callFrame) const
 {

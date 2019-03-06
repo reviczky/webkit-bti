@@ -180,8 +180,8 @@ static bool isLookalikeCharacter(const Optional<UChar32>& previousCodePoint, UCh
     case 0x233F: /* APL FUNCTIONAL SYMBOL SLASH BAR */
     case 0x23AE: /* INTEGRAL EXTENSION */
     case 0x244A: /* OCR DOUBLE BACKSLASH */
-    case 0x2571: /* DisplayType::Box DRAWINGS LIGHT DIAGONAL UPPER RIGHT TO LOWER LEFT */
-    case 0x2572: /* DisplayType::Box DRAWINGS LIGHT DIAGONAL UPPER LEFT TO LOWER RIGHT */
+    case 0x2571: /* BOX DRAWINGS LIGHT DIAGONAL UPPER RIGHT TO LOWER LEFT */
+    case 0x2572: /* BOX DRAWINGS LIGHT DIAGONAL UPPER LEFT TO LOWER RIGHT */
     case 0x29F6: /* SOLIDUS WITH OVERBAR */
     case 0x29F8: /* BIG SOLIDUS */
     case 0x2AFB: /* TRIPLE SOLIDUS BINARY RELATION */
@@ -775,27 +775,34 @@ static String createStringWithEscapedUnsafeCharacters(const String& sourceBuffer
 
 static String toNormalizationFormC(const String& string)
 {
-    auto sourceBuffer = string.charactersWithNullTermination();
+    Vector<UChar> sourceBuffer = string.charactersWithNullTermination();
     ASSERT(sourceBuffer.last() == '\0');
     sourceBuffer.removeLast();
 
-    String result;
-    Vector<UChar, urlBytesBufferLength> normalizedCharacters(sourceBuffer.size());
     UErrorCode uerror = U_ZERO_ERROR;
-    int32_t normalizedLength = 0;
     const UNormalizer2* normalizer = unorm2_getNFCInstance(&uerror);
-    if (!U_FAILURE(uerror)) {
-        normalizedLength = unorm2_normalize(normalizer, sourceBuffer.data(), sourceBuffer.size(), normalizedCharacters.data(), normalizedCharacters.size(), &uerror);
-        if (uerror == U_BUFFER_OVERFLOW_ERROR) {
-            uerror = U_ZERO_ERROR;
-            normalizedCharacters.resize(normalizedLength);
-            normalizedLength = unorm2_normalize(normalizer, sourceBuffer.data(), sourceBuffer.size(), normalizedCharacters.data(), normalizedLength, &uerror);
-        }
-        if (!U_FAILURE(uerror))
-            result = String(normalizedCharacters.data(), normalizedLength);
-    }
+    if (U_FAILURE(uerror))
+        return { };
 
-    return result;
+    UNormalizationCheckResult checkResult = unorm2_quickCheck(normalizer, sourceBuffer.data(), sourceBuffer.size(), &uerror);
+    if (U_FAILURE(uerror))
+        return { };
+
+    // No need to normalize if already normalized.
+    if (checkResult == UNORM_YES)
+        return string;
+
+    Vector<UChar, urlBytesBufferLength> normalizedCharacters(sourceBuffer.size());
+    auto normalizedLength = unorm2_normalize(normalizer, sourceBuffer.data(), sourceBuffer.size(), normalizedCharacters.data(), normalizedCharacters.size(), &uerror);
+    if (uerror == U_BUFFER_OVERFLOW_ERROR) {
+        uerror = U_ZERO_ERROR;
+        normalizedCharacters.resize(normalizedLength);
+        normalizedLength = unorm2_normalize(normalizer, sourceBuffer.data(), sourceBuffer.size(), normalizedCharacters.data(), normalizedLength, &uerror);
+    }
+    if (U_FAILURE(uerror))
+        return { };
+
+    return String(normalizedCharacters.data(), normalizedLength);
 }
 
 String userVisibleURL(const CString& url)
@@ -808,9 +815,11 @@ String userVisibleURL(const CString& url)
 
     bool mayNeedHostNameDecoding = false;
 
-    // The buffer should be large enough to %-escape every character.
-    int bufferLength = (length * 3) + 1;
-    Vector<char, urlBytesBufferLength> after(bufferLength);
+    Checked<int, RecordOverflow> bufferLength = length;
+    bufferLength = bufferLength * 3 + 1; // The buffer should be large enough to %-escape every character.
+    if (bufferLength.hasOverflowed())
+        return { };
+    Vector<char, urlBytesBufferLength> after(bufferLength.unsafeGet());
 
     char* q = after.data();
     {
@@ -850,7 +859,7 @@ String userVisibleURL(const CString& url)
         // then we will copy back bytes to the start of the buffer 
         // as we convert.
         int afterlength = q - after.data();
-        char* p = after.data() + bufferLength - afterlength - 1;
+        char* p = after.data() + bufferLength.unsafeGet() - afterlength - 1;
         memmove(p, after.data(), afterlength + 1); // copies trailing '\0'
         char* q = after.data();
         while (*p) {
