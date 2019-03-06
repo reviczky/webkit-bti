@@ -32,7 +32,12 @@
 #include "WebProcessCreationParameters.h"
 #include <JavaScriptCore/RemoteInspectorServer.h>
 #include <WebCore/GStreamerCommon.h>
+#include <wtf/FileSystem.h>
 #include <wtf/glib/GUniquePtr.h>
+
+#if PLATFORM(WPE)
+#include <wpe/wpe.h>
+#endif
 
 namespace WebKit {
 
@@ -68,31 +73,32 @@ static bool memoryPressureMonitorDisabled()
 
 void WebProcessPool::platformInitialize()
 {
+#if PLATFORM(GTK)
+    m_alwaysUsesComplexTextCodePath = true;
+#endif
+    if (const char* forceComplexText = getenv("WEBKIT_FORCE_COMPLEX_TEXT"))
+        m_alwaysUsesComplexTextCodePath = !strcmp(forceComplexText, "1");
+
 #if ENABLE(REMOTE_INSPECTOR)
     if (const char* address = g_getenv("WEBKIT_INSPECTOR_SERVER"))
         initializeRemoteInspectorServer(address);
 #endif
 
-#if PLATFORM(GTK)
-    // To enable this for WPE, we need WebMemoryPressureHandler to lose the
-    // hard dependency on ViewSnapshotStore.
     if (!memoryPressureMonitorDisabled())
         installMemoryPressureHandler();
-#endif
 }
 
 void WebProcessPool::platformInitializeWebProcess(WebProcessCreationParameters& parameters)
 {
+#if PLATFORM(WPE)
+    parameters.hostClientFileDescriptor = wpe_renderer_host_create_client();
+#if defined(WPE_BACKEND_CHECK_VERSION) && WPE_BACKEND_CHECK_VERSION(0, 2, 0)
+    parameters.implementationLibraryName = FileSystem::fileSystemRepresentation(wpe_loader_get_loaded_implementation_library_name());
+#endif
+#endif
+
     parameters.memoryCacheDisabled = m_memoryCacheDisabled || cacheModel() == CacheModel::DocumentViewer;
     parameters.proxySettings = m_networkProxySettings;
-
-#if PLATFORM(GTK)
-    // This is misnamed. It can only be used to disable complex text.
-    parameters.shouldAlwaysUseComplexTextCodePath = true;
-    const char* forceComplexText = getenv("WEBKIT_FORCE_COMPLEX_TEXT");
-    if (forceComplexText && !strcmp(forceComplexText, "0"))
-        parameters.shouldAlwaysUseComplexTextCodePath = m_alwaysUsesComplexTextCodePath;
-#endif
 
     if (memoryPressureMonitorDisabled())
         parameters.shouldSuppressMemoryPressureHandler = true;

@@ -178,7 +178,15 @@
 #include <wtf/RandomNumber.h>
 
 #if ENABLE(INTL)
+#include "IntlCollator.h"
+#include "IntlCollatorPrototype.h"
+#include "IntlDateTimeFormat.h"
+#include "IntlDateTimeFormatPrototype.h"
+#include "IntlNumberFormat.h"
+#include "IntlNumberFormatPrototype.h"
 #include "IntlObject.h"
+#include "IntlPluralRules.h"
+#include "IntlPluralRulesPrototype.h"
 #include <unicode/ucol.h>
 #include <unicode/udat.h>
 #include <unicode/unum.h>
@@ -798,6 +806,31 @@ putDirectWithoutTransition(vm, vm.propertyNames-> jsName, lowerName ## Construct
     putDirectWithoutTransition(vm, vm.propertyNames->eval, m_evalFunction.get(), static_cast<unsigned>(PropertyAttribute::DontEnum));
     
 #if ENABLE(INTL)
+    m_collatorStructure.initLater(
+        [] (const Initializer<Structure>& init) {
+            JSGlobalObject* globalObject = jsCast<JSGlobalObject*>(init.owner);
+            IntlCollatorPrototype* collatorPrototype = IntlCollatorPrototype::create(init.vm, globalObject, IntlCollatorPrototype::createStructure(init.vm, globalObject, globalObject->objectPrototype()));
+            init.set(IntlCollator::createStructure(init.vm, globalObject, collatorPrototype));
+        });
+    m_numberFormatStructure.initLater(
+        [] (const Initializer<Structure>& init) {
+            JSGlobalObject* globalObject = jsCast<JSGlobalObject*>(init.owner);
+            IntlNumberFormatPrototype* numberFormatPrototype = IntlNumberFormatPrototype::create(init.vm, globalObject, IntlNumberFormatPrototype::createStructure(init.vm, globalObject, globalObject->objectPrototype()));
+            init.set(IntlNumberFormat::createStructure(init.vm, globalObject, numberFormatPrototype));
+        });
+    m_dateTimeFormatStructure.initLater(
+        [] (const Initializer<Structure>& init) {
+            JSGlobalObject* globalObject = jsCast<JSGlobalObject*>(init.owner);
+            IntlDateTimeFormatPrototype* dateTimeFormatPrototype = IntlDateTimeFormatPrototype::create(init.vm, globalObject, IntlDateTimeFormatPrototype::createStructure(init.vm, globalObject, globalObject->objectPrototype()));
+            init.set(IntlDateTimeFormat::createStructure(init.vm, globalObject, dateTimeFormatPrototype));
+        });
+    m_pluralRulesStructure.initLater(
+        [] (const Initializer<Structure>& init) {
+            JSGlobalObject* globalObject = jsCast<JSGlobalObject*>(init.owner);
+            IntlPluralRulesPrototype* pluralRulesPrototype = IntlPluralRulesPrototype::create(init.vm, globalObject, IntlPluralRulesPrototype::createStructure(init.vm, globalObject, globalObject->objectPrototype()));
+            init.set(IntlPluralRules::createStructure(init.vm, globalObject, pluralRulesPrototype));
+        });
+
     IntlObject* intl = IntlObject::create(vm, IntlObject::createStructure(vm, this, m_objectPrototype.get()));
     putDirectWithoutTransition(vm, vm.propertyNames->Intl, intl, static_cast<unsigned>(PropertyAttribute::DontEnum));
     m_intlObject.set(vm, this, intl);
@@ -830,7 +863,9 @@ putDirectWithoutTransition(vm, vm.propertyNames-> jsName, lowerName ## Construct
     JSFunction* privateFuncHasInstanceBoundFunction = JSFunction::create(vm, this, 0, String(), hasInstanceBoundFunction);
     JSFunction* privateFuncInstanceOf = JSFunction::create(vm, this, 0, String(), objectPrivateFuncInstanceOf);
     JSFunction* privateFuncThisTimeValue = JSFunction::create(vm, this, 0, String(), dateProtoFuncGetTime);
-    JSFunction* privateFuncThisNumberValue = JSFunction::create(vm, this, 0, String(), numberProtoFuncValueOf);
+#if ENABLE(INTL)
+    JSFunction* privateFuncDateTimeFormat = JSFunction::create(vm, this, 0, String(), globalFuncDateTimeFormat);
+#endif
     JSFunction* privateFuncIsArrayConstructor = JSFunction::create(vm, this, 0, String(), arrayConstructorPrivateFuncIsArrayConstructor);
     JSFunction* privateFuncIsArraySlow = JSFunction::create(vm, this, 0, String(), arrayConstructorPrivateFuncIsArraySlow);
     JSFunction* privateFuncConcatMemcpy = JSFunction::create(vm, this, 0, String(), arrayProtoPrivateFuncConcatMemcpy);
@@ -920,12 +955,8 @@ putDirectWithoutTransition(vm, vm.propertyNames-> jsName, lowerName ## Construct
         GlobalPropertyInfo(vm.propertyNames->builtinNames().InspectorInstrumentationPrivateName(), InspectorInstrumentationObject::create(vm, this, InspectorInstrumentationObject::createStructure(vm, this, m_objectPrototype.get())), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         GlobalPropertyInfo(vm.propertyNames->builtinNames().SetPrivateName(), setConstructor, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
         GlobalPropertyInfo(vm.propertyNames->builtinNames().thisTimeValuePrivateName(), privateFuncThisTimeValue, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
-        GlobalPropertyInfo(vm.propertyNames->builtinNames().thisNumberValuePrivateName(), privateFuncThisNumberValue, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
 #if ENABLE(INTL)
-        GlobalPropertyInfo(vm.propertyNames->builtinNames().CollatorPrivateName(), intl->getDirect(vm, vm.propertyNames->Collator), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
-        GlobalPropertyInfo(vm.propertyNames->builtinNames().DateTimeFormatPrivateName(), intl->getDirect(vm, vm.propertyNames->DateTimeFormat), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
-        GlobalPropertyInfo(vm.propertyNames->builtinNames().NumberFormatPrivateName(), intl->getDirect(vm, vm.propertyNames->NumberFormat), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
-        GlobalPropertyInfo(vm.propertyNames->builtinNames().PluralRulesPrivateName(), intl->getDirect(vm, vm.propertyNames->PluralRules), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
+        GlobalPropertyInfo(vm.propertyNames->builtinNames().dateTimeFormatPrivateName(), privateFuncDateTimeFormat, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
 #endif // ENABLE(INTL)
 
         GlobalPropertyInfo(vm.propertyNames->builtinNames().isConstructorPrivateName(), JSFunction::create(vm, this, 1, String(), esSpecIsConstructor, NoIntrinsic), PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly),
@@ -1568,6 +1599,11 @@ void JSGlobalObject::visitChildren(JSCell* cell, SlotVisitor& visitor)
 
 #if ENABLE(INTL)
     visitor.append(thisObject->m_intlObject);
+    visitor.append(thisObject->m_defaultCollator);
+    thisObject->m_collatorStructure.visit(visitor);
+    thisObject->m_numberFormatStructure.visit(visitor);
+    thisObject->m_dateTimeFormatStructure.visit(visitor);
+    thisObject->m_pluralRulesStructure.visit(visitor);
 #endif
     visitor.append(thisObject->m_nullGetterFunction);
     visitor.append(thisObject->m_nullSetterFunction);
@@ -1865,6 +1901,22 @@ const HashSet<String>& JSGlobalObject::intlPluralRulesAvailableLocales()
     }
     return m_intlPluralRulesAvailableLocales;
 }
+
+IntlCollator* JSGlobalObject::defaultCollator(ExecState* exec)
+{
+    VM& vm = exec->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    if (m_defaultCollator)
+        return m_defaultCollator.get();
+
+    IntlCollator* collator = IntlCollator::create(vm, collatorStructure());
+    collator->initializeCollator(*exec, jsUndefined(), jsUndefined());
+    RETURN_IF_EXCEPTION(scope, nullptr);
+    m_defaultCollator.set(vm, this, collator);
+    return collator;
+}
+
 #endif // ENABLE(INTL)
 
 void JSGlobalObject::bumpGlobalLexicalBindingEpoch(VM& vm)

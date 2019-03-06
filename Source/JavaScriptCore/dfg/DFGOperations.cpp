@@ -71,6 +71,7 @@
 #include "Repatch.h"
 #include "ScopedArguments.h"
 #include "StringConstructor.h"
+#include "StringPrototypeInlines.h"
 #include "SuperSampler.h"
 #include "Symbol.h"
 #include "TypeProfilerLog.h"
@@ -2157,6 +2158,20 @@ JSCell* JIT_OPERATION operationStringSubstr(ExecState* exec, JSCell* cell, int32
     return jsSubstring(exec, string, from, span);
 }
 
+JSCell* JIT_OPERATION operationStringSlice(ExecState* exec, JSCell* cell, int32_t start, int32_t end)
+{
+    VM& vm = exec->vm();
+    NativeCallFrameTracer tracer(&vm, exec);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    auto string = jsCast<JSString*>(cell)->value(exec);
+    RETURN_IF_EXCEPTION(scope, nullptr);
+    static_assert(static_cast<uint64_t>(JSString::MaxLength) <= static_cast<uint64_t>(std::numeric_limits<int32_t>::max()), "");
+
+    scope.release();
+    return stringSlice(exec, WTFMove(string), start, end);
+}
+
 JSString* JIT_OPERATION operationToLowerCase(ExecState* exec, JSString* string, uint32_t failingIndex)
 {
     VM& vm = exec->vm();
@@ -2892,7 +2907,7 @@ JSCell* JIT_OPERATION operationJSMapFindBucket(ExecState* exec, JSCell* map, Enc
     NativeCallFrameTracer tracer(&vm, exec);
     JSMap::BucketType** bucket = jsCast<JSMap*>(map)->findBucket(exec, JSValue::decode(key), hash);
     if (!bucket)
-        return vm.sentinelMapBucket.get();
+        return vm.sentinelMapBucket();
     return *bucket;
 }
 
@@ -2902,7 +2917,7 @@ JSCell* JIT_OPERATION operationJSSetFindBucket(ExecState* exec, JSCell* map, Enc
     NativeCallFrameTracer tracer(&vm, exec);
     JSSet::BucketType** bucket = jsCast<JSSet*>(map)->findBucket(exec, JSValue::decode(key), hash);
     if (!bucket)
-        return vm.sentinelSetBucket.get();
+        return vm.sentinelSetBucket();
     return *bucket;
 }
 
@@ -2912,7 +2927,7 @@ JSCell* JIT_OPERATION operationSetAdd(ExecState* exec, JSCell* set, EncodedJSVal
     NativeCallFrameTracer tracer(&vm, exec);
     auto* bucket = jsCast<JSSet*>(set)->addNormalized(exec, JSValue::decode(key), JSValue(), hash);
     if (!bucket)
-        return vm.sentinelSetBucket.get();
+        return vm.sentinelSetBucket();
     return bucket;
 }
 
@@ -2922,7 +2937,7 @@ JSCell* JIT_OPERATION operationMapSet(ExecState* exec, JSCell* map, EncodedJSVal
     NativeCallFrameTracer tracer(&vm, exec);
     auto* bucket = jsCast<JSMap*>(map)->addNormalized(exec, JSValue::decode(key), JSValue::decode(value), hash);
     if (!bucket)
-        return vm.sentinelMapBucket.get();
+        return vm.sentinelMapBucket();
     return bucket;
 }
 
@@ -3108,7 +3123,7 @@ static void triggerFTLReplacementCompile(VM* vm, CodeBlock* codeBlock, JITCode* 
     // We need to compile the code.
     compile(
         *vm, codeBlock->newReplacement(), codeBlock, FTLMode, UINT_MAX,
-        Operands<JSValue>(), ToFTLDeferredCompilationCallback::create());
+        Operands<Optional<JSValue>>(), ToFTLDeferredCompilationCallback::create());
 
     // If we reached here, the counter has not be reset. Do that now.
     jitCode->setOptimizationThresholdBasedOnCompilationResult(
@@ -3346,7 +3361,7 @@ static char* tierUpCommon(ExecState* exec, unsigned originBytecodeIndex, bool ca
 
     JITCode::TriggerReason* triggerAddress = &(triggerIterator->value);
 
-    Operands<JSValue> mustHandleValues;
+    Operands<Optional<JSValue>> mustHandleValues;
     unsigned streamIndex = jitCode->bytecodeIndexToStreamIndex.get(originBytecodeIndex);
     jitCode->reconstruct(
         exec, codeBlock, CodeOrigin(originBytecodeIndex), streamIndex, mustHandleValues);

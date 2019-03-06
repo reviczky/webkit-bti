@@ -42,6 +42,7 @@
       <sub name="WebKitOptionMenuItem" link="WebKitOptionMenuItem.html"/>
       <sub name="WebKitFormSubmissionRequest" link="WebKitFormSubmissionRequest.html"/>
       <sub name="WebKitSecurityManager" link="WebKitSecurityManager.html"/>
+      <sub name="WebKitUserContentFilterStore" link="WebKitUserContentFilterStore.html"/>
       <sub name="WebKitUserContentManager" link="WebKitUserContentManager.html"/>
       <sub name="User content" link="webkit2gtk-4.0-WebKitUserContent.html"/>
       <sub name="WebKitNotification" link="WebKitNotification.html"/>
@@ -852,6 +853,20 @@
     <keyword type="function" name="webkit_security_manager_register_uri_scheme_as_empty_document ()" link="WebKitSecurityManager.html#webkit-security-manager-register-uri-scheme-as-empty-document"/>
     <keyword type="function" name="webkit_security_manager_uri_scheme_is_empty_document ()" link="WebKitSecurityManager.html#webkit-security-manager-uri-scheme-is-empty-document"/>
     <keyword type="struct" name="struct WebKitSecurityManager" link="WebKitSecurityManager.html#WebKitSecurityManager-struct"/>
+    <keyword type="function" name="webkit_user_content_filter_store_new ()" link="WebKitUserContentFilterStore.html#webkit-user-content-filter-store-new" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_store_get_path ()" link="WebKitUserContentFilterStore.html#webkit-user-content-filter-store-get-path" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_store_save ()" link="WebKitUserContentFilterStore.html#webkit-user-content-filter-store-save" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_store_save_finish ()" link="WebKitUserContentFilterStore.html#webkit-user-content-filter-store-save-finish" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_store_save_from_file ()" link="WebKitUserContentFilterStore.html#webkit-user-content-filter-store-save-from-file" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_store_save_from_file_finish ()" link="WebKitUserContentFilterStore.html#webkit-user-content-filter-store-save-from-file-finish" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_store_load ()" link="WebKitUserContentFilterStore.html#webkit-user-content-filter-store-load" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_store_load_finish ()" link="WebKitUserContentFilterStore.html#webkit-user-content-filter-store-load-finish" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_store_remove ()" link="WebKitUserContentFilterStore.html#webkit-user-content-filter-store-remove" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_store_remove_finish ()" link="WebKitUserContentFilterStore.html#webkit-user-content-filter-store-remove-finish" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_store_fetch_identifiers ()" link="WebKitUserContentFilterStore.html#webkit-user-content-filter-store-fetch-identifiers" since="2.24"/>
+    <keyword type="function" name="webkit_user_content_filter_store_fetch_identifiers_finish ()" link="WebKitUserContentFilterStore.html#webkit-user-content-filter-store-fetch-identifiers-finish" since="2.24"/>
+    <keyword type="struct" name="struct WebKitUserContentFilterStore" link="WebKitUserContentFilterStore.html#WebKitUserContentFilterStore-struct"/>
+    <keyword type="property" name="The “path” property" link="WebKitUserContentFilterStore.html#WebKitUserContentFilterStore--path"/>
     <keyword type="function" name="webkit_user_content_manager_new ()" link="WebKitUserContentManager.html#webkit-user-content-manager-new" since="2.6"/>
     <keyword type="function" name="webkit_user_content_manager_add_style_sheet ()" link="WebKitUserContentManager.html#webkit-user-content-manager-add-style-sheet" since="2.6"/>
     <keyword type="function" name="webkit_user_content_manager_remove_all_style_sheets ()" link="WebKitUserContentManager.html#webkit-user-content-manager-remove-all-style-sheets" since="2.6"/>

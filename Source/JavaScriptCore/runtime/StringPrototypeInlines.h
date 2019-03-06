@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2019 Apple, Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,32 +23,26 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "config.h"
-#include "JSCPoison.h"
+#pragma once
 
-#include "Options.h"
-#include <mutex>
-#include <wtf/HashSet.h>
+#include "StringPrototype.h"
 
 namespace JSC {
 
-#define DEFINE_POISON(poisonID) \
-    uintptr_t POISON_KEY_NAME(poisonID);
-FOR_EACH_JSC_POISON(DEFINE_POISON)
-
-void initializePoison()
+template<typename NumberType>
+ALWAYS_INLINE JSString* stringSlice(ExecState* exec, String&& string, NumberType start, NumberType end)
 {
-    static std::once_flag initializeOnceFlag;
-    std::call_once(initializeOnceFlag, [] {
-        if (!Options::usePoisoning())
-            return;
-
-#define INITIALIZE_POISON(poisonID) \
-    POISON_KEY_NAME(poisonID) = makePoison();
-
-        FOR_EACH_JSC_POISON(INITIALIZE_POISON)
-    });
+    int32_t length = string.length();
+    NumberType from = start < 0 ? length + start : start;
+    NumberType to = end < 0 ? length + end : end;
+    if (to > from && to > 0 && from < length) {
+        if (from < 0)
+            from = 0;
+        if (to > length)
+            to = length;
+        return jsSubstring(exec, WTFMove(string), static_cast<unsigned>(from), static_cast<unsigned>(to) - static_cast<unsigned>(from));
+    }
+    return jsEmptyString(exec);
 }
 
 } // namespace JSC
-
