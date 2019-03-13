@@ -1,6 +1,8 @@
 webkit2gtk (2.24.0-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/copyright:
+    + Remove nonexistent files.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 13 Mar 2019 12:12:49 +0200
 
