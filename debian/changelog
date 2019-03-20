@@ -1,3 +1,10 @@
+webkit2gtk (2.24.0-2) UNRELEASED; urgency=medium
+
+  * GTK has dropped the '+' from its name, and so has WebKitGTK, so update
+    all references.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 20 Mar 2019 17:09:51 +0200
+
 webkit2gtk (2.24.0-1) experimental; urgency=medium
 
   * New upstream release.

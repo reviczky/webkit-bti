@@ -1,6 +1,6 @@
 From: Alberto Garcia <berto@igalia.com>
 Description: Use WTF_CPU_UNKNOWN when building for X32
- WebKitGTK+ doesn't build on X32 even with the JIT disabled.
+ WebKitGTK doesn't build on X32 even with the JIT disabled.
  Treating the CPU as unknown is perhaps a bit severe, but it allows us
  to get the build done until someone steps up to maintain this
  properly.
