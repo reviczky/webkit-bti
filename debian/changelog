@@ -10,6 +10,8 @@ webkit2gtk (2.24.1-1) UNRELEASED; urgency=high
     + No need to chmod generate-gtkdoc anymore.
   * debian/watch:
     + Scan stable releases only.
+  * debian/patches/detect-woff.patch:
+    + Refresh.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 20 Mar 2019 17:09:51 +0200
 
