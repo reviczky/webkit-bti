@@ -6,6 +6,8 @@ webkit2gtk (2.24.0-2) UNRELEASED; urgency=medium
     + Update upstream branch name.
   * debian/rules:
     + No need to chmod generate-gtkdoc anymore.
+  * debian/watch:
+    + Scan stable releases only.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 20 Mar 2019 17:09:51 +0200
 
