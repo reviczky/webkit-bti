@@ -1,4 +1,4 @@
-webkit2gtk (2.24.1-1) UNRELEASED; urgency=high
+webkit2gtk (2.24.1-1) unstable; urgency=high
 
   * New upstream release.
     + This fixes CVE-2019-6251.
@@ -14,7 +14,7 @@ webkit2gtk (2.24.1-1) UNRELEASED; urgency=high
   * debian/patches/detect-woff.patch:
     + Refresh.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 20 Mar 2019 17:09:51 +0200
+ -- Alberto Garcia <berto@igalia.com>  Tue, 09 Apr 2019 17:31:03 +0300
 
 webkit2gtk (2.24.0-1) experimental; urgency=medium
 
