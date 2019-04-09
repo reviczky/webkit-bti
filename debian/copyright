@@ -114,19 +114,15 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WTF/wtf/MetaAllocatorHandle.h
        Source/WTF/wtf/RedBlackTree.h
        Source/WTF/wtf/RunLoopTimer.h
-       Source/WTF/wtf/RunLoopTimerCF.cpp
        Source/WTF/wtf/SHA1.cpp
        Source/WTF/wtf/SHA1.h
        Source/WTF/wtf/SaturatedArithmetic.h
        Source/WTF/wtf/SchedulePair.h
-       Source/WTF/wtf/SchedulePairCF.cpp
        Source/WTF/wtf/SegmentedVector.h
        Source/WTF/wtf/SizeLimits.cpp
        Source/WTF/wtf/StreamBuffer.h
        Source/WTF/wtf/ThreadSpecific.h
        Source/WTF/wtf/ThreadingPrimitives.h
-       Source/WTF/wtf/ThreadingPthreads.cpp
-       Source/WTF/wtf/ThreadingWin.cpp
        Source/WTF/wtf/dtoa/*
        Source/WTF/wtf/text/AtomicStringHash.h
        Source/WTF/wtf/text/StringBuffer.h
@@ -253,7 +249,6 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/editing/SmartReplaceCF.cpp
        Source/WebCore/editing/SurroundingText.h
        Source/WebCore/editing/UndoStep.h
-       Source/WebCore/extract-localizable-strings.pl
        Source/WebCore/fileapi/*
        Source/WebCore/history/CachedFramePlatformData.h
        Source/WebCore/html/BaseButtonInputType.cpp
@@ -405,11 +400,9 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/platform/Decimal.h
        Source/WebCore/platform/FileChooser.cpp
        Source/WebCore/platform/FileChooser.h
-       Source/WebCore/platform/FileMetadata.h
        Source/WebCore/platform/FileStream.cpp
        Source/WebCore/platform/FileStream.h
        Source/WebCore/platform/FileStreamClient.h
-       Source/WebCore/platform/FileSystem.h
        Source/WebCore/platform/FloatConversion.h
        Source/WebCore/platform/LayoutUnit.h
        Source/WebCore/platform/ReferrerPolicy.h
@@ -463,7 +456,6 @@ Files: Source/JavaScriptCore/API/JSRetainPtr.h
        Source/WebCore/platform/network/ParsedContentType.cpp
        Source/WebCore/platform/network/ParsedContentType.h
        Source/WebCore/platform/network/SocketStreamHandleClient.h
-       Source/WebCore/platform/posix/FileSystemPOSIX.cpp
        Source/WebCore/platform/sql/SQLValue.h
        Source/WebCore/platform/sql/SQLiteAuthorizer.cpp
        Source/WebCore/platform/sql/SQLiteFileSystem.cpp
@@ -602,8 +594,6 @@ Files: Documentation/*
        Source/JavaScriptCore/runtime/Identifier.h
        Source/JavaScriptCore/runtime/InternalFunction.cpp
        Source/JavaScriptCore/runtime/InternalFunction.h
-       Source/JavaScriptCore/runtime/JSAPIValueWrapper.cpp
-       Source/JavaScriptCore/runtime/JSAPIValueWrapper.h
        Source/JavaScriptCore/runtime/JSArray.cpp
        Source/JavaScriptCore/runtime/JSArray.h
        Source/JavaScriptCore/runtime/JSCJSValue.cpp
@@ -688,7 +678,6 @@ Files: Documentation/*
        Source/WTF/wtf/RefPtr.h
        Source/WTF/wtf/RetainPtr.h
        Source/WTF/wtf/StackBounds.cpp
-       Source/WTF/wtf/ThreadSpecificWin.cpp
        Source/WTF/wtf/Vector.h
        Source/WTF/wtf/VectorTraits.h
        Source/WTF/wtf/dtoa.h

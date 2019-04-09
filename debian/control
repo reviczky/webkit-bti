@@ -8,7 +8,7 @@ Uploaders: Gustavo Noronha Silva <kov@debian.org>,
 X-Ubuntu-Use-Langpack: no
 Build-Depends: gawk,
                cmake (>= 3.3),
-               debhelper (>= 10),
+               debhelper (>= 11.2~),
                libfile-copy-recursive-perl,
                libglib2.0-dev (>= 2.36.0),
                libgtk2.0-dev (>= 2.24.10),
@@ -35,6 +35,7 @@ Build-Depends: gawk,
                flex,
                ruby:native,
                libjpeg-dev,
+               libopenjp2-7-dev (>= 2.2.0),
                libpng-dev,
                libtasn1-6-dev,
                libwebp-dev,
@@ -51,87 +52,88 @@ Build-Depends: gawk,
                gobject-introspection (>= 1.32.0),
                libgirepository1.0-dev (>= 0.9.12-4),
                mesa-common-dev,
+               ninja-build,
                libegl1-mesa-dev,
                libgl1-mesa-dev [!armel !armhf !arm64],
                libgles2-mesa-dev
 Build-Conflicts: gir-repository-dev
-Standards-Version: 4.2.1
+Standards-Version: 4.3.0
 Vcs-Browser: https://salsa.debian.org/webkit-team/webkit
 Vcs-Git: https://salsa.debian.org/webkit-team/webkit.git
 Homepage: https://webkitgtk.org/
 
 Package: libjavascriptcoregtk-4.0-18
 Section: libs
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends},
          ${misc:Depends}
-Description: JavaScript engine library from WebKitGTK+
+Description: JavaScript engine library from WebKitGTK
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
  of the following building blocks: lexer, parser, start-up interpreter
  (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
  high-throughput optimizing JIT (FTL).
  .
- This build comes from the GTK+ port of WebKit (API version 4.0).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
  This package contains the shared libraries.
 
 Package: libjavascriptcoregtk-4.0-dev
 Section: libdevel
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          gir1.2-javascriptcoregtk-4.0 (= ${binary:Version}),
          ${misc:Depends}
-Description: JavaScript engine library from WebKitGTK+ - development files
+Description: JavaScript engine library from WebKitGTK - development files
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
  of the following building blocks: lexer, parser, start-up interpreter
  (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
  high-throughput optimizing JIT (FTL).
  .
- This build comes from the GTK+ port of WebKit (API version 4.0).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
  This package contains the development files.
 
 Package: libjavascriptcoregtk-4.0-bin
 Section: interpreters
-Architecture: any
+Architecture: linux-any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends},
          ${misc:Depends}
 Conflicts: libjavascriptcoregtk-3.0-bin
-Description: JavaScript engine library from WebKitGTK+ - command-line interpreter
+Description: JavaScript engine library from WebKitGTK - command-line interpreter
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
  of the following building blocks: lexer, parser, start-up interpreter
  (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
  high-throughput optimizing JIT (FTL).
  .
- This build comes from the GTK+ port of WebKit (API version 4.0).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
  This package provides jsc, a command-line JavaScript interpreter.
 
 Package: gir1.2-javascriptcoregtk-4.0
 Section: introspection
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Depends: ${gir:Depends},
          ${misc:Depends}
 Conflicts: gobject-introspection-repository
-Description: JavaScript engine library from WebKitGTK+ - GObject introspection data
+Description: JavaScript engine library from WebKitGTK - GObject introspection data
  JavaScriptCore is the JavaScript engine used in WebKit. It consists
  of the following building blocks: lexer, parser, start-up interpreter
  (LLInt), baseline JIT, a low-latency optimizing JIT (DFG), and a
  high-throughput optimizing JIT (FTL).
  .
- This build comes from the GTK+ port of WebKit (API version 4.0).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
  This package contains the introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.
 
 Package: libwebkit2gtk-4.0-37
 Section: libs
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
@@ -143,7 +145,7 @@ Recommends: gstreamer1.0-plugins-good,
             libgl1-mesa-dri,
             ${gst:Recommends}
 Suggests: libwebkit2gtk-4.0-37-gtk2
-Description: Web content engine library for GTK+
+Description: Web content engine library for GTK
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
  other applications, such as mail readers, or web browsers.
@@ -155,13 +157,13 @@ Description: Web content engine library for GTK+
  support a split process model, where the web content lives in a
  separate process from the application UI.
  .
- This build comes from the GTK+ port of WebKit (API version 4.0).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
- This is the library for embedding in GTK+ applications.
+ This is the library for embedding in GTK applications.
 
 Package: libwebkit2gtk-4.0-dev
 Section: libdevel
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
          gir1.2-webkit2-4.0 (= ${binary:Version}),
@@ -169,7 +171,7 @@ Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
          libsoup2.4-dev (>= 2.40),
          libjavascriptcoregtk-4.0-dev (= ${binary:Version}),
          ${misc:Depends}
-Description: Web content engine library for GTK+ - development files
+Description: Web content engine library for GTK - development files
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
  other applications, such as mail readers, or web browsers.
@@ -181,7 +183,7 @@ Description: Web content engine library for GTK+ - development files
  support a split process model, where the web content lives in a
  separate process from the application UI.
  .
- This build comes from the GTK+ port of WebKit (API version 4.0).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
  This package contains the development files.
 
@@ -190,7 +192,7 @@ Section: doc
 Architecture: all
 Depends: ${misc:Depends}
 Suggests: devhelp
-Description: Web content engine library for GTK+ - documentation
+Description: Web content engine library for GTK - documentation
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
  other applications, such as mail readers, or web browsers.
@@ -202,18 +204,18 @@ Description: Web content engine library for GTK+ - documentation
  support a split process model, where the web content lives in a
  separate process from the application UI.
  .
- This build comes from the GTK+ port of WebKit (API version 4.0).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
  This package contains the documentation.
 
 Package: gir1.2-webkit2-4.0
 Section: introspection
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Depends: gir1.2-javascriptcoregtk-4.0 (= ${binary:Version}),
          ${gir:Depends},
          ${misc:Depends}
-Description: Web content engine library for GTK+ - GObject introspection data
+Description: Web content engine library for GTK - GObject introspection data
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
  other applications, such as mail readers, or web browsers.
@@ -225,20 +227,20 @@ Description: Web content engine library for GTK+ - GObject introspection data
  support a split process model, where the web content lives in a
  separate process from the application UI.
  .
- This build comes from the GTK+ port of WebKit (API version 4.0).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
  This package contains introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.
 
 Package: libwebkit2gtk-4.0-37-gtk2
 Section: libs
-Architecture: any
+Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
-Description: Web content engine library for GTK+ - GTK+2 plugin process
+Description: Web content engine library for GTK - GTK 2 plugin process
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
  other applications, such as mail readers, or web browsers.
@@ -250,18 +252,18 @@ Description: Web content engine library for GTK+ - GTK+2 plugin process
  support a split process model, where the web content lives in a
  separate process from the application UI.
  .
- This build comes from the GTK+ port of WebKit (API version 4.0).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
- This package adds support for NPAPI plugins that depend on the GTK+ 2
+ This package adds support for NPAPI plugins that depend on the GTK 2
  library, such as the Adobe Flash and Google Talk/Hangouts plugins.
 
 Package: webkit2gtk-driver
-Architecture: any
+Architecture: linux-any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: libwebkit2gtk-4.0-37 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
-Description: WebKitGTK+ WebDriver support
+Description: WebKitGTK WebDriver support
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
  other applications, such as mail readers, or web browsers.
@@ -273,7 +275,7 @@ Description: WebKitGTK+ WebDriver support
  support a split process model, where the web content lives in a
  separate process from the application UI.
  .
- This build comes from the GTK+ port of WebKit (API version 4.0).
+ This build comes from the GTK port of WebKit (API version 4.0).
  .
  This package provides the WebDriver service implementation for
- WebKitGTK+.
+ WebKitGTK.

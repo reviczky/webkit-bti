@@ -6,7 +6,7 @@ Index: webkitgtk/Source/WTF/wtf/Platform.h
 ===================================================================
 --- webkitgtk.orig/Source/WTF/wtf/Platform.h
 +++ webkitgtk/Source/WTF/wtf/Platform.h
-@@ -59,6 +59,11 @@
+@@ -58,6 +58,11 @@
  /* ==== CPU() - the target CPU architecture ==== */
  /* CPU(KNOWN) becomes true if we explicitly support a target CPU. */
  
@@ -38,7 +38,7 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ElementRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/ElementRareData.cpp
-@@ -50,6 +50,10 @@ struct SameSizeAsElementRareData : NodeR
+@@ -53,6 +53,10 @@ struct SameSizeAsElementRareData : NodeR
  
  };
  
@@ -53,7 +53,7 @@ Index: webkitgtk/Source/WebCore/dom/NodeRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/NodeRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/NodeRareData.cpp
-@@ -38,6 +38,10 @@ struct SameSizeAsNodeRareData {
+@@ -38,7 +38,11 @@ struct SameSizeAsNodeRareData {
      void* m_pointer[3];
  };
  
@@ -63,12 +63,13 @@ Index: webkitgtk/Source/WebCore/dom/NodeRareData.cpp
  COMPILE_ASSERT(sizeof(NodeRareData) == sizeof(SameSizeAsNodeRareData), NodeRareDataShouldStaySmall);
 +#endif
  
- } // namespace WebCore
+ // Ensure the 10 bits reserved for the m_connectedFrameCount cannot overflow
+ static_assert(Page::maxNumberOfFrames < 1024, "Frame limit should fit in rare data count");
 Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ShadowRoot.cpp
 +++ webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
-@@ -50,7 +50,11 @@ struct SameSizeAsShadowRoot : public Doc
+@@ -52,7 +52,11 @@ struct SameSizeAsShadowRoot : public Doc
      void* slotAssignment;
  };
  
@@ -84,7 +85,7 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/style/RenderStyle.cpp
 +++ webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
-@@ -63,7 +63,11 @@ struct SameSizeAsBorderValue {
+@@ -66,7 +66,11 @@ struct SameSizeAsBorderValue {
      int m_restBits;
  };
  
@@ -96,7 +97,7 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
  
  struct SameSizeAsRenderStyle {
      void* dataRefs[7];
-@@ -81,7 +85,11 @@ struct SameSizeAsRenderStyle {
+@@ -84,7 +88,11 @@ struct SameSizeAsRenderStyle {
  #endif
  };
  
@@ -140,19 +141,3 @@ Index: webkitgtk/Source/WebCore/css/RuleSet.h
  
  class RuleSet {
      WTF_MAKE_NONCOPYABLE(RuleSet); WTF_MAKE_FAST_ALLOCATED;
-Index: webkitgtk/Source/WebCore/platform/graphics/FontDescription.cpp
-===================================================================
---- webkitgtk.orig/Source/WebCore/platform/graphics/FontDescription.cpp
-+++ webkitgtk/Source/WebCore/platform/graphics/FontDescription.cpp
-@@ -52,7 +52,11 @@ struct SameSizeAsFontCascadeDescription
-     unsigned bitfields3 : 10;
- };
- 
-+#if defined(__m68k__)
-+COMPILE_ASSERT(sizeof(FontCascadeDescription) <= sizeof(SameSizeAsFontCascadeDescription), FontCascadeDescription_should_stay_small);
-+#else
- COMPILE_ASSERT(sizeof(FontCascadeDescription) == sizeof(SameSizeAsFontCascadeDescription), FontCascadeDescription_should_stay_small);
-+#endif
- 
- FontDescription::FontDescription()
-     : m_fontSelectionRequest { FontCascadeDescription::initialWeight(), FontCascadeDescription::initialStretch(), FontCascadeDescription::initialItalic() }

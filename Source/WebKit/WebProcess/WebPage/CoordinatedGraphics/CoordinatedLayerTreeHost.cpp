@@ -189,6 +189,7 @@ void CoordinatedLayerTreeHost::layerFlushTimerFired()
 
     m_coordinator.syncDisplayState();
     m_webPage.flushPendingEditorStateUpdate();
+    m_webPage.willDisplayPage();
 
     if (!m_isValid || !m_coordinator.rootCompositingLayer())
         return;
@@ -213,21 +214,14 @@ void CoordinatedLayerTreeHost::commitSceneState(const CoordinatedGraphicsState& 
 
 void CoordinatedLayerTreeHost::flushLayersAndForceRepaint()
 {
-    if (m_layerFlushTimer.isActive())
-        m_layerFlushTimer.stop();
-
     m_coordinator.forceFrameSync();
-    layerFlushTimerFired();
+    scheduleLayerFlush();
 }
 
 void CoordinatedLayerTreeHost::deviceOrPageScaleFactorChanged()
 {
     m_coordinator.deviceOrPageScaleFactorChanged();
     m_webPage.corePage()->pageOverlayController().didChangeDeviceScaleFactor();
-}
-
-void CoordinatedLayerTreeHost::pageBackgroundTransparencyChanged()
-{
 }
 
 GraphicsLayerFactory* CoordinatedLayerTreeHost::graphicsLayerFactory()

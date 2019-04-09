@@ -1,33 +1,112 @@
-webkit2gtk (2.22.7-1) unstable; urgency=high
+webkit2gtk (2.24.0-2) UNRELEASED; urgency=medium
 
-  * New upstream release (Closes: #921869).
+  * GTK has dropped the '+' from its name, and so has WebKitGTK, so update
+    all references.
 
- -- Alberto Garcia <berto@igalia.com>  Sun, 03 Mar 2019 15:49:26 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 20 Mar 2019 17:09:51 +0200
 
-webkit2gtk (2.22.6-1) unstable; urgency=high
+webkit2gtk (2.24.0-1) experimental; urgency=medium
 
   * New upstream release.
-  * The WebKitGTK+ security advisory WSA-2019-0001 lists the following
-    security fixes in the latest versions of WebKitGTK+:
-    + CVE-2019-6226 (fixed in 2.22.0)
-    + CVE-2019-6233 and CVE-2019-6234 (fixed in 2.22.4)
-    + CVE-2019-6216, CVE-2019-6217, CVE-2019-6227 and CVE-2019-6229
-      (fixed in 2.22.5).
-    + CVE-2019-6212 and CVE-2019-6215 (fixed in 2.22.6).
   * debian/copyright:
-    + Update copyright years.
+    + Remove nonexistent files.
 
- -- Alberto Garcia <berto@igalia.com>  Sat, 09 Feb 2019 11:35:18 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 13 Mar 2019 12:12:49 +0200
 
-webkit2gtk (2.22.5-1) unstable; urgency=medium
+webkit2gtk (2.23.92-1) experimental; urgency=medium
 
-  * New upstream release.
-  * debian/patches/detect-jit.patch:
-    + Drop patch, this has been fixed upstream.
+  [ Jeremy Bicha ]
+  * debian/rules: Use --buildsystem=cmake+ninja
+
+  [ Alberto Garcia ]
+  * New upstream development release.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 06 Mar 2019 19:04:30 +0200
+
+webkit2gtk (2.23.91-1) experimental; urgency=medium
+
+  [ Alberto Garcia ]
+  * New upstream development release.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+
+  [ Jeremy Bicha ]
+  * Disable openjpeg2 support on Ubuntu since it's not in Ubuntu main yet.
+    See bug 711061.
+  * debian/rules:
+    + Use -O1 in armhf to fix the build.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 20 Feb 2019 16:08:54 +0200
+
+webkit2gtk (2.23.90-1) experimental; urgency=medium
+
+  * New upstream development release.
   * debian/patches/detect-woff.patch:
     + Refresh.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing override.
+  * debian/control:
+    + Add build dependency on libopenjp2-7-dev.
+  * debian/copyright:
+    + Update copyright years.
+  * debian/rules:
+    + Stop building with ENABLE_BUBBLEWRAP_SANDBOX=OFF, this option no
+      longer exists.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Thu, 13 Dec 2018 20:43:29 +0200
+ -- Alberto Garcia <berto@igalia.com>  Thu, 14 Feb 2019 17:58:57 +0200
+
+webkit2gtk (2.23.3-1) experimental; urgency=medium
+
+  * New upstream development release.
+  * debian/patches/missing-gtkdoc-files.patch:
+    + Drop this patch, it is no longer needed.
+  * debian/control:
+    + Set the architecture to linux-any, this package depends on the
+      Linux-specific sysinfo() call.
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 14 Jan 2019 11:51:50 +0200
+
+webkit2gtk (2.23.2-1) experimental; urgency=medium
+
+  * New upstream development release (Closes: #914986).
+  * debian/patches/build-minibrowser.patch,
+    debian/patches/detect-jit.patch,
+    debian/patches/fix-ftbfs-armel.patch:
+    + Remove these patches, they are now upstream.
+  * debian/patches/detect-woff.patch,
+    debian/patches/fix-ftbfs-m68k.patch,
+    debian/patches/fix-ftbfs-x32.patch:
+    + Refresh these patches.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
+  * debian/patches/missing-gtkdoc-files.patch:
+    + Upstream forgot to add Tools/gtkdoc to the tarball.
+  * debian/rules:
+    + Make Tools/gtkdoc/generate-gtkdoc executable.
+  * debian/control:
+    + Update Standards-Version to 4.3.0 (no changes).
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 08 Jan 2019 16:55:02 +0200
+
+webkit2gtk (2.23.1-1) experimental; urgency=medium
+
+  * New upstream development release.
+  * Refresh all patches.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing overrides.
+  * debian/watch, debian/gbp.conf:
+    + Update for 2.23.x packages in experimental.
+  * debian/rules:
+    + Build with ENABLE_BUBBLEWRAP_SANDBOX=OFF, since it requires
+      xdg-dbus-proxy which is not available in Debian.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+  * debian/patches/build-minibrowser.patch:
+    + Add missing cmake code to build the minibrowser.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 23 Nov 2018 16:16:56 +0200
 
 webkit2gtk (2.22.4-1) unstable; urgency=high
 

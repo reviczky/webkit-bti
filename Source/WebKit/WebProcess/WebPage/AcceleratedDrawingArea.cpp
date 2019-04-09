@@ -93,14 +93,6 @@ void AcceleratedDrawingArea::scroll(const IntRect& scrollRect, const IntSize& sc
         m_layerTreeHost->scrollNonCompositedContents(scrollRect);
 }
 
-void AcceleratedDrawingArea::pageBackgroundTransparencyChanged()
-{
-    if (m_layerTreeHost)
-        m_layerTreeHost->pageBackgroundTransparencyChanged();
-    else if (m_previousLayerTreeHost)
-        m_previousLayerTreeHost->pageBackgroundTransparencyChanged();
-}
-
 void AcceleratedDrawingArea::setLayerTreeStateIsFrozen(bool isFrozen)
 {
     if (m_layerTreeStateIsFrozen == isFrozen)
@@ -223,6 +215,10 @@ void AcceleratedDrawingArea::scheduleCompositingLayerFlush()
         m_layerTreeHost->scheduleLayerFlush();
 }
 
+void AcceleratedDrawingArea::scheduleInitialDeferredPaint()
+{
+}
+
 void AcceleratedDrawingArea::scheduleCompositingLayerFlushImmediately()
 {
     scheduleCompositingLayerFlush();
@@ -252,6 +248,7 @@ void AcceleratedDrawingArea::updateBackingStoreState(uint64_t stateID, bool resp
         m_webPage.layoutIfNeeded();
         m_webPage.flushPendingEditorStateUpdate();
         m_webPage.scrollMainFrameIfNotAtMaxScrollPosition(scrollOffset);
+        m_webPage.willDisplayPage();
 
         if (m_layerTreeHost)
             m_layerTreeHost->sizeDidChange(m_webPage.size());
@@ -465,11 +462,8 @@ void AcceleratedDrawingArea::activityStateDidChange(OptionSet<ActivityState::Fla
     }
 }
 
-void AcceleratedDrawingArea::attachViewOverlayGraphicsLayer(Frame* frame, GraphicsLayer* viewOverlayRootLayer)
+void AcceleratedDrawingArea::attachViewOverlayGraphicsLayer(GraphicsLayer* viewOverlayRootLayer)
 {
-    if (!frame->isMainFrame())
-        return;
-
     if (m_layerTreeHost)
         m_layerTreeHost->setViewOverlayRootLayer(viewOverlayRootLayer);
     else if (m_previousLayerTreeHost)

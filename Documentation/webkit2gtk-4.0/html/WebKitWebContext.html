@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKitWebContext: WebKit2GTK+ Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
-<link rel="home" href="index.html" title="WebKit2GTK+ Reference Manual">
+<title>WebKitWebContext: WebKitGTK Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="ch01.html" title="Class Overview">
 <link rel="next" href="WebKitWebView.html" title="WebKitWebView">
-<meta name="generator" content="GTK-Doc V1.29 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.29.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -1844,38 +1844,38 @@ when the data of the request is available or
 30
 31
 32</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
-<span class="function">about_uri_scheme_request_cb</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitURISchemeRequest</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">request</span><span class="symbol">,</span>
-<span class="normal">                             </span><span class="usertype">gpointer</span><span class="normal">                user_data</span><span class="symbol">)</span>
-<span class="cbracket">{</span>
-<span class="normal">    </span><span class="usertype">GInputStream</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">stream</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="usertype">gsize</span><span class="normal">         stream_length</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="keyword">const</span><span class="normal"> </span><span class="usertype">gchar</span><span class="normal">  </span><span class="symbol">*</span><span class="normal">path</span><span class="symbol">;</span>
+        <td class="listing_code"><pre class="programlisting"><span class="gtkdoc kwb">static void</span>
+<span class="function">about_uri_scheme_request_cb</span> <span class="gtkdoc opt">(</span>WebKitURISchemeRequest <span class="gtkdoc opt">*</span>request<span class="gtkdoc opt">,</span>
+                             gpointer                user_data<span class="gtkdoc opt">)</span>
+<span class="gtkdoc opt">{</span>
+    GInputStream <span class="gtkdoc opt">*</span>stream<span class="gtkdoc opt">;</span>
+    gsize         stream_length<span class="gtkdoc opt">;</span>
+    <span class="gtkdoc kwb">const</span> gchar  <span class="gtkdoc opt">*</span>path<span class="gtkdoc opt">;</span>
 
-<span class="normal">    path </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitURISchemeRequest.html#webkit-uri-scheme-request-get-path">webkit_uri_scheme_request_get_path</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">path</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"plugins"</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">        </span><span class="comment">/* Create a GInputStream with the contents of plugins about page, and set its length to stream_length */</span>
-<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">path</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"memory"</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">        </span><span class="comment">/* Create a GInputStream with the contents of memory about page, and set its length to stream_length */</span>
-<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">path</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"applications"</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">        </span><span class="comment">/* Create a GInputStream with the contents of applications about page, and set its length to stream_length */</span>
-<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">path</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"example"</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">        </span><span class="usertype">gchar</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">contents</span><span class="symbol">;</span>
+    path <span class="gtkdoc opt">=</span> <span class="function"><a href="WebKitURISchemeRequest.html#webkit-uri-scheme-request-get-path">webkit_uri_scheme_request_get_path</a></span> <span class="gtkdoc opt">(</span>request<span class="gtkdoc opt">);</span>
+    <span class="keyword">if</span> <span class="gtkdoc opt">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span> <span class="gtkdoc opt">(</span>path<span class="gtkdoc opt">,</span> <span class="string">&quot;plugins&quot;</span><span class="gtkdoc opt">)) {</span>
+        <span class="comment">/* Create a GInputStream with the contents of plugins about page, and set its length to stream_length */</span>
+    <span class="gtkdoc opt">}</span> <span class="keyword">else if</span> <span class="gtkdoc opt">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span> <span class="gtkdoc opt">(</span>path<span class="gtkdoc opt">,</span> <span class="string">&quot;memory&quot;</span><span class="gtkdoc opt">)) {</span>
+        <span class="comment">/* Create a GInputStream with the contents of memory about page, and set its length to stream_length */</span>
+    <span class="gtkdoc opt">}</span> <span class="keyword">else if</span> <span class="gtkdoc opt">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span> <span class="gtkdoc opt">(</span>path<span class="gtkdoc opt">,</span> <span class="string">&quot;applications&quot;</span><span class="gtkdoc opt">)) {</span>
+        <span class="comment">/* Create a GInputStream with the contents of applications about page, and set its length to stream_length */</span>
+    <span class="gtkdoc opt">}</span> <span class="keyword">else if</span> <span class="gtkdoc opt">(!</span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strcmp0">g_strcmp0</a></span> <span class="gtkdoc opt">(</span>path<span class="gtkdoc opt">,</span> <span class="string">&quot;example&quot;</span><span class="gtkdoc opt">)) {</span>
+        gchar <span class="gtkdoc opt">*</span>contents<span class="gtkdoc opt">;</span>
 
-<span class="normal">        contents </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strdup-printf">g_strdup_printf</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"&lt;html&gt;&lt;body&gt;&lt;p&gt;Example about page&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;"</span><span class="symbol">);</span>
-<span class="normal">        stream_length </span><span class="symbol">=</span><span class="normal"> </span><span class="function">strlen</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">contents</span><span class="symbol">);</span>
-<span class="normal">        stream </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../gio/GMemoryInputStream.html#g-memory-input-stream-new-from-data">g_memory_input_stream_new_from_data</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">contents</span><span class="symbol">,</span><span class="normal"> stream_length</span><span class="symbol">,</span><span class="normal"> <a href="../glib/glib-Memory-Allocation.html#g-free">g_free</a></span><span class="symbol">);</span>
-<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">        </span><span class="usertype">GError</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">error</span><span class="symbol">;</span>
+        contents <span class="gtkdoc opt">=</span> <span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strdup-printf">g_strdup_printf</a></span> <span class="gtkdoc opt">(</span><span class="string">&quot;&lt;html&gt;&lt;body&gt;&lt;p&gt;Example about page&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;&quot;</span><span class="gtkdoc opt">);</span>
+        stream_length <span class="gtkdoc opt">=</span> <span class="function">strlen</span> <span class="gtkdoc opt">(</span>contents<span class="gtkdoc opt">);</span>
+        stream <span class="gtkdoc opt">=</span> <span class="function"><a href="../gio/GMemoryInputStream.html#g-memory-input-stream-new-from-data">g_memory_input_stream_new_from_data</a></span> <span class="gtkdoc opt">(</span>contents<span class="gtkdoc opt">,</span> stream_length<span class="gtkdoc opt">,</span> g_free<span class="gtkdoc opt">);</span>
+    <span class="gtkdoc opt">}</span> <span class="keyword">else</span> <span class="gtkdoc opt">{</span>
+        GError <span class="gtkdoc opt">*</span>error<span class="gtkdoc opt">;</span>
 
-<span class="normal">        error </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../glib/glib-Error-Reporting.html#g-error-new">g_error_new</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">ABOUT_HANDLER_ERROR</span><span class="symbol">,</span><span class="normal"> ABOUT_HANDLER_ERROR_INVALID</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"Invalid about:%s page."</span><span class="symbol">,</span><span class="normal"> path</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="function"><a href="WebKitURISchemeRequest.html#webkit-uri-scheme-request-finish-error">webkit_uri_scheme_request_finish_error</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">,</span><span class="normal"> error</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="function"><a href="../glib/glib-Error-Reporting.html#g-error-free">g_error_free</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">error</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="keyword">return</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="cbracket">}</span>
-<span class="normal">    </span><span class="function"><a href="WebKitURISchemeRequest.html#webkit-uri-scheme-request-finish">webkit_uri_scheme_request_finish</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">,</span><span class="normal"> stream</span><span class="symbol">,</span><span class="normal"> stream_length</span><span class="symbol">,</span><span class="normal"> </span><span class="string">"text/html"</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="function"><a href="../gobject/gobject-The-Base-Object-Type.html#g-object-unref">g_object_unref</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">stream</span><span class="symbol">);</span>
-<span class="cbracket">}</span></pre></td>
+        error <span class="gtkdoc opt">=</span> <span class="function"><a href="../glib/glib-Error-Reporting.html#g-error-new">g_error_new</a></span> <span class="gtkdoc opt">(</span>ABOUT_HANDLER_ERROR<span class="gtkdoc opt">,</span> ABOUT_HANDLER_ERROR_INVALID<span class="gtkdoc opt">,</span> <span class="string">&quot;Invalid about:%s page.&quot;</span><span class="gtkdoc opt">,</span> path<span class="gtkdoc opt">);</span>
+        <span class="function"><a href="WebKitURISchemeRequest.html#webkit-uri-scheme-request-finish-error">webkit_uri_scheme_request_finish_error</a></span> <span class="gtkdoc opt">(</span>request<span class="gtkdoc opt">,</span> error<span class="gtkdoc opt">);</span>
+        <span class="function"><a href="../glib/glib-Error-Reporting.html#g-error-free">g_error_free</a></span> <span class="gtkdoc opt">(</span>error<span class="gtkdoc opt">);</span>
+        <span class="keyword">return</span><span class="gtkdoc opt">;</span>
+    <span class="gtkdoc opt">}</span>
+    <span class="function"><a href="WebKitURISchemeRequest.html#webkit-uri-scheme-request-finish">webkit_uri_scheme_request_finish</a></span> <span class="gtkdoc opt">(</span>request<span class="gtkdoc opt">,</span> stream<span class="gtkdoc opt">,</span> stream_length<span class="gtkdoc opt">,</span> <span class="string">&quot;text/html&quot;</span><span class="gtkdoc opt">);</span>
+    <span class="function"><a href="../gobject/gobject-The-Base-Object-Type.html#g-object-unref">g_object_unref</a></span> <span class="gtkdoc opt">(</span>stream<span class="gtkdoc opt">);</span>
+<span class="gtkdoc opt">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -2268,6 +2268,6 @@ and <a class="link" href="WebKitWebContext.html#webkit-web-context-set-web-exten
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.29</div>
+<hr>Generated by GTK-Doc V1.29.1</div>
 </body>
 </html>

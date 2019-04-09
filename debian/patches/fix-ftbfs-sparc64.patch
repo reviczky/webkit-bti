@@ -5,7 +5,7 @@ Index: webkitgtk/Source/WTF/wtf/Platform.h
 ===================================================================
 --- webkitgtk.orig/Source/WTF/wtf/Platform.h
 +++ webkitgtk/Source/WTF/wtf/Platform.h
-@@ -115,6 +115,11 @@
+@@ -114,6 +114,11 @@
  #define WTF_CPU_KNOWN 1
  #endif
  

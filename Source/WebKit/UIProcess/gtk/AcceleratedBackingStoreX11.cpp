@@ -45,8 +45,8 @@
 namespace WebKit {
 using namespace WebCore;
 
-static std::optional<int> s_damageEventBase;
-static std::optional<int> s_damageErrorBase;
+static Optional<int> s_damageEventBase;
+static Optional<int> s_damageErrorBase;
 
 class XDamageNotifier {
     WTF_MAKE_NONCOPYABLE(XDamageNotifier);
@@ -186,7 +186,6 @@ bool AcceleratedBackingStoreX11::paint(cairo_t* cr, const IntRect& clipRect)
         return false;
 
     cairo_save(cr);
-    AcceleratedBackingStore::paint(cr, clipRect);
 
     // The surface can be modified by the web process at any time, so we mark it
     // as dirty to ensure we always render the updated contents as soon as possible.

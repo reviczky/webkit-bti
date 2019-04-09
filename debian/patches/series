@@ -3,7 +3,6 @@ fix-ftbfs-hurd.patch
 fix-ftbfs-x86.patch
 fix-ftbfs-m68k.patch
 fix-ftbfs-x32.patch
-fix-ftbfs-armel.patch
 detect-gstreamer-gl.patch
 detect-woff.patch
 user-agent-branding.patch

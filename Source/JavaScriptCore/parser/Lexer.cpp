@@ -38,6 +38,7 @@
 #include <limits.h>
 #include <string.h>
 #include <wtf/Assertions.h>
+#include <wtf/HexNumber.h>
 #include <wtf/Variant.h>
 #include <wtf/dtoa.h>
 
@@ -56,6 +57,10 @@ enum CharacterType {
     CharacterIdentifierStart,
     CharacterZero,
     CharacterNumber,
+
+    // For single-byte characters grandfathered into Other_ID_Continue -- namely just U+00B7 MIDDLE DOT.
+    // (http://unicode.org/reports/tr31/#Backward_Compatibility)
+    CharacterOtherIdentifierPart,
 
     CharacterInvalid,
     CharacterLineTerminator,
@@ -278,7 +283,7 @@ static constexpr const unsigned short typesOfLatin1Characters[256] = {
 /* 180 - Sk category        */ CharacterInvalid,
 /* 181 - Ll category        */ CharacterIdentifierStart,
 /* 182 - So category        */ CharacterInvalid,
-/* 183 - Po category        */ CharacterInvalid,
+/* 183 - Po category        */ CharacterOtherIdentifierPart,
 /* 184 - Sk category        */ CharacterInvalid,
 /* 185 - No category        */ CharacterInvalid,
 /* 186 - Ll category        */ CharacterIdentifierStart,
@@ -526,7 +531,7 @@ String Lexer<T>::invalidCharacterMessage() const
     case 96:
         return "Invalid character: '`'"_s;
     default:
-        return String::format("Invalid character '\\u%04x'", static_cast<unsigned>(m_current));
+        return makeString("Invalid character '\\u", hex(m_current, 4, Lowercase), '\'');
     }
 }
 
@@ -727,22 +732,7 @@ ALWAYS_INLINE void Lexer<T>::skipWhitespace()
 
 static NEVER_INLINE bool isNonLatin1IdentStart(UChar c)
 {
-    return U_GET_GC_MASK(c) & U_GC_L_MASK;
-}
-
-static ALWAYS_INLINE bool isLatin1(LChar)
-{
-    return true;
-}
-
-static ALWAYS_INLINE bool isLatin1(UChar c)
-{
-    return c < 256;
-}
-
-static ALWAYS_INLINE bool isLatin1(UChar32 c)
-{
-    return !(c & ~0xFF);
+    return u_hasBinaryProperty(c, UCHAR_ID_START);
 }
 
 static inline bool isIdentStart(LChar c)
@@ -757,16 +747,15 @@ static inline bool isIdentStart(UChar32 c)
 
 static NEVER_INLINE bool isNonLatin1IdentPart(UChar32 c)
 {
-    // FIXME: ES6 says this should be based on the Unicode property ID_Continue now instead.
-    return (U_GET_GC_MASK(c) & (U_GC_L_MASK | U_GC_MN_MASK | U_GC_MC_MASK | U_GC_ND_MASK | U_GC_PC_MASK)) || c == 0x200C || c == 0x200D;
+    return u_hasBinaryProperty(c, UCHAR_ID_CONTINUE) || c == 0x200C || c == 0x200D;
 }
 
 static ALWAYS_INLINE bool isIdentPart(LChar c)
 {
     // Character types are divided into two groups depending on whether they can be part of an
-    // identifier or not. Those whose type value is less or equal than CharacterNumber can be
+    // identifier or not. Those whose type value is less or equal than CharacterOtherIdentifierPart can be
     // part of an identifier. (See the CharacterType definition for more details.)
-    return typesOfLatin1Characters[c] <= CharacterNumber;
+    return typesOfLatin1Characters[c] <= CharacterOtherIdentifierPart;
 }
 
 static ALWAYS_INLINE bool isIdentPart(UChar32 c)
@@ -972,9 +961,9 @@ template <bool shouldCreateIdentifier> ALWAYS_INLINE JSTokenType Lexer<LChar>::p
                 return ERRORTOK;
             }
             if (isPrivateName)
-                ident = m_vm->propertyNames->lookUpPrivateName(*ident);
+                ident = &m_arena->makeIdentifier(m_vm, m_vm->propertyNames->lookUpPrivateName(*ident));
             else if (*ident == m_vm->propertyNames->undefinedKeyword)
-                tokenData->ident = &m_vm->propertyNames->builtinNames().undefinedPrivateName();
+                tokenData->ident = &m_vm->propertyNames->undefinedPrivateName;
             if (!ident)
                 return INVALID_PRIVATE_NAME_ERRORTOK;
         }
@@ -1050,9 +1039,9 @@ template <bool shouldCreateIdentifier> ALWAYS_INLINE JSTokenType Lexer<UChar>::p
                 return ERRORTOK;
             }
             if (isPrivateName)
-                ident = m_vm->propertyNames->lookUpPrivateName(*ident);
+                ident = &m_arena->makeIdentifier(m_vm, m_vm->propertyNames->lookUpPrivateName(*ident));
             else if (*ident == m_vm->propertyNames->undefinedKeyword)
-                tokenData->ident = &m_vm->propertyNames->builtinNames().undefinedPrivateName();
+                tokenData->ident = &m_vm->propertyNames->undefinedPrivateName;
             if (!ident)
                 return INVALID_PRIVATE_NAME_ERRORTOK;
         }
@@ -1539,7 +1528,7 @@ ALWAYS_INLINE auto Lexer<T>::parseHex() -> NumberParseResult
 }
 
 template <typename T>
-ALWAYS_INLINE auto Lexer<T>::parseBinary() -> std::optional<NumberParseResult>
+ALWAYS_INLINE auto Lexer<T>::parseBinary() -> Optional<NumberParseResult>
 {
     // Optimization: most binary values fit into 4 bytes.
     uint32_t binaryValue = 0;
@@ -1571,13 +1560,13 @@ ALWAYS_INLINE auto Lexer<T>::parseBinary() -> std::optional<NumberParseResult>
         return Variant<double, const Identifier*> { makeIdentifier(m_buffer8.data(), m_buffer8.size()) };
 
     if (isASCIIDigit(m_current))
-        return std::nullopt;
+        return WTF::nullopt;
 
     return Variant<double, const Identifier*> { parseIntOverflow(m_buffer8.data(), m_buffer8.size(), 2) };
 }
 
 template <typename T>
-ALWAYS_INLINE auto Lexer<T>::parseOctal() -> std::optional<NumberParseResult>
+ALWAYS_INLINE auto Lexer<T>::parseOctal() -> Optional<NumberParseResult>
 {
     // Optimization: most octal values fit into 4 bytes.
     uint32_t octalValue = 0;
@@ -1610,13 +1599,13 @@ ALWAYS_INLINE auto Lexer<T>::parseOctal() -> std::optional<NumberParseResult>
         return Variant<double, const Identifier*> { makeIdentifier(m_buffer8.data(), m_buffer8.size()) };
 
     if (isASCIIDigit(m_current))
-        return std::nullopt;
+        return WTF::nullopt;
 
     return Variant<double, const Identifier*> { parseIntOverflow(m_buffer8.data(), m_buffer8.size(), 8) };
 }
 
 template <typename T>
-ALWAYS_INLINE auto Lexer<T>::parseDecimal() -> std::optional<NumberParseResult>
+ALWAYS_INLINE auto Lexer<T>::parseDecimal() -> Optional<NumberParseResult>
 {
     // Optimization: most decimal values fit into 4 bytes.
     uint32_t decimalValue = 0;
@@ -1652,7 +1641,7 @@ ALWAYS_INLINE auto Lexer<T>::parseDecimal() -> std::optional<NumberParseResult>
     if (UNLIKELY(Options::useBigInt() && m_current == 'n'))
         return Variant<double, const Identifier*> { makeIdentifier(m_buffer8.data(), m_buffer8.size()) };
 
-    return std::nullopt;
+    return WTF::nullopt;
 }
 
 template <typename T>
@@ -2312,6 +2301,7 @@ start:
             goto parseIdent;
 
         FALLTHROUGH;
+    case CharacterOtherIdentifierPart:
     case CharacterInvalid:
         m_lexErrorMessage = invalidCharacterMessage();
         token = ERRORTOK;

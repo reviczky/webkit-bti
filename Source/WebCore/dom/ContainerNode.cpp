@@ -59,6 +59,7 @@
 #include "SVGUseElement.h"
 #include "ScriptDisallowedScope.h"
 #include "SelectorQuery.h"
+#include "SlotAssignment.h"
 #include "TemplateContentDocumentFragment.h"
 #include <algorithm>
 #include <wtf/IsoMallocInlines.h>
@@ -103,6 +104,9 @@ ALWAYS_INLINE NodeVector ContainerNode::removeAllChildrenWithScriptAssertion(Chi
 
     WidgetHierarchyUpdatesSuspensionScope suspendWidgetHierarchyUpdates;
     ScriptDisallowedScope::InMainThread scriptDisallowedScope;
+
+    if (UNLIKELY(isShadowRoot() || isInShadowTree()))
+        containingShadowRoot()->willRemoveAllChildren(*this);
 
     document().nodeChildrenWillBeRemoved(*this);
 
@@ -150,6 +154,9 @@ ALWAYS_INLINE bool ContainerNode::removeNodeWithScriptAssertion(Node& childToRem
         WidgetHierarchyUpdatesSuspensionScope suspendWidgetHierarchyUpdates;
         ScriptDisallowedScope::InMainThread scriptDisallowedScope;
 
+        if (UNLIKELY(isShadowRoot() || isInShadowTree()))
+            containingShadowRoot()->resolveSlotsBeforeNodeInsertionOrRemoval();
+
         document().nodeWillBeRemoved(childToRemove);
 
         ASSERT_WITH_SECURITY_IMPLICATION(childToRemove.parentNode() == this);
@@ -181,6 +188,10 @@ static ALWAYS_INLINE void executeNodeInsertionWithScriptAssertion(ContainerNode&
     NodeVector postInsertionNotificationTargets;
     {
         ScriptDisallowedScope::InMainThread scriptDisallowedScope;
+
+        if (UNLIKELY(containerNode.isShadowRoot() || containerNode.isInShadowTree()))
+            containerNode.containingShadowRoot()->resolveSlotsBeforeNodeInsertionOrRemoval();
+
         doNodeInsertion();
         ChildListMutationScope(containerNode).childAdded(child);
         postInsertionNotificationTargets = notifyChildNodeInserted(containerNode, child);
@@ -730,11 +741,38 @@ void ContainerNode::parserAppendChild(Node& newChild)
     });
 }
 
+static bool affectsElements(const ContainerNode::ChildChange& change)
+{
+    switch (change.type) {
+    case ContainerNode::ElementInserted:
+    case ContainerNode::ElementRemoved:
+    case ContainerNode::AllChildrenRemoved:
+    case ContainerNode::AllChildrenReplaced:
+        return true;
+    case ContainerNode::TextInserted:
+    case ContainerNode::TextRemoved:
+    case ContainerNode::TextChanged:
+    case ContainerNode::NonContentsChildInserted:
+    case ContainerNode::NonContentsChildRemoved:
+        return false;
+    }
+    ASSERT_NOT_REACHED();
+    return false;
+}
+
 void ContainerNode::childrenChanged(const ChildChange& change)
 {
     document().incDOMTreeVersion();
+
+    if (affectsElements(change))
+        document().invalidateAccessKeyCache();
+
+    // FIXME: Unclear why it's always safe to skip this when parser is adding children.
+    // FIXME: Seems like it's equally safe to skip for TextInserted and TextRemoved as for TextChanged.
+    // FIXME: Should use switch for change type so we remember to update when adding new types.
     if (change.source == ChildChangeSource::API && change.type != TextChanged)
         document().updateRangesAfterChildrenChanged(*this);
+
     invalidateNodeListAndCollectionCachesInAncestors();
 }
 

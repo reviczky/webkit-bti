@@ -2,11 +2,14 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  NetworkProcessMainUnix@Base 2.5.3
  PluginProcessMainUnix@Base 2.5.3
  WebProcessMainUnix@Base 2.5.3
- StorageProcessMainUnix@Base 2.17.90
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
+ (optional)_ZN7bmalloc10PerProcessINS_12IsoTLSLayoutEE6s_dataE@Base 2.23.90
+ (optional)_ZN7bmalloc10PerProcessINS_12IsoTLSLayoutEE8s_objectE@Base 2.23.90
  (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE6s_dataE@Base 2.21.1
  (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_objectE@Base 2.19.6
+ (optional)_ZN7bmalloc10PerProcessINS_6VMHeapEE6s_dataE@Base 2.23.90
+ (optional)_ZN7bmalloc10PerProcessINS_6VMHeapEE8s_objectE@Base 2.23.90
  (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE6s_dataE@Base 2.21.1
  (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.21.1
  (optional)_ZZN7bmalloc10vmPageSizeEvE6cached@Base 2.19.6
@@ -122,6 +125,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_credential_has_password@Base 2.5.3
  webkit_credential_new@Base 2.5.3
  webkit_credential_persistence_get_type@Base 2.5.3
+ webkit_device_info_permission_request_get_type@Base 2.23.1
  (optional)webkit_dom_attr_get_local_name@Base 2.13.91
  webkit_dom_attr_get_name@Base 2.5.3
  (optional)webkit_dom_attr_get_namespace_uri@Base 2.13.91
@@ -1622,13 +1626,17 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_response_policy_decision_get_type@Base 2.5.3
  webkit_response_policy_decision_is_mime_type_supported@Base 2.5.3
  webkit_save_mode_get_type@Base 2.5.3
+ webkit_script_dialog_close@Base 2.23.1
  webkit_script_dialog_confirm_set_confirmed@Base 2.5.3
  webkit_script_dialog_get_dialog_type@Base 2.5.3
  webkit_script_dialog_get_message@Base 2.5.3
  webkit_script_dialog_get_type@Base 2.5.3
+ webkit_script_dialog_impl_get_type@Base 2.23.1
  webkit_script_dialog_prompt_get_default_text@Base 2.5.3
  webkit_script_dialog_prompt_set_text@Base 2.5.3
+ webkit_script_dialog_ref@Base 2.23.1
  webkit_script_dialog_type_get_type@Base 2.5.3
+ webkit_script_dialog_unref@Base 2.23.1
  webkit_script_world_get_default@Base 2.5.3
  webkit_script_world_get_name@Base 2.21.4
  webkit_script_world_get_type@Base 2.5.3
@@ -1670,6 +1678,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_default_monospace_font_size@Base 2.5.3
  webkit_settings_get_draw_compositing_indicators@Base 2.5.3
  webkit_settings_get_enable_accelerated_2d_canvas@Base 2.5.3
+ webkit_settings_get_enable_back_forward_navigation_gestures@Base 2.23.90
  webkit_settings_get_enable_caret_browsing@Base 2.5.3
  webkit_settings_get_enable_developer_extras@Base 2.5.3
  webkit_settings_get_enable_dns_prefetching@Base 2.5.3
@@ -1681,9 +1690,11 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_enable_hyperlink_auditing@Base 2.5.3
  webkit_settings_get_enable_java@Base 2.5.3
  webkit_settings_get_enable_javascript@Base 2.5.3
+ webkit_settings_get_enable_javascript_markup@Base 2.23.90
  webkit_settings_get_enable_media_capabilities@Base 2.21.91
  webkit_settings_get_enable_media_stream@Base 2.5.3
  webkit_settings_get_enable_mediasource@Base 2.5.3
+ webkit_settings_get_enable_mock_capture_devices@Base 2.23.1
  webkit_settings_get_enable_offline_web_application_cache@Base 2.5.3
  webkit_settings_get_enable_page_cache@Base 2.5.3
  webkit_settings_get_enable_plugins@Base 2.5.3
@@ -1726,6 +1737,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_set_default_monospace_font_size@Base 2.5.3
  webkit_settings_set_draw_compositing_indicators@Base 2.5.3
  webkit_settings_set_enable_accelerated_2d_canvas@Base 2.5.3
+ webkit_settings_set_enable_back_forward_navigation_gestures@Base 2.23.90
  webkit_settings_set_enable_caret_browsing@Base 2.5.3
  webkit_settings_set_enable_developer_extras@Base 2.5.3
  webkit_settings_set_enable_dns_prefetching@Base 2.5.3
@@ -1737,9 +1749,11 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_set_enable_hyperlink_auditing@Base 2.5.3
  webkit_settings_set_enable_java@Base 2.5.3
  webkit_settings_set_enable_javascript@Base 2.5.3
+ webkit_settings_set_enable_javascript_markup@Base 2.23.90
  webkit_settings_set_enable_media_capabilities@Base 2.21.91
  webkit_settings_set_enable_media_stream@Base 2.5.3
  webkit_settings_set_enable_mediasource@Base 2.5.3
+ webkit_settings_set_enable_mock_capture_devices@Base 2.23.1
  webkit_settings_set_enable_offline_web_application_cache@Base 2.5.3
  webkit_settings_set_enable_page_cache@Base 2.5.3
  webkit_settings_set_enable_plugins@Base 2.5.3
@@ -1776,6 +1790,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (optional)webkit_soup_request_generic_get_type@Base 2.19.6
  (optional)webkit_soup_request_input_stream_get_type@Base 2.19.6
  webkit_tls_errors_policy_get_type@Base 2.5.3
+ webkit_uri_for_display@Base 2.23.90
  webkit_uri_request_get_http_headers@Base 2.5.3
  webkit_uri_request_get_http_method@Base 2.12.0
  webkit_uri_request_get_type@Base 2.5.3
@@ -1796,15 +1811,37 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_uri_scheme_request_get_type@Base 2.5.3
  webkit_uri_scheme_request_get_uri@Base 2.5.3
  webkit_uri_scheme_request_get_web_view@Base 2.5.3
+ webkit_user_content_filter_error_get_type@Base 2.23.91
+ webkit_user_content_filter_error_quark@Base 2.23.91
+ webkit_user_content_filter_get_identifier@Base 2.23.91
+ webkit_user_content_filter_get_type@Base 2.23.91
+ webkit_user_content_filter_ref@Base 2.23.91
+ webkit_user_content_filter_store_fetch_identifiers@Base 2.23.91
+ webkit_user_content_filter_store_fetch_identifiers_finish@Base 2.23.91
+ webkit_user_content_filter_store_get_path@Base 2.23.91
+ webkit_user_content_filter_store_get_type@Base 2.23.91
+ webkit_user_content_filter_store_load@Base 2.23.91
+ webkit_user_content_filter_store_load_finish@Base 2.23.91
+ webkit_user_content_filter_store_new@Base 2.23.91
+ webkit_user_content_filter_store_remove@Base 2.23.91
+ webkit_user_content_filter_store_remove_finish@Base 2.23.91
+ webkit_user_content_filter_store_save@Base 2.23.91
+ webkit_user_content_filter_store_save_finish@Base 2.23.91
+ webkit_user_content_filter_store_save_from_file@Base 2.23.91
+ webkit_user_content_filter_store_save_from_file_finish@Base 2.23.91
+ webkit_user_content_filter_unref@Base 2.23.91
  webkit_user_content_injected_frames_get_type@Base 2.5.3
+ webkit_user_content_manager_add_filter@Base 2.23.91
  webkit_user_content_manager_add_script@Base 2.5.3
  webkit_user_content_manager_add_style_sheet@Base 2.5.3
  webkit_user_content_manager_get_type@Base 2.5.3
  webkit_user_content_manager_new@Base 2.5.3
  webkit_user_content_manager_register_script_message_handler@Base 2.8.1
  webkit_user_content_manager_register_script_message_handler_in_world@Base 2.21.92
+ webkit_user_content_manager_remove_all_filters@Base 2.23.91
  webkit_user_content_manager_remove_all_scripts@Base 2.5.3
  webkit_user_content_manager_remove_all_style_sheets@Base 2.5.3
+ webkit_user_content_manager_remove_filter@Base 2.23.91
  webkit_user_content_manager_unregister_script_message_handler@Base 2.8.1
  webkit_user_content_manager_unregister_script_message_handler_in_world@Base 2.21.92
  webkit_user_media_permission_is_for_audio_device@Base 2.8.1
@@ -1898,6 +1935,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_can_go_back@Base 2.5.3
  webkit_web_view_can_go_forward@Base 2.5.3
  webkit_web_view_can_show_mime_type@Base 2.5.3
+ webkit_web_view_dialog_get_type@Base 2.23.1
  webkit_web_view_download_uri@Base 2.5.3
  webkit_web_view_execute_editing_command@Base 2.5.3
  webkit_web_view_execute_editing_command_with_argument@Base 2.10.0

@@ -43,7 +43,6 @@ protected:
     void setNeedsDisplay() override;
     void setNeedsDisplayInRect(const WebCore::IntRect&) override;
     void scroll(const WebCore::IntRect& scrollRect, const WebCore::IntSize& scrollDelta) override;
-    void pageBackgroundTransparencyChanged() override;
     void setLayerTreeStateIsFrozen(bool) override;
     bool layerTreeStateIsFrozen() const override { return m_layerTreeStateIsFrozen; }
     LayerTreeHost* layerTreeHost() const override { return m_layerTreeHost.get(); }
@@ -56,6 +55,7 @@ protected:
 
     WebCore::GraphicsLayerFactory* graphicsLayerFactory() override;
     void setRootCompositingLayer(WebCore::GraphicsLayer*) override;
+    void scheduleInitialDeferredPaint() override;
     void scheduleCompositingLayerFlush() override;
     void scheduleCompositingLayerFlushImmediately() override;
 
@@ -69,7 +69,7 @@ protected:
 #endif
 
     void activityStateDidChange(OptionSet<WebCore::ActivityState::Flag>, ActivityStateChangeID, const Vector<CallbackID>& /* callbackIDs */) override;
-    void attachViewOverlayGraphicsLayer(WebCore::Frame*, WebCore::GraphicsLayer*) override;
+    void attachViewOverlayGraphicsLayer(WebCore::GraphicsLayer*) override;
 
     void layerHostDidFlushLayers() override;
 

@@ -66,6 +66,8 @@ public:
     virtual ~MediaPlayerPrivateGStreamer();
 
     static void registerMediaEngine(MediaEngineRegistrar);
+    static bool isAvailable();
+
     void handleMessage(GstMessage*);
     void handlePluginInstallerResult(GstInstallPluginsReturn);
 
@@ -107,7 +109,7 @@ public:
     MediaTime maxTimeLoaded() const override;
 
     bool hasSingleSecurityOrigin() const override;
-    std::optional<bool> wouldTaintOrigin(const SecurityOrigin&) const override;
+    Optional<bool> wouldTaintOrigin(const SecurityOrigin&) const override;
 
     void loadStateChanged();
     void timeChanged();
@@ -137,8 +139,7 @@ public:
 private:
     static void getSupportedTypes(HashSet<String, ASCIICaseInsensitiveHash>&);
     static MediaPlayer::SupportsType supportsType(const MediaEngineSupportParameters&);
-
-    static bool isAvailable();
+    void syncOnClock(bool sync);
 
     GstElement* createAudioSink() override;
 
@@ -258,7 +259,7 @@ private:
     mutable unsigned long long m_totalBytes;
     URL m_url;
     bool m_preservesPitch;
-    mutable std::optional<Seconds> m_lastQueryTime;
+    mutable Optional<Seconds> m_lastQueryTime;
     bool m_isLegacyPlaybin;
 #if GST_CHECK_VERSION(1, 10, 0)
     GRefPtr<GstStreamCollection> m_streamCollection;
@@ -287,7 +288,7 @@ private:
 #endif
     virtual bool isMediaSource() const { return false; }
 
-    std::optional<bool> m_hasTaintedOrigin { std::nullopt };
+    Optional<bool> m_hasTaintedOrigin { WTF::nullopt };
 };
 }
 

@@ -2,13 +2,13 @@
 <html>
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<title>WebKitWebView: WebKit2GTK+ Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
-<link rel="home" href="index.html" title="WebKit2GTK+ Reference Manual">
+<title>WebKitWebView: WebKitGTK Reference Manual</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitWebContext.html" title="WebKitWebContext">
 <link rel="next" href="WebKitAuthenticationRequest.html" title="WebKitAuthenticationRequest">
-<meta name="generator" content="GTK-Doc V1.29 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.29.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -31,7 +31,7 @@
 <div class="refnamediv"><table width="100%"><tr>
 <td valign="top">
 <h2><span class="refentrytitle"><a name="WebKitWebView.top_of_page"></a>WebKitWebView</span></h2>
-<p>WebKitWebView — The central class of the WebKit2GTK+ API</p>
+<p>WebKitWebView — The central class of the WPE WebKit and WebKitGTK APIs</p>
 </td>
 <td class="gallery_image" valign="top" align="right"></td>
 </tr></table></div>
@@ -314,7 +314,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../cairo/cairo-cairo-surface-t.html#cairo-surface-t"><span class="returnvalue">cairo_surface_t</span></a> *
+<span class="returnvalue">cairo_surface_t</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebView.html#webkit-web-view-get-favicon" title="webkit_web_view_get_favicon ()">webkit_web_view_get_favicon</a> <span class="c_punctuation">()</span>
@@ -530,7 +530,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../cairo/cairo-cairo-surface-t.html#cairo-surface-t"><span class="returnvalue">cairo_surface_t</span></a> *
+<span class="returnvalue">cairo_surface_t</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebView.html#webkit-web-view-get-snapshot-finish" title="webkit_web_view_get_snapshot_finish ()">webkit_web_view_get_snapshot_finish</a> <span class="c_punctuation">()</span>
@@ -594,6 +594,14 @@
 </tr>
 <tr>
 <td class="function_type">
+<a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="returnvalue">WebKitWebResource</span></a> *
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-get-main-resource" title="webkit_web_view_get_main_resource ()">webkit_web_view_get_main_resource</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
 <a class="link" href="WebKitWebView.html#WebKitJavascriptResult"><span class="returnvalue">WebKitJavascriptResult</span></a> *
 </td>
 <td class="function_name">
@@ -630,6 +638,22 @@
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebView.html#webkit-javascript-result-get-js-value" title="webkit_javascript_result_get_js_value ()">webkit_javascript_result_get_js_value</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a class="link" href="WebKitWebView.html#WebKitScriptDialog"><span class="returnvalue">WebKitScriptDialog</span></a> *
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-script-dialog-ref" title="webkit_script_dialog_ref ()">webkit_script_dialog_ref</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-script-dialog-unref" title="webkit_script_dialog_unref ()">webkit_script_dialog_unref</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
 <tr>
@@ -672,10 +696,10 @@
 </tr>
 <tr>
 <td class="function_type">
-<a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="returnvalue">WebKitWebResource</span></a> *
+<span class="returnvalue">void</span>
 </td>
 <td class="function_name">
-<a class="link" href="WebKitWebView.html#webkit-web-view-get-main-resource" title="webkit_web_view_get_main_resource ()">webkit_web_view_get_main_resource</a> <span class="c_punctuation">()</span>
+<a class="link" href="WebKitWebView.html#webkit-script-dialog-close" title="webkit_script_dialog_close ()">webkit_script_dialog_close</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
 <tr>
@@ -1037,11 +1061,11 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebView.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="/usr/share/gtk-doc/html/gobject/gobject-Boxed-Types.html">GBoxed</a>
+<pre class="screen">    <a href="../gobject/gobject-Boxed-Types.html">GBoxed</a>
     <span class="lineart">├──</span> WebKitJavascriptResult
     <span class="lineart">├──</span> WebKitScriptDialog
     <span class="lineart">╰──</span> WebKitWebViewSessionState
-    <a href="/usr/share/gtk-doc/html/gobject/gobject-Enumeration-and-Flag-Types.html">GEnum</a>
+    <a href="../gobject/gobject-Enumeration-and-Flag-Types.html">GEnum</a>
     <span class="lineart">├──</span> WebKitInsecureContentEvent
     <span class="lineart">├──</span> WebKitLoadEvent
     <span class="lineart">├──</span> WebKitPolicyDecisionType
@@ -1062,13 +1086,13 @@ WebKitWebView implements
 </div>
 <div class="refsect1">
 <a name="WebKitWebView.description"></a><h2>Description</h2>
-<p><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> is the central class of the WebKit2GTK+ API. It is
-responsible for managing the drawing of the content and forwarding
-of events. You can load any URI into the <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> or a data
-string. With <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> you can control various aspects of the
-rendering and loading of the content.</p>
-<p>Note that <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> is scrollable by itself, so you don't need
-to embed it in a <a href="../gtk3/GtkScrolledWindow.html#GtkScrolledWindow-struct"><span class="type">GtkScrolledWindow</span></a>.</p>
+<p><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> is the central class of the WPE WebKit and WebKitGTK
+APIs. It is responsible for managing the drawing of the content and
+forwarding of events. You can load any URI into the <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> or
+a data string. With <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> you can control various aspects
+of the rendering and loading of the content.</p>
+<p>Note that in WebKitGTK, <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> is scrollable by itself, so
+you don't need to embed it in a <a href="../gtk3/GtkScrolledWindow.html#GtkScrolledWindow-struct"><span class="type">GtkScrolledWindow</span></a>.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitWebView.functions_details"></a><h2>Functions</h2>
@@ -2200,7 +2224,7 @@ if nothing has been loaded yet.</p>
 <hr>
 <div class="refsect2">
 <a name="webkit-web-view-get-favicon"></a><h3>webkit_web_view_get_favicon ()</h3>
-<pre class="programlisting"><a href="../cairo/cairo-cairo-surface-t.html#cairo-surface-t"><span class="returnvalue">cairo_surface_t</span></a> *
+<pre class="programlisting"><span class="returnvalue">cairo_surface_t</span> *
 webkit_web_view_get_favicon (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
 <p>Returns favicon currently associated to <em class="parameter"><code>web_view</code></em>
 , if any. You can
@@ -2224,7 +2248,7 @@ the favicon is available.</p>
 </div>
 <div class="refsect3">
 <a name="webkit-web-view-get-favicon.returns"></a><h4>Returns</h4>
-<p>a pointer to a <a href="../cairo/cairo-cairo-surface-t.html#cairo-surface-t"><span class="type">cairo_surface_t</span></a> with the
+<p>a pointer to a <span class="type">cairo_surface_t</span> with the
 favicon or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if there's no icon associated with <em class="parameter"><code>web_view</code></em>
 . </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
@@ -2781,50 +2805,50 @@ a string:</p>
 42
 43
 44</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
-<span class="function">web_view_javascript_finished</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">GObject</span><span class="normal">      </span><span class="symbol">*</span><span class="normal">object</span><span class="symbol">,</span>
-<span class="normal">                              </span><span class="usertype">GAsyncResult</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">result</span><span class="symbol">,</span>
-<span class="normal">                              </span><span class="usertype">gpointer</span><span class="normal">      user_data</span><span class="symbol">)</span>
-<span class="cbracket">{</span>
-<span class="normal">    </span><span class="usertype">WebKitJavascriptResult</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">js_result</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="usertype">JSCValue</span><span class="normal">               </span><span class="symbol">*</span><span class="normal">value</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="usertype">GError</span><span class="normal">                 </span><span class="symbol">*</span><span class="normal">error </span><span class="symbol">=</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#NULL:CAPS">NULL</a></span><span class="symbol">;</span>
+        <td class="listing_code"><pre class="programlisting"><span class="gtkdoc kwb">static void</span>
+<span class="function">web_view_javascript_finished</span> <span class="gtkdoc opt">(</span>GObject      <span class="gtkdoc opt">*</span>object<span class="gtkdoc opt">,</span>
+                              GAsyncResult <span class="gtkdoc opt">*</span>result<span class="gtkdoc opt">,</span>
+                              gpointer      user_data<span class="gtkdoc opt">)</span>
+<span class="gtkdoc opt">{</span>
+    WebKitJavascriptResult <span class="gtkdoc opt">*</span>js_result<span class="gtkdoc opt">;</span>
+    JSCValue               <span class="gtkdoc opt">*</span>value<span class="gtkdoc opt">;</span>
+    GError                 <span class="gtkdoc opt">*</span>error <span class="gtkdoc opt">=</span> NULL<span class="gtkdoc opt">;</span>
 
-<span class="normal">    js_result </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-run-javascript-finish">webkit_web_view_run_javascript_finish</a></span><span class="normal"> </span><span class="symbol">(</span><span class="function">WEBKIT_WEB_VIEW</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">object</span><span class="symbol">),</span><span class="normal"> result</span><span class="symbol">,</span><span class="normal"> </span><span class="symbol">&amp;</span><span class="normal">error</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="normal">js_result</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">        </span><span class="function"><a href="../glib/glib-Message-Logging.html#g-warning">g_warning</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"Error running javascript: %s"</span><span class="symbol">,</span><span class="normal"> error</span><span class="symbol">-&gt;</span><span class="normal">message</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="function"><a href="../glib/glib-Error-Reporting.html#g-error-free">g_error_free</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">error</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="keyword">return</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="cbracket">}</span>
+    js_result <span class="gtkdoc opt">=</span> <span class="function"><a href="WebKitWebView.html#webkit-web-view-run-javascript-finish">webkit_web_view_run_javascript_finish</a></span> <span class="gtkdoc opt">(</span><span class="function">WEBKIT_WEB_VIEW</span> <span class="gtkdoc opt">(</span>object<span class="gtkdoc opt">),</span> result<span class="gtkdoc opt">, &amp;</span>error<span class="gtkdoc opt">);</span>
+    <span class="keyword">if</span> <span class="gtkdoc opt">(!</span>js_result<span class="gtkdoc opt">) {</span>
+        <span class="function"><a href="../glib/glib-Message-Logging.html#g-warning">g_warning</a></span> <span class="gtkdoc opt">(</span><span class="string">&quot;Error running javascript: %s&quot;</span><span class="gtkdoc opt">,</span> error<span class="gtkdoc opt">-&gt;</span>message<span class="gtkdoc opt">);</span>
+        <span class="function"><a href="../glib/glib-Error-Reporting.html#g-error-free">g_error_free</a></span> <span class="gtkdoc opt">(</span>error<span class="gtkdoc opt">);</span>
+        <span class="keyword">return</span><span class="gtkdoc opt">;</span>
+    <span class="gtkdoc opt">}</span>
 
-<span class="normal">    value </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitWebView.html#webkit-javascript-result-get-js-value">webkit_javascript_result_get_js_value</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">js_result</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(</span><span class="function"><a href="../jsc-glib-4.0/JSCValue.html#jsc-value-is-string">jsc_value_is_string</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">value</span><span class="symbol">))</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">        </span><span class="usertype">JSCException</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">exception</span><span class="symbol">;</span>
-<span class="normal">        </span><span class="usertype">gchar</span><span class="normal">        </span><span class="symbol">*</span><span class="normal">str_value</span><span class="symbol">;</span>
+    value <span class="gtkdoc opt">=</span> <span class="function"><a href="WebKitWebView.html#webkit-javascript-result-get-js-value">webkit_javascript_result_get_js_value</a></span> <span class="gtkdoc opt">(</span>js_result<span class="gtkdoc opt">);</span>
+    <span class="keyword">if</span> <span class="gtkdoc opt">(</span><span class="function"><a href="../jsc-glib-4.0/JSCValue.html#jsc-value-is-string">jsc_value_is_string</a></span> <span class="gtkdoc opt">(</span>value<span class="gtkdoc opt">)) {</span>
+        JSCException <span class="gtkdoc opt">*</span>exception<span class="gtkdoc opt">;</span>
+        gchar        <span class="gtkdoc opt">*</span>str_value<span class="gtkdoc opt">;</span>
 
-<span class="normal">        str_value </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../jsc-glib-4.0/JSCValue.html#jsc-value-to-string">jsc_value_to_string</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">value</span><span class="symbol">);</span>
-<span class="normal">        exception </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../jsc-glib-4.0/JSCContext.html#jsc-context-get-exception">jsc_context_get_exception</a></span><span class="normal"> </span><span class="symbol">(</span><span class="function"><a href="../jsc-glib-4.0/JSCValue.html#jsc-value-get-context">jsc_value_get_context</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">value</span><span class="symbol">));</span>
-<span class="normal">        </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">exception</span><span class="symbol">)</span>
-<span class="normal">            </span><span class="function"><a href="../glib/glib-Message-Logging.html#g-warning">g_warning</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"Error running javascript: %s"</span><span class="symbol">,</span><span class="normal"> </span><span class="function"><a href="../jsc-glib-4.0/JSCException.html#jsc-exception-get-message">jsc_exception_get_message</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">exception</span><span class="symbol">));</span>
-<span class="normal">        </span><span class="keyword">else</span>
-<span class="normal">            </span><span class="function"><a href="../glib/glib-Warnings-and-Assertions.html#g-print">g_print</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"Script result: %s</span><span class="specialchar">\n</span><span class="string">"</span><span class="symbol">,</span><span class="normal"> str_value</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="function"><a href="../glib/glib-Memory-Allocation.html#g-free">g_free</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">str_value</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="cbracket">}</span><span class="normal"> </span><span class="keyword">else</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">        </span><span class="function"><a href="../glib/glib-Message-Logging.html#g-warning">g_warning</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"Error running javascript: unexpected return value"</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="cbracket">}</span>
-<span class="normal">    </span><span class="function"><a href="WebKitWebView.html#webkit-javascript-result-unref">webkit_javascript_result_unref</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">js_result</span><span class="symbol">);</span>
-<span class="cbracket">}</span>
+        str_value <span class="gtkdoc opt">=</span> <span class="function"><a href="../jsc-glib-4.0/JSCValue.html#jsc-value-to-string">jsc_value_to_string</a></span> <span class="gtkdoc opt">(</span>value<span class="gtkdoc opt">);</span>
+        exception <span class="gtkdoc opt">=</span> <span class="function"><a href="../jsc-glib-4.0/JSCContext.html#jsc-context-get-exception">jsc_context_get_exception</a></span> <span class="gtkdoc opt">(</span><span class="function"><a href="../jsc-glib-4.0/JSCValue.html#jsc-value-get-context">jsc_value_get_context</a></span> <span class="gtkdoc opt">(</span>value<span class="gtkdoc opt">));</span>
+        <span class="keyword">if</span> <span class="gtkdoc opt">(</span>exception<span class="gtkdoc opt">)</span>
+            <span class="function"><a href="../glib/glib-Message-Logging.html#g-warning">g_warning</a></span> <span class="gtkdoc opt">(</span><span class="string">&quot;Error running javascript: %s&quot;</span><span class="gtkdoc opt">,</span> <span class="function"><a href="../jsc-glib-4.0/JSCException.html#jsc-exception-get-message">jsc_exception_get_message</a></span> <span class="gtkdoc opt">(</span>exception<span class="gtkdoc opt">));</span>
+        <span class="keyword">else</span>
+            <span class="function"><a href="../glib/glib-Warnings-and-Assertions.html#g-print">g_print</a></span> <span class="gtkdoc opt">(</span><span class="string">&quot;Script result: %s</span><span class="gtkdoc esc">\n</span><span class="string">&quot;</span><span class="gtkdoc opt">,</span> str_value<span class="gtkdoc opt">);</span>
+        <span class="function"><a href="../glib/glib-Memory-Allocation.html#g-free">g_free</a></span> <span class="gtkdoc opt">(</span>str_value<span class="gtkdoc opt">);</span>
+    <span class="gtkdoc opt">}</span> <span class="keyword">else</span> <span class="gtkdoc opt">{</span>
+        <span class="function"><a href="../glib/glib-Message-Logging.html#g-warning">g_warning</a></span> <span class="gtkdoc opt">(</span><span class="string">&quot;Error running javascript: unexpected return value&quot;</span><span class="gtkdoc opt">);</span>
+    <span class="gtkdoc opt">}</span>
+    <span class="function"><a href="WebKitWebView.html#webkit-javascript-result-unref">webkit_javascript_result_unref</a></span> <span class="gtkdoc opt">(</span>js_result<span class="gtkdoc opt">);</span>
+<span class="gtkdoc opt">}</span>
 
-<span class="keyword">static</span><span class="normal"> </span><span class="type">void</span>
-<span class="function">web_view_get_link_url</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitWebView</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">web_view</span><span class="symbol">,</span>
-<span class="normal">                       </span><span class="keyword">const</span><span class="normal"> </span><span class="usertype">gchar</span><span class="normal">   </span><span class="symbol">*</span><span class="normal">link_id</span><span class="symbol">)</span>
-<span class="cbracket">{</span>
-<span class="normal">    </span><span class="usertype">gchar</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">script</span><span class="symbol">;</span>
+<span class="gtkdoc kwb">static void</span>
+<span class="function">web_view_get_link_url</span> <span class="gtkdoc opt">(</span>WebKitWebView <span class="gtkdoc opt">*</span>web_view<span class="gtkdoc opt">,</span>
+                       <span class="gtkdoc kwb">const</span> gchar   <span class="gtkdoc opt">*</span>link_id<span class="gtkdoc opt">)</span>
+<span class="gtkdoc opt">{</span>
+    gchar <span class="gtkdoc opt">*</span>script<span class="gtkdoc opt">;</span>
 
-<span class="normal">    script </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strdup-printf">g_strdup_printf</a></span><span class="normal"> </span><span class="symbol">(</span><span class="string">"window.document.getElementById('%s').href;"</span><span class="symbol">,</span><span class="normal"> link_id</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-run-javascript">webkit_web_view_run_javascript</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_view</span><span class="symbol">,</span><span class="normal"> script</span><span class="symbol">,</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#NULL:CAPS">NULL</a></span><span class="symbol">,</span><span class="normal"> web_view_javascript_finished</span><span class="symbol">,</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#NULL:CAPS">NULL</a></span><span class="symbol">);</span>
-<span class="normal">    </span><span class="function"><a href="../glib/glib-Memory-Allocation.html#g-free">g_free</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">script</span><span class="symbol">);</span>
-<span class="cbracket">}</span></pre></td>
+    script <span class="gtkdoc opt">=</span> <span class="function"><a href="../glib/glib-String-Utility-Functions.html#g-strdup-printf">g_strdup_printf</a></span> <span class="gtkdoc opt">(</span><span class="string">&quot;window.document.getElementById(&apos;%s&apos;).href;&quot;</span><span class="gtkdoc opt">,</span> link_id<span class="gtkdoc opt">);</span>
+    <span class="function"><a href="WebKitWebView.html#webkit-web-view-run-javascript">webkit_web_view_run_javascript</a></span> <span class="gtkdoc opt">(</span>web_view<span class="gtkdoc opt">,</span> script<span class="gtkdoc opt">,</span> NULL<span class="gtkdoc opt">,</span> web_view_javascript_finished<span class="gtkdoc opt">,</span> NULL<span class="gtkdoc opt">);</span>
+    <span class="function"><a href="../glib/glib-Memory-Allocation.html#g-free">g_free</a></span> <span class="gtkdoc opt">(</span>script<span class="gtkdoc opt">);</span>
+<span class="gtkdoc opt">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -3466,7 +3490,7 @@ operation.</p>
 <hr>
 <div class="refsect2">
 <a name="webkit-web-view-get-snapshot-finish"></a><h3>webkit_web_view_get_snapshot_finish ()</h3>
-<pre class="programlisting"><a href="../cairo/cairo-cairo-surface-t.html#cairo-surface-t"><span class="returnvalue">cairo_surface_t</span></a> *
+<pre class="programlisting"><span class="returnvalue">cairo_surface_t</span> *
 webkit_web_view_get_snapshot_finish (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>,
                                      <em class="parameter"><code><a href="../gio/GAsyncResult.html#GAsyncResult-struct"><span class="type">GAsyncResult</span></a> *result</code></em>,
                                      <em class="parameter"><code><a href="../glib/glib-Error-Reporting.html#GError"><span class="type">GError</span></a> **error</code></em>);</pre>
@@ -3500,7 +3524,7 @@ webkit_web_view_get_snapshot_finish (<em class="parameter"><code><a class="link"
 </div>
 <div class="refsect3">
 <a name="webkit-web-view-get-snapshot-finish.returns"></a><h4>Returns</h4>
-<p>a <a href="../cairo/cairo-cairo-surface-t.html#cairo-surface-t"><span class="type">cairo_surface_t</span></a> with the retrieved snapshot or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> in error. </p>
+<p>a <span class="type">cairo_surface_t</span> with the retrieved snapshot or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> in error. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
 </div>
 </div>
@@ -3540,22 +3564,22 @@ Note that the parent window must have a RGBA visual and
 14
 15
 16</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span><span class="normal"> </span><span class="function">browser_window_set_background_color</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">BrowserWindow</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">window</span><span class="symbol">,</span>
-<span class="normal">                                                 </span><span class="keyword">const</span><span class="normal"> </span><span class="usertype">GdkRGBA</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">rgba</span><span class="symbol">)</span>
-<span class="cbracket">{</span>
-<span class="normal">    </span><span class="usertype">WebKitWebView</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">web_view</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="usertype">GdkScreen</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">screen </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../gtk3/GtkWindow.html#gtk-window-get-screen">gtk_window_get_screen</a></span><span class="normal"> </span><span class="symbol">(</span><span class="function">GTK_WINDOW</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">window</span><span class="symbol">));</span>
-<span class="normal">    </span><span class="usertype">GdkVisual</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">rgba_visual </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../gdk3/GdkScreen.html#gdk-screen-get-rgba-visual">gdk_screen_get_rgba_visual</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">screen</span><span class="symbol">);</span>
+        <td class="listing_code"><pre class="programlisting"><span class="gtkdoc kwb">static void</span> <span class="function">browser_window_set_background_color</span> <span class="gtkdoc opt">(</span>BrowserWindow <span class="gtkdoc opt">*</span>window<span class="gtkdoc opt">,</span>
+                                                 <span class="gtkdoc kwb">const</span> GdkRGBA <span class="gtkdoc opt">*</span>rgba<span class="gtkdoc opt">)</span>
+<span class="gtkdoc opt">{</span>
+    WebKitWebView <span class="gtkdoc opt">*</span>web_view<span class="gtkdoc opt">;</span>
+    GdkScreen <span class="gtkdoc opt">*</span>screen <span class="gtkdoc opt">=</span> <span class="function"><a href="../gtk3/GtkWindow.html#gtk-window-get-screen">gtk_window_get_screen</a></span> <span class="gtkdoc opt">(</span><span class="function">GTK_WINDOW</span> <span class="gtkdoc opt">(</span>window<span class="gtkdoc opt">));</span>
+    GdkVisual <span class="gtkdoc opt">*</span>rgba_visual <span class="gtkdoc opt">=</span> <span class="function"><a href="../gdk3/GdkScreen.html#gdk-screen-get-rgba-visual">gdk_screen_get_rgba_visual</a></span> <span class="gtkdoc opt">(</span>screen<span class="gtkdoc opt">);</span>
 
-<span class="normal">    </span><span class="keyword">if</span><span class="normal"> </span><span class="symbol">(!</span><span class="normal">rgba_visual</span><span class="symbol">)</span>
-<span class="normal">         </span><span class="keyword">return</span><span class="symbol">;</span>
+    <span class="keyword">if</span> <span class="gtkdoc opt">(!</span>rgba_visual<span class="gtkdoc opt">)</span>
+         <span class="keyword">return</span><span class="gtkdoc opt">;</span>
 
-<span class="normal">    </span><span class="function"><a href="../gtk3/GtkWidget.html#gtk-widget-set-visual">gtk_widget_set_visual</a></span><span class="normal"> </span><span class="symbol">(</span><span class="function">GTK_WIDGET</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">window</span><span class="symbol">),</span><span class="normal"> rgba_visual</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="function"><a href="../gtk3/GtkWidget.html#gtk-widget-set-app-paintable">gtk_widget_set_app_paintable</a></span><span class="normal"> </span><span class="symbol">(</span><span class="function">GTK_WIDGET</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">window</span><span class="symbol">),</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS">TRUE</a></span><span class="symbol">);</span>
+    <span class="function"><a href="../gtk3/GtkWidget.html#gtk-widget-set-visual">gtk_widget_set_visual</a></span> <span class="gtkdoc opt">(</span><span class="function">GTK_WIDGET</span> <span class="gtkdoc opt">(</span>window<span class="gtkdoc opt">),</span> rgba_visual<span class="gtkdoc opt">);</span>
+    <span class="function"><a href="../gtk3/GtkWidget.html#gtk-widget-set-app-paintable">gtk_widget_set_app_paintable</a></span> <span class="gtkdoc opt">(</span><span class="function">GTK_WIDGET</span> <span class="gtkdoc opt">(</span>window<span class="gtkdoc opt">),</span> TRUE<span class="gtkdoc opt">);</span>
 
-<span class="normal">    web_view </span><span class="symbol">=</span><span class="normal"> </span><span class="function">browser_window_get_web_view</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">window</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-set-background-color">webkit_web_view_set_background_color</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_view</span><span class="symbol">,</span><span class="normal"> rgba</span><span class="symbol">);</span>
-<span class="cbracket">}</span></pre></td>
+    web_view <span class="gtkdoc opt">=</span> <span class="function">browser_window_get_web_view</span> <span class="gtkdoc opt">(</span>window<span class="gtkdoc opt">);</span>
+    <span class="function"><a href="WebKitWebView.html#webkit-web-view-set-background-color">webkit_web_view_set_background_color</a></span> <span class="gtkdoc opt">(</span>web_view<span class="gtkdoc opt">,</span> rgba<span class="gtkdoc opt">);</span>
+<span class="gtkdoc opt">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -3760,6 +3784,35 @@ webkit_web_view_restore_session_state (<em class="parameter"><code><a class="lin
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-web-view-get-main-resource"></a><h3>webkit_web_view_get_main_resource ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="returnvalue">WebKitWebResource</span></a> *
+webkit_web_view_get_main_resource (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+<p>Return the main resource of <em class="parameter"><code>web_view</code></em>
+.</p>
+<div class="refsect3">
+<a name="webkit-web-view-get-main-resource.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-web-view-get-main-resource.returns"></a><h4>Returns</h4>
+<p>the main <a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> of the view
+or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if nothing has been loaded. </p>
+<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
+</div>
+</div>
+<hr>
+<div class="refsect2">
 <a name="webkit-javascript-result-ref"></a><h3>webkit_javascript_result_ref ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitWebView.html#WebKitJavascriptResult"><span class="returnvalue">WebKitJavascriptResult</span></a> *
 webkit_javascript_result_ref (<em class="parameter"><code><a class="link" href="WebKitWebView.html#WebKitJavascriptResult"><span class="type">WebKitJavascriptResult</span></a> *js_result</code></em>);</pre>
@@ -3906,6 +3959,62 @@ webkit_javascript_result_get_js_value (<em class="parameter"><code><a class="lin
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-22.html#api-index-2.22">2.22</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-script-dialog-ref"></a><h3>webkit_script_dialog_ref ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitWebView.html#WebKitScriptDialog"><span class="returnvalue">WebKitScriptDialog</span></a> *
+webkit_script_dialog_ref (<em class="parameter"><code><a class="link" href="WebKitWebView.html#WebKitScriptDialog"><span class="type">WebKitScriptDialog</span></a> *dialog</code></em>);</pre>
+<p>Atomically increments the reference count of <em class="parameter"><code>dialog</code></em>
+ by one. This
+function is MT-safe and may be called from any thread.</p>
+<div class="refsect3">
+<a name="webkit-script-dialog-ref.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>dialog</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html#WebKitScriptDialog"><span class="type">WebKitScriptDialog</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-script-dialog-ref.returns"></a><h4>Returns</h4>
+<p> The passed in <a class="link" href="WebKitWebView.html#WebKitScriptDialog"><span class="type">WebKitScriptDialog</span></a></p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-24.html#api-index-2.24">2.24</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-script-dialog-unref"></a><h3>webkit_script_dialog_unref ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_script_dialog_unref (<em class="parameter"><code><a class="link" href="WebKitWebView.html#WebKitScriptDialog"><span class="type">WebKitScriptDialog</span></a> *dialog</code></em>);</pre>
+<p>Atomically decrements the reference count of <em class="parameter"><code>dialog</code></em>
+ by one. If the
+reference count drops to 0, all memory allocated by the <span class="type">WebKitScriptdialog</span> is
+released. This function is MT-safe and may be called from any
+thread.</p>
+<div class="refsect3">
+<a name="webkit-script-dialog-unref.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>dialog</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html#WebKitScriptDialog"><span class="type">WebKitScriptDialog</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-24.html#api-index-2.24">2.24</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -4064,13 +4173,16 @@ It's an error to use this method with a <a class="link" href="WebKitWebView.html
 </div>
 <hr>
 <div class="refsect2">
-<a name="webkit-web-view-get-main-resource"></a><h3>webkit_web_view_get_main_resource ()</h3>
-<pre class="programlisting"><a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="returnvalue">WebKitWebResource</span></a> *
-webkit_web_view_get_main_resource (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
-<p>Return the main resource of <em class="parameter"><code>web_view</code></em>
-.</p>
+<a name="webkit-script-dialog-close"></a><h3>webkit_script_dialog_close ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_script_dialog_close (<em class="parameter"><code><a class="link" href="WebKitWebView.html#WebKitScriptDialog"><span class="type">WebKitScriptDialog</span></a> *dialog</code></em>);</pre>
+<p>Close <em class="parameter"><code>dialog</code></em>
+. When handling a <a class="link" href="WebKitWebView.html#WebKitScriptDialog"><span class="type">WebKitScriptDialog</span></a> asynchronously (<a class="link" href="WebKitWebView.html#webkit-script-dialog-ref" title="webkit_script_dialog_ref ()"><code class="function">webkit_script_dialog_ref()</code></a>
+was called in <a class="link" href="WebKitWebView.html#WebKitWebView-script-dialog" title="The “script-dialog” signal"><span class="type">“script-dialog”</span></a> callback), this function needs to be called to notify
+that we are done with the script dialog. The dialog will be closed on destruction if this function
+hasn't been called before.</p>
 <div class="refsect3">
-<a name="webkit-web-view-get-main-resource.parameters"></a><h4>Parameters</h4>
+<a name="webkit-script-dialog-close.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
 <col width="150px" class="parameters_name">
@@ -4078,18 +4190,13 @@ webkit_web_view_get_main_resource (<em class="parameter"><code><a class="link" h
 <col width="200px" class="parameters_annotations">
 </colgroup>
 <tbody><tr>
-<td class="parameter_name"><p>web_view</p></td>
-<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_name"><p>dialog</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html#WebKitScriptDialog"><span class="type">WebKitScriptDialog</span></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr></tbody>
 </table></div>
 </div>
-<div class="refsect3">
-<a name="webkit-web-view-get-main-resource.returns"></a><h4>Returns</h4>
-<p>the main <a class="link" href="WebKitWebResource.html" title="WebKitWebResource"><span class="type">WebKitWebResource</span></a> of the view
-or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if nothing has been loaded. </p>
-<p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
-</div>
+<p class="since">Since: <a class="link" href="api-index-2-24.html#api-index-2.24">2.24</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -5113,31 +5220,35 @@ specific type when making the decision. For example:</p>
 21
 22
 23
-24</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> <a href="../glib/glib-Basic-Types.html#gboolean">gboolean</a></span>
-<span class="function">decide_policy_cb</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitWebView</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">web_view</span><span class="symbol">,</span>
-<span class="normal">                  </span><span class="usertype">WebKitPolicyDecision</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">decision</span><span class="symbol">,</span>
-<span class="normal">                  </span><span class="usertype">WebKitPolicyDecisionType</span><span class="normal"> type</span><span class="symbol">)</span>
-<span class="cbracket">{</span>
-<span class="normal">    </span><span class="keyword">switch</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">type</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-POLICY-DECISION-TYPE-NAVIGATION-ACTION:CAPS">WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION</a></span><span class="symbol">:</span>
-<span class="normal">        </span><span class="usertype">WebKitNavigationPolicyDecision</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">navigation_decision </span><span class="symbol">=</span><span class="normal"> </span><span class="function">WEBKIT_NAVIGATION_POLICY_DECISION</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">decision</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="comment">/* Make a policy decision here. */</span>
-<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-POLICY-DECISION-TYPE-NEW-WINDOW-ACTION:CAPS">WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION</a></span><span class="symbol">:</span>
-<span class="normal">        </span><span class="usertype">WebKitNavigationPolicyDecision</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">navigation_decision </span><span class="symbol">=</span><span class="normal"> </span><span class="function">WEBKIT_NAVIGATION_POLICY_DECISION</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">decision</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="comment">/* Make a policy decision here. */</span>
-<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-POLICY-DECISION-TYPE-RESPONSE:CAPS">WEBKIT_POLICY_DECISION_TYPE_RESPONSE</a></span><span class="symbol">:</span>
-<span class="normal">        </span><span class="usertype">WebKitResponsePolicyDecision</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">response </span><span class="symbol">=</span><span class="normal"> </span><span class="function">WEBKIT_RESPONSE_POLICY_DECISION</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">decision</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="comment">/* Make a policy decision here. */</span>
-<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
-<span class="label">    default:</span>
-<span class="normal">        </span><span class="comment">/* Making no decision results in webkit_policy_decision_use(). */</span>
-<span class="normal">        </span><span class="keyword">return</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS">FALSE</a></span><span class="symbol">;</span>
-<span class="normal">    </span><span class="cbracket">}</span>
-<span class="normal">    </span><span class="keyword">return</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS">TRUE</a></span><span class="symbol">;</span>
-<span class="cbracket">}</span></pre></td>
+24
+25
+26</pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="gtkdoc kwb">static</span> gboolean
+<span class="function">decide_policy_cb</span> <span class="gtkdoc opt">(</span>WebKitWebView <span class="gtkdoc opt">*</span>web_view<span class="gtkdoc opt">,</span>
+                  WebKitPolicyDecision <span class="gtkdoc opt">*</span>decision<span class="gtkdoc opt">,</span>
+                  WebKitPolicyDecisionType type<span class="gtkdoc opt">)</span>
+<span class="gtkdoc opt">{</span>
+    <span class="keyword">switch</span> <span class="gtkdoc opt">(</span>type<span class="gtkdoc opt">) {</span>
+    <span class="keyword">case</span> WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION<span class="gtkdoc opt">: {</span>
+        WebKitNavigationPolicyDecision <span class="gtkdoc opt">*</span>navigation_decision <span class="gtkdoc opt">=</span> <span class="function">WEBKIT_NAVIGATION_POLICY_DECISION</span> <span class="gtkdoc opt">(</span>decision<span class="gtkdoc opt">);</span>
+        <span class="comment">/* Make a policy decision here. */</span>
+        <span class="keyword">break</span><span class="gtkdoc opt">;</span>
+    <span class="gtkdoc opt">}</span>
+    <span class="keyword">case</span> WEBKIT_POLICY_DECISION_TYPE_NEW_WINDOW_ACTION<span class="gtkdoc opt">: {</span>
+        WebKitNavigationPolicyDecision <span class="gtkdoc opt">*</span>navigation_decision <span class="gtkdoc opt">=</span> <span class="function">WEBKIT_NAVIGATION_POLICY_DECISION</span> <span class="gtkdoc opt">(</span>decision<span class="gtkdoc opt">);</span>
+        <span class="comment">/* Make a policy decision here. */</span>
+        <span class="keyword">break</span><span class="gtkdoc opt">;</span>
+    <span class="gtkdoc opt">}</span>
+    <span class="keyword">case</span> WEBKIT_POLICY_DECISION_TYPE_RESPONSE<span class="gtkdoc opt">:</span>
+        WebKitResponsePolicyDecision <span class="gtkdoc opt">*</span>response <span class="gtkdoc opt">=</span> <span class="function">WEBKIT_RESPONSE_POLICY_DECISION</span> <span class="gtkdoc opt">(</span>decision<span class="gtkdoc opt">);</span>
+        <span class="comment">/* Make a policy decision here. */</span>
+        <span class="keyword">break</span><span class="gtkdoc opt">;</span>
+    <span class="keyword">default</span><span class="gtkdoc opt">:</span>
+        <span class="comment">/* Making no decision results in webkit_policy_decision_use(). */</span>
+        <span class="keyword">return</span> FALSE<span class="gtkdoc opt">;</span>
+    <span class="gtkdoc opt">}</span>
+    <span class="keyword">return</span> TRUE<span class="gtkdoc opt">;</span>
+<span class="gtkdoc opt">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -5368,32 +5479,32 @@ load operation.</p>
 24
 25
 26</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="type">void</span><span class="normal"> </span><span class="function">web_view_load_changed</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitWebView</span><span class="normal">  </span><span class="symbol">*</span><span class="normal">web_view</span><span class="symbol">,</span>
-<span class="normal">                                   </span><span class="usertype">WebKitLoadEvent</span><span class="normal"> load_event</span><span class="symbol">,</span>
-<span class="normal">                                   </span><span class="usertype">gpointer</span><span class="normal">        user_data</span><span class="symbol">)</span>
-<span class="cbracket">{</span>
-<span class="normal">    </span><span class="keyword">switch</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">load_event</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-LOAD-STARTED:CAPS">WEBKIT_LOAD_STARTED</a></span><span class="symbol">:</span>
-<span class="normal">        </span><span class="comment">/* New load, we have now a provisional URI */</span>
-<span class="normal">        provisional_uri </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-get-uri">webkit_web_view_get_uri</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_view</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="comment">/* Here we could start a spinner or update the</span>
+        <td class="listing_code"><pre class="programlisting"><span class="gtkdoc kwb">static void</span> <span class="function">web_view_load_changed</span> <span class="gtkdoc opt">(</span>WebKitWebView  <span class="gtkdoc opt">*</span>web_view<span class="gtkdoc opt">,</span>
+                                   WebKitLoadEvent load_event<span class="gtkdoc opt">,</span>
+                                   gpointer        user_data<span class="gtkdoc opt">)</span>
+<span class="gtkdoc opt">{</span>
+    <span class="keyword">switch</span> <span class="gtkdoc opt">(</span>load_event<span class="gtkdoc opt">) {</span>
+    <span class="keyword">case</span> WEBKIT_LOAD_STARTED<span class="gtkdoc opt">:</span>
+        <span class="comment">/* New load, we have now a provisional URI */</span>
+        provisional_uri <span class="gtkdoc opt">=</span> <span class="function"><a href="WebKitWebView.html#webkit-web-view-get-uri">webkit_web_view_get_uri</a></span> <span class="gtkdoc opt">(</span>web_view<span class="gtkdoc opt">);</span>
+        <span class="comment">/* Here we could start a spinner or update the</span>
 <span class="comment">         * location bar with the provisional URI */</span>
-<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-LOAD-REDIRECTED:CAPS">WEBKIT_LOAD_REDIRECTED</a></span><span class="symbol">:</span>
-<span class="normal">        redirected_uri </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-get-uri">webkit_web_view_get_uri</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_view</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-LOAD-COMMITTED:CAPS">WEBKIT_LOAD_COMMITTED</a></span><span class="symbol">:</span>
-<span class="normal">        </span><span class="comment">/* The load is being performed. Current URI is</span>
-<span class="comment">         * the final one and it won't change unless a new</span>
+        <span class="keyword">break</span><span class="gtkdoc opt">;</span>
+    <span class="keyword">case</span> WEBKIT_LOAD_REDIRECTED<span class="gtkdoc opt">:</span>
+        redirected_uri <span class="gtkdoc opt">=</span> <span class="function"><a href="WebKitWebView.html#webkit-web-view-get-uri">webkit_web_view_get_uri</a></span> <span class="gtkdoc opt">(</span>web_view<span class="gtkdoc opt">);</span>
+        <span class="keyword">break</span><span class="gtkdoc opt">;</span>
+    <span class="keyword">case</span> WEBKIT_LOAD_COMMITTED<span class="gtkdoc opt">:</span>
+        <span class="comment">/* The load is being performed. Current URI is</span>
+<span class="comment">         * the final one and it won&apos;t change unless a new</span>
 <span class="comment">         * load is requested or a navigation within the</span>
 <span class="comment">         * same page is performed */</span>
-<span class="normal">        uri </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="WebKitWebView.html#webkit-web-view-get-uri">webkit_web_view_get_uri</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">web_view</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="WebKitWebView.html#WEBKIT-LOAD-FINISHED:CAPS">WEBKIT_LOAD_FINISHED</a></span><span class="symbol">:</span>
-<span class="normal">        </span><span class="comment">/* Load finished, we can now stop the spinner */</span>
-<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="cbracket">}</span>
-<span class="cbracket">}</span></pre></td>
+        uri <span class="gtkdoc opt">=</span> <span class="function"><a href="WebKitWebView.html#webkit-web-view-get-uri">webkit_web_view_get_uri</a></span> <span class="gtkdoc opt">(</span>web_view<span class="gtkdoc opt">);</span>
+        <span class="keyword">break</span><span class="gtkdoc opt">;</span>
+    <span class="keyword">case</span> WEBKIT_LOAD_FINISHED<span class="gtkdoc opt">:</span>
+        <span class="comment">/* Load finished, we can now stop the spinner */</span>
+        <span class="keyword">break</span><span class="gtkdoc opt">;</span>
+    <span class="gtkdoc opt">}</span>
+<span class="gtkdoc opt">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -5651,30 +5762,30 @@ allowing the user decide what to do with the request:</p>
 22
 23
 24</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="keyword">static</span><span class="normal"> </span><span class="usertype">gboolean</span><span class="normal"> </span><span class="function">permission_request_cb</span><span class="normal"> </span><span class="symbol">(</span><span class="usertype">WebKitWebView</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">web_view</span><span class="symbol">,</span>
-<span class="normal">                                       </span><span class="usertype">WebKitPermissionRequest</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">request</span><span class="symbol">,</span>
-<span class="normal">                                       </span><span class="usertype">GtkWindow</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">parent_window</span><span class="symbol">)</span>
-<span class="cbracket">{</span>
-<span class="normal">    </span><span class="usertype">GtkWidget</span><span class="normal"> </span><span class="symbol">*</span><span class="normal">dialog </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../gtk3/GtkMessageDialog.html#gtk-message-dialog-new">gtk_message_dialog_new</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">parent_window</span><span class="symbol">,</span>
-<span class="normal">                                                <a href="../gtk3/GtkDialog.html#GTK-DIALOG-MODAL:CAPS">GTK_DIALOG_MODAL</a></span><span class="symbol">,</span>
-<span class="normal">                                                <a href="../gtk3/GtkMessageDialog.html#GTK-MESSAGE-QUESTION:CAPS">GTK_MESSAGE_QUESTION</a></span><span class="symbol">,</span>
-<span class="normal">                                                <a href="../gtk3/GtkMessageDialog.html#GTK-BUTTONS-YES-NO:CAPS">GTK_BUTTONS_YES_NO</a></span><span class="symbol">,</span>
-<span class="normal">                                                </span><span class="string">"Allow Permission Request?"</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="function"><a href="../gtk3/GtkWidget.html#gtk-widget-show">gtk_widget_show</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">dialog</span><span class="symbol">);</span>
-<span class="normal">    </span><span class="usertype">gint</span><span class="normal"> result </span><span class="symbol">=</span><span class="normal"> </span><span class="function"><a href="../gtk3/GtkDialog.html#gtk-dialog-run">gtk_dialog_run</a></span><span class="normal"> </span><span class="symbol">(</span><span class="function">GTK_DIALOG</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">dialog</span><span class="symbol">));</span>
+        <td class="listing_code"><pre class="programlisting"><span class="gtkdoc kwb">static</span> gboolean <span class="function">permission_request_cb</span> <span class="gtkdoc opt">(</span>WebKitWebView <span class="gtkdoc opt">*</span>web_view<span class="gtkdoc opt">,</span>
+                                       WebKitPermissionRequest <span class="gtkdoc opt">*</span>request<span class="gtkdoc opt">,</span>
+                                       GtkWindow <span class="gtkdoc opt">*</span>parent_window<span class="gtkdoc opt">)</span>
+<span class="gtkdoc opt">{</span>
+    GtkWidget <span class="gtkdoc opt">*</span>dialog <span class="gtkdoc opt">=</span> <span class="function"><a href="../gtk3/GtkMessageDialog.html#gtk-message-dialog-new">gtk_message_dialog_new</a></span> <span class="gtkdoc opt">(</span>parent_window<span class="gtkdoc opt">,</span>
+                                                GTK_DIALOG_MODAL<span class="gtkdoc opt">,</span>
+                                                GTK_MESSAGE_QUESTION<span class="gtkdoc opt">,</span>
+                                                GTK_BUTTONS_YES_NO<span class="gtkdoc opt">,</span>
+                                                <span class="string">&quot;Allow Permission Request?&quot;</span><span class="gtkdoc opt">);</span>
+    <span class="function"><a href="../gtk3/GtkWidget.html#gtk-widget-show">gtk_widget_show</a></span> <span class="gtkdoc opt">(</span>dialog<span class="gtkdoc opt">);</span>
+    gint result <span class="gtkdoc opt">=</span> <span class="function"><a href="../gtk3/GtkDialog.html#gtk-dialog-run">gtk_dialog_run</a></span> <span class="gtkdoc opt">(</span><span class="function">GTK_DIALOG</span> <span class="gtkdoc opt">(</span>dialog<span class="gtkdoc opt">));</span>
 
-<span class="normal">    </span><span class="keyword">switch</span><span class="normal"> </span><span class="symbol">(</span><span class="normal">result</span><span class="symbol">)</span><span class="normal"> </span><span class="cbracket">{</span>
-<span class="normal">    </span><span class="keyword">case</span><span class="normal"> <a href="../gtk3/GtkDialog.html#GTK-RESPONSE-YES:CAPS">GTK_RESPONSE_YES</a></span><span class="symbol">:</span>
-<span class="normal">        </span><span class="function"><a href="WebKitPermissionRequest.html#webkit-permission-request-allow">webkit_permission_request_allow</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
-<span class="label">    default:</span>
-<span class="normal">        </span><span class="function"><a href="WebKitPermissionRequest.html#webkit-permission-request-deny">webkit_permission_request_deny</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">request</span><span class="symbol">);</span>
-<span class="normal">        </span><span class="keyword">break</span><span class="symbol">;</span>
-<span class="normal">    </span><span class="cbracket">}</span>
-<span class="normal">    </span><span class="function"><a href="../gtk3/GtkWidget.html#gtk-widget-destroy">gtk_widget_destroy</a></span><span class="normal"> </span><span class="symbol">(</span><span class="normal">dialog</span><span class="symbol">);</span>
+    <span class="keyword">switch</span> <span class="gtkdoc opt">(</span>result<span class="gtkdoc opt">) {</span>
+    <span class="keyword">case</span> GTK_RESPONSE_YES<span class="gtkdoc opt">:</span>
+        <span class="function"><a href="WebKitPermissionRequest.html#webkit-permission-request-allow">webkit_permission_request_allow</a></span> <span class="gtkdoc opt">(</span>request<span class="gtkdoc opt">);</span>
+        <span class="keyword">break</span><span class="gtkdoc opt">;</span>
+    <span class="keyword">default</span><span class="gtkdoc opt">:</span>
+        <span class="function"><a href="WebKitPermissionRequest.html#webkit-permission-request-deny">webkit_permission_request_deny</a></span> <span class="gtkdoc opt">(</span>request<span class="gtkdoc opt">);</span>
+        <span class="keyword">break</span><span class="gtkdoc opt">;</span>
+    <span class="gtkdoc opt">}</span>
+    <span class="function"><a href="../gtk3/GtkWidget.html#gtk-widget-destroy">gtk_widget_destroy</a></span> <span class="gtkdoc opt">(</span>dialog<span class="gtkdoc opt">);</span>
 
-<span class="normal">    </span><span class="keyword">return</span><span class="normal"> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS">TRUE</a></span><span class="symbol">;</span>
-<span class="cbracket">}</span></pre></td>
+    <span class="keyword">return</span> TRUE<span class="gtkdoc opt">;</span>
+<span class="gtkdoc opt">}</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -6034,6 +6145,12 @@ on the dialog type:</p>
  <a class="link" href="WebKitWebView.html#WEBKIT-SCRIPT-DIALOG-BEFORE-UNLOAD-CONFIRM:CAPS"><code class="literal">WEBKIT_SCRIPT_DIALOG_BEFORE_UNLOAD_CONFIRM</code></a>: message dialog with Stay and Leave buttons.
 </p></li>
 </ul></div>
+<p>It is possible to handle the script dialog request asynchronously, by simply
+caling <a class="link" href="WebKitWebView.html#webkit-script-dialog-ref" title="webkit_script_dialog_ref ()"><code class="function">webkit_script_dialog_ref()</code></a> on the <em class="parameter"><code>dialog</code></em>
+ argument and calling
+<a class="link" href="WebKitWebView.html#webkit-script-dialog-close" title="webkit_script_dialog_close ()"><code class="function">webkit_script_dialog_close()</code></a> when done.
+If the last reference is removed on a <a class="link" href="WebKitWebView.html#WebKitScriptDialog"><span class="type">WebKitScriptDialog</span></a> and the dialog has not been
+closed, <a class="link" href="WebKitWebView.html#webkit-script-dialog-close" title="webkit_script_dialog_close ()"><code class="function">webkit_script_dialog_close()</code></a> will be called.</p>
 <div class="refsect3">
 <a name="WebKitWebView-script-dialog.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -6313,6 +6430,6 @@ to <em class="parameter"><code>reason</code></em>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.29</div>
+<hr>Generated by GTK-Doc V1.29.1</div>
 </body>
 </html>

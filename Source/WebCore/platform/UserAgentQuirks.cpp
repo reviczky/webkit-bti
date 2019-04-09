@@ -27,7 +27,7 @@
 #include "UserAgentQuirks.h"
 
 #include "PublicSuffix.h"
-#include "URL.h"
+#include <wtf/URL.h>
 
 namespace WebCore {
 
@@ -65,12 +65,6 @@ static bool urlRequiresChromeBrowser(const URL& url)
     // Needed for fonts on many sites to work with WebKit.
     // https://bugs.webkit.org/show_bug.cgi?id=147296
     if (baseDomain == "typekit.net" || baseDomain == "typekit.com")
-        return true;
-
-    // Washington Post decides the image type based on the user agent,
-    // giving image/jp2 with WebKitGTK+'s standard user agent.
-    // https://bugs.webkit.org/show_bug.cgi?id=181421
-    if (baseDomain == "washingtonpost.com")
         return true;
 
     return false;
