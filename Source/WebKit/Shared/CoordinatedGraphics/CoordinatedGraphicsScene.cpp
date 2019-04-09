@@ -96,12 +96,10 @@ void CoordinatedGraphicsScene::updateViewport()
         m_client->updateViewport();
 }
 
-#if USE(COORDINATED_GRAPHICS_THREADED)
 void CoordinatedGraphicsScene::onNewBufferAvailable()
 {
     updateViewport();
 }
-#endif
 
 Nicosia::CompositionLayerTextureMapperImpl& compositionLayerImpl(Nicosia::CompositionLayer& compositionLayer)
 {
@@ -433,13 +431,12 @@ void CoordinatedGraphicsScene::purgeGLResources()
 
     if (m_nicosia.scene) {
         m_nicosia.scene->accessState(
-            [this](const Nicosia::Scene::State& state)
+            [](Nicosia::Scene::State& state)
             {
-                ASSERT(state.id == m_nicosia.state.id);
-                for (auto& layer : m_nicosia.state.layers)
+                for (auto& layer : state.layers)
                     removeLayer(*layer);
-                m_nicosia.state.layers = { };
-                m_nicosia.state.rootLayer = nullptr;
+                state.layers = { };
+                state.rootLayer = nullptr;
             });
         m_nicosia.scene = nullptr;
     }

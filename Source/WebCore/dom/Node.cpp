@@ -332,7 +332,9 @@ Node::Node(Document& document, ConstructionType type)
 Node::~Node()
 {
     ASSERT(isMainThread());
-    ASSERT(!m_refCount);
+    // We set m_refCount to 1 before calling delete to avoid double destruction through use of Ref<T>/RefPtr<T>.
+    // This is a security mitigation in case of programmer errorm (caught by a debug assertion).
+    ASSERT(m_refCount == 1);
     ASSERT(m_deletionHasBegun);
     ASSERT(!m_adoptionIsRequired);
 
@@ -1024,19 +1026,6 @@ bool Node::containsIncludingShadowDOM(const Node* node) const
     for (; node; node = node->parentOrShadowHostNode()) {
         if (node == this)
             return true;
-    }
-    return false;
-}
-
-bool Node::containsIncludingHostElements(const Node* node) const
-{
-    while (node) {
-        if (node == this)
-            return true;
-        if (is<DocumentFragment>(*node) && downcast<DocumentFragment>(*node).isTemplateContent())
-            node = static_cast<const TemplateContentDocumentFragment*>(node)->host();
-        else
-            node = node->parentOrShadowHostNode();
     }
     return false;
 }
@@ -2523,6 +2512,7 @@ void Node::removedLastRef()
 #ifndef NDEBUG
     m_deletionHasBegun = true;
 #endif
+    m_refCount = 1; // Avoid double destruction through use of RefPtr<T>. (This is a security mitigation in case of programmer error. It will ASSERT in debug builds.)
     delete this;
 }
 
