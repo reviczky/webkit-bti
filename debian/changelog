@@ -8,6 +8,7 @@ webkit2gtk (2.24.1-1) UNRELEASED; urgency=high
     + Update upstream branch name.
   * debian/rules:
     + No need to chmod generate-gtkdoc anymore.
+    + 32-bit x86 builds require SSE2 now.
   * debian/watch:
     + Scan stable releases only.
   * debian/patches/detect-woff.patch:

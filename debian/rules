@@ -23,6 +23,11 @@ ifeq (,$(filter $(DEB_HOST_ARCH),amd64 ppc64 ppc64el))
 	CFLAGS := $(CFLAGS:-g=-g1)
 endif
 
+# The 32-bit x86 build requires SSE2
+ifneq (,$(filter $(DEB_HOST_ARCH),i386))
+	CFLAGS += -msse2 -mfpmath=sse
+endif
+
 # See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=81426
 ifneq (,$(filter $(DEB_HOST_ARCH),armhf sh3 sh4 powerpc))
 	CFLAGS := $(CFLAGS:-O2=-O1)
