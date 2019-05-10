@@ -13,6 +13,8 @@ webkit2gtk (2.24.1-2) UNRELEASED; urgency=high
     + Fix playback of redirected streams (Closes: #928044).
   * debian/patches/fix-cjk-white-space.patch:
     + Fix white space rendering with noto CJK font (Closes: #926872).
+  * debian/NEWS:
+    + Add news item about the lack of support for pre-SSE2 i386 CPUs.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 10 May 2019 12:39:42 +0300
 
