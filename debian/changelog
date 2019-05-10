@@ -1,4 +1,4 @@
-webkit2gtk (2.24.1-2) UNRELEASED; urgency=high
+webkit2gtk (2.24.1-2) unstable; urgency=high
 
   * The WebKitGTK+ security advisory WSA-2019-0002 lists the following
     security fixes in the latest versions of WebKitGTK+:
