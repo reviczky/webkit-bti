@@ -7,3 +7,5 @@ detect-gstreamer-gl.patch
 detect-woff.patch
 user-agent-branding.patch
 prefer-pthread.patch
+fix-redirected-streams.patch
+fix-cjk-white-space.patch
