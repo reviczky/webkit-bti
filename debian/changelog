@@ -1,5 +1,14 @@
 webkit2gtk (2.24.1-2) UNRELEASED; urgency=high
 
+  * The WebKitGTK+ security advisory WSA-2019-0002 lists the following
+    security fixes in the latest versions of WebKitGTK+:
+    + CVE-2019-6201, CVE-2019-7285, CVE-2019-7292, CVE-2019-8503,
+      CVE-2019-8515 (fixed in 2.22.6).
+    + CVE-2019-8518, CVE-2019-8523 (fixed in 2.22.7).
+    + CVE-2019-8524, CVE-2019-8535, CVE-2019-8536, CVE-2019-8544,
+      CVE-2019-8551, CVE-2019-8558, CVE-2019-8559, CVE-2019-8563,
+      CVE-2019-8506 (fixed in 2.24.0).
+    + CVE-2019-11070, CVE-2019-6251 (fixed in 2.24.1).
   * debian/patches/fix-redirected-streams.patch:
     + Fix playback of redirected streams (Closes: #928044).
   * debian/patches/fix-cjk-white-space.patch:
