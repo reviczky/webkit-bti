@@ -9,3 +9,4 @@ user-agent-branding.patch
 prefer-pthread.patch
 fix-redirected-streams.patch
 fix-cjk-white-space.patch
+adaptive-streaming-fix.patch

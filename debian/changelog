@@ -1,3 +1,30 @@
+webkit2gtk (2.24.1-2~bpo9+1) stretch-backports; urgency=medium
+
+  * Rebuild for stretch-backports.
+  * debian/control:
+    + Versions of GStreamer < 1.13 had GStreamerGL in the "bad" set, so
+      depend on libgstreamer-plugins-bad1.0-dev and don't require
+      GStreamer 1.13. Don't install libgstreamer-plugins-bad1.0-dev in
+      armel or armhf: the usage of two different GL implementations causes
+      a build failure (see WebKit bug #175127).
+    + Remove build dependency on libwoff-dev, this is not available in
+      this Debian release.
+    + Don't recommend gstreamer1.0-gl, that package is not available in
+      this Debian release.
+    + Downgrade build dependency on debhelper to 10 and don't require
+      ninja-build.
+    + Don't depend on libopenjp2-7-dev.
+  * debian/rules:
+    + Build with -DENABLE_MEDIA_SOURCE=OFF. This feature requires a more
+      recent version of GStreamer.
+    + Build with -DUSE_OPENJPEG=OFF. This feature requires a more recent
+      version of libopenjp2-7-dev.
+    + Don't use cmake+ninja.
+  * debian/patches/adaptive-streaming-fix.patch:
+    + Fix crash with GStreamer versions < 1.12
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 13 May 2019 14:51:47 +0300
+
 webkit2gtk (2.24.1-2) unstable; urgency=high
 
   * The WebKitGTK+ security advisory WSA-2019-0002 lists the following
