@@ -13,6 +13,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE6s_dataE@Base 2.21.1
  (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.21.1
  (optional)_ZZN7bmalloc10vmPageSizeEvE6cached@Base 2.19.6
+ webkit_accessible_get_type@Base 2.24.2
+ webkit_accessible_hyperlink_get_type@Base 2.24.2
  webkit_application_info_get_name@Base 2.17.90
  webkit_application_info_get_type@Base 2.17.90
  webkit_application_info_get_version@Base 2.17.90
@@ -1915,6 +1917,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_inspector_get_web_view@Base 2.5.3
  webkit_web_inspector_is_attached@Base 2.5.3
  webkit_web_inspector_show@Base 2.5.3
+ webkit_web_page_accessibility_object_get_type@Base 2.24.2
  webkit_web_page_get_dom_document@Base 2.5.3
  webkit_web_page_get_editor@Base 2.10.0
  webkit_web_page_get_id@Base 2.5.3
