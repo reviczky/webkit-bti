@@ -85,7 +85,7 @@
 #include <wtf/text/WTFString.h>
 
 #if HAVE(ACCESSIBILITY) && PLATFORM(GTK)
-#include "WebPageAccessibilityObject.h"
+typedef struct _AtkObject AtkObject;
 #include <wtf/glib/GRefPtr.h>
 #endif
 
@@ -793,10 +793,6 @@ public:
 
 #if PLATFORM(COCOA) && ENABLE(SERVICE_CONTROLS)
     void replaceSelectionWithPasteboardData(const Vector<String>& types, const IPC::DataReference&);
-#endif
-
-#if HAVE(ACCESSIBILITY) && PLATFORM(GTK)
-    void updateAccessibilityTree();
 #endif
 
     void setCompositionForTesting(const String& compositionString, uint64_t from, uint64_t length, bool suppressUnderline);
@@ -1593,7 +1589,7 @@ private:
 #endif
 
 #if HAVE(ACCESSIBILITY) && PLATFORM(GTK)
-    GRefPtr<WebPageAccessibilityObject> m_accessibilityObject;
+    GRefPtr<AtkObject> m_accessibilityObject;
 #endif
 
 #if PLATFORM(GTK) && USE(TEXTURE_MAPPER_GL)

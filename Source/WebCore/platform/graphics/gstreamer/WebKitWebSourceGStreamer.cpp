@@ -44,6 +44,10 @@ public:
     CachedResourceStreamingClient(WebKitWebSrc*, ResourceRequest&&);
     virtual ~CachedResourceStreamingClient();
 
+    const HashSet<RefPtr<WebCore::SecurityOrigin>>& securityOrigins() const { return m_origins; }
+
+    void setSourceElement(WebKitWebSrc* src) { m_src = GST_ELEMENT_CAST(src); }
+
 private:
     void checkUpdateBlocksize(uint64_t bytesRead);
 
@@ -65,15 +69,35 @@ private:
 
     GRefPtr<GstElement> m_src;
     ResourceRequest m_request;
+    HashSet<RefPtr<WebCore::SecurityOrigin>> m_origins;
 };
 
 enum MainThreadSourceNotification {
     Start = 1 << 0,
     Stop = 1 << 1,
+    Dispose = 1 << 2,
 };
 
 #define WEBKIT_WEB_SRC_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE((obj), WEBKIT_TYPE_WEB_SRC, WebKitWebSrcPrivate))
 struct _WebKitWebSrcPrivate {
+    ~_WebKitWebSrcPrivate()
+    {
+        if (notifier && notifier->isValid()) {
+            notifier->notifyAndWait(MainThreadSourceNotification::Dispose, [&] {
+                if (resource) {
+                    auto* client = static_cast<CachedResourceStreamingClient*>(resource->client());
+                    if (client)
+                        client->setSourceElement(nullptr);
+
+                    resource->setClient(nullptr);
+                }
+                loader = nullptr;
+            });
+            notifier->invalidate();
+            notifier = nullptr;
+        }
+    }
+
     CString originalURI;
     CString redirectedURI;
     bool keepAlive;
@@ -128,7 +152,6 @@ GST_DEBUG_CATEGORY_STATIC(webkit_web_src_debug);
 static void webKitWebSrcUriHandlerInit(gpointer gIface, gpointer ifaceData);
 
 static void webKitWebSrcDispose(GObject*);
-static void webKitWebSrcFinalize(GObject*);
 static void webKitWebSrcSetProperty(GObject*, guint propertyID, const GValue*, GParamSpec*);
 static void webKitWebSrcGetProperty(GObject*, guint propertyID, GValue*, GParamSpec*);
 static GstStateChangeReturn webKitWebSrcChangeState(GstElement*, GstStateChange);
@@ -155,7 +178,6 @@ static void webkit_web_src_class_init(WebKitWebSrcClass* klass)
     GObjectClass* oklass = G_OBJECT_CLASS(klass);
 
     oklass->dispose = webKitWebSrcDispose;
-    oklass->finalize = webKitWebSrcFinalize;
     oklass->set_property = webKitWebSrcSetProperty;
     oklass->get_property = webKitWebSrcGetProperty;
 
@@ -242,21 +264,10 @@ static void webkit_web_src_init(WebKitWebSrc* src)
 static void webKitWebSrcDispose(GObject* object)
 {
     WebKitWebSrcPrivate* priv = WEBKIT_WEB_SRC(object)->priv;
-    if (priv->notifier) {
-        priv->notifier->invalidate();
-        priv->notifier = nullptr;
-    }
-
-    GST_CALL_PARENT(G_OBJECT_CLASS, dispose, (object));
-}
-
-static void webKitWebSrcFinalize(GObject* object)
-{
-    WebKitWebSrcPrivate* priv = WEBKIT_WEB_SRC(object)->priv;
 
     priv->~WebKitWebSrcPrivate();
 
-    GST_CALL_PARENT(G_OBJECT_CLASS, finalize, (object));
+    GST_CALL_PARENT(G_OBJECT_CLASS, dispose, (object));
 }
 
 static void webKitWebSrcSetProperty(GObject* object, guint propID, const GValue* value, GParamSpec* pspec)
@@ -486,7 +497,7 @@ static gboolean webKitWebSrcStart(GstBaseSrc* baseSrc)
     WebKitWebSrc* src = WEBKIT_WEB_SRC(baseSrc);
     WebKitWebSrcPrivate* priv = src->priv;
 
-    if (!priv->player) {
+    if (webkitGstCheckVersion(1, 12, 0) && !priv->player) {
         GRefPtr<GstQuery> query = adoptGRef(gst_query_new_context(WEBKIT_WEB_SRC_PLAYER_CONTEXT_TYPE_NAME));
         if (gst_pad_peer_query(GST_BASE_SRC_PAD(baseSrc), query.get())) {
             GstContext* context;
@@ -765,8 +776,28 @@ static GstURIType webKitWebSrcUriGetType(GType)
 
 const gchar* const* webKitWebSrcGetProtocols(GType)
 {
-    static const char* protocols[] = {"http", "https", "blob", nullptr };
+    static const char* protocols[4];
+    if (webkitGstCheckVersion(1, 12, 0)) {
+        protocols[0] = "http";
+        protocols[1] = "https";
+        protocols[2] = "blob";
+    } else {
+        protocols[0] = "webkit+http";
+        protocols[1] = "webkit+https";
+        protocols[2] = "webkit+blob";
+    }
+    protocols[3] = nullptr;
     return protocols;
+}
+
+static URL convertPlaybinURI(const char* uriString)
+{
+    URL url(URL(), uriString);
+    if (!webkitGstCheckVersion(1, 12, 0)) {
+        ASSERT(url.protocol().substring(0, 7) == "webkit+");
+        url.setProtocol(url.protocol().substring(7).toString());
+    }
+    return url;
 }
 
 static gchar* webKitWebSrcGetUri(GstURIHandler* handler)
@@ -796,7 +827,8 @@ static gboolean webKitWebSrcSetUri(GstURIHandler* handler, const gchar* uri, GEr
         return FALSE;
     }
 
-    URL url(URL(), uri);
+    URL url = convertPlaybinURI(uri);
+
     if (!urlHasSupportedProtocol(url)) {
         g_set_error(error, GST_URI_ERROR, GST_URI_ERROR_BAD_URI, "Invalid URI '%s'", uri);
         return FALSE;
@@ -878,6 +910,8 @@ void CachedResourceStreamingClient::responseReceived(PlatformMediaResource&, con
     priv->didPassAccessControlCheck = priv->resource->didPassAccessControlCheck();
 
     GST_DEBUG_OBJECT(src, "Received response: %d", response.httpStatusCode());
+
+    m_origins.add(SecurityOrigin::create(response.url()));
 
     auto responseURI = response.url().string().utf8();
     if (priv->originalURI != responseURI)
@@ -1060,6 +1094,18 @@ void CachedResourceStreamingClient::loadFinished(PlatformMediaResource&)
 
     if (priv->isSeeking && !priv->isFlushing)
         priv->isSeeking = false;
+}
+
+bool webKitSrcWouldTaintOrigin(WebKitWebSrc* src, const SecurityOrigin& origin)
+{
+    WebKitWebSrcPrivate* priv = src->priv;
+
+    auto* cachedResourceStreamingClient = reinterpret_cast<CachedResourceStreamingClient*>(priv->resource->client());
+    for (auto& responseOrigin : cachedResourceStreamingClient->securityOrigins()) {
+        if (!origin.canAccess(*responseOrigin))
+            return true;
+    }
+    return false;
 }
 
 #endif // ENABLE(VIDEO) && USE(GSTREAMER)

@@ -225,6 +225,14 @@ MediaPlayerPrivateGStreamer::~MediaPlayerPrivateGStreamer()
     }
 }
 
+static void convertToInternalProtocol(URL& url)
+{
+    if (webkitGstCheckVersion(1, 12, 0))
+        return;
+    if (url.protocolIsInHTTPFamily() || url.protocolIsBlob())
+        url.setProtocol("webkit+" + url.protocol());
+}
+
 void MediaPlayerPrivateGStreamer::setPlaybinURL(const URL& url)
 {
     // Clean out everything after file:// url path.
@@ -233,13 +241,14 @@ void MediaPlayerPrivateGStreamer::setPlaybinURL(const URL& url)
         cleanURLString = cleanURLString.substring(0, url.pathEnd());
 
     m_url = URL(URL(), cleanURLString);
+    convertToInternalProtocol(m_url);
     GST_INFO_OBJECT(pipeline(), "Load %s", m_url.string().utf8().data());
     g_object_set(m_pipeline.get(), "uri", m_url.string().utf8().data(), nullptr);
 }
 
 void MediaPlayerPrivateGStreamer::load(const String& urlString)
 {
-    loadFull(urlString, nullptr, String());
+    loadFull(urlString, String());
 }
 
 static void setSyncOnClock(GstElement *element, bool sync)
@@ -264,14 +273,10 @@ void MediaPlayerPrivateGStreamer::syncOnClock(bool sync)
     setSyncOnClock(audioSink(), sync);
 }
 
-void MediaPlayerPrivateGStreamer::loadFull(const String& urlString, const gchar* playbinName,
-    const String& pipelineName)
+void MediaPlayerPrivateGStreamer::loadFull(const String& urlString, const String& pipelineName)
 {
-    // FIXME: This method is still called even if supportsType() returned
-    // IsNotSupported. This would deserve more investigation but meanwhile make
-    // sure we don't ever try to play animated gif assets.
     if (m_player->contentMIMEType() == "image/gif") {
-        loadingFailed(MediaPlayer::FormatError);
+        loadingFailed(MediaPlayer::FormatError, MediaPlayer::HaveNothing, true);
         return;
     }
 
@@ -280,7 +285,7 @@ void MediaPlayerPrivateGStreamer::loadFull(const String& urlString, const gchar*
         return;
 
     if (!m_pipeline)
-        createGSTPlayBin(isMediaSource() ? "playbin" : playbinName, pipelineName);
+        createGSTPlayBin(url, pipelineName);
     syncOnClock(true);
     if (m_fillTimer.isActive())
         m_fillTimer.stop();
@@ -302,6 +307,7 @@ void MediaPlayerPrivateGStreamer::loadFull(const String& urlString, const gchar*
     m_readyState = MediaPlayer::HaveNothing;
     m_player->readyStateChanged();
     m_volumeAndMuteInitialized = false;
+    m_hasTaintedOrigin = WTF::nullopt;
 
     if (!m_delayingLoad)
         commitLoad();
@@ -325,7 +331,7 @@ void MediaPlayerPrivateGStreamer::load(MediaStreamPrivate& stream)
         (stream.hasCaptureVideoSource() || stream.hasCaptureAudioSource()) ? "Local" : "Remote",
         "_0x", hex(reinterpret_cast<uintptr_t>(this), Lowercase));
 
-    loadFull(String("mediastream://") + stream.id(), "playbin3", pipelineName);
+    loadFull(String("mediastream://") + stream.id(), pipelineName);
     syncOnClock(false);
 
 #if USE(GSTREAMER_GL)
@@ -1350,11 +1356,10 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
         }
 #endif
         else if (gst_structure_has_name(structure, "http-headers")) {
-            const char* redirectionUri = gst_structure_get_string(structure, "redirection-uri");
-            const char* uri = redirectionUri ? redirectionUri : gst_structure_get_string(structure, "uri");
-            if (uri) {
+            GST_DEBUG_OBJECT(pipeline(), "Processing HTTP headers: %" GST_PTR_FORMAT, structure);
+            if (const char* uri = gst_structure_get_string(structure, "uri")) {
                 URL url(URL(), uri);
-
+                convertToInternalProtocol(url);
                 m_origins.add(SecurityOrigin::create(url));
 
                 if (url != m_url) {
@@ -1366,7 +1371,16 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
             if (gst_structure_get(structure, "response-headers", GST_TYPE_STRUCTURE, &responseHeaders.outPtr(), nullptr)) {
                 const char* contentLengthHeaderName = httpHeaderNameString(HTTPHeaderName::ContentLength).utf8().data();
                 uint64_t contentLength = 0;
-                gst_structure_get_uint64(responseHeaders.get(), contentLengthHeaderName, &contentLength);
+                if (!gst_structure_get_uint64(responseHeaders.get(), contentLengthHeaderName, &contentLength)) {
+                    // souphttpsrc sets a string for Content-Length, so
+                    // handle it here, until we remove the webkit+ protocol
+                    // prefix from webkitwebsrc.
+                    if (const char* contentLengthAsString = gst_structure_get_string(responseHeaders.get(), contentLengthHeaderName)) {
+                        contentLength = g_ascii_strtoull(contentLengthAsString, nullptr, 10);
+                        if (contentLength == G_MAXUINT64)
+                            contentLength = 0;
+                    }
+                }
                 GST_INFO_OBJECT(pipeline(), "%s stream detected", !contentLength ? "Live" : "Non-live");
                 if (!contentLength) {
                     m_isStreaming = true;
@@ -1376,6 +1390,11 @@ void MediaPlayerPrivateGStreamer::handleMessage(GstMessage* message)
         } else if (gst_structure_has_name(structure, "webkit-network-statistics")) {
             if (gst_structure_get(structure, "read-position", G_TYPE_UINT64, &m_networkReadPosition, "size", G_TYPE_UINT64, &m_httpResponseTotalSize, nullptr))
                 GST_DEBUG_OBJECT(pipeline(), "Updated network read position %" G_GUINT64_FORMAT ", size: %" G_GUINT64_FORMAT, m_networkReadPosition, m_httpResponseTotalSize);
+        } else if (gst_structure_has_name(structure, "adaptive-streaming-statistics")) {
+            if (WEBKIT_IS_WEB_SRC(m_source.get()) && !webkitGstCheckVersion(1, 12, 0)) {
+                if (const char* uri = gst_structure_get_string(structure, "uri"))
+                    m_hasTaintedOrigin = webKitSrcWouldTaintOrigin(WEBKIT_WEB_SRC(m_source.get()), SecurityOrigin::create(URL(URL(), uri)));
+            }
         } else
             GST_DEBUG_OBJECT(pipeline(), "Unhandled element message: %" GST_PTR_FORMAT, structure);
         break;
@@ -2204,17 +2223,17 @@ void MediaPlayerPrivateGStreamer::durationChanged()
         m_player->durationChanged();
 }
 
-void MediaPlayerPrivateGStreamer::loadingFailed(MediaPlayer::NetworkState error)
+void MediaPlayerPrivateGStreamer::loadingFailed(MediaPlayer::NetworkState networkError, MediaPlayer::ReadyState readyState, bool forceNotifications)
 {
-    GST_WARNING("Loading failed, error: %d", error);
+    GST_WARNING("Loading failed, error: %s", convertEnumerationToString(networkError).utf8().data());
 
     m_errorOccured = true;
-    if (m_networkState != error) {
-        m_networkState = error;
+    if (forceNotifications || m_networkState != networkError) {
+        m_networkState = networkError;
         m_player->networkStateChanged();
     }
-    if (m_readyState != MediaPlayer::HaveNothing) {
-        m_readyState = MediaPlayer::HaveNothing;
+    if (forceNotifications || m_readyState != readyState) {
+        m_readyState = readyState;
         m_player->readyStateChanged();
     }
 
@@ -2388,36 +2407,30 @@ AudioSourceProvider* MediaPlayerPrivateGStreamer::audioSourceProvider()
 }
 #endif
 
-void MediaPlayerPrivateGStreamer::createGSTPlayBin(const gchar* playbinName, const String& pipelineName)
+void MediaPlayerPrivateGStreamer::createGSTPlayBin(const URL& url, const String& pipelineName)
 {
-    if (m_pipeline) {
-        if (!playbinName) {
-            GST_INFO_OBJECT(pipeline(), "Keeping same playbin as nothing forced");
-            return;
-        }
+    const gchar* playbinName = "playbin";
 
+    // MSE doesn't support playbin3. Mediastream requires playbin3. Regular
+    // playback can use playbin3 on-demand with the WEBKIT_GST_USE_PLAYBIN3
+    // environment variable.
+#if GST_CHECK_VERSION(1, 10, 0)
+    if ((!isMediaSource() && g_getenv("WEBKIT_GST_USE_PLAYBIN3")) || url.protocolIs("mediastream"))
+        playbinName = "playbin3";
+#endif
+
+    if (m_pipeline) {
         if (!g_strcmp0(GST_OBJECT_NAME(gst_element_get_factory(m_pipeline.get())), playbinName)) {
             GST_INFO_OBJECT(pipeline(), "Already using %s", playbinName);
             return;
         }
 
-        GST_INFO_OBJECT(pipeline(), "Tearing down as we need to use %s now.",
-            playbinName);
+        GST_INFO_OBJECT(pipeline(), "Tearing down as we need to use %s now.", playbinName);
         changePipelineState(GST_STATE_NULL);
         m_pipeline = nullptr;
     }
 
     ASSERT(!m_pipeline);
-
-#if GST_CHECK_VERSION(1, 10, 0)
-    if (g_getenv("USE_PLAYBIN3"))
-        playbinName = "playbin3";
-#else
-    playbinName = "playbin";
-#endif
-
-    if (!playbinName)
-        playbinName = "playbin";
 
     m_isLegacyPlaybin = !g_strcmp0(playbinName, "playbin");
 
@@ -2442,7 +2455,12 @@ void MediaPlayerPrivateGStreamer::createGSTPlayBin(const gchar* playbinName, con
             return;
 
         GUniquePtr<char> elementName(gst_element_get_name(element));
-        player->m_isVideoDecoderVideo4Linux = g_str_has_prefix(elementName.get(), "v4l2");
+        if (g_str_has_prefix(elementName.get(), "v4l2"))
+            player->m_videoDecoderPlatform = WebKitGstVideoDecoderPlatform::Video4Linux;
+        else if (g_str_has_prefix(elementName.get(), "imxvpudecoder"))
+            player->m_videoDecoderPlatform = WebKitGstVideoDecoderPlatform::ImxVPU;
+
+        player->updateTextureMapperFlags();
     }), this);
 
     g_signal_connect_swapped(m_pipeline.get(), "source-setup", G_CALLBACK(sourceSetupCallback), this);
@@ -2537,15 +2555,23 @@ bool MediaPlayerPrivateGStreamer::canSaveMediaData() const
 
 Optional<bool> MediaPlayerPrivateGStreamer::wouldTaintOrigin(const SecurityOrigin& origin) const
 {
-    GST_TRACE_OBJECT(pipeline(), "Checking %u origins", m_origins.size());
-    for (auto& responseOrigin : m_origins) {
-        if (!origin.canAccess(*responseOrigin)) {
-            GST_DEBUG_OBJECT(pipeline(), "Found reachable response origin");
-            return true;
+    if (webkitGstCheckVersion(1, 12, 0)) {
+        GST_TRACE_OBJECT(pipeline(), "Checking %u origins", m_origins.size());
+        for (auto& responseOrigin : m_origins) {
+            if (!origin.canAccess(*responseOrigin)) {
+                GST_DEBUG_OBJECT(pipeline(), "Found reachable response origin");
+                return true;
+            }
         }
+        GST_DEBUG_OBJECT(pipeline(), "No valid response origin found");
+        return false;
     }
-    GST_DEBUG_OBJECT(pipeline(), "No valid response origin found");
-    return false;
+
+    // GStreamer < 1.12 has an incomplete uridownloader implementation so we
+    // can't use WebKitWebSrc for adaptive fragments downloading if this
+    // version is detected.
+    UNUSED_PARAM(origin);
+    return m_hasTaintedOrigin;
 }
 
 }
