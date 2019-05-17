@@ -1,4 +1,4 @@
-webkit2gtk (2.24.2-1) UNRELEASED; urgency=medium
+webkit2gtk (2.24.2-1) unstable; urgency=medium
 
   * New upstream release.
     + This fixes CVE-2019-8595, CVE-2019-8607 and CVE-2019-8615.
@@ -8,7 +8,7 @@ webkit2gtk (2.24.2-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 17 May 2019 16:03:57 +0300
+ -- Alberto Garcia <berto@igalia.com>  Fri, 17 May 2019 17:40:52 +0300
 
 webkit2gtk (2.24.1-2) unstable; urgency=high
 
