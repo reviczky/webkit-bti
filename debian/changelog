@@ -1,3 +1,17 @@
+webkit2gtk (2.24.2-2) UNRELEASED; urgency=medium
+
+  * The WebKitGTK security advisory WSA-2019-0003 lists the following
+    security fixes in the latest versions of WebKitGTK+:
+    + CVE-2019-8571, CVE-2019-8583, CVE-2019-8586, CVE-2019-8594,
+      CVE-2019-8609, CVE-2019-8611, CVE-2019-8622 and CVE-2019-8623
+      (fixed in 2.24.0).
+    + CVE-2019-6237, CVE-2019-8584, CVE-2019-8587, CVE-2019-8596,
+      CVE-2019-8597, CVE-2019-8601, CVE-2019-8608, CVE-2019-8610 and
+      CVE-2019-8619 (fixed in 2.24.1).
+    + CVE-2019-8595, CVE-2019-8607 and CVE-2019-8615 (fixed in 2.24.2).
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 27 May 2019 13:16:53 +0200
+
 webkit2gtk (2.24.2-1) unstable; urgency=medium
 
   * New upstream release.
