@@ -1,0 +1,17 @@
+From: Alberto Garcia <berto@igalia.com>
+Subject: Fix build with GStreamer <= 1.12.5
+Bug: https://bugs.webkit.org/show_bug.cgi?id=198080
+Index: webkitgtk/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
+===================================================================
+--- webkitgtk.orig/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
++++ webkitgtk/Source/WebCore/platform/graphics/gstreamer/MediaPlayerPrivateGStreamerBase.h
+@@ -38,6 +38,9 @@
+ #include <wtf/WeakPtr.h>
+ 
+ #if USE(TEXTURE_MAPPER_GL)
++#define GST_USE_UNSTABLE_API
++#include <gst/gl/gl.h>
++#undef GST_USE_UNSTABLE_API
+ #include "TextureMapperGL.h"
+ #if USE(NICOSIA)
+ #include "NicosiaContentLayerTextureMapperImpl.h"
