@@ -2,6 +2,9 @@ webkit2gtk (2.25.1-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
+  * debian/rules:
+    + Don't add -msse2 manually to CFLAGS, WebKitGTK does this automatically
+      now.
   * debian/watch, debian/gbp.conf:
     + Update for 2.25.x packages in experimental.
 
