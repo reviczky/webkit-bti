@@ -38,7 +38,7 @@ namespace WebCore {
 
 namespace WHLSL {
 
-// FIXME: Return a better error code from this, and report it to JavaScript.
+// FIXME: https://bugs.webkit.org/show_bug.cgi?id=195682 Return a better error code from this, and report it to JavaScript.
 auto Parser::parse(Program& program, StringView stringView, Mode mode) -> Optional<Error>
 {
     m_lexer = Lexer(stringView);
@@ -129,10 +129,12 @@ auto Parser::parse(Program& program, StringView stringView, Mode mode) -> Option
     return WTF::nullopt;
 }
 
-auto Parser::fail(const String& message) -> Unexpected<Error>
+auto Parser::fail(const String& message, TryToPeek tryToPeek) -> Unexpected<Error>
 {
-    if (auto nextToken = peek())
-        return Unexpected<Error>(Error(m_lexer.errorString(*nextToken, message)));
+    if (tryToPeek == TryToPeek::Yes) {
+        if (auto nextToken = peek())
+            return Unexpected<Error>(Error(m_lexer.errorString(*nextToken, message)));
+    }
     return Unexpected<Error>(Error(makeString("Cannot lex: ", message)));
 }
 
@@ -142,7 +144,7 @@ auto Parser::peek() -> Expected<Lexer::Token, Error>
         m_lexer.unconsumeToken(Lexer::Token(*token));
         return *token;
     }
-    return fail("Cannot consume token"_str);
+    return fail("Cannot consume token"_str, TryToPeek::No);
 }
 
 Optional<Lexer::Token> Parser::tryType(Lexer::Token::Type type)
@@ -228,10 +230,11 @@ static Expected<int, Parser::Error> intLiteralToInt(StringView text)
             return Unexpected<Parser::Error>(Parser::Error(makeString("int literal ", text, " is out of bounds")));
     }
     if (negate) {
-        static_assert(std::numeric_limits<long long int>::min() < std::numeric_limits<int>::min(), "long long needs to be bigger than an int");
-        if (static_cast<long long>(result) > std::abs(static_cast<long long>(std::numeric_limits<int>::min())))
+        static_assert(sizeof(int64_t) > sizeof(unsigned) && sizeof(int64_t) > sizeof(int), "This code would be wrong otherwise");
+        int64_t intResult = -static_cast<int64_t>(result);
+        if (intResult < static_cast<int64_t>(std::numeric_limits<int>::min()))
             return Unexpected<Parser::Error>(Parser::Error(makeString("int literal ", text, " is out of bounds")));
-        return { static_cast<int>(static_cast<long long>(result) * 1) };
+        return { static_cast<int>(intResult) };
     }
     if (result > static_cast<unsigned>(std::numeric_limits<int>::max()))
         return Unexpected<Parser::Error>(Parser::Error(makeString("int literal ", text, " is out of bounds")));
@@ -582,13 +585,15 @@ auto Parser::parseNonAddressSpaceType() -> Expected<UniqueRef<AST::UnnamedType>,
 
 auto Parser::parseType() -> Expected<UniqueRef<AST::UnnamedType>, Error>
 {
-    auto type = backtrackingScope<Expected<UniqueRef<AST::UnnamedType>, Error>>([&]() {
-        return parseAddressSpaceType();
-    });
-    if (type)
-        return type;
+    {
+        auto type = backtrackingScope<Expected<UniqueRef<AST::UnnamedType>, Error>>([&]() {
+            return parseAddressSpaceType();
+        });
+        if (type)
+            return type;
+    }
 
-    type = backtrackingScope<Expected<UniqueRef<AST::UnnamedType>, Error>>([&]() {
+    auto type = backtrackingScope<Expected<UniqueRef<AST::UnnamedType>, Error>>([&]() {
         return parseNonAddressSpaceType();
     });
     if (type)
@@ -653,7 +658,7 @@ auto Parser::parseBuiltInSemantic() -> Expected<AST::BuiltInSemantic, Error>
     case Lexer::Token::Type::SVInnerCoverage:
         return AST::BuiltInSemantic(WTFMove(*origin), AST::BuiltInSemantic::Variable::SVInnerCoverage);
     case Lexer::Token::Type::SVTarget: {
-        auto target = consumeNonNegativeIntegralLiteral();
+        auto target = consumeNonNegativeIntegralLiteral(); // FIXME: https://bugs.webkit.org/show_bug.cgi?id=195807 Make this work with strings like "SV_Target0".
         if (!target)
             return Unexpected<Error>(target.error());
         return AST::BuiltInSemantic(WTFMove(*origin), AST::BuiltInSemantic::Variable::SVTarget, *target);
@@ -1078,13 +1083,13 @@ auto Parser::parseParameters() -> Expected<AST::VariableDeclarations, Error>
     auto firstParameter = parseParameter();
     if (!firstParameter)
         return Unexpected<Error>(firstParameter.error());
-    parameters.append(WTFMove(*firstParameter));
+    parameters.append(makeUniqueRef<AST::VariableDeclaration>(WTFMove(*firstParameter)));
 
     while (tryType(Lexer::Token::Type::Comma)) {
         auto parameter = parseParameter();
         if (!parameter)
             return Unexpected<Error>(parameter.error());
-        parameters.append(WTFMove(*parameter));
+        parameters.append(makeUniqueRef<AST::VariableDeclaration>(WTFMove(*parameter)));
     }
 
     auto rightParenthesis = consumeType(Lexer::Token::Type::RightParenthesis);
@@ -1563,14 +1568,14 @@ auto Parser::parseVariableDeclarations() -> Expected<AST::VariableDeclarationsSt
     if (!firstVariableDeclaration)
         return Unexpected<Error>(firstVariableDeclaration.error());
 
-    Vector<AST::VariableDeclaration> result;
-    result.append(WTFMove(*firstVariableDeclaration));
+    Vector<UniqueRef<AST::VariableDeclaration>> result;
+    result.append(makeUniqueRef<AST::VariableDeclaration>(WTFMove(*firstVariableDeclaration)));
 
     while (tryType(Lexer::Token::Type::Comma)) {
         auto variableDeclaration = parseVariableDeclaration((*type)->clone());
         if (!variableDeclaration)
             return Unexpected<Error>(variableDeclaration.error());
-        result.append(WTFMove(*variableDeclaration));
+        result.append(makeUniqueRef<AST::VariableDeclaration>(WTFMove(*variableDeclaration)));
     }
 
     return AST::VariableDeclarationsStatement(WTFMove(*origin), WTFMove(result));
@@ -1799,12 +1804,6 @@ auto Parser::parseEffectfulAssignment() -> Expected<UniqueRef<AST::Expression>, 
     if (assignment)
         return assignment;
 
-    assignment = backtrackingScope<Expected<UniqueRef<AST::Expression>, Error>>([&]() {
-        return parseCallExpression();
-    });
-    if (assignment)
-        return assignment;
-
     return Unexpected<Error>(assignment.error());
 }
 
@@ -1812,7 +1811,7 @@ auto Parser::parseEffectfulPrefix() -> Expected<UniqueRef<AST::Expression>, Erro
 {
     auto prefix = consumeTypes({ Lexer::Token::Type::PlusPlus, Lexer::Token::Type::MinusMinus });
     if (!prefix)
-        return Unexpected<Error>(prefix.error());
+        return parseEffectfulSuffix();
 
     auto previous = parsePossiblePrefix();
     if (!previous)

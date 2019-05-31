@@ -97,6 +97,10 @@ class VoidCallback;
 class WebGLRenderingContext;
 class XMLHttpRequest;
 
+#if ENABLE(VIDEO_TRACK)
+class TextTrackCueGeneric;
+#endif
+
 #if ENABLE(SERVICE_WORKER)
 class ServiceWorker;
 #endif
@@ -142,6 +146,8 @@ public:
     unsigned memoryCacheSize() const;
 
     unsigned imageFrameIndex(HTMLImageElement&);
+    unsigned imageFrameCount(HTMLImageElement&);
+    float imageFrameDurationAtIndex(HTMLImageElement&, unsigned index);
     void setImageFrameDecodingDuration(HTMLImageElement&, float duration);
     void resetImageAnimation(HTMLImageElement&);
     bool isImageAnimating(HTMLImageElement&);
@@ -225,7 +231,6 @@ public:
     Ref<DOMRect> boundingBox(Element&);
 
     ExceptionOr<Ref<DOMRectList>> inspectorHighlightRects();
-    ExceptionOr<String> inspectorHighlightObject();
 
     ExceptionOr<unsigned> markerCountForNode(Node&, const String&);
     ExceptionOr<RefPtr<Range>> markerRangeForNode(Node&, const String& markerType, unsigned index);
@@ -271,6 +276,7 @@ public:
     unsigned locationFromRange(Element& scope, const Range&);
     unsigned lengthFromRange(Element& scope, const Range&);
     String rangeAsText(const Range&);
+    String rangeAsTextUsingBackwardsTextIterator(const Range&);
     Ref<Range> subrange(Range&, int rangeLocation, int rangeLength);
     ExceptionOr<RefPtr<Range>> rangeForDictionaryLookupAtLocation(int x, int y);
     RefPtr<Range> rangeOfStringNearLocation(const Range&, const String&, unsigned);
@@ -347,6 +353,7 @@ public:
         LAYER_TREE_INCLUDES_ACCELERATES_DRAWING = 32,
         LAYER_TREE_INCLUDES_BACKING_STORE_ATTACHED = 64,
         LAYER_TREE_INCLUDES_ROOT_LAYER_PROPERTIES = 128,
+        LAYER_TREE_INCLUDES_EVENT_REGION = 256,
     };
     ExceptionOr<String> layerTreeAsText(Document&, unsigned short flags) const;
     ExceptionOr<uint64_t> layerIDForElement(Element&);
@@ -492,7 +499,7 @@ public:
     void forceReload(bool endToEnd);
     void reloadExpiredOnly();
 
-    void enableAutoSizeMode(bool enabled, int minimumWidth, int minimumHeight, int maximumWidth, int maximumHeight);
+    void enableAutoSizeMode(bool enabled, int width, int height);
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
     void initializeMockCDM();
@@ -535,6 +542,7 @@ public:
     void endSimulatedHDCPError(HTMLMediaElement&);
 
     bool elementShouldBufferData(HTMLMediaElement&);
+    String elementBufferingPolicy(HTMLMediaElement&);
 #endif
 
     bool isSelectPopupVisible(HTMLSelectElement&);
@@ -543,6 +551,9 @@ public:
     ExceptionOr<void> setCaptionsStyleSheetOverride(const String&);
     ExceptionOr<void> setPrimaryAudioTrackLanguageOverride(const String&);
     ExceptionOr<void> setCaptionDisplayMode(const String&);
+#if ENABLE(VIDEO_TRACK)
+    RefPtr<TextTrackCueGeneric> createGenericCue(double startTime, double endTime, String text);
+#endif
 
 #if ENABLE(VIDEO)
     Ref<TimeRanges> createTimeRanges(Float32Array& startTimes, Float32Array& endTimes);
@@ -555,6 +566,7 @@ public:
     ExceptionOr<bool> isPluginUnavailabilityIndicatorObscured(Element&);
     ExceptionOr<String> unavailablePluginReplacementText(Element&);
     bool isPluginSnapshotted(Element&);
+    bool pluginIsBelowSizeThreshold(Element&);
 
 #if ENABLE(MEDIA_SOURCE)
     WEBCORE_TESTSUPPORT_EXPORT void initializeMockMediaSource();
@@ -628,9 +640,8 @@ public:
     String userVisibleString(const DOMURL&);
     void setShowAllPlugins(bool);
 
-    String resourceLoadStatisticsForOrigin(const String& origin);
+    String resourceLoadStatisticsForURL(const DOMURL&);
     void setResourceLoadStatisticsEnabled(bool);
-    void setUserGrantsStorageAccess(bool);
 
 #if ENABLE(STREAMS_API)
     bool isReadableStreamDisturbed(JSC::ExecState&, JSC::JSValue);
@@ -643,6 +654,8 @@ public:
     double lastHandledUserGestureTimestamp();
 
     void withUserGesture(RefPtr<VoidCallback>&&);
+
+    bool userIsInteracting();
 
     RefPtr<GCObservation> observeGC(JSC::JSValue);
 
@@ -666,6 +679,9 @@ public:
     void setQuickLookPassword(const String&);
 
     void setAsRunningUserScripts(Document&);
+#if ENABLE(APPLE_PAY)
+    void setHasStartedApplePaySession(Document&);
+#endif
 
 #if ENABLE(WEBGL)
     void simulateWebGLContextChanged(WebGLRenderingContext&);
@@ -694,6 +710,7 @@ public:
     void simulateMediaStreamTrackCaptureSourceFailure(MediaStreamTrack&);
     void setMediaStreamTrackIdentifier(MediaStreamTrack&, String&& id);
     void setMediaStreamSourceInterrupted(MediaStreamTrack&, bool);
+    void setDisableGetDisplayMediaUserGestureConstraint(bool);
 #endif
 
     String audioSessionCategory() const;
@@ -704,6 +721,8 @@ public:
     void cacheStorageEngineRepresentation(DOMPromiseDeferred<IDLDOMString>&&);
     void setResponseSizeWithPadding(FetchResponse&, uint64_t size);
     uint64_t responseSizeWithPadding(FetchResponse&) const;
+
+    void updateQuotaBasedOnSpaceUsage();
 
     void setConsoleMessageListener(RefPtr<StringCallback>&&);
 
@@ -797,6 +816,12 @@ public:
     Vector<CookieData> getCookies() const;
 
     void setAlwaysAllowLocalWebarchive(bool);
+    void processWillSuspend();
+    void processDidResume();
+
+    void testDictionaryLogging();
+
+    void setXHRMaximumIntervalForUserGestureForwarding(XMLHttpRequest&, double);
 
 private:
     explicit Internals(Document&);

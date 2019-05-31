@@ -52,6 +52,7 @@ Structure* JSWebAssemblyInstance::createStructure(VM& vm, JSGlobalObject* global
 JSWebAssemblyInstance::JSWebAssemblyInstance(VM& vm, Structure* structure, Ref<Wasm::Instance>&& instance)
     : Base(vm, structure)
     , m_instance(WTFMove(instance))
+    , m_vm(&vm)
 {
     for (unsigned i = 0; i < this->instance().numImportFunctions(); ++i)
         new (this->instance().importFunction<WriteBarrier<JSObject>>(i)) WriteBarrier<JSObject>();
@@ -89,6 +90,12 @@ void JSWebAssemblyInstance::visitChildren(JSCell* cell, SlotVisitor& visitor)
     visitor.reportExtraMemoryVisited(thisObject->m_instance->extraMemoryAllocated());
     for (unsigned i = 0; i < thisObject->instance().numImportFunctions(); ++i)
         visitor.append(*thisObject->instance().importFunction<WriteBarrier<JSObject>>(i)); // This also keeps the functions' JSWebAssemblyInstance alive.
+
+    for (size_t i : thisObject->instance().globalsToMark()) {
+        // FIXME: We need to box wasm Funcrefs once they are supported here.
+        // <https://bugs.webkit.org/show_bug.cgi?id=198157>
+        visitor.appendUnbarriered(JSValue::decode(thisObject->instance().loadI64Global(i)));
+    }
 }
 
 void JSWebAssemblyInstance::finalizeCreation(VM& vm, ExecState* exec, Ref<Wasm::CodeBlock>&& wasmCodeBlock, JSObject* importObject, Wasm::CreationMode creationMode)
@@ -98,7 +105,7 @@ void JSWebAssemblyInstance::finalizeCreation(VM& vm, ExecState* exec, Ref<Wasm::
     auto scope = DECLARE_THROW_SCOPE(vm);
 
     if (!wasmCodeBlock->runnable()) {
-        throwException(exec, scope, JSWebAssemblyLinkError::create(exec, vm, globalObject(vm)->WebAssemblyLinkErrorStructure(), wasmCodeBlock->errorMessage()));
+        throwException(exec, scope, JSWebAssemblyLinkError::create(exec, vm, globalObject(vm)->webAssemblyLinkErrorStructure(), wasmCodeBlock->errorMessage()));
         return;
     }
 
@@ -114,7 +121,7 @@ void JSWebAssemblyInstance::finalizeCreation(VM& vm, ExecState* exec, Ref<Wasm::
     } else {
         jsCodeBlock = JSWebAssemblyCodeBlock::create(vm, WTFMove(wasmCodeBlock), module()->module().moduleInformation());
         if (UNLIKELY(!jsCodeBlock->runnable())) {
-            throwException(exec, scope, JSWebAssemblyLinkError::create(exec, vm, globalObject(vm)->WebAssemblyLinkErrorStructure(), jsCodeBlock->errorMessage()));
+            throwException(exec, scope, JSWebAssemblyLinkError::create(exec, vm, globalObject(vm)->webAssemblyLinkErrorStructure(), jsCodeBlock->errorMessage()));
             return;
         }
         m_codeBlock.set(vm, this, jsCodeBlock);
@@ -278,7 +285,7 @@ JSWebAssemblyInstance* JSWebAssemblyInstance::create(VM& vm, ExecState* exec, co
             // We create a memory when it's a memory definition.
             RELEASE_ASSERT(!moduleInformation.memory.isImport());
 
-            auto* jsMemory = JSWebAssemblyMemory::create(exec, vm, globalObject->WebAssemblyMemoryStructure());
+            auto* jsMemory = JSWebAssemblyMemory::create(exec, vm, globalObject->webAssemblyMemoryStructure());
             RETURN_IF_EXCEPTION(throwScope, nullptr);
 
             RefPtr<Wasm::Memory> memory = Wasm::Memory::tryCreate(moduleInformation.memory.initial(), moduleInformation.memory.maximum(),
@@ -296,7 +303,7 @@ JSWebAssemblyInstance* JSWebAssemblyInstance::create(VM& vm, ExecState* exec, co
     
     if (!jsInstance->memory()) {
         // Make sure we have a dummy memory, so that wasm -> wasm thunks avoid checking for a nullptr Memory when trying to set pinned registers.
-        auto* jsMemory = JSWebAssemblyMemory::create(exec, vm, globalObject->WebAssemblyMemoryStructure());
+        auto* jsMemory = JSWebAssemblyMemory::create(exec, vm, globalObject->webAssemblyMemoryStructure());
         jsMemory->adopt(Wasm::Memory::create());
         jsInstance->setMemory(vm, jsMemory);
         RETURN_IF_EXCEPTION(throwScope, nullptr);

@@ -76,7 +76,6 @@ WI.Table = class Table extends WI.View
         this._resizersElement.className = "resizers";
 
         this._cachedRows = new Map;
-        this._cachedNumberOfRows = NaN;
 
         this._columnSpecs = new Map;
         this._columnOrder = [];
@@ -113,6 +112,7 @@ WI.Table = class Table extends WI.View
         this._visibleRowIndexStart = NaN;
         this._visibleRowIndexEnd = NaN;
 
+        console.assert(this._dataSource.tableNumberOfRows, "Table data source must implement tableNumberOfRows.");
         console.assert(this._dataSource.tableIndexForRepresentedObject, "Table data source must implement tableIndexForRepresentedObject.");
         console.assert(this._dataSource.tableRepresentedObjectForIndex, "Table data source must implement tableRepresentedObjectForIndex.");
 
@@ -145,10 +145,7 @@ WI.Table = class Table extends WI.View
 
     get numberOfRows()
     {
-        if (isNaN(this._cachedNumberOfRows))
-            this._cachedNumberOfRows = this._dataSource.tableNumberOfRows(this);
-
-        return this._cachedNumberOfRows;
+        return this._dataSource.tableNumberOfRows(this);
     }
 
     get sortOrder()
@@ -253,7 +250,6 @@ WI.Table = class Table extends WI.View
 
         this._selectionController.reset();
 
-        this._cachedNumberOfRows = NaN;
         this._previousRevealedRowCount = NaN;
         this.needsLayout();
     }
@@ -619,10 +615,9 @@ WI.Table = class Table extends WI.View
                 row.classList.toggle("selected", true);
         }
 
-        if (selectedItems.size === 1) {
-            let rowIndex = this._indexForRepresentedObject(selectedItems.firstValue);
-            if (!this._isRowVisible(rowIndex))
-                this.revealRow(rowIndex);
+        if (this._selectionController.lastSelectedItem) {
+            let rowIndex = this._indexForRepresentedObject(this._selectionController.lastSelectedItem);
+            this.revealRow(rowIndex);
         }
 
         if (this._delegate.tableSelectionDidChange)
@@ -1300,7 +1295,7 @@ WI.Table = class Table extends WI.View
 
     _handleMouseDown(event)
     {
-        let cell = event.target.enclosingNodeOrSelfWithClass("cell");
+        let cell = event.target.closest(".cell");
         if (!cell)
             return;
 
@@ -1324,7 +1319,7 @@ WI.Table = class Table extends WI.View
 
     _handleContextMenu(event)
     {
-        let cell = event.target.enclosingNodeOrSelfWithClass("cell");
+        let cell = event.target.closest(".cell");
         if (!cell)
             return;
 
@@ -1436,18 +1431,14 @@ WI.Table = class Table extends WI.View
         if (!removed)
             return;
 
-        for (let index = lastIndex + 1; index < this._cachedNumberOfRows; ++index)
+        for (let index = lastIndex + 1; index < this.numberOfRows; ++index)
             adjustRowAtIndex(index);
 
-        this._cachedNumberOfRows -= removed;
-        console.assert(this._cachedNumberOfRows >= 0);
 
         this._selectionController.didRemoveItems(representedObjects);
 
-        if (this._delegate.tableDidRemoveRows) {
+        if (this._delegate.tableDidRemoveRows)
             this._delegate.tableDidRemoveRows(this, rowIndexes);
-            console.assert(this._cachedNumberOfRows === this._dataSource.tableNumberOfRows(this), "Table data source should update after removing rows.");
-        }
     }
 
     _indexForRepresentedObject(object)

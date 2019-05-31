@@ -1,5 +1,6 @@
 set(WTF_PUBLIC_HEADERS
     ASCIICType.h
+    AggregateLogger.h
     Algorithms.h
     Assertions.h
     Atomics.h
@@ -46,7 +47,6 @@ set(WTF_PUBLIC_HEADERS
     DateMath.h
     DebugUtilities.h
     DeferrableRefCounted.h
-    DeprecatedOptional.h
     Deque.h
     DisallowCType.h
     Dominators.h
@@ -139,6 +139,7 @@ set(WTF_PUBLIC_HEADERS
     NoLock.h
     NoTailCalls.h
     Noncopyable.h
+    Nonmovable.h
     NotFound.h
     NumberOfCores.h
     OSAllocator.h
@@ -149,6 +150,7 @@ set(WTF_PUBLIC_HEADERS
     OptionSet.h
     Optional.h
     OrderMaker.h
+    Packed.h
     PackedIntVector.h
     PageAllocation.h
     PageBlock.h
@@ -228,6 +230,7 @@ set(WTF_PUBLIC_HEADERS
     SynchronizedFixedQueue.h
     SystemFree.h
     SystemTracing.h
+    TaggedArrayStoragePtr.h
     ThreadGroup.h
     ThreadMessage.h
     ThreadSafeRefCounted.h
@@ -259,6 +262,7 @@ set(WTF_PUBLIC_HEADERS
     VectorTraits.h
     WTFSemaphore.h
     WallTime.h
+    WeakHashSet.h
     WeakPtr.h
     WeakRandom.h
     WindowsExtras.h
@@ -454,13 +458,15 @@ set(WTF_SOURCES
 )
 
 set(WTF_INCLUDE_DIRECTORIES
-    "${BMALLOC_DIR}"
+    # FIXME: https://bugs.webkit.org/show_bug.cgi?id=196734#c1
     "${CMAKE_BINARY_DIR}"
     "${DERIVED_SOURCES_DIR}"
     "${THIRDPARTY_DIR}"
 )
 
 set(WTF_PRIVATE_INCLUDE_DIRECTORIES
+    "${CMAKE_BINARY_DIR}"
+    "${WTF_DERIVED_SOURCES_DIR}"
     "${WTF_DIR}"
     "${WTF_DIR}/wtf"
     "${WTF_DIR}/wtf/dtoa"
@@ -476,7 +482,7 @@ set(WTF_LIBRARIES
 )
 
 if (NOT USE_SYSTEM_MALLOC)
-    list(APPEND WTF_LIBRARIES bmalloc)
+    list(APPEND WTF_LIBRARIES WebKit::bmalloc)
 endif ()
 
 list(APPEND WTF_SOURCES
@@ -484,13 +490,11 @@ list(APPEND WTF_SOURCES
 
     unicode/icu/CollatorICU.cpp
 )
-set(WTF_SYSTEM_INCLUDE_DIRECTORIES
-    ${ICU_INCLUDE_DIRS}
-)
+
 list(APPEND WTF_LIBRARIES
-    ${ICU_DATA_LIBRARIES}
-    ${ICU_I18N_LIBRARIES}
-    ${ICU_LIBRARIES}
+    ICU::data
+    ICU::i18n
+    ICU::uc
 )
 
 WEBKIT_FRAMEWORK_DECLARE(WTF)
@@ -500,31 +504,32 @@ WEBKIT_WRAP_SOURCELIST(${WTF_SOURCES})
 WEBKIT_FRAMEWORK(WTF)
 
 WEBKIT_MAKE_FORWARDING_HEADERS(WTF
-    DESTINATION ${FORWARDING_HEADERS_DIR}/wtf
+    TARGET_NAME WTFFrameworkHeaders
+    DESTINATION ${WTF_FRAMEWORK_HEADERS_DIR}/wtf
     FILES ${WTF_PUBLIC_HEADERS}
 )
 
 if (MSVC)
     set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS")
+endif ()
 
+if (USE_VERSION_STAMPER)
     add_custom_command(
         TARGET WTF
         PRE_BUILD
-        COMMAND ${PERL_EXECUTABLE} ${WEBKIT_LIBRARIES_DIR}/tools/scripts/auto-version.pl ${DERIVED_SOURCES_DIR}
+        COMMAND ${PERL_EXECUTABLE} ${WEBKIT_LIBRARIES_DIR}/tools/scripts/auto-version.pl ${WTF_DERIVED_SOURCES_DIR}
         VERBATIM)
 
     add_custom_command(
         TARGET WTF
         POST_BUILD
-        COMMAND ${PERL_EXECUTABLE} ${WEBKIT_LIBRARIES_DIR}/tools/scripts/version-stamp.pl ${DERIVED_SOURCES_DIR} $<TARGET_FILE:WTF>
+        COMMAND ${PERL_EXECUTABLE} ${WEBKIT_LIBRARIES_DIR}/tools/scripts/version-stamp.pl ${WTF_DERIVED_SOURCES_DIR} $<TARGET_FILE:WTF>
         VERBATIM)
 endif ()
-
-file(MAKE_DIRECTORY ${FORWARDING_HEADERS_DIR}/wtf/Scripts)
 
 file(COPY
     ../Scripts/generate-unified-source-bundles.rb
     DESTINATION
-    ${FORWARDING_HEADERS_DIR}/wtf/Scripts
+    ${WTF_SCRIPTS_DIR}
 )

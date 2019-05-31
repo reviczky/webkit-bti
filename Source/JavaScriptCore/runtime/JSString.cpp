@@ -75,9 +75,12 @@ void JSString::dumpToStream(const JSCell* cell, PrintStream& out)
     const JSString* thisObject = jsCast<const JSString*>(cell);
     out.printf("<%p, %s, [%u], ", thisObject, thisObject->className(vm), thisObject->length());
     uintptr_t pointer = thisObject->m_fiber;
-    if (pointer & isRopeInPointer)
-        out.printf("[rope]");
-    else {
+    if (pointer & isRopeInPointer) {
+        if (pointer & JSRopeString::isSubstringInPointer)
+            out.printf("[substring]");
+        else
+            out.printf("[rope]");
+    } else {
         if (WTF::StringImpl* ourImpl = bitwise_cast<StringImpl*>(pointer)) {
             if (ourImpl->is8Bit())
                 out.printf("[8 %p]", ourImpl->characters8());
@@ -114,7 +117,7 @@ void JSString::visitChildren(JSCell* cell, SlotVisitor& visitor)
     
     uintptr_t pointer = thisObject->m_fiber;
     if (pointer & isRopeInPointer) {
-        if ((pointer & JSRopeString::stringMask) == JSRopeString::substringSentinel()) {
+        if (pointer & JSRopeString::isSubstringInPointer) {
             visitor.appendUnbarriered(static_cast<JSRopeString*>(thisObject)->fiber1());
             return;
         }

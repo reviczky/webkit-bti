@@ -3,7 +3,7 @@
  *           (C) 1999 Antti Koivisto (koivisto@kde.org)
  *           (C) 2001 Dirk Mueller (mueller@kde.org)
  *           (C) 2006 Alexey Proskuryakov (ap@webkit.org)
- * Copyright (C) 2004-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2019 Apple Inc. All rights reserved.
  * Copyright (C) 2008, 2009 Torch Mobile Inc. All rights reserved. (http://www.torchmobile.com/)
  * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies)
  * Copyright (C) 2011 Google Inc. All rights reserved.
@@ -34,6 +34,7 @@
 #include "DocumentEventQueue.h"
 #include "DocumentIdentifier.h"
 #include "DocumentTiming.h"
+#include "ElementIdentifier.h"
 #include "FocusDirection.h"
 #include "FontSelectorClient.h"
 #include "FrameDestructionObserver.h"
@@ -44,6 +45,7 @@
 #include "PlatformEvent.h"
 #include "ReferrerPolicy.h"
 #include "Region.h"
+#include "RegistrableDomain.h"
 #include "RenderPtr.h"
 #include "ScriptExecutionContext.h"
 #include "SecurityPolicyViolationEvent.h"
@@ -64,6 +66,7 @@
 #include <wtf/Logger.h>
 #include <wtf/ObjectIdentifier.h>
 #include <wtf/UniqueRef.h>
+#include <wtf/WeakHashSet.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/text/AtomicStringHash.h>
 
@@ -98,14 +101,13 @@ class CanvasRenderingContext2D;
 class CharacterData;
 class Comment;
 class ConstantPropertyMap;
+class ContentChangeObserver;
 class DOMImplementation;
 class DOMSelection;
 class DOMWindow;
 class DOMWrapperWorld;
 class Database;
 class DatabaseThread;
-class DeferredPromise;
-class DocumentAnimationScheduler;
 class DocumentFragment;
 class DocumentLoader;
 class DocumentMarkerController;
@@ -113,6 +115,7 @@ class DocumentParser;
 class DocumentSharedObjectPool;
 class DocumentTimeline;
 class DocumentType;
+class EditingBehavior;
 class ExtensionStyleSheets;
 class FloatQuad;
 class FloatRect;
@@ -120,6 +123,7 @@ class FontFaceSet;
 class FormController;
 class Frame;
 class FrameView;
+class FullscreenManager;
 class HTMLAllCollection;
 class HTMLBodyElement;
 class HTMLCanvasElement;
@@ -134,6 +138,7 @@ class HTMLMapElement;
 class HTMLMediaElement;
 class HTMLPictureElement;
 class HTMLScriptElement;
+class HitTestLocation;
 class HitTestRequest;
 class HitTestResult;
 class ImageBitmapRenderingContext;
@@ -159,7 +164,6 @@ class ProcessingInstruction;
 class QualifiedName;
 class Quirks;
 class Range;
-class RenderFullScreen;
 class RenderTreeBuilder;
 class RenderView;
 class RequestAnimationFrameCallback;
@@ -192,8 +196,7 @@ class VisitedLinkState;
 class WebAnimation;
 class WebGL2RenderingContext;
 class WebGLRenderingContext;
-class WebGPURenderingContext;
-class WebMetalRenderingContext;
+class GPUCanvasContext;
 class WindowProxy;
 class Worklet;
 class XPathEvaluator;
@@ -223,11 +226,14 @@ class Touch;
 class TouchList;
 #endif
 
+#if ENABLE(DEVICE_ORIENTATION)
 #if PLATFORM(IOS_FAMILY)
 class DeviceMotionClient;
 class DeviceMotionController;
 class DeviceOrientationClient;
 class DeviceOrientationController;
+#endif
+class DeviceOrientationAndMotionAccessController;
 #endif
 
 #if ENABLE(TEXT_AUTOSIZING)
@@ -244,6 +250,10 @@ class HTMLAttachmentElement;
 
 #if ENABLE(INTERSECTION_OBSERVER)
 class IntersectionObserver;
+#endif
+
+#if ENABLE(RESIZE_OBSERVER)
+class ResizeObserver;
 #endif
 
 namespace Style {
@@ -315,10 +325,7 @@ using RenderingContext = Variant<
     RefPtr<WebGL2RenderingContext>,
 #endif
 #if ENABLE(WEBGPU)
-    RefPtr<WebGPURenderingContext>,
-#endif
-#if ENABLE(WEBMETAL)
-    RefPtr<WebMetalRenderingContext>,
+    RefPtr<GPUCanvasContext>,
 #endif
     RefPtr<ImageBitmapRenderingContext>,
     RefPtr<CanvasRenderingContext2D>
@@ -370,7 +377,7 @@ public:
 #if !ASSERT_DISABLED
             m_deletionHasBegun = true;
 #endif
-            m_refCount = 1; // Avoid double destruction through use of RefPtr<T>. (This is a security mitigation in case of programmer error. It will ASSERT in debug builds.)
+            m_refCountAndParentBit = s_refCountIncrement; // Avoid double destruction through use of Ref<T>/RefPtr<T>. (This is a security mitigation in case of programmer error. It will ASSERT in debug builds.)
             delete this;
         }
     }
@@ -384,6 +391,10 @@ public:
     using DocumentsMap = HashMap<DocumentIdentifier, Document*>;
     WEBCORE_EXPORT static DocumentsMap::ValuesIteratorRange allDocuments();
     WEBCORE_EXPORT static DocumentsMap& allDocumentsMap();
+
+    WEBCORE_EXPORT ElementIdentifier identifierForElement(Element&);
+    WEBCORE_EXPORT Element* searchForElementByIdentifier(const ElementIdentifier&);
+    void identifiedElementWasRemovedFromDocument(Element&);
 
     MediaQueryMatcher& mediaQueryMatcher();
 
@@ -400,9 +411,7 @@ public:
     void clearSelectorQueryCache();
 
     void setViewportArguments(const ViewportArguments& viewportArguments) { m_viewportArguments = viewportArguments; }
-    ViewportArguments viewportArguments() const { return m_viewportArguments; }
-
-    WEBCORE_EXPORT void setOverrideViewportArguments(const Optional<ViewportArguments>&);
+    WEBCORE_EXPORT ViewportArguments viewportArguments() const;
 
     OptionSet<DisabledAdaptations> disabledAdaptations() const { return m_disabledAdaptations; }
 #ifndef NDEBUG
@@ -552,12 +561,14 @@ public:
     WEBCORE_EXPORT Page* page() const; // Can be null.
     const Settings& settings() const { return m_settings.get(); }
     Settings& mutableSettings() { return m_settings.get(); }
+    EditingBehavior editingBehavior() const;
 
     const Quirks& quirks() const { return m_quirks; }
 
     float deviceScaleFactor() const;
 
     WEBCORE_EXPORT bool useSystemAppearance() const;
+    WEBCORE_EXPORT bool useInactiveAppearance() const;
     WEBCORE_EXPORT bool useDarkAppearance(const RenderStyle*) const;
 
     OptionSet<StyleColor::Options> styleColorOptions(const RenderStyle*) const;
@@ -871,6 +882,8 @@ public:
 
     // Called when <meta name="apple-mobile-web-app-orientations"> changes.
     void processWebAppOrientations();
+
+    WEBCORE_EXPORT ContentChangeObserver& contentChangeObserver();
 #endif
     
     void processViewport(const String& features, ViewportArguments::Type origin);
@@ -879,7 +892,7 @@ public:
     void processReferrerPolicy(const String& policy, ReferrerPolicySource);
 
 #if ENABLE(DARK_MODE_CSS)
-    void processSupportedColorSchemes(const String& colorSchemes);
+    void processColorScheme(const String& colorScheme);
 #endif
 
     // Returns the owning element in the parent document.
@@ -1042,7 +1055,10 @@ public:
     ScriptedAnimationController* scriptedAnimationController() { return m_scriptedAnimationController.get(); }
     void suspendScriptedAnimationControllerCallbacks();
     void resumeScriptedAnimationControllerCallbacks();
-    
+
+    void updateAnimationsAndSendEvents(DOMHighResTimeStamp timestamp);
+    void serviceRequestAnimationFrameCallbacks(DOMHighResTimeStamp timestamp);
+
     void windowScreenDidChange(PlatformDisplayID);
 
     void finishedParsing();
@@ -1101,6 +1117,8 @@ public:
     void stopAllMediaPlayback();
     void suspendAllMediaPlayback();
     void resumeAllMediaPlayback();
+    void suspendAllMediaBuffering();
+    void resumeAllMediaBuffering();
 #endif
 
     WEBCORE_EXPORT void setShouldCreateRenderers(bool);
@@ -1157,42 +1175,8 @@ public:
     MediaCanStartListener* takeAnyMediaCanStartListener();
 
 #if ENABLE(FULLSCREEN_API)
-    bool webkitIsFullScreen() const { return m_fullScreenElement.get(); }
-    bool webkitFullScreenKeyboardInputAllowed() const { return m_fullScreenElement.get() && m_areKeysEnabledInFullScreen; }
-    Element* webkitCurrentFullScreenElement() const { return m_fullScreenElement.get(); }
-    Element* webkitCurrentFullScreenElementForBindings() const { return ancestorElementInThisScope(webkitCurrentFullScreenElement()); }
-
-    enum FullScreenCheckType {
-        EnforceIFrameAllowFullScreenRequirement,
-        ExemptIFrameAllowFullScreenRequirement,
-    };
-
-    void requestFullScreenForElement(Element*, FullScreenCheckType);
-    WEBCORE_EXPORT void webkitCancelFullScreen();
-    
-    WEBCORE_EXPORT void webkitWillEnterFullScreen(Element&);
-    WEBCORE_EXPORT void webkitDidEnterFullScreen();
-    WEBCORE_EXPORT void webkitWillExitFullScreen();
-    WEBCORE_EXPORT void webkitDidExitFullScreen();
-    
-    void setFullScreenRenderer(RenderTreeBuilder&, RenderFullScreen&);
-    RenderFullScreen* fullScreenRenderer() const { return m_fullScreenRenderer.get(); }
-
-    void dispatchFullScreenChangeEvents();
-    bool fullScreenIsAllowedForElement(Element&) const;
-    void fullScreenElementRemoved();
-    void adjustFullScreenElementOnNodeRemoval(Node&, NodeRemoval = NodeRemoval::Node);
-
-    WEBCORE_EXPORT bool isAnimatingFullScreen() const;
-    WEBCORE_EXPORT void setAnimatingFullScreen(bool);
-
-    WEBCORE_EXPORT bool areFullscreenControlsHidden() const;
-    WEBCORE_EXPORT void setFullscreenControlsHidden(bool);
-
-    WEBCORE_EXPORT bool webkitFullscreenEnabled() const;
-    Element* webkitFullscreenElement() const { return !m_fullScreenElementStack.isEmpty() ? m_fullScreenElementStack.last().get() : nullptr; }
-    Element* webkitFullscreenElementForBindings() const { return ancestorElementInThisScope(webkitFullscreenElement()); }
-    WEBCORE_EXPORT void webkitExitFullscreen();
+    FullscreenManager& fullscreenManager() { return m_fullscreenManager; }
+    const FullscreenManager& fullscreenManager() const { return m_fullscreenManager; }
 #endif
 
 #if ENABLE(POINTER_LOCK)
@@ -1209,11 +1193,15 @@ public:
 #include <WebKitAdditions/DocumentIOS.h>
 #endif
 
-#if ENABLE(DEVICE_ORIENTATION) && PLATFORM(IOS_FAMILY)
+#if ENABLE(DEVICE_ORIENTATION)
+#if PLATFORM(IOS_FAMILY)
     DeviceMotionController& deviceMotionController() const;
     DeviceOrientationController& deviceOrientationController() const;
     WEBCORE_EXPORT void simulateDeviceOrientationChange(double alpha, double beta, double gamma);
 #endif
+
+    DeviceOrientationAndMotionAccessController& deviceOrientationAndMotionAccessController();
+#endif // ENABLE(DEVICE_ORIENTATION)
 
     const DocumentTiming& timing() const { return m_documentTiming; }
 
@@ -1234,6 +1222,7 @@ public:
     bool hasHadUserInteraction() const { return static_cast<bool>(m_lastHandledUserGestureTimestamp); }
     void updateLastHandledUserGestureTimestamp(MonotonicTime);
     bool processingUserGestureForMedia() const;
+    void userActivatedMediaFinishedPlaying() { m_userActivatedMediaFinishedPlayingTimestamp = MonotonicTime::now(); }
 
     void setUserDidInteractWithPage(bool userDidInteractWithPage) { ASSERT(&topDocument() == this); m_userDidInteractWithPage = userDidInteractWithPage; }
     bool userDidInteractWithPage() const { ASSERT(&topDocument() == this); return m_userDidInteractWithPage; }
@@ -1252,7 +1241,7 @@ public:
     bool hasTouchEventHandlers() const { return false; }
     bool touchEventTargetsContain(Node&) const { return false; }
 #endif
-#if ENABLE(POINTER_EVENTS)
+#if PLATFORM(IOS_FAMILY) && ENABLE(POINTER_EVENTS)
     void updateTouchActionElements(Element&, const RenderStyle&);
     const HashSet<RefPtr<Element>>* touchActionElements() const { return m_touchActionElements.get(); }
 #endif
@@ -1324,13 +1313,15 @@ public:
 
     const Document* templateDocument() const;
     Document& ensureTemplateDocument();
-    void setTemplateDocumentHost(Document* templateDocumentHost) { m_templateDocumentHost = templateDocumentHost; }
-    Document* templateDocumentHost() { return m_templateDocumentHost; }
+    void setTemplateDocumentHost(Document* templateDocumentHost) { m_templateDocumentHost = makeWeakPtr(templateDocumentHost); }
+    Document* templateDocumentHost() { return m_templateDocumentHost.get(); }
 
     void didAssociateFormControl(Element&);
     bool hasDisabledFieldsetElement() const { return m_disabledFieldsetElementsCount; }
     void addDisabledFieldsetElement() { m_disabledFieldsetElementsCount++; }
     void removeDisabledFieldsetElement() { ASSERT(m_disabledFieldsetElementsCount); m_disabledFieldsetElementsCount--; }
+
+    void getParserLocation(String& url, unsigned& line, unsigned& column) const;
 
     WEBCORE_EXPORT void addConsoleMessage(std::unique_ptr<Inspector::ConsoleMessage>&&) final;
 
@@ -1389,12 +1380,25 @@ public:
     void addAppearanceDependentPicture(HTMLPictureElement&);
     void removeAppearanceDependentPicture(HTMLPictureElement&);
 
+    void scheduleRenderingUpdate();
+
 #if ENABLE(INTERSECTION_OBSERVER)
     void addIntersectionObserver(IntersectionObserver&);
     void removeIntersectionObserver(IntersectionObserver&);
     unsigned numberOfIntersectionObservers() const { return m_intersectionObservers.size(); }
-    void scheduleForcedIntersectionObservationUpdate();
     void updateIntersectionObservations();
+#endif
+
+#if ENABLE(RESIZE_OBSERVER)
+    void addResizeObserver(ResizeObserver&);
+    void removeResizeObserver(ResizeObserver&);
+    bool hasResizeObservers();
+    // Return the minDepth of the active observations.
+    size_t gatherResizeObservations(size_t deeperThan);
+    void deliverResizeObservations();
+    bool hasSkippedResizeObservations() const;
+    void setHasSkippedResizeObservations(bool);
+    void updateResizeObservations(Page&);
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -1458,17 +1462,12 @@ public:
     TextAutoSizing& textAutoSizing();
 #endif
 
+    // For debugging rdar://problem/49877867.
+    void setMayBeDetachedFromFrame(bool mayBeDetachedFromFrame) { m_mayBeDetachedFromFrame = mayBeDetachedFromFrame; }
+
     Logger& logger();
 
-    void hasStorageAccess(Ref<DeferredPromise>&& passedPromise);
-    void requestStorageAccess(Ref<DeferredPromise>&& passedPromise);
-    void setUserGrantsStorageAccessOverride(bool value) { m_grantStorageAccessOverride = value; }
-
     WEBCORE_EXPORT void setConsoleMessageListener(RefPtr<StringCallback>&&); // For testing.
-
-#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-    DocumentAnimationScheduler& animationScheduler();
-#endif
 
     WEBCORE_EXPORT DocumentTimeline& timeline();
     DocumentTimeline* existingTimeline() const { return m_timeline.get(); }
@@ -1495,13 +1494,13 @@ public:
 #endif
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
-    bool hasRequestedPageSpecificStorageAccessWithUserInteraction(const String& primaryDomain);
-    void setHasRequestedPageSpecificStorageAccessWithUserInteraction(const String& primaryDomain);
+    bool hasRequestedPageSpecificStorageAccessWithUserInteraction(const RegistrableDomain&);
+    void setHasRequestedPageSpecificStorageAccessWithUserInteraction(const RegistrableDomain&);
+    WEBCORE_EXPORT void wasLoadedWithDataTransferFromPrevalentResource();
+    void downgradeReferrerToRegistrableDomain();
 #endif
 
     String signedPublicKeyAndChallengeString(unsigned keySizeIndex, const String& challengeString, const URL&);
-
-    void consumeTemporaryTimeUserGesture();
 
     void registerArticleElement(Element&);
     void unregisterArticleElement(Element&);
@@ -1517,10 +1516,22 @@ public:
     void setPaintWorkletGlobalScopeForName(const String& name, Ref<PaintWorkletGlobalScope>&&);
 #endif
 
-    void setAsRunningUserScripts() { m_isRunningUserScripts = true; }
-    bool isRunningUserScripts() const { return m_isRunningUserScripts; }
+    WEBCORE_EXPORT bool hasEvaluatedUserAgentScripts() const;
+    WEBCORE_EXPORT bool isRunningUserScripts() const;
+    WEBCORE_EXPORT void setAsRunningUserScripts();
+    void setHasEvaluatedUserAgentScripts();
+#if ENABLE(APPLE_PAY)
+    WEBCORE_EXPORT bool hasStartedApplePaySession() const;
+    WEBCORE_EXPORT void setHasStartedApplePaySession();
+#endif
 
     void frameWasDisconnectedFromOwner();
+
+    WEBCORE_EXPORT bool hitTest(const HitTestRequest&, HitTestResult&);
+    bool hitTest(const HitTestRequest&, const HitTestLocation&, HitTestResult&);
+#if !ASSERT_DISABLED
+    bool inHitTesting() const { return m_inHitTesting; }
+#endif
 
 protected:
     enum ConstructionFlags { Synthesized = 1, NonRenderedPlaceholder = 1 << 1 };
@@ -1589,14 +1600,6 @@ private:
 
     template<CollectionType> Ref<HTMLCollection> ensureCachedCollection();
 
-#if ENABLE(FULLSCREEN_API)
-    void dispatchFullScreenChangeOrErrorEvent(Deque<RefPtr<Node>>&, const AtomicString& eventName, bool shouldNotifyMediaElement);
-    void clearFullscreenElementStack();
-    void popFullscreenElementStack();
-    void pushFullscreenElementStack(Element&);
-    void addDocumentToFullScreenChangeEventQueue(Document&);
-#endif
-
     void dispatchDisabledAdaptationsDidChangeForMainFrame();
 
     void setVisualUpdatesAllowed(ReadyState);
@@ -1645,10 +1648,6 @@ private:
     bool shouldEnforceHTTP09Sandbox() const;
 
     void platformSuspendOrStopActiveDOMObjects();
-
-    bool domainIsRegisterable(const String&) const;
-
-    void enableTemporaryTimeUserGesture();
 
     bool isBodyPotentiallyScrollable(HTMLBodyElement&);
 
@@ -1766,7 +1765,7 @@ private:
     HashSet<SVGUseElement*> m_svgUseElements;
 
 #if ENABLE(DARK_MODE_CSS)
-    OptionSet<ColorSchemes> m_supportedColorSchemes;
+    OptionSet<ColorScheme> m_colorScheme;
     bool m_allowsColorSchemeTransformations { true };
 #endif
 
@@ -1812,18 +1811,7 @@ private:
     HashSet<MediaCanStartListener*> m_mediaCanStartListeners;
 
 #if ENABLE(FULLSCREEN_API)
-    RefPtr<Element> m_fullScreenElement;
-    Vector<RefPtr<Element>> m_fullScreenElementStack;
-    WeakPtr<RenderFullScreen> m_fullScreenRenderer { nullptr };
-    GenericTaskQueue<Timer> m_fullScreenTaskQueue;
-    Deque<RefPtr<Node>> m_fullScreenChangeEventTargetQueue;
-    Deque<RefPtr<Node>> m_fullScreenErrorEventTargetQueue;
-    LayoutRect m_savedPlaceholderFrameRect;
-    std::unique_ptr<RenderStyle> m_savedPlaceholderRenderStyle;
-
-    bool m_areKeysEnabledInFullScreen { false };
-    bool m_isAnimatingFullScreen { false };
-    bool m_areFullscreenControlsHidden { false };
+    UniqueRef<FullscreenManager> m_fullscreenManager;
 #endif
 
     HashSet<HTMLPictureElement*> m_viewportDependentPictures;
@@ -1835,10 +1823,13 @@ private:
     Timer m_intersectionObserversNotifyTimer;
 #endif
 
+#if ENABLE(RESIZE_OBSERVER)
+    Vector<WeakPtr<ResizeObserver>> m_resizeObservers;
+#endif
+
     Timer m_loadEventDelayTimer;
 
     ViewportArguments m_viewportArguments;
-    Optional<ViewportArguments> m_overrideViewportArguments;
     OptionSet<DisabledAdaptations> m_disabledAdaptations;
 
     DocumentTiming m_documentTiming;
@@ -1848,12 +1839,13 @@ private:
 #if ENABLE(TOUCH_EVENTS)
     std::unique_ptr<EventTargetSet> m_touchEventTargets;
 #endif
-#if ENABLE(POINTER_EVENTS)
+#if PLATFORM(IOS_FAMILY) && ENABLE(POINTER_EVENTS)
     std::unique_ptr<HashSet<RefPtr<Element>>> m_touchActionElements;
 #endif
     std::unique_ptr<EventTargetSet> m_wheelEventTargets;
 
     MonotonicTime m_lastHandledUserGestureTimestamp;
+    MonotonicTime m_userActivatedMediaFinishedPlayingTimestamp;
 
     void clearScriptedAnimationController();
     RefPtr<ScriptedAnimationController> m_scriptedAnimationController;
@@ -1862,16 +1854,14 @@ private:
 
     void didLogMessage(const WTFLogChannel&, WTFLogLevel, Vector<JSONLogValue>&&) final;
 
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
-    bool hasFrameSpecificStorageAccess() const;
-    void setHasFrameSpecificStorageAccess(bool);
-#endif
-
-#if ENABLE(DEVICE_ORIENTATION) && PLATFORM(IOS_FAMILY)
+#if ENABLE(DEVICE_ORIENTATION)
+#if PLATFORM(IOS_FAMILY)
     std::unique_ptr<DeviceMotionClient> m_deviceMotionClient;
     std::unique_ptr<DeviceMotionController> m_deviceMotionController;
     std::unique_ptr<DeviceOrientationClient> m_deviceOrientationClient;
     std::unique_ptr<DeviceOrientationController> m_deviceOrientationController;
+#endif
+    std::unique_ptr<DeviceOrientationAndMotionAccessController> m_deviceOrientationAndMotionAccessController;
 #endif
 
     GenericTaskQueue<Timer> m_logMessageTaskQueue;
@@ -1894,11 +1884,11 @@ private:
     LocaleIdentifierToLocaleMap m_localeCache;
 
     RefPtr<Document> m_templateDocument;
-    Document* m_templateDocumentHost { nullptr }; // Manually managed weakref (backpointer from m_templateDocument).
+    WeakPtr<Document> m_templateDocumentHost; // Manually managed weakref (backpointer from m_templateDocument).
 
     Ref<CSSFontSelector> m_fontSelector;
 
-    HashSet<MediaProducer*> m_audioProducers;
+    WeakHashSet<MediaProducer> m_audioProducers;
 
     HashSet<ShadowRoot*> m_inDocumentShadowRoots;
 
@@ -2019,13 +2009,12 @@ private:
 
     bool m_areDeviceMotionAndOrientationUpdatesSuspended { false };
     bool m_userDidInteractWithPage { false };
+#if !ASSERT_DISABLED
+    bool m_inHitTesting { false };
+#endif
 
 #if ENABLE(TELEPHONE_NUMBER_DETECTION)
     bool m_isTelephoneNumberParsingAllowed { true };
-#endif
-
-#if ENABLE(INTERSECTION_OBSERVER)
-    bool m_needsForcedIntersectionObservationUpdate { false };
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -2045,11 +2034,6 @@ private:
 
     static bool hasEverCreatedAnAXObjectCache;
 
-    bool m_grantStorageAccessOverride { false };
-
-#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-    RefPtr<DocumentAnimationScheduler> m_animationScheduler;
-#endif
     RefPtr<DocumentTimeline> m_timeline;
     DocumentIdentifier m_identifier;
 
@@ -2060,11 +2044,10 @@ private:
     HashSet<ApplicationStateChangeListener*> m_applicationStateChangeListeners;
     
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
-    String m_primaryDomainRequestedPageSpecificStorageAccessWithUserInteraction { };
+    RegistrableDomain m_registrableDomainRequestedPageSpecificStorageAccessWithUserInteraction { };
+    String m_referrerOverride;
 #endif
     
-    std::unique_ptr<UserGestureIndicator> m_temporaryUserGesture;
-
     CSSRegisteredCustomPropertySet m_CSSRegisteredPropertySet;
 
 #if ENABLE(CSS_PAINTING_API)
@@ -2072,9 +2055,19 @@ private:
     HashMap<String, Ref<PaintWorkletGlobalScope>> m_paintWorkletGlobalScopes;
 #endif
 
+    bool m_hasEvaluatedUserAgentScripts { false };
     bool m_isRunningUserScripts { false };
+    bool m_mayBeDetachedFromFrame { true };
+#if ENABLE(APPLE_PAY)
+    bool m_hasStartedApplePaySession { false };
+#endif
 
     Ref<UndoManager> m_undoManager;
+#if PLATFORM(IOS_FAMILY)
+    std::unique_ptr<ContentChangeObserver> m_contentChangeObserver;
+#endif
+
+    HashMap<Element*, ElementIdentifier> m_identifiedElementsMap;
 };
 
 Element* eventTargetElementForDocument(Document*);

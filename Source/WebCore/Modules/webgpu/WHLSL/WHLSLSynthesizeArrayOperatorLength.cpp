@@ -44,10 +44,10 @@ public:
     void visit(AST::ArrayType& arrayType) override
     {
         m_arrayTypes.append(arrayType);
-        checkErrorAndVisit(arrayType);
+        Visitor::visit(arrayType);
     }
 
-    Vector<std::reference_wrapper<AST::ArrayType>>&& takeArrayTypes()
+    Vector<std::reference_wrapper<AST::ArrayType>> takeArrayTypes()
     {
         return WTFMove(m_arrayTypes);
     }
@@ -56,7 +56,7 @@ private:
     Vector<std::reference_wrapper<AST::ArrayType>> m_arrayTypes;
 };
 
-void synthesizeArrayOperatorLength(Program& program)
+bool synthesizeArrayOperatorLength(Program& program)
 {
     FindArrayTypes findArrayTypes;
     findArrayTypes.checkErrorAndVisit(program);
@@ -65,12 +65,14 @@ void synthesizeArrayOperatorLength(Program& program)
     bool isOperator = true;
 
     for (auto& arrayType : arrayTypes) {
-        AST::VariableDeclaration variableDeclaration(Lexer::Token(arrayType.get().origin()), AST::Qualifiers(), { arrayType.get().clone() }, String(), WTF::nullopt, WTF::nullopt);
+        auto variableDeclaration = makeUniqueRef<AST::VariableDeclaration>(Lexer::Token(arrayType.get().origin()), AST::Qualifiers(), arrayType.get().clone(), String(), WTF::nullopt, WTF::nullopt);
         AST::VariableDeclarations parameters;
         parameters.append(WTFMove(variableDeclaration));
         AST::NativeFunctionDeclaration nativeFunctionDeclaration(AST::FunctionDeclaration(Lexer::Token(arrayType.get().origin()), AST::AttributeBlock(), WTF::nullopt, AST::TypeReference::wrap(Lexer::Token(arrayType.get().origin()), program.intrinsics().uintType()), "operator.length"_str, WTFMove(parameters), WTF::nullopt, isOperator));
-        program.append(WTFMove(nativeFunctionDeclaration));
+        if (!program.append(WTFMove(nativeFunctionDeclaration)))
+            return false;
     }
+    return true;
 }
 
 } // namespace WHLSL

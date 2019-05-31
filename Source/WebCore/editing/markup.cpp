@@ -38,6 +38,7 @@
 #include "ChildListMutationScope.h"
 #include "Comment.h"
 #include "ComposedTreeIterator.h"
+#include "CustomHeaderFields.h"
 #include "DocumentFragment.h"
 #include "DocumentLoader.h"
 #include "DocumentType.h"
@@ -183,7 +184,7 @@ std::unique_ptr<Page> createPageForSanitizingWebContent()
     page->settings().setAcceleratedCompositingEnabled(false);
 
     Frame& frame = page->mainFrame();
-    frame.setView(FrameView::create(frame));
+    frame.setView(FrameView::create(frame, IntSize { 800, 600 }));
     frame.init();
 
     FrameLoader& loader = frame.loader();
@@ -766,7 +767,7 @@ static RefPtr<EditingStyle> styleFromMatchedRulesAndInlineDecl(Node& node)
     auto& element = downcast<HTMLElement>(node);
     auto style = EditingStyle::create(element.inlineStyle());
     style->mergeStyleFromRules(element);
-    return WTFMove(style);
+    return style;
 }
 
 static bool isElementPresentational(const Node* node)
@@ -1193,13 +1194,13 @@ ExceptionOr<Ref<DocumentFragment>> createFragmentForInnerOuterHTML(Element& cont
 
     if (document->isHTMLDocument()) {
         fragment->parseHTML(markup, &contextElement, parserContentPolicy);
-        return WTFMove(fragment);
+        return fragment;
     }
 
     bool wasValid = fragment->parseXML(markup, &contextElement, parserContentPolicy);
     if (!wasValid)
         return Exception { SyntaxError };
-    return WTFMove(fragment);
+    return fragment;
 }
 
 RefPtr<DocumentFragment> createFragmentForTransformToFragment(Document& outputDoc, const String& sourceString, const String& sourceMIMEType)
@@ -1226,10 +1227,14 @@ RefPtr<DocumentFragment> createFragmentForTransformToFragment(Document& outputDo
     return fragment;
 }
 
-Ref<DocumentFragment> createFragmentForImageAndURL(Document& document, const String& url)
+Ref<DocumentFragment> createFragmentForImageAndURL(Document& document, const String& url, Optional<FloatSize> preferredSize)
 {
     auto imageElement = HTMLImageElement::create(document);
     imageElement->setAttributeWithoutSynchronization(HTMLNames::srcAttr, url);
+    if (preferredSize) {
+        imageElement->setAttributeWithoutSynchronization(HTMLNames::widthAttr, AtomicString::number(preferredSize->width()));
+        imageElement->setAttributeWithoutSynchronization(HTMLNames::heightAttr, AtomicString::number(preferredSize->height()));
+    }
 
     auto fragment = document.createDocumentFragment();
     fragment->appendChild(imageElement);
@@ -1278,7 +1283,7 @@ ExceptionOr<Ref<DocumentFragment>> createContextualFragment(Element& element, co
     for (auto& element : toRemove)
         removeElementFromFragmentPreservingChildren(fragment, element);
 
-    return WTFMove(fragment);
+    return fragment;
 }
 
 static inline bool hasOneChild(ContainerNode& node)

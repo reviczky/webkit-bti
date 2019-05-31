@@ -28,7 +28,11 @@
 #include "WebProcess.h"
 
 #include "WebProcessCreationParameters.h"
+
+#if USE(GSTREAMER)
 #include <WebCore/GStreamerCommon.h>
+#endif
+
 #include <WebCore/MemoryCache.h>
 
 #if PLATFORM(WAYLAND)
@@ -42,19 +46,24 @@
 
 namespace WebKit {
 
+using namespace WebCore;
+
 void WebProcess::platformSetCacheModel(CacheModel cacheModel)
 {
     WebCore::MemoryCache::singleton().setDisabled(cacheModel == CacheModel::DocumentViewer);
 }
 
-void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters&& parameters)
+void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters& parameters)
 {
 #if PLATFORM(WPE)
-    auto& implementationLibraryName = parameters.implementationLibraryName;
-    if (!implementationLibraryName.isNull() && implementationLibraryName.data()[0] != '\0')
-        wpe_loader_init(parameters.implementationLibraryName.data());
-    RELEASE_ASSERT(is<PlatformDisplayLibWPE>(PlatformDisplay::sharedDisplay()));
-    downcast<PlatformDisplayLibWPE>(PlatformDisplay::sharedDisplay()).initialize(parameters.hostClientFileDescriptor.releaseFileDescriptor());
+    if (!parameters.isServiceWorkerProcess) {
+        auto& implementationLibraryName = parameters.implementationLibraryName;
+        if (!implementationLibraryName.isNull() && implementationLibraryName.data()[0] != '\0')
+            wpe_loader_init(parameters.implementationLibraryName.data());
+
+        RELEASE_ASSERT(is<PlatformDisplayLibWPE>(PlatformDisplay::sharedDisplay()));
+        downcast<PlatformDisplayLibWPE>(PlatformDisplay::sharedDisplay()).initialize(parameters.hostClientFileDescriptor.releaseFileDescriptor());
+    }
 #endif
 #if PLATFORM(WAYLAND)
     m_waylandCompositorDisplay = WaylandCompositorDisplay::create(parameters.waylandCompositorDisplayName);
@@ -62,6 +71,10 @@ void WebProcess::platformInitializeWebProcess(WebProcessCreationParameters&& par
 #if USE(GSTREAMER)
     WebCore::initializeGStreamer(WTFMove(parameters.gstreamerOptions));
 #endif
+}
+
+void WebProcess::platformSetWebsiteDataStoreParameters(WebProcessDataStoreParameters&&)
+{
 }
 
 void WebProcess::platformTerminate()

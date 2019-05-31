@@ -34,6 +34,8 @@
 #include <mutex>
 #include <unicode/uidna.h>
 #include <unicode/uscript.h>
+#include <wtf/Optional.h>
+#include <wtf/text/WTFString.h>
 
 namespace WTF {
 namespace URLHelpers {
@@ -118,6 +120,7 @@ static bool isLookalikeCharacter(const Optional<UChar32>& previousCodePoint, UCh
     case 0x00BE: /* VULGAR FRACTION THREE QUARTERS */
     case 0x00ED: /* LATIN SMALL LETTER I WITH ACUTE */
     /* 0x0131 LATIN SMALL LETTER DOTLESS I is intentionally not considered a lookalike character because it is visually distinguishable from i and it has legitimate use in the Turkish language. */
+    case 0x01C0: /* LATIN LETTER DENTAL CLICK */
     case 0x01C3: /* LATIN LETTER RETROFLEX CLICK */
     case 0x0251: /* LATIN SMALL LETTER ALPHA */
     case 0x0261: /* LATIN SMALL LETTER SCRIPT G */
@@ -767,8 +770,8 @@ static String escapeUnsafeCharacters(const String& sourceBuffer)
             uint8_t utf8Buffer[4];
             size_t offset = 0;
             UBool failure = false;
-            U8_APPEND(utf8Buffer, offset, 4, c, failure)
-            ASSERT(!failure);
+            U8_APPEND(utf8Buffer, offset, 4, c, failure);
+            ASSERT_UNUSED(failure, !failure);
 
             for (size_t j = 0; j < offset; ++j) {
                 outBuffer.append('%');

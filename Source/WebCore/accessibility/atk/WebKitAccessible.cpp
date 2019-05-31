@@ -394,6 +394,8 @@ static AtkAttributeSet* webkitAccessibleGetAttributes(AtkObject* object)
     AtkAttributeSet* attributeSet = nullptr;
 #if PLATFORM(GTK)
     attributeSet = addToAtkAttributeSet(attributeSet, "toolkit", "WebKitGtk");
+#elif PLATFORM(WPE)
+    attributeSet = addToAtkAttributeSet(attributeSet, "toolkit", "WPEWebKit");
 #endif
 
     auto* coreObject = accessible->priv->object;
@@ -641,10 +643,11 @@ static AtkRole atkRole(AccessibilityObject* coreObject)
         return ATK_ROLE_TABLE_ROW;
     case AccessibilityRole::Toolbar:
         return ATK_ROLE_TOOL_BAR;
+    case AccessibilityRole::Meter:
+        return ATK_ROLE_LEVEL_BAR;
     case AccessibilityRole::BusyIndicator:
-        return ATK_ROLE_PROGRESS_BAR; // Is this right?
     case AccessibilityRole::ProgressIndicator:
-        return coreObject->isMeter() ? ATK_ROLE_LEVEL_BAR : ATK_ROLE_PROGRESS_BAR;
+        return ATK_ROLE_PROGRESS_BAR;
     case AccessibilityRole::Window:
         return ATK_ROLE_WINDOW;
     case AccessibilityRole::PopUpButton:

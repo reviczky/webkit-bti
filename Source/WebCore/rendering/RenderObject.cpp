@@ -1527,41 +1527,6 @@ void RenderObject::destroy()
     delete this;
 }
 
-bool RenderObject::isTransparentOrFullyClippedRespectingParentFrames() const
-{
-    static const double minimumVisibleOpacity = 0.01;
-
-    float currentOpacity = 1;
-    auto* layer = enclosingLayer();
-    while (layer) {
-        auto& layerRenderer = layer->renderer();
-        auto& style = layerRenderer.style();
-        if (auto* box = layer->renderBox()) {
-            bool isOverflowHidden = style.overflowX() == Overflow::Hidden || style.overflowY() == Overflow::Hidden;
-            if (isOverflowHidden && !box->isDocumentElementRenderer() && box->contentSize().isEmpty())
-                return true;
-        }
-        currentOpacity *= style.opacity();
-        if (currentOpacity < minimumVisibleOpacity)
-            return true;
-
-        auto* parentLayer = layer->parent();
-        if (!parentLayer) {
-            if (!is<RenderView>(layerRenderer))
-                return false;
-
-            auto& enclosingFrame = downcast<RenderView>(layerRenderer).view().frame();
-            if (enclosingFrame.isMainFrame())
-                return false;
-
-            if (auto *frameOwnerRenderer = enclosingFrame.ownerElement()->renderer())
-                parentLayer = frameOwnerRenderer->enclosingLayer();
-        }
-        layer = parentLayer;
-    }
-    return false;
-}
-
 Position RenderObject::positionForPoint(const LayoutPoint& point)
 {
     // FIXME: This should just create a Position object instead (webkit.org/b/168566). 
@@ -1729,7 +1694,7 @@ int RenderObject::nextOffset(int current) const
 
 void RenderObject::adjustRectForOutlineAndShadow(LayoutRect& rect) const
 {
-    LayoutUnit outlineSize = outlineStyleForRepaint().outlineSize();
+    LayoutUnit outlineSize { outlineStyleForRepaint().outlineSize() };
     if (const ShadowData* boxShadow = style().boxShadow()) {
         boxShadow->adjustRectForShadow(rect, outlineSize);
         return;

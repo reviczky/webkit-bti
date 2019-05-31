@@ -395,7 +395,7 @@ void WebFrameLoaderClient::dispatchWillChangeDocument(const URL& currentUrl, con
     if (!webPage)
         return;
 
-    if (m_hasFrameSpecificStorageAccess && !WebCore::registrableDomainsAreEqual(currentUrl, newUrl)) {
+    if (m_hasFrameSpecificStorageAccess && !WebCore::areRegistrableDomainsEqual(currentUrl, newUrl)) {
         WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::RemoveStorageAccessForFrame(sessionID(), frameID().value(), pageID().value()), 0);
         m_hasFrameSpecificStorageAccess = false;
     }
@@ -456,6 +456,16 @@ void WebFrameLoaderClient::dispatchDidPopStateWithinPage()
 void WebFrameLoaderClient::dispatchWillClose()
 {
     notImplemented();
+}
+
+void WebFrameLoaderClient::dispatchDidExplicitOpen(const URL& url)
+{
+    auto* webPage = m_frame->page();
+    if (!webPage)
+        return;
+
+    // Notify the UIProcess.
+    webPage->send(Messages::WebPageProxy::DidExplicitOpenForFrame(m_frame->frameID(), url));
 }
 
 void WebFrameLoaderClient::dispatchDidStartProvisionalLoad()
@@ -525,7 +535,7 @@ void WebFrameLoaderClient::dispatchDidCommitLoad(Optional<HasInsecureContent> ha
     webPage->didCommitLoad(m_frame);
 }
 
-void WebFrameLoaderClient::dispatchDidFailProvisionalLoad(const ResourceError& error)
+void WebFrameLoaderClient::dispatchDidFailProvisionalLoad(const ResourceError& error, WillContinueLoading willContinueLoading)
 {
     WebPage* webPage = m_frame->page();
     if (!webPage)
@@ -554,7 +564,7 @@ void WebFrameLoaderClient::dispatchDidFailProvisionalLoad(const ResourceError& e
 
     // Notify the UIProcess.
     WebCore::Frame* coreFrame = m_frame ? m_frame->coreFrame() : nullptr;
-    webPage->send(Messages::WebPageProxy::DidFailProvisionalLoadForFrame(m_frame->frameID(), SecurityOriginData::fromFrame(coreFrame), navigationID, m_frame->coreFrame()->loader().provisionalLoadErrorBeingHandledURL(), error, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
+    webPage->send(Messages::WebPageProxy::DidFailProvisionalLoadForFrame(m_frame->frameID(), SecurityOriginData::fromFrame(coreFrame), navigationID, m_frame->coreFrame()->loader().provisionalLoadErrorBeingHandledURL(), error, willContinueLoading, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
 
     // If we have a load listener, notify it.
     if (WebFrame::LoadListener* loadListener = m_frame->loadListener())
@@ -599,6 +609,8 @@ void WebFrameLoaderClient::dispatchDidFinishDocumentLoad()
 
     // Notify the UIProcess.
     webPage->send(Messages::WebPageProxy::DidFinishDocumentLoadForFrame(m_frame->frameID(), navigationID, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
+
+    webPage->didFinishDocumentLoad(*m_frame);
 }
 
 void WebFrameLoaderClient::dispatchDidFinishLoad()
@@ -621,7 +633,7 @@ void WebFrameLoaderClient::dispatchDidFinishLoad()
     if (WebFrame::LoadListener* loadListener = m_frame->loadListener())
         loadListener->didFinishLoad(m_frame);
 
-    webPage->didFinishLoad(m_frame);
+    webPage->didFinishLoad(*m_frame);
 }
 
 void WebFrameLoaderClient::forcePageTransitionIfNeeded()
@@ -646,6 +658,8 @@ void WebFrameLoaderClient::dispatchDidReachLayoutMilestone(OptionSet<WebCore::La
     RefPtr<API::Object> userData;
 
     if (milestones & DidFirstLayout) {
+        RELEASE_LOG(Layout, "%p - WebFrameLoaderClient::dispatchDidReachLayoutMilestone: dispatching DidFirstLayoutForFrame, page = %p", this, webPage);
+
         // FIXME: We should consider removing the old didFirstLayout API since this is doing double duty with the
         // new didLayout API.
         webPage->injectedBundleLoaderClient().didFirstLayoutForFrame(*webPage, *m_frame, userData);
@@ -654,6 +668,7 @@ void WebFrameLoaderClient::dispatchDidReachLayoutMilestone(OptionSet<WebCore::La
 #if PLATFORM(MAC)
         // FIXME: Do this on DidFirstVisuallyNonEmptyLayout when Mac Safari is able to handle it (<rdar://problem/17580021>)
         if (m_frame->isMainFrame() && !m_didCompletePageTransition && !webPage->corePage()->settings().suppressesIncrementalRendering()) {
+            RELEASE_LOG(Layout, "%p - WebFrameLoaderClient::dispatchDidReachLayoutMilestone: dispatching didCompletePageTransition, page = %p", this, webPage);
             webPage->didCompletePageTransition();
             m_didCompletePageTransition = true;
         }
@@ -665,17 +680,42 @@ void WebFrameLoaderClient::dispatchDidReachLayoutMilestone(OptionSet<WebCore::La
 #endif
     }
 
+#if !RELEASE_LOG_DISABLED
+    StringBuilder builder;
+    auto addIfSet = [&milestones, &builder] (WebCore::LayoutMilestone milestone, const String& toAdd) {
+        if (milestones.contains(milestone)) {
+            if (!builder.isEmpty())
+                builder.append(", ");
+            builder.append(toAdd);
+        }
+    };
+
+    addIfSet(DidFirstLayout, "DidFirstLayout"_s);
+    addIfSet(DidFirstVisuallyNonEmptyLayout, "DidFirstVisuallyNonEmptyLayout"_s);
+    addIfSet(DidHitRelevantRepaintedObjectsAreaThreshold, "DidHitRelevantRepaintedObjectsAreaThreshold"_s);
+    addIfSet(DidFirstFlushForHeaderLayer, "DidFirstFlushForHeaderLayer"_s);
+    addIfSet(DidFirstLayoutAfterSuppressedIncrementalRendering, "DidFirstLayoutAfterSuppressedIncrementalRendering"_s);
+    addIfSet(DidFirstPaintAfterSuppressedIncrementalRendering, "DidFirstPaintAfterSuppressedIncrementalRendering"_s);
+    addIfSet(ReachedSessionRestorationRenderTreeSizeThreshold, "ReachedSessionRestorationRenderTreeSizeThreshold"_s);
+    addIfSet(DidRenderSignificantAmountOfText, "DidRenderSignificantAmountOfText"_s);
+    addIfSet(DidFirstMeaningfulPaint, "DidFirstMeaningfulPaint"_s);
+
+    RELEASE_LOG(Layout, "%p - WebFrameLoaderClient::dispatchDidReachLayoutMilestone: dispatching DidReachLayoutMilestone, page = %p, milestones = %{public}s", this, webPage, builder.toString().utf8().data());
+#endif
+
     // Send this after DidFirstLayout-specific calls since some clients expect to get those messages first.
     webPage->dispatchDidReachLayoutMilestone(milestones);
 
     if (milestones & DidFirstVisuallyNonEmptyLayout) {
         if (m_frame->isMainFrame() && !m_didCompletePageTransition && !webPage->corePage()->settings().suppressesIncrementalRendering()) {
+            RELEASE_LOG(Layout, "%p - WebFrameLoaderClient::dispatchDidReachLayoutMilestone: dispatching didCompletePageTransition, page = %p", this, webPage);
             webPage->didCompletePageTransition();
             m_didCompletePageTransition = true;
         }
 
         // FIXME: We should consider removing the old didFirstVisuallyNonEmptyLayoutForFrame API since this is doing
         // double duty with the new didLayout API.
+        RELEASE_LOG(Layout, "%p - WebFrameLoaderClient::dispatchDidReachLayoutMilestone: dispatching DidFirstVisuallyNonEmptyLayoutForFrame, page = %p", this, webPage);
         webPage->injectedBundleLoaderClient().didFirstVisuallyNonEmptyLayoutForFrame(*webPage, *m_frame, userData);
         webPage->send(Messages::WebPageProxy::DidFirstVisuallyNonEmptyLayoutForFrame(m_frame->frameID(), UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get())));
     }
@@ -730,7 +770,7 @@ void WebFrameLoaderClient::dispatchShow()
     webPage->show();
 }
 
-void WebFrameLoaderClient::dispatchDecidePolicyForResponse(const ResourceResponse& response, const ResourceRequest& request, WebCore::PolicyCheckIdentifier identifier, FramePolicyFunction&& function)
+void WebFrameLoaderClient::dispatchDecidePolicyForResponse(const ResourceResponse& response, const ResourceRequest& request, WebCore::PolicyCheckIdentifier identifier, const String& downloadAttribute, FramePolicyFunction&& function)
 {
     WebPage* webPage = m_frame ? m_frame->page() : nullptr;
     if (!webPage) {
@@ -761,7 +801,7 @@ void WebFrameLoaderClient::dispatchDecidePolicyForResponse(const ResourceRespons
     Ref<WebFrame> protector(*m_frame);
     uint64_t listenerID = m_frame->setUpPolicyListener(identifier, WTFMove(function), WebFrame::ForNavigationAction::No);
     if (!webPage->send(Messages::WebPageProxy::DecidePolicyForResponse(m_frame->frameID(), SecurityOriginData::fromFrame(coreFrame), identifier, navigationID, response, request,
-        canShowResponse, listenerID, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get()))))
+        canShowResponse, downloadAttribute, listenerID, UserData(WebProcess::singleton().transformObjectsToHandles(userData.get()).get()))))
         m_frame->didReceivePolicyDecision(listenerID, identifier, PolicyAction::Ignore, 0, { }, { });
 }
 
@@ -880,8 +920,10 @@ void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const Navigat
     if (auto& requester = navigationAction.requester())
         navigationActionData.requesterOrigin = requester->securityOrigin().data();
     navigationActionData.targetBackForwardItemIdentifier = navigationAction.targetBackForwardItemIdentifier();
+    navigationActionData.sourceBackForwardItemIdentifier = navigationAction.sourceBackForwardItemIdentifier();
     navigationActionData.lockHistory = navigationAction.lockHistory();
     navigationActionData.lockBackForwardList = navigationAction.lockBackForwardList();
+    navigationActionData.adClickAttribution = navigationAction.adClickAttribution();
 
     WebCore::Frame* coreFrame = m_frame->coreFrame();
     if (!coreFrame)
@@ -1369,11 +1411,11 @@ void WebFrameLoaderClient::setTitle(const StringWithDirection& title, const URL&
 
 String WebFrameLoaderClient::userAgent(const URL& url)
 {
-    WebPage* webPage = m_frame->page();
+    auto* webPage = m_frame->page();
     if (!webPage)
         return String();
 
-    return webPage->userAgent(m_frame, url);
+    return webPage->userAgent(url);
 }
 
 String WebFrameLoaderClient::overrideContentSecurityPolicy() const
@@ -1438,8 +1480,7 @@ void WebFrameLoaderClient::transitionToCommittedForNewPage()
 
     if (int viewLayoutWidth = webPage->viewLayoutSize().width()) {
         int viewLayoutHeight = std::max(webPage->viewLayoutSize().height(), 1);
-        int maximumSize = std::numeric_limits<int>::max();
-        m_frame->coreFrame()->view()->enableAutoSizeMode(true, IntSize(viewLayoutWidth, viewLayoutHeight), IntSize(maximumSize, maximumSize));
+        m_frame->coreFrame()->view()->enableAutoSizeMode(true, { viewLayoutWidth, viewLayoutHeight });
 
         if (webPage->autoSizingShouldExpandToViewHeight())
             m_frame->coreFrame()->view()->setAutoSizeFixedMinimumHeight(webPage->size().height());
@@ -1556,22 +1597,6 @@ RefPtr<Widget> WebFrameLoaderClient::createPlugin(const IntSize&, HTMLPlugInElem
 #else
     UNUSED_PARAM(pluginElement);
     return nullptr;
-#endif
-}
-
-void WebFrameLoaderClient::recreatePlugin(Widget* widget)
-{
-#if ENABLE(NETSCAPE_PLUGIN_API)
-    ASSERT(widget);
-    ASSERT(widget->isPluginViewBase());
-    ASSERT(m_frame->page());
-
-    auto& pluginView = static_cast<PluginView&>(*widget);
-    String newMIMEType;
-    auto plugin = m_frame->page()->createPlugin(m_frame, pluginView.pluginElement(), pluginView.initialParameters(), newMIMEType);
-    pluginView.recreateAndInitialize(plugin.releaseNonNull());
-#else
-    UNUSED_PARAM(widget);
 #endif
 }
 

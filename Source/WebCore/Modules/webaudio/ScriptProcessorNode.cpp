@@ -37,9 +37,12 @@
 #include "Document.h"
 #include "EventNames.h"
 #include <JavaScriptCore/Float32Array.h>
+#include <wtf/IsoMallocInlines.h>
 #include <wtf/MainThread.h>
 
 namespace WebCore {
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(ScriptProcessorNode);
 
 Ref<ScriptProcessorNode> ScriptProcessorNode::create(AudioContext& context, float sampleRate, size_t bufferSize, unsigned numberOfInputChannels, unsigned numberOfOutputChannels)
 {
@@ -64,10 +67,9 @@ ScriptProcessorNode::ScriptProcessorNode(AudioContext& context, float sampleRate
 
     ASSERT(numberOfInputChannels <= AudioContext::maxNumberOfChannels());
 
+    setNodeType(NodeTypeJavaScript);
     addInput(std::make_unique<AudioNodeInput>(this));
     addOutput(std::make_unique<AudioNodeOutput>(this, numberOfOutputChannels));
-
-    setNodeType(NodeTypeJavaScript);
 
     initialize();
 }
@@ -220,7 +222,7 @@ void ScriptProcessorNode::fireProcessEvent()
         return;
 
     // Avoid firing the event if the document has already gone away.
-    if (context().scriptExecutionContext()) {
+    if (!context().isStopped()) {
         // Let the audio thread know we've gotten to the point where it's OK for it to make another request.
         m_isRequestOutstanding = false;
 

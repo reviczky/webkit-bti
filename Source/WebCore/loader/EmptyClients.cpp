@@ -34,6 +34,7 @@
 #include "ColorChooser.h"
 #include "ContextMenuClient.h"
 #include "CookieJar.h"
+#include "DOMPasteAccess.h"
 #include "DataListSuggestionPicker.h"
 #include "DatabaseProvider.h"
 #include "DiagnosticLoggingClient.h"
@@ -108,6 +109,10 @@ class EmptyContextMenuClient final : public ContextMenuClient {
     void searchWithSpotlight() final { }
 #endif
 
+#if PLATFORM(GTK)
+    void insertEmoji(Frame&) final { }
+#endif
+
 #if USE(ACCESSIBILITY_CONTEXT_MENUS)
     void showContextMenu() final { }
 #endif
@@ -117,9 +122,9 @@ class EmptyContextMenuClient final : public ContextMenuClient {
 
 class EmptyDatabaseProvider final : public DatabaseProvider {
 #if ENABLE(INDEXED_DATABASE)
-    IDBClient::IDBConnectionToServer& idbConnectionToServerForSession(const PAL::SessionID&) final
+    IDBClient::IDBConnectionToServer& idbConnectionToServerForSession(const PAL::SessionID& sessionID) final
     {
-        static auto& sharedConnection = InProcessIDBServer::create().leakRef();
+        static auto& sharedConnection = InProcessIDBServer::create(sessionID).leakRef();
         return sharedConnection.connectionToServer();
     }
 #endif
@@ -130,6 +135,7 @@ class EmptyDiagnosticLoggingClient final : public DiagnosticLoggingClient {
     void logDiagnosticMessageWithResult(const String&, const String&, DiagnosticLoggingResultType, ShouldSample) final { }
     void logDiagnosticMessageWithValue(const String&, const String&, double, unsigned, ShouldSample) final { }
     void logDiagnosticMessageWithEnhancedPrivacy(const String&, const String&, ShouldSample) final { }
+    void logDiagnosticMessageWithValueDictionary(const String&, const String&, const ValueDictionary&, ShouldSample) final { }
 };
 
 #if ENABLE(DRAG_SUPPORT)
@@ -182,13 +188,14 @@ private:
     void willWriteSelectionToPasteboard(Range*) final { }
     void didWriteSelectionToPasteboard() final { }
     void getClientPasteboardDataForRange(Range*, Vector<String>&, Vector<RefPtr<SharedBuffer>>&) final { }
-    String replacementURLForResource(Ref<SharedBuffer>&&, const String&) final { return { }; }
     void requestCandidatesForSelection(const VisibleSelection&) final { }
     void handleAcceptedCandidateWithSoftSpaces(TextCheckingResult) final { }
 
     void registerUndoStep(UndoStep&) final;
     void registerRedoStep(UndoStep&) final;
     void clearUndoRedoOperations() final { }
+
+    DOMPasteAccessResponse requestDOMPasteAccess(const String&) final { return DOMPasteAccessResponse::DeniedForGesture; }
 
     bool canCopyCut(Frame*, bool defaultValue) const final { return defaultValue; }
     bool canPaste(Frame*, bool defaultValue) const final { return defaultValue; }
@@ -198,8 +205,8 @@ private:
     void undo() final { }
     void redo() final { }
 
-    void handleKeyboardEvent(KeyboardEvent*) final { }
-    void handleInputMethodKeydown(KeyboardEvent*) final { }
+    void handleKeyboardEvent(KeyboardEvent&) final { }
+    void handleInputMethodKeydown(KeyboardEvent&) final { }
 
     void textFieldDidBeginEditing(Element*) final { }
     void textFieldDidEndEditing(Element*) final { }
@@ -314,8 +321,8 @@ class EmptyInspectorClient final : public InspectorClient {
 class EmptyPaymentCoordinatorClient final : public PaymentCoordinatorClient {
     Optional<String> validatedPaymentNetwork(const String&) final { return WTF::nullopt; }
     bool canMakePayments() final { return false; }
-    void canMakePaymentsWithActiveCard(const String&, const String&, WTF::Function<void(bool)>&& completionHandler) final { callOnMainThread([completionHandler = WTFMove(completionHandler)] { completionHandler(false); }); }
-    void openPaymentSetup(const String&, const String&, WTF::Function<void(bool)>&& completionHandler) final { callOnMainThread([completionHandler = WTFMove(completionHandler)] { completionHandler(false); }); }
+    void canMakePaymentsWithActiveCard(const String&, const String&, CompletionHandler<void(bool)>&& completionHandler) final { callOnMainThread([completionHandler = WTFMove(completionHandler)]() mutable { completionHandler(false); }); }
+    void openPaymentSetup(const String&, const String&, CompletionHandler<void(bool)>&& completionHandler) final { callOnMainThread([completionHandler = WTFMove(completionHandler)]() mutable { completionHandler(false); }); }
     bool showPaymentUI(const URL&, const Vector<URL>&, const ApplePaySessionPaymentRequest&) final { return false; }
     void completeMerchantValidation(const PaymentMerchantSession&) final { }
     void completeShippingMethodSelection(Optional<ShippingMethodUpdate>&&) final { }
@@ -481,10 +488,6 @@ RefPtr<Frame> EmptyFrameLoaderClient::createFrame(const URL&, const String&, HTM
 RefPtr<Widget> EmptyFrameLoaderClient::createPlugin(const IntSize&, HTMLPlugInElement&, const URL&, const Vector<String>&, const Vector<String>&, const String&, bool)
 {
     return nullptr;
-}
-
-void EmptyFrameLoaderClient::recreatePlugin(Widget*)
-{
 }
 
 RefPtr<Widget> EmptyFrameLoaderClient::createJavaAppletWidget(const IntSize&, HTMLAppletElement&, const URL&, const Vector<String>&, const Vector<String>&)

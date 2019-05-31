@@ -45,6 +45,7 @@
 #include "ScheduledAction.h"
 #include "Settings.h"
 #include "WebCoreJSClientData.h"
+#include <JavaScriptCore/BuiltinNames.h>
 #include <JavaScriptCore/HeapSnapshotBuilder.h>
 #include <JavaScriptCore/JSCInlines.h>
 #include <JavaScriptCore/JSMicrotask.h>
@@ -546,6 +547,21 @@ void JSDOMWindow::setOpener(JSC::ExecState& state, JSC::JSValue value)
         return;
     }
     replaceStaticPropertySlot(state.vm(), this, Identifier::fromString(&state.vm(), "opener"), value);
+}
+
+JSValue JSDOMWindow::self(JSC::ExecState&) const
+{
+    return globalThis();
+}
+
+JSValue JSDOMWindow::window(JSC::ExecState&) const
+{
+    return globalThis();
+}
+
+JSValue JSDOMWindow::frames(JSC::ExecState&) const
+{
+    return globalThis();
 }
 
 } // namespace WebCore

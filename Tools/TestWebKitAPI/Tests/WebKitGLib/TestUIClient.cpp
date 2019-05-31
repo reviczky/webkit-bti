@@ -786,13 +786,12 @@ static void testWebViewMouseTarget(UIClientTest* test, gconstpointer)
 }
 #endif // PLATFORM(GTK)
 
-#if ENABLE(GEOLOCATION)
 static void testWebViewGeolocationPermissionRequests(UIClientTest* test, gconstpointer)
 {
     // Some versions of geoclue give a runtime warning because it tries
     // to register the error quark twice. See https://bugs.webkit.org/show_bug.cgi?id=89858.
     // Make warnings non-fatal for this test to make it pass.
-    test->removeLogFatalFlag(G_LOG_LEVEL_WARNING);
+    Test::removeLogFatalFlag(G_LOG_LEVEL_WARNING);
 #if PLATFORM(GTK)
     test->showInWindowAndWaitUntilMapped();
 #endif
@@ -829,9 +828,8 @@ static void testWebViewGeolocationPermissionRequests(UIClientTest* test, gconstp
     test->loadHtml(geolocationRequestHTML, "https://foo.com/bar");
     result = test->waitUntilPermissionResultMessageReceived();
     g_assert_cmpstr(result, !=, "1");
-    test->addLogFatalFlag(G_LOG_LEVEL_WARNING);
+    Test::addLogFatalFlag(G_LOG_LEVEL_WARNING);
 }
-#endif // ENABLE(GEOLOCATION)
 
 #if ENABLE(MEDIA_STREAM)
 static void testWebViewUserMediaEnumerateDevicesPermissionCheck(UIClientTest* test, gconstpointer)
@@ -1193,9 +1191,7 @@ void beforeAll()
 #if PLATFORM(GTK)
     UIClientTest::add("WebKitWebView", "mouse-target", testWebViewMouseTarget);
 #endif
-#if ENABLE(GEOLOCATION)
     UIClientTest::add("WebKitWebView", "geolocation-permission-requests", testWebViewGeolocationPermissionRequests);
-#endif
 #if ENABLE(MEDIA_STREAM)
     UIClientTest::add("WebKitWebView", "usermedia-enumeratedevices-permission-check", testWebViewUserMediaEnumerateDevicesPermissionCheck);
     UIClientTest::add("WebKitWebView", "usermedia-permission-requests", testWebViewUserMediaPermissionRequests);

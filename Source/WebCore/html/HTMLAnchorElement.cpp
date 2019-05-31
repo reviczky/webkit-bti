@@ -42,6 +42,7 @@
 #include "MouseEvent.h"
 #include "PingLoader.h"
 #include "PlatformMouseEvent.h"
+#include "RegistrableDomain.h"
 #include "RenderImage.h"
 #include "ResourceRequest.h"
 #include "RuntimeEnabledFeatures.h"
@@ -53,6 +54,7 @@
 #include "URLUtils.h"
 #include "UserGestureIndicator.h"
 #include <wtf/IsoMallocInlines.h>
+#include <wtf/Optional.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/StringConcatenateNumbers.h>
 
@@ -66,7 +68,6 @@ HTMLAnchorElement::HTMLAnchorElement(const QualifiedName& tagName, Document& doc
     : HTMLElement(tagName, document)
     , m_hasRootEditableElementForSelectionOnMouseDown(false)
     , m_wasShiftKeyDownOnMouseDown(false)
-    , m_cachedVisitedLinkHash(0)
 {
 }
 
@@ -246,7 +247,6 @@ void HTMLAnchorElement::parseAttribute(const QualifiedName& name, const AtomicSt
                     document().frame()->loader().client().prefetchDNS(document().completeURL(parsedURL).host().toString());
             }
         }
-        invalidateCachedVisitedLinkHash();
     } else if (name == nameAttr || name == titleAttr) {
         // Do nothing.
     } else if (name == relAttr) {
@@ -403,7 +403,9 @@ Optional<AdClickAttribution> HTMLAnchorElement::parseAdClickAttribution() const
     using Source = AdClickAttribution::Source;
     using Destination = AdClickAttribution::Destination;
 
-    if (!RuntimeEnabledFeatures::sharedFeatures().adClickAttributionEnabled() || !UserGestureIndicator::processingUserGesture())
+    if (document().sessionID().isEphemeral()
+        || !RuntimeEnabledFeatures::sharedFeatures().adClickAttributionEnabled()
+        || !UserGestureIndicator::processingUserGesture())
         return WTF::nullopt;
 
     if (!hasAttributeWithoutSynchronization(adcampaignidAttr) && !hasAttributeWithoutSynchronization(addestinationAttr))
@@ -429,18 +431,24 @@ Optional<AdClickAttribution> HTMLAnchorElement::parseAdClickAttribution() const
         return WTF::nullopt;
     }
     
-    if (adCampaignID.value() >= AdClickAttribution::MaxEntropy) {
-        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, makeString("adcampaignid must have a non-negative value less than ", AdClickAttribution::MaxEntropy, " for Ad Click Attribution."));
+    if (adCampaignID.value() > AdClickAttribution::MaxEntropy) {
+        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, makeString("adcampaignid must have a non-negative value less than or equal to ", AdClickAttribution::MaxEntropy, " for Ad Click Attribution."));
         return WTF::nullopt;
     }
 
     URL adDestinationURL { URL(), adDestinationAttr };
     if (!adDestinationURL.isValid() || !adDestinationURL.protocolIsInHTTPFamily()) {
-        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, "adddestination could not be converted to a valid HTTP-family URL."_s);
+        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, "addestination could not be converted to a valid HTTP-family URL."_s);
         return WTF::nullopt;
     }
 
-    return AdClickAttribution { Campaign(adCampaignID.value()), Source(document().domain()), Destination(adDestinationURL.host().toString()) };
+    RegistrableDomain documentRegistrableDomain { document().url() };
+    if (documentRegistrableDomain.matches(adDestinationURL)) {
+        document().addConsoleMessage(MessageSource::Other, MessageLevel::Warning, "addestination can not be the same site as the current website."_s);
+        return WTF::nullopt;
+    }
+
+    return AdClickAttribution { Campaign(adCampaignID.value()), Source(documentRegistrableDomain), Destination(adDestinationURL) };
 }
 
 void HTMLAnchorElement::handleClick(Event& event)

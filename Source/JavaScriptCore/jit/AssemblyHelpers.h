@@ -57,7 +57,7 @@ public:
         if (m_codeBlock) {
             ASSERT(m_baselineCodeBlock);
             ASSERT(!m_baselineCodeBlock->alternative());
-            ASSERT(m_baselineCodeBlock->jitType() == JITCode::None || JITCode::isBaselineCode(m_baselineCodeBlock->jitType()));
+            ASSERT(m_baselineCodeBlock->jitType() == JITType::None || JITCode::isBaselineCode(m_baselineCodeBlock->jitType()));
         }
     }
 
@@ -1432,9 +1432,10 @@ public:
     
     bool isStrictModeFor(CodeOrigin codeOrigin)
     {
-        if (!codeOrigin.inlineCallFrame)
+        auto* inlineCallFrame = codeOrigin.inlineCallFrame();
+        if (!inlineCallFrame)
             return codeBlock()->isStrictMode();
-        return codeOrigin.inlineCallFrame->isStrictMode();
+        return inlineCallFrame->isStrictMode();
     }
     
     ECMAMode ecmaModeFor(CodeOrigin codeOrigin)
@@ -1474,7 +1475,7 @@ public:
     
     static VirtualRegister argumentsStart(const CodeOrigin& codeOrigin)
     {
-        return argumentsStart(codeOrigin.inlineCallFrame);
+        return argumentsStart(codeOrigin.inlineCallFrame());
     }
 
     static VirtualRegister argumentCount(InlineCallFrame* inlineCallFrame)
@@ -1487,7 +1488,7 @@ public:
 
     static VirtualRegister argumentCount(const CodeOrigin& codeOrigin)
     {
-        return argumentCount(codeOrigin.inlineCallFrame);
+        return argumentCount(codeOrigin.inlineCallFrame());
     }
     
     void emitLoadStructure(VM&, RegisterID source, RegisterID dest, RegisterID scratch);
@@ -1540,8 +1541,6 @@ public:
     
     void barrierStoreLoadFence(VM& vm)
     {
-        if (!Options::useConcurrentBarriers())
-            return;
         Jump ok = jumpIfMutatorFenceNotNeeded(vm);
         memoryFence();
         ok.link(this);
@@ -1570,7 +1569,7 @@ public:
 #endif
     }
     
-    void cageConditionally(Gigacage::Kind kind, GPRReg storage, GPRReg scratch)
+    void cageConditionally(Gigacage::Kind kind, GPRReg storage, GPRReg scratchOrLength)
     {
 #if GIGACAGE_ENABLED
         if (!Gigacage::isEnabled(kind))
@@ -1579,15 +1578,18 @@ public:
         if (kind != Gigacage::Primitive || Gigacage::isDisablingPrimitiveGigacageDisabled())
             return cage(kind, storage);
         
-        loadPtr(&Gigacage::basePtr(kind), scratch);
-        Jump done = branchTestPtr(Zero, scratch);
+        loadPtr(&Gigacage::basePtr(kind), scratchOrLength);
+        Jump done = branchTestPtr(Zero, scratchOrLength);
         andPtr(TrustedImmPtr(Gigacage::mask(kind)), storage);
-        addPtr(scratch, storage);
+        addPtr(scratchOrLength, storage);
         done.link(this);
+#elif CPU(ARM64E)
+        if (kind == Gigacage::Primitive)
+            untagArrayPtr(scratchOrLength, storage);
 #else
         UNUSED_PARAM(kind);
         UNUSED_PARAM(storage);
-        UNUSED_PARAM(scratch);
+        UNUSED_PARAM(scratchOrLength);
 #endif
     }
 

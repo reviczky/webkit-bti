@@ -103,15 +103,18 @@ namespace JSC { namespace DFG {
     macro(CheckTierUpAndOSREnter, NodeMustGenerate) \
     macro(CheckTierUpAtReturn, NodeMustGenerate) \
     \
-    /* Marker for an argument being set at the prologue of a function. */\
-    macro(SetArgument, 0) \
+    /* Marker for an argument being set at the prologue of a function. The argument is guaranteed to be set after this node. */\
+    macro(SetArgumentDefinitely, 0) \
+    /* A marker like the above that we use to track variable liveness and OSR exit state. However, it's not guaranteed to be set. To verify it was set, you'd need to check the actual argument length. We use this for varargs when we're unsure how many argument may actually end up on the stack. */\
+    macro(SetArgumentMaybe, 0) \
     \
     /* Marker of location in the IR where we may possibly perform jump replacement to */\
     /* invalidate this code block. */\
     macro(InvalidationPoint, NodeMustGenerate) \
     \
     /* Nodes for bitwise operations. */\
-    macro(ArithBitNot, NodeResultInt32 | NodeMustGenerate) \
+    macro(ValueBitNot, NodeResultJS | NodeMustGenerate) \
+    macro(ArithBitNot, NodeResultInt32) \
     macro(ValueBitAnd, NodeResultJS | NodeMustGenerate) \
     macro(ArithBitAnd, NodeResultInt32) \
     macro(ValueBitOr, NodeResultJS | NodeMustGenerate) \
@@ -176,6 +179,7 @@ namespace JSC { namespace DFG {
     macro(ValueSub, NodeResultJS | NodeMustGenerate) \
     macro(ValueMul, NodeResultJS | NodeMustGenerate) \
     macro(ValueDiv, NodeResultJS | NodeMustGenerate) \
+    macro(ValueMod, NodeResultJS | NodeMustGenerate) \
     \
     /* Add of values that always convers its inputs to strings. May have two or three kids. */\
     macro(StrCat, NodeResultJS | NodeMustGenerate) \

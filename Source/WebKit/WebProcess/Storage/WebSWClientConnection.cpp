@@ -60,6 +60,7 @@ WebSWClientConnection::WebSWClientConnection(IPC::Connection& connection, Sessio
     bool result = sendSync(Messages::NetworkConnectionToWebProcess::EstablishSWServerConnection(sessionID), Messages::NetworkConnectionToWebProcess::EstablishSWServerConnection::Reply(m_identifier));
 
     ASSERT_UNUSED(result, result);
+    updateThrottleState();
 }
 
 WebSWClientConnection::~WebSWClientConnection()
@@ -213,11 +214,6 @@ void WebSWClientConnection::continueDidReceiveFetchResponse(FetchIdentifier fetc
     send(Messages::WebSWServerConnection::ContinueDidReceiveFetchResponse { serviceWorkerRegistrationIdentifier, fetchIdentifier });
 }
 
-void WebSWClientConnection::postMessageToServiceWorkerClient(DocumentIdentifier destinationContextIdentifier, MessageWithMessagePorts&& message, ServiceWorkerData&& source, const String& sourceOrigin)
-{
-    SWClientConnection::postMessageToServiceWorkerClient(destinationContextIdentifier, WTFMove(message), WTFMove(source), sourceOrigin);
-}
-
 void WebSWClientConnection::connectionToServerLost()
 {
     auto registrationTasks = WTFMove(m_ongoingMatchRegistrationTasks);
@@ -233,7 +229,13 @@ void WebSWClientConnection::connectionToServerLost()
 
 void WebSWClientConnection::syncTerminateWorker(ServiceWorkerIdentifier identifier)
 {
-    sendSync(Messages::WebSWServerConnection::SyncTerminateWorker(identifier), Messages::WebSWServerConnection::SyncTerminateWorker::Reply());
+    sendSync(Messages::WebSWServerConnection::SyncTerminateWorkerFromClient(identifier), Messages::WebSWServerConnection::SyncTerminateWorkerFromClient::Reply());
+}
+
+void WebSWClientConnection::updateThrottleState()
+{
+    m_isThrottleable = WebProcess::singleton().areAllPagesThrottleable();
+    send(Messages::WebSWServerConnection::SetThrottleState { m_isThrottleable });
 }
 
 } // namespace WebKit

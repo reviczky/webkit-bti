@@ -82,6 +82,7 @@ set(WebKit2GTK_INSTALLED_HEADERS
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitFindController.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitFormSubmissionRequest.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitForwardDeclarations.h
+    ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitGeolocationManager.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitGeolocationPermissionRequest.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitHitTestResult.h
     ${WEBKIT_DIR}/UIProcess/API/gtk/WebKitInstallMissingMediaPluginsPermissionRequest.h
@@ -396,6 +397,7 @@ list(APPEND WebKit_INCLUDE_DIRECTORIES
     "${WEBKIT_DIR}/UIProcess/CoordinatedGraphics"
     "${WEBKIT_DIR}/UIProcess/Network/CustomProtocols/soup"
     "${WEBKIT_DIR}/UIProcess/Plugins/gtk"
+    "${WEBKIT_DIR}/UIProcess/geoclue"
     "${WEBKIT_DIR}/UIProcess/glib"
     "${WEBKIT_DIR}/UIProcess/gstreamer"
     "${WEBKIT_DIR}/UIProcess/gtk"
@@ -630,6 +632,8 @@ if (ENABLE_PLUGIN_PROCESS_GTK2)
 
         UIProcess/Launcher/ProcessLauncher.cpp
 
+        UIProcess/Launcher/glib/BubblewrapLauncher.cpp
+        UIProcess/Launcher/glib/FlatpakLauncher.cpp
         UIProcess/Launcher/glib/ProcessLauncherGLib.cpp
 
         UIProcess/Plugins/unix/PluginProcessProxyUnix.cpp
@@ -645,11 +649,11 @@ if (ENABLE_PLUGIN_PROCESS_GTK2)
         WebProcess/Plugins/Netscape/unix/NetscapePluginUnix.cpp
         WebProcess/Plugins/Netscape/x11/NetscapePluginX11.cpp
 
-        ${DERIVED_SOURCES_WEBKIT_DIR}/AuxiliaryProcessMessageReceiver.cpp
-        ${DERIVED_SOURCES_WEBKIT_DIR}/PluginControllerProxyMessageReceiver.cpp
-        ${DERIVED_SOURCES_WEBKIT_DIR}/PluginProcessMessageReceiver.cpp
-        ${DERIVED_SOURCES_WEBKIT_DIR}/NPObjectMessageReceiverMessageReceiver.cpp
-        ${DERIVED_SOURCES_WEBKIT_DIR}/WebProcessConnectionMessageReceiver.cpp
+        ${WebKit_DERIVED_SOURCES_DIR}/AuxiliaryProcessMessageReceiver.cpp
+        ${WebKit_DERIVED_SOURCES_DIR}/PluginControllerProxyMessageReceiver.cpp
+        ${WebKit_DERIVED_SOURCES_DIR}/PluginProcessMessageReceiver.cpp
+        ${WebKit_DERIVED_SOURCES_DIR}/NPObjectMessageReceiverMessageReceiver.cpp
+        ${WebKit_DERIVED_SOURCES_DIR}/WebProcessConnectionMessageReceiver.cpp
     )
 
     add_executable(WebKitPluginProcess2 ${PluginProcessGTK2_SOURCES})

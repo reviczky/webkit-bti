@@ -115,6 +115,7 @@ public:
         if (!m_length && !m_buffer && !other.m_string.isNull()) {
             m_string = other.m_string;
             m_length = other.m_length;
+            m_is8Bit = other.m_is8Bit;
             return;
         }
 
@@ -216,14 +217,25 @@ public:
     ALWAYS_INLINE void appendLiteral(const char (&characters)[characterCount]) { append(characters, characterCount - 1); }
 
     WTF_EXPORT_PRIVATE void appendNumber(int);
-    WTF_EXPORT_PRIVATE void appendNumber(unsigned int);
+    WTF_EXPORT_PRIVATE void appendNumber(unsigned);
     WTF_EXPORT_PRIVATE void appendNumber(long);
     WTF_EXPORT_PRIVATE void appendNumber(unsigned long);
     WTF_EXPORT_PRIVATE void appendNumber(long long);
     WTF_EXPORT_PRIVATE void appendNumber(unsigned long long);
-    WTF_EXPORT_PRIVATE void appendNumber(double, unsigned precision = 6, TrailingZerosTruncatingPolicy = TruncateTrailingZeros);
-    WTF_EXPORT_PRIVATE void appendECMAScriptNumber(double);
+    // FIXME: Change to call appendShortestFormNumber.
+    void appendNumber(float) = delete;
+    void appendNumber(double) = delete;
+
+    WTF_EXPORT_PRIVATE void appendShortestFormNumber(float);
+    WTF_EXPORT_PRIVATE void appendShortestFormNumber(double);
+    WTF_EXPORT_PRIVATE void appendFixedPrecisionNumber(float, unsigned precision = 6, TrailingZerosTruncatingPolicy = TruncateTrailingZeros);
+    WTF_EXPORT_PRIVATE void appendFixedPrecisionNumber(double, unsigned precision = 6, TrailingZerosTruncatingPolicy = TruncateTrailingZeros);
+    WTF_EXPORT_PRIVATE void appendFixedWidthNumber(float, unsigned decimalPlaces);
     WTF_EXPORT_PRIVATE void appendFixedWidthNumber(double, unsigned decimalPlaces);
+
+    // FIXME: Delete in favor of the name appendShortestFormNumber or just appendNumber.
+    void appendECMAScriptNumber(float) = delete;
+    void appendECMAScriptNumber(double);
 
     String toString()
     {
@@ -301,7 +313,7 @@ public:
     {
         ASSERT(m_is8Bit);
         if (!m_length)
-            return 0;
+            return nullptr;
         if (!m_string.isNull())
             return m_string.characters8();
         ASSERT(m_buffer);
@@ -312,7 +324,7 @@ public:
     {
         ASSERT(!m_is8Bit);
         if (!m_length)
-            return 0;
+            return nullptr;
         if (!m_string.isNull())
             return m_string.characters16();
         ASSERT(m_buffer);
@@ -326,7 +338,7 @@ public:
         m_length = 0;
         m_string = String();
         m_buffer = nullptr;
-        m_bufferCharacters8 = 0;
+        m_bufferCharacters8 = nullptr;
         m_is8Bit = true;
     }
 
@@ -380,6 +392,11 @@ ALWAYS_INLINE UChar* StringBuilder::getBufferCharacters<UChar>()
 {
     ASSERT(!m_is8Bit);
     return m_bufferCharacters16;
+}
+
+inline void StringBuilder::appendECMAScriptNumber(double number)
+{
+    appendShortestFormNumber(number);
 }
 
 template <typename CharType>

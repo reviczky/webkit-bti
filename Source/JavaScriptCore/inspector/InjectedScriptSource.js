@@ -353,6 +353,16 @@ let InjectedScript = class InjectedScript
         return RemoteObject.createObjectPreviewForValue(value, true);
     }
 
+    setEventValue(value)
+    {
+        this._eventValue = value;
+    }
+
+    clearEventValue()
+    {
+        delete this._eventValue;
+    }
+
     setExceptionValue(value)
     {
         this._exceptionValue = value;
@@ -643,7 +653,7 @@ let InjectedScript = class InjectedScript
                 if (symbol)
                     fakeDescriptor.symbol = symbol;
                 // Silence any possible unhandledrejection exceptions created from accessing a native accessor with a wrong this object.
-                if (fakeDescriptor.value instanceof Promise)
+                if (fakeDescriptor.value instanceof Promise && InjectedScriptHost.isPromiseRejectedWithNativeGetterTypeError(fakeDescriptor.value))
                     fakeDescriptor.value.catch(function(){});
                 return fakeDescriptor;
             } catch (e) {
@@ -1445,6 +1455,11 @@ function BasicCommandLineAPI(callFrame)
 {
     this.$_ = injectedScript._lastResult;
     this.$exception = injectedScript._exceptionValue;
+
+    if ("_eventValue" in injectedScript)
+        this.$event = injectedScript._eventValue;
+    else if ("$event" in this)
+        delete this.$event;
 
     // $1-$99
     for (let i = 1; i <= injectedScript._savedResults.length; ++i)

@@ -56,8 +56,11 @@
 #include <JavaScriptCore/VM.h>
 #include <limits>
 #include <wtf/CheckedArithmetic.h>
+#include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(SourceBuffer);
 
 static const double ExponentialMovingAverageCoefficient = 0.1;
 
@@ -741,7 +744,7 @@ static PlatformTimeRanges removeSamplesFromTrackBuffer(const DecodeOrderSampleMa
     size_t bytesRemoved = 0;
     auto logIdentifier = WTF::Logger::LogSiteIdentifier(buffer->logClassName(), logPrefix, buffer->logIdentifier());
     auto& logger = buffer->logger();
-    auto willLog = logger.willLog(buffer->logChannel(), WTFLogLevelDebug);
+    auto willLog = logger.willLog(buffer->logChannel(), WTFLogLevel::Debug);
 #else
     UNUSED_PARAM(logPrefix);
     UNUSED_PARAM(buffer);
@@ -990,7 +993,7 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
     size_t currentTimeRange = buffered.find(currentTime);
     if (currentTimeRange == notFound || currentTimeRange == buffered.length() - 1) {
 #if !RELEASE_LOG_DISABLED
-        ERROR_LOG(LOGIDENTIFIER, "evicted ", initialBufferedSize - extraMemoryCost(), " bytes but FAILED to free enough");
+        ERROR_LOG(LOGIDENTIFIER, "FAILED to free enough after evicting ", initialBufferedSize - extraMemoryCost());
 #endif
         return;
     }
@@ -1025,7 +1028,7 @@ void SourceBuffer::evictCodedFrames(size_t newDataSize)
 
 #if !RELEASE_LOG_DISABLED
     if (m_bufferFull)
-        ERROR_LOG(LOGIDENTIFIER, "evicted ", initialBufferedSize - extraMemoryCost(), " but FAILED to free enough");
+        ERROR_LOG(LOGIDENTIFIER, "FAILED to free enough after evicting ", initialBufferedSize - extraMemoryCost());
     else
         DEBUG_LOG(LOGIDENTIFIER, "evicted ", initialBufferedSize - extraMemoryCost());
 #endif
@@ -2049,7 +2052,7 @@ void SourceBuffer::provideMediaData(TrackBuffer& trackBuffer, const AtomicString
     }
 
 #if !RELEASE_LOG_DISABLED
-    DEBUG_LOG(LOGIDENTIFIER, "Enqueued ", enqueuedSamples, " samples, ", static_cast<size_t>(trackBuffer.decodeQueue.size()), " remaining");
+    DEBUG_LOG(LOGIDENTIFIER, "enqueued ", enqueuedSamples, " samples, ", static_cast<size_t>(trackBuffer.decodeQueue.size()), " remaining");
 #endif
 
     trySignalAllSamplesInTrackEnqueued(trackID);
@@ -2058,7 +2061,7 @@ void SourceBuffer::provideMediaData(TrackBuffer& trackBuffer, const AtomicString
 void SourceBuffer::trySignalAllSamplesInTrackEnqueued(const AtomicString& trackID)
 {
     if (m_source->isEnded() && m_trackBufferMap.get(trackID).decodeQueue.empty()) {
-        DEBUG_LOG(LOGIDENTIFIER, "All samples in track ", trackID, " enqueued");
+        DEBUG_LOG(LOGIDENTIFIER, "enqueued all samples from track ", trackID);
         m_private->allSamplesInTrackEnqueued(trackID);
     }
 }

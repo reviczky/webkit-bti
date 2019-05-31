@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011, 2012 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,8 +30,8 @@
 #include "LibWebRTCNetwork.h"
 #include "NetworkConnectionToWebProcessMessages.h"
 #include "ServiceWorkerClientFetchMessages.h"
-#include "WebCacheStorageConnection.h"
-#include "WebCacheStorageConnectionMessages.h"
+#include "StorageAreaMap.h"
+#include "StorageAreaMapMessages.h"
 #include "WebCacheStorageProvider.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebIDBConnectionToServerMessages.h"
@@ -39,6 +39,7 @@
 #include "WebMDNSRegisterMessages.h"
 #include "WebPage.h"
 #include "WebPageMessages.h"
+#include "WebPaymentCoordinator.h"
 #include "WebProcess.h"
 #include "WebRTCMonitor.h"
 #include "WebRTCMonitorMessages.h"
@@ -56,6 +57,10 @@
 #include <WebCore/MemoryCache.h>
 #include <WebCore/SharedBuffer.h>
 #include <pal/SessionID.h>
+
+#if ENABLE(APPLE_PAY_REMOTE_UI)
+#include "WebPaymentCoordinatorMessages.h"
+#endif
 
 namespace WebKit {
 using namespace WebCore;
@@ -88,6 +93,11 @@ void NetworkProcessConnection::didReceiveMessage(IPC::Connection& connection, IP
             webPage->didReceiveWebPageMessage(connection, decoder);
         return;
     }
+    if (decoder.messageReceiverName() == Messages::StorageAreaMap::messageReceiverName()) {
+        if (auto* stoargeAreaMap = WebProcess::singleton().storageAreaMap(decoder.destinationID()))
+            stoargeAreaMap->didReceiveMessage(connection, decoder);
+        return;
+    }
 
 #if USE(LIBWEBRTC)
     if (decoder.messageReceiverName() == Messages::WebRTCSocket::messageReceiverName()) {
@@ -109,10 +119,6 @@ void NetworkProcessConnection::didReceiveMessage(IPC::Connection& connection, IP
         return;
     }
 #endif
-    if (decoder.messageReceiverName() == Messages::WebCacheStorageConnection::messageReceiverName()) {
-        WebProcess::singleton().cacheStorageProvider().process(connection, decoder);
-        return;
-    }
 
 #if ENABLE(INDEXED_DATABASE)
     if (decoder.messageReceiverName() == Messages::WebIDBConnectionToServer::messageReceiverName()) {
@@ -141,6 +147,14 @@ void NetworkProcessConnection::didReceiveMessage(IPC::Connection& connection, IP
     }
 #endif
 
+#if ENABLE(APPLE_PAY_REMOTE_UI)
+    if (decoder.messageReceiverName() == Messages::WebPaymentCoordinator::messageReceiverName()) {
+        if (auto webPage = WebProcess::singleton().webPage(decoder.destinationID()))
+            webPage->paymentCoordinator()->didReceiveMessage(connection, decoder);
+        return;
+    }
+#endif
+
     didReceiveNetworkProcessConnectionMessage(connection, decoder);
 }
 
@@ -151,6 +165,14 @@ void NetworkProcessConnection::didReceiveSyncMessage(IPC::Connection& connection
         ASSERT(SWContextManager::singleton().connection());
         if (auto* contextManagerConnection = SWContextManager::singleton().connection())
             static_cast<WebSWContextManagerConnection&>(*contextManagerConnection).didReceiveSyncMessage(connection, decoder, replyEncoder);
+        return;
+    }
+#endif
+
+#if ENABLE(APPLE_PAY_REMOTE_UI)
+    if (decoder.messageReceiverName() == Messages::WebPaymentCoordinator::messageReceiverName()) {
+        if (auto webPage = WebProcess::singleton().webPage(decoder.destinationID()))
+            webPage->paymentCoordinator()->didReceiveSyncMessage(connection, decoder, replyEncoder);
         return;
     }
 #endif

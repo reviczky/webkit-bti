@@ -47,7 +47,9 @@
 #include "B3VariableValue.h"
 #include "B3WasmAddressValue.h"
 #include "B3WasmBoundsCheckValue.h"
+#include "DisallowMacroScratchRegisterUsage.h"
 #include "JSCInlines.h"
+#include "JSWebAssemblyInstance.h"
 #include "ScratchRegisterAllocator.h"
 #include "VirtualRegister.h"
 #include "WasmCallingConvention.h"
@@ -183,6 +185,8 @@ public:
     PartialResult WARN_UNUSED_RETURN addLocal(Type, uint32_t);
     ExpressionType addConstant(Type, uint64_t);
 
+    PartialResult WARN_UNUSED_RETURN addRefIsNull(ExpressionType& value, ExpressionType& result);
+
     // Locals
     PartialResult WARN_UNUSED_RETURN getLocal(uint32_t index, ExpressionType& result);
     PartialResult WARN_UNUSED_RETURN setLocal(uint32_t index, ExpressionType value);
@@ -236,6 +240,7 @@ private:
 
     void emitTierUpCheck(uint32_t decrementCount, Origin);
 
+    void emitWriteBarrierForJSWrapper();
     ExpressionType emitCheckAndPreparePointer(ExpressionType pointer, uint32_t offset, uint32_t sizeOfOp);
     B3::Kind memoryKind(B3::Opcode memoryOp);
     ExpressionType emitLoadOp(LoadOpType, ExpressionType pointer, uint32_t offset);
@@ -346,10 +351,8 @@ B3IRGenerator::B3IRGenerator(const ModuleInformation& info, Procedure& procedure
         m_proc.pinRegister(m_wasmContextInstanceGPR);
 
     if (mode != MemoryMode::Signaling) {
-        ASSERT(!pinnedRegs.sizeRegisters[0].sizeOffset);
-        m_memorySizeGPR = pinnedRegs.sizeRegisters[0].sizeRegister;
-        for (const PinnedSizeRegisterInfo& regInfo : pinnedRegs.sizeRegisters)
-            m_proc.pinRegister(regInfo.sizeRegister);
+        m_memorySizeGPR = pinnedRegs.sizeRegister;
+        m_proc.pinRegister(m_memorySizeGPR);
     }
 
     if (throwWasmException)
@@ -469,8 +472,9 @@ void B3IRGenerator::restoreWebAssemblyGlobalState(RestoreCachedStackLimit restor
         const PinnedRegisterInfo* pinnedRegs = &PinnedRegisterInfo::get();
         RegisterSet clobbers;
         clobbers.set(pinnedRegs->baseMemoryPointer);
-        for (auto info : pinnedRegs->sizeRegisters)
-            clobbers.set(info.sizeRegister);
+        clobbers.set(pinnedRegs->sizeRegister);
+        if (!isARM64())
+            clobbers.set(RegisterSet::macroScratchRegisters());
 
         B3::PatchpointValue* patchpoint = block->appendNew<B3::PatchpointValue>(proc, B3::Void, origin());
         Effects effects = Effects::none();
@@ -478,18 +482,19 @@ void B3IRGenerator::restoreWebAssemblyGlobalState(RestoreCachedStackLimit restor
         effects.reads = B3::HeapRange::top();
         patchpoint->effects = effects;
         patchpoint->clobber(clobbers);
+        patchpoint->numGPScratchRegisters = Gigacage::isEnabled(Gigacage::Primitive) ? 1 : 0;
 
         patchpoint->append(instance, ValueRep::SomeRegister);
-
         patchpoint->setGenerator([pinnedRegs] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
+            RELEASE_ASSERT(!Gigacage::isEnabled(Gigacage::Primitive) || !isARM64());
+            AllowMacroScratchRegisterUsageIf allowScratch(jit, !isARM64());
             GPRReg baseMemory = pinnedRegs->baseMemoryPointer;
-            const auto& sizeRegs = pinnedRegs->sizeRegisters;
-            ASSERT(sizeRegs.size() >= 1);
-            ASSERT(!sizeRegs[0].sizeOffset); // The following code assumes we start at 0, and calculates subsequent size registers relative to 0.
-            jit.loadPtr(CCallHelpers::Address(params[0].gpr(), Instance::offsetOfCachedMemorySize()), sizeRegs[0].sizeRegister);
+            GPRReg scratchOrSize = Gigacage::isEnabled(Gigacage::Primitive) ? params.gpScratch(0) : pinnedRegs->sizeRegister;
+
+            jit.loadPtr(CCallHelpers::Address(params[0].gpr(), Instance::offsetOfCachedMemorySize()), pinnedRegs->sizeRegister);
             jit.loadPtr(CCallHelpers::Address(params[0].gpr(), Instance::offsetOfCachedMemory()), baseMemory);
-            for (unsigned i = 1; i < sizeRegs.size(); ++i)
-                jit.add64(CCallHelpers::TrustedImm32(-sizeRegs[i].sizeOffset), sizeRegs[0].sizeRegister, sizeRegs[i].sizeRegister);
+
+            jit.cageConditionally(Gigacage::Primitive, baseMemory, scratchOrSize);
         });
     }
 }
@@ -546,6 +551,12 @@ auto B3IRGenerator::addArguments(const Signature& signature) -> PartialResult
             m_locals[i] = argumentVariable;
             m_currentBlock->appendNew<VariableValue>(m_proc, Set, Origin(), argumentVariable, argument);
         });
+    return { };
+}
+
+auto B3IRGenerator::addRefIsNull(ExpressionType& value, ExpressionType& result) -> PartialResult
+{
+    result = m_currentBlock->appendNew<Value>(m_proc, B3::Equal, origin(), value, m_currentBlock->appendNew<Const64Value>(m_proc, origin(), JSValue::encode(jsNull())));
     return { };
 }
 
@@ -632,7 +643,63 @@ auto B3IRGenerator::setGlobal(uint32_t index, ExpressionType value) -> PartialRe
     ASSERT(toB3Type(m_info.globals[index].type) == value->type());
     Value* globalsArray = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), instanceValue(), safeCast<int32_t>(Instance::offsetOfGlobals()));
     m_currentBlock->appendNew<MemoryValue>(m_proc, Store, origin(), value, globalsArray, safeCast<int32_t>(index * sizeof(Register)));
+
+    if (m_info.globals[index].type == Anyref)
+        emitWriteBarrierForJSWrapper();
+
     return { };
+}
+
+inline void B3IRGenerator::emitWriteBarrierForJSWrapper()
+{
+    Value* cell = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), instanceValue(), safeCast<int32_t>(Instance::offsetOfOwner()));
+    Value* cellState = m_currentBlock->appendNew<MemoryValue>(m_proc, Load8Z, Int32, origin(), cell, safeCast<int32_t>(JSCell::cellStateOffset()));
+    Value* vm = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, pointerType(), origin(), cell, safeCast<int32_t>(JSWebAssemblyInstance::offsetOfVM()));
+    Value* threshold = m_currentBlock->appendNew<MemoryValue>(m_proc, Load, Int32, origin(), vm, safeCast<int32_t>(VM::offsetOfHeapBarrierThreshold()));
+
+    BasicBlock* fenceCheckPath = m_proc.addBlock();
+    BasicBlock* fencePath = m_proc.addBlock();
+    BasicBlock* doSlowPath = m_proc.addBlock();
+    BasicBlock* continuation = m_proc.addBlock();
+
+    m_currentBlock->appendNewControlValue(m_proc, B3::Branch, origin(),
+        m_currentBlock->appendNew<Value>(m_proc, Above, origin(), cellState, threshold),
+        FrequentedBlock(continuation), FrequentedBlock(fenceCheckPath, FrequencyClass::Rare));
+    fenceCheckPath->addPredecessor(m_currentBlock);
+    continuation->addPredecessor(m_currentBlock);
+    m_currentBlock = fenceCheckPath;
+
+    Value* shouldFence = m_currentBlock->appendNew<MemoryValue>(m_proc, Load8Z, Int32, origin(), vm, safeCast<int32_t>(VM::offsetOfHeapMutatorShouldBeFenced()));
+    m_currentBlock->appendNewControlValue(m_proc, B3::Branch, origin(),
+        shouldFence,
+        FrequentedBlock(fencePath), FrequentedBlock(doSlowPath));
+    fencePath->addPredecessor(m_currentBlock);
+    doSlowPath->addPredecessor(m_currentBlock);
+    m_currentBlock = fencePath;
+
+    B3::PatchpointValue* doFence = m_currentBlock->appendNew<B3::PatchpointValue>(m_proc, B3::Void, origin());
+    doFence->setGenerator([] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
+        jit.memoryFence();
+    });
+
+    Value* cellStateLoadAfterFence = m_currentBlock->appendNew<MemoryValue>(m_proc, Load8Z, Int32, origin(), cell, safeCast<int32_t>(JSCell::cellStateOffset()));
+    m_currentBlock->appendNewControlValue(m_proc, B3::Branch, origin(),
+        m_currentBlock->appendNew<Value>(m_proc, Above, origin(), cellStateLoadAfterFence, m_currentBlock->appendNew<Const32Value>(m_proc, origin(), blackThreshold)),
+        FrequentedBlock(continuation), FrequentedBlock(doSlowPath, FrequencyClass::Rare));
+    doSlowPath->addPredecessor(m_currentBlock);
+    continuation->addPredecessor(m_currentBlock);
+    m_currentBlock = doSlowPath;
+
+    void (*writeBarrier)(JSWebAssemblyInstance*, VM*) = [] (JSWebAssemblyInstance* cell, VM* vm) -> void {
+        vm->heap.writeBarrierSlowPath(cell);
+    };
+
+    Value* writeBarrierAddress = m_currentBlock->appendNew<ConstPtrValue>(m_proc, origin(), tagCFunctionPtr<void*>(writeBarrier, B3CCallPtrTag));
+    m_currentBlock->appendNew<CCallValue>(m_proc, B3::Void, origin(), writeBarrierAddress, cell, vm);
+    m_currentBlock->appendNewControlValue(m_proc, Jump, origin(), continuation);
+
+    continuation->addPredecessor(m_currentBlock);
+    m_currentBlock = continuation;
 }
 
 inline Value* B3IRGenerator::emitCheckAndPreparePointer(ExpressionType pointer, uint32_t offset, uint32_t sizeOfOperation)
@@ -1277,25 +1344,28 @@ auto B3IRGenerator::addCallIndirect(const Signature& signature, Vector<Expressio
         patchpoint->clobber(RegisterSet::macroScratchRegisters());
         patchpoint->append(newContextInstance, ValueRep::SomeRegister);
         patchpoint->append(instanceValue(), ValueRep::SomeRegister);
+        patchpoint->numGPScratchRegisters = Gigacage::isEnabled(Gigacage::Primitive) ? 1 : 0;
+
         patchpoint->setGenerator([=] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
             AllowMacroScratchRegisterUsage allowScratch(jit);
             GPRReg newContextInstance = params[0].gpr();
             GPRReg oldContextInstance = params[1].gpr();
             const PinnedRegisterInfo& pinnedRegs = PinnedRegisterInfo::get();
-            const auto& sizeRegs = pinnedRegs.sizeRegisters;
             GPRReg baseMemory = pinnedRegs.baseMemoryPointer;
             ASSERT(newContextInstance != baseMemory);
             jit.loadPtr(CCallHelpers::Address(oldContextInstance, Instance::offsetOfCachedStackLimit()), baseMemory);
             jit.storePtr(baseMemory, CCallHelpers::Address(newContextInstance, Instance::offsetOfCachedStackLimit()));
             jit.storeWasmContextInstance(newContextInstance);
-            ASSERT(sizeRegs[0].sizeRegister != baseMemory);
+            ASSERT(pinnedRegs.sizeRegister != baseMemory);
             // FIXME: We should support more than one memory size register
             //   see: https://bugs.webkit.org/show_bug.cgi?id=162952
-            ASSERT(sizeRegs.size() == 1);
-            ASSERT(sizeRegs[0].sizeRegister != newContextInstance);
-            ASSERT(!sizeRegs[0].sizeOffset);
-            jit.loadPtr(CCallHelpers::Address(newContextInstance, Instance::offsetOfCachedMemorySize()), sizeRegs[0].sizeRegister); // Memory size.
+            ASSERT(pinnedRegs.sizeRegister != newContextInstance);
+            GPRReg scratchOrSize = Gigacage::isEnabled(Gigacage::Primitive) ? params.gpScratch(0) : pinnedRegs.sizeRegister;
+
+            jit.loadPtr(CCallHelpers::Address(newContextInstance, Instance::offsetOfCachedMemorySize()), pinnedRegs.sizeRegister); // Memory size.
             jit.loadPtr(CCallHelpers::Address(newContextInstance, Instance::offsetOfCachedMemory()), baseMemory); // Memory::void*.
+
+            jit.cageConditionally(Gigacage::Primitive, baseMemory, scratchOrSize);
         });
         doContextSwitch->appendNewControlValue(m_proc, Jump, origin(), continuation);
 
@@ -1424,7 +1494,7 @@ Expected<std::unique_ptr<InternalFunction>, String> parseAndCompile(CompilationC
         result->entrypoint.calleeSaveRegisters = procedure.calleeSaveRegisterAtOffsetList();
     }
 
-    return WTFMove(result);
+    return result;
 }
 
 // Custom wasm ops. These are the ones too messy to do in wasm.json.

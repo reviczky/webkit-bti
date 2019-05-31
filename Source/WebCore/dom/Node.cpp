@@ -42,6 +42,7 @@
 #include "EventDispatcher.h"
 #include "EventHandler.h"
 #include "FrameView.h"
+#include "HTMLAreaElement.h"
 #include "HTMLBodyElement.h"
 #include "HTMLCollection.h"
 #include "HTMLElement.h"
@@ -61,6 +62,7 @@
 #include "RenderBox.h"
 #include "RenderTextControl.h"
 #include "RenderView.h"
+#include "SVGElement.h"
 #include "ScopedEventQueue.h"
 #include "ScriptDisallowedScope.h"
 #include "StorageEvent.h"
@@ -316,8 +318,7 @@ void Node::trackForDebugging()
 }
 
 Node::Node(Document& document, ConstructionType type)
-    : m_refCount(1)
-    , m_nodeFlags(type)
+    : m_nodeFlags(type)
     , m_treeScope(&document)
 {
     ASSERT(isMainThread());
@@ -332,9 +333,7 @@ Node::Node(Document& document, ConstructionType type)
 Node::~Node()
 {
     ASSERT(isMainThread());
-    // We set m_refCount to 1 before calling delete to avoid double destruction through use of Ref<T>/RefPtr<T>.
-    // This is a security mitigation in case of programmer errorm (caught by a debug assertion).
-    ASSERT(m_refCount == 1);
+    ASSERT(m_refCountAndParentBit == s_refCountIncrement);
     ASSERT(m_deletionHasBegun);
     ASSERT(!m_adoptionIsRequired);
 
@@ -796,7 +795,11 @@ RenderBoxModelObject* Node::renderBoxModelObject() const
 LayoutRect Node::renderRect(bool* isReplaced)
 {    
     RenderObject* hitRenderer = this->renderer();
-    ASSERT(hitRenderer);
+    if (!hitRenderer && is<HTMLAreaElement>(*this)) {
+        auto& area = downcast<HTMLAreaElement>(*this);
+        if (auto* imageElement = area.imageElement())
+            hitRenderer = imageElement->renderer();
+    }
     RenderObject* renderer = hitRenderer;
     while (renderer && !renderer->isBody() && !renderer->isDocumentElementRenderer()) {
         if (renderer->isRenderBlock() || renderer->isInlineBlockOrInlineTable() || renderer->isReplaced()) {
@@ -2054,8 +2057,17 @@ void Node::moveNodeToNewDocument(Document& oldDocument, Document& newDocument)
         }
 
         unsigned numTouchEventListeners = 0;
-        for (auto& name : eventNames().touchAndPointerEventNames())
-            numTouchEventListeners += eventListeners(name).size();
+#if ENABLE(TOUCH_EVENTS)
+        if (newDocument.quirks().shouldDispatchSimulatedMouseEvents() || RuntimeEnabledFeatures::sharedFeatures().mouseEventsSimulationEnabled()) {
+            for (auto& name : eventNames().extendedTouchRelatedEventNames())
+                numTouchEventListeners += eventListeners(name).size();
+        } else {
+#endif
+            for (auto& name : eventNames().touchRelatedEventNames())
+                numTouchEventListeners += eventListeners(name).size();
+#if ENABLE(TOUCH_EVENTS)
+        }
+#endif
 
         for (unsigned i = 0; i < numTouchEventListeners; ++i) {
             oldDocument.didRemoveTouchEventHandler(*this);
@@ -2100,22 +2112,15 @@ static inline bool tryAddEventListener(Node* targetNode, const AtomicString& eve
     targetNode->document().addListenerTypeIfNeeded(eventType);
     if (eventNames().isWheelEventType(eventType))
         targetNode->document().didAddWheelEventHandler(*targetNode);
-    else if (eventNames().isTouchEventType(eventType))
+    else if (eventNames().isTouchRelatedEventType(targetNode->document(), eventType))
         targetNode->document().didAddTouchEventHandler(*targetNode);
 
 #if PLATFORM(IOS_FAMILY)
     if (targetNode == &targetNode->document() && eventType == eventNames().scrollEvent)
         targetNode->document().domWindow()->incrementScrollEventListenersCount();
 
-    // FIXME: Would it be sufficient to special-case this code for <body> and <frameset>?
-    //
-    // This code was added to address <rdar://problem/5846492> Onorientationchange event not working for document.body.
-    // Forward this call to addEventListener() to the window since these are window-only events.
-    if (eventType == eventNames().orientationchangeEvent || eventType == eventNames().resizeEvent)
-        targetNode->document().domWindow()->addEventListener(eventType, WTFMove(listener), options);
-
 #if ENABLE(TOUCH_EVENTS)
-    if (eventNames().isTouchEventType(eventType))
+    if (eventNames().isTouchRelatedEventType(targetNode->document(), eventType))
         targetNode->document().addTouchEventListener(*targetNode);
 #endif
 #endif // PLATFORM(IOS_FAMILY)
@@ -2142,21 +2147,15 @@ static inline bool tryRemoveEventListener(Node* targetNode, const AtomicString& 
     // listeners for each type, not just a bool - see https://bugs.webkit.org/show_bug.cgi?id=33861
     if (eventNames().isWheelEventType(eventType))
         targetNode->document().didRemoveWheelEventHandler(*targetNode);
-    else if (eventNames().isTouchEventType(eventType))
+    else if (eventNames().isTouchRelatedEventType(targetNode->document(), eventType))
         targetNode->document().didRemoveTouchEventHandler(*targetNode);
 
 #if PLATFORM(IOS_FAMILY)
     if (targetNode == &targetNode->document() && eventType == eventNames().scrollEvent)
         targetNode->document().domWindow()->decrementScrollEventListenersCount();
 
-    // FIXME: Would it be sufficient to special-case this code for <body> and <frameset>? See <rdar://problem/15647823>.
-    // This code was added to address <rdar://problem/5846492> Onorientationchange event not working for document.body.
-    // Forward this call to removeEventListener() to the window since these are window-only events.
-    if (eventType == eventNames().orientationchangeEvent || eventType == eventNames().resizeEvent)
-        targetNode->document().domWindow()->removeEventListener(eventType, listener, options);
-
 #if ENABLE(TOUCH_EVENTS)
-    if (eventNames().isTouchEventType(eventType))
+    if (eventNames().isTouchRelatedEventType(targetNode->document(), eventType))
         targetNode->document().removeTouchEventListener(*targetNode);
 #endif
 #endif // PLATFORM(IOS_FAMILY)
@@ -2452,7 +2451,7 @@ void Node::defaultEventHandler(Event& event)
             if (Frame* frame = document().frame())
                 frame->eventHandler().defaultWheelEventHandler(startNode, downcast<WheelEvent>(event));
 #if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS_FAMILY)
-    } else if (is<TouchEvent>(event) && eventNames().isTouchEventType(eventType)) {
+    } else if (is<TouchEvent>(event) && eventNames().isTouchRelatedEventType(document(), eventType)) {
         RenderObject* renderer = this->renderer();
         while (renderer && (!is<RenderBox>(*renderer) || !downcast<RenderBox>(*renderer).canBeScrolledAndHasScrollableArea()))
             renderer = renderer->parent();
@@ -2501,6 +2500,8 @@ bool Node::willRespondToMouseWheelEvents()
 // delete a Node at each deref call site.
 void Node::removedLastRef()
 {
+    ASSERT(m_refCountAndParentBit == s_refCountIncrement);
+
     // An explicit check for Document here is better than a virtual function since it is
     // faster for non-Document nodes, and because the call to removedLastRef that is inlined
     // at all deref call sites is smaller if it's a non-virtual function.
@@ -2509,10 +2510,15 @@ void Node::removedLastRef()
         return;
     }
 
+    // Now it is time to detach the SVGElement from all its properties. These properties
+    // may outlive the SVGElement. The only difference after the detach is no commit will
+    // be carried out unless these properties are attached to another owner.
+    if (is<SVGElement>(*this))
+        downcast<SVGElement>(*this).detachAllProperties();
+
 #ifndef NDEBUG
     m_deletionHasBegun = true;
 #endif
-    m_refCount = 1; // Avoid double destruction through use of RefPtr<T>. (This is a security mitigation in case of programmer error. It will ASSERT in debug builds.)
     delete this;
 }
 

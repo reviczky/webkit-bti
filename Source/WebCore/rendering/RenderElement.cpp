@@ -38,6 +38,7 @@
 #include "HTMLHtmlElement.h"
 #include "HTMLImageElement.h"
 #include "HTMLNames.h"
+#include "LengthFunctions.h"
 #include "Logging.h"
 #include "Page.h"
 #include "PathUtilities.h"
@@ -146,7 +147,7 @@ RenderPtr<RenderElement> RenderElement::createFor(Element& element, RenderStyle&
         auto& styleImage = downcast<ImageContentData>(*contentData).image();
         auto image = createRenderer<RenderImage>(element, WTFMove(style), const_cast<StyleImage*>(&styleImage));
         image->setIsGeneratedContent();
-        return WTFMove(image);
+        return image;
     }
 
     switch (style.display()) {
@@ -158,6 +159,7 @@ RenderPtr<RenderElement> RenderElement::createFor(Element& element, RenderStyle&
             return createRenderer<RenderInline>(element, WTFMove(style));
         FALLTHROUGH; // Fieldsets should make a block flow if display:inline is set.
     case DisplayType::Block:
+    case DisplayType::FlowRoot:
     case DisplayType::InlineBlock:
     case DisplayType::Compact:
         return createRenderer<RenderBlockFlow>(element, WTFMove(style));
@@ -730,6 +732,22 @@ void RenderElement::styleWillChange(StyleDifference diff, const RenderStyle& new
             }
         }
 
+        auto needsInvalidateEventRegion = [&] {
+            if (m_style.pointerEvents() != newStyle.pointerEvents())
+                return true;
+#if ENABLE(POINTER_EVENTS)
+            if (m_style.effectiveTouchActions() != newStyle.effectiveTouchActions())
+                return true;
+#endif
+            return false;
+        };
+
+        if (needsInvalidateEventRegion()) {
+            // Usually the event region gets updated as a result of paint invalidation. Here we need to request an update explicitly.
+            if (auto* layer = enclosingLayer())
+                layer->invalidateEventRegion();
+        }
+
         if (m_parent && (newStyle.outlineSize() < m_style.outlineSize() || shouldRepaintForStyleDifference(diff)))
             repaint();
 
@@ -982,7 +1000,7 @@ void RenderElement::paintAsInlineBlock(PaintInfo& paintInfo, const LayoutPoint& 
     // (See Appendix E.2, section 6.4 on inline block/table/replaced elements in the CSS2.1 specification.)
     // This is also used by other elements (e.g. flex items and grid items).
     PaintPhase paintPhaseToUse = isExcludedAndPlacedInBorder() ? paintInfo.phase : PaintPhase::Foreground;
-    if (paintInfo.phase == PaintPhase::Selection)
+    if (paintInfo.phase == PaintPhase::Selection || paintInfo.phase == PaintPhase::EventRegion)
         paint(paintInfo, childPoint);
     else if (paintInfo.phase == paintPhaseToUse) {
         paintPhase(*this, PaintPhase::BlockBackground, paintInfo, childPoint);
@@ -1123,7 +1141,7 @@ bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* rep
     // We didn't move, but we did change size. Invalidate the delta, which will consist of possibly
     // two rectangles (but typically only one).
     const RenderStyle& outlineStyle = outlineStyleForRepaint();
-    LayoutUnit outlineWidth = outlineStyle.outlineSize();
+    LayoutUnit outlineWidth { outlineStyle.outlineSize() };
     LayoutBoxExtent insetShadowExtent = style().getBoxShadowInsetExtent();
     LayoutUnit width = absoluteValue(newOutlineBox.width() - oldOutlineBox.width());
     if (width) {
@@ -1134,7 +1152,7 @@ bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* rep
         LayoutUnit boxWidth = is<RenderBox>(*this) ? downcast<RenderBox>(*this).width() : 0_lu;
         LayoutUnit minInsetRightShadowExtent = std::min<LayoutUnit>(-insetShadowExtent.right(), std::min(newBounds.width(), oldBounds.width()));
         LayoutUnit borderWidth = std::max(borderRight, std::max(valueForLength(style().borderTopRightRadius().width, boxWidth), valueForLength(style().borderBottomRightRadius().width, boxWidth)));
-        LayoutUnit decorationsWidth = std::max<LayoutUnit>(-outlineStyle.outlineOffset(), borderWidth + minInsetRightShadowExtent) + std::max(outlineWidth, shadowRight);
+        LayoutUnit decorationsWidth = std::max(LayoutUnit(-outlineStyle.outlineOffset()), borderWidth + minInsetRightShadowExtent) + std::max(outlineWidth, shadowRight);
         LayoutRect rightRect(newOutlineBox.x() + std::min(newOutlineBox.width(), oldOutlineBox.width()) - decorationsWidth,
             newOutlineBox.y(),
             width + decorationsWidth,
@@ -1155,7 +1173,7 @@ bool RenderElement::repaintAfterLayoutIfNeeded(const RenderLayerModelObject* rep
         LayoutUnit minInsetBottomShadowExtent = std::min<LayoutUnit>(-insetShadowExtent.bottom(), std::min(newBounds.height(), oldBounds.height()));
         LayoutUnit borderHeight = std::max(borderBottom, std::max(valueForLength(style().borderBottomLeftRadius().height, boxHeight),
             valueForLength(style().borderBottomRightRadius().height, boxHeight)));
-        LayoutUnit decorationsHeight = std::max<LayoutUnit>(-outlineStyle.outlineOffset(), borderHeight + minInsetBottomShadowExtent) + std::max(outlineWidth, shadowBottom);
+        LayoutUnit decorationsHeight = std::max(LayoutUnit(-outlineStyle.outlineOffset()), borderHeight + minInsetBottomShadowExtent) + std::max(outlineWidth, shadowBottom);
         LayoutRect bottomRect(newOutlineBox.x(),
             std::min(newOutlineBox.maxY(), oldOutlineBox.maxY()) - decorationsHeight,
             std::max(newOutlineBox.width(), oldOutlineBox.width()),
@@ -1619,13 +1637,13 @@ void RenderElement::drawLineForBoxSide(GraphicsContext& graphicsContext, const F
             switch (side) {
             case BSTop:
             case BSBottom:
-                drawBorderRect(snapRectToDevicePixels(x1, y1, length, thirdOfThickness, deviceScaleFactor));
-                drawBorderRect(snapRectToDevicePixels(x1, y2 - thirdOfThickness, length, thirdOfThickness, deviceScaleFactor));
+                drawBorderRect(snapRectToDevicePixels(LayoutRect(x1, y1, length, thirdOfThickness), deviceScaleFactor));
+                drawBorderRect(snapRectToDevicePixels(LayoutRect(x1, y2 - thirdOfThickness, length, thirdOfThickness), deviceScaleFactor));
                 break;
             case BSLeft:
             case BSRight:
-                drawBorderRect(snapRectToDevicePixels(x1, y1, thirdOfThickness, length, deviceScaleFactor));
-                drawBorderRect(snapRectToDevicePixels(x2 - thirdOfThickness, y1, thirdOfThickness, length, deviceScaleFactor));
+                drawBorderRect(snapRectToDevicePixels(LayoutRect(x1, y1, thirdOfThickness, length), deviceScaleFactor));
+                drawBorderRect(snapRectToDevicePixels(LayoutRect(x2 - thirdOfThickness, y1, thirdOfThickness, length), deviceScaleFactor));
                 break;
             }
 
@@ -1755,7 +1773,7 @@ void RenderElement::drawLineForBoxSide(GraphicsContext& graphicsContext, const F
             graphicsContext.setFillColor(color);
             bool wasAntialiased = graphicsContext.shouldAntialias();
             graphicsContext.setShouldAntialias(antialias);
-            drawBorderRect(snapRectToDevicePixels(x1, y1, x2 - x1, y2 - y1, deviceScaleFactor));
+            drawBorderRect(snapRectToDevicePixels(LayoutRect(x1, y1, x2 - x1, y2 - y1), deviceScaleFactor));
             graphicsContext.setShouldAntialias(wasAntialiased);
             graphicsContext.setStrokeStyle(oldStrokeStyle);
             return;
@@ -1896,7 +1914,17 @@ void RenderElement::paintOutline(PaintInfo& paintInfo, const LayoutRect& paintRe
     // Only paint the focus ring by hand if the theme isn't able to draw it.
     if (styleToUse.outlineStyleIsAuto() == OutlineIsAuto::On && !theme().supportsFocusRing(styleToUse)) {
         Vector<LayoutRect> focusRingRects;
-        addFocusRingRects(focusRingRects, paintRect.location(), paintInfo.paintContainer);
+        LayoutRect paintRectToUse { paintRect };
+#if PLATFORM(IOS_FAMILY)
+        // Workaround for <rdar://problem/6209763>. Force the painting bounds of checkboxes and radio controls to be square.
+        // FIXME: Consolidate this code with the same code in RenderBox::paintBoxDecorations(). See <https://bugs.webkit.org/show_bug.cgi?id=194781>.
+        if (style().appearance() == CheckboxPart || style().appearance() == RadioPart) {
+            int width = std::min(paintRect.width(), paintRect.height());
+            int height = width;
+            paintRectToUse = IntRect { paintRect.x(), paintRect.y() + (downcast<RenderBox>(*this).height() - height) / 2, width, height }; // Vertically center the checkbox, like on desktop
+        }
+#endif
+        addFocusRingRects(focusRingRects, paintRectToUse.location(), paintInfo.paintContainer);
         paintFocusRing(paintInfo, styleToUse, focusRingRects);
     }
 
@@ -2097,6 +2125,8 @@ static RenderObject::BlockContentHeightType includeNonFixedHeight(const RenderOb
         }
         return RenderObject::FixedHeight;
     }
+    if (renderer.document().settings().textAutosizingUsesIdempotentMode() && style.maxHeight().type() == Fixed && is<RenderBlock>(renderer) && style.maxHeight().value() <= downcast<RenderBlock>(renderer).layoutOverflowRect().maxY())
+        return RenderObject::FixedHeight;
     return RenderObject::FlexibleHeight;
 }
 
@@ -2106,9 +2136,12 @@ void RenderElement::adjustComputedFontSizesOnBlocks(float size, float visibleWid
     if (!document)
         return;
 
+    auto pageScale = document->page() ? document->page()->initialScale() : 1.0f;
+
     Vector<int> depthStack;
     int currentDepth = 0;
     int newFixedDepth = 0;
+    auto idempotentMode = document->settings().textAutosizingUsesIdempotentMode();
 
     // We don't apply autosizing to nodes with fixed height normally.
     // But we apply it to nodes which are located deep enough
@@ -2121,8 +2154,8 @@ void RenderElement::adjustComputedFontSizesOnBlocks(float size, float visibleWid
             depthStack.append(newFixedDepth);
 
         int stackSize = depthStack.size();
-        if (is<RenderBlockFlow>(*descendent) && !descendent->isListItem() && (!stackSize || currentDepth - depthStack[stackSize - 1] > TextAutoSizingFixedHeightDepth))
-            downcast<RenderBlockFlow>(*descendent).adjustComputedFontSizes(size, visibleWidth);
+        if (is<RenderBlockFlow>(*descendent) && !descendent->isListItem() && (idempotentMode || !stackSize || currentDepth - depthStack[stackSize - 1] > TextAutoSizingFixedHeightDepth))
+            downcast<RenderBlockFlow>(*descendent).adjustComputedFontSizes(size, visibleWidth, pageScale, idempotentMode);
         newFixedDepth = 0;
     }
 
@@ -2143,6 +2176,7 @@ void RenderElement::resetTextAutosizing()
     Vector<int> depthStack;
     int currentDepth = 0;
     int newFixedDepth = 0;
+    auto idempotentMode = document->settings().textAutosizingUsesIdempotentMode();
 
     for (RenderObject* descendent = traverseNext(this, includeNonFixedHeight, currentDepth, newFixedDepth); descendent; descendent = descendent->traverseNext(this, includeNonFixedHeight, currentDepth, newFixedDepth)) {
         while (depthStack.size() > 0 && currentDepth <= depthStack[depthStack.size() - 1])
@@ -2151,7 +2185,7 @@ void RenderElement::resetTextAutosizing()
             depthStack.append(newFixedDepth);
 
         int stackSize = depthStack.size();
-        if (is<RenderBlockFlow>(*descendent) && !descendent->isListItem() && (!stackSize || currentDepth - depthStack[stackSize - 1] > TextAutoSizingFixedHeightDepth))
+        if (is<RenderBlockFlow>(*descendent) && !descendent->isListItem() && (idempotentMode || !stackSize || currentDepth - depthStack[stackSize - 1] > TextAutoSizingFixedHeightDepth))
             downcast<RenderBlockFlow>(*descendent).resetComputedFontSize();
         newFixedDepth = 0;
     }

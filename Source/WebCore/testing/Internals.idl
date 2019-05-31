@@ -243,7 +243,6 @@ enum CompositingPolicy {
     DOMRect boundingBox(Element element);
 
     [MayThrowException] DOMRectList inspectorHighlightRects();
-    [MayThrowException] DOMString inspectorHighlightObject();
 
     [MayThrowException] unsigned long markerCountForNode(Node node, DOMString markerType);
     [MayThrowException] Range? markerRangeForNode(Node node, DOMString markerType, unsigned long index);
@@ -294,6 +293,7 @@ enum CompositingPolicy {
     unsigned long locationFromRange(Element scope, Range range);
     unsigned long lengthFromRange(Element scope, Range range);
     DOMString rangeAsText(Range range);
+    DOMString rangeAsTextUsingBackwardsTextIterator(Range range);
     Range subrange(Range range, long rangeLocation, long rangeLength);
     [MayThrowException] Range? rangeForDictionaryLookupAtLocation(long x, long y);
     Range? rangeOfStringNearLocation(Range range, DOMString text, long targetOffset);
@@ -346,6 +346,8 @@ enum CompositingPolicy {
     [MayThrowException] boolean isPageBoxVisible(long pageNumber);
 
     unsigned long imageFrameIndex(HTMLImageElement element);
+    unsigned long imageFrameCount(HTMLImageElement element);
+    float imageFrameDurationAtIndex(HTMLImageElement element, unsigned long index);
     void setImageFrameDecodingDuration(HTMLImageElement element, unrestricted float duration);
     void resetImageAnimation(HTMLImageElement element);
     boolean isImageAnimating(HTMLImageElement element);
@@ -372,6 +374,7 @@ enum CompositingPolicy {
     const unsigned short LAYER_TREE_INCLUDES_ACCELERATES_DRAWING = 32;
     const unsigned short LAYER_TREE_INCLUDES_BACKING_STORE_ATTACHED = 64;
     const unsigned short LAYER_TREE_INCLUDES_ROOT_LAYER_PROPERTIES = 128;
+    const unsigned short LAYER_TREE_INCLUDES_EVENT_REGION = 256;
     [MayThrowException] DOMString layerTreeAsText(Document document, optional unsigned short flags = 0);
 
     [MayThrowException] unsigned long long layerIDForElement(Element element);
@@ -517,7 +520,7 @@ enum CompositingPolicy {
     void forceReload(boolean endToEnd);
     void reloadExpiredOnly();
 
-    void enableAutoSizeMode(boolean enabled, long minimumWidth, long minimumHeight, long maximumWidth, long maximumHeight);
+    void enableAutoSizeMode(boolean enabled, long width, long height);
 
     [Conditional=VIDEO] sequence<DOMString> mediaResponseSources(HTMLMediaElement media);
     [Conditional=VIDEO] sequence<DOMString> mediaResponseContentRanges(HTMLMediaElement media);
@@ -527,6 +530,7 @@ enum CompositingPolicy {
     [Conditional=VIDEO] void endSimulatedHDCPError(HTMLMediaElement media);
 
     [Conditional=VIDEO] boolean elementShouldBufferData(HTMLMediaElement media);
+    [Conditional=VIDEO] DOMString elementBufferingPolicy(HTMLMediaElement media);
 
     [Conditional=LEGACY_ENCRYPTED_MEDIA] void initializeMockCDM();
     [Conditional=ENCRYPTED_MEDIA] MockCDMFactory registerMockCDM();
@@ -540,6 +544,7 @@ enum CompositingPolicy {
     [Conditional=VIDEO_TRACK, MayThrowException] void setCaptionsStyleSheetOverride(DOMString override);
     [Conditional=VIDEO_TRACK, MayThrowException] void setPrimaryAudioTrackLanguageOverride(DOMString language);
     [Conditional=VIDEO_TRACK, MayThrowException] void setCaptionDisplayMode(DOMString mode);
+    [Conditional=VIDEO_TRACK] TextTrackCueGeneric createGenericCue(double startTime, double endTime, DOMString text);
 
     [Conditional=VIDEO] TimeRanges createTimeRanges(Float32Array startTimes, Float32Array
      endTimes);
@@ -550,6 +555,7 @@ enum CompositingPolicy {
     [MayThrowException] boolean isPluginUnavailabilityIndicatorObscured(Element element);
     [MayThrowException] DOMString unavailablePluginReplacementText(Element element);
     boolean isPluginSnapshotted(Element element);
+    boolean pluginIsBelowSizeThreshold(Element element);
 
     [MayThrowException] DOMRect selectionBounds();
     void setSelectionWithoutValidation(Node baseNode, unsigned long baseOffset, Node? extentNode, unsigned long extentOffset);
@@ -620,9 +626,8 @@ enum CompositingPolicy {
     [Conditional=STREAMS_API, CallWith=ExecState] any cloneArrayBuffer(any buffer, any srcByteOffset, any byteLength);
     [Conditional=STREAMS_API, CallWith=ExecState] boolean isReadableStreamDisturbed(any stream);
 
-    DOMString resourceLoadStatisticsForOrigin(DOMString domain);
+    DOMString resourceLoadStatisticsForURL(DOMURL url);
     void setResourceLoadStatisticsEnabled(boolean enable);
-    [EnabledBySetting=StorageAccessAPI] void setUserGrantsStorageAccess(boolean value);
 
     [MayThrowException] void setCanShowModalDialogOverride(boolean allow);
 
@@ -632,6 +637,8 @@ enum CompositingPolicy {
     double lastHandledUserGestureTimestamp();
 
     void withUserGesture(VoidCallback callback);
+
+    boolean userIsInteracting();
 
     GCObservation? observeGC(any observed);
 
@@ -650,6 +657,7 @@ enum CompositingPolicy {
     void setQuickLookPassword(DOMString password);
 
     [CallWith=Document] void setAsRunningUserScripts();
+    [CallWith=Document, Conditional=APPLE_PAY] void setHasStartedApplePaySession();
 
     void disableTileSizeUpdateDelay();
     void setSpeculativeTilingDelayDisabledForTesting(boolean disabled);
@@ -675,6 +683,7 @@ enum CompositingPolicy {
     [Conditional=MEDIA_STREAM] void simulateMediaStreamTrackCaptureSourceFailure(MediaStreamTrack track);
     [Conditional=MEDIA_STREAM] void setMediaStreamTrackIdentifier(MediaStreamTrack track, DOMString identifier);
     [Conditional=MEDIA_STREAM] void setMediaStreamSourceInterrupted(MediaStreamTrack track, boolean interrupted);
+    [Conditional=MEDIA_STREAM] void setDisableGetDisplayMediaUserGestureConstraint(boolean value);
 
     unsigned long long documentIdentifier(Document document);
     boolean isDocumentAlive(unsigned long long documentIdentifier);
@@ -687,6 +696,8 @@ enum CompositingPolicy {
     Promise<DOMString> cacheStorageEngineRepresentation();
     void setResponseSizeWithPadding(FetchResponse response, unsigned long long size);
     unsigned long long responseSizeWithPadding(FetchResponse response);
+
+    void updateQuotaBasedOnSpaceUsage();
 
     void setConsoleMessageListener(StringCallback callback);
 
@@ -735,4 +746,11 @@ enum CompositingPolicy {
     sequence<CookieData> getCookies();
 
     void setAlwaysAllowLocalWebarchive(boolean alwaysAllowLocalWebarchive);
+
+    void processWillSuspend();
+    void processDidResume();
+
+    void testDictionaryLogging();
+
+    void setXHRMaximumIntervalForUserGestureForwarding(XMLHttpRequest xhr, double interval);
 };

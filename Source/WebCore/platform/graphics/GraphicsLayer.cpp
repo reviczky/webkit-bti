@@ -79,6 +79,7 @@ bool GraphicsLayer::supportsLayerType(Type type)
     case Type::Normal:
     case Type::PageTiledBacking:
     case Type::ScrollContainer:
+    case Type::ScrolledContents:
         return true;
     case Type::Shape:
         return false;
@@ -409,6 +410,11 @@ void GraphicsLayer::setShapeLayerWindRule(WindRule windRule)
 #else
     UNUSED_PARAM(windRule);
 #endif
+}
+
+void GraphicsLayer::setEventRegion(EventRegion&& eventRegion)
+{
+    m_eventRegion = WTFMove(eventRegion);
 }
 
 void GraphicsLayer::noteDeviceOrPageScaleFactorChangedIncludingDescendants()
@@ -918,6 +924,11 @@ void GraphicsLayer::dumpProperties(TextStream& ts, LayerTreeAsTextBehavior behav
             ts << repaintRectMap().get(this)[i].height();
             ts << ")\n";
         }
+        ts << indent << ")\n";
+    }
+
+    if (behavior & LayerTreeAsTextIncludeEventRegion && !m_eventRegion.isEmpty()) {
+        ts << indent << "(event region" << m_eventRegion;
         ts << indent << ")\n";
     }
 

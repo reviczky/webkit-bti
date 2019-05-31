@@ -520,11 +520,17 @@ bool WebFrame::allowsFollowingLink(const URL& url) const
 
 JSGlobalContextRef WebFrame::jsContext()
 {
+    if (!m_coreFrame)
+        return nullptr;
+
     return toGlobalRef(m_coreFrame->script().globalObject(mainThreadNormalWorld())->globalExec());
 }
 
 JSGlobalContextRef WebFrame::jsContextForWorld(InjectedBundleScriptWorld* world)
 {
+    if (!m_coreFrame)
+        return nullptr;
+
     return toGlobalRef(m_coreFrame->script().globalObject(world->coreWorld())->globalExec());
 }
 
@@ -813,7 +819,7 @@ void WebFrame::setTextDirection(const String& direction)
 
 void WebFrame::documentLoaderDetached(uint64_t navigationID)
 {
-    if (auto * page = this->page())
+    if (auto* page = this->page())
         page->send(Messages::WebPageProxy::DidDestroyNavigation(navigationID));
 }
 

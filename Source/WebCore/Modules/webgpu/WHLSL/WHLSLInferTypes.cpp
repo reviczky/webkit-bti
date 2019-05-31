@@ -104,7 +104,7 @@ bool matches(const AST::UnnamedType& unnamedType, const AST::NamedType& other)
 
 static Optional<UniqueRef<AST::UnnamedType>> matchAndCommit(AST::Type& unifyNode, AST::ResolvableType& resolvableType)
 {
-    ASSERT(!resolvableType.resolvedType());
+    ASSERT(!resolvableType.maybeResolvedType());
     if (!resolvableType.canResolve(unifyNode))
         return WTF::nullopt;
     if (is<AST::NamedType>(unifyNode)) {
@@ -131,8 +131,8 @@ Optional<UniqueRef<AST::UnnamedType>> matchAndCommit(AST::NamedType& namedType, 
 
 Optional<UniqueRef<AST::UnnamedType>> matchAndCommit(AST::ResolvableType& resolvableType1, AST::ResolvableType& resolvableType2)
 {
-    ASSERT(!resolvableType1.resolvedType());
-    ASSERT(!resolvableType2.resolvedType());
+    ASSERT(!resolvableType1.maybeResolvedType());
+    ASSERT(!resolvableType2.maybeResolvedType());
     if (is<AST::FloatLiteralType>(resolvableType1) && is<AST::FloatLiteralType>(resolvableType2)) {
         resolvableType1.resolve(downcast<AST::FloatLiteralType>(resolvableType1).preferredType().clone());
         resolvableType2.resolve(downcast<AST::FloatLiteralType>(resolvableType2).preferredType().clone());
@@ -157,7 +157,7 @@ Optional<UniqueRef<AST::UnnamedType>> matchAndCommit(AST::ResolvableType& resolv
 
 Optional<UniqueRef<AST::UnnamedType>> commit(AST::ResolvableType& resolvableType)
 {
-    ASSERT(!resolvableType.resolvedType());
+    ASSERT(!resolvableType.maybeResolvedType());
     if (is<AST::FloatLiteralType>(resolvableType)) {
         auto& floatLiteralType = downcast<AST::FloatLiteralType>(resolvableType);
         resolvableType.resolve(floatLiteralType.preferredType().clone());
@@ -221,20 +221,20 @@ bool inferTypesForTypeArguments(AST::NamedType& possibleType, AST::TypeArguments
     return true;
 }
 
-bool inferTypesForCall(AST::FunctionDeclaration& possibleFunction, Vector<std::reference_wrapper<ResolvingType>>& argumentTypes, Optional<std::reference_wrapper<AST::NamedType>>& castReturnType)
+bool inferTypesForCall(AST::FunctionDeclaration& possibleFunction, Vector<std::reference_wrapper<ResolvingType>>& argumentTypes, const AST::NamedType* castReturnType)
 {
     if (possibleFunction.parameters().size() != argumentTypes.size())
         return false;
     for (size_t i = 0; i < possibleFunction.parameters().size(); ++i) {
-        auto success = WTF::visit(WTF::makeVisitor([&](UniqueRef<AST::UnnamedType>& unnamedType) -> bool {
-            return matches(*possibleFunction.parameters()[i].type(), unnamedType);
-        }, [&](Ref<ResolvableTypeReference>& resolvableTypeReference) -> bool {
-            return resolvableTypeReference->resolvableType().canResolve(*possibleFunction.parameters()[i].type());
-        }), argumentTypes[i].get());
+        auto success = argumentTypes[i].get().visit(WTF::makeVisitor([&](UniqueRef<AST::UnnamedType>& unnamedType) -> bool {
+            return matches(*possibleFunction.parameters()[i]->type(), unnamedType);
+        }, [&](RefPtr<ResolvableTypeReference>& resolvableTypeReference) -> bool {
+            return resolvableTypeReference->resolvableType().canResolve(possibleFunction.parameters()[i]->type()->unifyNode());
+        }));
         if (!success)
             return false;
     }
-    if (castReturnType && !matches(castReturnType->get(), possibleFunction.type()))
+    if (castReturnType && !matches(possibleFunction.type(), *castReturnType))
         return false;
     return true;
 }

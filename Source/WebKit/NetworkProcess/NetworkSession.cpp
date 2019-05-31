@@ -26,11 +26,19 @@
 #include "config.h"
 #include "NetworkSession.h"
 
+#include "AdClickAttributionManager.h"
 #include "NetworkProcess.h"
 #include "NetworkProcessProxyMessages.h"
+#include "NetworkResourceLoadParameters.h"
+#include "NetworkResourceLoader.h"
+#include "PingLoad.h"
+#include "StorageManager.h"
+#include "WebPageProxy.h"
+#include "WebPageProxyMessages.h"
 #include "WebProcessProxy.h"
-#include "WebResourceLoadStatisticsStore.h"
+#include <WebCore/CookieJar.h>
 #include <WebCore/NetworkStorageSession.h>
+#include <WebCore/ResourceRequest.h>
 
 #if PLATFORM(COCOA)
 #include "NetworkSessionCocoa.h"
@@ -65,14 +73,24 @@ NetworkStorageSession& NetworkSession::networkStorageSession() const
     return *storageSession;
 }
 
-NetworkSession::NetworkSession(NetworkProcess& networkProcess, PAL::SessionID sessionID)
+NetworkSession::NetworkSession(NetworkProcess& networkProcess, PAL::SessionID sessionID, const String& localStorageDirectory, SandboxExtension::Handle& handle)
     : m_sessionID(sessionID)
     , m_networkProcess(networkProcess)
+    , m_adClickAttribution(makeUniqueRef<AdClickAttributionManager>(sessionID))
+    , m_storageManager(StorageManager::create(localStorageDirectory))
 {
+    SandboxExtension::consumePermanently(handle);
+    m_adClickAttribution->setPingLoadFunction([this, weakThis = makeWeakPtr(this)](NetworkResourceLoadParameters&& loadParameters, CompletionHandler<void(const WebCore::ResourceError&, const WebCore::ResourceResponse&)>&& completionHandler) {
+        if (!weakThis)
+            return;
+        // PingLoad manages its own lifetime, deleting itself when its purpose has been fulfilled.
+        new PingLoad(m_networkProcess, WTFMove(loadParameters), WTFMove(completionHandler));
+    });
 }
 
 NetworkSession::~NetworkSession()
 {
+    m_storageManager->waitUntilWritesFinished();
 }
 
 void NetworkSession::invalidateAndCancel()
@@ -95,8 +113,14 @@ void NetworkSession::setResourceLoadStatisticsEnabled(bool enable)
     // FIXME(193728): Support ResourceLoadStatistics for ephemeral sessions, too.
     if (m_sessionID.isEphemeral())
         return;
-    
-    m_resourceLoadStatistics = WebResourceLoadStatisticsStore::create(*this, m_resourceLoadStatisticsDirectory);
+
+    m_resourceLoadStatistics = WebResourceLoadStatisticsStore::create(*this, m_resourceLoadStatisticsDirectory, m_shouldIncludeLocalhostInResourceLoadStatistics);
+
+    if (m_enableResourceLoadStatisticsDebugMode == EnableResourceLoadStatisticsDebugMode::Yes)
+        m_resourceLoadStatistics->setResourceLoadStatisticsDebugMode(true, [] { });
+    // This should always be forwarded since debug mode may be enabled at runtime.
+    if (!m_resourceLoadStatisticsManualPrevalentResource.isEmpty())
+        m_resourceLoadStatistics->setPrevalentResourceForDebugMode(m_resourceLoadStatisticsManualPrevalentResource, [] { });
 }
 
 void NetworkSession::notifyResourceLoadStatisticsProcessed()
@@ -114,15 +138,69 @@ void NetworkSession::notifyPageStatisticsTelemetryFinished(unsigned totalPrevale
     m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::NotifyResourceLoadStatisticsTelemetryFinished(totalPrevalentResources, totalPrevalentResourcesWithUserInteraction, top3SubframeUnderTopFrameOrigins), 0);
 }
 
-void NetworkSession::deleteWebsiteDataForTopPrivatelyControlledDomainsInAllPersistentDataStores(OptionSet<WebsiteDataType> dataTypes, Vector<String>&& topPrivatelyControlledDomains, bool shouldNotifyPage, CompletionHandler<void(const HashSet<String>&)>&& completionHandler)
+void NetworkSession::deleteWebsiteDataForRegistrableDomains(OptionSet<WebsiteDataType> dataTypes, HashMap<RegistrableDomain, WebsiteDataToRemove>&& domains, bool shouldNotifyPage, CompletionHandler<void(const HashSet<RegistrableDomain>&)>&& completionHandler)
 {
-    m_networkProcess->deleteWebsiteDataForTopPrivatelyControlledDomainsInAllPersistentDataStores(m_sessionID, dataTypes, WTFMove(topPrivatelyControlledDomains), shouldNotifyPage, WTFMove(completionHandler));
+    m_networkProcess->deleteWebsiteDataForRegistrableDomains(m_sessionID, dataTypes, WTFMove(domains), shouldNotifyPage, WTFMove(completionHandler));
 }
 
-void NetworkSession::topPrivatelyControlledDomainsWithWebsiteData(OptionSet<WebsiteDataType> dataTypes, bool shouldNotifyPage, CompletionHandler<void(HashSet<String>&&)>&& completionHandler)
+void NetworkSession::registrableDomainsWithWebsiteData(OptionSet<WebsiteDataType> dataTypes, bool shouldNotifyPage, CompletionHandler<void(HashSet<RegistrableDomain>&&)>&& completionHandler)
 {
-    m_networkProcess->topPrivatelyControlledDomainsWithWebsiteData(m_sessionID, dataTypes, shouldNotifyPage, WTFMove(completionHandler));
+    m_networkProcess->registrableDomainsWithWebsiteData(m_sessionID, dataTypes, shouldNotifyPage, WTFMove(completionHandler));
 }
-#endif
+#endif // ENABLE(RESOURCE_LOAD_STATISTICS)
+
+void NetworkSession::storeAdClickAttribution(WebCore::AdClickAttribution&& adClickAttribution)
+{
+    m_adClickAttribution->storeUnconverted(WTFMove(adClickAttribution));
+}
+
+void NetworkSession::handleAdClickAttributionConversion(AdClickAttribution::Conversion&& conversion, const URL& requestURL, const WebCore::ResourceRequest& redirectRequest)
+{
+    m_adClickAttribution->handleConversion(WTFMove(conversion), requestURL, redirectRequest);
+}
+
+void NetworkSession::dumpAdClickAttribution(CompletionHandler<void(String)>&& completionHandler)
+{
+    m_adClickAttribution->toString(WTFMove(completionHandler));
+}
+
+void NetworkSession::clearAdClickAttribution()
+{
+    m_adClickAttribution->clear();
+}
+
+void NetworkSession::clearAdClickAttributionForRegistrableDomain(WebCore::RegistrableDomain&& domain)
+{
+    m_adClickAttribution->clearForRegistrableDomain(WTFMove(domain));
+}
+
+void NetworkSession::setAdClickAttributionOverrideTimerForTesting(bool value)
+{
+    m_adClickAttribution->setOverrideTimerForTesting(value);
+}
+
+void NetworkSession::setAdClickAttributionConversionURLForTesting(URL&& url)
+{
+    m_adClickAttribution->setConversionURLForTesting(WTFMove(url));
+}
+
+void NetworkSession::markAdClickAttributionsAsExpiredForTesting()
+{
+    m_adClickAttribution->markAllUnconvertedAsExpiredForTesting();
+}
+
+void NetworkSession::addKeptAliveLoad(Ref<NetworkResourceLoader>&& loader)
+{
+    ASSERT(m_sessionID == loader->sessionID());
+    ASSERT(!m_keptAliveLoads.contains(loader));
+    m_keptAliveLoads.add(WTFMove(loader));
+}
+
+void NetworkSession::removeKeptAliveLoad(NetworkResourceLoader& loader)
+{
+    ASSERT(m_sessionID == loader.sessionID());
+    ASSERT(m_keptAliveLoads.contains(loader));
+    m_keptAliveLoads.remove(loader);
+}
 
 } // namespace WebKit

@@ -31,13 +31,12 @@
 #include "TextCheckerState.h"
 #include "WebAutomationSession.h"
 #include "WebCertificateInfo.h"
-#include "WebGeolocationManagerProxy.h"
 #include "WebKitAutomationSessionPrivate.h"
 #include "WebKitCustomProtocolManagerClient.h"
 #include "WebKitDownloadClient.h"
 #include "WebKitDownloadPrivate.h"
 #include "WebKitFaviconDatabasePrivate.h"
-#include "WebKitGeolocationProvider.h"
+#include "WebKitGeolocationManagerPrivate.h"
 #include "WebKitInjectedBundleClient.h"
 #include "WebKitNetworkProxySettingsPrivate.h"
 #include "WebKitNotificationProvider.h"
@@ -170,9 +169,7 @@ struct _WebKitWebContextPrivate {
     GRefPtr<WebKitSecurityManager> securityManager;
     URISchemeHandlerMap uriSchemeHandlers;
     URISchemeRequestMap uriSchemeRequests;
-#if ENABLE(GEOLOCATION)
-    std::unique_ptr<WebKitGeolocationProvider> geolocationProvider;
-#endif
+    GRefPtr<WebKitGeolocationManager> geolocationManager;
     std::unique_ptr<WebKitNotificationProvider> notificationProvider;
     GRefPtr<WebKitWebsiteDataManager> websiteDataManager;
 
@@ -334,7 +331,6 @@ static void webkitWebContextConstructed(GObject* object)
 
     API::ProcessPoolConfiguration configuration;
     configuration.setInjectedBundlePath(FileSystem::stringFromFileSystemRepresentation(bundleFilename.get()));
-    configuration.setMaximumProcessCount(1);
     configuration.setDiskCacheSpeculativeValidationEnabled(true);
 
     WebKitWebContext* webContext = WEBKIT_WEB_CONTEXT(object);
@@ -368,9 +364,7 @@ static void webkitWebContextConstructed(GObject* object)
     attachDownloadClientToContext(webContext);
     attachCustomProtocolManagerClientToContext(webContext);
 
-#if ENABLE(GEOLOCATION)
-    priv->geolocationProvider = std::make_unique<WebKitGeolocationProvider>(priv->processPool->supplement<WebGeolocationManagerProxy>());
-#endif
+    priv->geolocationManager = adoptGRef(webkitGeolocationManagerCreate(priv->processPool->supplement<WebGeolocationManagerProxy>()));
     priv->notificationProvider = std::make_unique<WebKitNotificationProvider>(priv->processPool->supplement<WebNotificationManagerProxy>(), webContext);
 #if PLATFORM(GTK) && ENABLE(REMOTE_INSPECTOR)
     priv->remoteInspectorProtocolHandler = std::make_unique<RemoteInspectorProtocolHandler>(webContext);
@@ -868,6 +862,23 @@ WebKitCookieManager* webkit_web_context_get_cookie_manager(WebKitWebContext* con
     return webkit_website_data_manager_get_cookie_manager(context->priv->websiteDataManager.get());
 }
 
+/**
+ * webkit_web_context_get_geolocation_manager:
+ * @context: a #WebKitWebContext
+ *
+ * Get the #WebKitGeolocationManager of @context.
+ *
+ * Returns: (transfer none): the #WebKitGeolocationManager of @context.
+ *
+ * Since: 2.26
+ */
+WebKitGeolocationManager* webkit_web_context_get_geolocation_manager(WebKitWebContext* context)
+{
+    g_return_val_if_fail(WEBKIT_IS_WEB_CONTEXT(context), nullptr);
+
+    return context->priv->geolocationManager.get();
+}
+
 static void ensureFaviconDatabase(WebKitWebContext* context)
 {
     WebKitWebContextPrivate* priv = context->priv;
@@ -1146,6 +1157,73 @@ void webkit_web_context_register_uri_scheme(WebKitWebContext* context, const cha
     auto addResult = context->priv->uriSchemeHandlers.set(String::fromUTF8(scheme), handler.get());
     if (addResult.isNewEntry)
         context->priv->processPool->registerSchemeForCustomProtocol(String::fromUTF8(scheme));
+}
+
+/**
+ * webkit_web_context_set_sandbox_enabled:
+ * @context: a #WebKitWebContext
+ * @enabled: if %TRUE enable sandboxing
+ *
+ * Set whether WebKit subprocesses will be sandboxed, limiting access to the system.
+ *
+ * This method **must be called before any web process has been created**,
+ * as early as possible in your application. Calling it later is a fatal error.
+ *
+ * This is only implemented on Linux and is a no-op otherwise.
+ *
+ * Since: 2.26
+ */
+void webkit_web_context_set_sandbox_enabled(WebKitWebContext* context, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_CONTEXT(context));
+
+    if (context->priv->processPool->processes().size())
+        g_error("Sandboxing cannot be changed after subprocesses were spawned.");
+
+    context->priv->processPool->setSandboxEnabled(enabled);
+}
+
+/**
+ * webkit_web_context_add_path_to_sandbox:
+ * @context: a #WebKitWebContext
+ * @path: (type filename): an absolute path to mount in the sandbox
+ * @read_only: if %TRUE the path will be read-only
+ *
+ * Adds a path to be mounted in the sandbox. @path must exist before any web process
+ * has been created otherwise it will be silently ignored. It is a fatal error to
+ * add paths after a web process has been spawned.
+ *
+ * See also webkit_web_context_set_sandbox_enabled()
+ *
+ * Since: 2.26
+ */
+void webkit_web_context_add_path_to_sandbox(WebKitWebContext* context, const char* path, gboolean readOnly)
+{
+    g_return_if_fail(WEBKIT_IS_WEB_CONTEXT(context));
+    g_return_if_fail(g_path_is_absolute(path));
+
+    if (context->priv->processPool->processes().size())
+        g_error("Sandbox paths cannot be changed after subprocesses were spawned.");
+
+    auto permission = readOnly ? SandboxPermission::ReadOnly : SandboxPermission::ReadWrite;
+    context->priv->processPool->addSandboxPath(path, permission);
+}
+
+/**
+ * webkit_web_context_get_sandbox_enabled:
+ * @context: a #WebKitWebContext
+ *
+ * Get whether sandboxing is currently enabled.
+ *
+ * Returns: %TRUE if sandboxing is enabled, or %FALSE otherwise.
+ *
+ * Since: 2.26
+ */
+gboolean webkit_web_context_get_sandbox_enabled(WebKitWebContext* context)
+{
+    g_return_val_if_fail(WEBKIT_IS_WEB_CONTEXT(context), FALSE);
+
+    return context->priv->processPool->sandboxEnabled();
 }
 
 /**
@@ -1450,14 +1528,6 @@ void webkit_web_context_set_process_model(WebKitWebContext* context, WebKitProce
         return;
 
     context->priv->processModel = processModel;
-    switch (context->priv->processModel) {
-    case WEBKIT_PROCESS_MODEL_SHARED_SECONDARY_PROCESS:
-        context->priv->processPool->setMaximumNumberOfProcesses(1);
-        break;
-    case WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES:
-        context->priv->processPool->setMaximumNumberOfProcesses(context->priv->processCountLimit);
-        break;
-    }
 }
 
 /**
@@ -1500,8 +1570,6 @@ void webkit_web_context_set_web_process_count_limit(WebKitWebContext* context, g
         return;
 
     context->priv->processCountLimit = limit;
-    if (context->priv->processModel != WEBKIT_PROCESS_MODEL_SHARED_SECONDARY_PROCESS)
-        context->priv->processPool->setMaximumNumberOfProcesses(limit);
 }
 
 /**
@@ -1583,7 +1651,7 @@ WebKitDownload* webkitWebContextGetOrCreateDownload(DownloadProxy* downloadProxy
 WebKitDownload* webkitWebContextStartDownload(WebKitWebContext* context, const char* uri, WebPageProxy* initiatingPage)
 {
     WebCore::ResourceRequest request(String::fromUTF8(uri));
-    return webkitWebContextGetOrCreateDownload(context->priv->processPool->download(initiatingPage, request));
+    return webkitWebContextGetOrCreateDownload(&context->priv->processPool->download(initiatingPage, request));
 }
 
 void webkitWebContextRemoveDownload(DownloadProxy* downloadProxy)

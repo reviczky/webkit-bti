@@ -12,6 +12,12 @@ DeviceOrientationEventEnabled:
   condition: ENABLE(DEVICE_ORIENTATION)
   webcoreName: deviceOrientationEventEnabled
 
+DeviceOrientationPermissionAPIEnabled:
+  type: bool
+  defaultValue: false
+  condition: ENABLE(DEVICE_ORIENTATION)
+  webcoreName: deviceOrientationPermissionAPIEnabled
+
 JavaScriptEnabled:
   type: bool
   defaultValue: true
@@ -76,7 +82,7 @@ XSSAuditorEnabled:
 
 SafeBrowsingEnabled:
   type: bool
-  defaultValue: true
+  defaultValue: false
   webcoreBinding: none
 
 PrivateBrowsingEnabled:
@@ -484,6 +490,11 @@ SimpleLineLayoutEnabled:
   type: bool
   defaultValue: true
 
+ContentChangeObserverEnabled:
+  type: bool
+  defaultValue: true
+  condition: PLATFORM(IOS_FAMILY)
+
 SubpixelCSSOMElementMetricsEnabled:
   type: bool
   defaultValue: false
@@ -513,6 +524,12 @@ MediaStreamEnabled:
   webcoreBinding: RuntimeEnabledFeatures
   condition: ENABLE(MEDIA_STREAM)
 
+MediaEnabled:
+  type: bool
+  defaultValue: true
+  webcoreName: mediaEnabled
+  condition: ENABLE(VIDEO)
+
 ScreenCaptureEnabled:
   type: bool
   defaultValue: true
@@ -530,7 +547,7 @@ PeerConnectionEnabled:
 
 WebRTCUnifiedPlanEnabled:
   type: bool
-  defaultValue: DEFAULT_EXPERIMENTAL_FEATURES_ENABLED
+  defaultValue: true
   webcoreBinding: RuntimeEnabledFeatures
   condition: ENABLE(WEB_RTC)
   humanReadableName: "WebRTC Unified Plan"
@@ -576,6 +593,7 @@ MediaSourceEnabled:
   type: bool
   defaultValue: WebCore::Settings::platformDefaultMediaSourceEnabled()
   condition: ENABLE(MEDIA_SOURCE)
+  webcoreBinding: none
 
 ViewGestureDebuggingEnabled:
   type: bool
@@ -664,17 +682,13 @@ SelectionPaintingWithoutSelectionGapsEnabled:
 
 ApplePayEnabled:
   type: bool
-  defaultValue: false
+  defaultValue: DEFAULT_APPLE_PAY_ENABLED
   condition: ENABLE(APPLE_PAY)
 
 ApplePayCapabilityDisclosureAllowed:
   type: bool
   defaultValue: true
   condition: ENABLE(APPLE_PAY)
-
-VisualViewportEnabled:
-  type: bool
-  defaultValue: true
 
 LayoutViewportHeightExpansionFactor:
   type: double
@@ -735,7 +749,7 @@ InputEventsEnabled:
 
 WebAuthenticationEnabled:
   type: bool
-  defaultValue: false
+  defaultValue: DEFAULT_WEB_AUTHENTICATION_ENABLED
   humanReadableName: "Web Authentication"
   humanReadableDescription: "Enable Web Authentication support"
   webcoreBinding: RuntimeEnabledFeatures
@@ -1050,6 +1064,14 @@ DisableScreenSizeOverride:
   category: debug
   condition: PLATFORM(IOS_FAMILY)
 
+UseModernCompatibilityModeByDefault:
+  type: bool
+  defaultValue: false
+  humanReadableName: "Use Modern Compatibility Mode"
+  humanReadableDescription: "Use modern compatibility mode by default"
+  webcoreBinding: none
+  category: debug
+
 SimpleLineLayoutDebugBordersEnabled:
   type: bool
   defaultValue: false
@@ -1067,7 +1089,7 @@ LogsPageMessagesToSystemConsoleEnabled:
 
 IgnoreViewportScalingConstraints:
   type: bool
-  defaultValue: true
+  defaultValue: false
   category: debug
   webcoreBinding: none
   condition: PLATFORM(IOS_FAMILY)
@@ -1152,11 +1174,6 @@ StorageAccessAPIEnabled:
   type: bool
   defaultValue: true
 
-StorageAccessPromptsEnabled:
-  type: bool
-  defaultValue: true
-  webcoreBinding: RuntimeEnabledFeatures
-
 LinkPreloadEnabled:
   type: bool
   defaultValue: true
@@ -1186,6 +1203,10 @@ VideoQualityIncludesDisplayCompositingEnabled:
 EditableImagesEnabled:
   type: bool
   defaultValue: false
+
+ShouldDecidePolicyBeforeLoadingQuickLookPreview:
+  defaultValue: false
+  type: bool
 
 # For experimental features:
 # The type should be boolean.
@@ -1229,7 +1250,7 @@ VisualViewportAPIEnabled:
 
 PointerEventsEnabled:
   type: bool
-  defaultValue: DEFAULT_POINTER_EVENTS_ENABLED
+  defaultValue: true
   humanReadableName: "Pointer Events"
   humanReadableDescription: "Enable Pointer Events"
   webcoreBinding: RuntimeEnabledFeatures
@@ -1242,6 +1263,13 @@ CSSOMViewScrollingAPIEnabled:
   humanReadableDescription: "Implement standard behavior for scrollLeft, scrollTop, scrollWidth, scrollHeight, scrollTo, scrollBy and scrollingElement."
   category: internal
 
+BlockingOfSmallPluginsEnabled:
+  type: bool
+  defaultValue: true
+  humanReadableName: "Block small plugins"
+  humanReadableDescription: "Stop plugins smaller than a certain threshold from loading."
+  category: internal
+
 WebAnimationsEnabled:
   type: bool
   defaultValue: DEFAULT_EXPERIMENTAL_FEATURES_ENABLED
@@ -1252,7 +1280,7 @@ WebAnimationsEnabled:
 
 WebAnimationsCSSIntegrationEnabled:
   type: bool
-  defaultValue: DEFAULT_EXPERIMENTAL_FEATURES_ENABLED
+  defaultValue: false
   humanReadableName: "CSS Animations via Web Animations"
   humanReadableDescription: "Expose CSS Animations and CSS Transitions through getAnimations()"
   category: experimental
@@ -1275,15 +1303,6 @@ WebGPUEnabled:
   category: experimental
   webcoreBinding: RuntimeEnabledFeatures
   condition: ENABLE(WEBGPU)
-
-WebMetalEnabled:
-  type: bool
-  defaultValue: false
-  humanReadableName: "WebMetal"
-  humanReadableDescription: "WebMetal prototype"
-  category: experimental
-  webcoreBinding: RuntimeEnabledFeatures
-  condition: ENABLE(WEBMETAL)
 
 AccessibilityObjectModelEnabled:
   type: bool
@@ -1362,6 +1381,54 @@ ProcessSwapOnCrossSiteNavigationEnabled:
   category: experimental
   webcoreBinding: none
 
+MediaCapabilitiesExtensionsEnabled:
+  type: bool
+  defaultValue: true
+  humanReadableName: "Media Capabilities Extensions"
+  humanReadableDescription: "Media Capabilities Extensions"
+  category: experimental
+
+IsITPFirstPartyWebsiteDataRemovalEnabled:
+    type: bool
+    defaultValue: true
+    humanReadableName: "ITP First Party Website Data Removal"
+    humanReadableDescription: "Enable Intelligent Tracking Prevention First Party Website Data Removal"
+    webcoreBinding: RuntimeEnabledFeatures
+    category: experimental
+
+ResizeObserverEnabled:
+  type: bool
+  defaultValue: false
+  humanReadableName: "Resize Observer"
+  humanReadableDescription: "Enable Resize Observer support"
+  category: experimental
+  condition: ENABLE(RESIZE_OBSERVER)
+
+AdClickAttributionEnabled:
+    type: bool
+    defaultValue: false
+    humanReadableName: "Ad Click Attribution"
+    humanReadableDescription: "Enable Ad Click Attribution for Cross-Site Link Navigations"
+    webcoreBinding: RuntimeEnabledFeatures
+    category: experimental
+
+AdClickAttributionDebugModeEnabled:
+    type: bool
+    defaultValue: false
+    humanReadableName: "Ad Click Attribution Debug Mode"
+    humanReadableDescription: "Enable Ad Click Attribution Debug Mode"
+    webcoreBinding: RuntimeEnabledFeatures
+    category: experimental
+
+FetchAPIKeepAliveEnabled:
+  type: bool
+  defaultValue: true
+  humanReadableName: "Fetch API Request KeepAlive"
+  humanReadableDescription: "Enable Fetch API Request KeepAlive"
+  category: experimental
+  webcoreBinding: RuntimeEnabledFeatures
+  webcoreName: fetchAPIKeepAliveEnabled
+
 # For internal features:
 # The type should be boolean.
 # You must provide a humanReadableName and humanReadableDescription for all debug features. They
@@ -1383,6 +1450,14 @@ ItpDebugModeEnabled:
   humanReadableDescription: "Intelligent Tracking Prevention Debug Mode"
   webcoreBinding: RuntimeEnabledFeatures
 
+IsITPDatabaseEnabled:
+  type: bool
+  defaultValue: false
+  humanReadableName: "ITP Database Backend"
+  humanReadableDescription: "Enable Intelligent Tracking Prevention Database Backend"
+  webcoreBinding: RuntimeEnabledFeatures
+  category: internal
+
 ServiceWorkersEnabled:
   type: bool
   defaultValue: DEFAULT_SERVICE_WORKERS_ENABLED
@@ -1395,26 +1470,25 @@ ServiceWorkersEnabled:
 
 AsyncFrameScrollingEnabled:
   type: bool
-  defaultValue: false
+  defaultValue: DEFAULT_ASYNC_FRAME_SCROLLING_ENABLED
   humanReadableName: "Async Frame Scrolling"
   humanReadableDescription: "Perform frame scrolling off the main thread"
   category: internal
 
 AsyncOverflowScrollingEnabled:
   type: bool
-  defaultValue: false
+  defaultValue: DEFAULT_ASYNC_OVERFLOW_SCROLLING_ENABLED
   humanReadableName: "Async Overflow Scrolling"
   humanReadableDescription: "Perform overflow scrolling off the main thread"
   category: internal
 
-FetchAPIKeepAliveEnabled:
+LegacyOverflowScrollingTouchEnabled:
   type: bool
-  defaultValue: false
-  humanReadableName: "Fetch API Request KeepAlive"
-  humanReadableDescription: "Enable Fetch API Request KeepAlive"
+  defaultValue: true
+  humanReadableName: "Legacy -webkit-overflow-scrolling property"
+  humanReadableDescription: "Support the legacy -webkit-overflow-scrolling CSS property"
+  condition: ENABLE(OVERFLOW_SCROLLING_TOUCH)
   category: internal
-  webcoreBinding: RuntimeEnabledFeatures
-  webcoreName: fetchAPIKeepAliveEnabled
 
 WebGLCompressedTextureASTCSupportEnabled:
   type: bool
@@ -1456,6 +1530,24 @@ SelectionAcrossShadowBoundariesEnabled:
   humanReadableDescription: "Allow user-initiated selection across shadow DOM boundaries"
   category: internal
   webcoreName: selectionAcrossShadowBoundariesEnabled
+
+FasterClicksEnabled:
+  type: bool
+  defaultValue: true
+  condition: PLATFORM(IOS_FAMILY)
+  humanReadableName: "Faster clicks"
+  humanReadableDescription: "Support faster clicks on zoomable pages"
+  webcoreBinding: none
+  category: internal
+
+FastClicksEverywhere:
+  type: bool
+  defaultValue: DEFAULT_FAST_CLICKS_EVERYWHERE
+  condition: PLATFORM(IOS_FAMILY)
+  humanReadableName: "Fast clicks everywhere"
+  humanReadableDescription: "Force fast clicks on all pages"
+  webcoreBinding: none
+  category: internal
 
 InputTypeColorEnabled:
   type: bool
@@ -1526,13 +1618,60 @@ CSSLogicalEnabled:
   webcoreBinding: RuntimeEnabledFeatures
   category: internal
 
-AdClickAttributionEnabled:
+DOMPasteAccessRequestsEnabled:
+  type: bool
+  defaultValue: DEFAULT_DOM_PASTE_ACCESS_REQUESTS_ENABLED
+  humanReadableName: "DOM Paste Access Requests"
+  humanReadableDescription: "Enable DOM Paste Access Requests"
+  category: internal
+
+MouseEventsSimulationEnabled:
   type: bool
   defaultValue: false
-  humanReadableName: "Ad Click Attribution"
-  humanReadableDescription: "Enable Ad Click Attribution for Cross-Site Link Navigations"
+  humanReadableName: "Mouse events simulation"
+  humanReadableDescription: "Enable mouse events dispatch along with touch events on iOS"
   webcoreBinding: RuntimeEnabledFeatures
   category: internal
+  condition: ENABLE(TOUCH_EVENTS)
+
+ReferrerPolicyAttributeEnabled:
+  type: bool
+  defaultValue: false
+  humanReadableName: "Referrer Policy attribute"
+  humanReadableDescription: "Enable Referrer Policy attribute"
+  category: experimental
+  webcoreBinding: RuntimeEnabledFeatures
+
+PageAtRuleSupportEnabled:
+  type: bool
+  defaultValue: false
+  humanReadableName: "@page CSS at-rule support"
+  humanReadableDescription: "Enable @page support"
+  category: experimental
+  webcoreBinding: RuntimeEnabledFeatures
+
+CoreMathMLEnabled:
+  type: bool
+  defaultValue: DEFAULT_CORE_MATHML_ENABLED
+  humanReadableName: "MathML Core"
+  humanReadableDescription: "Disable features removed from the MathML Core spec."
+  category: experimental
+
+ApplePayRemoteUIEnabled:
+  category: internal
+  condition: ENABLE(APPLE_PAY_REMOTE_UI)
+  defaultValue: true
+  humanReadableDescription: "Enable Apple Pay Remote UI"
+  humanReadableName: "Apple Pay Remote UI"
+  type: bool
+
+LinkPrefetchEnabled:
+  type: bool
+  defaultValue: false
+  humanReadableName: "LinkPrefetch"
+  humanReadableDescription: "Enable LinkedPrefetch"
+  webcoreBinding: RuntimeEnabledFeatures
+  category: experimental
 
 # Deprecated
 

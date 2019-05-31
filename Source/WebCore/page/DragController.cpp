@@ -174,7 +174,7 @@ static RefPtr<DocumentFragment> documentFragmentFromDragData(const DragData& dra
                 anchor->appendChild(document.createTextNode(title));
                 auto fragment = document.createDocumentFragment();
                 fragment->appendChild(anchor);
-                return WTFMove(fragment);
+                return fragment;
             }
         }
     }
@@ -366,7 +366,7 @@ static Element* elementUnderMouse(Document* documentUnderMouse, const IntPoint& 
     LayoutPoint point(p.x() * zoomFactor, p.y() * zoomFactor);
 
     HitTestResult result(point);
-    documentUnderMouse->renderView()->hitTest(HitTestRequest(), result);
+    documentUnderMouse->hitTest(HitTestRequest(), result);
 
     auto* node = result.innerNode();
     if (!node)
@@ -442,7 +442,6 @@ DragHandlingMethod DragController::tryDocumentDrag(const DragData& dragData, Dra
 
         Frame* innerFrame = element->document().frame();
         dragOperation = dragIsMove(innerFrame->selection(), dragData) ? DragOperationMove : DragOperationCopy;
-        m_numberOfItemsToBeAccepted = 0;
 
         unsigned numberOfFiles = dragData.numberOfFiles();
         if (m_fileInputElementUnderMouse) {
@@ -459,9 +458,9 @@ DragHandlingMethod DragController::tryDocumentDrag(const DragData& dragData, Dra
                 dragOperation = DragOperationNone;
             m_fileInputElementUnderMouse->setCanReceiveDroppedFiles(m_numberOfItemsToBeAccepted);
         } else {
-            // We are not over a file input element. The dragged item(s) will only
-            // be loaded into the view the number of dragged items is 1.
-            m_numberOfItemsToBeAccepted = numberOfFiles != 1 ? 0 : 1;
+            // We are not over a file input element. The dragged item(s) will loaded into the view,
+            // dropped as text paths on other input elements, or handled by script on the page.
+            m_numberOfItemsToBeAccepted = numberOfFiles;
         }
 
         if (m_fileInputElementUnderMouse)
@@ -827,7 +826,10 @@ Element* DragController::draggableElement(const Frame* sourceFrame, Element* sta
     }
 
     // We either have nothing to drag or we have a selection and we're not over a draggable element.
-    return (state.type & DragSourceActionSelection) ? startElement : nullptr;
+    if (state.type & DragSourceActionSelection && m_dragSourceAction & DragSourceActionSelection)
+        return startElement;
+
+    return nullptr;
 }
 
 static CachedImage* getCachedImage(Element& element)

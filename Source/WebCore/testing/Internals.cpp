@@ -47,15 +47,18 @@
 #include "CachedResourceLoader.h"
 #include "CertificateInfo.h"
 #include "Chrome.h"
+#include "ChromeClient.h"
 #include "ClientOrigin.h"
 #include "ComposedTreeIterator.h"
 #include "CookieJar.h"
 #include "Cursor.h"
+#include "CustomHeaderFields.h"
 #include "DOMRect.h"
 #include "DOMRectList.h"
 #include "DOMStringList.h"
 #include "DOMWindow.h"
 #include "DeprecatedGlobalSettings.h"
+#include "DiagnosticLoggingClient.h"
 #include "DisabledAdaptations.h"
 #include "DisplayList.h"
 #include "Document.h"
@@ -74,6 +77,7 @@
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "FrameView.h"
+#include "FullscreenManager.h"
 #include "GCObservation.h"
 #include "GridPosition.h"
 #include "HEVCUtilities.h"
@@ -106,6 +110,7 @@
 #include "LibWebRTCProvider.h"
 #include "LoaderStrategy.h"
 #include "MallocStatistics.h"
+#include "MediaDevices.h"
 #include "MediaEngineConfigurationFactory.h"
 #include "MediaPlayer.h"
 #include "MediaProducer.h"
@@ -116,6 +121,7 @@
 #include "MockLibWebRTCPeerConnection.h"
 #include "MockPageOverlay.h"
 #include "MockPageOverlayClient.h"
+#include "NavigatorMediaDevices.h"
 #include "NetworkLoadInformation.h"
 #include "Page.h"
 #include "PageCache.h"
@@ -213,6 +219,7 @@
 #if ENABLE(VIDEO_TRACK)
 #include "CaptionUserPreferences.h"
 #include "PageGroup.h"
+#include "TextTrackCueGeneric.h"
 #endif
 
 #if ENABLE(VIDEO)
@@ -320,6 +327,7 @@ private:
     void showCertificate(const CertificateInfo&) final { }
     void setAttachedWindowHeight(unsigned) final { }
     void setAttachedWindowWidth(unsigned) final { }
+    void setSheetRect(const FloatRect&) final { }
 
     void sendMessageToFrontend(const String& message) final;
     ConnectionType connectionType() const final { return ConnectionType::Local; }
@@ -448,7 +456,7 @@ void Internals::resetToConsistentState(Page& page)
 
     page.mainFrame().setTextZoomFactor(1.0f);
 
-    page.setCompositingPolicyOverride(WTF::nullopt);
+    page.setCompositingPolicyOverride(WebCore::CompositingPolicy::Normal);
 
     FrameView* mainFrameView = page.mainFrame().view();
     if (mainFrameView) {
@@ -457,6 +465,7 @@ void Internals::resetToConsistentState(Page& page)
         page.setTopContentInset(0);
         mainFrameView->setUseFixedLayout(false);
         mainFrameView->setFixedLayoutSize(IntSize());
+        mainFrameView->enableAutoSizeMode(false, { });
 #if USE(COORDINATED_GRAPHICS)
         mainFrameView->setFixedVisibleContentRect(IntRect());
 #endif
@@ -828,6 +837,18 @@ unsigned Internals::imageFrameIndex(HTMLImageElement& element)
     return bitmapImage ? bitmapImage->currentFrame() : 0;
 }
 
+unsigned Internals::imageFrameCount(HTMLImageElement& element)
+{
+    auto* bitmapImage = bitmapImageFromImageElement(element);
+    return bitmapImage ? bitmapImage->frameCount() : 0;
+}
+
+float Internals::imageFrameDurationAtIndex(HTMLImageElement& element, unsigned index)
+{
+    auto* bitmapImage = bitmapImageFromImageElement(element);
+    return bitmapImage ? bitmapImage->frameDurationAtIndex(index).value() : 0;
+}
+    
 void Internals::setImageFrameDecodingDuration(HTMLImageElement& element, float duration)
 {
     if (auto* bitmapImage = bitmapImageFromImageElement(element))
@@ -1101,7 +1122,7 @@ ExceptionOr<String> Internals::elementRenderTreeAsText(Element& element)
     if (representation.isEmpty())
         return Exception { InvalidAccessError };
 
-    return WTFMove(representation);
+    return representation;
 }
 
 bool Internals::hasPausedImageAnimations(Element& element)
@@ -1545,15 +1566,6 @@ ExceptionOr<Ref<DOMRectList>> Internals::inspectorHighlightRects()
     return DOMRectList::create(highlight.quads);
 }
 
-ExceptionOr<String> Internals::inspectorHighlightObject()
-{
-    Document* document = contextDocument();
-    if (!document || !document->page())
-        return Exception { InvalidAccessError };
-
-    return document->page()->inspectorController().buildObjectForHighlightedNodes()->toJSONString();
-}
-
 ExceptionOr<unsigned> Internals::markerCountForNode(Node& node, const String& markerType)
 {
     OptionSet<DocumentMarker::MarkerType> markerTypes;
@@ -1615,13 +1627,13 @@ ExceptionOr<String> Internals::dumpMarkerRects(const String& markerTypeString)
     rectString.appendLiteral("marker rects: ");
     for (const auto& rect : rects) {
         rectString.append('(');
-        rectString.appendNumber(rect.x());
+        rectString.appendFixedPrecisionNumber(rect.x());
         rectString.appendLiteral(", ");
-        rectString.appendNumber(rect.y());
+        rectString.appendFixedPrecisionNumber(rect.y());
         rectString.appendLiteral(", ");
-        rectString.appendNumber(rect.width());
+        rectString.appendFixedPrecisionNumber(rect.width());
         rectString.appendLiteral(", ");
-        rectString.appendNumber(rect.height());
+        rectString.appendFixedPrecisionNumber(rect.height());
         rectString.appendLiteral(") ");
     }
     return rectString.toString();
@@ -1932,6 +1944,11 @@ String Internals::rangeAsText(const Range& range)
     return range.text();
 }
 
+String Internals::rangeAsTextUsingBackwardsTextIterator(const Range& range)
+{
+    return plainTextUsingBackwardsTextIteratorForTesting(range);
+}
+
 Ref<Range> Internals::subrange(Range& range, int rangeLocation, int rangeLength)
 {
     return TextIterator::subrange(range, rangeLocation, rangeLength);
@@ -2083,7 +2100,7 @@ ExceptionOr<RefPtr<NodeList>> Internals::nodesFromRect(Document& document, int c
         return nullptr;
 
     HitTestResult result(point, topPadding, rightPadding, bottomPadding, leftPadding);
-    renderView->hitTest(request, result);
+    document.hitTest(request, result);
     const HitTestResult::NodeSet& nodeSet = result.listBasedTestResult();
     Vector<Ref<Node>> matches;
     matches.reserveInitialCapacity(nodeSet.size());
@@ -2144,7 +2161,7 @@ String Internals::parserMetaData(JSC::JSValue code)
 
     if (executable->isFunctionExecutable()) {
         FunctionExecutable* funcExecutable = reinterpret_cast<FunctionExecutable*>(executable);
-        String inferredName = funcExecutable->inferredName().string();
+        String inferredName = funcExecutable->ecmaName().string();
         result.appendLiteral("function \"");
         result.append(inferredName);
         result.append('"');
@@ -2340,7 +2357,7 @@ static ExceptionOr<FindOptions> parseFindOptions(const Vector<String>& optionLis
         if (!found)
             return Exception { SyntaxError };
     }
-    return WTFMove(result);
+    return result;
 }
 
 ExceptionOr<RefPtr<Range>> Internals::rangeOfString(const String& text, RefPtr<Range>&& referenceRange, const Vector<String>& findOptions)
@@ -2522,6 +2539,8 @@ static LayerTreeFlags toLayerTreeFlags(unsigned short flags)
         layerTreeFlags |= LayerTreeFlagsIncludeBackingStoreAttached;
     if (flags & Internals::LAYER_TREE_INCLUDES_ROOT_LAYER_PROPERTIES)
         layerTreeFlags |= LayerTreeFlagsIncludeRootLayerProperties;
+    if (flags & Internals::LAYER_TREE_INCLUDES_EVENT_REGION)
+        layerTreeFlags |= LayerTreeFlagsIncludeEventRegion;
 
     return layerTreeFlags;
 }
@@ -3001,7 +3020,7 @@ void Internals::webkitWillEnterFullScreenForElement(Element& element)
     Document* document = contextDocument();
     if (!document)
         return;
-    document->webkitWillEnterFullScreen(element);
+    document->fullscreenManager().willEnterFullscreen(element);
 }
 
 void Internals::webkitDidEnterFullScreenForElement(Element&)
@@ -3009,7 +3028,7 @@ void Internals::webkitDidEnterFullScreenForElement(Element&)
     Document* document = contextDocument();
     if (!document)
         return;
-    document->webkitDidEnterFullScreen();
+    document->fullscreenManager().didEnterFullscreen();
 }
 
 void Internals::webkitWillExitFullScreenForElement(Element&)
@@ -3017,7 +3036,7 @@ void Internals::webkitWillExitFullScreenForElement(Element&)
     Document* document = contextDocument();
     if (!document)
         return;
-    document->webkitWillExitFullScreen();
+    document->fullscreenManager().willExitFullscreen();
 }
 
 void Internals::webkitDidExitFullScreenForElement(Element&)
@@ -3025,7 +3044,7 @@ void Internals::webkitDidExitFullScreenForElement(Element&)
     Document* document = contextDocument();
     if (!document)
         return;
-    document->webkitDidExitFullScreen();
+    document->fullscreenManager().didExitFullscreen();
 }
 
 bool Internals::isAnimatingFullScreen() const
@@ -3033,7 +3052,7 @@ bool Internals::isAnimatingFullScreen() const
     Document* document = contextDocument();
     if (!document)
         return false;
-    return document->isAnimatingFullScreen();
+    return document->fullscreenManager().isAnimatingFullscreen();
 }
 
 #endif
@@ -3332,14 +3351,14 @@ ExceptionOr<String> Internals::getCurrentCursorInfo()
     if (cursor.image()) {
         FloatSize size = cursor.image()->size();
         result.appendLiteral(" image=");
-        result.appendNumber(size.width());
+        result.appendFixedPrecisionNumber(size.width());
         result.append('x');
-        result.appendNumber(size.height());
+        result.appendFixedPrecisionNumber(size.height());
     }
 #if ENABLE(MOUSE_CURSOR_SCALE)
     if (cursor.imageScaleFactor() != 1) {
         result.appendLiteral(" scale=");
-        result.appendNumber(cursor.imageScaleFactor(), 8);
+        result.appendFixedPrecisionNumber(cursor.imageScaleFactor(), 8);
     }
 #endif
     return result.toString();
@@ -3390,12 +3409,12 @@ void Internals::reloadExpiredOnly()
     frame()->loader().reload(ReloadOption::ExpiredOnly);
 }
 
-void Internals::enableAutoSizeMode(bool enabled, int minimumWidth, int minimumHeight, int maximumWidth, int maximumHeight)
+void Internals::enableAutoSizeMode(bool enabled, int width, int height)
 {
     auto* document = contextDocument();
     if (!document || !document->view())
         return;
-    document->view()->enableAutoSizeMode(enabled, IntSize(minimumWidth, minimumHeight), IntSize(maximumWidth, maximumHeight));
+    document->view()->enableAutoSizeMode(enabled, { width, height });
 }
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
@@ -3496,9 +3515,25 @@ void Internals::endSimulatedHDCPError(HTMLMediaElement& element)
 
 bool Internals::elementShouldBufferData(HTMLMediaElement& element)
 {
-    return element.shouldBufferData();
+    return element.bufferingPolicy() < MediaPlayer::BufferingPolicy::LimitReadAhead;
 }
 
+String Internals::elementBufferingPolicy(HTMLMediaElement& element)
+{
+    switch (element.bufferingPolicy()) {
+    case MediaPlayer::BufferingPolicy::Default:
+        return "Default";
+    case MediaPlayer::BufferingPolicy::LimitReadAhead:
+        return "LimitReadAhead";
+    case MediaPlayer::BufferingPolicy::MakeResourcesPurgeable:
+        return "MakeResourcesPurgeable";
+    case MediaPlayer::BufferingPolicy::PurgeResources:
+        return "PurgeResources";
+    }
+
+    ASSERT_NOT_REACHED();
+    return "UNKNOWN";
+}
 #endif
 
 bool Internals::isSelectPopupVisible(HTMLSelectElement& element)
@@ -3582,6 +3617,16 @@ ExceptionOr<void> Internals::setCaptionDisplayMode(const String& mode)
     return { };
 }
 
+#if ENABLE(VIDEO_TRACK)
+RefPtr<TextTrackCueGeneric> Internals::createGenericCue(double startTime, double endTime, String text)
+{
+    Document* document = contextDocument();
+    if (!document || !document->page())
+        return nullptr;
+    return TextTrackCueGeneric::create(*document, MediaTime::createWithDouble(startTime), MediaTime::createWithDouble(endTime), text);
+}
+#endif
+
 #if ENABLE(VIDEO)
 
 Ref<TimeRanges> Internals::createTimeRanges(Float32Array& startTimes, Float32Array& endTimes)
@@ -3641,6 +3686,11 @@ ExceptionOr<String> Internals::unavailablePluginReplacementText(Element& element
 bool Internals::isPluginSnapshotted(Element& element)
 {
     return is<HTMLPlugInElement>(element) && downcast<HTMLPlugInElement>(element).displayState() <= HTMLPlugInElement::DisplayingSnapshot;
+}
+
+bool Internals::pluginIsBelowSizeThreshold(Element& element)
+{
+    return is<HTMLPlugInElement>(element) && downcast<HTMLPlugInElement>(element).isBelowSizeThreshold();
 }
 
 #if ENABLE(MEDIA_SOURCE)
@@ -3833,8 +3883,6 @@ void Internals::setMediaElementRestrictions(HTMLMediaElement& element, StringVie
 #endif
         if (equalLettersIgnoringASCIICase(restrictionString, "requireusergestureforaudioratechange"))
             restrictions |= MediaElementSession::RequireUserGestureForAudioRateChange;
-        if (equalLettersIgnoringASCIICase(restrictionString, "metadatapreloadingnotpermitted"))
-            restrictions |= MediaElementSession::MetadataPreloadingNotPermitted;
         if (equalLettersIgnoringASCIICase(restrictionString, "autopreloadingnotpermitted"))
             restrictions |= MediaElementSession::AutoPreloadingNotPermitted;
         if (equalLettersIgnoringASCIICase(restrictionString, "invisibleautoplaynotpermitted"))
@@ -4056,7 +4104,9 @@ void Internals::setPageMuted(StringView statesString)
         if (equalLettersIgnoringASCIICase(stateString, "audio"))
             state |= MediaProducer::AudioIsMuted;
         if (equalLettersIgnoringASCIICase(stateString, "capturedevices"))
-            state |= MediaProducer::CaptureDevicesAreMuted;
+            state |= MediaProducer::AudioAndVideoCaptureIsMuted;
+        if (equalLettersIgnoringASCIICase(stateString, "screencapture"))
+            state |= MediaProducer::ScreenCaptureIsMuted;
     }
 
     if (Page* page = document->page())
@@ -4347,23 +4397,14 @@ JSValue Internals::cloneArrayBuffer(JSC::ExecState& state, JSValue buffer, JSVal
 
 #endif
 
-String Internals::resourceLoadStatisticsForOrigin(const String& origin)
+String Internals::resourceLoadStatisticsForURL(const DOMURL& url)
 {
-    return ResourceLoadObserver::shared().statisticsForOrigin(origin);
+    return ResourceLoadObserver::shared().statisticsForURL(url.href());
 }
 
 void Internals::setResourceLoadStatisticsEnabled(bool enable)
 {
     DeprecatedGlobalSettings::setResourceLoadStatisticsEnabled(enable);
-}
-
-void Internals::setUserGrantsStorageAccess(bool value)
-{
-    Document* document = contextDocument();
-    if (!document)
-        return;
-
-    document->setUserGrantsStorageAccessOverride(value);
 }
 
 String Internals::composedTreeAsText(Node& node)
@@ -4382,6 +4423,15 @@ void Internals::withUserGesture(RefPtr<VoidCallback>&& callback)
 {
     UserGestureIndicator gestureIndicator(ProcessingUserGesture, contextDocument());
     callback->handleEvent();
+}
+
+bool Internals::userIsInteracting()
+{
+    if (auto* document = contextDocument()) {
+        if (auto* page = document->page())
+            return page->chrome().client().userIsInteracting();
+    }
+    return false;
 }
 
 double Internals::lastHandledUserGestureTimestamp()
@@ -4540,8 +4590,15 @@ void Internals::setQuickLookPassword(const String& password)
 
 void Internals::setAsRunningUserScripts(Document& document)
 {
-    document.topDocument().setAsRunningUserScripts();
+    document.setAsRunningUserScripts();
 }
+
+#if ENABLE(APPLE_PAY)
+void Internals::setHasStartedApplePaySession(Document& document)
+{
+    document.setHasStartedApplePaySession();
+}
+#endif
 
 #if ENABLE(WEBGL)
 void Internals::simulateWebGLContextChanged(WebGLRenderingContext& context)
@@ -4680,6 +4737,15 @@ void Internals::setMediaStreamSourceInterrupted(MediaStreamTrack& track, bool in
     track.source().setInterruptedForTesting(interrupted);
 }
 
+void Internals::setDisableGetDisplayMediaUserGestureConstraint(bool value)
+{
+    Document* document = contextDocument();
+    if (!document || !document->domWindow())
+        return;
+
+    if (auto* mediaDevices = NavigatorMediaDevices::mediaDevices(document->domWindow()->navigator()))
+        mediaDevices->setDisableGetDisplayMediaUserGestureConstraint(value);
+}
 #endif
 
 String Internals::audioSessionCategory() const
@@ -4754,6 +4820,22 @@ void Internals::cacheStorageEngineRepresentation(DOMPromiseDeferred<IDLDOMString
     m_cacheStorageConnection->engineRepresentation([promise = WTFMove(promise)](const String& result) mutable {
         promise.resolve(result);
     });
+}
+
+void Internals::updateQuotaBasedOnSpaceUsage()
+{
+    auto* document = contextDocument();
+    if (!document)
+        return;
+
+    if (!m_cacheStorageConnection) {
+        if (auto* page = contextDocument()->page())
+            m_cacheStorageConnection = page->cacheStorageProvider().createCacheStorageConnection(page->sessionID());
+        if (!m_cacheStorageConnection)
+            return;
+    }
+
+    m_cacheStorageConnection->updateQuotaBasedOnSpaceUsage(ClientOrigin { document->topOrigin().data(), document->securityOrigin().data() });
 }
 
 void Internals::setConsoleMessageListener(RefPtr<StringCallback>&& listener)
@@ -4894,7 +4976,7 @@ size_t Internals::pluginCount()
 
 void Internals::notifyResourceLoadObserver()
 {
-    ResourceLoadObserver::shared().notifyObserver();
+    ResourceLoadObserver::shared().updateCentralStatisticsStore();
 }
 
 unsigned Internals::primaryScreenDisplayID()
@@ -4914,7 +4996,7 @@ bool Internals::capsLockIsOn()
 bool Internals::supportsVCPEncoder()
 {
 #if defined(ENABLE_VCP_ENCODER)
-    return ENABLE_VCP_ENCODER;
+    return ENABLE_VCP_ENCODER || ENABLE_VCP_VTB_ENCODER;
 #else
     return false;
 #endif
@@ -4948,6 +5030,41 @@ void Internals::setAlwaysAllowLocalWebarchive(bool alwaysAllowLocalWebarchive)
     if (!localFrame)
         return;
     localFrame->loader().setAlwaysAllowLocalWebarchive(alwaysAllowLocalWebarchive);
+}
+
+void Internals::processWillSuspend()
+{
+    PlatformMediaSessionManager::sharedManager().processWillSuspend();
+}
+
+void Internals::processDidResume()
+{
+    PlatformMediaSessionManager::sharedManager().processDidResume();
+}
+
+void Internals::testDictionaryLogging()
+{
+    auto* document = contextDocument();
+    if (!document)
+        return;
+
+    auto* page = document->page();
+    if (!page)
+        return;
+
+    DiagnosticLoggingClient::ValueDictionary dictionary;
+    dictionary.set("stringKey"_s, String("stringValue"));
+    dictionary.set("uint64Key"_s, std::numeric_limits<uint64_t>::max());
+    dictionary.set("int64Key"_s, std::numeric_limits<int64_t>::min());
+    dictionary.set("boolKey"_s, true);
+    dictionary.set("doubleKey"_s, 2.7182818284590452353602874);
+
+    page->diagnosticLoggingClient().logDiagnosticMessageWithValueDictionary("testMessage"_s, "testDescription"_s, dictionary, ShouldSample::No);
+}
+
+void Internals::setXHRMaximumIntervalForUserGestureForwarding(XMLHttpRequest& request, double interval)
+{
+    request.setMaximumIntervalForUserGestureForwarding(interval);
 }
 
 } // namespace WebCore

@@ -69,6 +69,15 @@ public:
 
     RenderLayer& owningLayer() const { return m_owningLayer; }
 
+    // Included layers are non-z-order descendant layers that are painted into this backing.
+    const Vector<WeakPtr<RenderLayer>>& backingSharingLayers() const { return m_backingSharingLayers; }
+    void setBackingSharingLayers(Vector<WeakPtr<RenderLayer>>&&);
+
+    bool hasBackingSharingLayers() const { return !m_backingSharingLayers.isEmpty(); }
+
+    void removeBackingSharingLayer(RenderLayer&);
+    void clearBackingSharingLayers();
+
     void updateConfigurationAfterStyleChange();
 
     // Returns true if layer configuration changed.
@@ -83,7 +92,7 @@ public:
     // Update contents and clipping structure.
     void updateDrawsContent();
     
-    void updateAfterLayout(bool needsFullRepaint);
+    void updateAfterLayout(bool needsClippingUpdate, bool needsFullRepaint);
     
     GraphicsLayer* graphicsLayer() const { return m_graphicsLayer.get(); }
 
@@ -121,6 +130,8 @@ public:
             return m_frameHostingNodeID;
         case ScrollCoordinationRole::ViewportConstrained:
             return m_viewportConstrainedNodeID;
+        case ScrollCoordinationRole::Positioning:
+            return m_positioningNodeID;
         }
         return 0;
     }
@@ -138,12 +149,24 @@ public:
             m_viewportConstrainedNodeID = nodeID;
             setIsScrollCoordinatedWithViewportConstrainedRole(nodeID);
             break;
+        case ScrollCoordinationRole::Positioning:
+            m_positioningNodeID = nodeID;
+            break;
         }
     }
 
     ScrollingNodeID scrollingNodeIDForChildren() const
     {
-        return m_frameHostingNodeID ? m_frameHostingNodeID : (m_scrollingNodeID ? m_scrollingNodeID : m_viewportConstrainedNodeID);
+        if (m_frameHostingNodeID)
+            return m_frameHostingNodeID;
+
+        if (m_scrollingNodeID)
+            return m_scrollingNodeID;
+
+        if (m_viewportConstrainedNodeID)
+            return m_viewportConstrainedNodeID;
+
+        return m_positioningNodeID;
     }
 
     void setIsScrollCoordinatedWithViewportConstrainedRole(bool);
@@ -180,7 +203,7 @@ public:
     void transitionPaused(double timeOffset, CSSPropertyID);
     void transitionFinished(CSSPropertyID);
 
-    bool startAnimation(double timeOffset, const Animation* anim, const KeyframeList& keyframes);
+    bool startAnimation(double timeOffset, const Animation&, const KeyframeList&);
     void animationPaused(double timeOffset, const String& name);
     void animationSeeked(double timeOffset, const String& name);
     void animationFinished(const String& name);
@@ -312,7 +335,7 @@ private:
 
     GraphicsLayerPaintingPhase paintingPhaseForPrimaryLayer() const;
     
-    LayoutSize contentOffsetInCompostingLayer() const;
+    LayoutSize contentOffsetInCompositingLayer() const;
     // Result is transform origin in device pixels.
     FloatPoint3D computeTransformOriginForPainting(const LayoutRect& borderBox) const;
 
@@ -338,6 +361,7 @@ private:
     bool paintsContent(RenderLayer::PaintedContentRequest&) const;
 
     void updateDrawsContent(PaintedContentsInfo&);
+    void updateEventRegion();
 
     // Returns true if this compositing layer has no visible content.
     bool isSimpleContainerCompositingLayer(PaintedContentsInfo&) const;
@@ -372,6 +396,9 @@ private:
 
     RenderLayer& m_owningLayer;
 
+    // A list other layers that paint into this backing store, later than m_owningLayer in paint order.
+    Vector<WeakPtr<RenderLayer>> m_backingSharingLayers;
+
     RefPtr<GraphicsLayer> m_ancestorClippingLayer; // Only used if we are clipped by an ancestor which is not a stacking context.
     RefPtr<GraphicsLayer> m_contentsContainmentLayer; // Only used if we have a background layer; takes the transform.
     RefPtr<GraphicsLayer> m_graphicsLayer;
@@ -395,6 +422,7 @@ private:
     ScrollingNodeID m_viewportConstrainedNodeID { 0 };
     ScrollingNodeID m_scrollingNodeID { 0 };
     ScrollingNodeID m_frameHostingNodeID { 0 };
+    ScrollingNodeID m_positioningNodeID { 0 };
 
     bool m_artificiallyInflatedBounds { false }; // bounds had to be made non-zero to make transform-origin work
     bool m_isMainFrameRenderViewLayer { false };
@@ -406,6 +434,7 @@ private:
 #endif
     bool m_backgroundLayerPaintsFixedRootBackground { false };
     bool m_requiresBackgroundLayer { false };
+    bool m_hasSubpixelRounding { false };
     bool m_paintsSubpixelAntialiasedText { false }; // This is for logging only.
 };
 

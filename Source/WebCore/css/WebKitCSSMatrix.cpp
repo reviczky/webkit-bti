@@ -33,10 +33,13 @@
 #include "CSSValueKeywords.h"
 #include "StyleProperties.h"
 #include "TransformFunctions.h"
+#include <wtf/IsoMallocInlines.h>
 #include <wtf/MathExtras.h>
 #include <wtf/text/StringBuilder.h>
 
 namespace WebCore {
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(WebKitCSSMatrix);
 
 inline WebKitCSSMatrix::WebKitCSSMatrix(const TransformationMatrix& matrix)
     : m_matrix(matrix)
@@ -54,7 +57,7 @@ ExceptionOr<Ref<WebKitCSSMatrix>> WebKitCSSMatrix::create(const String& string)
     auto setMatrixValueResult = result->setMatrixValue(string);
     if (setMatrixValueResult.hasException())
         return setMatrixValueResult.releaseException();
-    return WTFMove(result);
+    return result;
 }
 
 WebKitCSSMatrix::~WebKitCSSMatrix() = default;
@@ -97,7 +100,7 @@ RefPtr<WebKitCSSMatrix> WebKitCSSMatrix::multiply(WebKitCSSMatrix* secondMatrix)
 
     auto matrix = create(m_matrix);
     matrix->m_matrix.multiply(secondMatrix->m_matrix);
-    return WTFMove(matrix);
+    return matrix;
 }
 
 ExceptionOr<Ref<WebKitCSSMatrix>> WebKitCSSMatrix::inverse() const

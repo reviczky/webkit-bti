@@ -31,6 +31,7 @@
 #include "NetworkConnectionToWebProcessMessages.h"
 #include "NetworkLoadClient.h"
 #include "NetworkResourceLoadParameters.h"
+#include <WebCore/AdClickAttribution.h>
 #include <WebCore/ContentSecurityPolicyClient.h>
 #include <WebCore/ResourceResponse.h>
 #include <WebCore/SecurityPolicyViolationEvent.h>
@@ -103,6 +104,7 @@ public:
 
     bool isMainResource() const { return m_parameters.request.requester() == WebCore::ResourceRequest::Requester::Main; }
     bool isMainFrameLoad() const { return isMainResource() && m_parameters.frameAncestorOrigins.isEmpty(); }
+    bool isCrossOriginPrefetch() const;
 
     bool isAlwaysOnLoggingAllowed() const;
 
@@ -112,6 +114,8 @@ public:
 #endif
 
     void disableExtraNetworkLoadMetricsCapture() { m_shouldCaptureExtraNetworkLoadMetrics = false; }
+
+    bool isKeptAlive() const { return m_isKeptAlive; }
 
 private:
     NetworkResourceLoader(NetworkResourceLoadParameters&&, NetworkConnectionToWebProcess&, Messages::NetworkConnectionToWebProcess::PerformSynchronousLoad::DelayedReply&&);
@@ -159,7 +163,7 @@ private:
     void logCookieInformation() const;
 #endif
 
-    void continueWillSendRedirectedRequest(WebCore::ResourceRequest&&, WebCore::ResourceRequest&& redirectRequest, WebCore::ResourceResponse&&);
+    void continueWillSendRedirectedRequest(WebCore::ResourceRequest&&, WebCore::ResourceRequest&& redirectRequest, WebCore::ResourceResponse&&, Optional<WebCore::AdClickAttribution::Conversion>&&);
     void didFinishWithRedirectResponse(WebCore::ResourceResponse&&);
     WebCore::ResourceResponse sanitizeResponseIfPossible(WebCore::ResourceResponse&&, WebCore::ResourceResponse::SanitizationType);
 
@@ -169,6 +173,8 @@ private:
     void enqueueSecurityPolicyViolationEvent(WebCore::SecurityPolicyViolationEvent::Init&&) final;
 
     void logSlowCacheRetrieveIfNeeded(const NetworkCache::Cache::RetrieveInfo&);
+
+    void handleAdClickAttributionConversion(WebCore::AdClickAttribution::Conversion&&, const URL&, const WebCore::ResourceRequest&);
 
     Optional<Seconds> validateCacheEntryForMaxAgeCapValidation(const WebCore::ResourceRequest&, const WebCore::ResourceRequest& redirectRequest, const WebCore::ResourceResponse&);
 
@@ -205,6 +211,7 @@ private:
     bool m_shouldRestartLoad { false };
     ResponseCompletionHandler m_responseCompletionHandler;
     bool m_shouldCaptureExtraNetworkLoadMetrics { false };
+    bool m_isKeptAlive { false };
 
     Optional<NetworkActivityTracker> m_networkActivityTracker;
 };

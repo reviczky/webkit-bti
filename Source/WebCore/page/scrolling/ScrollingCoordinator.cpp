@@ -47,7 +47,7 @@
 
 namespace WebCore {
 
-#if !PLATFORM(COCOA) && !USE(COORDINATED_GRAPHICS)
+#if !PLATFORM(MAC) && !USE(COORDINATED_GRAPHICS)
 Ref<ScrollingCoordinator> ScrollingCoordinator::create(Page* page)
 {
     return adoptRef(*new ScrollingCoordinator(page));
@@ -111,7 +111,7 @@ EventTrackingRegions ScrollingCoordinator::absoluteEventTrackingRegionsForFrame(
     auto eventTrackingRegions = document->eventTrackingRegions();
 
 #if ENABLE(POINTER_EVENTS)
-    if (RuntimeEnabledFeatures::sharedFeatures().pointerEventsEnabled()) {
+    if (!document->quirks().shouldDisablePointerEventsQuirk() && RuntimeEnabledFeatures::sharedFeatures().pointerEventsEnabled()) {
         if (auto* touchActionElements = frame.document()->touchActionElements()) {
             auto& touchActionData = eventTrackingRegions.touchActionData;
             for (const auto& element : *touchActionElements) {
@@ -435,10 +435,16 @@ TextStream& operator<<(TextStream& ts, ScrollableAreaParameters scrollableAreaPa
     ts.dumpProperty("vertical scroll elasticity", scrollableAreaParameters.verticalScrollElasticity);
     ts.dumpProperty("horizontal scrollbar mode", scrollableAreaParameters.horizontalScrollbarMode);
     ts.dumpProperty("vertical scrollbar mode", scrollableAreaParameters.verticalScrollbarMode);
+
     if (scrollableAreaParameters.hasEnabledHorizontalScrollbar)
         ts.dumpProperty("has enabled horizontal scrollbar", scrollableAreaParameters.hasEnabledHorizontalScrollbar);
     if (scrollableAreaParameters.hasEnabledVerticalScrollbar)
         ts.dumpProperty("has enabled vertical scrollbar", scrollableAreaParameters.hasEnabledVerticalScrollbar);
+
+    if (scrollableAreaParameters.horizontalScrollbarHiddenByStyle)
+        ts.dumpProperty("horizontal scrollbar hidden by style", scrollableAreaParameters.horizontalScrollbarHiddenByStyle);
+    if (scrollableAreaParameters.verticalScrollbarHiddenByStyle)
+        ts.dumpProperty("vertical scrollbar hidden by style", scrollableAreaParameters.verticalScrollbarHiddenByStyle);
 
     return ts;
 }
@@ -463,6 +469,9 @@ TextStream& operator<<(TextStream& ts, ScrollingNodeType nodeType)
         break;
     case ScrollingNodeType::Sticky:
         ts << "sticky";
+        break;
+    case ScrollingNodeType::Positioned:
+        ts << "positioned";
         break;
     }
     return ts;
@@ -496,6 +505,15 @@ TextStream& operator<<(TextStream& ts, ViewportRectStability stability)
     case ViewportRectStability::ChangingObscuredInsetsInteractively:
         ts << "changing obscured insets interactively";
         break;
+    }
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, ScrollType scrollType)
+{
+    switch (scrollType) {
+    case ScrollType::User: ts << "user"; break;
+    case ScrollType::Programmatic: ts << "programmatic"; break;
     }
     return ts;
 }

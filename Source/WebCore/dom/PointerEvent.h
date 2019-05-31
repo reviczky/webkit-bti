@@ -40,7 +40,7 @@ namespace WebCore {
 class PointerEvent final : public MouseEvent {
 public:
     struct Init : MouseEventInit {
-        PointerID pointerId { 0 };
+        PointerID pointerId { mousePointerID };
         double width { 1 };
         double height { 1 };
         float pressure { 0 };
@@ -52,17 +52,10 @@ public:
         bool isPrimary { false };
     };
 
+    enum class IsPrimary : uint8_t { No, Yes };
+
     static Ref<PointerEvent> create(const AtomicString& type, Init&& initializer)
     {
-        return adoptRef(*new PointerEvent(type, WTFMove(initializer)));
-    }
-
-    static Ref<PointerEvent> create(const AtomicString& type, PointerID pointerId, String pointerType)
-    {
-        Init initializer;
-        initializer.bubbles = true;
-        initializer.pointerId = pointerId;
-        initializer.pointerType = pointerType;
         return adoptRef(*new PointerEvent(type, WTFMove(initializer)));
     }
 
@@ -81,8 +74,12 @@ public:
         return adoptRef(*new PointerEvent);
     }
 
+    static RefPtr<PointerEvent> create(const MouseEvent&);
+    static Ref<PointerEvent> create(const String& type, PointerID, const String& pointerType, IsPrimary = IsPrimary::No);
+
 #if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS_FAMILY)
     static Ref<PointerEvent> create(const PlatformTouchEvent&, unsigned touchIndex, bool isPrimary, Ref<WindowProxy>&&);
+    static Ref<PointerEvent> create(const String& type, const PlatformTouchEvent&, unsigned touchIndex, bool isPrimary, Ref<WindowProxy>&&);
 #endif
 
     static const String& mousePointerType();
@@ -109,11 +106,13 @@ public:
 private:
     PointerEvent();
     PointerEvent(const AtomicString&, Init&&);
+    PointerEvent(const AtomicString& type, CanBubble, IsCancelable, IsComposed, const MouseEvent&);
+    PointerEvent(const AtomicString& type, CanBubble, IsCancelable, IsComposed, PointerID, const String& pointerType, IsPrimary);
 #if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS_FAMILY)
     PointerEvent(const AtomicString& type, const PlatformTouchEvent&, IsCancelable isCancelable, unsigned touchIndex, bool isPrimary, Ref<WindowProxy>&&);
 #endif
 
-    PointerID m_pointerId { 0 };
+    PointerID m_pointerId { mousePointerID };
     double m_width { 1 };
     double m_height { 1 };
     float m_pressure { 0 };

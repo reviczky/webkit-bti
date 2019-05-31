@@ -83,6 +83,10 @@ enum class WaitForOption {
     } \
 while (0)
 
+template<typename AsyncReplyResult> struct AsyncReplyError {
+    static AsyncReplyResult create() { return { }; };
+};
+
 class MachMessage;
 class UnixMessage;
 
@@ -177,7 +181,7 @@ public:
 
     void postConnectionDidCloseOnConnectionWorkQueue();
 
-    template<typename T, typename... Args> void sendWithAsyncReply(T&& message, CompletionHandler<void(Args...)>&& args, uint64_t destinationID = 0);
+    template<typename T, typename C> void sendWithAsyncReply(T&& message, C&& completionHandler, uint64_t destinationID = 0);
     template<typename T> bool send(T&& message, uint64_t destinationID, OptionSet<SendOption> sendOptions = { });
     template<typename T> void sendWithReply(T&& message, uint64_t destinationID, FunctionDispatcher& replyDispatcher, Function<void(Optional<typename CodingType<typename T::Reply>::Type>)>&& replyHandler);
     template<typename T> bool sendSync(T&& message, typename T::Reply&& reply, uint64_t destinationID, Seconds timeout = Seconds::infinity(), OptionSet<SendSyncOption> sendSyncOptions = { });
@@ -416,8 +420,8 @@ uint64_t nextAsyncReplyHandlerID();
 void addAsyncReplyHandler(Connection&, uint64_t, CompletionHandler<void(Decoder*)>&&);
 CompletionHandler<void(Decoder*)> takeAsyncReplyHandler(Connection&, uint64_t);
 
-template<typename T, typename... Args>
-void Connection::sendWithAsyncReply(T&& message, CompletionHandler<void(Args...)>&& completionHandler, uint64_t destinationID)
+template<typename T, typename C>
+void Connection::sendWithAsyncReply(T&& message, C&& completionHandler, uint64_t destinationID)
 {
     COMPILE_ASSERT(!T::isSync, AsyncMessageExpected);
 
@@ -444,15 +448,35 @@ void Connection::sendWithReply(T&& message, uint64_t destinationID, FunctionDisp
 
     sendMessageWithReply(requestID, WTFMove(encoder), replyDispatcher, [replyHandler = WTFMove(replyHandler)](std::unique_ptr<Decoder> decoder) {
         if (decoder) {
-            typename CodingType<typename T::Reply>::Type reply;
-            if (decoder->decode(reply)) {
-                replyHandler(WTFMove(reply));
+            Optional<typename CodingType<typename T::Reply>::Type> reply;
+            *decoder >> reply;
+            if (reply) {
+                replyHandler(WTFMove(*reply));
                 return;
             }
         }
 
         replyHandler(WTF::nullopt);
     });
+}
+
+template<size_t i, typename A, typename B> struct TupleMover {
+    static void move(A&& a, B& b)
+    {
+        std::get<i - 1>(b) = WTFMove(std::get<i - 1>(a));
+        TupleMover<i - 1, A, B>::move(WTFMove(a), b);
+    }
+};
+
+template<typename A, typename B> struct TupleMover<0, A, B> {
+    static void move(A&&, B&) { }
+};
+
+template<typename... A, typename... B>
+void moveTuple(std::tuple<A...>&& a, std::tuple<B...>& b)
+{
+    static_assert(sizeof...(A) == sizeof...(B), "Should be used with two tuples of same size");
+    TupleMover<sizeof...(A), std::tuple<A...>, std::tuple<B...>>::move(WTFMove(a), b);
 }
 
 template<typename T> bool Connection::sendSync(T&& message, typename T::Reply&& reply, uint64_t destinationID, Seconds timeout, OptionSet<SendSyncOption> sendSyncOptions)
@@ -476,7 +500,12 @@ template<typename T> bool Connection::sendSync(T&& message, typename T::Reply&& 
         return false;
 
     // Decode the reply.
-    return replyDecoder->decode(reply);
+    Optional<typename T::ReplyArguments> replyArguments;
+    *replyDecoder >> replyArguments;
+    if (!replyArguments)
+        return false;
+    moveTuple(WTFMove(*replyArguments), reply);
+    return true;
 }
 
 template<typename T> bool Connection::waitForAndDispatchImmediately(uint64_t destinationID, Seconds timeout, OptionSet<WaitForOption> waitForOptions)

@@ -86,7 +86,7 @@
 #endif
 
 #if ENABLE(DARK_MODE_CSS)
-#include "StyleSupportedColorSchemes.h"
+#include "StyleColorScheme.h"
 #endif
 
 #define SET_VAR(group, variable, value) do { \
@@ -638,9 +638,9 @@ public:
     RubyPosition rubyPosition() const { return static_cast<RubyPosition>(m_rareInheritedData->rubyPosition); }
 
 #if ENABLE(DARK_MODE_CSS)
-    StyleSupportedColorSchemes supportedColorSchemes() const { return m_rareInheritedData->supportedColorSchemes; }
-    void setHasExplicitlySetSupportedColorSchemes(bool v) { m_nonInheritedFlags.hasExplicitlySetSupportedColorSchemes = v; }
-    bool hasExplicitlySetSupportedColorSchemes() const { return m_nonInheritedFlags.hasExplicitlySetSupportedColorSchemes; };
+    StyleColorScheme colorScheme() const { return m_rareInheritedData->colorScheme; }
+    void setHasExplicitlySetColorScheme(bool v) { m_nonInheritedFlags.hasExplicitlySetColorScheme = v; }
+    bool hasExplicitlySetColorScheme() const { return m_nonInheritedFlags.hasExplicitlySetColorScheme; };
 #endif
 
     TextOrientation textOrientation() const { return static_cast<TextOrientation>(m_rareInheritedData->textOrientation); }
@@ -706,6 +706,8 @@ public:
 
 #if ENABLE(POINTER_EVENTS)
     OptionSet<TouchAction> touchActions() const { return OptionSet<TouchAction>::fromRaw(m_rareNonInheritedData->touchActions); }
+    // 'touch-action' behavior depends on values in ancestors. We use an additional inherited property to implement that.
+    OptionSet<TouchAction> effectiveTouchActions() const { return OptionSet<TouchAction>::fromRaw(m_rareInheritedData->effectiveTouchActions); }
 #endif
 
 #if ENABLE(CSS_SCROLL_SNAP)
@@ -736,7 +738,7 @@ public:
     bool touchCalloutEnabled() const { return m_rareInheritedData->touchCalloutEnabled; }
 #endif
 
-#if ENABLE(ACCELERATED_OVERFLOW_SCROLLING)
+#if ENABLE(OVERFLOW_SCROLLING_TOUCH)
     bool useTouchOverflowScrolling() const { return m_rareInheritedData->useTouchOverflowScrolling; }
 #endif
 
@@ -1177,7 +1179,7 @@ public:
     void setRubyPosition(RubyPosition position) { SET_VAR(m_rareInheritedData, rubyPosition, static_cast<unsigned>(position)); }
 
 #if ENABLE(DARK_MODE_CSS)
-    void setSupportedColorSchemes(StyleSupportedColorSchemes supported) { SET_VAR(m_rareInheritedData, supportedColorSchemes, supported); }
+    void setColorScheme(StyleColorScheme supported) { SET_VAR(m_rareInheritedData, colorScheme, supported); }
 #endif
 
     void setFilter(const FilterOperations& ops) { SET_NESTED_VAR(m_rareNonInheritedData, filter, operations, ops); }
@@ -1225,6 +1227,7 @@ public:
     
 #if ENABLE(POINTER_EVENTS)
     void setTouchActions(OptionSet<TouchAction> touchActions) { SET_VAR(m_rareNonInheritedData, touchActions, touchActions.toRaw()); }
+    void setEffectiveTouchActions(OptionSet<TouchAction> touchActions) { SET_VAR(m_rareInheritedData, effectiveTouchActions, touchActions.toRaw()); }
 #endif
 
 #if ENABLE(CSS_SCROLL_SNAP)
@@ -1249,7 +1252,7 @@ public:
     void setTouchCalloutEnabled(bool v) { SET_VAR(m_rareInheritedData, touchCalloutEnabled, v); }
 #endif
 
-#if ENABLE(ACCELERATED_OVERFLOW_SCROLLING)
+#if ENABLE(OVERFLOW_SCROLLING_TOUCH)
     void setUseTouchOverflowScrolling(bool v) { SET_VAR(m_rareInheritedData, useTouchOverflowScrolling, v); }
 #endif
 
@@ -1598,7 +1601,7 @@ public:
     static const AtomicString& initialContentAltText() { return emptyAtom(); }
 
 #if ENABLE(DARK_MODE_CSS)
-    static StyleSupportedColorSchemes initialSupportedColorSchemes() { return { }; }
+    static StyleColorScheme initialColorScheme() { return { }; }
 #endif
 
 #if ENABLE(CSS3_TEXT)
@@ -1685,7 +1688,7 @@ public:
     static Color initialTapHighlightColor();
 #endif
 
-#if ENABLE(ACCELERATED_OVERFLOW_SCROLLING)
+#if ENABLE(OVERFLOW_SCROLLING_TOUCH)
     static bool initialUseTouchOverflowScrolling() { return false; }
 #endif
 
@@ -1790,7 +1793,7 @@ private:
         unsigned hasExplicitlySetWritingMode : 1;
         unsigned hasExplicitlySetTextAlign : 1;
 #if ENABLE(DARK_MODE_CSS)
-        unsigned hasExplicitlySetSupportedColorSchemes : 1;
+        unsigned hasExplicitlySetColorScheme : 1;
 #endif
         unsigned hasViewportUnits : 1;
         unsigned hasExplicitlyInheritedProperties : 1; // Explicitly inherits a non-inherited property.
@@ -1919,7 +1922,7 @@ inline bool RenderStyle::NonInheritedFlags::operator==(const NonInheritedFlags& 
         && hasExplicitlySetWritingMode == other.hasExplicitlySetWritingMode
         && hasExplicitlySetTextAlign == other.hasExplicitlySetTextAlign
 #if ENABLE(DARK_MODE_CSS)
-        && hasExplicitlySetSupportedColorSchemes == other.hasExplicitlySetSupportedColorSchemes
+        && hasExplicitlySetColorScheme == other.hasExplicitlySetColorScheme
 #endif
         && hasViewportUnits == other.hasViewportUnits
         && hasExplicitlyInheritedProperties == other.hasExplicitlyInheritedProperties
@@ -2022,7 +2025,7 @@ inline float adjustFloatForAbsoluteZoom(float value, const RenderStyle& style)
 
 inline LayoutUnit adjustLayoutUnitForAbsoluteZoom(LayoutUnit value, const RenderStyle& style)
 {
-    return value / style.effectiveZoom();
+    return LayoutUnit(value / style.effectiveZoom());
 }
 
 inline BorderStyle collapsedBorderStyle(BorderStyle style)
@@ -2063,7 +2066,7 @@ inline bool RenderStyle::preserveNewline(WhiteSpace whiteSpace)
 inline bool RenderStyle::collapseWhiteSpace(WhiteSpace ws)
 {
     // Pre and prewrap do not collapse whitespace.
-    return ws != WhiteSpace::Pre && ws != WhiteSpace::PreWrap;
+    return ws != WhiteSpace::Pre && ws != WhiteSpace::PreWrap && ws != WhiteSpace::BreakSpaces;
 }
 
 inline bool RenderStyle::isCollapsibleWhiteSpace(UChar character) const
@@ -2081,7 +2084,7 @@ inline bool RenderStyle::isCollapsibleWhiteSpace(UChar character) const
 
 inline bool RenderStyle::breakOnlyAfterWhiteSpace() const
 {
-    return whiteSpace() == WhiteSpace::PreWrap || lineBreak() == LineBreak::AfterWhiteSpace;
+    return whiteSpace() == WhiteSpace::PreWrap || whiteSpace() == WhiteSpace::BreakSpaces || lineBreak() == LineBreak::AfterWhiteSpace;
 }
 
 inline bool RenderStyle::breakWords() const

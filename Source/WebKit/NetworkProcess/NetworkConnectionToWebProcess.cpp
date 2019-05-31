@@ -45,21 +45,30 @@
 #include "NetworkSocketStreamMessages.h"
 #include "PingLoad.h"
 #include "PreconnectTask.h"
+#include "ServiceWorkerFetchTaskMessages.h"
+#include "StorageManager.h"
+#include "StorageManagerMessages.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebErrors.h"
 #include "WebIDBConnectionToClient.h"
 #include "WebIDBConnectionToClientMessages.h"
+#include "WebProcessPoolMessages.h"
 #include "WebResourceLoadStatisticsStore.h"
 #include "WebSWServerConnection.h"
 #include "WebSWServerConnectionMessages.h"
 #include "WebSWServerToContextConnection.h"
 #include "WebSWServerToContextConnectionMessages.h"
 #include "WebsiteDataStoreParameters.h"
+#include <WebCore/DocumentStorageAccess.h>
 #include <WebCore/NetworkStorageSession.h>
 #include <WebCore/ResourceLoadStatistics.h>
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/SameSiteInfo.h>
 #include <WebCore/SecurityPolicy.h>
+
+#if ENABLE(APPLE_PAY_REMOTE_UI)
+#include "WebPaymentCoordinatorProxyMessages.h"
+#endif
 
 namespace WebKit {
 using namespace WebCore;
@@ -72,6 +81,7 @@ Ref<NetworkConnectionToWebProcess> NetworkConnectionToWebProcess::create(Network
 NetworkConnectionToWebProcess::NetworkConnectionToWebProcess(NetworkProcess& networkProcess, IPC::Connection::Identifier connectionIdentifier)
     : m_connection(IPC::Connection::createServerConnection(connectionIdentifier, *this))
     , m_networkProcess(networkProcess)
+    , m_networkResourceLoaders(*this)
 #if ENABLE(WEB_RTC)
     , m_mdnsRegister(*this)
 #endif
@@ -104,9 +114,23 @@ void NetworkConnectionToWebProcess::didCleanupResourceLoader(NetworkResourceLoad
 {
     RELEASE_ASSERT(loader.identifier());
     RELEASE_ASSERT(RunLoop::isMain());
-    ASSERT(m_networkResourceLoaders.get(loader.identifier()) == &loader);
 
+    if (loader.isKeptAlive()) {
+        networkProcess().removeKeptAliveLoad(loader);
+        return;
+    }
+
+    ASSERT(m_networkResourceLoaders.get(loader.identifier()) == &loader);
     m_networkResourceLoaders.remove(loader.identifier());
+}
+
+void NetworkConnectionToWebProcess::transferKeptAliveLoad(NetworkResourceLoader& loader)
+{
+    RELEASE_ASSERT(RunLoop::isMain());
+    ASSERT(loader.isKeptAlive());
+    ASSERT(m_networkResourceLoaders.get(loader.identifier()) == &loader);
+    if (auto takenLoader = m_networkResourceLoaders.take(loader.identifier()))
+        m_networkProcess->addKeptAliveLoad(takenLoader.releaseNonNull());
 }
 
 void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& decoder)
@@ -180,14 +204,33 @@ void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connectio
             swConnection->didReceiveMessage(connection, decoder);
         return;
     }
-    
+
     if (decoder.messageReceiverName() == Messages::WebSWServerToContextConnection::messageReceiverName()) {
         if (auto* contextConnection = m_networkProcess->connectionToContextProcessFromIPCConnection(connection)) {
             contextConnection->didReceiveMessage(connection, decoder);
             return;
         }
     }
+
+    if (decoder.messageReceiverName() == Messages::ServiceWorkerFetchTask::messageReceiverName()) {
+        if (auto* contextConnection = m_networkProcess->connectionToContextProcessFromIPCConnection(connection)) {
+            contextConnection->didReceiveFetchTaskMessage(connection, decoder);
+            return;
+        }
+    }
 #endif
+
+#if ENABLE(APPLE_PAY_REMOTE_UI)
+    if (decoder.messageReceiverName() == Messages::WebPaymentCoordinatorProxy::messageReceiverName())
+        return paymentCoordinator().didReceiveMessage(connection, decoder);
+#endif
+
+    if (decoder.messageReceiverName() == Messages::StorageManager::messageReceiverName()) {
+        if (auto* session = m_networkProcess->networkSessionByConnection(connection)) {
+            session->storageManager().didReceiveMessage(connection, decoder);
+            return;
+        }
+    }
 
     ASSERT_NOT_REACHED();
 }
@@ -223,6 +266,18 @@ void NetworkConnectionToWebProcess::didReceiveSyncMessage(IPC::Connection& conne
     }
 #endif
 
+#if ENABLE(APPLE_PAY_REMOTE_UI)
+    if (decoder.messageReceiverName() == Messages::WebPaymentCoordinatorProxy::messageReceiverName())
+        return paymentCoordinator().didReceiveSyncMessage(connection, decoder, reply);
+#endif
+
+    if (decoder.messageReceiverName() == Messages::StorageManager::messageReceiverName()) {
+        if (auto* session = m_networkProcess->networkSessionByConnection(connection)) {
+            session->storageManager().didReceiveSyncMessage(connection, decoder, reply);
+            return;
+        }
+    }
+
     ASSERT_NOT_REACHED();
 }
 
@@ -249,6 +304,8 @@ void NetworkConnectionToWebProcess::didClose(IPC::Connection& connection)
     // root activity trackers.
     stopAllNetworkActivityTracking();
 
+    m_networkProcess->webProcessWasDisconnected(connection);
+
     m_networkProcess->networkBlobRegistry().connectionToWebProcessDidClose(*this);
     m_networkProcess->removeNetworkConnectionToWebProcess(*this);
 
@@ -269,6 +326,10 @@ void NetworkConnectionToWebProcess::didClose(IPC::Connection& connection)
     
 #if ENABLE(SERVICE_WORKER)
     unregisterSWConnections();
+#endif
+
+#if ENABLE(APPLE_PAY_REMOTE_UI)
+    m_paymentCoordinator = nullptr;
 #endif
 }
 
@@ -451,16 +512,17 @@ void NetworkConnectionToWebProcess::convertMainResourceLoadToDownload(PAL::Sessi
     loader->convertToDownload(downloadID, request, response);
 }
 
-void NetworkConnectionToWebProcess::cookiesForDOM(PAL::SessionID sessionID, const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, Optional<uint64_t> frameID, Optional<uint64_t> pageID, IncludeSecureCookies includeSecureCookies, String& cookieString, bool& secureCookiesAccessed)
+void NetworkConnectionToWebProcess::cookiesForDOM(PAL::SessionID sessionID, const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, Optional<uint64_t> frameID, Optional<uint64_t> pageID, IncludeSecureCookies includeSecureCookies, CompletionHandler<void(String cookieString, bool secureCookiesAccessed)>&& completionHandler)
 {
     auto& networkStorageSession = storageSession(networkProcess(), sessionID);
-    std::tie(cookieString, secureCookiesAccessed) = networkStorageSession.cookiesForDOM(firstParty, sameSiteInfo, url, frameID, pageID, includeSecureCookies);
+    auto result = networkStorageSession.cookiesForDOM(firstParty, sameSiteInfo, url, frameID, pageID, includeSecureCookies);
 #if ENABLE(RESOURCE_LOAD_STATISTICS) && !RELEASE_LOG_DISABLED
     if (auto session = networkProcess().networkSession(sessionID)) {
         if (session->shouldLogCookieInformation())
             NetworkResourceLoader::logCookieInformation(*this, "NetworkConnectionToWebProcess::cookiesForDOM", reinterpret_cast<const void*>(this), networkStorageSession, firstParty, sameSiteInfo, url, emptyString(), frameID, pageID, WTF::nullopt);
     }
 #endif
+    completionHandler(WTFMove(result.first), result.second);
 }
 
 void NetworkConnectionToWebProcess::setCookiesFromDOM(PAL::SessionID sessionID, const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, Optional<uint64_t> frameID, Optional<uint64_t> pageID, const String& cookieString)
@@ -475,19 +537,22 @@ void NetworkConnectionToWebProcess::setCookiesFromDOM(PAL::SessionID sessionID, 
 #endif
 }
 
-void NetworkConnectionToWebProcess::cookiesEnabled(PAL::SessionID sessionID, bool& result)
+void NetworkConnectionToWebProcess::cookiesEnabled(PAL::SessionID sessionID, CompletionHandler<void(bool)>&& completionHandler)
 {
-    result = storageSession(networkProcess(), sessionID).cookiesEnabled();
+    completionHandler(storageSession(networkProcess(), sessionID).cookiesEnabled());
 }
 
-void NetworkConnectionToWebProcess::cookieRequestHeaderFieldValue(PAL::SessionID sessionID, const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, Optional<uint64_t> frameID, Optional<uint64_t> pageID, IncludeSecureCookies includeSecureCookies, String& cookieString, bool& secureCookiesAccessed)
+void NetworkConnectionToWebProcess::cookieRequestHeaderFieldValue(PAL::SessionID sessionID, const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, Optional<uint64_t> frameID, Optional<uint64_t> pageID, IncludeSecureCookies includeSecureCookies, CompletionHandler<void(String, bool)>&& completionHandler)
 {
-    std::tie(cookieString, secureCookiesAccessed) = storageSession(networkProcess(), sessionID).cookieRequestHeaderFieldValue(firstParty, sameSiteInfo, url, frameID, pageID, includeSecureCookies);
+    auto result = storageSession(networkProcess(), sessionID).cookieRequestHeaderFieldValue(firstParty, sameSiteInfo, url, frameID, pageID, includeSecureCookies);
+    completionHandler(WTFMove(result.first), result.second);
 }
 
-void NetworkConnectionToWebProcess::getRawCookies(PAL::SessionID sessionID, const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, Optional<uint64_t> frameID, Optional<uint64_t> pageID, Vector<Cookie>& result)
+void NetworkConnectionToWebProcess::getRawCookies(PAL::SessionID sessionID, const URL& firstParty, const SameSiteInfo& sameSiteInfo, const URL& url, Optional<uint64_t> frameID, Optional<uint64_t> pageID, CompletionHandler<void(Vector<WebCore::Cookie>&&)>&& completionHandler)
 {
+    Vector<WebCore::Cookie> result;
     storageSession(networkProcess(), sessionID).getRawCookies(firstParty, sameSiteInfo, url, frameID, pageID, result);
+    completionHandler(WTFMove(result));
 }
 
 void NetworkConnectionToWebProcess::deleteCookie(PAL::SessionID sessionID, const URL& url, const String& cookieName)
@@ -525,9 +590,9 @@ void NetworkConnectionToWebProcess::unregisterBlobURL(const URL& url)
     m_networkProcess->networkBlobRegistry().unregisterBlobURL(*this, url);
 }
 
-void NetworkConnectionToWebProcess::blobSize(const URL& url, uint64_t& resultSize)
+void NetworkConnectionToWebProcess::blobSize(const URL& url, CompletionHandler<void(uint64_t)>&& completionHandler)
 {
-    resultSize = m_networkProcess->networkBlobRegistry().blobSize(*this, url);
+    completionHandler(m_networkProcess->networkBlobRegistry().blobSize(*this, url));
 }
 
 void NetworkConnectionToWebProcess::writeBlobsToTemporaryFiles(const Vector<String>& blobURLs, CompletionHandler<void(Vector<String>&&)>&& completionHandler)
@@ -579,13 +644,13 @@ void NetworkConnectionToWebProcess::removeStorageAccessForFrame(PAL::SessionID s
         storageSession->removeStorageAccessForFrame(frameID, pageID);
 }
 
-void NetworkConnectionToWebProcess::removeStorageAccessForAllFramesOnPage(PAL::SessionID sessionID, uint64_t pageID)
+void NetworkConnectionToWebProcess::clearPageSpecificDataForResourceLoadStatistics(PAL::SessionID sessionID, uint64_t pageID)
 {
     if (auto* storageSession = networkProcess().storageSession(sessionID))
-        storageSession->removeStorageAccessForAllFramesOnPage(pageID);
+        storageSession->clearPageSpecificDataForResourceLoadStatistics(pageID);
 }
 
-void NetworkConnectionToWebProcess::logUserInteraction(PAL::SessionID sessionID, const String& topLevelOrigin)
+void NetworkConnectionToWebProcess::logUserInteraction(PAL::SessionID sessionID, const RegistrableDomain& domain)
 {
     ASSERT(sessionID.isValid());
     if (!sessionID.isValid())
@@ -593,53 +658,75 @@ void NetworkConnectionToWebProcess::logUserInteraction(PAL::SessionID sessionID,
 
     if (auto networkSession = networkProcess().networkSession(sessionID)) {
         if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
-            resourceLoadStatistics->logUserInteraction(topLevelOrigin, [] { });
+            resourceLoadStatistics->logUserInteraction(domain, [] { });
     }
 }
 
-void NetworkConnectionToWebProcess::logWebSocketLoading(PAL::SessionID sessionID, const String& targetPrimaryDomain, const String& mainFramePrimaryDomain, WallTime lastSeen)
+void NetworkConnectionToWebProcess::logWebSocketLoading(PAL::SessionID sessionID, const RegistrableDomain& targetDomain, const RegistrableDomain& topFrameDomain, WallTime lastSeen)
 {
     if (auto networkSession = networkProcess().networkSession(sessionID)) {
         if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
-            resourceLoadStatistics->logWebSocketLoading(targetPrimaryDomain, mainFramePrimaryDomain, lastSeen, [] { });
+            resourceLoadStatistics->logWebSocketLoading(targetDomain, topFrameDomain, lastSeen, [] { });
     }
 }
 
-void NetworkConnectionToWebProcess::logSubresourceLoading(PAL::SessionID sessionID, const String& targetPrimaryDomain, const String& mainFramePrimaryDomain, WallTime lastSeen)
+void NetworkConnectionToWebProcess::logSubresourceLoading(PAL::SessionID sessionID, const RegistrableDomain& targetDomain, const RegistrableDomain& topFrameDomain, WallTime lastSeen)
 {
     if (auto networkSession = networkProcess().networkSession(sessionID)) {
         if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
-            resourceLoadStatistics->logSubresourceLoading(targetPrimaryDomain, mainFramePrimaryDomain, lastSeen, [] { });
+            resourceLoadStatistics->logSubresourceLoading(targetDomain, topFrameDomain, lastSeen, [] { });
     }
 }
 
-void NetworkConnectionToWebProcess::logSubresourceRedirect(PAL::SessionID sessionID, const String& sourcePrimaryDomain, const String& targetPrimaryDomain)
+void NetworkConnectionToWebProcess::logSubresourceRedirect(PAL::SessionID sessionID, const RegistrableDomain& sourceDomain, const RegistrableDomain& targetDomain)
 {
     if (auto networkSession = networkProcess().networkSession(sessionID)) {
         if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
-            resourceLoadStatistics->logSubresourceRedirect(sourcePrimaryDomain, targetPrimaryDomain, [] { });
+            resourceLoadStatistics->logSubresourceRedirect(sourceDomain, targetDomain, [] { });
     }
 }
 
-void NetworkConnectionToWebProcess::requestResourceLoadStatisticsUpdate()
+void NetworkConnectionToWebProcess::resourceLoadStatisticsUpdated(Vector<WebCore::ResourceLoadStatistics>&& statistics)
 {
     for (auto& networkSession : networkProcess().networkSessions().values()) {
         if (networkSession->sessionID().isEphemeral())
             continue;
 
         if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
-            resourceLoadStatistics->requestUpdate();
+            resourceLoadStatistics->resourceLoadStatisticsUpdated(WTFMove(statistics));
     }
 }
 
-void NetworkConnectionToWebProcess::hasStorageAccess(PAL::SessionID sessionID, const String& subFrameHost, const String& topFrameHost, uint64_t frameID, uint64_t pageID, CompletionHandler<void(bool)>&& completionHandler)
+void NetworkConnectionToWebProcess::hasStorageAccess(PAL::SessionID sessionID, const RegistrableDomain& subFrameDomain, const RegistrableDomain& topFrameDomain, uint64_t frameID, uint64_t pageID, CompletionHandler<void(bool)>&& completionHandler)
 {
-    networkProcess().hasStorageAccess(sessionID, subFrameHost, topFrameHost, frameID, pageID, WTFMove(completionHandler));
+    if (auto networkSession = networkProcess().networkSession(sessionID)) {
+        if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics()) {
+            resourceLoadStatistics->hasStorageAccess(subFrameDomain, topFrameDomain, frameID, pageID, WTFMove(completionHandler));
+            return;
+        }
+    }
+
+    completionHandler(true);
 }
 
-void NetworkConnectionToWebProcess::requestStorageAccess(PAL::SessionID sessionID, const String& subFrameHost, const String& topFrameHost, uint64_t frameID, uint64_t pageID, bool promptEnabled, CompletionHandler<void(bool)>&& completionHandler)
+void NetworkConnectionToWebProcess::requestStorageAccess(PAL::SessionID sessionID, const RegistrableDomain& subFrameDomain, const RegistrableDomain& topFrameDomain, uint64_t frameID, uint64_t pageID, CompletionHandler<void(WebCore::StorageAccessWasGranted wasGranted, WebCore::StorageAccessPromptWasShown promptWasShown)>&& completionHandler)
 {
-    networkProcess().requestStorageAccessGranted(sessionID, subFrameHost, topFrameHost, frameID, pageID, promptEnabled, WTFMove(completionHandler));
+    if (auto networkSession = networkProcess().networkSession(sessionID)) {
+        if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics()) {
+            resourceLoadStatistics->requestStorageAccess(subFrameDomain, topFrameDomain, frameID, pageID, WTFMove(completionHandler));
+            return;
+        }
+    }
+
+    completionHandler(WebCore::StorageAccessWasGranted::Yes, WebCore::StorageAccessPromptWasShown::No);
+}
+
+void NetworkConnectionToWebProcess::requestStorageAccessUnderOpener(PAL::SessionID sessionID, WebCore::RegistrableDomain&& domainInNeedOfStorageAccess, uint64_t openerPageID, WebCore::RegistrableDomain&& openerDomain)
+{
+    if (auto networkSession = networkProcess().networkSession(sessionID)) {
+        if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
+            resourceLoadStatistics->requestStorageAccessUnderOpener(WTFMove(domainInNeedOfStorageAccess), openerPageID, WTFMove(openerDomain));
+    }
 }
 #endif
 
@@ -761,13 +848,14 @@ static uint64_t generateIDBConnectionToServerIdentifier()
     return ++identifier;
 }
 
-void NetworkConnectionToWebProcess::establishIDBConnectionToServer(PAL::SessionID sessionID, uint64_t& serverConnectionIdentifier)
+void NetworkConnectionToWebProcess::establishIDBConnectionToServer(PAL::SessionID sessionID, CompletionHandler<void(uint64_t)>&& completionHandler)
 {
-    serverConnectionIdentifier = generateIDBConnectionToServerIdentifier();
+    uint64_t serverConnectionIdentifier = generateIDBConnectionToServerIdentifier();
     LOG(IndexedDB, "NetworkConnectionToWebProcess::establishIDBConnectionToServer - %" PRIu64, serverConnectionIdentifier);
     ASSERT(!m_webIDBConnections.contains(serverConnectionIdentifier));
     
     m_webIDBConnections.set(serverConnectionIdentifier, WebIDBConnectionToClient::create(m_networkProcess, m_connection.get(), serverConnectionIdentifier, sessionID));
+    completionHandler(serverConnectionIdentifier);
 }
 #endif
     
@@ -781,18 +869,53 @@ void NetworkConnectionToWebProcess::unregisterSWConnections()
     }
 }
 
-void NetworkConnectionToWebProcess::establishSWServerConnection(PAL::SessionID sessionID, SWServerConnectionIdentifier& serverConnectionIdentifier)
+void NetworkConnectionToWebProcess::establishSWServerConnection(PAL::SessionID sessionID, CompletionHandler<void(WebCore::SWServerConnectionIdentifier&&)>&& completionHandler)
 {
     auto& server = m_networkProcess->swServerForSession(sessionID);
     auto connection = std::make_unique<WebSWServerConnection>(m_networkProcess, server, m_connection.get(), sessionID);
     
-    serverConnectionIdentifier = connection->identifier();
+    SWServerConnectionIdentifier serverConnectionIdentifier = connection->identifier();
     LOG(ServiceWorker, "NetworkConnectionToWebProcess::establishSWServerConnection - %s", serverConnectionIdentifier.loggingString().utf8().data());
 
     ASSERT(!m_swConnections.contains(serverConnectionIdentifier));
     m_swConnections.add(serverConnectionIdentifier, makeWeakPtr(*connection));
     server.addConnection(WTFMove(connection));
+    completionHandler(WTFMove(serverConnectionIdentifier));
 }
 #endif
+
+void NetworkConnectionToWebProcess::setWebProcessIdentifier(ProcessIdentifier webProcessIdentifier)
+{
+    m_webProcessIdentifier = webProcessIdentifier;
+}
+
+void NetworkConnectionToWebProcess::setConnectionHasUploads()
+{
+    ASSERT(!m_connectionHasUploads);
+    m_connectionHasUploads = true;
+    m_networkProcess->parentProcessConnection()->send(Messages::WebProcessPool::SetWebProcessHasUploads(m_webProcessIdentifier), 0);
+}
+
+void NetworkConnectionToWebProcess::clearConnectionHasUploads()
+{
+    ASSERT(m_connectionHasUploads);
+    m_connectionHasUploads = false;
+    m_networkProcess->parentProcessConnection()->send(Messages::WebProcessPool::ClearWebProcessHasUploads(m_webProcessIdentifier), 0);
+}
+
+void NetworkConnectionToWebProcess::webPageWasAdded(PAL::SessionID sessionID, uint64_t pageID, uint64_t oldPageID)
+{
+    m_networkProcess->webPageWasAdded(m_connection.get(), sessionID, pageID, oldPageID);
+}
+
+void NetworkConnectionToWebProcess::webPageWasRemoved(PAL::SessionID sessionID, uint64_t pageID)
+{
+    m_networkProcess->webPageWasRemoved(m_connection.get(), sessionID, pageID);
+}
+
+void NetworkConnectionToWebProcess::webProcessSessionChanged(PAL::SessionID newSessionID, const Vector<uint64_t>& pages)
+{
+    m_networkProcess->webProcessSessionChanged(m_connection.get(), newSessionID, pages);
+}
 
 } // namespace WebKit

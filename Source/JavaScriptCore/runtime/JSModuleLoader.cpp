@@ -116,8 +116,12 @@ void JSModuleLoader::finishCreation(ExecState* exec, VM& vm, JSGlobalObject* glo
 static String printableModuleKey(ExecState* exec, JSValue key)
 {
     VM& vm = exec->vm();
-    if (key.isString() || key.isSymbol())
-        return key.toPropertyKey(exec).impl();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    if (key.isString() || key.isSymbol()) {
+        auto propertyName = key.toPropertyKey(exec);
+        scope.assertNoException(); // This is OK since this function is just for debugging purpose.
+        return propertyName.impl();
+    }
     return vm.propertyNames->emptyIdentifier.impl();
 }
 
@@ -336,6 +340,11 @@ JSValue JSModuleLoader::evaluate(ExecState* exec, JSValue key, JSValue moduleRec
     if (globalObject->globalObjectMethodTable()->moduleLoaderEvaluate)
         return globalObject->globalObjectMethodTable()->moduleLoaderEvaluate(globalObject, exec, this, key, moduleRecordValue, scriptFetcher);
 
+    return evaluateNonVirtual(exec, key, moduleRecordValue, scriptFetcher);
+}
+
+JSValue JSModuleLoader::evaluateNonVirtual(ExecState* exec, JSValue, JSValue moduleRecordValue, JSValue)
+{
     if (auto* moduleRecord = jsDynamicCast<AbstractModuleRecord*>(exec->vm(), moduleRecordValue))
         return moduleRecord->evaluate(exec);
     return jsUndefined();

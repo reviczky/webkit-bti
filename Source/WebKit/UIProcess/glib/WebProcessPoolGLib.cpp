@@ -31,7 +31,11 @@
 #include "WebMemoryPressureHandler.h"
 #include "WebProcessCreationParameters.h"
 #include <JavaScriptCore/RemoteInspectorServer.h>
+
+#if USE(GSTREAMER)
 #include <WebCore/GStreamerCommon.h>
+#endif
+
 #include <wtf/FileSystem.h>
 #include <wtf/glib/GUniquePtr.h>
 
@@ -86,15 +90,22 @@ void WebProcessPool::platformInitialize()
 
     if (!memoryPressureMonitorDisabled())
         installMemoryPressureHandler();
+
+    // Process warming is incompatible with the fact our WebProcessProxy::platformGetLaunchOptions()
+    // requires a valid WebsiteDataStore at initialization time for our sandbox permissions.
+    // FIXME: With process warming disabled, the performance of
+    // process-swap-on-navigation is not going to be great. So this needs to be
+    // re-enabled when we enable PSON.
+    configuration().setIsAutomaticProcessWarmingEnabled(false);
 }
 
 void WebProcessPool::platformInitializeWebProcess(WebProcessCreationParameters& parameters)
 {
 #if PLATFORM(WPE)
-    parameters.hostClientFileDescriptor = wpe_renderer_host_create_client();
-#if defined(WPE_BACKEND_CHECK_VERSION) && WPE_BACKEND_CHECK_VERSION(0, 2, 0)
-    parameters.implementationLibraryName = FileSystem::fileSystemRepresentation(wpe_loader_get_loaded_implementation_library_name());
-#endif
+    if (!parameters.isServiceWorkerProcess) {
+        parameters.hostClientFileDescriptor = wpe_renderer_host_create_client();
+        parameters.implementationLibraryName = FileSystem::fileSystemRepresentation(wpe_loader_get_loaded_implementation_library_name());
+    }
 #endif
 
     parameters.memoryCacheDisabled = m_memoryCacheDisabled || cacheModel() == CacheModel::DocumentViewer;

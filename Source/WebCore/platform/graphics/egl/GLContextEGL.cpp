@@ -38,7 +38,6 @@
 #if USE(LIBEPOXY)
 #include <epoxy/gl.h>
 #elif USE(OPENGL_ES)
-#define GL_GLEXT_PROTOTYPES 1
 #include <GLES2/gl2.h>
 #include <GLES2/gl2ext.h>
 #else
@@ -233,10 +232,8 @@ std::unique_ptr<GLContextEGL> GLContextEGL::createSurfacelessContext(PlatformDis
     }
 
     const char* extensions = eglQueryString(display, EGL_EXTENSIONS);
-    if (!GLContext::isExtensionSupported(extensions, "EGL_KHR_surfaceless_context") && !GLContext::isExtensionSupported(extensions, "EGL_KHR_surfaceless_opengl")) {
-        WTFLogAlways("Cannot create EGL surfaceless context: missing EGL_KHR_surfaceless_{context,opengl} extension.\n");
+    if (!GLContext::isExtensionSupported(extensions, "EGL_KHR_surfaceless_context") && !GLContext::isExtensionSupported(extensions, "EGL_KHR_surfaceless_opengl"))
         return nullptr;
-    }
 
     EGLConfig config;
     if (!getEGLConfig(display, &config, Surfaceless)) {

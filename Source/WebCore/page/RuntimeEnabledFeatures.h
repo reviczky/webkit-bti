@@ -148,6 +148,12 @@ public:
     void setItpDebugModeEnabled(bool isEnabled) { m_itpDebugMode = isEnabled; }
     bool itpDebugModeEnabled() const { return m_itpDebugMode; }
 
+    void setIsITPDatabaseEnabled(bool isEnabled) { m_isITPDatabaseEnabled = isEnabled; }
+    bool isITPDatabaseEnabled() const { return m_isITPDatabaseEnabled; }
+    
+    void setIsITPFirstPartyWebsiteDataRemovalEnabled(bool isEnabled) { m_isITPFirstPartyWebsiteDataRemovalEnabled = isEnabled; }
+    bool isITPFirstPartyWebsiteDataRemovalEnabled() const { return m_isITPFirstPartyWebsiteDataRemovalEnabled; }
+
     void setRestrictedHTTPResponseAccess(bool isEnabled) { m_isRestrictedHTTPResponseAccess = isEnabled; }
     bool restrictedHTTPResponseAccess() const { return m_isRestrictedHTTPResponseAccess; }
 
@@ -156,9 +162,6 @@ public:
 
     void setWebGLCompressedTextureASTCSupportEnabled(bool isEnabled) { m_isWebGLCompressedTextureASTCSupportEnabled = isEnabled; }
     bool webGLCompressedTextureASTCSupportEnabled() const { return m_isWebGLCompressedTextureASTCSupportEnabled; }
-
-    void setStorageAccessPromptsEnabled(bool isEnabled)  { m_promptForStorageAccessAPIEnabled = isEnabled; }
-    bool storageAccessPromptsEnabled() const { return m_promptForStorageAccessAPIEnabled; }
 
     void setServerTimingEnabled(bool isEnabled) { m_isServerTimingEnabled = isEnabled; }
     bool serverTimingEnabled() const { return m_isServerTimingEnabled; }
@@ -293,11 +296,6 @@ public:
     bool webGPUEnabled() const { return m_isWebGPUEnabled; }
 #endif
 
-#if ENABLE(WEBMETAL)
-    void setWebMetalEnabled(bool isEnabled) { m_isWebMetalEnabled = isEnabled; }
-    bool webMetalEnabled() const { return m_isWebMetalEnabled; }
-#endif
-
 #if ENABLE(STREAMS_API)
     void setReadableByteStreamAPIEnabled(bool isEnabled) { m_isReadableByteStreamAPIEnabled = isEnabled; }
     bool readableByteStreamAPIEnabled() const { return m_isReadableByteStreamAPIEnabled; }
@@ -343,6 +341,21 @@ public:
 
     bool adClickAttributionEnabled() const { return m_adClickAttributionEnabled; }
     void setAdClickAttributionEnabled(bool isEnabled) { m_adClickAttributionEnabled = isEnabled; }
+    bool adClickAttributionDebugModeEnabled() const { return m_adClickAttributionDebugModeEnabled; }
+    void setAdClickAttributionDebugModeEnabled(bool isEnabled) { m_adClickAttributionDebugModeEnabled = isEnabled; }
+
+#if ENABLE(TOUCH_EVENTS)
+    bool mouseEventsSimulationEnabled() const { return m_mouseEventsSimulationEnabled; }
+    void setMouseEventsSimulationEnabled(bool isEnabled) { m_mouseEventsSimulationEnabled = isEnabled; }
+    bool touchEventsEnabled() const;
+    void setTouchEventsEnabled(bool isEnabled) { m_touchEventsEnabled = isEnabled; }
+#endif
+    
+    bool referrerPolicyAttributeEnabled() const { return m_referrerPolicyAttributeEnabled; }
+    void setReferrerPolicyAttributeEnabled(bool isEnabled) { m_referrerPolicyAttributeEnabled = isEnabled; }
+
+    bool pageAtRuleSupportEnabled() const { return m_pageAtRuleSupportEnabled; }
+    void setPageAtRuleSupportEnabled(bool isEnabled) { m_pageAtRuleSupportEnabled = isEnabled; }
 
     WEBCORE_EXPORT static RuntimeEnabledFeatures& sharedFeatures();
 
@@ -385,15 +398,15 @@ private:
     bool m_isRestrictedHTTPResponseAccess { true };
     bool m_crossOriginResourcePolicyEnabled { true };
     bool m_isWebGLCompressedTextureASTCSupportEnabled { false };
-    bool m_promptForStorageAccessAPIEnabled { false };
     bool m_isServerTimingEnabled { false };
     bool m_experimentalPlugInSandboxProfilesEnabled { false };
     bool m_disabledAdaptationsMetaTagEnabled { false };
     bool m_attrStyleEnabled { false };
     bool m_webAPIStatisticsEnabled { false };
     bool m_CSSCustomPropertiesAndValuesEnabled { false };
-    bool m_pointerEventsEnabled { false };
+    bool m_pointerEventsEnabled { true };
     bool m_webSQLEnabled { true };
+    bool m_pageAtRuleSupportEnabled { false };
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
     bool m_layoutFormattingContextEnabled { false };
@@ -487,10 +500,6 @@ private:
     bool m_isWebGPUEnabled { false };
 #endif
 
-#if ENABLE(WEBMETAL)
-    bool m_isWebMetalEnabled { false };
-#endif
-
 #if ENABLE(DOWNLOAD_ATTRIBUTE)
     bool m_isDownloadAttributeEnabled { false };
 #endif
@@ -500,7 +509,7 @@ private:
 #endif
 
 #if ENABLE(LEGACY_ENCRYPTED_MEDIA)
-    bool m_legacyEncryptedMediaAPIEnabled { false };
+    bool m_legacyEncryptedMediaAPIEnabled { true };
 #endif
 
 #if ENABLE(INTERSECTION_OBSERVER)
@@ -520,6 +529,17 @@ private:
     bool m_CSSLogicalEnabled { false };
 
     bool m_adClickAttributionEnabled { false };
+    bool m_adClickAttributionDebugModeEnabled { false };
+
+#if ENABLE(TOUCH_EVENTS)
+    bool m_mouseEventsSimulationEnabled { false };
+    Optional<bool> m_touchEventsEnabled;
+#endif
+
+    bool m_isITPDatabaseEnabled { false };
+    bool m_isITPFirstPartyWebsiteDataRemovalEnabled { false };
+
+    bool m_referrerPolicyAttributeEnabled { false };
 
     friend class WTF::NeverDestroyed<RuntimeEnabledFeatures>;
 };

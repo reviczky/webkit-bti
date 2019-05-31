@@ -91,7 +91,6 @@ void FocusedElementInformation::encode(IPC::Encoder& encoder) const
     encoder << title;
     encoder << acceptsAutofilledLoginCredentials;
     encoder << isAutofillableUsernameField;
-    encoder << elementIsTransparentOrFullyClipped;
     encoder << representingPageURL;
     encoder.encodeEnum(autofillFieldName);
     encoder << placeholder;
@@ -105,6 +104,7 @@ void FocusedElementInformation::encode(IPC::Encoder& encoder) const
     encoder << suggestedColors;
 #endif
 #endif
+    encoder << shouldSynthesizeKeyEventsForUndoAndRedo;
 }
 
 bool FocusedElementInformation::decode(IPC::Decoder& decoder, FocusedElementInformation& result)
@@ -193,9 +193,6 @@ bool FocusedElementInformation::decode(IPC::Decoder& decoder, FocusedElementInfo
     if (!decoder.decode(result.isAutofillableUsernameField))
         return false;
 
-    if (!decoder.decode(result.elementIsTransparentOrFullyClipped))
-        return false;
-
     if (!decoder.decode(result.representingPageURL))
         return false;
 
@@ -226,6 +223,8 @@ bool FocusedElementInformation::decode(IPC::Decoder& decoder, FocusedElementInfo
         return false;
 #endif
 #endif
+    if (!decoder.decode(result.shouldSynthesizeKeyEventsForUndoAndRedo))
+        return false;
 
     return true;
 }

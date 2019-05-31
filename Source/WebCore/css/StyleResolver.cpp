@@ -76,6 +76,7 @@
 #include "PageRuleCollector.h"
 #include "PaintWorkletGlobalScope.h"
 #include "Pair.h"
+#include "Quirks.h"
 #include "RenderScrollbar.h"
 #include "RenderStyleConstants.h"
 #include "RenderTheme.h"
@@ -695,6 +696,7 @@ static DisplayType equivalentBlockDisplay(const RenderStyle& style, const Docume
     case DisplayType::Flex:
     case DisplayType::WebKitFlex:
     case DisplayType::Grid:
+    case DisplayType::FlowRoot:
         return display;
 
     case DisplayType::ListItem:
@@ -745,7 +747,7 @@ static bool doesNotInheritTextDecoration(const RenderStyle& style, const Element
         || style.isFloating() || style.hasOutOfFlowPosition();
 }
 
-#if ENABLE(ACCELERATED_OVERFLOW_SCROLLING)
+#if ENABLE(OVERFLOW_SCROLLING_TOUCH) || ENABLE(POINTER_EVENTS)
 static bool isScrollableOverflow(Overflow overflow)
 {
     return overflow == Overflow::Scroll || overflow == Overflow::Auto;
@@ -841,6 +843,36 @@ void StyleResolver::adjustSVGElementStyle(const SVGElement& svgElement, RenderSt
     if ((svgElement.hasTagName(SVGNames::foreignObjectTag) || svgElement.hasTagName(SVGNames::textTag)) && style.isDisplayInlineType())
         style.setDisplay(DisplayType::Block);
 }
+
+#if ENABLE(POINTER_EVENTS)
+static OptionSet<TouchAction> computeEffectiveTouchActions(const RenderStyle& style, OptionSet<TouchAction> effectiveTouchActions)
+{
+    // https://w3c.github.io/pointerevents/#determining-supported-touch-behavior
+    // "A touch behavior is supported if it conforms to the touch-action property of each element between
+    // the hit tested element and its nearest ancestor with the default touch behavior (including both the
+    // hit tested element and the element with the default touch behavior)."
+
+    bool hasDefaultTouchBehavior = isScrollableOverflow(style.overflowX()) || isScrollableOverflow(style.overflowY());
+    if (hasDefaultTouchBehavior)
+        effectiveTouchActions = RenderStyle::initialTouchActions();
+
+    auto touchActions = style.touchActions();
+    if (touchActions == RenderStyle::initialTouchActions())
+        return effectiveTouchActions;
+
+    if (effectiveTouchActions.contains(TouchAction::None))
+        return { TouchAction::None };
+
+    if (effectiveTouchActions.contains(TouchAction::Auto) || effectiveTouchActions.contains(TouchAction::Manipulation))
+        return touchActions;
+
+    auto sharedTouchActions = effectiveTouchActions & touchActions;
+    if (sharedTouchActions.isEmpty())
+        return { TouchAction::None };
+
+    return sharedTouchActions;
+}
+#endif
 
 void StyleResolver::adjustRenderStyle(RenderStyle& style, const RenderStyle& parentStyle, const RenderStyle* parentBoxStyle, const Element* element)
 {
@@ -1037,7 +1069,7 @@ void StyleResolver::adjustRenderStyle(RenderStyle& style, const RenderStyle& par
         style.setOverflowY(Overflow::Visible);
     }
 
-#if ENABLE(ACCELERATED_OVERFLOW_SCROLLING)
+#if ENABLE(OVERFLOW_SCROLLING_TOUCH)
     // Touch overflow scrolling creates a stacking context.
     if (style.hasAutoZIndex() && style.useTouchOverflowScrolling() && (isScrollableOverflow(style.overflowX()) || isScrollableOverflow(style.overflowY())))
         style.setZIndex(0);
@@ -1087,6 +1119,29 @@ void StyleResolver::adjustRenderStyle(RenderStyle& style, const RenderStyle& par
     // 'center'), 'legacy' computes to the the inherited value. Otherwise, 'auto' computes to 'normal'.
     if (parentBoxStyle->justifyItems().positionType() == ItemPositionType::Legacy && style.justifyItems().position() == ItemPosition::Legacy)
         style.setJustifyItems(parentBoxStyle->justifyItems());
+
+#if ENABLE(POINTER_EVENTS)
+    style.setEffectiveTouchActions(computeEffectiveTouchActions(style, parentStyle.effectiveTouchActions()));
+#endif
+
+    if (element)
+        adjustRenderStyleForSiteSpecificQuirks(style, *element);
+}
+
+void StyleResolver::adjustRenderStyleForSiteSpecificQuirks(RenderStyle& style, const Element& element)
+{
+    if (document().quirks().needsGMailOverflowScrollQuirk()) {
+        // This turns sidebar scrollable without mouse move event.
+        static NeverDestroyed<AtomicString> roleValue("navigation", AtomicString::ConstructFromLiteral);
+        if (style.overflowY() == Overflow::Hidden && element.attributeWithoutSynchronization(roleAttr) == roleValue)
+            style.setOverflowY(Overflow::Auto);
+    }
+    if (document().quirks().needsYouTubeOverflowScrollQuirk()) {
+        // This turns sidebar scrollable without hover.
+        static NeverDestroyed<AtomicString> idValue("guide-inner-content", AtomicString::ConstructFromLiteral);
+        if (style.overflowY() == Overflow::Hidden && element.idForStyleResolution() == idValue)
+            style.setOverflowY(Overflow::Auto);
+    }
 }
 
 static void checkForOrientationChange(RenderStyle* style)
@@ -1384,7 +1439,7 @@ void StyleResolver::applyMatchedProperties(const MatchResult& matchResult, const
 
 #if ENABLE(DARK_MODE_CSS)
         // Supported color schemes can affect resolved colors, so we need to apply that property before any color properties.
-        applyCascadedProperties(CSSPropertySupportedColorSchemes, CSSPropertySupportedColorSchemes, applyState);
+        applyCascadedProperties(CSSPropertyColorScheme, CSSPropertyColorScheme, applyState);
 #endif
 
         applyCascadedProperties(firstCSSProperty, lastHighPriorityProperty, applyState);
@@ -1413,7 +1468,7 @@ void StyleResolver::applyMatchedProperties(const MatchResult& matchResult, const
 
 #if ENABLE(DARK_MODE_CSS)
     // Supported color schemes can affect resolved colors, so we need to apply that property before any color properties.
-    applyCascadedProperties(CSSPropertySupportedColorSchemes, CSSPropertySupportedColorSchemes, applyState);
+    applyCascadedProperties(CSSPropertyColorScheme, CSSPropertyColorScheme, applyState);
 #endif
 
     applyCascadedProperties(firstCSSProperty, lastHighPriorityProperty, applyState);

@@ -416,7 +416,7 @@ bool MediaPlayerPrivateGStreamerBase::ensureGstGLContext()
     auto& sharedDisplay = PlatformDisplay::sharedDisplayForCompositing();
 
     // The floating ref removal support was added in https://bugzilla.gnome.org/show_bug.cgi?id=743062.
-    bool shouldAdoptRef = webkitGstCheckVersion(1, 13, 1);
+    bool shouldAdoptRef = webkitGstCheckVersion(1, 14, 0);
     if (!m_glDisplay) {
 #if PLATFORM(X11)
 #if USE(GLX)
@@ -1000,11 +1000,13 @@ void MediaPlayerPrivateGStreamerBase::updateTextureMapperFlags()
         break;
     }
 
+#if USE(GSTREAMER_GL)
     // When the imxvpudecoder is used, the texture sampling of the
     // directviv-uploaded texture returns an RGB value, so there's no need to
     // convert it.
     if (m_videoDecoderPlatform != WebKitGstVideoDecoderPlatform::ImxVPU)
         m_textureMapperFlags |= TEXTURE_MAPPER_COLOR_CONVERT_FLAG;
+#endif
 }
 #endif
 

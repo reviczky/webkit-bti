@@ -91,7 +91,7 @@ bool checkModuleSyntax(ExecState* exec, const SourceCode& source, ParserError& e
     return true;
 }
 
-CachedBytecode generateBytecode(VM& vm, const SourceCode& source, ParserError& error)
+Ref<CachedBytecode> generateProgramBytecode(VM& vm, const SourceCode& source, ParserError& error)
 {
     JSLockHolder lock(vm);
     RELEASE_ASSERT(vm.atomicStringTable() == Thread::current().atomicStringTable());
@@ -99,14 +99,15 @@ CachedBytecode generateBytecode(VM& vm, const SourceCode& source, ParserError& e
     VariableEnvironment variablesUnderTDZ;
     JSParserStrictMode strictMode = JSParserStrictMode::NotStrict;
     JSParserScriptMode scriptMode = JSParserScriptMode::Classic;
-    DebuggerMode debuggerMode = DebuggerOff;
     EvalContextType evalContextType = EvalContextType::None;
 
-    UnlinkedCodeBlock* unlinkedCodeBlock = recursivelyGenerateUnlinkedCodeBlock<UnlinkedProgramCodeBlock>(vm, source, strictMode, scriptMode, debuggerMode, error, evalContextType, &variablesUnderTDZ);
-    return serializeBytecode(vm, unlinkedCodeBlock, source, SourceCodeType::ProgramType, strictMode, scriptMode, debuggerMode);
+    UnlinkedCodeBlock* unlinkedCodeBlock = recursivelyGenerateUnlinkedCodeBlock<UnlinkedProgramCodeBlock>(vm, source, strictMode, scriptMode, { }, error, evalContextType, &variablesUnderTDZ);
+    if (!unlinkedCodeBlock)
+        return CachedBytecode::create();
+    return serializeBytecode(vm, unlinkedCodeBlock, source, SourceCodeType::ProgramType, strictMode, scriptMode, { });
 }
 
-CachedBytecode generateModuleBytecode(VM& vm, const SourceCode& source, ParserError& error)
+Ref<CachedBytecode> generateModuleBytecode(VM& vm, const SourceCode& source, ParserError& error)
 {
     JSLockHolder lock(vm);
     RELEASE_ASSERT(vm.atomicStringTable() == Thread::current().atomicStringTable());
@@ -114,11 +115,12 @@ CachedBytecode generateModuleBytecode(VM& vm, const SourceCode& source, ParserEr
     VariableEnvironment variablesUnderTDZ;
     JSParserStrictMode strictMode = JSParserStrictMode::Strict;
     JSParserScriptMode scriptMode = JSParserScriptMode::Module;
-    DebuggerMode debuggerMode = DebuggerOff;
     EvalContextType evalContextType = EvalContextType::None;
 
-    UnlinkedCodeBlock* unlinkedCodeBlock = recursivelyGenerateUnlinkedCodeBlock<UnlinkedModuleProgramCodeBlock>(vm, source, strictMode, scriptMode, debuggerMode, error, evalContextType, &variablesUnderTDZ);
-    return serializeBytecode(vm, unlinkedCodeBlock, source, SourceCodeType::ModuleType, strictMode, scriptMode, debuggerMode);
+    UnlinkedCodeBlock* unlinkedCodeBlock = recursivelyGenerateUnlinkedCodeBlock<UnlinkedModuleProgramCodeBlock>(vm, source, strictMode, scriptMode, { }, error, evalContextType, &variablesUnderTDZ);
+    if (!unlinkedCodeBlock)
+        return CachedBytecode::create();
+    return serializeBytecode(vm, unlinkedCodeBlock, source, SourceCodeType::ModuleType, strictMode, scriptMode, { });
 }
 
 JSValue evaluate(ExecState* exec, const SourceCode& source, JSValue thisValue, NakedPtr<Exception>& returnedException)

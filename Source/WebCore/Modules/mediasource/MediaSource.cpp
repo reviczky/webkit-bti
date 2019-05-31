@@ -48,8 +48,11 @@
 #include "TextTrackList.h"
 #include "TimeRanges.h"
 #include "VideoTrackList.h"
+#include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(MediaSource);
 
 String convertEnumerationToString(MediaSourcePrivate::AddStatus enumerationValue)
 {
@@ -713,7 +716,7 @@ ExceptionOr<Ref<SourceBuffer>> MediaSource::addSourceBuffer(const String& type)
     regenerateActiveSourceBuffers();
 
     // 9. Return the new object to the caller.
-    return WTFMove(buffer);
+    return buffer;
 }
 
 ExceptionOr<void> MediaSource::removeSourceBuffer(SourceBuffer& buffer)

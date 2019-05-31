@@ -65,8 +65,6 @@ public:
     void cancelFetch(WebCore::FetchIdentifier, WebCore::ServiceWorkerRegistrationIdentifier);
     void continueDidReceiveFetchResponse(WebCore::FetchIdentifier, WebCore::ServiceWorkerRegistrationIdentifier);
 
-    void postMessageToServiceWorkerClient(WebCore::DocumentIdentifier destinationContextIdentifier, WebCore::MessageWithMessagePorts&&, WebCore::ServiceWorkerData&& source, const String& sourceOrigin);
-
     void connectionToServerLost();
 
     void syncTerminateWorker(WebCore::ServiceWorkerIdentifier) final;
@@ -89,6 +87,8 @@ private:
     void getRegistrations(WebCore::SecurityOriginData&& topOrigin, const URL& clientURL, GetRegistrationsCallback&&) final;
 
     void didResolveRegistrationPromise(const WebCore::ServiceWorkerRegistrationKey&) final;
+    void updateThrottleState() final;
+    bool isThrottleable() const final { return m_isThrottleable; }
 
     void scheduleStorageJob(const WebCore::ServiceWorkerJobData&);
 
@@ -111,7 +111,7 @@ private:
     HashMap<uint64_t, GetRegistrationsCallback> m_ongoingGetRegistrationsTasks;
     HashMap<uint64_t, WhenRegistrationReadyCallback> m_ongoingRegistrationReadyTasks;
     Deque<WTF::Function<void()>> m_tasksPendingOriginImport;
-
+    bool m_isThrottleable { true };
 }; // class WebSWServerConnection
 
 } // namespace WebKit

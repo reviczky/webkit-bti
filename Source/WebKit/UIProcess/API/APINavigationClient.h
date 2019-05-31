@@ -41,6 +41,7 @@
 #include <wtf/Forward.h>
 
 namespace WebCore {
+struct ContentRuleListResults;
 class ResourceError;
 class ResourceRequest;
 class ResourceResponse;
@@ -90,6 +91,7 @@ public:
     virtual void renderingProgressDidChange(WebKit::WebPageProxy&, OptionSet<WebCore::LayoutMilestone>) { }
 
     virtual void didReceiveAuthenticationChallenge(WebKit::WebPageProxy&, WebKit::AuthenticationChallengeProxy& challenge) { challenge.listener().completeChallenge(WebKit::AuthenticationChallengeDisposition::PerformDefaultHandling); }
+    virtual bool shouldBypassCompatibilityModeSafeguards() const { return false; }
 
     // FIXME: These function should not be part of this client.
     virtual bool processDidTerminate(WebKit::WebPageProxy&, WebKit::ProcessTerminationReason) { return false; }
@@ -115,7 +117,7 @@ public:
         listener->use();
     }
     
-    virtual void contentRuleListNotification(WebKit::WebPageProxy&, WTF::URL&&, Vector<WTF::String>&&, Vector<WTF::String>&&) { };
+    virtual void contentRuleListNotification(WebKit::WebPageProxy&, WTF::URL&&, WebCore::ContentRuleListResults&&) { };
     
 #if ENABLE(NETSCAPE_PLUGIN_API)
     virtual bool didFailToInitializePlugIn(WebKit::WebPageProxy&, API::Dictionary&) { return false; }

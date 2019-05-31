@@ -53,7 +53,7 @@ inline void emitPointerValidation(CCallHelpers& jit, GPRReg pointerGPR, TagType 
     jit.abortWithReason(TGInvalidPointer);
     isNonZero.link(&jit);
     jit.pushToSave(pointerGPR);
-    jit.untagPtr(pointerGPR, tag);
+    jit.untagPtr(tag, pointerGPR);
     jit.load8(pointerGPR, pointerGPR);
     jit.popToRestore(pointerGPR);
 }
@@ -456,13 +456,13 @@ MacroAssemblerCodeRef<JITThunkPtrTag> arityFixupGenerator(VM* vm)
     jit.pop(JSInterfaceJIT::regT4);
 #  endif
     jit.tagReturnAddress();
-#if CPU(ARM64) && USE(POINTER_PROFILING)
+#if CPU(ARM64E)
     jit.loadPtr(JSInterfaceJIT::Address(GPRInfo::callFrameRegister, CallFrame::returnPCOffset()), GPRInfo::regT3);
     jit.addPtr(JSInterfaceJIT::TrustedImm32(sizeof(CallerFrameAndPC)), GPRInfo::callFrameRegister, extraTemp);
-    jit.untagPtr(GPRInfo::regT3, extraTemp);
+    jit.untagPtr(extraTemp, GPRInfo::regT3);
     PtrTag tempReturnPCTag = static_cast<PtrTag>(random());
     jit.move(JSInterfaceJIT::TrustedImmPtr(tempReturnPCTag), extraTemp);
-    jit.tagPtr(GPRInfo::regT3, extraTemp);
+    jit.tagPtr(extraTemp, GPRInfo::regT3);
     jit.storePtr(GPRInfo::regT3, JSInterfaceJIT::Address(GPRInfo::callFrameRegister, CallFrame::returnPCOffset()));
 #endif
     jit.move(JSInterfaceJIT::callFrameRegister, JSInterfaceJIT::regT3);
@@ -512,12 +512,12 @@ MacroAssemblerCodeRef<JITThunkPtrTag> arityFixupGenerator(VM* vm)
     
     done.link(&jit);
 
-#if CPU(ARM64) && USE(POINTER_PROFILING)
+#if CPU(ARM64E)
     jit.loadPtr(JSInterfaceJIT::Address(GPRInfo::callFrameRegister, CallFrame::returnPCOffset()), GPRInfo::regT3);
     jit.move(JSInterfaceJIT::TrustedImmPtr(tempReturnPCTag), extraTemp);
-    jit.untagPtr(GPRInfo::regT3, extraTemp);
+    jit.untagPtr(extraTemp, GPRInfo::regT3);
     jit.addPtr(JSInterfaceJIT::TrustedImm32(sizeof(CallerFrameAndPC)), GPRInfo::callFrameRegister, extraTemp);
-    jit.tagPtr(GPRInfo::regT3, extraTemp);
+    jit.tagPtr(extraTemp, GPRInfo::regT3);
     jit.storePtr(GPRInfo::regT3, JSInterfaceJIT::Address(GPRInfo::callFrameRegister, CallFrame::returnPCOffset()));
 #endif
 

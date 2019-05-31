@@ -42,6 +42,7 @@
 #include <WebCore/Pagination.h>
 #include <WebCore/ScrollTypes.h>
 #include <WebCore/UserInterfaceLayoutDirection.h>
+#include <WebCore/ViewportArguments.h>
 #include <pal/SessionID.h>
 #include <wtf/HashMap.h>
 #include <wtf/text/WTFString.h>
@@ -71,6 +72,7 @@ struct WebPageCreationParameters {
     
     WebPreferencesStore store;
     DrawingAreaType drawingAreaType;
+    DrawingAreaIdentifier drawingAreaIdentifier;
     WebPageGroupData pageGroupData;
 
     bool isEditable;
@@ -134,6 +136,7 @@ struct WebPageCreationParameters {
     bool isProcessSwap { false };
 
     bool useDarkAppearance { false };
+    bool useInactiveAppearance { false };
 
 #if PLATFORM(MAC)
     ColorSpaceData colorSpace;
@@ -147,9 +150,13 @@ struct WebPageCreationParameters {
     bool ignoresViewportScaleLimits;
     WebCore::FloatSize viewportConfigurationViewLayoutSize;
     double viewportConfigurationLayoutSizeScaleFactor;
+    double viewportConfigurationMinimumEffectiveDeviceWidth;
     WebCore::FloatSize viewportConfigurationViewSize;
     WebCore::FloatSize maximumUnobscuredSize;
     int32_t deviceOrientation { 0 };
+    bool keyboardIsAttached { false };
+    bool canShowWhileLocked { false };
+    Optional<WebCore::ViewportArguments> overrideViewportArguments;
 #endif
 #if PLATFORM(COCOA)
     bool smartInsertDeleteEnabled;
@@ -194,6 +201,8 @@ struct WebPageCreationParameters {
 #endif
 
     Optional<WebCore::Color> backgroundColor;
+
+    Optional<uint64_t> oldPageID;
 };
 
 } // namespace WebKit

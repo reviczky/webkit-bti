@@ -1479,10 +1479,13 @@ bool SimplifiedBackwardsTextIterator::handleNonTextNode()
     // We can use a linefeed in place of a tab because this simple iterator is only used to
     // find boundaries, not actual content. A linefeed breaks words, sentences, and paragraphs.
     if (shouldEmitNewlineForNode(m_node, m_behavior & TextIteratorEmitsOriginalText) || shouldEmitNewlineAfterNode(*m_node) || shouldEmitTabBeforeNode(*m_node)) {
-        unsigned index = m_node->computeNodeIndex();
-        // The start of this emitted range is wrong. Ensuring correctness would require
-        // VisiblePositions and so would be slow. previousBoundary expects this.
-        emitCharacter('\n', *m_node->parentNode(), index + 1, index + 1);
+        if (m_lastCharacter != '\n') {
+            // Corresponds to the same check in TextIterator::exitNode.
+            unsigned index = m_node->computeNodeIndex();
+            // The start of this emitted range is wrong. Ensuring correctness would require
+            // VisiblePositions and so would be slow. previousBoundary expects this.
+            emitCharacter('\n', *m_node->parentNode(), index + 1, index + 1);
+        }
     }
     return true;
 }
@@ -1528,9 +1531,13 @@ Ref<Range> SimplifiedBackwardsTextIterator::range() const
 
 CharacterIterator::CharacterIterator(const Range& range, TextIteratorBehavior behavior)
     : m_underlyingIterator(&range, behavior)
-    , m_offset(0)
-    , m_runOffset(0)
-    , m_atBreak(true)
+{
+    while (!atEnd() && !m_underlyingIterator.text().length())
+        m_underlyingIterator.advance();
+}
+
+CharacterIterator::CharacterIterator(Position start, Position end, TextIteratorBehavior behavior)
+    : m_underlyingIterator(start, end, behavior)
 {
     while (!atEnd() && !m_underlyingIterator.text().length())
         m_underlyingIterator.advance();
@@ -2550,7 +2557,7 @@ RefPtr<Range> TextIterator::rangeFromLocationAndLength(ContainerNode* scope, int
     if (!rangeLocation && !rangeLength && it.atEnd()) {
         resultRange->setStart(textRunRange->startContainer(), 0);
         resultRange->setEnd(textRunRange->startContainer(), 0);
-        return WTFMove(resultRange);
+        return resultRange;
     }
 
     for (; !it.atEnd(); it.advance()) {
@@ -2613,7 +2620,7 @@ RefPtr<Range> TextIterator::rangeFromLocationAndLength(ContainerNode* scope, int
     if (rangeLength && rangeEnd > docTextPosition) // rangeEnd is out of bounds
         resultRange->setEnd(textRunRange->endContainer(), textRunRange->endOffset());
     
-    return WTFMove(resultRange);
+    return resultRange;
 }
 
 bool TextIterator::getLocationAndLengthFromRange(Node* scope, const Range* range, size_t& location, size_t& length)
@@ -2684,11 +2691,24 @@ String plainText(Position start, Position end, TextIteratorBehavior defaultBehav
     return result;
 }
 
+String plainTextReplacingNoBreakSpace(Position start, Position end, TextIteratorBehavior defaultBehavior, bool isDisplayString)
+{
+    return plainText(start, end, defaultBehavior, isDisplayString).replace(noBreakSpace, ' ');
+}
+
 String plainText(const Range* range, TextIteratorBehavior defaultBehavior, bool isDisplayString)
 {
     if (!range)
         return emptyString();
     return plainText(range->startPosition(), range->endPosition(), defaultBehavior, isDisplayString);
+}
+
+String plainTextUsingBackwardsTextIteratorForTesting(const Range& range)
+{
+    String result;
+    for (SimplifiedBackwardsTextIterator backwardsIterator(range); !backwardsIterator.atEnd(); backwardsIterator.advance())
+        result.insert(backwardsIterator.text().toString(), 0);
+    return result;
 }
 
 String plainTextReplacingNoBreakSpace(const Range* range, TextIteratorBehavior defaultBehavior, bool isDisplayString)

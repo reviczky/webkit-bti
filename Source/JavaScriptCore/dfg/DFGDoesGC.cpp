@@ -78,7 +78,8 @@ bool doesGC(Graph& graph, Node* node)
     case Phi:
     case Flush:
     case PhantomLocal:
-    case SetArgument:
+    case SetArgumentDefinitely:
+    case SetArgumentMaybe:
     case ArithBitNot:
     case ArithBitAnd:
     case ArithBitOr:
@@ -378,6 +379,8 @@ bool doesGC(Graph& graph, Node* node)
     case ValueSub:
     case ValueMul:
     case ValueDiv:
+    case ValueMod:
+    case ValueBitNot:
     case ValueNegate:
 #else
     // See comment at the top for why be default for all nodes should be to

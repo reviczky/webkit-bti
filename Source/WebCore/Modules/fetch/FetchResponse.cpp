@@ -131,7 +131,7 @@ ExceptionOr<Ref<FetchResponse>> FetchResponse::create(ScriptExecutionContext& co
     r->m_internalResponse.setHTTPStatusCode(status);
     r->m_internalResponse.setHTTPStatusText(statusText);
 
-    return WTFMove(r);
+    return r;
 }
 
 Ref<FetchResponse> FetchResponse::error(ScriptExecutionContext& context)
@@ -155,7 +155,7 @@ ExceptionOr<Ref<FetchResponse>> FetchResponse::redirect(ScriptExecutionContext& 
     redirectResponse->m_internalResponse.setHTTPStatusCode(status);
     redirectResponse->m_internalResponse.setHTTPHeaderField(HTTPHeaderName::Location, requestURL.string());
     redirectResponse->m_headers->fastSet(HTTPHeaderName::Location, requestURL.string());
-    return WTFMove(redirectResponse);
+    return redirectResponse;
 }
 
 FetchResponse::FetchResponse(ScriptExecutionContext& context, Optional<FetchBody>&& body, Ref<FetchHeaders>&& headers, ResourceResponse&& response)
@@ -183,7 +183,7 @@ ExceptionOr<Ref<FetchResponse>> FetchResponse::clone(ScriptExecutionContext& con
     clone->cloneBody(*this);
     clone->m_opaqueLoadIdentifier = m_opaqueLoadIdentifier;
     clone->m_bodySizeWithPadding = m_bodySizeWithPadding;
-    return WTFMove(clone);
+    return clone;
 }
 
 void FetchResponse::addAbortSteps(Ref<AbortSignal>&& signal)
@@ -201,6 +201,9 @@ void FetchResponse::addAbortSteps(Ref<AbortSignal>&& signal)
         if (m_bodyLoader) {
             if (auto callback = m_bodyLoader->takeNotificationCallback())
                 callback(Exception { AbortError, "Fetch is aborted"_s });
+
+            if (auto callback = m_bodyLoader->takeConsumeDataCallback())
+                callback(Exception { AbortError, "Fetch is aborted"_s });
         }
 
         if (m_readableStreamSource) {
@@ -211,10 +214,8 @@ void FetchResponse::addAbortSteps(Ref<AbortSignal>&& signal)
         if (m_body)
             m_body->loadingFailed(*loadingException());
 
-        if (m_bodyLoader) {
-            m_bodyLoader->stop();
-            m_bodyLoader = WTF::nullopt;
-        }
+        if (auto bodyLoader = WTFMove(m_bodyLoader))
+            bodyLoader->stop();
     });
 }
 
@@ -304,7 +305,7 @@ void FetchResponse::BodyLoader::didFail(const ResourceError& error)
 #endif
 
     // Check whether didFail is called as part of FetchLoader::start.
-    if (m_loader->isStarted()) {
+    if (m_loader && m_loader->isStarted()) {
         Ref<FetchResponse> protector(m_response);
         m_response.m_bodyLoader = WTF::nullopt;
     }
@@ -313,13 +314,12 @@ void FetchResponse::BodyLoader::didFail(const ResourceError& error)
 FetchResponse::BodyLoader::BodyLoader(FetchResponse& response, NotificationCallback&& responseCallback)
     : m_response(response)
     , m_responseCallback(WTFMove(responseCallback))
+    , m_pendingActivity(m_response.makePendingActivity(m_response))
 {
-    m_response.setPendingActivity(m_response);
 }
 
 FetchResponse::BodyLoader::~BodyLoader()
 {
-    m_response.unsetPendingActivity(m_response);
 }
 
 static uint64_t nextOpaqueLoadIdentifier { 0 };
@@ -521,10 +521,8 @@ void FetchResponse::stop()
 {
     RefPtr<FetchResponse> protectedThis(this);
     FetchBodyOwner::stop();
-    if (m_bodyLoader) {
-        m_bodyLoader->stop();
-        m_bodyLoader = WTF::nullopt;
-    }
+    if (auto bodyLoader = WTFMove(m_bodyLoader))
+        bodyLoader->stop();
 }
 
 const char* FetchResponse::activeDOMObjectName() const

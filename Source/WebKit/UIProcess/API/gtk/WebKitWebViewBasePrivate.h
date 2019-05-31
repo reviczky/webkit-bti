@@ -84,7 +84,8 @@ WebKit::GestureController& webkitWebViewBaseGestureController(WebKitWebViewBase*
 
 RefPtr<WebKit::ViewSnapshot> webkitWebViewBaseTakeViewSnapshot(WebKitWebViewBase*);
 
-WebKit::ViewGestureController& webkitWebViewBaseViewGestureController(WebKitWebViewBase*);
+void webkitWebViewBaseSetEnableBackForwardNavigationGesture(WebKitWebViewBase*, bool enabled);
+WebKit::ViewGestureController* webkitWebViewBaseViewGestureController(WebKitWebViewBase*);
 
 void webkitWebViewBaseDidStartProvisionalLoadForMainFrame(WebKitWebViewBase*);
 void webkitWebViewBaseDidFirstVisuallyNonEmptyLayoutForMainFrame(WebKitWebViewBase*);
@@ -92,3 +93,5 @@ void webkitWebViewBaseDidFinishLoadForMainFrame(WebKitWebViewBase*);
 void webkitWebViewBaseDidFailLoadForMainFrame(WebKitWebViewBase*);
 void webkitWebViewBaseDidSameDocumentNavigationForMainFrame(WebKitWebViewBase*, WebKit::SameDocumentNavigationType);
 void webkitWebViewBaseDidRestoreScrollPosition(WebKitWebViewBase*);
+
+void webkitWebViewBaseShowEmojiChooser(WebKitWebViewBase*, const WebCore::IntRect&, CompletionHandler<void(String)>&&);

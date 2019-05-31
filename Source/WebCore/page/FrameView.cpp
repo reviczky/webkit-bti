@@ -34,6 +34,7 @@
 #include "CachedResourceLoader.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
+#include "CustomHeaderFields.h"
 #include "DOMWindow.h"
 #include "DebugPageOverlays.h"
 #include "DeprecatedGlobalSettings.h"
@@ -85,6 +86,7 @@
 #include "RenderTheme.h"
 #include "RenderView.h"
 #include "RenderWidget.h"
+#include "ResizeObserver.h"
 #include "RuntimeEnabledFeatures.h"
 #include "SVGDocument.h"
 #include "SVGSVGElement.h"
@@ -97,6 +99,7 @@
 #include "StyleScope.h"
 #include "TextResourceDecoder.h"
 #include "TiledBacking.h"
+#include "VelocityData.h"
 #include "VisualViewport.h"
 #include "WheelEventTestTrigger.h"
 #include <wtf/text/TextStream.h>
@@ -458,8 +461,11 @@ void FrameView::setFrameRect(const IntRect& newRect)
     IntRect oldRect = frameRect();
     if (newRect == oldRect)
         return;
+
     // Every scroll that happens as the result of frame size change is programmatic.
-    SetForScope<bool> changeInProgrammaticScroll(m_inProgrammaticScroll, true);
+    auto oldScrollType = currentScrollType();
+    setCurrentScrollType(ScrollType::Programmatic);
+
     ScrollView::setFrameRect(newRect);
 
     updateScrollableAreaSet();
@@ -473,6 +479,7 @@ void FrameView::setFrameRect(const IntRect& newRect)
         frame().page()->pageOverlayController().didChangeViewSize();
 
     viewportContentsChanged();
+    setCurrentScrollType(oldScrollType);
 }
 
 bool FrameView::scheduleAnimation()
@@ -1089,13 +1096,17 @@ void FrameView::topContentInsetDidChange(float newTopContentInset)
     
     layoutContext().layout();
     // Every scroll that happens as the result of content inset change is programmatic.
-    SetForScope<bool> changeInProgrammaticScroll(m_inProgrammaticScroll, true);
+    auto oldScrollType = currentScrollType();
+    setCurrentScrollType(ScrollType::Programmatic);
+
     updateScrollbars(scrollPosition());
     if (renderView->usesCompositing())
         renderView->compositor().frameViewDidChangeSize();
 
     if (TiledBacking* tiledBacking = this->tiledBacking())
         tiledBacking->setTopContentInset(newTopContentInset);
+
+    setCurrentScrollType(oldScrollType);
 }
 
 void FrameView::topContentDirectionDidChange()
@@ -1515,7 +1526,7 @@ LayoutSize FrameView::expandedLayoutViewportSize(const LayoutSize& baseLayoutVie
     if (layoutViewportHeight > documentHeight)
         return baseLayoutViewportSize;
 
-    return { baseLayoutViewportSize.width(), std::min<LayoutUnit>(documentHeight, (1 + heightExpansionFactor) * layoutViewportHeight) };
+    return { baseLayoutViewportSize.width(), std::min(documentHeight, LayoutUnit((1 + heightExpansionFactor) * layoutViewportHeight)) };
 }
 
 LayoutRect FrameView::computeUpdatedLayoutViewportRect(const LayoutRect& layoutViewport, const LayoutRect& documentRect, const LayoutSize& unobscuredContentSize, const LayoutRect& unobscuredContentRect, const LayoutSize& baseLayoutViewportSize, const LayoutPoint& stableLayoutViewportOriginMin, const LayoutPoint& stableLayoutViewportOriginMax, LayoutViewportConstraint constraint)
@@ -1664,7 +1675,7 @@ void FrameView::updateLayoutViewport()
     LOG_WITH_STREAM(Scrolling, stream << "stable origins: min: " << minStableLayoutViewportOrigin() << " max: "<< maxStableLayoutViewportOrigin());
     
     if (m_layoutViewportOverrideRect) {
-        if (m_inProgrammaticScroll) {
+        if (currentScrollType() == ScrollType::Programmatic) {
             LOG_WITH_STREAM(Scrolling, stream << "computing new override layout viewport because of programmatic scrolling");
             LayoutPoint newOrigin = computeLayoutViewportOrigin(visualViewportRect(), minStableLayoutViewportOrigin(), maxStableLayoutViewportOrigin(), layoutViewport, StickToDocumentBounds);
             setLayoutViewportOverrideRect(LayoutRect(newOrigin, m_layoutViewportOverrideRect.value().size()));
@@ -1962,26 +1973,11 @@ void FrameView::viewportContentsChanged()
         if (auto* renderView = frameView.frame().contentRenderer())
             renderView->updateVisibleViewportRect(visibleRect);
     });
-
-#if ENABLE(INTERSECTION_OBSERVER)
-    if (auto* document = frame().document()) {
-        if (auto* page = frame().page()) {
-            if (document->numberOfIntersectionObservers())
-                page->addDocumentNeedingIntersectionObservationUpdate(*document);
-            if (!frame().isMainFrame()) {
-                if (auto* mainDocument = frame().mainFrame().document()) {
-                    if (mainDocument->numberOfIntersectionObservers())
-                        page->addDocumentNeedingIntersectionObservationUpdate(*mainDocument);
-                }
-            }
-        }
-    }
-#endif
 }
 
-IntRect FrameView::unobscuredContentRectExpandedByContentInsets() const
+IntRect FrameView::visualViewportRectExpandedByContentInsets() const
 {
-    FloatRect unobscuredContentRect = this->unobscuredContentRect();
+    FloatRect unobscuredContentRect = this->visualViewportRect();
     if (auto* page = frame().page())
         unobscuredContentRect.expand(page->contentInsets());
     return IntRect(unobscuredContentRect);
@@ -2009,12 +2005,12 @@ bool FrameView::shouldSetCursor() const
 }
 
 #if ENABLE(DARK_MODE_CSS)
-RenderObject* FrameView::rendererForSupportedColorSchemes() const
+RenderObject* FrameView::rendererForColorScheme() const
 {
     auto* document = frame().document();
     auto* documentElement = document ? document->documentElement() : nullptr;
     auto* documentElementRenderer = documentElement ? documentElement->renderer() : nullptr;
-    if (documentElementRenderer && documentElementRenderer->style().hasExplicitlySetSupportedColorSchemes())
+    if (documentElementRenderer && documentElementRenderer->style().hasExplicitlySetColorScheme())
         return documentElementRenderer;
     auto* bodyElement = document ? document->bodyOrFrameset() : nullptr;
     return bodyElement ? bodyElement->renderer() : nullptr;
@@ -2024,7 +2020,7 @@ RenderObject* FrameView::rendererForSupportedColorSchemes() const
 bool FrameView::useDarkAppearance() const
 {
 #if ENABLE(DARK_MODE_CSS)
-    if (auto* renderer = rendererForSupportedColorSchemes())
+    if (auto* renderer = rendererForColorScheme())
         return renderer->useDarkAppearance();
 #endif
     if (auto* document = frame().document())
@@ -2035,7 +2031,7 @@ bool FrameView::useDarkAppearance() const
 OptionSet<StyleColor::Options> FrameView::styleColorOptions() const
 {
 #if ENABLE(DARK_MODE_CSS)
-    if (auto* renderer = rendererForSupportedColorSchemes())
+    if (auto* renderer = rendererForColorScheme())
         return renderer->styleColorOptions();
 #endif
     if (auto* document = frame().document())
@@ -2268,7 +2264,9 @@ void FrameView::setScrollPosition(const ScrollPosition& scrollPosition)
 {
     LOG_WITH_STREAM(Scrolling, stream << "FrameView::setScrollPosition " << scrollPosition << " , clearing anchor");
 
-    SetForScope<bool> changeInProgrammaticScroll(m_inProgrammaticScroll, true);
+    auto oldScrollType = currentScrollType();
+    setCurrentScrollType(ScrollType::Programmatic);
+
     m_maintainScrollPositionAnchor = nullptr;
     m_shouldScrollToFocusedElement = false;
     m_delayedScrollToFocusedElementTimer.stop();
@@ -2276,6 +2274,8 @@ void FrameView::setScrollPosition(const ScrollPosition& scrollPosition)
     if (page && page->expectsWheelEventTriggers())
         scrollAnimator().setWheelEventTestTrigger(page->testTrigger());
     ScrollView::setScrollPosition(scrollPosition);
+
+    setCurrentScrollType(oldScrollType);
 }
 
 void FrameView::resetScrollAnchor()
@@ -2549,7 +2549,7 @@ bool FrameView::shouldUpdateCompositingLayersAfterScrolling() const
     if (scrollingCoordinator->shouldUpdateScrollLayerPositionSynchronously(*this))
         return true;
 
-    if (inProgrammaticScroll())
+    if (currentScrollType() == ScrollType::Programmatic)
         return true;
 
     return false;
@@ -2986,7 +2986,11 @@ Color FrameView::baseBackgroundColor() const
 
 void FrameView::setBaseBackgroundColor(const Color& backgroundColor)
 {
-    m_baseBackgroundColor = backgroundColor.isValid() ? backgroundColor : Color::white;
+    Color newBaseBackgroundColor = backgroundColor.isValid() ? backgroundColor : Color::white;
+    if (m_baseBackgroundColor == newBaseBackgroundColor)
+        return;
+
+    m_baseBackgroundColor = newBaseBackgroundColor;
 
     if (!isViewForDocumentInFrame())
         return;
@@ -2998,8 +3002,13 @@ void FrameView::setBaseBackgroundColor(const Color& backgroundColor)
 
 void FrameView::updateBackgroundRecursively(const Optional<Color>& backgroundColor)
 {
-#if ENABLE(DARK_MODE_CSS) && PLATFORM(MAC)
-    Color baseBackgroundColor = backgroundColor.valueOr(RenderTheme::singleton().systemColor(CSSValueAppleSystemControlBackground, styleColorOptions()));
+#if HAVE(OS_DARK_MODE_SUPPORT)
+#if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
+    static const auto cssValueControlBackground = CSSValueAppleSystemControlBackground;
+#else
+    static const auto cssValueControlBackground = CSSValueWindow;
+#endif
+    Color baseBackgroundColor = backgroundColor.valueOr(RenderTheme::singleton().systemColor(cssValueControlBackground, styleColorOptions()));
 #else
     Color baseBackgroundColor = backgroundColor.valueOr(Color::white);
 #endif
@@ -3440,90 +3449,37 @@ void FrameView::autoSizeIfEnabled()
     if (!renderView)
         return;
 
+    auto* firstChild = renderView->firstChild();
+    if (!firstChild)
+        return;
+
     LOG(Layout, "FrameView %p autoSizeIfEnabled", this);
     SetForScope<bool> changeInAutoSize(m_inAutoSize, true);
     if (layoutContext().subtreeLayoutRoot())
         layoutContext().convertSubtreeLayoutToFullLayout();
-    // Start from the minimum size and allow it to grow.
-    resize(m_minAutoSize.width(), m_minAutoSize.height());
-    IntSize size = frameRect().size();
-    // Do the resizing twice. The first time is basically a rough calculation using the preferred width
-    // which may result in a height change during the second iteration.
-    for (int i = 0; i < 2; i++) {
-        // Update various sizes including contentsSize, scrollHeight, etc.
-        document->updateLayoutIgnorePendingStylesheets();
-        int width = renderView->minPreferredLogicalWidth();
-        int height = renderView->documentRect().height();
-        IntSize newSize(width, height);
 
-        // Check to see if a scrollbar is needed for a given dimension and
-        // if so, increase the other dimension to account for the scrollbar.
-        // Since the dimensions are only for the view rectangle, once a
-        // dimension exceeds the maximum, there is no need to increase it further.
-        if (newSize.width() > m_maxAutoSize.width()) {
-            RefPtr<Scrollbar> localHorizontalScrollbar = horizontalScrollbar();
-            if (!localHorizontalScrollbar)
-                localHorizontalScrollbar = createScrollbar(HorizontalScrollbar);
-            newSize.expand(0, localHorizontalScrollbar->occupiedHeight());
+    ScrollbarMode horizonalScrollbarMode = ScrollbarAlwaysOff;
+    ScrollbarMode verticalScrollbarMode = ScrollbarAlwaysOff;
+    setVerticalScrollbarLock(false);
+    setHorizontalScrollbarLock(false);
+    setScrollbarModes(horizonalScrollbarMode, verticalScrollbarMode, true, true);
 
-            // Don't bother checking for a vertical scrollbar because the width is at
-            // already greater the maximum.
-        } else if (newSize.height() > m_maxAutoSize.height()) {
-            RefPtr<Scrollbar> localVerticalScrollbar = verticalScrollbar();
-            if (!localVerticalScrollbar)
-                localVerticalScrollbar = createScrollbar(VerticalScrollbar);
-            newSize.expand(localVerticalScrollbar->occupiedWidth(), 0);
-
-            // Don't bother checking for a horizontal scrollbar because the height is
-            // already greater the maximum.
-        }
-
-        // Ensure the size is at least the min bounds.
-        newSize = newSize.expandedTo(m_minAutoSize);
-
-        // Bound the dimensions by the max bounds and determine what scrollbars to show.
-        ScrollbarMode horizonalScrollbarMode = ScrollbarAlwaysOff;
-        if (newSize.width() > m_maxAutoSize.width()) {
-            newSize.setWidth(m_maxAutoSize.width());
-            horizonalScrollbarMode = ScrollbarAlwaysOn;
-        }
-        ScrollbarMode verticalScrollbarMode = ScrollbarAlwaysOff;
-        if (newSize.height() > m_maxAutoSize.height()) {
-            newSize.setHeight(m_maxAutoSize.height());
-            verticalScrollbarMode = ScrollbarAlwaysOn;
-        }
-
-        if (newSize == size)
-            continue;
-
-        // While loading only allow the size to increase (to avoid twitching during intermediate smaller states)
-        // unless autoresize has just been turned on or the maximum size is smaller than the current size.
-        if (m_didRunAutosize && size.height() <= m_maxAutoSize.height() && size.width() <= m_maxAutoSize.width()
-            && !frame().loader().isComplete() && (newSize.height() < size.height() || newSize.width() < size.width()))
-            break;
-
-        // The first time around, resize to the minimum height again; otherwise,
-        // on pages (e.g. quirks mode) where the body/document resize to the view size,
-        // we'll end up not shrinking back down after resizing to the computed preferred width.
-        resize(newSize.width(), i ? newSize.height() : m_minAutoSize.height());
-        // Force the scrollbar state to avoid the scrollbar code adding them and causing them to be needed. For example,
-        // a vertical scrollbar may cause text to wrap and thus increase the height (which is the only reason the scollbar is needed).
-        setVerticalScrollbarLock(false);
-        setHorizontalScrollbarLock(false);
-        setScrollbarModes(horizonalScrollbarMode, verticalScrollbarMode, true, true);
-    }
-    // All the resizing above may have invalidated style (for example if viewport units are being used).
+    ASSERT(is<RenderElement>(*firstChild));
+    auto& documentRenderer = downcast<RenderElement>(*firstChild);
+    documentRenderer.mutableStyle().setMaxWidth(Length(m_autoSizeConstraint.width(), Fixed));
+    resize(m_autoSizeConstraint.width(), m_autoSizeConstraint.height());
     document->updateStyleIfNeeded();
-    // FIXME: Use the final layout's result as the content size (webkit.org/b/173561).
-    m_autoSizeContentSize = contentsSize();
-    if (m_autoSizeFixedMinimumHeight) {
-        auto contentsSize = this->contentsSize();
-        resize(contentsSize.width(), std::max(m_autoSizeFixedMinimumHeight, contentsSize.height()));
-        document->updateLayoutIgnorePendingStylesheets();
-    }
-    m_didRunAutosize = true;
+    document->updateLayoutIgnorePendingStylesheets();
 
-    LOG_WITH_STREAM(Layout, stream << "FrameView " << this << " autoSizeIfEnabled() changed size from " << size << " to " << frameRect().size());
+    auto currentContentsSize = this->contentsSize();
+    auto finalWidth = std::max(m_autoSizeConstraint.width(), currentContentsSize.width());
+    auto finalHeight = m_autoSizeFixedMinimumHeight ? std::max(m_autoSizeFixedMinimumHeight, currentContentsSize.height()) : currentContentsSize.height();
+    resize(finalWidth, finalHeight);
+    document->updateLayoutIgnorePendingStylesheets();
+    m_autoSizeContentSize = contentsSize(); 
+    if (auto* page = frame().page())
+        page->chrome().client().intrinsicContentsSizeChanged(m_autoSizeContentSize);
+    m_didRunAutosize = true;
 }
 
 void FrameView::setAutoSizeFixedMinimumHeight(int fixedMinimumHeight)
@@ -4094,7 +4050,7 @@ void FrameView::setWasScrolledByUser(bool wasScrolledByUser)
 
     m_shouldScrollToFocusedElement = false;
     m_delayedScrollToFocusedElementTimer.stop();
-    if (m_inProgrammaticScroll)
+    if (currentScrollType() == ScrollType::Programmatic)
         return;
     m_maintainScrollPositionAnchor = nullptr;
     if (m_wasScrolledByUser == wasScrolledByUser)
@@ -4516,24 +4472,21 @@ bool FrameView::isViewForDocumentInFrame() const
     return &renderView->frameView() == this;
 }
 
-void FrameView::enableAutoSizeMode(bool enable, const IntSize& minSize, const IntSize& maxSize)
+void FrameView::enableAutoSizeMode(bool enable, const IntSize& viewSize)
 {
-    ASSERT(!enable || !minSize.isEmpty());
-    ASSERT(minSize.width() <= maxSize.width());
-    ASSERT(minSize.height() <= maxSize.height());
-
-    if (m_shouldAutoSize == enable && m_minAutoSize == minSize && m_maxAutoSize == maxSize)
+    ASSERT(!enable || !viewSize.isEmpty());
+    if (m_shouldAutoSize == enable && m_autoSizeConstraint == viewSize)
         return;
 
     m_shouldAutoSize = enable;
-    m_minAutoSize = minSize;
-    m_maxAutoSize = maxSize;
+    m_autoSizeConstraint = viewSize;
+    m_autoSizeContentSize = contentsSize();
     m_didRunAutosize = false;
 
     setNeedsLayoutAfterViewConfigurationChange();
     layoutContext().scheduleLayout();
     if (m_shouldAutoSize) {
-        overrideViewportSizeForCSSViewportUnits({ minSize.width(), m_overrideViewportSize ? m_overrideViewportSize->height : WTF::nullopt });
+        overrideViewportSizeForCSSViewportUnits({ m_autoSizeConstraint.width(), m_overrideViewportSize ? m_overrideViewportSize->height : WTF::nullopt });
         return;
     }
 
@@ -4597,7 +4550,7 @@ void FrameView::forceLayoutForPagination(const FloatSize& pageSize, const FloatS
         LayoutUnit clippedLogicalLeft;
         if (!renderView.style().isLeftToRightDirection())
             clippedLogicalLeft = docLogicalRight - pageLogicalWidth;
-        LayoutRect overflow(clippedLogicalLeft, docLogicalTop, pageLogicalWidth, docLogicalHeight);
+        LayoutRect overflow { clippedLogicalLeft, docLogicalTop, LayoutUnit(pageLogicalWidth), docLogicalHeight };
 
         if (!horizontalWritingMode)
             overflow = overflow.transposedRect();
@@ -4840,11 +4793,35 @@ FloatPoint FrameView::clientToDocumentPoint(FloatPoint point) const
     return point;
 }
 
+FloatPoint FrameView::absoluteToLayoutViewportPoint(FloatPoint p) const
+{
+    ASSERT(frame().settings().visualViewportEnabled());
+    p.scale(1 / frame().frameScaleFactor());
+    p.moveBy(-layoutViewportRect().location());
+    return p;
+}
+
 FloatPoint FrameView::layoutViewportToAbsolutePoint(FloatPoint p) const
 {
     ASSERT(frame().settings().visualViewportEnabled());
     p.moveBy(layoutViewportRect().location());
     return p.scaled(frame().frameScaleFactor());
+}
+
+FloatRect FrameView::layoutViewportToAbsoluteRect(FloatRect rect) const
+{
+    ASSERT(frame().settings().visualViewportEnabled());
+    rect.moveBy(layoutViewportRect().location());
+    rect.scale(frame().frameScaleFactor());
+    return rect;
+}
+
+FloatRect FrameView::absoluteToLayoutViewportRect(FloatRect rect) const
+{
+    ASSERT(frame().settings().visualViewportEnabled());
+    rect.scale(1 / frame().frameScaleFactor());
+    rect.moveBy(-layoutViewportRect().location());
+    return rect;
 }
 
 FloatRect FrameView::clientToLayoutViewportRect(FloatRect rect) const
@@ -5075,10 +5052,10 @@ void FrameView::setCustomSizeForResizeEvent(IntSize customSize)
     sendResizeEventIfNeeded();
 }
 
-void FrameView::setScrollVelocity(double horizontalVelocity, double verticalVelocity, double scaleChangeRate, MonotonicTime timestamp)
+void FrameView::setScrollVelocity(const VelocityData& velocityData)
 {
     if (TiledBacking* tiledBacking = this->tiledBacking())
-        tiledBacking->setVelocity(VelocityData(horizontalVelocity, verticalVelocity, scaleChangeRate, timestamp));
+        tiledBacking->setVelocity(velocityData);
 }
 #endif // PLATFORM(IOS_FAMILY)
 
@@ -5218,7 +5195,7 @@ int FrameView::mapFromLayoutToCSSUnits(LayoutUnit value) const
 
 LayoutUnit FrameView::mapFromCSSToLayoutUnits(int value) const
 {
-    return value * frame().pageZoomFactor() * frame().frameScaleFactor();
+    return LayoutUnit(value * frame().pageZoomFactor() * frame().frameScaleFactor());
 }
 
 void FrameView::didAddWidgetToRenderTree(Widget& widget)
@@ -5353,5 +5330,5 @@ bool FrameView::shouldPlaceBlockDirectionScrollbarOnLeft() const
 {
     return renderView() && renderView()->shouldPlaceBlockDirectionScrollbarOnLeft();
 }
-    
+
 } // namespace WebCore

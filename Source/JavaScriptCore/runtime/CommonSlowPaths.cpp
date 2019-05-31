@@ -242,7 +242,7 @@ SLOW_PATH_DECL(slow_path_create_this)
             cachedCallee.setWithoutWriteBarrier(JSCell::seenMultipleCalleeObjects());
 
         size_t inlineCapacity = bytecode.m_inlineCapacity;
-        ObjectAllocationProfile* allocationProfile = constructor->ensureRareDataAndAllocationProfile(exec, inlineCapacity)->objectAllocationProfile();
+        ObjectAllocationProfileWithPrototype* allocationProfile = constructor->ensureRareDataAndAllocationProfile(exec, inlineCapacity)->objectAllocationProfile();
         throwScope.releaseAssertNoException();
         Structure* structure = allocationProfile->structure();
         result = constructEmptyObject(exec, structure);
@@ -272,16 +272,17 @@ SLOW_PATH_DECL(slow_path_to_this)
     auto& metadata = bytecode.metadata(exec);
     JSValue v1 = GET(bytecode.m_srcDst).jsValue();
     if (v1.isCell()) {
-        Structure* myStructure = v1.asCell()->structure(vm);
-        Structure* otherStructure = metadata.m_cachedStructure.get();
-        if (myStructure != otherStructure) {
-            if (otherStructure)
+        StructureID myStructureID = v1.asCell()->structureID();
+        StructureID otherStructureID = metadata.m_cachedStructureID;
+        if (myStructureID != otherStructureID) {
+            if (otherStructureID)
                 metadata.m_toThisStatus = ToThisConflicted;
-            metadata.m_cachedStructure.set(vm, exec->codeBlock(), myStructure);
+            metadata.m_cachedStructureID = myStructureID;
+            vm.heap.writeBarrier(exec->codeBlock(), vm.getStructure(myStructureID));
         }
     } else {
         metadata.m_toThisStatus = ToThisConflicted;
-        metadata.m_cachedStructure.clear();
+        metadata.m_cachedStructureID = 0;
     }
     // Note: We only need to do this value profiling here on the slow path. The fast path
     // just returns the input to to_this if the structure check succeeds. If the structure
@@ -715,9 +716,16 @@ SLOW_PATH_DECL(slow_path_bitnot)
 {
     BEGIN();
     auto bytecode = pc->as<OpBitnot>();
-    int32_t operand = GET_C(bytecode.m_operand).jsValue().toInt32(exec);
+    auto operandNumeric = GET_C(bytecode.m_operand).jsValue().toBigIntOrInt32(exec);
     CHECK_EXCEPTION();
-    RETURN_PROFILED(jsNumber(~operand));
+
+    if (WTF::holds_alternative<JSBigInt*>(operandNumeric)) {
+        JSBigInt* result = JSBigInt::bitwiseNot(exec, WTF::get<JSBigInt*>(operandNumeric));
+        CHECK_EXCEPTION();
+        RETURN_PROFILED(result);
+    }
+
+    RETURN_PROFILED(jsNumber(~WTF::get<int32_t>(operandNumeric)));
 }
 
 SLOW_PATH_DECL(slow_path_bitand)
@@ -896,8 +904,8 @@ SLOW_PATH_DECL(slow_path_has_indexed_property)
     CHECK_EXCEPTION();
     JSValue property = GET(bytecode.m_property).jsValue();
     metadata.m_arrayProfile.observeStructure(base->structure(vm));
-    ASSERT(property.isUInt32());
-    RETURN(jsBoolean(base->hasPropertyGeneric(exec, property.asUInt32(), PropertySlot::InternalMethodType::GetOwnProperty)));
+    ASSERT(property.isUInt32AsAnyInt());
+    RETURN(jsBoolean(base->hasPropertyGeneric(exec, property.asUInt32AsAnyInt(), PropertySlot::InternalMethodType::GetOwnProperty)));
 }
 
 SLOW_PATH_DECL(slow_path_has_structure_property)
@@ -988,7 +996,9 @@ SLOW_PATH_DECL(slow_path_to_index_string)
 {
     BEGIN();
     auto bytecode = pc->as<OpToIndexString>();
-    RETURN(jsString(exec, Identifier::from(exec, GET(bytecode.m_index).jsValue().asUInt32()).string()));
+    JSValue indexValue = GET(bytecode.m_index).jsValue();
+    ASSERT(indexValue.isUInt32AsAnyInt());
+    RETURN(jsString(exec, Identifier::from(exec, indexValue.asUInt32AsAnyInt()).string()));
 }
 
 SLOW_PATH_DECL(slow_path_profile_type_clear_log)
@@ -1125,7 +1135,9 @@ SLOW_PATH_DECL(slow_path_get_by_val_with_this)
     if (LIKELY(baseValue.isCell() && subscript.isString())) {
         Structure& structure = *baseValue.asCell()->structure(vm);
         if (JSCell::canUseFastGetOwnProperty(structure)) {
-            if (RefPtr<AtomicStringImpl> existingAtomicString = asString(subscript)->toExistingAtomicString(exec)) {
+            RefPtr<AtomicStringImpl> existingAtomicString = asString(subscript)->toExistingAtomicString(exec);
+            CHECK_EXCEPTION();
+            if (existingAtomicString) {
                 if (JSValue result = baseValue.asCell()->fastGetOwnProperty(vm, structure, existingAtomicString.get()))
                     RETURN_PROFILED(result);
             }

@@ -39,6 +39,7 @@
 #include "CachedResourceRequestInitiators.h"
 #include "CachedScript.h"
 #include "CertificateInfo.h"
+#include "CustomHeaderFields.h"
 #include "Document.h"
 #include "DocumentLoader.h"
 #include "DocumentThreadableLoader.h"
@@ -368,7 +369,7 @@ RefPtr<Inspector::Protocol::Network::Response> InspectorNetworkAgent::buildObjec
         responseObject->setSecurity(WTFMove(securityPayload));
     }
 
-    return WTFMove(responseObject);
+    return responseObject;
 }
 
 Ref<Inspector::Protocol::Network::CachedResource> InspectorNetworkAgent::buildObjectForCachedResource(CachedResource* cachedResource)
@@ -814,7 +815,12 @@ void InspectorNetworkAgent::enable()
 
             unsigned identifier = channel->identifier();
             didCreateWebSocket(identifier, webSocket->url());
-            willSendWebSocketHandshakeRequest(identifier, channel->clientHandshakeRequest());
+            auto cookieRequestHeaderFieldValue = [document = makeWeakPtr(channel->document())] (const URL& url) -> String {
+                if (!document || !document->page())
+                    return { };
+                return document->page()->cookieJar().cookieRequestHeaderFieldValue(*document, url);
+            };
+            willSendWebSocketHandshakeRequest(identifier, channel->clientHandshakeRequest(WTFMove(cookieRequestHeaderFieldValue)));
 
             if (channel->handshakeMode() == WebSocketHandshake::Connected)
                 didReceiveWebSocketHandshakeResponse(identifier, channel->serverHandshakeResponse());

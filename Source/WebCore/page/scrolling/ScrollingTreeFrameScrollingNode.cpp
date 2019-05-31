@@ -72,8 +72,10 @@ void ScrollingTreeFrameScrollingNode::commitStateBeforeChildren(const ScrollingS
     if (state.hasChangedProperty(ScrollingStateFrameScrollingNode::FixedElementsLayoutRelativeToFrame))
         m_fixedElementsLayoutRelativeToFrame = state.fixedElementsLayoutRelativeToFrame();
 
-    if (state.hasChangedProperty(ScrollingStateFrameScrollingNode::LayoutViewport))
+    if (state.hasChangedProperty(ScrollingStateFrameScrollingNode::LayoutViewport)) {
         m_layoutViewport = state.layoutViewport();
+        updateViewportForCurrentScrollPosition({ });
+    }
 
     if (state.hasChangedProperty(ScrollingStateFrameScrollingNode::MinLayoutViewportOrigin))
         m_minLayoutViewportOrigin = state.minLayoutViewportOrigin();
@@ -82,16 +84,13 @@ void ScrollingTreeFrameScrollingNode::commitStateBeforeChildren(const ScrollingS
         m_maxLayoutViewportOrigin = state.maxLayoutViewportOrigin();
 }
 
-void ScrollingTreeFrameScrollingNode::setScrollPosition(const FloatPoint& scrollPosition)
+bool ScrollingTreeFrameScrollingNode::scrollPositionAndLayoutViewportMatch(const FloatPoint& position, Optional<FloatRect> overrideLayoutViewport)
 {
-    FloatPoint newScrollPosition = scrollPosition.constrainedBetween(minimumScrollPosition(), maximumScrollPosition());
-    setScrollPositionWithoutContentEdgeConstraints(newScrollPosition);
+    return position == currentScrollPosition() && (!overrideLayoutViewport || overrideLayoutViewport.value() == m_layoutViewport);
 }
 
 FloatRect ScrollingTreeFrameScrollingNode::layoutViewportForScrollPosition(const FloatPoint& visibleContentOrigin, float scale) const
 {
-    ASSERT(scrollingTree().visualViewportEnabled());
-
     FloatRect visibleContentRect(visibleContentOrigin, scrollableAreaSize());
     LayoutRect visualViewport(FrameView::visibleDocumentRect(visibleContentRect, headerHeight(), footerHeight(), totalContentsSize(), scale));
     LayoutRect layoutViewport(m_layoutViewport);
@@ -111,6 +110,14 @@ FloatRect ScrollingTreeFrameScrollingNode::layoutViewportForScrollPosition(const
     return layoutViewport;
 }
 
+void ScrollingTreeFrameScrollingNode::updateViewportForCurrentScrollPosition(Optional<FloatRect> overrideLayoutViewport)
+{
+    if (overrideLayoutViewport)
+        setLayoutViewport(overrideLayoutViewport.value());
+    else
+        setLayoutViewport(layoutViewportForScrollPosition(currentScrollPosition(), frameScaleFactor()));
+}
+
 FloatSize ScrollingTreeFrameScrollingNode::viewToContentsOffset(const FloatPoint& scrollPosition) const
 {
     return toFloatSize(scrollPosition) - FloatSize(0, headerHeight() + topContentInset());
@@ -123,7 +130,7 @@ LayoutPoint ScrollingTreeFrameScrollingNode::parentToLocalPoint(LayoutPoint poin
 
 LayoutPoint ScrollingTreeFrameScrollingNode::localToContentsPoint(LayoutPoint point) const
 {
-    auto scrolledPoint = point + LayoutPoint(scrollPosition());
+    auto scrolledPoint = point + LayoutPoint(currentScrollPosition());
     return scrolledPoint.scaled(1 / frameScaleFactor());
 }
 

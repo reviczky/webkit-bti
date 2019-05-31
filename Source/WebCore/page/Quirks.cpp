@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2018-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,10 +26,24 @@
 #include "config.h"
 #include "Quirks.h"
 
+#include "CustomHeaderFields.h"
 #include "Document.h"
+#include "DocumentLoader.h"
+#include "HTMLMetaElement.h"
+#include "HTMLObjectElement.h"
+#include "LayoutUnit.h"
 #include "Settings.h"
 
 namespace WebCore {
+
+static inline OptionSet<AutoplayQuirk> allowedAutoplayQuirks(Document& document)
+{
+    auto* loader = document.loader();
+    if (!loader)
+        return { };
+
+    return loader->allowedAutoplayQuirks();
+}
 
 Quirks::Quirks(Document& document)
     : m_document(makeWeakPtr(document))
@@ -38,9 +52,106 @@ Quirks::Quirks(Document& document)
 
 Quirks::~Quirks() = default;
 
+inline bool Quirks::needsQuirks() const
+{
+    return m_document && m_document->settings().needsSiteSpecificQuirks();
+}
+
+bool Quirks::shouldIgnoreShrinkToFitContent() const
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!needsQuirks())
+        return false;
+
+    auto host = m_document->topDocument().url().host();
+    if (equalLettersIgnoringASCIICase(host, "outlook.live.com"))
+        return true;
+#endif
+    return false;
+}
+
+Optional<LayoutUnit> Quirks::overriddenViewLayoutWidth(LayoutUnit currentViewLayoutWidth) const
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!needsQuirks())
+        return { };
+
+    auto host = m_document->topDocument().url().host();
+    if (equalLettersIgnoringASCIICase(host, "outlook.live.com")) {
+        if (currentViewLayoutWidth <= 989 || currentViewLayoutWidth >= 1132)
+            return { };
+        return { 989 };
+    }
+#else
+    UNUSED_PARAM(currentViewLayoutWidth);
+#endif
+    return { };
+}
+
+bool Quirks::shouldIgnoreInvalidSignal() const
+{
+    if (!needsQuirks())
+        return false;
+
+    auto host = m_document->topDocument().url().host();
+    return equalLettersIgnoringASCIICase(host, "www.thrivepatientportal.com");
+}
+
+bool Quirks::needsFormControlToBeMouseFocusable() const
+{
+#if PLATFORM(MAC)
+    if (!needsQuirks())
+        return false;
+
+    auto host = m_document->url().host();
+    return equalLettersIgnoringASCIICase(host, "ceac.state.gov") || host.endsWithIgnoringASCIICase(".ceac.state.gov");
+#else
+    return false;
+#endif
+}
+
+bool Quirks::needsAutoplayPlayPauseEvents() const
+{
+    if (!needsQuirks())
+        return false;
+
+    if (allowedAutoplayQuirks(*m_document).contains(AutoplayQuirk::SynthesizedPauseEvents))
+        return true;
+
+    return allowedAutoplayQuirks(m_document->topDocument()).contains(AutoplayQuirk::SynthesizedPauseEvents);
+}
+
+bool Quirks::needsSeekingSupportDisabled() const
+{
+    if (!needsQuirks())
+        return false;
+
+    auto host = m_document->topDocument().url().host();
+    return equalLettersIgnoringASCIICase(host, "netflix.com") || host.endsWithIgnoringASCIICase(".netflix.com");
+}
+
+bool Quirks::needsPerDocumentAutoplayBehavior() const
+{
+#if PLATFORM(MAC)
+    ASSERT(m_document == &m_document->topDocument());
+    return needsQuirks() && allowedAutoplayQuirks(*m_document).contains(AutoplayQuirk::PerDocumentAutoplayBehavior);
+#else
+    return false;
+#endif
+}
+
+bool Quirks::shouldAutoplayForArbitraryUserGesture() const
+{
+#if PLATFORM(MAC)
+    return needsQuirks() && allowedAutoplayQuirks(*m_document).contains(AutoplayQuirk::ArbitraryUserGestures);
+#else
+    return false;
+#endif
+}
+
 bool Quirks::hasBrokenEncryptedMediaAPISupportQuirk() const
 {
-    if (!m_document || !m_document->settings().needsSiteSpecificQuirks())
+    if (!needsQuirks())
         return false;
 
     if (m_hasBrokenEncryptedMediaAPISupportQuirk)
@@ -50,10 +161,229 @@ bool Quirks::hasBrokenEncryptedMediaAPISupportQuirk() const
 
     m_hasBrokenEncryptedMediaAPISupportQuirk = domain == "starz.com"
         || domain.endsWith(".starz.com")
+        || domain == "youtube.com"
+        || domain.endsWith(".youtube.com")
         || domain == "hulu.com"
         || domain.endsWith("hulu.com");
 
     return m_hasBrokenEncryptedMediaAPISupportQuirk.value();
 }
+
+bool Quirks::hasWebSQLSupportQuirk() const
+{
+    if (!needsQuirks())
+        return false;
+    
+    if (m_hasWebSQLSupportQuirk)
+        return m_hasWebSQLSupportQuirk.value();
+    
+    auto domain = m_document->securityOrigin().domain().convertToASCIILowercase();
+    
+    m_hasWebSQLSupportQuirk = domain == "bostonglobe.com"
+        || domain.endsWith(".bostonglobe.com")
+        || domain == "latimes.com"
+        || domain.endsWith(".latimes.com");
+    
+    return m_hasWebSQLSupportQuirk.value();
+}
+
+bool Quirks::isTouchBarUpdateSupressedForHiddenContentEditable() const
+{
+#if PLATFORM(MAC)
+    if (!needsQuirks())
+        return false;
+
+    auto host = m_document->topDocument().url().host();
+    return equalLettersIgnoringASCIICase(host, "docs.google.com");
+#else
+    return false;
+#endif
+}
+
+bool Quirks::isNeverRichlyEditableForTouchBar() const
+{
+#if PLATFORM(MAC)
+    if (!needsQuirks())
+        return false;
+
+    auto& url = m_document->topDocument().url();
+    auto host = url.host();
+
+    if (equalLettersIgnoringASCIICase(host, "twitter.com"))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "onedrive.live.com"))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "trix-editor.org"))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "www.icloud.com")) {
+        auto path = url.path();
+        if (path.contains("notes") || url.fragmentIdentifier().contains("notes"))
+            return true;
+    }
+#endif
+
+    return false;
+}
+
+#if USE(APPLE_INTERNAL_SDK)
+#import <WebKitAdditions/QuirksAdditions.cpp>
+#else
+
+static bool shouldSuppressAutocorrectionAndAutocaptializationInHiddenEditableAreasForHost(const StringView&)
+{
+    return false;
+}
+
+static bool shouldEmulateUndoRedoInHiddenEditableAreasForHost(const StringView&)
+{
+    return false;
+}
+
+#endif
+
+bool Quirks::shouldDispatchSyntheticMouseEventsWhenModifyingSelection() const
+{
+    if (m_document->settings().shouldDispatchSyntheticMouseEventsWhenModifyingSelection())
+        return true;
+
+    if (!needsQuirks())
+        return false;
+
+    auto host = m_document->topDocument().url().host();
+    if (equalLettersIgnoringASCIICase(host, "medium.com") || host.endsWithIgnoringASCIICase(".medium.com"))
+        return true;
+
+    if (equalLettersIgnoringASCIICase(host, "weebly.com") || host.endsWithIgnoringASCIICase(".weebly.com"))
+        return true;
+
+    return false;
+}
+
+bool Quirks::shouldEmulateUndoRedoInHiddenEditableAreas() const
+{
+    if (!needsQuirks())
+        return false;
+
+    return shouldEmulateUndoRedoInHiddenEditableAreasForHost(m_document->topDocument().url().host());
+}
+
+bool Quirks::shouldSuppressAutocorrectionAndAutocaptializationInHiddenEditableAreas() const
+{
+    if (!needsQuirks())
+        return false;
+
+    return shouldSuppressAutocorrectionAndAutocaptializationInHiddenEditableAreasForHost(m_document->topDocument().url().host());
+}
+
+bool Quirks::shouldDispatchSimulatedMouseEvents() const
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!needsQuirks())
+        return false;
+
+    auto* loader = m_document->loader();
+    if (!loader || loader->simulatedMouseEventsDispatchPolicy() != SimulatedMouseEventsDispatchPolicy::Allow)
+        return false;
+
+    auto& url = m_document->topDocument().url();
+    auto host = url.host();
+
+    if (equalLettersIgnoringASCIICase(host, "amazon.com") || host.endsWithIgnoringASCIICase(".amazon.com"))
+        return true;
+    if (equalLettersIgnoringASCIICase(host, "wix.com") || host.endsWithIgnoringASCIICase(".wix.com"))
+        return true;
+    if ((equalLettersIgnoringASCIICase(host, "desmos.com") || host.endsWithIgnoringASCIICase(".desmos.com")) && url.path().startsWithIgnoringASCIICase("/calculator/"))
+        return true;
+    if (equalLettersIgnoringASCIICase(host, "figma.com") || host.endsWithIgnoringASCIICase(".figma.com"))
+        return true;
+    if (equalLettersIgnoringASCIICase(host, "trello.com") || host.endsWithIgnoringASCIICase(".trello.com"))
+        return true;
+    if (equalLettersIgnoringASCIICase(host, "airtable.com") || host.endsWithIgnoringASCIICase(".airtable.com"))
+        return true;
+    if (equalLettersIgnoringASCIICase(host, "msn.com") || host.endsWithIgnoringASCIICase(".msn.com"))
+        return true;
+    if (equalLettersIgnoringASCIICase(host, "flipkart.com") || host.endsWithIgnoringASCIICase(".flipkart.com"))
+        return true;
+    if (equalLettersIgnoringASCIICase(host, "www.google.com") && url.path().startsWithIgnoringASCIICase("/maps/"))
+        return true;
+    if (equalLettersIgnoringASCIICase(host, "trailers.apple.com"))
+        return true;
+    if (equalLettersIgnoringASCIICase(host, "naver.com") || host.endsWithIgnoringASCIICase(".naver.com"))
+        return true;
+#endif
+    return false;
+}
+
+bool Quirks::shouldDisablePointerEventsQuirk() const
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!needsQuirks())
+        return false;
+
+    auto& url = m_document->topDocument().url();
+    auto host = url.host();
+    if (equalLettersIgnoringASCIICase(host, "mailchimp.com") || host.endsWithIgnoringASCIICase(".mailchimp.com"))
+        return true;
+#endif
+    return false;
+}
+
+// FIXME(<rdar://problem/50394969>): Remove after desmos.com adopts inputmode="none".
+bool Quirks::needsInputModeNoneImplicitly(const HTMLElement& element) const
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!needsQuirks())
+        return false;
+
+    if (!element.hasTagName(HTMLNames::textareaTag))
+        return false;
+
+    auto& url = m_document->url();
+    auto host = url.host();
+    if (!host.endsWithIgnoringASCIICase(".desmos.com"))
+        return false;
+
+    return element.parentElement() && element.parentElement()->classNames().contains("dcg-mq-textarea");
+#else
+    UNUSED_PARAM(element);
+    return false;
+#endif
+}
+
+// FIXME: Remove after the site is fixed, <rdar://problem/50374200>
+bool Quirks::needsGMailOverflowScrollQuirk() const
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!needsQuirks())
+        return false;
+
+    if (!m_needsGMailOverflowScrollQuirk)
+        m_needsGMailOverflowScrollQuirk = equalLettersIgnoringASCIICase(m_document->url().host(), "mail.google.com");
+
+    return *m_needsGMailOverflowScrollQuirk;
+#else
+    return false;
+#endif
+}
+
+// FIXME: Remove after the site is fixed, <rdar://problem/50374311>
+bool Quirks::needsYouTubeOverflowScrollQuirk() const
+{
+#if PLATFORM(IOS_FAMILY)
+    if (!needsQuirks())
+        return false;
+
+    if (!m_needsYouTubeOverflowScrollQuirk)
+        m_needsYouTubeOverflowScrollQuirk = equalLettersIgnoringASCIICase(m_document->url().host(), "www.youtube.com");
+
+    return *m_needsYouTubeOverflowScrollQuirk;
+#else
+    return false;
+#endif
+}
+
 
 }

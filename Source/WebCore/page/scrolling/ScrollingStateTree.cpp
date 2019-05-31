@@ -34,6 +34,7 @@
 #include "ScrollingStateFrameHostingNode.h"
 #include "ScrollingStateFrameScrollingNode.h"
 #include "ScrollingStateOverflowScrollingNode.h"
+#include "ScrollingStatePositionedNode.h"
 #include "ScrollingStateStickyNode.h"
 #include <wtf/text/CString.h>
 #include <wtf/text/TextStream.h>
@@ -75,6 +76,8 @@ Ref<ScrollingStateNode> ScrollingStateTree::createNode(ScrollingNodeType nodeTyp
         return ScrollingStateFixedNode::create(*this, nodeID);
     case ScrollingNodeType::Sticky:
         return ScrollingStateStickyNode::create(*this, nodeID);
+    case ScrollingNodeType::Positioned:
+        return ScrollingStatePositionedNode::create(*this, nodeID);
     }
     ASSERT_NOT_REACHED();
     return ScrollingStateFixedNode::create(*this, nodeID);
@@ -360,6 +363,31 @@ ScrollingStateNode* ScrollingStateTree::stateNodeForID(ScrollingNodeID scrollLay
 
     ASSERT(it->value->scrollingNodeID() == scrollLayerID);
     return it->value;
+}
+
+void ScrollingStateTree::reconcileLayerPositionsRecursive(ScrollingStateNode& currNode, const LayoutRect& layoutViewport, ScrollingLayerPositionAction action)
+{
+    currNode.reconcileLayerPositionForViewportRect(layoutViewport, action);
+
+    if (!currNode.children())
+        return;
+    
+    for (auto& child : *currNode.children()) {
+        // Never need to cross frame boundaries, since viewport rect reconciliation is per frame.
+        if (is<ScrollingStateFrameScrollingNode>(child))
+            continue;
+
+        reconcileLayerPositionsRecursive(*child, layoutViewport, action);
+    }
+}
+
+void ScrollingStateTree::reconcileViewportConstrainedLayerPositions(ScrollingNodeID scrollingNodeID, const LayoutRect& layoutViewport, ScrollingLayerPositionAction action)
+{
+    auto* scrollingNode = stateNodeForID(scrollingNodeID);
+    if (!scrollingNode)
+        return;
+    
+    reconcileLayerPositionsRecursive(*scrollingNode, layoutViewport, action);
 }
 
 } // namespace WebCore

@@ -38,6 +38,7 @@
 #include "CachedResourceLoader.h"
 #include "ContentExtensionError.h"
 #include "ContentSecurityPolicy.h"
+#include "CustomHeaderFields.h"
 #include "DOMWindow.h"
 #include "Document.h"
 #include "DocumentParser.h"
@@ -53,7 +54,6 @@
 #include "FrameTree.h"
 #include "HTMLFormElement.h"
 #include "HTMLFrameOwnerElement.h"
-#include "HTTPHeaderField.h"
 #include "HTTPHeaderNames.h"
 #include "HistoryItem.h"
 #include "HistoryController.h"
@@ -787,13 +787,15 @@ void DocumentLoader::responseReceived(const ResourceResponse& response, Completi
             return;
         }
 
-        String frameOptions = response.httpHeaderFields().get(HTTPHeaderName::XFrameOptions);
-        if (!frameOptions.isNull()) {
-            if (frameLoader()->shouldInterruptLoadForXFrameOptions(frameOptions, url, identifier)) {
-                String message = "Refused to display '" + url.stringCenterEllipsizedToLength() + "' in a frame because it set 'X-Frame-Options' to '" + frameOptions + "'.";
-                m_frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, message, identifier);
-                stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(identifier, response);
-                return;
+        if (!contentSecurityPolicy.overridesXFrameOptions()) {
+            String frameOptions = response.httpHeaderFields().get(HTTPHeaderName::XFrameOptions);
+            if (!frameOptions.isNull()) {
+                if (frameLoader()->shouldInterruptLoadForXFrameOptions(frameOptions, url, identifier)) {
+                    String message = "Refused to display '" + url.stringCenterEllipsizedToLength() + "' in a frame because it set 'X-Frame-Options' to '" + frameOptions + "'.";
+                    m_frame->document()->addConsoleMessage(MessageSource::Security, MessageLevel::Error, message, identifier);
+                    stopLoadingAfterXFrameOptionsOrContentSecurityPolicyDenied(identifier, response);
+                    return;
+                }
             }
         }
     }
@@ -1175,6 +1177,21 @@ void DocumentLoader::checkLoadComplete()
     m_frame->document()->domWindow()->finishedLoading();
 }
 
+void DocumentLoader::applyPoliciesToSettings()
+{
+    if (!m_frame) {
+        ASSERT_NOT_REACHED();
+        return;
+    }
+
+    if (!m_frame->isMainFrame())
+        return;
+
+#if ENABLE(MEDIA_SOURCE)
+    m_frame->settings().setMediaSourceEnabled(m_mediaSourcePolicy == MediaSourcePolicy::Default ? Settings::platformDefaultMediaSourceEnabled() : m_mediaSourcePolicy == MediaSourcePolicy::Enable);
+#endif
+}
+
 void DocumentLoader::attachToFrame(Frame& frame)
 {
     if (m_frame == &frame)
@@ -1188,6 +1205,8 @@ void DocumentLoader::attachToFrame(Frame& frame)
 #ifndef NDEBUG
     m_hasEverBeenAttached = true;
 #endif
+
+    applyPoliciesToSettings();
 }
 
 void DocumentLoader::attachToFrame()
@@ -1302,11 +1321,6 @@ void DocumentLoader::notifyFinishedLoadingApplicationManifest(uint64_t callbackI
     m_frame->loader().client().finishedLoadingApplicationManifest(callbackIdentifier, manifest);
 }
 #endif
-
-void DocumentLoader::setCustomHeaderFields(Vector<HTTPHeaderField>&& fields)
-{
-    m_customHeaderFields = WTFMove(fields);
-}
 
 bool DocumentLoader::isLoadingInAPISense() const
 {
@@ -1554,6 +1568,11 @@ void DocumentLoader::stopRecordingResponses()
 {
     m_stopRecordingResponses = true;
     m_responses.shrinkToFit();
+}
+
+void DocumentLoader::setCustomHeaderFields(Vector<CustomHeaderFields>&& fields)
+{
+    m_customHeaderFields = WTFMove(fields);
 }
 
 void DocumentLoader::setTitle(const StringWithDirection& title)
@@ -2076,10 +2095,18 @@ void DocumentLoader::setTriggeringAction(NavigationAction&& action)
 
 ShouldOpenExternalURLsPolicy DocumentLoader::shouldOpenExternalURLsPolicyToPropagate() const
 {
-    if (!m_frame || !m_frame->isMainFrame())
+    if (!m_frame)
         return ShouldOpenExternalURLsPolicy::ShouldNotAllow;
 
-    return m_shouldOpenExternalURLsPolicy;
+    if (m_frame->isMainFrame())
+        return m_shouldOpenExternalURLsPolicy;
+
+    if (auto* currentDocument = document()) {
+        if (currentDocument->securityOrigin().isSameOriginAs(currentDocument->topOrigin()))
+            return m_shouldOpenExternalURLsPolicy;
+    }
+
+    return ShouldOpenExternalURLsPolicy::ShouldNotAllow;
 }
 
 void DocumentLoader::becomeMainResourceClient()

@@ -1705,11 +1705,13 @@ sub NeedsRuntimeCheck
     }
 
     return $context->extendedAttributes->{EnabledAtRuntime}
+        || $context->extendedAttributes->{EnabledForContext}
         || $context->extendedAttributes->{EnabledForWorld}
         || $context->extendedAttributes->{EnabledBySetting}
         || $context->extendedAttributes->{DisabledByQuirk}
         || $context->extendedAttributes->{SecureContext}
-        || $context->extendedAttributes->{ContextHasServiceWorkerScheme};
+        || $context->extendedAttributes->{ContextHasServiceWorkerScheme}
+        || $context->extendedAttributes->{CustomEnabled};
 }
 
 # https://heycam.github.io/webidl/#es-operations
@@ -2403,19 +2405,30 @@ sub GenerateDictionaryImplementationContent
                     # 2. Let value be the result of converting idlValue to an ECMAScript value.
                     # 3. Perform ! CreateDataProperty(O, key, value).
 
+                my $needsRuntimeCheck = NeedsRuntimeCheck($dictionary, $member);
+                my $indent = "";
+                if ($needsRuntimeCheck) {
+                    my $runtimeEnableConditionalString = GenerateRuntimeEnableConditionalString($dictionary, $member, "true");
+                    $result .= "    if (${runtimeEnableConditionalString}) {\n";
+                    $indent = "    ";
+                }
+
                 if (!$member->isRequired && not defined $member->default) {
                     my $IDLType = GetIDLType($typeScope, $member->type);
                     my $conversionExpression = NativeToJSValueUsingReferences($member, $typeScope, "${IDLType}::extractValueFromNullable(${valueExpression})", "globalObject");
 
-                    $result .= "    if (!${IDLType}::isNullValue(${valueExpression})) {\n";
-                    $result .= "        auto ${key}Value = ${conversionExpression};\n";
-                    $result .= "        result->putDirect(vm, JSC::Identifier::fromString(&vm, \"${key}\"), ${key}Value);\n";
-                    $result .= "    }\n";
+                    $result .= "${indent}    if (!${IDLType}::isNullValue(${valueExpression})) {\n";
+                    $result .= "${indent}        auto ${key}Value = ${conversionExpression};\n";
+                    $result .= "${indent}        result->putDirect(vm, JSC::Identifier::fromString(&vm, \"${key}\"), ${key}Value);\n";
+                    $result .= "${indent}    }\n";
                 } else {
                     my $conversionExpression = NativeToJSValueUsingReferences($member, $typeScope, $valueExpression, "globalObject");
 
-                    $result .= "    auto ${key}Value = ${conversionExpression};\n";
-                    $result .= "    result->putDirect(vm, JSC::Identifier::fromString(&vm, \"${key}\"), ${key}Value);\n";
+                    $result .= "${indent}    auto ${key}Value = ${conversionExpression};\n";
+                    $result .= "${indent}    result->putDirect(vm, JSC::Identifier::fromString(&vm, \"${key}\"), ${key}Value);\n";
+                }
+                if ($needsRuntimeCheck) {
+                    $result .= "    }\n";
                 }
             }
         }
@@ -2499,8 +2512,6 @@ sub GenerateHeader
         }
     }
 
-    $headerIncludes{"$interfaceName.h"} = 1 if $hasParent && $interface->extendedAttributes->{JSGenerateToNativeObject};
-
     $headerIncludes{"SVGElement.h"} = 1 if $className =~ /^JSSVG/;
 
     my $implType = GetImplClassName($interface);
@@ -2512,8 +2523,11 @@ sub GenerateHeader
     push(@headerContent, "\nnamespace WebCore {\n\n");
 
     if ($codeGenerator->IsSVGAnimatedType($interface->type)) {
-        $headerIncludes{"$interfaceName.h"} = 1;
+        $headerIncludes{"SVGAnimatedPropertyImpl.h"} = 1;
+    } elsif ($codeGenerator->IsSVGPathSegType($interface->type)) {
+        $headerIncludes{"SVGPathSegImpl.h"} = 1;
     } else {
+        $headerIncludes{"$interfaceName.h"} = 1 if $hasParent && $interface->extendedAttributes->{JSGenerateToNativeObject};
         # Implementation class forward declaration
         if (IsDOMGlobalObject($interface)) {
             AddClassForwardIfNeeded($interface->type);
@@ -2563,7 +2577,9 @@ sub GenerateHeader
         push(@headerContent, "        return ptr;\n");
         push(@headerContent, "    }\n\n");  
     } else {
-        AddIncludesForImplementationTypeInHeader($implType);
+        if (!$codeGenerator->IsSVGAnimatedType($interface->type) && !$codeGenerator->IsSVGPathSegType($interface->type)) {
+            AddIncludesForImplementationTypeInHeader($implType);
+        }
         push(@headerContent, "    static $className* create(JSC::Structure* structure, JSDOMGlobalObject* globalObject, Ref<$implType>&& impl)\n");
         push(@headerContent, "    {\n");
         push(@headerContent, "        $className* ptr = new (NotNull, JSC::allocateCell<$className>(globalObject->vm().heap)) $className(structure, *globalObject, WTFMove(impl));\n");
@@ -3730,6 +3746,13 @@ sub GenerateRuntimeEnableConditionalString
         }
     }
 
+    if ($context->extendedAttributes->{CustomEnabled}) {
+        assert("CustomEnabled can only be used by interfaces only exposed to the Window") if $interface->extendedAttributes->{Exposed} && $interface->extendedAttributes->{Exposed} ne "Window";
+
+        my $className = "JS" . $interface->type->name;
+        push(@conjuncts, "${className}" . $codeGenerator->WK_ucfirst($context->name) . "IsEnabled()");
+    }
+
     if ($context->extendedAttributes->{DisabledByQuirk}) {
         assert("Must specify value for DisabledByQuirk.") if $context->extendedAttributes->{DisabledByQuirk} eq "VALUE_IS_MISSING";
 
@@ -3749,10 +3772,38 @@ sub GenerateRuntimeEnableConditionalString
 
         AddToImplIncludes("RuntimeEnabledFeatures.h");
 
-        my @flags = split(/&/, $context->extendedAttributes->{EnabledAtRuntime});
-        foreach my $flag (@flags) {
-            push(@conjuncts, "RuntimeEnabledFeatures::sharedFeatures()." . ToMethodName($flag) . "Enabled()");
+        if ($context->extendedAttributes->{EnabledByQuirk}) {
+            AddToImplIncludes("Document.h");
+            AddToImplIncludes("Quirks.h");
+            
+            assert("EnabledByQuirks can only be used by interfaces only exposed to the Window") if $interface->extendedAttributes->{Exposed} && $interface->extendedAttributes->{Exposed} ne "Window";
+    
+            my @quirkFlags = split(/&/, $context->extendedAttributes->{EnabledByQuirk});
+            my @runtimeFlags = split(/&/, $context->extendedAttributes->{EnabledAtRuntime});
+            my @quirks;
+            my @runtimes;
+            foreach my $flag (@quirkFlags) {
+                push(@quirks, "downcast<Document>(jsCast<JSDOMGlobalObject*>(" . $globalObjectPtr . ")->scriptExecutionContext())->quirks()." . ToMethodName($flag) . "Quirk()");
+            }
+            foreach my $flag (@runtimeFlags) {
+                push(@runtimes, "RuntimeEnabledFeatures::sharedFeatures()." . ToMethodName($flag) . "Enabled()");
+            }
+            push(@conjuncts, "(" . join(" && ", @quirks) . " || " . join(" && ", @runtimes) .")");
+        } else {
+            my @flags = split(/&/, $context->extendedAttributes->{EnabledAtRuntime});
+            foreach my $flag (@flags) {
+                push(@conjuncts, "RuntimeEnabledFeatures::sharedFeatures()." . ToMethodName($flag) . "Enabled()");
+            }
         }
+    }
+
+    if ($context->extendedAttributes->{EnabledForContext}) {
+        assert("Must not specify value for EnabledForContext.") unless $context->extendedAttributes->{EnabledForContext} eq "VALUE_IS_MISSING";
+        assert("EnabledForContext must be an interface or constructor attribute.") unless $codeGenerator->IsConstructorType($context->type);
+
+        my $contextRef = "*jsCast<JSDOMGlobalObject*>(" . $globalObjectPtr . ")->scriptExecutionContext()";
+        my $name = $context->name;
+        push(@conjuncts,  "${name}::enabledForContext(" . $contextRef . ")");
     }
 
     my $result = join(" && ", @conjuncts);
@@ -4682,7 +4733,7 @@ sub GenerateImplementation
             }
 
             push(@implContent, $rootString);
-            push(@implContent, "    return root && visitor.containsOpaqueRoot(root);\n");
+            push(@implContent, "    return visitor.containsOpaqueRoot(root);\n");
         } else {
             if (!$emittedJSCast) {
                 push(@implContent, "    UNUSED_PARAM(handle);\n");
@@ -6202,7 +6253,7 @@ sub GenerateCallbackImplementationContent
                 push(@$contentRef, "    auto throwScope = DECLARE_THROW_SCOPE(vm);\n");
                 push(@$contentRef, "    auto returnValue = ${nativeValue};\n");
                 push(@$contentRef, "    RETURN_IF_EXCEPTION(throwScope, CallbackResultType::ExceptionThrown);\n");
-                push(@$contentRef, "    return WTFMove(returnValue);\n");
+                push(@$contentRef, "    return returnValue;\n");
             }
 
             push(@$contentRef, "}\n\n");

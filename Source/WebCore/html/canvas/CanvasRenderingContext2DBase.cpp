@@ -45,6 +45,7 @@
 #include "DisplayListRecorder.h"
 #include "DisplayListReplayer.h"
 #include "FloatQuad.h"
+#include "HTMLCanvasElement.h"
 #include "HTMLImageElement.h"
 #include "HTMLVideoElement.h"
 #include "ImageBitmap.h"
@@ -63,6 +64,7 @@
 #include "TextRun.h"
 #include "TypedOMCSSImageValue.h"
 #include <wtf/CheckedArithmetic.h>
+#include <wtf/IsoMallocInlines.h>
 #include <wtf/MathExtras.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/text/StringBuilder.h>
@@ -71,6 +73,8 @@
 namespace WebCore {
 
 using namespace HTMLNames;
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(CanvasRenderingContext2DBase);
 
 #if USE(CG)
 const ImageSmoothingQuality defaultSmoothingQuality = ImageSmoothingQuality::Low;
@@ -318,7 +322,7 @@ void CanvasRenderingContext2DBase::FontProxy::fontsNeedUpdate(FontSelector& sele
     update(selector);
 }
 
-inline void CanvasRenderingContext2DBase::FontProxy::initialize(FontSelector& fontSelector, const RenderStyle& newStyle)
+void CanvasRenderingContext2DBase::FontProxy::initialize(FontSelector& fontSelector, const RenderStyle& newStyle)
 {
     // Beware! m_font.fontSelector() might not point to document.fontSelector()!
     ASSERT(newStyle.fontCascade().fontSelector() == &fontSelector);
@@ -330,22 +334,22 @@ inline void CanvasRenderingContext2DBase::FontProxy::initialize(FontSelector& fo
     m_font.fontSelector()->registerForInvalidationCallbacks(*this);
 }
 
-inline const FontMetrics& CanvasRenderingContext2DBase::FontProxy::fontMetrics() const
+const FontMetrics& CanvasRenderingContext2DBase::FontProxy::fontMetrics() const
 {
     return m_font.fontMetrics();
 }
 
-inline const FontCascadeDescription& CanvasRenderingContext2DBase::FontProxy::fontDescription() const
+const FontCascadeDescription& CanvasRenderingContext2DBase::FontProxy::fontDescription() const
 {
     return m_font.fontDescription();
 }
 
-inline float CanvasRenderingContext2DBase::FontProxy::width(const TextRun& textRun, GlyphOverflow* overflow) const
+float CanvasRenderingContext2DBase::FontProxy::width(const TextRun& textRun, GlyphOverflow* overflow) const
 {
     return m_font.width(textRun, 0, overflow);
 }
 
-inline void CanvasRenderingContext2DBase::FontProxy::drawBidiText(GraphicsContext& context, const TextRun& run, const FloatPoint& point, FontCascade::CustomFontNotReadyAction action) const
+void CanvasRenderingContext2DBase::FontProxy::drawBidiText(GraphicsContext& context, const TextRun& run, const FloatPoint& point, FontCascade::CustomFontNotReadyAction action) const
 {
     context.drawBidiText(m_font, run, point, action);
 }
@@ -1162,14 +1166,14 @@ void CanvasRenderingContext2DBase::clipInternal(const Path& path, CanvasFillRule
     c->canvasClip(path, toWindRule(windingRule));
 }
 
-inline void CanvasRenderingContext2DBase::beginCompositeLayer()
+void CanvasRenderingContext2DBase::beginCompositeLayer()
 {
 #if !USE(CAIRO)
     drawingContext()->beginTransparencyLayer(1);
 #endif
 }
 
-inline void CanvasRenderingContext2DBase::endCompositeLayer()
+void CanvasRenderingContext2DBase::endCompositeLayer()
 {
 #if !USE(CAIRO)
     drawingContext()->endTransparencyLayer();    
@@ -1929,7 +1933,7 @@ ExceptionOr<Ref<CanvasGradient>> CanvasRenderingContext2DBase::createLinearGradi
 
     auto gradient = CanvasGradient::create(FloatPoint(x0, y0), FloatPoint(x1, y1));
     prepareGradientForDashboard(gradient.get());
-    return WTFMove(gradient);
+    return gradient;
 }
 
 ExceptionOr<Ref<CanvasGradient>> CanvasRenderingContext2DBase::createRadialGradient(float x0, float y0, float r0, float x1, float y1, float r1)
@@ -1942,7 +1946,7 @@ ExceptionOr<Ref<CanvasGradient>> CanvasRenderingContext2DBase::createRadialGradi
 
     auto gradient = CanvasGradient::create(FloatPoint(x0, y0), r0, FloatPoint(x1, y1), r1);
     prepareGradientForDashboard(gradient.get());
-    return WTFMove(gradient);
+    return gradient;
 }
 
 ExceptionOr<RefPtr<CanvasPattern>> CanvasRenderingContext2DBase::createPattern(CanvasImageSource&& image, const String& repetition)

@@ -55,6 +55,7 @@
 #include "Frame.h"
 #include "FrameSelection.h"
 #include "FrameView.h"
+#include "FullscreenManager.h"
 #include "HTMLBodyElement.h"
 #include "HTMLCanvasElement.h"
 #include "HTMLCollection.h"
@@ -79,6 +80,7 @@
 #include "NodeRenderStyle.h"
 #include "PlatformWheelEvent.h"
 #include "PointerCaptureController.h"
+#include "PointerEvent.h"
 #include "PointerLockController.h"
 #include "RenderFragmentContainer.h"
 #include "RenderLayer.h"
@@ -197,10 +199,21 @@ Element::~Element()
     disconnectFromIntersectionObservers();
 #endif
 
+#if ENABLE(RESIZE_OBSERVER)
+    disconnectFromResizeObservers();
+#endif
+
     removeShadowRoot();
 
     if (hasSyntheticAttrChildNodes())
         detachAllAttrNodesFromElement();
+
+#if ENABLE(CSS_TYPED_OM)
+    if (hasRareData()) {
+        if (auto* map = elementRareData()->attributeStyleMap())
+            map->clearElement();
+    }
+#endif
 
     if (hasPendingResources()) {
         document().accessSVGExtensions().removeElementFromPendingResources(*this);
@@ -275,6 +288,15 @@ static bool isForceEvent(const PlatformMouseEvent& platformEvent)
     return platformEvent.type() == PlatformEvent::MouseForceChanged || platformEvent.type() == PlatformEvent::MouseForceDown || platformEvent.type() == PlatformEvent::MouseForceUp;
 }
 
+#if ENABLE(POINTER_EVENTS) && !ENABLE(TOUCH_EVENTS)
+static bool isCompatibilityMouseEvent(const MouseEvent& mouseEvent)
+{
+    // https://www.w3.org/TR/pointerevents/#compatibility-mapping-with-mouse-events
+    const auto& type = mouseEvent.type();
+    return type != eventNames().clickEvent && type != eventNames().mouseoverEvent && type != eventNames().mouseoutEvent && type != eventNames().mouseenterEvent && type != eventNames().mouseleaveEvent;
+}
+#endif
+
 bool Element::dispatchMouseEvent(const PlatformMouseEvent& platformEvent, const AtomicString& eventType, int detail, Element* relatedTarget)
 {
     if (isDisabledFormControl())
@@ -288,9 +310,36 @@ bool Element::dispatchMouseEvent(const PlatformMouseEvent& platformEvent, const 
     if (mouseEvent->type().isEmpty())
         return true; // Shouldn't happen.
 
+    bool didNotSwallowEvent = true;
+
+#if ENABLE(POINTER_EVENTS)
+    if (RuntimeEnabledFeatures::sharedFeatures().pointerEventsEnabled()) {
+#if ENABLE(TOUCH_EVENTS)
+        if (auto* page = document().page()) {
+            if (mouseEvent->type() != eventNames().clickEvent && page->pointerCaptureController().preventsCompatibilityMouseEventsForIdentifier(platformEvent.pointerId()))
+                return false;
+        }
+#else
+        if (auto pointerEvent = PointerEvent::create(mouseEvent)) {
+            if (auto* page = document().page()) {
+                page->pointerCaptureController().dispatchEvent(*pointerEvent, this);
+                if (isCompatibilityMouseEvent(mouseEvent) && page->pointerCaptureController().preventsCompatibilityMouseEventsForIdentifier(pointerEvent->pointerId()))
+                    return false;
+            }
+            if (pointerEvent->defaultPrevented() || pointerEvent->defaultHandled()) {
+                didNotSwallowEvent = false;
+                if (pointerEvent->type() == eventNames().pointerdownEvent)
+                    return false;
+            }
+        }
+#endif
+    }
+#endif
+
     ASSERT(!mouseEvent->target() || mouseEvent->target() != relatedTarget);
     dispatchEvent(mouseEvent);
-    bool didNotSwallowEvent = !mouseEvent->defaultPrevented() && !mouseEvent->defaultHandled();
+    if (mouseEvent->defaultPrevented() || mouseEvent->defaultHandled())
+        didNotSwallowEvent = false;
 
     if (mouseEvent->type() == eventNames().clickEvent && mouseEvent->detail() == 2) {
         // Special case: If it's a double click event, we also send the dblclick event. This is not part
@@ -451,11 +500,9 @@ void Element::synchronizeAllAttributes() const
         ASSERT(isStyledElement());
         static_cast<const StyledElement*>(this)->synchronizeStyleAttributeInternal();
     }
-
-    if (elementData()->animatedSVGAttributesAreDirty()) {
-        ASSERT(isSVGElement());
-        downcast<SVGElement>(*this).synchronizeAnimatedSVGAttribute(anyQName());
-    }
+    
+    if (isSVGElement())
+        downcast<SVGElement>(const_cast<Element&>(*this)).synchronizeAllAttributes();
 }
 
 ALWAYS_INLINE void Element::synchronizeAttribute(const QualifiedName& name) const
@@ -468,10 +515,8 @@ ALWAYS_INLINE void Element::synchronizeAttribute(const QualifiedName& name) cons
         return;
     }
 
-    if (UNLIKELY(elementData()->animatedSVGAttributesAreDirty())) {
-        ASSERT(isSVGElement());
-        downcast<SVGElement>(*this).synchronizeAnimatedSVGAttribute(name);
-    }
+    if (isSVGElement())
+        downcast<SVGElement>(const_cast<Element&>(*this)).synchronizeAttribute(name);
 }
 
 static ALWAYS_INLINE bool isStyleAttribute(const Element& element, const AtomicString& attributeLocalName)
@@ -492,11 +537,9 @@ ALWAYS_INLINE void Element::synchronizeAttribute(const AtomicString& localName) 
         static_cast<const StyledElement*>(this)->synchronizeStyleAttributeInternal();
         return;
     }
-    if (elementData()->animatedSVGAttributesAreDirty()) {
-        // We're not passing a namespace argument on purpose. SVGNames::*Attr are defined w/o namespaces as well.
-        ASSERT_WITH_SECURITY_IMPLICATION(isSVGElement());
-        downcast<SVGElement>(*this).synchronizeAnimatedSVGAttribute(QualifiedName(nullAtom(), localName, nullAtom()));
-    }
+
+    if (isSVGElement())
+        downcast<SVGElement>(const_cast<Element&>(*this)).synchronizeAttribute(QualifiedName(nullAtom(), localName, nullAtom()));
 }
 
 const AtomicString& Element::getAttribute(const QualifiedName& name) const
@@ -530,7 +573,8 @@ bool Element::isFocusable() const
     if (!renderer()) {
         // If the node is in a display:none tree it might say it needs style recalc but
         // the whole document is actually up to date.
-        ASSERT(!needsStyleRecalc() || !document().childNeedsStyleRecalc());
+        // FIXME: We should be able to assert !needsStyleRecalc() || !document().childNeedsStyleRecalc()
+        // but it hits too frequently on websites like Gmail and Microsoft Exchange.
 
         // Elements in canvas fallback content are not rendered, but they are allowed to be
         // focusable as long as their canvas is displayed and visible.
@@ -793,8 +837,8 @@ void Element::scrollTo(const ScrollToOptions& options, ScrollClamping clamping)
         adjustForAbsoluteZoom(renderer->scrollLeft(), *renderer),
         adjustForAbsoluteZoom(renderer->scrollTop(), *renderer)
     );
-    renderer->setScrollLeft(clampToInteger(scrollToOptions.left.value() * renderer->style().effectiveZoom()), clamping);
-    renderer->setScrollTop(clampToInteger(scrollToOptions.top.value() * renderer->style().effectiveZoom()), clamping);
+    renderer->setScrollLeft(clampToInteger(scrollToOptions.left.value() * renderer->style().effectiveZoom()), ScrollType::Programmatic, clamping);
+    renderer->setScrollTop(clampToInteger(scrollToOptions.top.value() * renderer->style().effectiveZoom()), ScrollType::Programmatic, clamping);
 }
 
 void Element::scrollTo(double x, double y)
@@ -1115,9 +1159,9 @@ void Element::setScrollLeft(int newLeft)
     }
 
     if (auto* renderer = renderBox()) {
-        renderer->setScrollLeft(static_cast<int>(newLeft * renderer->style().effectiveZoom()));
+        renderer->setScrollLeft(static_cast<int>(newLeft * renderer->style().effectiveZoom()), ScrollType::Programmatic);
         if (auto* scrollableArea = renderer->layer())
-            scrollableArea->setScrolledProgrammatically(true);
+            scrollableArea->setScrollShouldClearLatchedState(true);
     }
 }
 
@@ -1132,9 +1176,9 @@ void Element::setScrollTop(int newTop)
     }
 
     if (auto* renderer = renderBox()) {
-        renderer->setScrollTop(static_cast<int>(newTop * renderer->style().effectiveZoom()));
+        renderer->setScrollTop(static_cast<int>(newTop * renderer->style().effectiveZoom()), ScrollType::Programmatic);
         if (auto* scrollableArea = renderer->layer())
-            scrollableArea->setScrolledProgrammatically(true);
+            scrollableArea->setScrollShouldClearLatchedState(true);
     }
 }
 
@@ -1389,10 +1433,8 @@ Ref<DOMRectList> Element::getClientRects()
     return DOMRectList::create(quads);
 }
 
-FloatRect Element::boundingClientRect()
+Optional<std::pair<RenderObject*, FloatRect>> Element::boundingAbsoluteRectWithoutLayout()
 {
-    document().updateLayoutIgnorePendingStylesheets();
-
     RenderObject* renderer = this->renderer();
     Vector<FloatQuad> quads;
     if (isSVGElement() && renderer && !renderer->isSVGRoot()) {
@@ -1408,12 +1450,23 @@ FloatRect Element::boundingClientRect()
         renderBoxModelObject->absoluteQuads(quads);
 
     if (quads.isEmpty())
-        return { };
+        return WTF::nullopt;
 
     FloatRect result = quads[0].boundingBox();
     for (size_t i = 1; i < quads.size(); ++i)
         result.unite(quads[i].boundingBox());
 
+    return std::make_pair(renderer, result);
+}
+
+FloatRect Element::boundingClientRect()
+{
+    document().updateLayoutIgnorePendingStylesheets();
+    auto pair = boundingAbsoluteRectWithoutLayout();
+    if (!pair)
+        return { };
+    RenderObject* renderer = pair->first;
+    FloatRect result = pair->second;
     document().convertAbsoluteToClientRect(result, renderer->style());
     return result;
 }
@@ -1966,6 +2019,10 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
     if (document().page())
         document().page()->pointerLockController().elementRemoved(*this);
 #endif
+#if ENABLE(POINTER_EVENTS)
+    if (document().page() && RuntimeEnabledFeatures::sharedFeatures().pointerEventsEnabled())
+        document().page()->pointerCaptureController().elementWasRemoved(*this);
+#endif
 
     setSavedLayerScrollPosition(ScrollPosition());
 
@@ -2031,6 +2088,11 @@ void Element::removedFromAncestor(RemovalType removalType, ContainerNode& oldPar
     if (frame && frame->page())
         frame->page()->removeLatchingStateForTarget(*this);
 #endif
+
+    if (hasRareData() && elementRareData()->hasElementIdentifier()) {
+        document().identifiedElementWasRemovedFromDocument(*this);
+        elementRareData()->setHasElementIdentifier(false);
+    }
 }
 
 ShadowRoot* Element::shadowRoot() const
@@ -2450,7 +2512,7 @@ ExceptionOr<RefPtr<Attr>> Element::setAttributeNode(Attr& attrNode)
 {
     RefPtr<Attr> oldAttrNode = attrIfExists(attrNode.localName(), shouldIgnoreAttributeCase(*this));
     if (oldAttrNode.get() == &attrNode)
-        return WTFMove(oldAttrNode);
+        return oldAttrNode;
 
     // InUseAttributeError: Raised if node is an Attr that is already an attribute of another Element object.
     // The DOM user must explicitly clone Attr nodes to re-use them in other elements.
@@ -2490,14 +2552,14 @@ ExceptionOr<RefPtr<Attr>> Element::setAttributeNode(Attr& attrNode)
         }
     }
 
-    return WTFMove(oldAttrNode);
+    return oldAttrNode;
 }
 
 ExceptionOr<RefPtr<Attr>> Element::setAttributeNodeNS(Attr& attrNode)
 {
     RefPtr<Attr> oldAttrNode = attrIfExists(attrNode.qualifiedName());
     if (oldAttrNode.get() == &attrNode)
-        return WTFMove(oldAttrNode);
+        return oldAttrNode;
 
     // InUseAttributeError: Raised if node is an Attr that is already an attribute of another Element object.
     // The DOM user must explicitly clone Attr nodes to re-use them in other elements.
@@ -2526,7 +2588,7 @@ ExceptionOr<RefPtr<Attr>> Element::setAttributeNodeNS(Attr& attrNode)
     attachAttributeNodeIfNeeded(attrNode);
     setAttributeInternal(index, attrNode.qualifiedName(), attrNodeValue, NotInSynchronizationOfLazyAttribute);
 
-    return WTFMove(oldAttrNode);
+    return oldAttrNode;
 }
 
 ExceptionOr<Ref<Attr>> Element::removeAttributeNode(Attr& attr)
@@ -2550,7 +2612,7 @@ ExceptionOr<Ref<Attr>> Element::removeAttributeNode(Attr& attr)
     detachAttrNodeFromElementWithValue(&attr, m_elementData->attributeAt(existingAttributeIndex).value());
     removeAttributeInternal(existingAttributeIndex, NotInSynchronizationOfLazyAttribute);
 
-    return WTFMove(oldAttrNode);
+    return oldAttrNode;
 }
 
 ExceptionOr<QualifiedName> Element::parseAttributeName(const AtomicString& namespaceURI, const AtomicString& qualifiedName)
@@ -2561,7 +2623,7 @@ ExceptionOr<QualifiedName> Element::parseAttributeName(const AtomicString& names
     QualifiedName parsedAttributeName { parseResult.releaseReturnValue() };
     if (!Document::hasValidNamespaceForAttributes(parsedAttributeName))
         return Exception { NamespaceError };
-    return WTFMove(parsedAttributeName);
+    return parsedAttributeName;
 }
 
 ExceptionOr<void> Element::setAttributeNS(const AtomicString& namespaceURI, const AtomicString& qualifiedName, const AtomicString& value)
@@ -2751,6 +2813,7 @@ void Element::updateFocusAppearance(SelectionRestorationMode, SelectionRevealMod
         if (frame->selection().shouldChangeSelection(newSelection)) {
             frame->selection().setSelection(newSelection, FrameSelection::defaultSetSelectionOptions(), Element::defaultFocusTextStateChangeIntent());
             frame->selection().revealSelection(revealMode);
+            return;
         }
     }
 
@@ -3405,7 +3468,7 @@ bool Element::childShouldCreateRenderer(const Node& child) const
     return true;
 }
 
-#if ENABLE(FULLSCREEN_API) || ENABLE(POINTER_EVENTS)
+#if ENABLE(FULLSCREEN_API)
 static Element* parentCrossingFrameBoundaries(const Element* element)
 {
     ASSERT(element);
@@ -3413,12 +3476,10 @@ static Element* parentCrossingFrameBoundaries(const Element* element)
         return parent;
     return element->document().ownerElement();
 }
-#endif
 
-#if ENABLE(FULLSCREEN_API)
 void Element::webkitRequestFullscreen()
 {
-    document().requestFullScreenForElement(this, Document::EnforceIFrameAllowFullScreenRequirement);
+    document().fullscreenManager().requestFullscreenForElement(this, FullscreenManager::EnforceIFrameAllowFullscreenRequirement);
 }
 
 bool Element::containsFullScreenElement() const
@@ -3501,6 +3562,32 @@ IntersectionObserverData* Element::intersectionObserverData()
 }
 #endif
 
+#if ENABLE(RESIZE_OBSERVER)
+void Element::disconnectFromResizeObservers()
+{
+    auto* observerData = resizeObserverData();
+    if (!observerData)
+        return;
+
+    for (const auto& observer : observerData->observers)
+        observer->targetDestroyed(*this);
+    observerData->observers.clear();
+}
+
+ResizeObserverData& Element::ensureResizeObserverData()
+{
+    auto& rareData = ensureElementRareData();
+    if (!rareData.resizeObserverData())
+        rareData.setResizeObserverData(std::make_unique<ResizeObserverData>());
+    return *rareData.resizeObserverData();
+}
+
+ResizeObserverData* Element::resizeObserverData()
+{
+    return hasRareData() ? elementRareData()->resizeObserverData() : nullptr;
+}
+#endif
+
 SpellcheckAttributeState Element::spellcheckAttributeState() const
 {
     const AtomicString& value = attributeWithoutSynchronization(HTMLNames::spellcheckAttr);
@@ -3536,7 +3623,7 @@ bool Element::fastAttributeLookupAllowed(const QualifiedName& name) const
         return false;
 
     if (isSVGElement())
-        return !downcast<SVGElement>(*this).isAnimatableAttribute(name);
+        return !downcast<SVGElement>(*this).isAnimatedPropertyAttribute(name);
 
     return true;
 }
@@ -4117,7 +4204,7 @@ ExceptionOr<Ref<WebAnimation>> Element::animate(JSC::ExecState& state, JSC::Stro
     if (animationPlayResult.hasException())
         return animationPlayResult.releaseException();
 
-    return WTFMove(animation);
+    return animation;
 }
 
 Vector<RefPtr<WebAnimation>> Element::getAnimations()
@@ -4139,6 +4226,15 @@ Vector<RefPtr<WebAnimation>> Element::getAnimations()
     return animations;
 }
 
+ElementIdentifier Element::createElementIdentifier()
+{
+    auto& rareData = ensureElementRareData();
+    ASSERT(!rareData.hasElementIdentifier());
+
+    rareData.setHasElementIdentifier(true);
+    return ElementIdentifier::generate();
+}
+
 #if ENABLE(CSS_TYPED_OM)
 StylePropertyMap* Element::attributeStyleMap()
 {
@@ -4156,47 +4252,13 @@ void Element::setAttributeStyleMap(Ref<StylePropertyMap>&& map)
 #if ENABLE(POINTER_EVENTS)
 OptionSet<TouchAction> Element::computedTouchActions() const
 {
-    OptionSet<TouchAction> computedTouchActions = TouchAction::Auto;
-    for (auto* element = this; element; element = parentCrossingFrameBoundaries(element)) {
-        auto* renderer = element->renderer();
-        if (!renderer)
-            continue;
+    if (auto* style = renderOrDisplayContentsStyle())
+        return style->effectiveTouchActions();
 
-        auto touchActions = renderer->style().touchActions();
-
-        // Once we've encountered touch-action: none, we know that this will be the computed value.
-        if (touchActions == TouchAction::None)
-            return touchActions;
-
-        // If the computed touch-action so far was "auto", we can just use the current element's touch-action.
-        if (computedTouchActions == TouchAction::Auto) {
-            computedTouchActions = touchActions;
-            continue;
-        }
-
-        // If the current element has touch-action: auto or the same touch-action as the computed touch-action,
-        // we need to keep going up the ancestry chain.
-        if (touchActions == TouchAction::Auto || touchActions == computedTouchActions)
-            continue;
-
-        // Now, the element's touch-action and the computed touch-action are different and are neither "auto" nor "none".
-        if (computedTouchActions == TouchAction::Manipulation) {
-            // If the computed touch-action is "manipulation", we can take the current element's touch-action as the newly
-            // computed touch-action.
-            computedTouchActions = touchActions;
-        } else if (touchActions == TouchAction::Manipulation) {
-            // Otherwise, we have a restricted computed touch-action so far. If the current element's touch-action is "manipulation"
-            // then we can just keep going and leave the computed touch-action untouched.
-            continue;
-        }
-
-        // In any other case, we have competing restrictive touch-action values that can only yield "none".
-        return TouchAction::None;
-    }
-    return computedTouchActions;
+    return TouchAction::Auto;
 }
 
-#if ENABLE(ACCELERATED_OVERFLOW_SCROLLING)
+#if ENABLE(OVERFLOW_SCROLLING_TOUCH)
 ScrollingNodeID Element::nearestScrollingNodeIDUsingTouchOverflowScrolling() const
 {
     if (!renderer())

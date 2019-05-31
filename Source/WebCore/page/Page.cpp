@@ -35,6 +35,7 @@
 #include "ContextMenuClient.h"
 #include "ContextMenuController.h"
 #include "CookieJar.h"
+#include "CustomHeaderFields.h"
 #include "DOMRect.h"
 #include "DOMRectList.h"
 #include "DatabaseProvider.h"
@@ -57,6 +58,7 @@
 #include "FrameSelection.h"
 #include "FrameTree.h"
 #include "FrameView.h"
+#include "FullscreenManager.h"
 #include "HTMLElement.h"
 #include "HTMLMediaElement.h"
 #include "HistoryController.h"
@@ -89,11 +91,11 @@
 #include "PointerCaptureController.h"
 #include "PointerLockController.h"
 #include "ProgressTracker.h"
-#include "PublicSuffix.h"
 #include "RenderLayerCompositor.h"
 #include "RenderTheme.h"
 #include "RenderView.h"
 #include "RenderWidget.h"
+#include "ResizeObserver.h"
 #include "ResourceUsageOverlay.h"
 #include "RuntimeEnabledFeatures.h"
 #include "SVGDocumentExtensions.h"
@@ -125,6 +127,7 @@
 #include <wtf/FileSystem.h>
 #include <wtf/RefCountedLeakCounter.h>
 #include <wtf/StdLibExtras.h>
+#include <wtf/SystemTracing.h>
 #include <wtf/text/Base64.h>
 #include <wtf/text/StringHash.h>
 
@@ -231,6 +234,9 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_diagnosticLoggingClient(WTFMove(pageConfiguration.diagnosticLoggingClient))
     , m_performanceLoggingClient(WTFMove(pageConfiguration.performanceLoggingClient))
     , m_webGLStateTracker(WTFMove(pageConfiguration.webGLStateTracker))
+#if ENABLE(SPEECH_SYNTHESIS)
+    , m_speechSynthesisClient(WTFMove(pageConfiguration.speechSynthesisClient))
+#endif
     , m_libWebRTCProvider(WTFMove(pageConfiguration.libWebRTCProvider))
     , m_verticalScrollElasticity(ScrollElasticityAllowed)
     , m_horizontalScrollElasticity(ScrollElasticityAllowed)
@@ -251,9 +257,6 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_storageNamespaceProvider(*WTFMove(pageConfiguration.storageNamespaceProvider))
     , m_userContentProvider(*WTFMove(pageConfiguration.userContentProvider))
     , m_visitedLinkStore(*WTFMove(pageConfiguration.visitedLinkStore))
-#if ENABLE(INTERSECTION_OBSERVER)
-    , m_intersectionObservationUpdateTimer(*this, &Page::updateIntersectionObservations)
-#endif
     , m_sessionID(PAL::SessionID::defaultSessionID())
 #if ENABLE(VIDEO)
     , m_playbackControlsManagerUpdateTimer(*this, &Page::playbackControlsManagerUpdateTimerFired)
@@ -396,6 +399,16 @@ OptionSet<DisabledAdaptations> Page::disabledAdaptations() const
 ViewportArguments Page::viewportArguments() const
 {
     return mainFrame().document() ? mainFrame().document()->viewportArguments() : ViewportArguments();
+}
+
+void Page::setOverrideViewportArguments(const Optional<ViewportArguments>& viewportArguments)
+{
+    if (viewportArguments == m_overrideViewportArguments)
+        return;
+
+    m_overrideViewportArguments = viewportArguments;
+    if (auto* document = mainFrame().document())
+        document->updateViewportArguments();
 }
 
 ScrollingCoordinator* Page::scrollingCoordinator()
@@ -1075,6 +1088,11 @@ void Page::setDeviceScaleFactor(float scaleFactor)
     pageOverlayController().didChangeDeviceScaleFactor();
 }
 
+void Page::setInitialScale(float initialScale)
+{
+    m_initialScale = initialScale;
+}
+
 void Page::setUserInterfaceLayoutDirection(UserInterfaceLayoutDirection userInterfaceLayoutDirection)
 {
     if (m_userInterfaceLayoutDirection == userInterfaceLayoutDirection)
@@ -1110,13 +1128,6 @@ void Page::didFinishLoad()
 
     if (m_performanceMonitor)
         m_performanceMonitor->didFinishLoad();
-}
-
-void Page::willDisplayPage()
-{
-#if ENABLE(INTERSECTION_OBSERVER)
-    updateIntersectionObservations();
-#endif
 }
 
 bool Page::isOnlyNonUtilityPage() const
@@ -1260,31 +1271,50 @@ void Page::removeActivityStateChangeObserver(ActivityStateChangeObserver& observ
     m_activityStateChangeObservers.remove(&observer);
 }
 
-#if ENABLE(INTERSECTION_OBSERVER)
-void Page::addDocumentNeedingIntersectionObservationUpdate(Document& document)
+void Page::layoutIfNeeded()
 {
-    if (m_documentsNeedingIntersectionObservationUpdate.find(&document) == notFound)
-        m_documentsNeedingIntersectionObservationUpdate.append(makeWeakPtr(document));
+    if (FrameView* view = m_mainFrame->view())
+        view->updateLayoutAndStyleIfNeededRecursive();
 }
 
-void Page::updateIntersectionObservations()
+void Page::updateRendering()
 {
-    m_intersectionObservationUpdateTimer.stop();
-    for (const auto& document : m_documentsNeedingIntersectionObservationUpdate) {
-        if (document)
-            document->updateIntersectionObservations();
-    }
-    m_documentsNeedingIntersectionObservationUpdate.clear();
-}
-
-void Page::scheduleForcedIntersectionObservationUpdate(Document& document)
-{
-    addDocumentNeedingIntersectionObservationUpdate(document);
-    if (m_intersectionObservationUpdateTimer.isActive())
+    // This function is not reentrant, e.g. a rAF callback may force repaint.
+    if (m_inUpdateRendering) {
+        layoutIfNeeded();
         return;
-    m_intersectionObservationUpdateTimer.startOneShot(0_s);
-}
+    }
+
+    TraceScope traceScope(RenderingUpdateStart, RenderingUpdateEnd);
+
+    SetForScope<bool> change(m_inUpdateRendering, true);
+
+    Vector<RefPtr<Document>> documents;
+
+    // The requestAnimationFrame callbacks may change the frame hierarchy of the page
+    forEachDocument([&documents] (Document& document) {
+        documents.append(&document);
+    });
+
+    for (auto& document : documents) {
+        DOMHighResTimeStamp timestamp = document->domWindow()->nowTimestamp();
+        document->updateAnimationsAndSendEvents(timestamp);
+        document->serviceRequestAnimationFrameCallbacks(timestamp);
+    }
+
+    layoutIfNeeded();
+
+#if ENABLE(INTERSECTION_OBSERVER)
+    for (auto& document : documents)
+        document->updateIntersectionObservations();
 #endif
+#if ENABLE(RESIZE_OBSERVER)
+    for (auto& document : documents)
+        document->updateResizeObservations(*this);
+#endif
+
+    layoutIfNeeded();
+}
 
 void Page::suspendScriptedAnimations()
 {
@@ -1764,6 +1794,35 @@ void Page::resumeAllMediaPlayback()
 #endif
 }
 
+void Page::suspendAllMediaBuffering()
+{
+#if ENABLE(VIDEO)
+    ASSERT(!m_mediaBufferingIsSuspended);
+    if (m_mediaBufferingIsSuspended)
+        return;
+    m_mediaBufferingIsSuspended = true;
+
+    for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
+        if (auto* document = frame->document())
+            document->suspendAllMediaBuffering();
+    }
+#endif
+}
+
+void Page::resumeAllMediaBuffering()
+{
+#if ENABLE(VIDEO)
+    if (!m_mediaBufferingIsSuspended)
+        return;
+    m_mediaBufferingIsSuspended = false;
+
+    for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
+        if (auto* document = frame->document())
+            document->resumeAllMediaBuffering();
+    }
+#endif
+}
+
 #if ENABLE(MEDIA_SESSION)
 void Page::handleMediaEvent(MediaEventType eventType)
 {
@@ -2133,7 +2192,7 @@ static LayoutRect relevantViewRect(RenderView* view)
     // has been determined to be relevant in the context of this goal. We may choose to tweak
     // the rect over time, much like we may choose to tweak gMinimumPaintedAreaRatio and
     // gMaximumUnpaintedAreaRatio. But this seems to work well right now.
-    LayoutRect relevantViewRect { 0, 0, relevantViewRectWidth, 1300 };
+    LayoutRect relevantViewRect { 0, 0, LayoutUnit(relevantViewRectWidth), 1300 };
     // If the viewRect is wider than the relevantViewRect, center the relevantViewRect.
     if (viewRect.width() > relevantViewRect.width())
         relevantViewRect.setX((viewRect.width() - relevantViewRect.width()) / 2);
@@ -2369,19 +2428,12 @@ void Page::logNavigation(const Navigation& navigation)
     diagnosticLoggingClient().logDiagnosticMessage(DiagnosticLoggingKeys::navigationKey(), navigationDescription, ShouldSample::No);
 
     if (!navigation.domain.isEmpty())
-        diagnosticLoggingClient().logDiagnosticMessageWithEnhancedPrivacy(DiagnosticLoggingKeys::domainVisitedKey(), navigation.domain, ShouldSample::Yes);
+        diagnosticLoggingClient().logDiagnosticMessageWithEnhancedPrivacy(DiagnosticLoggingKeys::domainVisitedKey(), navigation.domain.string(), ShouldSample::Yes);
 }
 
 void Page::mainFrameLoadStarted(const URL& destinationURL, FrameLoadType type)
 {
-    String domain;
-#if ENABLE(PUBLIC_SUFFIX_LIST)
-    domain = topPrivatelyControlledDomain(destinationURL.host().toString());
-#else
-    UNUSED_PARAM(destinationURL);
-#endif
-
-    Navigation navigation = { domain, type };
+    Navigation navigation = { RegistrableDomain { destinationURL }, type };
 
     // To avoid being too verbose, we only log navigations if the page is or becomes visible. This avoids logging non-user observable loads.
     if (!isVisible()) {
@@ -2641,19 +2693,6 @@ void Page::appearanceDidChange()
     }
 }
 
-void Page::installedPageOverlaysChanged()
-{
-    if (isInWindow()) {
-        if (pageOverlayController().hasViewOverlays())
-            chrome().client().attachViewOverlayGraphicsLayer(&pageOverlayController().layerWithViewOverlays());
-        else
-            chrome().client().attachViewOverlayGraphicsLayer(nullptr);
-    }
-
-    if (auto* frameView = mainFrame().view())
-        frameView->setNeedsCompositingConfigurationUpdate();
-}
-
 void Page::setUnobscuredSafeAreaInsets(const FloatBoxExtent& insets)
 {
     if (m_unobscuredSafeAreaInsets == insets)
@@ -2688,19 +2727,27 @@ void Page::setUseSystemAppearance(bool value)
     }
 }
 
-void Page::setUseDarkAppearance(bool value)
+void Page::effectiveAppearanceDidChange(bool useDarkAppearance, bool useInactiveAppearance)
 {
 #if HAVE(OS_DARK_MODE_SUPPORT)
-    if (m_useDarkAppearance == value)
+    if (m_useDarkAppearance == useDarkAppearance && m_useInactiveAppearance == useInactiveAppearance)
         return;
 
-    m_useDarkAppearance = value;
+    m_useDarkAppearance = useDarkAppearance;
+    m_useInactiveAppearance = useInactiveAppearance;
 
-    InspectorInstrumentation::defaultAppearanceDidChange(*this, value);
+    InspectorInstrumentation::defaultAppearanceDidChange(*this, useDarkAppearance);
 
     appearanceDidChange();
 #else
-    UNUSED_PARAM(value);
+    UNUSED_PARAM(useDarkAppearance);
+
+    if (m_useInactiveAppearance == useInactiveAppearance)
+        return;
+
+    m_useInactiveAppearance = useInactiveAppearance;
+
+    appearanceDidChange();
 #endif
 }
 
@@ -2763,7 +2810,7 @@ void Page::setFullscreenControlsHidden(bool hidden)
     for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
         if (!frame->document())
             continue;
-        frame->document()->setFullscreenControlsHidden(hidden);
+        frame->document()->fullscreenManager().setFullscreenControlsHidden(hidden);
     }
 #else
     UNUSED_PARAM(hidden);
@@ -2813,6 +2860,13 @@ void Page::didChangeMainDocument()
 #if ENABLE(WEB_RTC)
     m_rtcController.reset(m_shouldEnableICECandidateFilteringByDefault);
 #endif
+}
+
+RenderingUpdateScheduler& Page::renderingUpdateScheduler()
+{
+    if (!m_renderingUpdateScheduler)
+        m_renderingUpdateScheduler = RenderingUpdateScheduler::create(*this);
+    return *m_renderingUpdateScheduler;
 }
 
 void Page::forEachDocument(const Function<void(Document&)>& functor)
@@ -2892,11 +2946,59 @@ void Page::removeLatchingStateForTarget(Element& targetNode)
 }
 #endif // PLATFORM(MAC)
 
+static void dispatchPrintEvent(Frame& mainFrame, const AtomicString& eventType)
+{
+    Vector<Ref<Frame>> frames;
+    for (auto* frame = &mainFrame; frame; frame = frame->tree().traverseNext())
+        frames.append(*frame);
+
+    for (auto& frame : frames) {
+        if (auto* window = frame->window())
+            window->dispatchEvent(Event::create(eventType, Event::CanBubble::No, Event::IsCancelable::No), window->document());
+    }
+}
+
+void Page::dispatchBeforePrintEvent()
+{
+    dispatchPrintEvent(m_mainFrame, eventNames().beforeprintEvent);
+}
+
+void Page::dispatchAfterPrintEvent()
+{
+    dispatchPrintEvent(m_mainFrame, eventNames().afterprintEvent);
+}
+
 #if ENABLE(APPLE_PAY)
 void Page::setPaymentCoordinator(std::unique_ptr<PaymentCoordinator>&& paymentCoordinator)
 {
     m_paymentCoordinator = WTFMove(paymentCoordinator);
 }
 #endif
+
+void Page::configureLoggingChannel(const String& channelName, WTFLogChannelState state, WTFLogLevel level)
+{
+#if !RELEASE_LOG_DISABLED
+    if (auto* channel = getLogChannel(channelName)) {
+        channel->state = state;
+        channel->level = level;
+
+#if USE(LIBWEBRTC)
+        if (channel == &LogWebRTC && m_mainFrame->document())
+            libWebRTCProvider().setEnableLogging(!m_mainFrame->document()->sessionID().isEphemeral());
+#endif
+    }
+
+    chrome().client().configureLoggingChannel(channelName, state, level);
+#else
+    UNUSED_PARAM(channelName);
+    UNUSED_PARAM(state);
+    UNUSED_PARAM(level);
+#endif
+}
+
+void Page::didFinishLoadingImageForElement(HTMLImageElement& element)
+{
+    chrome().client().didFinishLoadingImageForElement(element);
+}
 
 } // namespace WebCore

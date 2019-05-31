@@ -86,12 +86,21 @@ void WebFrameProxy::loadURL(const URL& url)
     m_page->process().send(Messages::WebPage::LoadURLInFrame(url, m_frameID), m_page->pageID());
 }
 
+void WebFrameProxy::loadData(const IPC::DataReference& data, const String& MIMEType, const String& encodingName, const URL& baseURL)
+{
+    ASSERT(!isMainFrame());
+    if (!m_page)
+        return;
+
+    m_page->process().send(Messages::WebPage::LoadDataInFrame(data, MIMEType, encodingName, baseURL, m_frameID), m_page->pageID());
+}
+
 void WebFrameProxy::stopLoading() const
 {
     if (!m_page)
         return;
 
-    if (!m_page->isValid())
+    if (!m_page->hasRunningProcess())
         return;
 
     m_page->process().send(Messages::WebPage::StopLoadingFrame(m_frameID), m_page->pageID());
@@ -135,6 +144,11 @@ bool WebFrameProxy::isDisplayingPDFDocument() const
 void WebFrameProxy::didStartProvisionalLoad(const URL& url)
 {
     m_frameLoadState.didStartProvisionalLoad(url);
+}
+
+void WebFrameProxy::didExplicitOpen(const URL& url)
+{
+    m_frameLoadState.didExplicitOpen(url);
 }
 
 void WebFrameProxy::didReceiveServerRedirectForProvisionalLoad(const URL& url)
