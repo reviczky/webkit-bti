@@ -1,6 +1,7 @@
 webkit2gtk (2.25.1-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * Refresh all patches.
   * debian/watch, debian/gbp.conf:
     + Update for 2.25.x packages in experimental.
 
