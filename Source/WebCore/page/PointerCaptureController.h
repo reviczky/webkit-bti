@@ -46,11 +46,16 @@ public:
     bool hasPointerCapture(Element*, PointerID);
 
     void pointerLockWasApplied();
+    void elementWasRemoved(Element&);
 
-    void touchEndedOrWasCancelledForIdentifier(PointerID);
+#if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS_FAMILY)
+    void dispatchEventForTouchAtIndex(EventTarget&, const PlatformTouchEvent&, unsigned, bool isPrimary, WindowProxy&);
+#endif
+
+    WEBCORE_EXPORT void touchWithIdentifierWasRemoved(PointerID);
     bool hasCancelledPointerEventForIdentifier(PointerID);
-    void pointerEventWillBeDispatched(const PointerEvent&, EventTarget*);
-    void pointerEventWasDispatched(const PointerEvent&);
+    bool preventsCompatibilityMouseEventsForIdentifier(PointerID);
+    void dispatchEvent(PointerEvent&, EventTarget*);
     WEBCORE_EXPORT void cancelPointer(PointerID, const IntPoint&);
 
 private:
@@ -59,12 +64,20 @@ private:
         RefPtr<Element> targetOverride;
         String pointerType;
         bool cancelled { false };
+        bool isPrimary { false };
+        bool preventsCompatibilityMouseEvents { false };
+        bool pointerIsPressed { false };
     };
 
+    void pointerEventWillBeDispatched(const PointerEvent&, EventTarget*);
+    void pointerEventWasDispatched(const PointerEvent&);
     void processPendingPointerCapture(const PointerEvent&);
 
     Page& m_page;
-    HashMap<PointerID, CapturingData> m_activePointerIdsToCapturingData;
+    // While PointerID is defined as int32_t, we use int64_t here so that we may use a value outside of the int32_t range to have safe
+    // empty and removed values, allowing any int32_t to be provided through the API for lookup in this hashmap.
+    using PointerIdToCapturingDataMap = HashMap<int64_t, CapturingData, WTF::IntHash<int64_t>, WTF::SignedWithZeroKeyHashTraits<int64_t>>;
+    PointerIdToCapturingDataMap m_activePointerIdsToCapturingData;
 };
 
 } // namespace WebCore

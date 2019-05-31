@@ -60,6 +60,7 @@
 namespace WebCore {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(VTTCueBox);
+WTF_MAKE_ISO_ALLOCATED_IMPL(VTTCue);
 
 // This constant should correspond with the percentage returned by CaptionUserPreferences::captionFontSizeScaleAndImportance.
 const static double DEFAULTCAPTIONFONTSIZEPERCENTAGE = 5;
@@ -177,7 +178,10 @@ void VTTCueBox::applyCSSProperties(const IntSize& videoSize)
     setInlineStyleProperty(CSSPropertyTop, position.second, CSSPrimitiveValue::CSS_PERCENTAGE);
 
     // the 'left' property must be set to left
-    setInlineStyleProperty(CSSPropertyLeft, position.first, CSSPrimitiveValue::CSS_PERCENTAGE);
+    if (cue->vertical() == horizontalKeyword())
+        setInlineStyleProperty(CSSPropertyLeft, position.first, CSSPrimitiveValue::CSS_PERCENTAGE);
+    else if (cue->vertical() == verticalGrowingRightKeyword())
+        setInlineStyleProperty(CSSPropertyLeft, makeString("calc(-", FormattedNumber::fixedWidth(videoSize.width(), 2), "px - ", FormattedNumber::fixedWidth(cue->getCSSSize(), 2), "px)"));
 
     double authorFontSize = std::min(videoSize.width(), videoSize.height()) * DEFAULTCAPTIONFONTSIZEPERCENTAGE / 100.0;
     double multiplier = 1.0;
@@ -542,7 +546,7 @@ RefPtr<DocumentFragment> VTTCue::getCueAsHTML()
 
     auto clonedFragment = DocumentFragment::create(ownerDocument());
     copyWebVTTNodeToDOMTree(m_webVTTNodeTree.get(), clonedFragment.ptr());
-    return WTFMove(clonedFragment);
+    return clonedFragment;
 }
 
 RefPtr<DocumentFragment> VTTCue::createCueRenderingTree()
@@ -557,7 +561,7 @@ RefPtr<DocumentFragment> VTTCue::createCueRenderingTree()
     ScriptDisallowedScope::EventAllowedScope allowedScope(clonedFragment);
 
     m_webVTTNodeTree->cloneChildNodes(clonedFragment);
-    return WTFMove(clonedFragment);
+    return clonedFragment;
 }
 
 void VTTCue::setRegionId(const String& regionId)

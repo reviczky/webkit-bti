@@ -37,6 +37,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
 
     encoder << store;
     encoder.encodeEnum(drawingAreaType);
+    encoder << drawingAreaIdentifier;
     encoder << pageGroupData;
     encoder << isEditable;
     encoder << underlayColor;
@@ -76,6 +77,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << controlledByAutomation;
     encoder << isProcessSwap;
     encoder << useDarkAppearance;
+    encoder << useInactiveAppearance;
 
 #if PLATFORM(MAC)
     encoder << colorSpace;
@@ -89,9 +91,13 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << ignoresViewportScaleLimits;
     encoder << viewportConfigurationViewLayoutSize;
     encoder << viewportConfigurationLayoutSizeScaleFactor;
+    encoder << viewportConfigurationMinimumEffectiveDeviceWidth;
     encoder << viewportConfigurationViewSize;
     encoder << maximumUnobscuredSize;
     encoder << deviceOrientation;
+    encoder << keyboardIsAttached;
+    encoder << canShowWhileLocked;
+    encoder << overrideViewportArguments;
 #endif
 #if PLATFORM(COCOA)
     encoder << smartInsertDeleteEnabled;
@@ -125,6 +131,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << contentRuleLists;
 #endif
     encoder << backgroundColor;
+    encoder << oldPageID;
 }
 
 Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decoder& decoder)
@@ -138,6 +145,11 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
         return WTF::nullopt;
     if (!decoder.decodeEnum(parameters.drawingAreaType))
         return WTF::nullopt;
+    Optional<DrawingAreaIdentifier> drawingAreaIdentifier;
+    decoder >> drawingAreaIdentifier;
+    if (!drawingAreaIdentifier)
+        return WTF::nullopt;
+    parameters.drawingAreaIdentifier = *drawingAreaIdentifier;
     Optional<WebPageGroupData> pageGroupData;
     decoder >> pageGroupData;
     if (!pageGroupData)
@@ -238,6 +250,8 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
         return WTF::nullopt;
     if (!decoder.decode(parameters.useDarkAppearance))
         return WTF::nullopt;
+    if (!decoder.decode(parameters.useInactiveAppearance))
+        return WTF::nullopt;
 
 #if PLATFORM(MAC)
     if (!decoder.decode(parameters.colorSpace))
@@ -261,12 +275,24 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
         return WTF::nullopt;
     if (!decoder.decode(parameters.viewportConfigurationLayoutSizeScaleFactor))
         return WTF::nullopt;
+    if (!decoder.decode(parameters.viewportConfigurationMinimumEffectiveDeviceWidth))
+        return WTF::nullopt;
     if (!decoder.decode(parameters.viewportConfigurationViewSize))
         return WTF::nullopt;
     if (!decoder.decode(parameters.maximumUnobscuredSize))
         return WTF::nullopt;
     if (!decoder.decode(parameters.deviceOrientation))
         return WTF::nullopt;
+    if (!decoder.decode(parameters.keyboardIsAttached))
+        return WTF::nullopt;
+    if (!decoder.decode(parameters.canShowWhileLocked))
+        return WTF::nullopt;
+
+    Optional<Optional<WebCore::ViewportArguments>> overrideViewportArguments;
+    decoder >> overrideViewportArguments;
+    if (!overrideViewportArguments)
+        return WTF::nullopt;
+    parameters.overrideViewportArguments = WTFMove(*overrideViewportArguments);
 #endif
 
 #if PLATFORM(COCOA)
@@ -366,7 +392,13 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
         return WTF::nullopt;
     parameters.backgroundColor = WTFMove(*backgroundColor);
 
-    return WTFMove(parameters);
+    Optional<Optional<uint64_t>> oldPageID;
+    decoder >> oldPageID;
+    if (!oldPageID)
+        return WTF::nullopt;
+    parameters.oldPageID = WTFMove(*oldPageID);
+
+    return parameters;
 }
 
 } // namespace WebKit

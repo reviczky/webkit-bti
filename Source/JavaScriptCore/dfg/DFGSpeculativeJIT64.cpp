@@ -217,8 +217,6 @@ void SpeculativeJIT::cachedGetByIdWithThis(CodeOrigin codeOrigin, GPRReg baseGPR
 
 void SpeculativeJIT::nonSpeculativeNonPeepholeCompareNullOrUndefined(Edge operand)
 {
-    ASSERT_WITH_MESSAGE(!masqueradesAsUndefinedWatchpointIsStillValid() || !isKnownCell(operand.node()), "The Compare should have been eliminated, it is known to be always false.");
-
     JSValueOperand arg(this, operand, ManualOperandSpeculation);
     GPRReg argGPR = arg.gpr();
     
@@ -579,9 +577,9 @@ void SpeculativeJIT::emitCall(Node* node)
             JITCompiler::JumpList slowCase;
             InlineCallFrame* inlineCallFrame;
             if (node->child3())
-                inlineCallFrame = node->child3()->origin.semantic.inlineCallFrame;
+                inlineCallFrame = node->child3()->origin.semantic.inlineCallFrame();
             else
-                inlineCallFrame = node->origin.semantic.inlineCallFrame;
+                inlineCallFrame = node->origin.semantic.inlineCallFrame();
             // emitSetupVarargsFrameFastCase modifies the stack pointer if it succeeds.
             emitSetupVarargsFrameFastCase(*m_jit.vm(), m_jit, scratchGPR2, scratchGPR1, scratchGPR2, scratchGPR3, inlineCallFrame, data->firstVarArgOffset, slowCase);
             JITCompiler::Jump done = m_jit.jump();
@@ -720,10 +718,11 @@ void SpeculativeJIT::emitCall(Node* node)
     }
 
     CodeOrigin staticOrigin = node->origin.semantic;
-    ASSERT(!isTail || !staticOrigin.inlineCallFrame || !staticOrigin.inlineCallFrame->getCallerSkippingTailCalls());
-    ASSERT(!isEmulatedTail || (staticOrigin.inlineCallFrame && staticOrigin.inlineCallFrame->getCallerSkippingTailCalls()));
+    InlineCallFrame* staticInlineCallFrame = staticOrigin.inlineCallFrame();
+    ASSERT(!isTail || !staticInlineCallFrame || !staticInlineCallFrame->getCallerSkippingTailCalls());
+    ASSERT(!isEmulatedTail || (staticInlineCallFrame && staticInlineCallFrame->getCallerSkippingTailCalls()));
     CodeOrigin dynamicOrigin =
-        isEmulatedTail ? *staticOrigin.inlineCallFrame->getCallerSkippingTailCalls() : staticOrigin;
+        isEmulatedTail ? *staticInlineCallFrame->getCallerSkippingTailCalls() : staticOrigin;
 
     CallSiteIndex callSite = m_jit.recordCallSiteAndGenerateExceptionHandlingOSRExitIfNeeded(dynamicOrigin, m_stream->size());
     
@@ -943,7 +942,7 @@ GPRReg SpeculativeJIT::fillSpeculateInt32Internal(Edge edge, DataFormat& returnF
     }
 
     case DataFormatJS: {
-        DFG_ASSERT(m_jit.graph(), m_currentNode, !(type & SpecInt52Only));
+        DFG_ASSERT(m_jit.graph(), m_currentNode, !(type & SpecInt52Any));
         // Check the value is an integer.
         GPRReg gpr = info.gpr();
         m_gprs.lock(gpr);
@@ -1028,7 +1027,7 @@ GPRReg SpeculativeJIT::fillSpeculateInt52(Edge edge, DataFormat desiredFormat)
     ASSERT(desiredFormat == DataFormatInt52 || desiredFormat == DataFormatStrictInt52);
     AbstractValue& value = m_state.forNode(edge);
 
-    m_interpreter.filter(value, SpecAnyInt);
+    m_interpreter.filter(value, SpecInt52Any);
     if (value.isClear()) {
         if (mayHaveTypeCheck(edge.useKind()))
             terminateSpeculativeExecution(Uncountable, JSValueRegs(), 0);
@@ -2072,12 +2071,17 @@ void SpeculativeJIT::compile(Node* node)
         break;
     }
 
-    case SetArgument:
+    case SetArgumentDefinitely:
+    case SetArgumentMaybe:
         // This is a no-op; it just marks the fact that the argument is being used.
         // But it may be profitable to use this as a hook to run speculation checks
         // on arguments, thereby allowing us to trivially eliminate such checks if
         // the argument is not used.
         recordSetLocal(dataFormatFor(node->variableAccessData()->flushFormat()));
+        break;
+
+    case ValueBitNot:
+        compileValueBitNot(node);
         break;
 
     case ArithBitNot:
@@ -2226,6 +2230,11 @@ void SpeculativeJIT::compile(Node* node)
 
     case ArithDiv: {
         compileArithDiv(node);
+        break;
+    }
+
+    case ValueMod: {
+        compileValueMod(node);
         break;
     }
 
@@ -2723,7 +2732,7 @@ void SpeculativeJIT::compile(Node* node)
             if (arrayMode.isOutOfBounds()) {
                 addSlowPathGenerator(slowPathCall(
                     slowCase, this,
-                    m_jit.codeBlock()->isStrictMode()
+                    m_jit.isStrictModeFor(node->origin.semantic)
                         ? (node->op() == PutByValDirect ? operationPutByValDirectBeyondArrayBoundsStrict : operationPutByValBeyondArrayBoundsStrict)
                         : (node->op() == PutByValDirect ? operationPutByValDirectBeyondArrayBoundsNonStrict : operationPutByValBeyondArrayBoundsNonStrict),
                     NoResult, baseReg, propertyReg, valueReg));
@@ -2807,7 +2816,7 @@ void SpeculativeJIT::compile(Node* node)
             if (!slowCases.empty()) {
                 addSlowPathGenerator(slowPathCall(
                     slowCases, this,
-                    m_jit.codeBlock()->isStrictMode()
+                    m_jit.isStrictModeFor(node->origin.semantic)
                         ? (node->op() == PutByValDirect ? operationPutByValDirectBeyondArrayBoundsStrict : operationPutByValBeyondArrayBoundsStrict)
                         : (node->op() == PutByValDirect ? operationPutByValDirectBeyondArrayBoundsNonStrict : operationPutByValBeyondArrayBoundsNonStrict),
                     NoResult, baseReg, propertyReg, valueReg));
@@ -4669,7 +4678,7 @@ void SpeculativeJIT::compile(Node* node)
             m_jit.branch64(MacroAssembler::AboveOrEqual, t2, t1));
 
         m_jit.loadPtr(JITCompiler::Address(dataViewGPR, JSArrayBufferView::offsetOfVector()), t2);
-        cageTypedArrayStorage(t2);
+        cageTypedArrayStorage(dataViewGPR, t2);
 
         m_jit.zeroExtend32ToPtr(indexGPR, t1);
         auto baseIndex = JITCompiler::BaseIndex(t2, t1, MacroAssembler::TimesOne);
@@ -4865,7 +4874,7 @@ void SpeculativeJIT::compile(Node* node)
             m_jit.branch64(MacroAssembler::AboveOrEqual, t2, t1));
 
         m_jit.loadPtr(JITCompiler::Address(dataViewGPR, JSArrayBufferView::offsetOfVector()), t2);
-        cageTypedArrayStorage(t2);
+        cageTypedArrayStorage(dataViewGPR, t2);
 
         m_jit.zeroExtend32ToPtr(indexGPR, t1);
         auto baseIndex = JITCompiler::BaseIndex(t2, t1, MacroAssembler::TimesOne);
@@ -5010,7 +5019,7 @@ void SpeculativeJIT::compile(Node* node)
 
         Vector<SilentRegisterSavePlan> savePlans;
         silentSpillAllRegistersImpl(false, savePlans, InvalidGPRReg);
-        unsigned bytecodeIndex = node->origin.semantic.bytecodeIndex;
+        unsigned bytecodeIndex = node->origin.semantic.bytecodeIndex();
 
         addSlowPathGeneratorLambda([=]() {
             callTierUp.link(&m_jit);
@@ -5039,12 +5048,12 @@ void SpeculativeJIT::compile(Node* node)
     }
         
     case CheckTierUpAndOSREnter: {
-        ASSERT(!node->origin.semantic.inlineCallFrame);
+        ASSERT(!node->origin.semantic.inlineCallFrame());
 
         GPRTemporary temp(this);
         GPRReg tempGPR = temp.gpr();
 
-        unsigned bytecodeIndex = node->origin.semantic.bytecodeIndex;
+        unsigned bytecodeIndex = node->origin.semantic.bytecodeIndex();
         auto triggerIterator = m_jit.jitCode()->tierUpEntryTriggers.find(bytecodeIndex);
         DFG_ASSERT(m_jit.graph(), node, triggerIterator != m_jit.jitCode()->tierUpEntryTriggers.end());
         JITCode::TriggerReason* forceEntryTrigger = &(m_jit.jitCode()->tierUpEntryTriggers.find(bytecodeIndex)->value);

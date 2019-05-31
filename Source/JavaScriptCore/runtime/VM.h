@@ -38,6 +38,7 @@
 #include "ExceptionEventLocation.h"
 #include "ExecutableAllocator.h"
 #include "FunctionHasExecutedCache.h"
+#include "FuzzerAgent.h"
 #include "Heap.h"
 #include "Intrinsic.h"
 #include "IsoCellSet.h"
@@ -123,7 +124,6 @@ class JSDestructibleObjectHeapCellType;
 class JSGlobalObject;
 class JSObject;
 class JSRunLoopTimer;
-class JSSegmentedVariableObjectHeapCellType;
 class JSStringHeapCellType;
 class JSWebAssemblyCodeBlockHeapCellType;
 class JSWebAssemblyInstance;
@@ -158,6 +158,7 @@ class VMEntryScope;
 class Watchdog;
 class Watchpoint;
 class WatchpointSet;
+class WebAssemblyFunctionHeapCellType;
 
 #if ENABLE(FTL_JIT)
 namespace FTL {
@@ -295,6 +296,12 @@ public:
     JS_EXPORT_PRIVATE SamplingProfiler& ensureSamplingProfiler(RefPtr<Stopwatch>&&);
 #endif
 
+    FuzzerAgent* fuzzerAgent() const { return m_fuzzerAgent.get(); }
+    void setFuzzerAgent(std::unique_ptr<FuzzerAgent>&& fuzzerAgent)
+    {
+        m_fuzzerAgent = WTFMove(fuzzerAgent);
+    }
+
     static unsigned numberOfIDs() { return s_numberOfIDs.load(); }
     unsigned id() const { return m_id; }
     bool isEntered() const { return !!entryScope; }
@@ -329,9 +336,9 @@ public:
     std::unique_ptr<HeapCellType> destructibleCellHeapCellType;
     std::unique_ptr<JSStringHeapCellType> stringHeapCellType;
     std::unique_ptr<JSDestructibleObjectHeapCellType> destructibleObjectHeapCellType;
-    std::unique_ptr<JSSegmentedVariableObjectHeapCellType> segmentedVariableObjectHeapCellType;
 #if ENABLE(WEBASSEMBLY)
     std::unique_ptr<JSWebAssemblyCodeBlockHeapCellType> webAssemblyCodeBlockHeapCellType;
+    std::unique_ptr<WebAssemblyFunctionHeapCellType> webAssemblyFunctionHeapCellType;
 #endif
     
     CompleteSubspace primitiveGigacageAuxiliarySpace; // Typed arrays, strings, bitvectors, etc go here.
@@ -365,7 +372,6 @@ public:
     CompleteSubspace stringSpace;
     CompleteSubspace destructibleObjectSpace;
     CompleteSubspace eagerlySweptDestructibleObjectSpace;
-    CompleteSubspace segmentedVariableObjectSpace;
     
     IsoSubspace executableToCodeBlockEdgeSpace;
     IsoSubspace functionSpace;
@@ -533,10 +539,11 @@ public:
     Strong<Structure> functionCodeBlockStructure;
     Strong<Structure> hashMapBucketSetStructure;
     Strong<Structure> hashMapBucketMapStructure;
-    Strong<Structure> setIteratorStructure;
-    Strong<Structure> mapIteratorStructure;
     Strong<Structure> bigIntStructure;
     Strong<Structure> executableToCodeBlockEdgeStructure;
+
+    Strong<Structure> m_setIteratorStructure;
+    Strong<Structure> m_mapIteratorStructure;
 
     Strong<JSCell> emptyPropertyNameEnumerator;
 
@@ -562,6 +569,20 @@ public:
 
     AtomicStringTable* atomicStringTable() const { return m_atomicStringTable; }
     WTF::SymbolRegistry& symbolRegistry() { return m_symbolRegistry; }
+
+    Structure* setIteratorStructure()
+    {
+        if (LIKELY(m_setIteratorStructure))
+            return m_setIteratorStructure.get();
+        return setIteratorStructureSlow();
+    }
+
+    Structure* mapIteratorStructure()
+    {
+        if (LIKELY(m_mapIteratorStructure))
+            return m_mapIteratorStructure.get();
+        return mapIteratorStructureSlow();
+    }
 
     JSCell* sentinelSetBucket()
     {
@@ -612,7 +633,6 @@ public:
     };
 
     static JS_EXPORT_PRIVATE bool canUseAssembler();
-    static JS_EXPORT_PRIVATE bool canUseRegExpJIT();
     static JS_EXPORT_PRIVATE bool isInMiniMode();
 
     static void computeCanUseJIT();
@@ -667,6 +687,16 @@ public:
         return OBJECT_OFFSETOF(VM, topEntryFrame);
     }
 
+    static ptrdiff_t offsetOfHeapBarrierThreshold()
+    {
+        return OBJECT_OFFSETOF(VM, heap) + OBJECT_OFFSETOF(Heap, m_barrierThreshold);
+    }
+
+    static ptrdiff_t offsetOfHeapMutatorShouldBeFenced()
+    {
+        return OBJECT_OFFSETOF(VM, heap) + OBJECT_OFFSETOF(Heap, m_mutatorShouldBeFenced);
+    }
+
     void restorePreviousException(Exception* exception) { setException(exception); }
 
     void clearLastException() { m_lastException = nullptr; }
@@ -710,6 +740,7 @@ public:
 #if ENABLE(C_LOOP)
     void* cloopStackLimit() { return m_cloopStackLimit; }
     void setCLoopStackLimit(void* limit) { m_cloopStackLimit = limit; }
+    JS_EXPORT_PRIVATE void* currentCLoopStackPointer() const;
 #endif
 
     inline bool isSafeToRecurseSoft() const;
@@ -779,6 +810,8 @@ public:
     Lock m_regExpPatternContextLock;
     char* acquireRegExpPatternContexBuffer();
     void releaseRegExpPatternContexBuffer();
+#else
+    static constexpr size_t patternContextBufferSize = 0; // Space allocated to save nested parenthesis context
 #endif
 
     Ref<CompactVariableMap> m_compactVariableMap;
@@ -792,7 +825,9 @@ public:
     RTTraceList* m_rtTraceList;
 #endif
 
-    std::unique_ptr<ValueProfile> noJITValueProfileSingleton;
+#if JSC_OBJC_API_ENABLED
+    void* m_apiWrapper { nullptr };
+#endif
 
     JS_EXPORT_PRIVATE void resetDateCache();
 
@@ -885,6 +920,8 @@ public:
     JS_EXPORT_PRIVATE void setRunLoop(CFRunLoopRef);
 #endif // USE(CF)
 
+    static void setCrashOnVMCreation(bool);
+
     class DeferExceptionScope {
     public:
         DeferExceptionScope(VM& vm)
@@ -905,6 +942,8 @@ private:
     static VM*& sharedInstanceInternal();
     void createNativeThunk();
 
+    JS_EXPORT_PRIVATE Structure* setIteratorStructureSlow();
+    JS_EXPORT_PRIVATE Structure* mapIteratorStructureSlow();
     JSCell* sentinelSetBucketSlow();
     JSCell* sentinelMapBucketSlow();
 
@@ -944,9 +983,9 @@ private:
     bool isSafeToRecurseSoftCLoop() const;
 #endif // ENABLE(C_LOOP)
 
-    JS_EXPORT_PRIVATE void throwException(ExecState*, Exception*);
-    JS_EXPORT_PRIVATE JSValue throwException(ExecState*, JSValue);
-    JS_EXPORT_PRIVATE JSObject* throwException(ExecState*, JSObject*);
+    JS_EXPORT_PRIVATE Exception* throwException(ExecState*, Exception*);
+    JS_EXPORT_PRIVATE Exception* throwException(ExecState*, JSValue);
+    JS_EXPORT_PRIVATE Exception* throwException(ExecState*, JSObject*);
 
 #if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
     void verifyExceptionCheckNeedIsSatisfied(unsigned depth, ExceptionEventLocation&);
@@ -1006,6 +1045,7 @@ private:
 #if ENABLE(SAMPLING_PROFILER)
     RefPtr<SamplingProfiler> m_samplingProfiler;
 #endif
+    std::unique_ptr<FuzzerAgent> m_fuzzerAgent;
     std::unique_ptr<ShadowChicken> m_shadowChicken;
     std::unique_ptr<BytecodeIntrinsicRegistry> m_bytecodeIntrinsicRegistry;
 

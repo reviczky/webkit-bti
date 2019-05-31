@@ -99,7 +99,8 @@ class MediaController
         if (this.host && this.host.compactMode)
             return LayoutTraits.Compact;
 
-        let traits = window.navigator.platform === "MacIntel" ? LayoutTraits.macOS : LayoutTraits.iOS;
+        // The window.navigator.platform !== "MacIntel" is strictly used for the test infrastructure since touch events are off for open-source bots.
+        let traits = GestureRecognizer.SupportsTouches || window.navigator.platform !== "MacIntel" ? LayoutTraits.iOS : LayoutTraits.macOS;
         if (this.isFullscreen)
             return traits | LayoutTraits.Fullscreen;
         return traits;
@@ -284,7 +285,7 @@ class MediaController
     _returnMediaLayerToInlineIfNeeded()
     {
         if (this.host)
-            window.requestAnimationFrame(() => this.host.setPreparedToReturnVideoLayerToInline(this.media.webkitPresentationMode !== PiPMode));
+            this.host.setPreparedToReturnVideoLayerToInline(this.media.webkitPresentationMode !== PiPMode);
     }
 
     _controlsClassForLayoutTraits(layoutTraits)

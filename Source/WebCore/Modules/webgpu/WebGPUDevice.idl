@@ -27,22 +27,25 @@
 [
     Conditional=WEBGPU,
     EnabledAtRuntime=WebGPU,
-    ImplementationLacksVTable
+    ImplementationLacksVTable,
+    InterfaceName=GPUDevice
 ] interface WebGPUDevice {
     readonly attribute WebGPUAdapter adapter;
 
-    WebGPUBuffer createBuffer(WebGPUBufferDescriptor descriptor);
+    WebGPUBuffer createBuffer(GPUBufferDescriptor descriptor);
     WebGPUTexture createTexture(GPUTextureDescriptor descriptor);
+    WebGPUSampler createSampler(GPUSamplerDescriptor descriptor);
 
-    WebGPUBindGroupLayout createBindGroupLayout(WebGPUBindGroupLayoutDescriptor descriptor);
+    WebGPUBindGroupLayout createBindGroupLayout(GPUBindGroupLayoutDescriptor descriptor);
     WebGPUPipelineLayout createPipelineLayout(WebGPUPipelineLayoutDescriptor descriptor);
     WebGPUBindGroup createBindGroup(WebGPUBindGroupDescriptor descriptor);
 
     WebGPUShaderModule createShaderModule(WebGPUShaderModuleDescriptor descriptor);
     WebGPURenderPipeline createRenderPipeline(WebGPURenderPipelineDescriptor descriptor);
+    WebGPUComputePipeline createComputePipeline(WebGPUComputePipelineDescriptor descriptor);
 
-    // FIXME: Currently, WebGPUCommandBufferDescriptor is an empty dictionary.
-    WebGPUCommandBuffer createCommandBuffer(/*WebGPUCommandBufferDescriptor descriptor*/);
+    // FIXME: Currently, GPUCommandEncoderDescriptor is an empty dictionary.
+    WebGPUCommandEncoder createCommandEncoder(/*GPUCommandEncoderDescriptor descriptor*/);
 
     WebGPUQueue getQueue();
 
@@ -50,10 +53,6 @@
     // readonly attribute WebGPUExtensions extensions;
     // readonly attribute WebGPULimits limits;
 
-    // WebGPUTexture createTexture(WebGPUTextureDescriptor descriptor);
-    // WebGPUSampler createSampler(WebGPUSamplerDescriptor descriptor);
-
-    // WebGPUComputePipeline createComputePipeline(WebGPUComputePipelineDescriptor descriptor);
     // WebGPUFence createFence(WebGPUFenceDescriptor descriptor);
 
     // attribute WebGPULogCallback onLog;

@@ -34,6 +34,10 @@
 #include <objc/objc.h>
 #endif
 
+#if OS(WINDOWS)
+#include <wtf/text/win/WCharStringExtras.h>
+#endif
+
 namespace WTF {
 
 // Declarations of string operations
@@ -175,12 +179,20 @@ public:
     WTF_EXPORT_PRIVATE static String number(unsigned long);
     WTF_EXPORT_PRIVATE static String number(long long);
     WTF_EXPORT_PRIVATE static String number(unsigned long long);
+    // FIXME: Change to call numberToStringShortest.
+    static String number(float) = delete;
+    static String number(double) = delete;
 
-    WTF_EXPORT_PRIVATE static String number(double, unsigned precision = 6, TrailingZerosTruncatingPolicy = TruncateTrailingZeros);
-
-    // Number to String conversion following the ECMAScript definition.
-    WTF_EXPORT_PRIVATE static String numberToStringECMAScript(double);
+    WTF_EXPORT_PRIVATE static String numberToStringShortest(float);
+    WTF_EXPORT_PRIVATE static String numberToStringShortest(double);
+    WTF_EXPORT_PRIVATE static String numberToStringFixedPrecision(float, unsigned precision = 6, TrailingZerosTruncatingPolicy = TruncateTrailingZeros);
+    WTF_EXPORT_PRIVATE static String numberToStringFixedPrecision(double, unsigned precision = 6, TrailingZerosTruncatingPolicy = TruncateTrailingZeros);
+    WTF_EXPORT_PRIVATE static String numberToStringFixedWidth(float, unsigned decimalPlaces);
     WTF_EXPORT_PRIVATE static String numberToStringFixedWidth(double, unsigned decimalPlaces);
+
+    // FIXME: Delete in favor of the name numberToStringShortest or just number.
+    static String numberToStringECMAScript(float) = delete;
+    static String numberToStringECMAScript(double);
 
     // Find a single character or string, also with match function & latin1 forms.
     size_t find(UChar character, unsigned start = 0) const { return m_impl ? m_impl->find(character, start) : notFound; }
@@ -320,6 +332,18 @@ public:
     // Given Cocoa idioms, this is a more useful default. Clients that need to preserve the
     // null string can check isNull explicitly.
     operator NSString *() const;
+#endif
+
+#if OS(WINDOWS)
+#if U_ICU_VERSION_MAJOR_NUM >= 59
+    String(const wchar_t* characters, unsigned length)
+        : String(ucharFrom(characters), length) { }
+
+    String(const wchar_t* characters)
+        : String(ucharFrom(characters)) { }
+#endif
+
+    WTF_EXPORT_PRIVATE Vector<wchar_t> wideCharacters() const;
 #endif
 
     WTF_EXPORT_PRIVATE static String make8BitFrom16BitSource(const UChar*, size_t);
@@ -628,6 +652,11 @@ inline bool equalIgnoringASCIICase(const String& a, const char* b)
 template<unsigned length> inline bool startsWithLettersIgnoringASCIICase(const String& string, const char (&lowercaseLetters)[length])
 {
     return startsWithLettersIgnoringASCIICase(string.impl(), lowercaseLetters);
+}
+
+inline String String::numberToStringECMAScript(double number)
+{
+    return numberToStringShortest(number);
 }
 
 inline namespace StringLiterals {

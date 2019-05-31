@@ -65,7 +65,7 @@ Optional<LayoutUnit> FormattingContext::Geometry::computedHeightValue(const Layo
         return { };
 
     if (height.isFixed())
-        return { height.value() };
+        return LayoutUnit(height.value());
 
     Optional<LayoutUnit> containingBlockHeightValue;
     if (layoutBox.isOutOfFlowPositioned()) {
@@ -77,7 +77,7 @@ Optional<LayoutUnit> FormattingContext::Geometry::computedHeightValue(const Layo
         else {
             auto containingBlockHeight = layoutBox.containingBlock()->style().logicalHeight();
             if (containingBlockHeight.isFixed())
-                containingBlockHeightValue = { containingBlockHeight.value() };
+                containingBlockHeightValue = LayoutUnit(containingBlockHeight.value());
         }
     }
 
@@ -109,12 +109,11 @@ static LayoutUnit contentHeightForFormattingContextRoot(const LayoutState& layou
     auto bottom = borderAndPaddingTop;
     auto& formattingRootContainer = downcast<Container>(layoutBox);
     if (formattingRootContainer.establishesInlineFormattingContext()) {
-        // This is temp and will be replaced by the correct display box once inline runs move over to the display tree.
-        auto& inlineRuns = downcast<InlineFormattingState>(layoutState.establishedFormattingState(layoutBox)).inlineRuns();
-        if (!inlineRuns.isEmpty()) {
-            top = inlineRuns[0].logicalTop();
-            bottom =  inlineRuns.last().logicalBottom();
-        }
+        auto& lineBoxes = downcast<InlineFormattingState>(layoutState.establishedFormattingState(layoutBox)).lineBoxes();
+        // Even empty containers generate one line. 
+        ASSERT(!lineBoxes.isEmpty());
+        top = lineBoxes.first().logicalTop();
+        bottom = lineBoxes.last().logicalBottom();
     } else if (formattingRootContainer.establishesBlockFormattingContext() || layoutBox.isDocumentBox()) {
         if (formattingRootContainer.hasInFlowChild()) {
             auto& firstDisplayBox = layoutState.displayBoxForLayoutBox(*formattingRootContainer.firstInFlowChild());
@@ -160,7 +159,7 @@ Optional<LayoutUnit> FormattingContext::Geometry::fixedValue(const Length& geome
 {
     if (!geometryProperty.isFixed())
         return WTF::nullopt;
-    return { geometryProperty.value() };
+    return LayoutUnit(geometryProperty.value());
 }
 
 // https://www.w3.org/TR/CSS22/visudet.html#min-max-heights
@@ -1039,8 +1038,8 @@ Edges FormattingContext::Geometry::computedBorder(const Box& layoutBox)
     auto& style = layoutBox.style();
     LOG_WITH_STREAM(FormattingContextLayout, stream << "[Border] -> layoutBox: " << &layoutBox);
     return {
-        { style.borderLeft().boxModelWidth(), style.borderRight().boxModelWidth() },
-        { style.borderTop().boxModelWidth(), style.borderBottom().boxModelWidth() }
+        { LayoutUnit(style.borderLeft().boxModelWidth()), LayoutUnit(style.borderRight().boxModelWidth()) },
+        { LayoutUnit(style.borderTop().boxModelWidth()), LayoutUnit(style.borderBottom().boxModelWidth()) }
     };
 }
 

@@ -745,7 +745,7 @@ llintOpWithMetadata(op_to_this, OpToThis, macro (size, get, dispatch, metadata, 
     loadi PayloadOffset[cfr, t0, 8], t0
     bbneq JSCell::m_type[t0], FinalObjectType, .opToThisSlow
     metadata(t2, t3)
-    loadp OpToThis::Metadata::m_cachedStructure[t2], t2
+    loadi OpToThis::Metadata::m_cachedStructureID[t2], t2
     bineq JSCell::m_structureID[t0], t2, .opToThisSlow
     dispatch()
 
@@ -1344,7 +1344,7 @@ end)
 
 llintOpWithMetadata(op_get_by_id, OpGetById, macro (size, get, dispatch, metadata, return)
     metadata(t5, t0)
-    loadb OpGetById::Metadata::m_mode[t5], t1
+    loadb OpGetById::Metadata::m_modeMetadata.mode[t5], t1
     get(m_base, t0)
 
 .opGetByIdProtoLoad:
@@ -1788,15 +1788,15 @@ llintOpWithJump(op_switch_char, OpSwitchChar, macro (size, get, jump, dispatch)
     addp t3, t2
     bineq t1, CellTag, .opSwitchCharFallThrough
     bbneq JSCell::m_type[t0], StringType, .opSwitchCharFallThrough
-    loadp JSString::m_fiber[t0], t0
-    btpnz t0, isRopeInPointer, .opSwitchOnRope
-    bineq StringImpl::m_length[t0], 1, .opSwitchCharFallThrough
-    loadp StringImpl::m_data8[t0], t1
-    btinz StringImpl::m_hashAndFlags[t0], HashFlags8BitBuffer, .opSwitchChar8Bit
-    loadh [t1], t0
+    loadp JSString::m_fiber[t0], t1
+    btpnz t1, isRopeInPointer, .opSwitchOnRope
+    bineq StringImpl::m_length[t1], 1, .opSwitchCharFallThrough
+    loadp StringImpl::m_data8[t1], t0
+    btinz StringImpl::m_hashAndFlags[t1], HashFlags8BitBuffer, .opSwitchChar8Bit
+    loadh [t0], t0
     jmp .opSwitchCharReady
 .opSwitchChar8Bit:
-    loadb [t1], t0
+    loadb [t0], t0
 .opSwitchCharReady:
     subi SimpleJumpTable::min[t2], t0
     biaeq t0, SimpleJumpTable::branchOffsets + VectorSizeOffset[t2], .opSwitchCharFallThrough
@@ -1809,6 +1809,9 @@ llintOpWithJump(op_switch_char, OpSwitchChar, macro (size, get, jump, dispatch)
     jump(m_defaultOffset)
 
 .opSwitchOnRope:
+    bineq JSRopeString::m_compactFibers + JSRopeString::CompactFibers::m_length[t0], 1, .opSwitchCharFallThrough
+
+.opSwitchOnRopeChar:
     callSlowPath(_llint_slow_path_switch_char)
     nextInstruction()
 end)
@@ -1820,7 +1823,7 @@ macro arrayProfileForCall(opcodeStruct, getu)
     bineq ThisArgumentOffset + TagOffset[cfr, t3, 8], CellTag, .done
     loadi ThisArgumentOffset + PayloadOffset[cfr, t3, 8], t0
     loadi JSCell::m_structureID[t0], t0
-    storei t0, %opcodeStruct%::Metadata::m_arrayProfile.m_lastSeenStructureID[t5]
+    storei t0, %opcodeStruct%::Metadata::m_callLinkInfo.m_arrayProfile.m_lastSeenStructureID[t5]
 .done:
 end
 
@@ -1833,7 +1836,7 @@ macro commonCallOp(opcodeName, slowPath, opcodeStruct, prepareCall, prologue)
         end, metadata)
 
         get(m_callee, t0)
-        loadp %opcodeStruct%::Metadata::m_callLinkInfo.callee[t5], t2
+        loadp %opcodeStruct%::Metadata::m_callLinkInfo.m_calleeOrLastSeenCalleeWithLinkBit[t5], t2
         loadConstantOrVariablePayload(size, t0, CellTag, t3, .opCallSlow)
         bineq t3, t2, .opCallSlow
         getu(size, opcodeStruct, m_argv, t3)
@@ -1846,8 +1849,8 @@ macro commonCallOp(opcodeName, slowPath, opcodeStruct, prepareCall, prologue)
         storei t2, ArgumentCount + PayloadOffset[t3]
         storei CellTag, Callee + TagOffset[t3]
         move t3, sp
-        prepareCall(%opcodeStruct%::Metadata::m_callLinkInfo.machineCodeTarget[t5], t2, t3, t4, JSEntryPtrTag)
-        callTargetFunction(size, opcodeStruct, dispatch, %opcodeStruct%::Metadata::m_callLinkInfo.machineCodeTarget[t5], JSEntryPtrTag)
+        prepareCall(%opcodeStruct%::Metadata::m_callLinkInfo.m_machineCodeTarget[t5], t2, t3, t4, JSEntryPtrTag)
+        callTargetFunction(size, opcodeStruct, dispatch, %opcodeStruct%::Metadata::m_callLinkInfo.m_machineCodeTarget[t5], JSEntryPtrTag)
 
     .opCallSlow:
         slowPathForCall(size, opcodeStruct, dispatch, slowPath, prepareCall)

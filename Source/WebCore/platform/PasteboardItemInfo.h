@@ -40,7 +40,9 @@ enum class PasteboardItemPresentationStyle {
 struct PasteboardItemInfo {
     Vector<String> pathsForFileUpload;
     Vector<String> contentTypesForFileUpload;
+    Vector<String> contentTypesByFidelity;
     String suggestedFileName;
+    Optional<FloatSize> preferredPresentationSize;
     bool isNonTextType { false };
     bool containsFileURLAndFileUploadContent { false };
     PasteboardItemPresentationStyle preferredPresentationStyle { PasteboardItemPresentationStyle::Unspecified };
@@ -55,12 +57,37 @@ struct PasteboardItemInfo {
         return pathsForFileUpload[index];
     }
 
+    // The preferredPresentationStyle flag is platform API used by drag or copy sources to explicitly indicate
+    // that the data being written to the item provider should be treated as an attachment; unfortunately, not
+    // all clients attempt to set this flag, so we additionally take having a suggested filename as a strong
+    // indicator that the item should be treated as an attachment or file.
+    bool canBeTreatedAsAttachmentOrFile() const
+    {
+        switch (preferredPresentationStyle) {
+        case PasteboardItemPresentationStyle::Inline:
+            return false;
+        case PasteboardItemPresentationStyle::Attachment:
+            return true;
+        case PasteboardItemPresentationStyle::Unspecified:
+            return !suggestedFileName.isEmpty();
+        }
+        ASSERT_NOT_REACHED();
+        return false;
+    }
+
+    String contentTypeForHighestFidelityItem() const
+    {
+        if (contentTypesForFileUpload.isEmpty())
+            return { };
+
+        return contentTypesForFileUpload.first();
+    }
+
     String pathForHighestFidelityItem() const
     {
         if (pathsForFileUpload.isEmpty())
             return { };
 
-        ASSERT(!pathsForFileUpload.first().isEmpty());
         return pathsForFileUpload.first();
     }
 
@@ -71,7 +98,7 @@ struct PasteboardItemInfo {
 template<class Encoder>
 void PasteboardItemInfo::encode(Encoder& encoder) const
 {
-    encoder << pathsForFileUpload << contentTypesForFileUpload << suggestedFileName << isNonTextType << containsFileURLAndFileUploadContent;
+    encoder << pathsForFileUpload << contentTypesForFileUpload << contentTypesByFidelity << suggestedFileName << preferredPresentationSize << isNonTextType << containsFileURLAndFileUploadContent;
     encoder.encodeEnum(preferredPresentationStyle);
 }
 
@@ -85,7 +112,13 @@ Optional<PasteboardItemInfo> PasteboardItemInfo::decode(Decoder& decoder)
     if (!decoder.decode(result.contentTypesForFileUpload))
         return WTF::nullopt;
 
+    if (!decoder.decode(result.contentTypesByFidelity))
+        return WTF::nullopt;
+
     if (!decoder.decode(result.suggestedFileName))
+        return WTF::nullopt;
+
+    if (!decoder.decode(result.preferredPresentationSize))
         return WTF::nullopt;
 
     if (!decoder.decode(result.isNonTextType))

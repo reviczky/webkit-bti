@@ -277,12 +277,12 @@ private:
 };
 
 SamplingProfiler::SamplingProfiler(VM& vm, RefPtr<Stopwatch>&& stopwatch)
-    : m_vm(vm)
+    : m_isPaused(false)
+    , m_isShutDown(false)
+    , m_vm(vm)
     , m_weakRandom()
     , m_stopwatch(WTFMove(stopwatch))
     , m_timingInterval(Seconds::fromMicroseconds(Options::sampleInterval()))
-    , m_isPaused(false)
-    , m_isShutDown(false)
 {
     if (sReportStats) {
         sNumTotalWalks = 0;
@@ -434,7 +434,7 @@ static ALWAYS_INLINE unsigned tryGetBytecodeIndex(unsigned llintPC, CodeBlock* c
 
 #if USE(JSVALUE64)
     unsigned bytecodeIndex = llintPC;
-    if (bytecodeIndex < codeBlock->instructionCount()) {
+    if (bytecodeIndex < codeBlock->instructionsSize()) {
         isValid = true;
         return bytecodeIndex;
     }
@@ -465,7 +465,7 @@ void SamplingProfiler::processUnverifiedStackTraces()
         stackTrace.timestamp = unprocessedStackTrace.timestamp;
 
         auto populateCodeLocation = [] (CodeBlock* codeBlock, unsigned bytecodeIndex, StackFrame::CodeLocation& location) {
-            if (bytecodeIndex < codeBlock->instructionCount()) {
+            if (bytecodeIndex < codeBlock->instructionsSize()) {
                 int divot;
                 int startOffset;
                 int endOffset;
@@ -556,12 +556,13 @@ void SamplingProfiler::processUnverifiedStackTraces()
             CodeOrigin machineOrigin;
             origin.walkUpInlineStack([&] (const CodeOrigin& codeOrigin) {
                 machineOrigin = codeOrigin;
-                appendCodeBlock(codeOrigin.inlineCallFrame ? codeOrigin.inlineCallFrame->baselineCodeBlock.get() : machineCodeBlock, codeOrigin.bytecodeIndex);
+                auto* inlineCallFrame = codeOrigin.inlineCallFrame();
+                appendCodeBlock(inlineCallFrame ? inlineCallFrame->baselineCodeBlock.get() : machineCodeBlock, codeOrigin.bytecodeIndex());
             });
 
             if (Options::collectSamplingProfilerDataForJSCShell()) {
                 RELEASE_ASSERT(machineOrigin.isSet());
-                RELEASE_ASSERT(!machineOrigin.inlineCallFrame);
+                RELEASE_ASSERT(!machineOrigin.inlineCallFrame());
 
                 StackFrame::CodeLocation machineLocation = stackTrace.frames.last().semanticLocation;
 
@@ -589,7 +590,7 @@ void SamplingProfiler::processUnverifiedStackTraces()
                 // inside the LLInt's handleUncaughtException. So we just protect against this
                 // by ignoring it.
                 unsigned bytecodeIndex = 0;
-                if (topCodeBlock->jitType() == JITCode::InterpreterThunk || topCodeBlock->jitType() == JITCode::BaselineJIT) {
+                if (topCodeBlock->jitType() == JITType::InterpreterThunk || topCodeBlock->jitType() == JITType::BaselineJIT) {
                     bool isValidPC;
                     unsigned bits;
 #if USE(JSVALUE64)
@@ -778,7 +779,7 @@ String SamplingProfiler::StackFrame::displayName(VM& vm)
         return static_cast<NativeExecutable*>(executable)->name();
 
     if (executable->isFunctionExecutable())
-        return static_cast<FunctionExecutable*>(executable)->inferredName().string();
+        return static_cast<FunctionExecutable*>(executable)->ecmaName().string();
     if (executable->isProgramExecutable() || executable->isEvalExecutable())
         return "(program)"_s;
     if (executable->isModuleProgramExecutable())
@@ -805,7 +806,7 @@ String SamplingProfiler::StackFrame::displayNameForJSONTests(VM& vm)
         return static_cast<NativeExecutable*>(executable)->name();
 
     if (executable->isFunctionExecutable()) {
-        String result = static_cast<FunctionExecutable*>(executable)->inferredName().string();
+        String result = static_cast<FunctionExecutable*>(executable)->ecmaName().string();
         if (result.isEmpty())
             return "(anonymous function)"_s;
         return result;

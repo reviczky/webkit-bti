@@ -135,7 +135,6 @@ JSCBuiltins.h: $(BUILTINS_GENERATOR_SCRIPTS) $(JavaScriptCore_BUILTINS_SOURCES) 
 OBJECT_LUT_HEADERS = \
     AsyncFromSyncIteratorPrototype.lut.h \
     ArrayConstructor.lut.h \
-    ArrayIteratorPrototype.lut.h \
     AsyncGeneratorPrototype.lut.h \
     BigIntConstructor.lut.h \
     BigIntPrototype.lut.h \
@@ -161,6 +160,7 @@ OBJECT_LUT_HEADERS = \
     JSONObject.lut.h \
     JSPromiseConstructor.lut.h \
     JSPromisePrototype.lut.h \
+    JSWebAssembly.lut.h \
     MapPrototype.lut.h \
     NumberConstructor.lut.h \
     NumberPrototype.lut.h \
@@ -169,7 +169,6 @@ OBJECT_LUT_HEADERS = \
     RegExpConstructor.lut.h \
     SetPrototype.lut.h \
     StringConstructor.lut.h \
-    StringIteratorPrototype.lut.h \
     StringPrototype.lut.h \
     SymbolConstructor.lut.h \
     SymbolPrototype.lut.h \
@@ -242,7 +241,6 @@ INSPECTOR_DOMAINS := \
     $(JavaScriptCore)/inspector/protocol/Inspector.json \
     $(JavaScriptCore)/inspector/protocol/LayerTree.json \
     $(JavaScriptCore)/inspector/protocol/Network.json \
-    $(JavaScriptCore)/inspector/protocol/OverlayTypes.json \
     $(JavaScriptCore)/inspector/protocol/Page.json \
     $(JavaScriptCore)/inspector/protocol/Recording.json \
     $(JavaScriptCore)/inspector/protocol/Runtime.json \

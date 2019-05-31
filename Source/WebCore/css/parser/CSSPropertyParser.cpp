@@ -156,12 +156,18 @@ static bool isAppleLegacyCssValueKeyword(const char* valueKeyword, unsigned leng
     static const char applePrefix[] = "-apple-";
     static const char appleSystemPrefix[] = "-apple-system";
     static const char applePayPrefix[] = "-apple-pay";
+
+#if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
     static const char* appleWirelessPlaybackTargetActive = getValueName(CSSValueAppleWirelessPlaybackTargetActive);
-    
+#endif
+
     return hasPrefix(valueKeyword, length, applePrefix)
     && !hasPrefix(valueKeyword, length, appleSystemPrefix)
     && !hasPrefix(valueKeyword, length, applePayPrefix)
-    && !WTF::equal(reinterpret_cast<const LChar*>(valueKeyword), reinterpret_cast<const LChar*>(appleWirelessPlaybackTargetActive), length);
+#if PLATFORM(MAC) || PLATFORM(IOS_FAMILY)
+    && !WTF::equal(reinterpret_cast<const LChar*>(valueKeyword), reinterpret_cast<const LChar*>(appleWirelessPlaybackTargetActive), length)
+#endif
+    ;
 }
 
 template <typename CharacterType>
@@ -308,22 +314,6 @@ void CSSPropertyParser::collectParsedCustomPropertyValueDependencies(const Strin
     parser.collectParsedCustomPropertyValueDependencies(syntax, isRoot, dependencies);
 }
 
-static bool isLegacyBreakProperty(CSSPropertyID propertyID)
-{
-    switch (propertyID) {
-    case CSSPropertyPageBreakAfter:
-    case CSSPropertyPageBreakBefore:
-    case CSSPropertyPageBreakInside:
-    case CSSPropertyWebkitColumnBreakAfter:
-    case CSSPropertyWebkitColumnBreakBefore:
-    case CSSPropertyWebkitColumnBreakInside:
-        return true;
-    default:
-        break;
-    }
-    return false;
-}
-
 bool CSSPropertyParser::parseValueStart(CSSPropertyID propertyID, bool important)
 {
     if (consumeCSSWideKeyword(propertyID, important))
@@ -335,11 +325,6 @@ bool CSSPropertyParser::parseValueStart(CSSPropertyID propertyID, bool important
     if (isShorthand) {
         // Variable references will fail to parse here and will fall out to the variable ref parser below.
         if (parseShorthand(propertyID, important))
-            return true;
-    } else if (isLegacyBreakProperty(propertyID)) {
-        // FIXME-NEWPARSER: Can turn this into a shorthand once old parser is gone, and then
-        // we don't need the special case.
-        if (consumeLegacyBreakProperty(propertyID, important))
             return true;
     } else {
         RefPtr<CSSValue> parsedValue = parseSingleValue(propertyID);
@@ -569,7 +554,7 @@ static RefPtr<CSSValue> consumeFontVariationSettings(CSSParserTokenRange& range)
     if (!settings->length())
         return nullptr;
 
-    return WTFMove(settings);
+    return settings;
 }
 #endif // ENABLE(VARIATION_FONTS)
 
@@ -1081,7 +1066,7 @@ static RefPtr<CSSValueList> consumeFontFamily(CSSParserTokenRange& range)
 
 static RefPtr<CSSValueList> consumeFontFamilyDescriptor(CSSParserTokenRange& range)
 {
-    // FIXME-NEWPARSER: For compatibility with the old parser, we have to make
+    // FIXME-NEWPARSER: https://bugs.webkit.org/show_bug.cgi?id=196381 For compatibility with the old parser, we have to make
     // a list here, even though the list always contains only a single family name.
     // Once the old parser is gone, we can delete this function, make the caller
     // use consumeFamilyName instead, and then patch the @font-face code to
@@ -2456,7 +2441,7 @@ static RefPtr<CSSBasicShapePath> consumeBasicShapePath(CSSParserTokenRange& args
     auto shape = CSSBasicShapePath::create(WTFMove(byteStream));
     shape->setWindRule(windRule);
     
-    return WTFMove(shape);
+    return shape;
 }
 
 static void complete4Sides(RefPtr<CSSPrimitiveValue> side[4])
@@ -3761,7 +3746,7 @@ static RefPtr<CSSValue> consumeTextEmphasisPosition(CSSParserTokenRange& range)
 
 #if ENABLE(DARK_MODE_CSS)
 
-static RefPtr<CSSValue> consumeSupportedColorSchemes(CSSParserTokenRange& range)
+static RefPtr<CSSValue> consumeColorScheme(CSSParserTokenRange& range)
 {
     if (isAuto(range.peek().id()))
         return consumeIdent(range);
@@ -3903,8 +3888,9 @@ static RefPtr<CSSValue> consumeWebkitDashboardRegion(CSSParserTokenRange& range,
 RefPtr<CSSValue> CSSPropertyParser::parseSingleValue(CSSPropertyID property, CSSPropertyID currentShorthand)
 {
     if (CSSParserFastPaths::isKeywordPropertyID(property)) {
-        if (!CSSParserFastPaths::isValidKeywordPropertyAndValue(property, m_range.peek().id(), m_context.mode))
+        if (!CSSParserFastPaths::isValidKeywordPropertyAndValue(property, m_range.peek().id(), m_context))
             return nullptr;
+
         return consumeIdent(m_range);
     }
     switch (property) {
@@ -4350,10 +4336,10 @@ RefPtr<CSSValue> CSSPropertyParser::parseSingleValue(CSSPropertyID property, CSS
     case CSSPropertyWebkitTextEmphasisPosition:
         return consumeTextEmphasisPosition(m_range);
 #if ENABLE(DARK_MODE_CSS)
-    case CSSPropertySupportedColorSchemes:
+    case CSSPropertyColorScheme:
         if (!RuntimeEnabledFeatures::sharedFeatures().darkModeCSSEnabled())
             return nullptr;
-        return consumeSupportedColorSchemes(m_range);
+        return consumeColorScheme(m_range);
 #endif
 #if ENABLE(DASHBOARD_SUPPORT)
     case CSSPropertyWebkitDashboardRegion:
@@ -5132,10 +5118,8 @@ static inline CSSValueID mapFromPageBreakBetween(CSSValueID value)
 {
     if (value == CSSValueAlways)
         return CSSValuePage;
-    if (value == CSSValueAuto || value == CSSValueLeft || value == CSSValueRight)
+    if (value == CSSValueAuto || value == CSSValueAvoid || value == CSSValueLeft || value == CSSValueRight)
         return value;
-    if (value == CSSValueAvoid)
-        return CSSValueAvoidPage;
     return CSSValueInvalid;
 }
 
@@ -5525,7 +5509,7 @@ static RefPtr<CSSValue> consumeImplicitGridAutoFlow(CSSParserTokenRange& range, 
         list->append(CSSValuePool::singleton().createIdentifierValue(CSSValueDense));
     }
     
-    return WTFMove(list);
+    return list;
 }
 
 bool CSSPropertyParser::consumeGridShorthand(bool important)
@@ -5692,7 +5676,7 @@ bool CSSPropertyParser::parseShorthand(CSSPropertyID property, bool important)
     switch (property) {
     case CSSPropertyWebkitMarginCollapse: {
         CSSValueID id = m_range.consumeIncludingWhitespace().id();
-        if (!CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyWebkitMarginBeforeCollapse, id, m_context.mode))
+        if (!CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyWebkitMarginBeforeCollapse, id, m_context))
             return false;
         addProperty(CSSPropertyWebkitMarginBeforeCollapse, CSSPropertyWebkitMarginCollapse, CSSValuePool::singleton().createIdentifierValue(id), important);
         if (m_range.atEnd()) {
@@ -5700,14 +5684,14 @@ bool CSSPropertyParser::parseShorthand(CSSPropertyID property, bool important)
             return true;
         }
         id = m_range.consumeIncludingWhitespace().id();
-        if (!CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyWebkitMarginAfterCollapse, id, m_context.mode))
+        if (!CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyWebkitMarginAfterCollapse, id, m_context))
             return false;
         addProperty(CSSPropertyWebkitMarginAfterCollapse, CSSPropertyWebkitMarginCollapse, CSSValuePool::singleton().createIdentifierValue(id), important);
         return true;
     }
     case CSSPropertyOverflow: {
         CSSValueID id = m_range.consumeIncludingWhitespace().id();
-        if (!CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyOverflowY, id, m_context.mode))
+        if (!CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyOverflowY, id, m_context))
             return false;
         if (!m_range.atEnd())
             return false;
@@ -5880,6 +5864,13 @@ bool CSSPropertyParser::parseShorthand(CSSPropertyID property, bool important)
     }
     case CSSPropertyBorderImage:
         return consumeBorderImage(property, important);
+    case CSSPropertyPageBreakAfter:
+    case CSSPropertyPageBreakBefore:
+    case CSSPropertyPageBreakInside:
+    case CSSPropertyWebkitColumnBreakAfter:
+    case CSSPropertyWebkitColumnBreakBefore:
+    case CSSPropertyWebkitColumnBreakInside:
+        return consumeLegacyBreakProperty(property, important);
     case CSSPropertyWebkitMaskPosition:
     case CSSPropertyBackgroundPosition: {
         RefPtr<CSSValue> resultX;

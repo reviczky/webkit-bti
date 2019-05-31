@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2011-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -219,7 +219,6 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(bool, testTheFTL, false, Normal, nullptr) \
     v(bool, verboseSanitizeStack, false, Normal, nullptr) \
     v(bool, useGenerationalGC, true, Normal, nullptr) \
-    v(bool, useConcurrentBarriers, true, Normal, nullptr) \
     v(bool, useConcurrentGC, true, Normal, nullptr) \
     v(bool, collectContinuously, false, Normal, nullptr) \
     v(double, collectContinuouslyPeriodMS, 1, Normal, nullptr) \
@@ -252,7 +251,6 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(bool, dumpSizeClasses, false, Normal, nullptr) \
     v(bool, useBumpAllocator, true, Normal, nullptr) \
     v(bool, stealEmptyBlocksFromOtherAllocators, true, Normal, nullptr) \
-    v(bool, tradeDestructorBlocks, true, Normal, nullptr) \
     v(bool, eagerlyUpdateTopCallFrame, false, Normal, nullptr) \
     \
     v(bool, useOSREntryToDFG, true, Normal, nullptr) \
@@ -284,6 +282,7 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(bool, useMovHintRemoval, true, Normal, nullptr) \
     v(bool, usePutStackSinking, true, Normal, nullptr) \
     v(bool, useObjectAllocationSinking, true, Normal, nullptr) \
+    v(bool, useValueRepElimination, true, Normal, nullptr) \
     v(bool, useArityFixupInlining, true, Normal, nullptr) \
     v(bool, logExecutableAllocation, false, Normal, nullptr) \
     \
@@ -301,13 +300,13 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     \
     v(bool, breakOnThrow, false, Normal, nullptr) \
     \
-    v(unsigned, maximumOptimizationCandidateInstructionCount, 100000, Normal, nullptr) \
+    v(unsigned, maximumOptimizationCandidateBytecodeCost, 100000, Normal, nullptr) \
     \
-    v(unsigned, maximumFunctionForCallInlineCandidateInstructionCount, 120, Normal, nullptr) \
-    v(unsigned, maximumFunctionForClosureCallInlineCandidateInstructionCount, 100, Normal, nullptr) \
-    v(unsigned, maximumFunctionForConstructInlineCandidateInstructionCount, 100, Normal, nullptr) \
+    v(unsigned, maximumFunctionForCallInlineCandidateBytecodeCost, 120, Normal, nullptr) \
+    v(unsigned, maximumFunctionForClosureCallInlineCandidateBytecodeCost, 100, Normal, nullptr) \
+    v(unsigned, maximumFunctionForConstructInlineCandidateBytecoodeCost, 100, Normal, nullptr) \
     \
-    v(unsigned, maximumFTLCandidateInstructionCount, 20000, Normal, nullptr) \
+    v(unsigned, maximumFTLCandidateBytecodeCost, 20000, Normal, nullptr) \
     \
     /* Depth of inline stack, so 1 = no inlining, 2 = one level, etc. */ \
     v(unsigned, maximumInliningDepth, 5, Normal, "maximum allowed inlining depth.  Depth of 1 means no inlining") \
@@ -315,7 +314,7 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     \
     /* Maximum size of a caller for enabling inlining. This is purely to protect us */\
     /* from super long compiles that take a lot of memory. */\
-    v(unsigned, maximumInliningCallerSize, 10000, Normal, nullptr) \
+    v(unsigned, maximumInliningCallerBytecodeCost, 10000, Normal, nullptr) \
     \
     v(unsigned, maximumVarargsForInlining, 100, Normal, nullptr) \
     \
@@ -395,7 +394,7 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(unsigned, gcMaxHeapSize, 0, Normal, nullptr) \
     v(unsigned, forceRAMSize, 0, Normal, nullptr) \
     v(bool, recordGCPauseTimes, false, Normal, nullptr) \
-    v(bool, logHeapStatisticsAtExit, false, Normal, nullptr) \
+    v(bool, dumpHeapStatisticsAtVMDestruction, false, Normal, nullptr) \
     v(bool, forceCodeBlockToJettisonDueToOldAge, false, Normal, "If true, this means that anytime we can jettison a CodeBlock due to old age, we do.") \
     v(bool, useEagerCodeBlockJettisonTiming, false, Normal, "If true, the time slices for jettisoning a CodeBlock due to old age are shrunk significantly.") \
     \
@@ -434,6 +433,11 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(unsigned, fireOSRExitFuzzAt, 0, Normal, nullptr) \
     v(unsigned, fireOSRExitFuzzAtOrAfter, 0, Normal, nullptr) \
     \
+    v(bool, useRandomizingFuzzerAgent, false, Normal, nullptr) \
+    v(unsigned, seedOfRandomizingFuzzerAgent, 1, Normal, nullptr) \
+    v(bool, dumpRandomizingFuzzerAgentPredictions, false, Normal, nullptr) \
+    v(bool, useDoublePredictionFuzzerAgent, false, Normal, nullptr) \
+    \
     v(bool, logPhaseTimes, false, Normal, nullptr) \
     v(double, rareBlockPenalty, 0.001, Normal, nullptr) \
     v(bool, airLinearScanVerbose, false, Normal, nullptr) \
@@ -441,6 +445,7 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(bool, airForceBriggsAllocator, false, Normal, nullptr) \
     v(bool, airForceIRCAllocator, false, Normal, nullptr) \
     v(bool, airRandomizeRegs, false, Normal, nullptr) \
+    v(unsigned, airRandomizeRegsSeed, 0, Normal, nullptr) \
     v(bool, coalesceSpillSlots, true, Normal, nullptr) \
     v(bool, logAirRegisterPressure, false, Normal, nullptr) \
     v(bool, useB3TailDup, true, Normal, nullptr) \
@@ -487,8 +492,7 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(unsigned, webAssemblyLoopDecrement, 15, Normal, "The amount the tier up countdown is decremented on each loop backedge.") \
     v(unsigned, webAssemblyFunctionEntryDecrement, 1, Normal, "The amount the tier up countdown is decremented on each function entry.") \
     \
-    /* FIXME: enable fast memories on iOS and pre-allocate them. https://bugs.webkit.org/show_bug.cgi?id=170774 */ \
-    v(bool, useWebAssemblyFastMemory, !isIOS(), Normal, "If true, we will try to use a 32-bit address space with a signal handler to bounds check wasm memory.") \
+    v(bool, useWebAssemblyFastMemory, true, Normal, "If true, we will try to use a 32-bit address space with a signal handler to bounds check wasm memory.") \
     v(bool, logWebAssemblyMemory, false, Normal, nullptr) \
     v(unsigned, webAssemblyFastMemoryRedzonePages, 128, Normal, "WebAssembly fast memories use 4GiB virtual allocations, plus a redzone (counted as multiple of 64KiB WebAssembly pages) at the end to catch reg+imm accesses which exceed 32-bit, anything beyond the redzone is explicitly bounds-checked") \
     v(bool, crashIfWebAssemblyCantFastMemory, false, Normal, "If true, we will crash if we can't obtain fast memory for wasm.") \
@@ -498,6 +502,7 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(bool, useWebAssemblyStreamingApi, enableWebAssemblyStreamingApi, Normal, "Allow to run WebAssembly's Streaming API") \
     v(bool, useCallICsForWebAssemblyToJSCalls, true, Normal, "If true, we will use CallLinkInfo to inline cache Wasm to JS calls.") \
     v(bool, useEagerWebAssemblyModuleHashing, false, Normal, "Unnamed WebAssembly modules are identified in backtraces through their hash, if available.") \
+    v(bool, useWebAssemblyReferences, true, Normal, "Allow types from the wasm references spec.") \
     v(bool, useBigInt, false, Normal, "If true, we will enable BigInt support.") \
     v(bool, useIntlNumberFormatToParts, enableIntlNumberFormatToParts, Normal, "If true, we will enable Intl.NumberFormat.prototype.formatToParts") \
     v(bool, useIntlPluralRules, enableIntlPluralRules, Normal, "If true, we will enable Intl.PluralRules.") \
@@ -511,6 +516,10 @@ constexpr bool enableWebAssemblyStreamingApi = false;
     v(unsigned, thresholdForGlobalLexicalBindingEpoch, UINT_MAX, Normal, "Threshold for global lexical binding epoch. If the epoch reaches to this value, CodeBlock metadata for scope operations will be revised globally. It needs to be greater than 1.") \
     v(optionString, diskCachePath, nullptr, Restricted, nullptr) \
     v(bool, forceDiskCache, false, Restricted, nullptr) \
+    v(bool, validateAbstractInterpreterState, false, Restricted, nullptr) \
+    v(double, validateAbstractInterpreterStateProbability, 0.5, Normal, nullptr) \
+    v(optionString, dumpJITMemoryPath, nullptr, Restricted, nullptr) \
+    v(double, dumpJITMemoryFlushInterval, 10, Restricted, "Maximum time in between flushes of the JIT memory dump in seconds.") \
 
 
 enum OptionEquivalence {
@@ -551,6 +560,12 @@ enum OptionEquivalence {
     v(enableDollarVM, useDollarVM, SameOption) \
     v(enableWebAssembly, useWebAssembly, SameOption) \
     v(verboseDFGByteCodeParsing, verboseDFGBytecodeParsing, SameOption) \
+    v(maximumOptimizationCandidateInstructionCount, maximumOptimizationCandidateBytecodeCost, SameOption) \
+    v(maximumFunctionForCallInlineCandidateInstructionCount, maximumFunctionForCallInlineCandidateBytecodeCost, SameOption) \
+    v(maximumFunctionForClosureCallInlineCandidateInstructionCount, maximumFunctionForClosureCallInlineCandidateBytecodeCost, SameOption) \
+    v(maximumFunctionForConstructInlineCandidateInstructionCount, maximumFunctionForConstructInlineCandidateBytecoodeCost, SameOption) \
+    v(maximumFTLCandidateInstructionCount, maximumFTLCandidateBytecodeCost, SameOption) \
+    v(maximumInliningCallerSize, maximumInliningCallerBytecodeCost, SameOption) \
 
 
 class Options {

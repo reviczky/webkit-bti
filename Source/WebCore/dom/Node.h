@@ -283,7 +283,7 @@ public:
 
     virtual bool canContainRangeEndPoint() const { return false; }
 
-    bool isRootEditableElement() const;
+    WEBCORE_EXPORT bool isRootEditableElement() const;
     WEBCORE_EXPORT Element* rootEditableElement() const;
 
     // Called by the parser when this element's close tag is reached,
@@ -499,7 +499,7 @@ public:
     void ref();
     void deref();
     bool hasOneRef() const;
-    int refCount() const;
+    unsigned refCount() const;
 
 #ifndef NDEBUG
     bool m_deletionHasBegun { false };
@@ -617,6 +617,9 @@ protected:
     };
     Node(Document&, ConstructionType);
 
+    static constexpr uint32_t s_refCountIncrement = 2;
+    static constexpr uint32_t s_refCountMask = ~static_cast<uint32_t>(1);
+
     virtual void addSubresourceAttributeURLs(ListHashSet<URL>&) const { }
 
     bool hasRareData() const { return getFlag(HasRareDataFlag); }
@@ -663,7 +666,7 @@ private:
     static void moveTreeToNewScope(Node&, TreeScope& oldScope, TreeScope& newScope);
     void moveNodeToNewDocument(Document& oldDocument, Document& newDocument);
 
-    int m_refCount;
+    uint32_t m_refCountAndParentBit { s_refCountIncrement };
     mutable uint32_t m_nodeFlags;
 
     ContainerNode* m_parentNode { nullptr };
@@ -694,34 +697,39 @@ ALWAYS_INLINE void Node::ref()
     ASSERT(!m_deletionHasBegun);
     ASSERT(!m_inRemovedLastRefFunction);
     ASSERT(!m_adoptionIsRequired);
-    ++m_refCount;
+    m_refCountAndParentBit += s_refCountIncrement;
 }
 
 ALWAYS_INLINE void Node::deref()
 {
     ASSERT(isMainThread());
-    ASSERT(m_refCount >= 0);
+    ASSERT(refCount());
     ASSERT(!m_deletionHasBegun);
     ASSERT(!m_inRemovedLastRefFunction);
     ASSERT(!m_adoptionIsRequired);
-    if (--m_refCount <= 0 && !parentNode()) {
+    auto updatedRefCount = m_refCountAndParentBit - s_refCountIncrement;
+    if (!updatedRefCount) {
+        // Don't update m_refCountAndParentBit to avoid double destruction through use of Ref<T>/RefPtr<T>.
+        // (This is a security mitigation in case of programmer error. It will ASSERT in debug builds.)
 #ifndef NDEBUG
         m_inRemovedLastRefFunction = true;
 #endif
         removedLastRef();
+        return;
     }
+    m_refCountAndParentBit = updatedRefCount;
 }
 
 ALWAYS_INLINE bool Node::hasOneRef() const
 {
     ASSERT(!m_deletionHasBegun);
     ASSERT(!m_inRemovedLastRefFunction);
-    return m_refCount == 1;
+    return refCount() == 1;
 }
 
-ALWAYS_INLINE int Node::refCount() const
+ALWAYS_INLINE unsigned Node::refCount() const
 {
-    return m_refCount;
+    return m_refCountAndParentBit / s_refCountIncrement;
 }
 
 // Used in Node::addSubresourceAttributeURLs() and in addSubresourceStyleURLs()
@@ -735,6 +743,7 @@ inline void Node::setParentNode(ContainerNode* parent)
 {
     ASSERT(isMainThread());
     m_parentNode = parent;
+    m_refCountAndParentBit = (m_refCountAndParentBit & s_refCountMask) | !!parent;
 }
 
 inline ContainerNode* Node::parentNode() const

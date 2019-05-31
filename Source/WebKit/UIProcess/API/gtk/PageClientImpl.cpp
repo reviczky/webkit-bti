@@ -44,6 +44,7 @@
 #include "WebProcessPool.h"
 #include <WebCore/CairoUtilities.h>
 #include <WebCore/Cursor.h>
+#include <WebCore/DOMPasteAccess.h>
 #include <WebCore/EventNames.h>
 #include <WebCore/GtkUtilities.h>
 #include <WebCore/NotImplemented.h>
@@ -81,7 +82,7 @@ void PageClientImpl::setViewNeedsDisplay(const WebCore::Region& region)
     gtk_widget_queue_draw_region(m_viewWidget, toCairoRegion(region).get());
 }
 
-void PageClientImpl::requestScroll(const WebCore::FloatPoint&, const WebCore::IntPoint&, bool)
+void PageClientImpl::requestScroll(const WebCore::FloatPoint&, const WebCore::IntPoint&)
 {
     notImplemented();
 }
@@ -203,6 +204,16 @@ IntRect PageClientImpl::rootViewToScreen(const IntRect& rect)
     return IntRect(convertWidgetPointToScreenPoint(m_viewWidget, rect.location()), rect.size());
 }
 
+WebCore::IntPoint PageClientImpl::accessibilityScreenToRootView(const WebCore::IntPoint& point)
+{
+    return screenToRootView(point);
+}
+
+WebCore::IntRect PageClientImpl::rootViewToAccessibilityScreen(const WebCore::IntRect& rect)    
+{
+    return rootViewToScreen(rect);
+}
+
 void PageClientImpl::doneWithKeyEvent(const NativeWebKeyboardEvent& event, bool wasEventHandled)
 {
     if (wasEventHandled)
@@ -288,10 +299,10 @@ void PageClientImpl::startDrag(Ref<SelectionData>&& selection, DragOperation dra
 }
 #endif
 
-void PageClientImpl::handleDownloadRequest(DownloadProxy* download)
+void PageClientImpl::handleDownloadRequest(DownloadProxy& download)
 {
     if (WEBKIT_IS_WEB_VIEW(m_viewWidget))
-        webkitWebViewHandleDownloadRequest(WEBKIT_WEB_VIEW(m_viewWidget), download);
+        webkitWebViewHandleDownloadRequest(WEBKIT_WEB_VIEW(m_viewWidget), &download);
 }
 
 void PageClientImpl::didCommitLoadForMainFrame(const String& /* mimeType */, bool /* useCustomContentProvider */ )
@@ -420,9 +431,9 @@ void PageClientImpl::doneWithTouchEvent(const NativeWebTouchEvent& event, bool w
 
 void PageClientImpl::wheelEventWasNotHandledByWebCore(const NativeWebWheelEvent& event)
 {
-    ViewGestureController& controller = webkitWebViewBaseViewGestureController(WEBKIT_WEB_VIEW_BASE(m_viewWidget));
-    if (controller.isSwipeGestureEnabled()) {
-        controller.wheelEventWasNotHandledByWebCore(&event.nativeEvent()->scroll);
+    ViewGestureController* controller = webkitWebViewBaseViewGestureController(WEBKIT_WEB_VIEW_BASE(m_viewWidget));
+    if (controller && controller->isSwipeGestureEnabled()) {
+        controller->wheelEventWasNotHandledByWebCore(&event.nativeEvent()->scroll);
         return;
     }
 
@@ -516,5 +527,29 @@ bool PageClientImpl::decidePolicyForInstallMissingMediaPluginsPermissionRequest(
     return true;
 }
 #endif
+
+void PageClientImpl::requestDOMPasteAccess(const IntRect&, const String&, CompletionHandler<void(WebCore::DOMPasteAccessResponse)>&& completionHandler)
+{
+    completionHandler(WebCore::DOMPasteAccessResponse::DeniedForGesture);
+}
+
+bool PageClientImpl::effectiveAppearanceIsDark() const
+{
+    auto* settings = gtk_widget_get_settings(m_viewWidget);
+    gboolean preferDarkTheme;
+    g_object_get(settings, "gtk-application-prefer-dark-theme", &preferDarkTheme, nullptr);
+    if (preferDarkTheme)
+        return true;
+
+    GUniqueOutPtr<char> themeName;
+    g_object_get(settings, "gtk-theme-name", &themeName.outPtr(), nullptr);
+    if (g_str_has_suffix(themeName.get(), "-dark"))
+        return true;
+
+    if (auto* themeNameEnv = g_getenv("GTK_THEME"))
+        return g_str_has_suffix(themeNameEnv, ":dark");
+
+    return false;
+}
 
 } // namespace WebKit

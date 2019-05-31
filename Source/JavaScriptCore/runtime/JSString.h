@@ -49,7 +49,6 @@ JSString* jsString(ExecState*, const String&); // returns empty string if passed
 JSString* jsSingleCharacterString(VM*, UChar);
 JSString* jsSingleCharacterString(ExecState*, UChar);
 JSString* jsSubstring(VM*, const String&, unsigned offset, unsigned length);
-JSString* jsSubstring(ExecState*, const String&, unsigned offset, unsigned length);
 
 // Non-trivial strings are two or more characters long.
 // These functions are faster than just calling jsString.
@@ -80,9 +79,9 @@ JSString* asString(JSValue);
 //
 //              0                        8        10               16                       32                                     48
 // JSString     [   ID      ][  header  ][   String pointer      0]
-// JSRopeString [   ID      ][  header  ][ flags ][ 1st fiber    1][  length  ][2nd lower32][2nd upper16][3rd lower16][3rd upper32]
+// JSRopeString [   ID      ][  header  ][   1st fiber         xyz][  length  ][2nd lower32][2nd upper16][3rd lower16][3rd upper32]
 //                                                               ^
-//                                                            isRope bit
+//                                            x:(is8Bit),y:(isSubstring),z:(isRope) bit flags
 class JSString : public JSCell {
 public:
     friend class JIT;
@@ -260,13 +259,15 @@ private:
 class JSRopeString final : public JSString {
     friend class JSString;
 public:
+    // We use lower 3bits of fiber0 for flags. These bits are usable due to alignment, and it is OK even in 32bit architecture.
+    static constexpr uintptr_t is8BitInPointer = static_cast<uintptr_t>(StringImpl::flagIs8Bit());
+    static constexpr uintptr_t isSubstringInPointer = 0x2;
+    static_assert(is8BitInPointer == 0b100, "");
+    static_assert(isSubstringInPointer == 0b010, "");
+    static_assert(isRopeInPointer == 0b001, "");
+    static constexpr uintptr_t stringMask = ~(isRopeInPointer | is8BitInPointer | isSubstringInPointer);
 #if CPU(ADDRESS64)
     static_assert(sizeof(uintptr_t) == sizeof(uint64_t), "");
-    static constexpr uintptr_t flagMask = 0xffff000000000000ULL;
-    static constexpr uintptr_t stringMask = ~(flagMask | isRopeInPointer);
-    static_assert(StringImpl::flagIs8Bit() == 0b100, "");
-    static constexpr uintptr_t is8BitInPointer = static_cast<uintptr_t>(StringImpl::flagIs8Bit()) << 48;
-
     class CompactFibers {
     public:
         JSString* fiber1() const
@@ -283,13 +284,13 @@ public:
 
         JSString* fiber2() const
         {
-            return bitwise_cast<JSString*>(static_cast<uintptr_t>(m_fiber2Lower) | (static_cast<uintptr_t>(m_fiber2Upper) << 32));
+            return bitwise_cast<JSString*>(static_cast<uintptr_t>(m_fiber2Lower) | (static_cast<uintptr_t>(m_fiber2Upper) << 16));
         }
         void initializeFiber2(JSString* fiber)
         {
             uintptr_t pointer = bitwise_cast<uintptr_t>(fiber);
-            m_fiber2Lower = static_cast<uint32_t>(pointer);
-            m_fiber2Upper = static_cast<uint16_t>(pointer >> 32);
+            m_fiber2Lower = static_cast<uint16_t>(pointer);
+            m_fiber2Upper = static_cast<uint32_t>(pointer >> 16);
         }
 
         unsigned length() const { return m_length; }
@@ -299,22 +300,20 @@ public:
         }
 
         static ptrdiff_t offsetOfLength() { return OBJECT_OFFSETOF(CompactFibers, m_length); }
-        static ptrdiff_t offsetOfFiber1Lower() { return OBJECT_OFFSETOF(CompactFibers, m_fiber1Lower); }
-        static ptrdiff_t offsetOfFiber1Upper() { return OBJECT_OFFSETOF(CompactFibers, m_fiber1Upper); }
-        static ptrdiff_t offsetOfFiber2Lower() { return OBJECT_OFFSETOF(CompactFibers, m_fiber2Lower); }
-        static ptrdiff_t offsetOfFiber2Upper() { return OBJECT_OFFSETOF(CompactFibers, m_fiber2Upper); }
+        static ptrdiff_t offsetOfFiber1() { return OBJECT_OFFSETOF(CompactFibers, m_length); }
+        static ptrdiff_t offsetOfFiber2() { return OBJECT_OFFSETOF(CompactFibers, m_fiber1Upper); }
 
     private:
+        friend class LLIntOffsetsExtractor;
+
         uint32_t m_length { 0 };
         uint32_t m_fiber1Lower { 0 };
         uint16_t m_fiber1Upper { 0 };
-        uint16_t m_fiber2Upper { 0 };
-        uint32_t m_fiber2Lower { 0 };
+        uint16_t m_fiber2Lower { 0 };
+        uint32_t m_fiber2Upper { 0 };
     };
     static_assert(sizeof(CompactFibers) == sizeof(void*) * 2, "");
 #else
-    static constexpr uintptr_t stringMask = ~(isRopeInPointer);
-
     class CompactFibers {
     public:
         JSString* fiber1() const
@@ -341,24 +340,14 @@ public:
             m_length = length;
         }
 
-        void initializeIs8Bit(bool flag)
-        {
-            if (flag)
-                m_flags |= static_cast<uintptr_t>(StringImpl::flagIs8Bit());
-            else
-                m_flags &= ~static_cast<uintptr_t>(StringImpl::flagIs8Bit());
-        }
-
-        bool is8Bit()
-        {
-            return m_flags & static_cast<uintptr_t>(StringImpl::flagIs8Bit());
-        }
-
         static ptrdiff_t offsetOfLength() { return OBJECT_OFFSETOF(CompactFibers, m_length); }
+        static ptrdiff_t offsetOfFiber1() { return OBJECT_OFFSETOF(CompactFibers, m_fiber1); }
+        static ptrdiff_t offsetOfFiber2() { return OBJECT_OFFSETOF(CompactFibers, m_fiber2); }
 
     private:
+        friend class LLIntOffsetsExtractor;
+
         uint32_t m_length { 0 };
-        uint32_t m_flags { 0 };
         JSString* m_fiber1 { nullptr };
         JSString* m_fiber2 { nullptr };
     };
@@ -446,24 +435,41 @@ public:
     }
 
 private:
+    friend class LLIntOffsetsExtractor;
+
     void convertToNonRope(String&&) const;
 
     void initializeIs8Bit(bool flag) const
     {
-#if CPU(ADDRESS64)
         if (flag)
             m_fiber |= is8BitInPointer;
         else
             m_fiber &= ~is8BitInPointer;
-#else
-        m_compactFibers.initializeIs8Bit(flag);
-#endif
+    }
+
+    void initializeIsSubstring(bool flag) const
+    {
+        if (flag)
+            m_fiber |= isSubstringInPointer;
+        else
+            m_fiber &= ~isSubstringInPointer;
     }
 
     ALWAYS_INLINE void initializeLength(unsigned length)
     {
         ASSERT(length <= MaxLength);
         m_compactFibers.initializeLength(length);
+    }
+
+    JSRopeString(VM& vm)
+        : JSString(vm)
+    {
+        initializeIsSubstring(false);
+        initializeLength(0);
+        initializeIs8Bit(true);
+        initializeFiber0(nullptr);
+        initializeFiber1(nullptr);
+        initializeFiber2(nullptr);
     }
 
     JSRopeString(VM& vm, JSString* s1, JSString* s2)
@@ -500,40 +506,10 @@ private:
         initializeIsSubstring(true);
         initializeLength(length);
         initializeIs8Bit(base->is8Bit());
-        if (base->isSubstring()) {
-            JSRopeString* baseRope = jsCast<JSRopeString*>(base);
-            initializeSubstringBase(baseRope->substringBase());
-            initializeSubstringOffset(baseRope->substringOffset() + offset);
-        } else {
-            initializeSubstringBase(base);
-            initializeSubstringOffset(offset);
-        }
-        ASSERT(length == this->length());
-    }
-
-    enum SubstringOfResolvedTag { SubstringOfResolved };
-    JSRopeString(SubstringOfResolvedTag, VM& vm, JSString* base, unsigned offset, unsigned length)
-        : JSString(vm)
-    {
-        RELEASE_ASSERT(!sumOverflows<int32_t>(offset, length));
-        RELEASE_ASSERT(offset + length <= base->length());
-        initializeIsSubstring(true);
-        initializeLength(length);
-        initializeIs8Bit(base->is8Bit());
         initializeSubstringBase(base);
         initializeSubstringOffset(offset);
         ASSERT(length == this->length());
-    }
-
-    ALWAYS_INLINE void finishCreationSubstring(VM& vm, ExecState* exec)
-    {
-        Base::finishCreation(vm);
-        JSString* updatedBase = substringBase();
-        // For now, let's not allow substrings with a rope base.
-        // Resolve non-substring rope bases so we don't have to deal with it.
-        // FIXME: Evaluate if this would be worth adding more branches.
-        if (updatedBase->isRope())
-            jsCast<JSRopeString*>(updatedBase)->resolveRope(exec);
+        ASSERT(!base->isRope());
     }
 
     ALWAYS_INLINE void finishCreationSubstringOfResolved(VM& vm)
@@ -543,25 +519,28 @@ private:
 
 public:
     static ptrdiff_t offsetOfLength() { return OBJECT_OFFSETOF(JSRopeString, m_compactFibers) + CompactFibers::offsetOfLength(); } // 32byte width.
+    static ptrdiff_t offsetOfFlags() { return offsetOfValue(); }
     static ptrdiff_t offsetOfFiber0() { return offsetOfValue(); }
-#if CPU(ADDRESS64)
-    static ptrdiff_t offsetOfFlags() { return offsetOfValue() + sizeof(uint16_t) * 3; } // 16byte width.
-    static ptrdiff_t offsetOfFiber1Lower() { return OBJECT_OFFSETOF(JSRopeString, m_compactFibers) + CompactFibers::offsetOfFiber1Lower(); } // 32byte width.
-    static ptrdiff_t offsetOfFiber1Upper() { return OBJECT_OFFSETOF(JSRopeString, m_compactFibers) + CompactFibers::offsetOfFiber1Upper(); } // 16byte width.
-    static ptrdiff_t offsetOfFiber2Lower() { return OBJECT_OFFSETOF(JSRopeString, m_compactFibers) + CompactFibers::offsetOfFiber2Lower(); } // 32byte width.
-    static ptrdiff_t offsetOfFiber2Upper() { return OBJECT_OFFSETOF(JSRopeString, m_compactFibers) + CompactFibers::offsetOfFiber2Upper(); } // 16byte width.
-#elif USE(JSVALUE64)
-    // FIXME: This is an temporary workaround to make JSC built on ARM64_32. Once we start calculating bits before storing them to JSRopeString,
-    // we do not need to have such a detailed information as an offset. After that, what we only need is offsetOfFiber0, offsetOfFiber1, and offsetOfFiber2.
-    // https://bugs.webkit.org/show_bug.cgi?id=195234
-    static ptrdiff_t offsetOfFlags() { ASSERT_NOT_REACHED(); return 0; }
-    static ptrdiff_t offsetOfFiber1Lower() { ASSERT_NOT_REACHED(); return 0; }
-    static ptrdiff_t offsetOfFiber1Upper() { ASSERT_NOT_REACHED(); return 0; }
-    static ptrdiff_t offsetOfFiber2Lower() { ASSERT_NOT_REACHED(); return 0; }
-    static ptrdiff_t offsetOfFiber2Upper() { ASSERT_NOT_REACHED(); return 0; }
-#endif
+    static ptrdiff_t offsetOfFiber1() { return OBJECT_OFFSETOF(JSRopeString, m_compactFibers) + CompactFibers::offsetOfFiber1(); }
+    static ptrdiff_t offsetOfFiber2() { return OBJECT_OFFSETOF(JSRopeString, m_compactFibers) + CompactFibers::offsetOfFiber2(); }
 
     static constexpr unsigned s_maxInternalRopeLength = 3;
+
+    // This JSRopeString is only used to simulate half-baked JSRopeString in DFG and FTL MakeRope. If OSR exit happens in
+    // the middle of MakeRope due to string length overflow, we have half-baked JSRopeString which is the same to the result
+    // of this function. This half-baked JSRopeString will not be exposed to users, but still collectors can see it due to
+    // the conservative stack scan. This JSRopeString is used to test the collector with such a half-baked JSRopeString.
+    // Because this JSRopeString breaks the JSString's invariant (only one singleton JSString can be zero length), almost all the
+    // operations in JS fail to handle this string correctly.
+    static JSRopeString* createNullForTesting(VM& vm)
+    {
+        JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm.heap)) JSRopeString(vm);
+        newString->finishCreation(vm);
+        ASSERT(!newString->length());
+        ASSERT(newString->isRope());
+        ASSERT(newString->fiber0() == nullptr);
+        return newString;
+    }
 
 private:
     static JSRopeString* create(VM& vm, JSString* s1, JSString* s2)
@@ -569,6 +548,7 @@ private:
         JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm.heap)) JSRopeString(vm, s1, s2);
         newString->finishCreation(vm);
         ASSERT(newString->length());
+        ASSERT(newString->isRope());
         return newString;
     }
     static JSRopeString* create(VM& vm, JSString* s1, JSString* s2, JSString* s3)
@@ -576,22 +556,16 @@ private:
         JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm.heap)) JSRopeString(vm, s1, s2, s3);
         newString->finishCreation(vm);
         ASSERT(newString->length());
-        return newString;
-    }
-
-    static JSRopeString* create(VM& vm, ExecState* exec, JSString* base, unsigned offset, unsigned length)
-    {
-        JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm.heap)) JSRopeString(vm, base, offset, length);
-        newString->finishCreationSubstring(vm, exec);
-        ASSERT(newString->length());
+        ASSERT(newString->isRope());
         return newString;
     }
 
     ALWAYS_INLINE static JSRopeString* createSubstringOfResolved(VM& vm, GCDeferralContext* deferralContext, JSString* base, unsigned offset, unsigned length)
     {
-        JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm.heap, deferralContext)) JSRopeString(SubstringOfResolved, vm, base, offset, length);
+        JSRopeString* newString = new (NotNull, allocateCell<JSRopeString>(vm.heap, deferralContext)) JSRopeString(vm, base, offset, length);
         newString->finishCreationSubstringOfResolved(vm);
         ASSERT(newString->length());
+        ASSERT(newString->isRope());
         return newString;
     }
 
@@ -679,26 +653,6 @@ private:
         return static_cast<unsigned>(bitwise_cast<uintptr_t>(fiber2()));
     }
 
-    static constexpr uintptr_t notSubstringSentinel()
-    {
-        return 0;
-    }
-
-    static constexpr uintptr_t substringSentinel()
-    {
-        return 2;
-    }
-
-    bool isSubstring() const
-    {
-        return (m_fiber & stringMask) == substringSentinel();
-    }
-
-    void initializeIsSubstring(bool isSubstring)
-    {
-        m_fiber |= (isSubstring ? substringSentinel() : notSubstringSentinel());
-    }
-
     static_assert(s_maxInternalRopeLength >= 2, "");
     mutable CompactFibers m_compactFibers;
 
@@ -720,14 +674,9 @@ ALWAYS_INLINE bool JSString::is8Bit() const
 {
     uintptr_t pointer = m_fiber;
     if (pointer & isRopeInPointer) {
-#if CPU(ADDRESS64)
         // Do not load m_fiber twice. We should use the information in pointer.
         // Otherwise, JSRopeString may be converted to JSString between the first and second accesses.
         return pointer & JSRopeString::is8BitInPointer;
-#else
-        // It is OK to load flag since even if JSRopeString is converted to JSString, this flag still exists.
-        return jsCast<const JSRopeString*>(this)->m_compactFibers.is8Bit();
-#endif
     }
     return bitwise_cast<StringImpl*>(pointer)->is8Bit();
 }
@@ -855,16 +804,31 @@ inline JSString* jsString(VM* vm, const String& s)
     return JSString::create(*vm, *s.impl());
 }
 
-inline JSString* jsSubstring(VM& vm, ExecState* exec, JSString* s, unsigned offset, unsigned length)
+inline JSString* jsSubstring(VM& vm, ExecState* exec, JSString* base, unsigned offset, unsigned length)
 {
-    ASSERT(offset <= s->length());
-    ASSERT(length <= s->length());
-    ASSERT(offset + length <= s->length());
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    ASSERT(offset <= base->length());
+    ASSERT(length <= base->length());
+    ASSERT(offset + length <= base->length());
     if (!length)
         return vm.smallStrings.emptyString();
-    if (!offset && length == s->length())
-        return s;
-    return JSRopeString::create(vm, exec, s, offset, length);
+    if (!offset && length == base->length())
+        return base;
+
+    // For now, let's not allow substrings with a rope base.
+    // Resolve non-substring rope bases so we don't have to deal with it.
+    // FIXME: Evaluate if this would be worth adding more branches.
+    if (base->isSubstring()) {
+        JSRopeString* baseRope = jsCast<JSRopeString*>(base);
+        base = baseRope->substringBase();
+        offset = baseRope->substringOffset() + offset;
+        ASSERT(!base->isRope());
+    } else if (base->isRope()) {
+        jsCast<JSRopeString*>(base)->resolveRope(exec);
+        RETURN_IF_EXCEPTION(scope, nullptr);
+    }
+    return jsSubstringOfResolved(vm, nullptr, base, offset, length);
 }
 
 inline JSString* jsSubstringOfResolved(VM& vm, GCDeferralContext* deferralContext, JSString* s, unsigned offset, unsigned length)
@@ -872,10 +836,17 @@ inline JSString* jsSubstringOfResolved(VM& vm, GCDeferralContext* deferralContex
     ASSERT(offset <= s->length());
     ASSERT(length <= s->length());
     ASSERT(offset + length <= s->length());
+    ASSERT(!s->isRope());
     if (!length)
         return vm.smallStrings.emptyString();
     if (!offset && length == s->length())
         return s;
+    if (length == 1) {
+        auto& base = s->valueInternal();
+        UChar character = base.characterAt(offset);
+        if (character <= maxSingleCharacterString)
+            return vm.smallStrings.singleCharacterString(character);
+    }
     return JSRopeString::createSubstringOfResolved(vm, deferralContext, s, offset, length);
 }
 
@@ -923,7 +894,6 @@ inline JSString* jsOwnedString(VM* vm, const String& s)
 inline JSString* jsEmptyString(ExecState* exec) { return jsEmptyString(&exec->vm()); }
 inline JSString* jsString(ExecState* exec, const String& s) { return jsString(&exec->vm(), s); }
 inline JSString* jsSingleCharacterString(ExecState* exec, UChar c) { return jsSingleCharacterString(&exec->vm(), c); }
-inline JSString* jsSubstring(ExecState* exec, const String& s, unsigned offset, unsigned length) { return jsSubstring(&exec->vm(), s, offset, length); }
 inline JSString* jsNontrivialString(ExecState* exec, const String& s) { return jsNontrivialString(&exec->vm(), s); }
 inline JSString* jsNontrivialString(ExecState* exec, String&& s) { return jsNontrivialString(&exec->vm(), WTFMove(s)); }
 inline JSString* jsOwnedString(ExecState* exec, const String& s) { return jsOwnedString(&exec->vm(), s); }
@@ -1040,7 +1010,7 @@ ALWAYS_INLINE StringViewWithUnderlyingString JSString::viewWithUnderlyingString(
 
 inline bool JSString::isSubstring() const
 {
-    return isRope() && static_cast<const JSRopeString*>(this)->isSubstring();
+    return m_fiber & JSRopeString::isSubstringInPointer;
 }
 
 // --- JSValue inlines ----------------------------

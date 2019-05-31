@@ -39,47 +39,51 @@ namespace WebCore {
 
 namespace WHLSL {
 
-void synthesizeStructureAccessors(Program& program)
+bool synthesizeStructureAccessors(Program& program)
 {
     bool isOperator = true;
     for (auto& structureDefinition : program.structureDefinitions()) {
         for (auto& structureElement : structureDefinition->structureElements()) {
             {
                 // The getter: operator.field
-                AST::VariableDeclaration variableDeclaration(Lexer::Token(structureElement.origin()), AST::Qualifiers(), { AST::TypeReference::wrap(Lexer::Token(structureElement.origin()), structureDefinition) }, String(), WTF::nullopt, WTF::nullopt);
+                auto variableDeclaration = makeUniqueRef<AST::VariableDeclaration>(Lexer::Token(structureElement.origin()), AST::Qualifiers(), UniqueRef<AST::UnnamedType>(AST::TypeReference::wrap(Lexer::Token(structureElement.origin()), structureDefinition)), String(), WTF::nullopt, WTF::nullopt);
                 AST::VariableDeclarations parameters;
                 parameters.append(WTFMove(variableDeclaration));
                 AST::NativeFunctionDeclaration nativeFunctionDeclaration(AST::FunctionDeclaration(Lexer::Token(structureElement.origin()), AST::AttributeBlock(), WTF::nullopt, structureElement.type().clone(), makeString("operator.", structureElement.name()), WTFMove(parameters), WTF::nullopt, isOperator));
-                program.append(WTFMove(nativeFunctionDeclaration));
+                if (!program.append(WTFMove(nativeFunctionDeclaration)))
+                    return false;
             }
 
             {
                 // The setter: operator.field=
-                AST::VariableDeclaration variableDeclaration1(Lexer::Token(structureElement.origin()), AST::Qualifiers(), { AST::TypeReference::wrap(Lexer::Token(structureElement.origin()), structureDefinition) }, String(), WTF::nullopt, WTF::nullopt);
-                AST::VariableDeclaration variableDeclaration2(Lexer::Token(structureElement.origin()), AST::Qualifiers(), { structureElement.type().clone() }, String(), WTF::nullopt, WTF::nullopt);
+                auto variableDeclaration1 = makeUniqueRef<AST::VariableDeclaration>(Lexer::Token(structureElement.origin()), AST::Qualifiers(), UniqueRef<AST::UnnamedType>(AST::TypeReference::wrap(Lexer::Token(structureElement.origin()), structureDefinition)), String(), WTF::nullopt, WTF::nullopt);
+                auto variableDeclaration2 = makeUniqueRef<AST::VariableDeclaration>(Lexer::Token(structureElement.origin()), AST::Qualifiers(), structureElement.type().clone(), String(), WTF::nullopt, WTF::nullopt);
                 AST::VariableDeclarations parameters;
                 parameters.append(WTFMove(variableDeclaration1));
                 parameters.append(WTFMove(variableDeclaration2));
                 AST::NativeFunctionDeclaration nativeFunctionDeclaration(AST::FunctionDeclaration(Lexer::Token(structureElement.origin()), AST::AttributeBlock(), WTF::nullopt, AST::TypeReference::wrap(Lexer::Token(structureElement.origin()), structureDefinition), makeString("operator.", structureElement.name(), '='), WTFMove(parameters), WTF::nullopt, isOperator));
-                program.append(WTFMove(nativeFunctionDeclaration));
+                if (!program.append(WTFMove(nativeFunctionDeclaration)))
+                    return false;
             }
 
             // The ander: operator&.field
             auto createAnder = [&](AST::AddressSpace addressSpace) -> AST::NativeFunctionDeclaration {
                 auto argumentType = makeUniqueRef<AST::PointerType>(Lexer::Token(structureElement.origin()), addressSpace, AST::TypeReference::wrap(Lexer::Token(structureElement.origin()), structureDefinition));
-                AST::VariableDeclaration variableDeclaration(Lexer::Token(structureElement.origin()), AST::Qualifiers(), { WTFMove(argumentType) }, String(), WTF::nullopt, WTF::nullopt);
+                auto variableDeclaration = makeUniqueRef<AST::VariableDeclaration>(Lexer::Token(structureElement.origin()), AST::Qualifiers(), UniqueRef<AST::UnnamedType>(WTFMove(argumentType)), String(), WTF::nullopt, WTF::nullopt);
                 AST::VariableDeclarations parameters;
                 parameters.append(WTFMove(variableDeclaration));
                 auto returnType = makeUniqueRef<AST::PointerType>(Lexer::Token(structureElement.origin()), addressSpace, structureElement.type().clone());
                 AST::NativeFunctionDeclaration nativeFunctionDeclaration(AST::FunctionDeclaration(Lexer::Token(structureElement.origin()), AST::AttributeBlock(), WTF::nullopt, WTFMove(returnType), makeString("operator&.", structureElement.name()), WTFMove(parameters), WTF::nullopt, isOperator));
                 return nativeFunctionDeclaration;
             };
-            program.append(createAnder(AST::AddressSpace::Constant));
-            program.append(createAnder(AST::AddressSpace::Device));
-            program.append(createAnder(AST::AddressSpace::Threadgroup));
-            program.append(createAnder(AST::AddressSpace::Thread));
+            if (!program.append(createAnder(AST::AddressSpace::Constant))
+                || !program.append(createAnder(AST::AddressSpace::Device))
+                || !program.append(createAnder(AST::AddressSpace::Threadgroup))
+                || !program.append(createAnder(AST::AddressSpace::Thread)))
+                return false;
         }
     }
+    return true;
 }
 
 } // namespace WHLSL

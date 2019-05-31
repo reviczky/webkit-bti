@@ -81,9 +81,14 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
 
         if (this._style.selectorEditable) {
             this._selectorTextField = new WI.SpreadsheetSelectorField(this, this._selectorElement);
+            this._selectorTextField.addEventListener(WI.SpreadsheetSelectorField.Event.StartedEditing, (event) => {
+                this._headerElement.classList.add("editing-selector");
+            });
+            this._selectorTextField.addEventListener(WI.SpreadsheetSelectorField.Event.StoppedEditing, (event) => {
+                this._headerElement.classList.remove("editing-selector");
+            });
+
             this._selectorElement.tabIndex = 0;
-            this._selectorElement.addEventListener("focus", () => this._headerElement.classList.add("editing-selector"));
-            this._selectorElement.addEventListener("blur", () => this._headerElement.classList.remove("editing-selector"));
         }
 
         this._propertiesEditor = new WI.SpreadsheetCSSStyleDeclarationEditor(this, this._style);
@@ -169,6 +174,7 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
         if (!selectorText || selectorText === this._style.ownerRule.selectorText)
             this._discardSelectorChange();
         else {
+            this.dispatchEventToListeners(WI.SpreadsheetCSSStyleDeclarationSection.Event.SelectorWillChange);
             this._style.ownerRule.singleFireEventListener(WI.CSSRule.Event.SelectorChanged, this._renderSelector, this);
             this._style.ownerRule.selectorText = selectorText;
         }
@@ -222,6 +228,12 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
             let index = parseInt(property.element.dataset.propertyIndex);
             this._propertiesEditor.selectProperties(this._mouseDownIndex, index);
         }
+    }
+
+    spreadsheetCSSStyleDeclarationEditorSelectProperty(property)
+    {
+        if (this._delegate && this._delegate.spreadsheetCSSStyleDeclarationSectionSelectProperty)
+            this._delegate.spreadsheetCSSStyleDeclarationSectionSelectProperty(property);
     }
 
     applyFilter(filterText)
@@ -291,18 +303,12 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
 
             var selectors = this._style.ownerRule.selectors;
             var matchedSelectorIndices = this._style.ownerRule.matchedSelectorIndices;
-            var alwaysMatch = !matchedSelectorIndices.length;
             if (selectors.length) {
-                let hasMatchingPseudoElementSelector = false;
                 for (let i = 0; i < selectors.length; ++i) {
-                    appendSelector(selectors[i], alwaysMatch || matchedSelectorIndices.includes(i));
+                    appendSelector(selectors[i], matchedSelectorIndices.includes(i));
                     if (i < selectors.length - 1)
                         this._selectorElement.append(", ");
-
-                    if (matchedSelectorIndices.includes(i) && selectors[i].isPseudoElementSelector())
-                        hasMatchingPseudoElementSelector = true;
                 }
-                this._element.classList.toggle("pseudo-element-selector", hasMatchingPseudoElementSelector);
             } else
                 appendSelectorTextKnownToMatch(this._style.ownerRule.selectorText);
 
@@ -385,6 +391,9 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
 
     _handleMouseDown(event)
     {
+        if (event.button !== 0)
+            return;
+
         this._wasEditing = this._propertiesEditor.editing || document.activeElement === this._selectorElement;
 
         let propertyElement = event.target.closest(".property");
@@ -487,13 +496,18 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
 
     _highlightNodesWithSelector()
     {
+        let node = this._style.node;
+
         if (!this._style.ownerRule) {
-            WI.domManager.highlightDOMNode(this._style.node.id);
+            WI.domManager.highlightDOMNode(node.id);
             return;
         }
 
         let selectorText = this._selectorElement.textContent.trim();
-        WI.domManager.highlightSelector(selectorText, this._style.node.ownerDocument.frameIdentifier);
+        if (node.frame)
+            WI.domManager.highlightSelector(selectorText, node.frame.id);
+        else
+            WI.domManager.highlightSelector(selectorText);
     }
 
     _hideDOMNodeHighlight()
@@ -533,6 +547,7 @@ WI.SpreadsheetCSSStyleDeclarationSection = class SpreadsheetCSSStyleDeclarationS
 
 WI.SpreadsheetCSSStyleDeclarationSection.Event = {
     FilterApplied: "spreadsheet-css-style-declaration-section-filter-applied",
+    SelectorWillChange: "spreadsheet-css-style-declaration-section-selector-will-change",
 };
 
 WI.SpreadsheetCSSStyleDeclarationSection.MatchedSelectorElementStyleClassName = "matched";

@@ -66,7 +66,7 @@ Ref<Element> JSCustomElementInterface::constructElementWithFallback(Document& do
     element->setIsCustomElementUpgradeCandidate();
     element->setIsFailedCustomElement(*this);
 
-    return WTFMove(element);
+    return element;
 }
 
 Ref<Element> JSCustomElementInterface::constructElementWithFallback(Document& document, const QualifiedName& name)
@@ -81,7 +81,7 @@ Ref<Element> JSCustomElementInterface::constructElementWithFallback(Document& do
     element->setIsCustomElementUpgradeCandidate();
     element->setIsFailedCustomElement(*this);
 
-    return WTFMove(element);
+    return element;
 }
 
 RefPtr<Element> JSCustomElementInterface::tryToConstructCustomElement(Document& document, const AtomicString& localName)
@@ -214,7 +214,7 @@ void JSCustomElementInterface::upgradeElement(Element& element)
     Element* wrappedElement = JSElement::toWrapped(vm, returnedElement);
     if (!wrappedElement || wrappedElement != &element) {
         element.setIsFailedCustomElement(*this);
-        reportException(state, createDOMException(state, InvalidStateError, "Custom element constructor failed to upgrade an element"));
+        reportException(state, createDOMException(state, TypeError, "Custom element constructor returned a wrong element"));
         return;
     }
     element.setIsDefinedCustomElement(*this);

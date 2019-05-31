@@ -27,13 +27,19 @@
 
 #include "AuxiliaryProcess.h"
 #include "CacheModel.h"
+#if ENABLE(MEDIA_STREAM)
+#include "MediaDeviceSandboxExtensions.h"
+#endif
 #include "PluginProcessConnectionManager.h"
 #include "ResourceCachesToClear.h"
 #include "SandboxExtension.h"
 #include "TextCheckerState.h"
 #include "ViewUpdateDispatcher.h"
 #include "WebInspectorInterruptDispatcher.h"
+#include "WebProcessCreationParameters.h"
+#include "WebSQLiteDatabaseTracker.h"
 #include <WebCore/ActivityState.h>
+#include <WebCore/RegistrableDomain.h>
 #if PLATFORM(MAC)
 #include <WebCore/ScreenProperties.h>
 #endif
@@ -50,6 +56,10 @@
 #if PLATFORM(COCOA)
 #include <dispatch/dispatch.h>
 #include <wtf/MachSendRight.h>
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+#include "ProcessTaskStateObserver.h"
 #endif
 
 namespace API {
@@ -87,6 +97,7 @@ class InjectedBundle;
 class LibWebRTCNetwork;
 class NetworkProcessConnection;
 class ObjCObjectGraph;
+class StorageAreaMap;
 class UserData;
 class WaylandCompositorDisplay;
 class WebAutomationSessionProxy;
@@ -96,16 +107,26 @@ class WebFrame;
 class WebLoaderStrategy;
 class WebPage;
 class WebPageGroupProxy;
+struct WebProcessCreationParameters;
+struct WebProcessDataStoreParameters;
 class WebProcessSupplement;
 enum class WebsiteDataType;
 struct WebPageCreationParameters;
 struct WebPageGroupData;
 struct WebPreferencesStore;
-struct WebProcessCreationParameters;
 struct WebsiteData;
 struct WebsiteDataStoreParameters;
 
-class WebProcess : public AuxiliaryProcess {
+#if PLATFORM(IOS_FAMILY)
+class LayerHostingContext;
+#endif
+
+class WebProcess
+    : public AuxiliaryProcess
+#if PLATFORM(IOS_FAMILY)
+    , ProcessTaskStateObserver::Client
+#endif
+{
 public:
     static WebProcess& singleton();
     static constexpr ProcessType processType = ProcessType::WebContent;
@@ -126,7 +147,7 @@ public:
 
     WebPage* webPage(uint64_t pageID) const;
     void createWebPage(uint64_t pageID, WebPageCreationParameters&&);
-    void removeWebPage(uint64_t pageID);
+    void removeWebPage(PAL::SessionID, uint64_t pageID);
     WebPage* focusedWebPage() const;
 
     InjectedBundle* injectedBundle() const { return m_injectedBundle.get(); }
@@ -183,6 +204,12 @@ public:
 
     void nonVisibleProcessCleanupTimerFired();
 
+    void registerStorageAreaMap(StorageAreaMap&);
+    void unregisterStorageAreaMap(StorageAreaMap&);
+    StorageAreaMap* storageAreaMap(uint64_t identifier) const;
+
+    void enablePrivateBrowsingForTesting(bool);
+
 #if PLATFORM(COCOA)
     RetainPtr<CFDataRef> sourceApplicationAuditData() const;
     void destroyRenderingResources();
@@ -196,7 +223,7 @@ public:
 
     void setHiddenPageDOMTimerThrottlingIncreaseLimit(int milliseconds);
 
-    void processWillSuspendImminently(bool& handled);
+    void processWillSuspendImminently();
     void prepareToSuspend();
     void cancelPrepareToSuspend();
     void processDidResume();
@@ -237,18 +264,28 @@ public:
 
 #if PLATFORM(IOS_FAMILY)
     void accessibilityProcessSuspendedNotification(bool);
+    
+    void unblockAccessibilityServer(const SandboxExtension::Handle&);
+#endif
+
+#if PLATFORM(IOS)
+    float backlightLevel() const { return m_backlightLevel; }
 #endif
 
 #if PLATFORM(COCOA)
     void setMediaMIMETypes(const Vector<String>);
 #endif
 
+    bool areAllPagesThrottleable() const;
+
 private:
     WebProcess();
     ~WebProcess();
 
     void initializeWebProcess(WebProcessCreationParameters&&);
-    void platformInitializeWebProcess(WebProcessCreationParameters&&);
+    void platformInitializeWebProcess(WebProcessCreationParameters&);
+    void setWebsiteDataStoreParameters(WebProcessDataStoreParameters&&);
+    void platformSetWebsiteDataStoreParameters(WebProcessDataStoreParameters&&);
 
     void prewarmGlobally();
     void prewarmWithDomainInformation(const WebCore::PrewarmInformation&);
@@ -267,6 +304,8 @@ private:
 
     void platformTerminate();
 
+    void setHasSuspendedPageProxy(bool);
+    void setIsInProcessCache(bool);
     void markIsNoLongerPrewarmed();
 
     void registerURLSchemeAsEmptyDocument(const String&);
@@ -326,9 +365,9 @@ private:
 
     void releasePageCache();
 
-    void fetchWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, WebsiteData&);
-    void deleteWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, WallTime modifiedSince);
-    void deleteWebsiteDataForOrigins(PAL::SessionID, OptionSet<WebsiteDataType>, const Vector<WebCore::SecurityOriginData>& origins);
+    void fetchWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, CompletionHandler<void(WebsiteData&&)>&&);
+    void deleteWebsiteData(PAL::SessionID, OptionSet<WebsiteDataType>, WallTime modifiedSince, CompletionHandler<void()>&&);
+    void deleteWebsiteDataForOrigins(PAL::SessionID, OptionSet<WebsiteDataType>, const Vector<WebCore::SecurityOriginData>& origins, CompletionHandler<void()>&&);
 
     void setMemoryCacheDisabled(bool);
 
@@ -344,6 +383,7 @@ private:
     void actualPrepareToSuspend(ShouldAcknowledgeWhenReadyToSuspend);
 
     bool hasPageRequiringPageCacheWhileSuspended() const;
+    bool areAllPagesSuspended() const;
 
     void ensureAutomationSessionProxy(const String& sessionIdentifier);
     void destroyAutomationSessionProxy();
@@ -371,6 +411,11 @@ private:
     void clearMockMediaDevices();
     void removeMockMediaDevice(const String& persistentId);
     void resetMockMediaDevices();
+#if ENABLE(SANDBOX_EXTENSIONS)
+    void grantUserMediaDeviceSandboxExtensions(MediaDeviceSandboxExtensions&&);
+    void revokeUserMediaDeviceSandboxExtensions(const Vector<String>&);
+#endif
+
 #endif
 
     void platformInitializeProcess(const AuxiliaryProcessInitializationParameters&);
@@ -382,16 +427,33 @@ private:
 
     // Implemented in generated WebProcessMessageReceiver.cpp
     void didReceiveWebProcessMessage(IPC::Connection&, IPC::Decoder&);
-    void didReceiveSyncWebProcessMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
 
 #if PLATFORM(MAC)
-    void updateProcessName();
     void setScreenProperties(const WebCore::ScreenProperties&);
 #if ENABLE(WEBPROCESS_WINDOWSERVER_BLOCKING)
     void scrollerStylePreferenceChanged(bool useOverlayScrollbars);
     void displayConfigurationChanged(CGDirectDisplayID, CGDisplayChangeSummaryFlags);
     void displayWasRefreshed(CGDirectDisplayID);
 #endif
+#endif
+
+#if PLATFORM(COCOA)
+    void updateProcessName();
+#endif
+
+#if PLATFORM(IOS)
+    void backlightLevelDidChange(float backlightLevel);
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+    void processTaskStateDidChange(ProcessTaskStateObserver::TaskState) final;
+    bool shouldFreezeOnSuspension() const;
+    void updateFreezerStatus();
+#endif
+
+#if ENABLE(VIDEO)
+    void suspendAllMediaBuffering();
+    void resumeAllMediaBuffering();
 #endif
 
     void clearCurrentModifierStateForTesting();
@@ -450,10 +512,20 @@ private:
     bool m_hasRichContentServices { false };
 #endif
 
+    bool m_processIsSuspended { false };
+
     HashSet<uint64_t> m_pagesInWindows;
     WebCore::Timer m_nonVisibleProcessCleanupTimer;
 
     RefPtr<WebCore::ApplicationCacheStorage> m_applicationCacheStorage;
+
+#if PLATFORM(IOS_FAMILY)
+    WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
+    ProcessTaskStateObserver m_taskStateObserver { *this };
+#endif
+#if HAVE(VISIBILITY_PROPAGATION_VIEW)
+    std::unique_ptr<LayerHostingContext> m_contextForVisibilityPropagation;
+#endif
 
     enum PageMarkingLayersAsVolatileCounterType { };
     using PageMarkingLayersAsVolatileCounter = RefCounter<PageMarkingLayersAsVolatileCounterType>;
@@ -465,10 +537,13 @@ private:
     std::unique_ptr<WebCore::CPUMonitor> m_cpuMonitor;
     Optional<double> m_cpuLimit;
 
-    enum class ProcessType { Inspector, ServiceWorker, PrewarmedWebContent, WebContent };
-    ProcessType m_processType { ProcessType::WebContent };
     String m_uiProcessName;
-    String m_securityOrigin;
+    WebCore::RegistrableDomain m_registrableDomain;
+#endif
+
+#if PLATFORM(COCOA)
+    enum class ProcessType { Inspector, ServiceWorker, PrewarmedWebContent, CachedWebContent, WebContent };
+    ProcessType m_processType { ProcessType::WebContent };
 #endif
 
     HashMap<WebCore::UserGestureToken *, uint64_t> m_userGestureTokens;
@@ -476,7 +551,18 @@ private:
 #if PLATFORM(WAYLAND)
     std::unique_ptr<WaylandCompositorDisplay> m_waylandCompositorDisplay;
 #endif
+    bool m_hasSuspendedPageProxy { false };
     bool m_isSuspending { false };
+
+#if ENABLE(MEDIA_STREAM) && ENABLE(SANDBOX_EXTENSIONS)
+    HashMap<String, RefPtr<SandboxExtension>> m_mediaCaptureSandboxExtensions;
+#endif
+
+#if PLATFORM(IOS)
+    float m_backlightLevel { 0 };
+#endif
+
+    HashMap<uint64_t, StorageAreaMap*> m_storageAreaMaps;
 };
 
 } // namespace WebKit

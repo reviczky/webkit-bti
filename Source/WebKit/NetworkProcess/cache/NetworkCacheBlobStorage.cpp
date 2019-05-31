@@ -86,41 +86,40 @@ String BlobStorage::blobPathForHash(const SHA1::Digest& hash) const
 
 BlobStorage::Blob BlobStorage::add(const String& path, const Data& data)
 {
-#if !OS(WINDOWS)
     ASSERT(!RunLoop::isMain());
 
     auto hash = computeSHA1(data, m_salt);
     if (data.isEmpty())
         return { data, hash };
 
-    auto blobPath = FileSystem::fileSystemRepresentation(blobPathForHash(hash));
-    auto linkPath = FileSystem::fileSystemRepresentation(path);
-    unlink(linkPath.data());
+    String blobPath = blobPathForHash(hash);
+    
+    FileSystem::deleteFile(path);
 
-    bool blobExists = access(blobPath.data(), F_OK) != -1;
+    bool blobExists = FileSystem::fileExists(blobPath);
     if (blobExists) {
-        auto existingData = mapFile(blobPath.data());
+        FileSystem::makeSafeToUseMemoryMapForPath(blobPath);
+        auto existingData = mapFile(blobPath);
         if (bytesEqual(existingData, data)) {
-            if (link(blobPath.data(), linkPath.data()) == -1)
-                WTFLogAlways("Failed to create hard link from %s to %s", blobPath.data(), linkPath.data());
+            if (!FileSystem::hardLink(blobPath, path))
+                WTFLogAlways("Failed to create hard link from %s to %s", blobPath.utf8().data(), path.utf8().data());
             return { existingData, hash };
         }
-        unlink(blobPath.data());
+        FileSystem::deleteFile(blobPath);
     }
 
-    auto mappedData = data.mapToFile(blobPath.data());
+    auto mappedData = data.mapToFile(blobPath);
     if (mappedData.isNull())
         return { };
 
-    if (link(blobPath.data(), linkPath.data()) == -1)
-        WTFLogAlways("Failed to create hard link from %s to %s", blobPath.data(), linkPath.data());
+    FileSystem::makeSafeToUseMemoryMapForPath(blobPath);
+
+    if (!FileSystem::hardLink(blobPath, path))
+        WTFLogAlways("Failed to create hard link from %s to %s", blobPath.utf8().data(), path.utf8().data());
 
     m_approximateSize += mappedData.size();
 
     return { mappedData, hash };
-#else
-    return { Data(), computeSHA1(data, m_salt) };
-#endif
 }
 
 BlobStorage::Blob BlobStorage::get(const String& path)
@@ -137,8 +136,7 @@ void BlobStorage::remove(const String& path)
 {
     ASSERT(!RunLoop::isMain());
 
-    auto linkPath = FileSystem::fileSystemRepresentation(path);
-    unlink(linkPath.data());
+    FileSystem::deleteFile(path);
 }
 
 unsigned BlobStorage::shareCount(const String& path)

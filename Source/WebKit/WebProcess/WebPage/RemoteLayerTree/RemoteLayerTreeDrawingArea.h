@@ -109,7 +109,7 @@ private:
 
     bool adjustLayerFlushThrottling(WebCore::LayerFlushThrottleState::Flags) override;
 
-    bool dispatchDidReachLayoutMilestone(OptionSet<WebCore::LayoutMilestone>) override;
+    bool addMilestonesToDispatch(OptionSet<WebCore::LayoutMilestone>) override;
 
     void updateScrolledExposedRect();
     void updateRootLayers();
@@ -122,6 +122,8 @@ private:
     uint64_t takeNextTransactionID() { return ++m_currentTransactionID; }
 
     bool markLayersVolatileImmediatelyIfPossible() override;
+
+    void adoptLayersFromDrawingArea(DrawingArea&) override;
 
     class BackingStoreFlusher : public ThreadSafeRefCounted<BackingStoreFlusher> {
     public:
@@ -159,6 +161,7 @@ private:
     bool m_waitingForBackingStoreSwap { false };
     bool m_hadFlushDeferredWhileWaitingForBackingStoreSwap { false };
     bool m_nextFlushIsForImmediatePaint { false };
+    bool m_inFlushLayers { false };
 
     dispatch_queue_t m_commitQueue;
     RefPtr<BackingStoreFlusher> m_pendingBackingStoreFlusher;
@@ -170,11 +173,17 @@ private:
     Vector<RemoteLayerTreeTransaction::TransactionCallbackID> m_pendingCallbackIDs;
     ActivityStateChangeID m_activityStateChangeID { ActivityStateChangeAsynchronous };
 
-    OptionSet<WebCore::LayoutMilestone> m_pendingNewlyReachedLayoutMilestones;
+    OptionSet<WebCore::LayoutMilestone> m_pendingNewlyReachedPaintingMilestones;
 
     RefPtr<WebCore::GraphicsLayer> m_contentLayer;
     RefPtr<WebCore::GraphicsLayer> m_viewOverlayRootLayer;
 };
+
+inline bool RemoteLayerTreeDrawingArea::addMilestonesToDispatch(OptionSet<WebCore::LayoutMilestone> paintMilestones)
+{
+    m_pendingNewlyReachedPaintingMilestones.add(paintMilestones);
+    return true;
+}
 
 } // namespace WebKit
 

@@ -241,6 +241,8 @@ public:
 
 #if PLATFORM(IOS_FAMILY)
     void defaultTouchEventHandler(Node&, TouchEvent&);
+    WEBCORE_EXPORT void dispatchSyntheticMouseOut(const PlatformMouseEvent&);
+    WEBCORE_EXPORT void dispatchSyntheticMouseMove(const PlatformMouseEvent&);
 #endif
 
 #if ENABLE(CONTEXT_MENUS)
@@ -363,6 +365,7 @@ private:
 
 #if ENABLE(DRAG_SUPPORT)
     bool handleMouseDraggedEvent(const MouseEventWithHitTestResults&, CheckDragHysteresis = ShouldCheckDragHysteresis);
+    bool shouldAllowMouseDownToStartDrag() const;
 #endif
 
     WEBCORE_EXPORT bool handleMouseReleaseEvent(const MouseEventWithHitTestResults&);
@@ -404,9 +407,9 @@ private:
 
     Node* nodeUnderMouse() const;
     
-    void updateMouseEventTargetNode(Node*, const PlatformMouseEvent&, bool fireMouseOverOut);
-    void fireMouseOverOut(bool fireMouseOver = true, bool fireMouseOut = true, bool updateLastNodeUnderMouse = true);
-    
+    enum class FireMouseOverOut { No, Yes };
+    void updateMouseEventTargetNode(Node*, const PlatformMouseEvent&, FireMouseOverOut);
+
     MouseEventWithHitTestResults prepareMouseEvent(const HitTestRequest&, const PlatformMouseEvent&);
 
     bool dispatchMouseEvent(const AtomicString& eventType, Node* target, bool cancelable, int clickCount, const PlatformMouseEvent&, bool setUnder);
@@ -455,6 +458,7 @@ private:
 
 #if ENABLE(DRAG_SUPPORT)
     DragSourceAction updateDragSourceActionsAllowed() const;
+    bool supportsSelectionUpdatesOnMouseDrag() const;
 #endif
 
     // The following are called at the beginning of handleMouseUp and handleDrag.  
@@ -606,9 +610,21 @@ private:
     bool m_touchPressed { false };
 #endif
 
+#if ENABLE(IOS_TOUCH_EVENTS)
+    unsigned touchIdentifierForMouseEvents { 0 };
+#endif
+
+#if ENABLE(POINTER_EVENTS) && ENABLE(IOS_TOUCH_EVENTS)
+    unsigned m_touchIdentifierForPrimaryTouch { 0 };
+#endif
+
     double m_maxMouseMovedDuration { 0 };
     bool m_didStartDrag { false };
     bool m_isHandlingWheelEvent { false };
+
+#if PLATFORM(IOS_FAMILY)
+    bool m_shouldAllowMouseDownToStartDrag { false };
+#endif
 
 #if ENABLE(CURSOR_VISIBILITY)
     Timer m_autoHideCursorTimer;

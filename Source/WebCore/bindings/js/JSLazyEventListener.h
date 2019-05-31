@@ -20,6 +20,8 @@
 #pragma once
 
 #include "JSEventListener.h"
+#include <wtf/Forward.h>
+#include <wtf/WeakPtr.h>
 
 namespace WebCore {
 
@@ -42,8 +44,12 @@ public:
 
 private:
     struct CreationArguments;
-    static RefPtr<JSLazyEventListener> create(const CreationArguments&);
-    JSLazyEventListener(const CreationArguments&, const String& sourceURL, const TextPosition&);
+    static RefPtr<JSLazyEventListener> create(CreationArguments&&);
+    JSLazyEventListener(CreationArguments&&, const String& sourceURL, const TextPosition&);
+
+#if !ASSERT_DISABLED
+    void checkValidityForEventTarget(EventTarget&) final;
+#endif
 
     JSC::JSObject* initializeJSFunction(ScriptExecutionContext&) const final;
     bool wasCreatedFromMarkup() const final { return true; }
@@ -53,7 +59,7 @@ private:
     String m_code;
     String m_sourceURL;
     TextPosition m_sourcePosition;
-    ContainerNode* m_originalNode;
+    WeakPtr<ContainerNode> m_originalNode;
 };
 
 } // namespace WebCore

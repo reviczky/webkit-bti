@@ -62,6 +62,14 @@ WI.CSSStyleDeclaration = class CSSStyleDeclaration extends WI.Object
         return this._id;
     }
 
+    get stringId()
+    {
+        if (this._id)
+            return this._id.styleSheetId + "/" + this._id.ordinal;
+        else
+            return "";
+    }
+
     get ownerStyleSheet()
     {
         return this._ownerStyleSheet;
@@ -361,21 +369,20 @@ WI.CSSStyleDeclaration = class CSSStyleDeclaration extends WI.Object
 
         if (!this._initialState) {
             this._initialState = new WI.CSSStyleDeclaration(
-                    this._nodeStyles,
-                    this._ownerStyleSheet,
-                    this._id,
-                    this._type,
-                    this._node,
-                    this._inherited,
-                    this._text,
-                    [], // Passing CSS properties here would change their ownerStyle.
-                    this._styleSheetTextRange);
+                this._nodeStyles,
+                this._ownerStyleSheet,
+                this._id,
+                this._type,
+                this._node,
+                this._inherited,
+                this._text,
+                [], // Passing CSS properties here would change their ownerStyle.
+                this._styleSheetTextRange);
         }
 
         this._initialState.properties = properties.map((property) => { return property.initialState || property });
 
-        if (this._ownerRule)
-            this._ownerRule.markModified();
+        WI.cssManager.addModifiedStyle(this);
     }
 
     shiftPropertiesAfter(cssProperty, lineDelta, columnDelta, propertyWasRemoved)
@@ -406,6 +413,7 @@ WI.CSSStyleDeclaration = class CSSStyleDeclaration extends WI.Object
             this._properties.splice(realIndex, 1);
 
         // Invalidate cached properties.
+        this._enabledProperties = null;
         this._visibleProperties = null;
     }
 

@@ -132,7 +132,7 @@ function installDependenciesWithApt {
         libsecret-1-dev \
         libsoup2.4-dev \
         libsqlite3-dev \
-        libsrtp0-dev \
+        libsrtp2-dev \
         libtasn1-6-dev \
         libtheora-dev \
         libtool \
@@ -370,7 +370,7 @@ function installDependenciesWithPacman {
         perl-xml-libxml\
         python2 \
         python2-lxml \
-        python3-setuptools \
+        python-setuptools \
         ragel \
         bigreqsproto \
         compositeproto \

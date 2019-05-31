@@ -145,8 +145,8 @@ void LayerTreeHost::layerFlushTimerFired()
         return;
 
     m_coordinator.syncDisplayState();
+    m_webPage.updateRendering();
     m_webPage.flushPendingEditorStateUpdate();
-    m_webPage.willDisplayPage();
 
     if (!m_isValid || !m_coordinator.rootCompositingLayer())
         return;
@@ -435,7 +435,6 @@ void LayerTreeHost::handleDisplayRefreshMonitorUpdate(bool hasBeenRescheduled)
     // Call renderNextFrame. If hasBeenRescheduled is true, the layer flush will force a repaint
     // that will cause the display refresh notification to come.
     renderNextFrame(hasBeenRescheduled);
-    m_compositor->handleDisplayRefreshMonitorUpdate();
 }
 
 void LayerTreeHost::renderNextFrame(bool forceRepaint)

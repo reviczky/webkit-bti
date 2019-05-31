@@ -25,12 +25,12 @@
 // https://github.com/gpuweb/gpuweb/blob/master/design/sketch.webidl
 
 typedef unsigned long u32;
-typedef (/*WebGPUSampler or */WebGPUTextureView or WebGPUBufferBinding) WebGPUBindingResource;
+typedef (WebGPUSampler or WebGPUTextureView or WebGPUBufferBinding) WebGPUBindingResource;
 
 [
     Conditional=WEBGPU,
     EnabledAtRuntime=WebGPU
 ] dictionary WebGPUBindGroupBinding {
-    u32 binding;
-    WebGPUBindingResource resource;
+    required u32 binding;
+    required WebGPUBindingResource resource;
 };

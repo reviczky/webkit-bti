@@ -60,7 +60,6 @@ enum ContentChangeType {
 class BorderEdge;
 class ImageBuffer;
 class InlineFlowBox;
-class KeyframeList;
 class RenderTextFragment;
 class StickyPositionViewportConstraints;
 
@@ -153,16 +152,16 @@ public:
     virtual LayoutUnit paddingStart() const { return computedCSSPaddingStart(); }
     virtual LayoutUnit paddingEnd() const { return computedCSSPaddingEnd(); }
 
-    virtual LayoutUnit borderTop() const { return style().borderTopWidth(); }
-    virtual LayoutUnit borderBottom() const { return style().borderBottomWidth(); }
-    virtual LayoutUnit borderLeft() const { return style().borderLeftWidth(); }
-    virtual LayoutUnit borderRight() const { return style().borderRightWidth(); }
+    virtual LayoutUnit borderTop() const { return LayoutUnit(style().borderTopWidth()); }
+    virtual LayoutUnit borderBottom() const { return LayoutUnit(style().borderBottomWidth()); }
+    virtual LayoutUnit borderLeft() const { return LayoutUnit(style().borderLeftWidth()); }
+    virtual LayoutUnit borderRight() const { return LayoutUnit(style().borderRightWidth()); }
     virtual LayoutUnit horizontalBorderExtent() const { return borderLeft() + borderRight(); }
     virtual LayoutUnit verticalBorderExtent() const { return borderTop() + borderBottom(); }
-    virtual LayoutUnit borderBefore() const { return style().borderBeforeWidth(); }
-    virtual LayoutUnit borderAfter() const { return style().borderAfterWidth(); }
-    virtual LayoutUnit borderStart() const { return style().borderStartWidth(); }
-    virtual LayoutUnit borderEnd() const { return style().borderEndWidth(); }
+    virtual LayoutUnit borderBefore() const { return LayoutUnit(style().borderBeforeWidth()); }
+    virtual LayoutUnit borderAfter() const { return LayoutUnit(style().borderAfterWidth()); }
+    virtual LayoutUnit borderStart() const { return LayoutUnit(style().borderStartWidth()); }
+    virtual LayoutUnit borderEnd() const { return LayoutUnit(style().borderEndWidth()); }
 
     LayoutUnit borderAndPaddingStart() const { return borderStart() + paddingStart(); }
     LayoutUnit borderAndPaddingBefore() const { return borderBefore() + paddingBefore(); }
@@ -222,17 +221,6 @@ public:
     void getGeometryForBackgroundImage(const RenderLayerModelObject* paintContainer, const LayoutPoint& paintOffset, FloatRect& destRect, FloatSize& phase, FloatSize& tileSize) const;
     void contentChanged(ContentChangeType);
     bool hasAcceleratedCompositing() const;
-
-    bool startTransition(double, CSSPropertyID, const RenderStyle* fromStyle, const RenderStyle* toStyle);
-    void transitionPaused(double timeOffset, CSSPropertyID);
-    void transitionFinished(CSSPropertyID);
-
-    bool startAnimation(double timeOffset, const Animation*, const KeyframeList& keyframes);
-    void animationPaused(double timeOffset, const String& name);
-    void animationSeeked(double timeOffset, const String& name);
-    void animationFinished(const String& name);
-
-    void suspendAnimations(MonotonicTime = MonotonicTime());
 
     RenderBoxModelObject* continuation() const;
     WEBCORE_EXPORT RenderInline* inlineContinuation() const;

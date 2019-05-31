@@ -35,13 +35,17 @@
 #include "DOMWrapperWorld.h"
 #include "EventNames.h"
 #include "HTMLBodyElement.h"
+#include "HTMLHtmlElement.h"
 #include "InspectorInstrumentation.h"
 #include "JSEventListener.h"
+#include "JSLazyEventListener.h"
+#include "RuntimeEnabledFeatures.h"
 #include "ScriptController.h"
 #include "ScriptDisallowedScope.h"
 #include "Settings.h"
 #include "WebKitAnimationEvent.h"
 #include "WebKitTransitionEvent.h"
+#include <wtf/IsoMallocInlines.h>
 #include <wtf/MainThread.h>
 #include <wtf/NeverDestroyed.h>
 #include <wtf/Ref.h>
@@ -50,6 +54,9 @@
 #include <wtf/Vector.h>
 
 namespace WebCore {
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(EventTarget);
+WTF_MAKE_ISO_ALLOCATED_IMPL(EventTargetWithInlineData);
 
 bool EventTarget::isNode() const
 {
@@ -63,6 +70,10 @@ bool EventTarget::isPaymentRequest() const
 
 bool EventTarget::addEventListener(const AtomicString& eventType, Ref<EventListener>&& listener, const AddEventListenerOptions& options)
 {
+#if !ASSERT_DISABLED
+    listener->checkValidityForEventTarget(*this);
+#endif
+
     auto passive = options.passive;
 
     if (!passive.hasValue() && eventNames().isTouchScrollBlockingEventType(eventType)) {
@@ -138,6 +149,10 @@ bool EventTarget::setAttributeEventListener(const AtomicString& eventType, RefPt
     }
     if (existingListener) {
         InspectorInstrumentation::willRemoveEventListener(*this, eventType, *existingListener, false);
+
+#if !ASSERT_DISABLED
+        listener->checkValidityForEventTarget(*this);
+#endif
 
         auto listenerPointer = listener.copyRef();
         eventTargetData()->eventListenerMap.replace(eventType, *existingListener, listener.releaseNonNull(), { });
@@ -295,6 +310,10 @@ void EventTarget::innerInvokeEventListeners(Event& event, EventListenerVector li
         if (registeredListener->isPassive())
             event.setInPassiveListener(true);
 
+#if !ASSERT_DISABLED
+        registeredListener->callback().checkValidityForEventTarget(*this);
+#endif
+
         InspectorInstrumentation::willHandleEvent(context, event, *registeredListener);
         registeredListener->callback().handleEvent(context, event);
         InspectorInstrumentation::didHandleEvent(context);
@@ -304,7 +323,14 @@ void EventTarget::innerInvokeEventListeners(Event& event, EventListenerVector li
     }
 
     if (contextIsDocument)
-        InspectorInstrumentation::didDispatchEvent(willDispatchEventCookie);
+        InspectorInstrumentation::didDispatchEvent(willDispatchEventCookie, event.defaultPrevented());
+}
+
+Vector<AtomicString> EventTarget::eventTypes()
+{
+    if (auto* data = eventTargetData())
+        return data->eventListenerMap.eventTypes();
+    return { };
 }
 
 const EventListenerVector& EventTarget::eventListeners(const AtomicString& eventType)

@@ -59,11 +59,16 @@
 #include <JavaScriptCore/ArrayBufferView.h>
 #include <JavaScriptCore/JSCInlines.h>
 #include <JavaScriptCore/JSLock.h>
+#include <wtf/IsoMallocInlines.h>
 #include <wtf/RefCountedLeakCounter.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/CString.h>
 
 namespace WebCore {
+
+static const Seconds maximumIntervalForUserGestureForwarding { 10_s };
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(XMLHttpRequest);
 
 DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, xmlHttpRequestCounter, ("XMLHttpRequest"));
 
@@ -74,23 +79,14 @@ enum XMLHttpRequestSendArrayBufferOrView {
     XMLHttpRequestSendArrayBufferOrViewMax,
 };
 
-static void replaceCharsetInMediaType(String& mediaType, const String& charsetValue)
+static void replaceCharsetInMediaTypeIfNeeded(String& mediaType)
 {
-    unsigned pos = 0, len = 0;
-
-    findCharsetInMediaType(mediaType, pos, len);
-
-    if (!len) {
-        // When no charset found, do nothing.
+    auto parsedContentType = ParsedContentType::create(mediaType);
+    if (!parsedContentType || parsedContentType->charset().isEmpty() || equalIgnoringASCIICase(parsedContentType->charset(), "UTF-8"))
         return;
-    }
 
-    // Found at least one existing charset, replace all occurrences with new charset.
-    while (len) {
-        mediaType.replace(pos, len, charsetValue);
-        unsigned start = pos + charsetValue.length();
-        findCharsetInMediaType(mediaType, pos, len, start);
-    }
+    parsedContentType->setCharset("UTF-8");
+    mediaType = parsedContentType->serialize();
 }
 
 static void logConsoleError(ScriptExecutionContext* context, const String& message)
@@ -127,6 +123,7 @@ XMLHttpRequest::XMLHttpRequest(ScriptExecutionContext& context)
     , m_resumeTimer(*this, &XMLHttpRequest::resumeTimerFired)
     , m_networkErrorTimer(*this, &XMLHttpRequest::networkErrorTimerFired)
     , m_timeoutTimer(*this, &XMLHttpRequest::didReachTimeout)
+    , m_maximumIntervalForUserGestureForwarding(maximumIntervalForUserGestureForwarding)
 {
 #ifndef NDEBUG
     xmlHttpRequestCounter.increment();
@@ -442,6 +439,7 @@ Optional<ExceptionOr<void>> XMLHttpRequest::prepareToSend()
 ExceptionOr<void> XMLHttpRequest::send(Optional<SendTypes>&& sendType)
 {
     InspectorInstrumentation::willSendXMLHttpRequest(scriptExecutionContext(), url());
+    m_userGestureToken = UserGestureIndicator::currentUserGesture();
 
     ExceptionOr<void> result;
     if (!sendType)
@@ -465,7 +463,7 @@ ExceptionOr<void> XMLHttpRequest::send(Document& document)
     if (auto result = prepareToSend())
         return WTFMove(result.value());
 
-    if (m_method != "GET" && m_method != "HEAD" && m_url.protocolIsInHTTPFamily()) {
+    if (m_method != "GET" && m_method != "HEAD") {
         if (!m_requestHeaders.contains(HTTPHeaderName::ContentType)) {
 #if ENABLE(DASHBOARD_SUPPORT)
             if (usesDashboardBackwardCompatibilityMode())
@@ -476,7 +474,7 @@ ExceptionOr<void> XMLHttpRequest::send(Document& document)
                 m_requestHeaders.set(HTTPHeaderName::ContentType, document.isHTMLDocument() ? "text/html;charset=UTF-8"_s : "application/xml;charset=UTF-8"_s);
         } else {
             String contentType = m_requestHeaders.get(HTTPHeaderName::ContentType);
-            replaceCharsetInMediaType(contentType, "UTF-8");
+            replaceCharsetInMediaTypeIfNeeded(contentType);
             m_requestHeaders.set(HTTPHeaderName::ContentType, contentType);
         }
 
@@ -495,7 +493,7 @@ ExceptionOr<void> XMLHttpRequest::send(const String& body)
     if (auto result = prepareToSend())
         return WTFMove(result.value());
 
-    if (!body.isNull() && m_method != "GET" && m_method != "HEAD" && m_url.protocolIsInHTTPFamily()) {
+    if (!body.isNull() && m_method != "GET" && m_method != "HEAD") {
         String contentType = m_requestHeaders.get(HTTPHeaderName::ContentType);
         if (contentType.isNull()) {
 #if ENABLE(DASHBOARD_SUPPORT)
@@ -505,7 +503,7 @@ ExceptionOr<void> XMLHttpRequest::send(const String& body)
 #endif
                 m_requestHeaders.set(HTTPHeaderName::ContentType, HTTPHeaderValues::textPlainContentType());
         } else {
-            replaceCharsetInMediaType(contentType, "UTF-8");
+            replaceCharsetInMediaTypeIfNeeded(contentType);
             m_requestHeaders.set(HTTPHeaderName::ContentType, contentType);
         }
 
@@ -522,7 +520,17 @@ ExceptionOr<void> XMLHttpRequest::send(Blob& body)
     if (auto result = prepareToSend())
         return WTFMove(result.value());
 
-    if (m_method != "GET" && m_method != "HEAD" && m_url.protocolIsInHTTPFamily()) {
+    if (m_method != "GET" && m_method != "HEAD") {
+        if (!m_url.protocolIsInHTTPFamily()) {
+            // FIXME: We would like to support posting Blobs to non-http URLs (e.g. custom URL schemes)
+            // but because of the architecture of blob-handling that will require a fair amount of work.
+            
+            ASCIILiteral consoleMessage { "POST of a Blob to non-HTTP protocols in XMLHttpRequest.send() is currently unsupported."_s };
+            scriptExecutionContext()->addConsoleMessage(MessageSource::JS, MessageLevel::Warning, consoleMessage);
+            
+            return createRequest();
+        }
+        
         if (!m_requestHeaders.contains(HTTPHeaderName::ContentType)) {
             const String& blobType = body.type();
             if (!blobType.isEmpty() && isValidContentType(blobType))
@@ -545,7 +553,7 @@ ExceptionOr<void> XMLHttpRequest::send(DOMFormData& body)
     if (auto result = prepareToSend())
         return WTFMove(result.value());
 
-    if (m_method != "GET" && m_method != "HEAD" && m_url.protocolIsInHTTPFamily()) {
+    if (m_method != "GET" && m_method != "HEAD") {
         m_requestEntityBody = FormData::createMultiPart(body, document());
         m_requestEntityBody->generateFiles(document());
         if (!m_requestHeaders.contains(HTTPHeaderName::ContentType))
@@ -572,7 +580,7 @@ ExceptionOr<void> XMLHttpRequest::sendBytesData(const void* data, size_t length)
     if (auto result = prepareToSend())
         return WTFMove(result.value());
 
-    if (m_method != "GET" && m_method != "HEAD" && m_url.protocolIsInHTTPFamily()) {
+    if (m_method != "GET" && m_method != "HEAD") {
         m_requestEntityBody = FormData::create(data, length);
         if (m_upload)
             m_requestEntityBody->setAlwaysStream(true);
@@ -635,7 +643,7 @@ ExceptionOr<void> XMLHttpRequest::createRequest()
     if (m_async) {
         m_progressEventThrottle.dispatchProgressEvent(eventNames().loadstartEvent);
         if (!m_uploadComplete && m_uploadListenerFlag)
-            m_upload->dispatchProgressEvent(eventNames().loadstartEvent);
+            m_upload->dispatchProgressEvent(eventNames().loadstartEvent, 0, request.httpBody()->lengthInBytes());
 
         if (readyState() != OPENED || !m_sendFlag || m_loader)
             return { };
@@ -955,13 +963,13 @@ void XMLHttpRequest::didSendData(unsigned long long bytesSent, unsigned long lon
         return;
 
     if (m_uploadListenerFlag)
-        m_upload->dispatchThrottledProgressEvent(true, bytesSent, totalBytesToBeSent);
+        m_upload->dispatchProgressEvent(eventNames().progressEvent, bytesSent, totalBytesToBeSent);
 
     if (bytesSent == totalBytesToBeSent && !m_uploadComplete) {
         m_uploadComplete = true;
         if (m_uploadListenerFlag) {
-            m_upload->dispatchProgressEvent(eventNames().loadEvent);
-            m_upload->dispatchProgressEvent(eventNames().loadendEvent);
+            m_upload->dispatchProgressEvent(eventNames().loadEvent, bytesSent, totalBytesToBeSent);
+            m_upload->dispatchProgressEvent(eventNames().loadendEvent, bytesSent, totalBytesToBeSent);
         }
     }
 }
@@ -987,10 +995,23 @@ static inline bool shouldDecodeResponse(XMLHttpRequest::ResponseType type)
     return true;
 }
 
+// https://xhr.spec.whatwg.org/#final-charset
+TextEncoding XMLHttpRequest::finalResponseCharset() const
+{
+    String label = m_responseEncoding;
+
+    String overrideResponseCharset = extractCharsetFromMediaType(m_mimeTypeOverride);
+    if (!overrideResponseCharset.isEmpty())
+        label = overrideResponseCharset;
+
+    return TextEncoding(label);
+}
+
 Ref<TextResourceDecoder> XMLHttpRequest::createDecoder() const
 {
-    if (!m_responseEncoding.isEmpty())
-        return TextResourceDecoder::create("text/plain", m_responseEncoding);
+    TextEncoding finalResponseCharset = this->finalResponseCharset();
+    if (finalResponseCharset.isValid())
+        return TextResourceDecoder::create("text/plain", finalResponseCharset);
 
     switch (responseType()) {
     case ResponseType::EmptyString:
@@ -1056,19 +1077,34 @@ void XMLHttpRequest::didReceiveData(const char* data, int len)
     if (!m_error) {
         m_receivedLength += len;
 
+        if (readyState() != LOADING)
+            changeState(LOADING);
+        else {
+            // Firefox calls readyStateChanged every time it receives data, 4449442
+            callReadyStateChangeListener();
+        }
+
         if (m_async) {
             long long expectedLength = m_response.expectedContentLength();
             bool lengthComputable = expectedLength > 0 && m_receivedLength <= expectedLength;
             unsigned long long total = lengthComputable ? expectedLength : 0;
             m_progressEventThrottle.dispatchThrottledProgressEvent(lengthComputable, m_receivedLength, total);
         }
-
-        if (readyState() != LOADING)
-            changeState(LOADING);
-        else
-            // Firefox calls readyStateChanged every time it receives data, 4449442
-            callReadyStateChangeListener();
     }
+}
+
+void XMLHttpRequest::dispatchEvent(Event& event)
+{
+    if (m_userGestureToken && m_userGestureToken->hasExpired(m_maximumIntervalForUserGestureForwarding))
+        m_userGestureToken = nullptr;
+
+    if (readyState() != DONE || !m_userGestureToken || !m_userGestureToken->processingUserGesture()) {
+        EventTarget::dispatchEvent(event);
+        return;
+    }
+
+    UserGestureIndicator gestureIndicator(m_userGestureToken, UserGestureToken::GestureScope::MediaOnly);
+    EventTarget::dispatchEvent(event);
 }
 
 void XMLHttpRequest::dispatchErrorEvents(const AtomicString& type)
@@ -1076,8 +1112,8 @@ void XMLHttpRequest::dispatchErrorEvents(const AtomicString& type)
     if (!m_uploadComplete) {
         m_uploadComplete = true;
         if (m_upload && m_uploadListenerFlag) {
-            m_upload->dispatchProgressEvent(type);
-            m_upload->dispatchProgressEvent(eventNames().loadendEvent);
+            m_upload->dispatchProgressEvent(type, 0, 0);
+            m_upload->dispatchProgressEvent(eventNames().loadendEvent, 0, 0);
         }
     }
     m_progressEventThrottle.dispatchProgressEvent(type);
@@ -1168,6 +1204,11 @@ void XMLHttpRequest::contextDestroyed()
 {
     ASSERT(!m_loader);
     ActiveDOMObject::contextDestroyed();
+}
+
+void XMLHttpRequest::setMaximumIntervalForUserGestureForwarding(double interval)
+{
+    m_maximumIntervalForUserGestureForwarding = Seconds(interval);    
 }
 
 } // namespace WebCore

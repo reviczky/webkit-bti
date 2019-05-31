@@ -117,6 +117,11 @@ void RemoteWebInspectorProxy::append(const String& suggestedURL, const String& c
     platformAppend(suggestedURL, content);
 }
 
+void RemoteWebInspectorProxy::setSheetRect(const FloatRect& rect)
+{
+    platformSetSheetRect(rect);
+}
+
 void RemoteWebInspectorProxy::startWindowDrag()
 {
     platformStartWindowDrag();
@@ -145,7 +150,7 @@ void RemoteWebInspectorProxy::createFrontendPageAndWindow()
 
     m_inspectorPage = platformCreateFrontendPageAndWindow();
 
-    trackInspectorPage(m_inspectorPage);
+    trackInspectorPage(m_inspectorPage, nullptr);
 
     m_inspectorPage->process().addMessageReceiver(Messages::RemoteWebInspectorProxy::messageReceiverName(), m_inspectorPage->pageID(), *this);
     m_inspectorPage->process().assumeReadAccessToBaseURL(*m_inspectorPage, WebInspectorProxy::inspectorBaseURL());
@@ -165,7 +170,7 @@ void RemoteWebInspectorProxy::closeFrontendPageAndWindow()
     platformCloseFrontendPageAndWindow();
 }
 
-#if !ENABLE(REMOTE_INSPECTOR) || (!PLATFORM(MAC) && !PLATFORM(GTK))
+#if (!ENABLE(REMOTE_INSPECTOR) && !PLATFORM(MAC)) || PLATFORM(WPE)
 WebPageProxy* RemoteWebInspectorProxy::platformCreateFrontendPageAndWindow()
 {
     notImplemented();
@@ -175,6 +180,7 @@ WebPageProxy* RemoteWebInspectorProxy::platformCreateFrontendPageAndWindow()
 void RemoteWebInspectorProxy::platformBringToFront() { }
 void RemoteWebInspectorProxy::platformSave(const String&, const String&, bool, bool) { }
 void RemoteWebInspectorProxy::platformAppend(const String&, const String&) { }
+void RemoteWebInspectorProxy::platformSetSheetRect(const FloatRect&) { }
 void RemoteWebInspectorProxy::platformStartWindowDrag() { }
 void RemoteWebInspectorProxy::platformOpenInNewTab(const String&) { }
 void RemoteWebInspectorProxy::platformShowCertificate(const CertificateInfo&) { }

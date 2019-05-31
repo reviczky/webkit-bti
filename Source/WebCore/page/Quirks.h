@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2018-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,6 +30,8 @@
 namespace WebCore {
 
 class Document;
+class HTMLElement;
+class LayoutUnit;
 
 class Quirks {
     WTF_MAKE_NONCOPYABLE(Quirks); WTF_MAKE_FAST_ALLOCATED;
@@ -37,12 +39,40 @@ public:
     Quirks(Document&);
     ~Quirks();
 
+    bool shouldIgnoreInvalidSignal() const;
+    WEBCORE_EXPORT bool shouldIgnoreShrinkToFitContent() const;
+    WEBCORE_EXPORT Optional<LayoutUnit> overriddenViewLayoutWidth(LayoutUnit currentViewLayoutWidth) const;
+    bool needsFormControlToBeMouseFocusable() const;
+    bool needsAutoplayPlayPauseEvents() const;
+    bool needsSeekingSupportDisabled() const;
+    bool needsPerDocumentAutoplayBehavior() const;
+    bool shouldAutoplayForArbitraryUserGesture() const;
     bool hasBrokenEncryptedMediaAPISupportQuirk() const;
+    bool hasWebSQLSupportQuirk() const;
+    bool shouldDispatchSimulatedMouseEvents() const;
+    bool shouldDisablePointerEventsQuirk() const;
+    bool needsInputModeNoneImplicitly(const HTMLElement&) const;
+
+    WEBCORE_EXPORT bool shouldDispatchSyntheticMouseEventsWhenModifyingSelection() const;
+    WEBCORE_EXPORT bool shouldSuppressAutocorrectionAndAutocaptializationInHiddenEditableAreas() const;
+    WEBCORE_EXPORT bool shouldEmulateUndoRedoInHiddenEditableAreas() const;
+    WEBCORE_EXPORT bool isTouchBarUpdateSupressedForHiddenContentEditable() const;
+    WEBCORE_EXPORT bool isNeverRichlyEditableForTouchBar() const;
+
+    bool needsGMailOverflowScrollQuirk() const;
+    bool needsYouTubeOverflowScrollQuirk() const;
 
 private:
+    bool needsQuirks() const;
+
     WeakPtr<Document> m_document;
 
     mutable Optional<bool> m_hasBrokenEncryptedMediaAPISupportQuirk;
+    mutable Optional<bool> m_hasWebSQLSupportQuirk;
+#if PLATFORM(IOS_FAMILY)
+    mutable Optional<bool> m_needsGMailOverflowScrollQuirk;
+    mutable Optional<bool> m_needsYouTubeOverflowScrollQuirk;
+#endif
 };
 
 }

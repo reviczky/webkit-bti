@@ -37,6 +37,7 @@
 #include "EventHandler.h"
 #include "EventNames.h"
 #include "Frame.h"
+#include "FullscreenManager.h"
 #include "GraphicsContext.h"
 #include "HTMLHeadingElement.h"
 #include "HTMLLIElement.h"
@@ -979,10 +980,10 @@ void MediaControlFullscreenButtonElement::defaultEventHandler(Event& event)
         // video implementation without requiring them to implement their own full
         // screen behavior.
         if (document().settings().fullScreenEnabled()) {
-            if (document().webkitIsFullScreen() && document().webkitCurrentFullScreenElement() == parentMediaElement(this))
-                document().webkitCancelFullScreen();
+            if (document().fullscreenManager().isFullscreen() && document().fullscreenManager().currentFullscreenElement() == parentMediaElement(this))
+                document().fullscreenManager().cancelFullscreen();
             else
-                document().requestFullScreenForElement(parentMediaElement(this).get(), Document::ExemptIFrameAllowFullScreenRequirement);
+                document().fullscreenManager().requestFullscreenForElement(parentMediaElement(this).get(), FullscreenManager::ExemptIFrameAllowFullscreenRequirement);
         } else
 #endif
             mediaController()->enterFullscreen();
@@ -1172,10 +1173,10 @@ void MediaControlTextTrackContainerElement::updateDisplay()
         removeChildren();
 
     activeCues.removeAllMatching([] (CueInterval& cueInterval) {
-        if (!cueInterval.data() || !cueInterval.data()->isRenderable())
+        if (!is<VTTCue>(cueInterval.data()))
             return true;
 
-        RefPtr<VTTCue> cue = toVTTCue(cueInterval.data());
+        Ref<VTTCue> cue = downcast<VTTCue>(*cueInterval.data());
 
         return !cue->isRenderable()
             || !cue->track()
@@ -1197,12 +1198,9 @@ void MediaControlTextTrackContainerElement::updateDisplay()
         if (!mediaController()->closedCaptionsVisible())
             continue;
 
-        RefPtr<VTTCue> cue = toVTTCue(activeCues[i].data());
-        ASSERT(cue);
-        if (!cue)
-            continue;
+        RefPtr<VTTCue> cue = downcast<VTTCue>(activeCues[i].data());
 
-        LOG(Media, "MediaControlTextTrackContainerElement::updateDisplay(%p) - adding and positioning cue #%zu: \"%s\", start=%.2f, end=%.2f, line=%.2f", this, i, cue->text().utf8().data(), cue->startTime(), cue->endTime(), cue->line());
+        DEBUG_LOG(LOGIDENTIFIER, "adding and positioning cue ", i, ": \"", cue->text(), "\", start=", cue->startTime(), ", end=", cue->endTime(), ", line=", cue->line());
         Ref<VTTCueBox> displayBox = cue->getDisplayTree(m_videoDisplaySize.size(), m_fontSize);
         RefPtr<VTTRegion> region = cue->track()->regions()->getRegionById(cue->regionId());
         if (!region) {
@@ -1453,6 +1451,25 @@ void MediaControlTextTrackContainerElement::textTrackRepresentationBoundsChanged
         updateTextTrackRepresentation();
     updateSizes();
 }
+
+#if !RELEASE_LOG_DISABLED
+const Logger& MediaControlTextTrackContainerElement::logger() const
+{
+    return document().logger();
+}
+
+const void* MediaControlTextTrackContainerElement::logIdentifier() const
+{
+    if (auto mediaElement = parentMediaElement(this))
+        return mediaElement->logIdentifier();
+    return nullptr;
+}
+
+WTFLogChannel& MediaControlTextTrackContainerElement::logChannel() const
+{
+    return LogMedia;
+}
+#endif // !RELEASE_LOG_DISABLED
 
 #endif // ENABLE(VIDEO_TRACK)
 

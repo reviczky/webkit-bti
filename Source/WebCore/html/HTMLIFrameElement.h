@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include "FeaturePolicy.h"
 #include "HTMLFrameElementBase.h"
 
 namespace WebCore {
@@ -40,6 +41,12 @@ public:
     RenderIFrame* renderer() const;
     const String& allow() const { return m_allow; }
 
+    void setReferrerPolicyForBindings(const AtomicString&);
+    String referrerPolicyForBindings() const;
+    ReferrerPolicy referrerPolicy() const final;
+
+    const FeaturePolicy& featurePolicy() const;
+
 private:
     HTMLIFrameElement(const QualifiedName&, Document&);
 
@@ -56,6 +63,7 @@ private:
 
     std::unique_ptr<DOMTokenList> m_sandbox;
     String m_allow;
+    mutable Optional<FeaturePolicy> m_featurePolicy;
 };
 
 } // namespace WebCore

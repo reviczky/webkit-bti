@@ -113,8 +113,10 @@ public:
     static const SettingsBase::ForcedAccessibilityValue defaultForcedPrefersReducedMotionAccessibilityValue = ForcedAccessibilityValue::System;
 
     WEBCORE_EXPORT static bool defaultTextAutosizingEnabled();
+    static bool defaultTextAutosizingUsesIdempotentMode();
     WEBCORE_EXPORT static float defaultMinimumZoomFontSize();
     WEBCORE_EXPORT static bool defaultDownloadableBinaryFontsEnabled();
+    WEBCORE_EXPORT static bool defaultContentChangeObserverEnabled();
 
 #if ENABLE(MEDIA_SOURCE)
     WEBCORE_EXPORT static bool platformDefaultMediaSourceEnabled();

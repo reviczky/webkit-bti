@@ -208,6 +208,14 @@ void MockRealtimeMediaSourceCenter::setMockRealtimeMediaSourceCenterEnabled(bool
         center.unsetDisplayCaptureFactory(mock.displayCaptureFactory());
 }
 
+bool MockRealtimeMediaSourceCenter::mockRealtimeMediaSourceCenterEnabled()
+{
+    MockRealtimeMediaSourceCenter& mock = singleton();
+    RealtimeMediaSourceCenter& center = RealtimeMediaSourceCenter::singleton();
+
+    return &center.audioCaptureFactory() == &mock.audioCaptureFactory() || &center.videoCaptureFactory() == &mock.videoCaptureFactory() || &center.displayCaptureFactory() == &mock.displayCaptureFactory();
+}
+
 static void createCaptureDevice(const MockMediaDevice& device)
 {
     deviceListForDevice(device).append(MockRealtimeMediaSourceCenter::captureDeviceWithPersistentID(device.type(), device.persistentId).value());
@@ -288,7 +296,7 @@ Optional<CaptureDevice> MockRealtimeMediaSourceCenter::captureDeviceWithPersiste
 
     CaptureDevice device { iterator->value.persistentId, type, iterator->value.label };
     device.setEnabled(true);
-    return WTFMove(device);
+    return device;
 }
 
 Vector<CaptureDevice>& MockRealtimeMediaSourceCenter::audioDevices()

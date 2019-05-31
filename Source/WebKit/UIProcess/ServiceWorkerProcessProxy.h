@@ -28,7 +28,7 @@
 #if ENABLE(SERVICE_WORKER)
 
 #include "WebProcessProxy.h"
-#include <WebCore/SecurityOriginData.h>
+#include <WebCore/RegistrableDomain.h>
 
 namespace WebKit {
 class AuthenticationChallengeProxy;
@@ -36,7 +36,7 @@ struct WebPreferencesStore;
 
 class ServiceWorkerProcessProxy final : public WebProcessProxy {
 public:
-    static Ref<ServiceWorkerProcessProxy> create(WebProcessPool&, const WebCore::SecurityOriginData&, WebsiteDataStore&);
+    static Ref<ServiceWorkerProcessProxy> create(WebProcessPool&, const WebCore::RegistrableDomain&, WebsiteDataStore&);
     ~ServiceWorkerProcessProxy();
 
     static bool hasRegisteredServiceWorkers(const String& serviceWorkerDirectory);
@@ -47,21 +47,18 @@ public:
     void setUserAgent(const String&);
     void updatePreferencesStore(const WebPreferencesStore&);
 
-    const WebCore::SecurityOriginData& securityOrigin() { return m_securityOrigin; }
+    const WebCore::RegistrableDomain& registrableDomain() { return m_registrableDomain; }
     uint64_t pageID() const { return m_serviceWorkerPageID; }
 
 private:
     // AuxiliaryProcessProxy
     void getLaunchOptions(ProcessLauncher::LaunchOptions&) final;
 
-    // ProcessLauncher::Client
-    void didFinishLaunching(ProcessLauncher*, IPC::Connection::Identifier) final;
-
     bool isServiceWorkerProcess() const final { return true; }
 
-    ServiceWorkerProcessProxy(WebProcessPool&, const WebCore::SecurityOriginData&, WebsiteDataStore&);
+    ServiceWorkerProcessProxy(WebProcessPool&, const WebCore::RegistrableDomain&, WebsiteDataStore&);
 
-    WebCore::SecurityOriginData m_securityOrigin;
+    WebCore::RegistrableDomain m_registrableDomain;
     uint64_t m_serviceWorkerPageID { 0 };
 };
 

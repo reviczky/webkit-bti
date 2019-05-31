@@ -338,7 +338,7 @@ void WebInspectorProxy::platformInspectedURLChanged(const String& url)
         updateInspectorWindowTitle();
 }
 
-void WebInspectorProxy::platformShowCertificate(const CertificateInfo&)
+void WebInspectorProxy::platformShowCertificate(const WebCore::CertificateInfo&)
 {
     notImplemented();
 }
@@ -399,7 +399,7 @@ void WebInspectorProxy::platformAttach()
 
 void WebInspectorProxy::platformDetach()
 {
-    if (!inspectedPage()->isValid())
+    if (!inspectedPage()->hasRunningProcess())
         return;
 
     GRefPtr<GtkWidget> inspectorView = m_inspectorView;
@@ -442,6 +442,11 @@ void WebInspectorProxy::platformSetAttachedWindowWidth(unsigned width)
     if (m_client)
         m_client->didChangeAttachedWidth(*this, width);
     webkitWebViewBaseSetInspectorViewSize(WEBKIT_WEB_VIEW_BASE(inspectedPage()->viewWidget()), width);
+}
+
+void WebInspectorProxy::platformSetSheetRect(const WebCore::FloatRect&)
+{
+    notImplemented();
 }
 
 void WebInspectorProxy::platformStartWindowDrag()

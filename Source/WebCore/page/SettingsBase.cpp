@@ -96,6 +96,11 @@ bool SettingsBase::defaultTextAutosizingEnabled()
 {
     return false;
 }
+
+bool SettingsBase::defaultTextAutosizingUsesIdempotentMode()
+{
+    return false;
+}
 #endif
 
 bool SettingsBase::defaultDownloadableBinaryFontsEnabled()
@@ -104,6 +109,15 @@ bool SettingsBase::defaultDownloadableBinaryFontsEnabled()
     return false;
 #else
     return true;
+#endif
+}
+
+bool SettingsBase::defaultContentChangeObserverEnabled()
+{
+#if PLATFORM(IOS_FAMILY) && !PLATFORM(IOSMAC)
+    return true;
+#else
+    return false;
 #endif
 }
 

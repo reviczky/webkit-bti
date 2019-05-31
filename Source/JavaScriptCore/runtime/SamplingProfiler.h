@@ -108,7 +108,7 @@ public:
             unsigned columnNumber { std::numeric_limits<unsigned>::max() };
             unsigned bytecodeIndex { std::numeric_limits<unsigned>::max() };
             CodeBlockHash codeBlockHash;
-            JITCode::JITType jitType { JITCode::None };
+            JITType jitType { JITType::None };
         };
 
         CodeLocation semanticLocation;
@@ -191,6 +191,10 @@ private:
     void timerLoop();
     void takeSample(const AbstractLocker&, Seconds& stackTraceProcessingTime);
 
+    Lock m_lock;
+    bool m_isPaused;
+    bool m_isShutDown;
+    bool m_needsReportAtExit { false };
     VM& m_vm;
     WeakRandom m_weakRandom;
     RefPtr<Stopwatch> m_stopwatch;
@@ -198,12 +202,8 @@ private:
     Vector<UnprocessedStackTrace> m_unprocessedStackTraces;
     Seconds m_timingInterval;
     Seconds m_lastTime;
-    Lock m_lock;
     RefPtr<Thread> m_thread;
     RefPtr<Thread> m_jscExecutionThread;
-    bool m_isPaused;
-    bool m_isShutDown;
-    bool m_needsReportAtExit { false };
     HashSet<JSCell*> m_liveCellPointers;
     Vector<UnprocessedStackFrame> m_currentFrames;
 };

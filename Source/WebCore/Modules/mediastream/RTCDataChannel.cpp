@@ -34,11 +34,15 @@
 #include "MessageEvent.h"
 #include "RTCDataChannelHandler.h"
 #include "ScriptExecutionContext.h"
+#include "SharedBuffer.h"
 #include <JavaScriptCore/ArrayBuffer.h>
 #include <JavaScriptCore/ArrayBufferView.h>
+#include <wtf/IsoMallocInlines.h>
 #include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(RTCDataChannel);
 
 static const AtomicString& blobKeyword()
 {
@@ -94,8 +98,10 @@ const AtomicString& RTCDataChannel::binaryType() const
 
 ExceptionOr<void> RTCDataChannel::setBinaryType(const AtomicString& binaryType)
 {
-    if (binaryType == blobKeyword())
-        return Exception { NotSupportedError };
+    if (binaryType == blobKeyword()) {
+        m_binaryType = BinaryType::Blob;
+        return { };
+    }
     if (binaryType == arraybufferKeyword()) {
         m_binaryType = BinaryType::ArrayBuffer;
         return { };
@@ -194,12 +200,11 @@ void RTCDataChannel::didReceiveRawData(const char* data, size_t dataLength)
     if (m_stopped)
         return;
 
-    if (m_binaryType == BinaryType::Blob) {
-        // FIXME: Implement.
+    switch (m_binaryType) {
+    case BinaryType::Blob:
+        scheduleDispatchEvent(MessageEvent::create(Blob::create(SharedBuffer::create(data, dataLength), emptyString()), { }));
         return;
-    }
-
-    if (m_binaryType == BinaryType::ArrayBuffer) {
+    case BinaryType::ArrayBuffer:
         scheduleDispatchEvent(MessageEvent::create(ArrayBuffer::create(data, dataLength)));
         return;
     }

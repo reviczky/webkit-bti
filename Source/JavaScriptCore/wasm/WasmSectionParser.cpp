@@ -35,6 +35,7 @@
 #include "WasmOps.h"
 #include "WasmSections.h"
 #include "WasmSignatureInlines.h"
+#include <wtf/Optional.h>
 
 namespace JSC { namespace Wasm {
 
@@ -472,6 +473,12 @@ auto SectionParser::parseInitExpr(uint8_t& opcode, uint64_t& bitsOrImportNumber,
         ASSERT(m_info->globals[index].mutability == Global::Immutable);
         resultType = m_info->globals[index].type;
         bitsOrImportNumber = index;
+        break;
+    }
+
+    case RefNull: {
+        resultType = Anyref;
+        bitsOrImportNumber = JSValue::encode(jsNull());
         break;
     }
 

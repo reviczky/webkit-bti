@@ -31,22 +31,26 @@
 
 namespace WebKit {
 
-class NetworkProcess;
-
-class WebSQLiteDatabaseTracker : public WebCore::SQLiteDatabaseTrackerClient {
+class WebSQLiteDatabaseTracker final : public WebCore::SQLiteDatabaseTrackerClient {
     WTF_MAKE_NONCOPYABLE(WebSQLiteDatabaseTracker)
 public:
-    explicit WebSQLiteDatabaseTracker(NetworkProcess&);
+    using IsHoldingLockedFilesHandler = Function<void(bool)>;
+    explicit WebSQLiteDatabaseTracker(IsHoldingLockedFilesHandler&&);
 
-    // WebCore::SQLiteDatabaseTrackerClient
-    void willBeginFirstTransaction() override;
-    void didFinishLastTransaction() override;
+    ~WebSQLiteDatabaseTracker();
+
+    void setIsSuspended(bool);
 
 private:
-    void hysteresisUpdated(PAL::HysteresisState);
+    void setIsHoldingLockedFiles(bool);
 
-    NetworkProcess& m_process;
+    // WebCore::SQLiteDatabaseTrackerClient.
+    void willBeginFirstTransaction() final;
+    void didFinishLastTransaction() final;
+
+    IsHoldingLockedFilesHandler m_isHoldingLockedFilesHandler;
     PAL::HysteresisActivity m_hysteresis;
+    bool m_isSuspended { false };
 };
 
 } // namespace WebKit

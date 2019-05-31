@@ -156,7 +156,7 @@ void DrawingAreaProxyCoordinatedGraphics::update(uint64_t backingStoreStateID, c
 #if !PLATFORM(WPE)
     incorporateUpdate(updateInfo);
 #endif
-    process().send(Messages::DrawingArea::DidUpdate(), m_webPageProxy.pageID());
+    send(Messages::DrawingArea::DidUpdate());
 }
 
 void DrawingAreaProxyCoordinatedGraphics::didUpdateBackingStoreState(uint64_t backingStoreStateID, const UpdateInfo& updateInfo, const LayerTreeContext& layerTreeContext)
@@ -303,7 +303,7 @@ void DrawingAreaProxyCoordinatedGraphics::sendUpdateBackingStoreState(RespondImm
 {
     ASSERT(m_currentBackingStoreStateID < m_nextBackingStoreStateID);
 
-    if (!m_webPageProxy.isValid())
+    if (!m_webPageProxy.hasRunningProcess())
         return;
 
     if (m_isWaitingForDidUpdateBackingStoreState)
@@ -314,8 +314,7 @@ void DrawingAreaProxyCoordinatedGraphics::sendUpdateBackingStoreState(RespondImm
 
     m_isWaitingForDidUpdateBackingStoreState = respondImmediatelyOrNot == RespondImmediately;
 
-    process().send(Messages::DrawingArea::UpdateBackingStoreState(m_nextBackingStoreStateID, respondImmediatelyOrNot == RespondImmediately, m_webPageProxy.deviceScaleFactor(), m_size, m_scrollOffset), m_webPageProxy.pageID());
-
+    send(Messages::DrawingArea::UpdateBackingStoreState(m_nextBackingStoreStateID, respondImmediatelyOrNot == RespondImmediately, m_webPageProxy.deviceScaleFactor(), m_size, m_scrollOffset));
     m_scrollOffset = IntSize();
 
     if (m_isWaitingForDidUpdateBackingStoreState) {
@@ -335,7 +334,7 @@ void DrawingAreaProxyCoordinatedGraphics::waitForAndDispatchDidUpdateBackingStor
 {
     ASSERT(m_isWaitingForDidUpdateBackingStoreState);
 
-    if (!m_webPageProxy.isValid())
+    if (!m_webPageProxy.hasRunningProcess())
         return;
     if (process().state() == WebProcessProxy::State::Launching)
         return;
@@ -354,7 +353,7 @@ void DrawingAreaProxyCoordinatedGraphics::waitForAndDispatchDidUpdateBackingStor
     // choose the most recent one, or the one that is closest to our current size.
 
     // The timeout, in seconds, we use when waiting for a DidUpdateBackingStoreState message when we're asked to paint.
-    process().connection()->waitForAndDispatchImmediately<Messages::DrawingAreaProxy::DidUpdateBackingStoreState>(m_webPageProxy.pageID(), Seconds::fromMilliseconds(500));
+    process().connection()->waitForAndDispatchImmediately<Messages::DrawingAreaProxy::DidUpdateBackingStoreState>(m_identifier.toUInt64(), Seconds::fromMilliseconds(500));
 }
 
 #if !PLATFORM(WPE)
@@ -386,7 +385,7 @@ void DrawingAreaProxyCoordinatedGraphics::setNativeSurfaceHandleForCompositing(u
         m_pendingNativeSurfaceHandleForCompositing = handle;
         return;
     }
-    process().send(Messages::DrawingArea::SetNativeSurfaceHandleForCompositing(handle), m_webPageProxy.pageID(), IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
+    send(Messages::DrawingArea::SetNativeSurfaceHandleForCompositing(handle), IPC::SendOption::DispatchMessageEvenWhenWaitingForSyncReply);
 }
 
 void DrawingAreaProxyCoordinatedGraphics::destroyNativeSurfaceHandleForCompositing()
@@ -396,7 +395,7 @@ void DrawingAreaProxyCoordinatedGraphics::destroyNativeSurfaceHandleForCompositi
         return;
     }
     bool handled;
-    process().sendSync(Messages::DrawingArea::DestroyNativeSurfaceHandleForCompositing(), Messages::DrawingArea::DestroyNativeSurfaceHandleForCompositing::Reply(handled), m_webPageProxy.pageID());
+    sendSync(Messages::DrawingArea::DestroyNativeSurfaceHandleForCompositing(), Messages::DrawingArea::DestroyNativeSurfaceHandleForCompositing::Reply(handled));
 }
 #endif
 
@@ -466,7 +465,7 @@ void DrawingAreaProxyCoordinatedGraphics::DrawingMonitor::didDraw()
 
 void DrawingAreaProxyCoordinatedGraphics::dispatchAfterEnsuringDrawing(WTF::Function<void(CallbackBase::Error)>&& callbackFunction)
 {
-    if (!m_webPageProxy.isValid()) {
+    if (!m_webPageProxy.hasRunningProcess()) {
         callbackFunction(CallbackBase::Error::OwnerWasInvalidated);
         return;
     }

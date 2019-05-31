@@ -55,9 +55,12 @@
 #include "SerializedScriptValue.h"
 #include "TransactionOperation.h"
 #include <wtf/CompletionHandler.h>
+#include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
 using namespace JSC;
+
+WTF_MAKE_ISO_ALLOCATED_IMPL(IDBTransaction);
 
 std::atomic<unsigned> IDBTransaction::numberOfIDBTransactions { 0 };
 
@@ -328,7 +331,7 @@ bool IDBTransaction::canSuspendForDocumentSuspension() const
 
 bool IDBTransaction::hasPendingActivity() const
 {
-    ASSERT(&m_database->originThread() == &Thread::current() || mayBeGCThread());
+    ASSERT(&m_database->originThread() == &Thread::current() || Thread::mayBeGCThread());
     return !m_contextStopped && m_state != IndexedDB::TransactionState::Finished;
 }
 
@@ -638,6 +641,7 @@ void IDBTransaction::dispatchEvent(Event& event)
     auto protectedThis = makeRef(*this);
 
     EventDispatcher::dispatchEvent({ this, m_database.ptr() }, event);
+    m_didDispatchAbortOrCommit = true;
 
     if (isVersionChange()) {
         ASSERT(m_openDBRequest);
@@ -986,7 +990,7 @@ void IDBTransaction::didGetAllRecordsOnServer(IDBRequest& request, const IDBResu
         request.setResult(getAllResult.keys());
         break;
     case IndexedDB::GetAllType::Values:
-        request.setResult(getAllResult.values());
+        request.setResult(getAllResult);
         break;
     }
 
@@ -1090,7 +1094,7 @@ void IDBTransaction::didGetRecordOnServer(IDBRequest& request, const IDBResultDa
             request.setResultToUndefined();
     } else {
         if (resultData.getResult().value().data().data())
-            request.setResultToStructuredClone(resultData.getResult().value());
+            request.setResultToStructuredClone(resultData.getResult());
         else
             request.setResultToUndefined();
     }

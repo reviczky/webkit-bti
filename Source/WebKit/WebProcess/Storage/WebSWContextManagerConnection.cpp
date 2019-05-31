@@ -32,6 +32,7 @@
 #include "FormDataReference.h"
 #include "Logging.h"
 #include "NetworkProcessMessages.h"
+#include "ServiceWorkerFetchTaskMessages.h"
 #include "WebCacheStorageProvider.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebDatabaseProvider.h"
@@ -225,12 +226,12 @@ void WebSWContextManagerConnection::startFetch(SWServerConnectionIdentifier serv
 {
     auto* serviceWorkerThreadProxy = SWContextManager::singleton().serviceWorkerThreadProxy(serviceWorkerIdentifier);
     if (!serviceWorkerThreadProxy) {
-        m_connectionToNetworkProcess->send(Messages::NetworkProcess::DidNotHandleFetch { serverConnectionIdentifier, fetchIdentifier }, 0);
+        m_connectionToNetworkProcess->send(Messages::ServiceWorkerFetchTask::DidNotHandle { }, fetchIdentifier.toUInt64());
         return;
     }
 
     if (!isValidFetch(request, options, serviceWorkerThreadProxy->scriptURL(), referrer)) {
-        m_connectionToNetworkProcess->send(Messages::NetworkProcess::DidNotHandleFetch { serverConnectionIdentifier, fetchIdentifier }, 0);
+        m_connectionToNetworkProcess->send(Messages::ServiceWorkerFetchTask::DidNotHandle { }, fetchIdentifier.toUInt64());
         return;
     }
 
@@ -357,10 +358,22 @@ void WebSWContextManagerConnection::didFinishSkipWaiting(uint64_t callbackID)
         callback();
 }
 
-NO_RETURN void WebSWContextManagerConnection::terminateProcess()
+void WebSWContextManagerConnection::terminateProcess()
 {
     RELEASE_LOG(ServiceWorker, "Service worker process is exiting because it is no longer needed");
     _exit(EXIT_SUCCESS);
+}
+
+void WebSWContextManagerConnection::setThrottleState(bool isThrottleable)
+{
+    RELEASE_LOG(ServiceWorker, "Service worker throttleable state is set to %d", isThrottleable);
+    m_isThrottleable = isThrottleable;
+    WebProcess::singleton().setProcessSuppressionEnabled(isThrottleable);
+}
+
+bool WebSWContextManagerConnection::isThrottleable() const
+{
+    return m_isThrottleable;
 }
 
 } // namespace WebCore

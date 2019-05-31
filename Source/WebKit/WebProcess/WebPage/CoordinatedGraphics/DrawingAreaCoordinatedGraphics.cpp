@@ -49,7 +49,7 @@ namespace WebKit {
 using namespace WebCore;
 
 DrawingAreaCoordinatedGraphics::DrawingAreaCoordinatedGraphics(WebPage& webPage, const WebPageCreationParameters& parameters)
-    : DrawingArea(DrawingAreaTypeCoordinatedGraphics, webPage)
+    : DrawingArea(DrawingAreaTypeCoordinatedGraphics, parameters.drawingAreaIdentifier, webPage)
     , m_exitCompositingTimer(RunLoop::main(), this, &DrawingAreaCoordinatedGraphics::exitAcceleratedCompositingMode)
     , m_discardPreviousLayerTreeHostTimer(RunLoop::main(), this, &DrawingAreaCoordinatedGraphics::discardPreviousLayerTreeHost)
     , m_displayTimer(RunLoop::main(), this, &DrawingAreaCoordinatedGraphics::displayTimerFired)
@@ -303,6 +303,8 @@ void DrawingAreaCoordinatedGraphics::scheduleCompositingLayerFlush()
 {
     if (m_layerTreeHost)
         m_layerTreeHost->scheduleLayerFlush();
+    else
+        setNeedsDisplay();
 }
 
 void DrawingAreaCoordinatedGraphics::layerHostDidFlushLayers()
@@ -317,7 +319,7 @@ void DrawingAreaCoordinatedGraphics::layerHostDidFlushLayers()
 
     ASSERT(!m_compositingAccordingToProxyMessages);
     if (!exitAcceleratedCompositingModePending()) {
-        m_webPage.send(Messages::DrawingAreaProxy::EnterAcceleratedCompositingMode(m_backingStoreStateID, m_layerTreeHost->layerTreeContext()));
+        send(Messages::DrawingAreaProxy::EnterAcceleratedCompositingMode(m_backingStoreStateID, m_layerTreeHost->layerTreeContext()));
         m_compositingAccordingToProxyMessages = true;
     }
 }
@@ -381,10 +383,9 @@ void DrawingAreaCoordinatedGraphics::updateBackingStoreState(uint64_t stateID, b
 
         m_webPage.setDeviceScaleFactor(deviceScaleFactor);
         m_webPage.setSize(size);
-        m_webPage.layoutIfNeeded();
+        m_webPage.updateRendering();
         m_webPage.flushPendingEditorStateUpdate();
         m_webPage.scrollMainFrameIfNotAtMaxScrollPosition(scrollOffset);
-        m_webPage.willDisplayPage();
 
         if (m_layerTreeHost)
             m_layerTreeHost->sizeDidChange(m_webPage.size());
@@ -451,7 +452,7 @@ void DrawingAreaCoordinatedGraphics::sendDidUpdateBackingStoreState()
             m_shouldSendDidUpdateBackingStoreState = false;
 
             LayerTreeContext layerTreeContext;
-            m_webPage.send(Messages::DrawingAreaProxy::DidUpdateBackingStoreState(m_backingStoreStateID, updateInfo, layerTreeContext));
+            send(Messages::DrawingAreaProxy::DidUpdateBackingStoreState(m_backingStoreStateID, updateInfo, layerTreeContext));
             m_compositingAccordingToProxyMessages = false;
             return;
         }
@@ -476,7 +477,7 @@ void DrawingAreaCoordinatedGraphics::sendDidUpdateBackingStoreState()
         m_layerTreeHost->forceRepaint();
     }
 
-    m_webPage.send(Messages::DrawingAreaProxy::DidUpdateBackingStoreState(m_backingStoreStateID, updateInfo, layerTreeContext));
+    send(Messages::DrawingAreaProxy::DidUpdateBackingStoreState(m_backingStoreStateID, updateInfo, layerTreeContext));
     m_compositingAccordingToProxyMessages = !layerTreeContext.isEmpty();
 }
 
@@ -616,12 +617,12 @@ void DrawingAreaCoordinatedGraphics::exitAcceleratedCompositingMode()
     // Send along a complete update of the page so we can paint the contents right after we exit the
     // accelerated compositing mode, eliminiating flicker.
     if (m_compositingAccordingToProxyMessages) {
-        m_webPage.send(Messages::DrawingAreaProxy::ExitAcceleratedCompositingMode(m_backingStoreStateID, updateInfo));
+        send(Messages::DrawingAreaProxy::ExitAcceleratedCompositingMode(m_backingStoreStateID, updateInfo));
         m_compositingAccordingToProxyMessages = false;
     } else {
         // If we left accelerated compositing mode before we sent an EnterAcceleratedCompositingMode message to the
         // UI process, we still need to let it know about the new contents, so send an Update message.
-        m_webPage.send(Messages::DrawingAreaProxy::Update(m_backingStoreStateID, updateInfo));
+        send(Messages::DrawingAreaProxy::Update(m_backingStoreStateID, updateInfo));
     }
 }
 
@@ -675,11 +676,11 @@ void DrawingAreaCoordinatedGraphics::display()
         return;
     }
 
-    m_webPage.send(Messages::DrawingAreaProxy::Update(m_backingStoreStateID, updateInfo));
+    send(Messages::DrawingAreaProxy::Update(m_backingStoreStateID, updateInfo));
     m_isWaitingForDidUpdate = true;
 }
 
-static bool shouldPaintBoundsRect(const IntRect& bounds, const Vector<IntRect>& rects)
+static bool shouldPaintBoundsRect(const IntRect& bounds, const Vector<IntRect, 1>& rects)
 {
     const size_t rectThreshold = 10;
     const double wastedSpaceThreshold = 0.75;
@@ -706,7 +707,7 @@ void DrawingAreaCoordinatedGraphics::display(UpdateInfo& updateInfo)
     ASSERT(!m_layerTreeHost);
     ASSERT(!m_webPage.size().isEmpty());
 
-    m_webPage.layoutIfNeeded();
+    m_webPage.updateRendering();
     m_webPage.flushPendingEditorStateUpdate();
 
     // The layout may have put the page into accelerated compositing mode. If the LayerTreeHost is
@@ -714,7 +715,6 @@ void DrawingAreaCoordinatedGraphics::display(UpdateInfo& updateInfo)
     if (m_layerTreeHost)
         return;
 
-    m_webPage.willDisplayPage();
     updateInfo.viewSize = m_webPage.size();
     updateInfo.deviceScaleFactor = m_webPage.corePage()->deviceScaleFactor();
 
@@ -731,7 +731,7 @@ void DrawingAreaCoordinatedGraphics::display(UpdateInfo& updateInfo)
     if (!bitmap->createHandle(updateInfo.bitmapHandle))
         return;
 
-    Vector<IntRect> rects = m_dirtyRegion.rects();
+    auto rects = m_dirtyRegion.rects();
     if (shouldPaintBoundsRect(bounds, rects)) {
         rects.clear();
         rects.append(bounds);

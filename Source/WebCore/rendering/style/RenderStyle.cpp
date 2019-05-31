@@ -542,7 +542,11 @@ inline bool RenderStyle::changeAffectsVisualOverflow(const RenderStyle& other) c
         || m_rareInheritedData->textDecorationThickness != other.m_rareInheritedData->textDecorationThickness
         || m_rareInheritedData->textUnderlineOffset != other.m_rareInheritedData->textUnderlineOffset
         || m_rareInheritedData->textUnderlinePosition != other.m_rareInheritedData->textUnderlinePosition) {
-        return true;
+        // Underlines are always drawn outside of their textbox bounds when text-underline-position: under;
+        // is specified. We can take an early out here.
+        if (textUnderlinePosition() == TextUnderlinePosition::Under || other.textUnderlinePosition() == TextUnderlinePosition::Under)
+            return true;
+        return visualOverflowForDecorations(*this, nullptr) != visualOverflowForDecorations(other, nullptr);
     }
 
     if (hasOutlineInVisualOverflow() != other.hasOutlineInVisualOverflow())
@@ -688,7 +692,7 @@ static bool rareInheritedDataChangeRequiresLayout(const StyleRareInheritedData& 
         || first.lineSnap != second.lineSnap
         || first.lineAlign != second.lineAlign
         || first.hangingPunctuation != second.hangingPunctuation
-#if ENABLE(ACCELERATED_OVERFLOW_SCROLLING)
+#if ENABLE(OVERFLOW_SCROLLING_TOUCH)
         || first.useTouchOverflowScrolling != second.useTouchOverflowScrolling
 #endif
         || first.listStyleImage != second.listStyleImage) // FIXME: needs arePointingToEqualData()?
@@ -959,7 +963,7 @@ static bool rareInheritedDataChangeRequiresRepaint(const StyleRareInheritedData&
         || first.appleColorFilter != second.appleColorFilter
         || first.imageRendering != second.imageRendering
 #if ENABLE(DARK_MODE_CSS)
-        || first.supportedColorSchemes != second.supportedColorSchemes
+        || first.colorScheme != second.colorScheme
 #endif
     ;
 }
@@ -1419,10 +1423,10 @@ RoundedRect RenderStyle::getRoundedBorderFor(const LayoutRect& borderRect, bool 
 RoundedRect RenderStyle::getRoundedInnerBorderFor(const LayoutRect& borderRect, bool includeLogicalLeftEdge, bool includeLogicalRightEdge) const
 {
     bool horizontal = isHorizontalWritingMode();
-    auto leftWidth = (!horizontal || includeLogicalLeftEdge) ? borderLeftWidth() : 0;
-    auto rightWidth = (!horizontal || includeLogicalRightEdge) ? borderRightWidth() : 0;
-    auto topWidth = (horizontal || includeLogicalLeftEdge) ? borderTopWidth() : 0;
-    auto bottomWidth = (horizontal || includeLogicalRightEdge) ? borderBottomWidth() : 0;
+    LayoutUnit leftWidth { (!horizontal || includeLogicalLeftEdge) ? borderLeftWidth() : 0 };
+    LayoutUnit rightWidth { (!horizontal || includeLogicalRightEdge) ? borderRightWidth() : 0 };
+    LayoutUnit topWidth { (horizontal || includeLogicalLeftEdge) ? borderTopWidth() : 0 };
+    LayoutUnit bottomWidth { (horizontal || includeLogicalRightEdge) ? borderBottomWidth() : 0 };
     return getRoundedInnerBorderFor(borderRect, topWidth, bottomWidth, leftWidth, rightWidth, includeLogicalLeftEdge, includeLogicalRightEdge);
 }
 
@@ -2123,10 +2127,12 @@ Color RenderStyle::initialTapHighlightColor()
 
 LayoutBoxExtent RenderStyle::imageOutsets(const NinePieceImage& image) const
 {
-    return LayoutBoxExtent(NinePieceImage::computeOutset(image.outset().top(), borderTopWidth()),
-                           NinePieceImage::computeOutset(image.outset().right(), borderRightWidth()),
-                           NinePieceImage::computeOutset(image.outset().bottom(), borderBottomWidth()),
-                           NinePieceImage::computeOutset(image.outset().left(), borderLeftWidth()));
+    return {
+        NinePieceImage::computeOutset(image.outset().top(), LayoutUnit(borderTopWidth())),
+        NinePieceImage::computeOutset(image.outset().right(), LayoutUnit(borderRightWidth())),
+        NinePieceImage::computeOutset(image.outset().bottom(), LayoutUnit(borderBottomWidth())),
+        NinePieceImage::computeOutset(image.outset().left(), LayoutUnit(borderLeftWidth()))
+    };
 }
 
 std::pair<FontOrientation, NonCJKGlyphOrientation> RenderStyle::fontAndGlyphOrientation()

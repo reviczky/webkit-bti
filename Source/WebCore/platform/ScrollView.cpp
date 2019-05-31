@@ -501,7 +501,7 @@ void ScrollView::setScrollPosition(const ScrollPosition& scrollPosition)
 
     ScrollPosition newScrollPosition = !delegatesScrolling() ? adjustScrollPositionWithinRange(scrollPosition) : scrollPosition;
 
-    if ((!delegatesScrolling() || !inProgrammaticScroll()) && newScrollPosition == this->scrollPosition())
+    if ((!delegatesScrolling() || currentScrollType() == ScrollType::User) && newScrollPosition == this->scrollPosition())
         return;
 
     if (requestScrollPositionUpdate(newScrollPosition))
@@ -842,6 +842,22 @@ IntPoint ScrollView::contentsToView(const IntPoint& point) const
     return point - toIntSize(documentScrollPositionRelativeToViewOrigin());
 }
 
+FloatPoint ScrollView::viewToContents(const FloatPoint& point) const
+{
+    if (delegatesScrolling())
+        return point;
+
+    return viewToContents(IntPoint(point));
+}
+
+FloatPoint ScrollView::contentsToView(const FloatPoint& point) const
+{
+    if (delegatesScrolling())
+        return point;
+
+    return contentsToView(IntPoint(point));
+}
+
 IntRect ScrollView::viewToContents(IntRect rect) const
 {
     if (delegatesScrolling())
@@ -908,6 +924,11 @@ IntPoint ScrollView::contentsToRootView(const IntPoint& contentsPoint) const
     return convertToRootView(contentsToView(contentsPoint));
 }
 
+FloatPoint ScrollView::contentsToRootView(const FloatPoint& contentsPoint) const
+{
+    return convertToRootView(contentsToView(contentsPoint));
+}
+
 IntRect ScrollView::rootViewToContents(const IntRect& rootViewRect) const
 {
     return viewToContents(convertFromRootView(rootViewRect));
@@ -916,6 +937,11 @@ IntRect ScrollView::rootViewToContents(const IntRect& rootViewRect) const
 FloatRect ScrollView::rootViewToContents(const FloatRect& rootViewRect) const
 {
     return viewToContents(convertFromRootView(rootViewRect));
+}
+
+FloatRect ScrollView::contentsToRootView(const FloatRect& contentsRect) const
+{
+    return convertToRootView(contentsToView(contentsRect));
 }
 
 IntPoint ScrollView::rootViewToTotalContents(const IntPoint& rootViewPoint) const

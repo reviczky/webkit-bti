@@ -1409,6 +1409,9 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(DisplayType e)
     case DisplayType::Contents:
         m_value.valueID = CSSValueContents;
         break;
+    case DisplayType::FlowRoot:
+        m_value.valueID = CSSValueFlowRoot;
+        break;
     }
 }
 
@@ -1644,6 +1647,9 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(LineBreak e)
     case LineBreak::AfterWhiteSpace:
         m_value.valueID = CSSValueAfterWhiteSpace;
         break;
+    case LineBreak::Anywhere:
+        m_value.valueID = CSSValueAnywhere;
+        break;
     }
 }
 
@@ -1685,6 +1691,8 @@ template<> inline CSSPrimitiveValue::operator LineBreak() const
         return LineBreak::Strict;
     case CSSValueAfterWhiteSpace:
         return LineBreak::AfterWhiteSpace;
+    case CSSValueAnywhere:
+        return LineBreak::Anywhere;
     default:
         break;
     }
@@ -2335,7 +2343,7 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(PositionType e)
         m_value.valueID = CSSValueFixed;
         break;
     case PositionType::Sticky:
-        m_value.valueID = CSSValueWebkitSticky;
+        m_value.valueID = CSSValueSticky;
         break;
     }
 }
@@ -2353,6 +2361,7 @@ template<> inline CSSPrimitiveValue::operator PositionType() const
         return PositionType::Absolute;
     case CSSValueFixed:
         return PositionType::Fixed;
+    case CSSValueSticky:
     case CSSValueWebkitSticky:
         return PositionType::Sticky;
     default:
@@ -3051,6 +3060,9 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(WhiteSpace e)
     case WhiteSpace::KHTMLNoWrap:
         m_value.valueID = CSSValueWebkitNowrap;
         break;
+    case WhiteSpace::BreakSpaces:
+        m_value.valueID = CSSValueBreakSpaces;
+        break;
     }
 }
 
@@ -3071,6 +3083,8 @@ template<> inline CSSPrimitiveValue::operator WhiteSpace() const
         return WhiteSpace::PreLine;
     case CSSValueNormal:
         return WhiteSpace::Normal;
+    case CSSValueBreakSpaces:
+        return WhiteSpace::BreakSpaces;
     default:
         break;
     }

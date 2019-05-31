@@ -62,6 +62,7 @@ protected:
     Callback& pendingCompletionHandler() { return m_pendingCompletionHandler; }
     RunLoop::Timer<AuthenticatorManager>& requestTimeOutTimer() { return m_requestTimeOutTimer; }
     void clearStateAsync(); // To void cyclic dependence.
+    void clearState();
 
 private:
     // AuthenticatorTransportService::Observer
@@ -69,6 +70,7 @@ private:
 
     // Authenticator::Observer
     void respondReceived(Respond&&) final;
+    void downgrade(Authenticator* id, Ref<Authenticator>&& downgradedAuthenticator) final;
 
     // Overriden by MockAuthenticatorManager.
     virtual UniqueRef<AuthenticatorTransportService> createService(WebCore::AuthenticatorTransport, AuthenticatorTransportService::Observer&) const;
@@ -79,7 +81,7 @@ private:
     void initTimeOutTimer(const Optional<unsigned>& timeOutInMs);
     void timeOutTimerFired();
 
-    // Request: We only allow one request per time.
+    // Request: We only allow one request per time. A new request will cancel any pending ones.
     WebAuthenticationRequestData m_pendingRequestData;
     Callback m_pendingCompletionHandler;
     RunLoop::Timer<AuthenticatorManager> m_requestTimeOutTimer;

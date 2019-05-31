@@ -28,6 +28,8 @@
 
 #if ENABLE(POINTER_EVENTS)
 
+#import "EventNames.h"
+
 namespace WebCore {
 
 const String& PointerEvent::mousePointerType()
@@ -48,6 +50,45 @@ const String& PointerEvent::touchPointerType()
     return touchType;
 }
 
+static AtomicString pointerEventType(const AtomicString& mouseEventType)
+{
+    auto& names = eventNames();
+    if (mouseEventType == names.mousedownEvent)
+        return names.pointerdownEvent;
+    if (mouseEventType == names.mouseoverEvent)
+        return names.pointeroverEvent;
+    if (mouseEventType == names.mouseenterEvent)
+        return names.pointerenterEvent;
+    if (mouseEventType == names.mousemoveEvent)
+        return names.pointermoveEvent;
+    if (mouseEventType == names.mouseleaveEvent)
+        return names.pointerleaveEvent;
+    if (mouseEventType == names.mouseoutEvent)
+        return names.pointeroutEvent;
+    if (mouseEventType == names.mouseupEvent)
+        return names.pointerupEvent;
+
+    return nullAtom();
+}
+
+RefPtr<PointerEvent> PointerEvent::create(const MouseEvent& mouseEvent)
+{
+    auto type = pointerEventType(mouseEvent.type());
+    if (type.isEmpty())
+        return nullptr;
+
+    auto isEnterOrLeave = type == eventNames().pointerenterEvent || type == eventNames().pointerleaveEvent;
+    auto canBubble = isEnterOrLeave ? CanBubble::No : CanBubble::Yes;
+    auto isCancelable = isEnterOrLeave ? IsCancelable::No : IsCancelable::Yes;
+    auto isComposed = isEnterOrLeave ? IsComposed::No : IsComposed::Yes;
+    return adoptRef(*new PointerEvent(type, canBubble, isCancelable, isComposed, mouseEvent));
+}
+
+Ref<PointerEvent> PointerEvent::create(const String& type, PointerID pointerId, const String& pointerType, IsPrimary isPrimary)
+{
+    return adoptRef(*new PointerEvent(type, CanBubble::Yes, IsCancelable::No, IsComposed::Yes, pointerId, pointerType, isPrimary));
+}
+
 PointerEvent::PointerEvent() = default;
 
 PointerEvent::PointerEvent(const AtomicString& type, Init&& initializer)
@@ -62,6 +103,20 @@ PointerEvent::PointerEvent(const AtomicString& type, Init&& initializer)
     , m_twist(initializer.twist)
     , m_pointerType(initializer.pointerType)
     , m_isPrimary(initializer.isPrimary)
+{
+}
+
+PointerEvent::PointerEvent(const AtomicString& type, CanBubble canBubble, IsCancelable isCancelable, IsComposed isComposed, const MouseEvent& mouseEvent)
+    : MouseEvent(type, canBubble, isCancelable, isComposed, mouseEvent.view(), mouseEvent.detail(), mouseEvent.screenLocation(), { mouseEvent.clientX(), mouseEvent.clientY() }, mouseEvent.modifierKeys(), mouseEvent.button(), mouseEvent.buttons(), mouseEvent.syntheticClickType(), mouseEvent.relatedTarget())
+    , m_isPrimary(true)
+{
+}
+
+PointerEvent::PointerEvent(const AtomicString& type, CanBubble canBubble, IsCancelable isCancelable, IsComposed isComposed, PointerID pointerId, const String& pointerType, IsPrimary isPrimary)
+    : MouseEvent(type, canBubble, isCancelable, isComposed, nullptr, 0, { }, { }, { }, 0, 0, 0, nullptr)
+    , m_pointerId(pointerId)
+    , m_pointerType(pointerType)
+    , m_isPrimary(isPrimary == IsPrimary::Yes)
 {
 }
 

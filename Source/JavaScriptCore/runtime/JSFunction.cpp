@@ -48,6 +48,7 @@
 #include "Parser.h"
 #include "PropertyNameArray.h"
 #include "StackVisitor.h"
+#include "WebAssemblyFunction.h"
 
 namespace JSC {
 
@@ -226,7 +227,7 @@ const String JSFunction::calculatedDisplayName(VM& vm)
     if (!actualName.isEmpty() || isHostOrBuiltinFunction())
         return actualName;
 
-    return jsExecutable()->inferredName().string();
+    return jsExecutable()->ecmaName().string();
 }
 
 const SourceCode* JSFunction::sourceCode() const
@@ -627,9 +628,13 @@ ConstructType JSFunction::getConstructData(JSCell* cell, ConstructData& construc
 
 String getCalculatedDisplayName(VM& vm, JSObject* object)
 {
+#if ENABLE(WEBASSEMBLY)
+    if (jsDynamicCast<JSToWasmICCallee*>(vm, object))
+        return "wasm-stub"_s;
+#endif
+
     if (!jsDynamicCast<JSFunction*>(vm, object) && !jsDynamicCast<InternalFunction*>(vm, object))
         return emptyString();
-
 
     Structure* structure = object->structure(vm);
     unsigned attributes;
@@ -646,7 +651,7 @@ String getCalculatedDisplayName(VM& vm, JSObject* object)
         if (!actualName.isEmpty() || function->isHostOrBuiltinFunction())
             return actualName;
 
-        return function->jsExecutable()->inferredName().string();
+        return function->jsExecutable()->ecmaName().string();
     }
     if (auto* function = jsDynamicCast<InternalFunction*>(vm, object))
         return function->name();
@@ -669,7 +674,8 @@ void JSFunction::setFunctionName(ExecState* exec, JSValue value)
     ASSERT(jsExecutable()->ecmaName().isNull());
     String name;
     if (value.isSymbol()) {
-        SymbolImpl& uid = asSymbol(value)->privateName().uid();
+        PrivateName privateName = asSymbol(value)->privateName();
+        SymbolImpl& uid = privateName.uid();
         if (uid.isNullSymbol())
             name = emptyString();
         else

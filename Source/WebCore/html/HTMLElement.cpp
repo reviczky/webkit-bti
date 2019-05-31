@@ -227,15 +227,6 @@ HTMLElement::EventHandlerNameMap HTMLElement::createEventHandlerNameMap()
 
     static const QualifiedName* const table[] = {
         &onabortAttr.get(),
-        &onaccessiblecontextmenuAttr.get(),
-        &onaccessibleclickAttr.get(),
-        &onaccessibledecrementAttr.get(),
-        &onaccessibledismissAttr.get(),
-        &onaccessiblefocusAttr.get(),
-        &onaccessibleincrementAttr.get(),
-        &onaccessiblescrollintoviewAttr.get(),
-        &onaccessiblesetvalueAttr.get(),
-        &onaccessibleselectAttr.get(),
         &onanimationendAttr.get(),
         &onanimationiterationAttr.get(),
         &onanimationstartAttr.get(),
@@ -273,6 +264,7 @@ HTMLElement::EventHandlerNameMap HTMLElement::createEventHandlerNameMap()
         &ongesturechangeAttr.get(),
         &ongestureendAttr.get(),
         &ongesturestartAttr.get(),
+        &ongotpointercaptureAttr.get(),
         &oninputAttr.get(),
         &oninvalidAttr.get(),
         &onkeydownAttr.get(),
@@ -282,6 +274,7 @@ HTMLElement::EventHandlerNameMap HTMLElement::createEventHandlerNameMap()
         &onloadeddataAttr.get(),
         &onloadedmetadataAttr.get(),
         &onloadstartAttr.get(),
+        &onlostpointercaptureAttr.get(),
         &onmousedownAttr.get(),
         &onmouseenterAttr.get(),
         &onmouseleaveAttr.get(),
@@ -294,6 +287,14 @@ HTMLElement::EventHandlerNameMap HTMLElement::createEventHandlerNameMap()
         &onpauseAttr.get(),
         &onplayAttr.get(),
         &onplayingAttr.get(),
+        &onpointerdownAttr.get(),
+        &onpointermoveAttr.get(),
+        &onpointerupAttr.get(),
+        &onpointercancelAttr.get(),
+        &onpointeroverAttr.get(),
+        &onpointeroutAttr.get(),
+        &onpointerenterAttr.get(),
+        &onpointerleaveAttr.get(),
         &onprogressAttr.get(),
         &onratechangeAttr.get(),
         &onresetAttr.get(),
@@ -762,6 +763,16 @@ HTMLFormElement* HTMLElement::form() const
     return HTMLFormElement::findClosestFormAncestor(*this);
 }
 
+FormNamedItem* HTMLElement::asFormNamedItem()
+{
+    return nullptr;
+}
+
+FormAssociatedElement* HTMLElement::asFormAssociatedElement()
+{
+    return nullptr;
+}
+
 static inline bool elementAffectsDirectionality(const Node& node)
 {
     if (!is<HTMLElement>(node))
@@ -1097,7 +1108,12 @@ void HTMLElement::setAutocorrect(bool autocorrect)
 
 InputMode HTMLElement::canonicalInputMode() const
 {
-    return inputModeForAttributeValue(attributeWithoutSynchronization(inputmodeAttr));
+    auto mode = inputModeForAttributeValue(attributeWithoutSynchronization(inputmodeAttr));
+    if (mode == InputMode::Unspecified) {
+        if (document().quirks().needsInputModeNoneImplicitly(*this))
+            return InputMode::None;
+    }
+    return mode;
 }
 
 const AtomicString& HTMLElement::inputMode() const

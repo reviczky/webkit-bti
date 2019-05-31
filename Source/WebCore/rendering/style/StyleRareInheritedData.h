@@ -38,7 +38,7 @@
 #endif
 
 #if ENABLE(DARK_MODE_CSS)
-#include "StyleSupportedColorSchemes.h"
+#include "StyleColorScheme.h"
 #endif
 
 namespace WebCore {
@@ -125,7 +125,7 @@ public:
     unsigned imageRendering : 3; // ImageRendering
     unsigned lineSnap : 2; // LineSnap
     unsigned lineAlign : 1; // LineAlign
-#if ENABLE(ACCELERATED_OVERFLOW_SCROLLING)
+#if ENABLE(OVERFLOW_SCROLLING_TOUCH)
     unsigned useTouchOverflowScrolling: 1;
 #endif
 #if ENABLE(CSS_IMAGE_RESOLUTION)
@@ -152,6 +152,11 @@ public:
     unsigned joinStyle : 2; // LineJoin
     unsigned hasSetStrokeWidth : 1;
     unsigned hasSetStrokeColor : 1;
+
+#if ENABLE(POINTER_EVENTS)
+    unsigned effectiveTouchActions : 6; // OptionSet<TouchAction>
+#endif
+
     Length strokeWidth;
     Color strokeColor;
     Color visitedLinkStrokeColor;
@@ -182,7 +187,7 @@ public:
 #endif
 
 #if ENABLE(DARK_MODE_CSS)
-    StyleSupportedColorSchemes supportedColorSchemes;
+    StyleColorScheme colorScheme;
 #endif
 
 private:

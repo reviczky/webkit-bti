@@ -577,6 +577,8 @@ public:
     bool isKnownNotNumber(Node* node) { return !(m_state.forNode(node).m_type & SpecFullNumber); }
     bool isKnownNotCell(Node* node) { return !(m_state.forNode(node).m_type & SpecCell); }
     bool isKnownNotOther(Node* node) { return !(m_state.forNode(node).m_type & SpecOther); }
+
+    bool canBeRope(Edge&);
     
     UniquedStringImpl* identifierUID(unsigned index)
     {
@@ -1323,6 +1325,7 @@ public:
     void compileUInt32ToNumber(Node*);
     void compileDoubleAsInt32(Node*);
 
+    void compileValueBitNot(Node*);
     void compileBitwiseNot(Node*);
 
     template<typename SnippetGenerator, J_JITOperation_EJJ slowPathFunction>
@@ -1353,6 +1356,7 @@ public:
     void compileValueDiv(Node*);
     void compileArithDiv(Node*);
     void compileArithFRound(Node*);
+    void compileValueMod(Node*);
     void compileArithMod(Node*);
     void compileArithPow(Node*);
     void compileArithRounding(Node*);
@@ -1647,13 +1651,7 @@ public:
     template<bool strict>
     GPRReg fillSpeculateInt32Internal(Edge, DataFormat& returnFormat);
     
-    void cageTypedArrayStorage(GPRReg);
-    
-    // It is possible, during speculative generation, to reach a situation in which we
-    // can statically determine a speculation will fail (for example, when two nodes
-    // will make conflicting speculations about the same operand). In such cases this
-    // flag is cleared, indicating no further code generation should take place.
-    bool m_compileOkay;
+    void cageTypedArrayStorage(GPRReg, GPRReg);
     
     void recordSetLocal(
         VirtualRegister bytecodeReg, VirtualRegister machineReg, DataFormat format)
@@ -1696,6 +1694,12 @@ public:
     Vector<GenerationInfo, 32> m_generationInfo;
     RegisterBank<GPRInfo> m_gprs;
     RegisterBank<FPRInfo> m_fprs;
+
+    // It is possible, during speculative generation, to reach a situation in which we
+    // can statically determine a speculation will fail (for example, when two nodes
+    // will make conflicting speculations about the same operand). In such cases this
+    // flag is cleared, indicating no further code generation should take place.
+    bool m_compileOkay;
 
     Vector<MacroAssembler::Label> m_osrEntryHeads;
     

@@ -26,6 +26,7 @@
 #pragma once
 
 #include "SandboxExtension.h"
+#include <WebCore/RegistrableDomain.h>
 #include <pal/SessionID.h>
 #include <wtf/Seconds.h>
 #include <wtf/URL.h>
@@ -52,6 +53,7 @@ extern "C" CFStringRef const WebKit2HTTPSProxyDefaultsKey;
 namespace WebKit {
 
 enum class AllowsCellularAccess : bool { No, Yes };
+enum class AllowsTLSFallback : bool { No, Yes };
 
 struct NetworkSessionCreationParameters {
     void encode(IPC::Encoder&) const;
@@ -65,6 +67,7 @@ struct NetworkSessionCreationParameters {
     RetainPtr<CFDictionaryRef> proxyConfiguration;
     String sourceApplicationBundleIdentifier;
     String sourceApplicationSecondaryIdentifier;
+    AllowsTLSFallback allowsTLSFallback { AllowsTLSFallback::Yes };
     bool shouldLogCookieInformation { false };
     Seconds loadThrottleLatency;
     URL httpProxy;
@@ -81,6 +84,12 @@ struct NetworkSessionCreationParameters {
     String resourceLoadStatisticsDirectory;
     SandboxExtension::Handle resourceLoadStatisticsDirectoryExtensionHandle;
     bool enableResourceLoadStatistics { false };
+    bool shouldIncludeLocalhostInResourceLoadStatistics { true };
+    bool enableResourceLoadStatisticsDebugMode { false };
+    WebCore::RegistrableDomain resourceLoadStatisticsManualPrevalentResource { };
+
+    String localStorageDirectory;
+    SandboxExtension::Handle localStorageDirectoryExtensionHandle;
 };
 
 } // namespace WebKit

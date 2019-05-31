@@ -91,9 +91,9 @@ WebLoaderStrategy::~WebLoaderStrategy()
 
 void WebLoaderStrategy::loadResource(Frame& frame, CachedResource& resource, ResourceRequest&& request, const ResourceLoaderOptions& options, CompletionHandler<void(RefPtr<SubresourceLoader>&&)>&& completionHandler)
 {
-    SubresourceLoader::create(frame, resource, WTFMove(request), options, [this, completionHandler = WTFMove(completionHandler), resource = CachedResourceHandle<CachedResource>(&resource), frame = makeRef(frame)] (RefPtr<SubresourceLoader>&& loader) mutable {
+    SubresourceLoader::create(frame, resource, WTFMove(request), options, [this, referrerPolicy = options.referrerPolicy, completionHandler = WTFMove(completionHandler), resource = CachedResourceHandle<CachedResource>(&resource), frame = makeRef(frame)] (RefPtr<SubresourceLoader>&& loader) mutable {
         if (loader)
-            scheduleLoad(*loader, resource.get(), frame->document()->referrerPolicy() == ReferrerPolicy::NoReferrerWhenDowngrade);
+            scheduleLoad(*loader, resource.get(), referrerPolicy == ReferrerPolicy::NoReferrerWhenDowngrade);
         else
             RELEASE_LOG_IF_ALLOWED(frame.get(), "loadResource: Unable to create SubresourceLoader (frame = %p", &frame);
         completionHandler(WTFMove(loader));
@@ -116,6 +116,7 @@ static Seconds maximumBufferingTime(CachedResource* resource)
 
     switch (resource->type()) {
     case CachedResource::Type::Beacon:
+    case CachedResource::Type::Ping:
     case CachedResource::Type::CSSStyleSheet:
     case CachedResource::Type::Script:
 #if ENABLE(SVG_FONTS)
@@ -286,7 +287,7 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
     auto* document = resourceLoader.frame() ? resourceLoader.frame()->document() : nullptr;
     if (resourceLoader.options().cspResponseHeaders)
         loadParameters.cspResponseHeaders = resourceLoader.options().cspResponseHeaders;
-    else if (document && !document->shouldBypassMainWorldContentSecurityPolicy()) {
+    else if (document && !document->shouldBypassMainWorldContentSecurityPolicy() && resourceLoader.options().contentSecurityPolicyImposition == ContentSecurityPolicyImposition::DoPolicyCheck) {
         if (auto* contentSecurityPolicy = document->contentSecurityPolicy())
             loadParameters.cspResponseHeaders = contentSecurityPolicy->responseHeaders();
     }
@@ -497,7 +498,7 @@ Optional<WebLoaderStrategy::SyncLoadResult> WebLoaderStrategy::tryLoadingSynchro
     SyncLoadResult result;
     handler->loadSynchronously(identifier, request, result.response, result.error, result.data);
 
-    return WTFMove(result);
+    return result;
 }
 
 void WebLoaderStrategy::loadResourceSynchronously(FrameLoader& frameLoader, unsigned long resourceLoadIdentifier, const ResourceRequest& request, ClientCredentialPolicy clientCredentialPolicy,  const FetchOptions& options, const HTTPHeaderMap& originalRequestHeaders, ResourceError& error, ResourceResponse& response, Vector<char>& data)
@@ -569,6 +570,11 @@ static uint64_t generateLoadIdentifier()
 {
     static uint64_t identifier = 0;
     return ++identifier;
+}
+
+bool WebLoaderStrategy::usePingLoad() const
+{
+    return !RuntimeEnabledFeatures::sharedFeatures().fetchAPIKeepAliveEnabled();
 }
 
 void WebLoaderStrategy::startPingLoad(Frame& frame, ResourceRequest& request, const HTTPHeaderMap& originalRequestHeaders, const FetchOptions& options, ContentSecurityPolicyImposition policyCheck, PingLoadCompletionHandler&& completionHandler)

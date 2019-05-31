@@ -27,6 +27,7 @@
 #include "DownloadManager.h"
 
 #include "Download.h"
+#include "NetworkBlobRegistry.h"
 #include "NetworkConnectionToWebProcess.h"
 #include "NetworkLoad.h"
 #include "NetworkSession.h"
@@ -168,11 +169,10 @@ void DownloadManager::publishDownloadProgress(DownloadID downloadID, const URL& 
 }
 #endif // PLATFORM(COCOA)
 
-void DownloadManager::downloadFinished(Download* download)
+void DownloadManager::downloadFinished(Download& download)
 {
-    ASSERT(m_downloads.contains(download->downloadID()));
-    m_downloads.remove(download->downloadID());
-    
+    ASSERT(m_downloads.contains(download.downloadID()));
+    m_downloads.remove(download.downloadID());
 }
 
 void DownloadManager::didCreateDownload()
@@ -193,6 +193,18 @@ IPC::Connection* DownloadManager::downloadProxyConnection()
 AuthenticationManager& DownloadManager::downloadsAuthenticationManager()
 {
     return m_client.downloadsAuthenticationManager();
+}
+
+void DownloadManager::applicationDidEnterBackground()
+{
+    for (auto& download : m_downloads.values())
+        download->applicationDidEnterBackground();
+}
+
+void DownloadManager::applicationWillEnterForeground()
+{
+    for (auto& download : m_downloads.values())
+        download->applicationWillEnterForeground();
 }
 
 } // namespace WebKit
