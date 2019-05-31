@@ -5,6 +5,9 @@ webkit2gtk (2.25.1-1) UNRELEASED; urgency=medium
   * debian/rules:
     + Don't add -msse2 manually to CFLAGS, WebKitGTK does this automatically
       now.
+  * debian/control:
+    + Add build and runtime dependencies on bubblewrap, xdg-dbus-proxy and
+      libseccomp-dev (ENABLE_BUBBLEWRAP_SANDBOX is now on by default).
   * debian/watch, debian/gbp.conf:
     + Update for 2.25.x packages in experimental.
 

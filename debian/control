@@ -7,6 +7,9 @@ Uploaders: Gustavo Noronha Silva <kov@debian.org>,
            Alberto Garcia <berto@igalia.com>
 X-Ubuntu-Use-Langpack: no
 Build-Depends: gawk,
+               bubblewrap,
+               xdg-dbus-proxy,
+               libseccomp-dev,
                cmake (>= 3.3),
                debhelper (>= 11.2~),
                libfile-copy-recursive-perl,
@@ -137,6 +140,8 @@ Architecture: linux-any
 Multi-Arch: same
 Pre-Depends: ${misc:Pre-Depends}
 Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
+         bubblewrap,
+         xdg-dbus-proxy,
          ${shlibs:Depends},
          ${misc:Depends}
 Recommends: gstreamer1.0-plugins-good,
