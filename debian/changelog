@@ -12,6 +12,8 @@ webkit2gtk (2.25.1-1) UNRELEASED; urgency=medium
     + Fix name of the WebKitWebDriver executable.
   * debian/watch, debian/gbp.conf:
     + Update for 2.25.x packages in experimental.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 31 May 2019 18:15:19 +0200
 
