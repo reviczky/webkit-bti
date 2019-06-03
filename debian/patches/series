@@ -7,3 +7,4 @@ detect-gstreamer-gl.patch
 detect-woff.patch
 user-agent-branding.patch
 prefer-pthread.patch
+webdriver-path.patch

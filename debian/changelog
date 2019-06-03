@@ -8,6 +8,8 @@ webkit2gtk (2.25.1-1) UNRELEASED; urgency=medium
   * debian/control:
     + Add build and runtime dependencies on bubblewrap, xdg-dbus-proxy and
       libseccomp-dev (ENABLE_BUBBLEWRAP_SANDBOX is now on by default).
+  * debian/patches/webdriver-path.patch:
+    + Fix name of the WebKitWebDriver executable.
   * debian/watch, debian/gbp.conf:
     + Update for 2.25.x packages in experimental.
 
