@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -22,23 +22,45 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
-// https://github.com/gpuweb/gpuweb/blob/master/design/sketch.webidl
 
-typedef unsigned long u32;
+#pragma once
 
-[
-    ImplementedAs=GPUIndexFormat
-] enum GPUIndexFormat {
-    "uint16",
-    "uint32"
+#if ENABLE(WEBGPU)
+
+#include "WHLSLLexer.h"
+#include "WHLSLStatement.h"
+#include <wtf/Vector.h>
+
+namespace WebCore {
+
+namespace WHLSL {
+
+namespace AST {
+
+class StatementList : public Statement {
+    using Base = Statement;
+public:
+    StatementList(Lexer::Token&& origin, Statements&& statements)
+        : Base(WTFMove(origin))
+        , m_statements(WTFMove(statements))
+    { }
+
+    virtual ~StatementList() = default;
+
+    Statements& statements() { return m_statements; }
+
+    bool isStatementList() const override { return true; }
+
+private:
+    Statements m_statements;
 };
 
-[
-    Conditional=WEBGPU,
-    EnabledAtRuntime=WebGPU
-] dictionary GPUInputStateDescriptor {
-    GPUIndexFormat? indexFormat;
+} // namespace AST
 
-    required sequence<GPUVertexAttributeDescriptor> attributes;
-    required sequence<GPUVertexInputDescriptor> inputs;
-};
+}
+
+}
+
+SPECIALIZE_TYPE_TRAITS_WHLSL_STATEMENT(StatementList, isStatementList())
+
+#endif

@@ -34,6 +34,7 @@
 #include "CSSFontVariationValue.h"
 #include "CSSFunctionValue.h"
 #include "CSSGridAutoRepeatValue.h"
+#include "CSSGridIntegerRepeatValue.h"
 #include "CSSGridLineNamesValue.h"
 #include "CSSImageGeneratorValue.h"
 #include "CSSImageSetValue.h"
@@ -52,6 +53,7 @@
 #include "Settings.h"
 #include "StyleResolver.h"
 #include "StyleScrollSnapPoints.h"
+#include "TabSize.h"
 #include "TouchAction.h"
 #include "TransformFunctions.h"
 #include <wtf/Optional.h>
@@ -65,6 +67,7 @@ public:
     static Length convertLengthOrAuto(const StyleResolver&, const CSSValue&);
     static Length convertLengthSizing(const StyleResolver&, const CSSValue&);
     static Length convertLengthMaxSizing(const StyleResolver&, const CSSValue&);
+    static TabSize convertTabSize(const StyleResolver&, const CSSValue&);
     template<typename T> static T convertComputedLength(StyleResolver&, const CSSValue&);
     template<typename T> static T convertLineWidth(StyleResolver&, const CSSValue&);
     static float convertSpacing(StyleResolver&, const CSSValue&);
@@ -252,6 +255,14 @@ inline Length StyleBuilderConverter::convertLengthMaxSizing(const StyleResolver&
     if (downcast<CSSPrimitiveValue>(value).valueID() == CSSValueNone)
         return Length(Undefined);
     return convertLengthSizing(styleResolver, value);
+}
+
+inline TabSize StyleBuilderConverter::convertTabSize(const StyleResolver& styleResolver, const CSSValue& value)
+{
+    auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
+    if (primitiveValue.isNumber())
+        return TabSize(primitiveValue.floatValue(), SpaceValueType);
+    return TabSize(primitiveValue.computeLength<float>(styleResolver.state().cssToLengthConversionData()), LengthValueType);
 }
 
 template<typename T>
@@ -989,12 +1000,16 @@ inline bool StyleBuilderConverter::createGridTrackList(const CSSValue& value, Tr
         return false;
 
     unsigned currentNamedGridLine = 0;
-    for (auto& currentValue : downcast<CSSValueList>(value)) {
-        if (is<CSSGridLineNamesValue>(currentValue)) {
-            createGridLineNamesList(currentValue.get(), currentNamedGridLine, tracksData.m_namedGridLines, tracksData.m_orderedNamedGridLines);
-            continue;
+    auto handleLineNameOrTrackSize = [&](const CSSValue& currentValue) {
+        if (is<CSSGridLineNamesValue>(currentValue))
+            createGridLineNamesList(currentValue, currentNamedGridLine, tracksData.m_namedGridLines, tracksData.m_orderedNamedGridLines);
+        else {
+            ++currentNamedGridLine;
+            tracksData.m_trackSizes.append(createGridTrackSize(currentValue, styleResolver));
         }
+    };
 
+    for (auto& currentValue : downcast<CSSValueList>(value)) {
         if (is<CSSGridAutoRepeatValue>(currentValue)) {
             ASSERT(tracksData.m_autoRepeatTrackSizes.isEmpty());
             unsigned autoRepeatIndex = 0;
@@ -1013,8 +1028,16 @@ inline bool StyleBuilderConverter::createGridTrackList(const CSSValue& value, Tr
             continue;
         }
 
-        ++currentNamedGridLine;
-        tracksData.m_trackSizes.append(createGridTrackSize(currentValue, styleResolver));
+        if (is<CSSGridIntegerRepeatValue>(currentValue)) {
+            size_t repetitions = downcast<CSSGridIntegerRepeatValue>(currentValue.get()).repetitions();
+            for (size_t i = 0; i < repetitions; ++i) {
+                for (auto& integerRepeatValue : downcast<CSSValueList>(currentValue.get()))
+                    handleLineNameOrTrackSize(integerRepeatValue);
+            }
+            continue;
+        }
+
+        handleLineNameOrTrackSize(currentValue);
     }
 
     // The parser should have rejected any <track-list> without any <track-size> as
@@ -1099,6 +1122,7 @@ inline Vector<GridTrackSize> StyleBuilderConverter::convertGridTrackSizeList(Sty
     for (auto& currValue : valueList) {
         ASSERT(!currValue->isGridLineNamesValue());
         ASSERT(!currValue->isGridAutoRepeatValue());
+        ASSERT(!currValue->isGridIntegerRepeatValue());
         trackSizes.uncheckedAppend(convertGridTrackSize(styleResolver, currValue));
     }
     return trackSizes;

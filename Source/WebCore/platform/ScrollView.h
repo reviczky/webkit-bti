@@ -65,16 +65,15 @@ class ScrollView : public Widget, public ScrollableArea {
 public:
     virtual ~ScrollView();
 
+    using WeakValueType = Widget::WeakValueType;
+    using Widget::weakPtrFactory;
+
     // ScrollableArea functions.
-    int scrollSize(ScrollbarOrientation) const final;
-    int scrollOffset(ScrollbarOrientation) const final;
     WEBCORE_EXPORT void setScrollOffset(const ScrollOffset&) final;
     bool isScrollCornerVisible() const final;
     void scrollbarStyleChanged(ScrollbarStyle, bool forceUpdate) override;
 
     virtual void notifyPageThatContentAreaWillPaint() const;
-
-    using Widget::weakPtrFactory;
 
     IntPoint locationOfContents() const;
 

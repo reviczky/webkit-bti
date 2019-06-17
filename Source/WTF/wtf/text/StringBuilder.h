@@ -27,7 +27,7 @@
 #pragma once
 
 #include <wtf/CheckedArithmetic.h>
-#include <wtf/text/AtomicString.h>
+#include <wtf/text/AtomString.h>
 #include <wtf/text/IntegerToStringConversion.h>
 #include <wtf/text/StringView.h>
 #include <wtf/text/WTFString.h>
@@ -72,9 +72,9 @@ public:
 
     ALWAYS_INLINE void append(const char* characters, unsigned length) { append(reinterpret_cast<const LChar*>(characters), length); }
 
-    void append(const AtomicString& atomicString)
+    void append(const AtomString& atomString)
     {
-        append(atomicString.string());
+        append(atomString.string());
     }
 
     void append(const String& string)
@@ -222,20 +222,13 @@ public:
     WTF_EXPORT_PRIVATE void appendNumber(unsigned long);
     WTF_EXPORT_PRIVATE void appendNumber(long long);
     WTF_EXPORT_PRIVATE void appendNumber(unsigned long long);
-    // FIXME: Change to call appendShortestFormNumber.
-    void appendNumber(float) = delete;
-    void appendNumber(double) = delete;
+    WTF_EXPORT_PRIVATE void appendNumber(float);
+    WTF_EXPORT_PRIVATE void appendNumber(double);
 
-    WTF_EXPORT_PRIVATE void appendShortestFormNumber(float);
-    WTF_EXPORT_PRIVATE void appendShortestFormNumber(double);
     WTF_EXPORT_PRIVATE void appendFixedPrecisionNumber(float, unsigned precision = 6, TrailingZerosTruncatingPolicy = TruncateTrailingZeros);
     WTF_EXPORT_PRIVATE void appendFixedPrecisionNumber(double, unsigned precision = 6, TrailingZerosTruncatingPolicy = TruncateTrailingZeros);
     WTF_EXPORT_PRIVATE void appendFixedWidthNumber(float, unsigned decimalPlaces);
     WTF_EXPORT_PRIVATE void appendFixedWidthNumber(double, unsigned decimalPlaces);
-
-    // FIXME: Delete in favor of the name appendShortestFormNumber or just appendNumber.
-    void appendECMAScriptNumber(float) = delete;
-    void appendECMAScriptNumber(double);
 
     String toString()
     {
@@ -259,24 +252,24 @@ public:
         return m_string;
     }
 
-    AtomicString toAtomicString() const
+    AtomString toAtomString() const
     {
         RELEASE_ASSERT(!hasOverflowed());
         if (!m_length)
             return emptyAtom();
 
-        // If the buffer is sufficiently over-allocated, make a new AtomicString from a copy so its buffer is not so large.
+        // If the buffer is sufficiently over-allocated, make a new AtomString from a copy so its buffer is not so large.
         if (canShrink()) {
             if (is8Bit())
-                return AtomicString(characters8(), length());
-            return AtomicString(characters16(), length());            
+                return AtomString(characters8(), length());
+            return AtomString(characters16(), length());            
         }
 
         if (!m_string.isNull())
-            return AtomicString(m_string);
+            return AtomString(m_string);
 
         ASSERT(m_buffer);
-        return AtomicString(m_buffer.get(), 0, m_length.unsafeGet());
+        return AtomString(m_buffer.get(), 0, m_length.unsafeGet());
     }
 
     unsigned length() const
@@ -392,11 +385,6 @@ ALWAYS_INLINE UChar* StringBuilder::getBufferCharacters<UChar>()
 {
     ASSERT(!m_is8Bit);
     return m_bufferCharacters16;
-}
-
-inline void StringBuilder::appendECMAScriptNumber(double number)
-{
-    appendShortestFormNumber(number);
 }
 
 template <typename CharType>

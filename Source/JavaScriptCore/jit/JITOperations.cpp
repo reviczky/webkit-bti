@@ -653,6 +653,10 @@ static void putByVal(CallFrame* callFrame, JSValue baseValue, JSValue subscript,
         scope.release();
         baseValue.putByIndex(callFrame, i, value, callFrame->codeBlock()->isStrictMode());
         return;
+    } else if (subscript.isInt32()) {
+        byValInfo->tookSlowPath = true;
+        if (baseValue.isObject())
+            byValInfo->arrayProfile->setOutOfBounds();
     }
 
     auto property = subscript.toPropertyKey(callFrame);
@@ -1837,12 +1841,12 @@ static JSValue getByVal(ExecState* exec, JSValue baseValue, JSValue subscript, B
     if (LIKELY(baseValue.isCell() && subscript.isString())) {
         Structure& structure = *baseValue.asCell()->structure(vm);
         if (JSCell::canUseFastGetOwnProperty(structure)) {
-            RefPtr<AtomicStringImpl> existingAtomicString = asString(subscript)->toExistingAtomicString(exec);
+            RefPtr<AtomStringImpl> existingAtomString = asString(subscript)->toExistingAtomString(exec);
             RETURN_IF_EXCEPTION(scope, JSValue());
-            if (existingAtomicString) {
-                if (JSValue result = baseValue.asCell()->fastGetOwnProperty(vm, structure, existingAtomicString.get())) {
+            if (existingAtomString) {
+                if (JSValue result = baseValue.asCell()->fastGetOwnProperty(vm, structure, existingAtomString.get())) {
                     ASSERT(exec->bytecodeOffset());
-                    if (byValInfo->stubInfo && byValInfo->cachedId.impl() != existingAtomicString)
+                    if (byValInfo->stubInfo && byValInfo->cachedId.impl() != existingAtomString)
                         byValInfo->tookSlowPath = true;
                     return result;
                 }

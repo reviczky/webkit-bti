@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Apple Inc. All rights reserved.
+ * Copyright (C) 2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,23 +23,32 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef AutoCorrectionCallback_h
-#define AutoCorrectionCallback_h
+#pragma once
 
-#include "APIError.h"
-#include "GenericCallback.h"
-#include "WKAPICast.h"
-#include <wtf/HashMap.h>
-#include <wtf/RefCounted.h>
+#if PLATFORM(IOS_FAMILY)
 
-namespace WebKit {
+#include "APIObject.h"
+#include "InteractionInformationAtPosition.h"
 
-struct WebAutocorrectionContext;
+namespace API {
 
-typedef GenericCallback<const Vector<WebCore::FloatRect>&, const String&, double, uint64_t> AutocorrectionDataCallback;
-typedef GenericCallback<const WebAutocorrectionContext&> AutocorrectionContextCallback;
-typedef GenericCallback<const String&, const String&, const String&> SelectionContextCallback;
+class ContextMenuElementInfo final : public ObjectImpl<Object::Type::ContextMenuElementInfo> {
+public:
+    template<typename... Args> static Ref<ContextMenuElementInfo> create(Args&&... args)
+    {
+        return adoptRef(*new ContextMenuElementInfo(std::forward<Args>(args)...));
+    }
+    
+    const WTF::URL& url() const { return m_interactionInformation.url; }
 
-} // namespace WebKit
+    const WebKit::InteractionInformationAtPosition& interactionInformation() const { return m_interactionInformation; }
 
-#endif // AutoCorrectionCallback_h
+private:
+    ContextMenuElementInfo(const WebKit::InteractionInformationAtPosition&);
+    
+    WebKit::InteractionInformationAtPosition m_interactionInformation;
+};
+
+} // namespace API
+
+#endif

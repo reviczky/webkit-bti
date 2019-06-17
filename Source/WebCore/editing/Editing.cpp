@@ -888,7 +888,7 @@ Ref<HTMLElement> createHTMLElement(Document& document, const QualifiedName& name
     return HTMLElementFactory::createElement(name, document);
 }
 
-Ref<HTMLElement> createHTMLElement(Document& document, const AtomicString& tagName)
+Ref<HTMLElement> createHTMLElement(Document& document, const AtomString& tagName)
 {
     return createHTMLElement(document, QualifiedName(nullAtom(), tagName, xhtmlNamespaceURI));
 }
@@ -1121,6 +1121,16 @@ VisiblePosition visiblePositionForIndexUsingCharacterIterator(Node& node, int in
     range->selectNodeContents(node);
     CharacterIterator it(range.get());
     it.advance(index - 1);
+
+    if (!it.atEnd() && it.text()[0] == '\n') {
+        // FIXME: workaround for collapsed range (where only start position is correct) emitted for some emitted newlines.
+        auto range = it.range();
+        if (range->startPosition() == range->endPosition()) {
+            it.advance(1);
+            return VisiblePosition(it.range()->startPosition());
+        }
+    }
+
     return { it.atEnd() ? range->endPosition() : it.range()->endPosition(), UPSTREAM };
 }
 

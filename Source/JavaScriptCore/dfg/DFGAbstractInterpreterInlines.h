@@ -499,13 +499,13 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
                 setConstant(node, JSValue(a ^ b));
                 break;
             case BitRShift:
-                setConstant(node, JSValue(a >> static_cast<uint32_t>(b)));
+                setConstant(node, JSValue(a >> (static_cast<uint32_t>(b) & 0x1f)));
                 break;
             case BitLShift:
-                setConstant(node, JSValue(a << static_cast<uint32_t>(b)));
+                setConstant(node, JSValue(a << (static_cast<uint32_t>(b) & 0x1f)));
                 break;
             case BitURShift:
-                setConstant(node, JSValue(static_cast<uint32_t>(a) >> static_cast<uint32_t>(b)));
+                setConstant(node, JSValue(static_cast<int32_t>(static_cast<uint32_t>(a) >> (static_cast<uint32_t>(b) & 0x1f))));
                 break;
             default:
                 RELEASE_ASSERT_NOT_REACHED();
@@ -902,6 +902,27 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         break;
     }
         
+    case ValuePow: {
+        JSValue childX = forNode(node->child1()).value();
+        JSValue childY = forNode(node->child2()).value();
+        if (childX && childY && childX.isNumber() && childY.isNumber()) {
+            // We need to call `didFoldClobberWorld` here because this path is only possible
+            // when node->useKind is UntypedUse. In the case of BigIntUse, children will be
+            // cleared by `AbstractInterpreter::executeEffects`.
+            didFoldClobberWorld();
+            setConstant(node, jsDoubleNumber(operationMathPow(childX.asNumber(), childY.asNumber())));
+            break;
+        }
+
+        if (node->binaryUseKind() == BigIntUse)
+            setTypeForNode(node, SpecBigInt);
+        else {
+            clobberWorld();
+            setTypeForNode(node, SpecBytecodeNumber | SpecBigInt);
+        }
+        break;
+    }
+
     case ValueMul: {
         if (node->binaryUseKind() == BigIntUse)
             setTypeForNode(node, SpecBigInt);
@@ -2741,10 +2762,8 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         
     case GetCallee:
         if (FunctionExecutable* executable = jsDynamicCast<FunctionExecutable*>(m_vm, m_codeBlock->ownerExecutable())) {
-            InferredValue* singleton = executable->singletonFunction();
-            if (JSValue value = singleton->inferredValue()) {
-                m_graph.watchpoints().addLazily(singleton);
-                JSFunction* function = jsCast<JSFunction*>(value);
+            if (JSFunction* function = executable->singleton().inferredValue()) {
+                m_graph.watchpoints().addLazily(executable);
                 setConstant(node, *m_graph.freeze(function));
                 break;
             }
@@ -3297,13 +3316,19 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
         
     case GetGetterSetterByOffset: {
         StorageAccessData& data = node->storageAccessData();
-        JSValue result = m_graph.tryGetConstantProperty(forNode(node->child2()), data.offset);
+        AbstractValue base = forNode(node->child2());
+        JSValue result = m_graph.tryGetConstantProperty(base, data.offset);
         if (result && jsDynamicCast<GetterSetter*>(m_vm, result)) {
             setConstant(node, *m_graph.freeze(result));
             break;
         }
         
-        setForNode(node, m_graph.globalObjectFor(node->origin.semantic)->getterSetterStructure());
+        if (base.value() && base.value().isObject()) {
+            setForNode(node, asObject(base.value())->globalObject()->getterSetterStructure());
+            break;
+        }
+
+        setTypeForNode(node, SpecObjectOther);
         break;
     }
         
@@ -3559,7 +3584,7 @@ bool AbstractInterpreter<AbstractStateType>::executeEffects(unsigned clobberLimi
             if (constant.isString()) {
                 JSString* string = asString(constant);
                 const StringImpl* impl = string->tryGetValueImpl();
-                if (impl && impl->isAtomic())
+                if (impl && impl->isAtom())
                     m_state.setFoundConstants(true);
             }
         }

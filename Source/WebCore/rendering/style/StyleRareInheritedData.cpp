@@ -42,20 +42,18 @@ struct GreaterThanOrSameSizeAsStyleRareInheritedData : public RefCounted<Greater
     float firstFloat;
     Color colors[9];
     void* ownPtrs[1];
-    AtomicString atomicStrings[5];
+    AtomString atomStrings[5];
     void* refPtrs[3];
     Length lengths[2];
     float secondFloat;
     TextUnderlineOffset offset;
     TextDecorationThickness thickness;
+    void* customPropertyDataRefs[1];
     unsigned bitfields[4];
     short pagedMediaShorts[2];
-    unsigned unsigneds[1];
+    TabSize tabSize;
     short hyphenationShorts[3];
 
-#if PLATFORM(IOS_FAMILY)
-    Color compositionColor; // FIXME: this has gone.
-#endif
 #if ENABLE(TEXT_AUTOSIZING)
     TextSizeAdjustment textSizeAdjust;
 #endif
@@ -71,8 +69,6 @@ struct GreaterThanOrSameSizeAsStyleRareInheritedData : public RefCounted<Greater
 #if ENABLE(DARK_MODE_CSS)
     StyleColorScheme colorScheme;
 #endif
-
-    void* customPropertyDataRefs[1];
 };
 
 COMPILE_ASSERT(sizeof(StyleRareInheritedData) <= sizeof(GreaterThanOrSameSizeAsStyleRareInheritedData), StyleRareInheritedData_should_bit_pack);

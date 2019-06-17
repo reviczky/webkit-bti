@@ -60,7 +60,12 @@ static void layoutUsingFormattingContext(const RenderView& renderView)
         return;
     auto initialContainingBlock = Layout::TreeBuilder::createLayoutTree(renderView);
     auto layoutState = std::make_unique<Layout::LayoutState>(*initialContainingBlock);
-    layoutState->setInQuirksMode(renderView.document().inQuirksMode());
+    auto quirksMode = Layout::LayoutState::QuirksMode::No;
+    if (renderView.document().inLimitedQuirksMode())
+        quirksMode = Layout::LayoutState::QuirksMode::Limited;
+    else if (renderView.document().inQuirksMode())
+        quirksMode = Layout::LayoutState::QuirksMode::Yes;
+    layoutState->setQuirksMode(quirksMode);
     layoutState->updateLayout();
     layoutState->verifyAndOutputMismatchingLayoutTree(renderView);
 } 
@@ -458,6 +463,11 @@ void FrameViewLayoutContext::layoutTimerFired()
     layout();
 }
 
+RenderElement* FrameViewLayoutContext::subtreeLayoutRoot() const
+{
+    return m_subtreeLayoutRoot.get();
+}
+
 void FrameViewLayoutContext::convertSubtreeLayoutToFullLayout()
 {
     ASSERT(subtreeLayoutRoot());
@@ -491,9 +501,9 @@ bool FrameViewLayoutContext::canPerformLayout() const
 void FrameViewLayoutContext::applyTextSizingIfNeeded(RenderElement& layoutRoot)
 {
     auto& settings = layoutRoot.settings();
-    if (!settings.textAutosizingEnabled() || renderView()->printing())
-        return;
     bool idempotentMode = settings.textAutosizingUsesIdempotentMode();
+    if (!settings.textAutosizingEnabled() || idempotentMode || renderView()->printing())
+        return;
     auto minimumZoomFontSize = settings.minimumZoomFontSize();
     if (!idempotentMode && !minimumZoomFontSize)
         return;

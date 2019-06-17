@@ -55,6 +55,7 @@ public:
 
     FloatPoint currentScrollPosition() const { return m_currentScrollPosition; }
     FloatPoint lastCommittedScrollPosition() const { return m_lastCommittedScrollPosition; }
+    FloatSize scrollDeltaSinceLastCommit() const { return m_currentScrollPosition - m_lastCommittedScrollPosition; }
 
     // These are imperative; they adjust the scrolling layers.
     void scrollTo(const FloatPoint&, ScrollType = ScrollType::User, ScrollPositionClamp = ScrollPositionClamp::ToContentEdges);
@@ -107,7 +108,7 @@ protected:
     virtual void repositionScrollingLayers() { }
     virtual void repositionRelatedLayers() { }
 
-    void applyLayerPositions(const FloatRect& layoutViewport, FloatSize& cumulativeDelta) override;
+    void applyLayerPositions() override;
 
     const FloatSize& reachableContentsSize() const { return m_reachableContentsSize; }
     const LayoutRect& parentRelativeScrollableRect() const { return m_parentRelativeScrollableRect; }

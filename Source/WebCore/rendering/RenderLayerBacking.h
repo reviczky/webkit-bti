@@ -216,6 +216,8 @@ public:
     bool setCompositedBounds(const LayoutRect&);
     // Returns true if changed.
     bool updateCompositedBounds();
+
+    void updateEventRegion();
     
     void updateAfterWidgetResize();
     void positionOverflowControlsLayers();
@@ -235,7 +237,7 @@ public:
     void notifyFlushRequired(const GraphicsLayer*) override;
     void notifyFlushBeforeDisplayRefresh(const GraphicsLayer*) override;
 
-    void paintContents(const GraphicsLayer*, GraphicsContext&, GraphicsLayerPaintingPhase, const FloatRect& clip, GraphicsLayerPaintBehavior) override;
+    void paintContents(const GraphicsLayer*, GraphicsContext&, OptionSet<GraphicsLayerPaintingPhase>, const FloatRect& clip, GraphicsLayerPaintBehavior) override;
 
     float deviceScaleFactor() const override;
     float contentsScaleMultiplierForNewTiles(const GraphicsLayer*) const override;
@@ -316,7 +318,7 @@ private:
     bool updateOverflowControlsLayers(bool needsHorizontalScrollbarLayer, bool needsVerticalScrollbarLayer, bool needsScrollCornerLayer);
     bool updateForegroundLayer(bool needsForegroundLayer);
     bool updateBackgroundLayer(bool needsBackgroundLayer);
-    void updateMaskingLayer(bool hasMask, bool hasClipPath);
+    bool updateMaskingLayer(bool hasMask, bool hasClipPath);
     bool requiresHorizontalScrollbarLayer() const;
     bool requiresVerticalScrollbarLayer() const;
     bool requiresScrollCornerLayer() const;
@@ -326,15 +328,12 @@ private:
     void setLocationOfScrolledContents(ScrollOffset, ScrollingLayerPositionAction);
 
     void updateChildClippingStrategy(bool needsDescendantsClippingLayer);
-
     void updateMaskingLayerGeometry();
-    
     void updateRootLayerConfiguration();
+    void updatePaintingPhases();
 
     void setBackgroundLayerPaintsFixedRootBackground(bool);
 
-    GraphicsLayerPaintingPhase paintingPhaseForPrimaryLayer() const;
-    
     LayoutSize contentOffsetInCompositingLayer() const;
     // Result is transform origin in device pixels.
     FloatPoint3D computeTransformOriginForPainting(const LayoutRect& borderBox) const;
@@ -361,7 +360,6 @@ private:
     bool paintsContent(RenderLayer::PaintedContentRequest&) const;
 
     void updateDrawsContent(PaintedContentsInfo&);
-    void updateEventRegion();
 
     // Returns true if this compositing layer has no visible content.
     bool isSimpleContainerCompositingLayer(PaintedContentsInfo&) const;
@@ -385,7 +383,9 @@ private:
     bool hasTiledBackingFlatteningLayer() const { return (m_childContainmentLayer && m_isFrameLayerWithTiledBacking); }
     GraphicsLayer* tileCacheFlatteningLayer() const { return m_isFrameLayerWithTiledBacking ? m_childContainmentLayer.get() : nullptr; }
 
-    void paintIntoLayer(const GraphicsLayer*, GraphicsContext&, const IntRect& paintDirtyRect, OptionSet<PaintBehavior>, GraphicsLayerPaintingPhase);
+    void paintIntoLayer(const GraphicsLayer*, GraphicsContext&, const IntRect& paintDirtyRect, OptionSet<PaintBehavior>, OptionSet<GraphicsLayerPaintingPhase>);
+    
+    void paintDebugOverlays(const GraphicsLayer*, GraphicsContext&);
 
     static CSSPropertyID graphicsLayerToCSSProperty(AnimatedPropertyID);
     static AnimatedPropertyID cssToGraphicsLayerProperty(CSSPropertyID);

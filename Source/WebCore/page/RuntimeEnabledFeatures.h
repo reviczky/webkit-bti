@@ -183,6 +183,9 @@ public:
 
     void setPointerEventsEnabled(bool isEnabled) { m_pointerEventsEnabled = isEnabled; }
     bool pointerEventsEnabled() const { return m_pointerEventsEnabled; }
+    
+    void setSyntheticEditingCommandsEnabled(bool isEnabled) { m_syntheticEditingCommandsEnabled = isEnabled; }
+    bool syntheticEditingCommandsEnabled() const { return m_syntheticEditingCommandsEnabled; }
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
     void setLayoutFormattingContextEnabled(bool isEnabled) { m_layoutFormattingContextEnabled = isEnabled; }
@@ -357,7 +360,18 @@ public:
     bool pageAtRuleSupportEnabled() const { return m_pageAtRuleSupportEnabled; }
     void setPageAtRuleSupportEnabled(bool isEnabled) { m_pageAtRuleSupportEnabled = isEnabled; }
 
+    bool interruptAudioOnPageVisibilityChangeEnabled() const { return m_interruptAudioOnPageVisibilityChangeEnabled; }
+    void setInterruptAudioOnPageVisibilityChangeEnabled(bool enabled) { m_interruptAudioOnPageVisibilityChangeEnabled = enabled; }
+
+    bool linkPreloadResponsiveImagesEnabled() const { return m_linkPreloadResponsiveImagesEnabled; }
+    void setLinkPreloadResponsiveImagesEnabled(bool isEnabled) { m_linkPreloadResponsiveImagesEnabled = isEnabled; }
+
     WEBCORE_EXPORT static RuntimeEnabledFeatures& sharedFeatures();
+
+#if HAVE(NSURLSESSION_WEBSOCKET)
+    bool isNSURLSessionWebSocketEnabled() const { return m_isNSURLSessionWebSocketEnabled; }
+    void setIsNSURLSessionWebSocketEnabled(bool isEnabled) { m_isNSURLSessionWebSocketEnabled = isEnabled; }
+#endif
 
 private:
     // Never instantiate.
@@ -405,6 +419,7 @@ private:
     bool m_webAPIStatisticsEnabled { false };
     bool m_CSSCustomPropertiesAndValuesEnabled { false };
     bool m_pointerEventsEnabled { true };
+    bool m_syntheticEditingCommandsEnabled { true };
     bool m_webSQLEnabled { true };
     bool m_pageAtRuleSupportEnabled { false };
 
@@ -540,6 +555,13 @@ private:
     bool m_isITPFirstPartyWebsiteDataRemovalEnabled { false };
 
     bool m_referrerPolicyAttributeEnabled { false };
+    bool m_interruptAudioOnPageVisibilityChangeEnabled { false };
+
+    bool m_linkPreloadResponsiveImagesEnabled { false };
+
+#if HAVE(NSURLSESSION_WEBSOCKET)
+    bool m_isNSURLSessionWebSocketEnabled { false };
+#endif
 
     friend class WTF::NeverDestroyed<RuntimeEnabledFeatures>;
 };

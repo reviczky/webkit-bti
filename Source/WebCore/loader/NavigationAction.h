@@ -32,6 +32,7 @@
 #include "BackForwardItemIdentifier.h"
 #include "FrameLoaderTypes.h"
 #include "LayoutPoint.h"
+#include "PageIdentifier.h"
 #include "ResourceRequest.h"
 #include "SecurityOrigin.h"
 #include "UserGestureIndicator.h"
@@ -52,8 +53,8 @@ class UIEventWithKeyState;
 class NavigationAction {
 public:
     NavigationAction();
-    WEBCORE_EXPORT NavigationAction(Document&, const ResourceRequest&, InitiatedByMainFrame, NavigationType = NavigationType::Other, ShouldOpenExternalURLsPolicy = ShouldOpenExternalURLsPolicy::ShouldNotAllow, Event* = nullptr, const AtomicString& downloadAttribute = nullAtom());
-    NavigationAction(Document&, const ResourceRequest&, InitiatedByMainFrame, FrameLoadType, bool isFormSubmission, Event* = nullptr, ShouldOpenExternalURLsPolicy = ShouldOpenExternalURLsPolicy::ShouldNotAllow, const AtomicString& downloadAttribute = nullAtom());
+    WEBCORE_EXPORT NavigationAction(Document&, const ResourceRequest&, InitiatedByMainFrame, NavigationType = NavigationType::Other, ShouldOpenExternalURLsPolicy = ShouldOpenExternalURLsPolicy::ShouldNotAllow, Event* = nullptr, const AtomString& downloadAttribute = nullAtom());
+    NavigationAction(Document&, const ResourceRequest&, InitiatedByMainFrame, FrameLoadType, bool isFormSubmission, Event* = nullptr, ShouldOpenExternalURLsPolicy = ShouldOpenExternalURLsPolicy::ShouldNotAllow, const AtomString& downloadAttribute = nullAtom());
 
     WEBCORE_EXPORT ~NavigationAction();
 
@@ -63,14 +64,14 @@ public:
     NavigationAction(NavigationAction&&);
     NavigationAction& operator=(NavigationAction&&);
 
-    using PageIDAndFrameIDPair = std::pair<uint64_t /* pageID */, uint64_t /* frameID */>;
+    using PageIDAndFrameIDPair = std::pair<PageIdentifier, uint64_t /* frameID */>;
     class Requester {
     public:
         Requester(const Document&);
 
         const URL& url() const { return m_url; }
         const SecurityOrigin& securityOrigin() const { return *m_origin; }
-        uint64_t pageID() const { return m_pageIDAndFrameIDPair.first; }
+        PageIdentifier pageID() const { return m_pageIDAndFrameIDPair.first; }
         uint64_t frameID() const { return m_pageIDAndFrameIDPair.second; }
     private:
         URL m_url;
@@ -93,7 +94,7 @@ public:
 
         LayoutPoint absoluteLocation;
         FloatPoint locationInRootViewCoordinates;
-        unsigned short button;
+        short button;
         unsigned short syntheticClickType;
         bool buttonDown;
     };
@@ -116,7 +117,7 @@ public:
     void setShouldOpenExternalURLsPolicy(ShouldOpenExternalURLsPolicy policy) {  m_shouldOpenExternalURLsPolicy = policy; }
     InitiatedByMainFrame initiatedByMainFrame() const { return m_initiatedByMainFrame; }
 
-    const AtomicString& downloadAttribute() const { return m_downloadAttribute; }
+    const AtomString& downloadAttribute() const { return m_downloadAttribute; }
 
     bool treatAsSameOriginNavigation() const { return m_treatAsSameOriginNavigation; }
 
@@ -152,7 +153,7 @@ private:
     Optional<UIEventWithKeyStateData> m_keyStateEventData;
     Optional<MouseEventData> m_mouseEventData;
     RefPtr<UserGestureToken> m_userGestureToken { UserGestureIndicator::currentUserGesture() };
-    AtomicString m_downloadAttribute;
+    AtomString m_downloadAttribute;
     bool m_treatAsSameOriginNavigation;
     bool m_hasOpenedFrames { false };
     bool m_openedByDOMWithOpener { false };

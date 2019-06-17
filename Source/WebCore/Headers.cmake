@@ -149,6 +149,16 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/webdatabase/DatabaseTracker.h
     Modules/webdatabase/OriginLock.h
 
+    Modules/websockets/ThreadableWebSocketChannel.h
+    Modules/websockets/WebSocketChannel.h
+    Modules/websockets/WebSocketChannelClient.h
+    Modules/websockets/WebSocketDeflateFramer.h
+    Modules/websockets/WebSocketDeflater.h
+    Modules/websockets/WebSocketExtensionDispatcher.h
+    Modules/websockets/WebSocketExtensionProcessor.h
+    Modules/websockets/WebSocketFrame.h
+    Modules/websockets/WebSocketHandshake.h
+
     accessibility/AXObjectCache.h
     accessibility/AXTextStateChangeIntent.h
     accessibility/AccessibilityListBox.h
@@ -288,6 +298,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/CSSCustomPropertyValue.h
     css/CSSFontFaceRule.h
     css/CSSFontFamily.h
+    css/CSSGridIntegerRepeatValue.h
     css/CSSGroupingRule.h
     css/CSSImportRule.h
     css/CSSLineBoxContainValue.h
@@ -505,6 +516,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     fileapi/BlobPropertyBag.h
     fileapi/File.h
     fileapi/FileList.h
+    fileapi/FileReaderLoaderClient.h
 
     history/BackForwardClient.h
     history/BackForwardController.h
@@ -777,6 +789,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/PageConfiguration.h
     page/PageConsoleClient.h
     page/PageGroup.h
+    page/PageIdentifier.h
     page/PageOverlay.h
     page/PageOverlayController.h
     page/PerformanceLogging.h
@@ -1084,6 +1097,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/RemoteVideoSample.h
     platform/graphics/RoundedRect.h
     platform/graphics/StringTruncator.h
+    platform/graphics/TabSize.h
     platform/graphics/TextRun.h
     platform/graphics/TiledBacking.h
     platform/graphics/TrackPrivateBase.h
@@ -1310,7 +1324,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/style/StyleColorScheme.h
     rendering/style/StyleContentAlignmentData.h
     rendering/style/StyleCustomPropertyData.h
-    rendering/style/StyleDashboardRegion.h
     rendering/style/StyleDeprecatedFlexibleBoxData.h
     rendering/style/StyleFilterData.h
     rendering/style/StyleFlexibleBoxData.h

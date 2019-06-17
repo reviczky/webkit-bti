@@ -232,7 +232,12 @@ public:
     ExpressionType addConstant(Type, uint64_t);
     ExpressionType addConstant(BasicBlock*, Type, uint64_t);
 
+    // References
     PartialResult WARN_UNUSED_RETURN addRefIsNull(ExpressionType& value, ExpressionType& result);
+
+    // Tables
+    PartialResult WARN_UNUSED_RETURN addTableGet(ExpressionType& idx, ExpressionType& result);
+    PartialResult WARN_UNUSED_RETURN addTableSet(ExpressionType& idx, ExpressionType& value);
 
     // Locals
     PartialResult WARN_UNUSED_RETURN getLocal(uint32_t index, ExpressionType& result);
@@ -843,15 +848,14 @@ void AirIRGenerator::restoreWebAssemblyGlobalState(RestoreCachedStackLimit resto
         patchpoint->numGPScratchRegisters = Gigacage::isEnabled(Gigacage::Primitive) ? 1 : 0;
 
         patchpoint->setGenerator([pinnedRegs] (CCallHelpers& jit, const B3::StackmapGenerationParams& params) {
-            RELEASE_ASSERT(!Gigacage::isEnabled(Gigacage::Primitive) || !isARM64());
-            AllowMacroScratchRegisterUsageIf allowScratch(jit, !isARM64());
+            AllowMacroScratchRegisterUsage allowScratch(jit);
             GPRReg baseMemory = pinnedRegs->baseMemoryPointer;
             GPRReg scratchOrSize = Gigacage::isEnabled(Gigacage::Primitive) ? params.gpScratch(0) : pinnedRegs->sizeRegister;
 
             jit.loadPtr(CCallHelpers::Address(params[0].gpr(), Instance::offsetOfCachedMemorySize()), pinnedRegs->sizeRegister);
             jit.loadPtr(CCallHelpers::Address(params[0].gpr(), Instance::offsetOfCachedMemory()), baseMemory);
 
-            jit.cageConditionally(Gigacage::Primitive, baseMemory, scratchOrSize);
+            jit.cageConditionally(Gigacage::Primitive, baseMemory, pinnedRegs->sizeRegister, scratchOrSize);
         });
 
         emitPatchpoint(block, patchpoint, Tmp(), instance);
@@ -879,6 +883,9 @@ auto AirIRGenerator::addLocal(Type type, uint32_t count) -> PartialResult
         auto local = tmpForType(type);
         m_locals.uncheckedAppend(local);
         switch (type) {
+        case Type::Anyref:
+            append(Move, Arg::imm(JSValue::encode(jsNull())), local);
+            break;
         case Type::I32:
         case Type::I64: {
             append(Xor64, local, local);
@@ -942,6 +949,40 @@ auto AirIRGenerator::addRefIsNull(ExpressionType& value, ExpressionType& result)
 
     append(Move, Arg::bigImm(JSValue::encode(jsNull())), tmp);
     append(Compare64, Arg::relCond(MacroAssembler::Equal), value, tmp, result);
+
+    return { };
+}
+
+auto AirIRGenerator::addTableGet(ExpressionType& idx, ExpressionType& result) -> PartialResult
+{
+    // FIXME: Emit this inline <https://bugs.webkit.org/show_bug.cgi?id=198506>.
+    ASSERT(idx.tmp());
+    ASSERT(idx.type() == Type::I32);
+    result = tmpForType(Type::Anyref);
+
+    uint64_t (*doGet)(Instance*, int32_t) = [] (Instance* instance, int32_t idx) -> uint64_t {
+        return JSValue::encode(instance->table()->get(idx));
+    };
+
+    emitCCall(doGet, result, instanceValue(), idx);
+
+    return { };
+}
+
+auto AirIRGenerator::addTableSet(ExpressionType& idx, ExpressionType& value) -> PartialResult
+{
+    // FIXME: Emit this inline <https://bugs.webkit.org/show_bug.cgi?id=198506>.
+    ASSERT(idx.tmp());
+    ASSERT(idx.type() == Type::I32);
+    ASSERT(value.tmp());
+
+    void (*doSet)(Instance*, int32_t, uint64_t value) = [] (Instance* instance, int32_t idx, uint64_t value) -> void {
+        // FIXME: We need to box wasm Funcrefs once they are supported here.
+        // <https://bugs.webkit.org/show_bug.cgi?id=198157>
+        instance->table()->set(idx, JSValue::decode(value));
+    };
+
+    emitCCall(doSet, TypedTmp(), instanceValue(), idx, value);
 
     return { };
 }
@@ -1838,6 +1879,7 @@ auto AirIRGenerator::addCallIndirect(const Signature& signature, Vector<Expressi
 {
     ExpressionType calleeIndex = args.takeLast();
     ASSERT(signature.argumentCount() == args.size());
+    ASSERT(m_info.tableInformation.type() == TableElementType::Funcref);
 
     m_makesCalls = true;
     // Note: call indirect can call either WebAssemblyFunction or WebAssemblyWrapperFunction. Because
@@ -1853,13 +1895,13 @@ auto AirIRGenerator::addCallIndirect(const Signature& signature, Vector<Expressi
     ExpressionType callableFunctionBufferLength = g64();
     {
         RELEASE_ASSERT(Arg::isValidAddrForm(Instance::offsetOfTable(), B3::Width64));
-        RELEASE_ASSERT(Arg::isValidAddrForm(Table::offsetOfFunctions(), B3::Width64));
-        RELEASE_ASSERT(Arg::isValidAddrForm(Table::offsetOfInstances(), B3::Width64));
-        RELEASE_ASSERT(Arg::isValidAddrForm(Table::offsetOfLength(), B3::Width64));
+        RELEASE_ASSERT(Arg::isValidAddrForm(FuncRefTable::offsetOfFunctions(), B3::Width64));
+        RELEASE_ASSERT(Arg::isValidAddrForm(FuncRefTable::offsetOfInstances(), B3::Width64));
+        RELEASE_ASSERT(Arg::isValidAddrForm(FuncRefTable::offsetOfLength(), B3::Width64));
 
         append(Move, Arg::addr(instanceValue(), Instance::offsetOfTable()), callableFunctionBufferLength);
-        append(Move, Arg::addr(callableFunctionBufferLength, Table::offsetOfFunctions()), callableFunctionBuffer);
-        append(Move, Arg::addr(callableFunctionBufferLength, Table::offsetOfInstances()), instancesBuffer);
+        append(Move, Arg::addr(callableFunctionBufferLength, FuncRefTable::offsetOfFunctions()), callableFunctionBuffer);
+        append(Move, Arg::addr(callableFunctionBufferLength, FuncRefTable::offsetOfInstances()), instancesBuffer);
         append(Move32, Arg::addr(callableFunctionBufferLength, Table::offsetOfLength()), callableFunctionBufferLength);
     }
 
@@ -1945,7 +1987,7 @@ auto AirIRGenerator::addCallIndirect(const Signature& signature, Vector<Expressi
             jit.loadPtr(CCallHelpers::Address(newContextInstance, Instance::offsetOfCachedMemorySize()), pinnedRegs.sizeRegister); // Memory size.
             jit.loadPtr(CCallHelpers::Address(newContextInstance, Instance::offsetOfCachedMemory()), baseMemory); // Memory::void*.
 
-            jit.cageConditionally(Gigacage::Primitive, baseMemory, scratchOrSize);
+            jit.cageConditionally(Gigacage::Primitive, baseMemory, pinnedRegs.sizeRegister, scratchOrSize);
         });
 
         emitPatchpoint(doContextSwitch, patchpoint, Tmp(), newContextInstance, instanceValue());

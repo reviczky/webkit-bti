@@ -53,7 +53,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << userAgent;
     encoder << itemStates;
     encoder << sessionID;
-    encoder << userContentControllerID.toUInt64();
+    encoder << userContentControllerID;
     encoder << visitedLinkTableID;
     encoder << websiteDataStoreID;
     encoder << canRunBeforeUnloadConfirmPanel;
@@ -66,6 +66,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << mediaVolume;
     encoder << muted;
     encoder << mayStartMediaWhenInWindow;
+    encoder << mediaPlaybackIsSuspended;
     encoder << viewLayoutSize;
     encoder << autoSizingShouldExpandToViewHeight;
     encoder << viewportSizeForCSSViewportUnits;
@@ -97,13 +98,15 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << deviceOrientation;
     encoder << keyboardIsAttached;
     encoder << canShowWhileLocked;
+    encoder << doubleTapForDoubleClickDelay;
+    encoder << doubleTapForDoubleClickRadius;
     encoder << overrideViewportArguments;
 #endif
 #if PLATFORM(COCOA)
     encoder << smartInsertDeleteEnabled;
     encoder << additionalSupportedImageTypes;
 #endif
-#if PLATFORM(WPE)
+#if USE(WPE_RENDERER)
     encoder << hostFileDescriptor;
 #endif
     encoder << appleMailPaginationQuirkEnabled;
@@ -193,11 +196,11 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
     if (!decoder.decode(parameters.sessionID))
         return WTF::nullopt;
 
-    Optional<uint64_t> userContentControllerIdentifier;
+    Optional<UserContentControllerIdentifier> userContentControllerIdentifier;
     decoder >> userContentControllerIdentifier;
     if (!userContentControllerIdentifier)
         return WTF::nullopt;
-    parameters.userContentControllerID = makeObjectIdentifier<UserContentControllerIdentifierType>(*userContentControllerIdentifier);
+    parameters.userContentControllerID = *userContentControllerIdentifier;
 
     if (!decoder.decode(parameters.visitedLinkTableID))
         return WTF::nullopt;
@@ -222,6 +225,8 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
     if (!decoder.decode(parameters.muted))
         return WTF::nullopt;
     if (!decoder.decode(parameters.mayStartMediaWhenInWindow))
+        return WTF::nullopt;
+    if (!decoder.decode(parameters.mediaPlaybackIsSuspended))
         return WTF::nullopt;
     if (!decoder.decode(parameters.viewLayoutSize))
         return WTF::nullopt;
@@ -287,6 +292,10 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
         return WTF::nullopt;
     if (!decoder.decode(parameters.canShowWhileLocked))
         return WTF::nullopt;
+    if (!decoder.decode(parameters.doubleTapForDoubleClickDelay))
+        return WTF::nullopt;
+    if (!decoder.decode(parameters.doubleTapForDoubleClickRadius))
+        return WTF::nullopt;
 
     Optional<Optional<WebCore::ViewportArguments>> overrideViewportArguments;
     decoder >> overrideViewportArguments;
@@ -302,7 +311,7 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
         return WTF::nullopt;
 #endif
 
-#if PLATFORM(WPE)
+#if USE(WPE_RENDERER)
     if (!decoder.decode(parameters.hostFileDescriptor))
         return WTF::nullopt;
 #endif
@@ -392,7 +401,7 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
         return WTF::nullopt;
     parameters.backgroundColor = WTFMove(*backgroundColor);
 
-    Optional<Optional<uint64_t>> oldPageID;
+    Optional<Optional<WebCore::PageIdentifier>> oldPageID;
     decoder >> oldPageID;
     if (!oldPageID)
         return WTF::nullopt;

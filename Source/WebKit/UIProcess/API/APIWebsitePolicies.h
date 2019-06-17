@@ -26,7 +26,7 @@
 #pragma once
 
 #include "APIObject.h"
-#include "WebCompatibilityMode.h"
+#include "WebContentMode.h"
 #include "WebsiteAutoplayPolicy.h"
 #include "WebsiteAutoplayQuirk.h"
 #include "WebsiteLegacyOverflowScrollingTouchPolicy.h"
@@ -93,8 +93,8 @@ public:
     void setCustomNavigatorPlatform(const WTF::String& customNavigatorPlatform) { m_customNavigatorPlatform = customNavigatorPlatform; }
     const WTF::String& customNavigatorPlatform() const { return m_customNavigatorPlatform; }
 
-    WebKit::WebCompatibilityMode preferredCompatibilityMode() const { return m_preferredCompatibilityMode; }
-    void setPreferredCompatibilityMode(WebKit::WebCompatibilityMode mode) { m_preferredCompatibilityMode = mode; }
+    WebKit::WebContentMode preferredContentMode() const { return m_preferredContentMode; }
+    void setPreferredContentMode(WebKit::WebContentMode mode) { m_preferredContentMode = mode; }
 
     WebKit::WebsiteMetaViewportPolicy metaViewportPolicy() const { return m_metaViewportPolicy; }
     void setMetaViewportPolicy(WebKit::WebsiteMetaViewportPolicy policy) { m_metaViewportPolicy = policy; }
@@ -108,11 +108,11 @@ public:
     WebKit::WebsiteLegacyOverflowScrollingTouchPolicy legacyOverflowScrollingTouchPolicy() const { return m_legacyOverflowScrollingTouchPolicy; }
     void setLegacyOverflowScrollingTouchPolicy(WebKit::WebsiteLegacyOverflowScrollingTouchPolicy policy) { m_legacyOverflowScrollingTouchPolicy = policy; }
 
-    bool allowSiteSpecificQuirksToOverrideCompatibilityMode() const { return m_allowSiteSpecificQuirksToOverrideCompatibilityMode; }
-    void setAllowSiteSpecificQuirksToOverrideCompatibilityMode(bool value) { m_allowSiteSpecificQuirksToOverrideCompatibilityMode = value; }
+    bool allowSiteSpecificQuirksToOverrideContentMode() const { return m_allowSiteSpecificQuirksToOverrideContentMode; }
+    void setAllowSiteSpecificQuirksToOverrideContentMode(bool value) { m_allowSiteSpecificQuirksToOverrideContentMode = value; }
 
-    WTF::String applicationNameForUserAgentWithModernCompatibility() const { return m_applicationNameForUserAgentWithModernCompatibility; }
-    void setApplicationNameForUserAgentWithModernCompatibility(const WTF::String& applicationName) { m_applicationNameForUserAgentWithModernCompatibility = applicationName; }
+    WTF::String applicationNameForDesktopUserAgent() const { return m_applicationNameForDesktopUserAgent; }
+    void setApplicationNameForDesktopUserAgent(const WTF::String& applicationName) { m_applicationNameForDesktopUserAgent = applicationName; }
 
 private:
     WebsitePolicies(bool contentBlockersEnabled, OptionSet<WebKit::WebsiteAutoplayQuirk>, WebKit::WebsiteAutoplayPolicy, Vector<WebCore::HTTPHeaderField>&&, Vector<WebCore::CustomHeaderFields>&&, WebKit::WebsitePopUpPolicy, RefPtr<WebsiteDataStore>&&);
@@ -130,13 +130,13 @@ private:
     WTF::String m_customUserAgent;
     WTF::String m_customJavaScriptUserAgentAsSiteSpecificQuirks;
     WTF::String m_customNavigatorPlatform;
-    WebKit::WebCompatibilityMode m_preferredCompatibilityMode { WebKit::WebCompatibilityMode::Recommended };
+    WebKit::WebContentMode m_preferredContentMode { WebKit::WebContentMode::Recommended };
     WebKit::WebsiteMetaViewportPolicy m_metaViewportPolicy { WebKit::WebsiteMetaViewportPolicy::Default };
     WebKit::WebsiteMediaSourcePolicy m_mediaSourcePolicy { WebKit::WebsiteMediaSourcePolicy::Default };
     WebKit::WebsiteSimulatedMouseEventsDispatchPolicy m_simulatedMouseEventsDispatchPolicy { WebKit::WebsiteSimulatedMouseEventsDispatchPolicy::Default };
     WebKit::WebsiteLegacyOverflowScrollingTouchPolicy m_legacyOverflowScrollingTouchPolicy { WebKit::WebsiteLegacyOverflowScrollingTouchPolicy::Default };
-    bool m_allowSiteSpecificQuirksToOverrideCompatibilityMode { false };
-    WTF::String m_applicationNameForUserAgentWithModernCompatibility;
+    bool m_allowSiteSpecificQuirksToOverrideContentMode { false };
+    WTF::String m_applicationNameForDesktopUserAgent;
 };
 
 } // namespace API

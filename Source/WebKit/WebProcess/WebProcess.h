@@ -38,7 +38,9 @@
 #include "WebInspectorInterruptDispatcher.h"
 #include "WebProcessCreationParameters.h"
 #include "WebSQLiteDatabaseTracker.h"
+#include "WebSocketChannelManager.h"
 #include <WebCore/ActivityState.h>
+#include <WebCore/PageIdentifier.h>
 #include <WebCore/RegistrableDomain.h>
 #if PLATFORM(MAC)
 #include <WebCore/ScreenProperties.h>
@@ -50,8 +52,8 @@
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/RefCounter.h>
-#include <wtf/text/AtomicString.h>
-#include <wtf/text/AtomicStringHash.h>
+#include <wtf/text/AtomString.h>
+#include <wtf/text/AtomStringHash.h>
 
 #if PLATFORM(COCOA)
 #include <dispatch/dispatch.h>
@@ -60,6 +62,10 @@
 
 #if PLATFORM(IOS_FAMILY)
 #include "ProcessTaskStateObserver.h"
+#endif
+
+#if PLATFORM(WAYLAND) && USE(WPE_RENDERER)
+#include <WebCore/PlatformDisplayLibWPE.h>
 #endif
 
 namespace API {
@@ -145,9 +151,9 @@ public:
 
     WebConnectionToUIProcess* webConnectionToUIProcess() const { return m_webConnection.get(); }
 
-    WebPage* webPage(uint64_t pageID) const;
-    void createWebPage(uint64_t pageID, WebPageCreationParameters&&);
-    void removeWebPage(PAL::SessionID, uint64_t pageID);
+    WebPage* webPage(WebCore::PageIdentifier) const;
+    void createWebPage(WebCore::PageIdentifier, WebPageCreationParameters&&);
+    void removeWebPage(PAL::SessionID, WebCore::PageIdentifier);
     WebPage* focusedWebPage() const;
 
     InjectedBundle* injectedBundle() const { return m_injectedBundle.get(); }
@@ -199,8 +205,8 @@ public:
 
     void ensureLegacyPrivateBrowsingSessionInNetworkProcess();
 
-    void pageDidEnterWindow(uint64_t pageID);
-    void pageWillLeaveWindow(uint64_t pageID);
+    void pageDidEnterWindow(WebCore::PageIdentifier);
+    void pageWillLeaveWindow(WebCore::PageIdentifier);
 
     void nonVisibleProcessCleanupTimerFired();
 
@@ -219,7 +225,7 @@ public:
 
     void updateActivePages();
     void getActivePagesOriginsForTesting(CompletionHandler<void(Vector<String>&&)>&&);
-    void pageActivityStateDidChange(uint64_t pageID, OptionSet<WebCore::ActivityState::Flag> changed);
+    void pageActivityStateDidChange(WebCore::PageIdentifier, OptionSet<WebCore::ActivityState::Flag> changed);
 
     void setHiddenPageDOMTimerThrottlingIncreaseLimit(int milliseconds);
 
@@ -261,6 +267,7 @@ public:
     WebAutomationSessionProxy* automationSessionProxy() { return m_automationSessionProxy.get(); }
 
     WebCacheStorageProvider& cacheStorageProvider() { return m_cacheStorageProvider.get(); }
+    WebSocketChannelManager& webSocketChannelManager() { return m_webSocketChannelManager; }
 
 #if PLATFORM(IOS_FAMILY)
     void accessibilityProcessSuspendedNotification(bool);
@@ -359,7 +366,7 @@ private:
 #endif
 
 #if ENABLE(SERVICE_WORKER)
-    void establishWorkerContextConnectionToNetworkProcess(uint64_t pageGroupID, uint64_t pageID, const WebPreferencesStore&, PAL::SessionID);
+    void establishWorkerContextConnectionToNetworkProcess(uint64_t pageGroupID, WebCore::PageIdentifier, const WebPreferencesStore&, PAL::SessionID);
     void registerServiceWorkerClients();
 #endif
 
@@ -460,7 +467,7 @@ private:
 
     RefPtr<WebConnectionToUIProcess> m_webConnection;
 
-    HashMap<uint64_t, RefPtr<WebPage>> m_pageMap;
+    HashMap<WebCore::PageIdentifier, RefPtr<WebPage>> m_pageMap;
     HashMap<uint64_t, RefPtr<WebPageGroupProxy>> m_pageGroupMap;
     RefPtr<InjectedBundle> m_injectedBundle;
 
@@ -494,6 +501,7 @@ private:
     WebLoaderStrategy& m_webLoaderStrategy;
 
     Ref<WebCacheStorageProvider> m_cacheStorageProvider;
+    WebSocketChannelManager m_webSocketChannelManager;
 
     std::unique_ptr<LibWebRTCNetwork> m_libWebRTCNetwork;
 
@@ -514,7 +522,7 @@ private:
 
     bool m_processIsSuspended { false };
 
-    HashSet<uint64_t> m_pagesInWindows;
+    HashSet<WebCore::PageIdentifier> m_pagesInWindows;
     WebCore::Timer m_nonVisibleProcessCleanupTimer;
 
     RefPtr<WebCore::ApplicationCacheStorage> m_applicationCacheStorage;
@@ -522,9 +530,6 @@ private:
 #if PLATFORM(IOS_FAMILY)
     WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
     ProcessTaskStateObserver m_taskStateObserver { *this };
-#endif
-#if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    std::unique_ptr<LayerHostingContext> m_contextForVisibilityPropagation;
 #endif
 
     enum PageMarkingLayersAsVolatileCounterType { };
@@ -551,6 +556,11 @@ private:
 #if PLATFORM(WAYLAND)
     std::unique_ptr<WaylandCompositorDisplay> m_waylandCompositorDisplay;
 #endif
+
+#if PLATFORM(WAYLAND) && USE(WPE_RENDERER)
+    std::unique_ptr<WebCore::PlatformDisplayLibWPE> m_wpeDisplay;
+#endif
+
     bool m_hasSuspendedPageProxy { false };
     bool m_isSuspending { false };
 

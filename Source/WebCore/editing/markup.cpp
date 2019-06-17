@@ -130,7 +130,7 @@ static void completeURLs(DocumentFragment* fragment, const String& baseURL)
         change.apply();
 }
 
-void replaceSubresourceURLs(Ref<DocumentFragment>&& fragment, HashMap<AtomicString, AtomicString>&& replacementMap)
+void replaceSubresourceURLs(Ref<DocumentFragment>&& fragment, HashMap<AtomString, AtomString>&& replacementMap)
 {
     Vector<AttributeChange> changes;
     for (auto& element : descendantsOfType<Element>(fragment)) {
@@ -1115,12 +1115,16 @@ Ref<DocumentFragment> createFragmentFromText(Range& context, const String& text)
     string.replace("\r\n", "\n");
     string.replace('\r', '\n');
 
+    auto createHTMLBRElement = [&document]() {
+        auto element = HTMLBRElement::create(document);
+        element->setAttributeWithoutSynchronization(classAttr, AppleInterchangeNewline);
+        return element;
+    };
+
     if (contextPreservesNewline(context)) {
         fragment->appendChild(document.createTextNode(string));
         if (string.endsWith('\n')) {
-            auto element = HTMLBRElement::create(document);
-            element->setAttributeWithoutSynchronization(classAttr, AppleInterchangeNewline);
-            fragment->appendChild(element);
+            fragment->appendChild(createHTMLBRElement());
         }
         return fragment;
     }
@@ -1128,6 +1132,12 @@ Ref<DocumentFragment> createFragmentFromText(Range& context, const String& text)
     // A string with no newlines gets added inline, rather than being put into a paragraph.
     if (string.find('\n') == notFound) {
         fillContainerFromString(fragment, string);
+        return fragment;
+    }
+
+    if (string.length() == 1 && string[0] == '\n') {
+        // This is a single newline char, thus just create one HTMLBRElement.
+        fragment->appendChild(createHTMLBRElement());
         return fragment;
     }
 
@@ -1149,8 +1159,7 @@ Ref<DocumentFragment> createFragmentFromText(Range& context, const String& text)
         RefPtr<Element> element;
         if (s.isEmpty() && i + 1 == numLines) {
             // For last line, use the "magic BR" rather than a P.
-            element = HTMLBRElement::create(document);
-            element->setAttributeWithoutSynchronization(classAttr, AppleInterchangeNewline);
+            element = createHTMLBRElement();
         } else if (useLineBreak) {
             element = HTMLBRElement::create(document);
             fillContainerFromString(fragment, s);
@@ -1227,15 +1236,14 @@ RefPtr<DocumentFragment> createFragmentForTransformToFragment(Document& outputDo
     return fragment;
 }
 
-Ref<DocumentFragment> createFragmentForImageAndURL(Document& document, const String& url, Optional<FloatSize> preferredSize)
+Ref<DocumentFragment> createFragmentForImageAndURL(Document& document, const String& url, PresentationSize preferredSize)
 {
     auto imageElement = HTMLImageElement::create(document);
     imageElement->setAttributeWithoutSynchronization(HTMLNames::srcAttr, url);
-    if (preferredSize) {
-        imageElement->setAttributeWithoutSynchronization(HTMLNames::widthAttr, AtomicString::number(preferredSize->width()));
-        imageElement->setAttributeWithoutSynchronization(HTMLNames::heightAttr, AtomicString::number(preferredSize->height()));
-    }
-
+    if (preferredSize.width)
+        imageElement->setAttributeWithoutSynchronization(HTMLNames::widthAttr, AtomString::number(*preferredSize.width));
+    if (preferredSize.height)
+        imageElement->setAttributeWithoutSynchronization(HTMLNames::heightAttr, AtomString::number(*preferredSize.height));
     auto fragment = document.createDocumentFragment();
     fragment->appendChild(imageElement);
 

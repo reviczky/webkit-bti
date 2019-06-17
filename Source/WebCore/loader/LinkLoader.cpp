@@ -242,7 +242,7 @@ std::unique_ptr<LinkPreloadResourceClient> LinkLoader::preloadIfNeeded(const Lin
         return nullptr;
     }
     URL url;
-    if (type == CachedResource::Type::ImageResource && !imageSrcSet.isEmpty()) {
+    if (RuntimeEnabledFeatures::sharedFeatures().linkPreloadResponsiveImagesEnabled() && type == CachedResource::Type::ImageResource && !imageSrcSet.isEmpty()) {
         auto sourceSize = SizesAttributeParser(imageSizes, document).length();
         auto candidate = bestFitSourceForImageAttributes(document.deviceScaleFactor(), href.string(), imageSrcSet, sourceSize);
         url = document.completeURL(URL({ }, candidate.string.toString()));

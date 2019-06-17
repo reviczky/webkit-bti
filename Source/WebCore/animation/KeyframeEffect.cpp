@@ -601,13 +601,13 @@ Vector<Strong<JSObject>> KeyframeEffect::getKeyframes(ExecState& state)
                 auto propertyName = CSSPropertyIDToIDLAttributeName(cssPropertyId);
                 // 2. Let IDL value be the result of serializing the property value of declaration by passing declaration to the algorithm to serialize a CSS value.
                 String idlValue = "";
-                if (auto cssValue = computedStyleExtractor.valueForPropertyinStyle(style, cssPropertyId))
+                if (auto cssValue = computedStyleExtractor.valueForPropertyInStyle(style, cssPropertyId))
                     idlValue = cssValue->cssText();
                 // 3. Let value be the result of converting IDL value to an ECMAScript String value.
                 auto value = toJS<IDLDOMString>(state, idlValue);
                 // 4. Call the [[DefineOwnProperty]] internal method on output keyframe with property name property name,
                 //    Property Descriptor { [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true, [[Value]]: value } and Boolean flag false.
-                JSObject::defineOwnProperty(outputKeyframe, &state, AtomicString(propertyName).impl(), PropertyDescriptor(value, 0), false);
+                JSObject::defineOwnProperty(outputKeyframe, &state, AtomString(propertyName).impl(), PropertyDescriptor(value, 0), false);
             }
 
             // 5. Append output keyframe to result.
@@ -645,7 +645,7 @@ Vector<Strong<JSObject>> KeyframeEffect::getKeyframes(ExecState& state)
                 auto value = toJS<IDLDOMString>(state, it->value);
                 // 4. Call the [[DefineOwnProperty]] internal method on output keyframe with property name property name,
                 //    Property Descriptor { [[Writable]]: true, [[Enumerable]]: true, [[Configurable]]: true, [[Value]]: value } and Boolean flag false.
-                JSObject::defineOwnProperty(outputKeyframe, &state, AtomicString(propertyName).impl(), PropertyDescriptor(value, 0), false);
+                JSObject::defineOwnProperty(outputKeyframe, &state, AtomString(propertyName).impl(), PropertyDescriptor(value, 0), false);
             }
 
             // 4. Append output keyframe to result.

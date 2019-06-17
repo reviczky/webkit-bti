@@ -117,11 +117,6 @@
 #include "MemoryPressureMonitor.h"
 #endif
 
-#if PLATFORM(WAYLAND)
-#include "WaylandCompositor.h"
-#include <WebCore/PlatformDisplay.h>
-#endif
-
 #if PLATFORM(COCOA)
 #include "VersionChecks.h"
 #endif
@@ -825,6 +820,13 @@ RefPtr<WebProcessProxy> WebProcessPool::tryTakePrewarmedProcess(WebsiteDataStore
     if (!m_prewarmedProcess)
         return nullptr;
 
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    // In platforms using Bubblewrap for sandboxing, prewarmed process is launched using the WebProcessPool primary WebsiteDataStore,
+    // so we don't use it in case of using a different WebsiteDataStore.
+    if (m_sandboxEnabled && m_websiteDataStore && &m_websiteDataStore->websiteDataStore() != &websiteDataStore)
+        return nullptr;
+#endif
+
     ASSERT(m_prewarmedProcess->isPrewarmed());
     m_prewarmedProcess->markIsNoLongerInPrewarmedPool();
 
@@ -977,11 +979,6 @@ void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDa
 
 #if OS(LINUX)
     parameters.shouldEnableMemoryPressureReliefLogging = true;
-#endif
-
-#if PLATFORM(WAYLAND) && USE(EGL)
-    if (PlatformDisplay::sharedDisplay().type() == PlatformDisplay::Type::Wayland)
-        parameters.waylandCompositorDisplayName = WaylandCompositor::singleton().displayName();
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -1296,9 +1293,9 @@ bool WebProcessPool::mayHaveRegisteredServiceWorkers(const WebsiteDataStore& sto
 }
 #endif
 
-void WebProcessPool::pageBeginUsingWebsiteDataStore(uint64_t pageID, WebsiteDataStore& dataStore)
+void WebProcessPool::pageBeginUsingWebsiteDataStore(PageIdentifier pageID, WebsiteDataStore& dataStore)
 {
-    auto result = m_sessionToPageIDsMap.add(dataStore.sessionID(), HashSet<uint64_t>()).iterator->value.add(pageID);
+    auto result = m_sessionToPageIDsMap.add(dataStore.sessionID(), HashSet<PageIdentifier>()).iterator->value.add(pageID);
     ASSERT_UNUSED(result, result.isNewEntry);
 
     auto sessionID = dataStore.sessionID();
@@ -1316,7 +1313,7 @@ void WebProcessPool::pageBeginUsingWebsiteDataStore(uint64_t pageID, WebsiteData
     }
 }
 
-void WebProcessPool::pageEndUsingWebsiteDataStore(uint64_t pageID, WebsiteDataStore& dataStore)
+void WebProcessPool::pageEndUsingWebsiteDataStore(PageIdentifier pageID, WebsiteDataStore& dataStore)
 {
     auto sessionID = dataStore.sessionID();
     auto iterator = m_sessionToPageIDsMap.find(sessionID);
@@ -1491,6 +1488,9 @@ void WebProcessPool::setShouldUseFontSmoothing(bool useFontSmoothing)
 void WebProcessPool::setResourceLoadStatisticsEnabled(bool enabled)
 {
     sendToAllProcesses(Messages::WebProcess::SetResourceLoadStatisticsEnabled(enabled));
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+    sendToNetworkingProcess(Messages::NetworkProcess::SetResourceLoadStatisticsEnabled(enabled));
+#endif
 }
 
 void WebProcessPool::clearResourceLoadStatistics()
@@ -2211,7 +2211,7 @@ void WebProcessPool::reinstateNetworkProcessAssertionState(NetworkProcessProxy& 
 }
 
 #if ENABLE(SERVICE_WORKER)
-ServiceWorkerProcessProxy* WebProcessPool::serviceWorkerProcessProxyFromPageID(uint64_t pageID) const
+ServiceWorkerProcessProxy* WebProcessPool::serviceWorkerProcessProxyFromPageID(PageIdentifier pageID) const
 {
     // FIXME: This is inefficient.
     for (auto* serviceWorkerProcess : m_serviceWorkerProcesses.values()) {
@@ -2520,7 +2520,7 @@ void WebProcessPool::clearCurrentModifierStateForTesting()
 }
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
-void WebProcessPool::didCommitCrossSiteLoadWithDataTransfer(PAL::SessionID sessionID, const RegistrableDomain& fromDomain, const RegistrableDomain& toDomain, OptionSet<CrossSiteNavigationDataTransfer::Flag> navigationDataTransfer, uint64_t pageID)
+void WebProcessPool::didCommitCrossSiteLoadWithDataTransfer(PAL::SessionID sessionID, const RegistrableDomain& fromDomain, const RegistrableDomain& toDomain, OptionSet<CrossSiteNavigationDataTransfer::Flag> navigationDataTransfer, PageIdentifier pageID)
 {
     if (!m_networkProcess)
         return;
@@ -2531,8 +2531,12 @@ void WebProcessPool::didCommitCrossSiteLoadWithDataTransfer(PAL::SessionID sessi
 
 void WebProcessPool::setWebProcessHasUploads(ProcessIdentifier processID)
 {
+    ASSERT(processID);
     auto* process = WebProcessProxy::processForIdentifier(processID);
     ASSERT(process);
+
+    if (!process)
+        return;
 
     RELEASE_LOG(ProcessSuspension, "Web process pid %u now has uploads in progress", (unsigned)process->processIdentifier());
 
@@ -2553,8 +2557,10 @@ void WebProcessPool::setWebProcessHasUploads(ProcessIdentifier processID)
 
 void WebProcessPool::clearWebProcessHasUploads(ProcessIdentifier processID)
 {
+    ASSERT(processID);
     auto result = m_processesWithUploads.take(processID);
-    ASSERT_UNUSED(result, result);
+    if (!result)
+        return;
 
     auto* process = WebProcessProxy::processForIdentifier(processID);
     ASSERT_UNUSED(process, process);
@@ -2597,7 +2603,8 @@ void WebProcessPool::clearWebProcessIsPlayingAudibleMedia(WebCore::ProcessIdenti
     ASSERT_UNUSED(result, result);
 
     auto* process = WebProcessProxy::processForIdentifier(processID);
-    ASSERT(process);
+    ASSERT_UNUSED(process, process);
+
     RELEASE_LOG(ProcessSuspension, "Web process pid %u is no longer playing audible media", (unsigned)process->processIdentifier());
 
     if (m_processesPlayingAudibleMedia.isEmpty()) {

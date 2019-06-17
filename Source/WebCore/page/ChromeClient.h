@@ -234,10 +234,6 @@ public:
     // the new cache.
     virtual void reachedApplicationCacheOriginQuota(SecurityOrigin&, int64_t totalSpaceNeeded) = 0;
 
-#if ENABLE(DASHBOARD_SUPPORT)
-    virtual void annotatedRegionsChanged();
-#endif
-
     virtual bool shouldReplaceWithGeneratedFileForUpload(const String& path, String& generatedFilename);
     virtual String generateReplacementFile(const String& path);
 
@@ -320,6 +316,7 @@ public:
     // Sets a flag to specify that the view needs to be updated, so we need
     // to do an eager layout before the drawing.
     virtual void scheduleCompositingLayerFlush() = 0;
+    virtual bool needsImmediateRenderingUpdate() const { return false; }
     // Returns whether or not the client can render the composited layer,
     // regardless of the settings.
     virtual bool allowsAcceleratedCompositing() const { return true; }
@@ -489,8 +486,8 @@ public:
     virtual RefPtr<Icon> createIconForFiles(const Vector<String>& /* filenames */) = 0;
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
-    virtual void hasStorageAccess(RegistrableDomain&& /*subFrameDomain*/, RegistrableDomain&& /*topFrameDomain*/, uint64_t /*frameID*/, uint64_t /*pageID*/, WTF::CompletionHandler<void(bool)>&& completionHandler) { completionHandler(false); }
-    virtual void requestStorageAccess(RegistrableDomain&& /*subFrameDomain*/, RegistrableDomain&& /*topFrameDomain*/, uint64_t /*frameID*/, uint64_t /*pageID*/, WTF::CompletionHandler<void(StorageAccessWasGranted, StorageAccessPromptWasShown)>&& completionHandler) { completionHandler(StorageAccessWasGranted::No, StorageAccessPromptWasShown::No); }
+    virtual void hasStorageAccess(RegistrableDomain&& /*subFrameDomain*/, RegistrableDomain&& /*topFrameDomain*/, uint64_t /*frameID*/, PageIdentifier, WTF::CompletionHandler<void(bool)>&& completionHandler) { completionHandler(false); }
+    virtual void requestStorageAccess(RegistrableDomain&& /*subFrameDomain*/, RegistrableDomain&& /*topFrameDomain*/, uint64_t /*frameID*/, PageIdentifier, WTF::CompletionHandler<void(StorageAccessWasGranted, StorageAccessPromptWasShown)>&& completionHandler) { completionHandler(StorageAccessWasGranted::No, StorageAccessPromptWasShown::No); }
 #endif
 
 #if ENABLE(DEVICE_ORIENTATION)

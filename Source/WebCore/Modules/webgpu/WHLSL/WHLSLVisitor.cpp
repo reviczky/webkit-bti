@@ -59,10 +59,8 @@ void Visitor::visit(AST::UnnamedType& unnamedType)
         checkErrorAndVisit(downcast<AST::PointerType>(unnamedType));
     else if (is<AST::ArrayReferenceType>(unnamedType))
         checkErrorAndVisit(downcast<AST::ArrayReferenceType>(unnamedType));
-    else {
-        ASSERT(is<AST::ArrayType>(unnamedType));
+    else
         checkErrorAndVisit(downcast<AST::ArrayType>(unnamedType));
-    }
 }
 
 void Visitor::visit(AST::NamedType& namedType)
@@ -73,10 +71,8 @@ void Visitor::visit(AST::NamedType& namedType)
         checkErrorAndVisit(downcast<AST::StructureDefinition>(namedType));
     else if (is<AST::EnumerationDefinition>(namedType))
         checkErrorAndVisit(downcast<AST::EnumerationDefinition>(namedType));
-    else {
-        ASSERT(is<AST::NativeTypeDeclaration>(namedType));
+    else
         checkErrorAndVisit(downcast<AST::NativeTypeDeclaration>(namedType));
-    }
 }
 
 void Visitor::visit(AST::TypeDefinition& typeDefinition)
@@ -300,6 +296,12 @@ void Visitor::visit(AST::Block& block)
         checkErrorAndVisit(statement);
 }
 
+void Visitor::visit(AST::StatementList& statementList)
+{
+    for (auto& statement : statementList.statements())
+        checkErrorAndVisit(statement);
+}
+
 void Visitor::visit(AST::Statement& statement)
 {
     if (is<AST::Block>(statement))
@@ -320,6 +322,8 @@ void Visitor::visit(AST::Statement& statement)
         checkErrorAndVisit(downcast<AST::IfStatement>(statement));
     else if (is<AST::Return>(statement))
         checkErrorAndVisit(downcast<AST::Return>(statement));
+    else if (is<AST::StatementList>(statement))
+        checkErrorAndVisit(downcast<AST::StatementList>(statement));
     else if (is<AST::SwitchCase>(statement))
         checkErrorAndVisit(downcast<AST::SwitchCase>(statement));
     else if (is<AST::SwitchStatement>(statement))
@@ -328,10 +332,8 @@ void Visitor::visit(AST::Statement& statement)
         checkErrorAndVisit(downcast<AST::Trap>(statement));
     else if (is<AST::VariableDeclarationsStatement>(statement))
         checkErrorAndVisit(downcast<AST::VariableDeclarationsStatement>(statement));
-    else {
-        ASSERT(is<AST::WhileLoop>(statement));
+    else
         checkErrorAndVisit(downcast<AST::WhileLoop>(statement));
-    }
 }
 
 void Visitor::visit(AST::Break&)
@@ -376,6 +378,8 @@ void Visitor::visit(AST::Expression& expression)
         checkErrorAndVisit(downcast<AST::NullLiteral>(expression));
     else if (is<AST::DotExpression>(expression))
         checkErrorAndVisit(downcast<AST::DotExpression>(expression));
+    else if (is<AST::GlobalVariableReference>(expression))
+        checkErrorAndVisit(downcast<AST::GlobalVariableReference>(expression));
     else if (is<AST::IndexExpression>(expression))
         checkErrorAndVisit(downcast<AST::IndexExpression>(expression));
     else if (is<AST::ReadModifyWriteExpression>(expression))
@@ -386,15 +390,18 @@ void Visitor::visit(AST::Expression& expression)
         checkErrorAndVisit(downcast<AST::UnsignedIntegerLiteral>(expression));
     else if (is<AST::EnumerationMemberLiteral>(expression))
         checkErrorAndVisit(downcast<AST::EnumerationMemberLiteral>(expression));
-    else {
-        ASSERT(is<AST::VariableReference>(expression));
+    else
         checkErrorAndVisit(downcast<AST::VariableReference>(expression));
-    }
 }
 
 void Visitor::visit(AST::DotExpression& dotExpression)
 {
     checkErrorAndVisit(static_cast<AST::PropertyAccessExpression&>(dotExpression));
+}
+
+void Visitor::visit(AST::GlobalVariableReference& globalVariableReference)
+{
+    checkErrorAndVisit(globalVariableReference.base());
 }
 
 void Visitor::visit(AST::IndexExpression& indexExpression)
@@ -419,8 +426,8 @@ void Visitor::visit(AST::Fallthrough&)
 
 void Visitor::visit(AST::ForLoop& forLoop)
 {
-    WTF::visit(WTF::makeVisitor([&](AST::VariableDeclarationsStatement& variableDeclarationsStatement) {
-        checkErrorAndVisit(variableDeclarationsStatement);
+    WTF::visit(WTF::makeVisitor([&](UniqueRef<AST::Statement>& statement) {
+        checkErrorAndVisit(statement);
     }, [&](UniqueRef<AST::Expression>& expression) {
         checkErrorAndVisit(expression);
     }), forLoop.initialization());

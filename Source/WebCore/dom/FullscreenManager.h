@@ -79,7 +79,7 @@ public:
     WEBCORE_EXPORT void didExitFullscreen();
 
     void setFullscreenRenderer(RenderTreeBuilder&, RenderFullScreen&);
-    RenderFullScreen* fullscreenRenderer() const { return m_fullscreenRenderer.get(); }
+    RenderFullScreen* fullscreenRenderer() const;
 
     void dispatchFullscreenChangeEvents();
     bool fullscreenIsAllowedForElement(Element&) const;
@@ -99,7 +99,7 @@ public:
 protected:
     friend class Document;
 
-    void dispatchFullscreenChangeOrErrorEvent(Deque<RefPtr<Node>>&, const AtomicString& eventName, bool shouldNotifyMediaElement);
+    void dispatchFullscreenChangeOrErrorEvent(Deque<RefPtr<Node>>&, const AtomString& eventName, bool shouldNotifyMediaElement);
     void clearFullscreenElementStack();
     void popFullscreenElementStack();
     void pushFullscreenElementStack(Element&);

@@ -474,6 +474,29 @@ WI.SourcesNavigationSidebarPanel = class SourcesNavigationSidebarPanel extends W
 
     // Protected
 
+    createContentTreeOutline(options = {})
+    {
+        let treeOutline = super.createContentTreeOutline(options)
+
+        treeOutline.addEventListener(WI.TreeOutline.Event.ElementRevealed, (event) => {
+            let treeElement = event.data.element;
+            let detailsSections = [this._pauseReasonSection, this._callStackSection, this._breakpointsSection];
+            let detailsSection = detailsSections.find((detailsSection) => detailsSection.element.contains(treeElement.listItemElement));
+            if (!detailsSection)
+                return;
+
+            // Revealing a TreeElement at the scroll container's topmost edge with
+            // scrollIntoViewIfNeeded may result in the element being covered by the
+            // DetailsSection header, which uses sticky positioning. Detect this case,
+            // and adjust the sidebar content's scroll position to compensate.
+            let offset = detailsSection.headerElement.totalOffsetBottom - treeElement.listItemElement.totalOffsetTop;
+            if (offset > 0)
+                this.scrollElement.scrollBy(0, -offset);
+        });
+
+        return treeOutline;
+    }
+
     resetFilter()
     {
         this._resourceTypeScopeBar.resetToDefault();
@@ -889,13 +912,13 @@ WI.SourcesNavigationSidebarPanel = class SourcesNavigationSidebarPanel extends W
 
         if (breakpoint === WI.debuggerManager.allExceptionsBreakpoint) {
             options.className = "breakpoint-exception-icon";
-            options.title = WI.UIString("All Exceptions");
+            options.title = WI.repeatedUIString.allExceptions();
         } else if (breakpoint === WI.debuggerManager.uncaughtExceptionsBreakpoint) {
             options.className = "breakpoint-exception-icon";
-            options.title = WI.UIString("Uncaught Exceptions");
+            options.title = WI.repeatedUIString.uncaughtExceptions();
         } else if (breakpoint === WI.debuggerManager.assertionFailuresBreakpoint) {
             options.className = "breakpoint-assertion-icon";
-            options.title = WI.UIString("Assertion Failures");
+            options.title = WI.repeatedUIString.assertionFailures();
         } else if (breakpoint instanceof WI.DOMBreakpoint) {
             if (!breakpoint.domNodeIdentifier)
                 return null;
@@ -929,7 +952,7 @@ WI.SourcesNavigationSidebarPanel = class SourcesNavigationSidebarPanel extends W
 
             if (breakpoint === WI.domDebuggerManager.allRequestsBreakpoint) {
                 options.className = "breakpoint-assertion-icon";
-                options.title = WI.UIString("All Requests");
+                options.title = WI.repeatedUIString.allRequests();
             }
         } else {
             let sourceCode = breakpoint.sourceCodeLocation && breakpoint.sourceCodeLocation.displaySourceCode;
@@ -1508,7 +1531,7 @@ WI.SourcesNavigationSidebarPanel = class SourcesNavigationSidebarPanel extends W
         if (InspectorBackend.domains.Debugger.setPauseOnAssertions) {
             let assertionFailuresBreakpointShown = WI.settings.showAssertionFailuresBreakpoint.value;
 
-            contextMenu.appendCheckboxItem(WI.UIString("Assertion Failures"), () => {
+            contextMenu.appendCheckboxItem(WI.repeatedUIString.assertionFailures(), () => {
                 if (assertionFailuresBreakpointShown)
                     WI.debuggerManager.removeBreakpoint(WI.debuggerManager.assertionFailuresBreakpoint);
                 else {
@@ -1530,7 +1553,7 @@ WI.SourcesNavigationSidebarPanel = class SourcesNavigationSidebarPanel extends W
 
             let allRequestsBreakpointShown = WI.settings.showAllRequestsBreakpoint.value;
 
-            contextMenu.appendCheckboxItem(WI.UIString("All Requests"), () => {
+            contextMenu.appendCheckboxItem(WI.repeatedUIString.allRequests(), () => {
                 if (allRequestsBreakpointShown)
                     WI.domDebuggerManager.removeURLBreakpoint(WI.domDebuggerManager.allRequestsBreakpoint);
                 else {
@@ -1728,6 +1751,10 @@ WI.SourcesNavigationSidebarPanel = class SourcesNavigationSidebarPanel extends W
         console.assert(treeElement);
         if (treeElement)
             treeElement.refresh();
+
+        let activeCallFrameTreeElement = this._callStackTreeOutline.findTreeElement(WI.debuggerManager.activeCallFrame);
+        if (activeCallFrameTreeElement)
+            activeCallFrameTreeElement.reveal();
     }
 
     _handleDebuggerActiveCallFrameDidChange(event)

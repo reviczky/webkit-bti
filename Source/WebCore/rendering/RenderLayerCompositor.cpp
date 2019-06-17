@@ -978,7 +978,6 @@ void RenderLayerCompositor::computeCompositingRequirements(RenderLayer* ancestor
         // If we have to make a layer for this child, make one now so we can have a contents layer
         // (since we need to ensure that the -ve z-order child renders underneath our contents).
         if (!willBeComposited && currentState.subtreeIsCompositing) {
-            // make layer compositing
             layer.setIndirectCompositingReason(IndirectCompositingReason::BackgroundLayer);
             layerWillComposite();
         }
@@ -1211,6 +1210,11 @@ void RenderLayerCompositor::updateBackingAndHierarchy(RenderLayer& layer, Vector
         } else if (layer.needsScrollingTreeUpdate())
             scrollingNodeChanges.add(ScrollingNodeChangeFlags::LayerGeometry);
 
+        // This needs to happen after any geometry update.
+        // FIXME: Use separate bit for event region invalidation.
+        if (layerNeedsUpdate || layer.needsCompositingConfigurationUpdate())
+            layerBacking->updateEventRegion();
+
         if (auto* reflection = layer.reflectionLayer()) {
             if (auto* reflectionBacking = reflection->backing()) {
                 reflectionBacking->updateCompositedBounds();
@@ -1250,7 +1254,7 @@ void RenderLayerCompositor::updateBackingAndHierarchy(RenderLayer& layer, Vector
 #if !ASSERT_DISABLED
     LayerListMutationDetector mutationChecker(layer);
 #endif
-    
+
     auto appendForegroundLayerIfNecessary = [&] {
         // If a negative z-order child is compositing, we get a foreground layer which needs to get parented.
         if (layer.negativeZOrderLayers().size()) {
@@ -2062,7 +2066,7 @@ String RenderLayerCompositor::layerTreeAsText(LayerTreeFlags flags)
         return String();
 
     flushPendingLayerChanges(true);
-    page().renderingUpdateScheduler().scheduleCompositingLayerFlush();
+    page().renderingUpdateScheduler().scheduleImmediateRenderingUpdate();
 
     LayerTreeAsTextBehavior layerTreeBehavior = LayerTreeAsTextBehaviorNormal;
     if (flags & LayerTreeFlagsIncludeDebugInfo)
@@ -3048,8 +3052,10 @@ bool RenderLayerCompositor::isViewportConstrainedFixedOrStickyLayer(const Render
         return false;
 
     // FIXME: Handle fixed inside of a transform, which should not behave as fixed.
-    for (auto* stackingContext = layer.stackingContext(); stackingContext; stackingContext = stackingContext->stackingContext()) {
-        if (stackingContext->isComposited() && stackingContext->renderer().isFixedPositioned())
+    for (auto* ancestor = layer.parent(); ancestor; ancestor = ancestor->parent()) {
+        if (ancestor->hasCompositedScrollableOverflow())
+            return true;
+        if (ancestor->isStackingContext() && ancestor->isComposited() && ancestor->renderer().isFixedPositioned())
             return false;
     }
 
@@ -3240,11 +3246,16 @@ bool RenderLayerCompositor::isRunningTransformAnimation(RenderLayerModelObject& 
     return renderer.animation().isRunningAnimationOnRenderer(renderer, CSSPropertyTransform);
 }
 
-// If an element has negative z-index children, those children render in front of the 
+// If an element has composited negative z-index children, those children render in front of the
 // layer background, so we need an extra 'contents' layer for the foreground of the layer object.
 bool RenderLayerCompositor::needsContentsCompositingLayer(const RenderLayer& layer) const
 {
-    return layer.hasNegativeZOrderLayers();
+    for (auto* layer : layer.negativeZOrderLayers()) {
+        if (layer->isComposited() || layer->hasCompositingDescendant())
+            return true;
+    }
+
+    return false;
 }
 
 bool RenderLayerCompositor::requiresScrollLayer(RootLayerAttachment attachment) const
@@ -3274,7 +3285,7 @@ void paintScrollbar(Scrollbar* scrollbar, GraphicsContext& context, const IntRec
     context.restore();
 }
 
-void RenderLayerCompositor::paintContents(const GraphicsLayer* graphicsLayer, GraphicsContext& context, GraphicsLayerPaintingPhase, const FloatRect& clip, GraphicsLayerPaintBehavior)
+void RenderLayerCompositor::paintContents(const GraphicsLayer* graphicsLayer, GraphicsContext& context, OptionSet<GraphicsLayerPaintingPhase>, const FloatRect& clip, GraphicsLayerPaintBehavior)
 {
 #if PLATFORM(MAC)
     LocalDefaultSystemAppearance localAppearance(m_renderView.useDarkAppearance());
@@ -4211,6 +4222,14 @@ ScrollingNodeID RenderLayerCompositor::updateScrollCoordinationForLayer(RenderLa
     ScrollingTreeState childTreeState;
     ScrollingTreeState* currentTreeState = &treeState;
 
+    // If there's a positioning node, it's the parent scrolling node for fixed/sticky/scrolling/frame hosting.
+    if (roles.contains(ScrollCoordinationRole::Positioning)) {
+        newNodeID = updateScrollingNodeForPositioningRole(layer, *currentTreeState, changes);
+        childTreeState.parentNodeID = newNodeID;
+        currentTreeState = &childTreeState;
+    } else
+        detachScrollCoordinatedLayer(layer, ScrollCoordinationRole::Positioning);
+
     // If is fixed or sticky, it's the parent scrolling node for scrolling/frame hosting.
     if (roles.contains(ScrollCoordinationRole::ViewportConstrained)) {
         newNodeID = updateScrollingNodeForViewportConstrainedRole(layer, *currentTreeState, changes);
@@ -4219,14 +4238,6 @@ ScrollingNodeID RenderLayerCompositor::updateScrollCoordinationForLayer(RenderLa
         currentTreeState = &childTreeState;
     } else
         detachScrollCoordinatedLayer(layer, ScrollCoordinationRole::ViewportConstrained);
-
-    // If there's a positioning node, it's the parent scrolling node for scrolling/frame hosting.
-    if (roles.contains(ScrollCoordinationRole::Positioning)) {
-        newNodeID = updateScrollingNodeForPositioningRole(layer, *currentTreeState, changes);
-        childTreeState.parentNodeID = newNodeID;
-        currentTreeState = &childTreeState;
-    } else
-        detachScrollCoordinatedLayer(layer, ScrollCoordinationRole::Positioning);
 
     if (roles.contains(ScrollCoordinationRole::Scrolling))
         newNodeID = updateScrollingNodeForScrollingRole(layer, *currentTreeState, changes);

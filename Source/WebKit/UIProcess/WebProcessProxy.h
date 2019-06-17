@@ -40,6 +40,7 @@
 #include "WebProcessProxyMessages.h"
 #include <WebCore/MessagePortChannelProvider.h>
 #include <WebCore/MessagePortIdentifier.h>
+#include <WebCore/PageIdentifier.h>
 #include <WebCore/ProcessIdentifier.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/SharedStringHash.h>
@@ -97,7 +98,7 @@ enum class AllowProcessCaching { No, Yes };
 class WebProcessProxy : public AuxiliaryProcessProxy, public ResponsivenessTimer::Client, public ThreadSafeRefCounted<WebProcessProxy>, public CanMakeWeakPtr<WebProcessProxy>, private ProcessThrottlerClient {
 public:
     typedef HashMap<uint64_t, RefPtr<WebFrameProxy>> WebFrameProxyMap;
-    typedef HashMap<uint64_t, WebPageProxy*> WebPageProxyMap;
+    typedef HashMap<WebCore::PageIdentifier, WebPageProxy*> WebPageProxyMap;
     typedef HashMap<uint64_t, RefPtr<API::UserInitiatedAction>> UserInitiatedActionMap;
 
     enum class IsPrewarmed {
@@ -118,7 +119,7 @@ public:
     void incrementSuspendedPageCount();
     void decrementSuspendedPageCount();
 
-    WebProcessPool& processPool() const { ASSERT(m_processPool); return *m_processPool.get(); }
+    WebProcessPool& processPool() const;
 
     WebCore::RegistrableDomain registrableDomain() const { return m_registrableDomain.valueOr(WebCore::RegistrableDomain { }); }
     void setIsInProcessCache(bool);
@@ -128,7 +129,7 @@ public:
     void setWebsiteDataStore(WebsiteDataStore&);
 
     static WebProcessProxy* processForIdentifier(WebCore::ProcessIdentifier);
-    static WebPageProxy* webPage(uint64_t pageID);
+    static WebPageProxy* webPage(WebCore::PageIdentifier);
     Ref<WebPageProxy> createWebPage(PageClient&, Ref<API::PageConfiguration>&&);
 
     enum class BeginsUsingDataStore : bool { No, Yes };
@@ -149,10 +150,10 @@ public:
 
     virtual bool isServiceWorkerProcess() const { return false; }
 
-    void didCreateWebPageInProcess(uint64_t pageID);
+    void didCreateWebPageInProcess(WebCore::PageIdentifier);
 
-    void addVisitedLinkStoreUser(VisitedLinkStore&, uint64_t pageID);
-    void removeVisitedLinkStoreUser(VisitedLinkStore&, uint64_t pageID);
+    void addVisitedLinkStoreUser(VisitedLinkStore&, WebCore::PageIdentifier);
+    void removeVisitedLinkStoreUser(VisitedLinkStore&, WebCore::PageIdentifier);
 
     void addWebUserContentControllerProxy(WebUserContentControllerProxy&, WebPageCreationParameters&);
     void didDestroyWebUserContentControllerProxy(WebUserContentControllerProxy&);
@@ -300,10 +301,6 @@ public:
     void unblockAccessibilityServerIfNeeded();
 #endif
 
-#if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    LayerHostingContextID contextIDForVisibilityPropagation() { return m_contextIDForVisibilityPropagation; }
-#endif
-
 #if PLATFORM(IOS_FAMILY)
     void processWasUnexpectedlyUnsuspended(CompletionHandler<void()>&&);
 #endif
@@ -311,7 +308,7 @@ public:
     void webPageMediaStateDidChange(WebPageProxy&);
 
 protected:
-    static uint64_t generatePageID();
+    static WebCore::PageIdentifier generatePageID();
     WebProcessProxy(WebProcessPool&, WebsiteDataStore*, IsPrewarmed);
 
     // AuxiliaryProcessProxy
@@ -350,11 +347,7 @@ private:
     void didDeliverMessagePortMessages(uint64_t messageBatchIdentifier);
     void didCheckProcessLocalPortForActivity(uint64_t callbackIdentifier, bool isLocallyReachable);
 
-#if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    void didCreateContextForVisibilityPropagation(LayerHostingContextID);
-#endif
-
-    bool hasProvisionalPageWithID(uint64_t pageID) const;
+    bool hasProvisionalPageWithID(WebCore::PageIdentifier) const;
     bool isAllowedToUpdateBackForwardItem(WebBackForwardListItem&) const;
 
     // Plugins
@@ -447,7 +440,7 @@ private:
     HashSet<ProvisionalPageProxy*> m_provisionalPages;
     UserInitiatedActionMap m_userInitiatedActionMap;
 
-    HashMap<VisitedLinkStore*, HashSet<uint64_t/* pageID */>> m_visitedLinkStoresWithUsers;
+    HashMap<VisitedLinkStore*, HashSet<WebCore::PageIdentifier>> m_visitedLinkStoresWithUsers;
     HashSet<WebUserContentControllerProxy*> m_webUserContentControllerProxies;
 
     int m_numberOfTimesSuddenTerminationWasDisabled;
@@ -458,10 +451,6 @@ private:
     BackgroundWebProcessToken m_backgroundToken;
     bool m_hasSentMessageToUnblockAccessibilityServer { false };
     std::unique_ptr<WebCore::DeferrableOneShotTimer> m_unexpectedActivityTimer;
-#endif
-
-#if HAVE(VISIBILITY_PROPAGATION_VIEW)
-    LayerHostingContextID m_contextIDForVisibilityPropagation { 0 };
 #endif
 
     HashMap<String, uint64_t> m_pageURLRetainCountMap;

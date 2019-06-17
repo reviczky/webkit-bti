@@ -44,9 +44,12 @@ public:
     ExceptionOr<void> setPointerCapture(Element*, PointerID);
     ExceptionOr<void> releasePointerCapture(Element*, PointerID);
     bool hasPointerCapture(Element*, PointerID);
+    void reset();
 
     void pointerLockWasApplied();
     void elementWasRemoved(Element&);
+
+    RefPtr<PointerEvent> pointerEventForMouseEvent(const MouseEvent&);
 
 #if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS_FAMILY)
     void dispatchEventForTouchAtIndex(EventTarget&, const PlatformTouchEvent&, unsigned, bool isPrimary, WindowProxy&);
@@ -67,6 +70,7 @@ private:
         bool isPrimary { false };
         bool preventsCompatibilityMouseEvents { false };
         bool pointerIsPressed { false };
+        short previousMouseButton { -1 };
     };
 
     void pointerEventWillBeDispatched(const PointerEvent&, EventTarget*);

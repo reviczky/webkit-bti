@@ -166,7 +166,17 @@ WebsiteDataStore* WebsiteDataStore::existingNonDefaultDataStoreForSessionID(PAL:
 WebProcessPool* WebsiteDataStore::processPoolForCookieStorageOperations()
 {
     auto pools = processPools(1, false);
-    return pools.isEmpty() ? nullptr : pools.begin()->get();
+    if (!pools.isEmpty())
+        return pools.begin()->get();
+
+    for (auto* processPool : WebProcessPool::allProcessPools()) {
+        for (auto& process : processPool->processes()) {
+            if (process != processPool->dummyProcessProxy() && process->pageCount() && &process->websiteDataStore() == this)
+                return processPool;
+        }
+    }
+
+    return nullptr;
 }
 
 void WebsiteDataStore::resolveDirectoriesIfNecessary()
@@ -1565,7 +1575,7 @@ void WebsiteDataStore::setNotifyPagesWhenTelemetryWasCaptured(bool value, Comple
         processPool->ensureNetworkProcess().setNotifyPagesWhenTelemetryWasCaptured(m_sessionID, value, [processPool, callbackAggregator = callbackAggregator.copyRef()] { });
 }
 
-void WebsiteDataStore::getAllStorageAccessEntries(uint64_t pageID, CompletionHandler<void(Vector<String>&& domains)>&& completionHandler)
+void WebsiteDataStore::getAllStorageAccessEntries(WebCore::PageIdentifier pageID, CompletionHandler<void(Vector<String>&& domains)>&& completionHandler)
 {
     auto* webPage = WebProcessProxy::webPage(pageID);
     if (!webPage) {
@@ -1931,6 +1941,9 @@ Vector<WebCore::Cookie> WebsiteDataStore::pendingCookies() const
 
 void WebsiteDataStore::addPendingCookie(const WebCore::Cookie& cookie)
 {
+    m_pendingCookies.removeIf([&cookie](auto& pendingCookie) {
+        return pendingCookie.isKeyEqual(cookie);
+    });
     m_pendingCookies.add(cookie);
 }
 

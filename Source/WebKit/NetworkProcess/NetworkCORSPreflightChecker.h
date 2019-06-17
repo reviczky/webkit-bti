@@ -49,7 +49,7 @@ public:
         String referrer;
         String userAgent;
         PAL::SessionID sessionID;
-        uint64_t pageID;
+        WebCore::PageIdentifier pageID;
         uint64_t frameID;
         WebCore::StoredCredentialsPolicy storedCredentialsPolicy;
     };
@@ -72,6 +72,7 @@ private:
     void didSendData(uint64_t totalBytesSent, uint64_t totalBytesExpectedToSend) final;
     void wasBlocked() final;
     void cannotShowURL() final;
+    void wasBlockedByRestrictions() final;
 
     Parameters m_parameters;
     Ref<NetworkProcess> m_networkProcess;

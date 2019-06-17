@@ -250,7 +250,7 @@ void PageOverlayController::updateForceSynchronousScrollLayerPositionUpdates()
 #endif
 }
 
-void PageOverlayController::setPageOverlayNeedsDisplay(PageOverlay& overlay, const WebCore::IntRect& dirtyRect)
+void PageOverlayController::setPageOverlayNeedsDisplay(PageOverlay& overlay, const IntRect& dirtyRect)
 {
     ASSERT(m_pageOverlays.contains(&overlay));
     auto* graphicsLayer = m_overlayGraphicsLayers.get(&overlay);
@@ -318,7 +318,7 @@ void PageOverlayController::didChangeDeviceScaleFactor()
 
 void PageOverlayController::didChangeViewExposedRect()
 {
-    m_page.renderingUpdateScheduler().scheduleRenderingUpdate();
+    m_page.renderingUpdateScheduler().scheduleTimedRenderingUpdate();
 }
 
 void PageOverlayController::didScrollFrame(Frame& frame)
@@ -391,7 +391,7 @@ Vector<String> PageOverlayController::copyAccessibilityAttributesNames(bool para
     return { };
 }
 
-void PageOverlayController::paintContents(const WebCore::GraphicsLayer* graphicsLayer, WebCore::GraphicsContext& graphicsContext, WebCore::GraphicsLayerPaintingPhase, const WebCore::FloatRect& clipRect, GraphicsLayerPaintBehavior)
+void PageOverlayController::paintContents(const GraphicsLayer* graphicsLayer, GraphicsContext& graphicsContext, OptionSet<GraphicsLayerPaintingPhase>, const FloatRect& clipRect, GraphicsLayerPaintBehavior)
 {
     for (auto& overlayAndGraphicsLayer : m_overlayGraphicsLayers) {
         if (overlayAndGraphicsLayer.value.ptr() != graphicsLayer)
@@ -410,9 +410,9 @@ float PageOverlayController::deviceScaleFactor() const
     return m_page.deviceScaleFactor();
 }
 
-void PageOverlayController::notifyFlushRequired(const WebCore::GraphicsLayer*)
+void PageOverlayController::notifyFlushRequired(const GraphicsLayer*)
 {
-    m_page.renderingUpdateScheduler().scheduleRenderingUpdate();
+    m_page.renderingUpdateScheduler().scheduleTimedRenderingUpdate();
 }
 
 void PageOverlayController::didChangeOverlayFrame(PageOverlay& overlay)

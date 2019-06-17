@@ -188,7 +188,6 @@ bool inferTypesForTypeArguments(AST::NamedType& possibleType, AST::TypeArguments
         return typeArguments.isEmpty();
     }
 
-    ASSERT(is<AST::NativeTypeDeclaration>(possibleType));
     auto& nativeTypeDeclaration = downcast<AST::NativeTypeDeclaration>(possibleType);
     if (nativeTypeDeclaration.typeArguments().size() != typeArguments.size())
         return false;
@@ -221,7 +220,8 @@ bool inferTypesForTypeArguments(AST::NamedType& possibleType, AST::TypeArguments
     return true;
 }
 
-bool inferTypesForCall(AST::FunctionDeclaration& possibleFunction, Vector<std::reference_wrapper<ResolvingType>>& argumentTypes, const AST::NamedType* castReturnType)
+template <typename TypeKind>
+ALWAYS_INLINE bool inferTypesForCallImpl(AST::FunctionDeclaration& possibleFunction, Vector<std::reference_wrapper<ResolvingType>>& argumentTypes, const TypeKind* castReturnType)
 {
     if (possibleFunction.parameters().size() != argumentTypes.size())
         return false;
@@ -237,6 +237,16 @@ bool inferTypesForCall(AST::FunctionDeclaration& possibleFunction, Vector<std::r
     if (castReturnType && !matches(possibleFunction.type(), *castReturnType))
         return false;
     return true;
+}
+
+bool inferTypesForCall(AST::FunctionDeclaration& possibleFunction, Vector<std::reference_wrapper<ResolvingType>>& argumentTypes, const AST::NamedType* castReturnType)
+{
+    return inferTypesForCallImpl(possibleFunction, argumentTypes, castReturnType);
+}
+
+bool inferTypesForCall(AST::FunctionDeclaration& possibleFunction, Vector<std::reference_wrapper<ResolvingType>>& argumentTypes, const AST::UnnamedType* castReturnType)
+{
+    return inferTypesForCallImpl(possibleFunction, argumentTypes, castReturnType);
 }
 
 } // namespace WHLSL

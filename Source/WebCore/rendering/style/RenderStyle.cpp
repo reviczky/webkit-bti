@@ -165,6 +165,9 @@ RenderStyle::RenderStyle(CreateDefaultStyleTag)
     m_inheritedFlags.insideLink = static_cast<unsigned>(InsideLink::NotInside);
     m_inheritedFlags.insideDefaultButton = false;
     m_inheritedFlags.writingMode = initialWritingMode();
+#if ENABLE(TEXT_AUTOSIZING)
+    m_inheritedFlags.autosizeStatus = 0;
+#endif
 
     m_nonInheritedFlags.effectiveDisplay = static_cast<unsigned>(initialDisplay());
     m_nonInheritedFlags.originalDisplay = static_cast<unsigned>(initialDisplay());
@@ -489,6 +492,16 @@ bool RenderStyle::equalForTextAutosizing(const RenderStyle& other) const
         && m_rareNonInheritedData->textOverflow == other.m_rareNonInheritedData->textOverflow;
 }
 
+AutosizeStatus RenderStyle::autosizeStatus() const
+{
+    return OptionSet<AutosizeStatus::Fields>::fromRaw(m_inheritedFlags.autosizeStatus);
+}
+
+void RenderStyle::setAutosizeStatus(AutosizeStatus autosizeStatus)
+{
+    m_inheritedFlags.autosizeStatus = autosizeStatus.fields().toRaw();
+}
+
 #endif // ENABLE(TEXT_AUTOSIZING)
 
 bool RenderStyle::inheritedDataShared(const RenderStyle* other) const
@@ -602,12 +615,6 @@ static bool rareNonInheritedDataChangeRequiresLayout(const StyleRareNonInherited
     if (first.grid != second.grid
         || first.gridItem != second.gridItem)
         return true;
-
-#if ENABLE(DASHBOARD_SUPPORT)
-    // If regions change, trigger a relayout to re-calc regions.
-    if (first.dashboardRegions != second.dashboardRegions)
-        return true;
-#endif
 
     if (!arePointingToEqualData(first.willChange, second.willChange)) {
         changedContextSensitiveProperties.add(StyleDifferenceContextSensitiveProperty::WillChange);
@@ -1002,8 +1009,8 @@ inline static bool changedCustomPaintWatchedProperty(const RenderStyle& a, const
                     CSSPropertyID propertyID = cssPropertyID(name);
                     if (!propertyID)
                         continue;
-                    valueA = extractor.valueForPropertyinStyle(a, propertyID);
-                    valueB = extractor.valueForPropertyinStyle(b, propertyID);
+                    valueA = extractor.valueForPropertyInStyle(a, propertyID);
+                    valueB = extractor.valueForPropertyInStyle(b, propertyID);
                 }
 
                 if ((valueA && !valueB) || (!valueA && valueB))
@@ -1470,7 +1477,7 @@ CounterDirectiveMap& RenderStyle::accessCounterDirectives()
     return *map;
 }
 
-const AtomicString& RenderStyle::hyphenString() const
+const AtomString& RenderStyle::hyphenString() const
 {
     ASSERT(hyphens() != Hyphens::None);
 
@@ -1479,12 +1486,12 @@ const AtomicString& RenderStyle::hyphenString() const
         return hyphenationString;
 
     // FIXME: This should depend on locale.
-    static NeverDestroyed<AtomicString> hyphenMinusString(&hyphenMinus, 1);
-    static NeverDestroyed<AtomicString> hyphenString(&hyphen, 1);
+    static NeverDestroyed<AtomString> hyphenMinusString(&hyphenMinus, 1);
+    static NeverDestroyed<AtomString> hyphenString(&hyphen, 1);
     return fontCascade().primaryFont().glyphForCharacter(hyphen) ? hyphenString : hyphenMinusString;
 }
 
-const AtomicString& RenderStyle::textEmphasisMarkString() const
+const AtomString& RenderStyle::textEmphasisMarkString() const
 {
     switch (textEmphasisMark()) {
     case TextEmphasisMark::None:
@@ -1492,28 +1499,28 @@ const AtomicString& RenderStyle::textEmphasisMarkString() const
     case TextEmphasisMark::Custom:
         return textEmphasisCustomMark();
     case TextEmphasisMark::Dot: {
-        static NeverDestroyed<AtomicString> filledDotString(&bullet, 1);
-        static NeverDestroyed<AtomicString> openDotString(&whiteBullet, 1);
+        static NeverDestroyed<AtomString> filledDotString(&bullet, 1);
+        static NeverDestroyed<AtomString> openDotString(&whiteBullet, 1);
         return textEmphasisFill() == TextEmphasisFill::Filled ? filledDotString : openDotString;
     }
     case TextEmphasisMark::Circle: {
-        static NeverDestroyed<AtomicString> filledCircleString(&blackCircle, 1);
-        static NeverDestroyed<AtomicString> openCircleString(&whiteCircle, 1);
+        static NeverDestroyed<AtomString> filledCircleString(&blackCircle, 1);
+        static NeverDestroyed<AtomString> openCircleString(&whiteCircle, 1);
         return textEmphasisFill() == TextEmphasisFill::Filled ? filledCircleString : openCircleString;
     }
     case TextEmphasisMark::DoubleCircle: {
-        static NeverDestroyed<AtomicString> filledDoubleCircleString(&fisheye, 1);
-        static NeverDestroyed<AtomicString> openDoubleCircleString(&bullseye, 1);
+        static NeverDestroyed<AtomString> filledDoubleCircleString(&fisheye, 1);
+        static NeverDestroyed<AtomString> openDoubleCircleString(&bullseye, 1);
         return textEmphasisFill() == TextEmphasisFill::Filled ? filledDoubleCircleString : openDoubleCircleString;
     }
     case TextEmphasisMark::Triangle: {
-        static NeverDestroyed<AtomicString> filledTriangleString(&blackUpPointingTriangle, 1);
-        static NeverDestroyed<AtomicString> openTriangleString(&whiteUpPointingTriangle, 1);
+        static NeverDestroyed<AtomString> filledTriangleString(&blackUpPointingTriangle, 1);
+        static NeverDestroyed<AtomString> openTriangleString(&whiteUpPointingTriangle, 1);
         return textEmphasisFill() == TextEmphasisFill::Filled ? filledTriangleString : openTriangleString;
     }
     case TextEmphasisMark::Sesame: {
-        static NeverDestroyed<AtomicString> filledSesameString(&sesameDot, 1);
-        static NeverDestroyed<AtomicString> openSesameString(&whiteSesameDot, 1);
+        static NeverDestroyed<AtomString> filledSesameString(&sesameDot, 1);
+        static NeverDestroyed<AtomString> openSesameString(&whiteSesameDot, 1);
         return textEmphasisFill() == TextEmphasisFill::Filled ? filledSesameString : openSesameString;
     }
     case TextEmphasisMark::Auto:
@@ -1524,27 +1531,6 @@ const AtomicString& RenderStyle::textEmphasisMarkString() const
     ASSERT_NOT_REACHED();
     return nullAtom();
 }
-
-#if ENABLE(DASHBOARD_SUPPORT)
-
-const Vector<StyleDashboardRegion>& RenderStyle::initialDashboardRegions()
-{
-    static NeverDestroyed<Vector<StyleDashboardRegion>> emptyList;
-    return emptyList;
-}
-
-const Vector<StyleDashboardRegion>& RenderStyle::noneDashboardRegions()
-{
-    static NeverDestroyed<Vector<StyleDashboardRegion>> noneList;
-    static bool noneListInitialized = false;
-    if (!noneListInitialized) {
-        noneList.get().append(StyleDashboardRegion { emptyString(), { }, StyleDashboardRegion::None });
-        noneListInitialized = true;
-    }
-    return noneList;
-}
-
-#endif
 
 void RenderStyle::adjustAnimations()
 {
@@ -2389,17 +2375,6 @@ bool RenderStyle::shouldPlaceBlockDirectionScrollbarOnLeft() const
 {
     return !isLeftToRightDirection() && isHorizontalWritingMode();
 }
-
-#if ENABLE(DASHBOARD_SUPPORT)
-
-void RenderStyle::setDashboardRegion(int type, const String& label, Length&& top, Length&& right, Length&& bottom, Length&& left, bool append)
-{
-    if (!append)
-        m_rareNonInheritedData.access().dashboardRegions.clear();
-    m_rareNonInheritedData.access().dashboardRegions.append({ label, { WTFMove(top), WTFMove(right), WTFMove(bottom), WTFMove(left) }, type });
-}
-
-#endif
 
 Vector<PaintType, 3> RenderStyle::paintTypesForPaintOrder(PaintOrder order)
 {

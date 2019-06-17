@@ -364,8 +364,8 @@ void InspectorTimelineAgent::willComposite(Frame& frame)
 
 void InspectorTimelineAgent::didComposite()
 {
-    ASSERT(m_startedComposite);
-    didCompleteCurrentRecord(TimelineRecordType::Composite);
+    if (m_startedComposite)
+        didCompleteCurrentRecord(TimelineRecordType::Composite);
     m_startedComposite = false;
 }
 

@@ -342,6 +342,7 @@ $(PROJECT_DIR)/Modules/webgpu/GPUTextureDescriptor.idl
 $(PROJECT_DIR)/Modules/webgpu/GPUTextureFormat.idl
 $(PROJECT_DIR)/Modules/webgpu/GPUTextureUsage.idl
 $(PROJECT_DIR)/Modules/webgpu/GPUVertexAttributeDescriptor.idl
+$(PROJECT_DIR)/Modules/webgpu/GPUVertexBufferDescriptor.idl
 $(PROJECT_DIR)/Modules/webgpu/GPUVertexInputDescriptor.idl
 $(PROJECT_DIR)/Modules/webgpu/NavigatorGPU.idl
 $(PROJECT_DIR)/Modules/webgpu/WHLSL/WHLSLStandardLibrary.txt
@@ -592,6 +593,7 @@ $(PROJECT_DIR)/dom/MutationEvent.idl
 $(PROJECT_DIR)/dom/MutationObserver.idl
 $(PROJECT_DIR)/dom/MutationRecord.idl
 $(PROJECT_DIR)/dom/NamedNodeMap.idl
+$(PROJECT_DIR)/dom/NavigatorMaxTouchPoints.idl
 $(PROJECT_DIR)/dom/Node.idl
 $(PROJECT_DIR)/dom/NodeFilter.idl
 $(PROJECT_DIR)/dom/NodeIterator.idl

@@ -360,7 +360,7 @@ private:
 
 DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, webPageCounter, ("WebPage"));
 
-Ref<WebPage> WebPage::create(uint64_t pageID, WebPageCreationParameters&& parameters)
+Ref<WebPage> WebPage::create(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 {
     Ref<WebPage> page = adoptRef(*new WebPage(pageID, WTFMove(parameters)));
 
@@ -370,7 +370,7 @@ Ref<WebPage> WebPage::create(uint64_t pageID, WebPageCreationParameters&& parame
     return page;
 }
 
-WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
+WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     : m_pageID(pageID)
     , m_viewSize(parameters.viewSize)
     , m_alwaysShowsHorizontalScroller { parameters.alwaysShowsHorizontalScroller }
@@ -416,6 +416,8 @@ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
     , m_deviceOrientation(parameters.deviceOrientation)
     , m_keyboardIsAttached(parameters.keyboardIsAttached)
     , m_canShowWhileLocked(parameters.canShowWhileLocked)
+    , m_doubleTapForDoubleClickDelay(parameters.doubleTapForDoubleClickDelay)
+    , m_doubleTapForDoubleClickRadius(parameters.doubleTapForDoubleClickRadius)
 #endif
     , m_layerVolatilityTimer(*this, &WebPage::layerVolatilityTimerFired)
     , m_activityState(parameters.activityState)
@@ -423,7 +425,7 @@ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
     , m_userInterfaceLayoutDirection(parameters.userInterfaceLayoutDirection)
     , m_overrideContentSecurityPolicy { parameters.overrideContentSecurityPolicy }
     , m_cpuLimit(parameters.cpuLimit)
-#if PLATFORM(WPE)
+#if USE(WPE_RENDERER)
     , m_hostFileDescriptor(WTFMove(parameters.hostFileDescriptor))
 #endif
 #if ENABLE(VIEWPORT_RESIZING)
@@ -539,6 +541,8 @@ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
 
     m_page->setCanStartMedia(false);
     m_mayStartMediaWhenInWindow = parameters.mayStartMediaWhenInWindow;
+    if (parameters.mediaPlaybackIsSuspended)
+        m_page->suspendAllMediaPlayback();
 
     m_page->setGroupName(m_pageGroup->identifier());
     m_page->setDeviceScaleFactor(parameters.deviceScaleFactor);
@@ -677,6 +681,14 @@ WebPage::WebPage(uint64_t pageID, WebPageCreationParameters&& parameters)
 
 #if USE(AUDIO_SESSION)
     PlatformMediaSessionManager::setShouldDeactivateAudioSession(true);
+#endif
+
+#if HAVE(VISIBILITY_PROPAGATION_VIEW)
+    m_contextForVisibilityPropagation = LayerHostingContext::createForExternalHostingProcess({
+        m_canShowWhileLocked
+    });
+    RELEASE_LOG(Process, "Created context with ID %d for visibility propagation from UIProcess", m_contextForVisibilityPropagation->contextID());
+    send(Messages::WebPageProxy::DidCreateContextForVisibilityPropagation(m_contextForVisibilityPropagation->contextID()));
 #endif
 
     updateThrottleState();
@@ -831,7 +843,7 @@ IPC::Connection* WebPage::messageSenderConnection() const
 
 uint64_t WebPage::messageSenderDestinationID() const
 {
-    return pageID();
+    return pageID().toUInt64();
 }
 
 #if ENABLE(CONTEXT_MENUS)
@@ -1648,7 +1660,7 @@ void WebPage::goToBackForwardItem(uint64_t navigationID, const BackForwardItemId
     if (!item)
         return;
 
-    LOG(Loading, "In WebProcess pid %i, WebPage %" PRIu64 " is navigating to back/forward URL %s", getCurrentProcessID(), m_pageID, item->url().string().utf8().data());
+    LOG(Loading, "In WebProcess pid %i, WebPage %" PRIu64 " is navigating to back/forward URL %s", getCurrentProcessID(), m_pageID.toUInt64(), item->url().string().utf8().data());
 
     ASSERT(!m_pendingNavigationID);
     m_pendingNavigationID = navigationID;
@@ -2076,7 +2088,7 @@ bool WebPage::setFixedLayoutSize(const IntSize& size)
     if (!view || view->fixedLayoutSize() == size)
         return false;
 
-    LOG_WITH_STREAM(VisibleRects, stream << "WebPage " << m_pageID << " setFixedLayoutSize " << size);
+    LOG_WITH_STREAM(VisibleRects, stream << "WebPage " << m_pageID.toUInt64() << " setFixedLayoutSize " << size);
     view->setFixedLayoutSize(size);
 
     send(Messages::WebPageProxy::FixedLayoutSizeDidChange(size));
@@ -2504,7 +2516,7 @@ const WebEvent* WebPage::currentEvent()
 void WebPage::freezeLayerTree(LayerTreeFreezeReason reason)
 {
     RELEASE_LOG(ProcessSuspension, "%p - WebPage (PageID=%llu) - Adding a reason %d to freeze layer tree; current reasons are %d",
-        this, m_pageID, static_cast<unsigned>(reason), m_layerTreeFreezeReasons.toRaw());
+        this, m_pageID.toUInt64(), static_cast<unsigned>(reason), m_layerTreeFreezeReasons.toRaw());
     m_layerTreeFreezeReasons.add(reason);
     updateDrawingAreaLayerTreeFreezeState();
 }
@@ -2512,7 +2524,7 @@ void WebPage::freezeLayerTree(LayerTreeFreezeReason reason)
 void WebPage::unfreezeLayerTree(LayerTreeFreezeReason reason)
 {
     RELEASE_LOG(ProcessSuspension, "%p - WebPage (PageID=%llu) - Removing a reason %d to freeze layer tree; current reasons are %d",
-        this, m_pageID, static_cast<unsigned>(reason), m_layerTreeFreezeReasons.toRaw());
+        this, m_pageID.toUInt64(), static_cast<unsigned>(reason), m_layerTreeFreezeReasons.toRaw());
     m_layerTreeFreezeReasons.remove(reason);
     updateDrawingAreaLayerTreeFreezeState();
 }
@@ -3168,7 +3180,7 @@ void WebPage::visibilityDidChange()
 
 void WebPage::setActivityState(OptionSet<ActivityState::Flag> activityState, ActivityStateChangeID activityStateChangeID, const Vector<CallbackID>& callbackIDs)
 {
-    LOG_WITH_STREAM(ActivityState, stream << "WebPage " << pageID() << " setActivityState to " << activityState);
+    LOG_WITH_STREAM(ActivityState, stream << "WebPage " << pageID().toUInt64() << " setActivityState to " << activityState);
 
     auto changed = m_activityState ^ activityState;
     m_activityState = activityState;
@@ -3176,7 +3188,7 @@ void WebPage::setActivityState(OptionSet<ActivityState::Flag> activityState, Act
     if (changed)
         updateThrottleState();
 
-    ASSERT_WITH_MESSAGE(m_page, "setActivityState called on %" PRIu64 " but WebCore page was null", pageID());
+    ASSERT_WITH_MESSAGE(m_page, "setActivityState called on %" PRIu64 " but WebCore page was null", pageID().toUInt64());
     if (m_page) {
         SetForScope<OptionSet<ActivityState::Flag>> currentlyChangingActivityState { m_lastActivityStateChanges, changed };
         m_page->setActivityState(activityState);
@@ -3519,7 +3531,7 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
 
     Settings& settings = m_page->settings();
 
-#if !PLATFORM(GTK)
+#if !PLATFORM(GTK) && !PLATFORM(WIN)
     if (!settings.acceleratedCompositingEnabled()) {
         RELEASE_LOG_IF_ALLOWED("%p - WebPage - acceleratedCompositingEnabled setting was false. WebKit cannot function in this mode; changing setting to true", this);
         settings.setAcceleratedCompositingEnabled(true);
@@ -3909,6 +3921,8 @@ void WebPage::dragEnded(WebCore::IntPoint clientPosition, WebCore::IntPoint glob
     m_page->mainFrame().eventHandler().dragSourceEndedAt(event, (DragOperation)operation);
 
     send(Messages::WebPageProxy::DidEndDragging());
+
+    m_isStartingDrag = false;
 }
 
 void WebPage::willPerformLoadDragDestinationAction()
@@ -4339,7 +4353,7 @@ void WebPage::mainFrameDidLayout()
 #if PLATFORM(IOS_FAMILY)
     if (FrameView* frameView = mainFrameView()) {
         IntSize newContentSize = frameView->contentsSize();
-        LOG_WITH_STREAM(VisibleRects, stream << "WebPage " << m_pageID << " mainFrameDidLayout setting content size to " << newContentSize);
+        LOG_WITH_STREAM(VisibleRects, stream << "WebPage " << m_pageID.toUInt64() << " mainFrameDidLayout setting content size to " << newContentSize);
         if (m_viewportConfiguration.setContentsSize(newContentSize))
             viewportConfigurationChanged();
     }
@@ -5467,6 +5481,8 @@ void WebPage::elementDidFocus(WebCore::Element& element)
         send(Messages::WebPageProxy::SetEditableElementIsFocused(!element.hasTagName(WebCore::HTMLNames::selectTag)));
 #endif
         m_recentlyBlurredElement = nullptr;
+
+        scheduleFullEditorStateUpdate();
     }
 }
 
@@ -5742,11 +5758,14 @@ void WebPage::didCommitLoad(WebFrame* frame)
     
     bool viewportChanged = false;
 
-    LOG_WITH_STREAM(VisibleRects, stream << "WebPage " << m_pageID << " didCommitLoad setting content size to " << coreFrame->view()->contentsSize());
+    LOG_WITH_STREAM(VisibleRects, stream << "WebPage " << m_pageID.toUInt64() << " didCommitLoad setting content size to " << coreFrame->view()->contentsSize());
     if (m_viewportConfiguration.setContentsSize(coreFrame->view()->contentsSize()))
         viewportChanged = true;
 
     if (m_viewportConfiguration.setViewportArguments(coreFrame->document()->viewportArguments()))
+        viewportChanged = true;
+
+    if (m_viewportConfiguration.setIsKnownToLayOutWiderThanViewport(false))
         viewportChanged = true;
 
     if (viewportChanged)
@@ -6056,7 +6075,7 @@ void WebPage::sendEditorStateUpdate()
     // If that is the case, just send what we have (i.e. don't include post-layout data) and wait until the
     // next layer tree commit to compute and send the complete EditorState over.
     auto state = editorState();
-    send(Messages::WebPageProxy::EditorStateChanged(state), pageID());
+    send(Messages::WebPageProxy::EditorStateChanged(state));
 
     if (state.isMissingPostLayoutData)
         scheduleFullEditorStateUpdate();
@@ -6237,7 +6256,7 @@ void WebPage::postMessage(const String& messageName, API::Object* messageBody)
 
 void WebPage::postMessageIgnoringFullySynchronousMode(const String& messageName, API::Object* messageBody)
 {
-    send(Messages::WebPageProxy::HandleMessage(messageName, UserData(WebProcess::singleton().transformObjectsToHandles(messageBody))), pageID(), IPC::SendOption::IgnoreFullySynchronousMode);
+    send(Messages::WebPageProxy::HandleMessage(messageName, UserData(WebProcess::singleton().transformObjectsToHandles(messageBody))), IPC::SendOption::IgnoreFullySynchronousMode);
 }
 
 void WebPage::postSynchronousMessageForTesting(const String& messageName, API::Object* messageBody, RefPtr<API::Object>& returnData)

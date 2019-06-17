@@ -42,6 +42,7 @@
 #include "MediaProducer.h"
 #include "MutationObserver.h"
 #include "OrientationNotifier.h"
+#include "PageIdentifier.h"
 #include "PlatformEvent.h"
 #include "ReferrerPolicy.h"
 #include "Region.h"
@@ -68,7 +69,7 @@
 #include <wtf/UniqueRef.h>
 #include <wtf/WeakHashSet.h>
 #include <wtf/WeakPtr.h>
-#include <wtf/text/AtomicStringHash.h>
+#include <wtf/text/AtomStringHash.h>
 
 #if PLATFORM(IOS_FAMILY)
 #include "EventTrackingRegions.h"
@@ -217,10 +218,6 @@ using PlatformDisplayID = uint32_t;
 class TransformSource;
 #endif
 
-#if ENABLE(DASHBOARD_SUPPORT)
-struct AnnotatedRegionValue;
-#endif
-
 #if ENABLE(TOUCH_EVENTS) || ENABLE(IOS_TOUCH_EVENTS)
 class Touch;
 class TouchList;
@@ -346,7 +343,6 @@ class Document
     , public TreeScope
     , public ScriptExecutionContext
     , public FontSelectorClient
-    , public CanMakeWeakPtr<Document>
     , public FrameDestructionObserver
     , public Supplementable<Document>
     , public Logger::Observer {
@@ -433,19 +429,19 @@ public:
 
     bool hasManifest() const;
     
-    WEBCORE_EXPORT ExceptionOr<Ref<Element>> createElementForBindings(const AtomicString& tagName);
+    WEBCORE_EXPORT ExceptionOr<Ref<Element>> createElementForBindings(const AtomString& tagName);
     WEBCORE_EXPORT Ref<DocumentFragment> createDocumentFragment();
     WEBCORE_EXPORT Ref<Text> createTextNode(const String& data);
     WEBCORE_EXPORT Ref<Comment> createComment(const String& data);
     WEBCORE_EXPORT ExceptionOr<Ref<CDATASection>> createCDATASection(const String& data);
     WEBCORE_EXPORT ExceptionOr<Ref<ProcessingInstruction>> createProcessingInstruction(const String& target, const String& data);
     WEBCORE_EXPORT ExceptionOr<Ref<Attr>> createAttribute(const String& name);
-    WEBCORE_EXPORT ExceptionOr<Ref<Attr>> createAttributeNS(const AtomicString& namespaceURI, const String& qualifiedName, bool shouldIgnoreNamespaceChecks = false);
+    WEBCORE_EXPORT ExceptionOr<Ref<Attr>> createAttributeNS(const AtomString& namespaceURI, const String& qualifiedName, bool shouldIgnoreNamespaceChecks = false);
     WEBCORE_EXPORT ExceptionOr<Ref<Node>> importNode(Node& nodeToImport, bool deep);
-    WEBCORE_EXPORT ExceptionOr<Ref<Element>> createElementNS(const AtomicString& namespaceURI, const String& qualifiedName);
+    WEBCORE_EXPORT ExceptionOr<Ref<Element>> createElementNS(const AtomString& namespaceURI, const String& qualifiedName);
     WEBCORE_EXPORT Ref<Element> createElement(const QualifiedName&, bool createdByParser);
 
-    static CustomElementNameValidationStatus validateCustomElementName(const AtomicString&);
+    static CustomElementNameValidationStatus validateCustomElementName(const AtomString&);
 
     WEBCORE_EXPORT RefPtr<Range> caretRangeFromPoint(int x, int y);
     RefPtr<Range> caretRangeFromPoint(const LayoutPoint& clientPoint);
@@ -462,7 +458,7 @@ public:
     WEBCORE_EXPORT String characterSetWithUTF8Fallback() const;
     TextEncoding textEncoding() const;
 
-    AtomicString encoding() const { return textEncoding().domName(); }
+    AtomString encoding() const { return textEncoding().domName(); }
 
     WEBCORE_EXPORT void setCharset(const String&); // Used by ObjC / GOBject bindings only.
 
@@ -509,10 +505,10 @@ public:
     WEBCORE_EXPORT Ref<HTMLCollection> anchors();
     WEBCORE_EXPORT Ref<HTMLCollection> scripts();
     Ref<HTMLCollection> all();
-    Ref<HTMLCollection> allFilteredByName(const AtomicString&);
+    Ref<HTMLCollection> allFilteredByName(const AtomString&);
 
-    Ref<HTMLCollection> windowNamedItems(const AtomicString&);
-    Ref<HTMLCollection> documentNamedItems(const AtomicString&);
+    Ref<HTMLCollection> windowNamedItems(const AtomString&);
+    Ref<HTMLCollection> documentNamedItems(const AtomString&);
 
     // Other methods (not part of DOM)
     bool isSynthesized() const { return m_isSynthesized; }
@@ -635,14 +631,14 @@ public:
     WEBCORE_EXPORT AXObjectCache* axObjectCache() const;
     void clearAXObjectCache();
 
-    Optional<uint64_t> pageID() const;
+    Optional<PageIdentifier> pageID() const;
     // to get visually ordered hebrew and arabic pages right
     void setVisuallyOrdered();
     bool visuallyOrdered() const { return m_visuallyOrdered; }
     
     WEBCORE_EXPORT DocumentLoader* loader() const;
 
-    WEBCORE_EXPORT ExceptionOr<RefPtr<WindowProxy>> openForBindings(DOMWindow& activeWindow, DOMWindow& firstDOMWindow, const String& url, const AtomicString& name, const String& features);
+    WEBCORE_EXPORT ExceptionOr<RefPtr<WindowProxy>> openForBindings(DOMWindow& activeWindow, DOMWindow& firstDOMWindow, const String& url, const AtomString& name, const String& features);
     WEBCORE_EXPORT ExceptionOr<Document&> openForBindings(Document* responsibleDocument, const String&, const String&);
 
     // FIXME: We should rename this at some point and give back the name 'open' to the HTML specified ones.
@@ -827,9 +823,9 @@ public:
     void setContextDocument(Document& document) { m_contextDocument = makeWeakPtr(document); }
 
     // Helper functions for forwarding DOMWindow event related tasks to the DOMWindow if it exists.
-    void setWindowAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& value, DOMWrapperWorld&);
-    void setWindowAttributeEventListener(const AtomicString& eventType, RefPtr<EventListener>&&, DOMWrapperWorld&);
-    EventListener* getWindowAttributeEventListener(const AtomicString& eventType, DOMWrapperWorld&);
+    void setWindowAttributeEventListener(const AtomString& eventType, const QualifiedName& attributeName, const AtomString& value, DOMWrapperWorld&);
+    void setWindowAttributeEventListener(const AtomString& eventType, RefPtr<EventListener>&&, DOMWrapperWorld&);
+    EventListener* getWindowAttributeEventListener(const AtomString& eventType, DOMWrapperWorld&);
     WEBCORE_EXPORT void dispatchWindowEvent(Event&, EventTarget* = nullptr);
     void dispatchWindowLoadEvent();
 
@@ -860,7 +856,7 @@ public:
 
     bool hasListenerType(ListenerType listenerType) const { return (m_listenerTypes & listenerType); }
     bool hasListenerTypeForEventType(PlatformEvent::Type) const;
-    void addListenerTypeIfNeeded(const AtomicString& eventType);
+    void addListenerTypeIfNeeded(const AtomString& eventType);
 
     bool hasMutationObserversOfType(MutationObserver::MutationType type) const
     {
@@ -903,8 +899,8 @@ public:
     const String& title() const { return m_title.string; }
     WEBCORE_EXPORT void setTitle(const String&);
 
-    WEBCORE_EXPORT const AtomicString& dir() const;
-    WEBCORE_EXPORT void setDir(const AtomicString&);
+    WEBCORE_EXPORT const AtomString& dir() const;
+    WEBCORE_EXPORT void setDir(const AtomString&);
 
     void titleElementAdded(Element& titleElement);
     void titleElementRemoved(Element& titleElement);
@@ -966,8 +962,8 @@ public:
 
     // The following breaks a qualified name into a prefix and a local name.
     // It also does a validity check, and returns an error if the qualified name is invalid.
-    static ExceptionOr<std::pair<AtomicString, AtomicString>> parseQualifiedName(const String& qualifiedName);
-    static ExceptionOr<QualifiedName> parseQualifiedName(const AtomicString& namespaceURI, const String& qualifiedName);
+    static ExceptionOr<std::pair<AtomString, AtomString>> parseQualifiedName(const String& qualifiedName);
+    static ExceptionOr<QualifiedName> parseQualifiedName(const AtomString& namespaceURI, const String& qualifiedName);
 
     // Checks to make sure prefix and namespace do not conflict (per DOM Core 3)
     static bool hasValidNamespaceForElements(const QualifiedName&);
@@ -1129,15 +1125,7 @@ public:
 
     WEBCORE_EXPORT String displayStringModifiedByEncoding(const String&) const;
 
-#if ENABLE(DASHBOARD_SUPPORT)
-    void setHasAnnotatedRegions(bool f) { m_hasAnnotatedRegions = f; }
-    WEBCORE_EXPORT const Vector<AnnotatedRegionValue>& annotatedRegions() const;
-#endif
-
-    enum class AnnotationsAction { Invalidate, Update };
-    void invalidateRenderingDependentRegions(AnnotationsAction = AnnotationsAction::Invalidate);
-    void invalidateScrollbarDependentRegions();
-    void updateZOrderDependentRegions();
+    void invalidateRenderingDependentRegions();
 
     void removeAllEventListeners() final;
 
@@ -1149,7 +1137,7 @@ public:
     HashSet<SVGUseElement*> const svgUseElements() const { return m_svgUseElements; }
 
     void initSecurityContext();
-    void initContentSecurityPolicy();
+    void initContentSecurityPolicy(ContentSecurityPolicy* previousPolicy);
 
     void updateURLForPushOrReplaceState(const URL&);
     void statePopped(Ref<SerializedScriptValue>&&);
@@ -1309,7 +1297,7 @@ public:
     void updateTextRenderer(Text&, unsigned offsetOfReplacedText, unsigned lengthOfReplacedText);
 
     // Return a Locale for the default locale if the argument is null or empty.
-    Locale& getCachedLocale(const AtomicString& locale = nullAtom());
+    Locale& getCachedLocale(const AtomString& locale = nullAtom());
 
     const Document* templateDocument() const;
     Document& ensureTemplateDocument();
@@ -1380,13 +1368,14 @@ public:
     void addAppearanceDependentPicture(HTMLPictureElement&);
     void removeAppearanceDependentPicture(HTMLPictureElement&);
 
-    void scheduleRenderingUpdate();
+    void scheduleTimedRenderingUpdate();
 
 #if ENABLE(INTERSECTION_OBSERVER)
     void addIntersectionObserver(IntersectionObserver&);
     void removeIntersectionObserver(IntersectionObserver&);
     unsigned numberOfIntersectionObservers() const { return m_intersectionObservers.size(); }
     void updateIntersectionObservations();
+    void scheduleInitialIntersectionObservationUpdate();
 #endif
 
 #if ENABLE(RESIZE_OBSERVER)
@@ -1424,7 +1413,7 @@ public:
 #endif
 
     using ContainerNode::setAttributeEventListener;
-    void setAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& value, DOMWrapperWorld& isolatedWorld);
+    void setAttributeEventListener(const AtomString& eventType, const QualifiedName& attributeName, const AtomString& value, DOMWrapperWorld& isolatedWorld);
 
     DOMSelection* getSelection();
 
@@ -1440,15 +1429,15 @@ public:
     void orientationChanged(int orientation);
     OrientationNotifier& orientationNotifier() { return m_orientationNotifier; }
 
-    WEBCORE_EXPORT const AtomicString& bgColor() const;
+    WEBCORE_EXPORT const AtomString& bgColor() const;
     WEBCORE_EXPORT void setBgColor(const String&);
-    WEBCORE_EXPORT const AtomicString& fgColor() const;
+    WEBCORE_EXPORT const AtomString& fgColor() const;
     WEBCORE_EXPORT void setFgColor(const String&);
-    WEBCORE_EXPORT const AtomicString& alinkColor() const;
+    WEBCORE_EXPORT const AtomString& alinkColor() const;
     WEBCORE_EXPORT void setAlinkColor(const String&);
-    WEBCORE_EXPORT const AtomicString& linkColorForBindings() const;
+    WEBCORE_EXPORT const AtomString& linkColorForBindings() const;
     WEBCORE_EXPORT void setLinkColorForBindings(const String&);
-    WEBCORE_EXPORT const AtomicString& vlinkColor() const;
+    WEBCORE_EXPORT const AtomString& vlinkColor() const;
     WEBCORE_EXPORT void setVlinkColor(const String&);
 
     // Per https://html.spec.whatwg.org/multipage/obsolete.html#dom-document-clear, this method does nothing.
@@ -1521,8 +1510,8 @@ public:
     WEBCORE_EXPORT void setAsRunningUserScripts();
     void setHasEvaluatedUserAgentScripts();
 #if ENABLE(APPLE_PAY)
-    WEBCORE_EXPORT bool hasStartedApplePaySession() const;
-    WEBCORE_EXPORT void setHasStartedApplePaySession();
+    WEBCORE_EXPORT bool isApplePayActive() const;
+    WEBCORE_EXPORT void setApplePayIsActive();
 #endif
 
     void frameWasDisconnectedFromOwner();
@@ -1548,7 +1537,7 @@ private:
     friend class IgnoreOpensDuringUnloadCountIncrementer;
     friend class IgnoreDestructiveWriteCountIncrementer;
 
-    bool shouldInheritContentSecurityPolicyFromOwner() const;
+    bool shouldInheritContentSecurityPolicy() const;
 
     void updateTitleElement(Element& changingTitleElement);
     void willDetachPage() final;
@@ -1611,14 +1600,6 @@ private:
     void didAssociateFormControlsTimerFired();
 
     void wheelEventHandlersChanged();
-
-#if ENABLE(DASHBOARD_SUPPORT)
-    void setAnnotatedRegionsDirty(bool f = true) { m_annotatedRegionsDirty = f; }
-    bool annotatedRegionsDirty() const { return m_annotatedRegionsDirty; }
-    bool hasAnnotatedRegions () const { return m_hasAnnotatedRegions; }
-    void setAnnotatedRegions(const Vector<AnnotatedRegionValue>&);
-    void updateAnnotatedRegions();
-#endif
 
     HttpEquivPolicy httpEquivPolicy() const;
     AXObjectCache* existingAXObjectCacheSlow() const;
@@ -1769,12 +1750,6 @@ private:
     bool m_allowsColorSchemeTransformations { true };
 #endif
 
-#if ENABLE(DASHBOARD_SUPPORT)
-    Vector<AnnotatedRegionValue> m_annotatedRegions;
-    bool m_hasAnnotatedRegions { false };
-    bool m_annotatedRegionsDirty { false };
-#endif
-
     HashMap<String, RefPtr<HTMLCanvasElement>> m_cssCanvasElements;
 
     HashSet<Element*> m_documentSuspensionCallbackElements;
@@ -1821,6 +1796,7 @@ private:
     Vector<WeakPtr<IntersectionObserver>> m_intersectionObservers;
     Vector<WeakPtr<IntersectionObserver>> m_intersectionObserversWithPendingNotifications;
     Timer m_intersectionObserversNotifyTimer;
+    Timer m_intersectionObserversInitialUpdateTimer;
 #endif
 
 #if ENABLE(RESIZE_OBSERVER)
@@ -1880,7 +1856,7 @@ private:
 
     std::unique_ptr<DocumentSharedObjectPool> m_sharedObjectPool;
 
-    typedef HashMap<AtomicString, std::unique_ptr<Locale>> LocaleIdentifierToLocaleMap;
+    typedef HashMap<AtomString, std::unique_ptr<Locale>> LocaleIdentifierToLocaleMap;
     LocaleIdentifierToLocaleMap m_localeCache;
 
     RefPtr<Document> m_templateDocument;

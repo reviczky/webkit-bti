@@ -491,6 +491,15 @@ void GraphicsLayer::setBackgroundColor(const Color& color)
     m_backgroundColor = color;
 }
 
+void GraphicsLayer::setPaintingPhase(OptionSet<GraphicsLayerPaintingPhase> phase)
+{
+    if (phase == m_paintingPhase)
+        return;
+
+    setNeedsDisplay();
+    m_paintingPhase = phase;
+}
+
 void GraphicsLayer::paintGraphicsLayerContents(GraphicsContext& context, const FloatRect& clip, GraphicsLayerPaintBehavior layerPaintBehavior)
 {
     FloatSize offset = offsetFromRenderer() - toFloatSize(scrollOffset());
@@ -500,6 +509,64 @@ void GraphicsLayer::paintGraphicsLayerContents(GraphicsContext& context, const F
     clipRect.move(offset);
 
     client().paintContents(this, context, m_paintingPhase, clipRect, layerPaintBehavior);
+}
+
+FloatRect GraphicsLayer::adjustCoverageRectForMovement(const FloatRect& coverageRect, const FloatRect& previousVisibleRect, const FloatRect& currentVisibleRect)
+{
+    // If the old visible rect is empty, we have no information about how the visible area is changing
+    // (maybe the layer was just created), so don't attempt to expand. Also don't attempt to expand if the rects don't overlap.
+    if (previousVisibleRect.isEmpty() || !currentVisibleRect.intersects(previousVisibleRect))
+        return unionRect(coverageRect, currentVisibleRect);
+
+    const float paddingMultiplier = 2;
+
+    float leftEdgeDelta = paddingMultiplier * (currentVisibleRect.x() - previousVisibleRect.x());
+    float rightEdgeDelta = paddingMultiplier * (currentVisibleRect.maxX() - previousVisibleRect.maxX());
+
+    float topEdgeDelta = paddingMultiplier * (currentVisibleRect.y() - previousVisibleRect.y());
+    float bottomEdgeDelta = paddingMultiplier * (currentVisibleRect.maxY() - previousVisibleRect.maxY());
+    
+    FloatRect expandedRect = currentVisibleRect;
+
+    // More exposed on left side.
+    if (leftEdgeDelta < 0) {
+        float newLeft = expandedRect.x() + leftEdgeDelta;
+        // Pad to the left, but don't reduce padding that's already in the backing store (since we're still exposing to the left).
+        if (newLeft < previousVisibleRect.x())
+            expandedRect.shiftXEdgeTo(newLeft);
+        else
+            expandedRect.shiftXEdgeTo(previousVisibleRect.x());
+    }
+
+    // More exposed on right.
+    if (rightEdgeDelta > 0) {
+        float newRight = expandedRect.maxX() + rightEdgeDelta;
+        // Pad to the right, but don't reduce padding that's already in the backing store (since we're still exposing to the right).
+        if (newRight > previousVisibleRect.maxX())
+            expandedRect.setWidth(newRight - expandedRect.x());
+        else
+            expandedRect.setWidth(previousVisibleRect.maxX() - expandedRect.x());
+    }
+
+    // More exposed at top.
+    if (topEdgeDelta < 0) {
+        float newTop = expandedRect.y() + topEdgeDelta;
+        if (newTop < previousVisibleRect.y())
+            expandedRect.shiftYEdgeTo(newTop);
+        else
+            expandedRect.shiftYEdgeTo(previousVisibleRect.y());
+    }
+
+    // More exposed on bottom.
+    if (bottomEdgeDelta > 0) {
+        float newBottom = expandedRect.maxY() + bottomEdgeDelta;
+        if (newBottom > previousVisibleRect.maxY())
+            expandedRect.setHeight(newBottom - expandedRect.y());
+        else
+            expandedRect.setHeight(previousVisibleRect.maxY() - expandedRect.y());
+    }
+    
+    return unionRect(coverageRect, expandedRect);
 }
 
 String GraphicsLayer::animationNameForTransition(AnimatedPropertyID property)
@@ -851,10 +918,8 @@ void GraphicsLayer::dumpProperties(TextStream& ts, LayerTreeAsTextBehavior behav
     if (!m_backfaceVisibility)
         ts << indent << "(backfaceVisibility " << (m_backfaceVisibility ? "visible" : "hidden") << ")\n";
 
-    if (behavior & LayerTreeAsTextDebug) {
+    if (behavior & LayerTreeAsTextDebug)
         ts << indent << "(primary-layer-id " << primaryLayerID() << ")\n";
-        ts << indent << "(client " << static_cast<void*>(m_client) << ")\n";
-    }
 
     if (m_backgroundColor.isValid() && client().shouldDumpPropertyForLayer(this, "backgroundColor", behavior))
         ts << indent << "(backgroundColor " << m_backgroundColor.nameForRenderTreeAsText() << ")\n";
@@ -932,29 +997,8 @@ void GraphicsLayer::dumpProperties(TextStream& ts, LayerTreeAsTextBehavior behav
         ts << indent << ")\n";
     }
 
-    if (behavior & LayerTreeAsTextIncludePaintingPhases && paintingPhase()) {
-        ts << indent << "(paintingPhases\n";
-        TextStream::IndentScope indentScope(ts);
-        if (paintingPhase() & GraphicsLayerPaintBackground)
-            ts << indent << "GraphicsLayerPaintBackground\n";
-
-        if (paintingPhase() & GraphicsLayerPaintForeground)
-            ts << indent << "GraphicsLayerPaintForeground\n";
-
-        if (paintingPhase() & GraphicsLayerPaintMask)
-            ts << indent << "GraphicsLayerPaintMask\n";
-
-        if (paintingPhase() & GraphicsLayerPaintChildClippingMask)
-            ts << indent << "GraphicsLayerPaintChildClippingMask\n";
-
-        if (paintingPhase() & GraphicsLayerPaintOverflowContents)
-            ts << indent << "GraphicsLayerPaintOverflowContents\n";
-
-        if (paintingPhase() & GraphicsLayerPaintCompositedScroll)
-            ts << indent << "GraphicsLayerPaintCompositedScroll\n";
-
-        ts << indent << ")\n";
-    }
+    if (behavior & LayerTreeAsTextIncludePaintingPhases && paintingPhase())
+        ts << indent << "(paintingPhases " << paintingPhase() << ")\n";
 
     dumpAdditionalProperties(ts, behavior);
     
@@ -984,7 +1028,22 @@ TextStream& operator<<(TextStream& ts, const Vector<GraphicsLayer::PlatformLayer
     return ts;
 }
 
-TextStream& operator<<(TextStream& ts, const WebCore::GraphicsLayer::CustomAppearance& customAppearance)
+TextStream& operator<<(TextStream& ts, GraphicsLayerPaintingPhase phase)
+{
+    switch (phase) {
+    case GraphicsLayerPaintingPhase::Background: ts << "background"; break;
+    case GraphicsLayerPaintingPhase::Foreground: ts << "foreground"; break;
+    case GraphicsLayerPaintingPhase::Mask: ts << "mask"; break;
+    case GraphicsLayerPaintingPhase::ClipPath: ts << "clip-path"; break;
+    case GraphicsLayerPaintingPhase::OverflowContents: ts << "overflow-contents"; break;
+    case GraphicsLayerPaintingPhase::CompositedScroll: ts << "composited-scroll"; break;
+    case GraphicsLayerPaintingPhase::ChildClippingMask: ts << "child-clipping-mask"; break;
+    }
+
+    return ts;
+}
+
+TextStream& operator<<(TextStream& ts, const GraphicsLayer::CustomAppearance& customAppearance)
 {
     switch (customAppearance) {
     case GraphicsLayer::CustomAppearance::None: ts << "none"; break;

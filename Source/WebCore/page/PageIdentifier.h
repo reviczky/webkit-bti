@@ -25,14 +25,11 @@
 
 #pragma once
 
-#include <wtf/Forward.h>
+#include <wtf/ObjectIdentifier.h>
 
-namespace WebKit {
+namespace WebCore {
 
-enum class WebCompatibilityMode : uint8_t {
-    Recommended,
-    Legacy,
-    Modern,
-};
+enum PageIdentifierType { };
+using PageIdentifier = ObjectIdentifier<PageIdentifierType>;
 
 }

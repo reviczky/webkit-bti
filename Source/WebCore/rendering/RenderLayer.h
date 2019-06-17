@@ -442,14 +442,14 @@ public:
     void setPostLayoutScrollPosition(Optional<ScrollPosition>);
     void applyPostLayoutScrollPositionIfNeeded();
 
-    ScrollOffset scrollOffset() const { return scrollOffsetFromPosition(m_scrollPosition); }
-
     void availableContentSizeChanged(AvailableSizeChangeReason) override;
 
     // "absoluteRect" is in scaled document coordinates.
     void scrollRectToVisible(const LayoutRect& absoluteRect, bool insideFixed, const ScrollRectToVisibleOptions&);
 
     bool scrollsOverflow() const;
+    bool hasScrollableHorizontalOverflow() const;
+    bool hasScrollableVerticalOverflow() const;
     bool hasScrollbars() const { return m_hBar || m_vBar; }
     void setHasHorizontalScrollbar(bool);
     void setHasVerticalScrollbar(bool);
@@ -1066,15 +1066,11 @@ private:
     void computeScrollDimensions();
     bool hasHorizontalOverflow() const;
     bool hasVerticalOverflow() const;
-    bool hasScrollableHorizontalOverflow() const;
-    bool hasScrollableVerticalOverflow() const;
 
     bool showsOverflowControls() const;
 
     bool shouldBeSelfPaintingLayer() const;
 
-    int scrollOffset(ScrollbarOrientation) const override;
-    
     // ScrollableArea interface
     void invalidateScrollbarRect(Scrollbar&, const IntRect&) override;
     void invalidateScrollCornerRect(const IntRect&) override;
@@ -1085,7 +1081,6 @@ private:
     IntRect convertFromContainingViewToScrollbar(const Scrollbar&, const IntRect&) const override;
     IntPoint convertFromScrollbarToContainingView(const Scrollbar&, const IntPoint&) const override;
     IntPoint convertFromContainingViewToScrollbar(const Scrollbar&, const IntPoint&) const override;
-    int scrollSize(ScrollbarOrientation) const override;
     void setScrollOffset(const ScrollOffset&) override;
     ScrollingNodeID scrollingNodeID() const override;
 

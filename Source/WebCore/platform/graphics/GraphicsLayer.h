@@ -414,8 +414,8 @@ public:
 #endif
 
     // Some GraphicsLayers paint only the foreground or the background content
-    GraphicsLayerPaintingPhase paintingPhase() const { return m_paintingPhase; }
-    void setPaintingPhase(GraphicsLayerPaintingPhase phase) { m_paintingPhase = phase; }
+    OptionSet<GraphicsLayerPaintingPhase> paintingPhase() const { return m_paintingPhase; }
+    void setPaintingPhase(OptionSet<GraphicsLayerPaintingPhase>);
 
     enum ShouldClipToLayer {
         DoNotClipToLayer,
@@ -576,6 +576,8 @@ public:
     // for example to allocate new tiles.
     virtual bool visibleRectChangeRequiresFlush(const FloatRect& /* clipRect */) const { return false; }
 
+    static FloatRect adjustCoverageRectForMovement(const FloatRect& coverageRect, const FloatRect& previousVisibleRect, const FloatRect& currentVisibleRect);
+
     // Return a string with a human readable form of the layer tree, If debug is true
     // pointers for the layers and timing data will be included in the returned string.
     WEBCORE_EXPORT String layerTreeAsText(LayerTreeAsTextBehavior = LayerTreeAsTextBehaviorNormal) const;
@@ -691,7 +693,7 @@ protected:
 
     const Type m_type;
     CustomAppearance m_customAppearance { CustomAppearance::None };
-    GraphicsLayerPaintingPhase m_paintingPhase { GraphicsLayerPaintAllWithOverflowClip };
+    OptionSet<GraphicsLayerPaintingPhase> m_paintingPhase { GraphicsLayerPaintingPhase::Foreground, GraphicsLayerPaintingPhase::Background };
     CompositingCoordinatesOrientation m_contentsOrientation { CompositingCoordinatesOrientation::TopDown }; // affects orientation of layer contents
 
     bool m_beingDestroyed : 1;
@@ -739,6 +741,7 @@ protected:
 #endif
 };
 
+WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const WebCore::GraphicsLayerPaintingPhase);
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const Vector<GraphicsLayer::PlatformLayerID>&);
 WEBCORE_EXPORT WTF::TextStream& operator<<(WTF::TextStream&, const GraphicsLayer::CustomAppearance&);
 

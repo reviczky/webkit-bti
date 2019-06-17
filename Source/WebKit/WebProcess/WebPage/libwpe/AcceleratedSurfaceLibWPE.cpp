@@ -26,9 +26,12 @@
 #include "config.h"
 #include "AcceleratedSurfaceLibWPE.h"
 
+#if USE(WPE_RENDERER)
+
 #include "WebPage.h"
 #include <WebCore/PlatformDisplayLibWPE.h>
 #include <wpe/wpe-egl.h>
+#include <wtf/UniStdExtras.h>
 
 namespace WebKit {
 using namespace WebCore;
@@ -50,7 +53,7 @@ AcceleratedSurfaceLibWPE::~AcceleratedSurfaceLibWPE()
 
 void AcceleratedSurfaceLibWPE::initialize()
 {
-    m_backend = wpe_renderer_backend_egl_target_create(m_webPage.releaseHostFileDescriptor());
+    m_backend = wpe_renderer_backend_egl_target_create(dupCloseOnExec(m_webPage.hostFileDescriptor()));
     static struct wpe_renderer_backend_egl_target_client s_client = {
         // frame_complete
         [](void* data)
@@ -65,7 +68,7 @@ void AcceleratedSurfaceLibWPE::initialize()
         nullptr
     };
     wpe_renderer_backend_egl_target_set_client(m_backend, &s_client, this);
-    wpe_renderer_backend_egl_target_initialize(m_backend, downcast<PlatformDisplayLibWPE>(PlatformDisplay::sharedDisplay()).backend(),
+    wpe_renderer_backend_egl_target_initialize(m_backend, downcast<PlatformDisplayLibWPE>(PlatformDisplay::sharedDisplayForCompositing()).backend(),
         std::max(1, m_size.width()), std::max(1, m_size.height()));
 }
 
@@ -88,7 +91,7 @@ uint64_t AcceleratedSurfaceLibWPE::window() const
 
 uint64_t AcceleratedSurfaceLibWPE::surfaceID() const
 {
-    return m_webPage.pageID();
+    return m_webPage.pageID().toUInt64();
 }
 
 void AcceleratedSurfaceLibWPE::clientResize(const IntSize& size)
@@ -111,3 +114,4 @@ void AcceleratedSurfaceLibWPE::didRenderFrame()
 
 } // namespace WebKit
 
+#endif // USE(WPE_RENDERER)

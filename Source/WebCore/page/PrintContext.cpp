@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007 Alp Toker <alp@atoker.com>
- * Copyright (C) 2007, 2016 Apple Inc.
+ * Copyright (C) 2007-2019 Apple Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -345,6 +345,8 @@ String PrintContext::pageProperty(Frame* frame, const char* propertyName, int pa
     ASSERT(frame);
     ASSERT(frame->document());
 
+    Ref<Frame> protectedFrame(*frame);
+
     auto& document = *frame->document();
     PrintContext printContext(frame);
     printContext.begin(800); // Any width is OK here.
@@ -355,16 +357,16 @@ String PrintContext::pageProperty(Frame* frame, const char* propertyName, int pa
     if (!strcmp(propertyName, "margin-left")) {
         if (style->marginLeft().isAuto())
             return "auto"_s;
-        return String::numberToStringFixedPrecision(style->marginLeft().value());
+        return String::number(style->marginLeft().value());
     }
     if (!strcmp(propertyName, "line-height"))
-        return String::numberToStringFixedPrecision(style->lineHeight().value());
+        return String::number(style->lineHeight().value());
     if (!strcmp(propertyName, "font-size"))
         return String::number(style->fontDescription().computedPixelSize());
     if (!strcmp(propertyName, "font-family"))
         return style->fontDescription().firstFamily();
     if (!strcmp(propertyName, "size"))
-        return makeString(FormattedNumber::fixedPrecision(style->pageSize().width.value()), ' ', FormattedNumber::fixedPrecision(style->pageSize().height.value()));
+        return makeString(style->pageSize().width.value(), ' ', style->pageSize().height.value());
 
     return makeString("pageProperty() unimplemented for: ", propertyName);
 }
@@ -400,6 +402,8 @@ bool PrintContext::beginAndComputePageRectsWithPageSize(Frame& frame, const Floa
 
 int PrintContext::numberOfPages(Frame& frame, const FloatSize& pageSizeInPixels)
 {
+    Ref<Frame> protectedFrame(frame);
+
     PrintContext printContext(&frame);
     if (!printContext.beginAndComputePageRectsWithPageSize(frame, pageSizeInPixels))
         return -1;
@@ -409,6 +413,8 @@ int PrintContext::numberOfPages(Frame& frame, const FloatSize& pageSizeInPixels)
 
 void PrintContext::spoolAllPagesWithBoundaries(Frame& frame, GraphicsContext& graphicsContext, const FloatSize& pageSizeInPixels)
 {
+    Ref<Frame> protectedFrame(frame);
+
     PrintContext printContext(&frame);
     if (!printContext.beginAndComputePageRectsWithPageSize(frame, pageSizeInPixels))
         return;

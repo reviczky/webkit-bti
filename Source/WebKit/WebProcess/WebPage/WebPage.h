@@ -64,6 +64,7 @@
 #include <WebCore/IntRect.h>
 #include <WebCore/IntSizeHash.h>
 #include <WebCore/Page.h>
+#include <WebCore/PageIdentifier.h>
 #include <WebCore/PageOverlay.h>
 #include <WebCore/PluginData.h>
 #include <WebCore/PointerID.h>
@@ -263,6 +264,7 @@ struct InteractionInformationRequest;
 struct LoadParameters;
 struct PrintInfo;
 struct TextInputContext;
+struct WebAutocorrectionData;
 struct WebAutocorrectionContext;
 struct WebPageCreationParameters;
 struct WebPreferencesStore;
@@ -274,7 +276,8 @@ using WKEventModifiers = uint32_t;
 
 class WebPage : public API::ObjectImpl<API::Object::Type::BundlePage>, public IPC::MessageReceiver, public IPC::MessageSender, public CanMakeWeakPtr<WebPage> {
 public:
-    static Ref<WebPage> create(uint64_t pageID, WebPageCreationParameters&&);
+    static Ref<WebPage> create(WebCore::PageIdentifier, WebPageCreationParameters&&);
+
     virtual ~WebPage();
 
     void reinitializeWebPage(WebPageCreationParameters&&);
@@ -284,7 +287,7 @@ public:
     static WebPage* fromCorePage(WebCore::Page*);
 
     WebCore::Page* corePage() const { return m_page.get(); }
-    uint64_t pageID() const { return m_pageID; }
+    WebCore::PageIdentifier pageID() const { return m_pageID; }
     PAL::SessionID sessionID() const { return m_page->sessionID(); }
     bool usesEphemeralSession() const { return m_page->usesEphemeralSession(); }
 
@@ -631,7 +634,7 @@ public:
     void cancelPotentialTapInFrame(WebFrame&);
     void tapHighlightAtPosition(uint64_t requestID, const WebCore::FloatPoint&);
     void didRecognizeLongPress();
-    void handleDoubleTapForDoubleClickAtPoint(const WebCore::IntPoint&, OptionSet<WebKit::WebEvent::Modifier>, uint64_t lastLayerTreeTransactionId);
+    bool handlePotentialDoubleTapForDoubleClickAtPoint(OptionSet<WebKit::WebEvent::Modifier>, uint64_t lastLayerTreeTransactionId);
 
     void inspectorNodeSearchMovedToPosition(const WebCore::FloatPoint&);
     void inspectorNodeSearchEndedAtPosition(const WebCore::FloatPoint&);
@@ -655,7 +658,7 @@ public:
     void requestDictationContext(CallbackID);
     void replaceDictatedText(const String& oldText, const String& newText);
     void replaceSelectedText(const String& oldText, const String& newText);
-    void requestAutocorrectionData(const String& textForAutocorrection, CallbackID);
+    void requestAutocorrectionData(const String& textForAutocorrection, CompletionHandler<void(WebAutocorrectionData)>&& reply);
     void applyAutocorrection(const String& correction, const String& originalText, CallbackID);
     void syncApplyAutocorrection(const String& correction, const String& originalText, CompletionHandler<void(bool)>&&);
     void requestAutocorrectionContext();
@@ -969,10 +972,6 @@ public:
     void dispatchTouchEvent(const WebTouchEvent&, bool& handled);
 #endif
 
-#if PLATFORM(GTK) && USE(TEXTURE_MAPPER_GL)
-    uint64_t nativeWindowHandle() { return m_nativeWindowHandle; }
-#endif
-
     bool shouldUseCustomContentProviderForResponse(const WebCore::ResourceResponse&);
 
     bool asynchronousPluginInitializationEnabled() const { return m_asynchronousPluginInitializationEnabled; }
@@ -1153,8 +1152,8 @@ public:
     void didFinishLoadingApplicationManifest(uint64_t, const Optional<WebCore::ApplicationManifest>&);
 #endif
 
-#if PLATFORM(WPE)
-    int releaseHostFileDescriptor() { return m_hostFileDescriptor.releaseFileDescriptor(); }
+#if USE(WPE_RENDERER)
+    int hostFileDescriptor() const { return m_hostFileDescriptor.fileDescriptor(); }
 #endif
 
     void updateCurrentModifierState(OptionSet<WebCore::PlatformEvent::Modifier> modifiers);
@@ -1171,7 +1170,7 @@ public:
     bool sendSyncWithDelayedReply(T&& message, typename T::Reply&& reply)
     {
         cancelGesturesBlockedOnSynchronousReplies();
-        return sendSync(WTFMove(message), WTFMove(reply), m_pageID, Seconds::infinity(), IPC::SendSyncOption::InformPlatformProcessWillSuspend);
+        return sendSync(WTFMove(message), WTFMove(reply), Seconds::infinity(), IPC::SendSyncOption::InformPlatformProcessWillSuspend);
     }
 
     WebCore::DOMPasteAccessResponse requestDOMPasteAccess(const String& originIdentifier);
@@ -1203,8 +1202,11 @@ public:
     bool userIsInteracting() const { return m_userIsInteracting; }
     void setUserIsInteracting(bool userIsInteracting) { m_userIsInteracting = userIsInteracting; }
 
+    bool firstFlushAfterCommit() const { return m_firstFlushAfterCommit; }
+    void setFirstFlushAfterCommit(bool f) { m_firstFlushAfterCommit = f; }
+    
 private:
-    WebPage(uint64_t pageID, WebPageCreationParameters&&);
+    WebPage(WebCore::PageIdentifier, WebPageCreationParameters&&);
 
     void updateThrottleState();
 
@@ -1235,7 +1237,6 @@ private:
     void updateViewportSizeForCSSViewportUnits();
 
     static void convertSelectionRectsToRootView(WebCore::FrameView*, Vector<WebCore::SelectionRect>&);
-    RefPtr<WebCore::Range> rangeForWebSelectionAtPosition(const WebCore::IntPoint&, const WebCore::VisiblePosition&, SelectionFlags&);
     void getFocusedElementInformation(FocusedElementInformation&);
     void platformInitializeAccessibility();
     void generateSyntheticEditingCommand(SyntheticEditingCommandType);
@@ -1243,6 +1244,7 @@ private:
     void completeSyntheticClick(WebCore::Node& nodeRespondingToClick, const WebCore::FloatPoint& location, OptionSet<WebKit::WebEvent::Modifier>, WebCore::SyntheticClickType, WebCore::PointerID = WebCore::mousePointerID);
     void sendTapHighlightForNodeIfNecessary(uint64_t requestID, WebCore::Node*);
     void resetTextAutosizing();
+    void resetIdempotentTextAutosizingIfNeeded(double previousInitialScale);
     WebCore::VisiblePosition visiblePositionInFocusedNodeForPoint(const WebCore::Frame&, const WebCore::IntPoint&, bool isInteractingWithFocusedElement);
     RefPtr<WebCore::Range> rangeForGranularityAtPoint(WebCore::Frame&, const WebCore::IntPoint&, uint32_t granularity, bool isInteractingWithFocusedElement);
     void dispatchSyntheticMouseEventsForSelectionGesture(SelectionTouch, const WebCore::IntPoint&);
@@ -1591,7 +1593,7 @@ private:
 
     void updateMockAccessibilityElementAfterCommittingLoad();
 
-    uint64_t m_pageID;
+    WebCore::PageIdentifier m_pageID;
 
     std::unique_ptr<WebCore::Page> m_page;
     RefPtr<WebFrame> m_mainFrame;
@@ -1676,11 +1678,6 @@ private:
 
 #if HAVE(ACCESSIBILITY) && USE(ATK)
     GRefPtr<AtkObject> m_accessibilityObject;
-#endif
-
-#if PLATFORM(GTK) && USE(TEXTURE_MAPPER_GL)
-    // Our view's window in the UI process.
-    uint64_t m_nativeWindowHandle { 0 };
 #endif
 
 #if !PLATFORM(IOS_FAMILY)
@@ -1778,6 +1775,7 @@ private:
 
 #if ENABLE(DRAG_SUPPORT) && PLATFORM(IOS_FAMILY)
     HashSet<RefPtr<WebCore::HTMLImageElement>> m_pendingImageElementsForDropSnapshot;
+    RefPtr<WebCore::Range> m_rangeForDropSnapshot;
 #endif
 
     bool m_cachedMainFrameIsPinnedToLeftSide { true };
@@ -1846,12 +1844,13 @@ private:
 
     RefPtr<WebCore::Range> m_initialSelection;
     WebCore::VisibleSelection m_storedSelectionForAccessibility { WebCore::VisibleSelection() };
-    WebCore::IntSize m_blockSelectionDesiredSize;
     WebCore::FloatSize m_maximumUnobscuredSize;
     int32_t m_deviceOrientation { 0 };
     bool m_keyboardIsAttached { false };
     bool m_canShowWhileLocked { false };
     bool m_inDynamicSizeUpdate { false };
+    Seconds m_doubleTapForDoubleClickDelay { 350_ms };
+    float m_doubleTapForDoubleClickRadius { 45 };
     HashMap<std::pair<WebCore::IntSize, double>, WebCore::IntPoint> m_dynamicSizeUpdateHistory;
     RefPtr<WebCore::Node> m_pendingSyntheticClickNode;
     WebCore::FloatPoint m_pendingSyntheticClickLocation;
@@ -1862,6 +1861,8 @@ private:
     Optional<DynamicViewportSizeUpdateID> m_pendingDynamicViewportSizeUpdateID;
     double m_lastTransactionPageScaleFactor { 0 };
     uint64_t m_lastTransactionIDWithScaleChange { 0 };
+    Optional<MonotonicTime> m_lastCommittedTapTimestamp;
+    Optional<WebCore::FloatPoint> m_lastCommittedTapLocation;
 
     CompletionHandler<void(InteractionInformationAtPosition&&)> m_pendingSynchronousPositionInformationReply;
 #endif
@@ -1914,7 +1915,7 @@ private:
     const String m_overrideContentSecurityPolicy;
     const Optional<double> m_cpuLimit;
 
-#if PLATFORM(WPE)
+#if USE(WPE_RENDERER)
     IPC::Attachment m_hostFileDescriptor;
 #endif
 
@@ -1931,12 +1932,16 @@ private:
     OptionSet<LayerTreeFreezeReason> m_layerTreeFreezeReasons;
     bool m_isSuspended { false };
     bool m_needsFontAttributes { false };
+    bool m_firstFlushAfterCommit { false };
 #if PLATFORM(COCOA)
     WeakPtr<RemoteObjectRegistry> m_remoteObjectRegistry;
 #endif
     WebCore::IntSize m_lastSentIntrinsicContentSize;
 #if ENABLE(VIEWPORT_RESIZING)
     WebCore::DeferrableOneShotTimer m_shrinkToFitContentTimer;
+#endif
+#if HAVE(VISIBILITY_PROPAGATION_VIEW)
+    std::unique_ptr<LayerHostingContext> m_contextForVisibilityPropagation;
 #endif
 };
 
