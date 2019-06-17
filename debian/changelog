@@ -1,4 +1,4 @@
-webkit2gtk (2.25.2-1) UNRELEASED; urgency=medium
+webkit2gtk (2.25.2-1) experimental; urgency=medium
 
   * New upstream development release.
   * debian/patches/webdriver-path.patch,
@@ -9,7 +9,7 @@ webkit2gtk (2.25.2-1) UNRELEASED; urgency=medium
   * debian/rules:
     + Build with -DUSE_WPE_RENDERER=OFF.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 17 Jun 2019 15:46:49 +0300
+ -- Alberto Garcia <berto@igalia.com>  Mon, 17 Jun 2019 23:39:56 +0300
 
 webkit2gtk (2.25.1-1) experimental; urgency=medium
 
