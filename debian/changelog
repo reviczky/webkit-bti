@@ -1,6 +1,11 @@
 webkit2gtk (2.25.2-1) UNRELEASED; urgency=medium
 
   * New upstream development release.
+  * debian/patches/webdriver-path.patch,
+    debian/patches/fix-ftbfs-hurd.patch:
+    + Remove.
+  * debian/patches/detect-woff.patch
+    + Refresh.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 17 Jun 2019 15:46:49 +0300
 
