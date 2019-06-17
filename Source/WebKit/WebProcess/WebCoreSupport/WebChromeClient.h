@@ -143,10 +143,6 @@ private:
     void reachedMaxAppCacheSize(int64_t spaceNeeded) final;
     void reachedApplicationCacheOriginQuota(WebCore::SecurityOrigin&, int64_t spaceNeeded) final;
 
-#if ENABLE(DASHBOARD_SUPPORT)
-    void annotatedRegionsChanged() final;
-#endif
-
     bool shouldReplaceWithGeneratedFileForUpload(const String& path, String& generatedFilename) final;
     String generateReplacementFile(const String& path) final;
     
@@ -372,8 +368,8 @@ private:
     void didInvalidateDocumentMarkerRects() final;
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
-    void hasStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, uint64_t frameID, uint64_t pageID, WTF::CompletionHandler<void(bool)>&&) final;
-    void requestStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, uint64_t frameID, uint64_t pageID, WTF::CompletionHandler<void(WebCore::StorageAccessWasGranted, WebCore::StorageAccessPromptWasShown)>&&) final;
+    void hasStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, uint64_t frameID, WebCore::PageIdentifier, WTF::CompletionHandler<void(bool)>&&) final;
+    void requestStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, uint64_t frameID, WebCore::PageIdentifier, WTF::CompletionHandler<void(WebCore::StorageAccessWasGranted, WebCore::StorageAccessPromptWasShown)>&&) final;
 #endif
 
 #if ENABLE(DEVICE_ORIENTATION)

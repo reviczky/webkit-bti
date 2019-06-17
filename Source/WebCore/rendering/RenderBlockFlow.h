@@ -264,7 +264,8 @@ public:
     }
     void layoutLineGridBox();
 
-    RenderMultiColumnFlow* multiColumnFlow() const { return hasRareBlockFlowData() ? rareBlockFlowData()->m_multiColumnFlow.get() : nullptr; }
+    RenderMultiColumnFlow* multiColumnFlow() const { return hasRareBlockFlowData() ? multiColumnFlowSlowCase() : nullptr; }
+    RenderMultiColumnFlow* multiColumnFlowSlowCase() const;
     void setMultiColumnFlow(RenderMultiColumnFlow&);
     void clearMultiColumnFlow();
     bool willCreateColumns(Optional<unsigned> desiredColumnCount = WTF::nullopt) const;
@@ -604,7 +605,7 @@ public:
 
 #if ENABLE(TEXT_AUTOSIZING)
     int lineCountForTextAutosizing();
-    void adjustComputedFontSizes(float size, float visibleWidth, float pageScale, bool idempotentMode);
+    void adjustComputedFontSizes(float size, float visibleWidth);
     void resetComputedFontSize()
     {
         m_widthForTextAutosizing = -1;

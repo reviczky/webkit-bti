@@ -657,7 +657,7 @@ enum CompositingPolicy {
     void setQuickLookPassword(DOMString password);
 
     [CallWith=Document] void setAsRunningUserScripts();
-    [CallWith=Document, Conditional=APPLE_PAY] void setHasStartedApplePaySession();
+    [CallWith=Document, Conditional=APPLE_PAY] void setApplePayIsActive();
 
     void disableTileSizeUpdateDelay();
     void setSpeculativeTilingDelayDisabledForTesting(boolean disabled);
@@ -672,6 +672,7 @@ enum CompositingPolicy {
     [Conditional=WEB_RTC] void setH264HardwareEncoderAllowed(boolean allowed);
     [Conditional=WEB_RTC] void applyRotationForOutgoingVideoSources(RTCPeerConnection connection);
 
+    [Conditional=MEDIA_STREAM] void setShouldInterruptAudioOnPageVisibilityChange(boolean shouldInterrupt);
     [Conditional=MEDIA_STREAM] void setCameraMediaStreamTrackOrientation(MediaStreamTrack track, short orientation);
     [Conditional=MEDIA_STREAM] void observeMediaStreamTrack(MediaStreamTrack track);
     [Conditional=MEDIA_STREAM] Promise<ImageData> grabNextMediaStreamTrackFrame();
@@ -691,6 +692,7 @@ enum CompositingPolicy {
     boolean isAnyWorkletGlobalScopeAlive();
 
     DOMString serviceWorkerClientIdentifier(Document document);
+    Promise<void> storeRegistrationsOnDisk();
 
     Promise<void> clearCacheStorageMemoryRepresentation();
     Promise<DOMString> cacheStorageEngineRepresentation();
@@ -753,4 +755,6 @@ enum CompositingPolicy {
     void testDictionaryLogging();
 
     void setXHRMaximumIntervalForUserGestureForwarding(XMLHttpRequest xhr, double interval);
+
+    void setIsPlayingToAutomotiveHeadUnit(boolean value);
 };

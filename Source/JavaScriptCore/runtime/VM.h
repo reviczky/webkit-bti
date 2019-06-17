@@ -380,6 +380,7 @@ public:
     IsoSubspace propertyTableSpace;
     IsoSubspace structureRareDataSpace;
     IsoSubspace structureSpace;
+    IsoSubspace symbolTableSpace;
 
 #define DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(name) \
     template<SubspaceAccess mode> \
@@ -451,7 +452,6 @@ public:
     };
     
     SpaceAndSet codeBlockSpace;
-    DYNAMIC_SPACE_AND_SET_DEFINE_MEMBER(inferredValueSpace)
 
     template<typename Func>
     void forEachCodeBlockSpace(const Func& func)
@@ -527,7 +527,6 @@ public:
     Strong<Structure> unlinkedFunctionCodeBlockStructure;
     Strong<Structure> unlinkedModuleProgramCodeBlockStructure;
     Strong<Structure> propertyTableStructure;
-    Strong<Structure> inferredValueStructure;
     Strong<Structure> functionRareDataStructure;
     Strong<Structure> exceptionStructure;
     Strong<Structure> promiseDeferredStructure;
@@ -555,7 +554,7 @@ public:
     JSCell* currentlyDestructingCallbackObject;
     const ClassInfo* currentlyDestructingCallbackObjectClassInfo { nullptr };
 
-    AtomicStringTable* m_atomicStringTable;
+    AtomStringTable* m_atomStringTable;
     WTF::SymbolRegistry m_symbolRegistry;
     CommonIdentifiers* propertyNames;
     const ArgList* emptyList;
@@ -567,7 +566,7 @@ public:
     WeakGCMap<StringImpl*, JSString, PtrHash<StringImpl*>> stringCache;
     Strong<JSString> lastCachedString;
 
-    AtomicStringTable* atomicStringTable() const { return m_atomicStringTable; }
+    AtomStringTable* atomStringTable() const { return m_atomStringTable; }
     WTF::SymbolRegistry& symbolRegistry() { return m_symbolRegistry; }
 
     Structure* setIteratorStructure()
@@ -633,7 +632,15 @@ public:
     };
 
     static JS_EXPORT_PRIVATE bool canUseAssembler();
-    static JS_EXPORT_PRIVATE bool isInMiniMode();
+    static bool isInMiniMode()
+    {
+        return !canUseJIT() || Options::forceMiniVMMode();
+    }
+
+    static bool useUnlinkedCodeBlockJettisoning()
+    {
+        return Options::useUnlinkedCodeBlockJettisoning() || isInMiniMode();
+    }
 
     static void computeCanUseJIT();
     ALWAYS_INLINE static bool canUseJIT()
@@ -859,7 +866,7 @@ public:
     WatchpointSet* ensureWatchpointSetForImpureProperty(const Identifier&);
     void registerWatchpointForImpureProperty(const Identifier&, Watchpoint*);
     
-    // FIXME: Use AtomicString once it got merged with Identifier.
+    // FIXME: Use AtomString once it got merged with Identifier.
     JS_EXPORT_PRIVATE void addImpureProperty(const String&);
     
     InlineWatchpointSet& primitiveGigacageEnabled() { return m_primitiveGigacageEnabled; }

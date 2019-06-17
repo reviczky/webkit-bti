@@ -64,7 +64,6 @@
 #include "Identifier.h"
 #include "IncrementalSweeper.h"
 #include "IndirectEvalExecutable.h"
-#include "InferredValue.h"
 #include "Interpreter.h"
 #include "IntlCollatorConstructor.h"
 #include "IntlDateTimeFormatConstructor.h"
@@ -156,7 +155,7 @@
 #include <wtf/SimpleStats.h>
 #include <wtf/StringPrintStream.h>
 #include <wtf/Threading.h>
-#include <wtf/text/AtomicStringTable.h>
+#include <wtf/text/AtomStringTable.h>
 #include <wtf/text/SymbolRegistry.h>
 
 #if ENABLE(C_LOOP)
@@ -233,11 +232,6 @@ void VM::computeCanUseJIT()
 #endif
 }
 
-bool VM::isInMiniMode()
-{
-    return !canUseJIT() || Options::forceMiniVMMode();
-}
-
 inline unsigned VM::nextID()
 {
     for (;;) {
@@ -286,6 +280,7 @@ VM::VM(VMType vmType, HeapType heapType)
     , propertyTableSpace ISO_SUBSPACE_INIT(heap, destructibleCellHeapCellType.get(), PropertyTable)
     , structureRareDataSpace ISO_SUBSPACE_INIT(heap, destructibleCellHeapCellType.get(), StructureRareData)
     , structureSpace ISO_SUBSPACE_INIT(heap, destructibleCellHeapCellType.get(), Structure)
+    , symbolTableSpace ISO_SUBSPACE_INIT(heap, destructibleCellHeapCellType.get(), SymbolTable)
     , executableToCodeBlockEdgesWithConstraints(executableToCodeBlockEdgeSpace)
     , executableToCodeBlockEdgesWithFinalizers(executableToCodeBlockEdgeSpace)
     , codeBlockSpace ISO_SUBSPACE_INIT(heap, destructibleCellHeapCellType.get(), CodeBlock)
@@ -297,7 +292,7 @@ VM::VM(VMType vmType, HeapType heapType)
     , topEntryFrame(nullptr)
     , topCallFrame(CallFrame::noCaller())
     , promiseDeferredTimer(std::make_unique<PromiseDeferredTimer>(*this))
-    , m_atomicStringTable(vmType == Default ? Thread::current().atomicStringTable() : new AtomicStringTable)
+    , m_atomStringTable(vmType == Default ? Thread::current().atomStringTable() : new AtomStringTable)
     , propertyNames(nullptr)
     , emptyList(new ArgList)
     , machineCodeBytesPerBytecodeWordForBaselineJIT(std::make_unique<SimpleStats>())
@@ -334,7 +329,7 @@ VM::VM(VMType vmType, HeapType heapType)
 
     // Need to be careful to keep everything consistent here
     JSLockHolder lock(this);
-    AtomicStringTable* existingEntryAtomicStringTable = Thread::current().setCurrentAtomicStringTable(m_atomicStringTable);
+    AtomStringTable* existingEntryAtomStringTable = Thread::current().setCurrentAtomStringTable(m_atomStringTable);
     structureStructure.set(*this, Structure::createStructure(*this));
     structureRareDataStructure.set(*this, StructureRareData::createStructure(*this, 0, jsNull()));
     stringStructure.set(*this, JSString::createStructure(*this, 0, jsNull()));
@@ -378,8 +373,6 @@ VM::VM(VMType vmType, HeapType heapType)
     unlinkedFunctionCodeBlockStructure.set(*this, UnlinkedFunctionCodeBlock::createStructure(*this, 0, jsNull()));
     unlinkedModuleProgramCodeBlockStructure.set(*this, UnlinkedModuleProgramCodeBlock::createStructure(*this, 0, jsNull()));
     propertyTableStructure.set(*this, PropertyTable::createStructure(*this, 0, jsNull()));
-    if (VM::canUseJIT())
-        inferredValueStructure.set(*this, InferredValue::createStructure(*this, 0, jsNull()));
     functionRareDataStructure.set(*this, FunctionRareData::createStructure(*this, 0, jsNull()));
     exceptionStructure.set(*this, Exception::createStructure(*this, 0, jsNull()));
     promiseDeferredStructure.set(*this, JSPromiseDeferred::createStructure(*this, 0, jsNull()));
@@ -400,7 +393,7 @@ VM::VM(VMType vmType, HeapType heapType)
         sentinelSetBucket();
     }
 
-    Thread::current().setCurrentAtomicStringTable(existingEntryAtomicStringTable);
+    Thread::current().setCurrentAtomStringTable(existingEntryAtomStringTable);
     
 #if !ENABLE(C_LOOP)
     initializeHostCallReturnValue(); // This is needed to convince the linker not to drop host call return support.
@@ -548,7 +541,7 @@ VM::~VM()
 
     delete propertyNames;
     if (vmType != Default)
-        delete m_atomicStringTable;
+        delete m_atomStringTable;
 
     delete clientData;
     delete m_regExpCache;
@@ -1277,7 +1270,6 @@ DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(webAssemblyWrapperFunctionSpace, cellHea
         return &m_##name->space; \
     }
 
-DYNAMIC_SPACE_AND_SET_DEFINE_MEMBER_SLOW(inferredValueSpace, destructibleCellHeapCellType.get(), InferredValue)
 DYNAMIC_SPACE_AND_SET_DEFINE_MEMBER_SLOW(evalExecutableSpace, destructibleCellHeapCellType.get(), EvalExecutable)
 DYNAMIC_SPACE_AND_SET_DEFINE_MEMBER_SLOW(moduleProgramExecutableSpace, destructibleCellHeapCellType.get(), ModuleProgramExecutable)
 

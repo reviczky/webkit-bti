@@ -2515,14 +2515,18 @@ void RenderLayer::scrollTo(const ScrollPosition& position)
             // when that completes.
             if (usesCompositedScrolling()) {
                 setNeedsCompositingGeometryUpdate();
-                setDescendantsNeedUpdateBackingAndHierarchyTraversal();
+
+                // Scroll position can affect the location of a composited descendant (which may be a sibling in z-order),
+                // so trigger a descendant walk from the paint-order parent.
+                if (auto* paintParent = paintOrderParent())
+                    paintParent->setDescendantsNeedUpdateBackingAndHierarchyTraversal();
             }
 
             updateCompositingLayersAfterScroll();
         }
 
         // Update regions, scrolling may change the clip of a particular region.
-        renderer().document().invalidateRenderingDependentRegions(Document::AnnotationsAction::Update);
+        renderer().document().invalidateRenderingDependentRegions();
         DebugPageOverlays::didLayout(renderer().frame());
     }
 
@@ -2894,26 +2898,9 @@ void RenderLayer::resize(const PlatformMouseEvent& evt, const LayoutSize& oldOff
     // FIXME (Radar 4118564): We should also autoscroll the window as necessary to keep the point under the cursor in view.
 }
 
-int RenderLayer::scrollSize(ScrollbarOrientation orientation) const
-{
-    Scrollbar* scrollbar = ((orientation == HorizontalScrollbar) ? m_hBar : m_vBar).get();
-    return scrollbar ? (scrollbar->totalSize() - scrollbar->visibleSize()) : 0;
-}
-
 void RenderLayer::setScrollOffset(const ScrollOffset& offset)
 {
     scrollTo(scrollPositionFromOffset(offset));
-}
-
-int RenderLayer::scrollOffset(ScrollbarOrientation orientation) const
-{
-    if (orientation == HorizontalScrollbar)
-        return scrollOffset().x();
-
-    if (orientation == VerticalScrollbar)
-        return scrollOffset().y();
-
-    return 0;
 }
 
 ScrollingNodeID RenderLayer::scrollingNodeID() const
@@ -3339,8 +3326,6 @@ void RenderLayer::setHasHorizontalScrollbar(bool hasScrollbar)
         m_hBar->styleChanged();
     if (m_vBar)
         m_vBar->styleChanged();
-
-    renderer().document().invalidateScrollbarDependentRegions();
 }
 
 void RenderLayer::setHasVerticalScrollbar(bool hasScrollbar)
@@ -3366,8 +3351,6 @@ void RenderLayer::setHasVerticalScrollbar(bool hasScrollbar)
         m_hBar->styleChanged();
     if (m_vBar)
         m_vBar->styleChanged();
-
-    renderer().document().invalidateScrollbarDependentRegions();
 }
 
 ScrollableArea* RenderLayer::enclosingScrollableArea() const
@@ -3638,7 +3621,6 @@ void RenderLayer::updateScrollbarsAfterLayout()
 
         updateSelfPaintingLayer();
 
-        renderer().document().invalidateScrollbarDependentRegions();
         renderer().repaint();
 
         if (renderer().style().overflowX() == Overflow::Auto || renderer().style().overflowY() == Overflow::Auto) {

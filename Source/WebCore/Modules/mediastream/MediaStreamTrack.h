@@ -70,11 +70,11 @@ public:
 
     virtual bool isCanvas() const { return false; }
 
-    const AtomicString& kind() const;
+    const AtomString& kind() const;
     WEBCORE_EXPORT const String& id() const;
     const String& label() const;
 
-    const AtomicString& contentHint() const;
+    const AtomString& contentHint() const;
     void setContentHint(const String&);
         
     bool enabled() const;
@@ -93,7 +93,7 @@ public:
     enum class StopMode { Silently, PostEvent };
     void stopTrack(StopMode = StopMode::Silently);
 
-    bool isCaptureTrack() const { return m_private->isCaptureTrack(); }
+    bool isCaptureTrack() const { return m_isCaptureTrack; }
 
     struct TrackSettings {
         Optional<int> width;
@@ -151,8 +151,8 @@ public:
     void setIdForTesting(String&& id) { m_private->setIdForTesting(WTFMove(id)); }
 
 #if !RELEASE_LOG_DISABLED
-    const Logger& logger() const final { return m_logger.get(); }
-    const void* logIdentifier() const final { return m_logIdentifier; }
+    const Logger& logger() const final { return m_private->logger(); }
+    const void* logIdentifier() const final { return m_private->logIdentifier(); }
 #endif
 
 protected:
@@ -189,9 +189,6 @@ private:
 #if !RELEASE_LOG_DISABLED
     const char* logClassName() const final { return "MediaStreamTrack"; }
     WTFLogChannel& logChannel() const final;
-    
-    Ref<const Logger> m_logger;
-    const void* m_logIdentifier;
 #endif
 
     Vector<Observer*> m_observers;
@@ -202,6 +199,7 @@ private:
     GenericTaskQueue<Timer> m_eventTaskQueue;
 
     bool m_ended { false };
+    bool m_isCaptureTrack { false };
 };
 
 typedef Vector<RefPtr<MediaStreamTrack>> MediaStreamTrackVector;

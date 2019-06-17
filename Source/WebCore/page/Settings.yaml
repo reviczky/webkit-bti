@@ -115,9 +115,6 @@ javaScriptCanAccessClipboard:
   initial: false
 shouldPrintBackgrounds:
   initial: false
-usesDashboardBackwardCompatibilityMode:
-  initial: false
-  conditional: DASHBOARD_SUPPORT
 clipboardAccessPolicy:
   type: ClipboardAccessPolicy
   initial: ClipboardAccessPolicy::RequiresUserGesture
@@ -441,7 +438,7 @@ minimumZoomFontSize:
   initial: defaultMinimumZoomFontSize()
   conditional: TEXT_AUTOSIZING
 textAutosizingUsesIdempotentMode:
-  initial: defaultTextAutosizingUsesIdempotentMode()
+  initial: false
   onChange: setNeedsRecalcStyleInAllFrames
   conditional: TEXT_AUTOSIZING
 
@@ -588,6 +585,9 @@ visualViewportEnabled:
 
 visualViewportAPIEnabled:
   initial: false
+
+syntheticEditingCommandsEnabled:
+  initial: true
 
 CSSOMViewScrollingAPIEnabled:
   initial: false
@@ -836,6 +836,9 @@ shouldDecidePolicyBeforeLoadingQuickLookPreview:
 
 shouldDispatchSyntheticMouseEventsWhenModifyingSelection:
   initial: false
+
+allowViewportShrinkToFitContent:
+  initial: true
 
 # Deprecated
 

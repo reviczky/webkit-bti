@@ -151,7 +151,7 @@ HTMLCanvasElement::~HTMLCanvasElement()
     releaseImageBufferAndContext();
 }
 
-void HTMLCanvasElement::parseAttribute(const QualifiedName& name, const AtomicString& value)
+void HTMLCanvasElement::parseAttribute(const QualifiedName& name, const AtomString& value)
 {
     if (name == widthAttr || name == heightAttr)
         reset();
@@ -180,7 +180,7 @@ ExceptionOr<void> HTMLCanvasElement::setHeight(unsigned value)
 {
     if (m_context && m_context->isPlaceholder())
         return Exception { InvalidStateError };
-    setAttributeWithoutSynchronization(heightAttr, AtomicString::number(limitToOnlyHTMLNonNegative(value, defaultHeight)));
+    setAttributeWithoutSynchronization(heightAttr, AtomString::number(limitToOnlyHTMLNonNegative(value, defaultHeight)));
     return { };
 }
 
@@ -188,7 +188,7 @@ ExceptionOr<void> HTMLCanvasElement::setWidth(unsigned value)
 {
     if (m_context && m_context->isPlaceholder())
         return Exception { InvalidStateError };
-    setAttributeWithoutSynchronization(widthAttr, AtomicString::number(limitToOnlyHTMLNonNegative(value, defaultWidth)));
+    setAttributeWithoutSynchronization(widthAttr, AtomString::number(limitToOnlyHTMLNonNegative(value, defaultWidth)));
     return { };
 }
 
@@ -329,11 +329,6 @@ CanvasRenderingContext2D* HTMLCanvasElement::createContext2d(const String& type)
     ASSERT_UNUSED(HTMLCanvasElement::is2dType(type), type);
     ASSERT(!m_context);
 
-    bool usesDashboardCompatibilityMode = false;
-#if ENABLE(DASHBOARD_SUPPORT)
-    usesDashboardCompatibilityMode = document().settings().usesDashboardBackwardCompatibilityMode();
-#endif
-
     // Make sure we don't use more pixel memory than the system can support.
     size_t requestedPixelMemory = 4 * width() * height();
     if (activePixelMemory + requestedPixelMemory > maxActivePixelMemory()) {
@@ -345,7 +340,7 @@ CanvasRenderingContext2D* HTMLCanvasElement::createContext2d(const String& type)
         return nullptr;
     }
 
-    m_context = CanvasRenderingContext2D::create(*this, document().inQuirksMode(), usesDashboardCompatibilityMode);
+    m_context = CanvasRenderingContext2D::create(*this, document().inQuirksMode());
 
     downcast<CanvasRenderingContext2D>(*m_context).setUsesDisplayListDrawing(m_usesDisplayListDrawing);
     downcast<CanvasRenderingContext2D>(*m_context).setTracksDisplayListReplay(m_tracksDisplayListReplay);
@@ -790,18 +785,18 @@ RefPtr<MediaSample> HTMLCanvasElement::toMediaSample()
 #endif
 }
 
-ExceptionOr<Ref<MediaStream>> HTMLCanvasElement::captureStream(ScriptExecutionContext& context, Optional<double>&& frameRequestRate)
+ExceptionOr<Ref<MediaStream>> HTMLCanvasElement::captureStream(Document& document, Optional<double>&& frameRequestRate)
 {
     if (!originClean())
         return Exception(SecurityError, "Canvas is tainted"_s);
     if (RuntimeEnabledFeatures::sharedFeatures().webAPIStatisticsEnabled())
-        ResourceLoadObserver::shared().logCanvasRead(document());
+        ResourceLoadObserver::shared().logCanvasRead(this->document());
 
     if (frameRequestRate && frameRequestRate.value() < 0)
         return Exception(NotSupportedError, "frameRequestRate is negative"_s);
 
-    auto track = CanvasCaptureMediaStreamTrack::create(context, *this, WTFMove(frameRequestRate));
-    auto stream =  MediaStream::create(context);
+    auto track = CanvasCaptureMediaStreamTrack::create(document, *this, WTFMove(frameRequestRate));
+    auto stream =  MediaStream::create(document);
     stream->addTrack(track);
     return stream;
 }

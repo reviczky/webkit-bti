@@ -36,6 +36,8 @@
 #include "WebPageProxy.h"
 #include "WebPageProxyMessages.h"
 #include "WebProcessProxy.h"
+#include "WebSocketTask.h"
+#include <WebCore/AdClickAttribution.h>
 #include <WebCore/CookieJar.h>
 #include <WebCore/NetworkStorageSession.h>
 #include <WebCore/ResourceRequest.h>
@@ -90,6 +92,7 @@ NetworkSession::NetworkSession(NetworkProcess& networkProcess, PAL::SessionID se
 
 NetworkSession::~NetworkSession()
 {
+    m_storageManager->resume();
     m_storageManager->waitUntilWritesFinished();
 }
 
@@ -97,11 +100,19 @@ void NetworkSession::invalidateAndCancel()
 {
     for (auto* task : m_dataTaskSet)
         task->invalidateAndCancel();
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+    if (m_resourceLoadStatistics)
+        m_resourceLoadStatistics->invalidateAndCancel();
+#endif
+#if !ASSERT_DISABLED
+    m_isInvalidated = true;
+#endif
 }
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
 void NetworkSession::setResourceLoadStatisticsEnabled(bool enable)
 {
+    ASSERT(!m_isInvalidated);
     if (!enable) {
         m_resourceLoadStatistics = nullptr;
         return;
@@ -201,6 +212,11 @@ void NetworkSession::removeKeptAliveLoad(NetworkResourceLoader& loader)
     ASSERT(m_sessionID == loader.sessionID());
     ASSERT(m_keptAliveLoads.contains(loader));
     m_keptAliveLoads.remove(loader);
+}
+
+std::unique_ptr<WebSocketTask> NetworkSession::createWebSocketTask(NetworkSocketChannel&, const WebCore::ResourceRequest&, const String& protocol)
+{
+    return nullptr;
 }
 
 } // namespace WebKit

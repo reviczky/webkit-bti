@@ -149,6 +149,9 @@ class HTMLMediaElement
 {
     WTF_MAKE_ISO_ALLOCATED(HTMLMediaElement);
 public:
+    using WeakValueType = HTMLElement::WeakValueType;
+    using HTMLElement::weakPtrFactory;
+
     RefPtr<MediaPlayer> player() const { return m_player; }
 
     virtual bool isVideo() const { return false; }
@@ -171,7 +174,7 @@ public:
 
     bool canSaveMediaData() const;
 
-    bool doesHaveAttribute(const AtomicString&, AtomicString* value = nullptr) const override;
+    bool doesHaveAttribute(const AtomString&, AtomString* value = nullptr) const override;
 
     PlatformLayer* platformLayer() const;
     bool isVideoLayerInline();
@@ -212,7 +215,7 @@ public:
     const MediaProvider& srcObject() const { return m_mediaProvider; }
     void setSrcObject(MediaProvider&&);
 
-    WEBCORE_EXPORT void setCrossOrigin(const AtomicString&);
+    WEBCORE_EXPORT void setCrossOrigin(const AtomString&);
     WEBCORE_EXPORT String crossOrigin() const;
 
 // network state
@@ -404,8 +407,8 @@ public:
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     void webkitShowPlaybackTargetPicker();
-    bool addEventListener(const AtomicString& eventType, Ref<EventListener>&&, const AddEventListenerOptions&) override;
-    bool removeEventListener(const AtomicString& eventType, EventListener&, const ListenerOptions&) override;
+    bool addEventListener(const AtomString& eventType, Ref<EventListener>&&, const AddEventListenerOptions&) override;
+    bool removeEventListener(const AtomString& eventType, EventListener&, const ListenerOptions&) override;
 
     void wirelessRoutesAvailableDidChange() override;
     void setWirelessPlaybackTarget(Ref<MediaPlaybackTarget>&&) override;
@@ -575,14 +578,12 @@ public:
 
     enum class AutoplayEventPlaybackState { None, PreventedAutoplay, StartedWithUserGesture, StartedWithoutUserGesture };
 
-    using HTMLElement::weakPtrFactory;
-
 protected:
     HTMLMediaElement(const QualifiedName&, Document&, bool createdByParser);
     virtual void finishInitialization();
     virtual ~HTMLMediaElement();
 
-    void parseAttribute(const QualifiedName&, const AtomicString&) override;
+    void parseAttribute(const QualifiedName&, const AtomString&) override;
     void finishParsingChildren() override;
     bool isURLAttribute(const Attribute&) const override;
     void willAttachRenderers() override;
@@ -612,7 +613,7 @@ protected:
     void updateMediaControlsAfterPresentationModeChange();
 #endif
 
-    void scheduleEvent(const AtomicString& eventName);
+    void scheduleEvent(const AtomString& eventName);
 
 private:
     void createMediaPlayer();

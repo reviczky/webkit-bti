@@ -306,7 +306,9 @@ Modules/websockets/WorkerThreadableWebSocketChannel.cpp
 
 Modules/webgpu/GPUCanvasContext.cpp
 Modules/webgpu/NavigatorGPU.cpp
+Modules/webgpu/WHLSL/WHLSLComputeDimensions.cpp
 Modules/webgpu/WHLSL/WHLSLASTDumper.cpp
+Modules/webgpu/WHLSL/WHLSLAutoInitializeVariables.cpp
 Modules/webgpu/WHLSL/WHLSLInferTypes.cpp
 Modules/webgpu/WHLSL/WHLSLLexer.cpp
 Modules/webgpu/WHLSL/WHLSLParser.cpp
@@ -322,6 +324,7 @@ Modules/webgpu/WHLSL/WHLSLIntrinsics.cpp
 Modules/webgpu/WHLSL/WHLSLStatementBehaviorChecker.cpp
 Modules/webgpu/WHLSL/WHLSLNameContext.cpp
 Modules/webgpu/WHLSL/WHLSLNameResolver.cpp
+Modules/webgpu/WHLSL/WHLSLPreserveVariableLifetimes.cpp
 Modules/webgpu/WHLSL/WHLSLResolveOverloadImpl.cpp
 Modules/webgpu/WHLSL/WHLSLRecursionChecker.cpp
 Modules/webgpu/WHLSL/WHLSLVisitor.cpp
@@ -532,6 +535,7 @@ bindings/js/JSPromiseRejectionEventCustom.cpp
 bindings/js/JSReadableStreamSourceCustom.cpp
 bindings/js/JSRemoteDOMWindowBase.cpp
 bindings/js/JSRemoteDOMWindowCustom.cpp
+bindings/js/JSResizeObserverEntryCustom.cpp
 bindings/js/JSSVGPathSegCustom.cpp
 bindings/js/JSSVGViewSpecCustom.cpp
 bindings/js/JSStyleSheetCustom.cpp
@@ -672,6 +676,7 @@ css/CSSFontVariationValue.cpp
 css/CSSFunctionValue.cpp
 css/CSSGradientValue.cpp
 css/CSSGridAutoRepeatValue.cpp
+css/CSSGridIntegerRepeatValue.cpp
 css/CSSGridLineNamesValue.cpp
 css/CSSGridTemplateAreasValue.cpp
 css/CSSGroupingRule.cpp
@@ -1348,6 +1353,7 @@ layout/inlineformatting/InlineFormattingContextGeometry.cpp
 layout/inlineformatting/InlineFormattingContextLineLayout.cpp
 layout/inlineformatting/InlineFormattingState.cpp
 layout/inlineformatting/InlineInvalidation.cpp
+layout/inlineformatting/InlineLine.cpp
 layout/inlineformatting/InlineLineBreaker.cpp
 layout/inlineformatting/InlineTextItem.cpp
 layout/inlineformatting/text/TextUtil.cpp
@@ -2143,6 +2149,7 @@ rendering/style/StyleScrollSnapPoints.cpp
 rendering/style/StyleSurroundData.cpp
 rendering/style/StyleTransformData.cpp
 rendering/style/StyleVisualData.cpp
+rendering/style/TextSizeAdjustment.cpp
 rendering/style/WillChangeData.cpp
 
 rendering/svg/RenderSVGBlock.cpp
@@ -2744,7 +2751,6 @@ JSGPUBufferUsage.cpp
 JSGPUCompareFunction.cpp
 JSGPUDepthStencilStateDescriptor.cpp
 JSGPUExtent3D.cpp
-JSGPUInputStateDescriptor.cpp
 JSGPULoadOp.cpp
 JSGPUOrigin3D.cpp
 JSGPURequestAdapterOptions.cpp
@@ -2755,6 +2761,7 @@ JSGPUTextureDescriptor.cpp
 JSGPUTextureFormat.cpp
 JSGPUTextureUsage.cpp
 JSGPUVertexAttributeDescriptor.cpp
+JSGPUVertexBufferDescriptor.cpp
 JSGPUVertexInputDescriptor.cpp
 JSGainNode.cpp
 JSGeolocation.cpp
@@ -2930,6 +2937,7 @@ JSNavigatorGeolocation.cpp
 JSNavigatorGPU.cpp
 JSNavigatorID.cpp
 JSNavigatorLanguage.cpp
+JSNavigatorMaxTouchPoints.cpp
 JSNavigatorMediaCapabilities.cpp
 JSNavigatorMediaDevices.cpp
 JSNavigatorOnLine.cpp

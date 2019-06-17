@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,28 +23,18 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "config.h"
+#include "APIContextMenuElementInfo.h"
 
-#if ENABLE(WEBGPU)
+#if PLATFORM(IOS_FAMILY)
 
-#include "GPUVertexAttributeDescriptor.h"
-#include "GPUVertexInputDescriptor.h"
-#include <wtf/Vector.h>
+namespace API {
 
-namespace WebCore {
+ContextMenuElementInfo::ContextMenuElementInfo(const WebKit::InteractionInformationAtPosition& info)
+    : m_interactionInformation(info)
+{
+}
 
-enum class GPUIndexFormat {
-    Uint16,
-    Uint32,
-};
+} // namespace API
 
-struct GPUInputStateDescriptor {
-    Optional<GPUIndexFormat> indexFormat;
-
-    Vector<GPUVertexAttributeDescriptor> attributes;
-    Vector<GPUVertexInputDescriptor> inputs;
-};
-
-} // namespace WebCore
-
-#endif // ENABLE(WEBGPU)
+#endif // PLATFORM(IOS_FAMILY)

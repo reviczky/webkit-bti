@@ -31,6 +31,7 @@
 #include "EdenGCActivityCallback.h"
 #include "Exception.h"
 #include "FullGCActivityCallback.h"
+#include "FunctionExecutableInlines.h"
 #include "GCActivityCallback.h"
 #include "GCIncomingRefCountedSetInlines.h"
 #include "GCSegmentedArrayInlines.h"
@@ -67,6 +68,7 @@
 #include "SubspaceInlines.h"
 #include "SuperSampler.h"
 #include "SweepingScope.h"
+#include "SymbolTableInlines.h"
 #include "SynchronousStopTheWorldMutatorScheduler.h"
 #include "TypeProfiler.h"
 #include "TypeProfilerLog.h"
@@ -148,7 +150,7 @@ bool isValidSharedInstanceThreadState(VM* vm)
 
 bool isValidThreadState(VM* vm)
 {
-    if (vm->atomicStringTable() != Thread::current().atomicStringTable())
+    if (vm->atomStringTable() != Thread::current().atomStringTable())
         return false;
 
     if (vm->isSharedInstance() && !isValidSharedInstanceThreadState(vm))
@@ -301,6 +303,14 @@ Heap::Heap(VM* vm, HeapType heapType)
     , m_threadCondition(AutomaticThreadCondition::create())
 {
     m_worldState.store(0);
+
+    for (unsigned i = 0, numberOfParallelThreads = heapHelperPool().numberOfThreads(); i < numberOfParallelThreads; ++i) {
+        std::unique_ptr<SlotVisitor> visitor = std::make_unique<SlotVisitor>(*this, toCString("P", i + 1));
+        if (Options::optimizeParallelSlotVisitorsForStoppedMutator())
+            visitor->optimizeForStoppedMutator();
+        m_availableParallelSlotVisitors.append(visitor.get());
+        m_parallelSlotVisitors.append(WTFMove(visitor));
+    }
     
     if (Options::useConcurrentGC()) {
         if (Options::useStochasticMutatorScheduler())
@@ -588,14 +598,15 @@ void Heap::finalizeMarkedUnconditionalFinalizers(CellSet& cellSet)
 void Heap::finalizeUnconditionalFinalizers()
 {
     vm()->builtinExecutables()->finalizeUnconditionally();
-    if (vm()->m_inferredValueSpace)
-        finalizeMarkedUnconditionalFinalizers<InferredValue>(vm()->m_inferredValueSpace->space);
+    finalizeMarkedUnconditionalFinalizers<FunctionExecutable>(vm()->functionExecutableSpace.space);
+    finalizeMarkedUnconditionalFinalizers<SymbolTable>(vm()->symbolTableSpace);
     vm()->forEachCodeBlockSpace(
         [&] (auto& space) {
             this->finalizeMarkedUnconditionalFinalizers<CodeBlock>(space.set);
         });
     finalizeMarkedUnconditionalFinalizers<ExecutableToCodeBlockEdge>(vm()->executableToCodeBlockEdgesWithFinalizers);
     finalizeMarkedUnconditionalFinalizers<StructureRareData>(vm()->structureRareDataSpace);
+    finalizeMarkedUnconditionalFinalizers<UnlinkedFunctionExecutable>(vm()->unlinkedFunctionExecutableSpace.set);
     if (vm()->m_weakSetSpace)
         finalizeMarkedUnconditionalFinalizers<JSWeakSet>(*vm()->m_weakSetSpace);
     if (vm()->m_weakMapSpace)
@@ -1283,19 +1294,8 @@ NEVER_INLINE bool Heap::runBeginPhase(GCConductor conn)
             SlotVisitor* slotVisitor;
             {
                 LockHolder locker(m_parallelSlotVisitorLock);
-                if (m_availableParallelSlotVisitors.isEmpty()) {
-                    std::unique_ptr<SlotVisitor> newVisitor = std::make_unique<SlotVisitor>(
-                        *this, toCString("P", m_parallelSlotVisitors.size() + 1));
-                    
-                    if (Options::optimizeParallelSlotVisitorsForStoppedMutator())
-                        newVisitor->optimizeForStoppedMutator();
-                    
-                    newVisitor->didStartMarking();
-                    
-                    slotVisitor = newVisitor.get();
-                    m_parallelSlotVisitors.append(WTFMove(newVisitor));
-                } else
-                    slotVisitor = m_availableParallelSlotVisitors.takeLast();
+                RELEASE_ASSERT_WITH_MESSAGE(!m_availableParallelSlotVisitors.isEmpty(), "Parallel SlotVisitors are allocated apriori");
+                slotVisitor = m_availableParallelSlotVisitors.takeLast();
             }
 
             Thread::registerGCThread(GCThreadType::Helper);
@@ -2105,7 +2105,7 @@ Heap::Ticket Heap::requestCollection(GCRequest request)
     stopIfNecessary();
     
     ASSERT(vm()->currentThreadIsHoldingAPILock());
-    RELEASE_ASSERT(vm()->atomicStringTable() == Thread::current().atomicStringTable());
+    RELEASE_ASSERT(vm()->atomStringTable() == Thread::current().atomStringTable());
     
     LockHolder locker(*m_threadLock);
     // We may be able to steal the conn. That only works if the collector is definitely not running

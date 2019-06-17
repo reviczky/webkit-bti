@@ -932,10 +932,10 @@ static ALWAYS_INLINE JSValue getByVal(VM& vm, ExecState* exec, OpGetByVal byteco
     if (LIKELY(baseValue.isCell() && subscript.isString())) {
         Structure& structure = *baseValue.asCell()->structure(vm);
         if (JSCell::canUseFastGetOwnProperty(structure)) {
-            RefPtr<AtomicStringImpl> existingAtomicString = asString(subscript)->toExistingAtomicString(exec);
+            RefPtr<AtomStringImpl> existingAtomString = asString(subscript)->toExistingAtomString(exec);
             RETURN_IF_EXCEPTION(scope, JSValue());
-            if (existingAtomicString) {
-                if (JSValue result = baseValue.asCell()->fastGetOwnProperty(vm, structure, existingAtomicString.get()))
+            if (existingAtomString) {
+                if (JSValue result = baseValue.asCell()->fastGetOwnProperty(vm, structure, existingAtomString.get()))
                     return result;
             }
         }
@@ -1722,9 +1722,14 @@ LLINT_SLOW_PATH_DECL(slow_path_call_eval)
     return commonCallEval(exec, pc, LLInt::getCodePtr<JSEntryPtrTag>(llint_generic_return_point));
 }
 
-LLINT_SLOW_PATH_DECL(slow_path_call_eval_wide)
+LLINT_SLOW_PATH_DECL(slow_path_call_eval_wide16)
 {
-    return commonCallEval(exec, pc, LLInt::getWideCodePtr<JSEntryPtrTag>(llint_generic_return_point));
+    return commonCallEval(exec, pc, LLInt::getWide16CodePtr<JSEntryPtrTag>(llint_generic_return_point));
+}
+
+LLINT_SLOW_PATH_DECL(slow_path_call_eval_wide32)
+{
+    return commonCallEval(exec, pc, LLInt::getWide32CodePtr<JSEntryPtrTag>(llint_generic_return_point));
 }
 
 LLINT_SLOW_PATH_DECL(slow_path_strcat)

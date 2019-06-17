@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -594,6 +594,8 @@ AccessibilityObject* AXObjectCache::getOrCreate(Node* node)
     if (!inCanvasSubtree && !isHidden && !insideMeterElement)
         return nullptr;
 
+    auto protectedNode = makeRef(*node);
+
     // Fallback content is only focusable as long as the canvas is displayed and visible.
     // Update the style before Element::isFocusable() gets called.
     if (inCanvasSubtree)
@@ -849,7 +851,7 @@ void AXObjectCache::handleLiveRegionCreated(Node* node)
     Element* element = downcast<Element>(node);
     String liveRegionStatus = element->attributeWithoutSynchronization(aria_liveAttr);
     if (liveRegionStatus.isEmpty()) {
-        const AtomicString& ariaRole = element->attributeWithoutSynchronization(roleAttr);
+        const AtomString& ariaRole = element->attributeWithoutSynchronization(roleAttr);
         if (!ariaRole.isEmpty())
             liveRegionStatus = AccessibilityObject::defaultLiveRegionStatusForRole(AccessibilityObject::ariaRoleToWebCoreRole(ariaRole));
     }
@@ -3037,7 +3039,7 @@ bool isNodeAriaVisible(Node* node)
     bool ariaHiddenFalsePresent = false;
     for (Node* testNode = node; testNode; testNode = testNode->parentNode()) {
         if (is<Element>(*testNode)) {
-            const AtomicString& ariaHiddenValue = downcast<Element>(*testNode).attributeWithoutSynchronization(aria_hiddenAttr);
+            const AtomString& ariaHiddenValue = downcast<Element>(*testNode).attributeWithoutSynchronization(aria_hiddenAttr);
             if (equalLettersIgnoringASCIICase(ariaHiddenValue, "true"))
                 return false;
             

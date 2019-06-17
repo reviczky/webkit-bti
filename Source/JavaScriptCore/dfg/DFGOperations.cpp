@@ -548,6 +548,19 @@ EncodedJSValue JIT_OPERATION operationValueDiv(ExecState* exec, EncodedJSValue e
     return binaryOp(exec, encodedOp1, encodedOp2, bigIntOp, numberOp, "Invalid mix of BigInt and other type in division operation.");
 }
 
+EncodedJSValue JIT_OPERATION operationValuePow(ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2)
+{
+    auto bigIntOp = [] (ExecState* exec, JSBigInt* left, JSBigInt* right) -> JSBigInt* {
+        return JSBigInt::exponentiate(exec, left, right);
+    };
+
+    auto numberOp = [] (double left, double right) -> double {
+        return operationMathPow(left, right);
+    };
+
+    return binaryOp(exec, encodedOp1, encodedOp2, bigIntOp, numberOp, "Invalid mix of BigInt and other type in exponentiation operation."_s);
+}
+
 double JIT_OPERATION operationArithAbs(ExecState* exec, EncodedJSValue encodedOp1)
 {
     VM* vm = &exec->vm();
@@ -699,10 +712,10 @@ EncodedJSValue JIT_OPERATION operationGetByVal(ExecState* exec, EncodedJSValue e
         } else if (property.isString()) {
             Structure& structure = *base->structure(vm);
             if (JSCell::canUseFastGetOwnProperty(structure)) {
-                RefPtr<AtomicStringImpl> existingAtomicString = asString(property)->toExistingAtomicString(exec);
+                RefPtr<AtomStringImpl> existingAtomString = asString(property)->toExistingAtomString(exec);
                 RETURN_IF_EXCEPTION(scope, encodedJSValue());
-                if (existingAtomicString) {
-                    if (JSValue result = base->fastGetOwnProperty(vm, structure, existingAtomicString.get()))
+                if (existingAtomString) {
+                    if (JSValue result = base->fastGetOwnProperty(vm, structure, existingAtomString.get()))
                         return JSValue::encode(result);
                 }
             }
@@ -736,10 +749,10 @@ EncodedJSValue JIT_OPERATION operationGetByValCell(ExecState* exec, JSCell* base
     } else if (property.isString()) {
         Structure& structure = *base->structure(vm);
         if (JSCell::canUseFastGetOwnProperty(structure)) {
-            RefPtr<AtomicStringImpl> existingAtomicString = asString(property)->toExistingAtomicString(exec);
+            RefPtr<AtomStringImpl> existingAtomString = asString(property)->toExistingAtomString(exec);
             RETURN_IF_EXCEPTION(scope, encodedJSValue());
-            if (existingAtomicString) {
-                if (JSValue result = base->fastGetOwnProperty(vm, structure, existingAtomicString.get()))
+            if (existingAtomString) {
+                if (JSValue result = base->fastGetOwnProperty(vm, structure, existingAtomString.get()))
                     return JSValue::encode(result);
             }
         }
@@ -1396,6 +1409,17 @@ JSCell* JIT_OPERATION operationDivBigInt(ExecState* exec, JSCell* op1, JSCell* o
     return JSBigInt::divide(exec, leftOperand, rightOperand);
 }
 
+JSCell* JIT_OPERATION operationPowBigInt(ExecState* exec, JSCell* op1, JSCell* op2)
+{
+    VM* vm = &exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+    
+    JSBigInt* leftOperand = jsCast<JSBigInt*>(op1);
+    JSBigInt* rightOperand = jsCast<JSBigInt*>(op2);
+    
+    return JSBigInt::exponentiate(exec, leftOperand, rightOperand);
+}
+
 JSCell* JIT_OPERATION operationBitAndBigInt(ExecState* exec, JSCell* op1, JSCell* op2)
 {
     VM* vm = &exec->vm();
@@ -1485,10 +1509,10 @@ EncodedJSValue JIT_OPERATION operationGetByValWithThis(ExecState* exec, EncodedJ
     if (LIKELY(baseValue.isCell() && subscript.isString())) {
         Structure& structure = *baseValue.asCell()->structure(vm);
         if (JSCell::canUseFastGetOwnProperty(structure)) {
-            RefPtr<AtomicStringImpl> existingAtomicString = asString(subscript)->toExistingAtomicString(exec);
+            RefPtr<AtomStringImpl> existingAtomString = asString(subscript)->toExistingAtomString(exec);
             RETURN_IF_EXCEPTION(scope, encodedJSValue());
-            if (existingAtomicString) {
-                if (JSValue result = baseValue.asCell()->fastGetOwnProperty(vm, structure, existingAtomicString.get()))
+            if (existingAtomString) {
+                if (JSValue result = baseValue.asCell()->fastGetOwnProperty(vm, structure, existingAtomString.get()))
                     return JSValue::encode(result);
             }
         }

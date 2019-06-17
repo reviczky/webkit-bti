@@ -333,23 +333,6 @@ RefPtr<DisplayRefreshMonitor> DrawingAreaCoordinatedGraphics::createDisplayRefre
 }
 #endif
 
-#if USE(TEXTURE_MAPPER_GL) && PLATFORM(GTK) && PLATFORM(X11) && !USE(REDIRECTED_XCOMPOSITE_WINDOW)
-void DrawingAreaCoordinatedGraphics::setNativeSurfaceHandleForCompositing(uint64_t handle)
-{
-    m_nativeSurfaceHandleForCompositing = handle;
-    if (m_layerTreeHost) {
-        m_webPage.corePage()->settings().setAcceleratedCompositingEnabled(true);
-        m_layerTreeHost->setNativeSurfaceHandleForCompositing(handle);
-    }
-}
-
-void DrawingAreaCoordinatedGraphics::destroyNativeSurfaceHandleForCompositing(bool& handled)
-{
-    handled = true;
-    setNativeSurfaceHandleForCompositing(0);
-}
-#endif
-
 void DrawingAreaCoordinatedGraphics::activityStateDidChange(OptionSet<ActivityState::Flag> changed, ActivityStateChangeID, const Vector<CallbackID>&)
 {
     if (changed & ActivityState::IsVisible) {
@@ -544,6 +527,10 @@ void DrawingAreaCoordinatedGraphics::enterAcceleratedCompositingMode(GraphicsLay
     m_exitCompositingTimer.stop();
     m_wantsToExitAcceleratedCompositingMode = false;
 
+    // In order to ensure that we get a unique DisplayRefreshMonitor per-DrawingArea (necessary because ThreadedDisplayRefreshMonitor
+    // is driven by the ThreadedCompositor of the drawing area), give each page a unique DisplayID derived from WebPage's unique ID.
+    m_webPage.windowScreenDidChange(std::numeric_limits<uint32_t>::max() - m_webPage.pageID().toUInt64());
+
     ASSERT(!m_layerTreeHost);
     if (m_previousLayerTreeHost) {
         m_layerTreeHost = WTFMove(m_previousLayerTreeHost);
@@ -563,10 +550,6 @@ void DrawingAreaCoordinatedGraphics::enterAcceleratedCompositingMode(GraphicsLay
             m_layerTreeHost->pauseRendering();
     }
 
-#if USE(TEXTURE_MAPPER_GL) && PLATFORM(GTK) && PLATFORM(X11) && !USE(REDIRECTED_XCOMPOSITE_WINDOW)
-    if (m_nativeSurfaceHandleForCompositing)
-        m_layerTreeHost->setNativeSurfaceHandleForCompositing(m_nativeSurfaceHandleForCompositing);
-#endif
     if (!m_inUpdateBackingStoreState)
         m_layerTreeHost->setShouldNotifyAfterNextScheduledLayerFlush(true);
 
@@ -596,6 +579,9 @@ void DrawingAreaCoordinatedGraphics::exitAcceleratedCompositingMode()
     m_previousLayerTreeHost->pauseRendering();
     m_previousLayerTreeHost->setLayerFlushSchedulingEnabled(false);
     m_discardPreviousLayerTreeHostTimer.startOneShot(5_s);
+
+    // Always use the primary display ID (0) when not in accelerated compositing mode.
+    m_webPage.windowScreenDidChange(0);
 
     m_dirtyRegion = m_webPage.bounds();
 

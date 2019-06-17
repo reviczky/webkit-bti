@@ -38,7 +38,7 @@
 #include "VideoSinkGStreamer.h"
 #include "WebKitWebSourceGStreamer.h"
 #include <wtf/glib/GUniquePtr.h>
-#include <wtf/text/AtomicString.h>
+#include <wtf/text/AtomString.h>
 #include <wtf/text/CString.h>
 #include <wtf/MathExtras.h>
 #include <wtf/StringPrintStream.h>
@@ -102,7 +102,9 @@
 
 #if PLATFORM(WAYLAND)
 #include "PlatformDisplayWayland.h"
-#elif PLATFORM(WPE)
+#endif
+
+#if USE(WPE_RENDERER)
 #include "PlatformDisplayLibWPE.h"
 #endif
 
@@ -448,13 +450,14 @@ bool MediaPlayerPrivateGStreamerBase::ensureGstGLContext()
         }
 #endif
 
-#if PLATFORM(WPE)
-        ASSERT(is<PlatformDisplayLibWPE>(sharedDisplay));
-        GST_DEBUG_OBJECT(pipeline(), "Creating WPE shared EGL display");
-        if (shouldAdoptRef)
-            m_glDisplay = adoptGRef(GST_GL_DISPLAY(gst_gl_display_egl_new_with_egl_display(downcast<PlatformDisplayLibWPE>(sharedDisplay).eglDisplay())));
-        else
-            m_glDisplay = GST_GL_DISPLAY(gst_gl_display_egl_new_with_egl_display(downcast<PlatformDisplayLibWPE>(sharedDisplay).eglDisplay()));
+#if USE(WPE_RENDERER)
+        if (is<PlatformDisplayLibWPE>(sharedDisplay)) {
+            GST_DEBUG_OBJECT(pipeline(), "Creating WPE shared EGL display");
+            if (shouldAdoptRef)
+                m_glDisplay = adoptGRef(GST_GL_DISPLAY(gst_gl_display_egl_new_with_egl_display(downcast<PlatformDisplayLibWPE>(sharedDisplay).eglDisplay())));
+            else
+                m_glDisplay = GST_GL_DISPLAY(gst_gl_display_egl_new_with_egl_display(downcast<PlatformDisplayLibWPE>(sharedDisplay).eglDisplay()));
+        }
 #endif
 
         ASSERT(m_glDisplay);

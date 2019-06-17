@@ -352,6 +352,10 @@ private:
     bool m_disallowLayout { false };
 };
 
+#if ENABLE(INTERSECTION_OBSERVER)
+static const Seconds intersectionObserversInitialUpdateDelay { 2000_ms };
+#endif
+
 // DOM Level 2 says (letters added):
 //
 // a) Name start characters must have one of the categories Ll, Lu, Lo, Lt, Nl.
@@ -536,6 +540,7 @@ Document::Document(Frame* frame, const URL& url, unsigned documentClasses, unsig
 #endif
 #if ENABLE(INTERSECTION_OBSERVER)
     , m_intersectionObserversNotifyTimer(*this, &Document::notifyIntersectionObserversTimerFired)
+    , m_intersectionObserversInitialUpdateTimer(*this, &Document::scheduleTimedRenderingUpdate)
 #endif
     , m_loadEventDelayTimer(*this, &Document::loadEventDelayTimerFired)
 #if PLATFORM(IOS_FAMILY) && ENABLE(DEVICE_ORIENTATION)
@@ -888,12 +893,12 @@ static ALWAYS_INLINE Ref<HTMLElement> createUpgradeCandidateElement(Document& do
     return element;
 }
 
-static ALWAYS_INLINE Ref<HTMLElement> createUpgradeCandidateElement(Document& document, const AtomicString& localName)
+static ALWAYS_INLINE Ref<HTMLElement> createUpgradeCandidateElement(Document& document, const AtomString& localName)
 {
     return createUpgradeCandidateElement(document, QualifiedName { nullAtom(), localName, xhtmlNamespaceURI });
 }
 
-static inline bool isValidHTMLElementName(const AtomicString& localName)
+static inline bool isValidHTMLElementName(const AtomString& localName)
 {
     return Document::isValidName(localName);
 }
@@ -924,7 +929,7 @@ static ExceptionOr<Ref<Element>> createHTMLElementWithNameValidation(Document& d
     return Ref<Element> { createUpgradeCandidateElement(document, name) };
 }
 
-ExceptionOr<Ref<Element>> Document::createElementForBindings(const AtomicString& name)
+ExceptionOr<Ref<Element>> Document::createElementForBindings(const AtomString& name)
 {
     if (isHTMLDocument())
         return createHTMLElementWithNameValidation(*this, name.convertToASCIILowercase());
@@ -1169,7 +1174,7 @@ static inline bool isPotentialCustomElementNameCharacter(UChar32 character)
     return std::binary_search(std::begin(ranges), std::end(ranges), character);
 }
 
-CustomElementNameValidationStatus Document::validateCustomElementName(const AtomicString& localName)
+CustomElementNameValidationStatus Document::validateCustomElementName(const AtomString& localName)
 {
     if (!isASCIILower(localName[0]))
         return CustomElementNameValidationStatus::FirstCharacterIsNotLowercaseASCIILetter;
@@ -1190,7 +1195,7 @@ CustomElementNameValidationStatus Document::validateCustomElementName(const Atom
 #if ENABLE(MATHML)
     const auto& annotationXmlLocalName = MathMLNames::annotation_xmlTag->localName();
 #else
-    static NeverDestroyed<const AtomicString> annotationXmlLocalName("annotation-xml", AtomicString::ConstructFromLiteral);
+    static NeverDestroyed<const AtomString> annotationXmlLocalName("annotation-xml", AtomString::ConstructFromLiteral);
 #endif
 
     if (localName == SVGNames::color_profileTag->localName()
@@ -1206,7 +1211,7 @@ CustomElementNameValidationStatus Document::validateCustomElementName(const Atom
     return CustomElementNameValidationStatus::Valid;
 }
 
-ExceptionOr<Ref<Element>> Document::createElementNS(const AtomicString& namespaceURI, const String& qualifiedName)
+ExceptionOr<Ref<Element>> Document::createElementNS(const AtomString& namespaceURI, const String& qualifiedName)
 {
     auto parseResult = parseQualifiedName(namespaceURI, qualifiedName);
     if (parseResult.hasException())
@@ -1335,7 +1340,7 @@ void Document::setVisualUpdatesAllowedByClient(bool visualUpdatesAllowedByClient
 
 String Document::characterSetWithUTF8Fallback() const
 {
-    AtomicString name = encoding();
+    AtomString name = encoding();
     if (!name.isNull())
         return name;
     return UTF8Encoding().domName();
@@ -2693,7 +2698,7 @@ ScriptableDocumentParser* Document::scriptableDocumentParser() const
     return parser() ? parser()->asScriptableDocumentParser() : nullptr;
 }
 
-ExceptionOr<RefPtr<WindowProxy>> Document::openForBindings(DOMWindow& activeWindow, DOMWindow& firstWindow, const String& url, const AtomicString& name, const String& features)
+ExceptionOr<RefPtr<WindowProxy>> Document::openForBindings(DOMWindow& activeWindow, DOMWindow& firstWindow, const String& url, const AtomString& name, const String& features)
 {
     if (!m_domWindow)
         return Exception { InvalidAccessError };
@@ -3216,12 +3221,12 @@ void Document::setBaseURLOverride(const URL& url)
 void Document::processBaseElement()
 {
     // Find the first href attribute in a base element and the first target attribute in a base element.
-    const AtomicString* href = nullptr;
-    const AtomicString* target = nullptr;
+    const AtomString* href = nullptr;
+    const AtomString* target = nullptr;
     auto baseDescendants = descendantsOfType<HTMLBaseElement>(*this);
     for (auto& base : baseDescendants) {
         if (!href) {
-            const AtomicString& value = base.attributeWithoutSynchronization(hrefAttr);
+            const AtomString& value = base.attributeWithoutSynchronization(hrefAttr);
             if (!value.isNull()) {
                 href = &value;
                 if (target)
@@ -3229,7 +3234,7 @@ void Document::processBaseElement()
             }
         }
         if (!target) {
-            const AtomicString& value = base.attributeWithoutSynchronization(targetAttr);
+            const AtomString& value = base.attributeWithoutSynchronization(targetAttr);
             if (!value.isNull()) {
                 target = &value;
                 if (href)
@@ -3928,6 +3933,7 @@ void Document::addAudioProducer(MediaProducer& audioProducer)
 
 void Document::removeAudioProducer(MediaProducer& audioProducer)
 {
+    RELEASE_ASSERT(isMainThread());
     m_audioProducers.remove(audioProducer);
     updateIsPlayingMedia();
 }
@@ -4046,48 +4052,8 @@ void Document::elementInActiveChainDidDetach(Element& element)
         m_activeElement = m_activeElement->parentElement();
 }
 
-#if ENABLE(DASHBOARD_SUPPORT)
-const Vector<AnnotatedRegionValue>& Document::annotatedRegions() const
+void Document::invalidateRenderingDependentRegions()
 {
-    return m_annotatedRegions;
-}
-
-void Document::setAnnotatedRegions(const Vector<AnnotatedRegionValue>& regions)
-{
-    m_annotatedRegions = regions;
-    setAnnotatedRegionsDirty(false);
-}
-
-void Document::updateAnnotatedRegions()
-{
-    if (!hasAnnotatedRegions())
-        return;
-
-    Vector<AnnotatedRegionValue> newRegions;
-    renderBox()->collectAnnotatedRegions(newRegions); // FIXME.
-    if (newRegions == annotatedRegions())
-        return;
-
-    setAnnotatedRegions(newRegions);
-    
-    if (Page* page = this->page())
-        page->chrome().client().annotatedRegionsChanged();
-}
-#endif
-
-void Document::invalidateRenderingDependentRegions(AnnotationsAction annotationsAction)
-{
-#if ENABLE(DASHBOARD_SUPPORT)
-    // FIXME: we don't have a good invalidation/update policy for Dashboard regions. They get eagerly updated
-    // on forced layouts, and don't need to be.
-    if (annotationsAction == AnnotationsAction::Update)
-        updateAnnotatedRegions();
-    else
-        setAnnotatedRegionsDirty();
-#else
-    UNUSED_PARAM(annotationsAction);
-#endif
-
 #if PLATFORM(IOS_FAMILY) && ENABLE(TOUCH_EVENTS)
     setTouchEventRegionsNeedUpdate();
 #endif
@@ -4099,22 +4065,6 @@ void Document::invalidateRenderingDependentRegions(AnnotationsAction annotations
                 scrollingCoordinator->frameViewEventTrackingRegionsChanged(*frameView);
         }
     }
-#endif
-}
-
-void Document::invalidateScrollbarDependentRegions()
-{
-#if ENABLE(DASHBOARD_SUPPORT)
-    if (hasAnnotatedRegions())
-        setAnnotatedRegionsDirty();
-#endif
-}
-
-void Document::updateZOrderDependentRegions()
-{
-#if ENABLE(DASHBOARD_SUPPORT)
-    if (annotatedRegionsDirty())
-        updateAnnotatedRegions();
 #endif
 }
 
@@ -4258,8 +4208,8 @@ bool Document::setFocusedElement(Element* element, FocusDirection direction, Foc
             }
             if (focusWidget)
                 focusWidget->setFocus(true);
-            else
-                view()->setFocus(true);
+            else if (auto* frameView = view())
+                frameView->setFocus(true);
         }
     }
 
@@ -4596,26 +4546,26 @@ Document& Document::contextDocument() const
     return const_cast<Document&>(*this);
 }
 
-void Document::setAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& attributeValue, DOMWrapperWorld& isolatedWorld)
+void Document::setAttributeEventListener(const AtomString& eventType, const QualifiedName& attributeName, const AtomString& attributeValue, DOMWrapperWorld& isolatedWorld)
 {
     setAttributeEventListener(eventType, JSLazyEventListener::create(*this, attributeName, attributeValue), isolatedWorld);
 }
 
-void Document::setWindowAttributeEventListener(const AtomicString& eventType, RefPtr<EventListener>&& listener, DOMWrapperWorld& isolatedWorld)
+void Document::setWindowAttributeEventListener(const AtomString& eventType, RefPtr<EventListener>&& listener, DOMWrapperWorld& isolatedWorld)
 {
     if (!m_domWindow)
         return;
     m_domWindow->setAttributeEventListener(eventType, WTFMove(listener), isolatedWorld);
 }
 
-void Document::setWindowAttributeEventListener(const AtomicString& eventType, const QualifiedName& attributeName, const AtomicString& attributeValue, DOMWrapperWorld& isolatedWorld)
+void Document::setWindowAttributeEventListener(const AtomString& eventType, const QualifiedName& attributeName, const AtomString& attributeValue, DOMWrapperWorld& isolatedWorld)
 {
     if (!m_domWindow)
         return;
     setWindowAttributeEventListener(eventType, JSLazyEventListener::create(*m_domWindow, attributeName, attributeValue), isolatedWorld);
 }
 
-EventListener* Document::getWindowAttributeEventListener(const AtomicString& eventType, DOMWrapperWorld& isolatedWorld)
+EventListener* Document::getWindowAttributeEventListener(const AtomString& eventType, DOMWrapperWorld& isolatedWorld)
 {
     if (!m_domWindow)
         return nullptr;
@@ -4754,7 +4704,7 @@ bool Document::hasListenerTypeForEventType(PlatformEvent::Type eventType) const
     }
 }
 
-void Document::addListenerTypeIfNeeded(const AtomicString& eventType)
+void Document::addListenerTypeIfNeeded(const AtomString& eventType)
 {
     if (eventType == eventNames().DOMSubtreeModifiedEvent)
         addListenerType(DOMSUBTREEMODIFIED_LISTENER);
@@ -5013,7 +4963,7 @@ bool Document::isValidName(const String& name)
     return isValidNameNonASCII(characters, length);
 }
 
-ExceptionOr<std::pair<AtomicString, AtomicString>> Document::parseQualifiedName(const String& qualifiedName)
+ExceptionOr<std::pair<AtomString, AtomString>> Document::parseQualifiedName(const String& qualifiedName)
 {
     unsigned length = qualifiedName.length();
 
@@ -5044,15 +4994,15 @@ ExceptionOr<std::pair<AtomicString, AtomicString>> Document::parseQualifiedName(
     }
 
     if (!sawColon)
-        return std::pair<AtomicString, AtomicString> { { }, { qualifiedName } };
+        return std::pair<AtomString, AtomString> { { }, { qualifiedName } };
 
     if (!colonPosition || length - colonPosition <= 1)
         return Exception { InvalidCharacterError };
 
-    return std::pair<AtomicString, AtomicString> { StringView { qualifiedName }.substring(0, colonPosition).toAtomicString(), StringView { qualifiedName }.substring(colonPosition + 1).toAtomicString() };
+    return std::pair<AtomString, AtomString> { StringView { qualifiedName }.substring(0, colonPosition).toAtomString(), StringView { qualifiedName }.substring(colonPosition + 1).toAtomString() };
 }
 
-ExceptionOr<QualifiedName> Document::parseQualifiedName(const AtomicString& namespaceURI, const String& qualifiedName)
+ExceptionOr<QualifiedName> Document::parseQualifiedName(const AtomString& namespaceURI, const String& qualifiedName)
 {
     auto parseResult = parseQualifiedName(qualifiedName);
     if (parseResult.hasException())
@@ -5477,6 +5427,11 @@ void Document::applyPendingXSLTransformsTimerFired()
         if (transformSourceDocument() || !processingInstruction->sheet())
             return;
 
+        // If the Document has already been detached from the frame, or the frame is currently in the process of
+        // changing to a new document, don't attempt to create a new Document from the XSLT.
+        if (!frame() || frame()->documentIsBeingReplaced())
+            return;
+
         auto processor = XSLTProcessor::create();
         processor->setXSLStyleSheet(downcast<XSLStyleSheet>(processingInstruction->sheet()));
         String resultMIMEType;
@@ -5567,7 +5522,7 @@ ExceptionOr<Ref<Attr>> Document::createAttribute(const String& name)
     return createAttributeNS({ }, isHTMLDocument() ? name.convertToASCIILowercase() : name, true);
 }
 
-ExceptionOr<Ref<Attr>> Document::createAttributeNS(const AtomicString& namespaceURI, const String& qualifiedName, bool shouldIgnoreNamespaceChecks)
+ExceptionOr<Ref<Attr>> Document::createAttributeNS(const AtomString& namespaceURI, const String& qualifiedName, bool shouldIgnoreNamespaceChecks)
 {
     auto parseResult = parseQualifiedName(namespaceURI, qualifiedName);
     if (parseResult.hasException())
@@ -5659,17 +5614,17 @@ Ref<HTMLCollection> Document::all()
     return ensureRareData().ensureNodeLists().addCachedCollection<HTMLAllCollection>(*this, DocAll);
 }
 
-Ref<HTMLCollection> Document::allFilteredByName(const AtomicString& name)
+Ref<HTMLCollection> Document::allFilteredByName(const AtomString& name)
 {
     return ensureRareData().ensureNodeLists().addCachedCollection<HTMLAllNamedSubCollection>(*this, DocumentAllNamedItems, name);
 }
 
-Ref<HTMLCollection> Document::windowNamedItems(const AtomicString& name)
+Ref<HTMLCollection> Document::windowNamedItems(const AtomString& name)
 {
     return ensureRareData().ensureNodeLists().addCachedCollection<WindowNameCollection>(*this, WindowNamedItems, name);
 }
 
-Ref<HTMLCollection> Document::documentNamedItems(const AtomicString& name)
+Ref<HTMLCollection> Document::documentNamedItems(const AtomString& name)
 {
     return ensureRareData().ensureNodeLists().addCachedCollection<DocumentNameCollection>(*this, DocumentNamedItems, name);
 }
@@ -5893,10 +5848,13 @@ void Document::initSecurityContext()
     setSecurityOriginPolicy(ownerFrame->document()->securityOriginPolicy());
 }
 
-bool Document::shouldInheritContentSecurityPolicyFromOwner() const
+// FIXME: The current criterion is stricter than <https://www.w3.org/TR/CSP3/#security-inherit-csp> (Editor's Draft, 28 February 2019).
+bool Document::shouldInheritContentSecurityPolicy() const
 {
     ASSERT(m_frame);
     if (SecurityPolicy::shouldInheritSecurityOriginFromOwner(m_url))
+        return true;
+    if (m_url.protocolIsData() || m_url.protocolIsBlob())
         return true;
     if (!isPluginDocument())
         return false;
@@ -5908,7 +5866,7 @@ bool Document::shouldInheritContentSecurityPolicyFromOwner() const
     return openerFrame->document()->securityOrigin().canAccess(securityOrigin());
 }
 
-void Document::initContentSecurityPolicy()
+void Document::initContentSecurityPolicy(ContentSecurityPolicy* previousPolicy)
 {
     // 1. Inherit Upgrade Insecure Requests
     Frame* parentFrame = m_frame->tree().parent();
@@ -5916,19 +5874,27 @@ void Document::initContentSecurityPolicy()
         contentSecurityPolicy()->copyUpgradeInsecureRequestStateFrom(*parentFrame->document()->contentSecurityPolicy());
 
     // 2. Inherit Content Security Policy (without copying Upgrade Insecure Requests state).
-    if (!shouldInheritContentSecurityPolicyFromOwner())
+    if (!shouldInheritContentSecurityPolicy())
         return;
-    Frame* ownerFrame = parentFrame;
-    if (!ownerFrame)
-        ownerFrame = m_frame->loader().opener();
-    if (!ownerFrame)
+    ContentSecurityPolicy* ownerPolicy = nullptr;
+    if (previousPolicy && (m_url.protocolIsData() || m_url.protocolIsBlob()))
+        ownerPolicy = previousPolicy;
+    if (!ownerPolicy) {
+        Frame* ownerFrame = parentFrame;
+        if (!ownerFrame)
+            ownerFrame = m_frame->loader().opener();
+        if (ownerFrame)
+            ownerPolicy = ownerFrame->document()->contentSecurityPolicy();
+    }
+    if (!ownerPolicy)
         return;
-    // FIXME: The CSP 3 spec. implies that only plugin documents delivered with a local scheme (e.g. blob, file, data)
-    // should inherit a policy.
+    // FIXME: We are stricter than the CSP 3 spec. with regards to plugins: we prefer to inherit the full policy unless the plugin
+    // document is opened in a new window. The CSP 3 spec. implies that only plugin documents delivered with a local scheme (e.g. blob,
+    // file, data) should inherit a policy.
     if (isPluginDocument() && m_frame->loader().opener())
-        contentSecurityPolicy()->createPolicyForPluginDocumentFrom(*ownerFrame->document()->contentSecurityPolicy());
+        contentSecurityPolicy()->createPolicyForPluginDocumentFrom(*ownerPolicy);
     else
-        contentSecurityPolicy()->copyStateFrom(ownerFrame->document()->contentSecurityPolicy());
+        contentSecurityPolicy()->copyStateFrom(ownerPolicy);
 }
 
 bool Document::isContextThread() const
@@ -6873,9 +6839,9 @@ bool Document::haveStylesheetsLoaded() const
     return !styleScope().hasPendingSheets() || m_ignorePendingStylesheets;
 }
 
-Locale& Document::getCachedLocale(const AtomicString& locale)
+Locale& Document::getCachedLocale(const AtomString& locale)
 {
-    AtomicString localeKey = locale;
+    AtomString localeKey = locale;
     if (locale.isEmpty() || !settings().langAttributeAwareFormControlUIEnabled())
         localeKey = defaultLanguage();
     LocaleIdentifierToLocaleMap::AddResult result = m_localeCache.add(localeKey, nullptr);
@@ -7279,10 +7245,13 @@ void Document::removeAppearanceDependentPicture(HTMLPictureElement& picture)
     m_appearanceDependentPictures.remove(&picture);
 }
 
-void Document::scheduleRenderingUpdate()
+void Document::scheduleTimedRenderingUpdate()
 {
+#if ENABLE(INTERSECTION_OBSERVER)
+    m_intersectionObserversInitialUpdateTimer.stop();
+#endif
     if (auto page = this->page())
-        page->renderingUpdateScheduler().scheduleRenderingUpdate();
+        page->renderingUpdateScheduler().scheduleTimedRenderingUpdate();
 }
 
 #if ENABLE(INTERSECTION_OBSERVER)
@@ -7416,6 +7385,8 @@ void Document::updateIntersectionObservations()
     if (!frameView)
         return;
 
+    m_intersectionObserversInitialUpdateTimer.stop();
+
     bool needsLayout = frameView->layoutContext().isLayoutPending() || (renderView() && renderView()->needsLayout());
     if (needsLayout || hasPendingStyleRecalc())
         return;
@@ -7504,6 +7475,14 @@ void Document::notifyIntersectionObserversTimerFired()
     }
     m_intersectionObserversWithPendingNotifications.clear();
 }
+
+void Document::scheduleInitialIntersectionObservationUpdate()
+{
+    if (m_readyState == Complete)
+        scheduleTimedRenderingUpdate();
+    else if (!m_intersectionObserversInitialUpdateTimer.isActive())
+        m_intersectionObserversInitialUpdateTimer.startOneShot(intersectionObserversInitialUpdateDelay);
+}
 #endif
 
 #if ENABLE(RESIZE_OBSERVER)
@@ -7582,12 +7561,12 @@ void Document::updateResizeObservations(Page& page)
         getParserLocation(url, line, column);
         reportException("ResizeObserver loop completed with undelivered notifications.", line, column, url, nullptr, nullptr);
         // Starting a new schedule the next round of notify.
-        scheduleRenderingUpdate();
+        scheduleTimedRenderingUpdate();
     }
 }
 #endif
 
-const AtomicString& Document::dir() const
+const AtomString& Document::dir() const
 {
     auto* documentElement = this->documentElement();
     if (!is<HTMLHtmlElement>(documentElement))
@@ -7595,7 +7574,7 @@ const AtomicString& Document::dir() const
     return downcast<HTMLHtmlElement>(*documentElement).dir();
 }
 
-void Document::setDir(const AtomicString& value)
+void Document::setDir(const AtomString& value)
 {
     auto* documentElement = this->documentElement();
     if (is<HTMLHtmlElement>(documentElement))
@@ -7633,7 +7612,7 @@ void Document::notifyMediaCaptureOfVisibilityChanged()
     if (!page())
         return;
 
-    RealtimeMediaSourceCenter::singleton().setVideoCapturePageState(hidden(), page()->isMediaCaptureMuted());
+    RealtimeMediaSourceCenter::singleton().setCapturePageState(hidden(), page()->isMediaCaptureMuted());
 #endif
 }
 
@@ -7689,7 +7668,7 @@ void Document::forEachApplicationStateChangeListener(const Function<void(Applica
         functor(*listener);
 }
 
-const AtomicString& Document::bgColor() const
+const AtomString& Document::bgColor() const
 {
     auto* bodyElement = body();
     if (!bodyElement)
@@ -7703,7 +7682,7 @@ void Document::setBgColor(const String& value)
         bodyElement->setAttributeWithoutSynchronization(bgcolorAttr, value);
 }
 
-const AtomicString& Document::fgColor() const
+const AtomString& Document::fgColor() const
 {
     auto* bodyElement = body();
     if (!bodyElement)
@@ -7717,7 +7696,7 @@ void Document::setFgColor(const String& value)
         bodyElement->setAttributeWithoutSynchronization(textAttr, value);
 }
 
-const AtomicString& Document::alinkColor() const
+const AtomString& Document::alinkColor() const
 {
     auto* bodyElement = body();
     if (!bodyElement)
@@ -7731,7 +7710,7 @@ void Document::setAlinkColor(const String& value)
         bodyElement->setAttributeWithoutSynchronization(alinkAttr, value);
 }
 
-const AtomicString& Document::linkColorForBindings() const
+const AtomString& Document::linkColorForBindings() const
 {
     auto* bodyElement = body();
     if (!bodyElement)
@@ -7745,7 +7724,7 @@ void Document::setLinkColorForBindings(const String& value)
         bodyElement->setAttributeWithoutSynchronization(linkAttr, value);
 }
 
-const AtomicString& Document::vlinkColor() const
+const AtomString& Document::vlinkColor() const
 {
     auto* bodyElement = body();
     if (!bodyElement)
@@ -7770,7 +7749,7 @@ Logger& Document::logger()
     return *m_logger;
 }
     
-Optional<uint64_t> Document::pageID() const
+Optional<PageIdentifier> Document::pageID() const
 {
     return m_frame->loader().client().pageID();
 }
@@ -8234,19 +8213,19 @@ void Document::setHasEvaluatedUserAgentScripts()
 
 #if ENABLE(APPLE_PAY)
 
-bool Document::hasStartedApplePaySession() const
+bool Document::isApplePayActive() const
 {
     auto& top = topDocument();
-    return this == &top ? m_hasStartedApplePaySession : top.hasStartedApplePaySession();
+    return this == &top ? m_hasStartedApplePaySession : top.isApplePayActive();
 }
 
-void Document::setHasStartedApplePaySession()
+void Document::setApplePayIsActive()
 {
     auto& top = topDocument();
     if (this == &top)
         m_hasStartedApplePaySession = true;
     else
-        top.setHasStartedApplePaySession();
+        top.setApplePayIsActive();
 }
 
 #endif

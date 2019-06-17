@@ -30,6 +30,7 @@
 #include "DisplayBox.h"
 #include "FormattingContext.h"
 #include "InlineFormattingState.h"
+#include "InlineLine.h"
 #include <wtf/IsoMalloc.h>
 
 namespace WebCore {
@@ -37,7 +38,6 @@ namespace Layout {
 
 class FloatingState;
 class InlineContainer;
-class Line;
 
 // This class implements the layout logic for inline formatting contexts.
 // https://www.w3.org/TR/CSS22/visuren.html#inline-formatting
@@ -53,14 +53,36 @@ private:
     class LineLayout {
     public:
         LineLayout(const InlineFormattingContext&);
-        void layout() const;
+        void layout(LayoutUnit widthConstraint) const;
+        LayoutUnit computedIntrinsicWidth(LayoutUnit widthConstraint) const;
 
     private:
         LayoutState& layoutState() const { return m_formattingContext.layoutState(); }
-        void initializeLine(Line&, LayoutUnit lineLogicalTop) const;
-        void closeLine(Line&) const;
-        void commitInlineItemToLine(Line&, const InlineItem&) const;
-        void handleFloat(Line&, const FloatingContext&, const InlineItem& floatBox) const;
+
+        struct LineContent {
+            Optional<unsigned> lastInlineItemIndex;
+            Vector<WeakPtr<InlineItem>> floats;
+            std::unique_ptr<Line::Content> runs;
+        };
+
+        struct LineInput {
+            enum class SkipVerticalAligment { No, Yes };
+            LineInput(LayoutPoint logicalTopLeft, LayoutUnit availableLogicalWidth, SkipVerticalAligment, unsigned firstInlineItemIndex, const InlineItems&);
+            struct HorizontalConstraint {
+                HorizontalConstraint(LayoutPoint logicalTopLeft, LayoutUnit availableLogicalWidth);
+
+                LayoutPoint logicalTopLeft;
+                LayoutUnit availableLogicalWidth;
+            };
+            HorizontalConstraint horizontalConstraint;
+            // FIXME Alternatively we could just have a second pass with vertical positioning (preferred width computation opts out) 
+            SkipVerticalAligment skipVerticalAligment;
+            unsigned firstInlineItemIndex { 0 };
+            const InlineItems& inlineItems;
+            Optional<LayoutUnit> floatMinimumLogicalBottom;
+        };
+        LineContent placeInlineItems(const LineInput&) const;
+        void createDisplayRuns(const Line::Content&, const Vector<WeakPtr<InlineItem>>& floats, LayoutUnit widthConstraint) const;
         void alignRuns(TextAlignMode, unsigned firstRunIndex, LayoutUnit availableWidth) const;
 
     private:

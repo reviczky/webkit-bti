@@ -28,10 +28,11 @@
 #include "DataRef.h"
 #include "Length.h"
 #include "StyleCustomPropertyData.h"
+#include "TabSize.h"
 #include "TextDecorationThickness.h"
 #include "TextUnderlineOffset.h"
 #include <wtf/RefCounted.h>
-#include <wtf/text/AtomicString.h>
+#include <wtf/text/AtomString.h>
 
 #if ENABLE(TEXT_AUTOSIZING)
 #include "TextSizeAdjustment.h"
@@ -162,17 +163,17 @@ public:
     Color visitedLinkStrokeColor;
     float miterLimit;
 
-    AtomicString hyphenationString;
+    AtomString hyphenationString;
     short hyphenationLimitBefore;
     short hyphenationLimitAfter;
     short hyphenationLimitLines;
 
-    AtomicString textEmphasisCustomMark;
+    AtomString textEmphasisCustomMark;
     RefPtr<QuotesData> quotes;
     DataRef<StyleFilterData> appleColorFilter;
 
-    AtomicString lineGrid;
-    unsigned tabSize;
+    AtomString lineGrid;
+    TabSize tabSize;
 
 #if ENABLE(TEXT_AUTOSIZING)
     TextSizeAdjustment textSizeAdjust;

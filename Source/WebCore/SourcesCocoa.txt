@@ -326,6 +326,7 @@ platform/graphics/gpu/cocoa/GPUCommandBufferMetal.mm
 platform/graphics/gpu/cocoa/GPUComputePassEncoderMetal.mm
 platform/graphics/gpu/cocoa/GPUComputePipelineMetal.mm
 platform/graphics/gpu/cocoa/GPUDeviceMetal.mm
+platform/graphics/gpu/cocoa/GPUPipelineMetalConvertLayout.cpp
 platform/graphics/gpu/cocoa/GPUProgrammablePassEncoderMetal.mm
 platform/graphics/gpu/cocoa/GPUQueueMetal.mm
 platform/graphics/gpu/cocoa/GPURenderPassEncoderMetal.mm
@@ -383,6 +384,7 @@ platform/ios/LegacyTileGrid.mm
 platform/ios/LegacyTileGridTile.mm
 platform/ios/LegacyTileLayer.mm
 platform/ios/LegacyTileLayerPool.mm
+platform/ios/LocalCurrentTraitCollection.mm
 platform/ios/LowPowerModeNotifierIOS.mm
 platform/ios/PasteboardIOS.mm
 platform/ios/PlatformEventFactoryIOS.mm @no-unify
@@ -542,6 +544,7 @@ platform/mediastream/mac/DisplayCaptureSourceCocoa.cpp
 platform/mediastream/mac/RealtimeIncomingAudioSourceCocoa.cpp
 platform/mediastream/mac/RealtimeIncomingVideoSourceCocoa.mm
 platform/mediastream/mac/RealtimeMediaSourceCenterMac.cpp
+platform/mediastream/mac/RealtimeMediaSourceCenterMac.mm
 platform/mediastream/mac/RealtimeOutgoingAudioSourceCocoa.cpp
 platform/mediastream/mac/RealtimeOutgoingVideoSourceCocoa.cpp
 platform/mediastream/mac/ScreenDisplayCaptureSourceMac.mm

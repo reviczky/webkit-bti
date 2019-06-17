@@ -33,35 +33,10 @@ WI.TextEditor = class TextEditor extends WI.View
 
         this._codeMirror = WI.CodeMirrorEditor.create(this.element, {
             readOnly: true,
-            indentWithTabs: WI.settings.indentWithTabs.value,
-            indentUnit: WI.settings.indentUnit.value,
-            tabSize: WI.settings.tabSize.value,
             lineNumbers: true,
-            lineWrapping: WI.settings.enableLineWrapping.value,
             matchBrackets: true,
             autoCloseBrackets: true,
-            showWhitespaceCharacters: WI.settings.showWhitespaceCharacters.value,
             styleSelectedText: true,
-        });
-
-        WI.settings.indentWithTabs.addEventListener(WI.Setting.Event.Changed, (event) => {
-            this._codeMirror.setOption("indentWithTabs", WI.settings.indentWithTabs.value);
-        });
-
-        WI.settings.indentUnit.addEventListener(WI.Setting.Event.Changed, (event) => {
-            this._codeMirror.setOption("indentUnit", WI.settings.indentUnit.value);
-        });
-
-        WI.settings.tabSize.addEventListener(WI.Setting.Event.Changed, (event) => {
-            this._codeMirror.setOption("tabSize", WI.settings.tabSize.value);
-        });
-
-        WI.settings.enableLineWrapping.addEventListener(WI.Setting.Event.Changed, (event) => {
-            this._codeMirror.setOption("lineWrapping", WI.settings.enableLineWrapping.value);
-        });
-
-        WI.settings.showWhitespaceCharacters.addEventListener(WI.Setting.Event.Changed, (event) => {
-            this._codeMirror.setOption("showWhitespaceCharacters", WI.settings.showWhitespaceCharacters.value);
         });
 
         this._codeMirror.on("focus", this._editorFocused.bind(this));
@@ -587,15 +562,6 @@ WI.TextEditor = class TextEditor extends WI.View
         this._visible = false;
     }
 
-    close()
-    {
-        WI.settings.indentWithTabs.removeEventListener(null, null, this);
-        WI.settings.indentUnit.removeEventListener(null, null, this);
-        WI.settings.tabSize.removeEventListener(null, null, this);
-        WI.settings.enableLineWrapping.removeEventListener(null, null, this);
-        WI.settings.showWhitespaceCharacters.removeEventListener(null, null, this);
-    }
-
     setBreakpointInfoForLineAndColumn(lineNumber, columnNumber, breakpointInfo)
     {
         if (this._ignoreSetBreakpointInfoCalls)
@@ -896,7 +862,8 @@ WI.TextEditor = class TextEditor extends WI.View
 
     _canUseFormatterWorker()
     {
-        return this._codeMirror.getMode().name === "javascript";
+        let mode = this._codeMirror.getMode().name;
+        return mode === "javascript" || mode === "css";
     }
 
     _attemptToDetermineMIMEType()
@@ -919,22 +886,27 @@ WI.TextEditor = class TextEditor extends WI.View
 
     _startWorkerPrettyPrint(beforePrettyPrintState, callback)
     {
+        let workerProxy = WI.FormatterWorkerProxy.singleton();
         let sourceText = this._codeMirror.getValue();
         let indentString = WI.indentString();
         const includeSourceMapData = true;
 
-        let sourceType = this._delegate ? this._delegate.textEditorScriptSourceType(this) : WI.Script.SourceType.Program;
-        const isModule = sourceType === WI.Script.SourceType.Module;
-
-        let workerProxy = WI.FormatterWorkerProxy.singleton();
-        workerProxy.formatJavaScript(sourceText, isModule, indentString, includeSourceMapData, ({formattedText, sourceMapData}) => {
+        let formatCallback = ({formattedText, sourceMapData}) => {
             // Handle if formatting failed, which is possible for invalid programs.
             if (formattedText === null) {
                 callback();
                 return;
             }
             this._finishPrettyPrint(beforePrettyPrintState, formattedText, sourceMapData, callback);
-        });
+        };
+
+        let mode = this._codeMirror.getMode().name;
+        if (mode === "javascript") {
+            let sourceType = this._delegate ? this._delegate.textEditorScriptSourceType(this) : WI.Script.SourceType.Program;
+            const isModule = sourceType === WI.Script.SourceType.Module;
+            workerProxy.formatJavaScript(sourceText, isModule, indentString, includeSourceMapData, formatCallback);
+        } else if (mode === "css")
+            workerProxy.formatCSS(sourceText, indentString, includeSourceMapData, formatCallback);
     }
 
     _startCodeMirrorPrettyPrint(beforePrettyPrintState, callback)

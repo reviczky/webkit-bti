@@ -439,6 +439,11 @@ void FullscreenManager::setFullscreenRenderer(RenderTreeBuilder& builder, Render
     m_fullscreenRenderer = makeWeakPtr(renderer);
 }
 
+RenderFullScreen* FullscreenManager::fullscreenRenderer() const
+{
+    return m_fullscreenRenderer.get();
+}
+
 void FullscreenManager::dispatchFullscreenChangeEvents()
 {
     // Since we dispatch events in this function, it's possible that the
@@ -453,7 +458,7 @@ void FullscreenManager::dispatchFullscreenChangeEvents()
     dispatchFullscreenChangeOrErrorEvent(errorQueue, eventNames().webkitfullscreenerrorEvent, /* shouldNotifyMediaElement */ false);
 }
 
-void FullscreenManager::dispatchFullscreenChangeOrErrorEvent(Deque<RefPtr<Node>>& queue, const AtomicString& eventName, bool shouldNotifyMediaElement)
+void FullscreenManager::dispatchFullscreenChangeOrErrorEvent(Deque<RefPtr<Node>>& queue, const AtomString& eventName, bool shouldNotifyMediaElement)
 {
     while (!queue.isEmpty()) {
         RefPtr<Node> node = queue.takeFirst();

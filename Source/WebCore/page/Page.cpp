@@ -2860,6 +2860,9 @@ void Page::didChangeMainDocument()
 #if ENABLE(WEB_RTC)
     m_rtcController.reset(m_shouldEnableICECandidateFilteringByDefault);
 #endif
+#if ENABLE(POINTER_EVENTS)
+    m_pointerCaptureController->reset();
+#endif
 }
 
 RenderingUpdateScheduler& Page::renderingUpdateScheduler()
@@ -2946,7 +2949,7 @@ void Page::removeLatchingStateForTarget(Element& targetNode)
 }
 #endif // PLATFORM(MAC)
 
-static void dispatchPrintEvent(Frame& mainFrame, const AtomicString& eventType)
+static void dispatchPrintEvent(Frame& mainFrame, const AtomString& eventType)
 {
     Vector<Ref<Frame>> frames;
     for (auto* frame = &mainFrame; frame; frame = frame->tree().traverseNext())

@@ -27,7 +27,9 @@
 
 #if ENABLE(POINTER_EVENTS)
 
+#include "EventNames.h"
 #include "MouseEvent.h"
+#include "Node.h"
 #include "PointerID.h"
 #include <wtf/text/WTFString.h>
 
@@ -54,12 +56,12 @@ public:
 
     enum class IsPrimary : uint8_t { No, Yes };
 
-    static Ref<PointerEvent> create(const AtomicString& type, Init&& initializer)
+    static Ref<PointerEvent> create(const AtomString& type, Init&& initializer)
     {
         return adoptRef(*new PointerEvent(type, WTFMove(initializer)));
     }
 
-    static Ref<PointerEvent> createForPointerCapture(const AtomicString& type, const PointerEvent& pointerEvent)
+    static Ref<PointerEvent> createForPointerCapture(const AtomString& type, const PointerEvent& pointerEvent)
     {
         Init initializer;
         initializer.bubbles = true;
@@ -74,7 +76,8 @@ public:
         return adoptRef(*new PointerEvent);
     }
 
-    static RefPtr<PointerEvent> create(const MouseEvent&);
+    static RefPtr<PointerEvent> create(short button, const MouseEvent&);
+    static Ref<PointerEvent> create(const String& type, short button, const MouseEvent&);
     static Ref<PointerEvent> create(const String& type, PointerID, const String& pointerType, IsPrimary = IsPrimary::No);
 
 #if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS_FAMILY)
@@ -101,15 +104,28 @@ public:
 
     bool isPointerEvent() const final { return true; }
 
+    // https://w3c.github.io/pointerevents/#attributes-and-default-actions
+    // Many user agents expose non-standard attributes fromElement and toElement in MouseEvents to
+    // support legacy content. In those user agents, the values of those (inherited) attributes in
+    // PointerEvents must be null to encourage the use of the standardized alternates (i.e. target
+    // and relatedTarget).
+    RefPtr<Node> toElement() const final { return nullptr; }
+    RefPtr<Node> fromElement() const final { return nullptr; }
+
     EventInterface eventInterface() const override;
 
 private:
+    static bool typeIsEnterOrLeave(const AtomString& type) { return type == eventNames().pointerenterEvent || type == eventNames().pointerleaveEvent; }
+    static CanBubble typeCanBubble(const AtomString& type) { return typeIsEnterOrLeave(type) ? CanBubble::No : CanBubble::Yes; }
+    static IsCancelable typeIsCancelable(const AtomString& type) { return typeIsEnterOrLeave(type) ? IsCancelable::No : IsCancelable::Yes; }
+    static IsComposed typeIsComposed(const AtomString& type) { return typeIsEnterOrLeave(type) ? IsComposed::No : IsComposed::Yes; }
+
     PointerEvent();
-    PointerEvent(const AtomicString&, Init&&);
-    PointerEvent(const AtomicString& type, CanBubble, IsCancelable, IsComposed, const MouseEvent&);
-    PointerEvent(const AtomicString& type, CanBubble, IsCancelable, IsComposed, PointerID, const String& pointerType, IsPrimary);
+    PointerEvent(const AtomString&, Init&&);
+    PointerEvent(const AtomString& type, short button, const MouseEvent&);
+    PointerEvent(const AtomString& type, PointerID, const String& pointerType, IsPrimary);
 #if ENABLE(TOUCH_EVENTS) && PLATFORM(IOS_FAMILY)
-    PointerEvent(const AtomicString& type, const PlatformTouchEvent&, IsCancelable isCancelable, unsigned touchIndex, bool isPrimary, Ref<WindowProxy>&&);
+    PointerEvent(const AtomString& type, const PlatformTouchEvent&, IsCancelable isCancelable, unsigned touchIndex, bool isPrimary, Ref<WindowProxy>&&);
 #endif
 
     PointerID m_pointerId { mousePointerID };

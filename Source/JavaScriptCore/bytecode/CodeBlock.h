@@ -145,6 +145,8 @@ public:
     void dumpAssumingJITType(PrintStream&, JITType) const;
     JS_EXPORT_PRIVATE void dump(PrintStream&) const;
 
+    MetadataTable* metadataTable() const { return m_metadata.get(); }
+
     int numParameters() const { return m_numParameters; }
     void setNumParameters(int newValue);
 
@@ -1008,6 +1010,7 @@ private:
     RefPtr<MetadataTable> m_metadata;
 
     MonotonicTime m_creationTime;
+    double m_previousCounter { 0 };
 
     std::unique_ptr<RareData> m_rareData;
 };

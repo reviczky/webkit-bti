@@ -182,7 +182,7 @@ void RemoteScrollingCoordinatorProxy::handleMouseEvent(const WebCore::PlatformMo
     m_scrollingTree->handleMouseEvent(event);
 }
 
-TrackingType RemoteScrollingCoordinatorProxy::eventTrackingTypeForPoint(const AtomicString& eventName, IntPoint p) const
+TrackingType RemoteScrollingCoordinatorProxy::eventTrackingTypeForPoint(const AtomString& eventName, IntPoint p) const
 {
     return m_scrollingTree->eventTrackingTypeForPoint(eventName, p);
 }
@@ -192,9 +192,9 @@ void RemoteScrollingCoordinatorProxy::viewportChangedViaDelegatedScrolling(const
     m_scrollingTree->mainFrameViewportChangedViaDelegatedScrolling(scrollPosition, layoutViewport, scale);
 }
 
-void RemoteScrollingCoordinatorProxy::applyScrollingTreeLayerPositions()
+void RemoteScrollingCoordinatorProxy::applyScrollingTreeLayerPositionsAfterCommit()
 {
-    m_scrollingTree->applyLayerPositions();
+    m_scrollingTree->applyLayerPositionsAfterCommit();
 }
 
 void RemoteScrollingCoordinatorProxy::currentSnapPointIndicesDidChange(WebCore::ScrollingNodeID nodeID, unsigned horizontal, unsigned vertical)

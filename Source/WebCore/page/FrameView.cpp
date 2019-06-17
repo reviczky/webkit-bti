@@ -3,7 +3,7 @@
  *                     1999 Lars Knoll <knoll@kde.org>
  *                     1999 Antti Koivisto <koivisto@kde.org>
  *                     2000 Dirk Mueller <mueller@kde.org>
- * Copyright (C) 2004-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2004-2019 Apple Inc. All rights reserved.
  *           (C) 2006 Graham Dennis (graham.dennis@gmail.com)
  *           (C) 2006 Alexey Proskuryakov (ap@nypop.com)
  * Copyright (C) 2009 Google Inc. All rights reserved.
@@ -1148,10 +1148,6 @@ bool FrameView::isEnclosedInCompositingLayer() const
 
 bool FrameView::flushCompositingStateIncludingSubframes()
 {
-#if PLATFORM(COCOA)
-    InspectorInstrumentation::willComposite(frame());
-#endif
-
     bool allFramesFlushed = flushCompositingStateForThisFrame(frame());
 
     for (Frame* child = frame().tree().firstRenderedChild(); child; child = child->tree().traverseNextRendered(m_frame.ptr())) {
@@ -1280,7 +1276,7 @@ void FrameView::didLayout(WeakPtr<RenderElement> layoutRoot)
         cache->postNotification(layoutRoot.get(), AXObjectCache::AXLayoutComplete);
 #endif
 
-    frame().document()->invalidateRenderingDependentRegions(Document::AnnotationsAction::Update);
+    frame().document()->invalidateRenderingDependentRegions();
 
     updateCanBlitOnScrollRecursively();
 
@@ -3468,6 +3464,8 @@ void FrameView::autoSizeIfEnabled()
     auto& documentRenderer = downcast<RenderElement>(*firstChild);
     documentRenderer.mutableStyle().setMaxWidth(Length(m_autoSizeConstraint.width(), Fixed));
     resize(m_autoSizeConstraint.width(), m_autoSizeConstraint.height());
+
+    Ref<FrameView> protectedThis(*this);
     document->updateStyleIfNeeded();
     document->updateLayoutIgnorePendingStylesheets();
 
@@ -4108,9 +4106,6 @@ void FrameView::didPaintContents(GraphicsContext& context, const IntRect& dirtyR
 
     m_paintBehavior = paintingState.paintBehavior;
     m_lastPaintTime = MonotonicTime::now();
-
-    // Regions may have changed as a result of the visibility/z-index of element changing.
-    frame().document()->updateZOrderDependentRegions();
 
     if (paintingState.isTopLevelPainter)
         sCurrentPaintTimeStamp = MonotonicTime();
@@ -4866,8 +4861,11 @@ void FrameView::resetTrackedRepaints()
 
 String FrameView::trackedRepaintRectsAsText() const
 {
-    if (frame().document())
-        frame().document()->updateLayout();
+    Frame& frame = this->frame();
+    Ref<Frame> protector(frame);
+
+    if (auto* document = frame.document())
+        document->updateLayout();
 
     TextStream ts;
     if (!m_trackedRepaintRects.isEmpty()) {

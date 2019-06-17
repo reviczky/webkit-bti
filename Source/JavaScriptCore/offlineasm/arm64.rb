@@ -126,6 +126,8 @@ class RegisterID
           arm64GPRName('x5', kind)
         when 't6'
           arm64GPRName('x6', kind)
+        when 't7'
+          arm64GPRName('x7', kind)
         when 'cfr'
             arm64GPRName('x29', kind)
         when 'csr0'
@@ -278,7 +280,7 @@ def arm64LowerLabelReferences(list)
         | node |
         if node.is_a? Instruction
             case node.opcode
-            when "loadi", "loadis", "loadp", "loadq", "loadb", "loadbs", "loadh", "loadhs", "leap"
+            when "loadi", "loadis", "loadp", "loadq", "loadb", "loadbsi", "loadbsq", "loadh", "loadhsi", "loadhsq", "leap"
                 labelRef = node.operands[0]
                 if labelRef.is_a? LabelReference
                     tmp = Tmp.new(node.codeOrigin, :gpr)
@@ -374,9 +376,9 @@ class Sequence
         result = riscLowerMalformedAddresses(result) {
             | node, address |
             case node.opcode
-            when "loadb", "loadbs", "loadbsp", "storeb", /^bb/, /^btb/, /^cb/, /^tb/
+            when "loadb", "loadbsi", "loadbsq", "storeb", /^bb/, /^btb/, /^cb/, /^tb/
                 size = 1
-            when "loadh", "loadhs"
+            when "loadh", "loadhsi", "loadhsq"
                 size = 2
             when "loadi", "loadis", "storei", "addi", "andi", "lshifti", "muli", "negi",
                 "noti", "ori", "rshifti", "urshifti", "subi", "xori", /^bi/, /^bti/,
@@ -709,16 +711,18 @@ class Instruction
             emitARM64Unflipped("str", operands, :quad)
         when "loadb"
             emitARM64Access("ldrb", "ldurb", operands[1], operands[0], :word)
-        when "loadbs"
+        when "loadbsi"
             emitARM64Access("ldrsb", "ldursb", operands[1], operands[0], :word)
-        when "loadbsp"
-            emitARM64Access("ldrsb", "ldursb", operands[1], operands[0], :ptr)
+        when "loadbsq"
+            emitARM64Access("ldrsb", "ldursb", operands[1], operands[0], :quad)
         when "storeb"
             emitARM64Unflipped("strb", operands, :word)
         when "loadh"
             emitARM64Access("ldrh", "ldurh", operands[1], operands[0], :word)
-        when "loadhs"
+        when "loadhsi"
             emitARM64Access("ldrsh", "ldursh", operands[1], operands[0], :word)
+        when "loadhsq"
+            emitARM64Access("ldrsh", "ldursh", operands[1], operands[0], :quad)
         when "storeh"
             emitARM64Unflipped("strh", operands, :word)
         when "loadd"
@@ -1017,6 +1021,8 @@ class Instruction
             $asm.puts "smaddl #{operands[2].arm64Operand(:quad)}, #{operands[0].arm64Operand(:word)}, #{operands[1].arm64Operand(:word)}, xzr"
         when "memfence"
             $asm.puts "dmb sy"
+        when "bfiq"
+            $asm.puts "bfi #{operands[3].arm64Operand(:quad)}, #{operands[0].arm64Operand(:quad)}, #{operands[1].value}, #{operands[2].value}"
         when "pcrtoaddr"
             $asm.puts "adr #{operands[1].arm64Operand(:quad)}, #{operands[0].value}"
         when "nopCortexA53Fix835769"

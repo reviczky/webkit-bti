@@ -413,6 +413,9 @@ public:
     virtual void disableInspectorNodeSearch() = 0;
 
     virtual void handleAutocorrectionContext(const WebAutocorrectionContext&) = 0;
+
+    virtual Seconds doubleTapForDoubleClickDelay() = 0;
+    virtual float doubleTapForDoubleClickRadius() = 0;
 #endif
 
     // Auxiliary Client Creation
@@ -505,7 +508,7 @@ public:
     virtual WTF::Optional<unsigned> activeTouchIdentifierForGestureRecognizer(UIGestureRecognizer*) { return WTF::nullopt; }
 #endif
 
-#if PLATFORM(WPE)
+#if USE(WPE_RENDERER)
     virtual IPC::Attachment hostFileDescriptor() = 0;
 #endif
 };

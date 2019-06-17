@@ -492,6 +492,7 @@ void Internals::resetToConsistentState(Page& page)
     PlatformMediaSessionManager::sharedManager().resetRestrictions();
     PlatformMediaSessionManager::sharedManager().setWillIgnoreSystemInterruptions(true);
 #endif
+    PlatformMediaSessionManager::sharedManager().setIsPlayingToAutomotiveHeadUnit(false);
 #if HAVE(ACCESSIBILITY)
     AXObjectCache::setEnhancedUserInterfaceAccessibility(false);
     AXObjectCache::disableAccessibility();
@@ -531,6 +532,10 @@ void Internals::resetToConsistentState(Page& page)
     page.setFullscreenControlsHidden(false);
 
     MediaEngineConfigurationFactory::disableMock();
+
+#if ENABLE(MEDIA_STREAM)
+    RuntimeEnabledFeatures::sharedFeatures().setInterruptAudioOnPageVisibilityChangeEnabled(false);
+#endif
 }
 
 Internals::Internals(Document& document)
@@ -1048,7 +1053,7 @@ ExceptionOr<bool> Internals::pauseAnimationAtTimeOnElement(const String& animati
 {
     if (pauseTime < 0)
         return Exception { InvalidAccessError };
-    return frame()->animation().pauseAnimationAtTime(element, AtomicString(animationName), pauseTime);
+    return frame()->animation().pauseAnimationAtTime(element, AtomString(animationName), pauseTime);
 }
 
 ExceptionOr<bool> Internals::pauseAnimationAtTimeOnPseudoElement(const String& animationName, double pauseTime, Element& element, const String& pseudoId)
@@ -1063,7 +1068,7 @@ ExceptionOr<bool> Internals::pauseAnimationAtTimeOnPseudoElement(const String& a
     if (!pseudoElement)
         return Exception { InvalidAccessError };
 
-    return frame()->animation().pauseAnimationAtTime(*pseudoElement, AtomicString(animationName), pauseTime);
+    return frame()->animation().pauseAnimationAtTime(*pseudoElement, AtomString(animationName), pauseTime);
 }
 
 ExceptionOr<bool> Internals::pauseTransitionAtTimeOnElement(const String& propertyName, double pauseTime, Element& element)
@@ -1501,6 +1506,10 @@ void Internals::applyRotationForOutgoingVideoSources(RTCPeerConnection& connecti
 #endif
 
 #if ENABLE(MEDIA_STREAM)
+void Internals::setShouldInterruptAudioOnPageVisibilityChange(bool shouldInterrupt)
+{
+    RuntimeEnabledFeatures::sharedFeatures().setInterruptAudioOnPageVisibilityChangeEnabled(shouldInterrupt);
+}
 
 void Internals::setMockMediaCaptureDevicesEnabled(bool enabled)
 {
@@ -3706,12 +3715,12 @@ void Internals::initializeMockMediaSource()
     MediaPlayerFactorySupport::callRegisterMediaEngine(MockMediaPlayerMediaSource::registerMediaEngine);
 }
 
-Vector<String> Internals::bufferedSamplesForTrackID(SourceBuffer& buffer, const AtomicString& trackID)
+Vector<String> Internals::bufferedSamplesForTrackID(SourceBuffer& buffer, const AtomString& trackID)
 {
     return buffer.bufferedSamplesForTrackID(trackID);
 }
 
-Vector<String> Internals::enqueuedSamplesForTrackID(SourceBuffer& buffer, const AtomicString& trackID)
+Vector<String> Internals::enqueuedSamplesForTrackID(SourceBuffer& buffer, const AtomString& trackID)
 {
     return buffer.enqueuedSamplesForTrackID(trackID);
 }
@@ -4594,9 +4603,9 @@ void Internals::setAsRunningUserScripts(Document& document)
 }
 
 #if ENABLE(APPLE_PAY)
-void Internals::setHasStartedApplePaySession(Document& document)
+void Internals::setApplePayIsActive(Document& document)
 {
-    document.setHasStartedApplePaySession();
+    document.setApplePayIsActive();
 }
 #endif
 
@@ -4785,6 +4794,21 @@ bool Internals::audioSessionActive() const
     return AudioSession::sharedSession().isActive();
 #endif
     return false;
+}
+
+void Internals::storeRegistrationsOnDisk(DOMPromiseDeferred<void>&& promise)
+{
+#if ENABLE(SERVICE_WORKER)
+    if (!contextDocument())
+        return;
+
+    auto& connection = ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(contextDocument()->sessionID());
+    connection.storeRegistrationsOnDiskForTesting([promise = WTFMove(promise)]() mutable {
+        promise.resolve();
+    });
+#else
+    promise.resolve();
+#endif
 }
 
 void Internals::clearCacheStorageMemoryRepresentation(DOMPromiseDeferred<void>&& promise)
@@ -5065,6 +5089,11 @@ void Internals::testDictionaryLogging()
 void Internals::setXHRMaximumIntervalForUserGestureForwarding(XMLHttpRequest& request, double interval)
 {
     request.setMaximumIntervalForUserGestureForwarding(interval);
+}
+
+void Internals::setIsPlayingToAutomotiveHeadUnit(bool isPlaying)
+{
+    PlatformMediaSessionManager::sharedManager().setIsPlayingToAutomotiveHeadUnit(isPlaying);
 }
 
 } // namespace WebCore

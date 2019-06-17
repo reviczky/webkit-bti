@@ -65,7 +65,7 @@ require "config"
 # the registers. Also, >8 return types are returned in a weird way.
 #
 # rax => t0,     r0
-# rcx =>     a0
+# rcx => t5, a0
 # rdx => t1, a1, r1
 #  r8 => t2, a2
 #  r9 => t3, a3
@@ -939,17 +939,17 @@ class Instruction
             else
                 $asm.puts "movzx #{x86LoadOperands(:byte, :int)}"
             end
-        when "loadbs"
+        when "loadbsi"
             if !isIntelSyntax
                 $asm.puts "movsbl #{x86LoadOperands(:byte, :int)}"
             else
                 $asm.puts "movsx #{x86LoadOperands(:byte, :int)}"
             end
-        when "loadbsp"
+        when "loadbsq"
             if !isIntelSyntax
-                $asm.puts "movsb#{x86Suffix(:ptr)} #{x86LoadOperands(:byte, :ptr)}"
+                $asm.puts "movsbq #{x86LoadOperands(:byte, :quad)}"
             else
-                $asm.puts "movsx #{x86LoadOperands(:byte, :ptr)}"
+                $asm.puts "movsx #{x86LoadOperands(:byte, :quad)}"
             end
         when "loadh"
             if !isIntelSyntax
@@ -957,11 +957,17 @@ class Instruction
             else
                 $asm.puts "movzx #{x86LoadOperands(:half, :int)}"
             end
-        when "loadhs"
+        when "loadhsi"
             if !isIntelSyntax
                 $asm.puts "movswl #{x86LoadOperands(:half, :int)}"
             else
                 $asm.puts "movsx #{x86LoadOperands(:half, :int)}"
+            end
+        when "loadhsq"
+            if !isIntelSyntax
+                $asm.puts "movswq #{x86LoadOperands(:half, :quad)}"
+            else
+                $asm.puts "movsx #{x86LoadOperands(:half, :quad)}"
             end
         when "storeb"
             $asm.puts "mov#{x86Suffix(:byte)} #{x86Operands(:byte, :byte)}"

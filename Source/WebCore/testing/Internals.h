@@ -516,6 +516,7 @@ public:
 #endif
 
 #if ENABLE(MEDIA_STREAM)
+    void setShouldInterruptAudioOnPageVisibilityChange(bool);
     void setMockMediaCaptureDevicesEnabled(bool);
     void setMediaCaptureRequiresSecureConnection(bool);
     void setCustomPrivateRecorderCreator();
@@ -570,8 +571,8 @@ public:
 
 #if ENABLE(MEDIA_SOURCE)
     WEBCORE_TESTSUPPORT_EXPORT void initializeMockMediaSource();
-    Vector<String> bufferedSamplesForTrackID(SourceBuffer&, const AtomicString&);
-    Vector<String> enqueuedSamplesForTrackID(SourceBuffer&, const AtomicString&);
+    Vector<String> bufferedSamplesForTrackID(SourceBuffer&, const AtomString&);
+    Vector<String> enqueuedSamplesForTrackID(SourceBuffer&, const AtomString&);
     void setShouldGenerateTimestamps(SourceBuffer&, bool);
 #endif
 
@@ -680,7 +681,7 @@ public:
 
     void setAsRunningUserScripts(Document&);
 #if ENABLE(APPLE_PAY)
-    void setHasStartedApplePaySession(Document&);
+    void setApplePayIsActive(Document&);
 #endif
 
 #if ENABLE(WEBGL)
@@ -716,6 +717,8 @@ public:
     String audioSessionCategory() const;
     double preferredAudioBufferSize() const;
     bool audioSessionActive() const;
+
+    void storeRegistrationsOnDisk(DOMPromiseDeferred<void>&&);
 
     void clearCacheStorageMemoryRepresentation(DOMPromiseDeferred<void>&&);
     void cacheStorageEngineRepresentation(DOMPromiseDeferred<IDLDOMString>&&);
@@ -822,6 +825,8 @@ public:
     void testDictionaryLogging();
 
     void setXHRMaximumIntervalForUserGestureForwarding(XMLHttpRequest&, double);
+
+    void setIsPlayingToAutomotiveHeadUnit(bool);
 
 private:
     explicit Internals(Document&);

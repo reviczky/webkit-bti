@@ -26,7 +26,6 @@
 #pragma once
 
 #include "APIObject.h"
-#include "AutoCorrectionCallback.h"
 #include "Connection.h"
 #include "ContextMenuContextData.h"
 #include "DownloadID.h"
@@ -82,6 +81,7 @@
 #include <WebCore/LayoutSize.h>
 #include <WebCore/MediaPlaybackTargetContext.h>
 #include <WebCore/MediaProducer.h>
+#include <WebCore/PageIdentifier.h>
 #include <WebCore/PlatformEvent.h>
 #include <WebCore/PlatformScreen.h>
 #include <WebCore/PlatformSpeechSynthesisUtterance.h>
@@ -290,12 +290,13 @@ struct LoadParameters;
 struct PlatformPopupMenuData;
 struct PrintInfo;
 struct TextInputContext;
+struct WebAutocorrectionData;
 struct WebPopupItem;
 struct URLSchemeTaskParameters;
 
 enum class ProcessSwapRequestedByClient;
 enum class UndoOrRedo : bool;
-enum class WebCompatibilityMode : uint8_t;
+enum class WebContentMode : uint8_t;
 
 #if USE(QUICK_LOOK)
 class QuickLookDocumentData;
@@ -306,6 +307,7 @@ typedef GenericCallback<EditingRange> EditingRangeCallback;
 typedef GenericCallback<const String&> StringCallback;
 typedef GenericCallback<API::SerializedScriptValue*, bool, const WebCore::ExceptionDetails&> ScriptValueCallback;
 typedef GenericCallback<const WebCore::FontAttributes&> FontAttributesCallback;
+typedef GenericCallback<const String&, const String&, const String&> SelectionContextCallback;
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
 using LayerHostingContextID = uint32_t;
@@ -382,14 +384,14 @@ class WebPageProxy : public API::ObjectImpl<API::Object::Type::Page>
 #endif
     , public CanMakeWeakPtr<WebPageProxy> {
 public:
-    static Ref<WebPageProxy> create(PageClient&, WebProcessProxy&, uint64_t pageID, Ref<API::PageConfiguration>&&);
+    static Ref<WebPageProxy> create(PageClient&, WebProcessProxy&, WebCore::PageIdentifier, Ref<API::PageConfiguration>&&);
     virtual ~WebPageProxy();
 
     static void forMostVisibleWebPageIfAny(PAL::SessionID, const WebCore::SecurityOriginData&, CompletionHandler<void(WebPageProxy*)>&&);
 
     const API::PageConfiguration& configuration() const;
 
-    uint64_t pageID() const { return m_pageID; }
+    WebCore::PageIdentifier pageID() const { return m_pageID; }
 
     PAL::SessionID sessionID() const;
 
@@ -515,6 +517,8 @@ public:
     bool openedByDOM() const { return m_openedByDOM; }
 
     bool hasCommittedAnyProvisionalLoads() const { return m_hasCommittedAnyProvisionalLoads; }
+
+    bool allowsFastClicksEverywhere() const { return m_allowsFastClicksEverywhere; }
 
     void setIsUsingHighPerformanceWebGL(bool value) { m_isUsingHighPerformanceWebGL = value; }
     bool isUsingHighPerformanceWebGL() const { return m_isUsingHighPerformanceWebGL; }
@@ -677,7 +681,7 @@ public:
     void beginSelectionInDirection(WebCore::SelectionDirection, WTF::Function<void (uint64_t, CallbackBase::Error)>&&);
     void updateSelectionWithExtentPoint(const WebCore::IntPoint, bool isInteractingWithFocusedElement, WTF::Function<void(uint64_t, CallbackBase::Error)>&&);
     void updateSelectionWithExtentPointAndBoundary(const WebCore::IntPoint, WebCore::TextGranularity, bool isInteractingWithFocusedElement, WTF::Function<void(uint64_t, CallbackBase::Error)>&&);
-    void requestAutocorrectionData(const String& textForAutocorrection, WTF::Function<void (const Vector<WebCore::FloatRect>&, const String&, double, uint64_t, CallbackBase::Error)>&&);
+    void requestAutocorrectionData(const String& textForAutocorrection, CompletionHandler<void(WebAutocorrectionData)>&&);
     void applyAutocorrection(const String& correction, const String& originalText, WTF::Function<void (const String&, CallbackBase::Error)>&&);
     bool applyAutocorrection(const String& correction, const String& originalText);
     void requestAutocorrectionContext();
@@ -851,6 +855,8 @@ public:
     const String& userAgent() const { return m_userAgent; }
     void setApplicationNameForUserAgent(const String&);
     const String& applicationNameForUserAgent() const { return m_applicationNameForUserAgent; }
+    void setApplicationNameForDesktopUserAgent(const String& applicationName) { m_applicationNameForDesktopUserAgent = applicationName; }
+    const String& applicationNameForDesktopUserAgent() const { return m_applicationNameForDesktopUserAgent; }
     void setCustomUserAgent(const String&);
     const String& customUserAgent() const { return m_customUserAgent; }
     static String standardUserAgent(const String& applicationName = String());
@@ -1072,6 +1078,7 @@ public:
 
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
     void didCreateContextForVisibilityPropagation(LayerHostingContextID);
+    LayerHostingContextID contextIDForVisibilityPropagation() const { return m_contextIDForVisibilityPropagation; }
 #endif
 
     virtual void enterAcceleratedCompositingMode(const LayerTreeContext&);
@@ -1221,7 +1228,6 @@ public:
     void tapHighlightAtPosition(const WebCore::FloatPoint&, uint64_t& requestID);
     void handleTap(const WebCore::FloatPoint&, OptionSet<WebKit::WebEvent::Modifier>, uint64_t layerTreeTransactionIdAtLastTouchStart);
     void didRecognizeLongPress();
-    void handleDoubleTapForDoubleClickAtPoint(const WebCore::IntPoint&, OptionSet<WebEvent::Modifier>, uint64_t layerTreeTransactionIdAtLastTouchStart);
 
     void inspectorNodeSearchMovedToPosition(const WebCore::FloatPoint&);
     void inspectorNodeSearchEndedAtPosition(const WebCore::FloatPoint&);
@@ -1505,7 +1511,7 @@ public:
     void didNavigateWithNavigationDataShared(Ref<WebProcessProxy>&&, const WebNavigationDataStore&, uint64_t frameID);
     void didChangeProvisionalURLForFrameShared(Ref<WebProcessProxy>&&, uint64_t frameID, uint64_t navigationID, URL&&);
     void decidePolicyForNavigationActionAsyncShared(Ref<WebProcessProxy>&&, uint64_t frameID, WebCore::SecurityOriginData&& frameSecurityOrigin, WebCore::PolicyCheckIdentifier,
-        uint64_t navigationID, NavigationActionData&&, FrameInfoData&&, uint64_t originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&,
+        uint64_t navigationID, NavigationActionData&&, FrameInfoData&&, Optional<WebCore::PageIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&,
         IPC::FormDataReference&& requestBody, WebCore::ResourceResponse&& redirectResponse, const UserData&, uint64_t listenerID);
     void decidePolicyForResponseShared(Ref<WebProcessProxy>&&, uint64_t frameID, const WebCore::SecurityOriginData& frameSecurityOrigin, WebCore::PolicyCheckIdentifier,
         uint64_t navigationID, const WebCore::ResourceResponse&, const WebCore::ResourceRequest&, bool canShowMIMEType, const String& downloadAttribute, uint64_t listenerID, const UserData&);
@@ -1514,10 +1520,13 @@ public:
     void loadRequestWithNavigationShared(Ref<WebProcessProxy>&&, API::Navigation&, WebCore::ResourceRequest&&, WebCore::ShouldOpenExternalURLsPolicy, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad, Optional<WebsitePoliciesData>&& = WTF::nullopt);
     void backForwardGoToItemShared(Ref<WebProcessProxy>&&, const WebCore::BackForwardItemIdentifier&, CompletionHandler<void(SandboxExtension::Handle&&)>&&);
     void decidePolicyForNavigationActionSyncShared(Ref<WebProcessProxy>&&, uint64_t frameID, bool isMainFrame, WebCore::SecurityOriginData&&, WebCore::PolicyCheckIdentifier, uint64_t navigationID, NavigationActionData&&,
-        FrameInfoData&&, uint64_t originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
+        FrameInfoData&&, Optional<WebCore::PageIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
         WebCore::ResourceResponse&& redirectResponse, const UserData&, Messages::WebPageProxy::DecidePolicyForNavigationActionSync::DelayedReply&&);
 #if USE(QUICK_LOOK)
     void didRequestPasswordForQuickLookDocumentInMainFrameShared(Ref<WebProcessProxy>&&, const String& fileName);
+#endif
+#if ENABLE(CONTENT_FILTERING)
+    void contentFilterDidBlockLoadForFrameShared(Ref<WebProcessProxy>&&, const WebCore::ContentFilterUnblockHandler&, uint64_t frameID);
 #endif
 
     void dumpAdClickAttribution(CompletionHandler<void(const String&)>&&);
@@ -1554,7 +1563,7 @@ WEBPAGEPROXY_LOADOPTIMIZER_ADDITIONS_1
     void requestStorageSpace(uint64_t frameID, const String& originIdentifier, const String& databaseName, const String& displayName, uint64_t currentQuota, uint64_t currentOriginUsage, uint64_t currentDatabaseUsage, uint64_t expectedUsage, WTF::CompletionHandler<void(uint64_t)>&&);
 
 private:
-    WebPageProxy(PageClient&, WebProcessProxy&, uint64_t pageID, Ref<API::PageConfiguration>&&);
+    WebPageProxy(PageClient&, WebProcessProxy&, WebCore::PageIdentifier, Ref<API::PageConfiguration>&&);
     void platformInitialize();
 
     void notifyProcessPoolToPrewarm();
@@ -1630,13 +1639,13 @@ private:
     void didDestroyNavigation(uint64_t navigationID);
 
     void decidePolicyForNavigationAction(Ref<WebProcessProxy>&&, WebFrameProxy&, WebCore::SecurityOriginData&&, uint64_t navigationID, NavigationActionData&&,
-        FrameInfoData&&, uint64_t originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
+        FrameInfoData&&, Optional<WebCore::PageIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
         WebCore::ResourceResponse&& redirectResponse, const UserData&, Ref<PolicyDecisionSender>&&);
     void decidePolicyForNavigationActionAsync(uint64_t frameID, WebCore::SecurityOriginData&&, WebCore::PolicyCheckIdentifier, uint64_t navigationID, NavigationActionData&&,
-        FrameInfoData&&, uint64_t originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
+        FrameInfoData&&, Optional<WebCore::PageIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
         WebCore::ResourceResponse&& redirectResponse, const UserData&, uint64_t listenerID);
     void decidePolicyForNavigationActionSync(uint64_t frameID, bool isMainFrame, WebCore::SecurityOriginData&&, WebCore::PolicyCheckIdentifier, uint64_t navigationID, NavigationActionData&&,
-        FrameInfoData&&, uint64_t originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
+        FrameInfoData&&, Optional<WebCore::PageIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
         WebCore::ResourceResponse&& redirectResponse, const UserData&, Messages::WebPageProxy::DecidePolicyForNavigationActionSync::DelayedReply&&);
     void decidePolicyForNewWindowAction(uint64_t frameID, const WebCore::SecurityOriginData&, WebCore::PolicyCheckIdentifier, NavigationActionData&&,
         WebCore::ResourceRequest&&, const String& frameName, uint64_t listenerID, const UserData&);
@@ -1645,7 +1654,7 @@ private:
     void unableToImplementPolicy(uint64_t frameID, const WebCore::ResourceError&, const UserData&);
     void beginSafeBrowsingCheck(const URL&, bool, WebFramePolicyListenerProxy&);
 
-    WebCompatibilityMode effectiveCompatibilityModeAfterAdjustingPolicies(API::WebsitePolicies&, const WebCore::ResourceRequest&);
+    WebContentMode effectiveContentModeAfterAdjustingPolicies(API::WebsitePolicies&, const WebCore::ResourceRequest&);
 
     void willSubmitForm(uint64_t frameID, uint64_t sourceFrameID, const Vector<std::pair<String, String>>& textFieldValues, uint64_t listenerID, const UserData&);
 
@@ -1658,7 +1667,7 @@ private:
     void didUpdateHistoryTitle(const String& title, const String& url, uint64_t frameID);
 
     // UI client
-    void createNewPage(const FrameInfoData&, uint64_t originatingPageID, WebCore::ResourceRequest&&, WebCore::WindowFeatures&&, NavigationActionData&&, Messages::WebPageProxy::CreateNewPage::DelayedReply&&);
+    void createNewPage(const FrameInfoData&, Optional<WebCore::PageIdentifier> originatingPageID, WebCore::ResourceRequest&&, WebCore::WindowFeatures&&, NavigationActionData&&, Messages::WebPageProxy::CreateNewPage::DelayedReply&&);
     void showPage();
     void runJavaScriptAlert(uint64_t frameID, const WebCore::SecurityOriginData&, const String&, Messages::WebPageProxy::RunJavaScriptAlert::DelayedReply&&);
     void runJavaScriptConfirm(uint64_t frameID, const WebCore::SecurityOriginData&, const String&, Messages::WebPageProxy::RunJavaScriptConfirm::DelayedReply&&);
@@ -1777,7 +1786,7 @@ private:
 #endif
 
 #if PLATFORM(GTK)
-    void getEditorCommandsForKeyEvent(const AtomicString&, Vector<String>&);
+    void getEditorCommandsForKeyEvent(const AtomString&, Vector<String>&);
 #endif
 
 #if USE(ATK)
@@ -1868,8 +1877,6 @@ private:
 #if PLATFORM(IOS_FAMILY)
     void gestureCallback(const WebCore::IntPoint&, uint32_t gestureType, uint32_t gestureState, uint32_t flags, CallbackID);
     void touchesCallback(const WebCore::IntPoint&, uint32_t touches, uint32_t flags, CallbackID);
-    void autocorrectionDataCallback(const Vector<WebCore::FloatRect>&, const String& fontName, float fontSize, uint64_t fontTraits, CallbackID);
-    void autocorrectionContextCallback(const WebAutocorrectionContext&, CallbackID);
     void selectionContextCallback(const String& selectedText, const String& beforeText, const String& afterText, CallbackID);
     void interpretKeyEvent(const EditorState&, bool isCharEvent, CompletionHandler<void(bool)>&&);
     void showPlaybackTargetPicker(bool hasVideo, const WebCore::IntRect& elementRect, WebCore::RouteSharingPolicy, const String&);
@@ -2060,6 +2067,7 @@ private:
     // WebPaymentCoordinatorProxy::Client
 #if ENABLE(APPLE_PAY)
     IPC::Connection* paymentCoordinatorConnection(const WebPaymentCoordinatorProxy&) final;
+    const String& paymentCoordinatorBoundInterfaceIdentifier(const WebPaymentCoordinatorProxy&, PAL::SessionID) final;
     const String& paymentCoordinatorSourceApplicationBundleIdentifier(const WebPaymentCoordinatorProxy&, PAL::SessionID) final;
     const String& paymentCoordinatorSourceApplicationSecondaryIdentifier(const WebPaymentCoordinatorProxy&, PAL::SessionID) final;
     void paymentCoordinatorAddMessageReceiver(WebPaymentCoordinatorProxy&, const IPC::StringReference&, IPC::MessageReceiver&) final;
@@ -2139,6 +2147,7 @@ private:
 
     String m_userAgent;
     String m_applicationNameForUserAgent;
+    String m_applicationNameForDesktopUserAgent;
     String m_customUserAgent;
     String m_customTextEncodingName;
     String m_overrideContentSecurityPolicy;
@@ -2330,7 +2339,7 @@ WEBPAGEPROXY_LOADOPTIMIZER_ADDITIONS_2
     RefPtr<WebCore::ValidationBubble> m_validationBubble;
 #endif
 
-    const uint64_t m_pageID;
+    const WebCore::PageIdentifier m_pageID;
 
     bool m_isPageSuspended { false };
     bool m_addsVisitedLinks { true };
@@ -2412,6 +2421,7 @@ WEBPAGEPROXY_LOADOPTIMIZER_ADDITIONS_2
     float m_mediaVolume { 1 };
     WebCore::MediaProducer::MutedStateFlags m_mutedState { WebCore::MediaProducer::NoneMuted };
     bool m_mayStartMediaWhenInWindow { true };
+    bool m_mediaPlaybackIsSuspended { false };
     bool m_mediaCaptureEnabled { true };
 
     bool m_waitingForDidUpdateActivityState { false };
@@ -2477,6 +2487,7 @@ WEBPAGEPROXY_LOADOPTIMIZER_ADDITIONS_2
     bool m_isUsingHighPerformanceWebGL { false };
     bool m_openedByDOM { false };
     bool m_hasCommittedAnyProvisionalLoads { false };
+    bool m_allowsFastClicksEverywhere { false };
 
     HashMap<String, Ref<WebURLSchemeHandler>> m_urlSchemeHandlersByScheme;
     HashMap<uint64_t, Ref<WebURLSchemeHandler>> m_urlSchemeHandlersByIdentifier;
@@ -2506,6 +2517,10 @@ WEBPAGEPROXY_LOADOPTIMIZER_ADDITIONS_2
 
 #if HAVE(PENCILKIT)
     std::unique_ptr<EditableImageController> m_editableImageController;
+#endif
+
+#if HAVE(VISIBILITY_PROPAGATION_VIEW)
+    LayerHostingContextID m_contextIDForVisibilityPropagation { 0 };
 #endif
 
     HashMap<WebViewDidMoveToWindowObserver*, WeakPtr<WebViewDidMoveToWindowObserver>> m_webViewDidMoveToWindowObservers;
