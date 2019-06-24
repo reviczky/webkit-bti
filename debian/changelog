@@ -1,4 +1,4 @@
-webkit2gtk (2.24.2-2) UNRELEASED; urgency=high
+webkit2gtk (2.24.2-2) unstable; urgency=high
 
   * The WebKitGTK security advisory WSA-2019-0003 lists the following
     security fixes in the latest versions of WebKitGTK+:
@@ -19,7 +19,7 @@ webkit2gtk (2.24.2-2) UNRELEASED; urgency=high
     + debian/NEWS:
       - Remove item about the requirement to have an SSE2-capable CPU.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 27 May 2019 13:16:53 +0200
+ -- Alberto Garcia <berto@igalia.com>  Mon, 24 Jun 2019 16:34:09 +0300
 
 webkit2gtk (2.24.2-1) unstable; urgency=medium
 
