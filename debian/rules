@@ -23,9 +23,10 @@ ifeq (,$(filter $(DEB_HOST_ARCH),amd64 ppc64 ppc64el))
 	CFLAGS := $(CFLAGS:-g=-g1)
 endif
 
-# The 32-bit x86 build requires SSE2
+# Use the CLoop Javascript interpreter and disable the JIT. This is
+# slow but it is the most compatible solution for old (non-SSE2) CPUs.
 ifneq (,$(filter $(DEB_HOST_ARCH),i386))
-	CFLAGS += -msse2 -mfpmath=sse
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF -DENABLE_C_LOOP=ON
 endif
 
 # See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=81426
