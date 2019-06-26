@@ -1,3 +1,11 @@
+webkit2gtk (2.24.2-3) UNRELEASED; urgency=medium
+
+  * debian/control:
+    + Recommend gstreamer1.0-libav. This package allows the user to play
+      most internet videos (Closes: #870814).
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 26 Jun 2019 12:09:40 +0300
+
 webkit2gtk (2.24.2-2) unstable; urgency=high
 
   * The WebKitGTK security advisory WSA-2019-0003 lists the following
