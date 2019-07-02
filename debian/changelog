@@ -1,10 +1,11 @@
-webkit2gtk (2.24.2-3) UNRELEASED; urgency=medium
+webkit2gtk (2.24.3-1) UNRELEASED; urgency=medium
 
+  * New upstream release (Closes: #929749).
   * debian/control:
     + Recommend gstreamer1.0-libav. This package allows the user to play
       most internet videos (Closes: #870814).
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 26 Jun 2019 12:09:40 +0300
+ -- Alberto Garcia <berto@igalia.com>  Tue, 02 Jul 2019 13:03:13 +0300
 
 webkit2gtk (2.24.2-2) unstable; urgency=high
 
