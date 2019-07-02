@@ -550,6 +550,10 @@ is ephemeral. </p>
 <pre class="programlisting">const <a href="../glib/glib-Basic-Types.html#gchar"><span class="returnvalue">gchar</span></a> *
 webkit_website_data_manager_get_websql_directory
                                (<em class="parameter"><code><a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a> *manager</code></em>);</pre>
+<div class="warning">
+<p><code class="literal">webkit_website_data_manager_get_websql_directory</code> has been deprecated since version 2.24. and should not be used in newly-written code.</p>
+<p>WebSQL is no longer supported. Use IndexedDB instead.</p>
+</div>
 <p>Get the <a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--websql-directory" title="The “websql-directory” property"><span class="type">“websql-directory”</span></a> property.</p>
 <div class="refsect3">
 <a name="webkit-website-data-manager-get-websql-directory.parameters"></a><h4>Parameters</h4>
@@ -994,6 +998,10 @@ parameters to configure data directories will be ignored.</p>
 <a name="WebKitWebsiteDataManager--websql-directory"></a><h3>The <code class="literal">“websql-directory”</code> property</h3>
 <pre class="programlisting">  “websql-directory”         <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The directory where WebSQL databases will be stored.</p>
+<div class="warning">
+<p><code class="literal">WebKitWebsiteDataManager:websql-directory</code> has been deprecated since version 2.24. and should not be used in newly-written code.</p>
+<p>WebSQL is no longer supported. Use IndexedDB instead.</p>
+</div>
 <p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
 <p class="since">Since: <a class="link" href="api-index-2-10.html#api-index-2.10">2.10</a></p>
