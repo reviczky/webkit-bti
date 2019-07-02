@@ -66,24 +66,6 @@
 
 #include <gst/app/gstappsink.h>
 
-#if USE(LIBEPOXY)
-// Include the <epoxy/gl.h> header before <gst/gl/gl.h>.
-#include <epoxy/gl.h>
-
-// Workaround build issue with RPi userland GLESv2 headers and libepoxy <https://webkit.org/b/185639>
-#if !GST_CHECK_VERSION(1, 14, 0)
-#include <gst/gl/gstglconfig.h>
-#if defined(GST_GL_HAVE_WINDOW_DISPMANX) && GST_GL_HAVE_WINDOW_DISPMANX
-#define __gl2_h_
-#undef GST_GL_HAVE_GLSYNC
-#define GST_GL_HAVE_GLSYNC 1
-#endif
-#endif // !GST_CHECK_VERSION(1, 14, 0)
-#endif // USE(LIBEPOXY)
-
-#define GST_USE_UNSTABLE_API
-#include <gst/gl/gl.h>
-#undef GST_USE_UNSTABLE_API
 
 #include "GLContext.h"
 #if USE(GLX)
@@ -570,7 +552,7 @@ void MediaPlayerPrivateGStreamerBase::setVolume(float volume)
         return;
 
     GST_DEBUG_OBJECT(pipeline(), "Setting volume: %f", volume);
-    gst_stream_volume_set_volume(m_volumeElement.get(), GST_STREAM_VOLUME_FORMAT_CUBIC, static_cast<double>(volume));
+    gst_stream_volume_set_volume(m_volumeElement.get(), GST_STREAM_VOLUME_FORMAT_LINEAR, static_cast<double>(volume));
 }
 
 float MediaPlayerPrivateGStreamerBase::volume() const
@@ -578,7 +560,7 @@ float MediaPlayerPrivateGStreamerBase::volume() const
     if (!m_volumeElement)
         return 0;
 
-    return gst_stream_volume_get_volume(m_volumeElement.get(), GST_STREAM_VOLUME_FORMAT_CUBIC);
+    return gst_stream_volume_get_volume(m_volumeElement.get(), GST_STREAM_VOLUME_FORMAT_LINEAR);
 }
 
 
@@ -587,7 +569,7 @@ void MediaPlayerPrivateGStreamerBase::notifyPlayerOfVolumeChange()
     if (!m_player || !m_volumeElement)
         return;
     double volume;
-    volume = gst_stream_volume_get_volume(m_volumeElement.get(), GST_STREAM_VOLUME_FORMAT_CUBIC);
+    volume = gst_stream_volume_get_volume(m_volumeElement.get(), GST_STREAM_VOLUME_FORMAT_LINEAR);
     // get_volume() can return values superior to 1.0 if the user
     // applies software user gain via third party application (GNOME
     // volume control for instance).
@@ -1000,11 +982,13 @@ void MediaPlayerPrivateGStreamerBase::updateTextureMapperFlags()
         break;
     }
 
+#if USE(GSTREAMER_GL)
     // When the imxvpudecoder is used, the texture sampling of the
     // directviv-uploaded texture returns an RGB value, so there's no need to
     // convert it.
     if (m_videoDecoderPlatform != WebKitGstVideoDecoderPlatform::ImxVPU)
         m_textureMapperFlags |= TEXTURE_MAPPER_COLOR_CONVERT_FLAG;
+#endif
 }
 #endif
 
@@ -1227,7 +1211,7 @@ void MediaPlayerPrivateGStreamerBase::setStreamVolumeElement(GstStreamVolume* vo
     // https://bugs.webkit.org/show_bug.cgi?id=118974 for more information.
     if (!m_player->platformVolumeConfigurationRequired()) {
         GST_DEBUG_OBJECT(pipeline(), "Setting stream volume to %f", m_player->volume());
-        g_object_set(m_volumeElement.get(), "volume", m_player->volume(), nullptr);
+        gst_stream_volume_set_volume(m_volumeElement.get(), GST_STREAM_VOLUME_FORMAT_LINEAR, static_cast<double>(m_player->volume()));
     } else
         GST_DEBUG_OBJECT(pipeline(), "Not setting stream volume, trusting system one");
 
