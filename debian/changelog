@@ -1,4 +1,4 @@
-webkit2gtk (2.24.3-1) UNRELEASED; urgency=medium
+webkit2gtk (2.24.3-1) unstable; urgency=medium
 
   * New upstream release (Closes: #929749).
   * debian/control:
