@@ -1,3 +1,9 @@
+webkit2gtk (2.24.3-1~bpo10+1) buster-backports; urgency=medium
+
+  * Rebuild for buster-backports.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 01 Aug 2019 12:23:18 +0200
+
 webkit2gtk (2.24.3-1) unstable; urgency=medium
 
   * New upstream release (Closes: #929749).
