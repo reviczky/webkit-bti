@@ -312,10 +312,10 @@ public:
 
 private:
     // This function fixes up the default font size if it detects that the current generic font family has changed. -dwh
-    void checkForGenericFamilyChange(RenderStyle*, const RenderStyle* parentStyle);
-    void checkForZoomChange(RenderStyle*, const RenderStyle* parentStyle);
+    void checkForGenericFamilyChange(RenderStyle&, const RenderStyle* parentStyle);
+    void checkForZoomChange(RenderStyle&, const RenderStyle* parentStyle);
 #if ENABLE(TEXT_AUTOSIZING)
-    void checkForTextSizeAdjust(RenderStyle*);
+    void checkForTextSizeAdjust(RenderStyle&);
 #endif
 
     void adjustRenderStyle(RenderStyle&, const RenderStyle& parentStyle, const RenderStyle* parentBoxStyle, const Element*);
@@ -469,6 +469,8 @@ public:
 
     RefPtr<CSSValue> resolvedVariableValue(CSSPropertyID, const CSSValue&, ApplyCascadedPropertyState&) const;
 
+    bool adjustRenderStyleForTextAutosizing(RenderStyle&, const Element&);
+
 private:
     void cacheBorderAndBackground();
 
@@ -499,8 +501,6 @@ private:
     // Every N additions to the matched declaration cache trigger a sweep where entries holding
     // the last reference to a style declaration are garbage collected.
     void sweepMatchedPropertiesCache();
-
-    void adjustRenderStyleForTextAutosizing(RenderStyle&, const Element&);
 
     typedef HashMap<unsigned, MatchedPropertiesCacheItem> MatchedPropertiesCache;
     MatchedPropertiesCache m_matchedPropertiesCache;

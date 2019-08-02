@@ -492,6 +492,57 @@ bool RenderStyle::equalForTextAutosizing(const RenderStyle& other) const
         && m_rareNonInheritedData->textOverflow == other.m_rareNonInheritedData->textOverflow;
 }
 
+bool RenderStyle::isIdempotentTextAutosizingCandidate() const
+{
+    // Refer to <rdar://problem/51826266> for more information regarding how this function was generated.
+    auto fields = OptionSet<AutosizeStatus::Fields>::fromRaw(m_inheritedFlags.autosizeStatus);
+    if (fields.contains(AutosizeStatus::Fields::AvoidSubtree))
+        return false;
+
+    if (fields.contains(AutosizeStatus::Fields::FixedHeight)) {
+        if (fields.contains(AutosizeStatus::Fields::FixedWidth)) {
+            if (whiteSpace() == WhiteSpace::NoWrap) {
+                if (width().isFixed())
+                    return false;
+
+                return true;
+            }
+
+            if (fields.contains(AutosizeStatus::Fields::Floating))
+                return false;
+
+            if (fields.contains(AutosizeStatus::Fields::OverflowXHidden))
+                return false;
+
+            return true;
+        }
+
+        if (fields.contains(AutosizeStatus::Fields::OverflowXHidden)) {
+            if (fields.contains(AutosizeStatus::Fields::Floating))
+                return false;
+
+            return true;
+        }
+
+        return true;
+    }
+
+    if (width().isFixed())
+        return false;
+
+    if (textSizeAdjust().isPercentage() && textSizeAdjust().percentage() == 100) {
+        if (fields.contains(AutosizeStatus::Fields::Floating))
+            return true;
+
+        if (fields.contains(AutosizeStatus::Fields::FixedWidth))
+            return true;
+
+        return false;
+    }
+
+    return true;
+}
+
 AutosizeStatus RenderStyle::autosizeStatus() const
 {
     return OptionSet<AutosizeStatus::Fields>::fromRaw(m_inheritedFlags.autosizeStatus);

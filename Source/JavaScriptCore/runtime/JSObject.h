@@ -256,9 +256,9 @@ public:
         return structure(vm)->hasIndexingHeader(this);
     }
     
-    bool canGetIndexQuickly(unsigned i)
+    bool canGetIndexQuickly(unsigned i) const
     {
-        Butterfly* butterfly = this->butterfly();
+        const Butterfly* butterfly = this->butterfly();
         switch (indexingType()) {
         case ALL_BLANK_INDEXING_TYPES:
         case ALL_UNDECIDED_INDEXING_TYPES:
@@ -282,9 +282,9 @@ public:
         }
     }
         
-    JSValue getIndexQuickly(unsigned i)
+    JSValue getIndexQuickly(unsigned i) const
     {
-        Butterfly* butterfly = this->butterfly();
+        const Butterfly* butterfly = this->butterfly();
         switch (indexingType()) {
         case ALL_INT32_INDEXING_TYPES:
             return jsNumber(butterfly->contiguous().at(this, i).get().asInt32());
@@ -302,7 +302,7 @@ public:
         
     JSValue tryGetIndexQuickly(unsigned i) const
     {
-        Butterfly* butterfly = const_cast<JSObject*>(this)->butterfly();
+        const Butterfly* butterfly = this->butterfly();
         switch (indexingType()) {
         case ALL_BLANK_INDEXING_TYPES:
         case ALL_UNDECIDED_INDEXING_TYPES:
@@ -744,7 +744,7 @@ public:
     bool isSealed(VM& vm) { return structure(vm)->isSealed(vm); }
     bool isFrozen(VM& vm) { return structure(vm)->isFrozen(vm); }
 
-    bool anyObjectInChainMayInterceptIndexedAccesses(VM&) const;
+    JS_EXPORT_PRIVATE bool anyObjectInChainMayInterceptIndexedAccesses(VM&) const;
     JS_EXPORT_PRIVATE bool prototypeChainMayInterceptStoreTo(VM&, PropertyName);
     bool needsSlowPutIndexing(VM&) const;
 

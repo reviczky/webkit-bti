@@ -351,6 +351,25 @@ void testMul32WithImmediates()
     }
 }
 
+#if CPU(ARM64)
+void testMul32SignExtend()
+{
+    for (auto value : int32Operands()) {
+        auto mul = compile([=] (CCallHelpers& jit) {
+            jit.emitFunctionPrologue();
+
+            jit.multiplySignExtend32(GPRInfo::argumentGPR0, GPRInfo::argumentGPR1, GPRInfo::returnValueGPR);
+
+            jit.emitFunctionEpilogue();
+            jit.ret();
+        });
+
+        for (auto value2 : int32Operands())
+            CHECK_EQ(invoke<long int>(mul, value, value2), ((long int) value) * ((long int) value2));
+    }
+}
+#endif
+
 #if CPU(X86) || CPU(X86_64) || CPU(ARM64)
 void testCompareFloat(MacroAssembler::DoubleCondition condition)
 {
@@ -1015,6 +1034,8 @@ void testMoveDoubleConditionally64()
 
 static void testCagePreservesPACFailureBit()
 {
+#if GIGACAGE_ENABLED
+    ASSERT(!Gigacage::isDisablingPrimitiveGigacageDisabled());
     auto cage = compile([] (CCallHelpers& jit) {
         jit.emitFunctionPrologue();
         jit.cageConditionally(Gigacage::Primitive, GPRInfo::argumentGPR0, GPRInfo::argumentGPR1, GPRInfo::argumentGPR2);
@@ -1025,10 +1046,15 @@ static void testCagePreservesPACFailureBit()
 
     void* ptr = Gigacage::tryMalloc(Gigacage::Primitive, 1);
     void* taggedPtr = tagArrayPtr(ptr, 1);
-    dataLogLn("starting test");
+    ASSERT(hasOneBitSet(Gigacage::size(Gigacage::Primitive) << 2));
+    void* notCagedPtr = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(ptr) + (Gigacage::size(Gigacage::Primitive) << 2));
+    CHECK_NOT_EQ(Gigacage::caged(Gigacage::Primitive, notCagedPtr), notCagedPtr);
+    void* taggedNotCagedPtr = tagArrayPtr(notCagedPtr, 1);
+
     if (isARM64E()) {
         // FIXME: This won't work if authentication failures trap but I don't know how to test for that right now.
         CHECK_NOT_EQ(invoke<void*>(cage, taggedPtr, 2), ptr);
+        CHECK_EQ(invoke<void*>(cage, taggedNotCagedPtr, 1), untagArrayPtr(taggedPtr, 2));
     } else
         CHECK_EQ(invoke<void*>(cage, taggedPtr, 2), ptr);
 
@@ -1042,16 +1068,17 @@ static void testCagePreservesPACFailureBit()
         jit.ret();
     });
 
+    CHECK_EQ(invoke<void*>(cageWithoutAuthentication, taggedPtr), taggedPtr);
     if (isARM64E()) {
         // FIXME: This won't work if authentication failures trap but I don't know how to test for that right now.
-        CHECK_NOT_EQ(invoke<void*>(cageWithoutAuthentication, untagArrayPtr(taggedPtr, 2)), ptr);
-    } else
-        CHECK_EQ(invoke<void*>(cageWithoutAuthentication, untagArrayPtr(taggedPtr, 2)), ptr);
-
-    CHECK_EQ(untagArrayPtr(taggedPtr, 1), ptr);
-    CHECK_EQ(invoke<void*>(cageWithoutAuthentication, untagArrayPtr(taggedPtr, 1)), ptr);
+        CHECK_NOT_EQ(invoke<void*>(cageWithoutAuthentication, taggedNotCagedPtr), taggedNotCagedPtr);
+        CHECK_NOT_EQ(untagArrayPtr(invoke<void*>(cageWithoutAuthentication, taggedNotCagedPtr), 1), notCagedPtr);
+        CHECK_NOT_EQ(invoke<void*>(cageWithoutAuthentication, taggedNotCagedPtr), taggedPtr);
+        CHECK_NOT_EQ(untagArrayPtr(invoke<void*>(cageWithoutAuthentication, taggedNotCagedPtr), 1), ptr);
+    }
 
     Gigacage::free(Gigacage::Primitive, ptr);
+#endif
 }
 
 #define RUN(test) do {                          \
@@ -1109,6 +1136,10 @@ void run(const char* filter)
     RUN(testCompareDouble(MacroAssembler::DoubleLessThanOrUnordered));
     RUN(testCompareDouble(MacroAssembler::DoubleLessThanOrEqualOrUnordered));
     RUN(testMul32WithImmediates());
+
+#if CPU(ARM64)
+    RUN(testMul32SignExtend());
+#endif
 
 #if CPU(X86) || CPU(X86_64) || CPU(ARM64)
     RUN(testCompareFloat(MacroAssembler::DoubleEqual));

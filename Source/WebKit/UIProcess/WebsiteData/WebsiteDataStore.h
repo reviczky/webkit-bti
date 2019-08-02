@@ -28,7 +28,6 @@
 #include "LocalStorageDatabaseTracker.h"
 #include "NetworkSessionCreationParameters.h"
 #include "WebDeviceOrientationAndMotionAccessController.h"
-#include "WebProcessLifetimeObserver.h"
 #include "WebsiteDataStoreClient.h"
 #include "WebsiteDataStoreConfiguration.h"
 #include <WebCore/Cookie.h>
@@ -44,6 +43,7 @@
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 #include <wtf/UniqueRef.h>
+#include <wtf/WeakHashSet.h>
 #include <wtf/WeakPtr.h>
 #include <wtf/WorkQueue.h>
 #include <wtf/text/WTFString.h>
@@ -54,10 +54,6 @@
 
 #if USE(CURL)
 #include <WebCore/CurlProxySettings.h>
-#endif
-
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/WebsiteDataStoreAdditions.h>
 #endif
 
 namespace API {
@@ -74,8 +70,10 @@ namespace WebKit {
 class AuthenticatorManager;
 class SecKeyProxyStore;
 class DeviceIdHashSaltStorage;
+class SOAuthorizationCoordinator;
 class WebPageProxy;
 class WebProcessPool;
+class WebProcessProxy;
 class WebResourceLoadStatisticsStore;
 enum class WebsiteDataFetchOption;
 enum class WebsiteDataType;
@@ -93,7 +91,7 @@ enum class StorageAccessPromptStatus;
 struct PluginModuleInfo;
 #endif
 
-class WebsiteDataStore : public RefCounted<WebsiteDataStore>, public WebProcessLifetimeObserver, public Identified<WebsiteDataStore>, public CanMakeWeakPtr<WebsiteDataStore>  {
+class WebsiteDataStore : public RefCounted<WebsiteDataStore>, public Identified<WebsiteDataStore>, public CanMakeWeakPtr<WebsiteDataStore>  {
 public:
     static Ref<WebsiteDataStore> createNonPersistent();
     static Ref<WebsiteDataStore> create(Ref<WebsiteDataStoreConfiguration>&&, PAL::SessionID);
@@ -103,6 +101,11 @@ public:
 
     bool isPersistent() const { return !m_sessionID.isEphemeral(); }
     PAL::SessionID sessionID() const { return m_sessionID; }
+    
+    void registerProcess(WebProcessProxy&);
+    void unregisterProcess(WebProcessProxy&);
+    
+    const WeakHashSet<WebProcessProxy>& processes() const { return m_processes; }
 
     bool resourceLoadStatisticsEnabled() const;
     void setResourceLoadStatisticsEnabled(bool);
@@ -179,8 +182,10 @@ public:
     void setCacheMaxAgeCapForPrevalentResources(Seconds, CompletionHandler<void()>&&);
     void resetCacheMaxAgeCapForPrevalentResources(CompletionHandler<void()>&&);
     void resolveDirectoriesIfNecessary();
+    const String& applicationCacheFlatFileSubdirectoryName() const { return m_configuration->applicationCacheFlatFileSubdirectoryName(); }
     const String& resolvedApplicationCacheDirectory() const { return m_resolvedConfiguration->applicationCacheDirectory(); }
     const String& resolvedLocalStorageDirectory() const { return m_resolvedConfiguration->localStorageDirectory(); }
+    const String& resolvedNetworkCacheDirectory() const { return m_resolvedConfiguration->networkCacheDirectory(); }
     const String& resolvedMediaCacheDirectory() const { return m_resolvedConfiguration->mediaCacheDirectory(); }
     const String& resolvedMediaKeysDirectory() const { return m_resolvedConfiguration->mediaKeysStorageDirectory(); }
     const String& resolvedDatabaseDirectory() const { return m_resolvedConfiguration->webSQLDatabaseDirectory(); }
@@ -255,8 +260,8 @@ public:
     WebDeviceOrientationAndMotionAccessController& deviceOrientationAndMotionAccessController() { return m_deviceOrientationAndMotionAccessController; }
 #endif
 
-#if HAVE(LOAD_OPTIMIZER)
-WEBSITEDATASTORE_LOADOPTIMIZER_ADDITIONS_1
+#if HAVE(APP_SSO)
+    SOAuthorizationCoordinator& soAuthorizationCoordinator() { return m_soAuthorizationCoordinator.get(); }
 #endif
 
 private:
@@ -313,6 +318,8 @@ private:
 #endif
 
     HashSet<WebCore::Cookie> m_pendingCookies;
+    
+    WeakHashSet<WebProcessProxy> m_processes;
 
     String m_boundInterfaceIdentifier;
     AllowsCellularAccess m_allowsCellularAccess { AllowsCellularAccess::Yes };
@@ -336,6 +343,10 @@ private:
     UniqueRef<WebsiteDataStoreClient> m_client;
 
     RefPtr<API::HTTPCookieStore> m_cookieStore;
+
+#if HAVE(APP_SSO)
+    UniqueRef<SOAuthorizationCoordinator> m_soAuthorizationCoordinator;
+#endif
 };
 
 }

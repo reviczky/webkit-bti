@@ -55,6 +55,13 @@ ThirdPartyIframeRedirectBlockingEnabled:
    humanReadableDescription: "Block top-level redirects by third-party iframes"
    category: experimental
 
+GoogleAntiFlickerOptimizationQuirkEnabled:
+   type: bool
+   defaultValue: true
+   humanReadableName: "Quirk to prevent delayed initial painting on sites using Google's Anti-Flicker optimization"
+   humanReadableDescription: "Quirk to prevent delayed initial painting on sites using Google's Anti-Flicker optimization"
+   category: experimental
+
 JavaEnabled:
   type: bool
   defaultValue: false
@@ -122,10 +129,6 @@ CanvasUsesAcceleratedDrawing:
 WebGLEnabled:
   type: bool
   defaultValue: true
-
-ForceSoftwareWebGLRendering:
-  type: bool
-  defaultValue: false
 
 Accelerated2dCanvasEnabled:
   type: bool
@@ -1119,6 +1122,10 @@ ShouldAllowUserInstalledFonts:
   type: bool
   defaultValue: true
 
+ShouldAllowDesignSystemUIFonts:
+  type: bool
+  defaultValue: false
+
 MediaCapabilitiesEnabled:
   type: bool
   defaultValue: true
@@ -1186,6 +1193,11 @@ SourceBufferChangeTypeEnabled:
   type: bool
   defaultValue: true
   condition: ENABLE(MEDIA_SOURCE)
+
+DialogElementEnabled:
+  type: bool
+  defaultValue: false
+  webcoreBinding: RuntimeEnabledFeatures
 
 EncryptedMediaAPIEnabled:
   type: bool
@@ -1343,15 +1355,6 @@ CSSCustomPropertiesAndValuesEnabled:
   webcoreBinding: RuntimeEnabledFeatures
   category: experimental
 
-DarkModeCSSEnabled:
-  type: bool
-  defaultValue: true
-  humanReadableName: "Dark Mode CSS Support"
-  humanReadableDescription: "Enable Dark Mode CSS Support"
-  webcoreBinding: RuntimeEnabledFeatures
-  category: experimental
-  condition: ENABLE(DARK_MODE_CSS)
-
 CSSPaintingAPIEnabled:
   type: bool
   defaultValue: false
@@ -1392,14 +1395,6 @@ MediaCapabilitiesExtensionsEnabled:
   humanReadableName: "Media Capabilities Extensions"
   humanReadableDescription: "Media Capabilities Extensions"
   category: experimental
-
-IsITPFirstPartyWebsiteDataRemovalEnabled:
-    type: bool
-    defaultValue: true
-    humanReadableName: "ITP First Party Website Data Removal"
-    humanReadableDescription: "Enable Intelligent Tracking Prevention First Party Website Data Removal"
-    webcoreBinding: RuntimeEnabledFeatures
-    category: experimental
 
 ResizeObserverEnabled:
   type: bool

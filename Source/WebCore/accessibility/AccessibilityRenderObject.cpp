@@ -1029,10 +1029,14 @@ bool AccessibilityRenderObject::hasTextAlternative() const
     // override the "label" element association.
     return ariaAccessibilityDescription().length();
 }
-    
+
 bool AccessibilityRenderObject::hasPopup() const
 {
-    return !equalLettersIgnoringASCIICase(hasPopupValue(), "false");
+    // Return true if this has the aria-haspopup attribute, or if it has an ancestor of type link with the aria-haspopup attribute.
+    return AccessibilityObject::matchedParent(*this, true, [this] (const AccessibilityObject& object) {
+        return (this == &object) ? !equalLettersIgnoringASCIICase(object.popupValue(), "false")
+            : object.isLink() && !equalLettersIgnoringASCIICase(object.popupValue(), "false");
+    });
 }
 
 bool AccessibilityRenderObject::supportsARIADropping() const 
@@ -1974,7 +1978,9 @@ VisiblePositionRange AccessibilityRenderObject::visiblePositionRangeForLine(unsi
     while (--lineCount) {
         savedVisiblePos = visiblePos;
         visiblePos = nextLinePosition(visiblePos, 0);
-        if (visiblePos.isNull() || visiblePos == savedVisiblePos)
+        if (visiblePos.isNull()
+            || visiblePos == savedVisiblePos
+            || visiblePos.equals(savedVisiblePos))
             return VisiblePositionRange();
     }
     
@@ -2809,8 +2815,17 @@ AccessibilityRole AccessibilityRenderObject::determineAccessibilityRole()
     if (m_renderer->isSVGRoot())
         return AccessibilityRole::SVGRoot;
     
-    if (isStyleFormatGroup())
+    if (isStyleFormatGroup()) {
+        if (node->hasTagName(delTag))
+            return AccessibilityRole::Deletion;
+        if (node->hasTagName(insTag))
+            return AccessibilityRole::Insertion;
+        if (node->hasTagName(subTag))
+            return AccessibilityRole::Subscript;
+        if (node->hasTagName(supTag))
+            return AccessibilityRole::Superscript;
         return is<RenderInline>(*m_renderer) ? AccessibilityRole::Inline : AccessibilityRole::TextGroup;
+    }
     
     if (node && node->hasTagName(ddTag))
         return AccessibilityRole::DescriptionListDetail;

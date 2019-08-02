@@ -53,6 +53,8 @@ ScrollingStateNode::ScrollingStateNode(const ScrollingStateNode& stateNode, Scro
 {
     if (hasChangedProperty(Layer))
         setLayer(stateNode.layer().toRepresentation(adoptiveTree.preferredLayerRepresentation()));
+
+    relaxAdoptionRequirement();
     scrollingStateTree().addNode(*this);
 }
 
@@ -67,7 +69,7 @@ void ScrollingStateNode::setPropertyChanged(unsigned propertyBit)
     m_scrollingStateTree.setHasChangedProperties();
 }
 
-void ScrollingStateNode::setAllPropertiesChanged()
+void ScrollingStateNode::setPropertyChangedBitsAfterReattach()
 {
     setPropertyChangedBit(Layer);
     setPropertyChangedBit(ChildNodes);

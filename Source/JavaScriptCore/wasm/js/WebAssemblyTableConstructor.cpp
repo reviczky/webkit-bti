@@ -65,12 +65,12 @@ static EncodedJSValue JSC_HOST_CALL constructJSWebAssemblyTable(ExecState* exec)
         RETURN_IF_EXCEPTION(throwScope, encodedJSValue());
         String elementString = elementValue.toWTFString(exec);
         RETURN_IF_EXCEPTION(throwScope, encodedJSValue());
-        if (elementString == "anyfunc")
+        if (elementString == "funcref" || elementString == "anyfunc")
             type = Wasm::TableElementType::Funcref;
         else if (elementString == "anyref")
             type = Wasm::TableElementType::Anyref;
         else
-            return JSValue::encode(throwException(exec, throwScope, createTypeError(exec, "WebAssembly.Table expects its 'element' field to be the string 'anyfunc' or 'anyref'"_s)));
+            return JSValue::encode(throwException(exec, throwScope, createTypeError(exec, "WebAssembly.Table expects its 'element' field to be the string 'funcref' or 'anyref'"_s)));
     }
 
     Identifier initialIdent = Identifier::fromString(&vm, "initial");
@@ -79,13 +79,13 @@ static EncodedJSValue JSC_HOST_CALL constructJSWebAssemblyTable(ExecState* exec)
     uint32_t initial = toNonWrappingUint32(exec, initialSizeValue);
     RETURN_IF_EXCEPTION(throwScope, encodedJSValue());
 
+    // In WebIDL, "present" means that [[Get]] result is undefined, not [[HasProperty]] result.
+    // https://heycam.github.io/webidl/#idl-dictionaries
     Optional<uint32_t> maximum;
     Identifier maximumIdent = Identifier::fromString(&vm, "maximum");
-    bool hasProperty = memoryDescriptor->hasProperty(exec, maximumIdent);
+    JSValue maxSizeValue = memoryDescriptor->get(exec, maximumIdent);
     RETURN_IF_EXCEPTION(throwScope, encodedJSValue());
-    if (hasProperty) {
-        JSValue maxSizeValue = memoryDescriptor->get(exec, maximumIdent);
-        RETURN_IF_EXCEPTION(throwScope, encodedJSValue());
+    if (!maxSizeValue.isUndefined()) {
         maximum = toNonWrappingUint32(exec, maxSizeValue);
         RETURN_IF_EXCEPTION(throwScope, encodedJSValue());
 
@@ -127,7 +127,7 @@ void WebAssemblyTableConstructor::finishCreation(VM& vm, WebAssemblyTablePrototy
 {
     Base::finishCreation(vm, "Table"_s, NameVisibility::Visible, NameAdditionMode::WithoutStructureTransition);
     putDirectWithoutTransition(vm, vm.propertyNames->prototype, prototype, PropertyAttribute::DontEnum | PropertyAttribute::DontDelete | PropertyAttribute::ReadOnly);
-    putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(1), PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum | PropertyAttribute::DontDelete);
+    putDirectWithoutTransition(vm, vm.propertyNames->length, jsNumber(1), PropertyAttribute::ReadOnly | PropertyAttribute::DontEnum);
 }
 
 WebAssemblyTableConstructor::WebAssemblyTableConstructor(VM& vm, Structure* structure)

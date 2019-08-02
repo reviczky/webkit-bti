@@ -42,30 +42,58 @@ bool AutosizeStatus::contains(Fields fields) const
     return m_fields.contains(fields);
 }
 
-AutosizeStatus AutosizeStatus::updateStatus(RenderStyle& style)
+void AutosizeStatus::updateStatus(RenderStyle& style)
 {
-    OptionSet<Fields> result = style.autosizeStatus().fields();
-    if (style.hasOutOfFlowPosition())
-        result.add(Fields::FoundOutOfFlowPosition);
-    switch (style.display()) {
-    case DisplayType::InlineBlock:
-        result.add(Fields::FoundInlineBlock);
-        break;
-    case DisplayType::None:
-        result.add(Fields::FoundDisplayNone);
-        break;
-    default: // FIXME: Add more cases.
-        break;
-    }
-    if (style.height().isFixed())
-        result.add(Fields::FoundFixedHeight);
-    style.setAutosizeStatus(result);
-    return result;
-}
+    auto result = style.autosizeStatus().fields();
 
-bool AutosizeStatus::shouldSkipSubtree() const
-{
-    return m_fields.containsAny({ Fields::FoundOutOfFlowPosition, Fields::FoundInlineBlock, Fields::FoundFixedHeight, Fields::FoundDisplayNone });
+    auto shouldAvoidAutosizingEntireSubtree = [&] {
+        if (style.display() == DisplayType::None)
+            return true;
+
+        if (!style.lineHeight().isSpecified() || style.whiteSpace() == WhiteSpace::NoWrap)
+            return false;
+
+        const float maximumDifferenceBetweenFixedLineHeightAndFontSize = 6;
+        if (style.lineHeight().isFixed() && style.lineHeight().value() - style.fontDescription().specifiedSize() > maximumDifferenceBetweenFixedLineHeightAndFontSize)
+            return false;
+
+        Optional<Length> heightOrMaxHeightAsLength;
+        if (style.height().isFixed() && style.maxHeight().isAuto())
+            heightOrMaxHeightAsLength = style.height();
+        else if (style.maxHeight().isFixed())
+            heightOrMaxHeightAsLength = style.maxHeight();
+
+        if (!heightOrMaxHeightAsLength)
+            return false;
+
+        float heightOrMaxHeight = heightOrMaxHeightAsLength->value();
+        float computedLineHeight = style.computedLineHeight();
+        if (computedLineHeight <= 0)
+            return false;
+
+        float approximateNumberOfLines = heightOrMaxHeight / computedLineHeight;
+        const int maximumNumberOfLines = 5;
+        const float thresholdForConsideringAnApproximateNumberOfLinesToBeCloseToAnInteger = 0.01;
+        return approximateNumberOfLines <= maximumNumberOfLines + thresholdForConsideringAnApproximateNumberOfLinesToBeCloseToAnInteger
+            && approximateNumberOfLines - std::floor(approximateNumberOfLines) <= thresholdForConsideringAnApproximateNumberOfLinesToBeCloseToAnInteger;
+    };
+
+    if (shouldAvoidAutosizingEntireSubtree())
+        result.add(Fields::AvoidSubtree);
+
+    if (style.height().isFixed())
+        result.add(Fields::FixedHeight);
+
+    if (style.width().isFixed())
+        result.add(Fields::FixedWidth);
+
+    if (style.overflowX() == Overflow::Hidden)
+        result.add(Fields::OverflowXHidden);
+
+    if (style.isFloating())
+        result.add(Fields::Floating);
+
+    style.setAutosizeStatus(result);
 }
 
 float AutosizeStatus::idempotentTextSize(float specifiedSize, float pageScale)

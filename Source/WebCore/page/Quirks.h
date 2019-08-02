@@ -25,11 +25,13 @@
 
 #pragma once
 
+#include "Event.h"
 #include <wtf/WeakPtr.h>
 
 namespace WebCore {
 
 class Document;
+class EventTarget;
 class HTMLElement;
 class LayoutUnit;
 
@@ -40,26 +42,28 @@ public:
     ~Quirks();
 
     bool shouldIgnoreInvalidSignal() const;
-    WEBCORE_EXPORT bool shouldIgnoreShrinkToFitContent() const;
-    WEBCORE_EXPORT Optional<LayoutUnit> overriddenViewLayoutWidth(LayoutUnit currentViewLayoutWidth) const;
     bool needsFormControlToBeMouseFocusable() const;
     bool needsAutoplayPlayPauseEvents() const;
     bool needsSeekingSupportDisabled() const;
     bool needsPerDocumentAutoplayBehavior() const;
     bool shouldAutoplayForArbitraryUserGesture() const;
     bool hasBrokenEncryptedMediaAPISupportQuirk() const;
-    bool hasWebSQLSupportQuirk() const;
 #if ENABLE(TOUCH_EVENTS)
     bool shouldDispatchSimulatedMouseEvents() const;
-    bool shouldDispatchSimulatedMouseEventsOnTarget(EventTarget*) const;
+    bool shouldDispatchedSimulatedMouseEventsAssumeDefaultPrevented(EventTarget*) const;
+    Optional<Event::IsCancelable> simulatedMouseEventTypeForTarget(EventTarget*) const;
 #endif
     bool shouldDisablePointerEventsQuirk() const;
     bool needsInputModeNoneImplicitly(const HTMLElement&) const;
+    bool needsDeferKeyDownAndKeyPressTimersUntilNextEditingCommand() const;
 
     WEBCORE_EXPORT bool shouldDispatchSyntheticMouseEventsWhenModifyingSelection() const;
     WEBCORE_EXPORT bool shouldSuppressAutocorrectionAndAutocaptializationInHiddenEditableAreas() const;
     WEBCORE_EXPORT bool isTouchBarUpdateSupressedForHiddenContentEditable() const;
     WEBCORE_EXPORT bool isNeverRichlyEditableForTouchBar() const;
+    WEBCORE_EXPORT bool shouldAvoidResizingWhenInputViewBoundsChange() const;
+
+    WEBCORE_EXPORT bool needsYouTubeMouseOutQuirk() const;
 
     bool needsGMailOverflowScrollQuirk() const;
     bool needsYouTubeOverflowScrollQuirk() const;
@@ -67,10 +71,14 @@ public:
 private:
     bool needsQuirks() const;
 
+#if ENABLE(TOUCH_EVENTS)
+    bool isAmazon() const;
+    bool isGoogleMaps() const;
+#endif
+
     WeakPtr<Document> m_document;
 
     mutable Optional<bool> m_hasBrokenEncryptedMediaAPISupportQuirk;
-    mutable Optional<bool> m_hasWebSQLSupportQuirk;
 #if PLATFORM(IOS_FAMILY)
     mutable Optional<bool> m_needsGMailOverflowScrollQuirk;
     mutable Optional<bool> m_needsYouTubeOverflowScrollQuirk;

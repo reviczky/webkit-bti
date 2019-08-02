@@ -30,11 +30,14 @@
 
 #include "NotImplemented.h"
 #include "WHLSLAST.h"
+#include "WHLSLEntryPointScaffolding.h"
+#include "WHLSLInferTypes.h"
 #include "WHLSLNativeFunctionWriter.h"
 #include "WHLSLProgram.h"
 #include "WHLSLTypeNamer.h"
 #include "WHLSLVisitor.h"
 #include <wtf/HashMap.h>
+#include <wtf/HashSet.h>
 #include <wtf/SetForScope.h>
 #include <wtf/text/StringBuilder.h>
 
@@ -123,7 +126,6 @@ protected:
     void visit(AST::Return&) override;
     void visit(AST::SwitchStatement&) override;
     void visit(AST::SwitchCase&) override;
-    void visit(AST::Trap&) override;
     void visit(AST::VariableDeclarationsStatement&) override;
     void visit(AST::WhileLoop&) override;
     void visit(AST::IntegerLiteral&) override;
@@ -190,6 +192,13 @@ protected:
         ASSERT(m_stack.last().leftValue);
         return m_stack.takeLast().leftValue;
     }
+
+    enum class BreakContext {
+        Loop,
+        Switch
+    };
+
+    Optional<BreakContext> m_currentBreakContext;
 
     Intrinsics& m_intrinsics;
     TypeNamer& m_typeNamer;
@@ -271,9 +280,17 @@ void FunctionDefinitionWriter::visit(AST::Block& block)
 
 void FunctionDefinitionWriter::visit(AST::Break&)
 {
-    ASSERT(m_breakOutOfCurrentLoopEarlyVariable.length());
-    m_stringBuilder.append(makeString(m_breakOutOfCurrentLoopEarlyVariable, " = true;\n"));
-    m_stringBuilder.append("break;\n");
+    ASSERT(m_currentBreakContext);
+    switch (*m_currentBreakContext) {
+    case BreakContext::Switch:
+        m_stringBuilder.append("break;\n");
+        break;
+    case BreakContext::Loop:
+        ASSERT(m_breakOutOfCurrentLoopEarlyVariable.length());
+        m_stringBuilder.append(makeString(m_breakOutOfCurrentLoopEarlyVariable, " = true;\n"));
+        m_stringBuilder.append("break;\n");
+        break;
+    }
 }
 
 void FunctionDefinitionWriter::visit(AST::Continue&)
@@ -307,6 +324,7 @@ void FunctionDefinitionWriter::emitLoop(LoopConditionLocation loopConditionLocat
     }
 
     m_stringBuilder.append("do {\n");
+    SetForScope<Optional<BreakContext>> breakContext(m_currentBreakContext, BreakContext::Loop);
     checkErrorAndVisit(body);
     m_stringBuilder.append("} while(false); \n");
     m_stringBuilder.append(makeString("if (", m_breakOutOfCurrentLoopEarlyVariable, ") break;\n"));
@@ -393,15 +411,9 @@ void FunctionDefinitionWriter::visit(AST::SwitchCase& switchCase)
         m_stringBuilder.append(makeString("case ", constantExpressionString(*switchCase.value()), ":\n"));
     else
         m_stringBuilder.append("default:\n");
+    SetForScope<Optional<BreakContext>> breakContext(m_currentBreakContext, BreakContext::Switch);
     checkErrorAndVisit(switchCase.block());
     // FIXME: https://bugs.webkit.org/show_bug.cgi?id=195812 Figure out whether we need to break or fallthrough.
-    notImplemented();
-}
-
-void FunctionDefinitionWriter::visit(AST::Trap&)
-{
-    // FIXME: https://bugs.webkit.org/show_bug.cgi?id=195811 Implement this
-    notImplemented();
 }
 
 void FunctionDefinitionWriter::visit(AST::VariableDeclarationsStatement& variableDeclarationsStatement)
@@ -463,7 +475,7 @@ void FunctionDefinitionWriter::visit(AST::EnumerationMemberLiteral& enumerationM
     ASSERT(enumerationMemberLiteral.enumerationDefinition());
     auto variableName = generateNextVariableName();
     auto mangledTypeName = m_typeNamer.mangledNameForType(enumerationMemberLiteral.resolvedType());
-    m_stringBuilder.append(makeString(mangledTypeName, ' ', variableName, " = ", mangledTypeName, '.', m_typeNamer.mangledNameForEnumerationMember(*enumerationMemberLiteral.enumerationMember()), ";\n"));
+    m_stringBuilder.append(makeString(mangledTypeName, ' ', variableName, " = ", mangledTypeName, "::", m_typeNamer.mangledNameForEnumerationMember(*enumerationMemberLiteral.enumerationMember()), ";\n"));
     appendRightValue(enumerationMemberLiteral, variableName);
 }
 
@@ -538,11 +550,12 @@ void FunctionDefinitionWriter::visit(AST::CallExpression& callExpression)
         checkErrorAndVisit(argument);
         argumentNames.append(takeLastValue());
     }
-    ASSERT(callExpression.function());
-    auto iterator = m_functionMapping.find(callExpression.function());
+    auto iterator = m_functionMapping.find(&callExpression.function());
     ASSERT(iterator != m_functionMapping.end());
     auto variableName = generateNextVariableName();
-    m_stringBuilder.append(makeString(m_typeNamer.mangledNameForType(callExpression.resolvedType()), ' ', variableName, " = ", iterator->value, '('));
+    if (!matches(callExpression.resolvedType(), m_intrinsics.voidType()))
+        m_stringBuilder.append(makeString(m_typeNamer.mangledNameForType(callExpression.resolvedType()), ' ', variableName, " = "));
+    m_stringBuilder.append(makeString(iterator->value, '('));
     for (size_t i = 0; i < argumentNames.size(); ++i) {
         if (i)
             m_stringBuilder.append(", ");
@@ -610,16 +623,22 @@ void FunctionDefinitionWriter::visit(AST::MakeArrayReferenceExpression& makeArra
     checkErrorAndVisit(makeArrayReferenceExpression.leftValue());
     // FIXME: This needs to be made to work. It probably should be using the last leftValue too.
     // https://bugs.webkit.org/show_bug.cgi?id=198838
-    auto lValue = takeLastValue();
     auto variableName = generateNextVariableName();
+
     auto mangledTypeName = m_typeNamer.mangledNameForType(makeArrayReferenceExpression.resolvedType());
-    if (is<AST::PointerType>(makeArrayReferenceExpression.resolvedType()))
+    if (is<AST::PointerType>(makeArrayReferenceExpression.leftValue().resolvedType())) {
+        auto ptrValue = takeLastValue();
+        m_stringBuilder.append(makeString(mangledTypeName, ' ', variableName, ";\n"));
+        m_stringBuilder.append(makeString("if (", ptrValue, ") ", variableName, " = { ", ptrValue, ", 1};\n"));
+        m_stringBuilder.append(makeString("else ", variableName, " = { nullptr, 0 };\n"));
+    } else if (is<AST::ArrayType>(makeArrayReferenceExpression.leftValue().resolvedType())) {
+        auto lValue = takeLastLeftValue();
+        auto& arrayType = downcast<AST::ArrayType>(makeArrayReferenceExpression.leftValue().resolvedType());
+        m_stringBuilder.append(makeString(mangledTypeName, ' ', variableName, " = { ", lValue, "->data(), ", arrayType.numElements(), " };\n"));
+    } else {
+        auto lValue = takeLastLeftValue();
         m_stringBuilder.append(makeString(mangledTypeName, ' ', variableName, " = { ", lValue, ", 1 };\n"));
-    else if (is<AST::ArrayType>(makeArrayReferenceExpression.resolvedType())) {
-        auto& arrayType = downcast<AST::ArrayType>(makeArrayReferenceExpression.resolvedType());
-        m_stringBuilder.append(makeString(mangledTypeName, ' ', variableName, " = { &(", lValue, "[0]), ", arrayType.numElements(), " };\n"));
-    } else
-        m_stringBuilder.append(makeString(mangledTypeName, ' ', variableName, " = { &", lValue, ", 1 };\n"));
+    }
     appendRightValue(makeArrayReferenceExpression, variableName);
 }
 
@@ -681,7 +700,7 @@ String FunctionDefinitionWriter::constantExpressionString(AST::ConstantExpressio
     }, [&](AST::EnumerationMemberLiteral& enumerationMemberLiteral) -> String {
         ASSERT(enumerationMemberLiteral.enumerationDefinition());
         ASSERT(enumerationMemberLiteral.enumerationDefinition());
-        return makeString(m_typeNamer.mangledNameForType(*enumerationMemberLiteral.enumerationDefinition()), '.', m_typeNamer.mangledNameForEnumerationMember(*enumerationMemberLiteral.enumerationMember()));
+        return makeString(m_typeNamer.mangledNameForType(*enumerationMemberLiteral.enumerationDefinition()), "::", m_typeNamer.mangledNameForEnumerationMember(*enumerationMemberLiteral.enumerationMember()));
     }));
 }
 
@@ -739,7 +758,7 @@ struct SharedMetalFunctionsResult {
     HashMap<AST::FunctionDeclaration*, String> functionMapping;
     String metalFunctions;
 };
-static SharedMetalFunctionsResult sharedMetalFunctions(Program& program, TypeNamer& typeNamer)
+static SharedMetalFunctionsResult sharedMetalFunctions(Program& program, TypeNamer& typeNamer, const HashSet<AST::FunctionDeclaration*>& reachableFunctions)
 {
     StringBuilder stringBuilder;
 
@@ -756,10 +775,12 @@ static SharedMetalFunctionsResult sharedMetalFunctions(Program& program, TypeNam
 
     {
         FunctionDeclarationWriter functionDeclarationWriter(typeNamer, functionMapping);
-        for (auto& nativeFunctionDeclaration : program.nativeFunctionDeclarations())
-            functionDeclarationWriter.visit(nativeFunctionDeclaration);
+        for (auto& nativeFunctionDeclaration : program.nativeFunctionDeclarations()) {
+            if (reachableFunctions.contains(&nativeFunctionDeclaration))
+                functionDeclarationWriter.visit(nativeFunctionDeclaration);
+        }
         for (auto& functionDefinition : program.functionDefinitions()) {
-            if (!functionDefinition->entryPointType())
+            if (!functionDefinition->entryPointType() && reachableFunctions.contains(&functionDefinition))
                 functionDeclarationWriter.visit(functionDefinition);
         }
         stringBuilder.append(functionDeclarationWriter.toString());
@@ -769,49 +790,89 @@ static SharedMetalFunctionsResult sharedMetalFunctions(Program& program, TypeNam
     return { WTFMove(functionMapping), stringBuilder.toString() };
 }
 
+class ReachableFunctionsGatherer : public Visitor {
+public:
+    void visit(AST::FunctionDeclaration& functionDeclaration) override
+    {
+        Visitor::visit(functionDeclaration);
+        m_reachableFunctions.add(&functionDeclaration);
+    }
+
+    void visit(AST::CallExpression& callExpression) override
+    {
+        Visitor::visit(callExpression);
+        if (is<AST::FunctionDefinition>(callExpression.function()))
+            checkErrorAndVisit(downcast<AST::FunctionDefinition>(callExpression.function()));
+        else
+            checkErrorAndVisit(downcast<AST::NativeFunctionDeclaration>(callExpression.function()));
+    }
+
+    HashSet<AST::FunctionDeclaration*> takeReachableFunctions() { return WTFMove(m_reachableFunctions); }
+
+private:
+    HashSet<AST::FunctionDeclaration*> m_reachableFunctions;
+};
+
 RenderMetalFunctions metalFunctions(Program& program, TypeNamer& typeNamer, MatchedRenderSemantics&& matchedSemantics, Layout& layout)
 {
-    auto sharedMetalFunctions = Metal::sharedMetalFunctions(program, typeNamer);
+    auto& vertexShaderEntryPoint = *matchedSemantics.vertexShader;
+    auto& fragmentShaderEntryPoint = *matchedSemantics.fragmentShader;
+
+    ReachableFunctionsGatherer reachableFunctionsGatherer;
+    reachableFunctionsGatherer.Visitor::visit(vertexShaderEntryPoint);
+    reachableFunctionsGatherer.Visitor::visit(fragmentShaderEntryPoint);
+    auto reachableFunctions = reachableFunctionsGatherer.takeReachableFunctions();
+
+    auto sharedMetalFunctions = Metal::sharedMetalFunctions(program, typeNamer, reachableFunctions);
 
     StringBuilder stringBuilder;
     stringBuilder.append(sharedMetalFunctions.metalFunctions);
 
-    auto* vertexShaderEntryPoint = matchedSemantics.vertexShader;
-    auto* fragmentShaderEntryPoint = matchedSemantics.fragmentShader;
-
     RenderFunctionDefinitionWriter functionDefinitionWriter(program.intrinsics(), typeNamer, sharedMetalFunctions.functionMapping, WTFMove(matchedSemantics), layout);
-    for (auto& nativeFunctionDeclaration : program.nativeFunctionDeclarations())
-        functionDefinitionWriter.visit(nativeFunctionDeclaration);
-    for (auto& functionDefinition : program.functionDefinitions())
-        functionDefinitionWriter.visit(functionDefinition);
+    for (auto& nativeFunctionDeclaration : program.nativeFunctionDeclarations()) {
+        if (reachableFunctions.contains(&nativeFunctionDeclaration))
+            functionDefinitionWriter.visit(nativeFunctionDeclaration);
+    }
+    for (auto& functionDefinition : program.functionDefinitions()) {
+        if (reachableFunctions.contains(&functionDefinition))
+            functionDefinitionWriter.visit(functionDefinition);
+    }
     stringBuilder.append(functionDefinitionWriter.toString());
 
     RenderMetalFunctions result;
     result.metalSource = stringBuilder.toString();
-    result.mangledVertexEntryPointName = sharedMetalFunctions.functionMapping.get(vertexShaderEntryPoint);
-    result.mangledFragmentEntryPointName = sharedMetalFunctions.functionMapping.get(fragmentShaderEntryPoint);
+    result.mangledVertexEntryPointName = sharedMetalFunctions.functionMapping.get(&vertexShaderEntryPoint);
+    result.mangledFragmentEntryPointName = sharedMetalFunctions.functionMapping.get(&fragmentShaderEntryPoint);
     return result;
 }
 
 ComputeMetalFunctions metalFunctions(Program& program, TypeNamer& typeNamer, MatchedComputeSemantics&& matchedSemantics, Layout& layout)
 {
-    auto sharedMetalFunctions = Metal::sharedMetalFunctions(program, typeNamer);
+    auto& entryPoint = *matchedSemantics.shader;
+
+    ReachableFunctionsGatherer reachableFunctionsGatherer;
+    reachableFunctionsGatherer.Visitor::visit(entryPoint);
+    auto reachableFunctions = reachableFunctionsGatherer.takeReachableFunctions();
+
+    auto sharedMetalFunctions = Metal::sharedMetalFunctions(program, typeNamer, reachableFunctions);
 
     StringBuilder stringBuilder;
     stringBuilder.append(sharedMetalFunctions.metalFunctions);
 
-    auto* entryPoint = matchedSemantics.shader;
-
     ComputeFunctionDefinitionWriter functionDefinitionWriter(program.intrinsics(), typeNamer, sharedMetalFunctions.functionMapping, WTFMove(matchedSemantics), layout);
-    for (auto& nativeFunctionDeclaration : program.nativeFunctionDeclarations())
-        functionDefinitionWriter.visit(nativeFunctionDeclaration);
-    for (auto& functionDefinition : program.functionDefinitions())
-        functionDefinitionWriter.visit(functionDefinition);
+    for (auto& nativeFunctionDeclaration : program.nativeFunctionDeclarations()) {
+        if (reachableFunctions.contains(&nativeFunctionDeclaration))
+            functionDefinitionWriter.visit(nativeFunctionDeclaration);
+    }
+    for (auto& functionDefinition : program.functionDefinitions()) {
+        if (reachableFunctions.contains(&functionDefinition))
+            functionDefinitionWriter.visit(functionDefinition);
+    }
     stringBuilder.append(functionDefinitionWriter.toString());
 
     ComputeMetalFunctions result;
     result.metalSource = stringBuilder.toString();
-    result.mangledEntryPointName = sharedMetalFunctions.functionMapping.get(entryPoint);
+    result.mangledEntryPointName = sharedMetalFunctions.functionMapping.get(&entryPoint);
     return result;
 }
 

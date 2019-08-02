@@ -119,6 +119,7 @@ public:
     void incrementSuspendedPageCount();
     void decrementSuspendedPageCount();
 
+    WebProcessPool* processPoolIfExists() const;
     WebProcessPool& processPool() const;
 
     WebCore::RegistrableDomain registrableDomain() const { return m_registrableDomain.valueOr(WebCore::RegistrableDomain { }); }
@@ -138,8 +139,8 @@ public:
     enum class EndsUsingDataStore : bool { No, Yes };
     void removeWebPage(WebPageProxy&, EndsUsingDataStore);
 
-    void addProvisionalPageProxy(ProvisionalPageProxy& provisionalPage) { ASSERT(!m_provisionalPages.contains(&provisionalPage)); m_provisionalPages.add(&provisionalPage); }
-    void removeProvisionalPageProxy(ProvisionalPageProxy& provisionalPage) { ASSERT(m_provisionalPages.contains(&provisionalPage)); m_provisionalPages.remove(&provisionalPage); }
+    void addProvisionalPageProxy(ProvisionalPageProxy&);
+    void removeProvisionalPageProxy(ProvisionalPageProxy&);
     
     typename WebPageProxyMap::ValuesConstIteratorRange pages() const { return m_pageMap.values(); }
     unsigned pageCount() const { return m_pageMap.size(); }
@@ -251,7 +252,7 @@ public:
     void markIsNoLongerInPrewarmedPool();
 
 #if PLATFORM(COCOA)
-    Vector<String> mediaMIMETypes();
+    Vector<String> mediaMIMETypes() const;
     void cacheMediaMIMETypes(const Vector<String>&);
 #endif
 
@@ -393,6 +394,8 @@ private:
     void didCollectPrewarmInformation(const WebCore::RegistrableDomain&, const WebCore::PrewarmInformation&);
 
     void logDiagnosticMessageForResourceLimitTermination(const String& limitKey);
+    
+    void updateRegistrationWithDataStore();
 
     enum class IsWeak { No, Yes };
     template<typename T> class WeakOrStrongPtr {

@@ -1353,6 +1353,8 @@ webkit_web_context_add_path_to_sandbox
  must exist before any web process
 has been created otherwise it will be silently ignored. It is a fatal error to
 add paths after a web process has been spawned.</p>
+<p>Paths in directories such as <code class="literal">/sys</code>, <code class="literal">/proc</code>, and <code class="literal">/dev</code> or all of <code class="literal">/</code>
+are not valid.</p>
 <p>See also <a class="link" href="WebKitWebContext.html#webkit-web-context-set-sandbox-enabled" title="webkit_web_context_set_sandbox_enabled ()"><code class="function">webkit_web_context_set_sandbox_enabled()</code></a></p>
 <div class="refsect3">
 <a name="webkit-web-context-add-path-to-sandbox.parameters"></a><h4>Parameters</h4>

@@ -27,6 +27,7 @@
 #include "NetworkSession.h"
 
 #include "AdClickAttributionManager.h"
+#include "Logging.h"
 #include "NetworkProcess.h"
 #include "NetworkProcessProxyMessages.h"
 #include "NetworkResourceLoadParameters.h"
@@ -68,20 +69,34 @@ Ref<NetworkSession> NetworkSession::create(NetworkProcess& networkProcess, Netwo
 #endif
 }
 
-NetworkStorageSession& NetworkSession::networkStorageSession() const
+NetworkStorageSession* NetworkSession::networkStorageSession() const
 {
+    // FIXME: https://bugs.webkit.org/show_bug.cgi?id=194926 NetworkSession should own NetworkStorageSession
+    // instead of having separate maps with the same key and different management.
     auto* storageSession = m_networkProcess->storageSession(m_sessionID);
-    RELEASE_ASSERT(storageSession);
-    return *storageSession;
+    ASSERT(storageSession);
+    return storageSession;
 }
 
-NetworkSession::NetworkSession(NetworkProcess& networkProcess, PAL::SessionID sessionID, const String& localStorageDirectory, SandboxExtension::Handle& handle)
-    : m_sessionID(sessionID)
+NetworkSession::NetworkSession(NetworkProcess& networkProcess, const NetworkSessionCreationParameters& parameters)
+    : m_sessionID(parameters.sessionID)
     , m_networkProcess(networkProcess)
-    , m_adClickAttribution(makeUniqueRef<AdClickAttributionManager>(sessionID))
-    , m_storageManager(StorageManager::create(localStorageDirectory))
+    , m_adClickAttribution(makeUniqueRef<AdClickAttributionManager>(parameters.sessionID))
+    , m_storageManager(StorageManager::create(String(parameters.localStorageDirectory)))
 {
-    SandboxExtension::consumePermanently(handle);
+    if (!m_sessionID.isEphemeral()) {
+        String networkCacheDirectory = parameters.networkCacheDirectory;
+        if (networkCacheDirectory.isNull())
+            networkCacheDirectory = networkProcess.diskCacheDirectory();
+        else
+            SandboxExtension::consumePermanently(parameters.networkCacheDirectoryExtensionHandle);
+
+        m_cache = NetworkCache::Cache::open(networkProcess, networkCacheDirectory, networkProcess.cacheOptions());
+        if (!m_cache)
+            RELEASE_LOG_ERROR(NetworkCache, "Failed to initialize the WebKit network disk cache");
+    }
+
+    SandboxExtension::consumePermanently(parameters.localStorageDirectoryExtensionHandle);
     m_adClickAttribution->setPingLoadFunction([this, weakThis = makeWeakPtr(this)](NetworkResourceLoadParameters&& loadParameters, CompletionHandler<void(const WebCore::ResourceError&, const WebCore::ResourceResponse&)>&& completionHandler) {
         if (!weakThis)
             return;
@@ -93,7 +108,7 @@ NetworkSession::NetworkSession(NetworkProcess& networkProcess, PAL::SessionID se
 NetworkSession::~NetworkSession()
 {
     m_storageManager->resume();
-    m_storageManager->waitUntilWritesFinished();
+    m_storageManager->waitUntilTasksFinished();
 }
 
 void NetworkSession::invalidateAndCancel()

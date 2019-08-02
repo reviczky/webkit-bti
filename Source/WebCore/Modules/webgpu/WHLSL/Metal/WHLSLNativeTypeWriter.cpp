@@ -122,35 +122,19 @@ String writeNativeType(AST::NativeTypeDeclaration& nativeTypeDeclaration)
             ASSERT(parameterType.name() == "float");
             return "float";
         })();
+
         ASSERT(WTF::holds_alternative<AST::ConstantExpression>(nativeTypeDeclaration.typeArguments()[1]));
         auto& constantExpression1 = WTF::get<AST::ConstantExpression>(nativeTypeDeclaration.typeArguments()[1]);
         auto& integerLiteral1 = constantExpression1.integerLiteral();
-        auto middle = ([&]() -> String {
-            switch (integerLiteral1.value()) {
-            case 2:
-                return "2"_str;
-            case 3:
-                return "3"_str;
-            default:
-                ASSERT(integerLiteral1.value() == 4);
-                return "4"_str;
-            }
-        })();
+        unsigned rows = integerLiteral1.value();
+        ASSERT(rows == 2 || rows == 3 || rows == 4);
+
         ASSERT(WTF::holds_alternative<AST::ConstantExpression>(nativeTypeDeclaration.typeArguments()[2]));
         auto& constantExpression2 = WTF::get<AST::ConstantExpression>(nativeTypeDeclaration.typeArguments()[2]);
         auto& integerLiteral2 = constantExpression2.integerLiteral();
-        auto suffix = ([&]() -> String {
-            switch (integerLiteral2.value()) {
-            case 2:
-                return "2"_str;
-            case 3:
-                return "3"_str;
-            default:
-                ASSERT(integerLiteral2.value() == 4);
-                return "4"_str;
-            }
-        })();
-        return makeString(prefix, middle, 'x', suffix);
+        unsigned columns = integerLiteral2.value();
+        ASSERT(columns == 2 || columns == 3 || columns == 4);
+        return makeString("array<", prefix, ", ", columns * rows, ">");
     }
     ASSERT(nativeTypeDeclaration.typeArguments().size() == 1);
     ASSERT(WTF::holds_alternative<UniqueRef<AST::TypeReference>>(nativeTypeDeclaration.typeArguments()[0]));
@@ -180,11 +164,7 @@ String writeNativeType(AST::NativeTypeDeclaration& nativeTypeDeclaration)
             return "texturecube"_str;
         if (nativeTypeDeclaration.name() == "TextureDepth2D")
             return "depth2d"_str;
-        if (nativeTypeDeclaration.name() == "RWTextureDepth2D")
-            return "depth2d"_str;
         if (nativeTypeDeclaration.name() == "TextureDepth2DArray")
-            return "depth2d_array"_str;
-        if (nativeTypeDeclaration.name() == "RWTextureDepth2DArray")
             return "depth2d_array"_str;
         ASSERT(nativeTypeDeclaration.name() == "TextureDepthCube");
         return "depthcube"_str;
@@ -239,8 +219,12 @@ String writeNativeType(AST::NativeTypeDeclaration& nativeTypeDeclaration)
         ASSERT(typeReference->name() == "float4");
         return "float"_str;
     })();
-    // FIXME: https://bugs.webkit.org/show_bug.cgi?id=195813 Specify the second template argument to Metal texture types.
-    return makeString(prefix, '<', innerType, '>');
+    auto isReadWrite = nativeTypeDeclaration.name() == "RWTexture1D"
+        || nativeTypeDeclaration.name() == "RWTexture1DArray"
+        || nativeTypeDeclaration.name() == "RWTexture2D"
+        || nativeTypeDeclaration.name() == "RWTexture2DArray"
+        || nativeTypeDeclaration.name() == "RWTexture3D";
+    return makeString(prefix, '<', innerType, ", ", isReadWrite ? "access::read_write" : "access::sample", '>');
 }
 
 } // namespace Metal

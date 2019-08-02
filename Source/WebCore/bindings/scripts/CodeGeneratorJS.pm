@@ -3772,28 +3772,9 @@ sub GenerateRuntimeEnableConditionalString
 
         AddToImplIncludes("RuntimeEnabledFeatures.h");
 
-        if ($context->extendedAttributes->{EnabledByQuirk}) {
-            AddToImplIncludes("Document.h");
-            AddToImplIncludes("Quirks.h");
-            
-            assert("EnabledByQuirks can only be used by interfaces only exposed to the Window") if $interface->extendedAttributes->{Exposed} && $interface->extendedAttributes->{Exposed} ne "Window";
-    
-            my @quirkFlags = split(/&/, $context->extendedAttributes->{EnabledByQuirk});
-            my @runtimeFlags = split(/&/, $context->extendedAttributes->{EnabledAtRuntime});
-            my @quirks;
-            my @runtimes;
-            foreach my $flag (@quirkFlags) {
-                push(@quirks, "downcast<Document>(jsCast<JSDOMGlobalObject*>(" . $globalObjectPtr . ")->scriptExecutionContext())->quirks()." . ToMethodName($flag) . "Quirk()");
-            }
-            foreach my $flag (@runtimeFlags) {
-                push(@runtimes, "RuntimeEnabledFeatures::sharedFeatures()." . ToMethodName($flag) . "Enabled()");
-            }
-            push(@conjuncts, "(" . join(" && ", @quirks) . " || " . join(" && ", @runtimes) .")");
-        } else {
-            my @flags = split(/&/, $context->extendedAttributes->{EnabledAtRuntime});
-            foreach my $flag (@flags) {
-                push(@conjuncts, "RuntimeEnabledFeatures::sharedFeatures()." . ToMethodName($flag) . "Enabled()");
-            }
+        my @flags = split(/&/, $context->extendedAttributes->{EnabledAtRuntime});
+        foreach my $flag (@flags) {
+            push(@conjuncts, "RuntimeEnabledFeatures::sharedFeatures()." . ToMethodName($flag) . "Enabled()");
         }
     }
 
@@ -5082,8 +5063,7 @@ sub GenerateAttributeSetterBodyDefinition
         my $callTracingCallback = $attribute->extendedAttributes->{CallTracingCallback} || $interface->extendedAttributes->{CallTracingCallback};
         if ($callTracingCallback) {
             my $indent = "    ";
-            my @callTracerArguments = ();
-            push(@callTracerArguments, GenerateCallTracerParameter("nativeValue", $attribute->type, 0, $indent));
+            my @callTracerArguments = ("nativeValue");
             GenerateCallTracer($outputArray, $callTracingCallback, $attribute->name, \@callTracerArguments, $indent);
         }
 
@@ -6281,10 +6261,7 @@ sub GenerateImplementationFunctionCall
 
     my $callTracingCallback = $operation->extendedAttributes->{CallTracingCallback} || $interface->extendedAttributes->{CallTracingCallback};
     if ($callTracingCallback) {
-        my @callTracerArguments = ();
-        foreach my $argument (@{$operation->arguments}) {
-            push(@callTracerArguments, GenerateCallTracerParameter($argument->name, $argument->type, $argument->isOptional && !defined($argument->default), $indent));
-        }
+        my @callTracerArguments = map { $_->name } @{$operation->arguments};
         GenerateCallTracer($outputArray, $callTracingCallback, $operation->name, \@callTracerArguments, $indent);
     }
 
@@ -7524,57 +7501,18 @@ sub AddJSBuiltinIncludesIfNeeded()
     }
 }
 
-sub GenerateCallTracerParameter()
-{
-    my ($name, $type, $optional, $indent) = @_;
-
-    my $result = "";
-
-    if ($optional || $type->isNullable) {
-        $result .= $indent . "    if (" . $name . ")\n";
-        $result .= "    ";
-    }
-
-    $result .= $indent . "    ";
-
-    if ($type->isUnion) {
-        $result .= "WTF::visit([&] (auto& value) { callTracerParameters.append(value); }, ";
-    } else {
-        $result .= "callTracerParameters.append(";
-    }
-
-    if ($optional || ($type->isUnion && $type->isNullable)) {
-        $result .= "*";
-    }
-
-    $result .= $name . ");";
-
-    return $result;
-}
-
 sub GenerateCallTracer()
 {
     my ($outputArray, $callTracingCallback, $name, $arguments, $indent) = @_;
 
     AddToImplIncludes("CallTracer.h");
 
-    my $count = scalar(@$arguments);
-
-    push(@$outputArray, $indent . "if (UNLIKELY(impl.callTracingActive()))");
-    if ($count) {
-        push(@$outputArray, " {\n");
-        push(@$outputArray, $indent . "    Vector<" . $codeGenerator->WK_ucfirst($callTracingCallback) . "Variant> callTracerParameters;\n");
-        push(@$outputArray, join("\n", @$arguments));
-    }
-    push(@$outputArray, "\n");
+    push(@$outputArray, $indent . "if (UNLIKELY(impl.callTracingActive()))\n");
     push(@$outputArray, $indent . "    CallTracer::" . $callTracingCallback . "(impl, \"" . $name . "\"_s");
-    if ($count) {
-        push(@$outputArray, ", WTFMove(callTracerParameters)");
+    if (scalar(@$arguments)) {
+        push(@$outputArray, ", { " . join(", ", @$arguments) . " }");
     }
     push(@$outputArray, ");\n");
-    if ($count) {
-        push(@$outputArray, $indent . "}\n")
-    }
 }
 
 sub GenerateCustomElementReactionsStackIfNeeded

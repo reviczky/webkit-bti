@@ -52,6 +52,7 @@ class WebPageProxy;
 class AcceleratedBackingStoreWayland final : public AcceleratedBackingStore {
     WTF_MAKE_NONCOPYABLE(AcceleratedBackingStoreWayland); WTF_MAKE_FAST_ALLOCATED;
 public:
+    static bool checkRequirements();
     static std::unique_ptr<AcceleratedBackingStoreWayland> create(WebPageProxy&);
     ~AcceleratedBackingStoreWayland();
 
@@ -72,9 +73,7 @@ private:
 
     RefPtr<cairo_surface_t> m_surface;
     bool m_glContextInitialized { false };
-#if GTK_CHECK_VERSION(3, 16, 0)
     GRefPtr<GdkGLContext> m_gdkGLContext;
-#endif
     std::unique_ptr<WebCore::GLContext> m_glContext;
 
 #if USE(WPE_RENDERER)
