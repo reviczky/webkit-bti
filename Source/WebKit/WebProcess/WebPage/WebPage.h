@@ -86,7 +86,7 @@
 #include <wtf/WallTime.h>
 #include <wtf/text/WTFString.h>
 
-#if HAVE(ACCESSIBILITY) && USE(ATK)
+#if ENABLE(ACCESSIBILITY) && USE(ATK)
 typedef struct _AtkObject AtkObject;
 #include <wtf/glib/GRefPtr.h>
 #endif
@@ -258,6 +258,7 @@ struct AttributedString;
 struct BackForwardListItemState;
 struct DataDetectionResult;
 struct EditorState;
+struct FontInfo;
 struct InsertTextOptions;
 struct InteractionInformationAtPosition;
 struct InteractionInformationRequest;
@@ -553,7 +554,7 @@ public:
     void setUseSystemAppearance(bool);
 #endif
 
-    void effectiveAppearanceDidChange(bool useDarkAppearance, bool useInactiveAppearance);
+    void effectiveAppearanceDidChange(bool useDarkAppearance, bool useElevatedUserInterfaceLevel);
 
     bool windowIsFocused() const;
     bool windowAndWebPageAreFocused() const;
@@ -768,9 +769,7 @@ public:
 
     void collapseSelectionInFrame(uint64_t frameID);
     void showEmojiPicker(WebCore::Frame&);
-#endif
 
-#if PLATFORM (GTK) && HAVE(GTK_GESTURES)
     void getCenterForZoomGesture(const WebCore::IntPoint& centerInViewCoordinates, CompletionHandler<void(WebCore::IntPoint&&)>&&);
 #endif
 
@@ -1204,7 +1203,15 @@ public:
 
     bool firstFlushAfterCommit() const { return m_firstFlushAfterCommit; }
     void setFirstFlushAfterCommit(bool f) { m_firstFlushAfterCommit = f; }
-    
+
+#if PLATFORM(IOS_FAMILY)
+    // This excludes layout overflow, includes borders.
+    static WebCore::IntRect rootViewBoundsForElement(const WebCore::Element&);
+    // These include layout overflow for overflow:visible elements, but exclude borders.
+    static WebCore::IntRect absoluteInteractionBoundsForElement(const WebCore::Element&);
+    static WebCore::IntRect rootViewInteractionBoundsForElement(const WebCore::Element&);
+#endif // PLATFORM(IOS_FAMILY)
+
 private:
     WebPage(WebCore::PageIdentifier, WebPageCreationParameters&&);
 
@@ -1218,6 +1225,7 @@ private:
     void platformReinitialize();
     void platformDetach();
     void platformEditorState(WebCore::Frame&, EditorState& result, IncludePostLayoutDataHint) const;
+    void platformWillPerformEditingCommand();
     void sendEditorStateUpdate();
 
 #if PLATFORM(COCOA)
@@ -1230,30 +1238,35 @@ private:
     void didReceiveSyncWebPageMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
 
 #if PLATFORM(IOS_FAMILY)
-    WebCore::FloatSize viewLayoutSizeAdjustedForQuirks(const WebCore::FloatSize&);
     void resetViewportDefaultConfiguration(WebFrame* mainFrame, bool hasMobileDocType = false);
     enum class ZoomToInitialScale { No, Yes };
     void viewportConfigurationChanged(ZoomToInitialScale = ZoomToInitialScale::No);
     void updateViewportSizeForCSSViewportUnits();
 
     static void convertSelectionRectsToRootView(WebCore::FrameView*, Vector<WebCore::SelectionRect>&);
+
     void getFocusedElementInformation(FocusedElementInformation&);
     void platformInitializeAccessibility();
     void generateSyntheticEditingCommand(SyntheticEditingCommandType);
     void handleSyntheticClick(WebCore::Node& nodeRespondingToClick, const WebCore::FloatPoint& location, OptionSet<WebKit::WebEvent::Modifier>, WebCore::PointerID = WebCore::mousePointerID);
     void completeSyntheticClick(WebCore::Node& nodeRespondingToClick, const WebCore::FloatPoint& location, OptionSet<WebKit::WebEvent::Modifier>, WebCore::SyntheticClickType, WebCore::PointerID = WebCore::mousePointerID);
     void sendTapHighlightForNodeIfNecessary(uint64_t requestID, WebCore::Node*);
-    void resetTextAutosizing();
-    void resetIdempotentTextAutosizingIfNeeded(double previousInitialScale);
     WebCore::VisiblePosition visiblePositionInFocusedNodeForPoint(const WebCore::Frame&, const WebCore::IntPoint&, bool isInteractingWithFocusedElement);
     RefPtr<WebCore::Range> rangeForGranularityAtPoint(WebCore::Frame&, const WebCore::IntPoint&, uint32_t granularity, bool isInteractingWithFocusedElement);
+    void setFocusedFrameBeforeSelectingTextAtLocation(const WebCore::IntPoint&);
     void dispatchSyntheticMouseEventsForSelectionGesture(SelectionTouch, const WebCore::IntPoint&);
 
     void sendPositionInformation(InteractionInformationAtPosition&&);
     InteractionInformationAtPosition positionInformation(const InteractionInformationRequest&);
+    RefPtr<ShareableBitmap> shareableBitmapSnapshotForNode(WebCore::Element&);
     WebAutocorrectionContext autocorrectionContext();
     bool applyAutocorrectionInternal(const String& correction, const String& originalText);
     bool shouldIgnoreMetaViewport() const;
+#endif
+#if ENABLE(TEXT_AUTOSIZING)
+    void textAutoSizingAdjustmentTimerFired();
+    void resetTextAutosizing();
+    void resetIdempotentTextAutosizingIfNeeded(double previousInitialScale);
 #endif
 
 #if ENABLE(VIEWPORT_RESIZING)
@@ -1285,7 +1298,7 @@ private:
 
     String sourceForFrame(WebFrame*);
 
-    void loadDataImpl(uint64_t navigationID, bool shouldTreatAsContinuingLoad, Optional<WebsitePoliciesData>&&, Ref<WebCore::SharedBuffer>&&, const String& MIMEType, const String& encodingName, const URL& baseURL, const URL& failingURL, const UserData&);
+    void loadDataImpl(uint64_t navigationID, bool shouldTreatAsContinuingLoad, Optional<WebsitePoliciesData>&&, Ref<WebCore::SharedBuffer>&&, const String& MIMEType, const String& encodingName, const URL& baseURL, const URL& failingURL, const UserData&, WebCore::ShouldOpenExternalURLsPolicy = WebCore::ShouldOpenExternalURLsPolicy::ShouldNotAllow);
 
     // Actions
     void tryClose();
@@ -1320,6 +1333,7 @@ private:
 
 #if ENABLE(IOS_TOUCH_EVENTS)
     void touchEventSync(const WebTouchEvent&, CompletionHandler<void(bool)>&&);
+    void resetPotentialTapSecurityOrigin();
     void updatePotentialTapSecurityOrigin(const WebTouchEvent&, bool wasHandled);
 #elif ENABLE(TOUCH_EVENTS)
     void touchEvent(const WebTouchEvent&);
@@ -1338,7 +1352,7 @@ private:
     static bool scroll(WebCore::Page*, WebCore::ScrollDirection, WebCore::ScrollGranularity);
     static bool logicalScroll(WebCore::Page*, WebCore::ScrollLogicalDirection, WebCore::ScrollGranularity);
 
-    void loadURLInFrame(URL&&, uint64_t frameID);
+    void loadURLInFrame(URL&&, const String& referrer, uint64_t frameID);
     void loadDataInFrame(IPC::DataReference&&, String&& MIMEType, String&& encodingName, URL&& baseURL, uint64_t frameID);
 
     enum class WasRestoredByAPIRequest { No, Yes };
@@ -1428,6 +1442,7 @@ private:
     void findStringMatches(const String&, uint32_t findOptions, uint32_t maxMatchCount);
     void getImageForFindMatch(uint32_t matchIndex);
     void selectFindMatch(uint32_t matchIndex);
+    void indicateFindMatch(uint32_t matchIndex);
     void hideFindUI();
     void countStringMatches(const String&, uint32_t findOptions, uint32_t maxMatchCount);
     void replaceMatches(const Vector<uint32_t>& matchIndices, const String& replacementText, bool selectionOnly, CallbackID);
@@ -1448,6 +1463,7 @@ private:
 
 #if PLATFORM(IOS_FAMILY)
     void didChooseFilesForOpenPanelWithDisplayStringAndIcon(const Vector<String>&, const String& displayString, const IPC::DataReference& iconData);
+    bool isTransparentOrFullyClipped(const WebCore::Element&) const;
 #endif
 
 #if ENABLE(SANDBOX_EXTENSIONS)
@@ -1676,7 +1692,7 @@ private:
     RetainPtr<NSDictionary> m_dataDetectionContext;
 #endif
 
-#if HAVE(ACCESSIBILITY) && USE(ATK)
+#if ENABLE(ACCESSIBILITY) && USE(ATK)
     GRefPtr<AtkObject> m_accessibilityObject;
 #endif
 
@@ -1943,7 +1959,14 @@ private:
 #if HAVE(VISIBILITY_PROPAGATION_VIEW)
     std::unique_ptr<LayerHostingContext> m_contextForVisibilityPropagation;
 #endif
+#if ENABLE(TEXT_AUTOSIZING)
+    WebCore::Timer m_textAutoSizingAdjustmentTimer;
+#endif
 };
+
+#if !PLATFORM(IOS_FAMILY)
+inline void WebPage::platformWillPerformEditingCommand() { }
+#endif
 
 } // namespace WebKit
 

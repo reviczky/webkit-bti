@@ -582,7 +582,7 @@ NetworkProcessProxy& WebProcessPool::ensureNetworkProcess(WebsiteDataStore* with
 
     SandboxExtension::createHandleForReadWriteDirectory(parameters.defaultDataStoreParameters.networkSessionParameters.resourceLoadStatisticsDirectory, parameters.defaultDataStoreParameters.networkSessionParameters.resourceLoadStatisticsDirectoryExtensionHandle);
 
-    bool enableResourceLoadStatistics = false;
+    bool enableResourceLoadStatistics = m_shouldEnableITPForDefaultSessions;
     bool shouldIncludeLocalhost = true;
     bool enableResourceLoadStatisticsDebugMode = false;
     WebCore::RegistrableDomain manualPrevalentResource { };
@@ -870,7 +870,9 @@ void WebProcessPool::sendWebProcessDataStoreParameters(WebProcessProxy& process,
         parameters.applicationCacheDirectory = m_resolvedPaths.applicationCacheDirectory;
     if (!parameters.applicationCacheDirectory.isEmpty())
         SandboxExtension::createHandleWithoutResolvingPath(parameters.applicationCacheDirectory, SandboxExtension::Type::ReadWrite, parameters.applicationCacheDirectoryExtensionHandle);
-    parameters.applicationCacheFlatFileSubdirectoryName = m_configuration->applicationCacheFlatFileSubdirectoryName();
+    parameters.applicationCacheFlatFileSubdirectoryName = websiteDataStore.applicationCacheFlatFileSubdirectoryName();
+    if (parameters.applicationCacheFlatFileSubdirectoryName.isEmpty())
+        parameters.applicationCacheFlatFileSubdirectoryName = m_configuration->applicationCacheFlatFileSubdirectoryName();
 
     parameters.webSQLDatabaseDirectory = websiteDataStore.resolvedDatabaseDirectory();
     if (parameters.webSQLDatabaseDirectory.isEmpty())
@@ -890,11 +892,13 @@ void WebProcessPool::sendWebProcessDataStoreParameters(WebProcessProxy& process,
     if (!parameters.mediaKeyStorageDirectory.isEmpty())
         SandboxExtension::createHandleWithoutResolvingPath(parameters.mediaKeyStorageDirectory, SandboxExtension::Type::ReadWrite, parameters.mediaKeyStorageDirectoryExtensionHandle);
 
-    if (javaScriptConfigurationFileEnabled()) {
+    
+    if (auto& directory = configuration().javaScriptConfigurationDirectory(); !directory.isEmpty())
+        parameters.javaScriptConfigurationDirectory = directory;
+    if (javaScriptConfigurationFileEnabled())
         parameters.javaScriptConfigurationDirectory = websiteDataStore.resolvedJavaScriptConfigurationDirectory();
-        if (!parameters.javaScriptConfigurationDirectory.isEmpty())
-            SandboxExtension::createHandleWithoutResolvingPath(parameters.javaScriptConfigurationDirectory, SandboxExtension::Type::ReadWrite, parameters.javaScriptConfigurationDirectoryExtensionHandle);
-    }
+    if (!parameters.javaScriptConfigurationDirectory.isEmpty())
+        SandboxExtension::createHandleWithoutResolvingPath(parameters.javaScriptConfigurationDirectory, SandboxExtension::Type::ReadWrite, parameters.javaScriptConfigurationDirectoryExtensionHandle);
 
     parameters.resourceLoadStatisticsEnabled = websiteDataStore.resourceLoadStatisticsEnabled();
 
@@ -989,16 +993,8 @@ void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDa
 
     parameters.presentingApplicationPID = m_configuration->presentingApplicationPID();
 
-#if PLATFORM(COCOA)
-    parameters.mediaMIMETypes = process.mediaMIMETypes();
-#endif
-
-#if PLATFORM(WPE)
-    parameters.isServiceWorkerProcess = process.isServiceWorkerProcess();
-#endif
-
     // Add any platform specific parameters
-    platformInitializeWebProcess(parameters);
+    platformInitializeWebProcess(process, parameters);
 
     RefPtr<API::Object> injectedBundleInitializationUserData = m_injectedBundleClient->getInjectedBundleInitializationUserData(*this);
     if (!injectedBundleInitializationUserData)
@@ -1487,6 +1483,7 @@ void WebProcessPool::setShouldUseFontSmoothing(bool useFontSmoothing)
 
 void WebProcessPool::setResourceLoadStatisticsEnabled(bool enabled)
 {
+    m_shouldEnableITPForDefaultSessions = enabled;
     sendToAllProcesses(Messages::WebProcess::SetResourceLoadStatisticsEnabled(enabled));
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     sendToNetworkingProcess(Messages::NetworkProcess::SetResourceLoadStatisticsEnabled(enabled));
@@ -1751,6 +1748,12 @@ void WebProcessPool::clearCachedCredentials()
         m_networkProcess->send(Messages::NetworkProcess::ClearCachedCredentials(), 0);
 }
 
+void WebProcessPool::clearPermanentCredentialsForProtectionSpace(WebCore::ProtectionSpace&& protectionSpace, CompletionHandler<void()>&& completionHandler)
+{
+    if (m_networkProcess)
+        m_networkProcess->sendWithAsyncReply(Messages::NetworkProcess::ClearPermanentCredentialsForProtectionSpace(protectionSpace), WTFMove(completionHandler));
+}
+
 void WebProcessPool::terminateNetworkProcess()
 {
     if (!m_networkProcess)
@@ -1901,9 +1904,9 @@ void WebProcessPool::handleSynchronousMessage(IPC::Connection& connection, const
     if (!webProcessProxy)
         return completionHandler({ });
 
-    RefPtr<API::Object> returnData;
-    m_injectedBundleClient->didReceiveSynchronousMessageFromInjectedBundle(*this, messageName, webProcessProxy->transformHandlesToObjects(messageBody.object()).get(), returnData);
-    completionHandler(UserData(webProcessProxy->transformObjectsToHandles(returnData.get())));
+    m_injectedBundleClient->didReceiveSynchronousMessageFromInjectedBundle(*this, messageName, webProcessProxy->transformHandlesToObjects(messageBody.object()).get(), [webProcessProxy = makeRef(*webProcessProxy), completionHandler = WTFMove(completionHandler)] (RefPtr<API::Object>&& returnData) mutable {
+        completionHandler(UserData(webProcessProxy->transformObjectsToHandles(returnData.get())));
+    });
 }
 
 void WebProcessPool::didGetStatistics(const StatisticsData& statisticsData, uint64_t requestID)

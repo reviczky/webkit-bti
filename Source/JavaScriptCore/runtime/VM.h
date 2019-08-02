@@ -403,6 +403,7 @@ public:
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(errorInstanceSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(nativeStdFunctionSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(proxyRevokeSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(weakObjectRefSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(weakSetSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(weakMapSpace)
 #if ENABLE(WEBASSEMBLY)
@@ -832,10 +833,6 @@ public:
     RTTraceList* m_rtTraceList;
 #endif
 
-#if JSC_OBJC_API_ENABLED
-    void* m_apiWrapper { nullptr };
-#endif
-
     JS_EXPORT_PRIVATE void resetDateCache();
 
     RegExpCache* regExpCache() { return m_regExpCache; }
@@ -887,7 +884,10 @@ public:
 
     void queueMicrotask(JSGlobalObject&, Ref<Microtask>&&);
     JS_EXPORT_PRIVATE void drainMicrotasks();
-    ALWAYS_INLINE void setOnEachMicrotaskTick(WTF::Function<void(VM&)>&& func) { m_onEachMicrotaskTick = WTFMove(func); }
+    void setOnEachMicrotaskTick(WTF::Function<void(VM&)>&& func) { m_onEachMicrotaskTick = WTFMove(func); }
+    void finalizeSynchronousJSExecution() { ASSERT(currentThreadIsHoldingAPILock()); m_currentWeakRefVersion++; }
+    uintptr_t currentWeakRefVersion() const { return m_currentWeakRefVersion; }
+
     void setGlobalConstRedeclarationShouldThrow(bool globalConstRedeclarationThrow) { m_globalConstRedeclarationShouldThrow = globalConstRedeclarationThrow; }
     ALWAYS_INLINE bool globalConstRedeclarationShouldThrow() const { return m_globalConstRedeclarationShouldThrow; }
 
@@ -1057,6 +1057,7 @@ private:
     std::unique_ptr<BytecodeIntrinsicRegistry> m_bytecodeIntrinsicRegistry;
 
     WTF::Function<void(VM&)> m_onEachMicrotaskTick;
+    uintptr_t m_currentWeakRefVersion { 0 };
 
 #if ENABLE(JIT)
 #if !ASSERT_DISABLED

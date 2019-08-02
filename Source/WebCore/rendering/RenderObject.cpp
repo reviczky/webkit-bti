@@ -102,6 +102,9 @@ RenderObject::SetLayoutNeededForbiddenScope::~SetLayoutNeededForbiddenScope()
 
 struct SameSizeAsRenderObject {
     virtual ~SameSizeAsRenderObject() = default; // Allocate vtable pointer.
+#if !ASSERT_DISABLED
+    bool weakPtrFactorWasConstructedOnMainThread;
+#endif
     void* pointers[5];
 #ifndef NDEBUG
     unsigned m_debugBitfields : 2;
@@ -973,23 +976,6 @@ LayoutRect RenderObject::clippedOverflowRectForRepaint(const RenderLayerModelObj
 {
     ASSERT_NOT_REACHED();
     return LayoutRect();
-}
-
-bool RenderObject::shouldApplyCompositedContainerScrollsForRepaint()
-{
-#if PLATFORM(IOS_FAMILY)
-    return false;
-#else
-    return true;
-#endif
-}
-
-RenderObject::VisibleRectContext RenderObject::visibleRectContextForRepaint()
-{
-    VisibleRectContext context(false, false, { VisibleRectContextOption::ApplyContainerClip });
-    if (shouldApplyCompositedContainerScrollsForRepaint())
-        context.m_options.add(VisibleRectContextOption::ApplyCompositedContainerScrolls);
-    return context;
 }
 
 LayoutRect RenderObject::computeRectForRepaint(const LayoutRect& rect, const RenderLayerModelObject* repaintContainer) const

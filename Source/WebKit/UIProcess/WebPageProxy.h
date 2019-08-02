@@ -64,7 +64,6 @@
 #include "WebPreferences.h"
 #include "WebPageProxyMessages.h"
 #include "WebPopupMenuProxy.h"
-#include "WebProcessLifetimeTracker.h"
 #include "WebUndoStepID.h"
 #include "WebsitePoliciesData.h"
 #include <WebCore/ActivityState.h>
@@ -141,8 +140,8 @@ OBJC_CLASS _WKRemoteObjectRegistry;
 #include <WebCore/WebMediaSessionManagerClient.h>
 #endif
 
-#if USE(APPLE_INTERNAL_SDK)
-#include <WebKitAdditions/WebPageProxyAdditions.h>
+#if HAVE(APP_SSO)
+#include "SOAuthorizationLoadPolicy.h"
 #endif
 
 #if ENABLE(MEDIA_SESSION)
@@ -221,7 +220,7 @@ using FloatBoxExtent = RectEdges<float>;
 }
 
 #if PLATFORM(GTK)
-typedef GtkWidget* PlatformWidget;
+typedef GtkWidget* PlatformViewWidget;
 #endif
 
 #if PLATFORM(WPE)
@@ -233,7 +232,7 @@ typedef struct OpaqueJSContext* JSGlobalContextRef;
 #endif
 
 #if PLATFORM(WIN)
-typedef HWND PlatformWidget;
+typedef HWND PlatformViewWidget;
 #endif
 
 namespace WebKit {
@@ -283,6 +282,7 @@ struct DocumentEditingContext;
 struct DocumentEditingContextRequest;
 struct EditingRange;
 struct EditorState;
+struct FontInfo;
 struct FrameInfoData;
 struct InsertTextOptions;
 struct InteractionInformationRequest;
@@ -302,6 +302,7 @@ enum class WebContentMode : uint8_t;
 class QuickLookDocumentData;
 #endif
 
+typedef GenericCallback<API::Data*> DataCallback;
 typedef GenericCallback<uint64_t> UnsignedCallback;
 typedef GenericCallback<EditingRange> EditingRangeCallback;
 typedef GenericCallback<const String&> StringCallback;
@@ -337,7 +338,7 @@ typedef GenericCallback<const Optional<WebCore::ApplicationManifest>&> Applicati
 
 #if PLATFORM(MAC)
 typedef GenericCallback<const AttributedString&, const EditingRange&> AttributedStringForCharacterRangeCallback;
-typedef GenericCallback<const String&, double, bool> FontAtSelectionCallback;
+typedef GenericCallback<const FontInfo&, double, bool> FontAtSelectionCallback;
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -407,8 +408,6 @@ public:
     WebsiteDataStore& websiteDataStore() { return m_websiteDataStore; }
 
     void addPreviouslyVisitedPath(const String&);
-
-    WebProcessLifetimeTracker& webProcessLifetimeTracker() { return m_webProcessLifetimeTracker; }
 
 #if ENABLE(DATA_DETECTION)
     NSArray *dataDetectionResults() { return m_dataDetectionResults.get(); }
@@ -496,7 +495,6 @@ public:
     void setLoaderClient(std::unique_ptr<API::LoaderClient>&&);
     void setPolicyClient(std::unique_ptr<API::PolicyClient>&&);
     void setInjectedBundleClient(const WKPageInjectedBundleClientBase*);
-    WebPageInjectedBundleClient* injectedBundleClient() { return m_injectedBundleClient.get(); }
 
     API::UIClient& uiClient() { return *m_uiClient; }
     void setUIClient(std::unique_ptr<API::UIClient>&&);
@@ -531,7 +529,7 @@ public:
     void addPlatformLoadParameters(LoadParameters&);
     RefPtr<API::Navigation> loadRequest(WebCore::ResourceRequest&&, WebCore::ShouldOpenExternalURLsPolicy = WebCore::ShouldOpenExternalURLsPolicy::ShouldAllowExternalSchemes, API::Object* userData = nullptr);
     RefPtr<API::Navigation> loadFile(const String& fileURL, const String& resourceDirectoryURL, API::Object* userData = nullptr);
-    RefPtr<API::Navigation> loadData(const IPC::DataReference&, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData = nullptr);
+    RefPtr<API::Navigation> loadData(const IPC::DataReference&, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData = nullptr, WebCore::ShouldOpenExternalURLsPolicy = WebCore::ShouldOpenExternalURLsPolicy::ShouldNotAllow);
     void loadAlternateHTML(const IPC::DataReference&, const String& encoding, const URL& baseURL, const URL& unreachableURL, API::Object* userData = nullptr);
     void loadWebArchiveData(API::Data*, API::Object* userData = nullptr);
     void navigateToPDFLinkWithSimulatedClick(const String& url, WebCore::IntPoint documentPoint, WebCore::IntPoint screenPoint);
@@ -663,6 +661,7 @@ public:
 
     void setViewportConfigurationViewLayoutSize(const WebCore::FloatSize&, double scaleFactor, double minimumEffectiveDeviceWidth);
     void setMaximumUnobscuredSize(const WebCore::FloatSize&);
+    WebCore::FloatSize maximumUnobscuredSize() const { return m_maximumUnobscuredSize; }
     void setDeviceOrientation(int32_t);
     int32_t deviceOrientation() const { return m_deviceOrientation; }
     void setOverrideViewportArguments(const Optional<WebCore::ViewportArguments>&);
@@ -752,13 +751,9 @@ public:
     void setComposition(const String& text, Vector<WebCore::CompositionUnderline> underlines, uint64_t selectionStart, uint64_t selectionEnd, uint64_t replacementRangeStart, uint64_t replacementRangeEnd);
     void confirmComposition(const String& compositionString, int64_t selectionStart, int64_t selectionLength);
     void cancelComposition();
-#endif
 
-#if PLATFORM(GTK)
     void setInputMethodState(bool enabled);
-#endif
 
-#if PLATFORM (GTK) && HAVE(GTK_GESTURES)
     void getCenterForZoomGesture(const WebCore::IntPoint& centerInViewCoordinates, WebCore::IntPoint& center);
 #endif
 
@@ -794,7 +789,7 @@ public:
 #if PLATFORM(MAC)
     void insertDictatedTextAsync(const String& text, const EditingRange& replacementRange, const Vector<WebCore::TextAlternativeWithRange>& dictationAlternatives, bool registerUndoGroup);
     void attributedSubstringForCharacterRangeAsync(const EditingRange&, WTF::Function<void (const AttributedString&, const EditingRange&, CallbackBase::Error)>&&);
-    void fontAtSelection(WTF::Function<void (const String&, double, bool, CallbackBase::Error)>&&);
+    void fontAtSelection(Function<void(const FontInfo&, double, bool, CallbackBase::Error)>&&);
 
     void startWindowDrag();
     NSWindow *platformWindow();
@@ -807,7 +802,7 @@ public:
 #endif // PLATFORM(MAC)
 
 #if PLATFORM(GTK)
-    PlatformWidget viewWidget();
+    PlatformViewWidget viewWidget();
     bool makeGLContextCurrent();
 #endif
 
@@ -815,7 +810,7 @@ public:
     void setBackgroundColor(const Optional<WebCore::Color>&);
 
 #if PLATFORM(WIN)
-    PlatformWidget viewWidget();
+    PlatformViewWidget viewWidget();
 #endif
 #if PLATFORM(WPE)
     struct wpe_view_backend* viewBackend();
@@ -835,6 +830,7 @@ public:
 #endif
 
 #if ENABLE(IOS_TOUCH_EVENTS)
+    void resetPotentialTapSecurityOrigin();
     void handleTouchEventSynchronously(NativeWebTouchEvent&);
     void handleTouchEventAsynchronously(const NativeWebTouchEvent&);
 
@@ -958,7 +954,7 @@ public:
 
     void effectiveAppearanceDidChange();
     bool useDarkAppearance() const;
-    bool useInactiveAppearance() const;
+    bool useElevatedUserInterfaceLevel() const;
 
 #if PLATFORM(COCOA)
     // Called by the web process through a message.
@@ -987,6 +983,7 @@ public:
     void findStringMatches(const String&, FindOptions, unsigned maxMatchCount);
     void getImageForFindMatch(int32_t matchIndex);
     void selectFindMatch(int32_t matchIndex);
+    void indicateFindMatch(int32_t matchIndex);
     void didGetImageForFindMatch(const ShareableBitmap::Handle& contentImageHandle, uint32_t matchIndex);
     void hideFindUI();
     void countStringMatches(const String&, FindOptions, unsigned maxMatchCount);
@@ -1259,9 +1256,6 @@ public:
     void didFinishCheckingText(uint64_t requestID, const Vector<WebCore::TextCheckingResult>&);
     void didCancelCheckingText(uint64_t requestID);
 
-    void connectionWillOpen(IPC::Connection&);
-    void webProcessWillShutDown();
-
     void didSaveToPageCache();
         
     void setScrollPinningBehavior(WebCore::ScrollPinningBehavior);
@@ -1378,6 +1372,7 @@ public:
 
 #if PLATFORM(IOS_FAMILY)
     void setIsKeyboardAnimatingIn(bool isKeyboardAnimatingIn) { m_isKeyboardAnimatingIn = isKeyboardAnimatingIn; }
+    bool waitingForPostLayoutEditorStateUpdateAfterFocusingElement() const { return m_waitingForPostLayoutEditorStateUpdateAfterFocusingElement; }
 #endif
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS_FAMILY)
@@ -1516,7 +1511,7 @@ public:
     void decidePolicyForResponseShared(Ref<WebProcessProxy>&&, uint64_t frameID, const WebCore::SecurityOriginData& frameSecurityOrigin, WebCore::PolicyCheckIdentifier,
         uint64_t navigationID, const WebCore::ResourceResponse&, const WebCore::ResourceRequest&, bool canShowMIMEType, const String& downloadAttribute, uint64_t listenerID, const UserData&);
     void startURLSchemeTaskShared(Ref<WebProcessProxy>&&, URLSchemeTaskParameters&&);
-    void loadDataWithNavigationShared(Ref<WebProcessProxy>&&, API::Navigation&, const IPC::DataReference&, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad, Optional<WebsitePoliciesData>&& = WTF::nullopt);
+    void loadDataWithNavigationShared(Ref<WebProcessProxy>&&, API::Navigation&, const IPC::DataReference&, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad, Optional<WebsitePoliciesData>&& = WTF::nullopt, WebCore::ShouldOpenExternalURLsPolicy = WebCore::ShouldOpenExternalURLsPolicy::ShouldNotAllow);
     void loadRequestWithNavigationShared(Ref<WebProcessProxy>&&, API::Navigation&, WebCore::ResourceRequest&&, WebCore::ShouldOpenExternalURLsPolicy, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad, Optional<WebsitePoliciesData>&& = WTF::nullopt);
     void backForwardGoToItemShared(Ref<WebProcessProxy>&&, const WebCore::BackForwardItemIdentifier&, CompletionHandler<void(SandboxExtension::Handle&&)>&&);
     void decidePolicyForNavigationActionSyncShared(Ref<WebProcessProxy>&&, uint64_t frameID, bool isMainFrame, WebCore::SecurityOriginData&&, WebCore::PolicyCheckIdentifier, uint64_t navigationID, NavigationActionData&&,
@@ -1549,8 +1544,10 @@ public:
     void removeObserver(WebViewDidMoveToWindowObserver&);
     void webViewDidMoveToWindow();
 
-#if HAVE(LOAD_OPTIMIZER)
-WEBPAGEPROXY_LOADOPTIMIZER_ADDITIONS_1
+#if HAVE(APP_SSO)
+    void setShouldSuppressSOAuthorizationInAllNavigationPolicyDecision() { m_shouldSuppressSOAuthorizationInAllNavigationPolicyDecision = true; }
+    void setShouldSuppressSOAuthorizationInNextNavigationPolicyDecision() { m_shouldSuppressSOAuthorizationInNextNavigationPolicyDecision = true; }
+    void decidePolicyForSOAuthorizationLoad(const String&, CompletionHandler<void(SOAuthorizationLoadPolicy)>&&);
 #endif
 
     Logger& logger();
@@ -1561,6 +1558,12 @@ WEBPAGEPROXY_LOADOPTIMIZER_ADDITIONS_1
     void didReceiveSyncMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&) override;
 
     void requestStorageSpace(uint64_t frameID, const String& originIdentifier, const String& databaseName, const String& displayName, uint64_t currentQuota, uint64_t currentOriginUsage, uint64_t currentDatabaseUsage, uint64_t expectedUsage, WTF::CompletionHandler<void(uint64_t)>&&);
+
+    URL currentResourceDirectoryURL() const;
+
+#if ENABLE(MEDIA_STREAM)
+    void setMockCaptureDevicesEnabledOverride(Optional<bool>);
+#endif
 
 private:
     WebPageProxy(PageClient&, WebProcessProxy&, WebCore::PageIdentifier, Ref<API::PageConfiguration>&&);
@@ -1872,7 +1875,7 @@ private:
     void rectForCharacterRangeCallback(const WebCore::IntRect&, const EditingRange&, CallbackID);
 #if PLATFORM(MAC)
     void attributedStringForCharacterRangeCallback(const AttributedString&, const EditingRange&, CallbackID);
-    void fontAtSelectionCallback(const String&, double, bool, CallbackID);
+    void fontAtSelectionCallback(const FontInfo&, double, bool, CallbackID);
 #endif
 #if PLATFORM(IOS_FAMILY)
     void gestureCallback(const WebCore::IntPoint&, uint32_t gestureType, uint32_t gestureState, uint32_t flags, CallbackID);
@@ -1898,7 +1901,7 @@ private:
     void setPluginComplexTextInputState(uint64_t pluginComplexTextInputIdentifier, uint64_t complexTextInputState);
 #endif
 
-    bool maybeInitializeSandboxExtensionHandle(WebProcessProxy&, const URL&, SandboxExtension::Handle&);
+    void maybeInitializeSandboxExtensionHandle(WebProcessProxy&, const URL& url, const URL& resourceDirectoryURL, SandboxExtension::Handle&);
 
 #if USE(AUTOMATIC_TEXT_REPLACEMENT)
     void toggleSmartInsertDelete();
@@ -2134,8 +2137,6 @@ private:
     Ref<WebPageGroup> m_pageGroup;
     Ref<WebPreferences> m_preferences;
 
-    WebProcessLifetimeTracker m_webProcessLifetimeTracker { *this };
-
     Ref<WebUserContentControllerProxy> m_userContentController;
     Ref<VisitedLinkStore> m_visitedLinkStore;
     Ref<WebsiteDataStore> m_websiteDataStore;
@@ -2288,8 +2289,9 @@ private:
     WebCore::ResourceRequest m_decidePolicyForResponseRequest;
     bool m_shouldSuppressAppLinksInNextNavigationPolicyDecision { false };
 
-#if HAVE(LOAD_OPTIMIZER)
-WEBPAGEPROXY_LOADOPTIMIZER_ADDITIONS_2
+#if HAVE(APP_SSO)
+    bool m_shouldSuppressSOAuthorizationInNextNavigationPolicyDecision { false };
+    bool m_shouldSuppressSOAuthorizationInAllNavigationPolicyDecision { false };
 #endif
 
     Deque<NativeWebMouseEvent> m_mouseEventQueue;

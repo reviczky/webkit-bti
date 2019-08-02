@@ -111,6 +111,7 @@ JavaScriptCore_BUILTINS_SOURCES = \
     $(JavaScriptCore)/builtins/PromisePrototype.js \
     $(JavaScriptCore)/builtins/ReflectObject.js \
     $(JavaScriptCore)/builtins/RegExpPrototype.js \
+    ${JavaScriptCore}/builtins/RegExpStringIteratorPrototype.js \
     $(JavaScriptCore)/builtins/SetIteratorPrototype.js \
     $(JavaScriptCore)/builtins/SetPrototype.js \
     $(JavaScriptCore)/builtins/StringConstructor.js \
@@ -118,7 +119,7 @@ JavaScriptCore_BUILTINS_SOURCES = \
     $(JavaScriptCore)/builtins/StringPrototype.js \
     $(JavaScriptCore)/builtins/TypedArrayConstructor.js \
     $(JavaScriptCore)/builtins/TypedArrayPrototype.js \
-    $(JavaScriptCore)/builtins/WebAssemblyPrototype.js \
+    $(JavaScriptCore)/builtins/WebAssembly.js \
 #
 
 # The combined output file depends on the contents of builtins and generator scripts, so
@@ -182,7 +183,6 @@ OBJECT_LUT_HEADERS = \
     WebAssemblyMemoryPrototype.lut.h \
     WebAssemblyModuleConstructor.lut.h \
     WebAssemblyModulePrototype.lut.h \
-    WebAssemblyPrototype.lut.h \
     WebAssemblyRuntimeErrorConstructor.lut.h \
     WebAssemblyRuntimeErrorPrototype.lut.h \
     WebAssemblyTableConstructor.lut.h \

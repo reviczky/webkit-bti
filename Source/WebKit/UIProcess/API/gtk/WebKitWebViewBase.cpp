@@ -54,7 +54,6 @@
 #include <WebCore/CairoUtilities.h>
 #include <WebCore/GUniquePtrGtk.h>
 #include <WebCore/GtkUtilities.h>
-#include <WebCore/GtkVersioning.h>
 #include <WebCore/NotImplemented.h>
 #include <WebCore/PasteboardHelper.h>
 #include <WebCore/PlatformDisplay.h>
@@ -79,10 +78,6 @@
 #if PLATFORM(X11)
 #include <gdk/gdkx.h>
 #endif
-
-// gtk_widget_get_scale_factor() appeared in GTK 3.10, but we also need
-// to make sure we have cairo new enough to support cairo_surface_set_device_scale
-#define HAVE_GTK_SCALE_FACTOR HAVE_CAIRO_SURFACE_SET_DEVICE_SCALE && GTK_CHECK_VERSION(3, 10, 0)
 
 using namespace WebKit;
 using namespace WebCore;
@@ -118,19 +113,24 @@ public:
             eventTime = (timeValue.tv_sec * 1000) + (timeValue.tv_usec / 1000);
         }
 
-        if ((event->type == GDK_2BUTTON_PRESS || event->type == GDK_3BUTTON_PRESS)
-            || ((std::abs(event->button.x - previousClickPoint.x()) < doubleClickDistance)
-                && (std::abs(event->button.y - previousClickPoint.y()) < doubleClickDistance)
+        GdkEventType type;
+        guint button;
+        double x, y;
+        gdk_event_get_coords(event, &x, &y);
+        gdk_event_get_button(event, &button);
+        type = gdk_event_get_event_type(event);
+
+        if ((type == GDK_2BUTTON_PRESS || type == GDK_3BUTTON_PRESS)
+            || ((std::abs(x - previousClickPoint.x()) < doubleClickDistance)
+                && (std::abs(y - previousClickPoint.y()) < doubleClickDistance)
                 && (eventTime - previousClickTime < static_cast<unsigned>(doubleClickTime))
-                && (event->button.button == previousClickButton)))
+                && (button == previousClickButton)))
             currentClickCount++;
         else
             currentClickCount = 1;
 
-        double x, y;
-        gdk_event_get_coords(event, &x, &y);
         previousClickPoint = IntPoint(x, y);
-        previousClickButton = event->button.button;
+        previousClickButton = button;
         previousClickTime = eventTime;
 
         return currentClickCount;
@@ -220,9 +220,7 @@ struct _WebKitWebViewBasePrivate {
     std::unique_ptr<DragAndDropHandler> dragAndDropHandler;
 #endif
 
-#if HAVE(GTK_GESTURES)
     std::unique_ptr<GestureController> gestureController;
-#endif
     std::unique_ptr<ViewGestureController> viewGestureController;
     bool isBackForwardNavigationGestureEnabled { false };
 
@@ -415,9 +413,7 @@ static void webkitWebViewBaseRealize(GtkWidget* widget)
         | GDK_BUTTON2_MOTION_MASK
         | GDK_BUTTON3_MOTION_MASK
         | GDK_TOUCH_MASK;
-#if HAVE(GTK_GESTURES)
     attributes.event_mask |= GDK_TOUCHPAD_GESTURE_MASK;
-#endif
 
     gint attributesMask = GDK_WA_X | GDK_WA_Y | GDK_WA_VISUAL;
 
@@ -589,9 +585,10 @@ static gboolean webkitWebViewBaseDraw(GtkWidget* widget, cairo_t* cr)
     if (showingNavigationSnapshot)
         cairo_push_group(cr);
 
-    if (drawingArea->isInAcceleratedCompositingMode())
+    if (drawingArea->isInAcceleratedCompositingMode()) {
+        ASSERT(webViewBase->priv->acceleratedBackingStore);
         webViewBase->priv->acceleratedBackingStore->paint(cr, clipRect);
-    else {
+    } else {
         WebCore::Region unpaintedRegion; // This is simply unused.
         drawingArea->paint(cr, clipRect, unpaintedRegion);
     }
@@ -739,8 +736,13 @@ static gboolean webkitWebViewBaseKeyPressEvent(GtkWidget* widget, GdkEventKey* k
     WebKitWebViewBase* webViewBase = WEBKIT_WEB_VIEW_BASE(widget);
     WebKitWebViewBasePrivate* priv = webViewBase->priv;
 
+    GdkModifierType state;
+    guint keyval;
+    gdk_event_get_state(reinterpret_cast<GdkEvent*>(keyEvent), &state);
+    gdk_event_get_keyval(reinterpret_cast<GdkEvent*>(keyEvent), &keyval);
+
 #if ENABLE(DEVELOPER_MODE) && OS(LINUX)
-    if ((keyEvent->state & GDK_CONTROL_MASK) && (keyEvent->state & GDK_SHIFT_MASK) && keyEvent->keyval == GDK_KEY_G) {
+    if ((state & GDK_CONTROL_MASK) && (state & GDK_SHIFT_MASK) && keyval == GDK_KEY_G) {
         auto& preferences = priv->pageProxy->preferences();
         preferences.setResourceUsageOverlayVisible(!preferences.resourceUsageOverlayVisible());
         priv->shouldForwardNextKeyEvent = FALSE;
@@ -753,7 +755,7 @@ static gboolean webkitWebViewBaseKeyPressEvent(GtkWidget* widget, GdkEventKey* k
 
 #if ENABLE(FULLSCREEN_API)
     if (priv->fullScreenModeActive) {
-        switch (keyEvent->keyval) {
+        switch (keyval) {
         case GDK_KEY_Escape:
         case GDK_KEY_f:
         case GDK_KEY_F:
@@ -809,8 +811,8 @@ static void webkitWebViewBaseHandleMouseEvent(WebKitWebViewBase* webViewBase, Gd
     ASSERT(!priv->dialog);
 
     int clickCount = 0;
-
-    switch (event->type) {
+    GdkEventType eventType = gdk_event_get_event_type(event);
+    switch (eventType) {
     case GDK_BUTTON_PRESS:
     case GDK_2BUTTON_PRESS:
     case GDK_3BUTTON_PRESS: {
@@ -825,8 +827,10 @@ static void webkitWebViewBaseHandleMouseEvent(WebKitWebViewBase* webViewBase, Gd
 
         priv->inputMethodFilter.notifyMouseButtonPress();
 
+        guint button;
+        gdk_event_get_button(event, &button);
         // If it's a right click event save it as a possible context menu event.
-        if (event->button.button == GDK_BUTTON_SECONDARY)
+        if (button == GDK_BUTTON_SECONDARY)
             priv->contextMenuEvent.reset(gdk_event_copy(event));
 
         clickCount = priv->clickCounter.currentClickCountForGdkButtonEvent(event);
@@ -975,10 +979,12 @@ static gboolean webkitWebViewBaseCrossingNotifyEvent(GtkWidget* widget, GdkEvent
     // because those coordinates are inside the web view.
     GtkAllocation allocation;
     gtk_widget_get_allocation(widget, &allocation);
+    double xEvent, yEvent;
+    gdk_event_get_coords(reinterpret_cast<GdkEvent*>(crossingEvent), &xEvent, &yEvent);
     double width = allocation.width;
     double height = allocation.height;
-    double x = crossingEvent->x;
-    double y = crossingEvent->y;
+    double x = xEvent;
+    double y = yEvent;
     if (x < 0 && x > -1)
         x = -1;
     else if (x >= width && x < width + 1)
@@ -990,7 +996,7 @@ static gboolean webkitWebViewBaseCrossingNotifyEvent(GtkWidget* widget, GdkEvent
 
     GdkEvent* event = reinterpret_cast<GdkEvent*>(crossingEvent);
     GUniquePtr<GdkEvent> copiedEvent;
-    if (x != crossingEvent->x || y != crossingEvent->y) {
+    if (x != xEvent || y != yEvent) {
         copiedEvent.reset(gdk_event_copy(event));
         copiedEvent->crossing.x = x;
         copiedEvent->crossing.y = y;
@@ -1036,7 +1042,8 @@ static inline WebPlatformTouchPoint::TouchPointState touchPointStateForEvents(co
 static void webkitWebViewBaseGetTouchPointsForEvent(WebKitWebViewBase* webViewBase, GdkEvent* event, Vector<WebPlatformTouchPoint>& touchPoints)
 {
     WebKitWebViewBasePrivate* priv = webViewBase->priv;
-    bool touchEnd = (event->type == GDK_TOUCH_END) || (event->type == GDK_TOUCH_CANCEL);
+    GdkEventType type = gdk_event_get_event_type(event);
+    bool touchEnd = (type == GDK_TOUCH_END) || (type == GDK_TOUCH_CANCEL);
     touchPoints.reserveInitialCapacity(touchEnd ? priv->touchEvents.size() + 1 : priv->touchEvents.size());
 
     for (const auto& it : priv->touchEvents)
@@ -1058,7 +1065,8 @@ static gboolean webkitWebViewBaseTouchEvent(GtkWidget* widget, GdkEventTouch* ev
     GdkEvent* touchEvent = reinterpret_cast<GdkEvent*>(event);
     uint32_t sequence = GPOINTER_TO_UINT(gdk_event_get_event_sequence(touchEvent));
 
-    switch (touchEvent->type) {
+    GdkEventType type = gdk_event_get_event_type(touchEvent);
+    switch (type) {
     case GDK_TOUCH_BEGIN: {
         ASSERT(!priv->touchEvents.contains(sequence));
         GUniquePtr<GdkEvent> event(gdk_event_copy(touchEvent));
@@ -1089,7 +1097,6 @@ static gboolean webkitWebViewBaseTouchEvent(GtkWidget* widget, GdkEventTouch* ev
 }
 #endif // ENABLE(TOUCH_EVENTS)
 
-#if HAVE(GTK_GESTURES)
 class TouchGestureController final : public GestureControllerClient {
     WTF_MAKE_FAST_ALLOCATED;
 
@@ -1112,11 +1119,7 @@ private:
         scrollEvent->scroll.delta_x = delta.x();
         scrollEvent->scroll.delta_y = delta.y();
         scrollEvent->scroll.state = event->state;
-#if GTK_CHECK_VERSION(3, 20, 0)
         scrollEvent->scroll.is_stop = isStop;
-#else
-        UNUSED_PARAM(isStop);
-#endif
         scrollEvent->scroll.window = event->window ? GDK_WINDOW(g_object_ref(event->window)) : nullptr;
         auto* touchEvent = reinterpret_cast<GdkEvent*>(event);
         gdk_event_set_screen(scrollEvent.get(), gdk_event_get_screen(touchEvent));
@@ -1175,9 +1178,17 @@ private:
         webkitWebViewBaseHandleWheelEvent(m_webView, scrollEvent.get(), WebWheelEvent::Phase::PhaseChanged);
     }
 
+    void cancelDrag() final
+    {
+        if (auto* controller = webkitWebViewBaseViewGestureController(m_webView))
+            controller->cancelSwipe();
+    }
+
     void swipe(GdkEventTouch* event, const FloatPoint& velocity) final
     {
-        GUniquePtr<GdkEvent> scrollEvent = createScrollEvent(event, FloatPoint::narrowPrecision(event->x, event->y), velocity, true);
+        double x, y;
+        gdk_event_get_coords(reinterpret_cast<GdkEvent*>(event), &x, &y);
+        GUniquePtr<GdkEvent> scrollEvent = createScrollEvent(event, FloatPoint::narrowPrecision(x, y), velocity, true);
         webkitWebViewBaseHandleWheelEvent(m_webView, scrollEvent.get(), WebWheelEvent::Phase::PhaseNone, WebWheelEvent::Phase::PhaseBegan);
     }
 
@@ -1212,7 +1223,6 @@ GestureController& webkitWebViewBaseGestureController(WebKitWebViewBase* webView
         priv->gestureController = std::make_unique<GestureController>(GTK_WIDGET(webViewBase), std::make_unique<TouchGestureController>(webViewBase));
     return *priv->gestureController;
 }
-#endif
 
 void webkitWebViewBaseSetEnableBackForwardNavigationGesture(WebKitWebViewBase* webViewBase, bool enabled)
 {
@@ -1229,6 +1239,22 @@ void webkitWebViewBaseSetEnableBackForwardNavigationGesture(WebKitWebViewBase* w
 ViewGestureController* webkitWebViewBaseViewGestureController(WebKitWebViewBase* webViewBase)
 {
     return webViewBase->priv->viewGestureController.get();
+}
+
+bool webkitWebViewBaseBeginBackSwipeForTesting(WebKitWebViewBase* webViewBase)
+{
+    if (auto* gestureController = webkitWebViewBaseViewGestureController(webViewBase))
+        return gestureController->beginSimulatedSwipeInDirectionForTesting(ViewGestureController::SwipeDirection::Back);
+
+    return FALSE;
+}
+
+bool webkitWebViewBaseCompleteBackSwipeForTesting(WebKitWebViewBase* webViewBase)
+{
+    if (auto* gestureController = webkitWebViewBaseViewGestureController(webViewBase))
+        return gestureController->completeSimulatedSwipeInDirectionForTesting(ViewGestureController::SwipeDirection::Back);
+
+    return FALSE;
 }
 
 static gboolean webkitWebViewBaseQueryTooltip(GtkWidget* widget, gint /* x */, gint /* y */, gboolean keyboardMode, GtkTooltip* tooltip)
@@ -1277,11 +1303,8 @@ static void webkitWebViewBaseDragDataReceived(GtkWidget* widget, GdkDragContext*
 
 static gboolean webkitWebViewBaseEvent(GtkWidget* widget, GdkEvent* event)
 {
-#if HAVE(GTK_GESTURES)
-    if (event->type == GDK_TOUCHPAD_PINCH)
+    if (gdk_event_get_event_type(event) == GDK_TOUCHPAD_PINCH)
         webkitWebViewBaseGestureController(WEBKIT_WEB_VIEW_BASE(widget)).handleEvent(event);
-#endif
-
     return GDK_EVENT_PROPAGATE;
 }
 
@@ -1434,12 +1457,10 @@ WebPageProxy* webkitWebViewBaseGetPage(WebKitWebViewBase* webkitWebViewBase)
     return webkitWebViewBase->priv->pageProxy.get();
 }
 
-#if HAVE(GTK_SCALE_FACTOR)
 static void deviceScaleFactorChanged(WebKitWebViewBase* webkitWebViewBase)
 {
     webkitWebViewBase->priv->pageProxy->setIntrinsicDeviceScaleFactor(gtk_widget_get_scale_factor(GTK_WIDGET(webkitWebViewBase)));
 }
-#endif // HAVE(GTK_SCALE_FACTOR)
 
 void webkitWebViewBaseCreateWebPage(WebKitWebViewBase* webkitWebViewBase, Ref<API::PageConfiguration>&& configuration)
 {
@@ -1451,11 +1472,9 @@ void webkitWebViewBaseCreateWebPage(WebKitWebViewBase* webkitWebViewBase, Ref<AP
 
     priv->inputMethodFilter.setPage(priv->pageProxy.get());
 
-#if HAVE(GTK_SCALE_FACTOR)
     // We attach this here, because changes in scale factor are passed directly to the page proxy.
     priv->pageProxy->setIntrinsicDeviceScaleFactor(gtk_widget_get_scale_factor(GTK_WIDGET(webkitWebViewBase)));
     g_signal_connect(webkitWebViewBase, "notify::scale-factor", G_CALLBACK(deviceScaleFactorChanged), nullptr);
-#endif
 }
 
 void webkitWebViewBaseSetTooltipText(WebKitWebViewBase* webViewBase, const char* tooltip)
@@ -1645,22 +1664,39 @@ void webkitWebViewBaseResetClickCounter(WebKitWebViewBase* webkitWebViewBase)
 
 void webkitWebViewBaseEnterAcceleratedCompositingMode(WebKitWebViewBase* webkitWebViewBase, const LayerTreeContext& layerTreeContext)
 {
+    ASSERT(webkitWebViewBase->priv->acceleratedBackingStore);
     webkitWebViewBase->priv->acceleratedBackingStore->update(layerTreeContext);
 }
 
 void webkitWebViewBaseUpdateAcceleratedCompositingMode(WebKitWebViewBase* webkitWebViewBase, const LayerTreeContext& layerTreeContext)
 {
+    ASSERT(webkitWebViewBase->priv->acceleratedBackingStore);
     webkitWebViewBase->priv->acceleratedBackingStore->update(layerTreeContext);
 }
 
 void webkitWebViewBaseExitAcceleratedCompositingMode(WebKitWebViewBase* webkitWebViewBase)
 {
+    ASSERT(webkitWebViewBase->priv->acceleratedBackingStore);
     webkitWebViewBase->priv->acceleratedBackingStore->update(LayerTreeContext());
 }
 
 bool webkitWebViewBaseMakeGLContextCurrent(WebKitWebViewBase* webkitWebViewBase)
 {
+    ASSERT(webkitWebViewBase->priv->acceleratedBackingStore);
     return webkitWebViewBase->priv->acceleratedBackingStore->makeContextCurrent();
+}
+
+void webkitWebViewBaseWillSwapWebProcess(WebKitWebViewBase* webkitWebViewBase)
+{
+    WebKitWebViewBasePrivate* priv = webkitWebViewBase->priv;
+
+    if (priv->viewGestureController)
+        priv->viewGestureController->disconnectFromProcess();
+}
+
+void webkitWebViewBaseDidExitWebProcess(WebKitWebViewBase* webkitWebViewBase)
+{
+    webkitWebViewBase->priv->viewGestureController = nullptr;
 }
 
 void webkitWebViewBaseDidRelaunchWebProcess(WebKitWebViewBase* webkitWebViewBase)
@@ -1669,13 +1705,23 @@ void webkitWebViewBaseDidRelaunchWebProcess(WebKitWebViewBase* webkitWebViewBase
     gtk_widget_queue_resize_no_redraw(GTK_WIDGET(webkitWebViewBase));
 
     WebKitWebViewBasePrivate* priv = webkitWebViewBase->priv;
-    priv->viewGestureController = std::make_unique<WebKit::ViewGestureController>(*priv->pageProxy);
-    priv->viewGestureController->setSwipeGestureEnabled(priv->isBackForwardNavigationGestureEnabled);
+    if (priv->acceleratedBackingStore) {
+        auto* drawingArea = static_cast<DrawingAreaProxyCoordinatedGraphics*>(priv->pageProxy->drawingArea());
+        priv->acceleratedBackingStore->update(drawingArea->layerTreeContext());
+    }
+
+    if (priv->viewGestureController)
+        priv->viewGestureController->connectToProcess();
+    else {
+        priv->viewGestureController = std::make_unique<WebKit::ViewGestureController>(*priv->pageProxy);
+        priv->viewGestureController->setSwipeGestureEnabled(priv->isBackForwardNavigationGestureEnabled);
+    }
 }
 
 void webkitWebViewBasePageClosed(WebKitWebViewBase* webkitWebViewBase)
 {
-    webkitWebViewBase->priv->acceleratedBackingStore->update(LayerTreeContext());
+    if (webkitWebViewBase->priv->acceleratedBackingStore)
+        webkitWebViewBase->priv->acceleratedBackingStore->update({ });
 }
 
 RefPtr<WebKit::ViewSnapshot> webkitWebViewBaseTakeViewSnapshot(WebKitWebViewBase* webkitWebViewBase)
@@ -1684,16 +1730,11 @@ RefPtr<WebKit::ViewSnapshot> webkitWebViewBaseTakeViewSnapshot(WebKitWebViewBase
 
     IntSize size = page->viewSize();
 
-#if HAVE_GTK_SCALE_FACTOR
     float deviceScale = page->deviceScaleFactor();
     size.scale(deviceScale);
-#endif
 
     RefPtr<cairo_surface_t> surface = adoptRef(cairo_image_surface_create(CAIRO_FORMAT_RGB24, size.width(), size.height()));
-
-#if HAVE_GTK_SCALE_FACTOR
     cairoSurfaceSetDeviceScale(surface.get(), deviceScale, deviceScale);
-#endif
 
     RefPtr<cairo_t> cr = adoptRef(cairo_create(surface.get()));
     webkitWebViewBaseDraw(GTK_WIDGET(webkitWebViewBase), cr.get());
@@ -1784,6 +1825,8 @@ void webkitWebViewBaseShowEmojiChooser(WebKitWebViewBase* webkitWebViewBase, con
 #if USE(WPE_RENDERER)
 int webkitWebViewBaseRenderHostFileDescriptor(WebKitWebViewBase* webkitWebViewBase)
 {
+    if (!webkitWebViewBase->priv->acceleratedBackingStore)
+        return -1;
     return webkitWebViewBase->priv->acceleratedBackingStore->renderHostFileDescriptor();
 }
 #endif

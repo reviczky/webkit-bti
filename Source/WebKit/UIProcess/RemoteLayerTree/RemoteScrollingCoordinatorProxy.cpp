@@ -156,6 +156,7 @@ void RemoteScrollingCoordinatorProxy::connectStateNodeLayers(ScrollingStateTree&
                 scrollingStateNode.setHorizontalScrollbarLayer(layerTreeHost.layerForID(scrollingStateNode.horizontalScrollbarLayer()));
             break;
         }
+        case ScrollingNodeType::OverflowProxy:
         case ScrollingNodeType::FrameHosting:
         case ScrollingNodeType::Fixed:
         case ScrollingNodeType::Sticky:
@@ -243,7 +244,10 @@ String RemoteScrollingCoordinatorProxy::scrollingTreeAsText() const
 bool RemoteScrollingCoordinatorProxy::hasScrollableMainFrame() const
 {
     auto* rootNode = m_scrollingTree->rootNode();
-    return rootNode && rootNode->canHaveScrollbars();
+    if (!rootNode)
+        return false;
+
+    return rootNode->canHaveScrollbars() || rootNode->visualViewportIsSmallerThanLayoutViewport();
 }
 
 #if ENABLE(POINTER_EVENTS)

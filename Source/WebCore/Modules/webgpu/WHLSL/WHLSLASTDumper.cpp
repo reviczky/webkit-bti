@@ -134,11 +134,7 @@ void ASTDumper::visit(AST::EnumerationDefinition& enumerationDefinition)
 
 void ASTDumper::visit(AST::EnumerationMember& enumerationMember)
 {
-    m_out.print(enumerationMember.name());
-    if (enumerationMember.value()) {
-        m_out.print(" = ");
-        visit(*enumerationMember.value());
-    }
+    m_out.print(enumerationMember.name(), " = ", enumerationMember.value());
 }
 
 void ASTDumper::visit(AST::FunctionDefinition& functionDefinition)
@@ -502,11 +498,6 @@ void ASTDumper::visit(AST::Return& returnStatement)
     }
 }
 
-void ASTDumper::visit(AST::Trap&)
-{
-    m_out.print("trap");
-}
-
 void ASTDumper::visit(AST::SwitchStatement& switchStatement)
 {
     m_out.print("switch (");
@@ -639,7 +630,7 @@ void ASTDumper::visit(AST::ReadModifyWriteExpression& readModifyWriteExpression)
     auto oldVariable = readModifyWriteExpression.oldVariableReference();
     auto newVariable = readModifyWriteExpression.newVariableReference();
 
-    m_out.print("(");
+    m_out.print("RMW(");
     visit(oldVariable.get());
     m_out.print(" = ");
     visit(readModifyWriteExpression.leftValue());

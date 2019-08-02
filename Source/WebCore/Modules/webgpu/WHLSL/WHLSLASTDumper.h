@@ -98,7 +98,6 @@ public:
     void visit(AST::Return&) override;
     void visit(AST::SwitchCase&) override;
     void visit(AST::SwitchStatement&) override;
-    void visit(AST::Trap&) override;
     void visit(AST::VariableDeclarationsStatement&) override;
     void visit(AST::WhileLoop&) override;
     void visit(AST::VariableDeclaration&) override;
@@ -142,6 +141,7 @@ MAKE_PRINT_ADAPTOR(StatementDumper, AST::Statement&, dumpASTNode);
 MAKE_PRINT_ADAPTOR(ProgramDumper, Program&, dumpASTNode);
 MAKE_PRINT_ADAPTOR(StructureDefinitionDumper, AST::StructureDefinition&, dumpASTNode);
 MAKE_PRINT_ADAPTOR(FunctionDefinitionDumper, AST::FunctionDefinition&, dumpASTNode);
+MAKE_PRINT_ADAPTOR(NativeFunctionDeclarationDumper, AST::NativeFunctionDeclaration&, dumpASTNode);
 MAKE_PRINT_ADAPTOR(TypeDumper, AST::UnnamedType&, dumpASTNode);
 
 

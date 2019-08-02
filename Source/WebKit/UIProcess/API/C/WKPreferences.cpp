@@ -469,16 +469,6 @@ bool WKPreferencesGetWebGLEnabled(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->webGLEnabled();
 }
 
-void WKPreferencesSetForceSoftwareWebGLRendering(WKPreferencesRef preferencesRef, bool flag)
-{
-    toImpl(preferencesRef)->setForceSoftwareWebGLRendering(flag);
-}
-
-bool WKPreferencesGetForceSoftwareWebGLRendering(WKPreferencesRef preferencesRef)
-{
-    return toImpl(preferencesRef)->forceSoftwareWebGLRendering();
-}
-
 void WKPreferencesSetAccelerated2DCanvasEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setAccelerated2dCanvasEnabled(flag);
@@ -1307,7 +1297,7 @@ void WKPreferencesSetIncrementalRenderingSuppressionTimeout(WKPreferencesRef pre
 
 double WKPreferencesGetIncrementalRenderingSuppressionTimeout(WKPreferencesRef preferencesRef)
 {
-    return toAPI(toImpl(preferencesRef)->incrementalRenderingSuppressionTimeout());
+    return toImpl(preferencesRef)->incrementalRenderingSuppressionTimeout();
 }
 
 void WKPreferencesSetThreadedScrollingEnabled(WKPreferencesRef preferencesRef, bool enabled)
@@ -1728,6 +1718,16 @@ void WKPreferencesSetCustomPasteboardDataEnabled(WKPreferencesRef preferencesRef
 bool WKPreferencesGetCustomPasteboardDataEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->customPasteboardDataEnabled();
+}
+
+void WKPreferencesSetDialogElementEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setDialogElementEnabled(flag);
+}
+
+bool WKPreferencesGetDialogElementEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->dialogElementEnabled();
 }
 
 void WKPreferencesSetWebShareEnabled(WKPreferencesRef preferencesRef, bool flag)

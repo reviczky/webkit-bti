@@ -330,40 +330,10 @@ Optional<DOMCacheEngine::Record> ArgumentCoder<DOMCacheEngine::Record>::decode(D
     return {{ WTFMove(identifier), WTFMove(updateResponseCounter), WTFMove(requestHeadersGuard), WTFMove(request), WTFMove(options.value()), WTFMove(referrer), WTFMove(responseHeadersGuard), WTFMove(response), WTFMove(responseBody), responseBodySize }};
 }
 
-#if ENABLE(POINTER_EVENTS)
-void ArgumentCoder<TouchActionData>::encode(Encoder& encoder, const TouchActionData& touchActionData)
-{
-    encoder << touchActionData.touchActions << touchActionData.scrollingNodeID << touchActionData.region;
-}
-
-Optional<TouchActionData> ArgumentCoder<TouchActionData>::decode(Decoder& decoder)
-{
-    Optional<OptionSet<TouchAction>> touchActions;
-    decoder >> touchActions;
-    if (!touchActions)
-        return WTF::nullopt;
-
-    Optional<ScrollingNodeID> scrollingNodeID;
-    decoder >> scrollingNodeID;
-    if (!scrollingNodeID)
-        return WTF::nullopt;
-
-    Optional<Region> region;
-    decoder >> region;
-    if (!region)
-        return WTF::nullopt;
-
-    return {{ WTFMove(*touchActions), WTFMove(*scrollingNodeID), WTFMove(*region) }};
-}
-#endif
-
 void ArgumentCoder<EventTrackingRegions>::encode(Encoder& encoder, const EventTrackingRegions& eventTrackingRegions)
 {
     encoder << eventTrackingRegions.asynchronousDispatchRegion;
     encoder << eventTrackingRegions.eventSpecificSynchronousDispatchRegions;
-#if ENABLE(POINTER_EVENTS)
-    encoder << eventTrackingRegions.touchActionData;
-#endif
 }
 
 bool ArgumentCoder<EventTrackingRegions>::decode(Decoder& decoder, EventTrackingRegions& eventTrackingRegions)
@@ -375,16 +345,8 @@ bool ArgumentCoder<EventTrackingRegions>::decode(Decoder& decoder, EventTracking
     HashMap<String, Region> eventSpecificSynchronousDispatchRegions;
     if (!decoder.decode(eventSpecificSynchronousDispatchRegions))
         return false;
-#if ENABLE(POINTER_EVENTS)
-    Vector<TouchActionData> touchActionData;
-    if (!decoder.decode(touchActionData))
-        return false;
-#endif
     eventTrackingRegions.asynchronousDispatchRegion = WTFMove(*asynchronousDispatchRegion);
     eventTrackingRegions.eventSpecificSynchronousDispatchRegions = WTFMove(eventSpecificSynchronousDispatchRegions);
-#if ENABLE(POINTER_EVENTS)
-    eventTrackingRegions.touchActionData = WTFMove(touchActionData);
-#endif
     return true;
 }
 
@@ -2201,14 +2163,13 @@ bool ArgumentCoder<FixedPositionViewportConstraints>::decode(Decoder& decoder, F
     return true;
 }
 
-void ArgumentCoder<LayoutConstraints>::encode(Encoder& encoder, const LayoutConstraints& layoutConstraints)
+void ArgumentCoder<AbsolutePositionConstraints>::encode(Encoder& encoder, const AbsolutePositionConstraints& layoutConstraints)
 {
     encoder << layoutConstraints.alignmentOffset();
     encoder << layoutConstraints.layerPositionAtLastLayout();
-    encoder.encodeEnum(layoutConstraints.scrollPositioningBehavior());
 }
 
-bool ArgumentCoder<LayoutConstraints>::decode(Decoder& decoder, LayoutConstraints& layoutConstraints)
+bool ArgumentCoder<AbsolutePositionConstraints>::decode(Decoder& decoder, AbsolutePositionConstraints& layoutConstraints)
 {
     FloatSize alignmentOffset;
     if (!decoder.decode(alignmentOffset))
@@ -2218,14 +2179,9 @@ bool ArgumentCoder<LayoutConstraints>::decode(Decoder& decoder, LayoutConstraint
     if (!decoder.decode(layerPosition))
         return false;
 
-    ScrollPositioningBehavior positioningBehavior;
-    if (!decoder.decodeEnum(positioningBehavior))
-        return false;
-
     layoutConstraints = { };
     layoutConstraints.setAlignmentOffset(alignmentOffset);
     layoutConstraints.setLayerPositionAtLastLayout(layerPosition);
-    layoutConstraints.setScrollPositioningBehavior(positioningBehavior);
     return true;
 }
 

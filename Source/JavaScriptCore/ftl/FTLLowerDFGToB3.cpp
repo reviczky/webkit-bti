@@ -853,8 +853,11 @@ private:
         case BitRShift:
             compileBitRShift();
             break;
-        case BitLShift:
-            compileBitLShift();
+        case ArithBitLShift:
+            compileArithBitLShift();
+            break;
+        case ValueBitLShift:
+            compileValueBitLShift();
             break;
         case BitURShift:
             compileBitURShift();
@@ -3184,17 +3187,28 @@ private:
             m_out.bitAnd(lowInt32(m_node->child2()), m_out.constInt32(31))));
     }
     
-    void compileBitLShift()
+    void compileArithBitLShift()
     {
-        if (m_node->isBinaryUseKind(UntypedUse)) {
-            emitBinaryBitOpSnippet<JITLeftShiftGenerator>(operationValueBitLShift);
-            return;
-        }
         setInt32(m_out.shl(
             lowInt32(m_node->child1()),
             m_out.bitAnd(lowInt32(m_node->child2()), m_out.constInt32(31))));
     }
     
+    void compileValueBitLShift()
+    {
+        if (m_node->isBinaryUseKind(BigIntUse)) {
+            LValue left = lowBigInt(m_node->child1());
+            LValue right = lowBigInt(m_node->child2());
+            
+            LValue result = vmCall(pointerType(), m_out.operation(operationBitLShiftBigInt), m_callFrame, left, right);
+            setJSValue(result);
+            return;
+        }
+
+        ASSERT(m_node->isBinaryUseKind(UntypedUse));
+        emitBinaryBitOpSnippet<JITLeftShiftGenerator>(operationValueBitLShift);
+    }
+
     void compileBitURShift()
     {
         if (m_node->isBinaryUseKind(UntypedUse)) {
@@ -5116,6 +5130,7 @@ private:
     {
         JSGlobalObject* globalObject = m_graph.globalObjectFor(m_node->origin.semantic);
 
+        LValue sourceArray = lowCell(m_graph.varArgChild(m_node, 0));
         LValue sourceStorage = lowStorage(m_graph.varArgChild(m_node, m_node->numChildren() - 1));
         LValue inputLength = m_out.load32(sourceStorage, m_heaps.Butterfly_publicLength);
 
@@ -5141,7 +5156,7 @@ private:
 
         ArrayValues arrayResult;
         {
-            LValue indexingType = m_out.load8ZeroExt32(lowCell(m_graph.varArgChild(m_node, 0)), m_heaps.JSCell_indexingTypeAndMisc);
+            LValue indexingType = m_out.load8ZeroExt32(sourceArray, m_heaps.JSCell_indexingTypeAndMisc);
             // We can ignore the writability of the cell since we won't write to the source.
             indexingType = m_out.bitAnd(indexingType, m_out.constInt32(AllWritableArrayTypesAndHistory));
             // When we emit an ArraySlice, we dominate the use of the array by a CheckStructure
@@ -5155,6 +5170,9 @@ private:
                     weakStructure(m_graph.registerStructure(globalObject->arrayStructureForIndexingTypeDuringAllocation(ArrayWithDouble)))));
             arrayResult = allocateJSArray(resultLength, resultLength, structure, indexingType, false, false);
         }
+
+        // Keep the sourceArray alive at least until after anything that can GC.
+        keepAlive(sourceArray);
 
         LBasicBlock loop = m_out.newBlock();
         LBasicBlock continuation = m_out.newBlock();
@@ -5547,8 +5565,25 @@ private:
         m_out.storePtr(weakPointer(executable), fastObject, m_heaps.JSFunction_executable);
         m_out.storePtr(m_out.intPtrZero, fastObject, m_heaps.JSFunction_rareData);
         
-        mutatorFence();
-        
+        VM& vm = this->vm();
+        if (executable->isAnonymousBuiltinFunction()) {
+            mutatorFence();
+            Allocator allocator = allocatorForNonVirtualConcurrently<FunctionRareData>(vm, sizeof(FunctionRareData), AllocatorForMode::AllocatorIfExists);
+            LValue rareData = allocateCell(m_out.constIntPtr(allocator.localAllocator()), vm.functionRareDataStructure.get(), slowPath);
+            m_out.storePtr(m_out.intPtrZero, rareData, m_heaps.FunctionRareData_allocator);
+            m_out.storePtr(m_out.intPtrZero, rareData, m_heaps.FunctionRareData_structure);
+            m_out.storePtr(m_out.intPtrZero, rareData, m_heaps.FunctionRareData_prototype);
+            m_out.storePtr(m_out.intPtrOne, rareData, m_heaps.FunctionRareData_objectAllocationProfileWatchpoint);
+            m_out.storePtr(m_out.intPtrZero, rareData, m_heaps.FunctionRareData_internalFunctionAllocationProfile_structure);
+            m_out.storePtr(m_out.intPtrZero, rareData, m_heaps.FunctionRareData_boundFunctionStructure);
+            m_out.storePtr(m_out.intPtrZero, rareData, m_heaps.FunctionRareData_allocationProfileClearingWatchpoint);
+            m_out.store32As8(m_out.int32One, rareData, m_heaps.FunctionRareData_hasReifiedName);
+            m_out.store32As8(m_out.int32Zero, rareData, m_heaps.FunctionRareData_hasReifiedLength);
+            mutatorFence();
+            m_out.storePtr(rareData, fastObject, m_heaps.JSFunction_rareData);
+        } else
+            mutatorFence();
+
         ValueFromBlock fastResult = m_out.anchor(fastObject);
         m_out.jump(continuation);
         
@@ -5556,7 +5591,6 @@ private:
 
         Vector<LValue> slowPathArguments;
         slowPathArguments.append(scope);
-        VM& vm = this->vm();
         LValue callResult = lazySlowPath(
             [=, &vm] (const Vector<Location>& locations) -> RefPtr<LazySlowPath::Generator> {
                 auto* operation = operationNewFunctionWithInvalidatedReallocationWatchpoint;
@@ -10447,7 +10481,7 @@ private:
 
             lastNext = m_out.appendTo(isNonEmptyString, isAtomString);
             uniquedStringImpl = m_out.loadPtr(keyAsValue, m_heaps.JSString_value);
-            LValue isNotAtomic = m_out.testIsZero32(m_out.load32(uniquedStringImpl, m_heaps.StringImpl_hashAndFlags), m_out.constInt32(StringImpl::flagIsAtomic()));
+            LValue isNotAtomic = m_out.testIsZero32(m_out.load32(uniquedStringImpl, m_heaps.StringImpl_hashAndFlags), m_out.constInt32(StringImpl::flagIsAtom()));
             m_out.branch(isNotAtomic, rarely(slowCase), usually(isAtomString));
 
             m_out.appendTo(isAtomString, slowCase);
@@ -10479,7 +10513,7 @@ private:
             m_out.appendTo(isNonEmptyString, notStringCase);
             LValue implFromString = m_out.loadPtr(keyAsValue, m_heaps.JSString_value);
             ValueFromBlock stringResult = m_out.anchor(implFromString);
-            LValue isNotAtomic = m_out.testIsZero32(m_out.load32(implFromString, m_heaps.StringImpl_hashAndFlags), m_out.constInt32(StringImpl::flagIsAtomic()));
+            LValue isNotAtomic = m_out.testIsZero32(m_out.load32(implFromString, m_heaps.StringImpl_hashAndFlags), m_out.constInt32(StringImpl::flagIsAtom()));
             m_out.branch(isNotAtomic, rarely(slowCase), usually(hasUniquedStringImpl));
 
             m_out.appendTo(notStringCase, isSymbolCase);
@@ -13695,7 +13729,7 @@ private:
         }
         
         ValueFromBlock noButterfly = m_out.anchor(m_out.intPtrZero);
-        
+
         LValue predicate;
         if (shouldLargeArraySizeCreateArrayStorage)
             predicate = m_out.aboveOrEqual(publicLength, m_out.constInt32(MIN_ARRAY_STORAGE_CONSTRUCTION_LENGTH));
@@ -13705,16 +13739,16 @@ private:
         m_out.branch(predicate, rarely(largeCase), usually(fastCase));
         
         m_out.appendTo(fastCase, largeCase);
-            
+
         LValue payloadSize =
             m_out.shl(m_out.zeroExt(vectorLength, pointerType()), m_out.constIntPtr(3));
-            
+
         LValue butterflySize = m_out.add(
             payloadSize, m_out.constIntPtr(sizeof(IndexingHeader)));
-            
+
         LValue allocator = allocatorForSize(vm().jsValueGigacageAuxiliarySpace, butterflySize, failCase);
         LValue startOfStorage = allocateHeapCell(allocator, failCase);
-            
+
         LValue butterfly = m_out.add(startOfStorage, m_out.constIntPtr(sizeof(IndexingHeader)));
         
         m_out.store32(publicLength, butterfly, m_heaps.Butterfly_publicLength);
@@ -14157,18 +14191,7 @@ private:
 
     LValue caged(Gigacage::Kind kind, LValue ptr, LValue base)
     {
-#if CPU(ARM64E)
-        if (kind == Gigacage::Primitive) {
-            LValue size = m_out.load32(base, m_heaps.JSArrayBufferView_length);
-            ptr = untagArrayPtr(ptr, size);
-        }
-#else
-        UNUSED_PARAM(kind);
-        UNUSED_PARAM(base);
-#endif
-
 #if GIGACAGE_ENABLED
-        UNUSED_PARAM(base);
         if (!Gigacage::isEnabled(kind))
             return ptr;
         
@@ -14186,7 +14209,7 @@ private:
         LValue result = m_out.add(masked, basePtr);
 
 #if CPU(ARM64E)
-        {
+        if (kind == Gigacage::Primitive) {
             PatchpointValue* merge = m_out.patchpoint(pointerType());
             merge->append(result, B3::ValueRep(B3::ValueRep::SomeLateRegister));
             merge->appendSomeRegister(ptr);
@@ -14194,9 +14217,12 @@ private:
                 jit.move(params[2].gpr(), params[0].gpr());
                 jit.bitFieldInsert64(params[1].gpr(), 0, 64 - MacroAssembler::numberOfPACBits, params[0].gpr());
             });
-            result = merge;
+
+            LValue size = m_out.load32(base, m_heaps.JSArrayBufferView_length);
+            result = untagArrayPtr(merge, size);
         }
-#endif
+#endif // CPU(ARM64E)
+
         // Make sure that B3 doesn't try to do smart reassociation of these pointer bits.
         // FIXME: In an ideal world, B3 would not do harmful reassociations, and if it did, it would be able
         // to undo them during constant hoisting and regalloc. As it stands, if you remove this then Octane
@@ -14210,6 +14236,9 @@ private:
         // https://bugs.webkit.org/show_bug.cgi?id=175493
         return m_out.opaque(result);
 #endif
+
+        UNUSED_PARAM(kind);
+        UNUSED_PARAM(base);
         return ptr;
     }
     
@@ -16405,7 +16434,7 @@ private:
             BadType, jsValueValue(string), edge.node(),
             m_out.testIsZero32(
                 m_out.load32(stringImpl, m_heaps.StringImpl_hashAndFlags),
-                m_out.constInt32(StringImpl::flagIsAtomic())));
+                m_out.constInt32(StringImpl::flagIsAtom())));
         m_interpreter.filter(edge, SpecStringIdent | ~SpecString);
     }
     
@@ -17258,7 +17287,17 @@ private:
             return false;
         return true;
     }
-    
+
+    void keepAlive(LValue value)
+    {
+        PatchpointValue* patchpoint = m_out.patchpoint(Void);
+        patchpoint->effects = Effects::none();
+        patchpoint->effects.writesLocalState = true;
+        patchpoint->effects.reads = HeapRange::top();
+        patchpoint->append(value, ValueRep::ColdAny);
+        patchpoint->setGenerator([=] (CCallHelpers&, const StackmapGenerationParams&) { });
+    }
+
     void addWeakReference(JSCell* target)
     {
         m_graph.m_plan.weakReferences().addLazily(target);

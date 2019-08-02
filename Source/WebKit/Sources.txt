@@ -290,8 +290,6 @@ UIProcess/WebPageProxy.cpp
 UIProcess/WebPasteboardProxy.cpp
 UIProcess/WebPreferences.cpp
 UIProcess/WebProcessCache.cpp
-UIProcess/WebProcessLifetimeObserver.cpp
-UIProcess/WebProcessLifetimeTracker.cpp
 UIProcess/WebProcessPool.cpp
 UIProcess/WebProcessProxy.cpp
 UIProcess/WebURLSchemeHandler.cpp
@@ -344,6 +342,7 @@ UIProcess/API/C/WKIconDatabase.cpp
 UIProcess/API/C/WKInspector.cpp
 UIProcess/API/C/WKKeyValueStorageManager.cpp
 UIProcess/API/C/WKMediaSessionMetadata.cpp
+UIProcess/API/C/WKMessageListener.cpp
 UIProcess/API/C/WKMockDisplay.cpp
 UIProcess/API/C/WKMockMediaDevice.cpp
 UIProcess/API/C/WKNavigationActionRef.cpp

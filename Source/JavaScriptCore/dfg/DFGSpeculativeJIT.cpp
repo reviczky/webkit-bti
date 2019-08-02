@@ -3861,6 +3861,34 @@ void SpeculativeJIT::emitUntypedRightShiftBitOp(Node* node)
     return;
 }
 
+void SpeculativeJIT::compileValueLShiftOp(Node* node)
+{
+    Edge& leftChild = node->child1();
+    Edge& rightChild = node->child2();
+
+    if (node->binaryUseKind() == BigIntUse) {
+        SpeculateCellOperand left(this, leftChild);
+        SpeculateCellOperand right(this, rightChild);
+        GPRReg leftGPR = left.gpr();
+        GPRReg rightGPR = right.gpr();
+
+        speculateBigInt(leftChild, leftGPR);
+        speculateBigInt(rightChild, rightGPR);
+
+        flushRegisters();
+        GPRFlushedCallResult result(this);
+        GPRReg resultGPR = result.gpr();
+
+        callOperation(operationBitLShiftBigInt, resultGPR, leftGPR, rightGPR);
+        m_jit.exceptionCheck();
+        cellResult(resultGPR, node);
+        return;
+    }
+
+    ASSERT(leftChild.useKind() == UntypedUse && rightChild.useKind() == UntypedUse);
+    emitUntypedBitOp<JITLeftShiftGenerator, operationValueBitLShift>(node);
+}
+
 void SpeculativeJIT::compileShiftOp(Node* node)
 {
     NodeType op = node->op();
@@ -3869,9 +3897,6 @@ void SpeculativeJIT::compileShiftOp(Node* node)
 
     if (leftChild.useKind() == UntypedUse || rightChild.useKind() == UntypedUse) {
         switch (op) {
-        case BitLShift:
-            emitUntypedBitOp<JITLeftShiftGenerator, operationValueBitLShift>(node);
-            return;
         case BitRShift:
         case BitURShift:
             emitUntypedRightShiftBitOp(node);
@@ -7182,7 +7207,28 @@ void SpeculativeJIT::compileNewFunctionCommon(GPRReg resultGPR, RegisteredStruct
     m_jit.storePtr(TrustedImmPtr::weakPointer(m_jit.graph(), executable), JITCompiler::Address(resultGPR, JSFunction::offsetOfExecutable()));
     m_jit.storePtr(TrustedImmPtr(nullptr), JITCompiler::Address(resultGPR, JSFunction::offsetOfRareData()));
     
-    m_jit.mutatorFence(*m_jit.vm());
+    if (executable->isAnonymousBuiltinFunction()) {
+        VM& vm = *m_jit.vm();
+        m_jit.mutatorFence(vm);
+        GPRTemporary allocator(this);
+        Allocator allocatorValue = allocatorForNonVirtualConcurrently<FunctionRareData>(vm, sizeof(FunctionRareData), AllocatorForMode::AllocatorIfExists);
+        emitAllocateJSCell(scratch1GPR, JITAllocator::constant(allocatorValue), allocator.gpr(), TrustedImmPtr(m_jit.graph().registerStructure(vm.functionRareDataStructure.get())), scratch2GPR, slowPath);
+
+        ptrdiff_t objectAllocationProfileOffset = FunctionRareData::offsetOfObjectAllocationProfile();
+        m_jit.storePtr(TrustedImmPtr(nullptr), JITCompiler::Address(scratch1GPR, objectAllocationProfileOffset + ObjectAllocationProfileWithPrototype::offsetOfAllocator()));
+        m_jit.storePtr(TrustedImmPtr(nullptr), JITCompiler::Address(scratch1GPR, objectAllocationProfileOffset + ObjectAllocationProfileWithPrototype::offsetOfStructure()));
+        m_jit.storePtr(TrustedImmPtr(nullptr), JITCompiler::Address(scratch1GPR, objectAllocationProfileOffset + ObjectAllocationProfileWithPrototype::offsetOfPrototype()));
+        m_jit.storePtr(TrustedImmPtr(0x1), JITCompiler::Address(scratch1GPR, FunctionRareData::offsetOfObjectAllocationProfileWatchpoint()));
+        m_jit.storePtr(TrustedImmPtr(nullptr), JITCompiler::Address(scratch1GPR, FunctionRareData::offsetOfInternalFunctionAllocationProfile() + InternalFunctionAllocationProfile::offsetOfStructure()));
+        m_jit.storePtr(TrustedImmPtr(nullptr), JITCompiler::Address(scratch1GPR, FunctionRareData::offsetOfBoundFunctionStructure()));
+        m_jit.storePtr(TrustedImmPtr(nullptr), JITCompiler::Address(scratch1GPR, FunctionRareData::offsetOfAllocationProfileClearingWatchpoint()));
+        m_jit.store8(TrustedImm32(0), JITCompiler::Address(scratch1GPR, FunctionRareData::offsetOfHasReifiedLength()));
+        m_jit.store8(TrustedImm32(1), JITCompiler::Address(scratch1GPR, FunctionRareData::offsetOfHasReifiedName()));
+        m_jit.mutatorFence(vm);
+        m_jit.storePtr(scratch1GPR, JITCompiler::Address(resultGPR, JSFunction::offsetOfRareData()));
+    } else
+        m_jit.mutatorFence(*m_jit.vm());
+
 }
 
 void SpeculativeJIT::compileNewFunction(Node* node)
@@ -8332,17 +8378,18 @@ void SpeculativeJIT::compileArraySlice(Node* node)
         }
     }
 
-
     GPRTemporary temp3(this);
     GPRReg tempValue = temp3.gpr();
+
     {
+        // We need to keep the source array alive at least until after we're done
+        // with anything that can GC (e.g. allocating the result array below).
         SpeculateCellOperand cell(this, m_jit.graph().varArgChild(node, 0));
+
         m_jit.load8(MacroAssembler::Address(cell.gpr(), JSCell::indexingTypeAndMiscOffset()), tempValue);
         // We can ignore the writability of the cell since we won't write to the source.
         m_jit.and32(TrustedImm32(AllWritableArrayTypesAndHistory), tempValue);
-    }
 
-    {
         JSValueRegsTemporary emptyValue(this);
         JSValueRegs emptyValueRegs = emptyValue.regs();
 
@@ -10260,7 +10307,7 @@ void SpeculativeJIT::speculateStringIdentAndLoadStorage(Edge edge, GPRReg string
         BadType, JSValueSource::unboxedCell(string), edge, m_jit.branchTest32(
             MacroAssembler::Zero,
             MacroAssembler::Address(storage, StringImpl::flagsOffset()),
-            MacroAssembler::TrustedImm32(StringImpl::flagIsAtomic())));
+            MacroAssembler::TrustedImm32(StringImpl::flagIsAtom())));
     
     m_interpreter.filter(edge, SpecStringIdent | ~SpecString);
 }

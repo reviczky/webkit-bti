@@ -423,6 +423,29 @@ void DOMWindow::didSecureTransitionTo(Document& document)
     m_performance = nullptr;
 }
 
+void DOMWindow::prewarmLocalStorageIfNecessary()
+{
+    auto* page = this->page();
+
+    // No need to prewarm for ephemeral sessions since the data is in memory only.
+    if (!page || page->usesEphemeralSession())
+        return;
+
+    if (!page->mainFrame().mayPrewarmLocalStorage())
+        return;
+
+    auto localStorageResult = this->localStorage();
+    if (localStorageResult.hasException())
+        return;
+
+    auto* localStorage = localStorageResult.returnValue();
+    if (!localStorage)
+        return;
+
+    if (localStorage->prewarm())
+        page->mainFrame().didPrewarmLocalStorage();
+}
+
 DOMWindow::~DOMWindow()
 {
     if (m_suspendedForDocumentSuspension)
@@ -1490,7 +1513,7 @@ RefPtr<CSSRuleList> DOMWindow::getMatchedCSSRules(Element* element, const String
         return nullptr;
 
     unsigned colonStart = pseudoElement[0] == ':' ? (pseudoElement[1] == ':' ? 2 : 1) : 0;
-    CSSSelector::PseudoElementType pseudoType = CSSSelector::parsePseudoElementType(pseudoElement.substringSharingImpl(colonStart));
+    auto pseudoType = CSSSelector::parsePseudoElementType(StringView { pseudoElement }.substring(colonStart));
     if (pseudoType == CSSSelector::PseudoElementUnknown && !pseudoElement.isEmpty())
         return nullptr;
 
