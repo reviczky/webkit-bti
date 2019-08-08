@@ -5,13 +5,13 @@ Index: webkitgtk/Source/cmake/GStreamerChecks.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/GStreamerChecks.cmake
 +++ webkitgtk/Source/cmake/GStreamerChecks.cmake
-@@ -37,7 +37,8 @@ if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
-             message(FATAL_ERROR "GStreamer 1.10 is needed for USE_GSTREAMER_GL.")
-         else ()
-             if (NOT PC_GSTREAMER_GL_FOUND)
--                message(FATAL_ERROR "GStreamerGL is needed for USE_GSTREAMER_GL.")
-+                set(USE_GSTREAMER_GL OFF)
-+                message(STATUS "GStreamerGL is needed for USE_GSTREAMER_GL.")
-             endif ()
-         endif ()
+@@ -31,7 +31,8 @@ if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
      endif ()
+ 
+     if (USE_GSTREAMER_GL AND NOT PC_GSTREAMER_GL_FOUND)
+-        message(FATAL_ERROR "GStreamerGL is needed for USE_GSTREAMER_GL.")
++        set(USE_GSTREAMER_GL OFF)
++        message(STATUS "GStreamerGL is needed for USE_GSTREAMER_GL.")
+     endif ()
+ 
+     SET_AND_EXPOSE_TO_BUILD(USE_GSTREAMER TRUE)
