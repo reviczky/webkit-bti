@@ -33,6 +33,7 @@ set(TestWTF_SOURCES
     Tests/WTF/Condition.cpp
     Tests/WTF/CrossThreadCopier.cpp
     Tests/WTF/CrossThreadTask.cpp
+    Tests/WTF/DataMutex.cpp
     Tests/WTF/DateMath.cpp
     Tests/WTF/Deque.cpp
     Tests/WTF/EnumTraits.cpp
@@ -223,6 +224,7 @@ if (ENABLE_WEBKIT)
         Tests/WebKit/NewFirstVisuallyNonEmptyLayoutFrames.cpp
         Tests/WebKit/PageLoadBasic.cpp
         Tests/WebKit/PageLoadDidChangeLocationWithinPageForFrame.cpp
+        Tests/WebKit/PageLoadState.cpp
         Tests/WebKit/ParentFrame.cpp
         Tests/WebKit/PendingAPIRequestURL.cpp
         Tests/WebKit/PreventEmptyUserAgent.cpp
