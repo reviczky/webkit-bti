@@ -11346,7 +11346,6 @@ private:
 
         LValue scope = lowCell(m_graph.varArgChild(m_node, 1));
         SymbolTable* table = m_node->castOperand<SymbolTable*>();
-        ASSERT(table == m_graph.varArgChild(m_node, 0)->castConstant<SymbolTable*>(vm()));
         RegisteredStructure structure = m_graph.registerStructure(m_graph.globalObjectFor(m_node->origin.semantic)->activationStructure());
 
         LBasicBlock slowPath = m_out.newBlock();
@@ -12581,16 +12580,17 @@ private:
 
         unsigned argumentCountIncludingThis = signature->argumentCount + 1;
         LValue result;
-        assertIsTaggedWith(reinterpret_cast<void*>(signature->unsafeFunction), CFunctionPtrTag);
+        DOMJIT::FunctionWithoutTypeCheck function = signature->functionWithoutTypeCheck;
+        assertIsTaggedWith(function, CFunctionPtrTag);
         switch (argumentCountIncludingThis) {
         case 1:
-            result = vmCall(Int64, m_out.operation(reinterpret_cast<J_JITOperation_EP>(signature->unsafeFunction)), m_callFrame, operands[0]);
+            result = vmCall(Int64, m_out.operation(reinterpret_cast<J_JITOperation_EP>(function)), m_callFrame, operands[0]);
             break;
         case 2:
-            result = vmCall(Int64, m_out.operation(reinterpret_cast<J_JITOperation_EPP>(signature->unsafeFunction)), m_callFrame, operands[0], operands[1]);
+            result = vmCall(Int64, m_out.operation(reinterpret_cast<J_JITOperation_EPP>(function)), m_callFrame, operands[0], operands[1]);
             break;
         case 3:
-            result = vmCall(Int64, m_out.operation(reinterpret_cast<J_JITOperation_EPPP>(signature->unsafeFunction)), m_callFrame, operands[0], operands[1], operands[2]);
+            result = vmCall(Int64, m_out.operation(reinterpret_cast<J_JITOperation_EPPP>(function)), m_callFrame, operands[0], operands[1], operands[2]);
             break;
         default:
             RELEASE_ASSERT_NOT_REACHED();
