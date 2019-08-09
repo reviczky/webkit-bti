@@ -4,6 +4,15 @@ webkit2gtk (2.25.4-1) UNRELEASED; urgency=medium
   * Refresh all patches.
   * debian/source/lintian-overrides:
     + Update source-is-missing override.
+  * Use the CLoop Javascript interpreter in i386 and stop telling gcc to
+    use SSE2 instructions (Closes: #930935).
+    + debian/rules:
+      - Build with -DENABLE_JIT=OFF -DENABLE_C_LOOP=ON and stop using
+        -msse2 -mfpmath=sse.
+    + debian/patches/dont-detect-sse2.patch:
+      - Don't check for SSE2 support.
+    + debian/NEWS:
+      - Remove item about the requirement to have an SSE2-capable CPU.
   * debian/control:
     + Recommend gstreamer1.0-libav. This package allows the user to play
       most internet videos (Closes: #870814).
