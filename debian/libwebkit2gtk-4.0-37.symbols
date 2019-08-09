@@ -4,12 +4,15 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  WebProcessMainUnix@Base 2.5.3
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
- (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE6s_dataE@Base 2.21.1
- (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_objectE@Base 2.19.6
- (optional)_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE10_M_replaceEmmPKcm@Base 2.25.1
- (optional)_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE14_M_replace_auxEmmmc@Base 2.25.1
- (optional)_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_appendEPKcm@Base 2.25.1
- (optional)_ZZN7bmalloc10vmPageSizeEvE6cached@Base 2.19.6
+ (c++|optional|arch-bits=32)"std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_append(char const*, unsigned int)@Base" 2.25.1
+ (c++|optional|arch-bits=32)"std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace(unsigned int, unsigned int, char const*, unsigned int)@Base" 2.25.1
+ (c++|optional|arch-bits=32)"std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace_aux(unsigned int, unsigned int, unsigned int, char)@Base" 2.25.1
+ (c++|optional|arch-bits=64)"std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_append(char const*, unsigned long)@Base" 2.25.1
+ (c++|optional|arch-bits=64)"std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace(unsigned long, unsigned long, char const*, unsigned long)@Base" 2.25.1
+ (c++|optional|arch-bits=64)"std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace_aux(unsigned long, unsigned long, unsigned long, char)@Base" 2.25.1
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSDeallocatorEntry<bmalloc::IsoConfig<40u> > >::s_data@Base" 2.21.1
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSDeallocatorEntry<bmalloc::IsoConfig<40u> > >::s_object@Base" 2.19.6
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::vmPageSize()::cached@Base" 2.19.6
  webkit_accessible_get_type@Base 2.24.2
  webkit_accessible_hyperlink_get_type@Base 2.24.2
  webkit_application_info_get_name@Base 2.17.90
@@ -52,6 +55,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_back_forward_list_item_get_type@Base 2.5.3
  webkit_back_forward_list_item_get_uri@Base 2.5.3
  webkit_cache_model_get_type@Base 2.5.3
+ webkit_cached_resolver_get_type@Base 2.25.3
  webkit_color_chooser_request_cancel@Base 2.8.1
  webkit_color_chooser_request_finish@Base 2.8.1
  webkit_color_chooser_request_get_element_rectangle@Base 2.8.1
