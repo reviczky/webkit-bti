@@ -1,4 +1,4 @@
-webkit2gtk (2.25.4-1) UNRELEASED; urgency=medium
+webkit2gtk (2.25.4-1) experimental; urgency=medium
 
   * New upstream development release.
   * Refresh all patches.
@@ -28,7 +28,7 @@ webkit2gtk (2.25.4-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 26 Jun 2019 12:14:40 +0300
+ -- Alberto Garcia <berto@igalia.com>  Fri, 09 Aug 2019 11:52:26 +0200
 
 webkit2gtk (2.25.2-1) experimental; urgency=medium
 
