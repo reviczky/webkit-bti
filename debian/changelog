@@ -24,6 +24,7 @@ webkit2gtk (2.25.4-1) UNRELEASED; urgency=medium
   * debian/control:
     + Recommend gstreamer1.0-libav. This package allows the user to play
       most internet videos (Closes: #870814).
+    + Update Standards-Version to 4.4.0 (no changes).
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update symbols.
 
