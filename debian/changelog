@@ -13,6 +13,14 @@ webkit2gtk (2.25.4-1) UNRELEASED; urgency=medium
       - Don't check for SSE2 support.
     + debian/NEWS:
       - Remove item about the requirement to have an SSE2-capable CPU.
+  * WebKitGTK 2.25.3 no longer ships the GTK 2 plugin process:
+    + debian/control:
+      - Drop build dependency on libgtk2.0-dev.
+      - Remove the libwebkit2gtk-4.0-37-gtk2 package.
+    + debian/NEWS:
+      - Add item explaining the removal of the GTK 2 plugin process.
+    + debian/libwebkit2gtk-4.0-37-gtk2.install:
+      - Drop this file.
   * debian/control:
     + Recommend gstreamer1.0-libav. This package allows the user to play
       most internet videos (Closes: #870814).
