@@ -378,13 +378,15 @@ void ScriptController::disableWebAssembly(const String& errorMessage)
     jsWindowProxy->window()->setWebAssemblyEnabled(false, errorMessage);
 }
 
-bool ScriptController::canAccessFromCurrentOrigin(Frame* frame)
+bool ScriptController::canAccessFromCurrentOrigin(Frame* frame, Document& accessingDocument)
 {
     auto* state = JSExecState::currentState();
 
-    // If the current state is null we're in a call path where the DOM security check doesn't apply (eg. parser).
-    if (!state)
-        return true;
+    // If the current state is null we should use the accessing document for the security check.
+    if (!state) {
+        auto* targetDocument = frame ? frame->document() : nullptr;
+        return targetDocument && accessingDocument.securityOrigin().canAccess(targetDocument->securityOrigin());
+    }
 
     return BindingSecurity::shouldAllowAccessToFrame(state, frame);
 }
@@ -620,11 +622,17 @@ bool ScriptController::executeIfJavaScriptURL(const URL& url, ShouldReplaceDocum
     if (shouldReplaceDocumentIfJavaScriptURL == ReplaceDocumentIfJavaScriptURL) {
         // We're still in a frame, so there should be a DocumentLoader.
         ASSERT(m_frame.document()->loader());
-        
-        // DocumentWriter::replaceDocument can cause the DocumentLoader to get deref'ed and possible destroyed,
+
+        // Signal to FrameLoader to disable navigations within this frame while replacing it with the result of executing javascript
+        // FIXME: https://bugs.webkit.org/show_bug.cgi?id=200523
+        // The only reason we do a nestable save/restore of this flag here is because we sometimes nest javascript: url loads as
+        // some will load synchronously. We'd like to remove those synchronous loads and then change this.
+        SetForScope<bool> willBeReplaced(m_willReplaceWithResultOfExecutingJavascriptURL, true);
+
+        // DocumentWriter::replaceDocumentWithResultOfExecutingJavascriptURL can cause the DocumentLoader to get deref'ed and possible destroyed,
         // so protect it with a RefPtr.
         if (RefPtr<DocumentLoader> loader = m_frame.document()->loader())
-            loader->writer().replaceDocument(scriptResult, ownerDocument.get());
+            loader->writer().replaceDocumentWithResultOfExecutingJavascriptURL(scriptResult, ownerDocument.get());
     }
     return true;
 }

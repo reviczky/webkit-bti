@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitWebsiteDataManager: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitSecurityOrigin.html" title="WebKitSecurityOrigin">
 <link rel="next" href="WebKitWebsiteData.html" title="WebKitWebsiteData">
-<meta name="generator" content="GTK-Doc V1.29.1 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.31 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -186,48 +186,48 @@
 <td class="property_type">
 <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--base-cache-directory" title="The “base-cache-directory” property">base-cache-directory</a></td>
-<td class="property_flags">Read / Write / Construct Only</td>
+<td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
 <td class="property_type">
 <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--base-data-directory" title="The “base-data-directory” property">base-data-directory</a></td>
-<td class="property_flags">Read / Write / Construct Only</td>
+<td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
 <td class="property_type">
 <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--disk-cache-directory" title="The “disk-cache-directory” property">disk-cache-directory</a></td>
-<td class="property_flags">Read / Write / Construct Only</td>
+<td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
 <td class="property_type">
 <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--indexeddb-directory" title="The “indexeddb-directory” property">indexeddb-directory</a></td>
-<td class="property_flags">Read / Write / Construct Only</td>
+<td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--is-ephemeral" title="The “is-ephemeral” property">is-ephemeral</a></td>
-<td class="property_flags">Read / Write / Construct Only</td>
+<td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
 <td class="property_type">
 <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--local-storage-directory" title="The “local-storage-directory” property">local-storage-directory</a></td>
-<td class="property_flags">Read / Write / Construct Only</td>
+<td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
 <td class="property_type">
 <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--offline-application-cache-directory" title="The “offline-application-cache-directory” property">offline-application-cache-directory</a></td>
-<td class="property_flags">Read / Write / Construct Only</td>
+<td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
 <td class="property_type">
 <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--websql-directory" title="The “websql-directory” property">websql-directory</a></td>
-<td class="property_flags">Read / Write / Construct Only</td>
+<td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 </tbody>
 </table></div>
@@ -931,7 +931,8 @@ webkit_website_data_manager_clear_finish
 <pre class="programlisting">  “base-cache-directory”     <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The base directory for Website cache. This is used as a base directory
 for any Website cache when no specific cache directory has been provided.</p>
-<p>Flags: Read / Write / Construct Only</p>
+<p>Owner: WebKitWebsiteDataManager</p>
+<p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
 <p class="since">Since: <a class="link" href="api-index-2-10.html#api-index-2.10">2.10</a></p>
 </div>
@@ -941,7 +942,8 @@ for any Website cache when no specific cache directory has been provided.</p>
 <pre class="programlisting">  “base-data-directory”      <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The base directory for Website data. This is used as a base directory
 for any Website data when no specific data directory has been provided.</p>
-<p>Flags: Read / Write / Construct Only</p>
+<p>Owner: WebKitWebsiteDataManager</p>
+<p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
 <p class="since">Since: <a class="link" href="api-index-2-10.html#api-index-2.10">2.10</a></p>
 </div>
@@ -950,7 +952,8 @@ for any Website data when no specific data directory has been provided.</p>
 <a name="WebKitWebsiteDataManager--disk-cache-directory"></a><h3>The <code class="literal">“disk-cache-directory”</code> property</h3>
 <pre class="programlisting">  “disk-cache-directory”     <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The directory where HTTP disk cache will be stored.</p>
-<p>Flags: Read / Write / Construct Only</p>
+<p>Owner: WebKitWebsiteDataManager</p>
+<p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
 <p class="since">Since: <a class="link" href="api-index-2-10.html#api-index-2.10">2.10</a></p>
 </div>
@@ -959,7 +962,8 @@ for any Website data when no specific data directory has been provided.</p>
 <a name="WebKitWebsiteDataManager--indexeddb-directory"></a><h3>The <code class="literal">“indexeddb-directory”</code> property</h3>
 <pre class="programlisting">  “indexeddb-directory”      <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The directory where IndexedDB databases will be stored.</p>
-<p>Flags: Read / Write / Construct Only</p>
+<p>Owner: WebKitWebsiteDataManager</p>
+<p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
 <p class="since">Since: <a class="link" href="api-index-2-10.html#api-index-2.10">2.10</a></p>
 </div>
@@ -971,7 +975,8 @@ for any Website data when no specific data directory has been provided.</p>
 handles all websites data as non-persistent, and nothing will be written to the client
 storage. Note that if you create an ephemeral <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a> all other construction
 parameters to configure data directories will be ignored.</p>
-<p>Flags: Read / Write / Construct Only</p>
+<p>Owner: WebKitWebsiteDataManager</p>
+<p>Flags: Read / Write / Construct Only</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
 </div>
@@ -980,7 +985,8 @@ parameters to configure data directories will be ignored.</p>
 <a name="WebKitWebsiteDataManager--local-storage-directory"></a><h3>The <code class="literal">“local-storage-directory”</code> property</h3>
 <pre class="programlisting">  “local-storage-directory”  <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The directory where local storage data will be stored.</p>
-<p>Flags: Read / Write / Construct Only</p>
+<p>Owner: WebKitWebsiteDataManager</p>
+<p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
 <p class="since">Since: <a class="link" href="api-index-2-10.html#api-index-2.10">2.10</a></p>
 </div>
@@ -989,7 +995,8 @@ parameters to configure data directories will be ignored.</p>
 <a name="WebKitWebsiteDataManager--offline-application-cache-directory"></a><h3>The <code class="literal">“offline-application-cache-directory”</code> property</h3>
 <pre class="programlisting">  “offline-application-cache-directory” <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The directory where offline web application cache will be stored.</p>
-<p>Flags: Read / Write / Construct Only</p>
+<p>Owner: WebKitWebsiteDataManager</p>
+<p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
 <p class="since">Since: <a class="link" href="api-index-2-10.html#api-index-2.10">2.10</a></p>
 </div>
@@ -1002,7 +1009,8 @@ parameters to configure data directories will be ignored.</p>
 <p><code class="literal">WebKitWebsiteDataManager:websql-directory</code> has been deprecated since version 2.24. and should not be used in newly-written code.</p>
 <p>WebSQL is no longer supported. Use IndexedDB instead.</p>
 </div>
-<p>Flags: Read / Write / Construct Only</p>
+<p>Owner: WebKitWebsiteDataManager</p>
+<p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
 <p class="since">Since: <a class="link" href="api-index-2-10.html#api-index-2.10">2.10</a></p>
 </div>
@@ -1013,6 +1021,6 @@ parameters to configure data directories will be ignored.</p>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.29.1</div>
+<hr>Generated by GTK-Doc V1.31</div>
 </body>
 </html>
