@@ -4,15 +4,15 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  WebProcessMainUnix@Base 2.5.3
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
- (optional)_ZN7bmalloc10PerProcessINS_12IsoTLSLayoutEE6s_dataE@Base 2.23.90
- (optional)_ZN7bmalloc10PerProcessINS_12IsoTLSLayoutEE8s_objectE@Base 2.23.90
- (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE6s_dataE@Base 2.21.1
- (optional)_ZN7bmalloc10PerProcessINS_22IsoTLSDeallocatorEntryINS_9IsoConfigILj40EEEEEE8s_objectE@Base 2.19.6
- (optional)_ZN7bmalloc10PerProcessINS_6VMHeapEE6s_dataE@Base 2.23.90
- (optional)_ZN7bmalloc10PerProcessINS_6VMHeapEE8s_objectE@Base 2.23.90
- (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE6s_dataE@Base 2.21.1
- (optional)_ZN7bmalloc10PerProcessINS_9ScavengerEE8s_objectE@Base 2.21.1
- (optional)_ZZN7bmalloc10vmPageSizeEvE6cached@Base 2.19.6
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSDeallocatorEntry<bmalloc::IsoConfig<40u> > >::s_data@Base" 2.21.1
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSDeallocatorEntry<bmalloc::IsoConfig<40u> > >::s_object@Base" 2.19.6
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSLayout>::s_data@Base" 2.23.90
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSLayout>::s_object@Base" 2.23.90
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::Scavenger>::s_data@Base" 2.21.1
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::Scavenger>::s_object@Base" 2.21.1
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::VMHeap>::s_data@Base" 2.23.90
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::VMHeap>::s_object@Base" 2.23.90
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::vmPageSize()::cached@Base" 2.19.6
  webkit_accessible_get_type@Base 2.24.2
  webkit_accessible_hyperlink_get_type@Base 2.24.2
  webkit_application_info_get_name@Base 2.17.90
