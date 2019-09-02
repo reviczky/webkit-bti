@@ -54,7 +54,6 @@ endif
 
 # openjpeg2 is not in Ubuntu main yet https://launchpad.net/bugs/711061
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
-	EXTRA_CMAKE_ARGUMENTS += -DUSE_OPENJPEG=OFF
 	CPPFLAGS += -DUSER_AGENT_GTK_DISTRIBUTOR_NAME='"Ubuntu"'
 else
 	# gstreamer1.0-libav is not in Ubuntu "main"
@@ -74,6 +73,8 @@ override_dh_auto_configure:
 	   -DCMAKE_CXX_FLAGS_RELEASE="" \
 	   -DCMAKE_CXX_FLAGS_DEBUG="" \
 	   -DENABLE_MINIBROWSER=ON \
+	   -DENABLE_MEDIA_SOURCE=OFF \
+	   -DUSE_OPENJPEG=OFF \
 	   $(EXTRA_CMAKE_ARGUMENTS)
 
 # Create a dummy doc directory in case the "nodoc" build option is set
