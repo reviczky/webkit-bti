@@ -134,7 +134,7 @@ using namespace HTMLNames;
 
 RenderImage::RenderImage(Element& element, RenderStyle&& style, StyleImage* styleImage, const float imageDevicePixelRatio)
     : RenderReplaced(element, WTFMove(style), IntSize())
-    , m_imageResource(styleImage ? std::make_unique<RenderImageResourceStyleImage>(*styleImage) : std::make_unique<RenderImageResource>())
+    , m_imageResource(styleImage ? makeUnique<RenderImageResourceStyleImage>(*styleImage) : makeUnique<RenderImageResource>())
     , m_imageDevicePixelRatio(imageDevicePixelRatio)
 {
     updateAltText();
@@ -144,7 +144,7 @@ RenderImage::RenderImage(Element& element, RenderStyle&& style, StyleImage* styl
 
 RenderImage::RenderImage(Document& document, RenderStyle&& style, StyleImage* styleImage)
     : RenderReplaced(document, WTFMove(style), IntSize())
-    , m_imageResource(styleImage ? std::make_unique<RenderImageResourceStyleImage>(*styleImage) : std::make_unique<RenderImageResource>())
+    , m_imageResource(styleImage ? makeUnique<RenderImageResourceStyleImage>(*styleImage) : makeUnique<RenderImageResource>())
 {
 }
 
@@ -469,11 +469,7 @@ void RenderImage::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paintOf
                     centerY = 0;
                 imageOffset = LayoutSize(leftBorder + leftPad + centerX + missingImageBorderWidth, topBorder + topPad + centerY + missingImageBorderWidth);
 
-                ImageOrientationDescription orientationDescription(shouldRespectImageOrientation());
-#if ENABLE(CSS_IMAGE_ORIENTATION)
-                orientationDescription.setImageOrientationEnum(style().imageOrientation());
-#endif
-                context.drawImage(*image, snapRectToDevicePixels(LayoutRect(paintOffset + imageOffset, imageSize), deviceScaleFactor), orientationDescription);
+                context.drawImage(*image, snapRectToDevicePixels(LayoutRect(paintOffset + imageOffset, imageSize), deviceScaleFactor), { imageOrientation() });
                 errorPictureDrawn = true;
             }
 
@@ -635,9 +631,8 @@ ImageDrawResult RenderImage::paintIntoRect(PaintInfo& paintInfo, const FloatRect
     if (is<BitmapImage>(image))
         downcast<BitmapImage>(*image).updateFromSettings(settings());
 
-    ImageOrientationDescription orientationDescription(shouldRespectImageOrientation(), style().imageOrientation());
     auto decodingMode = decodingModeForImageDraw(*image, paintInfo);
-    auto drawResult = paintInfo.context().drawImage(*img, rect, ImagePaintingOptions(compositeOperator, BlendMode::Normal, decodingMode, orientationDescription, interpolation));
+    auto drawResult = paintInfo.context().drawImage(*img, rect, { compositeOperator, BlendMode::Normal, decodingMode, imageOrientation(), interpolation });
     if (drawResult == ImageDrawResult::DidRequestDecoding)
         imageResource().cachedImage()->addClientWaitingForAsyncDecoding(*this);
 

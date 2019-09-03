@@ -125,6 +125,42 @@ static void setAllDefersLoading(const ResourceLoaderMap& loaders, bool defers)
         loader->setDefersLoading(defers);
 }
 
+static bool shouldPendingCachedResourceLoadPreventPageCache(CachedResource& cachedResource)
+{
+    if (!cachedResource.isLoading())
+        return false;
+
+    switch (cachedResource.type()) {
+    case CachedResource::Type::ImageResource:
+    case CachedResource::Type::Icon:
+    case CachedResource::Type::Beacon:
+    case CachedResource::Type::Ping:
+    case CachedResource::Type::LinkPrefetch:
+        return false;
+    case CachedResource::Type::MainResource:
+    case CachedResource::Type::CSSStyleSheet:
+    case CachedResource::Type::Script:
+    case CachedResource::Type::FontResource:
+#if ENABLE(SVG_FONTS)
+    case CachedResource::Type::SVGFontResource:
+#endif
+    case CachedResource::Type::MediaResource:
+    case CachedResource::Type::RawResource:
+    case CachedResource::Type::SVGDocumentResource:
+#if ENABLE(XSLT)
+    case CachedResource::Type::XSLStyleSheet:
+#endif
+#if ENABLE(VIDEO_TRACK)
+    case CachedResource::Type::TextTrackResource:
+#endif
+#if ENABLE(APPLICATION_MANIFEST)
+    case CachedResource::Type::ApplicationManifest:
+#endif
+        break;
+    };
+    return !cachedResource.areAllClientsXMLHttpRequests();
+}
+
 static bool areAllLoadersPageCacheAcceptable(const ResourceLoaderMap& loaders)
 {
     for (auto& loader : copyToVector(loaders.values())) {
@@ -137,7 +173,7 @@ static bool areAllLoadersPageCacheAcceptable(const ResourceLoaderMap& loaders)
 
         // Only image and XHR loads do not prevent the page from entering the PageCache.
         // All non-image loads will prevent the page from entering the PageCache.
-        if (cachedResource->isLoading() && !cachedResource->isImage() && !cachedResource->areAllClientsXMLHttpRequests())
+        if (shouldPendingCachedResourceLoadPreventPageCache(*cachedResource))
             return false;
     }
     return true;
@@ -153,7 +189,7 @@ DocumentLoader::DocumentLoader(const ResourceRequest& request, const SubstituteD
     , m_originalSubstituteDataWasValid(substituteData.isValid())
     , m_substituteResourceDeliveryTimer(*this, &DocumentLoader::substituteResourceDeliveryTimerFired)
     , m_dataLoadTimer(*this, &DocumentLoader::handleSubstituteDataLoadNow)
-    , m_applicationCacheHost(std::make_unique<ApplicationCacheHost>(*this))
+    , m_applicationCacheHost(makeUnique<ApplicationCacheHost>(*this))
 {
 }
 
@@ -1300,7 +1336,7 @@ uint64_t DocumentLoader::loadApplicationManifest()
     if (manifestURL.isEmpty() || !manifestURL.isValid())
         return 0;
 
-    auto manifestLoader = std::make_unique<ApplicationManifestLoader>(*this, manifestURL, useCredentials);
+    auto manifestLoader = makeUnique<ApplicationManifestLoader>(*this, manifestURL, useCredentials);
     auto* rawManifestLoader = manifestLoader.get();
     auto callbackID = nextCallbackID++;
     m_applicationManifestLoaders.set(WTFMove(manifestLoader), callbackID);
@@ -1391,7 +1427,7 @@ void DocumentLoader::setArchive(Ref<Archive>&& archive)
 void DocumentLoader::addAllArchiveResources(Archive& archive)
 {
     if (!m_archiveResourceCollection)
-        m_archiveResourceCollection = std::make_unique<ArchiveResourceCollection>();
+        m_archiveResourceCollection = makeUnique<ArchiveResourceCollection>();
     m_archiveResourceCollection->addAllResources(archive);
 }
 
@@ -1400,7 +1436,7 @@ void DocumentLoader::addAllArchiveResources(Archive& archive)
 void DocumentLoader::addArchiveResource(Ref<ArchiveResource>&& resource)
 {
     if (!m_archiveResourceCollection)
-        m_archiveResourceCollection = std::make_unique<ArchiveResourceCollection>();
+        m_archiveResourceCollection = makeUnique<ArchiveResourceCollection>();
     m_archiveResourceCollection->addResource(WTFMove(resource));
 }
 
@@ -1682,8 +1718,24 @@ void DocumentLoader::addSubresourceLoader(ResourceLoader* loader)
     if (loader->options().applicationCacheMode == ApplicationCacheMode::Bypass)
         return;
 
-    // A page in the PageCache or about to enter PageCache should not be able to start loads.
-    ASSERT_WITH_SECURITY_IMPLICATION(!document() || document()->pageCacheState() == Document::NotInPageCache);
+#if !ASSERT_DISABLED
+    if (document()) {
+        switch (document()->pageCacheState()) {
+        case Document::NotInPageCache:
+            break;
+        case Document::AboutToEnterPageCache: {
+            // A page about to enter PageCache should only be able to start ping loads.
+            auto* cachedResource = MemoryCache::singleton().resourceForRequest(loader->request(), loader->frameLoader()->frame().page()->sessionID());
+            ASSERT(cachedResource && CachedResource::shouldUsePingLoad(cachedResource->type()));
+            break;
+        }
+        case Document::InPageCache:
+            // A page in the PageCache should not be able to start loads.
+            ASSERT_NOT_REACHED();
+            break;
+        }
+    }
+#endif
 
     m_subresourceLoaders.add(loader->identifier(), loader);
 }
@@ -1911,7 +1963,7 @@ void DocumentLoader::loadMainResource(ResourceRequest&& request)
         // If the load was aborted by clearing m_request, it's possible the ApplicationCacheHost
         // is now in a state where starting an empty load will be inconsistent. Replace it with
         // a new ApplicationCacheHost.
-        m_applicationCacheHost = std::make_unique<ApplicationCacheHost>(*this);
+        m_applicationCacheHost = makeUnique<ApplicationCacheHost>(*this);
         maybeLoadEmpty();
         return;
     }
@@ -2070,7 +2122,7 @@ void DocumentLoader::didGetLoadDecisionForIcon(bool decision, uint64_t loadIdent
         return;
     }
 
-    auto iconLoader = std::make_unique<IconLoader>(*this, icon.url);
+    auto iconLoader = makeUnique<IconLoader>(*this, icon.url);
     auto* rawIconLoader = iconLoader.get();
     m_iconLoaders.set(WTFMove(iconLoader), newCallbackID);
 

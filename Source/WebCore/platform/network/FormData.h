@@ -20,6 +20,7 @@
 #pragma once
 
 #include "BlobData.h"
+#include <pal/SessionID.h>
 #include <wtf/Forward.h>
 #include <wtf/RefCounted.h>
 #include <wtf/URL.h>
@@ -29,7 +30,7 @@
 
 namespace WebCore {
 
-class BlobRegistry;
+class BlobRegistryImpl;
 class DOMFormData;
 class File;
 class SharedBuffer;
@@ -50,7 +51,8 @@ struct FormDataElement {
     explicit FormDataElement(const URL& blobURL)
         : data(EncodedBlobData { blobURL }) { }
 
-    uint64_t lengthInBytes() const;
+    uint64_t lengthInBytes(BlobRegistryImpl*) const;
+    uint64_t lengthInBytes(PAL::SessionID) const;
 
     FormDataElement isolatedCopy() const;
 
@@ -219,7 +221,7 @@ public:
 
     // Resolve all blob references so we only have file and data.
     // If the FormData has no blob references to resolve, this is returned.
-    WEBCORE_EXPORT Ref<FormData> resolveBlobReferences(BlobRegistry&);
+    WEBCORE_EXPORT Ref<FormData> resolveBlobReferences(BlobRegistryImpl*);
 
     WEBCORE_EXPORT FormDataForUpload prepareForUpload();
 
@@ -249,7 +251,7 @@ public:
         return FormURLEncoded;
     }
 
-    uint64_t lengthInBytes() const;
+    uint64_t lengthInBytes(PAL::SessionID) const;
 
     WEBCORE_EXPORT URL asBlobURL() const;
 

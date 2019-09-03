@@ -70,6 +70,7 @@ static String gcTimerString(MonotonicTime timerFireDate, MonotonicTime now)
 static const float gFontSize = 14;
 
 class ResourceUsageOverlayPainter final : public GraphicsLayerClient {
+    WTF_MAKE_FAST_ALLOCATED;
 public:
     ResourceUsageOverlayPainter(ResourceUsageOverlay& overlay)
         : m_overlay(overlay)
@@ -132,7 +133,7 @@ private:
 
 void ResourceUsageOverlay::platformInitialize()
 {
-    m_overlayPainter = std::make_unique<ResourceUsageOverlayPainter>(*this);
+    m_overlayPainter = makeUnique<ResourceUsageOverlayPainter>(*this);
     m_paintLayer = GraphicsLayer::create(overlay().page()->chrome().client().graphicsLayerFactory(), *m_overlayPainter);
     m_paintLayer->setAnchorPoint(FloatPoint3D());
     m_paintLayer->setSize({ normalWidth, normalHeight });

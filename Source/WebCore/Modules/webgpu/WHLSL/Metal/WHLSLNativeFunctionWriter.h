@@ -27,7 +27,7 @@
 
 #if ENABLE(WEBGPU)
 
-#include <wtf/text/WTFString.h>
+#include "WHLSLMangledNames.h"
 
 namespace WebCore {
 
@@ -45,7 +45,7 @@ namespace Metal {
 
 class TypeNamer;
 
-String writeNativeFunction(AST::NativeFunctionDeclaration&, String& outputFunctionName, Intrinsics&, TypeNamer&);
+void inlineNativeFunction(StringBuilder&, AST::NativeFunctionDeclaration&, MangledVariableName returnName, const Vector<MangledVariableName>& argumentNames, Intrinsics&, TypeNamer&, std::function<MangledVariableName()>&&, Indentation<4>);
 
 }
 

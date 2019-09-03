@@ -115,6 +115,8 @@ void Label::setLocation(BytecodeGenerator& generator, unsigned location)
         CASE(OpJfalse)
         CASE(OpJeqNull)
         CASE(OpJneqNull)
+        CASE(OpJundefinedOrNull)
+        CASE(OpJnundefinedOrNull)
         CASE(OpJeq)
         CASE(OpJstricteq)
         CASE(OpJneq)
@@ -334,7 +336,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, ProgramNode* programNode, UnlinkedP
     , m_codeBlock(vm, codeBlock)
     , m_thisRegister(CallFrame::thisArgumentOffset())
     , m_codeType(GlobalCode)
-    , m_vm(&vm)
+    , m_vm(vm)
     , m_needsToUpdateArrowFunctionContext(programNode->usesArrowFunction() || programNode->usesEval())
 {
     ASSERT_UNUSED(parentScopeTDZVariables, !parentScopeTDZVariables->size());
@@ -349,8 +351,6 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, ProgramNode* programNode, UnlinkedP
     emitEnter();
 
     allocateAndEmitScope();
-
-    emitCheckTraps();
 
     const FunctionStack& functionStack = programNode->functionStack();
 
@@ -379,7 +379,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
     , m_scopeNode(functionNode)
     , m_codeBlock(vm, codeBlock)
     , m_codeType(FunctionCode)
-    , m_vm(&vm)
+    , m_vm(vm)
     , m_isBuiltinFunction(codeBlock->isBuiltinFunction())
     , m_usesNonStrictEval(codeBlock->usesEval() && !codeBlock->isStrictMode())
     // FIXME: We should be able to have tail call elimination with the profiler
@@ -396,7 +396,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
 
     allocateCalleeSaveSpace();
     
-    SymbolTable* functionSymbolTable = SymbolTable::create(*m_vm);
+    SymbolTable* functionSymbolTable = SymbolTable::create(m_vm);
     functionSymbolTable->setUsesNonStrictEval(m_usesNonStrictEval);
     int symbolTableConstantIndex = 0;
 
@@ -471,8 +471,6 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
 
     allocateAndEmitScope();
 
-    emitCheckTraps();
-    
     if (functionNameIsInScope(functionNode->ident(), functionNode->functionMode())) {
         ASSERT(parseMode != SourceParseMode::GeneratorBodyMode);
         ASSERT(!isAsyncFunctionBodyParseMode(parseMode));
@@ -548,7 +546,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
                     // notifyWrite(), since that would be cumbersome. Also, watching formal
                     // parameters when "arguments" is in play is unlikely to be super profitable.
                     // So, we just disable it.
-                    entry.disableWatching(*m_vm);
+                    entry.disableWatching(m_vm);
                     functionSymbolTable->set(NoLockingNecessary, name, entry);
                 }
                 OpPutToScope::emit(this, m_lexicalEnvironmentRegister, UINT_MAX, virtualRegisterForArgument(1 + i), GetPutInfo(ThrowIfNotFound, LocalClosureVar, InitializationMode::NotInitialization), SymbolTableOrScopeDepth::symbolTable(VirtualRegister { symbolTableConstantIndex }), offset.offset());
@@ -665,7 +663,9 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
     }
 
 
-    m_newTargetRegister = addVar();
+    if (functionNode->needsNewTargetRegisterForThisScope() || isNewTargetUsedInInnerArrowFunction() || codeBlock->usesEval())
+        m_newTargetRegister = addVar();
+
     switch (parseMode) {
     case SourceParseMode::GeneratorWrapperFunctionMode:
     case SourceParseMode::GeneratorWrapperMethodMode:
@@ -723,14 +723,16 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
     case SourceParseMode::AsyncArrowFunctionBodyMode:
     case SourceParseMode::GeneratorBodyMode: {
         // |this| is already filled correctly before here.
-        emitLoad(m_newTargetRegister, jsUndefined());
+        if (m_newTargetRegister)
+            emitLoad(m_newTargetRegister, jsUndefined());
         break;
     }
 
     default: {
         if (SourceParseMode::ArrowFunctionMode != parseMode) {
             if (isConstructor()) {
-                move(m_newTargetRegister, &m_thisRegister);
+                if (m_newTargetRegister)
+                    move(m_newTargetRegister, &m_thisRegister);
                 if (constructorKind() == ConstructorKind::Extends) {
                     moveEmptyValue(&m_thisRegister);
                 } else
@@ -770,7 +772,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
         if (functionNode->usesThis() || functionNode->usesSuperProperty())
             emitLoadThisFromArrowFunctionLexicalEnvironment();
 
-        if (m_scopeNode->usesNewTarget() || m_scopeNode->usesSuperCall())
+        if (m_scopeNode->needsNewTargetRegisterForThisScope())
             emitLoadNewTargetFromArrowFunctionLexicalEnvironment();
     }
 
@@ -806,7 +808,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
         emitOutOfLineCatchHandler(thrownValue.get(), nullptr, tryFormalParametersData);
 
         // return promiseCapability.@reject(thrownValue)
-        RefPtr<RegisterID> reject = emitGetById(newTemporary(), promiseCapabilityRegister(), m_vm->propertyNames->builtinNames().rejectPrivateName());
+        RefPtr<RegisterID> reject = emitGetById(newTemporary(), promiseCapabilityRegister(), m_vm.propertyNames->builtinNames().rejectPrivateName());
 
         CallArguments args(*this, nullptr, 1);
         emitLoad(args.thisRegister(), jsUndefined());
@@ -815,7 +817,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
         JSTextPosition divot(functionNode->firstLine(), functionNode->startOffset(), functionNode->lineStartOffset());
 
         RefPtr<RegisterID> result = emitCall(newTemporary(), reject.get(), NoExpectedFunction, args, divot, divot, divot, DebuggableCall::No);
-        emitReturn(emitGetById(newTemporary(), promiseCapabilityRegister(), m_vm->propertyNames->builtinNames().promisePrivateName()));
+        emitReturn(emitGetById(newTemporary(), promiseCapabilityRegister(), m_vm.propertyNames->builtinNames().promisePrivateName()));
 
         emitLabel(didNotThrow.get());
     }
@@ -827,14 +829,14 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
         if (functionNode->usesThis() || functionNode->usesSuperProperty())
             emitLoadThisFromArrowFunctionLexicalEnvironment();
     
-        if (m_scopeNode->usesNewTarget() || m_scopeNode->usesSuperCall())
+        if (m_scopeNode->needsNewTargetRegisterForThisScope())
             emitLoadNewTargetFromArrowFunctionLexicalEnvironment();
     }
     
     // Set up the lexical environment scope as the generator frame. We store the saved and resumed generator registers into this scope with the symbol keys.
     // Since they are symbol keyed, these variables cannot be reached from the usual code.
     if (isGeneratorOrAsyncFunctionBodyParseMode(parseMode)) {
-        m_generatorFrameSymbolTable.set(*m_vm, functionSymbolTable);
+        m_generatorFrameSymbolTable.set(m_vm, functionSymbolTable);
         m_generatorFrameSymbolTableIndex = symbolTableConstantIndex;
         if (m_lexicalEnvironmentRegister)
             move(generatorFrameRegister(), m_lexicalEnvironmentRegister);
@@ -858,7 +860,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, EvalNode* evalNode, UnlinkedEvalCod
     , m_codeBlock(vm, codeBlock)
     , m_thisRegister(CallFrame::thisArgumentOffset())
     , m_codeType(EvalCode)
-    , m_vm(&vm)
+    , m_vm(vm)
     , m_usesNonStrictEval(codeBlock->usesEval() && !codeBlock->isStrictMode())
     , m_needsToUpdateArrowFunctionContext(evalNode->usesArrowFunction() || evalNode->usesEval())
     , m_derivedContextType(codeBlock->derivedContextType())
@@ -876,8 +878,6 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, EvalNode* evalNode, UnlinkedEvalCod
 
     allocateAndEmitScope();
 
-    emitCheckTraps();
-    
     for (FunctionMetadataNode* function : evalNode->functionStack()) {
         m_codeBlock->addFunctionDecl(makeFunction(function));
         m_functionsToInitialize.append(std::make_pair(function, TopLevelFunctionVariable));
@@ -897,13 +897,13 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, EvalNode* evalNode, UnlinkedEvalCod
     codeBlock->adoptVariables(variables);
     codeBlock->adoptFunctionHoistingCandidates(WTFMove(hoistedFunctions));
     
-    if (evalNode->usesSuperCall() || evalNode->usesNewTarget())
+    if (evalNode->needsNewTargetRegisterForThisScope())
         m_newTargetRegister = addVar();
 
     if (codeBlock->isArrowFunctionContext() && (evalNode->usesThis() || evalNode->usesSuperProperty()))
         emitLoadThisFromArrowFunctionLexicalEnvironment();
 
-    if (evalNode->usesSuperCall() || evalNode->usesNewTarget())
+    if (evalNode->needsNewTargetRegisterForThisScope())
         emitLoadNewTargetFromArrowFunctionLexicalEnvironment();
 
     if (needsToUpdateArrowFunctionContext() && !codeBlock->isArrowFunctionContext() && !isDerivedConstructorContext()) {
@@ -921,7 +921,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, ModuleProgramNode* moduleProgramNod
     , m_codeBlock(vm, codeBlock)
     , m_thisRegister(CallFrame::thisArgumentOffset())
     , m_codeType(ModuleCode)
-    , m_vm(&vm)
+    , m_vm(vm)
     , m_usesNonStrictEval(false)
     , m_needsToUpdateArrowFunctionContext(moduleProgramNode->usesArrowFunction() || moduleProgramNode->usesEval())
 {
@@ -932,7 +932,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, ModuleProgramNode* moduleProgramNod
 
     allocateCalleeSaveSpace();
 
-    SymbolTable* moduleEnvironmentSymbolTable = SymbolTable::create(*m_vm);
+    SymbolTable* moduleEnvironmentSymbolTable = SymbolTable::create(m_vm);
     moduleEnvironmentSymbolTable->setUsesNonStrictEval(m_usesNonStrictEval);
     moduleEnvironmentSymbolTable->setScopeType(SymbolTable::ScopeType::LexicalScope);
 
@@ -962,15 +962,13 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, ModuleProgramNode* moduleProgramNod
 
     allocateAndEmitScope();
 
-    emitCheckTraps();
-    
     m_calleeRegister.setIndex(CallFrameSlot::callee);
 
     m_codeBlock->setNumParameters(1); // Allocate space for "this"
 
     // Now declare all variables.
 
-    createVariable(m_vm->propertyNames->builtinNames().metaPrivateName(), VarKind::Scope, moduleEnvironmentSymbolTable, VerifyExisting);
+    createVariable(m_vm.propertyNames->builtinNames().metaPrivateName(), VarKind::Scope, moduleEnvironmentSymbolTable, VerifyExisting);
 
     for (auto& entry : moduleProgramNode->varDeclarations()) {
         ASSERT(!entry.value.isLet() && !entry.value.isConst());
@@ -992,7 +990,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, ModuleProgramNode* moduleProgramNod
     if (shouldEmitTypeProfilerHooks())
         constantSymbolTable = addConstantValue(moduleEnvironmentSymbolTable);
     else
-        constantSymbolTable = addConstantValue(moduleEnvironmentSymbolTable->cloneScopePart(*m_vm));
+        constantSymbolTable = addConstantValue(moduleEnvironmentSymbolTable->cloneScopePart(m_vm));
 
     pushTDZVariables(lexicalVariables, TDZCheckOptimization::Optimize, TDZRequirement::UnderTDZ);
     bool isWithScope = false;
@@ -1391,17 +1389,11 @@ void BytecodeGenerator::emitEnter()
 void BytecodeGenerator::emitLoopHint()
 {
     OpLoopHint::emit(this);
-    emitCheckTraps();
 }
 
 void BytecodeGenerator::emitJump(Label& target)
 {
     OpJmp::emit(this, target.bind(this));
-}
-
-void BytecodeGenerator::emitCheckTraps()
-{
-    OpCheckTraps::emit(this);
 }
 
 void ALWAYS_INLINE BytecodeGenerator::rewind()
@@ -1481,6 +1473,9 @@ void BytecodeGenerator::emitJumpIfTrue(RegisterID* cond, Label& target)
         } else if (m_lastOpcodeID == op_neq_null && target.isForward()) {
             if (fuseTestAndJmp<OpNeqNull, OpJneqNull>(cond, target))
                 return;
+        } else if (m_lastOpcodeID == op_is_undefined_or_null && target.isForward()) {
+            if (fuseTestAndJmp<OpIsUndefinedOrNull, OpJundefinedOrNull>(cond, target))
+                return;
         }
     }
 
@@ -1528,6 +1523,9 @@ void BytecodeGenerator::emitJumpIfFalse(RegisterID* cond, Label& target)
                 return;
         } else if (m_lastOpcodeID == op_neq_null && target.isForward()) {
             if (fuseTestAndJmp<OpNeqNull, OpJeqNull>(cond, target))
+                return;
+        } else if (m_lastOpcodeID == op_is_undefined_or_null && target.isForward()) {
+            if (fuseTestAndJmp<OpIsUndefinedOrNull, OpJnundefinedOrNull>(cond, target))
                 return;
         }
     }
@@ -2009,7 +2007,7 @@ void BytecodeGenerator::pushLexicalScopeInternal(VariableEnvironment& environmen
     if (shouldEmitDebugHooks())
         environment.markAllVariablesAsCaptured();
 
-    SymbolTable* symbolTable = SymbolTable::create(*m_vm);
+    SymbolTable* symbolTable = SymbolTable::create(m_vm);
     switch (scopeType) {
     case ScopeType::CatchScope:
         symbolTable->setScopeType(SymbolTable::ScopeType::CatchScope);
@@ -2046,7 +2044,7 @@ void BytecodeGenerator::pushLexicalScopeInternal(VariableEnvironment& environmen
             newScope = addVar();
         if (!constantSymbolTable) {
             ASSERT(!shouldEmitTypeProfilerHooks());
-            constantSymbolTable = addConstantValue(symbolTable->cloneScopePart(*m_vm));
+            constantSymbolTable = addConstantValue(symbolTable->cloneScopePart(m_vm));
             symbolTableConstantIndex = constantSymbolTable->index();
         }
         if (constantSymbolTableResult)
@@ -2637,7 +2635,7 @@ RegisterID* BytecodeGenerator::emitDirectPutById(RegisterID* base, const Identif
 
     m_staticPropertyAnalyzer.putById(base, propertyIndex);
 
-    PutByIdFlags type = (putType == PropertyNode::KnownDirect || property != m_vm->propertyNames->underscoreProto) ? PutByIdIsDirect : PutByIdNone;
+    PutByIdFlags type = (putType == PropertyNode::KnownDirect || property != m_vm.propertyNames->underscoreProto) ? PutByIdIsDirect : PutByIdNone;
     OpPutById::emit(this, base, propertyIndex, value, type);
     m_codeBlock->addPropertyAccessInstruction(m_lastInstruction.offset());
     return value;
@@ -2918,7 +2916,7 @@ Optional<CompactVariableMap::Handle> BytecodeGenerator::getVariablesUnderTDZ()
         }
     }
 
-    m_cachedVariablesUnderTDZ = m_vm->m_compactVariableMap->get(environment);
+    m_cachedVariablesUnderTDZ = m_vm.m_compactVariableMap->get(environment);
     m_hasCachedVariablesUnderTDZ = !environment.isEmpty();
     if (!m_hasCachedVariablesUnderTDZ)
         return WTF::nullopt;
@@ -2948,9 +2946,9 @@ RegisterID* BytecodeGenerator::emitNewObject(RegisterID* dst)
 JSValue BytecodeGenerator::addBigIntConstant(const Identifier& identifier, uint8_t radix, bool sign)
 {
     return m_bigIntMap.ensure(BigIntMapEntry(identifier.impl(), radix, sign), [&] {
-        auto scope = DECLARE_CATCH_SCOPE(*vm());
+        auto scope = DECLARE_CATCH_SCOPE(vm());
         auto parseIntSign = sign ? JSBigInt::ParseIntSign::Signed : JSBigInt::ParseIntSign::Unsigned;
-        JSBigInt* bigIntInMap = JSBigInt::parseInt(nullptr, *vm(), identifier.string(), radix, JSBigInt::ErrorParseMode::ThrowExceptions, parseIntSign);
+        JSBigInt* bigIntInMap = JSBigInt::parseInt(nullptr, vm(), identifier.string(), radix, JSBigInt::ErrorParseMode::ThrowExceptions, parseIntSign);
         // FIXME: [ESNext] Enables a way to throw an error on ByteCodeGenerator step
         // https://bugs.webkit.org/show_bug.cgi?id=180139
         scope.assertNoException();
@@ -2975,7 +2973,7 @@ RegisterID* BytecodeGenerator::addTemplateObjectConstant(Ref<TemplateObjectDescr
 {
     auto result = m_templateObjectDescriptorSet.add(WTFMove(descriptor));
     JSTemplateObjectDescriptor* descriptorValue = m_templateDescriptorMap.ensure(endOffset, [&] {
-        return JSTemplateObjectDescriptor::create(*vm(), result.iterator->copyRef(), endOffset);
+        return JSTemplateObjectDescriptor::create(vm(), result.iterator->copyRef(), endOffset);
     }).iterator->value;
     int index = addConstantIndex();
     m_codeBlock->addConstant(descriptorValue);
@@ -3101,7 +3099,7 @@ RegisterID* BytecodeGenerator::emitNewMethodDefinition(RegisterID* dst, MethodDe
 RegisterID* BytecodeGenerator::emitNewDefaultConstructor(RegisterID* dst, ConstructorKind constructorKind, const Identifier& name,
     const Identifier& ecmaName, const SourceCode& classSource)
 {
-    UnlinkedFunctionExecutable* executable = m_vm->builtinExecutables()->createDefaultConstructor(constructorKind, name);
+    UnlinkedFunctionExecutable* executable = m_vm.builtinExecutables()->createDefaultConstructor(constructorKind, name);
     executable->setInvalidTypeProfilingOffsets();
     executable->setEcmaName(ecmaName);
     executable->setClassSource(classSource);
@@ -3136,7 +3134,7 @@ void BytecodeGenerator::emitSetFunctionNameIfNeeded(ExpressionNode* valueNode, R
         ClassExprNode* classExprNode = static_cast<ClassExprNode*>(valueNode);
         if (!classExprNode->ecmaName().isNull())
             return;
-        if (classExprNode->hasStaticProperty(m_vm->propertyNames->name))
+        if (classExprNode->hasStaticProperty(m_vm.propertyNames->name))
             return;
     } else
         return;
@@ -4457,10 +4455,8 @@ RegisterID* BytecodeGenerator::emitRestParameter(RegisterID* result, unsigned nu
 
 void BytecodeGenerator::emitRequireObjectCoercible(RegisterID* value, const String& error)
 {
-    // FIXME: op_jneq_null treats "undetectable" objects as null/undefined. RequireObjectCoercible
-    // thus incorrectly throws a TypeError for interfaces like HTMLAllCollection.
     Ref<Label> target = newLabel();
-    OpJneqNull::emit(this, value, target->bind(this));
+    OpJnundefinedOrNull::emit(this, value, target->bind(this));
     emitThrowTypeError(error);
     emitLabel(target.get());
 }
@@ -4956,6 +4952,34 @@ void BytecodeGenerator::emitJumpIf(RegisterID* completionTypeRegister, Completio
 
     auto equivalenceResult = emitBinaryOp<CompareOp>(tempRegister.get(), completionTypeRegister, valueConstant, operandTypes);
     emitJumpIfTrue(equivalenceResult, jumpTarget);
+}
+
+void BytecodeGenerator::pushOptionalChainTarget()
+{
+    m_optionalChainTargetStack.append(newLabel());
+}
+
+void BytecodeGenerator::popOptionalChainTarget()
+{
+    ASSERT(m_optionalChainTargetStack.size());
+    emitLabel(m_optionalChainTargetStack.takeLast().get());
+}
+
+void BytecodeGenerator::popOptionalChainTarget(RegisterID* dst, bool isDelete)
+{
+    Ref<Label> endLabel = newLabel();
+    emitJump(endLabel.get());
+
+    popOptionalChainTarget();
+    emitLoad(dst, isDelete ? jsBoolean(true) : jsUndefined());
+
+    emitLabel(endLabel.get());
+}
+
+void BytecodeGenerator::emitOptionalCheck(RegisterID* src)
+{
+    ASSERT(m_optionalChainTargetStack.size());
+    emitJumpIfTrue(emitIsUndefinedOrNull(newTemporary(), src), m_optionalChainTargetStack.last().get());
 }
 
 void ForInContext::finalize(BytecodeGenerator& generator, UnlinkedCodeBlock* codeBlock, unsigned bodyBytecodeEndOffset)

@@ -71,7 +71,7 @@ RenderTreeUpdater::Parent::Parent(Element& element, const Style::ElementUpdates*
 
 RenderTreeUpdater::RenderTreeUpdater(Document& document)
     : m_document(document)
-    , m_generatedContent(std::make_unique<GeneratedContent>(*this))
+    , m_generatedContent(makeUnique<GeneratedContent>(*this))
     , m_builder(renderView())
 {
 }
@@ -137,10 +137,6 @@ static bool shouldCreateRenderer(const Element& element, const RenderElement& pa
 
 void RenderTreeUpdater::updateRenderTree(ContainerNode& root)
 {
-#if PLATFORM(IOS_FAMILY)
-    ContentChangeObserver::RenderTreeUpdateScope observingScope(m_document);
-#endif
-
     ASSERT(root.renderer());
     ASSERT(m_parentStack.isEmpty());
 
@@ -561,9 +557,6 @@ void RenderTreeUpdater::tearDownRenderers(Element& root, TeardownType teardownTy
             GeneratedContent::removeAfterPseudoElement(element, builder);
 
             if (auto* renderer = element.renderer()) {
-#if PLATFORM(IOS_FAMILY)
-                document.contentChangeObserver().willDestroyRenderer(element);
-#endif
                 builder.destroyAndCleanUpAnonymousWrappers(*renderer);
                 element.setRenderer(nullptr);
             }

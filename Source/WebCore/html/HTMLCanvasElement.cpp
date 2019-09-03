@@ -610,17 +610,10 @@ void HTMLCanvasElement::paint(GraphicsContext& context, const LayoutRect& r)
 
         if (shouldPaint) {
             if (hasCreatedImageBuffer()) {
-                ImageBuffer* imageBuffer = buffer();
-                if (imageBuffer) {
-                    if (m_presentedImage) {
-                        ImageOrientationDescription orientationDescription;
-#if ENABLE(CSS_IMAGE_ORIENTATION)
-                        orientationDescription.setImageOrientationEnum(renderer()->style().imageOrientation());
-#endif
-                        context.drawImage(*m_presentedImage, snappedIntRect(r), ImagePaintingOptions(orientationDescription));
-                    } else
-                        context.drawImageBuffer(*imageBuffer, snappedIntRect(r));
-                }
+                if (m_presentedImage)
+                    context.drawImage(*m_presentedImage, snappedIntRect(r), renderer()->imageOrientation());
+                else if (ImageBuffer* imageBuffer = buffer())
+                    context.drawImageBuffer(*imageBuffer, snappedIntRect(r));
             }
 
             if (isGPUBased())
@@ -739,7 +732,7 @@ ExceptionOr<void> HTMLCanvasElement::toBlob(ScriptExecutionContext& context, Ref
         RefPtr<Blob> blob;
         Vector<uint8_t> blobData = data(*imageData, encodingMIMEType, quality);
         if (!blobData.isEmpty())
-            blob = Blob::create(WTFMove(blobData), encodingMIMEType);
+            blob = Blob::create(context.sessionID(), WTFMove(blobData), encodingMIMEType);
         callback->scheduleCallback(context, WTFMove(blob));
         return { };
     }
@@ -750,7 +743,7 @@ ExceptionOr<void> HTMLCanvasElement::toBlob(ScriptExecutionContext& context, Ref
     RefPtr<Blob> blob;
     Vector<uint8_t> blobData = buffer()->toData(encodingMIMEType, quality);
     if (!blobData.isEmpty())
-        blob = Blob::create(WTFMove(blobData), encodingMIMEType);
+        blob = Blob::create(context.sessionID(), WTFMove(blobData), encodingMIMEType);
     callback->scheduleCallback(context, WTFMove(blob));
     return { };
 }
@@ -959,7 +952,7 @@ void HTMLCanvasElement::setImageBuffer(std::unique_ptr<ImageBuffer>&& buffer) co
     m_imageBuffer->context().setShadowsIgnoreTransforms(true);
     m_imageBuffer->context().setImageInterpolationQuality(defaultInterpolationQuality);
     m_imageBuffer->context().setStrokeThickness(1);
-    m_contextStateSaver = std::make_unique<GraphicsContextStateSaver>(m_imageBuffer->context());
+    m_contextStateSaver = makeUnique<GraphicsContextStateSaver>(m_imageBuffer->context());
 
     JSC::JSLockHolder lock(HTMLElement::scriptExecutionContext()->vm());
     HTMLElement::scriptExecutionContext()->vm().heap.reportExtraMemoryAllocated(memoryCost());

@@ -72,6 +72,7 @@ struct NetworkSessionCreationParameters {
     Seconds loadThrottleLatency;
     URL httpProxy;
     URL httpsProxy;
+    bool enableLegacyTLS { false };
 #endif
 #if USE(SOUP)
     String cookiePersistentStoragePath;
@@ -87,12 +88,11 @@ struct NetworkSessionCreationParameters {
     bool enableResourceLoadStatisticsLogTestingEvent { false };
     bool shouldIncludeLocalhostInResourceLoadStatistics { true };
     bool enableResourceLoadStatisticsDebugMode { false };
+    bool enableResourceLoadStatisticsNSURLSessionSwitching { true };
     bool deviceManagementRestrictionsEnabled { false };
     bool allLoadsBlockedByDeviceManagementRestrictionsForTesting { false };
     WebCore::RegistrableDomain resourceLoadStatisticsManualPrevalentResource { };
 
-    String localStorageDirectory;
-    SandboxExtension::Handle localStorageDirectoryExtensionHandle;
     String networkCacheDirectory;
     SandboxExtension::Handle networkCacheDirectoryExtensionHandle;
 };

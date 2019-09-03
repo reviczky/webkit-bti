@@ -45,10 +45,6 @@
 #include "OpenTypeVerticalData.h"
 #endif
 
-#if USE(DIRECT2D)
-#include <dwrite.h>
-#endif
-
 namespace WebCore {
 
 unsigned GlyphPage::s_count = 0;
@@ -394,7 +390,7 @@ GlyphData Font::glyphDataForCharacter(UChar32 character) const
 auto Font::ensureDerivedFontData() const -> DerivedFonts&
 {
     if (!m_derivedFontData)
-        m_derivedFontData = std::make_unique<DerivedFonts>();
+        m_derivedFontData = makeUnique<DerivedFonts>();
     return *m_derivedFontData;
 }
 

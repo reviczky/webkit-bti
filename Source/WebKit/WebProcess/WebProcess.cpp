@@ -217,12 +217,15 @@ WebProcess::WebProcess()
     m_plugInAutoStartOriginHashes.add(PAL::SessionID::defaultSessionID(), HashMap<unsigned, WallTime>());
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
-    ResourceLoadObserver::shared().setStatisticsUpdatedCallback([this] (Vector<ResourceLoadStatistics>&& statistics) {
+    ResourceLoadObserver::shared().setStatisticsUpdatedCallback([this] (auto&& statistics) {
         ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::ResourceLoadStatisticsUpdated(WTFMove(statistics)), 0);
     });
 
     ResourceLoadObserver::shared().setRequestStorageAccessUnderOpenerCallback([this] (PAL::SessionID sessionID, const RegistrableDomain& domainInNeedOfStorageAccess, PageIdentifier openerPageID, const RegistrableDomain& openerDomain) {
         ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::RequestStorageAccessUnderOpener(sessionID, domainInNeedOfStorageAccess, openerPageID, openerDomain), 0);
+    });
+    
+    ResourceLoadObserver::shared().setLogUserInteractionNotificationCallback([this] (PAL::SessionID sessionID, const RegistrableDomain& domain) {    ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::LogUserInteraction(sessionID, domain), 0);
     });
 #endif
     
@@ -314,7 +317,7 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
             auto maintainMemoryCache = m_isSuspending && m_hasSuspendedPageProxy ? WebCore::MaintainMemoryCache::Yes : WebCore::MaintainMemoryCache::No;
             WebCore::releaseMemory(critical, synchronous, maintainPageCache, maintainMemoryCache);
         });
-#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MAX_ALLOWED >= 101200) || PLATFORM(GTK) || PLATFORM(WPE)
+#if PLATFORM(MAC) || PLATFORM(GTK) || PLATFORM(WPE)
         memoryPressureHandler.setShouldUsePeriodicMemoryMonitor(true);
         memoryPressureHandler.setMemoryKillCallback([this] () {
             WebCore::logMemoryStatisticsAtTimeOfDeath();
@@ -395,24 +398,6 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
     setShouldUseFontSmoothing(parameters.shouldUseFontSmoothing);
 
     ensureNetworkProcessConnection();
-
-#if ENABLE(RESOURCE_LOAD_STATISTICS)
-    ResourceLoadObserver::shared().setLogUserInteractionNotificationCallback([this] (PAL::SessionID sessionID, const RegistrableDomain& domain) {
-        ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::LogUserInteraction(sessionID, domain), 0);
-    });
-
-    ResourceLoadObserver::shared().setLogWebSocketLoadingNotificationCallback([this] (PAL::SessionID sessionID, const RegistrableDomain& targetDomain, const RegistrableDomain& topFrameDomain, WallTime lastSeen) {
-        ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::LogWebSocketLoading(sessionID, targetDomain, topFrameDomain, lastSeen), 0);
-    });
-    
-    ResourceLoadObserver::shared().setLogSubresourceLoadingNotificationCallback([this] (PAL::SessionID sessionID, const RegistrableDomain& targetDomain, const RegistrableDomain& topFrameDomain, WallTime lastSeen) {
-        ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::LogSubresourceLoading(sessionID, targetDomain, topFrameDomain, lastSeen), 0);
-    });
-
-    ResourceLoadObserver::shared().setLogSubresourceRedirectNotificationCallback([this] (PAL::SessionID sessionID, const RegistrableDomain& sourceDomain, const RegistrableDomain& targetDomain) {
-        ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::LogSubresourceRedirect(sessionID, sourceDomain, targetDomain), 0);
-    });
-#endif
 
     setTerminationTimeout(parameters.terminationTimeout);
 
@@ -677,7 +662,6 @@ void WebProcess::createWebPage(PageIdentifier pageID, WebPageCreationParameters&
     // It is necessary to check for page existence here since during a window.open() (or targeted
     // link) the WebPage gets created both in the synchronous handler and through the normal way. 
     auto result = m_pageMap.add(pageID, nullptr);
-    auto oldPageID = parameters.oldPageID ? parameters.oldPageID.value() : pageID;
     if (result.isNewEntry) {
         ASSERT(!result.iterator->value);
         result.iterator->value = WebPage::create(pageID, WTFMove(parameters));
@@ -688,8 +672,6 @@ void WebProcess::createWebPage(PageIdentifier pageID, WebPageCreationParameters&
     } else
         result.iterator->value->reinitializeWebPage(WTFMove(parameters));
 
-    ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::WebPageWasAdded(result.iterator->value->sessionID(), pageID, oldPageID), 0);
-
     ASSERT(result.iterator->value);
 }
 
@@ -697,7 +679,6 @@ void WebProcess::removeWebPage(PAL::SessionID sessionID, PageIdentifier pageID)
 {
     ASSERT(m_pageMap.contains(pageID));
 
-    ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::WebPageWasRemoved(sessionID, pageID), 0);
     pageWillLeaveWindow(pageID);
     m_pageMap.remove(pageID);
 
@@ -768,17 +749,17 @@ void WebProcess::didReceiveMessage(IPC::Connection& connection, IPC::Decoder& de
     LOG_ERROR("Unhandled web process message '%s:%s'", decoder.messageReceiverName().toString().data(), decoder.messageName().toString().data());
 }
 
-WebFrame* WebProcess::webFrame(uint64_t frameID) const
+WebFrame* WebProcess::webFrame(FrameIdentifier frameID) const
 {
     return m_frameMap.get(frameID);
 }
 
-void WebProcess::addWebFrame(uint64_t frameID, WebFrame* frame)
+void WebProcess::addWebFrame(FrameIdentifier frameID, WebFrame* frame)
 {
     m_frameMap.set(frameID, frame);
 }
 
-void WebProcess::removeWebFrame(uint64_t frameID)
+void WebProcess::removeWebFrame(FrameIdentifier frameID)
 {
     m_frameMap.remove(frameID);
 
@@ -1246,16 +1227,6 @@ NetworkProcessConnection& WebProcess::ensureNetworkProcessConnection()
             CRASH();
 
         m_networkProcessConnection = NetworkProcessConnection::create(connectionIdentifier);
-
-        // To recover web storage, network process needs to know active webpages to prepare session storage.
-        // FIXME: https://bugs.webkit.org/show_bug.cgi?id=198051.
-        // Webpage should be added when Storage is used, not when connection is re-established.
-        for (auto& page : m_pageMap) {
-            if (!page.value)
-                continue;
-
-            m_networkProcessConnection->connection().send(Messages::NetworkConnectionToWebProcess::WebPageWasAdded(page.value->sessionID(), page.key, page.key), 0);
-        }
     }
     
     return *m_networkProcessConnection;
@@ -1286,7 +1257,7 @@ void WebProcess::networkProcessConnectionClosed(NetworkProcessConnection* connec
     ASSERT(m_networkProcessConnection);
     ASSERT_UNUSED(connection, m_networkProcessConnection == connection);
 
-    for (auto* storageAreaMap : m_storageAreaMaps.values())
+    for (auto* storageAreaMap : copyToVector(m_storageAreaMaps.values()))
         storageAreaMap->disconnect();
 
 #if ENABLE(INDEXED_DATABASE)
@@ -1573,7 +1544,7 @@ void WebProcess::markAllLayersVolatile(WTF::Function<void(bool)>&& completionHan
     ASSERT(!m_pageMarkingLayersAsVolatileCounter);
     m_countOfPagesFailingToMarkVolatile = 0;
 
-    m_pageMarkingLayersAsVolatileCounter = std::make_unique<PageMarkingLayersAsVolatileCounter>([this, completionHandler = WTFMove(completionHandler)] (RefCounterEvent) {
+    m_pageMarkingLayersAsVolatileCounter = makeUnique<PageMarkingLayersAsVolatileCounter>([this, completionHandler = WTFMove(completionHandler)] (RefCounterEvent) {
         if (m_pageMarkingLayersAsVolatileCounter->value())
             return;
 
@@ -1674,36 +1645,22 @@ void WebProcess::nonVisibleProcessCleanupTimerFired()
 
 void WebProcess::registerStorageAreaMap(StorageAreaMap& storageAreaMap)
 {
-    ASSERT(!m_storageAreaMaps.contains(storageAreaMap.identifier()));
-    m_storageAreaMaps.set(storageAreaMap.identifier(), &storageAreaMap);
+    ASSERT(storageAreaMap.identifier());
+    ASSERT(!m_storageAreaMaps.contains(*storageAreaMap.identifier()));
+    m_storageAreaMaps.set(*storageAreaMap.identifier(), &storageAreaMap);
 }
 
 void WebProcess::unregisterStorageAreaMap(StorageAreaMap& storageAreaMap)
 {
-    ASSERT(m_storageAreaMaps.contains(storageAreaMap.identifier()));
-    ASSERT(m_storageAreaMaps.get(storageAreaMap.identifier()) == &storageAreaMap);
-    m_storageAreaMaps.remove(storageAreaMap.identifier());
+    ASSERT(storageAreaMap.identifier());
+    ASSERT(m_storageAreaMaps.contains(*storageAreaMap.identifier()));
+    ASSERT(m_storageAreaMaps.get(*storageAreaMap.identifier()) == &storageAreaMap);
+    m_storageAreaMaps.remove(*storageAreaMap.identifier());
 }
 
-StorageAreaMap* WebProcess::storageAreaMap(uint64_t identifier) const
+StorageAreaMap* WebProcess::storageAreaMap(StorageAreaIdentifier identifier) const
 {
-    ASSERT(m_storageAreaMaps.contains(identifier));
     return m_storageAreaMaps.get(identifier);
-}
-
-void WebProcess::enablePrivateBrowsingForTesting(bool enable)
-{
-    if (enable)
-        ensureLegacyPrivateBrowsingSessionInNetworkProcess();
-
-    Vector<PageIdentifier> pageIDs;
-    for (auto& page : m_pageMap) {
-        if (page.value)
-            pageIDs.append(page.key);
-    }
-
-    if (!pageIDs.isEmpty())
-        ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::WebProcessSessionChanged(enable ? PAL::SessionID::legacyPrivateSessionID() : PAL::SessionID::defaultSessionID(), pageIDs), 0);
 }
 
 void WebProcess::setResourceLoadStatisticsEnabled(bool enabled)
@@ -1838,7 +1795,7 @@ void WebProcess::setEnabledServices(bool hasImageServices, bool hasSelectionServ
 
 void WebProcess::ensureAutomationSessionProxy(const String& sessionIdentifier)
 {
-    m_automationSessionProxy = std::make_unique<WebAutomationSessionProxy>(sessionIdentifier);
+    m_automationSessionProxy = makeUnique<WebAutomationSessionProxy>(sessionIdentifier);
 }
 
 void WebProcess::destroyAutomationSessionProxy()
@@ -1871,7 +1828,7 @@ bool WebProcess::hasVisibleWebPage() const
 LibWebRTCNetwork& WebProcess::libWebRTCNetwork()
 {
     if (!m_libWebRTCNetwork)
-        m_libWebRTCNetwork = std::make_unique<LibWebRTCNetwork>();
+        m_libWebRTCNetwork = makeUnique<LibWebRTCNetwork>();
     return *m_libWebRTCNetwork;
 }
 
@@ -1882,7 +1839,7 @@ void WebProcess::establishWorkerContextConnectionToNetworkProcess(uint64_t pageG
     // by calling ensureNetworkProcessConnection. SWContextManager needs to use the same underlying IPC::Connection as the
     // NetworkProcessConnection for synchronization purposes.
     auto& ipcConnection = ensureNetworkProcessConnection().connection();
-    SWContextManager::singleton().setConnection(std::make_unique<WebSWContextManagerConnection>(ipcConnection, pageGroupID, pageID, store));
+    SWContextManager::singleton().setConnection(makeUnique<WebSWContextManagerConnection>(ipcConnection, pageGroupID, pageID, store));
 }
 
 void WebProcess::registerServiceWorkerClients()

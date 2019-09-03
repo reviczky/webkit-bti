@@ -25,15 +25,15 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     Modules/fetch/FetchLoader.h
     Modules/fetch/FetchLoaderClient.h
 
-    Modules/geolocation/Coordinates.h
     Modules/geolocation/Geolocation.h
     Modules/geolocation/GeolocationClient.h
     Modules/geolocation/GeolocationController.h
+    Modules/geolocation/GeolocationCoordinates.h
     Modules/geolocation/GeolocationError.h
     Modules/geolocation/GeolocationPosition.h
-    Modules/geolocation/Geoposition.h
+    Modules/geolocation/GeolocationPositionData.h
+    Modules/geolocation/GeolocationPositionError.h
     Modules/geolocation/PositionCallback.h
-    Modules/geolocation/PositionError.h
     Modules/geolocation/PositionErrorCallback.h
     Modules/geolocation/PositionOptions.h
 
@@ -90,7 +90,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     Modules/mediastream/DoubleRange.h
     Modules/mediastream/LongRange.h
-    Modules/mediastream/MediaDevicesEnumerationRequest.h
     Modules/mediastream/MediaStreamTrack.h
     Modules/mediastream/MediaTrackConstraints.h
     Modules/mediastream/RTCController.h
@@ -777,6 +776,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/FocusDirection.h
     page/Frame.h
     page/FrameDestructionObserver.h
+    page/FrameIdentifier.h
     page/FrameSnapshotting.h
     page/FrameTree.h
     page/FrameView.h
@@ -1064,6 +1064,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/ImageFrame.h
     platform/graphics/ImageObserver.h
     platform/graphics/ImageOrientation.h
+    platform/graphics/ImagePaintingOptions.h
     platform/graphics/ImageSource.h
     platform/graphics/ImageTypes.h
     platform/graphics/InbandTextTrackPrivate.h
@@ -1239,6 +1240,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/BreakLines.h
     rendering/ClipPathOperation.h
     rendering/ClipRect.h
+    rendering/ComplexLineLayout.h
     rendering/EventRegion.h
     rendering/FloatingObjects.h
     rendering/GapRects.h

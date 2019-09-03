@@ -74,6 +74,7 @@ template<bool isSpecialCharacter(UChar), typename CharacterType> bool isAllSpeci
 #if STRING_STATS
 
 struct StringStats {
+    WTF_MAKE_STRUCT_FAST_ALLOCATED;
     void add8BitString(unsigned length, bool isSubString = false)
     {
         ++m_totalNumberStrings;
@@ -126,12 +127,6 @@ struct StringStats {
 #define STRING_STATS_DEREF_STRING(string) ((void)0)
 
 #endif
-
-template<typename CharacterType> inline bool isLatin1(CharacterType character)
-{
-    using UnsignedCharacterType = typename std::make_unsigned<CharacterType>::type;
-    return static_cast<UnsignedCharacterType>(character) <= static_cast<UnsignedCharacterType>(0xFF);
-}
 
 class StringImplShape {
     WTF_MAKE_NONCOPYABLE(StringImplShape);
@@ -681,7 +676,7 @@ ALWAYS_INLINE size_t reverseFind(const UChar* characters, unsigned length, LChar
 
 inline size_t reverseFind(const LChar* characters, unsigned length, UChar matchCharacter, unsigned index)
 {
-    if (matchCharacter & ~0xFF)
+    if (!isLatin1(matchCharacter))
         return notFound;
     return reverseFind(characters, length, static_cast<LChar>(matchCharacter), index);
 }
@@ -752,7 +747,7 @@ inline int codePointCompare(const StringImpl* string1, const StringImpl* string2
 inline bool isSpaceOrNewline(UChar32 character)
 {
     // Use isASCIISpace() for all Latin-1 characters. This will include newlines, which aren't included in Unicode DirWS.
-    return character <= 0xFF ? isASCIISpace(character) : u_charDirection(character) == U_WHITE_SPACE_NEUTRAL;
+    return isLatin1(character) ? isASCIISpace(character) : u_charDirection(character) == U_WHITE_SPACE_NEUTRAL;
 }
 
 template<typename CharacterType> inline unsigned lengthOfNullTerminatedString(const CharacterType* string)
@@ -1242,4 +1237,3 @@ template<unsigned length> inline bool equalLettersIgnoringASCIICase(const String
 using WTF::StaticStringImpl;
 using WTF::StringImpl;
 using WTF::equal;
-using WTF::isLatin1;

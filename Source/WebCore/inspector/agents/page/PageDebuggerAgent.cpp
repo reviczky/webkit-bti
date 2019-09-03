@@ -65,6 +65,8 @@ PageDebuggerAgent::PageDebuggerAgent(PageAgentContext& context)
 {
 }
 
+PageDebuggerAgent::~PageDebuggerAgent() = default;
+
 void PageDebuggerAgent::evaluateOnCallFrame(ErrorString& errorString, const String& callFrameId, const String& expression, const String* objectGroup, const bool* includeCommandLineAPI, const bool* doNotPauseOnExceptionsAndMuteConsole, const bool* returnByValue, const bool* generatePreview, const bool* saveResult, const bool* emulateUserGesture, RefPtr<Protocol::Runtime::RemoteObject>& result, Optional<bool>& wasThrown, Optional<int>& savedResultIndex)
 {
     auto& pageChromeClient = m_inspectedPage.chrome().client();
@@ -152,7 +154,7 @@ InjectedScript PageDebuggerAgent::injectedScriptForEval(ErrorString& errorString
 
     InjectedScript injectedScript = injectedScriptManager().injectedScriptForId(*executionContextId);
     if (injectedScript.hasNoValue())
-        errorString = "Execution context with given id not found."_s;
+        errorString = "Missing injected script for given executionContextId."_s;
 
     return injectedScript;
 }
@@ -166,8 +168,9 @@ void PageDebuggerAgent::mainFrameStartedLoading()
 {
     if (isPaused()) {
         setSuppressAllPauses(true);
-        ErrorString unused;
-        resume(unused);
+
+        ErrorString ignored;
+        resume(ignored);
     }
 }
 

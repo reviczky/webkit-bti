@@ -48,19 +48,24 @@ namespace WebCore {
 
 static const Seconds minimumNotificationInterval { 5_s };
 
+ResourceLoadObserver::ResourceLoadObserver()
+    : m_notificationTimer(*this, &ResourceLoadObserver::updateCentralStatisticsStore)
+{
+}
+
 ResourceLoadObserver& ResourceLoadObserver::shared()
 {
     static NeverDestroyed<ResourceLoadObserver> resourceLoadObserver;
     return resourceLoadObserver;
 }
 
-void ResourceLoadObserver::setStatisticsUpdatedCallback(WTF::Function<void(Vector<ResourceLoadStatistics>&&)>&& notificationCallback)
+void ResourceLoadObserver::setStatisticsUpdatedCallback(Function<void(PerSessionResourceLoadData&&)>&& notificationCallback)
 {
     ASSERT(!m_notificationCallback);
     m_notificationCallback = WTFMove(notificationCallback);
 }
 
-void ResourceLoadObserver::setRequestStorageAccessUnderOpenerCallback(WTF::Function<void(PAL::SessionID sessionID, const RegistrableDomain& domainInNeedOfStorageAccess, PageIdentifier openerPageID, const RegistrableDomain& openerDomain)>&& callback)
+void ResourceLoadObserver::setRequestStorageAccessUnderOpenerCallback(Function<void(PAL::SessionID sessionID, const RegistrableDomain& domainInNeedOfStorageAccess, PageIdentifier openerPageID, const RegistrableDomain& openerDomain)>&& callback)
 {
     ASSERT(!m_requestStorageAccessUnderOpenerCallback);
     m_requestStorageAccessUnderOpenerCallback = WTFMove(callback);
@@ -71,33 +76,15 @@ void ResourceLoadObserver::setLogUserInteractionNotificationCallback(Function<vo
     ASSERT(!m_logUserInteractionNotificationCallback);
     m_logUserInteractionNotificationCallback = WTFMove(callback);
 }
-
-void ResourceLoadObserver::setLogWebSocketLoadingNotificationCallback(Function<void(PAL::SessionID, const RegistrableDomain&, const RegistrableDomain&, WallTime)>&& callback)
-{
-    ASSERT(!m_logWebSocketLoadingNotificationCallback);
-    m_logWebSocketLoadingNotificationCallback = WTFMove(callback);
-}
-
-void ResourceLoadObserver::setLogSubresourceLoadingNotificationCallback(Function<void(PAL::SessionID, const RegistrableDomain&, const RegistrableDomain&, WallTime)>&& callback)
-{
-    ASSERT(!m_logSubresourceLoadingNotificationCallback);
-    m_logSubresourceLoadingNotificationCallback = WTFMove(callback);
-}
-
-void ResourceLoadObserver::setLogSubresourceRedirectNotificationCallback(Function<void(PAL::SessionID, const RegistrableDomain&, const RegistrableDomain&)>&& callback)
-{
-    ASSERT(!m_logSubresourceRedirectNotificationCallback);
-    m_logSubresourceRedirectNotificationCallback = WTFMove(callback);
-}
     
 static inline bool is3xxRedirect(const ResourceResponse& response)
 {
     return response.httpStatusCode() >= 300 && response.httpStatusCode() <= 399;
 }
 
-bool ResourceLoadObserver::shouldLog(bool usesEphemeralSession) const
+bool ResourceLoadObserver::shouldLog(PAL::SessionID sessionID) const
 {
-    return DeprecatedGlobalSettings::resourceLoadStatisticsEnabled() && !usesEphemeralSession && m_notificationCallback;
+    return DeprecatedGlobalSettings::resourceLoadStatisticsEnabled() && !sessionID.isEphemeral() && m_notificationCallback;
 }
 
 void ResourceLoadObserver::logSubresourceLoading(const Frame* frame, const ResourceRequest& newRequest, const ResourceResponse& redirectResponse)
@@ -108,7 +95,7 @@ void ResourceLoadObserver::logSubresourceLoading(const Frame* frame, const Resou
         return;
 
     auto* page = frame->page();
-    if (!page || !shouldLog(page->usesEphemeralSession()))
+    if (!page || !shouldLog(page->sessionID()))
         return;
 
     bool isRedirect = is3xxRedirect(redirectResponse);
@@ -130,27 +117,27 @@ void ResourceLoadObserver::logSubresourceLoading(const Frame* frame, const Resou
         return;
 
     {
-        auto& targetStatistics = ensureResourceStatisticsForRegistrableDomain(targetDomain);
+        auto& targetStatistics = ensureResourceStatisticsForRegistrableDomain(page->sessionID(), targetDomain);
         auto lastSeen = ResourceLoadStatistics::reduceTimeResolution(WallTime::now());
         targetStatistics.lastSeen = lastSeen;
         targetStatistics.subresourceUnderTopFrameDomains.add(topFrameDomain);
 
-        m_logSubresourceLoadingNotificationCallback(page->sessionID(), targetDomain, topFrameDomain, lastSeen);
+        scheduleNotificationIfNeeded();
     }
 
     if (isRedirect) {
-        auto& redirectingOriginStatistics = ensureResourceStatisticsForRegistrableDomain(redirectedFromDomain);
+        auto& redirectingOriginStatistics = ensureResourceStatisticsForRegistrableDomain(page->sessionID(), redirectedFromDomain);
         redirectingOriginStatistics.subresourceUniqueRedirectsTo.add(targetDomain);
-        auto& targetStatistics = ensureResourceStatisticsForRegistrableDomain(targetDomain);
+        auto& targetStatistics = ensureResourceStatisticsForRegistrableDomain(page->sessionID(), targetDomain);
         targetStatistics.subresourceUniqueRedirectsFrom.add(redirectedFromDomain);
 
-        m_logSubresourceRedirectNotificationCallback(page->sessionID(), redirectedFromDomain, targetDomain);
+        scheduleNotificationIfNeeded();
     }
 }
 
 void ResourceLoadObserver::logWebSocketLoading(const URL& targetURL, const URL& mainFrameURL, PAL::SessionID sessionID)
 {
-    if (!shouldLog(sessionID.isEphemeral()))
+    if (!shouldLog(sessionID))
         return;
 
     auto targetHost = targetURL.host();
@@ -167,16 +154,16 @@ void ResourceLoadObserver::logWebSocketLoading(const URL& targetURL, const URL& 
 
     auto lastSeen = ResourceLoadStatistics::reduceTimeResolution(WallTime::now());
 
-    auto& targetStatistics = ensureResourceStatisticsForRegistrableDomain(targetDomain);
+    auto& targetStatistics = ensureResourceStatisticsForRegistrableDomain(sessionID, targetDomain);
     targetStatistics.lastSeen = lastSeen;
     targetStatistics.subresourceUnderTopFrameDomains.add(topFrameDomain);
 
-    m_logWebSocketLoadingNotificationCallback(sessionID, targetDomain, topFrameDomain, lastSeen);
+    scheduleNotificationIfNeeded();
 }
 
 void ResourceLoadObserver::logUserInteractionWithReducedTimeResolution(const Document& document)
 {
-    if (!document.sessionID().isValid() || !shouldLog(document.sessionID().isEphemeral()))
+    if (!document.sessionID().isValid() || !shouldLog(document.sessionID()))
         return;
 
     auto& url = document.url();
@@ -191,7 +178,7 @@ void ResourceLoadObserver::logUserInteractionWithReducedTimeResolution(const Doc
 
     m_lastReportedUserInteractionMap.set(topFrameDomain, newTime);
 
-    auto& statistics = ensureResourceStatisticsForRegistrableDomain(topFrameDomain);
+    auto& statistics = ensureResourceStatisticsForRegistrableDomain(document.sessionID(), topFrameDomain);
     statistics.hadUserInteraction = true;
     statistics.lastSeen = newTime;
     statistics.mostRecentUserInteractionTime = newTime;
@@ -208,6 +195,8 @@ void ResourceLoadObserver::logUserInteractionWithReducedTimeResolution(const Doc
         }
     }
 
+    // We notify right away in case of a user interaction instead of waiting the usual 5 seconds because we want
+    // to update cookie blocking state as quickly as possible.
     m_logUserInteractionNotificationCallback(document.sessionID(), topFrameDomain);
 #endif
 
@@ -251,10 +240,10 @@ void ResourceLoadObserver::requestStorageAccessUnderOpener(PAL::SessionID sessio
 void ResourceLoadObserver::logFontLoad(const Document& document, const String& familyName, bool loadStatus)
 {
 #if ENABLE(WEB_API_STATISTICS)
-    if (!shouldLog(document.sessionID().isEphemeral()))
+    if (!shouldLog(document.sessionID()))
         return;
     RegistrableDomain registrableDomain { document.url() };
-    auto& statistics = ensureResourceStatisticsForRegistrableDomain(registrableDomain);
+    auto& statistics = ensureResourceStatisticsForRegistrableDomain(document.sessionID, registrableDomain);
     bool shouldCallNotificationCallback = false;
     if (!loadStatus) {
         if (statistics.fontsFailedToLoad.add(familyName).isNewEntry)
@@ -278,10 +267,10 @@ void ResourceLoadObserver::logFontLoad(const Document& document, const String& f
 void ResourceLoadObserver::logCanvasRead(const Document& document)
 {
 #if ENABLE(WEB_API_STATISTICS)
-    if (!shouldLog(document.sessionID().isEphemeral()))
+    if (!shouldLog(document.sessionID()))
         return;
     RegistrableDomain registrableDomain { document.url() };
-    auto& statistics = ensureResourceStatisticsForRegistrableDomain(registrableDomain);
+    auto& statistics = ensureResourceStatisticsForRegistrableDomain(document.sessionID(), registrableDomain);
     RegistrableDomain mainFrameRegistrableDomain { document.topDocument().url() };
     statistics.canvasActivityRecord.wasDataRead = true;
     if (statistics.topFrameRegistrableDomainsWhichAccessedWebAPIs.add(mainFrameRegistrableDomain.string()).isNewEntry)
@@ -294,10 +283,10 @@ void ResourceLoadObserver::logCanvasRead(const Document& document)
 void ResourceLoadObserver::logCanvasWriteOrMeasure(const Document& document, const String& textWritten)
 {
 #if ENABLE(WEB_API_STATISTICS)
-    if (!shouldLog(document.sessionID().isEphemeral()))
+    if (!shouldLog(document.sessionID()))
         return;
     RegistrableDomain registrableDomain { document.url() };
-    auto& statistics = ensureResourceStatisticsForRegistrableDomain(registrableDomain);
+    auto& statistics = ensureResourceStatisticsForRegistrableDomain(document.sessionID, registrableDomain);
     bool shouldCallNotificationCallback = false;
     RegistrableDomain mainFrameRegistrableDomain { document.topDocument().url() };
     if (statistics.canvasActivityRecord.recordWrittenOrMeasuredText(textWritten))
@@ -315,10 +304,10 @@ void ResourceLoadObserver::logCanvasWriteOrMeasure(const Document& document, con
 void ResourceLoadObserver::logNavigatorAPIAccessed(const Document& document, const ResourceLoadStatistics::NavigatorAPI functionName)
 {
 #if ENABLE(WEB_API_STATISTICS)
-    if (!shouldLog(document.sessionID().isEphemeral()))
+    if (!shouldLog(document.sessionID()))
         return;
     RegistrableDomain registrableDomain { document.url() };
-    auto& statistics = ensureResourceStatisticsForRegistrableDomain(registrableDomain);
+    auto& statistics = ensureResourceStatisticsForRegistrableDomain(document.sessionID, registrableDomain);
     bool shouldCallNotificationCallback = false;
     if (!statistics.navigatorFunctionsAccessed.contains(functionName)) {
         statistics.navigatorFunctionsAccessed.add(functionName);
@@ -338,10 +327,10 @@ void ResourceLoadObserver::logNavigatorAPIAccessed(const Document& document, con
 void ResourceLoadObserver::logScreenAPIAccessed(const Document& document, const ResourceLoadStatistics::ScreenAPI functionName)
 {
 #if ENABLE(WEB_API_STATISTICS)
-    if (!shouldLog(document.sessionID().isEphemeral()))
+    if (!shouldLog(document.sessionID()))
         return;
     RegistrableDomain registrableDomain { document.url() };
-    auto& statistics = ensureResourceStatisticsForRegistrableDomain(registrableDomain);
+    auto& statistics = ensureResourceStatisticsForRegistrableDomain(document.sessionID, registrableDomain);
     bool shouldCallNotificationCallback = false;
     if (!statistics.screenFunctionsAccessed.contains(functionName)) {
         statistics.screenFunctionsAccessed.add(functionName);
@@ -358,43 +347,72 @@ void ResourceLoadObserver::logScreenAPIAccessed(const Document& document, const 
 #endif
 }
     
-ResourceLoadStatistics& ResourceLoadObserver::ensureResourceStatisticsForRegistrableDomain(const RegistrableDomain& domain)
+ResourceLoadStatistics& ResourceLoadObserver::ensureResourceStatisticsForRegistrableDomain(PAL::SessionID sessionID, const RegistrableDomain& domain)
 {
-    auto addResult = m_resourceStatisticsMap.ensure(domain, [&domain] {
+    auto addResult = m_perSessionResourceStatisticsMap.ensure(sessionID, [] {
+        return makeUnique<HashMap<RegistrableDomain, ResourceLoadStatistics>>();
+    });
+
+    auto addDomainResult = addResult.iterator->value->ensure(domain, [&domain] {
         return ResourceLoadStatistics(domain);
     });
-    return addResult.iterator->value;
+    return addDomainResult.iterator->value;
+}
+
+void ResourceLoadObserver::scheduleNotificationIfNeeded()
+{
+    ASSERT(m_notificationCallback);
+    if (m_perSessionResourceStatisticsMap.isEmpty()) {
+        m_notificationTimer.stop();
+        return;
+    }
+
+    if (!m_notificationTimer.isActive())
+        m_notificationTimer.startOneShot(minimumNotificationInterval);
 }
 
 void ResourceLoadObserver::updateCentralStatisticsStore()
 {
+    ASSERT(m_notificationCallback);
+    m_notificationTimer.stop();
     m_notificationCallback(takeStatistics());
 }
 
-String ResourceLoadObserver::statisticsForURL(const URL& url)
+String ResourceLoadObserver::statisticsForURL(PAL::SessionID sessionID, const URL& url)
 {
-    auto iter = m_resourceStatisticsMap.find(RegistrableDomain { url });
-    if (iter == m_resourceStatisticsMap.end())
+    auto* resourceStatisticsByDomain = m_perSessionResourceStatisticsMap.get(sessionID);
+    if (!resourceStatisticsByDomain)
+        return emptyString();
+
+    auto iter = resourceStatisticsByDomain->find(RegistrableDomain { url });
+    if (iter == resourceStatisticsByDomain->end())
         return emptyString();
 
     return makeString("Statistics for ", url.host().toString(), ":\n", iter->value.toString());
 }
 
-Vector<ResourceLoadStatistics> ResourceLoadObserver::takeStatistics()
+auto ResourceLoadObserver::takeStatistics() -> PerSessionResourceLoadData
 {
-    Vector<ResourceLoadStatistics> statistics;
-    statistics.reserveInitialCapacity(m_resourceStatisticsMap.size());
-    for (auto& statistic : m_resourceStatisticsMap.values())
-        statistics.uncheckedAppend(WTFMove(statistic));
+    PerSessionResourceLoadData perSessionStatistics;
 
-    m_resourceStatisticsMap.clear();
+    for (auto& iter : m_perSessionResourceStatisticsMap) {
+        Vector<ResourceLoadStatistics> statistics;
+        statistics.reserveInitialCapacity(iter.value->size());
 
-    return statistics;
+        for (auto& statistic : iter.value->values())
+            statistics.uncheckedAppend(WTFMove(statistic));
+
+        perSessionStatistics.append(std::make_pair(iter.key, WTFMove(statistics)));
+    }
+    
+    m_perSessionResourceStatisticsMap.clear();
+    return perSessionStatistics;
 }
 
 void ResourceLoadObserver::clearState()
 {
-    m_resourceStatisticsMap.clear();
+    m_notificationTimer.stop();
+    m_perSessionResourceStatisticsMap.clear();
     m_lastReportedUserInteractionMap.clear();
 }
 

@@ -540,6 +540,9 @@ static inline FunctionType addPseudoClassType(const CSSSelector& selector, Selec
     case CSSSelector::PseudoClassAutofillStrongPassword:
         fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr<CSSOperationPtrTag>(isAutofilledStrongPassword));
         return FunctionType::SimpleSelectorChecker;
+    case CSSSelector::PseudoClassAutofillStrongPasswordViewable:
+        fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr<CSSOperationPtrTag>(isAutofilledStrongPasswordViewable));
+        return FunctionType::SimpleSelectorChecker;
     case CSSSelector::PseudoClassChecked:
         fragment.unoptimizedPseudoClasses.append(JSC::FunctionPtr<CSSOperationPtrTag>(isChecked));
         return FunctionType::SimpleSelectorChecker;
@@ -3599,10 +3602,12 @@ void SelectorCodeGenerator::generateElementIsNthChild(Assembler::JumpList& failu
 
         Assembler::JumpList noCachedChildIndexCases;
         generateWalkToPreviousAdjacentElement(noMoreSiblingsCases, previousSibling);
-        noCachedChildIndexCases.append(m_assembler.branchTest32(Assembler::Zero, Assembler::Address(previousSibling, Node::nodeFlagsMemoryOffset()), Assembler::TrustedImm32(Node::flagHasRareData())));
+
+        LocalRegister elementRareData(m_registerAllocator);
+        m_assembler.loadPtr(Assembler::Address(previousSibling, Node::rareDataMemoryOffset()), elementRareData);
+
+        noCachedChildIndexCases.append(m_assembler.branchTestPtr(Assembler::Zero, elementRareData));
         {
-            LocalRegister elementRareData(m_registerAllocator);
-            m_assembler.loadPtr(Assembler::Address(previousSibling, Node::rareDataMemoryOffset()), elementRareData);
             LocalRegister cachedChildIndex(m_registerAllocator);
             m_assembler.load16(Assembler::Address(elementRareData, ElementRareData::childIndexMemoryOffset()), cachedChildIndex);
             noCachedChildIndexCases.append(m_assembler.branchTest32(Assembler::Zero, cachedChildIndex));

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2016-2019 Apple Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -91,14 +91,20 @@ void ProxyObject::finishCreation(VM& vm, ExecState* exec, JSValue target, JSValu
         return;
     }
     if (ProxyObject* targetAsProxy = jsDynamicCast<ProxyObject*>(vm, target)) {
-        if (targetAsProxy->handler().isNull()) {
-            throwTypeError(exec, scope, "If a Proxy's handler is another Proxy object, the other Proxy should not have been revoked"_s);
+        if (targetAsProxy->isRevoked()) {
+            throwTypeError(exec, scope, "A Proxy's 'target' shouldn't be a revoked Proxy"_s);
             return;
         }
     }
     if (!handler.isObject()) {
         throwTypeError(exec, scope, "A Proxy's 'handler' should be an Object"_s);
         return;
+    }
+    if (ProxyObject* handlerAsProxy = jsDynamicCast<ProxyObject*>(vm, handler)) {
+        if (handlerAsProxy->isRevoked()) {
+            throwTypeError(exec, scope, "A Proxy's 'handler' shouldn't be a revoked Proxy"_s);
+            return;
+        }
     }
 
     JSObject* targetAsObject = jsCast<JSObject*>(target);
@@ -143,7 +149,7 @@ static JSValue performProxyGet(ExecState* exec, ProxyObject* proxyObject, JSValu
     };
 
     if (propertyName.isPrivateName())
-        return performDefaultGet();
+        return jsUndefined();
 
     JSValue handlerValue = proxyObject->handler();
     if (handlerValue.isNull())
@@ -160,7 +166,7 @@ static JSValue performProxyGet(ExecState* exec, ProxyObject* proxyObject, JSValu
 
     MarkedArgumentBuffer arguments;
     arguments.append(target);
-    arguments.append(identifierToSafePublicJSValue(vm, Identifier::fromUid(&vm, propertyName.uid())));
+    arguments.append(identifierToSafePublicJSValue(vm, Identifier::fromUid(vm, propertyName.uid())));
     arguments.append(receiver);
     ASSERT(!arguments.hasOverflowed());
     JSValue trapResult = call(exec, getHandler, callType, callData, handler, arguments);
@@ -214,7 +220,7 @@ bool ProxyObject::performInternalMethodGetOwnProperty(ExecState* exec, PropertyN
     };
 
     if (propertyName.isPrivateName())
-        RELEASE_AND_RETURN(scope, performDefaultGetOwnProperty());
+        return false;
 
     JSValue handlerValue = this->handler();
     if (handlerValue.isNull()) {
@@ -232,7 +238,7 @@ bool ProxyObject::performInternalMethodGetOwnProperty(ExecState* exec, PropertyN
 
     MarkedArgumentBuffer arguments;
     arguments.append(target);
-    arguments.append(identifierToSafePublicJSValue(vm, Identifier::fromUid(&vm, propertyName.uid())));
+    arguments.append(identifierToSafePublicJSValue(vm, Identifier::fromUid(vm, propertyName.uid())));
     ASSERT(!arguments.hasOverflowed());
     JSValue trapResult = call(exec, getOwnPropertyDescriptorMethod, callType, callData, handler, arguments);
     RETURN_IF_EXCEPTION(scope, false);
@@ -323,7 +329,7 @@ bool ProxyObject::performHasProperty(ExecState* exec, PropertyName propertyName,
     };
 
     if (propertyName.isPrivateName())
-        RELEASE_AND_RETURN(scope, performDefaultHasProperty());
+        return false;
 
     JSValue handlerValue = this->handler();
     if (handlerValue.isNull()) {
@@ -341,7 +347,7 @@ bool ProxyObject::performHasProperty(ExecState* exec, PropertyName propertyName,
 
     MarkedArgumentBuffer arguments;
     arguments.append(target);
-    arguments.append(identifierToSafePublicJSValue(vm, Identifier::fromUid(&vm, propertyName.uid())));
+    arguments.append(identifierToSafePublicJSValue(vm, Identifier::fromUid(vm, propertyName.uid())));
     ASSERT(!arguments.hasOverflowed());
     JSValue trapResult = call(exec, hasMethod, callType, callData, handler, arguments);
     RETURN_IF_EXCEPTION(scope, false);
@@ -407,8 +413,9 @@ bool ProxyObject::getOwnPropertySlot(JSObject* object, ExecState* exec, Property
 
 bool ProxyObject::getOwnPropertySlotByIndex(JSObject* object, ExecState* exec, unsigned propertyName, PropertySlot& slot)
 {
+    VM& vm = exec->vm();
     ProxyObject* thisObject = jsCast<ProxyObject*>(object);
-    Identifier ident = Identifier::from(exec, propertyName); 
+    Identifier ident = Identifier::from(vm, propertyName);
     return thisObject->getOwnPropertySlotCommon(exec, ident.impl(), slot);
 }
 
@@ -425,7 +432,7 @@ bool ProxyObject::performPut(ExecState* exec, JSValue putValue, JSValue thisValu
     }
 
     if (propertyName.isPrivateName())
-        RELEASE_AND_RETURN(scope, performDefaultPut());
+        return false;
 
     JSValue handlerValue = this->handler();
     if (handlerValue.isNull()) {
@@ -444,7 +451,7 @@ bool ProxyObject::performPut(ExecState* exec, JSValue putValue, JSValue thisValu
 
     MarkedArgumentBuffer arguments;
     arguments.append(target);
-    arguments.append(identifierToSafePublicJSValue(vm, Identifier::fromUid(&vm, propertyName.uid())));
+    arguments.append(identifierToSafePublicJSValue(vm, Identifier::fromUid(vm, propertyName.uid())));
     arguments.append(putValue);
     arguments.append(thisValue);
     ASSERT(!arguments.hasOverflowed());
@@ -492,7 +499,7 @@ bool ProxyObject::putByIndexCommon(ExecState* exec, JSValue thisValue, unsigned 
 {
     VM& vm = exec->vm();
     auto scope = DECLARE_THROW_SCOPE(vm);
-    Identifier ident = Identifier::from(exec, propertyName);
+    Identifier ident = Identifier::from(vm, propertyName);
     RETURN_IF_EXCEPTION(scope, false);
     auto performDefaultPut = [&] () {
         JSObject* target = this->target();
@@ -628,7 +635,7 @@ bool ProxyObject::performDelete(ExecState* exec, PropertyName propertyName, Defa
     }
 
     if (propertyName.isPrivateName())
-        RELEASE_AND_RETURN(scope, performDefaultDelete());
+        return false;
 
     JSValue handlerValue = this->handler();
     if (handlerValue.isNull()) {
@@ -647,7 +654,7 @@ bool ProxyObject::performDelete(ExecState* exec, PropertyName propertyName, Defa
 
     MarkedArgumentBuffer arguments;
     arguments.append(target);
-    arguments.append(identifierToSafePublicJSValue(vm, Identifier::fromUid(&vm, propertyName.uid())));
+    arguments.append(identifierToSafePublicJSValue(vm, Identifier::fromUid(vm, propertyName.uid())));
     ASSERT(!arguments.hasOverflowed());
     JSValue trapResult = call(exec, deletePropertyMethod, callType, callData, handler, arguments);
     RETURN_IF_EXCEPTION(scope, false);
@@ -691,11 +698,12 @@ bool ProxyObject::deleteProperty(JSCell* cell, ExecState* exec, PropertyName pro
 
 bool ProxyObject::deletePropertyByIndex(JSCell* cell, ExecState* exec, unsigned propertyName)
 {
+    VM& vm = exec->vm();
     ProxyObject* thisObject = jsCast<ProxyObject*>(cell);
-    Identifier ident = Identifier::from(exec, propertyName); 
+    Identifier ident = Identifier::from(vm, propertyName);
     auto performDefaultDelete = [&] () -> bool {
         JSObject* target = thisObject->target();
-        return target->methodTable(exec->vm())->deletePropertyByIndex(target, exec, propertyName);
+        return target->methodTable(vm)->deletePropertyByIndex(target, exec, propertyName);
     };
     return thisObject->performDelete(exec, ident.impl(), performDefaultDelete);
 }
@@ -827,7 +835,7 @@ bool ProxyObject::performDefineOwnProperty(ExecState* exec, PropertyName propert
     };
 
     if (propertyName.isPrivateName())
-        return performDefaultDefineOwnProperty();
+        return false;
 
     JSValue handlerValue = this->handler();
     if (handlerValue.isNull()) {
@@ -849,7 +857,7 @@ bool ProxyObject::performDefineOwnProperty(ExecState* exec, PropertyName propert
 
     MarkedArgumentBuffer arguments;
     arguments.append(target);
-    arguments.append(identifierToSafePublicJSValue(vm, Identifier::fromUid(&vm, propertyName.uid())));
+    arguments.append(identifierToSafePublicJSValue(vm, Identifier::fromUid(vm, propertyName.uid())));
     arguments.append(descriptorObject);
     ASSERT(!arguments.hasOverflowed());
     JSValue trapResult = call(exec, definePropertyMethod, callType, callData, handler, arguments);
@@ -946,7 +954,7 @@ void ProxyObject::performGetOwnPropertyNames(ExecState* exec, PropertyNameArray&
     JSValue arrayLikeObject = call(exec, ownKeysMethod, callType, callData, handler, arguments);
     RETURN_IF_EXCEPTION(scope, void());
 
-    PropertyNameArray trapResult(&vm, propertyNames.propertyNameMode(), propertyNames.privateSymbolMode());
+    PropertyNameArray trapResult(vm, propertyNames.propertyNameMode(), propertyNames.privateSymbolMode());
     HashSet<UniquedStringImpl*> uncheckedResultKeys;
     {
         HashSet<RefPtr<UniquedStringImpl>> seenKeys;
@@ -1000,7 +1008,7 @@ void ProxyObject::performGetOwnPropertyNames(ExecState* exec, PropertyNameArray&
     bool targetIsExensible = target->isExtensible(exec);
     RETURN_IF_EXCEPTION(scope, void());
 
-    PropertyNameArray targetKeys(&vm, propertyNames.propertyNameMode(), propertyNames.privateSymbolMode());
+    PropertyNameArray targetKeys(vm, propertyNames.propertyNameMode(), propertyNames.privateSymbolMode());
     target->methodTable(vm)->getOwnPropertyNames(target, exec, targetKeys, enumerationMode);
     RETURN_IF_EXCEPTION(scope, void());
     Vector<UniquedStringImpl*> targetConfigurableKeys;

@@ -337,26 +337,16 @@ private:
     void sendMessageToFrontend(const String& message) final;
     ConnectionType connectionType() const final { return ConnectionType::Local; }
 
-    Page* frontendPage() const
-    {
-        if (!m_frontendWindow || !m_frontendWindow->document())
-            return nullptr;
-
-        return m_frontendWindow->document()->page();
-    }
-
     RefPtr<DOMWindow> m_frontendWindow;
-    InspectorController& m_frontendController;
 };
 
 InspectorStubFrontend::InspectorStubFrontend(Page& inspectedPage, RefPtr<DOMWindow>&& frontendWindow)
-    : InspectorFrontendClientLocal(&inspectedPage.inspectorController(), frontendWindow->document()->page(), std::make_unique<InspectorFrontendClientLocal::Settings>())
+    : InspectorFrontendClientLocal(&inspectedPage.inspectorController(), frontendWindow->document()->page(), makeUnique<InspectorFrontendClientLocal::Settings>())
     , m_frontendWindow(frontendWindow.copyRef())
-    , m_frontendController(frontendPage()->inspectorController())
 {
     ASSERT_ARG(frontendWindow, frontendWindow);
 
-    m_frontendController.setInspectorFrontendClient(this);
+    frontendPage()->inspectorController().setInspectorFrontendClient(this);
     inspectedPage.inspectorController().connectFrontend(*this);
 }
 
@@ -370,7 +360,7 @@ void InspectorStubFrontend::closeWindow()
     if (!m_frontendWindow)
         return;
 
-    m_frontendController.setInspectorFrontendClient(nullptr);
+    frontendPage()->inspectorController().setInspectorFrontendClient(nullptr);
     inspectedPage()->inspectorController().disconnectFrontend(*this);
 
     m_frontendWindow->close();
@@ -379,9 +369,7 @@ void InspectorStubFrontend::closeWindow()
 
 void InspectorStubFrontend::sendMessageToFrontend(const String& message)
 {
-    ASSERT_ARG(message, !message.isEmpty());
-
-    InspectorClient::doDispatchMessageOnFrontendPage(frontendPage(), message);
+    dispatchMessageAsync(message);
 }
 
 static bool markerTypeFrom(const String& markerType, DocumentMarker::MarkerType& result)
@@ -579,7 +567,7 @@ Internals::Internals(Document& document)
     auto* frame = document.frame();
     if (frame && frame->page() && frame->isMainFrame()) {
         auto mockPaymentCoordinator = new MockPaymentCoordinator(*frame->page());
-        frame->page()->setPaymentCoordinator(std::make_unique<PaymentCoordinator>(*mockPaymentCoordinator));
+        frame->page()->setPaymentCoordinator(makeUnique<PaymentCoordinator>(*mockPaymentCoordinator));
     }
 #endif
 }
@@ -1429,7 +1417,7 @@ void Internals::enableMockSpeechSynthesizer()
     if (!synthesis)
         return;
 
-    synthesis->setPlatformSynthesizer(std::make_unique<PlatformSpeechSynthesizerMock>(synthesis));
+    synthesis->setPlatformSynthesizer(makeUnique<PlatformSpeechSynthesizerMock>(synthesis));
 }
 
 #endif
@@ -1446,9 +1434,7 @@ void Internals::emulateRTCPeerConnectionPlatformEvent(RTCPeerConnection& connect
 
 void Internals::useMockRTCPeerConnectionFactory(const String& testCase)
 {
-    // FIXME: We should upgrade mocks to support unified plan APIs, until then use plan B in tests using mock.
-
-    ASSERT(!RuntimeEnabledFeatures::sharedFeatures().webRTCUnifiedPlanEnabled());
+    ASSERT(RuntimeEnabledFeatures::sharedFeatures().webRTCUnifiedPlanEnabled());
     if (!LibWebRTCProvider::webRTCAvailable())
         return;
 
@@ -1861,6 +1847,11 @@ bool Internals::elementShouldAutoComplete(HTMLInputElement& element)
 void Internals::setAutofilled(HTMLInputElement& element, bool enabled)
 {
     element.setAutoFilled(enabled);
+}
+
+void Internals::setAutoFilledAndViewable(HTMLInputElement& element, bool enabled)
+{
+    element.setAutoFilledAndViewable(enabled);
 }
 
 static AutoFillButtonType toAutoFillButtonType(Internals::AutoFillButtonType type)
@@ -2496,7 +2487,7 @@ RefPtr<WindowProxy> Internals::openDummyInspectorFrontend(const String& url)
     auto* inspectedPage = contextDocument()->frame()->page();
     auto* window = inspectedPage->mainFrame().document()->domWindow();
     auto frontendWindowProxy = window->open(*window, *window, url, "", "").releaseReturnValue();
-    m_inspectorFrontend = std::make_unique<InspectorStubFrontend>(*inspectedPage, downcast<DOMWindow>(frontendWindowProxy->window()));
+    m_inspectorFrontend = makeUnique<InspectorStubFrontend>(*inspectedPage, downcast<DOMWindow>(frontendWindowProxy->window()));
     return frontendWindowProxy;
 }
 
@@ -3016,7 +3007,7 @@ ExceptionOr<void> Internals::setViewExposedRect(float x, float y, float width, f
 
 void Internals::setPrinting(int width, int height)
 {
-    printContextForTesting() = std::make_unique<PrintContext>(frame());
+    printContextForTesting() = makeUnique<PrintContext>(frame());
     printContextForTesting()->begin(width, height);
 }
 
@@ -3455,7 +3446,7 @@ void Internals::enableAutoSizeMode(bool enabled, int width, int height)
 
 void Internals::initializeMockCDM()
 {
-    LegacyCDM::registerCDMFactory([] (LegacyCDM* cdm) { return std::make_unique<LegacyMockCDM>(cdm); },
+    LegacyCDM::registerCDMFactory([] (LegacyCDM* cdm) { return makeUnique<LegacyMockCDM>(cdm); },
         LegacyMockCDM::supportsKeySystem, LegacyMockCDM::supportsKeySystemAndMimeType);
 }
 
@@ -3750,9 +3741,19 @@ Vector<String> Internals::enqueuedSamplesForTrackID(SourceBuffer& buffer, const 
     return buffer.enqueuedSamplesForTrackID(trackID);
 }
 
+double Internals::minimumUpcomingPresentationTimeForTrackID(SourceBuffer& buffer, const AtomString& trackID)
+{
+    return buffer.minimumUpcomingPresentationTimeForTrackID(trackID).toDouble();
+}
+
 void Internals::setShouldGenerateTimestamps(SourceBuffer& buffer, bool flag)
 {
     buffer.setShouldGenerateTimestamps(flag);
+}
+
+void Internals::setMaximumQueueDepthForTrackID(SourceBuffer& buffer, const AtomString& trackID, size_t maxQueueDepth)
+{
+    buffer.setMaximumQueueDepthForTrackID(trackID, maxQueueDepth);
 }
 
 #endif
@@ -4229,7 +4230,7 @@ RefPtr<File> Internals::createFile(const String& path)
     if (!url.isLocalFile())
         return nullptr;
 
-    return File::create(url.fileSystemPath());
+    return File::create(document->sessionID(), url.fileSystemPath());
 }
 
 void Internals::queueMicroTask(int testNumber)
@@ -4238,7 +4239,7 @@ void Internals::queueMicroTask(int testNumber)
     if (!document)
         return;
 
-    auto microtask = std::make_unique<ActiveDOMCallbackMicrotask>(MicrotaskQueue::mainThreadQueue(), *document, [document, testNumber]() {
+    auto microtask = makeUnique<ActiveDOMCallbackMicrotask>(MicrotaskQueue::mainThreadQueue(), *document, [document, testNumber]() {
         document->addConsoleMessage(MessageSource::JS, MessageLevel::Debug, makeString("MicroTask #", testNumber, " has run."));
     });
 
@@ -4433,7 +4434,11 @@ JSValue Internals::cloneArrayBuffer(JSC::ExecState& state, JSValue buffer, JSVal
 
 String Internals::resourceLoadStatisticsForURL(const DOMURL& url)
 {
-    return ResourceLoadObserver::shared().statisticsForURL(url.href());
+    auto* document = contextDocument();
+    if (!document)
+        return emptyString();
+
+    return ResourceLoadObserver::shared().statisticsForURL(document->sessionID(), url.href());
 }
 
 void Internals::setResourceLoadStatisticsEnabled(bool enable)
@@ -5008,7 +5013,7 @@ String Internals::ongoingLoadsDescriptions() const
         builder.append('[');
 
         for (auto& info : platformStrategies()->loaderStrategy()->intermediateLoadInformationFromResourceLoadIdentifier(identifier))
-            builder.flexibleAppend('[', (int)info.type, ",\"", info.request.url().string(), "\",\"", info.request.httpMethod(), "\",", info.response.httpStatusCode(), ']');
+            builder.append('[', (int)info.type, ",\"", info.request.url().string(), "\",\"", info.request.httpMethod(), "\",", info.response.httpStatusCode(), ']');
 
         builder.append(']');
     }

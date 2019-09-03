@@ -310,7 +310,6 @@ public:
     void setAllowsAnySSLCertificateForWebSocket(bool);
 
     void clearCachedCredentials();
-    void clearPermanentCredentialsForProtectionSpace(WebCore::ProtectionSpace&&, CompletionHandler<void()>&&);
     void terminateNetworkProcess();
     void sendNetworkProcessWillSuspendImminentlyForTesting();
     void sendNetworkProcessDidResume();
@@ -318,8 +317,8 @@ public:
     void disableServiceWorkerProcessTerminationDelay();
 
     void syncNetworkProcessCookies();
-
-    void setIDBPerOriginQuota(uint64_t);
+    void syncLocalStorage(CompletionHandler<void()>&& callback);
+    void clearLegacyPrivateBrowsingLocalStorage(CompletionHandler<void()>&& callback);
 
     void setShouldMakeNextWebProcessLaunchFailForTesting(bool value) { m_shouldMakeNextWebProcessLaunchFailForTesting = value; }
     bool shouldMakeNextWebProcessLaunchFailForTesting() const { return m_shouldMakeNextWebProcessLaunchFailForTesting; }
@@ -380,9 +379,9 @@ public:
 
     void getNetworkProcessConnection(WebProcessProxy&, Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply&&);
 
+    bool isServiceWorkerPageID(WebCore::PageIdentifier) const;
 #if ENABLE(SERVICE_WORKER)
     void establishWorkerContextConnectionToNetworkProcess(NetworkProcessProxy&, WebCore::RegistrableDomain&&, Optional<PAL::SessionID>);
-    ServiceWorkerProcessProxy* serviceWorkerProcessProxyFromPageID(WebCore::PageIdentifier) const;
     const HashMap<WebCore::RegistrableDomain, ServiceWorkerProcessProxy*>& serviceWorkerProxies() const { return m_serviceWorkerProcesses; }
     void setAllowsAnySSLCertificateForServiceWorker(bool allows) { m_allowsAnySSLCertificateForServiceWorker = allows; }
     bool allowsAnySSLCertificateForServiceWorker() const { return m_allowsAnySSLCertificateForServiceWorker; }
@@ -468,6 +467,8 @@ public:
     void setCookieStoragePartitioningEnabled(bool);
     bool storageAccessAPIEnabled() const { return m_storageAccessAPIEnabled; }
     void setStorageAccessAPIEnabled(bool);
+
+    void clearPermanentCredentialsForProtectionSpace(WebCore::ProtectionSpace&&);
 #endif
 
 #if ENABLE(SERVICE_WORKER)

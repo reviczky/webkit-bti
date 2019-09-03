@@ -102,7 +102,7 @@ void paintFlow(const RenderBlockFlow& flow, const Layout& layout, PaintInfo& pai
 
     std::unique_ptr<ShadowData> debugShadow = nullptr;
     if (flow.settings().simpleLineLayoutDebugBordersEnabled()) {
-        debugShadow = std::make_unique<ShadowData>(IntPoint(0, 0), 10, 20, ShadowStyle::Normal, true, Color(0, 255, 0, 200));
+        debugShadow = makeUnique<ShadowData>(IntPoint(0, 0), 10, 20, ShadowStyle::Normal, true, Color(0, 255, 0, 200));
         textPainter.setShadow(debugShadow.get());
     }
 
@@ -331,7 +331,7 @@ static void initializeInlineTextBox(RenderBlockFlow& flow, InlineTextBox& inline
 
 void generateLineBoxTree(RenderBlockFlow& flow, const Layout& layout)
 {
-    ASSERT(!flow.lineBoxes().firstLineBox());
+    ASSERT(!flow.complexLineLayout()->lineBoxes().firstLineBox());
     if (!layout.runCount())
         return;
 
@@ -347,16 +347,16 @@ void generateLineBoxTree(RenderBlockFlow& flow, const Layout& layout)
         BidiRunList<BidiRun> bidiRuns;
         for (auto it = range.begin(); it != range.end(); ++it) {
             auto run = *it;
-            bidiRuns.appendRun(std::make_unique<BidiRun>(run.localStart(), run.localEnd(), const_cast<RenderObject&>(run.renderer()), bidiContext.ptr(), U_LEFT_TO_RIGHT));
+            bidiRuns.appendRun(makeUnique<BidiRun>(run.localStart(), run.localEnd(), const_cast<RenderObject&>(run.renderer()), bidiContext.ptr(), U_LEFT_TO_RIGHT));
         }
 
         LineInfo lineInfo;
-        lineInfo.setFirstLine(!flow.lineBoxes().firstLineBox());
+        lineInfo.setFirstLine(!flow.complexLineLayout()->lineBoxes().firstLineBox());
         // FIXME: This is needed for flow boxes -but we don't have them yet.
         // lineInfo.setLastLine(lastLine);
         lineInfo.setEmpty(!bidiRuns.runCount());
         bidiRuns.setLogicallyLastRun(bidiRuns.lastRun());
-        auto* root = flow.constructLine(bidiRuns, lineInfo);
+        auto* root = flow.complexLineLayout()->constructLine(bidiRuns, lineInfo);
         bidiRuns.clear();
         if (!root)
             continue;

@@ -510,7 +510,7 @@ WI.TreeOutline = class TreeOutline extends WI.Object
             if (predicate(treeElement))
                 return treeElement;
 
-            treeElements = treeElements.concat(treeElement.children);
+            treeElements.pushAll(treeElement.children);
         }
 
         return false;
@@ -598,7 +598,7 @@ WI.TreeOutline = class TreeOutline extends WI.Object
         if (event.target !== this._childrenListNode)
             return;
 
-        let isRTL = WI.resolvedLayoutDirection() === WI.LayoutDirection.RTL;
+        let isRTL = WI.resolveLayoutDirectionForElement(this.element) === WI.LayoutDirection.RTL;
         let expandKeyIdentifier = isRTL ? "Left" : "Right";
         let collapseKeyIdentifier = isRTL ? "Right" : "Left";
 
@@ -727,19 +727,6 @@ WI.TreeOutline = class TreeOutline extends WI.Object
 
         let selectableObjects = treeElements.map((treeElement) => this.objectForSelection(treeElement));
         this._selectionController.selectItems(new Set(selectableObjects));
-    }
-
-    get selectedTreeElementIndex()
-    {
-        if (!this.hasChildren || !this.selectedTreeElement)
-            return;
-
-        for (var i = 0; i < this.children.length; ++i) {
-            if (this.children[i] === this.selectedTreeElement)
-                return i;
-        }
-
-        return false;
     }
 
     get virtualized()

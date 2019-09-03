@@ -40,21 +40,19 @@ namespace WHLSL {
 
 namespace AST {
 
-class NativeTypeDeclaration : public NamedType {
+class NativeTypeDeclaration final : public NamedType {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     NativeTypeDeclaration(CodeLocation location, String&& name, TypeArguments&& typeArguments)
-        : NamedType(location, WTFMove(name))
+        : NamedType(Kind::NativeTypeDeclaration, location, WTFMove(name))
         , m_typeArguments(WTFMove(typeArguments))
     {
     }
 
-    virtual ~NativeTypeDeclaration() = default;
+    ~NativeTypeDeclaration() = default;
 
     NativeTypeDeclaration(const NativeTypeDeclaration&) = delete;
     NativeTypeDeclaration(NativeTypeDeclaration&&) = default;
-
-    bool isNativeTypeDeclaration() const override { return true; }
 
     TypeArguments& typeArguments() { return m_typeArguments; }
 
@@ -78,6 +76,22 @@ public:
     const std::function<int64_t(int)>& formatValueFromInteger() const { return m_formatValueFromInteger; }
     const std::function<int64_t(unsigned)>& formatValueFromUnsignedInteger() const { return m_formatValueFromUnsignedInteger; }
     void iterateAllValues(const std::function<bool(int64_t)>& callback) { m_iterateAllValues(callback); }
+private:
+    unsigned matrixDimension(unsigned typeArgumentIndex)
+    {
+        ASSERT(isMatrix());
+        ASSERT(typeArguments().size() == 3);
+        return WTF::get<AST::ConstantExpression>(typeArguments()[typeArgumentIndex]).integerLiteral().value();
+    }
+public:
+    unsigned numberOfMatrixRows()
+    {
+        return matrixDimension(1);
+    }
+    unsigned numberOfMatrixColumns()
+    {
+        return matrixDimension(2);
+    }
 
     void setIsInt() { m_isInt = true; }
     void setIsNumber() { m_isNumber = true; }
@@ -130,6 +144,6 @@ private:
 
 }
 
-SPECIALIZE_TYPE_TRAITS_WHLSL_NAMED_TYPE(NativeTypeDeclaration, isNativeTypeDeclaration())
+SPECIALIZE_TYPE_TRAITS_WHLSL_TYPE(NativeTypeDeclaration, isNativeTypeDeclaration())
 
 #endif

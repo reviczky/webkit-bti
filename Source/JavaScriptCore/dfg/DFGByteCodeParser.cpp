@@ -267,7 +267,7 @@ private:
     {
         ASSERT(!operand.isConstant());
         
-        m_graph.m_variableAccessData.append(VariableAccessData(operand));
+        m_graph.m_variableAccessData.append(operand);
         return &m_graph.m_variableAccessData.last();
     }
     
@@ -1441,10 +1441,16 @@ bool ByteCodeParser::handleRecursiveTailCall(Node* callTargetNode, CallVariant c
         for (int i = 0; i < stackEntry->m_codeBlock->numVars(); ++i)
             setDirect(stackEntry->remapOperand(virtualRegisterForLocal(i)), undefined, NormalSet);
 
-        // We want to emit the SetLocals with an exit origin that points to the place we are jumping to.
         unsigned oldIndex = m_currentIndex;
         auto oldStackTop = m_inlineStackTop;
+
+        // First, we emit check-traps operation pointing to bc#0 as exit.
         m_inlineStackTop = stackEntry;
+        m_currentIndex = 0;
+        m_exitOK = true;
+        addToGraph(Options::usePollingTraps() ? CheckTraps : InvalidationPoint);
+
+        // Then, we want to emit the SetLocals with an exit origin that points to the place we are jumping to.
         m_currentIndex = opcodeLengths[op_enter];
         m_exitOK = true;
         processSetLocalQueue();
@@ -1566,9 +1572,7 @@ void ByteCodeParser::inlineCall(Node* callTargetNode, VirtualRegister result, Ca
 {
     const Instruction* savedCurrentInstruction = m_currentInstruction;
     CodeSpecializationKind specializationKind = InlineCallFrame::specializationKindFor(kind);
-    
-    ASSERT(inliningCost(callee, argumentCountIncludingThis, kind) != UINT_MAX);
-    
+
     CodeBlock* codeBlock = callee.functionExecutable()->baselineCodeBlockFor(specializationKind);
     insertChecks(codeBlock);
 
@@ -1862,8 +1866,6 @@ bool ByteCodeParser::handleVarargsInlining(Node* callTargetNode, VirtualRegister
     registerOffset -= CallFrame::headerSizeInRegisters;
     registerOffset = -WTF::roundUpToMultipleOf(stackAlignmentRegisters(), -registerOffset);
 
-    Vector<VirtualRegister> setArgumentMaybes;
-    
     auto insertChecks = [&] (CodeBlock* codeBlock) {
         emitFunctionChecks(callVariant, callTargetNode, thisArgument);
         
@@ -1928,8 +1930,6 @@ bool ByteCodeParser::handleVarargsInlining(Node* callTargetNode, VirtualRegister
             }
             
             Node* setArgument = addToGraph(numSetArguments >= mandatoryMinimum ? SetArgumentMaybe : SetArgumentDefinitely, OpInfo(variable));
-            if (numSetArguments >= mandatoryMinimum && Options::useMaximalFlushInsertionPhase())
-                setArgumentMaybes.append(variable->local());
             m_currentBlock->variablesAtTail.setOperand(variable->local(), setArgument);
             ++numSetArguments;
         }
@@ -1944,8 +1944,6 @@ bool ByteCodeParser::handleVarargsInlining(Node* callTargetNode, VirtualRegister
     // calling LoadVarargs twice.
     inlineCall(callTargetNode, result, callVariant, registerOffset, maxNumArguments, kind, nullptr, insertChecks);
 
-    for (VirtualRegister reg : setArgumentMaybes)
-        setDirect(reg, jsConstant(jsUndefined()), ImmediateNakedSet);
 
     VERBOSE_LOG("Successful inlining (varargs, monomorphic).\nStack: ", currentCodeOrigin(), "\n");
     return true;
@@ -2112,7 +2110,8 @@ ByteCodeParser::CallOptimizationResult ByteCodeParser::handleInlining(
         addToGraph(Phantom, myCallTargetNode);
         emitArgumentPhantoms(registerOffset, argumentCountIncludingThis);
         
-        set(result, addToGraph(BottomValue));
+        if (result.isValid())
+            set(result, addToGraph(BottomValue));
         VERBOSE_LOG("couldTakeSlowPath was false\n");
     }
 
@@ -2351,13 +2350,13 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, VirtualRegister result, I
 
                 // FIXME: We could easily relax the Array/Object.prototype transition as long as we OSR exitted if we saw a hole.
                 // https://bugs.webkit.org/show_bug.cgi?id=173171
-                if (globalObject->arraySpeciesWatchpoint().state() == IsWatched
+                if (globalObject->arraySpeciesWatchpointSet().state() == IsWatched
                     && globalObject->havingABadTimeWatchpoint()->isStillValid()
                     && arrayPrototypeStructure->transitionWatchpointSetIsStillValid()
                     && objectPrototypeStructure->transitionWatchpointSetIsStillValid()
                     && globalObject->arrayPrototypeChainIsSane()) {
 
-                    m_graph.watchpoints().addLazily(globalObject->arraySpeciesWatchpoint());
+                    m_graph.watchpoints().addLazily(globalObject->arraySpeciesWatchpointSet());
                     m_graph.watchpoints().addLazily(globalObject->havingABadTimeWatchpoint());
                     m_graph.registerAndWatchStructureTransition(arrayPrototypeStructure);
                     m_graph.registerAndWatchStructureTransition(objectPrototypeStructure);
@@ -3244,9 +3243,11 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, VirtualRegister result, I
                     littleEndianChild = get(virtualRegisterForArgument(2, registerOffset));
                     if (littleEndianChild->hasConstant()) {
                         JSValue constant = littleEndianChild->constant()->value();
-                        isLittleEndian = constant.pureToBoolean();
-                        if (isLittleEndian != MixedTriState)
-                            littleEndianChild = nullptr;
+                        if (constant) {
+                            isLittleEndian = constant.pureToBoolean();
+                            if (isLittleEndian != MixedTriState)
+                                littleEndianChild = nullptr;
+                        }
                     } else
                         isLittleEndian = MixedTriState;
                 }
@@ -3327,9 +3328,11 @@ bool ByteCodeParser::handleIntrinsicCall(Node* callee, VirtualRegister result, I
                     littleEndianChild = get(virtualRegisterForArgument(3, registerOffset));
                     if (littleEndianChild->hasConstant()) {
                         JSValue constant = littleEndianChild->constant()->value();
-                        isLittleEndian = constant.pureToBoolean();
-                        if (isLittleEndian != MixedTriState)
-                            littleEndianChild = nullptr;
+                        if (constant) {
+                            isLittleEndian = constant.pureToBoolean();
+                            if (isLittleEndian != MixedTriState)
+                                littleEndianChild = nullptr;
+                        }
                     } else
                         isLittleEndian = MixedTriState;
                 }
@@ -4782,11 +4785,11 @@ void ByteCodeParser::parseBlock(unsigned limit)
         // === Function entry opcodes ===
 
         case op_enter: {
+            addToGraph(Options::usePollingTraps() ? CheckTraps : InvalidationPoint);
             Node* undefined = addToGraph(JSConstant, OpInfo(m_constantUndefined));
             // Initialize all locals to undefined.
             for (int i = 0; i < m_inlineStackTop->m_codeBlock->numVars(); ++i)
                 set(virtualRegisterForLocal(i), undefined, ImmediateNakedSet);
-
             NEXT_OPCODE(op_enter);
         }
             
@@ -5735,6 +5738,24 @@ void ByteCodeParser::parseBlock(unsigned limit)
             LAST_OPCODE(op_jneq_null);
         }
 
+        case op_jundefined_or_null: {
+            auto bytecode = currentInstruction->as<OpJundefinedOrNull>();
+            unsigned relativeOffset = jumpTarget(bytecode.m_targetLabel);
+            Node* value = get(bytecode.m_value);
+            Node* condition = addToGraph(IsUndefinedOrNull, value);
+            addToGraph(Branch, OpInfo(branchData(m_currentIndex + relativeOffset, m_currentIndex + currentInstruction->size())), condition);
+            LAST_OPCODE(op_jundefined_or_null);
+        }
+
+        case op_jnundefined_or_null: {
+            auto bytecode = currentInstruction->as<OpJnundefinedOrNull>();
+            unsigned relativeOffset = jumpTarget(bytecode.m_targetLabel);
+            Node* value = get(bytecode.m_value);
+            Node* condition = addToGraph(IsUndefinedOrNull, value);
+            addToGraph(Branch, OpInfo(branchData(m_currentIndex + currentInstruction->size(), m_currentIndex + relativeOffset)), condition);
+            LAST_OPCODE(op_jnundefined_or_null);
+        }
+
         case op_jless: {
             auto bytecode = currentInstruction->as<OpJless>();
             unsigned relativeOffset = jumpTarget(bytecode.m_targetLabel);
@@ -6625,14 +6646,10 @@ void ByteCodeParser::parseBlock(unsigned limit)
                 m_currentBlock->isOSRTarget = true;
 
             addToGraph(LoopHint);
+            addToGraph(Options::usePollingTraps() ? CheckTraps : InvalidationPoint);
             NEXT_OPCODE(op_loop_hint);
         }
         
-        case op_check_traps: {
-            addToGraph(Options::usePollingTraps() ? CheckTraps : InvalidationPoint);
-            NEXT_OPCODE(op_check_traps);
-        }
-
         case op_nop: {
             addToGraph(Check); // We add a nop here so that basic block linking doesn't break.
             NEXT_OPCODE(op_nop);
@@ -7101,7 +7118,7 @@ ByteCodeParser::InlineStackEntry::InlineStackEntry(
         }
         for (unsigned i = 0; i < codeBlock->numberOfSwitchJumpTables(); ++i) {
             m_switchRemap[i] = byteCodeParser->m_codeBlock->numberOfSwitchJumpTables();
-            byteCodeParser->m_codeBlock->addSwitchJumpTable() = codeBlock->switchJumpTable(i);
+            byteCodeParser->m_codeBlock->addSwitchJumpTableFromProfiledCodeBlock(codeBlock->switchJumpTable(i));
         }
     } else {
         // Machine code block case.

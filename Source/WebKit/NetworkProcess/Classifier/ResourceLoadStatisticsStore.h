@@ -29,6 +29,7 @@
 
 #include "ResourceLoadStatisticsClassifier.h"
 #include "WebResourceLoadStatisticsStore.h"
+#include <WebCore/FrameIdentifier.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
@@ -77,6 +78,7 @@ enum class OperatingDatesWindow : bool { Long, Short };
 
 // This is always constructed / used / destroyed on the WebResourceLoadStatisticsStore's statistics queue.
 class ResourceLoadStatisticsStore : public CanMakeWeakPtr<ResourceLoadStatisticsStore> {
+    WTF_MAKE_FAST_ALLOCATED;
 public:
     using ResourceLoadStatistics = WebCore::ResourceLoadStatistics;
     using RegistrableDomain = WebCore::RegistrableDomain;
@@ -90,7 +92,6 @@ public:
     using NavigatedToDomain = WebCore::RegistrableDomain;
     using DomainInNeedOfStorageAccess = WebCore::RegistrableDomain;
     using OpenerDomain = WebCore::RegistrableDomain;
-    using FrameID = uint64_t;
     
     virtual ~ResourceLoadStatisticsStore();
 
@@ -98,7 +99,7 @@ public:
     virtual bool isEmpty() const = 0;
 
     virtual void updateCookieBlocking(CompletionHandler<void()>&&) = 0;
-    void updateCookieBlockingForDomains(const Vector<RegistrableDomain>& domainsToBlock, CompletionHandler<void()>&&);
+    void updateCookieBlockingForDomains(const RegistrableDomainsToBlockCookiesFor&, CompletionHandler<void()>&&);
     void clearBlockingStateForDomains(const Vector<RegistrableDomain>& domains, CompletionHandler<void()>&&);
 
     void includeTodayAsOperatingDateIfNecessary();
@@ -159,14 +160,12 @@ public:
     bool isDebugModeEnabled() const { return m_debugModeEnabled; };
     void setPrevalentResourceForDebugMode(const RegistrableDomain&);
 
-    virtual void hasStorageAccess(const SubFrameDomain&, const TopFrameDomain&, Optional<FrameID>, WebCore::PageIdentifier, CompletionHandler<void(bool)>&&) = 0;
-    virtual void requestStorageAccess(SubFrameDomain&&, TopFrameDomain&&, FrameID, WebCore::PageIdentifier, CompletionHandler<void(StorageAccessStatus)>&&) = 0;
-    virtual void grantStorageAccess(SubFrameDomain&&, TopFrameDomain&&, FrameID, WebCore::PageIdentifier, WebCore::StorageAccessPromptWasShown, CompletionHandler<void(WebCore::StorageAccessWasGranted)>&&) = 0;
+    virtual void hasStorageAccess(const SubFrameDomain&, const TopFrameDomain&, Optional<WebCore::FrameIdentifier>, WebCore::PageIdentifier, CompletionHandler<void(bool)>&&) = 0;
+    virtual void requestStorageAccess(SubFrameDomain&&, TopFrameDomain&&, WebCore::FrameIdentifier, WebCore::PageIdentifier, CompletionHandler<void(StorageAccessStatus)>&&) = 0;
+    virtual void grantStorageAccess(SubFrameDomain&&, TopFrameDomain&&, WebCore::FrameIdentifier, WebCore::PageIdentifier, WebCore::StorageAccessPromptWasShown, CompletionHandler<void(WebCore::StorageAccessWasGranted)>&&) = 0;
 
     virtual void logFrameNavigation(const NavigatedToDomain&, const TopFrameDomain&, const NavigatedFromDomain&, bool isRedirect, bool isMainFrame) = 0;
     virtual void logUserInteraction(const TopFrameDomain&) = 0;
-    virtual void logSubresourceLoading(const SubResourceDomain&, const TopFrameDomain&, WallTime lastSeen) = 0;
-    virtual void logSubresourceRedirect(const RedirectedFromDomain&, const RedirectedToDomain&) = 0;
     virtual void logCrossSiteLoadWithLinkDecoration(const NavigatedFromDomain&, const NavigatedToDomain&) = 0;
 
     virtual void clearUserInteraction(const RegistrableDomain&) = 0;
@@ -186,7 +185,7 @@ public:
 protected:
     static unsigned computeImportance(const WebCore::ResourceLoadStatistics&);
     static Vector<OperatingDate> mergeOperatingDates(const Vector<OperatingDate>& existingDates, Vector<OperatingDate>&& newDates);
-    static void debugLogDomainsInBatches(const char* action, const Vector<RegistrableDomain>& domains);
+    static void debugLogDomainsInBatches(const char* action, const RegistrableDomainsToBlockCookiesFor&);
 
     ResourceLoadStatisticsStore(WebResourceLoadStatisticsStore&, WorkQueue&, ShouldIncludeLocalhost);
     
@@ -197,7 +196,7 @@ protected:
     void scheduleStatisticsProcessingRequestIfNecessary();
     void mergeOperatingDates(Vector<OperatingDate>&&);
     virtual Vector<RegistrableDomain> ensurePrevalentResourcesForDebugMode() = 0;
-    virtual HashMap<RegistrableDomain, WebsiteDataToRemove> registrableDomainsToRemoveWebsiteDataFor() = 0;
+    virtual Vector<std::pair<RegistrableDomain, WebsiteDataToRemove>> registrableDomainsToRemoveWebsiteDataFor() = 0;
     virtual void pruneStatisticsIfNeeded() = 0;
 
     WebResourceLoadStatisticsStore& store() { return m_store; }

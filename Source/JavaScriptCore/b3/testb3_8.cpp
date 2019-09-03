@@ -31,8 +31,8 @@
 template<typename T>
 void testAtomicWeakCAS()
 {
-    Type type = NativeTraits<T>::type;
-    Width width = NativeTraits<T>::width;
+    constexpr Type type = NativeTraits<T>::type;
+    constexpr Width width = NativeTraits<T>::width;
 
     auto checkMyDisassembly = [&] (Compilation& compilation, bool fenced) {
         if (isX86()) {
@@ -278,8 +278,8 @@ void testAtomicWeakCAS()
 template<typename T>
 void testAtomicStrongCAS()
 {
-    Type type = NativeTraits<T>::type;
-    Width width = NativeTraits<T>::width;
+    constexpr Type type = NativeTraits<T>::type;
+    constexpr Width width = NativeTraits<T>::width;
 
     auto checkMyDisassembly = [&] (Compilation& compilation, bool fenced) {
         if (isX86()) {
@@ -547,8 +547,8 @@ void testAtomicStrongCAS()
 template<typename T>
 void testAtomicXchg(B3::Opcode opcode)
 {
-    Type type = NativeTraits<T>::type;
-    Width width = NativeTraits<T>::width;
+    constexpr Type type = NativeTraits<T>::type;
+    constexpr Width width = NativeTraits<T>::width;
 
     auto doTheMath = [&] (T& memory, T operand) -> T {
         T oldValue = memory;
@@ -716,8 +716,8 @@ void addAtomicTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>& tasks
     RUN(testAtomicXchg<int64_t>(AtomicXchg));
 }
 
-template<B3::Type type, typename CType, typename InputType>
-void testLoad(B3::Opcode opcode, InputType value)
+template<typename CType, typename InputType>
+void testLoad(B3::Type type, B3::Opcode opcode, InputType value)
 {
     // Simple load from an absolute address.
     {
@@ -806,29 +806,29 @@ void testLoad(B3::Opcode opcode, InputType value)
 template<typename T>
 void testLoad(B3::Opcode opcode, int32_t value)
 {
-    return testLoad<Int32, T>(opcode, value);
+    return testLoad<T>(B3::Int32, opcode, value);
 }
 
-template<B3::Type type, typename T>
-void testLoad(T value)
+template<typename T>
+void testLoad(B3::Type type, T value)
 {
-    return testLoad<type, T>(Load, value);
+    return testLoad<T>(type, Load, value);
 }
 
 void addLoadTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>& tasks)
 {
-    RUN(testLoad<Int32>(60));
-    RUN(testLoad<Int32>(-60));
-    RUN(testLoad<Int32>(1000));
-    RUN(testLoad<Int32>(-1000));
-    RUN(testLoad<Int32>(1000000));
-    RUN(testLoad<Int32>(-1000000));
-    RUN(testLoad<Int32>(1000000000));
-    RUN(testLoad<Int32>(-1000000000));
-    RUN_UNARY(testLoad<Int64>, int64Operands());
-    RUN_UNARY(testLoad<Float>, floatingPointOperands<float>());
-    RUN_UNARY(testLoad<Double>, floatingPointOperands<double>());
-    
+    RUN(testLoad(Int32, 60));
+    RUN(testLoad(Int32, -60));
+    RUN(testLoad(Int32, 1000));
+    RUN(testLoad(Int32, -1000));
+    RUN(testLoad(Int32, 1000000));
+    RUN(testLoad(Int32, -1000000));
+    RUN(testLoad(Int32, 1000000000));
+    RUN(testLoad(Int32, -1000000000));
+    RUN_BINARY(testLoad, { MAKE_OPERAND(Int64) }, int64Operands());
+    RUN_BINARY(testLoad, { MAKE_OPERAND(Float) }, floatingPointOperands<float>());
+    RUN_BINARY(testLoad, { MAKE_OPERAND(Double) }, floatingPointOperands<double>());
+
     RUN(testLoad<int8_t>(Load8S, 60));
     RUN(testLoad<int8_t>(Load8S, -60));
     RUN(testLoad<int8_t>(Load8S, 1000));
@@ -864,6 +864,242 @@ void addLoadTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>& tasks)
     RUN(testLoad<uint16_t>(Load16Z, -1000000));
     RUN(testLoad<uint16_t>(Load16Z, 1000000000));
     RUN(testLoad<uint16_t>(Load16Z, -1000000000));
+}
+
+void testFastForwardCopy32()
+{
+#if CPU(X86_64)
+    for (const bool aligned : { true, false }) {
+        for (const bool overlap : { false, true }) {
+            for (size_t arrsize : { 1, 4, 5, 6, 8, 10, 12, 16, 20, 40, 100, 1000}) {
+                size_t overlapAmount = 5;
+
+                uint32_t* arr1, *arr2;
+
+                if (overlap) {
+                    arr1 = new uint32_t[arrsize * 2];
+                    arr2 = arr1 + (arrsize - overlapAmount);
+                } else {
+                    arr1 = new uint32_t[arrsize];
+                    arr2 = new uint32_t[arrsize];
+                }
+
+                if (!aligned && arrsize < 3)
+                    continue;
+                if (overlap && arrsize <= overlapAmount + 3)
+                    continue;
+
+                if (!aligned) {
+                    ++arr1;
+                    ++arr2;
+                    arrsize -= 1;
+                    overlapAmount -= 1;
+                }
+
+                for (size_t i = 0; i < arrsize; ++i)
+                    arr1[i] = i;
+
+                fastForwardCopy32(arr2, arr1, arrsize);
+
+                if (overlap) {
+                    for (size_t i = 0; i < arrsize - overlapAmount; ++i)
+                        CHECK(arr2[i] == i);
+                    for (size_t i = arrsize - overlapAmount; i < arrsize; ++i)
+                        CHECK(arr2[i] == i - (arrsize - overlapAmount));
+                } else {
+                    for (size_t i = 0; i < arrsize; ++i)
+                        CHECK(arr2[i] == i);
+                }
+
+                if (!aligned) {
+                    --arr1;
+                    --arr2;
+                }
+
+                if (!overlap) {
+                    delete[] arr1;
+                    delete[] arr2;
+                } else
+                    delete[] arr1;
+            }
+        }
+    }
+#endif
+}
+
+void testByteCopyLoop()
+{
+    Procedure proc;
+    BasicBlock* root = proc.addBlock();
+    BasicBlock* head = proc.addBlock();
+    BasicBlock* update = proc.addBlock();
+    BasicBlock* continuation = proc.addBlock();
+
+    auto* arraySrc = root->appendNew<ArgumentRegValue>(proc, Origin(), GPRInfo::argumentGPR0);
+    auto* arrayDst = root->appendNew<ArgumentRegValue>(proc, Origin(), GPRInfo::argumentGPR1);
+    auto* arraySize = root->appendNew<Value>(proc, Trunc, Origin(), root->appendNew<ArgumentRegValue>(proc, Origin(), GPRInfo::argumentGPR2));
+    auto* one = root->appendNew<Const32Value>(proc, Origin(), 1);
+    auto* two = root->appendNew<Const32Value>(proc, Origin(), 2);
+    UpsilonValue* startingIndex = root->appendNew<UpsilonValue>(proc, Origin(), root->appendNew<Const32Value>(proc, Origin(), 0));
+    root->appendNew<Value>(proc, Jump, Origin());
+    root->setSuccessors(FrequentedBlock(head));
+
+    auto* index = head->appendNew<Value>(proc, Phi, Int32, Origin());
+    startingIndex->setPhi(index);
+    auto* loadIndex = head->appendNew<Value>(proc, Add, Origin(), arraySrc,
+        head->appendNew<Value>(proc, ZExt32, Origin(), head->appendNew<Value>(proc, Shl, Origin(), index, two)));
+    auto* storeIndex = head->appendNew<Value>(proc, Add, Origin(), arrayDst,
+        head->appendNew<Value>(proc, ZExt32, Origin(), head->appendNew<Value>(proc, Shl, Origin(), index, two)));
+    head->appendNew<MemoryValue>(proc, Store, Origin(), head->appendNew<MemoryValue>(proc, Load, Int32, Origin(), loadIndex), storeIndex);
+    auto* newIndex = head->appendNew<Value>(proc, Add, Origin(), index, one);
+    auto* cmpValue = head->appendNew<Value>(proc, GreaterThan, Origin(), newIndex, arraySize);
+    head->appendNew<Value>(proc, Branch, Origin(), cmpValue);
+    head->setSuccessors(FrequentedBlock(continuation), FrequentedBlock(update));
+
+    UpsilonValue* updateIndex = update->appendNew<UpsilonValue>(proc, Origin(), newIndex);
+    updateIndex->setPhi(index);
+    update->appendNew<Value>(proc, Jump, Origin());
+    update->setSuccessors(FrequentedBlock(head));
+
+    continuation->appendNewControlValue(proc, Return, Origin());
+
+    int* arr1 = new int[3];
+    int* arr2 = new int[3];
+
+    arr1[0] = 0;
+    arr1[1] = 0;
+    arr1[2] = 0;
+    arr2[0] = 1;
+    arr2[1] = 2;
+    arr2[2] = 3;
+
+    compileAndRun<void>(proc, arr2, arr1, 3);
+
+    CHECK_EQ(arr1[0], 1);
+    CHECK_EQ(arr1[1], 2);
+    CHECK_EQ(arr1[2], 3);
+
+    delete[] arr1;
+    delete [] arr2;
+}
+
+void testByteCopyLoopStartIsLoopDependent()
+{
+    Procedure proc;
+    BasicBlock* root = proc.addBlock();
+    BasicBlock* head = proc.addBlock();
+    BasicBlock* update = proc.addBlock();
+    BasicBlock* continuation = proc.addBlock();
+
+    auto* arraySrc = root->appendNew<ArgumentRegValue>(proc, Origin(), GPRInfo::argumentGPR0);
+    auto* arrayDst = root->appendNew<ArgumentRegValue>(proc, Origin(), GPRInfo::argumentGPR1);
+    auto* arraySize = root->appendNew<Value>(proc, Trunc, Origin(), root->appendNew<ArgumentRegValue>(proc, Origin(), GPRInfo::argumentGPR2));
+    auto* one = root->appendNew<Const32Value>(proc, Origin(), 1);
+    auto* two = root->appendNew<Const32Value>(proc, Origin(), 2);
+    root->appendNew<Value>(proc, Jump, Origin());
+    root->setSuccessors(FrequentedBlock(head));
+
+    UpsilonValue* startingIndex = head->appendNew<UpsilonValue>(proc, Origin(), head->appendNew<Const32Value>(proc, Origin(), 0));
+    auto* index = head->appendNew<Value>(proc, Phi, Int32, Origin());
+    startingIndex->setPhi(index);
+    auto* loadIndex = head->appendNew<Value>(proc, Add, Origin(), arraySrc,
+        head->appendNew<Value>(proc, ZExt32, Origin(), head->appendNew<Value>(proc, Shl, Origin(), index, two)));
+    auto* storeIndex = head->appendNew<Value>(proc, Add, Origin(), arrayDst,
+        head->appendNew<Value>(proc, ZExt32, Origin(), head->appendNew<Value>(proc, Shl, Origin(), index, two)));
+    head->appendNew<MemoryValue>(proc, Store, Origin(), head->appendNew<MemoryValue>(proc, Load, Int32, Origin(), loadIndex), storeIndex);
+    auto* newIndex = head->appendNew<Value>(proc, Add, Origin(), index, one);
+    auto* cmpValue = head->appendNew<Value>(proc, GreaterThan, Origin(), newIndex, arraySize);
+    head->appendNew<Value>(proc, Branch, Origin(), cmpValue);
+    head->setSuccessors(FrequentedBlock(continuation), FrequentedBlock(update));
+
+    UpsilonValue* updateIndex = update->appendNew<UpsilonValue>(proc, Origin(), newIndex);
+    updateIndex->setPhi(index);
+    update->appendNew<Value>(proc, Jump, Origin());
+    update->setSuccessors(FrequentedBlock(head));
+
+    continuation->appendNewControlValue(proc, Return, Origin());
+
+    int* arr1 = new int[3];
+    int* arr2 = new int[3];
+
+    arr1[0] = 0;
+    arr1[1] = 0;
+    arr1[2] = 0;
+    arr2[0] = 1;
+    arr2[1] = 2;
+    arr2[2] = 3;
+
+    compileAndRun<void>(proc, arr2, arr1, 0);
+
+    CHECK_EQ(arr1[0], 1);
+    CHECK_EQ(arr1[1], 0);
+    CHECK_EQ(arr1[2], 0);
+
+    delete[] arr1;
+    delete [] arr2;
+}
+
+void testByteCopyLoopBoundIsLoopDependent()
+{
+    Procedure proc;
+    BasicBlock* root = proc.addBlock();
+    BasicBlock* head = proc.addBlock();
+    BasicBlock* update = proc.addBlock();
+    BasicBlock* continuation = proc.addBlock();
+
+    auto* arraySrc = root->appendNew<ArgumentRegValue>(proc, Origin(), GPRInfo::argumentGPR0);
+    auto* arrayDst = root->appendNew<ArgumentRegValue>(proc, Origin(), GPRInfo::argumentGPR1);
+    auto* one = root->appendNew<Const32Value>(proc, Origin(), 1);
+    auto* two = root->appendNew<Const32Value>(proc, Origin(), 2);
+    UpsilonValue* startingIndex = root->appendNew<UpsilonValue>(proc, Origin(), root->appendNew<Const32Value>(proc, Origin(), 0));
+    root->appendNew<Value>(proc, Jump, Origin());
+    root->setSuccessors(FrequentedBlock(head));
+
+    auto* index = head->appendNew<Value>(proc, Phi, Int32, Origin());
+    startingIndex->setPhi(index);
+    auto* loadIndex = head->appendNew<Value>(proc, Add, Origin(), arraySrc,
+        head->appendNew<Value>(proc, ZExt32, Origin(), head->appendNew<Value>(proc, Shl, Origin(), index, two)));
+    auto* storeIndex = head->appendNew<Value>(proc, Add, Origin(), arrayDst,
+        head->appendNew<Value>(proc, ZExt32, Origin(), head->appendNew<Value>(proc, Shl, Origin(), index, two)));
+    head->appendNew<MemoryValue>(proc, Store, Origin(), head->appendNew<MemoryValue>(proc, Load, Int32, Origin(), loadIndex), storeIndex);
+    auto* newIndex = head->appendNew<Value>(proc, Add, Origin(), index, one);
+    auto* cmpValue = head->appendNew<Value>(proc, GreaterThan, Origin(), newIndex, index);
+    head->appendNew<Value>(proc, Branch, Origin(), cmpValue);
+    head->setSuccessors(FrequentedBlock(continuation), FrequentedBlock(update));
+
+    UpsilonValue* updateIndex = update->appendNew<UpsilonValue>(proc, Origin(), newIndex);
+    updateIndex->setPhi(index);
+    update->appendNew<Value>(proc, Jump, Origin());
+    update->setSuccessors(FrequentedBlock(head));
+
+    continuation->appendNewControlValue(proc, Return, Origin());
+
+    int* arr1 = new int[3];
+    int* arr2 = new int[3];
+
+    arr1[0] = 0;
+    arr1[1] = 0;
+    arr1[2] = 0;
+    arr2[0] = 1;
+    arr2[1] = 2;
+    arr2[2] = 3;
+
+    compileAndRun<void>(proc, arr2, arr1, 3);
+
+    CHECK_EQ(arr1[0], 1);
+    CHECK_EQ(arr1[1], 0);
+    CHECK_EQ(arr1[2], 0);
+
+    delete[] arr1;
+    delete [] arr2;
+}
+
+void addCopyTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>& tasks)
+{
+    RUN(testFastForwardCopy32());
+    RUN(testByteCopyLoop());
+    RUN(testByteCopyLoopStartIsLoopDependent());
+    RUN(testByteCopyLoopBoundIsLoopDependent());
 }
 
 #endif // ENABLE(B3_JIT)

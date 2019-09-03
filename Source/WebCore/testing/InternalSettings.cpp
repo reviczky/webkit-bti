@@ -103,6 +103,7 @@ InternalSettings::Backup::Backup(Settings& settings)
     , m_shouldDispatchSyntheticMouseEventsWhenModifyingSelection(settings.shouldDispatchSyntheticMouseEventsWhenModifyingSelection())
     , m_shouldDispatchSyntheticMouseOutAfterSyntheticClick(settings.shouldDispatchSyntheticMouseOutAfterSyntheticClick())
     , m_shouldDeactivateAudioSession(PlatformMediaSessionManager::shouldDeactivateAudioSession())
+    , m_animatedImageDebugCanvasDrawingEnabled(settings.animatedImageDebugCanvasDrawingEnabled())
     , m_userInterfaceDirectionPolicy(settings.userInterfaceDirectionPolicy())
     , m_systemLayoutDirection(settings.systemLayoutDirection())
     , m_pdfImageCachingPolicy(settings.pdfImageCachingPolicy())
@@ -212,6 +213,7 @@ void InternalSettings::Backup::restoreTo(Settings& settings)
     settings.setShouldDispatchSyntheticMouseEventsWhenModifyingSelection(m_shouldDispatchSyntheticMouseEventsWhenModifyingSelection);
     settings.setShouldDispatchSyntheticMouseOutAfterSyntheticClick(m_shouldDispatchSyntheticMouseOutAfterSyntheticClick);
     PlatformMediaSessionManager::setShouldDeactivateAudioSession(m_shouldDeactivateAudioSession);
+    settings.setAnimatedImageDebugCanvasDrawingEnabled(m_animatedImageDebugCanvasDrawingEnabled);
 
 #if ENABLE(INDEXED_DATABASE_IN_WORKERS)
     RuntimeEnabledFeatures::sharedFeatures().setIndexedDBWorkersEnabled(m_indexedDBWorkersEnabled);
@@ -231,6 +233,7 @@ void InternalSettings::Backup::restoreTo(Settings& settings)
 }
 
 class InternalSettingsWrapper : public Supplement<Page> {
+    WTF_MAKE_FAST_ALLOCATED;
 public:
     explicit InternalSettingsWrapper(Page* page)
         : m_internalSettings(InternalSettings::create(page)) { }
@@ -252,7 +255,7 @@ const char* InternalSettings::supplementName()
 InternalSettings* InternalSettings::from(Page* page)
 {
     if (!Supplement<Page>::from(page, supplementName()))
-        Supplement<Page>::provideTo(page, supplementName(), std::make_unique<InternalSettingsWrapper>(page));
+        Supplement<Page>::provideTo(page, supplementName(), makeUnique<InternalSettingsWrapper>(page));
     return static_cast<InternalSettingsWrapper*>(Supplement<Page>::from(page, supplementName()))->internalSettings();
 }
 
@@ -772,6 +775,14 @@ ExceptionOr<void> InternalSettings::setShouldMockBoldSystemFontForAccessibility(
         return Exception { InvalidAccessError };
     RenderTheme::singleton().setShouldMockBoldSystemFontForAccessibility(requires);
     FontCache::singleton().setShouldMockBoldSystemFontForAccessibility(requires);
+    return { };
+}
+
+ExceptionOr<void> InternalSettings::setAnimatedImageDebugCanvasDrawingEnabled(bool ignore)
+{
+    if (!m_page)
+        return Exception { InvalidAccessError };
+    settings().setAnimatedImageDebugCanvasDrawingEnabled(ignore);
     return { };
 }
 

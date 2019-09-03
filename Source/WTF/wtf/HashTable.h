@@ -105,6 +105,7 @@ namespace WTF {
 
     template<typename Key, typename Value, typename Extractor, typename HashFunctions, typename Traits, typename KeyTraits>
     class HashTableConstIterator : public std::iterator<std::forward_iterator_tag, Value, std::ptrdiff_t, const Value*, const Value&> {
+        WTF_MAKE_FAST_ALLOCATED;
     private:
         typedef HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits> HashTableType;
         typedef HashTableIterator<Key, Value, Extractor, HashFunctions, Traits, KeyTraits> iterator;
@@ -241,6 +242,7 @@ namespace WTF {
 
     template<typename Key, typename Value, typename Extractor, typename HashFunctions, typename Traits, typename KeyTraits>
     class HashTableIterator : public std::iterator<std::forward_iterator_tag, Value, std::ptrdiff_t, Value*, Value&> {
+        WTF_MAKE_FAST_ALLOCATED;
     private:
         typedef HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits> HashTableType;
         typedef HashTableIterator<Key, Value, Extractor, HashFunctions, Traits, KeyTraits> iterator;
@@ -311,6 +313,8 @@ namespace WTF {
 
 #if DUMP_HASHTABLE_STATS_PER_TABLE
         struct Stats {
+            WTF_MAKE_STRUCT_FAST_ALLOCATED;
+
             Stats()
                 : numAccesses(0)
                 , numRehashes(0)
@@ -584,10 +588,10 @@ namespace WTF {
         , m_deletedCount(0)
 #if CHECK_HASHTABLE_ITERATORS
         , m_iterators(0)
-        , m_mutex(std::make_unique<Lock>())
+        , m_mutex(makeUnique<Lock>())
 #endif
 #if DUMP_HASHTABLE_STATS_PER_TABLE
-        , m_stats(std::make_unique<Stats>())
+        , m_stats(makeUnique<Stats>())
 #endif
     {
     }
@@ -1330,10 +1334,10 @@ namespace WTF {
         , m_deletedCount(0)
 #if CHECK_HASHTABLE_ITERATORS
         , m_iterators(nullptr)
-        , m_mutex(std::make_unique<Lock>())
+        , m_mutex(makeUnique<Lock>())
 #endif
 #if DUMP_HASHTABLE_STATS_PER_TABLE
-        , m_stats(std::make_unique<Stats>(*other.m_stats))
+        , m_stats(makeUnique<Stats>(*other.m_stats))
 #endif
     {
         unsigned otherKeyCount = other.size();
@@ -1378,7 +1382,7 @@ namespace WTF {
     inline HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits>::HashTable(HashTable&& other)
 #if CHECK_HASHTABLE_ITERATORS
         : m_iterators(nullptr)
-        , m_mutex(std::make_unique<Lock>())
+        , m_mutex(makeUnique<Lock>())
 #endif
     {
         other.invalidateIterators();

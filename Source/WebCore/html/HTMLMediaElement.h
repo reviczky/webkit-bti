@@ -456,7 +456,7 @@ public:
     void sourceWasRemoved(HTMLSourceElement&);
     void sourceWasAdded(HTMLSourceElement&);
 
-    void privateBrowsingStateDidChange() override;
+    void privateBrowsingStateDidChange(PAL::SessionID) override;
 
     // Media cache management.
     WEBCORE_EXPORT static void setMediaCacheDirectory(const String&);
@@ -626,6 +626,7 @@ private:
     void didFinishInsertingNode() override;
     void removedFromAncestor(RemovalType, ContainerNode&) override;
     void didRecalcStyle(Style::Change) override;
+    bool isInteractiveContent() const override;
 
     void willBecomeFullscreenElement() override;
     void willStopBeingFullscreenElement() override;
@@ -990,6 +991,7 @@ private:
     RefPtr<MediaError> m_error;
 
     struct PendingSeek {
+        WTF_MAKE_STRUCT_FAST_ALLOCATED;
         PendingSeek(const MediaTime& now, const MediaTime& targetTime, const MediaTime& negativeTolerance, const MediaTime& positiveTolerance)
             : now(now)
             , targetTime(targetTime)

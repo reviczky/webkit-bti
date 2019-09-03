@@ -30,6 +30,8 @@
 #include "WHLSLCodeLocation.h"
 #include "WHLSLEntryPointType.h"
 #include "WHLSLFunctionAttribute.h"
+#include "WHLSLNameSpace.h"
+#include "WHLSLParsingMode.h"
 #include "WHLSLSemantic.h"
 #include "WHLSLUnnamedType.h"
 #include "WHLSLVariableDeclaration.h"
@@ -46,11 +48,12 @@ namespace AST {
 class FunctionDeclaration {
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    FunctionDeclaration(CodeLocation location, AttributeBlock&& attributeBlock, Optional<EntryPointType> entryPointType, Ref<UnnamedType> type, String&& name, VariableDeclarations&& parameters, std::unique_ptr<Semantic>&& semantic, bool isOperator)
+    FunctionDeclaration(CodeLocation location, AttributeBlock&& attributeBlock, Optional<EntryPointType> entryPointType, Ref<UnnamedType> type, String&& name, VariableDeclarations&& parameters, std::unique_ptr<Semantic>&& semantic, bool isOperator, ParsingMode parsingMode)
         : m_codeLocation(location)
         , m_attributeBlock(WTFMove(attributeBlock))
         , m_entryPointType(entryPointType)
-        , m_isOperator(WTFMove(isOperator))
+        , m_isOperator(isOperator)
+        , m_parsingMode(parsingMode)
         , m_type(WTFMove(type))
         , m_name(WTFMove(name))
         , m_parameters(WTFMove(parameters))
@@ -79,15 +82,22 @@ public:
     bool isOperator() const { return m_isOperator; }
     const CodeLocation& codeLocation() const { return m_codeLocation; }
 
+    ParsingMode parsingMode() const { return m_parsingMode; }
+
+    NameSpace nameSpace() const { return m_nameSpace; }
+    void setNameSpace(NameSpace nameSpace) { m_nameSpace = nameSpace; }
+
 private:
     CodeLocation m_codeLocation;
     AttributeBlock m_attributeBlock;
     Optional<EntryPointType> m_entryPointType;
     bool m_isOperator;
+    ParsingMode m_parsingMode;
     Ref<UnnamedType> m_type;
     String m_name;
     VariableDeclarations m_parameters;
     std::unique_ptr<Semantic> m_semantic;
+    NameSpace m_nameSpace { NameSpace::StandardLibrary };
 };
 
 } // namespace AST

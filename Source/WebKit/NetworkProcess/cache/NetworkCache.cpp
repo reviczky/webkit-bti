@@ -59,7 +59,7 @@ static const AtomString& resourceType()
     return resource;
 }
 
-RefPtr<Cache> Cache::open(NetworkProcess& networkProcess, const String& cachePath, OptionSet<CacheOption> options)
+RefPtr<Cache> Cache::open(NetworkProcess& networkProcess, const String& cachePath, OptionSet<CacheOption> options, PAL::SessionID sessionID)
 {
     auto storage = Storage::open(cachePath, options.contains(CacheOption::TestingMode) ? Storage::Mode::AvoidRandomness : Storage::Mode::Normal);
 
@@ -68,7 +68,7 @@ RefPtr<Cache> Cache::open(NetworkProcess& networkProcess, const String& cachePat
     if (!storage)
         return nullptr;
 
-    return adoptRef(*new Cache(networkProcess, storage.releaseNonNull(), options));
+    return adoptRef(*new Cache(networkProcess, storage.releaseNonNull(), options, sessionID));
 }
 
 #if PLATFORM(GTK) || PLATFORM(WPE)
@@ -78,23 +78,24 @@ static void dumpFileChanged(Cache* cache)
 }
 #endif
 
-Cache::Cache(NetworkProcess& networkProcess, Ref<Storage>&& storage, OptionSet<CacheOption> options)
+Cache::Cache(NetworkProcess& networkProcess, Ref<Storage>&& storage, OptionSet<CacheOption> options, PAL::SessionID sessionID)
     : m_storage(WTFMove(storage))
     , m_networkProcess(networkProcess)
+    , m_sessionID(sessionID)
 {
 #if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
     if (options.contains(CacheOption::SpeculativeRevalidation)) {
-        m_lowPowerModeNotifier = std::make_unique<WebCore::LowPowerModeNotifier>([this](bool isLowPowerModeEnabled) {
+        m_lowPowerModeNotifier = makeUnique<WebCore::LowPowerModeNotifier>([this](bool isLowPowerModeEnabled) {
             ASSERT(WTF::RunLoop::isMain());
             if (isLowPowerModeEnabled)
                 m_speculativeLoadManager = nullptr;
             else {
                 ASSERT(!m_speculativeLoadManager);
-                m_speculativeLoadManager = std::make_unique<SpeculativeLoadManager>(*this, m_storage.get());
+                m_speculativeLoadManager = makeUnique<SpeculativeLoadManager>(*this, m_storage.get());
             }
         });
         if (!m_lowPowerModeNotifier->isLowPowerModeEnabled())
-            m_speculativeLoadManager = std::make_unique<SpeculativeLoadManager>(*this, m_storage.get());
+            m_speculativeLoadManager = makeUnique<SpeculativeLoadManager>(*this, m_storage.get());
     }
 #endif
 
@@ -108,7 +109,7 @@ Cache::Cache(NetworkProcess& networkProcess, Ref<Storage>&& storage, OptionSet<C
 #endif
 #if PLATFORM(GTK) || PLATFORM(WPE)
         // Triggers with "touch $cachePath/dump".
-        CString dumpFilePath = fileSystemRepresentation(pathByAppendingComponent(m_storage->basePath(), "dump"));
+        CString dumpFilePath = fileSystemRepresentation(pathByAppendingComponent(m_storage->basePathIsolatedCopy(), "dump"));
         GRefPtr<GFile> dumpFile = adoptGRef(g_file_new_for_path(dumpFilePath.data()));
         GFileMonitor* monitor = g_file_monitor_file(dumpFile.get(), G_FILE_MONITOR_NONE, nullptr, nullptr);
         g_signal_connect_swapped(monitor, "changed", G_CALLBACK(dumpFileChanged), this);
@@ -270,15 +271,27 @@ static StoreDecision makeStoreDecision(const WebCore::ResourceRequest& originalR
 }
 
 #if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
-static bool inline canRequestUseSpeculativeRevalidation(const ResourceRequest& request)
+static bool inline canRequestUseSpeculativeRevalidation(const WebCore::ResourceRequest& request)
 {
     if (request.isConditional())
         return false;
 
-    if (cachePolicyAllowsExpired(request.cachePolicy()))
+    if (request.requester() == WebCore::ResourceRequest::Requester::XHR || request.requester() == WebCore::ResourceRequest::Requester::Fetch)
         return false;
 
-    return request.requester() != ResourceRequest::Requester::XHR && request.requester() != ResourceRequest::Requester::Fetch;
+    switch (request.cachePolicy()) {
+    case WebCore::ResourceRequestCachePolicy::ReturnCacheDataElseLoad:
+    case WebCore::ResourceRequestCachePolicy::ReturnCacheDataDontLoad:
+    case WebCore::ResourceRequestCachePolicy::ReloadIgnoringCacheData:
+        return false;
+    case WebCore::ResourceRequestCachePolicy::UseProtocolCachePolicy:
+    case WebCore::ResourceRequestCachePolicy::RefreshAnyCacheData:
+        return true;
+    case WebCore::ResourceRequestCachePolicy::DoNotUseAnyCache:
+        ASSERT_NOT_REACHED();
+        return false;
+    }
+    return false;
 }
 #endif
 
@@ -363,12 +376,12 @@ void Cache::completeRetrieve(RetrieveCompletionHandler&& handler, std::unique_pt
     
 std::unique_ptr<Entry> Cache::makeEntry(const WebCore::ResourceRequest& request, const WebCore::ResourceResponse& response, RefPtr<WebCore::SharedBuffer>&& responseData)
 {
-    return std::make_unique<Entry>(makeCacheKey(request), response, WTFMove(responseData), WebCore::collectVaryingRequestHeaders(networkProcess().defaultStorageSession(), request, response));
+    return makeUnique<Entry>(makeCacheKey(request), response, WTFMove(responseData), WebCore::collectVaryingRequestHeaders(networkProcess().defaultStorageSession(), request, response));
 }
 
 std::unique_ptr<Entry> Cache::makeRedirectEntry(const WebCore::ResourceRequest& request, const WebCore::ResourceResponse& response, const WebCore::ResourceRequest& redirectRequest)
 {
-    return std::make_unique<Entry>(makeCacheKey(request), response, redirectRequest, WebCore::collectVaryingRequestHeaders(networkProcess().defaultStorageSession(), request, response));
+    return makeUnique<Entry>(makeCacheKey(request), response, redirectRequest, WebCore::collectVaryingRequestHeaders(networkProcess().defaultStorageSession(), request, response));
 }
 
 std::unique_ptr<Entry> Cache::store(const WebCore::ResourceRequest& request, const WebCore::ResourceResponse& response, RefPtr<WebCore::SharedBuffer>&& responseData, Function<void(MappedBody&)>&& completionHandler)
@@ -403,7 +416,8 @@ std::unique_ptr<Entry> Cache::store(const WebCore::ResourceRequest& request, con
             mappedBody.shareableResource->createHandle(mappedBody.shareableResourceHandle);
         }
 #endif
-        completionHandler(mappedBody);
+        if (completionHandler)
+            completionHandler(mappedBody);
         LOG(NetworkCache, "(NetworkProcess) stored");
     });
 
@@ -445,7 +459,7 @@ std::unique_ptr<Entry> Cache::update(const WebCore::ResourceRequest& originalReq
     WebCore::ResourceResponse response = existingEntry.response();
     WebCore::updateResponseHeadersAfterRevalidation(response, validatingResponse);
 
-    auto updateEntry = std::make_unique<Entry>(existingEntry.key(), response, existingEntry.buffer(), WebCore::collectVaryingRequestHeaders(networkProcess().defaultStorageSession(), originalRequest, response));
+    auto updateEntry = makeUnique<Entry>(existingEntry.key(), response, existingEntry.buffer(), WebCore::collectVaryingRequestHeaders(networkProcess().defaultStorageSession(), originalRequest, response));
     auto updateRecord = updateEntry->encodeAsStorageRecord();
 
     m_storage->store(updateRecord, { });
@@ -580,9 +594,9 @@ void Cache::clear()
     clear(-WallTime::infinity(), nullptr);
 }
 
-String Cache::recordsPath() const
+String Cache::recordsPathIsolatedCopy() const
 {
-    return m_storage->recordsPath();
+    return m_storage->recordsPathIsolatedCopy();
 }
 
 void Cache::retrieveData(const DataKey& dataKey, Function<void(const uint8_t*, size_t)> completionHandler)

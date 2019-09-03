@@ -151,10 +151,9 @@ void SVGAElement::defaultEventHandler(Event& event)
     SVGGraphicsElement::defaultEventHandler(event);
 }
 
-int SVGAElement::tabIndex() const
+int SVGAElement::defaultTabIndex() const
 {
-    // Skip the supportsFocus check in SVGElement.
-    return Element::tabIndex();
+    return 0;
 }
 
 bool SVGAElement::supportsFocus() const
@@ -162,7 +161,7 @@ bool SVGAElement::supportsFocus() const
     if (hasEditableStyle())
         return SVGGraphicsElement::supportsFocus();
     // If not a link we should still be able to focus the element if it has a tabIndex.
-    return isLink() || Element::supportsFocus();
+    return isLink() || SVGGraphicsElement::supportsFocus();
 }
 
 bool SVGAElement::isURLAttribute(const Attribute& attribute) const

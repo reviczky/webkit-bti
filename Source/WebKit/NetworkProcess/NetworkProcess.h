@@ -29,7 +29,6 @@
 #include "CacheModel.h"
 #include "DownloadManager.h"
 #include "LocalStorageDatabaseTracker.h"
-#include "NetworkBlobRegistry.h"
 #include "NetworkContentRuleListManager.h"
 #include "NetworkHTTPSUpgradeChecker.h"
 #include "SandboxExtension.h"
@@ -98,6 +97,7 @@ class NetworkConnectionToWebProcess;
 class NetworkProcessSupplement;
 class NetworkProximityManager;
 class NetworkResourceLoader;
+class StorageManagerSet;
 class WebSWServerConnection;
 class WebSWServerToContextConnection;
 enum class ShouldGrandfatherStatistics : bool;
@@ -138,7 +138,6 @@ public:
     using NavigatedToDomain = WebCore::RegistrableDomain;
     using DomainInNeedOfStorageAccess = WebCore::RegistrableDomain;
     using OpenerDomain = WebCore::RegistrableDomain;
-    using FrameID = uint64_t;
 
     NetworkProcess(AuxiliaryProcessInitializationParameters&&);
     ~NetworkProcess();
@@ -153,7 +152,7 @@ public:
     template <typename T>
     void addSupplement()
     {
-        m_supplements.add(T::supplementName(), std::make_unique<T>(*this));
+        m_supplements.add(T::supplementName(), makeUnique<T>(*this));
     }
 
     void removeNetworkConnectionToWebProcess(NetworkConnectionToWebProcess&);
@@ -161,10 +160,10 @@ public:
     AuthenticationManager& authenticationManager();
     DownloadManager& downloadManager();
 
-    void setSession(const PAL::SessionID&, std::unique_ptr<NetworkSession>&&);
-    NetworkSession* networkSession(const PAL::SessionID&) const final;
+    void setSession(PAL::SessionID, std::unique_ptr<NetworkSession>&&);
+    NetworkSession* networkSession(PAL::SessionID) const final;
     NetworkSession* networkSessionByConnection(IPC::Connection&) const;
-    void destroySession(const PAL::SessionID&);
+    void destroySession(PAL::SessionID);
 
     void forEachNetworkSession(const Function<void(NetworkSession&)>&);
 
@@ -194,10 +193,12 @@ public:
 
 #if PLATFORM(COCOA)
     RetainPtr<CFDataRef> sourceApplicationAuditData() const;
+    bool suppressesConnectionTerminationOnSystemChange() const { return m_suppressesConnectionTerminationOnSystemChange; }
+#endif
+#if PLATFORM(COCOA) || USE(SOUP)
     void getHostNamesWithHSTSCache(WebCore::NetworkStorageSession&, HashSet<String>&);
     void deleteHSTSCacheForHostNames(WebCore::NetworkStorageSession&, const Vector<String>&);
     void clearHSTSCache(WebCore::NetworkStorageSession&, WallTime modifiedSince);
-    bool suppressesConnectionTerminationOnSystemChange() const { return m_suppressesConnectionTerminationOnSystemChange; }
 #endif
 
     void findPendingDownloadLocation(NetworkDataTask&, ResponseCompletionHandler&&, const WebCore::ResourceResponse&);
@@ -209,7 +210,7 @@ public:
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     void clearPrevalentResource(PAL::SessionID, const RegistrableDomain&, CompletionHandler<void()>&&);
     void clearUserInteraction(PAL::SessionID, const RegistrableDomain&, CompletionHandler<void()>&&);
-    void deleteWebsiteDataForRegistrableDomains(PAL::SessionID, OptionSet<WebsiteDataType>, HashMap<RegistrableDomain, WebsiteDataToRemove>&&, bool shouldNotifyPage, CompletionHandler<void(const HashSet<RegistrableDomain>&)>&&);
+    void deleteWebsiteDataForRegistrableDomains(PAL::SessionID, OptionSet<WebsiteDataType>, Vector<std::pair<RegistrableDomain, WebsiteDataToRemove>>&&, bool shouldNotifyPage, CompletionHandler<void(const HashSet<RegistrableDomain>&)>&&);
     void deleteCookiesForTesting(PAL::SessionID, RegistrableDomain, bool includeHttpOnlyCookies, CompletionHandler<void()>&&);
     void dumpResourceLoadStatistics(PAL::SessionID, CompletionHandler<void(String)>&&);
     void updatePrevalentDomainsToBlockCookiesFor(PAL::SessionID, const Vector<RegistrableDomain>& domainsToBlock, CompletionHandler<void()>&&);
@@ -260,6 +261,7 @@ public:
     void didCommitCrossSiteLoadWithDataTransfer(PAL::SessionID, const RegistrableDomain& fromDomain, const RegistrableDomain& toDomain, OptionSet<WebCore::CrossSiteNavigationDataTransfer::Flag>, WebCore::PageIdentifier);
     void setCrossSiteLoadWithLinkDecorationForTesting(PAL::SessionID, const RegistrableDomain& fromDomain, const RegistrableDomain& toDomain, CompletionHandler<void()>&&);
     void resetCrossSiteLoadsWithLinkDecorationForTesting(PAL::SessionID, CompletionHandler<void()>&&);
+    void hasIsolatedSession(PAL::SessionID, const WebCore::RegistrableDomain&, CompletionHandler<void(bool)>&&) const;
 #endif
 
     using CacheStorageRootPathCallback = CompletionHandler<void(String&&)>;
@@ -270,10 +272,7 @@ public:
     void setSessionIsControlledByAutomation(PAL::SessionID, bool);
     bool sessionIsControlledByAutomation(PAL::SessionID) const;
 
-    void webPageWasAdded(IPC::Connection&, PAL::SessionID, WebCore::PageIdentifier, WebCore::PageIdentifier);
-    void webPageWasRemoved(IPC::Connection&, PAL::SessionID, WebCore::PageIdentifier);
-    void webProcessWasDisconnected(IPC::Connection&);
-    void webProcessSessionChanged(IPC::Connection&, PAL::SessionID, const Vector<WebCore::PageIdentifier>&);
+    void connectionToWebProcessClosed(IPC::Connection&);
     void getLocalStorageOriginDetails(PAL::SessionID, CompletionHandler<void(Vector<LocalStorageDatabaseTracker::OriginDetails>&&)>&&);
 
 #if ENABLE(CONTENT_EXTENSIONS)
@@ -284,8 +283,11 @@ public:
     WebCore::IDBServer::IDBServer& idbServer(PAL::SessionID);
     // WebCore::IDBServer::IDBBackingStoreFileHandler.
     void accessToTemporaryFileComplete(const String& path) final;
-    void setIDBPerOriginQuota(uint64_t);
 #endif
+
+    void syncLocalStorage(CompletionHandler<void()>&&);
+    void clearLegacyPrivateBrowsingLocalStorage();
+
     void updateQuotaBasedOnSpaceUsageForTesting(PAL::SessionID, const WebCore::ClientOrigin&);
 
 #if ENABLE(SANDBOX_EXTENSIONS)
@@ -328,7 +330,7 @@ public:
     void removeCacheEngine(const PAL::SessionID&);
     void requestStorageSpace(PAL::SessionID, const WebCore::ClientOrigin&, uint64_t quota, uint64_t currentSize, uint64_t spaceRequired, CompletionHandler<void(Optional<uint64_t>)>&&);
 
-    NetworkBlobRegistry& networkBlobRegistry() override { return m_networkBlobRegistry; }
+    WebCore::BlobRegistryImpl* blobRegistry(NetworkConnectionToWebProcess&);
 
     void storeAdClickAttribution(PAL::SessionID, WebCore::AdClickAttribution&&);
     void dumpAdClickAttribution(PAL::SessionID, CompletionHandler<void(String)>&&);
@@ -395,7 +397,6 @@ private:
     void deleteWebsiteDataForOrigins(PAL::SessionID, OptionSet<WebsiteDataType>, const Vector<WebCore::SecurityOriginData>& origins, const Vector<String>& cookieHostNames, const Vector<String>& HSTSCacheHostnames, uint64_t callbackID);
 
     void clearCachedCredentials();
-    void clearPermanentCredentialsForProtectionSpace(const WebCore::ProtectionSpace&, CompletionHandler<void()>&&);
 
     void setCacheStorageParameters(PAL::SessionID, String&& cacheStorageDirectory, SandboxExtension::Handle&&);
     void initializeQuotaUsers(WebCore::StorageQuotaManager&, PAL::SessionID, const WebCore::ClientOrigin&);
@@ -500,7 +501,8 @@ private:
     HashMap<PAL::SessionID, std::unique_ptr<NetworkSession>> m_networkSessions;
     HashMap<PAL::SessionID, std::unique_ptr<WebCore::NetworkStorageSession>> m_networkStorageSessions;
     mutable std::unique_ptr<WebCore::NetworkStorageSession> m_defaultNetworkStorageSession;
-    NetworkBlobRegistry m_networkBlobRegistry;
+
+    RefPtr<StorageManagerSet> m_storageManagerSet;
 
 #if PLATFORM(COCOA)
     void platformInitializeNetworkProcessCocoa(const NetworkProcessCreationParameters&);
@@ -527,7 +529,6 @@ private:
 #if ENABLE(INDEXED_DATABASE)
     HashMap<PAL::SessionID, String> m_idbDatabasePaths;
     HashMap<PAL::SessionID, RefPtr<WebCore::IDBServer::IDBServer>> m_idbServers;
-    uint64_t m_idbPerOriginQuota { WebCore::IDBServer::defaultPerOriginQuota };
 #endif
 
     Deque<CrossThreadTask> m_storageTasks;
@@ -539,7 +540,7 @@ private:
     bool m_shouldDisableServiceWorkerProcessTerminationDelay { false };
     HashMap<PAL::SessionID, String> m_swDatabasePaths;
     HashMap<PAL::SessionID, std::unique_ptr<WebCore::SWServer>> m_swServers;
-    HashMap<WebCore::SWServerConnectionIdentifier, WebSWServerConnection*> m_swServerConnections;
+    HashMap<WebCore::SWServerConnectionIdentifier, WeakPtr<WebSWServerConnection>> m_swServerConnections;
 #endif
 
 #if PLATFORM(COCOA)

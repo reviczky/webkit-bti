@@ -29,6 +29,7 @@
 
 #include "WHLSLCodeLocation.h"
 #include "WHLSLError.h"
+#include "WHLSLNameSpace.h"
 #include <wtf/Optional.h>
 #include <wtf/Vector.h>
 #include <wtf/text/StringConcatenate.h>
@@ -165,16 +166,17 @@ struct Token {
 };
 
 inline CodeLocation::CodeLocation(const Token& token)
-    : m_startOffset(token.codeLocation.startOffset())
-    , m_endOffset(token.codeLocation.endOffset())
-{ }
+    : CodeLocation(token.codeLocation)
+{
+}
 
 class Lexer {
 public:
     Lexer() = default;
 
-    Lexer(StringView stringView)
+    Lexer(StringView stringView, AST::NameSpace nameSpace)
         : m_stringView(stringView)
+        , m_nameSpace(nameSpace)
     {
         skipWhitespaceAndComments();
         m_ringBuffer[0] = consumeTokenFromStream();
@@ -251,7 +253,9 @@ public:
         return makeString("Parse error at line ", lineAndColumnNumberFromOffset(m_stringView, token.startOffset()).line, ": ", message);
     }
 
-    static String errorString(const StringView& source, Error);
+    static String errorString(Error, const String& source1, const String* source2 = nullptr);
+
+    AST::NameSpace nameSpace() const { return m_nameSpace; }
 
 private:
     friend struct Token;
@@ -265,43 +269,12 @@ private:
     };
     static LineAndColumn lineAndColumnNumberFromOffset(const StringView&, unsigned offset);
 
-    Optional<Token::Type> recognizeKeyword(unsigned end);
-
-    Optional<unsigned> coreDecimalIntLiteral(unsigned) const;
-    Optional<unsigned> decimalIntLiteral(unsigned) const;
-    Optional<unsigned> decimalUintLiteral(unsigned) const;
-    Optional<unsigned> coreHexadecimalIntLiteral(unsigned) const;
-    Optional<unsigned> hexadecimalIntLiteral(unsigned) const;
-    Optional<unsigned> hexadecimalUintLiteral(unsigned) const;
-    Optional<unsigned> intLiteral(unsigned) const;
-    Optional<unsigned> uintLiteral(unsigned) const;
-    Optional<unsigned> digit(unsigned) const;
-    unsigned digitStar(unsigned) const;
-    Optional<unsigned> character(char, unsigned) const;
-    Optional<unsigned> coreFloatLiteralType1(unsigned) const;
-    Optional<unsigned> coreFloatLiteral(unsigned) const;
-    Optional<unsigned> floatLiteral(unsigned) const;
-    template<unsigned length> Optional<unsigned> string(const char (&string)[length], unsigned) const;
-    Optional<unsigned> validIdentifier(unsigned) const;
-    Optional<unsigned> identifier(unsigned) const;
-    Optional<unsigned> completeOperatorName(unsigned) const;
-
     StringView m_stringView;
     Token m_ringBuffer[2];
     unsigned m_ringBufferIndex { 0 };
     unsigned m_offset { 0 };
+    AST::NameSpace m_nameSpace { AST::NameSpace::StandardLibrary };
 };
-
-template<unsigned length> Optional<unsigned> Lexer::string(const char (&string)[length], unsigned offset) const
-{
-    if (offset + length > m_stringView.length())
-        return WTF::nullopt;
-    for (unsigned i = 0; i < length - 1; ++i) {
-        if (m_stringView[offset + i] != string[i])
-            return WTF::nullopt;
-    }
-    return offset + length - 1;
-}
 
 StringView Token::stringView(const Lexer& lexer) const
 {

@@ -33,7 +33,6 @@
 #include "NetworkResourceLoadParameters.h"
 #include "NetworkResourceLoader.h"
 #include "PingLoad.h"
-#include "StorageManager.h"
 #include "WebPageProxy.h"
 #include "WebPageProxyMessages.h"
 #include "WebProcessProxy.h"
@@ -85,7 +84,6 @@ NetworkSession::NetworkSession(NetworkProcess& networkProcess, const NetworkSess
     , m_enableResourceLoadStatisticsLogTestingEvent(parameters.enableResourceLoadStatisticsLogTestingEvent)
 #endif
     , m_adClickAttribution(makeUniqueRef<AdClickAttributionManager>(parameters.sessionID))
-    , m_storageManager(StorageManager::create(String(parameters.localStorageDirectory)))
 {
     if (!m_sessionID.isEphemeral()) {
         String networkCacheDirectory = parameters.networkCacheDirectory;
@@ -94,12 +92,11 @@ NetworkSession::NetworkSession(NetworkProcess& networkProcess, const NetworkSess
         else
             SandboxExtension::consumePermanently(parameters.networkCacheDirectoryExtensionHandle);
 
-        m_cache = NetworkCache::Cache::open(networkProcess, networkCacheDirectory, networkProcess.cacheOptions());
+        m_cache = NetworkCache::Cache::open(networkProcess, networkCacheDirectory, networkProcess.cacheOptions(), m_sessionID);
         if (!m_cache)
             RELEASE_LOG_ERROR(NetworkCache, "Failed to initialize the WebKit network disk cache");
     }
 
-    SandboxExtension::consumePermanently(parameters.localStorageDirectoryExtensionHandle);
     m_adClickAttribution->setPingLoadFunction([this, weakThis = makeWeakPtr(this)](NetworkResourceLoadParameters&& loadParameters, CompletionHandler<void(const WebCore::ResourceError&, const WebCore::ResourceResponse&)>&& completionHandler) {
         if (!weakThis)
             return;
@@ -113,9 +110,6 @@ NetworkSession::~NetworkSession()
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     destroyResourceLoadStatistics();
 #endif
-
-    m_storageManager->resume();
-    m_storageManager->waitUntilTasksFinished();
 }
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
@@ -182,7 +176,7 @@ void NetworkSession::notifyPageStatisticsTelemetryFinished(unsigned totalPrevale
     m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::NotifyResourceLoadStatisticsTelemetryFinished(totalPrevalentResources, totalPrevalentResourcesWithUserInteraction, top3SubframeUnderTopFrameOrigins), 0);
 }
 
-void NetworkSession::deleteWebsiteDataForRegistrableDomains(OptionSet<WebsiteDataType> dataTypes, HashMap<RegistrableDomain, WebsiteDataToRemove>&& domains, bool shouldNotifyPage, CompletionHandler<void(const HashSet<RegistrableDomain>&)>&& completionHandler)
+void NetworkSession::deleteWebsiteDataForRegistrableDomains(OptionSet<WebsiteDataType> dataTypes, Vector<std::pair<RegistrableDomain, WebsiteDataToRemove>>&& domains, bool shouldNotifyPage, CompletionHandler<void(const HashSet<RegistrableDomain>&)>&& completionHandler)
 {
     m_networkProcess->deleteWebsiteDataForRegistrableDomains(m_sessionID, dataTypes, WTFMove(domains), shouldNotifyPage, WTFMove(completionHandler));
 }

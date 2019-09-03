@@ -91,6 +91,18 @@ public:
     }
 
     template<class IDLType>
+    void resolveCallbackValueWithNewlyCreated(const Function<typename IDLType::InnerParameterType(ScriptExecutionContext&)>& createValue)
+    {
+        if (isSuspended())
+            return;
+        ASSERT(deferred());
+        ASSERT(globalObject());
+        auto* exec = globalObject()->globalExec();
+        JSC::JSLockHolder locker(exec);
+        resolve(*exec, toJSNewlyCreated<IDLType>(*exec, *globalObject(), createValue(*globalObject()->scriptExecutionContext())));
+    }
+
+    template<class IDLType>
     void reject(typename IDLType::ParameterType value)
     {
         if (isSuspended())

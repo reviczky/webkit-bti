@@ -48,6 +48,7 @@
 #include "B3MoveConstants.h"
 #include "B3NativeTraits.h"
 #include "B3Procedure.h"
+#include "B3ReduceLoopStrength.h"
 #include "B3ReduceStrength.h"
 #include "B3SlotBaseValue.h"
 #include "B3StackSlot.h"
@@ -189,7 +190,7 @@ extern Lock crashLock;
 inline std::unique_ptr<Compilation> compileProc(Procedure& procedure, unsigned optLevel = Options::defaultB3OptLevel())
 {
     procedure.setOptLevel(optLevel);
-    return std::make_unique<Compilation>(B3::compile(procedure));
+    return makeUnique<Compilation>(B3::compile(procedure));
 }
 
 template<typename T, typename... Arguments>
@@ -270,6 +271,8 @@ struct Operand {
 typedef Operand<int64_t> Int64Operand;
 typedef Operand<int32_t> Int32Operand;
 
+#define MAKE_OPERAND(value) Operand<decltype(value)> { #value, value }
+
 template<typename FloatType>
 void populateWithInterestingValues(Vector<Operand<FloatType>>& operands)
 {
@@ -279,8 +282,8 @@ void populateWithInterestingValues(Vector<Operand<FloatType>>& operands)
     operands.append({ "-0.4", static_cast<FloatType>(-0.5) });
     operands.append({ "0.5", static_cast<FloatType>(0.5) });
     operands.append({ "-0.5", static_cast<FloatType>(-0.5) });
-    operands.append({ "0.6", static_cast<FloatType>(0.5) });
-    operands.append({ "-0.6", static_cast<FloatType>(-0.5) });
+    operands.append({ "0.6", static_cast<FloatType>(0.6) });
+    operands.append({ "-0.6", static_cast<FloatType>(-0.6) });
     operands.append({ "1.", static_cast<FloatType>(1.) });
     operands.append({ "-1.", static_cast<FloatType>(-1.) });
     operands.append({ "2.", static_cast<FloatType>(2.) });
@@ -699,7 +702,8 @@ void testPatchpointGPScratch();
 void testPatchpointFPScratch();
 void testPatchpointLotsOfLateAnys();
 void testPatchpointAnyImm(ValueRep rep);
-void testPatchpointManyImms();
+void testPatchpointManyWarmAnyImms();
+void testPatchpointManyColdAnyImms();
 void testPatchpointWithRegisterResult();
 void testPatchpointWithStackArgumentResult();
 void testPatchpointWithAnyResult();
@@ -1011,6 +1015,14 @@ void addSShrShTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>&);
 void addShrTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>&);
 void addAtomicTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>&);
 void addLoadTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>&);
+void addTupleTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>&);
+
+void testFastForwardCopy32();
+void testByteCopyLoop();
+void testByteCopyLoopStartIsLoopDependent();
+void testByteCopyLoopBoundIsLoopDependent();
+
+void addCopyTests(const char* filter, Deque<RefPtr<SharedTask<void()>>>&);
 
 bool shouldRun(const char* filter, const char* testName);
 

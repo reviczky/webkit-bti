@@ -45,27 +45,25 @@ namespace WHLSL {
 
 namespace AST {
 
-class EnumerationDefinition : public NamedType {
+class EnumerationDefinition final : public NamedType {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     EnumerationDefinition(CodeLocation location, String&& name, Ref<UnnamedType> type)
-        : NamedType(location, WTFMove(name))
+        : NamedType(Kind::EnumerationDefinition, location, WTFMove(name))
         , m_type(WTFMove(type))
     {
     }
 
-    virtual ~EnumerationDefinition() = default;
+    ~EnumerationDefinition() = default;
 
     EnumerationDefinition(const EnumerationDefinition&) = delete;
     EnumerationDefinition(EnumerationDefinition&&) = default;
-
-    bool isEnumerationDefinition() const override { return true; }
 
     UnnamedType& type() { return m_type; }
 
     bool add(EnumerationMember&& member)
     {
-        auto result = m_members.add(member.name(), std::make_unique<EnumerationMember>(WTFMove(member)));
+        auto result = m_members.add(member.name(), makeUnique<EnumerationMember>(WTFMove(member)));
         return result.isNewEntry;
     }
 
@@ -96,6 +94,8 @@ private:
 
 }
 
-SPECIALIZE_TYPE_TRAITS_WHLSL_NAMED_TYPE(EnumerationDefinition, isEnumerationDefinition())
+DEFINE_DEFAULT_DELETE(EnumerationDefinition)
+
+SPECIALIZE_TYPE_TRAITS_WHLSL_TYPE(EnumerationDefinition, isEnumerationDefinition())
 
 #endif

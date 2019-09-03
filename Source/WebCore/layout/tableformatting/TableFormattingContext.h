@@ -41,6 +41,21 @@ class TableFormattingContext : public FormattingContext {
 public:
     TableFormattingContext(const Box& formattingContextRoot, TableFormattingState&);
     void layout() const override;
+
+private:
+    class Geometry : public FormattingContext::Geometry {
+    public:
+        static HeightAndMargin tableCellHeightAndMargin(const LayoutState&, const Box&);
+    };
+
+    IntrinsicWidthConstraints computedIntrinsicWidthConstraints() const override;
+    LayoutUnit computedTableWidth() const;
+
+    void ensureTableGrid() const;
+    void computePreferredWidthForColumns() const;
+    void distributeAvailableWidth(LayoutUnit extraHorizontalSpace) const;
+
+    TableFormattingState& formattingState() const { return downcast<TableFormattingState>(FormattingContext::formattingState()); }
 };
 
 }

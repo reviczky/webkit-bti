@@ -86,7 +86,6 @@ void computeUsesForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, const Ins
     case op_create_direct_arguments:
     case op_create_cloned_arguments:
     case op_get_rest_length:
-    case op_check_traps:
     case op_get_argument:
     case op_nop:
     case op_unreachable:
@@ -107,6 +106,8 @@ void computeUsesForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, const Ins
     USES(OpJfalse, condition)
     USES(OpJeqNull, value)
     USES(OpJneqNull, value)
+    USES(OpJundefinedOrNull, value)
+    USES(OpJnundefinedOrNull, value)
     USES(OpDec, srcDst)
     USES(OpInc, srcDst)
     USES(OpLogShadowChickenPrologue, scope)
@@ -307,6 +308,8 @@ void computeDefsForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, const Ins
     case op_jfalse:
     case op_jeq_null:
     case op_jneq_null:
+    case op_jundefined_or_null:
+    case op_jnundefined_or_null:
     case op_jneq_ptr:
     case op_jless:
     case op_jlesseq:
@@ -342,7 +345,6 @@ void computeDefsForBytecodeOffset(Block* codeBlock, OpcodeID opcodeID, const Ins
     case op_profile_control_flow:
     case op_put_to_arguments:
     case op_set_function_name:
-    case op_check_traps:
     case op_log_shadow_chicken_prologue:
     case op_log_shadow_chicken_tail:
     case op_yield:

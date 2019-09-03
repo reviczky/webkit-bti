@@ -625,6 +625,18 @@ op :jneq_null,
         targetLabel: BoundLabel,
     }
 
+op :jundefined_or_null,
+    args: {
+        value: VirtualRegister,
+        targetLabel: BoundLabel,
+    }
+
+op :jnundefined_or_null,
+    args: {
+        value: VirtualRegister,
+        targetLabel: BoundLabel,
+    }
+
 op :jneq_ptr,
     args: {
         value: VirtualRegister,
@@ -1080,8 +1092,6 @@ op :yield,
         yieldPoint: unsigned,
         argument: VirtualRegister,
     }
-
-op :check_traps
 
 op :log_shadow_chicken_prologue,
     args: {

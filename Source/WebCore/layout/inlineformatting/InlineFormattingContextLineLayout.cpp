@@ -49,7 +49,7 @@ static LayoutUnit inlineItemWidth(const LayoutState& layoutState, const InlineIt
     if (is<InlineTextItem>(inlineItem)) {
         auto& inlineTextItem = downcast<InlineTextItem>(inlineItem);
         auto end = inlineTextItem.isCollapsed() ? inlineTextItem.start() + 1 : inlineTextItem.end();
-        return TextUtil::width(inlineTextItem.inlineBox(), inlineTextItem.start(), end, contentLogicalLeft);
+        return TextUtil::width(inlineTextItem.layoutBox(), inlineTextItem.start(), end, contentLogicalLeft);
     }
 
     auto& layoutBox = inlineItem.layoutBox();
@@ -59,7 +59,7 @@ static LayoutUnit inlineItemWidth(const LayoutState& layoutState, const InlineIt
     if (layoutBox.isFloatingPositioned())
         return displayBox.marginBoxWidth();
 
-    if (layoutBox.isReplaced())
+    if (layoutBox.replaced())
         return displayBox.width();
 
     if (inlineItem.isContainerStart())
@@ -206,7 +206,7 @@ LineLayout::IsEndOfLine LineLayout::placeInlineItem(const InlineItem& inlineItem
     if (breakingContext.breakingBehavior == LineBreaker::BreakingBehavior::Split) {
         ASSERT(inlineItem.isText());
         auto& inlineTextItem = downcast<InlineTextItem>(inlineItem);
-        auto splitData = TextUtil::split(inlineTextItem.inlineBox(), inlineTextItem.start(), inlineTextItem.length(), itemLogicalWidth, availableWidth, currentLogicalRight);
+        auto splitData = TextUtil::split(inlineTextItem.layoutBox(), inlineTextItem.start(), inlineTextItem.length(), itemLogicalWidth, availableWidth, currentLogicalRight);
         // Construct a partial trailing inline item.
         ASSERT(!m_trailingPartialInlineTextItem);
         m_trailingPartialInlineTextItem = inlineTextItem.split(splitData.start, splitData.length);
@@ -279,8 +279,6 @@ InlineFormattingContext::InlineLayout::InlineLayout(const InlineFormattingContex
 
 void InlineFormattingContext::InlineLayout::layout(const InlineItems& inlineItems, LayoutUnit widthConstraint) const
 {
-    ASSERT(!inlineItems.isEmpty());
-
     auto& formattingRootDisplayBox = layoutState().displayBoxForLayoutBox(m_formattingRoot);
     auto& floatingState = layoutState().establishedFormattingState(m_formattingRoot).floatingState();
 
@@ -398,7 +396,7 @@ void InlineFormattingContext::InlineLayout::createDisplayRuns(const Line::Conten
             displayBox.setTopLeft(logicalRect.topLeft());
             displayBox.setContentBoxWidth(logicalRect.width());
             displayBox.setContentBoxHeight(logicalRect.height());
-            formattingState.addInlineRun(std::make_unique<Display::Run>(logicalRect));
+            formattingState.addInlineRun(makeUnique<Display::Run>(logicalRect));
             continue;
         }
 
@@ -409,7 +407,7 @@ void InlineFormattingContext::InlineLayout::createDisplayRuns(const Line::Conten
                 topLeft += Geometry::inFlowPositionedPositionOffset(layoutState(), layoutBox);
             displayBox.setTopLeft(topLeft);
             lineBoxRect.expandHorizontally(logicalRect.width());
-            formattingState.addInlineRun(std::make_unique<Display::Run>(logicalRect));
+            formattingState.addInlineRun(makeUnique<Display::Run>(logicalRect));
             continue;
         }
 
@@ -444,7 +442,7 @@ void InlineFormattingContext::InlineLayout::createDisplayRuns(const Line::Conten
             auto previousRunCanBeExtended = previousLineRun && previousLineRun->textContext() ? previousLineRun->textContext()->canBeExtended : false;
             auto requiresNewRun = !index || !previousRunCanBeExtended || &layoutBox != &previousLineRun->layoutBox();
             if (requiresNewRun)
-                formattingState.addInlineRun(std::make_unique<Display::Run>(logicalRect, Display::Run::TextContext { textContext->start, textContext->length }));
+                formattingState.addInlineRun(makeUnique<Display::Run>(logicalRect, Display::Run::TextContext { textContext->start, textContext->length }));
             else {
                 auto& lastDisplayRun = formattingState.inlineRuns().last();
                 lastDisplayRun->expandHorizontally(logicalRect.width());

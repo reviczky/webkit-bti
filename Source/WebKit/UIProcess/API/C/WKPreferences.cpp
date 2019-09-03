@@ -1740,6 +1740,16 @@ bool WKPreferencesGetDialogElementEnabled(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->dialogElementEnabled();
 }
 
+void WKPreferencesSetKeygenElementEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setKeygenElementEnabled(flag);
+}
+
+bool WKPreferencesGetKeygenElementEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->keygenElementEnabled();
+}
+
 void WKPreferencesSetWebShareEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setWebShareEnabled(flag);
@@ -2138,4 +2148,14 @@ void WKPreferencesSetReferrerPolicyAttributeEnabled(WKPreferencesRef preferences
 bool WKPreferencesGetReferrerPolicyAttributeEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->referrerPolicyAttributeEnabled();
+}
+
+void WKPreferencesSetLazyImageLoadingEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setLazyImageLoadingEnabled(flag);
+}
+
+bool WKPreferencesGetLazyImageLoadingEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->lazyImageLoadingEnabled();
 }

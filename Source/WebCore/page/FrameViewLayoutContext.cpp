@@ -39,12 +39,8 @@
 #include "RuntimeEnabledFeatures.h"
 #include "ScriptDisallowedScope.h"
 #include "Settings.h"
-
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
-#include "FormattingState.h"
-#include "LayoutContainer.h"
 #include "LayoutState.h"
-#include "LayoutTreeBuilder.h"
 #endif
 
 #include <wtf/SetForScope.h>
@@ -58,16 +54,7 @@ static void layoutUsingFormattingContext(const RenderView& renderView)
 {
     if (!RuntimeEnabledFeatures::sharedFeatures().layoutFormattingContextEnabled())
         return;
-    auto initialContainingBlock = Layout::TreeBuilder::createLayoutTree(renderView);
-    auto layoutState = std::make_unique<Layout::LayoutState>(*initialContainingBlock);
-    auto quirksMode = Layout::LayoutState::QuirksMode::No;
-    if (renderView.document().inLimitedQuirksMode())
-        quirksMode = Layout::LayoutState::QuirksMode::Limited;
-    else if (renderView.document().inQuirksMode())
-        quirksMode = Layout::LayoutState::QuirksMode::Yes;
-    layoutState->setQuirksMode(quirksMode);
-    layoutState->updateLayout();
-    layoutState->verifyAndOutputMismatchingLayoutTree(renderView);
+    Layout::LayoutState::run(renderView);
 } 
 #endif
 
@@ -158,7 +145,8 @@ void FrameViewLayoutContext::layout()
     ASSERT(!view().isPainting());
     ASSERT(frame().view() == &view());
     ASSERT(frame().document());
-    ASSERT(frame().document()->pageCacheState() == Document::NotInPageCache);
+    ASSERT(frame().document()->pageCacheState() == Document::NotInPageCache
+        || frame().document()->pageCacheState() == Document::AboutToEnterPageCache);
     if (!canPerformLayout()) {
         LOG(Layout, "  is not allowed, bailing");
         return;
@@ -608,14 +596,14 @@ void FrameViewLayoutContext::pushLayoutState(RenderElement& root)
     ASSERT(!m_paintOffsetCacheDisableCount);
     ASSERT(!layoutState());
 
-    m_layoutStateStack.append(std::make_unique<RenderLayoutState>(root));
+    m_layoutStateStack.append(makeUnique<RenderLayoutState>(root));
 }
 
 bool FrameViewLayoutContext::pushLayoutStateForPaginationIfNeeded(RenderBlockFlow& layoutRoot)
 {
     if (layoutState())
         return false;
-    m_layoutStateStack.append(std::make_unique<RenderLayoutState>(layoutRoot, RenderLayoutState::IsPaginated::Yes));
+    m_layoutStateStack.append(makeUnique<RenderLayoutState>(layoutRoot, RenderLayoutState::IsPaginated::Yes));
     return true;
 }
     
@@ -625,7 +613,7 @@ bool FrameViewLayoutContext::pushLayoutState(RenderBox& renderer, const LayoutSi
     auto* layoutState = this->layoutState();
     if (!layoutState || !needsFullRepaint() || layoutState->isPaginated() || renderer.enclosingFragmentedFlow()
         || layoutState->lineGrid() || (renderer.style().lineGrid() != RenderStyle::initialLineGrid() && renderer.isRenderBlockFlow())) {
-        m_layoutStateStack.append(std::make_unique<RenderLayoutState>(m_layoutStateStack, renderer, offset, pageHeight, pageHeightChanged));
+        m_layoutStateStack.append(makeUnique<RenderLayoutState>(m_layoutStateStack, renderer, offset, pageHeight, pageHeightChanged));
         return true;
     }
     return false;

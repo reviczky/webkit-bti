@@ -295,7 +295,7 @@ RenderLayerCompositor::RenderLayerCompositor(RenderView& renderView)
 {
 #if PLATFORM(IOS_FAMILY)
     if (m_renderView.frameView().platformWidget())
-        m_legacyScrollingLayerCoordinator = std::make_unique<LegacyWebKitScrollingLayerCoordinator>(page().chrome().client(), isMainFrameCompositor());
+        m_legacyScrollingLayerCoordinator = makeUnique<LegacyWebKitScrollingLayerCoordinator>(page().chrome().client(), isMainFrameCompositor());
 #endif
 }
 
@@ -612,7 +612,7 @@ void RenderLayerCompositor::notifyFlushBeforeDisplayRefresh(const GraphicsLayer*
 {
     if (!m_layerUpdater) {
         PlatformDisplayID displayID = page().chrome().displayID();
-        m_layerUpdater = std::make_unique<GraphicsLayerUpdater>(*this, displayID);
+        m_layerUpdater = makeUnique<GraphicsLayerUpdater>(*this, displayID);
     }
     
     m_layerUpdater->scheduleUpdate();
@@ -691,7 +691,8 @@ bool RenderLayerCompositor::updateCompositingLayers(CompositingUpdateType update
 
     m_updateCompositingLayersTimer.stop();
 
-    ASSERT(m_renderView.document().pageCacheState() == Document::NotInPageCache);
+    ASSERT(m_renderView.document().pageCacheState() == Document::NotInPageCache
+        || m_renderView.document().pageCacheState() == Document::AboutToEnterPageCache);
     
     // Compositing layers will be updated in Document::setVisualUpdatesAllowed(bool) if suppressed here.
     if (!m_renderView.document().visualUpdatesAllowed())
@@ -1367,12 +1368,12 @@ void RenderLayerCompositor::logLayerInfo(const RenderLayer& layer, const char* p
     absoluteBounds.move(layer.offsetFromAncestor(m_renderView.layer()));
     
     StringBuilder logString;
-    logString.flexibleAppend(pad(' ', 12 + depth * 2, hex(reinterpret_cast<uintptr_t>(&layer))), " id ", backing->graphicsLayer()->primaryLayerID(), " (", FormattedNumber::fixedWidth(absoluteBounds.x().toFloat(), 3), ',', FormattedNumber::fixedWidth(absoluteBounds.y().toFloat(), 3), '-', FormattedNumber::fixedWidth(absoluteBounds.maxX().toFloat(), 3), ',', FormattedNumber::fixedWidth(absoluteBounds.maxY().toFloat(), 3), ") ", FormattedNumber::fixedWidth(backing->backingStoreMemoryEstimate() / 1024, 2), "KB");
+    logString.append(pad(' ', 12 + depth * 2, hex(reinterpret_cast<uintptr_t>(&layer))), " id ", backing->graphicsLayer()->primaryLayerID(), " (", FormattedNumber::fixedWidth(absoluteBounds.x().toFloat(), 3), ',', FormattedNumber::fixedWidth(absoluteBounds.y().toFloat(), 3), '-', FormattedNumber::fixedWidth(absoluteBounds.maxX().toFloat(), 3), ',', FormattedNumber::fixedWidth(absoluteBounds.maxY().toFloat(), 3), ") ", FormattedNumber::fixedWidth(backing->backingStoreMemoryEstimate() / 1024, 2), "KB");
 
     if (!layer.renderer().style().hasAutoZIndex())
-        logString.flexibleAppend(" z-index: ", layer.renderer().style().zIndex());
+        logString.append(" z-index: ", layer.renderer().style().zIndex());
 
-    logString.flexibleAppend(" (", logReasonsForCompositing(layer), ") ");
+    logString.append(" (", logReasonsForCompositing(layer), ") ");
 
     if (backing->graphicsLayer()->contentsOpaque() || backing->paintsIntoCompositedAncestor() || backing->foregroundLayer() || backing->backgroundLayer()) {
         logString.append('[');
@@ -1926,7 +1927,6 @@ void RenderLayerCompositor::addDescendantsToOverlapMapRecursive(LayerOverlapMap&
 void RenderLayerCompositor::updateOverlapMap(LayerOverlapMap& overlapMap, const RenderLayer& layer, OverlapExtent& layerExtent, bool didPushContainer, bool addLayerToOverlap, bool addDescendantsToOverlap) const
 {
     if (addLayerToOverlap) {
-        auto clippingScopes = enclosingClippingScopes(layer, rootRenderLayer());
         addToOverlapMap(overlapMap, layer, layerExtent);
         LOG_WITH_STREAM(CompositingOverlap, stream << "layer " << &layer << " contributes to overlap, added to map " << overlapMap);
     }
@@ -2705,6 +2705,37 @@ Vector<CompositedClipData> RenderLayerCompositor::computeAncestorClippingStack(c
     });
     
     return newStack;
+}
+
+// Note that this returns the ScrollingNodeID of the scroller this layer is embedded in, not the layer's own ScrollingNodeID if it has one.
+ScrollingNodeID RenderLayerCompositor::asyncScrollableContainerNodeID(const RenderObject& renderer)
+{
+    auto* enclosingLayer = renderer.enclosingLayer();
+    if (!enclosingLayer)
+        return 0;
+    
+    auto layerScrollingNodeID = [](const RenderLayer& layer) -> ScrollingNodeID {
+        if (layer.isComposited())
+            return layer.backing()->scrollingNodeIDForRole(ScrollCoordinationRole::Scrolling);
+        return 0;
+    };
+
+    // If the renderer is inside the layer, we care about the layer's scrollability. Otherwise, we let traverseAncestorLayers look at ancestors.
+    if (!renderer.hasLayer()) {
+        if (auto scrollingNodeID = layerScrollingNodeID(*enclosingLayer))
+            return scrollingNodeID;
+    }
+
+    ScrollingNodeID containerScrollingNodeID = 0;
+    traverseAncestorLayers(*enclosingLayer, [&](const RenderLayer& ancestorLayer, bool isContainingBlockChain, bool /*isPaintOrderAncestor*/) {
+        if (isContainingBlockChain && ancestorLayer.hasCompositedScrollableOverflow()) {
+            containerScrollingNodeID = layerScrollingNodeID(ancestorLayer);
+            return AncestorTraversal::Stop;
+        }
+        return AncestorTraversal::Continue;
+    });
+
+    return containerScrollingNodeID;
 }
 
 // Return true if the given layer is a stacking context and has compositing child
@@ -4760,7 +4791,7 @@ void LegacyWebKitScrollingLayerCoordinator::registerAllViewportConstrainedLayers
 
         std::unique_ptr<ViewportConstraints> constraints;
         if (layer->renderer().isStickilyPositioned()) {
-            constraints = std::make_unique<StickyPositionViewportConstraints>(compositor.computeStickyViewportConstraints(*layer));
+            constraints = makeUnique<StickyPositionViewportConstraints>(compositor.computeStickyViewportConstraints(*layer));
             const RenderLayer* enclosingTouchScrollableLayer = nullptr;
             if (compositor.isAsyncScrollableStickyLayer(*layer, &enclosingTouchScrollableLayer) && enclosingTouchScrollableLayer) {
                 ASSERT(enclosingTouchScrollableLayer->isComposited());
@@ -4768,7 +4799,7 @@ void LegacyWebKitScrollingLayerCoordinator::registerAllViewportConstrainedLayers
                 stickyContainerMap.add(layer->backing()->graphicsLayer()->platformLayer(), enclosingTouchScrollableLayer->backing()->scrollContainerLayer()->platformLayer());
             }
         } else if (layer->renderer().isFixedPositioned())
-            constraints = std::make_unique<FixedPositionViewportConstraints>(compositor.computeFixedViewportConstraints(*layer));
+            constraints = makeUnique<FixedPositionViewportConstraints>(compositor.computeFixedViewportConstraints(*layer));
         else
             continue;
 

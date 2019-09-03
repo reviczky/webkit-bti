@@ -173,6 +173,8 @@ ExceptionOr<Document*> XMLHttpRequest::responseXML()
         return nullptr;
 
     if (!m_createdDocument) {
+        auto& context = *scriptExecutionContext();
+
         String mimeType = responseMIMEType();
         bool isHTML = equalLettersIgnoringASCIICase(mimeType, "text/html");
 
@@ -183,13 +185,13 @@ ExceptionOr<Document*> XMLHttpRequest::responseXML()
             m_responseDocument = nullptr;
         } else {
             if (isHTML)
-                m_responseDocument = HTMLDocument::create(nullptr, m_url);
+                m_responseDocument = HTMLDocument::create(context.sessionID(), nullptr, m_url);
             else
-                m_responseDocument = XMLDocument::create(nullptr, m_url);
+                m_responseDocument = XMLDocument::create(context.sessionID(), nullptr, m_url);
             m_responseDocument->overrideLastModified(m_response.lastModified());
             m_responseDocument->setContent(m_responseBuilder.toStringPreserveCapacity());
-            m_responseDocument->setContextDocument(downcast<Document>(*scriptExecutionContext()));
-            m_responseDocument->setSecurityOriginPolicy(scriptExecutionContext()->securityOriginPolicy());
+            m_responseDocument->setContextDocument(downcast<Document>(context));
+            m_responseDocument->setSecurityOriginPolicy(context.securityOriginPolicy());
             m_responseDocument->overrideMIMEType(mimeType);
 
             if (!m_responseDocument->wellFormed())
@@ -212,7 +214,7 @@ Ref<Blob> XMLHttpRequest::createResponseBlob()
         data.append(m_binaryResponseBuilder->data(), m_binaryResponseBuilder->size());
     m_binaryResponseBuilder = nullptr;
     String normalizedContentType = Blob::normalizedContentType(responseMIMEType()); // responseMIMEType defaults to text/xml which may be incorrect.
-    return Blob::create(WTFMove(data), normalizedContentType);
+    return Blob::create(scriptExecutionContext()->sessionID(), WTFMove(data), normalizedContentType);
 }
 
 RefPtr<ArrayBuffer> XMLHttpRequest::createResponseArrayBuffer()
@@ -273,7 +275,7 @@ String XMLHttpRequest::responseURL() const
 XMLHttpRequestUpload& XMLHttpRequest::upload()
 {
     if (!m_upload)
-        m_upload = std::make_unique<XMLHttpRequestUpload>(*this);
+        m_upload = makeUnique<XMLHttpRequestUpload>(*this);
     return *m_upload;
 }
 
@@ -621,7 +623,7 @@ ExceptionOr<void> XMLHttpRequest::createRequest()
     if (m_async) {
         m_progressEventThrottle.dispatchProgressEvent(eventNames().loadstartEvent);
         if (!m_uploadComplete && m_uploadListenerFlag)
-            m_upload->dispatchProgressEvent(eventNames().loadstartEvent, 0, request.httpBody()->lengthInBytes());
+            m_upload->dispatchProgressEvent(eventNames().loadstartEvent, 0, request.httpBody()->lengthInBytes(scriptExecutionContext()->sessionID()));
 
         if (readyState() != OPENED || !m_sendFlag || m_loader)
             return { };
@@ -839,12 +841,14 @@ String XMLHttpRequest::responseMIMEType() const
 {
     String mimeType = extractMIMETypeFromMediaType(m_mimeTypeOverride);
     if (mimeType.isEmpty()) {
+        String contentType;
         if (m_response.isHTTP())
-            mimeType = extractMIMETypeFromMediaType(m_response.httpHeaderField(HTTPHeaderName::ContentType));
+            contentType = m_response.httpHeaderField(HTTPHeaderName::ContentType);
         else
-            mimeType = m_response.mimeType();
-        if (mimeType.isEmpty())
-            mimeType = "text/xml"_s;
+            contentType = m_response.mimeType();
+        if (auto parsedContentType = ParsedContentType::create(contentType))
+            return parsedContentType->mimeType();
+        return "text/xml"_s;
     }
     return mimeType;
 }

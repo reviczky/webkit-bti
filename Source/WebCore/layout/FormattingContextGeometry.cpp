@@ -31,6 +31,8 @@
 #include "FloatingState.h"
 #include "FormattingState.h"
 #include "InlineFormattingState.h"
+#include "TableFormattingState.h"
+#include "TableGrid.h"
 
 namespace WebCore {
 namespace Layout {
@@ -87,7 +89,7 @@ Optional<LayoutUnit> FormattingContext::Geometry::computedHeightValue(const Layo
     return valueForLength(height, *containingBlockHeightValue);
 }
 
-static LayoutUnit contentHeightForFormattingContextRoot(const LayoutState& layoutState, const Box& layoutBox)
+LayoutUnit FormattingContext::Geometry::contentHeightForFormattingContextRoot(const LayoutState& layoutState, const Box& layoutBox)
 {
     ASSERT(isHeightAuto(layoutBox) && (layoutBox.establishesFormattingContext() || layoutBox.isDocumentBox()));
 
@@ -101,7 +103,7 @@ static LayoutUnit contentHeightForFormattingContextRoot(const LayoutState& layou
     // then the height is increased to include those edges. Only floats that participate in this block formatting context are taken
     // into account, e.g., floats inside absolutely positioned descendants or other floats are not.
     if (!is<Container>(layoutBox) || !downcast<Container>(layoutBox).hasInFlowOrFloatingChild())
-        return 0;
+        return { };
 
     auto& displayBox = layoutState.displayBoxForLayoutBox(layoutBox);
     auto borderAndPaddingTop = displayBox.borderTop() + displayBox.paddingTop().valueOr(0);
@@ -121,7 +123,14 @@ static LayoutUnit contentHeightForFormattingContextRoot(const LayoutState& layou
             top = firstDisplayBox.rectWithMargin().top();
             bottom = lastDisplayBox.rectWithMargin().bottom();
         }
-    }
+    } else if (formattingRootContainer.establishesTableFormattingContext()) {
+        auto& rowList = downcast<TableFormattingState>(layoutState.establishedFormattingState(formattingRootContainer)).tableGrid().rows();
+        ASSERT(!rowList.isEmpty());
+        top += rowList.first().logicalTop();
+        auto& lastRow = rowList.last();
+        bottom += lastRow.logicalBottom();
+    } else
+        ASSERT_NOT_REACHED();
 
     auto* formattingContextRoot = &layoutBox;
     // TODO: The document renderer is not a formatting context root by default at all. Need to find out what it is.
@@ -250,12 +259,10 @@ LayoutUnit FormattingContext::Geometry::shrinkToFitWidth(LayoutState& layoutStat
     // 'padding-left', 'padding-right', 'border-right-width', 'margin-right', and the widths of any relevant scroll bars.
 
     // Then the shrink-to-fit width is: min(max(preferred minimum width, available width), preferred width).
-    auto& formattingStateForRoot = layoutState.formattingStateForBox(formattingRoot);
-    auto intrinsicWidthConstraints = formattingStateForRoot.intrinsicWidthConstraints(formattingRoot);
-    if (!intrinsicWidthConstraints) {
-        layoutState.createFormattingContext(formattingRoot)->computeIntrinsicWidthConstraints();
-        intrinsicWidthConstraints = formattingStateForRoot.intrinsicWidthConstraints(formattingRoot);
-    }
+    auto& formattingStateForRoot = layoutState.createFormattingStateForFormattingRootIfNeeded(formattingRoot);
+    auto intrinsicWidthConstraints = formattingStateForRoot.intrinsicWidthConstraints();
+    if (!intrinsicWidthConstraints)
+        intrinsicWidthConstraints = layoutState.createFormattingContext(formattingRoot)->computedIntrinsicWidthConstraints();
     auto availableWidth = *usedValues.containingBlockWidth;
     return std::min(std::max(intrinsicWidthConstraints->minimum, availableWidth), intrinsicWidthConstraints->maximum);
 }

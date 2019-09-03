@@ -44,8 +44,6 @@ public:
 
     WEBCORE_EXPORT String title() const final;
 
-    int tabIndex() const override;
-
     WEBCORE_EXPORT ExceptionOr<void> setInnerText(const String&);
     WEBCORE_EXPORT ExceptionOr<void> setOuterText(const String&);
 
@@ -91,6 +89,8 @@ public:
     virtual bool isLabelable() const { return false; }
     virtual FormNamedItem* asFormNamedItem();
     virtual FormAssociatedElement* asFormAssociatedElement();
+
+    virtual bool isInteractiveContent() const { return false; }
 
     bool hasTagName(const HTMLQualifiedName& name) const { return hasLocalName(name.localName()); }
 

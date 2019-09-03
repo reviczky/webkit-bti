@@ -47,6 +47,7 @@ static pthread_t mainThread;
 #endif
 
 class MainThreadDispatcher {
+    WTF_MAKE_FAST_ALLOCATED;
 public:
     MainThreadDispatcher()
         : m_timer(RunLoop::main(), this, &MainThreadDispatcher::fired)
@@ -89,6 +90,11 @@ bool isMainThread()
 bool isMainThreadIfInitialized()
 {
     return isMainThread();
+}
+
+bool isMainThreadInitialized()
+{
+    return true;
 }
 
 void scheduleDispatchFunctionsOnMainThread()

@@ -28,19 +28,45 @@
 #if ENABLE(WEBGPU)
 
 #include "WHLSLError.h"
+#include "WHLSLMangledNames.h"
 #include "WHLSLPipelineDescriptor.h"
+#include <wtf/UniqueRef.h>
+#include <wtf/text/StringBuilder.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
 namespace WHLSL {
 
-struct RenderPrepareResult {
-    String metalSource;
-    String mangledVertexEntryPointName;
-    String mangledFragmentEntryPointName;
+// Hide the contents of the ShaderModule. Clients of the compiler shouldn't care what's inside it.
+struct ShaderModule;
+
+}
+
+}
+
+namespace std {
+
+template<> struct default_delete<WebCore::WHLSL::ShaderModule> {
+    void operator()(WebCore::WHLSL::ShaderModule*) const;
 };
-Expected<RenderPrepareResult, String> prepare(String& whlslSource, RenderPipelineDescriptor&);
+
+}
+
+namespace WebCore {
+
+namespace WHLSL {
+
+constexpr bool dumpMetalCompileTimes = false;
+
+UniqueRef<ShaderModule> createShaderModule(const String& whlslSource);
+
+struct RenderPrepareResult {
+    StringBuilder metalSource;
+    Metal::MangledFunctionName mangledVertexEntryPointName;
+    Metal::MangledFunctionName mangledFragmentEntryPointName;
+};
+Expected<RenderPrepareResult, String> prepare(const ShaderModule& vertexShaderModule, const ShaderModule* fragmentShaderModule, RenderPipelineDescriptor&);
 
 struct ComputeDimensions {
     unsigned width;
@@ -49,11 +75,11 @@ struct ComputeDimensions {
 };
 
 struct ComputePrepareResult {
-    String metalSource;
-    String mangledEntryPointName;
+    StringBuilder metalSource;
+    Metal::MangledFunctionName mangledEntryPointName;
     ComputeDimensions computeDimensions;
 };
-Expected<ComputePrepareResult, String> prepare(String& whlslSource, ComputePipelineDescriptor&);
+Expected<ComputePrepareResult, String> prepare(const ShaderModule&, ComputePipelineDescriptor&);
 
 } // namespace WHLSL
 
