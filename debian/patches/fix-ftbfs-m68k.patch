@@ -54,7 +54,7 @@ Index: webkitgtk/Source/WebCore/dom/NodeRareData.cpp
 --- webkitgtk.orig/Source/WebCore/dom/NodeRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/NodeRareData.cpp
 @@ -40,7 +40,11 @@ struct SameSizeAsNodeRareData {
-     void* m_pointer[3];
+     void* m_pointer[2];
  };
  
 +#if defined(__m68k__)
