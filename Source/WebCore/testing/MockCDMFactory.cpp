@@ -100,7 +100,7 @@ void MockCDMFactory::setSupportedDataTypes(Vector<String>&& types)
 
 std::unique_ptr<CDMPrivate> MockCDMFactory::createCDM(const String&)
 {
-    return std::make_unique<MockCDM>(makeWeakPtr(*this));
+    return makeUnique<MockCDM>(makeWeakPtr(*this));
 }
 
 MockCDM::MockCDM(WeakPtr<MockCDMFactory> factory)
@@ -269,7 +269,7 @@ CDMInstance::SuccessValue MockCDMInstance::setPersistentStateAllowed(bool persis
 
 CDMInstance::SuccessValue MockCDMInstance::setServerCertificate(Ref<SharedBuffer>&& certificate)
 {
-    StringView certificateStringView(reinterpret_cast<const LChar*>(certificate->data()), certificate->size());
+    StringView certificateStringView(certificate->data(), certificate->size());
 
     if (equalIgnoringASCIICase(certificateStringView, "valid"))
         return Succeeded;

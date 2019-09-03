@@ -261,12 +261,12 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/fetch/FetchResponse.idl
     Modules/fetch/WorkerGlobalScopeFetch.idl
 
-    Modules/geolocation/Coordinates.idl
     Modules/geolocation/Geolocation.idl
-    Modules/geolocation/Geoposition.idl
+    Modules/geolocation/GeolocationCoordinates.idl
+    Modules/geolocation/GeolocationPosition.idl
+    Modules/geolocation/GeolocationPositionError.idl
     Modules/geolocation/NavigatorGeolocation.idl
     Modules/geolocation/PositionCallback.idl
-    Modules/geolocation/PositionError.idl
     Modules/geolocation/PositionErrorCallback.idl
     Modules/geolocation/PositionOptions.idl
 
@@ -1211,6 +1211,7 @@ set(WebCore_LIBRARIES
 )
 
 set(WebCoreTestSupport_LIBRARIES
+    WebCore
     WebKit::JavaScriptCore
 )
 

@@ -475,7 +475,8 @@ void run(const char* filter)
     RUN(testPatchpointAnyImm(ValueRep::WarmAny));
     RUN(testPatchpointAnyImm(ValueRep::ColdAny));
     RUN(testPatchpointAnyImm(ValueRep::LateColdAny));
-    RUN(testPatchpointManyImms());
+    RUN(testPatchpointManyWarmAnyImms());
+    RUN(testPatchpointManyColdAnyImms());
     RUN(testPatchpointWithRegisterResult());
     RUN(testPatchpointWithStackArgumentResult());
     RUN(testPatchpointWithAnyResult());
@@ -535,6 +536,9 @@ void run(const char* filter)
     RUN(testEqualDouble(PNaN, PNaN, false));
 
     addLoadTests(filter, tasks);
+    addTupleTests(filter, tasks);
+
+    addCopyTests(filter, tasks);
 
     RUN(testSpillGP());
     RUN(testSpillFP());
@@ -901,6 +905,7 @@ int main(int argc, char** argv)
         break;
     }
 
+    WTF::initializeMainThread();
     JSC::initializeThreading();
     
     for (unsigned i = 0; i <= 2; ++i) {

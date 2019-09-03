@@ -46,10 +46,6 @@
 #include "OpenTypeVerticalData.h"
 #endif
 
-#if USE(DIRECT2D)
-#include <dwrite.h>
-#endif
-
 #if PLATFORM(IOS_FAMILY)
 #include <wtf/Lock.h>
 #include <wtf/RecursiveLockAdapter.h>
@@ -244,7 +240,7 @@ FontPlatformData* FontCache::getCachedFontPlatformData(const FontDescription& fo
                 it = fontPlatformDataCache().find(key);
                 ASSERT(it != fontPlatformDataCache().end());
                 if (fontPlatformDataForAlternateName)
-                    it->value = std::make_unique<FontPlatformData>(*fontPlatformDataForAlternateName);
+                    it->value = makeUnique<FontPlatformData>(*fontPlatformDataForAlternateName);
             }
         }
     }

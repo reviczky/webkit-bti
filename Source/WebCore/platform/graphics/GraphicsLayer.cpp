@@ -112,7 +112,7 @@ bool GraphicsLayer::supportsContentsTiling()
 #endif
 
 // Singleton client used for layers on which clearClient has been called.
-class EmptyGraphicsLayerClient : public GraphicsLayerClient {
+class EmptyGraphicsLayerClient final : public GraphicsLayerClient {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     static EmptyGraphicsLayerClient& singleton();
@@ -343,7 +343,7 @@ void GraphicsLayer::setTransform(const TransformationMatrix& matrix)
     if (m_transform)
         *m_transform = matrix;
     else
-        m_transform = std::make_unique<TransformationMatrix>(matrix);
+        m_transform = makeUnique<TransformationMatrix>(matrix);
 }
 
 const TransformationMatrix& GraphicsLayer::childrenTransform() const
@@ -356,7 +356,7 @@ void GraphicsLayer::setChildrenTransform(const TransformationMatrix& matrix)
     if (m_childrenTransform)
         *m_childrenTransform = matrix;
     else
-        m_childrenTransform = std::make_unique<TransformationMatrix>(matrix);
+        m_childrenTransform = makeUnique<TransformationMatrix>(matrix);
 }
 
 void GraphicsLayer::setMaskLayer(RefPtr<GraphicsLayer>&& layer)

@@ -72,7 +72,7 @@ namespace JSC {
 
 #define BEGIN_NO_SET_PC() \
     VM& vm = exec->vm();      \
-    NativeCallFrameTracer tracer(&vm, exec); \
+    NativeCallFrameTracer tracer(vm, exec); \
     auto throwScope = DECLARE_THROW_SCOPE(vm); \
     UNUSED_PARAM(throwScope)
 
@@ -180,7 +180,7 @@ SLOW_PATH_DECL(slow_path_call_arityCheck)
     if (UNLIKELY(slotsToAdd < 0)) {
         CodeBlock* codeBlock = CommonSlowPaths::codeBlockFromCallFrameCallee(exec, CodeForCall);
         exec->convertToStackOverflowFrame(vm, codeBlock);
-        NativeCallFrameTracer tracer(&vm, exec);
+        NativeCallFrameTracer tracer(vm, exec);
         ErrorHandlingScope errorScope(vm);
         throwScope.release();
         throwArityCheckStackOverflowError(exec, throwScope);
@@ -196,7 +196,7 @@ SLOW_PATH_DECL(slow_path_construct_arityCheck)
     if (UNLIKELY(slotsToAdd < 0)) {
         CodeBlock* codeBlock = CommonSlowPaths::codeBlockFromCallFrameCallee(exec, CodeForConstruct);
         exec->convertToStackOverflowFrame(vm, codeBlock);
-        NativeCallFrameTracer tracer(&vm, exec);
+        NativeCallFrameTracer tracer(vm, exec);
         ErrorHandlingScope errorScope(vm);
         throwArityCheckStackOverflowError(exec, throwScope);
         RETURN_TWO(bitwise_cast<void*>(static_cast<uintptr_t>(1)), exec);
@@ -888,14 +888,6 @@ SLOW_PATH_DECL(slow_path_to_primitive)
     RETURN(GET_C(bytecode.m_src).jsValue().toPrimitive(exec));
 }
 
-SLOW_PATH_DECL(slow_path_enter)
-{
-    BEGIN();
-    CodeBlock* codeBlock = exec->codeBlock();
-    Heap::heap(codeBlock)->writeBarrier(codeBlock);
-    END();
-}
-
 SLOW_PATH_DECL(slow_path_get_enumerable_length)
 {
     BEGIN();
@@ -1012,7 +1004,7 @@ SLOW_PATH_DECL(slow_path_to_index_string)
     auto bytecode = pc->as<OpToIndexString>();
     JSValue indexValue = GET(bytecode.m_index).jsValue();
     ASSERT(indexValue.isUInt32AsAnyInt());
-    RETURN(jsString(exec, Identifier::from(exec, indexValue.asUInt32AsAnyInt()).string()));
+    RETURN(jsString(vm, Identifier::from(vm, indexValue.asUInt32AsAnyInt()).string()));
 }
 
 SLOW_PATH_DECL(slow_path_profile_type_clear_log)

@@ -183,7 +183,8 @@ void ScriptController::loadModuleScript(LoadableModuleScript& moduleScript, cons
 
 JSC::JSValue ScriptController::linkAndEvaluateModuleScriptInWorld(LoadableModuleScript& moduleScript, DOMWrapperWorld& world)
 {
-    JSLockHolder lock(world.vm());
+    JSC::VM& vm = world.vm();
+    JSLockHolder lock(vm);
 
     auto& proxy = jsWindowProxy(world);
     auto& state = *proxy.window()->globalExec();
@@ -193,7 +194,7 @@ JSC::JSValue ScriptController::linkAndEvaluateModuleScriptInWorld(LoadableModule
     Ref<Frame> protector(m_frame);
 
     NakedPtr<JSC::Exception> evaluationException;
-    auto returnValue = JSExecState::linkAndEvaluateModule(state, Identifier::fromUid(&state.vm(), moduleScript.moduleKey()), jsUndefined(), evaluationException);
+    auto returnValue = JSExecState::linkAndEvaluateModule(state, Identifier::fromUid(vm, moduleScript.moduleKey()), jsUndefined(), evaluationException);
     if (evaluationException) {
         // FIXME: Give a chance to dump the stack trace if the "crossorigin" attribute allows.
         // https://bugs.webkit.org/show_bug.cgi?id=164539
@@ -648,8 +649,14 @@ bool ScriptController::executeIfJavaScriptURL(const URL& url, ShouldReplaceDocum
     if (shouldReplaceDocumentIfJavaScriptURL == ReplaceDocumentIfJavaScriptURL) {
         // We're still in a frame, so there should be a DocumentLoader.
         ASSERT(m_frame.document()->loader());
-        
-        // DocumentWriter::replaceDocument can cause the DocumentLoader to get deref'ed and possible destroyed,
+
+        // Signal to FrameLoader to disable navigations within this frame while replacing it with the result of executing javascript
+        // FIXME: https://bugs.webkit.org/show_bug.cgi?id=200523
+        // The only reason we do a nestable save/restore of this flag here is because we sometimes nest javascript: url loads as
+        // some will load synchronously. We'd like to remove those synchronous loads and then change this.
+        SetForScope<bool> willBeReplaced(m_willReplaceWithResultOfExecutingJavascriptURL, true);
+
+        // DocumentWriter::replaceDocumentWithResultOfExecutingJavascriptURL can cause the DocumentLoader to get deref'ed and possible destroyed,
         // so protect it with a RefPtr.
         if (RefPtr<DocumentLoader> loader = m_frame.document()->loader())
             loader->writer().replaceDocumentWithResultOfExecutingJavascriptURL(scriptResult, ownerDocument.get());

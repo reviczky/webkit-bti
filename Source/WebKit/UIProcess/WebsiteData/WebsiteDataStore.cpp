@@ -145,7 +145,7 @@ WebsiteDataStore::~WebsiteDataStore()
 
     platformDestroy();
 
-    if (m_sessionID.isValid() && m_sessionID != PAL::SessionID::defaultSessionID()) {
+    if (m_sessionID != PAL::SessionID::defaultSessionID()) {
         ASSERT(nonDefaultDataStores().get(m_sessionID) == this);
         nonDefaultDataStores().remove(m_sessionID);
         for (auto& processPool : WebProcessPool::allProcessPools()) {
@@ -157,7 +157,7 @@ WebsiteDataStore::~WebsiteDataStore()
 
 void WebsiteDataStore::maybeRegisterWithSessionIDMap()
 {
-    if (m_sessionID.isValid() && m_sessionID != PAL::SessionID::defaultSessionID()) {
+    if (m_sessionID != PAL::SessionID::defaultSessionID()) {
         auto result = nonDefaultDataStores().add(m_sessionID, this);
         ASSERT_UNUSED(result, result.isNewEntry);
     }
@@ -165,7 +165,7 @@ void WebsiteDataStore::maybeRegisterWithSessionIDMap()
 
 WebsiteDataStore* WebsiteDataStore::existingNonDefaultDataStoreForSessionID(PAL::SessionID sessionID)
 {
-    return sessionID.isValid() && sessionID != PAL::SessionID::defaultSessionID() ? nonDefaultDataStores().get(sessionID) : nullptr;
+    return sessionID != PAL::SessionID::defaultSessionID() ? nonDefaultDataStores().get(sessionID) : nullptr;
 }
 
 void WebsiteDataStore::registerProcess(WebProcessProxy& process)
@@ -1684,6 +1684,18 @@ void WebsiteDataStore::hasLocalStorageForTesting(const URL& url, CompletionHandl
     }
     ASSERT(!completionHandler);
 }
+
+void WebsiteDataStore::hasIsolatedSessionForTesting(const URL& url, CompletionHandler<void(bool)>&& completionHandler) const
+{
+    for (auto& processPool : processPools()) {
+        if (auto* networkProcess = processPool->networkProcess()) {
+            networkProcess->hasIsolatedSession(m_sessionID, WebCore::RegistrableDomain { url }, WTFMove(completionHandler));
+            ASSERT(processPools().size() == 1);
+            break;
+        }
+    }
+    ASSERT(!completionHandler);
+}
 #endif // ENABLE(RESOURCE_LOAD_STATISTICS)
 
 void WebsiteDataStore::setCacheMaxAgeCapForPrevalentResources(Seconds seconds, CompletionHandler<void()>&& completionHandler)
@@ -1957,8 +1969,8 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
 
     auto localStorageDirectory = resolvedLocalStorageDirectory();
     if (!localStorageDirectory.isEmpty()) {
-        parameters.networkSessionParameters.localStorageDirectory = localStorageDirectory;
-        SandboxExtension::createHandleForReadWriteDirectory(localStorageDirectory, parameters.networkSessionParameters.localStorageDirectoryExtensionHandle);
+        parameters.localStorageDirectory = localStorageDirectory;
+        SandboxExtension::createHandleForReadWriteDirectory(localStorageDirectory, parameters.localStorageDirectoryExtensionHandle);
     }
 
 #if ENABLE(INDEXED_DATABASE)

@@ -53,7 +53,7 @@ namespace IDBServer {
 class IDBServer;
 class UniqueIDBDatabaseConnection;
 
-class UniqueIDBDatabaseTransaction : public RefCounted<UniqueIDBDatabaseTransaction> {
+class UniqueIDBDatabaseTransaction : public RefCounted<UniqueIDBDatabaseTransaction>, public CanMakeWeakPtr<UniqueIDBDatabaseTransaction> {
 public:
     enum class State { Running, Aborting, Committing, Aborted, Committed };
 
@@ -101,7 +101,6 @@ private:
 
     Ref<UniqueIDBDatabaseConnection> m_databaseConnection;
     IDBTransactionInfo m_transactionInfo;
-    WeakPtr<IDBServer> m_server;
 
     std::unique_ptr<IDBDatabaseInfo> m_originalDatabaseInfo;
 

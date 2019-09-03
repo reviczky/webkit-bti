@@ -390,18 +390,26 @@ class EmptyStorageNamespaceProvider final : public StorageNamespaceProvider {
         bool contains(const String&) final { return false; }
         StorageType storageType() const final { return StorageType::Local; }
         size_t memoryBytesUsedByCache() final { return 0; }
-        const SecurityOriginData& securityOrigin() const final { static NeverDestroyed<SecurityOriginData> origin; return origin.get(); }
     };
 
     struct EmptyStorageNamespace final : public StorageNamespace {
+        explicit EmptyStorageNamespace(PAL::SessionID sessionID)
+            : m_sessionID(sessionID)
+        {
+        }
+    private:
         Ref<StorageArea> storageArea(const SecurityOriginData&) final { return adoptRef(*new EmptyStorageArea); }
-        Ref<StorageNamespace> copy(Page*) final { return adoptRef(*new EmptyStorageNamespace); }
+        Ref<StorageNamespace> copy(Page*) final { return adoptRef(*new EmptyStorageNamespace { m_sessionID }); }
+        PAL::SessionID sessionID() const final { return m_sessionID; }
+        void setSessionIDForTesting(PAL::SessionID sessionID) final { m_sessionID = sessionID; };
+
+        PAL::SessionID m_sessionID;
     };
 
     Ref<StorageNamespace> createSessionStorageNamespace(Page&, unsigned) final;
-    Ref<StorageNamespace> createLocalStorageNamespace(unsigned) final;
-    Ref<StorageNamespace> createEphemeralLocalStorageNamespace(Page&, unsigned) final;
-    Ref<StorageNamespace> createTransientLocalStorageNamespace(SecurityOrigin&, unsigned) final;
+    Ref<StorageNamespace> createLocalStorageNamespace(unsigned, PAL::SessionID) final;
+    Ref<StorageNamespace> createTransientLocalStorageNamespace(SecurityOrigin&, unsigned, PAL::SessionID) final;
+
 };
 
 class EmptyUserContentProvider final : public UserContentProvider {
@@ -520,24 +528,19 @@ void EmptyEditorClient::registerRedoStep(UndoStep&)
 {
 }
 
-Ref<StorageNamespace> EmptyStorageNamespaceProvider::createSessionStorageNamespace(Page&, unsigned)
+Ref<StorageNamespace> EmptyStorageNamespaceProvider::createSessionStorageNamespace(Page& page, unsigned)
 {
-    return adoptRef(*new EmptyStorageNamespace);
+    return adoptRef(*new EmptyStorageNamespace { page.sessionID() });
 }
 
-Ref<StorageNamespace> EmptyStorageNamespaceProvider::createLocalStorageNamespace(unsigned)
+Ref<StorageNamespace> EmptyStorageNamespaceProvider::createLocalStorageNamespace(unsigned, PAL::SessionID sessionID)
 {
-    return adoptRef(*new EmptyStorageNamespace);
+    return adoptRef(*new EmptyStorageNamespace { sessionID });
 }
 
-Ref<StorageNamespace> EmptyStorageNamespaceProvider::createEphemeralLocalStorageNamespace(Page&, unsigned)
+Ref<StorageNamespace> EmptyStorageNamespaceProvider::createTransientLocalStorageNamespace(SecurityOrigin&, unsigned, PAL::SessionID sessionID)
 {
-    return adoptRef(*new EmptyStorageNamespace);
-}
-
-Ref<StorageNamespace> EmptyStorageNamespaceProvider::createTransientLocalStorageNamespace(SecurityOrigin&, unsigned)
-{
-    return adoptRef(*new EmptyStorageNamespace);
+    return adoptRef(*new EmptyStorageNamespace { sessionID });
 }
 
 class EmptyStorageSessionProvider : public StorageSessionProvider {
@@ -582,7 +585,7 @@ PageConfiguration pageConfigurationWithEmptyClients()
     static NeverDestroyed<EmptyProgressTrackerClient> dummyProgressTrackerClient;
     pageConfiguration.progressTrackerClient = &dummyProgressTrackerClient.get();
 
-    pageConfiguration.diagnosticLoggingClient = std::make_unique<EmptyDiagnosticLoggingClient>();
+    pageConfiguration.diagnosticLoggingClient = makeUnique<EmptyDiagnosticLoggingClient>();
 
     pageConfiguration.applicationCacheStorage = ApplicationCacheStorage::create({ }, { });
     pageConfiguration.databaseProvider = adoptRef(*new EmptyDatabaseProvider);

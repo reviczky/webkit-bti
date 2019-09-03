@@ -123,6 +123,7 @@ class JSCustomGetterSetterFunction;
 class JSDestructibleObjectHeapCellType;
 class JSGlobalObject;
 class JSObject;
+class JSPromise;
 class JSPropertyNameEnumerator;
 class JSRunLoopTimer;
 class JSStringHeapCellType;
@@ -185,7 +186,6 @@ struct LocalTimeOffsetCache {
         : start(0.0)
         , end(-1.0)
         , increment(0.0)
-        , timeType(WTF::UTCTime)
     {
     }
 
@@ -195,14 +195,12 @@ struct LocalTimeOffsetCache {
         start = 0.0;
         end = -1.0;
         increment = 0.0;
-        timeType = WTF::UTCTime;
     }
 
     LocalTimeOffset offset;
     double start;
     double end;
     double increment;
-    WTF::TimeType timeType;
 };
 
 class QueuedTask {
@@ -551,7 +549,7 @@ public:
     Strong<JSCell> m_sentinelSetBucket;
     Strong<JSCell> m_sentinelMapBucket;
 
-    std::unique_ptr<PromiseDeferredTimer> promiseDeferredTimer;
+    Ref<PromiseDeferredTimer> promiseDeferredTimer;
     
     JSCell* currentlyDestructingCallbackObject;
     const ClassInfo* currentlyDestructingCallbackObjectClassInfo { nullptr };
@@ -676,7 +674,7 @@ public:
     std::unique_ptr<JITThunks> jitStubs;
     MacroAssemblerCodeRef<JITThunkPtrTag> getCTIStub(ThunkGenerator generator)
     {
-        return jitStubs->ctiStub(this, generator);
+        return jitStubs->ctiStub(*this, generator);
     }
 
 #endif // ENABLE(JIT)
@@ -809,6 +807,7 @@ public:
     JSObject* stringRecursionCheckFirstObject { nullptr };
     HashSet<JSObject*> stringRecursionCheckVisitedObjects;
     
+    LocalTimeOffsetCache utcTimeOffsetCache;
     LocalTimeOffsetCache localTimeOffsetCache;
 
     String cachedDateString;
@@ -924,6 +923,8 @@ public:
     void notifyNeedTermination() { m_traps.fireTrap(VMTraps::NeedTermination); }
     void notifyNeedWatchdogCheck() { m_traps.fireTrap(VMTraps::NeedWatchdogCheck); }
 
+    void promiseRejected(JSPromise*);
+
 #if ENABLE(EXCEPTION_SCOPE_VERIFICATION)
     StackTrace* nativeStackTraceOfLastThrow() const { return m_nativeStackTraceOfLastThrow.get(); }
     Thread* throwingThread() const { return m_throwingThread.get(); }
@@ -1010,6 +1011,9 @@ private:
     static void primitiveGigacageDisabledCallback(void*);
     void primitiveGigacageDisabled();
 
+    void callPromiseRejectionCallback(Strong<JSPromise>&);
+    void didExhaustMicrotaskQueue();
+
 #if ENABLE(GC_VALIDATION)
     const ClassInfo* m_initializingObjectClass;
 #endif
@@ -1065,6 +1069,9 @@ private:
     std::unique_ptr<ShadowChicken> m_shadowChicken;
     std::unique_ptr<BytecodeIntrinsicRegistry> m_bytecodeIntrinsicRegistry;
 
+    // FIXME: We should remove handled promises from this list at GC flip. <https://webkit.org/b/201005>
+    Vector<Strong<JSPromise>> m_aboutToBeNotifiedRejectedPromises;
+
     WTF::Function<void(VM&)> m_onEachMicrotaskTick;
     uintptr_t m_currentWeakRefVersion { 0 };
 
@@ -1101,14 +1108,14 @@ inline void VM::setInitializingObjectClass(const ClassInfo* initializingObjectCl
 
 inline Heap* WeakSet::heap() const
 {
-    return &m_vm->heap;
+    return &m_vm.heap;
 }
 
 #if !ENABLE(C_LOOP)
 extern "C" void sanitizeStackForVMImpl(VM*);
 #endif
 
-JS_EXPORT_PRIVATE void sanitizeStackForVM(VM*);
-void logSanitizeStack(VM*);
+JS_EXPORT_PRIVATE void sanitizeStackForVM(VM&);
+void logSanitizeStack(VM&);
 
 } // namespace JSC

@@ -179,7 +179,7 @@ ExceptionOr<Ref<IDBObjectStore>> IDBTransaction::objectStore(const String& objec
     if (!info || (!found && !isVersionChange()))
         return Exception { NotFoundError, "Failed to execute 'objectStore' on 'IDBTransaction': The specified object store was not found."_s };
 
-    auto objectStore = std::make_unique<IDBObjectStore>(*scriptExecutionContext(), *info, *this);
+    auto objectStore = makeUnique<IDBObjectStore>(*scriptExecutionContext(), *info, *this);
     auto* rawObjectStore = objectStore.get();
     m_referencedObjectStores.set(objectStoreName, WTFMove(objectStore));
 
@@ -446,7 +446,9 @@ void IDBTransaction::operationCompletedOnServer(const IDBResultData& data, IDBCl
     ASSERT(&operation.originThread() == &Thread::current());
 
     m_completedOnServerQueue.append({ &operation, data });
-    scheduleCompletedOperationTimer();
+
+    if (!m_currentlyCompletingRequest)
+        scheduleCompletedOperationTimer();
 }
 
 void IDBTransaction::scheduleCompletedOperationTimer()
@@ -667,7 +669,7 @@ Ref<IDBObjectStore> IDBTransaction::createObjectStore(const IDBObjectStoreInfo& 
 
     Locker<Lock> locker(m_referencedObjectStoreLock);
 
-    auto objectStore = std::make_unique<IDBObjectStore>(*scriptExecutionContext(), info, *this);
+    auto objectStore = makeUnique<IDBObjectStore>(*scriptExecutionContext(), info, *this);
     auto* rawObjectStore = objectStore.get();
     m_referencedObjectStores.set(info.name(), WTFMove(objectStore));
 
@@ -755,7 +757,7 @@ std::unique_ptr<IDBIndex> IDBTransaction::createIndex(IDBObjectStore& objectStor
         protectedThis->createIndexOnServer(operation, info);
     }));
 
-    return std::make_unique<IDBIndex>(*scriptExecutionContext(), info, objectStore);
+    return makeUnique<IDBIndex>(*scriptExecutionContext(), info, objectStore);
 }
 
 void IDBTransaction::createIndexOnServer(IDBClient::TransactionOperation& operation, const IDBIndexInfo& info)
@@ -1280,7 +1282,7 @@ void IDBTransaction::putOrAddOnServer(IDBClient::TransactionOperation& operation
     // workers currently write blobs to disk synchronously.
     // FIXME: https://bugs.webkit.org/show_bug.cgi?id=157958 - Make this asynchronous after refactoring allows it.
     if (!isMainThread()) {
-        auto idbValue = value->writeBlobsToDiskForIndexedDBSynchronously();
+        auto idbValue = value->writeBlobsToDiskForIndexedDBSynchronously(scriptExecutionContext()->sessionID());
         if (idbValue.data().data())
             m_database->connectionProxy().putOrAdd(operation, key.get(), idbValue, overwriteMode);
         else {
@@ -1299,7 +1301,7 @@ void IDBTransaction::putOrAddOnServer(IDBClient::TransactionOperation& operation
     // stop future requests from going to the server ahead of it.
     operation.setNextRequestCanGoToServer(false);
 
-    value->writeBlobsToDiskForIndexedDB([protectedThis = makeRef(*this), this, protectedOperation = Ref<IDBClient::TransactionOperation>(operation), keyData = IDBKeyData(key.get()).isolatedCopy(), overwriteMode](IDBValue&& idbValue) mutable {
+    value->writeBlobsToDiskForIndexedDB(scriptExecutionContext()->sessionID(), [protectedThis = makeRef(*this), this, protectedOperation = Ref<IDBClient::TransactionOperation>(operation), keyData = IDBKeyData(key.get()).isolatedCopy(), overwriteMode](IDBValue&& idbValue) mutable {
         ASSERT(&originThread() == &Thread::current());
         ASSERT(isMainThread());
         if (idbValue.data().data()) {

@@ -37,6 +37,8 @@
 #include "Event.h"
 #include "Frame.h"
 #include "InspectorCPUProfilerAgent.h"
+#include "InspectorClient.h"
+#include "InspectorController.h"
 #include "InspectorMemoryAgent.h"
 #include "InspectorPageAgent.h"
 #include "InstrumentingAgents.h"
@@ -83,10 +85,11 @@ static CFRunLoopRef currentRunLoop()
 }
 #endif
 
-InspectorTimelineAgent::InspectorTimelineAgent(WebAgentContext& context)
+InspectorTimelineAgent::InspectorTimelineAgent(PageAgentContext& context)
     : InspectorAgentBase("Timeline"_s, context)
-    , m_frontendDispatcher(std::make_unique<Inspector::TimelineFrontendDispatcher>(context.frontendRouter))
+    , m_frontendDispatcher(makeUnique<Inspector::TimelineFrontendDispatcher>(context.frontendRouter))
     , m_backendDispatcher(Inspector::TimelineBackendDispatcher::create(context.backendDispatcher, this))
+    , m_inspectedPage(context.inspectedPage)
 {
 }
 
@@ -94,15 +97,35 @@ InspectorTimelineAgent::~InspectorTimelineAgent() = default;
 
 void InspectorTimelineAgent::didCreateFrontendAndBackend(Inspector::FrontendRouter*, Inspector::BackendDispatcher*)
 {
-    m_instrumentingAgents.setPersistentInspectorTimelineAgent(this);
 }
 
 void InspectorTimelineAgent::willDestroyFrontendAndBackend(Inspector::DisconnectReason)
 {
-    m_instrumentingAgents.setPersistentInspectorTimelineAgent(nullptr);
+    ErrorString ignored;
+    disable(ignored);
+}
 
-    ErrorString unused;
-    stop(unused);
+void InspectorTimelineAgent::enable(ErrorString& errorString)
+{
+    if (m_instrumentingAgents.inspectorTimelineAgent() == this) {
+        errorString = "Timeline domain already enabled"_s;
+        return;
+    }
+
+    m_instrumentingAgents.setInspectorTimelineAgent(this);
+}
+
+void InspectorTimelineAgent::disable(ErrorString& errorString)
+{
+    if (m_instrumentingAgents.inspectorTimelineAgent() != this) {
+        errorString = "Timeline domain already disabled"_s;
+        return;
+    }
+
+    m_instrumentingAgents.setInspectorTimelineAgent(nullptr);
+
+    ErrorString ignored;
+    stop(ignored);
 
     m_autoCaptureEnabled = false;
     m_instruments.clear();
@@ -110,7 +133,7 @@ void InspectorTimelineAgent::willDestroyFrontendAndBackend(Inspector::Disconnect
 
 void InspectorTimelineAgent::start(ErrorString&, const int* maxCallStackDepth)
 {
-    m_enabledFromFrontend = true;
+    m_trackingFromFrontend = true;
 
     internalStart(maxCallStackDepth);
 }
@@ -119,7 +142,7 @@ void InspectorTimelineAgent::stop(ErrorString&)
 {
     internalStop();
 
-    m_enabledFromFrontend = false;
+    m_trackingFromFrontend = false;
 }
 
 void InspectorTimelineAgent::setAutoCaptureEnabled(ErrorString&, bool enabled)
@@ -135,13 +158,13 @@ void InspectorTimelineAgent::setInstruments(ErrorString& errorString, const JSON
     for (const auto& instrumentValue : instruments) {
         String enumValueString;
         if (!instrumentValue->asString(enumValueString)) {
-            errorString = "Unexpected type in instruments list, should be string"_s;
+            errorString = "Unexpected non-string value in given instruments"_s;
             return;
         }
 
         Optional<Protocol::Timeline::Instrument> instrumentType = Protocol::InspectorHelpers::parseEnumValueFromString<Protocol::Timeline::Instrument>(enumValueString);
         if (!instrumentType) {
-            errorString = makeString("Unexpected enum value: ", enumValueString);
+            errorString = makeString("Unknown item in given instruments: ", enumValueString);
             return;
         }
 
@@ -153,7 +176,7 @@ void InspectorTimelineAgent::setInstruments(ErrorString& errorString, const JSON
 
 void InspectorTimelineAgent::internalStart(const int* maxCallStackDepth)
 {
-    if (m_enabled)
+    if (m_tracking)
         return;
 
     if (maxCallStackDepth && *maxCallStackDepth > 0)
@@ -161,17 +184,17 @@ void InspectorTimelineAgent::internalStart(const int* maxCallStackDepth)
     else
         m_maxCallStackDepth = 5;
 
-    m_instrumentingAgents.setInspectorTimelineAgent(this);
+    m_instrumentingAgents.setTrackingInspectorTimelineAgent(this);
 
     m_environment.scriptDebugServer().addListener(this);
 
-    m_enabled = true;
+    m_tracking = true;
 
     // FIXME: Abstract away platform-specific code once https://bugs.webkit.org/show_bug.cgi?id=142748 is fixed.
 
 #if PLATFORM(COCOA)
-    m_frameStartObserver = std::make_unique<RunLoopObserver>(static_cast<CFIndex>(RunLoopObserver::WellKnownRunLoopOrders::InspectorFrameBegin), [this]() {
-        if (!m_enabled || m_environment.scriptDebugServer().isPaused())
+    m_frameStartObserver = makeUnique<RunLoopObserver>(static_cast<CFIndex>(RunLoopObserver::WellKnownRunLoopOrders::InspectorFrameBegin), [this]() {
+        if (!m_tracking || m_environment.scriptDebugServer().isPaused())
             return;
 
         if (!m_runLoopNestingLevel)
@@ -179,8 +202,8 @@ void InspectorTimelineAgent::internalStart(const int* maxCallStackDepth)
         m_runLoopNestingLevel++;
     });
 
-    m_frameStopObserver = std::make_unique<RunLoopObserver>(static_cast<CFIndex>(RunLoopObserver::WellKnownRunLoopOrders::InspectorFrameEnd), [this]() {
-        if (!m_enabled || m_environment.scriptDebugServer().isPaused())
+    m_frameStopObserver = makeUnique<RunLoopObserver>(static_cast<CFIndex>(RunLoopObserver::WellKnownRunLoopOrders::InspectorFrameEnd), [this]() {
+        if (!m_tracking || m_environment.scriptDebugServer().isPaused())
             return;
 
         ASSERT(m_runLoopNestingLevel > 0);
@@ -205,14 +228,17 @@ void InspectorTimelineAgent::internalStart(const int* maxCallStackDepth)
 #endif
 
     m_frontendDispatcher->recordingStarted(timestamp());
+
+    if (auto* client = m_inspectedPage.inspectorController().inspectorClient())
+        client->timelineRecordingChanged(true);
 }
 
 void InspectorTimelineAgent::internalStop()
 {
-    if (!m_enabled)
+    if (!m_tracking)
         return;
 
-    m_instrumentingAgents.setInspectorTimelineAgent(nullptr);
+    m_instrumentingAgents.setTrackingInspectorTimelineAgent(nullptr);
 
     m_environment.scriptDebugServer().removeListener(this, true);
 
@@ -228,11 +254,14 @@ void InspectorTimelineAgent::internalStop()
 
     clearRecordStack();
 
-    m_enabled = false;
+    m_tracking = false;
     m_startedComposite = false;
     m_autoCapturePhase = AutoCapturePhase::None;
 
     m_frontendDispatcher->recordingStopped(timestamp());
+
+    if (auto* client = m_inspectedPage.inspectorController().inspectorClient())
+        client->timelineRecordingChanged(false);
 }
 
 double InspectorTimelineAgent::timestamp()
@@ -251,14 +280,14 @@ void InspectorTimelineAgent::startFromConsole(JSC::ExecState* exec, const String
                 if (WebConsoleAgent* consoleAgent = m_instrumentingAgents.webConsoleAgent()) {
                     // FIXME: Send an enum to the frontend for localization?
                     String warning = title.isEmpty() ? "Unnamed Profile already exists"_s : makeString("Profile \"", title, "\" already exists");
-                    consoleAgent->addMessageToConsole(std::make_unique<ConsoleMessage>(MessageSource::ConsoleAPI, MessageType::Profile, MessageLevel::Warning, warning));
+                    consoleAgent->addMessageToConsole(makeUnique<ConsoleMessage>(MessageSource::ConsoleAPI, MessageType::Profile, MessageLevel::Warning, warning));
                 }
                 return;
             }
         }
     }
 
-    if (!m_enabled && m_pendingConsoleProfileRecords.isEmpty())
+    if (!m_tracking && m_pendingConsoleProfileRecords.isEmpty())
         startProgrammaticCapture();
 
     m_pendingConsoleProfileRecords.append(createRecordEntry(TimelineRecordFactory::createConsoleProfileData(title), TimelineRecordType::ConsoleProfile, true, frameFromExecState(exec)));
@@ -277,7 +306,7 @@ void InspectorTimelineAgent::stopFromConsole(JSC::ExecState*, const String& titl
             didCompleteRecordEntry(record);
             m_pendingConsoleProfileRecords.remove(i);
 
-            if (!m_enabledFromFrontend && m_pendingConsoleProfileRecords.isEmpty())
+            if (!m_trackingFromFrontend && m_pendingConsoleProfileRecords.isEmpty())
                 stopProgrammaticCapture();
 
             return;
@@ -287,7 +316,7 @@ void InspectorTimelineAgent::stopFromConsole(JSC::ExecState*, const String& titl
     if (WebConsoleAgent* consoleAgent = m_instrumentingAgents.webConsoleAgent()) {
         // FIXME: Send an enum to the frontend for localization?
         String warning = title.isEmpty() ? "No profiles exist"_s : makeString("Profile \"", title, "\" does not exist");
-        consoleAgent->addMessageToConsole(std::make_unique<ConsoleMessage>(MessageSource::ConsoleAPI, MessageType::ProfileEnd, MessageLevel::Warning, warning));
+        consoleAgent->addMessageToConsole(makeUnique<ConsoleMessage>(MessageSource::ConsoleAPI, MessageType::ProfileEnd, MessageLevel::Warning, warning));
     }
 }
 
@@ -431,7 +460,7 @@ void InspectorTimelineAgent::timeEnd(Frame& frame, const String& message)
 
 void InspectorTimelineAgent::mainFrameStartedLoading()
 {
-    if (m_enabled)
+    if (m_tracking)
         return;
 
     if (!m_autoCaptureEnabled)
@@ -444,8 +473,8 @@ void InspectorTimelineAgent::mainFrameStartedLoading()
 
     // Pre-emptively disable breakpoints. The frontend must re-enable them.
     if (InspectorDebuggerAgent* debuggerAgent = m_instrumentingAgents.inspectorDebuggerAgent()) {
-        ErrorString unused;
-        debuggerAgent->setBreakpointsActive(unused, false);
+        ErrorString ignored;
+        debuggerAgent->setBreakpointsActive(ignored, false);
     }
 
     // Inform the frontend we started an auto capture. The frontend must stop capture.
@@ -465,14 +494,14 @@ void InspectorTimelineAgent::mainFrameNavigated()
 
 void InspectorTimelineAgent::startProgrammaticCapture()
 {
-    ASSERT(!m_enabled);
+    ASSERT(!m_tracking);
 
     // Disable breakpoints during programmatic capture.
     if (InspectorDebuggerAgent* debuggerAgent = m_instrumentingAgents.inspectorDebuggerAgent()) {
         m_programmaticCaptureRestoreBreakpointActiveValue = debuggerAgent->breakpointsActive();
         if (m_programmaticCaptureRestoreBreakpointActiveValue) {
-            ErrorString unused;
-            debuggerAgent->setBreakpointsActive(unused, false);
+            ErrorString ignored;
+            debuggerAgent->setBreakpointsActive(ignored, false);
         }
     } else
         m_programmaticCaptureRestoreBreakpointActiveValue = false;
@@ -484,8 +513,8 @@ void InspectorTimelineAgent::startProgrammaticCapture()
 
 void InspectorTimelineAgent::stopProgrammaticCapture()
 {
-    ASSERT(m_enabled);
-    ASSERT(!m_enabledFromFrontend);
+    ASSERT(m_tracking);
+    ASSERT(!m_trackingFromFrontend);
 
     toggleInstruments(InstrumentState::Stop);
     toggleTimelineInstrument(InstrumentState::Stop);
@@ -494,8 +523,8 @@ void InspectorTimelineAgent::stopProgrammaticCapture()
     // Re-enable breakpoints if they were enabled.
     if (m_programmaticCaptureRestoreBreakpointActiveValue) {
         if (InspectorDebuggerAgent* debuggerAgent = m_instrumentingAgents.inspectorDebuggerAgent()) {
-            ErrorString unused;
-            debuggerAgent->setBreakpointsActive(unused, true);
+            ErrorString ignored;
+            debuggerAgent->setBreakpointsActive(ignored, true);
         }
     }
 }
@@ -530,24 +559,24 @@ void InspectorTimelineAgent::toggleInstruments(InstrumentState state)
 void InspectorTimelineAgent::toggleScriptProfilerInstrument(InstrumentState state)
 {
     if (auto* scriptProfilerAgent = m_instrumentingAgents.inspectorScriptProfilerAgent()) {
-        ErrorString unused;
+        ErrorString ignored;
         if (state == InstrumentState::Start) {
             const bool includeSamples = true;
-            scriptProfilerAgent->startTracking(unused, &includeSamples);
+            scriptProfilerAgent->startTracking(ignored, &includeSamples);
         } else
-            scriptProfilerAgent->stopTracking(unused);
+            scriptProfilerAgent->stopTracking(ignored);
     }
 }
 
 void InspectorTimelineAgent::toggleHeapInstrument(InstrumentState state)
 {
     if (auto* heapAgent = m_instrumentingAgents.pageHeapAgent()) {
-        ErrorString unused;
+        ErrorString ignored;
         if (state == InstrumentState::Start) {
             if (m_autoCapturePhase == AutoCapturePhase::None || m_autoCapturePhase == AutoCapturePhase::FirstNavigation)
-                heapAgent->startTracking(unused);
+                heapAgent->startTracking(ignored);
         } else
-            heapAgent->stopTracking(unused);
+            heapAgent->stopTracking(ignored);
     }
 }
 
@@ -555,11 +584,11 @@ void InspectorTimelineAgent::toggleCPUInstrument(InstrumentState state)
 {
 #if ENABLE(RESOURCE_USAGE)
     if (InspectorCPUProfilerAgent* cpuProfilerAgent = m_instrumentingAgents.inspectorCPUProfilerAgent()) {
-        ErrorString unused;
+        ErrorString ignored;
         if (state == InstrumentState::Start)
-            cpuProfilerAgent->startTracking(unused);
+            cpuProfilerAgent->startTracking(ignored);
         else
-            cpuProfilerAgent->stopTracking(unused);
+            cpuProfilerAgent->stopTracking(ignored);
     }
 #else
     UNUSED_PARAM(state);
@@ -570,11 +599,11 @@ void InspectorTimelineAgent::toggleMemoryInstrument(InstrumentState state)
 {
 #if ENABLE(RESOURCE_USAGE)
     if (InspectorMemoryAgent* memoryAgent = m_instrumentingAgents.inspectorMemoryAgent()) {
-        ErrorString unused;
+        ErrorString ignored;
         if (state == InstrumentState::Start)
-            memoryAgent->startTracking(unused);
+            memoryAgent->startTracking(ignored);
         else
-            memoryAgent->stopTracking(unused);
+            memoryAgent->stopTracking(ignored);
     }
 #else
     UNUSED_PARAM(state);
@@ -587,11 +616,6 @@ void InspectorTimelineAgent::toggleTimelineInstrument(InstrumentState state)
         internalStart();
     else
         internalStop();
-}
-
-void InspectorTimelineAgent::didCommitLoad()
-{
-    clearRecordStack();
 }
 
 void InspectorTimelineAgent::didRequestAnimationFrame(int callbackId, Frame* frame)

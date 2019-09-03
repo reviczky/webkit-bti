@@ -51,6 +51,8 @@ WebInspectorUI::WebInspectorUI(WebPage& page)
     : m_page(page)
     , m_frontendAPIDispatcher(page)
 {
+    JSC::Options::useBigInt() = true;
+        
     RuntimeEnabledFeatures::sharedFeatures().setInspectorAdditionsEnabled(true);
     RuntimeEnabledFeatures::sharedFeatures().setImageBitmapOffscreenCanvasEnabled(true);
 #if ENABLE(WEBGL2)
@@ -295,11 +297,6 @@ void WebInspectorUI::showConsole()
 void WebInspectorUI::showResources()
 {
     m_frontendAPIDispatcher.dispatchCommand("showResources"_s);
-}
-
-void WebInspectorUI::showTimelines()
-{
-    m_frontendAPIDispatcher.dispatchCommand("showTimelines"_s);
 }
 
 void WebInspectorUI::showMainResourceForFrame(const String& frameIdentifier)

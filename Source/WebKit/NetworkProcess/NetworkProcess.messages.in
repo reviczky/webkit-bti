@@ -38,7 +38,6 @@ messages -> NetworkProcess LegacyReceiver {
 #endif
 
     ClearCachedCredentials()
-    ClearPermanentCredentialsForProtectionSpace(WebCore::ProtectionSpace protectionSpace) -> () Async
 
     AddWebsiteDataStore(struct WebKit::WebsiteDataStoreParameters websiteDataStoreParameters);
     DestroySession(PAL::SessionID sessionID)
@@ -138,6 +137,7 @@ messages -> NetworkProcess LegacyReceiver {
     SetCrossSiteLoadWithLinkDecorationForTesting(PAL::SessionID sessionID, WebCore::RegistrableDomain fromDomain, WebCore::RegistrableDomain toDomain) -> () Async
     ResetCrossSiteLoadsWithLinkDecorationForTesting(PAL::SessionID sessionID) -> () Async
     DeleteCookiesForTesting(PAL::SessionID sessionID, WebCore::RegistrableDomain domain, bool includeHttpOnlyCookies) -> () Async
+    HasIsolatedSession(PAL::SessionID sessionID, WebCore::RegistrableDomain domain) -> (bool hasIsolatedSession) Async
 #endif
 
     SetSessionIsControlledByAutomation(PAL::SessionID sessionID, bool controlled);
@@ -160,9 +160,9 @@ messages -> NetworkProcess LegacyReceiver {
     DisableServiceWorkerProcessTerminationDelay()
 #endif
 
-#if ENABLE(INDEXED_DATABASE)
-    SetIDBPerOriginQuota(uint64_t quota)
-#endif
+    SyncLocalStorage() -> () Synchronous
+    ClearLegacyPrivateBrowsingLocalStorage()
+
     UpdateQuotaBasedOnSpaceUsageForTesting(PAL::SessionID sessionID, struct WebCore::ClientOrigin origin)
 
     StoreAdClickAttribution(PAL::SessionID sessionID, WebCore::AdClickAttribution adClickAttribution)

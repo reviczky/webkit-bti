@@ -75,6 +75,11 @@ public:
         if (m_function->name() != other.m_function->name())
             return false;
 
+        if (m_function->nameSpace() != AST::NameSpace::StandardLibrary
+            && other.m_function->nameSpace() != AST::NameSpace::StandardLibrary
+            && m_function->nameSpace() != other.m_function->nameSpace())
+            return false;
+
         ASSERT(m_function->isCast() == other.m_function->isCast());
 
         for (size_t i = 0; i < m_function->parameters().size(); ++i) {
@@ -103,7 +108,6 @@ public:
         }
 
         static const bool safeToCompareToEmptyOrDeleted = false;
-        static const bool emptyValueIsZero = true;
     };
 
     struct Traits : public WTF::SimpleClassHashTraits<DuplicateFunctionKey> {

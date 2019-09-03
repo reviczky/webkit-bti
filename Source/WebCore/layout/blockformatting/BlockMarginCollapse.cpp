@@ -381,7 +381,7 @@ bool BlockFormattingContext::MarginCollapse::marginsCollapseThrough(const Layout
         return false;
 
     // FIXME: Block replaced boxes clearly don't collapse through their margins, but I couldn't find it in the spec yet (and no, it's not a quirk).
-    if (layoutBox.isReplaced())
+    if (layoutBox.replaced())
         return false;
 
     if (!is<Container>(layoutBox))
@@ -408,8 +408,8 @@ bool BlockFormattingContext::MarginCollapse::marginsCollapseThrough(const Layout
             return true;
         }
 
-        if (establishesBlockFormattingContext(layoutBox))
-            return false;
+        // A root of a non-inline formatting context (table, flex etc) with inflow descendants should not collapse through.
+        return false;
     }
 
     for (auto* inflowChild = downcast<Container>(layoutBox).firstInFlowOrFloatingChild(); inflowChild; inflowChild = inflowChild->nextInFlowOrFloatingSibling()) {

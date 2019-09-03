@@ -1359,7 +1359,7 @@ WebGLExtension* WebGL2RenderingContext::getExtension(const String& name)
 #define ENABLE_IF_REQUESTED(type, variable, nameLiteral, canEnable) \
     if (equalIgnoringASCIICase(name, nameLiteral)) { \
         if (!variable) { \
-            variable = (canEnable) ? std::make_unique<type>(*this) : nullptr; \
+            variable = (canEnable) ? makeUnique<type>(*this) : nullptr; \
             if (variable != nullptr) \
                 InspectorInstrumentation::didEnableExtension(*this, name); \
         } \
@@ -1771,6 +1771,8 @@ WebGLAny WebGL2RenderingContext::getParameter(GC3Denum pname)
     case GraphicsContext3D::ALIASED_POINT_SIZE_RANGE:
         return getWebGLFloatArrayParameter(pname);
     case GraphicsContext3D::ALPHA_BITS:
+        if (!m_framebufferBinding && !m_attributes.alpha)
+            return 0;
         return getIntParameter(pname);
     case GraphicsContext3D::ARRAY_BUFFER_BINDING:
         return m_boundArrayBuffer;

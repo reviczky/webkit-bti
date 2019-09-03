@@ -129,7 +129,7 @@ float RootInlineBox::placeEllipsis(const AtomString& ellipsisStr,  bool ltr, flo
         gEllipsisBoxMap = new EllipsisBoxMap();
 
     ASSERT(!hasEllipsisBox());
-    auto* ellipsisBox = gEllipsisBoxMap->set(this, std::make_unique<EllipsisBox>(blockFlow(), ellipsisStr, this, ellipsisWidth - (markupBox ? markupBox->logicalWidth() : 0), logicalHeight(), y(), !prevRootBox(), isHorizontal(), markupBox)).iterator->value.get();
+    auto* ellipsisBox = gEllipsisBoxMap->set(this, makeUnique<EllipsisBox>(blockFlow(), ellipsisStr, this, ellipsisWidth - (markupBox ? markupBox->logicalWidth() : 0), logicalHeight(), y(), !prevRootBox(), isHorizontal(), markupBox)).iterator->value.get();
     setHasEllipsisBox(true);
     // FIXME: Do we need an RTL version of this?
     if (ltr && (x() + logicalWidth() + ellipsisWidth) <= blockRightEdge) {
@@ -828,17 +828,17 @@ EllipsisBox* RootInlineBox::ellipsisBox() const
 
 void RootInlineBox::removeLineBoxFromRenderObject()
 {
-    blockFlow().lineBoxes().removeLineBox(this);
+    blockFlow().complexLineLayout()->lineBoxes().removeLineBox(this);
 }
 
 void RootInlineBox::extractLineBoxFromRenderObject()
 {
-    blockFlow().lineBoxes().extractLineBox(this);
+    blockFlow().complexLineLayout()->lineBoxes().extractLineBox(this);
 }
 
 void RootInlineBox::attachLineBoxToRenderObject()
 {
-    blockFlow().lineBoxes().attachLineBox(this);
+    blockFlow().complexLineLayout()->lineBoxes().attachLineBox(this);
 }
 
 LayoutRect RootInlineBox::paddedLayoutOverflowRect(LayoutUnit endPadding) const

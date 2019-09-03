@@ -108,6 +108,7 @@ WI.CSSProperty = class CSSProperty extends WI.Object
         this._text = text;
         this._name = name;
         this._rawValue = value;
+        this._value = undefined;
         this._priority = priority;
         this._enabled = enabled;
         this._implicit = implicit;
@@ -148,6 +149,7 @@ WI.CSSProperty = class CSSProperty extends WI.Object
 
     commentOut(disabled)
     {
+        console.assert(this.editable);
         if (this._enabled === !disabled)
             return;
 
@@ -180,7 +182,10 @@ WI.CSSProperty = class CSSProperty extends WI.Object
         if (!this._name)
             return "";
 
-        return `${this._name}: ${this._rawValue};`;
+        let text = `${this._name}: ${this._rawValue};`;
+        if (!this._enabled)
+            text = "/* " + text + " */";
+        return text;
     }
 
     get modified()
@@ -462,7 +467,7 @@ WI.CSSProperty = class CSSProperty extends WI.Object
 
         console.assert(oldText === styleText.slice(range.startOffset, range.endOffset), "_styleSheetTextRange data is invalid.");
 
-        if (WI.settings.enableStyleEditingDebugMode.value) {
+        if (WI.isDebugUIEnabled() && WI.settings.debugEnableStyleEditingDebugMode.value) {
             let prefix = styleText.slice(0, range.startOffset);
             let postfix = styleText.slice(range.endOffset);
             console.info(`${prefix}%c${oldText}%c${newText}%c${postfix}`, `background: hsl(356, 100%, 90%); color: black`, `background: hsl(100, 100%, 91%); color: black`, `background: transparent`);

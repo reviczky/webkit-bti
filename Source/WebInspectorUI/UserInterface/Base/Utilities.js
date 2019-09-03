@@ -690,15 +690,13 @@ Object.defineProperty(Array.prototype, "insertAtIndex",
     }
 });
 
-Object.defineProperty(Array.prototype, "keySet",
+Object.defineProperty(Array.prototype, "pushAll",
 {
-    value()
+    value(iterable)
     {
-        let keys = Object.create(null);
-        for (var i = 0; i < this.length; ++i)
-            keys[this[i]] = true;
-        return keys;
-    }
+        for (let item of iterable)
+            this.push(item);
+    },
 });
 
 Object.defineProperty(Array.prototype, "partition",
@@ -731,6 +729,18 @@ Object.defineProperty(String.prototype, "isUpperCase",
     value()
     {
         return String(this) === this.toUpperCase();
+    }
+});
+
+Object.defineProperty(String.prototype, "isJSON",
+{
+    value(predicate)
+    {
+        try {
+            let json = JSON.parse(this);
+            return !predicate || predicate(json);
+        } catch { }
+        return false;
     }
 });
 
@@ -1639,7 +1649,7 @@ function isTextLikelyMinified(content)
     if (startRatio < autoFormatWhitespaceRatio)
         return true;
 
-    let endRatio = whitespaceRatio(content, content.length - autoFormatMaxCharactersToCheck, content.length)
+    let endRatio = whitespaceRatio(content, content.length - autoFormatMaxCharactersToCheck, content.length);
     if (endRatio < autoFormatWhitespaceRatio)
         return true;
 

@@ -233,15 +233,15 @@ static HashSet<String, ASCIICaseInsensitiveHash>& globalURLSchemesWithCustomProt
 WebProcessPool::WebProcessPool(API::ProcessPoolConfiguration& configuration)
     : m_configuration(configuration.copy())
     , m_defaultPageGroup(WebPageGroup::create())
-    , m_injectedBundleClient(std::make_unique<API::InjectedBundleClient>())
-    , m_automationClient(std::make_unique<API::AutomationClient>())
-    , m_downloadClient(std::make_unique<API::DownloadClient>())
-    , m_historyClient(std::make_unique<API::LegacyContextHistoryClient>())
-    , m_customProtocolManagerClient(std::make_unique<API::CustomProtocolManagerClient>())
+    , m_injectedBundleClient(makeUnique<API::InjectedBundleClient>())
+    , m_automationClient(makeUnique<API::AutomationClient>())
+    , m_downloadClient(makeUnique<API::DownloadClient>())
+    , m_historyClient(makeUnique<API::LegacyContextHistoryClient>())
+    , m_customProtocolManagerClient(makeUnique<API::CustomProtocolManagerClient>())
     , m_visitedLinkStore(VisitedLinkStore::create())
 #if PLATFORM(MAC)
-    , m_highPerformanceGraphicsUsageSampler(std::make_unique<HighPerformanceGraphicsUsageSampler>(*this))
-    , m_perActivityStateCPUUsageSampler(std::make_unique<PerActivityStateCPUUsageSampler>(*this))
+    , m_highPerformanceGraphicsUsageSampler(makeUnique<HighPerformanceGraphicsUsageSampler>(*this))
+    , m_perActivityStateCPUUsageSampler(makeUnique<PerActivityStateCPUUsageSampler>(*this))
 #endif
     , m_alwaysRunsAtBackgroundPriority(m_configuration->alwaysRunsAtBackgroundPriority())
     , m_shouldTakeUIBackgroundAssertion(m_configuration->shouldTakeUIBackgroundAssertion())
@@ -364,7 +364,7 @@ void WebProcessPool::initializeClient(const WKContextClientBase* client)
 void WebProcessPool::setInjectedBundleClient(std::unique_ptr<API::InjectedBundleClient>&& client)
 {
     if (!client)
-        m_injectedBundleClient = std::make_unique<API::InjectedBundleClient>();
+        m_injectedBundleClient = makeUnique<API::InjectedBundleClient>();
     else
         m_injectedBundleClient = WTFMove(client);
 }
@@ -377,7 +377,7 @@ void WebProcessPool::initializeConnectionClient(const WKContextConnectionClientB
 void WebProcessPool::setHistoryClient(std::unique_ptr<API::LegacyContextHistoryClient>&& historyClient)
 {
     if (!historyClient)
-        m_historyClient = std::make_unique<API::LegacyContextHistoryClient>();
+        m_historyClient = makeUnique<API::LegacyContextHistoryClient>();
     else
         m_historyClient = WTFMove(historyClient);
 }
@@ -385,7 +385,7 @@ void WebProcessPool::setHistoryClient(std::unique_ptr<API::LegacyContextHistoryC
 void WebProcessPool::setDownloadClient(std::unique_ptr<API::DownloadClient>&& downloadClient)
 {
     if (!downloadClient)
-        m_downloadClient = std::make_unique<API::DownloadClient>();
+        m_downloadClient = makeUnique<API::DownloadClient>();
     else
         m_downloadClient = WTFMove(downloadClient);
 }
@@ -393,7 +393,7 @@ void WebProcessPool::setDownloadClient(std::unique_ptr<API::DownloadClient>&& do
 void WebProcessPool::setAutomationClient(std::unique_ptr<API::AutomationClient>&& automationClient)
 {
     if (!automationClient)
-        m_automationClient = std::make_unique<API::AutomationClient>();
+        m_automationClient = makeUnique<API::AutomationClient>();
     else
         m_automationClient = WTFMove(automationClient);
 }
@@ -402,7 +402,7 @@ void WebProcessPool::setLegacyCustomProtocolManagerClient(std::unique_ptr<API::C
 {
 #if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
     if (!customProtocolManagerClient)
-        m_customProtocolManagerClient = std::make_unique<API::CustomProtocolManagerClient>();
+        m_customProtocolManagerClient = makeUnique<API::CustomProtocolManagerClient>();
     else
         m_customProtocolManagerClient = WTFMove(customProtocolManagerClient);
 #endif
@@ -492,7 +492,7 @@ NetworkProcessProxy& WebProcessPool::ensureNetworkProcess(WebsiteDataStore* with
         return *m_networkProcess;
     }
 
-    auto networkProcess = std::make_unique<NetworkProcessProxy>(*this);
+    auto networkProcess = makeUnique<NetworkProcessProxy>(*this);
 
     NetworkProcessCreationParameters parameters;
 
@@ -583,8 +583,8 @@ NetworkProcessProxy& WebProcessPool::ensureNetworkProcess(WebsiteDataStore* with
     auto localStorageDirectory = m_websiteDataStore ? m_websiteDataStore->websiteDataStore().resolvedLocalStorageDirectory() : nullString();
     if (!localStorageDirectory)
         localStorageDirectory = API::WebsiteDataStore::defaultLocalStorageDirectory();
-    parameters.defaultDataStoreParameters.networkSessionParameters.localStorageDirectory = localStorageDirectory;
-    SandboxExtension::createHandleForReadWriteDirectory(localStorageDirectory, parameters.defaultDataStoreParameters.networkSessionParameters.localStorageDirectoryExtensionHandle);
+    parameters.defaultDataStoreParameters.localStorageDirectory = localStorageDirectory;
+    SandboxExtension::createHandleForReadWriteDirectory(localStorageDirectory, parameters.defaultDataStoreParameters.localStorageDirectoryExtensionHandle);
 
     if (m_websiteDataStore)
         parameters.defaultDataStoreParameters.networkSessionParameters.resourceLoadStatisticsDirectory = m_websiteDataStore->websiteDataStore().resolvedResourceLoadStatisticsDirectory();
@@ -792,9 +792,9 @@ void WebProcessPool::didReceiveInvalidMessage(const IPC::StringReference& messag
         return;
 
     StringBuilder messageNameStringBuilder;
-    messageNameStringBuilder.append(messageReceiverName.data(), messageReceiverName.size());
+    messageNameStringBuilder.appendCharacters(messageReceiverName.data(), messageReceiverName.size());
     messageNameStringBuilder.append('.');
-    messageNameStringBuilder.append(messageName.data(), messageName.size());
+    messageNameStringBuilder.appendCharacters(messageName.data(), messageName.size());
 
     s_invalidMessageCallback(toAPI(API::String::create(messageNameStringBuilder.toString()).ptr()));
 }
@@ -1228,9 +1228,7 @@ Ref<WebPageProxy> WebProcessPool::createWebPage(PageClient& pageClient, Ref<API:
         if (!m_websiteDataStore)
             m_websiteDataStore = API::WebsiteDataStore::defaultDataStore().ptr();
 
-        ASSERT(!pageConfiguration->sessionID().isValid());
         pageConfiguration->setWebsiteDataStore(m_websiteDataStore.get());
-        pageConfiguration->setSessionID(pageConfiguration->preferences()->privateBrowsingEnabled() ? PAL::SessionID::legacyPrivateSessionID() : m_websiteDataStore->websiteDataStore().sessionID());
     }
 
     RefPtr<WebProcessProxy> process;
@@ -1315,13 +1313,8 @@ void WebProcessPool::pageBeginUsingWebsiteDataStore(PageIdentifier pageID, Websi
     ASSERT_UNUSED(result, result.isNewEntry);
 
     auto sessionID = dataStore.sessionID();
-    if (sessionID.isEphemeral()) {
-        ASSERT(dataStore.parameters().networkSessionParameters.sessionID == sessionID);
-        if (m_networkProcess) {
-            m_networkProcess->addSession(makeRef(dataStore));
-            dataStore.clearPendingCookies();
-        }
-    } else if (sessionID != PAL::SessionID::defaultSessionID()) {
+    if (sessionID != PAL::SessionID::defaultSessionID()) {
+        ASSERT(!sessionID.isEphemeral() || dataStore.parameters().networkSessionParameters.sessionID == sessionID);
         if (m_networkProcess) {
             m_networkProcess->addSession(makeRef(dataStore));
             dataStore.clearPendingCookies();
@@ -1341,14 +1334,8 @@ void WebProcessPool::pageEndUsingWebsiteDataStore(PageIdentifier pageID, Website
     if (iterator->value.isEmpty()) {
         m_sessionToPageIDsMap.remove(iterator);
 
-        if (sessionID == PAL::SessionID::defaultSessionID())
-            return;
-
-        // The last user of this non-default PAL::SessionID is gone, so clean it up in the child processes.
-        if (networkProcess())
-            networkProcess()->removeSession(sessionID);
-
-        m_webProcessCache->clearAllProcessesForSession(sessionID);
+        if (sessionID.isEphemeral())
+            m_webProcessCache->clearAllProcessesForSession(sessionID);
     }
 }
 
@@ -1768,12 +1755,6 @@ void WebProcessPool::clearCachedCredentials()
         m_networkProcess->send(Messages::NetworkProcess::ClearCachedCredentials(), 0);
 }
 
-void WebProcessPool::clearPermanentCredentialsForProtectionSpace(WebCore::ProtectionSpace&& protectionSpace, CompletionHandler<void()>&& completionHandler)
-{
-    if (m_networkProcess)
-        m_networkProcess->sendWithAsyncReply(Messages::NetworkProcess::ClearPermanentCredentialsForProtectionSpace(protectionSpace), WTFMove(completionHandler));
-}
-
 void WebProcessPool::terminateNetworkProcess()
 {
     if (!m_networkProcess)
@@ -1810,11 +1791,17 @@ void WebProcessPool::syncNetworkProcessCookies()
     ensureNetworkProcess().syncAllCookies();
 }
 
-void WebProcessPool::setIDBPerOriginQuota(uint64_t quota)
+void WebProcessPool::syncLocalStorage(CompletionHandler<void()>&& completionHandler)
 {
-#if ENABLE(INDEXED_DATABASE)
-    ensureNetworkProcess().send(Messages::NetworkProcess::SetIDBPerOriginQuota(quota), 0);
-#endif
+    sendSyncToNetworkingProcess(Messages::NetworkProcess::SyncLocalStorage(), Messages::NetworkProcess::SyncLocalStorage::Reply());
+    completionHandler();
+}
+
+void WebProcessPool::clearLegacyPrivateBrowsingLocalStorage(CompletionHandler<void()>&& completionHandler)
+{
+    if (m_networkProcess)
+        m_networkProcess->send(Messages::NetworkProcess::ClearLegacyPrivateBrowsingLocalStorage(), 0);
+    completionHandler();
 }
 
 void WebProcessPool::allowSpecificHTTPSCertificateForHost(const WebCertificateInfo* certificate, const String& host)
@@ -2233,17 +2220,17 @@ void WebProcessPool::reinstateNetworkProcessAssertionState(NetworkProcessProxy& 
 #endif
 }
 
-#if ENABLE(SERVICE_WORKER)
-ServiceWorkerProcessProxy* WebProcessPool::serviceWorkerProcessProxyFromPageID(PageIdentifier pageID) const
+bool WebProcessPool::isServiceWorkerPageID(PageIdentifier pageID) const
 {
+#if ENABLE(SERVICE_WORKER)
     // FIXME: This is inefficient.
     for (auto* serviceWorkerProcess : m_serviceWorkerProcesses.values()) {
         if (serviceWorkerProcess->pageID() == pageID)
-            return serviceWorkerProcess;
+            return true;
     }
-    return nullptr;
-}
 #endif
+    return false;
+}
 
 void WebProcessPool::addProcessToOriginCacheSet(WebProcessProxy& process, const URL& url)
 {
@@ -2523,7 +2510,7 @@ void WebProcessPool::didCollectPrewarmInformation(const WebCore::RegistrableDoma
         m_prewarmInformationPerRegistrableDomain.remove(m_prewarmInformationPerRegistrableDomain.random());
 
     auto& value = m_prewarmInformationPerRegistrableDomain.ensure(registrableDomain, [] {
-        return std::make_unique<WebCore::PrewarmInformation>();
+        return makeUnique<WebCore::PrewarmInformation>();
     }).iterator->value;
 
     *value = prewarmInformation;
@@ -2570,12 +2557,12 @@ void WebProcessPool::setWebProcessHasUploads(ProcessIdentifier processID)
         m_networkProcess->takeUploadAssertion();
         
         ASSERT(!m_uiProcessUploadAssertion);
-        m_uiProcessUploadAssertion = std::make_unique<ProcessAssertion>(getCurrentProcessID(), "WebKit uploads"_s, AssertionState::UnboundedNetworking);
+        m_uiProcessUploadAssertion = makeUnique<ProcessAssertion>(getCurrentProcessID(), "WebKit uploads"_s, AssertionState::UnboundedNetworking);
     }
     
     auto result = m_processesWithUploads.add(processID, nullptr);
     ASSERT(result.isNewEntry);
-    result.iterator->value = std::make_unique<ProcessAssertion>(process->processIdentifier(), "WebKit uploads"_s, AssertionState::UnboundedNetworking);
+    result.iterator->value = makeUnique<ProcessAssertion>(process->processIdentifier(), "WebKit uploads"_s, AssertionState::UnboundedNetworking);
 }
 
 void WebProcessPool::clearWebProcessHasUploads(ProcessIdentifier processID)
@@ -2612,12 +2599,12 @@ void WebProcessPool::setWebProcessIsPlayingAudibleMedia(WebCore::ProcessIdentifi
         RELEASE_LOG(ProcessSuspension, "The number of processes playing audible media is now one. Taking UI process assertion.");
 
         ASSERT(!m_uiProcessMediaPlaybackAssertion);
-        m_uiProcessMediaPlaybackAssertion = std::make_unique<ProcessAssertion>(getCurrentProcessID(), "WebKit Media Playback"_s, AssertionState::Foreground, AssertionReason::MediaPlayback);
+        m_uiProcessMediaPlaybackAssertion = makeUnique<ProcessAssertion>(getCurrentProcessID(), "WebKit Media Playback"_s, AssertionState::Foreground, AssertionReason::MediaPlayback);
     }
 
     auto result = m_processesPlayingAudibleMedia.add(processID, nullptr);
     ASSERT(result.isNewEntry);
-    result.iterator->value = std::make_unique<ProcessAssertion>(process->processIdentifier(), "WebKit Media Playback"_s, AssertionState::Foreground, AssertionReason::MediaPlayback);
+    result.iterator->value = makeUnique<ProcessAssertion>(process->processIdentifier(), "WebKit Media Playback"_s, AssertionState::Foreground, AssertionReason::MediaPlayback);
 }
 
 void WebProcessPool::clearWebProcessIsPlayingAudibleMedia(WebCore::ProcessIdentifier processID)

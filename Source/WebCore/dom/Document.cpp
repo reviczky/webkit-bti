@@ -124,6 +124,7 @@
 #include "MediaProducer.h"
 #include "MediaQueryList.h"
 #include "MediaQueryMatcher.h"
+#include "MediaStream.h"
 #include "MessageEvent.h"
 #include "Microtasks.h"
 #include "MouseEventWithHitTestResults.h"
@@ -304,11 +305,6 @@
 
 #if ENABLE(XSLT)
 #include "XSLTProcessor.h"
-#endif
-
-#if ENABLE(MEDIA_STREAM)
-#include "MediaStream.h"
-#include "MediaStreamRegistry.h"
 #endif
 
 #if ENABLE(WEBGL)
@@ -514,7 +510,7 @@ static inline int currentOrientation(Frame* frame)
     return 0;
 }
 
-Document::Document(Frame* frame, const URL& url, unsigned documentClasses, unsigned constructionFlags)
+Document::Document(PAL::SessionID sessionID, Frame* frame, const URL& url, unsigned documentClasses, unsigned constructionFlags)
     : ContainerNode(*this, CreateDocument)
     , TreeScope(*this)
     , FrameDestructionObserver(frame)
@@ -525,19 +521,19 @@ Document::Document(Frame* frame, const URL& url, unsigned documentClasses, unsig
     , m_quirks(makeUniqueRef<Quirks>(*this))
     , m_cachedResourceLoader(m_frame ? Ref<CachedResourceLoader>(m_frame->loader().activeDocumentLoader()->cachedResourceLoader()) : CachedResourceLoader::create(nullptr))
     , m_domTreeVersion(++s_globalTreeVersion)
-    , m_styleScope(std::make_unique<Style::Scope>(*this))
-    , m_extensionStyleSheets(std::make_unique<ExtensionStyleSheets>(*this))
-    , m_visitedLinkState(std::make_unique<VisitedLinkState>(*this))
-    , m_markers(std::make_unique<DocumentMarkerController>(*this))
+    , m_styleScope(makeUnique<Style::Scope>(*this))
+    , m_extensionStyleSheets(makeUnique<ExtensionStyleSheets>(*this))
+    , m_visitedLinkState(makeUnique<VisitedLinkState>(*this))
+    , m_markers(makeUnique<DocumentMarkerController>(*this))
     , m_styleRecalcTimer([this] { updateStyleIfNeeded(); })
     , m_documentCreationTime(MonotonicTime::now())
-    , m_scriptRunner(std::make_unique<ScriptRunner>(*this))
-    , m_moduleLoader(std::make_unique<ScriptModuleLoader>(*this))
+    , m_scriptRunner(makeUnique<ScriptRunner>(*this))
+    , m_moduleLoader(makeUnique<ScriptModuleLoader>(*this))
 #if ENABLE(XSLT)
     , m_applyPendingXSLTransformsTimer(*this, &Document::applyPendingXSLTransformsTimerFired)
 #endif
     , m_xmlVersion("1.0"_s)
-    , m_constantPropertyMap(std::make_unique<ConstantPropertyMap>(*this))
+    , m_constantPropertyMap(makeUnique<ConstantPropertyMap>(*this))
     , m_documentClasses(documentClasses)
     , m_eventQueue(*this)
 #if ENABLE(FULLSCREEN_API)
@@ -549,10 +545,10 @@ Document::Document(Frame* frame, const URL& url, unsigned documentClasses, unsig
 #endif
     , m_loadEventDelayTimer(*this, &Document::loadEventDelayTimerFired)
 #if PLATFORM(IOS_FAMILY) && ENABLE(DEVICE_ORIENTATION)
-    , m_deviceMotionClient(std::make_unique<DeviceMotionClientIOS>())
-    , m_deviceMotionController(std::make_unique<DeviceMotionController>(*m_deviceMotionClient))
-    , m_deviceOrientationClient(std::make_unique<DeviceOrientationClientIOS>())
-    , m_deviceOrientationController(std::make_unique<DeviceOrientationController>(*m_deviceOrientationClient))
+    , m_deviceMotionClient(makeUnique<DeviceMotionClientIOS>())
+    , m_deviceMotionController(makeUnique<DeviceMotionController>(*m_deviceMotionClient))
+    , m_deviceOrientationClient(makeUnique<DeviceOrientationClientIOS>())
+    , m_deviceOrientationController(makeUnique<DeviceOrientationController>(*m_deviceOrientationClient))
 #endif
     , m_pendingTasksTimer(*this, &Document::pendingTasksTimerFired)
     , m_visualUpdatesSuppressionTimer(*this, &Document::visualUpdatesSuppressionTimerFired)
@@ -564,9 +560,12 @@ Document::Document(Frame* frame, const URL& url, unsigned documentClasses, unsig
     , m_isSynthesized(constructionFlags & Synthesized)
     , m_isNonRenderedPlaceholder(constructionFlags & NonRenderedPlaceholder)
     , m_orientationNotifier(currentOrientation(frame))
+    , m_sessionID(sessionID)
     , m_identifier(DocumentIdentifier::generate())
     , m_undoManager(UndoManager::create(*this))
 {
+    ASSERT(!frame || frame->sessionID() == m_sessionID);
+
     auto addResult = allDocumentsMap().add(m_identifier, this);
     ASSERT_UNUSED(addResult, addResult.isNewEntry);
 
@@ -597,10 +596,15 @@ Document::Document(Frame* frame, const URL& url, unsigned documentClasses, unsig
 
 Ref<Document> Document::create(Document& contextDocument)
 {
-    auto document = adoptRef(*new Document(nullptr, URL()));
+    auto document = adoptRef(*new Document(contextDocument.sessionID(), nullptr, URL()));
     document->setContextDocument(contextDocument);
     document->setSecurityOriginPolicy(contextDocument.securityOriginPolicy());
     return document;
+}
+
+Ref<Document> Document::createNonRenderedPlaceholder(Frame& frame, const URL& url)
+{
+    return adoptRef(*new Document(frame.sessionID(), &frame, url, DefaultDocumentClass, NonRenderedPlaceholder));
 }
 
 Document::~Document()
@@ -761,7 +765,7 @@ Element* Document::elementForAccessKey(const String& key)
 
 void Document::buildAccessKeyCache()
 {
-    m_accessKeyCache = std::make_unique<HashMap<String, Element*, ASCIICaseInsensitiveHash>>([this] {
+    m_accessKeyCache = makeUnique<HashMap<String, Element*, ASCIICaseInsensitiveHash>>([this] {
         HashMap<String, Element*, ASCIICaseInsensitiveHash> map;
         for (auto& node : composedTreeDescendants(*this)) {
             if (!is<Element>(node))
@@ -786,7 +790,7 @@ ExceptionOr<SelectorQuery&> Document::selectorQueryForString(const String& selec
     if (selectorString.isEmpty())
         return Exception { SyntaxError };
     if (!m_selectorQueryCache)
-        m_selectorQueryCache = std::make_unique<SelectorQueryCache>();
+        m_selectorQueryCache = makeUnique<SelectorQueryCache>();
     return m_selectorQueryCache->add(selectorString, *this);
 }
 
@@ -851,7 +855,7 @@ void Document::resetActiveLinkColor()
 DOMImplementation& Document::implementation()
 {
     if (!m_implementation)
-        m_implementation = std::make_unique<DOMImplementation>(*this);
+        m_implementation = makeUnique<DOMImplementation>(*this);
     return *m_implementation;
 }
 
@@ -1766,7 +1770,7 @@ Node::NodeType Document::nodeType() const
 FormController& Document::formController()
 {
     if (!m_formController)
-        m_formController = std::make_unique<FormController>();
+        m_formController = makeUnique<FormController>();
     return *m_formController;
 }
 
@@ -1991,7 +1995,7 @@ void Document::updateTextRenderer(Text& text, unsigned offsetOfReplacedText, uns
     ASSERT(!m_inRenderTreeUpdate);
     SetForScope<bool> inRenderTreeUpdate(m_inRenderTreeUpdate, true);
 
-    auto textUpdate = std::make_unique<Style::Update>(*this);
+    auto textUpdate = makeUnique<Style::Update>(*this);
     textUpdate->addText(text, { offsetOfReplacedText, lengthOfReplacedText, WTF::nullopt });
 
     RenderTreeUpdater renderTreeUpdater(*this);
@@ -2273,7 +2277,7 @@ void Document::pageSizeAndMarginsInPixels(int pageIndex, IntSize& pageSize, int&
 StyleResolver& Document::userAgentShadowTreeStyleResolver()
 {
     if (!m_userAgentShadowTreeStyleResolver)
-        m_userAgentShadowTreeStyleResolver = std::make_unique<StyleResolver>(*this);
+        m_userAgentShadowTreeStyleResolver = makeUnique<StyleResolver>(*this);
     return *m_userAgentShadowTreeStyleResolver;
 }
 
@@ -2676,7 +2680,7 @@ AXObjectCache* Document::axObjectCache() const
 
     ASSERT(&topDocument == this || !m_axObjectCache);
     if (!topDocument.m_axObjectCache) {
-        topDocument.m_axObjectCache = std::make_unique<AXObjectCache>(topDocument);
+        topDocument.m_axObjectCache = makeUnique<AXObjectCache>(topDocument);
         hasEverCreatedAnAXObjectCache = true;
     }
     return topDocument.m_axObjectCache.get();
@@ -3010,6 +3014,9 @@ void Document::implicitClose()
 
     m_processingLoadEvent = false;
 
+    if (auto* fontFaceSet = fontSelector().optionalFontFaceSet())
+        fontFaceSet->didFirstLayout();
+
 #if PLATFORM(COCOA) || PLATFORM(WIN) || PLATFORM(GTK)
     if (f && hasLivingRenderTree() && AXObjectCache::accessibilityEnabled()) {
         // The AX cache may have been cleared at this point, but we need to make sure it contains an
@@ -3040,7 +3047,7 @@ void Document::setParsing(bool b)
     m_bParsing = b;
 
     if (m_bParsing && !m_sharedObjectPool)
-        m_sharedObjectPool = std::make_unique<DocumentSharedObjectPool>();
+        m_sharedObjectPool = makeUnique<DocumentSharedObjectPool>();
 
     if (!m_bParsing && view() && !view()->needsLayout())
         view()->fireLayoutRelatedMilestonesIfNeeded();
@@ -3873,10 +3880,10 @@ Ref<Document> Document::cloneDocumentWithoutChildren() const
 {
     if (isXMLDocument()) {
         if (isXHTMLDocument())
-            return XMLDocument::createXHTML(nullptr, url());
-        return XMLDocument::create(nullptr, url());
+            return XMLDocument::createXHTML(sessionID(), nullptr, url());
+        return XMLDocument::create(sessionID(), nullptr, url());
     }
-    return create(url());
+    return create(sessionID(), url());
 }
 
 void Document::cloneDataFromDocument(const Document& other)
@@ -3980,6 +3987,10 @@ void Document::updateIsPlayingMedia(uint64_t sourceElementID)
     for (auto& audioProducer : m_audioProducers)
         state |= audioProducer.mediaState();
 
+#if ENABLE(MEDIA_STREAM) && PLATFORM(IOS_FAMILY)
+    state |= MediaStreamTrack::captureState();
+#endif
+
 #if ENABLE(MEDIA_SESSION)
     if (HTMLMediaElement* sourceElement = HTMLMediaElement::elementWithID(sourceElementID)) {
         if (sourceElement->isPlaying())
@@ -4021,6 +4032,10 @@ void Document::pageMutedStateDidChange()
 {
     for (auto& audioProducer : m_audioProducers)
         audioProducer.pageMutedStateDidChange();
+
+#if ENABLE(MEDIA_STREAM) && PLATFORM(IOS_FAMILY)
+    MediaStreamTrack::muteCapture();
+#endif
 }
 
 static bool isNodeInSubtree(Node& node, Node& container, Document::NodeRemoval nodeRemoval)
@@ -5054,12 +5069,6 @@ URL Document::completeURL(const String& url) const
 
 PAL::SessionID Document::sessionID() const
 {
-    if (m_sessionID.isValid())
-        return m_sessionID;
-
-    if (auto* page = this->page())
-        m_sessionID = page->sessionID();
-
     return m_sessionID;
 }
 
@@ -5258,19 +5267,18 @@ void Document::storageBlockingStateDidChange()
     securityOrigin().setStorageBlockingPolicy(settings().storageBlockingPolicy());
 }
 
-void Document::privateBrowsingStateDidChange() 
+void Document::privateBrowsingStateDidChange(PAL::SessionID sessionID)
 {
-    m_sessionID = SessionID::emptySessionID();
+    m_sessionID = sessionID;
     if (m_logger)
-        m_logger->setEnabled(this, sessionID().isAlwaysOnLoggingAllowed());
+        m_logger->setEnabled(this, sessionID.isAlwaysOnLoggingAllowed());
 
     for (auto* element : m_privateBrowsingStateChangedElements)
-        element->privateBrowsingStateDidChange();
+        element->privateBrowsingStateDidChange(sessionID);
 
 #if ENABLE(SERVICE_WORKER)
-    ASSERT(sessionID().isValid());
-    if (RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled() && m_serviceWorkerConnection && sessionID().isValid())
-        setServiceWorkerConnection(&ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(sessionID()));
+    if (RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled() && m_serviceWorkerConnection)
+        setServiceWorkerConnection(&ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(sessionID));
 #endif
 }
 
@@ -5562,7 +5570,7 @@ const SVGDocumentExtensions* Document::svgExtensions()
 SVGDocumentExtensions& Document::accessSVGExtensions()
 {
     if (!m_svgExtensions)
-        m_svgExtensions = std::make_unique<SVGDocumentExtensions>(*this);
+        m_svgExtensions = makeUnique<SVGDocumentExtensions>(*this);
     return *m_svgExtensions;
 }
 
@@ -5724,7 +5732,7 @@ bool Document::isTelephoneNumberParsingAllowed() const
 
 #endif
 
-String Document::originIdentifierForPasteboard()
+String Document::originIdentifierForPasteboard() const
 {
     auto origin = securityOrigin().toString();
     if (origin != "null")
@@ -5767,7 +5775,7 @@ void Document::initSecurityContext()
         // This can occur via document.implementation.createDocument().
         setCookieURL(URL({ }, emptyString()));
         setSecurityOriginPolicy(SecurityOriginPolicy::create(SecurityOrigin::createUnique()));
-        setContentSecurityPolicy(std::make_unique<ContentSecurityPolicy>(URL { { }, emptyString() }, *this));
+        setContentSecurityPolicy(makeUnique<ContentSecurityPolicy>(URL { { }, emptyString() }, *this));
         return;
     }
 
@@ -5786,7 +5794,7 @@ void Document::initSecurityContext()
         isSecurityOriginUnique = documentLoader && documentLoader->response().tainting() == ResourceResponse::Tainting::Opaque;
 
     setSecurityOriginPolicy(SecurityOriginPolicy::create(isSecurityOriginUnique ? SecurityOrigin::createUnique() : SecurityOrigin::create(m_url)));
-    setContentSecurityPolicy(std::make_unique<ContentSecurityPolicy>(URL { m_url }, *this));
+    setContentSecurityPolicy(makeUnique<ContentSecurityPolicy>(URL { m_url }, *this));
 
     String overrideContentSecurityPolicy = m_frame->loader().client().overrideContentSecurityPolicy();
     if (!overrideContentSecurityPolicy.isNull())
@@ -5929,6 +5937,8 @@ bool Document::isSecureContext() const
 {
     if (!m_frame)
         return true;
+    if (!RuntimeEnabledFeatures::sharedFeatures().secureContextChecksEnabled())
+        return true;
     if (!securityOrigin().isPotentiallyTrustworthy())
         return false;
     for (Frame* frame = m_frame->tree().parent(); frame; frame = frame->tree().parent()) {
@@ -6024,7 +6034,7 @@ String Document::nameForCSSCanvasElement(const HTMLCanvasElement& canvasElement)
 TextAutoSizing& Document::textAutoSizing()
 {
     if (!m_textAutoSizing)
-        m_textAutoSizing = std::make_unique<TextAutoSizing>();
+        m_textAutoSizing = makeUnique<TextAutoSizing>();
     return *m_textAutoSizing;
 }
 #endif // ENABLE(TEXT_AUTOSIZING)
@@ -6391,7 +6401,7 @@ void Document::wheelEventHandlersChanged()
 void Document::didAddWheelEventHandler(Node& node)
 {
     if (!m_wheelEventTargets)
-        m_wheelEventTargets = std::make_unique<EventTargetSet>();
+        m_wheelEventTargets = makeUnique<EventTargetSet>();
 
     m_wheelEventTargets->add(&node);
 
@@ -6451,7 +6461,7 @@ void Document::didAddTouchEventHandler(Node& handler)
 {
 #if ENABLE(TOUCH_EVENTS)
     if (!m_touchEventTargets)
-        m_touchEventTargets = std::make_unique<EventTargetSet>();
+        m_touchEventTargets = makeUnique<EventTargetSet>();
 
     m_touchEventTargets->add(&handler);
 
@@ -6879,9 +6889,9 @@ Document& Document::ensureTemplateDocument()
         return const_cast<Document&>(*document);
 
     if (isHTMLDocument())
-        m_templateDocument = HTMLDocument::create(nullptr, WTF::blankURL());
+        m_templateDocument = HTMLDocument::create(sessionID(), nullptr, WTF::blankURL());
     else
-        m_templateDocument = create(WTF::blankURL());
+        m_templateDocument = create(sessionID(), WTF::blankURL());
 
     m_templateDocument->setContextDocument(contextDocument());
     m_templateDocument->setTemplateDocumentHost(this); // balanced in dtor.
@@ -7553,8 +7563,9 @@ size_t Document::gatherResizeObservations(size_t deeperThan)
 
 void Document::deliverResizeObservations()
 {
-    for (const auto& observer : m_resizeObservers) {
-        if (!observer->hasActiveObservations())
+    auto observersToNotify = m_resizeObservers;
+    for (const auto& observer : observersToNotify) {
+        if (!observer || !observer->hasActiveObservations())
             continue;
         observer->deliverObservations();
     }
@@ -7656,10 +7667,7 @@ void Document::notifyMediaCaptureOfVisibilityChanged()
 #if ENABLE(MEDIA_STREAM)
 void Document::stopMediaCapture()
 {
-    MediaStreamRegistry::shared().forEach([this](MediaStream& stream) {
-        if (stream.document() == this)
-            stream.endCaptureTracks();
-    });
+    MediaStreamTrack::endCapture(*this);
 }
 
 void Document::registerForMediaStreamStateChangeCallbacks(HTMLMediaElement& element)
@@ -8012,8 +8020,22 @@ static MessageLevel messageLevelFromWTFLogLevel(WTFLogLevel level)
     return MessageLevel::Log;
 }
 
+static inline Vector<JSONLogValue> crossThreadCopy(Vector<JSONLogValue>&& source)
+{
+    auto values = WTFMove(source);
+    for (auto& value : values)
+        value.value = crossThreadCopy(WTFMove(value.value));
+    return values;
+}
+
 void Document::didLogMessage(const WTFLogChannel& channel, WTFLogLevel level, Vector<JSONLogValue>&& logMessages)
 {
+    if (!isMainThread()) {
+        postTask([this, channel, level, logMessages = crossThreadCopy(WTFMove(logMessages))](auto&) mutable {
+            didLogMessage(channel, level, WTFMove(logMessages));
+        });
+        return;
+    }
     if (!page())
         return;
 
@@ -8028,7 +8050,7 @@ void Document::didLogMessage(const WTFLogChannel& channel, WTFLogLevel level, Ve
             return;
 
         auto messageLevel = messageLevelFromWTFLogLevel(level);
-        auto message = std::make_unique<Inspector::ConsoleMessage>(messageSource, MessageType::Log, messageLevel, WTFMove(logMessages), mainWorldExecState(frame()));
+        auto message = makeUnique<Inspector::ConsoleMessage>(messageSource, MessageType::Log, messageLevel, WTFMove(logMessages), mainWorldExecState(frame()));
 
         addConsoleMessage(WTFMove(message));
     });
@@ -8063,7 +8085,7 @@ String Document::signedPublicKeyAndChallengeString(unsigned keySizeIndex, const 
 
 bool Document::registerCSSProperty(CSSRegisteredCustomProperty&& prop)
 {
-    return m_CSSRegisteredPropertySet.add(prop.name, std::make_unique<CSSRegisteredCustomProperty>(WTFMove(prop))).isNewEntry;
+    return m_CSSRegisteredPropertySet.add(prop.name, makeUnique<CSSRegisteredCustomProperty>(WTFMove(prop))).isNewEntry;
 }
 
 void Document::detachFromFrame()
@@ -8157,7 +8179,7 @@ DeviceOrientationAndMotionAccessController& Document::deviceOrientationAndMotion
         return topDocument().deviceOrientationAndMotionAccessController();
 
     if (!m_deviceOrientationAndMotionAccessController)
-        m_deviceOrientationAndMotionAccessController = std::make_unique<DeviceOrientationAndMotionAccessController>(*this);
+        m_deviceOrientationAndMotionAccessController = makeUnique<DeviceOrientationAndMotionAccessController>(*this);
     return *m_deviceOrientationAndMotionAccessController;
 }
 
@@ -8188,7 +8210,7 @@ void Document::setPaintWorkletGlobalScopeForName(const String& name, Ref<PaintWo
 ContentChangeObserver& Document::contentChangeObserver()
 {
     if (!m_contentChangeObserver)
-        m_contentChangeObserver = std::make_unique<ContentChangeObserver>(*this);
+        m_contentChangeObserver = makeUnique<ContentChangeObserver>(*this);
     return *m_contentChangeObserver; 
 }
 
@@ -8196,7 +8218,7 @@ DOMTimerHoldingTank& Document::domTimerHoldingTank()
 {
     if (m_domTimerHoldingTank)
         return *m_domTimerHoldingTank;
-    m_domTimerHoldingTank = std::make_unique<DOMTimerHoldingTank>();
+    m_domTimerHoldingTank = makeUnique<DOMTimerHoldingTank>();
     return *m_domTimerHoldingTank;
 }
 

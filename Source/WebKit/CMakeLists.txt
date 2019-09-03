@@ -2,6 +2,10 @@ include(WebKitCommon)
 
 set_property(DIRECTORY . PROPERTY FOLDER "WebKit")
 
+if (PAL_LIBRARY_TYPE MATCHES STATIC)
+    add_definitions(-DSTATICALLY_LINKED_WITH_PAL=1)
+endif ()
+
 set(WebKit_PRIVATE_INCLUDE_DIRECTORIES
     "${CMAKE_BINARY_DIR}"
 )
@@ -118,7 +122,7 @@ set(WebKit_MESSAGES_IN_FILES
     NetworkProcess/ServiceWorker/WebSWServerConnection.messages.in
     NetworkProcess/ServiceWorker/WebSWServerToContextConnection.messages.in
 
-    NetworkProcess/WebStorage/StorageManager.messages.in
+    NetworkProcess/WebStorage/StorageManagerSet.messages.in
 
     NetworkProcess/cache/CacheStorageEngineConnection.messages.in
 

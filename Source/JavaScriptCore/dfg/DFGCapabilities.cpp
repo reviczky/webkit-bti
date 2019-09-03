@@ -188,6 +188,8 @@ CapabilityLevel capabilityLevel(OpcodeID opcodeID, CodeBlock* codeBlock, const I
     case op_jfalse:
     case op_jeq_null:
     case op_jneq_null:
+    case op_jundefined_or_null:
+    case op_jnundefined_or_null:
     case op_jless:
     case op_jlesseq:
     case op_jgreater:
@@ -203,7 +205,6 @@ CapabilityLevel capabilityLevel(OpcodeID opcodeID, CodeBlock* codeBlock, const I
     case op_jbelow:
     case op_jbeloweq:
     case op_loop_hint:
-    case op_check_traps:
     case op_nop:
     case op_ret:
     case op_end:

@@ -53,7 +53,7 @@ Ref<ServiceWorkerProcessProxy> ServiceWorkerProcessProxy::create(WebProcessPool&
 ServiceWorkerProcessProxy::ServiceWorkerProcessProxy(WebProcessPool& pool, const RegistrableDomain& registrableDomain, WebsiteDataStore& store)
     : WebProcessProxy { pool, &store, IsPrewarmed::No }
     , m_registrableDomain(registrableDomain)
-    , m_serviceWorkerPageID(generatePageID())
+    , m_serviceWorkerPageID(PageIdentifier::generate())
 {
 }
 
@@ -88,22 +88,6 @@ void ServiceWorkerProcessProxy::setUserAgent(const String& userAgent)
 void ServiceWorkerProcessProxy::updatePreferencesStore(const WebPreferencesStore& store)
 {
     send(Messages::WebSWContextManagerConnection::UpdatePreferencesStore { store }, 0);
-}
-
-void ServiceWorkerProcessProxy::didReceiveAuthenticationChallenge(PageIdentifier pageID, uint64_t frameID, Ref<AuthenticationChallengeProxy>&& challenge)
-{
-    UNUSED_PARAM(pageID);
-    UNUSED_PARAM(frameID);
-
-    // FIXME: Expose an API to delegate the actual decision to the application layer.
-    auto& protectionSpace = challenge->core().protectionSpace();
-    if (protectionSpace.authenticationScheme() == WebCore::ProtectionSpaceAuthenticationSchemeServerTrustEvaluationRequested && processPool().allowsAnySSLCertificateForServiceWorker()) {
-        auto credential = WebCore::Credential("accept server trust"_s, emptyString(), WebCore::CredentialPersistenceNone);
-        challenge->listener().completeChallenge(AuthenticationChallengeDisposition::UseCredential, credential);
-        return;
-    }
-    notImplemented();
-    challenge->listener().completeChallenge(AuthenticationChallengeDisposition::PerformDefaultHandling);
 }
 
 } // namespace WebKit

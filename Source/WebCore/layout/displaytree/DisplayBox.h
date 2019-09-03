@@ -44,6 +44,7 @@ class FormattingContext;
 class FloatingContext;
 class InlineFormattingContext;
 class LayoutState;
+class TableFormattingContext;
 }
 
 namespace Display {
@@ -58,6 +59,7 @@ public:
     friend class Layout::FloatingContext;
     friend class Layout::InlineFormattingContext;
     friend class Layout::LayoutState;
+    friend class Layout::TableFormattingContext;
 
     Box(const RenderStyle&);
     Box(const Box&);
@@ -123,6 +125,8 @@ public:
     LayoutUnit borderBoxWidth() const { return borderLeft() + paddingBoxWidth() + borderRight(); }
     LayoutUnit marginBoxHeight() const { return marginBefore() + borderBoxHeight() + marginAfter(); }
     LayoutUnit marginBoxWidth() const { return marginStart() + borderBoxWidth() + marginEnd(); }
+
+    LayoutUnit horizontalMarginBorderAndPadding() const { return marginStart() + horizontalBorder() + horizontalPadding().valueOr(0) + marginEnd(); }
 
     Rect marginBox() const;
     Rect nonCollapsedMarginBox() const;

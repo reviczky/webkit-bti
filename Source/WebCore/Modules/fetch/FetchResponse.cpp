@@ -103,7 +103,10 @@ ExceptionOr<Ref<FetchResponse>> FetchResponse::create(ScriptExecutionContext& co
         String contentType;
 
         // 8.3 Set r’s response’s body and Content-Type to the result of extracting body.
-        extractedBody = FetchBody::extract(context, WTFMove(*body), contentType);
+        auto result = FetchBody::extract(WTFMove(*body), contentType);
+        if (result.hasException())
+            return result.releaseException();
+        extractedBody = result.releaseReturnValue();
 
         // 8.4 If Content-Type is non-null and r’s response’s header list does not contain `Content-Type`, then append
         //     `Content-Type`/Content-Type to r’s response’s header list.
@@ -240,7 +243,7 @@ void FetchResponse::fetch(ScriptExecutionContext& context, FetchRequest& request
 
     response->addAbortSteps(request.signal());
 
-    response->m_bodyLoader = std::make_unique<BodyLoader>(response.get(), WTFMove(responseCallback));
+    response->m_bodyLoader = makeUnique<BodyLoader>(response.get(), WTFMove(responseCallback));
     if (!response->m_bodyLoader->start(context, request))
         response->m_bodyLoader = nullptr;
 }
@@ -379,7 +382,7 @@ void FetchResponse::BodyLoader::didReceiveData(const char* data, size_t size)
 
 bool FetchResponse::BodyLoader::start(ScriptExecutionContext& context, const FetchRequest& request)
 {
-    m_loader = std::make_unique<FetchLoader>(*this, &m_response.m_body->consumer());
+    m_loader = makeUnique<FetchLoader>(*this, &m_response.m_body->consumer());
     m_loader->start(context, request);
     return m_loader->isStarted();
 }

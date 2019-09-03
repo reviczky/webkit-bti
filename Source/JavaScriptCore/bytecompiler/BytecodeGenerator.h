@@ -379,9 +379,9 @@ namespace JSC {
 
         ~BytecodeGenerator();
         
-        VM* vm() const { return m_vm; }
+        VM& vm() const { return m_vm; }
         ParserArena& parserArena() const { return m_scopeNode->parserArena(); }
-        const CommonIdentifiers& propertyNames() const { return *m_vm->propertyNames; }
+        const CommonIdentifiers& propertyNames() const { return *m_vm.propertyNames; }
 
         bool isConstructor() const { return m_codeBlock->isConstructor(); }
         DerivedContextType derivedContextType() const { return m_derivedContextType; }
@@ -401,7 +401,7 @@ namespace JSC {
                 before = MonotonicTime::now();
 
             DeferGC deferGC(vm.heap);
-            auto bytecodeGenerator = std::make_unique<BytecodeGenerator>(vm, node, unlinkedCodeBlock, codeGenerationMode, environment);
+            auto bytecodeGenerator = makeUnique<BytecodeGenerator>(vm, node, unlinkedCodeBlock, codeGenerationMode, environment);
             auto result = bytecodeGenerator->generate();
 
             if (UNLIKELY(Options::reportBytecodeCompileTimes())) {
@@ -423,6 +423,7 @@ namespace JSC {
         RegisterID* argumentsRegister() { return m_argumentsRegister; }
         RegisterID* newTarget()
         {
+            ASSERT(m_newTargetRegister);
             return m_newTargetRegister;
         }
 
@@ -500,7 +501,7 @@ namespace JSC {
         {
             // Node::emitCode assumes that dst, if provided, is either a local or a referenced temporary.
             ASSERT(!dst || dst == ignoredResult() || !dst->isTemporary() || dst->refCount());
-            if (UNLIKELY(!m_vm->isSafeToRecurse())) {
+            if (UNLIKELY(!m_vm.isSafeToRecurse())) {
                 emitThrowExpressionTooDeepException();
                 return;
             }
@@ -536,7 +537,7 @@ namespace JSC {
         {
             // Node::emitCode assumes that dst, if provided, is either a local or a referenced temporary.
             ASSERT(!dst || dst == ignoredResult() || !dst->isTemporary() || dst->refCount());
-            if (UNLIKELY(!m_vm->isSafeToRecurse()))
+            if (UNLIKELY(!m_vm.isSafeToRecurse()))
                 return emitThrowExpressionTooDeepException();
             if (UNLIKELY(n->needsDebugHook()))
                 emitDebugHook(n);
@@ -556,7 +557,7 @@ namespace JSC {
         RegisterID* emitDefineClassElements(PropertyListNode* n, RegisterID* constructor, RegisterID* prototype)
         {
             ASSERT(constructor->refCount() && prototype->refCount());
-            if (UNLIKELY(!m_vm->isSafeToRecurse()))
+            if (UNLIKELY(!m_vm.isSafeToRecurse()))
                 return emitThrowExpressionTooDeepException();
             if (UNLIKELY(n->needsDebugHook()))
                 emitDebugHook(n);
@@ -579,7 +580,7 @@ namespace JSC {
 
         void emitNodeInConditionContext(ExpressionNode* n, Label& trueTarget, Label& falseTarget, FallThroughMode fallThroughMode)
         {
-            if (UNLIKELY(!m_vm->isSafeToRecurse())) {
+            if (UNLIKELY(!m_vm.isSafeToRecurse())) {
                 emitThrowExpressionTooDeepException();
                 return;
             }
@@ -846,7 +847,6 @@ namespace JSC {
         bool fuseTestAndJmp(RegisterID* cond, Label& target);
 
         void emitEnter();
-        void emitCheckTraps();
 
         RegisterID* emitHasIndexedProperty(RegisterID* dst, RegisterID* base, RegisterID* propertyName);
         RegisterID* emitHasStructureProperty(RegisterID* dst, RegisterID* base, RegisterID* propertyName, RegisterID* enumerator);
@@ -958,6 +958,11 @@ namespace JSC {
     public:
         void pushFinallyControlFlowScope(FinallyContext&);
         void popFinallyControlFlowScope();
+
+        void pushOptionalChainTarget();
+        void popOptionalChainTarget();
+        void popOptionalChainTarget(RegisterID* dst, bool isDelete);
+        void emitOptionalCheck(RegisterID* src);
 
         void pushIndexedForInScope(RegisterID* local, RegisterID* index);
         void popIndexedForInScope(RegisterID* local);
@@ -1266,6 +1271,8 @@ namespace JSC {
         Vector<TryRange> m_tryRanges;
         SegmentedVector<TryData, 8> m_tryData;
 
+        Vector<Ref<Label>> m_optionalChainTargetStack;
+
         int m_nextConstantOffset { 0 };
 
         typedef HashMap<FunctionMetadataNode*, unsigned> FunctionOffsetMap;
@@ -1283,7 +1290,7 @@ namespace JSC {
 
         StaticPropertyAnalyzer m_staticPropertyAnalyzer;
 
-        VM* m_vm;
+        VM& m_vm;
 
         OpcodeID m_lastOpcodeID = op_end;
         InstructionStream::MutableRef m_lastInstruction { m_writer.ref() };

@@ -46,6 +46,8 @@ PageNetworkAgent::PageNetworkAgent(PageAgentContext& context)
 {
 }
 
+PageNetworkAgent::~PageNetworkAgent() = default;
+
 String PageNetworkAgent::loaderIdentifier(DocumentLoader* loader)
 {
     if (loader) {
@@ -102,7 +104,7 @@ ScriptExecutionContext* PageNetworkAgent::scriptExecutionContext(ErrorString& er
 {
     auto* pageAgent = m_instrumentingAgents.inspectorPageAgent();
     if (!pageAgent) {
-        errorString = "Missing Page agent"_s;
+        errorString = "Page domain must be enabled"_s;
         return nullptr;
     }
 
@@ -112,7 +114,7 @@ ScriptExecutionContext* PageNetworkAgent::scriptExecutionContext(ErrorString& er
 
     auto* document = frame->document();
     if (!document) {
-        errorString = "No Document instance for the specified frame"_s;
+        errorString = "Missing frame of docuemnt for given frameId"_s;
         return nullptr;
     }
 

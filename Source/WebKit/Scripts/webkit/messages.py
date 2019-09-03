@@ -205,6 +205,7 @@ def forward_declarations_and_headers(receiver):
         'String',
         'WebCore::DocumentIdentifier',
         'WebCore::FetchIdentifier',
+        'WebCore::FrameIdentifier',
         'WebCore::PageIdentifier',
         'WebCore::PointerID',
         'WebCore::ProcessIdentifier',
@@ -216,6 +217,10 @@ def forward_declarations_and_headers(receiver):
         'WebCore::SWServerConnectionIdentifier',
         'WebKit::ActivityStateChangeID',
         'WebKit::LayerHostingContextID',
+        'WebKit::TransactionID',
+        'WebKit::StorageAreaIdentifier',
+        'WebKit::StorageAreaImplIdentifier',
+        'WebKit::StorageNamespaceIdentifier',
         'WebKit::UserContentControllerIdentifier',
     ])
 

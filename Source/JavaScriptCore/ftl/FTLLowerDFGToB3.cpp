@@ -6869,7 +6869,7 @@ private:
         m_out.branch(m_out.isZero32(flagsAndLength.length), rarely(emptyCase), usually(continuation));
 
         LBasicBlock lastNext = m_out.appendTo(emptyCase, slowPath);
-        ValueFromBlock emptyResult = m_out.anchor(weakPointer(jsEmptyString(&m_graph.m_vm)));
+        ValueFromBlock emptyResult = m_out.anchor(weakPointer(jsEmptyString(m_graph.m_vm)));
         m_out.jump(continuation);
         
         m_out.appendTo(slowPath, continuation);
@@ -6978,20 +6978,19 @@ private:
             results.append(m_out.anchor(m_out.intPtrZero));
         } else {
             JSGlobalObject* globalObject = m_graph.globalObjectFor(m_node->origin.semantic);
-            
-            bool prototypeChainIsSane = false;
+            Structure* stringPrototypeStructure = globalObject->stringPrototype()->structure(vm());
+            Structure* objectPrototypeStructure = globalObject->objectPrototype()->structure(vm());
+            WTF::loadLoadFence();
+
             if (globalObject->stringPrototypeChainIsSane()) {
                 // FIXME: This could be captured using a Speculation mode that means
                 // "out-of-bounds loads return a trivial value", something like
                 // SaneChainOutOfBounds.
                 // https://bugs.webkit.org/show_bug.cgi?id=144668
                 
-                m_graph.registerAndWatchStructureTransition(globalObject->stringPrototype()->structure(vm()));
-                m_graph.registerAndWatchStructureTransition(globalObject->objectPrototype()->structure(vm()));
+                m_graph.registerAndWatchStructureTransition(stringPrototypeStructure);
+                m_graph.registerAndWatchStructureTransition(objectPrototypeStructure);
 
-                prototypeChainIsSane = globalObject->stringPrototypeChainIsSane();
-            }
-            if (prototypeChainIsSane) {
                 LBasicBlock negativeIndex = m_out.newBlock();
                     
                 results.append(m_out.anchor(m_out.constInt64(JSValue::encode(jsUndefined()))));
@@ -7890,7 +7889,7 @@ private:
         patchpoint->append(m_tagTypeNumber, ValueRep::reg(GPRInfo::tagTypeNumberRegister));
         patchpoint->clobber(RegisterSet::macroScratchRegisters());
         patchpoint->clobberLate(RegisterSet::volatileRegistersForJSCall());
-        patchpoint->resultConstraint = ValueRep::reg(GPRInfo::returnValueGPR);
+        patchpoint->resultConstraints = { ValueRep::reg(GPRInfo::returnValueGPR) };
 
         CodeOrigin codeOrigin = codeOriginDescriptionOfCallSite();
         State* state = &m_ftlState;
@@ -8009,7 +8008,7 @@ private:
         patchpoint->clobber(RegisterSet::macroScratchRegisters());
         if (!isTail) {
             patchpoint->clobberLate(RegisterSet::volatileRegistersForJSCall());
-            patchpoint->resultConstraint = ValueRep::reg(GPRInfo::returnValueGPR);
+            patchpoint->resultConstraints = { ValueRep::reg(GPRInfo::returnValueGPR) };
         }
         
         CodeOrigin codeOrigin = codeOriginDescriptionOfCallSite();
@@ -8330,7 +8329,7 @@ private:
 
         patchpoint->clobber(RegisterSet::macroScratchRegisters());
         patchpoint->clobber(RegisterSet::volatileRegistersForJSCall()); // No inputs will be in a volatile register.
-        patchpoint->resultConstraint = ValueRep::reg(GPRInfo::returnValueGPR);
+        patchpoint->resultConstraints = { ValueRep::reg(GPRInfo::returnValueGPR) };
 
         patchpoint->numGPScratchRegisters = 0;
 
@@ -8632,7 +8631,7 @@ private:
 
         patchpoint->clobber(RegisterSet::macroScratchRegisters());
         patchpoint->clobberLate(RegisterSet::volatileRegistersForJSCall());
-        patchpoint->resultConstraint = ValueRep::reg(GPRInfo::returnValueGPR);
+        patchpoint->resultConstraints = { ValueRep::reg(GPRInfo::returnValueGPR) };
 
         // This is the minimum amount of call arg area stack space that all JS->JS calls always have.
         unsigned minimumJSCallAreaSize =
@@ -8889,7 +8888,7 @@ private:
         patchpoint->append(m_tagTypeNumber, ValueRep::reg(GPRInfo::tagTypeNumberRegister));
         patchpoint->clobber(RegisterSet::macroScratchRegisters());
         patchpoint->clobberLate(RegisterSet::volatileRegistersForJSCall());
-        patchpoint->resultConstraint = ValueRep::reg(GPRInfo::returnValueGPR);
+        patchpoint->resultConstraints = { ValueRep::reg(GPRInfo::returnValueGPR) };
         
         CodeOrigin codeOrigin = codeOriginDescriptionOfCallSite();
         State* state = &m_ftlState;
@@ -9543,7 +9542,7 @@ private:
             patchpoint->effects = Effects::forCall();
             patchpoint->clobber(RegisterSet { X86Registers::eax, X86Registers::edx });
             // The low 32-bits of rdtsc go into rax.
-            patchpoint->resultConstraint = ValueRep::reg(X86Registers::eax);
+            patchpoint->resultConstraints = { ValueRep::reg(X86Registers::eax) };
             patchpoint->setGenerator( [=] (CCallHelpers& jit, const B3::StackmapGenerationParams&) {
                 jit.rdtsc();
             });
@@ -10653,7 +10652,7 @@ private:
         patchpoint->append(m_tagMask, ValueRep::lateReg(GPRInfo::tagMaskRegister));
         patchpoint->append(m_tagTypeNumber, ValueRep::lateReg(GPRInfo::tagTypeNumberRegister));
         patchpoint->numGPScratchRegisters = 2;
-        patchpoint->resultConstraint = ValueRep::SomeEarlyRegister;
+        patchpoint->resultConstraints = { ValueRep::SomeEarlyRegister };
         patchpoint->clobber(RegisterSet::macroScratchRegisters());
         
         RefPtr<PatchpointExceptionHandle> exceptionHandle =
@@ -12282,7 +12281,7 @@ private:
         Vector<ValueFromBlock, 5> results;
 
         m_out.appendTo(emptyCase, notEmptyCase);
-        results.append(m_out.anchor(weakPointer(jsEmptyString(&vm()))));
+        results.append(m_out.anchor(weakPointer(jsEmptyString(vm()))));
         m_out.jump(continuation);
 
         m_out.appendTo(notEmptyCase, oneCharCase);
@@ -12580,17 +12579,16 @@ private:
 
         unsigned argumentCountIncludingThis = signature->argumentCount + 1;
         LValue result;
-        DOMJIT::FunctionWithoutTypeCheck function = signature->functionWithoutTypeCheck;
-        assertIsTaggedWith(function, CFunctionPtrTag);
+        auto function = CFunctionPtr(signature->functionWithoutTypeCheck);
         switch (argumentCountIncludingThis) {
         case 1:
-            result = vmCall(Int64, m_out.operation(reinterpret_cast<J_JITOperation_EP>(function)), m_callFrame, operands[0]);
+            result = vmCall(Int64, m_out.operation(reinterpret_cast<J_JITOperation_EP>(function.get())), m_callFrame, operands[0]);
             break;
         case 2:
-            result = vmCall(Int64, m_out.operation(reinterpret_cast<J_JITOperation_EPP>(function)), m_callFrame, operands[0], operands[1]);
+            result = vmCall(Int64, m_out.operation(reinterpret_cast<J_JITOperation_EPP>(function.get())), m_callFrame, operands[0], operands[1]);
             break;
         case 3:
-            result = vmCall(Int64, m_out.operation(reinterpret_cast<J_JITOperation_EPPP>(function)), m_callFrame, operands[0], operands[1], operands[2]);
+            result = vmCall(Int64, m_out.operation(reinterpret_cast<J_JITOperation_EPPP>(function.get())), m_callFrame, operands[0], operands[1], operands[2]);
             break;
         default:
             RELEASE_ASSERT_NOT_REACHED();
@@ -12635,7 +12633,7 @@ private:
         patchpoint->clobber(RegisterSet::macroScratchRegisters());
         patchpoint->numGPScratchRegisters = domJIT->numGPScratchRegisters;
         patchpoint->numFPScratchRegisters = domJIT->numFPScratchRegisters;
-        patchpoint->resultConstraint = ValueRep::SomeEarlyRegister;
+        patchpoint->resultConstraints = { ValueRep::SomeEarlyRegister };
 
         State* state = &m_ftlState;
         Node* node = m_node;
@@ -13241,7 +13239,7 @@ private:
         if (scratchFPRUsage == NeedScratchFPR)
             patchpoint->numFPScratchRegisters++;
         patchpoint->clobber(RegisterSet::macroScratchRegisters());
-        patchpoint->resultConstraint = ValueRep::SomeEarlyRegister;
+        patchpoint->resultConstraints = { ValueRep::SomeEarlyRegister };
         State* state = &m_ftlState;
         patchpoint->setGenerator(
             [=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
@@ -13304,7 +13302,7 @@ private:
             preparePatchpointForExceptions(patchpoint);
         patchpoint->numGPScratchRegisters = 1;
         patchpoint->clobber(RegisterSet::macroScratchRegisters());
-        patchpoint->resultConstraint = ValueRep::SomeEarlyRegister;
+        patchpoint->resultConstraints = { ValueRep::SomeEarlyRegister };
         State* state = &m_ftlState;
         patchpoint->setGenerator(
             [=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
@@ -13360,7 +13358,7 @@ private:
         patchpoint->numGPScratchRegisters = 1;
         patchpoint->numFPScratchRegisters = 1;
         patchpoint->clobber(RegisterSet::macroScratchRegisters());
-        patchpoint->resultConstraint = ValueRep::SomeEarlyRegister;
+        patchpoint->resultConstraints = { ValueRep::SomeEarlyRegister };
         State* state = &m_ftlState;
         patchpoint->setGenerator(
             [=] (CCallHelpers& jit, const StackmapGenerationParams& params) {
@@ -13441,7 +13439,7 @@ private:
         else
             patchpoint->appendSomeRegisterWithClobber(allocator);
         patchpoint->numGPScratchRegisters++;
-        patchpoint->resultConstraint = ValueRep::SomeEarlyRegister;
+        patchpoint->resultConstraints = { ValueRep::SomeEarlyRegister };
         
         m_out.appendSuccessor(usually(continuation));
         m_out.appendSuccessor(rarely(slowPath));
@@ -13881,7 +13879,7 @@ private:
                     edge, CellCaseSpeculatesObject, SpeculateNullOrUndefined,
                     ManualOperandSpeculation));
         case StringUse:
-            return m_out.notEqual(lowString(edge), weakPointer(jsEmptyString(&m_graph.m_vm)));
+            return m_out.notEqual(lowString(edge), weakPointer(jsEmptyString(m_graph.m_vm)));
         case StringOrOtherUse: {
             LValue value = lowJSValue(edge, ManualOperandSpeculation);
 
@@ -13893,7 +13891,7 @@ private:
             
             LBasicBlock lastNext = m_out.appendTo(cellCase, notCellCase);
             FTL_TYPE_CHECK(jsValueValue(value), edge, (~SpecCellCheck) | SpecString, isNotString(value));
-            ValueFromBlock stringResult = m_out.anchor(m_out.notEqual(value, weakPointer(jsEmptyString(&m_graph.m_vm))));
+            ValueFromBlock stringResult = m_out.anchor(m_out.notEqual(value, weakPointer(jsEmptyString(m_graph.m_vm))));
             m_out.jump(continuation);
 
             m_out.appendTo(notCellCase, continuation);
@@ -13950,7 +13948,7 @@ private:
                 unsure(bigIntCase), unsure(notStringOrBigIntCase));
 
             m_out.appendTo(stringCase, bigIntCase);
-            results.append(m_out.anchor(m_out.notEqual(value, weakPointer(jsEmptyString(&m_graph.m_vm)))));
+            results.append(m_out.anchor(m_out.notEqual(value, weakPointer(jsEmptyString(m_graph.m_vm)))));
             m_out.jump(continuation);
 
             m_out.appendTo(bigIntCase, notStringOrBigIntCase);
@@ -14191,15 +14189,28 @@ private:
 
     LValue caged(Gigacage::Kind kind, LValue ptr, LValue base)
     {
+        auto doUntagArrayPtr = [&](LValue taggedPtr) {
+#if CPU(ARM64E)
+            if (kind == Gigacage::Primitive) {
+                LValue size = m_out.load32(base, m_heaps.JSArrayBufferView_length);
+                return untagArrayPtr(taggedPtr, size);
+            }
+            return ptr;
+#else
+            UNUSED_PARAM(taggedPtr);
+            return ptr;
+#endif
+        };
+
 #if GIGACAGE_ENABLED
         if (!Gigacage::isEnabled(kind))
-            return ptr;
+            return doUntagArrayPtr(ptr);
         
         if (kind == Gigacage::Primitive && Gigacage::canPrimitiveGigacageBeDisabled()) {
             if (vm().primitiveGigacageEnabled().isStillValid())
                 m_graph.watchpoints().addLazily(vm().primitiveGigacageEnabled());
             else
-                return ptr;
+                return doUntagArrayPtr(ptr);
         }
         
         LValue basePtr = m_out.constIntPtr(Gigacage::basePtr(kind));
@@ -14218,8 +14229,7 @@ private:
                 jit.bitFieldInsert64(params[1].gpr(), 0, 64 - MacroAssembler::numberOfPACBits, params[0].gpr());
             });
 
-            LValue size = m_out.load32(base, m_heaps.JSArrayBufferView_length);
-            result = untagArrayPtr(merge, size);
+            result = doUntagArrayPtr(merge);
         }
 #endif // CPU(ARM64E)
 
@@ -14239,7 +14249,7 @@ private:
 
         UNUSED_PARAM(kind);
         UNUSED_PARAM(base);
-        return ptr;
+        return doUntagArrayPtr(ptr);
     }
     
     void buildSwitch(SwitchData* data, LType type, LValue switchValue)
@@ -15081,7 +15091,7 @@ private:
                                 linkBuffer.link(generatorJump,
                                     CodeLocationLabel<JITThunkPtrTag>(vm->getCTIStub(lazySlowPathGenerationThunkGenerator).code()));
                                 
-                                std::unique_ptr<LazySlowPath> lazySlowPath = std::make_unique<LazySlowPath>();
+                                std::unique_ptr<LazySlowPath> lazySlowPath = makeUnique<LazySlowPath>();
 
                                 auto linkedPatchableJump = CodeLocationJump<JSInternalPtrTag>(linkBuffer.locationOf<JSInternalPtrTag>(patchableJump));
 

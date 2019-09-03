@@ -790,8 +790,10 @@ specifying <a class="link" href="WebKitWebContext.html#WEBKIT-CACHE-MODEL-DOCUME
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#guint"><span class="returnvalue">guint</span></a>
 webkit_web_context_get_web_process_count_limit
                                (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>);</pre>
+<div class="warning"><p><code class="literal">webkit_web_context_get_web_process_count_limit</code> has been deprecated since version 2.26 and should not be used in newly-written code.</p></div>
 <p>Gets the maximum number of web processes that can be created at the same time for the <em class="parameter"><code>context</code></em>
 .</p>
+<p>This function is now deprecated and always returns 0 (no limit). See also <a class="link" href="WebKitWebContext.html#webkit-web-context-set-web-process-count-limit" title="webkit_web_context_set_web_process_count_limit ()"><code class="function">webkit_web_context_set_web_process_count_limit()</code></a>.</p>
 <div class="refsect3">
 <a name="webkit-web-context-get-web-process-count-limit.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -820,12 +822,11 @@ webkit_web_context_get_web_process_count_limit
 webkit_web_context_set_web_process_count_limit
                                (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>,
                                 <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> limit</code></em>);</pre>
+<div class="warning"><p><code class="literal">webkit_web_context_set_web_process_count_limit</code> has been deprecated since version 2.26 and should not be used in newly-written code.</p></div>
 <p>Sets the maximum number of web processes that can be created at the same time for the <em class="parameter"><code>context</code></em>
 .
 The default value is 0 and means no limit.</p>
-<p>This method **must be called before any web process has been created**,
-as early as possible in your application. Calling it later will make
-your application crash.</p>
+<p>This function is now deprecated and does nothing for security reasons.</p>
 <div class="refsect3">
 <a name="webkit-web-context-set-web-process-count-limit.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -1831,19 +1832,16 @@ see <a class="link" href="WebKitWebContext.html#webkit-web-context-set-process-m
 webkit_web_context_set_process_model (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>,
                                       <em class="parameter"><code><a class="link" href="WebKitWebContext.html#WebKitProcessModel" title="enum WebKitProcessModel"><span class="type">WebKitProcessModel</span></a> process_model</code></em>);</pre>
 <p>Specifies a process model for WebViews, which WebKit will use to
-determine how auxiliary processes are handled. The default setting
-(<a class="link" href="WebKitWebContext.html#WEBKIT-PROCESS-MODEL-SHARED-SECONDARY-PROCESS:CAPS"><code class="literal">WEBKIT_PROCESS_MODEL_SHARED_SECONDARY_PROCESS</code></a>) is suitable for most
-applications which embed a small amount of WebViews, or are used to
-display documents which are considered safe — like local files.</p>
-<p>Applications which may potentially use a large amount of WebViews
-—for example a multi-tabbed web browser— may want to use
-<a class="link" href="WebKitWebContext.html#WEBKIT-PROCESS-MODEL-MULTIPLE-SECONDARY-PROCESSES:CAPS"><code class="literal">WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code></a>, which will use
+determine how auxiliary processes are handled.</p>
+<p><a class="link" href="WebKitWebContext.html#WEBKIT-PROCESS-MODEL-MULTIPLE-SECONDARY-PROCESSES:CAPS"><code class="literal">WEBKIT_PROCESS_MODEL_MULTIPLE_SECONDARY_PROCESSES</code></a> will use
 one process per view most of the time, while still allowing for web
 views to share a process when needed (for example when different
 views interact with each other). Using this model, when a process
 hangs or crashes, only the WebViews using it stop working, while
 the rest of the WebViews in the application will still function
 normally.</p>
+<p><a class="link" href="WebKitWebContext.html#WEBKIT-PROCESS-MODEL-SHARED-SECONDARY-PROCESS:CAPS"><code class="literal">WEBKIT_PROCESS_MODEL_SHARED_SECONDARY_PROCESS</code></a> is deprecated since 2.26,
+using it has no effect for security reasons.</p>
 <p>This method **must be called before any web process has been created**,
 as early as possible in your application. Calling it later will make
 your application crash.</p>
@@ -2157,11 +2155,7 @@ when the data of the request is available or
 <tr>
 <td class="enum_member_name"><p><a name="WEBKIT-PROCESS-MODEL-SHARED-SECONDARY-PROCESS:CAPS"></a>WEBKIT_PROCESS_MODEL_SHARED_SECONDARY_PROCESS</p></td>
 <td class="enum_member_description">
-<p>Use a single process to
-  perform content rendering. The process is shared among all the
-  <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> instances created by the application: if the process
-  hangs or crashes all the web views in the application will be affected.
-  This is the default process model, and it should suffice for most cases.</p>
+<p>Deprecated 2.26.</p>
 </td>
 <td class="enum_member_annotations"> </td>
 </tr>

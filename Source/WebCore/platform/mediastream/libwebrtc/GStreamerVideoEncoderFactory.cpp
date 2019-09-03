@@ -60,17 +60,16 @@ GST_DEBUG_CATEGORY(webkit_webrtcenc_debug);
 namespace WebCore {
 
 class GStreamerVideoEncoder : public webrtc::VideoEncoder {
+    WTF_MAKE_FAST_ALLOCATED;
 public:
     GStreamerVideoEncoder(const webrtc::SdpVideoFormat&)
         : m_firstFramePts(GST_CLOCK_TIME_NONE)
         , m_restrictionCaps(adoptGRef(gst_caps_new_empty_simple("video/x-raw")))
-        , m_adapter(adoptGRef(gst_adapter_new()))
     {
     }
     GStreamerVideoEncoder()
         : m_firstFramePts(GST_CLOCK_TIME_NONE)
         , m_restrictionCaps(adoptGRef(gst_caps_new_empty_simple("video/x-raw")))
-        , m_adapter(adoptGRef(gst_adapter_new()))
     {
     }
 
@@ -196,7 +195,6 @@ public:
             return WEBRTC_VIDEO_CODEC_ERROR;
         }
     }
-
 
     int32_t Encode(const webrtc::VideoFrame& frame,
         const webrtc::CodecSpecificInfo*,
@@ -379,7 +377,6 @@ private:
     size_t m_encodedImageBufferSize;
 
     Lock m_bufferMapLock;
-    GRefPtr<GstAdapter> m_adapter;
     GstElement* m_sink;
 };
 
@@ -516,14 +513,14 @@ std::unique_ptr<webrtc::VideoEncoder> GStreamerVideoEncoderFactory::CreateVideoE
         g_object_get(webrtcencoder.get(), "encoder", &encoder.outPtr(), NULL);
 
         if (encoder)
-            return std::make_unique<GStreamerVP8Encoder>(format);
+            return makeUnique<GStreamerVP8Encoder>(format);
 
         GST_INFO("Using VP8 Encoder from LibWebRTC.");
-        return std::make_unique<webrtc::LibvpxVp8Encoder>();
+        return makeUniqueWithoutFastMallocCheck<webrtc::LibvpxVp8Encoder>();
     }
 
     if (format.name == cricket::kH264CodecName)
-        return std::make_unique<GStreamerH264Encoder>(format);
+        return makeUnique<GStreamerH264Encoder>(format);
 
     return nullptr;
 }

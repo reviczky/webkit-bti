@@ -36,6 +36,7 @@
 #include "GPUBufferBinding.h"
 #include "GPUBufferDescriptor.h"
 #include "GPUCommandBuffer.h"
+#include "GPUComputePipelineDescriptor.h"
 #include "GPUPipelineStageDescriptor.h"
 #include "GPURenderPipelineDescriptor.h"
 #include "GPUSampler.h"
@@ -90,7 +91,7 @@ Ref<WebGPUBuffer> WebGPUDevice::createBuffer(const GPUBufferDescriptor& descript
     m_errorScopes->setErrorPrefix("GPUDevice.createBuffer(): ");
 
     auto buffer = m_device->tryCreateBuffer(descriptor, GPUBufferMappedOption::NotMapped, m_errorScopes);
-    return WebGPUBuffer::create(WTFMove(buffer));
+    return WebGPUBuffer::create(WTFMove(buffer), m_errorScopes);
 }
 
 Vector<JSC::JSValue> WebGPUDevice::createBufferMapped(JSC::ExecState& state, const GPUBufferDescriptor& descriptor) const
@@ -105,7 +106,7 @@ Vector<JSC::JSValue> WebGPUDevice::createBufferMapped(JSC::ExecState& state, con
         wrappedArrayBuffer = toJS(&state, JSC::jsCast<JSDOMGlobalObject*>(state.lexicalGlobalObject()), arrayBuffer);
     }
 
-    auto webBuffer = WebGPUBuffer::create(WTFMove(buffer));
+    auto webBuffer = WebGPUBuffer::create(WTFMove(buffer), m_errorScopes);
     auto wrappedWebBuffer = toJS(&state, JSC::jsCast<JSDOMGlobalObject*>(state.lexicalGlobalObject()), webBuffer);
 
     return { wrappedWebBuffer, wrappedArrayBuffer };
@@ -145,14 +146,14 @@ Ref<WebGPUBindGroup> WebGPUDevice::createBindGroup(const WebGPUBindGroupDescript
     if (!gpuDescriptor)
         return WebGPUBindGroup::create(nullptr);
 
-    auto bindGroup = GPUBindGroup::tryCreate(*gpuDescriptor);
+    auto bindGroup = m_device->tryCreateBindGroup(*gpuDescriptor, m_errorScopes);
     return WebGPUBindGroup::create(WTFMove(bindGroup));
 }
 
 Ref<WebGPUShaderModule> WebGPUDevice::createShaderModule(const WebGPUShaderModuleDescriptor& descriptor) const
 {
     // FIXME: What can be validated here?
-    auto module = m_device->tryCreateShaderModule(GPUShaderModuleDescriptor { descriptor.code, descriptor.isWHLSL });
+    auto module = m_device->tryCreateShaderModule(GPUShaderModuleDescriptor { descriptor.code });
     return WebGPUShaderModule::create(WTFMove(module));
 }
 
