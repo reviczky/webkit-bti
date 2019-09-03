@@ -4,14 +4,10 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  WebProcessMainUnix@Base 2.5.3
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
- (c++|optional|arch-bits=32)"std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_append(char const*, unsigned int)@Base" 2.25.1
- (c++|optional|arch-bits=32)"std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace(unsigned int, unsigned int, char const*, unsigned int)@Base" 2.25.1
- (c++|optional|arch-bits=32)"std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace_aux(unsigned int, unsigned int, unsigned int, char)@Base" 2.25.1
- (c++|optional|arch-bits=64)"std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_append(char const*, unsigned long)@Base" 2.25.1
- (c++|optional|arch-bits=64)"std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace(unsigned long, unsigned long, char const*, unsigned long)@Base" 2.25.1
- (c++|optional|arch-bits=64)"std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >::_M_replace_aux(unsigned long, unsigned long, unsigned long, char)@Base" 2.25.1
  (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSDeallocatorEntry<bmalloc::IsoConfig<40u> > >::s_data@Base" 2.21.1
  (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSDeallocatorEntry<bmalloc::IsoConfig<40u> > >::s_object@Base" 2.19.6
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerThreadStorage<bmalloc::PerHeapKind<bmalloc::Cache> >::s_didInitialize@Base" 2.25.92
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerThreadStorage<bmalloc::PerHeapKind<bmalloc::Cache> >::s_key@Base" 2.25.92
  (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::vmPageSize()::cached@Base" 2.19.6
  webkit_accessible_get_type@Base 2.24.2
  webkit_accessible_hyperlink_get_type@Base 2.24.2
@@ -1862,6 +1858,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_user_content_manager_remove_all_scripts@Base 2.5.3
  webkit_user_content_manager_remove_all_style_sheets@Base 2.5.3
  webkit_user_content_manager_remove_filter@Base 2.23.91
+ webkit_user_content_manager_remove_filter_by_id@Base 2.25.92
  webkit_user_content_manager_unregister_script_message_handler@Base 2.8.1
  webkit_user_content_manager_unregister_script_message_handler_in_world@Base 2.21.92
  webkit_user_media_permission_is_for_audio_device@Base 2.8.1
@@ -2044,6 +2041,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_get_base_data_directory@Base 2.10.0
  webkit_website_data_manager_get_cookie_manager@Base 2.15.90
  webkit_website_data_manager_get_disk_cache_directory@Base 2.10.0
+ webkit_website_data_manager_get_hsts_cache_directory@Base 2.25.92
  webkit_website_data_manager_get_indexeddb_directory@Base 2.10.0
  webkit_website_data_manager_get_local_storage_directory@Base 2.10.0
  webkit_website_data_manager_get_offline_application_cache_directory@Base 2.10.0
