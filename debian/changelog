@@ -1,3 +1,18 @@
+webkit2gtk (2.24.4-1~deb10u1) buster-security; urgency=high
+
+  * Rebuild for buster-security.
+  * The WebKitGTK security advisory WSA-2019-0004 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    + CVE-2019-8671, CVE-2019-8672, CVE-2019-8677, CVE-2019-8679 and
+      CVE-2019-8686 (fixed in 2.24.2)
+    + CVE-2019-8666, CVE-2019-8673, CVE-2019-8676, CVE-2019-8681,
+      CVE-2019-8687, CVE-2019-8689, and CVE-2019-8690 (fixed in 2.24.3)
+    + CVE-2019-8644, CVE-2019-8649, CVE-2019-8658, CVE-2019-8669,
+      CVE-2019-8678, CVE-2019-8680, CVE-2019-8683, CVE-2019-8684 and
+      CVE-2019-8688 (fixed in 2.24.4)
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 04 Sep 2019 11:41:19 +0300
+
 webkit2gtk (2.24.4-1) unstable; urgency=medium
 
   * New upstream release (Closes: #931807).
