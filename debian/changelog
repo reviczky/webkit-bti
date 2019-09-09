@@ -3,6 +3,8 @@ webkit2gtk (2.26.0-1) UNRELEASED; urgency=medium
   * New upstream release.
   * debian/watch:
     + Scan stable releases only.
+  * debian/copyright:
+    + Remove nonexistent files.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 09 Sep 2019 12:51:58 +0300
 
