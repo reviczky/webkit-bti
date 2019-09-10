@@ -5,6 +5,12 @@ webkit2gtk (2.26.0-1) UNRELEASED; urgency=medium
     + Scan stable releases only.
   * debian/copyright:
     + Remove nonexistent files.
+  * Add a dummy libwebkit2gtk-4.0-37-gtk2 with a transition plan for
+    people who still need to use Flash.
+    + debian/control:
+      - Add the package, suggest browser-plugin-freshplayer-pepperflash.
+    + debian/libwebkit2gtk-4.0-37-gtk2.NEWS:
+      - Add news item about the Flash transition plan.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 09 Sep 2019 12:51:58 +0300
 

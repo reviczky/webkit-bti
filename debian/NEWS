@@ -1,14 +1,3 @@
-webkit2gtk (2.25.4-1) experimental; urgency=medium
-
-  The libwebkit2gtk-4.0-37-gtk2 package is no longer available because
-  upstream has stopped supporting NPAPI plugins that use GTK 2.
-
-  Because of this, NPAPI-based plugins like the Adobe Flash Player (the
-  one installed by the flashplugin-nonfree package) cannot be used anymore
-  with WebKitGTK.
-
- -- Alberto Garcia <berto@igalia.com>  Fri, 09 Aug 2019 10:36:44 +0200
-
 webkit2gtk (2.20.0-2) unstable; urgency=medium
 
   webkit2gtk 2.20.0 contains a security feature named Gigacage that

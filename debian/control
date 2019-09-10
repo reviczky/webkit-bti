@@ -236,6 +236,18 @@ Description: Web content engine library for GTK - GObject introspection data
  This package contains introspection data, which can be used by
  packages using the GIRepository format to generate dynamic bindings.
 
+Package: libwebkit2gtk-4.0-37-gtk2
+Section: oldlibs
+Architecture: all
+Depends: ${misc:Depends}
+Suggests: browser-plugin-freshplayer-pepperflash
+Description: Transitional dummy package
+ This is a transitional dummy package, it can be safely removed.
+ .
+ WebKitGTK no longer supports plugins that depend on GTK 2. If you
+ still need to use the Adobe Flash Player then you can install
+ browser-plugin-freshplayer-pepperflash.
+
 Package: webkit2gtk-driver
 Architecture: linux-any
 Pre-Depends: ${misc:Pre-Depends}
