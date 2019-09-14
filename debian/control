@@ -144,11 +144,11 @@ Depends: libjavascriptcoregtk-4.0-18 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
 Recommends: gstreamer1.0-plugins-good,
-            gstreamer1.0-libav,
             gstreamer1.0-pulseaudio | gstreamer1.0-alsa,
             gstreamer1.0-gl,
             libgl1-mesa-dri,
             ${gst:Recommends}
+Suggests: ${gst:Suggests}
 Description: Web content engine library for GTK
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
