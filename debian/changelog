@@ -1,3 +1,9 @@
+webkit2gtk (2.26.0-2) UNRELEASED; urgency=medium
+
+  * Suggest instead of Recommend gstreamer1.0-libav on Ubuntu
+
+ -- Jeremy Bicha <jbicha@debian.org>  Sat, 14 Sep 2019 18:54:34 -0400
+
 webkit2gtk (2.26.0-1) experimental; urgency=medium
 
   * New upstream release.
