@@ -1,4 +1,4 @@
-webkit2gtk (2.26.1-1) UNRELEASED; urgency=medium
+webkit2gtk (2.26.1-1) experimental; urgency=medium
 
   [ Jeremy Bicha ]
   * Suggest instead of Recommend gstreamer1.0-libav on Ubuntu
@@ -6,7 +6,7 @@ webkit2gtk (2.26.1-1) UNRELEASED; urgency=medium
   [ Alberto Garcia ]
   * New upstream release.
 
- -- Alberto Garcia <berto@igalia.com>  Mon, 23 Sep 2019 14:32:14 +0300
+ -- Alberto Garcia <berto@igalia.com>  Mon, 23 Sep 2019 15:55:10 +0300
 
 webkit2gtk (2.26.0-1) experimental; urgency=medium
 
