@@ -38,7 +38,7 @@ Index: webkitgtk/Source/WebCore/dom/ElementRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ElementRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/ElementRareData.cpp
-@@ -53,6 +53,10 @@ struct SameSizeAsElementRareData : NodeR
+@@ -56,6 +56,10 @@ struct SameSizeAsElementRareData : NodeR
  
  };
  
@@ -53,8 +53,8 @@ Index: webkitgtk/Source/WebCore/dom/NodeRareData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/NodeRareData.cpp
 +++ webkitgtk/Source/WebCore/dom/NodeRareData.cpp
-@@ -38,7 +38,11 @@ struct SameSizeAsNodeRareData {
-     void* m_pointer[3];
+@@ -40,7 +40,11 @@ struct SameSizeAsNodeRareData {
+     void* m_pointer[2];
  };
  
 +#if defined(__m68k__)

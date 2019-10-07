@@ -39,6 +39,10 @@
 #include <wtf/OptionSet.h>
 #include <wtf/RunLoop.h>
 
+#if USE(COORDINATED_GRAPHICS)
+#include <WebCore/NicosiaSceneIntegration.h>
+#endif
+
 namespace WebCore {
 class IntRect;
 class IntSize;
@@ -54,7 +58,7 @@ class WebPage;
 
 class LayerTreeHost
 #if USE(COORDINATED_GRAPHICS)
-    final : public CompositingCoordinator::Client, public AcceleratedSurface::Client
+    final : public CompositingCoordinator::Client, public AcceleratedSurface::Client, public Nicosia::SceneIntegration::Client
 #endif
 {
     WTF_MAKE_FAST_ALLOCATED;
@@ -87,10 +91,6 @@ public:
 
     void setIsDiscardable(bool);
 
-#if USE(TEXTURE_MAPPER_GL) && PLATFORM(GTK)
-    void setNativeSurfaceHandleForCompositing(uint64_t);
-#endif
-
     void deviceOrPageScaleFactorChanged();
 
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
@@ -107,9 +107,13 @@ private:
     void didFlushRootLayer(const WebCore::FloatRect& visibleContentRect) override;
     void notifyFlushRequired() override { scheduleLayerFlush(); };
     void commitSceneState(const WebCore::CoordinatedGraphicsState&) override;
+    RefPtr<Nicosia::SceneIntegration> sceneIntegration() override;
 
     // AcceleratedSurface::Client
     void frameComplete() override;
+
+    // Nicosia::SceneIntegration::Client
+    void requestUpdate() override;
 
     uint64_t nativeSurfaceHandleForCompositing();
     void didDestroyGLContext();
@@ -137,7 +141,7 @@ private:
             m_layerTreeHost.didDestroyGLContext();
         }
 
-        void resize(const WebCore::IntSize& size)
+        void resize(const WebCore::IntSize& size) override
         {
             if (m_layerTreeHost.m_surface)
                 m_layerTreeHost.m_surface->clientResize(size);
@@ -158,7 +162,7 @@ private:
             m_layerTreeHost.requestDisplayRefreshMonitorUpdate();
         }
 
-        void handleDisplayRefreshMonitorUpdate(bool hasBeenRescheduled)
+        void handleDisplayRefreshMonitorUpdate(bool hasBeenRescheduled) override
         {
             m_layerTreeHost.handleDisplayRefreshMonitorUpdate(hasBeenRescheduled);
         }
@@ -197,6 +201,7 @@ private:
         bool needsFreshFlush { false };
     } m_forceRepaintAsync;
     RunLoop::Timer<LayerTreeHost> m_layerFlushTimer;
+    Ref<Nicosia::SceneIntegration> m_sceneIntegration;
 #endif // USE(COORDINATED_GRAPHICS)
 };
 

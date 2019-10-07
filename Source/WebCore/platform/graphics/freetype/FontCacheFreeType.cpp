@@ -186,11 +186,16 @@ Vector<String> FontCache::systemFontFamilies()
     return fontFamilies;
 }
 
+bool FontCache::isSystemFontForbiddenForEditing(const String&)
+{
+    return false;
+}
+
 Ref<Font> FontCache::lastResortFallbackFont(const FontDescription& fontDescription)
 {
     // We want to return a fallback font here, otherwise the logic preventing FontConfig
     // matches for non-fallback fonts might return 0. See isFallbackFontAllowed.
-    static AtomicString timesStr("serif");
+    static AtomString timesStr("serif");
     if (RefPtr<Font> font = fontForFamily(fontDescription, timesStr))
         return *font;
 
@@ -198,12 +203,12 @@ Ref<Font> FontCache::lastResortFallbackFont(const FontDescription& fontDescripti
     RELEASE_ASSERT_NOT_REACHED();
 }
 
-Vector<FontSelectionCapabilities> FontCache::getFontSelectionCapabilitiesInFamily(const AtomicString&, AllowUserInstalledFonts)
+Vector<FontSelectionCapabilities> FontCache::getFontSelectionCapabilitiesInFamily(const AtomString&, AllowUserInstalledFonts)
 {
     return { };
 }
 
-static String getFamilyNameStringFromFamily(const AtomicString& family)
+static String getFamilyNameStringFromFamily(const AtomString& family)
 {
     // If we're creating a fallback font (e.g. "-webkit-monospace"), convert the name into
     // the fallback name (like "monospace") that fontconfig understands.
@@ -371,7 +376,7 @@ static inline bool isCommonlyUsedGenericFamily(const String& familyNameString)
         || equalLettersIgnoringASCIICase(familyNameString, "cursive");
 }
 
-std::unique_ptr<FontPlatformData> FontCache::createFontPlatformData(const FontDescription& fontDescription, const AtomicString& family, const FontFeatureSettings*, const FontVariantSettings*, FontSelectionSpecifiedCapabilities)
+std::unique_ptr<FontPlatformData> FontCache::createFontPlatformData(const FontDescription& fontDescription, const AtomString& family, const FontFeatureSettings*, const FontVariantSettings*, FontSelectionSpecifiedCapabilities)
 {
     // The CSS font matching algorithm (http://www.w3.org/TR/css3-fonts/#font-matching-algorithm)
     // says that we must find an exact match for font family, slant (italic or oblique can be used)
@@ -450,7 +455,7 @@ std::unique_ptr<FontPlatformData> FontCache::createFontPlatformData(const FontDe
             FcPatternAddString(resultPattern.get(), FC_FONT_VARIATIONS, reinterpret_cast<const FcChar8*>(variants.utf8().data()));
     }
 #endif
-    auto platformData = std::make_unique<FontPlatformData>(fontFace.get(), resultPattern.get(), fontDescription.computedPixelSize(), fixedWidth, syntheticBold, syntheticOblique, fontDescription.orientation());
+    auto platformData = makeUnique<FontPlatformData>(fontFace.get(), resultPattern.get(), fontDescription.computedPixelSize(), fixedWidth, syntheticBold, syntheticOblique, fontDescription.orientation());
     // Verify that this font has an encoding compatible with Fontconfig. Fontconfig currently
     // supports three encodings in FcFreeTypeCharIndex: Unicode, Symbol and AppleRoman.
     // If this font doesn't have one of these three encodings, don't select it.
@@ -460,7 +465,7 @@ std::unique_ptr<FontPlatformData> FontCache::createFontPlatformData(const FontDe
     return platformData;
 }
 
-const AtomicString& FontCache::platformAlternateFamilyName(const AtomicString&)
+const AtomString& FontCache::platformAlternateFamilyName(const AtomString&)
 {
     return nullAtom();
 }
@@ -522,7 +527,7 @@ String buildVariationSettings(FT_Face face, const FontDescription& fontDescripti
         builder.append(variation.key[2]);
         builder.append(variation.key[3]);
         builder.append('=');
-        builder.appendNumber(variation.value);
+        builder.appendFixedPrecisionNumber(variation.value);
     }
     return builder.toString();
 }

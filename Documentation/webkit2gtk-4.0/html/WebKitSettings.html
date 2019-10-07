@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitSettings: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="WebKitBackForwardListItem.html" title="WebKitBackForwardListItem">
 <link rel="next" href="WebKitURIRequest.html" title="WebKitURIRequest">
-<meta name="generator" content="GTK-Doc V1.31 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.29.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -29,7 +29,7 @@
 <div class="refnamediv"><table width="100%"><tr>
 <td valign="top">
 <h2><span class="refentrytitle"><a name="WebKitSettings.top_of_page"></a>WebKitSettings</span></h2>
-<p>WebKitSettings — Control the behaviour of a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p>
+<p>WebKitSettings — Control the behaviour of a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a></p>
 </td>
 <td class="gallery_image" valign="top" align="right"></td>
 </tr></table></div>
@@ -968,6 +968,22 @@
 <a class="link" href="WebKitSettings.html#webkit-settings-font-size-to-pixels" title="webkit_settings_font_size_to_pixels ()">webkit_settings_font_size_to_pixels</a> <span class="c_punctuation">()</span>
 </td>
 </tr>
+<tr>
+<td class="function_type">
+<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitSettings.html#webkit-settings-get-enable-media" title="webkit_settings_get_enable_media ()">webkit_settings_get_enable_media</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitSettings.html#webkit-settings-set-enable-media" title="webkit_settings_set_enable_media ()">webkit_settings_set_enable_media</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
 </tbody>
 </table></div>
 </div>
@@ -1101,6 +1117,11 @@
 <tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="WebKitSettings.html#WebKitSettings--enable-javascript-markup" title="The “enable-javascript-markup” property">enable-javascript-markup</a></td>
+<td class="property_flags">Read / Write / Construct</td>
+</tr>
+<tr>
+<td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
+<td class="property_name"><a class="link" href="WebKitSettings.html#WebKitSettings--enable-media" title="The “enable-media” property">enable-media</a></td>
 <td class="property_flags">Read / Write / Construct</td>
 </tr>
 <tr>
@@ -1293,7 +1314,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitSettings.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="/usr/share/gtk-doc/html/gobject/gobject-Enumeration-and-Flag-Types.html">GEnum</a>
+<pre class="screen">    <a href="../gobject/gobject-Enumeration-and-Flag-Types.html">GEnum</a>
     <span class="lineart">╰──</span> WebKitHardwareAccelerationPolicy
     <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitSettings
@@ -1301,9 +1322,9 @@
 </div>
 <div class="refsect1">
 <a name="WebKitSettings.description"></a><h2>Description</h2>
-<p><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> can be applied to a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> to control text charset,
+<p><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> can be applied to a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> to control text charset,
 color, font sizes, printing mode, script support, loading of images and various
-other things on a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>. After creation, a <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> object
+other things on a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a>. After creation, a <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> object
 contains default settings.</p>
 <div class="informalexample">
   <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
@@ -1312,9 +1333,9 @@ contains default settings.</p>
         <td class="listing_lines" align="right"><pre>1
 2
 3</pre></td>
-        <td class="listing_code"><pre class="programlisting"><span class="cm">/* Disable JavaScript. */</span>
-<span class="n">WebKitSettings</span> <span class="o">*</span><span class="n">settings</span> <span class="o">=</span> <span class="n">webkit_web_view_group_get_settings</span> <span class="p">(</span><span class="n">my_view_group</span><span class="p">);</span>
-<span class="n">webkit_settings_set_enable_javascript</span> <span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="n">FALSE</span><span class="p">);</span></pre></td>
+        <td class="listing_code"><pre class="programlisting"><span class="comment">/* Disable JavaScript. */</span>
+WebKitSettings <span class="gtkdoc opt">*</span>settings <span class="gtkdoc opt">=</span> <span class="function">webkit_web_view_group_get_settings</span> <span class="gtkdoc opt">(</span>my_view_group<span class="gtkdoc opt">);</span>
+<span class="function"><a href="WebKitSettings.html#webkit-settings-set-enable-javascript">webkit_settings_set_enable_javascript</a></span> <span class="gtkdoc opt">(</span>settings<span class="gtkdoc opt">,</span> FALSE<span class="gtkdoc opt">);</span></pre></td>
       </tr>
     </tbody>
   </table>
@@ -1328,7 +1349,7 @@ contains default settings.</p>
 <pre class="programlisting"><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="returnvalue">WebKitSettings</span></a> *
 webkit_settings_new (<em class="parameter"><code><span class="type">void</span></code></em>);</pre>
 <p>Creates a new <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> instance with default values. It must
-be manually attached to a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>.
+be manually attached to a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a>.
 See also <a class="link" href="WebKitSettings.html#webkit-settings-new-with-settings" title="webkit_settings_new_with_settings ()"><code class="function">webkit_settings_new_with_settings()</code></a>.</p>
 <div class="refsect3">
 <a name="webkit-settings-new.returns"></a><h4>Returns</h4>
@@ -1342,7 +1363,7 @@ See also <a class="link" href="WebKitSettings.html#webkit-settings-new-with-sett
 webkit_settings_new_with_settings (<em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *first_setting_name</code></em>,
                                    <em class="parameter"><code>...</code></em>);</pre>
 <p>Creates a new <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> instance with the given settings. It must
-be manually attached to a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>.</p>
+be manually attached to a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a>.</p>
 <div class="refsect3">
 <a name="webkit-settings-new-with-settings.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -4705,6 +4726,64 @@ of <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-20.html#api-index-2.20">2.20</a></p>
 </div>
+<hr>
+<div class="refsect2">
+<a name="webkit-settings-get-enable-media"></a><h3>webkit_settings_get_enable_media ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_settings_get_enable_media (<em class="parameter"><code><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> *settings</code></em>);</pre>
+<p>Get the <a class="link" href="WebKitSettings.html#WebKitSettings--enable-media" title="The “enable-media” property"><span class="type">“enable-media”</span></a> property.</p>
+<div class="refsect3">
+<a name="webkit-settings-get-enable-media.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>settings</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-settings-get-enable-media.returns"></a><h4>Returns</h4>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> if media support is enabled or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> otherwise.</p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-26.html#api-index-2.26">2.26</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-settings-set-enable-media"></a><h3>webkit_settings_set_enable_media ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_settings_set_enable_media (<em class="parameter"><code><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> *settings</code></em>,
+                                  <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> enabled</code></em>);</pre>
+<p>Set the <a class="link" href="WebKitSettings.html#WebKitSettings--enable-media" title="The “enable-media” property"><span class="type">“enable-media”</span></a> property.</p>
+<div class="refsect3">
+<a name="webkit-settings-set-enable-media.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>settings</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>enabled</p></td>
+<td class="parameter_description"><p>Value to be set</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-26.html#api-index-2.26">2.26</a></p>
+</div>
 </div>
 <div class="refsect1">
 <a name="WebKitSettings.other_details"></a><h2>Types and Values</h2>
@@ -4758,11 +4837,10 @@ of <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class
 <a name="WebKitSettings--allow-file-access-from-file-urls"></a><h3>The <code class="literal">“allow-file-access-from-file-urls”</code> property</h3>
 <pre class="programlisting">  “allow-file-access-from-file-urls” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Whether file access is allowed from file URLs. By default, when
-something is loaded in a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> using a file URI, cross
+something is loaded in a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> using a file URI, cross
 origin requests to other file resources are not allowed. This
 setting allows you to change that behaviour, so that it would be
 possible to do a XMLHttpRequest of a local file, for example.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-10.html#api-index-2.10">2.10</a></p>
@@ -4772,12 +4850,11 @@ possible to do a XMLHttpRequest of a local file, for example.</p>
 <a name="WebKitSettings--allow-modal-dialogs"></a><h3>The <code class="literal">“allow-modal-dialogs”</code> property</h3>
 <pre class="programlisting">  “allow-modal-dialogs”      <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Determine whether it's allowed to create and run modal dialogs
-from a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> through JavaScript with
+from a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> through JavaScript with
 <code class="function">window.showModalDialog</code>. If it's set to
-<a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a>, the associated <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> won't be able to create
+<a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a>, the associated <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> won't be able to create
 new modal dialogs, so not even the <a class="link" href="WebKitWebView.html#WebKitWebView-create" title="The “create” signal"><span class="type">“create”</span></a>
 signal will be emitted.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -4787,11 +4864,10 @@ signal will be emitted.</p>
 <pre class="programlisting">  “allow-universal-access-from-file-urls” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Whether or not JavaScript running in the context of a file scheme URL
 should be allowed to access content from any origin.  By default, when
-something is loaded in a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> using a file scheme URL,
+something is loaded in a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> using a file scheme URL,
 access to the local file system and arbitrary local storage is not
 allowed. This setting allows you to change that behaviour, so that
 it would be possible to use local storage, for example.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-14.html#api-index-2.14">2.14</a></p>
@@ -4803,7 +4879,6 @@ it would be possible to use local storage, for example.</p>
 <p>Determines whether images should be automatically loaded or not.
 On devices where network bandwidth is of concern, it might be
 useful to turn this property off.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -4812,7 +4887,6 @@ useful to turn this property off.</p>
 <a name="WebKitSettings--cursive-font-family"></a><h3>The <code class="literal">“cursive-font-family”</code> property</h3>
 <pre class="programlisting">  “cursive-font-family”      <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The font family used as the default for content using a cursive font.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: "serif"</p>
 </div>
@@ -4821,7 +4895,6 @@ useful to turn this property off.</p>
 <a name="WebKitSettings--default-charset"></a><h3>The <code class="literal">“default-charset”</code> property</h3>
 <pre class="programlisting">  “default-charset”          <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The default text charset used when interpreting content with an unspecified charset.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: "iso-8859-1"</p>
 </div>
@@ -4830,7 +4903,6 @@ useful to turn this property off.</p>
 <a name="WebKitSettings--default-font-family"></a><h3>The <code class="literal">“default-font-family”</code> property</h3>
 <pre class="programlisting">  “default-font-family”      <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The font family to use as the default for content that does not specify a font.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: "sans-serif"</p>
 </div>
@@ -4840,7 +4912,6 @@ useful to turn this property off.</p>
 <pre class="programlisting">  “default-font-size”        <a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a></pre>
 <p>The default font size in pixels to use for content displayed if
 no font size is specified.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: 16</p>
 </div>
@@ -4850,7 +4921,6 @@ no font size is specified.</p>
 <pre class="programlisting">  “default-monospace-font-size” <a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a></pre>
 <p>The default font size in pixels to use for content displayed in
 monospace font if no font size is specified.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: 13</p>
 </div>
@@ -4861,7 +4931,6 @@ monospace font if no font size is specified.</p>
 <p>Whether to draw compositing borders and repaint counters on layers drawn
 with accelerated compositing. This is useful for debugging issues related
 to web content that is composited with the GPU.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -4873,7 +4942,6 @@ to web content that is composited with the GPU.</p>
 if WebKit was compiled with a version of Cairo including the unstable CairoGL API.
 When accelerated 2D canvas is enabled, WebKit may render some 2D canvas content
 using hardware accelerated drawing operations.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
@@ -4883,7 +4951,6 @@ using hardware accelerated drawing operations.</p>
 <a name="WebKitSettings--enable-back-forward-navigation-gestures"></a><h3>The <code class="literal">“enable-back-forward-navigation-gestures”</code> property</h3>
 <pre class="programlisting">  “enable-back-forward-navigation-gestures” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Enable or disable horizontal swipe gesture for back-forward navigation.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-24.html#api-index-2.24">2.24</a></p>
@@ -4893,7 +4960,6 @@ using hardware accelerated drawing operations.</p>
 <a name="WebKitSettings--enable-caret-browsing"></a><h3>The <code class="literal">“enable-caret-browsing”</code> property</h3>
 <pre class="programlisting">  “enable-caret-browsing”    <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Whether to enable accessibility enhanced keyboard navigation.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -4902,7 +4968,6 @@ using hardware accelerated drawing operations.</p>
 <a name="WebKitSettings--enable-developer-extras"></a><h3>The <code class="literal">“enable-developer-extras”</code> property</h3>
 <pre class="programlisting">  “enable-developer-extras”  <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Determines whether or not developer tools, such as the Web Inspector, are enabled.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -4912,7 +4977,6 @@ using hardware accelerated drawing operations.</p>
 <pre class="programlisting">  “enable-dns-prefetching”   <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Determines whether or not to prefetch domain names. DNS prefetching attempts
 to resolve domain names before a user tries to follow a link.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -4925,7 +4989,6 @@ EncryptedMedia is an experimental JavaScript API for playing encrypted media in 
 This property will only work as intended if the EncryptedMedia feature is enabled at build time
 with the ENABLE_ENCRYPTED_MEDIA flag.</p>
 <p>See https://www.w3.org/TR/encrypted-media/</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-20.html#api-index-2.20">2.20</a></p>
@@ -4937,7 +5000,6 @@ with the ENABLE_ENCRYPTED_MEDIA flag.</p>
 <p>Whether to enable the frame flattening. With this setting each subframe is expanded
 to its contents, which will flatten all the frames to become one scrollable page.
 On touch devices scrollable subframes on a page can result in a confusing user experience.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -4949,7 +5011,6 @@ On touch devices scrollable subframes on a page can result in a confusing user e
 allows any HTML element to request fullscreen display. See also
 the current draft of the spec:
 http://www.w3.org/TR/fullscreen/</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -4958,7 +5019,6 @@ http://www.w3.org/TR/fullscreen/</p>
 <a name="WebKitSettings--enable-html5-database"></a><h3>The <code class="literal">“enable-html5-database”</code> property</h3>
 <pre class="programlisting">  “enable-html5-database”    <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Whether to enable HTML5 client-side SQL database support (IndexedDB).</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -4970,7 +5030,6 @@ http://www.w3.org/TR/fullscreen/</p>
 simple synchronous storage access.</p>
 <p>HTML5 local storage specification is available at
 http://dev.w3.org/html5/webstorage/.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -4981,16 +5040,14 @@ http://dev.w3.org/html5/webstorage/.</p>
 <p>Determines whether or not hyperlink auditing is enabled.</p>
 <p>The hyperlink auditing specification is available at
 http://www.whatwg.org/specs/web-apps/current-work/multipage/links.html<span class="type">hyperlink-auditing</span>.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
-<p>Default value: FALSE</p>
+<p>Default value: TRUE</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="WebKitSettings--enable-java"></a><h3>The <code class="literal">“enable-java”</code> property</h3>
 <pre class="programlisting">  “enable-java”              <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Determines whether or not Java is enabled on the page.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -4999,7 +5056,6 @@ http://www.whatwg.org/specs/web-apps/current-work/multipage/links.html<span clas
 <a name="WebKitSettings--enable-javascript"></a><h3>The <code class="literal">“enable-javascript”</code> property</h3>
 <pre class="programlisting">  “enable-javascript”        <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Determines whether or not JavaScript executes within a page.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -5010,10 +5066,20 @@ http://www.whatwg.org/specs/web-apps/current-work/multipage/links.html<span clas
 <p>Determines whether or not JavaScript markup is allowed in document. When this setting is disabled,
 all JavaScript-related elements and attributes are removed from the document during parsing. Note that
 executing JavaScript is still allowed if <a class="link" href="WebKitSettings.html#WebKitSettings--enable-javascript" title="The “enable-javascript” property"><span class="type">“enable-javascript”</span></a> is <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a>.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 <p class="since">Since: <a class="link" href="api-index-2-24.html#api-index-2.24">2.24</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitSettings--enable-media"></a><h3>The <code class="literal">“enable-media”</code> property</h3>
+<pre class="programlisting">  “enable-media”             <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
+<p>Enable or disable support for media playback on pages. This setting is enabled by
+default. Disabling it means <code class="literal">&lt;audio&gt;</code>, <code class="literal">&lt;track&gt;</code> and <code class="literal">&lt;video&gt;</code> elements will have
+playback support disabled.</p>
+<p>Flags: Read / Write / Construct</p>
+<p>Default value: TRUE</p>
+<p class="since">Since: <a class="link" href="api-index-2-26.html#api-index-2.26">2.26</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -5026,7 +5092,6 @@ information about the decoding and encoding capabilities for a given format
 but also output capabilities to find the best match based on the device’s
 display.</p>
 <p>See also https://wicg.github.io/media-capabilities/</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-22.html#api-index-2.22">2.22</a></p>
@@ -5039,7 +5104,6 @@ display.</p>
 is an experimental proposal for allowing web pages to access
 audio and video devices for capture.</p>
 <p>See also http://dev.w3.org/2011/webrtc/editor/getusermedia.html</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-4.html#api-index-2.4">2.4</a></p>
@@ -5052,7 +5116,6 @@ audio and video devices for capture.</p>
 extends HTMLMediaElement to allow JavaScript to generate media
 streams for playback.</p>
 <p>See also http://www.w3.org/TR/media-source/</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 <p class="since">Since: <a class="link" href="api-index-2-4.html#api-index-2.4">2.4</a></p>
@@ -5064,7 +5127,6 @@ streams for playback.</p>
 <p>Enable or disable the Mock Capture Devices. Those are fake
 Microphone and Camera devices to be used as MediaStream
 sources.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-24.html#api-index-2.24">2.24</a></p>
@@ -5078,7 +5140,6 @@ web application cache allows web applications to run even when
 the user is not connected to the network.</p>
 <p>HTML5 offline web application specification is available at
 http://dev.w3.org/html5/spec/offline.html.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -5095,7 +5156,6 @@ resource caches, its point is to make going back and forth
 between pages much faster. For details about the different types
 of caches and their purposes see:
 http://webkit.org/blog/427/webkit-page-cache-i-the-basics/</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -5104,7 +5164,6 @@ http://webkit.org/blog/427/webkit-page-cache-i-the-basics/</p>
 <a name="WebKitSettings--enable-plugins"></a><h3>The <code class="literal">“enable-plugins”</code> property</h3>
 <pre class="programlisting">  “enable-plugins”           <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Determines whether or not plugins on the page are enabled.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -5118,7 +5177,6 @@ will disable history, cache and form auto-fill for any pages visited.</p>
 <p><code class="literal">WebKitSettings:enable-private-browsing</code> has been deprecated since version 2.16. and should not be used in newly-written code.</p>
 <p>Use <a class="link" href="WebKitWebView.html#WebKitWebView--is-ephemeral" title="The “is-ephemeral” property"><span class="type">“is-ephemeral”</span></a> or <a class="link" href="WebKitWebsiteDataManager.html#WebKitWebsiteDataManager--is-ephemeral" title="The “is-ephemeral” property"><span class="type">“is-ephemeral”</span></a> instead.</p>
 </div>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -5127,7 +5185,6 @@ will disable history, cache and form auto-fill for any pages visited.</p>
 <a name="WebKitSettings--enable-resizable-text-areas"></a><h3>The <code class="literal">“enable-resizable-text-areas”</code> property</h3>
 <pre class="programlisting">  “enable-resizable-text-areas” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Determines whether or not text areas can be resized.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -5141,7 +5198,6 @@ better web compatibility. For example, older versions of
 MediaWiki will incorrectly send to WebKit a CSS file with KHTML
 workarounds. By turning on site-specific quirks, WebKit will
 special-case this and other cases to make some specific sites work.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -5150,7 +5206,6 @@ special-case this and other cases to make some specific sites work.</p>
 <a name="WebKitSettings--enable-smooth-scrolling"></a><h3>The <code class="literal">“enable-smooth-scrolling”</code> property</h3>
 <pre class="programlisting">  “enable-smooth-scrolling”  <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Enable or disable smooth scrolling.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -5164,7 +5219,6 @@ and form controls, by using Left, Right, Up and Down arrow keys.
 For example, if an user presses the Right key, heuristics determine whether
 there is an element they might be trying to reach towards the right, and if
 there are multiple elements, which element they probably wants.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-4.html#api-index-2.4">2.4</a></p>
@@ -5177,7 +5231,6 @@ there are multiple elements, which element they probably wants.</p>
 When this setting is enabled, users will be able to focus the next element
 in the page by pressing the tab key. If the selected element is editable,
 then pressing tab key will insert the tab character.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -5190,7 +5243,6 @@ experimental proposal for allowing web pages to generate Audio
 WAVE data from JavaScript. The standard is currently a
 work-in-progress by the W3C Audio Working Group.</p>
 <p>See also https://dvcs.w3.org/hg/audio/raw-file/tip/webaudio/specification.html</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -5201,7 +5253,6 @@ work-in-progress by the W3C Audio Working Group.</p>
 <p>Enable or disable support for WebGL on pages. WebGL is an experimental
 proposal for allowing web pages to use OpenGL ES-like calls directly. The
 standard is currently a work-in-progress by the Khronos Group.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -5211,7 +5262,6 @@ standard is currently a work-in-progress by the Khronos Group.</p>
 <pre class="programlisting">  “enable-write-console-messages-to-stdout” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Enable or disable writing console messages to stdout. These are messages
 sent to the console with console.log and related methods.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 <p class="since">Since: <a class="link" href="api-index-2-2.html#api-index-2.2">2.2</a></p>
@@ -5222,7 +5272,6 @@ sent to the console with console.log and related methods.</p>
 <pre class="programlisting">  “enable-xss-auditor”       <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Whether to enable the XSS auditor. This feature filters some kinds of
 reflective XSS attacks on vulnerable web sites.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -5231,7 +5280,6 @@ reflective XSS attacks on vulnerable web sites.</p>
 <a name="WebKitSettings--fantasy-font-family"></a><h3>The <code class="literal">“fantasy-font-family”</code> property</h3>
 <pre class="programlisting">  “fantasy-font-family”      <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The font family used as the default for content using a fantasy font.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: "serif"</p>
 </div>
@@ -5249,7 +5297,6 @@ acceleration might cause some websites to not render correctly or consume more C
 <p>Note that changing this setting might not be possible if hardware acceleration is not
 supported by the hardware or the system. In that case you can get the value to know the
 actual policy being used, but changing the setting will not have any effect.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: WEBKIT_HARDWARE_ACCELERATION_POLICY_ON_DEMAND</p>
 <p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
@@ -5260,7 +5307,6 @@ actual policy being used, but changing the setting will not have any effect.</p>
 <pre class="programlisting">  “javascript-can-access-clipboard” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Whether JavaScript can access the clipboard. The default value is <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a>. If
 set to <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a>, document.execCommand() allows cut, copy and paste commands.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -5270,7 +5316,6 @@ set to <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="litera
 <pre class="programlisting">  “javascript-can-open-windows-automatically” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Whether JavaScript can open popup windows automatically without user
 intervention.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -5280,7 +5325,6 @@ intervention.</p>
 <pre class="programlisting">  “load-icons-ignoring-image-load-setting” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Determines whether a site can load favicons irrespective
 of the value of <a class="link" href="WebKitSettings.html#WebKitSettings--auto-load-images" title="The “auto-load-images” property"><span class="type">“auto-load-images”</span></a>.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -5291,7 +5335,6 @@ of the value of <a class="link" href="WebKitSettings.html#WebKitSettings--auto-l
 <p>Whether media playback is full-screen only or inline playback is allowed.
 This is <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> by default, so media playback can be inline. Setting it to
 <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> allows specifying that media playback should be always fullscreen.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -5304,7 +5347,6 @@ would be required to start media playback or load media. This is off
 by default, so media playback could start automatically.
 Setting it on requires a gesture by the user to start playback, or to
 load the media.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
@@ -5315,7 +5357,6 @@ load the media.</p>
 <p>The minimum font size in pixels used to display text. This setting
 controls the absolute smallest size. Values other than 0 can
 potentially break page layouts.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: 0</p>
 </div>
@@ -5324,7 +5365,6 @@ potentially break page layouts.</p>
 <a name="WebKitSettings--monospace-font-family"></a><h3>The <code class="literal">“monospace-font-family”</code> property</h3>
 <pre class="programlisting">  “monospace-font-family”    <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The font family used as the default for content using a monospace font.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: "monospace"</p>
 </div>
@@ -5333,7 +5373,6 @@ potentially break page layouts.</p>
 <a name="WebKitSettings--pictograph-font-family"></a><h3>The <code class="literal">“pictograph-font-family”</code> property</h3>
 <pre class="programlisting">  “pictograph-font-family”   <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The font family used as the default for content using a pictograph font.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: "serif"</p>
 </div>
@@ -5342,7 +5381,6 @@ potentially break page layouts.</p>
 <a name="WebKitSettings--print-backgrounds"></a><h3>The <code class="literal">“print-backgrounds”</code> property</h3>
 <pre class="programlisting">  “print-backgrounds”        <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Whether background images should be drawn during printing.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: TRUE</p>
 </div>
@@ -5351,7 +5389,6 @@ potentially break page layouts.</p>
 <a name="WebKitSettings--sans-serif-font-family"></a><h3>The <code class="literal">“sans-serif-font-family”</code> property</h3>
 <pre class="programlisting">  “sans-serif-font-family”   <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The font family used as the default for content using a sans-serif font.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: "sans-serif"</p>
 </div>
@@ -5360,7 +5397,6 @@ potentially break page layouts.</p>
 <a name="WebKitSettings--serif-font-family"></a><h3>The <code class="literal">“serif-font-family”</code> property</h3>
 <pre class="programlisting">  “serif-font-family”        <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The font family used as the default for content using a serif font.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: "serif"</p>
 </div>
@@ -5375,7 +5411,6 @@ typically better to not completely override the standard user-agent, but to use
 <a class="link" href="WebKitSettings.html#webkit-settings-set-user-agent-with-application-details" title="webkit_settings_set_user_agent_with_application_details ()"><code class="function">webkit_settings_set_user_agent_with_application_details()</code></a> instead.</p>
 <p>If this property is set to the empty string or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>, it will revert to the standard
 user-agent.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: NULL</p>
 </div>
@@ -5387,13 +5422,12 @@ user-agent.</p>
 text of the page or all the contents. Other contents containing text
 like form controls will be also affected by zoom factor when
 this property is enabled.</p>
-<p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
 </div>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.31</div>
+<hr>Generated by GTK-Doc V1.29.1</div>
 </body>
 </html>

@@ -6,12 +6,8 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
  (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSDeallocatorEntry<bmalloc::IsoConfig<40u> > >::s_data@Base" 2.21.1
  (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSDeallocatorEntry<bmalloc::IsoConfig<40u> > >::s_object@Base" 2.19.6
- (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSLayout>::s_data@Base" 2.23.90
- (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSLayout>::s_object@Base" 2.23.90
- (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::Scavenger>::s_data@Base" 2.21.1
- (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::Scavenger>::s_object@Base" 2.21.1
- (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::VMHeap>::s_data@Base" 2.23.90
- (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::VMHeap>::s_object@Base" 2.23.90
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerThreadStorage<bmalloc::PerHeapKind<bmalloc::Cache> >::s_didInitialize@Base" 2.25.92
+ (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerThreadStorage<bmalloc::PerHeapKind<bmalloc::Cache> >::s_key@Base" 2.25.92
  (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::vmPageSize()::cached@Base" 2.19.6
  webkit_accessible_get_type@Base 2.24.2
  webkit_accessible_hyperlink_get_type@Base 2.24.2
@@ -55,6 +51,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_back_forward_list_item_get_type@Base 2.5.3
  webkit_back_forward_list_item_get_uri@Base 2.5.3
  webkit_cache_model_get_type@Base 2.5.3
+ webkit_cached_resolver_get_type@Base 2.25.3
  webkit_color_chooser_request_cancel@Base 2.8.1
  webkit_color_chooser_request_finish@Base 2.8.1
  webkit_color_chooser_request_get_element_rectangle@Base 2.8.1
@@ -1462,6 +1459,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_editor_state_is_redo_available@Base 2.19.1
  webkit_editor_state_is_undo_available@Base 2.19.1
  webkit_editor_typing_attributes_get_type@Base 2.10.0
+ webkit_emoji_chooser_get_type@Base 2.25.1
  webkit_favicon_database_clear@Base 2.5.3
  webkit_favicon_database_error_get_type@Base 2.5.3
  webkit_favicon_database_error_quark@Base 2.5.3
@@ -1492,6 +1490,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_form_submission_request_list_text_fields@Base 2.19.4
  webkit_form_submission_request_submit@Base 2.5.3
  webkit_form_submission_step_get_type@Base 2.19.4
+ webkit_frame_get_id@Base 2.25.1
  webkit_frame_get_javascript_context_for_script_world@Base 2.5.3
  webkit_frame_get_javascript_global_context@Base 2.5.3
  webkit_frame_get_js_context@Base 2.21.1
@@ -1501,7 +1500,20 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_frame_get_type@Base 2.5.3
  webkit_frame_get_uri@Base 2.5.3
  webkit_frame_is_main_frame@Base 2.5.3
+ webkit_geolocation_manager_failed@Base 2.25.1
+ webkit_geolocation_manager_get_enable_high_accuracy@Base 2.25.1
+ webkit_geolocation_manager_get_type@Base 2.25.1
+ webkit_geolocation_manager_update_position@Base 2.25.1
  webkit_geolocation_permission_request_get_type@Base 2.5.3
+ webkit_geolocation_position_copy@Base 2.25.1
+ webkit_geolocation_position_free@Base 2.25.1
+ webkit_geolocation_position_get_type@Base 2.25.1
+ webkit_geolocation_position_new@Base 2.25.1
+ webkit_geolocation_position_set_altitude@Base 2.25.1
+ webkit_geolocation_position_set_altitude_accuracy@Base 2.25.1
+ webkit_geolocation_position_set_heading@Base 2.25.1
+ webkit_geolocation_position_set_speed@Base 2.25.1
+ webkit_geolocation_position_set_timestamp@Base 2.25.1
  webkit_get_major_version@Base 2.5.3
  webkit_get_micro_version@Base 2.5.3
  webkit_get_minor_version@Base 2.5.3
@@ -1693,6 +1705,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_get_enable_java@Base 2.5.3
  webkit_settings_get_enable_javascript@Base 2.5.3
  webkit_settings_get_enable_javascript_markup@Base 2.23.90
+ webkit_settings_get_enable_media@Base 2.25.1
  webkit_settings_get_enable_media_capabilities@Base 2.21.91
  webkit_settings_get_enable_media_stream@Base 2.5.3
  webkit_settings_get_enable_mediasource@Base 2.5.3
@@ -1752,6 +1765,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_set_enable_java@Base 2.5.3
  webkit_settings_set_enable_javascript@Base 2.5.3
  webkit_settings_set_enable_javascript_markup@Base 2.23.90
+ webkit_settings_set_enable_media@Base 2.25.1
  webkit_settings_set_enable_media_capabilities@Base 2.21.91
  webkit_settings_set_enable_media_stream@Base 2.5.3
  webkit_settings_set_enable_mediasource@Base 2.5.3
@@ -1844,6 +1858,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_user_content_manager_remove_all_scripts@Base 2.5.3
  webkit_user_content_manager_remove_all_style_sheets@Base 2.5.3
  webkit_user_content_manager_remove_filter@Base 2.23.91
+ webkit_user_content_manager_remove_filter_by_id@Base 2.25.92
  webkit_user_content_manager_unregister_script_message_handler@Base 2.8.1
  webkit_user_content_manager_unregister_script_message_handler_in_world@Base 2.21.92
  webkit_user_media_permission_is_for_audio_device@Base 2.8.1
@@ -1861,6 +1876,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_user_style_sheet_new_for_world@Base 2.21.92
  webkit_user_style_sheet_ref@Base 2.5.3
  webkit_user_style_sheet_unref@Base 2.5.3
+ webkit_web_context_add_path_to_sandbox@Base 2.25.1
  webkit_web_context_allow_tls_certificate_for_host@Base 2.5.3
  webkit_web_context_clear_cache@Base 2.5.3
  webkit_web_context_download_uri@Base 2.5.3
@@ -1869,9 +1885,11 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_get_default@Base 2.5.3
  webkit_web_context_get_favicon_database@Base 2.5.3
  webkit_web_context_get_favicon_database_directory@Base 2.5.3
+ webkit_web_context_get_geolocation_manager@Base 2.25.1
  webkit_web_context_get_plugins@Base 2.5.3
  webkit_web_context_get_plugins_finish@Base 2.5.3
  webkit_web_context_get_process_model@Base 2.5.3
+ webkit_web_context_get_sandbox_enabled@Base 2.25.1
  webkit_web_context_get_security_manager@Base 2.5.3
  webkit_web_context_get_spell_checking_enabled@Base 2.5.3
  webkit_web_context_get_spell_checking_languages@Base 2.5.3
@@ -1895,6 +1913,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_context_set_network_proxy_settings@Base 2.15.3
  webkit_web_context_set_preferred_languages@Base 2.5.3
  webkit_web_context_set_process_model@Base 2.5.3
+ webkit_web_context_set_sandbox_enabled@Base 2.25.1
  webkit_web_context_set_spell_checking_enabled@Base 2.5.3
  webkit_web_context_set_spell_checking_languages@Base 2.5.3
  webkit_web_context_set_tls_errors_policy@Base 2.5.3
@@ -1931,7 +1950,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_resource_get_type@Base 2.5.3
  webkit_web_resource_get_uri@Base 2.5.3
  (optional)webkit_web_src_get_type@Base 2.19.6
- (optional)webkit_web_view_base_accessible_get_type@Base 2.19.6
+ webkit_web_view_accessible_get_type@Base 2.25.1
  webkit_web_view_base_get_type@Base 2.5.3
  webkit_web_view_can_execute_editing_command@Base 2.5.3
  webkit_web_view_can_execute_editing_command_finish@Base 2.5.3
@@ -2022,6 +2041,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_website_data_manager_get_base_data_directory@Base 2.10.0
  webkit_website_data_manager_get_cookie_manager@Base 2.15.90
  webkit_website_data_manager_get_disk_cache_directory@Base 2.10.0
+ webkit_website_data_manager_get_hsts_cache_directory@Base 2.25.92
  webkit_website_data_manager_get_indexeddb_directory@Base 2.10.0
  webkit_website_data_manager_get_local_storage_directory@Base 2.10.0
  webkit_website_data_manager_get_offline_application_cache_directory@Base 2.10.0

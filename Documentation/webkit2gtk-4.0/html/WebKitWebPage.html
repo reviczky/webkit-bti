@@ -3,12 +3,12 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>WebKitWebPage: WebKitGTK Reference Manual</title>
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch02.html" title="Web Extensions">
 <link rel="prev" href="WebKitWebExtension.html" title="WebKitWebExtension">
 <link rel="next" href="WebKitFrame.html" title="WebKitFrame">
-<meta name="generator" content="GTK-Doc V1.31 (XML mode)">
+<meta name="generator" content="GTK-Doc V1.29.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -104,9 +104,9 @@
 <a name="WebKitWebPage.signals"></a><h2>Signals</h2>
 <div class="informaltable"><table class="informaltable" border="0">
 <colgroup>
-<col width="150px" class="signal_proto_type">
-<col width="300px" class="signal_proto_name">
-<col width="200px" class="signal_proto_flags">
+<col width="150px" class="signals_return">
+<col width="300px" class="signals_name">
+<col width="200px" class="signals_flags">
 </colgroup>
 <tbody>
 <tr>
@@ -127,6 +127,11 @@
 <tr>
 <td class="signal_type"><span class="returnvalue">void</span></td>
 <td class="signal_name"><a class="link" href="WebKitWebPage.html#WebKitWebPage-form-controls-associated" title="The “form-controls-associated” signal">form-controls-associated</a></td>
+<td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
+</tr>
+<tr>
+<td class="signal_type"><span class="returnvalue">void</span></td>
+<td class="signal_name"><a class="link" href="WebKitWebPage.html#WebKitWebPage-form-controls-associated-for-frame" title="The “form-controls-associated-for-frame” signal">form-controls-associated-for-frame</a></td>
 <td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
 </tr>
 <tr>
@@ -163,7 +168,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitWebPage.object-hierarchy"></a><h2>Object Hierarchy</h2>
-<pre class="screen">    <a href="/usr/share/gtk-doc/html/gobject/gobject-Enumeration-and-Flag-Types.html">GEnum</a>
+<pre class="screen">    <a href="../gobject/gobject-Enumeration-and-Flag-Types.html">GEnum</a>
     <span class="lineart">╰──</span> WebKitFormSubmissionStep
     <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> WebKitWebPage
@@ -367,7 +372,6 @@ to be submitted.</p>
 <a name="WebKitWebPage--uri"></a><h3>The <code class="literal">“uri”</code> property</h3>
 <pre class="programlisting">  “uri”                      <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The current active URI of the <a class="link" href="WebKitWebPage.html" title="WebKitWebPage"><span class="type">WebKitWebPage</span></a>.</p>
-<p>Owner: WebKitWebPage</p>
 <p>Flags: Read</p>
 <p>Default value: NULL</p>
 </div>
@@ -522,6 +526,10 @@ that case, the <em class="parameter"><code>elements</code></em>
 <p>Clients should take a reference to the members of the <em class="parameter"><code>elements</code></em>
  array if it is desired to
 keep them alive after the signal handler returns.</p>
+<div class="warning">
+<p><code class="literal">WebKitWebPage::form-controls-associated</code> has been deprecated since version 2.26 and should not be used in newly-written code.</p>
+<p>, use <a class="link" href="WebKitWebPage.html#WebKitWebPage-form-controls-associated-for-frame" title="The “form-controls-associated-for-frame” signal"><span class="type">“form-controls-associated-for-frame”</span></a> instead.</p>
+</div>
 <div class="refsect3">
 <a name="WebKitWebPage-form-controls-associated.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -555,6 +563,59 @@ keep them alive after the signal handler returns.</p>
 </div>
 <hr>
 <div class="refsect2">
+<a name="WebKitWebPage-form-controls-associated-for-frame"></a><h3>The <code class="literal">“form-controls-associated-for-frame”</code> signal</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+user_function (<a class="link" href="WebKitWebPage.html" title="WebKitWebPage"><span class="type">WebKitWebPage</span></a> *web_page,
+               <a href="../glib/glib-Pointer-Arrays.html#GPtrArray"><span class="type">GPtrArray</span></a>     *elements,
+               <a class="link" href="WebKitFrame.html" title="WebKitFrame"><span class="type">WebKitFrame</span></a>   *frame,
+               <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>       user_data)</pre>
+<p>Emitted after form elements (or form associated elements) are associated to a particular web
+page. This is useful to implement form auto filling for web pages where form fields are added
+dynamically. This signal might be emitted multiple times for the same web page.</p>
+<p>Note that this signal could be also emitted when form controls are moved between forms. In
+that case, the <em class="parameter"><code>elements</code></em>
+ array carries the list of those elements which have moved.</p>
+<p>Clients should take a reference to the members of the <em class="parameter"><code>elements</code></em>
+ array if it is desired to
+keep them alive after the signal handler returns.</p>
+<div class="refsect3">
+<a name="WebKitWebPage-form-controls-associated-for-frame.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>web_page</p></td>
+<td class="parameter_description"><p>the <a class="link" href="WebKitWebPage.html" title="WebKitWebPage"><span class="type">WebKitWebPage</span></a> on which the signal is emitted</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>elements</p></td>
+<td class="parameter_description"><p>a <a href="../glib/glib-Pointer-Arrays.html#GPtrArray"><span class="type">GPtrArray</span></a> of
+<a href="../webkitdomgtk-4.0/WebKitDOMElement.html#WebKitDOMElement-struct"><span class="type">WebKitDOMElement</span></a> with the list of forms in the page. </p></td>
+<td class="parameter_annotations"><span class="annotation">[<acronym title="Generics and defining elements of containers and arrays."><span class="acronym">element-type</span></acronym> WebKitDOMElement][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></td>
+</tr>
+<tr>
+<td class="parameter_name"><p>frame</p></td>
+<td class="parameter_description"><p>the <a class="link" href="WebKitFrame.html" title="WebKitFrame"><span class="type">WebKitFrame</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>user_data</p></td>
+<td class="parameter_description"><p>user data set when the signal handler was connected.</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p>Flags: <a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></p>
+<p class="since">Since: <a class="link" href="api-index-2-26.html#api-index-2.26">2.26</a></p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="WebKitWebPage-send-request"></a><h3>The <code class="literal">“send-request”</code> signal</h3>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 user_function (<a class="link" href="WebKitWebPage.html" title="WebKitWebPage"><span class="type">WebKitWebPage</span></a>     *web_page,
@@ -574,7 +635,7 @@ request to be sent to the server due to the redirection and the
  parameter containing the response
 received by the server for the initial request.</p>
 <p>Modifications to the <a class="link" href="WebKitURIRequest.html" title="WebKitURIRequest"><span class="type">WebKitURIRequest</span></a> and its associated
-<a href="../libsoup-2.4/SoupMessageHeaders.html#SoupMessageHeaders"><span class="type">SoupMessageHeaders</span></a> will be taken into account when the request
+<span class="type">SoupMessageHeaders</span> will be taken into account when the request
 is sent over the network.</p>
 <div class="refsect3">
 <a name="WebKitWebPage-send-request.parameters"></a><h4>Parameters</h4>
@@ -717,6 +778,6 @@ of the form's text fields. </p></td>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.31</div>
+<hr>Generated by GTK-Doc V1.29.1</div>
 </body>
 </html>

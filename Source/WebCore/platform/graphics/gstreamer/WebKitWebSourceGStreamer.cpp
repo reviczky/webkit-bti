@@ -50,6 +50,7 @@ using namespace WebCore;
 #define LOW_QUEUE_FACTOR_THRESHOLD 0.2
 
 class CachedResourceStreamingClient final : public PlatformMediaResourceClient {
+    WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(CachedResourceStreamingClient);
 public:
     CachedResourceStreamingClient(WebKitWebSrc*, ResourceRequest&&);
@@ -390,7 +391,7 @@ static GstFlowReturn webKitWebSrcCreate(GstPushSrc* pushSrc, GstBuffer** buffer)
         });
     }
 
-    GST_TRACE_OBJECT(src, "flushing: %s, doesHaveEOS: %s, queueSize: %" G_GSIZE_FORMAT ", isDownloadSuspended: %s",
+    GST_TRACE_OBJECT(src, "flushing: %s, doesHaveEOS: %s, queueSize: %" G_GUINT64_FORMAT ", isDownloadSuspended: %s",
         boolForPrinting(priv->isFlushing), boolForPrinting(priv->doesHaveEOS), priv->queueSize,
         boolForPrinting(priv->isDownloadSuspended));
 
@@ -632,7 +633,7 @@ static gboolean webKitWebSrcMakeRequest(GstBaseSrc* baseSrc, bool notifyAsyncCom
             loadOptions |= PlatformMediaResourceLoader::LoadOption::BufferData;
         priv->resource = priv->loader->requestResource(ResourceRequest(request), loadOptions);
         if (priv->resource) {
-            priv->resource->setClient(std::make_unique<CachedResourceStreamingClient>(protector.get(), ResourceRequest(request)));
+            priv->resource->setClient(makeUnique<CachedResourceStreamingClient>(protector.get(), ResourceRequest(request)));
             GST_DEBUG_OBJECT(protector.get(), "Started request");
             if (notifyAsyncCompletion)
                 gst_base_src_start_complete(GST_BASE_SRC(src), GST_FLOW_OK);
@@ -795,7 +796,7 @@ static GstStateChangeReturn webKitWebSrcChangeState(GstElement* element, GstStat
     WebKitWebSrc* src = WEBKIT_WEB_SRC(element);
 
 #if GST_CHECK_VERSION(1, 14, 0)
-    GST_DEBUG_OBJECT(src, gst_state_change_get_name(transition));
+    GST_DEBUG_OBJECT(src, "%s", gst_state_change_get_name(transition));
 #endif
     switch (transition) {
     case GST_STATE_CHANGE_READY_TO_NULL:
