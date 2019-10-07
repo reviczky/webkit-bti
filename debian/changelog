@@ -2,6 +2,8 @@ webkit2gtk (2.26.1-2) UNRELEASED; urgency=medium
 
   * debian/patches/force-single-process.patch:
     + Force the single-process mode in Evolution and Geary.
+  * debian/gbp.conf:
+    + Update upstream branch name.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 07 Oct 2019 15:17:27 +0300
 
