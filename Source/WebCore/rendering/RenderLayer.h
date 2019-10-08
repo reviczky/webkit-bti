@@ -119,6 +119,7 @@ enum class RequestState {
 
 enum class IndirectCompositingReason {
     None,
+    Clipping,
     Stacking,
     OverflowScrollPositioning,
     Overlap,
@@ -897,7 +898,7 @@ public:
     void simulateFrequentPaint() { SinglePaintFrequencyTracking { m_paintFrequencyTracker }; }
     bool paintingFrequently() const { return m_paintFrequencyTracker.paintingFrequently(); }
 
-    WEBCORE_EXPORT bool isTransparentOrFullyClippedRespectingParentFrames() const;
+    WEBCORE_EXPORT bool isTransparentRespectingParentFrames() const;
 
     void invalidateEventRegion();
 
@@ -1238,8 +1239,8 @@ private:
     bool m_hasTransformedAncestor : 1;
     bool m_has3DTransformedAncestor : 1;
 
-    unsigned m_indirectCompositingReason : 3;
-    unsigned m_viewportConstrainedNotCompositedReason : 2;
+    unsigned m_indirectCompositingReason : 4; // IndirectCompositingReason
+    unsigned m_viewportConstrainedNotCompositedReason : 2; // ViewportConstrainedNotCompositedReason
 
 #if PLATFORM(IOS_FAMILY)
 #if ENABLE(IOS_TOUCH_EVENTS)
@@ -1257,7 +1258,7 @@ private:
 #endif
 
 #if ENABLE(CSS_COMPOSITING)
-    unsigned m_blendMode : 5;
+    unsigned m_blendMode : 5; // BlendMode
     bool m_hasNotIsolatedCompositedBlendingDescendants : 1;
     bool m_hasNotIsolatedBlendingDescendants : 1;
     bool m_hasNotIsolatedBlendingDescendantsStatusDirty : 1;

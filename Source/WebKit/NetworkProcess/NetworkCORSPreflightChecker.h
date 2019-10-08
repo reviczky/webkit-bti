@@ -26,6 +26,7 @@
 #pragma once
 
 #include "NetworkDataTask.h"
+#include "WebPageProxyIdentifier.h"
 #include <WebCore/FrameIdentifier.h>
 #include <WebCore/NetworkLoadInformation.h>
 #include <WebCore/PageIdentifier.h>
@@ -48,11 +49,11 @@ public:
     struct Parameters {
         WebCore::ResourceRequest originalRequest;
         Ref<WebCore::SecurityOrigin> sourceOrigin;
+        RefPtr<WebCore::SecurityOrigin> topOrigin;
         String referrer;
         String userAgent;
         PAL::SessionID sessionID;
-        WebCore::PageIdentifier pageID;
-        WebCore::FrameIdentifier frameID;
+        WebPageProxyIdentifier webPageProxyID;
         WebCore::StoredCredentialsPolicy storedCredentialsPolicy;
     };
     using CompletionCallback = CompletionHandler<void(WebCore::ResourceError&&)>;

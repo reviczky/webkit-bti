@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016-2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2016-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -35,7 +35,6 @@
 #include "WasmCallingConvention.h"
 #include "WasmFaultSignalHandler.h"
 #include "WasmMemory.h"
-#include "WasmModuleParser.h"
 #include "WasmValidate.h"
 #include <wtf/DataLog.h>
 #include <wtf/Locker.h>
@@ -46,7 +45,7 @@
 namespace JSC { namespace Wasm {
 
 namespace WasmPlanInternal {
-static const bool verbose = false;
+static constexpr bool verbose = false;
 }
 
 Plan::Plan(Context* context, Ref<ModuleInformation> info, CompletionTask&& task, CreateEmbedderWrapper&& createEmbedderWrapper, ThrowWasmException throwWasmException)
@@ -131,6 +130,9 @@ bool Plan::tryRemoveContextAndCancelIfLast(Context& context)
 
 void Plan::fail(const AbstractLocker& locker, String&& errorMessage)
 {
+    ASSERT(errorMessage);
+    if (failed())
+        return;
     dataLogLnIf(WasmPlanInternal::verbose, "failing with message: ", errorMessage);
     m_errorMessage = WTFMove(errorMessage);
     complete(locker);

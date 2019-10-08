@@ -79,6 +79,7 @@ namespace IOSApplication {
 WEBCORE_EXPORT bool isMobileMail();
 WEBCORE_EXPORT bool isMailCompositionService();
 WEBCORE_EXPORT bool isMobileSafari();
+WEBCORE_EXPORT bool isSafariViewService();
 WEBCORE_EXPORT bool isIMDb();
 WEBCORE_EXPORT bool isWebBookmarksD();
 WEBCORE_EXPORT bool isDumpRenderTree();
@@ -95,6 +96,8 @@ bool isMoviStarPlus();
 WEBCORE_EXPORT bool isFirefox();
 WEBCORE_EXPORT bool isAppleApplication();
 WEBCORE_EXPORT bool isEvernote();
+WEBCORE_EXPORT bool isEventbrite();
+WEBCORE_EXPORT bool isDataActivation();
 
 } // IOSApplication
 

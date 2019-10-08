@@ -40,6 +40,7 @@
 #include "FunctionHasExecutedCache.h"
 #include "FuzzerAgent.h"
 #include "Heap.h"
+#include "Integrity.h"
 #include "Intrinsic.h"
 #include "IsoCellSet.h"
 #include "IsoSubspace.h"
@@ -85,7 +86,7 @@
 // Enable the Objective-C API for platforms with a modern runtime. This has to match exactly what we
 // have in JSBase.h.
 #if !defined(JSC_OBJC_API_ENABLED)
-#if (defined(__clang__) && defined(__APPLE__) && ((defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && !defined(__i386__)) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)))
+#if (defined(__clang__) && defined(__APPLE__) && (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) || (defined(TARGET_OS_IPHONE) && TARGET_OS_IPHONE)))
 #define JSC_OBJC_API_ENABLED 1
 #else
 #define JSC_OBJC_API_ENABLED 0
@@ -310,6 +311,42 @@ public:
     // Global object in which execution began.
     JS_EXPORT_PRIVATE JSGlobalObject* vmEntryGlobalObject(const CallFrame*) const;
 
+    WeakRandom& random() { return m_random; }
+    Integrity::Random& integrityRandom() { return m_integrityRandom; }
+
+#if HAVE(FAST_TLS)
+    static constexpr pthread_key_t tlsKey = WTF_VM_KEY;
+
+    static VM* exchange(VM* vm)
+    {
+        VM* previous = current();
+        _pthread_setspecific_direct(tlsKey, bitwise_cast<void*>(vm));
+        return previous;
+    }
+
+    static VM* current()
+    {
+        return bitwise_cast<VM*>(_pthread_getspecific_direct(tlsKey));
+    }
+#else
+    static WTF::ThreadSpecificKey tlsKey;
+
+    static VM* exchange(VM* vm)
+    {
+        ASSERT(tlsKey != WTF::InvalidThreadSpecificKey);
+        VM* previous = current();
+        WTF::threadSpecificSet(tlsKey, vm);
+        return previous;
+    }
+
+    static VM* current()
+    {
+        ASSERT(tlsKey != WTF::InvalidThreadSpecificKey);
+        return bitwise_cast<VM*>(WTF::threadSpecificGet(tlsKey));
+    }
+#endif
+    static void initializeTLS();
+
 private:
     unsigned nextID();
 
@@ -321,6 +358,9 @@ private:
     // These need to be initialized before heap below.
     RetainPtr<CFRunLoopRef> m_runLoop;
 #endif
+
+    WeakRandom m_random;
+    Integrity::Random m_integrityRandom;
 
 public:
     Heap heap;
@@ -353,12 +393,12 @@ public:
     ALWAYS_INLINE CompleteSubspace& gigacageAuxiliarySpace(Gigacage::Kind kind)
     {
         switch (kind) {
-        case Gigacage::ReservedForFlagsAndNotABasePtr:
-            RELEASE_ASSERT_NOT_REACHED();
         case Gigacage::Primitive:
             return primitiveGigacageAuxiliarySpace;
         case Gigacage::JSValue:
             return jsValueGigacageAuxiliarySpace;
+        case Gigacage::NumberOfKinds:
+            break;
         }
         RELEASE_ASSERT_NOT_REACHED();
         return primitiveGigacageAuxiliarySpace;
@@ -366,7 +406,7 @@ public:
     
     // Whenever possible, use subspaceFor<CellType>(vm) to get one of these subspaces.
     CompleteSubspace cellSpace;
-    CompleteSubspace jsValueGigacageCellSpace; // FIXME: This space is problematic because we have things in here like DirectArguments and ScopedArguments; those should be split into JSValueOOB cells and JSValueStrict auxiliaries. https://bugs.webkit.org/show_bug.cgi?id=182858
+    CompleteSubspace variableSizedCellSpace; // FIXME: This space is problematic because we have things in here like DirectArguments and ScopedArguments; those should be split into JSValueOOB cells and JSValueStrict auxiliaries. https://bugs.webkit.org/show_bug.cgi?id=182858
     CompleteSubspace destructibleCellSpace;
     CompleteSubspace stringSpace;
     CompleteSubspace destructibleObjectSpace;

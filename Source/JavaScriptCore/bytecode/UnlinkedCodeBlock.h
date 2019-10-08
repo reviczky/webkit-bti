@@ -109,9 +109,9 @@ struct UnlinkedSimpleJumpTable {
 class UnlinkedCodeBlock : public JSCell {
 public:
     typedef JSCell Base;
-    static const unsigned StructureFlags = Base::StructureFlags;
+    static constexpr unsigned StructureFlags = Base::StructureFlags;
 
-    static const bool needsDestruction = true;
+    static constexpr bool needsDestruction = true;
 
     enum { CallFunction, ApplyFunction };
 
@@ -276,14 +276,6 @@ public:
 
     VirtualRegister thisRegister() const { return m_thisRegister; }
     VirtualRegister scopeRegister() const { return m_scopeRegister; }
-
-    void addPropertyAccessInstruction(InstructionStream::Offset propertyAccessInstruction)
-    {
-        m_propertyAccessInstructions.append(propertyAccessInstruction);
-    }
-
-    size_t numberOfPropertyAccessInstructions() const { return m_propertyAccessInstructions.size(); }
-    const Vector<InstructionStream::Offset>& propertyAccessInstructions() const { return m_propertyAccessInstructions; }
 
     bool hasRareData() const { return m_rareData.get(); }
 
@@ -458,9 +450,6 @@ private:
 #if ENABLE(DFG_JIT)
     DFG::ExitProfile m_exitProfile;
 #endif
-
-
-    Vector<InstructionStream::Offset> m_propertyAccessInstructions;
 
     // Constant Pools
     Vector<Identifier> m_identifiers;

@@ -174,6 +174,11 @@ void dumpSpeculation(PrintStream& outStream, SpeculatedType value)
             else
                 isTop = false;
 
+            if (value & SpecPromiseObject)
+                strOut.print("PromiseObject");
+            else
+                isTop = false;
+
             if (value & SpecMapObject)
                 strOut.print("MapObject");
             else
@@ -463,6 +468,9 @@ SpeculatedType speculationFromClassInfo(const ClassInfo* classInfo)
             return SpecFunctionWithNonDefaultHasInstance;
         return SpecFunctionWithDefaultHasInstance;
     }
+
+    if (classInfo->isSubClassOf(JSPromise::info()))
+        return SpecPromiseObject;
     
     if (isTypedView(classInfo->typedArrayStorageType))
         return speculationFromTypedArrayType(classInfo->typedArrayStorageType);
@@ -571,7 +579,7 @@ TypedArrayType typedArrayTypeFromSpeculation(SpeculatedType type)
     return NotTypedArray;
 }
 
-SpeculatedType speculationFromJSType(JSType type)
+Optional<SpeculatedType> speculationFromJSType(JSType type)
 {
     switch (type) {
     case StringType:
@@ -588,6 +596,8 @@ SpeculatedType speculationFromJSType(JSType type)
         return SpecRegExpObject;
     case ProxyObjectType:
         return SpecProxyObject;
+    case JSPromiseType:
+        return SpecPromiseObject;
     case JSMapType:
         return SpecMapObject;
     case JSSetType:
@@ -599,9 +609,8 @@ SpeculatedType speculationFromJSType(JSType type)
     case DataViewType:
         return SpecDataViewObject;
     default:
-        ASSERT_NOT_REACHED();
+        return WTF::nullopt;
     }
-    return SpecNone;
 }
 
 SpeculatedType leastUpperBoundOfStrictlyEquivalentSpeculations(SpeculatedType type)
@@ -615,10 +624,21 @@ SpeculatedType leastUpperBoundOfStrictlyEquivalentSpeculations(SpeculatedType ty
     return type;
 }
 
+static inline SpeculatedType leastUpperBoundOfEquivalentSpeculations(SpeculatedType type)
+{
+    type = leastUpperBoundOfStrictlyEquivalentSpeculations(type);
+
+    // Boolean or BigInt can be converted to Number when performing non-strict equal.
+    if (type & (SpecIntAnyFormat | SpecNonIntAsDouble | SpecBoolean | SpecBigInt))
+        type |= (SpecIntAnyFormat | SpecNonIntAsDouble | SpecBoolean | SpecBigInt);
+
+    return type;
+}
+
 bool valuesCouldBeEqual(SpeculatedType a, SpeculatedType b)
 {
-    a = leastUpperBoundOfStrictlyEquivalentSpeculations(a);
-    b = leastUpperBoundOfStrictlyEquivalentSpeculations(b);
+    a = leastUpperBoundOfEquivalentSpeculations(a);
+    b = leastUpperBoundOfEquivalentSpeculations(b);
     
     // Anything could be equal to a string.
     if (a & SpecString)
@@ -794,6 +814,8 @@ SpeculatedType speculationFromString(const char* speculation)
         return SpecStringObject;
     if (!strncmp(speculation, "SpecRegExpObject", strlen("SpecRegExpObject")))
         return SpecRegExpObject;
+    if (!strncmp(speculation, "SpecPromiseObject", strlen("SpecPromiseObject")))
+        return SpecPromiseObject;
     if (!strncmp(speculation, "SpecMapObject", strlen("SpecMapObject")))
         return SpecMapObject;
     if (!strncmp(speculation, "SpecSetObject", strlen("SpecSetObject")))

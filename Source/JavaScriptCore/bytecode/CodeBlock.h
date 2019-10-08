@@ -111,8 +111,8 @@ public:
 
     enum CopyParsedBlockTag { CopyParsedBlock };
 
-    static const unsigned StructureFlags = Base::StructureFlags | StructureIsImmortal;
-    static const bool needsDestruction = true;
+    static constexpr unsigned StructureFlags = Base::StructureFlags | StructureIsImmortal;
+    static constexpr bool needsDestruction = true;
 
     template<typename, SubspaceAccess>
     static IsoSubspace* subspaceFor(VM&) { return nullptr; }
@@ -546,7 +546,7 @@ public:
 
     Vector<WriteBarrier<Unknown>>& constants() { return m_constantRegisters; }
     Vector<SourceCodeRepresentation>& constantsSourceCodeRepresentation() { return m_constantsSourceCodeRepresentation; }
-    unsigned addConstant(JSValue v)
+    unsigned addConstant(const ConcurrentJSLocker&, JSValue v)
     {
         unsigned result = m_constantRegisters.size();
         m_constantRegisters.append(WriteBarrier<Unknown>());
@@ -555,7 +555,7 @@ public:
         return result;
     }
 
-    unsigned addConstantLazily()
+    unsigned addConstantLazily(const ConcurrentJSLocker&)
     {
         unsigned result = m_constantRegisters.size();
         m_constantRegisters.append(WriteBarrier<Unknown>());
@@ -787,7 +787,7 @@ public:
     unsigned frameRegisterCount();
     int stackPointerOffset();
 
-    bool hasOpDebugForLineAndColumn(unsigned line, unsigned column);
+    bool hasOpDebugForLineAndColumn(unsigned line, Optional<unsigned> column);
 
     bool hasDebuggerRequests() const { return m_debuggerRequests; }
     void* debuggerRequestsAddress() { return &m_debuggerRequests; }

@@ -51,7 +51,10 @@
 #include "JSFixedArray.h"
 #include "JSGlobalObjectFunctions.h"
 #include "JSImmutableButterfly.h"
+#include "JSInternalPromise.h"
+#include "JSInternalPromiseConstructor.h"
 #include "JSLexicalEnvironment.h"
+#include "JSPromiseConstructor.h"
 #include "JSPropertyNameEnumerator.h"
 #include "JSString.h"
 #include "JSWithScope.h"
@@ -233,8 +236,8 @@ SLOW_PATH_DECL(slow_path_create_this)
     auto bytecode = pc->as<OpCreateThis>();
     JSObject* result;
     JSObject* constructorAsObject = asObject(GET(bytecode.m_callee).jsValue());
-    if (constructorAsObject->type() == JSFunctionType && jsCast<JSFunction*>(constructorAsObject)->canUseAllocationProfile()) {
-        JSFunction* constructor = jsCast<JSFunction*>(constructorAsObject);
+    JSFunction* constructor = jsDynamicCast<JSFunction*>(vm, constructorAsObject);
+    if (constructor && constructor->canUseAllocationProfile()) {
         WriteBarrier<JSCell>& cachedCallee = bytecode.metadata(exec).m_cachedCallee;
         if (!cachedCallee)
             cachedCallee.set(vm, exec->codeBlock(), constructor);
@@ -262,6 +265,91 @@ SLOW_PATH_DECL(slow_path_create_this)
         else
             result = constructEmptyObject(exec);
     }
+    RETURN(result);
+}
+
+SLOW_PATH_DECL(slow_path_create_promise)
+{
+    BEGIN();
+    auto bytecode = pc->as<OpCreatePromise>();
+    JSGlobalObject* globalObject = exec->lexicalGlobalObject();
+    JSObject* constructorAsObject = asObject(GET(bytecode.m_callee).jsValue());
+
+    JSPromise* result = nullptr;
+    if (bytecode.m_isInternalPromise) {
+        Structure* structure = InternalFunction::createSubclassStructure(exec, globalObject->internalPromiseConstructor(), constructorAsObject, globalObject->internalPromiseStructure());
+        CHECK_EXCEPTION();
+        result = JSInternalPromise::create(vm, structure);
+    } else {
+        Structure* structure = InternalFunction::createSubclassStructure(exec, globalObject->promiseConstructor(), constructorAsObject, globalObject->promiseStructure());
+        CHECK_EXCEPTION();
+        result = JSPromise::create(vm, structure);
+    }
+
+    JSFunction* constructor = jsDynamicCast<JSFunction*>(vm, constructorAsObject);
+    if (constructor && constructor->canUseAllocationProfile()) {
+        WriteBarrier<JSCell>& cachedCallee = bytecode.metadata(exec).m_cachedCallee;
+        if (!cachedCallee)
+            cachedCallee.set(vm, exec->codeBlock(), constructor);
+        else if (cachedCallee.unvalidatedGet() != JSCell::seenMultipleCalleeObjects() && cachedCallee.get() != constructor)
+            cachedCallee.setWithoutWriteBarrier(JSCell::seenMultipleCalleeObjects());
+    }
+    RETURN(result);
+}
+
+SLOW_PATH_DECL(slow_path_new_promise)
+{
+    BEGIN();
+    auto bytecode = pc->as<OpNewPromise>();
+    JSPromise* result = nullptr;
+    if (bytecode.m_isInternalPromise)
+        result = JSInternalPromise::create(vm, exec->lexicalGlobalObject()->internalPromiseStructure());
+    else
+        result = JSPromise::create(vm, exec->lexicalGlobalObject()->promiseStructure());
+    RETURN(result);
+}
+
+template<typename JSClass, typename Bytecode>
+static JSClass* createInternalFieldObject(ExecState* exec, VM& vm, const Bytecode& bytecode, Structure* baseStructure)
+{
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    JSObject* constructorAsObject = asObject(GET(bytecode.m_callee).jsValue());
+
+    Structure* structure = InternalFunction::createSubclassStructure(exec, nullptr, constructorAsObject, baseStructure);
+    RETURN_IF_EXCEPTION(scope, nullptr);
+    JSClass* result = JSClass::create(vm, structure);
+
+    JSFunction* constructor = jsDynamicCast<JSFunction*>(vm, constructorAsObject);
+    if (constructor && constructor->canUseAllocationProfile()) {
+        WriteBarrier<JSCell>& cachedCallee = bytecode.metadata(exec).m_cachedCallee;
+        if (!cachedCallee)
+            cachedCallee.set(vm, exec->codeBlock(), constructor);
+        else if (cachedCallee.unvalidatedGet() != JSCell::seenMultipleCalleeObjects() && cachedCallee.get() != constructor)
+            cachedCallee.setWithoutWriteBarrier(JSCell::seenMultipleCalleeObjects());
+    }
+    RELEASE_AND_RETURN(scope, result);
+}
+
+SLOW_PATH_DECL(slow_path_create_generator)
+{
+    BEGIN();
+    auto bytecode = pc->as<OpCreateGenerator>();
+    RETURN(createInternalFieldObject<JSGenerator>(exec, vm, bytecode, exec->lexicalGlobalObject()->generatorStructure()));
+}
+
+SLOW_PATH_DECL(slow_path_create_async_generator)
+{
+    BEGIN();
+    auto bytecode = pc->as<OpCreateAsyncGenerator>();
+    RETURN(createInternalFieldObject<JSAsyncGenerator>(exec, vm, bytecode, exec->lexicalGlobalObject()->asyncGeneratorStructure()));
+}
+
+SLOW_PATH_DECL(slow_path_new_generator)
+{
+    BEGIN();
+    auto bytecode = pc->as<OpNewGenerator>();
+    JSGenerator* result = JSGenerator::create(vm, exec->lexicalGlobalObject()->generatorStructure());
     RETURN(result);
 }
 
@@ -698,13 +786,13 @@ SLOW_PATH_DECL(slow_path_rshift)
         if (WTF::holds_alternative<JSBigInt*>(leftNumeric) && WTF::holds_alternative<JSBigInt*>(rightNumeric)) {
             JSBigInt* result = JSBigInt::signedRightShift(exec, WTF::get<JSBigInt*>(leftNumeric), WTF::get<JSBigInt*>(rightNumeric));
             CHECK_EXCEPTION();
-            RETURN(result);
+            RETURN_PROFILED(result);
         }
 
-        THROW(createTypeError(exec, "Invalid mix of BigInt and other type in signed right shift operation."));
+        THROW(createTypeError(exec, "Invalid mix of BigInt and other type in signed right shift operation."_s));
     }
 
-    RETURN(jsNumber(WTF::get<int32_t>(leftNumeric) >> (WTF::get<int32_t>(rightNumeric) & 31)));
+    RETURN_PROFILED(jsNumber(WTF::get<int32_t>(leftNumeric) >> (WTF::get<int32_t>(rightNumeric) & 31)));
 }
 
 SLOW_PATH_DECL(slow_path_urshift)
@@ -886,6 +974,14 @@ SLOW_PATH_DECL(slow_path_to_primitive)
     BEGIN();
     auto bytecode = pc->as<OpToPrimitive>();
     RETURN(GET_C(bytecode.m_src).jsValue().toPrimitive(exec));
+}
+
+SLOW_PATH_DECL(slow_path_enter)
+{
+    BEGIN();
+    CodeBlock* codeBlock = exec->codeBlock();
+    Heap::heap(codeBlock)->writeBarrier(codeBlock);
+    END();
 }
 
 SLOW_PATH_DECL(slow_path_get_enumerable_length)

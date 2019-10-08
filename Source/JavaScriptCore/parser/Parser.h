@@ -330,7 +330,7 @@ public:
 
         // We can now purge values from the captured candidates because they're captured in this scope.
         {
-            for (auto entry : m_lexicalVariables) {
+            for (const auto& entry : m_lexicalVariables) {
                 if (entry.value.isCaptured())
                     m_closedVariableCandidates.remove(entry.key.get());
             }
@@ -885,7 +885,7 @@ class Parser {
     WTF_MAKE_FAST_ALLOCATED;
 
 public:
-    Parser(VM&, const SourceCode&, JSParserBuiltinMode, JSParserStrictMode, JSParserScriptMode, SourceParseMode, SuperBinding, ConstructorKind defaultConstructorKind = ConstructorKind::None, DerivedContextType = DerivedContextType::None, bool isEvalContext = false, EvalContextType = EvalContextType::None, DebuggerParseData* = nullptr);
+    Parser(VM&, const SourceCode&, JSParserBuiltinMode, JSParserStrictMode, JSParserScriptMode, SourceParseMode, SuperBinding, ConstructorKind defaultConstructorKindForTopLevelFunction = ConstructorKind::None, DerivedContextType = DerivedContextType::None, bool isEvalContext = false, EvalContextType = EvalContextType::None, DebuggerParseData* = nullptr);
     ~Parser();
 
     template <class ParsedNode>
@@ -1615,7 +1615,6 @@ private:
     template <class TreeBuilder> ALWAYS_INLINE TreeExpression parsePrimaryExpression(TreeBuilder&);
     template <class TreeBuilder> ALWAYS_INLINE TreeExpression parseArrayLiteral(TreeBuilder&);
     template <class TreeBuilder> ALWAYS_INLINE TreeExpression parseObjectLiteral(TreeBuilder&);
-    template <class TreeBuilder> NEVER_INLINE TreeExpression parseStrictObjectLiteral(TreeBuilder&);
     template <class TreeBuilder> ALWAYS_INLINE TreeClassExpression parseClassExpression(TreeBuilder&);
     template <class TreeBuilder> ALWAYS_INLINE TreeExpression parseFunctionExpression(TreeBuilder&);
     template <class TreeBuilder> ALWAYS_INLINE TreeExpression parseAsyncFunctionExpression(TreeBuilder&);
@@ -1885,7 +1884,7 @@ private:
     bool m_parsingBuiltin;
     JSParserScriptMode m_scriptMode;
     SuperBinding m_superBinding;
-    ConstructorKind m_defaultConstructorKind;
+    ConstructorKind m_defaultConstructorKindForTopLevelFunction;
     VariableEnvironment m_varDeclarations;
     DeclarationStacks::FunctionStack m_funcDeclarations;
     UniquedStringImplPtrSet m_sloppyModeHoistedFunctions;
@@ -2001,7 +2000,7 @@ std::unique_ptr<ParsedNode> parse(
     const Identifier& name, JSParserBuiltinMode builtinMode,
     JSParserStrictMode strictMode, JSParserScriptMode scriptMode, SourceParseMode parseMode, SuperBinding superBinding,
     ParserError& error, JSTextPosition* positionBeforeLastNewline = nullptr,
-    ConstructorKind defaultConstructorKind = ConstructorKind::None,
+    ConstructorKind defaultConstructorKindForTopLevelFunction = ConstructorKind::None,
     DerivedContextType derivedContextType = DerivedContextType::None,
     EvalContextType evalContextType = EvalContextType::None,
     DebuggerParseData* debuggerParseData = nullptr)
@@ -2014,7 +2013,7 @@ std::unique_ptr<ParsedNode> parse(
 
     std::unique_ptr<ParsedNode> result;
     if (source.provider()->source().is8Bit()) {
-        Parser<Lexer<LChar>> parser(vm, source, builtinMode, strictMode, scriptMode, parseMode, superBinding, defaultConstructorKind, derivedContextType, isEvalNode<ParsedNode>(), evalContextType, debuggerParseData);
+        Parser<Lexer<LChar>> parser(vm, source, builtinMode, strictMode, scriptMode, parseMode, superBinding, defaultConstructorKindForTopLevelFunction, derivedContextType, isEvalNode<ParsedNode>(), evalContextType, debuggerParseData);
         result = parser.parse<ParsedNode>(error, name, parseMode, isEvalNode<ParsedNode>() ? ParsingContext::Eval : ParsingContext::Program);
         if (positionBeforeLastNewline)
             *positionBeforeLastNewline = parser.positionBeforeLastNewline();
@@ -2026,8 +2025,8 @@ std::unique_ptr<ParsedNode> parse(
             }
         }
     } else {
-        ASSERT_WITH_MESSAGE(defaultConstructorKind == ConstructorKind::None, "BuiltinExecutables::createDefaultConstructor should always use a 8-bit string");
-        Parser<Lexer<UChar>> parser(vm, source, builtinMode, strictMode, scriptMode, parseMode, superBinding, defaultConstructorKind, derivedContextType, isEvalNode<ParsedNode>(), evalContextType, debuggerParseData);
+        ASSERT_WITH_MESSAGE(defaultConstructorKindForTopLevelFunction == ConstructorKind::None, "BuiltinExecutables's special constructors should always use a 8-bit string");
+        Parser<Lexer<UChar>> parser(vm, source, builtinMode, strictMode, scriptMode, parseMode, superBinding, defaultConstructorKindForTopLevelFunction, derivedContextType, isEvalNode<ParsedNode>(), evalContextType, debuggerParseData);
         result = parser.parse<ParsedNode>(error, name, parseMode, isEvalNode<ParsedNode>() ? ParsingContext::Eval : ParsingContext::Program);
         if (positionBeforeLastNewline)
             *positionBeforeLastNewline = parser.positionBeforeLastNewline();

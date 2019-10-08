@@ -25,7 +25,7 @@ messages -> NetworkProcess LegacyReceiver {
     InitializeNetworkProcess(struct WebKit::NetworkProcessCreationParameters processCreationParameters)
 
     # Creates a connection for communication with a WebProcess
-    CreateNetworkConnectionToWebProcess(bool isServiceWorkerProcess, WebCore::RegistrableDomain registrableDomain)
+    CreateNetworkConnectionToWebProcess(WebCore::ProcessIdentifier processIdentifier, PAL::SessionID sessionID) -> (Optional<IPC::Attachment> connectionIdentifier) Async
 
 #if USE(SOUP)
     SetIgnoreTLSErrors(bool ignoreTLSErrors)
@@ -67,12 +67,11 @@ messages -> NetworkProcess LegacyReceiver {
     SyncAllCookies()
 
     AllowSpecificHTTPSCertificateForHost(WebCore::CertificateInfo certificate, String host)
-    SetCanHandleHTTPSServerTrustEvaluation(bool value)
     
     GetNetworkProcessStatistics(uint64_t callbackID)
     
     ClearCacheForAllOrigins(uint32_t cachesToClear)
-    SetCacheModel(enum:uint8_t WebKit::CacheModel cacheModel);
+    SetCacheModel(enum:uint8_t WebKit::CacheModel cacheModel, String overrideCacheStorageDirectory);
 
     ProcessDidTransitionToBackground()
     ProcessDidTransitionToForeground()
@@ -83,13 +82,11 @@ messages -> NetworkProcess LegacyReceiver {
     CancelPrepareToSuspend()
     ProcessDidResume()
 
-    PreconnectTo(URL url, enum:uint8_t WebCore::StoredCredentialsPolicy storedCredentialsPolicy);
-
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     ClearPrevalentResource(PAL::SessionID sessionID, WebCore::RegistrableDomain resourceDomain) -> () Async
     ClearUserInteraction(PAL::SessionID sessionID, WebCore::RegistrableDomain resourceDomain) -> () Async
     DumpResourceLoadStatistics(PAL::SessionID sessionID) -> (String dumpedStatistics) Async
-    SetResourceLoadStatisticsEnabled(bool enabled)
+    SetResourceLoadStatisticsEnabled(PAL::SessionID sessionID, bool enabled)
     SetResourceLoadStatisticsLogTestingEvent(bool enabled)
     UpdatePrevalentDomainsToBlockCookiesFor(PAL::SessionID sessionID, Vector<WebCore::RegistrableDomain> domainsToBlock) -> () Async
     IsGrandfathered(PAL::SessionID sessionID, WebCore::RegistrableDomain targetDomain) -> (bool isGrandfathered) Async
@@ -97,6 +94,7 @@ messages -> NetworkProcess LegacyReceiver {
     IsVeryPrevalentResource(PAL::SessionID sessionID, WebCore::RegistrableDomain targetDomain) -> (bool isVeryPrevalent) Async
     SetAgeCapForClientSideCookies(PAL::SessionID sessionID, Optional<Seconds> seconds) -> () Async
     SetLastSeen(PAL::SessionID sessionID, WebCore::RegistrableDomain resourceDomain, Seconds seconds) -> () Async
+    MergeStatisticForTesting(PAL::SessionID sessionID, WebCore::RegistrableDomain resourceDomain, WebCore::RegistrableDomain topFrameDomain, Seconds lastSeen, bool hadUserInteraction, Seconds mostRecentUserInteraction, bool isGrandfathered, bool isPrevalent, bool isVeryPrevalent, uint64_t dataRecordsRemoved) -> () Async
     SetPrevalentResource(PAL::SessionID sessionID, WebCore::RegistrableDomain resourceDomain) -> () Async
     SetPrevalentResourceForDebugMode(PAL::SessionID sessionID, WebCore::RegistrableDomain resourceDomain) -> () Async
     HadUserInteraction(PAL::SessionID sessionID, WebCore::RegistrableDomain resourceDomain) -> (bool hadUserInteraction) Async
@@ -115,6 +113,7 @@ messages -> NetworkProcess LegacyReceiver {
     SubmitTelemetry(PAL::SessionID sessionID) -> () Async
     SetCacheMaxAgeCapForPrevalentResources(PAL::SessionID sessionID, Seconds seconds) -> () Async
     SetGrandfathered(PAL::SessionID sessionID, WebCore::RegistrableDomain resourceDomain, bool isGrandfathered) -> () Async
+    SetUseITPDatabase(PAL::SessionID sessionID, bool value)
     SetGrandfatheringTime(PAL::SessionID sessionID, Seconds seconds) -> () Async
     SetMaxStatisticsEntries(PAL::SessionID sessionID, uint64_t maximumEntryCount) -> () Async
     SetMinimumTimeBetweenDataRecordsRemoval(PAL::SessionID sessionID, Seconds seconds) -> () Async
@@ -133,11 +132,12 @@ messages -> NetworkProcess LegacyReceiver {
     SetTopFrameUniqueRedirectTo(PAL::SessionID sessionID, WebCore::RegistrableDomain topFrameDomain, WebCore::RegistrableDomain redirectedToDomain) -> () Async
     SetTopFrameUniqueRedirectFrom(PAL::SessionID sessionID, WebCore::RegistrableDomain topFrameDomain, WebCore::RegistrableDomain redirectedFromDomain) -> () Async
     ResetCacheMaxAgeCapForPrevalentResources(PAL::SessionID sessionID) -> () Async
-    DidCommitCrossSiteLoadWithDataTransfer(PAL::SessionID sessionID, WebCore::RegistrableDomain fromDomain, WebCore::RegistrableDomain toDomain, OptionSet<WebCore::CrossSiteNavigationDataTransfer::Flag> navigationDataTransfer, WebCore::PageIdentifier pageID)
+    DidCommitCrossSiteLoadWithDataTransfer(PAL::SessionID sessionID, WebCore::RegistrableDomain fromDomain, WebCore::RegistrableDomain toDomain, OptionSet<WebCore::CrossSiteNavigationDataTransfer::Flag> navigationDataTransfer, WebKit::WebPageProxyIdentifier webPageProxyID, WebCore::PageIdentifier webPageID)
     SetCrossSiteLoadWithLinkDecorationForTesting(PAL::SessionID sessionID, WebCore::RegistrableDomain fromDomain, WebCore::RegistrableDomain toDomain) -> () Async
     ResetCrossSiteLoadsWithLinkDecorationForTesting(PAL::SessionID sessionID) -> () Async
     DeleteCookiesForTesting(PAL::SessionID sessionID, WebCore::RegistrableDomain domain, bool includeHttpOnlyCookies) -> () Async
     HasIsolatedSession(PAL::SessionID sessionID, WebCore::RegistrableDomain domain) -> (bool hasIsolatedSession) Async
+    SetShouldDowngradeReferrerForTesting(bool enabled) -> () Async
 #endif
 
     SetSessionIsControlledByAutomation(PAL::SessionID sessionID, bool controlled);
@@ -151,14 +151,6 @@ messages -> NetworkProcess LegacyReceiver {
     RegisterURLSchemeAsCanDisplayOnlyIfCanRequest(String scheme)
 
     SetCacheStorageParameters(PAL::SessionID sessionID, String cacheStorageDirectory, WebKit::SandboxExtension::Handle handle);
-
-#if ENABLE(SERVICE_WORKER)
-    PostMessageToServiceWorkerClient(struct WebCore::ServiceWorkerClientIdentifier destinationIdentifier, struct WebCore::MessageWithMessagePorts message, WebCore::ServiceWorkerIdentifier sourceIdentifier, String sourceOrigin)
-
-    PostMessageToServiceWorker(WebCore::ServiceWorkerIdentifier destination, struct WebCore::MessageWithMessagePorts message, WebCore::ServiceWorkerOrClientIdentifier source, WebCore::SWServerConnectionIdentifier connectionIdentifier)
-
-    DisableServiceWorkerProcessTerminationDelay()
-#endif
 
     SyncLocalStorage() -> () Synchronous
     ClearLegacyPrivateBrowsingLocalStorage()

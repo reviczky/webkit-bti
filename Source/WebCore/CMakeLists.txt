@@ -477,7 +477,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/webgpu/GPUCanvasContext.idl
     Modules/webgpu/GPUColor.idl
     Modules/webgpu/GPUColorStateDescriptor.idl
-    Modules/webgpu/GPUColorWriteBits.idl
+    Modules/webgpu/GPUColorWrite.idl
     Modules/webgpu/GPUCompareFunction.idl
     Modules/webgpu/GPUDepthStencilStateDescriptor.idl
     Modules/webgpu/GPUErrorFilter.idl
@@ -487,11 +487,12 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/webgpu/GPUOutOfMemoryError.idl
     Modules/webgpu/GPURequestAdapterOptions.idl
     Modules/webgpu/GPUSamplerDescriptor.idl
-    Modules/webgpu/GPUShaderStageBit.idl
+    Modules/webgpu/GPUShaderStage.idl
     Modules/webgpu/GPUStoreOp.idl
     Modules/webgpu/GPUTextureDescriptor.idl
     Modules/webgpu/GPUTextureFormat.idl
     Modules/webgpu/GPUTextureUsage.idl
+    Modules/webgpu/GPUUncapturedErrorEvent.idl
     Modules/webgpu/GPUValidationError.idl
     Modules/webgpu/GPUVertexAttributeDescriptor.idl
     Modules/webgpu/GPUVertexBufferDescriptor.idl
@@ -512,10 +513,11 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/webgpu/WebGPUComputePipelineDescriptor.idl
     Modules/webgpu/WebGPUDevice.idl
     Modules/webgpu/WebGPUDeviceErrorScopes.idl
+    Modules/webgpu/WebGPUDeviceEventHandler.idl
     Modules/webgpu/WebGPUPipelineDescriptorBase.idl
     Modules/webgpu/WebGPUPipelineLayout.idl
     Modules/webgpu/WebGPUPipelineLayoutDescriptor.idl
-    Modules/webgpu/WebGPUPipelineStageDescriptor.idl
+    Modules/webgpu/WebGPUProgrammableStageDescriptor.idl
     Modules/webgpu/WebGPUProgrammablePassEncoder.idl
     Modules/webgpu/WebGPUQueue.idl
     Modules/webgpu/WebGPURenderPassDescriptor.idl
@@ -824,6 +826,7 @@ set(WebCore_NON_SVG_IDL_FILES
     html/HTMLOptGroupElement.idl
     html/HTMLOptionElement.idl
     html/HTMLOptionsCollection.idl
+    html/HTMLOrForeignElement.idl
     html/HTMLOutputElement.idl
     html/HTMLParagraphElement.idl
     html/HTMLParamElement.idl
@@ -903,6 +906,9 @@ set(WebCore_NON_SVG_IDL_FILES
     inspector/InspectorFrontendHost.idl
 
     loader/appcache/DOMApplicationCache.idl
+
+    mathml/MathMLElement.idl
+    mathml/MathMLMathElement.idl
 
     page/BarProp.idl
     page/Crypto.idl

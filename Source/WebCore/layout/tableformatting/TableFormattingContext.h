@@ -39,25 +39,49 @@ namespace Layout {
 class TableFormattingContext : public FormattingContext {
     WTF_MAKE_ISO_ALLOCATED(TableFormattingContext);
 public:
-    TableFormattingContext(const Box& formattingContextRoot, TableFormattingState&);
-    void layout() const override;
+    TableFormattingContext(const Container& formattingContextRoot, TableFormattingState&);
+    void layoutInFlowContent() override;
 
 private:
     class Geometry : public FormattingContext::Geometry {
     public:
-        static HeightAndMargin tableCellHeightAndMargin(const LayoutState&, const Box&);
+        HeightAndMargin tableCellHeightAndMargin(const Box&) const;
+
+    private:
+        friend class TableFormattingContext;
+        Geometry(const TableFormattingContext&);
+
+        const TableFormattingContext& formattingContext() const { return downcast<TableFormattingContext>(FormattingContext::Geometry::formattingContext()); }
     };
+    TableFormattingContext::Geometry geometry() const { return Geometry(*this); }
 
-    IntrinsicWidthConstraints computedIntrinsicWidthConstraints() const override;
-    LayoutUnit computedTableWidth() const;
+    IntrinsicWidthConstraints computedIntrinsicWidthConstraints() override;
+    LayoutUnit computedTableWidth();
+    void layoutTableCellBox(const Box& cellLayoutBox, const TableGrid::Column&);
+    void positionTableCells();
+    void setComputedGeometryForRows();
+    void setComputedGeometryForSections();
 
-    void ensureTableGrid() const;
-    void computePreferredWidthForColumns() const;
-    void distributeAvailableWidth(LayoutUnit extraHorizontalSpace) const;
+    void ensureTableGrid();
+    void computePreferredWidthForColumns();
+    void distributeAvailableWidth(LayoutUnit extraHorizontalSpace);
+    enum class WidthConstraintsType { Minimum, Maximum };
+    void useAsContentLogicalWidth(WidthConstraintsType);
 
-    TableFormattingState& formattingState() const { return downcast<TableFormattingState>(FormattingContext::formattingState()); }
+    void initializeDisplayBoxToBlank(Display::Box&) const;
+
+    const TableFormattingState& formattingState() const { return downcast<TableFormattingState>(FormattingContext::formattingState()); }
+    TableFormattingState& formattingState() { return downcast<TableFormattingState>(FormattingContext::formattingState()); }
 };
 
+inline TableFormattingContext::Geometry::Geometry(const TableFormattingContext& tableFormattingContext)
+    : FormattingContext::Geometry(tableFormattingContext)
+{
+}
+
 }
 }
+
+SPECIALIZE_TYPE_TRAITS_LAYOUT_FORMATTING_CONTEXT(TableFormattingContext, isTableFormattingContext())
+
 #endif

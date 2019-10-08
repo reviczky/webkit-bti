@@ -216,6 +216,7 @@ private:
         }
 
         case ValueBitLShift:
+        case ValueBitRShift:
         case ValueBitXor:
         case ValueBitOr:
         case ValueBitAnd: {
@@ -244,6 +245,9 @@ private:
                 break;
             case ValueBitLShift:
                 node->setOp(ArithBitLShift);
+                break;
+            case ValueBitRShift:
+                node->setOp(ArithBitRShift);
                 break;
             default:
                 DFG_CRASH(m_graph, node, "Unexpected node during ValueBit operation fixup");
@@ -281,6 +285,7 @@ private:
             break;
         }
 
+        case ArithBitRShift:
         case ArithBitLShift: 
         case ArithBitXor:
         case ArithBitOr:
@@ -290,7 +295,6 @@ private:
             break;
         }
 
-        case BitRShift:
         case BitURShift: {
             if (Node::shouldSpeculateUntypedForBitOps(node->child1().node(), node->child2().node())) {
                 fixEdge<UntypedUse>(node->child1());
@@ -835,7 +839,8 @@ private:
             break;
 
         case StringCharAt:
-        case StringCharCodeAt: {
+        case StringCharCodeAt:
+        case StringCodePointAt: {
             // Currently we have no good way of refining these.
             ASSERT(node->arrayMode() == ArrayMode(Array::String, Array::Read));
             blessArrayOperation(node->child1(), node->child2(), node->child3());
@@ -1483,13 +1488,15 @@ private:
         }
             
         case GetClosureVar:
-        case GetFromArguments: {
+        case GetFromArguments:
+        case GetInternalField: {
             fixEdge<KnownCellUse>(node->child1());
             break;
         }
 
         case PutClosureVar:
-        case PutToArguments: {
+        case PutToArguments:
+        case PutInternalField: {
             fixEdge<KnownCellUse>(node->child1());
             speculateForBarrier(node->child2());
             break;
@@ -1643,6 +1650,9 @@ private:
         case CheckStructure:
         case CheckCell:
         case CreateThis:
+        case CreatePromise:
+        case CreateGenerator:
+        case CreateAsyncGenerator:
         case GetButterfly: {
             fixEdge<CellUse>(node->child1());
             break;
@@ -1743,17 +1753,12 @@ private:
 
         case HasOwnProperty: {
             fixEdge<ObjectUse>(node->child1());
-#if CPU(X86)
-            // We don't have enough registers to do anything interesting on x86 and mips.
-            fixEdge<UntypedUse>(node->child2());
-#else
             if (node->child2()->shouldSpeculateString())
                 fixEdge<StringUse>(node->child2());
             else if (node->child2()->shouldSpeculateSymbol())
                 fixEdge<SymbolUse>(node->child2());
             else
                 fixEdge<UntypedUse>(node->child2());
-#endif
             break;
         }
 
@@ -2404,6 +2409,9 @@ private:
         case ForwardVarargs:
         case ProfileControlFlow:
         case NewObject:
+        case NewPromise:
+        case NewGenerator:
+        case NewAsyncGenerator:
         case NewRegexp:
         case DeleteById:
         case DeleteByVal:
@@ -2574,61 +2582,64 @@ private:
 
     void fixupIsCellWithType(Node* node)
     {
-        switch (node->speculatedTypeForQuery()) {
-        case SpecString:
-            if (node->child1()->shouldSpeculateString()) {
-                m_insertionSet.insertNode(
-                    m_indexInBlock, SpecNone, Check, node->origin,
-                    Edge(node->child1().node(), StringUse));
-                m_graph.convertToConstant(node, jsBoolean(true));
-                observeUseKindOnNode<StringUse>(node);
-                return;
-            }
-            break;
+        Optional<SpeculatedType> filter = node->speculatedTypeForQuery();
+        if (filter) {
+            switch (filter.value()) {
+            case SpecString:
+                if (node->child1()->shouldSpeculateString()) {
+                    m_insertionSet.insertNode(
+                        m_indexInBlock, SpecNone, Check, node->origin,
+                        Edge(node->child1().node(), StringUse));
+                    m_graph.convertToConstant(node, jsBoolean(true));
+                    observeUseKindOnNode<StringUse>(node);
+                    return;
+                }
+                break;
 
-        case SpecProxyObject:
-            if (node->child1()->shouldSpeculateProxyObject()) {
-                m_insertionSet.insertNode(
-                    m_indexInBlock, SpecNone, Check, node->origin,
-                    Edge(node->child1().node(), ProxyObjectUse));
-                m_graph.convertToConstant(node, jsBoolean(true));
-                observeUseKindOnNode<ProxyObjectUse>(node);
-                return;
-            }
-            break;
+            case SpecProxyObject:
+                if (node->child1()->shouldSpeculateProxyObject()) {
+                    m_insertionSet.insertNode(
+                        m_indexInBlock, SpecNone, Check, node->origin,
+                        Edge(node->child1().node(), ProxyObjectUse));
+                    m_graph.convertToConstant(node, jsBoolean(true));
+                    observeUseKindOnNode<ProxyObjectUse>(node);
+                    return;
+                }
+                break;
 
-        case SpecRegExpObject:
-            if (node->child1()->shouldSpeculateRegExpObject()) {
-                m_insertionSet.insertNode(
-                    m_indexInBlock, SpecNone, Check, node->origin,
-                    Edge(node->child1().node(), RegExpObjectUse));
-                m_graph.convertToConstant(node, jsBoolean(true));
-                observeUseKindOnNode<RegExpObjectUse>(node);
-                return;
-            }
-            break;
+            case SpecRegExpObject:
+                if (node->child1()->shouldSpeculateRegExpObject()) {
+                    m_insertionSet.insertNode(
+                        m_indexInBlock, SpecNone, Check, node->origin,
+                        Edge(node->child1().node(), RegExpObjectUse));
+                    m_graph.convertToConstant(node, jsBoolean(true));
+                    observeUseKindOnNode<RegExpObjectUse>(node);
+                    return;
+                }
+                break;
 
-        case SpecArray:
-            if (node->child1()->shouldSpeculateArray()) {
-                m_insertionSet.insertNode(
-                    m_indexInBlock, SpecNone, Check, node->origin,
-                    Edge(node->child1().node(), ArrayUse));
-                m_graph.convertToConstant(node, jsBoolean(true));
-                observeUseKindOnNode<ArrayUse>(node);
-                return;
-            }
-            break;
+            case SpecArray:
+                if (node->child1()->shouldSpeculateArray()) {
+                    m_insertionSet.insertNode(
+                        m_indexInBlock, SpecNone, Check, node->origin,
+                        Edge(node->child1().node(), ArrayUse));
+                    m_graph.convertToConstant(node, jsBoolean(true));
+                    observeUseKindOnNode<ArrayUse>(node);
+                    return;
+                }
+                break;
 
-        case SpecDerivedArray:
-            if (node->child1()->shouldSpeculateDerivedArray()) {
-                m_insertionSet.insertNode(
-                    m_indexInBlock, SpecNone, Check, node->origin,
-                    Edge(node->child1().node(), DerivedArrayUse));
-                m_graph.convertToConstant(node, jsBoolean(true));
-                observeUseKindOnNode<DerivedArrayUse>(node);
-                return;
+            case SpecDerivedArray:
+                if (node->child1()->shouldSpeculateDerivedArray()) {
+                    m_insertionSet.insertNode(
+                        m_indexInBlock, SpecNone, Check, node->origin,
+                        Edge(node->child1().node(), DerivedArrayUse));
+                    m_graph.convertToConstant(node, jsBoolean(true));
+                    observeUseKindOnNode<DerivedArrayUse>(node);
+                    return;
+                }
+                break;
             }
-            break;
         }
 
         if (node->child1()->shouldSpeculateCell()) {

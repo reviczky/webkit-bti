@@ -118,6 +118,40 @@ op :create_this,
         cachedCallee: WriteBarrier[JSCell]
     }
 
+op :create_promise,
+    args: {
+        dst: VirtualRegister,
+        callee: VirtualRegister,
+        isInternalPromise: bool,
+    },
+    metadata: {
+        cachedCallee: WriteBarrier[JSCell]
+    }
+
+op :new_promise,
+    args: {
+        dst: VirtualRegister,
+        isInternalPromise: bool,
+    }
+
+op :new_generator,
+    args: {
+        dst: VirtualRegister,
+    }
+
+op_group :CreateInternalFieldObjectOp,
+    [
+        :create_generator,
+        :create_async_generator,
+    ],
+    args: {
+        dst: VirtualRegister,
+        callee: VirtualRegister,
+    },
+    metadata: {
+        cachedCallee: WriteBarrier[JSCell]
+    }
+
 op :get_argument,
     args: {
         dst: VirtualRegister,
@@ -226,7 +260,6 @@ op_group :BinaryOp,
         :beloweq,
         :mod,
         :pow,
-        :rshift,
         :urshift,
     ],
     args: {
@@ -261,6 +294,7 @@ op_group :ValueProfiledBinaryOp,
         :bitor,
         :bitxor,
         :lshift,
+        :rshift,
     ],
     args: {
         dst: VirtualRegister,
@@ -1093,6 +1127,8 @@ op :yield,
         argument: VirtualRegister,
     }
 
+op :check_traps
+
 op :log_shadow_chicken_prologue,
     args: {
         scope: VirtualRegister,
@@ -1109,6 +1145,23 @@ op :resolve_scope_for_hoisting_func_decl_in_eval,
         dst: VirtualRegister,
         scope: VirtualRegister,
         property: unsigned,
+    }
+
+op :get_internal_field,
+    args: {
+        dst: VirtualRegister,
+        base: VirtualRegister,
+        index: unsigned,
+    },
+    metadata: {
+        profile: ValueProfile,
+    }
+
+op :put_internal_field,
+    args: {
+        base: VirtualRegister,
+        index: unsigned,
+        value: VirtualRegister,
     }
 
 op :nop

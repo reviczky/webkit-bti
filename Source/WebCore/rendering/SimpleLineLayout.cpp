@@ -473,7 +473,7 @@ public:
         // New line needs new run.
         if (!m_runsWidth) {
             ASSERT(!m_uncompletedWidth);
-            runs.append(Run(fragment.start(), endPosition, m_runsWidth, m_runsWidth + fragment.width(), false, fragment.hasHyphen()));
+            runs.append(Run(fragment.start(), endPosition, m_runsWidth, m_runsWidth + fragment.width(), false, fragment.hasHyphen(), fragment.isLineBreak()));
         } else {
             // Advance last completed fragment when the previous fragment is all set (including multiple parts across renderers)
             if ((m_lastFragment.type() != fragment.type()) || !m_lastFragment.overlapsToNextRenderer()) {
@@ -492,7 +492,7 @@ public:
                 return;
             }
             if (m_lastFragment.isLastInRenderer() || m_lastFragment.isCollapsed())
-                runs.append(Run(fragment.start(), endPosition, m_runsWidth, m_runsWidth + fragment.width(), false, fragment.hasHyphen()));
+                runs.append(Run(fragment.start(), endPosition, m_runsWidth, m_runsWidth + fragment.width(), false, fragment.hasHyphen(), fragment.isLineBreak()));
             else {
                 Run& lastRun = runs.last();
                 lastRun.end = endPosition;
@@ -972,7 +972,7 @@ static void createTextRuns(Layout::RunVector& runs, RenderBlockFlow& flow, unsig
     } while (!isEndOfContent);
 }
 
-std::unique_ptr<Layout> create(RenderBlockFlow& flow)
+Ref<Layout> create(RenderBlockFlow& flow)
 {
     unsigned lineCount = 0;
     Layout::RunVector runs;
@@ -980,10 +980,10 @@ std::unique_ptr<Layout> create(RenderBlockFlow& flow)
     return Layout::create(runs, lineCount, flow);
 }
 
-std::unique_ptr<Layout> Layout::create(const RunVector& runVector, unsigned lineCount, const RenderBlockFlow& blockFlow)
+Ref<Layout> Layout::create(const RunVector& runVector, unsigned lineCount, const RenderBlockFlow& blockFlow)
 {
     void* slot = WTF::fastMalloc(sizeof(Layout) + sizeof(Run) * runVector.size());
-    return std::unique_ptr<Layout>(new (NotNull, slot) Layout(runVector, lineCount, blockFlow));
+    return adoptRef(*new (NotNull, slot) Layout(runVector, lineCount, blockFlow));
 }
 
 Layout::Layout(const RunVector& runVector, unsigned lineCount, const RenderBlockFlow& blockFlow)

@@ -259,14 +259,9 @@ bool ProxyObject::performInternalMethodGetOwnProperty(ExecState* exec, PropertyN
             throwVMTypeError(exec, scope, "When the result of 'getOwnPropertyDescriptor' is undefined the target must be configurable"_s);
             return false;
         }
-        // FIXME: this doesn't work if 'target' is another Proxy. We don't have isExtensible implemented in a way that fits w/ Proxys.
-        // https://bugs.webkit.org/show_bug.cgi?id=154375
         bool isExtensible = target->isExtensible(exec);
         RETURN_IF_EXCEPTION(scope, false);
         if (!isExtensible) {
-            // FIXME: Come up with a test for this error. I'm not sure how to because
-            // Object.seal(o) will make all fields [[Configurable]] false.
-            // https://bugs.webkit.org/show_bug.cgi?id=154376
             throwVMTypeError(exec, scope, "When 'getOwnPropertyDescriptor' returns undefined, the 'target' of a Proxy should be extensible"_s);
             return false;
         }
@@ -974,8 +969,8 @@ void ProxyObject::performGetOwnPropertyNames(ExecState* exec, PropertyNameArray&
         ASSERT(resultFilter);
 
         auto addPropName = [&] (JSValue value, RuntimeType type) -> bool {
-            static const bool doExitEarly = true;
-            static const bool dontExitEarly = false;
+            static constexpr bool doExitEarly = true;
+            static constexpr bool dontExitEarly = false;
 
             Identifier ident = value.toPropertyKey(exec);
             RETURN_IF_EXCEPTION(scope, doExitEarly);
@@ -1056,7 +1051,7 @@ void ProxyObject::performGetOwnPropertyNames(ExecState* exec, PropertyNameArray&
 
     if (!enumerationMode.includeDontEnumProperties()) {
         // Filtering DontEnum properties is observable in proxies and must occur following the invariant checks above.
-        for (auto propertyName : trapResult) {
+        for (const auto& propertyName : trapResult) {
             PropertySlot slot(this, PropertySlot::InternalMethodType::GetOwnProperty);
             auto result = getOwnPropertySlotCommon(exec, propertyName, slot);
             RETURN_IF_EXCEPTION(scope, void());
@@ -1067,7 +1062,7 @@ void ProxyObject::performGetOwnPropertyNames(ExecState* exec, PropertyNameArray&
             propertyNames.add(propertyName.impl());
         }
     } else {
-        for (auto propertyName : trapResult)
+        for (const auto& propertyName : trapResult)
             propertyNames.add(propertyName.impl());
     }
 }

@@ -41,17 +41,22 @@
 #include "MediaStreamPrivate.h"
 #include "MediaStreamRequest.h"
 #include <wtf/CompletionHandler.h>
+#include <wtf/ObjectIdentifier.h>
 
 namespace WebCore {
 
 class MediaStream;
 class SecurityOrigin;
 
+enum UserMediaRequestIdentifierType { };
+using UserMediaRequestIdentifier = ObjectIdentifier<UserMediaRequestIdentifierType>;
+
 class UserMediaRequest : public RefCounted<UserMediaRequest>, public ActiveDOMObject {
 public:
     static Ref<UserMediaRequest> create(Document&, MediaStreamRequest&&, DOMPromiseDeferred<IDLInterface<MediaStream>>&&);
     virtual ~UserMediaRequest();
 
+    UserMediaRequestIdentifier identifier() const { return m_identifier; }
     void start();
 
     WEBCORE_EXPORT void setAllowedMediaDeviceUIDs(const String& audioDeviceUID, const String& videoDeviceUID);
@@ -79,29 +84,14 @@ private:
     const char* activeDOMObjectName() const final;
     bool canSuspendForDocumentSuspension() const final;
 
-    void mediaStreamIsReady(Ref<MediaStream>&&);
     void mediaStreamDidFail(RealtimeMediaSource::Type);
 
-    class PendingActivationMediaStream : private MediaStreamPrivate::Observer {
-        WTF_MAKE_FAST_ALLOCATED;
-    public:
-        PendingActivationMediaStream(Ref<PendingActivity<UserMediaRequest>>&&, UserMediaRequest&, Ref<MediaStream>&&, CompletionHandler<void()>&&);
-        ~PendingActivationMediaStream();
-
-    private:
-        void characteristicsChanged() final;
-
-        Ref<PendingActivity<UserMediaRequest>> m_protectingUserMediaRequest;
-        UserMediaRequest& m_userMediaRequest;
-        Ref<MediaStream> m_mediaStream;
-        CompletionHandler<void()> m_completionHandler;
-    };
+    UserMediaRequestIdentifier m_identifier;
 
     Vector<String> m_videoDeviceUIDs;
     Vector<String> m_audioDeviceUIDs;
 
     DOMPromiseDeferred<IDLInterface<MediaStream>> m_promise;
-    std::unique_ptr<PendingActivationMediaStream> m_pendingActivationMediaStream;
     MediaStreamRequest m_request;
 };
 

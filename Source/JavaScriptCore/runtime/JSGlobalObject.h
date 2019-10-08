@@ -296,9 +296,9 @@ public:
     LazyProperty<JSGlobalObject, JSFunction> m_arrayProtoToStringFunction;
     LazyProperty<JSGlobalObject, JSFunction> m_arrayProtoValuesFunction;
     LazyProperty<JSGlobalObject, JSFunction> m_evalFunction;
-    LazyProperty<JSGlobalObject, JSFunction> m_initializePromiseFunction;
     LazyProperty<JSGlobalObject, JSFunction> m_iteratorProtocolFunction;
     LazyProperty<JSGlobalObject, JSFunction> m_promiseResolveFunction;
+    WriteBarrier<JSFunction> m_promiseProtoThenFunction;
     WriteBarrier<JSFunction> m_objectProtoValueOfFunction;
     WriteBarrier<JSFunction> m_numberProtoToStringFunction;
     WriteBarrier<JSFunction> m_newPromiseCapabilityFunction;
@@ -374,6 +374,8 @@ public:
     WriteBarrier<Structure> m_asyncFunctionStructure;
     WriteBarrier<Structure> m_asyncGeneratorFunctionStructure;
     WriteBarrier<Structure> m_generatorFunctionStructure;
+    WriteBarrier<Structure> m_generatorStructure;
+    WriteBarrier<Structure> m_asyncGeneratorStructure;
     LazyProperty<JSGlobalObject, Structure> m_iteratorResultObjectStructure;
     WriteBarrier<Structure> m_regExpMatchesArrayStructure;
     WriteBarrier<Structure> m_regExpMatchesArrayWithGroupsStructure;
@@ -531,7 +533,7 @@ public:
         
 public:
     typedef JSSegmentedVariableObject Base;
-    static const unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable | OverridesGetOwnPropertySlot | OverridesGetPropertyNames | IsImmutablePrototypeExoticObject;
+    static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable | OverridesGetOwnPropertySlot | OverridesGetPropertyNames | IsImmutablePrototypeExoticObject;
 
     JS_EXPORT_PRIVATE static JSGlobalObject* create(VM&, Structure*);
 
@@ -611,9 +613,9 @@ public:
     JSFunction* throwTypeErrorFunction() const { return m_throwTypeErrorFunction.get(); }
     JSFunction* arrayProtoToStringFunction() const { return m_arrayProtoToStringFunction.get(this); }
     JSFunction* arrayProtoValuesFunction() const { return m_arrayProtoValuesFunction.get(this); }
-    JSFunction* initializePromiseFunction() const { return m_initializePromiseFunction.get(this); }
     JSFunction* iteratorProtocolFunction() const { return m_iteratorProtocolFunction.get(this); }
     JSFunction* promiseResolveFunction() const { return m_promiseResolveFunction.get(this); }
+    JSFunction* promiseProtoThenFunction() const { return m_promiseProtoThenFunction.get(); }
     JSFunction* objectProtoValueOfFunction() const { return m_objectProtoValueOfFunction.get(); }
     JSFunction* numberProtoToStringFunction() const { return m_numberProtoToStringFunction.get(); }
     JSFunction* newPromiseCapabilityFunction() const { return m_newPromiseCapabilityFunction.get(); }
@@ -752,6 +754,8 @@ public:
     Structure* numberObjectStructure() const { return m_numberObjectStructure.get(this); }
     Structure* mapStructure() const { return m_mapStructure.get(); }
     Structure* regExpStructure() const { return m_regExpStructure.get(); }
+    Structure* generatorStructure() const { return m_generatorStructure.get(); }
+    Structure* asyncGeneratorStructure() const { return m_asyncGeneratorStructure.get(); }
     Structure* generatorFunctionStructure() const { return m_generatorFunctionStructure.get(); }
     Structure* asyncFunctionStructure() const { return m_asyncFunctionStructure.get(); }
     Structure* asyncGeneratorFunctionStructure() const { return m_asyncGeneratorFunctionStructure.get(); }

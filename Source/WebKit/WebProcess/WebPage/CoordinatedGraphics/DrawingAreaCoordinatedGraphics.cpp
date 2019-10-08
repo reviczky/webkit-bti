@@ -45,6 +45,7 @@
 #include <WebCore/GraphicsContextImplDirect2D.h>
 #include <WebCore/PlatformContextDirect2D.h>
 #include <d2d1.h>
+#include <d3d11_1.h>
 #endif
 
 
@@ -59,6 +60,7 @@ DrawingAreaCoordinatedGraphics::DrawingAreaCoordinatedGraphics(WebPage& webPage,
     : DrawingArea(DrawingAreaTypeCoordinatedGraphics, parameters.drawingAreaIdentifier, webPage)
     , m_exitCompositingTimer(RunLoop::main(), this, &DrawingAreaCoordinatedGraphics::exitAcceleratedCompositingMode)
     , m_discardPreviousLayerTreeHostTimer(RunLoop::main(), this, &DrawingAreaCoordinatedGraphics::discardPreviousLayerTreeHost)
+    , m_supportsAsyncScrolling(parameters.store.getBoolValueForKey(WebPreferencesKey::threadedScrollingEnabledKey()))
     , m_displayTimer(RunLoop::main(), this, &DrawingAreaCoordinatedGraphics::displayTimerFired)
 {
 #if USE(GLIB_EVENT_LOOP)
@@ -67,14 +69,17 @@ DrawingAreaCoordinatedGraphics::DrawingAreaCoordinatedGraphics(WebPage& webPage,
     m_displayTimer.setPriority(RunLoopSourcePriority::NonAcceleratedDrawingTimer);
 #endif
 #endif
+
+#if ENABLE(DEVELOPER_MODE)
+    if (m_supportsAsyncScrolling) {
+        auto* disableAsyncScrolling = getenv("WEBKIT_DISABLE_ASYNC_SCROLLING");
+        if (disableAsyncScrolling && strcmp(disableAsyncScrolling, "0"))
+            m_supportsAsyncScrolling = false;
+    }
+#endif
 }
 
-DrawingAreaCoordinatedGraphics::~DrawingAreaCoordinatedGraphics()
-{
-    discardPreviousLayerTreeHost();
-    if (m_layerTreeHost)
-        m_layerTreeHost->invalidate();
-}
+DrawingAreaCoordinatedGraphics::~DrawingAreaCoordinatedGraphics() = default;
 
 void DrawingAreaCoordinatedGraphics::setNeedsDisplay()
 {
@@ -236,6 +241,13 @@ void DrawingAreaCoordinatedGraphics::updatePreferences(const WebPreferencesStore
     settings.setAcceleratedCompositingForFixedPositionEnabled(settings.acceleratedCompositingEnabled());
 
     m_alwaysUseCompositing = settings.acceleratedCompositingEnabled() && settings.forceCompositingMode();
+
+    // If async scrolling is disabled, we have to force-disable async frame and overflow scrolling
+    // to keep the non-async scrolling on those elements working.
+    if (!m_supportsAsyncScrolling) {
+        settings.setAsyncFrameScrollingEnabled(false);
+        settings.setAsyncOverflowScrollingEnabled(false);
+    }
 }
 
 void DrawingAreaCoordinatedGraphics::enablePainting()
@@ -271,6 +283,11 @@ void DrawingAreaCoordinatedGraphics::didChangeViewportAttributes(ViewportAttribu
         m_previousLayerTreeHost->didChangeViewportAttributes(WTFMove(attrs));
 }
 #endif
+
+bool DrawingAreaCoordinatedGraphics::supportsAsyncScrolling()
+{
+    return m_supportsAsyncScrolling;
+}
 
 GraphicsLayerFactory* DrawingAreaCoordinatedGraphics::graphicsLayerFactory()
 {
@@ -495,10 +512,6 @@ void DrawingAreaCoordinatedGraphics::exitAcceleratedCompositingModeSoon()
 void DrawingAreaCoordinatedGraphics::discardPreviousLayerTreeHost()
 {
     m_discardPreviousLayerTreeHostTimer.stop();
-    if (!m_previousLayerTreeHost)
-        return;
-
-    m_previousLayerTreeHost->invalidate();
     m_previousLayerTreeHost = nullptr;
 }
 
@@ -544,7 +557,7 @@ void DrawingAreaCoordinatedGraphics::enterAcceleratedCompositingMode(GraphicsLay
 
     // In order to ensure that we get a unique DisplayRefreshMonitor per-DrawingArea (necessary because ThreadedDisplayRefreshMonitor
     // is driven by the ThreadedCompositor of the drawing area), give each page a unique DisplayID derived from WebPage's unique ID.
-    m_webPage.windowScreenDidChange(std::numeric_limits<uint32_t>::max() - m_webPage.pageID().toUInt64());
+    m_webPage.windowScreenDidChange(std::numeric_limits<uint32_t>::max() - m_webPage.identifier().toUInt64());
 
     ASSERT(!m_layerTreeHost);
     if (m_previousLayerTreeHost) {
@@ -759,8 +772,7 @@ void DrawingAreaCoordinatedGraphics::display(UpdateInfo& updateInfo)
     }
 
 #if USE(DIRECT2D)
-    if (graphicsContext)
-        bitmap->sync(*graphicsContext);
+    bitmap->leakSharedResource(); // It will be destroyed in the UIProcess.
 #endif
 
     // Layout can trigger more calls to setNeedsDisplay and we don't want to process them

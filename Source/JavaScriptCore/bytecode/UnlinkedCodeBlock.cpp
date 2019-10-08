@@ -271,7 +271,7 @@ void UnlinkedCodeBlock::addExpressionInfo(unsigned instructionOffset,
 
 bool UnlinkedCodeBlock::typeProfilerExpressionInfoForBytecodeOffset(unsigned bytecodeOffset, unsigned& startDivot, unsigned& endDivot)
 {
-    static const bool verbose = false;
+    static constexpr bool verbose = false;
     if (!m_rareData) {
         if (verbose)
             dataLogF("Don't have assignment info for offset:%u\n", bytecodeOffset);
@@ -363,9 +363,6 @@ void UnlinkedCodeBlock::applyModification(BytecodeRewriter& rewriter, Instructio
         }
     }
 
-    for (size_t i = 0; i < m_propertyAccessInstructions.size(); ++i)
-        m_propertyAccessInstructions[i] = rewriter.adjustAbsoluteOffset(m_propertyAccessInstructions[i]);
-
     for (size_t i = 0; i < m_expressionInfo.size(); ++i)
         m_expressionInfo[i].instructionOffset = rewriter.adjustAbsoluteOffset(m_expressionInfo[i].instructionOffset);
 
@@ -382,7 +379,6 @@ void UnlinkedCodeBlock::shrinkToFit()
     auto locker = holdLock(cellLock());
     
     m_jumpTargets.shrinkToFit();
-    m_propertyAccessInstructions.shrinkToFit();
     m_identifiers.shrinkToFit();
     m_constantRegisters.shrinkToFit();
     m_constantsSourceCodeRepresentation.shrinkToFit();

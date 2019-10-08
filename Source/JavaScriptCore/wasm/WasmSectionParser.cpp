@@ -57,28 +57,31 @@ auto SectionParser::parseType() -> PartialResult
         WASM_PARSER_FAIL_IF(type != Func, i, "th Type is non-Func ", type);
         WASM_PARSER_FAIL_IF(!parseVarUInt32(argumentCount), "can't get ", i, "th Type's argument count");
         WASM_PARSER_FAIL_IF(argumentCount > maxFunctionParams, i, "th argument count is too big ", argumentCount, " maximum ", maxFunctionParams);
-        RefPtr<Signature> maybeSignature = Signature::tryCreate(argumentCount);
-        WASM_PARSER_FAIL_IF(!maybeSignature, "can't allocate enough memory for Type section's ", i, "th signature");
-        Ref<Signature> signature = maybeSignature.releaseNonNull();
+        Vector<Type> arguments;
+        WASM_PARSER_FAIL_IF(!arguments.tryReserveCapacity(argumentCount), "can't allocate enough memory for Type section's ", i, "th signature");
 
         for (unsigned i = 0; i < argumentCount; ++i) {
             Type argumentType;
             WASM_PARSER_FAIL_IF(!parseValueType(argumentType), "can't get ", i, "th argument Type");
-            signature->argument(i) = argumentType;
+            arguments.append(argumentType);
         }
 
-        uint8_t returnCount;
-        WASM_PARSER_FAIL_IF(!parseVarUInt1(returnCount), "can't get ", i, "th Type's return count");
-        Type returnType;
-        if (returnCount) {
+        uint32_t returnCount;
+        WASM_PARSER_FAIL_IF(!parseVarUInt32(returnCount), "can't get ", i, "th Type's return count");
+        WASM_PARSER_FAIL_IF(returnCount > 1 && !Options::useWebAssemblyMultiValues(), "Signatures cannot have more than one result type yet.");
+
+        Vector<Type, 1> returnTypes;
+        WASM_PARSER_FAIL_IF(!returnTypes.tryReserveCapacity(argumentCount), "can't allocate enough memory for Type section's ", i, "th signature");
+        for (unsigned i = 0; i < returnCount; ++i) {
             Type value;
             WASM_PARSER_FAIL_IF(!parseValueType(value), "can't get ", i, "th Type's return value");
-            returnType = static_cast<Type>(value);
-        } else
-            returnType = Type::Void;
-        signature->returnType() = returnType;
+            returnTypes.append(value);
+        }
 
-        m_info->usedSignatures.uncheckedAppend(SignatureInformation::adopt(WTFMove(signature)));
+        RefPtr<Signature> signature = SignatureInformation::signatureFor(returnTypes, arguments);
+        WASM_PARSER_FAIL_IF(!signature, "can't allocate enough memory for Type section's ", i, "th signature");
+
+        m_info->usedSignatures.uncheckedAppend(signature.releaseNonNull());
     }
     return { };
 }
@@ -359,7 +362,7 @@ auto SectionParser::parseStart() -> PartialResult
     SignatureIndex signatureIndex = m_info->signatureIndexFromFunctionIndexSpace(startFunctionIndex);
     const Signature& signature = SignatureInformation::get(signatureIndex);
     WASM_PARSER_FAIL_IF(signature.argumentCount(), "Start function can't have arguments");
-    WASM_PARSER_FAIL_IF(signature.returnType() != Void, "Start function can't return a value");
+    WASM_PARSER_FAIL_IF(!signature.returnsVoid(), "Start function can't return a value");
     m_info->startFunctionIndexSpace = startFunctionIndex;
     return { };
 }
@@ -411,30 +414,10 @@ auto SectionParser::parseElement() -> PartialResult
     return { };
 }
 
-// This function will be changed to be RELEASE_ASSERT_NOT_REACHED once we switch our parsing infrastructure to the streaming parser.
 auto SectionParser::parseCode() -> PartialResult
 {
-    m_info->codeSectionSize = length();
-    uint32_t count;
-    WASM_PARSER_FAIL_IF(!parseVarUInt32(count), "can't get Code section's count");
-    WASM_PARSER_FAIL_IF(count == std::numeric_limits<uint32_t>::max(), "Code section's count is too big ", count);
-    WASM_PARSER_FAIL_IF(count != m_info->functions.size(), "Code section count ", count, " exceeds the declared number of functions ", m_info->functions.size());
-
-    for (uint32_t i = 0; i < count; ++i) {
-        uint32_t functionSize;
-        WASM_PARSER_FAIL_IF(!parseVarUInt32(functionSize), "can't get ", i, "th Code function's size");
-        WASM_PARSER_FAIL_IF(functionSize > length(), "Code function's size ", functionSize, " exceeds the module's size ", length());
-        WASM_PARSER_FAIL_IF(functionSize > length() - m_offset, "Code function's size ", functionSize, " exceeds the module's remaining size", length() - m_offset);
-        WASM_PARSER_FAIL_IF(functionSize > maxFunctionSize, "Code function's size ", functionSize, " is too big");
-
-        Vector<uint8_t> data(functionSize);
-        std::memcpy(data.data(), source() + m_offset, functionSize);
-        m_info->functions[i].start = m_offsetInSource + m_offset;
-        m_info->functions[i].end = m_offsetInSource + m_offset + functionSize;
-        m_info->functions[i].data = WTFMove(data);
-        m_offset += functionSize;
-    }
-
+    // The Code section is handled specially in StreamingParser.
+    RELEASE_ASSERT_NOT_REACHED();
     return { };
 }
 

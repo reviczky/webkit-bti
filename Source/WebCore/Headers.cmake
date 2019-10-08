@@ -519,6 +519,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     fileapi/FileList.h
     fileapi/FileReaderLoader.h
     fileapi/FileReaderLoaderClient.h
+    fileapi/NetworkSendQueue.h
 
     history/BackForwardClient.h
     history/BackForwardController.h
@@ -655,6 +656,8 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     inspector/InspectorFrontendClient.h
     inspector/InspectorFrontendClientLocal.h
     inspector/InspectorFrontendHost.h
+    inspector/InspectorInstrumentationPublic.h
+    inspector/InspectorInstrumentationWebKit.h
     inspector/InspectorOverlay.h
     inspector/InspectorWebAgentBase.h
     inspector/PageScriptDebugServer.h
@@ -1156,6 +1159,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     platform/mediastream/libwebrtc/LibWebRTCMacros.h
     platform/mediastream/libwebrtc/LibWebRTCProvider.h
+    platform/mediastream/libwebrtc/LibWebRTCSocketIdentifier.h
 
     platform/mock/DeviceOrientationClientMock.h
     platform/mock/MediaPlaybackTargetMock.h
@@ -1248,7 +1252,9 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/HitTestRequest.h
     rendering/HitTestResult.h
     rendering/InlineBox.h
+    rendering/InlineElementBox.h
     rendering/InlineFlowBox.h
+    rendering/InlineTextBox.h
     rendering/LayerAncestorClippingStack.h
     rendering/LayerFragment.h
     rendering/MarkedText.h
@@ -1300,7 +1306,10 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     rendering/SelectionRangeData.h
     rendering/SimpleLineLayout.h
     rendering/SimpleLineLayoutCoverage.h
+    rendering/SimpleLineLayoutFlowContents.h
+    rendering/SimpleLineLayoutResolver.h
 
+    rendering/line/LineLayoutTraversal.h
     rendering/line/LineWidth.h
     rendering/line/TrailingObjects.h
 

@@ -88,7 +88,7 @@ namespace WebCore {
     macro(GPUBuffer) \
     macro(GPUBufferUsage) \
     macro(GPUCanvasContext) \
-    macro(GPUColorWriteBits) \
+    macro(GPUColorWrite) \
     macro(GPUCommandBuffer) \
     macro(GPUCommandEncoder) \
     macro(GPUComputePassEncoder) \
@@ -102,11 +102,12 @@ namespace WebCore {
     macro(GPURenderPipeline) \
     macro(GPUSampler) \
     macro(GPUShaderModule) \
-    macro(GPUShaderStageBit) \
+    macro(GPUShaderStage) \
     macro(GPUSwapChain) \
     macro(GPUTexture) \
     macro(GPUTextureUsage) \
     macro(GPUTextureView) \
+    macro(GPUUncapturedErrorEvent) \
     macro(GPUValidationError) \
     macro(HTMLAttachmentElement) \
     macro(HTMLAudioElement) \
@@ -135,6 +136,7 @@ namespace WebCore {
     macro(KeyframeEffect) \
     macro(MediaCapabilities) \
     macro(MediaCapabilitiesInfo) \
+    macro(MediaDevices) \
     macro(MediaEncryptedEvent) \
     macro(MediaKeyMessageEvent) \
     macro(MediaKeySession) \
@@ -285,6 +287,7 @@ namespace WebCore {
     macro(ontouchmove) \
     macro(ontouchstart) \
     macro(ontouchforcechange) \
+    macro(onuncapturederror) \
     macro(onvrdisplayactivate) \
     macro(onvrdisplayblur) \
     macro(onvrdisplayconnect) \

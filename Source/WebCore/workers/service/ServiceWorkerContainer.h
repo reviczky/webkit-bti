@@ -30,13 +30,13 @@
 #include "ActiveDOMObject.h"
 #include "DOMPromiseProxy.h"
 #include "EventTarget.h"
+#include "GenericEventQueue.h"
 #include "SWClientConnection.h"
 #include "SWServer.h"
 #include "ServiceWorkerJobClient.h"
 #include "ServiceWorkerRegistration.h"
 #include "ServiceWorkerRegistrationOptions.h"
 #include "WorkerType.h"
-#include <pal/SessionID.h>
 #include <wtf/Threading.h>
 
 namespace WebCore {
@@ -90,6 +90,8 @@ public:
     NavigatorBase* navigator() { return &m_navigator; }
 
 private:
+    bool addEventListener(const AtomString& eventType, Ref<EventListener>&&, const AddEventListenerOptions& = { }) final;
+
     void scheduleJob(std::unique_ptr<ServiceWorkerJob>&&);
 
     void jobFailedWithException(ServiceWorkerJob&, const Exception&) final;
@@ -102,15 +104,14 @@ private:
     void notifyFailedFetchingScript(ServiceWorkerJob&, const ResourceError&);
     void destroyJob(ServiceWorkerJob&);
 
-    void didFinishGetRegistrationRequest(uint64_t requestIdentifier, Optional<ServiceWorkerRegistrationData>&&);
-    void didFinishGetRegistrationsRequest(uint64_t requestIdentifier, Vector<ServiceWorkerRegistrationData>&&);
-
     DocumentOrWorkerIdentifier contextIdentifier() final;
 
     SWClientConnection& ensureSWClientConnection();
 
+    // ActiveDOMObject.
     const char* activeDOMObjectName() const final;
     bool canSuspendForDocumentSuspension() const final;
+    
     ScriptExecutionContext* scriptExecutionContext() const final { return ActiveDOMObject::scriptExecutionContext(); }
     EventTargetInterface eventTargetInterface() const final { return ServiceWorkerContainerEventTargetInterfaceType; }
     void refEventTarget() final;
@@ -138,23 +139,9 @@ private:
     Ref<Thread> m_creationThread { Thread::current() };
 #endif
 
-    struct PendingPromise {
-        WTF_MAKE_STRUCT_FAST_ALLOCATED;
-        PendingPromise(Ref<DeferredPromise>&& promise, Ref<PendingActivity<ServiceWorkerContainer>>&& pendingActivity)
-            : promise(WTFMove(promise))
-            , pendingActivity(WTFMove(pendingActivity))
-        { }
-
-        Ref<DeferredPromise> promise;
-        Ref<PendingActivity<ServiceWorkerContainer>> pendingActivity;
-    };
-
-    uint64_t m_lastPendingPromiseIdentifier { 0 };
-    HashMap<uint64_t, std::unique_ptr<PendingPromise>> m_pendingPromises;
-
     uint64_t m_lastOngoingSettledRegistrationIdentifier { 0 };
     HashMap<uint64_t, ServiceWorkerRegistrationKey> m_ongoingSettledRegistrations;
-
+    UniqueRef<GenericEventQueue> m_messageQueue;
 };
 
 } // namespace WebCore

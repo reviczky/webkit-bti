@@ -108,6 +108,8 @@ class TextTrackCueGeneric;
 class ServiceWorker;
 #endif
 
+class UnsuspendableActiveDOMObject;
+
 class Internals final : public RefCounted<Internals>, private ContextDestructionObserver
 #if ENABLE(MEDIA_STREAM)
     , private RealtimeMediaSource::Observer
@@ -165,6 +167,7 @@ public:
 
     void clearPageCache();
     unsigned pageCacheSize() const;
+    void preventDocumentForEnteringPageCache();
 
     void disableTileSizeUpdateDelay();
 
@@ -408,6 +411,9 @@ public:
     uint64_t documentIdentifier(const Document&) const;
     bool isDocumentAlive(uint64_t documentIdentifier) const;
 
+    uint64_t frameIdentifier(const Document&) const;
+    uint64_t pageIdentifier(const Document&) const;
+
     bool isAnyWorkletGlobalScopeAlive() const;
 
     String serviceWorkerClientIdentifier(const Document&) const;
@@ -541,6 +547,7 @@ public:
     void clearPeerConnectionFactory();
     void applyRotationForOutgoingVideoSources(RTCPeerConnection&);
     void setEnableWebRTCEncryption(bool);
+    void setUseDTLS10(bool);
 #endif
 
     String getImageSourceURL(Element&);
@@ -729,6 +736,7 @@ public:
     void setDisableGetDisplayMediaUserGestureConstraint(bool);
 #endif
 
+    bool supportsAudioSession() const;
     String audioSessionCategory() const;
     double preferredAudioBufferSize() const;
     bool audioSessionActive() const;
@@ -895,6 +903,8 @@ private:
 
     std::unique_ptr<InspectorStubFrontend> m_inspectorFrontend;
     RefPtr<CacheStorageConnection> m_cacheStorageConnection;
+
+    RefPtr<UnsuspendableActiveDOMObject> m_unsuspendableActiveDOMObject;
 };
 
 } // namespace WebCore

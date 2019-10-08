@@ -55,8 +55,11 @@
 #include "JSGenericTypedArrayViewConstructorInlines.h"
 #include "JSGlobalObjectFunctions.h"
 #include "JSImmutableButterfly.h"
+#include "JSInternalPromise.h"
+#include "JSInternalPromiseConstructor.h"
 #include "JSLexicalEnvironment.h"
 #include "JSMap.h"
+#include "JSPromiseConstructor.h"
 #include "JSPropertyNameEnumerator.h"
 #include "JSSet.h"
 #include "JSWeakMap.h"
@@ -375,6 +378,46 @@ JSCell* JIT_OPERATION operationCreateThis(ExecState* exec, JSObject* constructor
     return constructEmptyObject(exec);
 }
 
+JSCell* JIT_OPERATION operationCreatePromise(ExecState* exec, JSObject* constructor, JSGlobalObject* globalObject)
+{
+    VM& vm = exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    Structure* structure = InternalFunction::createSubclassStructure(exec, globalObject->promiseConstructor(), constructor, globalObject->promiseStructure());
+    RETURN_IF_EXCEPTION(scope, nullptr);
+    RELEASE_AND_RETURN(scope, JSPromise::create(vm, structure));
+}
+
+JSCell* JIT_OPERATION operationCreateInternalPromise(ExecState* exec, JSObject* constructor, JSGlobalObject* globalObject)
+{
+    VM& vm = exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    Structure* structure = InternalFunction::createSubclassStructure(exec, globalObject->internalPromiseConstructor(), constructor, globalObject->internalPromiseStructure());
+    RETURN_IF_EXCEPTION(scope, nullptr);
+    RELEASE_AND_RETURN(scope, JSInternalPromise::create(vm, structure));
+}
+
+JSCell* JIT_OPERATION operationCreateGenerator(ExecState* exec, JSObject* constructor, JSGlobalObject* globalObject)
+{
+    VM& vm = exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    Structure* structure = InternalFunction::createSubclassStructure(exec, nullptr, constructor, globalObject->generatorStructure());
+    RETURN_IF_EXCEPTION(scope, nullptr);
+    RELEASE_AND_RETURN(scope, JSGenerator::create(vm, structure));
+}
+
+JSCell* JIT_OPERATION operationCreateAsyncGenerator(ExecState* exec, JSObject* constructor, JSGlobalObject* globalObject)
+{
+    VM& vm = exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+    auto scope = DECLARE_THROW_SCOPE(vm);
+    Structure* structure = InternalFunction::createSubclassStructure(exec, nullptr, constructor, globalObject->asyncGeneratorStructure());
+    RETURN_IF_EXCEPTION(scope, nullptr);
+    RELEASE_AND_RETURN(scope, JSAsyncGenerator::create(vm, structure));
+}
+
 JSCell* JIT_OPERATION operationCallObjectConstructor(ExecState* exec, JSGlobalObject* globalObject, EncodedJSValue encodedTarget)
 {
     VM& vm = exec->vm();
@@ -491,18 +534,15 @@ EncodedJSValue JIT_OPERATION operationValueBitLShift(ExecState* exec, EncodedJSV
 
 EncodedJSValue JIT_OPERATION operationValueBitRShift(ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2)
 {
-    VM& vm = exec->vm();
-    NativeCallFrameTracer tracer(vm, exec);
-    auto scope = DECLARE_THROW_SCOPE(vm);
+    auto bigIntOp = [] (ExecState* exec, JSBigInt* left, JSBigInt* right) -> JSBigInt* {
+        return JSBigInt::signedRightShift(exec, left, right);
+    };
 
-    JSValue op1 = JSValue::decode(encodedOp1);
-    JSValue op2 = JSValue::decode(encodedOp2);
+    auto int32Op = [] (int32_t left, int32_t right) -> int32_t {
+        return left >> (right & 0x1f);
+    };
 
-    int32_t a = op1.toInt32(exec);
-    RETURN_IF_EXCEPTION(scope, encodedJSValue());
-    scope.release();
-    uint32_t b = op2.toUInt32(exec);
-    return JSValue::encode(jsNumber(a >> (b & 0x1f)));
+    return bitwiseBinaryOp(exec, encodedOp1, encodedOp2, bigIntOp, int32Op, "Invalid mix of BigInt and other type in signed right shift operation."_s);
 }
 
 EncodedJSValue JIT_OPERATION operationValueBitURShift(ExecState* exec, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2)
@@ -1450,6 +1490,17 @@ JSCell* JIT_OPERATION operationAddBigInt(ExecState* exec, JSCell* op1, JSCell* o
     return JSBigInt::add(exec, leftOperand, rightOperand);
 }
 
+JSCell* JIT_OPERATION operationBitRShiftBigInt(ExecState* exec, JSCell* op1, JSCell* op2)
+{
+    VM& vm = exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+    
+    JSBigInt* leftOperand = jsCast<JSBigInt*>(op1);
+    JSBigInt* rightOperand = jsCast<JSBigInt*>(op2);
+    
+    return JSBigInt::signedRightShift(exec, leftOperand, rightOperand);
+}
+
 JSCell* JIT_OPERATION operationBitOrBigInt(ExecState* exec, JSCell* op1, JSCell* op2)
 {
     VM& vm = exec->vm();
@@ -2251,7 +2302,7 @@ JSString* JIT_OPERATION operationToLowerCase(ExecState* exec, JSString* string, 
 
     auto scope = DECLARE_THROW_SCOPE(vm);
 
-    const String& inputString = string->value(exec);
+    String inputString = string->value(exec);
     RETURN_IF_EXCEPTION(scope, nullptr);
     if (!inputString.length())
         return vm.smallStrings.emptyString();
@@ -2734,7 +2785,6 @@ char* JIT_OPERATION operationNewRawObject(ExecState* exec, Structure* structure,
     }
 
     JSObject* result = JSObject::createRawObject(exec, structure, butterfly);
-    result->butterfly(); // Ensure that the butterfly is in to-space.
     return bitwise_cast<char*>(result);
 }
 
@@ -2749,7 +2799,6 @@ JSCell* JIT_OPERATION operationNewObjectWithButterfly(ExecState* exec, Structure
     }
     
     JSObject* result = JSObject::createRawObject(exec, structure, butterfly);
-    result->butterfly(); // Ensure that the butterfly is in to-space.
     return result;
 }
 
@@ -2771,7 +2820,6 @@ JSCell* JIT_OPERATION operationNewObjectWithButterflyWithIndexingHeaderAndVector
     
     // Paradoxically this may allocate a JSArray. That's totally cool.
     JSObject* result = JSObject::createRawObject(exec, structure, butterfly);
-    result->butterfly(); // Ensure that the butterfly is in to-space.
     return result;
 }
 

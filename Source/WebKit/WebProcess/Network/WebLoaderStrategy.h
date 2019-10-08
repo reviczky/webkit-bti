@@ -51,7 +51,7 @@ public:
     
     void loadResource(WebCore::Frame&, WebCore::CachedResource&, WebCore::ResourceRequest&&, const WebCore::ResourceLoaderOptions&, CompletionHandler<void(RefPtr<WebCore::SubresourceLoader>&&)>&&) final;
     void loadResourceSynchronously(WebCore::FrameLoader&, unsigned long resourceLoadIdentifier, const WebCore::ResourceRequest&, WebCore::ClientCredentialPolicy, const WebCore::FetchOptions&, const WebCore::HTTPHeaderMap&, WebCore::ResourceError&, WebCore::ResourceResponse&, Vector<char>& data) final;
-    void pageLoadCompleted(WebCore::PageIdentifier) final;
+    void pageLoadCompleted(WebCore::Page&) final;
 
     void remove(WebCore::ResourceLoader*) final;
     void setDefersLoading(WebCore::ResourceLoader&, bool) final;
@@ -79,7 +79,7 @@ public:
     void addURLSchemeTaskProxy(WebURLSchemeTaskProxy&);
     void removeURLSchemeTaskProxy(WebURLSchemeTaskProxy&);
 
-    void scheduleLoadFromNetworkProcess(WebCore::ResourceLoader&, const WebCore::ResourceRequest&, const WebResourceLoader::TrackingParameters&, PAL::SessionID, bool shouldClearReferrerOnHTTPSToHTTPRedirect, Seconds maximumBufferingTime);
+    void scheduleLoadFromNetworkProcess(WebCore::ResourceLoader&, const WebCore::ResourceRequest&, const WebResourceLoader::TrackingParameters&, bool shouldClearReferrerOnHTTPSToHTTPRedirect, Seconds maximumBufferingTime);
 
     bool isOnLine() const final;
     void addOnlineStateChangeListener(Function<void(bool)>&&) final;

@@ -315,6 +315,9 @@ WI.DebuggerSidebarPanel = class DebuggerSidebarPanel extends WI.NavigationSideba
 
     treeElementForRepresentedObject(representedObject)
     {
+        if (representedObject instanceof WI.LocalResource)
+            return null;
+
         // The main resource is used as the representedObject instead of Frame in our tree.
         if (representedObject instanceof WI.Frame)
             representedObject = representedObject.mainResource;
@@ -1166,15 +1169,13 @@ WI.DebuggerSidebarPanel = class DebuggerSidebarPanel extends WI.NavigationSideba
         this._pauseReasonTreeOutline = null;
 
         this._updatePauseReasonGotoArrow();
-        return this._updatePauseReasonSection();
-    }
-
-    _updatePauseReasonSection()
-    {
         let target = WI.debuggerManager.activeCallFrame.target;
         let targetData = WI.debuggerManager.dataForTarget(target);
-        let {pauseReason, pauseData} = targetData;
+        return this._updatePauseReasonSection(target, targetData.pauseReason, targetData.pauseData);
+    }
 
+    _updatePauseReasonSection(target, pauseReason, pauseData)
+    {
         switch (pauseReason) {
         case WI.DebuggerManager.PauseReason.AnimationFrame:
             this._pauseReasonTreeOutline = this.createContentTreeOutline({suppressFiltering: true});
@@ -1202,6 +1203,20 @@ WI.DebuggerSidebarPanel = class DebuggerSidebarPanel extends WI.NavigationSideba
             this._pauseReasonTextRow.text = WI.UIString("Assertion Failed");
             this._pauseReasonGroup.rows = [this._pauseReasonTextRow];
             return true;
+
+        case WI.DebuggerManager.PauseReason.BlackboxedScript: {
+            console.assert(pauseData);
+            if (pauseData)
+                this._updatePauseReasonSection(target, WI.DebuggerManager.pauseReasonFromPayload(pauseData.originalReason), pauseData.originalData);
+
+            // Don't use `_pauseReasonTextRow` as it may have already been set.
+            let blackboxReasonTextRow = new WI.DetailsSectionTextRow(WI.UIString("Deferred pause from blackboxed script"));
+            blackboxReasonTextRow.__blackboxReason = true;
+
+            let existingRows = this._pauseReasonGroup.rows.filter((row) => !row.__blackboxReason);
+            this._pauseReasonGroup.rows = [blackboxReasonTextRow, ...existingRows];
+            return true;
+        }
 
         case WI.DebuggerManager.PauseReason.Breakpoint:
             console.assert(pauseData, "Expected breakpoint identifier, but found none.");
@@ -1580,15 +1595,16 @@ WI.DebuggerSidebarPanel = class DebuggerSidebarPanel extends WI.NavigationSideba
 
         if (event.type === WI.TreeOutline.Event.ElementRemoved) {
             let selectedTreeElement = this._breakpointsContentTreeOutline.selectedTreeElement;
-            console.assert(selectedTreeElement);
-            if (selectedTreeElement.representedObject === WI.debuggerManager.assertionFailuresBreakpoint || !WI.debuggerManager.isBreakpointRemovable(selectedTreeElement.representedObject)) {
-                const skipUnrevealed = true;
-                const dontPopulate = true;
-                let treeElementToSelect = selectedTreeElement.traverseNextTreeElement(skipUnrevealed, dontPopulate);
-                if (treeElementToSelect) {
-                    const omitFocus = true;
-                    const selectedByUser = true;
-                    treeElementToSelect.select(omitFocus, selectedByUser);
+            if (selectedTreeElement) {
+                if (selectedTreeElement.representedObject === WI.debuggerManager.assertionFailuresBreakpoint || !WI.debuggerManager.isBreakpointRemovable(selectedTreeElement.representedObject)) {
+                    const skipUnrevealed = true;
+                    const dontPopulate = true;
+                    let treeElementToSelect = selectedTreeElement.traverseNextTreeElement(skipUnrevealed, dontPopulate);
+                    if (treeElementToSelect) {
+                        const omitFocus = true;
+                        const selectedByUser = true;
+                        treeElementToSelect.select(omitFocus, selectedByUser);
+                    }
                 }
             }
         }

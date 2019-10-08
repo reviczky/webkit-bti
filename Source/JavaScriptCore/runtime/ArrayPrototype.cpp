@@ -166,24 +166,26 @@ static ALWAYS_INLINE JSValue getProperty(ExecState* exec, JSObject* object, unsi
     RELEASE_AND_RETURN(scope, slot.getValue(exec, index));
 }
 
-static ALWAYS_INLINE bool putLength(ExecState* exec, VM& vm, JSObject* obj, JSValue value)
+static ALWAYS_INLINE void putLength(ExecState* exec, VM& vm, JSObject* obj, JSValue value)
 {
+    auto scope = DECLARE_THROW_SCOPE(vm);
     PutPropertySlot slot(obj);
-    return obj->methodTable(vm)->put(obj, exec, vm.propertyNames->length, value, slot);
+    bool success = obj->methodTable(vm)->put(obj, exec, vm.propertyNames->length, value, slot);
+    RETURN_IF_EXCEPTION(scope, void());
+    if (UNLIKELY(!success))
+        throwTypeError(exec, scope, ReadonlyPropertyWriteError);
 }
 
 static ALWAYS_INLINE void setLength(ExecState* exec, VM& vm, JSObject* obj, unsigned value)
 {
     auto scope = DECLARE_THROW_SCOPE(vm);
-    static const bool throwException = true;
+    static constexpr bool throwException = true;
     if (isJSArray(obj)) {
         jsCast<JSArray*>(obj)->setLength(exec, value, throwException);
         RETURN_IF_EXCEPTION(scope, void());
     }
-    bool success = putLength(exec, vm, obj, jsNumber(value));
-    RETURN_IF_EXCEPTION(scope, void());
-    if (UNLIKELY(!success))
-        throwTypeError(exec, scope, ReadonlyPropertyWriteError);
+    scope.release();
+    putLength(exec, vm, obj, jsNumber(value));
 }
 
 namespace ArrayPrototypeInternal {

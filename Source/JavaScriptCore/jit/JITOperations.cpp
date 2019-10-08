@@ -59,6 +59,7 @@
 #include "JSCPtrTag.h"
 #include "JSGeneratorFunction.h"
 #include "JSGlobalObjectFunctions.h"
+#include "JSInternalPromise.h"
 #include "JSLexicalEnvironment.h"
 #include "JSWithScope.h"
 #include "ModuleProgramCodeBlock.h"
@@ -1146,7 +1147,7 @@ void JIT_OPERATION operationLinkDirectCall(ExecState* exec, CallLinkInfo* callLi
         EXCEPTION_ASSERT_UNUSED(throwScope, throwScope.exception() == error);
         if (UNLIKELY(error))
             return;
-        unsigned argumentStackSlots = callLinkInfo->maxNumArguments();
+        unsigned argumentStackSlots = callLinkInfo->maxArgumentCountIncludingThis();
         if (argumentStackSlots < static_cast<size_t>(codeBlock->numParameters()))
             codePtr = functionExecutable->entrypointFor(kind, MustCheckArity);
         else
@@ -1375,6 +1376,38 @@ JSCell* JIT_OPERATION operationNewObject(ExecState* exec, Structure* structure)
     NativeCallFrameTracer tracer(vm, exec);
 
     return constructEmptyObject(exec, structure);
+}
+
+JSCell* JIT_OPERATION operationNewPromise(ExecState* exec, Structure* structure)
+{
+    VM& vm = exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+
+    return JSPromise::create(vm, structure);
+}
+
+JSCell* JIT_OPERATION operationNewInternalPromise(ExecState* exec, Structure* structure)
+{
+    VM& vm = exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+
+    return JSInternalPromise::create(vm, structure);
+}
+
+JSCell* JIT_OPERATION operationNewGenerator(ExecState* exec, Structure* structure)
+{
+    VM& vm = exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+
+    return JSGenerator::create(vm, structure);
+}
+
+JSCell* JIT_OPERATION operationNewAsyncGenerator(ExecState* exec, Structure* structure)
+{
+    VM& vm = exec->vm();
+    NativeCallFrameTracer tracer(vm, exec);
+
+    return JSAsyncGenerator::create(vm, structure);
 }
 
 JSCell* JIT_OPERATION operationNewRegexp(ExecState* exec, JSCell* regexpPtr)

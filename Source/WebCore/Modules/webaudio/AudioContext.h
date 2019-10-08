@@ -45,6 +45,7 @@
 #include <wtf/RefPtr.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/Threading.h>
+#include <wtf/UniqueRef.h>
 #include <wtf/Vector.h>
 #include <wtf/text/AtomStringHash.h>
 
@@ -64,8 +65,8 @@ class DelayNode;
 class Document;
 class DynamicsCompressorNode;
 class GainNode;
-class GenericEventQueue;
 class HTMLMediaElement;
+class MainThreadGenericEventQueue;
 class MediaElementAudioSourceNode;
 class MediaStream;
 class MediaStreamAudioDestinationNode;
@@ -417,7 +418,7 @@ private:
     Vector<Vector<DOMPromiseDeferred<void>>> m_stateReactions;
 
     std::unique_ptr<PlatformMediaSession> m_mediaSession;
-    std::unique_ptr<GenericEventQueue> m_eventQueue;
+    UniqueRef<MainThreadGenericEventQueue> m_eventQueue;
 
     RefPtr<AudioBuffer> m_renderTarget;
     RefPtr<AudioDestinationNode> m_destinationNode;

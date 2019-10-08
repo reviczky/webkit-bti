@@ -701,31 +701,24 @@ end
 _llint_op_enter:
     traceExecution()
     checkStackPointerAlignment(t2, 0xdead00e1)
-    loadp CodeBlock[cfr], t1                // t1<CodeBlock> = cfr.CodeBlock
-    loadi CodeBlock::m_numVars[t1], t2      // t2<size_t> = t1<CodeBlock>.m_numVars
+    loadp CodeBlock[cfr], t2                // t2<CodeBlock> = cfr.CodeBlock
+    loadi CodeBlock::m_numVars[t2], t2      // t2<size_t> = t2<CodeBlock>.m_numVars
     subi CalleeSaveSpaceAsVirtualRegisters, t2
     move cfr, t3
     subp CalleeSaveSpaceAsVirtualRegisters * SlotSize, t3
     btiz t2, .opEnterDone
     move UndefinedTag, t0
+    move 0, t1
     negi t2
 .opEnterLoop:
     storei t0, TagOffset[t3, t2, 8]
-    storei 0, PayloadOffset[t3, t2, 8]
+    storei t1, PayloadOffset[t3, t2, 8]
     addi 1, t2
     btinz t2, .opEnterLoop
 .opEnterDone:
-    writeBarrierOnCellWithReload(t1, macro ()
-        loadp CodeBlock[cfr], t1 # Reload CodeBlock
-    end)
-    # Checking traps.
-    loadp CodeBlock::m_vm[t1], t1
-    btpnz VM::m_traps + VMTraps::m_needTrapHandling[t1], .handleTraps
-.afterHandlingTraps:
+    callSlowPath(_slow_path_enter)
     dispatchOp(narrow, op_enter)
-.handleTraps:
-    callTrapHandler(_llint_throw_from_slow_path_trampoline)
-    jmp .afterHandlingTraps
+
 
 llintOpWithProfile(op_get_argument, OpGetArgument, macro (size, get, dispatch, return)
     get(m_index, t2)
@@ -2525,6 +2518,28 @@ llintOpWithReturn(op_get_rest_length, OpGetRestLength, macro (size, get, dispatc
     move 0, t0
 .finish:
     return(Int32Tag, t0)
+end)
+
+
+llintOpWithProfile(op_get_internal_field, OpGetInternalField, macro (size, get, dispatch, return)
+    get(m_base, t0)
+    loadi PayloadOffset[cfr, t0, 8], t0
+    getu(size, OpGetInternalField, m_index, t1)
+    loadi JSInternalFieldObjectImpl_internalFields + TagOffset[t0, t1, SlotSize], t2
+    loadi JSInternalFieldObjectImpl_internalFields + PayloadOffset[t0, t1, SlotSize], t3
+    return(t2, t3)
+end)
+
+llintOp(op_put_internal_field, OpPutInternalField, macro (size, get, dispatch)
+    get(m_base, t0)
+    loadi PayloadOffset[cfr, t0, 8], t0
+    get(m_value, t1)
+    loadConstantOrVariable(size, t1, t2, t3)
+    getu(size, OpPutInternalField, m_index, t1)
+    storei t2, JSInternalFieldObjectImpl_internalFields + TagOffset[t0, t1, SlotSize]
+    storei t3, JSInternalFieldObjectImpl_internalFields + PayloadOffset[t0, t1, SlotSize]
+    writeBarrierOnOperand(size, get, m_base)
+    dispatch()
 end)
 
 

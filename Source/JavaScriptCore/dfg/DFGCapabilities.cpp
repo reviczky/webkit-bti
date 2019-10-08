@@ -116,6 +116,9 @@ CapabilityLevel capabilityLevel(OpcodeID opcodeID, CodeBlock* codeBlock, const I
     case op_argument_count:
     case op_check_tdz:
     case op_create_this:
+    case op_create_promise:
+    case op_create_generator:
+    case op_create_async_generator:
     case op_bitnot:
     case op_bitand:
     case op_bitor:
@@ -205,10 +208,13 @@ CapabilityLevel capabilityLevel(OpcodeID opcodeID, CodeBlock* codeBlock, const I
     case op_jbelow:
     case op_jbeloweq:
     case op_loop_hint:
+    case op_check_traps:
     case op_nop:
     case op_ret:
     case op_end:
     case op_new_object:
+    case op_new_promise:
+    case op_new_generator:
     case op_new_array:
     case op_new_array_with_size:
     case op_new_array_buffer:
@@ -272,6 +278,8 @@ CapabilityLevel capabilityLevel(OpcodeID opcodeID, CodeBlock* codeBlock, const I
     case op_resolve_scope:
     case op_resolve_scope_for_hoisting_func_decl_in_eval:
     case op_new_regexp:
+    case op_get_internal_field:
+    case op_put_internal_field:
     case op_unreachable:
     case op_super_sampler_begin:
     case op_super_sampler_end:

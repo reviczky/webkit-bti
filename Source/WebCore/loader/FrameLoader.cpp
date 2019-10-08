@@ -257,9 +257,7 @@ public:
         ASSERT(m_frame.page());
         m_inProgress = false;
         m_frame.page()->progress().progressCompleted(m_frame);
-
-        if (auto pageID = m_frame.loader().client().pageID())
-            platformStrategies()->loaderStrategy()->pageLoadCompleted(pageID.value());
+        platformStrategies()->loaderStrategy()->pageLoadCompleted(*m_frame.page());
     }
 
 private:
@@ -705,7 +703,7 @@ void FrameLoader::receivedFirstData()
 
     double delay;
     String urlString;
-    if (!parseHTTPRefresh(documentLoader.response().httpHeaderField(HTTPHeaderName::Refresh), delay, urlString))
+    if (!parseMetaHTTPEquivRefresh(documentLoader.response().httpHeaderField(HTTPHeaderName::Refresh), delay, urlString))
         return;
     auto completedURL = urlString.isEmpty() ? document.url() : document.completeURL(urlString);
     if (!WTF::protocolIsJavaScript(completedURL))
@@ -721,7 +719,7 @@ void FrameLoader::setOutgoingReferrer(const URL& url)
     m_outgoingReferrer = url.strippedForUseAsReferrer();
 }
 
-void FrameLoader::didBeginDocument(bool dispatch, ContentSecurityPolicy* previousPolicy)
+void FrameLoader::didBeginDocument(bool dispatch)
 {
     m_needsClear = true;
     m_isComplete = false;
@@ -737,7 +735,7 @@ void FrameLoader::didBeginDocument(bool dispatch, ContentSecurityPolicy* previou
         dispatchDidClearWindowObjectsInAllWorlds();
 
     updateFirstPartyForCookies();
-    m_frame.document()->initContentSecurityPolicy(previousPolicy);
+    m_frame.document()->initContentSecurityPolicy();
 
     const Settings& settings = m_frame.settings();
     m_frame.document()->cachedResourceLoader().setImagesEnabled(settings.areImagesEnabled());
@@ -1416,9 +1414,8 @@ void FrameLoader::loadURL(FrameLoadRequest&& frameLoadRequest, const String& ref
     bool isRedirect = m_quickRedirectComing;
 #if USE(SYSTEM_PREVIEW)
     bool isSystemPreview = frameLoadRequest.isSystemPreview();
-    request.setSystemPreview(isSystemPreview);
     if (isSystemPreview)
-        request.setSystemPreviewRect(frameLoadRequest.systemPreviewRect());
+        request.setSystemPreviewInfo(frameLoadRequest.systemPreviewInfo());
 #endif
     loadWithNavigationAction(request, WTFMove(action), lockHistory, newLoadType, WTFMove(formState), allowNavigationToInvalidURL, frameLoadRequest.downloadAttribute(), [this, isRedirect, sameURL, newLoadType, protectedFrame = makeRef(m_frame), completionHandler = completionHandlerCaller.release()] () mutable {
         if (isRedirect) {
@@ -1846,6 +1843,27 @@ void FrameLoader::stopAllLoaders(ClearProvisionalItemPolicy clearProvisionalItem
     setProvisionalDocumentLoader(nullptr);
 
     m_inStopAllLoaders = false;    
+}
+
+void FrameLoader::stopForPageCache()
+{
+    // Make sure there are no scheduled loads or policy checks.
+    policyChecker().stopCheck();
+    m_frame.navigationScheduler().cancel();
+
+    // Stop provisional loads in subframes (The one in the main frame is about to be committed).
+    if (!m_frame.isMainFrame()) {
+        if (m_provisionalDocumentLoader)
+            m_provisionalDocumentLoader->stopLoading();
+        setProvisionalDocumentLoader(nullptr);
+    }
+
+    // Stop current loads.
+    if (m_documentLoader)
+        m_documentLoader->stopLoading();
+
+    for (RefPtr<Frame> child = m_frame.tree().firstChild(); child; child = child->tree().nextSibling())
+        child->loader().stopForPageCache();
 }
 
 void FrameLoader::stopAllLoadersAndCheckCompleteness()

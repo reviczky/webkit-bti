@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2002-2014 The ANGLE Project Authors. All rights reserved.
+// Copyright 2002 The ANGLE Project Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -250,6 +250,9 @@ std::string ToString(const T &value)
 #define GL_RGB10_A2_SSCALED_ANGLEX 0x6AEC
 #define GL_RGB10_A2_USCALED_ANGLEX 0x6AED
 
+// EXT_texture_type_2_10_10_10_REV
+#define GL_RGB10_UNORM_ANGLEX 0x6AEE
+
 #define ANGLE_CHECK_GL_ALLOC(context, result) \
     ANGLE_CHECK(context, result, "Failed to allocate host memory", GL_OUT_OF_MEMORY)
 
@@ -329,5 +332,11 @@ std::string ToString(const T &value)
 #else
 #    define ANGLE_MAYBE_UNUSED
 #endif  // __has_cpp_attribute(maybe_unused)
+
+#if __has_cpp_attribute(require_constant_initialization)
+#    define ANGLE_REQUIRE_CONSTANT_INIT [[require_constant_initialization]]
+#else
+#    define ANGLE_REQUIRE_CONSTANT_INIT
+#endif  // __has_cpp_attribute(require_constant_initialization)
 
 #endif  // COMMON_ANGLEUTILS_H_

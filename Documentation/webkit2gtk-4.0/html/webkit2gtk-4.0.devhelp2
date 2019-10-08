@@ -82,6 +82,7 @@
     <sub name="Index of new symbols in 2.22" link="api-index-2-22.html"/>
     <sub name="Index of new symbols in 2.24" link="api-index-2-24.html"/>
     <sub name="Index of new symbols in 2.26" link="api-index-2-26.html"/>
+    <sub name="Index of new symbols in 2.28" link="api-index-2-28.html"/>
     <sub name="Annotation Glossary" link="annotation-glossary.html"/>
   </chapters>
   <functions>
@@ -135,6 +136,7 @@
     <keyword type="enum" name="enum WebKitTLSErrorsPolicy" link="WebKitWebContext.html#WebKitTLSErrorsPolicy"/>
     <keyword type="enum" name="enum WebKitNetworkProxyMode" link="WebKitWebContext.html#WebKitNetworkProxyMode" since="2.16"/>
     <keyword type="property" name="The “local-storage-directory” property" link="WebKitWebContext.html#WebKitWebContext--local-storage-directory"/>
+    <keyword type="property" name="The “process-swap-on-cross-site-navigation-enabled” property" link="WebKitWebContext.html#WebKitWebContext--process-swap-on-cross-site-navigation-enabled"/>
     <keyword type="property" name="The “website-data-manager” property" link="WebKitWebContext.html#WebKitWebContext--website-data-manager"/>
     <keyword type="signal" name="The “automation-started” signal" link="WebKitWebContext.html#WebKitWebContext-automation-started"/>
     <keyword type="signal" name="The “download-started” signal" link="WebKitWebContext.html#WebKitWebContext-download-started"/>
@@ -254,6 +256,7 @@
     <keyword type="property" name="The “is-ephemeral” property" link="WebKitWebView.html#WebKitWebView--is-ephemeral"/>
     <keyword type="property" name="The “is-loading” property" link="WebKitWebView.html#WebKitWebView--is-loading"/>
     <keyword type="property" name="The “is-playing-audio” property" link="WebKitWebView.html#WebKitWebView--is-playing-audio"/>
+    <keyword type="property" name="The “page-id” property" link="WebKitWebView.html#WebKitWebView--page-id"/>
     <keyword type="property" name="The “related-view” property" link="WebKitWebView.html#WebKitWebView--related-view"/>
     <keyword type="property" name="The “settings” property" link="WebKitWebView.html#WebKitWebView--settings"/>
     <keyword type="property" name="The “title” property" link="WebKitWebView.html#WebKitWebView--title"/>

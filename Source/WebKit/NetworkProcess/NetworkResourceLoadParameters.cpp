@@ -33,8 +33,8 @@ using namespace WebCore;
 
 void NetworkResourceLoadParameters::encode(IPC::Encoder& encoder) const
 {
-    encoder << sessionID;
     encoder << identifier;
+    encoder << webPageProxyID;
     encoder << webPageID;
     encoder << webFrameID;
     encoder << parentPID;
@@ -66,7 +66,14 @@ void NetworkResourceLoadParameters::encode(IPC::Encoder& encoder) const
 
     if (request.url().isLocalFile()) {
         SandboxExtension::Handle requestSandboxExtension;
+#if HAVE(SANDBOX_ISSUE_READ_EXTENSION_TO_PROCESS_BY_AUDIT_TOKEN)
+        if (networkProcessAuditToken)
+            SandboxExtension::createHandleForReadByAuditToken(request.url().fileSystemPath(), *networkProcessAuditToken, requestSandboxExtension);
+        else
+            SandboxExtension::createHandle(request.url().fileSystemPath(), SandboxExtension::Type::ReadOnly, requestSandboxExtension);
+#else
         SandboxExtension::createHandle(request.url().fileSystemPath(), SandboxExtension::Type::ReadOnly, requestSandboxExtension);
+#endif
         encoder << requestSandboxExtension;
     }
 
@@ -84,6 +91,9 @@ void NetworkResourceLoadParameters::encode(IPC::Encoder& encoder) const
     encoder << static_cast<bool>(sourceOrigin);
     if (sourceOrigin)
         encoder << *sourceOrigin;
+    encoder << static_cast<bool>(topOrigin);
+    if (sourceOrigin)
+        encoder << *topOrigin;
     encoder << options;
     encoder << cspResponseHeaders;
     encoder << originalRequestHeaders;
@@ -105,16 +115,16 @@ void NetworkResourceLoadParameters::encode(IPC::Encoder& encoder) const
 
 Optional<NetworkResourceLoadParameters> NetworkResourceLoadParameters::decode(IPC::Decoder& decoder)
 {
-    Optional<PAL::SessionID> sessionID;
-    decoder >> sessionID;
-
-    if (!sessionID)
-        return WTF::nullopt;
-
-    NetworkResourceLoadParameters result { *sessionID };
+    NetworkResourceLoadParameters result;
 
     if (!decoder.decode(result.identifier))
         return WTF::nullopt;
+        
+    Optional<WebPageProxyIdentifier> webPageProxyID;
+    decoder >> webPageProxyID;
+    if (!webPageProxyID)
+        return WTF::nullopt;
+    result.webPageProxyID = *webPageProxyID;
 
     Optional<PageIdentifier> webPageID;
     decoder >> webPageID;
@@ -186,6 +196,15 @@ Optional<NetworkResourceLoadParameters> NetworkResourceLoadParameters::decode(IP
     if (hasSourceOrigin) {
         result.sourceOrigin = SecurityOrigin::decode(decoder);
         if (!result.sourceOrigin)
+            return WTF::nullopt;
+    }
+
+    bool hasTopOrigin;
+    if (!decoder.decode(hasTopOrigin))
+        return WTF::nullopt;
+    if (hasTopOrigin) {
+        result.topOrigin = SecurityOrigin::decode(decoder);
+        if (!result.topOrigin)
             return WTF::nullopt;
     }
 

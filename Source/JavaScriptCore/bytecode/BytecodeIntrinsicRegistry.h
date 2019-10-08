@@ -41,11 +41,17 @@ class RegisterID;
     macro(argumentCount) \
     macro(getByIdDirect) \
     macro(getByIdDirectPrivate) \
+    macro(getPromiseInternalField) \
+    macro(getGeneratorInternalField) \
+    macro(getAsyncGeneratorInternalField) \
     macro(idWithProfile) \
     macro(isObject) \
     macro(isJSArray) \
     macro(isProxyObject) \
     macro(isDerivedArray) \
+    macro(isGenerator) \
+    macro(isAsyncGenerator) \
+    macro(isPromise) \
     macro(isRegExpObject) \
     macro(isMap) \
     macro(isSet) \
@@ -58,10 +64,15 @@ class RegisterID;
     macro(putByIdDirect) \
     macro(putByIdDirectPrivate) \
     macro(putByValDirect) \
+    macro(putPromiseInternalField) \
+    macro(putGeneratorInternalField) \
+    macro(putAsyncGeneratorInternalField) \
     macro(toNumber) \
     macro(toString) \
     macro(toObject) \
     macro(newArrayWithSize) \
+    macro(newPromise) \
+    macro(createPromise) \
     macro(defineEnumerableWritableConfigurableDataProperty) \
 
 #define JSC_COMMON_BYTECODE_INTRINSIC_CONSTANTS_EACH_NAME(macro) \
@@ -88,11 +99,23 @@ class RegisterID;
     macro(promiseStatePending) \
     macro(promiseStateFulfilled) \
     macro(promiseStateRejected) \
+    macro(promiseStateMask) \
+    macro(promiseFlagsIsHandled) \
+    macro(promiseFlagsIsFirstResolvingFunctionCalled) \
+    macro(promiseFieldFlags) \
+    macro(promiseFieldReactionsOrResult) \
+    macro(generatorFieldState) \
+    macro(generatorFieldNext) \
+    macro(generatorFieldThis) \
+    macro(generatorFieldFrame) \
     macro(GeneratorResumeModeNormal) \
     macro(GeneratorResumeModeThrow) \
     macro(GeneratorResumeModeReturn) \
     macro(GeneratorStateCompleted) \
     macro(GeneratorStateExecuting) \
+    macro(asyncGeneratorFieldSuspendReason) \
+    macro(asyncGeneratorFieldQueueFirst) \
+    macro(asyncGeneratorFieldQueueLast) \
     macro(AsyncGeneratorStateCompleted) \
     macro(AsyncGeneratorStateExecuting) \
     macro(AsyncGeneratorStateAwaitingReturn) \

@@ -92,11 +92,6 @@ SafeBrowsingEnabled:
   defaultValue: true
   webcoreBinding: none
 
-PrivateBrowsingEnabled:
-  type: bool
-  defaultValue: false
-  webcoreBinding: none
-
 TextAreasAreResizable:
   type: bool
   defaultValue: DEFAULT_TEXT_AREAS_ARE_RESIZABLE
@@ -111,7 +106,7 @@ HyperlinkAuditingEnabled:
 
 NeedsSiteSpecificQuirks:
   type: bool
-  defaultValue: false
+  defaultValue: true
 
 AcceleratedCompositingEnabled:
   type: bool
@@ -767,7 +762,7 @@ InputEventsEnabled:
 
 WebAuthenticationEnabled:
   type: bool
-  defaultValue: DEFAULT_WEB_AUTHENTICATION_ENABLED
+  defaultValue: false
   humanReadableName: "Web Authentication"
   humanReadableDescription: "Enable Web Authentication support"
   webcoreBinding: RuntimeEnabledFeatures
@@ -846,7 +841,7 @@ DataTransferItemsEnabled:
 
 CustomPasteboardDataEnabled:
   type: bool
-  defaultValue: defaultCustomPasteboardDataEnabled()
+  defaultValue: DEFAULT_CUSTOM_PASTEBOARD_DATA_ENABLED
   humanReadableName: "Custom pasteboard data"
   humanReadableDescription: "Enable custom clipboard types and better security model for clipboard API."
   webcoreBinding: RuntimeEnabledFeatures
@@ -1446,6 +1441,14 @@ FetchAPIKeepAliveEnabled:
   webcoreBinding: RuntimeEnabledFeatures
   webcoreName: fetchAPIKeepAliveEnabled
 
+CSSShadowPartsEnabled:
+  type: bool
+  defaultValue: false
+  humanReadableName: "CSS Shadow Parts"
+  humanReadableDescription: "Enable CSS Shadow Parts"
+  category: experimental
+  webcoreBinding: RuntimeEnabledFeatures
+
 # For internal features:
 # The type should be boolean.
 # You must provide a humanReadableName and humanReadableDescription for all debug features. They
@@ -1727,7 +1730,7 @@ IsNSURLSessionWebSocketEnabled:
   defaultValue: false
   humanReadableName: "NSURLSession WebSocket"
   humanReadableDescription: "Use NSURLSession WebSocket API"
-  category: internal
+  category: experimental
   webcoreBinding: RuntimeEnabledFeatures
   condition: HAVE(NSURLSESSION_WEBSOCKET)
 

@@ -147,6 +147,7 @@ public:
     void stopAllLoadersAndCheckCompleteness();
     WEBCORE_EXPORT void stopAllLoaders(ClearProvisionalItemPolicy = ShouldClearProvisionalItem, StopLoadingPolicy = StopLoadingPolicy::PreventDuringUnloadEvents);
     WEBCORE_EXPORT void stopForUserCancel(bool deferCheckLoadComplete = false);
+    void stopForPageCache();
     void stop();
     void stopLoading(UnloadEventPolicy);
     bool closeURL();
@@ -231,7 +232,7 @@ public:
     void didExplicitOpen();
 
     // Callbacks from DocumentWriter
-    void didBeginDocument(bool dispatchWindowObjectAvailable, ContentSecurityPolicy* previousPolicy);
+    void didBeginDocument(bool dispatchWindowObjectAvailable);
 
     void receivedFirstData();
 

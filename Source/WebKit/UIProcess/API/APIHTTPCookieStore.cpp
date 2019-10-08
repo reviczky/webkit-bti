@@ -26,9 +26,9 @@
 #include "config.h"
 #include "APIHTTPCookieStore.h"
 
-#include "APIWebsiteDataStore.h"
 #include "WebCookieManagerProxy.h"
 #include "WebProcessPool.h"
+#include "WebsiteDataStore.h"
 #include <WebCore/Cookie.h>
 #include <WebCore/CookieStorage.h>
 #include <WebCore/NetworkStorageSession.h>
@@ -113,6 +113,38 @@ void HTTPCookieStore::deleteCookie(const WebCore::Cookie& cookie, CompletionHand
 
     auto* cookieManager = pool->supplement<WebKit::WebCookieManagerProxy>();
     cookieManager->deleteCookie(m_owningDataStore->sessionID(), cookie, [pool = WTFMove(pool), completionHandler = WTFMove(completionHandler)](CallbackBase::Error error) mutable {
+        completionHandler();
+    });
+}
+
+void HTTPCookieStore::deleteAllCookies(CompletionHandler<void()>&& completionHandler)
+{
+    auto* pool = m_owningDataStore->processPoolForCookieStorageOperations();
+    if (!pool) {
+        if (!m_owningDataStore->sessionID().isEphemeral())
+            deleteCookiesInDefaultUIProcessCookieStore();
+        RunLoop::main().dispatch(WTFMove(completionHandler));
+        return;
+    }
+
+    auto* cookieManager = pool->supplement<WebKit::WebCookieManagerProxy>();
+    cookieManager->deleteAllCookies(m_owningDataStore->sessionID());
+    // FIXME: The CompletionHandler should be passed to WebCookieManagerProxy::deleteAllCookies.
+    RunLoop::main().dispatch(WTFMove(completionHandler));
+}
+
+void HTTPCookieStore::setHTTPCookieAcceptPolicy(WebKit::HTTPCookieAcceptPolicy policy, CompletionHandler<void()>&& completionHandler)
+{
+    auto* pool = m_owningDataStore->processPoolForCookieStorageOperations();
+    if (!pool) {
+        if (!m_owningDataStore->sessionID().isEphemeral())
+            setHTTPCookieAcceptPolicyInDefaultUIProcessCookieStore(policy);
+        RunLoop::main().dispatch(WTFMove(completionHandler));
+        return;
+    }
+
+    auto* cookieManager = pool->supplement<WebKit::WebCookieManagerProxy>();
+    cookieManager->setHTTPCookieAcceptPolicy(m_owningDataStore->sessionID(), policy, [completionHandler = WTFMove(completionHandler)] (CallbackBase::Error) mutable {
         completionHandler();
     });
 }
@@ -246,6 +278,8 @@ void HTTPCookieStore::setCookieInDefaultUIProcessCookieStore(const WebCore::Cook
 void HTTPCookieStore::deleteCookieFromDefaultUIProcessCookieStore(const WebCore::Cookie&) { }
 void HTTPCookieStore::startObservingChangesToDefaultUIProcessCookieStore(Function<void()>&&) { }
 void HTTPCookieStore::stopObservingChangesToDefaultUIProcessCookieStore() { }
+void HTTPCookieStore::deleteCookiesInDefaultUIProcessCookieStore() { }
+void HTTPCookieStore::setHTTPCookieAcceptPolicyInDefaultUIProcessCookieStore(WebKit::HTTPCookieAcceptPolicy) { }
 #endif
     
 } // namespace API

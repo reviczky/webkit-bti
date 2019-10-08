@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2016 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -44,7 +44,7 @@ namespace JSC { namespace DFG {
 namespace {
 
 namespace DFGStoreBarrierInsertionPhaseInternal {
-static const bool verbose = false;
+static constexpr bool verbose = false;
 }
 
 enum class PhaseMode {
@@ -281,7 +281,8 @@ private:
 
             case PutClosureVar:
             case PutToArguments:
-            case SetRegExpObjectLastIndex: {
+            case SetRegExpObjectLastIndex:
+            case PutInternalField: {
                 considerBarrier(m_node->child1(), m_node->child2());
                 break;
             }
@@ -320,6 +321,9 @@ private:
             
             switch (m_node->op()) {
             case NewObject:
+            case NewPromise:
+            case NewGenerator:
+            case NewAsyncGenerator:
             case NewArray:
             case NewArrayWithSize:
             case NewArrayBuffer:

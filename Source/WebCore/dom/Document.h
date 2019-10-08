@@ -157,6 +157,7 @@ class MediaPlaybackTarget;
 class MediaPlaybackTargetClient;
 class MediaQueryList;
 class MediaQueryMatcher;
+class MessagePortChannelProvider;
 class MouseEventWithHitTestResults;
 class NodeFilter;
 class NodeIterator;
@@ -350,7 +351,7 @@ class Document
     , public Logger::Observer {
     WTF_MAKE_ISO_ALLOCATED(Document);
 public:
-    static Ref<Document> create(PAL::SessionID, const URL&);
+    static Ref<Document> create(const URL&);
     static Ref<Document> createNonRenderedPlaceholder(Frame&, const URL&);
     static Ref<Document> create(Document&);
 
@@ -634,7 +635,7 @@ public:
     WEBCORE_EXPORT AXObjectCache* axObjectCache() const;
     void clearAXObjectCache();
 
-    Optional<PageIdentifier> pageID() const;
+    WEBCORE_EXPORT Optional<PageIdentifier> pageID() const;
     // to get visually ordered hebrew and arabic pages right
     void setVisuallyOrdered();
     bool visuallyOrdered() const { return m_visuallyOrdered; }
@@ -682,7 +683,6 @@ public:
 
     WEBCORE_EXPORT URL completeURL(const String&) const final;
     URL completeURL(const String&, const URL& baseURLOverride) const;
-    WEBCORE_EXPORT PAL::SessionID sessionID() const final;
 
     String userAgent(const URL&) const final;
 
@@ -916,7 +916,7 @@ public:
     WEBCORE_EXPORT ExceptionOr<String> cookie();
     WEBCORE_EXPORT ExceptionOr<void> setCookie(const String&);
 
-    WEBCORE_EXPORT String referrer() const;
+    WEBCORE_EXPORT String referrer();
 
     WEBCORE_EXPORT String origin() const final;
 
@@ -1038,7 +1038,7 @@ public:
     // XPathEvaluator methods
     WEBCORE_EXPORT ExceptionOr<Ref<XPathExpression>> createExpression(const String& expression, RefPtr<XPathNSResolver>&&);
     WEBCORE_EXPORT Ref<XPathNSResolver> createNSResolver(Node* nodeResolver);
-    WEBCORE_EXPORT ExceptionOr<Ref<XPathResult>> evaluate(const String& expression, Node* contextNode, RefPtr<XPathNSResolver>&&, unsigned short type, XPathResult*);
+    WEBCORE_EXPORT ExceptionOr<Ref<XPathResult>> evaluate(const String& expression, Node& contextNode, RefPtr<XPathNSResolver>&&, unsigned short type, XPathResult*);
 
     bool hasNodesWithNonFinalStyle() const { return m_hasNodesWithNonFinalStyle; }
     void setHasNodesWithNonFinalStyle() { m_hasNodesWithNonFinalStyle = true; }
@@ -1144,7 +1144,7 @@ public:
     HashSet<SVGUseElement*> const svgUseElements() const { return m_svgUseElements; }
 
     void initSecurityContext();
-    void initContentSecurityPolicy(ContentSecurityPolicy* previousPolicy);
+    void initContentSecurityPolicy();
 
     void updateURLForPushOrReplaceState(const URL&);
     void statePopped(Ref<SerializedScriptValue>&&);
@@ -1490,8 +1490,8 @@ public:
 #endif
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
-    bool hasRequestedPageSpecificStorageAccessWithUserInteraction(const RegistrableDomain&);
-    void setHasRequestedPageSpecificStorageAccessWithUserInteraction(const RegistrableDomain&);
+    WEBCORE_EXPORT bool hasRequestedPageSpecificStorageAccessWithUserInteraction(const RegistrableDomain&);
+    WEBCORE_EXPORT void setHasRequestedPageSpecificStorageAccessWithUserInteraction(const RegistrableDomain&);
     WEBCORE_EXPORT void wasLoadedWithDataTransferFromPrevalentResource();
     void downgradeReferrerToRegistrableDomain();
 #endif
@@ -1529,9 +1529,15 @@ public:
     bool inHitTesting() const { return m_inHitTesting; }
 #endif
 
+    MessagePortChannelProvider& messagePortChannelProvider();
+
+#if USE(SYSTEM_PREVIEW)
+    WEBCORE_EXPORT void dispatchSystemPreviewActionEvent(const String& message);
+#endif
+
 protected:
     enum ConstructionFlags { Synthesized = 1, NonRenderedPlaceholder = 1 << 1 };
-    Document(PAL::SessionID, Frame*, const URL&, unsigned = DefaultDocumentClass, unsigned constructionFlags = 0);
+    Document(Frame*, const URL&, unsigned = DefaultDocumentClass, unsigned constructionFlags = 0);
 
     void clearXMLVersion() { m_xmlVersion = String(); }
 
@@ -1543,8 +1549,6 @@ private:
     friend class ThrowOnDynamicMarkupInsertionCountIncrementer;
     friend class IgnoreOpensDuringUnloadCountIncrementer;
     friend class IgnoreDestructiveWriteCountIncrementer;
-
-    bool shouldInheritContentSecurityPolicy() const;
 
     void updateTitleElement(Element& changingTitleElement);
     void willDetachPage() final;
@@ -2011,7 +2015,6 @@ private:
 #endif
 
     OrientationNotifier m_orientationNotifier;
-    mutable PAL::SessionID m_sessionID;
     mutable RefPtr<Logger> m_logger;
     RefPtr<StringCallback> m_consoleMessageListener;
 
@@ -2075,9 +2078,9 @@ inline AXObjectCache* Document::existingAXObjectCache() const
     return existingAXObjectCacheSlow();
 }
 
-inline Ref<Document> Document::create(PAL::SessionID sessionID, const URL& url)
+inline Ref<Document> Document::create(const URL& url)
 {
-    return adoptRef(*new Document(sessionID, nullptr, url));
+    return adoptRef(*new Document(nullptr, url));
 }
 
 inline void Document::invalidateAccessKeyCache()

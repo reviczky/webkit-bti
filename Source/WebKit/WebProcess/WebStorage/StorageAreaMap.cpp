@@ -160,10 +160,11 @@ void StorageAreaMap::loadValuesIfNeeded()
     if (m_storageMap)
         return;
 
+    // The StorageManagerSet::GetValues() IPC may be very slow because it may need to fetch the values from disk and there may be a lot
+    // of data.
+    IPC::UnboundedSynchronousIPCScope unboundedSynchronousIPCScope;
+
     HashMap<String, String> values;
-    // FIXME: This should use a special sendSync flag to indicate that we don't want to process incoming messages while waiting for a reply.
-    // (This flag does not yet exist). Since loadValuesIfNeeded() ends up being called from within JavaScript code, processing incoming synchronous messages
-    // could lead to weird reentrency bugs otherwise.
     WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::StorageManagerSet::GetValues(*m_storageMapID), Messages::StorageManagerSet::GetValues::Reply(values), 0);
 
     m_storageMap = StorageMap::create(m_quotaInBytes);
@@ -352,12 +353,12 @@ void StorageAreaMap::connect()
     case StorageType::Local:
     case StorageType::TransientLocal:
         if (SecurityOrigin* topLevelOrigin = m_storageNamespace->topLevelOrigin())
-            WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::StorageManagerSet::ConnectToTransientLocalStorageArea(m_storageNamespace->sessionID(), m_storageNamespace->storageNamespaceID(), topLevelOrigin->data(), m_securityOrigin->data()), Messages::StorageManagerSet::ConnectToTransientLocalStorageArea::Reply(m_storageMapID), 0);
+            WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::StorageManagerSet::ConnectToTransientLocalStorageArea(WebProcess::singleton().sessionID(), m_storageNamespace->storageNamespaceID(), topLevelOrigin->data(), m_securityOrigin->data()), Messages::StorageManagerSet::ConnectToTransientLocalStorageArea::Reply(m_storageMapID), 0);
         else
-            WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::StorageManagerSet::ConnectToLocalStorageArea(m_storageNamespace->sessionID(), m_storageNamespace->storageNamespaceID(), m_securityOrigin->data()), Messages::StorageManagerSet::ConnectToLocalStorageArea::Reply(m_storageMapID), 0);
+            WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::StorageManagerSet::ConnectToLocalStorageArea(WebProcess::singleton().sessionID(), m_storageNamespace->storageNamespaceID(), m_securityOrigin->data()), Messages::StorageManagerSet::ConnectToLocalStorageArea::Reply(m_storageMapID), 0);
         break;
     case StorageType::Session:
-        WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::StorageManagerSet::ConnectToSessionStorageArea(m_storageNamespace->sessionID(), m_storageNamespace->storageNamespaceID(), m_securityOrigin->data()), Messages::StorageManagerSet::ConnectToSessionStorageArea::Reply(m_storageMapID), 0);
+        WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::StorageManagerSet::ConnectToSessionStorageArea(WebProcess::singleton().sessionID(), m_storageNamespace->storageNamespaceID(), m_securityOrigin->data()), Messages::StorageManagerSet::ConnectToSessionStorageArea::Reply(m_storageMapID), 0);
     }
 
     if (m_storageMapID)

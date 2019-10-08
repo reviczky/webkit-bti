@@ -111,7 +111,13 @@ void WebPopupMenu::show(const IntRect& rect, FrameView* view, int index)
     PlatformPopupMenuData platformData;
     setUpPlatformData(pageCoordinates, platformData);
 
-    WebProcess::singleton().parentProcessConnection()->send(Messages::WebPageProxy::ShowPopupMenu(pageCoordinates, static_cast<uint64_t>(m_popupClient->menuStyle().textDirection()), items, index, platformData), m_page->pageID());
+    WebProcess::singleton().parentProcessConnection()->send(Messages::WebPageProxy::ShowPopupMenu(pageCoordinates, static_cast<uint64_t>(m_popupClient->menuStyle().textDirection()), items, index, platformData), m_page->identifier());
+
+#if USE(DIRECT2D)
+    // Don't destroy the shared handle in the WebContent process. It will be destroyed in the UIProcess.
+    platformData.m_notSelectedBackingStore->leakSharedResource();
+    platformData.m_selectedBackingStore->leakSharedResource();
+#endif
 }
 
 void WebPopupMenu::hide()
@@ -119,7 +125,7 @@ void WebPopupMenu::hide()
     if (!m_page || !m_popupClient)
         return;
 
-    WebProcess::singleton().parentProcessConnection()->send(Messages::WebPageProxy::HidePopupMenu(), m_page->pageID());
+    WebProcess::singleton().parentProcessConnection()->send(Messages::WebPageProxy::HidePopupMenu(), m_page->identifier());
     m_page->setActivePopupMenu(nullptr);
     m_popupClient->popupDidHide();
 }

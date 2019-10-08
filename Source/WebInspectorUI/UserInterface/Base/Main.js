@@ -103,7 +103,6 @@ WI.loaded = function()
     // as event listeners on these managers.
     WI.managers = [
         WI.targetManager = new WI.TargetManager,
-        WI.branchManager = new WI.BranchManager,
         WI.networkManager = new WI.NetworkManager,
         WI.domStorageManager = new WI.DOMStorageManager,
         WI.databaseManager = new WI.DatabaseManager,
@@ -296,6 +295,9 @@ WI.contentLoaded = function()
 
     document.body.classList.add(WI.sharedApp.debuggableType);
     document.body.setAttribute("dir", WI.resolvedLayoutDirection());
+
+    WI.layoutMeasurementContainer = document.body.appendChild(document.createElement("div"));
+    WI.layoutMeasurementContainer.id = "layout-measurement-container";
 
     WI.settings.showJavaScriptTypeInformation.addEventListener(WI.Setting.Event.Changed, WI._showJavaScriptTypeInformationSettingChanged);
     WI.settings.enableControlFlowProfiler.addEventListener(WI.Setting.Event.Changed, WI._enableControlFlowProfilerSettingChanged);
@@ -1331,6 +1333,14 @@ WI.showRepresentedObject = function(representedObject, cookie, options = {})
     tabContentView.showRepresentedObject(representedObject, cookie);
 };
 
+WI.showLocalResourceOverride = function(localResourceOverride)
+{
+    console.assert(localResourceOverride instanceof WI.LocalResourceOverride);
+    const cookie = null;
+    const options = {ignoreNetworkTab: true, ignoreSearchTab: true};
+    WI.showRepresentedObject(localResourceOverride, cookie, options);
+};
+
 WI.showMainFrameDOMTree = function(nodeToSelect, options = {})
 {
     console.assert(WI.networkManager.mainFrame);
@@ -1405,7 +1415,7 @@ WI.showOriginalOrFormattedSourceCodeTextRange = function(sourceCodeTextRange, op
 
 WI.showResourceRequest = function(resource, options = {})
 {
-    WI.showRepresentedObject(resource, {[WI.ResourceClusterContentView.ContentViewIdentifierCookieKey]: WI.ResourceClusterContentView.CustomRequestIdentifier}, options);
+    WI.showRepresentedObject(resource, {[WI.ResourceClusterContentView.ContentViewIdentifierCookieKey]: WI.ResourceClusterContentView.Identifier.Request}, options);
 };
 
 WI.debuggerToggleBreakpoints = function(event)
@@ -2773,6 +2783,14 @@ WI._enableControlFlowProfilerSettingChanged = function(event)
 WI._resourceCachingDisabledSettingChanged = function(event)
 {
     NetworkAgent.setResourceCachingDisabled(WI.settings.resourceCachingDisabled.value);
+};
+
+WI.measureElement = function(element)
+{
+    WI.layoutMeasurementContainer.appendChild(element.cloneNode(true));
+    let rect = WI.layoutMeasurementContainer.getBoundingClientRect();
+    WI.layoutMeasurementContainer.removeChildren();
+    return rect;
 };
 
 WI.elementDragStart = function(element, dividerDrag, elementDragEnd, event, cursor, eventTarget)

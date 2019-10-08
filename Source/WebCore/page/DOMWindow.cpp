@@ -1123,7 +1123,7 @@ void DOMWindow::alert(const String& message)
     page->chrome().runJavaScriptAlert(*frame, message);
 }
 
-bool DOMWindow::confirm(const String& message)
+bool DOMWindow::confirmForBindings(const String& message)
 {
     auto* frame = this->frame();
     if (!frame)
@@ -2168,11 +2168,14 @@ void DOMWindow::dispatchEvent(Event& event, EventTarget* target)
     event.setCurrentTarget(this);
     event.setEventPhase(Event::AT_TARGET);
     event.resetBeforeDispatch();
-    auto cookie = InspectorInstrumentation::willDispatchEventOnWindow(frame(), event, *this);
+
+    auto* protectedFrame = frame();
+    InspectorInstrumentation::willDispatchEventOnWindow(protectedFrame, event, *this);
     // FIXME: We should use EventDispatcher everywhere.
     fireEventListeners(event, EventInvokePhase::Capturing);
     fireEventListeners(event, EventInvokePhase::Bubbling);
-    InspectorInstrumentation::didDispatchEventOnWindow(cookie, event.defaultPrevented());
+    InspectorInstrumentation::didDispatchEventOnWindow(protectedFrame, event.defaultPrevented());
+
     event.resetAfterDispatch();
 }
 
@@ -2357,7 +2360,6 @@ ExceptionOr<RefPtr<Frame>> DOMWindow::createWindow(const String& urlString, cons
     auto initiatedByMainFrame = activeFrame->isMainFrame() ? InitiatedByMainFrame::Yes : InitiatedByMainFrame::Unknown;
 
     ResourceRequest resourceRequest { completedURL, referrer };
-    FrameLoader::addHTTPOriginIfNeeded(resourceRequest, firstFrame.loader().outgoingOrigin());
     FrameLoadRequest frameLoadRequest { *activeDocument, activeDocument->securityOrigin(), resourceRequest, frameName, LockHistory::No, LockBackForwardList::No, MaybeSendReferrer, AllowNavigationToInvalidURL::Yes, NewFrameOpenerPolicy::Allow, activeDocument->shouldOpenExternalURLsPolicyToPropagate(), initiatedByMainFrame };
 
     // We pass the opener frame for the lookupFrame in case the active frame is different from

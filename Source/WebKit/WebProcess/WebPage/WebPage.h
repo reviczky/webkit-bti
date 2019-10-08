@@ -288,15 +288,13 @@ public:
 
     void close();
 
-    static WebPage* fromCorePage(WebCore::Page*);
+    static WebPage& fromCorePage(WebCore::Page&);
 
     WebCore::Page* corePage() const { return m_page.get(); }
-    WebCore::PageIdentifier pageID() const { return m_pageID; }
-    StorageNamespaceIdentifier sessionStorageNamespaceIdentifier() const { return makeObjectIdentifier<StorageNamespaceIdentifierType>(m_pageID.toUInt64()); }
-    PAL::SessionID sessionID() const { return m_page->sessionID(); }
-    bool usesEphemeralSession() const { return m_page->usesEphemeralSession(); }
-
-    void setSessionID(PAL::SessionID);
+    WebCore::PageIdentifier identifier() const { return m_identifier; }
+    StorageNamespaceIdentifier sessionStorageNamespaceIdentifier() const { return makeObjectIdentifier<StorageNamespaceIdentifierType>(m_webPageProxyIdentifier.toUInt64()); }
+    PAL::SessionID sessionID() const;
+    bool usesEphemeralSession() const;
 
     void setSize(const WebCore::IntSize&);
     const WebCore::IntSize& size() const { return m_viewSize; }
@@ -881,6 +879,8 @@ public:
     void computePagesForPrintingAndDrawToPDF(WebCore::FrameIdentifier, const PrintInfo&, CallbackID, Messages::WebPage::ComputePagesForPrintingAndDrawToPDF::DelayedReply&&);
 #endif
 
+    void drawToPDF(WebCore::FrameIdentifier, const Optional<WebCore::FloatRect>&, CallbackID);
+
 #if PLATFORM(GTK)
     void drawPagesForPrinting(WebCore::FrameIdentifier, const PrintInfo&, CallbackID);
     void didFinishPrintOperation(const WebCore::ResourceError&, CallbackID);
@@ -1135,8 +1135,8 @@ public:
     void flushPendingEditorStateUpdate();
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
-    void hasStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, WebCore::FrameIdentifier, CompletionHandler<void(bool)>&&);
-    void requestStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, WebCore::FrameIdentifier, CompletionHandler<void(WebCore::StorageAccessWasGranted, WebCore::StorageAccessPromptWasShown)>&&);
+    void hasStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, WebFrame&, CompletionHandler<void(bool)>&&);
+    void requestStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, WebFrame&, CompletionHandler<void(WebCore::StorageAccessWasGranted, WebCore::StorageAccessPromptWasShown)>&&);
     void wasLoadedWithDataTransferFromPrevalentResource();
 #endif
 
@@ -1202,6 +1202,8 @@ public:
     void setRemoteObjectRegistry(WebRemoteObjectRegistry*);
     WebRemoteObjectRegistry* remoteObjectRegistry();
 #endif
+
+    WebPageProxyIdentifier webPageProxyIdentifier() const { return m_webPageProxyIdentifier; }
 
     void updateIntrinsicContentSizeIfNeeded(const WebCore::IntSize&);
     void scheduleFullEditorStateUpdate();
@@ -1287,6 +1289,7 @@ private:
 #if PLATFORM(IOS_FAMILY) && ENABLE(DATA_INTERACTION)
     void requestDragStart(const WebCore::IntPoint& clientPosition, const WebCore::IntPoint& globalPosition, uint64_t allowedActions);
     void requestAdditionalItemsForDragSession(const WebCore::IntPoint& clientPosition, const WebCore::IntPoint& globalPosition, uint64_t allowedActions);
+    void insertDroppedImagePlaceholders(const Vector<WebCore::IntSize>&, CompletionHandler<void(const Vector<WebCore::IntRect>&, Optional<WebCore::TextIndicatorData>)>&& reply);
     void computeAndSendEditDragSnapshot();
 #endif
 
@@ -1315,6 +1318,7 @@ private:
     void tryClose();
     void platformDidReceiveLoadParameters(const LoadParameters&);
     void loadRequest(LoadParameters&&);
+    NO_RETURN void loadRequestWaitingForPID(LoadParameters&&, URL&&, WebPageProxyIdentifier);
     void loadData(LoadParameters&&);
     void loadAlternateHTML(LoadParameters&&);
     void navigateToPDFLinkWithSimulatedClick(const String& url, WebCore::IntPoint documentPoint, WebCore::IntPoint screenPoint);
@@ -1584,6 +1588,10 @@ private:
 
     void simulateDeviceOrientationChange(double alpha, double beta, double gamma);
 
+#if USE(SYSTEM_PREVIEW)
+    void systemPreviewActionTriggered(WebCore::SystemPreviewInfo, const String& message);
+#endif
+
 #if ENABLE(SPEECH_SYNTHESIS)
     void speakingErrorOccurred();
     void boundaryEventOccurred(bool wordBoundary, unsigned charIndex);
@@ -1603,8 +1611,8 @@ private:
 
     RefPtr<WebImage> snapshotAtSize(const WebCore::IntRect&, const WebCore::IntSize& bitmapSize, SnapshotOptions);
     RefPtr<WebImage> snapshotNode(WebCore::Node&, SnapshotOptions, unsigned maximumPixelCount = std::numeric_limits<unsigned>::max());
-#if USE(CF)
-    RetainPtr<CFDataRef> pdfSnapshotAtSize(const WebCore::IntRect&, const WebCore::IntSize& bitmapSize, SnapshotOptions);
+#if PLATFORM(COCOA)
+    RetainPtr<CFDataRef> pdfSnapshotAtSize(WebCore::IntRect, WebCore::IntSize bitmapSize, SnapshotOptions);
 #endif
 
 #if ENABLE(ATTACHMENT_ELEMENT)
@@ -1619,7 +1627,9 @@ private:
 
     void updateMockAccessibilityElementAfterCommittingLoad();
 
-    WebCore::PageIdentifier m_pageID;
+    void paintSnapshotAtSize(const WebCore::IntRect&, const WebCore::IntSize&, SnapshotOptions, WebCore::Frame&, WebCore::FrameView&, WebCore::GraphicsContext&);
+
+    WebCore::PageIdentifier m_identifier;
 
     std::unique_ptr<WebCore::Page> m_page;
     RefPtr<WebFrame> m_mainFrame;
@@ -1957,6 +1967,7 @@ private:
 #if PLATFORM(COCOA)
     WeakPtr<WebRemoteObjectRegistry> m_remoteObjectRegistry;
 #endif
+    WebPageProxyIdentifier m_webPageProxyIdentifier;
     WebCore::IntSize m_lastSentIntrinsicContentSize;
 #if ENABLE(VIEWPORT_RESIZING)
     WebCore::DeferrableOneShotTimer m_shrinkToFitContentTimer;

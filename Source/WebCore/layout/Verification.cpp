@@ -29,9 +29,11 @@
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
 #include "DisplayBox.h"
+#include "InlineFormattingState.h"
 #include "InlineTextBox.h"
 #include "LayoutBox.h"
 #include "LayoutContainer.h"
+#include "LayoutContext.h"
 #include "LayoutTreeBuilder.h"
 #include "RenderBox.h"
 #include "RenderInline.h"
@@ -87,17 +89,21 @@ static bool outputMismatchingSimpleLineInformationIfNeeded(TextStream& stream, c
         auto& simpleRun = lineLayoutData->runAt(i);
         auto& inlineRun = inlineRunList[i];
 
-        auto matchingRuns = areEssentiallyEqual(simpleRun.logicalLeft, inlineRun->logicalLeft()) && areEssentiallyEqual(simpleRun.logicalRight, inlineRun->logicalRight());
-        if (matchingRuns && inlineRun->textContext()) {
-            matchingRuns = simpleRun.start == inlineRun->textContext()->start() && simpleRun.end == inlineRun->textContext()->end();
+        auto matchingRuns = areEssentiallyEqual(simpleRun.logicalLeft, inlineRun.logicalLeft()) && areEssentiallyEqual(simpleRun.logicalRight, inlineRun.logicalRight());
+        if (matchingRuns && inlineRun.textContext()) {
+            matchingRuns = simpleRun.start == inlineRun.textContext()->start() && simpleRun.end == inlineRun.textContext()->end();
             // SLL handles strings in a more concatenated format <div>foo<br>bar</div> -> foo -> 0,3 bar -> 3,6 vs. 0,3 and 0,3
             if (!matchingRuns)
-                matchingRuns = (simpleRun.end - simpleRun.start) == (inlineRun->textContext()->end() - inlineRun->textContext()->start()); 
+                matchingRuns = (simpleRun.end - simpleRun.start) == (inlineRun.textContext()->end() - inlineRun.textContext()->start()); 
         }
         if (matchingRuns)
             continue;
 
-        stream << "Mismatching: simple run(" << simpleRun.start << ", " << simpleRun.end << ") (" << simpleRun.logicalLeft << ", " << simpleRun.logicalRight << ") layout run(" << inlineRun->textContext()->start() << ", " << inlineRun->textContext()->end() << ") (" << inlineRun->logicalLeft() << ", " << inlineRun->logicalRight() << ")";
+        stream << "Mismatching: simple run(" << simpleRun.start << ", " << simpleRun.end << ") (" << simpleRun.logicalLeft << ", " << simpleRun.logicalRight << ")";
+        stream << " inline run";
+        if (inlineRun.textContext())
+            stream << " (" << inlineRun.textContext()->start() << ", " << inlineRun.textContext()->end() << ")";
+        stream << " (" << inlineRun.logicalLeft() << ", " << inlineRun.logicalTop() << ") (" << inlineRun.logicalWidth() << "x" << inlineRun.logicalHeight() << ")";
         stream.nextLine();
         mismatched = true;
     }
@@ -120,18 +126,18 @@ static bool checkForMatchingTextRuns(const Display::Run& inlineRun, const Inline
         && areEssentiallyEqual(inlineTextBox.logicalTop(), inlineRun.logicalTop())
         && areEssentiallyEqual(inlineTextBox.logicalBottom(), inlineRun.logicalBottom())
         && inlineTextBox.start() == inlineRun.textContext()->start()
-        && (inlineTextBox.end() + 1) == inlineRun.textContext()->end();
+        && inlineTextBox.end() == inlineRun.textContext()->end();
 }
 
 static void collectFlowBoxSubtree(const InlineFlowBox& flowbox, Vector<WebCore::InlineBox*>& inlineBoxes)
 {
-    auto* inlineBox = flowbox.firstLeafChild();
-    auto* lastLeafChild = flowbox.lastLeafChild();
+    auto* inlineBox = flowbox.firstLeafDescendant();
+    auto* lastLeafDescendant = flowbox.lastLeafDescendant();
     while (inlineBox) {
         inlineBoxes.append(inlineBox);
-        if (inlineBox == lastLeafChild)
+        if (inlineBox == lastLeafDescendant)
             break;
-        inlineBox = inlineBox->nextLeafChild();
+        inlineBox = inlineBox->nextLeafOnLine();
     }
 }
 
@@ -170,7 +176,7 @@ static bool outputMismatchingComplexLineInformationIfNeeded(TextStream& stream, 
         auto& inlineRun = inlineRunList[runIndex];
         auto* inlineBox = inlineBoxes[inlineBoxIndex];
         auto* inlineTextBox = is<InlineTextBox>(inlineBox) ? downcast<InlineTextBox>(inlineBox) : nullptr;
-        bool matchingRuns = inlineTextBox ? checkForMatchingTextRuns(*inlineRun, *inlineTextBox) : matchingRuns = checkForMatchingNonTextRuns(*inlineRun, *inlineBox);
+        bool matchingRuns = inlineTextBox ? checkForMatchingTextRuns(inlineRun, *inlineTextBox) : matchingRuns = checkForMatchingNonTextRuns(inlineRun, *inlineBox);
 
         if (!matchingRuns) {
             
@@ -184,13 +190,13 @@ static bool outputMismatchingComplexLineInformationIfNeeded(TextStream& stream, 
             stream << "Mismatching: run";
 
             if (inlineTextBox)
-                stream << " (" << inlineTextBox->start() << ", " << inlineTextBox->end() + 1 << ")";
+                stream << " (" << inlineTextBox->start() << ", " << inlineTextBox->end() << ")";
             stream << " (" << inlineBox->logicalLeft() << ", " << inlineBox->logicalTop() << ") (" << inlineBox->logicalWidth() << "x" << inlineBox->logicalHeight() << ")";
 
             stream << " inline run";
-            if (inlineRun->textContext())
-                stream << " (" << inlineRun->textContext()->start() << ", " << inlineRun->textContext()->end() << ")";
-            stream << " (" << inlineRun->logicalLeft() << ", " << inlineRun->logicalTop() << ") (" << inlineRun->logicalWidth() << "x" << inlineRun->logicalHeight() << ")";
+            if (inlineRun.textContext())
+                stream << " (" << inlineRun.textContext()->start() << ", " << inlineRun.textContext()->end() << ")";
+            stream << " (" << inlineRun.logicalLeft() << ", " << inlineRun.logicalTop() << ") (" << inlineRun.logicalWidth() << "x" << inlineRun.logicalHeight() << ")";
             stream.nextLine();
             mismatched = true;
         }
@@ -272,6 +278,10 @@ static bool outputMismatchingBlockBoxInformationIfNeeded(TextStream& stream, con
 
 static bool verifyAndOutputSubtree(TextStream& stream, const LayoutState& context, const RenderBox& renderer, const Box& layoutBox)
 {
+    // Rendering code does not have the concept of table wrapper box. Skip it by verifying the first child(table box) instead. 
+    if (layoutBox.isTableWrapperBox())
+        return verifyAndOutputSubtree(stream, context, renderer, *downcast<Container>(layoutBox).firstChild()); 
+
     auto mismtachingGeometry = outputMismatchingBlockBoxInformationIfNeeded(stream, context, renderer, layoutBox);
 
     if (!is<Container>(layoutBox))
@@ -314,15 +324,15 @@ static bool verifyAndOutputSubtree(TextStream& stream, const LayoutState& contex
     return mismtachingGeometry;
 }
 
-void LayoutState::verifyAndOutputMismatchingLayoutTree(const RenderView& renderView) const
+void LayoutContext::verifyAndOutputMismatchingLayoutTree(const LayoutState& layoutState, const RenderView& renderView, const Container& initialContainingBlock)
 {
     TextStream stream;
-    auto mismatchingGeometry = verifyAndOutputSubtree(stream, *this, renderView, initialContainingBlock());
+    auto mismatchingGeometry = verifyAndOutputSubtree(stream, layoutState, renderView, initialContainingBlock);
     if (!mismatchingGeometry)
         return;
 #if ENABLE(TREE_DEBUGGING)
     showRenderTree(&renderView);
-    showLayoutTree(initialContainingBlock(), this);
+    showLayoutTree(initialContainingBlock, &layoutState);
 #endif
     WTFLogAlways("%s", stream.release().utf8().data());
     ASSERT_NOT_REACHED();

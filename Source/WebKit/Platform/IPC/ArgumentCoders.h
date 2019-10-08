@@ -227,7 +227,7 @@ struct TupleDecoder {
 
 template<>
 struct TupleDecoder<0> {
-    static Optional<std::tuple<>> decode(Decoder& decoder)
+    static Optional<std::tuple<>> decode(Decoder&)
     {
         return std::make_tuple();
     }
@@ -620,5 +620,12 @@ template<> struct ArgumentCoder<SHA1::Digest> {
     static void encode(Encoder&, const SHA1::Digest&);
     static bool decode(Decoder&, SHA1::Digest&);
 };
+
+#if HAVE(AUDIT_TOKEN)
+template<> struct ArgumentCoder<audit_token_t> {
+    static void encode(Encoder&, const audit_token_t&);
+    static bool decode(Decoder&, audit_token_t&);
+};
+#endif
 
 } // namespace IPC

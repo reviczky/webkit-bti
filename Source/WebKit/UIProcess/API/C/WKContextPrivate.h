@@ -67,11 +67,11 @@ WK_EXPORT void WKContextRegisterURLSchemeAsCanDisplayOnlyIfCanRequest(WKContextR
 
 WK_EXPORT void WKContextSetDomainRelaxationForbiddenForURLScheme(WKContextRef context, WKStringRef urlScheme);
 
-WK_EXPORT void WKContextSetCanHandleHTTPSServerTrustEvaluation(WKContextRef context, bool value);
+WK_EXPORT void WKContextSetCanHandleHTTPSServerTrustEvaluation(WKContextRef context, bool value) WK_C_API_DEPRECATED;
 
 WK_EXPORT void WKContextSetPrewarmsProcessesAutomatically(WKContextRef context, bool value);
 
-WK_EXPORT void WKContextSetDiskCacheSpeculativeValidationEnabled(WKContextRef context, bool value);
+WK_EXPORT void WKContextSetDiskCacheSpeculativeValidationEnabled(WKContextRef context, bool value) WK_C_API_DEPRECATED;
 
 WK_EXPORT void WKContextSetIconDatabasePath(WKContextRef context, WKStringRef iconDatabasePath);
 
@@ -109,7 +109,7 @@ WK_EXPORT void WKContextSetMemoryCacheDisabled(WKContextRef, bool disabled);
 
 WK_EXPORT void WKContextSetFontWhitelist(WKContextRef, WKArrayRef);
 
-WK_EXPORT void WKContextPreconnectToServer(WKContextRef context, WKURLRef serverURL);
+WK_EXPORT void WKContextPreconnectToServer(WKContextRef context, WKURLRef serverURL) WK_C_API_DEPRECATED;
 
 WK_EXPORT WKProcessID WKContextGetNetworkProcessIdentifier(WKContextRef context);
 

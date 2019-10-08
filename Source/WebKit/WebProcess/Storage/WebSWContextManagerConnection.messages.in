@@ -23,13 +23,14 @@
 #if ENABLE(SERVICE_WORKER)
 
 messages -> WebSWContextManagerConnection {
-    InstallServiceWorker(struct WebCore::ServiceWorkerContextData contextData, PAL::SessionID sessionID, String userAgent)
+    InstallServiceWorker(struct WebCore::ServiceWorkerContextData contextData, String userAgent)
     StartFetch(WebCore::SWServerConnectionIdentifier serverConnectionIdentifier, WebCore::ServiceWorkerIdentifier serviceWorkerIdentifier, WebCore::FetchIdentifier fetchIdentifier, WebCore::ResourceRequest request, struct WebCore::FetchOptions options, IPC::FormDataReference requestBody, String referrer)
     CancelFetch(WebCore::SWServerConnectionIdentifier serverConnectionIdentifier, WebCore::ServiceWorkerIdentifier serviceWorkerIdentifier, WebCore::FetchIdentifier fetchIdentifier)
     ContinueDidReceiveFetchResponse(WebCore::SWServerConnectionIdentifier serverConnectionIdentifier, WebCore::ServiceWorkerIdentifier serviceWorkerIdentifier, WebCore::FetchIdentifier fetchIdentifier)
     PostMessageToServiceWorker(WebCore::ServiceWorkerIdentifier destinationIdentifier, struct WebCore::MessageWithMessagePorts message, WebCore::ServiceWorkerOrClientData sourceData)
     FireInstallEvent(WebCore::ServiceWorkerIdentifier identifier)
     FireActivateEvent(WebCore::ServiceWorkerIdentifier identifier)
+    SoftUpdate(WebCore::ServiceWorkerIdentifier identifier)
     TerminateWorker(WebCore::ServiceWorkerIdentifier identifier)
     SyncTerminateWorker(WebCore::ServiceWorkerIdentifier identifier) -> () Synchronous
     FindClientByIdentifierCompleted(uint64_t clientIdRequestIdentifier, Optional<WebCore::ServiceWorkerClientData> data, bool hasSecurityError)

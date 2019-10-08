@@ -61,6 +61,7 @@
 #include "WebPageCreationParameters.h"
 #include "WebPageDiagnosticLoggingClient.h"
 #include "WebPageInjectedBundleClient.h"
+#include "WebPageProxyIdentifier.h"
 #include "WebPaymentCoordinatorProxy.h"
 #include "WebPreferences.h"
 #include "WebPageProxyMessages.h"
@@ -149,6 +150,10 @@ OBJC_CLASS _WKRemoteObjectRegistry;
 namespace WebCore {
 class MediaSessionMetadata;
 }
+#endif
+
+#if USE(DIRECT2D)
+interface ID3D11Device1;
 #endif
 
 namespace API {
@@ -355,11 +360,10 @@ struct ElementDidFocusArguments {
     OptionSet<WebCore::ActivityState::Flag> activityStateChanges;
     RefPtr<API::Object> userData;
 };
-
-using DrawToPDFCallback = GenericCallback<const IPC::DataReference&>;
 #endif
 
 #if PLATFORM(COCOA)
+using DrawToPDFCallback = GenericCallback<const IPC::DataReference&>;
 typedef GenericCallback<const WTF::MachSendRight&> MachSendRightCallback;
 typedef GenericCallback<bool, bool, String, double, double, uint64_t> NowPlayingInfoCallback;
 #endif
@@ -392,7 +396,10 @@ public:
 
     const API::PageConfiguration& configuration() const;
 
-    WebCore::PageIdentifier pageID() const { return m_pageID; }
+    using Identifier = WebPageProxyIdentifier;
+
+    Identifier identifier() const { return m_identifier; }
+    WebCore::PageIdentifier webPageID() const { return m_webPageID; }
 
     PAL::SessionID sessionID() const;
 
@@ -477,6 +484,7 @@ public:
 
 #if USE(SYSTEM_PREVIEW)
     SystemPreviewController* systemPreviewController() { return m_systemPreviewController.get(); }
+    void systemPreviewActionTriggered(const WebCore::SystemPreviewInfo&, const String&) const;
 #endif
 
 #if ENABLE(CONTEXT_MENUS)
@@ -654,6 +662,9 @@ public:
 
     WebCore::FloatRect computeCustomFixedPositionRect(const WebCore::FloatRect& unobscuredContentRect, const WebCore::FloatRect& unobscuredContentRectRespectingInputViewBounds, const WebCore::FloatRect& currentCustomFixedPositionRect, double displayedContentScale, WebCore::FrameView::LayoutViewportConstraint = WebCore::FrameView::LayoutViewportConstraint::Unconstrained) const;
 
+    WebCore::FloatRect unconstrainedLayoutViewportRect() const;
+    void adjustLayersForLayoutViewport(const WebCore::FloatRect& layoutViewport);
+
     void scrollingNodeScrollViewWillStartPanGesture();
     void scrollingNodeScrollViewDidScroll();
     void scrollingNodeScrollWillStartScroll();
@@ -736,6 +747,7 @@ public:
     void didHandleAdditionalDragItemsRequest(bool added);
     void requestDragStart(const WebCore::IntPoint& clientPosition, const WebCore::IntPoint& globalPosition, WebCore::DragSourceAction allowedActions);
     void requestAdditionalItemsForDragSession(const WebCore::IntPoint& clientPosition, const WebCore::IntPoint& globalPosition, WebCore::DragSourceAction allowedActions);
+    void insertDroppedImagePlaceholders(const Vector<WebCore::IntSize>&, CompletionHandler<void(const Vector<WebCore::IntRect>&, Optional<WebCore::TextIndicatorData>)>&& reply);
     void willReceiveEditDragSnapshot();
     void didReceiveEditDragSnapshot(Optional<WebCore::TextIndicatorData>);
     void didConcludeDrop();
@@ -813,6 +825,10 @@ public:
 
 #if PLATFORM(WIN)
     PlatformViewWidget viewWidget();
+#if USE(DIRECT2D)
+    ID3D11Device1* device() const;
+    void setDevice(ID3D11Device1*);
+#endif
 #endif
 #if PLATFORM(WPE)
     struct wpe_view_backend* viewBackend();
@@ -1160,9 +1176,10 @@ public:
 #if PLATFORM(COCOA)
     void drawRectToImage(WebFrameProxy*, const PrintInfo&, const WebCore::IntRect&, const WebCore::IntSize&, Ref<ImageCallback>&&);
     void drawPagesToPDF(WebFrameProxy*, const PrintInfo&, uint32_t first, uint32_t count, Ref<DataCallback>&&);
+    void drawToPDF(WebCore::FrameIdentifier, const Optional<WebCore::FloatRect>&, DrawToPDFCallback::CallbackFunction&&);
+    void drawToPDFCallback(const IPC::DataReference& pdfData, WebKit::CallbackID);
 #if PLATFORM(IOS_FAMILY)
     uint32_t computePagesForPrintingAndDrawToPDF(WebCore::FrameIdentifier, const PrintInfo&, DrawToPDFCallback::CallbackFunction&&);
-    void drawToPDFCallback(const IPC::DataReference& pdfData, WebKit::CallbackID);
 #endif
 #elif PLATFORM(GTK)
     void drawPagesForPrinting(WebFrameProxy*, const PrintInfo&, Ref<PrintFinishedCallback>&&);
@@ -1177,7 +1194,6 @@ public:
     void saveDataToFileInDownloadsFolder(String&& suggestedFilename, String&& mimeType, URL&& originatingURL, API::Data&);
     void savePDFToFileInDownloadsFolder(String&& suggestedFilename, URL&& originatingURL, const IPC::DataReference&);
 #if PLATFORM(COCOA)
-    void savePDFToTemporaryFolderAndOpenWithNativeApplicationRaw(const String& suggestedFilename, const String& originatingURLString, const uint8_t* data, unsigned long size, const String& pdfUUID);
     void savePDFToTemporaryFolderAndOpenWithNativeApplication(const String& suggestedFilename, const String& originatingURLString, const IPC::DataReference&, const String& pdfUUID);
     void openPDFFromTemporaryFolderWithNativeApplication(const String& pdfUUID);
 #endif
@@ -1252,7 +1268,7 @@ public:
     void setViewportSizeForCSSViewportUnits(const WebCore::IntSize&);
     WebCore::IntSize viewportSizeForCSSViewportUnits() const { return m_viewportSizeForCSSViewportUnits.valueOr(WebCore::IntSize()); }
 
-    void didReceiveAuthenticationChallengeProxy(WebCore::FrameIdentifier, Ref<AuthenticationChallengeProxy>&&);
+    void didReceiveAuthenticationChallengeProxy(Ref<AuthenticationChallengeProxy>&&);
 
     SpellDocumentTag spellDocumentTag();
 
@@ -1508,17 +1524,17 @@ public:
     void didPerformClientRedirectShared(Ref<WebProcessProxy>&&, const String& sourceURLString, const String& destinationURLString, WebCore::FrameIdentifier);
     void didNavigateWithNavigationDataShared(Ref<WebProcessProxy>&&, const WebNavigationDataStore&, WebCore::FrameIdentifier);
     void didChangeProvisionalURLForFrameShared(Ref<WebProcessProxy>&&, WebCore::FrameIdentifier, uint64_t navigationID, URL&&);
-    void decidePolicyForNavigationActionAsyncShared(Ref<WebProcessProxy>&&, WebCore::FrameIdentifier, WebCore::SecurityOriginData&& frameSecurityOrigin, WebCore::PolicyCheckIdentifier,
-        uint64_t navigationID, NavigationActionData&&, FrameInfoData&&, Optional<WebCore::PageIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&,
+    void decidePolicyForNavigationActionAsyncShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, WebCore::FrameIdentifier, WebCore::SecurityOriginData&& frameSecurityOrigin, WebCore::PolicyCheckIdentifier,
+        uint64_t navigationID, NavigationActionData&&, FrameInfoData&&, Optional<WebPageProxyIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&,
         IPC::FormDataReference&& requestBody, WebCore::ResourceResponse&& redirectResponse, const UserData&, uint64_t listenerID);
-    void decidePolicyForResponseShared(Ref<WebProcessProxy>&&, WebCore::FrameIdentifier, const WebCore::SecurityOriginData& frameSecurityOrigin, WebCore::PolicyCheckIdentifier,
+    void decidePolicyForResponseShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, WebCore::FrameIdentifier, const WebCore::SecurityOriginData& frameSecurityOrigin, WebCore::PolicyCheckIdentifier,
         uint64_t navigationID, const WebCore::ResourceResponse&, const WebCore::ResourceRequest&, bool canShowMIMEType, const String& downloadAttribute, uint64_t listenerID, const UserData&);
-    void startURLSchemeTaskShared(Ref<WebProcessProxy>&&, URLSchemeTaskParameters&&);
-    void loadDataWithNavigationShared(Ref<WebProcessProxy>&&, API::Navigation&, const IPC::DataReference&, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad, Optional<WebsitePoliciesData>&& = WTF::nullopt, WebCore::ShouldOpenExternalURLsPolicy = WebCore::ShouldOpenExternalURLsPolicy::ShouldNotAllow);
-    void loadRequestWithNavigationShared(Ref<WebProcessProxy>&&, API::Navigation&, WebCore::ResourceRequest&&, WebCore::ShouldOpenExternalURLsPolicy, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad, Optional<WebsitePoliciesData>&& = WTF::nullopt);
+    void startURLSchemeTaskShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, URLSchemeTaskParameters&&);
+    void loadDataWithNavigationShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, API::Navigation&, const IPC::DataReference&, const String& MIMEType, const String& encoding, const String& baseURL, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad, Optional<WebsitePoliciesData>&& = WTF::nullopt, WebCore::ShouldOpenExternalURLsPolicy = WebCore::ShouldOpenExternalURLsPolicy::ShouldNotAllow);
+    void loadRequestWithNavigationShared(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, API::Navigation&, WebCore::ResourceRequest&&, WebCore::ShouldOpenExternalURLsPolicy, API::Object* userData, WebCore::ShouldTreatAsContinuingLoad, Optional<WebsitePoliciesData>&& = WTF::nullopt);
     void backForwardGoToItemShared(Ref<WebProcessProxy>&&, const WebCore::BackForwardItemIdentifier&, CompletionHandler<void(SandboxExtension::Handle&&)>&&);
     void decidePolicyForNavigationActionSyncShared(Ref<WebProcessProxy>&&, WebCore::FrameIdentifier, bool isMainFrame, WebCore::SecurityOriginData&&, WebCore::PolicyCheckIdentifier, uint64_t navigationID, NavigationActionData&&,
-        FrameInfoData&&, Optional<WebCore::PageIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
+        FrameInfoData&&, Optional<WebPageProxyIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
         WebCore::ResourceResponse&& redirectResponse, const UserData&, Messages::WebPageProxy::DecidePolicyForNavigationActionSync::DelayedReply&&);
 #if USE(QUICK_LOOK)
     void didRequestPasswordForQuickLookDocumentInMainFrameShared(Ref<WebProcessProxy>&&, const String& fileName);
@@ -1568,6 +1584,8 @@ public:
 #if ENABLE(MEDIA_STREAM)
     void setMockCaptureDevicesEnabledOverride(Optional<bool>);
 #endif
+
+    void maybeInitializeSandboxExtensionHandle(WebProcessProxy&, const URL&, const URL& resourceDirectoryURL, SandboxExtension::Handle&);
 
 private:
     WebPageProxy(PageClient&, WebProcessProxy&, Ref<API::PageConfiguration>&&);
@@ -1646,13 +1664,13 @@ private:
     void didDestroyNavigation(uint64_t navigationID);
 
     void decidePolicyForNavigationAction(Ref<WebProcessProxy>&&, WebFrameProxy&, WebCore::SecurityOriginData&&, uint64_t navigationID, NavigationActionData&&,
-        FrameInfoData&&, Optional<WebCore::PageIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
+        FrameInfoData&&, Optional<WebPageProxyIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
         WebCore::ResourceResponse&& redirectResponse, const UserData&, Ref<PolicyDecisionSender>&&);
     void decidePolicyForNavigationActionAsync(WebCore::FrameIdentifier, WebCore::SecurityOriginData&&, WebCore::PolicyCheckIdentifier, uint64_t navigationID, NavigationActionData&&,
-        FrameInfoData&&, Optional<WebCore::PageIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
+        FrameInfoData&&, Optional<WebPageProxyIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
         WebCore::ResourceResponse&& redirectResponse, const UserData&, uint64_t listenerID);
     void decidePolicyForNavigationActionSync(WebCore::FrameIdentifier, bool isMainFrame, WebCore::SecurityOriginData&&, WebCore::PolicyCheckIdentifier, uint64_t navigationID, NavigationActionData&&,
-        FrameInfoData&&, Optional<WebCore::PageIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
+        FrameInfoData&&, Optional<WebPageProxyIdentifier> originatingPageID, const WebCore::ResourceRequest& originalRequest, WebCore::ResourceRequest&&, IPC::FormDataReference&& requestBody,
         WebCore::ResourceResponse&& redirectResponse, const UserData&, Messages::WebPageProxy::DecidePolicyForNavigationActionSync::DelayedReply&&);
     void decidePolicyForNewWindowAction(WebCore::FrameIdentifier, const WebCore::SecurityOriginData&, WebCore::PolicyCheckIdentifier, NavigationActionData&&,
         WebCore::ResourceRequest&&, const String& frameName, uint64_t listenerID, const UserData&);
@@ -1674,7 +1692,7 @@ private:
     void didUpdateHistoryTitle(const String& title, const String& url, WebCore::FrameIdentifier);
 
     // UI client
-    void createNewPage(const FrameInfoData&, Optional<WebCore::PageIdentifier> originatingPageID, WebCore::ResourceRequest&&, WebCore::WindowFeatures&&, NavigationActionData&&, Messages::WebPageProxy::CreateNewPage::DelayedReply&&);
+    void createNewPage(const FrameInfoData&, Optional<WebPageProxyIdentifier> originatingPageID, WebCore::ResourceRequest&&, WebCore::WindowFeatures&&, NavigationActionData&&, Messages::WebPageProxy::CreateNewPage::DelayedReply&&);
     void showPage();
     void runJavaScriptAlert(WebCore::FrameIdentifier, const WebCore::SecurityOriginData&, const String&, Messages::WebPageProxy::RunJavaScriptAlert::DelayedReply&&);
     void runJavaScriptConfirm(WebCore::FrameIdentifier, const WebCore::SecurityOriginData&, const String&, Messages::WebPageProxy::RunJavaScriptConfirm::DelayedReply&&);
@@ -1738,7 +1756,7 @@ private:
     };
 
     void launchProcess(const WebCore::RegistrableDomain&, ProcessLaunchReason);
-    void swapToWebProcess(Ref<WebProcessProxy>&&, std::unique_ptr<DrawingAreaProxy>&&, RefPtr<WebFrameProxy>&& mainFrame);
+    void swapToWebProcess(Ref<WebProcessProxy>&&, WebCore::PageIdentifier, std::unique_ptr<DrawingAreaProxy>&&, RefPtr<WebFrameProxy>&& mainFrame);
     void didFailToSuspendAfterProcessSwap();
     void didSuspendAfterProcessSwap();
     void finishAttachingToWebProcess(ProcessLaunchReason);
@@ -1908,8 +1926,6 @@ private:
     void pluginFocusOrWindowFocusChanged(uint64_t pluginComplexTextInputIdentifier, bool pluginHasFocusAndWindowHasFocus);
     void setPluginComplexTextInputState(uint64_t pluginComplexTextInputIdentifier, uint64_t complexTextInputState);
 #endif
-
-    void maybeInitializeSandboxExtensionHandle(WebProcessProxy&, const URL& url, const URL& resourceDirectoryURL, SandboxExtension::Handle&);
 
 #if USE(AUTOMATIC_TEXT_REPLACEMENT)
     void toggleSmartInsertDelete();
@@ -2082,15 +2098,15 @@ private:
     // WebPaymentCoordinatorProxy::Client
 #if ENABLE(APPLE_PAY)
     IPC::Connection* paymentCoordinatorConnection(const WebPaymentCoordinatorProxy&) final;
-    const String& paymentCoordinatorBoundInterfaceIdentifier(const WebPaymentCoordinatorProxy&, PAL::SessionID) final;
-    const String& paymentCoordinatorSourceApplicationBundleIdentifier(const WebPaymentCoordinatorProxy&, PAL::SessionID) final;
-    const String& paymentCoordinatorSourceApplicationSecondaryIdentifier(const WebPaymentCoordinatorProxy&, PAL::SessionID) final;
+    const String& paymentCoordinatorBoundInterfaceIdentifier(const WebPaymentCoordinatorProxy&) final;
+    const String& paymentCoordinatorSourceApplicationBundleIdentifier(const WebPaymentCoordinatorProxy&) final;
+    const String& paymentCoordinatorSourceApplicationSecondaryIdentifier(const WebPaymentCoordinatorProxy&) final;
     void paymentCoordinatorAddMessageReceiver(WebPaymentCoordinatorProxy&, const IPC::StringReference&, IPC::MessageReceiver&) final;
     void paymentCoordinatorRemoveMessageReceiver(WebPaymentCoordinatorProxy&, const IPC::StringReference&) final;
 #endif
 #if ENABLE(APPLE_PAY) && PLATFORM(IOS_FAMILY)
     UIViewController *paymentCoordinatorPresentingViewController(const WebPaymentCoordinatorProxy&) final;
-    const String& paymentCoordinatorCTDataConnectionServiceType(const WebPaymentCoordinatorProxy&, PAL::SessionID) final;
+    const String& paymentCoordinatorCTDataConnectionServiceType(const WebPaymentCoordinatorProxy&) final;
     std::unique_ptr<PaymentAuthorizationPresenter> paymentCoordinatorAuthorizationPresenter(WebPaymentCoordinatorProxy&, PKPaymentRequest *) final;
 #endif
 #if ENABLE(APPLE_PAY) && PLATFORM(MAC)
@@ -2117,7 +2133,8 @@ private:
 
     void makeStorageSpaceRequest(WebCore::FrameIdentifier, const String& originIdentifier, const String& databaseName, const String& displayName, uint64_t currentQuota, uint64_t currentOriginUsage, uint64_t currentDatabaseUsage, uint64_t expectedUsage, CompletionHandler<void(uint64_t)>&&);
 
-    const WebCore::PageIdentifier m_pageID;
+    const Identifier m_identifier;
+    WebCore::PageIdentifier m_webPageID;
     WeakPtr<PageClient> m_pageClient;
     Ref<API::PageConfiguration> m_configuration;
 
@@ -2553,6 +2570,9 @@ private:
         CompletionHandler<void()> speakingResumedCompletionHandler;
     };
     Optional<SpeechSynthesisData> m_speechSynthesisData;
+#endif
+#if USE(DIRECT2D)
+    COMPtr<ID3D11Device1> m_device;
 #endif
     bool m_isQuotaIncreaseDenied { false };
 };
