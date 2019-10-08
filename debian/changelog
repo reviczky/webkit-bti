@@ -4,6 +4,7 @@ webkit2gtk (2.27.1-1) UNRELEASED; urgency=medium
   * debian/watch, debian/gbp.conf:
     + Update for 2.27.x packages in experimental.
   * Refresh all patches.
+    + Use -DWTF_CPU_ARM64_CORTEXA53=OFF to fix the arm64 build.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 08 Oct 2019 16:58:23 +0300
 
