@@ -1804,7 +1804,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_snapshot_options_get_type@Base 2.5.3
  webkit_snapshot_region_get_type@Base 2.5.3
  (optional)webkit_soup_request_generic_get_type@Base 2.19.6
- (optional)webkit_soup_request_input_stream_get_type@Base 2.19.6
  webkit_tls_errors_policy_get_type@Base 2.5.3
  webkit_uri_for_display@Base 2.23.90
  webkit_uri_request_get_http_headers@Base 2.5.3
