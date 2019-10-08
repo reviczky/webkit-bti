@@ -167,11 +167,12 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
         this._createConsoleSettingsView();
         this._createExperimentalSettingsView();
 
-        if (WI.isEngineeringBuild)
+        if (WI.isEngineeringBuild) {
             this._createEngineeringSettingsView();
 
-        WI.showDebugUISetting.addEventListener(WI.Setting.Event.Changed, this._updateDebugSettingsViewVisibility, this);
-        this._updateDebugSettingsViewVisibility();
+            WI.showDebugUISetting.addEventListener(WI.Setting.Event.Changed, this._updateDebugSettingsViewVisibility, this);
+            this._updateDebugSettingsViewVisibility();
+        }
 
         this.selectedSettingsView = this._settingsViews[0];
     }
@@ -345,12 +346,20 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
         reloadInspectorButton.textContent = WI.UIString("Reload Web Inspector");
         reloadInspectorButton.addEventListener("click", (event) => {
             // Force a copy so that WI.Setting sees it as a new value.
-            let newTabs = WI._openTabsSetting.value.slice();
-            if (!initialValues.get(WI.settings.experimentalEnableSourcesTab) && WI.settings.experimentalEnableSourcesTab.value)
-                newTabs.push(WI.SourcesTabContentView.Type);
+            let newTabs = WI._openTabsSetting.value;
+            if (!initialValues.get(WI.settings.experimentalEnableSourcesTab) && WI.settings.experimentalEnableSourcesTab.value) {
+                let existingIndex = newTabs.indexOf(WI.SourcesTabContentView.Type);
+                if (existingIndex === -1) {
+                    let index = newTabs.indexOf(WI.DebuggerTabContentView.Type);
+                    if (index !== -1)
+                        newTabs.insertAtIndex(WI.SourcesTabContentView.Type, index);
+                    else
+                        newTabs.push(WI.SourcesTabContentView.Type);
+                }
+            }
             if (!initialValues.get(WI.settings.experimentalEnableLayersTab) && window.LayerTreeAgent && WI.settings.experimentalEnableLayersTab.value)
                 newTabs.push(WI.LayersTabContentView.Type);
-            WI._openTabsSetting.value = newTabs;
+            WI._openTabsSetting.save();
 
             InspectorFrontendHost.reopen();
         });

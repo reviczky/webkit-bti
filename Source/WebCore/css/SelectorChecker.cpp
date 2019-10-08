@@ -429,10 +429,11 @@ SelectorChecker::MatchResult SelectorChecker::matchRecursively(CheckingContext& 
         }
     case CSSSelector::ShadowDescendant:
         {
-            Element* shadowHostNode = context.element->shadowHost();
-            if (!shadowHostNode)
+            // When matching foo::part(bar) we skip directly to the tree of element 'foo'.
+            auto* shadowHost = checkingContext.shadowHostInPartRuleScope ? checkingContext.shadowHostInPartRuleScope : context.element->shadowHost();
+            if (!shadowHost)
                 return MatchResult::fails(Match::SelectorFailsCompletely);
-            nextContext.element = shadowHostNode;
+            nextContext.element = shadowHost;
             nextContext.firstSelectorOfTheFragment = nextContext.selector;
             nextContext.isSubjectOrAdjacentElement = false;
             PseudoIdSet ignoreDynamicPseudo;
@@ -1045,8 +1046,8 @@ bool SelectorChecker::checkOne(CheckingContext& checkingContext, const LocalCont
             break;
         case CSSSelector::PseudoClassLang:
             {
-                ASSERT(selector.langArgumentList() && !selector.langArgumentList()->isEmpty());
-                return matchesLangPseudoClass(element, *selector.langArgumentList());
+                ASSERT(selector.argumentList() && !selector.argumentList()->isEmpty());
+                return matchesLangPseudoClass(element, *selector.argumentList());
             }
 #if ENABLE(FULLSCREEN_API)
         case CSSSelector::PseudoClassFullScreen:
@@ -1124,27 +1125,60 @@ bool SelectorChecker::checkOne(CheckingContext& checkingContext, const LocalCont
         }
         return false;
     }
-#if ENABLE(VIDEO_TRACK)
-    if (selector.match() == CSSSelector::PseudoElement && selector.pseudoElementType() == CSSSelector::PseudoElementCue) {
-        LocalContext subcontext(context);
 
-        const CSSSelector* const & selector = context.selector;
-        for (subcontext.selector = selector->selectorList()->first(); subcontext.selector; subcontext.selector = CSSSelectorList::next(subcontext.selector)) {
-            subcontext.firstSelectorOfTheFragment = subcontext.selector;
-            subcontext.inFunctionalPseudoClass = true;
-            subcontext.pseudoElementEffective = false;
-            PseudoIdSet ignoredDynamicPseudo;
-            unsigned ignoredSpecificity = 0;
-            if (matchRecursively(checkingContext, subcontext, ignoredDynamicPseudo, ignoredSpecificity).match == Match::SelectorMatches)
-                return true;
+    if (selector.match() == CSSSelector::PseudoElement) {
+        switch (selector.pseudoElementType()) {
+#if ENABLE(VIDEO_TRACK)
+        case CSSSelector::PseudoElementCue: {
+            LocalContext subcontext(context);
+
+            const CSSSelector* const & selector = context.selector;
+            for (subcontext.selector = selector->selectorList()->first(); subcontext.selector; subcontext.selector = CSSSelectorList::next(subcontext.selector)) {
+                subcontext.firstSelectorOfTheFragment = subcontext.selector;
+                subcontext.inFunctionalPseudoClass = true;
+                subcontext.pseudoElementEffective = false;
+                PseudoIdSet ignoredDynamicPseudo;
+                unsigned ignoredSpecificity = 0;
+                if (matchRecursively(checkingContext, subcontext, ignoredDynamicPseudo, ignoredSpecificity).match == Match::SelectorMatches)
+                    return true;
+            }
+            return false;
         }
-        return false;
-    }
 #endif
-    if (selector.match() == CSSSelector::PseudoElement && selector.pseudoElementType() == CSSSelector::PseudoElementSlotted) {
-        // We see ::slotted() pseudo elements when collecting slotted rules from the slot shadow tree only.
-        ASSERT(checkingContext.resolvingMode == Mode::CollectingRules);
-        return is<HTMLSlotElement>(element);
+        case CSSSelector::PseudoElementSlotted:
+            // We see ::slotted() pseudo elements when collecting slotted rules from the slot shadow tree only.
+            ASSERT(checkingContext.resolvingMode == Mode::CollectingRules);
+            return is<HTMLSlotElement>(element);
+
+        case CSSSelector::PseudoElementPart: {
+            auto translatePartNameToRuleScope = [&](AtomString partName) {
+                for (auto* shadowRoot = element.containingShadowRoot(); shadowRoot; shadowRoot = shadowRoot->host()->containingShadowRoot()) {
+                    // Apply mappings up to the scope the rules are coming from.
+                    if (shadowRoot->host() == checkingContext.shadowHostInPartRuleScope)
+                        break;
+                    partName = shadowRoot->partMappings().get(partName);
+                    if (partName.isEmpty())
+                        return AtomString();
+                }
+                return partName;
+            };
+
+            Vector<AtomString, 4> translatedPartNames;
+            for (unsigned i = 0; i < element.partNames().size(); ++i) {
+                auto translatedPartName = translatePartNameToRuleScope(element.partNames()[i]);
+                if (!translatedPartName.isEmpty())
+                    translatedPartNames.append(translatedPartName);
+            }
+
+            for (auto& part : *selector.argumentList()) {
+                if (!translatedPartNames.contains(part))
+                    return false;
+            }
+            return true;
+        }
+        default:
+            return true;
+        }
     }
     return true;
 }

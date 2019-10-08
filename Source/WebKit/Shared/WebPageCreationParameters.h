@@ -31,6 +31,7 @@
 #include "WebCompiledContentRuleListData.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebPageGroupData.h"
+#include "WebPageProxyIdentifier.h"
 #include "WebPreferencesStore.h"
 #include "WebUserContentControllerDataTypes.h"
 #include <WebCore/ActivityState.h>
@@ -44,7 +45,6 @@
 #include <WebCore/ScrollTypes.h>
 #include <WebCore/UserInterfaceLayoutDirection.h>
 #include <WebCore/ViewportArguments.h>
-#include <pal/SessionID.h>
 #include <wtf/HashMap.h>
 #include <wtf/text/WTFString.h>
 
@@ -64,15 +64,9 @@ class Encoder;
 namespace WebKit {
 
 struct WebPageCreationParameters {
-    explicit WebPageCreationParameters(PAL::SessionID sessionID)
-        : sessionID(sessionID)
-    {
-    }
-
     void encode(IPC::Encoder&) const;
     static Optional<WebPageCreationParameters> decode(IPC::Decoder&);
 
-    PAL::SessionID sessionID;
     WebCore::IntSize viewSize;
 
     OptionSet<WebCore::ActivityState::Flag> activityState;
@@ -80,6 +74,7 @@ struct WebPageCreationParameters {
     WebPreferencesStore store;
     DrawingAreaType drawingAreaType;
     DrawingAreaIdentifier drawingAreaIdentifier;
+    WebPageProxyIdentifier webPageProxyIdentifier;
     WebPageGroupData pageGroupData;
 
     bool isEditable;
@@ -106,7 +101,6 @@ struct WebPageCreationParameters {
 
     UserContentControllerIdentifier userContentControllerID;
     uint64_t visitedLinkTableID;
-    uint64_t websiteDataStoreID;
     bool canRunBeforeUnloadConfirmPanel;
     bool canRunModal;
 

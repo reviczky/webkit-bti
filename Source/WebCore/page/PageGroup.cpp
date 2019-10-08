@@ -93,9 +93,6 @@ void PageGroup::addPage(Page& page)
 {
     ASSERT(!m_pages.contains(&page));
     m_pages.add(&page);
-    
-    if (m_isLegacyPrivateBrowsingEnabledForTesting)
-        page.enableLegacyPrivateBrowsing(true);
 }
 
 void PageGroup::removePage(Page& page)
@@ -125,16 +122,5 @@ CaptionUserPreferences& PageGroup::captionPreferences()
     return *m_captionPreferences.get();
 }
 #endif
-
-void PageGroup::enableLegacyPrivateBrowsingForTesting(bool enabled)
-{
-    if (m_isLegacyPrivateBrowsingEnabledForTesting == enabled)
-        return;
-
-    m_isLegacyPrivateBrowsingEnabledForTesting = enabled;
-    
-    for (auto* page : m_pages)
-        page->enableLegacyPrivateBrowsing(enabled);
-}
 
 } // namespace WebCore

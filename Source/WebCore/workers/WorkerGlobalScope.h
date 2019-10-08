@@ -35,10 +35,10 @@
 #include <wtf/URL.h>
 #include "WorkerCacheStorageConnection.h"
 #include "WorkerEventQueue.h"
+#include "WorkerMessagePortChannelProvider.h"
 #include "WorkerScriptController.h"
 #include <JavaScriptCore/ConsoleMessage.h>
 #include <memory>
-#include <pal/SessionID.h>
 
 namespace WebCore {
 
@@ -50,6 +50,7 @@ class ScheduledAction;
 class WorkerInspectorController;
 class WorkerLocation;
 class WorkerNavigator;
+class WorkerSWClientConnection;
 class WorkerThread;
 
 namespace IDBClient {
@@ -73,6 +74,10 @@ public:
 #endif
 
     WorkerCacheStorageConnection& cacheStorageConnection();
+    MessagePortChannelProvider& messagePortChannelProvider();
+#if ENABLE(SERVICE_WORKER)
+    WorkerSWClientConnection& swClientConnection();
+#endif
 
     WorkerScriptController* script() { return m_script.get(); }
     void clearScript() { m_script = nullptr; }
@@ -126,10 +131,8 @@ public:
 
     unsigned long createUniqueIdentifier() { return m_uniqueIdentifier++; }
 
-    PAL::SessionID sessionID() const final { return m_sessionID; }
-
 protected:
-    WorkerGlobalScope(const URL&, Ref<SecurityOrigin>&&, const String& identifier, const String& userAgent, bool isOnline, WorkerThread&, bool shouldBypassMainWorldContentSecurityPolicy, Ref<SecurityOrigin>&& topOrigin, MonotonicTime timeOrigin, IDBClient::IDBConnectionProxy*, SocketProvider*, PAL::SessionID);
+    WorkerGlobalScope(const URL&, Ref<SecurityOrigin>&&, const String& identifier, const String& userAgent, bool isOnline, WorkerThread&, bool shouldBypassMainWorldContentSecurityPolicy, Ref<SecurityOrigin>&& topOrigin, MonotonicTime timeOrigin, IDBClient::IDBConnectionProxy*, SocketProvider*);
 
     void applyContentSecurityPolicyResponseHeaders(const ContentSecurityPolicyResponseHeaders&);
 
@@ -208,10 +211,12 @@ private:
     RefPtr<Performance> m_performance;
     mutable RefPtr<Crypto> m_crypto;
 
-    PAL::SessionID m_sessionID;
     RefPtr<WorkerCacheStorageConnection> m_cacheStorageConnection;
-
+    std::unique_ptr<WorkerMessagePortChannelProvider> m_messagePortChannelProvider;
     unsigned long m_uniqueIdentifier { 1 };
+#if ENABLE(SERVICE_WORKER)
+    RefPtr<WorkerSWClientConnection> m_swClientConnection;
+#endif
 };
 
 } // namespace WebCore

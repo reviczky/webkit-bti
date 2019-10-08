@@ -42,9 +42,9 @@ WI.CanvasObserver = class CanvasObserver
         WI.canvasManager.canvasMemoryChanged(canvasId, memoryCost);
     }
 
-    cssCanvasClientNodesChanged(canvasId)
+    clientNodesChanged(canvasId)
     {
-        WI.canvasManager.cssCanvasClientNodesChanged(canvasId);
+        WI.canvasManager.clientNodesChanged(canvasId);
     }
 
     recordingStarted(canvasId, initiator)
@@ -67,13 +67,19 @@ WI.CanvasObserver = class CanvasObserver
         WI.canvasManager.extensionEnabled(canvasId, extension);
     }
 
-    programCreated(canvasId, programId)
+    programCreated(canvasId, programId, programType)
     {
-        WI.canvasManager.programCreated(canvasId, programId);
+        WI.canvasManager.programCreated(canvasId, programId, programType);
     }
 
     programDeleted(programId)
     {
         WI.canvasManager.programDeleted(programId);
+    }
+
+    // COMPATIBILITY (iOS 13): Canvas.events.cssCanvasClientNodesChanged was renamed to Canvas.events.clientNodesChanged.
+    cssCanvasClientNodesChanged(canvasId)
+    {
+        WI.canvasManager.clientNodesChanged(canvasId);
     }
 };

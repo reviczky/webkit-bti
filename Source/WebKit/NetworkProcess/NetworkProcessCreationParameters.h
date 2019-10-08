@@ -52,13 +52,7 @@ struct NetworkProcessCreationParameters {
     static bool decode(IPC::Decoder&, NetworkProcessCreationParameters&);
 
     CacheModel cacheModel { CacheModel::DocumentViewer };
-    bool canHandleHTTPSServerTrustEvaluation { true };
 
-    String diskCacheDirectory;
-    SandboxExtension::Handle diskCacheDirectoryExtensionHandle;
-#if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
-    bool shouldEnableNetworkCacheSpeculativeRevalidation { false };
-#endif
 #if PLATFORM(MAC)
     Vector<uint8_t> uiProcessCookieStorageIdentifier;
 #endif
@@ -68,7 +62,6 @@ struct NetworkProcessCreationParameters {
     SandboxExtension::Handle parentBundleDirectoryExtensionHandle;
 #endif
     bool shouldSuppressMemoryPressureHandler { false };
-    bool shouldUseTestingNetworkSession { false };
 
     Vector<String> urlSchemesRegisteredForCustomProtocols;
 
@@ -107,10 +100,10 @@ struct NetworkProcessCreationParameters {
     bool shouldDisableServiceWorkerProcessTerminationDelay { false };
 #endif
     bool shouldEnableITPDatabase { false };
-    uint32_t downloadMonitorSpeedMultiplier { 1 };
     bool enableAdClickAttributionDebugMode { false };
     String hstsStorageDirectory;
     SandboxExtension::Handle hstsStorageDirectoryExtensionHandle;
+    bool enableLegacyTLS { false };
 };
 
 } // namespace WebKit

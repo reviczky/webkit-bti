@@ -267,12 +267,7 @@ RefPtr<Element> Element::focusDelegate()
 
 int Element::tabIndexForBindings() const
 {
-    auto defaultIndex = defaultTabIndex();
-    ASSERT(!defaultIndex || defaultIndex == -1);
-    // FIXME: supportsFocus() check shouldn't be here.
-    if (!defaultIndex || supportsFocus())
-        return tabIndexSetExplicitly().valueOr(0);
-    return defaultIndex;
+    return valueOrCompute(tabIndexSetExplicitly(), [&] { return defaultTabIndex(); });
 }
 
 void Element::setTabIndexForBindings(int value)
@@ -1174,6 +1169,18 @@ double Element::clientWidth()
     
     if (RenderBox* renderer = renderBox()) {
         LayoutUnit clientWidth = subpixelMetricsEnabled(renderer->document()) ? renderer->clientWidth() : LayoutUnit(roundToInt(renderer->clientWidth()));
+        // clientWidth/Height is the visual portion of the box content, not including
+        // borders or scroll bars, but includes padding. And per
+        // https://www.w3.org/TR/CSS2/tables.html#model,
+        // table wrapper box is a principal block box that contains the table box
+        // itself and any caption boxes, and table grid box is a block-level box that
+        // contains the table's internal table boxes. When table's border is specified
+        // in CSS, the border is added to table grid box, not table wrapper box.
+        // Currently, WebKit doesn't have table wrapper box, and we are supposed to
+        // retrieve clientWidth/Height from table wrapper box, not table grid box. So
+        // when we retrieve clientWidth/Height, it includes table's border size.
+        if (renderer->isTable())
+            clientWidth += renderer->borderLeft() + renderer->borderRight();
         return convertToNonSubpixelValueIfNeeded(adjustLayoutUnitForAbsoluteZoom(clientWidth, *renderer).toDouble(), renderer->document());
     }
     return 0;
@@ -1195,6 +1202,18 @@ double Element::clientHeight()
 
     if (RenderBox* renderer = renderBox()) {
         LayoutUnit clientHeight = subpixelMetricsEnabled(renderer->document()) ? renderer->clientHeight() : LayoutUnit(roundToInt(renderer->clientHeight()));
+        // clientWidth/Height is the visual portion of the box content, not including
+        // borders or scroll bars, but includes padding. And per
+        // https://www.w3.org/TR/CSS2/tables.html#model,
+        // table wrapper box is a principal block box that contains the table box
+        // itself and any caption boxes, and table grid box is a block-level box that
+        // contains the table's internal table boxes. When table's border is specified
+        // in CSS, the border is added to table grid box, not table wrapper box.
+        // Currently, WebKit doesn't have table wrapper box, and we are supposed to
+        // retrieve clientWidth/Height from table wrapper box, not table grid box. So
+        // when we retrieve clientWidth/Height, it includes table's border size.
+        if (renderer->isTable())
+            clientHeight += renderer->borderTop() + renderer->borderBottom();
         return convertToNonSubpixelValueIfNeeded(adjustLayoutUnitForAbsoluteZoom(clientHeight, *renderer).toDouble(), renderer->document());
     }
     return 0;
@@ -1722,6 +1741,11 @@ void Element::attributeChanged(const QualifiedName& name, const AtomString& oldV
                 if (auto* shadowRoot = parent->shadowRoot())
                     shadowRoot->hostChildElementDidChangeSlotAttribute(*this, oldValue, newValue);
             }
+        } else if (name == HTMLNames::partAttr)
+            partAttributeChanged(newValue);
+        else if (name == HTMLNames::exportpartsAttr) {
+            if (auto* shadowRoot = this->shadowRoot())
+                shadowRoot->invalidatePartMappings();
         }
     }
 
@@ -1742,7 +1766,7 @@ void Element::attributeChanged(const QualifiedName& name, const AtomString& oldV
 }
 
 template <typename CharacterType>
-static inline bool classStringHasClassName(const CharacterType* characters, unsigned length)
+static inline bool isNonEmptyTokenList(const CharacterType* characters, unsigned length)
 {
     ASSERT(length > 0);
 
@@ -1756,16 +1780,16 @@ static inline bool classStringHasClassName(const CharacterType* characters, unsi
     return i < length;
 }
 
-static inline bool classStringHasClassName(const AtomString& newClassString)
+static inline bool isNonEmptyTokenList(const AtomString& stringValue)
 {
-    unsigned length = newClassString.length();
+    unsigned length = stringValue.length();
 
     if (!length)
         return false;
 
-    if (newClassString.is8Bit())
-        return classStringHasClassName(newClassString.characters8(), length);
-    return classStringHasClassName(newClassString.characters16(), length);
+    if (stringValue.is8Bit())
+        return isNonEmptyTokenList(stringValue.characters8(), length);
+    return isNonEmptyTokenList(stringValue.characters16(), length);
 }
 
 void Element::classAttributeChanged(const AtomString& newClassString)
@@ -1775,7 +1799,7 @@ void Element::classAttributeChanged(const AtomString& newClassString)
         ensureUniqueElementData();
 
     bool shouldFoldCase = document().inQuirksMode();
-    bool newStringHasClasses = classStringHasClassName(newClassString);
+    bool newStringHasClasses = isNonEmptyTokenList(newClassString);
 
     auto oldClassNames = elementData()->classNames();
     auto newClassNames = newStringHasClasses ? SpaceSplitString(newClassString, shouldFoldCase) : SpaceSplitString();
@@ -1787,6 +1811,23 @@ void Element::classAttributeChanged(const AtomString& newClassString)
     if (hasRareData()) {
         if (auto* classList = elementRareData()->classList())
             classList->associatedAttributeValueChanged(newClassString);
+    }
+}
+
+void Element::partAttributeChanged(const AtomString& newValue)
+{
+    if (!RuntimeEnabledFeatures::sharedFeatures().cssShadowPartsEnabled())
+        return;
+
+    bool hasParts = isNonEmptyTokenList(newValue);
+    if (hasParts || !partNames().isEmpty()) {
+        auto newParts = hasParts ? SpaceSplitString(newValue, false) : SpaceSplitString();
+        ensureElementRareData().setPartNames(WTFMove(newParts));
+    }
+
+    if (hasRareData()) {
+        if (auto* partList = elementRareData()->partList())
+            partList->associatedAttributeValueChanged(newValue);
     }
 }
 
@@ -3393,6 +3434,19 @@ DOMTokenList& Element::classList()
     if (!data.classList())
         data.setClassList(makeUnique<DOMTokenList>(*this, HTMLNames::classAttr));
     return *data.classList();
+}
+
+SpaceSplitString Element::partNames() const
+{
+    return hasRareData() ? elementRareData()->partNames() : SpaceSplitString();
+}
+
+DOMTokenList& Element::part()
+{
+    auto& data = ensureElementRareData();
+    if (!data.partList())
+        data.setPartList(makeUnique<DOMTokenList>(*this, HTMLNames::partAttr));
+    return *data.partList();
 }
 
 DatasetDOMStringMap& Element::dataset()

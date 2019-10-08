@@ -30,7 +30,6 @@
 #include "UserContentControllerIdentifier.h"
 #include <WebCore/ContentSecurityPolicyResponseHeaders.h>
 #include <WebCore/FetchOptions.h>
-#include <WebCore/SecurityOrigin.h>
 #include <wtf/Seconds.h>
 
 namespace IPC {
@@ -44,11 +43,6 @@ typedef uint64_t ResourceLoadIdentifier;
 
 class NetworkResourceLoadParameters : public NetworkLoadParameters {
 public:
-    explicit NetworkResourceLoadParameters(PAL::SessionID sessionID)
-        : NetworkLoadParameters(sessionID)
-    {
-    }
-
     void encode(IPC::Encoder&) const;
     static Optional<NetworkResourceLoadParameters> decode(IPC::Decoder&);
 

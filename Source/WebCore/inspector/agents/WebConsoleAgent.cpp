@@ -29,7 +29,6 @@
 
 #include "CommandLineAPIHost.h"
 #include "DOMWindow.h"
-#include "InspectorWebAgentBase.h"
 #include "Logging.h"
 #include "ResourceError.h"
 #include "ResourceResponse.h"

@@ -27,20 +27,25 @@
 
 #if ENABLE(WEBGL)
 
+#include "ContextDestructionObserver.h"
 #include "WebGLSharedObject.h"
 #include <wtf/Forward.h>
 
 namespace WebCore {
 
+class ScriptExecutionContext;
+class WebGLRenderingContextBase;
 class WebGLShader;
 
-class WebGLProgram final : public WebGLSharedObject {
+class WebGLProgram final : public WebGLSharedObject, public ContextDestructionObserver {
 public:
     static Ref<WebGLProgram> create(WebGLRenderingContextBase&);
     virtual ~WebGLProgram();
 
     static HashMap<WebGLProgram*, WebGLRenderingContextBase*>& instances(const LockHolder&);
     static Lock& instancesMutex();
+
+    void contextDestroyed() final;
 
     unsigned numActiveAttribLocations();
     GC3Dint getActiveAttribLocation(GC3Duint index);

@@ -58,12 +58,11 @@ namespace WebKit {
 using namespace PAL;
 using namespace WebCore;
 
-#define SWSERVERCONNECTION_RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(m_sessionID.isAlwaysOnLoggingAllowed(), ServiceWorker, "%p - WebSWServerConnection::" fmt, this, ##__VA_ARGS__)
-#define SWSERVERCONNECTION_RELEASE_LOG_ERROR_IF_ALLOWED(fmt, ...) RELEASE_LOG_ERROR_IF(m_sessionID.isAlwaysOnLoggingAllowed(), ServiceWorker, "%p - WebSWServerConnection::" fmt, this, ##__VA_ARGS__)
+#define SWSERVERCONNECTION_RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(sessionID().isAlwaysOnLoggingAllowed(), ServiceWorker, "%p - WebSWServerConnection::" fmt, this, ##__VA_ARGS__)
+#define SWSERVERCONNECTION_RELEASE_LOG_ERROR_IF_ALLOWED(fmt, ...) RELEASE_LOG_ERROR_IF(sessionID().isAlwaysOnLoggingAllowed(), ServiceWorker, "%p - WebSWServerConnection::" fmt, this, ##__VA_ARGS__)
 
-WebSWServerConnection::WebSWServerConnection(NetworkProcess& networkProcess, SWServer& server, IPC::Connection& connection, SessionID sessionID)
-    : SWServer::Connection(server)
-    , m_sessionID(sessionID)
+WebSWServerConnection::WebSWServerConnection(NetworkProcess& networkProcess, SWServer& server, IPC::Connection& connection, ProcessIdentifier processIdentifier)
+    : SWServer::Connection(server, processIdentifier)
     , m_contentConnection(connection)
     , m_networkProcess(networkProcess)
 {
@@ -181,21 +180,29 @@ void WebSWServerConnection::startFetch(ServiceWorkerRegistrationIdentifier servi
         }
 
         if (!worker->contextConnection())
-            m_networkProcess->createServerToContextConnection(worker->registrableDomain(), server().sessionID());
+            server().createContextConnection(worker->registrableDomain());
 
-        server().runServiceWorkerIfNecessary(serviceWorkerIdentifier, [weakThis = WTFMove(weakThis), this, fetchIdentifier, serviceWorkerIdentifier, request = WTFMove(request), options = WTFMove(options), formData = WTFMove(formData), referrer = WTFMove(referrer)](auto* contextConnection) {
+        server().runServiceWorkerIfNecessary(serviceWorkerIdentifier, [weakThis = WTFMove(weakThis), this, fetchIdentifier, serviceWorkerIdentifier, request = WTFMove(request), options = WTFMove(options), formData = WTFMove(formData), referrer = WTFMove(referrer), shouldSkipFetchEvent = worker->shouldSkipFetchEvent()](auto* contextConnection) {
             if (!weakThis)
                 return;
 
             if (contextConnection) {
                 SWSERVERCONNECTION_RELEASE_LOG_IF_ALLOWED("startFetch: Starting fetch %s via service worker %s", fetchIdentifier.loggingString().utf8().data(), serviceWorkerIdentifier.loggingString().utf8().data());
-                static_cast<WebSWServerToContextConnection&>(*contextConnection).startFetch(m_sessionID, m_contentConnection.get(), this->identifier(), fetchIdentifier, serviceWorkerIdentifier, request, options, formData, referrer);
+                static_cast<WebSWServerToContextConnection&>(*contextConnection).startFetch(sessionID(), m_contentConnection.get(), this->identifier(), fetchIdentifier, serviceWorkerIdentifier, request, options, formData, referrer);
             } else {
                 SWSERVERCONNECTION_RELEASE_LOG_ERROR_IF_ALLOWED("startFetch: fetchIdentifier: %s DidNotHandle because failed to run service worker", fetchIdentifier.loggingString().utf8().data());
                 m_contentConnection->send(Messages::ServiceWorkerClientFetch::DidNotHandle { }, fetchIdentifier);
             }
         });
     };
+
+    if (worker->shouldSkipFetchEvent()) {
+        m_contentConnection->send(Messages::ServiceWorkerClientFetch::DidNotHandle { }, fetchIdentifier);
+        auto* registration = server().getRegistration(worker->registrationKey());
+        if (registration && registration->shouldSoftUpdate(options))
+            registration->softUpdate();
+        return;
+    }
 
     if (worker->state() == ServiceWorkerState::Activating) {
         worker->whenActivated(WTFMove(runServerWorkerAndStartFetch));
@@ -224,7 +231,7 @@ void WebSWServerConnection::postMessageToServiceWorker(ServiceWorkerIdentifier d
         return;
 
     if (!destinationWorker->contextConnection())
-        m_networkProcess->createServerToContextConnection(destinationWorker->registrableDomain(), server().sessionID());
+        server().createContextConnection(destinationWorker->registrableDomain());
 
     // It's possible this specific worker cannot be re-run (e.g. its registration has been removed)
     server().runServiceWorkerIfNecessary(destinationIdentifier, [destinationIdentifier, message = WTFMove(message), sourceData = WTFMove(*sourceData)](auto* contextConnection) mutable {
@@ -235,9 +242,9 @@ void WebSWServerConnection::postMessageToServiceWorker(ServiceWorkerIdentifier d
 
 void WebSWServerConnection::scheduleJobInServer(ServiceWorkerJobData&& jobData)
 {
-    RegistrableDomain registrableDomain(jobData.scriptURL);
-    if (!m_networkProcess->serverToContextConnectionForRegistrableDomain(registrableDomain))
-        m_networkProcess->createServerToContextConnection(registrableDomain, server().sessionID());
+    RegistrableDomain registrableDomain(jobData.scopeURL);
+    if (!server().contextConnectionForRegistrableDomain(registrableDomain))
+        server().createContextConnection(registrableDomain);
 
     SWSERVERCONNECTION_RELEASE_LOG_IF_ALLOWED("Scheduling ServiceWorker job %s in server", jobData.identifier().loggingString().utf8().data());
     ASSERT(identifier() == jobData.connectionIdentifier());
@@ -245,13 +252,13 @@ void WebSWServerConnection::scheduleJobInServer(ServiceWorkerJobData&& jobData)
     server().scheduleJob(WTFMove(jobData));
 }
 
-void WebSWServerConnection::postMessageToServiceWorkerClient(DocumentIdentifier destinationContextIdentifier, MessageWithMessagePorts&& message, ServiceWorkerIdentifier sourceIdentifier, const String& sourceOrigin)
+void WebSWServerConnection::postMessageToServiceWorkerClient(DocumentIdentifier destinationContextIdentifier, const MessageWithMessagePorts& message, ServiceWorkerIdentifier sourceIdentifier, const String& sourceOrigin)
 {
     auto* sourceServiceWorker = server().workerByID(sourceIdentifier);
     if (!sourceServiceWorker)
         return;
 
-    send(Messages::WebSWClientConnection::PostMessageToServiceWorkerClient { destinationContextIdentifier, WTFMove(message), sourceServiceWorker->data(), sourceOrigin });
+    send(Messages::WebSWClientConnection::PostMessageToServiceWorkerClient { destinationContextIdentifier, message, sourceServiceWorker->data(), sourceOrigin });
 }
 
 void WebSWServerConnection::matchRegistration(uint64_t registrationMatchRequestIdentifier, const SecurityOriginData& topOrigin, const URL& clientURL)
@@ -325,7 +332,7 @@ void WebSWServerConnection::updateThrottleState()
         origins.add(origin.clientOrigin);
 
     for (auto& origin : origins) {
-        if (auto* contextConnection = SWServerToContextConnection::connectionForRegistrableDomain(RegistrableDomain { origin })) {
+        if (auto* contextConnection = server().contextConnectionForRegistrableDomain(RegistrableDomain { origin })) {
             auto& connection = static_cast<WebSWServerToContextConnection&>(*contextConnection);
 
             if (connection.isThrottleable() == m_isThrottleable)
@@ -338,7 +345,7 @@ void WebSWServerConnection::updateThrottleState()
     }
 }
 
-void WebSWServerConnection::serverToContextConnectionCreated(WebCore::SWServerToContextConnection& contextConnection)
+void WebSWServerConnection::contextConnectionCreated(WebCore::SWServerToContextConnection& contextConnection)
 {
     auto& connection =  static_cast<WebSWServerToContextConnection&>(contextConnection);
     connection.setThrottleState(computeThrottleState(connection.registrableDomain()));
@@ -348,6 +355,11 @@ void WebSWServerConnection::syncTerminateWorkerFromClient(WebCore::ServiceWorker
 {
     syncTerminateWorker(WTFMove(identifier));
     completionHandler();
+}
+
+PAL::SessionID WebSWServerConnection::sessionID() const
+{
+    return server().sessionID();
 }
     
 template<typename U> void WebSWServerConnection::sendToContextProcess(WebCore::SWServerToContextConnection& connection, U&& message)

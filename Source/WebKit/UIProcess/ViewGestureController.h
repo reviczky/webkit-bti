@@ -27,9 +27,9 @@
 
 #include "MessageReceiver.h"
 #include "SameDocumentNavigationType.h"
+#include "WebPageProxyIdentifier.h"
 #include <WebCore/Color.h>
 #include <WebCore/FloatRect.h>
-#include <WebCore/PageIdentifier.h>
 #include <wtf/MonotonicTime.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/RunLoop.h>
@@ -42,6 +42,7 @@
 #if PLATFORM(GTK)
 #include <WebCore/CairoUtilities.h>
 #include <gtk/gtk.h>
+#include <wtf/glib/GRefPtr.h>
 #endif
 
 #if PLATFORM(COCOA)
@@ -177,7 +178,7 @@ private:
     // IPC::MessageReceiver.
     void didReceiveMessage(IPC::Connection&, IPC::Decoder&) override;
 
-    static ViewGestureController* controllerForGesture(WebCore::PageIdentifier, GestureID);
+    static ViewGestureController* controllerForGesture(WebPageProxyIdentifier, GestureID);
 
     static GestureID takeNextGestureID();
     void willBeginGesture(ViewGestureType);
@@ -305,6 +306,10 @@ private:
     };
 #endif
 
+#if PLATFORM(GTK)
+    GRefPtr<GtkStyleContext> createStyleContext(const char*);
+#endif
+
     WebPageProxy& m_webPageProxy;
     ViewGestureType m_activeGestureType { ViewGestureType::None };
 
@@ -410,6 +415,14 @@ private:
     SwipeProgressTracker m_swipeProgressTracker;
 
     RefPtr<cairo_pattern_t> m_currentSwipeSnapshotPattern;
+    RefPtr<cairo_pattern_t> m_swipeDimmingPattern;
+    RefPtr<cairo_pattern_t> m_swipeShadowPattern;
+    RefPtr<cairo_pattern_t> m_swipeBorderPattern;
+    RefPtr<cairo_pattern_t> m_swipeOutlinePattern;
+    int m_swipeShadowSize;
+    int m_swipeBorderSize;
+    int m_swipeOutlineSize;
+    GRefPtr<GtkCssProvider> m_cssProvider;
 
     bool m_isSimulatedSwipe { false };
 #endif

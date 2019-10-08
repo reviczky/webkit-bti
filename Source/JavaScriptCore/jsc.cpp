@@ -27,6 +27,7 @@
 #include "BuiltinNames.h"
 #include "ButterflyInlines.h"
 #include "BytecodeCacheError.h"
+#include "CallFrameInlines.h"
 #include "CatchScope.h"
 #include "CodeBlock.h"
 #include "CodeCache.h"
@@ -139,6 +140,11 @@
 
 #if OS(DARWIN)
 #include <wtf/spi/darwin/ProcessMemoryFootprint.h>
+#elif OS(LINUX)
+#include <wtf/linux/ProcessMemoryFootprint.h>
+#endif
+
+#if OS(DARWIN) || OS(LINUX)
 struct MemoryFootprint : ProcessMemoryFootprint {
     MemoryFootprint(const ProcessMemoryFootprint& src)
         : ProcessMemoryFootprint(src)
@@ -195,7 +201,7 @@ public:
     }
 
     typedef JSNonFinalObject Base;
-    static const unsigned StructureFlags = Base::StructureFlags | JSC::MasqueradesAsUndefined;
+    static constexpr unsigned StructureFlags = Base::StructureFlags | JSC::MasqueradesAsUndefined;
 
     static Masquerader* create(VM& vm, JSGlobalObject* globalObject)
     {
@@ -300,7 +306,6 @@ static EncodedJSValue JSC_HOST_CALL functionJSCStack(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionGCAndSweep(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionFullGC(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionEdenGC(ExecState*);
-static EncodedJSValue JSC_HOST_CALL functionForceGCSlowPaths(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionHeapSize(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionCreateMemoryFootprint(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionResetMemoryPeak(ExecState*);
@@ -320,6 +325,7 @@ static EncodedJSValue JSC_HOST_CALL functionNoFTL(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionNoOSRExitFuzzing(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionOptimizeNextInvocation(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionNumberOfDFGCompiles(ExecState*);
+static EncodedJSValue JSC_HOST_CALL functionCallerIsOMGCompiled(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionJSCOptions(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionReoptimizationRetryCount(ExecState*);
 static EncodedJSValue JSC_HOST_CALL functionTransferArrayBuffer(ExecState*);
@@ -492,7 +498,7 @@ public:
         return object;
     }
 
-    static const bool needsDestruction = false;
+    static constexpr bool needsDestruction = false;
 
     DECLARE_INFO;
     static const GlobalObjectMethodTable s_globalObjectMethodTable;
@@ -518,7 +524,6 @@ protected:
         addFunction(vm, "gc", functionGCAndSweep, 0);
         addFunction(vm, "fullGC", functionFullGC, 0);
         addFunction(vm, "edenGC", functionEdenGC, 0);
-        addFunction(vm, "forceGCSlowPaths", functionForceGCSlowPaths, 0);
         addFunction(vm, "gcHeapSize", functionHeapSize, 0);
         addFunction(vm, "MemoryFootprint", functionCreateMemoryFootprint, 0);
         addFunction(vm, "resetMemoryPeak", functionResetMemoryPeak, 0);
@@ -541,6 +546,7 @@ protected:
         addFunction(vm, "noFTL", functionNoFTL, 1);
         addFunction(vm, "noOSRExitFuzzing", functionNoOSRExitFuzzing, 1);
         addFunction(vm, "numberOfDFGCompiles", functionNumberOfDFGCompiles, 1);
+        addFunction(vm, "callerIsOMGCompiled", functionCallerIsOMGCompiled, 0);
         addFunction(vm, "jscOptions", functionJSCOptions, 0);
         addFunction(vm, "optimizeNextInvocation", functionOptimizeNextInvocation, 1);
         addFunction(vm, "reoptimizationRetryCount", functionReoptimizationRetryCount, 1);
@@ -835,8 +841,9 @@ JSInternalPromise* GlobalObject::moduleLoaderImportModule(JSGlobalObject* global
     if (sourceOrigin.isNull())
         return reject(createError(exec, "Could not resolve the module specifier."_s));
 
-    const auto& referrer = sourceOrigin.string();
-    const auto& moduleName = moduleNameValue->value(exec);
+    auto referrer = sourceOrigin.string();
+    auto moduleName = moduleNameValue->value(exec);
+    RETURN_IF_EXCEPTION(throwScope, nullptr);
     if (UNLIKELY(catchScope.exception()))
         return reject(catchScope.exception());
 
@@ -1367,14 +1374,6 @@ EncodedJSValue JSC_HOST_CALL functionEdenGC(ExecState* exec)
     return JSValue::encode(jsNumber(vm.heap.sizeAfterLastEdenCollection()));
 }
 
-EncodedJSValue JSC_HOST_CALL functionForceGCSlowPaths(ExecState*)
-{
-    // It's best for this to be the first thing called in the 
-    // JS program so the option is set to true before we JIT.
-    Options::forceGCSlowPaths() = true;
-    return JSValue::encode(jsUndefined());
-}
-
 EncodedJSValue JSC_HOST_CALL functionHeapSize(ExecState* exec)
 {
     VM& vm = exec->vm();
@@ -1725,6 +1724,31 @@ EncodedJSValue JSC_HOST_CALL functionOptimizeNextInvocation(ExecState* exec)
 EncodedJSValue JSC_HOST_CALL functionNumberOfDFGCompiles(ExecState* exec)
 {
     return JSValue::encode(numberOfDFGCompiles(exec));
+}
+
+EncodedJSValue JSC_HOST_CALL functionCallerIsOMGCompiled(ExecState* exec)
+{
+    VM& vm = exec->vm();
+    auto scope = DECLARE_THROW_SCOPE(vm);
+
+    if (!Options::useBBQTierUpChecks())
+        return JSValue::encode(jsBoolean(true));
+
+    CallerFunctor wasmToJSFrame;
+    StackVisitor::visit(exec, &vm, wasmToJSFrame);
+    if (!wasmToJSFrame.callerFrame()->isAnyWasmCallee())
+        return throwVMError(exec, scope, "caller is not a wasm->js import function");
+
+    // We have a wrapper frame that we generate for imports. If we ever can direct call from wasm we would need to change this.
+    ASSERT(!wasmToJSFrame.callerFrame()->callee().isWasm());
+    CallerFunctor wasmFrame;
+    StackVisitor::visit(wasmToJSFrame.callerFrame(), &vm, wasmFrame);
+    ASSERT(wasmFrame.callerFrame()->callee().isWasm());
+#if ENABLE(WEBASSEMBLY)
+    auto mode = wasmFrame.callerFrame()->callee().asWasmCallee()->compilationMode();
+    return JSValue::encode(jsBoolean(mode == Wasm::CompilationMode::OMGMode || mode == Wasm::CompilationMode::OMGForOSREntryMode));
+#endif
+    RELEASE_ASSERT_NOT_REACHED();
 }
 
 Message::Message(ArrayBufferContents&& contents, int32_t index)
@@ -2095,10 +2119,10 @@ EncodedJSValue JSC_HOST_CALL functionJSCOptions(ExecState* exec)
 {
     VM& vm = exec->vm();
     JSObject* optionsObject = constructEmptyObject(exec);
-#define FOR_EACH_OPTION(type_, name_, defaultValue_, availability_, description_) \
+#define READ_OPTION(type_, name_, defaultValue_, availability_, description_) \
     addOption(vm, optionsObject, Identifier::fromString(vm, #name_), Options::name_());
-    JSC_OPTIONS(FOR_EACH_OPTION)
-#undef FOR_EACH_OPTION
+    FOR_EACH_JSC_OPTION(READ_OPTION)
+#undef READ_OPTION
     return JSValue::encode(optionsObject);
 }
 
@@ -2603,9 +2627,6 @@ static void runWithOptions(GlobalObject* globalObject, CommandLine& options, boo
     String fileName;
     Vector<char> scriptBuffer;
 
-    if (options.m_dump)
-        JSC::Options::dumpGeneratedBytecodes() = true;
-
     VM& vm = globalObject->vm();
     auto scope = DECLARE_CATCH_SCOPE(vm);
 
@@ -3070,7 +3091,7 @@ int runJSC(const CommandLine& options, bool isWorker, const Func& func)
 int jscmain(int argc, char** argv)
 {
     // Need to override and enable restricted options before we start parsing options below.
-    Options::enableRestrictedOptions(true);
+    Config::enableRestrictedOptions();
 
     WTF::initializeMainThread();
 
@@ -3079,6 +3100,8 @@ int jscmain(int argc, char** argv)
     CommandLine options(argc, argv);
 
     processConfigFile(Options::configFile(), "jsc");
+    if (options.m_dump)
+        JSC::Options::dumpGeneratedBytecodes() = true;
 
     // Initialize JSC before getting VM.
     JSC::initializeThreading();
@@ -3086,7 +3109,16 @@ int jscmain(int argc, char** argv)
 #if ENABLE(WEBASSEMBLY)
     JSC::Wasm::enableFastMemory();
 #endif
-    Gigacage::disableDisablingPrimitiveGigacageIfShouldBeEnabled();
+
+    bool gigacageDisableRequested = false;
+#if GIGACAGE_ENABLED && !COMPILER(MSVC)
+    if (char* gigacageEnabled = getenv("GIGACAGE_ENABLED")) {
+        if (!strcasecmp(gigacageEnabled, "no") || !strcasecmp(gigacageEnabled, "false") || !strcasecmp(gigacageEnabled, "0"))
+            gigacageDisableRequested = true;
+    }
+#endif
+    if (!gigacageDisableRequested)
+        Gigacage::forbidDisablingPrimitiveGigacage();
 
 #if PLATFORM(COCOA)
     auto& memoryPressureHandler = MemoryPressureHandler::singleton();

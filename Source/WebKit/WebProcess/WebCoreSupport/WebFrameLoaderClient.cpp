@@ -112,10 +112,18 @@ WebFrameLoaderClient::~WebFrameLoaderClient()
 {
 }
 
+Optional<WebPageProxyIdentifier> WebFrameLoaderClient::webPageProxyID() const
+{
+    if (m_frame && m_frame->page())
+        return m_frame->page()->webPageProxyIdentifier();
+
+    return WTF::nullopt;
+}
+
 Optional<PageIdentifier> WebFrameLoaderClient::pageID() const
 {
     if (m_frame && m_frame->page())
-        return m_frame->page()->pageID();
+        return m_frame->page()->identifier();
 
     return WTF::nullopt;
 }
@@ -128,10 +136,14 @@ Optional<FrameIdentifier> WebFrameLoaderClient::frameID() const
     return WTF::nullopt;
 }
 
-PAL::SessionID WebFrameLoaderClient::sessionID() const
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+void WebFrameLoaderClient::setHasFrameSpecificStorageAccess(FrameSpecificStorageAccessIdentifier&& frameSpecificStorageAccessIdentifier )
 {
-    return m_frame && m_frame->page() ? m_frame->page()->sessionID() : PAL::SessionID::defaultSessionID();
+    ASSERT(!m_frameSpecificStorageAccessIdentifier);
+
+    m_frameSpecificStorageAccessIdentifier = WTFMove(frameSpecificStorageAccessIdentifier);
 }
+#endif
 
 void WebFrameLoaderClient::frameLoaderDestroyed()
 {
@@ -173,9 +185,10 @@ void WebFrameLoaderClient::detachedFromParent2()
         return;
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
-    if (m_hasFrameSpecificStorageAccess) {
-        WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::RemoveStorageAccessForFrame(sessionID(), frameID().value(), pageID().value()), 0);
-        m_hasFrameSpecificStorageAccess = false;
+    if (m_frameSpecificStorageAccessIdentifier) {
+        WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::RemoveStorageAccessForFrame(
+            m_frameSpecificStorageAccessIdentifier->frameID, m_frameSpecificStorageAccessIdentifier->pageID), 0);
+        m_frameSpecificStorageAccessIdentifier = WTF::nullopt;
     }
 #endif
 
@@ -400,9 +413,10 @@ void WebFrameLoaderClient::dispatchWillChangeDocument(const URL& currentUrl, con
     if (!webPage)
         return;
 
-    if (m_hasFrameSpecificStorageAccess && !WebCore::areRegistrableDomainsEqual(currentUrl, newUrl)) {
-        WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::RemoveStorageAccessForFrame(sessionID(), frameID().value(), pageID().value()), 0);
-        m_hasFrameSpecificStorageAccess = false;
+    if (m_frameSpecificStorageAccessIdentifier && !WebCore::areRegistrableDomainsEqual(currentUrl, newUrl)) {
+        WebProcess::singleton().ensureNetworkProcessConnection().connection().send(Messages::NetworkConnectionToWebProcess::RemoveStorageAccessForFrame(
+            m_frameSpecificStorageAccessIdentifier->frameID, m_frameSpecificStorageAccessIdentifier->pageID), 0);
+        m_frameSpecificStorageAccessIdentifier = WTF::nullopt;
     }
 #endif
 }
@@ -546,7 +560,7 @@ void WebFrameLoaderClient::dispatchDidFailProvisionalLoad(const ResourceError& e
     if (!webPage)
         return;
 
-    RELEASE_LOG(Network, "%p - WebFrameLoaderClient::dispatchDidFailProvisionalLoad: (pageID = %" PRIu64 ", frameID = %" PRIu64 ")", this, webPage->pageID().toUInt64(), m_frame->frameID().toUInt64());
+    RELEASE_LOG(Network, "%p - WebFrameLoaderClient::dispatchDidFailProvisionalLoad: (pageID = %" PRIu64 ", frameID = %" PRIu64 ")", this, webPage->identifier().toUInt64(), m_frame->frameID().toUInt64());
 
     RefPtr<API::Object> userData;
 
@@ -582,7 +596,7 @@ void WebFrameLoaderClient::dispatchDidFailLoad(const ResourceError& error)
     if (!webPage)
         return;
 
-    RELEASE_LOG(Network, "%p - WebFrameLoaderClient::dispatchDidFailLoad: (pageID = %" PRIu64 ", frameID = %" PRIu64 ")", this, webPage->pageID().toUInt64(), m_frame->frameID().toUInt64());
+    RELEASE_LOG(Network, "%p - WebFrameLoaderClient::dispatchDidFailLoad: (pageID = %" PRIu64 ", frameID = %" PRIu64 ")", this, webPage->identifier().toUInt64(), m_frame->frameID().toUInt64());
 
     RefPtr<API::Object> userData;
 
@@ -906,9 +920,11 @@ void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const Navigat
     if (requester.frameID() && WebProcess::singleton().webFrame(requester.frameID()))
         originatingFrameInfoData.frameID = requester.frameID();
 
-    Optional<PageIdentifier> originatingPageID;
-    if (requester.pageID() && WebProcess::singleton().webPage(requester.pageID()))
-        originatingPageID = requester.pageID();
+    Optional<WebPageProxyIdentifier> originatingPageID;
+    if (requester.pageID()) {
+        if (auto* webPage = WebProcess::singleton().webPage(requester.pageID()))
+            originatingPageID = webPage->webPageProxyIdentifier();
+    }
 
     NavigationActionData navigationActionData;
     navigationActionData.navigationType = action->navigationType();
@@ -1548,9 +1564,9 @@ bool WebFrameLoaderClient::canCachePage() const
     return !m_frameHasCustomContentProvider;
 }
 
-void WebFrameLoaderClient::convertMainResourceLoadToDownload(DocumentLoader *documentLoader, PAL::SessionID sessionID, const ResourceRequest& request, const ResourceResponse& response)
+void WebFrameLoaderClient::convertMainResourceLoadToDownload(DocumentLoader *documentLoader, const ResourceRequest& request, const ResourceResponse& response)
 {
-    m_frame->convertMainResourceLoadToDownload(documentLoader, sessionID, request, response);
+    m_frame->convertMainResourceLoadToDownload(documentLoader, request, response);
 }
 
 RefPtr<Frame> WebFrameLoaderClient::createFrame(const URL& url, const String& name, HTMLFrameOwnerElement& ownerElement,

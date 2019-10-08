@@ -33,6 +33,7 @@
 #include "IDBResourceIdentifier.h"
 #include "SQLiteIDBTransaction.h"
 #include <JavaScriptCore/Strong.h>
+#include <pal/SessionID.h>
 #include <wtf/HashMap.h>
 
 namespace WebCore {
@@ -182,13 +183,21 @@ private:
         GetKeyRecordsLowerOpenUpperClosed,
         GetKeyRecordsLowerClosedUpperOpen,
         GetKeyRecordsLowerClosedUpperClosed,
-        Count
+        CountRecordsLowerOpenUpperOpen,
+        CountRecordsLowerOpenUpperClosed,
+        CountRecordsLowerClosedUpperOpen,
+        CountRecordsLowerClosedUpperClosed,
+        CountIndexRecordsLowerOpenUpperOpen,
+        CountIndexRecordsLowerOpenUpperClosed,
+        CountIndexRecordsLowerClosedUpperOpen,
+        CountIndexRecordsLowerClosedUpperClosed,
+        Invalid,
     };
 
     SQLiteStatement* cachedStatement(SQL, const char*);
     SQLiteStatement* cachedStatementForGetAllObjectStoreRecords(const IDBGetAllRecordsData&);
 
-    std::unique_ptr<SQLiteStatement> m_cachedStatements[static_cast<int>(SQL::Count)];
+    std::unique_ptr<SQLiteStatement> m_cachedStatements[static_cast<int>(SQL::Invalid)];
 
     PAL::SessionID m_sessionID;
     IDBDatabaseIdentifier m_identifier;

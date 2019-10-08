@@ -41,7 +41,7 @@
 #include "CatchScope.h"
 #include "DefinePropertyAttributes.h"
 #include "Interpreter.h"
-#include "JSAsyncGeneratorFunction.h"
+#include "JSAsyncGenerator.h"
 #include "JSBigInt.h"
 #include "JSCInlines.h"
 #include "JSFixedArray.h"
@@ -248,7 +248,16 @@ ParserError BytecodeGenerator::generate()
         }
     }
     
-    bool callingClassConstructor = constructorKind() != ConstructorKind::None && !isConstructor();
+    bool callingClassConstructor = false;
+    switch (constructorKind()) {
+    case ConstructorKind::None:
+    case ConstructorKind::Naked:
+        break;
+    case ConstructorKind::Base:
+    case ConstructorKind::Extends:
+        callingClassConstructor = !isConstructor();
+        break;
+    }
     if (!callingClassConstructor)
         m_scopeNode->emitBytecode(*this);
     else {
@@ -352,6 +361,8 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, ProgramNode* programNode, UnlinkedP
 
     allocateAndEmitScope();
 
+    emitCheckTraps();
+
     const FunctionStack& functionStack = programNode->functionStack();
 
     for (auto* function : functionStack)
@@ -387,6 +398,8 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
     // op_will_call / op_did_call pairs before and after a call, which are not
     // compatible with tail calls (we have no way of emitting op_did_call).
     // https://bugs.webkit.org/show_bug.cgi?id=148819
+    //
+    // Note that we intentionally enable tail call for naked constructors since it does not have special code for "return".
     , m_inTailPosition(Options::useTailCalls() && !isConstructor() && constructorKind() == ConstructorKind::None && isStrictMode())
     , m_needsToUpdateArrowFunctionContext(functionNode->usesArrowFunction() || functionNode->usesEval())
     , m_derivedContextType(codeBlock->derivedContextType())
@@ -471,6 +484,8 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
 
     allocateAndEmitScope();
 
+    emitCheckTraps();
+    
     if (functionNameIsInScope(functionNode->ident(), functionNode->functionMode())) {
         ASSERT(parseMode != SourceParseMode::GeneratorBodyMode);
         ASSERT(!isAsyncFunctionBodyParseMode(parseMode));
@@ -668,7 +683,17 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
 
     switch (parseMode) {
     case SourceParseMode::GeneratorWrapperFunctionMode:
-    case SourceParseMode::GeneratorWrapperMethodMode:
+    case SourceParseMode::GeneratorWrapperMethodMode: {
+        m_generatorRegister = addVar();
+
+        // FIXME: Emit to_this only when Generator uses it.
+        // https://bugs.webkit.org/show_bug.cgi?id=151586
+        emitToThis();
+
+        emitCreateGenerator(m_generatorRegister, &m_calleeRegister);
+        break;
+    }
+
     case SourceParseMode::AsyncGeneratorWrapperMethodMode:
     case SourceParseMode::AsyncGeneratorWrapperFunctionMode: {
         m_generatorRegister = addVar();
@@ -677,8 +702,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
         // https://bugs.webkit.org/show_bug.cgi?id=151586
         emitToThis();
 
-        move(m_generatorRegister, &m_calleeRegister);
-        emitCreateThis(m_generatorRegister);
+        emitCreateAsyncGenerator(m_generatorRegister, &m_calleeRegister);
         break;
     }
 
@@ -688,7 +712,7 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
         ASSERT(!isConstructor());
         ASSERT(constructorKind() == ConstructorKind::None);
         m_generatorRegister = addVar();
-        m_promiseCapabilityRegister = addVar();
+        m_promiseRegister = addVar();
 
         if (parseMode != SourceParseMode::AsyncArrowFunctionMode) {
             // FIXME: Emit to_this only when AsyncFunctionBody uses it.
@@ -696,25 +720,8 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
             emitToThis();
         }
 
-        emitNewObject(m_generatorRegister);
-
-        // let promiseCapability be @newPromiseCapability(@Promise)
-        auto varNewPromiseCapability = variable(propertyNames().builtinNames().newPromiseCapabilityPrivateName());
-        RefPtr<RegisterID> scope = newTemporary();
-        move(scope.get(), emitResolveScope(scope.get(), varNewPromiseCapability));
-        RefPtr<RegisterID> newPromiseCapability = emitGetFromScope(newTemporary(), scope.get(), varNewPromiseCapability, ThrowIfNotFound);
-
-        CallArguments args(*this, nullptr, 1);
-        emitLoad(args.thisRegister(), jsUndefined());
-
-        auto& builtinNames = propertyNames().builtinNames();
-        auto varPromiseConstructor = variable(m_isBuiltinFunction ? builtinNames.InternalPromisePrivateName() : builtinNames.PromisePrivateName());
-        move(scope.get(), emitResolveScope(scope.get(), varPromiseConstructor));
-        emitGetFromScope(args.argumentRegister(0), scope.get(), varPromiseConstructor, ThrowIfNotFound);
-
-        // JSTextPosition(int _line, int _offset, int _lineStartOffset)
-        JSTextPosition divot(m_scopeNode->firstLine(), m_scopeNode->startOffset(), m_scopeNode->lineStartOffset());
-        emitCall(promiseCapabilityRegister(), newPromiseCapability.get(), NoExpectedFunction, args, divot, divot, divot, DebuggableCall::No);
+        emitNewGenerator(m_generatorRegister);
+        emitNewPromise(promiseRegister(), m_isBuiltinFunction);
         break;
     }
 
@@ -733,33 +740,51 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
             if (isConstructor()) {
                 if (m_newTargetRegister)
                     move(m_newTargetRegister, &m_thisRegister);
-                if (constructorKind() == ConstructorKind::Extends) {
-                    moveEmptyValue(&m_thisRegister);
-                } else
+                switch (constructorKind()) {
+                case ConstructorKind::Naked:
+                    // Naked constructor not create |this| automatically.
+                    break;
+                case ConstructorKind::None:
+                case ConstructorKind::Base:
                     emitCreateThis(&m_thisRegister);
-            } else if (constructorKind() != ConstructorKind::None)
-                emitThrowTypeError("Cannot call a class constructor without |new|");
-            else {
-                bool shouldEmitToThis = false;
-                if (functionNode->usesThis() || codeBlock->usesEval() || m_scopeNode->doAnyInnerArrowFunctionsUseThis() || m_scopeNode->doAnyInnerArrowFunctionsUseEval())
-                    shouldEmitToThis = true;
-                else if ((functionNode->usesSuperProperty() || m_scopeNode->doAnyInnerArrowFunctionsUseSuperProperty()) && !codeBlock->isStrictMode()) {
-                    // We must emit to_this when we're not in strict mode because we
-                    // will convert |this| to an object, and that object may be passed
-                    // to a strict function as |this|. This is observable because that
-                    // strict function's to_this will just return the object.
-                    //
-                    // We don't need to emit this for strict-mode code because
-                    // strict-mode code may call another strict function, which will
-                    // to_this if it directly uses this; this is OK, because we defer
-                    // to_this until |this| is used directly. Strict-mode code might
-                    // also call a sloppy mode function, and that will to_this, which
-                    // will defer the conversion, again, until necessary.
-                    shouldEmitToThis = true;
+                    break;
+                case ConstructorKind::Extends:
+                    moveEmptyValue(&m_thisRegister);
+                    break;
                 }
+            } else {
+                switch (constructorKind()) {
+                case ConstructorKind::None: {
+                    bool shouldEmitToThis = false;
+                    if (functionNode->usesThis() || codeBlock->usesEval() || m_scopeNode->doAnyInnerArrowFunctionsUseThis() || m_scopeNode->doAnyInnerArrowFunctionsUseEval())
+                        shouldEmitToThis = true;
+                    else if ((functionNode->usesSuperProperty() || m_scopeNode->doAnyInnerArrowFunctionsUseSuperProperty()) && !codeBlock->isStrictMode()) {
+                        // We must emit to_this when we're not in strict mode because we
+                        // will convert |this| to an object, and that object may be passed
+                        // to a strict function as |this|. This is observable because that
+                        // strict function's to_this will just return the object.
+                        //
+                        // We don't need to emit this for strict-mode code because
+                        // strict-mode code may call another strict function, which will
+                        // to_this if it directly uses this; this is OK, because we defer
+                        // to_this until |this| is used directly. Strict-mode code might
+                        // also call a sloppy mode function, and that will to_this, which
+                        // will defer the conversion, again, until necessary.
+                        shouldEmitToThis = true;
+                    }
 
-                if (shouldEmitToThis)
-                    emitToThis();
+                    if (shouldEmitToThis)
+                        emitToThis();
+                    break;
+                }
+                case ConstructorKind::Naked:
+                    emitThrowTypeError("Cannot call a constructor without |new|");
+                    break;
+                case ConstructorKind::Base:
+                case ConstructorKind::Extends:
+                    emitThrowTypeError("Cannot call a class constructor without |new|");
+                    break;
+                }
             }
         }
         break;
@@ -807,18 +832,21 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
         RefPtr<RegisterID> thrownValue = newTemporary();
         emitOutOfLineCatchHandler(thrownValue.get(), nullptr, tryFormalParametersData);
 
-        // return promiseCapability.@reject(thrownValue)
-        RefPtr<RegisterID> reject = emitGetById(newTemporary(), promiseCapabilityRegister(), m_vm.propertyNames->builtinNames().rejectPrivateName());
+        // @rejectPromiseWithFirstResolvingFunctionCallCheck(@promise, thrownValue);
+        // return @promise;
+        auto varRejectPromise = variable(propertyNames().builtinNames().rejectPromiseWithFirstResolvingFunctionCallCheckPrivateName());
+        RefPtr<RegisterID> scope = newTemporary();
+        move(scope.get(), emitResolveScope(scope.get(), varRejectPromise));
+        RefPtr<RegisterID> rejectPromise = emitGetFromScope(newTemporary(), scope.get(), varRejectPromise, ThrowIfNotFound);
 
-        CallArguments args(*this, nullptr, 1);
+        CallArguments args(*this, nullptr, 2);
         emitLoad(args.thisRegister(), jsUndefined());
-        move(args.argumentRegister(0), thrownValue.get());
-
+        move(args.argumentRegister(0), promiseRegister());
+        move(args.argumentRegister(1), thrownValue.get());
         JSTextPosition divot(functionNode->firstLine(), functionNode->startOffset(), functionNode->lineStartOffset());
+        emitCall(newTemporary(), rejectPromise.get(), NoExpectedFunction, args, divot, divot, divot, DebuggableCall::No);
 
-        RefPtr<RegisterID> result = emitCall(newTemporary(), reject.get(), NoExpectedFunction, args, divot, divot, divot, DebuggableCall::No);
-        emitReturn(emitGetById(newTemporary(), promiseCapabilityRegister(), m_vm.propertyNames->builtinNames().promisePrivateName()));
-
+        emitReturn(promiseRegister());
         emitLabel(didNotThrow.get());
     }
 
@@ -847,7 +875,8 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, FunctionNode* functionNode, Unlinke
             // Generatorification inserts lexical environment creation if necessary. Otherwise, we convert it to op_mov frame, `undefined`.
             OpCreateGeneratorFrameEnvironment::emit(this, generatorFrameRegister(), scopeRegister(), VirtualRegister { symbolTableConstantIndex }, addConstantValue(jsUndefined()));
         }
-        emitPutById(generatorRegister(), propertyNames().builtinNames().generatorFramePrivateName(), generatorFrameRegister());
+        static_assert(static_cast<unsigned>(JSGenerator::Field::Frame) == static_cast<unsigned>(JSAsyncGenerator::Field::Frame));
+        emitPutInternalField(generatorRegister(), static_cast<unsigned>(JSGenerator::Field::Frame), generatorFrameRegister());
     }
 
     bool shouldInitializeBlockScopedFunctions = false; // We generate top-level function declarations in ::generate().
@@ -878,6 +907,8 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, EvalNode* evalNode, UnlinkedEvalCod
 
     allocateAndEmitScope();
 
+    emitCheckTraps();
+    
     for (FunctionMetadataNode* function : evalNode->functionStack()) {
         m_codeBlock->addFunctionDecl(makeFunction(function));
         m_functionsToInitialize.append(std::make_pair(function, TopLevelFunctionVariable));
@@ -962,6 +993,8 @@ BytecodeGenerator::BytecodeGenerator(VM& vm, ModuleProgramNode* moduleProgramNod
 
     allocateAndEmitScope();
 
+    emitCheckTraps();
+    
     m_calleeRegister.setIndex(CallFrameSlot::callee);
 
     m_codeBlock->setNumParameters(1); // Allocate space for "this"
@@ -1389,11 +1422,17 @@ void BytecodeGenerator::emitEnter()
 void BytecodeGenerator::emitLoopHint()
 {
     OpLoopHint::emit(this);
+    emitCheckTraps();
 }
 
 void BytecodeGenerator::emitJump(Label& target)
 {
     OpJmp::emit(this, target.bind(this));
+}
+
+void BytecodeGenerator::emitCheckTraps()
+{
+    OpCheckTraps::emit(this);
 }
 
 void ALWAYS_INLINE BytecodeGenerator::rewind()
@@ -2219,7 +2258,7 @@ void BytecodeGenerator::popLexicalScopeInternal(VariableEnvironment& environment
 
     if (hasCapturedVariables) {
         RELEASE_ASSERT(stackEntry.m_scope);
-        emitPopScope(scopeRegister(), stackEntry.m_scope);
+        emitGetParentScope(scopeRegister(), stackEntry.m_scope);
         popLocalControlFlowScope();
         stackEntry.m_scope->deref();
     }
@@ -2277,15 +2316,14 @@ void BytecodeGenerator::prepareLexicalScopeForNextForLoopIteration(VariableEnvir
     // as the previous scope because the loop body is compiled under
     // the assumption that the scope's register index is constant even
     // though the value in that register will change on each loop iteration.
-    RefPtr<RegisterID> parentScope = emitGetParentScope(newTemporary(), loopScope);
-    move(scopeRegister(), parentScope.get());
+    emitGetParentScope(scopeRegister(), loopScope);
 
     OpCreateLexicalEnvironment::emit(this, loopScope, scopeRegister(), loopSymbolTable, addConstantValue(jsTDZValue()));
 
     move(scopeRegister(), loopScope);
 
     {
-        for (auto pair : activationValuesToCopyOver) {
+        for (const auto& pair : activationValuesToCopyOver) {
             const Identifier& identifier = pair.second;
             SymbolTableEntry entry = symbolTable->get(NoLockingNecessary, identifier.impl());
             RELEASE_ASSERT(!entry.isNull());
@@ -2468,7 +2506,6 @@ RegisterID* BytecodeGenerator::emitResolveScope(RegisterID* dst, const Variable&
         
         dst = tempDestination(dst);
         OpResolveScope::emit(this, kill(dst), scopeRegister(), addConstant(variable.ident()), resolveType(), localScopeDepth());
-        m_codeBlock->addPropertyAccessInstruction(m_lastInstruction.offset());
         return dst;
     }
     
@@ -2497,7 +2534,6 @@ RegisterID* BytecodeGenerator::emitGetFromScope(RegisterID* dst, RegisterID* sco
             GetPutInfo(resolveMode, variable.offset().isScope() ? LocalClosureVar : resolveType(), InitializationMode::NotInitialization),
             localScopeDepth(),
             variable.offset().isScope() ? variable.offset().scopeOffset().offset() : 0);
-        m_codeBlock->addPropertyAccessInstruction(m_lastInstruction.offset());
         return dst;
     } }
     
@@ -2530,7 +2566,6 @@ RegisterID* BytecodeGenerator::emitPutToScope(RegisterID* scope, const Variable&
             symbolTableOrScopeDepth = SymbolTableOrScopeDepth::scopeDepth(localScopeDepth());
         }
         OpPutToScope::emit(this, scope, addConstant(variable.ident()), value, getPutInfo, symbolTableOrScopeDepth, !!offset ? offset.offset() : 0);
-        m_codeBlock->addPropertyAccessInstruction(m_lastInstruction.offset());
         return value;
     } }
     
@@ -2581,7 +2616,6 @@ RegisterID* BytecodeGenerator::emitGetById(RegisterID* dst, RegisterID* base, co
     ASSERT_WITH_MESSAGE(!parseIndex(property), "Indexed properties should be handled with get_by_val.");
 
     OpGetById::emit(this, kill(dst), base, addConstant(property));
-    m_codeBlock->addPropertyAccessInstruction(m_lastInstruction.offset());
     return dst;
 }
 
@@ -2598,7 +2632,6 @@ RegisterID* BytecodeGenerator::emitDirectGetById(RegisterID* dst, RegisterID* ba
     ASSERT_WITH_MESSAGE(!parseIndex(property), "Indexed properties should be handled with get_by_val_direct.");
 
     OpGetByIdDirect::emit(this, kill(dst), base, addConstant(property));
-    m_codeBlock->addPropertyAccessInstruction(m_lastInstruction.offset());
     return dst;
 }
 
@@ -2611,8 +2644,6 @@ RegisterID* BytecodeGenerator::emitPutById(RegisterID* base, const Identifier& p
     m_staticPropertyAnalyzer.putById(base, propertyIndex);
 
     OpPutById::emit(this, base, propertyIndex, value, PutByIdNone); // is not direct
-    m_codeBlock->addPropertyAccessInstruction(m_lastInstruction.offset());
-
     return value;
 }
 
@@ -2637,7 +2668,6 @@ RegisterID* BytecodeGenerator::emitDirectPutById(RegisterID* base, const Identif
 
     PutByIdFlags type = (putType == PropertyNode::KnownDirect || property != m_vm.propertyNames->underscoreProto) ? PutByIdIsDirect : PutByIdNone;
     OpPutById::emit(this, base, propertyIndex, value, type);
-    m_codeBlock->addPropertyAccessInstruction(m_lastInstruction.offset());
     return value;
 }
 
@@ -2678,38 +2708,20 @@ void BytecodeGenerator::emitPutSetterByVal(RegisterID* base, RegisterID* propert
 
 void BytecodeGenerator::emitPutGeneratorFields(RegisterID* nextFunction)
 {
-    // FIXME: Currently, we just create an object and store generator related fields as its properties for ease.
-    // But to make it efficient, we will introduce JSGenerator class, add opcode new_generator and use its C++ fields instead of these private properties.
-    // https://bugs.webkit.org/show_bug.cgi?id=151545
-
-    emitDirectPutById(m_generatorRegister, propertyNames().builtinNames().generatorNextPrivateName(), nextFunction, PropertyNode::KnownDirect);
+    emitPutInternalField(m_generatorRegister, static_cast<unsigned>(JSGenerator::Field::Next), nextFunction);
 
     // We do not store 'this' in arrow function within constructor,
     // because it might be not initialized, if super is called later.
     if (!(isDerivedConstructorContext() && m_codeBlock->parseMode() == SourceParseMode::AsyncArrowFunctionMode))
-        emitDirectPutById(m_generatorRegister, propertyNames().builtinNames().generatorThisPrivateName(), &m_thisRegister, PropertyNode::KnownDirect);
-
-    emitDirectPutById(m_generatorRegister, propertyNames().builtinNames().generatorStatePrivateName(), emitLoad(nullptr, jsNumber(0)), PropertyNode::KnownDirect);
-
-    emitDirectPutById(m_generatorRegister, propertyNames().builtinNames().generatorFramePrivateName(), emitLoad(nullptr, jsNull()), PropertyNode::KnownDirect);
+        emitPutInternalField(m_generatorRegister, static_cast<unsigned>(JSGenerator::Field::This), &m_thisRegister);
 }
 
 void BytecodeGenerator::emitPutAsyncGeneratorFields(RegisterID* nextFunction)
 {
     ASSERT(isAsyncGeneratorWrapperParseMode(parseMode()));
 
-    emitDirectPutById(m_generatorRegister, propertyNames().builtinNames().generatorNextPrivateName(), nextFunction, PropertyNode::KnownDirect);
-        
-    emitDirectPutById(m_generatorRegister, propertyNames().builtinNames().generatorThisPrivateName(), &m_thisRegister, PropertyNode::KnownDirect);
-        
-    emitDirectPutById(m_generatorRegister, propertyNames().builtinNames().generatorStatePrivateName(), emitLoad(nullptr, jsNumber(static_cast<int32_t>(JSAsyncGeneratorFunction::AsyncGeneratorState::SuspendedStart))), PropertyNode::KnownDirect);
-        
-    emitDirectPutById(m_generatorRegister, propertyNames().builtinNames().generatorFramePrivateName(), emitLoad(nullptr, jsNull()), PropertyNode::KnownDirect);
-
-    emitDirectPutById(m_generatorRegister, propertyNames().builtinNames().asyncGeneratorSuspendReasonPrivateName(), emitLoad(nullptr, jsNumber(static_cast<int32_t>(JSAsyncGeneratorFunction::AsyncGeneratorSuspendReason::None))), PropertyNode::KnownDirect);
-
-    emitDirectPutById(m_generatorRegister, propertyNames().builtinNames().asyncGeneratorQueueFirstPrivateName(), emitLoad(nullptr, jsNull()), PropertyNode::KnownDirect);
-    emitDirectPutById(m_generatorRegister, propertyNames().builtinNames().asyncGeneratorQueueLastPrivateName(), emitLoad(nullptr, jsNull()), PropertyNode::KnownDirect);
+    emitPutInternalField(m_generatorRegister, static_cast<unsigned>(JSAsyncGenerator::Field::Next), nextFunction);
+    emitPutInternalField(m_generatorRegister, static_cast<unsigned>(JSAsyncGenerator::Field::This), &m_thisRegister);
 }
 
 RegisterID* BytecodeGenerator::emitDeleteById(RegisterID* dst, RegisterID* base, const Identifier& property)
@@ -2780,6 +2792,18 @@ RegisterID* BytecodeGenerator::emitDeleteByVal(RegisterID* dst, RegisterID* base
     return dst;
 }
 
+RegisterID* BytecodeGenerator::emitGetInternalField(RegisterID* dst, RegisterID* base, unsigned index)
+{
+    OpGetInternalField::emit(this, dst, base, index);
+    return dst;
+}
+
+RegisterID* BytecodeGenerator::emitPutInternalField(RegisterID* base, unsigned index, RegisterID* value)
+{
+    OpPutInternalField::emit(this, base, index, value);
+    return value;
+}
+
 void BytecodeGenerator::emitSuperSamplerBegin()
 {
     OpSuperSamplerBegin::emit(this);
@@ -2811,8 +2835,36 @@ RegisterID* BytecodeGenerator::emitCreateThis(RegisterID* dst)
 {
     OpCreateThis::emit(this, dst, dst, 0);
     m_staticPropertyAnalyzer.createThis(dst, m_lastInstruction);
+    return dst;
+}
 
-    m_codeBlock->addPropertyAccessInstruction(m_lastInstruction.offset());
+RegisterID* BytecodeGenerator::emitCreatePromise(RegisterID* dst, RegisterID* newTarget, bool isInternalPromise)
+{
+    OpCreatePromise::emit(this, dst, newTarget, isInternalPromise);
+    return dst;
+}
+
+RegisterID* BytecodeGenerator::emitNewPromise(RegisterID* dst, bool isInternalPromise)
+{
+    OpNewPromise::emit(this, dst, isInternalPromise);
+    return dst;
+}
+
+RegisterID* BytecodeGenerator::emitCreateGenerator(RegisterID* dst, RegisterID* newTarget)
+{
+    OpCreateGenerator::emit(this, dst, newTarget);
+    return dst;
+}
+
+RegisterID* BytecodeGenerator::emitNewGenerator(RegisterID* dst)
+{
+    OpNewGenerator::emit(this, dst);
+    return dst;
+}
+
+RegisterID* BytecodeGenerator::emitCreateAsyncGenerator(RegisterID* dst, RegisterID* newTarget)
+{
+    OpCreateAsyncGenerator::emit(this, dst, newTarget);
     return dst;
 }
 
@@ -3387,7 +3439,8 @@ void BytecodeGenerator::emitCallDefineProperty(RegisterID* newObj, RegisterID* p
 
 RegisterID* BytecodeGenerator::emitReturn(RegisterID* src, ReturnFrom from)
 {
-    if (isConstructor()) {
+    // Normal functions and naked constructors do not handle `return` specially.
+    if (isConstructor() && constructorKind() != ConstructorKind::Naked) {
         bool isDerived = constructorKind() == ConstructorKind::Extends;
         bool srcIsThis = src->index() == m_thisRegister.index();
 
@@ -3511,15 +3564,9 @@ RegisterID* BytecodeGenerator::emitGetParentScope(RegisterID* dst, RegisterID* s
     return dst;
 }
 
-void BytecodeGenerator::emitPopScope(RegisterID* dst, RegisterID* scope)
-{
-    RefPtr<RegisterID> parentScope = emitGetParentScope(newTemporary(), scope);
-    move(dst, parentScope.get());
-}
-
 void BytecodeGenerator::emitPopWithScope()
 {
-    emitPopScope(scopeRegister(), scopeRegister());
+    emitGetParentScope(scopeRegister(), scopeRegister());
     popLocalControlFlowScope();
     auto stackEntry = m_lexicalScopeStack.takeLast();
     stackEntry.m_scope->deref();
@@ -4461,7 +4508,7 @@ void BytecodeGenerator::emitRequireObjectCoercible(RegisterID* value, const Stri
     emitLabel(target.get());
 }
 
-void BytecodeGenerator::emitYieldPoint(RegisterID* argument, JSAsyncGeneratorFunction::AsyncGeneratorSuspendReason result)
+void BytecodeGenerator::emitYieldPoint(RegisterID* argument, JSAsyncGenerator::AsyncGeneratorSuspendReason result)
 {
     Ref<Label> mergePoint = newLabel();
     unsigned yieldPointIndex = m_yieldPoints++;
@@ -4469,7 +4516,7 @@ void BytecodeGenerator::emitYieldPoint(RegisterID* argument, JSAsyncGeneratorFun
 
     if (parseMode() == SourceParseMode::AsyncGeneratorBodyMode) {
         int suspendReason = static_cast<int32_t>(result);
-        emitPutById(generatorRegister(), propertyNames().builtinNames().asyncGeneratorSuspendReasonPrivateName(), emitLoad(nullptr, jsNumber(suspendReason)));
+        emitPutInternalField(generatorRegister(), static_cast<unsigned>(JSAsyncGenerator::Field::SuspendReason), emitLoad(nullptr, jsNumber(suspendReason)));
     }
 
     // Split the try range here.
@@ -4501,17 +4548,17 @@ void BytecodeGenerator::emitYieldPoint(RegisterID* argument, JSAsyncGeneratorFun
     emitLabel(mergePoint.get());
 }
 
-RegisterID* BytecodeGenerator::emitYield(RegisterID* argument, JSAsyncGeneratorFunction::AsyncGeneratorSuspendReason result)
+RegisterID* BytecodeGenerator::emitYield(RegisterID* argument, JSAsyncGenerator::AsyncGeneratorSuspendReason result)
 {
     emitYieldPoint(argument, result);
 
     Ref<Label> normalLabel = newLabel();
     RefPtr<RegisterID> condition = newTemporary();
-    emitEqualityOp<OpStricteq>(condition.get(), generatorResumeModeRegister(), emitLoad(nullptr, jsNumber(static_cast<int32_t>(JSGeneratorFunction::GeneratorResumeMode::NormalMode))));
+    emitEqualityOp<OpStricteq>(condition.get(), generatorResumeModeRegister(), emitLoad(nullptr, jsNumber(static_cast<int32_t>(JSGenerator::GeneratorResumeMode::NormalMode))));
     emitJumpIfTrue(condition.get(), normalLabel.get());
 
     Ref<Label> throwLabel = newLabel();
-    emitEqualityOp<OpStricteq>(condition.get(), generatorResumeModeRegister(), emitLoad(nullptr, jsNumber(static_cast<int32_t>(JSGeneratorFunction::GeneratorResumeMode::ThrowMode))));
+    emitEqualityOp<OpStricteq>(condition.get(), generatorResumeModeRegister(), emitLoad(nullptr, jsNumber(static_cast<int32_t>(JSGenerator::GeneratorResumeMode::ThrowMode))));
     emitJumpIfTrue(condition.get(), throwLabel.get());
     // Return.
     {
@@ -4541,7 +4588,7 @@ RegisterID* BytecodeGenerator::emitCallIterator(RegisterID* iterator, RegisterID
 
 void BytecodeGenerator::emitAwait(RegisterID* value)
 {
-    emitYield(value, JSAsyncGeneratorFunction::AsyncGeneratorSuspendReason::Await);
+    emitYield(value, JSAsyncGenerator::AsyncGeneratorSuspendReason::Await);
     move(value, generatorValueRegister());
 }
 
@@ -4613,16 +4660,16 @@ RegisterID* BytecodeGenerator::emitDelegateYield(RegisterID* argument, Throwable
 
             Ref<Label> branchOnResult = newLabel();
             {
-                emitYieldPoint(value.get(), JSAsyncGeneratorFunction::AsyncGeneratorSuspendReason::Yield);
+                emitYieldPoint(value.get(), JSAsyncGenerator::AsyncGeneratorSuspendReason::Yield);
 
                 Ref<Label> normalLabel = newLabel();
                 Ref<Label> returnLabel = newLabel();
                 {
                     RefPtr<RegisterID> condition = newTemporary();
-                    emitEqualityOp<OpStricteq>(condition.get(), generatorResumeModeRegister(), emitLoad(nullptr, jsNumber(static_cast<int32_t>(JSGeneratorFunction::GeneratorResumeMode::NormalMode))));
+                    emitEqualityOp<OpStricteq>(condition.get(), generatorResumeModeRegister(), emitLoad(nullptr, jsNumber(static_cast<int32_t>(JSGenerator::GeneratorResumeMode::NormalMode))));
                     emitJumpIfTrue(condition.get(), normalLabel.get());
 
-                    emitEqualityOp<OpStricteq>(condition.get(), generatorResumeModeRegister(), emitLoad(nullptr, jsNumber(static_cast<int32_t>(JSGeneratorFunction::GeneratorResumeMode::ReturnMode))));
+                    emitEqualityOp<OpStricteq>(condition.get(), generatorResumeModeRegister(), emitLoad(nullptr, jsNumber(static_cast<int32_t>(JSGenerator::GeneratorResumeMode::ReturnMode))));
                     emitJumpIfTrue(condition.get(), returnLabel.get());
 
                     // Fallthrough to ThrowMode.
@@ -4724,7 +4771,8 @@ RegisterID* BytecodeGenerator::emitDelegateYield(RegisterID* argument, Throwable
 void BytecodeGenerator::emitGeneratorStateChange(int32_t state)
 {
     RegisterID* completedState = emitLoad(nullptr, jsNumber(state));
-    emitPutById(generatorRegister(), propertyNames().builtinNames().generatorStatePrivateName(), completedState);
+    static_assert(static_cast<unsigned>(JSGenerator::Field::State) == static_cast<unsigned>(JSAsyncGenerator::Field::State));
+    emitPutInternalField(generatorRegister(), static_cast<unsigned>(JSGenerator::Field::State), completedState);
 }
 
 bool BytecodeGenerator::emitJumpViaFinallyIfNeeded(int targetLabelScopeDepth, Label& jumpTarget)
@@ -5087,7 +5135,6 @@ void StaticPropertyAnalysis::record()
 void BytecodeGenerator::emitToThis()
 {
     OpToThis::emit(this, kill(&m_thisRegister));
-    m_codeBlock->addPropertyAccessInstruction(m_lastInstruction.offset());
 }
 
 } // namespace JSC

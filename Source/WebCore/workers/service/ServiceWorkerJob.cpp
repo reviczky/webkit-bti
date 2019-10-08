@@ -34,6 +34,7 @@
 #include "ResourceError.h"
 #include "ResourceResponse.h"
 #include "ScriptExecutionContext.h"
+#include "SecurityOrigin.h"
 #include "ServiceWorkerJobData.h"
 #include "ServiceWorkerRegistration.h"
 
@@ -134,7 +135,8 @@ void ServiceWorkerJob::didReceiveResponse(unsigned long, const ResourceResponse&
         maxScopeString = path.substring(0, path.reverseFind('/') + 1);
     } else {
         auto maxScope = URL(m_jobData.scriptURL, serviceWorkerAllowed);
-        maxScopeString = maxScope.path();
+        if (SecurityOrigin::create(maxScope)->isSameOriginAs(SecurityOrigin::create(m_jobData.scriptURL)))
+            maxScopeString = maxScope.path();
     }
 
     String scopeString = m_jobData.scopeURL.path();

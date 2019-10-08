@@ -85,7 +85,7 @@ bool doesGC(Graph& graph, Node* node)
     case ArithBitOr:
     case ArithBitXor:
     case ArithBitLShift:
-    case BitRShift:
+    case ArithBitRShift:
     case BitURShift:
     case ValueToInt32:
     case UInt32ToNumber:
@@ -123,6 +123,8 @@ bool doesGC(Graph& graph, Node* node)
     case GetGlobalThis:
     case GetClosureVar:
     case PutClosureVar:
+    case GetInternalField:
+    case PutInternalField:
     case GetRegExpObjectLastIndex:
     case SetRegExpObjectLastIndex:
     case RecordRegExpCachedResult:
@@ -190,6 +192,7 @@ bool doesGC(Graph& graph, Node* node)
     case GetArrayLength:
     case GetVectorLength:
     case StringCharCodeAt:
+    case StringCodePointAt:
     case GetTypedArrayByteOffset:
     case GetPrototypeOf:
     case PutStructure:
@@ -329,6 +332,9 @@ bool doesGC(Graph& graph, Node* node)
     case ToThis:
     case TryGetById:
     case CreateThis:
+    case CreatePromise:
+    case CreateGenerator:
+    case CreateAsyncGenerator:
     case ObjectCreate:
     case ObjectKeys:
     case AllocatePropertyStorage:
@@ -336,6 +342,9 @@ bool doesGC(Graph& graph, Node* node)
     case Arrayify:
     case ArrayifyToStructure:
     case NewObject:
+    case NewPromise:
+    case NewGenerator:
+    case NewAsyncGenerator:
     case NewArray:
     case NewArrayWithSpread:
     case Spread:
@@ -376,6 +385,7 @@ bool doesGC(Graph& graph, Node* node)
     case ValueBitOr:
     case ValueBitXor:
     case ValueBitLShift:
+    case ValueBitRShift:
     case ValueAdd:
     case ValueSub:
     case ValueMul:

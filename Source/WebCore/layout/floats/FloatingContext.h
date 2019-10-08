@@ -28,7 +28,8 @@
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
 #include "FloatingState.h"
-#include "LayoutUnits.h"
+#include "FormattingContext.h"
+#include "LayoutContainer.h"
 #include <wtf/IsoMalloc.h>
 
 namespace WebCore {
@@ -37,7 +38,6 @@ namespace Layout {
 
 class FloatAvoider;
 class Box;
-class Container;
 class FloatingPair;
 class LayoutState;
 
@@ -46,7 +46,7 @@ class LayoutState;
 class FloatingContext {
     WTF_MAKE_ISO_ALLOCATED(FloatingContext);
 public:
-    FloatingContext(FloatingState&);
+    FloatingContext(const Container& floatingContextRoot, const FormattingContext&, FloatingState&);
 
     FloatingState& floatingState() const { return m_floatingState; }
 
@@ -59,12 +59,32 @@ public:
     };
     ClearancePosition verticalPositionWithClearance(const Box&) const;
 
+    bool isEmpty() const { return m_floatingState.floats().isEmpty(); }
+
+    struct Constraints {
+        Optional<PointInContextRoot> left;
+        Optional<PointInContextRoot> right;
+    };
+    Constraints constraints(PositionInContextRoot verticalPosition) const;
+    void append(const Box&);
+    void remove(const Box&);
+
 private:
     LayoutState& layoutState() const { return m_floatingState.layoutState(); }
+    const FormattingContext& formattingContext() const { return m_formattingContext; }
+    const Container& root() const { return *m_root; }
 
     void findPositionForFloatBox(FloatBox&) const;
     void findPositionForFormattingContextRoot(FloatAvoider&) const;
 
+    struct AbsoluteCoordinateValuesForFloatAvoider;
+    AbsoluteCoordinateValuesForFloatAvoider absoluteDisplayBoxCoordinates(const Box&) const;
+    Display::Box mapToFloatingStateRoot(const Box&) const;
+    LayoutUnit mapTopToFloatingStateRoot(const Box&) const;
+    Point mapPointFromFormattingContextRootToFloatingStateRoot(Point) const;
+
+    WeakPtr<const Container> m_root;
+    const FormattingContext& m_formattingContext;
     FloatingState& m_floatingState;
 };
 

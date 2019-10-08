@@ -122,7 +122,6 @@ public:
 
     void setVisible(bool) override { }
     void setSize(const IntSize&) override;
-    void sizeChanged();
 
     // Prefer MediaTime based methods over float based.
     float duration() const override { return durationMediaTime().toFloat(); }
@@ -251,7 +250,6 @@ protected:
 
     enum MainThreadNotification {
         VideoChanged = 1 << 0,
-        VideoCapsChanged = 1 << 1,
         AudioChanged = 1 << 2,
         VolumeChanged = 1 << 3,
         MuteChanged = 1 << 4,
@@ -271,10 +269,11 @@ protected:
     MediaPlayer::ReadyState m_readyState;
     mutable MediaPlayer::NetworkState m_networkState;
     IntSize m_size;
+
     mutable Lock m_sampleMutex;
     GRefPtr<GstSample> m_sample;
-
     mutable FloatSize m_videoSize;
+
     bool m_usingFallbackVideoSink { false };
     bool m_renderingCanBeAccelerated { false };
 
@@ -297,6 +296,10 @@ protected:
     GRefPtr<GstContext> m_glDisplayElementContext;
     GRefPtr<GstContext> m_glAppElementContext;
     std::unique_ptr<VideoTextureCopierGStreamer> m_videoTextureCopier;
+
+    GRefPtr<GstGLColorConvert> m_colorConvert;
+    GRefPtr<GstCaps> m_colorConvertInputCaps;
+    GRefPtr<GstCaps> m_colorConvertOutputCaps;
 #endif
 
     ImageOrientation m_videoSourceOrientation;
@@ -311,8 +314,11 @@ protected:
     bool m_waitingForKey { false };
 #endif
 
-    enum class WebKitGstVideoDecoderPlatform { Video4Linux };
-    Optional<WebKitGstVideoDecoderPlatform> m_videoDecoderPlatform;
+    Optional<GstVideoDecoderPlatform> m_videoDecoderPlatform;
+
+private:
+    FloatSize naturalSizeFromCaps(GstCaps*) const;
+    bool doSamplesHaveDifferentNaturalSizes(GstSample* sampleA, GstSample* sampleB) const;
 };
 
 }

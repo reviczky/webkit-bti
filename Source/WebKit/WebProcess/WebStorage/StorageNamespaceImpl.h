@@ -44,9 +44,9 @@ class StorageNamespaceImpl : public WebCore::StorageNamespace {
 public:
     using Identifier = StorageNamespaceIdentifier;
 
-    static Ref<StorageNamespaceImpl> createSessionStorageNamespace(Identifier, unsigned quotaInBytes, PAL::SessionID);
-    static Ref<StorageNamespaceImpl> createLocalStorageNamespace(Identifier, unsigned quotaInBytes, PAL::SessionID);
-    static Ref<StorageNamespaceImpl> createTransientLocalStorageNamespace(Identifier, WebCore::SecurityOrigin& topLevelOrigin, uint64_t quotaInBytes, PAL::SessionID);
+    static Ref<StorageNamespaceImpl> createSessionStorageNamespace(Identifier, WebCore::PageIdentifier, unsigned quotaInBytes);
+    static Ref<StorageNamespaceImpl> createLocalStorageNamespace(Identifier, unsigned quotaInBytes);
+    static Ref<StorageNamespaceImpl> createTransientLocalStorageNamespace(Identifier, WebCore::SecurityOrigin& topLevelOrigin, uint64_t quotaInBytes);
 
     virtual ~StorageNamespaceImpl();
 
@@ -56,29 +56,28 @@ public:
     uint64_t pageGroupID() const;
     WebCore::SecurityOrigin* topLevelOrigin() const { return m_topLevelOrigin.get(); }
     unsigned quotaInBytes() const { return m_quotaInBytes; }
-    PAL::SessionID sessionID() const override { return m_sessionID; }
+    PAL::SessionID sessionID() const override;
 
     void didDestroyStorageAreaMap(StorageAreaMap&);
 
     void setSessionIDForTesting(PAL::SessionID) override;
 
 private:
-    StorageNamespaceImpl(WebCore::StorageType, Identifier, WebCore::SecurityOrigin* topLevelOrigin, unsigned quotaInBytes, PAL::SessionID);
+    StorageNamespaceImpl(WebCore::StorageType, Identifier, const Optional<WebCore::PageIdentifier>&, WebCore::SecurityOrigin* topLevelOrigin, unsigned quotaInBytes);
 
     Ref<WebCore::StorageArea> storageArea(const WebCore::SecurityOriginData&) override;
 
     // FIXME: This is only valid for session storage and should probably be moved to a subclass.
-    Ref<WebCore::StorageNamespace> copy(WebCore::Page*) override;
+    Ref<WebCore::StorageNamespace> copy(WebCore::Page&) override;
 
     const WebCore::StorageType m_storageType;
     const Identifier m_storageNamespaceID;
+    Optional<WebCore::PageIdentifier> m_sessionPageID;
 
     // Only used for transient local storage namespaces.
     const RefPtr<WebCore::SecurityOrigin> m_topLevelOrigin;
 
     const unsigned m_quotaInBytes;
-
-    PAL::SessionID m_sessionID;
 
     HashMap<WebCore::SecurityOriginData, RefPtr<StorageAreaMap>> m_storageAreaMaps;
 };

@@ -35,19 +35,11 @@
 
 namespace WebKit {
 
-NetworkProcessCreationParameters::NetworkProcessCreationParameters()
-{
-}
+NetworkProcessCreationParameters::NetworkProcessCreationParameters() = default;
 
 void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
 {
     encoder.encodeEnum(cacheModel);
-    encoder << canHandleHTTPSServerTrustEvaluation;
-    encoder << diskCacheDirectory;
-    encoder << diskCacheDirectoryExtensionHandle;
-#if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
-    encoder << shouldEnableNetworkCacheSpeculativeRevalidation;
-#endif
 #if PLATFORM(MAC)
     encoder << uiProcessCookieStorageIdentifier;
 #endif
@@ -57,7 +49,6 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << parentBundleDirectoryExtensionHandle;
 #endif
     encoder << shouldSuppressMemoryPressureHandler;
-    encoder << shouldUseTestingNetworkSession;
     encoder << urlSchemesRegisteredForCustomProtocols;
 #if PLATFORM(COCOA)
     encoder << uiProcessBundleIdentifier;
@@ -89,32 +80,17 @@ void NetworkProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << serviceWorkerRegistrationDirectory << serviceWorkerRegistrationDirectoryExtensionHandle << urlSchemesServiceWorkersCanHandle << shouldDisableServiceWorkerProcessTerminationDelay;
 #endif
     encoder << shouldEnableITPDatabase;
-    encoder << downloadMonitorSpeedMultiplier;
     encoder << enableAdClickAttributionDebugMode;
     encoder << hstsStorageDirectory;
     encoder << hstsStorageDirectoryExtensionHandle;
+    encoder << enableLegacyTLS;
 }
 
 bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProcessCreationParameters& result)
 {
     if (!decoder.decodeEnum(result.cacheModel))
         return false;
-    if (!decoder.decode(result.canHandleHTTPSServerTrustEvaluation))
-        return false;
 
-    if (!decoder.decode(result.diskCacheDirectory))
-        return false;
-    
-    Optional<SandboxExtension::Handle> diskCacheDirectoryExtensionHandle;
-    decoder >> diskCacheDirectoryExtensionHandle;
-    if (!diskCacheDirectoryExtensionHandle)
-        return false;
-    result.diskCacheDirectoryExtensionHandle = WTFMove(*diskCacheDirectoryExtensionHandle);
-
-#if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
-    if (!decoder.decode(result.shouldEnableNetworkCacheSpeculativeRevalidation))
-        return false;
-#endif
 #if PLATFORM(MAC)
     if (!decoder.decode(result.uiProcessCookieStorageIdentifier))
         return false;
@@ -139,8 +115,6 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
     result.parentBundleDirectoryExtensionHandle = WTFMove(*parentBundleDirectoryExtensionHandle);
 #endif
     if (!decoder.decode(result.shouldSuppressMemoryPressureHandler))
-        return false;
-    if (!decoder.decode(result.shouldUseTestingNetworkSession))
         return false;
     if (!decoder.decode(result.urlSchemesRegisteredForCustomProtocols))
         return false;
@@ -213,12 +187,6 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
     if (!decoder.decode(result.shouldEnableITPDatabase))
         return false;
 
-    Optional<uint32_t> downloadMonitorSpeedMultiplier;
-    decoder >> downloadMonitorSpeedMultiplier;
-    if (!downloadMonitorSpeedMultiplier)
-        return false;
-    result.downloadMonitorSpeedMultiplier = *downloadMonitorSpeedMultiplier;
-
     if (!decoder.decode(result.enableAdClickAttributionDebugMode))
         return false;
 
@@ -228,6 +196,9 @@ bool NetworkProcessCreationParameters::decode(IPC::Decoder& decoder, NetworkProc
     if (!decoder.decode(result.hstsStorageDirectoryExtensionHandle))
         return false;
     
+    if (!decoder.decode(result.enableLegacyTLS))
+        return false;
+
     return true;
 }
 

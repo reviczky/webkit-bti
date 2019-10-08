@@ -50,7 +50,7 @@ void WebsiteDataStoreParameters::encode(IPC::Encoder& encoder) const
 #endif
 
 #if ENABLE(SERVICE_WORKER)
-    encoder << serviceWorkerRegistrationDirectory << serviceWorkerRegistrationDirectoryExtensionHandle;
+    encoder << serviceWorkerRegistrationDirectory << serviceWorkerRegistrationDirectoryExtensionHandle << serviceWorkerProcessTerminationDelayEnabled;
 #endif
 
     encoder << localStorageDirectory << localStorageDirectoryExtensionHandle;
@@ -121,6 +121,12 @@ Optional<WebsiteDataStoreParameters> WebsiteDataStoreParameters::decode(IPC::Dec
     if (!serviceWorkerRegistrationDirectoryExtensionHandle)
         return WTF::nullopt;
     parameters.serviceWorkerRegistrationDirectoryExtensionHandle = WTFMove(*serviceWorkerRegistrationDirectoryExtensionHandle);
+    
+    Optional<bool> serviceWorkerProcessTerminationDelayEnabled;
+    decoder >> serviceWorkerProcessTerminationDelayEnabled;
+    if (!serviceWorkerProcessTerminationDelayEnabled)
+        return WTF::nullopt;
+    parameters.serviceWorkerProcessTerminationDelayEnabled = WTFMove(*serviceWorkerProcessTerminationDelayEnabled);
 #endif
 
     Optional<String> localStorageDirectory;
@@ -148,23 +154,6 @@ Optional<WebsiteDataStoreParameters> WebsiteDataStoreParameters::decode(IPC::Dec
     parameters.perThirdPartyOriginStorageQuota = *perThirdPartyOriginStorageQuota;
     
     return parameters;
-}
-
-WebsiteDataStoreParameters WebsiteDataStoreParameters::privateSessionParameters(PAL::SessionID sessionID)
-{
-    ASSERT(sessionID.isEphemeral());
-    return { { }, { }, { }, NetworkSessionCreationParameters::privateSessionParameters(sessionID)
-#if ENABLE(INDEXED_DATABASE)
-        , { }, { }
-#if PLATFORM(IOS_FAMILY)
-        , { }
-#endif
-#endif
-#if ENABLE(SERVICE_WORKER)
-        , { }, { }
-#endif
-        , { }, { }
-    };
 }
 
 } // namespace WebKit

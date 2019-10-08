@@ -411,6 +411,11 @@
 <td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
+<td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
+<td class="property_name"><a class="link" href="WebKitWebContext.html#WebKitWebContext--process-swap-on-cross-site-navigation-enabled" title="The “process-swap-on-cross-site-navigation-enabled” property">process-swap-on-cross-site-navigation-enabled</a></td>
+<td class="property_flags">Read / Write / Construct Only</td>
+</tr>
+<tr>
 <td class="property_type">
 <a class="link" href="WebKitWebsiteDataManager.html" title="WebKitWebsiteDataManager"><span class="type">WebKitWebsiteDataManager</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitWebContext.html#WebKitWebContext--website-data-manager" title="The “website-data-manager” property">website-data-manager</a></td>
@@ -2266,6 +2271,20 @@ when the data of the request is available or
 <p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
 <p class="since">Since: <a class="link" href="api-index-2-8.html#api-index-2.8">2.8</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitWebContext--process-swap-on-cross-site-navigation-enabled"></a><h3>The <code class="literal">“process-swap-on-cross-site-navigation-enabled”</code> property</h3>
+<pre class="programlisting">  “process-swap-on-cross-site-navigation-enabled” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
+<p>Whether swap Web processes on cross-site navigations is enabled.</p>
+<p>When enabled, pages from each security origin will be handled by
+their own separate Web processes, which are started (and
+terminated) on demand as the user navigates across different
+domains. This is an important security measure which helps prevent
+websites stealing data from other visited pages.</p>
+<p>Flags: Read / Write / Construct Only</p>
+<p>Default value: FALSE</p>
+<p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
 <hr>
 <div class="refsect2">

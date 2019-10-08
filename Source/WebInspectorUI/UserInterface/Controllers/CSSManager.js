@@ -633,6 +633,10 @@ WI.CSSManager = class CSSManager extends WI.Object
         if (resource === this._ignoreResourceContentDidChangeEventForResource)
             return;
 
+        // Ignore changes to resource overrides, those are not live on the page.
+        if (resource.isLocalResourceOverride)
+            return;
+
         // Ignore if it isn't a CSS style sheet.
         if (resource.type !== WI.Resource.Type.StyleSheet || resource.syntheticMIMEType !== "text/css")
             return;
@@ -651,7 +655,8 @@ WI.CSSManager = class CSSManager extends WI.Object
                 // ignore the next _updateResourceContent call.
                 resource.__ignoreNextUpdateResourceContent = true;
 
-                WI.branchManager.currentBranch.revisionForRepresentedObject(styleSheet).content = resource.content;
+                let revision = styleSheet.currentRevision;
+                revision.content = resource.content;
             }
 
             this._lookupStyleSheetForResource(resource, styleSheetFound.bind(this));
@@ -694,7 +699,7 @@ WI.CSSManager = class CSSManager extends WI.Object
 
             this._ignoreResourceContentDidChangeEventForResource = representedObject;
 
-            let revision = WI.branchManager.currentBranch.revisionForRepresentedObject(representedObject);
+            let revision = representedObject.currentRevision;
             if (styleSheet.isInspectorStyleSheet()) {
                 revision.content = representedObject.content;
                 styleSheet.dispatchEventToListeners(WI.SourceCode.Event.ContentDidChange);

@@ -221,3 +221,59 @@ function resolve(value)
 
     return promiseCapability.@promise;
 }
+
+@nakedConstructor
+function Promise(executor)
+{
+    "use strict";
+
+    if (typeof executor !== "function")
+        @throwTypeError("Promise constructor takes a function argument");
+
+    var promise = @createPromise(new.target, /* isInternalPromise */ false);
+    var capturedPromise = promise;
+
+    function @resolve(resolution) {
+        return @resolvePromiseWithFirstResolvingFunctionCallCheck(capturedPromise, resolution);
+    }
+
+    function @reject(reason) {
+        return @rejectPromiseWithFirstResolvingFunctionCallCheck(capturedPromise, reason);
+    }
+
+    try {
+        executor(@resolve, @reject);
+    } catch (error) {
+        @reject(error);
+    }
+
+    return promise;
+}
+
+@nakedConstructor
+function InternalPromise(executor)
+{
+    "use strict";
+
+    if (typeof executor !== "function")
+        @throwTypeError("InternalPromise constructor takes a function argument");
+
+    var promise = @createPromise(new.target, /* isInternalPromise */ true);
+    var capturedPromise = promise;
+
+    function @resolve(resolution) {
+        return @resolvePromiseWithFirstResolvingFunctionCallCheck(capturedPromise, resolution);
+    }
+
+    function @reject(reason) {
+        return @rejectPromiseWithFirstResolvingFunctionCallCheck(capturedPromise, reason);
+    }
+
+    try {
+        executor(@resolve, @reject);
+    } catch (error) {
+        @reject(error);
+    }
+
+    return promise;
+}

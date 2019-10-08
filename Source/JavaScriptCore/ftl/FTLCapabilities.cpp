@@ -63,7 +63,7 @@ inline CapabilityLevel canCompile(Node* node)
     case ArithBitAnd:
     case ArithBitOr:
     case ArithBitXor:
-    case BitRShift:
+    case ArithBitRShift:
     case ArithBitLShift:
     case BitURShift:
     case CheckStructure:
@@ -74,6 +74,9 @@ inline CapabilityLevel canCompile(Node* node)
     case PutStructure:
     case GetButterfly:
     case NewObject:
+    case NewPromise:
+    case NewGenerator:
+    case NewAsyncGenerator:
     case NewStringObject:
     case NewSymbol:
     case NewArray:
@@ -94,6 +97,7 @@ inline CapabilityLevel canCompile(Node* node)
     case ValueBitOr:
     case ValueBitNot:
     case ValueBitLShift:
+    case ValueBitRShift:
     case ValueNegate:
     case ValueAdd:
     case ValueSub:
@@ -141,6 +145,8 @@ inline CapabilityLevel canCompile(Node* node)
     case NewAsyncGeneratorFunction:
     case GetClosureVar:
     case PutClosureVar:
+    case GetInternalField:
+    case PutInternalField:
     case CreateDirectArguments:
     case CreateScopedArguments:
     case CreateClonedArguments:
@@ -156,6 +162,7 @@ inline CapabilityLevel canCompile(Node* node)
     case CheckStringIdent:
     case CheckTraps:
     case StringCharCodeAt:
+    case StringCodePointAt:
     case StringFromCharCode:
     case AllocatePropertyStorage:
     case ReallocatePropertyStorage:
@@ -375,6 +382,9 @@ inline CapabilityLevel canCompile(Node* node)
     case FilterPutByIdStatus:
     case FilterInByIdStatus:
     case CreateThis:
+    case CreatePromise:
+    case CreateGenerator:
+    case CreateAsyncGenerator:
     case DataViewGetInt:
     case DataViewGetFloat:
     case DataViewSet:
@@ -466,6 +476,7 @@ CapabilityLevel canCompile(Graph& graph)
                 case WeakSetObjectUse:
                 case DataViewObjectUse:
                 case FinalObjectUse:
+                case PromiseObjectUse:
                 case RegExpObjectUse:
                 case ProxyObjectUse:
                 case DerivedArrayUse:

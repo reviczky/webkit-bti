@@ -51,8 +51,6 @@ WebInspectorUI::WebInspectorUI(WebPage& page)
     : m_page(page)
     , m_frontendAPIDispatcher(page)
 {
-    JSC::Options::useBigInt() = true;
-        
     RuntimeEnabledFeatures::sharedFeatures().setInspectorAdditionsEnabled(true);
     RuntimeEnabledFeatures::sharedFeatures().setImageBitmapOffscreenCanvasEnabled(true);
 #if ENABLE(WEBGL2)
@@ -60,7 +58,7 @@ WebInspectorUI::WebInspectorUI(WebPage& page)
 #endif
 }
 
-void WebInspectorUI::establishConnection(PageIdentifier inspectedPageIdentifier, bool underTest, unsigned inspectionLevel)
+void WebInspectorUI::establishConnection(WebPageProxyIdentifier inspectedPageIdentifier, bool underTest, unsigned inspectionLevel)
 {
     m_inspectedPageIdentifier = inspectedPageIdentifier;
     m_frontendAPIDispatcher.reset();
@@ -265,8 +263,10 @@ void WebInspectorUI::changeSheetRect(const FloatRect& rect)
 
 void WebInspectorUI::openInNewTab(const String& url)
 {
-    if (m_backendConnection)
+    if (m_backendConnection) {
         m_backendConnection->send(Messages::WebInspector::OpenInNewTab(url), 0);
+        WebProcess::singleton().parentProcessConnection()->send(Messages::WebInspectorProxy::BringInspectedPageToFront(), m_inspectedPageIdentifier);
+    }
 }
 
 void WebInspectorUI::save(const WTF::String& filename, const WTF::String& content, bool base64Encoded, bool forceSaveAs)

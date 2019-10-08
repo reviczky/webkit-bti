@@ -48,27 +48,29 @@
 #include <WebCore/IDBResultData.h>
 #include <WebCore/IDBTransactionInfo.h>
 #include <WebCore/IDBValue.h>
+#include <WebCore/ProcessIdentifier.h>
 
 namespace WebKit {
 using namespace WebCore;
 
-Ref<WebIDBConnectionToServer> WebIDBConnectionToServer::create(PAL::SessionID sessionID)
+Ref<WebIDBConnectionToServer> WebIDBConnectionToServer::create()
 {
-    return adoptRef(*new WebIDBConnectionToServer(sessionID));
+    return adoptRef(*new WebIDBConnectionToServer());
 }
 
-WebIDBConnectionToServer::WebIDBConnectionToServer(PAL::SessionID sessionID)
-    : m_sessionID(sessionID)
+WebIDBConnectionToServer::WebIDBConnectionToServer()
+    : m_connectionToServer(IDBClient::IDBConnectionToServer::create(*this))
 {
-    relaxAdoptionRequirement();
-
-    m_isOpenInServer = sendSync(Messages::NetworkConnectionToWebProcess::EstablishIDBConnectionToServer(sessionID), Messages::NetworkConnectionToWebProcess::EstablishIDBConnectionToServer::Reply(m_identifier));
-
-    m_connectionToServer = IDBClient::IDBConnectionToServer::create(*this);
+    send(Messages::NetworkConnectionToWebProcess::EstablishIDBConnectionToServer(), 0);
 }
 
 WebIDBConnectionToServer::~WebIDBConnectionToServer()
 {
+}
+
+IDBConnectionIdentifier WebIDBConnectionToServer::identifier() const
+{
+    return Process::identifier();
 }
 
 IPC::Connection* WebIDBConnectionToServer::messageSenderConnection() const
@@ -78,7 +80,7 @@ IPC::Connection* WebIDBConnectionToServer::messageSenderConnection() const
 
 IDBClient::IDBConnectionToServer& WebIDBConnectionToServer::coreConnectionToServer()
 {
-    return *m_connectionToServer;
+    return m_connectionToServer;
 }
 
 void WebIDBConnectionToServer::deleteDatabase(const IDBRequestData& requestData)
@@ -213,7 +215,7 @@ void WebIDBConnectionToServer::confirmDidCloseFromServer(uint64_t databaseConnec
 
 void WebIDBConnectionToServer::getAllDatabaseNames(const WebCore::SecurityOriginData& topOrigin, const WebCore::SecurityOriginData& openingOrigin, uint64_t callbackID)
 {
-    send(Messages::WebIDBConnectionToClient::GetAllDatabaseNames(m_identifier, topOrigin, openingOrigin, callbackID));
+    send(Messages::WebIDBConnectionToClient::GetAllDatabaseNames(topOrigin, openingOrigin, callbackID));
 }
 
 void WebIDBConnectionToServer::didDeleteDatabase(const IDBResultData& result)

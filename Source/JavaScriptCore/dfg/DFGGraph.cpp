@@ -281,8 +281,8 @@ void Graph::dump(PrintStream& out, const char* prefixStr, Node* node, DumpContex
             }
         }
     }
-    if (node->hasSpeculatedTypeForQuery())
-        out.print(comma, SpeculationDump(node->speculatedTypeForQuery()));
+    if (node->hasQueriedType())
+        out.print(comma, node->queriedType());
     if (node->hasStorageAccessData()) {
         StorageAccessData& storageAccessData = node->storageAccessData();
         out.print(comma, "id", storageAccessData.identifierNumber, "{", identifiers()[storageAccessData.identifierNumber], "}");
@@ -354,6 +354,10 @@ void Graph::dump(PrintStream& out, const char* prefixStr, Node* node, DumpContex
         out.print(", offset = ", data->offset, ", mandatoryMinimum = ", data->mandatoryMinimum);
         out.print(", limit = ", data->limit);
     }
+    if (node->hasIsInternalPromise())
+        out.print(comma, "isInternalPromise = ", node->isInternalPromise());
+    if (node->hasInternalFieldIndex())
+        out.print(comma, "internalFieldIndex = ", node->internalFieldIndex());
     if (node->hasCallDOMGetterData()) {
         CallDOMGetterData* data = node->callDOMGetterData();
         out.print(comma, "id", data->identifierNumber, "{", identifiers()[data->identifierNumber], "}");
@@ -542,7 +546,7 @@ void Graph::dump(PrintStream& out, DumpContext* context)
             out.print(prefix, "  Argument formats for entrypoint index: ", entrypointIndex, " : ", listDump(m_argumentFormats[entrypointIndex]), "\n");
     }
     else {
-        for (auto pair : m_rootToArguments)
+        for (const auto& pair : m_rootToArguments)
             out.print(prefix, "  Arguments for block#", pair.key->index, ": ", listDump(pair.value), "\n");
     }
     out.print("\n");
@@ -1129,7 +1133,7 @@ BytecodeKills& Graph::killsFor(InlineCallFrame* inlineCallFrame)
 
 bool Graph::isLiveInBytecode(VirtualRegister operand, CodeOrigin codeOrigin)
 {
-    static const bool verbose = false;
+    static constexpr bool verbose = false;
     
     if (verbose)
         dataLog("Checking of operand is live: ", operand, "\n");
@@ -1401,6 +1405,7 @@ JSArrayBufferView* Graph::tryGetFoldableView(JSValue value, ArrayMode arrayMode)
 
 void Graph::registerFrozenValues()
 {
+    ConcurrentJSLocker locker(m_codeBlock->m_lock);
     m_codeBlock->constants().shrink(0);
     m_codeBlock->constantsSourceCodeRepresentation().resize(0);
     for (FrozenValue* value : m_frozenValues) {
@@ -1416,7 +1421,7 @@ void Graph::registerFrozenValues()
             break;
         }
         case StrongValue: {
-            unsigned constantIndex = m_codeBlock->addConstantLazily();
+            unsigned constantIndex = m_codeBlock->addConstantLazily(locker);
             // We already have a barrier on the code block.
             m_codeBlock->constants()[constantIndex].setWithoutWriteBarrier(value->value());
             break;

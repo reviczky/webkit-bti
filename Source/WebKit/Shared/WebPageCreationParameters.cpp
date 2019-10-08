@@ -32,13 +32,13 @@ namespace WebKit {
 
 void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
 {
-    encoder << sessionID;
     encoder << viewSize;
     encoder << activityState;
 
     encoder << store;
     encoder.encodeEnum(drawingAreaType);
     encoder << drawingAreaIdentifier;
+    encoder << webPageProxyIdentifier;
     encoder << pageGroupData;
     encoder << isEditable;
     encoder << underlayColor;
@@ -55,7 +55,6 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << itemStates;
     encoder << userContentControllerID;
     encoder << visitedLinkTableID;
-    encoder << websiteDataStoreID;
     encoder << canRunBeforeUnloadConfirmPanel;
     encoder << canRunModal;
     encoder << deviceScaleFactor;
@@ -137,12 +136,7 @@ void WebPageCreationParameters::encode(IPC::Encoder& encoder) const
 
 Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decoder& decoder)
 {
-    Optional<PAL::SessionID> sessionID;
-    decoder >> sessionID;
-    if (!sessionID)
-        return WTF::nullopt;
-
-    WebPageCreationParameters parameters { *sessionID };
+    WebPageCreationParameters parameters;
 
     if (!decoder.decode(parameters.viewSize))
         return WTF::nullopt;
@@ -157,6 +151,11 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
     if (!drawingAreaIdentifier)
         return WTF::nullopt;
     parameters.drawingAreaIdentifier = *drawingAreaIdentifier;
+    Optional<WebPageProxyIdentifier> webPageProxyIdentifier;
+    decoder >> webPageProxyIdentifier;
+    if (!webPageProxyIdentifier)
+        return WTF::nullopt;
+    parameters.webPageProxyIdentifier = WTFMove(*webPageProxyIdentifier);
     Optional<WebPageGroupData> pageGroupData;
     decoder >> pageGroupData;
     if (!pageGroupData)
@@ -204,8 +203,6 @@ Optional<WebPageCreationParameters> WebPageCreationParameters::decode(IPC::Decod
     parameters.userContentControllerID = *userContentControllerIdentifier;
 
     if (!decoder.decode(parameters.visitedLinkTableID))
-        return WTF::nullopt;
-    if (!decoder.decode(parameters.websiteDataStoreID))
         return WTF::nullopt;
     if (!decoder.decode(parameters.canRunBeforeUnloadConfirmPanel))
         return WTF::nullopt;

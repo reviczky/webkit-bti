@@ -25,11 +25,9 @@
 
 #pragma once
 
+#include "WebPageProxyIdentifier.h"
 #include <WebCore/FrameLoaderClient.h>
-
-namespace PAL {
-class SessionID;
-}
+#include <pal/SessionID.h>
 
 namespace WebKit {
 
@@ -51,13 +49,18 @@ public:
 
     void applyToDocumentLoader(WebsitePoliciesData&&);
 
+    Optional<WebPageProxyIdentifier> webPageProxyID() const;
     Optional<WebCore::PageIdentifier> pageID() const final;
     Optional<WebCore::FrameIdentifier> frameID() const final;
-    PAL::SessionID sessionID() const final;
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
-    bool hasFrameSpecificStorageAccess() { return m_hasFrameSpecificStorageAccess; }
-    void setHasFrameSpecificStorageAccess(bool value) { m_hasFrameSpecificStorageAccess = value; };
+    bool hasFrameSpecificStorageAccess() final { return !!m_frameSpecificStorageAccessIdentifier; }
+    
+    struct FrameSpecificStorageAccessIdentifier {
+        WebCore::FrameIdentifier frameID;
+        WebCore::PageIdentifier pageID;
+    };
+    void setHasFrameSpecificStorageAccess(FrameSpecificStorageAccessIdentifier&&);
 #endif
     
 private:
@@ -209,7 +212,7 @@ private:
     void dispatchDidBecomeFrameset(bool) final;
 
     bool canCachePage() const final;
-    void convertMainResourceLoadToDownload(WebCore::DocumentLoader*, PAL::SessionID, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&) final;
+    void convertMainResourceLoadToDownload(WebCore::DocumentLoader*, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&) final;
 
     RefPtr<WebCore::Frame> createFrame(const URL&, const String& name, WebCore::HTMLFrameOwnerElement&, const String& referrer) final;
 
@@ -282,7 +285,7 @@ private:
     bool m_frameCameFromPageCache;
     bool m_useIconLoadingClient { false };
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
-    bool m_hasFrameSpecificStorageAccess { false };
+    Optional<FrameSpecificStorageAccessIdentifier> m_frameSpecificStorageAccessIdentifier;
 #endif
 };
 

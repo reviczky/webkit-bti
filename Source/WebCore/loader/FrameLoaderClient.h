@@ -63,10 +63,6 @@ OBJC_CLASS NSDictionary;
 OBJC_CLASS NSView;
 #endif
 
-namespace PAL {
-class SessionID;
-}
-
 namespace WebCore {
 
 class AuthenticationChallenge;
@@ -130,7 +126,6 @@ public:
 
     virtual Optional<PageIdentifier> pageID() const = 0;
     virtual Optional<FrameIdentifier> frameID() const = 0;
-    virtual PAL::SessionID sessionID() const = 0;
 
 #if PLATFORM(IOS_FAMILY)
     // Returns true if the client forced the layout.
@@ -289,7 +284,7 @@ public:
     virtual void dispatchDidBecomeFrameset(bool) = 0; // Can change due to navigation or DOM modification.
 
     virtual bool canCachePage() const = 0;
-    virtual void convertMainResourceLoadToDownload(DocumentLoader*, PAL::SessionID, const ResourceRequest&, const ResourceResponse&) = 0;
+    virtual void convertMainResourceLoadToDownload(DocumentLoader*, const ResourceRequest&, const ResourceResponse&) = 0;
 
     virtual RefPtr<Frame> createFrame(const URL&, const String& name, HTMLFrameOwnerElement&, const String& referrer) = 0;
     virtual RefPtr<Widget> createPlugin(const IntSize&, HTMLPlugInElement&, const URL&, const Vector<String>&, const Vector<String>&, const String&, bool loadManually) = 0;
@@ -353,7 +348,8 @@ public:
     virtual void forcePageTransitionIfNeeded() { }
 
     // FIXME (bug 116233): We need to get rid of EmptyFrameLoaderClient completely, then this will no longer be needed.
-    virtual bool isEmptyFrameLoaderClient() { return false; }
+    virtual bool isEmptyFrameLoaderClient() const { return false; }
+    virtual bool isServiceWorkerFrameLoaderClient() const { return false; }
 
 #if USE(QUICK_LOOK)
     virtual RefPtr<PreviewLoaderClient> createPreviewLoaderClient(const String&, const String&) = 0;
@@ -378,7 +374,6 @@ public:
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     virtual bool hasFrameSpecificStorageAccess() { return false; }
-    virtual void setHasFrameSpecificStorageAccess(bool) { }
 #endif
 };
 

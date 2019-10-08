@@ -91,6 +91,26 @@ JIT::~JIT()
 {
 }
 
+#if ENABLE(DFG_JIT)
+void JIT::emitEnterOptimizationCheck()
+{
+    if (!canBeOptimized())
+        return;
+
+    JumpList skipOptimize;
+    
+    skipOptimize.append(branchAdd32(Signed, TrustedImm32(Options::executionCounterIncrementForEntry()), AbsoluteAddress(m_codeBlock->addressOfJITExecuteCounter())));
+    ASSERT(!m_bytecodeOffset);
+
+    copyCalleeSavesFromFrameOrRegisterToEntryFrameCalleeSavesBuffer(vm().topEntryFrame);
+
+    callOperation(operationOptimize, m_bytecodeOffset);
+    skipOptimize.append(branchTestPtr(Zero, returnValueGPR));
+    farJump(returnValueGPR, GPRInfo::callFrameRegister);
+    skipOptimize.link(this);
+}
+#endif
+
 void JIT::emitNotifyWrite(WatchpointSet* set)
 {
     if (!set || set->state() == IsInvalidated) {
@@ -290,6 +310,11 @@ void JIT::privateCompileMainPass()
         DEFINE_SLOW_OP(create_scoped_arguments)
         DEFINE_SLOW_OP(create_cloned_arguments)
         DEFINE_SLOW_OP(create_rest)
+        DEFINE_SLOW_OP(create_promise)
+        DEFINE_SLOW_OP(new_promise)
+        DEFINE_SLOW_OP(create_generator)
+        DEFINE_SLOW_OP(create_async_generator)
+        DEFINE_SLOW_OP(new_generator)
         DEFINE_SLOW_OP(pow)
 
         DEFINE_OP(op_add)
@@ -363,6 +388,7 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_jbeloweq)
         DEFINE_OP(op_jtrue)
         DEFINE_OP(op_loop_hint)
+        DEFINE_OP(op_check_traps)
         DEFINE_OP(op_nop)
         DEFINE_OP(op_super_sampler_begin)
         DEFINE_OP(op_super_sampler_end)
@@ -400,6 +426,9 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_put_getter_setter_by_id)
         DEFINE_OP(op_put_getter_by_val)
         DEFINE_OP(op_put_setter_by_val)
+
+        DEFINE_OP(op_get_internal_field)
+        DEFINE_OP(op_put_internal_field)
 
         DEFINE_OP(op_ret)
         DEFINE_OP(op_rshift)
@@ -527,7 +556,7 @@ void JIT::privateCompileSlowCases()
         DEFINE_SLOWCASE_OP(op_jstricteq)
         DEFINE_SLOWCASE_OP(op_jnstricteq)
         DEFINE_SLOWCASE_OP(op_loop_hint)
-        DEFINE_SLOWCASE_OP(op_enter)
+        DEFINE_SLOWCASE_OP(op_check_traps)
         DEFINE_SLOWCASE_OP(op_mod)
         DEFINE_SLOWCASE_OP(op_mul)
         DEFINE_SLOWCASE_OP(op_negate)
@@ -553,6 +582,9 @@ void JIT::privateCompileSlowCases()
         DEFINE_SLOWCASE_SLOW_OP(urshift)
         DEFINE_SLOWCASE_SLOW_OP(div)
         DEFINE_SLOWCASE_SLOW_OP(create_this)
+        DEFINE_SLOWCASE_SLOW_OP(create_promise)
+        DEFINE_SLOWCASE_SLOW_OP(create_generator)
+        DEFINE_SLOWCASE_SLOW_OP(create_async_generator)
         DEFINE_SLOWCASE_SLOW_OP(to_this)
         DEFINE_SLOWCASE_SLOW_OP(to_primitive)
         DEFINE_SLOWCASE_SLOW_OP(to_number)
@@ -918,12 +950,6 @@ void JIT::privateCompileExceptionHandlers()
 
         move(TrustedImmPtr(&vm()), GPRInfo::argumentGPR0);
         move(GPRInfo::callFrameRegister, GPRInfo::argumentGPR1);
-
-#if CPU(X86)
-        // FIXME: should use the call abstraction, but this is currently in the SpeculativeJIT layer!
-        poke(GPRInfo::argumentGPR0);
-        poke(GPRInfo::argumentGPR1, 1);
-#endif
         m_calls.append(CallRecord(call(OperationPtrTag), std::numeric_limits<unsigned>::max(), FunctionPtr<OperationPtrTag>(lookupExceptionHandlerFromCallerFrame)));
         jumpToExceptionHandler(vm());
     }
@@ -937,12 +963,6 @@ void JIT::privateCompileExceptionHandlers()
         // lookupExceptionHandler is passed two arguments, the VM and the exec (the CallFrame*).
         move(TrustedImmPtr(&vm()), GPRInfo::argumentGPR0);
         move(GPRInfo::callFrameRegister, GPRInfo::argumentGPR1);
-
-#if CPU(X86)
-        // FIXME: should use the call abstraction, but this is currently in the SpeculativeJIT layer!
-        poke(GPRInfo::argumentGPR0);
-        poke(GPRInfo::argumentGPR1, 1);
-#endif
         m_calls.append(CallRecord(call(OperationPtrTag), std::numeric_limits<unsigned>::max(), FunctionPtr<OperationPtrTag>(lookupExceptionHandler)));
         jumpToExceptionHandler(vm());
     }

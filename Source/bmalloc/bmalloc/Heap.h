@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2014-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
 
 #include "BumpRange.h"
 #include "Chunk.h"
+#include "FailureAction.h"
 #include "HeapKind.h"
 #include "LargeMap.h"
 #include "LineMetadata.h"
@@ -64,19 +65,23 @@ public:
     HeapKind kind() const { return m_kind; }
     
     void allocateSmallBumpRanges(std::unique_lock<Mutex>&, size_t sizeClass,
-        BumpAllocator&, BumpRangeCache&, LineCache&);
+        BumpAllocator&, BumpRangeCache&, LineCache&, FailureAction);
     void derefSmallLine(std::unique_lock<Mutex>&, Object, LineCache&);
     void deallocateLineCache(std::unique_lock<Mutex>&, LineCache&);
 
-    void* allocateLarge(std::unique_lock<Mutex>&, size_t alignment, size_t);
-    void* tryAllocateLarge(std::unique_lock<Mutex>&, size_t alignment, size_t);
+    void* allocateLarge(std::unique_lock<Mutex>&, size_t alignment, size_t, FailureAction);
     void deallocateLarge(std::unique_lock<Mutex>&, void*);
 
     bool isLarge(std::unique_lock<Mutex>&, void*);
     size_t largeSize(std::unique_lock<Mutex>&, void*);
     void shrinkLarge(std::unique_lock<Mutex>&, const Range&, size_t);
 
+#if BPLATFORM(MAC)
+    void scavengeToHighWatermark(std::lock_guard<Mutex>&, BulkDecommit&);
+    void scavenge(std::lock_guard<Mutex>&, BulkDecommit&);
+#else
     void scavenge(std::lock_guard<Mutex>&, BulkDecommit&, size_t& deferredDecommits);
+#endif
     void scavenge(std::lock_guard<Mutex>&, BulkDecommit&, size_t& freed, size_t goal);
 
     size_t freeableMemory(std::lock_guard<Mutex>&);
@@ -110,14 +115,14 @@ private:
     void initializePageMetadata();
 
     void allocateSmallBumpRangesByMetadata(std::unique_lock<Mutex>&,
-        size_t sizeClass, BumpAllocator&, BumpRangeCache&, LineCache&);
+        size_t sizeClass, BumpAllocator&, BumpRangeCache&, LineCache&, FailureAction);
     void allocateSmallBumpRangesByObject(std::unique_lock<Mutex>&,
-        size_t sizeClass, BumpAllocator&, BumpRangeCache&, LineCache&);
+        size_t sizeClass, BumpAllocator&, BumpRangeCache&, LineCache&, FailureAction);
 
-    SmallPage* allocateSmallPage(std::unique_lock<Mutex>&, size_t sizeClass, LineCache&);
+    SmallPage* allocateSmallPage(std::unique_lock<Mutex>&, size_t sizeClass, LineCache&, FailureAction);
     void deallocateSmallLine(std::unique_lock<Mutex>&, Object, LineCache&);
 
-    void allocateSmallChunk(std::unique_lock<Mutex>&, size_t pageClass);
+    void allocateSmallChunk(std::unique_lock<Mutex>&, size_t pageClass, FailureAction);
     void deallocateSmallChunk(Chunk*, size_t pageClass);
 
     void mergeLarge(BeginTag*&, EndTag*&, Range&);
@@ -152,16 +157,20 @@ private:
 #if ENABLE_PHYSICAL_PAGE_MAP 
     PhysicalPageMap m_physicalPageMap;
 #endif
+    
+#if BPLATFORM(MAC)
+    void* m_highWatermark { nullptr };
+#endif
 };
 
 inline void Heap::allocateSmallBumpRanges(
     std::unique_lock<Mutex>& lock, size_t sizeClass,
     BumpAllocator& allocator, BumpRangeCache& rangeCache,
-    LineCache& lineCache)
+    LineCache& lineCache, FailureAction action)
 {
     if (sizeClass < bmalloc::sizeClass(smallLineSize))
-        return allocateSmallBumpRangesByMetadata(lock, sizeClass, allocator, rangeCache, lineCache);
-    return allocateSmallBumpRangesByObject(lock, sizeClass, allocator, rangeCache, lineCache);
+        return allocateSmallBumpRangesByMetadata(lock, sizeClass, allocator, rangeCache, lineCache, action);
+    return allocateSmallBumpRangesByObject(lock, sizeClass, allocator, rangeCache, lineCache, action);
 }
 
 inline void Heap::derefSmallLine(std::unique_lock<Mutex>& lock, Object object, LineCache& lineCache)

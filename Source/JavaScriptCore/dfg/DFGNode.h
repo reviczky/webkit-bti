@@ -757,6 +757,25 @@ public:
         m_opInfo2 = OpInfoWrapper();
     }
 
+    void convertToNewPromise(RegisteredStructure structure)
+    {
+        ASSERT(m_op == CreatePromise);
+        bool internal = isInternalPromise();
+        setOpAndDefaultFlags(NewPromise);
+        children.reset();
+        m_opInfo = structure;
+        m_opInfo2 = internal;
+    }
+
+    void convertToNewInternalFieldObject(NodeType newOp, RegisteredStructure structure)
+    {
+        ASSERT(m_op == CreateAsyncGenerator || m_op == CreateGenerator);
+        setOpAndDefaultFlags(newOp);
+        children.reset();
+        m_opInfo = structure;
+        m_opInfo2 = OpInfoWrapper();
+    }
+
     void convertToNewArrayBuffer(FrozenValue* immutableButterfly);
     
     void convertToDirectCall(FrozenValue*);
@@ -1246,6 +1265,17 @@ public:
         return m_opInfo.as<unsigned>();
     }
 
+    bool hasIsInternalPromise()
+    {
+        return op() == CreatePromise || op() == NewPromise;
+    }
+
+    bool isInternalPromise()
+    {
+        ASSERT(hasIsInternalPromise());
+        return m_opInfo2.as<bool>();
+    }
+
     void setIndexingType(IndexingType indexingType)
     {
         ASSERT(hasIndexingType());
@@ -1261,6 +1291,17 @@ public:
     {
         ASSERT(hasScopeOffset());
         return ScopeOffset(m_opInfo.as<uint32_t>());
+    }
+
+    unsigned hasInternalFieldIndex()
+    {
+        return op() == GetInternalField || op() == PutInternalField;
+    }
+
+    unsigned internalFieldIndex()
+    {
+        ASSERT(hasInternalFieldIndex());
+        return m_opInfo.as<uint32_t>();
     }
     
     bool hasDirectArgumentsOffset()
@@ -1340,7 +1381,7 @@ public:
         return op() == IsCellWithType;
     }
 
-    SpeculatedType speculatedTypeForQuery()
+    Optional<SpeculatedType> speculatedTypeForQuery()
     {
         return speculationFromJSType(queriedType());
     }
@@ -1378,6 +1419,9 @@ public:
         case ValueBitAnd:
         case ValueBitOr:
         case ValueBitXor:
+        case ValueBitNot:
+        case ValueBitLShift:
+        case ValueBitRShift:
         case ValueNegate:
             return true;
         default:
@@ -1667,6 +1711,7 @@ public:
         case GetByOffset:
         case MultiGetByOffset:
         case GetClosureVar:
+        case GetInternalField:
         case GetFromArguments:
         case GetArgument:
         case ArrayPop:
@@ -1687,6 +1732,7 @@ public:
         case ValueBitXor:
         case ValueBitNot:
         case ValueBitLShift:
+        case ValueBitRShift:
         case CallObjectConstructor:
         case LoadKeyFromMapBucket:
         case LoadValueFromMapBucket:
@@ -1875,6 +1921,9 @@ public:
         switch (op()) {
         case ArrayifyToStructure:
         case NewObject:
+        case NewPromise:
+        case NewGenerator:
+        case NewAsyncGenerator:
         case NewStringObject:
             return true;
         default:
@@ -2060,6 +2109,7 @@ public:
         case GetByVal:
         case StringCharAt:
         case StringCharCodeAt:
+        case StringCodePointAt:
         case CheckArray:
         case Arrayify:
         case ArrayifyToStructure:

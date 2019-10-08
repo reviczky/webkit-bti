@@ -165,7 +165,6 @@
 #else
 #if USE(APPKIT)
 #import <Cocoa/Cocoa.h>
-#import <wtf/mac/AppKitCompatibilityDeclarations.h>
 #endif
 #endif // PLATFORM(IOS_FAMILY)
 #endif
@@ -174,6 +173,7 @@
 
 #if !PLATFORM(WIN)
 #import <wtf/FastMalloc.h>
+#import <wtf/HashMap.h>
 #import <wtf/Optional.h>
 #import <wtf/StdLibExtras.h>
 #import <wtf/text/AtomString.h>

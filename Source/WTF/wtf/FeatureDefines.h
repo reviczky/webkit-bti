@@ -174,7 +174,7 @@ the public iOS SDK. See <https://webkit.org/b/179167>. */
 #endif
 
 #if !defined(HAVE_PDFHOSTVIEWCONTROLLER_SNAPSHOTTING)
-#if !PLATFORM(WATCHOS) && !PLATFORM(APPLETV) && !PLATFORM(MACCATALYST) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 130000
+#if PLATFORM(IOS)
 #define HAVE_PDFHOSTVIEWCONTROLLER_SNAPSHOTTING 1
 #endif
 #endif
@@ -186,15 +186,11 @@ the public iOS SDK. See <https://webkit.org/b/179167>. */
 #endif
 
 #if !defined(HAVE_VISIBILITY_PROPAGATION_VIEW)
-#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 130000
 #define HAVE_VISIBILITY_PROPAGATION_VIEW 1
-#endif
 #endif
 
 #if !defined(HAVE_UISCENE)
-#if (__IPHONE_OS_VERSION_MIN_REQUIRED >= 130000) || PLATFORM(APPLETV) || PLATFORM(WATCHOS)
 #define HAVE_UISCENE 1
-#endif
 #endif
 
 #if !defined(HAVE_AVSTREAMSESSION)
@@ -205,16 +201,12 @@ the public iOS SDK. See <https://webkit.org/b/179167>. */
 #define ENABLE_MEDIA_SOURCE 0
 #endif
 
-#if !defined(HAVE_PASSKIT_GRANULAR_ERRORS)
-#define HAVE_PASSKIT_GRANULAR_ERRORS 1
-#endif
-
 #if !defined(HAVE_PASSKIT_API_TYPE)
 #define HAVE_PASSKIT_API_TYPE 1
 #endif
 
 #if !defined(HAVE_PASSKIT_BOUND_INTERFACE_IDENTIFIER)
-#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 130000
+#if PLATFORM(IOS)
 #define HAVE_PASSKIT_BOUND_INTERFACE_IDENTIFIER 1
 #endif
 #endif
@@ -293,10 +285,6 @@ the public iOS SDK. See <https://webkit.org/b/179167>. */
 
 #if !defined(ENABLE_MEDIA_SOURCE)
 #define ENABLE_MEDIA_SOURCE 1
-#endif
-
-#if !defined(HAVE_PASSKIT_GRANULAR_ERRORS)
-#define HAVE_PASSKIT_GRANULAR_ERRORS 1
 #endif
 
 #if !defined(HAVE_PASSKIT_API_TYPE)

@@ -35,6 +35,7 @@
 #include "LayoutBox.h"
 #include "LayoutChildIterator.h"
 #include "LayoutContainer.h"
+#include "LayoutContext.h"
 #include "LayoutDescendantIterator.h"
 #include "LayoutPhase.h"
 #include "LayoutState.h"
@@ -100,18 +101,6 @@ std::unique_ptr<Box> TreeBuilder::createLayoutBox(const RenderElement& parentRen
         if (auto* element = renderer.element()) {
             if (element->hasTagName(HTMLNames::bodyTag))
                 return Box::ElementAttributes { Box::ElementType::Body };
-            if (element->hasTagName(HTMLNames::colTag))
-                return Box::ElementAttributes { Box::ElementType::TableColumn };
-            if (element->hasTagName(HTMLNames::trTag))
-                return Box::ElementAttributes { Box::ElementType::TableRow };
-            if (element->hasTagName(HTMLNames::colgroupTag))
-                return Box::ElementAttributes { Box::ElementType::TableColumnGroup };
-            if (element->hasTagName(HTMLNames::theadTag))
-                return Box::ElementAttributes { Box::ElementType::TableHeaderGroup };
-            if (element->hasTagName(HTMLNames::tbodyTag))
-                return Box::ElementAttributes { Box::ElementType::TableBodyGroup };
-            if (element->hasTagName(HTMLNames::tfootTag))
-                return Box::ElementAttributes { Box::ElementType::TableFooterGroup };
             if (element->hasTagName(HTMLNames::imgTag))
                 return Box::ElementAttributes { Box::ElementType::Image };
             if (element->hasTagName(HTMLNames::iframeTag))
@@ -154,7 +143,7 @@ std::unique_ptr<Box> TreeBuilder::createLayoutBox(const RenderElement& parentRen
             childLayoutBox->replaced()->setIntrinsicSize(downcast<RenderReplaced>(renderer).intrinsicSize());
         if (is<RenderImage>(renderer)) {
             auto& imageRenderer = downcast<RenderImage>(renderer);
-            if (imageRenderer.imageResource().errorOccurred())
+            if (imageRenderer.shouldDisplayBrokenImageIcon())
                 childLayoutBox->replaced()->setIntrinsicRatio(1);
         }
     } else {
@@ -250,8 +239,9 @@ static void outputInlineRuns(TextStream& stream, const LayoutState& layoutState,
     auto& lineBoxes = inlineFormattingState.lineBoxes();
 
     unsigned printedCharacters = 0;
-    while (++printedCharacters <= depth * 3)
+    while (++printedCharacters <= depth * 2)
         stream << " ";
+    stream << "  ";
 
     stream << "lines are -> ";
     for (auto& lineBox : lineBoxes)
@@ -260,15 +250,16 @@ static void outputInlineRuns(TextStream& stream, const LayoutState& layoutState,
 
     for (auto& inlineRun : inlineRuns) {
         unsigned printedCharacters = 0;
-        while (++printedCharacters <= depth * 3)
+        while (++printedCharacters <= depth * 2)
             stream << " ";
-        if (inlineRun->textContext())
+        stream << "  ";
+        if (inlineRun.textContext())
             stream << "inline text box";
         else
             stream << "inline box";
-        stream << " at (" << inlineRun->logicalLeft() << "," << inlineRun->logicalTop() << ") size " << inlineRun->logicalWidth() << "x" << inlineRun->logicalHeight();
-        if (inlineRun->textContext())
-            stream << " run(" << inlineRun->textContext()->start() << ", " << inlineRun->textContext()->end() << ")";
+        stream << " at (" << inlineRun.logicalLeft() << "," << inlineRun.logicalTop() << ") size " << inlineRun.logicalWidth() << "x" << inlineRun.logicalHeight();
+        if (inlineRun.textContext())
+            stream << " run(" << inlineRun.textContext()->start() << ", " << inlineRun.textContext()->end() << ")";
         stream.nextLine();
     }
 }
@@ -375,10 +366,10 @@ void printLayoutTreeForLiveDocuments()
         // FIXME: Need to find a way to output geometry without layout context.
         auto& renderView = *document->renderView();
         auto initialContainingBlock = TreeBuilder::createLayoutTree(renderView);
-        auto layoutState = makeUnique<Layout::LayoutState>(*initialContainingBlock);
-        layoutState->setQuirksMode(renderView.document().inLimitedQuirksMode() ? LayoutState::QuirksMode::Limited : (renderView.document().inQuirksMode() ? LayoutState::QuirksMode::Yes : LayoutState::QuirksMode::No));
-        layoutState->updateLayout();
-        showLayoutTree(*initialContainingBlock, layoutState.get());
+        auto layoutState = LayoutState { };
+        layoutState.setQuirksMode(renderView.document().inLimitedQuirksMode() ? LayoutState::QuirksMode::Limited : (renderView.document().inQuirksMode() ? LayoutState::QuirksMode::Yes : LayoutState::QuirksMode::No));
+        LayoutContext(layoutState).layout();
+        showLayoutTree(*initialContainingBlock, &layoutState);
     }
 }
 #endif

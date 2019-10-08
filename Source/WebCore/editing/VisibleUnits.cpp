@@ -824,7 +824,7 @@ static VisiblePosition startPositionForLine(const VisiblePosition& c, LineEndpoi
     } else {
         // Generated content (e.g. list markers and CSS :before and :after pseudoelements) have no corresponding DOM element,
         // and so cannot be represented by a VisiblePosition. Use whatever follows instead.
-        startBox = rootBox->firstLeafChild();
+        startBox = rootBox->firstLeafDescendant();
         while (true) {
             if (!startBox)
                 return VisiblePosition();
@@ -833,7 +833,7 @@ static VisiblePosition startPositionForLine(const VisiblePosition& c, LineEndpoi
             if (startNode)
                 break;
 
-            startBox = startBox->nextLeafChild();
+            startBox = startBox->nextLeafOnLine();
         }
     }
 
@@ -898,7 +898,7 @@ static VisiblePosition endPositionForLine(const VisiblePosition& c, LineEndpoint
     } else {
         // Generated content (e.g. list markers and CSS :before and :after pseudoelements) have no corresponding DOM element,
         // and so cannot be represented by a VisiblePosition. Use whatever precedes instead.
-        endBox = rootBox->lastLeafChild();
+        endBox = rootBox->lastLeafDescendant();
         while (true) {
             if (!endBox)
                 return VisiblePosition();
@@ -907,7 +907,7 @@ static VisiblePosition endPositionForLine(const VisiblePosition& c, LineEndpoint
             if (endNode)
                 break;
             
-            endBox = endBox->prevLeafChild();
+            endBox = endBox->previousLeafOnLine();
         }
     }
 
@@ -1046,7 +1046,7 @@ VisiblePosition previousLinePosition(const VisiblePosition& visiblePosition, int
         root = box->root().prevRootBox();
         // We want to skip zero height boxes.
         // This could happen in case it is a TrailingFloatsRootInlineBox.
-        if (!root || !root->logicalHeight() || !root->firstLeafChild())
+        if (!root || !root->logicalHeight() || !root->firstLeafDescendant())
             root = nullptr;
     }
 
@@ -1101,7 +1101,7 @@ VisiblePosition nextLinePosition(const VisiblePosition& visiblePosition, int lin
         root = box->root().nextRootBox();
         // We want to skip zero height boxes.
         // This could happen in case it is a TrailingFloatsRootInlineBox.
-        if (!root || !root->logicalHeight() || !root->firstLeafChild())
+        if (!root || !root->logicalHeight() || !root->firstLeafDescendant())
             root = nullptr;
     }
 
@@ -1969,6 +1969,7 @@ RefPtr<Range> wordRangeFromPosition(const VisiblePosition& position)
         // We could be at the start of a word, try forward.
         range = enclosingTextUnitOfGranularity(position, WordGranularity, DirectionForward);
     }
+
     if (range)
         return range;
 
@@ -1977,18 +1978,6 @@ RefPtr<Range> wordRangeFromPosition(const VisiblePosition& position)
         currentPosition = positionOfNextBoundaryOfGranularity(currentPosition, WordGranularity, DirectionBackward);
     } while (currentPosition.isNotNull() && !atBoundaryOfGranularity(currentPosition, WordGranularity, DirectionBackward));
 
-    // If the position is an empty paragraph and at the end of the document
-    // the word iterator could not pass the paragraph boundary, therefore iterating to
-    // the previous line is required.
-    if (currentPosition.isNull() && isEndOfDocument(position)) {
-        VisiblePosition previousLinePosition = positionOfNextBoundaryOfGranularity(position, LineGranularity, DirectionBackward);
-        if (previousLinePosition.isNotNull()) {
-            currentPosition = positionOfNextBoundaryOfGranularity(previousLinePosition, WordGranularity, DirectionBackward);
-            if (currentPosition.isNull())
-                currentPosition = previousLinePosition;
-        }
-    }
-
     if (currentPosition.isNull())
         currentPosition = positionOfNextBoundaryOfGranularity(position, WordGranularity, DirectionForward);
 
@@ -1996,6 +1985,7 @@ RefPtr<Range> wordRangeFromPosition(const VisiblePosition& position)
         range = Range::create(position.deepEquivalent().deprecatedNode()->document(), currentPosition, position);
         ASSERT(range);
     }
+
     return range;
 }
 

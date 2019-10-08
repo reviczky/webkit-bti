@@ -96,7 +96,7 @@ inline bool hasArrayBuffer(TypedArrayMode mode)
 class JSArrayBufferView : public JSNonFinalObject {
 public:
     typedef JSNonFinalObject Base;
-    static const unsigned fastSizeLimit = 1000;
+    static constexpr unsigned fastSizeLimit = 1000;
     using VectorPtr = CagedBarrierPtr<Gigacage::Primitive, void, tagCagedPtr>;
     
     static size_t sizeOf(uint32_t length, uint32_t elementSize)
@@ -162,7 +162,7 @@ public:
     
     bool isShared();
     JS_EXPORT_PRIVATE ArrayBuffer* unsharedBuffer();
-    ArrayBuffer* possiblySharedBuffer();
+    inline ArrayBuffer* possiblySharedBuffer();
     JSArrayBuffer* unsharedJSBuffer(ExecState* exec);
     JSArrayBuffer* possiblySharedJSBuffer(ExecState* exec);
     RefPtr<ArrayBufferView> unsharedImpl();
@@ -173,7 +173,9 @@ public:
     bool hasVector() const { return !!m_vector; }
     void* vector() const { return m_vector.getMayBeNull(length()); }
     
-    unsigned byteOffset();
+    inline unsigned byteOffset();
+    inline Optional<unsigned> byteOffsetConcurrently();
+
     unsigned length() const { return m_length; }
 
     DECLARE_EXPORT_INFO;
@@ -185,6 +187,10 @@ public:
     static RefPtr<ArrayBufferView> toWrapped(VM&, JSValue);
 
 private:
+    enum Requester { Mutator, ConcurrentThread };
+    template<Requester, typename ResultType> ResultType byteOffsetImpl();
+    template<Requester> ArrayBuffer* possiblySharedBufferImpl();
+
     JS_EXPORT_PRIVATE ArrayBuffer* slowDownAndWasteMemory();
     static void finalize(JSCell*);
 

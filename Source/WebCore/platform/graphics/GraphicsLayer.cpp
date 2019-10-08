@@ -199,6 +199,11 @@ void GraphicsLayer::clearClient()
     m_client = &EmptyGraphicsLayerClient::singleton();
 }
 
+String GraphicsLayer::debugName() const
+{
+    return name();
+}
+
 void GraphicsLayer::setClient(GraphicsLayerClient& client)
 {
     m_client = &client;
@@ -508,7 +513,7 @@ void GraphicsLayer::paintGraphicsLayerContents(GraphicsContext& context, const F
     FloatRect clipRect(clip);
     clipRect.move(offset);
 
-    client().paintContents(this, context, m_paintingPhase, clipRect, layerPaintBehavior);
+    client().paintContents(this, context, clipRect, layerPaintBehavior);
 }
 
 FloatRect GraphicsLayer::adjustCoverageRectForMovement(const FloatRect& coverageRect, const FloatRect& previousVisibleRect, const FloatRect& currentVisibleRect)

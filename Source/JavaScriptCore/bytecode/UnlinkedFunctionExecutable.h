@@ -27,6 +27,7 @@
 
 #include "CodeSpecializationKind.h"
 #include "ConstructAbility.h"
+#include "ConstructorKind.h"
 #include "ExecutableInfo.h"
 #include "ExpressionRangeInfo.h"
 #include "Identifier.h"
@@ -60,7 +61,7 @@ public:
     friend class CachedFunctionExecutable;
 
     typedef JSCell Base;
-    static const unsigned StructureFlags = Base::StructureFlags | StructureIsImmortal;
+    static constexpr unsigned StructureFlags = Base::StructureFlags | StructureIsImmortal;
 
     template<typename CellType, SubspaceAccess>
     static IsoSubspace* subspaceFor(VM& vm)
@@ -141,14 +142,25 @@ public:
     CodeFeatures features() const { return m_features; }
     bool hasCapturedVariables() const { return m_hasCapturedVariables; }
 
-    static const bool needsDestruction = true;
+    static constexpr bool needsDestruction = true;
     static void destroy(JSCell*);
 
     bool isBuiltinFunction() const { return m_isBuiltinFunction; }
     bool isAnonymousBuiltinFunction() const { return isBuiltinFunction() && name().isPrivateName(); }
     ConstructAbility constructAbility() const { return static_cast<ConstructAbility>(m_constructAbility); }
     JSParserScriptMode scriptMode() const { return static_cast<JSParserScriptMode>(m_scriptMode); }
-    bool isClassConstructorFunction() const { return constructorKind() != ConstructorKind::None; }
+    bool isClassConstructorFunction() const
+    {
+        switch (constructorKind()) {
+        case ConstructorKind::None:
+        case ConstructorKind::Naked:
+            return false;
+        case ConstructorKind::Base:
+        case ConstructorKind::Extends:
+            return true;
+        }
+        return false;
+    }
     bool isClass() const
     {
         if (!m_rareData)

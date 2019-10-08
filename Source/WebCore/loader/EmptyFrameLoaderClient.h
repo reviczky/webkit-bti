@@ -23,7 +23,14 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#pragma once
+
 #include "FrameLoaderClient.h"
+#include "ResourceError.h"
+
+#if USE(QUICK_LOOK)
+#include "PreviewLoaderClient.h"
+#endif
 
 namespace WebCore {
 
@@ -34,7 +41,6 @@ class WEBCORE_EXPORT EmptyFrameLoaderClient : public FrameLoaderClient {
 
     Optional<FrameIdentifier> frameID() const override { return WTF::nullopt; }
     Optional<PageIdentifier> pageID() const override { return WTF::nullopt; }
-    PAL::SessionID sessionID() const override;
 
     bool hasWebView() const final { return true; } // mainly for assertions
 
@@ -49,7 +55,7 @@ class WEBCORE_EXPORT EmptyFrameLoaderClient : public FrameLoaderClient {
     void detachedFromParent2() final { }
     void detachedFromParent3() final { }
 
-    void convertMainResourceLoadToDownload(DocumentLoader*, PAL::SessionID, const ResourceRequest&, const ResourceResponse&) final { }
+    void convertMainResourceLoadToDownload(DocumentLoader*, const ResourceRequest&, const ResourceResponse&) final { }
 
     void assignIdentifierToInitialRequest(unsigned long, DocumentLoader*, const ResourceRequest&) final { }
     bool shouldUseCredentialStorage(DocumentLoader*, unsigned long) override { return false; }
@@ -192,7 +198,7 @@ class WEBCORE_EXPORT EmptyFrameLoaderClient : public FrameLoaderClient {
 
     Ref<FrameNetworkingContext> createNetworkingContext() final;
 
-    bool isEmptyFrameLoaderClient() final { return true; }
+    bool isEmptyFrameLoaderClient() const final { return true; }
     void prefetchDNS(const String&) final { }
 
 #if USE(QUICK_LOOK)
@@ -200,8 +206,11 @@ class WEBCORE_EXPORT EmptyFrameLoaderClient : public FrameLoaderClient {
 #endif
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     bool hasFrameSpecificStorageAccess() final { return false; }
-    void setHasFrameSpecificStorageAccess(bool) final { }
 #endif
 };
 
-}
+} // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::EmptyFrameLoaderClient)
+    static bool isType(const WebCore::FrameLoaderClient& frameLoaderClient) { return frameLoaderClient.isEmptyFrameLoaderClient(); }
+SPECIALIZE_TYPE_TRAITS_END()

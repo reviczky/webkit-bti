@@ -78,6 +78,7 @@
 #include "FormController.h"
 #include "Frame.h"
 #include "FrameLoader.h"
+#include "FrameLoaderClient.h"
 #include "FrameView.h"
 #include "FullscreenManager.h"
 #include "GCObservation.h"
@@ -485,7 +486,9 @@ void Internals::resetToConsistentState(Page& page)
     PlatformMediaSessionManager::sharedManager().resetRestrictions();
     PlatformMediaSessionManager::sharedManager().setWillIgnoreSystemInterruptions(true);
 #endif
+#if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
     PlatformMediaSessionManager::sharedManager().setIsPlayingToAutomotiveHeadUnit(false);
+#endif
 #if ENABLE(ACCESSIBILITY)
     AXObjectCache::setEnhancedUserInterfaceAccessibility(false);
     AXObjectCache::disableAccessibility();
@@ -570,6 +573,8 @@ Internals::Internals(Document& document)
         frame->page()->setPaymentCoordinator(makeUnique<PaymentCoordinator>(*mockPaymentCoordinator));
     }
 #endif
+
+    m_unsuspendableActiveDOMObject = nullptr;
 }
 
 Document* Internals::contextDocument() const
@@ -704,6 +709,8 @@ static String responseSourceToString(const ResourceResponse& response)
         return "Memory cache after validation";
     case ResourceResponse::Source::ApplicationCache:
         return "Application cache";
+    case ResourceResponse::Source::InspectorOverride:
+        return "Inspector override";
     }
     ASSERT_NOT_REACHED();
     return "Error";
@@ -919,6 +926,27 @@ void Internals::clearPageCache()
 unsigned Internals::pageCacheSize() const
 {
     return PageCache::singleton().pageCount();
+}
+
+class UnsuspendableActiveDOMObject final : public ActiveDOMObject, public RefCounted<UnsuspendableActiveDOMObject> {
+public:
+    static Ref<UnsuspendableActiveDOMObject> create(ScriptExecutionContext& context) { return adoptRef(*new UnsuspendableActiveDOMObject { &context }); }
+
+private:
+    explicit UnsuspendableActiveDOMObject(ScriptExecutionContext* context)
+        : ActiveDOMObject(context)
+    {
+        suspendIfNeeded();
+    }
+
+    bool canSuspendForDocumentSuspension() const final { return false; }
+    const char* activeDOMObjectName() const { return "UnsuspendableActiveDOMObject"; }
+};
+
+void Internals::preventDocumentForEnteringPageCache()
+{
+    if (auto* context = contextDocument())
+        m_unsuspendableActiveDOMObject = UnsuspendableActiveDOMObject::create(*context);
 }
 
 void Internals::disableTileSizeUpdateDelay()
@@ -1508,6 +1536,17 @@ void Internals::setEnableWebRTCEncryption(bool value)
         page->settings().setWebRTCEncryptionEnabled(value);
 #endif
 }
+
+void Internals::setUseDTLS10(bool useDTLS10)
+{
+#if USE(LIBWEBRTC)
+    auto* document = contextDocument();
+    if (!document || !document->page())
+        return;
+    document->page()->libWebRTCProvider().setUseDTLS10(useDTLS10);
+#endif
+}
+
 #endif
 
 #if ENABLE(MEDIA_STREAM)
@@ -2468,6 +2507,18 @@ bool Internals::isDocumentAlive(uint64_t documentIdentifier) const
     return Document::allDocumentsMap().contains(makeObjectIdentifier<DocumentIdentifierType>(documentIdentifier));
 }
 
+uint64_t Internals::frameIdentifier(const Document& document) const
+{
+    if (auto* page = document.page())
+        return page->mainFrame().loader().client().frameID().valueOr(FrameIdentifier { }).toUInt64();
+    return 0;
+}
+
+uint64_t Internals::pageIdentifier(const Document& document) const
+{
+    return document.pageID().valueOr(PageIdentifier { }).toUInt64();
+}
+
 bool Internals::isAnyWorkletGlobalScopeAlive() const
 {
 #if ENABLE(CSS_PAINTING_API)
@@ -2480,7 +2531,7 @@ bool Internals::isAnyWorkletGlobalScopeAlive() const
 String Internals::serviceWorkerClientIdentifier(const Document& document) const
 {
 #if ENABLE(SERVICE_WORKER)
-    return ServiceWorkerClientIdentifier { ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(document.sessionID()).serverConnectionIdentifier(), document.identifier() }.toString();
+    return ServiceWorkerClientIdentifier { ServiceWorkerProvider::singleton().serviceWorkerConnection().serverConnectionIdentifier(), document.identifier() }.toString();
 #else
     UNUSED_PARAM(document);
     return String();
@@ -4235,7 +4286,7 @@ RefPtr<File> Internals::createFile(const String& path)
     if (!url.isLocalFile())
         return nullptr;
 
-    return File::create(document->sessionID(), url.fileSystemPath());
+    return File::create(url.fileSystemPath());
 }
 
 void Internals::queueMicroTask(int testNumber)
@@ -4439,11 +4490,7 @@ JSValue Internals::cloneArrayBuffer(JSC::ExecState& state, JSValue buffer, JSVal
 
 String Internals::resourceLoadStatisticsForURL(const DOMURL& url)
 {
-    auto* document = contextDocument();
-    if (!document)
-        return emptyString();
-
-    return ResourceLoadObserver::shared().statisticsForURL(document->sessionID(), url.href());
+    return ResourceLoadObserver::shared().statisticsForURL(url.href());
 }
 
 void Internals::setResourceLoadStatisticsEnabled(bool enable)
@@ -4806,6 +4853,15 @@ void Internals::setDisableGetDisplayMediaUserGestureConstraint(bool value)
 }
 #endif
 
+bool Internals::supportsAudioSession() const
+{
+#if USE(AUDIO_SESSION)
+    return true;
+#else
+    return false;
+#endif
+}
+
 String Internals::audioSessionCategory() const
 {
 #if USE(AUDIO_SESSION)
@@ -4851,7 +4907,7 @@ void Internals::storeRegistrationsOnDisk(DOMPromiseDeferred<void>&& promise)
     if (!contextDocument())
         return;
 
-    auto& connection = ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(contextDocument()->sessionID());
+    auto& connection = ServiceWorkerProvider::singleton().serviceWorkerConnection();
     connection.storeRegistrationsOnDiskForTesting([promise = WTFMove(promise)]() mutable {
         promise.resolve();
     });
@@ -4868,7 +4924,7 @@ void Internals::clearCacheStorageMemoryRepresentation(DOMPromiseDeferred<void>&&
 
     if (!m_cacheStorageConnection) {
         if (auto* page = contextDocument()->page())
-            m_cacheStorageConnection = page->cacheStorageProvider().createCacheStorageConnection(page->sessionID());
+            m_cacheStorageConnection = page->cacheStorageProvider().createCacheStorageConnection();
         if (!m_cacheStorageConnection)
             return;
     }
@@ -4886,7 +4942,7 @@ void Internals::cacheStorageEngineRepresentation(DOMPromiseDeferred<IDLDOMString
 
     if (!m_cacheStorageConnection) {
         if (auto* page = contextDocument()->page())
-            m_cacheStorageConnection = page->cacheStorageProvider().createCacheStorageConnection(page->sessionID());
+            m_cacheStorageConnection = page->cacheStorageProvider().createCacheStorageConnection();
         if (!m_cacheStorageConnection)
             return;
     }
@@ -4903,7 +4959,7 @@ void Internals::updateQuotaBasedOnSpaceUsage()
 
     if (!m_cacheStorageConnection) {
         if (auto* page = contextDocument()->page())
-            m_cacheStorageConnection = page->cacheStorageProvider().createCacheStorageConnection(page->sessionID());
+            m_cacheStorageConnection = page->cacheStorageProvider().createCacheStorageConnection();
         if (!m_cacheStorageConnection)
             return;
     }
@@ -4937,7 +4993,7 @@ void Internals::hasServiceWorkerRegistration(const String& clientURL, HasRegistr
 
     URL parsedURL = contextDocument()->completeURL(clientURL);
 
-    return ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(contextDocument()->sessionID()).matchRegistration(SecurityOriginData { contextDocument()->topOrigin().data() }, parsedURL, [promise = WTFMove(promise)] (auto&& result) mutable {
+    return ServiceWorkerProvider::singleton().serviceWorkerConnection().matchRegistration(SecurityOriginData { contextDocument()->topOrigin().data() }, parsedURL, [promise = WTFMove(promise)] (auto&& result) mutable {
         promise.resolve(!!result);
     });
 }
@@ -4947,7 +5003,7 @@ void Internals::terminateServiceWorker(ServiceWorker& worker)
     if (!contextDocument())
         return;
 
-    ServiceWorkerProvider::singleton().serviceWorkerConnectionForSession(contextDocument()->sessionID()).syncTerminateWorker(worker.identifier());
+    ServiceWorkerProvider::singleton().serviceWorkerConnection().syncTerminateWorker(worker.identifier());
 }
 
 bool Internals::hasServiceWorkerConnection()
@@ -4955,7 +5011,7 @@ bool Internals::hasServiceWorkerConnection()
     if (!contextDocument())
         return false;
 
-    return ServiceWorkerProvider::singleton().existingServiceWorkerConnectionForSession(contextDocument()->sessionID());
+    return ServiceWorkerProvider::singleton().existingServiceWorkerConnection();
 }
 #endif
 
@@ -5107,12 +5163,16 @@ void Internals::setAlwaysAllowLocalWebarchive(bool alwaysAllowLocalWebarchive)
 
 void Internals::processWillSuspend()
 {
+#if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
     PlatformMediaSessionManager::sharedManager().processWillSuspend();
+#endif
 }
 
 void Internals::processDidResume()
 {
+#if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
     PlatformMediaSessionManager::sharedManager().processDidResume();
+#endif
 }
 
 void Internals::testDictionaryLogging()
@@ -5142,7 +5202,9 @@ void Internals::setXHRMaximumIntervalForUserGestureForwarding(XMLHttpRequest& re
 
 void Internals::setIsPlayingToAutomotiveHeadUnit(bool isPlaying)
 {
+#if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
     PlatformMediaSessionManager::sharedManager().setIsPlayingToAutomotiveHeadUnit(isPlaying);
+#endif
 }
     
 Internals::TextIndicatorInfo::TextIndicatorInfo()
@@ -5165,8 +5227,10 @@ Internals::TextIndicatorInfo Internals::textIndicatorForRange(const Range& range
 
 void Internals::addPrefetchLoadEventListener(HTMLLinkElement& link, RefPtr<EventListener>&& listener)
 {
-    if (RuntimeEnabledFeatures::sharedFeatures().linkPrefetchEnabled() && equalLettersIgnoringASCIICase(link.rel(), "prefetch"))
+    if (RuntimeEnabledFeatures::sharedFeatures().linkPrefetchEnabled() && equalLettersIgnoringASCIICase(link.rel(), "prefetch")) {
+        link.allowPrefetchLoadAndErrorForTesting();
         link.addEventListener(eventNames().loadEvent, listener.releaseNonNull(), false);
+    }
 }
 
 } // namespace WebCore

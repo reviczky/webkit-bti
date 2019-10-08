@@ -41,6 +41,7 @@ WebKitAnimationEvent
 WebKitTransitionEvent
 WheelEvent
 XMLHttpRequestProgressEvent
+ApplePayCancelEvent conditional=APPLE_PAY
 ApplePayPaymentAuthorizedEvent conditional=APPLE_PAY
 ApplePayPaymentMethodSelectedEvent conditional=APPLE_PAY
 ApplePayShippingContactSelectedEvent conditional=APPLE_PAY
@@ -82,3 +83,4 @@ MediaEncryptedEvent conditional=ENCRYPTED_MEDIA
 MediaKeyMessageEvent conditional=ENCRYPTED_MEDIA
 VRDisplayEvent
 PointerEvent conditional=POINTER_EVENTS
+GPUUncapturedErrorEvent conditional=WEBGPU

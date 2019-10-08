@@ -83,6 +83,7 @@ UserMediaPermissionRequestManagerProxy::UserMediaPermissionRequestManagerProxy(W
 
 UserMediaPermissionRequestManagerProxy::~UserMediaPermissionRequestManagerProxy()
 {
+    m_page.process().send(Messages::WebPage::StopMediaCapture { }, m_page.webPageID());
 #if ENABLE(MEDIA_STREAM)
     UserMediaProcessManager::singleton().revokeSandboxExtensionsIfNeeded(page().process());
     proxies().remove(this);
@@ -145,7 +146,7 @@ void UserMediaPermissionRequestManagerProxy::captureDevicesChanged(PermissionInf
     if (!m_page.hasRunningProcess())
         return;
 
-    m_page.process().send(Messages::WebPage::CaptureDevicesChanged(), m_page.pageID());
+    m_page.process().send(Messages::WebPage::CaptureDevicesChanged(), m_page.webPageID());
 }
 #endif
 
@@ -191,7 +192,7 @@ void UserMediaPermissionRequestManagerProxy::denyRequest(UserMediaPermissionRequ
         m_deniedRequests.append(DeniedRequest { request.mainFrameID(), request.userMediaDocumentSecurityOrigin(), request.topLevelDocumentSecurityOrigin(), request.requiresAudioCapture(), request.requiresVideoCapture(), request.requiresDisplayCapture() });
 
 #if ENABLE(MEDIA_STREAM)
-    m_page.process().send(Messages::WebPage::UserMediaAccessWasDenied(request.userMediaID(), toWebCore(reason), invalidConstraint), m_page.pageID());
+    m_page.process().send(Messages::WebPage::UserMediaAccessWasDenied(request.userMediaID(), toWebCore(reason), invalidConstraint), m_page.webPageID());
 #else
     UNUSED_PARAM(reason);
     UNUSED_PARAM(invalidConstraint);
@@ -241,8 +242,9 @@ void UserMediaPermissionRequestManagerProxy::finishGrantingRequest(UserMediaPerm
     m_page.process().connection()->sendWithAsyncReply(Messages::WebPage::UserMediaAccessWasGranted { request.userMediaID(), request.audioDevice(), request.videoDevice(), request.deviceIdentifierHashSalt() }, [this, weakThis = makeWeakPtr(this)] {
         if (!weakThis)
             return;
-        --m_hasPendingCapture;
-    }, m_page.pageID());
+        if (!--m_hasPendingCapture)
+            UserMediaProcessManager::singleton().revokeSandboxExtensionsIfNeeded(page().process());
+    }, m_page.webPageID());
 
     processNextUserMediaRequestIfNeeded();
 }

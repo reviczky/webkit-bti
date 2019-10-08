@@ -33,6 +33,7 @@
 #include "FloatingContext.h"
 #include "FloatingState.h"
 #include "LayoutBox.h"
+#include "LayoutChildIterator.h"
 #include "LayoutContainer.h"
 #include "LayoutState.h"
 #include "Logging.h"
@@ -44,25 +45,22 @@ namespace Layout {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(BlockFormattingContext);
 
-BlockFormattingContext::BlockFormattingContext(const Box& formattingContextRoot, BlockFormattingState& formattingState)
+BlockFormattingContext::BlockFormattingContext(const Container& formattingContextRoot, BlockFormattingState& formattingState)
     : FormattingContext(formattingContextRoot, formattingState)
 {
 }
 
-void BlockFormattingContext::layout() const
+void BlockFormattingContext::layoutInFlowContent()
 {
     // 9.4.1 Block formatting contexts
     // In a block formatting context, boxes are laid out one after the other, vertically, beginning at the top of a containing block.
     // The vertical distance between two sibling boxes is determined by the 'margin' properties.
     // Vertical margins between adjacent block-level boxes in a block formatting context collapse.
-    if (!is<Container>(root()))
-        return;
-
     LOG_WITH_STREAM(FormattingContextLayout, stream << "[Start] -> block formatting context -> formatting root(" << &root() << ")");
 
-    auto& formattingRoot = downcast<Container>(root());
+    auto& formattingRoot = root();
     LayoutQueue layoutQueue;
-    FloatingContext floatingContext(formattingState().floatingState());
+    auto floatingContext = FloatingContext { formattingRoot, *this, formattingState().floatingState() };
     // This is a post-order tree traversal layout.
     // The root container layout is done in the formatting context it lives in, not that one it creates, so let's start with the first child.
     if (auto* firstChild = formattingRoot.firstInFlowOrFloatingChild())
@@ -122,30 +120,27 @@ Optional<LayoutUnit> BlockFormattingContext::usedAvailableWidthForFloatAvoider(c
 {
     // Normally the available width for an in-flow block level box is the width of the containing block's content box.
     // However (and can't find it anywhere in the spec) non-floating positioned float avoider block level boxes are constrained by existing floats.
-    if (!layoutBox.isFloatAvoider() || layoutBox.isFloatingPositioned())
-        return { };
-    auto& floatingState = floatingContext.floatingState();
-    if (floatingState.isEmpty())
+    ASSERT(layoutBox.isFloatAvoider());
+    if (floatingContext.isEmpty())
         return { };
     // Vertical static position is not computed yet, so let's just estimate it for now.
-    auto& formattingRoot = downcast<Container>(root());
-    auto verticalPosition = FormattingContext::mapTopToAncestor(layoutState(), layoutBox, formattingRoot);
-    auto constraints = floatingState.constraints({ verticalPosition }, formattingRoot);
+    auto verticalPosition = mapTopToFormattingContextRoot(layoutBox);
+    auto constraints = floatingContext.constraints({ verticalPosition });
     if (!constraints.left && !constraints.right)
         return { };
-    auto& containingBlock = downcast<Container>(*layoutBox.containingBlock());
-    auto& containingBlockDisplayBox = layoutState().displayBoxForLayoutBox(containingBlock);
-    auto availableWidth = containingBlockDisplayBox.contentBoxWidth();
+    auto& containingBlock = *layoutBox.containingBlock();
+    auto& containingBlockGeometry = geometryForBox(containingBlock);
+    auto availableWidth = containingBlockGeometry.contentBoxWidth();
 
     LayoutUnit containingBlockLeft;
-    LayoutUnit containingBlockRight = containingBlockDisplayBox.right();
-    if (&containingBlock != &formattingRoot) {
+    LayoutUnit containingBlockRight = containingBlockGeometry.right();
+    if (&containingBlock != &root()) {
         // Move containing block left/right to the root's coordinate system.
-        containingBlockLeft = FormattingContext::mapLeftToAncestor(layoutState(), containingBlock, formattingRoot);
-        containingBlockRight = FormattingContext::mapRightToAncestor(layoutState(), containingBlock, formattingRoot);
+        containingBlockLeft = mapLeftToFormattingContextRoot(containingBlock);
+        containingBlockRight = mapRightToFormattingContextRoot(containingBlock);
     }
-    auto containingBlockContentBoxLeft = containingBlockLeft + containingBlockDisplayBox.borderLeft() + containingBlockDisplayBox.paddingLeft().valueOr(0);
-    auto containingBlockContentBoxRight = containingBlockRight - containingBlockDisplayBox.borderRight() + containingBlockDisplayBox.paddingRight().valueOr(0);
+    auto containingBlockContentBoxLeft = containingBlockLeft + containingBlockGeometry.borderLeft() + containingBlockGeometry.paddingLeft().valueOr(0);
+    auto containingBlockContentBoxRight = containingBlockRight - containingBlockGeometry.borderRight() + containingBlockGeometry.paddingRight().valueOr(0);
 
     // Shrink the available space if the floats are actually intruding at this vertical position.
     if (constraints.left)
@@ -155,7 +150,7 @@ Optional<LayoutUnit> BlockFormattingContext::usedAvailableWidthForFloatAvoider(c
     return availableWidth;
 }
 
-void BlockFormattingContext::layoutFormattingContextRoot(FloatingContext& floatingContext, const Box& layoutBox) const
+void BlockFormattingContext::layoutFormattingContextRoot(FloatingContext& floatingContext, const Box& layoutBox)
 {
     ASSERT(layoutBox.establishesFormattingContext());
     // Start laying out this formatting root in the formatting contenxt it lives in.
@@ -163,27 +158,32 @@ void BlockFormattingContext::layoutFormattingContextRoot(FloatingContext& floati
     computeBorderAndPadding(layoutBox);
     computeStaticVerticalPosition(floatingContext, layoutBox);
 
-    computeWidthAndMargin(layoutBox, usedAvailableWidthForFloatAvoider(floatingContext, layoutBox));
+    Optional<LayoutUnit> usedAvailableWidthForFloatAvoider;
+    auto horizontalAvailableSpaceIsConstrainedByExistingFloats = layoutBox.isFloatAvoider() && !layoutBox.isFloatingPositioned();
+    if (horizontalAvailableSpaceIsConstrainedByExistingFloats)
+        usedAvailableWidthForFloatAvoider = this->usedAvailableWidthForFloatAvoider(floatingContext, layoutBox);
+    computeWidthAndMargin(layoutBox, usedAvailableWidthForFloatAvoider);
     computeStaticHorizontalPosition(layoutBox);
-    // Swich over to the new formatting context (the one that the root creates).
-    auto formattingContext = layoutState().createFormattingContext(layoutBox);
-    formattingContext->layout();
-
-    // Come back and finalize the root's geometry.
-    LOG_WITH_STREAM(FormattingContextLayout, stream << "[Compute] -> [Height][Margin] -> for layoutBox(" << &layoutBox << ")");
-    computeHeightAndMargin(layoutBox);
-    // Now that we computed the root's height, we can go back and layout the out-of-flow content.
-    formattingContext->layoutOutOfFlowContent();
-
+    if (is<Container>(layoutBox)) {
+        // Swich over to the new formatting context (the one that the root creates).
+        auto& rootContainer = downcast<Container>(layoutBox);
+        auto formattingContext = LayoutContext::createFormattingContext(rootContainer, layoutState());
+        formattingContext->layoutInFlowContent();
+        // Come back and finalize the root's geometry.
+        computeHeightAndMargin(rootContainer);
+        // Now that we computed the root's height, we can go back and layout the out-of-flow content.
+        formattingContext->layoutOutOfFlowContent();
+    } else
+        computeHeightAndMargin(layoutBox);
     // Float related final positioning.
     if (layoutBox.isFloatingPositioned()) {
         computeFloatingPosition(floatingContext, layoutBox);
-        floatingContext.floatingState().append(layoutBox);
+        floatingContext.append(layoutBox);
     } else if (layoutBox.establishesBlockFormattingContext())
         computePositionToAvoidFloats(floatingContext, layoutBox);
 }
 
-void BlockFormattingContext::placeInFlowPositionedChildren(const Box& layoutBox) const
+void BlockFormattingContext::placeInFlowPositionedChildren(const Box& layoutBox)
 {
     if (!is<Container>(layoutBox))
         return;
@@ -195,10 +195,10 @@ void BlockFormattingContext::placeInFlowPositionedChildren(const Box& layoutBox)
             continue;
 
         auto computeInFlowPositionedPosition = [&] {
-            auto& layoutState = this->layoutState();
-            auto positionOffset = Geometry::inFlowPositionedPositionOffset(layoutState, childBox);
+            auto usedHorizontalValues = UsedHorizontalValues { UsedHorizontalValues::Constraints { geometryForBox(*childBox.containingBlock()) } };
+            auto positionOffset = geometry().inFlowPositionedPositionOffset(childBox, usedHorizontalValues);
 
-            auto& displayBox = layoutState.displayBoxForLayoutBox(childBox);
+            auto& displayBox = formattingState().displayBox(childBox);
             auto topLeft = displayBox.topLeft();
 
             topLeft.move(positionOffset);
@@ -211,34 +211,37 @@ void BlockFormattingContext::placeInFlowPositionedChildren(const Box& layoutBox)
     LOG_WITH_STREAM(FormattingContextLayout, stream << "End: move in-flow positioned children -> parent: " << &layoutBox);
 }
 
-void BlockFormattingContext::computeStaticVerticalPosition(const FloatingContext& floatingContext, const Box& layoutBox) const
+void BlockFormattingContext::computeStaticVerticalPosition(const FloatingContext& floatingContext, const Box& layoutBox)
 {
-    auto& layoutState = this->layoutState();
-    layoutState.displayBoxForLayoutBox(layoutBox).setTop(Geometry::staticVerticalPosition(layoutState, layoutBox));
+    auto usedVerticalValues = UsedVerticalValues { UsedVerticalValues::Constraints { geometryForBox(*layoutBox.containingBlock()) } };
+    formattingState().displayBox(layoutBox).setTop(geometry().staticVerticalPosition(layoutBox, usedVerticalValues));
     if (layoutBox.hasFloatClear())
         computeEstimatedVerticalPositionForFloatClear(floatingContext, layoutBox);
     else if (layoutBox.establishesFormattingContext())
         computeEstimatedVerticalPositionForFormattingRoot(layoutBox);
 }
 
-void BlockFormattingContext::computeStaticHorizontalPosition(const Box& layoutBox) const
+void BlockFormattingContext::computeStaticHorizontalPosition(const Box& layoutBox)
 {
-    layoutState().displayBoxForLayoutBox(layoutBox).setLeft(Geometry::staticHorizontalPosition(layoutState(), layoutBox));
+    auto usedHorizontalValues = UsedHorizontalValues { UsedHorizontalValues::Constraints { geometryForBox(*layoutBox.containingBlock()) } };
+    formattingState().displayBox(layoutBox).setLeft(geometry().staticHorizontalPosition(layoutBox, usedHorizontalValues));
 }
 
-void BlockFormattingContext::computeStaticPosition(const FloatingContext& floatingContext, const Box& layoutBox) const
+void BlockFormattingContext::computeStaticPosition(const FloatingContext& floatingContext, const Box& layoutBox)
 {
     computeStaticVerticalPosition(floatingContext, layoutBox);
     computeStaticHorizontalPosition(layoutBox);
 }
 
-void BlockFormattingContext::computeEstimatedVerticalPosition(const Box& layoutBox) const
+void BlockFormattingContext::computeEstimatedVerticalPosition(const Box& layoutBox)
 {
-    auto& layoutState = this->layoutState();
-    auto estimatedMarginBefore = MarginCollapse::estimatedMarginBefore(layoutState, layoutBox);
+    auto usedHorizontalValues = UsedHorizontalValues { UsedHorizontalValues::Constraints { geometryForBox(*layoutBox.containingBlock()) } };
+    auto computedVerticalMargin = geometry().computedVerticalMargin(layoutBox, usedHorizontalValues);
+    auto usedNonCollapsedMargin = UsedVerticalMargin::NonCollapsedValues { computedVerticalMargin.before.valueOr(0), computedVerticalMargin.after.valueOr(0) };
+    auto estimatedMarginBefore = marginCollapse().estimatedMarginBefore(layoutBox, usedNonCollapsedMargin);
     setEstimatedMarginBefore(layoutBox, estimatedMarginBefore);
 
-    auto& displayBox = layoutState.displayBoxForLayoutBox(layoutBox);
+    auto& displayBox = formattingState().displayBox(layoutBox);
     auto nonCollapsedValues = UsedVerticalMargin::NonCollapsedValues { estimatedMarginBefore.nonCollapsedValue, { } };
     auto collapsedValues = UsedVerticalMargin::CollapsedValues { estimatedMarginBefore.collapsedValue, { }, estimatedMarginBefore.isCollapsedThrough };
     auto verticalMargin = UsedVerticalMargin { nonCollapsedValues, collapsedValues };
@@ -249,10 +252,10 @@ void BlockFormattingContext::computeEstimatedVerticalPosition(const Box& layoutB
 #endif
 }
 
-void BlockFormattingContext::computeEstimatedVerticalPositionForAncestors(const Box& layoutBox) const
+void BlockFormattingContext::computeEstimatedVerticalPositionForAncestors(const Box& layoutBox)
 {
     // We only need to estimate margin top for float related layout (formatting context roots avoid floats).
-    ASSERT(layoutBox.isFloatingPositioned() || layoutBox.hasFloatClear() || layoutBox.establishesBlockFormattingContext() || layoutBox.establishesInlineFormattingContext());
+    ASSERT(layoutBox.isFloatAvoider() || layoutBox.establishesInlineFormattingContext());
 
     // In order to figure out whether a box should avoid a float, we need to know the final positions of both (ignore relative positioning for now).
     // In block formatting context the final position for a normal flow box includes
@@ -271,7 +274,7 @@ void BlockFormattingContext::computeEstimatedVerticalPositionForAncestors(const 
     }
 }
 
-void BlockFormattingContext::computeEstimatedVerticalPositionForFormattingRoot(const Box& layoutBox) const
+void BlockFormattingContext::computeEstimatedVerticalPositionForFormattingRoot(const Box& layoutBox)
 {
     ASSERT(layoutBox.establishesFormattingContext());
     ASSERT(!layoutBox.hasFloatClear());
@@ -293,10 +296,10 @@ void BlockFormattingContext::computeEstimatedVerticalPositionForFormattingRoot(c
     }
 }
 
-void BlockFormattingContext::computeEstimatedVerticalPositionForFloatClear(const FloatingContext& floatingContext, const Box& layoutBox) const
+void BlockFormattingContext::computeEstimatedVerticalPositionForFloatClear(const FloatingContext& floatingContext, const Box& layoutBox)
 {
     ASSERT(layoutBox.hasFloatClear());
-    if (floatingContext.floatingState().isEmpty())
+    if (floatingContext.isEmpty())
         return;
     // The static position with clear requires margin esitmation to see if clearance is needed.
     computeEstimatedVerticalPosition(layoutBox);
@@ -307,7 +310,7 @@ void BlockFormattingContext::computeEstimatedVerticalPositionForFloatClear(const
         return;
     }
 
-    auto& displayBox = layoutState().displayBoxForLayoutBox(layoutBox);
+    auto& displayBox = formattingState().displayBox(layoutBox);
     ASSERT(*verticalPositionAndClearance.position >= displayBox.top());
     displayBox.setTop(*verticalPositionAndClearance.position);
     if (verticalPositionAndClearance.clearance)
@@ -326,46 +329,45 @@ bool BlockFormattingContext::hasPrecomputedMarginBefore(const Box& layoutBox) co
 }
 #endif
 
-void BlockFormattingContext::computeFloatingPosition(const FloatingContext& floatingContext, const Box& layoutBox) const
+void BlockFormattingContext::computeFloatingPosition(const FloatingContext& floatingContext, const Box& layoutBox)
 {
     ASSERT(layoutBox.isFloatingPositioned());
     ASSERT(hasPrecomputedMarginBefore(layoutBox));
-    layoutState().displayBoxForLayoutBox(layoutBox).setTopLeft(floatingContext.positionForFloat(layoutBox));
+    formattingState().displayBox(layoutBox).setTopLeft(floatingContext.positionForFloat(layoutBox));
 }
 
-void BlockFormattingContext::computePositionToAvoidFloats(const FloatingContext& floatingContext, const Box& layoutBox) const
+void BlockFormattingContext::computePositionToAvoidFloats(const FloatingContext& floatingContext, const Box& layoutBox)
 {
-    auto& layoutState = this->layoutState();
     // Formatting context roots avoid floats.
     ASSERT(layoutBox.establishesBlockFormattingContext());
     ASSERT(!layoutBox.isFloatingPositioned());
     ASSERT(!layoutBox.hasFloatClear());
     ASSERT(hasPrecomputedMarginBefore(layoutBox));
 
-    if (floatingContext.floatingState().isEmpty())
+    if (floatingContext.isEmpty())
         return;
 
     if (auto adjustedPosition = floatingContext.positionForFormattingContextRoot(layoutBox))
-        layoutState.displayBoxForLayoutBox(layoutBox).setTopLeft(*adjustedPosition);
+        formattingState().displayBox(layoutBox).setTopLeft(*adjustedPosition);
 }
 
-void BlockFormattingContext::computeWidthAndMargin(const Box& layoutBox, Optional<LayoutUnit> usedAvailableWidth) const
+void BlockFormattingContext::computeWidthAndMargin(const Box& layoutBox, Optional<LayoutUnit> usedAvailableWidth)
 {
-    auto& layoutState = this->layoutState();
-
     LayoutUnit availableWidth;
+    auto containingBlockGeometry = geometryForBox(*layoutBox.containingBlock());
     if (usedAvailableWidth)
         availableWidth = *usedAvailableWidth;
     else
-        availableWidth = layoutState.displayBoxForLayoutBox(*layoutBox.containingBlock()).contentBoxWidth();
+        availableWidth = containingBlockGeometry.contentBoxWidth();
+    auto constraints = UsedHorizontalValues::Constraints { containingBlockGeometry.contentBoxLeft(), availableWidth };
 
     auto compute = [&](Optional<LayoutUnit> usedWidth) -> WidthAndMargin {
-        auto usedValues = UsedHorizontalValues { availableWidth, usedWidth, { } };
+        auto usedValues = UsedHorizontalValues { constraints, usedWidth, { } };
         if (layoutBox.isInFlow())
-            return Geometry::inFlowWidthAndMargin(layoutState, layoutBox, usedValues);
+            return geometry().inFlowWidthAndMargin(layoutBox, usedValues);
 
         if (layoutBox.isFloatingPositioned())
-            return Geometry::floatingWidthAndMargin(layoutState, layoutBox, usedValues);
+            return geometry().floatingWidthAndMargin(layoutBox, usedValues);
 
         ASSERT_NOT_REACHED();
         return { };
@@ -373,54 +375,55 @@ void BlockFormattingContext::computeWidthAndMargin(const Box& layoutBox, Optiona
 
     auto widthAndMargin = compute({ });
 
-    if (auto maxWidth = Geometry::computedValueIfNotAuto(layoutBox.style().logicalMaxWidth(), availableWidth)) {
+    if (auto maxWidth = geometry().computedValueIfNotAuto(layoutBox.style().logicalMaxWidth(), availableWidth)) {
         auto maxWidthAndMargin = compute(maxWidth);
         if (widthAndMargin.width > maxWidthAndMargin.width)
             widthAndMargin = maxWidthAndMargin;
     }
 
-    auto minWidth = Geometry::computedValueIfNotAuto(layoutBox.style().logicalMinWidth(), availableWidth).valueOr(0);
+    auto minWidth = geometry().computedValueIfNotAuto(layoutBox.style().logicalMinWidth(), availableWidth).valueOr(0);
     auto minWidthAndMargin = compute(minWidth);
     if (widthAndMargin.width < minWidthAndMargin.width)
         widthAndMargin = minWidthAndMargin;
 
-    auto& displayBox = layoutState.displayBoxForLayoutBox(layoutBox);
+    auto& displayBox = formattingState().displayBox(layoutBox);
     displayBox.setContentBoxWidth(widthAndMargin.width);
     displayBox.setHorizontalMargin(widthAndMargin.usedMargin);
     displayBox.setHorizontalComputedMargin(widthAndMargin.computedMargin);
 }
 
-void BlockFormattingContext::computeHeightAndMargin(const Box& layoutBox) const
+void BlockFormattingContext::computeHeightAndMargin(const Box& layoutBox)
 {
-    auto& layoutState = this->layoutState();
+    auto& containingBlockGeometry = geometryForBox(*layoutBox.containingBlock());
+    auto compute = [&](auto usedVerticalValues) -> HeightAndMargin {
 
-    auto compute = [&](UsedVerticalValues usedValues) -> HeightAndMargin {
-
+        auto usedHorizontalValues = UsedHorizontalValues { UsedHorizontalValues::Constraints { containingBlockGeometry } };
         if (layoutBox.isInFlow())
-            return Geometry::inFlowHeightAndMargin(layoutState, layoutBox, usedValues);
+            return geometry().inFlowHeightAndMargin(layoutBox, usedHorizontalValues, usedVerticalValues);
 
         if (layoutBox.isFloatingPositioned())
-            return Geometry::floatingHeightAndMargin(layoutState, layoutBox, usedValues, UsedHorizontalValues { layoutState.displayBoxForLayoutBox(*layoutBox.containingBlock()).contentBoxWidth() });
+            return geometry().floatingHeightAndMargin(layoutBox, usedHorizontalValues, usedVerticalValues);
 
         ASSERT_NOT_REACHED();
         return { };
     };
 
-    auto heightAndMargin = compute({ });
-    if (auto maxHeight = Geometry::computedMaxHeight(layoutState, layoutBox)) {
+    auto verticalConstraints = UsedVerticalValues::Constraints { containingBlockGeometry };
+    auto heightAndMargin = compute(UsedVerticalValues { verticalConstraints });
+    if (auto maxHeight = geometry().computedMaxHeight(layoutBox)) {
         if (heightAndMargin.height > *maxHeight) {
-            auto maxHeightAndMargin = compute({ *maxHeight });
+            auto maxHeightAndMargin = compute(UsedVerticalValues { verticalConstraints, maxHeight });
             // Used height should remain the same.
-            ASSERT((layoutState.inQuirksMode() && (layoutBox.isBodyBox() || layoutBox.isDocumentBox())) || maxHeightAndMargin.height == *maxHeight);
+            ASSERT((layoutState().inQuirksMode() && (layoutBox.isBodyBox() || layoutBox.isDocumentBox())) || maxHeightAndMargin.height == *maxHeight);
             heightAndMargin = { *maxHeight, maxHeightAndMargin.nonCollapsedMargin };
         }
     }
 
-    if (auto minHeight = Geometry::computedMinHeight(layoutState, layoutBox)) {
+    if (auto minHeight = geometry().computedMinHeight(layoutBox)) {
         if (heightAndMargin.height < *minHeight) {
-            auto minHeightAndMargin = compute({ *minHeight });
+            auto minHeightAndMargin = compute(UsedVerticalValues { verticalConstraints, minHeight });
             // Used height should remain the same.
-            ASSERT((layoutState.inQuirksMode() && (layoutBox.isBodyBox() || layoutBox.isDocumentBox())) || minHeightAndMargin.height == *minHeight);
+            ASSERT((layoutState().inQuirksMode() && (layoutBox.isBodyBox() || layoutBox.isDocumentBox())) || minHeightAndMargin.height == *minHeight);
             heightAndMargin = { *minHeight, minHeightAndMargin.nonCollapsedMargin };
         }
     }
@@ -428,9 +431,9 @@ void BlockFormattingContext::computeHeightAndMargin(const Box& layoutBox) const
     // 1. Compute collapsed margins.
     // 2. Adjust vertical position using the collapsed values
     // 3. Adjust previous in-flow sibling margin after using this margin.
-    auto collapsedMargin = MarginCollapse::collapsedVerticalValues(layoutState, layoutBox, heightAndMargin.nonCollapsedMargin);
+    auto collapsedMargin = marginCollapse().collapsedVerticalValues(layoutBox, heightAndMargin.nonCollapsedMargin);
     auto verticalMargin = UsedVerticalMargin { heightAndMargin.nonCollapsedMargin, collapsedMargin };
-    auto& displayBox = layoutState.displayBoxForLayoutBox(layoutBox);
+    auto& displayBox = formattingState().displayBox(layoutBox);
 
     // Out of flow boxes don't need vertical adjustment after margin collapsing.
     if (layoutBox.isOutOfFlowPositioned()) {
@@ -446,15 +449,14 @@ void BlockFormattingContext::computeHeightAndMargin(const Box& layoutBox) const
     displayBox.setContentBoxHeight(heightAndMargin.height);
     displayBox.setVerticalMargin(verticalMargin);
 
-    MarginCollapse::updatePositiveNegativeMarginValues(layoutState, layoutBox);
+    auto marginCollapse = this->marginCollapse();
+    MarginCollapse::updatePositiveNegativeMarginValues(*this, marginCollapse, layoutBox);
     // Adjust the previous sibling's margin bottom now that this box's vertical margin is computed.
-    MarginCollapse::updateMarginAfterForPreviousSibling(layoutState, layoutBox);
+    MarginCollapse::updateMarginAfterForPreviousSibling(*this, marginCollapse, layoutBox);
 }
 
-FormattingContext::IntrinsicWidthConstraints BlockFormattingContext::computedIntrinsicWidthConstraints() const
+FormattingContext::IntrinsicWidthConstraints BlockFormattingContext::computedIntrinsicWidthConstraints()
 {
-    auto& layoutState = this->layoutState();
-    auto& formattingRoot = root();
     auto& formattingState = this->formattingState();
     ASSERT(!formattingState.intrinsicWidthConstraints());
 
@@ -464,8 +466,8 @@ FormattingContext::IntrinsicWidthConstraints BlockFormattingContext::computedInt
     // 3. As we climb back on the tree, compute min/max intrinsic width
     // (Any subtrees with new formatting contexts need to layout synchronously)
     Vector<const Box*> queue;
-    if (is<Container>(formattingRoot) && downcast<Container>(formattingRoot).hasInFlowOrFloatingChild())
-        queue.append(downcast<Container>(formattingRoot).firstInFlowOrFloatingChild());
+    if (root().hasInFlowOrFloatingChild())
+        queue.append(root().firstInFlowOrFloatingChild());
 
     IntrinsicWidthConstraints constraints;
     while (!queue.isEmpty()) {
@@ -482,7 +484,7 @@ FormattingContext::IntrinsicWidthConstraints BlockFormattingContext::computedInt
             auto& layoutBox = *queue.takeLast();
             auto desdendantConstraints = formattingState.intrinsicWidthConstraintsForBox(layoutBox); 
             if (!desdendantConstraints) {
-                desdendantConstraints = Geometry::intrinsicWidthConstraints(layoutState, layoutBox);
+                desdendantConstraints = geometry().intrinsicWidthConstraints(layoutBox);
                 formattingState.setIntrinsicWidthConstraintsForBox(layoutBox, *desdendantConstraints);
             }
             constraints.minimum = std::max(constraints.minimum, desdendantConstraints->minimum);
@@ -506,30 +508,29 @@ LayoutUnit BlockFormattingContext::verticalPositionWithMargin(const Box& layoutB
     // 2. Check if the margin before collapses with the previous box's margin after. if not -> return previous box's bottom including margin after + marginBefore
     // 3. Check if the previous box's margins collapse through. If not -> return previous box' bottom excluding margin after + marginBefore (they are supposed to be equal)
     // 4. Go to previous box and start from step #1 until we hit the parent box.
-    auto& layoutState = this->layoutState();
-    auto& displayBox = layoutState.displayBoxForLayoutBox(layoutBox);
-    if (displayBox.hasClearance())
-        return displayBox.top();
+    auto& boxGeometry = geometryForBox(layoutBox);
+    if (boxGeometry.hasClearance())
+        return boxGeometry.top();
 
     auto* currentLayoutBox = &layoutBox;
     while (currentLayoutBox) {
         if (!currentLayoutBox->previousInFlowSibling())
             break;
         auto& previousInFlowSibling = *currentLayoutBox->previousInFlowSibling();
-        if (!MarginCollapse::marginBeforeCollapsesWithPreviousSiblingMarginAfter(layoutState, *currentLayoutBox)) {
-            auto& previousDisplayBox = layoutState.displayBoxForLayoutBox(previousInFlowSibling);
-            return previousDisplayBox.rectWithMargin().bottom() + verticalMargin.before();
+        if (!marginCollapse().marginBeforeCollapsesWithPreviousSiblingMarginAfter(*currentLayoutBox)) {
+            auto& previousBoxGeometry = geometryForBox(previousInFlowSibling);
+            return previousBoxGeometry.rectWithMargin().bottom() + verticalMargin.before();
         }
 
-        if (!MarginCollapse::marginsCollapseThrough(layoutState, previousInFlowSibling)) {
-            auto& previousDisplayBox = layoutState.displayBoxForLayoutBox(previousInFlowSibling);
-            return previousDisplayBox.bottom() + verticalMargin.before();
+        if (!marginCollapse().marginsCollapseThrough(previousInFlowSibling)) {
+            auto& previousBoxGeometry = geometryForBox(previousInFlowSibling);
+            return previousBoxGeometry.bottom() + verticalMargin.before();
         }
         currentLayoutBox = &previousInFlowSibling;
     }
 
     auto& containingBlock = *layoutBox.containingBlock();
-    auto containingBlockContentBoxTop = layoutState.displayBoxForLayoutBox(containingBlock).contentBoxTop();
+    auto containingBlockContentBoxTop = geometryForBox(containingBlock).contentBoxTop();
     // Adjust vertical position depending whether this box directly or indirectly adjoins with its parent.
     auto directlyAdjoinsParent = !layoutBox.previousInFlowSibling();
     if (directlyAdjoinsParent) {
@@ -537,15 +538,15 @@ LayoutUnit BlockFormattingContext::verticalPositionWithMargin(const Box& layoutB
         // In this case, the position of the element depends on its relationship with the other elements whose margins are being collapsed.
         if (verticalMargin.collapsedValues().isCollapsedThrough) {
             // If the element's margins are collapsed with its parent's top margin, the top border edge of the box is defined to be the same as the parent's.
-            if (MarginCollapse::marginBeforeCollapsesWithParentMarginBefore(layoutState, layoutBox))
+            if (marginCollapse().marginBeforeCollapsesWithParentMarginBefore(layoutBox))
                 return containingBlockContentBoxTop;
             // Otherwise, either the element's parent is not taking part in the margin collapsing, or only the parent's bottom margin is involved.
             // The position of the element's top border edge is the same as it would have been if the element had a non-zero bottom border.
-            auto beforeMarginWithBottomBorder = MarginCollapse::marginBeforeIgnoringCollapsingThrough(layoutState, layoutBox, verticalMargin.nonCollapsedValues());
+            auto beforeMarginWithBottomBorder = marginCollapse().marginBeforeIgnoringCollapsingThrough(layoutBox, verticalMargin.nonCollapsedValues());
             return containingBlockContentBoxTop + beforeMarginWithBottomBorder;
         }
         // Non-collapsed through box vertical position depending whether the margin collapses.
-        if (MarginCollapse::marginBeforeCollapsesWithParentMarginBefore(layoutState, layoutBox))
+        if (marginCollapse().marginBeforeCollapsesWithParentMarginBefore(layoutBox))
             return containingBlockContentBoxTop;
 
         return containingBlockContentBoxTop + verticalMargin.before();
@@ -553,13 +554,13 @@ LayoutUnit BlockFormattingContext::verticalPositionWithMargin(const Box& layoutB
     // At this point this box indirectly (via collapsed through previous in-flow siblings) adjoins the parent. Let's check if it margin collapses with the parent.
     ASSERT(containingBlock.firstInFlowChild());
     ASSERT(containingBlock.firstInFlowChild() != &layoutBox);
-    if (MarginCollapse::marginBeforeCollapsesWithParentMarginBefore(layoutState, *containingBlock.firstInFlowChild()))
+    if (marginCollapse().marginBeforeCollapsesWithParentMarginBefore(*containingBlock.firstInFlowChild()))
         return containingBlockContentBoxTop;
 
     return containingBlockContentBoxTop + verticalMargin.before();
 }
 
-void BlockFormattingContext::setEstimatedMarginBefore(const Box& layoutBox, const EstimatedMarginBefore& estimatedMarginBefore) const
+void BlockFormattingContext::setEstimatedMarginBefore(const Box& layoutBox, const EstimatedMarginBefore& estimatedMarginBefore)
 {
     // Can't cross formatting context boundary.
     ASSERT(&layoutState().formattingStateForBox(layoutBox) == &formattingState());

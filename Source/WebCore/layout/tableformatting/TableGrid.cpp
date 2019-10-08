@@ -82,10 +82,9 @@ void TableGrid::ColumnsContext::addColumn()
     m_columns.append({ });
 }
 
-void TableGrid::ColumnsContext::useAsLogicalWidth(WidthConstraintsType type)
+TableGrid::Row::Row(const Box& rowBox)
+    : m_layoutBox(rowBox)
 {
-    for (auto& column : m_columns)
-        column.setLogicalWidth(type == WidthConstraintsType::Minimum ? column.widthConstraints().minimum : column.widthConstraints().maximum);
 }
 
 TableGrid::CellInfo::CellInfo(const Box& tableCellBox, SlotPosition position, CellSize size)
@@ -142,12 +141,12 @@ void TableGrid::appendCell(const Box& tableCellBox)
         }
     }
     // Initialize columns/rows if needed.
-    auto missingNumberOfColumns = std::max<unsigned>(0, (initialSlotPosition.x() + columnSpan) - m_columnsContext.columns().size()); 
-    for (unsigned column = 0; column < missingNumberOfColumns; ++column)
+    auto missingNumberOfColumns = std::max<int>(0, initialSlotPosition.x() + columnSpan - m_columnsContext.columns().size()); 
+    for (auto column = 0; column < missingNumberOfColumns; ++column)
         m_columnsContext.addColumn();
 
     if (isInNewRow)
-        m_rows.append({ });
+        m_rows.append({ *tableCellBox.parent() });
 
     m_cellList.add(WTFMove(cellInfo));
 }
@@ -169,6 +168,7 @@ FormattingContext::IntrinsicWidthConstraints TableGrid::widthConstraints() const
     auto widthConstraints = FormattingContext::IntrinsicWidthConstraints { };
     for (auto& column : m_columnsContext.columns())
         widthConstraints += column.widthConstraints();
+    widthConstraints.expand((m_columnsContext.columns().size() + 1) * m_horizontalSpacing); 
     return widthConstraints;
 }
 

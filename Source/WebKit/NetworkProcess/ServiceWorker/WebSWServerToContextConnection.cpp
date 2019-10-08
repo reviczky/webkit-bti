@@ -29,24 +29,33 @@
 #if ENABLE(SERVICE_WORKER)
 
 #include "FormDataReference.h"
+#include "Logging.h"
 #include "NetworkProcess.h"
 #include "ServiceWorkerFetchTask.h"
 #include "ServiceWorkerFetchTaskMessages.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebSWContextManagerConnectionMessages.h"
+#include <WebCore/SWServer.h>
 #include <WebCore/ServiceWorkerContextData.h>
 
 namespace WebKit {
 using namespace WebCore;
 
-WebSWServerToContextConnection::WebSWServerToContextConnection(NetworkProcess& networkProcess, const RegistrableDomain& registrableDomain, Ref<IPC::Connection>&& connection)
-    : SWServerToContextConnection(registrableDomain)
+WebSWServerToContextConnection::WebSWServerToContextConnection(NetworkProcess& networkProcess, RegistrableDomain&& registrableDomain, SWServer& server, Ref<IPC::Connection>&& connection)
+    : SWServerToContextConnection(WTFMove(registrableDomain))
     , m_ipcConnection(WTFMove(connection))
     , m_networkProcess(networkProcess)
+    , m_server(makeWeakPtr(server))
 {
+    server.addContextConnection(*this);
 }
 
-WebSWServerToContextConnection::~WebSWServerToContextConnection() = default;
+WebSWServerToContextConnection::~WebSWServerToContextConnection()
+{
+    connectionClosed();
+    if (m_server && m_server->contextConnectionForRegistrableDomain(registrableDomain()) == this)
+        m_server->removeContextConnection(*this);
+}
 
 IPC::Connection* WebSWServerToContextConnection::messageSenderConnection() const
 {
@@ -65,9 +74,18 @@ void WebSWServerToContextConnection::connectionClosed()
         fetch->fail(ResourceError { errorDomainWebKitInternal, 0, { }, "Service Worker context closed"_s });
 }
 
-void WebSWServerToContextConnection::installServiceWorkerContext(const ServiceWorkerContextData& data, PAL::SessionID sessionID, const String& userAgent)
+void WebSWServerToContextConnection::postMessageToServiceWorkerClient(const ServiceWorkerClientIdentifier& destinationIdentifier, const MessageWithMessagePorts& message, ServiceWorkerIdentifier sourceIdentifier, const String& sourceOrigin)
 {
-    send(Messages::WebSWContextManagerConnection::InstallServiceWorker { data, sessionID, userAgent });
+    if (!m_server)
+        return;
+
+    if (auto* connection = m_server->connection(destinationIdentifier.serverConnectionIdentifier))
+        connection->postMessageToServiceWorkerClient(destinationIdentifier.contextIdentifier, message, sourceIdentifier, sourceOrigin);
+}
+
+void WebSWServerToContextConnection::installServiceWorkerContext(const ServiceWorkerContextData& data, const String& userAgent)
+{
+    send(Messages::WebSWContextManagerConnection::InstallServiceWorker { data, userAgent });
 }
 
 void WebSWServerToContextConnection::fireInstallEvent(ServiceWorkerIdentifier serviceWorkerIdentifier)
@@ -78,6 +96,11 @@ void WebSWServerToContextConnection::fireInstallEvent(ServiceWorkerIdentifier se
 void WebSWServerToContextConnection::fireActivateEvent(ServiceWorkerIdentifier serviceWorkerIdentifier)
 {
     send(Messages::WebSWContextManagerConnection::FireActivateEvent(serviceWorkerIdentifier));
+}
+
+void WebSWServerToContextConnection::softUpdate(ServiceWorkerIdentifier serviceWorkerIdentifier)
+{
+    send(Messages::WebSWContextManagerConnection::SoftUpdate(serviceWorkerIdentifier));
 }
 
 void WebSWServerToContextConnection::terminateWorker(ServiceWorkerIdentifier serviceWorkerIdentifier)
@@ -110,9 +133,11 @@ void WebSWServerToContextConnection::didFinishSkipWaiting(uint64_t callbackID)
     send(Messages::WebSWContextManagerConnection::DidFinishSkipWaiting { callbackID });
 }
 
-void WebSWServerToContextConnection::connectionMayNoLongerBeNeeded()
+void WebSWServerToContextConnection::connectionIsNoLongerNeeded()
 {
-    m_networkProcess->swContextConnectionMayNoLongerBeNeeded(*this);
+    RELEASE_LOG(ServiceWorker, "Service worker process is no longer needed, terminating it");
+    terminate();
+    connectionClosed();
 }
 
 void WebSWServerToContextConnection::setThrottleState(bool isThrottleable)

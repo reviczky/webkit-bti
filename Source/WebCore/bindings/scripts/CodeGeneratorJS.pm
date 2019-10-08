@@ -2614,7 +2614,7 @@ sub GenerateHeader
         push(@headerContent, "    }\n\n");
     }
 
-    push(@headerContent, "    static const bool needsDestruction = false;\n\n") if IsDOMGlobalObject($interface);
+    push(@headerContent, "    static constexpr bool needsDestruction = false;\n\n") if IsDOMGlobalObject($interface);
 
     $structureFlags{"JSC::HasStaticPropertyTable"} = 1 if InstancePropertyCount($interface) > 0;
     $structureFlags{"JSC::NewImpurePropertyFiresWatchpoints"} = 1 if $interface->extendedAttributes->{NewImpurePropertyFiresWatchpoints};
@@ -2882,7 +2882,7 @@ sub GenerateHeader
     # structure flags
     if (%structureFlags) {
         push(@headerContent, "public:\n");
-        push(@headerContent, "    static const unsigned StructureFlags = Base::StructureFlags");
+        push(@headerContent, "    static constexpr unsigned StructureFlags = Base::StructureFlags");
         foreach my $structureFlag (sort (keys %structureFlags)) {
             push(@headerContent, " | " . $structureFlag);
         }
@@ -6616,6 +6616,7 @@ sub JSValueToNativeDOMConvertNeedsGlobalObject
 
     return 1 if $codeGenerator->IsCallbackInterface($type);
     return 1 if $codeGenerator->IsCallbackFunction($type);
+    return JSValueToNativeDOMConvertNeedsGlobalObject(@{$type->subtypes}[1]) if $codeGenerator->IsRecordType($type);
     return 1 if $type->name eq "ScheduledAction";
     return 0;
 }
@@ -7137,7 +7138,7 @@ sub GeneratePrototypeDeclaration
     # structure flags
     if (%structureFlags) {
         push(@$outputArray, "public:\n");
-        push(@$outputArray, "    static const unsigned StructureFlags = Base::StructureFlags");
+        push(@$outputArray, "    static constexpr unsigned StructureFlags = Base::StructureFlags");
         foreach my $structureFlag (sort (keys %structureFlags)) {
             push(@$outputArray, " | " . $structureFlag);
         }

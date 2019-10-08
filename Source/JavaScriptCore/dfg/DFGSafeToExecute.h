@@ -59,6 +59,7 @@ public:
         case FunctionUse:
         case FinalObjectUse:
         case RegExpObjectUse:
+        case PromiseObjectUse:
         case ProxyObjectUse:
         case DerivedArrayUse:
         case MapObjectUse:
@@ -177,6 +178,9 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case IdentityWithProfile:
     case ToThis:
     case CreateThis:
+    case CreatePromise:
+    case CreateGenerator:
+    case CreateAsyncGenerator:
     case ObjectCreate:
     case ObjectKeys:
     case GetCallee:
@@ -204,7 +208,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case ArithBitOr:
     case ArithBitXor:
     case ArithBitLShift:
-    case BitRShift:
+    case ArithBitRShift:
     case BitURShift:
     case ValueToInt32:
     case UInt32ToNumber:
@@ -234,6 +238,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case ValueBitOr:
     case ValueBitNot:
     case ValueBitLShift:
+    case ValueBitRShift:
     case ValueNegate:
     case ValueAdd:
     case ValueSub:
@@ -281,6 +286,8 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case GetGlobalVar:
     case GetGlobalLexicalVariable:
     case PutGlobalVariable:
+    case GetInternalField:
+    case PutInternalField:
     case CheckCell:
     case CheckBadCell:
     case CheckNotEmpty:
@@ -316,6 +323,9 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case CallForwardVarargs:
     case ConstructForwardVarargs:
     case NewObject:
+    case NewPromise:
+    case NewGenerator:
+    case NewAsyncGenerator:
     case NewArray:
     case NewArrayWithSize:
     case NewArrayBuffer:
@@ -521,6 +531,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node, bool igno
     case ArrayPop:
     case StringCharAt:
     case StringCharCodeAt:
+    case StringCodePointAt:
         return node->arrayMode().alreadyChecked(graph, node, state.forNode(graph.child(node, 0)));
 
     case ArrayPush:

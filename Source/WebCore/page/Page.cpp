@@ -263,7 +263,7 @@ Page::Page(PageConfiguration&& pageConfiguration)
     , m_storageNamespaceProvider(*WTFMove(pageConfiguration.storageNamespaceProvider))
     , m_userContentProvider(*WTFMove(pageConfiguration.userContentProvider))
     , m_visitedLinkStore(*WTFMove(pageConfiguration.visitedLinkStore))
-    , m_sessionID(PAL::SessionID::defaultSessionID())
+    , m_sessionID(pageConfiguration.sessionID)
 #if ENABLE(VIDEO)
     , m_playbackControlsManagerUpdateTimer(*this, &Page::playbackControlsManagerUpdateTimerFired)
 #endif
@@ -1676,14 +1676,6 @@ void Page::storageBlockingStateChanged()
         view->storageBlockingStateChanged();
 }
 
-void Page::enableLegacyPrivateBrowsing(bool privateBrowsingEnabled)
-{
-    // Don't allow changing the legacy private browsing state if we have set a session ID.
-    ASSERT(m_sessionID == PAL::SessionID::defaultSessionID() || m_sessionID == PAL::SessionID::legacyPrivateSessionID());
-
-    setSessionID(privateBrowsingEnabled ? PAL::SessionID::legacyPrivateSessionID() : PAL::SessionID::defaultSessionID());
-}
-
 void Page::updateIsPlayingMedia(uint64_t sourceElementID)
 {
     MediaProducer::MediaStateFlags state = MediaProducer::IsNotPlaying;
@@ -2474,9 +2466,12 @@ PAL::SessionID Page::sessionID() const
     return m_sessionID;
 }
 
+// This is only called by WebKitLegacy.
 void Page::setSessionID(PAL::SessionID sessionID)
 {
     ASSERT(sessionID.isValid());
+    ASSERT(m_sessionID == PAL::SessionID::legacyPrivateSessionID() || m_sessionID == PAL::SessionID::defaultSessionID());
+    ASSERT(sessionID == PAL::SessionID::legacyPrivateSessionID() || sessionID == PAL::SessionID::defaultSessionID());
 
 #if ENABLE(INDEXED_DATABASE)
     if (sessionID != m_sessionID)
@@ -2972,7 +2967,7 @@ void Page::configureLoggingChannel(const String& channelName, WTFLogChannelState
 
 #if USE(LIBWEBRTC)
         if (channel == &LogWebRTC && m_mainFrame->document())
-            libWebRTCProvider().setEnableLogging(!m_mainFrame->document()->sessionID().isEphemeral());
+            libWebRTCProvider().setEnableLogging(!sessionID().isEphemeral());
 #endif
     }
 
@@ -2986,6 +2981,9 @@ void Page::configureLoggingChannel(const String& channelName, WTFLogChannelState
 
 void Page::didFinishLoadingImageForElement(HTMLImageElement& element)
 {
+    auto protectedElement = makeRef(element);
+    if (auto frame = makeRefPtr(element.document().frame()))
+        frame->editor().revealSelectionIfNeededAfterLoadingImageForElement(element);
     chrome().client().didFinishLoadingImageForElement(element);
 }
 
