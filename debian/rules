@@ -29,6 +29,11 @@ ifneq (,$(filter $(DEB_HOST_ARCH),i386))
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_JIT=OFF -DENABLE_C_LOOP=ON
 endif
 
+# See https://bugs.webkit.org/show_bug.cgi?id=197192
+ifneq (,$(filter $(DEB_HOST_ARCH),arm64))
+	EXTRA_CMAKE_ARGUMENTS += -DWTF_CPU_ARM64_CORTEXA53=OFF
+endif
+
 # See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=81426
 ifneq (,$(filter $(DEB_HOST_ARCH),armhf sh3 sh4 powerpc))
 	CFLAGS := $(CFLAGS:-O2=-O1)
