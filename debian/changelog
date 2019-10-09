@@ -3,6 +3,7 @@ webkit2gtk (2.27.2-1) UNRELEASED; urgency=medium
   * New upstream development release.
   * debian/control:
     + Require bubblewrap >= 0.3.1.
+    + Update Standards-Version to 4.4.1 (no changes).
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 22 Oct 2019 12:49:40 +0300
 
