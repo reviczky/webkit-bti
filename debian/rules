@@ -34,11 +34,6 @@ ifneq (,$(filter $(DEB_HOST_ARCH),arm64))
 	EXTRA_CMAKE_ARGUMENTS += -DWTF_CPU_ARM64_CORTEXA53=OFF
 endif
 
-# See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=81426
-ifneq (,$(filter $(DEB_HOST_ARCH),armhf sh3 sh4 powerpc))
-	CFLAGS := $(CFLAGS:-O2=-O1)
-endif
-
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEM_MALLOC=ON
 	CPPFLAGS += -DRELEASE_WITHOUT_OPTIMIZATIONS

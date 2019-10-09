@@ -5,6 +5,9 @@ webkit2gtk (2.27.2-1) UNRELEASED; urgency=medium
     + Require bubblewrap >= 0.3.1.
     + Update Standards-Version to 4.4.1 (no changes).
     + Add Breaks for Evolution < 3.34.1 (see WebKit bug #201033).
+  * debian/rules:
+    + Stop building with -O1 for armhf and friends, the build seems to
+      work just fine with -O2 now.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 22 Oct 2019 12:49:40 +0300
 
