@@ -1,3 +1,41 @@
+webkit2gtk (2.26.1-3~bpo9+1) stretch-backports-sloppy; urgency=medium
+
+  * Rebuild for stretch-backports-sloppy.
+  * debian/control:
+    + Versions of GStreamer < 1.13 had GStreamerGL in the "bad" set, so
+      depend on libgstreamer-plugins-bad1.0-dev and don't require
+      GStreamer 1.13. Don't install libgstreamer-plugins-bad1.0-dev in
+      armel or armhf: the usage of two different GL implementations causes
+      a build failure (see WebKit bug #175127).
+    + Remove build dependency on libwoff-dev, this is not available in
+      this Debian release.
+    + Don't recommend gstreamer1.0-gl, that package is not available in
+      this Debian release.
+    + Don't depend on libopenjp2-7-dev.
+    + Build depend on clang-7.
+    + Remove Breaks for Evolution < 3.34.1.
+    + Require Bubblewrap 0.3.1.
+  * debian/rules:
+    + Build with -DENABLE_MEDIA_SOURCE=OFF. This feature requires a more
+      recent version of GStreamer.
+    + Build with -DUSE_OPENJPEG=OFF. This feature requires a more recent
+      version of libopenjp2-7-dev.
+    + Pass CC and CXX to dh_auto_configure so it uses clang instead of
+      gcc.
+  * debian/patches/force-single-process.patch:
+    + Force the single-process mode in Evolution and Geary
+  * debian/patches/is-same-v.patch:
+    + Define std::is_same_v
+  * debian/patches/fix-gtkdoc-generation.patch:
+    + Fix gtk-doc generation.
+  * debian/patches/safe-multiply.patch:
+    + Fix link errors in 32-bit CPUs with clang
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Mark webkit_emoji_chooser_get_type as optional, this requires a more
+      recent version of GTK.
+
+ -- Alberto Garcia <berto@igalia.com>  Mon, 14 Oct 2019 18:47:59 +0300
+
 webkit2gtk (2.26.1-3) unstable; urgency=medium
 
   * debian/rules:

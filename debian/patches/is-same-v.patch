@@ -1,0 +1,19 @@
+Subject: Define std::is_same_v when using clang
+Index: webkitgtk/Source/JavaScriptCore/runtime/JSGlobalObject.cpp
+===================================================================
+--- webkitgtk.orig/Source/JavaScriptCore/runtime/JSGlobalObject.cpp
++++ webkitgtk/Source/JavaScriptCore/runtime/JSGlobalObject.cpp
+@@ -229,6 +229,13 @@
+ #include "JSCWrapperMap.h"
+ #endif
+ 
++#if COMPILER(CLANG)
++namespace std {
++    template< class T, class U >
++    inline constexpr bool is_same_v = is_same<T, U>::value;
++}
++#endif
++
+ namespace JSC {
+ 
+ #define CHECK_FEATURE_FLAG_TYPE(capitalName, lowerName, properName, instanceType, jsName, prototypeBase, featureFlag) \
