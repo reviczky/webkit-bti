@@ -3,6 +3,8 @@ webkit2gtk (2.26.1-4) UNRELEASED; urgency=medium
   * debian/rules:
     + Stop building with -O1 for armhf and friends, the build seems to
       work just fine with -O2 now.
+  * debian/control:
+    + Require bubblewrap >= 0.3.1.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 09 Oct 2019 17:15:06 +0300
 
