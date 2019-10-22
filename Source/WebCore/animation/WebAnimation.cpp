@@ -29,6 +29,7 @@
 #include "AnimationEffect.h"
 #include "AnimationPlaybackEvent.h"
 #include "AnimationTimeline.h"
+#include "DOMPromiseProxy.h"
 #include "DeclarativeAnimation.h"
 #include "Document.h"
 #include "DocumentTimeline.h"
@@ -1156,12 +1157,13 @@ const char* WebAnimation::activeDOMObjectName() const
     return "Animation";
 }
 
-bool WebAnimation::canSuspendForDocumentSuspension() const
+// FIXME: This should never prevent entering the back/forward cache.
+bool WebAnimation::shouldPreventEnteringBackForwardCache_DEPRECATED() const
 {
     // Use the base class's implementation of hasPendingActivity() since we wouldn't want the custom implementation
     // in this class designed to keep JS wrappers alive to interfere with the ability for a page using animations
-    // to enter the page cache.
-    return !ActiveDOMObject::hasPendingActivity();
+    // to enter the back/forward cache.
+    return ActiveDOMObject::hasPendingActivity();
 }
 
 void WebAnimation::stop()

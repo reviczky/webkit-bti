@@ -85,10 +85,18 @@ WI.appendContextMenuItemsForSourceCode = function(contextMenu, sourceCodeOrLocat
     contextMenu.appendSeparator();
 
     if (sourceCode.supportsScriptBlackboxing) {
-        let isBlackboxed = WI.debuggerManager.isScriptBlackboxed(sourceCode);
-        contextMenu.appendItem(isBlackboxed ? WI.UIString("Include script when debugging") : WI.UIString("Ignore script when debugging"), () => {
-            WI.debuggerManager.setShouldBlackboxScript(sourceCode, !isBlackboxed);
-        });
+        let blackboxData = WI.debuggerManager.blackboxDataForSourceCode(sourceCode);
+        if (blackboxData && blackboxData.type === WI.DebuggerManager.BlackboxType.Pattern) {
+            contextMenu.appendItem(WI.UIString("Reveal blackbox pattern"), () => {
+                WI.showSettingsTab({
+                    blackboxPatternToSelect: blackboxData.regex,
+                });
+            });
+        } else {
+            contextMenu.appendItem(blackboxData ? WI.UIString("Include script when debugging") : WI.UIString("Ignore script when debugging"), () => {
+                WI.debuggerManager.setShouldBlackboxScript(sourceCode, !blackboxData);
+            });
+        }
     }
 
     contextMenu.appendSeparator();
@@ -167,18 +175,10 @@ WI.appendContextMenuItemsForURL = function(contextMenu, url, options = {})
     }
 
     if (WI.networkManager.resourceForURL(url)) {
-        if (WI.settings.experimentalEnableSourcesTab.value) {
-            if (!WI.isShowingSourcesTab()) {
-                contextMenu.appendItem(WI.UIString("Reveal in Sources Tab"), () => {
-                    showResourceWithOptions({preferredTabType: WI.SourcesTabContentView.Type});
-                });
-            }
-        } else {
-            if (!WI.isShowingResourcesTab()) {
-                contextMenu.appendItem(WI.UIString("Reveal in Resources Tab"), () => {
-                    showResourceWithOptions({preferredTabType: WI.ResourcesTabContentView.Type});
-                });
-            }
+        if (!WI.isShowingSourcesTab()) {
+            contextMenu.appendItem(WI.UIString("Reveal in Sources Tab"), () => {
+                showResourceWithOptions({preferredTabType: WI.SourcesTabContentView.Type});
+            });
         }
 
         if (!WI.isShowingNetworkTab()) {
@@ -282,7 +282,8 @@ WI.appendContextMenuItemsForDOMNode = function(contextMenu, domNode, options = {
 
         contextMenu.appendSeparator();
 
-        if (!options.excludeLogElement && !domNode.isInUserAgentShadowTree() && !domNode.isPseudoElement()) {
+        let canLogShadowTree = !domNode.isInUserAgentShadowTree() || WI.DOMManager.supportsEditingUserAgentShadowTrees({frontendOnly: true});
+        if (!options.excludeLogElement && canLogShadowTree && !domNode.isPseudoElement()) {
             let label = isElement ? WI.UIString("Log Element", "Log (print) DOM element to Console") : WI.UIString("Log Node", "Log (print) DOM node to Console");
             contextMenu.appendItem(label, () => {
                 WI.RemoteObject.resolveNode(domNode, WI.RuntimeManager.ConsoleObjectGroup).then((remoteObject) => {
@@ -293,21 +294,22 @@ WI.appendContextMenuItemsForDOMNode = function(contextMenu, domNode, options = {
             });
         }
 
-        if (!options.excludeRevealElement && window.DOMAgent && attached) {
+        if (!options.excludeRevealElement && InspectorBackend.hasDomain("DOM") && attached) {
             contextMenu.appendItem(WI.repeatedUIString.revealInDOMTree(), () => {
                 WI.domManager.inspectElement(domNode.id);
             });
         }
 
-        if (WI.settings.experimentalEnableLayersTab.value && window.LayerTreeAgent && attached) {
+        if (WI.settings.experimentalEnableLayersTab.value && InspectorBackend.hasDomain("LayerTree") && attached) {
             contextMenu.appendItem(WI.UIString("Reveal in Layers Tab", "Open Layers tab and select the layer corresponding to this node"), () => {
                 WI.showLayersTab({nodeToSelect: domNode});
             });
         }
 
-        if (window.PageAgent && attached) {
+        if (InspectorBackend.hasDomain("Page") && attached) {
             contextMenu.appendItem(WI.UIString("Capture Screenshot", "Capture screenshot of the selected DOM node"), () => {
-                PageAgent.snapshotNode(domNode.id, (error, dataURL) => {
+                let target = WI.assumingMainTarget();
+                target.PageAgent.snapshotNode(domNode.id, (error, dataURL) => {
                     if (error) {
                         const target = WI.mainTarget;
                         const source = WI.ConsoleMessage.MessageSource.Other;

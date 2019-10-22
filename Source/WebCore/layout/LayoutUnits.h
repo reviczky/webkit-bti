@@ -29,7 +29,6 @@
 
 #include "LayoutUnit.h"
 #include "LayoutPoint.h"
-#include "LayoutRect.h"
 #include "MarginTypes.h"
 #include <wtf/Optional.h>
 
@@ -119,27 +118,27 @@ struct Edges {
     VerticalEdges vertical;
 };
 
-struct WidthAndMargin {
-    LayoutUnit width;
+struct ContentWidthAndMargin {
+    LayoutUnit contentWidth;
     UsedHorizontalMargin usedMargin;
     ComputedHorizontalMargin computedMargin;
 };
 
-struct HeightAndMargin {
-    LayoutUnit height;
+struct ContentHeightAndMargin {
+    LayoutUnit contentHeight;
     UsedVerticalMargin::NonCollapsedValues nonCollapsedMargin;
 };
 
 struct HorizontalGeometry {
     LayoutUnit left;
     LayoutUnit right;
-    WidthAndMargin widthAndMargin;
+    ContentWidthAndMargin contentWidthAndMargin;
 };
 
 struct VerticalGeometry {
     LayoutUnit top;
     LayoutUnit bottom;
-    HeightAndMargin heightAndMargin;
+    ContentHeightAndMargin contentHeightAndMargin;
 };
 
 struct UsedHorizontalValues {

@@ -33,7 +33,7 @@
 namespace JSC  {
 
     class Arguments;
-    class ExecState;
+    class CallFrame;
     class Interpreter;
     class JSCallee;
     class JSScope;
@@ -41,7 +41,7 @@ namespace JSC  {
 
     struct Instruction;
 
-    typedef ExecState CallFrame;
+    using ExecState = CallFrame;
 
     class CallSiteIndex {
     public:
@@ -84,23 +84,23 @@ namespace JSC  {
     struct CallerFrameAndPC {
         alignas(CPURegister) CallFrame* callerFrame;
         alignas(CPURegister) const Instruction* returnPC;
-        static const int sizeInRegisters = 2 * sizeof(CPURegister) / sizeof(Register);
+        static constexpr int sizeInRegisters = 2 * sizeof(CPURegister) / sizeof(Register);
     };
     static_assert(CallerFrameAndPC::sizeInRegisters == sizeof(CallerFrameAndPC) / sizeof(Register), "CallerFrameAndPC::sizeInRegisters is incorrect.");
 
     struct CallFrameSlot {
-        static const int codeBlock = CallerFrameAndPC::sizeInRegisters;
-        static const int callee = codeBlock + 1;
-        static const int argumentCount = callee + 1;
-        static const int thisArgument = argumentCount + 1;
-        static const int firstArgument = thisArgument + 1;
+        static constexpr int codeBlock = CallerFrameAndPC::sizeInRegisters;
+        static constexpr int callee = codeBlock + 1;
+        static constexpr int argumentCount = callee + 1;
+        static constexpr int thisArgument = argumentCount + 1;
+        static constexpr int firstArgument = thisArgument + 1;
     };
 
     // Represents the current state of script execution.
     // Passed as the first argument to most functions.
-    class ExecState : private Register {
+    class CallFrame : private Register {
     public:
-        static const int headerSizeInRegisters = CallFrameSlot::argumentCount + 1;
+        static constexpr int headerSizeInRegisters = CallFrameSlot::argumentCount + 1;
 
         // This function should only be called in very specific circumstances
         // when you've guaranteed the callee can't be a Wasm callee, and can
@@ -202,7 +202,7 @@ namespace JSC  {
         void setCallerFrame(CallFrame* frame) { callerFrameAndPC().callerFrame = frame; }
         void setScope(int scopeRegisterOffset, JSScope* scope) { static_cast<Register*>(this)[scopeRegisterOffset] = scope; }
 
-        static void initGlobalExec(ExecState* globalExec, JSCallee* globalCallee);
+        static void initGlobalExec(CallFrame* globalExec, JSCallee* globalCallee);
 
         // Read a register from the codeframe (or constant from the CodeBlock).
         Register& r(int);
@@ -303,8 +303,8 @@ namespace JSC  {
 
     private:
 
-        ExecState();
-        ~ExecState();
+        CallFrame();
+        ~CallFrame();
 
         Register* topOfFrameInternal();
 

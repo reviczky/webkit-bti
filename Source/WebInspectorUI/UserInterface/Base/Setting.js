@@ -171,7 +171,7 @@ WI.settings = {
     showAllTimeoutsBreakpoint: new WI.Setting("show-all-timeouts-breakpoint", false),
     showAssertionFailuresBreakpoint: new WI.Setting("show-assertion-failures-breakpoint", true),
     showCanvasPath: new WI.Setting("show-canvas-path", false),
-    showImageGrid: new WI.Setting("show-image-grid", false),
+    showImageGrid: new WI.Setting("show-image-grid", true),
     showInvisibleCharacters: new WI.Setting("show-invisible-characters", !!WI.Setting.migrateValue("show-invalid-characters")),
     showJavaScriptTypeInformation: new WI.Setting("show-javascript-type-information", false),
     showPaintRects: new WI.Setting("show-paint-rects", false),
@@ -186,9 +186,9 @@ WI.settings = {
     zoomFactor: new WI.Setting("zoom-factor", 1),
 
     // Experimental
+    experimentalEnablePreviewFeatures: new WI.Setting("experimental-enable-preview-features", false),
     experimentalEnableLayersTab: new WI.Setting("experimental-enable-layers-tab", false),
     experimentalEnableNewTabBar: new WI.Setting("experimental-enable-new-tab-bar", false),
-    experimentalEnableSourcesTab: new WI.Setting("experimental-enable-sources-tab", false),
     experimentalEnableStylesIcons: new WI.Setting("experimental-styles-icons", false),
     experimentalEnableStylesJumpToEffective: new WI.Setting("experimental-styles-jump-to-effective", false),
 
@@ -203,6 +203,7 @@ WI.settings = {
     engineeringPauseForInternalScripts: new WI.Setting("engineering-pause-for-internal-scripts", false),
     engineeringShowInternalObjectsInHeapSnapshot: new WI.Setting("engineering-show-internal-objects-in-heap-snapshot", false),
     engineeringShowPrivateSymbolsInHeapSnapshot: new WI.Setting("engineering-show-private-symbols-in-heap-snapshot", false),
+    engineeringAllowEditingUserAgentShadowTrees: new WI.Setting("engineering-allow-editing-user-agent-shadow-trees", false),
 
     // Debug
     debugShowConsoleEvaluations: new WI.Setting("debug-show-console-evaluations", false),
@@ -210,4 +211,22 @@ WI.settings = {
     debugEnableStyleEditingDebugMode: new WI.Setting("debug-enable-style-editing-debug-mode", false),
     debugEnableUncaughtExceptionReporter: new WI.Setting("debug-enable-uncaught-exception-reporter", true),
     debugLayoutDirection: new WI.Setting("debug-layout-direction-override", "system"),
+};
+
+WI.previewFeatures = [];
+
+WI.isTechnologyPreviewBuild = function()
+{
+    return WI.isExperimentalBuild && !WI.isEngineeringBuild;
+};
+
+WI.arePreviewFeaturesEnabled = function()
+{
+    if (WI.isExperimentalBuild)
+        return true;
+
+    if (WI.settings.experimentalEnablePreviewFeatures.value)
+        return true;
+
+    return false;
 };

@@ -37,6 +37,7 @@
 #include "ErrorEvent.h"
 #include "JSDOMExceptionHandling.h"
 #include "JSDOMWindow.h"
+#include "LegacySchemeRegistry.h"
 #include "MessagePort.h"
 #include "Navigator.h"
 #include "Page.h"
@@ -45,7 +46,6 @@
 #include "ResourceRequest.h"
 #include "SWClientConnection.h"
 #include "SWContextManager.h"
-#include "SchemeRegistry.h"
 #include "ScriptController.h"
 #include "ScriptDisallowedScope.h"
 #include "ScriptState.h"
@@ -229,7 +229,7 @@ bool ScriptExecutionContext::canSuspendActiveDOMObjectsForDocumentSuspension(Vec
     bool canSuspend = true;
 
     forEachActiveDOMObject([&](auto& activeDOMObject) {
-        if (!activeDOMObject.canSuspendForDocumentSuspension()) {
+        if (activeDOMObject.shouldPreventEnteringBackForwardCache_DEPRECATED()) {
             canSuspend = false;
             if (unsuspendableObjects)
                 unsuspendableObjects->append(&activeDOMObject);
@@ -278,7 +278,7 @@ void ScriptExecutionContext::suspendActiveDOMObjects(ReasonForSuspension why)
     checkConsistency();
 
     if (m_activeDOMObjectsAreSuspended) {
-        // A page may subsequently suspend DOM objects, say as part of entering the page cache, after the embedding
+        // A page may subsequently suspend DOM objects, say as part of entering the back/forward cache, after the embedding
         // client requested the page be suspended. We ignore such requests so long as the embedding client requested
         // the suspension first. See <rdar://problem/13754896> for more details.
         ASSERT(m_reasonForSuspendingActiveDOMObjects == ReasonForSuspension::PageWillBeSuspended);
@@ -301,15 +301,16 @@ void ScriptExecutionContext::resumeActiveDOMObjects(ReasonForSuspension why)
 
     if (m_reasonForSuspendingActiveDOMObjects != why)
         return;
-    m_activeDOMObjectsAreSuspended = false;
 
     forEachActiveDOMObject([](auto& activeDOMObject) {
         activeDOMObject.resume();
         return ShouldContinue::Yes;
     });
 
-    // In case there were pending messages at the time the script execution context entered PageCache,
-    // make sure those get dispatched shortly after restoring from PageCache.
+    m_activeDOMObjectsAreSuspended = false;
+
+    // In case there were pending messages at the time the script execution context entered the BackForwardCache,
+    // make sure those get dispatched shortly after restoring from the BackForwardCache.
     processMessageWithMessagePortsSoon();
 }
 
@@ -574,7 +575,7 @@ bool ScriptExecutionContext::allowsMediaDevices() const
 bool ScriptExecutionContext::hasServiceWorkerScheme() const
 {
     ASSERT(securityOrigin());
-    return SchemeRegistry::isServiceWorkerContainerCustomScheme(securityOrigin()->protocol());
+    return LegacySchemeRegistry::isServiceWorkerContainerCustomScheme(securityOrigin()->protocol());
 }
 
 #if ENABLE(SERVICE_WORKER)

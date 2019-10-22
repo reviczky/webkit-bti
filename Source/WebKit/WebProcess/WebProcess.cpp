@@ -53,6 +53,7 @@
 #include "WebFrameNetworkingContext.h"
 #include "WebGamepadProvider.h"
 #include "WebGeolocationManager.h"
+#include "WebIDBConnectionToServer.h"
 #include "WebLoaderStrategy.h"
 #include "WebMediaKeyStorageManager.h"
 #include "WebMemorySampler.h"
@@ -82,6 +83,7 @@
 #include <WebCore/AXObjectCache.h>
 #include <WebCore/ApplicationCacheStorage.h>
 #include <WebCore/AuthenticationChallenge.h>
+#include <WebCore/BackForwardCache.h>
 #include <WebCore/CPUMonitor.h>
 #include <WebCore/CommonVM.h>
 #include <WebCore/CrossOriginPreflightResultCache.h>
@@ -100,13 +102,13 @@
 #include <WebCore/GlyphPage.h>
 #include <WebCore/HTMLMediaElement.h>
 #include <WebCore/JSDOMWindow.h>
+#include <WebCore/LegacySchemeRegistry.h>
 #include <WebCore/MemoryCache.h>
 #include <WebCore/MemoryRelease.h>
 #include <WebCore/MessagePort.h>
 #include <WebCore/MockRealtimeMediaSourceCenter.h>
 #include <WebCore/NetworkStorageSession.h>
 #include <WebCore/Page.h>
-#include <WebCore/PageCache.h>
 #include <WebCore/PageGroup.h>
 #include <WebCore/PlatformKeyboardEvent.h>
 #include <WebCore/PlatformMediaSessionManager.h>
@@ -115,7 +117,6 @@
 #include <WebCore/ResourceLoadStatistics.h>
 #include <WebCore/RuntimeApplicationChecks.h>
 #include <WebCore/RuntimeEnabledFeatures.h>
-#include <WebCore/SchemeRegistry.h>
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/ServiceWorkerContextData.h>
 #include <WebCore/Settings.h>
@@ -306,9 +307,9 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
             }
 #endif
 
-            auto maintainPageCache = m_isSuspending && hasPageRequiringPageCacheWhileSuspended() ? WebCore::MaintainPageCache::Yes : WebCore::MaintainPageCache::No;
+            auto maintainBackForwardCache = m_isSuspending ? WebCore::MaintainBackForwardCache::Yes : WebCore::MaintainBackForwardCache::No;
             auto maintainMemoryCache = m_isSuspending && m_hasSuspendedPageProxy ? WebCore::MaintainMemoryCache::Yes : WebCore::MaintainMemoryCache::No;
-            WebCore::releaseMemory(critical, synchronous, maintainPageCache, maintainMemoryCache);
+            WebCore::releaseMemory(critical, synchronous, maintainBackForwardCache, maintainMemoryCache);
         });
 #if PLATFORM(MAC) || PLATFORM(GTK) || PLATFORM(WPE)
         memoryPressureHandler.setShouldUsePeriodicMemoryMonitor(true);
@@ -379,12 +380,14 @@ void WebProcess::initializeWebProcess(WebProcessCreationParameters&& parameters)
         registerURLSchemeAsCachePartitioned(scheme);
 
     for (auto& scheme : parameters.urlSchemesServiceWorkersCanHandle)
-        registerURLSchemeServiceWorkersCanHandle(scheme);
+        WebCore::LegacySchemeRegistry::registerURLSchemeServiceWorkersCanHandle(scheme);
 
     for (auto& scheme : parameters.urlSchemesRegisteredAsCanDisplayOnlyIfCanRequest)
         registerURLSchemeAsCanDisplayOnlyIfCanRequest(scheme);
 
     setDefaultRequestTimeoutInterval(parameters.defaultRequestTimeoutInterval);
+
+    setBackForwardCacheCapacity(parameters.backForwardCacheCapacity);
 
     setAlwaysUsesComplexTextCodePath(parameters.shouldAlwaysUseComplexTextCodePath);
 
@@ -469,15 +472,6 @@ void WebProcess::setWebsiteDataStoreParameters(WebProcessDataStoreParameters&& p
     ensureNetworkProcessConnection();
 }
 
-bool WebProcess::hasPageRequiringPageCacheWhileSuspended() const
-{
-    for (auto& page : m_pageMap.values()) {
-        if (page->isSuspended())
-            return true;
-    }
-    return false;
-}
-
 bool WebProcess::areAllPagesSuspended() const
 {
     for (auto& page : m_pageMap.values()) {
@@ -532,57 +526,57 @@ void WebProcess::prewarmWithDomainInformation(const WebCore::PrewarmInformation&
 
 void WebProcess::registerURLSchemeAsEmptyDocument(const String& urlScheme)
 {
-    SchemeRegistry::registerURLSchemeAsEmptyDocument(urlScheme);
+    LegacySchemeRegistry::registerURLSchemeAsEmptyDocument(urlScheme);
 }
 
 void WebProcess::registerURLSchemeAsSecure(const String& urlScheme) const
 {
-    SchemeRegistry::registerURLSchemeAsSecure(urlScheme);
+    LegacySchemeRegistry::registerURLSchemeAsSecure(urlScheme);
 }
 
 void WebProcess::registerURLSchemeAsBypassingContentSecurityPolicy(const String& urlScheme) const
 {
-    SchemeRegistry::registerURLSchemeAsBypassingContentSecurityPolicy(urlScheme);
+    LegacySchemeRegistry::registerURLSchemeAsBypassingContentSecurityPolicy(urlScheme);
 }
 
 void WebProcess::setDomainRelaxationForbiddenForURLScheme(const String& urlScheme) const
 {
-    SchemeRegistry::setDomainRelaxationForbiddenForURLScheme(true, urlScheme);
+    LegacySchemeRegistry::setDomainRelaxationForbiddenForURLScheme(true, urlScheme);
 }
 
 void WebProcess::registerURLSchemeAsLocal(const String& urlScheme) const
 {
-    SchemeRegistry::registerURLSchemeAsLocal(urlScheme);
+    LegacySchemeRegistry::registerURLSchemeAsLocal(urlScheme);
 }
 
 void WebProcess::registerURLSchemeAsNoAccess(const String& urlScheme) const
 {
-    SchemeRegistry::registerURLSchemeAsNoAccess(urlScheme);
+    LegacySchemeRegistry::registerURLSchemeAsNoAccess(urlScheme);
 }
 
 void WebProcess::registerURLSchemeAsDisplayIsolated(const String& urlScheme) const
 {
-    SchemeRegistry::registerURLSchemeAsDisplayIsolated(urlScheme);
+    LegacySchemeRegistry::registerURLSchemeAsDisplayIsolated(urlScheme);
 }
 
 void WebProcess::registerURLSchemeAsCORSEnabled(const String& urlScheme) const
 {
-    SchemeRegistry::registerURLSchemeAsCORSEnabled(urlScheme);
+    LegacySchemeRegistry::registerURLSchemeAsCORSEnabled(urlScheme);
 }
 
 void WebProcess::registerURLSchemeAsAlwaysRevalidated(const String& urlScheme) const
 {
-    SchemeRegistry::registerURLSchemeAsAlwaysRevalidated(urlScheme);
+    LegacySchemeRegistry::registerURLSchemeAsAlwaysRevalidated(urlScheme);
 }
 
 void WebProcess::registerURLSchemeAsCachePartitioned(const String& urlScheme) const
 {
-    SchemeRegistry::registerURLSchemeAsCachePartitioned(urlScheme);
+    LegacySchemeRegistry::registerURLSchemeAsCachePartitioned(urlScheme);
 }
 
 void WebProcess::registerURLSchemeAsCanDisplayOnlyIfCanRequest(const String& urlScheme) const
 {
-    SchemeRegistry::registerAsCanDisplayOnlyIfCanRequest(urlScheme);
+    LegacySchemeRegistry::registerAsCanDisplayOnlyIfCanRequest(urlScheme);
 }
 
 void WebProcess::setDefaultRequestTimeoutInterval(double timeoutInterval)
@@ -629,13 +623,13 @@ void WebProcess::setCacheModel(CacheModel cacheModel)
     unsigned cacheMinDeadCapacity = 0;
     unsigned cacheMaxDeadCapacity = 0;
     Seconds deadDecodedDataDeletionInterval;
-    unsigned pageCacheSize = 0;
-    calculateMemoryCacheSizes(cacheModel, cacheTotalCapacity, cacheMinDeadCapacity, cacheMaxDeadCapacity, deadDecodedDataDeletionInterval, pageCacheSize);
+    unsigned backForwardCacheSize = 0;
+    calculateMemoryCacheSizes(cacheModel, cacheTotalCapacity, cacheMinDeadCapacity, cacheMaxDeadCapacity, deadDecodedDataDeletionInterval, backForwardCacheSize);
 
     auto& memoryCache = MemoryCache::singleton();
     memoryCache.setCapacities(cacheMinDeadCapacity, cacheMaxDeadCapacity, cacheTotalCapacity);
     memoryCache.setDeadDecodedDataDeletionInterval(deadDecodedDataDeletionInterval);
-    PageCache::singleton().setMaxSize(pageCacheSize);
+    BackForwardCache::singleton().setMaxSize(backForwardCacheSize);
 
     platformSetCacheModel(cacheModel);
 }
@@ -1225,10 +1219,8 @@ void WebProcess::networkProcessConnectionClosed(NetworkProcessConnection* connec
 #endif
 
 #if ENABLE(SERVICE_WORKER)
-    if (SWContextManager::singleton().connection()) {
-        RELEASE_LOG(ServiceWorker, "Service worker process is exiting because network process is gone");
-        _exit(EXIT_SUCCESS);
-    }
+    if (SWContextManager::singleton().connection())
+        SWContextManager::singleton().stopAllServiceWorkers();
 #endif
 
     m_networkProcessConnection = nullptr;
@@ -1294,11 +1286,6 @@ void WebProcess::setTextCheckerState(const TextCheckerState& textCheckerState)
     }
 }
 
-void WebProcess::releasePageCache()
-{
-    PageCache::singleton().pruneToSizeNow(0, PruningReason::MemoryPressure);
-}
-
 void WebProcess::fetchWebsiteData(OptionSet<WebsiteDataType> websiteDataTypes, CompletionHandler<void(WebsiteData&&)>&& completionHandler)
 {
     WebsiteData websiteData;
@@ -1314,7 +1301,7 @@ void WebProcess::deleteWebsiteData(OptionSet<WebsiteDataType> websiteDataTypes, 
     UNUSED_PARAM(modifiedSince);
 
     if (websiteDataTypes.contains(WebsiteDataType::MemoryCache)) {
-        PageCache::singleton().pruneToSizeNow(0, PruningReason::None);
+        BackForwardCache::singleton().pruneToSizeNow(0, PruningReason::None);
         MemoryCache::singleton().evictResources(sessionID());
 
         CrossOriginPreflightResultCache::singleton().clear();
@@ -1552,6 +1539,13 @@ void WebProcess::processDidResume()
     m_webSQLiteDatabaseTracker.setIsSuspended(false);
     SQLiteDatabase::setIsDatabaseOpeningForbidden(false);
     accessibilityProcessSuspendedNotification(false);
+    {
+        LockHolder holder(m_unexpectedlyResumedUIAssertionLock);
+        if (m_unexpectedlyResumedUIAssertion) {
+            RELEASE_LOG(ProcessSuspension, "%p - WebProcess::processDidResume() Releasing 'Unexpectedly resumed' assertion", this);
+            m_unexpectedlyResumedUIAssertion = nullptr;
+        }
+    }
 #endif
 
 #if ENABLE(VIDEO)
@@ -1779,6 +1773,21 @@ bool WebProcess::hasVisibleWebPage() const
     return false;
 }
 
+void WebProcess::setBackForwardCacheCapacity(unsigned capacity)
+{
+    BackForwardCache::singleton().setMaxSize(capacity);
+}
+
+void WebProcess::clearCachedPage(BackForwardItemIdentifier backForwardItemID, CompletionHandler<void()>&& completionHandler)
+{
+    HistoryItem* item = WebBackForwardListProxy::itemForID(backForwardItemID);
+    if (!item)
+        return completionHandler();
+
+    BackForwardCache::singleton().remove(*item);
+    completionHandler();
+}
+
 LibWebRTCNetwork& WebProcess::libWebRTCNetwork()
 {
     if (!m_libWebRTCNetwork)
@@ -1798,8 +1807,6 @@ void WebProcess::establishWorkerContextConnectionToNetworkProcess(uint64_t pageG
 
 void WebProcess::registerServiceWorkerClients()
 {
-    // We do not want to register service worker dummy documents.
-    ASSERT(!SWContextManager::singleton().connection());
     ServiceWorkerProvider::singleton().registerServiceWorkerClients();
 }
 

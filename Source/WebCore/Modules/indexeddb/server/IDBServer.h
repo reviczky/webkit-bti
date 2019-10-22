@@ -54,15 +54,13 @@ struct IDBGetRecordData;
 
 namespace IDBServer {
 
-class IDBBackingStoreTemporaryFileHandler;
-
 enum class ShouldForceStop : bool { No, Yes };
 
 class IDBServer : public RefCounted<IDBServer>, public CrossThreadTaskHandler, public CanMakeWeakPtr<IDBServer> {
 public:
     using QuotaManagerGetter = WTF::Function<StorageQuotaManager*(PAL::SessionID, const ClientOrigin&)>;
-    static Ref<IDBServer> create(PAL::SessionID, IDBBackingStoreTemporaryFileHandler&, QuotaManagerGetter&&);
-    WEBCORE_EXPORT static Ref<IDBServer> create(PAL::SessionID, const String& databaseDirectoryPath, IDBBackingStoreTemporaryFileHandler&, QuotaManagerGetter&&);
+    static Ref<IDBServer> create(PAL::SessionID, QuotaManagerGetter&&);
+    WEBCORE_EXPORT static Ref<IDBServer> create(PAL::SessionID, const String& databaseDirectoryPath, QuotaManagerGetter&&);
 
     WEBCORE_EXPORT void registerConnection(IDBConnectionToClient&);
     WEBCORE_EXPORT void unregisterConnection(IDBConnectionToClient&);
@@ -126,8 +124,8 @@ public:
     WEBCORE_EXPORT void resume();
 
 private:
-    IDBServer(PAL::SessionID, IDBBackingStoreTemporaryFileHandler&, QuotaManagerGetter&&);
-    IDBServer(PAL::SessionID, const String& databaseDirectoryPath, IDBBackingStoreTemporaryFileHandler&, QuotaManagerGetter&&);
+    IDBServer(PAL::SessionID, QuotaManagerGetter&&);
+    IDBServer(PAL::SessionID, const String& databaseDirectoryPath, QuotaManagerGetter&&);
 
     UniqueIDBDatabase& getOrCreateUniqueIDBDatabase(const IDBDatabaseIdentifier&);
     
@@ -167,7 +165,12 @@ private:
         void initializeSpaceUsed(uint64_t spaceUsed);
 
     private:
-        uint64_t spaceUsed() const final { return m_spaceUsed + m_estimatedSpaceIncrease; }
+        uint64_t spaceUsed() const final
+        {
+            ASSERT(m_isInitialized);
+            return m_spaceUsed + m_estimatedSpaceIncrease;
+        }
+        void computeSpaceUsed() final;
         void whenInitialized(CompletionHandler<void()>&&) final;
 
         IDBServer& m_server;
@@ -194,7 +197,6 @@ private:
     HashMap<uint64_t, Function<void ()>> m_deleteDatabaseCompletionHandlers;
 
     String m_databaseDirectoryPath;
-    IDBBackingStoreTemporaryFileHandler& m_backingStoreTemporaryFileHandler;
 
     HashMap<ClientOrigin, std::unique_ptr<QuotaUser>> m_quotaUsers;
     QuotaManagerGetter m_quotaManagerGetter;

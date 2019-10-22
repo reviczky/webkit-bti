@@ -36,8 +36,9 @@
 #include <wtf/RefCounted.h>
 
 namespace JSC {
-class ExecState;
+class CallFrame;
 class JSValue;
+using ExecState = CallFrame;
 }
 
 namespace WebCore {
@@ -101,7 +102,7 @@ private:
 
     // ActiveDOMObject.
     const char* activeDOMObjectName() const override;
-    bool canSuspendForDocumentSuspension() const override;
+    bool shouldPreventEnteringBackForwardCache_DEPRECATED() const override;
     void stop() override;
 
     // EventTargetWithInlineData.

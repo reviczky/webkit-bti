@@ -40,7 +40,7 @@
 #include "UserInterfaceLayoutDirection.h"
 #include "ViewportArguments.h"
 #include "VisibilityState.h"
-#include "WheelEventTestTrigger.h"
+#include "WheelEventTestMonitor.h"
 #include <memory>
 #include <pal/SessionID.h>
 #include <wtf/Assertions.h>
@@ -413,7 +413,7 @@ public:
 
     // Page and FrameView both store a Pagination value. Page::pagination() is set only by API,
     // and FrameView::pagination() is set only by CSS. Page::pagination() will affect all
-    // FrameViews in the page cache, but FrameView::pagination() only affects the current
+    // FrameViews in the back/forward cache, but FrameView::pagination() only affects the current
     // FrameView.
     const Pagination& pagination() const { return m_pagination; }
     WEBCORE_EXPORT void setPagination(const Pagination&);
@@ -644,10 +644,10 @@ public:
     WEBCORE_EXPORT void setShouldPlayToPlaybackTarget(uint64_t, bool);
 #endif
 
-    RefPtr<WheelEventTestTrigger> testTrigger() const { return m_testTrigger; }
-    WEBCORE_EXPORT WheelEventTestTrigger& ensureTestTrigger();
-    void clearTrigger() { m_testTrigger = nullptr; }
-    bool expectsWheelEventTriggers() const { return !!m_testTrigger; }
+    RefPtr<WheelEventTestMonitor> wheelEventTestMonitor() const { return m_wheelEventTestMonitor; }
+    WEBCORE_EXPORT WheelEventTestMonitor& ensureWheelEventTestMonitor();
+    void clearWheelEventTestMonitor() { m_wheelEventTestMonitor = nullptr; }
+    bool isMonitoringWheelEvents() const { return !!m_wheelEventTestMonitor; }
 
     void setIsForSanitizingWebContent() { m_isForSanitizingWebContent = true; }
     bool isForSanitizingWebContent() const { return m_isForSanitizingWebContent; }
@@ -679,11 +679,8 @@ public:
     String captionUserPreferencesStyleSheet();
     void setCaptionUserPreferencesStyleSheet(const String&);
 
-    bool isResourceCachingDisabled() const { return m_resourceCachingDisabled || m_resourceCachingDisabledOverride; }
-    void setResourceCachingDisabled(bool disabled) { m_resourceCachingDisabled = disabled; }
-
-    // Web Inspector can override whatever value is set via WebKit SPI, but only while it is open.
-    void setResourceCachingDisabledOverride(bool disabled) { m_resourceCachingDisabledOverride = disabled; }
+    bool isResourceCachingDisabledByWebInspector() const { return m_resourceCachingDisabledByWebInspector; }
+    void setResourceCachingDisabledByWebInspector(bool disabled) { m_resourceCachingDisabledByWebInspector = disabled; }
 
     Optional<EventThrottlingBehavior> eventThrottlingBehaviorOverride() const { return m_eventThrottlingBehaviorOverride; }
     void setEventThrottlingBehaviorOverride(Optional<EventThrottlingBehavior> throttling) { m_eventThrottlingBehaviorOverride = throttling; }
@@ -753,6 +750,7 @@ private:
     void handleLowModePowerChange(bool);
 
     void forEachDocument(const WTF::Function<void(Document&)>&);
+    Vector<Ref<Document>> collectDocuments();
 
     enum class TimerThrottlingState { Disabled, Enabled, EnabledIncreasing };
     void hiddenPageDOMTimerThrottlingStateChanged();
@@ -926,7 +924,7 @@ private:
     Ref<StorageNamespaceProvider> m_storageNamespaceProvider;
     Ref<UserContentProvider> m_userContentProvider;
     Ref<VisitedLinkStore> m_visitedLinkStore;
-    RefPtr<WheelEventTestTrigger> m_testTrigger;
+    RefPtr<WheelEventTestMonitor> m_wheelEventTestMonitor;
 
     HashSet<ActivityStateChangeObserver*> m_activityStateChangeObservers;
 
@@ -949,8 +947,7 @@ private:
     bool m_allowsPlaybackControlsForAutoplayingAudio { false };
     bool m_showAllPlugins { false };
     bool m_controlledByAutomation { false };
-    bool m_resourceCachingDisabled { false };
-    bool m_resourceCachingDisabledOverride { false };
+    bool m_resourceCachingDisabledByWebInspector { false };
     bool m_isUtilityPage;
     UserInterfaceLayoutDirection m_userInterfaceLayoutDirection { UserInterfaceLayoutDirection::LTR };
     

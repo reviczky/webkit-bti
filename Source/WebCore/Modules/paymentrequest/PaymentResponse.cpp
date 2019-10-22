@@ -28,6 +28,7 @@
 
 #if ENABLE(PAYMENT_REQUEST)
 
+#include "JSDOMPromiseDeferred.h"
 #include "NotImplemented.h"
 #include "PaymentRequest.h"
 #include <wtf/IsoMallocInlines.h>
@@ -103,7 +104,7 @@ void PaymentResponse::retry(PaymentValidationErrors&& errors, DOMPromiseDeferred
         return;
     }
 
-    m_retryPromise = WTFMove(promise);
+    m_retryPromise = WTF::makeUnique<DOMPromiseDeferred<void>>(WTFMove(promise));
 }
 
 void PaymentResponse::abortWithException(Exception&& exception)
@@ -120,13 +121,15 @@ void PaymentResponse::settleRetryPromise(ExceptionOr<void>&& result)
 
     ASSERT(hasPendingActivity());
     ASSERT(m_state == State::Created);
-    std::exchange(m_retryPromise, WTF::nullopt)->settle(WTFMove(result));
+    m_retryPromise->settle(WTFMove(result));
+    m_retryPromise = nullptr;
 }
 
-bool PaymentResponse::canSuspendForDocumentSuspension() const
+// FIXME: This should never prevent entering the back/forward cache.
+bool PaymentResponse::shouldPreventEnteringBackForwardCache_DEPRECATED() const
 {
     ASSERT(m_state != State::Stopped);
-    return !hasPendingActivity();
+    return hasPendingActivity();
 }
 
 void PaymentResponse::stop()

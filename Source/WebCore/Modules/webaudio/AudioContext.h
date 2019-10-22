@@ -30,7 +30,6 @@
 #include "AudioBus.h"
 #include "AudioDestinationNode.h"
 #include "EventTarget.h"
-#include "JSDOMPromiseDeferred.h"
 #include "MediaCanStartListener.h"
 #include "MediaProducer.h"
 #include "PlatformMediaSession.h"
@@ -77,6 +76,8 @@ class PeriodicWave;
 class ScriptProcessorNode;
 class SecurityOrigin;
 class WaveShaperNode;
+
+template<typename IDLType> class DOMPromiseDeferred;
 
 // AudioContext is the cornerstone of the web audio API and all AudioNodes are created from it.
 // For thread safety between the audio thread and the main thread, it has a rendering graph locking mechanism. 
@@ -295,7 +296,7 @@ public:
 
 protected:
     explicit AudioContext(Document&);
-    AudioContext(Document&, unsigned numberOfChannels, size_t numberOfFrames, float sampleRate);
+    AudioContext(Document&, AudioBuffer* renderTarget);
     
     static bool isSampleRateRangeGood(float sampleRate);
     void clearPendingActivity();
@@ -338,7 +339,7 @@ private:
 
     // ActiveDOMObject API.
     void stop() override;
-    bool canSuspendForDocumentSuspension() const override;
+    bool shouldPreventEnteringBackForwardCache_DEPRECATED() const override;
     const char* activeDOMObjectName() const override;
 
     // When the context goes away, there might still be some sources which haven't finished playing.

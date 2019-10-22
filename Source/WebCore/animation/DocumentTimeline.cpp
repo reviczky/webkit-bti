@@ -33,6 +33,7 @@
 #include "DOMWindow.h"
 #include "DeclarativeAnimation.h"
 #include "Document.h"
+#include "EventNames.h"
 #include "GraphicsLayer.h"
 #include "KeyframeEffect.h"
 #include "Microtasks.h"
@@ -42,6 +43,7 @@
 #include "RenderElement.h"
 #include "RenderLayer.h"
 #include "RenderLayerBacking.h"
+#include <JavaScriptCore/VM.h>
 
 static const Seconds defaultAnimationInterval { 15_ms };
 static const Seconds throttledAnimationInterval { 30_ms };
@@ -492,8 +494,10 @@ void DocumentTimeline::removeReplacedAnimations()
         }
     }
 
-    for (auto& animation : animationsToRemove)
-        removeAnimation(*animation);
+    for (auto& animation : animationsToRemove) {
+        if (auto* timeline = animation->timeline())
+            timeline->removeAnimation(*animation);
+    }
 }
 
 void DocumentTimeline::transitionDidComplete(RefPtr<CSSTransition> transition)

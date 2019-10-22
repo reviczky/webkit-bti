@@ -174,6 +174,10 @@ WI.CanvasSidebarPanel = class CanvasSidebarPanel extends WI.NavigationSidebarPan
         let canvas = objects.find((object) => object instanceof WI.Canvas);
         if (canvas) {
             this.canvas = canvas;
+            let treeElement = this._canvasTreeOutline.findTreeElement(canvas);
+            const omitFocus = false;
+            const selectedByUser = false;
+            treeElement.revealAndSelect(omitFocus, selectedByUser);
             return;
         }
 
@@ -318,7 +322,7 @@ WI.CanvasSidebarPanel = class CanvasSidebarPanel extends WI.NavigationSidebarPan
 
     _handleImportButtonNavigationItemClicked(event)
     {
-        WI.FileUtilities.importJSON((result) => WI.canvasManager.processJSON(result));
+        WI.FileUtilities.importJSON((result) => WI.canvasManager.processJSON(result), {multiple: true});
     }
 
     _treeSelectionDidChange(event)

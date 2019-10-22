@@ -32,34 +32,45 @@
 #include "GPUErrorScopes.h"
 #include "GPUPipeline.h"
 #include "GPUProgrammableStageDescriptor.h"
+#include "GPUShaderModule.h"
+#include "GPUShaderModuleDescriptor.h"
 #include "WebGPUDevice.h"
+#include "WebGPUShaderModule.h"
 #include <wtf/Optional.h>
 #include <wtf/Ref.h>
 
 namespace WebCore {
 
-Ref<WebGPUComputePipeline> WebGPUComputePipeline::create(WebGPUDevice& device, RefPtr<GPUComputePipeline>&& pipeline, GPUErrorScopes& errorScopes, Optional<WebGPUPipeline::ShaderData> computeShader)
+Ref<WebGPUComputePipeline> WebGPUComputePipeline::create(WebGPUDevice& device, RefPtr<GPUComputePipeline>&& pipeline, GPUErrorScopes& errorScopes, WebGPUPipeline::ShaderData&& computeShader)
 {
-    return adoptRef(*new WebGPUComputePipeline(device, WTFMove(pipeline), errorScopes, computeShader));
+    return adoptRef(*new WebGPUComputePipeline(device, WTFMove(pipeline), errorScopes, WTFMove(computeShader)));
 }
 
-WebGPUComputePipeline::WebGPUComputePipeline(WebGPUDevice& device, RefPtr<GPUComputePipeline>&& pipeline, GPUErrorScopes& errorScopes, Optional<WebGPUPipeline::ShaderData> computeShader)
+WebGPUComputePipeline::WebGPUComputePipeline(WebGPUDevice& device, RefPtr<GPUComputePipeline>&& pipeline, GPUErrorScopes& errorScopes, WebGPUPipeline::ShaderData&& computeShader)
     : WebGPUPipeline(device, errorScopes)
     , m_computePipeline(WTFMove(pipeline))
-    , m_computeShader(computeShader)
+    , m_computeShader(WTFMove(computeShader))
 {
 }
 
 WebGPUComputePipeline::~WebGPUComputePipeline() = default;
 
+bool WebGPUComputePipeline::cloneShaderModules(const WebGPUDevice& device)
+{
+    if (m_computeShader.module) {
+        const auto& computeSource = m_computeShader.module->source();
+        m_computeShader.module = WebGPUShaderModule::create(GPUShaderModule::tryCreate(device.device(), { computeSource }), computeSource);
+        return true;
+    }
+    return false;
+}
+
 bool WebGPUComputePipeline::recompile(const WebGPUDevice& device)
 {
-    if (m_computePipeline && m_computeShader) {
-        if (auto& webGPUComputeShaderModule = m_computeShader.value().module) {
-            if (auto* gpuComputeShaderModule = webGPUComputeShaderModule->module()) {
-                GPUProgrammableStageDescriptor computeStage(makeRef(*gpuComputeShaderModule), { m_computeShader.value().entryPoint });
-                return m_computePipeline->recompile(device.device(), WTFMove(computeStage));
-            }
+    if (m_computePipeline && m_computeShader.module) {
+        if (auto* gpuComputeShaderModule = m_computeShader.module->module()) {
+            GPUProgrammableStageDescriptor computeStage(makeRef(*gpuComputeShaderModule), { m_computeShader.entryPoint });
+            return m_computePipeline->recompile(device.device(), WTFMove(computeStage));
         }
     }
     return false;

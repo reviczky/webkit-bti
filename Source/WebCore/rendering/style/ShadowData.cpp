@@ -23,6 +23,7 @@
 #include "ShadowData.h"
 
 #include <wtf/PointerComparison.h>
+#include <wtf/text/TextStream.h>
 
 namespace WebCore {
 
@@ -96,6 +97,16 @@ void ShadowData::adjustRectForShadow(FloatRect& rect, int additionalOutlineSize)
     rect.move(shadowLeft, shadowTop);
     rect.setWidth(rect.width() - shadowLeft + shadowRight);
     rect.setHeight(rect.height() - shadowTop + shadowBottom);
+}
+
+TextStream& operator<<(TextStream& ts, const ShadowData& data)
+{
+    ts.dumpProperty("location", data.location());
+    ts.dumpProperty("radius", data.radius());
+    ts.dumpProperty("spread", data.spread());
+    ts.dumpProperty("color", data.color());
+
+    return ts;
 }
 
 } // namespace WebCore

@@ -32,6 +32,7 @@
 #include "Logging.h"
 #include "PageClient.h"
 #include "URLSchemeTaskParameters.h"
+#include "WebBackForwardCacheEntry.h"
 #include "WebBackForwardList.h"
 #include "WebBackForwardListItem.h"
 #include "WebErrors.h"
@@ -88,21 +89,16 @@ ProvisionalPageProxy::ProvisionalPageProxy(WebPageProxy& page, Ref<WebProcessPro
 
 ProvisionalPageProxy::~ProvisionalPageProxy()
 {
+    if (!m_wasCommitted) {
+        if (&m_process->websiteDataStore() != &m_page.websiteDataStore())
+            m_process->processPool().pageEndUsingWebsiteDataStore(m_page.identifier(), m_process->websiteDataStore());
+
+        m_process->removeMessageReceiver(Messages::WebPageProxy::messageReceiverName(), m_webPageID);
+        m_process->send(Messages::WebPage::Close(), m_webPageID);
+        m_process->removeVisitedLinkStoreUser(m_page.visitedLinkStore(), m_page.identifier());
+    }
+
     m_process->removeProvisionalPageProxy(*this);
-
-    if (m_wasCommitted)
-        return;
-
-    if (&m_process->websiteDataStore() != &m_page.websiteDataStore())
-        m_process->processPool().pageEndUsingWebsiteDataStore(m_page.identifier(), m_process->websiteDataStore());
-
-    m_process->removeMessageReceiver(Messages::WebPageProxy::messageReceiverName(), m_webPageID);
-    m_process->send(Messages::WebPage::Close(), m_webPageID);
-    m_process->removeVisitedLinkStoreUser(m_page.visitedLinkStore(), m_page.identifier());
-
-    RunLoop::main().dispatch([process = m_process.copyRef()] {
-        process->maybeShutDown();
-    });
 }
 
 void ProvisionalPageProxy::processDidTerminate()
@@ -166,8 +162,8 @@ void ProvisionalPageProxy::goToBackForwardItem(API::Navigation& navigation, WebB
     RELEASE_LOG_IF_ALLOWED(ProcessSwapping, "goToBackForwardItem: pageProxyID = %" PRIu64 " webPageID = %" PRIu64, m_page.identifier().toUInt64(), m_webPageID.toUInt64());
 
     auto itemStates = m_page.backForwardList().filteredItemStates([this, targetItem = &item](auto& item) {
-        if (auto* page = item.suspendedPage()) {
-            if (&page->process() == m_process.ptr())
+        if (auto* backForwardCacheEntry = item.backForwardCacheEntry()) {
+            if (backForwardCacheEntry->processIdentifier() == m_process->coreProcessIdentifier())
                 return false;
         }
         return &item != targetItem;

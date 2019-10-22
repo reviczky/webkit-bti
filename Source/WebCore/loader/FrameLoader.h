@@ -147,7 +147,7 @@ public:
     void stopAllLoadersAndCheckCompleteness();
     WEBCORE_EXPORT void stopAllLoaders(ClearProvisionalItemPolicy = ShouldClearProvisionalItem, StopLoadingPolicy = StopLoadingPolicy::PreventDuringUnloadEvents);
     WEBCORE_EXPORT void stopForUserCancel(bool deferCheckLoadComplete = false);
-    void stopForPageCache();
+    void stopForBackForwardCache();
     void stop();
     void stopLoading(UnloadEventPolicy);
     bool closeURL();
@@ -253,6 +253,7 @@ public:
 
     WEBCORE_EXPORT Frame* opener();
     WEBCORE_EXPORT void setOpener(Frame*);
+    WEBCORE_EXPORT void detachFromAllOpenedFrames();
     bool hasOpenedFrames() const { return !m_openedFrames.isEmpty(); }
 
     void resetMultipleFormSubmissionProtection();

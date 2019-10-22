@@ -50,7 +50,7 @@ public:
 
     template<typename T> bool send(T&& message, uint64_t destinationID, OptionSet<IPC::SendOption> sendOptions = { });
     template<typename T> bool sendSync(T&& message, typename T::Reply&&, uint64_t destinationID, Seconds timeout = 1_s, OptionSet<IPC::SendSyncOption> sendSyncOptions = { });
-    template<typename T, typename... Args> void sendWithAsyncReply(T&&, CompletionHandler<void(Args...)>&&, uint64_t destinationID = 0, OptionSet<IPC::SendOption> = { });
+    template<typename T, typename C> void sendWithAsyncReply(T&&, C&&, uint64_t destinationID = 0, OptionSet<IPC::SendOption> = { });
     
     template<typename T, typename U>
     bool send(T&& message, ObjectIdentifier<U> destinationID, OptionSet<IPC::SendOption> sendOptions = { })
@@ -122,16 +122,18 @@ protected:
     virtual void getLaunchOptions(ProcessLauncher::LaunchOptions&);
     virtual void platformGetLaunchOptions(ProcessLauncher::LaunchOptions&) { };
 
-private:
-    virtual void connectionWillOpen(IPC::Connection&);
-    virtual void processWillShutDown(IPC::Connection&) = 0;
-
     struct PendingMessage {
         std::unique_ptr<IPC::Encoder> encoder;
         OptionSet<IPC::SendOption> sendOptions;
         Optional<std::pair<CompletionHandler<void(IPC::Decoder*)>, uint64_t>> asyncReplyInfo;
     };
-    
+
+    virtual bool shouldSendPendingMessage(const PendingMessage&) { return true; }
+
+private:
+    virtual void connectionWillOpen(IPC::Connection&);
+    virtual void processWillShutDown(IPC::Connection&) = 0;
+
     Vector<PendingMessage> m_pendingMessages;
     RefPtr<ProcessLauncher> m_processLauncher;
     RefPtr<IPC::Connection> m_connection;
@@ -164,8 +166,8 @@ bool AuxiliaryProcessProxy::sendSync(U&& message, typename U::Reply&& reply, uin
     return connection()->sendSync(std::forward<U>(message), WTFMove(reply), destinationID, timeout, sendSyncOptions);
 }
 
-template<typename T, typename... Args>
-void AuxiliaryProcessProxy::sendWithAsyncReply(T&& message, CompletionHandler<void(Args...)>&& completionHandler, uint64_t destinationID, OptionSet<IPC::SendOption> sendOptions)
+template<typename T, typename C>
+void AuxiliaryProcessProxy::sendWithAsyncReply(T&& message, C&& completionHandler, uint64_t destinationID, OptionSet<IPC::SendOption> sendOptions)
 {
     COMPILE_ASSERT(!T::isSync, AsyncMessageExpected);
 

@@ -29,13 +29,13 @@
 
 #include "ActiveDOMObject.h"
 #include "EventTarget.h"
-#include "JSDOMPromiseDeferred.h"
 #include "SWClientConnection.h"
 #include "ServiceWorkerRegistrationData.h"
 #include "Timer.h"
 
 namespace WebCore {
 
+class DeferredPromise;
 class ScriptExecutionContext;
 class ServiceWorker;
 class ServiceWorkerContainer;
@@ -91,7 +91,6 @@ private:
 
     // ActiveDOMObject.
     const char* activeDOMObjectName() const final;
-    bool canSuspendForDocumentSuspension() const final;
     void suspend(ReasonForSuspension) final;
     void resume() final;
     void stop() final;

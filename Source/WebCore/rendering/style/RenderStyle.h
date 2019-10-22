@@ -229,8 +229,7 @@ public:
 
     LayoutBoxExtent maskBoxImageOutsets() const { return imageOutsets(maskBoxImage()); }
 
-    bool hasFilterOutsets() const { return hasFilter() && filter().hasOutsets(); }
-    FilterOutsets filterOutsets() const { return hasFilter() ? filter().outsets() : FilterOutsets(); }
+    IntOutsets filterOutsets() const { return hasFilter() ? filter().outsets() : IntOutsets(); }
 
     Order rtlOrdering() const { return static_cast<Order>(m_inheritedFlags.rtlOrdering); }
     void setRTLOrdering(Order ordering) { m_inheritedFlags.rtlOrdering = static_cast<unsigned>(ordering); }
@@ -299,10 +298,10 @@ public:
     const LengthBox& borderImageWidth() const { return m_surroundData->border.image().borderSlices(); }
     const LengthBox& borderImageOutset() const { return m_surroundData->border.image().outset(); }
 
-    const LengthSize& borderTopLeftRadius() const { return m_surroundData->border.topLeft(); }
-    const LengthSize& borderTopRightRadius() const { return m_surroundData->border.topRight(); }
-    const LengthSize& borderBottomLeftRadius() const { return m_surroundData->border.bottomLeft(); }
-    const LengthSize& borderBottomRightRadius() const { return m_surroundData->border.bottomRight(); }
+    const LengthSize& borderTopLeftRadius() const { return m_surroundData->border.topLeftRadius(); }
+    const LengthSize& borderTopRightRadius() const { return m_surroundData->border.topRightRadius(); }
+    const LengthSize& borderBottomLeftRadius() const { return m_surroundData->border.bottomLeftRadius(); }
+    const LengthSize& borderBottomRightRadius() const { return m_surroundData->border.bottomRightRadius(); }
     bool hasBorderRadius() const { return m_surroundData->border.hasBorderRadius(); }
 
     float borderLeftWidth() const { return m_surroundData->border.borderLeftWidth(); }
@@ -693,8 +692,8 @@ public:
     const Length& perspectiveOriginY() const { return m_rareNonInheritedData->perspectiveOriginY; }
     const LengthSize& pageSize() const { return m_rareNonInheritedData->pageSize; }
     PageSizeType pageSizeType() const { return static_cast<PageSizeType>(m_rareNonInheritedData->pageSizeType); }
-    
-    LineBoxContain lineBoxContain() const { return m_rareInheritedData->lineBoxContain; }
+
+    OptionSet<LineBoxContain> lineBoxContain() const { return OptionSet<LineBoxContain>::fromRaw(m_rareInheritedData->lineBoxContain); }
     const LineClampValue& lineClamp() const { return m_rareNonInheritedData->lineClamp; }
     const IntSize& initialLetter() const { return m_rareNonInheritedData->initialLetter; }
     int initialLetterDrop() const { return initialLetter().width(); }
@@ -838,10 +837,10 @@ public:
     void resetBorderLeft() { SET_VAR(m_surroundData, border.m_left, BorderValue()); }
     void resetBorderImage() { SET_VAR(m_surroundData, border.m_image, NinePieceImage()); }
     void resetBorderRadius() { resetBorderTopLeftRadius(); resetBorderTopRightRadius(); resetBorderBottomLeftRadius(); resetBorderBottomRightRadius(); }
-    void resetBorderTopLeftRadius() { SET_VAR(m_surroundData, border.m_topLeft, initialBorderRadius()); }
-    void resetBorderTopRightRadius() { SET_VAR(m_surroundData, border.m_topRight, initialBorderRadius()); }
-    void resetBorderBottomLeftRadius() { SET_VAR(m_surroundData, border.m_bottomLeft, initialBorderRadius()); }
-    void resetBorderBottomRightRadius() { SET_VAR(m_surroundData, border.m_bottomRight, initialBorderRadius()); }
+    void resetBorderTopLeftRadius() { SET_VAR(m_surroundData, border.m_topLeftRadius, initialBorderRadius()); }
+    void resetBorderTopRightRadius() { SET_VAR(m_surroundData, border.m_topRightRadius, initialBorderRadius()); }
+    void resetBorderBottomLeftRadius() { SET_VAR(m_surroundData, border.m_bottomLeftRadius, initialBorderRadius()); }
+    void resetBorderBottomRightRadius() { SET_VAR(m_surroundData, border.m_bottomRightRadius, initialBorderRadius()); }
 
     void setBackgroundColor(const Color& v) { SET_VAR(m_backgroundData, color, v); }
 
@@ -856,10 +855,10 @@ public:
     void setBorderImageWidth(LengthBox&&);
     void setBorderImageOutset(LengthBox&&);
 
-    void setBorderTopLeftRadius(LengthSize&& size) { SET_VAR(m_surroundData, border.m_topLeft, WTFMove(size)); }
-    void setBorderTopRightRadius(LengthSize&& size) { SET_VAR(m_surroundData, border.m_topRight, WTFMove(size)); }
-    void setBorderBottomLeftRadius(LengthSize&& size) { SET_VAR(m_surroundData, border.m_bottomLeft, WTFMove(size)); }
-    void setBorderBottomRightRadius(LengthSize&& size) { SET_VAR(m_surroundData, border.m_bottomRight, WTFMove(size)); }
+    void setBorderTopLeftRadius(LengthSize&& size) { SET_VAR(m_surroundData, border.m_topLeftRadius, WTFMove(size)); }
+    void setBorderTopRightRadius(LengthSize&& size) { SET_VAR(m_surroundData, border.m_topRightRadius, WTFMove(size)); }
+    void setBorderBottomLeftRadius(LengthSize&& size) { SET_VAR(m_surroundData, border.m_bottomLeftRadius, WTFMove(size)); }
+    void setBorderBottomRightRadius(LengthSize&& size) { SET_VAR(m_surroundData, border.m_bottomRightRadius, WTFMove(size)); }
 
     void setBorderRadius(LengthSize&&);
     void setBorderRadius(const IntSize&);
@@ -1212,7 +1211,7 @@ public:
     void setPageSizeType(PageSizeType t) { SET_VAR(m_rareNonInheritedData, pageSizeType, t); }
     void resetPageSizeType() { SET_VAR(m_rareNonInheritedData, pageSizeType, PAGE_SIZE_AUTO); }
 
-    void setLineBoxContain(LineBoxContain c) { SET_VAR(m_rareInheritedData, lineBoxContain, c); }
+    void setLineBoxContain(OptionSet<LineBoxContain> c) { SET_VAR(m_rareInheritedData, lineBoxContain, c.toRaw()); }
     void setLineClamp(LineClampValue c) { SET_VAR(m_rareNonInheritedData, lineClamp, c); }
     
     void setInitialLetter(const IntSize& size) { SET_VAR(m_rareNonInheritedData, initialLetter, size); }
@@ -1582,7 +1581,7 @@ public:
     static const AtomString& initialTextEmphasisCustomMark() { return nullAtom(); }
     static OptionSet<TextEmphasisPosition> initialTextEmphasisPosition() { return { TextEmphasisPosition::Over, TextEmphasisPosition::Right }; }
     static RubyPosition initialRubyPosition() { return RubyPosition::Before; }
-    static LineBoxContain initialLineBoxContain() { return LineBoxContainBlock | LineBoxContainInline | LineBoxContainReplaced; }
+    static OptionSet<LineBoxContain> initialLineBoxContain() { return { LineBoxContain::Block, LineBoxContain::Inline, LineBoxContain::Replaced }; }
     static ImageOrientation initialImageOrientation() { return ImageOrientation::None; }
     static ImageRendering initialImageRendering() { return ImageRendering::Auto; }
     static ImageResolutionSource initialImageResolutionSource() { return ImageResolutionSource::Specified; }

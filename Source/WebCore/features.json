@@ -12,6 +12,20 @@
         "description": "Resources are saved for offline use using a manifest."
     },
     {
+        "name": "Async Clipboard API",
+        "status": {
+            "status": "In Development"
+        },
+        "url": "https://www.w3.org/TR/clipboard-apis/#async-clipboard-api",
+        "category": "webapps",
+        "description": "An API that allows reading from and writing to the system clipboard.",
+        "contact": {
+            "name": "Wenson Hsieh",
+            "email": "wenson_hsieh@apple.com",
+            "twitter": "@wensonhsieh"
+        }
+    },
+    {
         "name": "Battery Status API",
         "status": {
             "status": "Not Considering"
@@ -216,7 +230,8 @@
     {
         "name": "CSS Shadow Parts",
         "status": {
-            "status": "Under Consideration"
+            "status": "Supported",
+            "enabled-by-default": true
         },
         "url": "https://drafts.csswg.org/css-shadow-parts/",
         "webkit-url": "https://webkit.org/b/149443",

@@ -3491,38 +3491,38 @@ static RefPtr<CSSValue> consumeLineBoxContain(CSSParserTokenRange& range)
     if (range.peek().id() == CSSValueNone)
         return consumeIdent(range);
 
-    LineBoxContain lineBoxContain = LineBoxContainNone;
+    OptionSet<LineBoxContain> lineBoxContain;
     
     while (range.peek().type() == IdentToken) {
         auto id = range.peek().id();
         if (id == CSSValueBlock) {
-            if (lineBoxContain & LineBoxContainBlock)
+            if (lineBoxContain.contains(LineBoxContain::Block))
                 return nullptr;
-            lineBoxContain |= LineBoxContainBlock;
+            lineBoxContain.add(LineBoxContain::Block);
         } else if (id == CSSValueInline) {
-            if (lineBoxContain & LineBoxContainInline)
+            if (lineBoxContain.contains(LineBoxContain::Inline))
                 return nullptr;
-            lineBoxContain |= LineBoxContainInline;
+            lineBoxContain.add(LineBoxContain::Inline);
         } else if (id == CSSValueFont) {
-            if (lineBoxContain & LineBoxContainFont)
+            if (lineBoxContain.contains(LineBoxContain::Font))
                 return nullptr;
-            lineBoxContain |= LineBoxContainFont;
+            lineBoxContain.add(LineBoxContain::Font);
         } else if (id == CSSValueGlyphs) {
-            if (lineBoxContain & LineBoxContainGlyphs)
+            if (lineBoxContain.contains(LineBoxContain::Glyphs))
                 return nullptr;
-            lineBoxContain |= LineBoxContainGlyphs;
+            lineBoxContain.add(LineBoxContain::Glyphs);
         } else if (id == CSSValueReplaced) {
-            if (lineBoxContain & LineBoxContainReplaced)
+            if (lineBoxContain.contains(LineBoxContain::Replaced))
                 return nullptr;
-            lineBoxContain |= LineBoxContainReplaced;
+            lineBoxContain.add(LineBoxContain::Replaced);
         } else if (id == CSSValueInlineBox) {
-            if (lineBoxContain & LineBoxContainInlineBox)
+            if (lineBoxContain.contains(LineBoxContain::InlineBox))
                 return nullptr;
-            lineBoxContain |= LineBoxContainInlineBox;
+            lineBoxContain.add(LineBoxContain::InlineBox);
         } else if (id == CSSValueInitialLetter) {
-            if (lineBoxContain & LineBoxContainInitialLetter)
+            if (lineBoxContain.contains(LineBoxContain::InitialLetter))
                 return nullptr;
-            lineBoxContain |= LineBoxContainInitialLetter;
+            lineBoxContain.add(LineBoxContain::InitialLetter);
         } else
             return nullptr;
         range.consumeIncludingWhitespace();
@@ -4054,7 +4054,7 @@ RefPtr<CSSValue> CSSPropertyParser::parseSingleValue(CSSPropertyID property, CSS
     case CSSPropertyTransform:
         return consumeTransform(m_range, m_context.mode);
     case CSSPropertyTransformBox:
-        return consumeIdent<CSSValueBorderBox, CSSValueViewBox, CSSValueFillBox>(m_range);
+        return consumeIdent<CSSValueBorderBox, CSSValueViewBox, CSSValueFillBox, CSSValueStrokeBox, CSSValueContentBox>(m_range);
     case CSSPropertyTransformOriginX:
     case CSSPropertyPerspectiveOriginX:
         return consumePositionX(m_range, m_context.mode);
@@ -5228,6 +5228,35 @@ bool CSSPropertyParser::consumeBackgroundShorthand(const StylePropertyShorthand&
     return true;
 }
 
+bool CSSPropertyParser::consumeOverflowShorthand(bool important)
+{
+    CSSValueID xValueID = m_range.consumeIncludingWhitespace().id();
+    if (!CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyOverflowY, xValueID, m_context))
+        return false;
+
+    CSSValueID yValueID;
+    if (m_range.atEnd()) {
+        yValueID = xValueID;
+
+        // FIXME: -webkit-paged-x or -webkit-paged-y only apply to overflow-y. If this value has been
+        // set using the shorthand, then for now overflow-x will default to auto, but once we implement
+        // pagination controls, it should default to hidden. If the overflow-y value is anything but
+        // paged-x or paged-y, then overflow-x and overflow-y should have the same value.
+        if (xValueID == CSSValueWebkitPagedX || xValueID == CSSValueWebkitPagedY)
+            xValueID = CSSValueAuto;
+    } else 
+        yValueID = m_range.consumeIncludingWhitespace().id();
+
+    if (!CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyOverflowY, yValueID, m_context))
+        return false;
+    if (!m_range.atEnd())
+        return false;
+
+    addProperty(CSSPropertyOverflowX, CSSPropertyOverflow, CSSValuePool::singleton().createIdentifierValue(xValueID), important);
+    addProperty(CSSPropertyOverflowY, CSSPropertyOverflow, CSSValuePool::singleton().createIdentifierValue(yValueID), important);
+    return true;
+}
+
 // FIXME-NEWPARSER: Hack to work around the fact that we aren't using CSSCustomIdentValue
 // for stuff yet. This can be replaced by CSSValue::isCustomIdentValue() once we switch
 // to using CSSCustomIdentValue everywhere.
@@ -5587,27 +5616,8 @@ bool CSSPropertyParser::parseShorthand(CSSPropertyID property, bool important)
         addProperty(CSSPropertyWebkitMarginAfterCollapse, CSSPropertyWebkitMarginCollapse, CSSValuePool::singleton().createIdentifierValue(id), important);
         return true;
     }
-    case CSSPropertyOverflow: {
-        CSSValueID id = m_range.consumeIncludingWhitespace().id();
-        if (!CSSParserFastPaths::isValidKeywordPropertyAndValue(CSSPropertyOverflowY, id, m_context))
-            return false;
-        if (!m_range.atEnd())
-            return false;
-        RefPtr<CSSValue> overflowYValue = CSSValuePool::singleton().createIdentifierValue(id);
-        RefPtr<CSSValue> overflowXValue;
-
-        // FIXME: -webkit-paged-x or -webkit-paged-y only apply to overflow-y. If this value has been
-        // set using the shorthand, then for now overflow-x will default to auto, but once we implement
-        // pagination controls, it should default to hidden. If the overflow-y value is anything but
-        // paged-x or paged-y, then overflow-x and overflow-y should have the same value.
-        if (id == CSSValueWebkitPagedX || id == CSSValueWebkitPagedY)
-            overflowXValue = CSSValuePool::singleton().createIdentifierValue(CSSValueAuto);
-        else
-            overflowXValue = overflowYValue;
-        addProperty(CSSPropertyOverflowX, CSSPropertyOverflow, *overflowXValue, important);
-        addProperty(CSSPropertyOverflowY, CSSPropertyOverflow, *overflowYValue, important);
-        return true;
-    }
+    case CSSPropertyOverflow:
+        return consumeOverflowShorthand(important);
     case CSSPropertyFont: {
         const CSSParserToken& token = m_range.peek();
         if (token.id() >= CSSValueCaption && token.id() <= CSSValueStatusBar)

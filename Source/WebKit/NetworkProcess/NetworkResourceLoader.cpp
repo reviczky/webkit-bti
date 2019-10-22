@@ -168,7 +168,7 @@ void NetworkResourceLoader::start()
 {
     ASSERT(RunLoop::isMain());
 
-    m_networkActivityTracker = m_connection->startTrackingResourceLoad(m_parameters.webPageID, m_parameters.identifier, isMainResource());
+    m_networkActivityTracker = m_connection->startTrackingResourceLoad(m_parameters.webPageID, m_parameters.identifier, isMainFrameLoad());
 
     ASSERT(!m_wasStarted);
     m_wasStarted = true;
@@ -378,6 +378,11 @@ void NetworkResourceLoader::abort()
         m_connection->transferKeptAliveLoad(*this);
         return;
     }
+
+#if ENABLE(SERVICE_WORKER)
+    if (auto task = WTFMove(m_serviceWorkerFetchTask))
+        task->cancelFromClient();
+#endif
 
     if (m_networkLoad) {
         if (canUseCache(m_networkLoad->currentRequest())) {
@@ -612,8 +617,16 @@ void NetworkResourceLoader::didFailLoading(const ResourceError& error)
     if (isSynchronous()) {
         m_synchronousLoadData->error = error;
         sendReplyToSynchronousRequest(*m_synchronousLoadData, nullptr);
-    } else if (auto* connection = messageSenderConnection())
+    } else if (auto* connection = messageSenderConnection()) {
+#if ENABLE(SERVICE_WORKER)
+        if (m_serviceWorkerFetchTask)
+            connection->send(Messages::WebResourceLoader::DidFailServiceWorkerLoad(error), messageSenderDestinationID());
+        else
+            connection->send(Messages::WebResourceLoader::DidFailResourceLoad(error), messageSenderDestinationID());
+#else
         connection->send(Messages::WebResourceLoader::DidFailResourceLoad(error), messageSenderDestinationID());
+#endif
+    }
 
     cleanup(LoadResult::Failure);
 }
@@ -747,6 +760,22 @@ void NetworkResourceLoader::restartNetworkLoad(WebCore::ResourceRequest&& newReq
 
 void NetworkResourceLoader::continueWillSendRequest(ResourceRequest&& newRequest, bool isAllowedToAskUserForCredentials)
 {
+#if ENABLE(SERVICE_WORKER)
+    if (parameters().options.mode == FetchOptions::Mode::Navigate) {
+        if (auto serviceWorkerFetchTask = m_connection->swConnection().createFetchTask(*this, newRequest)) {
+            m_networkLoad = nullptr;
+            m_serviceWorkerFetchTask = WTFMove(serviceWorkerFetchTask);
+            return;
+        }
+        m_shouldRestartLoad = !!m_serviceWorkerFetchTask;
+        m_serviceWorkerFetchTask = nullptr;
+    }
+    if (m_serviceWorkerFetchTask) {
+        m_serviceWorkerFetchTask->continueFetchTaskWith(WTFMove(newRequest));
+        return;
+    }
+#endif
+
     if (m_shouldRestartLoad) {
         m_shouldRestartLoad = false;
 
@@ -792,6 +821,13 @@ void NetworkResourceLoader::continueWillSendRequest(ResourceRequest&& newRequest
 
 void NetworkResourceLoader::continueDidReceiveResponse()
 {
+#if ENABLE(SERVICE_WORKER)
+    if (m_serviceWorkerFetchTask) {
+        m_serviceWorkerFetchTask->continueDidReceiveFetchResponse();
+        return;
+    }
+#endif
+
     if (m_cacheEntryWaitingForContinueDidReceiveResponse) {
         sendResultForCacheEntry(WTFMove(m_cacheEntryWaitingForContinueDidReceiveResponse));
         cleanup(LoadResult::Success);
@@ -1195,6 +1231,38 @@ bool NetworkResourceLoader::isCrossOriginPrefetch() const
     auto& request = originalRequest();
     return request.httpHeaderField(HTTPHeaderName::Purpose) == "prefetch" && !m_parameters.sourceOrigin->canRequest(request.url());
 }
+
+#if ENABLE(SERVICE_WORKER)
+void NetworkResourceLoader::startWithServiceWorker()
+{
+    ASSERT(!m_serviceWorkerFetchTask);
+    m_serviceWorkerFetchTask = m_connection->swConnection().createFetchTask(*this, originalRequest());
+    if (m_serviceWorkerFetchTask)
+        return;
+
+    serviceWorkerDidNotHandle();
+}
+
+void NetworkResourceLoader::serviceWorkerDidNotHandle()
+{
+    if (m_parameters.serviceWorkersMode == ServiceWorkersMode::Only) {
+        send(Messages::WebResourceLoader::ServiceWorkerDidNotHandle { }, identifier());
+        abort();
+        return;
+    }
+
+    if (m_serviceWorkerFetchTask) {
+        auto newRequest = m_serviceWorkerFetchTask->takeRequest();
+        m_serviceWorkerFetchTask = nullptr;
+
+        if (m_networkLoad)
+            m_networkLoad->updateRequestAfterRedirection(newRequest);
+        restartNetworkLoad(WTFMove(newRequest));
+        return;
+    }
+    start();
+}
+#endif
 
 } // namespace WebKit
 

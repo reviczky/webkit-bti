@@ -38,11 +38,24 @@ namespace Layout {
 
 WTF_MAKE_ISO_ALLOCATED_IMPL(LayoutState);
 
-Display::Box& LayoutState::displayBoxForLayoutBox(const Box& layoutBox) const
+LayoutState::LayoutState(const Container& root)
+    : m_root(makeWeakPtr(root))
 {
-    return *m_layoutToDisplayBox.ensure(&layoutBox, [&layoutBox] {
-        return makeUnique<Display::Box>(layoutBox.style());
+    // It makes absolutely no sense to construct a dedicated layout state for a non-formatting context root (it would be a no-op).
+    ASSERT(root.establishesFormattingContext());
+}
+
+Display::Box& LayoutState::displayBoxForLayoutBox(const Box& layoutBox)
+{
+    return *m_layoutToDisplayBox.ensure(&layoutBox, [] {
+        return makeUnique<Display::Box>();
     }).iterator->value;
+}
+
+const Display::Box& LayoutState::displayBoxForLayoutBox(const Box& layoutBox) const
+{
+    ASSERT(hasDisplayBox(layoutBox));
+    return *m_layoutToDisplayBox.get(&layoutBox);
 }
 
 FormattingState& LayoutState::formattingStateForBox(const Box& layoutBox) const

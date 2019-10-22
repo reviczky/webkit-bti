@@ -31,7 +31,7 @@
 #include "Cookie.h"
 #include "ExceptionOr.h"
 #include "HEVCUtilities.h"
-#include "JSDOMPromiseDeferred.h"
+#include "IDLTypes.h"
 #include "OrientationNotifier.h"
 #include "PageConsoleClient.h"
 #include "RealtimeMediaSource.h"
@@ -96,8 +96,10 @@ class StringCallback;
 class StyleSheet;
 class TimeRanges;
 class TypeConversions;
+class UnsuspendableActiveDOMObject;
 class VoidCallback;
 class WebGLRenderingContext;
+class WindowProxy;
 class XMLHttpRequest;
 
 #if ENABLE(VIDEO_TRACK)
@@ -108,7 +110,9 @@ class TextTrackCueGeneric;
 class ServiceWorker;
 #endif
 
-class UnsuspendableActiveDOMObject;
+template<typename IDLType> class DOMPromiseDeferred;
+
+struct MockWebAuthenticationConfiguration;
 
 class Internals final : public RefCounted<Internals>, private ContextDestructionObserver
 #if ENABLE(MEDIA_STREAM)
@@ -165,9 +169,9 @@ public:
 
     void setGridMaxTracksLimit(unsigned);
 
-    void clearPageCache();
-    unsigned pageCacheSize() const;
-    void preventDocumentForEnteringPageCache();
+    void clearBackForwardCache();
+    unsigned backForwardCacheSize() const;
+    void preventDocumentForEnteringBackForwardCache();
 
     void disableTileSizeUpdateDelay();
 
@@ -300,6 +304,8 @@ public:
     Vector<String> userPreferredAudioCharacteristics() const;
     void setUserPreferredAudioCharacteristic(const String&);
 
+    void setMaxCanvasPixelMemory(unsigned);
+
     ExceptionOr<unsigned> wheelEventHandlerCount();
     ExceptionOr<unsigned> touchEventHandlerCount();
 
@@ -365,6 +371,7 @@ public:
         LAYER_TREE_INCLUDES_BACKING_STORE_ATTACHED = 128,
         LAYER_TREE_INCLUDES_ROOT_LAYER_PROPERTIES = 256,
         LAYER_TREE_INCLUDES_EVENT_REGION = 512,
+        LAYER_TREE_INCLUDES_DEEP_COLOR = 1024,
     };
     ExceptionOr<String> layerTreeAsText(Document&, unsigned short flags) const;
     ExceptionOr<uint64_t> layerIDForElement(Element&);
@@ -411,6 +418,7 @@ public:
     uint64_t documentIdentifier(const Document&) const;
     bool isDocumentAlive(uint64_t documentIdentifier) const;
 
+    uint64_t elementIdentifier(Element&) const;
     uint64_t frameIdentifier(const Document&) const;
     uint64_t pageIdentifier(const Document&) const;
 
@@ -627,6 +635,7 @@ public:
 
 #if ENABLE(WEB_AUDIO)
     void setAudioContextRestrictions(AudioContext&, StringView restrictionsString);
+    void useMockAudioDestinationCocoa();
 #endif
 
     void simulateSystemSleep() const;
@@ -809,6 +818,9 @@ public:
     using HEVCParameterSet = WebCore::HEVCParameterSet;
     Optional<HEVCParameterSet> parseHEVCCodecParameters(const String& codecString);
 
+    using DoViParameterSet = WebCore::DoViParameterSet;
+    Optional<DoViParameterSet> parseDoViCodecParameters(const String& codecString);
+
     struct CookieData {
         String name;
         String value;
@@ -882,6 +894,12 @@ public:
 
     void addPrefetchLoadEventListener(HTMLLinkElement&, RefPtr<EventListener>&&);
 
+#if ENABLE(WEB_AUTHN)
+    void setMockWebAuthenticationConfiguration(const MockWebAuthenticationConfiguration&);
+#endif
+
+    int processIdentifier() const;
+
 private:
     explicit Internals(Document&);
     Document* contextDocument() const;
@@ -898,7 +916,7 @@ private:
     unsigned long m_trackVideoSampleCount { 0 };
     unsigned long m_trackAudioSampleCount { 0 };
     RefPtr<MediaStreamTrack> m_track;
-    Optional<TrackFramePromise> m_nextTrackFramePromise;
+    std::unique_ptr<TrackFramePromise> m_nextTrackFramePromise;
 #endif
 
     std::unique_ptr<InspectorStubFrontend> m_inspectorFrontend;

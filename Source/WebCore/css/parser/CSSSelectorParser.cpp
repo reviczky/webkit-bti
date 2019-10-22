@@ -494,10 +494,16 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::consumePseudo(CSSParserTok
     
     if (colons == 1) {
         selector = CSSParserSelector::parsePseudoClassSelector(token.value());
-#if ENABLE(ATTACHMENT_ELEMENT)
-        if (!m_context.attachmentEnabled && selector && selector->match() == CSSSelector::PseudoClass && selector->pseudoClassType() == CSSSelector::PseudoClassHasAttachment)
+        if (!selector)
             return nullptr;
+        if (selector->match() == CSSSelector::PseudoClass) {
+            if (m_context.mode != UASheetMode && selector->pseudoClassType() == CSSSelector::PseudoClassDirectFocus)
+                return nullptr;
+#if ENABLE(ATTACHMENT_ELEMENT)
+            if (!m_context.attachmentEnabled && selector->pseudoClassType() == CSSSelector::PseudoClassHasAttachment)
+                return nullptr;
 #endif
+        }
     } else {
         selector = CSSParserSelector::parsePseudoElementSelector(token.value());
 #if ENABLE(VIDEO_TRACK)
@@ -868,10 +874,18 @@ std::unique_ptr<CSSParserSelector> CSSSelectorParser::splitCompoundAtImplicitSha
     if (!splitAfter || !splitAfter->tagHistory())
         return compoundSelector;
 
-    // FIXME: https://bugs.webkit.org/show_bug.cgi?id=161747
-    // We have to recur, since we have rules in media controls like video::a::b. This should not be allowed, and
-    // we should remove this recursion once those rules are gone.
-    std::unique_ptr<CSSParserSelector> secondCompound = context.mode != UASheetMode ? splitAfter->releaseTagHistory() : splitCompoundAtImplicitShadowCrossingCombinator(splitAfter->releaseTagHistory(), context);
+    // ::part() combines with other pseudo elements.
+    bool isPart = splitAfter->tagHistory()->match() == CSSSelector::PseudoElement && splitAfter->tagHistory()->pseudoElementType() == CSSSelector::PseudoElementPart;
+
+    std::unique_ptr<CSSParserSelector> secondCompound;
+    if (context.mode == UASheetMode || isPart) {
+        // FIXME: https://bugs.webkit.org/show_bug.cgi?id=161747
+        // We have to recur, since we have rules in media controls like video::a::b. This should not be allowed, and
+        // we should remove this recursion once those rules are gone.
+        secondCompound = splitCompoundAtImplicitShadowCrossingCombinator(splitAfter->releaseTagHistory(), context);
+    } else
+        secondCompound = splitAfter->releaseTagHistory();
+
     secondCompound->appendTagHistory(CSSSelector::ShadowDescendant, WTFMove(compoundSelector));
     return secondCompound;
 }

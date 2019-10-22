@@ -28,10 +28,12 @@
 #include "ActiveDOMObject.h"
 #include "CacheStorageConnection.h"
 #include "CacheStorageRecord.h"
+#include <wtf/UniqueRef.h>
 
 namespace WebCore {
 
 class ScriptExecutionContext;
+class SuspendableTaskQueue;
 
 class DOMCache final : public RefCounted<DOMCache>, public ActiveDOMObject {
 public:
@@ -56,10 +58,13 @@ public:
     const String& name() const { return m_name; }
     uint64_t identifier() const { return m_identifier; }
 
-    using MatchCallback = WTF::Function<void(ExceptionOr<FetchResponse*>)>;
+    using MatchCallback = Function<void(ExceptionOr<RefPtr<FetchResponse>>)>;
     void doMatch(RequestInfo&&, CacheQueryOptions&&, MatchCallback&&);
 
     CacheStorageConnection& connection() { return m_connection.get(); }
+
+    // ActiveDOMObject
+    bool hasPendingActivity() const final;
 
 private:
     DOMCache(ScriptExecutionContext&, String&& name, uint64_t identifier, Ref<CacheStorageConnection>&&);
@@ -69,7 +74,6 @@ private:
     // ActiveDOMObject
     void stop() final;
     const char* activeDOMObjectName() const final;
-    bool canSuspendForDocumentSuspension() const final;
 
     void putWithResponseData(DOMPromiseDeferred<void>&&, Ref<FetchRequest>&&, Ref<FetchResponse>&&, ExceptionOr<RefPtr<SharedBuffer>>&&);
 
@@ -90,6 +94,7 @@ private:
 
     Vector<CacheStorageRecord> m_records;
     bool m_isStopped { false };
+    UniqueRef<SuspendableTaskQueue> m_taskQueue;
 };
 
 } // namespace WebCore

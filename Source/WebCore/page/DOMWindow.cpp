@@ -68,7 +68,9 @@
 #include "FrameView.h"
 #include "HTTPParsers.h"
 #include "History.h"
+#include "IdleRequestOptions.h"
 #include "InspectorInstrumentation.h"
+#include "JSDOMPromiseDeferred.h"
 #include "JSDOMWindowBase.h"
 #include "JSExecState.h"
 #include "Location.h"
@@ -86,7 +88,6 @@
 #include "ResourceLoadInfo.h"
 #include "ResourceLoadObserver.h"
 #include "RuntimeApplicationChecks.h"
-#include "RuntimeEnabledFeatures.h"
 #include "ScheduledAction.h"
 #include "Screen.h"
 #include "SecurityOrigin.h"
@@ -557,25 +558,25 @@ void DOMWindow::resetUnlessSuspendedForDocumentSuspension()
     willDestroyDocumentInFrame();
 }
 
-void DOMWindow::suspendForPageCache()
+void DOMWindow::suspendForBackForwardCache()
 {
     SetForScope<bool> isSuspendingObservers(m_isSuspendingObservers, true);
     RELEASE_ASSERT(frame());
 
     for (auto* observer : copyToVector(m_observers)) {
         if (m_observers.contains(observer))
-            observer->suspendForPageCache();
+            observer->suspendForBackForwardCache();
     }
     RELEASE_ASSERT(frame());
 
     m_suspendedForDocumentSuspension = true;
 }
 
-void DOMWindow::resumeFromPageCache()
+void DOMWindow::resumeFromBackForwardCache()
 {
     for (auto* observer : copyToVector(m_observers)) {
         if (m_observers.contains(observer))
-            observer->resumeFromPageCache();
+            observer->resumeFromBackForwardCache();
     }
 
     m_suspendedForDocumentSuspension = false;
@@ -1780,6 +1781,22 @@ void DOMWindow::cancelAnimationFrame(int id)
     document->cancelAnimationFrame(id);
 }
 
+int DOMWindow::requestIdleCallback(Ref<IdleRequestCallback>&& callback, const IdleRequestOptions& options)
+{
+    auto document = makeRefPtr(this->document());
+    if (!document)
+        return 0;
+    return document->requestIdleCallback(WTFMove(callback), Seconds::fromMilliseconds(options.timeout));
+}
+
+void DOMWindow::cancelIdleCallback(int id)
+{
+    auto document = makeRefPtr(this->document());
+    if (!document)
+        return;
+    return document->cancelIdleCallback(id);
+}
+
 void DOMWindow::createImageBitmap(ImageBitmap::Source&& source, ImageBitmapOptions&& options, ImageBitmap::Promise&& promise)
 {
     auto* document = this->document();
@@ -2040,7 +2057,7 @@ void DOMWindow::decrementScrollEventListenersCount()
     Document* document = this->document();
     if (!--m_scrollEventListenerCount && document == &document->topDocument()) {
         Frame* frame = this->frame();
-        if (frame && frame->page() && document->pageCacheState() == Document::NotInPageCache)
+        if (frame && frame->page() && document->backForwardCacheState() == Document::NotInBackForwardCache)
             frame->page()->chrome().client().setNeedsScrollNotifications(*frame, false);
     }
 }
@@ -2169,12 +2186,21 @@ void DOMWindow::dispatchEvent(Event& event, EventTarget* target)
     event.setEventPhase(Event::AT_TARGET);
     event.resetBeforeDispatch();
 
-    auto* protectedFrame = frame();
-    InspectorInstrumentation::willDispatchEventOnWindow(protectedFrame, event, *this);
+    Frame* protectedFrame = nullptr;
+    bool hasListenersForEvent = false;
+    if (UNLIKELY(InspectorInstrumentation::hasFrontends())) {
+        protectedFrame = frame();
+        hasListenersForEvent = hasEventListeners(event.type());
+        if (hasListenersForEvent)
+            InspectorInstrumentation::willDispatchEventOnWindow(protectedFrame, event, *this);
+    }
+
     // FIXME: We should use EventDispatcher everywhere.
     fireEventListeners(event, EventInvokePhase::Capturing);
     fireEventListeners(event, EventInvokePhase::Bubbling);
-    InspectorInstrumentation::didDispatchEventOnWindow(protectedFrame, event.defaultPrevented());
+
+    if (hasListenersForEvent)
+        InspectorInstrumentation::didDispatchEventOnWindow(protectedFrame, event);
 
     event.resetAfterDispatch();
 }

@@ -31,9 +31,9 @@
 #include "CrossOriginPreflightResultCache.h"
 #include "HTTPHeaderNames.h"
 #include "HTTPParsers.h"
+#include "LegacySchemeRegistry.h"
 #include "ResourceRequest.h"
 #include "ResourceResponse.h"
-#include "SchemeRegistry.h"
 #include "SecurityOrigin.h"
 #include "SecurityPolicy.h"
 #include <mutex>
@@ -129,39 +129,39 @@ CachedResourceRequest createPotentialAccessControlRequest(ResourceRequest&& requ
 
 bool isValidCrossOriginRedirectionURL(const URL& redirectURL)
 {
-    return SchemeRegistry::shouldTreatURLSchemeAsCORSEnabled(redirectURL.protocol().toStringWithoutCopying())
+    return LegacySchemeRegistry::shouldTreatURLSchemeAsCORSEnabled(redirectURL.protocol().toStringWithoutCopying())
         && redirectURL.user().isEmpty()
         && redirectURL.pass().isEmpty();
 }
 
-HTTPHeaderNameSet httpHeadersToKeepFromCleaning(const HTTPHeaderMap& headers)
+OptionSet<HTTPHeadersToKeepFromCleaning> httpHeadersToKeepFromCleaning(const HTTPHeaderMap& headers)
 {
-    HTTPHeaderNameSet headersToKeep;
+    OptionSet<HTTPHeadersToKeepFromCleaning> headersToKeep;
     if (headers.contains(HTTPHeaderName::ContentType))
-        headersToKeep.add(HTTPHeaderName::ContentType);
+        headersToKeep.add(HTTPHeadersToKeepFromCleaning::ContentType);
     if (headers.contains(HTTPHeaderName::Referer))
-        headersToKeep.add(HTTPHeaderName::Referer);
+        headersToKeep.add(HTTPHeadersToKeepFromCleaning::Referer);
     if (headers.contains(HTTPHeaderName::Origin))
-        headersToKeep.add(HTTPHeaderName::Origin);
+        headersToKeep.add(HTTPHeadersToKeepFromCleaning::Origin);
     if (headers.contains(HTTPHeaderName::UserAgent))
-        headersToKeep.add(HTTPHeaderName::UserAgent);
+        headersToKeep.add(HTTPHeadersToKeepFromCleaning::UserAgent);
     if (headers.contains(HTTPHeaderName::AcceptEncoding))
-        headersToKeep.add(HTTPHeaderName::AcceptEncoding);
+        headersToKeep.add(HTTPHeadersToKeepFromCleaning::AcceptEncoding);
     return headersToKeep;
 }
 
-void cleanHTTPRequestHeadersForAccessControl(ResourceRequest& request, const HashSet<HTTPHeaderName, WTF::IntHash<HTTPHeaderName>, WTF::StrongEnumHashTraits<HTTPHeaderName>>& headersToKeep)
+void cleanHTTPRequestHeadersForAccessControl(ResourceRequest& request, OptionSet<HTTPHeadersToKeepFromCleaning> headersToKeep)
 {
     // Remove headers that may have been added by the network layer that cause access control to fail.
-    if (!headersToKeep.contains(HTTPHeaderName::ContentType) && !isCrossOriginSafeRequestHeader(HTTPHeaderName::ContentType, request.httpContentType()))
+    if (!headersToKeep.contains(HTTPHeadersToKeepFromCleaning::ContentType) && !isCrossOriginSafeRequestHeader(HTTPHeaderName::ContentType, request.httpContentType()))
         request.clearHTTPContentType();
-    if (!headersToKeep.contains(HTTPHeaderName::Referer))
+    if (!headersToKeep.contains(HTTPHeadersToKeepFromCleaning::Referer))
         request.clearHTTPReferrer();
-    if (!headersToKeep.contains(HTTPHeaderName::Origin))
+    if (!headersToKeep.contains(HTTPHeadersToKeepFromCleaning::Origin))
         request.clearHTTPOrigin();
-    if (!headersToKeep.contains(HTTPHeaderName::UserAgent))
+    if (!headersToKeep.contains(HTTPHeadersToKeepFromCleaning::UserAgent))
         request.clearHTTPUserAgent();
-    if (!headersToKeep.contains(HTTPHeaderName::AcceptEncoding))
+    if (!headersToKeep.contains(HTTPHeadersToKeepFromCleaning::AcceptEncoding))
         request.clearHTTPAcceptEncoding();
 }
 

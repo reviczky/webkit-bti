@@ -35,8 +35,8 @@
 
 namespace JSC {
 
+class CallFrame;
 class CodeBlock;
-class ExecState;
 class JSArray;
 class JSObject;
 class JSScope;
@@ -44,7 +44,7 @@ class LLIntOffsetsExtractor;
 class SlotVisitor;
 class VM;
 
-typedef ExecState CallFrame;
+using ExecState = CallFrame;
 
 // ShadowChicken is a log that can be used to produce a shadow stack of CHICKEN-style stack frames.
 // This enables the debugger to almost always see the tail-deleted stack frames, so long as we have
@@ -77,9 +77,9 @@ public:
         {
         }
         
-        static const constexpr unsigned unlikelyValue = 0x7a11;
+        static constexpr unsigned unlikelyValue = 0x7a11;
 
-        static const constexpr intptr_t tailMarkerValue = static_cast<intptr_t>(unlikelyValue);
+        static constexpr intptr_t tailMarkerValue = static_cast<intptr_t>(unlikelyValue);
         static JSObject* tailMarker()
         {
             return bitwise_cast<JSObject*>(tailMarkerValue);

@@ -29,17 +29,17 @@
 
 namespace JSC {
 
-EncodedJSValue JSC_HOST_CALL boundThisNoArgsFunctionCall(ExecState*);
-EncodedJSValue JSC_HOST_CALL boundFunctionCall(ExecState*);
-EncodedJSValue JSC_HOST_CALL boundThisNoArgsFunctionConstruct(ExecState*);
-EncodedJSValue JSC_HOST_CALL boundFunctionConstruct(ExecState*);
-EncodedJSValue JSC_HOST_CALL isBoundFunction(ExecState*);
-EncodedJSValue JSC_HOST_CALL hasInstanceBoundFunction(ExecState*);
+EncodedJSValue JSC_HOST_CALL boundThisNoArgsFunctionCall(JSGlobalObject*, CallFrame*);
+EncodedJSValue JSC_HOST_CALL boundFunctionCall(JSGlobalObject*, CallFrame*);
+EncodedJSValue JSC_HOST_CALL boundThisNoArgsFunctionConstruct(JSGlobalObject*, CallFrame*);
+EncodedJSValue JSC_HOST_CALL boundFunctionConstruct(JSGlobalObject*, CallFrame*);
+EncodedJSValue JSC_HOST_CALL isBoundFunction(JSGlobalObject*, CallFrame*);
+EncodedJSValue JSC_HOST_CALL hasInstanceBoundFunction(JSGlobalObject*, CallFrame*);
 
 class JSBoundFunction final : public JSFunction {
 public:
     typedef JSFunction Base;
-    const static unsigned StructureFlags = Base::StructureFlags & ~ImplementsDefaultHasInstance;
+    static constexpr unsigned StructureFlags = Base::StructureFlags & ~ImplementsDefaultHasInstance;
     static_assert(StructureFlags & ImplementsHasInstance, "");
 
     template<typename CellType, SubspaceAccess mode>

@@ -25,6 +25,7 @@
 #include "ApplicationCacheStorage.h"
 #include "ApplicationStateChangeListener.h"
 #include "AuthenticatorCoordinator.h"
+#include "BackForwardCache.h"
 #include "BackForwardClient.h"
 #include "BackForwardController.h"
 #include "CSSAnimationController.h"
@@ -66,13 +67,13 @@
 #include "InspectorClient.h"
 #include "InspectorController.h"
 #include "InspectorInstrumentation.h"
+#include "LegacySchemeRegistry.h"
 #include "LibWebRTCProvider.h"
 #include "LoaderStrategy.h"
 #include "Logging.h"
 #include "LowPowerModeNotifier.h"
 #include "MediaCanStartListener.h"
 #include "Navigator.h"
-#include "PageCache.h"
 #include "PageConfiguration.h"
 #include "PageConsoleClient.h"
 #include "PageDebuggable.h"
@@ -100,7 +101,6 @@
 #include "ResourceUsageOverlay.h"
 #include "RuntimeEnabledFeatures.h"
 #include "SVGDocumentExtensions.h"
-#include "SchemeRegistry.h"
 #include "ScriptController.h"
 #include "ScriptedAnimationController.h"
 #include "ScrollLatchingState.h"
@@ -359,7 +359,7 @@ Page::~Page()
 
     backForward().close();
     if (!isUtilityPage())
-        PageCache::singleton().removeAllItemsForPage(*this);
+        BackForwardCache::singleton().removeAllItemsForPage(*this);
 
 #ifndef NDEBUG
     pageCounter.decrement();
@@ -1071,7 +1071,7 @@ void Page::setViewScaleFactor(float scale)
         return;
 
     m_viewScaleFactor = scale;
-    PageCache::singleton().markPagesForDeviceOrPageScaleChanged(*this);
+    BackForwardCache::singleton().markPagesForDeviceOrPageScaleChanged(*this);
 }
 
 void Page::setDeviceScaleFactor(float scaleFactor)
@@ -1087,7 +1087,7 @@ void Page::setDeviceScaleFactor(float scaleFactor)
     setNeedsRecalcStyleInAllFrames();
 
     mainFrame().deviceOrPageScaleFactorChanged();
-    PageCache::singleton().markPagesForDeviceOrPageScaleChanged(*this);
+    BackForwardCache::singleton().markPagesForDeviceOrPageScaleChanged(*this);
 
     pageOverlayController().didChangeDeviceScaleFactor();
 }
@@ -1281,6 +1281,7 @@ void Page::layoutIfNeeded()
         view->updateLayoutAndStyleIfNeededRecursive();
 }
 
+// https://html.spec.whatwg.org/multipage/webappapis.html#update-the-rendering
 void Page::updateRendering()
 {
     // This function is not reentrant, e.g. a rAF callback may force repaint.
@@ -1293,16 +1294,21 @@ void Page::updateRendering()
 
     SetForScope<bool> change(m_inUpdateRendering, true);
 
-    Vector<RefPtr<Document>> documents;
+    layoutIfNeeded();
 
-    // The requestAnimationFrame callbacks may change the frame hierarchy of the page
-    forEachDocument([&documents] (Document& document) {
-        documents.append(&document);
-    });
+    for (auto& document : collectDocuments())
+        document->runResizeSteps();
 
+    // FIXME: Run the scroll steps
+
+    for (auto& document : collectDocuments())
+        document->evaluateMediaQueriesAndReportChanges();
+
+    Vector<Ref<Document>> documents = collectDocuments(); // The requestAnimationFrame callbacks may change the frame hierarchy of the page
     for (auto& document : documents) {
         DOMHighResTimeStamp timestamp = document->domWindow()->nowTimestamp();
         document->updateAnimationsAndSendEvents(timestamp);
+        // FIXME: Run the fullscreen steps.
         document->serviceRequestAnimationFrameCallbacks(timestamp);
     }
 
@@ -1316,6 +1322,9 @@ void Page::updateRendering()
     for (auto& document : documents)
         document->updateResizeObservations(*this);
 #endif
+
+    // FIXME: Flush autofocus candidates
+    // https://github.com/whatwg/html/issues/4992
 
     layoutIfNeeded();
 }
@@ -1381,7 +1390,7 @@ void Page::userStyleSheetLocationChanged()
     URL url = m_settings->userStyleSheetLocation();
     
     // Allow any local file URL scheme to be loaded.
-    if (SchemeRegistry::shouldTreatURLSchemeAsLocal(url.protocol().toStringWithoutCopying()))
+    if (LegacySchemeRegistry::shouldTreatURLSchemeAsLocal(url.protocol().toStringWithoutCopying()))
         m_userStyleSheetPath = url.fileSystemPath();
     else
         m_userStyleSheetPath = String();
@@ -2569,18 +2578,18 @@ void Page::setShouldPlayToPlaybackTarget(uint64_t clientId, bool shouldPlay)
 }
 #endif
 
-WheelEventTestTrigger& Page::ensureTestTrigger()
+WheelEventTestMonitor& Page::ensureWheelEventTestMonitor()
 {
-    if (!m_testTrigger) {
-        m_testTrigger = adoptRef(new WheelEventTestTrigger());
+    if (!m_wheelEventTestMonitor) {
+        m_wheelEventTestMonitor = adoptRef(new WheelEventTestMonitor());
         // We need to update the scrolling coordinator so that the mainframe scrolling node can expect wheel event test triggers.
         if (auto* frameView = mainFrame().view()) {
             if (m_scrollingCoordinator)
-                m_scrollingCoordinator->updateExpectsWheelEventTestTriggerWithFrameView(*frameView);
+                m_scrollingCoordinator->updateIsMonitoringWheelEventsForFrameView(*frameView);
         }
     }
 
-    return *m_testTrigger;
+    return *m_wheelEventTestMonitor;
 }
 
 #if ENABLE(VIDEO)
@@ -2655,7 +2664,7 @@ void Page::accessibilitySettingsDidChange()
     for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
         if (auto* document = frame->document()) {
             document->styleScope().evaluateMediaQueriesForAccessibilitySettingsChange();
-            document->evaluateMediaQueryList();
+            document->updateElementsAffectedByMediaQueries();
         }
     }
 }
@@ -2669,7 +2678,7 @@ void Page::appearanceDidChange()
 
         document->styleScope().didChangeStyleSheetEnvironment();
         document->styleScope().evaluateMediaQueriesForAppearanceChange();
-        document->evaluateMediaQueryList();
+        document->updateElementsAffectedByMediaQueries();
     }
 }
 
@@ -2860,6 +2869,18 @@ void Page::forEachDocument(const Function<void(Document&)>& functor)
 
         functor(*frame->document());
     }
+}
+
+Vector<Ref<Document>> Page::collectDocuments()
+{
+    Vector<Ref<Document>> documents;
+    for (Frame* frame = &mainFrame(); frame; frame = frame->tree().traverseNext()) {
+        auto* document = frame->document();
+        if (!document)
+            continue;
+        documents.append(*document);
+    }
+    return documents;
 }
 
 void Page::applicationWillResignActive()

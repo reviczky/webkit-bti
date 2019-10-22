@@ -29,16 +29,13 @@
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
 #include "FormattingContext.h"
-#include "InlineFormattingState.h"
 #include "LayoutBox.h"
 #include "LayoutContainer.h"
-#include "LayoutState.h"
-#include "TextUtil.h"
 
 namespace WebCore {
 namespace Layout {
 
-WidthAndMargin InlineFormattingContext::Geometry::inlineBlockWidthAndMargin(const Box& formattingContextRoot, UsedHorizontalValues usedHorizontalValues)
+ContentWidthAndMargin InlineFormattingContext::Geometry::inlineBlockWidthAndMargin(const Box& formattingContextRoot, UsedHorizontalValues usedHorizontalValues)
 {
     ASSERT(formattingContextRoot.isInFlow());
 
@@ -60,10 +57,10 @@ WidthAndMargin InlineFormattingContext::Geometry::inlineBlockWidthAndMargin(cons
     // #2
     auto computedHorizontalMargin = Geometry::computedHorizontalMargin(formattingContextRoot, usedHorizontalValues);
 
-    return WidthAndMargin { *width, { computedHorizontalMargin.start.valueOr(0_lu), computedHorizontalMargin.end.valueOr(0_lu) }, computedHorizontalMargin };
+    return ContentWidthAndMargin { *width, { computedHorizontalMargin.start.valueOr(0_lu), computedHorizontalMargin.end.valueOr(0_lu) }, computedHorizontalMargin };
 }
 
-HeightAndMargin InlineFormattingContext::Geometry::inlineBlockHeightAndMargin(const Box& layoutBox, UsedHorizontalValues usedHorizontalValues, UsedVerticalValues usedVerticalValues) const
+ContentHeightAndMargin InlineFormattingContext::Geometry::inlineBlockHeightAndMargin(const Box& layoutBox, UsedHorizontalValues usedHorizontalValues, UsedVerticalValues usedVerticalValues) const
 {
     ASSERT(layoutBox.isInFlow());
 

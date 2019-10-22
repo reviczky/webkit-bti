@@ -47,10 +47,14 @@ public:
     ElementRuleCollector(const Element&, const DocumentRuleSets&, const SelectorFilter*);
     ElementRuleCollector(const Element&, const RuleSet& authorStyle, const SelectorFilter*);
 
+    void setIncludeEmptyRules(bool value) { m_shouldIncludeEmptyRules = value; }
+
     void matchAllRules(bool matchAuthorAndUserStyles, bool includeSMILProperties);
     void matchUARules();
-    void matchAuthorRules(bool includeEmptyRules);
-    void matchUserRules(bool includeEmptyRules);
+    void matchAuthorRules();
+    void matchUserRules();
+
+    bool matchesAnyAuthorRules();
 
     void setMode(SelectorChecker::Mode mode) { m_mode = mode; }
     void setPseudoStyleRequest(const PseudoStyleRequest& request) { m_pseudoStyleRequest = request; }
@@ -61,7 +65,6 @@ public:
     StyleResolver::MatchResult& matchedResult();
     const Vector<RefPtr<StyleRule>>& matchedRuleList() const;
 
-    bool hasMatchedRules() const { return !m_matchedRules.isEmpty(); }
     void clearMatchedRules();
 
     const PseudoIdSet& matchedPseudoElementIds() const { return m_matchedPseudoElementIds; }
@@ -72,38 +75,50 @@ private:
     void addElementStyleProperties(const StyleProperties*, bool isCacheable = true);
 
     void matchUARules(const RuleSet&);
-    void matchAuthorShadowPseudoElementRules(bool includeEmptyRules, StyleResolver::RuleRange&);
-    void matchHostPseudoClassRules(bool includeEmptyRules, StyleResolver::RuleRange&);
-    void matchSlottedPseudoElementRules(bool includeEmptyRules, StyleResolver::RuleRange&);
-    void matchPartPseudoElementRules(const ShadowRoot& containingShadowRoot, bool includeEmptyRules, StyleResolver::RuleRange&);
 
-    void collectMatchingShadowPseudoElementRules(const MatchRequest&, StyleResolver::RuleRange&);
-    std::unique_ptr<RuleSet::RuleDataVector> collectSlottedPseudoElementRulesForSlot(bool includeEmptyRules);
+    void collectMatchingAuthorRules();
+    void addElementInlineStyleProperties(bool includeSMILProperties);
 
-    void collectMatchingRules(const MatchRequest&, StyleResolver::RuleRange&);
-    void collectMatchingRulesForList(const RuleSet::RuleDataVector*, const MatchRequest&, StyleResolver::RuleRange&);
+    void matchAuthorShadowPseudoElementRules();
+    void matchHostPseudoClassRules();
+    void matchSlottedPseudoElementRules();
+    void matchPartPseudoElementRules();
+    void matchPartPseudoElementRulesForScope(const ShadowRoot& scopeShadowRoot);
+
+    void collectMatchingShadowPseudoElementRules(const MatchRequest&);
+    std::unique_ptr<RuleSet::RuleDataVector> collectSlottedPseudoElementRulesForSlot();
+
+    void collectMatchingRules(const MatchRequest&);
+    void collectMatchingRulesForList(const RuleSet::RuleDataVector*, const MatchRequest&);
     bool ruleMatches(const RuleData&, unsigned &specificity);
 
     void sortMatchedRules();
-    void sortAndTransferMatchedRules();
 
-    void addMatchedRule(const RuleData&, unsigned specificity, Style::ScopeOrdinal, StyleResolver::RuleRange&);
+    enum class DeclarationOrigin { UserAgent, Author, User };
+    void sortAndTransferMatchedRules(DeclarationOrigin);
+    void transferMatchedRules(DeclarationOrigin, Optional<Style::ScopeOrdinal> forScope = { });
 
-    const Element& m_element;
+    void addMatchedRule(const RuleData&, unsigned specificity, Style::ScopeOrdinal);
+
+    const Element& element() const { return m_element.get(); }
+
+    const Ref<const Element> m_element;
     const RuleSet& m_authorStyle;
     const RuleSet* m_userStyle { nullptr };
     const RuleSet* m_userAgentMediaQueryStyle { nullptr };
     const SelectorFilter* m_selectorFilter { nullptr };
 
+    bool m_shouldIncludeEmptyRules { false };
     bool m_isPrintStyle { false };
     PseudoStyleRequest m_pseudoStyleRequest { PseudoId::None };
     SelectorChecker::Mode m_mode { SelectorChecker::Mode::ResolvingStyle };
     bool m_isMatchingSlottedPseudoElements { false };
     bool m_isMatchingHostPseudoClass { false };
-    const Element* m_shadowHostInPartRuleScope { nullptr };
+    RefPtr<const Element> m_shadowHostInPartRuleScope;
     Vector<std::unique_ptr<RuleSet::RuleDataVector>> m_keepAliveSlottedPseudoElementRules;
 
     Vector<MatchedRule, 64> m_matchedRules;
+    size_t m_matchedRuleTransferIndex { 0 };
 
     // Output.
     Vector<RefPtr<StyleRule>> m_matchedRuleList;

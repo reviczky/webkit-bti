@@ -101,11 +101,6 @@ void SourceBufferList::scheduleEvent(const AtomString& eventName)
     m_asyncEventQueue->enqueueEvent(WTFMove(event));
 }
 
-bool SourceBufferList::canSuspendForDocumentSuspension() const
-{
-    return !m_asyncEventQueue->hasPendingEvents();
-}
-
 const char* SourceBufferList::activeDOMObjectName() const
 {
     return "SourceBufferList";

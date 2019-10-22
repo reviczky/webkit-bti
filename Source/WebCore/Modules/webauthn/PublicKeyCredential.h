@@ -29,7 +29,7 @@
 
 #include "BasicCredential.h"
 #include "ExceptionOr.h"
-#include "JSDOMPromiseDeferred.h"
+#include "IDLTypes.h"
 #include <JavaScriptCore/ArrayBuffer.h>
 #include <wtf/Forward.h>
 
@@ -40,13 +40,15 @@ class Document;
 
 struct PublicKeyCredentialData;
 
+template<typename IDLType> class DOMPromiseDeferred;
+
 class PublicKeyCredential final : public BasicCredential {
 public:
     struct AuthenticationExtensionsClientOutputs {
         Optional<bool> appid;
     };
 
-    static RefPtr<PublicKeyCredential> tryCreate(const PublicKeyCredentialData&);
+    static RefPtr<PublicKeyCredential> tryCreate(PublicKeyCredentialData&&);
 
     ArrayBuffer* rawId() const { return m_rawId.ptr(); }
     AuthenticatorResponse* response() const { return m_response.ptr(); }

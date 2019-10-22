@@ -290,10 +290,16 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCharacterData.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCharacterData.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSChildNode.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSChildNode.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSClipboard.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSClipboard.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSClipboardEvent.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSClipboardEvent.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSClipboardItem.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSClipboardItem.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCloseEvent.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCloseEvent.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSColorGamut.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSColorGamut.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCommandLineAPIHost.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSCommandLineAPIHost.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSComment.cpp
@@ -479,6 +485,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocumentFullscreen.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocumentFullscreen.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocumentOrShadowRoot.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocumentOrShadowRoot.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocumentPictureInPicture.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocumentPictureInPicture.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocumentStorageAccess.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocumentStorageAccess.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSDocumentTimeline.cpp
@@ -515,6 +523,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSElement.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSElement.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSElementCSSInlineStyle.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSElementCSSInlineStyle.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEnterPictureInPictureEvent.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSEnterPictureInPictureEvent.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSErrorCallback.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSErrorCallback.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSErrorEvent.cpp
@@ -851,8 +861,12 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHTMLUnknownElement.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHTMLUnknownElement.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHTMLVideoElement.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHTMLVideoElement.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHTMLVideoElementPictureInPicture.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHTMLVideoElementPictureInPicture.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHashChangeEvent.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHashChangeEvent.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHdrMetadataType.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHdrMetadataType.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHistory.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHistory.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSHkdfParams.cpp
@@ -885,6 +899,12 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIDBTransactionMode.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIDBTransactionMode.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIDBVersionChangeEvent.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIDBVersionChangeEvent.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIdleDeadline.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIdleDeadline.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIdleRequestCallback.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIdleRequestCallback.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIdleRequestOptions.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSIdleRequestOptions.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSImageBitmap.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSImageBitmap.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSImageBitmapOptions.cpp
@@ -1049,6 +1069,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMockPaymentCoordinator.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMockPaymentCoordinator.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMockPaymentError.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMockPaymentError.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMockWebAuthenticationConfiguration.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMockWebAuthenticationConfiguration.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMouseEvent.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMouseEvent.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSMouseEventInit.cpp
@@ -1067,6 +1089,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigator.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigator.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorBeacon.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorBeacon.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorClipboard.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorClipboard.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorCredentials.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorCredentials.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorEME.cpp
@@ -1079,6 +1103,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorGeolocation.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorGeolocation.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorID.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorID.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorIsLoggedIn.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorIsLoggedIn.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorLanguage.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorLanguage.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSNavigatorMaxTouchPoints.cpp
@@ -1225,6 +1251,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPerformanceTiming.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPerformanceTiming.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPeriodicWave.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPeriodicWave.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPictureInPictureWindow.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPictureInPictureWindow.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPlaybackDirection.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPlaybackDirection.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSPointerEvent.cpp
@@ -1457,8 +1485,6 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSSVGElementWrapperFactory.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSSVGElementWrapperFactory.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSSVGEllipseElement.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSSVGEllipseElement.h
-$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSSVGExternalResourcesRequired.cpp
-$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSSVGExternalResourcesRequired.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSSVGFEBlendElement.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSSVGFEBlendElement.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSSVGFEColorMatrixElement.cpp
@@ -1687,10 +1713,6 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSSVGZoomEvent.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSSVGZoomEvent.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSScreen.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSScreen.h
-$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSScreenColorGamut.cpp
-$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSScreenColorGamut.h
-$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSScreenLuminance.cpp
-$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSScreenLuminance.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSScriptProcessorNode.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSScriptProcessorNode.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSScrollIntoViewOptions.cpp
@@ -1805,6 +1827,8 @@ $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTouchList.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTouchList.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTrackEvent.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTrackEvent.h
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTransferFunction.cpp
+$(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTransferFunction.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTransitionEvent.cpp
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTransitionEvent.h
 $(BUILT_PRODUCTS_DIR)/DerivedSources/WebCore/JSTreeWalker.cpp

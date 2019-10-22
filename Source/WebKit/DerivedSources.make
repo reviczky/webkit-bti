@@ -132,7 +132,6 @@ MESSAGE_RECEIVERS = \
     RemoteWebInspectorProxy \
     RemoteWebInspectorUI \
     SecItemShimProxy \
-    ServiceWorkerClientFetch \
     ServiceWorkerFetchTask \
     SmartMagnificationController \
     StorageAreaMap \
@@ -147,7 +146,6 @@ MESSAGE_RECEIVERS = \
     ViewUpdateDispatcher \
     VisitedLinkStore \
     VisitedLinkTableController \
-    WebAuthenticatorCoordinator \
     WebAuthenticatorCoordinatorProxy \
     WebAutomationSession \
     WebAutomationSessionProxy \

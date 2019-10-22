@@ -29,6 +29,7 @@
 #include "BlobDataFileReferenceWithSandboxExtension.h"
 #include "CacheStorageEngineConnectionMessages.h"
 #include "DataReference.h"
+#include "Logging.h"
 #include "NetworkCache.h"
 #include "NetworkMDNSRegisterMessages.h"
 #include "NetworkProcess.h"
@@ -73,6 +74,9 @@
 #include "WebPaymentCoordinatorProxyMessages.h"
 #endif
 
+#undef RELEASE_LOG_IF_ALLOWED
+#define RELEASE_LOG_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_IF(m_sessionID.isAlwaysOnLoggingAllowed(), channel, "%p - NetworkConnectionToWebProcess::" fmt, this, ##__VA_ARGS__)
+
 namespace WebKit {
 using namespace WebCore;
 
@@ -97,6 +101,10 @@ NetworkConnectionToWebProcess::NetworkConnectionToWebProcess(NetworkProcess& net
     // reply from the Network process, which would be unsafe.
     m_connection->setOnlySendMessagesAsDispatchWhenWaitingForSyncReplyWhenProcessingSuchAMessage(true);
     m_connection->open();
+
+#if ENABLE(SERVICE_WORKER)
+    establishSWServerConnection();
+#endif
 }
 
 NetworkConnectionToWebProcess::~NetworkConnectionToWebProcess()
@@ -218,19 +226,15 @@ void NetworkConnectionToWebProcess::didReceiveMessage(IPC::Connection& connectio
         return;
     }
     if (decoder.messageReceiverName() == Messages::WebSWServerToContextConnection::messageReceiverName()) {
-        ASSERT(m_swContextConnection);
-        if (m_swContextConnection) {
+        if (m_swContextConnection)
             m_swContextConnection->didReceiveMessage(connection, decoder);
-            return;
-        }
+        return;
     }
 
     if (decoder.messageReceiverName() == Messages::ServiceWorkerFetchTask::messageReceiverName()) {
-        ASSERT(m_swContextConnection);
-        if (m_swContextConnection) {
+        if (m_swContextConnection)
             m_swContextConnection->didReceiveFetchTaskMessage(connection, decoder);
-            return;
-        }
+        return;
     }
 #endif
 
@@ -400,14 +404,30 @@ Vector<RefPtr<WebCore::BlobDataFileReference>> NetworkConnectionToWebProcess::re
 
 void NetworkConnectionToWebProcess::scheduleResourceLoad(NetworkResourceLoadParameters&& loadParameters)
 {
+#if ENABLE(SERVICE_WORKER)
+    auto& server = m_networkProcess->swServerForSession(m_sessionID);
+    if (!server.isImportCompleted()) {
+        server.whenImportIsCompleted([this, protectedThis = makeRef(*this), loadParameters = WTFMove(loadParameters)]() mutable {
+            if (!m_networkProcess->webProcessConnection(webProcessIdentifier()))
+                return;
+            ASSERT(m_networkProcess->swServerForSession(m_sessionID).isImportCompleted());
+            scheduleResourceLoad(WTFMove(loadParameters));
+        });
+        return;
+    }
+#endif
     auto identifier = loadParameters.identifier;
     RELEASE_ASSERT(identifier);
     RELEASE_ASSERT(RunLoop::isMain());
     ASSERT(!m_networkResourceLoaders.contains(identifier));
 
-    auto loader = NetworkResourceLoader::create(WTFMove(loadParameters), *this);
-    m_networkResourceLoaders.add(identifier, loader.copyRef());
+    auto& loader = m_networkResourceLoaders.add(identifier, NetworkResourceLoader::create(WTFMove(loadParameters), *this)).iterator->value;
+
+#if ENABLE(SERVICE_WORKER)
+    loader->startWithServiceWorker();
+#else
     loader->start();
+#endif
 }
 
 void NetworkConnectionToWebProcess::performSynchronousLoad(NetworkResourceLoadParameters&& loadParameters, Messages::NetworkConnectionToWebProcess::PerformSynchronousLoad::DelayedReply&& reply)
@@ -761,7 +781,7 @@ void NetworkConnectionToWebProcess::resetOriginAccessWhitelists()
     SecurityPolicy::resetOriginAccessWhitelists();
 }
 
-Optional<NetworkActivityTracker> NetworkConnectionToWebProcess::startTrackingResourceLoad(PageIdentifier pageID, ResourceLoadIdentifier resourceID, bool isMainResource)
+Optional<NetworkActivityTracker> NetworkConnectionToWebProcess::startTrackingResourceLoad(PageIdentifier pageID, ResourceLoadIdentifier resourceID, bool isTopResource)
 {
     if (m_sessionID.isEphemeral())
         return WTF::nullopt;
@@ -770,7 +790,7 @@ Optional<NetworkActivityTracker> NetworkConnectionToWebProcess::startTrackingRes
     // new one if this is the main resource.
 
     size_t rootActivityIndex;
-    if (isMainResource) {
+    if (isTopResource) {
         // If we're loading a page from the top, make sure any tracking of
         // previous activity for this page is stopped.
 
@@ -875,10 +895,12 @@ void NetworkConnectionToWebProcess::unregisterSWConnection()
 
 void NetworkConnectionToWebProcess::establishSWServerConnection()
 {
+    if (m_swConnection)
+        return;
+
     auto& server = m_networkProcess->swServerForSession(m_sessionID);
     auto connection = makeUnique<WebSWServerConnection>(m_networkProcess, server, m_connection.get(), m_webProcessIdentifier);
 
-    ASSERT(!m_swConnection);
     m_swConnection = makeWeakPtr(*connection);
     server.addConnection(WTFMove(connection));
 }
@@ -886,7 +908,27 @@ void NetworkConnectionToWebProcess::establishSWServerConnection()
 void NetworkConnectionToWebProcess::establishSWContextConnection(RegistrableDomain&& registrableDomain)
 {
     if (auto* server = m_networkProcess->swServerForSessionIfExists(m_sessionID))
-        m_swContextConnection = makeUnique<WebSWServerToContextConnection>(m_networkProcess, WTFMove(registrableDomain), *server, m_connection.get());
+        m_swContextConnection = makeUnique<WebSWServerToContextConnection>(*this, WTFMove(registrableDomain), *server);
+}
+
+void NetworkConnectionToWebProcess::closeSWContextConnection()
+{
+    m_swContextConnection = nullptr;
+}
+
+void NetworkConnectionToWebProcess::serverToContextConnectionNoLongerNeeded()
+{
+    RELEASE_LOG_IF_ALLOWED(ServiceWorker, "serverToContextConnectionNoLongerNeeded - WebProcess %llu no longer useful for running service workers", webProcessIdentifier().toUInt64());
+    m_networkProcess->parentProcessConnection()->send(Messages::NetworkProcessProxy::WorkerContextConnectionNoLongerNeeded { webProcessIdentifier() }, 0);
+
+    m_swContextConnection = nullptr;
+}
+
+WebSWServerConnection& NetworkConnectionToWebProcess::swConnection()
+{
+    if (!m_swConnection)
+        establishSWServerConnection();
+    return *m_swConnection;
 }
 #endif
 

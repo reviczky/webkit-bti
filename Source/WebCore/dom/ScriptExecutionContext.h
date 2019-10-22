@@ -40,11 +40,12 @@
 #include <wtf/text/WTFString.h>
 
 namespace JSC {
+class CallFrame;
 class Exception;
-class ExecState;
 class JSPromise;
 class VM;
 template<typename> class Strong;
+using ExecState = CallFrame;
 }
 
 namespace Inspector {
@@ -201,7 +202,7 @@ public:
     // Gets the next id in a circular sequence from 1 to 2^31-1.
     int circularSequentialID();
 
-    bool addTimeout(int timeoutId, DOMTimer& timer) { return m_timeouts.add(timeoutId, &timer).isNewEntry; }
+    bool addTimeout(int timeoutId, DOMTimer& timer) { return m_timeouts.add(timeoutId, timer).isNewEntry; }
     void removeTimeout(int timeoutId) { m_timeouts.remove(timeoutId); }
     DOMTimer* findTimeout(int timeoutId) { return m_timeouts.get(timeoutId); }
 
@@ -220,6 +221,9 @@ public:
     void setDatabaseContext(DatabaseContext*);
 
 #if ENABLE(WEB_CRYPTO)
+    // These two methods are used when CryptoKeys are serialized into IndexedDB. As a side effect, it is also
+    // used for things that utilize the same structure clone algorithm, for example, message passing between
+    // worker and document.
     virtual bool wrapCryptoKey(const Vector<uint8_t>& key, Vector<uint8_t>& wrappedKey) = 0;
     virtual bool unwrapCryptoKey(const Vector<uint8_t>& wrappedKey, Vector<uint8_t>& key) = 0;
 #endif
@@ -303,7 +307,7 @@ private:
     HashSet<ContextDestructionObserver*> m_destructionObservers;
     HashSet<ActiveDOMObject*> m_activeDOMObjects;
 
-    HashMap<int, RefPtr<DOMTimer>> m_timeouts;
+    HashMap<int, Ref<DOMTimer>> m_timeouts;
 
     struct PendingException;
     std::unique_ptr<Vector<std::unique_ptr<PendingException>>> m_pendingExceptions;

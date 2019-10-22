@@ -255,7 +255,7 @@ macro doVMEntry(makeCall)
 
     checkStackPointerAlignment(extraTempReg, 0xbad0dc02)
 
-    makeCall(entry, t3, t4)
+    makeCall(entry, protoCallFrame, t3, t4)
 
     # We may have just made a call into a JS function, so we can't rely on sp
     # for anything but the fact that our own locals (ie the VMEntryRecord) are
@@ -297,7 +297,8 @@ macro doVMEntry(makeCall)
 end
 
 
-macro makeJavaScriptCall(entry, temp, unused)
+# a0, a2, t3, t4
+macro makeJavaScriptCall(entry, protoCallFrame, temp1, temp2)
     addp 16, sp
     if C_LOOP or C_LOOP_WIN
         cloopCallJSFunction entry
@@ -307,20 +308,22 @@ macro makeJavaScriptCall(entry, temp, unused)
     subp 16, sp
 end
 
-macro makeHostFunctionCall(entry, temp, unused)
-    move entry, temp
+# a0, a2, t3, t4
+macro makeHostFunctionCall(entry, protoCallFrame, temp1, temp2)
+    move entry, temp1
     storep cfr, [sp]
-    move sp, a0
+    loadp ProtoCallFrame::globalObject[protoCallFrame], a0
+    move sp, a1
     if C_LOOP or C_LOOP_WIN
         storep lr, 8[sp]
-        cloopCallNative temp
+        cloopCallNative temp1
     elsif X86_64_WIN
         # We need to allocate 32 bytes on the stack for the shadow space.
         subp 32, sp
-        call temp, JSEntryPtrTag
+        call temp1, JSEntryPtrTag
         addp 32, sp
     else
-        call temp, JSEntryPtrTag
+        call temp1, JSEntryPtrTag
     end
 end
 
@@ -1325,7 +1328,6 @@ llintOpWithMetadata(op_get_by_id_direct, OpGetByIdDirect, macro (size, get, disp
     dispatch()
 end)
 
-
 llintOpWithMetadata(op_get_by_id, OpGetById, macro (size, get, dispatch, metadata, return)
     metadata(t2, t1)
     loadb OpGetById::Metadata::m_modeMetadata.mode[t2], t1
@@ -1376,6 +1378,13 @@ llintOpWithMetadata(op_get_by_id, OpGetById, macro (size, get, dispatch, metadat
 .opGetByIdSlow:
     callSlowPath(_llint_slow_path_get_by_id)
     dispatch()
+
+.osrReturnPoint:
+    getterSetterOSRExitReturnPoint(op_get_by_id, size)
+    metadata(t2, t3)
+    valueProfile(OpGetById, t2, r0)
+    return(r0)
+
 end)
 
 
@@ -1448,6 +1457,11 @@ llintOpWithMetadata(op_put_by_id, OpPutById, macro (size, get, dispatch, metadat
 .opPutByIdSlow:
     callSlowPath(_llint_slow_path_put_by_id)
     dispatch()
+
+.osrReturnPoint:
+    getterSetterOSRExitReturnPoint(op_put_by_id, size)
+    dispatch()
+
 end)
 
 
@@ -1619,10 +1633,17 @@ llintOpWithMetadata(op_get_by_val, OpGetByVal, macro (size, get, dispatch, metad
 .opGetByValSlow:
     callSlowPath(_llint_slow_path_get_by_val)
     dispatch()
+
+.osrReturnPoint:
+    getterSetterOSRExitReturnPoint(op_get_by_val, size)
+    metadata(t5, t2)
+    valueProfile(OpGetByVal, t5, r0)
+    return(r0)
+
 end)
 
 
-macro putByValOp(opcodeName, opcodeStruct)
+macro putByValOp(opcodeName, opcodeStruct, osrExitPoint)
     llintOpWithMetadata(op_%opcodeName%, opcodeStruct, macro (size, get, dispatch, metadata, return)
         macro contiguousPutByVal(storeCallback)
             biaeq t3, -sizeof IndexingHeader + IndexingHeader::u.lengths.publicLength[t0], .outOfBounds
@@ -1710,12 +1731,19 @@ macro putByValOp(opcodeName, opcodeStruct)
     .opPutByValSlow:
         callSlowPath(_llint_slow_path_%opcodeName%)
         dispatch()
+
+        osrExitPoint(size, dispatch)
+        
     end)
 end
 
-putByValOp(put_by_val, OpPutByVal)
+putByValOp(put_by_val, OpPutByVal, macro (size, dispatch)
+.osrReturnPoint:
+    getterSetterOSRExitReturnPoint(op_put_by_val, size)
+    dispatch()
+end)
 
-putByValOp(put_by_val_direct, OpPutByValDirect)
+putByValOp(put_by_val_direct, OpPutByValDirect, macro (a, b) end)
 
 
 macro llintJumpTrueOrFalseOp(opcodeName, opcodeStruct, conditionOp)
@@ -2004,10 +2032,10 @@ macro commonCallOp(opcodeName, slowPath, opcodeStruct, prepareCall, prologue)
         storei t2, ArgumentCount + PayloadOffset[t3]
         move t3, sp
         prepareCall(%opcodeStruct%::Metadata::m_callLinkInfo.m_machineCodeTarget[t5], t2, t3, t4, JSEntryPtrTag)
-        callTargetFunction(size, opcodeStruct, dispatch, %opcodeStruct%::Metadata::m_callLinkInfo.m_machineCodeTarget[t5], JSEntryPtrTag)
+        callTargetFunction(opcodeName, size, opcodeStruct, dispatch, %opcodeStruct%::Metadata::m_callLinkInfo.m_machineCodeTarget[t5], JSEntryPtrTag)
 
     .opCallSlow:
-        slowPathForCall(size, opcodeStruct, dispatch, slowPath, prepareCall)
+        slowPathForCall(opcodeName, size, opcodeStruct, dispatch, slowPath, prepareCall)
     end)
 end
 
@@ -2123,19 +2151,20 @@ macro nativeCallTrampoline(executableOffsetToFunction)
     if ARM64 or ARM64E or C_LOOP or C_LOOP_WIN
         storep lr, ReturnPC[cfr]
     end
-    move cfr, a0
-    loadp Callee[cfr], t1
-    loadp JSFunction::m_executable[t1], t1
+    move cfr, a1
+    loadp Callee[cfr], a0
+    loadp JSFunction::m_executable[a0], a2
+    loadp JSFunction::m_globalObject[a0], a0
     checkStackPointerAlignment(t3, 0xdead0001)
     if C_LOOP or C_LOOP_WIN
-        cloopCallNative executableOffsetToFunction[t1]
+        cloopCallNative executableOffsetToFunction[a2]
     else
         if X86_64_WIN
             subp 32, sp
-            call executableOffsetToFunction[t1], JSEntryPtrTag
+            call executableOffsetToFunction[a2], JSEntryPtrTag
             addp 32, sp
         else
-            call executableOffsetToFunction[t1], JSEntryPtrTag
+            call executableOffsetToFunction[a2], JSEntryPtrTag
         end
     end
 
@@ -2163,18 +2192,19 @@ macro internalFunctionCallTrampoline(offsetOfFunction)
     if ARM64 or ARM64E or C_LOOP or C_LOOP_WIN
         storep lr, ReturnPC[cfr]
     end
-    move cfr, a0
-    loadp Callee[cfr], t1
+    move cfr, a1
+    loadp Callee[cfr], a2
+    loadp InternalFunction::m_globalObject[a2], a0
     checkStackPointerAlignment(t3, 0xdead0001)
     if C_LOOP or C_LOOP_WIN
-        cloopCallNative offsetOfFunction[t1]
+        cloopCallNative offsetOfFunction[a2]
     else
         if X86_64_WIN
             subp 32, sp
-            call offsetOfFunction[t1], JSEntryPtrTag
+            call offsetOfFunction[a2], JSEntryPtrTag
             addp 32, sp
         else
-            call offsetOfFunction[t1], JSEntryPtrTag
+            call offsetOfFunction[a2], JSEntryPtrTag
         end
     end
 

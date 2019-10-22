@@ -136,6 +136,7 @@
 #include <JavaScriptCore/SamplingProfiler.h>
 #include <WebCore/ApplicationCacheStorage.h>
 #include <WebCore/ArchiveResource.h>
+#include <WebCore/BackForwardCache.h>
 #include <WebCore/BackForwardController.h>
 #include <WebCore/Chrome.h>
 #include <WebCore/CommonVM.h>
@@ -186,12 +187,12 @@
 #include <WebCore/JSDOMExceptionHandling.h>
 #include <WebCore/JSDOMWindow.h>
 #include <WebCore/KeyboardEvent.h>
+#include <WebCore/LegacySchemeRegistry.h>
 #include <WebCore/LocalizedStrings.h>
 #include <WebCore/MIMETypeRegistry.h>
 #include <WebCore/MouseEvent.h>
 #include <WebCore/NotImplemented.h>
 #include <WebCore/Page.h>
-#include <WebCore/PageCache.h>
 #include <WebCore/PageConfiguration.h>
 #include <WebCore/PingLoader.h>
 #include <WebCore/PlatformKeyboardEvent.h>
@@ -214,7 +215,6 @@
 #include <WebCore/ResourceResponse.h>
 #include <WebCore/RuntimeEnabledFeatures.h>
 #include <WebCore/SWClientConnection.h>
-#include <WebCore/SchemeRegistry.h>
 #include <WebCore/ScriptController.h>
 #include <WebCore/SerializedScriptValue.h>
 #include <WebCore/ServiceWorkerProvider.h>
@@ -520,6 +520,10 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
         m_useAsyncScrolling = false;
     m_page->settings().setScrollingCoordinatorEnabled(m_useAsyncScrolling);
 #endif
+
+    // Disable Back/Forward cache expiration in the WebContent process since management happens in the UIProcess
+    // in modern WebKit.
+    m_page->settings().setBackForwardCacheExpirationInterval(Seconds::infinity());
 
     m_mainFrame = WebFrame::createWithCoreMainFrame(this, &m_page->mainFrame());
     m_drawingArea->updatePreferences(parameters.store);
@@ -1486,10 +1490,16 @@ void WebPage::suspendForProcessSwap()
         return;
     }
 
-    if (!PageCache::singleton().addIfCacheable(*currentHistoryItem, corePage())) {
+    if (!BackForwardCache::singleton().addIfCacheable(*currentHistoryItem, corePage())) {
         failedToSuspend();
         return;
     }
+
+    // Back/forward cache does not break the opener link for the main frame (only does so for the subframes) because the
+    // main frame is normally re-used for the navigation. However, in the case of process-swapping, the main frame
+    // is now hosted in another process and the one in this process is in the cache.
+    if (m_mainFrame && m_mainFrame->coreFrame())
+        m_mainFrame->coreFrame()->loader().detachFromAllOpenedFrames();
 
     send(Messages::WebPageProxy::DidSuspendAfterProcessSwap());
 }
@@ -4966,7 +4976,7 @@ void WebPage::runModal()
 
 bool WebPage::canHandleRequest(const WebCore::ResourceRequest& request)
 {
-    if (SchemeRegistry::shouldLoadURLSchemeAsEmptyDocument(request.url().protocol().toStringWithoutCopying()))
+    if (LegacySchemeRegistry::shouldLoadURLSchemeAsEmptyDocument(request.url().protocol().toStringWithoutCopying()))
         return true;
 
     if (request.url().protocolIsBlob())
@@ -6298,12 +6308,12 @@ void WebPage::postSynchronousMessageForTesting(const String& messageName, API::O
         returnData = webProcess.transformHandlesToObjects(returnUserData.object());
 }
 
-void WebPage::clearWheelEventTestTrigger()
+void WebPage::clearWheelEventTestMonitor()
 {
     if (!m_page)
         return;
 
-    m_page->clearTrigger();
+    m_page->clearWheelEventTestMonitor();
 }
 
 void WebPage::setShouldScaleViewToFitDocument(bool shouldScaleViewToFitDocument)
@@ -6377,11 +6387,6 @@ void WebPage::dispatchDidReachLayoutMilestone(OptionSet<WebCore::LayoutMilestone
 void WebPage::didRestoreScrollPosition()
 {
     send(Messages::WebPageProxy::DidRestoreScrollPosition());
-}
-
-void WebPage::setResourceCachingDisabled(bool disabled)
-{
-    m_page->setResourceCachingDisabled(disabled);
 }
 
 void WebPage::setUserInterfaceLayoutDirection(uint32_t direction)
@@ -6492,6 +6497,10 @@ void WebPage::setIsSuspended(bool suspended)
 
     // Unfrozen on drawing area reset.
     freezeLayerTree(LayerTreeFreezeReason::PageSuspended);
+
+    // Only the committed WebPage gets application visibility notifications from the UIProcess, so make sure
+    // we don't hold a BackgroundApplication freeze reason when transitioning from committed to suspended.
+    unfreezeLayerTree(LayerTreeFreezeReason::BackgroundApplication);
 
     WebProcess::singleton().sendPrewarmInformation(mainWebFrame()->url());
 
@@ -6612,19 +6621,15 @@ void WebPage::simulateDeviceOrientationChange(double alpha, double beta, double 
 #if USE(SYSTEM_PREVIEW)
 void WebPage::systemPreviewActionTriggered(WebCore::SystemPreviewInfo previewInfo, const String& message)
 {
-    WebFrame* frame = WebProcess::singleton().webFrame(previewInfo.globalFrameID.frameID);
-    if (!frame)
-        return;
-
-    auto* document = frame->coreFrame()->document();
+    auto* document = Document::allDocumentsMap().get(previewInfo.element.documentIdentifier);
     if (!document)
         return;
 
     auto pageID = document->pageID();
-    if (!pageID || previewInfo.globalFrameID.pageID != pageID.value())
+    if (!pageID || previewInfo.element.webPageIdentifier != pageID.value())
         return;
 
-    document->dispatchSystemPreviewActionEvent(message);
+    document->dispatchSystemPreviewActionEvent(previewInfo, message);
 }
 #endif
 
@@ -6749,9 +6754,9 @@ static bool isEditableTextInputElement(Element& element)
     return element.isRootEditableElement();
 }
 
-void WebPage::textInputContextsInRect(WebCore::FloatRect searchRect, CompletionHandler<void(const Vector<TextInputContext>&)>&& completionHandler)
+void WebPage::textInputContextsInRect(WebCore::FloatRect searchRect, CompletionHandler<void(const Vector<WebCore::ElementContext>&)>&& completionHandler)
 {
-    Vector<WebKit::TextInputContext> textInputContexts;
+    Vector<WebCore::ElementContext> textInputContexts;
 
     for (Frame* frame = &m_page->mainFrame(); frame; frame = frame->tree().traverseNext()) {
         Document* document = frame->document();
@@ -6777,7 +6782,7 @@ void WebPage::textInputContextsInRect(WebCore::FloatRect searchRect, CompletionH
             if (!searchRect.intersects(elementRect))
                 continue;
 
-            WebKit::TextInputContext context;
+            WebCore::ElementContext context;
             context.webPageIdentifier = m_identifier;
             context.documentIdentifier = document->identifier();
             context.elementIdentifier = document->identifierForElement(element);
@@ -6790,9 +6795,9 @@ void WebPage::textInputContextsInRect(WebCore::FloatRect searchRect, CompletionH
     completionHandler(textInputContexts);
 }
 
-void WebPage::focusTextInputContext(const TextInputContext& textInputContext, CompletionHandler<void(bool)>&& completionHandler)
+void WebPage::focusTextInputContext(const WebCore::ElementContext& textInputContext, CompletionHandler<void(bool)>&& completionHandler)
 {
-    RefPtr<Element> element = elementForTextInputContext(textInputContext);
+    RefPtr<Element> element = elementForContext(textInputContext);
 
     if (element)
         element->focus();
@@ -6800,19 +6805,32 @@ void WebPage::focusTextInputContext(const TextInputContext& textInputContext, Co
     completionHandler(element);
 }
 
-Element* WebPage::elementForTextInputContext(const TextInputContext& textInputContext)
+Element* WebPage::elementForContext(const WebCore::ElementContext& elementContext) const
 {
-    if (textInputContext.webPageIdentifier != m_identifier)
+    if (elementContext.webPageIdentifier != m_identifier)
         return nullptr;
 
-    auto* document = Document::allDocumentsMap().get(textInputContext.documentIdentifier);
+    auto* document = Document::allDocumentsMap().get(elementContext.documentIdentifier);
     if (!document)
         return nullptr;
 
     if (document->page() != m_page.get())
         return nullptr;
 
-    return document->searchForElementByIdentifier(textInputContext.elementIdentifier);
+    return document->searchForElementByIdentifier(elementContext.elementIdentifier);
+}
+
+Optional<WebCore::ElementContext> WebPage::contextForElement(WebCore::Element& element) const
+{
+    auto& document = element.document();
+    if (!m_page || document.page() != m_page.get())
+        return WTF::nullopt;
+
+    auto frame = document.frame();
+    if (!frame)
+        return WTF::nullopt;
+
+    return WebCore::ElementContext { elementRectInRootViewCoordinates(element, *frame), m_identifier, document.identifier(), document.identifierForElement(element) };
 }
 
 PAL::SessionID WebPage::sessionID() const

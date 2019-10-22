@@ -30,21 +30,22 @@
 
 #include "FormDataReference.h"
 #include "Logging.h"
+#include "NetworkConnectionToWebProcess.h"
 #include "NetworkProcess.h"
 #include "ServiceWorkerFetchTask.h"
 #include "ServiceWorkerFetchTaskMessages.h"
 #include "WebCoreArgumentCoders.h"
 #include "WebSWContextManagerConnectionMessages.h"
+#include "WebSWServerConnection.h"
 #include <WebCore/SWServer.h>
 #include <WebCore/ServiceWorkerContextData.h>
 
 namespace WebKit {
 using namespace WebCore;
 
-WebSWServerToContextConnection::WebSWServerToContextConnection(NetworkProcess& networkProcess, RegistrableDomain&& registrableDomain, SWServer& server, Ref<IPC::Connection>&& connection)
+WebSWServerToContextConnection::WebSWServerToContextConnection(NetworkConnectionToWebProcess& connection, RegistrableDomain&& registrableDomain, SWServer& server)
     : SWServerToContextConnection(WTFMove(registrableDomain))
-    , m_ipcConnection(WTFMove(connection))
-    , m_networkProcess(networkProcess)
+    , m_connection(connection)
     , m_server(makeWeakPtr(server))
 {
     server.addContextConnection(*this);
@@ -52,26 +53,27 @@ WebSWServerToContextConnection::WebSWServerToContextConnection(NetworkProcess& n
 
 WebSWServerToContextConnection::~WebSWServerToContextConnection()
 {
-    connectionClosed();
+    auto fetches = WTFMove(m_ongoingFetches);
+    for (auto& fetch : fetches.values())
+        fetch->fail(ResourceError { errorDomainWebKitInternal, 0, { }, "Service Worker context closed"_s });
+
     if (m_server && m_server->contextConnectionForRegistrableDomain(registrableDomain()) == this)
         m_server->removeContextConnection(*this);
 }
 
+IPC::Connection& WebSWServerToContextConnection::ipcConnection() const
+{
+    return m_connection.connection();
+}
+
 IPC::Connection* WebSWServerToContextConnection::messageSenderConnection() const
 {
-    return m_ipcConnection.ptr();
+    return &ipcConnection();
 }
 
 uint64_t WebSWServerToContextConnection::messageSenderDestinationID() const
 {
     return 0;
-}
-
-void WebSWServerToContextConnection::connectionClosed()
-{
-    auto fetches = WTFMove(m_ongoingFetches);
-    for (auto& fetch : fetches.values())
-        fetch->fail(ResourceError { errorDomainWebKitInternal, 0, { }, "Service Worker context closed"_s });
 }
 
 void WebSWServerToContextConnection::postMessageToServiceWorkerClient(const ServiceWorkerClientIdentifier& destinationIdentifier, const MessageWithMessagePorts& message, ServiceWorkerIdentifier sourceIdentifier, const String& sourceOrigin)
@@ -135,9 +137,7 @@ void WebSWServerToContextConnection::didFinishSkipWaiting(uint64_t callbackID)
 
 void WebSWServerToContextConnection::connectionIsNoLongerNeeded()
 {
-    RELEASE_LOG(ServiceWorker, "Service worker process is no longer needed, terminating it");
-    terminate();
-    connectionClosed();
+    m_connection.serverToContextConnectionNoLongerNeeded();
 }
 
 void WebSWServerToContextConnection::setThrottleState(bool isThrottleable)
@@ -146,42 +146,9 @@ void WebSWServerToContextConnection::setThrottleState(bool isThrottleable)
     send(Messages::WebSWContextManagerConnection::SetThrottleState { isThrottleable });
 }
 
-void WebSWServerToContextConnection::terminate()
+void WebSWServerToContextConnection::startFetch(ServiceWorkerFetchTask& task)
 {
-    send(Messages::WebSWContextManagerConnection::TerminateProcess());
-}
-
-void WebSWServerToContextConnection::startFetch(PAL::SessionID sessionID, Ref<IPC::Connection>&& contentConnection, WebCore::SWServerConnectionIdentifier serverConnectionIdentifier, FetchIdentifier contentFetchIdentifier, ServiceWorkerIdentifier serviceWorkerIdentifier, const ResourceRequest& request, const FetchOptions& options, const IPC::FormDataReference& data, const String& referrer)
-{
-    auto fetchIdentifier = FetchIdentifier::generate();
-    
-    m_ongoingFetches.add(fetchIdentifier, ServiceWorkerFetchTask::create(sessionID, WTFMove(contentConnection), serverConnectionIdentifier, contentFetchIdentifier));
-
-    ASSERT(!m_ongoingFetchIdentifiers.contains({serverConnectionIdentifier, contentFetchIdentifier}));
-    m_ongoingFetchIdentifiers.add({serverConnectionIdentifier, contentFetchIdentifier}, fetchIdentifier);
-
-    send(Messages::WebSWContextManagerConnection::StartFetch { serverConnectionIdentifier, serviceWorkerIdentifier, fetchIdentifier, request, options, data, referrer });
-}
-
-void WebSWServerToContextConnection::cancelFetch(WebCore::SWServerConnectionIdentifier serverConnectionIdentifier, FetchIdentifier contentFetchIdentifier, ServiceWorkerIdentifier serviceWorkerIdentifier)
-{
-    auto iterator = m_ongoingFetchIdentifiers.find({ serverConnectionIdentifier, contentFetchIdentifier });
-    if (iterator == m_ongoingFetchIdentifiers.end())
-        return;
-
-    send(Messages::WebSWContextManagerConnection::CancelFetch { serverConnectionIdentifier, serviceWorkerIdentifier, iterator->value });
-
-    m_ongoingFetches.remove(iterator->value);
-    m_ongoingFetchIdentifiers.remove(iterator);
-}
-
-void WebSWServerToContextConnection::continueDidReceiveFetchResponse(WebCore::SWServerConnectionIdentifier serverConnectionIdentifier, FetchIdentifier contentFetchIdentifier, ServiceWorkerIdentifier serviceWorkerIdentifier)
-{
-    auto iterator = m_ongoingFetchIdentifiers.find({ serverConnectionIdentifier, contentFetchIdentifier });
-    if (iterator == m_ongoingFetchIdentifiers.end())
-        return;
-    
-    send(Messages::WebSWContextManagerConnection::ContinueDidReceiveFetchResponse { serverConnectionIdentifier, serviceWorkerIdentifier, iterator->value });
+    task.start(*this);
 }
 
 void WebSWServerToContextConnection::didReceiveFetchTaskMessage(IPC::Connection& connection, IPC::Decoder& decoder)
@@ -189,18 +156,45 @@ void WebSWServerToContextConnection::didReceiveFetchTaskMessage(IPC::Connection&
     auto iterator = m_ongoingFetches.find(makeObjectIdentifier<FetchIdentifierType>(decoder.destinationID()));
     if (iterator == m_ongoingFetches.end())
         return;
-    
-    bool shouldRemove = decoder.messageName() == Messages::ServiceWorkerFetchTask::DidFail::name()
-        || decoder.messageName() == Messages::ServiceWorkerFetchTask::DidNotHandle::name()
-        || decoder.messageName() == Messages::ServiceWorkerFetchTask::DidFinish::name()
-        || decoder.messageName() == Messages::ServiceWorkerFetchTask::DidReceiveRedirectResponse::name();
 
     iterator->value->didReceiveMessage(connection, decoder);
+}
 
-    if (shouldRemove) {
-        ASSERT(m_ongoingFetchIdentifiers.contains(iterator->value->identifier()));
-        m_ongoingFetchIdentifiers.remove(iterator->value->identifier());
-        m_ongoingFetches.remove(iterator);
+void WebSWServerToContextConnection::registerFetch(ServiceWorkerFetchTask& task)
+{
+    ASSERT(!m_ongoingFetches.contains(task.fetchIdentifier()));
+    m_ongoingFetches.add(task.fetchIdentifier(), makeWeakPtr(task));
+}
+
+void WebSWServerToContextConnection::unregisterFetch(ServiceWorkerFetchTask& task)
+{
+    ASSERT(m_ongoingFetches.contains(task.fetchIdentifier()));
+    m_ongoingFetches.remove(task.fetchIdentifier());
+}
+
+void WebSWServerToContextConnection::fetchTaskTimedOut(ServiceWorkerIdentifier serviceWorkerIdentifier)
+{
+    // Gather all fetches in this service worker
+    Vector<ServiceWorkerFetchTask*> fetches;
+    for (auto& fetchTask : m_ongoingFetches.values()) {
+        if (fetchTask->serviceWorkerIdentifier() == serviceWorkerIdentifier)
+            fetches.append(fetchTask.get());
+    }
+
+    // Signal load failure for them
+    for (auto* fetchTask : fetches) {
+        if (fetchTask->wasHandled())
+            fetchTask->fail({ errorDomainWebKitInternal, 0, { }, "Service Worker context closed"_s });
+        else
+            fetchTask->didNotHandle();
+    }
+
+    if (m_server) {
+        if (auto* worker = m_server->workerByID(serviceWorkerIdentifier)) {
+            worker->setHasTimedOutAnyFetchTasks();
+            if (worker->isRunning())
+                m_server->syncTerminateWorker(*worker);
+        }
     }
 }
 

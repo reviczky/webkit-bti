@@ -538,11 +538,6 @@ void SourceBuffer::stop()
     m_removeTimer.stop();
 }
 
-bool SourceBuffer::canSuspendForDocumentSuspension() const
-{
-    return !hasPendingActivity();
-}
-
 const char* SourceBuffer::activeDOMObjectName() const
 {
     return "SourceBuffer";

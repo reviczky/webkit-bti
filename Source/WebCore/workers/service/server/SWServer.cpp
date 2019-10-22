@@ -69,6 +69,9 @@ SWServer::~SWServer()
     auto connections = WTFMove(m_connections);
     connections.clear();
 
+    for (auto& callback : std::exchange(m_importCompletedCallbacks, { }))
+        callback();
+
     Vector<SWServerWorker*> runningWorkers;
     for (auto& worker : m_runningOrTerminatingWorkers.values()) {
         if (worker->isRunning())
@@ -131,7 +134,17 @@ void SWServer::registrationStoreImportComplete()
         callback();
 
     performGetOriginsWithRegistrationsCallbacks();
+
+    for (auto& callback : std::exchange(m_importCompletedCallbacks, { }))
+        callback();
 }
+
+void SWServer::whenImportIsCompleted(CompletionHandler<void()>&& callback)
+{
+    ASSERT(!m_importCompleted);
+    m_importCompletedCallbacks.append(WTFMove(callback));
+}
+
 
 void SWServer::registrationStoreDatabaseFailedToOpen()
 {
@@ -539,9 +552,11 @@ void SWServer::tryInstallContextData(ServiceWorkerContextData&& data)
     RegistrableDomain registrableDomain(data.scriptURL);
     auto* connection = contextConnectionForRegistrableDomain(registrableDomain);
     if (!connection) {
-        m_pendingContextDatas.ensure(WTFMove(registrableDomain), [] {
+        m_pendingContextDatas.ensure(registrableDomain, [] {
             return Vector<ServiceWorkerContextData> { };
         }).iterator->value.append(WTFMove(data));
+
+        createContextConnection(registrableDomain);
         return;
     }
     
@@ -618,6 +633,8 @@ void SWServer::runServiceWorkerIfNecessary(ServiceWorkerIdentifier identifier, R
         serviceWorkerRunRequestsForOrigin.ensure(identifier, [&] {
             return Vector<RunServiceWorkerCallback> { };
         }).iterator->value.append(WTFMove(callback));
+
+        createContextConnection(worker->registrableDomain());
         return;
     }
 
@@ -753,6 +770,7 @@ void SWServer::removeConnection(SWServerConnectionIdentifier connectionIdentifie
 
 SWServerRegistration* SWServer::doRegistrationMatching(const SecurityOriginData& topOrigin, const URL& clientURL)
 {
+    ASSERT(isImportCompleted());
     SWServerRegistration* selectedRegistration = nullptr;
     for (auto& pair : m_scopeToRegistrationMap) {
         if (!pair.key.isMatching(topOrigin, clientURL))
@@ -967,6 +985,17 @@ void SWServer::createContextConnection(const RegistrableDomain& registrableDomai
 
     m_pendingConnectionDomains.add(registrableDomain);
     m_createContextConnectionCallback(registrableDomain);
+}
+
+bool SWServer::canHandleScheme(StringView scheme) const
+{
+    if (scheme.isNull())
+        return false;
+    if (!equalLettersIgnoringASCIICase(scheme.substring(0, 4), "http"))
+        return false;
+    if (scheme.length() == 5 && isASCIIAlphaCaselessEqual(scheme[4], 's'))
+        return true;
+    return scheme.length() == 4;
 }
 
 } // namespace WebCore

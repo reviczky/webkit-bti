@@ -382,7 +382,6 @@ dfg/DFGOSRExitBase.cpp
 dfg/DFGOSRExitCompilerCommon.cpp
 dfg/DFGOSRExitFuzz.cpp
 dfg/DFGOSRExitJumpPlaceholder.cpp
-dfg/DFGOSRExitPreparation.cpp
 dfg/DFGObjectAllocationSinkingPhase.cpp
 dfg/DFGObjectMaterializationData.cpp
 dfg/DFGOperations.cpp
@@ -554,7 +553,6 @@ heap/WriteBarrierSupport.cpp
 inspector/AsyncStackTrace.cpp
 inspector/ConsoleMessage.cpp
 inspector/ContentSearchUtilities.cpp
-inspector/EventLoop.cpp
 inspector/IdentifiersFactory.cpp
 inspector/InjectedScript.cpp
 inspector/InjectedScriptBase.cpp

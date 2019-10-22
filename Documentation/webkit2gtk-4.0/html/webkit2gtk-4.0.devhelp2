@@ -54,6 +54,7 @@
       <sub name="WebKitAutomationSession" link="WebKitAutomationSession.html"/>
       <sub name="WebKitApplicationInfo" link="WebKitApplicationInfo.html"/>
       <sub name="Geolocation manager" link="webkit2gtk-4.0-Geolocation-manager.html"/>
+      <sub name="WebKitUserMessage" link="WebKitUserMessage.html"/>
     </sub>
     <sub name="Web Extensions" link="ch02.html">
       <sub name="WebKitWebExtension" link="WebKitWebExtension.html"/>
@@ -128,6 +129,7 @@
     <keyword type="function" name="webkit_web_context_get_process_model ()" link="WebKitWebContext.html#webkit-web-context-get-process-model" since="2.4"/>
     <keyword type="function" name="webkit_web_context_set_process_model ()" link="WebKitWebContext.html#webkit-web-context-set-process-model" since="2.4"/>
     <keyword type="function" name="webkit_web_context_initialize_notification_permissions ()" link="WebKitWebContext.html#webkit-web-context-initialize-notification-permissions" since="2.16"/>
+    <keyword type="function" name="webkit_web_context_send_message_to_all_extensions ()" link="WebKitWebContext.html#webkit-web-context-send-message-to-all-extensions" since="2.28"/>
     <keyword type="function" name="WebKitURISchemeRequestCallback ()" link="WebKitWebContext.html#WebKitURISchemeRequestCallback"/>
     <keyword type="function" name="webkit_web_context_register_uri_scheme ()" link="WebKitWebContext.html#webkit-web-context-register-uri-scheme"/>
     <keyword type="struct" name="struct WebKitWebContext" link="WebKitWebContext.html#WebKitWebContext-struct"/>
@@ -142,6 +144,7 @@
     <keyword type="signal" name="The “download-started” signal" link="WebKitWebContext.html#WebKitWebContext-download-started"/>
     <keyword type="signal" name="The “initialize-notification-permissions” signal" link="WebKitWebContext.html#WebKitWebContext-initialize-notification-permissions"/>
     <keyword type="signal" name="The “initialize-web-extensions” signal" link="WebKitWebContext.html#WebKitWebContext-initialize-web-extensions"/>
+    <keyword type="signal" name="The “user-message-received” signal" link="WebKitWebContext.html#WebKitWebContext-user-message-received"/>
     <keyword type="function" name="webkit_web_view_new ()" link="WebKitWebView.html#webkit-web-view-new"/>
     <keyword type="function" name="webkit_web_view_new_with_context ()" link="WebKitWebView.html#webkit-web-view-new-with-context"/>
     <keyword type="function" name="webkit_web_view_new_with_related_view ()" link="WebKitWebView.html#webkit-web-view-new-with-related-view" since="2.4"/>
@@ -212,6 +215,8 @@
     <keyword type="function" name="webkit_web_view_get_session_state ()" link="WebKitWebView.html#webkit-web-view-get-session-state" since="2.12"/>
     <keyword type="function" name="webkit_web_view_restore_session_state ()" link="WebKitWebView.html#webkit-web-view-restore-session-state" since="2.12"/>
     <keyword type="function" name="webkit_web_view_get_main_resource ()" link="WebKitWebView.html#webkit-web-view-get-main-resource"/>
+    <keyword type="function" name="webkit_web_view_send_message_to_page ()" link="WebKitWebView.html#webkit-web-view-send-message-to-page" since="2.28"/>
+    <keyword type="function" name="webkit_web_view_send_message_to_page_finish ()" link="WebKitWebView.html#webkit-web-view-send-message-to-page-finish" since="2.28"/>
     <keyword type="function" name="webkit_javascript_result_ref ()" link="WebKitWebView.html#webkit-javascript-result-ref"/>
     <keyword type="function" name="webkit_javascript_result_unref ()" link="WebKitWebView.html#webkit-javascript-result-unref"/>
     <keyword type="function" name="webkit_javascript_result_get_global_context ()" link="WebKitWebView.html#webkit-javascript-result-get-global-context" deprecated="2.22: Use jsc_value_get_context() instead."/>
@@ -288,6 +293,7 @@
     <keyword type="signal" name="The “show-notification” signal" link="WebKitWebView.html#WebKitWebView-show-notification"/>
     <keyword type="signal" name="The “show-option-menu” signal" link="WebKitWebView.html#WebKitWebView-show-option-menu"/>
     <keyword type="signal" name="The “submit-form” signal" link="WebKitWebView.html#WebKitWebView-submit-form"/>
+    <keyword type="signal" name="The “user-message-received” signal" link="WebKitWebView.html#WebKitWebView-user-message-received"/>
     <keyword type="signal" name="The “web-process-crashed” signal" link="WebKitWebView.html#WebKitWebView-web-process-crashed"/>
     <keyword type="signal" name="The “web-process-terminated” signal" link="WebKitWebView.html#WebKitWebView-web-process-terminated"/>
     <keyword type="function" name="webkit_authentication_request_authenticate ()" link="WebKitAuthenticationRequest.html#webkit-authentication-request-authenticate" since="2.2"/>
@@ -1005,16 +1011,34 @@
     <keyword type="property" name="The “enable-high-accuracy” property" link="webkit2gtk-4.0-Geolocation-manager.html#WebKitGeolocationManager--enable-high-accuracy"/>
     <keyword type="signal" name="The “start” signal" link="webkit2gtk-4.0-Geolocation-manager.html#WebKitGeolocationManager-start"/>
     <keyword type="signal" name="The “stop” signal" link="webkit2gtk-4.0-Geolocation-manager.html#WebKitGeolocationManager-stop"/>
+    <keyword type="function" name="webkit_user_message_new ()" link="WebKitUserMessage.html#webkit-user-message-new" since="2.28"/>
+    <keyword type="function" name="webkit_user_message_new_with_fd_list ()" link="WebKitUserMessage.html#webkit-user-message-new-with-fd-list" since="2.28"/>
+    <keyword type="function" name="webkit_user_message_get_name ()" link="WebKitUserMessage.html#webkit-user-message-get-name" since="2.28"/>
+    <keyword type="function" name="webkit_user_message_get_parameters ()" link="WebKitUserMessage.html#webkit-user-message-get-parameters" since="2.28"/>
+    <keyword type="function" name="webkit_user_message_get_fd_list ()" link="WebKitUserMessage.html#webkit-user-message-get-fd-list" since="2.28"/>
+    <keyword type="function" name="webkit_user_message_send_reply ()" link="WebKitUserMessage.html#webkit-user-message-send-reply" since="2.28"/>
+    <keyword type="function" name="webkit_user_message_error_quark ()" link="WebKitUserMessage.html#webkit-user-message-error-quark"/>
+    <keyword type="struct" name="struct WebKitUserMessage" link="WebKitUserMessage.html#WebKitUserMessage-struct"/>
+    <keyword type="macro" name="WEBKIT_USER_MESSAGE_ERROR" link="WebKitUserMessage.html#WEBKIT-USER-MESSAGE-ERROR:CAPS"/>
+    <keyword type="enum" name="enum WebKitUserMessageError" link="WebKitUserMessage.html#WebKitUserMessageError" since="2.28"/>
+    <keyword type="property" name="The “fd-list” property" link="WebKitUserMessage.html#WebKitUserMessage--fd-list"/>
+    <keyword type="property" name="The “name” property" link="WebKitUserMessage.html#WebKitUserMessage--name"/>
+    <keyword type="property" name="The “parameters” property" link="WebKitUserMessage.html#WebKitUserMessage--parameters"/>
     <keyword type="function" name="WebKitWebExtensionInitializeFunction ()" link="WebKitWebExtension.html#WebKitWebExtensionInitializeFunction"/>
     <keyword type="function" name="WebKitWebExtensionInitializeWithUserDataFunction ()" link="WebKitWebExtension.html#WebKitWebExtensionInitializeWithUserDataFunction" since="2.4"/>
     <keyword type="function" name="webkit_web_extension_get_page ()" link="WebKitWebExtension.html#webkit-web-extension-get-page"/>
+    <keyword type="function" name="webkit_web_extension_send_message_to_context ()" link="WebKitWebExtension.html#webkit-web-extension-send-message-to-context" since="2.28"/>
+    <keyword type="function" name="webkit_web_extension_send_message_to_context_finish ()" link="WebKitWebExtension.html#webkit-web-extension-send-message-to-context-finish" since="2.28"/>
     <keyword type="struct" name="struct WebKitWebExtension" link="WebKitWebExtension.html#WebKitWebExtension-struct"/>
     <keyword type="signal" name="The “page-created” signal" link="WebKitWebExtension.html#WebKitWebExtension-page-created"/>
+    <keyword type="signal" name="The “user-message-received” signal" link="WebKitWebExtension.html#WebKitWebExtension-user-message-received"/>
     <keyword type="function" name="webkit_web_page_get_dom_document ()" link="WebKitWebPage.html#webkit-web-page-get-dom-document"/>
     <keyword type="function" name="webkit_web_page_get_id ()" link="WebKitWebPage.html#webkit-web-page-get-id"/>
     <keyword type="function" name="webkit_web_page_get_uri ()" link="WebKitWebPage.html#webkit-web-page-get-uri"/>
     <keyword type="function" name="webkit_web_page_get_main_frame ()" link="WebKitWebPage.html#webkit-web-page-get-main-frame" since="2.2"/>
     <keyword type="function" name="webkit_web_page_get_editor ()" link="WebKitWebPage.html#webkit-web-page-get-editor" since="2.10"/>
+    <keyword type="function" name="webkit_web_page_send_message_to_view ()" link="WebKitWebPage.html#webkit-web-page-send-message-to-view" since="2.28"/>
+    <keyword type="function" name="webkit_web_page_send_message_to_view_finish ()" link="WebKitWebPage.html#webkit-web-page-send-message-to-view-finish" since="2.28"/>
     <keyword type="struct" name="WebKitWebPage" link="WebKitWebPage.html#WebKitWebPage-struct"/>
     <keyword type="enum" name="enum WebKitFormSubmissionStep" link="WebKitWebPage.html#WebKitFormSubmissionStep" since="2.20"/>
     <keyword type="property" name="The “uri” property" link="WebKitWebPage.html#WebKitWebPage--uri"/>
@@ -1024,6 +1048,7 @@
     <keyword type="signal" name="The “form-controls-associated” signal" link="WebKitWebPage.html#WebKitWebPage-form-controls-associated"/>
     <keyword type="signal" name="The “form-controls-associated-for-frame” signal" link="WebKitWebPage.html#WebKitWebPage-form-controls-associated-for-frame"/>
     <keyword type="signal" name="The “send-request” signal" link="WebKitWebPage.html#WebKitWebPage-send-request"/>
+    <keyword type="signal" name="The “user-message-received” signal" link="WebKitWebPage.html#WebKitWebPage-user-message-received"/>
     <keyword type="signal" name="The “will-submit-form” signal" link="WebKitWebPage.html#WebKitWebPage-will-submit-form"/>
     <keyword type="function" name="webkit_frame_get_id ()" link="WebKitFrame.html#webkit-frame-get-id" since="2.26"/>
     <keyword type="function" name="webkit_frame_is_main_frame ()" link="WebKitFrame.html#webkit-frame-is-main-frame" since="2.2"/>
@@ -1228,6 +1253,7 @@
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_DEVICE_ID_HASH_SALT" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-DEVICE-ID-HASH-SALT:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_HSTS_CACHE" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-HSTS-CACHE:CAPS"/>
     <keyword type="constant" name="WEBKIT_WEBSITE_DATA_ALL" link="WebKitWebsiteData.html#WEBKIT-WEBSITE-DATA-ALL:CAPS"/>
+    <keyword type="constant" name="WEBKIT_USER_MESSAGE_UNHANDLED_MESSAGE" link="WebKitUserMessage.html#WEBKIT-USER-MESSAGE-UNHANDLED-MESSAGE:CAPS"/>
     <keyword type="constant" name="WEBKIT_FORM_SUBMISSION_WILL_SEND_DOM_EVENT" link="WebKitWebPage.html#WEBKIT-FORM-SUBMISSION-WILL-SEND-DOM-EVENT:CAPS"/>
     <keyword type="constant" name="WEBKIT_FORM_SUBMISSION_WILL_COMPLETE" link="WebKitWebPage.html#WEBKIT-FORM-SUBMISSION-WILL-COMPLETE:CAPS"/>
     <keyword type="constant" name="WEBKIT_CONSOLE_MESSAGE_SOURCE_JAVASCRIPT" link="WebKitConsoleMessage.html#WEBKIT-CONSOLE-MESSAGE-SOURCE-JAVASCRIPT:CAPS"/>

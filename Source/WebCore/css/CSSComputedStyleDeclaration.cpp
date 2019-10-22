@@ -64,7 +64,6 @@
 #include "RenderBox.h"
 #include "RenderInline.h"
 #include "RenderStyle.h"
-#include "RuntimeEnabledFeatures.h"
 #include "SVGElement.h"
 #include "Settings.h"
 #include "ShapeValue.h"
@@ -471,17 +470,17 @@ static const CSSPropertyID computedProperties[] = {
 
 const unsigned numComputedProperties = WTF_ARRAY_LENGTH(computedProperties);
 
-static CSSValueID valueForRepeatRule(int rule)
+static CSSValueID valueForRepeatRule(NinePieceImageRule rule)
 {
     switch (rule) {
-        case RepeatImageRule:
-            return CSSValueRepeat;
-        case RoundImageRule:
-            return CSSValueRound;
-        case SpaceImageRule:
-            return CSSValueSpace;
-        default:
-            return CSSValueStretch;
+    case NinePieceImageRule::Repeat:
+        return CSSValueRepeat;
+    case NinePieceImageRule::Round:
+        return CSSValueRound;
+    case NinePieceImageRule::Space:
+        return CSSValueSpace;
+    default:
+        return CSSValueStretch;
     }
 }
 
@@ -660,16 +659,16 @@ static Ref<CSSValue> valueForReflection(const StyleReflection* reflection, const
 
     RefPtr<CSSPrimitiveValue> direction;
     switch (reflection->direction()) {
-    case ReflectionBelow:
+    case ReflectionDirection::Below:
         direction = CSSValuePool::singleton().createIdentifierValue(CSSValueBelow);
         break;
-    case ReflectionAbove:
+    case ReflectionDirection::Above:
         direction = CSSValuePool::singleton().createIdentifierValue(CSSValueAbove);
         break;
-    case ReflectionLeft:
+    case ReflectionDirection::Left:
         direction = CSSValuePool::singleton().createIdentifierValue(CSSValueLeft);
         break;
-    case ReflectionRight:
+    case ReflectionDirection::Right:
         direction = CSSValuePool::singleton().createIdentifierValue(CSSValueRight);
         break;
     }
@@ -1694,7 +1693,7 @@ static Ref<CSSValueList> timingFunctionValue(const AnimationList* animationList)
     return list;
 }
 
-static Ref<CSSValue> createLineBoxContainValue(unsigned lineBoxContain)
+static Ref<CSSValue> createLineBoxContainValue(OptionSet<LineBoxContain> lineBoxContain)
 {
     if (!lineBoxContain)
         return CSSValuePool::singleton().createIdentifierValue(CSSValueNone);
@@ -3406,7 +3405,7 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
         case CSSPropertyOutlineWidth:
             return zoomAdjustedPixelValue(style.outlineWidth(), style);
         case CSSPropertyOverflow:
-            return cssValuePool.createValue(std::max(style.overflowX(), style.overflowY()));
+            return getCSSPropertyValuesFor2SidesShorthand(overflowShorthand());
         case CSSPropertyOverflowWrap:
             return cssValuePool.createValue(style.overflowWrap());
         case CSSPropertyOverflowX:

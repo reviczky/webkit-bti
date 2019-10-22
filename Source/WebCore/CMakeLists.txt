@@ -28,6 +28,7 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/Modules/applepay"
     "${WEBCORE_DIR}/Modules/applepay/paymentrequest"
     "${WEBCORE_DIR}/Modules/applicationmanifest"
+    "${WEBCORE_DIR}/Modules/async-clipboard"
     "${WEBCORE_DIR}/Modules/beacon"
     "${WEBCORE_DIR}/Modules/cache"
     "${WEBCORE_DIR}/Modules/credentialmanagement"
@@ -223,6 +224,10 @@ set(WebCore_IDL_INCLUDES
 set(WebCore_NON_SVG_IDL_FILES
     Modules/airplay/WebKitPlaybackTargetAvailabilityEvent.idl
 
+    Modules/async-clipboard/Clipboard.idl
+    Modules/async-clipboard/ClipboardItem.idl
+    Modules/async-clipboard/NavigatorClipboard.idl
+
     Modules/beacon/NavigatorBeacon.idl
 
     Modules/cache/CacheQueryOptions.idl
@@ -287,6 +292,8 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/indexeddb/WorkerGlobalScopeIndexedDatabase.idl
 
     Modules/mediacapabilities/AudioConfiguration.idl
+    Modules/mediacapabilities/ColorGamut.idl
+    Modules/mediacapabilities/HdrMetadataType.idl
     Modules/mediacapabilities/MediaCapabilities.idl
     Modules/mediacapabilities/MediaCapabilitiesDecodingInfo.idl
     Modules/mediacapabilities/MediaCapabilitiesEncodingInfo.idl
@@ -297,8 +304,7 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/mediacapabilities/MediaEncodingConfiguration.idl
     Modules/mediacapabilities/MediaEncodingType.idl
     Modules/mediacapabilities/NavigatorMediaCapabilities.idl
-    Modules/mediacapabilities/ScreenColorGamut.idl
-    Modules/mediacapabilities/ScreenLuminance.idl
+    Modules/mediacapabilities/TransferFunction.idl
     Modules/mediacapabilities/VideoConfiguration.idl
 
     Modules/mediacontrols/MediaControlsHost.idl
@@ -395,6 +401,11 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/paymentrequest/PaymentShippingOption.idl
     Modules/paymentrequest/PaymentShippingType.idl
     Modules/paymentrequest/PaymentValidationErrors.idl
+
+    Modules/pictureinpicture/DocumentPictureInPicture.idl
+    Modules/pictureinpicture/EnterPictureInPictureEvent.idl
+    Modules/pictureinpicture/HTMLVideoElementPictureInPicture.idl
+    Modules/pictureinpicture/PictureInPictureWindow.idl
 
     Modules/speech/DOMWindowSpeechSynthesis.idl
     Modules/speech/SpeechSynthesis.idl
@@ -706,6 +717,9 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/FocusEvent.idl
     dom/GlobalEventHandlers.idl
     dom/HashChangeEvent.idl
+    dom/IdleDeadline.idl
+    dom/IdleRequestCallback.idl
+    dom/IdleRequestOptions.idl
     dom/InputEvent.idl
     dom/KeyboardEvent.idl
     dom/MessageChannel.idl
@@ -1034,7 +1048,6 @@ set(WebCore_SVG_IDL_FILES
     svg/SVGDocument.idl
     svg/SVGElement.idl
     svg/SVGEllipseElement.idl
-    svg/SVGExternalResourcesRequired.idl
     svg/SVGFEBlendElement.idl
     svg/SVGFEColorMatrixElement.idl
     svg/SVGFEComponentTransferElement.idl

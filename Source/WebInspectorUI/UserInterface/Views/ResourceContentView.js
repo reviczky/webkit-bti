@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013, 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -57,13 +57,54 @@ WI.ResourceContentView = class ResourceContentView extends WI.ContentView
             for (var i = 0; i < issues.length; ++i)
                 this.addIssue(issues[i]);
         }
+
+        this._showingLocalResourceOverride = false;
+
+        if (WI.NetworkManager.supportsLocalResourceOverrides()) {
+            if (resource.isLocalResourceOverride) {
+                this._showingLocalResourceOverride = true;
+
+                this._localResourceOverrideBannerView = new WI.LocalResourceOverrideLabelView(resource);
+
+                this._importLocalResourceOverrideButtonNavigationItem = new WI.ButtonNavigationItem("import-local-resource-override", WI.UIString("Import"), "Images/Import.svg", 15, 15);
+                this._importLocalResourceOverrideButtonNavigationItem.buttonStyle = WI.ButtonNavigationItem.Style.ImageAndText;
+                this._importLocalResourceOverrideButtonNavigationItem.visibilityPriority = WI.NavigationItem.VisibilityPriority.Low;
+                this._importLocalResourceOverrideButtonNavigationItem.addEventListener(WI.ButtonNavigationItem.Event.Clicked, this._handleImportLocalResourceOverride, this);
+
+                this._removeLocalResourceOverrideButtonNavigationItem = new WI.ButtonNavigationItem("remove-local-resource-override", WI.UIString("Remove Local Override"), "Images/NavigationItemTrash.svg", 15, 15);
+                this._removeLocalResourceOverrideButtonNavigationItem.addEventListener(WI.ButtonNavigationItem.Event.Clicked, this._handleRemoveLocalResourceOverride, this);
+                this._removeLocalResourceOverrideButtonNavigationItem.visibilityPriority = WI.NavigationItem.VisibilityPriority.Low;
+            } else {
+                this._localResourceOverrideBannerView = new WI.LocalResourceOverrideWarningView(resource);
+
+                this._createLocalResourceOverrideButtonNavigationItem = new WI.ButtonNavigationItem("create-local-resource-override", WI.UIString("Create Local Override"), "Images/NavigationItemNetworkOverride.svg", 13, 14);
+                this._createLocalResourceOverrideButtonNavigationItem.addEventListener(WI.ButtonNavigationItem.Event.Clicked, this._handleCreateLocalResourceOverride, this);
+                this._createLocalResourceOverrideButtonNavigationItem.enabled = false; // Enabled when the content is available.
+                this._createLocalResourceOverrideButtonNavigationItem.visibilityPriority = WI.NavigationItem.VisibilityPriority.Low;
+            }
+
+            WI.networkManager.addEventListener(WI.NetworkManager.Event.LocalResourceOverrideAdded, this._handleLocalResourceOverrideChanged, this);
+            WI.networkManager.addEventListener(WI.NetworkManager.Event.LocalResourceOverrideRemoved, this._handleLocalResourceOverrideChanged, this);
+        }
     }
 
     // Public
 
-    get resource()
+    get resource() { return this._resource; }
+    get showingLocalResourceOverride() { return this._showingLocalResourceOverride; }
+
+    get navigationItems()
     {
-        return this._resource;
+        let items = [];
+
+        if (this._importLocalResourceOverrideButtonNavigationItem)
+            items.push(this._importLocalResourceOverrideButtonNavigationItem, new WI.DividerNavigationItem);
+        if (this._removeLocalResourceOverrideButtonNavigationItem)
+            items.push(this._removeLocalResourceOverrideButtonNavigationItem);
+        if (this._createLocalResourceOverrideButtonNavigationItem)
+            items.push(this._createLocalResourceOverrideButtonNavigationItem);
+
+        return items;
     }
 
     get supportsSave()
@@ -79,6 +120,12 @@ WI.ResourceContentView = class ResourceContentView extends WI.ContentView
     contentAvailable(content, base64Encoded)
     {
         throw WI.NotImplementedError.subclassMustOverride();
+    }
+
+    localResourceOverrideInitialContent()
+    {
+        // Implemented by subclasses if needed.
+        return {};
     }
 
     showGenericNoContentMessage()
@@ -110,6 +157,9 @@ WI.ResourceContentView = class ResourceContentView extends WI.ContentView
     {
         super.closed();
 
+        if (WI.NetworkManager.supportsLocalResourceOverrides())
+            WI.networkManager.removeEventListener(null, null, this);
+
         if (!this.managesOwnIssues)
             WI.consoleManager.removeEventListener(null, null, this);
     }
@@ -123,7 +173,10 @@ WI.ResourceContentView = class ResourceContentView extends WI.ContentView
             this._spinnerTimeout = undefined;
         }
 
-        this.element.removeChildren();
+        this.removeAllSubviews();
+
+        if (this._localResourceOverrideBannerView)
+            this.addSubview(this._localResourceOverrideBannerView);
     }
 
     // Private
@@ -144,6 +197,9 @@ WI.ResourceContentView = class ResourceContentView extends WI.ContentView
         console.assert(!this._hasContent());
         console.assert(parameters.sourceCode === this._resource);
         this.contentAvailable(parameters.sourceCode.content, parameters.base64Encoded);
+
+        if (this._createLocalResourceOverrideButtonNavigationItem)
+            this._createLocalResourceOverrideButtonNavigationItem.enabled = WI.networkManager.canBeOverridden(this._resource);
     }
 
     _contentError(error)
@@ -168,15 +224,69 @@ WI.ResourceContentView = class ResourceContentView extends WI.ContentView
         console.assert(!this.managesOwnIssues);
 
         var issue = event.data.issue;
-        if (!WI.ConsoleManager.issueMatchSourceCode(issue, this.resource))
+        if (!WI.ConsoleManager.issueMatchSourceCode(issue, this._resource))
             return;
 
         this.addIssue(issue);
     }
 
+    async _handleCreateLocalResourceOverride(event)
+    {
+        let initialContent = this.localResourceOverrideInitialContent();
+        let localResourceOverride = await this._resource.createLocalResourceOverride(initialContent);
+        WI.networkManager.addLocalResourceOverride(localResourceOverride);
+        WI.showLocalResourceOverride(localResourceOverride);
+    }
+
+    _handleImportLocalResourceOverride(event)
+    {
+        console.assert(this._showingLocalResourceOverride);
+
+        WI.FileUtilities.import(async (fileList) => {
+            console.assert(fileList.length === 1);
+
+            let localResourceOverride = WI.networkManager.localResourceOverrideForURL(this.resource.url);
+            console.assert(localResourceOverride);
+
+            let revision = localResourceOverride.localResource.currentRevision;
+
+            let file = fileList[0];
+            let mimeType = file.type || WI.mimeTypeForFileExtension(WI.fileExtensionForFilename(file.name));
+            if (WI.shouldTreatMIMETypeAsText(mimeType)) {
+                await WI.FileUtilities.readText(file, ({text}) => {
+                    revision.updateRevisionContent(text, {base64Encoded: false, mimeType});
+                });
+            } else {
+                await WI.FileUtilities.readData(file, ({dataURL, mimeType, base64Encoded, content}) => {
+                    revision.updateRevisionContent(content, {base64Encoded, mimeType});
+                });
+            }
+
+            if (!this.showingLocalResourceOverride)
+                WI.showLocalResourceOverride(localResourceOverride);
+        });
+    }
+
+    _handleRemoveLocalResourceOverride(event)
+    {
+        console.assert(this._showingLocalResourceOverride);
+
+        let localResourceOverride = WI.networkManager.localResourceOverrideForURL(this._resource.url);
+        WI.networkManager.removeLocalResourceOverride(localResourceOverride);
+    }
+
+    _handleLocalResourceOverrideChanged(event)
+    {
+        if (this._resource.url !== event.data.localResourceOverride.url)
+            return;
+
+        if (this._createLocalResourceOverrideButtonNavigationItem)
+            this._createLocalResourceOverrideButtonNavigationItem.enabled = WI.networkManager.canBeOverridden(this._resource);
+    }
+
     _mouseWasClicked(event)
     {
-        WI.handlePossibleLinkClick(event, this.resource.parentFrame);
+        WI.handlePossibleLinkClick(event, this._resource.parentFrame);
     }
 };
 

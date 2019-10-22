@@ -32,42 +32,63 @@
 #include "GPUPipeline.h"
 #include "GPUProgrammableStageDescriptor.h"
 #include "GPURenderPipeline.h"
+#include "GPUShaderModule.h"
+#include "GPUShaderModuleDescriptor.h"
 #include "WebGPUDevice.h"
+#include "WebGPUShaderModule.h"
 #include <wtf/Optional.h>
 #include <wtf/Ref.h>
 
 namespace WebCore {
 
-Ref<WebGPURenderPipeline> WebGPURenderPipeline::create(WebGPUDevice& device, RefPtr<GPURenderPipeline>&& pipeline, GPUErrorScopes& errorScopes, Optional<WebGPUPipeline::ShaderData> vertexShader, Optional<WebGPUPipeline::ShaderData> fragmentShader)
+Ref<WebGPURenderPipeline> WebGPURenderPipeline::create(WebGPUDevice& device, RefPtr<GPURenderPipeline>&& pipeline, GPUErrorScopes& errorScopes, WebGPUPipeline::ShaderData&& vertexShader, WebGPUPipeline::ShaderData&& fragmentShader)
 {
-    return adoptRef(*new WebGPURenderPipeline(device, WTFMove(pipeline), errorScopes, vertexShader, fragmentShader));
+    return adoptRef(*new WebGPURenderPipeline(device, WTFMove(pipeline), errorScopes, WTFMove(vertexShader), WTFMove(fragmentShader)));
 }
 
-WebGPURenderPipeline::WebGPURenderPipeline(WebGPUDevice& device, RefPtr<GPURenderPipeline>&& pipeline, GPUErrorScopes& errorScopes, Optional<WebGPUPipeline::ShaderData> vertexShader, Optional<WebGPUPipeline::ShaderData> fragmentShader)
+WebGPURenderPipeline::WebGPURenderPipeline(WebGPUDevice& device, RefPtr<GPURenderPipeline>&& pipeline, GPUErrorScopes& errorScopes, WebGPUPipeline::ShaderData&& vertexShader, WebGPUPipeline::ShaderData&& fragmentShader)
     : WebGPUPipeline(device, errorScopes)
     , m_renderPipeline(WTFMove(pipeline))
-    , m_vertexShader(vertexShader)
-    , m_fragmentShader(fragmentShader)
+    , m_vertexShader(WTFMove(vertexShader))
+    , m_fragmentShader(WTFMove(fragmentShader))
 {
 }
 
 WebGPURenderPipeline::~WebGPURenderPipeline() = default;
 
+bool WebGPURenderPipeline::cloneShaderModules(const WebGPUDevice& device)
+{
+    if (m_vertexShader.module) {
+        bool sharesVertexFragmentShaderModule = m_fragmentShader.module == m_vertexShader.module;
+
+        const auto& vertexSource = m_vertexShader.module->source();
+        m_vertexShader.module = WebGPUShaderModule::create(GPUShaderModule::tryCreate(device.device(), { vertexSource }), vertexSource);
+
+        if (m_fragmentShader.module) {
+            if (sharesVertexFragmentShaderModule)
+                m_fragmentShader.module = m_vertexShader.module;
+            else {
+                const auto& fragmentSource = m_fragmentShader.module->source();
+                m_fragmentShader.module = WebGPUShaderModule::create(GPUShaderModule::tryCreate(device.device(), { fragmentSource }), fragmentSource);
+            }
+        }
+
+        return true;
+    }
+    return false;
+}
+
 bool WebGPURenderPipeline::recompile(const WebGPUDevice& device)
 {
-    if (m_renderPipeline && m_vertexShader) {
-        if (auto& webGPUVertexShaderModule = m_vertexShader.value().module) {
-            if (auto* gpuVertexShaderModule = webGPUVertexShaderModule->module()) {
-                GPUProgrammableStageDescriptor vertexStage(makeRef(*gpuVertexShaderModule), { m_vertexShader.value().entryPoint });
-                Optional<GPUProgrammableStageDescriptor> fragmentStage;
-                if (m_fragmentShader) {
-                    if (auto& webGPUFragmentShaderModule = m_fragmentShader.value().module) {
-                        if (auto* gpuFragmentShaderModule = webGPUFragmentShaderModule->module())
-                            fragmentStage = GPUProgrammableStageDescriptor(makeRef(*gpuFragmentShaderModule), { m_fragmentShader.value().entryPoint });
-                    }
-                }
-                return m_renderPipeline->recompile(device.device(), WTFMove(vertexStage), WTFMove(fragmentStage));
+    if (m_renderPipeline && m_vertexShader.module) {
+        if (auto* gpuVertexShaderModule = m_vertexShader.module->module()) {
+            GPUProgrammableStageDescriptor vertexStage(makeRef(*gpuVertexShaderModule), { m_vertexShader.entryPoint });
+            Optional<GPUProgrammableStageDescriptor> fragmentStage;
+            if (m_fragmentShader.module) {
+                if (auto* gpuFragmentShaderModule = m_fragmentShader.module->module())
+                    fragmentStage = GPUProgrammableStageDescriptor(makeRef(*gpuFragmentShaderModule), { m_fragmentShader.entryPoint });
             }
+            return m_renderPipeline->recompile(device.device(), WTFMove(vertexStage), WTFMove(fragmentStage));
         }
     }
     return false;

@@ -594,13 +594,6 @@ AllowUserInstalledFonts CSSFontFace::allowUserInstalledFonts() const
     return AllowUserInstalledFonts::Yes;
 }
 
-bool CSSFontFace::shouldAllowDesignSystemUIFonts() const
-{
-    if (m_fontSelector && m_fontSelector->document())
-        return m_fontSelector->document()->settings().shouldAllowDesignSystemUIFonts();
-    return false;
-}
-
 static Settings::FontLoadTimingOverride fontLoadTimingOverride(CSSFontSelector* fontSelector)
 {
     auto overrideValue = Settings::FontLoadTimingOverride::None;
@@ -737,7 +730,7 @@ size_t CSSFontFace::pump(ExternalResourceDownloadPolicy policy)
             // but it seems that this behavior is a requirement of the design of FontRanges. FIXME: Perhaps rethink
             // this design.
             if (policy == ExternalResourceDownloadPolicy::Allow || !source->requiresExternalResource()) {
-                if (m_status == Status::Pending)
+                if (policy == ExternalResourceDownloadPolicy::Allow && m_status == Status::Pending)
                     setStatus(Status::Loading);
                 source->load(m_fontSelector.get());
             }
@@ -749,7 +742,7 @@ size_t CSSFontFace::pump(ExternalResourceDownloadPolicy policy)
             return i;
         case CSSFontFaceSource::Status::Loading:
             ASSERT(m_status == Status::Pending || m_status == Status::Loading || m_status == Status::TimedOut || m_status == Status::Failure);
-            if (m_status == Status::Pending)
+            if (policy == ExternalResourceDownloadPolicy::Allow && m_status == Status::Pending)
                 setStatus(Status::Loading);
             return i;
         case CSSFontFaceSource::Status::Success:
@@ -760,7 +753,7 @@ size_t CSSFontFace::pump(ExternalResourceDownloadPolicy policy)
                 setStatus(Status::Success);
             return i;
         case CSSFontFaceSource::Status::Failure:
-            if (m_status == Status::Pending)
+            if (policy == ExternalResourceDownloadPolicy::Allow && m_status == Status::Pending)
                 setStatus(Status::Loading);
             break;
         }

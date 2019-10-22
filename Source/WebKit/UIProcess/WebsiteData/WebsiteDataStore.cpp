@@ -35,6 +35,7 @@
 #include "NetworkProcessMessages.h"
 #include "ShouldGrandfatherStatistics.h"
 #include "StorageAccessStatus.h"
+#include "WebBackForwardCache.h"
 #include "WebKit2Initialize.h"
 #include "WebPageProxy.h"
 #include "WebProcessCache.h"
@@ -725,8 +726,10 @@ void WebsiteDataStore::removeData(OptionSet<WebsiteDataType> dataTypes, WallTime
     auto webProcessAccessType = computeWebProcessAccessTypeForDataRemoval(dataTypes, !isPersistent());
     if (webProcessAccessType != ProcessAccessType::None) {
         for (auto& processPool : processPools()) {
-            processPool->clearSuspendedPages(AllowProcessCaching::No);
-            processPool->webProcessCache().clear();
+            // Clear back/forward cache first as processes removed from the back/forward cache will likely
+            // be added to the WebProcess cache.
+            processPool->backForwardCache().removeEntriesForSession(sessionID());
+            processPool->webProcessCache().clearAllProcessesForSession(sessionID());
         }
 
         for (auto& process : processes()) {
@@ -1551,7 +1554,7 @@ void WebsiteDataStore::setLastSeen(const URL& url, Seconds seconds, CompletionHa
     }
 }
 
-void WebsiteDataStore::mergeStatisticForTesting(const URL& url , const URL& topFrameUrl, Seconds lastSeen, bool hadUserInteraction, Seconds mostRecentUserInteraction, bool isGrandfathered, bool isPrevalent, bool isVeryPrevalent, unsigned dataRecordsRemoved, CompletionHandler<void()>&& completionHandler)
+void WebsiteDataStore::mergeStatisticForTesting(const URL& url , const URL& topFrameUrl1, const URL& topFrameUrl2, Seconds lastSeen, bool hadUserInteraction, Seconds mostRecentUserInteraction, bool isGrandfathered, bool isPrevalent, bool isVeryPrevalent, unsigned dataRecordsRemoved, CompletionHandler<void()>&& completionHandler)
 {
     if (url.protocolIsAbout() || url.isEmpty()) {
         completionHandler();
@@ -1562,7 +1565,7 @@ void WebsiteDataStore::mergeStatisticForTesting(const URL& url , const URL& topF
 
     for (auto& processPool : processPools()) {
         if (auto* process = processPool->networkProcess())
-            process->mergeStatisticForTesting(m_sessionID, WebCore::RegistrableDomain { url }, WebCore::RegistrableDomain { topFrameUrl }, lastSeen, hadUserInteraction, mostRecentUserInteraction, isGrandfathered, isPrevalent, isVeryPrevalent, dataRecordsRemoved, [processPool, callbackAggregator = callbackAggregator.copyRef()] { });
+            process->mergeStatisticForTesting(m_sessionID, WebCore::RegistrableDomain { url }, WebCore::RegistrableDomain { topFrameUrl1 }, WebCore::RegistrableDomain { topFrameUrl2 }, lastSeen, hadUserInteraction, mostRecentUserInteraction, isGrandfathered, isPrevalent, isVeryPrevalent, dataRecordsRemoved, [processPool, callbackAggregator = callbackAggregator.copyRef()] { });
     }
 }
 
@@ -1646,6 +1649,24 @@ void WebsiteDataStore::hasHadUserInteraction(const URL& url, CompletionHandler<v
     }
 }
 
+void WebsiteDataStore::isRelationshipOnlyInDatabaseOnce(const URL& subUrl, const URL& topUrl, CompletionHandler<void(bool)>&& completionHandler)
+{
+    ASSERT(RunLoop::isMain());
+    
+    if (subUrl.protocolIsAbout() || subUrl.isEmpty() || topUrl.protocolIsAbout() || topUrl.isEmpty()) {
+        completionHandler(false);
+        return;
+    }
+    
+    for (auto& processPool : processPools()) {
+        if (auto* process = processPool->networkProcess()) {
+            process->isRelationshipOnlyInDatabaseOnce(m_sessionID, WebCore::RegistrableDomain { subUrl }, WebCore::RegistrableDomain { topUrl }, WTFMove(completionHandler));
+            ASSERT(processPools().size() == 1);
+            break;
+        }
+    }
+}
+
 void WebsiteDataStore::clearUserInteraction(const URL& url, CompletionHandler<void()>&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
@@ -1680,12 +1701,16 @@ void WebsiteDataStore::setGrandfathered(const URL& url, bool isGrandfathered, Co
     }
 }
 
-void WebsiteDataStore::setUseITPDatabase(bool value)
+void WebsiteDataStore::setUseITPDatabase(bool value, CompletionHandler<void()>&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
-
-    for (auto& processPool : processPools())
-        processPool->ensureNetworkProcess().setUseITPDatabase(m_sessionID, value);
+    
+    auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
+    
+    for (auto& processPool : processPools()) {
+        if (auto* process = processPool->networkProcess())
+            process->setUseITPDatabase(m_sessionID, value, [callbackAggregator = callbackAggregator.copyRef()] { });
+    }
 }
 
 void WebsiteDataStore::setCrossSiteLoadWithLinkDecorationForTesting(const URL& fromURL, const URL& toURL, CompletionHandler<void()>&& completionHandler)
@@ -1751,6 +1776,20 @@ void WebsiteDataStore::setResourceLoadStatisticsShouldDowngradeReferrerForTestin
     for (auto& processPool : processPools()) {
         if (auto* networkProcess = processPool->networkProcess()) {
             networkProcess->setShouldDowngradeReferrerForTesting(enabled, [callbackAggregator = callbackAggregator.copyRef()] { });
+            ASSERT(processPools().size() == 1);
+            break;
+        }
+    }
+    ASSERT(!completionHandler);
+}
+
+void WebsiteDataStore::setResourceLoadStatisticsShouldBlockThirdPartyCookiesForTesting(bool enabled, CompletionHandler<void()>&& completionHandler)
+{
+    auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
+    
+    for (auto& processPool : processPools()) {
+        if (auto* networkProcess = processPool->networkProcess()) {
+            networkProcess->setShouldBlockThirdPartyCookiesForTesting(m_sessionID, enabled, [callbackAggregator = callbackAggregator.copyRef()] { });
             ASSERT(processPools().size() == 1);
             break;
         }
@@ -2044,6 +2083,7 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
 
     parameters.perOriginStorageQuota = perOriginStorageQuota();
     parameters.perThirdPartyOriginStorageQuota = perThirdPartyOriginStorageQuota();
+    parameters.networkSessionParameters.networkCacheDirectory = resolvedNetworkCacheDirectory();
 
     platformSetNetworkParameters(parameters);
 
@@ -2059,7 +2099,7 @@ void WebsiteDataStore::addSecKeyProxyStore(Ref<SecKeyProxyStore>&& store)
 #endif
 
 #if ENABLE(WEB_AUTHN)
-void WebsiteDataStore::setMockWebAuthenticationConfiguration(MockWebAuthenticationConfiguration&& configuration)
+void WebsiteDataStore::setMockWebAuthenticationConfiguration(WebCore::MockWebAuthenticationConfiguration&& configuration)
 {
     if (!m_authenticatorManager->isMock()) {
         m_authenticatorManager = makeUniqueRef<MockAuthenticatorManager>(WTFMove(configuration));
