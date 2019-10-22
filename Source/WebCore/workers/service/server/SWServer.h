@@ -148,7 +148,7 @@ public:
 
     void updateWorker(Connection&, const ServiceWorkerJobDataIdentifier&, SWServerRegistration&, const URL&, const String& script, const ContentSecurityPolicyResponseHeaders&, const String& referrerPolicy, WorkerType, HashMap<URL, ServiceWorkerContextData::ImportedScript>&&);
     void terminateWorker(SWServerWorker&);
-    void syncTerminateWorker(SWServerWorker&);
+    WEBCORE_EXPORT void syncTerminateWorker(SWServerWorker&);
     void fireInstallEvent(SWServerWorker&);
     void fireActivateEvent(SWServerWorker&);
 
@@ -164,6 +164,7 @@ public:
     Connection* connection(SWServerConnectionIdentifier identifier) const { return m_connections.get(identifier); }
 
     const HashMap<SWServerConnectionIdentifier, std::unique_ptr<Connection>>& connections() const { return m_connections; }
+    WEBCORE_EXPORT bool canHandleScheme(StringView) const;
 
     SWOriginStore& originStore() { return m_originStore; }
 
@@ -201,6 +202,9 @@ public:
 
     SWServerToContextConnection* contextConnectionForRegistrableDomain(const RegistrableDomain& domain) { return m_contextConnections.get(domain); }
     WEBCORE_EXPORT void createContextConnection(const RegistrableDomain&);
+
+    bool isImportCompleted() const { return m_importCompleted; }
+    WEBCORE_EXPORT void whenImportIsCompleted(CompletionHandler<void()>&&);
 
 private:
     void scriptFetchFinished(Connection&, const ServiceWorkerFetchResult&);
@@ -261,6 +265,7 @@ private:
 
     CreateContextConnectionCallback m_createContextConnectionCallback;
     HashSet<WebCore::RegistrableDomain> m_pendingConnectionDomains;
+    Vector<CompletionHandler<void()>> m_importCompletedCallbacks;
 };
 
 } // namespace WebCore

@@ -31,6 +31,7 @@
 #include "Document.h"
 #include "Event.h"
 #include "EventNames.h"
+#include "JSDOMPromiseDeferred.h"
 #include "Logging.h"
 #include "ServiceWorker.h"
 #include "ServiceWorkerContainer.h"
@@ -235,11 +236,6 @@ ScriptExecutionContext* ServiceWorkerRegistration::scriptExecutionContext() cons
 const char* ServiceWorkerRegistration::activeDOMObjectName() const
 {
     return "ServiceWorkerRegistration";
-}
-
-bool ServiceWorkerRegistration::canSuspendForDocumentSuspension() const
-{
-    return true;
 }
 
 void ServiceWorkerRegistration::suspend(ReasonForSuspension)

@@ -31,12 +31,22 @@
 
 namespace WebCore {
 
+class Document;
+
 class SuspendableTaskQueue : public ActiveDOMObject {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     static UniqueRef<SuspendableTaskQueue> create(ScriptExecutionContext* context)
     {
         auto taskQueue = makeUniqueRef<SuspendableTaskQueue>(context);
+        taskQueue->suspendIfNeeded();
+        return taskQueue;
+    }
+
+    static UniqueRef<SuspendableTaskQueue> create(Document*) = delete;
+    static UniqueRef<SuspendableTaskQueue> create(Document& document)
+    {
+        auto taskQueue = makeUniqueRef<SuspendableTaskQueue>(document);
         taskQueue->suspendIfNeeded();
         return taskQueue;
     }
@@ -52,13 +62,14 @@ public:
 
 private:
     friend UniqueRef<SuspendableTaskQueue> WTF::makeUniqueRefWithoutFastMallocCheck<SuspendableTaskQueue, WebCore::ScriptExecutionContext*&>(WebCore::ScriptExecutionContext*&);
+    friend UniqueRef<SuspendableTaskQueue> WTF::makeUniqueRefWithoutFastMallocCheck<SuspendableTaskQueue, WebCore::Document&>(WebCore::Document&);
     explicit SuspendableTaskQueue(ScriptExecutionContext*);
+    explicit SuspendableTaskQueue(Document&);
 
     void runOneTask();
 
     // ActiveDOMObject.
     const char* activeDOMObjectName() const final;
-    bool canSuspendForDocumentSuspension() const final;
     void stop() final;
     void suspend(ReasonForSuspension) final;
     void resume() final;

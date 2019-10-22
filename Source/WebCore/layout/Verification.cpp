@@ -87,7 +87,7 @@ static bool outputMismatchingSimpleLineInformationIfNeeded(TextStream& stream, c
     auto mismatched = false;
     for (unsigned i = 0; i < lineLayoutData->runCount(); ++i) {
         auto& simpleRun = lineLayoutData->runAt(i);
-        auto& inlineRun = inlineRunList[i];
+        auto& inlineRun = *inlineRunList[i];
 
         auto matchingRuns = areEssentiallyEqual(simpleRun.logicalLeft, inlineRun.logicalLeft()) && areEssentiallyEqual(simpleRun.logicalRight, inlineRun.logicalRight());
         if (matchingRuns && inlineRun.textContext()) {
@@ -173,7 +173,7 @@ static bool outputMismatchingComplexLineInformationIfNeeded(TextStream& stream, 
     }
 
     for (unsigned inlineBoxIndex = 0; inlineBoxIndex < inlineBoxes.size() && runIndex < inlineRunList.size(); ++inlineBoxIndex) {
-        auto& inlineRun = inlineRunList[runIndex];
+        auto& inlineRun = *inlineRunList[runIndex];
         auto* inlineBox = inlineBoxes[inlineBoxIndex];
         auto* inlineTextBox = is<InlineTextBox>(inlineBox) ? downcast<InlineTextBox>(inlineBox) : nullptr;
         bool matchingRuns = inlineTextBox ? checkForMatchingTextRuns(inlineRun, *inlineTextBox) : matchingRuns = checkForMatchingNonTextRuns(inlineRun, *inlineBox);
@@ -324,15 +324,16 @@ static bool verifyAndOutputSubtree(TextStream& stream, const LayoutState& contex
     return mismtachingGeometry;
 }
 
-void LayoutContext::verifyAndOutputMismatchingLayoutTree(const LayoutState& layoutState, const RenderView& renderView, const Container& initialContainingBlock)
+void LayoutContext::verifyAndOutputMismatchingLayoutTree(const LayoutState& layoutState, const RenderView& renderView)
 {
     TextStream stream;
-    auto mismatchingGeometry = verifyAndOutputSubtree(stream, layoutState, renderView, initialContainingBlock);
+    auto& layoutRoot = layoutState.root();
+    auto mismatchingGeometry = verifyAndOutputSubtree(stream, layoutState, renderView, layoutRoot);
     if (!mismatchingGeometry)
         return;
 #if ENABLE(TREE_DEBUGGING)
     showRenderTree(&renderView);
-    showLayoutTree(initialContainingBlock, &layoutState);
+    showLayoutTree(layoutRoot, &layoutState);
 #endif
     WTFLogAlways("%s", stream.release().utf8().data());
     ASSERT_NOT_REACHED();

@@ -28,6 +28,7 @@
 
 #if ENABLE(SERVICE_WORKER)
 
+#include "DOMPromiseProxy.h"
 #include "Document.h"
 #include "Event.h"
 #include "EventNames.h"
@@ -35,11 +36,12 @@
 #include "IDLTypes.h"
 #include "JSDOMPromiseDeferred.h"
 #include "JSServiceWorkerRegistration.h"
+#include "LegacySchemeRegistry.h"
 #include "Logging.h"
 #include "MessageEvent.h"
 #include "NavigatorBase.h"
+#include "Page.h"
 #include "ResourceError.h"
-#include "SchemeRegistry.h"
 #include "ScriptExecutionContext.h"
 #include "SecurityOrigin.h"
 #include "ServiceWorker.h"
@@ -71,6 +73,7 @@ ServiceWorkerContainer::ServiceWorkerContainer(ScriptExecutionContext* context, 
     : ActiveDOMObject(context)
     , m_navigator(navigator)
     , m_messageQueue(GenericEventQueue::create(*this))
+    , m_taskQueue(SuspendableTaskQueue::create(context))
 {
     suspendIfNeeded();
     
@@ -106,11 +109,10 @@ auto ServiceWorkerContainer::ready() -> ReadyPromise&
 
         auto& context = *scriptExecutionContext();
         ensureSWClientConnection().whenRegistrationReady(context.topOrigin().data(), context.url(), [this, protectedThis = makeRef(*this)](auto&& registrationData) mutable {
-            if (m_isStopped)
-                return;
-
-            auto registration = ServiceWorkerRegistration::getOrCreate(*scriptExecutionContext(), *this, WTFMove(registrationData));
-            m_readyPromise->resolve(WTFMove(registration));
+            m_taskQueue->enqueueTask([this, registrationData = WTFMove(registrationData)]() mutable {
+                auto registration = ServiceWorkerRegistration::getOrCreate(*scriptExecutionContext(), *this, WTFMove(registrationData));
+                m_readyPromise->resolve(WTFMove(registration));
+            });
         });
     }
     return *m_readyPromise;
@@ -145,7 +147,7 @@ void ServiceWorkerContainer::addRegistration(const String& relativeScriptURL, co
         return;
     }
 
-    if (!SchemeRegistry::canServiceWorkersHandleURLScheme(jobData.scriptURL.protocol().toStringWithoutCopying())) {
+    if (!LegacySchemeRegistry::canServiceWorkersHandleURLScheme(jobData.scriptURL.protocol().toStringWithoutCopying())) {
         CONTAINER_RELEASE_LOG_ERROR_IF_ALLOWED("addRegistration: Invalid scriptURL scheme is not HTTP or HTTPS");
         promise->reject(Exception { TypeError, "serviceWorker.register() must be called with a script URL whose protocol is either HTTP or HTTPS"_s });
         return;
@@ -163,7 +165,7 @@ void ServiceWorkerContainer::addRegistration(const String& relativeScriptURL, co
     else
         jobData.scopeURL = URL(jobData.scriptURL, "./");
 
-    if (!jobData.scopeURL.isNull() && !SchemeRegistry::canServiceWorkersHandleURLScheme(jobData.scopeURL.protocol().toStringWithoutCopying())) {
+    if (!jobData.scopeURL.isNull() && !LegacySchemeRegistry::canServiceWorkersHandleURLScheme(jobData.scopeURL.protocol().toStringWithoutCopying())) {
         CONTAINER_RELEASE_LOG_ERROR_IF_ALLOWED("addRegistration: scopeURL scheme is not HTTP or HTTPS");
         promise->reject(Exception { TypeError, "Scope URL provided to serviceWorker.register() must be either HTTP or HTTPS"_s });
         return;
@@ -269,14 +271,13 @@ void ServiceWorkerContainer::getRegistration(const String& clientURL, Ref<Deferr
     }
 
     ensureSWClientConnection().matchRegistration(SecurityOriginData { context.topOrigin().data() }, parsedURL, [this, protectedThis = makeRef(*this), promise = WTFMove(promise)](auto&& result) mutable {
-        if (m_isStopped)
-            return;
-
-        if (!result) {
-            promise->resolve();
-            return;
-        }
-        promise->resolve<IDLInterface<ServiceWorkerRegistration>>(ServiceWorkerRegistration::getOrCreate(*scriptExecutionContext(), *this, WTFMove(result.value())));
+        m_taskQueue->enqueueTask([this, promise = WTFMove(promise), result = WTFMove(result)]() mutable {
+            if (!result) {
+                promise->resolve();
+                return;
+            }
+            promise->resolve<IDLInterface<ServiceWorkerRegistration>>(ServiceWorkerRegistration::getOrCreate(*scriptExecutionContext(), *this, WTFMove(result.value())));
+        });
     });
 }
 
@@ -302,13 +303,12 @@ void ServiceWorkerContainer::getRegistrations(Ref<DeferredPromise>&& promise)
 
     auto& context = *scriptExecutionContext();
     ensureSWClientConnection().getRegistrations(SecurityOriginData { context.topOrigin().data() }, context.url(), [this, protectedThis = makeRef(*this), promise = WTFMove(promise)] (auto&& registrationDatas) mutable {
-        if (m_isStopped)
-            return;
-
-        auto registrations = WTF::map(WTFMove(registrationDatas), [&](auto&& registrationData) {
-            return ServiceWorkerRegistration::getOrCreate(*scriptExecutionContext(), *this, WTFMove(registrationData));
+        m_taskQueue->enqueueTask([this, promise = WTFMove(promise), registrationDatas = WTFMove(registrationDatas)]() mutable {
+            auto registrations = WTF::map(WTFMove(registrationDatas), [&](auto&& registrationData) {
+                return ServiceWorkerRegistration::getOrCreate(*scriptExecutionContext(), *this, WTFMove(registrationData));
+            });
+            promise->resolve<IDLSequence<IDLInterface<ServiceWorkerRegistration>>>(WTFMove(registrations));
         });
-        promise->resolve<IDLSequence<IDLInterface<ServiceWorkerRegistration>>>(WTFMove(registrations));
     });
 }
 
@@ -335,11 +335,9 @@ void ServiceWorkerContainer::jobFailedWithException(ServiceWorkerJob& job, const
     if (!promise)
         return;
 
-    if (auto* context = scriptExecutionContext()) {
-        context->postTask([promise = WTFMove(promise), exception](auto&) mutable {
-            promise->reject(exception);
-        });
-    }
+    m_taskQueue->enqueueTask([promise = WTFMove(promise), exception]() mutable {
+        promise->reject(exception);
+    });
 }
 
 void ServiceWorkerContainer::fireUpdateFoundEvent(ServiceWorkerRegistrationIdentifier identifier)
@@ -370,7 +368,7 @@ void ServiceWorkerContainer::jobResolvedWithRegistration(ServiceWorkerJob& job, 
         destroyJob(job);
     });
 
-    auto notifyIfExitEarly = WTF::makeScopeExit([this, &data, &shouldNotifyWhenResolved] {
+    auto notifyIfExitEarly = WTF::makeScopeExit([this, protectedThis = makeRef(*this), &data, &shouldNotifyWhenResolved] {
         if (shouldNotifyWhenResolved == ShouldNotifyWhenResolved::Yes)
             notifyRegistrationIsSettled(data.key);
     });
@@ -382,16 +380,10 @@ void ServiceWorkerContainer::jobResolvedWithRegistration(ServiceWorkerJob& job, 
     if (!promise)
         return;
 
-    notifyIfExitEarly.release();
+    m_taskQueue->enqueueTask([this, protectedThis = makeRef(*this), promise = WTFMove(promise), jobIdentifier = job.identifier(), data = WTFMove(data), shouldNotifyWhenResolved, notifyIfExitEarly = WTFMove(notifyIfExitEarly)]() mutable {
+        notifyIfExitEarly.release();
 
-    scriptExecutionContext()->postTask([this, protectedThis = RefPtr<ServiceWorkerContainer>(this), promise = WTFMove(promise), jobIdentifier = job.identifier(), data = WTFMove(data), shouldNotifyWhenResolved](ScriptExecutionContext& context) mutable {
-        if (isStopped()) {
-            if (shouldNotifyWhenResolved == ShouldNotifyWhenResolved::Yes)
-                notifyRegistrationIsSettled(data.key);
-            return;
-        }
-
-        auto registration = ServiceWorkerRegistration::getOrCreate(context, *this, WTFMove(data));
+        auto registration = ServiceWorkerRegistration::getOrCreate(*scriptExecutionContext(), *this, WTFMove(data));
 
         CONTAINER_RELEASE_LOG_IF_ALLOWED("jobResolvedWithRegistration: Resolving promise for job %" PRIu64 ". Registration ID: %" PRIu64, jobIdentifier.toUInt64(), registration->identifier().toUInt64());
 
@@ -443,7 +435,7 @@ void ServiceWorkerContainer::jobResolvedWithUnregistrationResult(ServiceWorkerJo
         return;
     }
 
-    context->postTask([promise = job.takePromise(), unregistrationResult](auto&) mutable {
+    m_taskQueue->enqueueTask([promise = job.takePromise(), unregistrationResult]() mutable {
         promise->resolve<IDLBoolean>(unregistrationResult);
     });
 }
@@ -489,8 +481,11 @@ void ServiceWorkerContainer::jobFailedLoadingScript(ServiceWorkerJob& job, const
 
     CONTAINER_RELEASE_LOG_ERROR_IF_ALLOWED("jobFinishedLoadingScript: Failed to fetch script for job %" PRIu64 ", error: %s", job.identifier().toUInt64(), error.localizedDescription().utf8().data());
 
-    if (auto promise = job.takePromise())
-        promise->reject(WTFMove(exception));
+    if (auto promise = job.takePromise()) {
+        m_taskQueue->enqueueTask([promise = WTFMove(promise), exception = WTFMove(exception)]() mutable {
+            promise->reject(WTFMove(exception));
+        });
+    }
 
     notifyFailedFetchingScript(job, error);
     destroyJob(job);
@@ -516,11 +511,6 @@ void ServiceWorkerContainer::destroyJob(ServiceWorkerJob& job)
 const char* ServiceWorkerContainer::activeDOMObjectName() const
 {
     return "ServiceWorkerContainer";
-}
-
-bool ServiceWorkerContainer::canSuspendForDocumentSuspension() const
-{
-    return !hasPendingActivity();
 }
 
 SWClientConnection& ServiceWorkerContainer::ensureSWClientConnection()

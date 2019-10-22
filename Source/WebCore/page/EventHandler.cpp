@@ -34,6 +34,7 @@
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "ComposedTreeAncestorIterator.h"
+#include "ComposedTreeIterator.h"
 #include "CursorList.h"
 #include "DocumentMarkerController.h"
 #include "DragController.h"
@@ -127,10 +128,6 @@
 #include "PointerLockController.h"
 #endif
 
-#if ENABLE(POINTER_EVENTS)
-#include "RuntimeEnabledFeatures.h"
-#endif
-
 #if PLATFORM(IOS_FAMILY)
 #include "DOMTimerHoldingTank.h"
 #endif
@@ -219,11 +216,11 @@ public:
     // The default values are based on http://dvcs.w3.org/hg/webevents/raw-file/tip/touchevents.html
     explicit SyntheticTouchPoint(const PlatformMouseEvent& event)
     {
-        const static int idDefaultValue = 0;
-        const static int radiusYDefaultValue = 1;
-        const static int radiusXDefaultValue = 1;
-        const static float rotationAngleDefaultValue = 0.0f;
-        const static float forceDefaultValue = 1.0f;
+        static constexpr int idDefaultValue = 0;
+        static constexpr int radiusYDefaultValue = 1;
+        static constexpr int radiusXDefaultValue = 1;
+        static constexpr float rotationAngleDefaultValue = 0.0f;
+        static constexpr float forceDefaultValue = 1.0f;
 
         m_id = idDefaultValue; // There is only one active TouchPoint.
         m_screenPos = event.globalPosition();
@@ -2623,6 +2620,19 @@ void EventHandler::updateMouseEventTargetNode(Node* targetNode, const PlatformMo
     }
 }
 
+static RefPtr<Element> findFirstMouseFocusableElementInComposedTree(Element& host)
+{
+    ASSERT(host.shadowRoot());
+    for (auto& node : composedTreeDescendants(host)) {
+        if (!is<Element>(node))
+            continue;
+        auto& element = downcast<Element>(node);
+        if (element.isMouseFocusable())
+            return &element;
+    }
+    return nullptr;
+}
+
 bool EventHandler::dispatchMouseEvent(const AtomString& eventType, Node* targetNode, bool /*cancelable*/, int clickCount, const PlatformMouseEvent& platformMouseEvent, bool setUnder)
 {
     Ref<Frame> protectedFrame(m_frame);
@@ -2654,6 +2664,12 @@ bool EventHandler::dispatchMouseEvent(const AtomString& eventType, Node* targetN
     // Walk up the DOM tree to search for an element to focus.
     RefPtr<Element> element;
     for (element = m_elementUnderMouse.get(); element; element = element->parentElementInComposedTree()) {
+        if (auto* shadowRoot = element->shadowRoot()) {
+            if (shadowRoot->delegatesFocus()) {
+                element = findFirstMouseFocusableElementInComposedTree(*element);
+                break;
+            }
+        }
         if (element->isMouseFocusable())
             break;
     }

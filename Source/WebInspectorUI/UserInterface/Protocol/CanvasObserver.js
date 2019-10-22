@@ -23,7 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-WI.CanvasObserver = class CanvasObserver
+WI.CanvasObserver = class CanvasObserver extends InspectorBackend.Dispatcher
 {
     // Events defined by the "Canvas" domain.
 
@@ -67,9 +67,16 @@ WI.CanvasObserver = class CanvasObserver
         WI.canvasManager.extensionEnabled(canvasId, extension);
     }
 
-    programCreated(canvasId, programId, programType)
+    programCreated(shaderProgram)
     {
-        WI.canvasManager.programCreated(canvasId, programId, programType);
+        // COMPATIBILITY (iOS 13.0): `shaderProgram` replaced `canvasId` and `programId`.
+        if (arguments.length === 2) {
+            shaderProgram = {
+                canvasId: arguments[0],
+                programId: arguments[1],
+            };
+        }
+        WI.canvasManager.programCreated(shaderProgram);
     }
 
     programDeleted(programId)

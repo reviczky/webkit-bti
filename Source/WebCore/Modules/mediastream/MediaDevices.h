@@ -37,7 +37,7 @@
 #include "EventNames.h"
 #include "EventTarget.h"
 #include "ExceptionOr.h"
-#include "JSDOMPromiseDeferred.h"
+#include "IDLTypes.h"
 #include "MediaTrackConstraints.h"
 #include "RealtimeMediaSourceCenter.h"
 #include "Timer.h"
@@ -51,6 +51,8 @@ class MediaDeviceInfo;
 class MediaStream;
 
 struct MediaTrackSupportedConstraints;
+
+template<typename IDLType> class DOMPromiseDeferred;
 
 class MediaDevices final : public RefCounted<MediaDevices>, public ActiveDOMObject, public EventTargetWithInlineData, public CanMakeWeakPtr<MediaDevices> {
     WTF_MAKE_ISO_ALLOCATED(MediaDevices);
@@ -98,7 +100,6 @@ private:
 
     // ActiveDOMObject
     const char* activeDOMObjectName() const final;
-    bool canSuspendForDocumentSuspension() const final;
     void stop() final;
     bool hasPendingActivity() const final;
 

@@ -65,6 +65,7 @@
 
 #if PLATFORM(IOS_FAMILY)
 #include "ProcessTaskStateObserver.h"
+OBJC_CLASS BKSProcessAssertion;
 #endif
 
 #if PLATFORM(WAYLAND) && USE(WPE_RENDERER)
@@ -86,6 +87,7 @@ class CertificateInfo;
 class PageGroup;
 class ResourceRequest;
 class UserGestureToken;
+struct BackForwardItemIdentifier;
 struct MessagePortIdentifier;
 struct MessageWithMessagePorts;
 struct MockMediaDevice;
@@ -116,6 +118,7 @@ class WebFrame;
 class WebLoaderStrategy;
 class WebPage;
 class WebPageGroupProxy;
+struct UserMessage;
 struct WebProcessCreationParameters;
 struct WebProcessDataStoreParameters;
 class WebProcessSupplement;
@@ -368,13 +371,14 @@ private:
     void registerServiceWorkerClients();
 #endif
 
-    void releasePageCache();
-
     void fetchWebsiteData(OptionSet<WebsiteDataType>, CompletionHandler<void(WebsiteData&&)>&&);
     void deleteWebsiteData(OptionSet<WebsiteDataType>, WallTime modifiedSince, CompletionHandler<void()>&&);
     void deleteWebsiteDataForOrigins(OptionSet<WebsiteDataType>, const Vector<WebCore::SecurityOriginData>& origins, CompletionHandler<void()>&&);
 
     void setMemoryCacheDisabled(bool);
+
+    void setBackForwardCacheCapacity(unsigned);
+    void clearCachedPage(WebCore::BackForwardItemIdentifier, CompletionHandler<void()>&&);
 
 #if ENABLE(SERVICE_CONTROLS)
     void setEnabledServices(bool hasImageServices, bool hasSelectionServices, bool hasRichContentServices);
@@ -387,7 +391,6 @@ private:
     enum class ShouldAcknowledgeWhenReadyToSuspend { No, Yes };
     void actualPrepareToSuspend(ShouldAcknowledgeWhenReadyToSuspend);
 
-    bool hasPageRequiringPageCacheWhileSuspended() const;
     bool areAllPagesSuspended() const;
 
     void ensureAutomationSessionProxy(const String& sessionIdentifier);
@@ -463,6 +466,10 @@ private:
 
     void clearCurrentModifierStateForTesting();
 
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    void sendMessageToWebExtension(UserMessage&&);
+#endif
+
     RefPtr<WebConnectionToUIProcess> m_webConnection;
 
     HashMap<WebCore::PageIdentifier, RefPtr<WebPage>> m_pageMap;
@@ -528,6 +535,8 @@ private:
 #if PLATFORM(IOS_FAMILY)
     WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
     Ref<ProcessTaskStateObserver> m_taskStateObserver;
+    Lock m_unexpectedlyResumedUIAssertionLock;
+    RetainPtr<BKSProcessAssertion> m_unexpectedlyResumedUIAssertion;
 #endif
 
     enum PageMarkingLayersAsVolatileCounterType { };

@@ -86,7 +86,7 @@ private:
     {
     }
 
-    virtual ~FrontendMenuProvider()
+    ~FrontendMenuProvider() override
     {
         contextMenuCleared();
     }
@@ -444,6 +444,15 @@ void InspectorFrontendHost::dispatchEventAsContextMenuEvent(Event& event)
 bool InspectorFrontendHost::isUnderTest()
 {
     return m_client && m_client->isUnderTest();
+}
+
+bool InspectorFrontendHost::isExperimentalBuild()
+{
+#if ENABLE(EXPERIMENTAL_FEATURES)
+    return true;
+#else
+    return false;
+#endif
 }
 
 void InspectorFrontendHost::unbufferedLog(const String& message)

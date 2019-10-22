@@ -30,10 +30,9 @@
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/IsoMalloc.h>
+#include <wtf/WeakPtr.h>
 
 namespace WebCore {
-
-class RenderView;
 
 namespace Display {
 class Box;
@@ -49,6 +48,7 @@ class FormattingState;
 class LayoutState {
     WTF_MAKE_ISO_ALLOCATED(LayoutState);
 public:
+    LayoutState(const Container& root);
 
     FormattingState& createFormattingStateForFormattingRootIfNeeded(const Container& formattingContextRoot);
     FormattingState& establishedFormattingState(const Container& formattingRoot) const;
@@ -60,7 +60,8 @@ public:
     void deregisterFormattingContext(const FormattingContext& formattingContext) { m_formattingContextList.remove(&formattingContext); }
 #endif
 
-    Display::Box& displayBoxForLayoutBox(const Box& layoutBox) const;
+    Display::Box& displayBoxForLayoutBox(const Box& layoutBox);
+    const Display::Box& displayBoxForLayoutBox(const Box& layoutBox) const;
     bool hasDisplayBox(const Box& layoutBox) const { return m_layoutToDisplayBox.contains(&layoutBox); }
 
     enum class QuirksMode { No, Limited, Yes };
@@ -69,12 +70,15 @@ public:
     bool inLimitedQuirksMode() const { return m_quirksMode == QuirksMode::Limited; }
     bool inNoQuirksMode() const { return m_quirksMode == QuirksMode::No; }
 
+    const Container& root() const { return *m_root; }
+
 private:
+    WeakPtr<const Container> m_root;
     HashMap<const Container*, std::unique_ptr<FormattingState>> m_formattingStates;
 #ifndef NDEBUG
     HashSet<const FormattingContext*> m_formattingContextList;
 #endif
-    mutable HashMap<const Box*, std::unique_ptr<Display::Box>> m_layoutToDisplayBox;
+    HashMap<const Box*, std::unique_ptr<Display::Box>> m_layoutToDisplayBox;
     QuirksMode m_quirksMode { QuirksMode::No };
 };
 

@@ -147,9 +147,6 @@ public:
     void setIsITPDatabaseEnabled(bool isEnabled) { m_isITPDatabaseEnabled = isEnabled; }
     bool isITPDatabaseEnabled() const { return m_isITPDatabaseEnabled; }
 
-    void setIsITPSessionSwitchingEnabled(bool isEnabled) { m_isITPSessionSwitchingEnabled = isEnabled; }
-    bool isITPSessionSwitchingEnabled() const { return m_isITPSessionSwitchingEnabled; }
-
     void setRestrictedHTTPResponseAccess(bool isEnabled) { m_isRestrictedHTTPResponseAccess = isEnabled; }
     bool restrictedHTTPResponseAccess() const { return m_isRestrictedHTTPResponseAccess; }
 
@@ -233,8 +230,6 @@ public:
     void setWebRTCDTMFEnabled(bool isEnabled) { m_isWebRTCDTMFEnabled = isEnabled; }
     bool webRTCVP8CodecEnabled() const { return m_isWebRTCVP8CodecEnabled; }
     void setWebRTCVP8CodecEnabled(bool isEnabled) { m_isWebRTCVP8CodecEnabled = isEnabled; }
-    bool webRTCUnifiedPlanEnabled() const { return m_isWebRTCUnifiedPlanEnabled; }
-    void setWebRTCUnifiedPlanEnabled(bool isEnabled) { m_isWebRTCUnifiedPlanEnabled = isEnabled; }
     bool peerConnectionEnabled() const { return m_isPeerConnectionEnabled; }
     void setPeerConnectionEnabled(bool isEnabled) { m_isPeerConnectionEnabled = isEnabled; }
     bool webRTCMDNSICECandidatesEnabled() const { return m_isWebRTCMDNSICECandidatesEnabled; }
@@ -410,7 +405,7 @@ private:
     bool m_isCustomPasteboardDataEnabled { false };
     bool m_isWebShareEnabled { false };
     bool m_inputEventsEnabled { true };
-    bool m_areWebAnimationsEnabled { false };
+    bool m_areWebAnimationsEnabled { true };
     bool m_isWebAnimationsCSSIntegrationEnabled { false };
     bool m_isImageBitmapOffscreenCanvasEnabled { true };
     bool m_isCacheAPIEnabled { false };
@@ -422,7 +417,6 @@ private:
     bool m_accessibilityObjectModelEnabled { false };
     bool m_ariaReflectionEnabled { true };
     bool m_itpDebugMode { false };
-    bool m_isITPSessionSwitchingEnabled { true };
     bool m_isRestrictedHTTPResponseAccess { true };
     bool m_crossOriginResourcePolicyEnabled { true };
     bool m_isWebGLCompressedTextureASTCSupportEnabled { false };
@@ -469,7 +463,6 @@ private:
 #if ENABLE(WEB_RTC)
     bool m_isWebRTCDTMFEnabled { true };
     bool m_isWebRTCVP8CodecEnabled { true };
-    bool m_isWebRTCUnifiedPlanEnabled { true };
     bool m_isPeerConnectionEnabled { true };
     bool m_isWebRTCMDNSICECandidatesEnabled { false };
     bool m_isWebRTCH264SimulcastEnabled { true };
@@ -577,7 +570,7 @@ private:
 
     bool m_lazyImageLoadingEnabled { false };
     bool m_secureContextChecksEnabled { true };
-    bool m_isCSSShadowPartsEnabled { false };
+    bool m_isCSSShadowPartsEnabled { true };
 
     friend class WTF::NeverDestroyed<RuntimeEnabledFeatures>;
 };

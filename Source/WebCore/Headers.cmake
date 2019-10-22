@@ -306,7 +306,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/CSSPrimitiveValue.h
     css/CSSPrimitiveValueMappings.h
     css/CSSProperty.h
-    css/CSSReflectionDirection.h
     css/CSSRegisteredCustomProperty.h
     css/CSSRule.h
     css/CSSRuleList.h
@@ -383,6 +382,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/Element.h
     dom/ElementAncestorIterator.h
     dom/ElementChildIterator.h
+    dom/ElementContext.h
     dom/ElementData.h
     dom/ElementDescendantIterator.h
     dom/ElementIdentifier.h
@@ -521,13 +521,13 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     fileapi/FileReaderLoaderClient.h
     fileapi/NetworkSendQueue.h
 
+    history/BackForwardCache.h
     history/BackForwardClient.h
     history/BackForwardController.h
     history/BackForwardItemIdentifier.h
     history/CachedFrame.h
     history/CachedFramePlatformData.h
     history/HistoryItem.h
-    history/PageCache.h
 
     html/Autocapitalize.h
     html/AutocapitalizeTypes.h
@@ -791,6 +791,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/MediaCanStartListener.h
     page/MediaProducer.h
     page/MemoryRelease.h
+    page/NavigatorIsLoggedIn.h
     page/Page.h
     page/PageConfiguration.h
     page/PageConsoleClient.h
@@ -841,7 +842,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/WebCoreKeyboardUIMode.h
     page/WebKitNamespace.h
     page/WheelEventDeltaFilter.h
-    page/WheelEventTestTrigger.h
+    page/WheelEventTestMonitor.h
     page/WindowFeatures.h
 
     page/animation/AnimationBase.h
@@ -910,6 +911,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/KeyedCoding.h
     platform/KeypressCommand.h
     platform/LayoutUnit.h
+    platform/LegacySchemeRegistry.h
     platform/Length.h
     platform/LengthBox.h
     platform/LengthPoint.h
@@ -928,6 +930,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/PODIntervalTree.h
     platform/PODRedBlackTree.h
     platform/Pasteboard.h
+    platform/PasteboardCustomData.h
     platform/PasteboardItemInfo.h
     platform/PasteboardStrategy.h
     platform/PasteboardWriterData.h
@@ -957,7 +960,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/RemoteCommandListener.h
     platform/RuntimeApplicationChecks.h
     platform/SSLKeyGenerator.h
-    platform/SchemeRegistry.h
     platform/ScreenProperties.h
     platform/ScrollAnimator.h
     platform/ScrollTypes.h

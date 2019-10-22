@@ -26,12 +26,21 @@
 #include "config.h"
 #include "SuspendableTaskQueue.h"
 
+#include "Document.h"
+#include "ScriptExecutionContext.h"
+
 namespace WebCore {
 
 SuspendableTaskQueue::SuspendableTaskQueue(ScriptExecutionContext* context)
     : ActiveDOMObject(context)
     , m_taskQueue(context)
     , m_isClosed(!context)
+{
+}
+
+SuspendableTaskQueue::SuspendableTaskQueue(Document& document)
+    : ActiveDOMObject(document)
+    , m_taskQueue(document)
 {
 }
 
@@ -70,11 +79,6 @@ void SuspendableTaskQueue::runOneTask()
 const char* SuspendableTaskQueue::activeDOMObjectName() const
 {
     return "SuspendableTaskQueue";
-}
-
-bool SuspendableTaskQueue::canSuspendForDocumentSuspension() const
-{
-    return true;
 }
 
 void SuspendableTaskQueue::stop()

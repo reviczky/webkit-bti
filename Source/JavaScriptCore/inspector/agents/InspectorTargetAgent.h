@@ -40,14 +40,13 @@ class JS_EXPORT_PRIVATE InspectorTargetAgent : public InspectorAgentBase, public
     WTF_MAKE_NONCOPYABLE(InspectorTargetAgent);
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    virtual ~InspectorTargetAgent();
+    ~InspectorTargetAgent() override;
 
     // InspectorAgentBase
     void didCreateFrontendAndBackend(FrontendRouter*, BackendDispatcher*) final;
     void willDestroyFrontendAndBackend(DisconnectReason) final;
 
     // TargetBackendDispatcherHandler
-    void exists(ErrorString&) final;
     void sendMessageToTarget(ErrorString&, const String& targetId, const String& message) final;
 
     // Target lifecycle.

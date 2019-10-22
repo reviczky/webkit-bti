@@ -67,6 +67,7 @@
 #include <JavaScriptCore/JSScriptFetcher.h>
 #include <JavaScriptCore/ScriptCallStack.h>
 #include <JavaScriptCore/StrongInlines.h>
+#include <JavaScriptCore/WeakGCMapInlines.h>
 #include <wtf/SetForScope.h>
 #include <wtf/Threading.h>
 #include <wtf/text/TextPosition.h>
@@ -280,18 +281,18 @@ void ScriptController::setupModuleScriptHandlers(LoadableModuleScript& moduleScr
 
     RefPtr<LoadableModuleScript> moduleScript(&moduleScriptRef);
 
-    auto& fulfillHandler = *JSNativeStdFunction::create(state.vm(), proxy.window(), 1, String(), [moduleScript](ExecState* exec) -> JSC::EncodedJSValue {
-        VM& vm = exec->vm();
+    auto& fulfillHandler = *JSNativeStdFunction::create(state.vm(), proxy.window(), 1, String(), [moduleScript](JSGlobalObject* globalObject, CallFrame* callFrame) -> JSC::EncodedJSValue {
+        VM& vm = globalObject->vm();
         auto scope = DECLARE_THROW_SCOPE(vm);
-        Identifier moduleKey = jsValueToModuleKey(exec, exec->argument(0));
+        Identifier moduleKey = jsValueToModuleKey(callFrame, callFrame->argument(0));
         RETURN_IF_EXCEPTION(scope, { });
         moduleScript->notifyLoadCompleted(*moduleKey.impl());
         return JSValue::encode(jsUndefined());
     });
 
-    auto& rejectHandler = *JSNativeStdFunction::create(state.vm(), proxy.window(), 1, String(), [moduleScript](ExecState* exec) {
-        VM& vm = exec->vm();
-        JSValue errorValue = exec->argument(0);
+    auto& rejectHandler = *JSNativeStdFunction::create(state.vm(), proxy.window(), 1, String(), [moduleScript](JSGlobalObject* globalObject, CallFrame* callFrame) {
+        VM& vm = globalObject->vm();
+        JSValue errorValue = callFrame->argument(0);
         if (errorValue.isObject()) {
             auto* object = JSC::asObject(errorValue);
             if (JSValue failureKindValue = object->getDirect(vm, static_cast<JSVMClientData&>(*vm.clientData).builtinNames().failureKindPrivateName())) {
@@ -317,7 +318,7 @@ void ScriptController::setupModuleScriptHandlers(LoadableModuleScript& moduleScr
             LoadableScript::ConsoleMessage {
                 MessageSource::JS,
                 MessageLevel::Error,
-                retrieveErrorMessage(*exec, vm, errorValue, scope),
+                retrieveErrorMessage(*callFrame, vm, errorValue, scope),
             }
         });
         return JSValue::encode(jsUndefined());

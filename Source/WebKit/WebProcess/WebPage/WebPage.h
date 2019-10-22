@@ -191,6 +191,7 @@ enum class WritingDirection : uint8_t;
 struct BackForwardItemIdentifier;
 struct CompositionUnderline;
 struct DictationAlternative;
+struct ElementContext;
 struct GlobalFrameIdentifier;
 struct GlobalWindowIdentifier;
 struct Highlight;
@@ -212,6 +213,7 @@ class DownloadID;
 class FindController;
 class GamepadData;
 class GeolocationPermissionRequestManager;
+class LayerHostingContext;
 class MediaDeviceSandboxExtensions;
 class NotificationPermissionRequestManager;
 class PDFPlugin;
@@ -268,6 +270,7 @@ struct InteractionInformationRequest;
 struct LoadParameters;
 struct PrintInfo;
 struct TextInputContext;
+struct UserMessage;
 struct WebAutocorrectionData;
 struct WebAutocorrectionContext;
 struct WebPageCreationParameters;
@@ -611,8 +614,8 @@ public:
     void executeEditCommandWithCallback(const String&, const String& argument, CallbackID);
     void selectAll();
 
-    void textInputContextsInRect(WebCore::FloatRect, CompletionHandler<void(const Vector<WebKit::TextInputContext>&)>&&);
-    void focusTextInputContext(const TextInputContext&, CompletionHandler<void(bool)>&&);
+    void textInputContextsInRect(WebCore::FloatRect, CompletionHandler<void(const Vector<WebCore::ElementContext>&)>&&);
+    void focusTextInputContext(const WebCore::ElementContext&, CompletionHandler<void(bool)>&&);
 
 #if PLATFORM(IOS_FAMILY)
     WebCore::FloatSize screenSize() const;
@@ -668,7 +671,7 @@ public:
     void requestAutocorrectionContext();
     void getPositionInformation(const InteractionInformationRequest&, CompletionHandler<void(InteractionInformationAtPosition&&)>&&);
     void requestPositionInformation(const InteractionInformationRequest&);
-    void startInteractionWithElementAtPosition(const WebCore::IntPoint&);
+    void startInteractionWithElementContextOrPosition(Optional<WebCore::ElementContext>&&, WebCore::IntPoint&&);
     void stopInteraction();
     void performActionOnElement(uint32_t action);
     void focusNextFocusedElement(bool isForward, CallbackID);
@@ -1188,7 +1191,8 @@ public:
 
     void configureLoggingChannel(const String&, WTFLogChannelState, WTFLogLevel);
 
-    WebCore::Element* elementForTextInputContext(const TextInputContext&);
+    WebCore::Element* elementForContext(const WebCore::ElementContext&) const;
+    Optional<WebCore::ElementContext> contextForElement(WebCore::Element&) const;
 
 #if ENABLE(APPLE_PAY)
     WebPaymentCoordinator* paymentCoordinator();
@@ -1567,7 +1571,7 @@ private:
     void setShouldPlayToPlaybackTarget(uint64_t, bool);
 #endif
 
-    void clearWheelEventTestTrigger();
+    void clearWheelEventTestMonitor();
 
     void setShouldScaleViewToFitDocument(bool);
 
@@ -1577,7 +1581,6 @@ private:
     void didEndRequestInstallMissingMediaPlugins(uint32_t result);
 #endif
 
-    void setResourceCachingDisabled(bool);
     void setUserInterfaceLayoutDirection(uint32_t);
 
     bool canPluginHandleResponse(const WebCore::ResourceResponse&);
@@ -1628,6 +1631,11 @@ private:
     void updateMockAccessibilityElementAfterCommittingLoad();
 
     void paintSnapshotAtSize(const WebCore::IntRect&, const WebCore::IntSize&, SnapshotOptions, WebCore::Frame&, WebCore::FrameView&, WebCore::GraphicsContext&);
+
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    void sendMessageToWebExtension(UserMessage&&);
+    void sendMessageToWebExtensionWithReply(UserMessage&&, CompletionHandler<void(UserMessage&&)>&&);
+#endif
 
     WebCore::PageIdentifier m_identifier;
 

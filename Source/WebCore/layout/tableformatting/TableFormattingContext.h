@@ -28,12 +28,13 @@
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
 #include "FormattingContext.h"
-#include "TableFormattingState.h"
+#include "TableGrid.h"
 #include <wtf/IsoMalloc.h>
 
 namespace WebCore {
 namespace Layout {
 
+class TableFormattingState;
 // This class implements the layout logic for table formatting contexts.
 // https://www.w3.org/TR/CSS22/tables.html
 class TableFormattingContext : public FormattingContext {
@@ -45,7 +46,8 @@ public:
 private:
     class Geometry : public FormattingContext::Geometry {
     public:
-        HeightAndMargin tableCellHeightAndMargin(const Box&) const;
+        ContentHeightAndMargin tableCellHeightAndMargin(const Box&) const;
+        Optional<LayoutUnit> computedColumnWidth(const Box& columnBox) const;
 
     private:
         friend class TableFormattingContext;
@@ -56,7 +58,6 @@ private:
     TableFormattingContext::Geometry geometry() const { return Geometry(*this); }
 
     IntrinsicWidthConstraints computedIntrinsicWidthConstraints() override;
-    LayoutUnit computedTableWidth();
     void layoutTableCellBox(const Box& cellLayoutBox, const TableGrid::Column&);
     void positionTableCells();
     void setComputedGeometryForRows();
@@ -64,7 +65,7 @@ private:
 
     void ensureTableGrid();
     void computePreferredWidthForColumns();
-    void distributeAvailableWidth(LayoutUnit extraHorizontalSpace);
+    void computeAndDistributeExtraHorizontalSpace();
     enum class WidthConstraintsType { Minimum, Maximum };
     void useAsContentLogicalWidth(WidthConstraintsType);
 

@@ -891,9 +891,10 @@ bool JSObject::putByIndex(JSCell* cell, ExecState* exec, unsigned propertyName, 
         Butterfly* butterfly = thisObject->butterfly();
         if (propertyName >= butterfly->vectorLength())
             break;
-        butterfly->contiguous().at(thisObject, propertyName).set(vm, thisObject, value);
+        butterfly->contiguous().at(thisObject, propertyName).setWithoutWriteBarrier(value);
         if (propertyName >= butterfly->publicLength())
             butterfly->setPublicLength(propertyName + 1);
+        vm.heap.writeBarrier(thisObject, value);
         return true;
     }
         
@@ -2302,12 +2303,12 @@ bool JSObject::defaultHasInstance(ExecState* exec, JSValue value, JSValue proto)
     ASSERT_NOT_REACHED();
 }
 
-EncodedJSValue JSC_HOST_CALL objectPrivateFuncInstanceOf(ExecState* exec)
+EncodedJSValue JSC_HOST_CALL objectPrivateFuncInstanceOf(JSGlobalObject*, CallFrame* callFrame)
 {
-    JSValue value = exec->uncheckedArgument(0);
-    JSValue proto = exec->uncheckedArgument(1);
+    JSValue value = callFrame->uncheckedArgument(0);
+    JSValue proto = callFrame->uncheckedArgument(1);
 
-    return JSValue::encode(jsBoolean(JSObject::defaultHasInstance(exec, value, proto)));
+    return JSValue::encode(jsBoolean(JSObject::defaultHasInstance(callFrame, value, proto)));
 }
 
 void JSObject::getPropertyNames(JSObject* object, ExecState* exec, PropertyNameArray& propertyNames, EnumerationMode mode)
@@ -2683,8 +2684,12 @@ bool JSObject::defineOwnIndexedProperty(ExecState* exec, unsigned index, const P
                     return typeError(exec, scope, throwException, UnconfigurablePropertyChangeWritabilityError);
                 // 10.a.ii. If the [[Writable]] field of current is false, then
                 // 10.a.ii.1. Reject, if the [[Value]] field of Desc is present and SameValue(Desc.[[Value]], current.[[Value]]) is false.
-                if (descriptor.value() && !sameValue(exec, descriptor.value(), current.value()))
-                    return typeError(exec, scope, throwException, ReadonlyPropertyChangeError);
+                if (descriptor.value()) {
+                    bool isSame = sameValue(exec, descriptor.value(), current.value());
+                    RETURN_IF_EXCEPTION(scope, false);
+                    if (!isSame)
+                        return typeError(exec, scope, throwException, ReadonlyPropertyChangeError);
+                }
             }
             // 10.b. else, the [[Configurable]] field of current is true, so any change is acceptable.
         } else {
@@ -3425,6 +3430,7 @@ void JSObject::reallocateAndShrinkButterfly(VM& vm, unsigned length)
     ASSERT(length <= MAX_STORAGE_VECTOR_LENGTH);
     ASSERT(hasContiguous(indexingType()) || hasInt32(indexingType()) || hasDouble(indexingType()) || hasUndecided(indexingType()));
     ASSERT(m_butterfly->vectorLength() > length);
+    ASSERT(m_butterfly->publicLength() >= length);
     ASSERT(!m_butterfly->indexingHeader()->preCapacity(structure(vm)));
 
     DeferGC deferGC(vm.heap);
@@ -3641,8 +3647,12 @@ bool validateAndApplyPropertyDescriptor(ExecState* exec, JSObject* object, Prope
             if (!current.writable() && descriptor.writable())
                 return typeError(exec, scope, throwException, UnconfigurablePropertyChangeWritabilityError);
             if (!current.writable()) {
-                if (descriptor.value() && !sameValue(exec, current.value(), descriptor.value()))
-                    return typeError(exec, scope, throwException, ReadonlyPropertyChangeError);
+                if (descriptor.value()) {
+                    bool isSame = sameValue(exec, current.value(), descriptor.value());
+                    RETURN_IF_EXCEPTION(scope, false);
+                    if (!isSame)
+                        return typeError(exec, scope, throwException, ReadonlyPropertyChangeError);
+                }
             }
         }
         if (current.attributesEqual(descriptor) && !descriptor.value())

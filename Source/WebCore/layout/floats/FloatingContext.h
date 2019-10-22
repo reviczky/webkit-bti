@@ -28,17 +28,16 @@
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
 #include "FloatingState.h"
-#include "FormattingContext.h"
 #include "LayoutContainer.h"
 #include <wtf/IsoMalloc.h>
 
 namespace WebCore {
-
 namespace Layout {
 
 class FloatAvoider;
+class FloatBox;
+class FormattingContext;
 class Box;
-class FloatingPair;
 class LayoutState;
 
 // FloatingContext is responsible for adjusting the position of a box in the current formatting context

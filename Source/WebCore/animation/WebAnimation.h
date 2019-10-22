@@ -26,9 +26,9 @@
 #pragma once
 
 #include "ActiveDOMObject.h"
-#include "DOMPromiseProxy.h"
 #include "EventTarget.h"
 #include "ExceptionOr.h"
+#include "IDLTypes.h"
 #include "WebAnimationUtilities.h"
 #include <wtf/Markable.h>
 #include <wtf/RefCounted.h>
@@ -44,6 +44,8 @@ class AnimationTimeline;
 class Document;
 class Element;
 class RenderStyle;
+
+template<typename IDLType> class DOMPromiseProxyWithResolveCallback;
 
 class WebAnimation : public RefCounted<WebAnimation>, public CanMakeWeakPtr<WebAnimation>, public EventTargetWithInlineData, public ActiveDOMObject {
     WTF_MAKE_ISO_ALLOCATED(WebAnimation);
@@ -195,7 +197,7 @@ private:
 
     // ActiveDOMObject.
     const char* activeDOMObjectName() const final;
-    bool canSuspendForDocumentSuspension() const final;
+    bool shouldPreventEnteringBackForwardCache_DEPRECATED() const final;
 
     // EventTarget
     EventTargetInterface eventTargetInterface() const final { return WebAnimationEventTargetInterfaceType; }

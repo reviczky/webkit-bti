@@ -1,5 +1,7 @@
 include(platform/Curl.cmake)
-include(platform/ImageDecoders.cmake)
+if (NOT APPLE_BUILD)
+    include(platform/ImageDecoders.cmake)
+endif ()
 include(platform/TextureMapper.cmake)
 
 list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES
@@ -117,7 +119,6 @@ list(APPEND WebCore_SOURCES
     platform/win/DragDataWin.cpp
     platform/win/DragImageDirect2D.cpp
     platform/win/DragImageWin.cpp
-    platform/win/EventLoopWin.cpp
     platform/win/GDIObjectCounter.cpp
     platform/win/GDIUtilities.cpp
     platform/win/ImportedFunctionsEnumerator.cpp

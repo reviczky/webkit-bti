@@ -33,6 +33,12 @@ loader/cache/CachedApplicationManifest.cpp
 
 #endif
 
+Modules/async-clipboard/Clipboard.cpp
+Modules/async-clipboard/ClipboardItem.cpp
+Modules/async-clipboard/ClipboardItemBindingsDataSource.cpp
+Modules/async-clipboard/ClipboardItemPasteboardDataSource.cpp
+Modules/async-clipboard/NavigatorClipboard.cpp
+
 Modules/beacon/NavigatorBeacon.cpp
 
 Modules/cache/CacheStorageConnection.cpp
@@ -198,6 +204,11 @@ Modules/paymentrequest/PaymentRequest.cpp
 Modules/paymentrequest/PaymentRequestUpdateEvent.cpp
 Modules/paymentrequest/PaymentResponse.cpp
 
+Modules/pictureinpicture/DocumentPictureInPicture.cpp
+Modules/pictureinpicture/EnterPictureInPictureEvent.cpp
+Modules/pictureinpicture/HTMLVideoElementPictureInPicture.cpp
+Modules/pictureinpicture/PictureInPictureWindow.cpp
+
 Modules/speech/DOMWindowSpeechSynthesis.cpp
 Modules/speech/SpeechSynthesis.cpp
 Modules/speech/SpeechSynthesisEvent.cpp
@@ -205,6 +216,7 @@ Modules/speech/SpeechSynthesisUtterance.cpp
 Modules/speech/SpeechSynthesisVoice.cpp
 
 Modules/streams/ReadableStreamSink.cpp
+Modules/streams/ReadableStreamSource.cpp
 
 Modules/webaudio/AnalyserNode.cpp
 Modules/webaudio/AsyncAudioDecoder.cpp
@@ -252,7 +264,6 @@ Modules/webaudio/WaveShaperNode.cpp
 Modules/webaudio/WaveShaperProcessor.cpp
 
 Modules/webauthn/AuthenticatorCoordinator.cpp
-Modules/webauthn/AuthenticatorCoordinatorClient.cpp
 Modules/webauthn/PublicKeyCredential.cpp
 Modules/webauthn/WebAuthenticationUtils.cpp
 Modules/webauthn/apdu/ApduCommand.cpp
@@ -453,6 +464,8 @@ bindings/js/DOMGCOutputConstraint.cpp
 bindings/js/DOMWrapperWorld.cpp
 bindings/js/GCController.cpp
 bindings/js/IDBBindingUtilities.cpp
+bindings/js/JSAbortControllerCustom.cpp
+bindings/js/JSAbortSignalCustom.cpp
 bindings/js/JSAuthenticatorResponseCustom.cpp
 bindings/js/JSAnimationEffectCustom.cpp
 bindings/js/JSAnimationTimelineCustom.cpp
@@ -883,6 +896,8 @@ dom/GenericEventQueue.cpp
 dom/HashChangeEvent.cpp
 dom/IdTargetObserver.cpp
 dom/IdTargetObserverRegistry.cpp
+dom/IdleDeadline.cpp
+dom/IdleCallbackController.cpp
 dom/InlineClassicScript.cpp
 dom/InlineStyleSheetOwner.cpp
 dom/InputEvent.cpp
@@ -974,6 +989,7 @@ dom/VisitedLinkState.cpp
 dom/WebKitAnimationEvent.cpp
 dom/WebKitTransitionEvent.cpp
 dom/WheelEvent.cpp
+dom/WindowEventLoop.cpp
 dom/XMLDocument.cpp
 
 dom/messageports/MessagePortChannel.cpp
@@ -1068,11 +1084,11 @@ fileapi/FileReaderSync.cpp
 fileapi/NetworkSendQueue.cpp
 fileapi/ThreadableBlobRegistry.cpp
 
+history/BackForwardCache.cpp
 history/BackForwardController.cpp
 history/CachedFrame.cpp
 history/CachedPage.cpp
 history/HistoryItem.cpp
-history/PageCache.cpp
 
 html/Autofill.cpp
 html/BaseButtonInputType.cpp
@@ -1412,6 +1428,7 @@ layout/blockformatting/BlockFormattingState.cpp
 layout/blockformatting/BlockMarginCollapse.cpp
 layout/blockformatting/BlockInvalidation.cpp
 layout/displaytree/DisplayBox.cpp
+layout/displaytree/DisplayPainter.cpp
 layout/floats/FloatAvoider.cpp
 layout/floats/FloatBox.cpp
 layout/floats/FloatingContext.cpp
@@ -1586,6 +1603,7 @@ page/MemoryRelease.cpp
 page/MouseEventWithHitTestResults.cpp
 page/Navigator.cpp
 page/NavigatorBase.cpp
+page/NavigatorIsLoggedIn.cpp
 page/OriginAccessEntry.cpp
 page/Page.cpp
 page/PageConfiguration.cpp
@@ -1638,7 +1656,7 @@ page/UserContentURLPattern.cpp
 page/VisitedLinkStore.cpp
 page/VisualViewport.cpp
 page/WheelEventDeltaFilter.cpp
-page/WheelEventTestTrigger.cpp
+page/WheelEventTestMonitor.cpp
 page/WindowFeatures.cpp
 page/WindowFocusAllowedIndicator.cpp
 page/WorkerNavigator.cpp
@@ -1701,6 +1719,7 @@ platform/FileMonitor.cpp
 platform/FileStream.cpp
 platform/GenericTaskQueue.cpp
 platform/LayoutUnit.cpp
+platform/LegacySchemeRegistry.cpp
 platform/Length.cpp
 platform/LengthBox.cpp
 platform/LengthPoint.cpp
@@ -1712,6 +1731,7 @@ platform/MIMETypeRegistry.cpp
 platform/MainThreadSharedTimer.cpp
 platform/NotImplemented.cpp
 platform/Pasteboard.cpp
+platform/PasteboardCustomData.cpp
 platform/PasteboardWriterData.cpp
 platform/PlatformKeyboardEvent.cpp
 platform/PlatformSpeechSynthesisUtterance.cpp
@@ -1723,7 +1743,6 @@ platform/ReferrerPolicy.cpp
 platform/RemoteCommandListener.cpp
 platform/RuntimeApplicationChecks.cpp
 platform/SSLKeyGenerator.cpp
-platform/SchemeRegistry.cpp
 platform/ScrollAnimator.cpp
 platform/ScrollView.cpp
 platform/ScrollableArea.cpp
@@ -1738,6 +1757,7 @@ platform/SuspendableTaskQueue.cpp
 platform/Theme.cpp
 platform/ThreadGlobalData.cpp
 platform/ThreadTimers.cpp
+platform/ThemeTypes.cpp
 platform/Timer.cpp
 platform/UserActivity.cpp
 platform/WebCoreCrossThreadCopier.cpp
@@ -2198,6 +2218,7 @@ rendering/shapes/Shape.cpp
 rendering/shapes/ShapeOutsideInfo.cpp
 
 rendering/style/BasicShapes.cpp
+rendering/style/BorderData.cpp
 rendering/style/ContentData.cpp
 rendering/style/FillLayer.cpp
 rendering/style/GapLength.cpp
@@ -2348,7 +2369,6 @@ svg/SVGDocument.cpp
 svg/SVGDocumentExtensions.cpp
 svg/SVGElement.cpp
 svg/SVGEllipseElement.cpp
-svg/SVGExternalResourcesRequired.cpp
 svg/SVGFEBlendElement.cpp
 svg/SVGFEColorMatrixElement.cpp
 svg/SVGFEComponentTransferElement.cpp
@@ -2684,8 +2704,11 @@ JSChannelMergerNode.cpp
 JSChannelSplitterNode.cpp
 JSCharacterData.cpp
 JSChildNode.cpp
+JSClipboard.cpp
 JSClipboardEvent.cpp
+JSClipboardItem.cpp
 JSCloseEvent.cpp
+JSColorGamut.cpp
 JSCommandLineAPIHost.cpp
 JSComment.cpp
 JSCompositionEvent.cpp
@@ -2777,6 +2800,7 @@ JSDocument.cpp
 JSDocumentAndElementEventHandlers.cpp
 JSDocumentFragment.cpp
 JSDocumentOrShadowRoot.cpp
+JSDocumentPictureInPicture.cpp
 JSDocumentType.cpp
 JSDoubleRange.cpp
 JSDynamicsCompressorNode.cpp
@@ -2785,6 +2809,7 @@ JSEcdhKeyDeriveParams.cpp
 JSEcdsaParams.cpp
 JSElement.cpp
 JSElementCSSInlineStyle.cpp
+JSEnterPictureInPictureEvent.cpp
 JSErrorCallback.cpp
 JSErrorEvent.cpp
 JSEvent.cpp
@@ -2942,7 +2967,9 @@ JSHTMLTrackElement.cpp
 JSHTMLUListElement.cpp
 JSHTMLUnknownElement.cpp
 JSHTMLVideoElement.cpp
+JSHTMLVideoElementPictureInPicture.cpp
 JSHashChangeEvent.cpp
+JSHdrMetadataType.cpp
 JSHistory.cpp
 JSHkdfParams.cpp
 JSHmacKeyParams.cpp
@@ -2961,6 +2988,9 @@ JSIDBRequest.cpp
 JSIDBTransaction.cpp
 JSIDBTransactionMode.cpp
 JSIDBVersionChangeEvent.cpp
+JSIdleRequestCallback.cpp
+JSIdleRequestOptions.cpp
+JSIdleDeadline.cpp
 JSImageBitmap.cpp
 JSImageBitmapOptions.cpp
 JSImageBitmapRenderingContext.cpp
@@ -3025,6 +3055,7 @@ JSMutationRecord.cpp
 JSNamedNodeMap.cpp
 JSNavigator.cpp
 JSNavigatorBeacon.cpp
+JSNavigatorClipboard.cpp
 JSNavigatorCredentials.cpp
 JSNavigatorGeolocation.cpp
 JSNavigatorGPU.cpp
@@ -3094,6 +3125,7 @@ JSPerformanceResourceTiming.cpp
 JSPerformanceServerTiming.cpp
 JSPerformanceTiming.cpp
 JSPeriodicWave.cpp
+JSPictureInPictureWindow.cpp
 JSPlaybackDirection.cpp
 JSPointerEvent.cpp
 JSPopStateEvent.cpp
@@ -3207,7 +3239,6 @@ JSSVGDescElement.cpp
 JSSVGDocument.cpp
 JSSVGElement.cpp
 JSSVGEllipseElement.cpp
-JSSVGExternalResourcesRequired.cpp
 JSSVGFEBlendElement.cpp
 JSSVGFEColorMatrixElement.cpp
 JSSVGFEComponentTransferElement.cpp
@@ -3322,7 +3353,6 @@ JSSVGViewSpec.cpp
 JSSVGZoomAndPan.cpp
 JSSVGZoomEvent.cpp
 JSScreen.cpp
-JSScreenLuminance.cpp
 JSScriptProcessorNode.cpp
 JSScrollIntoViewOptions.cpp
 JSScrollLogicalPosition.cpp
@@ -3363,6 +3393,7 @@ JSTextEncoder.cpp
 JSTextEvent.cpp
 JSTextMetrics.cpp
 JSTimeRanges.cpp
+JSTransferFunction.cpp
 JSTransitionEvent.cpp
 JSTreeWalker.cpp
 JSUndoItem.cpp

@@ -28,14 +28,15 @@
 #if ENABLE(SERVICE_WORKER)
 
 #include "ActiveDOMObject.h"
-#include "DOMPromiseProxy.h"
 #include "EventTarget.h"
 #include "GenericEventQueue.h"
+#include "IDLTypes.h"
 #include "SWClientConnection.h"
 #include "SWServer.h"
 #include "ServiceWorkerJobClient.h"
 #include "ServiceWorkerRegistration.h"
 #include "ServiceWorkerRegistrationOptions.h"
+#include "SuspendableTaskQueue.h"
 #include "WorkerType.h"
 #include <wtf/Threading.h>
 
@@ -47,6 +48,8 @@ class ServiceWorker;
 
 enum class ServiceWorkerUpdateViaCache : uint8_t;
 enum class WorkerType;
+
+template<typename IDLType> class DOMPromiseProxy;
 
 class ServiceWorkerContainer final : public EventTargetWithInlineData, public ActiveDOMObject, public ServiceWorkerJobClient {
     WTF_MAKE_NONCOPYABLE(ServiceWorkerContainer);
@@ -110,7 +113,6 @@ private:
 
     // ActiveDOMObject.
     const char* activeDOMObjectName() const final;
-    bool canSuspendForDocumentSuspension() const final;
     
     ScriptExecutionContext* scriptExecutionContext() const final { return ActiveDOMObject::scriptExecutionContext(); }
     EventTargetInterface eventTargetInterface() const final { return ServiceWorkerContainerEventTargetInterfaceType; }
@@ -142,6 +144,7 @@ private:
     uint64_t m_lastOngoingSettledRegistrationIdentifier { 0 };
     HashMap<uint64_t, ServiceWorkerRegistrationKey> m_ongoingSettledRegistrations;
     UniqueRef<GenericEventQueue> m_messageQueue;
+    UniqueRef<SuspendableTaskQueue> m_taskQueue;
 };
 
 } // namespace WebCore

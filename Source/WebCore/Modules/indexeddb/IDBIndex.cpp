@@ -62,14 +62,9 @@ const char* IDBIndex::activeDOMObjectName() const
     return "IDBIndex";
 }
 
-bool IDBIndex::canSuspendForDocumentSuspension() const
-{
-    return false;
-}
-
 bool IDBIndex::hasPendingActivity() const
 {
-    return m_objectStore.transaction().hasPendingActivity();
+    return m_objectStore.hasPendingActivity();
 }
 
 const String& IDBIndex::name() const

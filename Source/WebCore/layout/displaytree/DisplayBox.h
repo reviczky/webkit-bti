@@ -29,43 +29,16 @@
 
 #include "DisplayRect.h"
 #include "LayoutUnits.h"
-#include "RenderStyleConstants.h"
 #include <wtf/IsoMalloc.h>
 
 namespace WebCore {
-
-class RenderStyle;
-
-namespace Layout {
-class BlockFormattingContext;
-class FloatAvoider;
-class FloatBox;
-class FormattingContext;
-class FloatingContext;
-class InlineFormattingContext;
-class LayoutContext;
-class LayoutState;
-class TableFormattingContext;
-}
-
 namespace Display {
 
 class Box {
     WTF_MAKE_ISO_ALLOCATED(Box);
 public:
-    friend class Layout::BlockFormattingContext;
-    friend class Layout::FloatAvoider;
-    friend class Layout::FloatBox;
-    friend class Layout::FormattingContext;
-    friend class Layout::FloatingContext;
-    friend class Layout::InlineFormattingContext;
-    // This is temporary and should be removed when LayoutContext::run is no longer needed.
-    friend class Layout::LayoutContext;
-    friend class Layout::LayoutState;
-    friend class Layout::TableFormattingContext;
-
-    Box(const RenderStyle&);
     Box(const Box&);
+    Box() = default;
     ~Box();
 
     LayoutUnit top() const;
@@ -142,18 +115,12 @@ public:
     void setHasEstimatedMarginBefore() { m_hasEstimatedMarginBefore = true; }
 #endif
 
-private:
-    struct Style {
-        Style(const RenderStyle&);
-
-        BoxSizing boxSizing { BoxSizing::ContentBox };
-    };
-
     void setTopLeft(const LayoutPoint&);
     void setTop(LayoutUnit);
     void setLeft(LayoutUnit);
     void moveHorizontally(LayoutUnit offset) { m_topLeft.move(offset, 0_lu); }
     void moveVertically(LayoutUnit offset) { m_topLeft.move(0_lu, offset); }
+    void moveBy(LayoutPoint offset) { m_topLeft.moveBy(offset); }
 
     void setContentBoxHeight(LayoutUnit);
     void setContentBoxWidth(LayoutUnit);
@@ -166,6 +133,7 @@ private:
     void setBorder(Layout::Edges);
     void setPadding(Optional<Layout::Edges>);
 
+private:
 #if !ASSERT_DISABLED
     void invalidateMargin();
     void invalidateBorder() { m_hasValidBorder = false; }
@@ -185,8 +153,6 @@ private:
     void setHasValidContentHeight() { m_hasValidContentHeight = true; }
     void setHasValidContentWidth() { m_hasValidContentWidth = true; }
 #endif
-
-    const Style m_style;
 
     LayoutPoint m_topLeft;
     LayoutUnit m_contentWidth;

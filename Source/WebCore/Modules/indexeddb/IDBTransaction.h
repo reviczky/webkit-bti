@@ -92,7 +92,6 @@ public:
     using ThreadSafeRefCounted<IDBTransaction>::deref;
 
     const char* activeDOMObjectName() const final;
-    bool canSuspendForDocumentSuspension() const final;
     bool hasPendingActivity() const final;
     void stop() final;
 
@@ -229,7 +228,7 @@ private:
     void completeNoncursorRequest(IDBRequest&, const IDBResultData&);
     void completeCursorRequest(IDBRequest&, const IDBResultData&);
 
-    void schedulePendingOperationTimer();
+    void trySchedulePendingOperationTimer();
     void scheduleCompletedOperationTimer();
 
     Ref<IDBDatabase> m_database;

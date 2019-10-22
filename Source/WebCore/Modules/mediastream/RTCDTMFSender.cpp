@@ -30,6 +30,7 @@
 
 #include "RTCDTMFSenderBackend.h"
 #include "RTCDTMFToneChangeEvent.h"
+#include "RTCRtpSender.h"
 #include "ScriptExecutionContext.h"
 #include <wtf/IsoMallocInlines.h>
 
@@ -147,9 +148,10 @@ const char* RTCDTMFSender::activeDOMObjectName() const
     return "RTCDTMFSender";
 }
 
-bool RTCDTMFSender::canSuspendForDocumentSuspension() const
+// FIXME: This should never prevent entering the back/forward cache.
+bool RTCDTMFSender::shouldPreventEnteringBackForwardCache_DEPRECATED() const
 {
-    return !m_sender || m_sender->isStopped();
+    return m_sender && !m_sender->isStopped();
 }
 
 } // namespace WebCore

@@ -126,27 +126,27 @@ static WebGLShader* shaderForType(WebGLProgram& program, Inspector::Protocol::Ca
 #endif
 
 #if ENABLE(WEBGPU)
-static Optional<WebGPUPipeline::ShaderData> shaderForType(WebGPUPipeline& pipeline, Inspector::Protocol::Canvas::ShaderType shaderType)
+static RefPtr<WebGPUShaderModule> shaderForType(WebGPUPipeline& pipeline, Inspector::Protocol::Canvas::ShaderType shaderType)
 {
     switch (shaderType) {
     case Inspector::Protocol::Canvas::ShaderType::Compute:
         if (is<WebGPUComputePipeline>(pipeline))
             return downcast<WebGPUComputePipeline>(pipeline).computeShader();
-        return WTF::nullopt;
+        return nullptr;
 
     case Inspector::Protocol::Canvas::ShaderType::Fragment:
         if (is<WebGPURenderPipeline>(pipeline))
             return downcast<WebGPURenderPipeline>(pipeline).fragmentShader();
-        return WTF::nullopt;
+        return nullptr;
 
     case Inspector::Protocol::Canvas::ShaderType::Vertex:
         if (is<WebGPURenderPipeline>(pipeline))
             return downcast<WebGPURenderPipeline>(pipeline).vertexShader();
-        return WTF::nullopt;
+        return nullptr;
     }
 
     ASSERT_NOT_REACHED();
-    return WTF::nullopt;
+    return nullptr;
 }
 #endif
 
@@ -168,10 +168,8 @@ String InspectorShaderProgram::requestShaderSource(Inspector::Protocol::Canvas::
 #if ENABLE(WEBGPU)
         [&] (std::reference_wrapper<WebGPUPipeline> pipelineWrapper) {
             auto& pipeline = pipelineWrapper.get();
-            if (auto shaderData = shaderForType(pipeline, shaderType)) {
-                if (auto module = shaderData.value().module)
-                    return module->source();
-            }
+            if (auto shader = shaderForType(pipeline, shaderType))
+                return shader->source();
             return String();
         },
 #endif
@@ -215,9 +213,9 @@ bool InspectorShaderProgram::updateShader(Inspector::Protocol::Canvas::ShaderTyp
         [&] (std::reference_wrapper<WebGPUPipeline> pipelineWrapper) {
             auto& pipeline = pipelineWrapper.get();
             if (auto* device = m_canvas.deviceContext()) {
-                if (auto shaderData = shaderForType(pipeline, shaderType)) {
-                    if (auto module = shaderData.value().module) {
-                        module->update(*device, source);
+                if (pipeline.cloneShaderModules(*device)) {
+                    if (auto shader = shaderForType(pipeline, shaderType)) {
+                        shader->update(*device, source);
                         if (pipeline.recompile(*device))
                             return true;
                     }
@@ -233,6 +231,53 @@ bool InspectorShaderProgram::updateShader(Inspector::Protocol::Canvas::ShaderTyp
             return false;
         }
     );
+}
+
+Ref<Inspector::Protocol::Canvas::ShaderProgram> InspectorShaderProgram::buildObjectForShaderProgram()
+{
+    bool sharesVertexFragmentShader = false;
+
+    using ProgramTypeType = Optional<Inspector::Protocol::Canvas::ProgramType>;
+    auto programType = WTF::switchOn(m_program,
+#if ENABLE(WEBGL)
+        [&] (std::reference_wrapper<WebGLProgram>) -> ProgramTypeType {
+            return Inspector::Protocol::Canvas::ProgramType::Render;
+        },
+#endif
+#if ENABLE(WEBGPU)
+        [&] (std::reference_wrapper<WebGPUPipeline> pipelineWrapper) -> ProgramTypeType {
+            auto& pipeline = pipelineWrapper.get();
+            if (is<WebGPUComputePipeline>(pipeline))
+                return Inspector::Protocol::Canvas::ProgramType::Compute;
+            if (is<WebGPURenderPipeline>(pipeline)) {
+                auto& renderPipeline = downcast<WebGPURenderPipeline>(pipeline);
+                if (renderPipeline.vertexShader() == renderPipeline.fragmentShader())
+                    sharesVertexFragmentShader = true;
+                return Inspector::Protocol::Canvas::ProgramType::Render;
+            }
+            return WTF::nullopt;
+        },
+#endif
+        [&] (Monostate) -> ProgramTypeType {
+#if ENABLE(WEBGL) || ENABLE(WEBGPU)
+            ASSERT_NOT_REACHED();
+#endif
+            return WTF::nullopt;
+        }
+    );
+    if (!programType) {
+        ASSERT_NOT_REACHED();
+        programType = Inspector::Protocol::Canvas::ProgramType::Render;
+    }
+
+    auto payload = Inspector::Protocol::Canvas::ShaderProgram::create()
+        .setProgramId(m_identifier)
+        .setProgramType(programType.value())
+        .setCanvasId(m_canvas.identifier())
+        .release();
+    if (sharesVertexFragmentShader)
+        payload->setSharesVertexFragmentShader(true);
+    return payload;
 }
 
 } // namespace WebCore

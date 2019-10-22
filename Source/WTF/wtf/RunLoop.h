@@ -35,6 +35,7 @@
 #include <wtf/RetainPtr.h>
 #include <wtf/Seconds.h>
 #include <wtf/ThreadingPrimitives.h>
+#include <wtf/text/WTFString.h>
 
 #if USE(GLIB_EVENT_LOOP)
 #include <wtf/glib/GRefPtr.h>
@@ -48,9 +49,15 @@ public:
     // Must be called from the main thread (except for the Mac platform, where it
     // can be called from any thread).
     WTF_EXPORT_PRIVATE static void initializeMainRunLoop();
+#if USE(WEB_THREAD)
+    WTF_EXPORT_PRIVATE static void initializeWebRunLoop();
+#endif
 
     WTF_EXPORT_PRIVATE static RunLoop& current();
     WTF_EXPORT_PRIVATE static RunLoop& main();
+#if USE(WEB_THREAD)
+    WTF_EXPORT_PRIVATE static RunLoop& web();
+#endif
     WTF_EXPORT_PRIVATE static bool isMain();
     ~RunLoop();
 
@@ -59,6 +66,9 @@ public:
     WTF_EXPORT_PRIVATE static void run();
     WTF_EXPORT_PRIVATE void stop();
     WTF_EXPORT_PRIVATE void wakeUp();
+
+    enum class CycleResult { Continue, Stop };
+    WTF_EXPORT_PRIVATE CycleResult static cycle(const String& = { });
 
 #if USE(COCOA_EVENT_LOOP)
     WTF_EXPORT_PRIVATE void runForDuration(Seconds duration);
@@ -174,9 +184,10 @@ private:
 
     Lock m_loopLock;
 #elif USE(COCOA_EVENT_LOOP)
-    static void performWork(void*);
+    static void performWork(CFMachPortRef, void* msg, CFIndex size, void* info);
     RetainPtr<CFRunLoopRef> m_runLoop;
     RetainPtr<CFRunLoopSourceRef> m_runLoopSource;
+    RetainPtr<CFMachPortRef> m_port;
 #elif USE(GLIB_EVENT_LOOP)
     GRefPtr<GMainContext> m_mainContext;
     Vector<GRefPtr<GMainLoop>> m_mainLoops;

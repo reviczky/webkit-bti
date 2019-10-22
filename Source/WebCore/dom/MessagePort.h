@@ -36,9 +36,10 @@
 #include <wtf/WeakPtr.h>
 
 namespace JSC {
-class ExecState;
+class CallFrame;
 class JSObject;
 class JSValue;
+using ExecState = CallFrame;
 }
 
 namespace WebCore {
@@ -84,7 +85,6 @@ public:
 
     // ActiveDOMObject
     const char* activeDOMObjectName() const final;
-    bool canSuspendForDocumentSuspension() const final;
     void contextDestroyed() final;
     void stop() final { close(); }
     bool hasPendingActivity() const final;

@@ -40,6 +40,7 @@
 #include "WorkerScriptLoader.h"
 #include "WorkerThread.h"
 #include <JavaScriptCore/IdentifiersFactory.h>
+#include <JavaScriptCore/ScriptCallStack.h>
 #include <wtf/HashSet.h>
 #include <wtf/IsoMallocInlines.h>
 #include <wtf/MainThread.h>
@@ -149,11 +150,6 @@ void Worker::terminate()
     m_eventQueue->cancelAllEvents();
 }
 
-bool Worker::canSuspendForDocumentSuspension() const
-{
-    return true;
-}
-
 const char* Worker::activeDOMObjectName() const
 {
     return "Worker";
@@ -162,6 +158,22 @@ const char* Worker::activeDOMObjectName() const
 void Worker::stop()
 {
     terminate();
+}
+
+void Worker::suspend(ReasonForSuspension reason)
+{
+    if (reason == ReasonForSuspension::BackForwardCache) {
+        m_contextProxy.suspendForBackForwardCache();
+        m_isSuspendedForBackForwardCache = true;
+    }
+}
+
+void Worker::resume()
+{
+    if (m_isSuspendedForBackForwardCache) {
+        m_contextProxy.resumeForBackForwardCache();
+        m_isSuspendedForBackForwardCache = false;
+    }
 }
 
 bool Worker::hasPendingActivity() const

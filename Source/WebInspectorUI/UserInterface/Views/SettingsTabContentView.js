@@ -153,10 +153,22 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
         }
     }
 
+    selectBlackboxPattern(regex)
+    {
+        console.assert(regex instanceof RegExp);
+
+        console.assert(this._blackboxSettingsView);
+        this.selectedSettingsView = this._blackboxSettingsView;
+
+        this._blackboxSettingsView.selectBlackboxPattern(regex);
+    }
+
     // Protected
 
     initialLayout()
     {
+        super.initialLayout();
+
         this._navigationBar = new WI.NavigationBar;
         this._navigationBar.addEventListener(WI.NavigationBar.Event.NavigationItemSelected, this._navigationItemSelected, this);
         this.addSubview(this._navigationBar);
@@ -165,6 +177,12 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
         this._createElementsSettingsView();
         this._createSourcesSettingsView();
         this._createConsoleSettingsView();
+
+        if (WI.DebuggerManager.supportsBlackboxingScripts()) {
+            this._blackboxSettingsView = new WI.BlackboxSettingsView;
+            this.addSettingsView(this._blackboxSettingsView);
+        }
+
         this._createExperimentalSettingsView();
 
         if (WI.isEngineeringBuild) {
@@ -231,12 +249,12 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
 
     _createElementsSettingsView()
     {
-        if (!InspectorBackend.domains.DOM)
+        if (!InspectorBackend.hasDomain("DOM"))
             return;
 
         let elementsSettingsView = new WI.SettingsView("elements", WI.UIString("Elements"));
 
-        if (InspectorBackend.domains.DOM.setInspectModeEnabled && InspectorBackend.domains.DOM.setInspectModeEnabled.supports("showRulers")) {
+        if (InspectorBackend.hasCommand("DOM.setInspectModeEnabled", "showRulers")) {
             elementsSettingsView.addSetting(WI.UIString("Element Selection:"), WI.settings.showRulersDuringElementSelection, WI.UIString("Show page rulers and node border lines"));
 
             elementsSettingsView.addSeparator();
@@ -251,11 +269,15 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
     {
         let sourcesSettingsView = new WI.SettingsView("sources", WI.UIString("Sources"));
 
-        sourcesSettingsView.addSetting(WI.UIString("Debugger:"), WI.settings.showScopeChainOnPause, WI.UIString("Show Scope Chain on pause"));
+        sourcesSettingsView.addSetting(WI.UIString("Debugging:"), WI.settings.showScopeChainOnPause, WI.UIString("Show Scope Chain on pause"));
 
         sourcesSettingsView.addSeparator();
 
         sourcesSettingsView.addSetting(WI.UIString("Source Maps:"), WI.settings.sourceMapsEnabled, WI.UIString("Enable source maps"));
+
+        sourcesSettingsView.addSeparator();
+
+        sourcesSettingsView.addSetting(WI.UIString("Images:"), WI.settings.showImageGrid, WI.UIString("Show transparency grid"));
 
         this.addSettingsView(sourcesSettingsView);
     }
@@ -265,7 +287,7 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
         let consoleSettingsView = new WI.SettingsView("console", WI.UIString("Console"));
 
         // COMPATIBILITY (iOS 12.2): Runtime.setSavedResultAlias did not exist.
-        if (InspectorBackend.domains.Runtime.setSavedResultAlias) {
+        if (InspectorBackend.hasCommand("Runtime.setSavedResultAlias")) {
             let consoleSavedResultAliasEditor = consoleSettingsView.addGroupWithCustomEditor(WI.UIString("Saved Result Alias:"));
 
             let consoleSavedResultAliasInput = consoleSavedResultAliasEditor.appendChild(document.createElement("input"));
@@ -324,10 +346,15 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
 
         let initialValues = new Map;
 
-        experimentalSettingsView.addSetting(WI.UIString("Sources:"), WI.settings.experimentalEnableSourcesTab, WI.UIString("Enable Sources Tab"));
-        experimentalSettingsView.addSeparator();
+        // WebKit may by default enable certain features in a Technology Preview that are not enabled in trunk.
+        // Provide a switch that will make non-preview builds behave like an experimental build, for those preview features.
+        let hasPreviewFeatures = WI.previewFeatures.length > 0;
+        if (hasPreviewFeatures && (WI.isTechnologyPreviewBuild() || WI.isEngineeringBuild)) {
+            experimentalSettingsView.addSetting(WI.UIString("Staging:"), WI.settings.experimentalEnablePreviewFeatures, WI.UIString("Enable Preview Features"));
+            experimentalSettingsView.addSeparator();
+        }
 
-        if (window.LayerTreeAgent) {
+        if (InspectorBackend.hasDomain("LayerTree")) {
             experimentalSettingsView.addSetting(WI.UIString("Layers:"), WI.settings.experimentalEnableLayersTab, WI.UIString("Enable Layers Tab"));
             experimentalSettingsView.addSeparator();
         }
@@ -335,7 +362,7 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
         experimentalSettingsView.addSetting(WI.UIString("User Interface:"), WI.settings.experimentalEnableNewTabBar, WI.UIString("Enable New Tab Bar"));
         experimentalSettingsView.addSeparator();
 
-        if (InspectorBackend.domains.CSS) {
+        if (InspectorBackend.hasDomain("CSS")) {
             let stylesGroup = experimentalSettingsView.addGroup(WI.UIString("Styles:"));
             stylesGroup.addSetting(WI.settings.experimentalEnableStylesIcons, WI.UIString("Show Icons"));
             stylesGroup.addSetting(WI.settings.experimentalEnableStylesJumpToEffective, WI.UIString("Show Jump to Effective Property Button"));
@@ -345,20 +372,8 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
         let reloadInspectorButton = document.createElement("button");
         reloadInspectorButton.textContent = WI.UIString("Reload Web Inspector");
         reloadInspectorButton.addEventListener("click", (event) => {
-            // Force a copy so that WI.Setting sees it as a new value.
-            let newTabs = WI._openTabsSetting.value;
-            if (!initialValues.get(WI.settings.experimentalEnableSourcesTab) && WI.settings.experimentalEnableSourcesTab.value) {
-                let existingIndex = newTabs.indexOf(WI.SourcesTabContentView.Type);
-                if (existingIndex === -1) {
-                    let index = newTabs.indexOf(WI.DebuggerTabContentView.Type);
-                    if (index !== -1)
-                        newTabs.insertAtIndex(WI.SourcesTabContentView.Type, index);
-                    else
-                        newTabs.push(WI.SourcesTabContentView.Type);
-                }
-            }
-            if (!initialValues.get(WI.settings.experimentalEnableLayersTab) && window.LayerTreeAgent && WI.settings.experimentalEnableLayersTab.value)
-                newTabs.push(WI.LayersTabContentView.Type);
+            if (!initialValues.get(WI.settings.experimentalEnableLayersTab) && InspectorBackend.hasDomain("LayerTree") && WI.settings.experimentalEnableLayersTab.value)
+                WI._openTabsSetting.value.push(WI.LayersTabContentView.Type);
             WI._openTabsSetting.save();
 
             InspectorFrontendHost.reopen();
@@ -374,11 +389,11 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
             });
         }
 
-        listenForChange(WI.settings.experimentalEnableSourcesTab);
+        listenForChange(WI.settings.experimentalEnablePreviewFeatures);
         listenForChange(WI.settings.experimentalEnableLayersTab);
         listenForChange(WI.settings.experimentalEnableNewTabBar);
 
-        if (InspectorBackend.domains.CSS) {
+        if (InspectorBackend.hasDomain("CSS")) {
             listenForChange(WI.settings.experimentalEnableStylesIcons);
             listenForChange(WI.settings.experimentalEnableStylesJumpToEffective);
         }
@@ -391,6 +406,9 @@ WI.SettingsTabContentView = class SettingsTabContentView extends WI.TabContentVi
         // These settings are only ever shown in engineering builds, so the strings are unlocalized.
 
         let engineeringSettingsView = new WI.SettingsView("engineering", WI.unlocalizedString("Engineering"));
+
+        let elementsGroup = engineeringSettingsView.addGroup(WI.unlocalizedString("Elements:"));
+        elementsGroup.addSetting(WI.settings.engineeringAllowEditingUserAgentShadowTrees, WI.unlocalizedString("Allow editing UserAgent shadow trees"));
 
         let debuggingGroup = engineeringSettingsView.addGroup(WI.unlocalizedString("Debugging:"));
         debuggingGroup.addSetting(WI.settings.engineeringShowInternalScripts, WI.unlocalizedString("Show WebKit-internal scripts"));

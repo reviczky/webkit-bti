@@ -78,6 +78,7 @@ WebKitProtocolHandler::WebKitProtocolHandler(WebKitWebContext* context)
 
     auto* manager = webkit_web_context_get_security_manager(context);
     webkit_security_manager_register_uri_scheme_as_display_isolated(manager, "webkit");
+    webkit_security_manager_register_uri_scheme_as_local(manager, "webkit");
 }
 
 void WebKitProtocolHandler::handleRequest(WebKitURISchemeRequest* request)
@@ -451,8 +452,9 @@ void WebKitProtocolHandler::handleGPU(WebKitURISchemeRequest* request)
         g_string_append_printf(html,
             " <tbody><tr>"
             "  <td><div class=\"titlename\">EGL_EXTENSIONS</div></td>"
-            "  <td>%s</td>"
+            "  <td>%s %s</td>"
             " </tbody></tr>",
+            eglQueryString(nullptr, EGL_EXTENSIONS),
             eglQueryString(eglDisplay, EGL_EXTENSIONS));
     }
 #endif

@@ -38,6 +38,7 @@
 #include "FocusDirection.h"
 #include "FontSelectorClient.h"
 #include "FrameDestructionObserver.h"
+#include "FrameLoaderTypes.h"
 #include "GenericTaskQueue.h"
 #include "GraphicsTypes.h"
 #include "MediaProducer.h"
@@ -81,8 +82,9 @@
 #endif
 
 namespace JSC {
-class ExecState;
+class CallFrame;
 class InputCursor;
+using ExecState = CallFrame;
 }
 
 namespace WebCore {
@@ -139,11 +141,14 @@ class HTMLIFrameElement;
 class HTMLImageElement;
 class HTMLMapElement;
 class HTMLMediaElement;
+class HTMLVideoElement;
 class HTMLPictureElement;
 class HTMLScriptElement;
 class HitTestLocation;
 class HitTestRequest;
 class HitTestResult;
+class IdleCallbackController;
+class IdleRequestCallback;
 class ImageBitmapRenderingContext;
 class IntPoint;
 class JSNode;
@@ -201,6 +206,7 @@ class WebAnimation;
 class WebGL2RenderingContext;
 class WebGLRenderingContext;
 class GPUCanvasContext;
+class WindowEventLoop;
 class WindowProxy;
 class Worklet;
 class XPathEvaluator;
@@ -550,7 +556,8 @@ public:
     bool gotoAnchorNeededAfterStylesheetsLoad() { return m_gotoAnchorNeededAfterStylesheetsLoad; }
     void setGotoAnchorNeededAfterStylesheetsLoad(bool b) { m_gotoAnchorNeededAfterStylesheetsLoad = b; }
 
-    void evaluateMediaQueryList();
+    void updateElementsAffectedByMediaQueries();
+    void evaluateMediaQueriesAndReportChanges();
 
     FormController& formController();
     Vector<String> formElementsState() const;
@@ -1055,6 +1062,9 @@ public:
 
     WEBCORE_EXPORT void postTask(Task&&) final; // Executes the task on context's thread asynchronously.
 
+    WindowEventLoop& eventLoop();
+    WindowEventLoop* eventLoopIfExists() { return m_eventLoop.get(); }
+
     ScriptedAnimationController* scriptedAnimationController() { return m_scriptedAnimationController.get(); }
     void suspendScriptedAnimationControllerCallbacks();
     void resumeScriptedAnimationControllerCallbacks();
@@ -1066,10 +1076,10 @@ public:
 
     void finishedParsing();
 
-    enum PageCacheState { NotInPageCache, AboutToEnterPageCache, InPageCache };
+    enum BackForwardCacheState { NotInBackForwardCache, AboutToEnterBackForwardCache, InBackForwardCache };
 
-    PageCacheState pageCacheState() const { return m_pageCacheState; }
-    void setPageCacheState(PageCacheState);
+    BackForwardCacheState backForwardCacheState() const { return m_backForwardCacheState; }
+    void setBackForwardCacheState(BackForwardCacheState);
 
     void registerForDocumentSuspensionCallbacks(Element&);
     void unregisterForDocumentSuspensionCallbacks(Element&);
@@ -1204,6 +1214,10 @@ public:
 
     int requestAnimationFrame(Ref<RequestAnimationFrameCallback>&&);
     void cancelAnimationFrame(int id);
+
+    int requestIdleCallback(Ref<IdleRequestCallback>&&, Seconds timeout);
+    void cancelIdleCallback(int id);
+    IdleCallbackController* idleCallbackController() { return m_idleCallbackController.get(); }
 
     EventTarget* errorEventTarget() final;
     void logExceptionToConsole(const String& errorMessage, const String& sourceURL, int lineNumber, int columnNumber, RefPtr<Inspector::ScriptCallStack>&&) final;
@@ -1345,6 +1359,10 @@ public:
     void setHasStyleWithViewportUnits() { m_hasStyleWithViewportUnits = true; }
     bool hasStyleWithViewportUnits() const { return m_hasStyleWithViewportUnits; }
     void updateViewportUnitsOnResize();
+
+    void setNeedsDOMWindowResizeEvent();
+    void setNeedsVisualViewportResize();
+    void runResizeSteps();
 
     WEBCORE_EXPORT void addAudioProducer(MediaProducer&);
     WEBCORE_EXPORT void removeAudioProducer(MediaProducer&);
@@ -1532,7 +1550,12 @@ public:
     MessagePortChannelProvider& messagePortChannelProvider();
 
 #if USE(SYSTEM_PREVIEW)
-    WEBCORE_EXPORT void dispatchSystemPreviewActionEvent(const String& message);
+    WEBCORE_EXPORT void dispatchSystemPreviewActionEvent(const SystemPreviewInfo&, const String& message);
+#endif
+
+#if ENABLE(PICTURE_IN_PICTURE_API)
+    HTMLVideoElement* pictureInPictureElement() const;
+    void setPictureInPictureElement(HTMLVideoElement*);
 #endif
 
 protected:
@@ -1837,6 +1860,8 @@ private:
     void clearScriptedAnimationController();
     RefPtr<ScriptedAnimationController> m_scriptedAnimationController;
 
+    std::unique_ptr<IdleCallbackController> m_idleCallbackController;
+
     void notifyMediaCaptureOfVisibilityChanged();
 
     void didLogMessage(const WTFLogChannel&, WTFLogLevel, Vector<JSONLogValue>&&) final;
@@ -1932,7 +1957,7 @@ private:
     InheritedBool m_designMode { inherit };
     MediaProducer::MediaStateFlags m_mediaState { MediaProducer::IsNotPlaying };
     bool m_userHasInteractedWithMediaElement { false };
-    PageCacheState m_pageCacheState { NotInPageCache };
+    BackForwardCacheState m_backForwardCacheState { NotInBackForwardCache };
     Optional<ReferrerPolicy> m_referrerPolicy;
     ReadyState m_readyState { Complete };
 
@@ -1969,7 +1994,6 @@ private:
 
     bool m_needsFullStyleRebuild { false };
     bool m_inStyleRecalc { false };
-    bool m_closeAfterStyleRecalc { false };
     bool m_inRenderTreeUpdate { false };
     bool m_isResolvingTreeStyle { false };
 
@@ -1988,6 +2012,8 @@ private:
     bool m_hasPreparedForDestruction { false };
 
     bool m_hasStyleWithViewportUnits { false };
+    bool m_needsDOMWindowResizeEvent { false };
+    bool m_needsVisualViewportResizeEvent { false };
     bool m_isTimerThrottlingEnabled { false };
     bool m_isSuspended { false };
 
@@ -2023,6 +2049,8 @@ private:
     RefPtr<DocumentTimeline> m_timeline;
     DocumentIdentifier m_identifier;
 
+    RefPtr<WindowEventLoop> m_eventLoop;
+
 #if ENABLE(SERVICE_WORKER)
     RefPtr<SWClientConnection> m_serviceWorkerConnection;
 #endif
@@ -2052,6 +2080,10 @@ private:
 #if PLATFORM(IOS_FAMILY)
     std::unique_ptr<ContentChangeObserver> m_contentChangeObserver;
     std::unique_ptr<DOMTimerHoldingTank> m_domTimerHoldingTank;
+#endif
+
+#if ENABLE(PICTURE_IN_PICTURE_API)
+    WeakPtr<HTMLVideoElement> m_pictureInPictureElement;
 #endif
 
     HashMap<Element*, ElementIdentifier> m_identifiedElementsMap;
@@ -2094,11 +2126,6 @@ inline void Document::invalidateAccessKeyCache()
 inline ScriptExecutionContext* Node::scriptExecutionContext() const
 {
     return &document().contextDocument();
-}
-
-inline ActiveDOMObject::ActiveDOMObject(Document& document)
-    : ActiveDOMObject(static_cast<ScriptExecutionContext*>(&document.contextDocument()))
-{
 }
 
 } // namespace WebCore

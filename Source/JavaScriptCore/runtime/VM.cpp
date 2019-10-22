@@ -342,6 +342,7 @@ VM::VM(VMType vmType, HeapType heapType)
     propertyNames = new CommonIdentifiers(*this);
     terminatedExecutionErrorStructure.set(*this, TerminatedExecutionError::createStructure(*this, 0, jsNull()));
     propertyNameEnumeratorStructure.set(*this, JSPropertyNameEnumerator::createStructure(*this, 0, jsNull()));
+    getterSetterStructure.set(*this, GetterSetter::createStructure(*this, 0, jsNull()));
     customGetterSetterStructure.set(*this, CustomGetterSetter::createStructure(*this, 0, jsNull()));
     domAttributeGetterSetterStructure.set(*this, DOMAttributeGetterSetter::createStructure(*this, 0, jsNull()));
     scopedArgumentsTableStructure.set(*this, ScopedArgumentsTable::createStructure(*this, 0, jsNull()));
@@ -1377,18 +1378,6 @@ JSGlobalObject* VM::vmEntryGlobalObject(const CallFrame* callFrame) const
 void VM::setCrashOnVMCreation(bool shouldCrash)
 {
     vmCreationShouldCrash = shouldCrash;
-}
-
-
-#if !HAVE(FAST_TLS)
-WTF::ThreadSpecificKey VM::tlsKey { WTF::InvalidThreadSpecificKey };
-#endif
-
-void VM::initializeTLS()
-{
-#if !HAVE(FAST_TLS)
-    WTF::threadSpecificKeyCreate(&tlsKey, nullptr);
-#endif
 }
 
 } // namespace JSC

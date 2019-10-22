@@ -32,6 +32,7 @@
 #include "EventHandler.h"
 #include "EventNames.h"
 #include "EventTarget.h"
+#include "HitTestResult.h"
 #include "Page.h"
 #include "PointerEvent.h"
 #include <wtf/CheckedArithmetic.h>
@@ -158,11 +159,10 @@ void PointerCaptureController::elementWasRemoved(Element& element)
 void PointerCaptureController::reset()
 {
     m_activePointerIdsToCapturingData.clear();
-#if !ENABLE(TOUCH_EVENTS)
+
     CapturingData capturingData;
     capturingData.pointerType = PointerEvent::mousePointerType();
     m_activePointerIdsToCapturingData.add(mousePointerID, capturingData);
-#endif
 }
 
 void PointerCaptureController::touchWithIdentifierWasRemoved(PointerID pointerId)

@@ -44,6 +44,8 @@ class Encoder;
 namespace WebKit {
 
 class SuspendedPageProxy;
+class WebBackForwardCache;
+class WebBackForwardCacheEntry;
 
 class WebBackForwardListItem : public API::ObjectImpl<API::Object::Type::BackForwardListItem> {
 public:
@@ -77,7 +79,10 @@ public:
     ViewSnapshot* snapshot() const { return m_itemState.snapshot.get(); }
     void setSnapshot(RefPtr<ViewSnapshot>&& snapshot) { m_itemState.snapshot = WTFMove(snapshot); }
 #endif
-    void setSuspendedPage(SuspendedPageProxy*);
+
+    void wasRemovedFromBackForwardList();
+
+    WebBackForwardCacheEntry* backForwardCacheEntry() const { return m_backForwardCacheEntry.get(); }
     SuspendedPageProxy* suspendedPage() const;
 
 #if !LOG_DISABLED
@@ -87,13 +92,17 @@ public:
 private:
     WebBackForwardListItem(BackForwardListItemState&&, WebPageProxyIdentifier);
 
-    void removeSuspendedPageFromProcessPool();
+    void removeFromBackForwardCache();
+
+    // WebBackForwardCache.
+    friend class WebBackForwardCache;
+    void setBackForwardCacheEntry(std::unique_ptr<WebBackForwardCacheEntry>&&);
 
     BackForwardListItemState m_itemState;
     URL m_resourceDirectoryURL;
     WebPageProxyIdentifier m_pageID;
     WebCore::ProcessIdentifier m_lastProcessIdentifier;
-    WeakPtr<SuspendedPageProxy> m_suspendedPage;
+    std::unique_ptr<WebBackForwardCacheEntry> m_backForwardCacheEntry;
 };
 
 typedef Vector<Ref<WebBackForwardListItem>> BackForwardListItemVector;

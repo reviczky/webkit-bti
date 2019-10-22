@@ -31,6 +31,7 @@
 #include "WebResourceLoadStatisticsStore.h"
 #include <WebCore/SQLiteDatabase.h>
 #include <WebCore/SQLiteStatement.h>
+#include <pal/SessionID.h>
 #include <wtf/CompletionHandler.h>
 #include <wtf/StdSet.h>
 #include <wtf/Vector.h>
@@ -45,6 +46,32 @@ struct ResourceLoadStatistics;
 }
 
 namespace WebKit {
+
+static constexpr size_t numberOfBucketsPerStatistic = 5;
+static constexpr size_t numberOfStatistics = 7;
+static constexpr std::array<unsigned, numberOfBucketsPerStatistic> bucketSizes {{ 1, 3, 10, 50, 100 }};
+
+struct PrevalentResourceDatabaseTelemetry {
+    using Buckets = std::array<unsigned, numberOfBucketsPerStatistic>;
+
+    enum class Statistic {
+        NumberOfPrevalentResourcesWithUI,
+        MedianSubFrameWithoutUI,
+        MedianSubResourceWithoutUI,
+        MedianUniqueRedirectsWithoutUI,
+        MedianDataRecordsRemovedWithoutUI,
+        MedianTimesAccessedDueToUserInteractionWithoutUI,
+        MedianTimesAccessedDueToStorageAccessAPIWithoutUI
+    };
+
+    unsigned numberOfPrevalentResources;
+    unsigned numberOfPrevalentResourcesWithUserInteraction;
+    unsigned numberOfPrevalentResourcesWithoutUserInteraction;
+    unsigned topPrevalentResourceWithUserInteractionDaysSinceUserInteraction;
+    unsigned medianDaysSinceUserInteractionPrevalentResourceWithUserInteraction;
+
+    std::array<Buckets, numberOfStatistics> statistics;
+};
 
 class ResourceLoadStatisticsMemoryStore;
 
@@ -96,20 +123,29 @@ public:
     void grantStorageAccess(SubFrameDomain&&, TopFrameDomain&&, WebCore::FrameIdentifier, WebCore::PageIdentifier, WebCore::StorageAccessPromptWasShown, CompletionHandler<void(WebCore::StorageAccessWasGranted)>&&) override;
 
     void logFrameNavigation(const NavigatedToDomain&, const TopFrameDomain&, const NavigatedFromDomain&, bool isRedirect, bool isMainFrame) override;
-    void logUserInteraction(const TopFrameDomain&) override;
+    void logUserInteraction(const TopFrameDomain&, CompletionHandler<void()>&&) override;
     void logCrossSiteLoadWithLinkDecoration(const NavigatedFromDomain&, const NavigatedToDomain&) override;
 
     void clearUserInteraction(const RegistrableDomain&) override;
     bool hasHadUserInteraction(const RegistrableDomain&, OperatingDatesWindow) override;
 
     void setLastSeen(const RegistrableDomain&, Seconds) override;
+    bool isCorrectSubStatisticsCount(const RegistrableDomain&, const TopFrameDomain&);
 
 private:
     void mergeStatistic(const ResourceLoadStatistics&);
     void merge(WebCore::SQLiteStatement&, const ResourceLoadStatistics&);
     void clearDatabaseContents();
+    unsigned getNumberOfPrevalentResources() const;
+    unsigned getNumberOfPrevalentResourcesWithUI() const;
+    unsigned getNumberOfPrevalentResourcesWithoutUI() const;
+    unsigned getTopPrevelentResourceDaysSinceUI() const;
+    void resetTelemetryPreparedStatements() const;
+    void resetTelemetryStatements() const;
+    void calculateTelemetryData(PrevalentResourceDatabaseTelemetry&) const;
     bool insertObservedDomain(const ResourceLoadStatistics&);
     void insertDomainRelationships(const ResourceLoadStatistics&);
+    void insertDomainRelationshipList(const String&, const HashSet<RegistrableDomain>&, unsigned);
     bool insertDomainRelationship(WebCore::SQLiteStatement&, unsigned domainID, const RegistrableDomain& topFrameDomain);
     bool relationshipExists(WebCore::SQLiteStatement&, Optional<unsigned> firstDomainID, const RegistrableDomain& secondDomain) const;
     Optional<unsigned> domainID(const RegistrableDomain&) const;
@@ -119,6 +155,7 @@ private:
     void setUserInteraction(const RegistrableDomain&, bool hadUserInteraction, WallTime);
     Vector<RegistrableDomain> domainsToBlockAndDeleteCookiesFor() const;
     Vector<RegistrableDomain> domainsToBlockButKeepCookiesFor() const;
+    Vector<RegistrableDomain> domainsWithUserInteractionAsFirstParty() const;
 
     struct PrevalentDomainData {
         unsigned domainID;
@@ -166,8 +203,11 @@ private:
     Vector<std::pair<RegistrableDomain, WebsiteDataToRemove>> registrableDomainsToRemoveWebsiteDataFor() override;
     bool isDatabaseStore() const final { return true; }
 
+    bool createUniqueIndices();
     bool createSchema();
     bool prepareStatements();
+    String ensureAndMakeDomainList(const HashSet<RegistrableDomain>&);
+
     
     const String m_storageDirectoryPath;
     mutable WebCore::SQLiteDatabase m_database;
@@ -175,22 +215,10 @@ private:
     WebCore::SQLiteStatement m_insertObservedDomainStatement;
     WebCore::SQLiteStatement m_insertTopLevelDomainStatement;
     mutable WebCore::SQLiteStatement m_domainIDFromStringStatement;
-    WebCore::SQLiteStatement m_storageAccessUnderTopFrameDomainsStatement;
-    WebCore::SQLiteStatement m_storageAccessUnderTopFrameDomainsExistsStatement;
-    WebCore::SQLiteStatement m_topFrameUniqueRedirectsTo;
-    mutable WebCore::SQLiteStatement m_topFrameUniqueRedirectsToExists;
-    WebCore::SQLiteStatement m_topFrameUniqueRedirectsFrom;
-    mutable WebCore::SQLiteStatement m_topFrameUniqueRedirectsFromExists;
-    WebCore::SQLiteStatement m_topFrameLinkDecorationsFrom;
     mutable WebCore::SQLiteStatement m_topFrameLinkDecorationsFromExists;
-    WebCore::SQLiteStatement m_subframeUnderTopFrameDomains;
     mutable WebCore::SQLiteStatement m_subframeUnderTopFrameDomainExists;
-    WebCore::SQLiteStatement m_subresourceUnderTopFrameDomains;
     mutable WebCore::SQLiteStatement m_subresourceUnderTopFrameDomainExists;
-    WebCore::SQLiteStatement m_subresourceUniqueRedirectsTo;
     mutable WebCore::SQLiteStatement m_subresourceUniqueRedirectsToExists;
-    WebCore::SQLiteStatement m_subresourceUniqueRedirectsFrom;
-    mutable WebCore::SQLiteStatement m_subresourceUniqueRedirectsFromExists;
     WebCore::SQLiteStatement m_mostRecentUserInteractionStatement;
     WebCore::SQLiteStatement m_updateLastSeenStatement;
     mutable WebCore::SQLiteStatement m_updateDataRecordsRemovedStatement;
@@ -203,6 +231,9 @@ private:
     WebCore::SQLiteStatement m_updateGrandfatheredStatement;
     mutable WebCore::SQLiteStatement m_isGrandfatheredStatement;
     mutable WebCore::SQLiteStatement m_findExpiredUserInteractionStatement;
+    mutable WebCore::SQLiteStatement m_countPrevalentResourcesStatement;
+    mutable WebCore::SQLiteStatement m_countPrevalentResourcesWithUserInteractionStatement;
+    mutable WebCore::SQLiteStatement m_countPrevalentResourcesWithoutUserInteractionStatement;
     PAL::SessionID m_sessionID;
 };
 

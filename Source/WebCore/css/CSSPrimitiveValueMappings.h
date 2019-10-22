@@ -32,7 +32,6 @@
 #include "CSSCalculationValue.h"
 #include "CSSFontFamily.h"
 #include "CSSPrimitiveValue.h"
-#include "CSSReflectionDirection.h"
 #include "CSSToLengthConversionData.h"
 #include "CSSValueKeywords.h"
 #include "GraphicsTypes.h"
@@ -140,44 +139,44 @@ template<> inline CSSPrimitiveValue::operator LineClampValue() const
     return LineClampValue();
 }
 
-template<> inline CSSPrimitiveValue::CSSPrimitiveValue(CSSReflectionDirection e)
+template<> inline CSSPrimitiveValue::CSSPrimitiveValue(ReflectionDirection direction)
     : CSSValue(PrimitiveClass)
 {
     m_primitiveUnitType = CSS_VALUE_ID;
-    switch (e) {
-    case ReflectionAbove:
+    switch (direction) {
+    case ReflectionDirection::Above:
         m_value.valueID = CSSValueAbove;
         break;
-    case ReflectionBelow:
+    case ReflectionDirection::Below:
         m_value.valueID = CSSValueBelow;
         break;
-    case ReflectionLeft:
+    case ReflectionDirection::Left:
         m_value.valueID = CSSValueLeft;
         break;
-    case ReflectionRight:
+    case ReflectionDirection::Right:
         m_value.valueID = CSSValueRight;
     }
 }
 
-template<> inline CSSPrimitiveValue::operator CSSReflectionDirection() const
+template<> inline CSSPrimitiveValue::operator ReflectionDirection() const
 {
     ASSERT(isValueID());
 
     switch (m_value.valueID) {
     case CSSValueAbove:
-        return ReflectionAbove;
+        return ReflectionDirection::Above;
     case CSSValueBelow:
-        return ReflectionBelow;
+        return ReflectionDirection::Below;
     case CSSValueLeft:
-        return ReflectionLeft;
+        return ReflectionDirection::Left;
     case CSSValueRight:
-        return ReflectionRight;
+        return ReflectionDirection::Right;
     default:
         break;
     }
 
     ASSERT_NOT_REACHED();
-    return ReflectionBelow;
+    return ReflectionDirection::Below;
 }
 
 template<> inline CSSPrimitiveValue::CSSPrimitiveValue(ColumnFill columnFill)
@@ -4392,6 +4391,12 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(TransformBox box)
 {
     m_primitiveUnitType = CSS_VALUE_ID;
     switch (box) {
+    case TransformBox::StrokeBox:
+        m_value.valueID = CSSValueStrokeBox;
+        break;
+    case TransformBox::ContentBox:
+        m_value.valueID = CSSValueContentBox;
+        break;
     case TransformBox::BorderBox:
         m_value.valueID = CSSValueBorderBox;
         break;
@@ -4409,6 +4414,10 @@ template<> inline CSSPrimitiveValue::operator TransformBox() const
     ASSERT(isValueID());
 
     switch (m_value.valueID) {
+    case CSSValueStrokeBox:
+        return TransformBox::StrokeBox;
+    case CSSValueContentBox:
+        return TransformBox::ContentBox;
     case CSSValueBorderBox:
         return TransformBox::BorderBox;
     case CSSValueFillBox:

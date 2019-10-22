@@ -69,6 +69,7 @@
 #include <WebCore/DNS.h>
 #include <WebCore/DeprecatedGlobalSettings.h>
 #include <WebCore/DiagnosticLoggingClient.h>
+#include <WebCore/LegacySchemeRegistry.h>
 #include <WebCore/LogInitialization.h>
 #include <WebCore/MIMETypeRegistry.h>
 #include <WebCore/NetworkStateNotifier.h>
@@ -76,7 +77,6 @@
 #include <WebCore/ResourceRequest.h>
 #include <WebCore/RuntimeApplicationChecks.h>
 #include <WebCore/RuntimeEnabledFeatures.h>
-#include <WebCore/SchemeRegistry.h>
 #include <WebCore/SecurityOriginData.h>
 #include <WebCore/StorageQuotaManager.h>
 #include <wtf/Algorithms.h>
@@ -323,10 +323,7 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
 #if ENABLE(SERVICE_WORKER)
     if (parentProcessHasServiceWorkerEntitlement()) {
         bool serviceWorkerProcessTerminationDelayEnabled = true;
-        addServiceWorkerSession(PAL::SessionID::defaultSessionID(), serviceWorkerProcessTerminationDelayEnabled, parameters.serviceWorkerRegistrationDirectory, parameters.serviceWorkerRegistrationDirectoryExtensionHandle);
-
-        for (auto& scheme : parameters.urlSchemesServiceWorkersCanHandle)
-            registerURLSchemeServiceWorkersCanHandle(scheme);
+        addServiceWorkerSession(PAL::SessionID::defaultSessionID(), serviceWorkerProcessTerminationDelayEnabled, WTFMove(parameters.serviceWorkerRegistrationDirectory), parameters.serviceWorkerRegistrationDirectoryExtensionHandle);
     }
 #endif
     initializeStorageQuota(parameters.defaultDataStoreParameters);
@@ -352,9 +349,6 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
 
     for (auto& scheme : parameters.urlSchemesRegisteredAsNoAccess)
         registerURLSchemeAsNoAccess(scheme);
-
-    for (auto& scheme : parameters.urlSchemesRegisteredAsDisplayIsolated)
-        registerURLSchemeAsDisplayIsolated(scheme);
 
     for (auto& scheme : parameters.urlSchemesRegisteredAsCORSEnabled)
         registerURLSchemeAsCORSEnabled(scheme);
@@ -452,7 +446,7 @@ void NetworkProcess::addWebsiteDataStore(WebsiteDataStoreParameters&& parameters
 
 #if ENABLE(SERVICE_WORKER)
     if (parentProcessHasServiceWorkerEntitlement())
-        addServiceWorkerSession(parameters.networkSessionParameters.sessionID, parameters.serviceWorkerProcessTerminationDelayEnabled, parameters.serviceWorkerRegistrationDirectory, parameters.serviceWorkerRegistrationDirectoryExtensionHandle);
+        addServiceWorkerSession(parameters.networkSessionParameters.sessionID, parameters.serviceWorkerProcessTerminationDelayEnabled, WTFMove(parameters.serviceWorkerRegistrationDirectory), parameters.serviceWorkerRegistrationDirectoryExtensionHandle);
 #endif
 
     m_storageManagerSet->add(parameters.networkSessionParameters.sessionID, parameters.localStorageDirectory, parameters.localStorageDirectoryExtensionHandle);
@@ -672,15 +666,18 @@ void NetworkProcess::setGrandfathered(PAL::SessionID sessionID, const Registrabl
     }
 }
 
-void NetworkProcess::setUseITPDatabase(PAL::SessionID sessionID, bool value)
+void NetworkProcess::setUseITPDatabase(PAL::SessionID sessionID, bool value, CompletionHandler<void()>&& completionHandler)
 {
     if (auto* networkSession = this->networkSession(sessionID)) {
         if (m_isITPDatabaseEnabled != value) {
             m_isITPDatabaseEnabled = value;
             networkSession->recreateResourceLoadStatisticStore();
         }
-    } else
+        completionHandler();
+    } else {
         ASSERT_NOT_REACHED();
+        completionHandler();
+    }
 }
 
 void NetworkProcess::setPrevalentResource(PAL::SessionID sessionID, const RegistrableDomain& domain, CompletionHandler<void()>&& completionHandler)
@@ -974,11 +971,11 @@ void NetworkProcess::setLastSeen(PAL::SessionID sessionID, const RegistrableDoma
     }
 }
 
-void NetworkProcess::mergeStatisticForTesting(PAL::SessionID sessionID, const RegistrableDomain& domain, const RegistrableDomain& topFrameDomain, Seconds lastSeen, bool hadUserInteraction, Seconds mostRecentUserInteraction, bool isGrandfathered, bool isPrevalent, bool isVeryPrevalent, unsigned dataRecordsRemoved, CompletionHandler<void()>&& completionHandler)
+void NetworkProcess::mergeStatisticForTesting(PAL::SessionID sessionID, const RegistrableDomain& domain, const RegistrableDomain& topFrameDomain1, const RegistrableDomain& topFrameDomain2, Seconds lastSeen, bool hadUserInteraction, Seconds mostRecentUserInteraction, bool isGrandfathered, bool isPrevalent, bool isVeryPrevalent, unsigned dataRecordsRemoved, CompletionHandler<void()>&& completionHandler)
 {
     if (auto* networkSession = this->networkSession(sessionID)) {
         if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
-            resourceLoadStatistics->mergeStatisticForTesting(domain, topFrameDomain, lastSeen, hadUserInteraction, mostRecentUserInteraction, isGrandfathered, isPrevalent, isVeryPrevalent, dataRecordsRemoved, WTFMove(completionHandler));
+            resourceLoadStatistics->mergeStatisticForTesting(domain, topFrameDomain1, topFrameDomain2, lastSeen, hadUserInteraction, mostRecentUserInteraction, isGrandfathered, isPrevalent, isVeryPrevalent, dataRecordsRemoved, WTFMove(completionHandler));
         else
             completionHandler();
     } else {
@@ -1024,6 +1021,19 @@ void NetworkProcess::hadUserInteraction(PAL::SessionID sessionID, const Registra
     if (auto* networkSession = this->networkSession(sessionID)) {
         if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
             resourceLoadStatistics->hasHadUserInteraction(domain, WTFMove(completionHandler));
+        else
+            completionHandler(false);
+    } else {
+        ASSERT_NOT_REACHED();
+        completionHandler(false);
+    }
+}
+
+void NetworkProcess::isRelationshipOnlyInDatabaseOnce(PAL::SessionID sessionID, const RegistrableDomain& subDomain, const RegistrableDomain& topDomain, CompletionHandler<void(bool)>&& completionHandler)
+{
+    if (auto* networkSession = this->networkSession(sessionID)) {
+        if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
+            resourceLoadStatistics->isRelationshipOnlyInDatabaseOnce(subDomain, topDomain, WTFMove(completionHandler));
         else
             completionHandler(false);
     } else {
@@ -1246,6 +1256,15 @@ void NetworkProcess::setShouldDowngradeReferrerForTesting(bool enabled, Completi
     forEachNetworkSession([enabled](auto& networkSession) {
         networkSession.setShouldDowngradeReferrerForTesting(enabled);
     });
+    completionHandler();
+}
+
+void NetworkProcess::setShouldBlockThirdPartyCookiesForTesting(PAL::SessionID sessionID, bool enabled, CompletionHandler<void()>&& completionHandler)
+{
+    if (auto* networkStorageSession = storageSession(sessionID))
+        networkStorageSession->setIsThirdPartyCookieBlockingOnSitesWithoutUserInteractionEnabled(enabled);
+    else
+        ASSERT_NOT_REACHED();
     completionHandler();
 }
 #endif // ENABLE(RESOURCE_LOAD_STATISTICS)
@@ -2013,16 +2032,6 @@ void NetworkProcess::setCacheModel(CacheModel cacheModel, String cacheStorageDir
     });
 }
 
-void NetworkProcess::getNetworkProcessStatistics(uint64_t callbackID)
-{
-    StatisticsData data;
-
-    data.statisticsNumbers.set("DownloadsActiveCount", downloadManager().activeDownloadCount());
-    data.statisticsNumbers.set("OutstandingAuthenticationChallengesCount", authenticationManager().outstandingAuthenticationChallengeCount());
-
-    parentProcessConnection()->send(Messages::WebProcessPool::DidGetStatistics(data, callbackID), 0);
-}
-
 void NetworkProcess::setAllowsAnySSLCertificateForWebSocket(bool allows, CompletionHandler<void()>&& completionHandler)
 {
     DeprecatedGlobalSettings::setAllowsAnySSLCertificate(allows);
@@ -2206,37 +2215,32 @@ void NetworkProcess::setCacheStorageParameters(PAL::SessionID sessionID, String&
 
 void NetworkProcess::registerURLSchemeAsSecure(const String& scheme) const
 {
-    SchemeRegistry::registerURLSchemeAsSecure(scheme);
+    LegacySchemeRegistry::registerURLSchemeAsSecure(scheme);
 }
 
 void NetworkProcess::registerURLSchemeAsBypassingContentSecurityPolicy(const String& scheme) const
 {
-    SchemeRegistry::registerURLSchemeAsBypassingContentSecurityPolicy(scheme);
+    LegacySchemeRegistry::registerURLSchemeAsBypassingContentSecurityPolicy(scheme);
 }
 
 void NetworkProcess::registerURLSchemeAsLocal(const String& scheme) const
 {
-    SchemeRegistry::registerURLSchemeAsLocal(scheme);
+    LegacySchemeRegistry::registerURLSchemeAsLocal(scheme);
 }
 
 void NetworkProcess::registerURLSchemeAsNoAccess(const String& scheme) const
 {
-    SchemeRegistry::registerURLSchemeAsNoAccess(scheme);
-}
-
-void NetworkProcess::registerURLSchemeAsDisplayIsolated(const String& scheme) const
-{
-    SchemeRegistry::registerURLSchemeAsDisplayIsolated(scheme);
+    LegacySchemeRegistry::registerURLSchemeAsNoAccess(scheme);
 }
 
 void NetworkProcess::registerURLSchemeAsCORSEnabled(const String& scheme) const
 {
-    SchemeRegistry::registerURLSchemeAsCORSEnabled(scheme);
+    LegacySchemeRegistry::registerURLSchemeAsCORSEnabled(scheme);
 }
 
 void NetworkProcess::registerURLSchemeAsCanDisplayOnlyIfCanRequest(const String& scheme) const
 {
-    SchemeRegistry::registerAsCanDisplayOnlyIfCanRequest(scheme);
+    LegacySchemeRegistry::registerAsCanDisplayOnlyIfCanRequest(scheme);
 }
 
 void NetworkProcess::didSyncAllCookies()
@@ -2253,7 +2257,7 @@ Ref<IDBServer::IDBServer> NetworkProcess::createIDBServer(PAL::SessionID session
         path = m_idbDatabasePaths.get(sessionID);
     }
 
-    return IDBServer::IDBServer::create(sessionID, path, *this, [this, weakThis = makeWeakPtr(this)](PAL::SessionID sessionID, const auto& origin) -> StorageQuotaManager* {
+    return IDBServer::IDBServer::create(sessionID, path, [this, weakThis = makeWeakPtr(this)](PAL::SessionID sessionID, const auto& origin) -> StorageQuotaManager* {
         if (!weakThis)
             return nullptr;
         return &this->storageQuotaManager(sessionID, origin);
@@ -2300,14 +2304,6 @@ void NetworkProcess::performNextStorageTask()
     }
     
     task.performTask();
-}
-
-void NetworkProcess::accessToTemporaryFileComplete(const String& path)
-{
-    // We've either hard linked the temporary blob file to the database directory, copied it there,
-    // or the transaction is being aborted.
-    // In any of those cases, we can delete the temporary blob file now.
-    FileSystem::deleteFile(path);
 }
 
 void NetworkProcess::collectIndexedDatabaseOriginsForVersion(const String& path, HashSet<WebCore::SecurityOriginData>& securityOrigins)
@@ -2428,11 +2424,11 @@ void NetworkProcess::unregisterSWServerConnection(WebSWServerConnection& connect
         store->unregisterSWServerConnection(connection);
 }
 
-void NetworkProcess::addServiceWorkerSession(PAL::SessionID sessionID, bool processTerminationDelayEnabled, String& serviceWorkerRegistrationDirectory, const SandboxExtension::Handle& handle)
+void NetworkProcess::addServiceWorkerSession(PAL::SessionID sessionID, bool processTerminationDelayEnabled, String&& serviceWorkerRegistrationDirectory, const SandboxExtension::Handle& handle)
 {
     ServiceWorkerInfo info {
-        serviceWorkerRegistrationDirectory,
-        processTerminationDelayEnabled,
+        WTFMove(serviceWorkerRegistrationDirectory),
+        processTerminationDelayEnabled
     };
     auto addResult = m_serviceWorkerInfo.add(sessionID, WTFMove(info));
     if (addResult.isNewEntry) {
@@ -2608,6 +2604,19 @@ void NetworkProcess::connectionToWebProcessClosed(IPC::Connection& connection)
 NetworkConnectionToWebProcess* NetworkProcess::webProcessConnection(ProcessIdentifier identifier) const
 {
     return m_webProcessConnections.get(identifier);
+}
+
+const Seconds NetworkProcess::defaultServiceWorkerFetchTimeout = 70_s;
+void NetworkProcess::setServiceWorkerFetchTimeoutForTesting(Seconds timeout, CompletionHandler<void()>&& completionHandler)
+{
+    m_serviceWorkerFetchTimeout = timeout;
+    completionHandler();
+}
+
+void NetworkProcess::resetServiceWorkerFetchTimeoutForTesting(CompletionHandler<void()>&& completionHandler)
+{
+    m_serviceWorkerFetchTimeout = defaultServiceWorkerFetchTimeout;
+    completionHandler();
 }
 
 } // namespace WebKit

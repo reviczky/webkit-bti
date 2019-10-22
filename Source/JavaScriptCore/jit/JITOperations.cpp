@@ -987,7 +987,7 @@ static SlowPathReturnType handleHostCall(ExecState* execCallee, JSValue callee, 
         if (callType == CallType::Host) {
             NativeCallFrameTracer tracer(vm, execCallee);
             execCallee->setCallee(asObject(callee));
-            vm.hostCallReturnValue = JSValue::decode(callData.native.function(execCallee));
+            vm.hostCallReturnValue = JSValue::decode(callData.native.function(asObject(callee)->globalObject(vm), execCallee));
             if (UNLIKELY(scope.exception())) {
                 return encodeResult(
                     vm.getCTIStub(throwExceptionFromCallSlowPathGenerator).retaggedCode<JSEntryPtrTag>().executableAddress(),
@@ -1016,7 +1016,7 @@ static SlowPathReturnType handleHostCall(ExecState* execCallee, JSValue callee, 
     if (constructType == ConstructType::Host) {
         NativeCallFrameTracer tracer(vm, execCallee);
         execCallee->setCallee(asObject(callee));
-        vm.hostCallReturnValue = JSValue::decode(constructData.native.function(execCallee));
+        vm.hostCallReturnValue = JSValue::decode(constructData.native.function(asObject(callee)->globalObject(vm), execCallee));
         if (UNLIKELY(scope.exception())) {
             return encodeResult(
                 vm.getCTIStub(throwExceptionFromCallSlowPathGenerator).retaggedCode<JSEntryPtrTag>().executableAddress(),
@@ -2303,6 +2303,7 @@ char* JIT_OPERATION operationSwitchCharWithUnknownKeyType(ExecState* exec, Encod
 {
     VM& vm = exec->vm();
     NativeCallFrameTracer tracer(vm, exec);
+    auto throwScope = DECLARE_THROW_SCOPE(vm);
     JSValue key = JSValue::decode(encodedKey);
     CodeBlock* codeBlock = exec->codeBlock();
 
@@ -2310,9 +2311,12 @@ char* JIT_OPERATION operationSwitchCharWithUnknownKeyType(ExecState* exec, Encod
     void* result = jumpTable.ctiDefault.executableAddress();
 
     if (key.isString()) {
-        StringImpl* value = asString(key)->value(exec).impl();
-        if (value->length() == 1)
-            result = jumpTable.ctiForValue((*value)[0]).executableAddress();
+        JSString* string = asString(key);
+        if (string->length() == 1) {
+            String value = string->value(exec);
+            RETURN_IF_EXCEPTION(throwScope, nullptr);
+            result = jumpTable.ctiForValue(value[0]).executableAddress();
+        }
     }
 
     assertIsTaggedWith(result, JSSwitchPtrTag);

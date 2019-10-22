@@ -47,6 +47,9 @@ $(PROJECT_DIR)/Modules/applepay/ApplePayShippingMethodUpdate.idl
 $(PROJECT_DIR)/Modules/applepay/ApplePayValidateMerchantEvent.idl
 $(PROJECT_DIR)/Modules/applepay/paymentrequest/ApplePayModifier.idl
 $(PROJECT_DIR)/Modules/applepay/paymentrequest/ApplePayRequest.idl
+$(PROJECT_DIR)/Modules/async-clipboard/Clipboard.idl
+$(PROJECT_DIR)/Modules/async-clipboard/ClipboardItem.idl
+$(PROJECT_DIR)/Modules/async-clipboard/NavigatorClipboard.idl
 $(PROJECT_DIR)/Modules/beacon/NavigatorBeacon.idl
 $(PROJECT_DIR)/Modules/cache/CacheQueryOptions.idl
 $(PROJECT_DIR)/Modules/cache/DOMCache.idl
@@ -126,6 +129,8 @@ $(PROJECT_DIR)/Modules/indexeddb/IDBTransactionMode.idl
 $(PROJECT_DIR)/Modules/indexeddb/IDBVersionChangeEvent.idl
 $(PROJECT_DIR)/Modules/indexeddb/WorkerGlobalScopeIndexedDatabase.idl
 $(PROJECT_DIR)/Modules/mediacapabilities/AudioConfiguration.idl
+$(PROJECT_DIR)/Modules/mediacapabilities/ColorGamut.idl
+$(PROJECT_DIR)/Modules/mediacapabilities/HdrMetadataType.idl
 $(PROJECT_DIR)/Modules/mediacapabilities/MediaCapabilities.idl
 $(PROJECT_DIR)/Modules/mediacapabilities/MediaCapabilitiesDecodingInfo.idl
 $(PROJECT_DIR)/Modules/mediacapabilities/MediaCapabilitiesEncodingInfo.idl
@@ -136,8 +141,7 @@ $(PROJECT_DIR)/Modules/mediacapabilities/MediaDecodingType.idl
 $(PROJECT_DIR)/Modules/mediacapabilities/MediaEncodingConfiguration.idl
 $(PROJECT_DIR)/Modules/mediacapabilities/MediaEncodingType.idl
 $(PROJECT_DIR)/Modules/mediacapabilities/NavigatorMediaCapabilities.idl
-$(PROJECT_DIR)/Modules/mediacapabilities/ScreenColorGamut.idl
-$(PROJECT_DIR)/Modules/mediacapabilities/ScreenLuminance.idl
+$(PROJECT_DIR)/Modules/mediacapabilities/TransferFunction.idl
 $(PROJECT_DIR)/Modules/mediacapabilities/VideoConfiguration.idl
 $(PROJECT_DIR)/Modules/mediacontrols/MediaControlsHost.idl
 $(PROJECT_DIR)/Modules/mediarecorder/BlobEvent.idl
@@ -232,6 +236,10 @@ $(PROJECT_DIR)/Modules/paymentrequest/PaymentResponse.idl
 $(PROJECT_DIR)/Modules/paymentrequest/PaymentShippingOption.idl
 $(PROJECT_DIR)/Modules/paymentrequest/PaymentShippingType.idl
 $(PROJECT_DIR)/Modules/paymentrequest/PaymentValidationErrors.idl
+$(PROJECT_DIR)/Modules/pictureinpicture/DocumentPictureInPicture.idl
+$(PROJECT_DIR)/Modules/pictureinpicture/EnterPictureInPictureEvent.idl
+$(PROJECT_DIR)/Modules/pictureinpicture/HTMLVideoElementPictureInPicture.idl
+$(PROJECT_DIR)/Modules/pictureinpicture/PictureInPictureWindow.idl
 $(PROJECT_DIR)/Modules/plugins/QuickTimePluginReplacement.css
 $(PROJECT_DIR)/Modules/plugins/QuickTimePluginReplacement.idl
 $(PROJECT_DIR)/Modules/plugins/QuickTimePluginReplacement.js
@@ -596,6 +604,9 @@ $(PROJECT_DIR)/dom/EventTargetFactory.in
 $(PROJECT_DIR)/dom/FocusEvent.idl
 $(PROJECT_DIR)/dom/GlobalEventHandlers.idl
 $(PROJECT_DIR)/dom/HashChangeEvent.idl
+$(PROJECT_DIR)/dom/IdleDeadline.idl
+$(PROJECT_DIR)/dom/IdleRequestCallback.idl
+$(PROJECT_DIR)/dom/IdleRequestOptions.idl
 $(PROJECT_DIR)/dom/InputEvent.idl
 $(PROJECT_DIR)/dom/KeyboardEvent.idl
 $(PROJECT_DIR)/dom/MessageChannel.idl
@@ -879,6 +890,7 @@ $(PROJECT_DIR)/page/IntersectionObserverEntry.idl
 $(PROJECT_DIR)/page/Location.idl
 $(PROJECT_DIR)/page/Navigator.idl
 $(PROJECT_DIR)/page/NavigatorID.idl
+$(PROJECT_DIR)/page/NavigatorIsLoggedIn.idl
 $(PROJECT_DIR)/page/NavigatorLanguage.idl
 $(PROJECT_DIR)/page/NavigatorOnLine.idl
 $(PROJECT_DIR)/page/NavigatorServiceWorker.idl
@@ -954,7 +966,6 @@ $(PROJECT_DIR)/svg/SVGDescElement.idl
 $(PROJECT_DIR)/svg/SVGDocument.idl
 $(PROJECT_DIR)/svg/SVGElement.idl
 $(PROJECT_DIR)/svg/SVGEllipseElement.idl
-$(PROJECT_DIR)/svg/SVGExternalResourcesRequired.idl
 $(PROJECT_DIR)/svg/SVGFEBlendElement.idl
 $(PROJECT_DIR)/svg/SVGFEColorMatrixElement.idl
 $(PROJECT_DIR)/svg/SVGFEComponentTransferElement.idl
@@ -1083,6 +1094,7 @@ $(PROJECT_DIR)/testing/MockPaymentAddress.idl
 $(PROJECT_DIR)/testing/MockPaymentContactFields.idl
 $(PROJECT_DIR)/testing/MockPaymentCoordinator.idl
 $(PROJECT_DIR)/testing/MockPaymentError.idl
+$(PROJECT_DIR)/testing/MockWebAuthenticationConfiguration.idl
 $(PROJECT_DIR)/testing/ServiceWorkerInternals.idl
 $(PROJECT_DIR)/testing/TypeConversions.idl
 $(PROJECT_DIR)/workers/AbstractWorker.idl

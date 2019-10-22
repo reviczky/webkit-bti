@@ -33,8 +33,9 @@
 
 namespace JSC {
 
-class ExecState;
+class CallFrame;
 class VM;
+using ExecState = CallFrame;
 
 class Watchdog : public WTF::ThreadSafeRefCounted<Watchdog> {
     WTF_MAKE_FAST_ALLOCATED;
@@ -53,7 +54,7 @@ public:
     void enteredVM();
     void exitedVM();
 
-    static const Seconds noTimeLimit;
+    static constexpr Seconds noTimeLimit = Seconds::infinity();
 
 private:
     void startTimer(Seconds timeLimit);

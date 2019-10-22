@@ -709,6 +709,8 @@ static void setupGetByIdPrototypeCache(ExecState* exec, VM& vm, const Instructio
         structure->flattenDictionaryStructure(vm, jsCast<JSObject*>(baseCell));
     }
 
+    preparePrototypeChainForCaching(exec->lexicalGlobalObject(), baseCell, slot);
+
     ObjectPropertyConditionSet conditions;
     if (slot.isUnset())
         conditions = generateConditionsForPropertyMiss(vm, codeBlock, exec, structure, ident.impl());
@@ -1443,7 +1445,7 @@ static SlowPathReturnType handleHostCall(ExecState* execCallee, JSValue callee, 
         if (callType == CallType::Host) {
             NativeCallFrameTracer tracer(vm, execCallee);
             execCallee->setCallee(asObject(callee));
-            vm.hostCallReturnValue = JSValue::decode(callData.native.function(execCallee));
+            vm.hostCallReturnValue = JSValue::decode(callData.native.function(asObject(callee)->globalObject(vm), execCallee));
             LLINT_CALL_RETURN(execCallee, execCallee, LLInt::getCodePtr(getHostCallReturnValue), CFunctionPtrTag);
         }
         
@@ -1463,7 +1465,7 @@ static SlowPathReturnType handleHostCall(ExecState* execCallee, JSValue callee, 
     if (constructType == ConstructType::Host) {
         NativeCallFrameTracer tracer(vm, execCallee);
         execCallee->setCallee(asObject(callee));
-        vm.hostCallReturnValue = JSValue::decode(constructData.native.function(execCallee));
+        vm.hostCallReturnValue = JSValue::decode(constructData.native.function(asObject(callee)->globalObject(vm), execCallee));
         LLINT_CALL_RETURN(execCallee, execCallee, LLInt::getCodePtr(getHostCallReturnValue), CFunctionPtrTag);
     }
     
