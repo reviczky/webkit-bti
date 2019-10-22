@@ -8,6 +8,7 @@ webkit2gtk (2.27.2-1) UNRELEASED; urgency=medium
   * debian/rules:
     + Stop building with -O1 for armhf and friends, the build seems to
       work just fine with -O2 now.
+  * Drop fix-ftbfs-m68k.patch, we are not building for m68k anyway.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 22 Oct 2019 12:49:40 +0300
 
