@@ -11,3 +11,4 @@ force-single-process.patch
 is-same-v.patch
 safe-multiply.patch
 fix-gtkdoc-generation.patch
+fix-atomics-build.patch
