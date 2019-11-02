@@ -5,6 +5,15 @@ webkit2gtk (2.26.1-4) UNRELEASED; urgency=medium
       work just fine with -O2 now.
   * debian/control:
     + Require bubblewrap >= 0.3.1.
+  * The WebKitGTK security advisory WSA-2019-0005 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    + CVE-2019-8768 (fixed in 2.24.0).
+    + CVE-2019-8735 (fixed in 2.24.2).
+    + CVE-2019-8726 (fixed in 2.24.3).
+    + CVE-2019-8674, CVE-2019-8707, CVE-2019-8719, CVE-2019-8733 and
+      CVE-2019-8763 (fixed in 2.24.4).
+    + CVE-2019-8625, CVE-2019-8720, CVE-2019-8769 and CVE-2019-8771
+      (fixed in 2.26.0).
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 09 Oct 2019 17:15:06 +0300
 
