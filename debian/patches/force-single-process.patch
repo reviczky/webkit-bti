@@ -1,7 +1,7 @@
 From: Alberto Garcia <berto@igalia.com>
 Bug: https://bugs.webkit.org/show_bug.cgi?id=201033
 Origin: https://mail.gnome.org/archives/distributor-list/2019-October/msg00000.html
-Description: Force the single-process mode in Geary
+Description: Force the single-process mode in Evolution and Geary
  Since WebKitGTK 2.26 the single-process mode is considered a security
  risk and the process limiting APIs have been completely disabled.
  This change is transparent for most applications, but Geary and
@@ -11,7 +11,7 @@ Description: Force the single-process mode in Geary
  .
  Although the API to set the single-process model is no longer
  available, it is still possible to do it internally. This patch does
- that for Geary (Evolution is now fixed in Debian unstable).
+ that for Evolution and Geary.
  .
  This is a temporary workaround and it is especially meant for stable
  distributions and security updates, where patching or updating the
@@ -32,7 +32,7 @@ Index: webkitgtk/Source/WebKit/UIProcess/API/glib/WebKitWebContext.cpp
 +        }
 +    } else {
 +        const char* prgname = g_get_prgname();
-+        if (!g_strcmp0(prgname, "geary")) {
++        if (!g_strcmp0(prgname, "evolution") || !g_strcmp0(prgname, "geary")) {
 +            configuration.setUsesSingleWebProcess(true);
 +        }
 +    }
