@@ -6,6 +6,9 @@ webkit2gtk (2.26.2-1) UNRELEASED; urgency=medium
       work just fine with -O2 now.
   * debian/control:
     + Require bubblewrap >= 0.3.1.
+  * debian/patches/force-single-process.patch:
+    + Remove this patch, the fixed version of Geary (3.34.1) is now in
+      unstable.
   * The WebKitGTK security advisory WSA-2019-0005 lists the following
     security fixes in the latest versions of WebKitGTK:
     + CVE-2019-8768 (fixed in 2.24.0).
