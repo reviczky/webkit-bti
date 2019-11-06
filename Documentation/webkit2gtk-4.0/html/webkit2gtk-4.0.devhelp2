@@ -3,7 +3,7 @@
   <chapters>
     <sub name="Class Overview" link="ch01.html">
       <sub name="WebKitWebContext" link="WebKitWebContext.html"/>
-      <sub name="WebKitWebView" link="WebKitWebView.html"/>
+      <sub name="The main frame document title of this #WebKitWebView. If&#10;the title has not been received yet, it will be %NULL." link="WebKitWebView.html"/>
       <sub name="WebKitAuthenticationRequest" link="WebKitAuthenticationRequest.html"/>
       <sub name="WebKitBackForwardList" link="WebKitBackForwardList.html"/>
       <sub name="WebKitBackForwardListItem" link="WebKitBackForwardListItem.html"/>
@@ -23,7 +23,7 @@
       <sub name="WebKitResponsePolicyDecision" link="WebKitResponsePolicyDecision.html"/>
       <sub name="WebKitHitTestResult" link="WebKitHitTestResult.html"/>
       <sub name="WebKitEditorState" link="WebKitEditorState.html"/>
-      <sub name="WebKitPrintCustomWidget" link="WebKitPrintCustomWidget.html"/>
+      <sub name="The title of the custom widget." link="webkit2gtk-4.0-The-title-of-the-custom-widget..html"/>
       <sub name="WebKitPrintOperation" link="WebKitPrintOperation.html"/>
       <sub name="WebKitWebResource" link="WebKitWebResource.html"/>
       <sub name="WebKitError" link="webkit2gtk-4.0-WebKitError.html"/>
@@ -45,7 +45,7 @@
       <sub name="WebKitUserContentFilterStore" link="WebKitUserContentFilterStore.html"/>
       <sub name="WebKitUserContentManager" link="WebKitUserContentManager.html"/>
       <sub name="User content" link="webkit2gtk-4.0-WebKitUserContent.html"/>
-      <sub name="WebKitNotification" link="WebKitNotification.html"/>
+      <sub name="The title for the notification." link="webkit2gtk-4.0-The-title-for-the-notification..html"/>
       <sub name="WebKitNotificationPermissionRequest" link="WebKitNotificationPermissionRequest.html"/>
       <sub name="WebKitSecurityOrigin" link="WebKitSecurityOrigin.html"/>
       <sub name="WebKitWebsiteDataManager" link="WebKitWebsiteDataManager.html"/>
@@ -634,14 +634,14 @@
     <keyword type="struct" name="struct WebKitEditorState" link="WebKitEditorState.html#WebKitEditorState-struct"/>
     <keyword type="enum" name="enum WebKitEditorTypingAttributes" link="WebKitEditorState.html#WebKitEditorTypingAttributes" since="2.10"/>
     <keyword type="property" name="The “typing-attributes” property" link="WebKitEditorState.html#WebKitEditorState--typing-attributes"/>
-    <keyword type="function" name="webkit_print_custom_widget_new ()" link="WebKitPrintCustomWidget.html#webkit-print-custom-widget-new" since="2.16"/>
-    <keyword type="function" name="webkit_print_custom_widget_get_widget ()" link="WebKitPrintCustomWidget.html#webkit-print-custom-widget-get-widget" since="2.16"/>
-    <keyword type="function" name="webkit_print_custom_widget_get_title ()" link="WebKitPrintCustomWidget.html#webkit-print-custom-widget-get-title" since="2.16"/>
-    <keyword type="struct" name="struct WebKitPrintCustomWidget" link="WebKitPrintCustomWidget.html#WebKitPrintCustomWidget-struct"/>
-    <keyword type="property" name="The “title” property" link="WebKitPrintCustomWidget.html#WebKitPrintCustomWidget--title"/>
-    <keyword type="property" name="The “widget” property" link="WebKitPrintCustomWidget.html#WebKitPrintCustomWidget--widget"/>
-    <keyword type="signal" name="The “apply” signal" link="WebKitPrintCustomWidget.html#WebKitPrintCustomWidget-apply"/>
-    <keyword type="signal" name="The “update” signal" link="WebKitPrintCustomWidget.html#WebKitPrintCustomWidget-update"/>
+    <keyword type="function" name="webkit_print_custom_widget_new ()" link="webkit2gtk-4.0-The-title-of-the-custom-widget..html#webkit-print-custom-widget-new" since="2.16"/>
+    <keyword type="function" name="webkit_print_custom_widget_get_widget ()" link="webkit2gtk-4.0-The-title-of-the-custom-widget..html#webkit-print-custom-widget-get-widget" since="2.16"/>
+    <keyword type="function" name="webkit_print_custom_widget_get_title ()" link="webkit2gtk-4.0-The-title-of-the-custom-widget..html#webkit-print-custom-widget-get-title" since="2.16"/>
+    <keyword type="struct" name="struct WebKitPrintCustomWidget" link="webkit2gtk-4.0-The-title-of-the-custom-widget..html#WebKitPrintCustomWidget-struct"/>
+    <keyword type="property" name="The “title” property" link="webkit2gtk-4.0-The-title-of-the-custom-widget..html#WebKitPrintCustomWidget--title"/>
+    <keyword type="property" name="The “widget” property" link="webkit2gtk-4.0-The-title-of-the-custom-widget..html#WebKitPrintCustomWidget--widget"/>
+    <keyword type="signal" name="The “apply” signal" link="webkit2gtk-4.0-The-title-of-the-custom-widget..html#WebKitPrintCustomWidget-apply"/>
+    <keyword type="signal" name="The “update” signal" link="webkit2gtk-4.0-The-title-of-the-custom-widget..html#WebKitPrintCustomWidget-update"/>
     <keyword type="function" name="webkit_print_operation_new ()" link="WebKitPrintOperation.html#webkit-print-operation-new"/>
     <keyword type="function" name="webkit_print_operation_get_print_settings ()" link="WebKitPrintOperation.html#webkit-print-operation-get-print-settings"/>
     <keyword type="function" name="webkit_print_operation_set_print_settings ()" link="WebKitPrintOperation.html#webkit-print-operation-set-print-settings"/>
@@ -908,19 +908,19 @@
     <keyword type="enum" name="enum WebKitUserStyleLevel" link="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserStyleLevel" since="2.6"/>
     <keyword type="enum" name="enum WebKitUserScriptInjectionTime" link="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserScriptInjectionTime" since="2.6"/>
     <keyword type="struct" name="WebKitUserContentFilter" link="webkit2gtk-4.0-WebKitUserContent.html#WebKitUserContentFilter-struct"/>
-    <keyword type="function" name="webkit_notification_get_id ()" link="WebKitNotification.html#webkit-notification-get-id" since="2.8"/>
-    <keyword type="function" name="webkit_notification_get_title ()" link="WebKitNotification.html#webkit-notification-get-title" since="2.8"/>
-    <keyword type="function" name="webkit_notification_get_body ()" link="WebKitNotification.html#webkit-notification-get-body" since="2.8"/>
-    <keyword type="function" name="webkit_notification_get_tag ()" link="WebKitNotification.html#webkit-notification-get-tag" since="2.16"/>
-    <keyword type="function" name="webkit_notification_close ()" link="WebKitNotification.html#webkit-notification-close" since="2.8"/>
-    <keyword type="function" name="webkit_notification_clicked ()" link="WebKitNotification.html#webkit-notification-clicked" since="2.12"/>
-    <keyword type="struct" name="struct WebKitNotification" link="WebKitNotification.html#WebKitNotification-struct"/>
-    <keyword type="property" name="The “body” property" link="WebKitNotification.html#WebKitNotification--body"/>
-    <keyword type="property" name="The “id” property" link="WebKitNotification.html#WebKitNotification--id"/>
-    <keyword type="property" name="The “tag” property" link="WebKitNotification.html#WebKitNotification--tag"/>
-    <keyword type="property" name="The “title” property" link="WebKitNotification.html#WebKitNotification--title"/>
-    <keyword type="signal" name="The “clicked” signal" link="WebKitNotification.html#WebKitNotification-clicked"/>
-    <keyword type="signal" name="The “closed” signal" link="WebKitNotification.html#WebKitNotification-closed"/>
+    <keyword type="function" name="webkit_notification_get_id ()" link="webkit2gtk-4.0-The-title-for-the-notification..html#webkit-notification-get-id" since="2.8"/>
+    <keyword type="function" name="webkit_notification_get_title ()" link="webkit2gtk-4.0-The-title-for-the-notification..html#webkit-notification-get-title" since="2.8"/>
+    <keyword type="function" name="webkit_notification_get_body ()" link="webkit2gtk-4.0-The-title-for-the-notification..html#webkit-notification-get-body" since="2.8"/>
+    <keyword type="function" name="webkit_notification_get_tag ()" link="webkit2gtk-4.0-The-title-for-the-notification..html#webkit-notification-get-tag" since="2.16"/>
+    <keyword type="function" name="webkit_notification_close ()" link="webkit2gtk-4.0-The-title-for-the-notification..html#webkit-notification-close" since="2.8"/>
+    <keyword type="function" name="webkit_notification_clicked ()" link="webkit2gtk-4.0-The-title-for-the-notification..html#webkit-notification-clicked" since="2.12"/>
+    <keyword type="struct" name="struct WebKitNotification" link="webkit2gtk-4.0-The-title-for-the-notification..html#WebKitNotification-struct"/>
+    <keyword type="property" name="The “body” property" link="webkit2gtk-4.0-The-title-for-the-notification..html#WebKitNotification--body"/>
+    <keyword type="property" name="The “id” property" link="webkit2gtk-4.0-The-title-for-the-notification..html#WebKitNotification--id"/>
+    <keyword type="property" name="The “tag” property" link="webkit2gtk-4.0-The-title-for-the-notification..html#WebKitNotification--tag"/>
+    <keyword type="property" name="The “title” property" link="webkit2gtk-4.0-The-title-for-the-notification..html#WebKitNotification--title"/>
+    <keyword type="signal" name="The “clicked” signal" link="webkit2gtk-4.0-The-title-for-the-notification..html#WebKitNotification-clicked"/>
+    <keyword type="signal" name="The “closed” signal" link="webkit2gtk-4.0-The-title-for-the-notification..html#WebKitNotification-closed"/>
     <keyword type="struct" name="struct WebKitNotificationPermissionRequest" link="WebKitNotificationPermissionRequest.html#WebKitNotificationPermissionRequest-struct"/>
     <keyword type="function" name="webkit_security_origin_new ()" link="WebKitSecurityOrigin.html#webkit-security-origin-new" since="2.16"/>
     <keyword type="function" name="webkit_security_origin_new_for_uri ()" link="WebKitSecurityOrigin.html#webkit-security-origin-new-for-uri" since="2.16"/>
