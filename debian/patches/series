@@ -7,3 +7,8 @@ detect-woff.patch
 user-agent-branding.patch
 prefer-pthread.patch
 dont-detect-sse2.patch
+force-single-process.patch
+is-same-v.patch
+safe-multiply.patch
+fix-gtkdoc-generation.patch
+fix-atomics-build.patch
