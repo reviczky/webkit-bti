@@ -1,5 +1,10 @@
-webkit2gtk (2.26.2-2) UNRELEASED; urgency=medium
+webkit2gtk (2.26.2-1~deb10+1) buster-security; urgency=high
 
+  * Rebuild for buster-security.
+  * debian/patches/force-single-process.patch:
+    + Force the single-process mode in Evolution and Geary
+  * debian/control:
+    + Remove Breaks for Evolution < 3.34.1.
   * The WebKitGTK security advisory WSA-2019-0006 lists the following
     security fixes in the latest versions of WebKitGTK:
     + CVE-2019-8765, CVE-2019-8821, CVE-2019-8822 (fixed in 2.24.4)
