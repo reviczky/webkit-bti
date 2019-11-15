@@ -8,6 +8,16 @@ webkit2gtk (2.26.2-2) UNRELEASED; urgency=medium
     + CVE-2019-8783, CVE-2019-8811, CVE-2019-8813, CVE-2019-8816,
       CVE-2019-8819, CVE-2019-8820, CVE-2019-8823 (fixed in 2.26.1)
     + CVE-2019-8812, CVE-2019-8814 (fixed in 2.26.2)
+  * Build without the bubblewrap sandbox if the required dependencies are
+    not available (Closes: #944731):
+    + debian/rules:
+      - Pass -DENABLE_BUBBLEWRAP_SANDBOX depending on whether libseccomp
+        is installed.
+      - Add runtime dependencies on bubblewrap and xdg-dbus-proxy
+        conditionally to the status of ENABLE_BUBBLEWRAP_SANDBOX.
+    + debian/control:
+      - Don't require bubblewrap, xdg-dbus-proxy or libseccomp-dev in
+        alpha, ia64, m68k, riscv64, sh4 or sparc64.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 12 Nov 2019 14:15:29 +0200
 
