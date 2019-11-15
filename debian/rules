@@ -9,6 +9,7 @@ CFLAGS = $(shell dpkg-buildflags --get CFLAGS)
 LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS) -Wl,--as-needed
 
 EXTRA_CMAKE_ARGUMENTS =
+DH_GENCONTROL_ARGS =
 
 # Sacrifice speed in order to make it more likely resource limits
 # won't be hit.
@@ -52,6 +53,14 @@ else
 	CPPFLAGS += -DNDEBUG -DG_DISABLE_CAST_CHECKS
 endif
 
+# Disable the bubblewrap sandbox if libseccomp-dev is not available
+ifeq ($(shell pkg-config --exists libseccomp && echo yes),yes)
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=ON
+	DH_GENCONTROL_ARGS += -Vbwrap:Depends="bubblewrap (>= 0.3.1), xdg-dbus-proxy"
+else
+	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=OFF
+endif
+
 # openjpeg2 is not in Ubuntu main yet https://launchpad.net/bugs/711061
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_OPENJPEG=OFF
@@ -59,12 +68,14 @@ ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
 endif
 
 # gstreamer1.0-libav is not in Ubuntu "main"
-override_dh_gencontrol:
 ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
-	dh_gencontrol -- -Vgst:Suggests="gstreamer1.0-libav"
+	DH_GENCONTROL_ARGS += -Vgst:Suggests="gstreamer1.0-libav"
 else
-	dh_gencontrol -- -Vgst:Recommends="gstreamer1.0-libav"
+	DH_GENCONTROL_ARGS += -Vgst:Recommends="gstreamer1.0-libav"
 endif
+
+override_dh_gencontrol:
+	dh_gencontrol -- $(DH_GENCONTROL_ARGS)
 
 %:
 	dh $@ --with gir --buildsystem=cmake+ninja
