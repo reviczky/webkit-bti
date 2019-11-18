@@ -30,6 +30,7 @@ webkit2gtk (2.26.2-2) UNRELEASED; urgency=medium
       I'm not convinced that they have been very useful for reporting
       bugs. Using -g1 is enough for a basic backtrace and it makes the
       packages easier to handle.
+    + Install the NEWS file using debian/libwebkit2gtk-4.0-37.docs.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 12 Nov 2019 14:15:29 +0200
 
