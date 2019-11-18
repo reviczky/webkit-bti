@@ -18,11 +18,8 @@ ifeq ($(DEB_BUILD_ARCH_BITS),32)
 endif
 
 # The debug packages produced by webkit are huge and cause problems in
-# most buildds, so use -g1 in all architectures except the ones that
-# are known to work fine
-ifeq (,$(filter $(DEB_HOST_ARCH),amd64 ppc64 ppc64el))
-	CFLAGS := $(CFLAGS:-g=-g1)
-endif
+# most buildds. Use -g1 in all architectures to make them smaller.
+CFLAGS := $(CFLAGS:-g=-g1)
 
 # Use the CLoop Javascript interpreter and disable the JIT. This is
 # slow but it is the most compatible solution for old (non-SSE2) CPUs.
