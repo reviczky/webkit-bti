@@ -106,9 +106,6 @@ override_dh_makeshlibs:
 	dh_makeshlibs -plibwebkit2gtk-4.0-37 -Xinjected-bundle
 	dh_makeshlibs -plibjavascriptcoregtk-4.0-18
 
-override_dh_installdocs:
-	dh_installdocs -A NEWS
-
 override_dh_missing:
 	dh_missing --fail-missing
 
