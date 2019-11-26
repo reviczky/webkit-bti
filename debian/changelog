@@ -1,4 +1,4 @@
-webkit2gtk (2.27.3-1) UNRELEASED; urgency=medium
+webkit2gtk (2.27.3-1) experimental; urgency=medium
 
   * New upstream development release.
   * Build without the bubblewrap sandbox if the required dependencies are
@@ -31,7 +31,7 @@ webkit2gtk (2.27.3-1) UNRELEASED; urgency=medium
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 26 Nov 2019 14:51:37 +0200
+ -- Alberto Garcia <berto@igalia.com>  Tue, 26 Nov 2019 17:31:23 +0200
 
 webkit2gtk (2.27.2-1) experimental; urgency=medium
 
