@@ -1,5 +1,6 @@
-webkit2gtk (2.27.2-2) UNRELEASED; urgency=medium
+webkit2gtk (2.27.3-1) UNRELEASED; urgency=medium
 
+  * New upstream development release.
   * Build without the bubblewrap sandbox if the required dependencies are
     not available:
     + debian/rules:
