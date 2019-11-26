@@ -105,7 +105,7 @@ public:
     void transactionDestroyed(UniqueIDBDatabaseTransaction&);
     void connectionClosedFromClient(UniqueIDBDatabaseConnection&);
     void confirmConnectionClosedOnServer(UniqueIDBDatabaseConnection&);
-    void didFireVersionChangeEvent(UniqueIDBDatabaseConnection&, const IDBResourceIdentifier& requestIdentifier);
+    void didFireVersionChangeEvent(UniqueIDBDatabaseConnection&, const IDBResourceIdentifier& requestIdentifier, IndexedDB::ConnectionClosedOnBehalfOfServer);
     void openDBRequestCancelled(const IDBResourceIdentifier& requestIdentifier);
     void confirmDidCloseFromServer(UniqueIDBDatabaseConnection&);
 
@@ -116,7 +116,8 @@ public:
 
     bool hardClosedForUserDelete() const { return m_hardClosedForUserDelete; }
 
-    void finishActiveTransactions();
+    void suspend();
+    void resume();
 
 private:
     void handleDatabaseOperations();
@@ -232,9 +233,9 @@ private:
     RefPtr<UniqueIDBDatabaseTransaction> takeNextRunnableTransaction(bool& hadDeferredTransactions);
 
     bool prepareToFinishTransaction(UniqueIDBDatabaseTransaction&, UniqueIDBDatabaseTransaction::State);
-    void abortTransactionOnMainThread(UniqueIDBDatabaseTransaction&);
-    void commitTransactionOnMainThread(UniqueIDBDatabaseTransaction&);
-    
+    void abortTransactionOnMainThread(UniqueIDBDatabaseTransaction&, const LockHolder&);
+    void commitTransactionOnMainThread(UniqueIDBDatabaseTransaction&, const LockHolder&);
+
     void clearStalePendingOpenDBRequests();
 
     void postDatabaseTask(CrossThreadTask&&);
@@ -249,6 +250,8 @@ private:
     void waitForRequestSpaceCompletion(UniqueIDBDatabaseTransaction&, CompletionHandler<void(IDBError&&)>&&);
     void startSpaceIncreaseTask(uint64_t identifier, uint64_t taskSize);
     void finishSpaceIncreaseTask(uint64_t identifier, bool isTaskSuccessful);
+
+    void clearTransactionsOnConnection(UniqueIDBDatabaseConnection&);
 
     static uint64_t generateUniqueCallbackIdentifier();
 
@@ -267,6 +270,11 @@ private:
 
     bool m_isOpeningBackingStore { false };
     IDBError m_backingStoreOpenError;
+
+    // Usually IDBBackingStore activities happens on the background thread only, but on process suspension,
+    // we need to force transactions of IDBBackingStore to stop on the main thread, and we need to make sure
+    // no IDBBackingStore activity can happen after process acknowledges suspension.
+    Lock m_backingStoreLock;
     std::unique_ptr<IDBBackingStore> m_backingStore;
     std::unique_ptr<IDBDatabaseInfo> m_databaseInfo;
     std::unique_ptr<IDBDatabaseInfo> m_mostRecentDeletedDatabaseInfo;
@@ -304,6 +312,8 @@ private:
     HashSet<IDBResourceIdentifier> m_cursorPrefetches;
 
     HashMap<uint64_t, uint64_t> m_pendingSpaceIncreaseTasks;
+
+    bool m_isSuspended { false };
 };
 
 } // namespace IDBServer

@@ -223,8 +223,12 @@ void DocumentLoader::setRequest(const ResourceRequest& req)
     ASSERT(!m_committed);
 
     m_request = req;
-    if (shouldNotifyAboutProvisionalURLChange)
+    if (shouldNotifyAboutProvisionalURLChange) {
+        // Logging for <rdar://problem/54830233>.
+        if (!frameLoader()->provisionalDocumentLoader())
+            RELEASE_LOG_IF_ALLOWED("DocumentLoader::setRequest: With no provisional document loader (frame = %p, main = %d)", m_frame, m_frame ? m_frame->isMainFrame() : false);
         frameLoader()->client().dispatchDidChangeProvisionalURL();
+    }
 }
 
 void DocumentLoader::setMainDocumentError(const ResourceError& error)
@@ -505,8 +509,7 @@ void DocumentLoader::matchRegistration(const URL& url, SWClientConnection::Regis
     }
 
     auto origin = (!m_frame->isMainFrame() && m_frame->document()) ? m_frame->document()->topOrigin().data() : SecurityOriginData::fromURL(url);
-    auto& provider = ServiceWorkerProvider::singleton();
-    if (!provider.mayHaveServiceWorkerRegisteredForOrigin(origin)) {
+    if (!ServiceWorkerProvider::singleton().serviceWorkerConnection().mayHaveServiceWorkerRegisteredForOrigin(origin)) {
         callback(WTF::nullopt);
         return;
     }
@@ -570,6 +573,10 @@ void DocumentLoader::willSendRequest(ResourceRequest&& newRequest, const Resourc
     // deferrals plays less of a part in this function in preventing the bad behavior deferring 
     // callbacks is meant to prevent.
     ASSERT(!newRequest.isNull());
+
+    // Logging for <rdar://problem/54830233>.
+    if (!frameLoader() || !frameLoader()->provisionalDocumentLoader())
+        RELEASE_LOG_IF_ALLOWED("willSendRequest: With no provisional document loader (frame = %p, main = %d)", m_frame, m_frame ? m_frame->isMainFrame() : false);
 
     bool didReceiveRedirectResponse = !redirectResponse.isNull();
     if (!frameLoader()->checkIfFormActionAllowedByCSP(newRequest.url(), didReceiveRedirectResponse)) {
@@ -903,6 +910,11 @@ void DocumentLoader::continueAfterContentPolicy(PolicyAction policy)
     if (isStopping())
         return;
 
+    if (!m_frame) {
+        RELEASE_LOG_IF_ALLOWED("continueAfterContentPolicy: Policy action %i received by DocumentLoader with null frame", (int)policy);
+        return;
+    }
+
     switch (policy) {
     case PolicyAction::Use: {
         if (!frameLoader()->client().canShowMIMEType(m_response.mimeType()) || disallowWebArchive()) {
@@ -1061,7 +1073,7 @@ void DocumentLoader::commitData(const char* bytes, size_t length)
             }
 
             if (m_frame->document()->activeServiceWorker() || LegacySchemeRegistry::canServiceWorkersHandleURLScheme(m_frame->document()->url().protocol().toStringWithoutCopying()))
-                m_frame->document()->setServiceWorkerConnection(ServiceWorkerProvider::singleton().existingServiceWorkerConnection());
+                m_frame->document()->setServiceWorkerConnection(&ServiceWorkerProvider::singleton().serviceWorkerConnection());
 
             // We currently unregister the temporary service worker client since we now registered the real document.
             // FIXME: We should make the real document use the temporary client identifier.
@@ -2139,7 +2151,7 @@ void DocumentLoader::previewResponseReceived(CachedResource& resource, const Res
     m_response = response;
 }
 
-void DocumentLoader::setPreviewConverter(std::unique_ptr<PreviewConverter>&& previewConverter)
+void DocumentLoader::setPreviewConverter(RefPtr<PreviewConverter>&& previewConverter)
 {
     m_previewConverter = WTFMove(previewConverter);
 }

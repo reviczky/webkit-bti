@@ -35,6 +35,7 @@
 #include "SandboxExtension.h"
 #include "StorageAreaIdentifier.h"
 #include "TextCheckerState.h"
+#include "UserContentControllerIdentifier.h"
 #include "ViewUpdateDispatcher.h"
 #include "WebInspectorInterruptDispatcher.h"
 #include "WebPageProxyIdentifier.h"
@@ -48,11 +49,12 @@
 #if PLATFORM(MAC)
 #include <WebCore/ScreenProperties.h>
 #endif
+#include <WebCore/ServiceWorkerTypes.h>
 #include <WebCore/Timer.h>
 #include <pal/HysteresisActivity.h>
 #include <pal/SessionID.h>
 #include <wtf/Forward.h>
-#include <wtf/HashMap.h>
+#include <wtf/HashCountedSet.h>
 #include <wtf/HashSet.h>
 #include <wtf/RefCounter.h>
 #include <wtf/text/AtomString.h>
@@ -85,6 +87,7 @@ class ApplicationCacheStorage;
 class CPUMonitor;
 class CertificateInfo;
 class PageGroup;
+class RegistrableDomain;
 class ResourceRequest;
 class UserGestureToken;
 struct BackForwardItemIdentifier;
@@ -108,11 +111,13 @@ class InjectedBundle;
 class LibWebRTCNetwork;
 class NetworkProcessConnection;
 class ObjCObjectGraph;
+struct ServiceWorkerInitializationData;
 class StorageAreaMap;
 class UserData;
 class WaylandCompositorDisplay;
 class WebAutomationSessionProxy;
 class WebCacheStorageProvider;
+class WebCompiledContentRuleListData;
 class WebConnectionToUIProcess;
 class WebFrame;
 class WebLoaderStrategy;
@@ -234,9 +239,7 @@ public:
 
     void setHiddenPageDOMTimerThrottlingIncreaseLimit(int milliseconds);
 
-    void processWillSuspendImminently();
-    void prepareToSuspend();
-    void cancelPrepareToSuspend();
+    void prepareToSuspend(bool isSuspensionImminent, CompletionHandler<void()>&&);
     void processDidResume();
 
     void sendPrewarmInformation(const URL&);
@@ -292,6 +295,11 @@ public:
 
     void messagesAvailableForPort(const WebCore::MessagePortIdentifier&);
 
+#if ENABLE(SERVICE_WORKER)
+    void addServiceWorkerRegistration(WebCore::ServiceWorkerRegistrationIdentifier);
+    bool removeServiceWorkerRegistration(WebCore::ServiceWorkerRegistrationIdentifier);
+#endif
+
 private:
     WebProcess();
     ~WebProcess();
@@ -329,7 +337,7 @@ private:
     void registerURLSchemeAsLocal(const String&) const;
     void registerURLSchemeAsNoAccess(const String&) const;
     void registerURLSchemeAsDisplayIsolated(const String&) const;
-    void registerURLSchemeAsCORSEnabled(const String&) const;
+    void registerURLSchemeAsCORSEnabled(const String&);
     void registerURLSchemeAsAlwaysRevalidated(const String&) const;
     void registerURLSchemeAsCachePartitioned(const String&) const;
     void registerURLSchemeAsCanDisplayOnlyIfCanRequest(const String&) const;
@@ -339,6 +347,8 @@ private:
     void setShouldUseFontSmoothing(bool);
     void setResourceLoadStatisticsEnabled(bool);
     void clearResourceLoadStatistics();
+    void flushResourceLoadStatistics();
+    void seedResourceLoadStatisticsForTesting(const WebCore::RegistrableDomain& firstPartyDomain, const WebCore::RegistrableDomain& thirdPartyDomain, bool shouldScheduleNotification, CompletionHandler<void()>&&);
     void userPreferredLanguagesChanged(const Vector<String>&) const;
     void fullKeyboardAccessModeChanged(bool fullKeyboardAccessEnabled);
 
@@ -367,7 +377,7 @@ private:
 #endif
 
 #if ENABLE(SERVICE_WORKER)
-    void establishWorkerContextConnectionToNetworkProcess(uint64_t pageGroupID, WebPageProxyIdentifier, WebCore::PageIdentifier, const WebPreferencesStore&, WebCore::RegistrableDomain&&);
+    void establishWorkerContextConnectionToNetworkProcess(uint64_t pageGroupID, WebPageProxyIdentifier, WebCore::PageIdentifier, const WebPreferencesStore&, WebCore::RegistrableDomain&&, ServiceWorkerInitializationData&&);
     void registerServiceWorkerClients();
 #endif
 
@@ -387,9 +397,6 @@ private:
     void handleInjectedBundleMessage(const String& messageName, const UserData& messageBody);
     void setInjectedBundleParameter(const String& key, const IPC::DataReference&);
     void setInjectedBundleParameters(const IPC::DataReference&);
-
-    enum class ShouldAcknowledgeWhenReadyToSuspend { No, Yes };
-    void actualPrepareToSuspend(ShouldAcknowledgeWhenReadyToSuspend);
 
     bool areAllPagesSuspended() const;
 
@@ -457,6 +464,8 @@ private:
     void processTaskStateDidChange(ProcessTaskStateObserver::TaskState) final;
     bool shouldFreezeOnSuspension() const;
     void updateFreezerStatus();
+
+    void releaseProcessWasResumedAssertions();
 #endif
 
 #if ENABLE(VIDEO)
@@ -534,9 +543,10 @@ private:
 
 #if PLATFORM(IOS_FAMILY)
     WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
-    Ref<ProcessTaskStateObserver> m_taskStateObserver;
-    Lock m_unexpectedlyResumedUIAssertionLock;
-    RetainPtr<BKSProcessAssertion> m_unexpectedlyResumedUIAssertion;
+    RefPtr<ProcessTaskStateObserver> m_taskStateObserver;
+    Lock m_processWasResumedAssertionsLock;
+    RetainPtr<BKSProcessAssertion> m_processWasResumedUIAssertion;
+    RetainPtr<BKSProcessAssertion> m_processWasResumedOwnAssertion;
 #endif
 
     enum PageMarkingLayersAsVolatileCounterType { };
@@ -577,6 +587,10 @@ private:
 
 #if PLATFORM(IOS)
     float m_backlightLevel { 0 };
+#endif
+
+#if ENABLE(SERVICE_WORKER)
+    HashCountedSet<WebCore::ServiceWorkerRegistrationIdentifier> m_swRegistrationCounts;
 #endif
 
     HashMap<StorageAreaIdentifier, StorageAreaMap*> m_storageAreaMaps;

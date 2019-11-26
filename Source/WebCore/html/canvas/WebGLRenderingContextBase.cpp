@@ -63,7 +63,6 @@
 #include "OESTextureHalfFloat.h"
 #include "OESTextureHalfFloatLinear.h"
 #include "OESVertexArrayObject.h"
-#include "OffscreenCanvas.h"
 #include "Page.h"
 #include "RenderBox.h"
 #include "RuntimeEnabledFeatures.h"
@@ -73,6 +72,8 @@
 #include "WebGLBuffer.h"
 #include "WebGLCompressedTextureASTC.h"
 #include "WebGLCompressedTextureATC.h"
+#include "WebGLCompressedTextureETC.h"
+#include "WebGLCompressedTextureETC1.h"
 #include "WebGLCompressedTexturePVRTC.h"
 #include "WebGLCompressedTextureS3TC.h"
 #include "WebGLContextAttributes.h"
@@ -106,6 +107,10 @@
 #include <wtf/UniqueArray.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
+
+#if ENABLE(OFFSCREEN_CANVAS)
+#include "OffscreenCanvas.h"
+#endif
 
 namespace WebCore {
 
@@ -681,11 +686,14 @@ WebGLRenderingContextBase::WebGLRenderingContextBase(CanvasBase& canvas, Ref<Gra
 WebGLCanvas WebGLRenderingContextBase::canvas()
 {
     auto& base = canvasBase();
+#if ENABLE(OFFSCREEN_CANVAS)
     if (is<OffscreenCanvas>(base))
         return &downcast<OffscreenCanvas>(base);
+#endif
     return &downcast<HTMLCanvasElement>(base);
 }
 
+#if ENABLE(OFFSCREEN_CANVAS)
 OffscreenCanvas* WebGLRenderingContextBase::offscreenCanvas()
 {
     auto& base = canvasBase();
@@ -693,6 +701,7 @@ OffscreenCanvas* WebGLRenderingContextBase::offscreenCanvas()
         return nullptr;
     return &downcast<OffscreenCanvas>(base);
 }
+#endif
 
 // We check for context loss handling after a few seconds to give the JS a chance to register the event listeners
 // and to discard temporary GL contexts (e.g. feature detection).
@@ -2052,7 +2061,10 @@ bool WebGLRenderingContextBase::validateIndexArrayPrecise(GC3Dsizei count, GC3De
 
 bool WebGLRenderingContextBase::validateVertexAttributes(unsigned elementCount, unsigned primitiveCount)
 {
-#if !USE(ANGLE)
+#if USE(ANGLE)
+    UNUSED_PARAM(elementCount);
+    UNUSED_PARAM(primitiveCount);
+#else
     if (!m_currentProgram)
         return false;
 
@@ -2120,9 +2132,6 @@ bool WebGLRenderingContextBase::validateVertexAttributes(unsigned elementCount, 
             return false;
         }
     }
-#else
-    UNUSED_PARAM(elementCount);
-    UNUSED_PARAM(primitiveCount);
 #endif
     
     return true;
@@ -2463,20 +2472,15 @@ void WebGLRenderingContextBase::framebufferTexture2D(GC3Denum target, GC3Denum a
         return;
     }
     Platform3DObject textureObject = objectOrZero(texture);
-    switch (attachment) {
-    case GraphicsContext3D::DEPTH_STENCIL_ATTACHMENT:
+
+#if !USE_ANGLE
+    if (attachment == GraphicsContext3D::DEPTH_STENCIL_ATTACHMENT) {
         m_context->framebufferTexture2D(target, GraphicsContext3D::DEPTH_ATTACHMENT, textarget, textureObject, level);
         m_context->framebufferTexture2D(target, GraphicsContext3D::STENCIL_ATTACHMENT, textarget, textureObject, level);
-        break;
-    case GraphicsContext3D::DEPTH_ATTACHMENT:
+    } else
+#endif
         m_context->framebufferTexture2D(target, attachment, textarget, textureObject, level);
-        break;
-    case GraphicsContext3D::STENCIL_ATTACHMENT:
-        m_context->framebufferTexture2D(target, attachment, textarget, textureObject, level);
-        break;
-    default:
-        m_context->framebufferTexture2D(target, attachment, textarget, textureObject, level);
-    }
+
     targetFramebuffer->setAttachmentForBoundFramebuffer(attachment, textarget, texture, level);
     applyStencilTest();
 }
@@ -3084,7 +3088,10 @@ bool WebGLRenderingContextBase::extensionIsEnabled(const String& name)
     CHECK_EXTENSION(m_webglLoseContext, "WEBGL_lose_context");
     CHECK_EXTENSION(m_webglDebugRendererInfo, "WEBGL_debug_renderer_info");
     CHECK_EXTENSION(m_webglDebugShaders, "WEBGL_debug_shaders");
+    CHECK_EXTENSION(m_webglCompressedTextureASTC, "WEBKIT_WEBGL_compressed_texture_astc");
     CHECK_EXTENSION(m_webglCompressedTextureATC, "WEBKIT_WEBGL_compressed_texture_atc");
+    CHECK_EXTENSION(m_webglCompressedTextureETC, "WEBKIT_WEBGL_compressed_texture_etc");
+    CHECK_EXTENSION(m_webglCompressedTextureETC1, "WEBKIT_WEBGL_compressed_texture_etc1");
     CHECK_EXTENSION(m_webglCompressedTexturePVRTC, "WEBKIT_WEBGL_compressed_texture_pvrtc");
     CHECK_EXTENSION(m_webglCompressedTextureS3TC, "WEBGL_compressed_texture_s3tc");
     CHECK_EXTENSION(m_webglDepthTexture, "WEBGL_depth_texture");
@@ -5555,19 +5562,21 @@ bool WebGLRenderingContextBase::validateCompressedTexFuncData(const char* functi
     const GC3Denum ASTCEnumStartRGBA = Extensions3D::COMPRESSED_RGBA_ASTC_4x4_KHR;
     const GC3Denum ASTCEnumStartSRGB8 = Extensions3D::COMPRESSED_SRGB8_ALPHA8_ASTC_4x4_KHR;
 
+    const int kEACAndETC2BlockSize = 4;
+
     switch (format) {
     case Extensions3D::COMPRESSED_RGB_S3TC_DXT1_EXT:
     case Extensions3D::COMPRESSED_RGBA_S3TC_DXT1_EXT:
     case Extensions3D::COMPRESSED_ATC_RGB_AMD:
-        {
-            const int kBlockSize = 8;
-            const int kBlockWidth = 4;
-            const int kBlockHeight = 4;
-            int numBlocksAcross = (width + kBlockWidth - 1) / kBlockWidth;
-            int numBlocksDown = (height + kBlockHeight - 1) / kBlockHeight;
-            bytesRequired = numBlocksAcross * numBlocksDown * kBlockSize;
-        }
+    case Extensions3D::ETC1_RGB8_OES: {
+        const int kBlockSize = 8;
+        const int kBlockWidth = 4;
+        const int kBlockHeight = 4;
+        int numBlocksAcross = (width + kBlockWidth - 1) / kBlockWidth;
+        int numBlocksDown = (height + kBlockHeight - 1) / kBlockHeight;
+        bytesRequired = numBlocksAcross * numBlocksDown * kBlockSize;
         break;
+    }
     case Extensions3D::COMPRESSED_RGBA_S3TC_DXT3_EXT:
     case Extensions3D::COMPRESSED_RGBA_S3TC_DXT5_EXT:
     case Extensions3D::COMPRESSED_ATC_RGBA_EXPLICIT_ALPHA_AMD:
@@ -5631,6 +5640,36 @@ bool WebGLRenderingContextBase::validateCompressedTexFuncData(const char* functi
     case Extensions3D::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR:
         bytesRequired = calculateBytesForASTC(width, height, ASTCParameters[format - ASTCEnumStartSRGB8]);
         break;
+    case Extensions3D::COMPRESSED_R11_EAC:
+    case Extensions3D::COMPRESSED_SIGNED_R11_EAC:
+    case Extensions3D::COMPRESSED_RGB8_ETC2:
+    case Extensions3D::COMPRESSED_SRGB8_ETC2:
+    case Extensions3D::COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2:
+    case Extensions3D::COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2: {
+        Checked<unsigned, RecordOverflow> checkedBytesRequired = (width + kEACAndETC2BlockSize - 1) / kEACAndETC2BlockSize;
+        checkedBytesRequired *= (height + kEACAndETC2BlockSize - 1) / kEACAndETC2BlockSize;
+        checkedBytesRequired *= 8;
+        if (checkedBytesRequired.hasOverflowed()) {
+            synthesizeGLError(GraphicsContext3D::INVALID_VALUE, functionName, "too large dimensions");
+            return false;
+        }
+        bytesRequired = checkedBytesRequired.unsafeGet();
+        break;
+    }
+    case Extensions3D::COMPRESSED_RG11_EAC:
+    case Extensions3D::COMPRESSED_SIGNED_RG11_EAC:
+    case Extensions3D::COMPRESSED_RGBA8_ETC2_EAC:
+    case Extensions3D::COMPRESSED_SRGB8_ALPHA8_ETC2_EAC: {
+        Checked<unsigned, RecordOverflow> checkedBytesRequired = (width + kEACAndETC2BlockSize - 1) / kEACAndETC2BlockSize;
+        checkedBytesRequired *= (height + kEACAndETC2BlockSize - 1) / kEACAndETC2BlockSize;
+        checkedBytesRequired *= 16;
+        if (checkedBytesRequired.hasOverflowed()) {
+            synthesizeGLError(GraphicsContext3D::INVALID_VALUE, functionName, "too large dimensions");
+            return false;
+        }
+        bytesRequired = checkedBytesRequired.unsafeGet();
+        break;
+    }
     default:
         synthesizeGLError(GraphicsContext3D::INVALID_ENUM, functionName, "invalid format");
         return false;
@@ -5701,7 +5740,18 @@ bool WebGLRenderingContextBase::validateCompressedTexDimensions(const char* func
     case Extensions3D::COMPRESSED_SRGB8_ALPHA8_ASTC_10x10_KHR:
     case Extensions3D::COMPRESSED_SRGB8_ALPHA8_ASTC_12x10_KHR:
     case Extensions3D::COMPRESSED_SRGB8_ALPHA8_ASTC_12x12_KHR:
-        // No height and width restrictions on ASTC.
+    case Extensions3D::ETC1_RGB8_OES:
+    case Extensions3D::COMPRESSED_R11_EAC:
+    case Extensions3D::COMPRESSED_SIGNED_R11_EAC:
+    case Extensions3D::COMPRESSED_RG11_EAC:
+    case Extensions3D::COMPRESSED_SIGNED_RG11_EAC:
+    case Extensions3D::COMPRESSED_RGB8_ETC2:
+    case Extensions3D::COMPRESSED_SRGB8_ETC2:
+    case Extensions3D::COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2:
+    case Extensions3D::COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2:
+    case Extensions3D::COMPRESSED_RGBA8_ETC2_EAC:
+    case Extensions3D::COMPRESSED_SRGB8_ALPHA8_ETC2_EAC:
+        // No height and width restrictions on ASTC, ETC1 or ETC2.
         return true;
     default:
         return false;
@@ -5748,6 +5798,34 @@ bool WebGLRenderingContextBase::validateCompressedTexSubDimensions(const char* f
             return false;
         }
         return validateCompressedTexDimensions(functionName, target, level, width, height, format);
+    }
+    case Extensions3D::ETC1_RGB8_OES:
+        // Not supported for ETC1_RGB8_OES textures.
+        return false;
+    case Extensions3D::COMPRESSED_R11_EAC:
+    case Extensions3D::COMPRESSED_SIGNED_R11_EAC:
+    case Extensions3D::COMPRESSED_RG11_EAC:
+    case Extensions3D::COMPRESSED_SIGNED_RG11_EAC:
+    case Extensions3D::COMPRESSED_RGB8_ETC2:
+    case Extensions3D::COMPRESSED_SRGB8_ETC2:
+    case Extensions3D::COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2:
+    case Extensions3D::COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2:
+    case Extensions3D::COMPRESSED_RGBA8_ETC2_EAC:
+    case Extensions3D::COMPRESSED_SRGB8_ALPHA8_ETC2_EAC: {
+        if (target == GraphicsContext3D::TEXTURE_3D) {
+            synthesizeGLError(GraphicsContext3D::INVALID_OPERATION, functionName, "not supported on TEXTURE_3D textures");
+            return false;
+        }
+        const int kBlockSize = 4;
+        int texWidth = tex->getWidth(target, level);
+        int texHeight = tex->getHeight(target, level);
+        if ((xoffset % kBlockSize) || (yoffset % kBlockSize)
+            || ((width % kBlockSize) && xoffset + width != texWidth)
+            || ((height % kBlockSize) && yoffset + height != texHeight)) {
+            synthesizeGLError(GraphicsContext3D::INVALID_OPERATION, functionName, "dimensions must match existing texture level dimensions");
+            return false;
+        }
+        return true;
     }
     default:
         return false;

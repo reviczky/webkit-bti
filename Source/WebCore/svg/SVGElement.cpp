@@ -51,6 +51,7 @@
 #include "SVGTitleElement.h"
 #include "SVGUseElement.h"
 #include "ShadowRoot.h"
+#include "StyleAdjuster.h"
 #include "XMLNames.h"
 #include <wtf/Assertions.h>
 #include <wtf/HashMap.h>
@@ -160,7 +161,6 @@ static NEVER_INLINE HashMap<AtomStringImpl*, CSSPropertyID> createAttributeNameT
 
 SVGElement::SVGElement(const QualifiedName& tagName, Document& document)
     : StyledElement(tagName, document, CreateSVGElement)
-    , SVGLangSpace(this)
     , m_propertyAnimatorFactory(makeUnique<SVGPropertyAnimatorFactory>())
 {
     static std::once_flag onceFlag;
@@ -354,8 +354,6 @@ void SVGElement::parseAttribute(const QualifiedName& name, const AtomString& val
         setAttributeEventListener(eventName, name, value);
         return;
     }
-
-    SVGLangSpace::parseAttribute(name, value);
 }
 
 bool SVGElement::haveLoadedRequiredResources()
@@ -552,7 +550,7 @@ void SVGElement::commitPropertyChange(SVGAnimatedProperty& animatedProperty)
     // A change in a style property, e.g SVGRectElement::x should be serialized to
     // the attribute immediately. Otherwise it is okay to be lazy in this regard.
     if (!propertyRegistry().isAnimatedStylePropertyAttribute(attributeName))
-        animatedProperty.setDirty();
+        propertyRegistry().setAnimatedPropertDirty(attributeName, animatedProperty);
     else
         setSynchronizedLazyAttribute(attributeName, animatedProperty.baseValAsString());
 
@@ -595,12 +593,12 @@ void SVGElement::animatorWillBeDeleted(const QualifiedName& attributeName)
     propertyAnimatorFactory().animatorWillBeDeleted(attributeName);
 }
 
-Optional<ElementStyle> SVGElement::resolveCustomStyle(const RenderStyle& parentStyle, const RenderStyle*)
+Optional<Style::ElementStyle> SVGElement::resolveCustomStyle(const RenderStyle& parentStyle, const RenderStyle*)
 {
     // If the element is in a <use> tree we get the style from the definition tree.
     if (auto styleElement = makeRefPtr(this->correspondingElement())) {
-        Optional<ElementStyle> style = styleElement->resolveStyle(&parentStyle);
-        StyleResolver::adjustSVGElementStyle(*this, *style->renderStyle);
+        auto style = styleElement->resolveStyle(&parentStyle);
+        Style::Adjuster::adjustSVGElementStyle(*style.renderStyle, *this);
         return style;
     }
 
@@ -834,8 +832,6 @@ void SVGElement::svgAttributeChanged(const QualifiedName& attrName)
         invalidateInstances();
         return;
     }
-
-    SVGLangSpace::svgAttributeChanged(attrName);
 }
 
 Node::InsertedIntoAncestorResult SVGElement::insertedIntoAncestor(InsertionType insertionType, ContainerNode& parentOfInsertedTree)
@@ -876,25 +872,6 @@ void SVGElement::childrenChanged(const ChildChange& change)
     if (change.source == ChildChangeSource::Parser)
         return;
     invalidateInstances();
-}
-
-RefPtr<DeprecatedCSSOMValue> SVGElement::getPresentationAttribute(const String& name)
-{
-    if (!hasAttributesWithoutUpdate())
-        return 0;
-
-    QualifiedName attributeName(nullAtom(), name, nullAtom());
-    const Attribute* attribute = findAttributeByName(attributeName);
-    if (!attribute)
-        return 0;
-
-    auto style = MutableStyleProperties::create(SVGAttributeMode);
-    CSSPropertyID propertyID = cssPropertyIdForSVGAttributeName(attribute->name());
-    style->setProperty(propertyID, attribute->value());
-    auto cssValue = style->getPropertyCSSValue(propertyID);
-    if (!cssValue)
-        return nullptr;
-    return cssValue->createDeprecatedCSSOMWrapper(style->ensureCSSStyleDeclaration());
 }
 
 bool SVGElement::instanceUpdatesBlocked() const

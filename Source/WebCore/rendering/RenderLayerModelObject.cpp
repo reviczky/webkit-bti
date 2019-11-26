@@ -132,8 +132,8 @@ void RenderLayerModelObject::styleWillChange(StyleDifference diff, const RenderS
             // When a layout hint happens, we do a repaint of the layer, since the layer could end up being destroyed.
             if (hasLayer()) {
                 if (oldStyle->position() != newStyle.position()
-                    || oldStyle->zIndex() != newStyle.zIndex()
-                    || oldStyle->hasAutoZIndex() != newStyle.hasAutoZIndex()
+                    || oldStyle->usedZIndex() != newStyle.usedZIndex()
+                    || oldStyle->hasAutoUsedZIndex() != newStyle.hasAutoUsedZIndex()
                     || !(oldStyle->clip() == newStyle.clip())
                     || oldStyle->hasClip() != newStyle.hasClip()
                     || oldStyle->opacity() != newStyle.opacity()
@@ -184,7 +184,12 @@ void RenderLayerModelObject::styleDidChange(StyleDifference diff, const RenderSt
         // Repaint the about to be destroyed self-painting layer when style change also triggers repaint.
         if (layer()->isSelfPaintingLayer() && layer()->repaintStatus() == NeedsFullRepaint && hasRepaintLayoutRects())
             repaintUsingContainer(containerForRepaint(), repaintLayoutRects().m_repaintRect);
+        // If the layer we're about to destroy had a position, then the positions of the current children will no longer be correct.
+        auto* parentLayer = layer()->parent();
+        bool layerHadLocation = !layer()->location().isZero();
         layer()->removeOnlyThisLayer(); // calls destroyLayer() which clears m_layer
+        if (layerHadLocation && parentLayer && !parentLayer->renderer().needsLayout())
+            parentLayer->updateLayerPositionsAfterStyleChange();
         if (s_wasFloating && isFloating())
             setChildNeedsLayout();
         if (s_hadTransform)

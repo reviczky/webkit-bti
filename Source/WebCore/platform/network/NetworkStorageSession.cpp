@@ -59,7 +59,7 @@ void NetworkStorageSession::permitProcessToUseCookieAPI(bool value)
 
 bool NetworkStorageSession::shouldBlockThirdPartyCookies(const RegistrableDomain& registrableDomain) const
 {
-    if (registrableDomain.isEmpty())
+    if (!m_isResourceLoadStatisticsEnabled || registrableDomain.isEmpty())
         return false;
 
     ASSERT(!(m_registrableDomainsToBlockAndDeleteCookiesFor.contains(registrableDomain) && m_registrableDomainsToBlockButKeepCookiesFor.contains(registrableDomain)));
@@ -70,7 +70,7 @@ bool NetworkStorageSession::shouldBlockThirdPartyCookies(const RegistrableDomain
 
 bool NetworkStorageSession::shouldBlockThirdPartyCookiesButKeepFirstPartyCookiesFor(const RegistrableDomain& registrableDomain) const
 {
-    if (registrableDomain.isEmpty())
+    if (!m_isResourceLoadStatisticsEnabled || registrableDomain.isEmpty())
         return false;
 
     ASSERT(!(m_registrableDomainsToBlockAndDeleteCookiesFor.contains(registrableDomain) && m_registrableDomainsToBlockButKeepCookiesFor.contains(registrableDomain)));
@@ -88,11 +88,17 @@ bool NetworkStorageSession::hasHadUserInteractionAsFirstParty(const RegistrableD
 
 bool NetworkStorageSession::shouldBlockCookies(const ResourceRequest& request, Optional<FrameIdentifier> frameID, Optional<PageIdentifier> pageID) const
 {
+    if (!m_isResourceLoadStatisticsEnabled)
+        return false;
+
     return shouldBlockCookies(request.firstPartyForCookies(), request.url(), frameID, pageID);
 }
     
 bool NetworkStorageSession::shouldBlockCookies(const URL& firstPartyForCookies, const URL& resource, Optional<FrameIdentifier> frameID, Optional<PageIdentifier> pageID) const
 {
+    if (!m_isResourceLoadStatisticsEnabled)
+        return false;
+
     RegistrableDomain firstPartyDomain { firstPartyForCookies };
     if (firstPartyDomain.isEmpty())
         return false;
@@ -107,10 +113,16 @@ bool NetworkStorageSession::shouldBlockCookies(const URL& firstPartyForCookies, 
     if (pageID && hasStorageAccess(resourceDomain, firstPartyDomain, frameID, pageID.value()))
         return false;
 
-    if (m_isThirdPartyCookieBlockingOnSitesWithoutUserInteractionEnabled && !hasHadUserInteractionAsFirstParty(firstPartyDomain))
+    switch (m_thirdPartyCookieBlockingMode) {
+    case ThirdPartyCookieBlockingMode::All:
         return true;
-
-    return shouldBlockThirdPartyCookies(resourceDomain);
+    case ThirdPartyCookieBlockingMode::AllOnSitesWithoutUserInteraction:
+        if (!hasHadUserInteractionAsFirstParty(firstPartyDomain))
+            return true;
+        FALLTHROUGH;
+    case ThirdPartyCookieBlockingMode::OnlyAccordingToPerDomainPolicy:
+        return shouldBlockThirdPartyCookies(resourceDomain);
+    }
 }
 
 Optional<Seconds> NetworkStorageSession::maxAgeCacheCap(const ResourceRequest& request)
@@ -261,6 +273,11 @@ void NetworkStorageSession::resetCrossSiteLoadsWithLinkDecorationForTesting()
 {
     m_navigatedToWithLinkDecorationByPrevalentResource.clear();
     m_navigationWithLinkDecorationTestMode = true;
+}
+
+void NetworkStorageSession::setThirdPartyCookieBlockingMode(ThirdPartyCookieBlockingMode blockingMode)
+{
+    m_thirdPartyCookieBlockingMode = blockingMode;
 }
 
 Optional<Seconds> NetworkStorageSession::clientSideCookieCap(const RegistrableDomain& firstParty, Optional<PageIdentifier> pageID) const

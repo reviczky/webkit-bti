@@ -1431,7 +1431,7 @@ bool FrameView::styleHidesScrollbarWithOrientation(ScrollbarOrientation orientat
     StyleScrollbarState scrollbarState;
     scrollbarState.scrollbarPart = ScrollbarBGPart;
     scrollbarState.orientation = orientation;
-    auto scrollbarStyle = renderer->getUncachedPseudoStyle(PseudoStyleRequest(PseudoId::Scrollbar, scrollbarState), &renderer->style());
+    auto scrollbarStyle = renderer->getUncachedPseudoStyle({ PseudoId::Scrollbar, scrollbarState }, &renderer->style());
     return scrollbarStyle && scrollbarStyle->display() == DisplayType::None;
 }
 
@@ -2169,12 +2169,12 @@ void FrameView::restoreScrollbar()
 bool FrameView::scrollToFragment(const URL& url)
 {
     String fragmentIdentifier = url.fragmentIdentifier();
-    if (scrollToAnchor(fragmentIdentifier))
+    if (scrollToFragmentInternal(fragmentIdentifier))
         return true;
 
     // Try again after decoding the ref, based on the document's encoding.
     if (TextResourceDecoder* decoder = frame().document()->decoder()) {
-        if (scrollToAnchor(decodeURLEscapeSequences(fragmentIdentifier, decoder->encoding())))
+        if (scrollToFragmentInternal(decodeURLEscapeSequences(fragmentIdentifier, decoder->encoding())))
             return true;
     }
 
@@ -2182,7 +2182,7 @@ bool FrameView::scrollToFragment(const URL& url)
     return false;
 }
 
-bool FrameView::scrollToAnchor(const String& fragmentIdentifier)
+bool FrameView::scrollToFragmentInternal(const String& fragmentIdentifier)
 {
     LOG(Scrolling, "FrameView::scrollToAnchor %s", fragmentIdentifier.utf8().data());
 
@@ -2192,13 +2192,7 @@ bool FrameView::scrollToAnchor(const String& fragmentIdentifier)
 
     ASSERT(frame().document());
     auto& document = *frame().document();
-
-    if (!document.haveStylesheetsLoaded()) {
-        document.setGotoAnchorNeededAfterStylesheetsLoad(true);
-        return false;
-    }
-
-    document.setGotoAnchorNeededAfterStylesheetsLoad(false);
+    RELEASE_ASSERT(document.haveStylesheetsLoaded());
 
     Element* anchorElement = document.findAnchor(fragmentIdentifier);
 
@@ -3422,7 +3416,7 @@ void FrameView::sendResizeEventIfNeeded()
     }
 #endif
 
-    LOG(Events, "FrameView %p sendResizeEventIfNeeded scheduling resize event for document %p, size %dx%d", this, frame().document(), currentSize.width(), currentSize.height());
+    LOG_WITH_STREAM(Events, stream << "FrameView" << this << "sendResizeEventIfNeeded scheduling resize event for document" << frame().document() << ", size " << currentSize);
     frame().document()->setNeedsDOMWindowResizeEvent();
 
     bool isMainFrame = frame().isMainFrame();
@@ -3862,7 +3856,7 @@ void FrameView::updateScrollCorner()
         Element* body = doc ? doc->bodyOrFrameset() : nullptr;
         if (body && body->renderer()) {
             renderer = body->renderer();
-            cornerStyle = renderer->getUncachedPseudoStyle(PseudoStyleRequest(PseudoId::ScrollbarCorner), &renderer->style());
+            cornerStyle = renderer->getUncachedPseudoStyle({ PseudoId::ScrollbarCorner }, &renderer->style());
         }
         
         if (!cornerStyle) {
@@ -3870,7 +3864,7 @@ void FrameView::updateScrollCorner()
             Element* docElement = doc ? doc->documentElement() : nullptr;
             if (docElement && docElement->renderer()) {
                 renderer = docElement->renderer();
-                cornerStyle = renderer->getUncachedPseudoStyle(PseudoStyleRequest(PseudoId::ScrollbarCorner), &renderer->style());
+                cornerStyle = renderer->getUncachedPseudoStyle({ PseudoId::ScrollbarCorner }, &renderer->style());
             }
         }
         
@@ -3878,7 +3872,7 @@ void FrameView::updateScrollCorner()
             // If we have an owning iframe/frame element, then it can set the custom scrollbar also.
             // FIXME: Seems wrong to do this for cross-origin frames.
             if (RenderWidget* renderer = frame().ownerRenderer())
-                cornerStyle = renderer->getUncachedPseudoStyle(PseudoStyleRequest(PseudoId::ScrollbarCorner), &renderer->style());
+                cornerStyle = renderer->getUncachedPseudoStyle({ PseudoId::ScrollbarCorner }, &renderer->style());
         }
     }
 
@@ -4169,7 +4163,8 @@ void FrameView::paintContents(GraphicsContext& context, const IntRect& dirtyRect
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
     if (RuntimeEnabledFeatures::sharedFeatures().layoutFormattingContextEnabled()) {
-        Layout::LayoutContext::runLayoutAndPaint(*renderView, context);
+        if (auto* layoutState = layoutContext().layoutFormattingState())
+            Layout::LayoutContext::paint(*layoutState, context, dirtyRect);
         return;
     }
 #endif

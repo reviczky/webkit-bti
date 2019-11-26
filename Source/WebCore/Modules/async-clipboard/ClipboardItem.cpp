@@ -31,6 +31,7 @@
 #include "ClipboardItemBindingsDataSource.h"
 #include "ClipboardItemPasteboardDataSource.h"
 #include "Navigator.h"
+#include "PasteboardCustomData.h"
 #include "PasteboardItemInfo.h"
 #include "SharedBuffer.h"
 
@@ -90,6 +91,11 @@ Vector<String> ClipboardItem::types() const
 void ClipboardItem::getType(const String& type, Ref<DeferredPromise>&& promise)
 {
     m_dataSource->getType(type, WTFMove(promise));
+}
+
+void ClipboardItem::collectDataForWriting(Clipboard& destination, CompletionHandler<void(Optional<PasteboardCustomData>)>&& completion)
+{
+    m_dataSource->collectDataForWriting(destination, WTFMove(completion));
 }
 
 Navigator* ClipboardItem::navigator()

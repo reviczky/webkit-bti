@@ -70,7 +70,6 @@ public:
     virtual void removeServiceWorkerRegistrationInServer(ServiceWorkerRegistrationIdentifier) = 0;
 
     WEBCORE_EXPORT virtual void scheduleJob(DocumentOrWorkerIdentifier, const ServiceWorkerJobData&);
-    void failedFetchingScript(ServiceWorkerJobIdentifier, const ServiceWorkerRegistrationKey&, const ResourceError&);
 
     virtual void didResolveRegistrationPromise(const ServiceWorkerRegistrationKey&) = 0;
 
@@ -84,9 +83,6 @@ public:
     virtual void unregisterServiceWorkerClient(DocumentIdentifier) = 0;
 
     virtual void finishFetchingScriptInServer(const ServiceWorkerFetchResult&) = 0;
-
-    virtual bool isThrottleable() const = 0;
-    virtual void updateThrottleState() = 0;
 
     virtual void storeRegistrationsOnDiskForTesting(CompletionHandler<void()>&& callback) { callback(); }
 

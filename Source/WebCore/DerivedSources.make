@@ -54,6 +54,7 @@ VPATH = \
     $(WebCore)/Modules/pictureinpicture \
     $(WebCore)/Modules/plugins \
     $(WebCore)/Modules/quota \
+	$(WebCore)/Modules/remoteplayback \
     $(WebCore)/Modules/speech \
     $(WebCore)/Modules/streams \
     $(WebCore)/Modules/webaudio \
@@ -321,6 +322,9 @@ JS_BINDING_IDLS = \
     $(WebCore)/Modules/quota/StorageQuotaCallback.idl \
     $(WebCore)/Modules/quota/StorageUsageCallback.idl \
     $(WebCore)/Modules/quota/WorkerNavigatorStorageQuota.idl \
+	$(WebCore)/Modules/remoteplayback/HTMLMediaElementRemotePlayback.idl \
+	$(WebCore)/Modules/remoteplayback/RemotePlayback.idl \
+	$(WebCore)/Modules/remoteplayback/RemotePlaybackAvailabilityCallback.idl \
     $(WebCore)/Modules/speech/DOMWindowSpeechSynthesis.idl \
     $(WebCore)/Modules/speech/SpeechSynthesis.idl \
     $(WebCore)/Modules/speech/SpeechSynthesisEvent.idl \
@@ -825,6 +829,8 @@ JS_BINDING_IDLS = \
     $(WebCore)/html/canvas/WebGLBuffer.idl \
     $(WebCore)/html/canvas/WebGLCompressedTextureASTC.idl \
     $(WebCore)/html/canvas/WebGLCompressedTextureATC.idl \
+    $(WebCore)/html/canvas/WebGLCompressedTextureETC.idl \
+    $(WebCore)/html/canvas/WebGLCompressedTextureETC1.idl \
     $(WebCore)/html/canvas/WebGLCompressedTexturePVRTC.idl \
     $(WebCore)/html/canvas/WebGLCompressedTextureS3TC.idl \
     $(WebCore)/html/canvas/WebGLContextAttributes.idl \
@@ -1285,7 +1291,7 @@ all : \
     SVGNames.h \
     SelectorPseudoClassAndCompatibilityElementMap.cpp \
     SelectorPseudoElementTypeMap.cpp \
-    StyleBuilder.cpp \
+    StyleBuilderGenerated.cpp \
     StylePropertyShorthandFunctions.cpp \
     StylePropertyShorthandFunctions.h \
     UserAgentStyleSheets.h \
@@ -1334,7 +1340,7 @@ WEBCORE_CSS_VALUE_KEYWORDS := $(WEBCORE_CSS_VALUE_KEYWORDS) $(WebCore)/css/SVGCS
 CSS_PROPERTY_NAME_FILES = \
     CSSPropertyNames.cpp \
     CSSPropertyNames.h \
-    StyleBuilder.cpp \
+    StyleBuilderGenerated.cpp \
     StylePropertyShorthandFunctions.cpp \
     StylePropertyShorthandFunctions.h \
 #

@@ -107,6 +107,10 @@ class WebKitMediaKeys;
 
 template<typename> class DOMPromiseDeferred;
 
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+class RemotePlayback;
+#endif
+
 #if ENABLE(VIDEO_TRACK)
 using CueIntervalTree = PODIntervalTree<MediaTime, TextTrackCue*>;
 using CueInterval = CueIntervalTree::IntervalType;
@@ -162,8 +166,6 @@ public:
 
     WEBCORE_EXPORT static RefPtr<HTMLMediaElement> bestMediaElementForShowingPlaybackControlsManager(MediaElementSession::PlaybackControlsPurpose);
 
-    static bool isRunningDestructor();
-
     WEBCORE_EXPORT void rewind(double timeDelta);
     WEBCORE_EXPORT void returnToRealtime() override;
 
@@ -185,7 +187,7 @@ public:
 #ifdef __OBJC__
     PlatformLayer* videoFullscreenLayer() const { return m_videoFullscreenLayer.get(); }
 #endif
-    void setVideoFullscreenFrame(FloatRect);
+    virtual void setVideoFullscreenFrame(FloatRect);
     void setVideoFullscreenGravity(MediaPlayerEnums::VideoGravity);
     MediaPlayerEnums::VideoGravity videoFullscreenGravity() const { return m_videoFullscreenGravity; }
 #endif
@@ -413,6 +415,7 @@ public:
     void wirelessRoutesAvailableDidChange() override;
     void setWirelessPlaybackTarget(Ref<MediaPlaybackTarget>&&) override;
     void setShouldPlayToPlaybackTarget(bool) override;
+    void playbackTargetPickerWasDismissed() override;
 #endif
     bool isPlayingToWirelessPlaybackTarget() const override { return m_isPlayingToWirelessTarget; };
     void setIsPlayingToWirelessTarget(bool);
@@ -576,7 +579,16 @@ public:
     WEBCORE_EXPORT void didBecomeFullscreenElement() override;
     WEBCORE_EXPORT void willExitFullscreen();
 
+#if ENABLE(PICTURE_IN_PICTURE_API)
+    void scheduleEvent(Ref<Event>&&);
+#endif
+
     enum class AutoplayEventPlaybackState { None, PreventedAutoplay, StartedWithUserGesture, StartedWithoutUserGesture };
+
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+    RemotePlayback& remote() { return m_remote; }
+    void remoteHasAvailabilityCallbacksChanged();
+#endif
 
 protected:
     HTMLMediaElement(const QualifiedName&, Document&, bool createdByParser);
@@ -613,7 +625,7 @@ protected:
     void updateMediaControlsAfterPresentationModeChange();
 #endif
 
-    void scheduleEvent(const AtomString& eventName);
+    void scheduleEvent(const AtomString&);
 
 private:
     void createMediaPlayer();
@@ -911,7 +923,7 @@ private:
     void updateCaptionContainer();
     void ensureMediaControlsShadowRoot();
 
-    using JSSetupFunction = WTF::Function<bool(JSDOMGlobalObject&, JSC::ExecState&, ScriptController&, DOMWrapperWorld&)>;
+    using JSSetupFunction = WTF::Function<bool(JSDOMGlobalObject&, JSC::JSGlobalObject&, ScriptController&, DOMWrapperWorld&)>;
     bool setupAndCallJS(const JSSetupFunction&);
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
@@ -1176,6 +1188,10 @@ private:
     bool m_attachingMediaKeys { false };
     bool m_playbackBlockedWaitingForKey { false };
     GenericTaskQueue<Timer> m_encryptedMediaQueue;
+#endif
+
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+    Ref<RemotePlayback> m_remote;
 #endif
 
     std::unique_ptr<MediaElementSession> m_mediaSession;

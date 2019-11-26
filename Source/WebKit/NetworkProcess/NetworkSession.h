@@ -30,6 +30,7 @@
 #include "WebResourceLoadStatisticsStore.h"
 #include <WebCore/AdClickAttribution.h>
 #include <WebCore/BlobRegistryImpl.h>
+#include <WebCore/NetworkStorageSession.h>
 #include <WebCore/RegistrableDomain.h>
 #include <pal/SessionID.h>
 #include <wtf/HashSet.h>
@@ -84,7 +85,7 @@ public:
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     WebResourceLoadStatisticsStore* resourceLoadStatistics() const { return m_resourceLoadStatistics.get(); }
     void setResourceLoadStatisticsEnabled(bool);
-    void recreateResourceLoadStatisticStore();
+    void recreateResourceLoadStatisticStore(CompletionHandler<void()>&&);
     bool isResourceLoadStatisticsEnabled() const;
     void notifyResourceLoadStatisticsProcessed();
     void deleteWebsiteDataForRegistrableDomains(OptionSet<WebsiteDataType>, Vector<std::pair<WebCore::RegistrableDomain, WebsiteDataToRemove>>&&, bool shouldNotifyPage, CompletionHandler<void(const HashSet<WebCore::RegistrableDomain>&)>&&);
@@ -97,7 +98,7 @@ public:
     virtual void clearIsolatedSessions() { }
     void setShouldDowngradeReferrerForTesting(bool);
     bool shouldDowngradeReferrer() const;
-    void setShouldBlockThirdPartyCookiesForTesting(bool);
+    void setThirdPartyCookieBlockingMode(WebCore::ThirdPartyCookieBlockingMode);
 #endif
     void storeAdClickAttribution(WebCore::AdClickAttribution&&);
     void handleAdClickAttributionConversion(WebCore::AdClickAttribution::Conversion&&, const URL& requestURL, const WebCore::ResourceRequest& redirectRequest);
@@ -124,6 +125,8 @@ public:
 
     unsigned testSpeedMultiplier() const { return m_testSpeedMultiplier; }
 
+    bool isStaleWhileRevalidateEnabled() const { return m_isStaleWhileRevalidateEnabled; }
+
 protected:
     NetworkSession(NetworkProcess&, const NetworkSessionCreationParameters&);
 
@@ -142,7 +145,9 @@ protected:
     WebCore::RegistrableDomain m_resourceLoadStatisticsManualPrevalentResource;
     bool m_enableResourceLoadStatisticsLogTestingEvent;
     bool m_downgradeReferrer { true };
+    WebCore::ThirdPartyCookieBlockingMode m_thirdPartyCookieBlockingMode { WebCore::ThirdPartyCookieBlockingMode::AllOnSitesWithoutUserInteraction };
 #endif
+    bool m_isStaleWhileRevalidateEnabled { false };
     UniqueRef<AdClickAttributionManager> m_adClickAttribution;
 
     HashSet<Ref<NetworkResourceLoader>> m_keptAliveLoads;

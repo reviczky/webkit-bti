@@ -119,6 +119,7 @@
 #include "WebProcessPoolMessages.h"
 #include "WebProcessProxyMessages.h"
 #include "WebProgressTrackerClient.h"
+#include "WebServiceWorkerProvider.h"
 #include "WebSocketProvider.h"
 #include "WebSpeechSynthesisClient.h"
 #include "WebStorageNamespaceProvider.h"
@@ -177,7 +178,6 @@
 #include <WebCore/HTMLPlugInElement.h>
 #include <WebCore/HTMLPlugInImageElement.h>
 #include <WebCore/HTMLSelectElement.h>
-#include <WebCore/HTMLTextAreaElement.h>
 #include <WebCore/HTMLTextFormControlElement.h>
 #include <WebCore/HTMLUListElement.h>
 #include <WebCore/HistoryController.h>
@@ -217,7 +217,6 @@
 #include <WebCore/SWClientConnection.h>
 #include <WebCore/ScriptController.h>
 #include <WebCore/SerializedScriptValue.h>
-#include <WebCore/ServiceWorkerProvider.h>
 #include <WebCore/Settings.h>
 #include <WebCore/ShadowRoot.h>
 #include <WebCore/SharedBuffer.h>
@@ -433,6 +432,7 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 #if ENABLE(TEXT_AUTOSIZING)
     , m_textAutoSizingAdjustmentTimer(*this, &WebPage::textAutoSizingAdjustmentTimerFired)
 #endif
+    , m_overriddenMediaType(parameters.overriddenMediaType)
 {
     ASSERT(m_identifier);
 
@@ -651,11 +651,6 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     WebCore::setAdditionalSupportedImageTypes(parameters.additionalSupportedImageTypes);
 #endif
 
-#if ENABLE(SERVICE_WORKER)
-    if (parameters.hasRegisteredServiceWorkers)
-        ServiceWorkerProvider::singleton().setMayHaveRegisteredServiceWorkers();
-#endif
-
     m_needsFontAttributes = parameters.needsFontAttributes;
 
 #if ENABLE(WEB_RTC)
@@ -792,12 +787,11 @@ void WebPage::updateThrottleState()
         m_userActivity.start();
 
 #if ENABLE(SERVICE_WORKER)
-    RunLoop::main().dispatch([isThrottleable] {
-        if (auto* connection = ServiceWorkerProvider::singleton().existingServiceWorkerConnection()) {
-            if (isThrottleable != connection->isThrottleable())
-                connection->updateThrottleState();
-        }
-    });
+    if (RuntimeEnabledFeatures::sharedFeatures().serviceWorkerEnabled()) {
+        RunLoop::main().dispatch([isThrottleable] {
+            WebServiceWorkerProvider::singleton().updateThrottleState(isThrottleable);
+        });
+    }
 #endif
 }
 
@@ -1562,8 +1556,8 @@ void WebPage::loadRequest(LoadParameters&& loadParameters)
     ASSERT(!m_pendingWebsitePolicies);
 }
 
-// LoadRequestWaitingForPID should never be sent to the WebProcess. It must always be converted to a LoadRequest message.
-NO_RETURN void WebPage::loadRequestWaitingForPID(LoadParameters&&, URL&&, WebPageProxyIdentifier)
+// LoadRequestWaitingForProcessLaunch should never be sent to the WebProcess. It must always be converted to a LoadRequest message.
+NO_RETURN void WebPage::loadRequestWaitingForProcessLaunch(LoadParameters&&, URL&&, WebPageProxyIdentifier, bool)
 {
     RELEASE_ASSERT_NOT_REACHED();
 }
@@ -2081,6 +2075,11 @@ void WebPage::accessibilitySettingsDidChange()
     m_page->accessibilitySettingsDidChange();
 }
 
+void WebPage::screenPropertiesDidChange()
+{
+    m_page->setNeedsRecalcStyleInAllFrames();
+}
+
 void WebPage::setUseFixedLayout(bool fixed)
 {
     // Do not overwrite current settings if initially setting it to false.
@@ -2508,16 +2507,18 @@ const WebEvent* WebPage::currentEvent()
 void WebPage::freezeLayerTree(LayerTreeFreezeReason reason)
 {
     auto oldReasons = m_layerTreeFreezeReasons.toRaw();
+    UNUSED_PARAM(oldReasons);
     m_layerTreeFreezeReasons.add(reason);
-    RELEASE_LOG(ProcessSuspension, "%p - WebPage (PageID=%llu) - Adding a reason %d to freeze layer tree (now %d); old reasons were %d", this, m_identifier.toUInt64(), static_cast<unsigned>(reason), m_layerTreeFreezeReasons.toRaw(), oldReasons);
+    RELEASE_LOG(ProcessSuspension, "%p - WebPage (webPageID=%llu) - Adding a reason %d to freeze layer tree (now %d); old reasons were %d", this, m_identifier.toUInt64(), static_cast<unsigned>(reason), m_layerTreeFreezeReasons.toRaw(), oldReasons);
     updateDrawingAreaLayerTreeFreezeState();
 }
 
 void WebPage::unfreezeLayerTree(LayerTreeFreezeReason reason)
 {
     auto oldReasons = m_layerTreeFreezeReasons.toRaw();
+    UNUSED_PARAM(oldReasons);
     m_layerTreeFreezeReasons.remove(reason);
-    RELEASE_LOG(ProcessSuspension, "%p - WebPage (PageID=%llu) - Removing a reason %d to freeze layer tree (now %d); old reasons were %d", this, m_identifier.toUInt64(), static_cast<unsigned>(reason), m_layerTreeFreezeReasons.toRaw(), oldReasons);
+    RELEASE_LOG(ProcessSuspension, "%p - WebPage (webPageID=%llu) - Removing a reason %d to freeze layer tree (now %d); old reasons were %d", this, m_identifier.toUInt64(), static_cast<unsigned>(reason), m_layerTreeFreezeReasons.toRaw(), oldReasons);
     updateDrawingAreaLayerTreeFreezeState();
 }
 
@@ -2608,10 +2609,10 @@ private:
     const WebEvent* m_previousCurrentEvent;
 };
 
-#if ENABLE(CONTEXT_MENUS)
+#if ENABLE(CONTEXT_MENU_EVENT)
 static bool isContextClick(const PlatformMouseEvent& event)
 {
-#if PLATFORM(COCOA)
+#if USE(APPKIT)
     return WebEventFactory::shouldBeHandledAsContextClick(event);
 #else
     return event.button() == WebCore::RightButton;
@@ -2628,20 +2629,27 @@ static bool handleContextMenuEvent(const PlatformMouseEvent& platformMouseEvent,
         frame = result.innerNonSharedNode()->document().frame();
 
     bool handled = page->corePage()->userInputBridge().handleContextMenuEvent(platformMouseEvent, *frame);
+#if ENABLE(CONTEXT_MENUS)
     if (handled)
         page->contextMenu()->show();
-
+#endif
     return handled;
 }
 
 void WebPage::contextMenuForKeyEvent()
 {
+#if ENABLE(CONTEXT_MENUS)
     corePage()->contextMenuController().clearContextMenu();
+#endif
 
     Frame& frame = m_page->focusController().focusedOrMainFrame();
     bool handled = frame.eventHandler().sendContextMenuEventForKey();
+#if ENABLE(CONTEXT_MENUS)
     if (handled)
         contextMenu()->show();
+#else
+    UNUSED_PARAM(handled);
+#endif
 }
 #endif
 
@@ -2661,7 +2669,7 @@ static bool handleMouseEvent(const WebMouseEvent& mouseEvent, WebPage* page)
 #endif
 
             bool handled = page->corePage()->userInputBridge().handleMousePressEvent(platformMouseEvent);
-#if ENABLE(CONTEXT_MENUS)
+#if ENABLE(CONTEXT_MENU_EVENT)
             if (isContextClick(platformMouseEvent))
                 handled = handleContextMenuEvent(platformMouseEvent, page);
 #endif
@@ -3344,7 +3352,7 @@ void WebPage::runJavaScript(WebFrame* frame, const String& script, bool forceUse
         if (JSValue resultValue = frame->coreFrame()->script().executeUserAgentScriptInWorld(world->coreWorld(), script, forceUserGesture, &details)) {
             hadException = false;
             serializedResultValue = SerializedScriptValue::create(frame->jsContextForWorld(world),
-                toRef(frame->coreFrame()->script().globalObject(world->coreWorld())->globalExec(), resultValue), nullptr);
+                toRef(frame->coreFrame()->script().globalObject(world->coreWorld()), resultValue), nullptr);
         }
     }
 
@@ -4045,9 +4053,9 @@ void WebPage::replaceStringMatchesFromInjectedBundle(const Vector<uint32_t>& mat
     findController().replaceMatches(matchIndices, replacementText, selectionOnly);
 }
 
-void WebPage::findString(const String& string, uint32_t options, uint32_t maxMatchCount)
+void WebPage::findString(const String& string, uint32_t options, uint32_t maxMatchCount, Optional<CallbackID> callbackID)
 {
-    findController().findString(string, static_cast<FindOptions>(options), maxMatchCount);
+    findController().findString(string, static_cast<FindOptions>(options), maxMatchCount, callbackID);
 }
 
 void WebPage::findStringMatches(const String& string, uint32_t options, uint32_t maxMatchCount)
@@ -5288,9 +5296,9 @@ void WebPage::confirmCompositionAsync()
 #endif // PLATFORM(COCOA)
 
 #if PLATFORM(GTK)
-static Frame* targetFrameForEditing(WebPage* page)
+static Frame* targetFrameForEditing(WebPage& page)
 {
-    Frame& targetFrame = page->corePage()->focusController().focusedOrMainFrame();
+    Frame& targetFrame = page.corePage()->focusController().focusedOrMainFrame();
 
     Editor& editor = targetFrame.editor();
     if (!editor.canEdit())
@@ -5309,62 +5317,20 @@ static Frame* targetFrameForEditing(WebPage* page)
     return &targetFrame;
 }
 
-void WebPage::confirmComposition(const String& compositionString, int64_t selectionStart, int64_t selectionLength)
+void WebPage::confirmComposition(const String& compositionString)
 {
-    Frame* targetFrame = targetFrameForEditing(this);
-    if (!targetFrame) {
-        send(Messages::WebPageProxy::EditorStateChanged(editorState()));
-        return;
-    }
-
-    targetFrame->editor().confirmComposition(compositionString);
-
-    if (selectionStart == -1) {
-        send(Messages::WebPageProxy::EditorStateChanged(editorState()));
-        return;
-    }
-
-    Element* scope = targetFrame->selection().selection().rootEditableElement();
-    RefPtr<Range> selectionRange = TextIterator::rangeFromLocationAndLength(scope, selectionStart, selectionLength);
-    ASSERT_WITH_MESSAGE(selectionRange, "Invalid selection: [%lld:%lld] in text of length %d", static_cast<long long>(selectionStart), static_cast<long long>(selectionLength), scope->innerText().length());
-
-    if (selectionRange) {
-        VisibleSelection selection(*selectionRange, SEL_DEFAULT_AFFINITY);
-        targetFrame->selection().setSelection(selection);
-    }
-    send(Messages::WebPageProxy::EditorStateChanged(editorState()));
+    if (auto* targetFrame = targetFrameForEditing(*this))
+        targetFrame->editor().confirmComposition(compositionString);
 }
 
-void WebPage::setComposition(const String& text, const Vector<CompositionUnderline>& underlines, uint64_t selectionStart, uint64_t selectionLength, uint64_t replacementStart, uint64_t replacementLength)
+void WebPage::setComposition(const String& text, const Vector<CompositionUnderline>& underlines, const EditingRange& selectionRange)
 {
-    Frame* targetFrame = targetFrameForEditing(this);
-    if (!targetFrame || !targetFrame->selection().selection().isContentEditable()) {
-        send(Messages::WebPageProxy::EditorStateChanged(editorState()));
+    Frame* targetFrame = targetFrameForEditing(*this);
+    if (!targetFrame || !targetFrame->selection().selection().isContentEditable())
         return;
-    }
 
     Ref<Frame> protector(*targetFrame);
-
-    if (replacementLength > 0) {
-        // The layout needs to be uptodate before setting a selection
-        targetFrame->document()->updateLayout();
-
-        Element* scope = targetFrame->selection().selection().rootEditableElement();
-        RefPtr<Range> replacementRange = TextIterator::rangeFromLocationAndLength(scope, replacementStart, replacementLength);
-        targetFrame->editor().setIgnoreSelectionChanges(true);
-        targetFrame->selection().setSelection(VisibleSelection(*replacementRange, SEL_DEFAULT_AFFINITY));
-        targetFrame->editor().setIgnoreSelectionChanges(false);
-    }
-
-    targetFrame->editor().setComposition(text, underlines, selectionStart, selectionStart + selectionLength);
-    send(Messages::WebPageProxy::EditorStateChanged(editorState()));
-}
-
-void WebPage::cancelComposition()
-{
-    if (Frame* targetFrame = targetFrameForEditing(this))
-        targetFrame->editor().cancelComposition();
-    send(Messages::WebPageProxy::EditorStateChanged(editorState()));
+    targetFrame->editor().setComposition(text, underlines, selectionRange.location, selectionRange.location + selectionRange.length);
 }
 #endif
 
@@ -6730,69 +6696,19 @@ void WebPage::updateInputContextAfterBlurringAndRefocusingElementIfNeeded(Elemen
 
 #endif // !PLATFORM(IOS_FAMILY)
 
-static IntRect elementRectInRootViewCoordinates(const Element& element, const Frame& frame)
-{
-    auto* view = frame.view();
-    if (!view)
-        return { };
-
-    auto* renderer = element.renderer();
-    if (!renderer)
-        return { };
-
-    return view->contentsToRootView(renderer->absoluteBoundingBoxRect());
-}
-
-static bool isEditableTextInputElement(Element& element)
-{
-    if (is<HTMLTextFormControlElement>(element)) {
-        if (!element.isTextField() && !is<HTMLTextAreaElement>(element))
-            return false;
-        return downcast<HTMLTextFormControlElement>(element).isInnerTextElementEditable();
-    }
-
-    return element.isRootEditableElement();
-}
-
 void WebPage::textInputContextsInRect(WebCore::FloatRect searchRect, CompletionHandler<void(const Vector<WebCore::ElementContext>&)>&& completionHandler)
 {
-    Vector<WebCore::ElementContext> textInputContexts;
+    auto contexts = m_page->editableElementsInRect(searchRect).map([&] (const auto& element) {
+        auto& document = element->document();
 
-    for (Frame* frame = &m_page->mainFrame(); frame; frame = frame->tree().traverseNext()) {
-        Document* document = frame->document();
-        if (!document)
-            continue;
-
-        Deque<Node*> nodesToSearch;
-        nodesToSearch.append(document);
-        while (!nodesToSearch.isEmpty()) {
-            auto node = nodesToSearch.takeFirst();
-
-            // It is possible to have nested text input contexts (e.g. <input type='text'> inside contenteditable) but
-            // in this case we just take the outermost context and skip the rest.
-            if (!is<Element>(*node) || !isEditableTextInputElement(downcast<Element>(*node))) {
-                for (auto* child = node->firstChild(); child; child = child->nextSibling())
-                    nodesToSearch.append(child);
-                continue;
-            }
-
-            auto& element = downcast<Element>(*node);
-
-            IntRect elementRect = elementRectInRootViewCoordinates(element, *frame);
-            if (!searchRect.intersects(elementRect))
-                continue;
-
-            WebCore::ElementContext context;
-            context.webPageIdentifier = m_identifier;
-            context.documentIdentifier = document->identifier();
-            context.elementIdentifier = document->identifierForElement(element);
-            context.boundingRect = elementRect;
-
-            textInputContexts.append(context);
-        }
-    }
-
-    completionHandler(textInputContexts);
+        WebCore::ElementContext context;
+        context.webPageIdentifier = m_identifier;
+        context.documentIdentifier = document.identifier();
+        context.elementIdentifier = document.identifierForElement(element);
+        context.boundingRect = element->clientRect();
+        return context;
+    });
+    completionHandler(contexts);
 }
 
 void WebPage::focusTextInputContext(const WebCore::ElementContext& textInputContext, CompletionHandler<void(bool)>&& completionHandler)
@@ -6830,7 +6746,53 @@ Optional<WebCore::ElementContext> WebPage::contextForElement(WebCore::Element& e
     if (!frame)
         return WTF::nullopt;
 
-    return WebCore::ElementContext { elementRectInRootViewCoordinates(element, *frame), m_identifier, document.identifier(), document.identifierForElement(element) };
+    return WebCore::ElementContext { element.clientRect(), m_identifier, document.identifier(), document.identifierForElement(element) };
+}
+
+void WebPage::startTextManipulations(Vector<WebCore::TextManipulationController::ExclusionRule>&& exclusionRules, CompletionHandler<void()>&& completionHandler)
+{
+    if (!m_page)
+        return;
+
+    auto mainDocument = makeRefPtr(m_page->mainFrame().document());
+    if (!mainDocument)
+        return;
+
+    mainDocument->textManipulationController().startObservingParagraphs([webPage = makeWeakPtr(*this)] (WebCore::Document& document,
+        WebCore::TextManipulationController::ItemIdentifier itemIdentifier, const Vector<WebCore::TextManipulationController::ManipulationToken>& tokens) {
+        auto* frame = document.frame();
+        if (!webPage || !frame || webPage->mainFrame() != frame)
+            return;
+
+        auto* webFrame = WebFrame::fromCoreFrame(*frame);
+        if (!webFrame)
+            return;
+
+        webPage->send(Messages::WebPageProxy::DidFindTextManipulationItem(itemIdentifier, tokens));
+    }, WTFMove(exclusionRules));
+    // For now, we assume startObservingParagraphs find all paragraphs synchronously at once.
+    completionHandler();
+}
+
+void WebPage::completeTextManipulation(WebCore::TextManipulationController::ItemIdentifier itemID,
+    const Vector<WebCore::TextManipulationController::ManipulationToken>& tokens, CompletionHandler<void(WebCore::TextManipulationController::ManipulationResult)>&& completionHandler)
+{
+    using ManipulationResult = WebCore::TextManipulationController::ManipulationResult;
+    auto completeManipulation = [&] {
+        if (!m_page)
+            return ManipulationResult::InvalidItem;
+
+        auto mainDocument = makeRefPtr(m_page->mainFrame().document());
+        if (!mainDocument)
+            return ManipulationResult::InvalidItem;
+
+        auto* controller = mainDocument->textManipulationControllerIfExists();
+        if (!controller)
+            return ManipulationResult::InvalidItem;
+
+        return controller->completeManipulation(itemID, tokens);
+    };
+    completionHandler(completeManipulation());
 }
 
 PAL::SessionID WebPage::sessionID() const
@@ -6868,6 +6830,15 @@ void WebPage::textAutoSizingAdjustmentTimerFired()
     m_page->recomputeTextAutoSizingInAllFrames();
 }
 #endif
+
+void WebPage::setOverriddenMediaType(const String& mediaType)
+{
+    if (mediaType == m_overriddenMediaType)
+        return;
+
+    m_overriddenMediaType = mediaType;
+    m_page->setNeedsRecalcStyleInAllFrames();
+}
 
 } // namespace WebKit
 

@@ -48,12 +48,11 @@ class InjectedScriptManager;
 namespace JSC {
 class CallFrame;
 class JSValue;
-using ExecState = CallFrame;
 }
 
 namespace WebCore {
 
-class AccessibilityObject;
+class AXCoreObject;
 class CharacterData;
 class DOMEditor;
 class Document;
@@ -99,7 +98,7 @@ public:
     static Node* innerParentNode(Node*);
 
     static Node* scriptValueAsNode(JSC::JSValue);
-    static JSC::JSValue nodeAsScriptValue(JSC::ExecState&, Node*);
+    static JSC::JSValue nodeAsScriptValue(JSC::JSGlobalObject&, Node*);
 
     // InspectorAgentBase
     void didCreateFrontendAndBackend(Inspector::FrontendRouter*, Inspector::BackendDispatcher*) override;
@@ -179,6 +178,7 @@ public:
 
     void styleAttributeInvalidated(const Vector<Element*>& elements);
 
+    int pushNodeToFrontend(Node*);
     int pushNodeToFrontend(ErrorString&, int documentNodeId, Node*);
     Node* nodeForId(int nodeId);
     int boundNodeId(const Node*);
@@ -226,7 +226,7 @@ private:
     RefPtr<JSON::ArrayOf<Inspector::Protocol::DOM::Node>> buildArrayForPseudoElements(const Element&, NodeToIdMap* nodesMap);
     Ref<Inspector::Protocol::DOM::EventListener> buildObjectForEventListener(const RegisteredEventListener&, int identifier, EventTarget&, const AtomString& eventType, bool disabled, bool hasBreakpoint);
     RefPtr<Inspector::Protocol::DOM::AccessibilityProperties> buildObjectForAccessibilityProperties(Node*);
-    void processAccessibilityChildren(AccessibilityObject&, JSON::ArrayOf<int>&);
+    void processAccessibilityChildren(AXCoreObject&, JSON::ArrayOf<int>&);
     
     Node* nodeForPath(const String& path);
     Node* nodeForObjectId(const String& objectId);

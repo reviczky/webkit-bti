@@ -430,12 +430,12 @@ void IDBServer::abortOpenAndUpgradeNeeded(uint64_t databaseConnectionIdentifier,
     databaseConnection->connectionClosedFromClient();
 }
 
-void IDBServer::didFireVersionChangeEvent(uint64_t databaseConnectionIdentifier, const IDBResourceIdentifier& requestIdentifier)
+void IDBServer::didFireVersionChangeEvent(uint64_t databaseConnectionIdentifier, const IDBResourceIdentifier& requestIdentifier, IndexedDB::ConnectionClosedOnBehalfOfServer connectionClosed)
 {
     LOG(IndexedDB, "IDBServer::didFireVersionChangeEvent");
 
     if (auto databaseConnection = m_databaseConnections.get(databaseConnectionIdentifier))
-        databaseConnection->didFireVersionChangeEvent(requestIdentifier);
+        databaseConnection->didFireVersionChangeEvent(requestIdentifier, connectionClosed);
 }
 
 void IDBServer::openDBRequestCancelled(const IDBRequestData& requestData)
@@ -853,14 +853,11 @@ void IDBServer::tryStop(ShouldForceStop shouldForceStop)
     if (m_sessionID.isEphemeral())
         return;
 
-    suspendAndWait();
-    if (shouldForceStop == ShouldForceStop::No && SQLiteDatabaseTracker::hasTransactionInProgress()) {
-        CrossThreadTaskHandler::resume();
+    if (shouldForceStop == ShouldForceStop::No && SQLiteDatabaseTracker::hasTransactionInProgress())
         return;
-    }
 
-    for (auto& database : m_uniqueIDBDatabaseMap.values())
-        database->finishActiveTransactions();
+    for (auto& database : m_allUniqueIDBDatabases)
+        database.suspend();
 }
 
 void IDBServer::resume()
@@ -868,7 +865,8 @@ void IDBServer::resume()
     if (m_sessionID.isEphemeral())
         return;
 
-    CrossThreadTaskHandler::resume();
+    for (auto& database : m_allUniqueIDBDatabases)
+        database.resume();
 }
 
 } // namespace IDBServer

@@ -49,6 +49,7 @@
 #include <WebCore/CredentialStorage.h>
 #include <WebCore/DatabaseTracker.h>
 #include <WebCore/HTMLMediaElement.h>
+#include <WebCore/NetworkStorageSession.h>
 #include <WebCore/OriginLock.h>
 #include <WebCore/RegistrableDomain.h>
 #include <WebCore/SecurityOrigin.h>
@@ -1369,6 +1370,10 @@ void WebsiteDataStore::isRegisteredAsSubresourceUnder(const URL& subresourceURL,
             process->isRegisteredAsSubresourceUnder(m_sessionID, WebCore::RegistrableDomain { subresourceURL }, WebCore::RegistrableDomain { topFrameURL }, WTFMove(completionHandler));
             ASSERT(processPools().size() == 1);
             break;
+        } else {
+            ASSERT_NOT_REACHED();
+            completionHandler(false);
+            break;
         }
     }
 }
@@ -1783,13 +1788,16 @@ void WebsiteDataStore::setResourceLoadStatisticsShouldDowngradeReferrerForTestin
     ASSERT(!completionHandler);
 }
 
-void WebsiteDataStore::setResourceLoadStatisticsShouldBlockThirdPartyCookiesForTesting(bool enabled, CompletionHandler<void()>&& completionHandler)
+void WebsiteDataStore::setResourceLoadStatisticsShouldBlockThirdPartyCookiesForTesting(bool enabled, bool onlyOnSitesWithoutUserInteraction, CompletionHandler<void()>&& completionHandler)
 {
     auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
-    
+    WebCore::ThirdPartyCookieBlockingMode blockingMode = WebCore::ThirdPartyCookieBlockingMode::OnlyAccordingToPerDomainPolicy;
+    if (enabled)
+        blockingMode = onlyOnSitesWithoutUserInteraction ? WebCore::ThirdPartyCookieBlockingMode::AllOnSitesWithoutUserInteraction : WebCore::ThirdPartyCookieBlockingMode::All;
+
     for (auto& processPool : processPools()) {
         if (auto* networkProcess = processPool->networkProcess()) {
-            networkProcess->setShouldBlockThirdPartyCookiesForTesting(m_sessionID, enabled, [callbackAggregator = callbackAggregator.copyRef()] { });
+            networkProcess->setShouldBlockThirdPartyCookiesForTesting(m_sessionID, blockingMode, [callbackAggregator = callbackAggregator.copyRef()] { });
             ASSERT(processPools().size() == 1);
             break;
         }
@@ -1961,13 +1969,17 @@ void WebsiteDataStore::setResourceLoadStatisticsEnabled(bool enabled)
         
         resolveDirectoriesIfNecessary();
         
-        for (auto& processPool : processPools(std::numeric_limits<size_t>::max(), false))
+        for (auto& processPool : processPools(std::numeric_limits<size_t>::max(), false)) {
             processPool->sendToNetworkingProcess(Messages::NetworkProcess::SetResourceLoadStatisticsEnabled(m_sessionID, true));
+            processPool->sendToAllProcesses(Messages::WebProcess::SetResourceLoadStatisticsEnabled(true));
+        }
         return;
     }
 
-    for (auto& processPool : processPools(std::numeric_limits<size_t>::max(), false))
+    for (auto& processPool : processPools(std::numeric_limits<size_t>::max(), false)) {
         processPool->sendToNetworkingProcess(Messages::NetworkProcess::SetResourceLoadStatisticsEnabled(m_sessionID, false));
+        processPool->sendToAllProcesses(Messages::WebProcess::SetResourceLoadStatisticsEnabled(false));
+    }
 
     m_resourceLoadStatisticsEnabled = false;
 #else
@@ -2053,6 +2065,12 @@ uint64_t WebsiteDataStore::perThirdPartyOriginStorageQuota() const
 {
     // FIXME: Consider whether allowing to set a perThirdPartyOriginStorageQuota from a WebsiteDataStore.
     return WebCore::StorageQuotaManager::defaultThirdPartyQuotaFromPerOriginQuota(perOriginStorageQuota());
+}
+
+void WebsiteDataStore::setCacheModelSynchronouslyForTesting(CacheModel cacheModel)
+{
+    for (auto processPool : WebProcessPool::allProcessPools())
+        processPool->setCacheModelSynchronouslyForTesting(cacheModel);
 }
 
 #if !PLATFORM(COCOA)
