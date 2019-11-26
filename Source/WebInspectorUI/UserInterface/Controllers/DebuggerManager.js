@@ -721,11 +721,11 @@ WI.DebuggerManager = class DebuggerManager extends WI.Object
         breakpoint.resolved = true;
     }
 
-    globalObjectCleared()
+    globalObjectCleared(target)
     {
         let wasPaused = this.paused;
 
-        WI.Script.resetUniqueDisplayNameNumbers();
+        WI.Script.resetUniqueDisplayNameNumbers(target);
 
         this._internalWebKitScripts = [];
         this._targetDebuggerDataMap.clear();
@@ -900,8 +900,9 @@ WI.DebuggerManager = class DebuggerManager extends WI.Object
 
     scriptDidFail(target, url, scriptSource)
     {
+        const sourceURL = null;
         const sourceType = WI.Script.SourceType.Program;
-        let script = new WI.LocalScript(target, url, sourceType, scriptSource);
+        let script = new WI.LocalScript(target, url, sourceURL, sourceType, scriptSource);
 
         // If there is already a resource we don't need to have the script anymore,
         // we only need a script to use for parser error location links.

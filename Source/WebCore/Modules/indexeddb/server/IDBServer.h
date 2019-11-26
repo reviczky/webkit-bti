@@ -41,7 +41,7 @@
 #include <wtf/Ref.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
-#include <wtf/WeakPtr.h>
+#include <wtf/WeakHashSet.h>
 
 namespace WebCore {
 
@@ -90,7 +90,7 @@ public:
     WEBCORE_EXPORT void databaseConnectionPendingClose(uint64_t databaseConnectionIdentifier);
     WEBCORE_EXPORT void databaseConnectionClosed(uint64_t databaseConnectionIdentifier);
     WEBCORE_EXPORT void abortOpenAndUpgradeNeeded(uint64_t databaseConnectionIdentifier, const IDBResourceIdentifier& transactionIdentifier);
-    WEBCORE_EXPORT void didFireVersionChangeEvent(uint64_t databaseConnectionIdentifier, const IDBResourceIdentifier& requestIdentifier);
+    WEBCORE_EXPORT void didFireVersionChangeEvent(uint64_t databaseConnectionIdentifier, const IDBResourceIdentifier& requestIdentifier, IndexedDB::ConnectionClosedOnBehalfOfServer);
     WEBCORE_EXPORT void openDBRequestCancelled(const IDBRequestData&);
     WEBCORE_EXPORT void confirmDidCloseFromServer(uint64_t databaseConnectionIdentifier);
 
@@ -122,6 +122,9 @@ public:
 
     WEBCORE_EXPORT void tryStop(ShouldForceStop);
     WEBCORE_EXPORT void resume();
+
+    void addDatabase(UniqueIDBDatabase& database) { m_allUniqueIDBDatabases.add(database); }
+    void removeDatabase(UniqueIDBDatabase& database) { m_allUniqueIDBDatabases.remove(database); }
 
 private:
     IDBServer(PAL::SessionID, QuotaManagerGetter&&);
@@ -190,6 +193,7 @@ private:
     PAL::SessionID m_sessionID;
     HashMap<IDBConnectionIdentifier, RefPtr<IDBConnectionToClient>> m_connectionMap;
     HashMap<IDBDatabaseIdentifier, std::unique_ptr<UniqueIDBDatabase>> m_uniqueIDBDatabaseMap;
+    WeakHashSet<UniqueIDBDatabase> m_allUniqueIDBDatabases;
 
     HashMap<uint64_t, UniqueIDBDatabaseConnection*> m_databaseConnections;
     HashMap<IDBResourceIdentifier, UniqueIDBDatabaseTransaction*> m_transactions;

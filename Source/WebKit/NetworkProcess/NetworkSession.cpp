@@ -39,7 +39,6 @@
 #include "WebSocketTask.h"
 #include <WebCore/AdClickAttribution.h>
 #include <WebCore/CookieJar.h>
-#include <WebCore/NetworkStorageSession.h>
 #include <WebCore/ResourceRequest.h>
 
 #if PLATFORM(COCOA)
@@ -88,25 +87,28 @@ NetworkSession::NetworkSession(NetworkProcess& networkProcess, const NetworkSess
 {
     if (!m_sessionID.isEphemeral()) {
         String networkCacheDirectory = parameters.networkCacheDirectory;
-        if (!networkCacheDirectory.isNull())
+        if (!networkCacheDirectory.isNull()) {
             SandboxExtension::consumePermanently(parameters.networkCacheDirectoryExtensionHandle);
 
-        auto cacheOptions = networkProcess.cacheOptions();
+            auto cacheOptions = networkProcess.cacheOptions();
 #if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
-        if (parameters.networkCacheSpeculativeValidationEnabled)
-            cacheOptions.add(NetworkCache::CacheOption::SpeculativeRevalidation);
+            if (parameters.networkCacheSpeculativeValidationEnabled)
+                cacheOptions.add(NetworkCache::CacheOption::SpeculativeRevalidation);
 #endif
-        if (parameters.shouldUseTestingNetworkSession)
-            cacheOptions.add(NetworkCache::CacheOption::TestingMode);
+            if (parameters.shouldUseTestingNetworkSession)
+                cacheOptions.add(NetworkCache::CacheOption::TestingMode);
 
-        m_cache = NetworkCache::Cache::open(networkProcess, networkCacheDirectory, cacheOptions, m_sessionID);
+            m_cache = NetworkCache::Cache::open(networkProcess, networkCacheDirectory, cacheOptions, m_sessionID);
 
-        if (!m_cache)
-            RELEASE_LOG_ERROR(NetworkCache, "Failed to initialize the WebKit network disk cache");
-        
+            if (!m_cache)
+                RELEASE_LOG_ERROR(NetworkCache, "Failed to initialize the WebKit network disk cache");
+        }
+
         if (!parameters.resourceLoadStatisticsDirectory.isEmpty())
             SandboxExtension::consumePermanently(parameters.resourceLoadStatisticsDirectoryExtensionHandle);
     }
+
+    m_isStaleWhileRevalidateEnabled = parameters.staleWhileRevalidateEnabled;
 
     m_adClickAttribution->setPingLoadFunction([this, weakThis = makeWeakPtr(this)](NetworkResourceLoadParameters&& loadParameters, CompletionHandler<void(const WebCore::ResourceError&, const WebCore::ResourceResponse&)>&& completionHandler) {
         if (!weakThis)
@@ -151,6 +153,8 @@ void NetworkSession::invalidateAndCancel()
 void NetworkSession::setResourceLoadStatisticsEnabled(bool enable)
 {
     ASSERT(!m_isInvalidated);
+    if (auto* storageSession = networkStorageSession())
+        storageSession->setResourceLoadStatisticsEnabled(enable);
     if (!enable) {
         destroyResourceLoadStatistics();
         return;
@@ -164,18 +168,22 @@ void NetworkSession::setResourceLoadStatisticsEnabled(bool enable)
         return;
 
     m_resourceLoadStatistics = WebResourceLoadStatisticsStore::create(*this, m_resourceLoadStatisticsDirectory, m_shouldIncludeLocalhostInResourceLoadStatistics);
+    m_resourceLoadStatistics->populateMemoryStoreFromDisk([] { });
 
     if (m_enableResourceLoadStatisticsDebugMode == EnableResourceLoadStatisticsDebugMode::Yes)
         m_resourceLoadStatistics->setResourceLoadStatisticsDebugMode(true, [] { });
     // This should always be forwarded since debug mode may be enabled at runtime.
     if (!m_resourceLoadStatisticsManualPrevalentResource.isEmpty())
         m_resourceLoadStatistics->setPrevalentResourceForDebugMode(m_resourceLoadStatisticsManualPrevalentResource, [] { });
+    m_resourceLoadStatistics->setThirdPartyCookieBlockingMode(m_thirdPartyCookieBlockingMode);
 }
 
-void NetworkSession::recreateResourceLoadStatisticStore()
+void NetworkSession::recreateResourceLoadStatisticStore(CompletionHandler<void()>&& completionHandler)
 {
     destroyResourceLoadStatistics();
     m_resourceLoadStatistics = WebResourceLoadStatisticsStore::create(*this, m_resourceLoadStatisticsDirectory, m_shouldIncludeLocalhostInResourceLoadStatistics);
+    m_resourceLoadStatistics->populateMemoryStoreFromDisk(WTFMove(completionHandler));
+    m_resourceLoadStatistics->setThirdPartyCookieBlockingMode(m_thirdPartyCookieBlockingMode);
 }
 
 bool NetworkSession::isResourceLoadStatisticsEnabled() const
@@ -218,6 +226,13 @@ bool NetworkSession::shouldDowngradeReferrer() const
     return m_downgradeReferrer;
 }
 
+void NetworkSession::setThirdPartyCookieBlockingMode(ThirdPartyCookieBlockingMode blockingMode)
+{
+    ASSERT(m_resourceLoadStatistics);
+    m_thirdPartyCookieBlockingMode = blockingMode;
+    if (m_resourceLoadStatistics)
+        m_resourceLoadStatistics->setThirdPartyCookieBlockingMode(blockingMode);
+}
 #endif // ENABLE(RESOURCE_LOAD_STATISTICS)
 
 void NetworkSession::storeAdClickAttribution(WebCore::AdClickAttribution&& adClickAttribution)

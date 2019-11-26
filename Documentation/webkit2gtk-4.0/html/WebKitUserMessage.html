@@ -7,8 +7,8 @@
 <link rel="home" href="index.html" title="WebKitGTK Reference Manual">
 <link rel="up" href="ch01.html" title="Class Overview">
 <link rel="prev" href="webkit2gtk-4.0-Geolocation-manager.html" title="Geolocation manager">
-<link rel="next" href="ch02.html" title="Web Extensions">
-<meta name="generator" content="GTK-Doc V1.29.1 (XML mode)">
+<link rel="next" href="WebKitPointerLockPermissionRequest.html" title="WebKitPointerLockPermissionRequest">
+<meta name="generator" content="GTK-Doc V1.32.1 (XML mode)">
 <link rel="stylesheet" href="style.css" type="text/css">
 </head>
 <body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
@@ -22,7 +22,7 @@
 <td><a accesskey="h" href="index.html"><img src="home.png" width="16" height="16" border="0" alt="Home"></a></td>
 <td><a accesskey="u" href="ch01.html"><img src="up.png" width="16" height="16" border="0" alt="Up"></a></td>
 <td><a accesskey="p" href="webkit2gtk-4.0-Geolocation-manager.html"><img src="left.png" width="16" height="16" border="0" alt="Prev"></a></td>
-<td><a accesskey="n" href="ch02.html"><img src="right.png" width="16" height="16" border="0" alt="Next"></a></td>
+<td><a accesskey="n" href="WebKitPointerLockPermissionRequest.html"><img src="right.png" width="16" height="16" border="0" alt="Next"></a></td>
 </tr></table>
 <div class="refentry">
 <a name="WebKitUserMessage"></a><div class="titlepage"></div>
@@ -37,8 +37,8 @@
 <a name="WebKitUserMessage.functions"></a><h2>Functions</h2>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
-<col width="150px" class="functions_return">
-<col class="functions_name">
+<col width="150px" class="functions_proto_type">
+<col class="functions_proto_name">
 </colgroup>
 <tbody>
 <tr>
@@ -112,19 +112,19 @@
 <td class="property_type">
 <a href="../gio/GUnixFDList.html#GUnixFDList-struct"><span class="type">GUnixFDList</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitUserMessage.html#WebKitUserMessage--fd-list" title="The “fd-list” property">fd-list</a></td>
-<td class="property_flags">Read / Write / Construct Only</td>
+<td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
 <td class="property_type">
 <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitUserMessage.html#WebKitUserMessage--name" title="The “name” property">name</a></td>
-<td class="property_flags">Read / Write / Construct Only</td>
+<td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 <tr>
 <td class="property_type">
 <a href="../glib/glib-GVariant.html#GVariant"><span class="type">GVariant</span></a> *</td>
 <td class="property_name"><a class="link" href="WebKitUserMessage.html#WebKitUserMessage--parameters" title="The “parameters” property">parameters</a></td>
-<td class="property_flags">Read / Write / Construct Only</td>
+<td class="property_flags">Read / Write / Construct Only</td>
 </tr>
 </tbody>
 </table></div>
@@ -133,8 +133,8 @@
 <a name="WebKitUserMessage.other"></a><h2>Types and Values</h2>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
 <colgroup>
-<col width="150px" class="name">
-<col class="description">
+<col width="150px" class="other_proto_type">
+<col class="other_proto_name">
 </colgroup>
 <tbody>
 <tr>
@@ -164,7 +164,7 @@
 <p>A WebKitUserMessage is a message that can be used for the communication between the UI process
 and web extensions. A WebKitUserMessage always has a name, and it can also include parameters and
 UNIX file descriptors. Messages can be sent from a <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> to all <a class="link" href="WebKitWebExtension.html" title="WebKitWebExtension"><span class="type">WebKitWebExtension</span></a>s,
-from a <a class="link" href="WebKitWebExtension.html" title="WebKitWebExtension"><span class="type">WebKitWebExtension</span></a> to its corresponding <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>, and from a <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a> to its
+from a <a class="link" href="WebKitWebExtension.html" title="WebKitWebExtension"><span class="type">WebKitWebExtension</span></a> to its corresponding <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>, and from a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> to its
 corresponding <a class="link" href="WebKitWebPage.html" title="WebKitWebPage"><span class="type">WebKitWebPage</span></a> (and vice versa). One to one messages can be replied to directly with
 <a class="link" href="WebKitUserMessage.html#webkit-user-message-send-reply" title="webkit_user_message_send_reply ()"><code class="function">webkit_user_message_send_reply()</code></a>.</p>
 </div>
@@ -416,7 +416,8 @@ webkit_user_message_error_quark (<em class="parameter"><code><span class="type">
 <a name="WebKitUserMessage--fd-list"></a><h3>The <code class="literal">“fd-list”</code> property</h3>
 <pre class="programlisting">  “fd-list”                  <a href="../gio/GUnixFDList.html#GUnixFDList-struct"><span class="type">GUnixFDList</span></a> *</pre>
 <p>The UNIX file descriptors of the user message.</p>
-<p>Flags: Read / Write / Construct Only</p>
+<p>Owner: WebKitUserMessage</p>
+<p>Flags: Read / Write / Construct Only</p>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
 <hr>
@@ -424,7 +425,8 @@ webkit_user_message_error_quark (<em class="parameter"><code><span class="type">
 <a name="WebKitUserMessage--name"></a><h3>The <code class="literal">“name”</code> property</h3>
 <pre class="programlisting">  “name”                     <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *</pre>
 <p>The name of the user message.</p>
-<p>Flags: Read / Write / Construct Only</p>
+<p>Owner: WebKitUserMessage</p>
+<p>Flags: Read / Write / Construct Only</p>
 <p>Default value: NULL</p>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
@@ -435,7 +437,8 @@ webkit_user_message_error_quark (<em class="parameter"><code><span class="type">
 <p>The parameters of the user message as a <a href="../glib/glib-GVariant.html#GVariant"><span class="type">GVariant</span></a>, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>
 if the message doesn't include parameters. Note that only complete types are
 allowed.</p>
-<p>Flags: Read / Write / Construct Only</p>
+<p>Owner: WebKitUserMessage</p>
+<p>Flags: Read / Write / Construct Only</p>
 <p>Allowed values: GVariant&lt;*&gt;</p>
 <p>Default value: NULL</p>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
@@ -443,10 +446,10 @@ allowed.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitUserMessage.see-also"></a><h2>See Also</h2>
-<p><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>, <a class="link" href="WebKitWebView.html" title="WebKitWebView"><span class="type">WebKitWebView</span></a>, <a class="link" href="WebKitWebExtension.html" title="WebKitWebExtension"><span class="type">WebKitWebExtension</span></a>, <a class="link" href="WebKitWebPage.html" title="WebKitWebPage"><span class="type">WebKitWebPage</span></a></p>
+<p><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a>, <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>, <a class="link" href="WebKitWebExtension.html" title="WebKitWebExtension"><span class="type">WebKitWebExtension</span></a>, <a class="link" href="WebKitWebPage.html" title="WebKitWebPage"><span class="type">WebKitWebPage</span></a></p>
 </div>
 </div>
 <div class="footer">
-<hr>Generated by GTK-Doc V1.29.1</div>
+<hr>Generated by GTK-Doc V1.32.1</div>
 </body>
 </html>

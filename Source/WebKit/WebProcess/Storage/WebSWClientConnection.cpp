@@ -73,6 +73,7 @@ IPC::Connection* WebSWClientConnection::messageSenderConnection() const
 
 void WebSWClientConnection::scheduleJobInServer(const ServiceWorkerJobData& jobData)
 {
+    RELEASE_ASSERT(!jobData.scopeURL.isNull());
     runOrDelayTaskForImport([this, jobData] {
         send(Messages::WebSWServerConnection::ScheduleJobInServer { jobData });
     });
@@ -85,12 +86,15 @@ void WebSWClientConnection::finishFetchingScriptInServer(const ServiceWorkerFetc
 
 void WebSWClientConnection::addServiceWorkerRegistrationInServer(ServiceWorkerRegistrationIdentifier identifier)
 {
+    // FIXME: We should send the message to network process only if this is a new registration, once we correctly handle recovery upon network process crash.
+    WebProcess::singleton().addServiceWorkerRegistration(identifier);
     send(Messages::WebSWServerConnection::AddServiceWorkerRegistrationInServer { identifier });
 }
 
 void WebSWClientConnection::removeServiceWorkerRegistrationInServer(ServiceWorkerRegistrationIdentifier identifier)
 {
-    send(Messages::WebSWServerConnection::RemoveServiceWorkerRegistrationInServer { identifier });
+    if (WebProcess::singleton().removeServiceWorkerRegistration(identifier))
+        send(Messages::WebSWServerConnection::RemoveServiceWorkerRegistrationInServer { identifier });
 }
 
 void WebSWClientConnection::postMessageToServiceWorker(ServiceWorkerIdentifier destinationIdentifier, MessageWithMessagePorts&& message, const ServiceWorkerOrClientIdentifier& sourceIdentifier)

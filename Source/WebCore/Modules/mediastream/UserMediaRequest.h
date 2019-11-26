@@ -85,7 +85,6 @@ private:
 
     void stop() final;
     const char* activeDOMObjectName() const final;
-    bool shouldPreventEnteringBackForwardCache_DEPRECATED() const final;
 
     void mediaStreamDidFail(RealtimeMediaSource::Type);
 
@@ -95,6 +94,7 @@ private:
     Vector<String> m_audioDeviceUIDs;
 
     UniqueRef<DOMPromiseDeferred<IDLInterface<MediaStream>>> m_promise;
+    CompletionHandler<void()> m_allowCompletionHandler;
     MediaStreamRequest m_request;
 };
 

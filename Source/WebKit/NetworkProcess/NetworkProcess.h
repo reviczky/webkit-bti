@@ -174,10 +174,8 @@ public:
     void ensureSession(const PAL::SessionID&, bool shouldUseTestingNetworkSession, const String& identifier);
 #endif
 
-    void processWillSuspendImminently();
     void processWillSuspendImminentlyForTestingSync(CompletionHandler<void()>&&);
-    void prepareToSuspend();
-    void cancelPrepareToSuspend();
+    void prepareToSuspend(bool isSuspensionImminent, CompletionHandler<void()>&&);
     void processDidResume();
     void resume();
 
@@ -187,8 +185,8 @@ public:
     void logDiagnosticMessageWithValue(WebPageProxyIdentifier, const String& message, const String& description, double value, unsigned significantFigures, WebCore::ShouldSample);
 
 #if PLATFORM(COCOA)
-    RetainPtr<CFDataRef> sourceApplicationAuditData() const;
     bool suppressesConnectionTerminationOnSystemChange() const { return m_suppressesConnectionTerminationOnSystemChange; }
+    RetainPtr<CFDataRef> sourceApplicationAuditData() const;
 #endif
 #if PLATFORM(COCOA) || USE(SOUP)
     void getHostNamesWithHSTSCache(WebCore::NetworkStorageSession&, HashSet<String>&);
@@ -262,7 +260,7 @@ public:
     void hasIsolatedSession(PAL::SessionID, const WebCore::RegistrableDomain&, CompletionHandler<void(bool)>&&) const;
     bool isITPDatabaseEnabled() const { return m_isITPDatabaseEnabled; }
     void setShouldDowngradeReferrerForTesting(bool, CompletionHandler<void()>&&);
-    void setShouldBlockThirdPartyCookiesForTesting(PAL::SessionID, bool, CompletionHandler<void()>&&);
+    void setShouldBlockThirdPartyCookiesForTesting(PAL::SessionID, WebCore::ThirdPartyCookieBlockingMode, CompletionHandler<void()>&&);
 #endif
 
     using CacheStorageRootPathCallback = CompletionHandler<void(String&&)>;
@@ -357,8 +355,6 @@ private:
     void platformProcessDidTransitionToForeground();
     void platformProcessDidTransitionToBackground();
 
-    enum class ShouldAcknowledgeWhenReadyToSuspend { No, Yes };
-    void actualPrepareToSuspend(ShouldAcknowledgeWhenReadyToSuspend);
     void platformPrepareToSuspend(CompletionHandler<void()>&&);
     void platformProcessDidResume();
 
@@ -411,6 +407,7 @@ private:
     void applicationWillEnterForeground();
 
     void setCacheModel(CacheModel, String overrideCacheStorageDirectory);
+    void setCacheModelSynchronouslyForTesting(CacheModel, CompletionHandler<void()>&&);
     void allowSpecificHTTPSCertificateForHost(const WebCore::CertificateInfo&, const String& host);
     void clearCacheForAllOrigins(uint32_t cachesToClear);
     void setAllowsAnySSLCertificateForWebSocket(bool, CompletionHandler<void()>&&);
@@ -439,7 +436,6 @@ private:
     void registerURLSchemeAsLocal(const String&) const;
     void registerURLSchemeAsNoAccess(const String&) const;
     void registerURLSchemeAsCORSEnabled(const String&) const;
-    void registerURLSchemeAsCanDisplayOnlyIfCanRequest(const String&) const;
 
 #if ENABLE(INDEXED_DATABASE)
     void addIndexedDatabaseSession(PAL::SessionID, String&, SandboxExtension::Handle&);
@@ -499,7 +495,6 @@ private:
     // multiple requests to clear the cache can come in before previous requests complete, and we need to wait for all of them.
     // In the future using WorkQueue and a counting semaphore would work, as would WorkQueue supporting the libdispatch concept of "work groups".
     dispatch_group_t m_clearCacheDispatchGroup { nullptr };
-
     bool m_suppressesConnectionTerminationOnSystemChange { false };
 #endif
 

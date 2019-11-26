@@ -34,7 +34,6 @@
 #include "Supplementable.h"
 #include <wtf/URL.h>
 #include "WorkerCacheStorageConnection.h"
-#include "WorkerEventQueue.h"
 #include "WorkerMessagePortChannelProvider.h"
 #include "WorkerScriptController.h"
 #include <JavaScriptCore/ConsoleMessage.h>
@@ -42,11 +41,13 @@
 
 namespace WebCore {
 
+class CSSValuePool;
 class ContentSecurityPolicyResponseHeaders;
 class Crypto;
-class MicrotaskQueue;
+class EventLoopTaskGroup;
 class Performance;
 class ScheduledAction;
+class WorkerEventLoop;
 class WorkerInspectorController;
 class WorkerLocation;
 class WorkerNavigator;
@@ -65,12 +66,16 @@ public:
     virtual bool isDedicatedWorkerGlobalScope() const { return false; }
     virtual bool isServiceWorkerGlobalScope() const { return false; }
 
+    EventLoopTaskGroup& eventLoop() final;
+
     const URL& url() const final { return m_url; }
     String origin() const final;
     const String& identifier() const { return m_identifier; }
 
 #if ENABLE(INDEXED_DATABASE)
     IDBClient::IDBConnectionProxy* idbConnectionProxy() final;
+    void suspend();
+    void resume();
 #endif
 
     WorkerCacheStorageConnection& cacheStorageConnection();
@@ -83,8 +88,6 @@ public:
     void clearScript() { m_script = nullptr; }
 
     WorkerInspectorController& inspectorController() const { return *m_inspectorController; }
-
-    MicrotaskQueue& microtaskQueue() const { return *m_microtaskQueue; }
 
     WorkerThread& thread() const { return m_thread; }
 
@@ -101,9 +104,9 @@ public:
 
     void setIsOnline(bool);
 
-    ExceptionOr<int> setTimeout(JSC::ExecState&, std::unique_ptr<ScheduledAction>, int timeout, Vector<JSC::Strong<JSC::Unknown>>&& arguments);
+    ExceptionOr<int> setTimeout(JSC::JSGlobalObject&, std::unique_ptr<ScheduledAction>, int timeout, Vector<JSC::Strong<JSC::Unknown>>&& arguments);
     void clearTimeout(int timeoutId);
-    ExceptionOr<int> setInterval(JSC::ExecState&, std::unique_ptr<ScheduledAction>, int timeout, Vector<JSC::Strong<JSC::Unknown>>&& arguments);
+    ExceptionOr<int> setInterval(JSC::JSGlobalObject&, std::unique_ptr<ScheduledAction>, int timeout, Vector<JSC::Strong<JSC::Unknown>>&& arguments);
     void clearInterval(int timeoutId);
 
     bool isContextThread() const final;
@@ -131,6 +134,8 @@ public:
 
     unsigned long createUniqueIdentifier() { return m_uniqueIdentifier++; }
 
+    CSSValuePool& cssValuePool();
+
 protected:
     WorkerGlobalScope(const URL&, Ref<SecurityOrigin>&&, const String& identifier, const String& userAgent, bool isOnline, WorkerThread&, bool shouldBypassMainWorldContentSecurityPolicy, Ref<SecurityOrigin>&& topOrigin, MonotonicTime timeOrigin, IDBClient::IDBConnectionProxy*, SocketProvider*);
 
@@ -147,7 +152,7 @@ private:
 
     // The following addMessage and addConsoleMessage functions are deprecated.
     // Callers should try to create the ConsoleMessage themselves.
-    void addMessage(MessageSource, MessageLevel, const String& message, const String& sourceURL, unsigned lineNumber, unsigned columnNumber, RefPtr<Inspector::ScriptCallStack>&&, JSC::ExecState*, unsigned long requestIdentifier) final;
+    void addMessage(MessageSource, MessageLevel, const String& message, const String& sourceURL, unsigned lineNumber, unsigned columnNumber, RefPtr<Inspector::ScriptCallStack>&&, JSC::JSGlobalObject*, unsigned long requestIdentifier) final;
     void addConsoleMessage(MessageSource, MessageLevel, const String& message, unsigned long requestIdentifier) final;
 
     bool isWorkerGlobalScope() const final { return true; }
@@ -158,7 +163,6 @@ private:
     void disableEval(const String& errorMessage) final;
     void disableWebAssembly(const String& errorMessage) final;
     EventTarget* errorEventTarget() final;
-    WorkerEventQueue& eventQueue() const final;
     String resourceRequestIdentifier() const final { return m_identifier; }
     SocketProvider* socketProvider() final;
 
@@ -185,13 +189,13 @@ private:
     WorkerThread& m_thread;
     std::unique_ptr<WorkerScriptController> m_script;
     std::unique_ptr<WorkerInspectorController> m_inspectorController;
-    std::unique_ptr<MicrotaskQueue> m_microtaskQueue;
 
     bool m_closing { false };
     bool m_isOnline;
     bool m_shouldBypassMainWorldContentSecurityPolicy;
 
-    mutable WorkerEventQueue m_eventQueue;
+    RefPtr<WorkerEventLoop> m_eventLoop;
+    std::unique_ptr<EventLoopTaskGroup> m_defaultTaskGroup;
 
     Ref<SecurityOrigin> m_topOrigin;
 
@@ -210,6 +214,7 @@ private:
 #if ENABLE(SERVICE_WORKER)
     RefPtr<WorkerSWClientConnection> m_swClientConnection;
 #endif
+    std::unique_ptr<CSSValuePool> m_cssValuePool;
 };
 
 } // namespace WebCore

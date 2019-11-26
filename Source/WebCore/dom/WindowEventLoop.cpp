@@ -26,69 +26,57 @@
 #include "config.h"
 #include "WindowEventLoop.h"
 
+#include "CommonVM.h"
 #include "Document.h"
+#include "Microtasks.h"
 
 namespace WebCore {
 
-Ref<WindowEventLoop> WindowEventLoop::create()
+static HashMap<RegistrableDomain, WindowEventLoop*>& windowEventLoopMap()
 {
-    return adoptRef(*new WindowEventLoop);
+    RELEASE_ASSERT(isMainThread());
+    static NeverDestroyed<HashMap<RegistrableDomain, WindowEventLoop*>> map;
+    return map.get();
 }
 
-void WindowEventLoop::queueTask(TaskSource source, ScriptExecutionContext& context, TaskFunction&& task)
+Ref<WindowEventLoop> WindowEventLoop::ensureForRegistrableDomain(const RegistrableDomain& domain)
 {
-    ASSERT(isMainThread());
-    ASSERT(is<Document>(context));
-    scheduleToRunIfNeeded();
-    m_tasks.append(Task { source, WTFMove(task), downcast<Document>(context).identifier() });
-}
-
-void WindowEventLoop::suspend(ScriptExecutionContext&)
-{
-    ASSERT(isMainThread());
-}
-
-void WindowEventLoop::resume(ScriptExecutionContext& context)
-{
-    ASSERT(isMainThread());
-    ASSERT(is<Document>(context));
-    auto& document = downcast<Document>(context);
-    if (!m_documentIdentifiersForSuspendedTasks.contains(document.identifier()))
-        return;
-    scheduleToRunIfNeeded();
-}
-
-void WindowEventLoop::scheduleToRunIfNeeded()
-{
-    if (m_isScheduledToRun)
-        return;
-
-    m_isScheduledToRun = true;
-    callOnMainThread([eventLoop = makeRef(*this)] () {
-        eventLoop->m_isScheduledToRun = false;
-        eventLoop->run();
-    });
-}
-
-void WindowEventLoop::run()
-{
-    Vector<Task> tasks = WTFMove(m_tasks);
-    m_documentIdentifiersForSuspendedTasks.clear();
-    Vector<Task> remainingTasks;
-    for (auto& task : tasks) {
-        auto* document = Document::allDocumentsMap().get(task.documentIdentifier);
-        if (!document || document->activeDOMObjectsAreStopped())
-            continue;
-        if (document->activeDOMObjectsAreSuspended()) {
-            m_documentIdentifiersForSuspendedTasks.add(task.documentIdentifier);
-            remainingTasks.append(WTFMove(task));
-            continue;
-        }
-        task.task();
+    auto addResult = windowEventLoopMap().add(domain, nullptr);
+    if (UNLIKELY(addResult.isNewEntry)) {
+        auto newEventLoop = adoptRef(*new WindowEventLoop(domain));
+        addResult.iterator->value = newEventLoop.ptr();
+        return newEventLoop;
     }
-    for (auto& task : m_tasks)
-        remainingTasks.append(WTFMove(task));
-    m_tasks = WTFMove(remainingTasks);
+    return *addResult.iterator->value;
+}
+
+inline WindowEventLoop::WindowEventLoop(const RegistrableDomain& domain)
+    : m_domain(domain)
+    , m_timer(*this, &WindowEventLoop::run)
+{
+}
+
+WindowEventLoop::~WindowEventLoop()
+{
+    auto didRemove = windowEventLoopMap().remove(m_domain);
+    RELEASE_ASSERT(didRemove);
+}
+
+void WindowEventLoop::scheduleToRun()
+{
+    m_timer.startOneShot(0_s);
+}
+
+bool WindowEventLoop::isContextThread() const
+{
+    return isMainThread();
+}
+
+MicrotaskQueue& WindowEventLoop::microtaskQueue()
+{
+    // MicrotaskQueue must be one per event loop.
+    static NeverDestroyed<MicrotaskQueue> queue(commonVM());
+    return queue;
 }
 
 } // namespace WebCore

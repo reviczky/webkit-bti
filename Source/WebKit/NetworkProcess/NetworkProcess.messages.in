@@ -69,15 +69,14 @@ messages -> NetworkProcess LegacyReceiver {
     AllowSpecificHTTPSCertificateForHost(WebCore::CertificateInfo certificate, String host)
     
     ClearCacheForAllOrigins(uint32_t cachesToClear)
-    SetCacheModel(enum:uint8_t WebKit::CacheModel cacheModel, String overrideCacheStorageDirectory);
+    SetCacheModel(enum:uint8_t WebKit::CacheModel cacheModel, String overrideCacheStorageDirectory)
+    SetCacheModelSynchronouslyForTesting(enum:uint8_t WebKit::CacheModel cacheModel) -> () Synchronous
 
     ProcessDidTransitionToBackground()
     ProcessDidTransitionToForeground()
 
-    ProcessWillSuspendImminently()
     ProcessWillSuspendImminentlyForTestingSync() -> () Synchronous
-    PrepareToSuspend()
-    CancelPrepareToSuspend()
+    PrepareToSuspend(bool isSuspensionImminent) -> () Async
     ProcessDidResume()
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
@@ -137,7 +136,7 @@ messages -> NetworkProcess LegacyReceiver {
     DeleteCookiesForTesting(PAL::SessionID sessionID, WebCore::RegistrableDomain domain, bool includeHttpOnlyCookies) -> () Async
     HasIsolatedSession(PAL::SessionID sessionID, WebCore::RegistrableDomain domain) -> (bool hasIsolatedSession) Async
     SetShouldDowngradeReferrerForTesting(bool enabled) -> () Async
-    SetShouldBlockThirdPartyCookiesForTesting(PAL::SessionID sessionID, bool enabled) -> () Async
+    SetShouldBlockThirdPartyCookiesForTesting(PAL::SessionID sessionID, enum:uint8_t WebCore::ThirdPartyCookieBlockingMode blockingMode) -> () Async
 #endif
 
     SetSessionIsControlledByAutomation(PAL::SessionID sessionID, bool controlled);
@@ -146,8 +145,6 @@ messages -> NetworkProcess LegacyReceiver {
     RegisterURLSchemeAsBypassingContentSecurityPolicy(String scheme)
     RegisterURLSchemeAsLocal(String scheme)
     RegisterURLSchemeAsNoAccess(String scheme)
-    RegisterURLSchemeAsCORSEnabled(String scheme)
-    RegisterURLSchemeAsCanDisplayOnlyIfCanRequest(String scheme)
 
     SetCacheStorageParameters(PAL::SessionID sessionID, String cacheStorageDirectory, WebKit::SandboxExtension::Handle handle);
 

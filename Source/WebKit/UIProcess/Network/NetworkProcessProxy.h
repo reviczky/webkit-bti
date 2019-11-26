@@ -26,20 +26,22 @@
 #pragma once
 
 #include "AuxiliaryProcessProxy.h"
-#if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
-#include "LegacyCustomProtocolManagerProxy.h"
-#endif
-#include "NetworkProcessProxyMessages.h"
+#include "NetworkProcessProxyMessagesReplies.h"
 #include "ProcessLauncher.h"
 #include "ProcessThrottler.h"
 #include "ProcessThrottlerClient.h"
 #include "UserContentControllerIdentifier.h"
-#include "WebProcessProxyMessages.h"
+#include "WebProcessProxyMessagesReplies.h"
 #include "WebsiteDataStore.h"
 #include <WebCore/CrossSiteNavigationDataTransfer.h>
+#include <WebCore/FrameIdentifier.h>
 #include <WebCore/RegistrableDomain.h>
 #include <memory>
 #include <wtf/Deque.h>
+
+#if ENABLE(LEGACY_CUSTOM_PROTOCOL_MANAGER)
+#include "LegacyCustomProtocolManagerProxy.h"
+#endif
 
 namespace PAL {
 class SessionID;
@@ -87,7 +89,7 @@ public:
     explicit NetworkProcessProxy(WebProcessPool&);
     ~NetworkProcessProxy();
 
-    void getNetworkProcessConnection(WebProcessProxy&, Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply&&);
+    void getNetworkProcessConnection(WebProcessProxy&, Messages::WebProcessProxy::GetNetworkProcessConnectionDelayedReply&&);
 
     DownloadProxy& createDownloadProxy(WebsiteDataStore&, const WebCore::ResourceRequest&);
 
@@ -155,13 +157,9 @@ public:
     void deleteWebsiteDataInUIProcessForRegistrableDomains(PAL::SessionID, OptionSet<WebsiteDataType>, OptionSet<WebsiteDataFetchOption>, Vector<RegistrableDomain>, CompletionHandler<void(HashSet<WebCore::RegistrableDomain>&&)>&&);
     void hasIsolatedSession(PAL::SessionID, const RegistrableDomain&, CompletionHandler<void(bool)>&&);
     void setShouldDowngradeReferrerForTesting(bool, CompletionHandler<void()>&&);
-    void setShouldBlockThirdPartyCookiesForTesting(PAL::SessionID, bool, CompletionHandler<void()>&&);
+    void setShouldBlockThirdPartyCookiesForTesting(PAL::SessionID, WebCore::ThirdPartyCookieBlockingMode, CompletionHandler<void()>&&);
 #endif
-
-    void processReadyToSuspend();
     
-    void sendProcessDidTransitionToForeground();
-    void sendProcessDidTransitionToBackground();
     void synthesizeAppIsBackground(bool background);
 
     void setIsHoldingLockedFiles(bool);
@@ -169,9 +167,11 @@ public:
     void syncAllCookies();
     void didSyncAllCookies();
 
-    void testProcessIncomingSyncMessagesWhenWaitingForSyncReply(WebPageProxyIdentifier, Messages::NetworkProcessProxy::TestProcessIncomingSyncMessagesWhenWaitingForSyncReply::DelayedReply&&);
+    void testProcessIncomingSyncMessagesWhenWaitingForSyncReply(WebPageProxyIdentifier, Messages::NetworkProcessProxy::TestProcessIncomingSyncMessagesWhenWaitingForSyncReplyDelayedReply&&);
 
     ProcessThrottler& throttler() { return m_throttler; }
+    void updateProcessAssertion();
+
     WebProcessPool& processPool() { return m_processPool; }
 
 #if ENABLE(CONTENT_EXTENSIONS)
@@ -189,7 +189,6 @@ public:
 #endif
 
     // ProcessThrottlerClient
-    void sendProcessWillSuspendImminently() final;
     void sendProcessDidResume() final;
     
     void sendProcessWillSuspendImminentlyForTesting();
@@ -207,8 +206,7 @@ private:
     void clearCallbackStates();
 
     // ProcessThrottlerClient
-    void sendPrepareToSuspend() final;
-    void sendCancelPrepareToSuspend() final;
+    void sendPrepareToSuspend(IsSuspensionImminent, CompletionHandler<void()>&&) final;
     void didSetAssertionState(AssertionState) final;
 
     // IPC::Connection::Client
@@ -242,12 +240,14 @@ private:
 #endif
 
 #if ENABLE(SANDBOX_EXTENSIONS)
-    void getSandboxExtensionsForBlobFiles(const Vector<String>& paths, Messages::NetworkProcessProxy::GetSandboxExtensionsForBlobFiles::AsyncReply&&);
+    void getSandboxExtensionsForBlobFiles(const Vector<String>& paths, Messages::NetworkProcessProxy::GetSandboxExtensionsForBlobFilesAsyncReply&&);
 #endif
 
 #if ENABLE(SERVICE_WORKER)
     void establishWorkerContextConnectionToNetworkProcess(WebCore::RegistrableDomain&&, PAL::SessionID);
     void workerContextConnectionNoLongerNeeded(WebCore::ProcessIdentifier);
+    void registerServiceWorkerClientProcess(WebCore::ProcessIdentifier webProcessIdentifier, WebCore::ProcessIdentifier serviceWorkerProcessIdentifier);
+    void unregisterServiceWorkerClientProcess(WebCore::ProcessIdentifier webProcessIdentifier, WebCore::ProcessIdentifier serviceWorkerProcessIdentifier);
 #endif
 
     void requestStorageSpace(PAL::SessionID, const WebCore::ClientOrigin&, uint64_t quota, uint64_t currentSize, uint64_t spaceRequired, CompletionHandler<void(Optional<uint64_t> quota)>&&);
@@ -265,7 +265,7 @@ private:
 
     struct ConnectionRequest {
         WeakPtr<WebProcessProxy> webProcess;
-        Messages::WebProcessProxy::GetNetworkProcessConnection::DelayedReply reply;
+        Messages::WebProcessProxy::GetNetworkProcessConnectionDelayedReply reply;
     };
     uint64_t m_connectionRequestIdentifier { 0 };
     HashMap<uint64_t, ConnectionRequest> m_connectionRequests;
@@ -279,8 +279,9 @@ private:
     LegacyCustomProtocolManagerProxy m_customProtocolManagerProxy;
 #endif
     ProcessThrottler m_throttler;
-    ProcessThrottler::BackgroundActivityToken m_tokenForHoldingLockedFiles;
-    ProcessThrottler::BackgroundActivityToken m_syncAllCookiesToken;
+    std::unique_ptr<ProcessThrottler::BackgroundActivity> m_activityForHoldingLockedFiles;
+    std::unique_ptr<ProcessThrottler::BackgroundActivity> m_syncAllCookiesActivity;
+    ProcessThrottler::ActivityVariant m_activityFromWebProcesses;
     
     unsigned m_syncAllCookiesCounter { 0 };
 

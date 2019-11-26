@@ -25,19 +25,35 @@
 
 #pragma once
 
+#include "GCLogging.h"
+
+using WTF::PrintStream;
+
 namespace JSC {
+
+#if PLATFORM(IOS_FAMILY)
+#define MAXIMUM_NUMBER_OF_FTL_COMPILER_THREADS 2
+#else
+#define MAXIMUM_NUMBER_OF_FTL_COMPILER_THREADS 8
+#endif
+
+#if ENABLE(WEBASSEMBLY_STREAMING_API)
+constexpr bool enableWebAssemblyStreamingApi = true;
+#else
+constexpr bool enableWebAssemblyStreamingApi = false;
+#endif
 
 // How do JSC VM options work?
 // ===========================
 // The FOR_EACH_JSC_OPTION() macro below defines a list of all JSC options in use,
 // along with their types and default values. The options values are actually
-// realized as an array of OptionEntry elements in JSC::Config.
+// realized as fields in OptionsStorage embedded in JSC::Config.
 //
-//     Options::initialize() will initialize the array of options values with
-// the defaults specified in FOR_EACH_JSC_OPTION() below. After that, the values can
-// be programmatically read and written to using an accessor method with the
-// same name as the option. For example, the option "useJIT" can be read and
-// set like so:
+//     Options::initialize() will initialize the option values with the defaults
+// specified in FOR_EACH_JSC_OPTION() below. After that, the values can be
+// programmatically read and written to using an accessor method with the same
+// name as the option. For example, the option "useJIT" can be read and set like
+// so:
 //
 //     bool jitIsOn = Options::useJIT();  // Get the option value.
 //     Options::useJIT() = false;         // Sets the option value.
@@ -54,6 +70,10 @@ namespace JSC {
 // checks are done after the option values are set. If you alter the option
 // values after the sanity checks (for your own testing), then you're liable to
 // ensure that the new values set are sane and reasonable for your own run.
+//
+// Any modifications to options must be done before the first VM is instantiated.
+// On instantiation of the first VM instance, the Options will be write protected
+// and cannot be modified thereafter.
 
 #define FOR_EACH_JSC_OPTION(v)                                          \
     v(Bool, useKernTCSM, true, Normal, "Note: this needs to go before other options since they depend on this value.") \
@@ -86,6 +106,7 @@ namespace JSC {
     v(Unsigned, repatchBufferingCountdown, 8, Normal, nullptr) \
     \
     v(Bool, dumpGeneratedBytecodes, false, Normal, nullptr) \
+    v(Bool, dumpGeneratedWasmBytecodes, false, Normal, nullptr) \
     v(Bool, dumpBytecodeLivenessResults, false, Normal, nullptr) \
     v(Bool, validateBytecode, false, Normal, nullptr) \
     v(Bool, forceDebuggerBytecodeGeneration, false, Normal, nullptr) \
@@ -183,7 +204,7 @@ namespace JSC {
     v(Double, gcIncrementScale, 0, Normal, nullptr) \
     v(Bool, scribbleFreeCells, false, Normal, nullptr) \
     v(Double, sizeClassProgression, 1.4, Normal, nullptr) \
-    v(Unsigned, largeAllocationCutoff, 100000, Normal, nullptr) \
+    v(Unsigned, preciseAllocationCutoff, 100000, Normal, nullptr) \
     v(Bool, dumpSizeClasses, false, Normal, nullptr) \
     v(Bool, useBumpAllocator, true, Normal, nullptr) \
     v(Bool, stealEmptyBlocksFromOtherAllocators, true, Normal, nullptr) \
@@ -428,6 +449,8 @@ namespace JSC {
     \
     v(Bool, useBBQTierUpChecks, true, Normal, "Enables tier up checks for our BBQ code.") \
     v(Bool, useWebAssemblyOSR, true, Normal, nullptr) \
+    v(Int32, thresholdForBBQOptimizeAfterWarmUp, 150, Normal, "The count before we tier up a function to BBQ.") \
+    v(Int32, thresholdForBBQOptimizeSoon, 50, Normal, nullptr) \
     v(Int32, thresholdForOMGOptimizeAfterWarmUp, 50000, Normal, "The count before we tier up a function to OMG.") \
     v(Int32, thresholdForOMGOptimizeSoon, 500, Normal, nullptr) \
     v(Int32, omgTierUpCounterIncrementForLoop, 1, Normal, "The amount the tier up counter is incremented on each loop backedge.") \
@@ -441,6 +464,8 @@ namespace JSC {
     v(Unsigned, maxNumWebAssemblyFastMemories, 4, Normal, nullptr) \
     v(Bool, useFastTLSForWasmContext, true, Normal, "If true, we will store context in fast TLS. If false, we will pin it to a register.") \
     v(Bool, wasmBBQUsesAir, true, Normal, nullptr) \
+    v(Bool, useWasmLLInt, true, Normal, nullptr) \
+    v(Bool, wasmLLIntTiersUpToBBQ, true, Normal, nullptr) \
     v(Size, webAssemblyBBQAirModeThreshold, isIOS() ? (10 * MB) : 0, Normal, "If 0, we always use BBQ Air. If Wasm module code size hits this threshold, we compile Wasm module with B3 BBQ mode.") \
     v(Bool, useWebAssemblyStreamingApi, enableWebAssemblyStreamingApi, Normal, "Allow to run WebAssembly's Streaming API") \
     v(Bool, useEagerWebAssemblyModuleHashing, false, Normal, "Unnamed WebAssembly modules are identified in backtraces through their hash, if available.") \
@@ -448,7 +473,6 @@ namespace JSC {
     v(Bool, useWebAssemblyMultiValues, true, Normal, "Allow types from the wasm mulit-values spec.") \
     v(Bool, useWeakRefs, false, Normal, "Expose the WeakRef constructor.") \
     v(Bool, useBigInt, false, Normal, "If true, we will enable BigInt support.") \
-    v(Bool, useNullishAwareOperators, false, Normal, "Enable support for ?. and ?? operators.") \
     v(Bool, useArrayAllocationProfiling, true, Normal, "If true, we will use our normal array allocation profiling. If false, the allocation profile will always claim to be undecided.") \
     v(Bool, forcePolyProto, false, Normal, "If true, create_this will always create an object with a poly proto structure.") \
     v(Bool, forceMiniVMMode, false, Normal, "If true, it will force mini VM mode on.") \
@@ -465,6 +489,7 @@ namespace JSC {
     v(Double, dumpJITMemoryFlushInterval, 10, Restricted, "Maximum time in between flushes of the JIT memory dump in seconds.") \
     v(Bool, useUnlinkedCodeBlockJettisoning, false, Normal, "If true, UnlinkedCodeBlock can be jettisoned.") \
     v(Bool, forceOSRExitToLLInt, false, Normal, "If true, we always exit to the LLInt. If false, we exit to whatever is most convenient.") \
+    v(Unsigned, getByValICMaxNumberOfIdentifiers, 4, Normal, "Number of identifiers we see in the LLInt that could cause us to bail on generating an IC for get_by_val.") \
 
 enum OptionEquivalence {
     SameOption,
@@ -522,5 +547,56 @@ constexpr size_t countNumberOfJSCOptions()
 
 constexpr size_t NumberOfOptions = countNumberOfJSCOptions();
 
-} // namespace JSC
+class OptionRange {
+private:
+    enum RangeState { Uninitialized, InitError, Normal, Inverted };
+public:
+    OptionRange& operator=(int value)
+    {
+        // Only used for initialization to state Uninitialized.
+        // OptionsList specifies OptionRange options with default value 0.
+        RELEASE_ASSERT(!value);
 
+        m_state = Uninitialized;
+        m_rangeString = 0;
+        m_lowLimit = 0;
+        m_highLimit = 0;
+        return *this;
+    }
+
+    bool init(const char*);
+    bool isInRange(unsigned);
+    const char* rangeString() const { return (m_state > InitError) ? m_rangeString : s_nullRangeStr; }
+    
+    void dump(PrintStream& out) const;
+
+private:
+    static const char* const s_nullRangeStr;
+
+    RangeState m_state;
+    const char* m_rangeString;
+    unsigned m_lowLimit;
+    unsigned m_highLimit;
+};
+
+struct OptionsStorage {
+    using Bool = bool;
+    using Unsigned = unsigned;
+    using Double = double;
+    using Int32 = int32_t;
+    using Size = size_t;
+    using OptionRange = JSC::OptionRange;
+    using OptionString = const char*;
+    using GCLogLevel = GCLogging::Level;
+
+#define DECLARE_OPTION(type_, name_, defaultValue_, availability_, description_) \
+    type_ name_; \
+    type_ name_##Default;
+FOR_EACH_JSC_OPTION(DECLARE_OPTION)
+#undef DECLARE_OPTION
+};
+
+// Options::Metadata's offsetOfOption and offsetOfOptionDefault relies on this.
+static_assert(sizeof(OptionsStorage) <= 16 * KB);
+
+} // namespace JSC

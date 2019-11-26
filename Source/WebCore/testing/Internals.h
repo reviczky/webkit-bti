@@ -72,6 +72,7 @@ class HTMLLinkElement;
 class HTMLMediaElement;
 class HTMLPictureElement;
 class HTMLSelectElement;
+class HTMLVideoElement;
 class ImageData;
 class InspectorStubFrontend;
 class InternalSettings;
@@ -631,6 +632,7 @@ public:
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     void setMockMediaPlaybackTargetPickerEnabled(bool);
     ExceptionOr<void> setMockMediaPlaybackTargetPickerState(const String& deviceName, const String& deviceState);
+    void mockMediaPlaybackTargetPickerDismissPopup();
 #endif
 
 #if ENABLE(WEB_AUDIO)
@@ -675,8 +677,8 @@ public:
     void setResourceLoadStatisticsEnabled(bool);
 
 #if ENABLE(STREAMS_API)
-    bool isReadableStreamDisturbed(JSC::ExecState&, JSC::JSValue);
-    JSC::JSValue cloneArrayBuffer(JSC::ExecState&, JSC::JSValue, JSC::JSValue, JSC::JSValue);
+    bool isReadableStreamDisturbed(JSC::JSGlobalObject&, JSC::JSValue);
+    JSC::JSValue cloneArrayBuffer(JSC::JSGlobalObject&, JSC::JSValue, JSC::JSValue, JSC::JSValue);
 #endif
 
     String composedTreeAsText(Node&);
@@ -742,7 +744,6 @@ public:
     void simulateMediaStreamTrackCaptureSourceFailure(MediaStreamTrack&);
     void setMediaStreamTrackIdentifier(MediaStreamTrack&, String&& id);
     void setMediaStreamSourceInterrupted(MediaStreamTrack&, bool);
-    void setDisableGetDisplayMediaUserGestureConstraint(bool);
 #endif
 
     bool supportsAudioSession() const;
@@ -765,7 +766,6 @@ public:
     using HasRegistrationPromise = DOMPromiseDeferred<IDLBoolean>;
     void hasServiceWorkerRegistration(const String& clientURL, HasRegistrationPromise&&);
     void terminateServiceWorker(ServiceWorker&);
-    bool hasServiceWorkerConnection();
 #endif
 
 #if ENABLE(APPLE_PAY)
@@ -776,6 +776,7 @@ public:
     bool isSystemPreviewImage(Element&) const;
 
     void postTask(RefPtr<VoidCallback>&&);
+    ExceptionOr<void> queueTask(ScriptExecutionContext&, const String& source, RefPtr<VoidCallback>&&);
     void markContextAsInsecure();
 
     bool usingAppleInternalSDK() const;
@@ -896,6 +897,10 @@ public:
 
 #if ENABLE(WEB_AUTHN)
     void setMockWebAuthenticationConfiguration(const MockWebAuthenticationConfiguration&);
+#endif
+
+#if ENABLE(PICTURE_IN_PICTURE_API)
+    void setPictureInPictureAPITestEnabled(HTMLVideoElement&, bool);
 #endif
 
     int processIdentifier() const;

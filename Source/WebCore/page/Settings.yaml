@@ -294,7 +294,7 @@ inlineMediaPlaybackRequiresPlaysInlineAttribute:
 allowsPictureInPictureMediaPlayback:
   initial: defaultAllowsPictureInPictureMediaPlayback
 pictureInPictureAPIEnabled:
-  initial: false
+  initial: true
 mediaControlsScaleWithPageZoom:
   initial: defaultMediaControlsScaleWithPageZoom
 invisibleAutoplayNotPermitted:
@@ -317,6 +317,9 @@ shouldDisplayCaptions:
 shouldDisplayTextDescriptions:
   initial: false
   conditional: VIDEO_TRACK
+genericCueAPIEnabled:
+    initial: false
+    conditional: VIDEO_TRACK
 scrollingCoordinatorEnabled:
   initial: false
 scrollingTreeIncludesFrames:
@@ -493,6 +496,10 @@ allowsAirPlayForMediaPlayback:
   initial: true
   conditional: WIRELESS_PLAYBACK_TARGET
 
+remotePlaybackEnabled:
+  initial: true
+  conditional: WIRELESS_PLAYBACK_TARGET
+
 shouldConvertPositionStyleOnCopy:
   initial: false
 
@@ -625,6 +632,10 @@ forcedDisplayIsMonochromeAccessibilityValue:
 forcedPrefersReducedMotionAccessibilityValue:
   type: ForcedAccessibilityValue
   initial: defaultForcedPrefersReducedMotionAccessibilityValue
+forcedSupportsHighDynamicRangeValue:
+  type: ForcedAccessibilityValue
+  initial: defaultForcedSupportsHighDynamicRangeValue
+  onChange: setNeedsRecalcStyleInAllFrames
 
 largeImageAsyncDecodingEnabled:
   initial: true
@@ -869,11 +880,18 @@ webRTCEncryptionEnabled:
   initial: true
   inspectorOverride: true
 
-isThirdPartyCookieBlockingOnSitesWithoutUserInteractionEnabled:
-  initial: false
+isThirdPartyCookieBlockingEnabled:
+  initial: true
 
 isLoggedInAPIEnabled:
   initial: false
+
+enterKeyHintEnabled:
+  initial: false
+
+legacyGetUserMediaEnabled:
+  initial: false
+  conditional: MEDIA_STREAM
 
 # Deprecated
 

@@ -25,8 +25,10 @@
 
 #pragma once
 
-#include "AbstractEventLoop.h"
 #include "DocumentIdentifier.h"
+#include "EventLoop.h"
+#include "RegistrableDomain.h"
+#include "Timer.h"
 #include <wtf/HashSet.h>
 
 namespace WebCore {
@@ -34,31 +36,21 @@ namespace WebCore {
 class Document;
 
 // https://html.spec.whatwg.org/multipage/webappapis.html#window-event-loop
-class WindowEventLoop final : public AbstractEventLoop {
+class WindowEventLoop final : public EventLoop {
 public:
-    static Ref<WindowEventLoop> create();
+    static Ref<WindowEventLoop> ensureForRegistrableDomain(const RegistrableDomain&);
 
-    void queueTask(TaskSource, ScriptExecutionContext&, TaskFunction&&) override;
-
-    void suspend(ScriptExecutionContext&) override;
-    void resume(ScriptExecutionContext&) override;
+    virtual ~WindowEventLoop();
 
 private:
-    WindowEventLoop() = default;
+    WindowEventLoop(const RegistrableDomain&);
 
-    void scheduleToRunIfNeeded();
-    void run();
+    void scheduleToRun() final;
+    bool isContextThread() const final;
+    MicrotaskQueue& microtaskQueue() final;
 
-    struct Task {
-        TaskSource source;
-        TaskFunction task;
-        DocumentIdentifier documentIdentifier;
-    };
-
-    // Use a global queue instead of multiple task queues since HTML5 spec allows UA to pick arbitrary queue.
-    Vector<Task> m_tasks;
-    bool m_isScheduledToRun { false };
-    HashSet<DocumentIdentifier> m_documentIdentifiersForSuspendedTasks;
+    RegistrableDomain m_domain;
+    Timer m_timer;
 };
 
 } // namespace WebCore

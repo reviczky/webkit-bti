@@ -251,6 +251,9 @@ $(PROJECT_DIR)/Modules/quota/StorageQuota.idl
 $(PROJECT_DIR)/Modules/quota/StorageQuotaCallback.idl
 $(PROJECT_DIR)/Modules/quota/StorageUsageCallback.idl
 $(PROJECT_DIR)/Modules/quota/WorkerNavigatorStorageQuota.idl
+$(PROJECT_DIR)/Modules/remoteplayback/HTMLMediaElementRemotePlayback.idl
+$(PROJECT_DIR)/Modules/remoteplayback/RemotePlayback.idl
+$(PROJECT_DIR)/Modules/remoteplayback/RemotePlaybackAvailabilityCallback.idl
 $(PROJECT_DIR)/Modules/speech/DOMWindowSpeechSynthesis.idl
 $(PROJECT_DIR)/Modules/speech/SpeechSynthesis.idl
 $(PROJECT_DIR)/Modules/speech/SpeechSynthesisEvent.idl
@@ -822,6 +825,8 @@ $(PROJECT_DIR)/html/canvas/WebGLActiveInfo.idl
 $(PROJECT_DIR)/html/canvas/WebGLBuffer.idl
 $(PROJECT_DIR)/html/canvas/WebGLCompressedTextureASTC.idl
 $(PROJECT_DIR)/html/canvas/WebGLCompressedTextureATC.idl
+$(PROJECT_DIR)/html/canvas/WebGLCompressedTextureETC.idl
+$(PROJECT_DIR)/html/canvas/WebGLCompressedTextureETC1.idl
 $(PROJECT_DIR)/html/canvas/WebGLCompressedTexturePVRTC.idl
 $(PROJECT_DIR)/html/canvas/WebGLCompressedTextureS3TC.idl
 $(PROJECT_DIR)/html/canvas/WebGLContextAttributes.idl

@@ -59,7 +59,6 @@ public:
     bool shouldDisablePointerEventsQuirk() const;
     bool needsInputModeNoneImplicitly(const HTMLElement&) const;
     bool needsDeferKeyDownAndKeyPressTimersUntilNextEditingCommand() const;
-    bool shouldLightenJapaneseBoldSansSerif() const;
     bool shouldDisableContentChangeObserverTouchEventAdjustment() const;
 
     WEBCORE_EXPORT bool shouldDispatchSyntheticMouseEventsWhenModifyingSelection() const;
@@ -81,6 +80,13 @@ public:
     bool shouldOpenAsAboutBlank(const String&) const;
 
     bool needsPreloadAutoQuirk() const;
+    bool needsFullWidthHeightFullscreenStyleQuirk() const;
+
+    bool shouldBypassBackForwardCache() const;
+
+#if ENABLE(MEDIA_STREAM)
+    bool shouldEnableLegacyGetUserMedia() const;
+#endif
 
 private:
     bool needsQuirks() const;
@@ -93,6 +99,7 @@ private:
     WeakPtr<Document> m_document;
 
     mutable Optional<bool> m_hasBrokenEncryptedMediaAPISupportQuirk;
+    mutable Optional<bool> m_needsFullWidthHeightFullscreenStyleQuirk;
 #if PLATFORM(IOS_FAMILY)
     mutable Optional<bool> m_needsGMailOverflowScrollQuirk;
     mutable Optional<bool> m_needsYouTubeOverflowScrollQuirk;
