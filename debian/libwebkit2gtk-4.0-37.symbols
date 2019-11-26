@@ -32,6 +32,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_authentication_request_is_for_proxy@Base 2.5.3
  webkit_authentication_request_is_retry@Base 2.5.3
  webkit_authentication_scheme_get_type@Base 2.5.3
+ webkit_automation_browsing_context_presentation_get_type@Base 2.27.3
  webkit_automation_session_get_application_info@Base 2.17.90
  webkit_automation_session_get_id@Base 2.17.3
  webkit_automation_session_get_type@Base 2.17.3
@@ -1612,6 +1613,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_plugin_get_name@Base 2.5.3
  webkit_plugin_get_path@Base 2.5.3
  webkit_plugin_get_type@Base 2.5.3
+ webkit_pointer_lock_permission_request_get_type@Base 2.27.3
  webkit_policy_decision_download@Base 2.5.3
  webkit_policy_decision_get_type@Base 2.5.3
  webkit_policy_decision_ignore@Base 2.5.3
@@ -1973,6 +1975,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_download_uri@Base 2.5.3
  webkit_web_view_execute_editing_command@Base 2.5.3
  webkit_web_view_execute_editing_command_with_argument@Base 2.10.0
+ webkit_web_view_get_automation_presentation_type@Base 2.27.3
  webkit_web_view_get_back_forward_list@Base 2.5.3
  webkit_web_view_get_background_color@Base 2.8.1
  webkit_web_view_get_context@Base 2.5.3

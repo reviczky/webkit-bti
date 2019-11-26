@@ -28,6 +28,8 @@ webkit2gtk (2.27.3-1) UNRELEASED; urgency=medium
     + Refresh.
   * debian/control:
     + Add build dependency on python.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 26 Nov 2019 14:51:37 +0200
 
