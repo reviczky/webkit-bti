@@ -31,6 +31,9 @@ webkit2gtk (2.26.2-2) UNRELEASED; urgency=medium
       bugs. Using -g1 is enough for a basic backtrace and it makes the
       packages easier to handle.
     + Install the NEWS file using debian/libwebkit2gtk-4.0-37.docs.
+  * debian/control:
+    + Switch build dependency from libenchant-dev to libenchant-2-dev
+      (Closes: #948106).
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 12 Nov 2019 14:15:29 +0200
 
