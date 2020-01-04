@@ -3,6 +3,7 @@ webkit2gtk (2.27.3-2) UNRELEASED; urgency=medium
   * debian/control:
     + Switch build dependency from libenchant-dev to libenchant-2-dev
       (Closes: #948106).
+    + Add build dependency on libx11-xcb-dev.
 
  -- Alberto Garcia <berto@igalia.com>  Sun, 05 Jan 2020 17:54:44 +0100
 
