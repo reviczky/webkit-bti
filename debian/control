@@ -57,7 +57,7 @@ Build-Depends: gawk,
                libgirepository1.0-dev (>= 0.9.12-4),
                mesa-common-dev,
                ninja-build,
-               python-all,
+               python,
                libegl1-mesa-dev,
                libgl1-mesa-dev [!armel !armhf !arm64],
                libgles2-mesa-dev
