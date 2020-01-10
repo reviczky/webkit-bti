@@ -325,10 +325,6 @@ public:
     void unblockAccessibilityServerIfNeeded();
 #endif
 
-#if PLATFORM(IOS_FAMILY)
-    void processWasResumed(CompletionHandler<void()>&&);
-#endif
-
     void webPageMediaStateDidChange(WebPageProxy&);
 
     void ref() final { ThreadSafeRefCounted::ref(); }
@@ -346,6 +342,10 @@ public:
     bool hasServiceWorkerBackgroundActivityForTesting() const;
 #endif
     void setAssertionStateForTesting(AssertionState state) { didSetAssertionState(state); }
+
+#if PLATFORM(COCOA) && ENABLE(MEDIA_STREAM)
+    UserMediaCaptureManagerProxy* userMediaCaptureManagerProxy() { return m_userMediaCaptureManagerProxy.get(); }
+#endif
 
 protected:
     WebProcessProxy(WebProcessPool&, WebsiteDataStore*, IsPrewarmed);
@@ -392,6 +392,10 @@ private:
     void plugInDidReceiveUserInteraction(uint32_t hash);
     
     void getNetworkProcessConnection(Messages::WebProcessProxy::GetNetworkProcessConnectionDelayedReply&&);
+
+#if ENABLE(GPU_PROCESS)
+    void getGPUProcessConnection(Messages::WebProcessProxy::GetGPUProcessConnectionDelayedReply&&);
+#endif
 
     bool platformIsBeingDebugged() const;
     bool shouldAllowNonValidInjectedCode() const;
@@ -493,7 +497,6 @@ private:
     BackgroundWebProcessToken m_backgroundToken;
 #if PLATFORM(IOS_FAMILY)
     bool m_hasSentMessageToUnblockAccessibilityServer { false };
-    std::unique_ptr<WebCore::DeferrableOneShotTimer> m_unexpectedActivityTimer;
 #endif
 
     HashMap<String, uint64_t> m_pageURLRetainCountMap;

@@ -136,8 +136,9 @@ struct ScrollRectToVisibleOptions {
     ShouldAllowCrossOriginScrolling shouldAllowCrossOriginScrolling { ShouldAllowCrossOriginScrolling::No };
 };
 
+DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(RenderLayer);
 class RenderLayer final : public ScrollableArea {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(RenderLayer);
 public:
     friend class RenderReplica;
     friend class RenderLayerFilters;
@@ -163,6 +164,7 @@ public:
     RenderLayer* firstChild() const { return m_first; }
     RenderLayer* lastChild() const { return m_last; }
     bool isDescendantOf(const RenderLayer&) const;
+    RenderLayer* commonAncestorWithLayer(const RenderLayer&) const;
 
     // This does an ancestor tree walk. Avoid it!
     const RenderLayer* root() const
@@ -176,8 +178,12 @@ public:
     void addChild(RenderLayer& newChild, RenderLayer* beforeChild = nullptr);
     void removeChild(RenderLayer&);
 
-    void insertOnlyThisLayer();
-    void removeOnlyThisLayer();
+    enum class LayerChangeTiming {
+        StyleChange,
+        RenderTreeConstruction,
+    };
+    void insertOnlyThisLayer(LayerChangeTiming);
+    void removeOnlyThisLayer(LayerChangeTiming);
 
     bool isNormalFlowOnly() const { return m_isNormalFlowOnly; }
 
@@ -206,7 +212,7 @@ public:
     bool normalFlowListDirty() const { return m_normalFlowListDirty; }
     bool zOrderListsDirty() const { return m_zOrderListsDirty; }
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     bool layerListMutationAllowed() const { return m_layerListMutationAllowed; }
     void setLayerListMutationAllowed(bool flag) { m_layerListMutationAllowed = flag; }
 #endif
@@ -1255,7 +1261,7 @@ private:
     bool m_containsDirtyOverlayScrollbars : 1;
     bool m_updatingMarqueePosition : 1;
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     bool m_layerListMutationAllowed : 1;
 #endif
 
@@ -1363,7 +1369,7 @@ inline RenderLayer* RenderLayer::paintOrderParent() const
     return m_isNormalFlowOnly ? m_parent : stackingContext();
 }
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
 class LayerListMutationDetector {
 public:
     LayerListMutationDetector(RenderLayer& layer)
@@ -1382,7 +1388,7 @@ private:
     RenderLayer& m_layer;
     bool m_previousMutationAllowedState;
 };
-#endif
+#endif // ASSERT_ENABLED
 
 void makeMatrixRenderable(TransformationMatrix&, bool has3DRendering);
 

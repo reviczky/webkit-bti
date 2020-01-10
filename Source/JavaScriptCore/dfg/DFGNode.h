@@ -55,6 +55,7 @@
 #include "TypeLocation.h"
 #include "ValueProfile.h"
 #include <type_traits>
+#include <wtf/FastMalloc.h>
 #include <wtf/ListDump.h>
 #include <wtf/LoggingHashSet.h>
 
@@ -250,13 +251,13 @@ struct StackAccessData {
     {
     }
     
-    StackAccessData(VirtualRegister local, FlushFormat format)
-        : local(local)
+    StackAccessData(Operand operand, FlushFormat format)
+        : operand(operand)
         , format(format)
     {
     }
     
-    VirtualRegister local;
+    Operand operand;
     VirtualRegister machineLocal;
     FlushFormat format;
     
@@ -278,8 +279,9 @@ enum class BucketOwnerType : uint32_t {
 // === Node ===
 //
 // Node represents a single operation in the data flow graph.
+DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(DFGNode);
 struct Node {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_STRUCT_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(DFGNode);
 public:
     static const char HashSetTemplateInstantiationString[];
     
@@ -612,7 +614,7 @@ public:
     
     void convertToPhantomNewObject()
     {
-        ASSERT(m_op == NewObject || m_op == MaterializeNewObject);
+        ASSERT(m_op == NewObject);
         m_op = PhantomNewObject;
         m_flags &= ~NodeHasVarArgs;
         m_flags |= NodeMustGenerate;
@@ -641,6 +643,17 @@ public:
         children = AdjacencyList();
     }
 
+    void convertToPhantomNewArrayIterator()
+    {
+        ASSERT(m_op == NewArrayIterator);
+        m_op = PhantomNewArrayIterator;
+        m_flags &= ~NodeHasVarArgs;
+        m_flags |= NodeMustGenerate;
+        m_opInfo = OpInfoWrapper();
+        m_opInfo2 = OpInfoWrapper();
+        children = AdjacencyList();
+    }
+
     void convertToPhantomNewAsyncFunction()
     {
         ASSERT(m_op == NewAsyncFunction);
@@ -663,7 +676,7 @@ public:
     
     void convertToPhantomCreateActivation()
     {
-        ASSERT(m_op == CreateActivation || m_op == MaterializeCreateActivation);
+        ASSERT(m_op == CreateActivation);
         m_op = PhantomCreateActivation;
         m_flags &= ~NodeHasVarArgs;
         m_flags |= NodeMustGenerate;
@@ -902,6 +915,7 @@ public:
         switch (op()) {
         case GetMyArgumentByVal:
         case GetMyArgumentByValOutOfBounds:
+        case VarargsLength:
         case LoadVarargs:
         case ForwardVarargs:
         case CallVarargs:
@@ -923,9 +937,11 @@ public:
         switch (op()) {
         case GetMyArgumentByVal:
         case GetMyArgumentByValOutOfBounds:
+        case VarargsLength:
+            return child1();
         case LoadVarargs:
         case ForwardVarargs:
-            return child1();
+            return child2();
         case CallVarargs:
         case CallForwardVarargs:
         case ConstructVarargs:
@@ -973,9 +989,9 @@ public:
         return m_opInfo.as<VariableAccessData*>()->find();
     }
     
-    VirtualRegister local()
+    Operand operand()
     {
-        return variableAccessData()->local();
+        return variableAccessData()->operand();
     }
     
     VirtualRegister machineLocal()
@@ -983,7 +999,7 @@ public:
         return variableAccessData()->machineLocal();
     }
     
-    bool hasUnlinkedLocal()
+    bool hasUnlinkedOperand()
     {
         switch (op()) {
         case ExtractOSREntryLocal:
@@ -996,10 +1012,10 @@ public:
         }
     }
     
-    VirtualRegister unlinkedLocal()
+    Operand unlinkedOperand()
     {
-        ASSERT(hasUnlinkedLocal());
-        return VirtualRegister(m_opInfo.as<int32_t>());
+        ASSERT(hasUnlinkedOperand());
+        return Operand::fromBits(m_opInfo.as<uint64_t>());
     }
     
     bool hasStackAccessData()
@@ -1350,7 +1366,7 @@ public:
     
     bool hasLoadVarargsData()
     {
-        return op() == LoadVarargs || op() == ForwardVarargs;
+        return op() == LoadVarargs || op() == ForwardVarargs || op() == VarargsLength;
     }
     
     LoadVarargsData* loadVarargsData()
@@ -1934,10 +1950,12 @@ public:
     {
         switch (op()) {
         case ArrayifyToStructure:
+        case MaterializeNewInternalFieldObject:
         case NewObject:
         case NewPromise:
         case NewGenerator:
         case NewAsyncGenerator:
+        case NewArrayIterator:
         case NewStringObject:
             return true;
         default:
@@ -2006,6 +2024,7 @@ public:
     {
         switch (op()) {
         case MaterializeNewObject:
+        case MaterializeNewInternalFieldObject:
         case MaterializeCreateActivation:
             return true;
 
@@ -2102,6 +2121,7 @@ public:
         case PhantomNewGeneratorFunction:
         case PhantomNewAsyncFunction:
         case PhantomNewAsyncGeneratorFunction:
+        case PhantomNewArrayIterator:
         case PhantomCreateActivation:
         case PhantomNewRegexp:
             return true;

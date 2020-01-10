@@ -131,6 +131,8 @@ struct WebPageCreationParameters {
 
     LayerHostingMode layerHostingMode;
 
+    bool hasResourceLoadClient { false };
+
     Vector<String> mimeTypesWithCustomContentProviders;
 
     bool controlledByAutomation;
@@ -202,6 +204,13 @@ struct WebPageCreationParameters {
     Optional<WebCore::PageIdentifier> oldPageID;
 
     String overriddenMediaType;
+    Vector<String> corsDisablingPatterns;
+
+    bool shouldCaptureAudioInUIProcess { false };
+    bool shouldCaptureAudioInGPUProcess { false };
+    bool shouldCaptureVideoInUIProcess { false };
+    bool shouldCaptureVideoInGPUProcess { false };
+    bool shouldCaptureDisplayInUIProcess { false };
 };
 
 } // namespace WebKit

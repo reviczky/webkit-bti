@@ -89,7 +89,7 @@ private:
     template<unsigned NumberOfRegisters, typename RegType>
     ALWAYS_INLINE void setupStubArgs(std::array<RegType, NumberOfRegisters> destinations, std::array<RegType, NumberOfRegisters> sources)
     {
-        if (!ASSERT_DISABLED) {
+        if (ASSERT_ENABLED) {
             RegisterSet set;
             for (RegType dest : destinations)
                 set.set(dest);
@@ -104,7 +104,7 @@ private:
                 pairs.append(std::make_pair(sources[i], destinations[i]));
         }
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
         auto numUniqueSources = [&] () -> unsigned {
             RegisterSet set;
             for (auto& pair : pairs) {
@@ -724,7 +724,7 @@ public:
             GPRReg oldFrameSizeGPR = temp2;
             {
                 GPRReg argCountGPR = oldFrameSizeGPR;
-                load32(Address(framePointerRegister, CallFrameSlot::argumentCount * static_cast<int>(sizeof(Register)) + PayloadOffset), argCountGPR);
+                load32(Address(framePointerRegister, CallFrameSlot::argumentCountIncludingThis * static_cast<int>(sizeof(Register)) + PayloadOffset), argCountGPR);
 
                 {
                     GPRReg numParametersGPR = temp1;
@@ -753,7 +753,7 @@ public:
             // The new frame size is just the number of arguments plus the
             // frame header size, aligned
             ASSERT(newFrameSizeGPR != newFramePointer);
-            load32(Address(stackPointerRegister, CallFrameSlot::argumentCount * static_cast<int>(sizeof(Register)) + PayloadOffset - sizeof(CallerFrameAndPC)),
+            load32(Address(stackPointerRegister, CallFrameSlot::argumentCountIncludingThis * static_cast<int>(sizeof(Register)) + PayloadOffset - sizeof(CallerFrameAndPC)),
                 newFrameSizeGPR);
             add32(TrustedImm32(stackAlignmentRegisters() + CallFrame::headerSizeInRegisters - 1), newFrameSizeGPR);
             and32(TrustedImm32(-stackAlignmentRegisters()), newFrameSizeGPR);

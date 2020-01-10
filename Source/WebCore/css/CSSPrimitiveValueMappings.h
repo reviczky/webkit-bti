@@ -47,10 +47,6 @@
 #include <wtf/MathExtras.h>
 #include <wtf/OptionSet.h>
 
-#if ENABLE(CSS_IMAGE_ORIENTATION)
-#include "ImageOrientation.h"
-#endif
-
 namespace WebCore {
 
 template<> inline CSSPrimitiveValue::CSSPrimitiveValue(short i)
@@ -334,46 +330,46 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(CompositeOperator e)
 {
     setPrimitiveUnitType(CSSUnitType::CSS_VALUE_ID);
     switch (e) {
-    case CompositeClear:
+    case CompositeOperator::Clear:
         m_value.valueID = CSSValueClear;
         break;
-    case CompositeCopy:
+    case CompositeOperator::Copy:
         m_value.valueID = CSSValueCopy;
         break;
-    case CompositeSourceOver:
+    case CompositeOperator::SourceOver:
         m_value.valueID = CSSValueSourceOver;
         break;
-    case CompositeSourceIn:
+    case CompositeOperator::SourceIn:
         m_value.valueID = CSSValueSourceIn;
         break;
-    case CompositeSourceOut:
+    case CompositeOperator::SourceOut:
         m_value.valueID = CSSValueSourceOut;
         break;
-    case CompositeSourceAtop:
+    case CompositeOperator::SourceAtop:
         m_value.valueID = CSSValueSourceAtop;
         break;
-    case CompositeDestinationOver:
+    case CompositeOperator::DestinationOver:
         m_value.valueID = CSSValueDestinationOver;
         break;
-    case CompositeDestinationIn:
+    case CompositeOperator::DestinationIn:
         m_value.valueID = CSSValueDestinationIn;
         break;
-    case CompositeDestinationOut:
+    case CompositeOperator::DestinationOut:
         m_value.valueID = CSSValueDestinationOut;
         break;
-    case CompositeDestinationAtop:
+    case CompositeOperator::DestinationAtop:
         m_value.valueID = CSSValueDestinationAtop;
         break;
-    case CompositeXOR:
+    case CompositeOperator::XOR:
         m_value.valueID = CSSValueXor;
         break;
-    case CompositePlusDarker:
+    case CompositeOperator::PlusDarker:
         m_value.valueID = CSSValuePlusDarker;
         break;
-    case CompositePlusLighter:
+    case CompositeOperator::PlusLighter:
         m_value.valueID = CSSValuePlusLighter;
         break;
-    case CompositeDifference:
+    case CompositeOperator::Difference:
         ASSERT_NOT_REACHED();
         break;
     }
@@ -385,37 +381,37 @@ template<> inline CSSPrimitiveValue::operator CompositeOperator() const
 
     switch (m_value.valueID) {
     case CSSValueClear:
-        return CompositeClear;
+        return CompositeOperator::Clear;
     case CSSValueCopy:
-        return CompositeCopy;
+        return CompositeOperator::Copy;
     case CSSValueSourceOver:
-        return CompositeSourceOver;
+        return CompositeOperator::SourceOver;
     case CSSValueSourceIn:
-        return CompositeSourceIn;
+        return CompositeOperator::SourceIn;
     case CSSValueSourceOut:
-        return CompositeSourceOut;
+        return CompositeOperator::SourceOut;
     case CSSValueSourceAtop:
-        return CompositeSourceAtop;
+        return CompositeOperator::SourceAtop;
     case CSSValueDestinationOver:
-        return CompositeDestinationOver;
+        return CompositeOperator::DestinationOver;
     case CSSValueDestinationIn:
-        return CompositeDestinationIn;
+        return CompositeOperator::DestinationIn;
     case CSSValueDestinationOut:
-        return CompositeDestinationOut;
+        return CompositeOperator::DestinationOut;
     case CSSValueDestinationAtop:
-        return CompositeDestinationAtop;
+        return CompositeOperator::DestinationAtop;
     case CSSValueXor:
-        return CompositeXOR;
+        return CompositeOperator::XOR;
     case CSSValuePlusDarker:
-        return CompositePlusDarker;
+        return CompositeOperator::PlusDarker;
     case CSSValuePlusLighter:
-        return CompositePlusLighter;
+        return CompositeOperator::PlusLighter;
     default:
         break;
     }
 
     ASSERT_NOT_REACHED();
-    return CompositeClear;
+    return CompositeOperator::Clear;
 }
 
 template<> inline CSSPrimitiveValue::CSSPrimitiveValue(ControlPart e)
@@ -1345,9 +1341,6 @@ template<> inline CSSPrimitiveValue::CSSPrimitiveValue(DisplayType e)
         break;
     case DisplayType::ListItem:
         m_value.valueID = CSSValueListItem;
-        break;
-    case DisplayType::Compact:
-        m_value.valueID = CSSValueCompact;
         break;
     case DisplayType::InlineBlock:
         m_value.valueID = CSSValueInlineBlock;
@@ -4885,56 +4878,6 @@ template<> inline CSSPrimitiveValue::operator MaskType() const
     ASSERT_NOT_REACHED();
     return MaskType::Luminance;
 }
-
-#if ENABLE(CSS_IMAGE_ORIENTATION)
-
-template<> inline CSSPrimitiveValue::CSSPrimitiveValue(ImageOrientation e)
-    : CSSValue(PrimitiveClass)
-{
-    setPrimitiveUnitType(CSSUnitType::CSS_DEG);
-    switch (e) {
-    case ImageOrientation::OriginTopLeft:
-        m_value.num = 0;
-        break;
-    case ImageOrientation::OriginRightTop:
-        m_value.num = 90;
-        break;
-    case ImageOrientation::OriginBottomRight:
-        m_value.num = 180;
-        break;
-    case ImageOrientation::OriginLeftBottom:
-        m_value.num = 270;
-        break;
-    case ImageOrientation::FromImage:
-    case ImageOrientation::OriginTopRight:
-    case ImageOrientation::OriginLeftTop:
-    case ImageOrientation::OriginBottomLeft:
-    case ImageOrientation::OriginRightBottom:
-        ASSERT_NOT_REACHED();
-    }
-}
-
-template<> inline CSSPrimitiveValue::operator ImageOrientation() const
-{
-    ASSERT(isAngle());
-    double quarters = 4 * doubleValue(CSSUnitType::CSS_TURN);
-    int orientation = 3 & static_cast<int>(quarters < 0 ? floor(quarters) : ceil(quarters));
-    switch (orientation) {
-    case 0:
-        return ImageOrientation::OriginTopLeft;
-    case 1:
-        return ImageOrientation::OriginRightTop;
-    case 2:
-        return ImageOrientation::OriginBottomRight;
-    case 3:
-        return ImageOrientation::OriginLeftBottom;
-    }
-
-    ASSERT_NOT_REACHED();
-    return ImageOrientation::None;
-}
-
-#endif // ENABLE(CSS_IMAGE_ORIENTATION)
 
 template<> inline CSSPrimitiveValue::CSSPrimitiveValue(CSSBoxType cssBox)
     : CSSValue(PrimitiveClass)

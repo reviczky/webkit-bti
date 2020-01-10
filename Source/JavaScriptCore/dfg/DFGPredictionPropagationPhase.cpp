@@ -1053,6 +1053,7 @@ private:
         case NewGenerator:
         case CreateAsyncGenerator:
         case NewAsyncGenerator:
+        case NewArrayIterator:
             setPrediction(SpecObjectOther);
             break;
             
@@ -1123,6 +1124,11 @@ private:
             
         case CreateClonedArguments: {
             setPrediction(SpecObjectOther);
+            break;
+        }
+
+        case CreateArgumentsButterfly: {
+            setPrediction(SpecCellOther);
             break;
         }
             
@@ -1245,7 +1251,6 @@ private:
 
         case PutByValAlias:
         case DoubleAsInt32:
-        case CheckArray:
         case CheckTypeInfoFlags:
         case Arrayify:
         case ArrayifyToStructure:
@@ -1271,6 +1276,7 @@ private:
         case PhantomSpread:
         case PhantomNewArrayWithSpread:
         case PhantomNewArrayBuffer:
+        case PhantomNewArrayIterator:
         case PhantomClonedArguments:
         case PhantomNewRegexp:
         case GetMyArgumentByVal:
@@ -1280,6 +1286,7 @@ private:
         case CheckStructureOrEmpty:
         case MaterializeNewObject:
         case MaterializeCreateActivation:
+        case MaterializeNewInternalFieldObject:
         case PutStack:
         case KillStack:
         case StoreBarrier:
@@ -1353,6 +1360,8 @@ private:
         case PutStructure:
         case Phantom:
         case Check:
+        case CheckArray:
+        case CheckNeutered:
         case CheckVarargs:
         case PutGlobalVariable:
         case CheckTraps:
@@ -1365,6 +1374,7 @@ private:
         case MovHint:
         case ZombieHint:
         case ExitOK:
+        case VarargsLength:
         case LoadVarargs:
         case ForwardVarargs:
         case PutDynamicVar:

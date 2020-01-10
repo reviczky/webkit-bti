@@ -61,6 +61,10 @@ void FrameViewLayoutContext::layoutUsingFormattingContext()
     if (!RuntimeEnabledFeatures::sharedFeatures().layoutFormattingContextEnabled())
         return;
 
+    // FrameView::setContentsSize temporary disables layout.
+    if (m_disableSetNeedsLayoutCount)
+        return;
+
     auto& renderView = *this->renderView();
     if (!m_layoutTreeContent) {
         m_layoutTreeContent = Layout::TreeBuilder::buildLayoutTree(renderView);
@@ -72,12 +76,6 @@ void FrameViewLayoutContext::layoutUsingFormattingContext()
 
     // FIXME: This is not the real invalidation yet.
     auto invalidationState = Layout::InvalidationState { };
-    auto invalidationContext = Layout::InvalidationContext { invalidationState };
-
-    // FrameView::setContentsSize temporary disables layout.
-    if (!m_disableSetNeedsLayoutCount)
-        invalidationContext.styleChanged(*m_layoutState->root().firstChild(), StyleDifference::Layout);
-
     auto layoutContext = Layout::LayoutContext { *m_layoutState };
     layoutContext.layout(view().layoutSize(), invalidationState);
 
@@ -620,7 +618,7 @@ void FrameViewLayoutContext::addLayoutDelta(const LayoutSize& delta)
         layoutState->addLayoutDelta(delta);
 }
     
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
 bool FrameViewLayoutContext::layoutDeltaMatches(const LayoutSize& delta)
 {
     if (auto* layoutState = this->layoutState())

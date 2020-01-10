@@ -33,6 +33,7 @@
 
 #include "BytecodeIndex.h"
 #include "GPRInfo.h"
+#include "Operands.h"
 
 namespace JSC {
 
@@ -106,7 +107,7 @@ private:
         struct {
             CodeBlock* codeBlock;
             BytecodeIndex bytecodeOffset;
-            int operand;
+            Operand operand;
         } lazyOperand;
     } u;
 };

@@ -1,4 +1,4 @@
-# Copyright (C) 2010-2018 Apple Inc. All rights reserved.
+# Copyright (C) 2010-2019 Apple Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -219,10 +219,15 @@ def types_that_cannot_be_forward_declared():
         'WebCore::SWServerConnectionIdentifier',
         'WebKit::ActivityStateChangeID',
         'WebKit::LayerHostingContextID',
-        'WebKit::TransactionID',
+        'WebKit::MediaPlayerPrivateRemoteIdentifier',
+        'WebKit::MediaRecorderIdentifier',
+        'WebKit::RemoteMediaResourceIdentifier',
+        'WebKit::RTCDecoderIdentifier',
+        'WebKit::RTCEncoderIdentifier',
         'WebKit::StorageAreaIdentifier',
         'WebKit::StorageAreaImplIdentifier',
         'WebKit::StorageNamespaceIdentifier',
+        'WebKit::TransactionID',
         'WebKit::UserContentControllerIdentifier',
         'WebKit::WebPageProxyIdentifier',
     ])
@@ -230,6 +235,7 @@ def types_that_cannot_be_forward_declared():
 
 def conditions_for_header(header):
     conditions = {
+        '"InputMethodState.h"': ["PLATFORM(GTK)", "PLATFORM(WPE)"],
         '"LayerHostingContext.h"': ["PLATFORM(COCOA)", ],
     }
     if not header in conditions:
@@ -589,6 +595,7 @@ def headers_for_type(type):
         'WebCore::TextCheckingType': ['<WebCore/TextChecking.h>'],
         'WebCore::TextIndicatorData': ['<WebCore/TextIndicator.h>'],
         'WebCore::ThirdPartyCookieBlockingMode': ['<WebCore/NetworkStorageSession.h>'],
+        'WebCore::FirstPartyWebsiteDataRemovalMode': ['<WebCore/NetworkStorageSession.h>'],
         'WebCore::ViewportAttributes': ['<WebCore/ViewportArguments.h>'],
         'WebCore::WillContinueLoading': ['<WebCore/FrameLoaderTypes.h>'],
         'WebCore::SelectionRect': ['"EditorState.h"'],
@@ -602,10 +609,13 @@ def headers_for_type(type):
         'WebKit::WebMouseEvent': ['"WebEvent.h"'],
         'WebKit::WebTouchEvent': ['"WebEvent.h"'],
         'WebKit::WebWheelEvent': ['"WebEvent.h"'],
+        'WebCore::MediaEngineSupportParameters': ['<WebCore/MediaPlayer.h>'],
         'struct WebCore::ElementContext': ['<WebCore/ElementContext.h>'],
         'struct WebKit::WebUserScriptData': ['"WebUserContentControllerDataTypes.h"'],
         'struct WebKit::WebUserStyleSheetData': ['"WebUserContentControllerDataTypes.h"'],
         'struct WebKit::WebScriptMessageHandlerData': ['"WebUserContentControllerDataTypes.h"'],
+        'webrtc::WebKitEncodedFrameInfo': ['<webrtc/sdk/WebKit/WebKitEncoder.h>'],
+        'webrtc::WebKitRTPFragmentationHeader': ['<webrtc/sdk/WebKit/WebKitEncoder.h>'],
     }
 
     headers = []

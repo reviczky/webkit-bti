@@ -29,12 +29,15 @@
 #if ENABLE(DFG_JIT)
 
 #include "Bytecodes.h"
+#include "CheckpointOSRExitSideState.h"
 #include "DFGJITCode.h"
 #include "DFGOperations.h"
 #include "JIT.h"
 #include "JSCJSValueInlines.h"
 #include "JSCInlines.h"
 #include "LLIntData.h"
+#include "LLIntThunks.h"
+#include "ProbeContext.h"
 #include "StructureStubInfo.h"
 
 namespace JSC { namespace DFG {
@@ -139,15 +142,18 @@ void handleExitCounts(VM& vm, CCallHelpers& jit, const OSRExitBase& exit)
     doneAdjusting.link(&jit);
 }
 
-void* callerReturnPC(CodeBlock* baselineCodeBlockForCaller, BytecodeIndex callBytecodeIndex, InlineCallFrame::Kind trueCallerCallKind, bool& callerIsLLInt)
+MacroAssemblerCodePtr<JSEntryPtrTag> callerReturnPC(CodeBlock* baselineCodeBlockForCaller, BytecodeIndex callBytecodeIndex, InlineCallFrame::Kind trueCallerCallKind, bool& callerIsLLInt)
 {
     callerIsLLInt = Options::forceOSRExitToLLInt() || baselineCodeBlockForCaller->jitType() == JITType::InterpreterThunk;
 
-    void* jumpTarget;
+    if (callBytecodeIndex.checkpoint())
+        return LLInt::getCodePtr<JSEntryPtrTag>(checkpoint_osr_exit_from_inlined_call_trampoline);
+
+    MacroAssemblerCodePtr<JSEntryPtrTag> jumpTarget;
 
     if (callerIsLLInt) {
         const Instruction& callInstruction = *baselineCodeBlockForCaller->instructions().at(callBytecodeIndex).ptr();
-#define LLINT_RETURN_LOCATION(name) (callInstruction.isWide16() ? LLInt::getWide16CodePtr<NoPtrTag>(name##_return_location) : (callInstruction.isWide32() ? LLInt::getWide32CodePtr<NoPtrTag>(name##_return_location) : LLInt::getCodePtr<NoPtrTag>(name##_return_location))).executableAddress()
+#define LLINT_RETURN_LOCATION(name) (callInstruction.isWide16() ? LLInt::getWide16CodePtr<JSEntryPtrTag>(name##_return_location) : (callInstruction.isWide32() ? LLInt::getWide32CodePtr<JSEntryPtrTag>(name##_return_location) : LLInt::getCodePtr<JSEntryPtrTag>(name##_return_location)))
 
         switch (trueCallerCallKind) {
         case InlineCallFrame::Call:
@@ -196,7 +202,7 @@ void* callerReturnPC(CodeBlock* baselineCodeBlockForCaller, BytecodeIndex callBy
                 baselineCodeBlockForCaller->getCallLinkInfoForBytecodeIndex(callBytecodeIndex);
             RELEASE_ASSERT(callLinkInfo);
 
-            jumpTarget = callLinkInfo->callReturnLocation().untaggedExecutableAddress();
+            jumpTarget = callLinkInfo->callReturnLocation().retagged<JSEntryPtrTag>();
             break;
         }
 
@@ -206,7 +212,7 @@ void* callerReturnPC(CodeBlock* baselineCodeBlockForCaller, BytecodeIndex callBy
                 baselineCodeBlockForCaller->findStubInfo(CodeOrigin(callBytecodeIndex));
             RELEASE_ASSERT(stubInfo);
 
-            jumpTarget = stubInfo->doneLocation().untaggedExecutableAddress();
+            jumpTarget = stubInfo->doneLocation.retagged<JSEntryPtrTag>();
             break;
         }
 
@@ -238,7 +244,7 @@ void reifyInlinedCallFrames(CCallHelpers& jit, const OSRExitBase& exit)
     // in presence of inlined tail calls.
     // https://bugs.webkit.org/show_bug.cgi?id=147511
     ASSERT(JITCode::isBaselineCode(jit.baselineCodeBlock()->jitType()));
-    jit.storePtr(AssemblyHelpers::TrustedImmPtr(jit.baselineCodeBlock()), AssemblyHelpers::addressFor((VirtualRegister)CallFrameSlot::codeBlock));
+    jit.storePtr(AssemblyHelpers::TrustedImmPtr(jit.baselineCodeBlock()), AssemblyHelpers::addressFor(CallFrameSlot::codeBlock));
 
     const CodeOrigin* codeOrigin;
     for (codeOrigin = &exit.m_codeOrigin; codeOrigin && codeOrigin->inlineCallFrame(); codeOrigin = codeOrigin->inlineCallFrame()->getCallerSkippingTailCalls()) {
@@ -265,7 +271,7 @@ void reifyInlinedCallFrames(CCallHelpers& jit, const OSRExitBase& exit)
         } else {
             CodeBlock* baselineCodeBlockForCaller = jit.baselineCodeBlockFor(*trueCaller);
             auto callBytecodeIndex = trueCaller->bytecodeIndex();
-            void* jumpTarget = callerReturnPC(baselineCodeBlockForCaller, callBytecodeIndex, trueCallerCallKind, callerIsLLInt);
+            MacroAssemblerCodePtr<JSEntryPtrTag> jumpTarget = callerReturnPC(baselineCodeBlockForCaller, callBytecodeIndex, trueCallerCallKind, callerIsLLInt);
 
             if (trueCaller->inlineCallFrame()) {
                 jit.addPtr(
@@ -277,11 +283,11 @@ void reifyInlinedCallFrames(CCallHelpers& jit, const OSRExitBase& exit)
 
 #if CPU(ARM64E)
             jit.addPtr(AssemblyHelpers::TrustedImm32(inlineCallFrame->returnPCOffset() + sizeof(void*)), GPRInfo::callFrameRegister, GPRInfo::regT2);
-            jit.move(AssemblyHelpers::TrustedImmPtr(jumpTarget), GPRInfo::nonArgGPR0);
+            jit.move(AssemblyHelpers::TrustedImmPtr(jumpTarget.untaggedExecutableAddress()), GPRInfo::nonArgGPR0);
             jit.tagPtr(GPRInfo::regT2, GPRInfo::nonArgGPR0);
             jit.storePtr(GPRInfo::nonArgGPR0, AssemblyHelpers::addressForByteOffset(inlineCallFrame->returnPCOffset()));
 #else
-            jit.storePtr(AssemblyHelpers::TrustedImmPtr(jumpTarget), AssemblyHelpers::addressForByteOffset(inlineCallFrame->returnPCOffset()));
+            jit.storePtr(AssemblyHelpers::TrustedImmPtr(jumpTarget.untaggedExecutableAddress()), AssemblyHelpers::addressForByteOffset(inlineCallFrame->returnPCOffset()));
 #endif
         }
 
@@ -305,33 +311,34 @@ void reifyInlinedCallFrames(CCallHelpers& jit, const OSRExitBase& exit)
         }
 
         if (!inlineCallFrame->isVarargs())
-            jit.store32(AssemblyHelpers::TrustedImm32(inlineCallFrame->argumentCountIncludingThis), AssemblyHelpers::payloadFor((VirtualRegister)(inlineCallFrame->stackOffset + CallFrameSlot::argumentCount)));
+            jit.store32(AssemblyHelpers::TrustedImm32(inlineCallFrame->argumentCountIncludingThis), AssemblyHelpers::payloadFor(VirtualRegister(inlineCallFrame->stackOffset + CallFrameSlot::argumentCountIncludingThis)));
 #if USE(JSVALUE64)
         jit.storePtr(callerFrameGPR, AssemblyHelpers::addressForByteOffset(inlineCallFrame->callerFrameOffset()));
-        uint32_t locationBits = CallSiteIndex(codeOrigin->bytecodeIndex()).bits();
-        jit.store32(AssemblyHelpers::TrustedImm32(locationBits), AssemblyHelpers::tagFor((VirtualRegister)(inlineCallFrame->stackOffset + CallFrameSlot::argumentCount)));
+        uint32_t locationBits = CallSiteIndex(baselineCodeBlock->bytecodeIndexForExit(codeOrigin->bytecodeIndex())).bits();
+        jit.store32(AssemblyHelpers::TrustedImm32(locationBits), AssemblyHelpers::tagFor(VirtualRegister(inlineCallFrame->stackOffset + CallFrameSlot::argumentCountIncludingThis)));
         if (!inlineCallFrame->isClosureCall)
-            jit.store64(AssemblyHelpers::TrustedImm64(JSValue::encode(JSValue(inlineCallFrame->calleeConstant()))), AssemblyHelpers::addressFor((VirtualRegister)(inlineCallFrame->stackOffset + CallFrameSlot::callee)));
+            jit.store64(AssemblyHelpers::TrustedImm64(JSValue::encode(JSValue(inlineCallFrame->calleeConstant()))), AssemblyHelpers::addressFor(VirtualRegister(inlineCallFrame->stackOffset + CallFrameSlot::callee)));
 #else // USE(JSVALUE64) // so this is the 32-bit part
         jit.storePtr(callerFrameGPR, AssemblyHelpers::addressForByteOffset(inlineCallFrame->callerFrameOffset()));
         const Instruction* instruction = baselineCodeBlock->instructions().at(codeOrigin->bytecodeIndex()).ptr();
-        uint32_t locationBits = CallSiteIndex(BytecodeIndex(bitwise_cast<uint32_t>(instruction))).bits();
-        jit.store32(AssemblyHelpers::TrustedImm32(locationBits), AssemblyHelpers::tagFor((VirtualRegister)(inlineCallFrame->stackOffset + CallFrameSlot::argumentCount)));
-        jit.store32(AssemblyHelpers::TrustedImm32(JSValue::CellTag), AssemblyHelpers::tagFor((VirtualRegister)(inlineCallFrame->stackOffset + CallFrameSlot::callee)));
+        uint32_t locationBits = CallSiteIndex().bits();
+        jit.store32(AssemblyHelpers::TrustedImm32(locationBits), AssemblyHelpers::tagFor(VirtualRegister(inlineCallFrame->stackOffset + CallFrameSlot::argumentCountIncludingThis)));
+        jit.store32(AssemblyHelpers::TrustedImm32(JSValue::CellTag), AssemblyHelpers::tagFor(VirtualRegister(inlineCallFrame->stackOffset + CallFrameSlot::callee)));
         if (!inlineCallFrame->isClosureCall)
-            jit.storePtr(AssemblyHelpers::TrustedImmPtr(inlineCallFrame->calleeConstant()), AssemblyHelpers::payloadFor((VirtualRegister)(inlineCallFrame->stackOffset + CallFrameSlot::callee)));
+            jit.storePtr(AssemblyHelpers::TrustedImmPtr(inlineCallFrame->calleeConstant()), AssemblyHelpers::payloadFor(VirtualRegister(inlineCallFrame->stackOffset + CallFrameSlot::callee)));
 #endif // USE(JSVALUE64) // ending the #else part, so directly above is the 32-bit part
     }
 
     // Don't need to set the toplevel code origin if we only did inline tail calls
     if (codeOrigin) {
 #if USE(JSVALUE64)
-        uint32_t locationBits = CallSiteIndex(codeOrigin->bytecodeIndex()).bits();
+        uint32_t locationBits = CallSiteIndex(BytecodeIndex(codeOrigin->bytecodeIndex().offset())).bits();
 #else
-        const Instruction* instruction = jit.baselineCodeBlock()->instructions().at(codeOrigin->bytecodeIndex()).ptr();
-        uint32_t locationBits = CallSiteIndex(BytecodeIndex(bitwise_cast<uint32_t>(instruction))).bits();
+        auto bytecodeIndex = jit.baselineCodeBlock()->bytecodeIndexForExit(codeOrigin->bytecodeIndex());
+        const Instruction* instruction = jit.baselineCodeBlock()->instructions(bytecodeIndex).at().ptr();
+        uint32_t locationBits = CallSiteIndex(bitwise_cast<uint32_t>(instruction)).bits();
 #endif
-        jit.store32(AssemblyHelpers::TrustedImm32(locationBits), AssemblyHelpers::tagFor((VirtualRegister)(CallFrameSlot::argumentCount)));
+        jit.store32(AssemblyHelpers::TrustedImm32(locationBits), AssemblyHelpers::tagFor(CallFrameSlot::argumentCountIncludingThis));
     }
 }
 
@@ -386,7 +393,11 @@ void adjustAndJumpToTarget(VM& vm, CCallHelpers& jit, const OSRExitBase& exit)
     if (exitToLLInt) {
         auto bytecodeIndex = exit.m_codeOrigin.bytecodeIndex();
         const Instruction& currentInstruction = *codeBlockForExit->instructions().at(bytecodeIndex).ptr();
-        MacroAssemblerCodePtr<JSEntryPtrTag> destination = LLInt::getCodePtr<JSEntryPtrTag>(currentInstruction);
+        MacroAssemblerCodePtr<JSEntryPtrTag> destination;
+        if (bytecodeIndex.checkpoint())
+            destination = LLInt::getCodePtr<JSEntryPtrTag>(checkpoint_osr_exit_trampoline);
+        else 
+            destination = LLInt::getCodePtr<JSEntryPtrTag>(currentInstruction);
 
         if (exit.isExceptionHandler()) {
             jit.move(CCallHelpers::TrustedImmPtr(&currentInstruction), GPRInfo::regT2);
@@ -402,10 +413,18 @@ void adjustAndJumpToTarget(VM& vm, CCallHelpers& jit, const OSRExitBase& exit)
 #endif
         jumpTarget = destination.retagged<OSRExitPtrTag>().executableAddress();
     } else {
-        CodeLocationLabel<JSEntryPtrTag> codeLocation = codeBlockForExit->jitCodeMap().find(exit.m_codeOrigin.bytecodeIndex());
-        ASSERT(codeLocation);
+        BytecodeIndex exitIndex = exit.m_codeOrigin.bytecodeIndex();
+        MacroAssemblerCodePtr<JSEntryPtrTag> destination;
+        if (exitIndex.checkpoint())
+            destination = LLInt::getCodePtr<JSEntryPtrTag>(checkpoint_osr_exit_trampoline);
+        else {
+            ASSERT(codeBlockForExit->bytecodeIndexForExit(exitIndex) == exitIndex);
+            destination = codeBlockForExit->jitCodeMap().find(exitIndex);
+        }
 
-        jumpTarget = codeLocation.retagged<OSRExitPtrTag>().executableAddress();
+        ASSERT(destination);
+
+        jumpTarget = destination.retagged<OSRExitPtrTag>().executableAddress();
     }
 
     jit.addPtr(AssemblyHelpers::TrustedImm32(JIT::stackPointerOffsetFor(codeBlockForExit) * sizeof(Register)), GPRInfo::callFrameRegister, AssemblyHelpers::stackPointerRegister);

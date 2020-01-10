@@ -38,6 +38,7 @@
 #include "BytecodeStructs.h"
 #include "BytecodeUseDef.h"
 #include "CallLinkStatus.h"
+#include "CheckpointOSRExitSideState.h"
 #include "CodeBlockInlines.h"
 #include "CodeBlockSet.h"
 #include "DFGCapabilities.h"
@@ -108,6 +109,8 @@
 #endif
 
 namespace JSC {
+
+DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(CodeBlockRareData);
 
 const ClassInfo CodeBlock::s_info = {
     "CodeBlock", nullptr, nullptr, nullptr,
@@ -407,7 +410,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
             ConcurrentJSLocker locker(clonedSymbolTable->m_lock);
             clonedSymbolTable->prepareForTypeProfiling(locker);
         }
-        replaceConstant(unlinkedModuleProgramCodeBlock->moduleEnvironmentSymbolTableConstantRegisterOffset(), clonedSymbolTable);
+        replaceConstant(VirtualRegister(unlinkedModuleProgramCodeBlock->moduleEnvironmentSymbolTableConstantRegisterOffset()), clonedSymbolTable);
     }
 
     bool shouldUpdateFunctionHasExecutedCache = m_unlinkedCode->wasCompiledWithTypeProfilerOpcodes() || m_unlinkedCode->wasCompiledWithControlFlowProfilerOpcodes();
@@ -641,7 +644,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
             if (bytecode.m_getPutInfo.resolveType() == LocalClosureVar) {
                 // Only do watching if the property we're putting to is not anonymous.
                 if (bytecode.m_var != UINT_MAX) {
-                    SymbolTable* symbolTable = jsCast<SymbolTable*>(getConstant(bytecode.m_symbolTableOrScopeDepth.symbolTable().offset()));
+                    SymbolTable* symbolTable = jsCast<SymbolTable*>(getConstant(bytecode.m_symbolTableOrScopeDepth.symbolTable()));
                     const Identifier& ident = identifier(bytecode.m_var);
                     ConcurrentJSLocker locker(symbolTable->m_lock);
                     auto iter = symbolTable->find(locker, ident.impl());
@@ -709,8 +712,7 @@ bool CodeBlock::finishCreation(VM& vm, ScriptExecutable* ownerExecutable, Unlink
                 break;
             }
             case ProfileTypeBytecodeLocallyResolved: {
-                int symbolTableIndex = bytecode.m_symbolTableOrScopeDepth.symbolTable().offset();
-                SymbolTable* symbolTable = jsCast<SymbolTable*>(getConstant(symbolTableIndex));
+                SymbolTable* symbolTable = jsCast<SymbolTable*>(getConstant(bytecode.m_symbolTableOrScopeDepth.symbolTable()));
                 const Identifier& ident = identifier(bytecode.m_identifier);
                 ConcurrentJSLocker locker(symbolTable->m_lock);
                 // If our parent scope was created while profiling was disabled, it will not have prepared for profiling yet.
@@ -1085,6 +1087,15 @@ static bool shouldMarkTransition(VM& vm, DFG::WeakReferenceTransition& transitio
         return false;
     
     return true;
+}
+
+BytecodeIndex CodeBlock::bytecodeIndexForExit(BytecodeIndex exitIndex) const
+{
+    if (exitIndex.checkpoint()) {
+        const auto& instruction = instructions().at(exitIndex);
+        exitIndex = instruction.next().index();
+    }
+    return exitIndex;
 }
 #endif // ENABLE(DFG_JIT)
 
@@ -1772,7 +1783,7 @@ void CodeBlock::ensureCatchLivenessIsComputedForBytecodeIndex(BytecodeIndex byte
     OpCatch op = instruction->as<OpCatch>();
     auto& metadata = op.metadata(this);
     if (!!metadata.m_buffer) {
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
         ConcurrentJSLocker locker(m_lock);
         bool found = false;
         auto* rareData = m_rareData.get();
@@ -1784,7 +1795,7 @@ void CodeBlock::ensureCatchLivenessIsComputedForBytecodeIndex(BytecodeIndex byte
             }
         }
         ASSERT(found);
-#endif
+#endif // ASSERT_ENABLED
         return;
     }
 
@@ -1811,10 +1822,10 @@ void CodeBlock::ensureCatchLivenessIsComputedForBytecodeIndexSlow(const OpCatch&
     for (int i = 0; i < numParameters(); ++i)
         liveOperands.append(virtualRegisterForArgument(i));
 
-    auto profiles = makeUnique<ValueProfileAndOperandBuffer>(liveOperands.size());
+    auto profiles = makeUnique<ValueProfileAndVirtualRegisterBuffer>(liveOperands.size());
     RELEASE_ASSERT(profiles->m_size == liveOperands.size());
     for (unsigned i = 0; i < profiles->m_size; ++i)
-        profiles->m_buffer.get()[i].m_operand = liveOperands[i].offset();
+        profiles->m_buffer.get()[i].m_operand = liveOperands[i];
 
     createRareDataIfNecessary();
 
@@ -2713,7 +2724,7 @@ void CodeBlock::updateAllValueProfilePredictionsAndCountLiveness(unsigned& numbe
 
     if (auto* rareData = m_rareData.get()) {
         for (auto& profileBucket : rareData->m_catchProfiles) {
-            profileBucket->forEach([&] (ValueProfileAndOperand& profile) {
+            profileBucket->forEach([&] (ValueProfileAndVirtualRegister& profile) {
                 profile.computeUpdatedPrediction(locker);
             });
         }

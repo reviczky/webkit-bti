@@ -28,6 +28,7 @@
 
 #include "JSDOMConvert.h"
 #include <JavaScriptCore/IteratorPrototype.h>
+#include <JavaScriptCore/PropertySlot.h>
 #include <type_traits>
 
 namespace WebCore {
@@ -45,13 +46,14 @@ enum class JSDOMIteratorType { Set, Map };
 template<typename T, typename U = void> using EnableIfMap = typename std::enable_if<T::type == JSDOMIteratorType::Map, U>::type;
 template<typename T, typename U = void> using EnableIfSet = typename std::enable_if<T::type == JSDOMIteratorType::Set, U>::type;
 
-template<typename JSWrapper, typename IteratorTraits> class JSDOMIteratorPrototype : public JSC::JSNonFinalObject {
+template<typename JSWrapper, typename IteratorTraits> class JSDOMIteratorPrototype final : public JSC::JSNonFinalObject {
 public:
     using Base = JSC::JSNonFinalObject;
     using DOMWrapped = typename JSWrapper::DOMWrapped;
 
     static JSDOMIteratorPrototype* create(JSC::VM& vm, JSC::JSGlobalObject* globalObject, JSC::Structure* structure)
     {
+        STATIC_ASSERT_ISO_SUBSPACE_SHARABLE(JSDOMIteratorPrototype, JSDOMIteratorPrototype::Base);
         JSDOMIteratorPrototype* prototype = new (NotNull, JSC::allocateCell<JSDOMIteratorPrototype>(vm.heap)) JSDOMIteratorPrototype(vm, structure);
         prototype->finishCreation(vm, globalObject);
         return prototype;
@@ -72,7 +74,7 @@ private:
     void finishCreation(JSC::VM&, JSC::JSGlobalObject*);
 };
 
-enum class IterationKind { Key, Value, KeyValue };
+using IterationKind = JSC::IterationKind;
 
 template<typename JSWrapper, typename IteratorTraits> class JSDOMIterator : public JSDOMObject {
 public:
@@ -153,11 +155,11 @@ template<typename IteratorValue, typename T> inline EnableIfMap<T, JSC::JSValue>
     ASSERT(value);
     
     switch (m_kind) {
-    case IterationKind::Key:
+    case IterationKind::Keys:
         return toJS<typename Traits::KeyType>(lexicalGlobalObject, *globalObject(), value->key);
-    case IterationKind::Value:
+    case IterationKind::Values:
         return toJS<typename Traits::ValueType>(lexicalGlobalObject, *globalObject(), value->value);
-    case IterationKind::KeyValue:
+    case IterationKind::Entries:
         return jsPair<typename Traits::KeyType, typename Traits::ValueType>(lexicalGlobalObject, *globalObject(), value->key, value->value);
     };
     
@@ -174,10 +176,10 @@ template<typename IteratorValue, typename T> inline EnableIfSet<T, JSC::JSValue>
     auto result = toJS<typename Traits::ValueType>(lexicalGlobalObject, *globalObject, value);
 
     switch (m_kind) {
-    case IterationKind::Key:
-    case IterationKind::Value:
+    case IterationKind::Keys:
+    case IterationKind::Values:
         return result;
-    case IterationKind::KeyValue:
+    case IterationKind::Entries:
         return jsPair(lexicalGlobalObject, *globalObject, result, result);
     };
 
@@ -264,6 +266,7 @@ void JSDOMIteratorPrototype<JSWrapper, IteratorTraits>::finishCreation(JSC::VM& 
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
 
+    putDirectWithoutTransition(vm, vm.propertyNames->toStringTagSymbol, jsString(vm, info()->className), JSC::PropertyAttribute::DontEnum | JSC::PropertyAttribute::ReadOnly);
     JSC_NATIVE_INTRINSIC_FUNCTION_WITHOUT_TRANSITION(vm.propertyNames->next, next, 0, 0, JSC::NoIntrinsic);
 }
 

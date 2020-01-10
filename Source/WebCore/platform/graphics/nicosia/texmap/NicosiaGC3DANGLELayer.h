@@ -31,7 +31,7 @@
 #if USE(NICOSIA) && USE(TEXTURE_MAPPER)
 
 #include "GLContext.h"
-#include "GraphicsContext3D.h"
+#include "GraphicsContextGLOpenGL.h"
 #include "NicosiaGC3DLayer.h"
 #include <memory>
 
@@ -61,8 +61,8 @@ public:
         virtual ~ANGLEContext();
 
         bool makeContextCurrent();
-#if ENABLE(GRAPHICS_CONTEXT_3D)
-        PlatformGraphicsContext3D platformContext();
+#if ENABLE(GRAPHICS_CONTEXT_GL)
+        PlatformGraphicsContextGL platformContext() const;
 #endif
 
     private:
@@ -73,11 +73,11 @@ public:
         EGLSurface m_surface { nullptr };
     };
 
-    GC3DANGLELayer(WebCore::GraphicsContext3D&, WebCore::GraphicsContext3D::RenderStyle);
+    GC3DANGLELayer(WebCore::GraphicsContextGLOpenGL&, WebCore::GraphicsContextGLOpenGL::Destination);
     virtual ~GC3DANGLELayer();
 
     bool makeContextCurrent() override;
-    PlatformGraphicsContext3D platformContext() override;
+    PlatformGraphicsContextGL platformContext() const override;
 
 private:
     std::unique_ptr<ANGLEContext> m_angleContext;

@@ -90,7 +90,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../gtk3/GtkAction.html#GtkAction-struct"><span class="returnvalue">GtkAction</span></a> *
+<span class="returnvalue">GtkAction</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitContextMenuItem.html#webkit-context-menu-item-get-action" title="webkit_context_menu_item_get_action ()">webkit_context_menu_item_get_action</a> <span class="c_punctuation">()</span>
@@ -167,7 +167,7 @@
 </div>
 <div class="refsect1">
 <a name="WebKitContextMenuItem.description"></a><h2>Description</h2>
-<p>The <a class="link" href="WebKitContextMenu.html" title="WebKitContextMenu"><span class="type">WebKitContextMenu</span></a> is composed of <a class="link" href="WebKitContextMenuItem.html" title="WebKitContextMenuItem"><span class="type">WebKitContextMenuItem</span></a>s. These items can be created from a <a href="../gtk3/GtkAction.html#GtkAction-struct"><span class="type">GtkAction</span></a>, from a
+<p>The <a class="link" href="WebKitContextMenu.html" title="WebKitContextMenu"><span class="type">WebKitContextMenu</span></a> is composed of <a class="link" href="WebKitContextMenuItem.html" title="WebKitContextMenuItem"><span class="type">WebKitContextMenuItem</span></a>s. These items can be created from a <span class="type">GtkAction</span>, from a
 <a class="link" href="WebKitContextMenuItem.html#WebKitContextMenuAction" title="enum WebKitContextMenuAction"><span class="type">WebKitContextMenuAction</span></a> or from a <a class="link" href="WebKitContextMenuItem.html#WebKitContextMenuAction" title="enum WebKitContextMenuAction"><span class="type">WebKitContextMenuAction</span></a> and a
 label. These <a class="link" href="WebKitContextMenuItem.html#WebKitContextMenuAction" title="enum WebKitContextMenuAction"><span class="type">WebKitContextMenuAction</span></a>s denote stock actions
 for the items. You can also create separators and submenus.</p>
@@ -177,7 +177,7 @@ for the items. You can also create separators and submenus.</p>
 <div class="refsect2">
 <a name="webkit-context-menu-item-new"></a><h3>webkit_context_menu_item_new ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitContextMenuItem.html" title="WebKitContextMenuItem"><span class="returnvalue">WebKitContextMenuItem</span></a> *
-webkit_context_menu_item_new (<em class="parameter"><code><a href="../gtk3/GtkAction.html#GtkAction-struct"><span class="type">GtkAction</span></a> *action</code></em>);</pre>
+webkit_context_menu_item_new (<em class="parameter"><code><span class="type">GtkAction</span> *action</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_context_menu_item_new</code> has been deprecated since version 2.18 and should not be used in newly-written code.</p>
 <p>Use <a class="link" href="WebKitContextMenuItem.html#webkit-context-menu-item-new-from-gaction" title="webkit_context_menu_item_new_from_gaction ()"><code class="function">webkit_context_menu_item_new_from_gaction()</code></a> instead.</p>
@@ -194,7 +194,7 @@ webkit_context_menu_item_new (<em class="parameter"><code><a href="../gtk3/GtkAc
 </colgroup>
 <tbody><tr>
 <td class="parameter_name"><p>action</p></td>
-<td class="parameter_description"><p>a <a href="../gtk3/GtkAction.html#GtkAction-struct"><span class="type">GtkAction</span></a></p></td>
+<td class="parameter_description"><p>a <span class="type">GtkAction</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr></tbody>
 </table></div>
@@ -260,9 +260,9 @@ webkit_context_menu_item_new_from_stock_action
 Stock actions are handled automatically by WebKit so that, for example,
 when a menu item created with a <a class="link" href="WebKitContextMenuItem.html#WEBKIT-CONTEXT-MENU-ACTION-STOP:CAPS"><code class="literal">WEBKIT_CONTEXT_MENU_ACTION_STOP</code></a> is
 activated the action associated will be handled by WebKit and the current
-load operation will be stopped. You can get the <a href="../gtk3/GtkAction.html#GtkAction-struct"><span class="type">GtkAction</span></a> of a
+load operation will be stopped. You can get the <span class="type">GtkAction</span> of a
 <a class="link" href="WebKitContextMenuItem.html" title="WebKitContextMenuItem"><span class="type">WebKitContextMenuItem</span></a> created with a <a class="link" href="WebKitContextMenuItem.html#WebKitContextMenuAction" title="enum WebKitContextMenuAction"><span class="type">WebKitContextMenuAction</span></a> with
-<a class="link" href="WebKitContextMenuItem.html#webkit-context-menu-item-get-action" title="webkit_context_menu_item_get_action ()"><code class="function">webkit_context_menu_item_get_action()</code></a> and connect to <a href="../gtk3/GtkAction.html#GtkAction-activate"><span class="type">“activate”</span></a> signal
+<a class="link" href="WebKitContextMenuItem.html#webkit-context-menu-item-get-action" title="webkit_context_menu_item_get_action ()"><code class="function">webkit_context_menu_item_get_action()</code></a> and connect to <span class="type">“activate”</span> signal
 to be notified when the item is activated. But you can't prevent the associated
 action from being performed.</p>
 <div class="refsect3">
@@ -374,14 +374,14 @@ webkit_context_menu_item_new_separator
 <hr>
 <div class="refsect2">
 <a name="webkit-context-menu-item-get-action"></a><h3>webkit_context_menu_item_get_action ()</h3>
-<pre class="programlisting"><a href="../gtk3/GtkAction.html#GtkAction-struct"><span class="returnvalue">GtkAction</span></a> *
+<pre class="programlisting"><span class="returnvalue">GtkAction</span> *
 webkit_context_menu_item_get_action (<em class="parameter"><code><a class="link" href="WebKitContextMenuItem.html" title="WebKitContextMenuItem"><span class="type">WebKitContextMenuItem</span></a> *item</code></em>);</pre>
 <div class="warning">
 <p><code class="literal">webkit_context_menu_item_get_action</code> has been deprecated since version 2.18 and should not be used in newly-written code.</p>
 <p>Use <a class="link" href="WebKitContextMenuItem.html#webkit-context-menu-item-get-gaction" title="webkit_context_menu_item_get_gaction ()"><code class="function">webkit_context_menu_item_get_gaction()</code></a> instead.</p>
 </div>
 <p>Gets the action associated to <em class="parameter"><code>item</code></em>
- as a <a href="../gtk3/GtkAction.html#GtkAction-struct"><span class="type">GtkAction</span></a>.</p>
+ as a <span class="type">GtkAction</span>.</p>
 <div class="refsect3">
 <a name="webkit-context-menu-item-get-action.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -399,7 +399,7 @@ webkit_context_menu_item_get_action (<em class="parameter"><code><a class="link"
 </div>
 <div class="refsect3">
 <a name="webkit-context-menu-item-get-action.returns"></a><h4>Returns</h4>
-<p>the <a href="../gtk3/GtkAction.html#GtkAction-struct"><span class="type">GtkAction</span></a> associated to the <a class="link" href="WebKitContextMenuItem.html" title="WebKitContextMenuItem"><span class="type">WebKitContextMenuItem</span></a>,
+<p>the <span class="type">GtkAction</span> associated to the <a class="link" href="WebKitContextMenuItem.html" title="WebKitContextMenuItem"><span class="type">WebKitContextMenuItem</span></a>,
 or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if <em class="parameter"><code>item</code></em>
 is a separator. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>

@@ -83,6 +83,7 @@ Shared/Plugins/unix/PluginSearchPath.cpp
 Shared/cairo/ShareableBitmapCairo.cpp
 
 Shared/glib/ArgumentCodersGLib.cpp
+Shared/glib/InputMethodState.cpp
 Shared/glib/ProcessExecutablePathGLib.cpp
 Shared/glib/UserMessage.cpp
 Shared/glib/WebContextMenuItemGlib.cpp
@@ -123,6 +124,7 @@ UIProcess/API/C/gtk/WKView.cpp
 
 UIProcess/API/glib/APIContentRuleListStoreGLib.cpp @no-unify
 UIProcess/API/glib/IconDatabase.cpp @no-unify
+UIProcess/API/glib/InputMethodFilter.cpp @no-unify
 UIProcess/API/glib/WebKitApplicationInfo.cpp @no-unify
 UIProcess/API/glib/WebKitAuthenticationRequest.cpp @no-unify
 UIProcess/API/glib/WebKitAutomationSession.cpp @no-unify
@@ -145,6 +147,7 @@ UIProcess/API/glib/WebKitGeolocationManager.cpp @no-unify
 UIProcess/API/glib/WebKitGeolocationPermissionRequest.cpp @no-unify
 UIProcess/API/glib/WebKitIconLoadingClient.cpp @no-unify
 UIProcess/API/glib/WebKitInjectedBundleClient.cpp @no-unify
+UIProcess/API/glib/WebKitInputMethodContext.cpp @no-unify
 UIProcess/API/glib/WebKitInstallMissingMediaPluginsPermissionRequest.cpp @no-unify
 UIProcess/API/glib/WebKitJavascriptResult.cpp @no-unify
 UIProcess/API/glib/WebKitMimeInfo.cpp @no-unify
@@ -183,11 +186,14 @@ UIProcess/API/glib/WebKitWebsiteData.cpp @no-unify
 UIProcess/API/glib/WebKitWebsiteDataManager.cpp @no-unify
 UIProcess/API/glib/WebKitWindowProperties.cpp @no-unify
 
+UIProcess/API/gtk/InputMethodFilterGtk.cpp @no-unify
 UIProcess/API/gtk/PageClientImpl.cpp @no-unify
 UIProcess/API/gtk/WebKitAuthenticationDialog.cpp @no-unify
 UIProcess/API/gtk/WebKitColorChooser.cpp @no-unify
 UIProcess/API/gtk/WebKitColorChooserRequest.cpp @no-unify
 UIProcess/API/gtk/WebKitEmojiChooser.cpp @no-unify
+UIProcess/API/gtk/WebKitInputMethodContextGtk.cpp @no-unify
+UIProcess/API/gtk/WebKitInputMethodContextImplGtk.cpp @no-unify
 UIProcess/API/gtk/WebKitOptionMenu.cpp @no-unify
 UIProcess/API/gtk/WebKitOptionMenuItem.cpp @no-unify
 UIProcess/API/gtk/WebKitPopupMenu.cpp @no-unify
@@ -238,7 +244,6 @@ UIProcess/gtk/AcceleratedBackingStoreX11.cpp @no-unify
 UIProcess/gtk/DragAndDropHandler.cpp
 UIProcess/gtk/GestureController.cpp
 UIProcess/gtk/HardwareAccelerationManager.cpp
-UIProcess/gtk/InputMethodFilter.cpp
 UIProcess/gtk/KeyBindingTranslator.cpp
 UIProcess/gtk/PointerLockManager.cpp @no-unify
 UIProcess/gtk/PointerLockManagerWayland.cpp @no-unify
@@ -389,10 +394,12 @@ WebProcess/InjectedBundle/glib/InjectedBundleGlib.cpp
 
 WebProcess/MediaCache/WebMediaKeyStorageManager.cpp
 
-WebProcess/Plugins/Netscape/unix/NetscapePluginUnix.cpp
-WebProcess/Plugins/Netscape/unix/PluginProxyUnix.cpp
+WebProcess/Plugins/Netscape/unix/NetscapePluginUnix.cpp @no-unify
+WebProcess/Plugins/Netscape/unix/PluginProxyUnix.cpp @no-unify
 
 WebProcess/Plugins/Netscape/x11/NetscapePluginX11.cpp @no-unify
+
+WebProcess/WebCoreSupport/glib/WebEditorClientGLib.cpp
 
 WebProcess/WebCoreSupport/gtk/WebContextMenuClientGtk.cpp
 WebProcess/WebCoreSupport/gtk/WebDragClientGtk.cpp

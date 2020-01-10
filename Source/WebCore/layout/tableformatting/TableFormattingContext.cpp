@@ -58,7 +58,7 @@ TableFormattingContext::TableFormattingContext(const Container& formattingContex
 {
 }
 
-void TableFormattingContext::layoutInFlowContent(InvalidationState& invalidationState)
+void TableFormattingContext::layoutInFlowContent(InvalidationState& invalidationState, const HorizontalConstraints&, const VerticalConstraints&)
 {
     auto& grid = formattingState().tableGrid();
     auto& columnsContext = grid.columnsContext();
@@ -99,9 +99,10 @@ void TableFormattingContext::layoutInFlowContent(InvalidationState& invalidation
 
 void TableFormattingContext::layoutTableCellBox(const Box& cellLayoutBox, const TableGrid::Column& column, InvalidationState& invalidationState)
 {
-    auto& cellDisplayBox = formattingState().displayBox(cellLayoutBox);
-    computeBorderAndPadding(cellLayoutBox);
+    auto horizontalConstraints = Geometry::horizontalConstraintsForInFlow(geometryForBox(*cellLayoutBox.containingBlock()));
+    computeBorderAndPadding(cellLayoutBox, horizontalConstraints);
     // Margins do not apply to internal table elements.
+    auto& cellDisplayBox = formattingState().displayBox(cellLayoutBox);
     cellDisplayBox.setHorizontalMargin({ });
     cellDisplayBox.setHorizontalComputedMargin({ });
     // Don't know the actual position yet.
@@ -110,7 +111,7 @@ void TableFormattingContext::layoutTableCellBox(const Box& cellLayoutBox, const 
 
     ASSERT(cellLayoutBox.establishesBlockFormattingContext());
     if (is<Container>(cellLayoutBox))
-        LayoutContext::createFormattingContext(downcast<Container>(cellLayoutBox), layoutState())->layoutInFlowContent(invalidationState);
+        LayoutContext::createFormattingContext(downcast<Container>(cellLayoutBox), layoutState())->layoutInFlowContent(invalidationState, Geometry::horizontalConstraintsForInFlow(cellDisplayBox), Geometry::verticalConstraintsForInFlow(cellDisplayBox));
     cellDisplayBox.setVerticalMargin({ { }, { } });
     cellDisplayBox.setContentBoxHeight(geometry().tableCellHeightAndMargin(cellLayoutBox).contentHeight);
     // FIXME: Check what to do with out-of-flow content.
@@ -236,7 +237,7 @@ void TableFormattingContext::computePreferredWidthForColumns()
                 intrinsicWidth = LayoutContext::createFormattingContext(downcast<Container>(tableCellBox), layoutState())->computedIntrinsicWidthConstraints();
             intrinsicWidth = geometry().constrainByMinMaxWidth(tableCellBox, *intrinsicWidth);
             auto border = geometry().computedBorder(tableCellBox);
-            auto padding = *geometry().computedPadding(tableCellBox, UsedHorizontalValues { UsedHorizontalValues::Constraints { { }, { } } });
+            auto padding = *geometry().computedPadding(tableCellBox, { });
 
             intrinsicWidth->expand(border.horizontal.width() + padding.horizontal.width());
             formattingState.setIntrinsicWidthConstraintsForBox(tableCellBox, *intrinsicWidth);

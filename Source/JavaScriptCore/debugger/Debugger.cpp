@@ -174,6 +174,8 @@ void Debugger::detach(JSGlobalObject* globalObject, ReasonForDetach reason)
     // since there's no point in staying paused once a window closes.
     // We know there is an entry scope, otherwise, m_currentCallFrame would be null.
     VM& vm = globalObject->vm();
+    JSLockHolder locker(vm);
+
     if (m_isPaused && m_currentCallFrame && vm.entryScope->globalObject() == globalObject) {
         m_currentCallFrame = nullptr;
         m_pauseOnCallFrame = nullptr;
@@ -449,14 +451,14 @@ void Debugger::removeBreakpoint(BreakpointID id)
     toggleBreakpoint(*breakpoint, BreakpointDisabled);
 
     BreakpointsList& breakpoints = *breaksIt->value;
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     bool found = false;
     for (Breakpoint* current = breakpoints.head(); current && !found; current = current->next()) {
         if (current->id == breakpoint->id)
             found = true;
     }
     ASSERT(found);
-#endif
+#endif // ASSERT_ENABLED
 
     m_breakpointIDToBreakpoint.remove(idIt);
     breakpoints.remove(breakpoint);

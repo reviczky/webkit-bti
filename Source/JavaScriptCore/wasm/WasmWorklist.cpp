@@ -146,14 +146,18 @@ void Worklist::enqueue(Ref<Plan> plan)
 {
     LockHolder locker(*m_lock);
 
-    if (!ASSERT_DISABLED) {
+    if (ASSERT_ENABLED) {
         for (const auto& element : m_queue)
             ASSERT_UNUSED(element, element.plan.get() != &plan.get());
     }
 
     dataLogLnIf(WasmWorklistInternal::verbose, "Enqueuing plan");
-    m_queue.enqueue({ Priority::Preparation, nextTicket(),  WTFMove(plan) });
-    m_planEnqueued->notifyOne(locker);
+    bool multiThreaded = plan->multiThreaded();
+    m_queue.enqueue({ multiThreaded ? Priority::Compilation : Priority::Preparation, nextTicket(),  WTFMove(plan) });
+    if (multiThreaded)
+        m_planEnqueued->notifyAll(locker);
+    else
+        m_planEnqueued->notifyOne(locker);
 }
 
 void Worklist::completePlanSynchronously(Plan& plan)

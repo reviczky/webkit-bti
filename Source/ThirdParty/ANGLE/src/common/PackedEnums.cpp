@@ -252,7 +252,7 @@ std::ostream &operator<<(std::ostream &os, VertexAttribType value)
     switch (value)
     {
         case VertexAttribType::Byte:
-            os << "GL_UNSIGNED_BYTE";
+            os << "GL_BYTE";
             break;
         case VertexAttribType::Fixed:
             os << "GL_FIXED";
@@ -374,11 +374,7 @@ gl::TextureType EGLTextureTargetToTextureType(EGLenum eglTarget)
             return gl::TextureType::_2D;
 
         case EGL_TEXTURE_RECTANGLE_ANGLE:
-#if defined(ANGLE_PLATFORM_IOS) && !defined(ANGLE_PLATFORM_MACCATALYST)
-            return gl::TextureType::_2D;
-#else
             return gl::TextureType::Rectangle;
-#endif
 
         default:
             UNREACHABLE();

@@ -56,7 +56,6 @@ public:
     MediaTime();
     MediaTime(int64_t value, uint32_t scale, uint8_t flags = Valid);
     MediaTime(const MediaTime& rhs);
-    ~MediaTime();
 
     static MediaTime createWithFloat(float floatTime);
     static MediaTime createWithFloat(float floatTime, uint32_t timeScale);
@@ -176,24 +175,18 @@ bool MediaTime::decode(Decoder& decoder, MediaTime& time)
         && decoder.decode(time.m_timeFlags);
 }
 
-template<typename Type>
-struct LogArgument;
+template<typename> struct LogArgument;
 
-template <>
-struct LogArgument<MediaTime> {
-    static String toString(const MediaTime& time)
-    {
-        return time.toJSONString();
-    }
+template<> struct LogArgument<MediaTime> {
+    static String toString(const MediaTime& time) { return time.toJSONString(); }
+};
+template<> struct LogArgument<MediaTimeRange> {
+    static String toString(const MediaTimeRange& range) { return range.toJSONString(); }
 };
 
-template <>
-struct LogArgument<MediaTimeRange> {
-    static String toString(const MediaTimeRange& range)
-    {
-        return range.toJSONString();
-    }
-};
+#ifndef NDEBUG
+WTF_EXPORT_PRIVATE TextStream& operator<<(TextStream&, const MediaTime&);
+#endif
 
 }
 

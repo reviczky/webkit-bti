@@ -37,6 +37,7 @@
 #include "JSEventTarget.h"
 #include "JSRemoteDOMWindow.h"
 #include "ScriptController.h"
+#include "WebCoreJSClientData.h"
 #include <JavaScriptCore/Debugger.h>
 #include <JavaScriptCore/JSObject.h>
 #include <JavaScriptCore/StrongInlines.h>
@@ -75,7 +76,7 @@ void JSWindowProxy::destroy(JSCell* cell)
 
 void JSWindowProxy::setWindow(VM& vm, JSDOMGlobalObject& window)
 {
-    ASSERT(window.classInfo() == JSDOMWindow::info() || window.classInfo() == JSRemoteDOMWindow::info());
+    ASSERT(window.classInfo(vm) == JSDOMWindow::info() || window.classInfo(vm) == JSRemoteDOMWindow::info());
     setTarget(vm, &window);
     structure(vm)->setGlobalObject(vm, &window);
     GCController::singleton().garbageCollectSoon();
@@ -164,6 +165,11 @@ WindowProxy* JSWindowProxy::toWrapped(VM& vm, JSValue value)
     if (object->inherits<JSWindowProxy>(vm))
         return jsCast<JSWindowProxy*>(object)->windowProxy();
     return nullptr;
+}
+
+JSC::IsoSubspace* JSWindowProxy::subspaceForImpl(JSC::VM& vm)
+{
+    return &static_cast<JSVMClientData*>(vm.clientData)->windowProxySpace();
 }
 
 } // namespace WebCore

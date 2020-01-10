@@ -307,11 +307,6 @@ void RenderText::willBeDestroyed()
     RenderObject::willBeDestroyed();
 }
 
-void RenderText::deleteLineBoxesBeforeSimpleLineLayout()
-{
-    m_lineBoxes.deleteAll();
-}
-
 String RenderText::originalText() const
 {
     return m_originalTextDiffersFromRendered ? originalTextMap().get(this) : m_text;
@@ -436,7 +431,7 @@ void RenderText::absoluteQuads(Vector<FloatQuad>& quads, bool* wasFixed) const
     quads.appendVector(m_lineBoxes.absoluteQuads(*this, wasFixed, RenderTextLineBoxes::NoClipping));
 }
 
-Vector<FloatQuad> RenderText::absoluteQuadsForRange(unsigned start, unsigned end, bool useSelectionHeight, bool* wasFixed) const
+Vector<FloatQuad> RenderText::absoluteQuadsForRange(unsigned start, unsigned end, bool useSelectionHeight, bool ignoreEmptyTextSelections, bool* wasFixed) const
 {
     // Work around signed/unsigned issues. This function takes unsigneds, and is often passed UINT_MAX
     // to mean "all the way to the end". InlineTextBox coordinates are unsigneds, so changing this
@@ -448,9 +443,9 @@ Vector<FloatQuad> RenderText::absoluteQuadsForRange(unsigned start, unsigned end
     start = std::min(start, static_cast<unsigned>(INT_MAX));
     end = std::min(end, static_cast<unsigned>(INT_MAX));
     if (simpleLineLayout() && !useSelectionHeight)
-        return collectAbsoluteQuadsForRange(*this, start, end, *simpleLineLayout(), wasFixed);
+        return collectAbsoluteQuadsForRange(*this, start, end, *simpleLineLayout(), ignoreEmptyTextSelections, wasFixed);
     const_cast<RenderText&>(*this).ensureLineBoxes();
-    return m_lineBoxes.absoluteQuadsForRange(*this, start, end, useSelectionHeight, wasFixed);
+    return m_lineBoxes.absoluteQuadsForRange(*this, start, end, useSelectionHeight, ignoreEmptyTextSelections, wasFixed);
 }
 
 Position RenderText::positionForPoint(const LayoutPoint& point)
@@ -1427,29 +1422,29 @@ LayoutRect RenderText::collectSelectionRectsForLineBoxes(const RenderLayerModelO
 
     // Now calculate startPos and endPos for painting selection.
     // We include a selection while endPos > 0
-    unsigned startPos;
-    unsigned endPos;
+    unsigned startOffset;
+    unsigned endOffset;
     if (selectionState() == SelectionInside) {
         // We are fully selected.
-        startPos = 0;
-        endPos = text().length();
+        startOffset = 0;
+        endOffset = text().length();
     } else {
-        startPos = view().selection().startPosition();
-        endPos = view().selection().endPosition();
+        startOffset = view().selection().startOffset();
+        endOffset = view().selection().endOffset();
         if (selectionState() == SelectionStart)
-            endPos = text().length();
+            endOffset = text().length();
         else if (selectionState() == SelectionEnd)
-            startPos = 0;
+            startOffset = 0;
     }
 
-    if (startPos == endPos)
+    if (startOffset == endOffset)
         return IntRect();
 
     LayoutRect resultRect;
     if (!rects)
-        resultRect = m_lineBoxes.selectionRectForRange(startPos, endPos);
+        resultRect = m_lineBoxes.selectionRectForRange(startOffset, endOffset);
     else {
-        m_lineBoxes.collectSelectionRectsForRange(startPos, endPos, *rects);
+        m_lineBoxes.collectSelectionRectsForRange(startOffset, endOffset, *rects);
         for (auto& rect : *rects) {
             resultRect.unite(rect);
             rect = localToContainerQuad(FloatRect(rect), repaintContainer).enclosingBoundingBox();

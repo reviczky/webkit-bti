@@ -63,9 +63,8 @@ public:
 
     virtual const char* activeDOMObjectName() const = 0;
 
-    // These three functions must not have a side effect of creating or destroying
+    // These functions must not have a side effect of creating or destroying
     // any ActiveDOMObject. That means they must not result in calls to arbitrary JavaScript.
-    virtual bool shouldPreventEnteringBackForwardCache_DEPRECATED() const { return false; } // Please do not add new overrides for this function.
     virtual void suspend(ReasonForSuspension);
     virtual void resume();
 
@@ -144,7 +143,7 @@ private:
     void queueTaskToDispatchEventInternal(EventTarget&, TaskSource, Ref<Event>&&);
 
     unsigned m_pendingActivityCount { 0 };
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     bool m_suspendIfNeededWasCalled { false };
     Ref<Thread> m_creationThread { Thread::current() };
 #endif
@@ -152,7 +151,7 @@ private:
     friend class ActiveDOMObjectEventDispatchTask;
 };
 
-#if ASSERT_DISABLED
+#if !ASSERT_ENABLED
 
 inline void ActiveDOMObject::assertSuspendIfNeededWasCalled() const
 {

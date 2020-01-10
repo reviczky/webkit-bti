@@ -29,13 +29,6 @@
 #include <WebKit/WKBase.h>
 #include <WebKit/WKContext.h>
 
-#if defined(WIN32) || defined(_WIN32)
-typedef int WKProcessID;
-#else
-#include <unistd.h>
-typedef pid_t WKProcessID;
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -91,7 +84,7 @@ WK_EXPORT void WKContextWarmInitialProcess(WKContextRef context);
 WK_EXPORT void WKContextSetUsesNetworkProcess(WKContextRef, bool);
 
 WK_EXPORT void WKContextTerminateNetworkProcess(WKContextRef);
-WK_EXPORT void WKContextTerminateServiceWorkerProcess(WKContextRef);
+WK_EXPORT void WKContextTerminateServiceWorkers(WKContextRef);
 
 WK_EXPORT void WKContextSetAllowsAnySSLCertificateForWebSocketTesting(WKContextRef, bool);
 WK_EXPORT void WKContextSetAllowsAnySSLCertificateForServiceWorkerTesting(WKContextRef, bool);

@@ -60,9 +60,6 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << webKitLoggingChannels;
 #if ENABLE(MEDIA_STREAM)
     encoder << audioCaptureExtensionHandle;
-    encoder << shouldCaptureAudioInUIProcess;
-    encoder << shouldCaptureVideoInUIProcess;
-    encoder << shouldCaptureDisplayInUIProcess;
 #endif
     encoder << urlSchemesRegisteredAsEmptyDocument;
     encoder << urlSchemesRegisteredAsSecure;
@@ -158,6 +155,22 @@ void WebProcessCreationParameters::encode(IPC::Encoder& encoder) const
 #endif
 
     encoder << websiteDataStoreParameters;
+    
+#if PLATFORM(IOS)
+    encoder << compilerServiceExtensionHandle;
+    encoder << contentFilterExtensionHandle;
+    encoder << launchServicesOpenExtensionHandle;
+    encoder << diagnosticsExtensionHandle;
+#endif
+    
+#if PLATFORM(COCOA)
+    encoder << neHelperExtensionHandle;
+    encoder << neSessionManagerExtensionHandle;
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+    encoder << currentUserInterfaceIdiomIsPad;
+#endif
 }
 
 bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreationParameters& parameters)
@@ -212,13 +225,6 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     if (!audioCaptureExtensionHandle)
         return false;
     parameters.audioCaptureExtensionHandle = WTFMove(*audioCaptureExtensionHandle);
-
-    if (!decoder.decode(parameters.shouldCaptureAudioInUIProcess))
-        return false;
-    if (!decoder.decode(parameters.shouldCaptureVideoInUIProcess))
-        return false;
-    if (!decoder.decode(parameters.shouldCaptureDisplayInUIProcess))
-        return false;
 #endif
     if (!decoder.decode(parameters.urlSchemesRegisteredAsEmptyDocument))
         return false;
@@ -387,6 +393,51 @@ bool WebProcessCreationParameters::decode(IPC::Decoder& decoder, WebProcessCreat
     if (!websiteDataStoreParameters)
         return false;
     parameters.websiteDataStoreParameters = WTFMove(*websiteDataStoreParameters);
+
+#if PLATFORM(IOS)
+    Optional<Optional<SandboxExtension::Handle>> compilerServiceExtensionHandle;
+    decoder >> compilerServiceExtensionHandle;
+    if (!compilerServiceExtensionHandle)
+        return false;
+    parameters.compilerServiceExtensionHandle = WTFMove(*compilerServiceExtensionHandle);
+
+    Optional<Optional<SandboxExtension::Handle>> contentFilterExtensionHandle;
+    decoder >> contentFilterExtensionHandle;
+    if (!contentFilterExtensionHandle)
+        return false;
+    parameters.contentFilterExtensionHandle = WTFMove(*contentFilterExtensionHandle);
+
+    Optional<Optional<SandboxExtension::Handle>> launchServicesOpenExtensionHandle;
+    decoder >> launchServicesOpenExtensionHandle;
+    if (!launchServicesOpenExtensionHandle)
+        return false;
+    parameters.launchServicesOpenExtensionHandle = WTFMove(*launchServicesOpenExtensionHandle);
+
+    Optional<Optional<SandboxExtension::Handle>> diagnosticsExtensionHandle;
+    decoder >> diagnosticsExtensionHandle;
+    if (!diagnosticsExtensionHandle)
+        return false;
+    parameters.diagnosticsExtensionHandle = WTFMove(*diagnosticsExtensionHandle);
+#endif
+
+#if PLATFORM(COCOA)
+    Optional<Optional<SandboxExtension::Handle>> neHelperExtensionHandle;
+    decoder >> neHelperExtensionHandle;
+    if (!neHelperExtensionHandle)
+        return false;
+    parameters.neHelperExtensionHandle = WTFMove(*neHelperExtensionHandle);
+
+    Optional<Optional<SandboxExtension::Handle>> neSessionManagerExtensionHandle;
+    decoder >> neSessionManagerExtensionHandle;
+    if (!neSessionManagerExtensionHandle)
+        return false;
+    parameters.neSessionManagerExtensionHandle = WTFMove(*neSessionManagerExtensionHandle);
+#endif
+
+#if PLATFORM(IOS_FAMILY)
+    if (!decoder.decode(parameters.currentUserInterfaceIdiomIsPad))
+        return false;
+#endif
 
     return true;
 }

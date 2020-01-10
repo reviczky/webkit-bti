@@ -137,12 +137,13 @@ enum class LegacyOverflowScrollingTouchPolicy : uint8_t {
     Enable,
 };
 
+DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(DocumentLoader);
 class DocumentLoader
     : public RefCounted<DocumentLoader>
     , public FrameDestructionObserver
     , public ContentSecurityPolicyClient
     , private CachedRawResourceClient {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(DocumentLoader);
     friend class ContentFilter;
 public:
     static Ref<DocumentLoader> create(const ResourceRequest& request, const SubstituteData& data)
@@ -236,7 +237,7 @@ public:
 
     WEBCORE_EXPORT Vector<Ref<ArchiveResource>> subresources() const;
 
-#ifndef NDEBUG
+#if ASSERT_ENABLED
     bool isSubstituteLoadPending(ResourceLoader*) const;
 #endif
     void cancelPendingSubstituteLoad(ResourceLoader*);   
@@ -299,8 +300,8 @@ public:
     void setCustomUserAgent(const String& customUserAgent) { m_customUserAgent = customUserAgent; }
     const String& customUserAgent() const { return m_customUserAgent; }
 
-    void setCustomJavaScriptUserAgentAsSiteSpecificQuirks(const String& customUserAgent) { m_customJavaScriptUserAgentAsSiteSpecificQuirks = customUserAgent; }
-    const String& customJavaScriptUserAgentAsSiteSpecificQuirks() const { return m_customJavaScriptUserAgentAsSiteSpecificQuirks; }
+    void setCustomUserAgentAsSiteSpecificQuirks(const String& customUserAgent) { m_customUserAgentAsSiteSpecificQuirks = customUserAgent; }
+    const String& customUserAgentAsSiteSpecificQuirks() const { return m_customUserAgentAsSiteSpecificQuirks; }
 
     void setCustomNavigatorPlatform(const String& customNavigatorPlatform) { m_customNavigatorPlatform = customNavigatorPlatform; }
     const String& customNavigatorPlatform() const { return m_customNavigatorPlatform; }
@@ -599,7 +600,7 @@ private:
     HashMap<String, Vector<std::pair<String, uint32_t>>> m_pendingContentExtensionDisplayNoneSelectors;
 #endif
     String m_customUserAgent;
-    String m_customJavaScriptUserAgentAsSiteSpecificQuirks;
+    String m_customUserAgentAsSiteSpecificQuirks;
     bool m_allowContentChangeObserverQuirk { false };
     String m_customNavigatorPlatform;
     bool m_userContentExtensionsEnabled { true };
@@ -619,7 +620,7 @@ private:
     Optional<DocumentIdentifier> m_temporaryServiceWorkerClient;
 #endif
 
-#ifndef NDEBUG
+#if ASSERT_ENABLED
     bool m_hasEverBeenAttached { false };
 #endif
 

@@ -34,7 +34,6 @@
 #include "ScriptExecutionContext.h"
 #include "ScriptSourceCode.h"
 #include "WorkerEventLoop.h"
-#include "WorkerEventQueue.h"
 #include <JavaScriptCore/ConsoleMessage.h>
 #include <JavaScriptCore/RuntimeFlags.h>
 #include <wtf/URL.h>
@@ -63,7 +62,6 @@ public:
     EventLoopTaskGroup& eventLoop() final;
 
     const URL& url() const final { return m_code.url(); }
-    String origin() const final;
 
     void evaluate();
 

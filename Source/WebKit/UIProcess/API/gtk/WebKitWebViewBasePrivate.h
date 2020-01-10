@@ -30,13 +30,16 @@
 #include "APIPageConfiguration.h"
 #include "DragAndDropHandler.h"
 #include "GestureController.h"
+#include "InputMethodState.h"
 #include "SameDocumentNavigationType.h"
 #include "ViewGestureController.h"
 #include "ViewSnapshotStore.h"
 #include "WebContextMenuProxyGtk.h"
 #include "WebInspectorProxy.h"
+#include "WebKitInputMethodContext.h"
 #include "WebKitWebViewBase.h"
 #include "WebPageProxy.h"
+#include <wtf/Optional.h>
 
 WebKitWebViewBase* webkitWebViewBaseCreate(const API::PageConfiguration&);
 WebKit::WebPageProxy* webkitWebViewBaseGetPage(WebKitWebViewBase*);
@@ -53,7 +56,7 @@ void webkitWebViewBaseSetInspectorViewSize(WebKitWebViewBase*, unsigned size);
 void webkitWebViewBaseSetActiveContextMenuProxy(WebKitWebViewBase*, WebKit::WebContextMenuProxyGtk*);
 WebKit::WebContextMenuProxyGtk* webkitWebViewBaseGetActiveContextMenuProxy(WebKitWebViewBase*);
 GdkEvent* webkitWebViewBaseTakeContextMenuEvent(WebKitWebViewBase*);
-void webkitWebViewBaseSetInputMethodState(WebKitWebViewBase*, bool enabled);
+void webkitWebViewBaseSetInputMethodState(WebKitWebViewBase*, Optional<WebKit::InputMethodState>&&);
 void webkitWebViewBaseUpdateTextInputState(WebKitWebViewBase*);
 void webkitWebViewBaseSetContentsSize(WebKitWebViewBase*, const WebCore::IntSize&);
 
@@ -104,3 +107,7 @@ int webkitWebViewBaseRenderHostFileDescriptor(WebKitWebViewBase*);
 
 void webkitWebViewBaseRequestPointerLock(WebKitWebViewBase*);
 void webkitWebViewBaseDidLosePointerLock(WebKitWebViewBase*);
+
+void webkitWebViewBaseSetInputMethodContext(WebKitWebViewBase*, WebKitInputMethodContext*);
+WebKitInputMethodContext* webkitWebViewBaseGetInputMethodContext(WebKitWebViewBase*);
+void webkitWebViewBaseSynthesizeCompositionKeyPress(WebKitWebViewBase*, const String& text, Optional<Vector<WebCore::CompositionUnderline>>&&, Optional<WebKit::EditingRange>&&);

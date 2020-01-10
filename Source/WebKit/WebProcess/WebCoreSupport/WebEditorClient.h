@@ -167,11 +167,15 @@ private:
     bool spellingUIIsShowing() final;
     void getGuessesForWord(const String& word, const String& context, const WebCore::VisibleSelection& currentSelection, Vector<String>& guesses) final;
     void willSetInputMethodState() final;
-    void setInputMethodState(bool enabled) final;
+    void setInputMethodState(WebCore::Element*) final;
     void requestCheckingOfString(WebCore::TextCheckingRequest&, const WebCore::VisibleSelection& currentSelection) final;
 
 #if PLATFORM(GTK)
     bool shouldShowUnicodeMenu() final;
+#endif
+
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    void didDispatchInputMethodKeydown(WebCore::KeyboardEvent&) final;
 #endif
 
 #if PLATFORM(IOS_FAMILY)

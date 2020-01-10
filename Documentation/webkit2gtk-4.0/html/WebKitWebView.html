@@ -47,7 +47,7 @@ the title has not been received yet, it will be %NULL. — The central class of 
 <tbody>
 <tr>
 <td class="function_type">
-<a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a> *
+<span class="returnvalue">GtkWidget</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebView.html#webkit-web-view-new" title="webkit_web_view_new ()">webkit_web_view_new</a> <span class="c_punctuation">()</span>
@@ -55,7 +55,7 @@ the title has not been received yet, it will be %NULL. — The central class of 
 </tr>
 <tr>
 <td class="function_type">
-<a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a> *
+<span class="returnvalue">GtkWidget</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebView.html#webkit-web-view-new-with-context" title="webkit_web_view_new_with_context ()">webkit_web_view_new_with_context</a> <span class="c_punctuation">()</span>
@@ -63,7 +63,7 @@ the title has not been received yet, it will be %NULL. — The central class of 
 </tr>
 <tr>
 <td class="function_type">
-<a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a> *
+<span class="returnvalue">GtkWidget</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebView.html#webkit-web-view-new-with-related-view" title="webkit_web_view_new_with_related_view ()">webkit_web_view_new_with_related_view</a> <span class="c_punctuation">()</span>
@@ -71,7 +71,7 @@ the title has not been received yet, it will be %NULL. — The central class of 
 </tr>
 <tr>
 <td class="function_type">
-<a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a> *
+<span class="returnvalue">GtkWidget</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebView.html#webkit-web-view-new-with-settings" title="webkit_web_view_new_with_settings ()">webkit_web_view_new_with_settings</a> <span class="c_punctuation">()</span>
@@ -79,7 +79,7 @@ the title has not been received yet, it will be %NULL. — The central class of 
 </tr>
 <tr>
 <td class="function_type">
-<a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a> *
+<span class="returnvalue">GtkWidget</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitWebView.html#webkit-web-view-new-with-user-content-manager" title="webkit_web_view_new_with_user_content_manager ()">webkit_web_view_new_with_user_content_manager</a> <span class="c_punctuation">()</span>
@@ -628,6 +628,22 @@ the title has not been received yet, it will be %NULL. — The central class of 
 </tr>
 <tr>
 <td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-set-input-method-context" title="webkit_web_view_set_input_method_context ()">webkit_web_view_set_input_method_context</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="returnvalue">WebKitInputMethodContext</span></a> *
+</td>
+<td class="function_name">
+<a class="link" href="WebKitWebView.html#webkit-web-view-get-input-method-context" title="webkit_web_view_get_input_method_context ()">webkit_web_view_get_input_method_context</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
 <a class="link" href="WebKitWebView.html#WebKitJavascriptResult"><span class="returnvalue">WebKitJavascriptResult</span></a> *
 </td>
 <td class="function_name">
@@ -892,7 +908,7 @@ the title has not been received yet, it will be %NULL. — The central class of 
 </tr>
 <tr>
 <td class="signal_type">
-<a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a>*</td>
+<span class="returnvalue">GtkWidget</span>*</td>
 <td class="signal_name"><a class="link" href="WebKitWebView.html#WebKitWebView-create" title="The “create” signal">create</a></td>
 <td class="signal_flags"><a href="../gobject/gobject-Signals.html#G-SIGNAL-RUN-LAST:CAPS">Run Last</a></td>
 </tr>
@@ -1113,8 +1129,8 @@ the title has not been received yet, it will be %NULL. — The central class of 
     <span class="lineart">╰──</span> WebKitWebProcessTerminationReason
     <a href="../gobject/gobject-The-Base-Object-Type.html#GObject-struct">GObject</a>
     <span class="lineart">╰──</span> <a href="../gobject/gobject-The-Base-Object-Type.html#GInitiallyUnowned">GInitiallyUnowned</a>
-        <span class="lineart">╰──</span> <a href="../gtk3/GtkWidget.html#GtkWidget-struct">GtkWidget</a>
-            <span class="lineart">╰──</span> <a href="../gtk3/GtkContainer.html#GtkContainer-struct">GtkContainer</a>
+        <span class="lineart">╰──</span> GtkWidget
+            <span class="lineart">╰──</span> GtkContainer
                 <span class="lineart">╰──</span> WebKitWebViewBase
                     <span class="lineart">╰──</span> WebKitWebView
 </pre>
@@ -1123,7 +1139,7 @@ the title has not been received yet, it will be %NULL. — The central class of 
 <a name="WebKitWebView.implemented-interfaces"></a><h2>Implemented Interfaces</h2>
 <p>
 WebKitWebView implements
- AtkImplementorIface and  <a href="../gtk3/GtkBuildable.html#GtkBuildable-struct">GtkBuildable</a>.</p>
+ AtkImplementorIface and  GtkBuildable.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitWebView.description"></a><h2>Description</h2>
@@ -1133,13 +1149,13 @@ forwarding of events. You can load any URI into the <a class="link" href="WebKit
 a data string. With <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> you can control various aspects
 of the rendering and loading of the content.</p>
 <p>Note that in WebKitGTK, <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> is scrollable by itself, so
-you don't need to embed it in a <a href="../gtk3/GtkScrolledWindow.html#GtkScrolledWindow-struct"><span class="type">GtkScrolledWindow</span></a>.</p>
+you don't need to embed it in a <span class="type">GtkScrolledWindow</span>.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitWebView.functions_details"></a><h2>Functions</h2>
 <div class="refsect2">
 <a name="webkit-web-view-new"></a><h3>webkit_web_view_new ()</h3>
-<pre class="programlisting"><a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a> *
+<pre class="programlisting"><span class="returnvalue">GtkWidget</span> *
 webkit_web_view_new (<em class="parameter"><code><span class="type">void</span></code></em>);</pre>
 <p>Creates a new <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> with the default <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> and
 no <a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a> associated with it.
@@ -1154,7 +1170,7 @@ See also <a class="link" href="WebKitWebView.html#webkit-web-view-new-with-conte
 <hr>
 <div class="refsect2">
 <a name="webkit-web-view-new-with-context"></a><h3>webkit_web_view_new_with_context ()</h3>
-<pre class="programlisting"><a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a> *
+<pre class="programlisting"><span class="returnvalue">GtkWidget</span> *
 webkit_web_view_new_with_context (<em class="parameter"><code><a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> *context</code></em>);</pre>
 <p>Creates a new <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> with the given <a class="link" href="WebKitWebContext.html" title="WebKitWebContext"><span class="type">WebKitWebContext</span></a> and
 no <a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a> associated with it.
@@ -1183,7 +1199,7 @@ See also <a class="link" href="WebKitWebView.html#webkit-web-view-new-with-user-
 <hr>
 <div class="refsect2">
 <a name="webkit-web-view-new-with-related-view"></a><h3>webkit_web_view_new_with_related_view ()</h3>
-<pre class="programlisting"><a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a> *
+<pre class="programlisting"><span class="returnvalue">GtkWidget</span> *
 webkit_web_view_new_with_related_view (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
 <p>Creates a new <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> sharing the same web process with <em class="parameter"><code>web_view</code></em>
 .
@@ -1222,7 +1238,7 @@ and <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span clas
 <hr>
 <div class="refsect2">
 <a name="webkit-web-view-new-with-settings"></a><h3>webkit_web_view_new_with_settings ()</h3>
-<pre class="programlisting"><a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a> *
+<pre class="programlisting"><span class="returnvalue">GtkWidget</span> *
 webkit_web_view_new_with_settings (<em class="parameter"><code><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> *settings</code></em>);</pre>
 <p>Creates a new <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> with the given <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a>.
 See also <a class="link" href="WebKitWebView.html#webkit-web-view-new-with-context" title="webkit_web_view_new_with_context ()"><code class="function">webkit_web_view_new_with_context()</code></a>, and
@@ -1251,7 +1267,7 @@ See also <a class="link" href="WebKitWebView.html#webkit-web-view-new-with-conte
 <hr>
 <div class="refsect2">
 <a name="webkit-web-view-new-with-user-content-manager"></a><h3>webkit_web_view_new_with_user_content_manager ()</h3>
-<pre class="programlisting"><a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a> *
+<pre class="programlisting"><span class="returnvalue">GtkWidget</span> *
 webkit_web_view_new_with_user_content_manager
                                (<em class="parameter"><code><a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a> *user_content_manager</code></em>);</pre>
 <p>Creates a new <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> with the given <a class="link" href="WebKitUserContentManager.html" title="WebKitUserContentManager"><span class="type">WebKitUserContentManager</span></a>.
@@ -3602,7 +3618,7 @@ webkit_web_view_get_snapshot_finish (<em class="parameter"><code><a class="link"
 <a name="webkit-web-view-set-background-color"></a><h3>webkit_web_view_set_background_color ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_web_view_set_background_color (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>,
-                                      <em class="parameter"><code>const <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> *rgba</code></em>);</pre>
+                                      <em class="parameter"><code>const <span class="type">GdkRGBA</span> *rgba</code></em>);</pre>
 <p>Sets the color that will be used to draw the <em class="parameter"><code>web_view</code></em>
  background before
 the actual contents are rendered. Note that if the web page loaded in <em class="parameter"><code>web_view</code></em>
@@ -3612,7 +3628,7 @@ specifies a background color, it will take precedence over the <em class="parame
 By default the <em class="parameter"><code>web_view</code></em>
  background color is opaque white.
 Note that the parent window must have a RGBA visual and
-<a href="../gtk3/GtkWidget.html#GtkWidget--app-paintable"><span class="type">“app-paintable”</span></a> property set to <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> for backgrounds colors to work.</p>
+<span class="type">“app-paintable”</span> property set to <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> for backgrounds colors to work.</p>
 <div class="informalexample">
   <table class="listing_frame" border="0" cellpadding="0" cellspacing="0">
     <tbody>
@@ -3670,7 +3686,7 @@ Note that the parent window must have a RGBA visual and
 </tr>
 <tr>
 <td class="parameter_name"><p>rgba</p></td>
-<td class="parameter_description"><p>a <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a></p></td>
+<td class="parameter_description"><p>a <span class="type">GdkRGBA</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 </tbody>
@@ -3683,7 +3699,7 @@ Note that the parent window must have a RGBA visual and
 <a name="webkit-web-view-get-background-color"></a><h3>webkit_web_view_get_background_color ()</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_web_view_get_background_color (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>,
-                                      <em class="parameter"><code><a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> *rgba</code></em>);</pre>
+                                      <em class="parameter"><code><span class="type">GdkRGBA</span> *rgba</code></em>);</pre>
 <p>Gets the color that is used to draw the <em class="parameter"><code>web_view</code></em>
  background before
 the actual contents are rendered.
@@ -3704,7 +3720,7 @@ For more information see also <a class="link" href="WebKitWebView.html#webkit-we
 </tr>
 <tr>
 <td class="parameter_name"><p>rgba</p></td>
-<td class="parameter_description"><p>a <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> to fill in with the background color. </p></td>
+<td class="parameter_description"><p>a <span class="type">GdkRGBA</span> to fill in with the background color. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="Parameter for returning results. Default is transfer full."><span class="acronym">out</span></acronym>]</span></td>
 </tr>
 </tbody>
@@ -3977,6 +3993,70 @@ webkit_web_view_send_message_to_page_finish
 <a name="webkit-web-view-send-message-to-page-finish.returns"></a><h4>Returns</h4>
 <p>a <a class="link" href="WebKitUserMessage.html" title="WebKitUserMessage"><span class="type">WebKitUserMessage</span></a> with the reply or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> in case of error. </p>
 <p><span class="annotation">[<acronym title="Free data after the code is done."><span class="acronym">transfer full</span></acronym>]</span></p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-set-input-method-context"></a><h3>webkit_web_view_set_input_method_context ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_web_view_set_input_method_context
+                               (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>,
+                                <em class="parameter"><code><a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> *context</code></em>);</pre>
+<p>Set the <a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> to be used by <em class="parameter"><code>web_view</code></em>
+, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> to not use any input method.
+Note that the same <a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> can't be set on more than one <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> at the same time.</p>
+<div class="refsect3">
+<a name="webkit-web-view-set-input-method-context.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>context</p></td>
+<td class="parameter_description"><p>the <a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> to set, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
+<td class="parameter_annotations"><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-web-view-get-input-method-context"></a><h3>webkit_web_view_get_input_method_context ()</h3>
+<pre class="programlisting"><a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="returnvalue">WebKitInputMethodContext</span></a> *
+webkit_web_view_get_input_method_context
+                               (<em class="parameter"><code><a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> *web_view</code></em>);</pre>
+<p>Get the <a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> currently in use by <em class="parameter"><code>web_view</code></em>
+, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> if no input method is being used.</p>
+<div class="refsect3">
+<a name="webkit-web-view-get-input-method-context.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>web_view</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-web-view-get-input-method-context.returns"></a><h4>Returns</h4>
+<p>a <a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a>, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p>
+<p><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>][<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
@@ -5203,7 +5283,7 @@ destroy the <a class="link" href="WebKitWebView.html" title="The main frame docu
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 user_function (<a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>       *web_view,
                <a class="link" href="WebKitContextMenu.html" title="WebKitContextMenu"><span class="type">WebKitContextMenu</span></a>   *context_menu,
-               <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a>            *event,
+               <span class="type">GdkEvent</span>            *event,
                <a class="link" href="WebKitHitTestResult.html" title="WebKitHitTestResult"><span class="type">WebKitHitTestResult</span></a> *hit_test_result,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>             user_data)</pre>
 <p>Emitted when a context menu is about to be displayed to give the application
@@ -5226,7 +5306,7 @@ or build its own context menu.</p>
  To build your own menu, you can remove all items from the proposed menu with
  <a class="link" href="WebKitContextMenu.html#webkit-context-menu-remove-all" title="webkit_context_menu_remove_all ()"><code class="function">webkit_context_menu_remove_all()</code></a>, add your own items and return <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a> so
  that the menu will be shown. You can also ignore the proposed <a class="link" href="WebKitContextMenu.html" title="WebKitContextMenu"><span class="type">WebKitContextMenu</span></a>,
- build your own <a href="../gtk3/GtkMenu.html#GtkMenu-struct"><span class="type">GtkMenu</span></a> and return <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> to prevent the proposed menu from being shown.
+ build your own <span class="type">GtkMenu</span> and return <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> to prevent the proposed menu from being shown.
 </p></li>
 <li class="listitem"><p>
  If you just want the default menu to be shown always, simply don't connect to this
@@ -5237,15 +5317,15 @@ or build its own context menu.</p>
  is expected to be one of the following types:</p>
 <div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
 <li class="listitem"><p>
-a <a href="../gdk3/gdk3-Event-Structures.html#GdkEventButton"><span class="type">GdkEventButton</span></a> of type <a href="../gdk3/gdk3-Events.html#GDK-BUTTON-PRESS:CAPS"><code class="literal">GDK_BUTTON_PRESS</code></a> when the context menu
+a <span class="type">GdkEventButton</span> of type <code class="literal">GDK_BUTTON_PRESS</code> when the context menu
 was triggered with mouse.
 </p></li>
 <li class="listitem"><p>
-a <a href="../gdk3/gdk3-Event-Structures.html#GdkEventKey"><span class="type">GdkEventKey</span></a> of type <a href="../gdk3/gdk3-Events.html#GDK-KEY-PRESS:CAPS"><code class="literal">GDK_KEY_PRESS</code></a> if the keyboard was used to show
+a <span class="type">GdkEventKey</span> of type <code class="literal">GDK_KEY_PRESS</code> if the keyboard was used to show
 the menu.
 </p></li>
 <li class="listitem"><p>
-a generic <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a> of type <a href="../gdk3/gdk3-Events.html#GDK-NOTHING:CAPS"><code class="literal">GDK_NOTHING</code></a> when the <a href="../gtk3/GtkWidget.html#GtkWidget-popup-menu"><span class="type">“popup-menu”</span></a>
+a generic <span class="type">GdkEvent</span> of type <code class="literal">GDK_NOTHING</code> when the <span class="type">“popup-menu”</span>
 signal was used to show the context menu.
 </p></li>
 </ul></div>
@@ -5276,7 +5356,7 @@ during the signal emission.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>event</p></td>
-<td class="parameter_description"><p>the <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a> that triggered the context menu</p></td>
+<td class="parameter_description"><p>the <span class="type">GdkEvent</span> that triggered the context menu</p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -5334,7 +5414,7 @@ to notify that the context menu is dismissed.</p>
 <hr>
 <div class="refsect2">
 <a name="WebKitWebView-create"></a><h3>The <code class="literal">“create”</code> signal</h3>
-<pre class="programlisting"><a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a>*
+<pre class="programlisting"><span class="returnvalue">GtkWidget</span>*
 user_function (<a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>          *web_view,
                <a class="link" href="WebKitNavigationAction.html" title="WebKitNavigationAction"><span class="type">WebKitNavigationAction</span></a> *navigation_action,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                user_data)</pre>
@@ -5887,7 +5967,7 @@ on the current mouse coordinates and the result is passed in the
 <em class="parameter"><code>hit_test_result</code></em>
  argument. The <em class="parameter"><code>modifiers</code></em>
  argument is a bitmask of
-<a href="../gdk3/gdk3-Windows.html#GdkModifierType"><span class="type">GdkModifierType</span></a> flags indicating the state of modifier keys.
+<span class="type">GdkModifierType</span> flags indicating the state of modifier keys.
 The signal is emitted again when the mouse is moved out of the
 current element with a new <em class="parameter"><code>hit_test_result</code></em>
 .</p>
@@ -5912,7 +5992,7 @@ current element with a new <em class="parameter"><code>hit_test_result</code></e
 </tr>
 <tr>
 <td class="parameter_name"><p>modifiers</p></td>
-<td class="parameter_description"><p>a bitmask of <a href="../gdk3/gdk3-Windows.html#GdkModifierType"><span class="type">GdkModifierType</span></a></p></td>
+<td class="parameter_description"><p>a bitmask of <span class="type">GdkModifierType</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -6232,7 +6312,7 @@ argument.</p>
 <p>It is possible to handle this request asynchronously by increasing the
 reference count of the request.</p>
 <p>The default signal handler will asynchronously run a regular
-<a href="../gtk3/GtkColorChooser.html#GtkColorChooser-struct"><span class="type">GtkColorChooser</span></a> for the user to interact with.</p>
+<span class="type">GtkColorChooser</span> for the user to interact with.</p>
 <div class="refsect3">
 <a name="WebKitWebView-run-color-chooser.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -6285,7 +6365,7 @@ instance of the <a class="link" href="WebKitFileChooserRequest.html" title="WebK
 
 argument.</p>
 <p>The default signal handler will asynchronously run a regular
-<a href="../gtk3/GtkFileChooserDialog.html#GtkFileChooserDialog-struct"><span class="type">GtkFileChooserDialog</span></a> for the user to interact with.</p>
+<span class="type">GtkFileChooserDialog</span> for the user to interact with.</p>
 <div class="refsect3">
 <a name="WebKitWebView-run-file-chooser.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -6442,8 +6522,8 @@ support for it.</p>
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 user_function (<a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>    *web_view,
                <a class="link" href="WebKitOptionMenu.html" title="WebKitOptionMenu"><span class="type">WebKitOptionMenu</span></a> *menu,
-               <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a>         *event,
-               <a href="../gdk3/gdk3-Points-Rectangles-and-Regions.html#GdkRectangle"><span class="type">GdkRectangle</span></a>     *rectangle,
+               <span class="type">GdkEvent</span>         *event,
+               <span class="type">GdkRectangle</span>     *rectangle,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>          user_data)</pre>
 <p>This signal is emitted when a select element in <em class="parameter"><code>web_view</code></em>
  needs to display a
@@ -6454,10 +6534,10 @@ the details of all items that should be displayed. The area of the element in th
  parameter, it can be used to position the
 menu. If this was triggered by a user interaction, like a mouse click,
 <em class="parameter"><code>event</code></em>
- parameter provides the <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a>.
+ parameter provides the <span class="type">GdkEvent</span>.
 To handle this signal asynchronously you should keep a ref of the <em class="parameter"><code>menu</code></em>
 .</p>
-<p>The default signal handler will pop up a <a href="../gtk3/GtkMenu.html#GtkMenu-struct"><span class="type">GtkMenu</span></a>.</p>
+<p>The default signal handler will pop up a <span class="type">GtkMenu</span>.</p>
 <div class="refsect3">
 <a name="WebKitWebView-show-option-menu.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -6479,7 +6559,7 @@ To handle this signal asynchronously you should keep a ref of the <em class="par
 </tr>
 <tr>
 <td class="parameter_name"><p>event</p></td>
-<td class="parameter_description"><p>the <a href="../gdk3/gdk3-Event-Structures.html#GdkEvent"><span class="type">GdkEvent</span></a> that triggered the menu, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a></p></td>
+<td class="parameter_description"><p>the <span class="type">GdkEvent</span> that triggered the menu, or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>

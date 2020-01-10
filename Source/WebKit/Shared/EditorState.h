@@ -86,7 +86,7 @@ struct EditorState {
 
     struct PostLayoutData {
         uint32_t typingAttributes { AttributeNone };
-#if PLATFORM(IOS_FAMILY) || PLATFORM(GTK)
+#if PLATFORM(IOS_FAMILY) || PLATFORM(GTK) || PLATFORM(WPE)
         WebCore::IntRect caretRectAtStart;
 #endif
 #if PLATFORM(COCOA)
@@ -119,6 +119,10 @@ struct EditorState {
         uint64_t candidateRequestStartPosition { 0 };
         String paragraphContextForCandidateRequest;
         String stringForCandidateRequest;
+#endif
+#if PLATFORM(GTK) || PLATFORM(WPE)
+        String paragraphContext;
+        uint64_t paragraphContextCursorPosition { 0 };
 #endif
 
         Optional<WebCore::FontAttributes> fontAttributes;

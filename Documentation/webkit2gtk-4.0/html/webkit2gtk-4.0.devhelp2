@@ -56,6 +56,7 @@
       <sub name="Geolocation manager" link="webkit2gtk-4.0-Geolocation-manager.html"/>
       <sub name="WebKitUserMessage" link="WebKitUserMessage.html"/>
       <sub name="WebKitPointerLockPermissionRequest" link="WebKitPointerLockPermissionRequest.html"/>
+      <sub name="WebKitInputMethodContext" link="WebKitInputMethodContext.html"/>
     </sub>
     <sub name="Web Extensions" link="ch02.html">
       <sub name="WebKitWebExtension" link="WebKitWebExtension.html"/>
@@ -219,6 +220,8 @@
     <keyword type="function" name="webkit_web_view_get_main_resource ()" link="WebKitWebView.html#webkit-web-view-get-main-resource"/>
     <keyword type="function" name="webkit_web_view_send_message_to_page ()" link="WebKitWebView.html#webkit-web-view-send-message-to-page" since="2.28"/>
     <keyword type="function" name="webkit_web_view_send_message_to_page_finish ()" link="WebKitWebView.html#webkit-web-view-send-message-to-page-finish" since="2.28"/>
+    <keyword type="function" name="webkit_web_view_set_input_method_context ()" link="WebKitWebView.html#webkit-web-view-set-input-method-context" since="2.28"/>
+    <keyword type="function" name="webkit_web_view_get_input_method_context ()" link="WebKitWebView.html#webkit-web-view-get-input-method-context" since="2.28"/>
     <keyword type="function" name="webkit_javascript_result_ref ()" link="WebKitWebView.html#webkit-javascript-result-ref"/>
     <keyword type="function" name="webkit_javascript_result_unref ()" link="WebKitWebView.html#webkit-javascript-result-unref"/>
     <keyword type="function" name="webkit_javascript_result_get_global_context ()" link="WebKitWebView.html#webkit-javascript-result-get-global-context" deprecated="2.22: Use jsc_value_get_context() instead."/>
@@ -1029,6 +1032,33 @@
     <keyword type="property" name="The “name” property" link="WebKitUserMessage.html#WebKitUserMessage--name"/>
     <keyword type="property" name="The “parameters” property" link="WebKitUserMessage.html#WebKitUserMessage--parameters"/>
     <keyword type="struct" name="struct WebKitPointerLockPermissionRequest" link="WebKitPointerLockPermissionRequest.html#WebKitPointerLockPermissionRequest-struct"/>
+    <keyword type="function" name="webkit_input_method_context_set_enable_preedit ()" link="WebKitInputMethodContext.html#webkit-input-method-context-set-enable-preedit" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_context_get_preedit ()" link="WebKitInputMethodContext.html#webkit-input-method-context-get-preedit" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_context_filter_key_event ()" link="WebKitInputMethodContext.html#webkit-input-method-context-filter-key-event" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_context_notify_focus_in ()" link="WebKitInputMethodContext.html#webkit-input-method-context-notify-focus-in" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_context_notify_focus_out ()" link="WebKitInputMethodContext.html#webkit-input-method-context-notify-focus-out" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_context_notify_cursor_area ()" link="WebKitInputMethodContext.html#webkit-input-method-context-notify-cursor-area" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_context_notify_surrounding ()" link="WebKitInputMethodContext.html#webkit-input-method-context-notify-surrounding" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_context_reset ()" link="WebKitInputMethodContext.html#webkit-input-method-context-reset" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_context_get_input_purpose ()" link="WebKitInputMethodContext.html#webkit-input-method-context-get-input-purpose" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_context_set_input_purpose ()" link="WebKitInputMethodContext.html#webkit-input-method-context-set-input-purpose" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_context_get_input_hints ()" link="WebKitInputMethodContext.html#webkit-input-method-context-get-input-hints" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_context_set_input_hints ()" link="WebKitInputMethodContext.html#webkit-input-method-context-set-input-hints"/>
+    <keyword type="function" name="webkit_input_method_underline_new ()" link="WebKitInputMethodContext.html#webkit-input-method-underline-new" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_underline_copy ()" link="WebKitInputMethodContext.html#webkit-input-method-underline-copy" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_underline_free ()" link="WebKitInputMethodContext.html#webkit-input-method-underline-free" since="2.28"/>
+    <keyword type="function" name="webkit_input_method_underline_set_color ()" link="WebKitInputMethodContext.html#webkit-input-method-underline-set-color" since="2.28"/>
+    <keyword type="struct" name="struct WebKitInputMethodContext" link="WebKitInputMethodContext.html#WebKitInputMethodContext-struct"/>
+    <keyword type="enum" name="enum WebKitInputPurpose" link="WebKitInputMethodContext.html#WebKitInputPurpose" since="2.28"/>
+    <keyword type="enum" name="enum WebKitInputHints" link="WebKitInputMethodContext.html#WebKitInputHints" since="2.28"/>
+    <keyword type="struct" name="WebKitInputMethodUnderline" link="WebKitInputMethodContext.html#WebKitInputMethodUnderline-struct"/>
+    <keyword type="property" name="The “input-hints” property" link="WebKitInputMethodContext.html#WebKitInputMethodContext--input-hints"/>
+    <keyword type="property" name="The “input-purpose” property" link="WebKitInputMethodContext.html#WebKitInputMethodContext--input-purpose"/>
+    <keyword type="signal" name="The “committed” signal" link="WebKitInputMethodContext.html#WebKitInputMethodContext-committed"/>
+    <keyword type="signal" name="The “delete-surrounding” signal" link="WebKitInputMethodContext.html#WebKitInputMethodContext-delete-surrounding"/>
+    <keyword type="signal" name="The “preedit-changed” signal" link="WebKitInputMethodContext.html#WebKitInputMethodContext-preedit-changed"/>
+    <keyword type="signal" name="The “preedit-finished” signal" link="WebKitInputMethodContext.html#WebKitInputMethodContext-preedit-finished"/>
+    <keyword type="signal" name="The “preedit-started” signal" link="WebKitInputMethodContext.html#WebKitInputMethodContext-preedit-started"/>
     <keyword type="function" name="WebKitWebExtensionInitializeFunction ()" link="WebKitWebExtension.html#WebKitWebExtensionInitializeFunction"/>
     <keyword type="function" name="WebKitWebExtensionInitializeWithUserDataFunction ()" link="WebKitWebExtension.html#WebKitWebExtensionInitializeWithUserDataFunction" since="2.4"/>
     <keyword type="function" name="webkit_web_extension_get_page ()" link="WebKitWebExtension.html#webkit-web-extension-get-page"/>
@@ -1261,6 +1291,20 @@
     <keyword type="constant" name="WEBKIT_AUTOMATION_BROWSING_CONTEXT_PRESENTATION_WINDOW" link="WebKitAutomationSession.html#WEBKIT-AUTOMATION-BROWSING-CONTEXT-PRESENTATION-WINDOW:CAPS"/>
     <keyword type="constant" name="WEBKIT_AUTOMATION_BROWSING_CONTEXT_PRESENTATION_TAB" link="WebKitAutomationSession.html#WEBKIT-AUTOMATION-BROWSING-CONTEXT-PRESENTATION-TAB:CAPS"/>
     <keyword type="constant" name="WEBKIT_USER_MESSAGE_UNHANDLED_MESSAGE" link="WebKitUserMessage.html#WEBKIT-USER-MESSAGE-UNHANDLED-MESSAGE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_PURPOSE_FREE_FORM" link="WebKitInputMethodContext.html#WEBKIT-INPUT-PURPOSE-FREE-FORM:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_PURPOSE_DIGITS" link="WebKitInputMethodContext.html#WEBKIT-INPUT-PURPOSE-DIGITS:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_PURPOSE_NUMBER" link="WebKitInputMethodContext.html#WEBKIT-INPUT-PURPOSE-NUMBER:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_PURPOSE_PHONE" link="WebKitInputMethodContext.html#WEBKIT-INPUT-PURPOSE-PHONE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_PURPOSE_URL" link="WebKitInputMethodContext.html#WEBKIT-INPUT-PURPOSE-URL:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_PURPOSE_EMAIL" link="WebKitInputMethodContext.html#WEBKIT-INPUT-PURPOSE-EMAIL:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_PURPOSE_PASSWORD" link="WebKitInputMethodContext.html#WEBKIT-INPUT-PURPOSE-PASSWORD:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_HINT_NONE" link="WebKitInputMethodContext.html#WEBKIT-INPUT-HINT-NONE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_HINT_SPELLCHECK" link="WebKitInputMethodContext.html#WEBKIT-INPUT-HINT-SPELLCHECK:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_HINT_LOWERCASE" link="WebKitInputMethodContext.html#WEBKIT-INPUT-HINT-LOWERCASE:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_HINT_UPPERCASE_CHARS" link="WebKitInputMethodContext.html#WEBKIT-INPUT-HINT-UPPERCASE-CHARS:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_HINT_UPPERCASE_WORDS" link="WebKitInputMethodContext.html#WEBKIT-INPUT-HINT-UPPERCASE-WORDS:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_HINT_UPPERCASE_SENTENCES" link="WebKitInputMethodContext.html#WEBKIT-INPUT-HINT-UPPERCASE-SENTENCES:CAPS"/>
+    <keyword type="constant" name="WEBKIT_INPUT_HINT_INHIBIT_OSK" link="WebKitInputMethodContext.html#WEBKIT-INPUT-HINT-INHIBIT-OSK:CAPS"/>
     <keyword type="constant" name="WEBKIT_FORM_SUBMISSION_WILL_SEND_DOM_EVENT" link="WebKitWebPage.html#WEBKIT-FORM-SUBMISSION-WILL-SEND-DOM-EVENT:CAPS"/>
     <keyword type="constant" name="WEBKIT_FORM_SUBMISSION_WILL_COMPLETE" link="WebKitWebPage.html#WEBKIT-FORM-SUBMISSION-WILL-COMPLETE:CAPS"/>
     <keyword type="constant" name="WEBKIT_CONSOLE_MESSAGE_SOURCE_JAVASCRIPT" link="WebKitConsoleMessage.html#WEBKIT-CONSOLE-MESSAGE-SOURCE-JAVASCRIPT:CAPS"/>

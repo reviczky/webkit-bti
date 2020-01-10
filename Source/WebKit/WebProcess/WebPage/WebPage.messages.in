@@ -204,7 +204,7 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
     GetSelectionAsWebArchiveData(WebKit::CallbackID callbackID)
     GetSourceForFrame(WebCore::FrameIdentifier frameID, WebKit::CallbackID callbackID)
     GetWebArchiveOfFrame(WebCore::FrameIdentifier frameID, WebKit::CallbackID callbackID)
-    RunJavaScriptInMainFrameScriptWorld(String script, bool forceUserGesture, Optional<String> worldName, WebKit::CallbackID callbackID)
+    RunJavaScriptInMainFrameScriptWorld(struct WebCore::RunJavaScriptParameters parameters, Optional<String> worldName, WebKit::CallbackID callbackID)
     RunJavaScriptInFrame(WebCore::FrameIdentifier frameID, String script, bool forceUserGesture, WebKit::CallbackID callbackID)
     ForceRepaint(WebKit::CallbackID callbackID)
 
@@ -234,7 +234,7 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
     ResumeActiveDOMObjectsAndAnimations()
 
     Close()
-    TryClose()
+    TryClose() -> (bool shouldClose) Async
 
     SetEditable(bool editable)
     ValidateCommand(String name, WebKit::CallbackID callbackID)
@@ -359,7 +359,7 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
 
 #if ENABLE(MEDIA_STREAM)
     # MediaSteam
-    UserMediaAccessWasGranted(uint64_t userMediaID, WebCore::CaptureDevice audioDevice, WebCore::CaptureDevice videoDevice, String mediaDeviceIdentifierHashSalt) -> () Async
+    UserMediaAccessWasGranted(uint64_t userMediaID, WebCore::CaptureDevice audioDevice, WebCore::CaptureDevice videoDevice, String mediaDeviceIdentifierHashSalt, WebKit::SandboxExtension::Handle sandboxExtensionHandle) -> () Async
     UserMediaAccessWasDenied(uint64_t userMediaID, uint64_t reason, String invalidConstraint)
     CaptureDevicesChanged()
 #endif
@@ -379,6 +379,9 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
 
     # Notification
     DidReceiveNotificationPermissionDecision(uint64_t notificationID, bool allowed)
+
+    FreezeLayerTreeDueToSwipeAnimation()
+    UnfreezeLayerTreeDueToSwipeAnimation()
 
     # Printing.
     BeginPrinting(WebCore::FrameIdentifier frameID, struct WebKit::PrintInfo printInfo)
@@ -410,10 +413,12 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
     SetCanRunBeforeUnloadConfirmPanel(bool canRunBeforeUnloadConfirmPanel)
     SetCanRunModal(bool canRunModal)
 
-#if PLATFORM(GTK)
-    SetComposition(String text, Vector<WebCore::CompositionUnderline> underlines, struct WebKit::EditingRange selectionRange)
-    ConfirmComposition(String text)
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    CancelComposition(String text)
+    DeleteSurrounding(int64_t offset, unsigned characterCount)
+#endif
 
+#if PLATFORM(GTK)
     CollapseSelectionInFrame(WebCore::FrameIdentifier frameID)
 
     GetCenterForZoomGesture(WebCore::IntPoint centerInViewCoordinates) -> (WebCore::IntPoint center) Synchronous
@@ -583,4 +588,6 @@ GenerateSyntheticEditingCommand(enum:uint8_t WebKit::SyntheticEditingCommandType
     CompleteTextManipulation(WebCore::TextManipulationController::ItemIdentifier itemID, Vector<WebCore::TextManipulationController::ManipulationToken> tokens) -> (enum:uint8_t WebCore::TextManipulationController::ManipulationResult result) Async
     
     SetOverriddenMediaType(String mediaType)
+
+    SetHasResourceLoadClient(bool has)
 }

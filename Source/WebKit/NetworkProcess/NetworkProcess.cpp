@@ -65,6 +65,7 @@
 #include "WebsiteDataStore.h"
 #include "WebsiteDataStoreParameters.h"
 #include "WebsiteDataType.h"
+#include <WebCore/ClientOrigin.h>
 #include <WebCore/CookieJar.h>
 #include <WebCore/DNS.h>
 #include <WebCore/DeprecatedGlobalSettings.h>
@@ -316,6 +317,9 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
     auto sessionID = parameters.defaultDataStoreParameters.networkSessionParameters.sessionID;
     setSession(sessionID, NetworkSession::create(*this, WTFMove(parameters.defaultDataStoreParameters.networkSessionParameters)));
 
+    SandboxExtension::consumePermanently(parameters.defaultDataStoreParameters.cacheStorageDirectoryExtensionHandle);
+    addSessionStorageQuotaManager(sessionID, parameters.defaultDataStoreParameters.perOriginStorageQuota, parameters.defaultDataStoreParameters.perThirdPartyOriginStorageQuota, parameters.defaultDataStoreParameters.cacheStorageDirectory, parameters.defaultDataStoreParameters.cacheStorageDirectoryExtensionHandle);
+
 #if ENABLE(INDEXED_DATABASE)
     addIndexedDatabaseSession(sessionID, parameters.defaultDataStoreParameters.indexedDatabaseDirectory, parameters.defaultDataStoreParameters.indexedDatabaseDirectoryExtensionHandle);
 #endif
@@ -326,7 +330,6 @@ void NetworkProcess::initializeNetworkProcess(NetworkProcessCreationParameters&&
         addServiceWorkerSession(PAL::SessionID::defaultSessionID(), serviceWorkerProcessTerminationDelayEnabled, WTFMove(parameters.serviceWorkerRegistrationDirectory), parameters.serviceWorkerRegistrationDirectoryExtensionHandle);
     }
 #endif
-    initializeStorageQuota(parameters.defaultDataStoreParameters);
 
     m_storageManagerSet->add(sessionID, parameters.defaultDataStoreParameters.localStorageDirectory, parameters.defaultDataStoreParameters.localStorageDirectoryExtensionHandle);
 
@@ -365,40 +368,9 @@ void NetworkProcess::initializeConnection(IPC::Connection* connection)
         supplement->initializeConnection(connection);
 }
 
-static inline Optional<std::pair<IPC::Connection::Identifier, IPC::Attachment>> createIPCConnectionToWebProcess()
-{
-#if USE(UNIX_DOMAIN_SOCKETS)
-    IPC::Connection::SocketPair socketPair = IPC::Connection::createPlatformConnection();
-    return std::make_pair(socketPair.server, IPC::Attachment { socketPair.client });
-#elif OS(DARWIN)
-    // Create the listening port.
-    mach_port_t listeningPort = MACH_PORT_NULL;
-    auto kr = mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &listeningPort);
-    if (kr != KERN_SUCCESS) {
-        RELEASE_LOG_ERROR(Process, "NetworkProcess::createNetworkConnectionToWebProcess: Could not allocate mach port, error %x", kr);
-        CRASH();
-    }
-    if (!MACH_PORT_VALID(listeningPort)) {
-        RELEASE_LOG_ERROR(Process, "NetworkProcess::createNetworkConnectionToWebProcess: Could not allocate mach port, returned port was invalid");
-        CRASH();
-    }
-    return std::make_pair(IPC::Connection::Identifier { listeningPort }, IPC::Attachment { listeningPort, MACH_MSG_TYPE_MAKE_SEND });
-#elif OS(WINDOWS)
-    IPC::Connection::Identifier serverIdentifier, clientIdentifier;
-    if (!IPC::Connection::createServerAndClientIdentifiers(serverIdentifier, clientIdentifier)) {
-        LOG_ERROR("Failed to create server and client identifiers");
-        CRASH();
-    }
-    return std::make_pair(serverIdentifier, IPC::Attachment { clientIdentifier });
-#else
-    notImplemented();
-    return { };
-#endif
-}
-
 void NetworkProcess::createNetworkConnectionToWebProcess(ProcessIdentifier identifier, PAL::SessionID sessionID, CompletionHandler<void(Optional<IPC::Attachment>&&)>&& completionHandler)
 {
-    auto ipcConnection = createIPCConnectionToWebProcess();
+    auto ipcConnection = createIPCConnectionPair();
     if (!ipcConnection) {
         completionHandler({ });
         return;
@@ -415,6 +387,8 @@ void NetworkProcess::createNetworkConnectionToWebProcess(ProcessIdentifier ident
     connection.setOnLineState(NetworkStateNotifier::singleton().onLine());
 
     m_storageManagerSet->addConnection(connection.connection());
+
+    webIDBServer(sessionID).addConnection(connection.connection(), identifier);
 }
 
 void NetworkProcess::clearCachedCredentials()
@@ -434,28 +408,39 @@ void NetworkProcess::clearCachedCredentials()
 
 void NetworkProcess::addWebsiteDataStore(WebsiteDataStoreParameters&& parameters)
 {
+    auto sessionID = parameters.networkSessionParameters.sessionID;
+
+    addSessionStorageQuotaManager(sessionID, parameters.perOriginStorageQuota, parameters.perThirdPartyOriginStorageQuota, parameters.cacheStorageDirectory, parameters.cacheStorageDirectoryExtensionHandle);
+
 #if ENABLE(INDEXED_DATABASE)
-    addIndexedDatabaseSession(parameters.networkSessionParameters.sessionID, parameters.indexedDatabaseDirectory, parameters.indexedDatabaseDirectoryExtensionHandle);
+    addIndexedDatabaseSession(sessionID, parameters.indexedDatabaseDirectory, parameters.indexedDatabaseDirectoryExtensionHandle);
 #endif
 
 #if ENABLE(SERVICE_WORKER)
     if (parentProcessHasServiceWorkerEntitlement())
-        addServiceWorkerSession(parameters.networkSessionParameters.sessionID, parameters.serviceWorkerProcessTerminationDelayEnabled, WTFMove(parameters.serviceWorkerRegistrationDirectory), parameters.serviceWorkerRegistrationDirectoryExtensionHandle);
+        addServiceWorkerSession(sessionID, parameters.serviceWorkerProcessTerminationDelayEnabled, WTFMove(parameters.serviceWorkerRegistrationDirectory), parameters.serviceWorkerRegistrationDirectoryExtensionHandle);
 #endif
 
-    m_storageManagerSet->add(parameters.networkSessionParameters.sessionID, parameters.localStorageDirectory, parameters.localStorageDirectoryExtensionHandle);
-
-    initializeStorageQuota(parameters);
+    m_storageManagerSet->add(sessionID, parameters.localStorageDirectory, parameters.localStorageDirectoryExtensionHandle);
 
     RemoteNetworkingContext::ensureWebsiteDataStoreSession(*this, WTFMove(parameters));
 }
 
-void NetworkProcess::initializeStorageQuota(const WebsiteDataStoreParameters& parameters)
+void NetworkProcess::addSessionStorageQuotaManager(PAL::SessionID sessionID, uint64_t defaultQuota, uint64_t defaultThirdPartyQuota, const String& cacheRootPath, SandboxExtension::Handle& cacheRootPathHandle)
 {
-    auto& managers =  m_storageQuotaManagers.ensure(parameters.networkSessionParameters.sessionID, [] {
-        return StorageQuotaManagers { };
-    }).iterator->value;
-    managers.setDefaultQuotas(parameters.perOriginStorageQuota, parameters.perThirdPartyOriginStorageQuota);
+    LockHolder locker(m_sessionStorageQuotaManagersLock);
+    auto isNewEntry = m_sessionStorageQuotaManagers.ensure(sessionID, [defaultQuota, defaultThirdPartyQuota, &cacheRootPath] {
+        return makeUnique<SessionStorageQuotaManager>(cacheRootPath, defaultQuota, defaultThirdPartyQuota);
+    }).isNewEntry;
+    if (isNewEntry)
+        SandboxExtension::consumePermanently(cacheRootPathHandle);
+}
+
+void NetworkProcess::removeSessionStorageQuotaManager(PAL::SessionID sessionID)
+{
+    LockHolder locker(m_sessionStorageQuotaManagersLock);
+    ASSERT(m_sessionStorageQuotaManagers.contains(sessionID));
+    m_sessionStorageQuotaManagers.remove(sessionID);
 }
 
 void NetworkProcess::forEachNetworkSession(const Function<void(NetworkSession&)>& functor)
@@ -576,8 +561,6 @@ void NetworkProcess::destroySession(PAL::SessionID sessionID)
 #endif
 
     m_storageManagerSet->remove(sessionID);
-
-    m_storageQuotaManagers.remove(sessionID);
 }
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
@@ -766,6 +749,19 @@ void NetworkProcess::scheduleClearInMemoryAndPersistent(PAL::SessionID sessionID
     } else {
         ASSERT_NOT_REACHED();
         completionHandler();
+    }
+}
+
+void NetworkProcess::getResourceLoadStatisticsDataSummary(PAL::SessionID sessionID, CompletionHandler<void(Vector<WebResourceLoadStatisticsStore::ThirdPartyData>&&)>&& completionHandler)
+{
+    if (auto* networkSession = this->networkSession(sessionID)) {
+        if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
+            resourceLoadStatistics->aggregatedThirdPartyData(WTFMove(completionHandler));
+        else
+            completionHandler({ });
+    } else {
+        ASSERT_NOT_REACHED();
+        completionHandler({ });
     }
 }
 
@@ -988,11 +984,11 @@ void NetworkProcess::getAllStorageAccessEntries(PAL::SessionID sessionID, Comple
     }
 }
 
-void NetworkProcess::logFrameNavigation(PAL::SessionID sessionID, const RegistrableDomain& targetDomain, const RegistrableDomain& topFrameDomain, const RegistrableDomain& sourceDomain, bool isRedirect, bool isMainFrame)
+void NetworkProcess::logFrameNavigation(PAL::SessionID sessionID, const RegistrableDomain& targetDomain, const RegistrableDomain& topFrameDomain, const RegistrableDomain& sourceDomain, bool isRedirect, bool isMainFrame, Seconds delayAfterMainFrameDocumentLoad, bool wasPotentiallyInitiatedByUser)
 {
     if (auto* networkSession = this->networkSession(sessionID)) {
         if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
-            resourceLoadStatistics->logFrameNavigation(targetDomain, topFrameDomain, sourceDomain, isRedirect, isMainFrame);
+            resourceLoadStatistics->logFrameNavigation(targetDomain, topFrameDomain, sourceDomain, isRedirect, isMainFrame, delayAfterMainFrameDocumentLoad, wasPotentiallyInitiatedByUser);
     } else
         ASSERT_NOT_REACHED();
 }
@@ -1261,6 +1257,19 @@ void NetworkProcess::setShouldBlockThirdPartyCookiesForTesting(PAL::SessionID se
         ASSERT_NOT_REACHED();
     completionHandler();
 }
+
+void NetworkProcess::setFirstPartyWebsiteDataRemovalModeForTesting(PAL::SessionID sessionID, WebCore::FirstPartyWebsiteDataRemovalMode mode, CompletionHandler<void()>&& completionHandler)
+{
+    if (auto* networkSession = this->networkSession(sessionID)) {
+        if (auto* resourceLoadStatistics = networkSession->resourceLoadStatistics())
+            resourceLoadStatistics->setFirstPartyWebsiteDataRemovalMode(mode, WTFMove(completionHandler));
+        else
+            completionHandler();
+    } else {
+        ASSERT_NOT_REACHED();
+        completionHandler();
+    }
+}
 #endif // ENABLE(RESOURCE_LOAD_STATISTICS)
 
 bool NetworkProcess::sessionIsControlledByAutomation(PAL::SessionID sessionID) const
@@ -1440,7 +1449,7 @@ void NetworkProcess::deleteWebsiteData(PAL::SessionID sessionID, OptionSet<Websi
 
 #if ENABLE(INDEXED_DATABASE)
     if (websiteDataTypes.contains(WebsiteDataType::IndexedDBDatabases) && !sessionID.isEphemeral())
-        idbServer(sessionID).closeAndDeleteDatabasesModifiedSince(modifiedSince, [clearTasksHandler = clearTasksHandler.copyRef()] { });
+        webIDBServer(sessionID).closeAndDeleteDatabasesModifiedSince(modifiedSince, [clearTasksHandler = clearTasksHandler.copyRef()] { });
 #endif
 
 #if ENABLE(SERVICE_WORKER)
@@ -1467,9 +1476,6 @@ void NetworkProcess::deleteWebsiteData(PAL::SessionID sessionID, OptionSet<Websi
 
     if (websiteDataTypes.contains(WebsiteDataType::DiskCache) && !sessionID.isEphemeral())
         clearDiskCache(modifiedSince, [clearTasksHandler = WTFMove(clearTasksHandler)] { });
-
-    if (websiteDataTypes.contains(WebsiteDataType::IndexedDBDatabases) || websiteDataTypes.contains(WebsiteDataType::DOMCache))
-        clearStorageQuota(sessionID);
 
     if (websiteDataTypes.contains(WebsiteDataType::AdClickAttributions)) {
         if (auto* networkSession = this->networkSession(sessionID))
@@ -1539,7 +1545,7 @@ void NetworkProcess::deleteWebsiteDataForOrigins(PAL::SessionID sessionID, Optio
 
 #if ENABLE(INDEXED_DATABASE)
     if (websiteDataTypes.contains(WebsiteDataType::IndexedDBDatabases) && !sessionID.isEphemeral())
-        idbServer(sessionID).closeAndDeleteDatabasesForOrigins(originDatas, [clearTasksHandler = clearTasksHandler.copyRef()] { });
+        webIDBServer(sessionID).closeAndDeleteDatabasesForOrigins(originDatas, [clearTasksHandler = clearTasksHandler.copyRef()] { });
 #endif
 
 #if ENABLE(SERVICE_WORKER)
@@ -1563,19 +1569,6 @@ void NetworkProcess::deleteWebsiteDataForOrigins(PAL::SessionID sessionID, Optio
         }
         WebCore::CredentialStorage::removeSessionCredentialsWithOrigins(originDatas);
     }
-
-    // FIXME: Implement storage quota clearing for these origins.
-}
-
-void NetworkProcess::clearStorageQuota(PAL::SessionID sessionID)
-{
-    auto iterator = m_storageQuotaManagers.find(sessionID);
-    if (iterator == m_storageQuotaManagers.end())
-        return;
-
-    auto& managers = iterator->value;
-    for (auto& manager : managers.managersPerOrigin())
-        manager.value->resetQuota(managers.defaultQuota(manager.key));
 }
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
@@ -1762,7 +1755,7 @@ void NetworkProcess::deleteWebsiteDataForRegistrableDomains(PAL::SessionID sessi
                     callbackAggregator->m_domains.add(domain);
                 }
 
-                idbServer(sessionID).closeAndDeleteDatabasesForOrigins(entriesToDelete, [callbackAggregator = callbackAggregator.copyRef()] { });
+                webIDBServer(sessionID).closeAndDeleteDatabasesForOrigins(entriesToDelete, [callbackAggregator = callbackAggregator.copyRef()] { });
             });
         }));
     }
@@ -2088,8 +2081,8 @@ void NetworkProcess::prepareToSuspend(bool isSuspensionImminent, CompletionHandl
     RELEASE_LOG(ProcessSuspension, "%p - NetworkProcess::prepareToSuspend(), isSuspensionImminent: %d", this, isSuspensionImminent);
 
 #if PLATFORM(IOS_FAMILY) && ENABLE(INDEXED_DATABASE)
-    for (auto& server : m_idbServers.values())
-        server->tryStop(isSuspensionImminent ? IDBServer::ShouldForceStop::Yes : IDBServer::ShouldForceStop::No);
+    for (auto& server : m_webIDBServers.values())
+        server->suspend(isSuspensionImminent ? WebIDBServer::ShouldForceStop::Yes : WebIDBServer::ShouldForceStop::No);
 #endif
 
 #if PLATFORM(IOS_FAMILY)
@@ -2150,7 +2143,7 @@ void NetworkProcess::resume()
         server->endSuspension();
 #endif
 #if PLATFORM(IOS_FAMILY) && ENABLE(INDEXED_DATABASE)
-    for (auto& server : m_idbServers.values())
+    for (auto& server : m_webIDBServers.values())
         server->resume();
 #endif
 
@@ -2209,7 +2202,7 @@ void NetworkProcess::didSyncAllCookies()
 }
 
 #if ENABLE(INDEXED_DATABASE)
-Ref<IDBServer::IDBServer> NetworkProcess::createIDBServer(PAL::SessionID sessionID)
+Ref<WebIDBServer> NetworkProcess::createWebIDBServer(PAL::SessionID sessionID)
 {
     String path;
     if (!sessionID.isEphemeral()) {
@@ -2217,17 +2210,16 @@ Ref<IDBServer::IDBServer> NetworkProcess::createIDBServer(PAL::SessionID session
         path = m_idbDatabasePaths.get(sessionID);
     }
 
-    return IDBServer::IDBServer::create(sessionID, path, [this, weakThis = makeWeakPtr(this)](PAL::SessionID sessionID, const auto& origin) -> StorageQuotaManager* {
-        if (!weakThis)
-            return nullptr;
-        return &this->storageQuotaManager(sessionID, origin);
+    return WebIDBServer::create(sessionID, path, [this, weakThis = makeWeakPtr(this), sessionID](const auto& origin, uint64_t spaceRequested) {
+        RefPtr<StorageQuotaManager> storageQuotaManager = weakThis ? this->storageQuotaManager(sessionID, origin) : nullptr;
+        return storageQuotaManager ? storageQuotaManager->requestSpaceOnBackgroundThread(spaceRequested) : StorageQuotaManager::Decision::Deny;
     });
 }
 
-IDBServer::IDBServer& NetworkProcess::idbServer(PAL::SessionID sessionID)
+WebIDBServer& NetworkProcess::webIDBServer(PAL::SessionID sessionID)
 {
-    return *m_idbServers.ensure(sessionID, [this, sessionID] {
-        return this->createIDBServer(sessionID);
+    return *m_webIDBServers.ensure(sessionID, [this, sessionID] {
+        return this->createWebIDBServer(sessionID);
     }).iterator->value;
 }
 
@@ -2307,8 +2299,18 @@ void NetworkProcess::addIndexedDatabaseSession(PAL::SessionID sessionID, String&
         SandboxExtension::consumePermanently(handle);
         if (!indexedDatabaseDirectory.isEmpty())
             postStorageTask(createCrossThreadTask(*this, &NetworkProcess::ensurePathExists, indexedDatabaseDirectory));
+        setSessionStorageQuotaManagerIDBRootPath(sessionID, indexedDatabaseDirectory);
     }
 }
+
+void NetworkProcess::setSessionStorageQuotaManagerIDBRootPath(PAL::SessionID sessionID, const String& idbRootPath)
+{
+    LockHolder locker(m_sessionStorageQuotaManagersLock);
+    auto* sessionStorageQuotaManager = m_sessionStorageQuotaManagers.get(sessionID);
+    ASSERT(sessionStorageQuotaManager);
+    sessionStorageQuotaManager->setIDBRootPath(idbRootPath);
+}
+
 #endif // ENABLE(INDEXED_DATABASE)
 
 void NetworkProcess::syncLocalStorage(CompletionHandler<void()>&& completionHandler)
@@ -2325,9 +2327,18 @@ void NetworkProcess::clearLegacyPrivateBrowsingLocalStorage()
 
 void NetworkProcess::updateQuotaBasedOnSpaceUsageForTesting(PAL::SessionID sessionID, const ClientOrigin& origin)
 {
-    auto& manager = storageQuotaManager(sessionID, origin);
-    manager.resetQuota(m_storageQuotaManagers.find(sessionID)->value.defaultQuota(origin));
-    manager.updateQuotaBasedOnSpaceUsage();
+    auto storageQuotaManager = this->storageQuotaManager(sessionID, origin);
+    storageQuotaManager->resetQuotaUpdatedBasedOnUsageForTesting();
+}
+
+void NetworkProcess::resetQuota(PAL::SessionID sessionID, CompletionHandler<void()>&& completionHandler)
+{
+    LockHolder locker(m_sessionStorageQuotaManagersLock);
+    if (auto* sessionStorageQuotaManager = m_sessionStorageQuotaManagers.get(sessionID)) {
+        for (auto storageQuotaManager : sessionStorageQuotaManager->existingStorageQuotaManagers())
+            storageQuotaManager->resetQuotaForTesting();
+    }
+    completionHandler();
 }
 
 #if ENABLE(SANDBOX_EXTENSIONS)
@@ -2353,7 +2364,9 @@ SWServer& NetworkProcess::swServerForSession(PAL::SessionID sessionID)
         // If there's not, then where did this PAL::SessionID come from?
         ASSERT(sessionID.isEphemeral() || !path.isEmpty());
 
-        return makeUnique<SWServer>(makeUniqueRef<WebSWOriginStore>(), info.processTerminationDelayEnabled, WTFMove(path), sessionID, [this, sessionID](auto& registrableDomain) {
+        return makeUnique<SWServer>(makeUniqueRef<WebSWOriginStore>(), info.processTerminationDelayEnabled, WTFMove(path), sessionID, [this, sessionID](auto&& jobData, bool shouldRefreshCache, auto&& request, auto&& completionHandler) mutable {
+            ServiceWorkerSoftUpdateLoader::start(networkSession(sessionID), WTFMove(jobData), shouldRefreshCache, WTFMove(request), WTFMove(completionHandler));
+        }, [this, sessionID](auto& registrableDomain) {
             ASSERT(!registrableDomain.isEmpty());
             parentProcessConnection()->send(Messages::NetworkProcessProxy::EstablishWorkerContextConnectionToNetworkProcess { registrableDomain, sessionID }, 0);
         });
@@ -2404,62 +2417,35 @@ void NetworkProcess::requestStorageSpace(PAL::SessionID sessionID, const ClientO
     parentProcessConnection()->sendWithAsyncReply(Messages::NetworkProcessProxy::RequestStorageSpace { sessionID, origin, quota, currentSize, spaceRequired }, WTFMove(callback), 0);
 }
 
-class QuotaUserInitializer final : public WebCore::StorageQuotaUser {
-    WTF_MAKE_FAST_ALLOCATED;
-public:
-    explicit QuotaUserInitializer(StorageQuotaManager& manager)
-        : m_manager(makeWeakPtr(manager))
-    {
-        manager.addUser(*this);
-    }
-
-    ~QuotaUserInitializer()
-    {
-        if (m_manager)
-            m_manager->removeUser(*this);
-        if (m_callback)
-            m_callback();
-    }
-
-private:
-    // StorageQuotaUser API.
-    uint64_t spaceUsed() const final
-    {
-        ASSERT_NOT_REACHED();
-        return 0;
-    }
-
-    void whenInitialized(CompletionHandler<void()>&& callback) final
-    {
-        m_callback = WTFMove(callback);
-    }
-
-    WeakPtr<StorageQuotaManager> m_manager;
-    CompletionHandler<void()> m_callback;
-};
-
-void NetworkProcess::initializeQuotaUsers(StorageQuotaManager& manager, PAL::SessionID sessionID, const ClientOrigin& origin)
+RefPtr<StorageQuotaManager> NetworkProcess::storageQuotaManager(PAL::SessionID sessionID, const ClientOrigin& origin)
 {
-    RunLoop::main().dispatch([this, weakThis = makeWeakPtr(this), sessionID, origin, user = makeUnique<QuotaUserInitializer>(manager)]() mutable {
+    LockHolder locker(m_sessionStorageQuotaManagersLock);
+    auto* sessionStorageQuotaManager = m_sessionStorageQuotaManagers.get(sessionID);
+    if (!sessionStorageQuotaManager)
+        return nullptr;
+
+    String idbRootPath;
+#if ENABLE(INDEXED_DATABASE)
+    idbRootPath = sessionStorageQuotaManager->idbRootPath();
+#endif
+    StorageQuotaManager::UsageGetter usageGetter = [cacheRootPath = sessionStorageQuotaManager->cacheRootPath().isolatedCopy(), idbRootPath = idbRootPath.isolatedCopy(), origin = origin.isolatedCopy()]() {
+        ASSERT(!isMainThread());    
+
+        uint64_t usage = CacheStorage::Engine::diskUsage(cacheRootPath, origin);
+#if ENABLE(INDEXED_DATABASE)
+        usage += IDBServer::IDBServer::diskUsage(idbRootPath, origin);
+#endif
+
+        return usage;
+    };
+    StorageQuotaManager::QuotaIncreaseRequester quotaIncreaseRequester = [this, weakThis = makeWeakPtr(*this), sessionID, origin] (uint64_t currentQuota, uint64_t currentSpace, uint64_t requestedIncrease, auto&& callback) {
+        ASSERT(isMainThread());
         if (!weakThis)
-            return;
-        this->idbServer(sessionID).initializeQuotaUser(origin);
-        CacheStorage::Engine::initializeQuotaUser(*this, sessionID, origin, [user = WTFMove(user)] { });
-    });
-}
+            callback({ });
+        requestStorageSpace(sessionID, origin, currentQuota, currentSpace, requestedIncrease, WTFMove(callback));
+    };
 
-StorageQuotaManager& NetworkProcess::storageQuotaManager(PAL::SessionID sessionID, const ClientOrigin& origin)
-{
-    auto& storageQuotaManagers = m_storageQuotaManagers.ensure(sessionID, [] {
-        return StorageQuotaManagers { };
-    }).iterator->value;
-    return *storageQuotaManagers.managersPerOrigin().ensure(origin, [this, &storageQuotaManagers, sessionID, &origin] {
-        auto manager = makeUnique<StorageQuotaManager>(storageQuotaManagers.defaultQuota(origin), [this, sessionID, origin](uint64_t quota, uint64_t currentSpace, uint64_t spaceIncrease, auto callback) {
-            this->requestStorageSpace(sessionID, origin, quota, currentSpace, spaceIncrease, WTFMove(callback));
-        });
-        initializeQuotaUsers(*manager, sessionID, origin);
-        return manager;
-    }).iterator->value;
+    return sessionStorageQuotaManager->ensureOriginStorageQuotaManager(origin, sessionStorageQuotaManager->defaultQuota(origin), WTFMove(usageGetter), WTFMove(quotaIncreaseRequester)).ptr();
 }
 
 #if !PLATFORM(COCOA)
@@ -2556,9 +2542,10 @@ void NetworkProcess::getLocalStorageOriginDetails(PAL::SessionID sessionID, Comp
     });
 }
 
-void NetworkProcess::connectionToWebProcessClosed(IPC::Connection& connection)
+void NetworkProcess::connectionToWebProcessClosed(IPC::Connection& connection, PAL::SessionID sessionID)
 {
     m_storageManagerSet->removeConnection(connection);
+    webIDBServer(sessionID).removeConnection(connection);
 }
 
 NetworkConnectionToWebProcess* NetworkProcess::webProcessConnection(ProcessIdentifier identifier) const

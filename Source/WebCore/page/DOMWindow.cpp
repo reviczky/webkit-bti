@@ -147,6 +147,21 @@
 namespace WebCore {
 using namespace Inspector;
 
+static const Seconds defaultTransientActivationDuration { 2_s };
+
+static Optional<Seconds>& transientActivationDurationOverrideForTesting()
+{
+    static NeverDestroyed<Optional<Seconds>> overrideForTesting;
+    return overrideForTesting;
+}
+
+static Seconds transientActivationDuration()
+{
+    if (auto override = transientActivationDurationOverrideForTesting())
+        return *override;
+    return defaultTransientActivationDuration;
+}
+
 WTF_MAKE_ISO_ALLOCATED_IMPL(DOMWindow);
 
 class PostMessageTimer : public TimerBase {
@@ -872,7 +887,7 @@ ExceptionOr<Storage*> DOMWindow::localStorage()
     return m_localStorage.get();
 }
 
-ExceptionOr<void> DOMWindow::postMessage(JSC::JSGlobalObject& lexicalGlobalObject, DOMWindow& incumbentWindow, JSC::JSValue messageValue, const String& targetOrigin, Vector<JSC::Strong<JSC::JSObject>>&& transfer)
+ExceptionOr<void> DOMWindow::postMessage(JSC::JSGlobalObject& lexicalGlobalObject, DOMWindow& incumbentWindow, JSC::JSValue messageValue, WindowPostMessageOptions&& options)
 {
     if (!isCurrentlyDisplayedInFrame())
         return { };
@@ -882,12 +897,12 @@ ExceptionOr<void> DOMWindow::postMessage(JSC::JSGlobalObject& lexicalGlobalObjec
     // Compute the target origin.  We need to do this synchronously in order
     // to generate the SyntaxError exception correctly.
     RefPtr<SecurityOrigin> target;
-    if (targetOrigin == "/") {
+    if (options.targetOrigin == "/") {
         if (!sourceDocument)
             return { };
         target = &sourceDocument->securityOrigin();
-    } else if (targetOrigin != "*") {
-        target = SecurityOrigin::createFromString(targetOrigin);
+    } else if (options.targetOrigin != "*") {
+        target = SecurityOrigin::createFromString(options.targetOrigin);
         // It doesn't make sense target a postMessage at a unique origin
         // because there's no way to represent a unique origin in a string.
         if (target->isUnique())
@@ -895,7 +910,7 @@ ExceptionOr<void> DOMWindow::postMessage(JSC::JSGlobalObject& lexicalGlobalObjec
     }
 
     Vector<RefPtr<MessagePort>> ports;
-    auto messageData = SerializedScriptValue::create(lexicalGlobalObject, messageValue, WTFMove(transfer), ports, SerializationContext::WindowPostMessage);
+    auto messageData = SerializedScriptValue::create(lexicalGlobalObject, messageValue, WTFMove(options.transfer), ports, SerializationContext::WindowPostMessage);
     if (messageData.hasException())
         return messageData.releaseException();
 
@@ -985,30 +1000,27 @@ void DOMWindow::focus(bool allowFocus)
     if (!frame())
         return;
 
-    Page* page = frame()->page();
+    auto protectedFrame = makeRefPtr(frame());
+
+    Page* page = protectedFrame->page();
     if (!page)
         return;
 
-    allowFocus = allowFocus || WindowFocusAllowedIndicator::windowFocusAllowed() || !frame()->settings().windowFocusRestricted();
+    allowFocus = allowFocus || WindowFocusAllowedIndicator::windowFocusAllowed() || !protectedFrame->settings().windowFocusRestricted();
 
     // If we're a top level window, bring the window to the front.
-    if (frame()->isMainFrame() && allowFocus)
+    if (protectedFrame->isMainFrame() && allowFocus)
         page->chrome().focus();
 
-    if (!frame())
-        return;
-
-    if (!frame()->hasHadUserInteraction() && !isSameSecurityOriginAsMainFrame())
+    if (!protectedFrame->hasHadUserInteraction() && !isSameSecurityOriginAsMainFrame())
         return;
 
     // Clear the current frame's focused node if a new frame is about to be focused.
-    Frame* focusedFrame = page->focusController().focusedFrame();
-    if (focusedFrame && focusedFrame != frame())
+    auto focusedFrame = makeRefPtr(page->focusController().focusedFrame());
+    if (focusedFrame && focusedFrame != protectedFrame)
         focusedFrame->document()->setFocusedElement(nullptr);
 
-    // setFocusedElement may clear frame(), so recheck before using it.
-    if (auto* frame = this->frame())
-        frame->eventHandler().focusDocumentView();
+    protectedFrame->eventHandler().focusDocumentView();
 }
 
 void DOMWindow::blur()
@@ -1491,13 +1503,78 @@ WindowProxy* DOMWindow::top() const
 
 String DOMWindow::origin() const
 {
-    auto document = this->document();
+    auto* document = this->document();
     return document ? document->securityOrigin().toString() : emptyString();
+}
+
+SecurityOrigin* DOMWindow::securityOrigin() const
+{
+    auto* document = this->document();
+    return document ? &document->securityOrigin() : nullptr;
 }
 
 Document* DOMWindow::document() const
 {
     return downcast<Document>(ContextDestructionObserver::scriptExecutionContext());
+}
+
+void DOMWindow::overrideTransientActivationDurationForTesting(Optional<Seconds>&& override)
+{
+    transientActivationDurationOverrideForTesting() = WTFMove(override);
+}
+
+// When the current high resolution time is greater than or equal to the last activation timestamp in W, and
+// less than the last activation timestamp in W plus the transient activation duration, then W is said to
+// have transient activation. (https://html.spec.whatwg.org/multipage/interaction.html#transient-activation)
+bool DOMWindow::hasTransientActivation() const
+{
+    auto now = MonotonicTime::now();
+    return now >= m_lastActivationTimestamp && now < (m_lastActivationTimestamp + transientActivationDuration());
+}
+
+// https://html.spec.whatwg.org/multipage/interaction.html#consume-user-activation
+bool DOMWindow::consumeTransientActivation()
+{
+    if (!hasTransientActivation())
+        return false;
+
+    for (Frame* frame = this->frame() ? &this->frame()->tree().top() : nullptr; frame; frame = frame->tree().traverseNext()) {
+        auto* window = frame->window();
+        if (!window || window->lastActivationTimestamp() != MonotonicTime::infinity())
+            window->setLastActivationTimestamp(-MonotonicTime::infinity());
+    }
+
+    return true;
+}
+
+// https://html.spec.whatwg.org/multipage/interaction.html#activation-notification
+void DOMWindow::notifyActivated(MonotonicTime activationTime)
+{
+    setLastActivationTimestamp(activationTime);
+    if (!frame())
+        return;
+
+    for (Frame* ancestor = frame() ? frame()->tree().parent() : nullptr; ancestor; ancestor = ancestor->tree().parent()) {
+        if (auto* window = ancestor->window())
+            window->setLastActivationTimestamp(activationTime);
+    }
+
+    auto* securityOrigin = this->securityOrigin();
+    if (!securityOrigin)
+        return;
+
+    auto* descendant = frame();
+    while ((descendant = descendant->tree().traverseNext(frame()))) {
+        auto* descendantWindow = descendant->window();
+        if (!descendantWindow)
+            continue;
+
+        auto* descendantSecurityOrigin = descendantWindow->securityOrigin();
+        if (!descendantSecurityOrigin || !descendantSecurityOrigin->isSameOriginAs(*securityOrigin))
+            continue;
+
+        descendantWindow->setLastActivationTimestamp(activationTime);
+    }
 }
 
 StyleMedia& DOMWindow::styleMedia()

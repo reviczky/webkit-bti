@@ -70,7 +70,7 @@ application identifier to allow web content to use geolocation services.
 The identifier *must* match the name of the <code class="literal">.desktop</code> file which describes
 the application, sans the suffix.</p>
 <p>If your application uses <a href="../gio/GApplication.html#GApplication-struct"><span class="type">GApplication</span></a> (or any subclass like
-<a href="../gtk3/GtkApplication.html#GtkApplication-struct"><span class="type">GtkApplication</span></a>), WebKit will automatically use the identifier returned by
+<span class="type">GtkApplication</span>), WebKit will automatically use the identifier returned by
 <a href="../gio/GApplication.html#g-application-get-application-id"><code class="function">g_application_get_application_id()</code></a>. This is the recommended approach for
 enabling geolocation in applications.</p>
 <p>If an identifier cannot be obtained through <a href="../gio/GApplication.html#GApplication-struct"><span class="type">GApplication</span></a>, the value

@@ -1510,6 +1510,16 @@ void WebsiteDataStore::scheduleClearInMemoryAndPersistent(WallTime modifiedSince
     }
 }
 
+void WebsiteDataStore::getResourceLoadStatisticsDataSummary(CompletionHandler<void(Vector<WebResourceLoadStatisticsStore::ThirdPartyData>&&)>&& completionHandler)
+{
+    ASSERT(RunLoop::isMain());
+
+    for (auto& processPool : processPools()) {
+        if (auto* process = processPool->networkProcess())
+            process->getResourceLoadStatisticsDataSummary(m_sessionID, WTFMove(completionHandler));
+    }
+}
+
 void WebsiteDataStore::scheduleClearInMemoryAndPersistent(ShouldGrandfatherStatistics shouldGrandfather, CompletionHandler<void()>&& completionHandler)
 {
     ASSERT(RunLoop::isMain());
@@ -1804,6 +1814,21 @@ void WebsiteDataStore::setResourceLoadStatisticsShouldBlockThirdPartyCookiesForT
     }
     ASSERT(!completionHandler);
 }
+
+void WebsiteDataStore::setResourceLoadStatisticsFirstPartyWebsiteDataRemovalModeForTesting(bool enabled, CompletionHandler<void()>&& completionHandler)
+{
+    auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
+    auto mode = enabled ? WebCore::FirstPartyWebsiteDataRemovalMode::AllButCookies : WebCore::FirstPartyWebsiteDataRemovalMode::None;
+
+    for (auto& processPool : processPools()) {
+        if (auto* networkProcess = processPool->networkProcess()) {
+            networkProcess->setFirstPartyWebsiteDataRemovalModeForTesting(m_sessionID, mode, [callbackAggregator = callbackAggregator.copyRef()] { });
+            ASSERT(processPools().size() == 1);
+            break;
+        }
+    }
+    ASSERT(!completionHandler);
+}
 #endif // ENABLE(RESOURCE_LOAD_STATISTICS)
 
 void WebsiteDataStore::setCacheMaxAgeCapForPrevalentResources(Seconds seconds, CompletionHandler<void()>&& completionHandler)
@@ -2087,6 +2112,12 @@ WebsiteDataStoreParameters WebsiteDataStore::parameters()
         SandboxExtension::createHandleForReadWriteDirectory(localStorageDirectory, parameters.localStorageDirectoryExtensionHandle);
     }
 
+    auto cacheStorageDirectory = this->cacheStorageDirectory();
+    if (!cacheStorageDirectory.isEmpty()) {
+        SandboxExtension::createHandleForReadWriteDirectory(cacheStorageDirectory, parameters.cacheStorageDirectoryExtensionHandle);
+        parameters.cacheStorageDirectory = cacheStorageDirectory;
+    }
+
 #if ENABLE(INDEXED_DATABASE)
     parameters.indexedDatabaseDirectory = resolvedIndexedDatabaseDirectory();
     if (!parameters.indexedDatabaseDirectory.isEmpty())
@@ -2171,6 +2202,15 @@ void WebsiteDataStore::getLocalStorageDetails(Function<void(Vector<LocalStorageD
         break;
     }
     ASSERT(!completionHandler);
+}
+
+void WebsiteDataStore::resetQuota(CompletionHandler<void()>&& completionHandler)
+{
+    auto callbackAggregator = CallbackAggregator::create(WTFMove(completionHandler));
+    for (auto& processPool : processPools()) {
+        if (auto* process = processPool->networkProcess())
+            process->resetQuota(m_sessionID, [callbackAggregator = callbackAggregator.copyRef()] { });
+    }
 }
 
 #if !PLATFORM(COCOA)

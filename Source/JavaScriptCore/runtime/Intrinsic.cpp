@@ -79,6 +79,12 @@ const char* intrinsicName(Intrinsic intrinsic)
         return "ArrayPopIntrinsic";
     case ArraySliceIntrinsic:
         return "ArraySliceIntrinsic";
+    case ArrayValuesIntrinsic:
+        return "ArrayValuesIntrinsic";
+    case ArrayKeysIntrinsic:
+        return "ArrayKeysIntrinsic";
+    case ArrayEntriesIntrinsic:
+        return "ArrayEntriesIntrinsic";
     case CharCodeAtIntrinsic:
         return "CharCodeAtIntrinsic";
     case CharAtIntrinsic:
@@ -185,10 +191,16 @@ const char* intrinsicName(Intrinsic intrinsic)
         return "FRoundIntrinsic";
     case TruncIntrinsic:
         return "TruncIntrinsic";
+    case TypedArrayValuesIntrinsic:
+        return "TypedArrayValuesIntrinsic";
+    case TypedArrayKeysIntrinsic:
+        return "TypedArrayKeysIntrinsic";
+    case TypedArrayEntriesIntrinsic:
+        return "TypedArrayEntriesIntrinsic";
     case IsTypedArrayViewIntrinsic:
         return "IsTypedArrayViewIntrinsic";
-    case BoundThisNoArgsFunctionCallIntrinsic:
-        return "BoundThisNoArgsFunctionCallIntrinsic";
+    case BoundFunctionCallIntrinsic:
+        return "BoundFunctionCallIntrinsic";
     case JSMapGetIntrinsic:
         return "JSMapGetIntrinsic";
     case JSMapHasIntrinsic:

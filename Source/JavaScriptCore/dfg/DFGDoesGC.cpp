@@ -117,6 +117,7 @@ bool doesGC(Graph& graph, Node* node)
     case GetButterfly:
     case CheckSubClass:
     case CheckArray:
+    case CheckNeutered:
     case GetScope:
     case SkipScope:
     case GetGlobalObject:
@@ -208,6 +209,7 @@ bool doesGC(Graph& graph, Node* node)
     case PhantomNewGeneratorFunction:
     case PhantomNewAsyncFunction:
     case PhantomNewAsyncGeneratorFunction:
+    case PhantomNewArrayIterator:
     case PhantomCreateActivation:
     case PhantomDirectArguments:
     case PhantomCreateRest:
@@ -249,7 +251,7 @@ bool doesGC(Graph& graph, Node* node)
     case DataViewSet:
         return false;
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     case ArrayPush:
     case ArrayPop:
     case PushWithScope:
@@ -257,6 +259,7 @@ bool doesGC(Graph& graph, Node* node)
     case CreateDirectArguments:
     case CreateScopedArguments:
     case CreateClonedArguments:
+    case CreateArgumentsButterfly:
     case Call:
     case CallEval:
     case CallForwardVarargs:
@@ -294,6 +297,7 @@ bool doesGC(Graph& graph, Node* node)
     case InByVal:
     case InstanceOf:
     case InstanceOfCustom:
+    case VarargsLength:
     case LoadVarargs:
     case NumberToStringWithRadix:
     case NumberToStringWithValidRadixConstant:
@@ -350,6 +354,7 @@ bool doesGC(Graph& graph, Node* node)
     case NewAsyncGenerator:
     case NewArray:
     case NewArrayWithSpread:
+    case NewArrayIterator:
     case Spread:
     case NewArrayWithSize:
     case NewArrayBuffer:
@@ -368,6 +373,7 @@ bool doesGC(Graph& graph, Node* node)
     case GetEnumeratorGenericPname:
     case ToIndexString:
     case MaterializeNewObject:
+    case MaterializeNewInternalFieldObject:
     case MaterializeCreateActivation:
     case SetFunctionName:
     case StrCat:
@@ -397,11 +403,11 @@ bool doesGC(Graph& graph, Node* node)
     case ValuePow:
     case ValueBitNot:
     case ValueNegate:
-#else
-    // See comment at the top for why be default for all nodes should be to
+#else // not ASSERT_ENABLED
+    // See comment at the top for why the default for all nodes should be to
     // return true.
     default:
-#endif
+#endif // not ASSERT_ENABLED
         return true;
 
     case CallStringConstructor:

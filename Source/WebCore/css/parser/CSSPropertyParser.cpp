@@ -1380,8 +1380,9 @@ static RefPtr<CSSValue> consumeColumnWidth(CSSParserTokenRange& range)
     // Always parse lengths in strict mode here, since it would be ambiguous otherwise when used in
     // the 'columns' shorthand property.
     RefPtr<CSSPrimitiveValue> columnWidth = consumeLength(range, HTMLStandardMode, ValueRangeNonNegative);
-    if (!columnWidth || (!columnWidth->isCalculated() && !columnWidth->doubleValue()) || (columnWidth->cssCalcValue() && !columnWidth->cssCalcValue()->doubleValue()))
+    if (!columnWidth || columnWidth->isZero().valueOr(false))
         return nullptr;
+
     return columnWidth;
 }
 
@@ -2280,8 +2281,13 @@ static RefPtr<CSSPrimitiveValue> consumePerspective(CSSParserTokenRange& range, 
             return nullptr;
         parsedValue = CSSPrimitiveValue::create(perspective, CSSUnitType::CSS_PX);
     }
-    if (parsedValue && (parsedValue->isCalculated() || parsedValue->doubleValue() > 0))
+
+    if (!parsedValue)
+        return nullptr;
+
+    if (parsedValue->isPositive().valueOr(true))
         return parsedValue;
+
     return nullptr;
 }
 
@@ -2894,18 +2900,6 @@ static RefPtr<CSSValue> consumeReflect(CSSParserTokenRange& range, const CSSPars
     }
     return CSSReflectValue::create(direction.releaseNonNull(), offset.releaseNonNull(), WTFMove(mask));
 }
-
-#if ENABLE(CSS_IMAGE_ORIENTATION)
-static RefPtr<CSSValue> consumeImageOrientation(CSSParserTokenRange& range, CSSParserMode cssParserMode, UnitlessQuirk unitless = UnitlessQuirk::Forbid)
-{
-    if (range.peek().type() != NumberToken) {
-        RefPtr<CSSPrimitiveValue> angle = consumeAngle(range, cssParserMode, unitless);
-        if (angle && angle->doubleValue() == 0)
-            return angle;
-    }
-    return nullptr;
-}
-#endif
 
 static RefPtr<CSSPrimitiveValue> consumeBackgroundBlendMode(CSSParserTokenRange& range)
 {
@@ -3651,22 +3645,16 @@ static RefPtr<CSSValue> consumeHangingPunctuation(CSSParserTokenRange& range)
 
 static RefPtr<CSSValue> consumeWebkitMarqueeIncrement(CSSParserTokenRange& range, CSSParserMode cssParserMode)
 {
-    if (range.peek().type() == IdentToken)
-        return consumeIdent<CSSValueSmall, CSSValueMedium, CSSValueLarge>(range);
     return consumeLengthOrPercent(range, cssParserMode, ValueRangeAll, UnitlessQuirk::Allow);
 }
 
 static RefPtr<CSSValue> consumeWebkitMarqueeRepetition(CSSParserTokenRange& range)
 {
-    if (range.peek().type() == IdentToken)
-        return consumeIdent<CSSValueInfinite>(range);
     return consumeNumber(range, ValueRangeNonNegative);
 }
 
 static RefPtr<CSSValue> consumeWebkitMarqueeSpeed(CSSParserTokenRange& range, CSSParserMode cssParserMode)
 {
-    if (range.peek().type() == IdentToken)
-        return consumeIdent<CSSValueSlow, CSSValueNormal, CSSValueFast>(range);
     return consumeTime(range, cssParserMode, ValueRangeNonNegative, UnitlessQuirk::Allow);
 }
 
@@ -3687,12 +3675,13 @@ static RefPtr<CSSValue> consumeWebkitAspectRatio(CSSParserTokenRange& range)
         return consumeIdent<CSSValueAuto, CSSValueFromDimensions, CSSValueFromIntrinsic>(range);
     
     RefPtr<CSSPrimitiveValue> leftValue = consumeNumber(range, ValueRangeNonNegative);
-    if (!leftValue || !leftValue->floatValue() || range.atEnd() || !consumeSlashIncludingWhitespace(range))
+    if (!leftValue || leftValue->isZero().valueOr(false) || range.atEnd() || !consumeSlashIncludingWhitespace(range))
         return nullptr;
+
     RefPtr<CSSPrimitiveValue> rightValue = consumeNumber(range, ValueRangeNonNegative);
-    if (!rightValue || !rightValue->floatValue())
+    if (!rightValue || rightValue->isZero().valueOr(false))
         return nullptr;
-    
+
     return CSSAspectRatioValue::create(leftValue->floatValue(), rightValue->floatValue());
 }
 
@@ -4172,10 +4161,6 @@ RefPtr<CSSValue> CSSPropertyParser::parseSingleValue(CSSPropertyID property, CSS
         return consumeReflect(m_range, m_context);
     case CSSPropertyWebkitLineBoxContain:
         return consumeLineBoxContain(m_range);
-#if ENABLE(CSS_IMAGE_ORIENTATION)
-    case CSSPropertyImageOrientation:
-        return consumeImageOrientation(m_range, m_context.mode);
-#endif
     case CSSPropertyBackgroundAttachment:
     case CSSPropertyBackgroundBlendMode:
     case CSSPropertyBackgroundClip:
@@ -5838,8 +5823,6 @@ bool CSSPropertyParser::parseShorthand(CSSPropertyID property, bool important)
         return consumePlaceItemsShorthand(important);
     case CSSPropertyPlaceSelf:
         return consumePlaceSelfShorthand(important);
-    case CSSPropertyWebkitMarquee:
-        return consumeShorthandGreedily(webkitMarqueeShorthand(), important);
     default:
         return false;
     }

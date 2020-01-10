@@ -78,12 +78,14 @@ struct SameSizeAsRenderStyle {
     struct NonInheritedFlags {
         unsigned m_bitfields[2];
     } m_nonInheritedFlags;
-#if !ASSERT_DISABLED || ENABLE(SECURITY_ASSERTIONS)
+#if ASSERT_ENABLED || ENABLE(SECURITY_ASSERTIONS)
     bool deletionCheck;
 #endif
 };
 
 static_assert(sizeof(RenderStyle) == sizeof(SameSizeAsRenderStyle), "RenderStyle should stay small");
+
+DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(RenderStyle);
 
 RenderStyle& RenderStyle::defaultStyle()
 {
@@ -229,7 +231,7 @@ inline RenderStyle::RenderStyle(RenderStyle& a, RenderStyle&& b)
 
 RenderStyle::~RenderStyle()
 {
-#if !ASSERT_DISABLED || ENABLE(SECURITY_ASSERTIONS)
+#if ASSERT_ENABLED || ENABLE(SECURITY_ASSERTIONS)
     ASSERT_WITH_SECURITY_IMPLICATION(!m_deletionHasBegun);
     m_deletionHasBegun = true;
 #endif
@@ -756,9 +758,7 @@ static bool rareInheritedDataChangeRequiresLayout(const StyleRareInheritedData& 
         || first.tabSize != second.tabSize
         || first.lineBoxContain != second.lineBoxContain
         || first.lineGrid != second.lineGrid
-#if ENABLE(CSS_IMAGE_ORIENTATION)
         || first.imageOrientation != second.imageOrientation
-#endif
 #if ENABLE(CSS_IMAGE_RESOLUTION)
         || first.imageResolutionSource != second.imageResolutionSource
         || first.imageResolutionSnap != second.imageResolutionSnap

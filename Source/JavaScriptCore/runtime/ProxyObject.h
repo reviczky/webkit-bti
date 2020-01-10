@@ -59,7 +59,7 @@ public:
         Structure* result = Structure::create(vm, globalObject, prototype, TypeInfo(ProxyObjectType, flags), info(), NonArray | MayHaveIndexedAccessors);
         result->setIsQuickPropertyAccessAllowedForEnumeration(false);
         RELEASE_ASSERT(!result->canAccessPropertiesQuicklyForEnumeration());
-        RELEASE_ASSERT(!result->canCachePropertyNameEnumerator());
+        RELEASE_ASSERT(!result->canCachePropertyNameEnumerator(vm));
         return result;
     }
 
@@ -110,7 +110,8 @@ private:
     bool performPreventExtensions(JSGlobalObject*);
     bool performIsExtensible(JSGlobalObject*);
     bool performDefineOwnProperty(JSGlobalObject*, PropertyName, const PropertyDescriptor&, bool shouldThrow);
-    void performGetOwnPropertyNames(JSGlobalObject*, PropertyNameArray&, EnumerationMode);
+    void performGetOwnPropertyNames(JSGlobalObject*, PropertyNameArray&);
+    void performGetOwnEnumerablePropertyNames(JSGlobalObject*, PropertyNameArray&);
     bool performSetPrototype(JSGlobalObject*, JSValue prototype, bool shouldThrowIfCantSet);
 
     WriteBarrier<JSObject> m_target;

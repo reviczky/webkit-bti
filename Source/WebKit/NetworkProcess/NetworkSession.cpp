@@ -84,6 +84,7 @@ NetworkSession::NetworkSession(NetworkProcess& networkProcess, const NetworkSess
 #endif
     , m_adClickAttribution(makeUniqueRef<AdClickAttributionManager>(parameters.sessionID))
     , m_testSpeedMultiplier(parameters.testSpeedMultiplier)
+    , m_allowsServerPreconnect(parameters.allowsServerPreconnect)
 {
     if (!m_sessionID.isEphemeral()) {
         String networkCacheDirectory = parameters.networkCacheDirectory;
@@ -144,7 +145,7 @@ void NetworkSession::invalidateAndCancel()
     if (m_resourceLoadStatistics)
         m_resourceLoadStatistics->invalidateAndCancel();
 #endif
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     m_isInvalidated = true;
 #endif
 }
@@ -175,7 +176,7 @@ void NetworkSession::setResourceLoadStatisticsEnabled(bool enable)
     // This should always be forwarded since debug mode may be enabled at runtime.
     if (!m_resourceLoadStatisticsManualPrevalentResource.isEmpty())
         m_resourceLoadStatistics->setPrevalentResourceForDebugMode(m_resourceLoadStatisticsManualPrevalentResource, [] { });
-    m_resourceLoadStatistics->setThirdPartyCookieBlockingMode(m_thirdPartyCookieBlockingMode);
+    forwardResourceLoadStatisticsSettings();
 }
 
 void NetworkSession::recreateResourceLoadStatisticStore(CompletionHandler<void()>&& completionHandler)
@@ -183,7 +184,13 @@ void NetworkSession::recreateResourceLoadStatisticStore(CompletionHandler<void()
     destroyResourceLoadStatistics();
     m_resourceLoadStatistics = WebResourceLoadStatisticsStore::create(*this, m_resourceLoadStatisticsDirectory, m_shouldIncludeLocalhostInResourceLoadStatistics);
     m_resourceLoadStatistics->populateMemoryStoreFromDisk(WTFMove(completionHandler));
+    forwardResourceLoadStatisticsSettings();
+}
+
+void NetworkSession::forwardResourceLoadStatisticsSettings()
+{
     m_resourceLoadStatistics->setThirdPartyCookieBlockingMode(m_thirdPartyCookieBlockingMode);
+    m_resourceLoadStatistics->setFirstPartyWebsiteDataRemovalMode(m_firstPartyWebsiteDataRemovalMode, [] { });
 }
 
 bool NetworkSession::isResourceLoadStatisticsEnabled() const

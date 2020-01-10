@@ -1869,6 +1869,12 @@ private:
             break;
         }
 
+        case CheckNeutered:
+        case CheckArray: {
+            fixEdge<CellUse>(node->child1());
+            break;
+        }
+
         case Phi:
         case Upsilon:
         case EntrySwitch:
@@ -1877,7 +1883,6 @@ private:
         case CheckTierUpInLoop:
         case CheckTierUpAtReturn:
         case CheckTierUpAndOSREnter:
-        case CheckArray:
         case CheckInBounds:
         case ConstantStoragePointer:
         case DoubleAsInt32:
@@ -1893,6 +1898,7 @@ private:
         case PhantomNewGeneratorFunction:
         case PhantomNewAsyncGeneratorFunction:
         case PhantomNewAsyncFunction:
+        case PhantomNewArrayIterator:
         case PhantomCreateActivation:
         case PhantomDirectArguments:
         case PhantomCreateRest:
@@ -1909,6 +1915,7 @@ private:
         case CheckStructureOrEmpty:
         case MaterializeNewObject:
         case MaterializeCreateActivation:
+        case MaterializeNewInternalFieldObject:
         case PutStack:
         case KillStack:
         case GetStack:
@@ -2432,7 +2439,13 @@ private:
             break;
         }
 
-#if !ASSERT_DISABLED
+        case ForwardVarargs:
+        case LoadVarargs: {
+            fixEdge<KnownInt32Use>(node->child1());
+            break;
+        }
+
+#if ASSERT_ENABLED
         // Have these no-op cases here to ensure that nobody forgets to add handlers for new opcodes.
         case SetArgumentDefinitely:
         case SetArgumentMaybe:
@@ -2464,13 +2477,13 @@ private:
         case ConstructForwardVarargs:
         case TailCallForwardVarargs:
         case TailCallForwardVarargsInlinedCaller:
-        case LoadVarargs:
-        case ForwardVarargs:
+        case VarargsLength:
         case ProfileControlFlow:
         case NewObject:
         case NewPromise:
         case NewGenerator:
         case NewAsyncGenerator:
+        case NewArrayIterator:
         case NewRegexp:
         case DeleteById:
         case DeleteByVal:
@@ -2521,11 +2534,12 @@ private:
         case FilterPutByIdStatus:
         case FilterInByIdStatus:
         case InvalidationPoint:
+        case CreateArgumentsButterfly:
             break;
-#else
+#else // not ASSERT_ENABLED
         default:
             break;
-#endif
+#endif // not ASSERT_ENABLED
         }
     }
 

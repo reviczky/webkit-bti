@@ -37,6 +37,12 @@ class LineBreaker;
 class RenderMultiColumnFlow;
 class RenderRubyRun;
 
+#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
+namespace LayoutIntegration {
+class LineLayout;
+}
+#endif
+
 #if ENABLE(TEXT_AUTOSIZING)
 enum LineCount {
     NOT_SET = 0, NO_LINE = 1, ONE_LINE = 2, MULTI_LINE = 3
@@ -338,13 +344,13 @@ public:
     bool hasLines() const;
     void invalidateLineLayoutPath() final;
 
-    enum LineLayoutPath { UndeterminedPath = 0, SimpleLinesPath, LineBoxesPath, ForceLineBoxesPath };
+    enum LineLayoutPath { UndeterminedPath = 0, SimpleLinesPath, LineBoxesPath, LayoutFormattingContextPath, ForceLineBoxesPath };
     LineLayoutPath lineLayoutPath() const { return static_cast<LineLayoutPath>(renderBlockFlowLineLayoutPath()); }
     void setLineLayoutPath(LineLayoutPath path) { setRenderBlockFlowLineLayoutPath(path); }
 
     // Helper methods for computing line counts and heights for line counts.
     RootInlineBox* lineAtIndex(int) const;
-    int lineCount(const RootInlineBox* = nullptr, bool* = nullptr) const;
+    int lineCount() const;
     int heightForLineCount(int);
     void clearTruncation();
 
@@ -357,8 +363,11 @@ public:
     SimpleLineLayout::Layout* simpleLineLayout();
     const ComplexLineLayout* complexLineLayout() const;
     ComplexLineLayout* complexLineLayout();
+#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
+    const LayoutIntegration::LineLayout* layoutFormattingContextLineLayout() const;
+    LayoutIntegration::LineLayout* layoutFormattingContextLineLayout();
+#endif
 
-    void deleteLineBoxesBeforeSimpleLineLayout();
     void ensureLineBoxes();
     void generateLineBoxTree();
 
@@ -531,10 +540,16 @@ public:
     virtual void adjustInlineDirectionLineBounds(int /* expansionOpportunityCount */, float& /* logicalLeft */, float& /* logicalWidth */) const { }
 
 private:
+    bool hasLineLayout() const;
     bool hasSimpleLineLayout() const;
     bool hasComplexLineLayout() const;
 
     void layoutSimpleLines(bool relayoutChildren, LayoutUnit& repaintLogicalTop, LayoutUnit& repaintLogicalBottom);
+
+#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
+    bool hasLayoutFormattingContextLineLayout() const;
+    void layoutLFCLines(bool relayoutChildren, LayoutUnit& repaintLogicalTop, LayoutUnit& repaintLogicalBottom);
+#endif
 
     void adjustIntrinsicLogicalWidthsForColumns(LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth) const;
     void computeInlinePreferredLogicalWidths(LayoutUnit& minLogicalWidth, LayoutUnit& maxLogicalWidth) const;
@@ -573,12 +588,24 @@ protected:
     std::unique_ptr<RenderBlockFlowRareData> m_rareBlockFlowData;
 
 private:
-    Variant<std::nullptr_t, std::unique_ptr<ComplexLineLayout>, Ref<SimpleLineLayout::Layout>> m_lineLayout;
+    Variant<
+        WTF::Monostate,
+        Ref<SimpleLineLayout::Layout>,
+#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
+        std::unique_ptr<LayoutIntegration::LineLayout>,
+#endif
+        std::unique_ptr<ComplexLineLayout>
+    > m_lineLayout;
 
     friend class LineBreaker;
     friend class LineWidth; // Needs to know FloatingObject
     friend class ComplexLineLayout;
 };
+
+inline bool RenderBlockFlow::hasLineLayout() const
+{
+    return !WTF::holds_alternative<WTF::Monostate>(m_lineLayout);
+}
 
 inline bool RenderBlockFlow::hasComplexLineLayout() const
 {
@@ -609,6 +636,23 @@ inline SimpleLineLayout::Layout* RenderBlockFlow::simpleLineLayout()
 {
     return hasSimpleLineLayout() ? WTF::get<Ref<SimpleLineLayout::Layout>>(m_lineLayout).ptr() : nullptr;
 }
+
+#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
+inline bool RenderBlockFlow::hasLayoutFormattingContextLineLayout() const
+{
+    return WTF::holds_alternative<std::unique_ptr<LayoutIntegration::LineLayout>>(m_lineLayout);
+}
+
+inline const LayoutIntegration::LineLayout* RenderBlockFlow::layoutFormattingContextLineLayout() const
+{
+    return hasLayoutFormattingContextLineLayout() ? WTF::get<std::unique_ptr<LayoutIntegration::LineLayout>>(m_lineLayout).get() : nullptr;
+}
+
+inline LayoutIntegration::LineLayout* RenderBlockFlow::layoutFormattingContextLineLayout()
+{
+    return hasLayoutFormattingContextLineLayout() ? WTF::get<std::unique_ptr<LayoutIntegration::LineLayout>>(m_lineLayout).get() : nullptr;
+}
+#endif
 
 } // namespace WebCore
 

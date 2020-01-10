@@ -245,10 +245,8 @@ void RenderImage::styleDidChange(StyleDifference diff, const RenderStyle* oldSty
             repaintOrMarkForLayout(ImageSizeChangeForAltText);
         m_needsToSetSizeForAltText = false;
     }
-#if ENABLE(CSS_IMAGE_ORIENTATION)
     if (diff == StyleDifference::Layout && oldStyle->imageOrientation() != style().imageOrientation())
         return repaintOrMarkForLayout(ImageSizeChangeNone);
-#endif
 
 #if ENABLE(CSS_IMAGE_RESOLUTION)
     if (diff == StyleDifference::Layout
@@ -645,10 +643,10 @@ ImageDrawResult RenderImage::paintIntoRect(PaintInfo& paintInfo, const FloatRect
         downcast<BitmapImage>(*image).updateFromSettings(settings());
 
     ImagePaintingOptions options = {
-        imageElement ? imageElement->compositeOperator() : CompositeSourceOver,
+        imageElement ? imageElement->compositeOperator() : CompositeOperator::SourceOver,
         decodingModeForImageDraw(*image, paintInfo),
         imageOrientation(),
-        image ? chooseInterpolationQuality(paintInfo.context(), *image, image, LayoutSize(rect.size())) : InterpolationDefault
+        image ? chooseInterpolationQuality(paintInfo.context(), *image, image, LayoutSize(rect.size())) : InterpolationQuality::Default
     };
 
     auto drawResult = paintInfo.context().drawImage(*img, rect, options);

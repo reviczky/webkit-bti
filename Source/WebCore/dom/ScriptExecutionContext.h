@@ -120,17 +120,11 @@ public:
     virtual void addConsoleMessage(MessageSource, MessageLevel, const String& message, unsigned long requestIdentifier = 0) = 0;
 
     virtual SecurityOrigin& topOrigin() const = 0;
-    virtual String origin() const = 0;
 
     virtual bool shouldBypassMainWorldContentSecurityPolicy() const { return false; }
 
     PublicURLManager& publicURLManager();
 
-    // Active objects are not garbage collected even if inaccessible, e.g. because their activity may result in callbacks being invoked.
-    WEBCORE_EXPORT bool canSuspendActiveDOMObjectsForDocumentSuspension(Vector<ActiveDOMObject*>* unsuspendableObjects = nullptr);
-
-    // Active objects can be asked to suspend even if canSuspendActiveDOMObjectsForDocumentSuspension() returns 'false' -
-    // step-by-step JS debugging is one example.
     virtual void suspendActiveDOMObjects(ReasonForSuspension);
     virtual void resumeActiveDOMObjects(ReasonForSuspension);
     virtual void stopActiveDOMObjects();
@@ -192,6 +186,7 @@ public:
         bool m_isCleanupTask;
     };
 
+    void enqueueTaskForDispatcher(Function<void()>&& function) { postTask(WTFMove(function)); }
     virtual void postTask(Task&&) = 0; // Executes the task on context's thread asynchronously.
 
     template<typename... Arguments>
@@ -257,8 +252,6 @@ public:
 
     ServiceWorkerContainer* serviceWorkerContainer();
     ServiceWorkerContainer* ensureServiceWorkerContainer();
-
-    WEBCORE_EXPORT static bool postTaskTo(const DocumentOrWorkerIdentifier&, WTF::Function<void(ScriptExecutionContext&)>&&);
 #endif
     WEBCORE_EXPORT static bool postTaskTo(ScriptExecutionContextIdentifier, Task&&);
 
@@ -330,7 +323,7 @@ private:
     mutable bool m_activeDOMObjectAdditionForbidden { false };
     bool m_willprocessMessageWithMessagePortsSoon { false };
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     bool m_inScriptExecutionContextDestructor { false };
 #endif
 

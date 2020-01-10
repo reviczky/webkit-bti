@@ -62,6 +62,7 @@ public:
     void deregisterFormattingContext(const FormattingContext& formattingContext) { m_formattingContextList.remove(&formattingContext); }
 #endif
 
+    Display::Box& displayBoxForRootLayoutBox();
     Display::Box& displayBoxForLayoutBox(const Box& layoutBox);
     const Display::Box& displayBoxForLayoutBox(const Box& layoutBox) const;
     bool hasDisplayBox(const Box& layoutBox) const { return m_layoutToDisplayBox.contains(&layoutBox); }
@@ -76,6 +77,11 @@ public:
     const RenderBox& rootRenderer() const { return m_layoutTreeContent->rootRenderer(); }
 #endif
 
+    // LFC integration only. Full LFC has proper ICB access.
+    void setViewportSize(const LayoutSize&);
+    LayoutSize viewportSize() const;
+    bool isIntegratedRootBoxFirstChild() const;
+
 private:
     void setQuirksMode(QuirksMode quirksMode) { m_quirksMode = quirksMode; }
 
@@ -87,6 +93,8 @@ private:
     QuirksMode m_quirksMode { QuirksMode::No };
 
     WeakPtr<const LayoutTreeContent> m_layoutTreeContent;
+    // LFC integration only.
+    LayoutSize m_viewportSize;
 };
 
 #ifndef NDEBUG

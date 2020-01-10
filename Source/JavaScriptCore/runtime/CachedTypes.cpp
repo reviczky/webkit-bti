@@ -27,7 +27,6 @@
 #include "CachedTypes.h"
 
 #include "BytecodeCacheError.h"
-#include "BytecodeCacheVersion.h"
 #include "BytecodeLivenessAnalysis.h"
 #include "JSCInlines.h"
 #include "JSImmutableButterfly.h"
@@ -41,6 +40,7 @@
 #include "UnlinkedModuleProgramCodeBlock.h"
 #include "UnlinkedProgramCodeBlock.h"
 #include <wtf/FastMalloc.h>
+#include <wtf/MallocPtr.h>
 #include <wtf/Optional.h>
 #include <wtf/UUID.h>
 #include <wtf/text/AtomStringImpl.h>
@@ -64,6 +64,11 @@ struct SourceTypeImpl<T, std::enable_if_t<!std::is_fundamental<T>::value && !std
 
 template<typename T>
 using SourceType = typename SourceTypeImpl<T>::type;
+
+static constexpr unsigned jscBytecodeCacheVersion()
+{
+    return StringHasher::computeHash(__TIMESTAMP__);
+}
 
 class Encoder {
     WTF_MAKE_NONCOPYABLE(Encoder);
@@ -157,7 +162,7 @@ public:
         }
 
         size_t size = m_baseOffset + m_currentPage->size();
-        MallocPtr<uint8_t> buffer = MallocPtr<uint8_t>::malloc(size);
+        MallocPtr<uint8_t, VMMalloc> buffer = MallocPtr<uint8_t, VMMalloc>::malloc(size);
         unsigned offset = 0;
         for (const auto& page : m_pages) {
             memcpy(buffer.get() + offset, page.buffer(), page.size());
@@ -202,10 +207,9 @@ private:
     class Page {
     public:
         Page(size_t size)
-            : m_offset(0)
+            : m_buffer(MallocPtr<uint8_t, VMMalloc>::malloc(size))
             , m_capacity(size)
         {
-            m_buffer = MallocPtr<uint8_t>::malloc(size);
         }
 
         bool malloc(size_t size, ptrdiff_t& result)
@@ -244,8 +248,8 @@ private:
         }
 
     private:
-        MallocPtr<uint8_t> m_buffer;
-        ptrdiff_t m_offset;
+        MallocPtr<uint8_t, VMMalloc> m_buffer;
+        ptrdiff_t m_offset { 0 };
         size_t m_capacity;
     };
 
@@ -593,10 +597,10 @@ ptrdiff_t CachedWriteBarrierOffsets::ptrOffset()
     return OBJECT_OFFSETOF(CachedWriteBarrier<void>, m_ptr);
 }
 
-template<typename T, size_t InlineCapacity = 0, typename OverflowHandler = CrashOnOverflow>
-class CachedVector : public VariableLengthObject<Vector<SourceType<T>, InlineCapacity, OverflowHandler>> {
+template<typename T, size_t InlineCapacity = 0, typename OverflowHandler = CrashOnOverflow, typename Malloc = WTF::VectorMalloc>
+class CachedVector : public VariableLengthObject<Vector<SourceType<T>, InlineCapacity, OverflowHandler, 16, Malloc>> {
 public:
-    void encode(Encoder& encoder, const Vector<SourceType<T>, InlineCapacity, OverflowHandler>& vector)
+    void encode(Encoder& encoder, const Vector<SourceType<T>, InlineCapacity, OverflowHandler, 16, Malloc>& vector)
     {
         m_size = vector.size();
         if (!m_size)
@@ -607,7 +611,7 @@ public:
     }
 
     template<typename... Args>
-    void decode(Decoder& decoder, Vector<SourceType<T>, InlineCapacity, OverflowHandler>& vector, Args... args) const
+    void decode(Decoder& decoder, Vector<SourceType<T>, InlineCapacity, OverflowHandler, 16, Malloc>& vector, Args... args) const
     {
         if (!m_size)
             return;
@@ -1358,13 +1362,13 @@ public:
 
     InstructionStream* decode(Decoder& decoder) const
     {
-        Vector<uint8_t, 0, UnsafeVectorOverflow> instructionsVector;
+        Vector<uint8_t, 0, UnsafeVectorOverflow, 16, InstructionStreamMalloc> instructionsVector;
         m_instructions.decode(decoder, instructionsVector);
         return new InstructionStream(WTFMove(instructionsVector));
     }
 
 private:
-    CachedVector<uint8_t, 0, UnsafeVectorOverflow> m_instructions;
+    CachedVector<uint8_t, 0, UnsafeVectorOverflow, InstructionStreamMalloc> m_instructions;
 };
 
 class CachedMetadataTable : public CachedObject<UnlinkedMetadataTable> {
@@ -1784,6 +1788,7 @@ public:
     unsigned derivedContextType() const { return m_derivedContextType; }
     unsigned evalContextType() const { return m_evalContextType; }
     unsigned hasTailCalls() const { return m_hasTailCalls; }
+    unsigned hasCheckpoints() const { return m_hasCheckpoints; }
     unsigned lineCount() const { return m_lineCount; }
     unsigned endColumn() const { return m_endColumn; }
 
@@ -1816,6 +1821,7 @@ private:
     unsigned m_evalContextType : 2;
     unsigned m_hasTailCalls : 1;
     unsigned m_codeType : 2;
+    unsigned m_hasCheckpoints : 1;
 
     CodeFeatures m_features;
     SourceParseMode m_parseMode;
@@ -2014,6 +2020,7 @@ ALWAYS_INLINE UnlinkedCodeBlock::UnlinkedCodeBlock(Decoder& decoder, Structure* 
 
     , m_didOptimize(static_cast<unsigned>(MixedTriState))
     , m_age(0)
+    , m_hasCheckpoints(cachedCodeBlock.hasCheckpoints())
 
     , m_features(cachedCodeBlock.features())
     , m_parseMode(cachedCodeBlock.parseMode())
@@ -2202,6 +2209,7 @@ ALWAYS_INLINE void CachedCodeBlock<CodeBlockType>::encode(Encoder& encoder, cons
     m_parseMode = codeBlock.m_parseMode;
     m_codeGenerationMode = codeBlock.m_codeGenerationMode;
     m_codeType = codeBlock.m_codeType;
+    m_hasCheckpoints = codeBlock.m_hasCheckpoints;
 
     m_metadata.encode(encoder, codeBlock.m_metadata.get());
     m_rareData.encode(encoder, codeBlock.m_rareData.get());
@@ -2265,7 +2273,7 @@ protected:
 
     bool isUpToDate(Decoder& decoder) const
     {
-        if (m_cacheVersion != JSC_BYTECODE_CACHE_VERSION)
+        if (m_cacheVersion != jscBytecodeCacheVersion())
             return false;
         if (m_bootSessionUUID.decode(decoder) != bootSessionUUIDString())
             return false;
@@ -2273,7 +2281,7 @@ protected:
     }
 
 private:
-    uint32_t m_cacheVersion { JSC_BYTECODE_CACHE_VERSION };
+    uint32_t m_cacheVersion { jscBytecodeCacheVersion() };
     CachedString m_bootSessionUUID;
     CachedCodeBlockTag m_tag;
 };

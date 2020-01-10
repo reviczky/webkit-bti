@@ -103,21 +103,26 @@
 #include "HitTestResult.h"
 #include "InspectorClient.h"
 #include "InspectorController.h"
+#include "InspectorDebuggableType.h"
 #include "InspectorFrontendClientLocal.h"
 #include "InspectorOverlay.h"
 #include "InstrumentingAgents.h"
 #include "IntRect.h"
 #include "InternalSettings.h"
+#include "InternalsMapLike.h"
+#include "InternalsSetLike.h"
 #include "JSDOMPromiseDeferred.h"
 #include "JSImageData.h"
 #include "LegacySchemeRegistry.h"
 #include "LibWebRTCProvider.h"
 #include "LoaderStrategy.h"
+#include "Location.h"
 #include "MallocStatistics.h"
 #include "MediaDevices.h"
 #include "MediaEngineConfigurationFactory.h"
 #include "MediaPlayer.h"
 #include "MediaProducer.h"
+#include "MediaRecorderProvider.h"
 #include "MediaResourceLoader.h"
 #include "MediaStreamTrack.h"
 #include "MemoryCache.h"
@@ -168,6 +173,7 @@
 #include "SpellChecker.h"
 #include "StaticNodeList.h"
 #include "StringCallback.h"
+#include "StyleResolver.h"
 #include "StyleRule.h"
 #include "StyleScope.h"
 #include "StyleSheetContents.h"
@@ -297,7 +303,11 @@
 #endif
 
 #if PLATFORM(MAC)
-#include "GraphicsContext3DManager.h"
+#include "GraphicsContextGLOpenGLManager.h"
+#endif
+
+#if PLATFORM(COCOA)
+#import <wtf/spi/darwin/SandboxSPI.h>
 #endif
 
 using JSC::CallData;
@@ -331,8 +341,12 @@ private:
     void closeWindow() final;
     void reopen() final { }
     void bringToFront() final { }
-    String localizedStringsURL() final { return String(); }
-    String debuggableType() const final { return "page"_s; };
+    String localizedStringsURL() const final { return String(); }
+    DebuggableType debuggableType() const final { return DebuggableType::Page; }
+    String targetPlatformName() const { return "Unknown"_s; }
+    String targetBuildVersion() const { return "Unknown"_s; }
+    String targetProductVersion() const { return "Unknown"_s; }
+    bool targetIsSimulator() const { return false; }
     void inspectedURLChanged(const String&) final { }
     void showCertificate(const CertificateInfo&) final { }
     void setAttachedWindowHeight(unsigned) final { }
@@ -525,6 +539,7 @@ void Internals::resetToConsistentState(Page& page)
     rtcProvider.disableNonLocalhostConnections();
     RuntimeEnabledFeatures::sharedFeatures().setWebRTCVP8CodecEnabled(true);
     page.settings().setWebRTCEncryptionEnabled(true);
+    rtcProvider.setUseGPUProcess(false);
 #endif
 
     page.settings().setStorageAccessAPIEnabled(false);
@@ -536,9 +551,12 @@ void Internals::resetToConsistentState(Page& page)
 
 #if ENABLE(MEDIA_STREAM)
     RuntimeEnabledFeatures::sharedFeatures().setInterruptAudioOnPageVisibilityChangeEnabled(false);
+    WebCore::MediaRecorder::setCustomPrivateRecorderCreator(nullptr);
+    page.mediaRecorderProvider().setUseGPUProcess(true);
 #endif
 
     HTMLCanvasElement::setMaxPixelMemoryForTesting(0); // This means use the default value.
+    DOMWindow::overrideTransientActivationDurationForTesting(WTF::nullopt);
 }
 
 Internals::Internals(Document& document)
@@ -553,7 +571,6 @@ Internals::Internals(Document& document)
 #endif
 
 #if ENABLE(MEDIA_STREAM)
-    setMockMediaCaptureDevicesEnabled(true);
     setMediaCaptureRequiresSecureConnection(false);
 #endif
 
@@ -579,8 +596,6 @@ Internals::Internals(Document& document)
         frame->page()->setPaymentCoordinator(makeUnique<PaymentCoordinator>(*mockPaymentCoordinator));
     }
 #endif
-
-    m_unsuspendableActiveDOMObject = nullptr;
 
 #if PLATFORM(COCOA) &&  ENABLE(WEB_AUDIO)
     AudioDestinationCocoa::createOverride = nullptr;
@@ -938,25 +953,10 @@ unsigned Internals::backForwardCacheSize() const
     return BackForwardCache::singleton().pageCount();
 }
 
-class UnsuspendableActiveDOMObject final : public ActiveDOMObject, public RefCounted<UnsuspendableActiveDOMObject> {
-public:
-    static Ref<UnsuspendableActiveDOMObject> create(ScriptExecutionContext& context) { return adoptRef(*new UnsuspendableActiveDOMObject { &context }); }
-
-private:
-    explicit UnsuspendableActiveDOMObject(ScriptExecutionContext* context)
-        : ActiveDOMObject(context)
-    {
-        suspendIfNeeded();
-    }
-
-    bool shouldPreventEnteringBackForwardCache_DEPRECATED() const final { return true; }
-    const char* activeDOMObjectName() const { return "UnsuspendableActiveDOMObject"; }
-};
-
-void Internals::preventDocumentForEnteringBackForwardCache()
+void Internals::preventDocumentFromEnteringBackForwardCache()
 {
-    if (auto* context = contextDocument())
-        m_unsuspendableActiveDOMObject = UnsuspendableActiveDOMObject::create(*context);
+    if (auto* document = contextDocument())
+        document->preventEnteringBackForwardCacheForTesting();
 }
 
 void Internals::disableTileSizeUpdateDelay()
@@ -1556,19 +1556,23 @@ void Internals::setUseDTLS10(bool useDTLS10)
 #endif
 }
 
+void Internals::setUseGPUProcessForWebRTC(bool useGPUProcess)
+{
+#if USE(LIBWEBRTC)
+    auto* document = contextDocument();
+    if (!document || !document->page())
+        return;
+
+    document->page()->libWebRTCProvider().setUseGPUProcess(useGPUProcess);
+    document->page()->mediaRecorderProvider().setUseGPUProcess(useGPUProcess);
+#endif
+}
 #endif
 
 #if ENABLE(MEDIA_STREAM)
 void Internals::setShouldInterruptAudioOnPageVisibilityChange(bool shouldInterrupt)
 {
     RuntimeEnabledFeatures::sharedFeatures().setInterruptAudioOnPageVisibilityChangeEnabled(shouldInterrupt);
-}
-
-void Internals::setMockMediaCaptureDevicesEnabled(bool enabled)
-{
-    Document* document = contextDocument();
-    if (auto* page = document->page())
-        page->settings().setMockCaptureDevicesEnabled(enabled);
 }
 
 void Internals::setMediaCaptureRequiresSecureConnection(bool enabled)
@@ -1689,13 +1693,13 @@ ExceptionOr<String> Internals::dumpMarkerRects(const String& markerTypeString)
     rectString.appendLiteral("marker rects: ");
     for (const auto& rect : rects) {
         rectString.append('(');
-        rectString.appendFixedPrecisionNumber(rect.x());
+        rectString.append(FormattedNumber::fixedPrecision(rect.x()));
         rectString.appendLiteral(", ");
-        rectString.appendFixedPrecisionNumber(rect.y());
+        rectString.append(FormattedNumber::fixedPrecision(rect.y()));
         rectString.appendLiteral(", ");
-        rectString.appendFixedPrecisionNumber(rect.width());
+        rectString.append(FormattedNumber::fixedPrecision(rect.width()));
         rectString.appendLiteral(", ");
-        rectString.appendFixedPrecisionNumber(rect.height());
+        rectString.append(FormattedNumber::fixedPrecision(rect.height()));
         rectString.appendLiteral(") ");
     }
     return rectString.toString();
@@ -3449,14 +3453,14 @@ ExceptionOr<String> Internals::getCurrentCursorInfo()
     if (cursor.image()) {
         FloatSize size = cursor.image()->size();
         result.appendLiteral(" image=");
-        result.appendFixedPrecisionNumber(size.width());
+        result.append(FormattedNumber::fixedPrecision(size.width()));
         result.append('x');
-        result.appendFixedPrecisionNumber(size.height());
+        result.append(FormattedNumber::fixedPrecision(size.height()));
     }
 #if ENABLE(MOUSE_CURSOR_SCALE)
     if (cursor.imageScaleFactor() != 1) {
         result.appendLiteral(" scale=");
-        result.appendFixedPrecisionNumber(cursor.imageScaleFactor(), 8);
+        result.append(FormattedNumber::fixedPrecision(cursor.imageScaleFactor(), 8));
     }
 #endif
     return result.toString();
@@ -4431,19 +4435,19 @@ ExceptionOr<String> Internals::pathStringWithShrinkWrappedRects(const Vector<dou
     SVGPathStringBuilder builder;
     PathUtilities::pathWithShrinkWrappedRects(rects, radius).apply([&builder](const PathElement& element) {
         switch (element.type) {
-        case PathElementMoveToPoint:
+        case PathElement::Type::MoveToPoint:
             builder.moveTo(element.points[0], false, AbsoluteCoordinates);
             return;
-        case PathElementAddLineToPoint:
+        case PathElement::Type::AddLineToPoint:
             builder.lineTo(element.points[0], AbsoluteCoordinates);
             return;
-        case PathElementAddQuadCurveToPoint:
+        case PathElement::Type::AddQuadCurveToPoint:
             builder.curveToQuadratic(element.points[0], element.points[1], AbsoluteCoordinates);
             return;
-        case PathElementAddCurveToPoint:
+        case PathElement::Type::AddCurveToPoint:
             builder.curveToCubic(element.points[0], element.points[1], element.points[2], AbsoluteCoordinates);
             return;
-        case PathElementCloseSubpath:
+        case PathElement::Type::CloseSubpath:
             builder.closePath();
             return;
         }
@@ -4675,19 +4679,57 @@ void Internals::postTask(RefPtr<VoidCallback>&& callback)
     });
 }
 
+static Optional<TaskSource> taskSourceFromString(const String& taskSourceName)
+{
+    if (taskSourceName == "DOMManipulation")
+        return TaskSource::DOMManipulation;
+    return WTF::nullopt;
+}
+
 ExceptionOr<void> Internals::queueTask(ScriptExecutionContext& context, const String& taskSourceName, RefPtr<VoidCallback>&& callback)
 {
-    TaskSource source;
-    if (taskSourceName == "DOMManipulation")
-        source = TaskSource::DOMManipulation;
-    else
+    auto source = taskSourceFromString(taskSourceName);
+    if (!source)
         return Exception { NotSupportedError };
 
-    context.eventLoop().queueTask(source, [callback = WTFMove(callback)]() {
+    context.eventLoop().queueTask(*source, [callback = WTFMove(callback)] {
         callback->handleEvent();
     });
 
     return { };
+}
+
+ExceptionOr<void> Internals::queueTaskToQueueMicrotask(Document& document, const String& taskSourceName, RefPtr<VoidCallback>&& callback)
+{
+    auto source = taskSourceFromString(taskSourceName);
+    if (!source)
+        return Exception { NotSupportedError };
+
+    ScriptExecutionContext& context = document; // This avoids unnecessarily exporting Document::eventLoop.
+    context.eventLoop().queueTask(*source, [movedCallback = WTFMove(callback), protectedDocument = makeRef(document)]() mutable {
+        ScriptExecutionContext& context = protectedDocument.get();
+        context.eventLoop().queueMicrotask([callback = WTFMove(movedCallback)] {
+            callback->handleEvent();
+        });
+    });
+
+    return { };
+}
+
+ExceptionOr<bool> Internals::hasSameEventLoopAs(WindowProxy& proxy)
+{
+    RefPtr<ScriptExecutionContext> context = contextDocument();
+    if (!context || !proxy.frame())
+        return Exception { InvalidStateError };
+
+    auto& proxyFrame = *proxy.frame();
+    if (!is<Frame>(proxyFrame))
+        return false;
+    RefPtr<ScriptExecutionContext> proxyContext = downcast<Frame>(proxyFrame).document();
+    if (!proxyContext)
+        return Exception { InvalidStateError };
+
+    return context->eventLoop().hasSameEventLoopAs(proxyContext->eventLoop());
 }
 
 Vector<String> Internals::accessKeyModifiers() const
@@ -4886,6 +4928,11 @@ void Internals::setMediaStreamSourceInterrupted(MediaStreamTrack& track, bool in
 {
     track.source().setInterruptedForTesting(interrupted);
 }
+
+bool Internals::isMockRealtimeMediaSourceCenterEnabled()
+{
+    return MockRealtimeMediaSourceCenter::mockRealtimeMediaSourceCenterEnabled();
+}
 #endif
 
 bool Internals::supportsAudioSession() const
@@ -5039,6 +5086,13 @@ void Internals::terminateServiceWorker(ServiceWorker& worker)
         return;
 
     ServiceWorkerProvider::singleton().serviceWorkerConnection().syncTerminateWorker(worker.identifier());
+}
+
+void Internals::isServiceWorkerRunning(ServiceWorker& worker, DOMPromiseDeferred<IDLBoolean>&& promise)
+{
+    return ServiceWorkerProvider::singleton().serviceWorkerConnection().isServiceWorkerRunning(worker.identifier(), [promise = WTFMove(promise)](bool result) mutable {
+        promise.resolve(result);
+    });
 }
 #endif
 
@@ -5232,11 +5286,32 @@ void Internals::setXHRMaximumIntervalForUserGestureForwarding(XMLHttpRequest& re
     request.setMaximumIntervalForUserGestureForwarding(interval);
 }
 
+void Internals::setTransientActivationDuration(double seconds)
+{
+    DOMWindow::overrideTransientActivationDurationForTesting(Seconds { seconds });
+}
+
 void Internals::setIsPlayingToAutomotiveHeadUnit(bool isPlaying)
 {
 #if ENABLE(VIDEO) || ENABLE(WEB_AUDIO)
     PlatformMediaSessionManager::sharedManager().setIsPlayingToAutomotiveHeadUnit(isPlaying);
 #endif
+}
+
+String Internals::highlightPseudoElementColor(const String& highlightName, Element& element)
+{
+    element.document().updateStyleIfNeeded();
+
+    auto& styleResolver = element.document().styleScope().resolver();
+    auto* parentStyle = element.computedStyle();
+    if (!parentStyle)
+        return { };
+
+    auto style = styleResolver.pseudoStyleForElement(element, { PseudoId::Highlight, highlightName }, *parentStyle);
+    if (!style)
+        return { };
+
+    return style->color().cssText();
 }
     
 Internals::TextIndicatorInfo::TextIndicatorInfo()
@@ -5293,6 +5368,55 @@ void Internals::setMaxCanvasPixelMemory(unsigned size)
 int Internals::processIdentifier() const
 {
     return getCurrentProcessID();
+}
+
+Ref<InternalsMapLike> Internals::createInternalsMapLike()
+{
+    return InternalsMapLike::create();
+}
+
+Ref<InternalsSetLike> Internals::createInternalsSetLike()
+{
+    return InternalsSetLike::create();
+}
+
+bool Internals::hasSandboxMachLookupAccessToGlobalName(const String& process, const String& service)
+{
+#if PLATFORM(COCOA)
+    pid_t pid;
+    if (process == "com.apple.WebKit.WebContent")
+        pid = getpid();
+    else
+        RELEASE_ASSERT_NOT_REACHED();
+
+    return !sandbox_check(pid, "mach-lookup", static_cast<enum sandbox_filter_type>(SANDBOX_FILTER_GLOBAL_NAME | SANDBOX_CHECK_NO_REPORT), service.utf8().data());
+#else
+    UNUSED_PARAM(process);
+    UNUSED_PARAM(service);
+    return false;
+#endif
+}
+
+bool Internals::hasSandboxMachLookupAccessToXPCServiceName(const String& process, const String& service)
+{
+#if PLATFORM(COCOA)
+    pid_t pid;
+    if (process == "com.apple.WebKit.WebContent")
+        pid = getpid();
+    else
+        RELEASE_ASSERT_NOT_REACHED();
+
+    return !sandbox_check(pid, "mach-lookup", static_cast<enum sandbox_filter_type>(SANDBOX_FILTER_XPC_SERVICE_NAME | SANDBOX_CHECK_NO_REPORT), service.utf8().data());
+#else
+    UNUSED_PARAM(process);
+    UNUSED_PARAM(service);
+    return false;
+#endif
+}
+
+String Internals::windowLocationHost(DOMWindow& window)
+{
+    return window.location().host();
 }
 
 } // namespace WebCore

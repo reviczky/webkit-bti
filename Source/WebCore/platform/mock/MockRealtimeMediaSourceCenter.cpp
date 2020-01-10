@@ -94,7 +94,7 @@ public:
     {
         ASSERT(device.type() == CaptureDevice::DeviceType::Camera);
         if (!MockRealtimeMediaSourceCenter::captureDeviceWithPersistentID(CaptureDevice::DeviceType::Camera, device.persistentId()))
-            return { };
+            return { "Unable to find mock camera device with given persistentID"_s };
 
         return MockRealtimeVideoSource::create(String { device.persistentId() }, String { device.label() }, WTFMove(hashSalt), constraints);
     }
@@ -115,7 +115,7 @@ public:
     CaptureSourceOrError createDisplayCaptureSource(const CaptureDevice& device, const MediaConstraints* constraints) final
     {
         if (!MockRealtimeMediaSourceCenter::captureDeviceWithPersistentID(device.type(), device.persistentId()))
-            return { };
+            return { "Unable to find mock  display device with given persistentID"_s };
 
         switch (device.type()) {
         case CaptureDevice::DeviceType::Screen:
@@ -141,7 +141,7 @@ public:
     {
         ASSERT(device.type() == CaptureDevice::DeviceType::Microphone);
         if (!MockRealtimeMediaSourceCenter::captureDeviceWithPersistentID(CaptureDevice::DeviceType::Microphone, device.persistentId()))
-            return { };
+            return { "Unable to find mock microphone device with given persistentID"_s };
 
         return MockRealtimeAudioSource::create(String { device.persistentId() }, String { device.label() }, WTFMove(hashSalt), constraints);
     }
@@ -191,16 +191,15 @@ MockRealtimeMediaSourceCenter& MockRealtimeMediaSourceCenter::singleton()
 
 void MockRealtimeMediaSourceCenter::setMockRealtimeMediaSourceCenterEnabled(bool enabled)
 {
-    static bool active = false;
-    if (active == enabled)
-        return;
-
-    active = enabled;
-
-    RealtimeMediaSourceCenter& center = RealtimeMediaSourceCenter::singleton();
     MockRealtimeMediaSourceCenter& mock = singleton();
 
-    if (active) {
+    if (mock.m_isEnabled == enabled)
+        return;
+
+    mock.m_isEnabled = enabled;
+    RealtimeMediaSourceCenter& center = RealtimeMediaSourceCenter::singleton();
+
+    if (mock.m_isEnabled) {
         if (mock.m_isMockAudioCaptureEnabled)
             center.setAudioCaptureFactory(mock.audioCaptureFactory());
         if (mock.m_isMockVideoCaptureEnabled)
@@ -220,10 +219,7 @@ void MockRealtimeMediaSourceCenter::setMockRealtimeMediaSourceCenterEnabled(bool
 
 bool MockRealtimeMediaSourceCenter::mockRealtimeMediaSourceCenterEnabled()
 {
-    MockRealtimeMediaSourceCenter& mock = singleton();
-    RealtimeMediaSourceCenter& center = RealtimeMediaSourceCenter::singleton();
-
-    return &center.audioCaptureFactory() == &mock.audioCaptureFactory() || &center.videoCaptureFactory() == &mock.videoCaptureFactory() || &center.displayCaptureFactory() == &mock.displayCaptureFactory();
+    return singleton().m_isEnabled;
 }
 
 static void createCaptureDevice(const MockMediaDevice& device)

@@ -100,7 +100,7 @@ void AssemblyHelpers::clearSamplingFlag(int32_t flag)
 }
 #endif
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
 #if USE(JSVALUE64)
 void AssemblyHelpers::jitAssertIsInt32(GPRReg gpr)
 {
@@ -211,12 +211,12 @@ void AssemblyHelpers::jitAssertIsNull(GPRReg gpr)
 
 void AssemblyHelpers::jitAssertArgumentCountSane()
 {
-    Jump ok = branch32(Below, payloadFor(CallFrameSlot::argumentCount), TrustedImm32(10000000));
+    Jump ok = branch32(Below, payloadFor(CallFrameSlot::argumentCountIncludingThis), TrustedImm32(10000000));
     abortWithReason(AHInsaneArgumentCount);
     ok.link(this);
 }
 
-#endif // !ASSERT_DISABLED
+#endif // ASSERT_ENABLED
 
 void AssemblyHelpers::jitReleaseAssertNoException(VM& vm)
 {
@@ -315,7 +315,7 @@ void AssemblyHelpers::emitStoreStructureWithTypeInfo(AssemblyHelpers& jit, Trust
     const Structure* structurePtr = reinterpret_cast<const Structure*>(structure.m_value);
 #if USE(JSVALUE64)
     jit.store64(TrustedImm64(structurePtr->idBlob()), MacroAssembler::Address(dest, JSCell::structureIDOffset()));
-    if (!ASSERT_DISABLED) {
+    if (ASSERT_ENABLED) {
         Jump correctStructure = jit.branch32(Equal, MacroAssembler::Address(dest, JSCell::structureIDOffset()), TrustedImm32(structurePtr->id()));
         jit.abortWithReason(AHStructureIDIsValid);
         correctStructure.link(&jit);
@@ -633,7 +633,7 @@ void AssemblyHelpers::emitDumbVirtualCall(VM& vm, JSGlobalObject* globalObject, 
     addLinkTask(
         [=, &vm] (LinkBuffer& linkBuffer) {
             MacroAssemblerCodeRef<JITStubRoutinePtrTag> virtualThunk = virtualThunkFor(vm, *info);
-            info->setSlowStub(createJITStubRoutine(virtualThunk, vm, nullptr, true));
+            info->setSlowStub(GCAwareJITStubRoutine::create(virtualThunk, vm));
             linkBuffer.link(call, CodeLocationLabel<JITStubRoutinePtrTag>(virtualThunk.code()));
         });
 }

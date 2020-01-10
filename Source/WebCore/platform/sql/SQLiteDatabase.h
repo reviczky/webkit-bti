@@ -132,10 +132,10 @@ public:
 
     // Set this flag to allow access from multiple threads.  Not all multi-threaded accesses are safe!
     // See http://www.sqlite.org/cvstrac/wiki?p=MultiThreading for more info.
-#ifndef NDEBUG
+#if ASSERT_ENABLED
     WEBCORE_EXPORT void disableThreadingChecks();
 #else
-    WEBCORE_EXPORT void disableThreadingChecks() {}
+    void disableThreadingChecks() { }
 #endif
 
     WEBCORE_EXPORT static void setIsDatabaseOpeningForbidden(bool);
@@ -154,7 +154,7 @@ private:
     int m_pageSize { -1 };
     
     bool m_transactionInProgress { false };
-#ifndef NDEBUG
+#if ASSERT_ENABLED
     bool m_sharable { false };
 #endif
 

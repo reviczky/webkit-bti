@@ -1539,6 +1539,16 @@ bool WKPreferencesGetGamepadsEnabled(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->gamepadsEnabled();
 }
 
+void WKPreferencesSetHighlightAPIEnabled(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setHighlightAPIEnabled(enabled);
+}
+
+bool WKPreferencesGetHighlightAPIEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->highlightAPIEnabled();
+}
+
 // FIXME: Remove these when possible.
 void WKPreferencesSetLongMousePressEnabled(WKPreferencesRef preferencesRef, bool enabled)
 {
@@ -1699,16 +1709,6 @@ bool WKPreferencesGetFetchAPIEnabled(WKPreferencesRef preferencesRef)
     return toImpl(preferencesRef)->fetchAPIEnabled();
 }
 
-void WKPreferencesSetDisplayContentsEnabled(WKPreferencesRef preferencesRef, bool flag)
-{
-    toImpl(preferencesRef)->setDisplayContentsEnabled(flag);
-}
-
-bool WKPreferencesGetDisplayContentsEnabled(WKPreferencesRef preferencesRef)
-{
-    return toImpl(preferencesRef)->displayContentsEnabled();
-}
-
 void WKPreferencesSetDataTransferItemsEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setDataTransferItemsEnabled(flag);
@@ -1817,6 +1817,16 @@ void WKPreferencesSetIsNSURLSessionWebSocketEnabled(WKPreferencesRef preferences
 bool WKPreferencesGetIsNSURLSessionWebSocketEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->isNSURLSessionWebSocketEnabled();
+}
+
+WK_EXPORT void WKPreferencesSetIsAccessibilityIsolatedTreeEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setIsAccessibilityIsolatedTreeEnabled(flag);
+}
+
+WK_EXPORT bool WKPreferencesGetIsAccessibilityIsolatedTreeEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->isAccessibilityIsolatedTreeEnabled();
 }
 
 void WKPreferencesSetFetchAPIKeepAliveEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -2139,6 +2149,16 @@ bool WKPreferencesGetCaptureAudioInUIProcessEnabled(WKPreferencesRef preferences
     return toImpl(preferencesRef)->captureAudioInUIProcessEnabled();
 }
 
+void WKPreferencesSetCaptureAudioInGPUProcessEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setCaptureAudioInGPUProcessEnabled(flag);
+}
+
+bool WKPreferencesGetCaptureAudioInGPUProcessEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->captureAudioInGPUProcessEnabled();
+}
+
 void WKPreferencesSetCaptureVideoInUIProcessEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setCaptureVideoInUIProcessEnabled(flag);
@@ -2147,6 +2167,16 @@ void WKPreferencesSetCaptureVideoInUIProcessEnabled(WKPreferencesRef preferences
 bool WKPreferencesGetCaptureVideoInUIProcessEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->captureVideoInUIProcessEnabled();
+}
+
+void WKPreferencesSetCaptureVideoInGPUProcessEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setCaptureVideoInGPUProcessEnabled(flag);
+}
+
+bool WKPreferencesGetCaptureVideoInGPUProcessEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->captureVideoInGPUProcessEnabled();
 }
 
 void WKPreferencesSetReferrerPolicyAttributeEnabled(WKPreferencesRef preferencesRef, bool flag)
@@ -2177,4 +2207,14 @@ bool WKPreferencesGetRemotePlaybackEnabled(WKPreferencesRef preferencesRef)
 void WKPreferencesSetRemotePlaybackEnabled(WKPreferencesRef preferencesRef, bool enabled)
 {
     WebKit::toImpl(preferencesRef)->setRemotePlaybackEnabled(enabled);
+}
+
+bool WKPreferencesGetShouldUseServiceWorkerShortTimeout(WKPreferencesRef preferencesRef)
+{
+    return WebKit::toImpl(preferencesRef)->shouldUseServiceWorkerShortTimeout();
+}
+
+void WKPreferencesSetShouldUseServiceWorkerShortTimeout(WKPreferencesRef preferencesRef, bool enabled)
+{
+    WebKit::toImpl(preferencesRef)->setShouldUseServiceWorkerShortTimeout(enabled);
 }

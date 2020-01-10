@@ -328,7 +328,7 @@ private:
                         }
                     } else if (childConstant.isSymbol()) {
                         Symbol* symbol = jsCast<Symbol*>(childConstant);
-                        constantUid = &symbol->privateName().uid();
+                        constantUid = &symbol->uid();
                     }
                 }
 
@@ -383,7 +383,7 @@ private:
                 // GetMyArgumentByVal in such statically-out-of-bounds accesses; we just lose CFA unless
                 // GCSE removes the access entirely.
                 if (inlineCallFrame) {
-                    if (index >= inlineCallFrame->argumentCountIncludingThis - 1)
+                    if (index >= static_cast<unsigned>(inlineCallFrame->argumentCountIncludingThis - 1))
                         break;
                 } else {
                     if (index >= m_state.numberOfArguments() - 1)
@@ -404,7 +404,7 @@ private:
                         virtualRegisterForArgument(index + 1), FlushedJSValue);
                 }
                 
-                if (inlineCallFrame && !inlineCallFrame->isVarargs() && index < inlineCallFrame->argumentCountIncludingThis - 1) {
+                if (inlineCallFrame && !inlineCallFrame->isVarargs() && index < static_cast<unsigned>(inlineCallFrame->argumentCountIncludingThis - 1)) {
                     node->convertToGetStack(data);
                     eliminated = true;
                     break;
@@ -606,18 +606,15 @@ private:
                 AbstractValue baseValue = m_state.forNode(child);
                 AbstractValue valueValue = m_state.forNode(node->child2());
 
-                m_interpreter.execute(indexInBlock); // Push CFA over this node after we get the state before.
-                alreadyHandled = true; // Don't allow the default constant folder to do things to this.
-
                 if (!baseValue.m_structure.isFinite())
                     break;
-                
+
                 PutByIdStatus status = PutByIdStatus::computeFor(
                     m_graph.globalObjectFor(origin.semantic),
                     baseValue.m_structure.toStructureSet(),
                     m_graph.identifiers()[identifierNumber],
                     node->op() == PutByIdDirect);
-                
+
                 if (!status.isSimple())
                     break;
 
@@ -629,9 +626,9 @@ private:
                 changed = true;
 
                 bool allGood = true;
+                RegisteredStructureSet newSet;
+                TransitionVector transitions;
                 for (const PutByIdVariant& variant : status.variants()) {
-                    if (!allGood)
-                        break;
                     for (const ObjectPropertyCondition& condition : variant.conditionSet()) {
                         if (m_graph.watchCondition(condition))
                             continue;
@@ -648,10 +645,32 @@ private:
                             m_insertionSet.insertConstantForUse(
                                 indexInBlock, node->origin, condition.object(), KnownCellUse));
                     }
+
+                    if (!allGood)
+                        break;
+
+                    if (variant.kind() == PutByIdVariant::Transition) {
+                        RegisteredStructure newStructure = m_graph.registerStructure(variant.newStructure());
+                        transitions.append(
+                            Transition(
+                                m_graph.registerStructure(variant.oldStructureForTransition()), newStructure));
+                        newSet.add(newStructure);
+                    } else {
+                        ASSERT(variant.kind() == PutByIdVariant::Replace);
+                        newSet.merge(*m_graph.addStructureSet(variant.oldStructure()));
+                    }
                 }
 
                 if (!allGood)
                     break;
+
+                // Push CFA over this node after we get the state before.
+                m_interpreter.didFoldClobberWorld();
+                m_interpreter.observeTransitions(indexInBlock, transitions);
+                if (m_state.forNode(node->child1()).changeStructure(m_graph, newSet) == Contradiction)
+                    m_state.setIsValid(false);
+
+                alreadyHandled = true; // Don't allow the default constant folder to do things to this.
                 
                 m_insertionSet.insertNode(
                     indexInBlock, SpecNone, FilterPutByIdStatus, node->origin,
@@ -857,6 +876,26 @@ private:
                 break;
             }
 
+            case NewArrayWithSpread: {
+                if (m_graph.isWatchingHavingABadTimeWatchpoint(node)) {
+                    BitVector* bitVector = node->bitVector();
+                    if (node->numChildren() == 1 && bitVector->get(0)) {
+                        Edge use = m_graph.varArgChild(node, 0);
+                        if (use->op() == PhantomSpread) {
+                            if (use->child1()->op() == PhantomNewArrayBuffer) {
+                                auto* immutableButterfly = use->child1()->castOperand<JSImmutableButterfly*>();
+                                if (hasContiguous(immutableButterfly->indexingType())) {
+                                    node->convertToNewArrayBuffer(m_graph.freeze(immutableButterfly));
+                                    changed = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                break;
+            }
+
             case ToNumber: {
                 if (m_state.forNode(node->child1()).m_type & ~SpecBytecodeNumber)
                     break;
@@ -1035,6 +1074,7 @@ private:
             case PhantomNewGeneratorFunction:
             case PhantomNewAsyncGeneratorFunction:
             case PhantomNewAsyncFunction:
+            case PhantomNewArrayIterator:
             case PhantomCreateActivation:
             case PhantomDirectArguments:
             case PhantomClonedArguments:

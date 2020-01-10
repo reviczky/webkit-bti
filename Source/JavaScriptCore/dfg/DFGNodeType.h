@@ -74,6 +74,7 @@ namespace JSC { namespace DFG {
     macro(GetLocal, NodeResultJS | NodeMustGenerate) \
     macro(SetLocal, 0) \
     \
+    /* These are used in SSA form to represent to track */\
     macro(PutStack, NodeMustGenerate) \
     macro(KillStack, NodeMustGenerate) \
     macro(GetStack, NodeResultJS) \
@@ -202,6 +203,7 @@ namespace JSC { namespace DFG {
     macro(GetByValWithThis, NodeResultJS | NodeMustGenerate) \
     macro(GetMyArgumentByVal, NodeResultJS | NodeMustGenerate) \
     macro(GetMyArgumentByValOutOfBounds, NodeResultJS | NodeMustGenerate) \
+    macro(VarargsLength, NodeMustGenerate | NodeResultInt32) \
     macro(LoadVarargs, NodeMustGenerate) \
     macro(ForwardVarargs, NodeMustGenerate) \
     macro(PutByValDirect, NodeMustGenerate | NodeHasVarArgs) \
@@ -236,6 +238,8 @@ namespace JSC { namespace DFG {
     macro(GetButterfly, NodeResultStorage) \
     macro(NukeStructureAndSetButterfly, NodeMustGenerate) \
     macro(CheckArray, NodeMustGenerate) \
+    /* This checks if the edge is a typed array and if it is neutered. */ \
+    macro(CheckNeutered, NodeMustGenerate) \
     macro(Arrayify, NodeMustGenerate) \
     macro(ArrayifyToStructure, NodeMustGenerate) \
     macro(GetIndexedPropertyStorage, NodeResultStorage) \
@@ -353,6 +357,7 @@ namespace JSC { namespace DFG {
     macro(NewArrayWithSpread, NodeResultJS | NodeHasVarArgs) \
     macro(NewArrayWithSize, NodeResultJS | NodeMustGenerate) \
     macro(NewArrayBuffer, NodeResultJS) \
+    macro(NewArrayIterator, NodeResultJS) \
     macro(NewTypedArray, NodeResultJS | NodeMustGenerate) \
     macro(NewRegexp, NodeResultJS) \
     macro(NewSymbol, NodeResultJS) \
@@ -371,6 +376,8 @@ namespace JSC { namespace DFG {
     macro(PhantomNewGeneratorFunction, NodeResultJS | NodeMustGenerate) \
     macro(PhantomNewAsyncFunction, NodeResultJS | NodeMustGenerate) \
     macro(PhantomNewAsyncGeneratorFunction, NodeResultJS | NodeMustGenerate) \
+    macro(PhantomNewArrayIterator, NodeResultJS | NodeMustGenerate) \
+    macro(MaterializeNewInternalFieldObject, NodeResultJS | NodeHasVarArgs) \
     macro(PhantomCreateActivation, NodeResultJS | NodeMustGenerate) \
     macro(MaterializeCreateActivation, NodeResultJS | NodeHasVarArgs) \
     macro(PhantomNewRegexp, NodeResultJS | NodeMustGenerate) \
@@ -426,6 +433,7 @@ namespace JSC { namespace DFG {
     macro(CreateScopedArguments, NodeResultJS) \
     macro(CreateClonedArguments, NodeResultJS) \
     macro(PhantomClonedArguments, NodeResultJS | NodeMustGenerate) \
+    macro(CreateArgumentsButterfly, NodeResultJS) \
     macro(GetFromArguments, NodeResultJS) \
     macro(PutToArguments, NodeMustGenerate) \
     macro(GetArgument, NodeResultJS) \
