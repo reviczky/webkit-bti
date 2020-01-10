@@ -33,6 +33,7 @@
 #include "Frame.h"
 #include "FrameDestructionObserver.h"
 #include "ImageBitmap.h"
+#include "PostMessageOptions.h"
 #include "ScrollToOptions.h"
 #include "ScrollTypes.h"
 #include "Supplementable.h"
@@ -40,6 +41,7 @@
 #include <JavaScriptCore/Strong.h>
 #include <wtf/Function.h>
 #include <wtf/HashSet.h>
+#include <wtf/MonotonicTime.h>
 #include <wtf/WeakPtr.h>
 
 namespace JSC {
@@ -95,6 +97,16 @@ struct WindowFeatures;
 
 enum SetLocationLocking { LockHistoryBasedOnGestureState, LockHistoryAndBackForwardList };
 enum class IncludeTargetOrigin { No, Yes };
+
+struct WindowPostMessageOptions : public PostMessageOptions {
+    WindowPostMessageOptions() = default;
+    WindowPostMessageOptions(String&& targetOrigin, Vector<JSC::Strong<JSC::JSObject>>&& transfer)
+        : PostMessageOptions(WTFMove(transfer))
+        , targetOrigin(WTFMove(targetOrigin))
+    { }
+
+    String targetOrigin { "/"_s };
+};
 
 // FIXME: Rename DOMWindow to LocalWindow and AbstractDOMWindow to DOMWindow.
 class DOMWindow final
@@ -165,7 +177,14 @@ public:
     Navigator* optionalNavigator() const { return m_navigator.get(); }
     Navigator& clientInformation() { return navigator(); }
 
-    Location& location();
+    WEBCORE_EXPORT static void overrideTransientActivationDurationForTesting(Optional<Seconds>&&);
+    void setLastActivationTimestamp(MonotonicTime lastActivationTimestamp) { m_lastActivationTimestamp = lastActivationTimestamp; }
+    MonotonicTime lastActivationTimestamp() const { return m_lastActivationTimestamp; }
+    void notifyActivated(MonotonicTime);
+    bool hasTransientActivation() const;
+    bool consumeTransientActivation();
+
+    WEBCORE_EXPORT Location& location();
     void setLocation(DOMWindow& activeWindow, const URL& completedURL, SetLocationLocking = LockHistoryBasedOnGestureState);
 
     DOMSelection* getSelection();
@@ -223,6 +242,7 @@ public:
     WindowProxy* top() const;
 
     String origin() const;
+    SecurityOrigin* securityOrigin() const;
 
     // DOM Level 2 AbstractView Interface
 
@@ -250,7 +270,12 @@ public:
 
     String crossDomainAccessErrorMessage(const DOMWindow& activeWindow, IncludeTargetOrigin);
 
-    ExceptionOr<void> postMessage(JSC::JSGlobalObject&, DOMWindow& incumbentWindow, JSC::JSValue message, const String& targetOrigin, Vector<JSC::Strong<JSC::JSObject>>&&);
+    ExceptionOr<void> postMessage(JSC::JSGlobalObject&, DOMWindow& incumbentWindow, JSC::JSValue message, WindowPostMessageOptions&&);
+    ExceptionOr<void> postMessage(JSC::JSGlobalObject& globalObject, DOMWindow& incumbentWindow, JSC::JSValue message, String&& targetOrigin, Vector<JSC::Strong<JSC::JSObject>>&& transfer)
+    {
+        return postMessage(globalObject, incumbentWindow, message, WindowPostMessageOptions { WTFMove(targetOrigin), WTFMove(transfer) });
+    }
+
     void postMessageTimerFired(PostMessageTimer&);
 
     void languagesChanged();
@@ -446,6 +471,12 @@ private:
     RefPtr<CustomElementRegistry> m_customElementRegistry;
 
     mutable RefPtr<Performance> m_performance;
+
+    // For the purpose of tracking user activation, each Window W has a last activation timestamp. This is a number indicating the last time W got
+    // an activation notification. It corresponds to a DOMHighResTimeStamp value except for two cases: positive infinity indicates that W has never
+    // been activated, while negative infinity indicates that a user activation-gated API has consumed the last user activation of W. The initial
+    // value is positive infinity.
+    MonotonicTime m_lastActivationTimestamp { MonotonicTime::infinity() };
 
 #if ENABLE(USER_MESSAGE_HANDLERS)
     mutable RefPtr<WebKitNamespace> m_webkitNamespace;

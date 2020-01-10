@@ -24,7 +24,7 @@
 
 #if USE(TEXTURE_MAPPER_GL)
 
-#include "Extensions3D.h"
+#include "ExtensionsGL.h"
 #include "FilterOperations.h"
 #include "LengthFunctions.h"
 #include "NativeImage.h"
@@ -63,13 +63,14 @@ BitmapTextureGL* toBitmapTextureGL(BitmapTexture* texture)
 
 BitmapTextureGL::BitmapTextureGL(const TextureMapperContextAttributes& contextAttributes, const Flags, GLint internalFormat)
     : m_contextAttributes(contextAttributes)
+    , m_format(GL_RGBA)
 {
     if (internalFormat != GL_DONT_CARE) {
-        m_internalFormat = m_format = internalFormat;
+        m_internalFormat = internalFormat;
         return;
     }
 
-    m_internalFormat = m_format = GL_RGBA;
+    m_internalFormat = GL_RGBA;
 }
 
 void BitmapTextureGL::didReset()

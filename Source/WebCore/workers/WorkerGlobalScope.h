@@ -69,7 +69,7 @@ public:
     EventLoopTaskGroup& eventLoop() final;
 
     const URL& url() const final { return m_url; }
-    String origin() const final;
+    String origin() const;
     const String& identifier() const { return m_identifier; }
 
 #if ENABLE(INDEXED_DATABASE)
@@ -122,6 +122,8 @@ public:
 
     void addConsoleMessage(std::unique_ptr<Inspector::ConsoleMessage>&&) final;
 
+    SecurityOrigin& topOrigin() const final { return m_topOrigin.get(); }
+
     Crypto& crypto();
     Performance& performance() const;
 
@@ -168,7 +170,6 @@ private:
 
     bool shouldBypassMainWorldContentSecurityPolicy() const final { return m_shouldBypassMainWorldContentSecurityPolicy; }
     bool isJSExecutionForbidden() const final;
-    SecurityOrigin& topOrigin() const final { return m_topOrigin.get(); }
 
 #if ENABLE(WEB_CRYPTO)
     bool wrapCryptoKey(const Vector<uint8_t>& key, Vector<uint8_t>& wrappedKey) final;

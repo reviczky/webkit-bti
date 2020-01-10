@@ -28,6 +28,7 @@
 #include <type_traits>
 #include <utility>
 #include <wtf/Assertions.h>
+#include <wtf/DebugHeap.h>
 #include <wtf/FastMalloc.h>
 #include <wtf/HashTraits.h>
 #include <wtf/Lock.h>
@@ -44,6 +45,8 @@
 #endif
 
 namespace WTF {
+
+DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(HashTable);
 
 // Enables internal WTF consistency checks that are invoked automatically. Non-WTF callers can call checkTableConsistency() even if internal checks are disabled.
 #define CHECK_HASHTABLE_CONSISTENCY 0
@@ -450,7 +453,7 @@ namespace WTF {
         template<typename HashTranslator, typename T> ValueType* lookup(const T&);
         template<typename HashTranslator, typename T> ValueType* inlineLookup(const T&);
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
         void checkTableConsistency() const;
 #else
         static void checkTableConsistency() { }
@@ -506,7 +509,7 @@ namespace WTF {
         iterator makeKnownGoodIterator(ValueType* pos) { return iterator(this, pos, m_table + m_tableSize, HashItemKnownGood); }
         const_iterator makeKnownGoodConstIterator(ValueType* pos) const { return const_iterator(this, pos, m_table + m_tableSize, HashItemKnownGood); }
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
         void checkTableConsistencyExceptSize() const;
 #else
         static void checkTableConsistencyExceptSize() { }
@@ -606,7 +609,7 @@ namespace WTF {
         return key;
     }
 
-#if ASSERT_DISABLED
+#if !ASSERT_ENABLED
 
     template<typename Key, typename Value, typename Extractor, typename HashFunctions, typename Traits, typename KeyTraits>
     template<typename HashTranslator, typename T>
@@ -614,7 +617,7 @@ namespace WTF {
     {
     }
 
-#else
+#else // ASSERT_ENABLED
 
     template<typename Key, typename Value, typename Extractor, typename HashFunctions, typename Traits, typename KeyTraits>
     template<typename HashTranslator, typename T>
@@ -630,7 +633,7 @@ namespace WTF {
         ASSERT(!HashTranslator::equal(Extractor::extract(deletedValue), key));
     }
 
-#endif
+#endif // ASSERT_ENABLED
 
     template<typename Key, typename Value, typename Extractor, typename HashFunctions, typename Traits, typename KeyTraits>
     template<typename HashTranslator, typename T>
@@ -1181,8 +1184,9 @@ namespace WTF {
         // would use a template member function with explicit specializations here, but
         // gcc doesn't appear to support that
         if (Traits::emptyValueIsZero)
-            return static_cast<ValueType*>(fastZeroedMalloc(size * sizeof(ValueType)));
-        ValueType* result = static_cast<ValueType*>(fastMalloc(size * sizeof(ValueType)));
+            return static_cast<ValueType*>(HashTableMalloc::zeroedMalloc(size * sizeof(ValueType)));
+
+        ValueType* result = static_cast<ValueType*>(HashTableMalloc::malloc(size * sizeof(ValueType)));
         for (unsigned i = 0; i < size; i++)
             initializeBucket(result[i]);
         return result;
@@ -1195,7 +1199,7 @@ namespace WTF {
             if (!isDeletedBucket(table[i]))
                 table[i].~ValueType();
         }
-        fastFree(table);
+        HashTableMalloc::free(table);
     }
 
     template<typename Key, typename Value, typename Extractor, typename HashFunctions, typename Traits, typename KeyTraits>
@@ -1304,7 +1308,7 @@ namespace WTF {
 
         m_deletedCount = 0;
 
-        fastFree(oldTable);
+        HashTableMalloc::free(oldTable);
 
         internalCheckTableConsistency();
         return newEntry;
@@ -1413,7 +1417,7 @@ namespace WTF {
         return *this;
     }
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
 
     template<typename Key, typename Value, typename Extractor, typename HashFunctions, typename Traits, typename KeyTraits>
     void HashTable<Key, Value, Extractor, HashFunctions, Traits, KeyTraits>::checkTableConsistency() const
@@ -1456,7 +1460,7 @@ namespace WTF {
         ASSERT(m_tableSize == m_tableSizeMask + 1);
     }
 
-#endif // ASSERT_DISABLED
+#endif // ASSERT_ENABLED
 
 #if CHECK_HASHTABLE_ITERATORS
 

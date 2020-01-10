@@ -270,16 +270,6 @@ void HTMLVideoElement::setDisplayMode(DisplayMode mode)
 
     HTMLMediaElement::setDisplayMode(mode);
 
-    if (player() && player()->canLoadPoster()) {
-        bool canLoad = true;
-        if (!poster.isEmpty()) {
-            if (RefPtr<Frame> frame = document().frame())
-                canLoad = frame->loader().willLoadMediaElementURL(poster, *this);
-        }
-        if (canLoad)
-            player()->setPoster(poster);
-    }
-
     if (auto* renderer = this->renderer()) {
         if (displayMode() != oldMode)
             renderer->updateFromElement();
@@ -304,7 +294,7 @@ void HTMLVideoElement::paintCurrentFrameInContext(GraphicsContext& context, cons
     player->paintCurrentFrameInContext(context, destRect);
 }
 
-bool HTMLVideoElement::copyVideoTextureToPlatformTexture(GraphicsContext3D* context, Platform3DObject texture, GC3Denum target, GC3Dint level, GC3Denum internalFormat, GC3Denum format, GC3Denum type, bool premultiplyAlpha, bool flipY)
+bool HTMLVideoElement::copyVideoTextureToPlatformTexture(GraphicsContextGLOpenGL* context, PlatformGLObject texture, GCGLenum target, GCGLint level, GCGLenum internalFormat, GCGLenum format, GCGLenum type, bool premultiplyAlpha, bool flipY)
 {
     if (!player())
         return false;

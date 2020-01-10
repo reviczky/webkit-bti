@@ -52,7 +52,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a> *
+<span class="returnvalue">GtkWidget</span> *
 </td>
 <td class="function_name">
 <a class="link" href="webkit2gtk-4.0-The-title-of-the-custom-widget..html#webkit-print-custom-widget-get-widget" title="webkit_print_custom_widget_get_widget ()">webkit_print_custom_widget_get_widget</a> <span class="c_punctuation">()</span>
@@ -85,7 +85,7 @@
 </tr>
 <tr>
 <td class="property_type">
-<a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="type">GtkWidget</span></a> *</td>
+<span class="type">GtkWidget</span> *</td>
 <td class="property_name"><a class="link" href="webkit2gtk-4.0-The-title-of-the-custom-widget..html#WebKitPrintCustomWidget--widget" title="The “widget” property">widget</a></td>
 <td class="property_flags">Read / Write / Construct Only</td>
 </tr>
@@ -146,7 +146,7 @@ use <a class="link" href="WebKitPrintOperation.html#webkit-print-operation-run-d
 <div class="refsect2">
 <a name="webkit-print-custom-widget-new"></a><h3>webkit_print_custom_widget_new ()</h3>
 <pre class="programlisting"><a class="link" href="webkit2gtk-4.0-The-title-of-the-custom-widget..html#WebKitPrintCustomWidget"><span class="returnvalue">WebKitPrintCustomWidget</span></a> *
-webkit_print_custom_widget_new (<em class="parameter"><code><a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="type">GtkWidget</span></a> *widget</code></em>,
+webkit_print_custom_widget_new (<em class="parameter"><code><span class="type">GtkWidget</span> *widget</code></em>,
                                 <em class="parameter"><code>const <span class="type">char</span> *title</code></em>);</pre>
 <p>Create a new <a class="link" href="webkit2gtk-4.0-The-title-of-the-custom-widget..html#WebKitPrintCustomWidget"><span class="type">WebKitPrintCustomWidget</span></a> with given <em class="parameter"><code>widget</code></em>
  and <em class="parameter"><code>title</code></em>
@@ -166,7 +166,7 @@ widget with multiple widgets in it.</p>
 <tbody>
 <tr>
 <td class="parameter_name"><p>widget</p></td>
-<td class="parameter_description"><p>a <a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="type">GtkWidget</span></a></p></td>
+<td class="parameter_description"><p>a <span class="type">GtkWidget</span></p></td>
 <td class="parameter_annotations"> </td>
 </tr>
 <tr>
@@ -188,7 +188,7 @@ widget with multiple widgets in it.</p>
 <hr>
 <div class="refsect2">
 <a name="webkit-print-custom-widget-get-widget"></a><h3>webkit_print_custom_widget_get_widget ()</h3>
-<pre class="programlisting"><a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="returnvalue">GtkWidget</span></a> *
+<pre class="programlisting"><span class="returnvalue">GtkWidget</span> *
 webkit_print_custom_widget_get_widget (<em class="parameter"><code><a class="link" href="webkit2gtk-4.0-The-title-of-the-custom-widget..html#WebKitPrintCustomWidget"><span class="type">WebKitPrintCustomWidget</span></a> *print_custom_widget</code></em>);</pre>
 <p>Return the value of <a class="link" href="webkit2gtk-4.0-The-title-of-the-custom-widget..html#WebKitPrintCustomWidget--widget" title="The “widget” property"><span class="type">“widget”</span></a> property for the given
 <em class="parameter"><code>print_custom_widget</code></em>
@@ -213,7 +213,7 @@ callbacks, but it will be <a href="../glib/glib-Standard-Macros.html#NULL:CAPS">
 </div>
 <div class="refsect3">
 <a name="webkit-print-custom-widget-get-widget.returns"></a><h4>Returns</h4>
-<p>a <a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="type">GtkWidget</span></a>. </p>
+<p>a <span class="type">GtkWidget</span>. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
 </div>
 <p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
@@ -270,8 +270,8 @@ webkit_print_custom_widget_get_title (<em class="parameter"><code><a class="link
 <hr>
 <div class="refsect2">
 <a name="WebKitPrintCustomWidget--widget"></a><h3>The <code class="literal">“widget”</code> property</h3>
-<pre class="programlisting">  “widget”                   <a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="type">GtkWidget</span></a> *</pre>
-<p>The custom <a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="type">GtkWidget</span></a> that will be embedded in the dialog.</p>
+<pre class="programlisting">  “widget”                   <span class="type">GtkWidget</span> *</pre>
+<p>The custom <span class="type">GtkWidget</span> that will be embedded in the dialog.</p>
 <p>Owner: WebKitPrintCustomWidget</p>
 <p>Flags: Read / Write / Construct Only</p>
 <p class="since">Since: <a class="link" href="api-index-2-16.html#api-index-2.16">2.16</a></p>
@@ -317,8 +317,8 @@ is not guaranteed to be valid at a later time.</p>
 <a name="WebKitPrintCustomWidget-update"></a><h3>The <code class="literal">“update”</code> signal</h3>
 <pre class="programlisting"><span class="returnvalue">void</span>
 user_function (<a class="link" href="webkit2gtk-4.0-The-title-of-the-custom-widget..html#WebKitPrintCustomWidget"><span class="type">WebKitPrintCustomWidget</span></a> *print_custom_widget,
-               <a href="../gtk3/GtkPageSetup.html#GtkPageSetup-struct"><span class="type">GtkPageSetup</span></a>            *page_setup,
-               <a href="../gtk3/GtkPrintSettings.html#GtkPrintSettings-struct"><span class="type">GtkPrintSettings</span></a>        *print_settings,
+               <span class="type">GtkPageSetup</span>            *page_setup,
+               <span class="type">GtkPrintSettings</span>        *print_settings,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>                 user_data)</pre>
 <p>Emitted after change of selected printer in the dialog. The actual page setup
 and print settings are available and the custom widget can actualize itself

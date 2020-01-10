@@ -49,6 +49,10 @@
 
 namespace WebCore {
 
+DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(StyleProperties);
+DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(ImmutableStyleProperties);
+DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(MutableStyleProperties);
+
 static size_t sizeForImmutableStylePropertiesWithPropertyCount(unsigned count)
 {
     return sizeof(ImmutableStyleProperties) - sizeof(void*) + sizeof(CSSValue*) * count + sizeof(StylePropertyMetadata) * count;
@@ -61,7 +65,7 @@ static bool isInitialOrInherit(const String& value)
 
 Ref<ImmutableStyleProperties> ImmutableStyleProperties::create(const CSSProperty* properties, unsigned count, CSSParserMode cssParserMode)
 {
-    void* slot = WTF::fastMalloc(sizeForImmutableStylePropertiesWithPropertyCount(count));
+    void* slot = ImmutableStylePropertiesMalloc::malloc(sizeForImmutableStylePropertiesWithPropertyCount(count));
     return adoptRef(*new (NotNull, slot) ImmutableStyleProperties(properties, count, cssParserMode));
 }
 
@@ -218,15 +222,15 @@ String StyleProperties::getPropertyValue(CSSPropertyID propertyID) const
     case CSSPropertyFlexFlow:
         return getShorthandValue(flexFlowShorthand());
     case CSSPropertyGridArea:
-        return getShorthandValue(gridAreaShorthand());
+        return getGridShorthandValue(gridAreaShorthand());
     case CSSPropertyGridTemplate:
-        return getShorthandValue(gridTemplateShorthand());
+        return getGridShorthandValue(gridTemplateShorthand());
     case CSSPropertyGrid:
-        return getShorthandValue(gridShorthand());
+        return getGridShorthandValue(gridShorthand());
     case CSSPropertyGridColumn:
-        return getShorthandValue(gridColumnShorthand());
+        return getGridShorthandValue(gridColumnShorthand());
     case CSSPropertyGridRow:
-        return getShorthandValue(gridRowShorthand());
+        return getGridShorthandValue(gridRowShorthand());
     case CSSPropertyPageBreakAfter:
         return pageBreakPropertyValue(pageBreakAfterShorthand());
     case CSSPropertyPageBreakBefore:
@@ -267,8 +271,6 @@ String StyleProperties::getPropertyValue(CSSPropertyID propertyID) const
         return getLayeredShorthandValue(transitionShorthand());
     case CSSPropertyListStyle:
         return getShorthandValue(listStyleShorthand());
-    case CSSPropertyWebkitMarquee:
-        return getShorthandValue(webkitMarqueeShorthand());
     case CSSPropertyWebkitMaskPosition:
         return getLayeredShorthandValue(webkitMaskPositionShorthand());
     case CSSPropertyWebkitMaskRepeat:
@@ -650,7 +652,12 @@ String StyleProperties::getLayeredShorthandValue(const StylePropertyShorthand& s
     return result.toString();
 }
 
-String StyleProperties::getShorthandValue(const StylePropertyShorthand& shorthand) const
+String StyleProperties::getGridShorthandValue(const StylePropertyShorthand& shorthand) const
+{
+    return getShorthandValue(shorthand, " / ");
+}
+
+String StyleProperties::getShorthandValue(const StylePropertyShorthand& shorthand, const char* separator) const
 {
     String commonValue;
     StringBuilder result;
@@ -667,7 +674,7 @@ String StyleProperties::getShorthandValue(const StylePropertyShorthand& shorthan
             if (value->isInitialValue())
                 continue;
             if (!result.isEmpty())
-                result.append(' ');
+                result.append(separator);
             result.append(valueText);
         } else
             commonValue = String();

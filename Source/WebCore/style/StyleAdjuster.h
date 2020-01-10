@@ -25,6 +25,8 @@
 
 #pragma once
 
+#include <wtf/OptionSet.h>
+
 namespace WebCore {
 
 class Document;
@@ -32,6 +34,8 @@ class Element;
 class RenderStyle;
 class SVGElement;
 class Settings;
+
+enum class AnimationImpact;
 
 namespace Style {
 
@@ -42,6 +46,8 @@ public:
     void adjust(RenderStyle&, const RenderStyle* userAgentAppearanceStyle) const;
 
     static void adjustSVGElementStyle(RenderStyle&, const SVGElement&);
+    static void adjustAnimatedStyle(RenderStyle&, const RenderStyle* parentBoxStyle, OptionSet<AnimationImpact>);
+
 #if ENABLE(TEXT_AUTOSIZING)
     static bool adjustForTextAutosizing(RenderStyle&, const Element&);
 #endif

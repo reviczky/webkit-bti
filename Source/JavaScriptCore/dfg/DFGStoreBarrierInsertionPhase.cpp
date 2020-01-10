@@ -327,6 +327,7 @@ private:
             case NewArray:
             case NewArrayWithSize:
             case NewArrayBuffer:
+            case NewArrayIterator:
             case NewTypedArray:
             case NewRegexp:
             case NewStringObject:
@@ -338,6 +339,7 @@ private:
             case CreateDirectArguments:
             case CreateScopedArguments:
             case CreateClonedArguments:
+            case CreateArgumentsButterfly:
             case NewFunction:
             case NewGeneratorFunction:
             case NewAsyncGeneratorFunction:

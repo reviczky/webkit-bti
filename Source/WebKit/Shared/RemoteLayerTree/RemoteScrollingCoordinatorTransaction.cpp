@@ -24,6 +24,9 @@
  */
 
 #include "config.h"
+
+#if ENABLE(UI_SIDE_COMPOSITING)
+
 #include "RemoteScrollingCoordinatorTransaction.h"
 
 #include "ArgumentCoders.h"
@@ -40,8 +43,6 @@
 #include <wtf/HashMap.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/TextStream.h>
-
-#if ENABLE(ASYNC_SCROLLING)
 
 namespace IPC {
 using namespace WebCore;
@@ -768,7 +769,7 @@ static void dump(TextStream& ts, const ScrollingStateTree& stateTree, bool chang
         recursiveDumpNodes(ts, *stateTree.rootStateNode(), changedPropertiesOnly);
 }
 
-WTF::CString RemoteScrollingCoordinatorTransaction::description() const
+String RemoteScrollingCoordinatorTransaction::description() const
 {
     TextStream ts;
 
@@ -785,30 +786,15 @@ WTF::CString RemoteScrollingCoordinatorTransaction::description() const
 
     ts.endGroup();
 
-    return ts.release().utf8();
+    return ts.release();
 }
 
 void RemoteScrollingCoordinatorTransaction::dump() const
 {
-    fprintf(stderr, "%s", description().data());
+    fprintf(stderr, "%s", description().utf8().data());
 }
 #endif
 
 } // namespace WebKit
 
-#else // !ENABLE(ASYNC_SCROLLING)
-
-namespace WebKit {
-
-void RemoteScrollingCoordinatorTransaction::encode(IPC::Encoder&) const
-{
-}
-
-bool RemoteScrollingCoordinatorTransaction::decode(IPC::Decoder& decoder, RemoteScrollingCoordinatorTransaction& transaction)
-{
-    return true;
-}
-
-} // namespace WebKit
-
-#endif // ENABLE(ASYNC_SCROLLING)
+#endif // ENABLE(UI_SIDE_COMPOSITING)

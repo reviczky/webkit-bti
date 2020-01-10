@@ -69,6 +69,7 @@ void NetworkSessionCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << enableResourceLoadStatisticsDebugMode;
     encoder << resourceLoadStatisticsManualPrevalentResource;
     encoder << thirdPartyCookieBlockingMode;
+    encoder << firstPartyWebsiteDataRemovalMode;
 
     encoder << networkCacheDirectory << networkCacheDirectoryExtensionHandle;
 
@@ -81,6 +82,7 @@ void NetworkSessionCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << staleWhileRevalidateEnabled;
     encoder << testSpeedMultiplier;
     encoder << suppressesConnectionTerminationOnSystemChange;
+    encoder << allowsServerPreconnect;
 }
 
 Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::decode(IPC::Decoder& decoder)
@@ -205,6 +207,11 @@ Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::dec
     if (!thirdPartyCookieBlockingMode)
         return WTF::nullopt;
 
+    Optional<WebCore::FirstPartyWebsiteDataRemovalMode> firstPartyWebsiteDataRemovalMode;
+    decoder >> firstPartyWebsiteDataRemovalMode;
+    if (!firstPartyWebsiteDataRemovalMode)
+        return WTF::nullopt;
+
     Optional<String> networkCacheDirectory;
     decoder >> networkCacheDirectory;
     if (!networkCacheDirectory)
@@ -260,6 +267,11 @@ Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::dec
     if (!suppressesConnectionTerminationOnSystemChange)
         return WTF::nullopt;
 
+    Optional<bool> allowsServerPreconnect;
+    decoder >> allowsServerPreconnect;
+    if (!allowsServerPreconnect)
+        return WTF::nullopt;
+
     return {{
         *sessionID
         , WTFMove(*boundInterfaceIdentifier)
@@ -289,6 +301,7 @@ Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::dec
         , WTFMove(*shouldIncludeLocalhostInResourceLoadStatistics)
         , WTFMove(*enableResourceLoadStatisticsDebugMode)
         , WTFMove(*thirdPartyCookieBlockingMode)
+        , WTFMove(*firstPartyWebsiteDataRemovalMode)
         , WTFMove(*deviceManagementRestrictionsEnabled)
         , WTFMove(*allLoadsBlockedByDeviceManagementRestrictionsForTesting)
         , WTFMove(*resourceLoadStatisticsManualPrevalentResource)
@@ -301,6 +314,7 @@ Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::dec
         , WTFMove(*staleWhileRevalidateEnabled)
         , WTFMove(*testSpeedMultiplier)
         , WTFMove(*suppressesConnectionTerminationOnSystemChange)
+        , WTFMove(*allowsServerPreconnect)
     }};
 }
 

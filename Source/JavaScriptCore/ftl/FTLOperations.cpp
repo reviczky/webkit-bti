@@ -37,10 +37,10 @@
 #include "FrameTracers.h"
 #include "InlineCallFrame.h"
 #include "Interpreter.h"
+#include "JSArrayIterator.h"
 #include "JSAsyncFunction.h"
 #include "JSAsyncGeneratorFunction.h"
 #include "JSCInlines.h"
-#include "JSFixedArray.h"
 #include "JSGeneratorFunction.h"
 #include "JSImmutableButterfly.h"
 #include "JSLexicalEnvironment.h"
@@ -115,6 +115,19 @@ extern "C" void JIT_OPERATION operationPopulateObjectInOSR(JSGlobalObject* globa
             activation->variableAt(ScopeOffset(property.location().info())).set(vm, activation, JSValue::decode(values[i]));
         }
 
+        break;
+    }
+
+    case PhantomNewArrayIterator: {
+        JSArrayIterator* arrayIterator = jsCast<JSArrayIterator*>(JSValue::decode(*encodedValue));
+
+        // Figure out what to populate the iterator with
+        for (unsigned i = materialization->properties().size(); i--;) {
+            const ExitPropertyValue& property = materialization->properties()[i];
+            if (property.location().kind() != InternalFieldObjectPLoc)
+                continue;
+            arrayIterator->internalField(static_cast<JSArrayIterator::Field>(property.location().info())).set(vm, arrayIterator, JSValue::decode(values[i]));
+        }
         break;
     }
 
@@ -280,6 +293,28 @@ extern "C" JSCell* JIT_OPERATION operationMaterializeObjectInOSR(JSGlobalObject*
         return result;
     }
 
+    case PhantomNewArrayIterator: {
+        // Figure out what structure.
+        Structure* structure = nullptr;
+        for (unsigned i = materialization->properties().size(); i--;) {
+            const ExitPropertyValue& property = materialization->properties()[i];
+            if (property.location() == PromotedLocationDescriptor(StructurePLoc)) {
+                RELEASE_ASSERT(JSValue::decode(values[i]).asCell()->inherits<Structure>(vm));
+                structure = jsCast<Structure*>(JSValue::decode(values[i]));
+            }
+        }
+        RELEASE_ASSERT(structure);
+
+        JSArrayIterator* result = JSArrayIterator::createWithInitialValues(vm, structure);
+
+        RELEASE_ASSERT(materialization->properties().size() - 1 == JSArrayIterator::numberOfInternalFields);
+
+        // The real values will be put subsequently by
+        // operationPopulateNewObjectInOSR. See the PhantomNewObject
+        // case for details.
+        return result;
+    }
+
     case PhantomCreateRest:
     case PhantomDirectArguments:
     case PhantomClonedArguments: {
@@ -412,7 +447,7 @@ extern "C" JSCell* JIT_OPERATION operationMaterializeObjectInOSR(JSGlobalObject*
                 array->putDirectIndex(globalObject, arrayIndex, JSValue::decode(values[i]));
             }
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
             // We avoid this O(n^2) loop when asserts are disabled, but the condition checked here
             // must hold to ensure the correctness of the above loop because of how we allocate the array.
             for (unsigned targetIndex = 0; targetIndex < arraySize; ++targetIndex) {
@@ -435,7 +470,7 @@ extern "C" JSCell* JIT_OPERATION operationMaterializeObjectInOSR(JSGlobalObject*
                 }
                 ASSERT(found);
             }
-#endif
+#endif // ASSERT_ENABLED
             return array;
         }
 
@@ -456,11 +491,11 @@ extern "C" JSCell* JIT_OPERATION operationMaterializeObjectInOSR(JSGlobalObject*
         }
         RELEASE_ASSERT(array);
 
-        // Note: it is sound for JSFixedArray::createFromArray to call getDirectIndex here
+        // Note: it is sound for JSImmutableButterfly::createFromArray to call getDirectIndex here
         // because we're guaranteed we won't be calling any getters. The reason for this is
         // that we only support PhantomSpread over CreateRest, which is an array we create.
         // Any attempts to put a getter on any indices on the rest array will escape the array.
-        JSFixedArray* fixedArray = JSFixedArray::createFromArray(globalObject, vm, array);
+        auto* fixedArray = JSImmutableButterfly::createFromArray(globalObject, vm, array);
         RELEASE_ASSERT(fixedArray);
         return fixedArray;
     }
@@ -506,7 +541,7 @@ extern "C" JSCell* JIT_OPERATION operationMaterializeObjectInOSR(JSGlobalObject*
             // We also cannot allocate a new butterfly from compilation threads since it's invalid to allocate cells from
             // a compilation thread.
             WTF::storeStoreFence();
-            codeBlock->constantRegister(newArrayBuffer.m_immutableButterfly.offset()).set(vm, codeBlock, immutableButterfly);
+            codeBlock->constantRegister(newArrayBuffer.m_immutableButterfly).set(vm, codeBlock, immutableButterfly);
             WTF::storeStoreFence();
         }
 
@@ -528,8 +563,8 @@ extern "C" JSCell* JIT_OPERATION operationMaterializeObjectInOSR(JSGlobalObject*
             if (property.location().kind() == NewArrayWithSpreadArgumentPLoc) {
                 ++numProperties;
                 JSValue value = JSValue::decode(values[i]);
-                if (JSFixedArray* fixedArray = jsDynamicCast<JSFixedArray*>(vm, value))
-                    checkedArraySize += fixedArray->size();
+                if (JSImmutableButterfly* immutableButterfly = jsDynamicCast<JSImmutableButterfly*>(vm, value))
+                    checkedArraySize += immutableButterfly->publicLength();
                 else
                     checkedArraySize += 1;
             }
@@ -541,7 +576,7 @@ extern "C" JSCell* JIT_OPERATION operationMaterializeObjectInOSR(JSGlobalObject*
         JSArray* result = JSArray::tryCreate(vm, structure, arraySize);
         RELEASE_ASSERT(result);
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
         // Ensure we see indices for everything in the range: [0, numProperties)
         for (unsigned i = 0; i < numProperties; ++i) {
             bool found = false;
@@ -554,7 +589,7 @@ extern "C" JSCell* JIT_OPERATION operationMaterializeObjectInOSR(JSGlobalObject*
             }
             ASSERT(found);
         }
-#endif
+#endif // ASSERT_ENABLED
 
         Vector<JSValue, 8> arguments;
         arguments.grow(numProperties);
@@ -570,10 +605,10 @@ extern "C" JSCell* JIT_OPERATION operationMaterializeObjectInOSR(JSGlobalObject*
 
         unsigned arrayIndex = 0;
         for (JSValue value : arguments) {
-            if (JSFixedArray* fixedArray = jsDynamicCast<JSFixedArray*>(vm, value)) {
-                for (unsigned i = 0; i < fixedArray->size(); i++) {
-                    ASSERT(fixedArray->get(i));
-                    result->putDirectIndex(globalObject, arrayIndex, fixedArray->get(i));
+            if (JSImmutableButterfly* immutableButterfly = jsDynamicCast<JSImmutableButterfly*>(vm, value)) {
+                for (unsigned i = 0; i < immutableButterfly->publicLength(); i++) {
+                    ASSERT(immutableButterfly->get(i));
+                    result->putDirectIndex(globalObject, arrayIndex, immutableButterfly->get(i));
                     ++arrayIndex;
                 }
             } else {

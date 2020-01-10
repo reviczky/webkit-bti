@@ -133,7 +133,7 @@ void link(State& state)
             CCallHelpers::JumpList mainPathJumps;
     
             jit.load32(
-                frame.withOffset(sizeof(Register) * CallFrameSlot::argumentCount),
+                frame.withOffset(sizeof(Register) * CallFrameSlot::argumentCountIncludingThis),
                 GPRInfo::regT1);
             mainPathJumps.append(jit.branch32(
                                      CCallHelpers::AboveOrEqual, GPRInfo::regT1,
@@ -151,7 +151,7 @@ void link(State& state)
             jit.jumpToExceptionHandler(vm);
             noException.link(&jit);
 
-            if (!ASSERT_DISABLED) {
+            if (ASSERT_ENABLED) {
                 jit.load64(vm.addressOfException(), GPRInfo::regT1);
                 jit.jitAssertIsNull(GPRInfo::regT1);
             }

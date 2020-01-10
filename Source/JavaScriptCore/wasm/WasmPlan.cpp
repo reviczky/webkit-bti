@@ -35,7 +35,6 @@
 #include "WasmCallingConvention.h"
 #include "WasmFaultSignalHandler.h"
 #include "WasmMemory.h"
-#include "WasmValidate.h"
 #include <wtf/DataLog.h>
 #include <wtf/Locker.h>
 #include <wtf/MonotonicTime.h>
@@ -48,19 +47,11 @@ namespace WasmPlanInternal {
 static constexpr bool verbose = false;
 }
 
-Plan::Plan(Context* context, Ref<ModuleInformation> info, CompletionTask&& task, CreateEmbedderWrapper&& createEmbedderWrapper, ThrowWasmException throwWasmException)
+Plan::Plan(Context* context, Ref<ModuleInformation> info, CompletionTask&& task)
     : m_moduleInformation(WTFMove(info))
-    , m_createEmbedderWrapper(WTFMove(createEmbedderWrapper))
-    , m_throwWasmException(throwWasmException)
 {
     m_completionTasks.append(std::make_pair(context, WTFMove(task)));
 }
-
-Plan::Plan(Context* context, Ref<ModuleInformation> info, CompletionTask&& task)
-    : Plan(context, WTFMove(info), WTFMove(task), nullptr, nullptr)
-{
-}
-
 Plan::Plan(Context* context, CompletionTask&& task)
     : m_moduleInformation(ModuleInformation::create())
 {
@@ -98,7 +89,7 @@ bool Plan::tryRemoveContextAndCancelIfLast(Context& context)
 {
     LockHolder locker(m_lock);
 
-    if (!ASSERT_DISABLED) {
+    if (ASSERT_ENABLED) {
         // We allow the first completion task to not have a Context.
         for (unsigned i = 1; i < m_completionTasks.size(); ++i)
             ASSERT(m_completionTasks[i].first);

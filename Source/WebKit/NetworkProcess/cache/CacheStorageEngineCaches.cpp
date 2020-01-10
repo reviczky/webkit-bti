@@ -56,36 +56,21 @@ String Caches::cachesSizeFilename(const String& cachesRootsPath)
     return FileSystem::pathByAppendingComponent(cachesRootsPath, "estimatedsize"_s);
 }
 
-Ref<Caches> Caches::create(Engine& engine, WebCore::ClientOrigin&& origin, String&& rootPath, WebCore::StorageQuotaManager& quotaManager)
+Ref<Caches> Caches::create(Engine& engine, WebCore::ClientOrigin&& origin, String&& rootPath)
 {
-    auto caches = adoptRef(*new Caches { engine, WTFMove(origin), WTFMove(rootPath), quotaManager });
-    quotaManager.addUser(caches.get());
-    return caches;
+    return adoptRef(*new Caches { engine, WTFMove(origin), WTFMove(rootPath) });
 }
 
-Caches::Caches(Engine& engine, WebCore::ClientOrigin&& origin, String&& rootPath, WebCore::StorageQuotaManager& quotaManager)
+Caches::Caches(Engine& engine, WebCore::ClientOrigin&& origin, String&& rootPath)
     : m_engine(&engine)
     , m_origin(WTFMove(origin))
     , m_rootPath(WTFMove(rootPath))
-    , m_quotaManager(makeWeakPtr(quotaManager))
 {
 }
 
 Caches::~Caches()
 {
     ASSERT(m_pendingWritingCachesToDiskCallbacks.isEmpty());
-
-    if (m_quotaManager)
-        m_quotaManager->removeUser(*this);
-}
-
-void Caches::whenInitialized(CompletionHandler<void()>&& callback)
-{
-    initialize([callback = WTFMove(callback)](auto&& error) mutable {
-        if (error)
-            RELEASE_LOG_ERROR(CacheStorage, "Caches::initialize failed, reported space used will be zero");
-        callback();
-    });
 }
 
 void Caches::retrieveOriginFromDirectory(const String& folderPath, WorkQueue& queue, WTF::CompletionHandler<void(Optional<WebCore::ClientOrigin>&&)>&& completionHandler)
@@ -208,10 +193,14 @@ void Caches::initialize(WebCore::DOMCacheEngine::CompletionCallback&& callback)
     });
 }
 
-void Caches::updateSizeFile()
+void Caches::updateSizeFile(CompletionHandler<void()>&& completionHandler)
 {
-    if (m_engine)
-        m_engine->writeSizeFile(cachesSizeFilename(m_rootPath), m_size);
+    if (!m_engine) {
+        completionHandler();
+        return;
+    }
+
+    m_engine->writeSizeFile(cachesSizeFilename(m_rootPath), m_size, WTFMove(completionHandler));
 }
 
 void Caches::initializeSize()
@@ -232,13 +221,12 @@ void Caches::initializeSize()
                 return;
             }
             m_size = size;
-            updateSizeFile();
-
-            m_isInitialized = true;
-            auto pendingCallbacks = WTFMove(m_pendingInitializationCallbacks);
-            for (auto& callback : pendingCallbacks)
-                callback(WTF::nullopt);
-
+            updateSizeFile([this, protectedThis = WTFMove(protectedThis)]() mutable {
+                m_isInitialized = true;
+                auto pendingCallbacks = WTFMove(m_pendingInitializationCallbacks);
+                for (auto& callback : pendingCallbacks)
+                    callback(WTF::nullopt);
+            });
             return;
         }
         auto decoded = Cache::decodeRecordHeader(*storage);
@@ -273,13 +261,11 @@ void Caches::clear(CompletionHandler<void()>&& completionHandler)
         m_storage->clear(String { }, -WallTime::infinity(), [protectedThis = makeRef(*this), completionHandler = WTFMove(completionHandler)]() mutable {
             ASSERT(RunLoop::isMain());
             protectedThis->clearMemoryRepresentation();
-            protectedThis->resetSpaceUsed();
             completionHandler();
         });
         return;
     }
     clearMemoryRepresentation();
-    resetSpaceUsed();
     clearPendingWritingCachesToDiskCallbacks();
     completionHandler();
 }
@@ -396,6 +382,11 @@ void Caches::dispose(Cache& cache)
         return;
     }
     ASSERT(m_caches.findMatching([&](const auto& item) { return item.identifier() == cache.identifier(); }) != notFound);
+
+    // We cannot clear the memory representation in ephemeral sessions since we would loose all data.
+    if (!shouldPersist())
+        return;
+
     cache.clearMemoryRepresentation();
 
     if (!hasActiveCache())
@@ -525,12 +516,12 @@ void Caches::readRecordsList(Cache& cache, NetworkCache::Storage::TraverseHandle
 
 void Caches::requestSpace(uint64_t spaceRequired, WebCore::DOMCacheEngine::CompletionCallback&& callback)
 {
-    if (!m_quotaManager) {
+    if (!m_engine) {
         callback(Error::QuotaExceeded);
         return;
     }
 
-    m_quotaManager->requestSpace(spaceRequired, [callback = WTFMove(callback)](auto decision) mutable {
+    m_engine->requestSpace(m_origin, spaceRequired, [callback = WTFMove(callback)](auto decision) mutable {
         switch (decision) {
         case WebCore::StorageQuotaManager::Decision::Deny:
             callback(Error::QuotaExceeded);
@@ -548,7 +539,6 @@ void Caches::writeRecord(const Cache& cache, const RecordInformation& recordInfo
     ASSERT(m_size >= previousRecordSize);
     m_size += recordInformation.size;
     m_size -= previousRecordSize;
-    updateSizeFile();
 
     if (!shouldPersist()) {
         m_volatileStorage.set(recordInformation.key, WTFMove(record));
@@ -556,13 +546,15 @@ void Caches::writeRecord(const Cache& cache, const RecordInformation& recordInfo
         return;
     }
 
-    m_storage->store(Cache::encode(recordInformation, record), { }, [protectedStorage = makeRef(*m_storage), callback = WTFMove(callback)](int error) mutable {
+    m_storage->store(Cache::encode(recordInformation, record), { }, [this, protectedThis = makeRef(*this), protectedStorage = makeRef(*m_storage), callback = WTFMove(callback)](int error) mutable {
         if (error) {
             RELEASE_LOG_ERROR(CacheStorage, "Caches::writeRecord failed with error %d", error);
             callback(Error::WriteDisk);
             return;
         }
-        callback(WTF::nullopt);
+        updateSizeFile([callback = WTFMove(callback)]() mutable {
+            callback(WTF::nullopt);
+        });
     });
 }
 
@@ -605,7 +597,7 @@ void Caches::removeRecord(const RecordInformation& record)
 
     ASSERT(m_size >= record.size);
     m_size -= record.size;
-    updateSizeFile();
+    updateSizeFile([] { });
 
     removeCacheEntry(record.key);
 }
@@ -619,17 +611,6 @@ void Caches::removeCacheEntry(const NetworkCache::Key& key)
         return;
     }
     m_storage->remove(key);
-}
-
-void Caches::resetSpaceUsed()
-{
-    m_size = 0;
-    updateSizeFile();
-
-    if (m_quotaManager) {
-        m_quotaManager->removeUser(*this);
-        m_quotaManager->addUser(*this);
-    }
 }
 
 void Caches::clearMemoryRepresentation()
@@ -684,10 +665,14 @@ void Caches::cacheInfos(uint64_t updateCounter, CacheInfosCallback&& callback)
 
 void Caches::appendRepresentation(StringBuilder& builder) const
 {
+    ASSERT(m_pendingInitializationCallbacks.isEmpty());
+    ASSERT(m_pendingWritingCachesToDiskCallbacks.isEmpty());
+
     builder.append("{ \"persistent\": [");
 
     bool isFirst = true;
     for (auto& cache : m_caches) {
+        ASSERT(!cache.hasPendingOpeningCallbacks());
         if (!isFirst)
             builder.append(", ");
         isFirst = false;

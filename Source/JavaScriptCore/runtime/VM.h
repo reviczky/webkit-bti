@@ -103,12 +103,16 @@ namespace JSC {
 class BuiltinExecutables;
 class BytecodeIntrinsicRegistry;
 class CallFrame;
+struct CheckpointOSRExitSideState;
 class CodeBlock;
 class CodeCache;
 class CommonIdentifiers;
 class CompactVariableMap;
+class ConservativeRoots;
 class CustomGetterSetter;
 class DOMAttributeGetterSetter;
+class DateInstance;
+class ErrorInstance;
 class Exception;
 class ExceptionScope;
 class FastMallocAlignedMemoryAllocator;
@@ -120,10 +124,23 @@ class HasOwnPropertyCache;
 class HeapProfiler;
 class Identifier;
 class Interpreter;
+class IntlCollator;
+class IntlDateTimeFormat;
+class IntlNumberFormat;
+class IntlPluralRules;
+class JSAPIGlobalObject;
+class JSAPIWrapperGlobalObject;
+class JSAPIWrapperObject;
 class JSCCallbackFunction;
+class JSCallbackConstructor;
 class JSCustomGetterSetterFunction;
 class JSDestructibleObjectHeapCellType;
 class JSGlobalObject;
+class JSGlobalLexicalEnvironment;
+class JSModuleNamespaceObject;
+class JSModuleRecord;
+class JSNativeStdFunction;
+class JSNonFinalObject;
 class JSObject;
 class JSPromise;
 class JSPropertyNameEnumerator;
@@ -131,7 +148,11 @@ class JSRunLoopTimer;
 class JSWeakMap;
 class JSWeakSet;
 class JSWebAssemblyCodeBlock;
+class JSWebAssemblyGlobal;
 class JSWebAssemblyInstance;
+class JSWebAssemblyMemory;
+class JSWebAssemblyModule;
+class JSWebAssemblyTable;
 class LLIntOffsetsExtractor;
 class NativeExecutable;
 class ObjCCallbackFunction;
@@ -166,8 +187,11 @@ class Watchdog;
 class Watchpoint;
 class WatchpointSet;
 class WebAssemblyFunction;
+class WebAssemblyModuleRecord;
 
-template<typename CellType> class IsoHeapCellType;
+class IsoHeapCellType;
+template<typename CellType> class IsoInlinedHeapCellType;
+template<typename Parent> class JSCallbackObject;
 
 #if ENABLE(FTL_JIT)
 namespace FTL {
@@ -227,6 +251,8 @@ private:
 
 class ConservativeRoots;
 
+DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(VM);
+
 #if COMPILER(MSVC)
 #pragma warning(push)
 #pragma warning(disable: 4200) // Disable "zero-sized array in struct/union" warning
@@ -239,8 +265,7 @@ struct ScratchBuffer {
 
     static ScratchBuffer* create(size_t size)
     {
-        ScratchBuffer* result = new (fastMalloc(ScratchBuffer::allocationSize(size))) ScratchBuffer;
-
+        ScratchBuffer* result = new (VMMalloc::malloc(ScratchBuffer::allocationSize(size))) ScratchBuffer;
         return result;
     }
 
@@ -345,19 +370,45 @@ public:
     std::unique_ptr<HeapCellType> immutableButterflyHeapCellType;
     std::unique_ptr<HeapCellType> cellHeapCellType;
     std::unique_ptr<HeapCellType> destructibleCellHeapCellType;
-    std::unique_ptr<IsoHeapCellType<JSString>> stringHeapCellType;
-    std::unique_ptr<IsoHeapCellType<JSWeakMap>> weakMapHeapCellType;
-    std::unique_ptr<IsoHeapCellType<JSWeakSet>> weakSetHeapCellType;
+    std::unique_ptr<IsoHeapCellType> apiGlobalObjectHeapCellType;
+    std::unique_ptr<IsoHeapCellType> callbackConstructorHeapCellType;
+    std::unique_ptr<IsoHeapCellType> callbackGlobalObjectHeapCellType;
+    std::unique_ptr<IsoHeapCellType> callbackObjectHeapCellType;
+    std::unique_ptr<IsoHeapCellType> dateInstanceHeapCellType;
+    std::unique_ptr<IsoHeapCellType> errorInstanceHeapCellType;
+    std::unique_ptr<IsoHeapCellType> globalLexicalEnvironmentHeapCellType;
+    std::unique_ptr<IsoHeapCellType> globalObjectHeapCellType;
+    std::unique_ptr<IsoHeapCellType> jsModuleRecordHeapCellType;
+    std::unique_ptr<IsoHeapCellType> moduleNamespaceObjectHeapCellType;
+    std::unique_ptr<IsoHeapCellType> nativeStdFunctionHeapCellType;
+    std::unique_ptr<IsoInlinedHeapCellType<JSString>> stringHeapCellType;
+    std::unique_ptr<IsoHeapCellType> weakMapHeapCellType;
+    std::unique_ptr<IsoHeapCellType> weakSetHeapCellType;
     std::unique_ptr<JSDestructibleObjectHeapCellType> destructibleObjectHeapCellType;
 #if JSC_OBJC_API_ENABLED
-    std::unique_ptr<IsoHeapCellType<ObjCCallbackFunction>> objCCallbackFunctionHeapCellType;
+    std::unique_ptr<IsoHeapCellType> apiWrapperObjectHeapCellType;
+    std::unique_ptr<IsoHeapCellType> objCCallbackFunctionHeapCellType;
 #endif
 #ifdef JSC_GLIB_API_ENABLED
-    std::unique_ptr<IsoHeapCellType<JSCCallbackFunction>> jscCallbackFunctionHeapCellType;
+    std::unique_ptr<IsoHeapCellType> apiWrapperObjectHeapCellType;
+    std::unique_ptr<IsoHeapCellType> callbackAPIWrapperGlobalObjectHeapCellType;
+    std::unique_ptr<IsoHeapCellType> jscCallbackFunctionHeapCellType;
+#endif
+#if ENABLE(INTL)
+    std::unique_ptr<IsoHeapCellType> intlCollatorHeapCellType;
+    std::unique_ptr<IsoHeapCellType> intlDateTimeFormatHeapCellType;
+    std::unique_ptr<IsoHeapCellType> intlNumberFormatHeapCellType;
+    std::unique_ptr<IsoHeapCellType> intlPluralRulesHeapCellType;
 #endif
 #if ENABLE(WEBASSEMBLY)
-    std::unique_ptr<IsoHeapCellType<JSWebAssemblyCodeBlock>> webAssemblyCodeBlockHeapCellType;
-    std::unique_ptr<IsoHeapCellType<WebAssemblyFunction>> webAssemblyFunctionHeapCellType;
+    std::unique_ptr<IsoHeapCellType> webAssemblyCodeBlockHeapCellType;
+    std::unique_ptr<IsoHeapCellType> webAssemblyFunctionHeapCellType;
+    std::unique_ptr<IsoHeapCellType> webAssemblyGlobalHeapCellType;
+    std::unique_ptr<IsoHeapCellType> webAssemblyInstanceHeapCellType;
+    std::unique_ptr<IsoHeapCellType> webAssemblyMemoryHeapCellType;
+    std::unique_ptr<IsoHeapCellType> webAssemblyModuleHeapCellType;
+    std::unique_ptr<IsoHeapCellType> webAssemblyModuleRecordHeapCellType;
+    std::unique_ptr<IsoHeapCellType> webAssemblyTableHeapCellType;
 #endif
     
     CompleteSubspace primitiveGigacageAuxiliarySpace; // Typed arrays, strings, bitvectors, etc go here.
@@ -387,20 +438,33 @@ public:
     // Whenever possible, use subspaceFor<CellType>(vm) to get one of these subspaces.
     CompleteSubspace cellSpace;
     CompleteSubspace variableSizedCellSpace; // FIXME: This space is problematic because we have things in here like DirectArguments and ScopedArguments; those should be split into JSValueOOB cells and JSValueStrict auxiliaries. https://bugs.webkit.org/show_bug.cgi?id=182858
-    CompleteSubspace destructibleCellSpace;
     CompleteSubspace destructibleObjectSpace;
     
     IsoSubspace bigIntSpace;
+    IsoSubspace calleeSpace;
+    IsoSubspace clonedArgumentsSpace;
+    IsoSubspace customGetterSetterSpace;
+    IsoSubspace dateInstanceSpace;
+    IsoSubspace domAttributeGetterSetterSpace;
+    IsoSubspace exceptionSpace;
     IsoSubspace executableToCodeBlockEdgeSpace;
     IsoSubspace functionSpace;
     IsoSubspace getterSetterSpace;
+    IsoSubspace globalLexicalEnvironmentSpace;
     IsoSubspace internalFunctionSpace;
     IsoSubspace nativeExecutableSpace;
+    IsoSubspace numberObjectSpace;
+    IsoSubspace promiseSpace;
+    IsoSubspace propertyNameEnumeratorSpace;
     IsoSubspace propertyTableSpace;
+    IsoSubspace regExpSpace;
+    IsoSubspace regExpObjectSpace;
     IsoSubspace ropeStringSpace;
     IsoSubspace scopedArgumentsSpace;
     IsoSubspace sparseArrayValueMapSpace;
     IsoSubspace stringSpace;
+    IsoSubspace stringObjectSpace;
+    IsoSubspace structureChainSpace;
     IsoSubspace structureRareDataSpace;
     IsoSubspace structureSpace;
     IsoSubspace symbolTableSpace;
@@ -418,20 +482,61 @@ public:
 
 
 #if JSC_OBJC_API_ENABLED
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(apiWrapperObjectSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(objCCallbackFunctionSpace)
 #endif
 #ifdef JSC_GLIB_API_ENABLED
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(apiWrapperObjectSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(jscCallbackFunctionSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(callbackAPIWrapperGlobalObjectSpace)
 #endif
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(apiGlobalObjectSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(apiValueWrapperSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(arrayBufferSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(asyncGeneratorSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(bigIntObjectSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(booleanObjectSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(boundFunctionSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(callbackConstructorSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(callbackGlobalObjectSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(callbackFunctionSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(callbackObjectSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(customGetterSetterFunctionSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(dataViewSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(debuggerScopeSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(errorInstanceSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(float32ArraySpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(float64ArraySpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(functionRareDataSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(generatorSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(arrayIteratorSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(globalObjectSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(int8ArraySpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(int16ArraySpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(int32ArraySpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(jsModuleRecordSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(mapBucketSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(mapIteratorSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(mapSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(moduleNamespaceObjectSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(nativeStdFunctionSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(proxyObjectSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(proxyRevokeSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(scopedArgumentsTableSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(scriptFetchParametersSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(scriptFetcherSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(setBucketSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(setIteratorSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(setSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(strictEvalActivationSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(sourceCodeSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(symbolSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(symbolObjectSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(templateObjectDescriptorSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(uint8ArraySpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(uint8ClampedArraySpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(uint16ArraySpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(uint32ArraySpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(unlinkedEvalCodeBlockSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(unlinkedFunctionCodeBlockSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(unlinkedModuleProgramCodeBlockSpace)
@@ -439,10 +544,23 @@ public:
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(weakObjectRefSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(weakSetSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(weakMapSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(withScopeSpace)
+#if ENABLE(INTL)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlCollatorSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlDateTimeFormatSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlNumberFormatSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(intlPluralRulesSpace)
+#endif
 #if ENABLE(WEBASSEMBLY)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(jsToWasmICCalleeSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(webAssemblyCodeBlockSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(webAssemblyFunctionSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(webAssemblyGlobalSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(webAssemblyInstanceSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(webAssemblyMemorySpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(webAssemblyModuleSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(webAssemblyModuleRecordSpace)
+    DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(webAssemblyTableSpace)
     DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER(webAssemblyWrapperFunctionSpace)
 #endif
 
@@ -548,7 +666,6 @@ public:
     Strong<Structure> regExpStructure;
     Strong<Structure> symbolStructure;
     Strong<Structure> symbolTableStructure;
-    Strong<Structure> fixedArrayStructure;
     Strong<Structure> immutableButterflyStructures[NumberOfCopyOnWriteIndexingModes];
     Strong<Structure> sourceCodeStructure;
     Strong<Structure> scriptFetcherStructure;
@@ -556,7 +673,6 @@ public:
     Strong<Structure> structureChainStructure;
     Strong<Structure> sparseArrayValueMapStructure;
     Strong<Structure> templateObjectDescriptorStructure;
-    Strong<Structure> arrayBufferNeuteringWatchpointStructure;
     Strong<Structure> unlinkedFunctionExecutableStructure;
     Strong<Structure> unlinkedProgramCodeBlockStructure;
     Strong<Structure> unlinkedEvalCodeBlockStructure;
@@ -565,7 +681,6 @@ public:
     Strong<Structure> propertyTableStructure;
     Strong<Structure> functionRareDataStructure;
     Strong<Structure> exceptionStructure;
-    Strong<Structure> nativeStdFunctionCellStructure;
     Strong<Structure> programCodeBlockStructure;
     Strong<Structure> moduleProgramCodeBlockStructure;
     Strong<Structure> evalCodeBlockStructure;
@@ -582,6 +697,11 @@ public:
 
     Strong<JSCell> m_sentinelSetBucket;
     Strong<JSCell> m_sentinelMapBucket;
+
+    Weak<NativeExecutable> m_fastBoundExecutable;
+    Weak<NativeExecutable> m_fastCanConstructBoundExecutable;
+    Weak<NativeExecutable> m_slowBoundExecutable;
+    Weak<NativeExecutable> m_slowCanConstructBoundExecutable;
 
     Ref<PromiseTimer> promiseTimer;
     
@@ -689,9 +809,7 @@ public:
     ALWAYS_INLINE static bool canUseJIT()
     {
 #if ENABLE(JIT)
-#if !ASSERT_DISABLED
-        RELEASE_ASSERT(s_canUseJITIsSet);
-#endif
+        ASSERT(s_canUseJITIsSet);
         return s_canUseJIT;
 #else
         return false;
@@ -719,6 +837,8 @@ public:
 #endif
     NativeExecutable* getHostFunction(NativeFunction, NativeFunction constructor, const String& name);
     NativeExecutable* getHostFunction(NativeFunction, Intrinsic, NativeFunction constructor, const DOMJIT::Signature*, const String& name);
+
+    NativeExecutable* getBoundFunction(bool isJSFunction, bool canConstruct);
 
     MacroAssemblerCodePtr<JSEntryPtrTag> getCTIInternalFunctionTrampolineFor(CodeSpecializationKind);
 
@@ -832,11 +952,16 @@ public:
     {
         ASSERT(Options::useExceptionFuzz());
         if (!m_exceptionFuzzBuffer)
-            m_exceptionFuzzBuffer = MallocPtr<EncodedJSValue>::malloc(size);
+            m_exceptionFuzzBuffer = MallocPtr<EncodedJSValue, VMMalloc>::malloc(size);
         return m_exceptionFuzzBuffer.get();
     }
 
     void gatherScratchBufferRoots(ConservativeRoots&);
+
+    void addCheckpointOSRSideState(CallFrame*, std::unique_ptr<CheckpointOSRExitSideState>&&);
+    std::unique_ptr<CheckpointOSRExitSideState> findCheckpointOSRSideState(CallFrame*);
+    bool hasCheckpointOSRSideState() const { return m_checkpointSideState.size(); }
+    void scanSideState(ConservativeRoots&) const;
 
     VMEntryScope* entryScope;
 
@@ -956,6 +1081,7 @@ public:
     void* needTrapHandlingAddress() { return m_traps.needTrapHandlingAddress(); }
 
     void notifyNeedDebuggerBreak() { m_traps.fireTrap(VMTraps::NeedDebuggerBreak); }
+    void notifyNeedShellTimeoutCheck() { m_traps.fireTrap(VMTraps::NeedShellTimeoutCheck); }
     void notifyNeedTermination() { m_traps.fireTrap(VMTraps::NeedTermination); }
     void notifyNeedWatchdogCheck() { m_traps.fireTrap(VMTraps::NeedWatchdogCheck); }
 
@@ -1088,12 +1214,13 @@ private:
     Lock m_scratchBufferLock;
     Vector<ScratchBuffer*> m_scratchBuffers;
     size_t m_sizeOfLastScratchBuffer { 0 };
+    HashMap<CallFrame*, std::unique_ptr<CheckpointOSRExitSideState>> m_checkpointSideState;
     InlineWatchpointSet m_primitiveGigacageEnabled;
     FunctionHasExecutedCache m_functionHasExecutedCache;
     std::unique_ptr<ControlFlowProfiler> m_controlFlowProfiler;
     unsigned m_controlFlowProfilerEnabledCount;
     Deque<std::unique_ptr<QueuedTask>> m_microtaskQueue;
-    MallocPtr<EncodedJSValue> m_exceptionFuzzBuffer;
+    MallocPtr<EncodedJSValue, VMMalloc> m_exceptionFuzzBuffer;
     VMTraps m_traps;
     RefPtr<Watchdog> m_watchdog;
     std::unique_ptr<HeapProfiler> m_heapProfiler;
@@ -1111,7 +1238,7 @@ private:
     uintptr_t m_currentWeakRefVersion { 0 };
 
 #if ENABLE(JIT)
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     JS_EXPORT_PRIVATE static bool s_canUseJITIsSet;
 #endif
     JS_EXPORT_PRIVATE static bool s_canUseJIT;

@@ -481,6 +481,22 @@ void WebResourceLoadStatisticsStore::setThirdPartyCookieBlockingMode(ThirdPartyC
     });
 }
 
+void WebResourceLoadStatisticsStore::setFirstPartyWebsiteDataRemovalMode(FirstPartyWebsiteDataRemovalMode mode, CompletionHandler<void()>&& completionHandler)
+{
+    ASSERT(RunLoop::isMain());
+
+    postTask([this, mode, completionHandler = WTFMove(completionHandler)]() mutable {
+        if (m_statisticsStore) {
+            m_statisticsStore->setFirstPartyWebsiteDataRemovalMode(mode);
+            if (mode == FirstPartyWebsiteDataRemovalMode::AllButCookiesReproTestingTimeout)
+                m_statisticsStore->setIsRunningTest(true);
+        }
+        postTaskReply([completionHandler = WTFMove(completionHandler)]() mutable {
+            completionHandler();
+        });
+    });
+}
+
 void WebResourceLoadStatisticsStore::didCreateNetworkProcess()
 {
     ASSERT(RunLoop::isMain());
@@ -538,43 +554,13 @@ void WebResourceLoadStatisticsStore::submitTelemetry(CompletionHandler<void()>&&
     });
 }
 
-void WebResourceLoadStatisticsStore::logFrameNavigation(const WebFrameProxy& frame, const URL& pageURL, const WebCore::ResourceRequest& request, const URL& redirectURL)
+void WebResourceLoadStatisticsStore::logFrameNavigation(const RegistrableDomain& targetDomain, const RegistrableDomain& topFrameDomain, const RegistrableDomain& sourceDomain, bool isRedirect, bool isMainFrame, Seconds delayAfterMainFrameDocumentLoad, bool wasPotentiallyInitiatedByUser)
 {
     ASSERT(RunLoop::isMain());
 
-    auto sourceURL = redirectURL;
-    bool isRedirect = !redirectURL.isNull();
-    if (!isRedirect) {
-        sourceURL = frame.url();
-        if (sourceURL.isNull())
-            sourceURL = pageURL;
-    }
-
-    auto& targetURL = request.url();
-
-    if (!targetURL.isValid() || !pageURL.isValid())
-        return;
-
-    auto targetHost = targetURL.host();
-    auto mainFrameHost = pageURL.host();
-
-    if (targetHost.isEmpty() || mainFrameHost.isEmpty() || targetHost == sourceURL.host())
-        return;
-
-    RegistrableDomain targetDomain { targetURL };
-    RegistrableDomain topFrameDomain { pageURL };
-    RegistrableDomain sourceDomain { sourceURL };
-
-    logFrameNavigation(targetDomain, topFrameDomain, sourceDomain, isRedirect, frame.isMainFrame());
-}
-
-void WebResourceLoadStatisticsStore::logFrameNavigation(const RegistrableDomain& targetDomain, const RegistrableDomain& topFrameDomain, const RegistrableDomain& sourceDomain, bool isRedirect, bool isMainFrame)
-{
-    ASSERT(RunLoop::isMain());
-
-    postTask([this, targetDomain = targetDomain.isolatedCopy(), topFrameDomain = topFrameDomain.isolatedCopy(), sourceDomain = sourceDomain.isolatedCopy(), isRedirect, isMainFrame] {
+    postTask([this, targetDomain = targetDomain.isolatedCopy(), topFrameDomain = topFrameDomain.isolatedCopy(), sourceDomain = sourceDomain.isolatedCopy(), isRedirect, isMainFrame, delayAfterMainFrameDocumentLoad, wasPotentiallyInitiatedByUser] {
         if (m_statisticsStore)
-            m_statisticsStore->logFrameNavigation(targetDomain, topFrameDomain, sourceDomain, isRedirect, isMainFrame);
+            m_statisticsStore->logFrameNavigation(targetDomain, topFrameDomain, sourceDomain, isRedirect, isMainFrame, delayAfterMainFrameDocumentLoad, wasPotentiallyInitiatedByUser);
     });
 }
 
@@ -1134,6 +1120,24 @@ void WebResourceLoadStatisticsStore::notifyPageStatisticsTelemetryFinished(unsig
     ASSERT(RunLoop::isMain());
     if (m_networkSession)
         const_cast<WebResourceLoadStatisticsStore*>(this)->networkSession()->notifyPageStatisticsTelemetryFinished(numberOfPrevalentResources, numberOfPrevalentResourcesWithUserInteraction, numberOfPrevalentResourcesWithoutUserInteraction, topPrevalentResourceWithUserInteractionDaysSinceUserInteraction, medianDaysSinceUserInteractionPrevalentResourceWithUserInteraction, top3NumberOfPrevalentResourcesWithUI, top3MedianSubFrameWithoutUI, top3MedianSubResourceWithoutUI, top3MedianUniqueRedirectsWithoutUI, top3MedianDataRecordsRemovedWithoutUI);
+}
+
+void WebResourceLoadStatisticsStore::aggregatedThirdPartyData(CompletionHandler<void(Vector<WebResourceLoadStatisticsStore::ThirdPartyData>&&)>&& completionHandler)
+{
+    ASSERT(RunLoop::isMain());
+
+    postTask([this, completionHandler = WTFMove(completionHandler)]() mutable  {
+        if (!m_statisticsStore) {
+            postTaskReply([completionHandler = WTFMove(completionHandler)]() mutable {
+                completionHandler({ });
+            });
+            return;
+        }
+        auto thirdPartyData = m_statisticsStore->aggregatedThirdPartyData();
+        postTaskReply([thirdPartyData = WTFMove(thirdPartyData), completionHandler = WTFMove(completionHandler)]() mutable {
+            completionHandler(WTFMove(thirdPartyData));
+        });
+    });
 }
 
 } // namespace WebKit

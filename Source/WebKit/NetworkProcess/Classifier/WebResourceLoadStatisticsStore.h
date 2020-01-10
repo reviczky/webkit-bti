@@ -27,10 +27,14 @@
 
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
 
+#include "ArgumentCoders.h"
+#include "Decoder.h"
+#include "Encoder.h"
 #include "StorageAccessStatus.h"
 #include "WebPageProxyIdentifier.h"
 #include "WebsiteDataType.h"
 #include <WebCore/FrameIdentifier.h>
+#include <WebCore/NetworkStorageSession.h>
 #include <WebCore/PageIdentifier.h>
 #include <WebCore/RegistrableDomain.h>
 #include <wtf/CompletionHandler.h>
@@ -101,6 +105,95 @@ public:
 
     ~WebResourceLoadStatisticsStore();
 
+struct ThirdPartyDataForSpecificFirstParty {
+    WebCore::RegistrableDomain firstPartyDomain;
+    bool storageAccessGranted;
+    Seconds timeLastUpdated;
+
+    String toString() const
+    {
+        return makeString("Has been granted storage access under ", firstPartyDomain.string(), ": ", storageAccessGranted ? '1' : '0', "; Has been seen under ", firstPartyDomain.string(), " in the last 24 hours: ", WallTime::now().secondsSinceEpoch() - timeLastUpdated < 24_h ? '1' : '0');
+    }
+
+    void encode(IPC::Encoder& encoder) const
+    {
+        encoder << firstPartyDomain;
+        encoder << storageAccessGranted;
+        encoder << timeLastUpdated;
+    }
+
+    static Optional<ThirdPartyDataForSpecificFirstParty> decode(IPC::Decoder& decoder)
+    {
+        Optional<WebCore::RegistrableDomain> decodedDomain;
+        decoder >> decodedDomain;
+        if (!decodedDomain)
+            return WTF::nullopt;
+
+        Optional<bool> decodedStorageAccess;
+        decoder >> decodedStorageAccess;
+        if (!decodedStorageAccess)
+            return WTF::nullopt;
+        
+        Optional<Seconds> decodedTimeLastUpdated;
+        decoder >> decodedTimeLastUpdated;
+        if (!decodedTimeLastUpdated)
+            return WTF::nullopt;
+        
+        return {{ WTFMove(*decodedDomain), WTFMove(*decodedStorageAccess), WTFMove(*decodedTimeLastUpdated) }};
+    }
+
+    bool operator==(ThirdPartyDataForSpecificFirstParty const other) const
+    {
+        return firstPartyDomain == other.firstPartyDomain && storageAccessGranted == other.storageAccessGranted;
+    }
+};
+
+struct ThirdPartyData {
+    WebCore::RegistrableDomain thirdPartyDomain;
+    Vector<ThirdPartyDataForSpecificFirstParty> underFirstParties;
+
+    String toString() const
+    {
+        StringBuilder stringBuilder;
+        stringBuilder.append("Third Party Registrable Domain: ", thirdPartyDomain.string(), "\n");
+        stringBuilder.appendLiteral("    {");
+
+        for (auto firstParty : underFirstParties) {
+            stringBuilder.appendLiteral("{ ");
+            stringBuilder.append(firstParty.toString());
+            stringBuilder.appendLiteral(" },");
+        }
+        stringBuilder.appendLiteral("}");
+        return stringBuilder.toString();
+    }
+
+    void encode(IPC::Encoder& encoder) const
+    {
+        encoder << thirdPartyDomain;
+        encoder << underFirstParties;
+    }
+
+    static Optional<ThirdPartyData> decode(IPC::Decoder& decoder)
+    {
+        Optional<WebCore::RegistrableDomain> decodedDomain;
+        decoder >> decodedDomain;
+        if (!decodedDomain)
+            return WTF::nullopt;
+
+        Optional<Vector<ThirdPartyDataForSpecificFirstParty>> decodedFirstParties;
+        decoder >> decodedFirstParties;
+        if (!decodedFirstParties)
+            return WTF::nullopt;
+
+        return {{ WTFMove(*decodedDomain), WTFMove(*decodedFirstParties) }};
+    }
+
+    bool operator<(const ThirdPartyData &other) const
+    {
+        return underFirstParties.size() < other.underFirstParties.size();
+    }
+};
+
     void didDestroyNetworkSession();
 
     static const OptionSet<WebsiteDataType>& monitoredDataTypes();
@@ -117,8 +210,7 @@ public:
 
     void applicationWillTerminate();
 
-    void logFrameNavigation(const WebFrameProxy&, const URL& pageURL, const WebCore::ResourceRequest&, const URL& redirectURL);
-    void logFrameNavigation(const NavigatedToDomain&, const TopFrameDomain&, const NavigatedFromDomain&, bool isRedirect, bool isMainFrame);
+    void logFrameNavigation(const NavigatedToDomain&, const TopFrameDomain&, const NavigatedFromDomain&, bool isRedirect, bool isMainFrame, Seconds delayAfterMainFrameDocumentLoad, bool wasPotentiallyInitiatedByUser);
     void logUserInteraction(const TopFrameDomain&, CompletionHandler<void()>&&);
     void logCrossSiteLoadWithLinkDecoration(const NavigatedFromDomain&, const NavigatedToDomain&, CompletionHandler<void()>&&);
     void clearUserInteraction(const TopFrameDomain&, CompletionHandler<void()>&&);
@@ -181,6 +273,7 @@ public:
 
     void hasCookies(const RegistrableDomain&, CompletionHandler<void(bool)>&&);
     void setThirdPartyCookieBlockingMode(WebCore::ThirdPartyCookieBlockingMode);
+    void setFirstPartyWebsiteDataRemovalMode(WebCore::FirstPartyWebsiteDataRemovalMode, CompletionHandler<void()>&&);
     void didCreateNetworkProcess();
 
     void notifyResourceLoadStatisticsProcessed();
@@ -193,6 +286,7 @@ public:
 
     void resourceLoadStatisticsUpdated(Vector<WebCore::ResourceLoadStatistics>&&);
     void requestStorageAccessUnderOpener(DomainInNeedOfStorageAccess&&, WebCore::PageIdentifier openerID, OpenerDomain&&);
+    void aggregatedThirdPartyData(CompletionHandler<void(Vector<WebResourceLoadStatisticsStore::ThirdPartyData>&&)>&&);
 
 private:
     explicit WebResourceLoadStatisticsStore(NetworkSession&, const String&, ShouldIncludeLocalhost);

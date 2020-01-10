@@ -79,6 +79,9 @@ Modules/geolocation/GeolocationController.cpp
 Modules/geolocation/GeolocationCoordinates.cpp
 Modules/geolocation/NavigatorGeolocation.cpp
 
+Modules/highlight/HighlightMap.cpp
+Modules/highlight/HighlightRangeGroup.cpp
+
 Modules/indexeddb/DOMWindowIndexedDatabase.cpp
 Modules/indexeddb/IDBCursor.cpp
 Modules/indexeddb/IDBCursorWithValue.cpp
@@ -139,7 +142,6 @@ Modules/indexeddb/shared/IDBRequestData.cpp
 Modules/indexeddb/shared/IDBResourceIdentifier.cpp
 Modules/indexeddb/shared/IDBResultData.cpp
 Modules/indexeddb/shared/IDBTransactionInfo.cpp
-Modules/indexeddb/shared/InProcessIDBServer.cpp
 Modules/indexeddb/shared/IndexKey.cpp
 
 Modules/mediacapabilities/MediaCapabilities.cpp
@@ -149,6 +151,7 @@ Modules/mediacontrols/MediaControlsHost.cpp
 
 Modules/mediarecorder/BlobEvent.cpp
 Modules/mediarecorder/MediaRecorder.cpp
+Modules/mediarecorder/MediaRecorderProvider.cpp
 Modules/mediarecorder/MediaRecorderErrorEvent.cpp
 
 Modules/mediasession/HTMLMediaElementMediaSession.cpp
@@ -266,6 +269,9 @@ Modules/webaudio/WaveShaperNode.cpp
 Modules/webaudio/WaveShaperProcessor.cpp
 
 Modules/webauthn/AuthenticatorCoordinator.cpp
+Modules/webauthn/AuthenticatorAssertionResponse.cpp
+Modules/webauthn/AuthenticatorAttestationResponse.cpp
+Modules/webauthn/AuthenticatorResponse.cpp
 Modules/webauthn/PublicKeyCredential.cpp
 Modules/webauthn/WebAuthenticationUtils.cpp
 Modules/webauthn/apdu/ApduCommand.cpp
@@ -281,6 +287,7 @@ Modules/webauthn/fido/FidoConstants.cpp
 Modules/webauthn/fido/FidoHidMessage.cpp
 Modules/webauthn/fido/FidoHidPacket.cpp
 Modules/webauthn/fido/FidoParsingUtils.cpp
+Modules/webauthn/fido/Pin.cpp
 Modules/webauthn/fido/U2fCommandConstructor.cpp
 Modules/webauthn/fido/U2fResponseConverter.cpp
 
@@ -457,6 +464,7 @@ animation/DeclarativeAnimation.cpp
 animation/DocumentTimeline.cpp
 animation/KeyframeEffect.cpp
 animation/WebAnimation.cpp
+animation/WebAnimationUtilities.cpp
 
 bindings/js/CachedModuleScriptLoader.cpp
 bindings/js/CachedScriptFetcher.cpp
@@ -503,6 +511,7 @@ bindings/js/JSDOMGuardedObject.cpp
 bindings/js/JSDOMMapLike.cpp
 bindings/js/JSDOMPromise.cpp
 bindings/js/JSDOMPromiseDeferred.cpp
+bindings/js/JSDOMSetLike.cpp
 bindings/js/JSDOMWindowBase.cpp
 bindings/js/JSDOMWindowCustom.cpp
 bindings/js/JSDOMWindowProperties.cpp
@@ -863,7 +872,6 @@ dom/DeviceOrientationData.cpp
 dom/DeviceOrientationEvent.cpp
 dom/DeviceOrientationOrMotionEvent.cpp
 dom/Document.cpp
-dom/DocumentEventQueue.cpp
 dom/DocumentFragment.cpp
 dom/DocumentMarkerController.cpp
 dom/DocumentParser.cpp
@@ -871,6 +879,7 @@ dom/DocumentSharedObjectPool.cpp
 dom/DocumentStorageAccess.cpp
 dom/DocumentTouch.cpp @no-unify
 dom/DocumentType.cpp
+dom/DragEvent.cpp
 dom/Element.cpp
 dom/ElementData.cpp
 dom/ElementRareData.cpp
@@ -1082,10 +1091,12 @@ fileapi/ThreadableBlobRegistry.cpp
 
 history/BackForwardCache.cpp
 history/BackForwardController.cpp
+history/BackForwardItemIdentifier.cpp
 history/CachedFrame.cpp
 history/CachedPage.cpp
 history/HistoryItem.cpp
 
+html/Autocapitalize.cpp
 html/Autofill.cpp
 html/BaseButtonInputType.cpp
 html/BaseCheckableInputType.cpp
@@ -1428,6 +1439,7 @@ layout/blockformatting/BlockFormattingContextQuirks.cpp
 layout/blockformatting/BlockFormattingState.cpp
 layout/blockformatting/BlockMarginCollapse.cpp
 layout/displaytree/DisplayBox.cpp
+layout/displaytree/DisplayInlineContent.cpp
 layout/displaytree/DisplayPainter.cpp
 layout/floats/FloatAvoider.cpp
 layout/floats/FloatBox.cpp
@@ -1443,6 +1455,7 @@ layout/inlineformatting/InlineLineBuilder.cpp
 layout/inlineformatting/InlineTextItem.cpp
 layout/inlineformatting/LineLayoutContext.cpp
 layout/inlineformatting/text/TextUtil.cpp
+layout/integration/LayoutIntegrationLineLayout.cpp
 layout/invalidation/InvalidationContext.cpp
 layout/invalidation/InvalidationState.cpp
 layout/layouttree/LayoutBox.cpp
@@ -1599,6 +1612,7 @@ page/FrameViewLayoutContext.cpp
 page/History.cpp
 page/IntersectionObserver.cpp
 page/IntersectionObserverEntry.cpp
+page/LoggedInStatus.cpp
 page/Location.cpp
 page/MemoryRelease.cpp
 page/MouseEventWithHitTestResults.cpp
@@ -1845,7 +1859,7 @@ platform/graphics/GeometryUtilities.cpp
 platform/graphics/Gradient.cpp
 platform/graphics/GradientImage.cpp
 platform/graphics/GraphicsContext.cpp
-platform/graphics/GraphicsContext3DManager.cpp
+platform/graphics/GraphicsContextGL.cpp
 platform/graphics/GraphicsContextImpl.cpp
 platform/graphics/GraphicsLayer.cpp
 platform/graphics/GraphicsLayerTransform.cpp
@@ -1865,6 +1879,7 @@ platform/graphics/LayoutPoint.cpp
 platform/graphics/LayoutRect.cpp
 platform/graphics/LayoutSize.cpp
 platform/graphics/MediaPlayer.cpp
+platform/graphics/MIMETypeCache.cpp
 platform/graphics/NamedImageGeneratedImage.cpp
 platform/graphics/Path.cpp
 platform/graphics/PathTraversalState.cpp
@@ -1933,6 +1948,8 @@ platform/graphics/iso/ISOSchemeTypeBox.cpp
 platform/graphics/iso/ISOTrackEncryptionBox.cpp
 platform/graphics/iso/ISOVTTCue.cpp
 
+platform/graphics/opengl/GraphicsContextGLOpenGL.cpp
+
 platform/graphics/opentype/OpenTypeMathData.cpp
 
 platform/graphics/transforms/AffineTransform.cpp
@@ -1949,6 +1966,7 @@ platform/graphics/transforms/TransformationMatrix.cpp
 platform/graphics/transforms/TranslateTransformOperation.cpp
 
 platform/mediacapabilities/MediaEngineConfigurationFactory.cpp
+platform/mediacapabilities/MediaCapabilitiesLogging.cpp
 
 platform/mediarecorder/MediaRecorderPrivateMock.cpp
 
@@ -2183,6 +2201,7 @@ rendering/SimpleLineLayoutFunctions.cpp
 rendering/SimpleLineLayoutPagination.cpp
 rendering/SimpleLineLayoutResolver.cpp
 rendering/SimpleLineLayoutTextFragmentIterator.cpp
+rendering/TableLayout.cpp
 rendering/TextDecorationPainter.cpp
 rendering/TextPaintStyle.cpp
 rendering/TextPainter.cpp
@@ -2508,7 +2527,6 @@ workers/DedicatedWorkerThread.cpp
 workers/Worker.cpp
 workers/WorkerConsoleClient.cpp
 workers/WorkerEventLoop.cpp
-workers/WorkerEventQueue.cpp
 workers/WorkerGlobalScope.cpp
 workers/WorkerInspectorProxy.cpp
 workers/WorkerLocation.cpp
@@ -2648,6 +2666,7 @@ JSAudioParam.cpp
 JSAudioProcessingEvent.cpp
 JSAttestationConveyancePreference.cpp
 JSAuthenticationExtensionsClientInputs.cpp
+JSAuthenticationExtensionsClientOutputs.cpp
 JSAuthenticatorAssertionResponse.cpp
 JSAuthenticatorAttestationResponse.cpp
 JSAuthenticatorResponse.cpp
@@ -2818,6 +2837,7 @@ JSDocumentOrShadowRoot.cpp
 JSDocumentPictureInPicture.cpp
 JSDocumentType.cpp
 JSDoubleRange.cpp
+JSDragEvent.cpp
 JSDynamicsCompressorNode.cpp
 JSEcKeyParams.cpp
 JSEcdhKeyDeriveParams.cpp
@@ -2898,6 +2918,8 @@ JSGeolocationPositionError.cpp
 JSGlobalCrypto.cpp
 JSGlobalEventHandlers.cpp
 JSGlobalPerformance.cpp
+JSHighlightMap.cpp
+JSHighlightRangeGroup.cpp
 JSHTMLAllCollection.cpp
 JSHTMLAnchorElement.cpp
 JSHTMLAppletElement.cpp
@@ -3147,6 +3169,7 @@ JSPopStateEvent.cpp
 JSPositionCallback.cpp
 JSPositionErrorCallback.cpp
 JSPositionOptions.cpp
+JSPostMessageOptions.cpp
 JSProcessingInstruction.cpp
 JSProgressEvent.cpp
 JSPromiseRejectionEvent.cpp
@@ -3177,6 +3200,7 @@ JSRTCPeerConnectionIceEvent.cpp
 JSRTCPeerConnectionState.cpp
 JSRTCPriorityType.cpp
 JSRTCRtpCapabilities.cpp
+JSRTCRtpCodecCapability.cpp
 JSRTCRtpCodecParameters.cpp
 JSRTCRtpContributingSource.cpp
 JSRTCRtpEncodingParameters.cpp

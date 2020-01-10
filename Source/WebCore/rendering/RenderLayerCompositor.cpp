@@ -993,7 +993,7 @@ void RenderLayerCompositor::computeCompositingRequirements(RenderLayer* ancestor
 
     backingSharingState.updateBeforeDescendantTraversal(layer, willBeComposited);
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     LayerListMutationDetector mutationChecker(layer);
 #endif
 
@@ -1162,7 +1162,7 @@ void RenderLayerCompositor::traverseUnchangedSubtree(RenderLayer* ancestorLayer,
 
     backingSharingState.updateBeforeDescendantTraversal(layer, layerIsComposited);
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     LayerListMutationDetector mutationChecker(layer);
 #endif
 
@@ -1279,7 +1279,7 @@ void RenderLayerCompositor::updateBackingAndHierarchy(RenderLayer& layer, Vector
 
     bool requiresChildRebuild = layerBacking && layer.needsCompositingLayerConnection() && !layer.hasCompositingDescendant();
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     LayerListMutationDetector mutationChecker(layer);
 #endif
 
@@ -1907,8 +1907,9 @@ void RenderLayerCompositor::addToOverlapMap(LayerOverlapMap& overlapMap, const R
 
     auto clippedBounds = extent.bounds;
     if (!clipRect.isInfinite()) {
-        // On iOS, pageScaleFactor() is not applied by RenderView, so we should not scale here.
-        if (!m_renderView.settings().delegatesPageScaling())
+        // With delegated page scaling, pageScaleFactor() is not applied by RenderView, so we should not scale here.
+        auto& frameView = m_renderView.frameView();
+        if (!frameView.delegatesPageScaling())
             clipRect.scale(pageScaleFactor());
 
         clippedBounds.intersect(clipRect);
@@ -1930,7 +1931,7 @@ void RenderLayerCompositor::addDescendantsToOverlapMapRecursive(LayerOverlapMap&
         addToOverlapMap(overlapMap, layer, layerExtent);
     }
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     LayerListMutationDetector mutationChecker(const_cast<RenderLayer&>(layer));
 #endif
 
@@ -2217,7 +2218,7 @@ void RenderLayerCompositor::recursiveRepaintLayer(RenderLayer& layer)
     if (layer.isComposited() && !layer.backing()->paintsIntoCompositedAncestor())
         layer.setBackingNeedsRepaint();
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     LayerListMutationDetector mutationChecker(layer);
 #endif
 
@@ -4108,7 +4109,7 @@ bool RenderLayerCompositor::layerHas3DContent(const RenderLayer& layer) const
 
     const_cast<RenderLayer&>(layer).updateLayerListsIfNeeded();
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     LayerListMutationDetector mutationChecker(const_cast<RenderLayer&>(layer));
 #endif
 

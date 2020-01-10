@@ -85,6 +85,7 @@ public:
     void clear(CompletionHandler<void()>&&) override;
     bool isEmpty() const override;
 
+    Vector<WebResourceLoadStatisticsStore::ThirdPartyData> aggregatedThirdPartyData() const override;
     void updateCookieBlocking(CompletionHandler<void()>&&) override;
 
     void classifyPrevalentResources() override;
@@ -123,7 +124,7 @@ public:
     void requestStorageAccess(SubFrameDomain&&, TopFrameDomain&&, WebCore::FrameIdentifier, WebCore::PageIdentifier, CompletionHandler<void(StorageAccessStatus)>&&) override;
     void grantStorageAccess(SubFrameDomain&&, TopFrameDomain&&, WebCore::FrameIdentifier, WebCore::PageIdentifier, WebCore::StorageAccessPromptWasShown, CompletionHandler<void(WebCore::StorageAccessWasGranted)>&&) override;
 
-    void logFrameNavigation(const NavigatedToDomain&, const TopFrameDomain&, const NavigatedFromDomain&, bool isRedirect, bool isMainFrame) override;
+    void logFrameNavigation(const NavigatedToDomain&, const TopFrameDomain&, const NavigatedFromDomain&, bool isRedirect, bool isMainFrame, Seconds delayAfterMainFrameDocumentLoad, bool wasPotentiallyInitiatedByUser) override;
     void logUserInteraction(const TopFrameDomain&, CompletionHandler<void()>&&) override;
     void logCrossSiteLoadWithLinkDecoration(const NavigatedFromDomain&, const NavigatedToDomain&) override;
 
@@ -133,10 +134,13 @@ public:
     void setLastSeen(const RegistrableDomain&, Seconds) override;
     bool isCorrectSubStatisticsCount(const RegistrableDomain&, const TopFrameDomain&);
     void resourceToString(StringBuilder&, const String&) const;
+    Seconds getMostRecentlyUpdatedTimestamp(const RegistrableDomain&, const TopFrameDomain&) const;
 
 private:
     void openITPDatabase();
     bool isCorrectTableSchema();
+    bool hasStorageAccess(const TopFrameDomain&, const SubFrameDomain&) const;
+    Vector<WebResourceLoadStatisticsStore::ThirdPartyDataForSpecificFirstParty> getThirdPartyDataForSpecificFirstPartyDomains(unsigned, const RegistrableDomain&) const;
     void openAndDropOldDatabaseIfNecessary();
     String getDomainStringFromDomainID(unsigned) const;
     String getSubStatisticStatement(const String&) const;
@@ -248,6 +252,9 @@ private:
     mutable WebCore::SQLiteStatement m_getResourceDataByDomainNameStatement;
     mutable WebCore::SQLiteStatement m_getAllDomainsStatement;
     mutable WebCore::SQLiteStatement m_domainStringFromDomainIDStatement;
+    mutable WebCore::SQLiteStatement m_getAllSubStatisticsStatement;
+    mutable WebCore::SQLiteStatement m_storageAccessExistsStatement;
+    mutable WebCore::SQLiteStatement m_getMostRecentlyUpdatedTimestampStatement;
     PAL::SessionID m_sessionID;
 };
 

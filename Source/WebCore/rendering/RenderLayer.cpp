@@ -53,7 +53,6 @@
 #include "DebugPageOverlays.h"
 #include "DeprecatedGlobalSettings.h"
 #include "Document.h"
-#include "DocumentEventQueue.h"
 #include "DocumentMarkerController.h"
 #include "DocumentTimeline.h"
 #include "Editor.h"
@@ -223,7 +222,7 @@ class ClipRectsCache {
 public:
     ClipRectsCache()
     {
-#ifndef NDEBUG
+#if ASSERT_ENABLED
         for (int i = 0; i < NumCachedClipRectsTypes; ++i) {
             m_clipRectsRoot[i] = 0;
             m_scrollbarRelevancy[i] = IgnoreOverlayScrollbarSize;
@@ -241,7 +240,7 @@ public:
         m_clipRects[getIndex(clipRectsType, respectOverflow)] = WTFMove(clipRects);
     }
 
-#ifndef NDEBUG
+#if ASSERT_ENABLED
     const RenderLayer* m_clipRectsRoot[NumCachedClipRectsTypes];
     OverlayScrollbarSizeRelevancy m_scrollbarRelevancy[NumCachedClipRectsTypes];
 #endif
@@ -284,9 +283,13 @@ static TextStream& operator<<(TextStream& ts, const ClipRects& clipRects)
 
 #endif
 
+DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(RenderLayer);
+
 RenderLayer::RenderLayer(RenderLayerModelObject& rendererLayerModelObject)
     : m_isRenderViewLayer(rendererLayerModelObject.isRenderView())
     , m_forcedStackingContext(rendererLayerModelObject.isMedia())
+    , m_isNormalFlowOnly(false)
+    , m_isCSSStackingContext(false)
     , m_isOpportunisticStackingContext(false)
     , m_zOrderListsDirty(false)
     , m_normalFlowListDirty(true)
@@ -324,7 +327,7 @@ RenderLayer::RenderLayer(RenderLayerModelObject& rendererLayerModelObject)
     , m_requiresScrollPositionReconciliation(false)
     , m_containsDirtyOverlayScrollbars(false)
     , m_updatingMarqueePosition(false)
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     , m_layerListMutationAllowed(true)
 #endif
 #if ENABLE(CSS_COMPOSITING)
@@ -496,7 +499,7 @@ void RenderLayer::dirtyPaintOrderListsOnChildChange(RenderLayer& child)
     }
 }
 
-void RenderLayer::insertOnlyThisLayer()
+void RenderLayer::insertOnlyThisLayer(LayerChangeTiming timing)
 {
     if (!m_parent && renderer().parent()) {
         // We need to connect ourselves when our renderer() has a parent.
@@ -511,14 +514,22 @@ void RenderLayer::insertOnlyThisLayer()
     for (auto& child : childrenOfType<RenderElement>(renderer()))
         child.moveLayers(m_parent, this);
 
+    if (parent()) {
+        if (timing == LayerChangeTiming::StyleChange)
+            renderer().view().layerChildrenChangedDuringStyleChange(*parent());
+    }
+    
     // Clear out all the clip rects.
     clearClipRectsIncludingDescendants();
 }
 
-void RenderLayer::removeOnlyThisLayer()
+void RenderLayer::removeOnlyThisLayer(LayerChangeTiming timing)
 {
     if (!m_parent)
         return;
+
+    if (timing == LayerChangeTiming::StyleChange)
+        renderer().view().layerChildrenChangedDuringStyleChange(*parent());
 
     // Mark that we are about to lose our layer. This makes render tree
     // walks ignore this layer while we're removing it.
@@ -2248,6 +2259,27 @@ bool RenderLayer::isDescendantOf(const RenderLayer& layer) const
             return true;
     }
     return false;
+}
+
+static RenderLayer* findCommonAncestor(const RenderLayer& firstLayer, const RenderLayer& secondLayer)
+{
+    if (&firstLayer == &secondLayer)
+        return const_cast<RenderLayer*>(&firstLayer);
+
+    HashSet<const RenderLayer*> ancestorChain;
+    for (auto* currLayer = &firstLayer; currLayer; currLayer = currLayer->parent())
+        ancestorChain.add(currLayer);
+
+    for (auto* currLayer = &secondLayer; currLayer; currLayer = currLayer->parent()) {
+        if (ancestorChain.contains(currLayer))
+            return const_cast<RenderLayer*>(currLayer);
+    }
+    return nullptr;
+}
+
+RenderLayer* RenderLayer::commonAncestorWithLayer(const RenderLayer& layer) const
+{
+    return findCommonAncestor(*this, layer);
 }
 
 void RenderLayer::convertToPixelSnappedLayerCoords(const RenderLayer* ancestorLayer, IntPoint& roundedLocation, ColumnOffsetAdjustment adjustForColumns) const
@@ -4502,8 +4534,16 @@ void RenderLayer::paintLayerContents(GraphicsContext& context, const LayerPainti
         || (!isPaintingScrollingContent && isPaintingCompositedForeground));
     bool shouldPaintContent = m_hasVisibleContent && isSelfPaintingLayer && !isPaintingOverlayScrollbars && !isCollectingEventRegion;
 
-    if (localPaintFlags & PaintLayerPaintingRootBackgroundOnly && !renderer().isRenderView() && !renderer().isDocumentElementRenderer())
+    if (localPaintFlags & PaintLayerPaintingRootBackgroundOnly && !renderer().isRenderView() && !renderer().isDocumentElementRenderer()) {
+        // If beginTransparencyLayers was called prior to this, ensure the transparency state is cleaned up before returning.
+        if (haveTransparency && m_usedTransparency && !m_paintingInsideReflection) {
+            context.endTransparencyLayer();
+            context.restore();
+            m_usedTransparency = false;
+        }
+
         return;
+    }
 
     updateLayerListsIfNeeded();
 
@@ -4723,7 +4763,7 @@ void RenderLayer::paintList(LayerList layerIterator, GraphicsContext& context, c
     if (!hasSelfPaintingLayerDescendant())
         return;
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     LayerListMutationDetector mutationChecker(*this);
 #endif
 
@@ -5338,7 +5378,7 @@ RenderLayer* RenderLayer::hitTestLayer(RenderLayer* rootLayer, RenderLayer* cont
 
     // This variable tracks which layer the mouse ends up being inside.
     RenderLayer* candidateLayer = nullptr;
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     LayerListMutationDetector mutationChecker(*this);
 #endif
 
@@ -5619,7 +5659,7 @@ Ref<ClipRects> RenderLayer::updateClipRects(const ClipRectsContext& clipRectsCon
     
     if (!m_clipRectsCache)
         m_clipRectsCache = makeUnique<ClipRectsCache>();
-#ifndef NDEBUG
+#if ASSERT_ENABLED
     m_clipRectsCache->m_clipRectsRoot[clipRectsType] = clipRectsContext.rootLayer;
     m_clipRectsCache->m_scrollbarRelevancy[clipRectsType] = clipRectsContext.overlayScrollbarSizeRelevancy;
 #endif
@@ -6132,7 +6172,7 @@ LayoutRect RenderLayer::calculateLayerBounds(const RenderLayer* ancestorLayer, c
     
     ASSERT(isStackingContext() || !positiveZOrderLayers().size());
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     LayerListMutationDetector mutationChecker(const_cast<RenderLayer&>(*this));
 #endif
 

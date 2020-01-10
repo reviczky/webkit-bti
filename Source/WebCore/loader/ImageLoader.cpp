@@ -48,7 +48,7 @@
 #include "RenderVideo.h"
 #endif
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
 // ImageLoader objects are allocated as members of other objects, so generic pointer check would always fail.
 namespace WTF {
 
@@ -62,8 +62,8 @@ template<> struct ValueCheck<WebCore::ImageLoader*> {
     }
 };
 
-}
-#endif
+} // namespace WTF
+#endif // ASSERT_ENABLED
 
 namespace WebCore {
 
@@ -185,7 +185,7 @@ void ImageLoader::updateFromElement()
         ResourceRequest resourceRequest(document.completeURL(sourceURI(attr)));
         resourceRequest.setInspectorInitiatorNodeIdentifier(InspectorInstrumentation::identifierForNode(m_element));
 
-        auto request = createPotentialAccessControlRequest(WTFMove(resourceRequest), document, crossOriginAttribute, WTFMove(options));
+        auto request = createPotentialAccessControlRequest(WTFMove(resourceRequest), WTFMove(options), document, crossOriginAttribute);
         request.setInitiator(element());
 
         if (m_loadManually) {

@@ -61,7 +61,9 @@ using ArrayBufferContentsArray = Vector<JSC::ArrayBufferContents>;
 using WasmModuleArray = Vector<RefPtr<JSC::Wasm::Module>>;
 #endif
 
+DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(SerializedScriptValue);
 class SerializedScriptValue : public ThreadSafeRefCounted<SerializedScriptValue> {
+    WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(SerializedScriptValue);
 public:
     WEBCORE_EXPORT static RefPtr<SerializedScriptValue> create(JSC::JSGlobalObject&, JSC::JSValue, SerializationErrorMode = SerializationErrorMode::Throwing);
 
@@ -170,14 +172,11 @@ RefPtr<SerializedScriptValue> SerializedScriptValue::decode(Decoder& decoder)
             return nullptr;
 
         auto buffer = Gigacage::tryMalloc(Gigacage::Primitive, bufferSize);
-        auto destructor = [] (void* ptr) {
-            Gigacage::free(Gigacage::Primitive, ptr);
-        };
         if (!decoder.decodeFixedLengthData(static_cast<uint8_t*>(buffer), bufferSize, 1)) {
-            destructor(buffer);
+            Gigacage::free(Gigacage::Primitive, buffer);
             return nullptr;
         }
-        arrayBufferContentsArray->append({ buffer, bufferSize, WTFMove(destructor) });
+        arrayBufferContentsArray->append({ buffer, bufferSize, ArrayBuffer::primitiveGigacageDestructor() });
     }
 
     return adoptRef(*new SerializedScriptValue(WTFMove(data), WTFMove(arrayBufferContentsArray)));

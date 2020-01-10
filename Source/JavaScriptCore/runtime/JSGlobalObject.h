@@ -62,6 +62,7 @@ class JSGlobalObjectInspectorController;
 namespace JSC {
 class ArrayConstructor;
 class ArrayPrototype;
+class ArrayIteratorPrototype;
 class AsyncIteratorPrototype;
 class AsyncFunctionPrototype;
 class AsyncGeneratorPrototype;
@@ -161,6 +162,7 @@ constexpr bool typeExposedByDefault = true;
 #if ENABLE(WEBASSEMBLY)
 #define FOR_EACH_WEBASSEMBLY_CONSTRUCTOR_TYPE(macro) \
     macro(WebAssemblyCompileError, webAssemblyCompileError, webAssemblyCompileError, JSWebAssemblyCompileError, CompileError, error, typeExposedByDefault) \
+    macro(WebAssemblyGlobal,       webAssemblyGlobal,       webAssemblyGlobal,       JSWebAssemblyGlobal,       Global,       object, typeExposedByDefault) \
     macro(WebAssemblyInstance,     webAssemblyInstance,     webAssemblyInstance,     JSWebAssemblyInstance,     Instance,     object, typeExposedByDefault) \
     macro(WebAssemblyLinkError,    webAssemblyLinkError,    webAssemblyLinkError,    JSWebAssemblyLinkError,    LinkError,    error, typeExposedByDefault) \
     macro(WebAssemblyMemory,       webAssemblyMemory,       webAssemblyMemory,       JSWebAssemblyMemory,       Memory,       object, typeExposedByDefault) \
@@ -320,6 +322,7 @@ public:
     WriteBarrier<GeneratorFunctionPrototype> m_generatorFunctionPrototype;
     WriteBarrier<GeneratorPrototype> m_generatorPrototype;
     WriteBarrier<AsyncGeneratorPrototype> m_asyncGeneratorPrototype;
+    WriteBarrier<ArrayIteratorPrototype> m_arrayIteratorPrototype;
 
     LazyProperty<JSGlobalObject, Structure> m_debuggerScopeStructure;
     LazyProperty<JSGlobalObject, Structure> m_withScopeStructure;
@@ -374,6 +377,7 @@ public:
     WriteBarrier<Structure> m_generatorFunctionStructure;
     WriteBarrier<Structure> m_generatorStructure;
     WriteBarrier<Structure> m_asyncGeneratorStructure;
+    WriteBarrier<Structure> m_arrayIteratorStructure;
     LazyProperty<JSGlobalObject, Structure> m_iteratorResultObjectStructure;
     WriteBarrier<Structure> m_regExpMatchesArrayStructure;
     LazyProperty<JSGlobalObject, Structure> m_moduleRecordStructure;
@@ -401,7 +405,6 @@ public:
     LazyProperty<JSGlobalObject, Structure> m_webAssemblyFunctionStructure;
     LazyProperty<JSGlobalObject, Structure> m_jsToWasmICCalleeStructure;
     LazyProperty<JSGlobalObject, Structure> m_webAssemblyWrapperFunctionStructure;
-    LazyProperty<JSGlobalObject, Structure> m_webAssemblyToJSCalleeStructure;
     FOR_EACH_WEBASSEMBLY_CONSTRUCTOR_TYPE(DEFINE_STORAGE_FOR_LAZY_TYPE)
 #endif // ENABLE(WEBASSEMBLY)
 
@@ -511,7 +514,7 @@ public:
     ConsoleClient* m_consoleClient { nullptr };
     Optional<unsigned> m_stackTraceLimit;
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     const JSGlobalObject* m_globalObjectAtDebuggerEntry { nullptr };
 #endif
 
@@ -526,8 +529,15 @@ public:
     }
         
 public:
-    typedef JSSegmentedVariableObject Base;
+    using Base = JSSegmentedVariableObject;
     static constexpr unsigned StructureFlags = Base::StructureFlags | HasStaticPropertyTable | OverridesGetOwnPropertySlot | OverridesGetPropertyNames | IsImmutablePrototypeExoticObject;
+
+    static constexpr bool needsDestruction = true;
+    template<typename CellType, SubspaceAccess mode>
+    static IsoSubspace* subspaceFor(VM& vm)
+    {
+        return vm.globalObjectSpace<mode>();
+    }
 
     JS_EXPORT_PRIVATE static JSGlobalObject* create(VM&, Structure*);
 
@@ -580,6 +590,8 @@ public:
     JSScope* globalScopeExtension() { return m_globalScopeExtension.get(); }
     void setGlobalScopeExtension(JSScope*);
     void clearGlobalScopeExtension();
+
+    JSCallee* globalCallee() { return m_globalCallee.get(); }
 
     // The following accessors return pristine values, even if a script 
     // replaces the global object's associated property.
@@ -643,6 +655,7 @@ public:
     GeneratorFunctionPrototype* generatorFunctionPrototype() const { return m_generatorFunctionPrototype.get(); }
     GeneratorPrototype* generatorPrototype() const { return m_generatorPrototype.get(); }
     AsyncFunctionPrototype* asyncFunctionPrototype() const { return m_asyncFunctionPrototype.get(); }
+    ArrayIteratorPrototype* arrayIteratorPrototype() const { return m_arrayIteratorPrototype.get(); }
     JSObject* mapPrototype() const { return m_mapStructure.prototype(this); }
     // Workaround for the name conflict between JSCell::setPrototype.
     JSObject* jsSetPrototype() const { return m_setStructure.prototype(this); }
@@ -750,6 +763,7 @@ public:
     Structure* generatorFunctionStructure() const { return m_generatorFunctionStructure.get(); }
     Structure* asyncFunctionStructure() const { return m_asyncFunctionStructure.get(); }
     Structure* asyncGeneratorFunctionStructure() const { return m_asyncGeneratorFunctionStructure.get(); }
+    Structure* arrayIteratorStructure() const { return m_arrayIteratorStructure.get(); }    
     Structure* stringObjectStructure() const { return m_stringObjectStructure.get(); }
     Structure* iteratorResultObjectStructure() const { return m_iteratorResultObjectStructure.get(this); }
     Structure* regExpMatchesArrayStructure() const { return m_regExpMatchesArrayStructure.get(); }
@@ -765,7 +779,6 @@ public:
     Structure* webAssemblyFunctionStructure() const { return m_webAssemblyFunctionStructure.get(this); }
     Structure* jsToWasmICCalleeStructure() const { return m_jsToWasmICCalleeStructure.get(this); }
     Structure* webAssemblyWrapperFunctionStructure() const { return m_webAssemblyWrapperFunctionStructure.get(this); }
-    Structure* webAssemblyToJSCalleeStructure() const { return m_webAssemblyToJSCalleeStructure.get(this); }
 #endif // ENABLE(WEBASSEMBLY)
 #if ENABLE(INTL)
     Structure* collatorStructure() { return m_collatorStructure.get(this); }
@@ -955,7 +968,7 @@ public:
         m_webAssemblyDisabledErrorMessage = errorMessage;
     }
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     const JSGlobalObject* globalObjectAtDebuggerEntry() const { return m_globalObjectAtDebuggerEntry; }
     void setGlobalObjectAtDebuggerEntry(const JSGlobalObject* globalObject) { m_globalObjectAtDebuggerEntry = globalObject; }
 #endif

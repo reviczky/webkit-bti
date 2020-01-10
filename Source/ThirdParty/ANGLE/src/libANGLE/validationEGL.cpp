@@ -31,7 +31,7 @@ size_t GetMaximumMipLevel(const gl::Context *context, gl::TextureType type)
 {
     const gl::Caps &caps = context->getCaps();
 
-    size_t maxDimension = 0;
+    int maxDimension = 0;
     switch (type)
     {
         case gl::TextureType::_2D:
@@ -53,7 +53,7 @@ size_t GetMaximumMipLevel(const gl::Context *context, gl::TextureType type)
             UNREACHABLE();
     }
 
-    return gl::log2(static_cast<int>(maxDimension));
+    return gl::log2(maxDimension);
 }
 
 bool TextureHasNonZeroMipLevelsSpecified(const gl::Context *context, const gl::Texture *texture)
@@ -349,6 +349,13 @@ Error ValidatePlatformType(const ClientExtensions &clientExtensions, EGLAttrib p
             if (!clientExtensions.platformANGLEVulkan)
             {
                 return EglBadAttribute() << "Vulkan platform is unsupported.";
+            }
+            break;
+
+        case EGL_PLATFORM_ANGLE_TYPE_METAL_ANGLE:
+            if (!clientExtensions.platformANGLEMetal)
+            {
+                return EglBadAttribute() << "Metal platform is unsupported.";
             }
             break;
 
@@ -1429,6 +1436,14 @@ Error ValidateCreateWindowSurface(Display *display,
                 }
                 break;
 
+            case EGL_GGP_STREAM_DESCRIPTOR_ANGLE:
+                if (!display->getExtensions().ggpStreamDescriptor)
+                {
+                    return EglBadAttribute() << "EGL_GGP_STREAM_DESCRIPTOR_ANGLE requires "
+                                                "EGL_ANGLE_ggp_stream_descriptor.";
+                }
+                break;
+
             default:
                 return EglBadAttribute();
         }
@@ -1701,6 +1716,12 @@ Error ValidateCreatePbufferFromClientBuffer(Display *display,
                     return EglBadAttribute() << "<buftype> doesn't support setting GL colorspace";
                 }
                 break;
+            case EGL_IOSURFACE_USAGE_HINT_ANGLE:
+                if (value & ~(EGL_IOSURFACE_READ_HINT_ANGLE | EGL_IOSURFACE_WRITE_HINT_ANGLE))
+                {
+                    return EglBadAttribute() << "IOSurface usage hint must only contain READ or WRITE";
+                }
+                break;
             default:
                 return EglBadAttribute();
         }
@@ -1760,10 +1781,19 @@ Error ValidateCreatePbufferFromClientBuffer(Display *display,
 
     if (buftype == EGL_IOSURFACE_ANGLE)
     {
+#if ANGLE_PLATFORM_MACOS
         if (textureTarget != EGL_TEXTURE_RECTANGLE_ANGLE)
         {
-            return EglBadAttribute() << "EGL_IOSURFACE requires the EGL_TEXTURE_RECTANGLE target";
+            return EglBadAttribute() << "EGL_IOSURFACE requires the EGL_TEXTURE_RECTANGLE target on desktop macOS";
         }
+#elif ANGLE_PLATFORM_IOS
+        if (textureTarget != EGL_TEXTURE_2D)
+        {
+            return EglBadAttribute() << "EGL_IOSURFACE requires the EGL_TEXTURE_2D target on iOS";
+        }
+#else
+        return EglBadAttribute() << "EGL_IOSURFACE supported only on macOS platforms";
+#endif
 
         if (textureFormat != EGL_TEXTURE_RGBA)
         {
@@ -3010,44 +3040,28 @@ Error ValidateStreamPostD3DTextureANGLE(const Display *display,
 }
 
 Error ValidateGetSyncValuesCHROMIUM(const Display *display,
-                                    const Surface *surface,
+                                    const Surface *eglSurface,
                                     const EGLuint64KHR *ust,
                                     const EGLuint64KHR *msc,
                                     const EGLuint64KHR *sbc)
 {
     ANGLE_TRY(ValidateDisplay(display));
+    ANGLE_TRY(ValidateSurface(display, eglSurface));
 
     const DisplayExtensions &displayExtensions = display->getExtensions();
-    if (!displayExtensions.getSyncValues)
+    if (!displayExtensions.syncControlCHROMIUM)
     {
-        return EglBadAccess() << "getSyncValues extension not active";
-    }
-
-    if (display->isDeviceLost())
-    {
-        return EglContextLost() << "Context is lost.";
-    }
-
-    if (surface == EGL_NO_SURFACE)
-    {
-        return EglBadSurface() << "getSyncValues surface cannot be EGL_NO_SURFACE";
-    }
-
-    if (!surface->directComposition())
-    {
-        return EglBadSurface() << "getSyncValues surface requires Direct Composition to be enabled";
+        return EglBadAccess() << "syncControlCHROMIUM extension not active";
     }
 
     if (ust == nullptr)
     {
         return EglBadParameter() << "ust is null";
     }
-
     if (msc == nullptr)
     {
         return EglBadParameter() << "msc is null";
     }
-
     if (sbc == nullptr)
     {
         return EglBadParameter() << "sbc is null";
@@ -4066,4 +4080,19 @@ Error ValidateDupNativeFenceFDANDROID(const Display *display, const Sync *sync)
     return NoError();
 }
 
+Error ValidateSwapBuffersWithFrameTokenANGLE(const Display *display,
+                                             const Surface *surface,
+                                             EGLFrameTokenANGLE frametoken)
+{
+    ANGLE_TRY(ValidateDisplay(display));
+
+    if (!display->getExtensions().swapWithFrameToken)
+    {
+        return EglBadDisplay() << "EGL_ANGLE_swap_buffers_with_frame_token is not available.";
+    }
+
+    ANGLE_TRY(ValidateSurface(display, surface));
+
+    return NoError();
+}
 }  // namespace egl

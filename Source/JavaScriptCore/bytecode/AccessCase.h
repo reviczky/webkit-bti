@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2017-2019 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,6 +36,8 @@
 namespace JSC {
 
 struct AccessGenerationState;
+
+DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(AccessCase);
 
 // An AccessCase describes one of the cases of a PolymorphicAccess. A PolymorphicAccess represents a
 // planned (to generate in future) or generated stub for some inline cache. That stub contains fast
@@ -78,7 +80,7 @@ struct AccessGenerationState;
 // code. This allows us to only regenerate once we've accumulated (hopefully) more than one new
 // AccessCase.
 class AccessCase {
-    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(AccessCase);
 public:
     enum AccessType : uint8_t {
         Load,
@@ -179,6 +181,19 @@ public:
     // past the call.
     bool doesCalls(Vector<JSCell*>* cellsToMark = nullptr) const;
 
+    bool isCustom() const
+    {
+        switch (type()) {
+        case CustomValueGetter:
+        case CustomAccessorGetter:
+        case CustomValueSetter:
+        case CustomAccessorSetter:
+            return true;
+        default:
+            return false;
+        }
+    }
+
     bool isGetter() const
     {
         switch (type()) {
@@ -224,7 +239,7 @@ public:
     Box<Identifier> identifier() const { return m_identifier; }
 
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     void checkConsistency(StructureStubInfo&);
 #else
     ALWAYS_INLINE void checkConsistency(StructureStubInfo&) { }

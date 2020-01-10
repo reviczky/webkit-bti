@@ -103,6 +103,46 @@ void ResourceLoadStatisticsMemoryStore::calculateAndSubmitTelemetry() const
         WebResourceLoadStatisticsTelemetry::calculateAndSubmit(*this);
 }
 
+static void ensureThirdPartyDataForSpecificFirstPartyDomain(Vector<WebResourceLoadStatisticsStore::ThirdPartyDataForSpecificFirstParty>& thirdPartyDataForSpecificFirstPartyDomain, const RegistrableDomain& firstPartyDomain, bool thirdPartyHasStorageAccess)
+{
+    WebResourceLoadStatisticsStore::ThirdPartyDataForSpecificFirstParty thirdPartyDataForSpecificFirstParty { firstPartyDomain, thirdPartyHasStorageAccess, Seconds { ResourceLoadStatistics::NoExistingTimestamp }};
+    thirdPartyDataForSpecificFirstPartyDomain.appendIfNotContains(thirdPartyDataForSpecificFirstParty);
+}
+
+static Vector<WebResourceLoadStatisticsStore::ThirdPartyDataForSpecificFirstParty> getThirdPartyDataForSpecificFirstPartyDomains(const ResourceLoadStatistics& thirdPartyStatistic)
+{
+    Vector<WebResourceLoadStatisticsStore::ThirdPartyDataForSpecificFirstParty> thirdPartyDataForSpecificFirstPartyDomains;
+
+    for (auto firstPartyDomain : thirdPartyStatistic.subframeUnderTopFrameDomains)
+        ensureThirdPartyDataForSpecificFirstPartyDomain(thirdPartyDataForSpecificFirstPartyDomains, firstPartyDomain, thirdPartyStatistic.storageAccessUnderTopFrameDomains.contains(firstPartyDomain));
+    for (auto firstPartyDomain : thirdPartyStatistic.subresourceUnderTopFrameDomains)
+        ensureThirdPartyDataForSpecificFirstPartyDomain(thirdPartyDataForSpecificFirstPartyDomains, firstPartyDomain, thirdPartyStatistic.storageAccessUnderTopFrameDomains.contains(firstPartyDomain));
+    for (auto firstPartyDomain : thirdPartyStatistic.subresourceUniqueRedirectsTo)
+        ensureThirdPartyDataForSpecificFirstPartyDomain(thirdPartyDataForSpecificFirstPartyDomains, firstPartyDomain, thirdPartyStatistic.storageAccessUnderTopFrameDomains.contains(firstPartyDomain));
+
+    return thirdPartyDataForSpecificFirstPartyDomains;
+}
+
+static bool hasBeenThirdParty(const ResourceLoadStatistics& statistic)
+{
+    return !statistic.subframeUnderTopFrameDomains.isEmpty()
+        || !statistic.subresourceUnderTopFrameDomains.isEmpty()
+        || !statistic.subresourceUniqueRedirectsTo.isEmpty();
+}
+
+Vector<WebResourceLoadStatisticsStore::ThirdPartyData> ResourceLoadStatisticsMemoryStore::aggregatedThirdPartyData() const
+{
+    ASSERT(!RunLoop::isMain());
+
+    Vector<WebResourceLoadStatisticsStore::ThirdPartyData> thirdPartyDataList;
+    for (auto& statistic : m_resourceStatisticsMap.values()) {
+        if (hasBeenThirdParty(statistic) && statistic.isPrevalentResource)
+            thirdPartyDataList.append(WebResourceLoadStatisticsStore::ThirdPartyData { statistic.registrableDomain, getThirdPartyDataForSpecificFirstPartyDomains(statistic) });
+    }
+    std::sort(thirdPartyDataList.rbegin(), thirdPartyDataList.rend());
+    return thirdPartyDataList;
+}
+
 void ResourceLoadStatisticsMemoryStore::incrementRecordsDeletedCountForDomains(HashSet<RegistrableDomain>&& domainsWithDeletedWebsiteData)
 {
     ASSERT(!RunLoop::isMain());
@@ -388,7 +428,7 @@ Vector<RegistrableDomain> ResourceLoadStatisticsMemoryStore::ensurePrevalentReso
     return domainsToBlock;
 }
 
-void ResourceLoadStatisticsMemoryStore::logFrameNavigation(const RegistrableDomain& targetDomain, const RegistrableDomain& topFrameDomain, const RegistrableDomain& sourceDomain, bool isRedirect, bool isMainFrame)
+void ResourceLoadStatisticsMemoryStore::logFrameNavigation(const RegistrableDomain& targetDomain, const RegistrableDomain& topFrameDomain, const RegistrableDomain& sourceDomain, bool isRedirect, bool isMainFrame, Seconds delayAfterMainFrameDocumentLoad, bool wasPotentiallyInitiatedByUser)
 {
     ASSERT(!RunLoop::isMain());
 
@@ -403,15 +443,18 @@ void ResourceLoadStatisticsMemoryStore::logFrameNavigation(const RegistrableDoma
             statisticsWereUpdated = true;
     }
 
-    if (isRedirect && !areTargetAndSourceDomainsSameSite) {
+    if (!areTargetAndSourceDomainsSameSite) {
         if (isMainFrame) {
             auto& redirectingDomainStatistics = ensureResourceStatisticsForRegistrableDomain(sourceDomain);
-            if (redirectingDomainStatistics.topFrameUniqueRedirectsTo.add(targetDomain).isNewEntry)
-                statisticsWereUpdated = true;
-            auto& targetStatistics = ensureResourceStatisticsForRegistrableDomain(targetDomain);
-            if (targetStatistics.topFrameUniqueRedirectsFrom.add(sourceDomain).isNewEntry)
-                statisticsWereUpdated = true;
-        } else {
+            bool wasNavigatedAfterShortDelayWithoutUserInteraction = !wasPotentiallyInitiatedByUser && delayAfterMainFrameDocumentLoad < parameters().minDelayAfterMainFrameDocumentLoadToNotBeARedirect;
+            if (isRedirect || wasNavigatedAfterShortDelayWithoutUserInteraction) {
+                if (redirectingDomainStatistics.topFrameUniqueRedirectsTo.add(targetDomain).isNewEntry)
+                    statisticsWereUpdated = true;
+                auto& targetStatistics = ensureResourceStatisticsForRegistrableDomain(targetDomain);
+                if (targetStatistics.topFrameUniqueRedirectsFrom.add(sourceDomain).isNewEntry)
+                    statisticsWereUpdated = true;
+            }
+        } else if (isRedirect) {
             auto& redirectingDomainStatistics = ensureResourceStatisticsForRegistrableDomain(sourceDomain);
             if (redirectingDomainStatistics.subresourceUniqueRedirectsTo.add(targetDomain).isNewEntry)
                 statisticsWereUpdated = true;
@@ -510,6 +553,15 @@ void ResourceLoadStatisticsMemoryStore::dumpResourceLoadStatistics(CompletionHan
     result.appendLiteral("Resource load statistics:\n\n");
     for (auto& mapEntry : m_resourceStatisticsMap.values())
         result.append(mapEntry.toString());
+
+    auto thirdPartyData = aggregatedThirdPartyData();
+    if (!thirdPartyData.isEmpty()) {
+        result.append("\nITP Data:\n");
+        for (auto thirdParty : thirdPartyData) {
+            result.append(thirdParty.toString());
+            result.append('\n');
+        }
+    }
     completionHandler(result.toString());
 }
 
@@ -814,12 +866,16 @@ bool ResourceLoadStatisticsMemoryStore::hasHadUnexpiredRecentUserInteraction(Res
     ASSERT(!RunLoop::isMain());
 
     if (resourceStatistic.hadUserInteraction && hasStatisticsExpired(resourceStatistic, operatingDatesWindow)) {
-        // Drop privacy sensitive data because we no longer need it.
-        // Set timestamp to 0 so that statistics merge will know
-        // it has been reset as opposed to its default -1.
-        resourceStatistic.mostRecentUserInteractionTime = { };
-        resourceStatistic.storageAccessUnderTopFrameDomains.clear();
-        resourceStatistic.hadUserInteraction = false;
+        if (operatingDatesWindow == OperatingDatesWindow::Long) {
+            // Drop privacy sensitive data because we no longer need it.
+            // Set timestamp to 0 so that statistics merge will know
+            // it has been reset as opposed to its default -1.
+            resourceStatistic.mostRecentUserInteractionTime = { };
+            resourceStatistic.storageAccessUnderTopFrameDomains.clear();
+            resourceStatistic.hadUserInteraction = false;
+        }
+        
+        return false;
     }
 
     return resourceStatistic.hadUserInteraction;
@@ -832,7 +888,24 @@ bool ResourceLoadStatisticsMemoryStore::shouldRemoveAllWebsiteDataFor(ResourceLo
 
 bool ResourceLoadStatisticsMemoryStore::shouldRemoveAllButCookiesFor(ResourceLoadStatistics& resourceStatistic, bool shouldCheckForGrandfathering) const
 {
-    return resourceStatistic.gotLinkDecorationFromPrevalentResource && !hasHadUnexpiredRecentUserInteraction(resourceStatistic, OperatingDatesWindow::Short) && (!shouldCheckForGrandfathering || !resourceStatistic.grandfathered);
+    bool isRemovalEnabled = firstPartyWebsiteDataRemovalMode() != FirstPartyWebsiteDataRemovalMode::None || resourceStatistic.gotLinkDecorationFromPrevalentResource;
+    bool isResourceGrandfathered = shouldCheckForGrandfathering && resourceStatistic.grandfathered;
+    
+    OperatingDatesWindow window { };
+    switch (firstPartyWebsiteDataRemovalMode()) {
+    case FirstPartyWebsiteDataRemovalMode::AllButCookies:
+        FALLTHROUGH;
+    case FirstPartyWebsiteDataRemovalMode::None:
+        window = OperatingDatesWindow::Short;
+        break;
+    case FirstPartyWebsiteDataRemovalMode::AllButCookiesLiveOnTestingTimeout:
+        window = OperatingDatesWindow::ForLiveOnTesting;
+        break;
+    case FirstPartyWebsiteDataRemovalMode::AllButCookiesReproTestingTimeout:
+        window = OperatingDatesWindow::ForReproTesting;
+    }
+
+    return isRemovalEnabled && !isResourceGrandfathered && !hasHadUnexpiredRecentUserInteraction(resourceStatistic, window);
 }
 
 Vector<std::pair<RegistrableDomain, WebsiteDataToRemove>> ResourceLoadStatisticsMemoryStore::registrableDomainsToRemoveWebsiteDataFor()

@@ -31,6 +31,7 @@
 #include "DisplayBox.h"
 #include "LayoutBox.h"
 #include "LayoutContainer.h"
+#include "RuntimeEnabledFeatures.h"
 #include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
@@ -56,6 +57,11 @@ LayoutState::LayoutState(const LayoutTreeContent& layoutTreeContent)
 }
 
 LayoutState::~LayoutState() = default;
+
+Display::Box& LayoutState::displayBoxForRootLayoutBox()
+{
+    return displayBoxForLayoutBox(m_layoutTreeContent->rootLayoutBox());
+}
 
 Display::Box& LayoutState::displayBoxForLayoutBox(const Box& layoutBox)
 {
@@ -122,6 +128,34 @@ FormattingState& LayoutState::createFormattingStateForFormattingRootIfNeeded(con
     }
 
     CRASH();
+}
+
+void LayoutState::setViewportSize(const LayoutSize& viewportSize)
+{
+    if (RuntimeEnabledFeatures::sharedFeatures().layoutFormattingContextIntegrationEnabled()) {
+        m_viewportSize = viewportSize;
+        return;
+    }
+    ASSERT_NOT_REACHED();
+}
+
+LayoutSize LayoutState::viewportSize() const
+{
+    if (RuntimeEnabledFeatures::sharedFeatures().layoutFormattingContextIntegrationEnabled())
+        return m_viewportSize;
+    ASSERT_NOT_REACHED();
+    return { };
+}
+
+bool LayoutState::isIntegratedRootBoxFirstChild() const
+{
+    if (RuntimeEnabledFeatures::sharedFeatures().layoutFormattingContextIntegrationEnabled()) {
+        auto& rootRenderer = m_layoutTreeContent->rootRenderer();
+        ASSERT(rootRenderer.parent());
+        return rootRenderer.parent()->firstChild() == &rootRenderer;
+    }
+    ASSERT_NOT_REACHED();
+    return false;
 }
 
 }

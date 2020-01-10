@@ -50,7 +50,7 @@
 </tr>
 <tr>
 <td class="function_type">
-<a href="../gtk3/GtkFileFilter.html#GtkFileFilter-struct"><span class="returnvalue">GtkFileFilter</span></a> *
+<span class="returnvalue">GtkFileFilter</span> *
 </td>
 <td class="function_name">
 <a class="link" href="WebKitFileChooserRequest.html#webkit-file-chooser-request-get-mime-types-filter" title="webkit_file_chooser_request_get_mime_types_filter ()">webkit_file_chooser_request_get_mime_types_filter</a> <span class="c_punctuation">()</span>
@@ -101,7 +101,7 @@
 <tbody>
 <tr>
 <td class="property_type">
-<a href="../gtk3/GtkFileFilter.html#GtkFileFilter-struct"><span class="type">GtkFileFilter</span></a> *</td>
+<span class="type">GtkFileFilter</span> *</td>
 <td class="property_name"><a class="link" href="WebKitFileChooserRequest.html#WebKitFileChooserRequest--filter" title="The “filter” property">filter</a></td>
 <td class="property_flags">Read</td>
 </tr>
@@ -148,7 +148,7 @@
 HTML element, WebKit will need to show a dialog to choose one or
 more files to be uploaded to the server along with the rest of the
 form data. For that to happen in a general way, instead of just
-opening a <a href="../gtk3/GtkFileChooserDialog.html#GtkFileChooserDialog-struct"><span class="type">GtkFileChooserDialog</span></a> (which might be not desirable in
+opening a <span class="type">GtkFileChooserDialog</span> (which might be not desirable in
 some cases, which could prefer to use their own file chooser
 dialog), WebKit will fire the <a class="link" href="WebKitWebView.html#WebKitWebView-run-file-chooser" title="The “run-file-chooser” signal"><span class="type">“run-file-chooser”</span></a>
 signal with a <a class="link" href="WebKitFileChooserRequest.html" title="WebKitFileChooserRequest"><span class="type">WebKitFileChooserRequest</span></a> object, which will allow
@@ -158,7 +158,7 @@ should be allowed) and to cancel the request, in case nothing was
 selected.</p>
 <p>In case the client application does not wish to handle this signal,
 WebKit will provide a default handler which will asynchronously run
-a regular <a href="../gtk3/GtkFileChooserDialog.html#GtkFileChooserDialog-struct"><span class="type">GtkFileChooserDialog</span></a> for the user to interact with.</p>
+a regular <span class="type">GtkFileChooserDialog</span> for the user to interact with.</p>
 </div>
 <div class="refsect1">
 <a name="WebKitFileChooserRequest.functions_details"></a><h2>Functions</h2>
@@ -201,11 +201,11 @@ should not be modified or freed. </p>
 <hr>
 <div class="refsect2">
 <a name="webkit-file-chooser-request-get-mime-types-filter"></a><h3>webkit_file_chooser_request_get_mime_types_filter ()</h3>
-<pre class="programlisting"><a href="../gtk3/GtkFileFilter.html#GtkFileFilter-struct"><span class="returnvalue">GtkFileFilter</span></a> *
+<pre class="programlisting"><span class="returnvalue">GtkFileFilter</span> *
 webkit_file_chooser_request_get_mime_types_filter
                                (<em class="parameter"><code><a class="link" href="WebKitFileChooserRequest.html" title="WebKitFileChooserRequest"><span class="type">WebKitFileChooserRequest</span></a> *request</code></em>);</pre>
 <p>Get the filter currently associated with the request, ready to be
-used by <a href="../gtk3/GtkFileChooser.html#GtkFileChooser-struct"><span class="type">GtkFileChooser</span></a>. This function should normally be called
+used by <span class="type">GtkFileChooser</span>. This function should normally be called
 before presenting the file chooser dialog to the user, to decide
 whether to apply a filter so the user would not be allowed to
 select files with other MIME types.</p>
@@ -228,7 +228,7 @@ interested in getting the list of accepted MIME types.</p>
 </div>
 <div class="refsect3">
 <a name="webkit-file-chooser-request-get-mime-types-filter.returns"></a><h4>Returns</h4>
-<p>a <a href="../gtk3/GtkFileFilter.html#GtkFileFilter-struct"><span class="type">GtkFileFilter</span></a> if a list of accepted
+<p>a <span class="type">GtkFileFilter</span> if a list of accepted
 MIME types is defined or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> otherwise. The returned object is
 owned by WebKit should not be modified or freed. </p>
 <p><span class="annotation">[<acronym title="Don't free data after the code is done."><span class="acronym">transfer none</span></acronym>]</span></p>
@@ -373,7 +373,7 @@ pending forever, which might cause the browser to hang.</p>
 <a name="WebKitFileChooserRequest.property-details"></a><h2>Property Details</h2>
 <div class="refsect2">
 <a name="WebKitFileChooserRequest--filter"></a><h3>The <code class="literal">“filter”</code> property</h3>
-<pre class="programlisting">  “filter”                   <a href="../gtk3/GtkFileFilter.html#GtkFileFilter-struct"><span class="type">GtkFileFilter</span></a> *</pre>
+<pre class="programlisting">  “filter”                   <span class="type">GtkFileFilter</span> *</pre>
 <p>The filter currently associated with the request. See
 <a class="link" href="WebKitFileChooserRequest.html#webkit-file-chooser-request-get-mime-types-filter" title="webkit_file_chooser_request_get_mime_types_filter ()"><code class="function">webkit_file_chooser_request_get_mime_types_filter()</code></a> for more
 details.</p>

@@ -100,6 +100,10 @@ typedef struct _AtkObject AtkObject;
 #include "WebPrintOperationGtk.h"
 #endif
 
+#if PLATFORM(GTK) || PLATFORM(WPE)
+#include "InputMethodState.h"
+#endif
+
 #if PLATFORM(IOS_FAMILY)
 #include "GestureTypes.h"
 #include <WebCore/IntPointHash.h>
@@ -197,6 +201,7 @@ struct GlobalWindowIdentifier;
 struct Highlight;
 struct KeypressCommand;
 struct PromisedAttachmentInfo;
+struct RunJavaScriptParameters;
 struct TextCheckingResult;
 struct ViewportArguments;
 
@@ -223,7 +228,6 @@ class RemoteWebInspectorUI;
 class TextCheckingControllerProxy;
 class UserMediaPermissionRequestManager;
 class ViewGestureGeometryCollector;
-class VisibleContentRectUpdateInfo;
 class WebColorChooser;
 class WebContextMenu;
 class WebContextMenuItemData;
@@ -280,6 +284,10 @@ struct WebPageCreationParameters;
 struct WebPreferencesStore;
 struct WebSelectionData;
 struct WebsitePoliciesData;
+
+#if ENABLE(UI_SIDE_COMPOSITING)
+class VisibleContentRectUpdateInfo;
+#endif
 
 using SnapshotOptions = uint32_t;
 using WKEventModifiers = uint32_t;
@@ -717,7 +725,7 @@ public:
 #endif
 
 #if PLATFORM(IOS_FAMILY) && ENABLE(IOS_TOUCH_EVENTS)
-    void dispatchAsynchronousTouchEvents(const Vector<WebTouchEvent, 1>& queue);
+    void dispatchAsynchronousTouchEvents(const Vector<std::pair<WebTouchEvent, Optional<CallbackID>>, 1>& queue);
 #endif
 
     bool hasRichlyEditableSelection() const;
@@ -729,12 +737,16 @@ public:
         PageSuspended           = 1 << 3,
         Printing                = 1 << 4,
         ProcessSwap             = 1 << 5,
+        SwipeAnimation          = 1 << 6,
     };
     void freezeLayerTree(LayerTreeFreezeReason);
     void unfreezeLayerTree(LayerTreeFreezeReason);
 
     void markLayersVolatile(Function<void(bool)>&& completionHandler = { });
     void cancelMarkLayersVolatile();
+
+    void freezeLayerTreeDueToSwipeAnimation();
+    void unfreezeLayerTreeDueToSwipeAnimation();
 
     NotificationPermissionRequestManager* notificationPermissionRequestManager();
 
@@ -773,10 +785,12 @@ public:
 
     SandboxExtensionTracker& sandboxExtensionTracker() { return m_sandboxExtensionTracker; }
 
-#if PLATFORM(GTK)
-    void setComposition(const String&, const Vector<WebCore::CompositionUnderline>&, const EditingRange& selectionRange);
-    void confirmComposition(const String& text);
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    void cancelComposition(const String& text);
+    void deleteSurrounding(int64_t offset, unsigned characterCount);
+#endif
 
+#if PLATFORM(GTK)
     void collapseSelectionInFrame(WebCore::FrameIdentifier);
     void showEmojiPicker(WebCore::Frame&);
 
@@ -958,8 +972,6 @@ public:
     void setDeviceOrientation(int32_t);
     void setOverrideViewportArguments(const Optional<WebCore::ViewportArguments>&);
     void dynamicViewportSizeUpdate(const WebCore::FloatSize& viewLayoutSize, const WebCore::FloatSize& maximumUnobscuredSize, const WebCore::FloatRect& targetExposedContentRect, const WebCore::FloatRect& targetUnobscuredRect, const WebCore::FloatRect& targetUnobscuredRectInScrollViewCoordinates, const WebCore::FloatBoxExtent& targetUnobscuredSafeAreaInsets, double scale, int32_t deviceOrientation, DynamicViewportSizeUpdateID);
-    Optional<float> scaleFromUIProcess(const VisibleContentRectUpdateInfo&) const;
-    void updateVisibleContentRects(const VisibleContentRectUpdateInfo&, MonotonicTime oldestTimestamp);
     bool scaleWasSetByUIProcess() const { return m_scaleWasSetByUIProcess; }
     void willStartUserTriggeredZooming();
     void applicationWillResignActive();
@@ -977,6 +989,11 @@ public:
     void updateStringForFind(const String&);
     
     bool canShowWhileLocked() const { return m_canShowWhileLocked; }
+#endif
+
+#if ENABLE(UI_SIDE_COMPOSITING)
+    Optional<float> scaleFromUIProcess(const VisibleContentRectUpdateInfo&) const;
+    void updateVisibleContentRects(const VisibleContentRectUpdateInfo&, MonotonicTime oldestTimestamp);
 #endif
 
 #if ENABLE(IOS_TOUCH_EVENTS)
@@ -1080,8 +1097,8 @@ public:
     void postSynchronousMessageForTesting(const String& messageName, API::Object* messageBody, RefPtr<API::Object>& returnData);
     void postMessageIgnoringFullySynchronousMode(const String& messageName, API::Object* messageBody);
 
-#if PLATFORM(GTK)
-    void setInputMethodState(bool);
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    void setInputMethodState(WebCore::Element*);
 #endif
 
     void imageOrMediaDocumentSizeChanged(const WebCore::IntSize&);
@@ -1260,7 +1277,7 @@ private:
     void platformWillPerformEditingCommand();
     void sendEditorStateUpdate();
 
-#if PLATFORM(COCOA)
+#if HAVE(TOUCH_BAR)
     void sendTouchBarMenuDataAddedUpdate(WebCore::HTMLMenuElement&);
     void sendTouchBarMenuDataRemovedUpdate(WebCore::HTMLMenuElement&);
     void sendTouchBarMenuItemDataAddedUpdate(WebCore::HTMLMenuItemElement&);
@@ -1336,7 +1353,7 @@ private:
     void loadDataImpl(uint64_t navigationID, bool shouldTreatAsContinuingLoad, Optional<WebsitePoliciesData>&&, Ref<WebCore::SharedBuffer>&&, const String& MIMEType, const String& encodingName, const URL& baseURL, const URL& failingURL, const UserData&, WebCore::ShouldOpenExternalURLsPolicy = WebCore::ShouldOpenExternalURLsPolicy::ShouldNotAllow);
 
     // Actions
-    void tryClose();
+    void tryClose(CompletionHandler<void(bool)>&&);
     void platformDidReceiveLoadParameters(const LoadParameters&);
     void loadRequest(LoadParameters&&);
     NO_RETURN void loadRequestWaitingForProcessLaunch(LoadParameters&&, URL&&, WebPageProxyIdentifier, bool);
@@ -1430,8 +1447,8 @@ private:
     void getSelectionAsWebArchiveData(CallbackID);
     void getSourceForFrame(WebCore::FrameIdentifier, CallbackID);
     void getWebArchiveOfFrame(WebCore::FrameIdentifier, CallbackID);
-    void runJavaScript(WebFrame*, const String&, bool forceUserGesture, const Optional<String>& worldName, CallbackID);
-    void runJavaScriptInMainFrameScriptWorld(const String&, bool forceUserGesture, const Optional<String>& worldName, CallbackID);
+    void runJavaScript(WebFrame*, WebCore::RunJavaScriptParameters&&, const Optional<String>& worldName, CallbackID);
+    void runJavaScriptInMainFrameScriptWorld(WebCore::RunJavaScriptParameters&&, const Optional<String>& worldName, CallbackID);
     void runJavaScriptInFrame(WebCore::FrameIdentifier, const String&, bool forceUserGesture, CallbackID);
     void forceRepaint(CallbackID);
     void takeSnapshot(WebCore::IntRect snapshotRect, WebCore::IntSize bitmapSize, uint32_t options, CallbackID);
@@ -1513,7 +1530,7 @@ private:
     void didReceiveNotificationPermissionDecision(uint64_t notificationID, bool allowed);
 
 #if ENABLE(MEDIA_STREAM)
-    void userMediaAccessWasGranted(uint64_t userMediaID, WebCore::CaptureDevice&& audioDeviceUID, WebCore::CaptureDevice&& videoDeviceUID, String&& mediaDeviceIdentifierHashSalt, CompletionHandler<void()>&&);
+    void userMediaAccessWasGranted(uint64_t userMediaID, WebCore::CaptureDevice&& audioDeviceUID, WebCore::CaptureDevice&& videoDeviceUID, String&& mediaDeviceIdentifierHashSalt, SandboxExtension::Handle&&, CompletionHandler<void()>&&);
     void userMediaAccessWasDenied(uint64_t userMediaID, uint64_t reason, String&& invalidConstraint);
 
 #endif
@@ -1543,6 +1560,8 @@ private:
 
     bool shouldDispatchSyntheticMouseEventsWhenModifyingSelection() const;
     void platformDidSelectAll();
+    
+    void setHasResourceLoadClient(bool);
 
 #if ENABLE(CONTEXT_MENUS)
     void didSelectItemFromActiveContextMenu(const WebContextMenuItemData&);
@@ -1854,8 +1873,11 @@ private:
 
     bool m_userIsInteracting { false };
     bool m_hasEverFocusedElementDueToUserInteractionSincePageTransition { false };
+
+#if HAVE(TOUCH_BAR)
     bool m_isTouchBarUpdateSupressedForHiddenContentEditable { false };
     bool m_isNeverRichlyEditableForTouchBar { false };
+#endif
     OptionSet<WebCore::ActivityState::Flag> m_lastActivityStateChanges;
 
 #if ENABLE(CONTEXT_MENUS)
@@ -1953,8 +1975,8 @@ private:
     enum class EditorStateIsContentEditable { No, Yes, Unset };
     mutable EditorStateIsContentEditable m_lastEditorStateWasContentEditable { EditorStateIsContentEditable::Unset };
 
-#if PLATFORM(GTK)
-    bool m_inputMethodEnabled { false };
+#if PLATFORM(GTK) || PLATFORM(WPE)
+    Optional<InputMethodState> m_inputMethodState;
 #endif
 
 #if ENABLE(VIDEO) && USE(GSTREAMER)

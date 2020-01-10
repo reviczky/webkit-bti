@@ -160,7 +160,7 @@ void CanvasRenderingContext2DBase::unwindStateStack()
 
 CanvasRenderingContext2DBase::~CanvasRenderingContext2DBase()
 {
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     unwindStateStack();
 #endif
 
@@ -199,7 +199,7 @@ CanvasRenderingContext2DBase::State::State()
     , shadowBlur(0)
     , shadowColor(Color::transparent)
     , globalAlpha(1)
-    , globalComposite(CompositeSourceOver)
+    , globalComposite(CompositeOperator::SourceOver)
     , globalBlend(BlendMode::Normal)
     , hasInvertibleTransform(true)
     , lineDashOffset(0)
@@ -769,7 +769,7 @@ String CanvasRenderingContext2DBase::globalCompositeOperation() const
 
 void CanvasRenderingContext2DBase::setGlobalCompositeOperation(const String& operation)
 {
-    CompositeOperator op = CompositeSourceOver;
+    CompositeOperator op = CompositeOperator::SourceOver;
     BlendMode blendMode = BlendMode::Normal;
     if (!parseCompositeAndBlendOperator(operation, op, blendMode))
         return;
@@ -1034,9 +1034,9 @@ static bool validateRectForCanvas(float& x, float& y, float& width, float& heigh
 bool CanvasRenderingContext2DBase::isFullCanvasCompositeMode(CompositeOperator op)
 {
     // See 4.8.11.1.3 Compositing
-    // CompositeSourceAtop and CompositeDestinationOut are not listed here as the platforms already
+    // CompositeOperator::SourceAtop and CompositeOperator::DestinationOut are not listed here as the platforms already
     // implement the specification's behavior.
-    return op == CompositeSourceIn || op == CompositeSourceOut || op == CompositeDestinationIn || op == CompositeDestinationAtop;
+    return op == CompositeOperator::SourceIn || op == CompositeOperator::SourceOut || op == CompositeOperator::DestinationIn || op == CompositeOperator::DestinationAtop;
 }
 
 static WindRule toWindRule(CanvasFillRule rule)
@@ -1096,7 +1096,7 @@ void CanvasRenderingContext2DBase::fillInternal(const Path& path, CanvasFillRule
             c->fillPath(path);
             endCompositeLayer();
             didDrawEntireCanvas();
-        } else if (state().globalComposite == CompositeCopy) {
+        } else if (state().globalComposite == CompositeOperator::Copy) {
             clearCanvas();
             c->fillPath(path);
             didDrawEntireCanvas();
@@ -1128,7 +1128,7 @@ void CanvasRenderingContext2DBase::strokeInternal(const Path& path)
             c->strokePath(path);
             endCompositeLayer();
             didDrawEntireCanvas();
-        } else if (state().globalComposite == CompositeCopy) {
+        } else if (state().globalComposite == CompositeOperator::Copy) {
             clearCanvas();
             c->strokePath(path);
             didDrawEntireCanvas();
@@ -1216,7 +1216,7 @@ bool CanvasRenderingContext2DBase::isPointInStrokeInternal(const Path& path, flo
         return false;
 
     CanvasStrokeStyleApplier applier(this);
-    return path.strokeContains(&applier, transformedPoint);
+    return path.strokeContains(applier, transformedPoint);
 }
 
 void CanvasRenderingContext2DBase::clearRect(float x, float y, float width, float height)
@@ -1243,12 +1243,12 @@ void CanvasRenderingContext2DBase::clearRect(float x, float y, float width, floa
         }
         context->setAlpha(1);
     }
-    if (state().globalComposite != CompositeSourceOver) {
+    if (state().globalComposite != CompositeOperator::SourceOver) {
         if (!saved) {
             context->save();
             saved = true;
         }
-        context->setCompositeOperation(CompositeSourceOver);
+        context->setCompositeOperation(CompositeOperator::SourceOver);
     }
     context->clearRect(rect);
     if (saved)
@@ -1284,7 +1284,7 @@ void CanvasRenderingContext2DBase::fillRect(float x, float y, float width, float
         c->fillRect(rect);
         endCompositeLayer();
         didDrawEntireCanvas();
-    } else if (state().globalComposite == CompositeCopy) {
+    } else if (state().globalComposite == CompositeOperator::Copy) {
         clearCanvas();
         c->fillRect(rect);
         didDrawEntireCanvas();
@@ -1318,7 +1318,7 @@ void CanvasRenderingContext2DBase::strokeRect(float x, float y, float width, flo
         c->strokeRect(rect, state().lineWidth);
         endCompositeLayer();
         didDrawEntireCanvas();
-    } else if (state().globalComposite == CompositeCopy) {
+    } else if (state().globalComposite == CompositeOperator::Copy) {
         clearCanvas();
         c->strokeRect(rect, state().lineWidth);
         didDrawEntireCanvas();
@@ -1580,7 +1580,7 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(Document& document, Ca
     } else if (isFullCanvasCompositeMode(op)) {
         fullCanvasCompositedDrawImage(*image, normalizedDstRect, normalizedSrcRect, op);
         didDrawEntireCanvas();
-    } else if (op == CompositeCopy) {
+    } else if (op == CompositeOperator::Copy) {
         clearCanvas();
         c->drawImage(*image, normalizedDstRect, normalizedSrcRect, options);
         didDrawEntireCanvas();
@@ -1638,9 +1638,9 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(CanvasBase& sourceCanv
     } else if (isFullCanvasCompositeMode(state().globalComposite)) {
         fullCanvasCompositedDrawImage(*buffer, dstRect, srcRect, state().globalComposite);
         didDrawEntireCanvas();
-    } else if (state().globalComposite == CompositeCopy) {
+    } else if (state().globalComposite == CompositeOperator::Copy) {
         if (&sourceCanvas == &canvasBase()) {
-            if (auto copy = buffer->copyRectToBuffer(srcRect, ColorSpaceSRGB, *c)) {
+            if (auto copy = buffer->copyRectToBuffer(srcRect, ColorSpace::SRGB, *c)) {
                 clearCanvas();
                 c->drawImageBuffer(*copy, dstRect, { { }, srcRect.size() }, { state().globalComposite, state().globalBlend });
             }
@@ -1736,7 +1736,7 @@ ExceptionOr<void> CanvasRenderingContext2DBase::drawImage(ImageBitmap& imageBitm
     } else if (isFullCanvasCompositeMode(state().globalComposite)) {
         fullCanvasCompositedDrawImage(*buffer, dstRect, srcRect, state().globalComposite);
         didDrawEntireCanvas();
-    } else if (state().globalComposite == CompositeCopy) {
+    } else if (state().globalComposite == CompositeOperator::Copy) {
         clearCanvas();
         c->drawImageBuffer(*buffer, dstRect, srcRect, { state().globalComposite, state().globalBlend });
         didDrawEntireCanvas();
@@ -1753,7 +1753,7 @@ void CanvasRenderingContext2DBase::drawImageFromRect(HTMLImageElement& imageElem
     CompositeOperator op;
     auto blendOp = BlendMode::Normal;
     if (!parseCompositeAndBlendOperator(compositeOperation, op, blendOp) || blendOp != BlendMode::Normal)
-        op = CompositeSourceOver;
+        op = CompositeOperator::SourceOver;
     drawImage(imageElement, FloatRect { sx, sy, sw, sh }, FloatRect { dx, dy, dw, dh }, op, BlendMode::Normal);
 }
 
@@ -1866,7 +1866,7 @@ template<class T> void CanvasRenderingContext2DBase::fullCanvasCompositedDrawIma
     buffer->context().translate(-transformedAdjustedRect.location());
     buffer->context().translate(croppedOffset);
     buffer->context().concatCTM(effectiveTransform);
-    drawImageToContext(image, buffer->context(), adjustedDest, src, { CompositeSourceOver });
+    drawImageToContext(image, buffer->context(), adjustedDest, src, { CompositeOperator::SourceOver });
 
     compositeBuffer(*buffer, bufferRect, op);
 }
@@ -2288,15 +2288,15 @@ static inline InterpolationQuality smoothingToInterpolationQuality(ImageSmoothin
 {
     switch (quality) {
     case ImageSmoothingQuality::Low:
-        return InterpolationLow;
+        return InterpolationQuality::Low;
     case ImageSmoothingQuality::Medium:
-        return InterpolationMedium;
+        return InterpolationQuality::Medium;
     case ImageSmoothingQuality::High:
-        return InterpolationHigh;
+        return InterpolationQuality::High;
     }
 
     ASSERT_NOT_REACHED();
-    return InterpolationLow;
+    return InterpolationQuality::Low;
 };
 
 auto CanvasRenderingContext2DBase::imageSmoothingQuality() const -> ImageSmoothingQuality
@@ -2333,7 +2333,7 @@ void CanvasRenderingContext2DBase::setImageSmoothingEnabled(bool enabled)
     modifiableState().imageSmoothingEnabled = enabled;
     auto* c = drawingContext();
     if (c)
-        c->setImageInterpolationQuality(enabled ? smoothingToInterpolationQuality(state().imageSmoothingQuality) : InterpolationNone);
+        c->setImageInterpolationQuality(enabled ? smoothingToInterpolationQuality(state().imageSmoothingQuality) : InterpolationQuality::DoNotInterpolate);
 }
 
 void CanvasRenderingContext2DBase::setPath(Path2D& path)

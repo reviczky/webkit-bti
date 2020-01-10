@@ -107,6 +107,7 @@ void InspectorCSSOMWrappers::collectDocumentWrappers(ExtensionStyleSheets& exten
         collectFromStyleSheetContents(UserAgentStyle::simpleDefaultStyleSheet);
         collectFromStyleSheetContents(UserAgentStyle::defaultStyleSheet);
         collectFromStyleSheetContents(UserAgentStyle::quirksStyleSheet);
+        collectFromStyleSheetContents(UserAgentStyle::dialogStyleSheet);
         collectFromStyleSheetContents(UserAgentStyle::svgStyleSheet);
         collectFromStyleSheetContents(UserAgentStyle::mathMLStyleSheet);
         collectFromStyleSheetContents(UserAgentStyle::mediaControlsStyleSheet);
@@ -123,6 +124,8 @@ void InspectorCSSOMWrappers::collectDocumentWrappers(ExtensionStyleSheets& exten
         collect(extensionStyleSheets.pageUserSheet());
         collectFromStyleSheets(extensionStyleSheets.injectedUserStyleSheets());
         collectFromStyleSheets(extensionStyleSheets.documentUserStyleSheets());
+        collectFromStyleSheets(extensionStyleSheets.injectedAuthorStyleSheets());
+        collectFromStyleSheets(extensionStyleSheets.authorStyleSheetsForTesting());
     }
 }
 
@@ -131,7 +134,7 @@ void InspectorCSSOMWrappers::collectScopeWrappers(Scope& styleScope)
     maybeCollectFromStyleSheets(styleScope.activeStyleSheets());
 }
 
-CSSStyleRule* InspectorCSSOMWrappers::getWrapperForRuleInSheets(StyleRule* rule)
+CSSStyleRule* InspectorCSSOMWrappers::getWrapperForRuleInSheets(const StyleRule* rule)
 {
     return m_styleRuleToCSSOMWrapperMap.get(rule);
 }

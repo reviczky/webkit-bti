@@ -49,6 +49,8 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
+DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(HTMLDocumentParser);
+
 HTMLDocumentParser::HTMLDocumentParser(HTMLDocument& document)
     : ScriptableDocumentParser(document)
     , m_options(document)
@@ -329,7 +331,7 @@ void HTMLDocumentParser::constructTreeFromHTMLToken(HTMLTokenizer::TokenPtr& raw
 {
     AtomicHTMLToken token(*rawToken);
 
-    // We clear the rawToken in case constructTreeFromAtomicToken
+    // We clear the rawToken in case constructTree
     // synchronously re-enters the parser. We don't clear the token immedately
     // for Character tokens because the AtomicHTMLToken avoids copying the
     // characters by keeping a pointer to the underlying buffer in the

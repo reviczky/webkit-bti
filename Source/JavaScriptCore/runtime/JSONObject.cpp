@@ -65,7 +65,7 @@ void JSONObject::finishCreation(VM& vm)
     Base::finishCreation(vm);
     ASSERT(inherits(vm, info()));
 
-    putDirectWithoutTransition(vm, vm.propertyNames->toStringTagSymbol, jsString(vm, "JSON"), PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly);
+    putDirectWithoutTransition(vm, vm.propertyNames->toStringTagSymbol, jsNontrivialString(vm, "JSON"_s), PropertyAttribute::DontEnum | PropertyAttribute::ReadOnly);
 }
 
 // PropertyNameForFunctionCall objects must be on the stack, since the JSValue that they create is not marked.
@@ -185,6 +185,7 @@ static inline String gap(JSGlobalObject* globalObject, JSValue space)
 
     // If the space value is a string, use it as the gap string, otherwise use no gap string.
     String spaces = space.getString(globalObject);
+    RETURN_IF_EXCEPTION(scope, { });
     if (spaces.length() <= maxGapLength)
         return spaces;
     return spaces.substringSharingImpl(0, maxGapLength);
@@ -279,7 +280,6 @@ JSValue Stringifier::stringify(JSValue value)
     JSObject* object = nullptr;
     if (isCallableReplacer()) {
         object = constructEmptyObject(m_globalObject);
-        RETURN_IF_EXCEPTION(scope, jsUndefined());
         object->putDirect(vm, vm.propertyNames->emptyIdentifier, value);
     }
 
@@ -795,9 +795,7 @@ NEVER_INLINE JSValue Walker::walk(JSValue unfiltered)
         stateStack.removeLast();
     }
     JSObject* finalHolder = constructEmptyObject(m_globalObject);
-    PutPropertySlot slot(finalHolder);
-    finalHolder->methodTable(vm)->put(finalHolder, m_globalObject, vm.propertyNames->emptyIdentifier, outValue, slot);
-    RETURN_IF_EXCEPTION(scope, { });
+    finalHolder->putDirect(vm, vm.propertyNames->emptyIdentifier, outValue);
     RELEASE_AND_RETURN(scope, callReviver(finalHolder, jsEmptyString(vm), outValue));
 }
 

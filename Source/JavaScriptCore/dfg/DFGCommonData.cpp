@@ -56,7 +56,7 @@ CallSiteIndex CommonData::addCodeOrigin(CodeOrigin codeOrigin)
         codeOrigins.append(codeOrigin);
     unsigned index = codeOrigins.size() - 1;
     ASSERT(codeOrigins[index] == codeOrigin);
-    return CallSiteIndex(BytecodeIndex(index));
+    return CallSiteIndex(index);
 }
 
 CallSiteIndex CommonData::addUniqueCallSiteIndex(CodeOrigin codeOrigin)
@@ -64,13 +64,13 @@ CallSiteIndex CommonData::addUniqueCallSiteIndex(CodeOrigin codeOrigin)
     codeOrigins.append(codeOrigin);
     unsigned index = codeOrigins.size() - 1;
     ASSERT(codeOrigins[index] == codeOrigin);
-    return CallSiteIndex(BytecodeIndex(index));
+    return CallSiteIndex(index);
 }
 
 CallSiteIndex CommonData::lastCallSite() const
 {
     RELEASE_ASSERT(codeOrigins.size());
-    return CallSiteIndex(BytecodeIndex(codeOrigins.size() - 1));
+    return CallSiteIndex(codeOrigins.size() - 1);
 }
 
 DisposableCallSiteIndex CommonData::addDisposableCallSiteIndex(CodeOrigin codeOrigin)
@@ -215,7 +215,7 @@ void CommonData::finalizeCatchEntrypoints()
     std::sort(catchEntrypoints.begin(), catchEntrypoints.end(),
         [] (const CatchEntrypointData& a, const CatchEntrypointData& b) { return a.bytecodeIndex < b.bytecodeIndex; });
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     for (unsigned i = 0; i + 1 < catchEntrypoints.size(); ++i)
         ASSERT(catchEntrypoints[i].bytecodeIndex <= catchEntrypoints[i + 1].bytecodeIndex);
 #endif

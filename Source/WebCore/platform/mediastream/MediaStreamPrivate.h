@@ -37,13 +37,10 @@
 #if ENABLE(MEDIA_STREAM)
 
 #include "FloatSize.h"
-#include "MediaStreamTrack.h"
 #include "MediaStreamTrackPrivate.h"
 #include <wtf/Function.h>
 #include <wtf/HashMap.h>
-#include <wtf/LoggerHelper.h>
 #include <wtf/MediaTime.h>
-#include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
 #include <wtf/UUID.h>
 #include <wtf/Vector.h>
@@ -84,7 +81,7 @@ public:
 
     String id() const { return m_id; }
 
-    MediaStreamTrackPrivateVector tracks() const;
+    WEBCORE_EXPORT MediaStreamTrackPrivateVector tracks() const;
     MediaStreamTrackPrivate* activeVideoTrack() { return m_activeVideoTrack; }
 
     bool active() const { return m_isActive; }

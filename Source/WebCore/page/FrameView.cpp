@@ -132,7 +132,7 @@
 #include "LayoutContext.h"
 #endif
 
-#define RELEASE_LOG_IF_ALLOWED(fmt, ...) RELEASE_LOG_IF(frame().page() && frame().page()->isAlwaysOnLoggingAllowed(), Layout, "%p - FrameView::" fmt, this, ##__VA_ARGS__)
+#define FRAMEVIEW_RELEASE_LOG_IF_ALLOWED(channel, fmt, ...) RELEASE_LOG_IF(frame().page() && frame().page()->isAlwaysOnLoggingAllowed(), channel, "%p - [frame=%p, main=%d] FrameView::" fmt, this, &frame(), frame().isMainFrame(), ##__VA_ARGS__)
 
 namespace WebCore {
 
@@ -797,6 +797,18 @@ void FrameView::willRecalcStyle()
         return;
 
     renderView->compositor().willRecalcStyle();
+}
+
+void FrameView::styleDidChange()
+{
+    ScrollView::styleDidChange();
+    RenderView* renderView = this->renderView();
+    if (!renderView)
+        return;
+
+    RenderLayer* layerTreeMutationRoot = renderView->takeStyleChangeLayerTreeMutationRoot();
+    if (layerTreeMutationRoot && !needsLayout())
+        layerTreeMutationRoot->updateLayerPositionsAfterStyleChange();
 }
 
 bool FrameView::updateCompositingLayersAfterStyleChange()
@@ -2795,14 +2807,12 @@ void FrameView::layoutOrVisualViewportChanged()
     }
 }
 
-#if PLATFORM(IOS_FAMILY)
-
 void FrameView::unobscuredContentSizeChanged()
 {
+#if PLATFORM(IOS_FAMILY)
     updateTiledBackingAdaptiveSizing();
-}
-
 #endif
+}
 
 static LayerFlushThrottleState::Flags determineLayerFlushThrottleState(Page& page)
 {
@@ -3697,7 +3707,8 @@ void FrameView::invalidateScrollbarRect(Scrollbar& scrollbar, const IntRect& rec
 
 float FrameView::visibleContentScaleFactor() const
 {
-    if (!frame().isMainFrame() || !frame().settings().delegatesPageScaling())
+    // FIXME: This !delegatesPageScaling() is confusing. This function should probably be renamed to delegatedPageScaleFactor().
+    if (!frame().isMainFrame() || !delegatesPageScaling())
         return 1;
 
     Page* page = frame().page();
@@ -4174,7 +4185,7 @@ void FrameView::paintContents(GraphicsContext& context, const IntRect& dirtyRect
 
     ASSERT(!needsLayout());
     if (needsLayout()) {
-        RELEASE_LOG_IF_ALLOWED("FrameView::paintContents() - not painting because render tree needs layout (is main frame %d)", frame().isMainFrame());
+        FRAMEVIEW_RELEASE_LOG_IF_ALLOWED(Layout, "paintContents: Not painting because render tree needs layout");
         return;
     }
 
@@ -4320,7 +4331,7 @@ void FrameView::updateLayoutAndStyleIfNeededRecursive()
             break;
     }
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     auto needsStyleRecalc = [&] {
         DescendantsDeque deque;
         while (auto view = nextRenderedDescendant(deque)) {
@@ -4339,7 +4350,7 @@ void FrameView::updateLayoutAndStyleIfNeededRecursive()
         }
         return false;
     };
-#endif
+#endif // ASSERT_ENABLED
 
     ASSERT(!needsStyleRecalc());
     ASSERT(!needsLayout());
@@ -5144,7 +5155,7 @@ void FrameView::fireLayoutRelatedMilestonesIfNeeded()
 
     if (milestonesAchieved && frame().isMainFrame()) {
         if (milestonesAchieved.contains(DidFirstVisuallyNonEmptyLayout))
-            RELEASE_LOG_IF_ALLOWED("fireLayoutRelatedMilestonesIfNeeded() - firing first visually non-empty layout milestone on the main frame");
+            FRAMEVIEW_RELEASE_LOG_IF_ALLOWED(Layout, "fireLayoutRelatedMilestonesIfNeeded: Firing first visually non-empty layout milestone on the main frame");
         frame().loader().didReachLayoutMilestone(milestonesAchieved);
     }
 }

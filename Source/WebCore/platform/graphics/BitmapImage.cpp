@@ -180,12 +180,12 @@ Vector<NativeImagePtr> BitmapImage::framesNativeImages()
 }
 #endif
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
 bool BitmapImage::notSolidColor()
 {
     return size().width() != 1 || size().height() != 1 || frameCount() > 1;
 }
-#endif
+#endif // ASSERT_ENABLED
 
 ImageDrawResult BitmapImage::draw(GraphicsContext& context, const FloatRect& destRect, const FloatRect& srcRect, const ImagePaintingOptions& options)
 {
@@ -301,7 +301,7 @@ void BitmapImage::drawPattern(GraphicsContext& ctxt, const FloatRect& destRect, 
     }
 
     if (!m_cachedImage) {
-        auto buffer = ImageBuffer::createCompatibleBuffer(expandedIntSize(tileRect.size()), ColorSpaceSRGB, ctxt);
+        auto buffer = ImageBuffer::createCompatibleBuffer(expandedIntSize(tileRect.size()), ColorSpace::SRGB, ctxt);
         if (!buffer)
             return;
 

@@ -74,7 +74,7 @@ HTMLImageElement::HTMLImageElement(const QualifiedName& tagName, Document& docum
     , m_imageLoader(WTF::makeUnique<HTMLImageLoader>(*this))
     , m_form(nullptr)
     , m_formSetByParser(makeWeakPtr(form))
-    , m_compositeOperator(CompositeSourceOver)
+    , m_compositeOperator(CompositeOperator::SourceOver)
     , m_imageDevicePixelRatio(1.0f)
     , m_experimentalImageMenuEnabled(false)
     , m_createdByParser(createdByParser)
@@ -252,7 +252,7 @@ void HTMLImageElement::parseAttribute(const QualifiedName& name, const AtomStrin
         // FIXME: images don't support blend modes in their compositing attribute.
         BlendMode blendOp = BlendMode::Normal;
         if (!parseCompositeAndBlendOperator(value, m_compositeOperator, blendOp))
-            m_compositeOperator = CompositeSourceOver;
+            m_compositeOperator = CompositeOperator::SourceOver;
 #if ENABLE(SERVICE_CONTROLS)
     } else if (name == webkitimagemenuAttr) {
         m_experimentalImageMenuEnabled = !value.isNull();
@@ -531,12 +531,25 @@ unsigned HTMLImageElement::height(bool ignorePendingStylesheets)
     return adjustForAbsoluteZoom(snappedIntRect(contentRect).height(), *box);
 }
 
+float HTMLImageElement::effectiveImageDevicePixelRatio() const
+{
+    if (!m_imageLoader->image())
+        return 1.0f;
+
+    auto* image = m_imageLoader->image()->image();
+
+    if (image && image->isSVGImage())
+        return 1.0f;
+
+    return m_imageDevicePixelRatio;
+}
+
 int HTMLImageElement::naturalWidth() const
 {
     if (!m_imageLoader->image())
         return 0;
 
-    return m_imageLoader->image()->imageSizeForRenderer(renderer(), 1.0f).width();
+    return m_imageLoader->image()->unclampedImageSizeForRenderer(renderer(), effectiveImageDevicePixelRatio()).width();
 }
 
 int HTMLImageElement::naturalHeight() const
@@ -544,7 +557,7 @@ int HTMLImageElement::naturalHeight() const
     if (!m_imageLoader->image())
         return 0;
 
-    return m_imageLoader->image()->imageSizeForRenderer(renderer(), 1.0f).height();
+    return m_imageLoader->image()->unclampedImageSizeForRenderer(renderer(), effectiveImageDevicePixelRatio()).height();
 }
 
 bool HTMLImageElement::isURLAttribute(const Attribute& attribute) const
@@ -573,7 +586,7 @@ String HTMLImageElement::completeURLsInAttributeValue(const URL& base, const Att
             result.append(URL(base, candidate.string.toString()).string());
             if (candidate.density != UninitializedDescriptor) {
                 result.append(' ');
-                result.appendFixedPrecisionNumber(candidate.density);
+                result.append(FormattedNumber::fixedPrecision(candidate.density));
                 result.append('x');
             }
             if (candidate.resourceWidth != UninitializedDescriptor) {

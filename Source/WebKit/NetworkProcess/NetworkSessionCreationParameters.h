@@ -86,7 +86,8 @@ struct NetworkSessionCreationParameters {
     bool enableResourceLoadStatisticsLogTestingEvent { false };
     bool shouldIncludeLocalhostInResourceLoadStatistics { true };
     bool enableResourceLoadStatisticsDebugMode { false };
-    WebCore::ThirdPartyCookieBlockingMode thirdPartyCookieBlockingMode { WebCore::ThirdPartyCookieBlockingMode::AllOnSitesWithoutUserInteraction };
+    WebCore::ThirdPartyCookieBlockingMode thirdPartyCookieBlockingMode { WebCore::ThirdPartyCookieBlockingMode::All };
+    WebCore::FirstPartyWebsiteDataRemovalMode firstPartyWebsiteDataRemovalMode { WebCore::FirstPartyWebsiteDataRemovalMode::AllButCookies };
     bool deviceManagementRestrictionsEnabled { false };
     bool allLoadsBlockedByDeviceManagementRestrictionsForTesting { false };
     WebCore::RegistrableDomain resourceLoadStatisticsManualPrevalentResource { };
@@ -100,6 +101,7 @@ struct NetworkSessionCreationParameters {
     bool staleWhileRevalidateEnabled { false };
     unsigned testSpeedMultiplier { 1 };
     bool suppressesConnectionTerminationOnSystemChange { false };
+    bool allowsServerPreconnect { true };
 };
 
 } // namespace WebKit

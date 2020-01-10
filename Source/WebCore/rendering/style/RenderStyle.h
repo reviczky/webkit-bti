@@ -124,9 +124,9 @@ using PseudoStyleCache = Vector<std::unique_ptr<RenderStyle>, 4>;
 
 template<typename T, typename U> inline bool compareEqual(const T& t, const U& u) { return t == static_cast<const T&>(u); }
 
+DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(RenderStyle);
 class RenderStyle {
-    WTF_MAKE_FAST_ALLOCATED;
-
+    WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(RenderStyle);
 private:
     enum CloneTag { Clone };
     enum CreateDefaultStyleTag { CreateDefaultStyle };
@@ -134,7 +134,7 @@ private:
 public:
     RenderStyle(RenderStyle&&);
     RenderStyle& operator=(RenderStyle&&);
-    ~RenderStyle();
+    WEBCORE_EXPORT ~RenderStyle();
 
     RenderStyle replace(RenderStyle&&) WARN_UNUSED_RETURN;
 
@@ -152,7 +152,7 @@ public:
     static RenderStyle createAnonymousStyleWithDisplay(const RenderStyle& parentStyle, DisplayType);
     static RenderStyle createStyleInheritingFromPseudoStyle(const RenderStyle& pseudoStyle);
 
-#if !ASSERT_DISABLED || ENABLE(SECURITY_ASSERTIONS)
+#if ASSERT_ENABLED || ENABLE(SECURITY_ASSERTIONS)
     bool deletionHasBegun() const { return m_deletionHasBegun; }
 #endif
 
@@ -948,10 +948,7 @@ public:
     void setSpecifiedLineHeight(Length&&);
 #endif
 
-#if ENABLE(CSS_IMAGE_ORIENTATION)
     void setImageOrientation(ImageOrientation v) { SET_VAR(m_rareInheritedData, imageOrientation, static_cast<int>(v)); }
-#endif
-
     void setImageRendering(ImageRendering v) { SET_VAR(m_rareInheritedData, imageRendering, static_cast<unsigned>(v)); }
 
 #if ENABLE(CSS_IMAGE_RESOLUTION)
@@ -1601,7 +1598,7 @@ public:
     static OptionSet<TextEmphasisPosition> initialTextEmphasisPosition() { return { TextEmphasisPosition::Over, TextEmphasisPosition::Right }; }
     static RubyPosition initialRubyPosition() { return RubyPosition::Before; }
     static OptionSet<LineBoxContain> initialLineBoxContain() { return { LineBoxContain::Block, LineBoxContain::Inline, LineBoxContain::Replaced }; }
-    static ImageOrientation initialImageOrientation() { return ImageOrientation::None; }
+    static ImageOrientation initialImageOrientation() { return ImageOrientation::FromImage; }
     static ImageRendering initialImageRendering() { return ImageRendering::Auto; }
     static ImageResolutionSource initialImageResolutionSource() { return ImageResolutionSource::Specified; }
     static ImageResolutionSnap initialImageResolutionSnap() { return ImageResolutionSnap::None; }
@@ -1747,7 +1744,7 @@ public:
     const Color& borderTopColor() const { return m_surroundData->border.top().color(); }
     const Color& borderBottomColor() const { return m_surroundData->border.bottom().color(); }
     const Color& backgroundColor() const { return m_backgroundData->color; }
-    const Color& color() const;
+    WEBCORE_EXPORT const Color& color() const;
     const Color& columnRuleColor() const { return m_rareNonInheritedData->multiCol->rule.color(); }
     const Color& outlineColor() const { return m_backgroundData->outline.color(); }
     const Color& textEmphasisColor() const { return m_rareInheritedData->textEmphasisColor; }
@@ -1905,7 +1902,7 @@ private:
 
     DataRef<SVGRenderStyle> m_svgStyle;
 
-#if !ASSERT_DISABLED || ENABLE(SECURITY_ASSERTIONS)
+#if ASSERT_ENABLED || ENABLE(SECURITY_ASSERTIONS)
     bool m_deletionHasBegun { false };
 #endif
 };
@@ -2112,11 +2109,7 @@ inline bool RenderStyle::hasInlineColumnAxis() const
 
 inline ImageOrientation RenderStyle::imageOrientation() const
 {
-#if ENABLE(CSS_IMAGE_ORIENTATION)
-    return ImageOrientation(m_rareInheritedData->imageOrientation);
-#else
-    return ImageOrientation::None;
-#endif
+    return static_cast<ImageOrientation::Orientation>(m_rareInheritedData->imageOrientation);
 }
 
 inline void RenderStyle::setLogicalWidth(Length&& logicalWidth)

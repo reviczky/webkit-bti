@@ -81,6 +81,7 @@ public:
     template<CSSPropertyID> static NinePieceImage convertBorderImage(BuilderState&, CSSValue&);
     template<CSSPropertyID> static NinePieceImage convertBorderMask(BuilderState&, CSSValue&);
     template<CSSPropertyID> static RefPtr<StyleImage> convertStyleImage(BuilderState&, CSSValue&);
+    static ImageOrientation convertImageOrientation(BuilderState&, const CSSValue&);
     static TransformOperations convertTransform(BuilderState&, const CSSValue&);
 #if ENABLE(DARK_MODE_CSS)
     static StyleColorScheme convertColorScheme(BuilderState&, const CSSValue&);
@@ -468,6 +469,14 @@ inline RefPtr<StyleImage> BuilderConverter::convertStyleImage(BuilderState& buil
     return builderState.createStyleImage(value);
 }
 
+inline ImageOrientation BuilderConverter::convertImageOrientation(BuilderState&, const CSSValue& value)
+{
+    auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
+    if (primitiveValue.valueID() == CSSValueFromImage)
+        return ImageOrientation::FromImage;
+    return ImageOrientation::None;
+}
+
 inline TransformOperations BuilderConverter::convertTransform(BuilderState& builderState, const CSSValue& value)
 {
     TransformOperations operations;
@@ -654,30 +663,11 @@ inline int BuilderConverter::convertMarqueeRepetition(BuilderState&, const CSSVa
 inline int BuilderConverter::convertMarqueeSpeed(BuilderState&, const CSSValue& value)
 {
     auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
-    int speed = 85;
-    if (CSSValueID ident = primitiveValue.valueID()) {
-        switch (ident) {
-        case CSSValueSlow:
-            speed = 500; // 500 msec.
-            break;
-        case CSSValueNormal:
-            speed = 85; // 85msec. The WinIE default.
-            break;
-        case CSSValueFast:
-            speed = 10; // 10msec. Super fast.
-            break;
-        default:
-            ASSERT_NOT_REACHED();
-            break;
-        }
-    } else if (primitiveValue.isTime())
-        speed = primitiveValue.computeTime<int, CSSPrimitiveValue::Milliseconds>();
-    else {
-        // For scrollamount support.
-        ASSERT(primitiveValue.isNumber());
-        speed = primitiveValue.intValue();
-    }
-    return speed;
+    if (primitiveValue.isTime())
+        return primitiveValue.computeTime<int, CSSPrimitiveValue::Milliseconds>();
+    // For scrollamount support.
+    ASSERT(primitiveValue.isNumber());
+    return primitiveValue.intValue();
 }
 
 inline Ref<QuotesData> BuilderConverter::convertQuotes(BuilderState&, const CSSValue& value)
@@ -1222,28 +1212,10 @@ inline Optional<float> BuilderConverter::convertPerspective(BuilderState& builde
 
 inline Optional<Length> BuilderConverter::convertMarqueeIncrement(BuilderState& builderState, const CSSValue& value)
 {
-    Optional<Length> marqueeLength;
-    auto& primitiveValue = downcast<CSSPrimitiveValue>(value);
-    switch (primitiveValue.valueID()) {
-    case CSSValueSmall:
-        marqueeLength = Length(1, Fixed); // 1px.
-        break;
-    case CSSValueNormal:
-        marqueeLength = Length(6, Fixed); // 6px. The WinIE default.
-        break;
-    case CSSValueLarge:
-        marqueeLength = Length(36, Fixed); // 36px.
-        break;
-    case CSSValueInvalid: {
-        Length length = primitiveValue.convertToLength<FixedIntegerConversion | PercentConversion | CalculatedConversion>(builderState.cssToLengthConversionData().copyWithAdjustedZoom(1.0f));
-        if (!length.isUndefined())
-            marqueeLength = length;
-        break;
-    }
-    default:
-        break;
-    }
-    return marqueeLength;
+    Length length = downcast<CSSPrimitiveValue>(value).convertToLength<FixedIntegerConversion | PercentConversion | CalculatedConversion>(builderState.cssToLengthConversionData().copyWithAdjustedZoom(1.0f));
+    if (length.isUndefined())
+        return WTF::nullopt;
+    return length;
 }
 
 inline Optional<FilterOperations> BuilderConverter::convertFilterOperations(BuilderState& builderState, const CSSValue& value)

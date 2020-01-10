@@ -100,7 +100,7 @@ namespace JSC {
 
         static inline OpcodeID getOpcodeID(Opcode);
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
         static bool isOpcode(Opcode);
 #endif
 
@@ -144,9 +144,9 @@ namespace JSC {
 #endif
         
 #if ENABLE(COMPUTED_GOTO_OPCODES)
-#if !USE(LLINT_EMBEDDED_OPCODE_ID) || !ASSERT_DISABLED
+#if !USE(LLINT_EMBEDDED_OPCODE_ID) || ASSERT_ENABLED
         static HashMap<Opcode, OpcodeID>& opcodeIDTable(); // Maps Opcode => OpcodeID.
-#endif // !USE(LLINT_EMBEDDED_OPCODE_ID) || !ASSERT_DISABLED
+#endif // !USE(LLINT_EMBEDDED_OPCODE_ID) || ASSERT_ENABLED
 #endif // ENABLE(COMPUTED_GOTO_OPCODES)
     };
 
@@ -171,7 +171,7 @@ namespace JSC {
     static constexpr unsigned maxArguments = 0x10000;
     unsigned sizeFrameForVarargs(JSGlobalObject*, CallFrame*, VM&, JSValue arguments, unsigned numUsedStackSlots, uint32_t firstVarArgOffset);
     unsigned sizeFrameForForwardArguments(JSGlobalObject*, CallFrame*, VM&, unsigned numUsedStackSlots);
-    void loadVarargs(JSGlobalObject*, CallFrame* execCaller, VirtualRegister firstElementDest, JSValue source, uint32_t offset, uint32_t length);
+    void loadVarargs(JSGlobalObject*, JSValue* firstElementDest, JSValue source, uint32_t offset, uint32_t length);
     void setupVarargsFrame(JSGlobalObject*, CallFrame* execCaller, CallFrame* execCallee, JSValue arguments, uint32_t firstVarArgOffset, uint32_t length);
     void setupVarargsFrameAndSetThis(JSGlobalObject*, CallFrame* execCaller, CallFrame* execCallee, JSValue thisValue, JSValue arguments, uint32_t firstVarArgOffset, uint32_t length);
     void setupForwardArgumentsFrame(JSGlobalObject*, CallFrame* execCaller, CallFrame* execCallee, uint32_t length);

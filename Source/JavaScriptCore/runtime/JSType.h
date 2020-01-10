@@ -49,7 +49,6 @@ enum JSType : uint8_t {
         
     CodeBlockType,
 
-    JSFixedArrayType,
     JSImmutableButterflyType,
     JSSourceCodeType,
     JSScriptFetcherType,
@@ -111,15 +110,19 @@ enum JSType : uint8_t {
     ProxyObjectType,
     JSGeneratorType,
     JSAsyncGeneratorType,
+    JSArrayIteratorType,
     JSPromiseType,
     JSMapType,
     JSSetType,
     JSWeakMapType,
     JSWeakSetType,
-    WebAssemblyToJSCalleeType,
+    WebAssemblyModuleType,
+    // Start StringObjectType types.
     StringObjectType,
+    DerivedStringObjectType,
+    // End StringObjectType types.
 
-    LastJSCObjectType = StringObjectType, // This is the last "JSC" Object type. After this, we have embedder's (e.g., WebCore) extended object types.
+    LastJSCObjectType = DerivedStringObjectType, // This is the last "JSC" Object type. After this, we have embedder's (e.g., WebCore) extended object types.
     MaxJSType = 0b11111111,
 };
 

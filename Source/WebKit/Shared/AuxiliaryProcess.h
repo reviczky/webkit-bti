@@ -37,6 +37,7 @@
 
 namespace WebKit {
 
+class DependencyProcessAssertion;
 class SandboxInitializationParameters;
 struct AuxiliaryProcessInitializationParameters;
 
@@ -47,7 +48,10 @@ public:
     enum class ProcessType : uint8_t {
         WebContent,
         Network,
-        Plugin
+        Plugin,
+#if ENABLE(GPU_PROCESS)
+        GPU
+#endif
     };
 
     void initialize(const AuxiliaryProcessInitializationParameters&);
@@ -125,6 +129,8 @@ protected:
     void didReceiveMemoryPressureEvent(bool isCritical);
 #endif
 
+    static Optional<std::pair<IPC::Connection::Identifier, IPC::Attachment>> createIPCConnectionPair();
+
 private:
     virtual bool shouldOverrideQuarantine() { return true; }
 
@@ -158,6 +164,9 @@ private:
 
     UserActivity m_processSuppressionDisabled;
 
+#if PLATFORM(IOS_FAMILY)
+    std::unique_ptr<DependencyProcessAssertion> m_uiProcessDependencyProcessAssertion;
+#endif
 #if PLATFORM(COCOA)
     OSObjectPtr<xpc_object_t> m_priorityBoostMessage;
 #endif

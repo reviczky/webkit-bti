@@ -126,7 +126,7 @@ void JIT::emitNotifyWrite(GPRReg pointerToSet)
 
 void JIT::assertStackPointerOffset()
 {
-    if (ASSERT_DISABLED)
+    if (!ASSERT_ENABLED)
         return;
     
     addPtr(TrustedImm32(stackPointerOffsetFor(m_codeBlock) * sizeof(Register)), callFrameRegister, regT0);
@@ -307,6 +307,7 @@ void JIT::privateCompileMainPass()
         DEFINE_SLOW_OP(create_direct_arguments)
         DEFINE_SLOW_OP(create_scoped_arguments)
         DEFINE_SLOW_OP(create_cloned_arguments)
+        DEFINE_SLOW_OP(create_arguments_butterfly)
         DEFINE_SLOW_OP(create_rest)
         DEFINE_SLOW_OP(create_promise)
         DEFINE_SLOW_OP(new_promise)
@@ -755,7 +756,7 @@ void JIT::compileWithoutLinking(JITCompilationEffort effort)
         emitFunctionPrologue();
         emitPutToCallFrameHeader(m_codeBlock, CallFrameSlot::codeBlock);
 
-        load32(payloadFor(CallFrameSlot::argumentCount), regT1);
+        load32(payloadFor(CallFrameSlot::argumentCountIncludingThis), regT1);
         branch32(AboveOrEqual, regT1, TrustedImm32(m_codeBlock->m_numParameters)).linkTo(beginLabel, this);
 
         m_bytecodeIndex = BytecodeIndex(0);
@@ -769,7 +770,7 @@ void JIT::compileWithoutLinking(JITCompilationEffort effort)
         move(returnValueGPR, GPRInfo::argumentGPR0);
         emitNakedCall(m_vm->getCTIStub(arityFixupGenerator).retaggedCode<NoPtrTag>());
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
         m_bytecodeIndex = BytecodeIndex(); // Reset this, in order to guard its use with ASSERTs.
 #endif
 

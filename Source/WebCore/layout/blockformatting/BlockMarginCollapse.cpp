@@ -395,9 +395,11 @@ bool BlockFormattingContext::MarginCollapse::marginsCollapseThrough(const Box& l
 
             auto isConsideredEmpty = [&] {
                 auto& formattingState = downcast<InlineFormattingState>(layoutState.establishedFormattingState(layoutContainer));
-                for (auto& lineBox : formattingState.lineBoxes()) {
-                    if (!lineBox->isConsideredEmpty())
-                        return false;
+                if (auto* inlineContent = formattingState.displayInlineContent()) {
+                    for (auto& lineBox : inlineContent->lineBoxes) {
+                        if (!lineBox.isConsideredEmpty())
+                            return false;
+                    }
                 }
                 // Any float box in this formatting context prevents collapsing through.
                 auto& floats = formattingState.floatingState().floats();
@@ -510,8 +512,7 @@ PositiveAndNegativeVerticalMargin::Values BlockFormattingContext::MarginCollapse
         return marginType == MarginType::Before ? positiveAndNegativeVerticalMargin.before : positiveAndNegativeVerticalMargin.after; 
     }
     // This is the estimate path. We don't yet have positive/negative margin computed.
-    auto usedValues = UsedHorizontalValues { UsedHorizontalValues::Constraints { formattingContext().geometryForBox(*layoutBox.containingBlock()) } };
-    auto computedVerticalMargin = formattingContext().geometry().computedVerticalMargin(layoutBox, usedValues);
+    auto computedVerticalMargin = formattingContext().geometry().computedVerticalMargin(layoutBox, Geometry::horizontalConstraintsForInFlow(formattingContext().geometryForBox(*layoutBox.containingBlock())));
     auto nonCollapsedMargin = UsedVerticalMargin::NonCollapsedValues { computedVerticalMargin.before.valueOr(0), computedVerticalMargin.after.valueOr(0) }; 
 
     if (marginType == MarginType::Before)

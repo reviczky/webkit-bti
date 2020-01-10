@@ -27,68 +27,55 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
+#include "InlineLineBreaker.h"
 #include "InlineLineBuilder.h"
 
 namespace WebCore {
 namespace Layout {
 
+struct LineCandidateContent;
+
 class LineLayoutContext {
 public:
-    LineLayoutContext(const InlineFormattingContext&, const InlineItems&);
+    LineLayoutContext(const InlineFormattingContext&, const Container& formattingContextRoot, const InlineItems&);
 
-    struct PartialContent {
-        // This will potentially gain some more members. 
-        unsigned length;
-    };
     struct LineContent {
+        struct PartialContent {
+            bool trailingContentNeedsHyphen { false };
+            unsigned overflowContentLength { 0 };
+        };
         Optional<unsigned> trailingInlineItemIndex;
-        Optional<PartialContent> trailingPartialContent;
+        Optional<PartialContent> partialContent;
         Vector<WeakPtr<InlineItem>> floats;
         const LineBuilder::RunList runList;
-        const LineBox lineBox;
+        const Display::LineBox lineBox;
     };
-    LineContent layoutLine(LineBuilder&, unsigned leadingInlineItemIndex, Optional<PartialContent> leadingPartialContent);
-
-    struct Run {
-        const InlineItem& inlineItem;
-        LayoutUnit logicalWidth;
-    };
-
-    using RunList = Vector<Run, 30>;
+    LineContent layoutLine(LineBuilder&, unsigned leadingInlineItemIndex, Optional<unsigned> partialLeadingContentLength);
+    using FloatList = Vector<WeakPtr<InlineItem>>;
 
 private:
-    const InlineFormattingContext& formattingContext() const { return m_inlineFormattingContext; }
-    enum class IsEndOfLine { No, Yes };
-    IsEndOfLine placeInlineItem(LineBuilder&, const InlineItem&);
-    void commitPendingContent(LineBuilder&);
-    LineContent close(LineBuilder&, unsigned leadingInlineItemIndex);
-    bool shouldProcessUncommittedContent(const InlineItem&) const;
-    IsEndOfLine processUncommittedContent(LineBuilder&);
-    
-    struct UncommittedContent {
-        void add(const InlineItem&, LayoutUnit logicalWidth);
-        void reset();
-        void trim(unsigned newSize);
-
-        RunList& runs() { return m_uncommittedRuns; }
-        const RunList& runs() const { return m_uncommittedRuns; }
-        bool isEmpty() const { return m_uncommittedRuns.isEmpty(); }
-        unsigned size() const { return m_uncommittedRuns.size(); }
-        LayoutUnit width() const { return m_width; }
-
-    private:
-        RunList m_uncommittedRuns;
-        LayoutUnit m_width;
+    LineCandidateContent nextContentForLine(unsigned inlineItemIndex, Optional<unsigned> overflowLength, InlineLayoutUnit currentLogicalRight);
+    struct Result {
+        LineBreaker::IsEndOfLine isEndOfLine { LineBreaker::IsEndOfLine::No };
+        size_t committedCount { 0 };
+        Optional <LineContent::PartialContent> partialContent { };
+        const InlineItem* revertTo { nullptr };
     };
+    Result tryAddingFloatItems(LineBuilder&, const FloatList&);
+    Result tryAddingInlineItems(LineBreaker&, LineBuilder&, const LineCandidateContent&);
+    void commitContent(LineBuilder&, const LineBreaker::RunList&, Optional<LineBreaker::Result::PartialTrailingContent>);
+    LineContent close(LineBuilder&, unsigned leadingInlineItemIndex, unsigned committedInlineItemCount, Optional<LineContent::PartialContent>);
+
+    const InlineFormattingContext& formattingContext() const { return m_inlineFormattingContext; }
+    const Container& root() const { return m_formattingContextRoot; }
 
     const InlineFormattingContext& m_inlineFormattingContext;
+    const Container& m_formattingContextRoot;
     const InlineItems& m_inlineItems;
-    UncommittedContent m_uncommittedContent;
-    unsigned m_committedInlineItemCount { 0 };
-    Vector<WeakPtr<InlineItem>> m_floats;
-    std::unique_ptr<InlineTextItem> m_leadingPartialTextItem;
-    std::unique_ptr<InlineTextItem> m_trailingPartialTextItem;
-    Optional<unsigned> m_overflowTextLength;
+    FloatList m_floats;
+    std::unique_ptr<InlineTextItem> m_partialLeadingTextItem;
+    std::unique_ptr<InlineTextItem> m_partialTrailingTextItem;
+    unsigned m_successiveHyphenatedLineCount { 0 };
 };
 
 }

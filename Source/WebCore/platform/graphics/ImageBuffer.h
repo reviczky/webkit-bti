@@ -30,7 +30,7 @@
 #include "AffineTransform.h"
 #include "ColorSpace.h"
 #include "GraphicsTypes.h"
-#include "GraphicsTypes3D.h"
+#include "GraphicsTypesGL.h"
 #include "ImageBufferData.h"
 #include "ImagePaintingOptions.h"
 #include "IntSize.h"
@@ -46,7 +46,7 @@ namespace WebCore {
 
 class FloatRect;
 class GraphicsContext;
-class GraphicsContext3D;
+class GraphicsContextGLOpenGL;
 class Image;
 class ImageData;
 class IntPoint;
@@ -69,9 +69,9 @@ class ImageBuffer {
     friend class IOSurface;
 public:
     // Will return a null pointer on allocation failure.
-    WEBCORE_EXPORT static std::unique_ptr<ImageBuffer> create(const FloatSize&, RenderingMode, float resolutionScale = 1, ColorSpace = ColorSpaceSRGB, const HostWindow* = nullptr);
+    WEBCORE_EXPORT static std::unique_ptr<ImageBuffer> create(const FloatSize&, RenderingMode, float resolutionScale = 1, ColorSpace = ColorSpace::SRGB, const HostWindow* = nullptr);
 #if USE(DIRECT2D)
-    WEBCORE_EXPORT static std::unique_ptr<ImageBuffer> create(const FloatSize&, RenderingMode, const GraphicsContext*, float resolutionScale = 1, ColorSpace = ColorSpaceSRGB, const HostWindow* = nullptr);
+    WEBCORE_EXPORT static std::unique_ptr<ImageBuffer> create(const FloatSize&, RenderingMode, const GraphicsContext*, float resolutionScale = 1, ColorSpace = ColorSpace::SRGB, const HostWindow* = nullptr);
 #endif
 
     // Create an image buffer compatible with the context and copy rect from this buffer into this new one.
@@ -134,7 +134,7 @@ public:
 
     // FIXME: current implementations of this method have the restriction that they only work
     // with textures that are RGB or RGBA format, and UNSIGNED_BYTE type.
-    bool copyToPlatformTexture(GraphicsContext3D&, GC3Denum, Platform3DObject, GC3Denum, bool, bool);
+    bool copyToPlatformTexture(GraphicsContextGLOpenGL&, GCGLenum, PlatformGLObject, GCGLenum, bool, bool);
 
     // These functions are used when clamping the ImageBuffer which is created for filter, masker or clipper.
     static bool sizeNeedsClamping(const FloatSize&);

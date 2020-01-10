@@ -116,6 +116,7 @@ public:
     void animationWasCanceled() final;
     void animationSuspensionStateDidChange(bool) final;
     void animationTimelineDidChange(AnimationTimeline*) final;
+    void animationTimingDidChange();
     void applyPendingAcceleratedActions();
     bool isRunningAccelerated() const { return m_lastRecordedAcceleratedAction != AcceleratedAction::Stop; }
     bool hasPendingAcceleratedAction() const { return !m_pendingAcceleratedActions.isEmpty() && isRunningAccelerated(); }
@@ -125,6 +126,7 @@ public:
     RenderElement* renderer() const override;
     const RenderStyle& currentStyle() const override;
     bool isAccelerated() const { return m_shouldRunAccelerated; }
+    bool triggersStackingContext() const { return m_triggersStackingContext; }
     bool filterFunctionListsMatch() const override { return m_filterFunctionListsMatch; }
     bool transformFunctionListsMatch() const override { return m_transformFunctionListsMatch; }
 #if ENABLE(FILTERS_LEVEL_2)
@@ -147,10 +149,11 @@ private:
     enum class AcceleratedAction : uint8_t { Play, Pause, Seek, Stop };
     enum class BlendingKeyframesSource : uint8_t { CSSAnimation, CSSTransition, WebAnimation };
 
+    void updateEffectStackMembership();
     void copyPropertiesFromSource(Ref<KeyframeEffect>&&);
     ExceptionOr<void> processKeyframes(JSC::JSGlobalObject&, JSC::Strong<JSC::JSObject>&&);
     void addPendingAcceleratedAction(AcceleratedAction);
-    void updateAcceleratedAnimationState();
+    void updateAcceleratedAnimationState(ComputedEffectTiming);
     void setAnimatedPropertiesInStyle(RenderStyle&, double);
     TimingFunction* timingFunctionForKeyframeAtIndex(size_t);
     Ref<const Animation> backingAnimationForCompositedRenderer() const;
@@ -188,6 +191,7 @@ private:
     bool m_backdropFilterFunctionListsMatch { false };
 #endif
     bool m_colorFilterFunctionListsMatch { false };
+    bool m_inTargetEffectStack { false };
 };
 
 } // namespace WebCore

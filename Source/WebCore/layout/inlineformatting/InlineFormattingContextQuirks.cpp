@@ -47,7 +47,7 @@ bool InlineFormattingContext::Quirks::lineDescentNeedsCollapsing(const LineBuild
         if (run.isContainerEnd() || layoutBox.style().verticalAlign() != VerticalAlign::Baseline)
             continue;
 
-        if (run.isForcedLineBreak())
+        if (run.isLineBreak())
             return false;
         if (run.isText()) {
             if (!run.isCollapsedToVisuallyEmpty())
@@ -63,8 +63,7 @@ bool InlineFormattingContext::Quirks::lineDescentNeedsCollapsing(const LineBuild
         if (run.isBox()) {
             if (layoutBox.isInlineBlockBox() && layoutBox.establishesInlineFormattingContext()) {
                 auto& formattingState = downcast<InlineFormattingState>(layoutState.establishedFormattingState(downcast<Container>(layoutBox)));
-                ASSERT(!formattingState.lineBoxes().isEmpty());
-                auto inlineBlockBaseline = formattingState.lineBoxes().last()->baseline();
+                auto inlineBlockBaseline = formattingState.displayInlineContent()->lineBoxes.last().baseline();
                 if (inlineBlockBaseline.descent())
                     return false;
             }
@@ -75,24 +74,24 @@ bool InlineFormattingContext::Quirks::lineDescentNeedsCollapsing(const LineBuild
     return true;
 }
 
-LineBuilder::Constraints::HeightAndBaseline InlineFormattingContext::Quirks::lineHeightConstraints(const Box& formattingRoot) const
+LineBuilder::Constraints::HeightAndBaseline InlineFormattingContext::Quirks::lineHeightConstraints(const Container& formattingRoot) const
 {
     // computedLineHeight takes font-size into account when line-height is not set.
     // Strut is the imaginary box that we put on every line. It sets the initial vertical constraints for each new line.
-    auto strutHeight = formattingRoot.style().computedLineHeight();
+    InlineLayoutUnit strutHeight = formattingRoot.style().computedLineHeight();
     auto strutBaselineOffset = LineBuilder::halfLeadingMetrics(formattingRoot.style().fontMetrics(), strutHeight).ascent();
     if (layoutState().inNoQuirksMode())
         return { strutHeight, strutBaselineOffset, { } };
 
     auto lineHeight = formattingRoot.style().lineHeight();
     if (lineHeight.isPercentOrCalculated()) {
-        auto initialBaselineOffset = LineBuilder::halfLeadingMetrics(formattingRoot.style().fontMetrics(), { }).ascent();
-        return { initialBaselineOffset, initialBaselineOffset, LineBox::Baseline { strutBaselineOffset, strutHeight - strutBaselineOffset } };
+        auto initialBaselineOffset = LineBuilder::halfLeadingMetrics(formattingRoot.style().fontMetrics(), 0_lu).ascent();
+        return { initialBaselineOffset, initialBaselineOffset, Display::LineBox::Baseline { strutBaselineOffset, strutHeight - strutBaselineOffset } };
     }
     // FIXME: The only reason why we use intValue() here is to match current inline tree (integral)behavior.
-    auto initialLineHeight = LayoutUnit { lineHeight.intValue() };
+    InlineLayoutUnit initialLineHeight = lineHeight.intValue();
     auto initialBaselineOffset = LineBuilder::halfLeadingMetrics(formattingRoot.style().fontMetrics(), initialLineHeight).ascent();
-    return { initialLineHeight, initialBaselineOffset, LineBox::Baseline { strutBaselineOffset, strutHeight - strutBaselineOffset } };
+    return { initialLineHeight, initialBaselineOffset, Display::LineBox::Baseline { strutBaselineOffset, strutHeight - strutBaselineOffset } };
 }
 
 }

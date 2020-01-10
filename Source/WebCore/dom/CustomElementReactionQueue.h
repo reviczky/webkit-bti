@@ -45,6 +45,23 @@ class Element;
 class JSCustomElementInterface;
 class QualifiedName;
 
+// https://html.spec.whatwg.org/multipage/custom-elements.html#element-queue
+class CustomElementQueue {
+    WTF_MAKE_FAST_ALLOCATED;
+    WTF_MAKE_NONCOPYABLE(CustomElementQueue);
+public:
+    CustomElementQueue() = default;
+
+    void add(Element&);
+    void processQueue(JSC::JSGlobalObject*);
+
+private:
+    void invokeAll();
+
+    Vector<GCReachableRef<Element>> m_elements;
+    bool m_invoking { false };
+};
+
 class CustomElementReactionQueue {
     WTF_MAKE_FAST_ALLOCATED;
     WTF_MAKE_NONCOPYABLE(CustomElementReactionQueue);
@@ -64,24 +81,10 @@ public:
     void invokeAll(Element&);
     void clear();
 
-    static void processBackupQueue();
-
-    class ElementQueue {
-    public:
-        void add(Element&);
-        void processQueue(JSC::JSGlobalObject*);
-
-    private:
-        void invokeAll();
-
-        Vector<GCReachableRef<Element>> m_elements;
-        bool m_invoking { false };
-    };
+    static void processBackupQueue(CustomElementQueue&);
 
 private:
     static void enqueueElementOnAppropriateElementQueue(Element&);
-    static ElementQueue& ensureBackupQueue(Document&);
-    static ElementQueue& backupElementQueue();
 
     Ref<JSCustomElementInterface> m_interface;
     Vector<CustomElementReactionQueueItem> m_items;
@@ -91,25 +94,25 @@ class CustomElementReactionDisallowedScope {
 public:
     CustomElementReactionDisallowedScope()
     {
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
         s_customElementReactionDisallowedCount++;
 #endif
     }
 
     ~CustomElementReactionDisallowedScope()
     {
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
         ASSERT(s_customElementReactionDisallowedCount);
         s_customElementReactionDisallowedCount--;
 #endif
     }
 
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     static bool isReactionAllowed() { return !s_customElementReactionDisallowedCount; }
 #endif
 
     class AllowedScope {
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     public:
         AllowedScope()
             : m_originalCount(s_customElementReactionDisallowedCount)
@@ -124,11 +127,11 @@ public:
 
     private:
         unsigned m_originalCount;
-#endif
+#endif // ASSERT_ENABLED
     };
 
 private:
-#if !ASSERT_DISABLED
+#if ASSERT_ENABLED
     WEBCORE_EXPORT static unsigned s_customElementReactionDisallowedCount;
 
     friend class AllowedScope;
@@ -158,7 +161,7 @@ public:
 private:
     WEBCORE_EXPORT void processQueue(JSC::JSGlobalObject*);
 
-    CustomElementReactionQueue::ElementQueue* m_queue { nullptr }; // Use raw pointer to avoid generating delete in the destructor.
+    CustomElementQueue* m_queue { nullptr }; // Use raw pointer to avoid generating delete in the destructor.
     CustomElementReactionStack* m_previousProcessingStack;
     JSC::JSGlobalObject* m_state;
 

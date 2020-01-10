@@ -39,6 +39,12 @@ public:
 
     DECLARE_EXPORT_INFO;
 
+    template<typename CellType, SubspaceAccess mode>
+    static IsoSubspace* subspaceFor(VM& vm)
+    {
+        return vm.mapIteratorSpace<mode>();
+    }
+
     static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
     {
         return Structure::create(vm, globalObject, prototype, TypeInfo(ObjectType, StructureFlags), info());
@@ -73,9 +79,9 @@ public:
         if (!bucket)
             return false;
 
-        if (m_kind == IterateValue)
+        if (m_kind == IterationKind::Values)
             value = bucket->value();
-        else if (m_kind == IterateKey)
+        else if (m_kind == IterationKind::Keys)
             value = bucket->key();
         else
             value = createPair(globalObject, bucket->key(), bucket->value());

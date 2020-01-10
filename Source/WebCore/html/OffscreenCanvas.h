@@ -43,6 +43,7 @@ namespace WebCore {
 
 class CanvasRenderingContext;
 class CSSValuePool;
+class DeferredPromise;
 class ImageBitmap;
 class OffscreenCanvasRenderingContext2D;
 class WebGLRenderingContext;
@@ -78,14 +79,15 @@ public:
 #if ENABLE(WEBGL)
     ExceptionOr<OffscreenRenderingContext> getContext(JSC::JSGlobalObject&, RenderingContextType, Vector<JSC::Strong<JSC::Unknown>>&& arguments);
 #endif
-    RefPtr<ImageBitmap> transferToImageBitmap();
-    // void convertToBlob(ImageEncodeOptions options);
+    ExceptionOr<RefPtr<ImageBitmap>> transferToImageBitmap();
+    void convertToBlob(ImageEncodeOptions&&, Ref<DeferredPromise>&&);
 
     void didDraw(const FloatRect&) final;
 
     Image* copiedImage() const final { return nullptr; }
     bool hasCreatedImageBuffer() const final { return m_hasCreatedImageBuffer; }
 
+    SecurityOrigin* securityOrigin() const final;
     CSSValuePool& cssValuePool();
 
     using RefCounted::ref;
@@ -109,6 +111,8 @@ private:
 
     void setSize(const IntSize&) final;
     void createImageBuffer() const final;
+    std::unique_ptr<ImageBuffer> takeImageBuffer() const;
+
     void reset();
 
     std::unique_ptr<CanvasRenderingContext> m_context;

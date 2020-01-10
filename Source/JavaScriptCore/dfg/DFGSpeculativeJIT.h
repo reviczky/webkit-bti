@@ -68,9 +68,9 @@ enum GeneratedOperandType { GeneratedOperandTypeUnknown, GeneratedOperandInteger
 // a speculative check has failed. This allows the SpeculativeJIT
 // to propagate type information (including information that has
 // only speculatively been asserted) through the dataflow.
+DECLARE_ALLOCATOR_WITH_HEAP_IDENTIFIER(SpeculativeJIT);
 class SpeculativeJIT {
-    WTF_MAKE_FAST_ALLOCATED;
-
+    WTF_MAKE_FAST_ALLOCATED_WITH_HEAP_IDENTIFIER(SpeculativeJIT);
     friend struct OSRExit;
 private:
     typedef JITCompiler::TrustedImm32 TrustedImm32;
@@ -713,6 +713,8 @@ public:
 
     void compileMovHint(Node*);
     void compileMovHintAndCheck(Node*);
+
+    void compileCheckNeutered(Node*);
 
     void cachedGetById(CodeOrigin, JSValueRegs base, JSValueRegs result, unsigned identifierNumber, JITCompiler::Jump slowPathTarget, SpillRegistersMode, AccessType);
     void cachedPutById(CodeOrigin, GPRReg baseGPR, JSValueRegs valueRegs, GPRReg scratchGPR, unsigned identifierNumber, PutKind, JITCompiler::Jump slowPathTarget = JITCompiler::Jump(), SpillRegistersMode = NeedToSpill);
@@ -1393,6 +1395,7 @@ public:
     void compileSetFunctionName(Node*);
     void compileNewRegexp(Node*);
     void compileForwardVarargs(Node*);
+    void compileVarargsLength(Node*);
     void compileLoadVarargs(Node*);
     void compileCreateActivation(Node*);
     void compileCreateDirectArguments(Node*);
@@ -1401,6 +1404,7 @@ public:
     void compileGetArgument(Node*);
     void compileCreateScopedArguments(Node*);
     void compileCreateClonedArguments(Node*);
+    void compileCreateArgumentsButterfly(Node*);
     void compileCreateRest(Node*);
     void compileSpread(Node*);
     void compileNewArray(Node*);
@@ -1483,6 +1487,7 @@ public:
     void compileNewPromise(Node*);
     void compileNewGenerator(Node*);
     void compileNewAsyncGenerator(Node*);
+    void compileNewArrayIterator(Node*);
     void compileToPrimitive(Node*);
     void compileToNumeric(Node*);
     void compileLogShadowChickenPrologue(Node*);
@@ -1669,15 +1674,16 @@ public:
     void cageTypedArrayStorage(GPRReg, GPRReg);
     
     void recordSetLocal(
-        VirtualRegister bytecodeReg, VirtualRegister machineReg, DataFormat format)
+        Operand bytecodeReg, VirtualRegister machineReg, DataFormat format)
     {
+        ASSERT(!bytecodeReg.isArgument() || bytecodeReg.virtualRegister().toArgument() >= 0);
         m_stream->appendAndLog(VariableEvent::setLocal(bytecodeReg, machineReg, format));
     }
     
     void recordSetLocal(DataFormat format)
     {
         VariableAccessData* variable = m_currentNode->variableAccessData();
-        recordSetLocal(variable->local(), variable->machineLocal(), format);
+        recordSetLocal(variable->operand(), variable->machineLocal(), format);
     }
 
     GenerationInfo& generationInfoFromVirtualRegister(VirtualRegister virtualRegister)
