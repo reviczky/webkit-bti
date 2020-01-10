@@ -5,8 +5,6 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  WebProcessMainUnix@Base 2.5.3
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
- (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSDeallocatorEntry<bmalloc::IsoConfig<40u> > >::s_data@Base" 2.21.1
- (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerProcess<bmalloc::IsoTLSDeallocatorEntry<bmalloc::IsoConfig<40u> > >::s_object@Base" 2.19.6
  (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerThreadStorage<bmalloc::PerHeapKind<bmalloc::Cache> >::s_didInitialize@Base" 2.25.92
  (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerThreadStorage<bmalloc::PerHeapKind<bmalloc::Cache> >::s_key@Base" 2.25.92
  (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::vmPageSize()::cached@Base" 2.19.6
@@ -1519,6 +1517,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_get_major_version@Base 2.5.3
  webkit_get_micro_version@Base 2.5.3
  webkit_get_minor_version@Base 2.5.3
+ (optional)webkit_gl_video_sink_get_type@Base 2.27.4
  webkit_hardware_acceleration_policy_get_type@Base 2.15.4
  webkit_hit_test_result_context_get_type@Base 2.5.3
  webkit_hit_test_result_context_is_editable@Base 2.5.3
@@ -1534,6 +1533,27 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_hit_test_result_get_link_uri@Base 2.5.3
  webkit_hit_test_result_get_media_uri@Base 2.5.3
  webkit_hit_test_result_get_type@Base 2.5.3
+ webkit_input_hints_get_type@Base 2.27.4
+ webkit_input_method_context_filter_key_event@Base 2.27.4
+ webkit_input_method_context_get_input_hints@Base 2.27.4
+ webkit_input_method_context_get_input_purpose@Base 2.27.4
+ webkit_input_method_context_get_preedit@Base 2.27.4
+ webkit_input_method_context_get_type@Base 2.27.4
+ webkit_input_method_context_impl_gtk_get_type@Base 2.27.4
+ webkit_input_method_context_notify_cursor_area@Base 2.27.4
+ webkit_input_method_context_notify_focus_in@Base 2.27.4
+ webkit_input_method_context_notify_focus_out@Base 2.27.4
+ webkit_input_method_context_notify_surrounding@Base 2.27.4
+ webkit_input_method_context_reset@Base 2.27.4
+ webkit_input_method_context_set_enable_preedit@Base 2.27.4
+ webkit_input_method_context_set_input_hints@Base 2.27.4
+ webkit_input_method_context_set_input_purpose@Base 2.27.4
+ webkit_input_method_underline_copy@Base 2.27.4
+ webkit_input_method_underline_free@Base 2.27.4
+ webkit_input_method_underline_get_type@Base 2.27.4
+ webkit_input_method_underline_new@Base 2.27.4
+ webkit_input_method_underline_set_color@Base 2.27.4
+ webkit_input_purpose_get_type@Base 2.27.4
  webkit_insecure_content_event_get_type@Base 2.5.3
  (optional)webkit_inspector_window_get_type@Base 2.19.6
  webkit_install_missing_media_plugins_permission_request_get_description@Base 2.10.0
@@ -1985,6 +2005,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_get_estimated_load_progress@Base 2.5.3
  webkit_web_view_get_favicon@Base 2.5.3
  webkit_web_view_get_find_controller@Base 2.5.3
+ webkit_web_view_get_input_method_context@Base 2.27.4
  webkit_web_view_get_inspector@Base 2.5.3
  webkit_web_view_get_javascript_global_context@Base 2.5.3
  webkit_web_view_get_main_resource@Base 2.5.3
@@ -2043,6 +2064,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_web_view_set_background_color@Base 2.8.1
  webkit_web_view_set_custom_charset@Base 2.5.3
  webkit_web_view_set_editable@Base 2.8.1
+ webkit_web_view_set_input_method_context@Base 2.27.4
  webkit_web_view_set_settings@Base 2.5.3
  webkit_web_view_set_zoom_level@Base 2.5.3
  webkit_web_view_stop_loading@Base 2.5.3
