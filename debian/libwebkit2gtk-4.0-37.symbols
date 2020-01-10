@@ -1,4 +1,5 @@
 libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
+* Build-Depends-Package: libwebkit2gtk-4.0-dev
  NetworkProcessMainUnix@Base 2.5.3
  PluginProcessMainUnix@Base 2.5.3
  WebProcessMainUnix@Base 2.5.3
