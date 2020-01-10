@@ -5,6 +5,7 @@ webkit2gtk (2.27.4-1) UNRELEASED; urgency=medium
     + Switch build dependency from libenchant-dev to libenchant-2-dev
       (Closes: #948106).
     + Add build dependency on libx11-xcb-dev.
+    + Add Rules-Requires-Root: no.
   * debian/source/lintian-overrides:
     + Update source-is-missing override.
   * debian/copyright:
