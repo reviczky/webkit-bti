@@ -7,3 +7,4 @@ detect-woff.patch
 user-agent-branding.patch
 prefer-pthread.patch
 dont-detect-sse2.patch
+use-python3.patch
