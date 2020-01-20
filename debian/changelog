@@ -34,7 +34,7 @@ webkit2gtk (2.26.2-2) UNRELEASED; urgency=medium
   * debian/control:
     + Switch build dependency from libenchant-dev to libenchant-2-dev
       (Closes: #948106).
-    + Add build dependency on libx11-xcb-dev.
+    + Add build dependency on libx11-xcb-dev (Closes: #949430).
   * debian/patches/use-python3.patch:
     + The unversioned python interpreter (i.e. Python 2) is not installed
       by default anymore, so use Python 3 instead (Closes: #948839).
