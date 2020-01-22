@@ -14,7 +14,7 @@ diff --git a/Source/WebCore/platform/glib/UserAgentGLib.cpp b/Source/WebCore/pla
 index 8eabebe..c50e359 100644
 --- a/Source/WebCore/platform/glib/UserAgentGLib.cpp
 +++ b/Source/WebCore/platform/glib/UserAgentGLib.cpp
-@@ -88,6 +88,9 @@ static String buildUserAgentString(const UserAgentQuirks& quirks)
+@@ -89,6 +89,9 @@ static String buildUserAgentString(const UserAgentQuirks& quirks)
      else {
          uaString.append(platformForUAString());
          uaString.appendLiteral("; ");
