@@ -9,6 +9,7 @@ webkit2gtk (2.27.90-1) UNRELEASED; urgency=medium
     + Mark libwebkit2gtk-4.0-doc and libwebkit2gtk-4.0-37-gtk2 as
       Multi-Arch: foreign.
   * debian/rules:
+    + Don't use the Gold linker on powerpc (Closes: #949618).
     + Run dh with --builddirectory=build. Some source files are generated
       inside this directory and are later referenced from the .gir files
       so their path names should be independent from the architecture.
