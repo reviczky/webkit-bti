@@ -32,6 +32,11 @@ ifneq (,$(filter $(DEB_HOST_ARCH),arm64))
 	EXTRA_CMAKE_ARGUMENTS += -DWTF_CPU_ARM64_CORTEXA53=OFF
 endif
 
+# Disable Gold where it causes build problems, see #949618
+ifneq (,$(filter $(DEB_HOST_ARCH),powerpc))
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_LD_GOLD=OFF
+endif
+
 ifneq (,$(filter noopt,$(DEB_BUILD_OPTIONS)))
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_SYSTEM_MALLOC=ON
 	CPPFLAGS += -DRELEASE_WITHOUT_OPTIMIZATIONS
