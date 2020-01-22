@@ -62,6 +62,7 @@ Build-Depends: gawk,
                libgles2-mesa-dev
 Build-Conflicts: gir-repository-dev
 Standards-Version: 4.4.1
+Rules-Requires-Root: no
 Vcs-Browser: https://salsa.debian.org/webkit-team/webkit
 Vcs-Git: https://salsa.debian.org/webkit-team/webkit.git
 Homepage: https://webkitgtk.org/
