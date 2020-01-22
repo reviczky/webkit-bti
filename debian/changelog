@@ -44,6 +44,8 @@ webkit2gtk (2.26.3-1) UNRELEASED; urgency=high
     + Refresh.
   * debian/libwebkit2gtk-4.0-37.symbols:
     + Add Build-Depends-Package field.
+  * debian/copyright:
+    + Update copyright years.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 12 Nov 2019 14:15:29 +0200
 
