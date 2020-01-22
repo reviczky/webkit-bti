@@ -1,4 +1,4 @@
-webkit2gtk (2.26.3-1) UNRELEASED; urgency=high
+webkit2gtk (2.26.3-1) unstable; urgency=high
 
   * New upstream release.
   * The WebKitGTK security advisory WSA-2019-0006 lists the following
@@ -47,7 +47,7 @@ webkit2gtk (2.26.3-1) UNRELEASED; urgency=high
   * debian/copyright:
     + Update copyright years.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 12 Nov 2019 14:15:29 +0200
+ -- Alberto Garcia <berto@igalia.com>  Wed, 22 Jan 2020 13:44:09 +0100
 
 webkit2gtk (2.26.2-1) unstable; urgency=medium
 
