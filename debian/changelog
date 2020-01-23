@@ -2,6 +2,9 @@ webkit2gtk (2.26.3-2) UNRELEASED; urgency=medium
 
   * debian/rules:
     + Don't use the Gold linker on powerpc (Closes: #949618).
+  * debian/patches/reduce-memory-overheads.patch:
+    + Reduce memory usage when not using the Gold linker
+      (Closes: #949621).
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 22 Jan 2020 23:23:11 +0100
 
