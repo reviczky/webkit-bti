@@ -1,7 +1,7 @@
 From: John Paul Adrian Glaubitz <glaubitz@physik.fu-berlin.de>
 Subject: Fix FTBFS on m68k
 Bug-Debian: https://bugs.debian.org/868126
-Last-Update: 2017-07-11
+Last-Update: 2020-01-23
 Index: webkitgtk/Source/WTF/wtf/Platform.h
 ===================================================================
 --- webkitgtk.orig/Source/WTF/wtf/Platform.h
@@ -141,3 +141,19 @@ Index: webkitgtk/Source/WebCore/css/RuleSet.h
  
  class RuleSet {
      WTF_MAKE_NONCOPYABLE(RuleSet); WTF_MAKE_FAST_ALLOCATED;
+Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
++++ webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
+@@ -51,7 +51,11 @@ struct SameSizeAsFontCascadeDescription
+     unsigned bitfields3 : 10;
+ };
+ 
++#if defined(__m68k__)
++COMPILE_ASSERT(sizeof(FontCascadeDescription) >= sizeof(SameSizeAsFontCascadeDescription), FontCascadeDescription_should_stay_small);
++#else
+ COMPILE_ASSERT(sizeof(FontCascadeDescription) == sizeof(SameSizeAsFontCascadeDescription), FontCascadeDescription_should_stay_small);
++#endif
+ 
+ FontCascadeDescription::FontCascadeDescription()
+     : m_isAbsoluteSize(false)
