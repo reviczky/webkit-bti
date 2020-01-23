@@ -13,6 +13,9 @@ webkit2gtk (2.27.90-1) UNRELEASED; urgency=medium
     + Run dh with --builddirectory=build. Some source files are generated
       inside this directory and are later referenced from the .gir files
       so their path names should be independent from the architecture.
+  * debian/patches/reduce-memory-overheads.patch:
+    + Reduce memory usage when not using the Gold linker
+      (Closes: #949621).
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 14 Jan 2020 12:49:08 +0100
 
