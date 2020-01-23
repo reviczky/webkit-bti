@@ -17,6 +17,8 @@ webkit2gtk (2.27.90-1) UNRELEASED; urgency=medium
   * debian/patches/reduce-memory-overheads.patch:
     + Reduce memory usage when not using the Gold linker
       (Closes: #949621).
+  * debian/patches/fix-ftbfs-m68k.patch:
+    + Bring the patch from the unstable branch.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 14 Jan 2020 12:49:08 +0100
 
