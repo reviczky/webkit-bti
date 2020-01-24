@@ -32,7 +32,6 @@ Build-Depends: gawk,
                libgudev-1.0-dev [linux-any],
                libupower-glib-dev,
                libwoff-dev (>= 1.0.2),
-               libwpebackend-fdo-1.0-dev,
                gperf,
                bison,
                flex,
@@ -46,7 +45,7 @@ Build-Depends: gawk,
                libxt-dev,
                libgstreamer1.0-dev (>= 1.13.1),
                libgstreamer-plugins-base1.0-dev (>= 1.13.1),
-               libenchant-2-dev,
+               libenchant-dev,
                gtk-doc-tools,
                libglib2.0-doc,
                libgtk-3-doc,
@@ -151,7 +150,6 @@ Recommends: gstreamer1.0-plugins-good,
             libgl1-mesa-dri,
             ${gst:Recommends}
 Suggests: ${gst:Suggests}
-Breaks: evolution (<< 3.34.1)
 Description: Web content engine library for GTK
  WebKit is a web content engine, derived from KHTML and KJS from KDE, and
  used primarily in Apple's Safari browser.  It is made to be embedded in
