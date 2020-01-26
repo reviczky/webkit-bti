@@ -1,3 +1,42 @@
+webkit2gtk (2.26.3-1~bpo9+1) stretch-backports-sloppy; urgency=medium
+
+  * Rebuild for stretch-backports-sloppy.
+  * debian/patches/force-single-process.patch:
+    + Force the single-process mode in Evolution and Geary
+  * debian/control:
+    + Versions of GStreamer < 1.13 had GStreamerGL in the "bad" set, so
+      depend on libgstreamer-plugins-bad1.0-dev and don't require
+      GStreamer 1.13. Don't install libgstreamer-plugins-bad1.0-dev in
+      armel or armhf: the usage of two different GL implementations causes
+      a build failure (see WebKit bug #175127).
+    + Remove build dependencies on libwoff-dev and libopenjp2-7-dev.
+    + Don't recommend gstreamer1.0-gl, that package is not available in
+      this Debian release.
+    + Build depend on clang-7.
+    + Remove Breaks for Evolution < 3.34.1.
+    + Remove build dependency on libwpebackend-fdo-1.0-dev.
+    + Switch build dependency from libenchant-2-dev to libenchant-dev.
+  * debian/rules:
+    + Build with -DENABLE_MEDIA_SOURCE=OFF. This feature requires a more
+      recent version of GStreamer.
+    + Build with -DUSE_OPENJPEG=OFF. This feature requires a more recent
+      version of libopenjp2-7-dev.
+    + Pass CC and CXX to dh_auto_configure so it uses clang instead of
+      gcc.
+  * debian/patches/is-same-v.patch:
+    + Define std::is_same_v and std::is_pod_v.
+  * debian/patches/fix-gtkdoc-generation.patch:
+    + Fix gtk-doc generation.
+  * debian/patches/safe-multiply.patch:
+    + Fix link errors in 32-bit CPUs with clang
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Mark webkit_emoji_chooser_get_type as optional, this requires a more
+      recent version of GTK.
+  * debian/patches/fix-atomics-build.patch:
+    + Use libatomic in libWTF. This fixes the armel build.
+
+ -- Alberto Garcia <berto@igalia.com>  Sat, 25 Jan 2020 23:19:00 +0100
+
 webkit2gtk (2.26.3-1) unstable; urgency=high
 
   * New upstream release.
