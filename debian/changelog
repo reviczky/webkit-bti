@@ -6,6 +6,10 @@ webkit2gtk (2.27.90-1) UNRELEASED; urgency=medium
       by default anymore, so use Python 3 instead (Closes: #948839).
   * debian/control:
     + Drop build dependency on python.
+  * debian/rules:
+    + Run dh with --builddirectory=build. Some source files are generated
+      inside this directory and are later referenced from the .gir files
+      so their path names should be independent from the architecture.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 14 Jan 2020 12:49:08 +0100
 
