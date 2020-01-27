@@ -87,7 +87,7 @@ override_dh_gencontrol:
 	dh_gencontrol -- $(DH_GENCONTROL_ARGS)
 
 %:
-	dh $@ --with gir --buildsystem=cmake+ninja
+	dh $@ --with gir --buildsystem=cmake+ninja --builddirectory=build
 
 override_dh_auto_configure:
 	CXXFLAGS="$(CFLAGS)" \
