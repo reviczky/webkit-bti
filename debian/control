@@ -197,6 +197,7 @@ Description: Web content engine library for GTK - development files
 Package: libwebkit2gtk-4.0-doc
 Section: doc
 Architecture: all
+Multi-Arch: foreign
 Depends: ${misc:Depends}
 Suggests: devhelp
 Description: Web content engine library for GTK - documentation
@@ -242,6 +243,7 @@ Description: Web content engine library for GTK - GObject introspection data
 Package: libwebkit2gtk-4.0-37-gtk2
 Section: oldlibs
 Architecture: all
+Multi-Arch: foreign
 Depends: ${misc:Depends}
 Suggests: browser-plugin-freshplayer-pepperflash
 Description: Transitional dummy package
