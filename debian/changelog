@@ -1,3 +1,17 @@
+webkit2gtk (2.26.3-1~deb10u1) buster-security; urgency=medium
+
+  * Rebuild for buster-security.
+    + This fixes CVE-2019-8835, CVE-2019-8844 and CVE-2019-8846.
+      See https://webkitgtk.org/security/WSA-2020-0001.html.
+  * debian/patches/force-single-process.patch:
+    + Force the single-process mode in Evolution and Geary
+  * debian/control:
+    + Remove Breaks for Evolution < 3.34.1.
+    + Remove build dependency on libwpebackend-fdo-1.0-dev.
+    + Switch build dependency from libenchant-2-dev to libenchant-dev.
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 29 Jan 2020 11:39:55 +0100
+
 webkit2gtk (2.26.3-1) unstable; urgency=high
 
   * New upstream release.
