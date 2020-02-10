@@ -20,6 +20,8 @@ webkit2gtk (2.27.90-1) UNRELEASED; urgency=medium
   * debian/patches/fix-ftbfs-m68k.patch:
     + Bring the patch from the unstable branch.
   * Add debian/upstream/metadata.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 14 Jan 2020 12:49:08 +0100
 

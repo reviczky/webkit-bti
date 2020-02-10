@@ -1,8 +1,8 @@
 libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
 * Build-Depends-Package: libwebkit2gtk-4.0-dev
- NetworkProcessMainUnix@Base 2.5.3
- PluginProcessMainUnix@Base 2.5.3
- WebProcessMainUnix@Base 2.5.3
+ (c++)"WebKit::NetworkProcessMain(int, char**)@Base" 2.27.90
+ (c++)"WebKit::PluginProcessMain(int, char**)@Base" 2.27.90
+ (c++)"WebKit::WebProcessMain(int, char**)@Base" 2.27.90
  (c++)"WebKit::WebKitExtensionManager::initialize(WebKit::InjectedBundle*, API::Object*)@Base" 2.17.5
  (c++)"WebKit::WebKitExtensionManager::singleton()@Base" 2.17.5
  (c++|optional|arch=amd64 arm64 armhf mips mipsel)"bmalloc::PerThreadStorage<bmalloc::PerHeapKind<bmalloc::Cache> >::s_didInitialize@Base" 2.25.92
@@ -1706,6 +1706,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_font_size_to_points@Base 2.19.2
  webkit_settings_get_allow_file_access_from_file_urls@Base 2.10.0
  webkit_settings_get_allow_modal_dialogs@Base 2.5.3
+ webkit_settings_get_allow_top_navigation_to_data_urls@Base 2.27.90
  webkit_settings_get_allow_universal_access_from_file_urls@Base 2.13.4
  webkit_settings_get_auto_load_images@Base 2.5.3
  webkit_settings_get_cursive_font_family@Base 2.5.3
@@ -1766,6 +1767,7 @@ libwebkit2gtk-4.0.so.37 libwebkit2gtk-4.0-37 #MINVER#
  webkit_settings_new_with_settings@Base 2.5.3
  webkit_settings_set_allow_file_access_from_file_urls@Base 2.10.0
  webkit_settings_set_allow_modal_dialogs@Base 2.5.3
+ webkit_settings_set_allow_top_navigation_to_data_urls@Base 2.27.90
  webkit_settings_set_allow_universal_access_from_file_urls@Base 2.13.4
  webkit_settings_set_auto_load_images@Base 2.5.3
  webkit_settings_set_cursive_font_family@Base 2.5.3
