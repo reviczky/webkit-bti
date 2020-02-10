@@ -1188,17 +1188,26 @@ bool WebGLRenderingContextBase::checkObjectToBeBound(const char* functionName, W
     return true;
 }
 
-void WebGLRenderingContextBase::bindBuffer(GCGLenum target, WebGLBuffer* buffer)
+bool WebGLRenderingContextBase::validateAndCacheBufferBinding(const char* functionName, GCGLenum target, WebGLBuffer* buffer)
 {
     bool deleted;
-    if (!checkObjectToBeBound("bindBuffer", buffer, deleted))
-        return;
+    if (!checkObjectToBeBound(functionName, buffer, deleted))
+        return false;
     if (deleted)
         buffer = nullptr;
-    if (buffer && buffer->getTarget() && buffer->getTarget() != target) {
-        synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, "bindBuffer", "buffers can not be used with multiple targets");
-        return;
+
+    if (buffer) {
+        // In WebGL, a buffer may only be bound to one of the ARRAY_BUFFER or ELEMENT_ARRAY_BUFFER target in its lifetime.
+        if (target == GraphicsContextGL::ARRAY_BUFFER || target == GraphicsContextGL::ELEMENT_ARRAY_BUFFER) {
+            if (buffer->arrayBufferOrElementArrayBuffer() && target != buffer->arrayBufferOrElementArrayBuffer()) {
+                synthesizeGLError(GraphicsContextGL::INVALID_OPERATION, functionName, "buffers can only be bound to one of ARRAY_BUFFER or ELEMENT_ARRAY_BUFFER");
+                return false;
+            }
+        }
+
+        buffer->setTarget(target);
     }
+
     if (target == GraphicsContextGL::ARRAY_BUFFER)
         m_boundArrayBuffer = buffer;
     else if (target == GraphicsContextGL::ELEMENT_ARRAY_BUFFER)
@@ -1235,13 +1244,19 @@ void WebGLRenderingContextBase::bindBuffer(GCGLenum target, WebGLBuffer* buffer)
 #endif
         if (!success) {
             synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "bindBuffer", "invalid target");
-            return;
+            return false;
         }
     }
 
+    return true;
+}
+
+void WebGLRenderingContextBase::bindBuffer(GCGLenum target, WebGLBuffer* buffer)
+{
+    if (!validateAndCacheBufferBinding("bindBuffer", target, buffer))
+        return;
+
     m_context->bindBuffer(target, objectOrZero(buffer));
-    if (buffer)
-        buffer->setTarget(target, isWebGL2());
 }
 
 void WebGLRenderingContextBase::bindFramebuffer(GCGLenum target, WebGLFramebuffer* buffer)
@@ -1794,14 +1809,29 @@ bool WebGLRenderingContextBase::deleteObject(WebGLObject* object)
     return true;
 }
 
+#define REMOVE_BUFFER_FROM_BINDING(binding) \
+    if (binding == buffer) \
+        binding = nullptr;
+
+void WebGLRenderingContextBase::uncacheDeletedBuffer(WebGLBuffer* buffer)
+{
+    REMOVE_BUFFER_FROM_BINDING(m_boundArrayBuffer);
+    REMOVE_BUFFER_FROM_BINDING(m_boundCopyReadBuffer);
+    REMOVE_BUFFER_FROM_BINDING(m_boundCopyWriteBuffer);
+    REMOVE_BUFFER_FROM_BINDING(m_boundPixelPackBuffer);
+    REMOVE_BUFFER_FROM_BINDING(m_boundPixelUnpackBuffer);
+    REMOVE_BUFFER_FROM_BINDING(m_boundTransformFeedbackBuffer);
+    REMOVE_BUFFER_FROM_BINDING(m_boundUniformBuffer);
+
+    m_boundVertexArrayObject->unbindBuffer(*buffer);
+}
+
 void WebGLRenderingContextBase::deleteBuffer(WebGLBuffer* buffer)
 {
     if (!deleteObject(buffer))
         return;
-    if (m_boundArrayBuffer == buffer)
-        m_boundArrayBuffer = nullptr;
 
-    m_boundVertexArrayObject->unbindBuffer(*buffer);
+    uncacheDeletedBuffer(buffer);
 }
 
 void WebGLRenderingContextBase::deleteFramebuffer(WebGLFramebuffer* framebuffer)
@@ -2652,6 +2682,19 @@ WebGLAny WebGLRenderingContextBase::getProgramParameter(WebGLProgram* program, G
 #endif // USE(ANGLE)
         return value;
     default:
+#if ENABLE(WEBGL2)
+        if (isWebGL2()) {
+            switch (pname) {
+            case GraphicsContextGL::TRANSFORM_FEEDBACK_BUFFER_MODE:
+            case GraphicsContextGL::TRANSFORM_FEEDBACK_VARYINGS:
+            case GraphicsContextGL::ACTIVE_UNIFORM_BLOCKS:
+                m_context->getProgramiv(objectOrZero(program), pname, &value);
+                return value;
+            default:
+                break;
+            }
+        }
+#endif // ENABLE(WEBGL2)
         synthesizeGLError(GraphicsContextGL::INVALID_ENUM, "getProgramParameter", "invalid parameter name");
         return nullptr;
     }
@@ -3939,7 +3982,7 @@ ExceptionOr<void> WebGLRenderingContextBase::texSubImage2D(GCGLenum target, GCGL
         if (!buffer)
             return { };
 
-        RefPtr<Image> image = buffer->copyImage(ImageBuffer::fastCopyImageMode());
+        RefPtr<Image> image = buffer->copyImage(DontCopyBackingStore);
         if (image)
             texSubImage2DImpl(target, level, xoffset, yoffset, format, type, image.get(), GraphicsContextGL::DOMSource::Image, m_unpackFlipY, m_unpackPremultiplyAlpha);
         return { };
@@ -4061,7 +4104,7 @@ ExceptionOr<void> WebGLRenderingContextBase::texSubImage2D(GCGLenum target, GCGL
         if (!validateTexFunc("texSubImage2D", TexSubImage, SourceHTMLVideoElement, target, level, internalFormat, video->videoWidth(), video->videoHeight(), 0, format, type, xoffset, yoffset))
             return { };
 
-        RefPtr<Image> image = videoFrameToImage(video.get(), ImageBuffer::fastCopyImageMode());
+        RefPtr<Image> image = videoFrameToImage(video.get(), DontCopyBackingStore);
         if (!image)
             return { };
         texSubImage2DImpl(target, level, xoffset, yoffset, format, type, image.get(), GraphicsContextGL::DOMSource::Video, m_unpackFlipY, m_unpackPremultiplyAlpha);
@@ -4508,7 +4551,7 @@ ExceptionOr<void> WebGLRenderingContextBase::texImage2D(GCGLenum target, GCGLint
         }
 
         // Normal pure SW path.
-        RefPtr<Image> image = buffer->copyImage(ImageBuffer::fastCopyImageMode());
+        RefPtr<Image> image = buffer->copyImage(DontCopyBackingStore);
         if (image)
             texImage2DImpl(target, level, internalformat, format, type, image.get(), GraphicsContextGL::DOMSource::Image, m_unpackFlipY, m_unpackPremultiplyAlpha);
         return { };
@@ -4622,7 +4665,7 @@ ExceptionOr<void> WebGLRenderingContextBase::texImage2D(GCGLenum target, GCGLint
         }
 
         // Normal pure SW path.
-        RefPtr<Image> image = videoFrameToImage(video.get(), ImageBuffer::fastCopyImageMode());
+        RefPtr<Image> image = videoFrameToImage(video.get(), DontCopyBackingStore);
         if (!image)
             return { };
         texImage2DImpl(target, level, internalformat, format, type, image.get(), GraphicsContextGL::DOMSource::Video, m_unpackFlipY, m_unpackPremultiplyAlpha);
@@ -4647,7 +4690,7 @@ RefPtr<Image> WebGLRenderingContextBase::drawImageIntoBuffer(Image& image, int w
     FloatRect srcRect(FloatPoint(), image.size());
     FloatRect destRect(FloatPoint(), size);
     buf->context().drawImage(image, destRect, srcRect);
-    return buf->copyImage(ImageBuffer::fastCopyImageMode());
+    return buf->copyImage(DontCopyBackingStore);
 }
 
 #if ENABLE(VIDEO)
@@ -6343,7 +6386,7 @@ ImageBuffer* WebGLRenderingContextBase::LRUImageBufferCache::imageBuffer(const I
     }
 
     // FIXME (149423): Should this ImageBuffer be unconditionally unaccelerated?
-    std::unique_ptr<ImageBuffer> temp = ImageBuffer::create(size, Unaccelerated);
+    std::unique_ptr<ImageBuffer> temp = ImageBuffer::create(size, RenderingMode::Unaccelerated);
     if (!temp)
         return nullptr;
     ASSERT(m_buffers.size() > 0);

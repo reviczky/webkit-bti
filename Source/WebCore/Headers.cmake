@@ -171,13 +171,14 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     accessibility/AccessibilityRenderObject.h
     accessibility/AccessibilityScrollView.h
 
+    accessibility/isolatedtree/AXIsolatedObject.h
     accessibility/isolatedtree/AXIsolatedTree.h
-    accessibility/isolatedtree/AXIsolatedTreeNode.h
 
     animation/CSSPropertyBlendingClient.h
     animation/CompositeOperation.h
     animation/EffectTiming.h
     animation/FillMode.h
+    animation/GetAnimationsOptions.h
     animation/IterationCompositeOperation.h
     animation/KeyframeAnimationOptions.h
     animation/KeyframeEffectOptions.h
@@ -335,7 +336,6 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     css/MediaQueryEvaluator.h
     css/MediaQueryExpression.h
     css/MediaQueryParserContext.h
-    css/RGBColor.h
     css/Rect.h
     css/StyleColor.h
     css/StyleProperties.h
@@ -482,6 +482,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     dom/messageports/MessageWithMessagePorts.h
 
     editing/ClipboardAccessPolicy.h
+    editing/CompositionHighlight.h
     editing/CompositionUnderline.h
     editing/DictationAlternative.h
     editing/DictionaryPopupInfo.h
@@ -673,8 +674,23 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
 
     inspector/agents/InspectorPageAgent.h
 
+    layout/LayoutUnits.h
+    layout/MarginTypes.h
+
+    layout/displaytree/DisplayBox.h
+    layout/displaytree/DisplayInlineContent.h
+    layout/displaytree/DisplayInlineRect.h
+    layout/displaytree/DisplayLineBox.h
+    layout/displaytree/DisplayRect.h
+    layout/displaytree/DisplayRun.h
+
+    layout/layouttree/LayoutBox.h
+    layout/layouttree/LayoutReplaced.h
+    layout/layouttree/TextContext.h
+
     loader/AdClickAttribution.h
     loader/CanvasActivityRecord.h
+    loader/ContentFilterClient.h
     loader/CookieJar.h
     loader/CrossOriginAccessControl.h
     loader/CrossOriginPreflightResultCache.h
@@ -821,8 +837,10 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     page/RemoteFrame.h
     page/RenderingUpdateScheduler.h
     page/RuntimeEnabledFeatures.h
+    page/ScrollBehavior.h
     page/ScrollIntoViewOptions.h
     page/ScrollLogicalPosition.h
+    page/ScrollOptions.h
     page/ScrollToOptions.h
     page/SecurityOrigin.h
     page/SecurityOriginData.h
@@ -1015,7 +1033,9 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/gamepad/GamepadProviderClient.h
     platform/gamepad/PlatformGamepad.h
 
+    platform/graphics/AlphaPremultiplication.h
     platform/graphics/ANGLEWebKitBridge.h
+    platform/graphics/AnimationFrameRate.h
     platform/graphics/AudioTrackPrivate.h
     platform/graphics/BitmapImage.h
     platform/graphics/Color.h
@@ -1112,6 +1132,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/graphics/PlatformTimeRanges.h
     platform/graphics/Region.h
     platform/graphics/RemoteVideoSample.h
+    platform/graphics/RenderingMode.h
     platform/graphics/RoundedRect.h
     platform/graphics/StringTruncator.h
     platform/graphics/TabSize.h
@@ -1206,6 +1227,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/network/DNS.h
     platform/network/DNSResolveQueue.h
     platform/network/FormData.h
+    platform/network/HTTPCookieAcceptPolicy.h
     platform/network/HTTPHeaderMap.h
     platform/network/HTTPParsers.h
     platform/network/NetworkLoadInformation.h
@@ -1231,6 +1253,7 @@ set(WebCore_PRIVATE_FRAMEWORK_HEADERS
     platform/network/SocketStreamHandleClient.h
     platform/network/StorageSessionProvider.h
     platform/network/StoredCredentialsPolicy.h
+    platform/network/SynchronousLoaderClient.h
 
     platform/sql/SQLValue.h
     platform/sql/SQLiteDatabase.h

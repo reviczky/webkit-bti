@@ -479,6 +479,12 @@ public:
         m_op = CheckStructureImmediate;
         children.setChild1(Edge(structure, CellUse));
     }
+
+    void convertCheckArrayOrEmptyToCheckArray()
+    {
+        ASSERT(op() == CheckArrayOrEmpty);
+        setOpAndDefaultFlags(CheckArray);
+    }
     
     void replaceWith(Graph&, Node* other);
     void replaceWithWithoutChecks(Node* other);
@@ -711,7 +717,7 @@ public:
     
     void convertToToString()
     {
-        ASSERT(m_op == ToPrimitive || m_op == StringValueOf);
+        ASSERT(m_op == ToPrimitive || m_op == StringValueOf || m_op == ToPropertyKey);
         m_op = ToString;
     }
 
@@ -2145,6 +2151,7 @@ public:
         case StringCharCodeAt:
         case StringCodePointAt:
         case CheckArray:
+        case CheckArrayOrEmpty:
         case Arrayify:
         case ArrayifyToStructure:
         case ArrayPush:

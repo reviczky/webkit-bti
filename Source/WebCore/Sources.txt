@@ -410,14 +410,6 @@ Modules/webgpu/WebGPUTexture.cpp
 Modules/webgpu/WebGPUTextureView.cpp
 Modules/webgpu/WorkerNavigatorGPU.cpp
 
-Modules/webvr/NavigatorWebVR.cpp
-Modules/webvr/VRDisplay.cpp
-Modules/webvr/VRDisplayEvent.cpp
-Modules/webvr/VREyeParameters.cpp
-Modules/webvr/VRFrameData.cpp
-Modules/webvr/VRPose.cpp
-Modules/webvr/VRStageParameters.cpp
-
 accessibility/AXObjectCache.cpp
 accessibility/AccessibilityARIAGrid.cpp
 accessibility/AccessibilityARIAGridCell.cpp
@@ -451,8 +443,8 @@ accessibility/AccessibilityTableHeaderContainer.cpp
 accessibility/AccessibilityTableRow.cpp
 accessibility/AccessibilityTree.cpp
 accessibility/AccessibilityTreeItem.cpp
+accessibility/isolatedtree/AXIsolatedObject.cpp
 accessibility/isolatedtree/AXIsolatedTree.cpp
-accessibility/isolatedtree/AXIsolatedTreeNode.cpp
 
 animation/AnimationEffect.cpp
 animation/KeyframeEffectStack.cpp
@@ -774,7 +766,6 @@ css/MediaQueryList.cpp
 css/MediaQueryMatcher.cpp
 css/MediaQueryParserContext.cpp
 css/PropertySetCSSStyleDeclaration.cpp
-css/RGBColor.cpp
 css/SVGCSSComputedStyleDeclaration.cpp
 css/SelectorChecker.cpp
 css/SelectorFilter.cpp
@@ -961,7 +952,6 @@ dom/ShadowRoot.cpp
 dom/SimulatedClick.cpp
 dom/SlotAssignment.cpp
 dom/SpaceSplitString.cpp
-dom/SpectreGadget.cpp
 dom/StaticNodeList.cpp
 dom/StaticRange.cpp
 dom/StringCallback.cpp
@@ -1455,6 +1445,7 @@ layout/inlineformatting/InlineLineBuilder.cpp
 layout/inlineformatting/InlineTextItem.cpp
 layout/inlineformatting/LineLayoutContext.cpp
 layout/inlineformatting/text/TextUtil.cpp
+layout/integration/LayoutIntegrationBoxTree.cpp
 layout/integration/LayoutIntegrationLineLayout.cpp
 layout/invalidation/InvalidationContext.cpp
 layout/invalidation/InvalidationState.cpp
@@ -1655,6 +1646,7 @@ page/ResourceUsageOverlay.cpp
 page/ResourceUsageThread.cpp
 page/RuntimeEnabledFeatures.cpp
 page/Screen.cpp
+page/ScrollBehavior.cpp
 page/SecurityOrigin.cpp
 page/SecurityOriginData.cpp
 page/SecurityPolicy.cpp
@@ -1753,6 +1745,7 @@ platform/PlatformSpeechSynthesisUtterance.cpp
 platform/PlatformSpeechSynthesisVoice.cpp
 platform/PlatformSpeechSynthesizer.cpp
 platform/PlatformStrategies.cpp
+platform/PlatformWheelEvent.cpp
 platform/PreviewConverter.cpp
 platform/ProcessIdentifier.cpp
 platform/ReferrerPolicy.cpp
@@ -1760,6 +1753,7 @@ platform/RemoteCommandListener.cpp
 platform/RuntimeApplicationChecks.cpp
 platform/SSLKeyGenerator.cpp
 platform/ScrollAnimator.cpp
+platform/ScrollTypes.cpp
 platform/ScrollView.cpp
 platform/ScrollableArea.cpp
 platform/Scrollbar.cpp
@@ -1970,6 +1964,8 @@ platform/mediacapabilities/MediaCapabilitiesLogging.cpp
 
 platform/mediarecorder/MediaRecorderPrivateMock.cpp
 
+platform/mediastream/AudioMediaStreamTrackRenderer.cpp
+platform/mediastream/AudioTrackPrivateMediaStream.cpp
 platform/mediastream/CaptureDeviceManager.cpp
 platform/mediastream/MediaConstraints.cpp
 platform/mediastream/MediaEndpointConfiguration.cpp
@@ -2062,11 +2058,6 @@ platform/text/TextCodecUserDefined.cpp
 platform/text/TextEncoding.cpp
 platform/text/TextEncodingDetectorICU.cpp
 platform/text/TextEncodingRegistry.cpp
-
-platform/vr/VRManager.cpp
-platform/vr/VRPlatformDisplay.cpp
-platform/vr/openvr/VRPlatformDisplayOpenVR.cpp
-platform/vr/openvr/VRPlatformManagerOpenVR.cpp
 
 plugins/DOMMimeType.cpp
 plugins/DOMMimeTypeArray.cpp
@@ -2256,15 +2247,18 @@ rendering/style/ShapeValue.cpp
 rendering/style/StyleBackgroundData.cpp
 rendering/style/StyleBoxData.cpp
 rendering/style/StyleCachedImage.cpp
+rendering/style/StyleCursorImage.cpp
 rendering/style/StyleDeprecatedFlexibleBoxData.cpp
 rendering/style/StyleFilterData.cpp
 rendering/style/StyleFlexibleBoxData.cpp
 rendering/style/StyleGeneratedImage.cpp
 rendering/style/StyleGridData.cpp
 rendering/style/StyleGridItemData.cpp
+rendering/style/StyleImageSet.cpp
 rendering/style/StyleInheritedData.cpp
 rendering/style/StyleMarqueeData.cpp
 rendering/style/StyleMultiColData.cpp
+rendering/style/StyleMultiImage.cpp
 rendering/style/StyleRareInheritedData.cpp
 rendering/style/StyleRareNonInheritedData.cpp
 rendering/style/StyleScrollSnapPoints.cpp
@@ -2812,7 +2806,6 @@ JSDOMWindowFetch.cpp
 JSDOMWindowIndexedDatabase.cpp
 JSDOMWindowSpeechSynthesis.cpp
 JSDOMWindowWebDatabase.cpp
-JSDOMWindowWebVR.cpp
 JSDataTransfer.cpp
 JSDataTransferItem.cpp
 JSDataTransferItemList.cpp
@@ -2882,6 +2875,7 @@ JSFillMode.cpp
 JSFocusEvent.cpp
 JSFontFace.cpp
 JSFontFaceSet.cpp
+JSGetAnimationsOptions.cpp
 JSGPUCanvasContext.cpp
 JSGPUColor.cpp
 JSGPUColorStateDescriptor.cpp
@@ -3106,7 +3100,6 @@ JSNavigatorShare.cpp
 JSShareData.cpp
 JSNavigatorServiceWorker.cpp
 JSNavigatorWebDriver.cpp
-JSNavigatorWebVR.cpp
 JSNode.cpp
 JSNodeFilter.cpp
 JSNodeIterator.cpp
@@ -3393,8 +3386,10 @@ JSSVGZoomAndPan.cpp
 JSSVGZoomEvent.cpp
 JSScreen.cpp
 JSScriptProcessorNode.cpp
+JSScrollBehavior.cpp
 JSScrollIntoViewOptions.cpp
 JSScrollLogicalPosition.cpp
+JSScrollOptions.cpp
 JSScrollToOptions.cpp
 JSSecurityPolicyViolationEvent.cpp
 JSServiceWorker.cpp
@@ -3411,7 +3406,6 @@ JSShadowRootMode.cpp
 JSSlotable.cpp
 JSSourceBuffer.cpp
 JSSourceBufferList.cpp
-JSSpectreGadget.cpp
 JSSpeechSynthesis.cpp
 JSSpeechSynthesisEvent.cpp
 JSSpeechSynthesisUtterance.cpp
@@ -3441,17 +3435,6 @@ JSUIEvent.cpp
 JSUIEventInit.cpp
 JSURLSearchParams.cpp
 JSUserVerificationRequirement.cpp
-JSVRDisplay.cpp
-JSVRDisplayCapabilities.cpp
-JSVRDisplayEvent.cpp
-JSVRDisplayEventReason.cpp
-JSVREye.cpp
-JSVREyeParameters.cpp
-JSVRFieldOfView.cpp
-JSVRFrameData.cpp
-JSVRLayerInit.cpp
-JSVRPose.cpp
-JSVRStageParameters.cpp
 JSValidityState.cpp
 JSVideoConfiguration.cpp
 JSVideoPlaybackQuality.cpp
@@ -3529,10 +3512,7 @@ JSXSLTProcessor.cpp
 JSGamepad.cpp
 JSGamepadButton.cpp
 JSGamepadEvent.cpp
-JSGamepadWebVR.cpp
 JSNavigatorGamepad.cpp
-
-Modules/webvr/GamepadWebVR.cpp
 
 #endif
 

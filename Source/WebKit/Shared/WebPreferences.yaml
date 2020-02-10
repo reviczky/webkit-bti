@@ -20,7 +20,7 @@ DeviceOrientationPermissionAPIEnabled:
 
 DisallowSyncXHRDuringPageDismissalEnabled:
   type: bool
-  defaultValue: true
+  defaultValue: defaultDisallowSyncXHRDuringPageDismissalEnabled()
   humanReadableName: "Disallow sync XHR during page dismissal"
   humanReadableDescription: "Disallow synchronous XMLHttpRequest during page dismissal"
   category: experimental
@@ -216,6 +216,10 @@ AllowSettingAnyXHRHeaderFromFileURLs:
   defaultValue: false
 
 AllowCrossOriginSubresourcesToAskForCredentials:
+  type: bool
+  defaultValue: false
+
+AllowTopNavigationToDataURLs:
   type: bool
   defaultValue: false
 
@@ -487,6 +491,10 @@ HiddenPageDOMTimerThrottlingAutoIncreases:
 HiddenPageCSSAnimationSuspensionEnabled:
   type: bool
   defaultValue: DEFAULT_HIDDEN_PAGE_CSS_ANIMATION_SUSPENSION_ENABLED
+
+RenderingUpdateThrottlingEnabled:
+  type: bool
+  defaultValue: true
 
 LowPowerVideoAudioBufferSizeEnabled:
   type: bool
@@ -1319,6 +1327,13 @@ BlockingOfSmallPluginsEnabled:
   humanReadableDescription: "Stop plugins smaller than a certain threshold from loading."
   category: internal
 
+CSSOMViewSmoothScrollingEnabled:
+  type: bool
+  defaultValue: false
+  humanReadableName: "CSSOM View Smooth Scrolling"
+  humanReadableDescription: "Enable DOM API and CSS property for 'smooth' scroll behavior"
+  category: experimental
+
 WebAnimationsEnabled:
   type: bool
   defaultValue: true
@@ -1340,6 +1355,14 @@ WebAnimationsCompositeOperationsEnabled:
   defaultValue: DEFAULT_EXPERIMENTAL_FEATURES_ENABLED
   humanReadableName: "Web Animations composite operations"
   humanReadableDescription: "Support for the CompositeOperation enum and properties consuming it"
+  category: experimental
+  webcoreBinding: RuntimeEnabledFeatures
+
+WebAnimationsMutableTimelinesEnabled:
+  type: bool
+  defaultValue: DEFAULT_EXPERIMENTAL_FEATURES_ENABLED
+  humanReadableName: "Web Animations mutable timelines"
+  humanReadableDescription: "Support for setting the timeline property of an Animation object"
   category: experimental
   webcoreBinding: RuntimeEnabledFeatures
 
@@ -1368,15 +1391,6 @@ AccessibilityObjectModelEnabled:
   humanReadableDescription: "Accessibility Object Model support"
   category: experimental
   webcoreBinding: RuntimeEnabledFeatures
-
-WebVREnabled:
-  type: bool
-  defaultValue: DEFAULT_EXPERIMENTAL_FEATURES_ENABLED
-  humanReadableName: "WebVR"
-  humanReadableDescription: "WebVR Module support"
-  webcoreBinding: RuntimeEnabledFeatures
-  category: experimental
-  condition: PLATFORM(GTK) || PLATFORM(WPE)
 
 ServerTimingEnabled:
   type: bool
@@ -1511,6 +1525,12 @@ CaptureVideoInGPUProcessEnabled:
   webcoreBinding: none
   condition: ENABLE(MEDIA_STREAM)
 
+AspectRatioOfImgFromWidthAndHeightEnabled:
+  type: bool
+  defaultValue: false
+  humanReadableName: "Aspect ratio of <img> from width and height"
+  humanReadableDescription: "Map HTML attributes width/height to the default aspect ratio of <img>"
+  category: experimental
 
 # For internal features:
 # The type should be boolean.
@@ -1679,7 +1699,7 @@ LayoutFormattingContextEnabled:
 
 LayoutFormattingContextIntegrationEnabled:
   type: bool
-  defaultValue: false
+  defaultValue: true
   humanReadableName: "Next-generation line layout integration (LFC)"
   humanReadableDescription: "Enable next-generation line layout integration (LFC)"
   category: internal
@@ -1890,7 +1910,7 @@ UseGPUProcessForMedia:
 
 IsInAppBrowserPrivacyEnabled:
     type: bool
-    defaultValue: true
+    defaultValue: false
     humanReadableName: "In-App Browser Privacy"
     humanReadableDescription: "Enable In-App Browser Privacy"
     webcoreBinding: RuntimeEnabledFeatures

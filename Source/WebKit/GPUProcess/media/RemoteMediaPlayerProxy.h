@@ -29,10 +29,13 @@
 
 #include "Connection.h"
 #include "MediaPlayerPrivateRemoteIdentifier.h"
+#include "MessageReceiver.h"
 #include "RemoteMediaPlayerConfiguration.h"
 #include "RemoteMediaPlayerProxyConfiguration.h"
 #include "RemoteMediaPlayerState.h"
 #include "RemoteMediaResourceIdentifier.h"
+#include "SandboxExtension.h"
+#include "TrackPrivateRemoteIdentifier.h"
 #include <WebCore/Cookie.h>
 #include <WebCore/MediaPlayer.h>
 #include <WebCore/PlatformMediaResourceLoader.h>
@@ -42,25 +45,39 @@
 #include <wtf/Vector.h>
 #include <wtf/WeakPtr.h>
 
+namespace WebCore {
+class AudioTrackPrivate;
+class VideoTrackPrivate;
+}
+
 namespace WebKit {
 
+using LayerHostingContextID = uint32_t;
+class LayerHostingContext;
+class RemoteAudioTrackProxy;
 class RemoteMediaPlayerManagerProxy;
+class RemoteVideoTrackProxy;
 
 class RemoteMediaPlayerProxy final
     : public CanMakeWeakPtr<RemoteMediaPlayerProxy>
-    , public WebCore::MediaPlayerClient {
+    , public WebCore::MediaPlayerClient
+    , private IPC::MessageReceiver {
     WTF_MAKE_FAST_ALLOCATED;
 public:
     RemoteMediaPlayerProxy(RemoteMediaPlayerManagerProxy&, MediaPlayerPrivateRemoteIdentifier, Ref<IPC::Connection>&&, WebCore::MediaPlayerEnums::MediaEngineIdentifier, RemoteMediaPlayerProxyConfiguration&&);
     ~RemoteMediaPlayerProxy();
 
+    MediaPlayerPrivateRemoteIdentifier idendifier() const { return m_id; }
     void invalidate();
+
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
 
     void getConfiguration(RemoteMediaPlayerConfiguration&);
 
-    void prepareForPlayback(bool privateMode, WebCore::MediaPlayerEnums::Preload, bool preservesPitch, bool prepareForRendering);
+    void prepareForPlayback(bool privateMode, WebCore::MediaPlayerEnums::Preload, bool preservesPitch, bool prepareForRendering, WebCore::LayoutRect, float videoContentScale, CompletionHandler<void(Optional<LayerHostingContextID>&&)>&&);
+    void prepareForRendering();
 
-    void load(const URL&, const WebCore::ContentType&, const String&, CompletionHandler<void(RemoteMediaPlayerConfiguration&&)>&&);
+    void load(URL&&, Optional<SandboxExtension::Handle>&&, const WebCore::ContentType&, const String&, CompletionHandler<void(RemoteMediaPlayerConfiguration&&)>&&);
     void cancelLoad();
 
     void prepareToPlay();
@@ -78,8 +95,6 @@ public:
     void setPrivateBrowsingMode(bool);
     void setPreservesPitch(bool);
 
-    void prepareForRendering();
-    void setSize(const WebCore::IntSize&);
     void setVisible(bool);
     void setShouldMaintainAspectRatio(bool);
     void setVideoFullscreenFrame(WebCore::FloatRect);
@@ -87,6 +102,26 @@ public:
     void acceleratedRenderingStateChanged(bool);
     void setShouldDisableSleep(bool);
     void setRate(double);
+
+    void audioTrackSetEnabled(TrackPrivateRemoteIdentifier, bool);
+    void videoTrackSetSelected(TrackPrivateRemoteIdentifier, bool);
+
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+    void setWirelessVideoPlaybackDisabled(bool);
+    void setShouldPlayToPlaybackTarget(bool);
+#endif
+
+#if ENABLE(LEGACY_ENCRYPTED_MEDIA)
+    void keyAdded();
+#endif
+
+    void beginSimulatedHDCPError();
+    void endSimulatedHDCPError();
+
+    void notifyActiveSourceBuffersChanged();
+
+    void applicationWillResignActive();
+    void applicationDidBecomeActive();
 
     Ref<WebCore::PlatformMediaResource> requestResource(WebCore::ResourceRequest&&, WebCore::PlatformMediaResourceLoader::LoadOptions);
     void removeResource(RemoteMediaResourceIdentifier);
@@ -105,6 +140,11 @@ private:
     void mediaPlayerBufferedTimeRangesChanged() final;
     void mediaPlayerSeekableTimeRangesChanged() final;
     bool mediaPlayerRenderingCanBeAccelerated() final;
+
+    void mediaPlayerDidAddAudioTrack(WebCore::AudioTrackPrivate&) final;
+    void mediaPlayerDidRemoveAudioTrack(WebCore::AudioTrackPrivate&) final;
+    void mediaPlayerDidAddVideoTrack(WebCore::VideoTrackPrivate&) final;
+    void mediaPlayerDidRemoveVideoTrack(WebCore::VideoTrackPrivate&) final;
 
     // Not implemented
     void mediaPlayerResourceNotSupported() final;
@@ -126,7 +166,7 @@ private:
     void mediaPlayerWaitingForKeyChanged() final;
 #endif
 
-    void mediaPlayerCurrentPlaybackTargetIsWirelessChanged() final;
+    void mediaPlayerCurrentPlaybackTargetIsWirelessChanged(bool) final;
 
     String mediaPlayerReferrer() const final;
     String mediaPlayerUserAgent() const final;
@@ -146,12 +186,8 @@ private:
     bool mediaPlayerShouldUsePersistentCache() const final;
     const String& mediaPlayerMediaCacheDirectory() const final;
 
-    void mediaPlayerDidAddAudioTrack(WebCore::AudioTrackPrivate&) final;
     void mediaPlayerDidAddTextTrack(WebCore::InbandTextTrackPrivate&) final;
-    void mediaPlayerDidAddVideoTrack(WebCore::VideoTrackPrivate&) final;
-    void mediaPlayerDidRemoveAudioTrack(WebCore::AudioTrackPrivate&) final;
     void mediaPlayerDidRemoveTextTrack(WebCore::InbandTextTrackPrivate&) final;
-    void mediaPlayerDidRemoveVideoTrack(WebCore::VideoTrackPrivate&) final;
 
     void textTrackRepresentationBoundsChanged(const WebCore::IntRect&) final;
 
@@ -185,9 +221,13 @@ private:
     const void* mediaPlayerLogIdentifier() { return reinterpret_cast<const void*>(m_configuration.logIdentifier); }
 #endif
 
+    HashMap<WebCore::AudioTrackPrivate*, Ref<RemoteAudioTrackProxy>> m_audioTracks;
+    HashMap<WebCore::VideoTrackPrivate*, Ref<RemoteVideoTrackProxy>> m_videoTracks;
     MediaPlayerPrivateRemoteIdentifier m_id;
+    RefPtr<SandboxExtension> m_sandboxExtension;
     Ref<IPC::Connection> m_webProcessConnection;
     RefPtr<WebCore::MediaPlayer> m_player;
+    std::unique_ptr<LayerHostingContext> m_layerHostingContext;
     RemoteMediaPlayerManagerProxy& m_manager;
     WebCore::MediaPlayerEnums::MediaEngineIdentifier m_engineIdentifier;
     Vector<WebCore::ContentType> m_typesRequiringHardwareSupport;
@@ -197,6 +237,8 @@ private:
     bool m_seekableChanged { true };
     bool m_bufferedChanged { true };
     bool m_renderingCanBeAccelerated { true };
+    WebCore::LayoutRect m_videoContentBoxRect;
+    float m_videoContentScale { 1.0 };
 
 #if !RELEASE_LOG_DISABLED
     const Logger& m_logger;

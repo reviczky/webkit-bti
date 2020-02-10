@@ -2783,7 +2783,7 @@ void SpeculativeJIT::compile(Node* node)
 
         flushRegisters();
         callOperation(m_jit.isStrictModeFor(node->origin.semantic) ? operationPutByValWithThisStrict : operationPutByValWithThis,
-            NoResult, TrustedImmPtr::weakPointer(m_graph, m_graph.globalObjectFor(node->origin.semantic)), baseRegs, thisRegs, propertyRegs, valueRegs);
+            TrustedImmPtr::weakPointer(m_graph, m_graph.globalObjectFor(node->origin.semantic)), baseRegs, thisRegs, propertyRegs, valueRegs);
         m_jit.exceptionCheck();
 
         noResult(node);
@@ -3092,6 +3092,11 @@ void SpeculativeJIT::compile(Node* node)
         
     case ToPrimitive: {
         compileToPrimitive(node);
+        break;
+    }
+
+    case ToPropertyKey: {
+        compileToPropertyKey(node);
         break;
     }
 
@@ -4175,6 +4180,10 @@ void SpeculativeJIT::compile(Node* node)
 
     case CheckStructureOrEmpty:
         DFG_CRASH(m_jit.graph(), node, "CheckStructureOrEmpty only used in 64-bit DFG");
+        break;
+
+    case CheckArrayOrEmpty:
+        DFG_CRASH(m_jit.graph(), node, "CheckArrayOrEmpty only used in 64-bit DFG");
         break;
         
     case FilterCallLinkStatus:

@@ -77,17 +77,22 @@ void InputMethodFilter::setContext(WebKitInputMethodContext* context)
     g_signal_connect_swapped(m_context.get(), "committed", G_CALLBACK(committedCallback), this);
     g_signal_connect_swapped(m_context.get(), "delete-surrounding", G_CALLBACK(deleteSurroundingCallback), this);
 
+    notifyContentType();
+
     if (isEnabled() && isViewFocused())
         notifyFocusedIn();
 }
 
 void InputMethodFilter::setState(Optional<InputMethodState>&& state)
 {
-    if (!state)
+    bool focusChanged = state.hasValue() != m_state.hasValue();
+    if (focusChanged && !state)
         notifyFocusedOut();
 
     m_state = WTFMove(state);
-    if (isEnabled() && isViewFocused())
+    notifyContentType();
+
+    if (focusChanged && isEnabled() && isViewFocused())
         notifyFocusedIn();
 }
 
@@ -172,7 +177,8 @@ static WebKitInputHints toWebKitHints(const OptionSet<InputMethodState::Hint>& h
         wkHints |= WEBKIT_INPUT_HINT_INHIBIT_OSK;
     return static_cast<WebKitInputHints>(wkHints);
 }
-void InputMethodFilter::notifyFocusedIn()
+
+void InputMethodFilter::notifyContentType()
 {
     if (!isEnabled() || !m_context)
         return;
@@ -181,6 +187,13 @@ void InputMethodFilter::notifyFocusedIn()
     webkit_input_method_context_set_input_purpose(m_context.get(), toWebKitPurpose(m_state->purpose));
     webkit_input_method_context_set_input_hints(m_context.get(), toWebKitHints(m_state->hints));
     g_object_thaw_notify(G_OBJECT(m_context.get()));
+}
+
+void InputMethodFilter::notifyFocusedIn()
+{
+    if (!isEnabled() || !m_context)
+        return;
+
     webkit_input_method_context_notify_focus_in(m_context.get());
 }
 
@@ -210,20 +223,24 @@ void InputMethodFilter::notifyCursorRect(const IntRect& cursorRect)
     webkit_input_method_context_notify_cursor_area(m_context.get(), translatedRect.x(), translatedRect.y(), translatedRect.width(), translatedRect.height());
 }
 
-void InputMethodFilter::notifySurrounding(const String& text, uint64_t cursorPosition)
+void InputMethodFilter::notifySurrounding(const String& text, uint64_t cursorPosition, uint64_t selectionPosition)
 {
     if (!isEnabled() || !m_context)
         return;
 
-    if (m_surrounding.text == text && m_surrounding.cursorPosition == cursorPosition)
+    if (m_surrounding.text == text && m_surrounding.cursorPosition == cursorPosition && m_surrounding.selectionPosition == selectionPosition)
         return;
 
     m_surrounding.text = text;
     m_surrounding.cursorPosition = cursorPosition;
+    m_surrounding.selectionPosition = selectionPosition;
 
     auto textUTF8 = m_surrounding.text.utf8();
     auto cursorPositionUTF8 = cursorPosition != text.length() ? text.substring(0, cursorPosition).utf8().length() : textUTF8.length();
-    webkit_input_method_context_notify_surrounding(m_context.get(), textUTF8.data(), textUTF8.length(), cursorPositionUTF8);
+    auto selectionPositionUTF8 = cursorPositionUTF8;
+    if (cursorPosition != selectionPosition)
+        selectionPositionUTF8 = selectionPosition != text.length() ? text.substring(0, selectionPosition).utf8().length() : textUTF8.length();
+    webkit_input_method_context_notify_surrounding(m_context.get(), textUTF8.data(), textUTF8.length(), cursorPositionUTF8, selectionPositionUTF8);
 }
 
 void InputMethodFilter::preeditStarted()

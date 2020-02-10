@@ -63,7 +63,6 @@ set(WTF_PUBLIC_HEADERS
     FastBitVector.h
     FastMalloc.h
     FastTLS.h
-    FeatureDefines.h
     FileMetadata.h
     FilePrintStream.h
     FileSystem.h
@@ -160,7 +159,6 @@ set(WTF_PUBLIC_HEADERS
     Packed.h
     PackedRef.h
     PackedRefPtr.h
-    PackedIntVector.h
     PageAllocation.h
     PageBlock.h
     PageReservation.h
@@ -172,7 +170,17 @@ set(WTF_PUBLIC_HEADERS
     ParallelVectorIterator.h
     ParkingLot.h
     Platform.h
+    PlatformCallingConventions.h
+    PlatformCPU.h
+    PlatformEnable.h
+    PlatformEnableCocoa.h
+    PlatformEnableWinApple.h
+    PlatformEnableWinCairo.h
+    PlatformHave.h
+    PlatformLegacy.h
+    PlatformOS.h
     PlatformRegisters.h
+    PlatformUse.h
     PointerComparison.h
     PointerPreparations.h
     PrintStream.h

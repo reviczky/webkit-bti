@@ -123,6 +123,7 @@ WI.loaded = function()
         WI.workerManager = new WI.WorkerManager,
         WI.domDebuggerManager = new WI.DOMDebuggerManager,
         WI.canvasManager = new WI.CanvasManager,
+        WI.animationManager = new WI.AnimationManager,
     ];
 
     // Register for events.
@@ -147,13 +148,13 @@ WI.loaded = function()
         WI.SourcesTabContentView.Type,
         WI.TimelineTabContentView.Type,
         WI.StorageTabContentView.Type,
-        WI.CanvasTabContentView.Type,
+        WI.GraphicsTabContentView.Type,
         WI.AuditTabContentView.Type,
         WI.ConsoleTabContentView.Type,
     ]);
     WI._selectedTabIndexSetting = new WI.Setting("selected-tab-index", 0);
 
-    // Replace the Debugger/Resources Tab with the Sources Tab.
+    // FIXME: <https://webkit.org/b/205826> Web Inspector: remove legacy code for replacing the Resources Tab and Debugger Tab with the Sources Tab
     let debuggerIndex = WI._openTabsSetting.value.indexOf("debugger");
     let resourcesIndex = WI._openTabsSetting.value.indexOf("resources");
     if (debuggerIndex >= 0 || resourcesIndex >= 0) {
@@ -171,6 +172,13 @@ WI.loaded = function()
 
         if (WI._selectedTabIndexSetting.value === debuggerIndex || WI._selectedTabIndexSetting.value === resourcesIndex)
             WI._selectedTabIndexSetting.value = sourcesIndex;
+    }
+
+    // FIXME: <https://webkit.org/b/205827> Web Inspector: remove legacy code for replacing the Canvas Tab with the Graphics Tab
+    let canvasIndex = WI._openTabsSetting.value.indexOf("canvas");
+    if (canvasIndex >= 0) {
+        WI._openTabsSetting.value.splice(canvasIndex, 1, WI.GraphicsTabContentView.Type);
+        WI._openTabsSetting.save();
     }
 
     // State.
@@ -400,7 +408,7 @@ WI.contentLoaded = function()
     WI._inspectModeToolbarButton.addEventListener(WI.ButtonNavigationItem.Event.Clicked, WI._toggleInspectMode);
 
     // COMPATIBILITY (iOS 12.2): Page.overrideSetting did not exist.
-    if (InspectorFrontendHost.isRemote && InspectorBackend.hasCommand("Page.overrideUserAgent") && InspectorBackend.hasCommand("Page.overrideSetting")) {
+    if ((InspectorFrontendHost.isRemote || WI.isDebugUIEnabled()) && InspectorBackend.hasCommand("Page.overrideUserAgent") && InspectorBackend.hasCommand("Page.overrideSetting")) {
         const deviceSettingsTooltip = WI.UIString("Device Settings");
         WI._deviceSettingsToolbarButton = new WI.ActivateButtonToolbarItem("device-settings", deviceSettingsTooltip, deviceSettingsTooltip, "Images/Device.svg");
         WI._deviceSettingsToolbarButton.addEventListener(WI.ButtonNavigationItem.Event.Clicked, WI._handleDeviceSettingsToolbarButtonClicked);
@@ -465,7 +473,7 @@ WI.contentLoaded = function()
         WI.SourcesTabContentView,
         WI.TimelineTabContentView,
         WI.StorageTabContentView,
-        WI.CanvasTabContentView,
+        WI.GraphicsTabContentView,
         WI.LayersTabContentView,
         WI.AuditTabContentView,
         WI.ConsoleTabContentView,
@@ -1223,11 +1231,8 @@ WI.tabContentViewClassForRepresentedObject = function(representedObject)
         || representedObject instanceof WI.AuditTestCaseResult || representedObject instanceof WI.AuditTestGroupResult)
         return WI.AuditTabContentView;
 
-    if (representedObject instanceof WI.CanvasCollection)
-        return WI.CanvasTabContentView;
-
-    if (representedObject instanceof WI.Recording)
-        return WI.CanvasTabContentView;
+    if (representedObject instanceof WI.Canvas || representedObject instanceof WI.ShaderProgram || representedObject instanceof WI.Recording || representedObject instanceof WI.Animation)
+        return WI.GraphicsTabContentView;
 
     return null;
 };
@@ -2101,10 +2106,12 @@ WI._handleDeviceSettingsToolbarButtonClicked = function(event)
         WI._deviceSettingsPopover.present(calculateTargetFrame(), preferredEdges);
     };
 
-    let contentElement = document.createElement("table");
+    let contentElement = document.createElement("div");
     contentElement.classList.add("device-settings-content");
 
-    let userAgentRow = contentElement.appendChild(document.createElement("tr"));
+    let table = contentElement.appendChild(document.createElement("table"));
+
+    let userAgentRow = table.appendChild(document.createElement("tr"));
 
     let userAgentTitle = userAgentRow.appendChild(document.createElement("td"));
     userAgentTitle.textContent = WI.UIString("User Agent:");
@@ -2232,7 +2239,7 @@ WI._handleDeviceSettingsToolbarButtonClicked = function(event)
         if (!group.columns.some((column) => column.some((item) => item.setting)))
             continue;
 
-        let settingsGroupRow = contentElement.appendChild(document.createElement("tr"));
+        let settingsGroupRow = table.appendChild(document.createElement("tr"));
 
         let settingsGroupTitle = settingsGroupRow.appendChild(document.createElement("td"));
         settingsGroupTitle.textContent = group.name;
@@ -2250,6 +2257,8 @@ WI._handleDeviceSettingsToolbarButtonClicked = function(event)
                 createCheckbox(columnElement, item.name, item.setting, item.value);
         }
     }
+
+    contentElement.appendChild(WI.createReferencePageLink("device-settings"));
 
     WI._deviceSettingsPopover.presentNewContentWithFrame(contentElement, calculateTargetFrame(), preferredEdges);
 };
@@ -2821,6 +2830,23 @@ WI.createNavigationItemHelp = function(formatString, navigationItem)
 
     String.format(formatString, [wrapperElement], String.standardFormatters, containerElement, append);
     return containerElement;
+};
+
+WI.createReferencePageLink = function(page, fragment)
+{
+    let url = "https://webkit.org/web-inspector/" + page + "/";
+    if (fragment)
+        url += "#" + fragment;
+
+    let wrapper = document.createElement("span");
+    wrapper.className = "reference-page-link-container";
+
+    let link = wrapper.appendChild(document.createElement("a"));
+    link.className = "reference-page-link";
+    link.href = link.title = url;
+    link.textContent = "?";
+
+    return wrapper;
 };
 
 WI.createGoToArrowButton = function()

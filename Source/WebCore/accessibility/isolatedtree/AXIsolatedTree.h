@@ -27,7 +27,6 @@
 
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
 
-#include "AXIsolatedTreeNode.h"
 #include "PageIdentifier.h"
 #include <wtf/HashMap.h>
 #include <wtf/RefPtr.h>
@@ -44,7 +43,9 @@ public:
     static Ref<AXIsolatedTree> create();
     virtual ~AXIsolatedTree();
 
-    WEBCORE_EXPORT static Ref<AXIsolatedTree> createTreeForPageID(PageIdentifier);
+    static Ref<AXIsolatedTree> createTreeForPageID(PageIdentifier);
+    static void removeTreeForPageID(PageIdentifier);
+
     WEBCORE_EXPORT static RefPtr<AXIsolatedTree> treeForPageID(PageIdentifier);
     WEBCORE_EXPORT static RefPtr<AXIsolatedTree> treeForID(AXIsolatedTreeID);
     AXObjectCache* axObjectCache() const { return m_axObjectCache; }
@@ -63,7 +64,7 @@ public:
     void setFocusedNodeID(AXID);
     
     // Call on AX thread
-    WEBCORE_EXPORT void applyPendingChanges();
+    void applyPendingChanges();
 
     AXIsolatedTreeID treeIdentifier() const { return m_treeID; }
 

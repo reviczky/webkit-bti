@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2019-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,6 +32,7 @@
 #include "RemoteMediaPlayerState.h"
 #include "RemoteMediaResourceIdentifier.h"
 #include "RemoteMediaResourceProxy.h"
+#include "TrackPrivateRemoteIdentifier.h"
 #include <WebCore/MediaPlayerPrivate.h>
 #include <wtf/LoggerHelper.h>
 #include <wtf/MediaTime.h>
@@ -39,9 +40,14 @@
 
 namespace WebKit {
 
+class AudioTrackPrivateRemote;
+class VideoTrackPrivateRemote;
+struct TrackPrivateRemoteConfiguration;
+
 class MediaPlayerPrivateRemote final
     : public CanMakeWeakPtr<MediaPlayerPrivateRemote>
     , public WebCore::MediaPlayerPrivateInterface
+    , private IPC::MessageReceiver
 #if !RELEASE_LOG_DISABLED
     , private LoggerHelper
 #endif
@@ -53,12 +59,14 @@ public:
     }
 
     MediaPlayerPrivateRemote(WebCore::MediaPlayer*, WebCore::MediaPlayerEnums::MediaEngineIdentifier, MediaPlayerPrivateRemoteIdentifier, RemoteMediaPlayerManager&, const RemoteMediaPlayerConfiguration&);
-
     ~MediaPlayerPrivateRemote();
+
+    void didReceiveMessage(IPC::Connection&, IPC::Decoder&) final;
 
     void invalidate() { m_invalid = true; }
     WebCore::MediaPlayerEnums::MediaEngineIdentifier remoteEngineIdentifier() const { return m_remoteEngineIdentifier; }
-    MediaPlayerPrivateRemoteIdentifier playerItentifier() const { return m_id; }
+    MediaPlayerPrivateRemoteIdentifier itentifier() const { return m_id; }
+    IPC::Connection& connection() const { return m_manager.gpuProcessConnection().connection(); }
 
     void networkStateChanged(RemoteMediaPlayerState&&);
     void readyStateChanged(RemoteMediaPlayerState&&);
@@ -72,9 +80,31 @@ public:
     void updateCachedState(RemoteMediaPlayerState&&);
     void characteristicChanged(bool hasAudio, bool hasVideo, WebCore::MediaPlayerEnums::MovieLoadType);
     void sizeChanged(WebCore::FloatSize);
+    void firstVideoFrameAvailable();
 
-    void requestResource(RemoteMediaResourceIdentifier, WebCore::ResourceRequest&&, WebCore::PlatformMediaResourceLoader::LoadOptions);
+    void addRemoteAudioTrack(TrackPrivateRemoteIdentifier, TrackPrivateRemoteConfiguration&&);
+    void removeRemoteAudioTrack(TrackPrivateRemoteIdentifier);
+    void remoteAudioTrackConfigurationChanged(TrackPrivateRemoteIdentifier, TrackPrivateRemoteConfiguration&&);
+
+    void addRemoteVideoTrack(TrackPrivateRemoteIdentifier, TrackPrivateRemoteConfiguration&&);
+    void removeRemoteVideoTrack(TrackPrivateRemoteIdentifier);
+    void remoteVideoTrackConfigurationChanged(TrackPrivateRemoteIdentifier, TrackPrivateRemoteConfiguration&&);
+
+    void requestResource(RemoteMediaResourceIdentifier, WebCore::ResourceRequest&&, WebCore::PlatformMediaResourceLoader::LoadOptions, CompletionHandler<void()>&&);
     void removeResource(RemoteMediaResourceIdentifier);
+    void resourceNotSupported();
+
+    void engineUpdated();
+
+    void activeSourceBuffersChanged();
+
+#if ENABLE(ENCRYPTED_MEDIA)
+    void waitingForKeyChanged();
+#endif
+
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+    void currentPlaybackTargetIsWirelessChanged(bool);
+#endif
 
 #if !RELEASE_LOG_DISABLED
     const Logger& logger() const final { return *m_logger; }
@@ -109,7 +139,6 @@ private:
 
     bool shouldIgnoreIntrinsicSize() final;
 
-    // Unimplemented
     PlatformLayer* platformLayer() const final;
 
 #if PLATFORM(IOS_FAMILY) || (PLATFORM(MAC) && ENABLE(VIDEO_PRESENTATION_MODE))
@@ -182,7 +211,10 @@ private:
     unsigned long long totalBytes() const final;
     bool didLoadingProgress() const final;
 
-    void setSize(const WebCore::IntSize&) final;
+    // In the Cocoa WebKit port, MediaPlayerPrivateAVFoundationObjC::setSize() does nothing,
+    // so the Web process does not need to send IPC messages to call it in the GPU process.
+    // Other WebKit ports may need to do that.
+    void setSize(const WebCore::IntSize&) final { }
 
     void paint(WebCore::GraphicsContext&, const WebCore::FloatRect&) final;
 
@@ -302,6 +334,7 @@ private:
 
     WebCore::MediaPlayer* m_player { nullptr };
     RefPtr<WebCore::PlatformMediaResourceLoader> m_mediaResourceLoader;
+    RetainPtr<PlatformLayer> m_videoLayer;
     RemoteMediaPlayerManager& m_manager;
     WebCore::MediaPlayerEnums::MediaEngineIdentifier m_remoteEngineIdentifier;
     MediaPlayerPrivateRemoteIdentifier m_id;
@@ -311,6 +344,8 @@ private:
     std::unique_ptr<WebCore::PlatformTimeRanges> m_cachedBufferedTimeRanges;
 
     HashMap<RemoteMediaResourceIdentifier, RefPtr<WebCore::PlatformMediaResource>> m_mediaResources;
+    HashMap<TrackPrivateRemoteIdentifier, Ref<AudioTrackPrivateRemote>> m_audioTracks;
+    HashMap<TrackPrivateRemoteIdentifier, Ref<VideoTrackPrivateRemote>> m_videoTracks;
 
     double m_volume { 1 };
     double m_rate { 1 };
@@ -320,6 +355,7 @@ private:
     bool m_hasVideo { false };
     bool m_muted { false };
     bool m_seeking { false };
+    bool m_isCurrentPlaybackTargetWireless { false };
 
 #if !RELEASE_LOG_DISABLED
     RefPtr<const Logger> m_logger;

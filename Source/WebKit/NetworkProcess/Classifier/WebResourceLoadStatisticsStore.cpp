@@ -163,9 +163,23 @@ WebResourceLoadStatisticsStore::WebResourceLoadStatisticsStore(NetworkSession& n
 
             auto memoryStore = makeUnique<ResourceLoadStatisticsMemoryStore>(*this, m_statisticsQueue, shouldIncludeLocalhost);
             downcast<ResourceLoadStatisticsDatabaseStore>(*m_statisticsStore.get()).populateFromMemoryStore(*memoryStore);
+
+            auto legacyPlistFilePath = FileSystem::pathByAppendingComponent(resourceLoadStatisticsDirectory, "full_browsing_session_resourceLog.plist");
+            if (FileSystem::fileExists(legacyPlistFilePath))
+                FileSystem::deleteFile(legacyPlistFilePath);
+
         } else {
             m_statisticsStore = makeUnique<ResourceLoadStatisticsMemoryStore>(*this, m_statisticsQueue, shouldIncludeLocalhost);
             m_persistentStorage = makeUnique<ResourceLoadStatisticsPersistentStorage>(downcast<ResourceLoadStatisticsMemoryStore>(*m_statisticsStore), m_statisticsQueue, resourceLoadStatisticsDirectory);
+
+            auto databaseStorageFilePath = FileSystem::pathByAppendingComponent(resourceLoadStatisticsDirectory, "observations.db");
+            auto databaseStorageTemporaryWalFilePath = FileSystem::pathByAppendingComponent(resourceLoadStatisticsDirectory, "observations.db-wal");
+            auto databaseStorageTemporaryShmFilePath = FileSystem::pathByAppendingComponent(resourceLoadStatisticsDirectory, "observations.db-shm");
+            if (FileSystem::fileExists(databaseStorageFilePath)) {
+                FileSystem::deleteFile(databaseStorageFilePath);
+                FileSystem::deleteFile(databaseStorageTemporaryWalFilePath);
+                FileSystem::deleteFile(databaseStorageTemporaryShmFilePath);
+            }
         }
 
         // FIXME(193297): This should be revised after the UIProcess version goes away.
@@ -230,7 +244,19 @@ void WebResourceLoadStatisticsStore::populateMemoryStoreFromDisk(CompletionHandl
             m_persistentStorage->populateMemoryStoreFromDisk([protectedThis = WTFMove(protectedThis), completionHandler = WTFMove(completionHandler)]() mutable {
                 postTaskReply(WTFMove(completionHandler));
             });
-        else
+        else if (is<ResourceLoadStatisticsDatabaseStore>(*m_statisticsStore)) {
+            auto& databaseStore = downcast<ResourceLoadStatisticsDatabaseStore>(*m_statisticsStore);
+            if (databaseStore.isNewResourceLoadStatisticsDatabaseFile()) {
+                m_statisticsStore->grandfatherExistingWebsiteData([protectedThis = WTFMove(protectedThis), completionHandler = WTFMove(completionHandler)]() mutable {
+                    postTaskReply(WTFMove(completionHandler));
+                });
+                databaseStore.setIsNewResourceLoadStatisticsDatabaseFile(false);
+            } else
+                postTaskReply([this, protectedThis = WTFMove(protectedThis), completionHandler = WTFMove(completionHandler)]() mutable {
+                    logTestingEvent("PopulatedWithoutGrandfathering"_s);
+                    completionHandler();
+                });
+        } else
             postTaskReply(WTFMove(completionHandler));
     });
 }
@@ -924,9 +950,11 @@ void WebResourceLoadStatisticsStore::scheduleClearInMemoryAndPersistent(ShouldGr
 
         m_statisticsStore->clear([this, protectedThis = protectedThis.copyRef(), shouldGrandfather, callbackAggregator = callbackAggregator.copyRef()] () mutable {
             if (shouldGrandfather == ShouldGrandfatherStatistics::Yes) {
-                if (m_statisticsStore)
+                if (m_statisticsStore) {
                     m_statisticsStore->grandfatherExistingWebsiteData([callbackAggregator = WTFMove(callbackAggregator)]() mutable { });
-                else
+                    if (is<ResourceLoadStatisticsDatabaseStore>(*m_statisticsStore))
+                        downcast<ResourceLoadStatisticsDatabaseStore>(*m_statisticsStore).setIsNewResourceLoadStatisticsDatabaseFile(true);
+                } else
                     RELEASE_LOG(ResourceLoadStatistics, "WebResourceLoadStatisticsStore::scheduleClearInMemoryAndPersistent After being cleared, m_statisticsStore is null when trying to grandfather data.");
             }
         });
@@ -1138,6 +1166,45 @@ void WebResourceLoadStatisticsStore::aggregatedThirdPartyData(CompletionHandler<
             completionHandler(WTFMove(thirdPartyData));
         });
     });
+}
+
+void WebResourceLoadStatisticsStore::suspend(CompletionHandler<void()>&& completionHandler)
+{
+    ASSERT(RunLoop::isMain());
+
+    CompletionHandlerCallingScope completionHandlerCaller(WTFMove(completionHandler));
+    Locker<Lock> stateLocker(m_stateLock);
+    if (m_state != State::Running)
+        return;
+    m_state = State::WillSuspend;
+
+    postTask([this, completionHandler = completionHandlerCaller.release()] () mutable {
+        Locker<Lock> stateLocker(m_stateLock);
+        ASSERT(m_state != State::Suspended);
+
+        if (m_state != State::WillSuspend) {
+            postTaskReply(WTFMove(completionHandler));
+            return;
+        }
+
+        m_state = State::Suspended;
+        postTaskReply(WTFMove(completionHandler));
+
+        while (m_state == State::Suspended)
+            m_stateChangeCondition.wait(m_stateLock);
+        ASSERT(m_state == State::Running);
+    });
+}
+
+void WebResourceLoadStatisticsStore::resume()
+{
+    ASSERT(RunLoop::isMain());
+
+    Locker<Lock> stateLocker(m_stateLock);
+    auto previousState = m_state;
+    m_state = State::Running;
+    if (previousState == State::Suspended)
+        m_stateChangeCondition.notifyOne();
 }
 
 } // namespace WebKit

@@ -27,6 +27,7 @@
 
 #if PLATFORM(IOS_FAMILY)
 
+#include "CSSValueKey.h"
 #include "RenderThemeCocoa.h"
 
 #if USE(SYSTEM_PREVIEW)
@@ -58,6 +59,13 @@ public:
 #if USE(SYSTEM_PREVIEW)
     void paintSystemPreviewBadge(Image&, const PaintInfo&, const FloatRect&) override;
 #endif
+
+    using CSSValueToSystemColorMap = HashMap<CSSValueKey, Color>;
+
+    WEBCORE_EXPORT static const CSSValueToSystemColorMap& cssValueToSystemColorMap();
+    WEBCORE_EXPORT static void setCSSValueToSystemColorMap(CSSValueToSystemColorMap&&);
+
+    WEBCORE_EXPORT static void setFocusRingColor(const Color&);
 
 protected:
     LengthBox popupInternalPaddingBox(const RenderStyle&) const override;

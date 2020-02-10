@@ -89,6 +89,7 @@ StyleRareNonInheritedData::StyleRareNonInheritedData()
     , backfaceVisibility(static_cast<unsigned>(RenderStyle::initialBackfaceVisibility()))
     , userDrag(static_cast<unsigned>(RenderStyle::initialUserDrag()))
     , textOverflow(static_cast<unsigned>(RenderStyle::initialTextOverflow()))
+    , useSmoothScrolling(static_cast<unsigned>(RenderStyle::initialUseSmoothScrolling()))
     , marginBeforeCollapse(static_cast<unsigned>(MarginCollapse::Collapse))
     , marginAfterCollapse(static_cast<unsigned>(MarginCollapse::Collapse))
     , appearance(static_cast<unsigned>(RenderStyle::initialAppearance()))
@@ -147,8 +148,8 @@ inline StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonIn
     , boxShadow(o.boxShadow ? makeUnique<ShadowData>(*o.boxShadow) : nullptr)
     , willChange(o.willChange)
     , boxReflect(o.boxReflect)
-    , animations(o.animations ? makeUnique<AnimationList>(*o.animations) : nullptr)
-    , transitions(o.transitions ? makeUnique<AnimationList>(*o.transitions) : nullptr)
+    , animations(o.animations ? o.animations->copy() : o.animations)
+    , transitions(o.transitions ? o.transitions->copy() : o.transitions)
     , mask(o.mask)
     , maskBoxImage(o.maskBoxImage)
     , pageSize(o.pageSize)
@@ -182,6 +183,7 @@ inline StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonIn
     , backfaceVisibility(o.backfaceVisibility)
     , userDrag(o.userDrag)
     , textOverflow(o.textOverflow)
+    , useSmoothScrolling(o.useSmoothScrolling)
     , marginBeforeCollapse(o.marginBeforeCollapse)
     , marginAfterCollapse(o.marginAfterCollapse)
     , appearance(o.appearance)
@@ -280,6 +282,7 @@ bool StyleRareNonInheritedData::operator==(const StyleRareNonInheritedData& o) c
         && backfaceVisibility == o.backfaceVisibility
         && userDrag == o.userDrag
         && textOverflow == o.textOverflow
+        && useSmoothScrolling == o.useSmoothScrolling
         && marginBeforeCollapse == o.marginBeforeCollapse
         && marginAfterCollapse == o.marginAfterCollapse
         && appearance == o.appearance

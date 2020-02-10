@@ -67,7 +67,7 @@ namespace JSC {
         WillExecuteProgram,
         DidExecuteProgram,
         DidEnterCallFrame,
-        DidReachBreakpoint,
+        DidReachDebuggerStatement,
         WillLeaveCallFrame,
         WillExecuteStatement,
         WillExecuteExpression,
@@ -144,9 +144,9 @@ namespace JSC {
 #endif
         
 #if ENABLE(COMPUTED_GOTO_OPCODES)
-#if !USE(LLINT_EMBEDDED_OPCODE_ID) || ASSERT_ENABLED
+#if !ENABLE(LLINT_EMBEDDED_OPCODE_ID) || ASSERT_ENABLED
         static HashMap<Opcode, OpcodeID>& opcodeIDTable(); // Maps Opcode => OpcodeID.
-#endif // !USE(LLINT_EMBEDDED_OPCODE_ID) || ASSERT_ENABLED
+#endif // !ENABLE(LLINT_EMBEDDED_OPCODE_ID) || ASSERT_ENABLED
 #endif // ENABLE(COMPUTED_GOTO_OPCODES)
     };
 

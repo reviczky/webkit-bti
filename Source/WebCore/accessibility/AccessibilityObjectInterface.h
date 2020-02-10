@@ -477,7 +477,7 @@ public:
 
     // When the corresponding WebCore object that this accessible object
     // represents is deleted, it must be detached.
-    virtual void detach(AccessibilityDetachmentType, AXObjectCache* = nullptr) = 0;
+    void detach(AccessibilityDetachmentType);
     virtual bool isDetached() const = 0;
 
     typedef Vector<RefPtr<AXCoreObject>> AccessibilityChildrenVector;
@@ -621,7 +621,7 @@ public:
     virtual bool hasSameFont(RenderObject*) const = 0;
     virtual bool hasSameFontColor(RenderObject*) const = 0;
     virtual bool hasSameStyle(RenderObject*) const = 0;
-    virtual bool isStaticText() const = 0;
+    bool isStaticText() const { return roleValue() == AccessibilityRole::StaticText; }
     virtual bool hasUnderline() const = 0;
     virtual bool hasHighlighting() const = 0;
 
@@ -1075,8 +1075,15 @@ public:
     virtual bool isDOMHidden() const = 0;
     virtual bool isHidden() const = 0;
 
-    virtual AccessibilityObjectWrapper* wrapper() const = 0;
-    virtual void setWrapper(AccessibilityObjectWrapper*) = 0;
+#if ENABLE(ACCESSIBILITY)
+    AccessibilityObjectWrapper* wrapper() const { return m_wrapper.get(); }
+    void setWrapper(AccessibilityObjectWrapper* wrapper) { m_wrapper = wrapper; }
+    void detachWrapper(AccessibilityDetachmentType);
+#else
+    AccessibilityObjectWrapper* wrapper() const { return nullptr; }
+    void setWrapper(AccessibilityObjectWrapper*) { }
+    void detachWrapper(AccessibilityDetachmentType) { }
+#endif
 
     virtual void overrideAttachmentParent(AXCoreObject* parent) = 0;
 
@@ -1124,7 +1131,34 @@ public:
     virtual uint64_t sessionID() const = 0;
     virtual String documentURI() const = 0;
     virtual String documentEncoding() const = 0;
+private:
+    // Detaches this object from the objects it references and it is referenced by.
+    virtual void detachRemoteParts(AccessibilityDetachmentType) = 0;
+
+#if PLATFORM(COCOA)
+    RetainPtr<WebAccessibilityObjectWrapper> m_wrapper;
+#elif PLATFORM(WIN)
+    COMPtr<AccessibilityObjectWrapper> m_wrapper;
+#elif USE(ATK)
+    GRefPtr<WebKitAccessible> m_wrapper;
+#endif
+    virtual void detachPlatformWrapper(AccessibilityDetachmentType) = 0;
 };
+
+inline void AXCoreObject::detach(AccessibilityDetachmentType detachmentType)
+{
+    detachWrapper(detachmentType);
+    detachRemoteParts(detachmentType);
+    setObjectID(InvalidAXID);
+}
+
+#if ENABLE(ACCESSIBILITY)
+inline void AXCoreObject::detachWrapper(AccessibilityDetachmentType detachmentType)
+{
+    detachPlatformWrapper(detachmentType);
+    m_wrapper = nullptr;
+}
+#endif
 
 namespace Accessibility {
 

@@ -30,6 +30,8 @@
 
 #include "FloatingState.h"
 #include "InlineFormattingState.h"
+#include "LayoutContext.h"
+#include "Logging.h"
 #include "TableFormattingState.h"
 
 namespace WebCore {
@@ -131,15 +133,15 @@ LayoutUnit FormattingContext::Geometry::contentHeightForFormattingContextRoot(co
     auto bottom = borderAndPaddingTop;
     auto& formattingRootContainer = downcast<Container>(layoutBox);
     if (formattingRootContainer.establishesInlineFormattingContext()) {
-        auto& lineBoxes = downcast<InlineFormattingState>(layoutState.establishedFormattingState(formattingRootContainer)).displayInlineContent()->lineBoxes;
+        auto& lineBoxes = layoutState.establishedInlineFormattingState(formattingRootContainer).displayInlineContent()->lineBoxes;
         // Even empty containers generate one line. 
         ASSERT(!lineBoxes.isEmpty());
-        top = lineBoxes.first().logicalTop();
-        bottom = lineBoxes.last().logicalBottom();
+        top = lineBoxes.first().top();
+        bottom = lineBoxes.last().bottom();
     } else if (formattingRootContainer.establishesBlockFormattingContext() || formattingRootContainer.establishesTableFormattingContext() || formattingRootContainer.isDocumentBox()) {
         if (formattingRootContainer.hasInFlowChild()) {
-            auto& firstBoxGeometry = formattingContext.geometryForBox(*formattingRootContainer.firstInFlowChild(), EscapeType::AccessChildFormattingContext);
-            auto& lastBoxGeometry = formattingContext.geometryForBox(*formattingRootContainer.lastInFlowChild(), EscapeType::AccessChildFormattingContext);
+            auto& firstBoxGeometry = formattingContext.geometryForBox(*formattingRootContainer.firstInFlowChild(), EscapeReason::NeedsGeometryFromEstablishedFormattingContext);
+            auto& lastBoxGeometry = formattingContext.geometryForBox(*formattingRootContainer.lastInFlowChild(), EscapeReason::NeedsGeometryFromEstablishedFormattingContext);
             top = firstBoxGeometry.rectWithMargin().top();
             bottom = lastBoxGeometry.rectWithMargin().bottom();
         }
@@ -227,18 +229,18 @@ LayoutUnit FormattingContext::Geometry::staticVerticalPositionForOutOfFlowPositi
     LayoutUnit top;
     if (auto* previousInFlowSibling = layoutBox.previousInFlowSibling()) {
         // Add sibling offset
-        auto& previousInFlowBoxGeometry = formattingContext.geometryForBox(*previousInFlowSibling, FormattingContext::EscapeType::AccessChildFormattingContext);
+        auto& previousInFlowBoxGeometry = formattingContext.geometryForBox(*previousInFlowSibling, EscapeReason::OutOfFlowBoxNeedsInFlowGeometry);
         top += previousInFlowBoxGeometry.bottom() + previousInFlowBoxGeometry.nonCollapsedMarginAfter();
     } else {
         ASSERT(layoutBox.parent());
-        top = formattingContext.geometryForBox(*layoutBox.parent(), FormattingContext::EscapeType::AccessChildFormattingContext).contentBoxTop();
+        top = formattingContext.geometryForBox(*layoutBox.parent(), EscapeReason::OutOfFlowBoxNeedsInFlowGeometry).contentBoxTop();
     }
 
     // Resolve top all the way up to the containing block.
     auto& containingBlock = *layoutBox.containingBlock();
     // Start with the parent since we pretend that this box is normal flow.
     for (auto* container = layoutBox.parent(); container != &containingBlock; container = container->containingBlock()) {
-        auto& boxGeometry = formattingContext.geometryForBox(*container, FormattingContext::EscapeType::AccessChildFormattingContext);
+        auto& boxGeometry = formattingContext.geometryForBox(*container, EscapeReason::OutOfFlowBoxNeedsInFlowGeometry);
         // Display::Box::top is the border box top position in its containing block's coordinate system.
         top += boxGeometry.top();
         ASSERT(!container->isPositioned() || layoutBox.isFixedPositioned());
@@ -255,13 +257,13 @@ LayoutUnit FormattingContext::Geometry::staticHorizontalPositionForOutOfFlowPosi
     // Start with this box's border box offset from the parent's border box.
     auto& formattingContext = this->formattingContext();
     ASSERT(layoutBox.parent());
-    auto left = formattingContext.geometryForBox(*layoutBox.parent(), FormattingContext::EscapeType::AccessChildFormattingContext).contentBoxLeft();
+    auto left = formattingContext.geometryForBox(*layoutBox.parent(), EscapeReason::OutOfFlowBoxNeedsInFlowGeometry).contentBoxLeft();
 
     // Resolve left all the way up to the containing block.
     auto& containingBlock = *layoutBox.containingBlock();
     // Start with the parent since we pretend that this box is normal flow.
     for (auto* container = layoutBox.parent(); container != &containingBlock; container = container->containingBlock()) {
-        auto& boxGeometry = formattingContext.geometryForBox(*container, FormattingContext::EscapeType::AccessChildFormattingContext);
+        auto& boxGeometry = formattingContext.geometryForBox(*container, EscapeReason::OutOfFlowBoxNeedsInFlowGeometry);
         // Display::Box::left is the border box left position in its containing block's coordinate system.
         left += boxGeometry.left();
         ASSERT(!container->isPositioned() || layoutBox.isFixedPositioned());
@@ -283,9 +285,9 @@ LayoutUnit FormattingContext::Geometry::shrinkToFitWidth(const Box& formattingRo
 
     // Then the shrink-to-fit width is: min(max(preferred minimum width, available width), preferred width).
     auto intrinsicWidthConstraints = IntrinsicWidthConstraints { };
-    if (is<Container>(formattingRoot)) {
+    if (is<Container>(formattingRoot) && downcast<Container>(formattingRoot).hasInFlowOrFloatingChild()) {
         auto& root = downcast<Container>(formattingRoot);
-        auto& formattingStateForRoot = layoutState().createFormattingStateForFormattingRootIfNeeded(root);
+        auto& formattingStateForRoot = layoutState().ensureFormattingState(root);
         auto precomputedIntrinsicWidthConstraints = formattingStateForRoot.intrinsicWidthConstraints();
         if (!precomputedIntrinsicWidthConstraints)
             intrinsicWidthConstraints = LayoutContext::createFormattingContext(root, layoutState())->computedIntrinsicWidthConstraints();

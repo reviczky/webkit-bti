@@ -637,7 +637,9 @@ Optional<FloatQuad> ArgumentCoder<FloatQuad>::decode(Decoder& decoder)
         return WTF::nullopt;
     return floatQuad;
 }
+#endif // PLATFORM(IOS_FAMILY)
 
+#if ENABLE(META_VIEWPORT)
 void ArgumentCoder<ViewportArguments>::encode(Encoder& encoder, const ViewportArguments& viewportArguments)
 {
     SimpleArgumentCoder<ViewportArguments>::encode(encoder, viewportArguments);
@@ -655,8 +657,18 @@ Optional<ViewportArguments> ArgumentCoder<ViewportArguments>::decode(Decoder& de
         return WTF::nullopt;
     return viewportArguments;
 }
-#endif // PLATFORM(IOS_FAMILY)
 
+#endif // ENABLE(META_VIEWPORT)
+
+void ArgumentCoder<ViewportAttributes>::encode(Encoder& encoder, const ViewportAttributes& viewportAttributes)
+{
+    SimpleArgumentCoder<ViewportAttributes>::encode(encoder, viewportAttributes);
+}
+
+bool ArgumentCoder<ViewportAttributes>::decode(Decoder& decoder, ViewportAttributes& viewportAttributes)
+{
+    return SimpleArgumentCoder<ViewportAttributes>::decode(decoder, viewportAttributes);
+}
 
 void ArgumentCoder<IntPoint>::encode(Encoder& encoder, const IntPoint& intPoint)
 {
@@ -761,16 +773,6 @@ void ArgumentCoder<Length>::encode(Encoder& encoder, const Length& length)
 bool ArgumentCoder<Length>::decode(Decoder& decoder, Length& length)
 {
     return SimpleArgumentCoder<Length>::decode(decoder, length);
-}
-
-void ArgumentCoder<ViewportAttributes>::encode(Encoder& encoder, const ViewportAttributes& viewportAttributes)
-{
-    SimpleArgumentCoder<ViewportAttributes>::encode(encoder, viewportAttributes);
-}
-
-bool ArgumentCoder<ViewportAttributes>::decode(Decoder& decoder, ViewportAttributes& viewportAttributes)
-{
-    return SimpleArgumentCoder<ViewportAttributes>::decode(decoder, viewportAttributes);
 }
 
 void ArgumentCoder<VelocityData>::encode(Encoder& encoder, const VelocityData& velocityData)
@@ -1487,8 +1489,10 @@ void ArgumentCoder<Color>::encode(Encoder& encoder, const Color& color)
         return;
     }
 
+    uint32_t value = color.rgb().value();
+
     encoder << true;
-    encoder << color.rgb();
+    encoder << value;
 }
 
 bool ArgumentCoder<Color>::decode(Decoder& decoder, Color& color)
@@ -1526,11 +1530,11 @@ bool ArgumentCoder<Color>::decode(Decoder& decoder, Color& color)
         return true;
     }
 
-    RGBA32 rgba;
-    if (!decoder.decode(rgba))
+    uint32_t value;
+    if (!decoder.decode(value))
         return false;
 
-    color = Color(rgba);
+    color = SimpleColor { value };
     return true;
 }
 
@@ -1601,6 +1605,7 @@ void ArgumentCoder<CompositionUnderline>::encode(Encoder& encoder, const Composi
     encoder << underline.startOffset;
     encoder << underline.endOffset;
     encoder << underline.thick;
+    encoder.encodeEnum(underline.compositionUnderlineColor);
     encoder << underline.color;
 }
 
@@ -1613,6 +1618,8 @@ Optional<CompositionUnderline> ArgumentCoder<CompositionUnderline>::decode(Decod
     if (!decoder.decode(underline.endOffset))
         return WTF::nullopt;
     if (!decoder.decode(underline.thick))
+        return WTF::nullopt;
+    if (!decoder.decodeEnum(underline.compositionUnderlineColor))
         return WTF::nullopt;
     if (!decoder.decode(underline.color))
         return WTF::nullopt;

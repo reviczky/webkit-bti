@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2014-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,6 +30,7 @@
 
 #include "BinarySwitch.h"
 #include "CCallHelpers.h"
+#include "CacheableIdentifierInlines.h"
 #include "CodeBlock.h"
 #include "FullCodeOrigin.h"
 #include "Heap.h"
@@ -352,6 +353,12 @@ bool PolymorphicAccess::propagateTransitions(SlotVisitor& visitor) const
     return result;
 }
 
+void PolymorphicAccess::visitAggregate(SlotVisitor& visitor)
+{
+    for (unsigned i = 0; i < size(); ++i)
+        at(i).visitAggregate(visitor);
+}
+
 void PolymorphicAccess::dump(PrintStream& out) const
 {
     out.print(RawPointer(this), ":[");
@@ -472,7 +479,6 @@ AccessGenerationResult PolymorphicAccess::regenerate(
     state.preservedReusedRegisterState =
         allocator.preserveReusedRegistersByPushing(jit, ScratchRegisterAllocator::ExtraStackSpace::NoExtraSpace);
 
-    
     bool generatedFinalCode = false;
 
     // If the resulting set of cases is so big that we would stop caching and this is InstanceOf,
@@ -481,7 +487,7 @@ AccessGenerationResult PolymorphicAccess::regenerate(
         && stubInfo.accessType == AccessType::InstanceOf) {
         while (!cases.isEmpty())
             m_list.append(cases.takeLast());
-        cases.append(AccessCase::create(vm, codeBlock, AccessCase::InstanceOfGeneric, Identifier()));
+        cases.append(AccessCase::create(vm, codeBlock, AccessCase::InstanceOfGeneric, nullptr));
         generatedFinalCode = true;
     }
 
@@ -719,16 +725,19 @@ AccessGenerationResult PolymorphicAccess::regenerate(
     bool doesCalls = false;
     Vector<JSCell*> cellsToMark;
     for (auto& entry : cases)
-        doesCalls |= entry->doesCalls(&cellsToMark);
+        doesCalls |= entry->doesCalls(vm, &cellsToMark);
     
     m_stubRoutine = createJITStubRoutine(code, vm, codeBlock, doesCalls, cellsToMark, WTFMove(state.m_callLinkInfos), codeBlockThatOwnsExceptionHandlers, callSiteIndexForExceptionHandling);
     m_watchpoints = WTFMove(state.watchpoints);
-    if (!state.weakReferences.isEmpty())
+    if (!state.weakReferences.isEmpty()) {
+        state.weakReferences.shrinkToFit();
         m_weakReferences = makeUnique<Vector<WriteBarrier<JSCell>>>(WTFMove(state.weakReferences));
+    }
     if (PolymorphicAccessInternal::verbose)
         dataLog("Returning: ", code.code(), "\n");
     
     m_list = WTFMove(cases);
+    m_list.shrinkToFit();
     
     AccessGenerationResult::Kind resultKind;
     if (m_list.size() >= Options::maxAccessVariantListSize() || generatedFinalCode)

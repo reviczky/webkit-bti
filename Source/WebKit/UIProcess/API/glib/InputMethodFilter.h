@@ -67,7 +67,7 @@ public:
     void notifyFocusedOut();
     void notifyMouseButtonPress();
     void notifyCursorRect(const WebCore::IntRect&);
-    void notifySurrounding(const String&, uint64_t);
+    void notifySurrounding(const String&, uint64_t, uint64_t);
 
     void cancelComposition();
 
@@ -86,6 +86,8 @@ private:
 
     bool isEnabled() const { return !!m_state; }
     bool isViewFocused() const;
+
+    void notifyContentType();
 
     WebCore::IntRect platformTransformCursorRectToViewCoordinates(const WebCore::IntRect&);
     bool platformEventKeyIsKeyPress(PlatformEventKey*) const;
@@ -110,6 +112,7 @@ private:
     struct {
         String text;
         uint64_t cursorPosition;
+        uint64_t selectionPosition;
     } m_surrounding;
 };
 

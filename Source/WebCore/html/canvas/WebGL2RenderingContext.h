@@ -44,6 +44,8 @@ public:
     static std::unique_ptr<WebGL2RenderingContext> create(CanvasBase&, GraphicsContextGLAttributes);
     static std::unique_ptr<WebGL2RenderingContext> create(CanvasBase&, Ref<GraphicsContextGLOpenGL>&&, GraphicsContextGLAttributes);
 
+    ~WebGL2RenderingContext();
+
     // Buffer objects
     using WebGLRenderingContextBase::bufferData;
     using WebGLRenderingContextBase::bufferSubData;
@@ -75,7 +77,7 @@ public:
 #endif
 
     using WebGLRenderingContextBase::texImage2D;
-    void texImage2D(GCGLenum target, GCGLint level, GCGLint internalformat, GCGLsizei width, GCGLsizei height, GCGLint border, GCGLenum format, GCGLenum type, GCGLint64 pboOffset);
+    void texImage2D(GCGLenum target, GCGLint level, GCGLint internalformat, GCGLsizei width, GCGLsizei height, GCGLint border, GCGLenum format, GCGLenum type, GCGLintptr offset);
     ExceptionOr<void> texImage2D(GCGLenum target, GCGLint level, GCGLint internalformat, GCGLsizei width, GCGLsizei height, GCGLint border, GCGLenum format, GCGLenum type, TexImageSource&&);
     void texImage2D(GCGLenum target, GCGLint level, GCGLint internalformat, GCGLsizei width, GCGLsizei height, GCGLint border, GCGLenum format, GCGLenum type, RefPtr<ArrayBufferView>&& srcData, GCGLuint srcOffset);
 
@@ -85,7 +87,7 @@ public:
     void texImage3D(GCGLenum target, GCGLint level, GCGLint internalformat, GCGLsizei width, GCGLsizei height, GCGLsizei depth, GCGLint border, GCGLenum format, GCGLenum type, RefPtr<ArrayBufferView>&& srcData, GCGLuint srcOffset);
 
     using WebGLRenderingContextBase::texSubImage2D;
-    void texSubImage2D(GCGLenum target, GCGLint level, GCGLint xoffset, GCGLint yoffset, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLenum type, GCGLint64 pboOffset);
+    void texSubImage2D(GCGLenum target, GCGLint level, GCGLint xoffset, GCGLint yoffset, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLenum type, GCGLintptr pboOffset);
     ExceptionOr<void> texSubImage2D(GCGLenum target, GCGLint level, GCGLint xoffset, GCGLint yoffset, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLenum type, TexImageSource&&);
     void texSubImage2D(GCGLenum target, GCGLint level, GCGLint xoffset, GCGLint yoffset, GCGLsizei width, GCGLsizei height, GCGLenum format, GCGLenum type, RefPtr<ArrayBufferView>&& srcData, GCGLuint srcOffset);
 
@@ -245,6 +247,10 @@ private:
 
     bool isWebGL2() const final { return true; }
 
+    RefPtr<ArrayBufferView> arrayBufferViewSliceFactory(const char* const functionName, const ArrayBufferView& data, unsigned startByte, unsigned bytelength);
+    RefPtr<ArrayBufferView> sliceArrayBufferView(const char* const functionName, const ArrayBufferView& data, GCGLuint srcOffset, GCGLuint length);
+    RefPtr<ArrayBufferView> sliceTypedArrayBufferView(const char* const functionName, RefPtr<ArrayBufferView>&, GCGLuint);
+
     void initializeVertexArrayObjects() final;
     GCGLint getMaxDrawBuffers() final;
     GCGLint getMaxColorAttachments() final;
@@ -258,8 +264,19 @@ private:
     GCGLenum baseInternalFormatFromInternalFormat(GCGLenum internalformat);
     bool isIntegerFormat(GCGLenum internalformat);
     void initializeShaderExtensions();
+    void initializeTransformFeedbackBufferCache();
+    void initializeSamplerCache();
 
     bool validateTexStorageFuncParameters(GCGLenum target, GCGLsizei levels, GCGLenum internalFormat, GCGLsizei width, GCGLsizei height, const char* functionName);
+
+    void uncacheDeletedBuffer(WebGLBuffer*) final;
+
+    RefPtr<WebGLTransformFeedback> m_boundTransformFeedback;
+    Vector<RefPtr<WebGLBuffer>> m_boundTransformFeedbackBuffers;
+
+    HashMap<GCGLenum, RefPtr<WebGLQuery>> m_activeQueries;
+
+    Vector<RefPtr<WebGLSampler>> m_boundSamplers;
 };
 
 } // namespace WebCore

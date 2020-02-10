@@ -649,6 +649,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case ConstructVarargs:
     case ConstructForwardVarargs:
     case ToPrimitive:
+    case ToPropertyKey:
     case InByVal:
     case InById:
     case HasOwnProperty:
@@ -739,7 +740,7 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case CallEval:
         ASSERT(!node->origin.semantic.inlineCallFrame());
         read(AbstractHeap(Stack, graph.m_codeBlock->scopeRegister()));
-        read(AbstractHeap(Stack, virtualRegisterForArgument(0)));
+        read(AbstractHeap(Stack, virtualRegisterForArgumentIncludingThis(0)));
         read(World);
         write(Heap);
         return;
@@ -1095,9 +1096,9 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         read(JSCell_structureID);
         return;
 
+    case CheckArrayOrEmpty:
     case CheckArray:
         read(JSCell_indexingType);
-        read(JSCell_typeInfoType);
         read(JSCell_structureID);
         return;
 
@@ -1129,7 +1130,6 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
     case PutStructure:
         read(JSObject_butterfly);
         write(JSCell_structureID);
-        write(JSCell_typeInfoType);
         write(JSCell_typeInfoFlags);
         write(JSCell_indexingType);
         return;
@@ -1350,14 +1350,14 @@ void clobberize(Graph& graph, Node* node, const ReadFunctor& read, const WriteFu
         return;
 
     case GetInternalField: {
-        AbstractHeap heap(JSPromiseFields, node->internalFieldIndex());
+        AbstractHeap heap(JSInternalFields, node->internalFieldIndex());
         read(heap);
         def(HeapLocation(InternalFieldObjectLoc, heap, node->child1()), LazyNode(node));
         return;
     }
 
     case PutInternalField: {
-        AbstractHeap heap(JSPromiseFields, node->internalFieldIndex());
+        AbstractHeap heap(JSInternalFields, node->internalFieldIndex());
         write(heap);
         def(HeapLocation(InternalFieldObjectLoc, heap, node->child1()), LazyNode(node->child2().node()));
         return;

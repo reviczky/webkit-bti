@@ -1535,9 +1535,14 @@ void HTMLMediaElement::loadResource(const URL& initialURL, ContentType& contentT
         loadAttempted = true;
 
         ALWAYS_LOG(LOGIDENTIFIER, "loading MSE blob");
-        if (!m_mediaSource->attachToElement(*this) || !m_player->load(url, contentType, m_mediaSource.get())) {
+        if (!m_mediaSource->attachToElement(*this)) {
             // Forget our reference to the MediaSource, so we leave it alone
             // while processing remainder of load failure.
+            m_mediaSource = nullptr;
+            mediaLoadingFailed(MediaPlayer::NetworkState::FormatError);
+        } else if (!m_player->load(url, contentType, m_mediaSource.get())) {
+            // We have to detach the MediaSource before we forget the reference to it.
+            m_mediaSource->detachFromElement(*this);
             m_mediaSource = nullptr;
             mediaLoadingFailed(MediaPlayer::NetworkState::FormatError);
         }
@@ -1635,9 +1640,8 @@ void HTMLMediaElement::updateActiveTextTrackCues(const MediaTime& movieTime)
 
     // The user agent must synchronously unset [the text track cue active] flag
     // whenever ... the media element's readyState is changed back to HAVE_NOTHING.
-    auto movieTimeInterval = m_cueData->cueTree.createInterval(movieTime, movieTime);
     if (m_readyState != HAVE_NOTHING && m_player) {
-        currentCues = m_cueData->cueTree.allOverlaps(movieTimeInterval);
+        currentCues = m_cueData->cueTree.allOverlaps({ movieTime, movieTime });
         if (currentCues.size() > 1)
             std::sort(currentCues.begin(), currentCues.end(), &compareCueInterval);
     }
@@ -1707,7 +1711,7 @@ void HTMLMediaElement::updateActiveTextTrackCues(const MediaTime& movieTime)
     if (auto nearestEndingCue = std::min_element(currentCues.begin(), currentCues.end(), compareCueIntervalEndTime))
         nextInterestingTime = nearestEndingCue->data()->endMediaTime();
 
-    Optional<CueInterval> nextCue = m_cueData->cueTree.nextIntervalAfter(movieTimeInterval.high());
+    Optional<CueInterval> nextCue = m_cueData->cueTree.nextIntervalAfter(movieTime);
     if (nextCue)
         nextInterestingTime = std::min(nextInterestingTime, nextCue->low());
 
@@ -1996,7 +2000,7 @@ void HTMLMediaElement::textTrackAddCue(TextTrack& track, TextTrackCue& cue)
     // zero-length cues.
     MediaTime endTime = std::max(cue.startMediaTime(), cue.endMediaTime());
 
-    CueInterval interval = m_cueData->cueTree.createInterval(cue.startMediaTime(), endTime, &cue);
+    CueInterval interval(cue.startMediaTime(), endTime, &cue);
     if (!m_cueData->cueTree.contains(interval))
         m_cueData->cueTree.add(interval);
     updateActiveTextTrackCues(currentMediaTime());
@@ -2011,7 +2015,7 @@ void HTMLMediaElement::textTrackRemoveCue(TextTrack&, TextTrackCue& cue)
     // zero-length cues.
     MediaTime endTime = std::max(cue.startMediaTime(), cue.endMediaTime());
 
-    CueInterval interval = m_cueData->cueTree.createInterval(cue.startMediaTime(), endTime, &cue);
+    CueInterval interval(cue.startMediaTime(), endTime, &cue);
     m_cueData->cueTree.remove(interval);
 
     // Since the cue will be removed from the media element and likely the
@@ -2327,6 +2331,13 @@ void HTMLMediaElement::changeNetworkStateFromLoadingToIdle()
 
 void HTMLMediaElement::mediaPlayerReadyStateChanged()
 {
+    if (isSuspended()) {
+        queueTaskKeepingObjectAlive(*this, TaskSource::MediaElement, [this] {
+            mediaPlayerReadyStateChanged();
+        });
+        return;
+    }
+
     beginProcessingMediaPlayerCallback();
 
     setReadyState(m_player->readyState());
@@ -5465,6 +5476,12 @@ void HTMLMediaElement::setPausedInternal(bool b)
     scheduleUpdatePlayState();
 }
 
+void HTMLMediaElement::pauseAndUpdatePlayStateImmediately()
+{
+    m_pausedInternal = true;
+    updatePlayState();
+}
+
 void HTMLMediaElement::stopPeriodicTimers()
 {
     m_progressEventTimer.stop();
@@ -5620,8 +5637,8 @@ void HTMLMediaElement::stopWithoutDestroyingMediaPlayer()
 
     // Stop the playback without generating events
     setPlaying(false);
-    setPausedInternal(true);
-    m_mediaSession->stopSession();
+    pauseAndUpdatePlayStateImmediately();
+    m_mediaSession->clientWillBeDOMSuspended();
 
     setAutoplayEventPlaybackState(AutoplayEventPlaybackState::None);
 
@@ -5807,9 +5824,9 @@ void HTMLMediaElement::wirelessRoutesAvailableDidChange()
     enqueuePlaybackTargetAvailabilityChangedEvent();
 }
 
-void HTMLMediaElement::mediaPlayerCurrentPlaybackTargetIsWirelessChanged()
+void HTMLMediaElement::mediaPlayerCurrentPlaybackTargetIsWirelessChanged(bool isCurrentPlayBackTargetWireless)
 {
-    setIsPlayingToWirelessTarget(m_player && m_player->isCurrentPlaybackTargetWireless());
+    setIsPlayingToWirelessTarget(m_player && isCurrentPlayBackTargetWireless);
 }
 
 void HTMLMediaElement::setIsPlayingToWirelessTarget(bool isPlayingToWirelessTarget)
@@ -7206,7 +7223,7 @@ RefPtr<VideoPlaybackQuality> HTMLMediaElement::getVideoPlaybackQuality()
 DOMWrapperWorld& HTMLMediaElement::ensureIsolatedWorld()
 {
     if (!m_isolatedWorld)
-        m_isolatedWorld = DOMWrapperWorld::create(commonVM());
+        m_isolatedWorld = DOMWrapperWorld::create(commonVM(), DOMWrapperWorld::Type::Internal, makeString("Media Controls (", localName(), ')'));
     return *m_isolatedWorld;
 }
 

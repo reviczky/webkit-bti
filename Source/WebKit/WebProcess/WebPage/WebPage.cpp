@@ -422,8 +422,10 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     , m_pageScrolledHysteresis([this](PAL::HysteresisState state) { if (state == PAL::HysteresisState::Stopped) pageStoppedScrolling(); }, pageScrollHysteresisDuration)
     , m_canRunBeforeUnloadConfirmPanel(parameters.canRunBeforeUnloadConfirmPanel)
     , m_canRunModal(parameters.canRunModal)
-#if PLATFORM(IOS_FAMILY)
+#if ENABLE(META_VIEWPORT)
     , m_forceAlwaysUserScalable(parameters.ignoresViewportScaleLimits)
+#endif
+#if PLATFORM(IOS_FAMILY)
     , m_screenSize(parameters.screenSize)
     , m_availableScreenSize(parameters.availableScreenSize)
     , m_overrideScreenSize(parameters.overrideScreenSize)
@@ -524,6 +526,13 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
 
     pageConfiguration.corsDisablingPatterns = WTFMove(parameters.corsDisablingPatterns);
 
+#if ENABLE(ATTACHMENT_ELEMENT) && PLATFORM(IOS_FAMILY)
+    if (parameters.frontboardExtensionHandle)
+        SandboxExtension::consumePermanently(*parameters.frontboardExtensionHandle);
+    if (parameters.iconServicesExtensionHandle)
+        SandboxExtension::consumePermanently(*parameters.iconServicesExtensionHandle);
+#endif
+
     m_page = makeUnique<Page>(WTFMove(pageConfiguration));
 
     updatePreferences(parameters.store);
@@ -590,6 +599,10 @@ WebPage::WebPage(PageIdentifier pageID, WebPageCreationParameters&& parameters)
     setPageLength(parameters.pageLength);
     setGapBetweenPages(parameters.gapBetweenPages);
     setPaginationLineGridEnabled(parameters.paginationLineGridEnabled);
+
+#if PLATFORM(GTK)
+    themeDidChange(WTFMove(parameters.themeName));
+#endif
 
     effectiveAppearanceDidChange(parameters.useDarkAppearance, parameters.useElevatedUserInterfaceLevel);
 
@@ -3378,14 +3391,19 @@ KeyboardUIMode WebPage::keyboardUIMode()
     return static_cast<KeyboardUIMode>((fullKeyboardAccessEnabled ? KeyboardAccessFull : KeyboardAccessDefault) | (m_tabToLinks ? KeyboardAccessTabsToLinks : 0));
 }
 
-void WebPage::runJavaScript(WebFrame* frame, RunJavaScriptParameters&& parameters, const Optional<String>& worldName, CallbackID callbackID)
+void WebPage::runJavaScript(WebFrame* frame, RunJavaScriptParameters&& parameters, ContentWorldIdentifier worldIdentifier, CallbackID callbackID)
 {
     // NOTE: We need to be careful when running scripts that the objects we depend on don't
     // disappear during script execution.
 
-    auto* world = worldName ? InjectedBundleScriptWorld::find(worldName.value()) : &InjectedBundleScriptWorld::normalWorld();
-    if (!frame || !frame->coreFrame() || !world) {
+    if (!frame || !frame->coreFrame()) {
         send(Messages::WebPageProxy::ScriptValueCallback({ }, ExceptionDetails { "Unable to execute JavaScript: Page is in invalid state"_s }, callbackID));
+        return;
+    }
+
+    auto* world = m_userContentController->worldForIdentifier(worldIdentifier);
+    if (!world) {
+        send(Messages::WebPageProxy::ScriptValueCallback({ }, ExceptionDetails { "Unable to execute JavaScript: Cannot find specified content world"_s }, callbackID));
         return;
     }
 
@@ -3411,16 +3429,17 @@ void WebPage::runJavaScript(WebFrame* frame, RunJavaScriptParameters&& parameter
     frame->coreFrame()->script().executeAsynchronousUserAgentScriptInWorld(world->coreWorld(), WTFMove(parameters), WTFMove(resolveFunction));
 }
 
-void WebPage::runJavaScriptInMainFrameScriptWorld(RunJavaScriptParameters&& parameters, const Optional<String>& worldName, CallbackID callbackID)
+void WebPage::runJavaScriptInMainFrameScriptWorld(RunJavaScriptParameters&& parameters, const std::pair<ContentWorldIdentifier, String>& worldData, CallbackID callbackID)
 {
-    runJavaScript(mainWebFrame(), WTFMove(parameters), worldName, callbackID);
+    m_userContentController->addUserContentWorld(worldData);
+    runJavaScript(mainWebFrame(), WTFMove(parameters), worldData.first, callbackID);
 }
 
 void WebPage::runJavaScriptInFrame(FrameIdentifier frameID, const String& script, bool forceUserGesture, CallbackID callbackID)
 {
     WebFrame* frame = WebProcess::singleton().webFrame(frameID);
     ASSERT(mainWebFrame() != frame);
-    runJavaScript(frame, { script, false, WTF::nullopt, forceUserGesture }, WTF::nullopt, callbackID);
+    runJavaScript(frame, { script, false, WTF::nullopt, forceUserGesture }, pageContentWorldIdentifier(), callbackID);
 }
 
 void WebPage::getContentsAsString(CallbackID callbackID)
@@ -4208,9 +4227,9 @@ void WebPage::extendSandboxForFilesFromOpenPanel(SandboxExtension::HandleArray&&
 #endif
 
 #if ENABLE(GEOLOCATION)
-void WebPage::didReceiveGeolocationPermissionDecision(uint64_t geolocationID, bool allowed)
+void WebPage::didReceiveGeolocationPermissionDecision(uint64_t geolocationID, const String& authorizationToken)
 {
-    geolocationPermissionRequestManager().didReceiveGeolocationPermissionDecision(geolocationID, allowed);
+    geolocationPermissionRequestManager().didReceiveGeolocationPermissionDecision(geolocationID, authorizationToken);
 }
 #endif
 
@@ -4701,12 +4720,10 @@ void WebPage::setUseSystemAppearance(bool useSystemAppearance)
 
 #endif
 
-#if !PLATFORM(GTK)
 void WebPage::effectiveAppearanceDidChange(bool useDarkAppearance, bool useElevatedUserInterfaceLevel)
 {
     corePage()->effectiveAppearanceDidChange(useDarkAppearance, useElevatedUserInterfaceLevel);
 }
-#endif
 
 void WebPage::freezeLayerTreeDueToSwipeAnimation()
 {
@@ -5083,7 +5100,7 @@ void WebPage::simulateMouseMotion(WebCore::IntPoint position, WallTime time)
     mouseEvent(WebMouseEvent(WebMouseEvent::MouseMove, WebMouseEvent::NoButton, 0, position, position, 0, 0, 0, 0, OptionSet<WebEvent::Modifier> { }, time, 0, WebMouseEvent::NoTap));
 }
 
-void WebPage::setCompositionForTesting(const String& compositionString, uint64_t from, uint64_t length, bool suppressUnderline)
+void WebPage::setCompositionForTesting(const String& compositionString, uint64_t from, uint64_t length, bool suppressUnderline, const Vector<CompositionHighlight>& highlights)
 {
     Frame& frame = m_page->focusController().focusedOrMainFrame();
     if (!frame.editor().canEdit())
@@ -5093,7 +5110,7 @@ void WebPage::setCompositionForTesting(const String& compositionString, uint64_t
     if (!suppressUnderline)
         underlines.append(CompositionUnderline(0, compositionString.length(), CompositionUnderlineColor::TextColor, Color(Color::black), false));
 
-    frame.editor().setComposition(compositionString, underlines, from, from + length);
+    frame.editor().setComposition(compositionString, underlines, highlights, from, from + length);
 }
 
 bool WebPage::hasCompositionForTesting()
@@ -5332,7 +5349,7 @@ void WebPage::firstRectForCharacterRangeAsync(const EditingRange& editingRange, 
     send(Messages::WebPageProxy::RectForCharacterRangeCallback(result, editingRange, callbackID));
 }
 
-void WebPage::setCompositionAsync(const String& text, const Vector<CompositionUnderline>& underlines, const EditingRange& selection, const EditingRange& replacementEditingRange)
+void WebPage::setCompositionAsync(const String& text, const Vector<CompositionUnderline>& underlines, const Vector<CompositionHighlight>& highlights, const EditingRange& selection, const EditingRange& replacementEditingRange)
 {
     platformWillPerformEditingCommand();
 
@@ -5346,7 +5363,7 @@ void WebPage::setCompositionAsync(const String& text, const Vector<CompositionUn
                 frame.selection().setSelection(VisibleSelection(*replacementRange, SEL_DEFAULT_AFFINITY));
         }
 
-        frame.editor().setComposition(text, underlines, selection.location, selection.location + selection.length);
+        frame.editor().setComposition(text, underlines, highlights, selection.location, selection.location + selection.length);
     }
 }
 
@@ -5403,6 +5420,8 @@ void WebPage::deleteSurrounding(int64_t offset, unsigned characterCount)
     auto cursorPosition = TextIterator::rangeLength(paragraphRange.get());
     auto& rootNode = paragraphRange->startContainer().treeScope().rootNode();
     auto selectionRange = TextIterator::rangeFromLocationAndLength(&rootNode, cursorPosition + offset, characterCount);
+    if (!selectionRange)
+        return;
 
     targetFrame->editor().setIgnoreSelectionChanges(true);
     targetFrame->selection().setSelection(VisibleSelection(*selectionRange, SEL_DEFAULT_AFFINITY));
@@ -5815,6 +5834,7 @@ void WebPage::didCommitLoad(WebFrame* frame)
         if (page && page->pageScaleFactor() != 1)
             scalePage(1, IntPoint());
     }
+
 #if PLATFORM(IOS_FAMILY)
     m_hasReceivedVisibleContentRectsAfterDidCommitLoad = false;
     m_hasRestoredExposedContentRectAfterDidCommitLoad = false;
@@ -5826,7 +5846,9 @@ void WebPage::didCommitLoad(WebFrame* frame)
 #if ENABLE(IOS_TOUCH_EVENTS)
     WebProcess::singleton().eventDispatcher().clearQueuedTouchEventsForPage(*this);
 #endif
+#endif // PLATFORM(IOS_FAMILY)
 
+#if ENABLE(META_VIEWPORT)
     resetViewportDefaultConfiguration(frame);
     const Frame* coreFrame = frame->coreFrame();
     
@@ -5844,7 +5866,7 @@ void WebPage::didCommitLoad(WebFrame* frame)
 
     if (viewportChanged)
         viewportConfigurationChanged();
-#endif
+#endif // ENABLE(META_VIEWPORT)
 
 #if ENABLE(VIEWPORT_RESIZING)
     m_shrinkToFitContentTimer.stop();
@@ -6600,6 +6622,17 @@ void WebPage::requestStorageAccess(RegistrableDomain&& subFrameDomain, Registrab
     });
 }
 
+void WebPage::addDomainWithPageLevelStorageAccess(const RegistrableDomain& topLevelDomain, const RegistrableDomain& resourceDomain)
+{
+    m_domainsWithPageLevelStorageAccess.add(topLevelDomain, resourceDomain);
+}
+
+bool WebPage::hasPageLevelStorageAccess(const RegistrableDomain& topLevelDomain, const RegistrableDomain& resourceDomain) const
+{
+    auto it = m_domainsWithPageLevelStorageAccess.find(topLevelDomain);
+    return it != m_domainsWithPageLevelStorageAccess.end() && it->value == resourceDomain;
+}
+
 void WebPage::wasLoadedWithDataTransferFromPrevalentResource()
 {
     auto* frame = mainFrame();
@@ -6800,6 +6833,13 @@ void WebPage::focusTextInputContext(const WebCore::ElementContext& textInputCont
         element->focus();
 
     completionHandler(element);
+}
+
+void WebPage::setCanShowPlaceholder(const WebCore::ElementContext& elementContext, bool canShowPlaceholder)
+{
+    RefPtr<Element> element = elementForContext(elementContext);
+    if (is<HTMLTextFormControlElement>(element))
+        downcast<HTMLTextFormControlElement>(*element).setCanShowPlaceholder(canShowPlaceholder);
 }
 
 Element* WebPage::elementForContext(const WebCore::ElementContext& elementContext) const

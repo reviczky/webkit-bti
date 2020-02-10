@@ -107,8 +107,11 @@ typedef struct _AtkObject AtkObject;
 #if PLATFORM(IOS_FAMILY)
 #include "GestureTypes.h"
 #include <WebCore/IntPointHash.h>
-#include <WebCore/ViewportConfiguration.h>
 #include <WebCore/WKContentObservation.h>
+#endif
+
+#if ENABLE(META_VIEWPORT)
+#include <WebCore/ViewportConfiguration.h>
 #endif
 
 #if ENABLE(APPLICATION_MANIFEST)
@@ -193,6 +196,7 @@ enum class TextIndicatorPresentationTransition : uint8_t;
 enum class WritingDirection : uint8_t;
 
 struct BackForwardItemIdentifier;
+struct CompositionHighlight;
 struct CompositionUnderline;
 struct DictationAlternative;
 struct ElementContext;
@@ -628,6 +632,7 @@ public:
 
     void textInputContextsInRect(WebCore::FloatRect, CompletionHandler<void(const Vector<WebCore::ElementContext>&)>&&);
     void focusTextInputContext(const WebCore::ElementContext&, CompletionHandler<void(bool)>&&);
+    void setCanShowPlaceholder(const WebCore::ElementContext&, bool);
 
 #if PLATFORM(IOS_FAMILY)
     WebCore::FloatSize screenSize() const;
@@ -635,9 +640,6 @@ public:
     WebCore::FloatSize overrideScreenSize() const;
     int32_t deviceOrientation() const { return m_deviceOrientation; }
     void didReceiveMobileDocType(bool);
-
-    void setUseTestingViewportConfiguration(bool useTestingViewport) { m_useTestingViewportConfiguration = useTestingViewport; }
-    bool isUsingTestingViewportConfiguration() const { return m_useTestingViewportConfiguration; }
 
     double minimumPageScaleFactor() const;
     double maximumPageScaleFactor() const;
@@ -795,6 +797,8 @@ public:
     void showEmojiPicker(WebCore::Frame&);
 
     void getCenterForZoomGesture(const WebCore::IntPoint& centerInViewCoordinates, CompletionHandler<void(WebCore::IntPoint&&)>&&);
+
+    void themeDidChange(String&&);
 #endif
 
     void didApplyStyle();
@@ -821,7 +825,7 @@ public:
     void getSelectedRangeAsync(CallbackID);
     void characterIndexForPointAsync(const WebCore::IntPoint&, CallbackID);
     void firstRectForCharacterRangeAsync(const EditingRange&, CallbackID);
-    void setCompositionAsync(const String& text, const Vector<WebCore::CompositionUnderline>& underlines, const EditingRange& selectionRange, const EditingRange& replacementRange);
+    void setCompositionAsync(const String& text, const Vector<WebCore::CompositionUnderline>&, const Vector<WebCore::CompositionHighlight>&, const EditingRange& selectionRange, const EditingRange& replacementRange);
     void confirmCompositionAsync();
 
     void readSelectionFromPasteboard(const String& pasteboardName, CompletionHandler<void(bool&&)>&&);
@@ -842,7 +846,7 @@ public:
     void replaceSelectionWithPasteboardData(const Vector<String>& types, const IPC::DataReference&);
 #endif
 
-    void setCompositionForTesting(const String& compositionString, uint64_t from, uint64_t length, bool suppressUnderline);
+    void setCompositionForTesting(const String& compositionString, uint64_t from, uint64_t length, bool suppressUnderline, const Vector<WebCore::CompositionHighlight>&);
     bool hasCompositionForTesting();
     void confirmCompositionForTesting(const String& compositionString);
 
@@ -967,11 +971,9 @@ public:
     void updateVisibilityState(bool isInitialState = false);
 
 #if PLATFORM(IOS_FAMILY)
-    void setViewportConfigurationViewLayoutSize(const WebCore::FloatSize&, double scaleFactor, double minimumEffectiveDeviceWidth);
     void setMaximumUnobscuredSize(const WebCore::FloatSize&);
     void setDeviceOrientation(int32_t);
-    void setOverrideViewportArguments(const Optional<WebCore::ViewportArguments>&);
-    void dynamicViewportSizeUpdate(const WebCore::FloatSize& viewLayoutSize, const WebCore::FloatSize& maximumUnobscuredSize, const WebCore::FloatRect& targetExposedContentRect, const WebCore::FloatRect& targetUnobscuredRect, const WebCore::FloatRect& targetUnobscuredRectInScrollViewCoordinates, const WebCore::FloatBoxExtent& targetUnobscuredSafeAreaInsets, double scale, int32_t deviceOrientation, DynamicViewportSizeUpdateID);
+    void dynamicViewportSizeUpdate(const WebCore::FloatSize& viewLayoutSize, const WebCore::FloatSize& maximumUnobscuredSize, const WebCore::FloatRect& targetExposedContentRect, const WebCore::FloatRect& targetUnobscuredRect, const WebCore::FloatRect& targetUnobscuredRectInScrollViewCoordinates, const WebCore::FloatBoxExtent& targetUnobscuredSafeAreaInsets, double scale, int32_t deviceOrientation, double minimumEffectiveDeviceWidth, DynamicViewportSizeUpdateID);
     bool scaleWasSetByUIProcess() const { return m_scaleWasSetByUIProcess; }
     void willStartUserTriggeredZooming();
     void applicationWillResignActive();
@@ -979,16 +981,26 @@ public:
     void applicationDidFinishSnapshottingAfterEnteringBackground();
     void applicationWillEnterForeground(bool isSuspendedUnderLock);
     void applicationDidBecomeActive();
+    void applicationDidEnterBackgroundForMedia(bool isSuspendedUnderLock);
+    void applicationWillEnterForegroundForMedia(bool isSuspendedUnderLock);
     void didFinishContentChangeObserving(WKContentChange);
 
     bool platformPrefersTextLegibilityBasedZoomScaling() const;
-    const WebCore::ViewportConfiguration& viewportConfiguration() const { return m_viewportConfiguration; }
 
     void hardwareKeyboardAvailabilityChanged(bool keyboardIsAttached);
 
     void updateStringForFind(const String&);
     
     bool canShowWhileLocked() const { return m_canShowWhileLocked; }
+#endif
+
+#if ENABLE(META_VIEWPORT)
+    void setViewportConfigurationViewLayoutSize(const WebCore::FloatSize&, double scaleFactor, double minimumEffectiveDeviceWidth);
+    void setOverrideViewportArguments(const Optional<WebCore::ViewportArguments>&);
+    const WebCore::ViewportConfiguration& viewportConfiguration() const { return m_viewportConfiguration; }
+
+    void setUseTestingViewportConfiguration(bool useTestingViewport) { m_useTestingViewportConfiguration = useTestingViewport; }
+    bool isUsingTestingViewportConfiguration() const { return m_useTestingViewportConfiguration; }
 #endif
 
 #if ENABLE(UI_SIDE_COMPOSITING)
@@ -1160,6 +1172,8 @@ public:
 #if ENABLE(RESOURCE_LOAD_STATISTICS)
     void hasStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, WebFrame&, CompletionHandler<void(bool)>&&);
     void requestStorageAccess(WebCore::RegistrableDomain&& subFrameDomain, WebCore::RegistrableDomain&& topFrameDomain, WebFrame&, CompletionHandler<void(WebCore::StorageAccessWasGranted, WebCore::StorageAccessPromptWasShown)>&&);
+    bool hasPageLevelStorageAccess(const WebCore::RegistrableDomain& topLevelDomain, const WebCore::RegistrableDomain& resourceDomain) const;
+    void addDomainWithPageLevelStorageAccess(const WebCore::RegistrableDomain& topLevelDomain, const WebCore::RegistrableDomain& resourceDomain);
     void wasLoadedWithDataTransferFromPrevalentResource();
 #endif
 
@@ -1287,9 +1301,6 @@ private:
     void didReceiveSyncWebPageMessage(IPC::Connection&, IPC::Decoder&, std::unique_ptr<IPC::Encoder>&);
 
 #if PLATFORM(IOS_FAMILY)
-    void resetViewportDefaultConfiguration(WebFrame* mainFrame, bool hasMobileDocType = false);
-    enum class ZoomToInitialScale { No, Yes };
-    void viewportConfigurationChanged(ZoomToInitialScale = ZoomToInitialScale::No);
     void updateViewportSizeForCSSViewportUnits();
 
     static void convertSelectionRectsToRootView(WebCore::FrameView*, Vector<WebCore::SelectionRect>&);
@@ -1310,8 +1321,15 @@ private:
     RefPtr<ShareableBitmap> shareableBitmapSnapshotForNode(WebCore::Element&);
     WebAutocorrectionContext autocorrectionContext();
     bool applyAutocorrectionInternal(const String& correction, const String& originalText);
+#endif
+
+#if ENABLE(META_VIEWPORT)
+    void resetViewportDefaultConfiguration(WebFrame* mainFrame, bool hasMobileDocType = false);
+    enum class ZoomToInitialScale { No, Yes };
+    void viewportConfigurationChanged(ZoomToInitialScale = ZoomToInitialScale::No);
     bool shouldIgnoreMetaViewport() const;
 #endif
+
 #if ENABLE(TEXT_AUTOSIZING)
     void textAutoSizingAdjustmentTimerFired();
     void resetTextAutosizing();
@@ -1447,8 +1465,8 @@ private:
     void getSelectionAsWebArchiveData(CallbackID);
     void getSourceForFrame(WebCore::FrameIdentifier, CallbackID);
     void getWebArchiveOfFrame(WebCore::FrameIdentifier, CallbackID);
-    void runJavaScript(WebFrame*, WebCore::RunJavaScriptParameters&&, const Optional<String>& worldName, CallbackID);
-    void runJavaScriptInMainFrameScriptWorld(WebCore::RunJavaScriptParameters&&, const Optional<String>& worldName, CallbackID);
+    void runJavaScript(WebFrame*, WebCore::RunJavaScriptParameters&&, ContentWorldIdentifier, CallbackID);
+    void runJavaScriptInMainFrameScriptWorld(WebCore::RunJavaScriptParameters&&, const std::pair<ContentWorldIdentifier, String>& worldData, CallbackID);
     void runJavaScriptInFrame(WebCore::FrameIdentifier, const String&, bool forceUserGesture, CallbackID);
     void forceRepaint(CallbackID);
     void takeSnapshot(WebCore::IntRect snapshotRect, WebCore::IntSize bitmapSize, uint32_t options, CallbackID);
@@ -1525,7 +1543,7 @@ private:
     void extendSandboxForFilesFromOpenPanel(SandboxExtension::HandleArray&&);
 #endif
 
-    void didReceiveGeolocationPermissionDecision(uint64_t geolocationID, bool allowed);
+    void didReceiveGeolocationPermissionDecision(uint64_t geolocationID, const String& authorizationToken);
 
     void didReceiveNotificationPermissionDecision(uint64_t notificationID, bool allowed);
 
@@ -1705,10 +1723,6 @@ private:
 
     bool m_alwaysShowsHorizontalScroller { false };
     bool m_alwaysShowsVerticalScroller { false };
-
-#if PLATFORM(IOS_FAMILY)
-    bool m_ignoreViewportScalingConstraints { false };
-#endif
 
 #if ENABLE(PRIMARY_SNAPSHOTTED_PLUGIN_HEURISTIC)
     bool m_readyToFindPrimarySnapshottedPlugin { false };
@@ -1892,7 +1906,14 @@ private:
 #if ENABLE(IOS_TOUCH_EVENTS)
     CompletionHandler<void(bool)> m_pendingSynchronousTouchEventReply;
 #endif
-    
+
+#if ENABLE(META_VIEWPORT)
+    WebCore::ViewportConfiguration m_viewportConfiguration;
+    bool m_useTestingViewportConfiguration { false };
+    bool m_forceAlwaysUserScalable { false };
+    bool m_ignoreViewportScalingConstraints { false };
+#endif
+
 #if PLATFORM(IOS_FAMILY)
     RefPtr<WebCore::Range> m_currentWordRange;
     RefPtr<WebCore::Node> m_interactionNode;
@@ -1907,16 +1928,12 @@ private:
     WebCore::FloatPoint m_potentialTapLocation;
     RefPtr<WebCore::SecurityOrigin> m_potentialTapSecurityOrigin;
 
-    WebCore::ViewportConfiguration m_viewportConfiguration;
-
     bool m_hasReceivedVisibleContentRectsAfterDidCommitLoad { false };
     bool m_hasRestoredExposedContentRectAfterDidCommitLoad { false };
     bool m_scaleWasSetByUIProcess { false };
     bool m_userHasChangedPageScaleFactor { false };
     bool m_hasStablePageScaleFactor { true };
-    bool m_useTestingViewportConfiguration { false };
     bool m_isInStableState { true };
-    bool m_forceAlwaysUserScalable { false };
     MonotonicTime m_oldestNonStableUpdateVisibleContentRectsTimestamp;
     Seconds m_estimatedLatency { 0 };
     WebCore::FloatSize m_screenSize;
@@ -2025,7 +2042,15 @@ private:
     WebCore::Timer m_textAutoSizingAdjustmentTimer;
 #endif
 
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
+    HashMap<WebCore::RegistrableDomain, WebCore::RegistrableDomain> m_domainsWithPageLevelStorageAccess;
+#endif
+
     String m_overriddenMediaType;
+
+#if PLATFORM(GTK)
+    String m_themeName;
+#endif
 };
 
 #if !PLATFORM(IOS_FAMILY)

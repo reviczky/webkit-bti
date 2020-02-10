@@ -32,7 +32,6 @@
 #include "CanvasRenderingContext.h"
 #include "Chrome.h"
 #include "ChromeClient.h"
-#include "DocumentTimeline.h"
 #include "Frame.h"
 #include "FrameView.h"
 #include "FullscreenManager.h"
@@ -42,6 +41,7 @@
 #include "HTMLNames.h"
 #include "HitTestResult.h"
 #include "InspectorInstrumentation.h"
+#include "KeyframeEffectStack.h"
 #include "LayerAncestorClippingStack.h"
 #include "LayerOverlapMap.h"
 #include "Logging.h"
@@ -1391,7 +1391,7 @@ void RenderLayerCompositor::logLayerInfo(const RenderLayer& layer, const char* p
     absoluteBounds.move(layer.offsetFromAncestor(m_renderView.layer()));
     
     StringBuilder logString;
-    logString.append(pad(' ', 12 + depth * 2, hex(reinterpret_cast<uintptr_t>(&layer), Lowercase)), " id ", backing->graphicsLayer()->primaryLayerID(), " (", FormattedNumber::fixedWidth(absoluteBounds.x().toFloat(), 3), ',', FormattedNumber::fixedWidth(absoluteBounds.y().toFloat(), 3), '-', FormattedNumber::fixedWidth(absoluteBounds.maxX().toFloat(), 3), ',', FormattedNumber::fixedWidth(absoluteBounds.maxY().toFloat(), 3), ") ", FormattedNumber::fixedWidth(backing->backingStoreMemoryEstimate() / 1024, 2), "KB");
+    logString.append(pad(' ', 12 + depth * 2, hex(reinterpret_cast<uintptr_t>(&layer), Lowercase)), " id ", backing->graphicsLayer()->primaryLayerID(), " (", absoluteBounds.x().toFloat(), ',', absoluteBounds.y().toFloat(), '-', absoluteBounds.maxX().toFloat(), ',', absoluteBounds.maxY().toFloat(), ") ", FormattedNumber::fixedWidth(backing->backingStoreMemoryEstimate() / 1024, 2), "KB");
 
     if (!layer.renderer().style().hasAutoUsedZIndex())
         logString.append(" z-index: ", layer.renderer().style().usedZIndex());
@@ -1908,8 +1908,7 @@ void RenderLayerCompositor::addToOverlapMap(LayerOverlapMap& overlapMap, const R
     auto clippedBounds = extent.bounds;
     if (!clipRect.isInfinite()) {
         // With delegated page scaling, pageScaleFactor() is not applied by RenderView, so we should not scale here.
-        auto& frameView = m_renderView.frameView();
-        if (!frameView.delegatesPageScaling())
+        if (!page().delegatesScaling())
             clipRect.scale(pageScaleFactor());
 
         clippedBounds.intersect(clipRect);
@@ -2779,9 +2778,14 @@ bool RenderLayerCompositor::requiresCompositingForAnimation(RenderLayerModelObje
         return false;
 
     if (auto* element = renderer.element()) {
-        if (auto* timeline = element->document().existingTimeline()) {
-            if (timeline->runningAnimationsForElementAreAllAccelerated(*element))
-                return true;
+        if (auto* effectsStack = element->keyframeEffectStack()) {
+            return (effectsStack->isCurrentlyAffectingProperty(CSSPropertyOpacity)
+                && (usesCompositing() || (m_compositingTriggers & ChromeClient::AnimatedOpacityTrigger)))
+                || effectsStack->isCurrentlyAffectingProperty(CSSPropertyFilter)
+#if ENABLE(FILTERS_LEVEL_2)
+                || effectsStack->isCurrentlyAffectingProperty(CSSPropertyWebkitBackdropFilter)
+#endif
+                || effectsStack->isCurrentlyAffectingProperty(CSSPropertyTransform);
         }
     }
 
@@ -3338,13 +3342,14 @@ bool RenderLayerCompositor::isRunningTransformAnimation(RenderLayerModelObject& 
     if (!(m_compositingTriggers & ChromeClient::AnimationTrigger))
         return false;
 
-    if (RuntimeEnabledFeatures::sharedFeatures().webAnimationsCSSIntegrationEnabled()) {
-        if (auto* element = renderer.element()) {
-            if (auto* timeline = element->document().existingTimeline())
-                return timeline->isRunningAnimationOnRenderer(renderer, CSSPropertyTransform);
-        }
-        return false;
+    if (auto* element = renderer.element()) {
+        if (auto* effectsStack = element->keyframeEffectStack())
+            return effectsStack->isCurrentlyAffectingProperty(CSSPropertyTransform);
     }
+
+    if (RuntimeEnabledFeatures::sharedFeatures().webAnimationsCSSIntegrationEnabled())
+        return false;
+
     return renderer.animation().isRunningAnimationOnRenderer(renderer, CSSPropertyTransform);
 }
 

@@ -415,12 +415,12 @@ public:
     WEBCORE_EXPORT ViewportArguments viewportArguments() const;
 
     OptionSet<DisabledAdaptations> disabledAdaptations() const { return m_disabledAdaptations; }
-#ifndef NDEBUG
+#if ASSERT_ENABLED
     bool didDispatchViewportPropertiesChanged() const { return m_didDispatchViewportPropertiesChanged; }
 #endif
 
     void setReferrerPolicy(ReferrerPolicy);
-    ReferrerPolicy referrerPolicy() const { return m_referrerPolicy.valueOr(ReferrerPolicy::NoReferrerWhenDowngrade); }
+    ReferrerPolicy referrerPolicy() const final { return m_referrerPolicy.valueOr(ReferrerPolicy::NoReferrerWhenDowngrade); }
 
     WEBCORE_EXPORT DocumentType* doctype() const;
 
@@ -541,6 +541,7 @@ public:
     Style::Resolver& userAgentShadowTreeStyleResolver();
 
     CSSFontSelector& fontSelector() { return m_fontSelector; }
+    const CSSFontSelector& fontSelector() const { return m_fontSelector; }
 
     WEBCORE_EXPORT bool haveStylesheetsLoaded() const;
     bool isIgnoringPendingStylesheets() const { return m_ignorePendingStylesheets; }
@@ -687,8 +688,8 @@ public:
     const String& baseTarget() const { return m_baseTarget; }
     void processBaseElement();
 
-    WEBCORE_EXPORT URL completeURL(const String&) const final;
-    URL completeURL(const String&, const URL& baseURLOverride) const;
+    WEBCORE_EXPORT URL completeURL(const String&, ForceUTF8 = ForceUTF8::No) const final;
+    URL completeURL(const String&, const URL& baseURLOverride, ForceUTF8 = ForceUTF8::No) const;
 
     String userAgent(const URL&) const final;
 
@@ -761,6 +762,9 @@ public:
 
     void setFocusNavigationStartingNode(Node*);
     Element* focusNavigationStartingNode(FocusDirection) const;
+
+    void didRejectSyncXHRDuringPageDismissal();
+    bool shouldIgnoreSyncXHRs() const;
 
     enum class NodeRemoval { Node, ChildrenOfNode };
     void adjustFocusedNodeOnNodeRemoval(Node&, NodeRemoval = NodeRemoval::Node);
@@ -1468,6 +1472,8 @@ public:
 
     WEBCORE_EXPORT void setConsoleMessageListener(RefPtr<StringCallback>&&); // For testing.
 
+    void addTimeline(DocumentTimeline&);
+    void removeTimeline(DocumentTimeline&);
     WEBCORE_EXPORT DocumentTimeline& timeline();
     DocumentTimeline* existingTimeline() const { return m_timeline.get(); }
     Vector<RefPtr<WebAnimation>> getAnimations();
@@ -1547,6 +1553,7 @@ public:
     TextManipulationController* textManipulationControllerIfExists() { return m_textManipulationController.get(); }
         
     HighlightMap& highlightMap();
+    void updateHighlightPositions();
 
 protected:
     enum ConstructionFlags { Synthesized = 1, NonRenderedPlaceholder = 1 << 1 };
@@ -2022,7 +2029,7 @@ private:
     bool m_hasHadCaptureMediaStreamTrack { false };
 #endif
 
-#ifndef NDEBUG
+#if ASSERT_ENABLED
     bool m_didDispatchViewportPropertiesChanged { false };
 #endif
 
@@ -2033,6 +2040,8 @@ private:
     static bool hasEverCreatedAnAXObjectCache;
 
     RefPtr<DocumentTimeline> m_timeline;
+    WeakHashSet<DocumentTimeline> m_timelines;
+
     DocumentIdentifier m_identifier;
 
     RefPtr<WindowEventLoop> m_eventLoop;
@@ -2053,7 +2062,7 @@ private:
     RefPtr<Worklet> m_paintWorklet;
     HashMap<String, Ref<PaintWorkletGlobalScope>> m_paintWorkletGlobalScopes;
 #endif
-
+    unsigned m_numberOfRejectedSyncXHRs { 0 };
     bool m_hasEvaluatedUserAgentScripts { false };
     bool m_isRunningUserScripts { false };
     bool m_mayBeDetachedFromFrame { true };

@@ -275,7 +275,20 @@ private:
                 }
                 break;
             }
-                
+
+            case CheckArrayOrEmpty: {
+                const AbstractValue& value = m_state.forNode(node->child1());
+                if (!(value.m_type & SpecEmpty)) {
+                    node->convertCheckArrayOrEmptyToCheckArray();
+                    changed = true;
+                }
+                // Even if the input includes SpecEmpty, we can fall through to CheckArray and remove the node.
+                // CheckArrayOrEmpty can be removed when arrayMode meets the requirement. In that case, CellUse's
+                // check just remains, and it works as CheckArrayOrEmpty without ArrayMode checking.
+                ASSERT(typeFilterFor(node->child1().useKind()) & SpecEmpty);
+                FALLTHROUGH;
+            }
+
             case CheckArray:
             case Arrayify: {
                 if (!node->arrayMode().alreadyChecked(m_graph, node, m_state.forNode(node->child1())))
@@ -401,7 +414,7 @@ private:
                         FlushedJSValue);
                 } else {
                     data = m_graph.m_stackAccessData.add(
-                        virtualRegisterForArgument(index + 1), FlushedJSValue);
+                        virtualRegisterForArgumentIncludingThis(index + 1), FlushedJSValue);
                 }
                 
                 if (inlineCallFrame && !inlineCallFrame->isVarargs() && index < static_cast<unsigned>(inlineCallFrame->argumentCountIncludingThis - 1)) {
@@ -712,6 +725,15 @@ private:
                 if (m_state.forNode(node->child1()).m_type & ~(SpecFullNumber | SpecBoolean | SpecString | SpecSymbol | SpecBigInt))
                     break;
                 
+                node->convertToIdentity();
+                changed = true;
+                break;
+            }
+
+            case ToPropertyKey: {
+                if (m_state.forNode(node->child1()).m_type & ~(SpecString | SpecSymbol))
+                    break;
+
                 node->convertToIdentity();
                 changed = true;
                 break;

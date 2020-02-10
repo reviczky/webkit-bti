@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 
 include(WebKitCommon)
+include(target/TargetWTF)
+include(target/TargetJavaScriptCore)
 include(WebCoreMacros.cmake)
 include(Headers.cmake)
 
@@ -66,7 +68,6 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/Modules/webgpu/WHLSL"
     "${WEBCORE_DIR}/Modules/webgpu/WHLSL/AST"
     "${WEBCORE_DIR}/Modules/websockets"
-    "${WEBCORE_DIR}/Modules/webvr"
     "${WEBCORE_DIR}/accessibility"
     "${WEBCORE_DIR}/accessibility/isolatedtree"
     "${WEBCORE_DIR}/animation"
@@ -107,7 +108,9 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/layout/inlineformatting"
     "${WEBCORE_DIR}/layout/inlineformatting/text"
     "${WEBCORE_DIR}/layout/integration"
+    "${WEBCORE_DIR}/layout/invalidation"
     "${WEBCORE_DIR}/layout/layouttree"
+    "${WEBCORE_DIR}/layout/tableformatting"
     "${WEBCORE_DIR}/loader"
     "${WEBCORE_DIR}/loader/appcache"
     "${WEBCORE_DIR}/loader/archive"
@@ -172,7 +175,6 @@ set(WebCore_PRIVATE_INCLUDE_DIRECTORIES
 set(WebCore_SYSTEM_INCLUDE_DIRECTORIES
     ${LIBXML2_INCLUDE_DIR}
     ${LIBXSLT_INCLUDE_DIR}
-    ${SQLITE_INCLUDE_DIR}
     ${ZLIB_INCLUDE_DIRS}
 )
 
@@ -211,7 +213,6 @@ set(WebCore_IDL_INCLUDES
     Modules/webdatabase
     Modules/webgpu
     Modules/websockets
-    Modules/webvr
 
     bindings/js
 
@@ -554,20 +555,6 @@ set(WebCore_NON_SVG_IDL_FILES
     Modules/websockets/CloseEvent.idl
     Modules/websockets/WebSocket.idl
 
-    Modules/webvr/DOMWindowWebVR.idl
-    Modules/webvr/NavigatorWebVR.idl
-    Modules/webvr/VRDisplay.idl
-    Modules/webvr/VRDisplayCapabilities.idl
-    Modules/webvr/VRDisplayEvent.idl
-    Modules/webvr/VRDisplayEventReason.idl
-    Modules/webvr/VREye.idl
-    Modules/webvr/VREyeParameters.idl
-    Modules/webvr/VRFieldOfView.idl
-    Modules/webvr/VRFrameData.idl
-    Modules/webvr/VRLayerInit.idl
-    Modules/webvr/VRPose.idl
-    Modules/webvr/VRStageParameters.idl
-
     accessibility/AccessibilityRole.idl
     accessibility/AriaAttributes.idl
 
@@ -585,6 +572,7 @@ set(WebCore_NON_SVG_IDL_FILES
     animation/DocumentTimeline.idl
     animation/DocumentTimelineOptions.idl
     animation/FillMode.idl
+    animation/GetAnimationsOptions.idl
     animation/IterationCompositeOperation.idl
     animation/KeyframeAnimationOptions.idl
     animation/KeyframeEffect.idl
@@ -762,7 +750,6 @@ set(WebCore_NON_SVG_IDL_FILES
     dom/ShadowRoot.idl
     dom/ShadowRootMode.idl
     dom/Slotable.idl
-    dom/SpectreGadget.idl
     dom/StaticRange.idl
     dom/StringCallback.idl
     dom/Text.idl
@@ -968,8 +955,10 @@ set(WebCore_NON_SVG_IDL_FILES
     page/ResizeObserverCallback.idl
     page/ResizeObserverEntry.idl
     page/Screen.idl
+    page/ScrollBehavior.idl
     page/ScrollIntoViewOptions.idl
     page/ScrollLogicalPosition.idl
+    page/ScrollOptions.idl
     page/ScrollToOptions.idl
     page/ShareData.idl
     page/UndoItem.idl
@@ -1187,8 +1176,6 @@ if (ENABLE_GAMEPAD)
         Modules/gamepad/GamepadButton.idl
         Modules/gamepad/GamepadEvent.idl
         Modules/gamepad/NavigatorGamepad.idl
-
-        Modules/webvr/GamepadWebVR.idl
     )
 
     list(APPEND WebCore_SOURCES
@@ -1233,9 +1220,9 @@ set(WebCore_PLUG_INS_RESOURCES
 )
 
 set(WebCore_LIBRARIES
+    SQLite::SQLite3
     ${LIBXML2_LIBRARIES}
     ${LIBXSLT_LIBRARIES}
-    ${SQLITE_LIBRARIES}
     ${ZLIB_LIBRARIES}
     PAL${DEBUG_SUFFIX}
 )
@@ -1556,12 +1543,6 @@ if (ENABLE_USER_MESSAGE_HANDLERS)
         page/UserMessageHandlersNamespace.cpp
         page/WebKitNamespace.cpp
     )
-endif ()
-
-if (USE_OPENVR)
-  list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES "${THIRDPARTY_DIR}/openvr/headers")
-  list(APPEND WebCore_PRIVATE_INCLUDE_DIRECTORIES "${WEBCORE_DIR}/platform/vr/openvr")
-  list(APPEND WebCore_LIBRARIES openvr_api)
 endif ()
 
 if (USE_WOFF2)

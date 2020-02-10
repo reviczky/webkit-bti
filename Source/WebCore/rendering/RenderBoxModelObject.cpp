@@ -962,7 +962,7 @@ void RenderBoxModelObject::paintFillLayerExtended(const PaintInfo& paintInfo, co
 
             auto drawResult = context.drawTiledImage(*image, geometry.destRect(), toLayoutPoint(geometry.relativePhase()), geometry.tileSize(), geometry.spaceSize(), options);
             if (drawResult == ImageDrawResult::DidRequestDecoding) {
-                ASSERT(bgImage->isCachedImage());
+                ASSERT(bgImage->hasCachedImage());
                 bgImage->cachedImage()->addClientWaitingForAsyncDecoding(*this);
             }
         }
@@ -2693,6 +2693,23 @@ bool RenderBoxModelObject::hasRunningAcceleratedAnimations() const
             return timeline->runningAnimationsForElementAreAllAccelerated(*node);
     }
     return false;
+}
+
+void RenderBoxModelObject::collectAbsoluteQuadsForContinuation(Vector<FloatQuad>& quads, bool* wasFixed) const
+{
+    ASSERT(continuation());
+    for (auto* nextInContinuation = this->continuation(); nextInContinuation; nextInContinuation = nextInContinuation->continuation()) {
+        if (is<RenderBlock>(*nextInContinuation)) {
+            auto& blockBox = downcast<RenderBlock>(*nextInContinuation);
+            // For blocks inside inlines, we include margins so that we run right up to the inline boxes
+            // above and below us (thus getting merged with them to form a single irregular shape).
+            auto logicalRect = FloatRect { 0, -blockBox.collapsedMarginBefore(), blockBox.width(),
+                blockBox.height() + blockBox.collapsedMarginBefore() + blockBox.collapsedMarginAfter() };
+            nextInContinuation->absoluteQuadsIgnoringContinuation(logicalRect, quads, wasFixed);
+            continue;
+        }
+        nextInContinuation->absoluteQuadsIgnoringContinuation({ }, quads, wasFixed);
+    }
 }
 
 } // namespace WebCore

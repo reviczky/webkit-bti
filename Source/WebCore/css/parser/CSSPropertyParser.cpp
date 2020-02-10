@@ -2151,7 +2151,7 @@ static RefPtr<CSSPrimitiveValue> consumeRxOrRy(CSSParserTokenRange& range, CSSPa
 static RefPtr<CSSValue> consumeCursor(CSSParserTokenRange& range, const CSSParserContext& context, bool inQuirksMode)
 {
     RefPtr<CSSValueList> list;
-    while (RefPtr<CSSValue> image = consumeImage(range, context, ConsumeGeneratedImage::Forbid)) {
+    while (RefPtr<CSSValue> image = consumeImage(range, context, { AllowedImageType::URLFunction, AllowedImageType::ImageSet })) {
         double num;
         IntPoint hotSpot(-1, -1);
         bool hotSpotSpecified = false;
@@ -2326,6 +2326,14 @@ static RefPtr<CSSValueList> consumeScrollSnapType(CSSParserTokenRange& range)
 }
 
 #endif
+
+static RefPtr<CSSPrimitiveValue> consumeScrollBehavior(CSSParserTokenRange& range)
+{
+    auto valueID = range.peek().id();
+    if (valueID != CSSValueAuto && valueID != CSSValueSmooth)
+        return nullptr;
+    return consumeIdent(range);
+}
 
 static RefPtr<CSSValue> consumeBorderRadiusCorner(CSSParserTokenRange& range, CSSParserMode cssParserMode)
 {
@@ -3909,6 +3917,10 @@ RefPtr<CSSValue> CSSPropertyParser::parseSingleValue(CSSPropertyID property, CSS
     case CSSPropertyScrollSnapType:
         return consumeScrollSnapType(m_range);
 #endif
+    case CSSPropertyScrollBehavior:
+        if (!m_context.scrollBehaviorEnabled)
+            return nullptr;
+        return consumeScrollBehavior(m_range);
     case CSSPropertyClip:
         return consumeClip(m_range, m_context.mode);
 #if ENABLE(POINTER_EVENTS)

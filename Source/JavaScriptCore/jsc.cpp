@@ -31,6 +31,7 @@
 #include "CatchScope.h"
 #include "CodeBlock.h"
 #include "CodeCache.h"
+#include "CompilerTimingScope.h"
 #include "Completion.h"
 #include "ConfigFile.h"
 #include "Disassembler.h"
@@ -135,7 +136,7 @@
 #include <windows.h>
 #endif
 
-#if PLATFORM(IOS_FAMILY) && CPU(ARM_THUMB2)
+#if OS(DARWIN) && CPU(ARM_THUMB2)
 #include <fenv.h>
 #include <arm/arch.h>
 #endif
@@ -2484,7 +2485,7 @@ static void startTimeoutThreadIfNeeded(VM& vm)
 
 int main(int argc, char** argv)
 {
-#if PLATFORM(IOS_FAMILY) && CPU(ARM_THUMB2)
+#if OS(DARWIN) && CPU(ARM_THUMB2)
     // Enabled IEEE754 denormal support.
     fenv_t env;
     fegetenv( &env );
@@ -3089,6 +3090,9 @@ int runJSC(const CommandLine& options, bool isWorker, const Func& func)
         std::sort(compileTimeKeys.begin(), compileTimeKeys.end());
         for (const CString& key : compileTimeKeys)
             printf("%40s: %.3lf ms\n", key.data(), compileTimeStats.get(key).milliseconds());
+
+        if (Options::reportTotalPhaseTimes())
+            logTotalPhaseTimes();
     }
 #endif
 

@@ -353,8 +353,6 @@ void JITCompiler::compile()
     emitStackOverflowCheck(*this, stackOverflow);
 
     addPtr(TrustedImm32(-(m_graph.frameRegisterCount() * sizeof(Register))), GPRInfo::callFrameRegister, stackPointerRegister);
-    if (Options::zeroStackFrame())
-        clearStackFrame(GPRInfo::callFrameRegister, stackPointerRegister, GPRInfo::regT0, m_graph.frameRegisterCount() * sizeof(Register));
     checkStackPointerAlignment();
     compileSetupRegistersForEntry();
     compileEntryExecutionFlag();
@@ -394,9 +392,6 @@ void JITCompiler::compile()
     link(*linkBuffer);
     m_speculative->linkOSREntries(*linkBuffer);
 
-    m_jitCode->shrinkToFit();
-    codeBlock()->shrinkToFit(CodeBlock::LateShrink);
-
     disassemble(*linkBuffer);
 
     m_graph.m_plan.setFinalizer(makeUnique<JITFinalizer>(
@@ -422,8 +417,6 @@ void JITCompiler::compileFunction()
 
     // Move the stack pointer down to accommodate locals
     addPtr(TrustedImm32(-(m_graph.frameRegisterCount() * sizeof(Register))), GPRInfo::callFrameRegister, stackPointerRegister);
-    if (Options::zeroStackFrame())
-        clearStackFrame(GPRInfo::callFrameRegister, stackPointerRegister, GPRInfo::regT0, m_graph.frameRegisterCount() * sizeof(Register));
     checkStackPointerAlignment();
 
     compileSetupRegistersForEntry();
@@ -498,9 +491,6 @@ void JITCompiler::compileFunction()
     link(*linkBuffer);
     m_speculative->linkOSREntries(*linkBuffer);
     
-    m_jitCode->shrinkToFit();
-    codeBlock()->shrinkToFit(CodeBlock::LateShrink);
-
     if (requiresArityFixup)
         linkBuffer->link(callArityFixup, FunctionPtr<JITThunkPtrTag>(vm().getCTIStub(arityFixupGenerator).code()));
 

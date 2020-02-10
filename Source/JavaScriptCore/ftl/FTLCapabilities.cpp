@@ -203,6 +203,7 @@ inline CapabilityLevel canCompile(Node* node)
     case Check:
     case CheckVarargs:
     case CheckArray:
+    case CheckArrayOrEmpty:
     case CheckNeutered:
     case CountExecution:
     case SuperSamplerBegin:
@@ -233,6 +234,7 @@ inline CapabilityLevel canCompile(Node* node)
     case MultiGetByOffset:
     case MultiPutByOffset:
     case ToPrimitive:
+    case ToPropertyKey:
     case Throw:
     case ThrowStaticError:
     case Unreachable:

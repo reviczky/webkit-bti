@@ -24,6 +24,7 @@
 #include "InlineTextBox.h"
 
 #include "BreakLines.h"
+#include "CompositionHighlight.h"
 #include "DashArray.h"
 #include "Document.h"
 #include "DocumentMarkerController.h"
@@ -1039,15 +1040,14 @@ Vector<MarkedText> InlineTextBox::collectMarkedTextsForHighlights(TextPaintPhase
     Vector<MarkedText> markedTexts;
     auto& parentRenderer = parent()->renderer();
     auto& parentStyle = parentRenderer.style();
-    for (auto& [highlightKey, highlightGroup] : renderer().document().highlightMap().map()) {
-        auto renderStyle = parentRenderer.getUncachedPseudoStyle({ PseudoId::Highlight, highlightKey }, &parentStyle);
+    for (auto& highlight : renderer().document().highlightMap().map()) {
+        auto renderStyle = parentRenderer.getUncachedPseudoStyle({ PseudoId::Highlight, highlight.key }, &parentStyle);
         if (!renderStyle)
             continue;
-        for (auto& staticRange : highlightGroup->ranges()) {
-            Position startPos = createLegacyEditingPosition(staticRange->startContainer(), staticRange->startOffset());
-            Position endPos = createLegacyEditingPosition(staticRange->endContainer(), staticRange->endOffset());
-
-            if (startPos.isNotNull() && endPos.isNotNull()) {
+        for (auto& rangeData : highlight.value->rangesData()) {
+            if (rangeData->startPosition && rangeData->endPosition) {
+                Position startPos = rangeData->startPosition.value();
+                Position endPos = rangeData->endPosition.value();
                 RenderObject* startRenderer = startPos.deprecatedNode()->renderer();
                 int startOffset = startPos.deprecatedEditingOffset();
                 RenderObject* endRenderer = endPos.deprecatedNode()->renderer();
@@ -1059,7 +1059,7 @@ Vector<MarkedText> InlineTextBox::collectMarkedTextsForHighlights(TextPaintPhase
                 highlightData.setContext({startRenderer, endRenderer, static_cast<unsigned>(startOffset), static_cast<unsigned>(endOffset)});
                 auto [highlightStart, highlightEnd] = highlightStartEnd(highlightData);
                 if (highlightStart < highlightEnd)
-                    markedTexts.append({ highlightStart, highlightEnd, MarkedText::Highlight, nullptr, highlightKey });
+                    markedTexts.append({ highlightStart, highlightEnd, MarkedText::Highlight, nullptr, highlight.key });
             }
         }
     }
@@ -1225,7 +1225,23 @@ void InlineTextBox::paintMarkedTextDecoration(PaintInfo& paintInfo, const FloatR
 
 void InlineTextBox::paintCompositionBackground(PaintInfo& paintInfo, const FloatPoint& boxOrigin)
 {
-    paintMarkedTextBackground(paintInfo, boxOrigin, Color::compositionFill, clampedOffset(renderer().frame().editor().compositionStart()), clampedOffset(renderer().frame().editor().compositionEnd()));
+    if (!renderer().frame().editor().compositionUsesCustomHighlights()) {
+        paintMarkedTextBackground(paintInfo, boxOrigin, Color::compositionFill, clampedOffset(renderer().frame().editor().compositionStart()), clampedOffset(renderer().frame().editor().compositionEnd()));
+        return;
+    }
+
+    for (auto& highlight : renderer().frame().editor().customCompositionHighlights()) {
+        if (highlight.endOffset <= m_start)
+            continue;
+
+        if (highlight.startOffset >= end())
+            break;
+
+        paintMarkedTextBackground(paintInfo, boxOrigin, highlight.color, clampedOffset(highlight.startOffset), clampedOffset(highlight.endOffset));
+
+        if (highlight.endOffset > end())
+            break;
+    }
 }
 
 void InlineTextBox::paintCompositionUnderlines(PaintInfo& paintInfo, const FloatPoint& boxOrigin) const
