@@ -205,8 +205,6 @@ public:
                 [codeBlock] (CCallHelpers& jit, B3::Air::Code& code) {
                     AllowMacroScratchRegisterUsage allowScratch(jit);
                     jit.addPtr(CCallHelpers::TrustedImm32(-code.frameSize()), GPRInfo::callFrameRegister, CCallHelpers::stackPointerRegister);
-                    if (Options::zeroStackFrame())
-                        jit.clearStackFrame(GPRInfo::callFrameRegister, CCallHelpers::stackPointerRegister, GPRInfo::regT0, code.frameSize());
 
                     jit.emitSave(code.calleeSaveRegisterAtOffsetList());
                     jit.emitPutToCallFrameHeader(codeBlock, VirtualRegister(CallFrameSlot::codeBlock));
@@ -359,12 +357,12 @@ public:
             availabilityMap().m_locals = Operands<Availability>(codeBlock()->numParameters(), 0, 0);
             for (unsigned i = codeBlock()->numParameters(); i--;) {
                 availabilityMap().m_locals.argument(i) =
-                    Availability(FlushedAt(FlushedJSValue, virtualRegisterForArgument(i)));
+                    Availability(FlushedAt(FlushedJSValue, virtualRegisterForArgumentIncludingThis(i)));
             }
 
             for (unsigned i = codeBlock()->numParameters(); i--;) {
                 MethodOfGettingAValueProfile profile(&m_graph.m_profiledBlock->valueProfileForArgument(i));
-                VirtualRegister operand = virtualRegisterForArgument(i);
+                VirtualRegister operand = virtualRegisterForArgumentIncludingThis(i);
                 LValue jsValue = m_out.load64(addressFor(operand));
                 
                 switch (m_graph.m_argumentFormats[0][i]) {
@@ -967,6 +965,9 @@ private:
         case CheckArray:
             compileCheckArray();
             break;
+        case CheckArrayOrEmpty:
+            compileCheckArrayOrEmpty();
+            break;
         case CheckNeutered:
             compileCheckNeutered();
             break;
@@ -1138,6 +1139,9 @@ private:
             break;
         case ToPrimitive:
             compileToPrimitive();
+            break;
+        case ToPropertyKey:
+            compileToPropertyKey();
             break;
         case MakeRope:
             compileMakeRope();
@@ -3407,11 +3411,10 @@ private:
 
         LValue cell = lowCell(m_node->child1());
         bool maySeeEmptyValue = m_interpreter.forNode(m_node->child1()).m_type & SpecEmpty;
-        LBasicBlock notEmpty;
-        LBasicBlock continuation;
-        LBasicBlock lastNext;
+        LBasicBlock continuation = nullptr;
+        LBasicBlock lastNext = nullptr;
         if (maySeeEmptyValue) {
-            notEmpty = m_out.newBlock();
+            LBasicBlock notEmpty = m_out.newBlock();
             continuation = m_out.newBlock();
             m_out.branch(m_out.isZero64(cell), unsure(continuation), unsure(notEmpty));
             lastNext = m_out.appendTo(notEmpty, continuation);
@@ -4065,13 +4068,41 @@ private:
             m_out.logicalNot(isArrayTypeForCheckArray(cell, m_node->arrayMode())));
     }
 
+    void compileCheckArrayOrEmpty()
+    {
+        Edge edge = m_node->child1();
+        LValue cell = lowCell(edge);
+
+        if (m_node->arrayMode().alreadyChecked(m_graph, m_node, abstractValue(edge))) {
+            // We can purge Empty check of CheckArrayOrEmpty completely in this case since CellUse only accepts SpecCell | SpecEmpty.
+            ASSERT(typeFilterFor(m_node->child1().useKind()) & SpecEmpty);
+            return;
+        }
+
+        bool maySeeEmptyValue = m_interpreter.forNode(m_node->child1()).m_type & SpecEmpty;
+        LBasicBlock continuation = nullptr;
+        LBasicBlock lastNext = nullptr;
+        if (maySeeEmptyValue) {
+            LBasicBlock notEmpty = m_out.newBlock();
+            continuation = m_out.newBlock();
+            m_out.branch(m_out.isZero64(cell), unsure(continuation), unsure(notEmpty));
+            lastNext = m_out.appendTo(notEmpty, continuation);
+        }
+
+        speculate(
+            BadIndexingType, jsValueValue(cell), 0,
+            m_out.logicalNot(isArrayTypeForCheckArray(cell, m_node->arrayMode())));
+
+        if (maySeeEmptyValue) {
+            m_out.jump(continuation);
+            m_out.appendTo(continuation, lastNext);
+        }
+    }
+
     void compileCheckNeutered()
     {
         Edge edge = m_node->child1();
         LValue cell = lowCell(edge);
-        
-        // We only emit this node after we have checked this is a typed array so that better be true now.
-        DFG_ASSERT(m_graph, m_node, speculationChecked(abstractValue(edge).m_type, SpecTypedArrayView));
 
         speculate(
             BadIndexingType, jsValueValue(cell), edge.node(),
@@ -4752,7 +4783,7 @@ private:
             if (inlineCallFrame->argumentCountIncludingThis > 1)
                 base = addressFor(inlineCallFrame->argumentsWithFixup[0].virtualRegister());
         } else
-            base = addressFor(virtualRegisterForArgument(0));
+            base = addressFor(virtualRegisterForArgumentIncludingThis(0));
         
         LValue result;
         if (base) {
@@ -7340,6 +7371,38 @@ private:
         m_out.appendTo(continuation, lastNext);
         setJSValue(m_out.phi(Int64, results));
     }
+
+    void compileToPropertyKey()
+    {
+        ASSERT(m_node->child1().useKind() == UntypedUse);
+        JSGlobalObject* globalObject = m_graph.globalObjectFor(m_node->origin.semantic);
+        LValue value = lowJSValue(m_node->child1());
+
+        LBasicBlock isCellCase = m_out.newBlock();
+        LBasicBlock notStringCase = m_out.newBlock();
+        LBasicBlock slowPathCase = m_out.newBlock();
+        LBasicBlock continuation = m_out.newBlock();
+
+        Vector<ValueFromBlock, 3> results;
+        m_out.branch(
+            isCell(value, provenType(m_node->child1())), unsure(isCellCase), unsure(slowPathCase));
+
+        LBasicBlock lastNext = m_out.appendTo(isCellCase, notStringCase);
+        results.append(m_out.anchor(value));
+        m_out.branch(isString(value, provenType(m_node->child1())), unsure(continuation), unsure(notStringCase));
+
+        m_out.appendTo(notStringCase, slowPathCase);
+        results.append(m_out.anchor(value));
+        m_out.branch(isSymbol(value, provenType(m_node->child1())), unsure(continuation), unsure(slowPathCase));
+
+        m_out.appendTo(slowPathCase, continuation);
+        results.append(m_out.anchor(vmCall(
+            Int64, operationToPropertyKey, weakPointer(globalObject), value)));
+        m_out.jump(continuation);
+
+        m_out.appendTo(continuation, lastNext);
+        setJSValue(m_out.phi(Int64, results));
+    }
     
     void compileMakeRope()
     {
@@ -8530,7 +8593,7 @@ private:
         addArgument(jsCallee, VirtualRegister(CallFrameSlot::callee), 0);
         addArgument(m_out.constInt32(numArgs), VirtualRegister(CallFrameSlot::argumentCountIncludingThis), PayloadOffset);
         for (unsigned i = 0; i < numArgs; ++i)
-            addArgument(lowJSValue(m_graph.varArgChild(node, 1 + i)), virtualRegisterForArgument(i), 0);
+            addArgument(lowJSValue(m_graph.varArgChild(node, 1 + i)), virtualRegisterForArgumentIncludingThis(i), 0);
 
         PatchpointValue* patchpoint = m_out.patchpoint(Int64);
         patchpoint->appendVector(arguments);
@@ -8640,9 +8703,9 @@ private:
             addArgument(jsCallee, VirtualRegister(CallFrameSlot::callee), 0);
             addArgument(m_out.constInt32(numPassedArgs), VirtualRegister(CallFrameSlot::argumentCountIncludingThis), PayloadOffset);
             for (unsigned i = 0; i < numPassedArgs; ++i)
-                addArgument(lowJSValue(m_graph.varArgChild(node, 1 + i)), virtualRegisterForArgument(i), 0);
+                addArgument(lowJSValue(m_graph.varArgChild(node, 1 + i)), virtualRegisterForArgumentIncludingThis(i), 0);
             for (unsigned i = numPassedArgs; i < numAllocatedArgs; ++i)
-                addArgument(m_out.constInt64(JSValue::encode(jsUndefined())), virtualRegisterForArgument(i), 0);
+                addArgument(m_out.constInt64(JSValue::encode(jsUndefined())), virtualRegisterForArgumentIncludingThis(i), 0);
         } else {
             for (unsigned i = 0; i < numPassedArgs; ++i)
                 arguments.append(ConstrainedValue(lowJSValue(m_graph.varArgChild(node, 1 + i)), ValueRep::WarmAny));
@@ -9538,7 +9601,7 @@ private:
         addArgument(jsCallee, VirtualRegister(CallFrameSlot::callee), 0);
         addArgument(m_out.constInt32(numArgs), VirtualRegister(CallFrameSlot::argumentCountIncludingThis), PayloadOffset);
         for (unsigned i = 0; i < numArgs; ++i)
-            addArgument(lowJSValue(m_graph.varArgChild(node, 1 + i)), virtualRegisterForArgument(i), 0);
+            addArgument(lowJSValue(m_graph.varArgChild(node, 1 + i)), virtualRegisterForArgumentIncludingThis(i), 0);
         
         PatchpointValue* patchpoint = m_out.patchpoint(Int64);
         patchpoint->appendVector(arguments);
@@ -13285,7 +13348,7 @@ private:
         LValue base = lowCell(baseEdge);
         JSValue baseConstant = m_state.forNode(baseEdge).value();
 
-        LValue globalObject;
+        LValue globalObject = nullptr;
         JSValue globalObjectConstant;
         if (domJIT->requireGlobalObject) {
             Edge& globalObjectEdge = m_node->child2();

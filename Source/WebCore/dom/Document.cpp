@@ -2578,10 +2578,9 @@ void Document::prepareForDestruction()
 
     detachFromFrame();
 
-    if (m_timeline) {
-        m_timeline->detachFromDocument();
-        m_timeline = nullptr;
-    }
+    while (!m_timelines.computesEmpty())
+        m_timelines.begin()->detachFromDocument();
+    m_timeline = nullptr;
 
 #if ENABLE(CSS_PAINTING_API)
     for (auto& scope : m_paintWorkletGlobalScopes.values())
@@ -2738,6 +2737,39 @@ HighlightMap& Document::highlightMap()
     if (!m_highlightMap)
         m_highlightMap = HighlightMap::create();
     return *m_highlightMap;
+}
+
+void Document::updateHighlightPositions()
+{
+    Vector<WeakPtr<HighlightRangeData>> rangesData;
+    if (m_highlightMap) {
+        for (auto& highlight : m_highlightMap->map()) {
+            for (auto& rangeData : highlight.value->rangesData()) {
+                if (rangeData->startPosition && rangeData->endPosition)
+                    continue;
+                if (&rangeData->range->startContainer()->treeScope() != &rangeData->range->endContainer()->treeScope())
+                    continue;
+                rangesData.append(makeWeakPtr(rangeData.ptr()));
+            }
+        }
+    }
+    
+    for (auto& weakRangeData : rangesData) {
+        if (auto* rangeData = weakRangeData.get()) {
+            VisibleSelection visibleSelection(rangeData->range);
+            Position startPosition;
+            Position endPosition;
+            if (!rangeData->startPosition.hasValue())
+                startPosition = visibleSelection.visibleStart().deepEquivalent();
+            if (!rangeData->endPosition.hasValue())
+                endPosition = visibleSelection.visibleEnd().deepEquivalent(); // <MMG> switch to END
+            if (!weakRangeData.get())
+                continue;
+            
+            rangeData->startPosition = startPosition;
+            rangeData->endPosition = endPosition;
+        }
+    }
 }
 
 ScriptableDocumentParser* Document::scriptableDocumentParser() const
@@ -3053,8 +3085,8 @@ void Document::implicitClose()
 
     m_processingLoadEvent = false;
 
-    if (auto* fontFaceSet = fontSelector().optionalFontFaceSet())
-        fontFaceSet->didFirstLayout();
+    if (auto fontFaceSet = makeRefPtr(fontSelector().fontFaceSetIfExists()))
+        fontFaceSet->documentDidFinishLoading();
 
 #if PLATFORM(COCOA) || PLATFORM(WIN) || PLATFORM(GTK)
     if (f && hasLivingRenderTree() && AXObjectCache::accessibilityEnabled()) {
@@ -3580,7 +3612,7 @@ void Document::processHttpEquiv(const String& equiv, const String& content, bool
         break;
 
     case HTTPHeaderName::Refresh: {
-        double delay;
+        double delay = 0;
         String urlString;
         if (frame && parseMetaHTTPEquivRefresh(content, delay, urlString)) {
             URL completedURL;
@@ -3691,7 +3723,7 @@ ViewportArguments Document::viewportArguments() const
 void Document::updateViewportArguments()
 {
     if (page() && frame()->isMainFrame()) {
-#ifndef NDEBUG
+#if ASSERT_ENABLED
         m_didDispatchViewportPropertiesChanged = true;
 #endif
         page()->chrome().dispatchViewportPropertiesDidChange(viewportArguments());
@@ -5205,7 +5237,7 @@ void Document::setDecoder(RefPtr<TextResourceDecoder>&& decoder)
     m_decoder = WTFMove(decoder);
 }
 
-URL Document::completeURL(const String& url, const URL& baseURLOverride) const
+URL Document::completeURL(const String& url, const URL& baseURLOverride, ForceUTF8 forceUTF8) const
 {
     // Always return a null URL when passed a null string.
     // FIXME: Should we change the URL constructor to have this behavior?
@@ -5213,14 +5245,14 @@ URL Document::completeURL(const String& url, const URL& baseURLOverride) const
     if (url.isNull())
         return URL();
     const URL& baseURL = ((baseURLOverride.isEmpty() || baseURLOverride == WTF::blankURL()) && parentDocument()) ? parentDocument()->baseURL() : baseURLOverride;
-    if (!m_decoder)
+    if (!m_decoder || forceUTF8 == ForceUTF8::Yes)
         return URL(baseURL, url);
     return URL(baseURL, url, m_decoder->encodingForURLParsing());
 }
 
-URL Document::completeURL(const String& url) const
+URL Document::completeURL(const String& url, ForceUTF8 forceUTF8) const
 {
-    return completeURL(url, m_baseURL);
+    return completeURL(url, m_baseURL, forceUTF8);
 }
 
 void Document::setBackForwardCacheState(BackForwardCacheState state)
@@ -5295,7 +5327,7 @@ void Document::suspend(ReasonForSuspension reason)
     for (auto* element : m_documentSuspensionCallbackElements)
         element->prepareForDocumentSuspension();
 
-#ifndef NDEBUG
+#if ASSERT_ENABLED
     // Clear the update flag to be able to check if the viewport arguments update
     // is dispatched, after the document is restored from the back/forward cache.
     m_didDispatchViewportPropertiesChanged = false;
@@ -6319,8 +6351,22 @@ void Document::resumeScriptedAnimationControllerCallbacks()
 
 void Document::updateAnimationsAndSendEvents(DOMHighResTimeStamp timestamp)
 {
-    if (m_timeline)
-        m_timeline->updateAnimationsAndSendEvents(timestamp);
+    ASSERT(!m_timelines.hasNullReferences());
+
+    // We need to copy m_timelines before iterating over its members since calling updateAnimationsAndSendEvents() may mutate m_timelines.
+    Vector<RefPtr<DocumentTimeline>> timelines;
+    bool shouldUpdateAnimations = false;
+    for (auto& timeline : m_timelines) {
+        if (!shouldUpdateAnimations && timeline.scheduledUpdate())
+            shouldUpdateAnimations = true;
+        timelines.append(&timeline);
+    }
+
+    for (auto& timeline : timelines) {
+        timeline->updateCurrentTime(timestamp);
+        if (shouldUpdateAnimations)
+            timeline->updateAnimationsAndSendEvents();
+    }
 }
 
 void Document::serviceRequestAnimationFrameCallbacks(DOMHighResTimeStamp timestamp)
@@ -6466,11 +6512,8 @@ int Document::requestAnimationFrame(Ref<RequestAnimationFrameCallback>&& callbac
         if (!page() || page()->scriptedAnimationsSuspended())
             m_scriptedAnimationController->suspend();
 
-        if (page() && page()->isLowPowerModeEnabled())
-            m_scriptedAnimationController->addThrottlingReason(ScriptedAnimationController::ThrottlingReason::LowPowerMode);
-
         if (!topOrigin().canAccess(securityOrigin()) && !hasHadUserInteraction())
-            m_scriptedAnimationController->addThrottlingReason(ScriptedAnimationController::ThrottlingReason::NonInteractedCrossOriginFrame);
+            m_scriptedAnimationController->addThrottlingReason(ThrottlingReason::NonInteractedCrossOriginFrame);
     }
 
     return m_scriptedAnimationController->registerCallback(WTFMove(callback));
@@ -6709,7 +6752,7 @@ void Document::updateLastHandledUserGestureTimestamp(MonotonicTime time)
 
     if (static_cast<bool>(time) && m_scriptedAnimationController) {
         // It's OK to always remove NonInteractedCrossOriginFrame even if this frame isn't cross-origin.
-        m_scriptedAnimationController->removeThrottlingReason(ScriptedAnimationController::ThrottlingReason::NonInteractedCrossOriginFrame);
+        m_scriptedAnimationController->removeThrottlingReason(ThrottlingReason::NonInteractedCrossOriginFrame);
     }
 
     // DOM Timer alignment may depend on the user having interacted with the document.
@@ -7049,7 +7092,6 @@ bool Document::useSystemAppearance() const
 
 bool Document::useDarkAppearance(const RenderStyle* style) const
 {
-#if HAVE(OS_DARK_MODE_SUPPORT)
 #if ENABLE(DARK_MODE_CSS)
     OptionSet<ColorScheme> colorScheme;
 
@@ -7077,9 +7119,6 @@ bool Document::useDarkAppearance(const RenderStyle* style) const
 #if ENABLE(DARK_MODE_CSS)
     if (colorScheme.contains(ColorScheme::Dark))
         return pageUsesDarkAppearance;
-#endif
-#else
-    UNUSED_PARAM(style);
 #endif
 
     return false;
@@ -8008,6 +8047,16 @@ void Document::setConsoleMessageListener(RefPtr<StringCallback>&& listener)
     m_consoleMessageListener = listener;
 }
 
+void Document::addTimeline(DocumentTimeline& timeline)
+{
+    m_timelines.add(timeline);
+}
+
+void Document::removeTimeline(DocumentTimeline& timeline)
+{
+    m_timelines.remove(timeline);
+}
+
 DocumentTimeline& Document::timeline()
 {
     if (!m_timeline)
@@ -8348,6 +8397,24 @@ void Document::setHasEvaluatedUserAgentScripts()
         m_hasEvaluatedUserAgentScripts = true;
     else
         top.setHasEvaluatedUserAgentScripts();
+}
+
+void Document::didRejectSyncXHRDuringPageDismissal()
+{
+    ++m_numberOfRejectedSyncXHRs;
+    if (m_numberOfRejectedSyncXHRs > 1)
+        return;
+
+    postTask([this, weakThis = makeWeakPtr(*this)](auto&) mutable {
+        if (weakThis)
+            m_numberOfRejectedSyncXHRs = 0;
+    });
+}
+
+bool Document::shouldIgnoreSyncXHRs() const
+{
+    const unsigned maxRejectedSyncXHRsPerEventLoopIteration = 5;
+    return m_numberOfRejectedSyncXHRs > maxRejectedSyncXHRsPerEventLoopIteration;
 }
 
 #if ENABLE(APPLE_PAY)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,6 +26,7 @@
 #include "config.h"
 #include "StructureStubInfo.h"
 
+#include "CacheableIdentifierInlines.h"
 #include "JSObject.h"
 #include "JSCInlines.h"
 #include "PolymorphicAccess.h"
@@ -62,11 +63,12 @@ StructureStubInfo::~StructureStubInfo()
 {
 }
 
-void StructureStubInfo::initGetByIdSelf(CodeBlock* codeBlock, Structure* baseObjectStructure, PropertyOffset offset, const Identifier& identifier)
+void StructureStubInfo::initGetByIdSelf(CodeBlock* codeBlock, Structure* baseObjectStructure, PropertyOffset offset, CacheableIdentifier identifier)
 {
     ASSERT(hasConstantIdentifier);
     setCacheType(CacheType::GetByIdSelf);
-    m_getByIdSelfIdentifier = Box<Identifier>::create(identifier);
+    m_getByIdSelfIdentifier = identifier;
+    codeBlock->vm().heap.writeBarrier(codeBlock);
     
     u.byIdSelf.baseObjectStructure.set(
         codeBlock->vm(), codeBlock, baseObjectStructure);
@@ -138,7 +140,7 @@ void StructureStubInfo::aboutToDie()
 }
 
 AccessGenerationResult StructureStubInfo::addAccessCase(
-    const GCSafeConcurrentJSLocker& locker, CodeBlock* codeBlock, const Identifier& ident, std::unique_ptr<AccessCase> accessCase)
+    const GCSafeConcurrentJSLocker& locker, CodeBlock* codeBlock, CacheableIdentifier ident, std::unique_ptr<AccessCase> accessCase)
 {
     checkConsistency();
 
@@ -194,6 +196,7 @@ AccessGenerationResult StructureStubInfo::addAccessCase(
             u.stub = access.release();
         }
         
+        ASSERT(m_cacheType == CacheType::Stub);
         RELEASE_ASSERT(!result.generatedSomeCode());
         
         // If we didn't buffer any cases then bail. If this made no changes then we'll just try again
@@ -279,6 +282,27 @@ void StructureStubInfo::reset(CodeBlock* codeBlock)
     setCacheType(CacheType::Unset);
 }
 
+void StructureStubInfo::visitAggregate(SlotVisitor& visitor)
+{
+    switch (m_cacheType) {
+    case CacheType::Unset:
+    case CacheType::ArrayLength:
+    case CacheType::StringLength:
+    case CacheType::PutByIdReplace:
+    case CacheType::InByIdSelf:
+        return;
+    case CacheType::GetByIdSelf:
+        m_getByIdSelfIdentifier.visitAggregate(visitor);
+        return;
+    case CacheType::Stub:
+        u.stub->visitAggregate(visitor);
+        return;
+    }
+    
+    RELEASE_ASSERT_NOT_REACHED();
+    return;
+}
+
 void StructureStubInfo::visitWeakReferences(CodeBlock* codeBlock)
 {
     VM& vm = codeBlock->vm();
@@ -327,7 +351,7 @@ bool StructureStubInfo::propagateTransitions(SlotVisitor& visitor)
     return true;
 }
 
-StubInfoSummary StructureStubInfo::summary() const
+StubInfoSummary StructureStubInfo::summary(VM& vm) const
 {
     StubInfoSummary takesSlowPath = StubInfoSummary::TakesSlowPath;
     StubInfoSummary simple = StubInfoSummary::Simple;
@@ -335,7 +359,7 @@ StubInfoSummary StructureStubInfo::summary() const
         PolymorphicAccess* list = u.stub;
         for (unsigned i = 0; i < list->size(); ++i) {
             const AccessCase& access = list->at(i);
-            if (access.doesCalls()) {
+            if (access.doesCalls(vm)) {
                 takesSlowPath = StubInfoSummary::TakesSlowPathAndMakesCalls;
                 simple = StubInfoSummary::MakesCalls;
                 break;
@@ -352,12 +376,12 @@ StubInfoSummary StructureStubInfo::summary() const
     return simple;
 }
 
-StubInfoSummary StructureStubInfo::summary(const StructureStubInfo* stubInfo)
+StubInfoSummary StructureStubInfo::summary(VM& vm, const StructureStubInfo* stubInfo)
 {
     if (!stubInfo)
         return StubInfoSummary::NoInformation;
     
-    return stubInfo->summary();
+    return stubInfo->summary(vm);
 }
 
 bool StructureStubInfo::containsPC(void* pc) const

@@ -106,11 +106,15 @@ WebSWContextManagerConnection::WebSWContextManagerConnection(Ref<IPC::Connection
     }
 
     updatePreferencesStore(store);
-    m_connectionToNetworkProcess->send(Messages::NetworkConnectionToWebProcess::EstablishSWContextConnection { m_registrableDomain }, 0);
     WebProcess::singleton().disableTermination();
 }
 
 WebSWContextManagerConnection::~WebSWContextManagerConnection() = default;
+
+void WebSWContextManagerConnection::establishConnection(CompletionHandler<void()>&& completionHandler)
+{
+    m_connectionToNetworkProcess->sendWithAsyncReply(Messages::NetworkConnectionToWebProcess::EstablishSWContextConnection { m_registrableDomain }, WTFMove(completionHandler), 0);
+}
 
 void WebSWContextManagerConnection::updatePreferencesStore(const WebPreferencesStore& store)
 {
@@ -148,7 +152,7 @@ void WebSWContextManagerConnection::installServiceWorker(const ServiceWorkerCont
     // FIXME: This method should be moved directly to WebCore::SWContextManager::Connection
     // If it weren't for ServiceWorkerFrameLoaderClient's dependence on WebDocumentLoader, this could already happen.
     // FIXME: Weird to pass m_previousServiceWorkerID as a FrameIdentifier.
-    auto frameLoaderClient = makeUnique<ServiceWorkerFrameLoaderClient>(*this, m_webPageProxyID, m_pageID, frameIdentifierFromID(++m_previousServiceWorkerID), effectiveUserAgent);
+    auto frameLoaderClient = makeUnique<ServiceWorkerFrameLoaderClient>(*this, m_webPageProxyID, m_pageID, makeObjectIdentifier<WebCore::FrameIdentifierType>(++m_previousServiceWorkerID), effectiveUserAgent);
     pageConfiguration.loaderClientForMainFrame = frameLoaderClient.get();
     m_loaders.add(WTFMove(frameLoaderClient));
 

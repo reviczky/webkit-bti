@@ -107,6 +107,8 @@ allowSettingAnyXHRHeaderFromFileURLs:
   initial: false
 allowCrossOriginSubresourcesToAskForCredentials:
   initial: false
+allowTopNavigationToDataURLs:
+  initial: false
 needsStorageAccessFromFileURLsQuirk:
   initial: true
 needsFrameNameFallbackToIdQuirk:
@@ -621,6 +623,9 @@ syntheticEditingCommandsEnabled:
 CSSOMViewScrollingAPIEnabled:
   initial: false
 
+CSSOMViewSmoothScrollingEnabled:
+  initial: false
+
 inputEventsEnabled:
   initial: true
 
@@ -728,6 +733,9 @@ scriptEnabled:
   initial: false
   getter: isScriptEnabled
   inspectorOverride: true
+parserScriptingFlagPolicy:
+  type: ParserScriptingFlagPolicy
+  initial: ParserScriptingFlagPolicy::OnlyIfScriptIsEnabled
 pluginsEnabled:
   initial: false
   getter: arePluginsEnabled
@@ -758,6 +766,10 @@ hiddenPageDOMTimerThrottlingAutoIncreases:
 hiddenPageCSSAnimationSuspensionEnabled:
   initial: false
   onChange: hiddenPageCSSAnimationSuspensionEnabledChanged
+
+renderingUpdateThrottlingEnabled:
+  initial: true
+  onChange: renderingUpdateThrottlingEnabledChanged
 
 storageBlockingPolicy:
   type: SecurityOrigin::StorageBlockingPolicy
@@ -912,6 +924,9 @@ isInAppBrowserPrivacyEnabled:
   initial: false
 
 isAccessibilityIsolatedTreeEnabled:
+  initial: false
+
+aspectRatioOfImgFromWidthAndHeightEnabled:
   initial: false
 
 # Deprecated

@@ -387,15 +387,36 @@ struct FeaturesGL : FeatureSetBase
         "name with a unique prefix.",
         &members, "http://crbug.com/403957"};
 
-    // Intel drivers on Mac - apparently for both older and current GPUs - have
-    // bugs where certain operations can be reordered across glBindFramebuffer
-    // calls. Flushing before and after glBindFramebuffer works around these.
-    // These bugs may exist on other platforms.
-    Feature flushBeforeAndAfterBindFramebuffer = {
-        "flush_before_and_after_bindframebuffer", FeatureCategory::OpenGLWorkarounds,
-        "Intel drivers (on Mac, possibly other platforms) incorrectly reorder some operations"
-        " across glBindFramebuffer calls. Flush before and after as a workaround.",
+    // Quite some OpenGL ES drivers don't implement readPixels for RGBA/UNSIGNED_SHORT from
+    // EXT_texture_norm16 correctly
+    Feature readPixelsUsingImplementationColorReadFormatForNorm16 = {
+        "read_pixels_using_implementation_color_read_format", FeatureCategory::OpenGLWorkarounds,
+        "Quite some OpenGL ES drivers don't implement readPixels for RGBA/UNSIGNED_SHORT from "
+        "EXT_texture_norm16 correctly",
+        &members, "http://anglebug.com/4214"};
+
+    // Bugs exist in some Intel drivers where dependencies are incorrectly
+    // tracked for textures which are copy destinations (via CopyTexImage2D, for
+    // example). Flush before DeleteTexture if these entry points have been
+    // called recently.
+    Feature flushBeforeDeleteTextureIfCopiedTo = {
+        "flush_before_delete_texture_if_copied_to", FeatureCategory::OpenGLWorkarounds,
+        "Some drivers track CopyTex{Sub}Image texture dependencies incorrectly. Flush"
+        " before glDeleteTextures in this case",
         &members, "http://anglebug.com/4267"};
+
+    // Rewrite row-major matrices as column-major as a driver bug workaround if
+    // necessary.
+    Feature rewriteRowMajorMatrices = {
+        "rewrite_row_major_matrices", FeatureCategory::OpenGLWorkarounds,
+        "Rewrite row major matrices in shaders as column major as a driver bug workaround",
+        &members, "http://anglebug.com/2273"};
+
+    // Flush before glBindFramebuffer as a driver bug workaround if necessary.
+    Feature flushBeforeBindFramebuffer = {
+        "flush_before_bindframebuffer", FeatureCategory::OpenGLWorkarounds,
+        "Flush before glBindFramebuffer as a driver bug workaround",
+        &members, "https://bugs.webkit.org/show_bug.cgi?id=206625"};
 };
 
 inline FeaturesGL::FeaturesGL()  = default;

@@ -39,6 +39,7 @@
 #include "CSSAnimationController.h"
 #include "CSSKeyframesRule.h"
 #include "CSSMediaRule.h"
+#include "CSSPropertyParser.h"
 #include "CSSStyleRule.h"
 #include "CSSSupportsRule.h"
 #include "CacheStorageConnection.h"
@@ -117,6 +118,7 @@
 #include "LibWebRTCProvider.h"
 #include "LoaderStrategy.h"
 #include "Location.h"
+#include "MIMETypeRegistry.h"
 #include "MallocStatistics.h"
 #include "MediaDevices.h"
 #include "MediaEngineConfigurationFactory.h"
@@ -149,6 +151,7 @@
 #include "RenderLayerBacking.h"
 #include "RenderLayerCompositor.h"
 #include "RenderMenuList.h"
+#include "RenderTheme.h"
 #include "RenderTreeAsText.h"
 #include "RenderView.h"
 #include "RenderedDocumentMarker.h"
@@ -159,6 +162,7 @@
 #include "SVGPathStringBuilder.h"
 #include "SVGSVGElement.h"
 #include "SWClientConnection.h"
+#include "ScriptController.h"
 #include "ScriptedAnimationController.h"
 #include "ScrollingCoordinator.h"
 #include "ScrollingMomentumCalculator.h"
@@ -172,6 +176,8 @@
 #include "SourceBuffer.h"
 #include "SpellChecker.h"
 #include "StaticNodeList.h"
+#include "StorageNamespace.h"
+#include "StorageNamespaceProvider.h"
 #include "StringCallback.h"
 #include "StyleResolver.h"
 #include "StyleRule.h"
@@ -307,7 +313,8 @@
 #endif
 
 #if PLATFORM(COCOA)
-#import <wtf/spi/darwin/SandboxSPI.h>
+#include "SystemBattery.h"
+#include <wtf/spi/darwin/SandboxSPI.h>
 #endif
 
 using JSC::CallData;
@@ -734,6 +741,8 @@ static String responseSourceToString(const ResourceResponse& response)
         return "Memory cache after validation";
     case ResourceResponse::Source::ApplicationCache:
         return "Application cache";
+    case ResourceResponse::Source::DOMCache:
+        return "DOM cache";
     case ResourceResponse::Source::InspectorOverride:
         return "Inspector override";
     }
@@ -1418,6 +1427,12 @@ String Internals::visiblePlaceholder(Element& element)
     return String();
 }
 
+void Internals::setCanShowPlaceholder(Element& element, bool canShowPlaceholder)
+{
+    if (is<HTMLTextFormControlElement>(element))
+        downcast<HTMLTextFormControlElement>(element).setCanShowPlaceholder(canShowPlaceholder);
+}
+
 void Internals::selectColorInColorChooser(HTMLInputElement& element, const String& colorValue)
 {
     element.selectColor(colorValue);
@@ -1689,19 +1704,11 @@ ExceptionOr<String> Internals::dumpMarkerRects(const String& markerTypeString)
     contextDocument()->markers().updateRectsForInvalidatedMarkersOfType(markerType);
     auto rects = contextDocument()->markers().renderedRectsForMarkers(markerType);
 
+    // FIXME: Using fixed precision here for width because of test results that contain numbers with specific precision. Would be nice to update the test results and move to default formatting.
     StringBuilder rectString;
     rectString.appendLiteral("marker rects: ");
-    for (const auto& rect : rects) {
-        rectString.append('(');
-        rectString.append(FormattedNumber::fixedPrecision(rect.x()));
-        rectString.appendLiteral(", ");
-        rectString.append(FormattedNumber::fixedPrecision(rect.y()));
-        rectString.appendLiteral(", ");
-        rectString.append(FormattedNumber::fixedPrecision(rect.width()));
-        rectString.appendLiteral(", ");
-        rectString.append(FormattedNumber::fixedPrecision(rect.height()));
-        rectString.appendLiteral(") ");
-    }
+    for (const auto& rect : rects)
+        rectString.append('(', rect.x(), ", ", rect.y(), ", ", FormattedNumber::fixedPrecision(rect.width()), ", ", rect.height(), ") ");
     return rectString.toString();
 }
 
@@ -1769,6 +1776,10 @@ ExceptionOr<void> Internals::unconstrainedScrollTo(Element& element, double x, d
         return Exception { InvalidAccessError };
 
     element.scrollTo({ x, y }, ScrollClamping::Unclamped);
+
+    auto& frameView = *document->view();
+    frameView.setViewportConstrainedObjectsNeedLayout();
+
     return { };
 }
 
@@ -1882,6 +1893,7 @@ ExceptionOr<String> Internals::configurationForViewport(float devicePixelRatio, 
     restrictMinimumScaleFactorToViewportSize(attributes, IntSize(availableWidth, availableHeight), devicePixelRatio);
     restrictScaleFactorToInitialScaleIfNotUserScalable(attributes);
 
+    // FIXME: Using fixed precision here because of test results that contain numbers with specific precision. Would be nice to update the test results and move to default formatting.
     return makeString("viewport size ", FormattedNumber::fixedPrecision(attributes.layoutSize.width()), 'x', FormattedNumber::fixedPrecision(attributes.layoutSize.height()), " scale ", FormattedNumber::fixedPrecision(attributes.initialScale), " with limits [", FormattedNumber::fixedPrecision(attributes.minimumScale), ", ", FormattedNumber::fixedPrecision(attributes.maximumScale), "] and userScalable ", (attributes.userScalable ? "true" : "false"));
 }
 
@@ -2519,6 +2531,15 @@ uint64_t Internals::documentIdentifier(const Document& document) const
 bool Internals::isDocumentAlive(uint64_t documentIdentifier) const
 {
     return Document::allDocumentsMap().contains(makeObjectIdentifier<DocumentIdentifierType>(documentIdentifier));
+}
+
+uint64_t Internals::storageAreaMapCount() const
+{
+    auto* page = contextDocument() ? contextDocument()->page() : nullptr;
+    if (!page)
+        return 0;
+
+    return page->storageNamespaceProvider().localStorageNamespace(page->sessionID()).storageAreaMapCountForTesting();
 }
 
 uint64_t Internals::elementIdentifier(Element& element) const
@@ -3444,24 +3465,14 @@ ExceptionOr<String> Internals::getCurrentCursorInfo()
     Cursor cursor = document->frame()->eventHandler().currentMouseCursor();
 
     StringBuilder result;
-    result.appendLiteral("type=");
-    result.append(cursorTypeToString(cursor.type()));
-    result.appendLiteral(" hotSpot=");
-    result.appendNumber(cursor.hotSpot().x());
-    result.append(',');
-    result.appendNumber(cursor.hotSpot().y());
+    result.append("type=", cursorTypeToString(cursor.type()), " hotSpot=", cursor.hotSpot().x(), ',', cursor.hotSpot().y());
     if (cursor.image()) {
         FloatSize size = cursor.image()->size();
-        result.appendLiteral(" image=");
-        result.append(FormattedNumber::fixedPrecision(size.width()));
-        result.append('x');
-        result.append(FormattedNumber::fixedPrecision(size.height()));
+        result.append(" image=", size.width(), 'x', size.height());
     }
 #if ENABLE(MOUSE_CURSOR_SCALE)
-    if (cursor.imageScaleFactor() != 1) {
-        result.appendLiteral(" scale=");
-        result.append(FormattedNumber::fixedPrecision(cursor.imageScaleFactor(), 8));
-    }
+    if (cursor.imageScaleFactor() != 1)
+        result.append(" scale=", cursor.imageScaleFactor());
 #endif
     return result.toString();
 #else
@@ -3486,6 +3497,14 @@ bool Internals::isFromCurrentWorld(JSC::JSValue value) const
 {
     JSC::VM& vm = contextDocument()->vm();
     return isWorldCompatible(*vm.topCallFrame->lexicalGlobalObject(vm), value);
+}
+
+JSC::JSValue Internals::evaluateInWorldIgnoringException(const String& name, const String& source)
+{
+    auto* document = contextDocument();
+    auto& scriptController = document->frame()->script();
+    auto world = ScriptController::createWorld(name);
+    return scriptController.executeScriptInWorldIgnoringException(world, source);
 }
 
 void Internals::setUsesOverlayScrollbars(bool enabled)
@@ -5417,6 +5436,40 @@ bool Internals::hasSandboxMachLookupAccessToXPCServiceName(const String& process
 String Internals::windowLocationHost(DOMWindow& window)
 {
     return window.location().host();
+}
+
+String Internals::systemColorForCSSValue(const String& cssValue, bool useDarkModeAppearance, bool useElevatedUserInterfaceLevel)
+{
+    CSSValueID id = cssValueKeywordID(cssValue);
+    RELEASE_ASSERT(StyleColor::isSystemColor(id));
+
+    OptionSet<StyleColor::Options> options;
+    if (useDarkModeAppearance)
+        options.add(StyleColor::Options::UseDarkAppearance);
+    if (useElevatedUserInterfaceLevel)
+        options.add(StyleColor::Options::UseElevatedUserInterfaceLevel);
+    
+    return RenderTheme::singleton().systemColor(id, options).cssText();
+}
+
+bool Internals::systemHasBattery() const
+{
+#if PLATFORM(COCOA)
+    return WebCore::systemHasBattery();
+#else
+    return false;
+#endif
+}
+
+String Internals::mediaMIMETypeForExtension(const String& extension)
+{
+    return MIMETypeRegistry::getMediaMIMETypeForExtension(extension);
+}
+
+String Internals::focusRingColor()
+{
+    OptionSet<StyleColor::Options> options;
+    return RenderTheme::singleton().focusRingColor(options).cssText();
 }
 
 } // namespace WebCore

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2010-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -116,6 +116,16 @@ void WKPreferencesSetLoadsSiteIconsIgnoringImageLoadingPreference(WKPreferencesR
 bool WKPreferencesGetLoadsSiteIconsIgnoringImageLoadingPreference(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->loadsSiteIconsIgnoringImageLoadingPreference();
+}
+
+void WKPreferencesSetIsITPDatabaseEnabled(WKPreferencesRef preferencesRef, bool isITPDatabaseEnabled)
+{
+    toImpl(preferencesRef)->setIsITPDatabaseEnabled(isITPDatabaseEnabled);
+}
+
+bool WKPreferencesGetIsITPDatabaseEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->isITPDatabaseEnabled();
 }
 
 void WKPreferencesSetOfflineWebApplicationCacheEnabled(WKPreferencesRef preferencesRef, bool offlineWebApplicationCacheEnabled)
@@ -728,6 +738,16 @@ bool WKPreferencesGetFileAccessFromFileURLsAllowed(WKPreferencesRef preferencesR
     return toImpl(preferencesRef)->allowFileAccessFromFileURLs();
 }
 
+void WKPreferencesSetTopNavigationToDataURLsAllowed(WKPreferencesRef preferencesRef, bool allowed)
+{
+    toImpl(preferencesRef)->setAllowTopNavigationToDataURLs(allowed);
+}
+
+bool WKPreferencesGetTopNavigationToDataURLsAllowed(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->allowTopNavigationToDataURLs();
+}
+
 void WKPreferencesSetNeedsStorageAccessFromFileURLsQuirk(WKPreferencesRef preferencesRef, bool needsQuirk)
 {
     toImpl(preferencesRef)->setNeedsStorageAccessFromFileURLsQuirk(needsQuirk);
@@ -1297,6 +1317,16 @@ void WKPreferencesSetHiddenPageCSSAnimationSuspensionEnabled(WKPreferencesRef pr
 bool WKPreferencesGetHiddenPageCSSAnimationSuspensionEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->hiddenPageCSSAnimationSuspensionEnabled();
+}
+
+void WKPreferencesSetRenderingUpdateThrottlingEnabled(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setRenderingUpdateThrottlingEnabled(enabled);
+}
+
+bool WKPreferencesGetRenderingUpdateThrottlingEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->renderingUpdateThrottlingEnabled();
 }
 
 void WKPreferencesSetIncrementalRenderingSuppressionTimeout(WKPreferencesRef preferencesRef, double timeout)

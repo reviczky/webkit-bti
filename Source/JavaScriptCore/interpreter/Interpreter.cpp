@@ -137,7 +137,9 @@ JSValue eval(JSGlobalObject* globalObject, CallFrame* callFrame)
     }
 
     EvalContextType evalContextType;
-    if (isFunctionParseMode(callerUnlinkedCodeBlock->parseMode()))
+    if (callerUnlinkedCodeBlock->parseMode() == SourceParseMode::InstanceFieldInitializerMode)
+        evalContextType = EvalContextType::InstanceFieldEvalContext;
+    else if (isFunctionParseMode(callerUnlinkedCodeBlock->parseMode()))
         evalContextType = EvalContextType::FunctionEvalContext;
     else if (callerUnlinkedCodeBlock->codeType() == EvalCode)
         evalContextType = callerUnlinkedCodeBlock->evalContextType();
@@ -163,7 +165,7 @@ JSValue eval(JSGlobalObject* globalObject, CallFrame* callFrame)
         
         VariableEnvironment variablesUnderTDZ;
         JSScope::collectClosureVariablesUnderTDZ(callerScopeChain, variablesUnderTDZ);
-        eval = DirectEvalExecutable::create(globalObject, makeSource(programSource, callerCodeBlock->source().provider()->sourceOrigin()), callerCodeBlock->isStrictMode(), derivedContextType, isArrowFunctionContext, evalContextType, &variablesUnderTDZ);
+        eval = DirectEvalExecutable::create(globalObject, makeSource(programSource, callerCodeBlock->source().provider()->sourceOrigin()), callerCodeBlock->isStrictMode(), derivedContextType, callerUnlinkedCodeBlock->needsClassFieldInitializer(), isArrowFunctionContext, evalContextType, &variablesUnderTDZ);
         EXCEPTION_ASSERT(!!scope.exception() == !eval);
         if (!eval)
             return jsUndefined();
@@ -351,7 +353,7 @@ Interpreter::~Interpreter()
 }
 
 #if ENABLE(COMPUTED_GOTO_OPCODES)
-#if !USE(LLINT_EMBEDDED_OPCODE_ID) || ASSERT_ENABLED
+#if !ENABLE(LLINT_EMBEDDED_OPCODE_ID) || ASSERT_ENABLED
 HashMap<Opcode, OpcodeID>& Interpreter::opcodeIDTable()
 {
     static NeverDestroyed<HashMap<Opcode, OpcodeID>> opcodeIDTable;
@@ -365,7 +367,7 @@ HashMap<Opcode, OpcodeID>& Interpreter::opcodeIDTable()
 
     return opcodeIDTable;
 }
-#endif // !USE(LLINT_EMBEDDED_OPCODE_ID) || ASSERT_ENABLED
+#endif // !ENABLE(LLINT_EMBEDDED_OPCODE_ID) || ASSERT_ENABLED
 #endif // ENABLE(COMPUTED_GOTO_OPCODES)
 
 #if ASSERT_ENABLED
@@ -1250,8 +1252,8 @@ NEVER_INLINE void Interpreter::debug(CallFrame* callFrame, DebugHookType debugHo
         case DidExecuteProgram:
             debugger->didExecuteProgram(callFrame);
             break;
-        case DidReachBreakpoint:
-            debugger->didReachBreakpoint(callFrame);
+        case DidReachDebuggerStatement:
+            debugger->didReachDebuggerStatement(callFrame);
             break;
     }
     scope.assertNoException();
@@ -1273,8 +1275,8 @@ void printInternal(PrintStream& out, JSC::DebugHookType type)
     case JSC::DidEnterCallFrame:
         out.print("DidEnterCallFrame");
         return;
-    case JSC::DidReachBreakpoint:
-        out.print("DidReachBreakpoint");
+    case JSC::DidReachDebuggerStatement:
+        out.print("DidReachDebuggerStatement");
         return;
     case JSC::WillLeaveCallFrame:
         out.print("WillLeaveCallFrame");

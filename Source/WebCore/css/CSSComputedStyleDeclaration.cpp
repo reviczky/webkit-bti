@@ -892,16 +892,7 @@ static Ref<CSSValue> valueForGridTrackList(GridTrackSizingDirection direction, R
     auto& autoRepeatTrackSizes = isRowAxis ? style.gridAutoRepeatColumns() : style.gridAutoRepeatRows();
 
     // Handle the 'none' case.
-    bool trackListIsEmpty = trackSizes.isEmpty() && autoRepeatTrackSizes.isEmpty();
-    if (isRenderGrid && trackListIsEmpty) {
-        // For grids we should consider every listed track, whether implicitly or explicitly
-        // created. Empty grids have a sole grid line per axis.
-        auto& grid = downcast<RenderGrid>(*renderer);
-        auto& positions = isRowAxis ? grid.columnPositions() : grid.rowPositions();
-        trackListIsEmpty = positions.size() == 1;
-    }
-
-    if (trackListIsEmpty)
+    if (trackSizes.isEmpty() && autoRepeatTrackSizes.isEmpty())
         return CSSValuePool::singleton().createIdentifierValue(CSSValueNone);
 
     auto list = CSSValueList::createSpaceSeparated();
@@ -3383,6 +3374,10 @@ RefPtr<CSSValue> ComputedStyleExtractor::valueForPropertyInStyle(const RenderSty
                 return cssValuePool.createIdentifierValue(CSSValueAuto);
             return cssValuePool.createIdentifierValue(CSSValueTouch);
 #endif
+        case CSSPropertyScrollBehavior:
+            if (!style.useSmoothScrolling())
+                return cssValuePool.createIdentifierValue(CSSValueAuto);
+            return cssValuePool.createIdentifierValue(CSSValueSmooth);
         case CSSPropertyPerspective:
             if (!style.hasPerspective())
                 return cssValuePool.createIdentifierValue(CSSValueNone);

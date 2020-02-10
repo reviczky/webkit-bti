@@ -96,9 +96,6 @@ struct AccessibilityText {
 bool nodeHasPresentationRole(Node*);
 
 class AccessibilityObject : public AXCoreObject {
-protected:
-    AccessibilityObject() = default;
-
 public:
     virtual ~AccessibilityObject();
 
@@ -108,9 +105,6 @@ public:
     void setObjectID(AXID id) override { m_id = id; }
     void init() override { }
 
-    // When the corresponding WebCore object that this AccessibilityObject
-    // wraps is deleted, it must be detached.
-    void detach(AccessibilityDetachmentType, AXObjectCache* = nullptr) override;
     bool isDetached() const override;
 
     bool isAccessibilityNodeObject() const override { return false; }
@@ -220,7 +214,6 @@ public:
     bool hasSameFont(RenderObject*) const override { return false; }
     bool hasSameFontColor(RenderObject*) const override { return false; }
     bool hasSameStyle(RenderObject*) const override { return false; }
-    bool isStaticText() const override { return roleValue() == AccessibilityRole::StaticText; }
     bool hasUnderline() const override { return false; }
     bool hasHighlighting() const override;
 
@@ -681,14 +674,6 @@ public:
     bool isDOMHidden() const override;
     bool isHidden() const override { return isAXHidden() || isDOMHidden(); }
 
-#if ENABLE(ACCESSIBILITY)
-    AccessibilityObjectWrapper* wrapper() const override { return m_wrapper.get(); }
-    void setWrapper(AccessibilityObjectWrapper* wrapper) override { m_wrapper = wrapper; }
-#else
-    AccessibilityObjectWrapper* wrapper() const override { return nullptr; }
-    void setWrapper(AccessibilityObjectWrapper*) override { }
-#endif
-
 #if PLATFORM(COCOA)
     void overrideAttachmentParent(AXCoreObject* parent) override;
 #else
@@ -745,6 +730,10 @@ public:
     String documentEncoding() const override;
 
 protected:
+    AccessibilityObject() = default;
+    void detachRemoteParts(AccessibilityDetachmentType) override;
+    void detachPlatformWrapper(AccessibilityDetachmentType) override;
+
     AXID m_id { 0 };
     AccessibilityChildrenVector m_children;
     mutable bool m_haveChildren { false };
@@ -785,14 +774,6 @@ protected:
     bool allowsTextRanges() const { return isTextControl(); }
     unsigned getLengthForTextRange() const { return text().length(); }
 #endif
-
-#if PLATFORM(COCOA)
-    RetainPtr<WebAccessibilityObjectWrapper> m_wrapper;
-#elif PLATFORM(WIN)
-    COMPtr<AccessibilityObjectWrapper> m_wrapper;
-#elif USE(ATK)
-    GRefPtr<WebKitAccessible> m_wrapper;
-#endif
 };
 
 #if !ENABLE(ACCESSIBILITY)
@@ -800,6 +781,7 @@ inline const AccessibilityObject::AccessibilityChildrenVector& AccessibilityObje
 inline String AccessibilityObject::actionVerb() const { return emptyString(); }
 inline int AccessibilityObject::lineForPosition(const VisiblePosition&) const { return -1; }
 inline void AccessibilityObject::updateBackingStore() { }
+inline void AccessibilityObject::detachPlatformWrapper(AccessibilityDetachmentType) { }
 #endif
 
 AccessibilityObject* firstAccessibleObjectFromNode(const Node*, const WTF::Function<bool(const AccessibilityObject&)>& isAccessible);

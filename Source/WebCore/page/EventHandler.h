@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006-2018 Apple Inc. All rights reserved.
+ * Copyright (C) 2006-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -220,6 +220,7 @@ public:
 #if ENABLE(IOS_TOUCH_EVENTS) || ENABLE(IOS_GESTURE_EVENTS)
     using TouchArray = Vector<RefPtr<Touch>>;
     using EventTargetTouchMap = HashMap<EventTarget*, TouchArray*>;
+    using EventTargetTouchArrayMap = HashMap<Ref<EventTarget>, std::unique_ptr<TouchArray>>;
 #endif
 
 #if ENABLE(IOS_TOUCH_EVENTS) || ENABLE(IOS_GESTURE_EVENTS) || ENABLE(MAC_GESTURE_EVENTS)
@@ -228,6 +229,7 @@ public:
 
 #if ENABLE(IOS_TOUCH_EVENTS)
     bool dispatchTouchEvent(const PlatformTouchEvent&, const AtomString&, const EventTargetTouchMap&, float, float);
+    bool dispatchTouchEvent(const PlatformTouchEvent&, const AtomString&, const EventTargetTouchArrayMap&, float, float);
     bool dispatchSimulatedTouchEvent(IntPoint location);
     Frame* touchEventTargetSubframe() const { return m_touchEventTargetSubframe.get(); }
     const TouchArray& touches() const { return m_touches; }
@@ -424,7 +426,8 @@ private:
 #if ENABLE(DRAG_SUPPORT)
     void clearDragState();
 
-    void dispatchDragSrcEvent(const AtomString& eventType, const PlatformMouseEvent&);
+    static bool shouldDispatchEventsToDragSourceElement();
+    void dispatchEventToDragSourceElement(const AtomString& eventType, const PlatformMouseEvent&);
     bool dispatchDragStartEventOnSourceElement(DataTransfer&);
 
     bool dragHysteresisExceeded(const FloatPoint&) const;
@@ -496,6 +499,8 @@ private:
     void clearLatchedState();
 
     bool shouldSendMouseEventsToInactiveWindows() const;
+
+    bool canMouseDownStartSelect(const MouseEventWithHitTestResults&);
 
     Frame& m_frame;
 

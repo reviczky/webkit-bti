@@ -39,7 +39,7 @@ class InvalidationState;
 
 // This class implements the layout logic for inline formatting contexts.
 // https://www.w3.org/TR/CSS22/visuren.html#inline-formatting
-class InlineFormattingContext : public FormattingContext {
+class InlineFormattingContext final : public FormattingContext {
     WTF_MAKE_ISO_ALLOCATED(InlineFormattingContext);
 public:
     InlineFormattingContext(const Container& formattingContextRoot, InlineFormattingState&);
@@ -77,12 +77,9 @@ private:
     };
     InlineFormattingContext::Geometry geometry() const { return Geometry(*this); }
 
-    void lineLayout(const HorizontalConstraints&, const VerticalConstraints&);
-    void layoutFormattingContextRoot(const Box&, InvalidationState&, const HorizontalConstraints&, const VerticalConstraints&);
-    void computeHorizontalAndVerticalGeometry(const Box&, const HorizontalConstraints&);
+    void lineLayout(InlineItems&, LineLayoutContext::InlineItemRange, const HorizontalConstraints&, const VerticalConstraints&);
 
-    void computeIntrinsicWidthForFormattingRoot(const Box&, const HorizontalConstraints&);
-    void computeWidthAndHeightForReplacedInlineBox(const Box&, const HorizontalConstraints&);
+    void computeIntrinsicWidthForFormattingRoot(const Box&);
     InlineLayoutUnit computedIntrinsicWidthForConstraint(const HorizontalConstraints&) const;
 
     void computeHorizontalMargin(const Box&, const HorizontalConstraints&);

@@ -275,6 +275,7 @@ bytecode/SuperSampler.cpp
 bytecode/ToThisStatus.cpp
 bytecode/TrackedReferences.cpp
 bytecode/UnlinkedCodeBlock.cpp
+bytecode/UnlinkedCodeBlockGenerator.cpp
 bytecode/UnlinkedEvalCodeBlock.cpp
 bytecode/UnlinkedFunctionCodeBlock.cpp
 bytecode/UnlinkedFunctionExecutable.cpp
@@ -729,6 +730,7 @@ runtime/BytecodeCacheError.cpp
 runtime/CallData.cpp
 runtime/CachePayload.cpp
 runtime/CacheUpdate.cpp
+runtime/CacheableIdentifier.cpp
 runtime/CachedBytecode.cpp
 runtime/CachedTypes.cpp
 runtime/CatchScope.cpp
@@ -854,7 +856,6 @@ runtime/JSModuleLoader.cpp
 runtime/JSModuleNamespaceObject.cpp
 runtime/JSModuleRecord.cpp
 runtime/JSNativeStdFunction.cpp
-runtime/JSNonDestructibleProxy.cpp
 runtime/JSONObject.cpp
 runtime/JSObject.cpp
 runtime/JSPromise.cpp

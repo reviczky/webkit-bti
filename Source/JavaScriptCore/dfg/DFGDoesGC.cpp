@@ -117,6 +117,7 @@ bool doesGC(Graph& graph, Node* node)
     case GetButterfly:
     case CheckSubClass:
     case CheckArray:
+    case CheckArrayOrEmpty:
     case CheckNeutered:
     case GetScope:
     case SkipScope:
@@ -336,6 +337,7 @@ bool doesGC(Graph& graph, Node* node)
     case ToNumeric:
     case ToObject:
     case ToPrimitive:
+    case ToPropertyKey:
     case ToThis:
     case TryGetById:
     case CreateThis:

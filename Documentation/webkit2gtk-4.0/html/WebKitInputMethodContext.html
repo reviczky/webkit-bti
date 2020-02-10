@@ -366,7 +366,7 @@ The string will be displayed inserted at <em class="parameter"><code>cursor_offs
 <pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
 webkit_input_method_context_filter_key_event
                                (<em class="parameter"><code><a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> *context</code></em>,
-                                <em class="parameter"><code><span class="type">GdkEventKey</span> *key_event</code></em>);</pre>
+                                <em class="parameter"><code><a href="../gdk3/gdk3-Event-Structures.html#GdkEventKey"><span class="type">GdkEventKey</span></a> *key_event</code></em>);</pre>
 <p>Allow <em class="parameter"><code>key_event</code></em>
  to be handled by the input method. If <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> is returned, then no further processing should be
 done for the key event.</p>
@@ -507,9 +507,13 @@ webkit_input_method_context_notify_surrounding
                                (<em class="parameter"><code><a class="link" href="WebKitInputMethodContext.html" title="WebKitInputMethodContext"><span class="type">WebKitInputMethodContext</span></a> *context</code></em>,
                                 <em class="parameter"><code>const <a href="../glib/glib-Basic-Types.html#gchar"><span class="type">gchar</span></a> *text</code></em>,
                                 <em class="parameter"><code><span class="type">int</span> length</code></em>,
-                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> cursor_index</code></em>);</pre>
+                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> cursor_index</code></em>,
+                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#guint"><span class="type">guint</span></a> selection_index</code></em>);</pre>
 <p>Notify <em class="parameter"><code>context</code></em>
- that the context surrounding the cursor has changed.</p>
+ that the context surrounding the cursor has changed.
+If there's no selection <em class="parameter"><code>selection_index</code></em>
+ is the same as <em class="parameter"><code>cursor_index</code></em>
+.</p>
 <div class="refsect3">
 <a name="webkit-input-method-context-notify-surrounding.parameters"></a><h4>Parameters</h4>
 <div class="informaltable"><table class="informaltable" width="100%" border="0">
@@ -539,6 +543,12 @@ is nul-terminated</p></td>
 <tr>
 <td class="parameter_name"><p>cursor_index</p></td>
 <td class="parameter_description"><p>the byte index of the insertion cursor within <em class="parameter"><code>text</code></em>
+.</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>selection_index</p></td>
+<td class="parameter_description"><p>the byte index of the selection cursor within <em class="parameter"><code>text</code></em>
 .</p></td>
 <td class="parameter_annotations"> </td>
 </tr>
@@ -762,7 +772,7 @@ webkit_input_method_underline_free (<em class="parameter"><code><a class="link" 
 <pre class="programlisting"><span class="returnvalue">void</span>
 webkit_input_method_underline_set_color
                                (<em class="parameter"><code><a class="link" href="WebKitInputMethodContext.html#WebKitInputMethodUnderline"><span class="type">WebKitInputMethodUnderline</span></a> *underline</code></em>,
-                                <em class="parameter"><code>const <span class="type">GdkRGBA</span> *rgba</code></em>);</pre>
+                                <em class="parameter"><code>const <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> *rgba</code></em>);</pre>
 <p>Set the color of the underline. If <em class="parameter"><code>rgba</code></em>
  is <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a> the foreground text color will be used
 for the underline too.</p>
@@ -782,7 +792,7 @@ for the underline too.</p>
 </tr>
 <tr>
 <td class="parameter_name"><p>rgba</p></td>
-<td class="parameter_description"><p>a <span class="type">GdkRGBA</span> or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
+<td class="parameter_description"><p>a <a href="../gdk3/gdk3-RGBA-Colors.html#GdkRGBA"><span class="type">GdkRGBA</span></a> or <a href="../glib/glib-Standard-Macros.html#NULL:CAPS"><code class="literal">NULL</code></a>. </p></td>
 <td class="parameter_annotations"><span class="annotation">[<acronym title="NULL may be passed as the value in, out, in-out; or as a return value."><span class="acronym">nullable</span></acronym>]</span></td>
 </tr>
 </tbody>

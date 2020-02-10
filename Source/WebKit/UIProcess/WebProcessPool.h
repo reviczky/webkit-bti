@@ -294,7 +294,7 @@ public:
     void stopMemorySampler();
 
 #if USE(SOUP)
-    void setInitialHTTPCookieAcceptPolicy(HTTPCookieAcceptPolicy policy) { m_initialHTTPCookieAcceptPolicy = policy; }
+    void setInitialHTTPCookieAcceptPolicy(WebCore::HTTPCookieAcceptPolicy policy) { m_initialHTTPCookieAcceptPolicy = policy; }
     void setNetworkProxySettings(const WebCore::SoupNetworkProxySettings&);
 #endif
     void setEnhancedAccessibility(bool);
@@ -326,6 +326,7 @@ public:
     void sendNetworkProcessWillSuspendImminentlyForTesting();
     void sendNetworkProcessDidResume();
     void terminateServiceWorkers();
+    void terminateServiceWorkerProcess(const WebCore::RegistrableDomain&, const PAL::SessionID&);
 
     void syncNetworkProcessCookies();
     void syncLocalStorage(CompletionHandler<void()>&& callback);
@@ -397,7 +398,7 @@ public:
 
     bool isServiceWorkerPageID(WebPageProxyIdentifier) const;
 #if ENABLE(SERVICE_WORKER)
-    void establishWorkerContextConnectionToNetworkProcess(NetworkProcessProxy&, WebCore::RegistrableDomain&&, PAL::SessionID);
+    void establishWorkerContextConnectionToNetworkProcess(NetworkProcessProxy&, WebCore::RegistrableDomain&&, PAL::SessionID, CompletionHandler<void()>&&);
     void removeFromServiceWorkerProcesses(WebProcessProxy&);
     size_t serviceWorkerProxiesCount() const { return m_serviceWorkerProcesses.size(); }
     void setAllowsAnySSLCertificateForServiceWorker(bool allows) { m_allowsAnySSLCertificateForServiceWorker = allows; }
@@ -605,7 +606,7 @@ private:
 
     void updateBackForwardCacheCapacity();
 
-#if PLATFORM(IOS_FAMILY)
+#if PLATFORM(IOS_FAMILY) && !PLATFORM(MACCATALYST)
     static float displayBrightness();
     static void backlightLevelDidChangeCallback(CFNotificationCenterRef, void *observer, CFStringRef name, const void *, CFDictionaryRef userInfo);    
 #endif
@@ -676,7 +677,7 @@ private:
     WebContextSupplementMap m_supplements;
 
 #if USE(SOUP)
-    HTTPCookieAcceptPolicy m_initialHTTPCookieAcceptPolicy { HTTPCookieAcceptPolicy::OnlyFromMainDocumentDomain };
+    WebCore::HTTPCookieAcceptPolicy m_initialHTTPCookieAcceptPolicy { WebCore::HTTPCookieAcceptPolicy::OnlyFromMainDocumentDomain };
     WebCore::SoupNetworkProxySettings m_networkProxySettings;
 #endif
 

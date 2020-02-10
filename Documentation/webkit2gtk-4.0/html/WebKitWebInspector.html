@@ -204,7 +204,7 @@
 <a name="WebKitWebInspector.description"></a><h2>Description</h2>
 <p>The WebKit Inspector is a graphical tool to inspect and change the
 content of a <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a>. It also includes an interactive
-JavaScript debugger. Using this class one can get a <span class="type">GtkWidget</span>
+JavaScript debugger. Using this class one can get a <a href="../gtk3/GtkWidget.html#GtkWidget-struct"><span class="type">GtkWidget</span></a>
 which can be embedded into an application to show the inspector.</p>
 <p>The inspector is available when the <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> of the
 <a class="link" href="WebKitWebView.html" title="The main frame document title of this #WebKitWebView. If the title has not been received yet, it will be %NULL."><span class="type">WebKitWebView</span></a> has set the <a class="link" href="WebKitSettings.html#WebKitSettings--enable-developer-extras" title="The “enable-developer-extras” property"><span class="type">“enable-developer-extras”</span></a>
@@ -579,7 +579,7 @@ For example, if the inspector view is attached using a tab in a browser
 window, the browser window should be raised and the tab containing the
 inspector view should be the active one.
 In both cases, if this signal is not handled, the default implementation
-calls <code class="function">gtk_window_present()</code> on the current toplevel <span class="type">GtkWindow</span> of the
+calls <a href="../gtk3/GtkWindow.html#gtk-window-present"><code class="function">gtk_window_present()</code></a> on the current toplevel <a href="../gtk3/GtkWindow.html#GtkWindow-struct"><span class="type">GtkWindow</span></a> of the
 inspector view.</p>
 <div class="refsect3">
 <a name="WebKitWebInspector-bring-to-front.parameters"></a><h4>Parameters</h4>
@@ -693,7 +693,7 @@ signal and simply return <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><
 user_function (<a class="link" href="WebKitWebInspector.html" title="WebKitWebInspector"><span class="type">WebKitWebInspector</span></a> *inspector,
                <a href="../glib/glib-Basic-Types.html#gpointer"><span class="type">gpointer</span></a>            user_data)</pre>
 <p>Emitted when the inspector is requested to open in a separate window.
-If this signal is not handled, a <span class="type">GtkWindow</span> with the inspector will be
+If this signal is not handled, a <a href="../gtk3/GtkWindow.html#GtkWindow-struct"><span class="type">GtkWindow</span></a> with the inspector will be
 created and shown, so you only need to handle this signal if you want
 to use your own window.
 This signal is emitted after <a class="link" href="WebKitWebInspector.html#WebKitWebInspector-detach" title="The “detach” signal"><span class="type">“detach”</span></a> to show

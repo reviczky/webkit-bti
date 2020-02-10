@@ -104,6 +104,7 @@ public:
     void pageDestroyed() { m_page = nullptr; }
 
     enum class FontLoadTimingOverride { None, Block, Swap, Failure };
+    enum class ParserScriptingFlagPolicy : uint8_t { OnlyIfScriptIsEnabled, Enabled };
 
     // FIXME: Move these default values to SettingsDefaultValues.h
 
@@ -193,6 +194,7 @@ protected:
     void scrollingPerformanceLoggingEnabledChanged();
     void hiddenPageDOMTimerThrottlingStateChanged();
     void hiddenPageCSSAnimationSuspensionEnabledChanged();
+    void renderingUpdateThrottlingEnabledChanged();
     void resourceUsageOverlayVisibleChanged();
     void iceCandidateFilteringEnabledChanged();
 #if ENABLE(TEXT_AUTOSIZING)

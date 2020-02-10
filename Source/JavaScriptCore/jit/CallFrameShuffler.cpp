@@ -65,7 +65,7 @@ CallFrameShuffler::CallFrameShuffler(CCallHelpers& jit, const CallFrameShuffleDa
 
     for (size_t i = 0; i < data.args.size(); ++i) {
         ASSERT(!data.args[i].isInJSStack() || data.args[i].virtualRegister().isLocal());
-        addNew(virtualRegisterForArgument(i), data.args[i]);
+        addNew(virtualRegisterForArgumentIncludingThis(i), data.args[i]);
     }
 
 #if USE(JSVALUE64)

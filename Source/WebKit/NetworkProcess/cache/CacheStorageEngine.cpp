@@ -95,8 +95,8 @@ void Engine::from(NetworkProcess& networkProcess, PAL::SessionID sessionID, Func
 
 void Engine::destroyEngine(NetworkProcess& networkProcess, PAL::SessionID sessionID)
 {
-#if !USE(SOUP)
-    // Soup based ports destroy the default session right before the process exits to avoid leaking
+#if !USE(SOUP) && !USE(CURL)
+    // cURL and Soup based ports destroy the default session right before the process exits to avoid leaking
     // network resources like the cookies database.
     ASSERT(sessionID != PAL::SessionID::defaultSessionID());
 #endif
@@ -744,7 +744,8 @@ void Engine::clearCachesForOriginFromDirectories(const Vector<String>& folderPat
             if (folderOrigin->topOrigin != origin && folderOrigin->clientOrigin != origin)
                 return;
 
-            ASSERT(folderPath == cachesRootPath(*folderOrigin));
+            // If cache salt is initialized and the paths do not match, some cache files have probably be removed or partially corrupted.
+            ASSERT(!m_salt || folderPath == cachesRootPath(*folderOrigin));
             deleteDirectoryRecursivelyOnBackgroundThread(folderPath, [callbackAggregator = WTFMove(callbackAggregator)] { });
         });
     }

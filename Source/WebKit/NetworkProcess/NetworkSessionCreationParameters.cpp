@@ -51,7 +51,6 @@ void NetworkSessionCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << loadThrottleLatency;
     encoder << httpProxy;
     encoder << httpsProxy;
-    encoder << enableLegacyTLS;
 #endif
 #if USE(SOUP)
     encoder << cookiePersistentStoragePath;
@@ -68,7 +67,9 @@ void NetworkSessionCreationParameters::encode(IPC::Encoder& encoder) const
     encoder << shouldIncludeLocalhostInResourceLoadStatistics;
     encoder << enableResourceLoadStatisticsDebugMode;
     encoder << resourceLoadStatisticsManualPrevalentResource;
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     encoder << thirdPartyCookieBlockingMode;
+#endif
     encoder << firstPartyWebsiteDataRemovalMode;
 
     encoder << networkCacheDirectory << networkCacheDirectoryExtensionHandle;
@@ -136,11 +137,6 @@ Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::dec
     decoder >> httpsProxy;
     if (!httpsProxy)
         return WTF::nullopt;
-
-    Optional<bool> enableLegacyTLS;
-    decoder >> enableLegacyTLS;
-    if (!enableLegacyTLS)
-        return WTF::nullopt;
 #endif
 
 #if USE(SOUP)
@@ -202,10 +198,12 @@ Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::dec
     if (!resourceLoadStatisticsManualPrevalentResource)
         return WTF::nullopt;
 
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
     Optional<WebCore::ThirdPartyCookieBlockingMode> thirdPartyCookieBlockingMode;
     decoder >> thirdPartyCookieBlockingMode;
     if (!thirdPartyCookieBlockingMode)
         return WTF::nullopt;
+#endif
 
     Optional<WebCore::FirstPartyWebsiteDataRemovalMode> firstPartyWebsiteDataRemovalMode;
     decoder >> firstPartyWebsiteDataRemovalMode;
@@ -284,7 +282,6 @@ Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::dec
         , WTFMove(*loadThrottleLatency)
         , WTFMove(*httpProxy)
         , WTFMove(*httpsProxy)
-        , WTFMove(*enableLegacyTLS)
 #endif
 #if USE(SOUP)
         , WTFMove(*cookiePersistentStoragePath)
@@ -300,7 +297,9 @@ Optional<NetworkSessionCreationParameters> NetworkSessionCreationParameters::dec
         , WTFMove(*enableResourceLoadStatisticsLogTestingEvent)
         , WTFMove(*shouldIncludeLocalhostInResourceLoadStatistics)
         , WTFMove(*enableResourceLoadStatisticsDebugMode)
+#if ENABLE(RESOURCE_LOAD_STATISTICS)
         , WTFMove(*thirdPartyCookieBlockingMode)
+#endif
         , WTFMove(*firstPartyWebsiteDataRemovalMode)
         , WTFMove(*deviceManagementRestrictionsEnabled)
         , WTFMove(*allLoadsBlockedByDeviceManagementRestrictionsForTesting)

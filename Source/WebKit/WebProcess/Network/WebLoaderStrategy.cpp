@@ -57,6 +57,7 @@
 #include <WebCore/FetchOptions.h>
 #include <WebCore/Frame.h>
 #include <WebCore/FrameLoader.h>
+#include <WebCore/HTMLFrameOwnerElement.h>
 #include <WebCore/NetscapePlugInStreamLoader.h>
 #include <WebCore/NetworkLoadInformation.h>
 #include <WebCore/PlatformStrategies.h>
@@ -239,18 +240,42 @@ void WebLoaderStrategy::scheduleLoad(ResourceLoader& resourceLoader, CachedResou
 bool WebLoaderStrategy::tryLoadingUsingURLSchemeHandler(ResourceLoader& resourceLoader, const WebResourceLoader::TrackingParameters& trackingParameters)
 {
     auto* webFrameLoaderClient = toWebFrameLoaderClient(resourceLoader.frameLoader()->client());
-    auto* webFrame = webFrameLoaderClient ? webFrameLoaderClient->webFrame() : nullptr;
-    auto* webPage = webFrame ? webFrame->page() : nullptr;
-    if (webPage) {
-        if (auto* handler = webPage->urlSchemeHandlerForScheme(resourceLoader.request().url().protocol().toStringWithoutCopying())) {
-            LOG(NetworkScheduling, "(WebProcess) WebLoaderStrategy::scheduleLoad, URL '%s' will be handled by a UIProcess URL scheme handler.", resourceLoader.url().string().utf8().data());
-            WEBLOADERSTRATEGY_RELEASE_LOG_IF_ALLOWED("tryLoadingUsingURLSchemeHandler: URL will be handled by a UIProcess URL scheme handler");
+    if (!webFrameLoaderClient)
+        return false;
 
-            handler->startNewTask(resourceLoader);
-            return true;
-        }
+    auto* webFrame = webFrameLoaderClient->webFrame();
+    if (!webFrame)
+        return false;
+
+    auto* webPage = webFrame->page();
+    if (!webPage)
+        return false;
+
+    auto* handler = webPage->urlSchemeHandlerForScheme(resourceLoader.request().url().protocol().toStringWithoutCopying());
+    if (!handler)
+        return false;
+
+    LOG(NetworkScheduling, "(WebProcess) WebLoaderStrategy::scheduleLoad, URL '%s' will be handled by a UIProcess URL scheme handler.", resourceLoader.url().string().utf8().data());
+    WEBLOADERSTRATEGY_RELEASE_LOG_IF_ALLOWED("tryLoadingUsingURLSchemeHandler: URL will be handled by a UIProcess URL scheme handler");
+
+    handler->startNewTask(resourceLoader, *webFrame);
+    return true;
+}
+
+static void addParametersFromFrame(const Frame* frame, NetworkResourceLoadParameters& parameters)
+{
+    if (!frame)
+        return;
+
+    parameters.isHTTPSUpgradeEnabled = frame->settings().HTTPSUpgradeEnabled();
+
+    if (auto* page = frame->page())
+        parameters.pageHasResourceLoadClient = page->hasResourceLoadClient();
+
+    if (auto* ownerElement = frame->ownerElement()) {
+        if (auto* parentFrame = ownerElement->document().frame())
+            parameters.parentFrameID = parentFrame->loader().client().frameID();
     }
-    return false;
 }
 
 void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceLoader, const ResourceRequest& request, const WebResourceLoader::TrackingParameters& trackingParameters, bool shouldClearReferrerOnHTTPSToHTTPRedirect, Seconds maximumBufferingTime)
@@ -286,11 +311,7 @@ void WebLoaderStrategy::scheduleLoadFromNetworkProcess(ResourceLoader& resourceL
     loadParameters.maximumBufferingTime = maximumBufferingTime;
     loadParameters.options = resourceLoader.options();
     loadParameters.preflightPolicy = resourceLoader.options().preflightPolicy;
-    if (frame) {
-        loadParameters.isHTTPSUpgradeEnabled = frame->settings().HTTPSUpgradeEnabled();
-        if (auto* page = frame->page())
-            loadParameters.pageHasResourceLoadClient = page->hasResourceLoadClient();
-    }
+    addParametersFromFrame(frame, loadParameters);
 
 #if ENABLE(SERVICE_WORKER)
     loadParameters.serviceWorkersMode = resourceLoader.options().serviceWorkersMode;
@@ -519,16 +540,17 @@ Optional<WebLoaderStrategy::SyncLoadResult> WebLoaderStrategy::tryLoadingSynchro
     LOG(NetworkScheduling, "(WebProcess) WebLoaderStrategy::scheduleLoad, sync load to URL '%s' will be handled by a UIProcess URL scheme handler.", request.url().string().utf8().data());
 
     SyncLoadResult result;
-    handler->loadSynchronously(identifier, request, result.response, result.error, result.data);
+    handler->loadSynchronously(identifier, *webFrame, request, result.response, result.error, result.data);
 
     return result;
 }
 
 void WebLoaderStrategy::loadResourceSynchronously(FrameLoader& frameLoader, unsigned long resourceLoadIdentifier, const ResourceRequest& request, ClientCredentialPolicy clientCredentialPolicy,  const FetchOptions& options, const HTTPHeaderMap& originalRequestHeaders, ResourceError& error, ResourceResponse& response, Vector<char>& data)
 {
-    WebFrameLoaderClient* webFrameLoaderClient = toWebFrameLoaderClient(frameLoader.client());
-    WebFrame* webFrame = webFrameLoaderClient ? webFrameLoaderClient->webFrame() : nullptr;
-    WebPage* webPage = webFrame ? webFrame->page() : nullptr;
+    auto* webFrameLoaderClient = toWebFrameLoaderClient(frameLoader.client());
+    auto* webFrame = webFrameLoaderClient ? webFrameLoaderClient->webFrame() : nullptr;
+    auto* webPage = webFrame ? webFrame->page() : nullptr;
+    auto* page = webPage ? webPage->corePage() : nullptr;
 
     auto webPageProxyID = webPage ? webPage->webPageProxyIdentifier() : WebPageProxyIdentifier { };
     auto pageID = webPage ? webPage->identifier() : PageIdentifier { };
@@ -579,6 +601,7 @@ void WebLoaderStrategy::loadResourceSynchronously(FrameLoader& frameLoader, unsi
             loadParameters.cspResponseHeaders = contentSecurityPolicy->responseHeaders();
     }
     loadParameters.originalRequestHeaders = originalRequestHeaders;
+    addParametersFromFrame(webFrame->coreFrame(), loadParameters);
 
     data.shrink(0);
 
@@ -591,7 +614,7 @@ void WebLoaderStrategy::loadResourceSynchronously(FrameLoader& frameLoader, unsi
 
     if (!WebProcess::singleton().ensureNetworkProcessConnection().connection().sendSync(Messages::NetworkConnectionToWebProcess::PerformSynchronousLoad(loadParameters), Messages::NetworkConnectionToWebProcess::PerformSynchronousLoad::Reply(error, response, data), 0)) {
         WEBLOADERSTRATEGY_WITH_FRAMELOADER_RELEASE_LOG_ERROR_IF_ALLOWED("loadResourceSynchronously: failed sending synchronous network process message");
-        if (auto* page = webPage ? webPage->corePage() : nullptr)
+        if (page)
             page->diagnosticLoggingClient().logDiagnosticMessage(WebCore::DiagnosticLoggingKeys::internalErrorKey(), WebCore::DiagnosticLoggingKeys::synchronousMessageFailedKey(), WebCore::ShouldSample::No);
         response = ResourceResponse();
         error = internalError(request.url());
@@ -644,6 +667,7 @@ void WebLoaderStrategy::startPingLoad(Frame& frame, ResourceRequest& request, co
         if (auto* contentSecurityPolicy = document->contentSecurityPolicy())
             loadParameters.cspResponseHeaders = contentSecurityPolicy->responseHeaders();
     }
+    addParametersFromFrame(&frame, loadParameters);
 
 #if ENABLE(CONTENT_EXTENSIONS)
     loadParameters.mainDocumentURL = document->topDocument().url();
@@ -779,6 +803,7 @@ bool WebLoaderStrategy::havePerformedSecurityChecks(const ResourceResponse& resp
     if (!shouldPerformSecurityChecks())
         return false;
     switch (response.source()) {
+    case ResourceResponse::Source::DOMCache:
     case ResourceResponse::Source::ApplicationCache:
     case ResourceResponse::Source::MemoryCache:
     case ResourceResponse::Source::MemoryCacheAfterValidation:

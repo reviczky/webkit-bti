@@ -68,6 +68,10 @@ namespace JSC {
     struct SimpleJumpTable;
     struct StringJumpTable;
 
+    struct OpPutByVal;
+    struct OpPutByValDirect;
+    struct OpPutToScope;
+
     struct CallRecord {
         MacroAssembler::Call from;
         BytecodeIndex bytecodeIndex;
@@ -333,9 +337,6 @@ namespace JSC {
         void compileOpEqJumpSlow(Vector<SlowCaseEntry>::iterator&, CompileOpEqType, int jumpTarget);
         bool isOperandConstantDouble(VirtualRegister);
         
-        void emitLoadDouble(VirtualRegister, FPRegisterID value);
-        void emitLoadInt32ToDouble(VirtualRegister, FPRegisterID value);
-
         enum WriteBarrierMode { UnconditionalWriteBarrier, ShouldFilterBase, ShouldFilterValue, ShouldFilterBaseAndValue };
         // value register in write barrier is used before any scratch registers
         // so may safely be the same as either of the scratch registers.
@@ -411,8 +412,9 @@ namespace JSC {
         double getOperandConstantDouble(VirtualRegister src);
 
 #if USE(JSVALUE32_64)
-        bool getOperandConstantInt(VirtualRegister op1, VirtualRegister op2, int& op, int32_t& constant);
+        bool getOperandConstantInt(VirtualRegister op1, VirtualRegister op2, VirtualRegister& op, int32_t& constant);
 
+        void emitLoadDouble(VirtualRegister, FPRegisterID value);
         void emitLoadTag(VirtualRegister, RegisterID tag);
         void emitLoadPayload(VirtualRegister, RegisterID payload);
 
@@ -614,6 +616,7 @@ namespace JSC {
         void emit_op_put_internal_field(const Instruction*);
         void emit_op_log_shadow_chicken_prologue(const Instruction*);
         void emit_op_log_shadow_chicken_tail(const Instruction*);
+        void emit_op_to_property_key(const Instruction*);
 
         void emitSlow_op_add(const Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_call(const Instruction*, Vector<SlowCaseEntry>::iterator&);
@@ -934,6 +937,7 @@ namespace JSC {
         unsigned m_instanceOfIndex { UINT_MAX };
         unsigned m_byValInstructionIndex { UINT_MAX };
         unsigned m_callLinkInfoIndex { UINT_MAX };
+        unsigned m_bytecodeCountHavingSlowCase { 0 };
         
         Label m_arityCheck;
         std::unique_ptr<LinkBuffer> m_linkBuffer;

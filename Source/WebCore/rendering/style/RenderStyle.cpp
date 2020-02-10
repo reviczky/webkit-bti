@@ -438,6 +438,15 @@ bool RenderStyle::inheritedEqual(const RenderStyle& other) const
         && m_rareInheritedData == other.m_rareInheritedData;
 }
 
+bool RenderStyle::descendantAffectingNonInheritedPropertiesEqual(const RenderStyle& other) const
+{
+    if (m_rareNonInheritedData.ptr() == other.m_rareNonInheritedData.ptr())
+        return true;
+    
+    return m_rareNonInheritedData->alignItems == other.m_rareNonInheritedData->alignItems
+        && m_rareNonInheritedData->justifyItems == other.m_rareNonInheritedData->justifyItems;
+}
+
 #if ENABLE(TEXT_AUTOSIZING)
 
 static inline unsigned computeFontHash(const FontCascade& font)
@@ -1661,14 +1670,14 @@ void RenderStyle::adjustTransitions()
 AnimationList& RenderStyle::ensureAnimations()
 {
     if (!m_rareNonInheritedData.access().animations)
-        m_rareNonInheritedData.access().animations = makeUnique<AnimationList>();
+        m_rareNonInheritedData.access().animations = AnimationList::create();
     return *m_rareNonInheritedData->animations;
 }
 
 AnimationList& RenderStyle::ensureTransitions()
 {
     if (!m_rareNonInheritedData.access().transitions)
-        m_rareNonInheritedData.access().transitions = makeUnique<AnimationList>();
+        m_rareNonInheritedData.access().transitions = AnimationList::create();
     return *m_rareNonInheritedData->transitions;
 }
 

@@ -32,8 +32,8 @@
 
 #include "AXObjectCache.h"
 
+#include "AXIsolatedObject.h"
 #include "AXIsolatedTree.h"
-#include "AXIsolatedTreeNode.h"
 #include "AccessibilityARIAGrid.h"
 #include "AccessibilityARIAGridCell.h"
 #include "AccessibilityARIAGridRow.h"
@@ -233,11 +233,14 @@ AXObjectCache::~AXObjectCache()
     m_focusModalNodeTimer.stop();
     m_performCacheUpdateTimer.stop();
 
-    for (const auto& object : m_objects.values()) {
-        detachWrapper(object.get(), AccessibilityDetachmentType::CacheDestroyed);
+#if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
+    // Destroy the IsolatedTree before destroying the live tree.
+    if (m_pageID)
+        AXIsolatedTree::removeTreeForPageID(*m_pageID);
+#endif
+
+    for (const auto& object : m_objects.values())
         object->detach(AccessibilityDetachmentType::CacheDestroyed);
-        object->setObjectID(0);
-    }
 }
 
 void AXObjectCache::findModalNodes()
@@ -597,6 +600,21 @@ static Ref<AccessibilityObject> createFromNode(Node* node)
     return AccessibilityNodeObject::create(node);
 }
 
+void AXObjectCache::cacheAndInitializeWrapper(AccessibilityObject* newObject, DOMObjectVariant domObject)
+{
+    ASSERT(newObject);
+    AXID axID = getAXID(newObject);
+    WTF::switchOn(domObject,
+        [&axID, this] (RenderObject* typedValue) { m_renderObjectMapping.set(typedValue, axID); },
+        [&axID, this] (Node* typedValue) { m_nodeObjectMapping.set(typedValue, axID); },
+        [&axID, this] (Widget* typedValue) { m_widgetObjectMapping.set(typedValue, axID); },
+        [] (auto&) { }
+    );
+    m_objects.set(axID, newObject);
+    newObject->init();
+    attachWrapper(newObject);
+}
+
 AccessibilityObject* AXObjectCache::getOrCreate(Widget* widget)
 {
     if (!widget)
@@ -619,12 +637,7 @@ AccessibilityObject* AXObjectCache::getOrCreate(Widget* widget)
     if (!newObj)
         return nullptr;
 
-    getAXID(newObj.get());
-    
-    m_widgetObjectMapping.set(widget, newObj->objectID());
-    m_objects.set(newObj->objectID(), newObj);
-    newObj->init();
-    attachWrapper(newObj.get());
+    cacheAndInitializeWrapper(newObj.get(), widget);
     return newObj.get();
 }
 
@@ -667,12 +680,7 @@ AccessibilityObject* AXObjectCache::getOrCreate(Node* node)
     // Will crash later if we have two objects for the same node.
     ASSERT(!get(node));
 
-    getAXID(newObj.get());
-
-    m_nodeObjectMapping.set(node, newObj->objectID());
-    m_objects.set(newObj->objectID(), newObj);
-    newObj->init();
-    attachWrapper(newObj.get());
+    cacheAndInitializeWrapper(newObj.get(), node);
     newObj->setLastKnownIsIgnoredValue(newObj->accessibilityIsIgnored());
     // Sometimes asking accessibilityIsIgnored() will cause the newObject to be deallocated, and then
     // it will disappear when this function is finished, leading to a use-after-free.
@@ -695,12 +703,7 @@ AccessibilityObject* AXObjectCache::getOrCreate(RenderObject* renderer)
     // Will crash later if we have two objects for the same renderer.
     ASSERT(!get(renderer));
 
-    getAXID(newObj.get());
-
-    m_renderObjectMapping.set(renderer, newObj->objectID());
-    m_objects.set(newObj->objectID(), newObj);
-    newObj->init();
-    attachWrapper(newObj.get());
+    cacheAndInitializeWrapper(newObj.get(), renderer);
     newObj->setLastKnownIsIgnoredValue(newObj->accessibilityIsIgnored());
     // Sometimes asking accessibilityIsIgnored() will cause the newObject to be deallocated, and then
     // it will disappear when this function is finished, leading to a use-after-free.
@@ -743,8 +746,11 @@ AXCoreObject* AXObjectCache::isolatedTreeRootObject()
         return nullptr;
 
     auto tree = AXIsolatedTree::treeForPageID(*m_pageID);
-    if (!tree && isMainThread()) {
-        tree = generateIsolatedTree(*m_pageID, m_document);
+    if (!tree) {
+        tree = Accessibility::retrieveValueFromMainThread<RefPtr<AXIsolatedTree>>([this] () -> RefPtr<AXIsolatedTree> {
+            return generateIsolatedTree(*m_pageID, m_document);
+        });
+
         // Now that we have created our tree, initialize the secondary thread,
         // so future requests come in on the other thread.
         _AXUIElementUseSecondaryAXThread(true);
@@ -786,8 +792,8 @@ AccessibilityObject* AXObjectCache::rootObjectForFrame(Frame* frame)
     
 AccessibilityObject* AXObjectCache::getOrCreate(AccessibilityRole role)
 {
-    RefPtr<AccessibilityObject> obj = nullptr;
-    
+    RefPtr<AccessibilityObject> obj;
+
     // will be filled in...
     switch (role) {
     case AccessibilityRole::ListBoxOption:
@@ -820,15 +826,11 @@ AccessibilityObject* AXObjectCache::getOrCreate(AccessibilityRole role)
     default:
         obj = nullptr;
     }
-    
-    if (obj)
-        getAXID(obj.get());
-    else
+
+    if (!obj)
         return nullptr;
 
-    m_objects.set(obj->objectID(), obj);
-    obj->init();
-    attachWrapper(obj.get());
+    cacheAndInitializeWrapper(obj.get());
     return obj.get();
 }
 
@@ -837,15 +839,6 @@ void AXObjectCache::remove(AXID axID)
     if (!axID)
         return;
 
-    auto object = m_objects.take(axID);
-    if (!object)
-        return;
-
-    detachWrapper(object.get(), AccessibilityDetachmentType::ElementDestroyed);
-    object->detach(AccessibilityDetachmentType::ElementDestroyed, this);
-    object->setObjectID(0);
-
-    m_idsInUse.remove(axID);
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
     if (m_pageID) {
         if (auto tree = AXIsolatedTree::treeForPageID(*m_pageID))
@@ -853,6 +846,13 @@ void AXObjectCache::remove(AXID axID)
     }
 #endif
 
+    auto object = m_objects.take(axID);
+    if (!object)
+        return;
+
+    object->detach(AccessibilityDetachmentType::ElementDestroyed);
+
+    m_idsInUse.remove(axID);
     ASSERT(m_objects.size() >= m_idsInUse.size());
 }
     
@@ -1933,7 +1933,7 @@ RefPtr<Range> AXObjectCache::rangeMatchesTextNearRange(RefPtr<Range> originalRan
         return nullptr;
     
     auto range = Range::create(m_document, startPosition, originalRange->startPosition());
-    unsigned targetOffset = TextIterator::rangeLength(range.ptr(), true);
+    unsigned targetOffset = TextIterator::rangeLength(range.ptr(), { TextIteratorLengthOption::GenerateSpacesForReplacedElements });
     return findClosestPlainText(searchRange.get(), matchText, { }, targetOffset);
 }
 
@@ -2514,8 +2514,12 @@ static UChar32 characterForCharacterOffset(const CharacterOffset& characterOffse
     
     UChar32 ch = 0;
     unsigned offset = characterOffset.startIndex + characterOffset.offset;
-    if (offset < characterOffset.node->textContent().length())
+    if (offset < characterOffset.node->textContent().length()) {
+// FIXME: Remove IGNORE_CLANG_WARNINGS macros once one of <rdar://problem/58615489&58615391> is fixed.
+IGNORE_CLANG_WARNINGS_BEGIN("conditional-uninitialized")
         U16_NEXT(characterOffset.node->textContent(), offset, characterOffset.node->textContent().length(), ch);
+IGNORE_CLANG_WARNINGS_END
+    }
     return ch;
 }
 
@@ -3071,7 +3075,7 @@ Ref<AXIsolatedObject> AXObjectCache::createIsolatedTreeHierarchy(AXCoreObject& o
 
     isolatedTreeNode->setTreeIdentifier(tree.treeIdentifier());
     isolatedTreeNode->setParent(parentID);
-    axObjectCache->attachWrapper(&isolatedTreeNode.get());
+    axObjectCache->attachWrapper(&isolatedTreeNode.get(), object.wrapper());
 
     for (const auto& child : object.children()) {
         auto staticChild = createIsolatedTreeHierarchy(*child, isolatedTreeNode->objectID(), axObjectCache, tree, nodeChanges, false);
@@ -3085,9 +3089,7 @@ Ref<AXIsolatedTree> AXObjectCache::generateIsolatedTree(PageIdentifier pageID, D
 {
     RELEASE_ASSERT(isMainThread());
 
-    auto tree = AXIsolatedTree::treeForPageID(pageID);
-    if (!tree)
-        tree = AXIsolatedTree::createTreeForPageID(pageID);
+    RefPtr<AXIsolatedTree> tree(AXIsolatedTree::createTreeForPageID(pageID));
 
     // Set the root and focused objects in the isolated tree. For that, we need
     // the root and the focused object in the AXObject tree.

@@ -38,7 +38,7 @@ class InvalidationState;
 class TableFormattingState;
 // This class implements the layout logic for table formatting contexts.
 // https://www.w3.org/TR/CSS22/tables.html
-class TableFormattingContext : public FormattingContext {
+class TableFormattingContext final : public FormattingContext {
     WTF_MAKE_ISO_ALLOCATED(TableFormattingContext);
 public:
     TableFormattingContext(const Container& formattingContextRoot, TableFormattingState&);
@@ -59,7 +59,7 @@ private:
     TableFormattingContext::Geometry geometry() const { return Geometry(*this); }
 
     IntrinsicWidthConstraints computedIntrinsicWidthConstraints() override;
-    void layoutTableCellBox(const Box& cellLayoutBox, const TableGrid::Column&, InvalidationState&);
+    void layoutTableCellBox(const Box& cellLayoutBox, const TableGrid::Column&, InvalidationState&, const HorizontalConstraints&);
     void positionTableCells();
     void setComputedGeometryForRows();
     void setComputedGeometryForSections();

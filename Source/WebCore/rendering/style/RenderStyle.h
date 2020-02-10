@@ -736,6 +736,8 @@ public:
     bool useTouchOverflowScrolling() const { return m_rareInheritedData->useTouchOverflowScrolling; }
 #endif
 
+    bool useSmoothScrolling() const { return m_rareNonInheritedData->useSmoothScrolling; }
+
 #if ENABLE(TEXT_AUTOSIZING)
     TextSizeAdjustment textSizeAdjust() const { return m_rareInheritedData->textSizeAdjust; }
     AutosizeStatus autosizeStatus() const;
@@ -1264,6 +1266,8 @@ public:
     void setUseTouchOverflowScrolling(bool v) { SET_VAR(m_rareInheritedData, useTouchOverflowScrolling, v); }
 #endif
 
+    void setUseSmoothScrolling(bool v) { SET_VAR(m_rareNonInheritedData, useSmoothScrolling, v); }
+
 #if ENABLE(TEXT_AUTOSIZING)
     void setTextSizeAdjust(TextSizeAdjustment adjustment) { SET_VAR(m_rareInheritedData, textSizeAdjust, adjustment); }
     void setAutosizeStatus(AutosizeStatus);
@@ -1414,6 +1418,7 @@ public:
     const AtomString& hyphenString() const;
 
     bool inheritedEqual(const RenderStyle&) const;
+    bool descendantAffectingNonInheritedPropertiesEqual(const RenderStyle&) const;
 
 #if ENABLE(TEXT_AUTOSIZING)
     uint32_t hashForTextAutosizing() const;
@@ -1700,6 +1705,8 @@ public:
 #if ENABLE(OVERFLOW_SCROLLING_TOUCH)
     static bool initialUseTouchOverflowScrolling() { return false; }
 #endif
+
+    static bool initialUseSmoothScrolling() { return false; }
 
     static const FilterOperations& initialFilter() { static NeverDestroyed<FilterOperations> ops; return ops; }
     static const FilterOperations& initialAppleColorFilter() { static NeverDestroyed<FilterOperations> ops; return ops; }

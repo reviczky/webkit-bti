@@ -165,7 +165,7 @@ static UseDecision responseNeedsRevalidation(NetworkSession& networkSession, con
 
     auto maximumStaleness = maxStale ? maxStale.value() : 0_ms;
     bool hasExpired = age - lifetime > maximumStaleness;
-#if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
+#if ENABLE(NETWORK_CACHE_STALE_WHILE_REVALIDATE)
     if (hasExpired && !maxStale && networkSession.isStaleWhileRevalidateEnabled()) {
         auto responseMaxStaleness = response.cacheControlStaleWhileRevalidate();
         maximumStaleness += responseMaxStaleness ? responseMaxStaleness.value() : 0_ms;
@@ -267,7 +267,7 @@ static StoreDecision makeStoreDecision(const WebCore::ResourceRequest& originalR
     if (!storeUnconditionallyForHistoryNavigation) {
         auto now = WallTime::now();
         Seconds allowedStale { 0_ms };
-#if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
+#if ENABLE(NETWORK_CACHE_STALE_WHILE_REVALIDATE)
         if (auto value = response.cacheControlStaleWhileRevalidate())
             allowedStale = value.value();
 #endif
@@ -315,7 +315,7 @@ static bool inline canRequestUseSpeculativeRevalidation(const WebCore::ResourceR
 }
 #endif
 
-#if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
+#if ENABLE(NETWORK_CACHE_STALE_WHILE_REVALIDATE)
 void Cache::startAsyncRevalidationIfNeeded(const WebCore::ResourceRequest& request, const NetworkCache::Key& key, std::unique_ptr<Entry>&& entry, const GlobalFrameID& frameID)
 {
     m_pendingAsyncRevalidations.ensure(key, [&] {
@@ -381,10 +381,13 @@ void Cache::retrieve(const WebCore::ResourceRequest& request, const GlobalFrameI
         auto useDecision = entry ? makeUseDecision(networkProcess, sessionID, *entry, request) : UseDecision::NoDueToDecodeFailure;
         switch (useDecision) {
         case UseDecision::AsyncRevalidate: {
-#if ENABLE(NETWORK_CACHE_SPECULATIVE_REVALIDATION)
+#if ENABLE(NETWORK_CACHE_STALE_WHILE_REVALIDATE)
             auto entryCopy = makeUnique<Entry>(*entry);
             entryCopy->setNeedsValidation(true);
             startAsyncRevalidationIfNeeded(request, storageKey, WTFMove(entryCopy), frameID);
+#else
+            UNUSED_PARAM(frameID);
+            UNUSED_PARAM(this);
 #endif
             FALLTHROUGH;
         }
@@ -575,23 +578,16 @@ void Cache::dumpContentsToFile()
     size_t capacity = m_storage->capacity();
     m_storage->traverse(resourceType(), flags, [fd, totals, capacity](const Storage::Record* record, const Storage::RecordInfo& info) mutable {
         if (!record) {
-            StringBuilder epilogue;
-            epilogue.appendLiteral("{}\n],\n");
-            epilogue.appendLiteral("\"totals\": {\n");
-            epilogue.appendLiteral("\"capacity\": ");
-            epilogue.appendNumber(capacity);
-            epilogue.appendLiteral(",\n");
-            epilogue.appendLiteral("\"count\": ");
-            epilogue.appendNumber(totals.count);
-            epilogue.appendLiteral(",\n");
-            epilogue.appendLiteral("\"bodySize\": ");
-            epilogue.appendNumber(totals.bodySize);
-            epilogue.appendLiteral(",\n");
-            epilogue.appendLiteral("\"averageWorth\": ");
-            epilogue.append(FormattedNumber::fixedPrecision(totals.count ? totals.worth / totals.count : 0));
-            epilogue.appendLiteral("\n");
-            epilogue.appendLiteral("}\n}\n");
-            auto writeData = epilogue.toString().utf8();
+            CString writeData = makeString(
+                "{}\n"
+                "],\n"
+                "\"totals\": {\n"
+                "\"capacity\": ", capacity, ",\n"
+                "\"count\": ", totals.count, ",\n"
+                "\"bodySize\": ", totals.bodySize, ",\n"
+                "\"averageWorth\": ", totals.count ? totals.worth / totals.count : 0, "\n"
+                "}\n}\n"
+            ).utf8();
             writeToFile(fd, writeData.data(), writeData.length());
             closeFile(fd);
             return;

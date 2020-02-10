@@ -28,7 +28,7 @@
 #if ENABLE(ACCESSIBILITY_ISOLATED_TREE)
 #include "AXIsolatedTree.h"
 
-#include "AXIsolatedTreeNode.h"
+#include "AXIsolatedObject.h"
 #include "Page.h"
 #include <wtf/NeverDestroyed.h>
 
@@ -80,11 +80,32 @@ RefPtr<AXIsolatedTree> AXIsolatedTree::treeForID(AXIsolatedTreeID treeID)
 Ref<AXIsolatedTree> AXIsolatedTree::createTreeForPageID(PageIdentifier pageID)
 {
     LockHolder locker(s_cacheLock);
+    ASSERT(!treePageCache().contains(pageID));
 
     auto newTree = AXIsolatedTree::create();
     treePageCache().set(pageID, newTree.copyRef());
     treeIDCache().set(newTree->treeIdentifier(), newTree.copyRef());
     return newTree;
+}
+
+void AXIsolatedTree::removeTreeForPageID(PageIdentifier pageID)
+{
+    LockHolder locker(s_cacheLock);
+
+    if (auto optionalTree = treePageCache().take(pageID)) {
+        auto& tree { *optionalTree };
+        LockHolder treeLocker { tree->m_changeLogLock };
+        for (const auto& axID : tree->m_readerThreadNodeMap.keys()) {
+            if (auto object = tree->nodeForID(axID))
+                object->detach(AccessibilityDetachmentType::CacheDestroyed);
+        }
+        tree->m_pendingAppends.clear();
+        tree->m_pendingRemovals.clear();
+        tree->m_readerThreadNodeMap.clear();
+        treeLocker.unlockEarly();
+
+        treeIDCache().remove(tree->treeIdentifier());
+    }
 }
 
 RefPtr<AXIsolatedTree> AXIsolatedTree::treeForPageID(PageIdentifier pageID)
@@ -145,20 +166,21 @@ void AXIsolatedTree::applyPendingChanges()
 {
     RELEASE_ASSERT(!isMainThread());
     LockHolder locker { m_changeLogLock };
-    Vector<Ref<AXIsolatedObject>> appendCopy;
-    std::swap(appendCopy, m_pendingAppends);
-    Vector<AXID> removeCopy({ WTFMove(m_pendingRemovals) });
-    locker.unlockEarly();
 
     // We don't clear the pending IDs beacause if the next round of updates does not modify them, then they stay the same
     // value without extra bookkeeping.
     m_focusedNodeID = m_pendingFocusedNodeID;
 
-    for (auto& item : appendCopy)
+    for (auto& item : m_pendingAppends)
         m_readerThreadNodeMap.add(item->objectID(), WTFMove(item));
+    m_pendingAppends.clear();
 
-    for (auto item : removeCopy)
+    for (auto& item : m_pendingRemovals) {
+        if (auto object = nodeForID(item))
+            object->detach(AccessibilityDetachmentType::ElementDestroyed);
         m_readerThreadNodeMap.remove(item);
+    }
+    m_pendingRemovals.clear();
 }
     
 } // namespace WebCore

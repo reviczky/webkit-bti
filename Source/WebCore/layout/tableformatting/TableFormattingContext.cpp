@@ -28,9 +28,11 @@
 
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
 
+#include "DisplayBox.h"
 #include "InvalidationState.h"
 #include "LayoutBox.h"
 #include "LayoutChildIterator.h"
+#include "LayoutContext.h"
 #include "TableFormattingState.h"
 #include <wtf/IsoMallocInlines.h>
 
@@ -58,7 +60,7 @@ TableFormattingContext::TableFormattingContext(const Container& formattingContex
 {
 }
 
-void TableFormattingContext::layoutInFlowContent(InvalidationState& invalidationState, const HorizontalConstraints&, const VerticalConstraints&)
+void TableFormattingContext::layoutInFlowContent(InvalidationState& invalidationState, const HorizontalConstraints& horizontalConstraints, const VerticalConstraints&)
 {
     auto& grid = formattingState().tableGrid();
     auto& columnsContext = grid.columnsContext();
@@ -79,7 +81,7 @@ void TableFormattingContext::layoutInFlowContent(InvalidationState& invalidation
     ASSERT(!cellList.isEmpty());
     for (auto& cell : cellList) {
         auto& cellLayoutBox = cell->tableCellBox;
-        layoutTableCellBox(cellLayoutBox, columnList.at(cell->position.x()), invalidationState);
+        layoutTableCellBox(cellLayoutBox, columnList.at(cell->position.x()), invalidationState, horizontalConstraints);
         // FIXME: Add support for column and row spanning and this requires a 2 pass layout.
         auto& row = grid.rows().at(cell->position.y());
         row.setLogicalHeight(std::max(row.logicalHeight(), geometryForBox(cellLayoutBox).marginBoxHeight()));
@@ -97,9 +99,8 @@ void TableFormattingContext::layoutInFlowContent(InvalidationState& invalidation
     setComputedGeometryForRows();
 }
 
-void TableFormattingContext::layoutTableCellBox(const Box& cellLayoutBox, const TableGrid::Column& column, InvalidationState& invalidationState)
+void TableFormattingContext::layoutTableCellBox(const Box& cellLayoutBox, const TableGrid::Column& column, InvalidationState& invalidationState, const HorizontalConstraints& horizontalConstraints)
 {
-    auto horizontalConstraints = Geometry::horizontalConstraintsForInFlow(geometryForBox(*cellLayoutBox.containingBlock()));
     computeBorderAndPadding(cellLayoutBox, horizontalConstraints);
     // Margins do not apply to internal table elements.
     auto& cellDisplayBox = formattingState().displayBox(cellLayoutBox);
@@ -110,7 +111,7 @@ void TableFormattingContext::layoutTableCellBox(const Box& cellLayoutBox, const 
     cellDisplayBox.setContentBoxWidth(column.logicalWidth() - cellDisplayBox.horizontalMarginBorderAndPadding());
 
     ASSERT(cellLayoutBox.establishesBlockFormattingContext());
-    if (is<Container>(cellLayoutBox))
+    if (is<Container>(cellLayoutBox) && downcast<Container>(cellLayoutBox).hasInFlowOrFloatingChild())
         LayoutContext::createFormattingContext(downcast<Container>(cellLayoutBox), layoutState())->layoutInFlowContent(invalidationState, Geometry::horizontalConstraintsForInFlow(cellDisplayBox), Geometry::verticalConstraintsForInFlow(cellDisplayBox));
     cellDisplayBox.setVerticalMargin({ { }, { } });
     cellDisplayBox.setContentBoxHeight(geometry().tableCellHeightAndMargin(cellLayoutBox).contentHeight);
@@ -316,7 +317,7 @@ void TableFormattingContext::computeAndDistributeExtraHorizontalSpace()
     };
 
     auto& tableBox = root();
-    auto containingBlockWidth = geometryForBox(*tableBox.containingBlock(), EscapeType::TableFormattingContextAccessParentTableWrapperBlockFormattingContext).contentBoxWidth();
+    auto containingBlockWidth = geometryForBox(*tableBox.containingBlock(), EscapeReason::TableNeedsAccessToTableWrapper).contentBoxWidth();
     auto contentWidth = geometry().computedContentWidth(tableBox, containingBlockWidth);
     if (contentWidth) {
         if (*contentWidth > tableWidthConstraints.minimum)

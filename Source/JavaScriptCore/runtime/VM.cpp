@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2008-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -88,6 +88,7 @@
 #include "JSArrayBufferConstructor.h"
 #include "JSArrayIterator.h"
 #include "JSAsyncFunction.h"
+#include "JSAsyncGenerator.h"
 #include "JSBigInt.h"
 #include "JSBoundFunction.h"
 #include "JSCInlines.h"
@@ -111,11 +112,13 @@
 #include "JSNativeStdFunction.h"
 #include "JSPromise.h"
 #include "JSPropertyNameEnumerator.h"
+#include "JSProxy.h"
 #include "JSScriptFetchParameters.h"
 #include "JSScriptFetcher.h"
 #include "JSSet.h"
 #include "JSSetIterator.h"
 #include "JSSourceCode.h"
+#include "JSStringIterator.h"
 #include "JSTemplateObjectDescriptor.h"
 #include "JSToWasmICCallee.h"
 #include "JSTypedArrays.h"
@@ -368,6 +371,7 @@ VM::VM(VMType vmType, HeapType heapType)
     , getterSetterSpace ISO_SUBSPACE_INIT(heap, cellHeapCellType.get(), GetterSetter)
     , globalLexicalEnvironmentSpace ISO_SUBSPACE_INIT(heap, globalLexicalEnvironmentHeapCellType.get(), JSGlobalLexicalEnvironment)
     , internalFunctionSpace ISO_SUBSPACE_INIT(heap, cellHeapCellType.get(), InternalFunction) // Hash:0xf845c464
+    , jsProxySpace ISO_SUBSPACE_INIT(heap, cellHeapCellType.get(), JSProxy)
     , nativeExecutableSpace ISO_SUBSPACE_INIT(heap, destructibleCellHeapCellType.get(), NativeExecutable) // Hash:0x67567f95
     , numberObjectSpace ISO_SUBSPACE_INIT(heap, cellHeapCellType.get(), NumberObject)
     , promiseSpace ISO_SUBSPACE_INIT(heap, cellHeapCellType.get(), JSPromise)
@@ -936,7 +940,7 @@ Exception* VM::throwException(JSGlobalObject* globalObject, Exception* exception
     if (!throwOriginFrame)
         throwOriginFrame = globalObject->deprecatedCallFrameForDebugger();
 
-    if (Options::breakOnThrow()) {
+    if (UNLIKELY(Options::breakOnThrow())) {
         CodeBlock* codeBlock = throwOriginFrame ? throwOriginFrame->codeBlock() : nullptr;
         dataLog("Throwing exception in call frame ", RawPointer(throwOriginFrame), " for code block ", codeBlock, "\n");
         CRASH();
@@ -1063,8 +1067,11 @@ void VM::gatherScratchBufferRoots(ConservativeRoots& conservativeRoots)
 
 void VM::scanSideState(ConservativeRoots& roots) const
 {
-    for (const auto& iter : m_checkpointSideState)
-        roots.add(iter.value->tmps, iter.value->tmps + sizeof(iter.value->tmps));
+    ASSERT(heap.worldIsStopped());
+    for (const auto& iter : m_checkpointSideState) {
+        static_assert(sizeof(iter.value->tmps) / sizeof(JSValue) == maxNumCheckpointTmps);
+        roots.add(iter.value->tmps, iter.value->tmps + maxNumCheckpointTmps);
+    }
 }
 #endif
 
@@ -1149,20 +1156,15 @@ void VM::dumpRegExpTrace()
 }
 #endif
 
-WatchpointSet* VM::ensureWatchpointSetForImpureProperty(const Identifier& propertyName)
+WatchpointSet* VM::ensureWatchpointSetForImpureProperty(UniquedStringImpl* propertyName)
 {
-    auto result = m_impurePropertyWatchpointSets.add(propertyName.string(), nullptr);
+    auto result = m_impurePropertyWatchpointSets.add(propertyName, nullptr);
     if (result.isNewEntry)
         result.iterator->value = adoptRef(new WatchpointSet(IsWatched));
     return result.iterator->value.get();
 }
 
-void VM::registerWatchpointForImpureProperty(const Identifier& propertyName, Watchpoint* watchpoint)
-{
-    ensureWatchpointSetForImpureProperty(propertyName)->add(watchpoint);
-}
-
-void VM::addImpureProperty(const String& propertyName)
+void VM::addImpureProperty(UniquedStringImpl* propertyName)
 {
     if (RefPtr<WatchpointSet> watchpointSet = m_impurePropertyWatchpointSets.take(propertyName))
         watchpointSet->fireAll(*this, "Impure property added");
@@ -1441,6 +1443,7 @@ void VM::ensureShadowChicken()
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(apiGlobalObjectSpace, apiGlobalObjectHeapCellType.get(), JSAPIGlobalObject)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(apiValueWrapperSpace, cellHeapCellType.get(), JSAPIValueWrapper)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(arrayBufferSpace, cellHeapCellType.get(), JSArrayBuffer)
+DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(arrayIteratorSpace, cellHeapCellType.get(), JSArrayIterator)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(asyncGeneratorSpace, cellHeapCellType.get(), JSAsyncGenerator)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(bigIntObjectSpace, cellHeapCellType.get(), BigIntObject)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(booleanObjectSpace, cellHeapCellType.get(), BooleanObject)
@@ -1457,7 +1460,6 @@ DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(float32ArraySpace, cellHeapCellType.get(
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(float64ArraySpace, cellHeapCellType.get(), JSFloat64Array)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(functionRareDataSpace, destructibleCellHeapCellType.get(), FunctionRareData)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(generatorSpace, cellHeapCellType.get(), JSGenerator)
-DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(arrayIteratorSpace, cellHeapCellType.get(), JSArrayIterator)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(globalObjectSpace, globalObjectHeapCellType.get(), JSGlobalObject)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(jsModuleRecordSpace, jsModuleRecordHeapCellType.get(), JSModuleRecord)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(int8ArraySpace, cellHeapCellType.get(), JSInt8Array)
@@ -1477,6 +1479,7 @@ DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(setBucketSpace, cellHeapCellType.get(), 
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(setIteratorSpace, cellHeapCellType.get(), JSSetIterator)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(setSpace, cellHeapCellType.get(), JSSet)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(strictEvalActivationSpace, cellHeapCellType.get(), StrictEvalActivation)
+DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(stringIteratorSpace, cellHeapCellType.get(), JSStringIterator)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(sourceCodeSpace, destructibleCellHeapCellType.get(), JSSourceCode)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(symbolSpace, destructibleCellHeapCellType.get(), Symbol)
 DYNAMIC_ISO_SUBSPACE_DEFINE_MEMBER_SLOW(symbolObjectSpace, cellHeapCellType.get(), SymbolObject)

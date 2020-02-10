@@ -669,12 +669,14 @@ void RenderBlockFlow::layoutBlockChildren(bool relayoutChildren, LayoutUnit& max
 void RenderBlockFlow::layoutInlineChildren(bool relayoutChildren, LayoutUnit& repaintLogicalTop, LayoutUnit& repaintLogicalBottom)
 {
     auto computeLineLayoutPath = [&] {
+        bool canUseSimpleLines = SimpleLineLayout::canUseFor(*this);
 #if ENABLE(LAYOUT_FORMATTING_CONTEXT)
-        if (LayoutIntegration::LineLayout::canUseFor(*this))
+        if (LayoutIntegration::LineLayout::canUseFor(*this, canUseSimpleLines))
             return LayoutFormattingContextPath;
 #endif
-        if (SimpleLineLayout::canUseFor(*this))
+        if (canUseSimpleLines)
             return SimpleLinesPath;
+
         return LineBoxesPath;
     };
 
@@ -1809,6 +1811,10 @@ void RenderBlockFlow::adjustLinePositionForPagination(RootInlineBox* lineBox, La
         if (((lineBox == firstRootBox() && totalLogicalHeight < pageLogicalHeightAtNewOffset) || (!style().hasAutoOrphans() && style().orphans() >= lineIndex))
             && !isOutOfFlowPositioned() && !isTableCell()) {
             auto firstRootBox = this->firstRootBox();
+            if (!firstRootBox) {
+                setPaginationStrut(remainingLogicalHeight + logicalOffset);
+                return;
+            }
             auto firstRootBoxOverflowRect = firstRootBox->logicalVisualOverflowRect(firstRootBox->lineTop(), firstRootBox->lineBottom());
             auto firstLineUpperOverhang = std::max(-firstRootBoxOverflowRect.y(), 0_lu);
             if (needsAppleMailPaginationQuirk(*lineBox))
@@ -2104,6 +2110,11 @@ void RenderBlockFlow::styleDidChange(StyleDifference diff, const RenderStyle* ol
 
     if (multiColumnFlow())
         updateStylesForColumnChildren();
+
+#if ENABLE(LAYOUT_FORMATTING_CONTEXT)
+    if (layoutFormattingContextLineLayout())
+        layoutFormattingContextLineLayout()->updateStyle();
+#endif
 }
 
 void RenderBlockFlow::updateStylesForColumnChildren()
