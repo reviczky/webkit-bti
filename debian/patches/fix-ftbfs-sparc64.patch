@@ -1,11 +1,11 @@
 From: David Matthew Mattli <dmm@mattli.us>
 Subject: Fix FTBFS in sparc64
 Bug-Debian: https://bugs.debian.org/806816
-Index: webkitgtk/Source/WTF/wtf/Platform.h
+Index: webkitgtk/Source/WTF/wtf/PlatformCPU.h
 ===================================================================
---- webkitgtk.orig/Source/WTF/wtf/Platform.h
-+++ webkitgtk/Source/WTF/wtf/Platform.h
-@@ -114,6 +114,11 @@
+--- webkitgtk.orig/Source/WTF/wtf/PlatformCPU.h
++++ webkitgtk/Source/WTF/wtf/PlatformCPU.h
+@@ -89,6 +89,11 @@
  #define WTF_CPU_KNOWN 1
  #endif
  
