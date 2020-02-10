@@ -1,5 +1,6 @@
-webkit2gtk (2.27.4-2) UNRELEASED; urgency=medium
+webkit2gtk (2.27.90-1) UNRELEASED; urgency=medium
 
+  * New upstream development release.
   * debian/patches/use-python3.patch:
     + The unversioned python interpreter (i.e. Python 2) is not installed
       by default anymore, so use Python 3 instead (Closes: #948839).
