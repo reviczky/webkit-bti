@@ -1,0 +1,4 @@
+Bug-Database: https://bugs.webkit.org/buglist.cgi?product=WebKit&component=WebKitGTK&resolution=---
+Bug-Submit: https://bugs.webkit.org/enter_bug.cgi?product=WebKit&component=WebKitGTK
+Repository: git://git.webkit.org/WebKit-https.git
+Repository-Browse: https://trac.webkit.org/browser
