@@ -12,6 +12,7 @@ webkit2gtk (2.26.4-1) UNRELEASED; urgency=medium
   * debian/control:
     + Mark libwebkit2gtk-4.0-doc and libwebkit2gtk-4.0-37-gtk2 as
       Multi-Arch: foreign.
+    + Update Standards-Version to 4.5.0 (no changes).
   * debian/patches/reduce-memory-overheads.patch:
     + Reduce memory usage when not using the Gold linker
       (Closes: #949621).
