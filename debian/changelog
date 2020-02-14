@@ -19,6 +19,7 @@ webkit2gtk (2.26.4-1) UNRELEASED; urgency=medium
     + Update to make it work with the current release (Closes: #949660).
   * debian/patches/detect-woff.patch:
     + Refresh.
+  * Add debian/upstream/metadata.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 22 Jan 2020 23:23:11 +0100
 
