@@ -83,11 +83,11 @@ else
 	DH_GENCONTROL_ARGS += -Vgst:Recommends="gstreamer1.0-libav"
 endif
 
-override_dh_gencontrol:
-	dh_gencontrol -- $(DH_GENCONTROL_ARGS)
-
 %:
 	dh $@ --with gir --buildsystem=cmake+ninja --builddirectory=build
+
+override_dh_gencontrol:
+	dh_gencontrol -- $(DH_GENCONTROL_ARGS)
 
 override_dh_auto_configure:
 	CXXFLAGS="$(CFLAGS)" \
