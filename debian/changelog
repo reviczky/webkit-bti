@@ -1,4 +1,4 @@
-webkit2gtk (2.26.4-1) UNRELEASED; urgency=medium
+webkit2gtk (2.26.4-1) unstable; urgency=high
 
   * New upstream release.
   * The WebKitGTK security advisory WSA-2020-0001 lists the following
@@ -26,7 +26,7 @@ webkit2gtk (2.26.4-1) UNRELEASED; urgency=medium
     + Refresh.
   * Add debian/upstream/metadata.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 22 Jan 2020 23:23:11 +0100
+ -- Alberto Garcia <berto@igalia.com>  Fri, 14 Feb 2020 14:55:40 +0100
 
 webkit2gtk (2.26.3-1) unstable; urgency=high
 
