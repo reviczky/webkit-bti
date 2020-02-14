@@ -17,6 +17,8 @@ webkit2gtk (2.26.4-1) UNRELEASED; urgency=medium
       (Closes: #949621).
   * debian/patches/fix-ftbfs-m68k.patch:
     + Update to make it work with the current release (Closes: #949660).
+  * debian/patches/detect-woff.patch:
+    + Refresh.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 22 Jan 2020 23:23:11 +0100
 

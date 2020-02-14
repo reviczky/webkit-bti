@@ -5,7 +5,7 @@ Index: webkitgtk/Source/cmake/OptionsGTK.cmake
 ===================================================================
 --- webkitgtk.orig/Source/cmake/OptionsGTK.cmake
 +++ webkitgtk/Source/cmake/OptionsGTK.cmake
-@@ -363,7 +363,8 @@ endif ()
+@@ -362,7 +362,8 @@ endif ()
  if (USE_WOFF2)
      find_package(WOFF2Dec 1.0.2)
      if (NOT WOFF2DEC_FOUND)
