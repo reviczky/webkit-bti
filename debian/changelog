@@ -4,6 +4,10 @@ webkit2gtk (2.26.4-1) UNRELEASED; urgency=medium
   * The WebKitGTK security advisory WSA-2020-0001 lists the following
     security fixes in the latest versions of WebKitGTK:
     + CVE-2019-8835, CVE-2019-8844, CVE-2019-8846 (fixed in 2.26.3)
+  * The WebKitGTK security advisory WSA-2020-0002 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    + CVE-2020-3862, CVE-2020-3864, CVE-2020-3865, CVE-2020-3867,
+      CVE-2020-3868 (fixed in 2.26.4)
   * debian/rules:
     + Don't use the Gold linker on powerpc (Closes: #949618).
     + Run dh with --builddirectory=build. Some source files are generated
