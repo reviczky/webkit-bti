@@ -1,3 +1,11 @@
+webkit2gtk (2.26.4-2) UNRELEASED; urgency=medium
+
+  * debian/rules:
+    + Use -mlra -fno-move-loop-invariants in sh3 and sh4 builds (thanks,
+      Adrian Glaubitz) (Closes: #952482).
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 26 Feb 2020 14:36:12 +0100
+
 webkit2gtk (2.26.4-1) unstable; urgency=high
 
   * New upstream release.
