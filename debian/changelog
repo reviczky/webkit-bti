@@ -9,6 +9,8 @@ webkit2gtk (2.27.91-1) UNRELEASED; urgency=medium
   * debian/control:
     + Add build dependency on jdupes.
     + Update Standards-Version to 4.5.0 (no changes).
+  * debian/WebKitWebDriver.1:
+    + Fix grammar.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 27 Feb 2020 11:44:09 +0100
 
