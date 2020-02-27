@@ -11,6 +11,8 @@ webkit2gtk (2.27.91-1) UNRELEASED; urgency=medium
     + Update Standards-Version to 4.5.0 (no changes).
   * debian/WebKitWebDriver.1:
     + Fix grammar.
+  * debian/copyright:
+    + Update copyright information of all files.
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 27 Feb 2020 11:44:09 +0100
 
