@@ -5,7 +5,9 @@ webkit2gtk (2.27.91-1) UNRELEASED; urgency=medium
   * debian/rules:
     + Use -mlra -fno-move-loop-invariants in sh3 and sh4 builds (thanks,
       Adrian Glaubitz) (Closes: #952482).
+    + Use jdupes to remove duplicate files in libwebkit2gtk-4.0-doc.
   * debian/control:
+    + Add build dependency on jdupes.
     + Update Standards-Version to 4.5.0 (no changes).
 
  -- Alberto Garcia <berto@igalia.com>  Thu, 27 Feb 2020 11:44:09 +0100
