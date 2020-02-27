@@ -126,6 +126,8 @@ clipboardAccessPolicy:
   initial: ClipboardAccessPolicy::RequiresUserGesture
 asyncClipboardAPIEnabled:
   initial: false
+shouldRestrictBaseURLSchemes:
+  initial: true
 
 textAreasAreResizable:
   initial: false
@@ -766,10 +768,6 @@ hiddenPageDOMTimerThrottlingAutoIncreases:
 hiddenPageCSSAnimationSuspensionEnabled:
   initial: false
   onChange: hiddenPageCSSAnimationSuspensionEnabledChanged
-
-renderingUpdateThrottlingEnabled:
-  initial: true
-  onChange: renderingUpdateThrottlingEnabledChanged
 
 storageBlockingPolicy:
   type: SecurityOrigin::StorageBlockingPolicy

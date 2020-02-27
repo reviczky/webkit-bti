@@ -64,6 +64,7 @@ constexpr auto objectStoreInfoTableName = "ObjectStoreInfo"_s;
 constexpr auto objectStoreInfoTableNameAlternate = "\"ObjectStoreInfo\""_s;
 constexpr auto v2ObjectStoreInfoSchema = "CREATE TABLE ObjectStoreInfo (id INTEGER PRIMARY KEY NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT FAIL, name TEXT NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT FAIL, keyPath BLOB NOT NULL ON CONFLICT FAIL, autoInc INTEGER NOT NULL ON CONFLICT FAIL)"_s;
 constexpr auto v1IndexRecordsRecordIndexSchema = "CREATE INDEX IndexRecordsRecordIndex ON IndexRecords (objectStoreID, objectStoreRecordID)"_s;
+constexpr auto IndexRecordsIndexSchema = "CREATE INDEX IndexRecordsIndex ON IndexRecords (indexID, key, value)"_s;
 
 // Current version of the metadata schema being used in the metadata database.
 static const int currentMetadataVersion = 1;
@@ -192,12 +193,6 @@ static const String v3IndexRecordsTableSchemaAlternate()
 {
     static NeverDestroyed<WTF::String> indexRecordsTableSchemaString = v3IndexRecordsTableSchema("\"IndexRecords\"");
     return indexRecordsTableSchemaString;
-}
-
-static const String& v1IndexRecordsIndexSchema()
-{
-    static NeverDestroyed<WTF::String> indexRecordsIndexSchemaString("CREATE INDEX IndexRecordsIndex ON IndexRecords (key)");
-    return indexRecordsIndexSchemaString;
 }
 
 static const String blobRecordsTableSchema(const String& tableName)
@@ -514,7 +509,7 @@ bool SQLiteIDBBackingStore::ensureValidIndexRecordsIndex()
 
         // If there is no IndexRecordsIndex index at all, create it and then bail.
         if (sqliteResult == SQLITE_DONE) {
-            if (!m_sqliteDB->executeCommand(v1IndexRecordsIndexSchema())) {
+            if (!m_sqliteDB->executeCommand(IndexRecordsIndexSchema)) {
                 LOG_ERROR("Could not create IndexRecordsIndex index in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
                 return false;
             }
@@ -533,11 +528,26 @@ bool SQLiteIDBBackingStore::ensureValidIndexRecordsIndex()
     ASSERT(!currentSchema.isEmpty());
 
     // If the schema in the backing store is the current schema, we're done.
-    if (currentSchema == v1IndexRecordsIndexSchema())
+    if (currentSchema == IndexRecordsIndexSchema)
         return true;
 
-    // There is currently no outdated schema for the IndexRecordsIndex, so any other existing schema means this database is invalid.
-    return false;
+    // Otherwise, update the schema.
+    SQLiteTransaction transaction(*m_sqliteDB);
+    transaction.begin();
+
+    if (!m_sqliteDB->executeCommand("DROP INDEX IndexRecordsIndex")) {
+        LOG_ERROR("Could not drop index IndexRecordsIndex in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
+        return false;
+    }
+
+    if (!m_sqliteDB->executeCommand(IndexRecordsIndexSchema)) {
+        LOG_ERROR("Could not create IndexRecordsIndex index in database (%i) - %s", m_sqliteDB->lastError(), m_sqliteDB->lastErrorMsg());
+        return false;
+    }
+
+    transaction.commit();
+
+    return true;
 }
 
 bool SQLiteIDBBackingStore::ensureValidIndexRecordsRecordIndex()
@@ -679,7 +689,10 @@ Optional<IsSchemaUpgraded> SQLiteIDBBackingStore::ensureValidObjectStoreInfoTabl
     if (currentSchema == v2ObjectStoreInfoSchema || currentSchema == createV2ObjectStoreInfoSchema(objectStoreInfoTableNameAlternate))
         return { IsSchemaUpgraded::No };
 
-    RELEASE_ASSERT(currentSchema == createV1ObjectStoreInfoSchema(objectStoreInfoTableName) || currentSchema == createV1ObjectStoreInfoSchema(objectStoreInfoTableNameAlternate));
+    if (currentSchema != createV1ObjectStoreInfoSchema(objectStoreInfoTableName) && currentSchema != createV1ObjectStoreInfoSchema(objectStoreInfoTableNameAlternate)) {
+        RELEASE_LOG_ERROR(IndexedDB, "%p - SQLiteIDBBackingStore::ensureValidObjectStoreInfoTable: schema is invalid - %s", this, currentSchema.utf8().data());
+        return WTF::nullopt;
+    }
 
     // Drop column maxIndexID from table.
     SQLiteTransaction transaction(*m_sqliteDB);
@@ -1349,8 +1362,8 @@ IDBError SQLiteIDBBackingStore::createIndex(const IDBResourceIdentifier& transac
 
     while (!cursor->currentKey().isNull()) {
         auto& key = cursor->currentKey();
-        auto* value = cursor->currentValue();
-        ThreadSafeDataBuffer valueBuffer = value ? value->data() : ThreadSafeDataBuffer();
+        auto value = cursor->currentValue();
+        ThreadSafeDataBuffer valueBuffer = value.data();
 
         ASSERT(cursor->currentRecordRowID());
 
@@ -2337,7 +2350,7 @@ IDBError SQLiteIDBBackingStore::getAllIndexRecords(const IDBResourceIdentifier& 
         IDBKeyData keyCopy = cursor->currentPrimaryKey();
         result.addKey(WTFMove(keyCopy));
         if (getAllRecordsData.getAllType == IndexedDB::GetAllType::Values)
-            result.addValue(cursor->currentValue() ? *cursor->currentValue() : IDBValue());
+            result.addValue(IDBValue(cursor->currentValue()));
 
         ++currentCount;
         cursor->advance(1);
@@ -2384,7 +2397,7 @@ IDBError SQLiteIDBBackingStore::getIndexRecord(const IDBResourceIdentifier& tran
         else {
             auto* objectStoreInfo = infoForObjectStore(objectStoreID);
             ASSERT(objectStoreInfo);
-            getResult = { cursor->currentPrimaryKey(), cursor->currentPrimaryKey(), cursor->currentValue() ? *cursor->currentValue() : IDBValue(), objectStoreInfo->keyPath() };
+            getResult = { cursor->currentPrimaryKey(), cursor->currentPrimaryKey(), IDBValue(cursor->currentValue()), objectStoreInfo->keyPath() };
         }
     }
 
@@ -2704,26 +2717,18 @@ IDBError SQLiteIDBBackingStore::iterateCursor(const IDBResourceIdentifier& trans
         }
     }
 
-    auto* objectStoreInfo = infoForObjectStore(cursor->objectStoreID());
-    ASSERT(objectStoreInfo);
-    cursor->currentData(result, objectStoreInfo->keyPath());
+    if (data.option == IndexedDB::CursorIterateOption::Reply) {
+        auto* objectStoreInfo = infoForObjectStore(cursor->objectStoreID());
+        ASSERT(objectStoreInfo);
+
+        bool shouldPrefetch = key.isNull() && primaryKey.isNull();
+        if (shouldPrefetch)
+            cursor->prefetch();
+
+        cursor->currentData(result, objectStoreInfo->keyPath(), shouldPrefetch ? SQLiteIDBCursor::ShouldIncludePrefetchedRecords::Yes : SQLiteIDBCursor::ShouldIncludePrefetchedRecords::No);
+    }
+
     return IDBError { };
-}
-
-bool SQLiteIDBBackingStore::prefetchCursor(const IDBResourceIdentifier& transactionIdentifier, const IDBResourceIdentifier& cursorIdentifier)
-{
-    LOG(IndexedDB, "SQLiteIDBBackingStore::prefetchCursor");
-
-    ASSERT(m_sqliteDB);
-    ASSERT(m_sqliteDB->isOpen());
-
-    auto* cursor = m_cursors.get(cursorIdentifier);
-    if (!cursor || !cursor->transaction() || !cursor->transaction()->inProgress())
-        return false;
-
-    ASSERT_UNUSED(transactionIdentifier, cursor->transaction()->transactionIdentifier() == transactionIdentifier);
-
-    return cursor->prefetch();
 }
 
 IDBObjectStoreInfo* SQLiteIDBBackingStore::infoForObjectStore(uint64_t objectStoreIdentifier)

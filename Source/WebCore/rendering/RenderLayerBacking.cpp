@@ -3283,8 +3283,10 @@ bool RenderLayerBacking::startAnimation(double timeOffset, const Animation& anim
         didAnimate = true;
 #endif
 
-    if (didAnimate)
+    if (didAnimate) {
         m_owningLayer.setNeedsPostLayoutCompositingUpdate();
+        m_owningLayer.setNeedsCompositingGeometryUpdate();
+    }
 
     return didAnimate;
 }
@@ -3303,6 +3305,7 @@ void RenderLayerBacking::animationFinished(const String& animationName)
 {
     m_graphicsLayer->removeAnimation(animationName);
     m_owningLayer.setNeedsPostLayoutCompositingUpdate();
+    m_owningLayer.setNeedsCompositingGeometryUpdate();
 }
 
 bool RenderLayerBacking::startTransition(double timeOffset, CSSPropertyID property, const RenderStyle* fromStyle, const RenderStyle* toStyle)
@@ -3394,7 +3397,8 @@ void RenderLayerBacking::transitionFinished(CSSPropertyID property)
 
 void RenderLayerBacking::notifyAnimationStarted(const GraphicsLayer*, const String&, MonotonicTime time)
 {
-    renderer().animation().notifyAnimationStarted(renderer(), time);
+    if (!RuntimeEnabledFeatures::sharedFeatures().webAnimationsCSSIntegrationEnabled())
+        renderer().animation().notifyAnimationStarted(renderer(), time);
 }
 
 void RenderLayerBacking::notifyFlushRequired(const GraphicsLayer* layer)
