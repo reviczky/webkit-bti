@@ -3264,4 +3264,3 @@ webkit (0~svn24735-1) unstable; urgency=low
   * Initial release. (Closes: #428855)
 
  -- Mike Hommey <glandium@debian.org>  Wed, 15 Aug 2007 14:19:46 +0200
-
