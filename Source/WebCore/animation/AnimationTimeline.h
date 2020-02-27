@@ -46,7 +46,7 @@ class CSSTransition;
 class DeclarativeAnimation;
 class Element;
 
-class AnimationTimeline : public RefCounted<AnimationTimeline> {
+class AnimationTimeline : public RefCounted<AnimationTimeline>, public CanMakeWeakPtr<AnimationTimeline> {
 public:
     virtual bool isDocumentTimeline() const { return false; }
 
@@ -59,12 +59,17 @@ public:
 
     enum class Ordering : uint8_t { Sorted, Unsorted };
     Vector<RefPtr<WebAnimation>> animationsForElement(Element&, Ordering ordering = Ordering::Unsorted) const;
+
     void elementWasRemoved(Element&);
     void removeAnimationsForElement(Element&);
+
     void willChangeRendererForElement(Element&);
+    void willDestroyRendererForElement(Element&);
     void cancelDeclarativeAnimationsForElement(Element&);
+
     virtual void animationWasAddedToElement(WebAnimation&, Element&);
     virtual void animationWasRemovedFromElement(WebAnimation&, Element&);
+
     void removeDeclarativeAnimationFromListsForOwningElement(WebAnimation&, Element&);
 
     void updateCSSAnimationsForElement(Element&, const RenderStyle* currentStyle, const RenderStyle& afterChangeStyle);
@@ -88,7 +93,6 @@ private:
     using ElementToCSSAnimationsMap = HashMap<Element*, CSSAnimationCollection>;
 
     void updateGlobalPosition(WebAnimation&);
-    RefPtr<WebAnimation> cssAnimationForElementAndProperty(Element&, CSSPropertyID);
     PropertyToTransitionMap& ensureRunningTransitionsByProperty(Element&);
     void updateCSSTransitionsForElementAndProperty(Element&, CSSPropertyID, const RenderStyle& currentStyle, const RenderStyle& afterChangeStyle, PropertyToTransitionMap&, PropertyToTransitionMap&, const MonotonicTime);
     void removeCSSAnimationCreatedByMarkup(Element&, CSSAnimation&);

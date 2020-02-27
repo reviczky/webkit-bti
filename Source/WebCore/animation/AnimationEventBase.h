@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,25 +25,42 @@
 
 #pragma once
 
-#include "CSSValue.h"
+#include "Event.h"
+#include <wtf/Markable.h>
 
 namespace WebCore {
 
-class CSSRevertValue final : public CSSValue {
+class WebAnimation;
+
+class AnimationEventBase : public Event {
+    WTF_MAKE_ISO_ALLOCATED(AnimationEventBase);
 public:
-    String customCSSText() const;
-
-    bool equals(const CSSRevertValue&) const { return true; }
-
-private:
-    friend LazyNeverDestroyed<CSSRevertValue>;
-    CSSRevertValue(StaticCSSValueTag)
-        : CSSValue(RevertClass)
+    static Ref<AnimationEventBase> create(const AtomString& type, WebAnimation* animation, Optional<Seconds> timelineTime)
     {
-        makeStatic();
+        return adoptRef(*new AnimationEventBase(type, animation, timelineTime));
     }
+
+    virtual ~AnimationEventBase();
+
+    virtual bool isAnimationPlaybackEvent() const { return false; }
+    virtual bool isAnimationEvent() const { return false; }
+    virtual bool isTransitionEvent() const { return false; }
+
+    Optional<Seconds> timelineTime() const { return m_timelineTime; }
+    WebAnimation* animation() const { return m_animation.get(); }
+
+protected:
+    AnimationEventBase(const AtomString&, WebAnimation*, Optional<Seconds>);
+    AnimationEventBase(const AtomString&, const EventInit&, IsTrusted);
+
+    RefPtr<WebAnimation> m_animation;
+    Markable<Seconds, Seconds::MarkableTraits> m_timelineTime;
 };
 
-} // namespace WebCore
+}
 
-SPECIALIZE_TYPE_TRAITS_CSS_VALUE(CSSRevertValue, isRevertValue())
+#define SPECIALIZE_TYPE_TRAITS_ANIMATION_EVENT_BASE(ToValueTypeName, predicate) \
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::ToValueTypeName) \
+static bool isType(const WebCore::AnimationEventBase& value) { return value.predicate; } \
+SPECIALIZE_TYPE_TRAITS_END()
+

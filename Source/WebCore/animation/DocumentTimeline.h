@@ -35,10 +35,10 @@
 
 namespace WebCore {
 
-class AnimationPlaybackEvent;
+class AnimationEventBase;
 class RenderElement;
 
-class DocumentTimeline final : public AnimationTimeline, public CanMakeWeakPtr<DocumentTimeline>
+class DocumentTimeline final : public AnimationTimeline
 {
 public:
     static Ref<DocumentTimeline> create(Document&);
@@ -70,12 +70,13 @@ public:
     bool runningAnimationsForElementAreAllAccelerated(Element&) const;
     void detachFromDocument();
 
-    void enqueueAnimationPlaybackEvent(AnimationPlaybackEvent&);
+    void enqueueAnimationEvent(AnimationEventBase&);
     
     bool scheduledUpdate() const { return m_animationResolutionScheduled; }
     void updateCurrentTime(DOMHighResTimeStamp timestamp);
     void updateAnimationsAndSendEvents();
 
+    void updateThrottlingState();
     WEBCORE_EXPORT Seconds animationInterval() const;
     WEBCORE_EXPORT void suspendAnimations();
     WEBCORE_EXPORT void resumeAnimations();
@@ -91,11 +92,9 @@ private:
     void cacheCurrentTime(DOMHighResTimeStamp);
     void maybeClearCachedCurrentTime();
     void scheduleInvalidationTaskIfNeeded();
-    void performInvalidationTask();
     void scheduleAnimationResolution();
-    void unscheduleAnimationResolution();
+    void clearTickScheduleTimer();
     void internalUpdateAnimationsAndSendEvents();
-    void performEventDispatchTask();
     void updateListOfElementsWithRunningAcceleratedAnimationsForElement(Element&);
     void transitionDidComplete(RefPtr<CSSTransition>);
     void scheduleNextTick();
@@ -107,14 +106,15 @@ private:
     GenericTaskQueue<Timer> m_currentTimeClearingTaskQueue;
     HashSet<RefPtr<WebAnimation>> m_acceleratedAnimationsPendingRunningStateChange;
     HashSet<Element*> m_elementsWithRunningAcceleratedAnimations;
-    Vector<Ref<AnimationPlaybackEvent>> m_pendingAnimationEvents;
-    RefPtr<Document> m_document;
+    Vector<Ref<AnimationEventBase>> m_pendingAnimationEvents;
+    WeakPtr<Document> m_document;
     Markable<Seconds, Seconds::MarkableTraits> m_cachedCurrentTime;
     Seconds m_originTime;
     unsigned m_numberOfAnimationTimelineInvalidationsForTesting { 0 };
     bool m_isSuspended { false };
     bool m_waitingOnVMIdle { false };
     bool m_animationResolutionScheduled { false };
+    bool m_shouldScheduleAnimationResolutionForNewPendingEvents { true };
 };
 
 } // namespace WebCore

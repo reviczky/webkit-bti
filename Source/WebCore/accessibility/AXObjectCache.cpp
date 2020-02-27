@@ -877,6 +877,12 @@ void AXObjectCache::remove(Node& node)
     m_deferredFocusedNodeChange.removeAllMatching([&node](auto& entry) -> bool {
         return entry.second == &node;
     });
+    // Set nullptr to the old focused node if it is being removed.
+    std::for_each(m_deferredFocusedNodeChange.begin(), m_deferredFocusedNodeChange.end(), [&node](auto& entry) {
+        if (entry.first == &node)
+            entry.first = nullptr;
+    });
+
     removeNodeForUse(node);
 
     remove(m_nodeObjectMapping.take(&node));
@@ -1933,7 +1939,7 @@ RefPtr<Range> AXObjectCache::rangeMatchesTextNearRange(RefPtr<Range> originalRan
         return nullptr;
     
     auto range = Range::create(m_document, startPosition, originalRange->startPosition());
-    unsigned targetOffset = TextIterator::rangeLength(range.ptr(), { TextIteratorLengthOption::GenerateSpacesForReplacedElements });
+    unsigned targetOffset = TextIterator::rangeLength(range.ptr(), true);
     return findClosestPlainText(searchRange.get(), matchText, { }, targetOffset);
 }
 

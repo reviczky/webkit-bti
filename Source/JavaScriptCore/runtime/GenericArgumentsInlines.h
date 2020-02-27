@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015-2019 Apple Inc. All rights reserved.
+ * Copyright (C) 2015-2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -132,7 +132,7 @@ bool GenericArguments<Type>::put(JSCell* cell, JSGlobalObject* globalObject, Pro
     // https://tc39.github.io/ecma262/#sec-arguments-exotic-objects-set-p-v-receiver
     // Fall back to the OrdinarySet when the receiver is altered from the thisObject.
     if (UNLIKELY(isThisValueAltered(slot, thisObject)))
-        return ordinarySetSlow(globalObject, thisObject, ident, value, slot.thisValue(), slot.isStrictMode());
+        RELEASE_AND_RETURN(scope, ordinarySetSlow(globalObject, thisObject, ident, value, slot.thisValue(), slot.isStrictMode()));
     
     Optional<uint32_t> index = parseIndex(ident);
     if (index && thisObject->isMappedArgument(index.value())) {
@@ -188,8 +188,10 @@ bool GenericArguments<Type>::deletePropertyByIndex(JSCell* cell, JSGlobalObject*
 
     bool propertyMightBeInJSObjectStorage = thisObject->isModifiedArgumentDescriptor(index) || !thisObject->isMappedArgument(index);
     bool deletedProperty = true;
-    if (propertyMightBeInJSObjectStorage)
+    if (propertyMightBeInJSObjectStorage) {
         deletedProperty = Base::deletePropertyByIndex(cell, globalObject, index);
+        RETURN_IF_EXCEPTION(scope, true);
+    }
 
     if (deletedProperty) {
         // Deleting an indexed property unconditionally unmaps it.

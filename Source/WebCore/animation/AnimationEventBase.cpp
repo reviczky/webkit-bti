@@ -1,6 +1,5 @@
 /*
- * Copyright (C) Canon Inc. 2016
- * Copyright (C) 2017 Apple Inc. All rights reserved.
+ * Copyright (C) 2020 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,27 +24,28 @@
  */
 
 #include "config.h"
-#include "JSAnimationTimeline.h"
+#include "AnimationEventBase.h"
 
-#include "Document.h"
-#include "DocumentTimeline.h"
-#include "JSDOMBinding.h"
-#include "JSDocumentTimeline.h"
-
-using namespace JSC;
+#include "WebAnimation.h"
+#include "WebAnimationUtilities.h"
+#include <wtf/IsoMallocInlines.h>
 
 namespace WebCore {
 
-JSValue toJSNewlyCreated(JSGlobalObject*, JSDOMGlobalObject* globalObject, Ref<AnimationTimeline>&& value)
+WTF_MAKE_ISO_ALLOCATED_IMPL(AnimationEventBase);
+
+AnimationEventBase::AnimationEventBase(const AtomString& type, WebAnimation* animation, Optional<Seconds> timelineTime)
+    : Event(type, CanBubble::Yes, IsCancelable::No)
+    , m_animation(animation)
+    , m_timelineTime(timelineTime)
 {
-    if (value->isDocumentTimeline())
-        return createWrapper<DocumentTimeline>(globalObject, WTFMove(value));
-    return createWrapper<AnimationTimeline>(globalObject, WTFMove(value));
 }
 
-JSValue toJS(JSGlobalObject* lexicalGlobalObject, JSDOMGlobalObject* globalObject, AnimationTimeline& value)
+AnimationEventBase::AnimationEventBase(const AtomString& type, const EventInit& initializer, IsTrusted isTrusted)
+    : Event(type, initializer, isTrusted)
 {
-    return wrap(lexicalGlobalObject, globalObject, value);
 }
+
+AnimationEventBase::~AnimationEventBase() = default;
 
 } // namespace WebCore

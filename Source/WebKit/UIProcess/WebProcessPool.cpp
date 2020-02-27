@@ -961,6 +961,12 @@ WebProcessDataStoreParameters WebProcessPool::webProcessDataStoreParameters(WebP
 void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDataStore* websiteDataStore, WebProcessProxy::IsPrewarmed isPrewarmed)
 {
     auto initializationActivity = process.throttler().backgroundActivity("WebProcess initialization"_s);
+    auto scopeExit = makeScopeExit([&process, initializationActivity = WTFMove(initializationActivity)]() mutable {
+        // Round-trip to the Web Content process before releasing the
+        // initialization activity, so that we're sure that all
+        // messages sent from this function have been handled.
+        process.isResponsive([initializationActivity = WTFMove(initializationActivity)] (bool) { });
+    });
 
     ensureNetworkProcess();
 
@@ -1045,8 +1051,7 @@ void WebProcessPool::initializeNewWebProcess(WebProcessProxy& process, WebsiteDa
     if (websiteDataStore)
         parameters.websiteDataStoreParameters = webProcessDataStoreParameters(process, *websiteDataStore);
 
-    process.sendWithAsyncReply(Messages::WebProcess::InitializeWebProcess(parameters), [protectedThis = makeRef(*this), protectedProcess = makeRef(process), initializationActivity = WTFMove(initializationActivity)] { });
-
+    process.send(Messages::WebProcess::InitializeWebProcess(parameters), 0);
 #if PLATFORM(COCOA)
     process.send(Messages::WebProcess::SetQOS(webProcessLatencyQOS(), webProcessThroughputQOS()), 0);
 #endif
@@ -1267,8 +1272,10 @@ Ref<WebPageProxy> WebProcessPool::createWebPage(PageClient& pageClient, Ref<API:
 #if ENABLE(SERVICE_WORKER)
     if (!m_serviceWorkerPreferences) {
         m_serviceWorkerPreferences = page->preferencesStore();
-        for (auto& serviceWorkerProcess : m_serviceWorkerProcesses.values())
-            serviceWorkerProcess->updateServiceWorkerPreferencesStore(*m_serviceWorkerPreferences);
+        for (auto& serviceWorkerProcess : m_serviceWorkerProcesses.values()) {
+            if (serviceWorkerProcess)
+                serviceWorkerProcess->updateServiceWorkerPreferencesStore(*m_serviceWorkerPreferences);
+        }
     }
     if (userContentController)
         m_userContentControllerIDForServiceWorker = userContentController->identifier();
@@ -1298,8 +1305,10 @@ void WebProcessPool::updateServiceWorkerUserAgent(const String& userAgent)
     if (m_serviceWorkerUserAgent == userAgent)
         return;
     m_serviceWorkerUserAgent = userAgent;
-    for (auto& serviceWorkerProcess : m_serviceWorkerProcesses.values())
-        serviceWorkerProcess->setServiceWorkerUserAgent(m_serviceWorkerUserAgent);
+    for (auto& serviceWorkerProcess : m_serviceWorkerProcesses.values()) {
+        if (serviceWorkerProcess)
+            serviceWorkerProcess->setServiceWorkerUserAgent(m_serviceWorkerUserAgent);
+    }
 }
 #endif
 
@@ -1608,7 +1617,7 @@ void WebProcessPool::setCacheModel(CacheModel cacheModel)
     sendToAllProcesses(Messages::WebProcess::SetCacheModel(cacheModel));
 
     if (m_networkProcess)
-        m_networkProcess->send(Messages::NetworkProcess::SetCacheModel(cacheModel, { }), 0);
+        m_networkProcess->send(Messages::NetworkProcess::SetCacheModel(cacheModel), 0);
 }
 
 void WebProcessPool::setCacheModelSynchronouslyForTesting(CacheModel cacheModel)
@@ -2104,8 +2113,10 @@ void WebProcessPool::updateProcessAssertions()
         if (!weakThis)
             return;
 #if ENABLE(SERVICE_WORKER)
-        for (auto& serviceWorkerProcess : m_serviceWorkerProcesses.values())
-            serviceWorkerProcess->updateServiceWorkerProcessAssertion();
+        for (auto& serviceWorkerProcess : m_serviceWorkerProcesses.values()) {
+            if (serviceWorkerProcess)
+                serviceWorkerProcess->updateServiceWorkerProcessAssertion();
+        }
 #endif
     });
 }
