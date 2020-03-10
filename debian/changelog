@@ -1,6 +1,8 @@
 webkit2gtk (2.28.0-1) UNRELEASED; urgency=medium
 
   * New upstream release.
+  * debian/watch:
+    + Scan stable releases only.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 10 Mar 2020 12:35:51 +0100
 
