@@ -6,6 +6,8 @@ webkit2gtk (2.28.0-2) UNRELEASED; urgency=high
   * debian/rules:
     + Disable the WPE renderer on Ubuntu since the required backend is in
       universe (thanks, Sebastien Bacher).
+  * debian/gbp.conf:
+    + Update upstream branch name.
 
  -- Alberto Garcia <berto@igalia.com>  Wed, 11 Mar 2020 16:25:42 +0100
 
