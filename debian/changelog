@@ -1,4 +1,4 @@
-webkit2gtk (2.28.0-2) UNRELEASED; urgency=high
+webkit2gtk (2.28.0-2) unstable; urgency=high
 
   * The WebKitGTK security advisory WSA-2020-0003 lists the following
     security fixes in the latest versions of WebKitGTK:
@@ -9,7 +9,7 @@ webkit2gtk (2.28.0-2) UNRELEASED; urgency=high
   * debian/gbp.conf:
     + Update upstream branch name.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 11 Mar 2020 16:25:42 +0100
+ -- Alberto Garcia <berto@igalia.com>  Thu, 12 Mar 2020 20:35:21 +0100
 
 webkit2gtk (2.28.0-1) experimental; urgency=medium
 
