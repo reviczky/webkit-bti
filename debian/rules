@@ -71,8 +71,11 @@ else
 	EXTRA_CMAKE_ARGUMENTS += -DENABLE_BUBBLEWRAP_SANDBOX=OFF
 endif
 
+# Disable WPE on Ubuntu since the required backend is in universe
+ifeq ($(shell dpkg-vendor --derives-from Ubuntu && echo yes),yes)
+	EXTRA_CMAKE_ARGUMENTS += -DUSE_WPE_RENDERER=OFF
 # Disable the WPE renderer if libwpebackend-fdo-1.0-dev is not available
-ifeq ($(shell pkg-config --exists wpebackend-fdo-1.0 && echo yes),yes)
+else ifeq ($(shell pkg-config --exists wpebackend-fdo-1.0 && echo yes),yes)
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_WPE_RENDERER=ON
 else
 	EXTRA_CMAKE_ARGUMENTS += -DUSE_WPE_RENDERER=OFF
@@ -114,6 +117,7 @@ override_dh_install:
 	mkdir -p $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0
 	touch $(CURDIR)/debian/tmp/usr/share/gtk-doc/html/webkit2gtk-4.0/index.html
 	dh_install
+	jdupes -rl $(CURDIR)/debian/libwebkit2gtk-4.0-doc/usr
 
 override_dh_makeshlibs:
 	dh_makeshlibs -plibwebkit2gtk-4.0-37 -Xinjected-bundle

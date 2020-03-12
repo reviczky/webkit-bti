@@ -38,7 +38,7 @@ namespace JSC { namespace Wasm {
 static Vector<GPRReg> getPinnedRegisters(unsigned remainingPinnedRegisters)
 {
     Vector<GPRReg> registers;
-    jscCallingConvention().m_calleeSaveRegisters.forEach([&] (Reg reg) {
+    jsCallingConvention().calleeSaveRegisters.forEach([&] (Reg reg) {
         if (!reg.isGPR())
             return;
         GPRReg gpr = reg.gpr();
@@ -65,11 +65,11 @@ const PinnedRegisterInfo& PinnedRegisterInfo::get()
             ++numberOfPinnedRegisters;
         Vector<GPRReg> pinnedRegs = getPinnedRegisters(numberOfPinnedRegisters);
 
-        GPRReg baseMemoryPointer = pinnedRegs.takeLast();
-        GPRReg sizeRegister = pinnedRegs.takeLast();
+        GPRReg baseMemoryPointer = GPRInfo::regCS3;
+        GPRReg sizeRegister = GPRInfo::regCS4;
         GPRReg wasmContextInstancePointer = InvalidGPRReg;
         if (!Context::useFastTLS())
-            wasmContextInstancePointer = pinnedRegs.takeLast();
+            wasmContextInstancePointer = GPRInfo::regCS0;
 
         staticPinnedRegisterInfo.construct(sizeRegister, baseMemoryPointer, wasmContextInstancePointer);
     });

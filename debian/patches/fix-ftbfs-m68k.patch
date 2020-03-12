@@ -2,11 +2,11 @@ From: John Paul Adrian Glaubitz <glaubitz@physik.fu-berlin.de>
 Subject: Fix FTBFS on m68k
 Bug-Debian: https://bugs.debian.org/868126
 Last-Update: 2020-01-23
-Index: webkitgtk/Source/WTF/wtf/Platform.h
+Index: webkitgtk/Source/WTF/wtf/PlatformCPU.h
 ===================================================================
---- webkitgtk.orig/Source/WTF/wtf/Platform.h
-+++ webkitgtk/Source/WTF/wtf/Platform.h
-@@ -58,6 +58,11 @@
+--- webkitgtk.orig/Source/WTF/wtf/PlatformCPU.h
++++ webkitgtk/Source/WTF/wtf/PlatformCPU.h
+@@ -35,6 +35,11 @@
  /* ==== CPU() - the target CPU architecture ==== */
  /* CPU(KNOWN) becomes true if we explicitly support a target CPU. */
  
@@ -69,8 +69,8 @@ Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/dom/ShadowRoot.cpp
 +++ webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
-@@ -52,7 +52,11 @@ struct SameSizeAsShadowRoot : public Doc
-     void* slotAssignment;
+@@ -58,7 +58,11 @@ struct SameSizeAsShadowRoot : public Doc
+     Optional<HashMap<AtomString, AtomString>> partMappings;
  };
  
 +#if defined(__m68k__)
@@ -79,13 +79,13 @@ Index: webkitgtk/Source/WebCore/dom/ShadowRoot.cpp
  COMPILE_ASSERT(sizeof(ShadowRoot) == sizeof(SameSizeAsShadowRoot), shadowroot_should_stay_small);
 +#endif
  
- ShadowRoot::ShadowRoot(Document& document, ShadowRootMode type)
+ ShadowRoot::ShadowRoot(Document& document, ShadowRootMode type, DelegatesFocus delegatesFocus)
      : DocumentFragment(document, CreateShadowRoot)
 Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/style/RenderStyle.cpp
 +++ webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
-@@ -66,7 +66,11 @@ struct SameSizeAsBorderValue {
+@@ -65,7 +65,11 @@ struct SameSizeAsBorderValue {
      int m_restBits;
  };
  
@@ -97,7 +97,7 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
  
  struct SameSizeAsRenderStyle {
      void* dataRefs[7];
-@@ -84,7 +88,11 @@ struct SameSizeAsRenderStyle {
+@@ -83,7 +87,11 @@ struct SameSizeAsRenderStyle {
  #endif
  };
  
@@ -107,8 +107,8 @@ Index: webkitgtk/Source/WebCore/rendering/style/RenderStyle.cpp
  static_assert(sizeof(RenderStyle) == sizeof(SameSizeAsRenderStyle), "RenderStyle should stay small");
 +#endif
  
- RenderStyle& RenderStyle::defaultStyle()
- {
+ DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(RenderStyle);
+ 
 Index: webkitgtk/Source/WebCore/rendering/style/StyleBoxData.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/rendering/style/StyleBoxData.cpp
@@ -123,24 +123,8 @@ Index: webkitgtk/Source/WebCore/rendering/style/StyleBoxData.cpp
  COMPILE_ASSERT(sizeof(StyleBoxData) == sizeof(SameSizeAsStyleBoxData), StyleBoxData_should_not_grow);
 +#endif
  
- StyleBoxData::StyleBoxData()
-     : m_minWidth(RenderStyle::initialMinSize())
-Index: webkitgtk/Source/WebCore/css/RuleSet.h
-===================================================================
---- webkitgtk.orig/Source/WebCore/css/RuleSet.h
-+++ webkitgtk/Source/WebCore/css/RuleSet.h
-@@ -98,7 +98,11 @@ struct SameSizeAsRuleData {
-     unsigned d[4];
- };
+ DEFINE_ALLOCATOR_WITH_HEAP_IDENTIFIER(StyleBoxData);
  
-+#if defined(__m68k__)
-+COMPILE_ASSERT(sizeof(RuleData) <= sizeof(SameSizeAsRuleData), RuleData_should_stay_small);
-+#else
- COMPILE_ASSERT(sizeof(RuleData) == sizeof(SameSizeAsRuleData), RuleData_should_stay_small);
-+#endif
- 
- class RuleSet {
-     WTF_MAKE_NONCOPYABLE(RuleSet); WTF_MAKE_FAST_ALLOCATED;
 Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
 ===================================================================
 --- webkitgtk.orig/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
@@ -157,3 +141,19 @@ Index: webkitgtk/Source/WebCore/platform/graphics/FontCascadeDescription.cpp
  
  FontCascadeDescription::FontCascadeDescription()
      : m_isAbsoluteSize(false)
+Index: webkitgtk/Source/WebCore/style/RuleData.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/style/RuleData.cpp
++++ webkitgtk/Source/WebCore/style/RuleData.cpp
+@@ -60,7 +60,11 @@ struct SameSizeAsRuleData {
+     unsigned d[4];
+ };
+ 
++#if defined(__m68k__)
++COMPILE_ASSERT(sizeof(RuleData) <= sizeof(SameSizeAsRuleData), RuleData_should_stay_small);
++#else
+ COMPILE_ASSERT(sizeof(RuleData) == sizeof(SameSizeAsRuleData), RuleData_should_stay_small);
++#endif
+ 
+ static inline MatchBasedOnRuleHash computeMatchBasedOnRuleHash(const CSSSelector& selector)
+ {

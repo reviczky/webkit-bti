@@ -1,54 +1,90 @@
-webkit2gtk (2.26.4-2) UNRELEASED; urgency=medium
+webkit2gtk (2.28.0-2) UNRELEASED; urgency=high
 
+  * The WebKitGTK security advisory WSA-2020-0003 lists the following
+    security fixes in the latest versions of WebKitGTK:
+    + CVE-2020-10018 (fixed in 2.28.0).
+  * debian/rules:
+    + Disable the WPE renderer on Ubuntu since the required backend is in
+      universe (thanks, Sebastien Bacher).
+
+ -- Alberto Garcia <berto@igalia.com>  Wed, 11 Mar 2020 16:25:42 +0100
+
+webkit2gtk (2.28.0-1) experimental; urgency=medium
+
+  * New upstream release.
+  * debian/watch:
+    + Scan stable releases only.
+
+ -- Alberto Garcia <berto@igalia.com>  Tue, 10 Mar 2020 14:22:29 +0100
+
+webkit2gtk (2.27.91-1) experimental; urgency=medium
+
+  * New upstream development release.
+  * Refresh debian/patches/dont-detect-sse2.patch.
   * debian/rules:
     + Use -mlra -fno-move-loop-invariants in sh3 and sh4 builds (thanks,
       Adrian Glaubitz) (Closes: #952482).
+    + Use jdupes to remove duplicate files in libwebkit2gtk-4.0-doc.
+  * debian/control:
+    + Add build dependency on jdupes.
+    + Update Standards-Version to 4.5.0 (no changes).
+  * debian/WebKitWebDriver.1:
+    + Fix grammar.
+  * debian/copyright:
+    + Update copyright information of all files.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 26 Feb 2020 14:36:12 +0100
+ -- Alberto Garcia <berto@igalia.com>  Thu, 27 Feb 2020 16:50:58 +0100
 
-webkit2gtk (2.26.4-1) unstable; urgency=high
+webkit2gtk (2.27.90-1) experimental; urgency=medium
 
-  * New upstream release.
-  * The WebKitGTK security advisory WSA-2020-0001 lists the following
-    security fixes in the latest versions of WebKitGTK:
-    + CVE-2019-8835, CVE-2019-8844, CVE-2019-8846 (fixed in 2.26.3)
-  * The WebKitGTK security advisory WSA-2020-0002 lists the following
-    security fixes in the latest versions of WebKitGTK:
-    + CVE-2020-3862, CVE-2020-3864, CVE-2020-3865, CVE-2020-3867,
-      CVE-2020-3868 (fixed in 2.26.4)
+  * New upstream development release.
+  * debian/patches/use-python3.patch:
+    + The unversioned python interpreter (i.e. Python 2) is not installed
+      by default anymore, so use Python 3 instead (Closes: #948839).
+  * debian/control:
+    + Drop build dependency on python.
+    + Mark libwebkit2gtk-4.0-doc and libwebkit2gtk-4.0-37-gtk2 as
+      Multi-Arch: foreign.
   * debian/rules:
     + Don't use the Gold linker on powerpc (Closes: #949618).
     + Run dh with --builddirectory=build. Some source files are generated
       inside this directory and are later referenced from the .gir files
       so their path names should be independent from the architecture.
-  * debian/control:
-    + Mark libwebkit2gtk-4.0-doc and libwebkit2gtk-4.0-37-gtk2 as
-      Multi-Arch: foreign.
-    + Update Standards-Version to 4.5.0 (no changes).
+  * Refresh all patches.
   * debian/patches/reduce-memory-overheads.patch:
     + Reduce memory usage when not using the Gold linker
       (Closes: #949621).
   * debian/patches/fix-ftbfs-m68k.patch:
-    + Update to make it work with the current release (Closes: #949660).
-  * debian/patches/detect-woff.patch:
-    + Refresh.
+    + Bring the patch from the unstable branch.
   * Add debian/upstream/metadata.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Fri, 14 Feb 2020 14:55:40 +0100
+ -- Alberto Garcia <berto@igalia.com>  Tue, 11 Feb 2020 00:06:15 +0100
 
-webkit2gtk (2.26.3-1) unstable; urgency=high
+webkit2gtk (2.27.4-1) experimental; urgency=medium
 
-  * New upstream release.
-  * The WebKitGTK security advisory WSA-2019-0006 lists the following
-    security fixes in the latest versions of WebKitGTK:
-    + CVE-2019-8765, CVE-2019-8821, CVE-2019-8822 (fixed in 2.24.4)
-    + CVE-2019-8710, CVE-2019-8743, CVE-2019-8764, CVE-2019-8766,
-      CVE-2019-8782, CVE-2019-8808, CVE-2019-8815 (fixed in 2.26.0)
-    + CVE-2019-8783, CVE-2019-8811, CVE-2019-8813, CVE-2019-8816,
-      CVE-2019-8819, CVE-2019-8820, CVE-2019-8823 (fixed in 2.26.1)
-    + CVE-2019-8812, CVE-2019-8814 (fixed in 2.26.2)
+  * New upstream development release.
+  * debian/control:
+    + Switch build dependency from libenchant-dev to libenchant-2-dev
+      (Closes: #948106).
+    + Add build dependency on libx11-xcb-dev.
+    + Add Rules-Requires-Root: no.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing override.
+  * debian/copyright:
+    + Update copyright years.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
+    + Add Build-Depends-Package field.
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 10 Jan 2020 16:47:54 +0100
+
+webkit2gtk (2.27.3-1) experimental; urgency=medium
+
+  * New upstream development release.
   * Build without the bubblewrap sandbox if the required dependencies are
-    not available (Closes: #944731):
+    not available:
     + debian/rules:
       - Pass -DENABLE_BUBBLEWRAP_SANDBOX depending on whether libseccomp
         is installed.
@@ -70,67 +106,44 @@ webkit2gtk (2.26.3-1) unstable; urgency=high
       bugs. Using -g1 is enough for a basic backtrace and it makes the
       packages easier to handle.
     + Install the NEWS file using debian/libwebkit2gtk-4.0-37.docs.
-  * debian/control:
-    + Switch build dependency from libenchant-dev to libenchant-2-dev
-      (Closes: #948106).
-    + Add build dependency on libx11-xcb-dev (Closes: #949430).
-    + Add Rules-Requires-Root: no.
-  * debian/patches/use-python3.patch:
-    + The unversioned python interpreter (i.e. Python 2) is not installed
-      by default anymore, so use Python 3 instead (Closes: #948839).
-  * debian/patches/user-agent-branding.patch:
+  * debian/patches/detect-woff.patch:
     + Refresh.
+  * debian/control:
+    + Add build dependency on python.
   * debian/libwebkit2gtk-4.0-37.symbols:
-    + Add Build-Depends-Package field.
-  * debian/copyright:
-    + Update copyright years.
+    + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 22 Jan 2020 13:44:09 +0100
+ -- Alberto Garcia <berto@igalia.com>  Tue, 26 Nov 2019 17:31:23 +0200
 
-webkit2gtk (2.26.2-1) unstable; urgency=medium
+webkit2gtk (2.27.2-1) experimental; urgency=medium
 
-  * New upstream release.
+  * New upstream development release.
+  * debian/control:
+    + Require bubblewrap >= 0.3.1.
+    + Update Standards-Version to 4.4.1 (no changes).
+    + Add Breaks for Evolution < 3.34.1 (see WebKit bug #201033).
   * debian/rules:
     + Stop building with -O1 for armhf and friends, the build seems to
       work just fine with -O2 now.
-  * debian/control:
-    + Require bubblewrap >= 0.3.1.
-  * debian/patches/force-single-process.patch:
-    + Remove this patch, the fixed version of Geary (3.34.1) is now in
-      unstable.
-  * The WebKitGTK security advisory WSA-2019-0005 lists the following
-    security fixes in the latest versions of WebKitGTK:
-    + CVE-2019-8768 (fixed in 2.24.0).
-    + CVE-2019-8735 (fixed in 2.24.2).
-    + CVE-2019-8726 (fixed in 2.24.3).
-    + CVE-2019-8674, CVE-2019-8707, CVE-2019-8719, CVE-2019-8733 and
-      CVE-2019-8763 (fixed in 2.24.4).
-    + CVE-2019-8625, CVE-2019-8720, CVE-2019-8769 and CVE-2019-8771
-      (fixed in 2.26.0).
+  * Drop fix-ftbfs-m68k.patch, we are not building for m68k anyway.
+  * debian/source/lintian-overrides:
+    + Update source-is-missing override.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 06 Nov 2019 14:29:56 +0200
+ -- Alberto Garcia <berto@igalia.com>  Tue, 22 Oct 2019 21:33:09 +0300
 
-webkit2gtk (2.26.1-3) unstable; urgency=medium
+webkit2gtk (2.27.1-1) experimental; urgency=medium
 
-  * debian/rules:
+  * New upstream development release.
+  * debian/watch, debian/gbp.conf:
+    + Update for 2.27.x packages in experimental.
+  * Refresh all patches.
     + Use -DWTF_CPU_ARM64_CORTEXA53=OFF to fix the arm64 build.
-  * debian/patches/force-single-process.patch:
-    + Don't use this workaround for Evolution anymore, the fixed version
-      is now in unstable.
-  * debian/control:
-    + Add Breaks for Evolution < 3.34.1.
-    + Update Standards-Version to 4.4.1 (no changes).
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
- -- Alberto Garcia <berto@igalia.com>  Wed, 09 Oct 2019 12:22:19 +0300
-
-webkit2gtk (2.26.1-2) unstable; urgency=medium
-
-  * debian/patches/force-single-process.patch:
-    + Force the single-process mode in Evolution and Geary.
-  * debian/gbp.conf:
-    + Update upstream branch name.
-
- -- Alberto Garcia <berto@igalia.com>  Mon, 07 Oct 2019 16:59:20 +0300
+ -- Alberto Garcia <berto@igalia.com>  Tue, 08 Oct 2019 16:58:23 +0300
 
 webkit2gtk (2.26.1-1) experimental; urgency=medium
 

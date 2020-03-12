@@ -922,6 +922,22 @@
 </tr>
 <tr>
 <td class="function_type">
+<a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitSettings.html#webkit-settings-get-allow-top-navigation-to-data-urls" title="webkit_settings_get_allow_top_navigation_to_data_urls ()">webkit_settings_get_allow_top_navigation_to_data_urls</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
+<span class="returnvalue">void</span>
+</td>
+<td class="function_name">
+<a class="link" href="WebKitSettings.html#webkit-settings-set-allow-top-navigation-to-data-urls" title="webkit_settings_set_allow_top_navigation_to_data_urls ()">webkit_settings_set_allow_top_navigation_to_data_urls</a> <span class="c_punctuation">()</span>
+</td>
+</tr>
+<tr>
+<td class="function_type">
 <a class="link" href="WebKitSettings.html#WebKitHardwareAccelerationPolicy" title="enum WebKitHardwareAccelerationPolicy"><span class="returnvalue">WebKitHardwareAccelerationPolicy</span></a>
 </td>
 <td class="function_name">
@@ -1004,6 +1020,11 @@
 <tr>
 <td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
 <td class="property_name"><a class="link" href="WebKitSettings.html#WebKitSettings--allow-modal-dialogs" title="The “allow-modal-dialogs” property">allow-modal-dialogs</a></td>
+<td class="property_flags">Read / Write / Construct</td>
+</tr>
+<tr>
+<td class="property_type"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></td>
+<td class="property_name"><a class="link" href="WebKitSettings.html#WebKitSettings--allow-top-navigation-to-data-urls" title="The “allow-top-navigation-to-data-urls” property">allow-top-navigation-to-data-urls</a></td>
 <td class="property_flags">Read / Write / Construct</td>
 </tr>
 <tr>
@@ -4549,6 +4570,67 @@ webkit_settings_set_allow_universal_access_from_file_urls
 </div>
 <hr>
 <div class="refsect2">
+<a name="webkit-settings-get-allow-top-navigation-to-data-urls"></a><h3>webkit_settings_get_allow_top_navigation_to_data_urls ()</h3>
+<pre class="programlisting"><a href="../glib/glib-Basic-Types.html#gboolean"><span class="returnvalue">gboolean</span></a>
+webkit_settings_get_allow_top_navigation_to_data_urls
+                               (<em class="parameter"><code><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> *settings</code></em>);</pre>
+<p>Get the <a class="link" href="WebKitSettings.html#WebKitSettings--allow-top-navigation-to-data-urls" title="The “allow-top-navigation-to-data-urls” property"><span class="type">“allow-top-navigation-to-data-urls”</span></a> property.</p>
+<div class="refsect3">
+<a name="webkit-settings-get-allow-top-navigation-to-data-urls.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody><tr>
+<td class="parameter_name"><p>settings</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr></tbody>
+</table></div>
+</div>
+<div class="refsect3">
+<a name="webkit-settings-get-allow-top-navigation-to-data-urls.returns"></a><h4>Returns</h4>
+<p> <a href="../glib/glib-Standard-Macros.html#TRUE:CAPS"><code class="literal">TRUE</code></a> If navigation to data URLs from the top frame is allowed or <a href="../glib/glib-Standard-Macros.html#FALSE:CAPS"><code class="literal">FALSE</code></a>\
+otherwise.</p>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="webkit-settings-set-allow-top-navigation-to-data-urls"></a><h3>webkit_settings_set_allow_top_navigation_to_data_urls ()</h3>
+<pre class="programlisting"><span class="returnvalue">void</span>
+webkit_settings_set_allow_top_navigation_to_data_urls
+                               (<em class="parameter"><code><a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a> *settings</code></em>,
+                                <em class="parameter"><code><a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a> allowed</code></em>);</pre>
+<p>Set the <a class="link" href="WebKitSettings.html#WebKitSettings--allow-top-navigation-to-data-urls" title="The “allow-top-navigation-to-data-urls” property"><span class="type">“allow-top-navigation-to-data-urls”</span></a> property.</p>
+<div class="refsect3">
+<a name="webkit-settings-set-allow-top-navigation-to-data-urls.parameters"></a><h4>Parameters</h4>
+<div class="informaltable"><table class="informaltable" width="100%" border="0">
+<colgroup>
+<col width="150px" class="parameters_name">
+<col class="parameters_description">
+<col width="200px" class="parameters_annotations">
+</colgroup>
+<tbody>
+<tr>
+<td class="parameter_name"><p>settings</p></td>
+<td class="parameter_description"><p>a <a class="link" href="WebKitSettings.html" title="WebKitSettings"><span class="type">WebKitSettings</span></a></p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+<tr>
+<td class="parameter_name"><p>allowed</p></td>
+<td class="parameter_description"><p>Value to be set</p></td>
+<td class="parameter_annotations"> </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
+</div>
+<hr>
+<div class="refsect2">
 <a name="webkit-settings-get-hardware-acceleration-policy"></a><h3>webkit_settings_get_hardware_acceleration_policy ()</h3>
 <pre class="programlisting"><a class="link" href="WebKitSettings.html#WebKitHardwareAccelerationPolicy" title="enum WebKitHardwareAccelerationPolicy"><span class="returnvalue">WebKitHardwareAccelerationPolicy</span></a>
 webkit_settings_get_hardware_acceleration_policy
@@ -4859,6 +4941,19 @@ signal will be emitted.</p>
 <p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
 <p>Default value: FALSE</p>
+</div>
+<hr>
+<div class="refsect2">
+<a name="WebKitSettings--allow-top-navigation-to-data-urls"></a><h3>The <code class="literal">“allow-top-navigation-to-data-urls”</code> property</h3>
+<pre class="programlisting">  “allow-top-navigation-to-data-urls” <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
+<p>Whether or not the top frame is allowed to navigate to data URLs. It is encouraged to disable it
+due to the risk it poses when loading untrusted URLs, with data URLs being used in scamming
+and phishing attacks. In contrast, a scenario where it could be enabled could be an app that
+embeds a WebView and you have control of the pages being shown instead of a generic browser.</p>
+<p>Owner: WebKitSettings</p>
+<p>Flags: Read / Write / Construct</p>
+<p>Default value: TRUE</p>
+<p class="since">Since: <a class="link" href="api-index-2-28.html#api-index-2.28">2.28</a></p>
 </div>
 <hr>
 <div class="refsect2">
@@ -5277,24 +5372,21 @@ then pressing tab key will insert the tab character.</p>
 <a name="WebKitSettings--enable-webaudio"></a><h3>The <code class="literal">“enable-webaudio”</code> property</h3>
 <pre class="programlisting">  “enable-webaudio”          <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
 <p>Enable or disable support for WebAudio on pages. WebAudio is an
-experimental proposal for allowing web pages to generate Audio
-WAVE data from JavaScript. The standard is currently a
-work-in-progress by the W3C Audio Working Group.</p>
-<p>See also https://dvcs.w3.org/hg/audio/raw-file/tip/webaudio/specification.html</p>
+API for processing and synthesizing audio in web applications</p>
+<p>See also https://webaudio.github.io/web-audio-api</p>
 <p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
-<p>Default value: FALSE</p>
+<p>Default value: TRUE</p>
 </div>
 <hr>
 <div class="refsect2">
 <a name="WebKitSettings--enable-webgl"></a><h3>The <code class="literal">“enable-webgl”</code> property</h3>
 <pre class="programlisting">  “enable-webgl”             <a href="../glib/glib-Basic-Types.html#gboolean"><span class="type">gboolean</span></a></pre>
-<p>Enable or disable support for WebGL on pages. WebGL is an experimental
-proposal for allowing web pages to use OpenGL ES-like calls directly. The
-standard is currently a work-in-progress by the Khronos Group.</p>
+<p>Enable or disable support for WebGL on pages. WebGL enables web
+content to use an API based on OpenGL ES 2.0.</p>
 <p>Owner: WebKitSettings</p>
 <p>Flags: Read / Write / Construct</p>
-<p>Default value: FALSE</p>
+<p>Default value: TRUE</p>
 </div>
 <hr>
 <div class="refsect2">
@@ -5332,8 +5424,8 @@ reflective XSS attacks on vulnerable web sites.</p>
 <pre class="programlisting">  “hardware-acceleration-policy” <a class="link" href="WebKitSettings.html#WebKitHardwareAccelerationPolicy" title="enum WebKitHardwareAccelerationPolicy"><span class="type">WebKitHardwareAccelerationPolicy</span></a></pre>
 <p>The <a class="link" href="WebKitSettings.html#WebKitHardwareAccelerationPolicy" title="enum WebKitHardwareAccelerationPolicy"><span class="type">WebKitHardwareAccelerationPolicy</span></a> to decide how to enable and disable
 hardware acceleration. The default value <a class="link" href="WebKitSettings.html#WEBKIT-HARDWARE-ACCELERATION-POLICY-ON-DEMAND:CAPS"><code class="literal">WEBKIT_HARDWARE_ACCELERATION_POLICY_ON_DEMAND</code></a>
-enables the hardware acceleration when the web contents request it, disabling it again
-when no longer needed. It's possible to enforce hardware acceleration to be always enabled
+enables the hardware acceleration when the web contents request it.
+It's possible to enforce hardware acceleration to be always enabled
 by using <a class="link" href="WebKitSettings.html#WEBKIT-HARDWARE-ACCELERATION-POLICY-ALWAYS:CAPS"><code class="literal">WEBKIT_HARDWARE_ACCELERATION_POLICY_ALWAYS</code></a>. And it's also possible to disable it
 completely using <a class="link" href="WebKitSettings.html#WEBKIT-HARDWARE-ACCELERATION-POLICY-NEVER:CAPS"><code class="literal">WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER</code></a>. Note that disabling hardware
 acceleration might cause some websites to not render correctly or consume more CPU.</p>

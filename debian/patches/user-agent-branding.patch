@@ -10,11 +10,11 @@ https://src.fedoraproject.org/rpms/webkit2gtk3/blob/master/f/user-agent-branding
  Source/WebCore/platform/glib/UserAgentGLib.cpp | 3 +++
  1 file changed, 3 insertions(+)
 
-diff --git a/Source/WebCore/platform/glib/UserAgentGLib.cpp b/Source/WebCore/platform/glib/UserAgentGLib.cpp
-index 8eabebe..c50e359 100644
---- a/Source/WebCore/platform/glib/UserAgentGLib.cpp
-+++ b/Source/WebCore/platform/glib/UserAgentGLib.cpp
-@@ -89,6 +89,9 @@ static String buildUserAgentString(const UserAgentQuirks& quirks)
+Index: webkitgtk/Source/WebCore/platform/glib/UserAgentGLib.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/platform/glib/UserAgentGLib.cpp
++++ webkitgtk/Source/WebCore/platform/glib/UserAgentGLib.cpp
+@@ -89,6 +89,9 @@ static String buildUserAgentString(const
      else {
          uaString.append(platformForUAString());
          uaString.appendLiteral("; ");
