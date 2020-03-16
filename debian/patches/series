@@ -9,3 +9,4 @@ prefer-pthread.patch
 dont-detect-sse2.patch
 use-python3.patch
 reduce-memory-overheads.patch
+force-single-process.patch
