@@ -1,4 +1,4 @@
-webkit2gtk (2.28.1-1) UNRELEASED; urgency=medium
+webkit2gtk (2.28.1-1) unstable; urgency=medium
 
   * New upstream release (Closes: #956219, #954026).
   * debian/control:
@@ -7,7 +7,7 @@ webkit2gtk (2.28.1-1) UNRELEASED; urgency=medium
   * debian/patches/use-python3.patch:
     + Drop patch, this is now upstream.
 
- -- Alberto Garcia <berto@igalia.com>  Tue, 24 Mar 2020 11:17:21 +0100
+ -- Alberto Garcia <berto@igalia.com>  Mon, 13 Apr 2020 13:08:54 +0200
 
 webkit2gtk (2.28.0-2) unstable; urgency=high
 
