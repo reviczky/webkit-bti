@@ -4,6 +4,8 @@ webkit2gtk (2.28.1-1) UNRELEASED; urgency=medium
   * debian/control:
     + Remove build dependency on libx11-xcb-dev now that gstreamer depends
       on it (see #948143).
+  * debian/patches/use-python3.patch:
+    + Drop patch, this is now upstream.
 
  -- Alberto Garcia <berto@igalia.com>  Tue, 24 Mar 2020 11:17:21 +0100
 
