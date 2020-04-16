@@ -11,3 +11,4 @@ use-python3.patch
 reduce-memory-overheads.patch
 force-single-process.patch
 cve-2020-10018-fix.patch
+cve-2020-11793-fix.patch

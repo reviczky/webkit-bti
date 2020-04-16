@@ -1,3 +1,10 @@
+webkit2gtk (2.26.4-1~deb10u3) UNRELEASED; urgency=medium
+
+  * debian/patches/cve-2020-11793-fix.patch:
+    + Cherry-pick fix for CVE-2020-11793.
+
+ -- Alberto Garcia <berto@igalia.com>  Thu, 16 Apr 2020 14:27:21 +0200
+
 webkit2gtk (2.26.4-1~deb10u2) buster-security; urgency=medium
 
   * debian/patches/cve-2020-10018-fix.patch:
