@@ -15,3 +15,4 @@ safe-multiply.patch
 fix-gtkdoc-generation.patch
 fix-atomics-build.patch
 cve-2020-10018-fix.patch
+cve-2020-11793-fix.patch
