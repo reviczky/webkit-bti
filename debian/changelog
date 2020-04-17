@@ -1,4 +1,4 @@
-webkit2gtk (2.26.4-1~bpo9+3) UNRELEASED; urgency=medium
+webkit2gtk (2.26.4-1~bpo9+3) stretch-backports-sloppy; urgency=medium
 
   * debian/patches/cve-2020-11793-fix.patch:
     + Cherry-pick fix for CVE-2020-11793.
