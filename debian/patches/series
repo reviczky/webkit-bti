@@ -9,3 +9,4 @@ prefer-pthread.patch
 dont-detect-sse2.patch
 reduce-memory-overheads.patch
 fix-ftbfs-mips64el.patch
+force-single-process.patch
