@@ -9,6 +9,8 @@ webkit2gtk (2.28.2-1) UNRELEASED; urgency=medium
       warning.
     + Include /usr/share/dpkg/buildflags.mk instead of setting the build
       flags manually.
+  * debian/source/lintian-overrides:
+    + Override mailing-list-obsolete-in-debian-infrastructure.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 24 Apr 2020 13:09:58 +0200
 

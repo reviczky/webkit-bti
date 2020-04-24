@@ -1,3 +1,4 @@
+webkit2gtk source: mailing-list-obsolete-in-debian-infrastructure Debian WebKit Maintainers <pkg-webkit-maintainers@lists.alioth.debian.org>
 webkit2gtk source: source-is-missing Source/WebInspectorUI/UserInterface/External/CodeMirror/codemirror.js line length is 1954 characters (>512)
 webkit2gtk source: source-is-missing Source/WebInspectorUI/UserInterface/External/CodeMirror/sql.js line length is 3058 characters (>512)
 webkit2gtk source: source-is-missing Source/WebInspectorUI/UserInterface/Models/CSSKeywordCompletions.js line length is 1495 characters (>512)
