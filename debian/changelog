@@ -1,6 +1,8 @@
 webkit2gtk (2.28.2-1) UNRELEASED; urgency=medium
 
   * New upstream release (Closes: #956837).
+  * debian/patches/fix-ftbfs-mips64el.patch:
+    + Drop this patch.
 
  -- Alberto Garcia <berto@igalia.com>  Fri, 24 Apr 2020 13:09:58 +0200
 
