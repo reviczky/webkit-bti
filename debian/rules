@@ -3,10 +3,7 @@
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 
 include /usr/share/dpkg/architecture.mk
-
-CPPFLAGS = $(shell dpkg-buildflags --get CPPFLAGS) -Wall
-CFLAGS = $(shell dpkg-buildflags --get CFLAGS)
-LDFLAGS = $(shell dpkg-buildflags --get LDFLAGS) -Wl,--as-needed
+include /usr/share/dpkg/buildflags.mk
 
 EXTRA_CMAKE_ARGUMENTS =
 DH_GENCONTROL_ARGS =
