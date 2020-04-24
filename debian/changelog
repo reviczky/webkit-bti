@@ -1,3 +1,9 @@
+webkit2gtk (2.28.2-1) UNRELEASED; urgency=medium
+
+  * New upstream release (Closes: #956837).
+
+ -- Alberto Garcia <berto@igalia.com>  Fri, 24 Apr 2020 13:09:58 +0200
+
 webkit2gtk (2.28.1-2) unstable; urgency=high
 
   * The WebKitGTK security advisory WSA-2020-0004 lists the following
