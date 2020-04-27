@@ -1,0 +1,35 @@
+From: Alberto Garcia <berto@igalia.com>
+Subject: Don't create a PlatformDisplayLibWPE as a fallback when using Wayland or X11
+Origin: https://trac.webkit.org/changeset/260750
+Bug: https://bugs.webkit.org/show_bug.cgi?id=209431
+Bug-Debian: https://bugs.debian.org/956219
+Index: webkitgtk/Source/WebCore/platform/graphics/PlatformDisplay.cpp
+===================================================================
+--- webkitgtk.orig/Source/WebCore/platform/graphics/PlatformDisplay.cpp
++++ webkitgtk/Source/WebCore/platform/graphics/PlatformDisplay.cpp
+@@ -90,12 +90,6 @@ std::unique_ptr<PlatformDisplay> Platfor
+     }
+ #endif // PLATFORM(GTK)
+ 
+-#if USE(WPE_RENDERER)
+-    return PlatformDisplayLibWPE::create();
+-#elif PLATFORM(WIN)
+-    return PlatformDisplayWin::create();
+-#endif
+-
+ #if PLATFORM(WAYLAND)
+     if (auto platformDisplay = PlatformDisplayWayland::create())
+         return platformDisplay;
+@@ -113,6 +107,12 @@ std::unique_ptr<PlatformDisplay> Platfor
+     return PlatformDisplayX11::create(nullptr);
+ #endif
+ 
++#if USE(WPE_RENDERER)
++    return PlatformDisplayLibWPE::create();
++#elif PLATFORM(WIN)
++    return PlatformDisplayWin::create();
++#endif
++
+     RELEASE_ASSERT_NOT_REACHED();
+ }
+ 
