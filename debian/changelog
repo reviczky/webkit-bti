@@ -14,6 +14,8 @@ webkit2gtk (2.29.1-1) UNRELEASED; urgency=medium
     debian/patches/detect-woff.patch:
     + Drop these patches. We won't be making backports of WebKitGTK 2.29.x
       for stretch.
+  * debian/libwebkit2gtk-4.0-37.symbols:
+    + Update symbols.
 
  -- Alberto Garcia <berto@igalia.com>  Mon, 18 May 2020 14:00:33 +0200
 
